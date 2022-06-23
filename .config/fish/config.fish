@@ -1,5 +1,6 @@
 . ~/.config/fish/aliases.fish
 . ~/.config/fish/profile.fish
+. ~/.config/fish/colors.fish
 
 set fish_greeting
 
@@ -17,3 +18,4 @@ function fish_user_keybindings
   fish_vi_key_bindings
 end
 
+starship init fish | source

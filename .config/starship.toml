@@ -1,0 +1,22 @@
+format = "$character"
+right_format = """$all"""
+
+[character]
+success_symbol = "[fbb ](bold cyan)[᛫](cyan)"
+error_symbol = "[err ](bold red)[᛫](red)"
+vicmd_symbol = "[vi ᛫](bold green)"
+
+[python]
+disabled = true
+
+[git_metrics]
+added_style = "bold blue"
+format = '[+$added]($added_style)/[-$deleted]($deleted_style) '
+
+[directory]
+truncation_length = 6
+truncation_symbol = "…/"
+read_only = "  "
+
+[nodejs]
+format = '[](bold fg:41) via $version'
