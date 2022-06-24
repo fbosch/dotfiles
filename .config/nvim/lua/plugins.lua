@@ -19,6 +19,7 @@
             "mg979/vim-visual-multi",
             "McAuleyPenney/tidy.nvim",
             "simrat39/symbols-outline.nvim",
+            "github/copilot.vim",
             {
               "mcchrish/zenbones.nvim",
               requires = "rktjmp/lush.nvim"
@@ -27,6 +28,12 @@
               "lewis6991/gitsigns.nvim",
               config = function()
                 require('gitsigns').setup()
+              end
+            },
+            {
+              "akinsho/toggleterm.nvim",
+              config = function()
+                require('toggleterm').setup()
               end
             },
             {
@@ -48,7 +55,7 @@
                         pickers = {
                             find_files = {
                                 prompt_prefix = "🔍",
-                                find_command = { "fd", "--type", "file", "--threads=4", "-E", "*.{png,jpg,jpeg,bmp,webp,log}" },
+                                find_command = { "fd", "--type", "file", "--threads=8", "-E", "*.{png,jpg,jpeg,bmp,webp,log}" },
                                 previewer = false,
                                 theme = "dropdown"
                             },
@@ -96,7 +103,7 @@
                     vim.g.ctrlp_map = "<c-p>"
                     vim.g.ctrlp_cmd = "CtrlP"
                     vim.g.ctrlp_working_path_mode = "cra"
-                    vim.g.ctrlp_user_command = "fd . %s --type file --threads=4 --color=never"
+                    vim.g.ctrlp_user_command = "fd . $(git rev-parse --show-toplevel) --type file --threads=48 --color=never"
                 end
             },
             {
@@ -111,6 +118,10 @@
                 requires = {
                     'kyazdani42/nvim-web-devicons',
                 },
+                config = function()
+                    require("nvim-tree").setup({
+                    })
+                end
             },
             {
                 "ibhagwan/fzf-lua",

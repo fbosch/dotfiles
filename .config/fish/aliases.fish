@@ -57,6 +57,8 @@ abbr cm 'commit -m ""'
 # Webdev
 alias ya 'yarn add'
 alias yr 'yarn remove'
+abbr dev 'yarn dev'
+abbr sb 'yarn storybook'
 
 # Programs
 alias vim 'nvim'

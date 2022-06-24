@@ -1,9 +1,9 @@
 # https://github.com/craftzdog/dotfiles-public/blob/master/.config/fish/functions/peco_change_directory.fish
 function _peco_change_directory
   if [ (count $argv) ]
-    peco --buffer-size=150 --layout=bottom-up --query "$argv "|perl -pe 's/([ ()])/\\\\$1/g'|read foo
+    peco --buffer-size=150 --layout=top-down --query "$argv "|perl -pe 's/([ ()])/\\\\$1/g'|read foo
   else
-    peco --buffer-size=150 --layout=bottom-up |perl -pe 's/([ ()])/\\\\$1/g'|read foo
+    peco --buffer-size=150 --layout=top-down |perl -pe 's/([ ()])/\\\\$1/g'|read foo
   end
   if [ $foo ]
         builtin cd $foo
