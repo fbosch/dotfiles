@@ -21,6 +21,25 @@
             "simrat39/symbols-outline.nvim",
             "github/copilot.vim",
             {
+              "gelguy/wilder.nvim",
+              requires = "kyazdani42/nvim-web-devicons",
+              config = function()
+                local wilder = require('wilder')
+                wilder.setup({
+                  modes = { ":", "/", "?" },
+                })
+
+                wilder.set_option('renderer', wilder.popupmenu_renderer({
+                  highlighter = wilder.basic_highlighter(),
+                  highlights = {
+                    accent = wilder.make_hl('WilderAccent', 'Pmenu', {{a = 1}, {a = 1}, {foreground = '#B279A7'}})
+                  },
+                  left = {' ', wilder.popupmenu_devicons() },
+                  right = {' ', wilder.popupmenu_scrollbar() },
+                }))
+              end,
+            },
+            {
               "mcchrish/zenbones.nvim",
               requires = "rktjmp/lush.nvim"
             },
@@ -55,7 +74,7 @@
                         pickers = {
                             find_files = {
                                 prompt_prefix = "🔍",
-                                find_command = { "fd", "--type", "file", "--threads=8", "-E", "*.{png,jpg,jpeg,bmp,webp,log}" },
+                                find_command = { "fd", ".", "$(git rev-parse --show-toplevel)", "--type", "file", "--threads=8", "-E", "*.{png,jpg,jpeg,bmp,webp,log}" },
                                 previewer = false,
                                 theme = "dropdown"
                             },
@@ -82,10 +101,9 @@
                 config = function()
                     require("lualine").setup({
                         options = { theme = "auto" },
-                        extensions = { "fugitive", "nvim-tree", "symbols-outline" }
+                        extensions = { "fugitive", "symbols-outline" }
                     })
                 end
-
             },
             {
                 "startup-nvim/startup.nvim",
@@ -98,12 +116,14 @@
                 end
             },
             {
-                "ctrlpvim/ctrlp.vim",
+                "ibhagwan/fzf-lua",
+                requires = { 'kyazdani42/nvim-web-devicons' },
                 config = function()
-                    vim.g.ctrlp_map = "<c-p>"
-                    vim.g.ctrlp_cmd = "CtrlP"
-                    vim.g.ctrlp_working_path_mode = "cra"
-                    vim.g.ctrlp_user_command = "fd . $(git rev-parse --show-toplevel) --type file --threads=48 --color=never"
+                  require("fzf-lua").setup({
+                    files = {
+                      prompt = 'Files '
+                    }
+                  })
                 end
             },
             {
@@ -119,13 +139,8 @@
                     'kyazdani42/nvim-web-devicons',
                 },
                 config = function()
-                    require("nvim-tree").setup({
-                    })
+                  require('nvim-tree').setup({})
                 end
-            },
-            {
-                "ibhagwan/fzf-lua",
-                requires = { "kyazdani42/nvim-web-devicons" }
             },
             {
                 "jghauser/kitty-runner.nvim",
@@ -159,10 +174,11 @@
                         "coc-json",
                         "coc-lua",
                         "coc-tsserver",
-                        "coc-svelte"
+                        "coc-svelte",
+                        "coc-tailwindcss"
                     }
                 end
-            }
+            },
         })
     end
 })

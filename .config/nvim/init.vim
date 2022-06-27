@@ -88,6 +88,9 @@ nnoremap <C-j> <C-w>j
 nnoremap <C-k> <C-w>k
 nnoremap <C-l> <C-w>l
 
+" fzf
+nnoremap <c-P> <cmd>lua require('fzf-lua').files()<CR>
+
 " adjust split sizes easier
 noremap <silent> <C-Left> :vertical resize +3<CR>
 noremap <silent> <C-Right> :vertical resize -3<CR>
