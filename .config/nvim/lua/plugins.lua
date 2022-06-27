@@ -1,4 +1,5 @@
-  return require("packer").startup({
+
+return require("packer").startup({
     function(use)
         use({
             "wbthomason/packer.nvim",
@@ -17,9 +18,14 @@
             "HerringtonDarkholme/yats.vim",
             "mhinz/vim-sayonara",
             "mg979/vim-visual-multi",
-            "McAuleyPenney/tidy.nvim",
             "simrat39/symbols-outline.nvim",
             "github/copilot.vim",
+            {
+              "mcauley-penney/tidy.nvim",
+              config = function()
+                require("tidy").setup()
+              end
+            },
             {
               "gelguy/wilder.nvim",
               requires = "kyazdani42/nvim-web-devicons",

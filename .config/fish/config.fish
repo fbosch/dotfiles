@@ -1,6 +1,7 @@
 . ~/.config/fish/aliases.fish
 . ~/.config/fish/profile.fish
 . ~/.config/fish/colors.fish
+. ~/.config/fish/nvm.fish
 
 set fish_greeting
 
