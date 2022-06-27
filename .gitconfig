@@ -1,0 +1,18 @@
+[user]
+	name = Frederik Bosch
+	email = 6979916+fbosch@users.noreply.github.com
+
+[push]
+  default = current
+
+[diff]
+  tool = icdiff
+
+[difftool]
+  prompt = false
+
+[difftool "icdiff"]
+  cmd = icdiff --line-numbers $LOCAL $REMOTE
+
+[page]
+  difftool = true

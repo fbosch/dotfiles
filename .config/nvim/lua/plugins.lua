@@ -34,15 +34,18 @@ return require("packer").startup({
                 wilder.setup({
                   modes = { ":", "/", "?" },
                 })
-
-                wilder.set_option('renderer', wilder.popupmenu_renderer({
-                  highlighter = wilder.basic_highlighter(),
-                  highlights = {
-                    accent = wilder.make_hl('WilderAccent', 'Pmenu', {{a = 1}, {a = 1}, {foreground = '#B279A7'}})
-                  },
-                  left = {' ', wilder.popupmenu_devicons() },
-                  right = {' ', wilder.popupmenu_scrollbar() },
-                }))
+                wilder.set_option('renderer', wilder.popupmenu_renderer(
+                  wilder.popupmenu_border_theme({
+                    border = 'rounded',
+                    highlighter = wilder.basic_highlighter(),
+                    highlights = {
+                      border = 'Normal',
+                      accent = wilder.make_hl('WilderAccent', 'Pmenu', {{a = 1}, {a = 1}, {foreground = '#B279A7'}})
+                    },
+                    left = {' ', wilder.popupmenu_devicons() },
+                    right = {' ', wilder.popupmenu_scrollbar() },
+                  })
+                ))
               end,
             },
             {
@@ -63,7 +66,7 @@ return require("packer").startup({
             },
             {
                 "nvim-telescope/telescope.nvim",
-                requires = {  "nvim-telescope/telescope-file-browser.nvim" },
+                requires = {  "nvim-telescope/telescope-file-browser.nvim",  },
                 config = function()
                     require("telescope").load_extension "file_browser"
                     require("telescope").setup({
@@ -80,7 +83,7 @@ return require("packer").startup({
                         pickers = {
                             find_files = {
                                 prompt_prefix = "🔍",
-                                find_command = { "fd", ".", "$(git rev-parse --show-toplevel)", "--type", "file", "--threads=8", "-E", "*.{png,jpg,jpeg,bmp,webp,log}" },
+                                find_command = { "fd", "$(git rev-parse --show-toplevel)", "--type", "file", "--threads=8", "-E", "*.{png,jpg,jpeg,bmp,webp,log}" },
                                 previewer = false,
                                 theme = "dropdown"
                             },
@@ -181,7 +184,6 @@ return require("packer").startup({
                         "coc-lua",
                         "coc-tsserver",
                         "coc-svelte",
-                        "coc-tailwindcss"
                     }
                 end
             },
