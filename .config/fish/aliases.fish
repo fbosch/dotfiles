@@ -65,3 +65,4 @@ alias vim 'nvim'
 abbr v 'nvim'
 abbr kssh 'kitty +kitten ssh'
 alias snvim 'sudo -E -s nvim' # launch vim in sudo but preserve env config
+alias logikill 'kill -9 $(ps ax | grep -E "Logi Options" | head -1 | cut -f 1 -d " ")'

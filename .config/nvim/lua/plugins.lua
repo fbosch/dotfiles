@@ -21,6 +21,13 @@ return require("packer").startup({
             "simrat39/symbols-outline.nvim",
             "github/copilot.vim",
             {
+              "folke/todo-comments.nvim",
+              requires = "nvim-lua/plenary.nvim",
+              config = function()
+                require("todo-comments").setup()
+              end
+            },
+            {
               "mcauley-penney/tidy.nvim",
               config = function()
                 require("tidy").setup()
@@ -184,6 +191,7 @@ return require("packer").startup({
                         "coc-lua",
                         "coc-tsserver",
                         "coc-svelte",
+                        "@yaegassy/coc-tailwindcss3",
                     }
                 end
             },
