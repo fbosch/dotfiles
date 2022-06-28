@@ -82,6 +82,10 @@ nnoremap <leader>r :NvimTreeRefresh<CR>
 nnoremap <leader>n :NvimTreeFindFile<CR>
 nnoremap <leader>c :HexokinaseToggle<CR>
 
+" Indent
+vnoremap < <gv
+vnoremap > >gv
+
 " remap split navigation to just CTRL + hjkl
 nnoremap <C-h> <C-w>h
 nnoremap <C-j> <C-w>j

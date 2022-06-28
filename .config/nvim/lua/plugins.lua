@@ -1,4 +1,3 @@
-
 return require("packer").startup({
     function(use)
         use({
@@ -20,6 +19,19 @@ return require("packer").startup({
             "mg979/vim-visual-multi",
             "simrat39/symbols-outline.nvim",
             "github/copilot.vim",
+            "windwp/nvim-ts-autotag",
+            "danilamihailov/beacon.nvim",
+             {
+                "rrethy/vim-hexokinase",
+                run = "make hexokinase",
+                event = "CursorHold",
+                config = function()
+                    vim.g.Hexokinase_highlighters = {"virtual"}
+                    vim.g.Hexokinase_optInPatterns = {
+                        "full_hex", "rgb", "rgba", "hsl", "hsla"
+                    }
+                end
+            },
             {
               "folke/todo-comments.nvim",
               requires = "nvim-lua/plenary.nvim",
