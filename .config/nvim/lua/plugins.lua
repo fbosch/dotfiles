@@ -8,7 +8,6 @@ return require("packer").startup({
             "tpope/vim-surround",
             "tpope/vim-vinegar",
             "nathom/filetype.nvim",
-            "romgrk/barbar.nvim",
             "neovim/nvim-lspconfig",
             "lewis6991/impatient.nvim",
             "lukas-reineke/indent-blankline.nvim",
@@ -21,7 +20,11 @@ return require("packer").startup({
             "github/copilot.vim",
             "windwp/nvim-ts-autotag",
             "danilamihailov/beacon.nvim",
-             {
+            {
+               "romgrk/barbar.nvim",
+                requires = {'kyazdani42/nvim-web-devicons'},
+            },
+            {
                 "rrethy/vim-hexokinase",
                 run = "make hexokinase",
                 event = "CursorHold",
@@ -168,6 +171,14 @@ return require("packer").startup({
                 },
                 config = function()
                   require('nvim-tree').setup({})
+                  local tree_events = require('nvim-tree.events')
+                  local bufferline_state = require('bufferline.state')
+                  tree_events.on_tree_open(function()
+                       bufferline_state.set_offset(31, 'FileTree')
+                  end)
+                  tree_events.on_tree_close(function()
+                      bufferline_state.set_offset(0)
+                  end)
                 end
             },
             {

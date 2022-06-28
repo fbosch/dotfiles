@@ -104,6 +104,7 @@ noremap <silent> <C-Down> :resize +3<CR>
 " move to previous/next
 nnoremap <silent>    <S-h> :BufferPrevious<CR>
 nnoremap <silent>    <S-l> :BufferNext<CR>
+
 nnoremap <silent>    <S-d> :Sayonara<CR>
 
 " Find files using Telescope command-line sugar.
