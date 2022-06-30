@@ -27,11 +27,11 @@ map("n", "<S-h>", ":BufferPrevious<CR>", silent)
 map("n", "<S-l>", ":BufferNext<CR>", silent)
 
 -- find files using telescope
-map("n", "<leader>ff", "<cmd>Telescope find_files<CR>", options)
-map("n", "<leader>lg", "<cmd>Telescope live_grep<CR>", options)
-map("n", "<leader>of", "<cmd>Telescope oldfiles<CR>", options)
-map("n", "<leader>fb", "<cmd>Telescope file_browser<CR>", options)
-map("n", "<leader>fh", "<cmd>Telescope help_tags<CR>", options)
+map("n", "<Leader>ff", ":Telescope find_files<CR>", options)
+map("n", "<Leader>lg", ":Telescope live_grep<CR>", options)
+map("n", "<Leader>of", ":Telescope oldfiles<CR>", options)
+map("n", "<Leader>fb", ":Telescope file_browser<CR>", options)
+map("n", "<Leader>fh", ":Telescope help_tags<CR>", options)
 
 -- tab controls
 map("n", "th", ":tabfirst<CR>", options)

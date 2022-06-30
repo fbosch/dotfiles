@@ -24,30 +24,82 @@ return require("packer").startup({
             "f-person/git-blame.nvim",
             "jose-elias-alvarez/null-ls.nvim",
             "jose-elias-alvarez/nvim-lsp-ts-utils",
-              {
+            "hrsh7th/cmp-nvim-lsp",
+            "hrsh7th/cmp-buffer",
+            "hrsh7th/cmp-path",
+            "hrsh7th/nvim-cmp",
+            "onsails/lspkind.nvim",
+            {
               "neovim/nvim-lspconfig",
               config = function()
+                local cmp = require("cmp")
                 local lspconfig = require("lspconfig")
+                local null_ls = require("null-ls")
+                local prettier = require("prettier")
+                local lspkind = require("lspkind")
+
+                cmp.setup({
+                  window = {
+                    completion = cmp.config.window.bordered(),
+                    documentation = cmp.config.window.bordered()
+                  },
+                  formatting = {
+                    format = lspkind.cmp_format({
+                      mode = 'symbol',
+                      maxwidth = 50
+                    })
+                  },
+                  sources = cmp.config.sources({
+                    { name = "nvim_lsp" },
+                    { name = "buffer" },
+                    { name = "path" }
+                  }),
+                  mapping = cmp.mapping.preset.insert({
+                    ["<C-f>"] = cmp.mapping.scroll_docs(4),
+                    ["<C-d>"] = cmp.mapping.scroll_docs(-4),
+                    ["<C-Space>"] = cmp.mapping.complete(),
+                    ["<C-e>"] = cmp.mapping.abort(),
+                    ["<CR>"] = cmp.mapping.confirm({ select = true })
+                  })
+                })
+
+                null_ls.setup({
+                  on_attach = function()
+                     if client.resolved_capabilities.document_formatting then
+                      vim.cmd("nnoremap <silent><buffer> <Leader>f :lua vim.lsp.buf.formatting()<CR>")
+                      -- format on save
+                      vim.cmd("autocmd BufWritePost <buffer> lua vim.lsp.buf.formatting()")
+                    end
+
+                    if client.resolved_capabilities.document_range_formatting then
+                      vim.cmd("xnoremap <silent><buffer> <Leader>f :lua vim.lsp.buf.range_formatting({})<CR>")
+                    end
+                  end
+                })
+
+                prettier.setup({
+                  bin = "prettier",
+                  filetypes = {
+                    "css",
+                    "graphql",
+                    "html",
+                    "javascript",
+                    "javascriptreact",
+                    "json",
+                    "scss",
+                    "less",
+                    "markdown",
+                    "typescript",
+                    "typescriptreact",
+                    "yaml"
+                  }
+                })
+
                 lspconfig.tailwindcss.setup({
                   cmd = { "tailwindcss-language-server", "--stdio" }
                 })
+
                 lspconfig.tsserver.setup({})
-              end
-            },
-            {
-              "hrsh7th/nvim-compe",
-              config = function()
-                require("compe").setup({
-                  enabled = true,
-                  autocomplete = true,
-                  preselect = "enable",
-                  source = {
-                    path = true,
-                    buffer = true,
-                    nvim_lsp = true,
-                    nvim_lua = true
-                  }
-                })
               end
             },
             {
@@ -195,8 +247,7 @@ return require("packer").startup({
                       builtin = {
                         ["K"] = "preview-page-up",
                         ["J"] = "preview-page-down",
-                      },
-                    },
+                      }, },
                   })
                 end
             },

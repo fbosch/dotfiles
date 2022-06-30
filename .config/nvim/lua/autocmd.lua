@@ -10,9 +10,31 @@ cmd({ "BufRead", "BufNewFile" }, {
 })
 cmd({ "BufWritePost" }, {
   pattern = { "plugins.lua" },
-  command = "source <afile> | PackerSync"
+  command = "source <afile> | PackerSync",
+  group = group
 })
 cmd({ "BufWritePost" }, {
   pattern = { "*nvim/*.lua" },
-  command = "source <afile> | PackerCompile"
+  command = "source <afile> | PackerCompile",
+  group = group
+})
+cmd({ "BufNewFile", "BufRead" }, {
+  pattern = { "*.es6" },
+  command = "setf javascript",
+  group = group
+})
+cmd({ "BufNewFile", "BufRead" }, {
+  pattern = { "*.tsx" },
+  command = "setf typescriptreact",
+  group = group
+})
+cmd({ "BufNewFile", "BufRead"}, {
+  pattern = { "*.md", "*.mdx" },
+  command = "setf markdown",
+  group = group
+})
+cmd({ "BufWritePre" }, {
+  pattern = { "*" },
+  command = "lua vim.lsp.buf.formatting()",
+  group = group
 })

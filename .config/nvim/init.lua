@@ -1,19 +1,20 @@
+vim.g.mapleader = ","
+local set = vim.opt
 
+require("impatient")
 require("plugins")
 require("keymap")
 require("autocmd")
 
+vim.cmd("colorscheme zenwritten")
 
-local set = vim.opt
-local cmd = vim.cmd
-
-vim.g.mapleader = ","
-
-cmd("colorscheme zenwritten")
-
+set.timeoutlen = 1500
+set.background = "dark"
 set.path:append("**")
 set.mouse = "a"
+set.showcmd = true
 set.re = 1
+set.scrolloff = 8
 set.gdefault = true
 set.expandtab = true
 set.compatible = false
@@ -26,7 +27,10 @@ set.wrap = false
 set.backspace = "indent,eol,start"
 set.number = true
 set.tabstop = 2
-set.softtabstop = 4
+set.shiftwidth = 2
+set.autoindent = true
+set.expandtab = true
+set.softtabstop = 2
 set.smartindent = true
 set.relativenumber = true
 set.ignorecase = true
@@ -44,4 +48,4 @@ set.termguicolors = true
 set.winblend = 0
 set.wildoptions = "pum"
 set.pumblend = 5
-set.background = "dark"
+set.ruler = true
