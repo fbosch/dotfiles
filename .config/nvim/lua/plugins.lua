@@ -29,6 +29,7 @@ return require("packer").startup({
             "hrsh7th/cmp-path",
             "hrsh7th/nvim-cmp",
             "onsails/lspkind.nvim",
+            "L3MON4D3/LuaSnip",
             {
               "neovim/nvim-lspconfig",
               config = function()
@@ -39,6 +40,11 @@ return require("packer").startup({
                 local lspkind = require("lspkind")
 
                 cmp.setup({
+                  snippet = {
+                    expand = function(args)
+                      require("luasnip").lsp_expand(args.body)
+                    end
+                  },
                   window = {
                     completion = cmp.config.window.bordered(),
                     documentation = cmp.config.window.bordered()
