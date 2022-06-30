@@ -11,7 +11,9 @@ vim.g.mapleader = ","
 
 cmd("colorscheme zenwritten")
 
+set.path:append("**")
 set.mouse = "a"
+set.re = 1
 set.gdefault = true
 set.expandtab = true
 set.compatible = false
@@ -23,6 +25,9 @@ set.foldexpr = "nvim_treesitter#foldexpr()"
 set.wrap = false
 set.backspace = "indent,eol,start"
 set.number = true
+set.tabstop = 2
+set.softtabstop = 4
+set.smartindent = true
 set.relativenumber = true
 set.ignorecase = true
 set.cursorline = true

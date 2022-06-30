@@ -3,7 +3,7 @@ local options = { noremap = true }
 local silent = { noremap = true, silent = true }
 
 map("n", "<C-p>", "<cmd>lua require('fzf-lua').files()<CR>", silent)
-map("n", "<C-e>", ":NvimTreeToggle<CR>", options)
+map("n", "<C-b>", ":NvimTreeToggle<CR>", options)
 map("n", "<S-d>", ":Sayonara<CR>", silent)
 
 -- easier indentation in visual mode
@@ -11,10 +11,10 @@ map("v", "<", "<gv", options)
 map("v", ">", ">gv", options)
 
 -- remap split navigation to CTRL + hjkl
-map("n", "<C-h> <C-w>", "h", options)
-map("n", "<C-j> <C-w>", "j", options)
-map("n", "<C-k> <C-w>", "k", options)
-map("n", "<C-l> <C-w>", "l", options)
+map("n", "<C-k>", ":wincmd k<CR>", silent)
+map("n", "<C-j>", ":wincmd j<CR>", silent)
+map("n", "<C-h>", ":wincmd h<CR>", silent)
+map("n", "<C-l>", ":wincmd l<CR>", silent)
 
 -- adjust split sizes with CTRL + arrows
 map("n", "<C-Left>", ":vertical resize +3<CR>", silent)

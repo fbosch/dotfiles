@@ -135,7 +135,7 @@ return require("packer").startup({
                         pickers = {
                             find_files = {
                                 prompt_prefix = "🔍",
-                                find_command = { "fd", "$(git rev-parse --show-toplevel)", "--type", "file", "--threads=8", "-E", "*.{png,jpg,jpeg,bmp,webp,log}" },
+                                find_command = { "fd", ".", "--type", "file", "--threads=8", "-E", "*.{png,jpg,jpeg,bmp,webp,log}" },
                                 previewer = false,
                                 theme = "dropdown"
                             },
@@ -200,13 +200,13 @@ return require("packer").startup({
                   })
                 end
             },
-            -- {
-            --     "windwp/nvim-autopairs",
-            --     event = "InsertEnter",
-            --     config = function()
-            --       require("nvim-autopairs").setup()
-            --     end
-            -- },
+            {
+                "windwp/nvim-autopairs",
+                event = "InsertEnter",
+                config = function()
+                  require("nvim-autopairs").setup()
+                end
+            },
             {
                 "kyazdani42/nvim-tree.lua",
                 requires = {
@@ -243,24 +243,6 @@ return require("packer").startup({
                     })
                 end
             },
-            -- {
-            --     "neoclide/coc.nvim",
-            --     branch = "release",
-            --     config = function()
-            --         vim.g.coc_global_extensions = {
-            --             "coc-diagnostic",
-            --             "coc-css",
-            --             "coc-eslint",
-            --             "coc-prettier",
-            --             "coc-html",
-            --             "coc-json",
-            --             "coc-lua",
-            --             "coc-tsserver",
-            --             "coc-svelte",
-            --             "@yaegassy/coc-tailwindcss3",
-            --         }
-            --     end
-            -- },
         })
     end
 })
