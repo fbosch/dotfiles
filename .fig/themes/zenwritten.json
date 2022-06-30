@@ -1,0 +1,20 @@
+{
+  "author": {
+    "name": "Frederik Bosch",
+    "github": "fbosch"
+  },
+  "version": "1.0",
+  "theme": {
+    "textColor": "#bbbbbb",
+    "backgroundColor": "#191919",
+    "matchBackgroundColor": "#2b2b2b",
+    "selection": {
+      "textColor": "#ffffff",
+      "backgroundColor": "#2b2b2b"
+    },
+    "description": {
+      "textColor": "#bbbbbb",
+      "borderColor": "#2b2b2b"
+    }
+  }
+}
