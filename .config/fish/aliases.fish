@@ -52,7 +52,7 @@ abbr gs 'git status'
 abbr gau 'git add -u'
 abbr gco 'git checkout'
 abbr gaa 'git add --all'
-abbr cm 'commit -m ""'
+abbr gcm 'git commit -m'
 
 # Webdev
 alias ya 'yarn add'

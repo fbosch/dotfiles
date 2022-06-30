@@ -2,13 +2,14 @@ return require("packer").startup({
     function(use)
         use({
             "wbthomason/packer.nvim",
+            "MunifTanjim/prettier.nvim",
+            "rktjmp/lush.nvim",
             "tpope/vim-rhubarb",
             "tpope/vim-fugitive",
             "tpope/vim-commentary",
             "tpope/vim-surround",
             "tpope/vim-vinegar",
             "nathom/filetype.nvim",
-            "neovim/nvim-lspconfig",
             "lewis6991/impatient.nvim",
             "lukas-reineke/indent-blankline.nvim",
             "dag/vim-fish",
@@ -20,9 +21,38 @@ return require("packer").startup({
             "github/copilot.vim",
             "windwp/nvim-ts-autotag",
             "danilamihailov/beacon.nvim",
+            "f-person/git-blame.nvim",
+            "jose-elias-alvarez/null-ls.nvim",
+            "jose-elias-alvarez/nvim-lsp-ts-utils",
+              {
+              "neovim/nvim-lspconfig",
+              config = function()
+                local lspconfig = require("lspconfig")
+                lspconfig.tailwindcss.setup({
+                  cmd = { "tailwindcss-language-server", "--stdio" }
+                })
+                lspconfig.tsserver.setup({})
+              end
+            },
+            {
+              "hrsh7th/nvim-compe",
+              config = function()
+                require("compe").setup({
+                  enabled = true,
+                  autocomplete = true,
+                  preselect = "enable",
+                  source = {
+                    path = true,
+                    buffer = true,
+                    nvim_lsp = true,
+                    nvim_lua = true
+                  }
+                })
+              end
+            },
             {
                "romgrk/barbar.nvim",
-                requires = {'kyazdani42/nvim-web-devicons'},
+                requires = {"kyazdani42/nvim-web-devicons" },
             },
             {
                 "rrethy/vim-hexokinase",
@@ -52,20 +82,20 @@ return require("packer").startup({
               "gelguy/wilder.nvim",
               requires = "kyazdani42/nvim-web-devicons",
               config = function()
-                local wilder = require('wilder')
+                local wilder = require("wilder")
                 wilder.setup({
                   modes = { ":", "/", "?" },
                 })
-                wilder.set_option('renderer', wilder.popupmenu_renderer(
+                wilder.set_option("renderer", wilder.popupmenu_renderer(
                   wilder.popupmenu_border_theme({
-                    border = 'rounded',
+                    border = "rounded",
                     highlighter = wilder.basic_highlighter(),
                     highlights = {
-                      border = 'Normal',
-                      accent = wilder.make_hl('WilderAccent', 'Pmenu', {{a = 1}, {a = 1}, {foreground = '#B279A7'}})
+                      border = "Normal",
+                      accent = wilder.make_hl("WilderAccent", "Pmenu", {{a = 1}, {a = 1}, {foreground = "#B279A7"}})
                     },
-                    left = {' ', wilder.popupmenu_devicons() },
-                    right = {' ', wilder.popupmenu_scrollbar() },
+                    left = {" ", wilder.popupmenu_devicons() },
+                    right = {" ", wilder.popupmenu_scrollbar() },
                   })
                 ))
               end,
@@ -77,13 +107,13 @@ return require("packer").startup({
             {
               "lewis6991/gitsigns.nvim",
               config = function()
-                require('gitsigns').setup()
+                require("gitsigns").setup()
               end
             },
             {
               "akinsho/toggleterm.nvim",
               config = function()
-                require('toggleterm').setup()
+                require("toggleterm").setup()
               end
             },
             {
@@ -110,7 +140,7 @@ return require("packer").startup({
                                 theme = "dropdown"
                             },
                             grep_string = {
-                                theme = 'dropdown',
+                                theme = "dropdown",
                                 disable_coordinates = true
                             },
                             live_grep = {
@@ -130,9 +160,16 @@ return require("packer").startup({
                 "nvim-lualine/lualine.nvim",
                 requires = { "kyazdani42/nvim-web-devicons", opt = true },
                 config = function()
+                    vim.g.gitblame_display_virtual_text = 0 -- Disable virtual text
+                    local git_blame = require('gitblame')
                     require("lualine").setup({
                         options = { theme = "auto" },
-                        extensions = { "fugitive", "symbols-outline" }
+                        extensions = { "fugitive", "symbols-outline" },
+                        sections = {
+                          lualine_c = {
+                            { git_blame.get_current_blame_text, cond = git_blame.is_blame_text_available }
+                          }
+                        }
                     })
                 end
             },
@@ -148,33 +185,39 @@ return require("packer").startup({
             },
             {
                 "ibhagwan/fzf-lua",
-                requires = { 'kyazdani42/nvim-web-devicons' },
+                requires = { "kyazdani42/nvim-web-devicons" },
                 config = function()
                   require("fzf-lua").setup({
                     files = {
-                      prompt = 'Files '
-                    }
+                      prompt = "Files "
+                    },
+                    keymap = {
+                      builtin = {
+                        ["K"] = "preview-page-up",
+                        ["J"] = "preview-page-down",
+                      },
+                    },
                   })
                 end
             },
-            {
-                "windwp/nvim-autopairs",
-                event = "InsertEnter",
-                config = function()
-                  require("nvim-autopairs").setup()
-                end
-            },
+            -- {
+            --     "windwp/nvim-autopairs",
+            --     event = "InsertEnter",
+            --     config = function()
+            --       require("nvim-autopairs").setup()
+            --     end
+            -- },
             {
                 "kyazdani42/nvim-tree.lua",
                 requires = {
-                    'kyazdani42/nvim-web-devicons',
+                    "kyazdani42/nvim-web-devicons",
                 },
                 config = function()
-                  require('nvim-tree').setup({})
-                  local tree_events = require('nvim-tree.events')
-                  local bufferline_state = require('bufferline.state')
+                  require("nvim-tree").setup({})
+                  local tree_events = require("nvim-tree.events")
+                  local bufferline_state = require("bufferline.state")
                   tree_events.on_tree_open(function()
-                       bufferline_state.set_offset(31, 'FileTree')
+                       bufferline_state.set_offset(31, "FileTree")
                   end)
                   tree_events.on_tree_close(function()
                       bufferline_state.set_offset(0)
@@ -194,30 +237,30 @@ return require("packer").startup({
                     require("nvim-treesitter.configs").setup({
                         autopairs = { enable = true },
                         autotag = { enable = true },
-                        ensure_installed = 'all',
+                        ensure_installed = "all",
                         highlight = { enable = true },
                         indent = { enable = true }
                     })
                 end
             },
-            {
-                "neoclide/coc.nvim",
-                branch = "release",
-                config = function()
-                    vim.g.coc_global_extensions = {
-                        "coc-diagnostic",
-                        "coc-css",
-                        "coc-eslint",
-                        "coc-prettier",
-                        "coc-html",
-                        "coc-json",
-                        "coc-lua",
-                        "coc-tsserver",
-                        "coc-svelte",
-                        "@yaegassy/coc-tailwindcss3",
-                    }
-                end
-            },
+            -- {
+            --     "neoclide/coc.nvim",
+            --     branch = "release",
+            --     config = function()
+            --         vim.g.coc_global_extensions = {
+            --             "coc-diagnostic",
+            --             "coc-css",
+            --             "coc-eslint",
+            --             "coc-prettier",
+            --             "coc-html",
+            --             "coc-json",
+            --             "coc-lua",
+            --             "coc-tsserver",
+            --             "coc-svelte",
+            --             "@yaegassy/coc-tailwindcss3",
+            --         }
+            --     end
+            -- },
         })
     end
 })
