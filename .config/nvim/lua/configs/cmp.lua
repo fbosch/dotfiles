@@ -1,5 +1,6 @@
 return function()
   local cmp = require("cmp")
+  local types = require("cmp.types")
   local lspkind = require("lspkind")
 
   vim.highlight.create("CmpItemAbbrDeprecated", { guibg=0, guifg="#bbbbbb", gui="strikethrough"})
@@ -38,9 +39,10 @@ return function()
     mapping = cmp.mapping.preset.insert({
       ["<C-f>"] = cmp.mapping.scroll_docs(4),
       ["<C-d>"] = cmp.mapping.scroll_docs(-4),
-      ["<C-Space>"] = cmp.mapping.complete(),
       ["<C-e>"] = cmp.mapping.abort(),
-      ["<CR>"] = cmp.mapping.confirm({ select = true })
+      ["<Space>"] = cmp.mapping.confirm({ select = true }),
+      ["<C-j>"] = cmp.mapping.select_next_item({ behavior = types.cmp.SelectBehavior.Select }),
+      ["<C-k>"] = cmp.mapping.select_prev_item({ behavior = types.cmp.SelectBehavior.Select })
     })
   })
 end

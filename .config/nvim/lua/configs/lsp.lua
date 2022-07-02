@@ -3,6 +3,7 @@ return function()
   require("fzf_lsp").setup()
   require("lsp_signature").setup({
     bind = true,
+    hint_prefix = "📖 ",
     handler_opts = {
       border = "rounded"
     }
