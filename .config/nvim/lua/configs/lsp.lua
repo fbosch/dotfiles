@@ -1,5 +1,13 @@
 return function()
   local lspconfig = require("lspconfig")
+  require("fzf_lsp").setup()
+  require("lsp_signature").setup({
+    bind = true,
+    handler_opts = {
+      border = "rounded"
+    }
+  })
+  require("nvim-ts-autotag").setup()
   require(".configs.null-ls")()
   require(".configs.prettier")()
   require(".configs.cmp")()

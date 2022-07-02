@@ -1,4 +1,30 @@
 vim.g.mapleader = ","
+
+local disabled_built_ins = {
+  "2html_plugin",
+  "getscript",
+  "getscriptPlugin",
+  "gzip",
+  "logipat",
+  "netrw",
+  "netrwPlugin",
+  "netrwSettings",
+  "netrwFileHandlers",
+  "matchit",
+  "matchparen",
+  "tar",
+  "tarPlugin",
+  "rrhelper",
+  "vimball",
+  "vimballPlugin",
+  "zip",
+  "zipPlugin",
+}
+
+for _, plugin in pairs(disabled_built_ins) do
+  vim.g["loaded_" .. plugin] = 1
+end
+
 local set = vim.opt
 
 require("impatient")
@@ -13,7 +39,7 @@ set.background = "dark"
 set.path:append("**")
 set.mouse = "a"
 set.showcmd = true
-set.re = 1
+set.re = 0 
 set.scrolloff = 8
 set.gdefault = true
 set.expandtab = true
@@ -41,7 +67,7 @@ set.hlsearch = false
 set.clipboard:append("unnamedplus")
 set.complete = "kspell"
 set.completeopt = "menuone,longest"
-set.updatetime = 100
+set.updatetime = 250
 set.lazyredraw = true
 set.ttyfast = true
 set.termguicolors = true
@@ -49,3 +75,4 @@ set.winblend = 0
 set.wildoptions = "pum"
 set.pumblend = 10
 set.ruler = true
+

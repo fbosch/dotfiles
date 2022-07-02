@@ -8,21 +8,21 @@ return require("packer").startup({
       "tpope/vim-commentary",
       "tpope/vim-surround",
       "tpope/vim-vinegar",
-      "nathom/filetype.nvim",
       "lewis6991/impatient.nvim",
       "lukas-reineke/indent-blankline.nvim",
-      "dag/vim-fish",
-      "norcalli/nvim-terminal.lua",
-      "HerringtonDarkholme/yats.vim",
       "mhinz/vim-sayonara",
       "mg979/vim-visual-multi",
       "simrat39/symbols-outline.nvim",
       "github/copilot.vim",
-      "windwp/nvim-ts-autotag",
       "danilamihailov/beacon.nvim",
+      "antoinemadec/FixCursorHold.nvim",
       {
         "neovim/nvim-lspconfig",
         requires = {
+          "windwp/nvim-ts-autotag",
+          "ray-x/lsp_signature.nvim",
+          "folke/lsp-colors.nvim",
+          "gfanto/fzf-lsp.nvim",
           "MunifTanjim/prettier.nvim",
           "f-person/git-blame.nvim",
           "onsails/lspkind.nvim",
@@ -59,12 +59,6 @@ return require("packer").startup({
         end
       },
       {
-        "mcauley-penney/tidy.nvim",
-        config = function()
-          require("tidy").setup()
-        end
-      },
-      {
         "gelguy/wilder.nvim",
         requires = { "kyazdani42/nvim-web-devicons", "romgrk/fzy-lua-native" },
         config = require("configs.wilder")
@@ -77,12 +71,6 @@ return require("packer").startup({
         "lewis6991/gitsigns.nvim",
         config = function()
           require("gitsigns").setup()
-        end
-      },
-      {
-        "akinsho/toggleterm.nvim",
-        config = function()
-          require("toggleterm").setup()
         end
       },
       {
@@ -118,12 +106,6 @@ return require("packer").startup({
         "kyazdani42/nvim-tree.lua",
         requires = { "kyazdani42/nvim-web-devicons" },
         config = require("configs.nvim-tree")
-      },
-      {
-        "jghauser/kitty-runner.nvim",
-        config = function()
-          require("kitty-runner").setup()
-        end
       },
       {
         "nvim-treesitter/nvim-treesitter",
