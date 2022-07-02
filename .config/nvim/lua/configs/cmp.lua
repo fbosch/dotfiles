@@ -31,5 +31,4 @@ return function()
       ["<CR>"] = cmp.mapping.confirm({ select = true })
     })
   })
-
 end

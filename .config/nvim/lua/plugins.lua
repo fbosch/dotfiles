@@ -20,10 +20,11 @@ return require("packer").startup({
       "github/copilot.vim",
       "windwp/nvim-ts-autotag",
       "danilamihailov/beacon.nvim",
-      "f-person/git-blame.nvim",
       {
         "neovim/nvim-lspconfig",
         requires = {
+          "MunifTanjim/prettier.nvim",
+          "f-person/git-blame.nvim",
           "onsails/lspkind.nvim",
           "L3MON4D3/LuaSnip",
           "hrsh7th/nvim-cmp",
