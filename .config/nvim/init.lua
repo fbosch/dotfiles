@@ -1,30 +1,5 @@
 vim.g.mapleader = ","
 
-local disabled_built_ins = {
-  "2html_plugin",
-  "getscript",
-  "getscriptPlugin",
-  "gzip",
-  "logipat",
-  "netrw",
-  "netrwPlugin",
-  "netrwSettings",
-  "netrwFileHandlers",
-  "matchit",
-  "matchparen",
-  "tar",
-  "tarPlugin",
-  "rrhelper",
-  "vimball",
-  "vimballPlugin",
-  "zip",
-  "zipPlugin",
-}
-
-for _, plugin in pairs(disabled_built_ins) do
-  vim.g["loaded_" .. plugin] = 1
-end
-
 local set = vim.opt
 
 require("impatient")
@@ -34,12 +9,13 @@ require("autocmd")
 
 vim.cmd("colorscheme zenwritten")
 
+set.backup = false 
 set.timeoutlen = 1500
 set.background = "dark"
 set.path:append("**")
 set.mouse = "a"
 set.showcmd = true
-set.re = 0 
+set.re = 0
 set.scrolloff = 8
 set.gdefault = true
 set.expandtab = true
@@ -76,3 +52,27 @@ set.wildoptions = "pum"
 set.pumblend = 10
 set.ruler = true
 
+local disabled_built_ins = {
+  "2html_plugin",
+  "getscript",
+  "getscriptPlugin",
+  "gzip",
+  "logipat",
+  "netrw",
+  "netrwPlugin",
+  "netrwSettings",
+  "netrwFileHandlers",
+  "matchit",
+  "matchparen",
+  "tar",
+  "tarPlugin",
+  "rrhelper",
+  "vimball",
+  "vimballPlugin",
+  "zip",
+  "zipPlugin",
+}
+
+for _, plugin in pairs(disabled_built_ins) do
+  vim.g["loaded_" .. plugin] = 1
+end

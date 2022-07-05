@@ -1,4 +1,20 @@
-return require("packer").startup({
+-- Use a protected call so we don't error out on first use
+local status_ok, packer = pcall(require, "packer")
+if not status_ok then
+	return
+end
+
+-- Have packer use a popup window
+packer.init({
+	display = {
+		open_fn = function()
+			return require("packer.util").float({ border = "rounded" })
+		end,
+	},
+})
+
+-- install packages
+return packer.startup({
   function(use)
     use({
       "wbthomason/packer.nvim",
@@ -16,24 +32,23 @@ return require("packer").startup({
       "github/copilot.vim",
       "danilamihailov/beacon.nvim",
       "antoinemadec/FixCursorHold.nvim",
+      "windwp/nvim-ts-autotag",
+      "ray-x/lsp_signature.nvim",
+      "folke/lsp-colors.nvim",
+      "gfanto/fzf-lsp.nvim",
+      "MunifTanjim/prettier.nvim",
+      "f-person/git-blame.nvim",
+      "onsails/lspkind.nvim",
+      "L3MON4D3/LuaSnip",
+      "hrsh7th/nvim-cmp",
+      "hrsh7th/cmp-nvim-lsp",
+      "hrsh7th/cmp-buffer",
+      "hrsh7th/cmp-path",
+      "junegunn/fzf",
+      "jose-elias-alvarez/null-ls.nvim",
+      "jose-elias-alvarez/nvim-lsp-ts-utils",
       {
         "neovim/nvim-lspconfig",
-        requires = {
-          "windwp/nvim-ts-autotag",
-          "ray-x/lsp_signature.nvim",
-          "folke/lsp-colors.nvim",
-          "gfanto/fzf-lsp.nvim",
-          "MunifTanjim/prettier.nvim",
-          "f-person/git-blame.nvim",
-          "onsails/lspkind.nvim",
-          "L3MON4D3/LuaSnip",
-          "hrsh7th/nvim-cmp",
-          "hrsh7th/cmp-nvim-lsp",
-          "hrsh7th/cmp-buffer",
-          "hrsh7th/cmp-path",
-          "jose-elias-alvarez/null-ls.nvim",
-          "jose-elias-alvarez/nvim-lsp-ts-utils",
-        },
         config = require("configs.lsp")
       },
       {
@@ -54,12 +69,14 @@ return require("packer").startup({
       {
         "folke/todo-comments.nvim",
         requires = "nvim-lua/plenary.nvim",
+        event = "CursorHold",
         config = function()
           require("todo-comments").setup()
         end
       },
       {
         "gelguy/wilder.nvim",
+        event = "VimEnter",
         requires = { "kyazdani42/nvim-web-devicons", "romgrk/fzy-lua-native" },
         config = require("configs.wilder")
       },
@@ -69,12 +86,14 @@ return require("packer").startup({
       },
       {
         "lewis6991/gitsigns.nvim",
+        event ="CursorHold",
         config = function()
           require("gitsigns").setup()
         end
       },
       {
         "nvim-telescope/telescope.nvim",
+        event = "VimEnter",
         requires = {  "nvim-telescope/telescope-file-browser.nvim",  },
         config = require("configs.telescope")
       },

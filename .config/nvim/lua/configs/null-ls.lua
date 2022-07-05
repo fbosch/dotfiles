@@ -12,8 +12,12 @@ return function()
       if client.resolved_capabilities.document_range_formatting then
         vim.cmd("xnoremap <silent><buffer> <Leader>f :lua vim.lsp.buf.range_formatting({})<CR>")
       end
-      on_attach(client, bufnr)
-    end
+    end,
+    sources = {
+      null_ls.builtins.diagnostics.eslint, -- eslint or eslint_d
+      null_ls.builtins.code_actions.eslint, -- eslint or eslint_d
+      null_ls.builtins.formatting.prettier -- prettier, eslint, eslint_d, or prettierd
+    }
   })
 
 end

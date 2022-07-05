@@ -51,3 +51,6 @@ map("n", "<C-t>6", "6gt", silent)
 map("n", "<C-t>7", "7gt", silent)
 map("n", "<C-t>8", "8gt", silent)
 map("n", "<C-t>9", "9gt", silent)
+
+-- disable
+map("n", "q", "<Nop>", silent)

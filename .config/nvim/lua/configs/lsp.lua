@@ -13,6 +13,10 @@ return function()
   require(".configs.prettier")()
   require(".configs.cmp")()
 
+  vim.lsp.diagnostic.enable = true
+
+  local capabilities = vim.lsp.protocol.make_client_capabilities()
+
   local on_attach = function(client, bufnr)
     local bufopts = { noremap=true, silent=true, buffer=bufnr }
     vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, bufopts)
@@ -39,7 +43,27 @@ return function()
   })
 
   lspconfig.tsserver.setup({
-    on_attach = on_attach,
+    init_options = require("nvim-lsp-ts-utils").init_options,
+    capabilities = capabilities,
+    on_attach = function(client, bufnr)
+      client.resolved_capabilities.document_formatting = false
+      client.resolved_capabilities.document_range_formatting = false
+      local ts_utils = require("nvim-lsp-ts-utils")
+
+      ts_utils.setup({
+        enable_import_on_completion = true
+      })
+
+      ts_utils.setup_client(client)
+
+      local opts = { silent = true }
+      vim.api.nvim_buf_set_keymap(bufnr, "n", "gs", ":TSLspOrganize<CR>", opts)
+      vim.api.nvim_buf_set_keymap(bufnr, "n", "gr", ":TSLspRenameFile<CR>", opts)
+      vim.api.nvim_buf_set_keymap(bufnr, "n", "gi", ":TSLspImportAll<CR>", opts)
+      
+      on_attach(client, bufnr)
+    end
   })
+
 
 end

@@ -15,7 +15,8 @@ return function()
       "typescript",
       "typescriptreact",
       "yaml"
-    }
+    },
+    single_quote = true,
   })
 
 end
