@@ -13,8 +13,6 @@ return function()
   require(".configs.prettier")()
   require(".configs.cmp")()
 
-  vim.lsp.diagnostic.enable = true
-
   local capabilities = vim.lsp.protocol.make_client_capabilities()
 
   local on_attach = function(client, bufnr)
@@ -39,6 +37,7 @@ return function()
 
   lspconfig.tailwindcss.setup({
     cmd = { "tailwindcss-language-server", "--stdio" },
+    capabilities = capabilities,
     on_attach = on_attach,
   })
 
@@ -51,7 +50,8 @@ return function()
       local ts_utils = require("nvim-lsp-ts-utils")
 
       ts_utils.setup({
-        enable_import_on_completion = true
+        enable_import_on_completion = true,
+        auto_inlay_hints = false
       })
 
       ts_utils.setup_client(client)
@@ -64,6 +64,5 @@ return function()
       on_attach(client, bufnr)
     end
   })
-
 
 end

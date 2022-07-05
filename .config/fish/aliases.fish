@@ -29,8 +29,7 @@ abbr cflf 'nvim ~/.config/lf/lfrc'
 abbr cfdu 'nvim ~/.config/dunst/dunstrc'
 
 # Directory shortcuts
-abbr prj 'cd ~/Projects'
-abbr pjo 'pj open '
+abbr prj 'cd ~/Projects' abbr pjo 'pj open '
 
 # Helpers
 alias icat 'kitty +kitten icat'
@@ -57,6 +56,7 @@ abbr atm 'tmux attach-session -t'
 # Git
 abbr g 'git'
 abbr gs 'git status'
+abbr gd 'git difftool'
 abbr gau 'git add -u'
 abbr gco 'git checkout'
 abbr gaa 'git add --all'
@@ -65,6 +65,8 @@ abbr gcm 'git commit -m'
 # Webdev
 alias ya 'yarn add'
 alias yr 'yarn remove'
+abbr yt 'yarn test'
+abbr yb 'yarn build'
 abbr dev 'yarn dev'
 abbr sb 'yarn storybook'
 abbr lint 'yarn lint'
