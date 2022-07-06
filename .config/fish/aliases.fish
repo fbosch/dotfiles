@@ -60,7 +60,9 @@ abbr gd 'git difftool'
 abbr gau 'git add -u'
 abbr gco 'git checkout'
 abbr gaa 'git add --all'
-abbr gcm 'git commit -m'
+abbr gcm 'git commit -m "'
+abbr grhh 'git reset --hard HEAD'
+abbr gcfd 'git clean -fd'
 
 # Webdev
 alias ya 'yarn add'

@@ -18,37 +18,72 @@ return packer.startup({
   function(use)
     use({
       "wbthomason/packer.nvim",
-      "rktjmp/lush.nvim",
-      "tpope/vim-rhubarb",
-      "tpope/vim-fugitive",
-      "tpope/vim-commentary",
-      "tpope/vim-surround",
-      "tpope/vim-vinegar",
       "lewis6991/impatient.nvim",
-      "lukas-reineke/indent-blankline.nvim",
-      "mhinz/vim-sayonara",
-      "mg979/vim-visual-multi",
-      "simrat39/symbols-outline.nvim",
-      "github/copilot.vim",
-      "danilamihailov/beacon.nvim",
-      "antoinemadec/FixCursorHold.nvim",
-      "windwp/nvim-ts-autotag",
-      "ray-x/lsp_signature.nvim",
-      "folke/lsp-colors.nvim",
-      "gfanto/fzf-lsp.nvim",
-      "MunifTanjim/prettier.nvim",
-      "f-person/git-blame.nvim",
-      "onsails/lspkind.nvim",
-      "L3MON4D3/LuaSnip",
-      "hrsh7th/nvim-cmp",
-      "hrsh7th/cmp-nvim-lsp",
-      "hrsh7th/cmp-buffer",
-      "hrsh7th/cmp-path",
-      "junegunn/fzf",
-      "jose-elias-alvarez/null-ls.nvim",
-      "jose-elias-alvarez/nvim-lsp-ts-utils",
+      "tweekmonster/startuptime.vim",
+      {
+        "tpope/vim-vinegar",
+        event = "VimEnter"
+      },
+      {
+        "tpope/vim-commentary",
+        event = "CursorHold",
+      },
+      {
+        "tpope/vim-surround",
+        event = "InsertEnter",
+      },
+      { 
+        "mhinz/vim-sayonara",
+        event = "VimEnter",
+      },
+      {
+        "danilamihailov/beacon.nvim",
+        event = "CursorHold"
+      },
+      { 
+        "antoinemadec/FixCursorHold.nvim",
+        event = "VimEnter"
+      },
+      { 
+        "github/copilot.vim",
+        event = "VimEnter"
+      }, 
+      { 
+        "tpope/vim-fugitive", 
+        event = "VimEnter"
+      },
+      {
+        "lukas-reineke/indent-blankline.nvim",
+        event = "CursorHold"
+      },
+      { 
+        "PHSix/faster.nvim",
+        event = "VimEnter *",
+        config = function()
+          vim.api.nvim_set_keymap('n', 'j', '<Plug>(faster_move_j)', {noremap=false, silent=true})
+          vim.api.nvim_set_keymap('n', 'k', '<Plug>(faster_move_k)', {noremap=false, silent=true})
+        end
+      },
       {
         "neovim/nvim-lspconfig",
+        event = "VimEnter",
+        requires = {
+          "junegunn/fzf",
+          "windwp/nvim-ts-autotag",
+          "ray-x/lsp_signature.nvim",
+          "folke/lsp-colors.nvim",
+          "gfanto/fzf-lsp.nvim",
+          "MunifTanjim/prettier.nvim",
+          "f-person/git-blame.nvim",
+          "onsails/lspkind.nvim",
+          "L3MON4D3/LuaSnip",
+          "hrsh7th/nvim-cmp",
+          "hrsh7th/cmp-nvim-lsp",
+          "hrsh7th/cmp-buffer",
+          "hrsh7th/cmp-path",
+          "jose-elias-alvarez/null-ls.nvim",
+          "jose-elias-alvarez/nvim-lsp-ts-utils",
+        },
         config = require("configs.lsp")
       },
       {
@@ -75,42 +110,46 @@ return packer.startup({
         end
       },
       {
-        "gelguy/wilder.nvim",
-        event = "VimEnter",
-        requires = { "kyazdani42/nvim-web-devicons", "romgrk/fzy-lua-native" },
-        config = require("configs.wilder")
-      },
-      {
         "mcchrish/zenbones.nvim",
         requires = "rktjmp/lush.nvim"
       },
       {
+        "gelguy/wilder.nvim",
+        event = "VimEnter",
+        requires = { "kyazdani42/nvim-web-devicons", "romgrk/fzy-lua-native", "mcchrish/zenbones.nvim" },
+        config = require("configs.wilder")
+      },
+      {
         "lewis6991/gitsigns.nvim",
-        event ="CursorHold",
+        event = "CursorHold",
+        requires = { "mcchrish/zenbones.nvim" },
         config = function()
           require("gitsigns").setup()
         end
       },
       {
         "nvim-telescope/telescope.nvim",
-        event = "VimEnter",
-        requires = {  "nvim-telescope/telescope-file-browser.nvim",  },
+        event = "ColorScheme",
+        requires = {  "nvim-telescope/telescope-file-browser.nvim"  },
         config = require("configs.telescope")
       },
       {
         "nvim-lualine/lualine.nvim",
+        event = "ColorScheme",
         requires = { "kyazdani42/nvim-web-devicons", opt = true },
         config = require("configs.lualine")
       },
       {
         "startup-nvim/startup.nvim",
         requires = {"nvim-telescope/telescope.nvim", "nvim-lua/plenary.nvim"},
+        event = "VimEnter",
         config = function()
           require("startup").setup({ theme = "startup_theme" })
         end
       },
       {
         "ibhagwan/fzf-lua",
+        event = "VimEnter",
         requires = { "kyazdani42/nvim-web-devicons" },
         config = require("configs.fzf")
       },
@@ -128,6 +167,7 @@ return packer.startup({
       },
       {
         "nvim-treesitter/nvim-treesitter",
+        event = "VimEnter",
         run = ":TSUpdate",
         config = require("configs.nvim-treesitter")
       },

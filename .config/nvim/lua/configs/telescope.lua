@@ -1,12 +1,13 @@
 return function()
   local telescope = require("telescope")
+  local actions = require("telescope.actions")
   telescope.load_extension "file_browser"
   telescope.setup({
     defaults = {
       layout_config = {
         scroll_speed = 1.5,
         preview_cutoff = 300
-      }
+      },
     },
     extensions = {
       file_browser = { theme = "dropdown" },
