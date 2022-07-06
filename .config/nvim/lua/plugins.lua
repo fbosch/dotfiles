@@ -21,6 +21,14 @@ return packer.startup({
       "lewis6991/impatient.nvim",
       "tweekmonster/startuptime.vim",
       {
+        "antoinemadec/FixCursorHold.nvim",
+        event = "VimEnter"
+      },
+      {
+        "f-person/git-blame.nvim",
+        event = "CursorHold",
+      },
+      {
         "tpope/vim-vinegar",
         event = "VimEnter"
       },
@@ -41,10 +49,6 @@ return packer.startup({
         event = "CursorHold"
       },
       { 
-        "antoinemadec/FixCursorHold.nvim",
-        event = "VimEnter"
-      },
-      { 
         "github/copilot.vim",
         event = "VimEnter"
       }, 
@@ -58,7 +62,7 @@ return packer.startup({
       },
       { 
         "PHSix/faster.nvim",
-        event = "VimEnter *",
+        event = "CursorHold",
         config = function()
           vim.api.nvim_set_keymap('n', 'j', '<Plug>(faster_move_j)', {noremap=false, silent=true})
           vim.api.nvim_set_keymap('n', 'k', '<Plug>(faster_move_k)', {noremap=false, silent=true})
@@ -74,7 +78,6 @@ return packer.startup({
           "folke/lsp-colors.nvim",
           "gfanto/fzf-lsp.nvim",
           "MunifTanjim/prettier.nvim",
-          "f-person/git-blame.nvim",
           "onsails/lspkind.nvim",
           "L3MON4D3/LuaSnip",
           "hrsh7th/nvim-cmp",
@@ -116,26 +119,24 @@ return packer.startup({
       {
         "gelguy/wilder.nvim",
         event = "VimEnter",
-        requires = { "kyazdani42/nvim-web-devicons", "romgrk/fzy-lua-native", "mcchrish/zenbones.nvim" },
+        requires = { "kyazdani42/nvim-web-devicons", "romgrk/fzy-lua-native" },
         config = require("configs.wilder")
       },
       {
         "lewis6991/gitsigns.nvim",
         event = "CursorHold",
-        requires = { "mcchrish/zenbones.nvim" },
         config = function()
           require("gitsigns").setup()
         end
       },
       {
         "nvim-telescope/telescope.nvim",
-        event = "ColorScheme",
+        event = "VimEnter",
         requires = {  "nvim-telescope/telescope-file-browser.nvim"  },
         config = require("configs.telescope")
       },
       {
         "nvim-lualine/lualine.nvim",
-        event = "ColorScheme",
         requires = { "kyazdani42/nvim-web-devicons", opt = true },
         config = require("configs.lualine")
       },
@@ -167,7 +168,6 @@ return packer.startup({
       },
       {
         "nvim-treesitter/nvim-treesitter",
-        event = "VimEnter",
         run = ":TSUpdate",
         config = require("configs.nvim-treesitter")
       },
