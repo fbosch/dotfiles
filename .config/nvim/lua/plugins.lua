@@ -48,10 +48,10 @@ return packer.startup({
         "danilamihailov/beacon.nvim",
         event = "CursorHold"
       },
-      { 
-        "github/copilot.vim",
-        event = "VimEnter"
-      }, 
+      -- { 
+      --   "github/copilot.vim",
+      --   event = "VimEnter"
+      -- }, 
       { 
         "tpope/vim-fugitive", 
         event = "VimEnter"
@@ -70,7 +70,6 @@ return packer.startup({
       },
       {
         "neovim/nvim-lspconfig",
-        event = "VimEnter",
         requires = {
           "junegunn/fzf",
           "windwp/nvim-ts-autotag",
@@ -131,7 +130,6 @@ return packer.startup({
       },
       {
         "nvim-telescope/telescope.nvim",
-        event = "VimEnter",
         requires = {  "nvim-telescope/telescope-file-browser.nvim"  },
         config = require("configs.telescope")
       },

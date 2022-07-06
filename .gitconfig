@@ -2,17 +2,41 @@
   name = Frederik Bosch
   email = 6979916+fbosch@users.noreply.github.com
 
+[core]
+  pager = delta
+
 [push]
   default = current
 
+[delta]
+  navigate = true
+  light = false
+  line-numbers = true
+  side-by-side = true
+  features = decorations
+  syntax-theme = "Zenwritten Dark"
+  plus-style = syntax "#233017"
+  minus-style = syntax "#531b28"
+
+[delta "interactive"]
+  keep-plus-minus-markers = true
+
+[delta "decorations"]
+  commit-decoration-style = bold white box 
+  file-style = omit
+  hunk-header-decoration-style = "#3D3839" box ul
+  hunk-header-style = file line-number syntax
+  line-numbers-plus-style = "#819B69"
+  line-numbers-minus-style = "#DE6E7C"
+  line-numbers-left-style = "#8E8E8E"
+  line-numbers-right-style = "#8E8E8E"
+
+[interactive]
+  diffFilter = delta --color-only --features=interactive
+  pager = delta
+
+[merge]
+  conflictstyle = diff3
+
 [diff]
-  tool = icdiff
-
-[difftool]
-  prompt = false
-
-[difftool "icdiff"]
-  cmd = icdiff --line-numbers $LOCAL $REMOTE
-
-[page]
-  difftool = true
+  colorMoved = default

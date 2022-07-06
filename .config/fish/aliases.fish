@@ -41,7 +41,7 @@ abbr t 'yarn test'
 abbr mki 'sudo make && sudo make clean install'
 
 # Extended defaults
-alias cat 'pygmentize -g -O style=colorful,lineos=1'
+alias cat 'bat --color=always'
 alias ls 'exa --icons -F'
 alias l 'ls -l'
 alias la 'ls -a'
