@@ -29,7 +29,8 @@ abbr cflf 'nvim ~/.config/lf/lfrc'
 abbr cfdu 'nvim ~/.config/dunst/dunstrc'
 
 # Directory shortcuts
-abbr prj 'cd ~/Projects' abbr pjo 'pj open '
+abbr prj 'cd ~/Projects' 
+abbr pjo 'pj open '
 
 # Helpers
 alias icat 'kitty +kitten icat'

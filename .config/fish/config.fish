@@ -30,10 +30,6 @@ function lfcd --description "lf to switch directories"
 end
 
 bind -M insert \cc kill-whole-line repaint
-bind \co 'lfcd' # Change directories when pressing CTRL+O
-# peco
-bind \cr 'peco_select_history' # Bind for peco select history to Ctrl+R
-bind \cf 'peco_change_directory' # Bind for peco change directory to Ctrl+F
 
 # Keybindings
 function fish_user_keybindings
