@@ -1,6 +1,5 @@
 return function()
   local lspconfig = require("lspconfig")
-  require("fzf_lsp").setup()
   require("lsp_signature").setup({
     bind = true,
     hint_prefix = "📖 ",
@@ -12,6 +11,8 @@ return function()
   require(".configs.null-ls")()
   require(".configs.prettier")()
   require(".configs.cmp")()
+
+  require("fzf_lsp").setup()
 
   local capabilities = vim.lsp.protocol.make_client_capabilities()
 

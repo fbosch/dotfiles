@@ -3,7 +3,7 @@ return function()
     previewers = {
       bat = {
         cmd = "bat",
-        args = "--style=numbers,changes --color=always --line-range=:50",
+        args = "--style=numbers,changes --color=always --line-range=:70",
         theme = 'Zenwritten Dark',
         config = nil 
       }
@@ -11,12 +11,12 @@ return function()
     files = {
       previewer = 'bat',
       prompt = "Files ",
-      git_icons = true
     },
     keymap = {
       builtin = {
         ["K"] = "preview-page-up",
         ["J"] = "preview-page-down",
-      }, },
+      }, 
+    },
   })
 end

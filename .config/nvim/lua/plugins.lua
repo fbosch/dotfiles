@@ -20,10 +20,7 @@ return packer.startup({
       "wbthomason/packer.nvim",
       "lewis6991/impatient.nvim",
       "tweekmonster/startuptime.vim",
-      {
-        "antoinemadec/FixCursorHold.nvim",
-        event = "VimEnter"
-      },
+      "antoinemadec/FixCursorHold.nvim",
       {
         "f-person/git-blame.nvim",
         event = "CursorHold",
@@ -35,7 +32,7 @@ return packer.startup({
       {
         "tpope/vim-commentary",
         event = "CursorHold",
-      },
+        },
       {
         "tpope/vim-surround",
         event = "InsertEnter",
@@ -48,10 +45,10 @@ return packer.startup({
         "danilamihailov/beacon.nvim",
         event = "CursorHold"
       },
-      -- { 
-      --   "github/copilot.vim",
-      --   event = "VimEnter"
-      -- }, 
+      { 
+        "github/copilot.vim",
+        ft = {"typescript", "typescriptreact", "javascript", "javascriptreact", "html", "markdown", "css"}
+      }, 
       { 
         "tpope/vim-fugitive", 
         event = "VimEnter"

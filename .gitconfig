@@ -13,7 +13,7 @@
   light = false
   line-numbers = true
   side-by-side = true
-  features = decorations
+  features = side-by-side line-numbers decorations
   syntax-theme = "Zenwritten Dark"
   plus-style = syntax "#233017"
   minus-style = syntax "#531b28"
@@ -24,12 +24,13 @@
 [delta "decorations"]
   commit-decoration-style = bold white box 
   file-style = omit
+  file-decoration-style = none
   hunk-header-decoration-style = "#3D3839" box ul
   hunk-header-style = file line-number syntax
   line-numbers-plus-style = "#819B69"
   line-numbers-minus-style = "#DE6E7C"
-  line-numbers-left-style = "#8E8E8E"
-  line-numbers-right-style = "#8E8E8E"
+  line-numbers-left-style = "#3D3839"
+  line-numbers-right-style = "#3D3839"
 
 [interactive]
   diffFilter = delta --color-only --features=interactive

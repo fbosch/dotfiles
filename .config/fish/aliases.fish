@@ -41,7 +41,7 @@ abbr t 'yarn test'
 abbr mki 'sudo make && sudo make clean install'
 
 # Extended defaults
-alias cat 'bat --color=always'
+alias cat 'pygmentize -g -O style=colorful,lineos=1'
 alias ls 'exa --icons -F'
 alias l 'ls -l'
 alias la 'ls -a'
@@ -56,7 +56,7 @@ abbr atm 'tmux attach-session -t'
 # Git
 abbr g 'git'
 abbr gs 'git status'
-abbr gd 'git difftool'
+abbr gd 'git diff'
 abbr gau 'git add -u'
 abbr gco 'git checkout'
 abbr gaa 'git add --all'
