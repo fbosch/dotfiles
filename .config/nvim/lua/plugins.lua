@@ -21,6 +21,7 @@ return packer.startup({
       "lewis6991/impatient.nvim",
       "tweekmonster/startuptime.vim",
       "antoinemadec/FixCursorHold.nvim",
+      "github/copilot.vim",
       {
         "f-person/git-blame.nvim",
         event = "CursorHold",
@@ -45,10 +46,6 @@ return packer.startup({
         "danilamihailov/beacon.nvim",
         event = "CursorHold"
       },
-      { 
-        "github/copilot.vim",
-        ft = {"typescript", "typescriptreact", "javascript", "javascriptreact", "html", "markdown", "css"}
-      }, 
       { 
         "tpope/vim-fugitive", 
         event = "VimEnter"

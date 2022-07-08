@@ -1,15 +1,15 @@
-Downloads/**/*
-go/**/*
-Library/**/*
-.brave-bin/**/*
-Desktop/**/*
-**/.yarn/**/*
-**/node_modules/**/*
+Downloads/*
+go/*
+Library/*
+.brave-bin/*
+Desktop/*
+*/.yarn/*
+*/node_modules/*
 *.log
 *.session
 *.history
-*/.vscode/**/*
+*/.vscode/*
 *.plist
 *.db
 *.kgbd
-**/Photos Library.photoslibrary/**/*
+*/Photos Library.photoslibrary/*

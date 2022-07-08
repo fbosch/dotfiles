@@ -31,6 +31,7 @@ abbr cfdu 'nvim ~/.config/dunst/dunstrc'
 # Directory shortcuts
 abbr prj 'cd ~/Projects' 
 abbr pjo 'pj open '
+abbr h 'cd ~/'
 
 # Helpers
 alias icat 'kitty +kitten icat'
@@ -43,7 +44,7 @@ abbr mki 'sudo make && sudo make clean install'
 # Extended defaults
 alias cat 'bat --style=plain --color=always'
 alias ls 'exa --icons -F'
-alias l 'ls -l'
+alias l 'ls -lh'
 alias la 'ls -a'
 alias lla 'ls -la'
 alias lt 'ls --tree'
