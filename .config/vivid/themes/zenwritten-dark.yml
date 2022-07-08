@@ -1,6 +1,6 @@
 colors:
-  # Based on the dark mode of `Solarized`
-  # (https://ethanschoonover.com/solarized/)
+  # Based on the dark mode of `Zenwritten`
+  # (https://github.com/mcchrish/zenbones.nvim)
   #
   # The assignment of colors to file types roughly follows `dircolors`
 
