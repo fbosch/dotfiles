@@ -23,6 +23,13 @@ return packer.startup({
       "antoinemadec/FixCursorHold.nvim",
       "github/copilot.vim",
       {
+        "folke/which-key.nvim",
+        config = function()
+          require("which-key").setup()
+        end,
+        event = "CursorHold"
+      },
+      {
         "f-person/git-blame.nvim",
         event = "CursorHold",
       },
