@@ -58,6 +58,7 @@ map("n", "<C-t>9", "9gt", silent)
 
 -- disable
 map("n", "q", "<Nop>", silent)
+map("n", "<SPACE>", "<Nop>", silent)
 
 -- trouble toggling
 map("n", "<leader>xx", "<cmd>Trouble<CR>", silent)

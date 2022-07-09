@@ -1,4 +1,4 @@
-vim.g.mapleader = ","
+vim.g.mapleader = " "
 vim.o.sessionoptions = "blank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal"
 
 local set = vim.opt
@@ -10,10 +10,14 @@ require("autocmd")
 
 vim.cmd("colorscheme zenwritten")
 
+set.background = "dark"
 set.shortmess = "I"
 set.backup = false 
-set.timeoutlen = 1500
-set.background = "dark"
+set.swapfile = false
+set.undofile = true
+set.undodir = "~/.vim/undo"
+set.signcolumn = "yes"
+set.timeoutlen = 1200
 set.path:append("**")
 set.mouse = "a"
 set.showcmd = true
@@ -31,6 +35,8 @@ set.wrap = false
 set.backspace = "indent,eol,start"
 set.number = true
 set.tabstop = 2
+set.hidden = true
+set.errorbells = false
 set.shiftwidth = 2
 set.autoindent = true
 set.expandtab = true

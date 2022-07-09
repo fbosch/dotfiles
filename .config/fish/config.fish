@@ -30,7 +30,6 @@ function lfcd --description "lf to switch directories"
 end
 
 bind -M insert \cc kill-whole-line repaint
-bind \cp "__fzf_open"
 
 # Keybindings
 function fish_user_keybindings

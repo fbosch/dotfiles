@@ -26,8 +26,6 @@ return packer.startup({
         config = function()
           require("auto-session").setup({
             log_level = "error",
-            supauto_session_suppress_dirs = { "~/", "~/.config" },
-            auto_session_allowed_dirs = { "~/Projects" },
           })
         end
       },
@@ -40,7 +38,7 @@ return packer.startup({
         config = function()
           require("which-key").setup()
         end,
-        event = "CursorHold"
+        event = "VimEnter"
       },
       {
         "f-person/git-blame.nvim",
