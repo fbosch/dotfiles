@@ -22,6 +22,16 @@ return packer.startup({
       "tweekmonster/startuptime.vim",
       "antoinemadec/FixCursorHold.nvim",
       {
+        "rmagatti/auto-session",
+        config = function()
+          require("auto-session").setup({
+            log_level = "error",
+            supauto_session_suppress_dirs = { "~/", "~/.config" },
+            auto_session_allowed_dirs = { "~/Projects" },
+          })
+        end
+      },
+      {
         "github/copilot.vim",
         ft = { "html", "css", "javascript", "javascriptreact", "typescript", "typescriptreact", "json", "lua" }
       },
@@ -148,14 +158,6 @@ return packer.startup({
         "nvim-lualine/lualine.nvim",
         requires = { "kyazdani42/nvim-web-devicons", opt = true },
         config = require("configs.lualine")
-      },
-      {
-        "startup-nvim/startup.nvim",
-        requires = {"nvim-telescope/telescope.nvim", "nvim-lua/plenary.nvim"},
-        event = "VimEnter",
-        config = function()
-          require("startup").setup({ theme = "startup_theme" })
-        end
       },
       {
         "ibhagwan/fzf-lua",

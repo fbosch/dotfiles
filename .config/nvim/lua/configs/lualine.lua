@@ -8,7 +8,7 @@ return function()
     options = { theme = "auto" },
     extensions = { "fugitive", "symbols-outline" },
     sections = {
-      lualine_c = {},
+      lualine_c = { require("auto-session-library").current_session_name },
       lualine_y = {
         "filetype"
       },

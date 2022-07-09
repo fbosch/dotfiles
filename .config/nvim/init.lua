@@ -1,14 +1,5 @@
-_G.__luacache_config = {
-  chunks = {
-    enable = true,
-    path = vim.fn.stdpath('cache')..'/luacache_chunks',
-  },
-  modpaths = {
-    enable = true,
-    path = vim.fn.stdpath('cache')..'/luacache_modpaths',
-  }
-}
 vim.g.mapleader = ","
+vim.o.sessionoptions = "blank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal"
 
 local set = vim.opt
 
@@ -18,9 +9,8 @@ require("keymap")
 require("autocmd")
 
 vim.cmd("colorscheme zenwritten")
-vim.highlight.create("WildMenu", { guibg = "NONE", guifg = "#bbbbbb", guisp = "NONE", gui = "NONE", cterm = "NONE" })
 
-
+set.shortmess = "I"
 set.backup = false 
 set.timeoutlen = 1500
 set.background = "dark"
