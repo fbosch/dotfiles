@@ -18,17 +18,17 @@ cmd({ "BufWritePost" }, {
   group = group
 })
 cmd({ "BufNewFile", "BufRead" }, {
-  pattern = { "*.es6" },
+  pattern = { ".{es6,mjs}" },
   command = "setf javascript",
   group = group
 })
   cmd({ "BufNewFile", "BufRead" }, {
-  pattern = { "*.tsx" },
+  pattern = { ".tsx" },
   command = "setf typescriptreact",
   group = group
 })
 cmd({ "BufNewFile", "BufRead"}, {
-  pattern = { "*.md", "*.mdx" },
+  pattern = { ".md", ".mdx" },
   command = "setf markdown",
   group = group
 })

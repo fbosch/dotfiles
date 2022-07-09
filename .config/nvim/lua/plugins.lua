@@ -6,11 +6,11 @@ end
 
 -- Have packer use a popup window
 packer.init({
-	display = {
-		open_fn = function()
-			return require("packer.util").float({ border = "rounded" })
-		end,
-	},
+  display = {
+    open_fn = function()
+      return require("packer.util").float({ border = "rounded" })
+    end,
+  },
 })
 
 -- install packages
@@ -31,6 +31,7 @@ return packer.startup({
       },
       {
         "github/copilot.vim",
+        event = "CursorHold",
         ft = { "html", "css", "javascript", "javascriptreact", "typescript", "typescriptreact", "json", "lua" }
       },
       {
@@ -82,6 +83,8 @@ return packer.startup({
       },
       {
         "neovim/nvim-lspconfig",
+        event = "VimEnter",
+        ft = { "html", "css", "javascript", "javascriptreact", "typescript", "typescriptreact", "json", "lua" },
         requires = {
           "junegunn/fzf",
           "windwp/nvim-ts-autotag",
@@ -91,6 +94,7 @@ return packer.startup({
           "MunifTanjim/prettier.nvim",
           "onsails/lspkind.nvim",
           "L3MON4D3/LuaSnip",
+          "saadparwaiz1/cmp_luasnip",
           "hrsh7th/nvim-cmp",
           "hrsh7th/cmp-nvim-lsp",
           "hrsh7th/cmp-buffer",
@@ -107,6 +111,7 @@ return packer.startup({
       {
         "folke/trouble.nvim",
         requires = { "kyazdani42/nvim-web-devicons" },
+        event = "CursorHold",
         config = function()
           require("trouble").setup()
         end

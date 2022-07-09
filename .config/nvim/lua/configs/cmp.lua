@@ -2,6 +2,9 @@ return function()
   local cmp = require("cmp")
   local types = require("cmp.types")
   local lspkind = require("lspkind")
+  local luasnip = require("luasnip")
+
+  require("luasnip.loaders.from_vscode").lazy_load({ include = { "typescript", "javascript" } })
 
   vim.highlight.create("CmpItemAbbrDeprecated", { guibg=0, guifg="#bbbbbb", gui="strikethrough"})
   vim.highlight.create("CmpItemAbbrMatch", { guibg=0, guifg="#aaaaaa" })
@@ -34,6 +37,7 @@ return function()
     sources = cmp.config.sources({
       { name = "nvim_lsp" },
       { name = "buffer" },
+      { name = "luasnip" },
       { name = "path" }
     }),
     mapping = cmp.mapping.preset.insert({

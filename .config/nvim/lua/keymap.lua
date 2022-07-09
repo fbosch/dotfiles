@@ -10,13 +10,17 @@ map("n", "<leader>z", ":Sayonara!<CR>", silent)
 map("v", "<", "<gv", options)
 map("v", ">", ">gv", options)
 
+-- clear highlighted search with Escape in normal mode
+map("n", "<Esc>", ":noh<CR>", silent)
+map("n", "<esc>^[", "<esc>[", silent)
+
 -- remap split navigation to CTRL + hjkl
 map("n", "<C-k>", ":wincmd k<CR>", silent)
 map("n", "<C-j>", ":wincmd j<CR>", silent)
 map("n", "<C-h>", ":wincmd h<CR>", silent)
 map("n", "<C-l>", ":wincmd l<CR>", silent)
 
--- autoswitch to newly create split
+-- autoswitch to newly created split
 map("n", "<C-W>v", ":vsplit<CR> | :wincmd l<CR>", silent)
 map("n", "<C-W>s", ":split<CR> | :wincmd j<CR>", silent)
 
@@ -57,8 +61,8 @@ map("n", "<C-t>8", "8gt", silent)
 map("n", "<C-t>9", "9gt", silent)
 
 -- disable
-map("n", "q", "<Nop>", silent)
-map("n", "<SPACE>", "<Nop>", silent)
+map("n", "<Space>", "<NOP>", silent)
+map("n", "q", "<NOP>", silent)
 
 -- trouble toggling
 map("n", "<leader>xx", "<cmd>Trouble<CR>", silent)
