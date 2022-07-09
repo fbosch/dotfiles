@@ -18,6 +18,8 @@ require("keymap")
 require("autocmd")
 
 vim.cmd("colorscheme zenwritten")
+vim.highlight.create("WildMenu", { guibg = "NONE", guifg = "#bbbbbb", guisp = "NONE", gui = "NONE", cterm = "NONE" })
+
 
 set.backup = false 
 set.timeoutlen = 1500

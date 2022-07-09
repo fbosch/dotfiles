@@ -16,6 +16,10 @@ map("n", "<C-j>", ":wincmd j<CR>", silent)
 map("n", "<C-h>", ":wincmd h<CR>", silent)
 map("n", "<C-l>", ":wincmd l<CR>", silent)
 
+-- autoswitch to newly create split
+map("n", "<C-W>v", ":vsplit<CR> | :wincmd l<CR>", silent)
+map("n", "<C-W>s", ":split<CR> | :wincmd j<CR>", silent)
+
 -- adjust split sizes with CTRL + arrows
 map("n", "<C-Left>", ":vertical resize +3<CR>", silent)
 map("n", "<C-Right>", ":vertical resize -3<CR>", silent)
@@ -54,3 +58,11 @@ map("n", "<C-t>9", "9gt", silent)
 
 -- disable
 map("n", "q", "<Nop>", silent)
+
+-- trouble toggling
+map("n", "<leader>xx", "<cmd>Trouble<CR>", silent)
+map("n", "<leader>xw", "<cmd>Trouble workspace_diagnostics<CR>", silent)
+map("n", "<leader>xd", "<cmd>Trouble document_diagnostics<CR>", silent)
+map("n", "<leader>xl", "<cmd>Trouble loclist<CR>", silent)
+map("n", "<leader>xq", "<cmd>Trouble quickfix<CR>", silent)
+map("n", "gR", "<cmd>Trouble lsp_references<CR>", silent)

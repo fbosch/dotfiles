@@ -3,8 +3,10 @@ go/*
 Library/*
 .brave-bin/*
 Desktop/*
-*/.yarn/*
-*/node_modules/*
+cache/**/*
+Cache/**/*
+**/.yarn/**/*
+**/node_modules/**/*
 *.log
 *.session
 *.history

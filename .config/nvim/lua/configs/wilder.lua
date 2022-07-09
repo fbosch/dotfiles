@@ -23,12 +23,13 @@ return function()
     wilder.popupmenu_border_theme({
       pumblend = 10,
       border = "rounded",
+      background = "dark",
       highlighter = {
         wilder.pcre2_highlighter(),
         wilder.lua_fzy_highlighter()
       },
       highlights = {
-        accent = wilder.make_hl("WilderAccent", "Pmenu", {{ foreground = "#ffffff" }, { background = -1 }, { foreground = "#B279A7" }})
+          accent = wilder.make_hl("WilderAccent", "Pmenu", {{ foreground = "#ffffff" }, { background = -1 }, { foreground = "#B279A7" }})
       },
       left = {
         ' ',

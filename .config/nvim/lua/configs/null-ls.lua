@@ -6,7 +6,14 @@ return function()
        if client.resolved_capabilities.document_formatting then
         vim.cmd("nnoremap <silent><buffer> <Leader>f :lua vim.lsp.buf.formatting()<CR>")
         -- format on save
-        vim.cmd("autocmd BufWritePost <buffer> lua vim.lsp.buf.formatting()")
+        vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
+        vim.api.nvim_create_autocmd("BufWritePre", {
+          group = augroup,
+          buffer = bufnr,
+          callback = function()
+            vim.lsp.buf.formatting_sync()
+          end
+        })
       end
 
       if client.resolved_capabilities.document_range_formatting then

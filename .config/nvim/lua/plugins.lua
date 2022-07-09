@@ -21,7 +21,10 @@ return packer.startup({
       "lewis6991/impatient.nvim",
       "tweekmonster/startuptime.vim",
       "antoinemadec/FixCursorHold.nvim",
-      "github/copilot.vim",
+      {
+        "github/copilot.vim",
+        ft = { "html", "css", "javascript", "javascriptreact", "typescript", "typescriptreact", "json", "lua" }
+      },
       {
         "folke/which-key.nvim",
         config = function()
@@ -92,6 +95,13 @@ return packer.startup({
       {
        "romgrk/barbar.nvim",
         requires = {"kyazdani42/nvim-web-devicons" },
+      },
+      {
+        "folke/trouble.nvim",
+        requires = { "kyazdani42/nvim-web-devicons" },
+        config = function()
+          require("trouble").setup()
+        end
       },
       {
         "rrethy/vim-hexokinase",
