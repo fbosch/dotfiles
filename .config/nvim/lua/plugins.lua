@@ -57,10 +57,6 @@ return packer.startup({
         "tpope/vim-surround",
         event = "InsertEnter",
       },
-      { 
-        "mhinz/vim-sayonara",
-        event = "VimEnter",
-      },
       {
         "danilamihailov/beacon.nvim",
         event = "CursorHold"
@@ -130,7 +126,7 @@ return packer.startup({
       {
         "folke/todo-comments.nvim",
         requires = "nvim-lua/plenary.nvim",
-        event = "CursorHold",
+        event = "VimEnter",
         config = function()
           require("todo-comments").setup()
         end

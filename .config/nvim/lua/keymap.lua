@@ -4,7 +4,7 @@ local silent = { noremap = true, silent = true }
 
 map("n", "<C-p>", "<cmd>lua require('fzf-lua').files()<CR>", silent)
 map("n", "<C-b>", ":NvimTreeToggle<CR>", options)
-map("n", "<leader>z", ":Sayonara!<CR>", silent)
+map("n", "<leader>z", ":bd<CR>", silent)
 
 -- easier indentation in visual mode
 map("v", "<", "<gv", options)
@@ -33,6 +33,9 @@ map("n", "<C-Down>", ":resize +3<CR>", silent)
 -- navigate buffers with SHIFT + hl
 map("n", "<S-h>", ":BufferPrevious<CR>", silent)
 map("n", "<S-l>", ":BufferNext<CR>", silent)
+
+-- previous buffer
+map("n", "-", ":b#<CR>", silent)
 
 -- find files using telescope
 map("n", "<Leader>ff", ":Telescope find_files<CR>", options)
@@ -71,3 +74,5 @@ map("n", "<leader>xd", "<cmd>Trouble document_diagnostics<CR>", silent)
 map("n", "<leader>xl", "<cmd>Trouble loclist<CR>", silent)
 map("n", "<leader>xq", "<cmd>Trouble quickfix<CR>", silent)
 map("n", "gR", "<cmd>Trouble lsp_references<CR>", silent)
+
+
