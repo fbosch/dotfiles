@@ -1,8 +1,21 @@
+
+
+
 -- Use a protected call so we don't error out on first use
 local status_ok, packer = pcall(require, "packer")
 if not status_ok then
+  local install_path = vim.fn.stdpath('data')..'/site/pack/packer/start/packer.nvim'
+  if vim.fn.empty(vim.fn.glob(install_path)) > 0 then
+    packer_bootstrap = vim.fn.system({'git', 'clone', '--depth', '1', 'https://github.com/wbthomason/packer.nvim', install_path})
+  end
 	return
 end
+
+
+if packer_bootstrap and status_ok then
+  packer.sync()
+end
+
 
 -- Have packer use a popup window
 packer.init({
@@ -13,6 +26,8 @@ packer.init({
   },
 })
 
+local developmentFiles = { "html", "css", "javascript", "javascriptreact", "typescript", "typescriptreact", "json", "lua" }
+
 -- install packages
 return packer.startup({
   function(use)
@@ -21,6 +36,10 @@ return packer.startup({
       "lewis6991/impatient.nvim",
       "tweekmonster/startuptime.vim",
       "antoinemadec/FixCursorHold.nvim",
+      {
+        "mcchrish/zenbones.nvim",
+        requires = { "rktjmp/lush.nvim" }
+      },
       {
         "rmagatti/auto-session",
         config = function()
@@ -31,8 +50,8 @@ return packer.startup({
       },
       {
         "github/copilot.vim",
-        event = "CursorHold",
-        ft = { "html", "css", "javascript", "javascriptreact", "typescript", "typescriptreact", "json", "lua" }
+        event = "CursorHoldI",
+        ft = developmentFiles
       },
       {
         "folke/which-key.nvim",
@@ -52,18 +71,20 @@ return packer.startup({
       {
         "tpope/vim-commentary",
         event = "CursorHold",
-        },
+      },
       {
         "tpope/vim-surround",
         event = "InsertEnter",
       },
       {
         "danilamihailov/beacon.nvim",
-        event = "CursorHold"
+        ft = developmentFiles,
+        event = "BufLeave"
       },
       { 
         "tpope/vim-fugitive", 
-        event = "VimEnter"
+        ft = developmentFiles,
+        event = "CursorHold"
       },
       {
         "lukas-reineke/indent-blankline.nvim",
@@ -71,7 +92,8 @@ return packer.startup({
       },
       { 
         "PHSix/faster.nvim",
-        event = "CursorHold",
+        event = "BufEnter",
+        ft = developmentFiles,
         config = function()
           vim.api.nvim_set_keymap('n', 'j', '<Plug>(faster_move_j)', {noremap=false, silent=true})
           vim.api.nvim_set_keymap('n', 'k', '<Plug>(faster_move_k)', {noremap=false, silent=true})
@@ -79,8 +101,8 @@ return packer.startup({
       },
       {
         "neovim/nvim-lspconfig",
+        ft = developmentFiles,
         event = "VimEnter",
-        ft = { "html", "css", "javascript", "javascriptreact", "typescript", "typescriptreact", "json", "lua" },
         requires = {
           "junegunn/fzf",
           "windwp/nvim-ts-autotag",
@@ -99,15 +121,6 @@ return packer.startup({
           "jose-elias-alvarez/nvim-lsp-ts-utils",
         },
         config = require("configs.lsp")
-      },
-      {
-       "romgrk/barbar.nvim",
-        requires = {"kyazdani42/nvim-web-devicons" },
-        config = function()
-          require("bufferline").setup({
-            animation = false
-          })
-        end
       },
       {
         "folke/trouble.nvim",
@@ -131,14 +144,28 @@ return packer.startup({
       {
         "folke/todo-comments.nvim",
         requires = "nvim-lua/plenary.nvim",
-        event = "VimEnter",
+        event = "ColorScheme",
+        ft = developmentFiles,
         config = function()
           require("todo-comments").setup()
         end
       },
       {
-        "mcchrish/zenbones.nvim",
-        requires = "rktjmp/lush.nvim"
+       "romgrk/barbar.nvim",
+        requires = { "kyazdani42/nvim-web-devicons" },
+        event = "VimEnter",
+        after = { "zenbones.nvim", "lush.nvim" },
+        config = function()
+          require("bufferline").setup({
+            animation = false
+          })
+        end
+      },
+      {
+        "nvim-lualine/lualine.nvim",
+        requires = { "kyazdani42/nvim-web-devicons", "f-person/git-blame.nvim" },
+        after = { "zenbones.nvim", "lush.nvim" },
+        config = require("configs.lualine")
       },
       {
         "gelguy/wilder.nvim",
@@ -149,19 +176,16 @@ return packer.startup({
       {
         "lewis6991/gitsigns.nvim",
         event = "CursorHold",
+        ft = developmentFiles,
         config = function()
           require("gitsigns").setup()
         end
       },
       {
         "nvim-telescope/telescope.nvim",
-        requires = {  "nvim-telescope/telescope-file-browser.nvim"  },
+        event = "VimEnter",
+        requires = { "nvim-telescope/telescope-file-browser.nvim"  },
         config = require("configs.telescope")
-      },
-      {
-        "nvim-lualine/lualine.nvim",
-        requires = { "kyazdani42/nvim-web-devicons", opt = true },
-        config = require("configs.lualine")
       },
       {
         "ibhagwan/fzf-lua",
@@ -170,20 +194,16 @@ return packer.startup({
         config = require("configs.fzf")
       },
       {
-        "windwp/nvim-autopairs",
-        event = "InsertEnter",
-        config = function()
-          require("nvim-autopairs").setup()
-        end
-      },
-      {
         "kyazdani42/nvim-tree.lua",
+        event = "VimEnter",
         requires = { "kyazdani42/nvim-web-devicons" },
         config = require("configs.nvim-tree")
       },
       {
         "nvim-treesitter/nvim-treesitter",
         run = ":TSUpdate",
+        requires = { "windwp/nvim-autopairs" },
+        ft = developmentFiles,
         config = require("configs.nvim-treesitter")
       },
     })

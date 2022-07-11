@@ -1,4 +1,5 @@
 return function()
+  require("nvim-autopairs").setup()
   require("nvim-treesitter.configs").setup({
     autopairs = { enable = true },
     autotag = { enable = true },
