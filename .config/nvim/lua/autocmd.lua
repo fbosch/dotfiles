@@ -13,8 +13,10 @@ cmd({ "VimLeavePre" }, {
   end,
   group = group,
 })
-
-cmd({ "BufEnter" }, { command = "syntax sync fromstart", group = group })
+cmd({ "BufEnter" }, { 
+  command = "syntax sync fromstart", 
+  group = group
+})
 cmd({ "BufRead", "BufNewFile" }, {
   pattern = { ".{eslint,babel,stylelint,prettier}rc" },
   command = "set ft=json5",
@@ -46,7 +48,6 @@ cmd({ "BufNewFile", "BufRead"}, {
   group = group
 })
 cmd({ "TextYankPost" }, {
-  pattern = { "*" },
   command = "lua vim.highlight.on_yank({ higroup = 'IncSearch', timeout = 500 })",
   group = group
 })

@@ -4,7 +4,7 @@ return function()
   local lspkind = require("lspkind")
   local luasnip = require("luasnip")
 
-  require("luasnip.loaders.from_vscode").lazy_load({ include = { "typescript", "javascript" } })
+  require("luasnip.loaders.from_snipmate").lazy_load()
 
   vim.highlight.create("CmpItemAbbrDeprecated", { guibg=0, guifg="#bbbbbb", gui="strikethrough"})
   vim.highlight.create("CmpItemAbbrMatch", { guibg=0, guifg="#aaaaaa" })
