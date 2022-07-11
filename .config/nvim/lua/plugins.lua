@@ -46,6 +46,18 @@ return packer.startup({
         end
       },
       {
+        "karb94/neoscroll.nvim",
+        event = "CursorHold",
+        config = function()
+          require("neoscroll").setup({
+            hide_cursor = true,
+            post_hook = function()
+              vim.api.nvim_command("Beacon")
+            end
+          })
+        end
+      },
+      {
         "github/copilot.vim",
         event = "CursorHoldI",
         ft = developmentFiles
@@ -88,15 +100,6 @@ return packer.startup({
         ft = developmentFiles,
         event = "CursorHold"
       },
-      { 
-        "PHSix/faster.nvim",
-        event = "BufEnter",
-        ft = developmentFiles,
-        config = function()
-          vim.api.nvim_set_keymap('n', 'j', '<Plug>(faster_move_j)', {noremap=false, silent=true})
-          vim.api.nvim_set_keymap('n', 'k', '<Plug>(faster_move_k)', {noremap=false, silent=true})
-        end
-      },
       {
         "nvim-treesitter/nvim-treesitter",
         run = ":TSUpdate",
@@ -123,6 +126,8 @@ return packer.startup({
           "hrsh7th/cmp-nvim-lsp",
           "hrsh7th/cmp-buffer",
           "hrsh7th/cmp-path",
+          "hrsh7th/cmp-nvim-lua",
+          "mtoohey31/cmp-fish",
           "jose-elias-alvarez/null-ls.nvim",
           "jose-elias-alvarez/nvim-lsp-ts-utils",
         },
