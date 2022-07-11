@@ -30,10 +30,6 @@ map("n", "<C-Right>", ":vertical resize -3<CR>", silent)
 map("n", "<C-Up>", ":resize -3<CR>", silent)
 map("n", "<C-Down>", ":resize +3<CR>", silent)
 
--- navigate buffers with SHIFT + hl
-map("n", "<S-h>", ":BufferPrevious<CR>", silent)
-map("n", "<S-l>", ":BufferNext<CR>", silent)
-
 -- previous buffer
 map("n", "-", ":b#<CR>", silent)
 
@@ -55,15 +51,19 @@ map("n", "<C-t>n", ":tabnew<CR>", silent)
 map("n", "<C-t>d", ":tabclose<CR>", silent)
 
 -- buffer controls
-map("n", "<C-t>1", ":BufferGoto 1<CR>", silent)
-map("n", "<C-t>2", ":BufferGoto 2<CR>", silent)
-map("n", "<C-t>3", ":BufferGoto 3<CR>", silent)
-map("n", "<C-t>4", ":BufferGoto 4<CR>", silent)
-map("n", "<C-t>5", ":BufferGoto 5<CR>", silent)
-map("n", "<C-t>6", ":BufferGoto 6<CR>", silent)
-map("n", "<C-t>7", ":BufferGoto 7<CR>", silent)
-map("n", "<C-t>8", ":BufferGoto 8<CR>", silent)
-map("n", "<C-t>9", ":BufferGoto 9<CR>", silent)
+map("n", "<C-h>", ":BufferPrevious<CR>", silent)
+map("n", "<C-l>", ":BufferNext<CR>", silent)
+map("n", "<C-A-h>", ":BufferMovePrevious<CR>", silent)
+map("n", "<C-A-l>", ":BufferMoveNext<CR>", silent)
+map("n", "<C-1>", ":BufferGoto 1<CR>", silent)
+map("n", "<C-2>", ":BufferGoto 2<CR>", silent)
+map("n", "<C-3>", ":BufferGoto 3<CR>", silent)
+map("n", "<C-4>", ":BufferGoto 4<CR>", silent)
+map("n", "<C-5>", ":BufferGoto 5<CR>", silent)
+map("n", "<C-6>", ":BufferGoto 6<CR>", silent)
+map("n", "<C-7>", ":BufferGoto 7<CR>", silent)
+map("n", "<C-8>", ":BufferGoto 8<CR>", silent)
+map("n", "<C-9>", ":BufferGoto 9<CR>", silent)
 
 -- disable
 map("n", "<Space>", "<NOP>", silent)

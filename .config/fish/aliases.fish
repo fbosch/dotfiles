@@ -1,5 +1,6 @@
 # Configuration
 alias config '/usr/bin/git --git-dir=$HOME/.cfg --work-tree=$HOME'
+abbr cf 'config'
 abbr cfa 'config add'
 abbr cfr 'config remove'
 abbr cfs 'config status'
