@@ -4,7 +4,6 @@ vim.o.sessionoptions = "blank,buffers,curdir,folds,help,tabpages,winsize,winpos,
 local set = vim.opt
 
 require("impatient")
-require("plugins")
 require("keymap")
 require("autocmd")
 
@@ -14,8 +13,6 @@ set.background = "dark"
 set.shortmess = "I"
 set.backup = false 
 set.swapfile = false
-set.undofile = true
-set.undodir = "~/.vim/undo"
 set.signcolumn = "yes"
 set.timeoutlen = 1200
 set.path:append("**")
