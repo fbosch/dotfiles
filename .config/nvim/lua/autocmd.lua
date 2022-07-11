@@ -9,6 +9,7 @@ cmd({ "VimLeavePre" }, {
         vim.api.nvim_win_close(win, false)
       end
     end
+    vim.cmd("NvimTreeClose");
   end,
   group = group,
 })

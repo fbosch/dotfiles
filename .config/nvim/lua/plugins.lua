@@ -1,6 +1,3 @@
-
-
-
 -- Use a protected call so we don't error out on first use
 local status_ok, packer = pcall(require, "packer")
 if not status_ok then
@@ -88,6 +85,7 @@ return packer.startup({
       },
       {
         "lukas-reineke/indent-blankline.nvim",
+        ft = developmentFiles,
         event = "CursorHold"
       },
       { 
@@ -100,9 +98,17 @@ return packer.startup({
         end
       },
       {
+        "nvim-treesitter/nvim-treesitter",
+        run = ":TSUpdate",
+        event = "VimEnter",
+        requires = { "windwp/nvim-autopairs" },
+        ft = developmentFiles,
+        config = require("configs.nvim-treesitter")
+      },
+      {
         "neovim/nvim-lspconfig",
         ft = developmentFiles,
-        event = "VimEnter",
+        after = { "nvim-treesitter" },
         requires = {
           "junegunn/fzf",
           "windwp/nvim-ts-autotag",
@@ -198,13 +204,6 @@ return packer.startup({
         event = "VimEnter",
         requires = { "kyazdani42/nvim-web-devicons" },
         config = require("configs.nvim-tree")
-      },
-      {
-        "nvim-treesitter/nvim-treesitter",
-        run = ":TSUpdate",
-        requires = { "windwp/nvim-autopairs" },
-        ft = developmentFiles,
-        config = require("configs.nvim-treesitter")
       },
     })
   end
