@@ -48,7 +48,7 @@ set.incsearch = true
 set.hlsearch = false
 set.clipboard:append("unnamedplus")
 set.complete = "kspell"
-set.completeopt = "menuone,longest"
+set.completeopt = "menu,menuone,noinsert"
 set.updatetime = 250
 set.lazyredraw = true
 set.ttyfast = true
