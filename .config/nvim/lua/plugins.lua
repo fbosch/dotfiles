@@ -103,6 +103,11 @@ return packer.startup({
       {
        "romgrk/barbar.nvim",
         requires = {"kyazdani42/nvim-web-devicons" },
+        config = function()
+          require("bufferline").setup({
+            animation = false
+          })
+        end
       },
       {
         "folke/trouble.nvim",
