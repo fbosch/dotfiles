@@ -15,10 +15,10 @@ map("n", "<Esc>", ":noh<CR>", silent)
 map("n", "<esc>^[", "<esc>[", silent)
 
 -- remap split navigation to CTRL + hjkl
-map("n", "<C-k>", ":wincmd k<CR>", silent)
-map("n", "<C-j>", ":wincmd j<CR>", silent)
-map("n", "<C-h>", ":wincmd h<CR>", silent)
-map("n", "<C-l>", ":wincmd l<CR>", silent)
+map("n", "<S-k>", ":wincmd k<CR>", silent)
+map("n", "<S-j>", ":wincmd j<CR>", silent)
+map("n", "<S-h>", ":wincmd h<CR>", silent)
+map("n", "<S-l>", ":wincmd l<CR>", silent)
 
 -- autoswitch to newly created split
 map("n", "<C-W>v", ":vsplit<CR> | :wincmd l<CR>", silent)
