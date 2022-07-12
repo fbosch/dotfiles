@@ -1,10 +1,17 @@
 format = "$character"
-right_format = """$all"""
+right_format = """
+$directory\
+$git_branch\
+$git_state\
+$git_metrics\
+$git_status\
+$cmd_duration
+"""
 
 [character]
-success_symbol = "[fbb ](bold cyan)[᛫](cyan)"
-error_symbol = "[err ](bold red)[᛫](red)"
-vicmd_symbol = "[vi ᛫](bold green)"
+success_symbol = "[ᚠᛒᛒ ](bold cyan)[᛫](cyan)"
+error_symbol = "[ᛖᚱᚱ ](bold red)[᛫](red)"
+vicmd_symbol = "[ᚹᛁ ᛫](bold green)"
 
 [python]
 disabled = true
