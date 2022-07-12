@@ -14,7 +14,7 @@ set.shortmess = "I"
 set.backup = false
 set.swapfile = false
 set.signcolumn = "yes"
-set.timeoutlen = 1200
+set.timeoutlen = 1000
 set.list = true
 set.path:append("**")
 set.mouse = "a"

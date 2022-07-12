@@ -45,7 +45,7 @@ return packer.startup({
           })
         end
       },
-      {
+        {
         "karb94/neoscroll.nvim",
         event = "CursorHold",
         config = function()
@@ -60,7 +60,7 @@ return packer.startup({
       {
         "github/copilot.vim",
         event = "CursorHoldI",
-        ft = developmentFiles
+        ft = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
       },
       {
         "folke/which-key.nvim",
@@ -74,10 +74,6 @@ return packer.startup({
         event = "CursorHold",
       },
       {
-        "tpope/vim-vinegar",
-        event = "VimEnter"
-      },
-      {
         "tpope/vim-commentary",
         event = "CursorHold",
       },
@@ -88,10 +84,14 @@ return packer.startup({
       {
         "danilamihailov/beacon.nvim",
         ft = developmentFiles,
-        event = "BufLeave"
+        event = "CursorHold",
+        config = function()
+          vim.g.beacon_size = 30
+          vim.highlight.create("Beacon", { guibg = "#bbbbbb", ctermbg = 15 })
+        end
       },
       { 
-        "tpope/vim-fugitive", 
+        "tpope/vim-fugitive",
         ft = developmentFiles,
         event = "CursorHold"
       },
@@ -166,7 +166,8 @@ return packer.startup({
         requires = { "kyazdani42/nvim-web-devicons" },
         config = function()
           require("bufferline").setup({
-            animation = false
+            animation = false,
+            icon_pinned = ""
           })
         end
       },

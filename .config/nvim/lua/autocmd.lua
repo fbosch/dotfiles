@@ -10,6 +10,11 @@ cmd({ "VimLeavePre" }, {
       end
     end
     vim.cmd("NvimTreeClose");
+    local terms = require("toggleterm.terminal")
+
+    for _, term in pairs(terminals) do
+      term:close()
+    end
   end,
   group = group,
 })

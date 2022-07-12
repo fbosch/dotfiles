@@ -2,9 +2,8 @@ local map = vim.keymap.set
 local options = { noremap = true }
 local silent = { noremap = true, silent = true }
 
-map("n", "<C-p>", "<cmd>lua require('fzf-lua').files()<CR>", silent)
-map("n", "<C-b>", ":NvimTreeToggle<CR>", options)
-map("n", "<leader>z", ":bp | :bd #<CR>", silent)
+map("n", "<C-p>", ":lua require('fzf-lua').files()<CR>", silent)
+map("n", "<Leader>e", ":NvimTreeToggle<CR>", silent)
 
 -- easier indentation in visual mode
 map("v", "<", "<gv", options)
@@ -51,6 +50,9 @@ map("n", "<C-t>n", ":tabnew<CR>", silent)
 map("n", "<C-t>d", ":tabclose<CR>", silent)
 
 -- buffer controls
+map("n", "<leader>z", ":bp | :bd #<CR>", silent) -- close buffer but keep split
+map("n", "<leader>x", ":BufferCloseAllButCurrentOrPinned<CR>", silent) -- close all buffers except current
+map("n", "<leader>p", ":BufferPin<CR>", silent) -- pin current buffer
 map("n", "<C-h>", ":BufferPrevious<CR>", silent)
 map("n", "<C-l>", ":BufferNext<CR>", silent)
 map("n", "<C-A-h>", ":BufferMovePrevious<CR>", silent)
