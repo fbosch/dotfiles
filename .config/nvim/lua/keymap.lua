@@ -20,8 +20,8 @@ map("n", "<S-h>", ":wincmd h<CR>", silent)
 map("n", "<S-l>", ":wincmd l<CR>", silent)
 
 -- autoswitch to newly created split
-map("n", "<C-W>v", ":vsplit<CR> | :wincmd l<CR>", silent)
-map("n", "<C-W>s", ":split<CR> | :wincmd j<CR>", silent)
+map("n", "<C-W>v", ":vsplit<CR> <bar> :wincmd l<CR>", silent)
+map("n", "<C-W>s", ":split<CR> <bar> :wincmd j<CR>", silent)
 
 -- adjust split sizes with CTRL + arrows
 map("n", "<C-Left>", ":vertical resize +3<CR>", silent)
@@ -29,10 +29,7 @@ map("n", "<C-Right>", ":vertical resize -3<CR>", silent)
 map("n", "<C-Up>", ":resize -3<CR>", silent)
 map("n", "<C-Down>", ":resize +3<CR>", silent)
 
--- previous buffer
-map("n", "-", ":b#<CR>", silent)
-
--- find files using telescope
+-- telescope
 map("n", "<Leader>ff", ":Telescope find_files<CR>", options)
 map("n", "<Leader>lg", ":Telescope live_grep<CR>", options)
 map("n", "<Leader>of", ":Telescope oldfiles<CR>", options)
@@ -50,8 +47,10 @@ map("n", "<C-t>n", ":tabnew<CR>", silent)
 map("n", "<C-t>d", ":tabclose<CR>", silent)
 
 -- buffer controls
-map("n", "<leader>z", ":bp | :bd #<CR>", silent) -- close buffer but keep split
-map("n", "<leader>x", ":BufferCloseAllButCurrentOrPinned<CR>", silent) -- close all buffers except current
+map("n", "<leader>z", ":bp <bar> :bd #<CR>", silent) -- close buffer but keep split
+map("n", "-", ":b#<CR>", silent) --  previously active buffer
+-- barbar buffer controls
+map("n", "<leader>x", ":only <bar> :BufferCloseAllButCurrentOrPinned<CR>", silent) -- close all buffers except current
 map("n", "<leader>p", ":BufferPin<CR>", silent) -- pin current buffer
 map("n", "<C-h>", ":BufferPrevious<CR>", silent)
 map("n", "<C-l>", ":BufferNext<CR>", silent)
@@ -72,11 +71,11 @@ map("n", "<Space>", "<NOP>", silent)
 map("n", "q", "<NOP>", silent)
 
 -- trouble toggling
-map("n", "<leader>xx", "<cmd>Trouble<CR>", silent)
-map("n", "<leader>xw", "<cmd>Trouble workspace_diagnostics<CR>", silent)
-map("n", "<leader>xd", "<cmd>Trouble document_diagnostics<CR>", silent)
-map("n", "<leader>xl", "<cmd>Trouble loclist<CR>", silent)
-map("n", "<leader>xq", "<cmd>Trouble quickfix<CR>", silent)
+map("n", "<leader>tx", "<cmd>Trouble<CR>", silent)
+map("n", "<leader>tw", "<cmd>Trouble workspace_diagnostics<CR>", silent)
+map("n", "<leader>td", "<cmd>Trouble document_diagnostics<CR>", silent)
+map("n", "<leader>tl", "<cmd>Trouble loclist<CR>", silent)
+map("n", "<leader>tq", "<cmd>Trouble quickfix<CR>", silent)
 map("n", "gR", "<cmd>Trouble lsp_references<CR>", silent)
 
 
