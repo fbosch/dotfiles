@@ -35,7 +35,7 @@ abbr pjo 'pj open '
 abbr h 'cd ~/'
 
 # Helpers
-alias icat 'kitty +kitten icat'
+
 abbr src 'source ~/.config/fish/config.fish'
 abbr makins 'sudo make && sudo make clean install'
 abbr cl 'clear'
@@ -60,13 +60,16 @@ abbr g 'git'
 abbr gs 'git status'
 abbr gd 'git diff'
 abbr gp 'git push'
+abbr gf 'git fetch'
 abbr gau 'git add -u'
 abbr gco 'git checkout'
 abbr gaa 'git add --all'
+abbr gsa 'git stash apply'
 abbr gpo 'git pull origin'
 abbr gcm 'git commit -m "'
 abbr grhh 'git reset --hard HEAD'
 abbr gcfd 'git clean -fd'
+abbr lg 'lazygit'
 
 # Webdev
 alias ya 'yarn add'

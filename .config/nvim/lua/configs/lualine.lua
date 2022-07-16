@@ -3,7 +3,7 @@ return function()
   local git_blame = require('gitblame')
   vim.g.gitblame_date_format = "%r"
   vim.g.gitblame_display_virtual_text = 0
-  vim.g.gitblame_message_template = "<author> • <date>"
+  vim.g.gitblame_message_template = "<date>"
   require("lualine").setup({
     options = { theme = "auto" },
     extensions = { "fugitive", "symbols-outline" },

@@ -109,6 +109,10 @@ return packer.startup({
         config = require("configs.nvim-treesitter")
       },
       {
+        "nvim-treesitter/nvim-treesitter-context",
+        after = { "nvim-treesitter" }
+      },
+      {
         "neovim/nvim-lspconfig",
         ft = developmentFiles,
         after = { "nvim-treesitter" },

@@ -3,7 +3,12 @@
 . ~/.config/fish/colors.fish
 . ~/.config/fish/nvm.fish
 
-set fish_greeting
+
+function fish_greeting
+  if [ "$KITTY_WINDOW_ID" = "1" ]
+    eval command tl
+  end
+end
 
 # Custom Function for a sudo !! replacement
 function sudo --description "replacement for 'sudo !!' command to run last command using sudo"
@@ -27,6 +32,13 @@ function lfcd --description "lf to switch directories"
            commandline --function repaint
         end
     end
+end
+
+# set kitty_id echo (kitty @ ls | jq ".[] | select(.is_focused = true)" | grep "id" | head -1 | grep -o "[0-9]*")
+function kitty_id --description "kitty id"
+  set --local kitty_list $(kitty @ ls)
+  set --local jq_args ".[] | select(.is_focused == true)"
+  echo "$kitty_list" | jq "$jq_args" | grep "id" | head -1 | grep -o "[0-9]*"
 end
 
 bind -M insert \cc kill-whole-line repaint

@@ -1,0 +1,42 @@
+{
+  "language": "en",
+  "tasklineDirectory": "~",
+  "displayCompleteTasks": true,
+  "displayProgressOverview": true,
+  "storageModule": "local",
+  "firestoreConfig": {
+    "storageName": "storage",
+    "archiveName": "archive",
+    "type": "",
+    "project_id": "",
+    "private_key_id": "",
+    "private_key": "",
+    "client_email": "",
+    "client_id": "",
+    "auth_uri": "",
+    "token_uri": "",
+    "auth_provider_x509_cert_url": "",
+    "client_x509_cert_url": ""
+  },
+  "dateformat": "dd.mm.yyyy HH:MM",
+  "theme": {
+    "colors": {
+      "pale": "white",
+      "error": "red",
+      "task": {
+        "priority": {
+          "medium": "yellow",
+          "high": "red"
+        }
+      },
+      "icons": {
+        "note": "blue",
+        "success": "green",
+        "star": "yellow",
+        "progress": "blue",
+        "pending": "magenta",
+        "canceled": "red"
+      }
+    }
+  }
+}

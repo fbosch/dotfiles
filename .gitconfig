@@ -5,9 +5,6 @@
 [core]
   pager = delta
 
-[push]
-  default = current
-
 [delta]
   navigate = true
   light = false
