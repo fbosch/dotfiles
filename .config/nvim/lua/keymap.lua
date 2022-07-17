@@ -3,7 +3,8 @@ local options = { noremap = true }
 local silent = { noremap = true, silent = true }
 
 map("n", "<C-p>", ":lua require('fzf-lua').files()<CR>", silent)
-map("n", "<Leader>e", ":NvimTreeToggle<CR>", silent)
+map("n", "<leader>e", ":NvimTreeToggle<CR>", silent)
+map("n", "<leader>uu", ":UndotreeToggle<CR>", silent)
 
 -- easier indentation in visual mode
 map("v", "<", "<gv", options)
@@ -30,11 +31,11 @@ map("n", "<C-Up>", ":resize -3<CR>", silent)
 map("n", "<C-Down>", ":resize +3<CR>", silent)
 
 -- telescope
-map("n", "<Leader>ff", ":Telescope find_files<CR>", options)
-map("n", "<Leader>lg", ":Telescope live_grep<CR>", options)
-map("n", "<Leader>of", ":Telescope oldfiles<CR>", options)
-map("n", "<Leader>fb", ":Telescope file_browser<CR>", options)
-map("n", "<Leader>fh", ":Telescope help_tags<CR>", options)
+map("n", "<leader>ff", ":Telescope find_files<CR>", options)
+map("n", "<leader>lg", ":Telescope live_grep<CR>", options)
+map("n", "<leader>of", ":Telescope oldfiles<CR>", options)
+map("n", "<leader>fb", ":Telescope file_browser<CR>", options)
+map("n", "<leader>fh", ":Telescope help_tags<CR>", options)
 
 -- tab controls
 map("n", "th", ":tabfirst<CR>", options)
@@ -49,6 +50,7 @@ map("n", "<C-t>d", ":tabclose<CR>", silent)
 -- buffer controls
 map("n", "<leader>z", ":bp <bar> :bd #<CR>", silent) -- close buffer but keep split
 map("n", "-", ":b#<CR>", silent) --  previously active buffer
+
 -- barbar buffer controls
 map("n", "<leader>x", ":only <bar> :BufferCloseAllButCurrentOrPinned<CR>", silent) -- close all buffers except current
 map("n", "<leader>p", ":BufferPin<CR>", silent) -- pin current buffer

@@ -94,7 +94,6 @@ return packer.startup({
       },
       {
         "danilamihailov/beacon.nvim",
-        event = "CursorHold",
         config = function()
           vim.g.beacon_size = 30
         end
@@ -111,8 +110,7 @@ return packer.startup({
       },
       {
         "mbbill/undotree",
-        ft = developmentFiles,
-        event = "CursorHold",
+        event = "VimEnter",
       },
       {
         "nvim-treesitter/nvim-treesitter",
