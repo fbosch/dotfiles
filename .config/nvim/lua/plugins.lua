@@ -24,6 +24,8 @@ packer.init({
 })
 
 local developmentFiles = { "html", "css", "javascript", "javascriptreact", "typescript", "typescriptreact", "json", "lua" }
+local pluginGroup = vim.api.nvim_create_augroup("plugsin", {})
+
 
 -- install packages
 return packer.startup({
@@ -63,13 +65,16 @@ return packer.startup({
       {
         "karb94/neoscroll.nvim",
         event = "CursorHold",
+        after = { "nvim-treesitter-context" },
         ft = developmentFiles,
         config = function()
           require("neoscroll").setup({
             pre_hook = function()
+              vim.opt.lazyredraw = false
               vim.api.nvim_command("TSContextDisable")
             end,
             post_hook = function()
+              vim.opt.lazyredraw = true
               vim.api.nvim_command("Beacon")
               vim.api.nvim_command("TSContextEnable")
             end
@@ -83,8 +88,13 @@ return packer.startup({
       },
       {
         "folke/which-key.nvim",
+        after = { "zenbones.nvim" },
         config = function()
-          require("which-key").setup()
+          require("which-key").setup({
+            window = {
+              border = "rounded"
+            }
+          })
         end,
         event = "VimEnter"
       },
@@ -105,12 +115,15 @@ return packer.startup({
         event = "VimEnter",
         config = function()
           vim.g.beacon_size = 30
+          vim.api.nvim_create_autocmd({ "WinEnter" }, {
+            command = "Beacon",
+            group = pluginGroup
+          })
         end
       },
       {
         "tpope/vim-fugitive",
         ft = developmentFiles,
-        event = "CursorHold"
       },
       {
         "sindrets/diffview.nvim",

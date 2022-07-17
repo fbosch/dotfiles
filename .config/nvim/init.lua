@@ -7,7 +7,7 @@ require("impatient")
 require("keymap")
 require("autocmd")
 
-set.background = "dark"
+-- set.background = "dark"
 set.shortmess = "I" -- disable welcome message
 
 -- file history
@@ -24,12 +24,12 @@ set.list = true
 set.path:append("**")
 set.mouse = "a"
 set.showcmd = true
+set.showmode = false
 set.re = 0
 set.scrolloff = 8
 set.gdefault = true
 set.expandtab = true
 set.compatible = false
-set.showmode = false
 set.wildignore = "*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Caches/*,*log*,*.dat*,*.kbx*,*.zip*"
 set.fileencoding = "utf-8"
 set.foldmethod = "marker"
@@ -55,7 +55,7 @@ set.hlsearch = false
 set.clipboard:append("unnamedplus")
 set.complete = "kspell"
 set.completeopt = "menu,menuone,noinsert"
-set.updatetime = 250
+set.updatetime = 500
 set.lazyredraw = true
 set.ttyfast = true
 set.termguicolors = true

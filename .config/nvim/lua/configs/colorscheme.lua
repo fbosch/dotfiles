@@ -17,4 +17,7 @@ return function()
   vim.highlight.create("CmpItemKindKeyword", { guibg=0, guifg="#bbbbbb" })
   vim.highlight.create("CmpItemKindProperty", { guibg=0, guifg="#ffffff" })
   vim.highlight.create("CmpItemKindUnit", { guibg=0, guifg="#ffffff" })
+  -- which-key
+  vim.highlight.create("WhichKeyFloat", { guibg = "#191919" })
+  vim.highlight.create("WhichKey", { guifg = "#97bdde" })
 end
