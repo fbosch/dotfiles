@@ -33,7 +33,15 @@ return packer.startup({
       "lewis6991/impatient.nvim",
       "tweekmonster/startuptime.vim",
       "antoinemadec/FixCursorHold.nvim",
-      "tpope/vim-dispatch",
+      {
+        "echasnovski/mini.nvim",
+        event = "VimEnter",
+        config = function()
+          require("mini.trailspace").setup({
+            only_in_normal_buffers = true
+          })
+        end
+      },
       {
         "mcchrish/zenbones.nvim",
         requires = { "rktjmp/lush.nvim" },
@@ -94,6 +102,7 @@ return packer.startup({
       },
       {
         "danilamihailov/beacon.nvim",
+        event = "VimEnter",
         config = function()
           vim.g.beacon_size = 30
         end
@@ -122,8 +131,8 @@ return packer.startup({
         "nvim-treesitter/nvim-treesitter",
         run = ":TSUpdate",
         event = "VimEnter",
-        requires = { "windwp/nvim-autopairs" },
         ft = developmentFiles,
+        requires = { "windwp/nvim-autopairs" },
         config = require("configs.nvim-treesitter")
       },
       {
@@ -142,6 +151,7 @@ return packer.startup({
         ft = developmentFiles,
         after = { "nvim-treesitter" },
         requires = {
+          "williamboman/nvim-lsp-installer",
           "junegunn/fzf",
           "windwp/nvim-ts-autotag",
           "ray-x/lsp_signature.nvim",
@@ -196,7 +206,8 @@ return packer.startup({
         config = function()
           require("bufferline").setup({
             animation = false,
-            icon_pinned = ""
+            icon_pinned = "",
+            auto_hide = true,
           })
         end
       },

@@ -15,8 +15,8 @@ cmd({ "VimLeavePre" }, {
   end,
   group = group,
 })
-cmd({ "BufEnter" }, { 
-  command = "syntax sync fromstart", 
+cmd({ "BufEnter" }, {
+  command = "syntax sync fromstart",
   group = group
 })
 cmd({ "BufRead", "BufNewFile" }, {
