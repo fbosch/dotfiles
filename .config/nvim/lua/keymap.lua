@@ -76,6 +76,6 @@ map("n", "<leader>tw", "<cmd>Trouble workspace_diagnostics<CR>", silent)
 map("n", "<leader>td", "<cmd>Trouble document_diagnostics<CR>", silent)
 map("n", "<leader>tl", "<cmd>Trouble loclist<CR>", silent)
 map("n", "<leader>tq", "<cmd>Trouble quickfix<CR>", silent)
-map("n", "gR", "<cmd>Trouble lsp_references<CR>", silent)
+map("n", "<leader>tr", "<cmd>Trouble lsp_references<CR>", silent)
 
 
