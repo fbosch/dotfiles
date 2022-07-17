@@ -5,6 +5,8 @@ local silent = { noremap = true, silent = true }
 map("n", "<C-p>", ":lua require('fzf-lua').files()<CR>", silent)
 map("n", "<leader>e", ":NvimTreeToggle<CR>", silent)
 map("n", "<leader>uu", ":UndotreeToggle<CR>", silent)
+map("n", "<leader>dff", ":DiffviewOpen<CR>", silent)
+map("n", "<leader>dfq", ":DiffviewClose<CR>", silent)
 
 -- easier indentation in visual mode
 map("v", "<", "<gv", options)

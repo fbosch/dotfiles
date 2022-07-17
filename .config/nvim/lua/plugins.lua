@@ -104,6 +104,12 @@ return packer.startup({
         event = "CursorHold"
       },
       {
+        "sindrets/diffview.nvim",
+        requires = { "nvim-lua/plenary.nvim" },
+        ft = developmentFiles,
+        event = "CursorHold"
+      },
+      {
         "lukas-reineke/indent-blankline.nvim",
         ft = developmentFiles,
         event = "CursorHold"

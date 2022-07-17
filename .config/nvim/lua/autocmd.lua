@@ -9,7 +9,9 @@ cmd({ "VimLeavePre" }, {
         vim.api.nvim_win_close(win, false)
       end
     end
-    vim.cmd("NvimTreeClose");
+    vim.cmd("NvimTreeClose")
+    vim.cmd("UndotreeHide")
+    vim.cmd("DiffviewClose")
   end,
   group = group,
 })
