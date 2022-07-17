@@ -33,6 +33,7 @@ return packer.startup({
       "lewis6991/impatient.nvim",
       "tweekmonster/startuptime.vim",
       "antoinemadec/FixCursorHold.nvim",
+      "tpope/vim-dispatch",
       {
         "mcchrish/zenbones.nvim",
         requires = { "rktjmp/lush.nvim" },
@@ -51,14 +52,12 @@ return packer.startup({
           })
         end
       },
-        {
+      {
         "karb94/neoscroll.nvim",
-        event = "CursorHold",
+        event = "VimEnter",
+        ft = developmentFiles,
         config = function()
           require("neoscroll").setup({
-            hide_cursor = true,
-            stop_eof = false,
-            respect_scrolloff = true,
             pre_hook = function()
               vim.api.nvim_command("TSContextDisable")
             end,
@@ -95,7 +94,6 @@ return packer.startup({
       },
       {
         "danilamihailov/beacon.nvim",
-        ft = developmentFiles,
         event = "CursorHold",
         config = function()
           vim.g.beacon_size = 30

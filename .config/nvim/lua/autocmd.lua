@@ -37,7 +37,7 @@ cmd({ "BufNewFile", "BufRead" }, {
   command = "setf javascript",
   group = group
 })
-  cmd({ "BufNewFile", "BufRead" }, {
+cmd({ "BufNewFile", "BufRead" }, {
   pattern = { ".tsx" },
   command = "setf typescriptreact",
   group = group
@@ -49,5 +49,9 @@ cmd({ "BufNewFile", "BufRead"}, {
 })
 cmd({ "TextYankPost" }, {
   command = "lua vim.highlight.on_yank({ higroup = 'IncSearch', timeout = 500 })",
+  group = group
+})
+cmd({ "WinEnter" }, {
+  command = "Beacon",
   group = group
 })
