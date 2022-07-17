@@ -10,9 +10,16 @@ require("autocmd")
 vim.cmd("colorscheme zenwritten")
 
 set.background = "dark"
-set.shortmess = "I"
-set.backup = false
-set.swapfile = false
+set.shortmess = "I" -- disable welcome message
+
+-- file history
+set.backup = true
+set.swapfile = false 
+set.undofile = true
+set.undodir = vim.fn.expand("~/.config") .. "/nvim/.undo//"
+set.backupdir = vim.fn.expand("~/.config") .. "/nvim/.backup//"
+set.directory = vim.fn.expand("~/.config") .. "/nvim/.swp//"
+
 set.signcolumn = "yes"
 set.timeoutlen = 1000
 set.list = true
@@ -32,6 +39,7 @@ set.foldexpr = "nvim_treesitter#foldexpr()"
 set.wrap = false
 set.backspace = "indent,eol,start"
 set.number = true
+
 set.tabstop = 2
 set.hidden = true
 set.errorbells = false

@@ -15,3 +15,7 @@ Cache/**/*
 *.db
 *.kgbd
 */Photos Library.photoslibrary/*
+.DS_Store
+**/.swp/*
+**/.backup/*
+**/.undo/*

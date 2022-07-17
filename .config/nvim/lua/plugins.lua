@@ -35,7 +35,13 @@ return packer.startup({
       "antoinemadec/FixCursorHold.nvim",
       {
         "mcchrish/zenbones.nvim",
-        requires = { "rktjmp/lush.nvim" }
+        requires = { "rktjmp/lush.nvim" },
+        config = function()
+          vim.highlight.create("NormalFloat", { guibg = "#191919" })
+          vim.highlight.create("Pmenu", { guibg = "#191919" })
+          vim.highlight.create("Beacon", { guibg = "#bbbbbb", ctermbg = 15 })
+          vim.highlight.create("TreesitterContext", { guibg = "#2c2c2c" })
+        end
       },
       {
         "rmagatti/auto-session",
@@ -51,8 +57,14 @@ return packer.startup({
         config = function()
           require("neoscroll").setup({
             hide_cursor = true,
+            stop_eof = false,
+            respect_scrolloff = true,
+            pre_hook = function()
+              vim.api.nvim_command("TSContextDisable")
+            end,
             post_hook = function()
               vim.api.nvim_command("Beacon")
+              vim.api.nvim_command("TSContextEnable")
             end
           })
         end
@@ -87,7 +99,6 @@ return packer.startup({
         event = "CursorHold",
         config = function()
           vim.g.beacon_size = 30
-          vim.highlight.create("Beacon", { guibg = "#bbbbbb", ctermbg = 15 })
         end
       },
       { 
@@ -101,6 +112,11 @@ return packer.startup({
         event = "CursorHold"
       },
       {
+        "mbbill/undotree",
+        ft = developmentFiles,
+        event = "CursorHold",
+      },
+      {
         "nvim-treesitter/nvim-treesitter",
         run = ":TSUpdate",
         event = "VimEnter",
@@ -110,7 +126,14 @@ return packer.startup({
       },
       {
         "nvim-treesitter/nvim-treesitter-context",
-        after = { "nvim-treesitter" }
+        ft = developmentFiles,
+        event = "CursorHold",
+        after = { "nvim-treesitter" },
+        config = function()
+          require("treesitter-context").setup({
+            mode = "topline",
+          })
+        end
       },
       {
         "neovim/nvim-lspconfig",
