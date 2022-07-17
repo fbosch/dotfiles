@@ -8,12 +8,22 @@ map("n", "<leader>uu", ":UndotreeToggle<CR>", silent)
 map("n", "<leader>dff", ":DiffviewOpen<CR>", silent)
 map("n", "<leader>dfq", ":DiffviewClose<CR>", silent)
 
+-- move lines with move.nvim using Alt + hjkl
+map("n", "<A-j>", ":MoveLine(1)<CR>", silent)
+map("n", "<A-k>", ":MoveLine(-1)<CR>", silent)
+map("v", "<A-j>", ":MoveBlock(1)<CR>", silent)
+map("v", "<A-k>", ":MoveBlock(-1)<CR>", silent)
+map("n", "<A-l>", ":MoveHChar(1)<CR>", silent)
+map("n", "<A-h>", ":MoveHChar(-1)<CR>", silent)
+map("v", "<A-l>", ":MoveHBlock(1)<CR>", silent)
+map("v", "<A-l>", ":MoveHBlock(-1)<CR>", silent)
+
 -- easier indentation in visual mode
 map("v", "<", "<gv", options)
 map("v", ">", ">gv", options)
 
 -- clear highlighted search with Escape in normal mode
-map("n", "<Esc>", ":noh<CR>", silent)
+map("n", "<esc>", ":noh<CR>", silent)
 map("n", "<esc>^[", "<esc>[", silent)
 
 -- remap split navigation to CTRL + hjkl

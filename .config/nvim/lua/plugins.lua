@@ -34,8 +34,12 @@ return packer.startup({
       "tweekmonster/startuptime.vim",
       "antoinemadec/FixCursorHold.nvim",
       {
+        "fedepujol/move.nvim",
+        event = "ModeChanged",
+     },
+      {
         "echasnovski/mini.nvim",
-        event = "VimEnter",
+        event = "CursorHold",
         config = function()
           require("mini.trailspace").setup({
             only_in_normal_buffers = true
@@ -45,12 +49,8 @@ return packer.startup({
       {
         "mcchrish/zenbones.nvim",
         requires = { "rktjmp/lush.nvim" },
-        config = function()
-          vim.highlight.create("NormalFloat", { guibg = "#191919" })
-          vim.highlight.create("Pmenu", { guibg = "#191919" })
-          vim.highlight.create("Beacon", { guibg = "#bbbbbb", ctermbg = 15 })
-          vim.highlight.create("TreesitterContext", { guibg = "#2c2c2c" })
-        end
+        event = "VimEnter",
+        config = require("configs.colorscheme")
       },
       {
         "rmagatti/auto-session",
@@ -62,7 +62,7 @@ return packer.startup({
       },
       {
         "karb94/neoscroll.nvim",
-        event = "VimEnter",
+        event = "CursorHold",
         ft = developmentFiles,
         config = function()
           require("neoscroll").setup({
@@ -107,7 +107,7 @@ return packer.startup({
           vim.g.beacon_size = 30
         end
       },
-      { 
+      {
         "tpope/vim-fugitive",
         ft = developmentFiles,
         event = "CursorHold"
@@ -150,6 +150,7 @@ return packer.startup({
         "neovim/nvim-lspconfig",
         ft = developmentFiles,
         after = { "nvim-treesitter" },
+        event = "VimEnter",
         requires = {
           "williamboman/nvim-lsp-installer",
           "junegunn/fzf",
@@ -158,6 +159,16 @@ return packer.startup({
           "folke/lsp-colors.nvim",
           "gfanto/fzf-lsp.nvim",
           "MunifTanjim/prettier.nvim",
+          "jose-elias-alvarez/null-ls.nvim",
+          "jose-elias-alvarez/nvim-lsp-ts-utils",
+        },
+        config = require("configs.lsp")
+      },
+      {
+        "hrsh7th/nvim-cmp",
+        event = "CursorHoldI",
+        after = { "nvim-treesitter" },
+        requires = {
           "onsails/lspkind.nvim",
           "L3MON4D3/LuaSnip",
           "saadparwaiz1/cmp_luasnip",
@@ -167,10 +178,8 @@ return packer.startup({
           "hrsh7th/cmp-path",
           "hrsh7th/cmp-nvim-lua",
           "mtoohey31/cmp-fish",
-          "jose-elias-alvarez/null-ls.nvim",
-          "jose-elias-alvarez/nvim-lsp-ts-utils",
         },
-        config = require("configs.lsp")
+        config = require("configs.cmp")
       },
       {
         "folke/trouble.nvim",
@@ -194,14 +203,16 @@ return packer.startup({
       {
         "folke/todo-comments.nvim",
         requires = "nvim-lua/plenary.nvim",
-        event = "ColorScheme",
         ft = developmentFiles,
+        after = { "zenbones.nvim" },
+        event = "CursorHold",
         config = function()
           require("todo-comments").setup()
         end
       },
       {
        "romgrk/barbar.nvim",
+        after = { "zenbones.nvim" },
         requires = { "kyazdani42/nvim-web-devicons" },
         config = function()
           require("bufferline").setup({
@@ -219,13 +230,14 @@ return packer.startup({
       },
       {
         "gelguy/wilder.nvim",
-        event = "VimEnter",
-        requires = { "kyazdani42/nvim-web-devicons", "romgrk/fzy-lua-native" },
+        after = { "zenbones.nvim" },
+        requires = { "kyazdani42/nvim-web-devicons", "romgrk/fzy-lua-native", "zenbones.nvim" },
         config = require("configs.wilder")
       },
       {
         "lewis6991/gitsigns.nvim",
         event = "CursorHold",
+        after = { "zenbones.nvim" },
         ft = developmentFiles,
         config = function()
           require("gitsigns").setup()
@@ -240,12 +252,14 @@ return packer.startup({
       {
         "ibhagwan/fzf-lua",
         event = "VimEnter",
+        after = { "zenbones.nvim" },
         requires = { "kyazdani42/nvim-web-devicons" },
         config = require("configs.fzf")
       },
       {
         "kyazdani42/nvim-tree.lua",
         event = "VimEnter",
+        after = { "zenbones.nvim" },
         requires = { "kyazdani42/nvim-web-devicons" },
         config = require("configs.nvim-tree")
       },

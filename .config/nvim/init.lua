@@ -7,14 +7,12 @@ require("impatient")
 require("keymap")
 require("autocmd")
 
-vim.cmd("colorscheme zenwritten")
-
 set.background = "dark"
 set.shortmess = "I" -- disable welcome message
 
 -- file history
 set.backup = true
-set.swapfile = false 
+set.swapfile = false
 set.undofile = true
 set.undodir = vim.fn.expand("~/.config") .. "/nvim/.undo//"
 set.backupdir = vim.fn.expand("~/.config") .. "/nvim/.backup//"

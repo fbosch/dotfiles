@@ -11,16 +11,15 @@ return function()
     ui = {
       border = "rounded",
       icons = {
-        server_installed = "﫟",
-        server_pending = "",
-        server_uninstalled = ""
+        server_installed = "✓",
+        server_pending = "➜",
+        server_uninstalled = "✗"
       }
     }
   })
   require("nvim-ts-autotag").setup()
   require(".configs.null-ls")()
   require(".configs.prettier")()
-  require(".configs.cmp")()
 
   require("fzf_lsp").setup()
 

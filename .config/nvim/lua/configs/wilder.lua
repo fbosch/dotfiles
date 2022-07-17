@@ -1,5 +1,6 @@
 return function()
   local wilder = require("wilder")
+
   wilder.setup({
     modes = { ":", "/", "?" },
     next_key = "<C-j>",
