@@ -37,7 +37,7 @@ return packer.startup({
       "antoinemadec/FixCursorHold.nvim",
       {
         "fedepujol/move.nvim",
-        event = "ModeChanged",
+        event = "BufEnter",
      },
       {
         "echasnovski/mini.nvim",
@@ -70,11 +70,9 @@ return packer.startup({
         config = function()
           require("neoscroll").setup({
             pre_hook = function()
-              vim.opt.lazyredraw = false
               vim.api.nvim_command("TSContextDisable")
             end,
             post_hook = function()
-              vim.opt.lazyredraw = true
               vim.api.nvim_command("Beacon")
               vim.api.nvim_command("TSContextEnable")
             end

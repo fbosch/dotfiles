@@ -69,7 +69,10 @@ abbr gpo 'git pull origin'
 abbr gcm 'git commit -m "'
 abbr grhh 'git reset --hard HEAD'
 abbr gcfd 'git clean -fd'
+abbr gl 'git log --graph --oneline --decorate'
 abbr lg 'lazygit'
+abbr bad 'git bisect bad'
+abbr good 'git bisect good'
 
 # Webdev
 alias ya 'yarn add'

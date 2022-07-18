@@ -7,8 +7,6 @@ require("impatient")
 require("keymap")
 require("autocmd")
 
--- set.background = "dark"
-set.shortmess = "I" -- disable welcome message
 
 -- file history
 set.backup = true
@@ -18,6 +16,8 @@ set.undodir = vim.fn.expand("~/.config") .. "/nvim/.undo//"
 set.backupdir = vim.fn.expand("~/.config") .. "/nvim/.backup//"
 set.directory = vim.fn.expand("~/.config") .. "/nvim/.swp//"
 
+set.shortmess:append("at")
+set.background = "dark"
 set.signcolumn = "yes"
 set.timeoutlen = 1000
 set.list = true

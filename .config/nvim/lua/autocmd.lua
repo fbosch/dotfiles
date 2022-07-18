@@ -12,6 +12,7 @@ cmd({ "VimLeavePre" }, {
     vim.cmd("NvimTreeClose")
     vim.cmd("UndotreeHide")
     vim.cmd("DiffviewClose")
+    vim.cmd("TroubleClose")
   end,
   group = group,
 })
@@ -32,5 +33,9 @@ cmd({ "BufWritePost" }, {
 })
 cmd({ "TextYankPost" }, {
   command = "lua vim.highlight.on_yank({ higroup = 'IncSearch', timeout = 500 })",
+  group = group
+})
+cmd({ "VimEnter" }, {
+  command = "set nolazyredraw",
   group = group
 })

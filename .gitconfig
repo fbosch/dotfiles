@@ -19,7 +19,7 @@
   keep-plus-minus-markers = true
 
 [delta "decorations"]
-  commit-decoration-style = bold white box 
+  commit-decoration-style = bold white box
   file-style = omit
   file-decoration-style = none
   hunk-header-decoration-style = "#3D3839" box ul
