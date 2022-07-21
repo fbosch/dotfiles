@@ -30,7 +30,7 @@ abbr cflf 'nvim ~/.config/lf/lfrc'
 abbr cfdu 'nvim ~/.config/dunst/dunstrc'
 
 # Directory shortcuts
-abbr prj 'cd ~/Projects' 
+abbr prj 'cd ~/Projects'
 abbr pjo 'pj open '
 abbr h 'cd ~/'
 
@@ -75,8 +75,10 @@ abbr bad 'git bisect bad'
 abbr good 'git bisect good'
 
 # Webdev
+abbr y 'yarn'
 alias ya 'yarn add'
 alias yr 'yarn remove'
+abbr yw 'yarn workspace'
 abbr yup 'yarn upgrade-interactive'
 abbr yt 'yarn test'
 abbr yb 'yarn build'

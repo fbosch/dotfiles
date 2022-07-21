@@ -33,6 +33,7 @@ set.compatible = false
 set.wildignore = "*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Caches/*,*log*,*.dat*,*.kbx*,*.zip*"
 set.fileencoding = "utf-8"
 set.foldmethod = "marker"
+set.foldlevelstart = 0
 set.foldexpr = "nvim_treesitter#foldexpr()"
 set.wrap = false
 set.backspace = "indent,eol,start"
