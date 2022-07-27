@@ -1,11 +1,11 @@
 -- Use a protected call so we don't error out on first use
-  local status_ok, packer = pcall(require, "packer")
+local status_ok, packer = pcall(require, "packer")
 if not status_ok then
   local install_path = vim.fn.stdpath('data')..'/site/pack/packer/start/packer.nvim'
   if vim.fn.empty(vim.fn.glob(install_path)) > 0 then
     packer_bootstrap = vim.fn.system({'git', 'clone', '--depth', '1', 'https://github.com/wbthomason/packer.nvim', install_path})
   end
-	return
+  return
 end
 
 
@@ -34,8 +34,12 @@ return packer.startup({
       "wbthomason/packer.nvim",
       "lewis6991/impatient.nvim",
       "luukvbaal/stabilize.nvim",
-      "tweekmonster/startuptime.vim",
       "antoinemadec/FixCursorHold.nvim",
+      "nathom/filetype.nvim",
+      {
+        "tweekmonster/startuptime.vim",
+        event = "VimEnter"
+      },
       {
         "fedepujol/move.nvim",
         event = "BufEnter",
@@ -70,30 +74,32 @@ return packer.startup({
         after = { "nvim-treesitter-context" },
         ft = developmentFiles,
         config = function()
-          require("neoscroll").setup({
-            pre_hook = function()
-              vim.api.nvim_command("TSContextDisable")
-            end,
-            post_hook = function()
-              vim.api.nvim_command("Beacon")
-              vim.api.nvim_command("TSContextEnable")
-            end
-          })
+          vim.defer_fn(function()
+            require("neoscroll").setup({
+              pre_hook = function()
+                vim.api.nvim_command("TSContextDisable")
+              end,
+              post_hook = function()
+                vim.api.nvim_command("Beacon")
+                vim.api.nvim_command("TSContextEnable")
+              end
+            })
+          end, 500)
         end
       },
-      {
-        "github/copilot.vim",
-        event = "CursorHoldI",
-        ft = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
-      },
+      -- {
+      --   "github/copilot.vim",
+      --   event = "CursorHoldI",
+      --   ft = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
+      -- },
       {
         "phaazon/hop.nvim",
         event = "CursorHold",
         ft = developmentFiles,
         config = function()
-          require("hop").setup({
-            keys = "etovxqpdygfblzhckisuran"
-          })
+            require("hop").setup({
+              keys = "etovxqpdygfblzhckisuran"
+            })
         end
       },
       {
@@ -106,7 +112,7 @@ return packer.startup({
               border = "rounded"
             }
           })
-        end
+        end,
       },
       {
         "akinsho/git-conflict.nvim",
@@ -114,23 +120,25 @@ return packer.startup({
         event = "VimEnter",
         ft = developmentFiles,
         config = function()
-          require("git-conflict").setup({
-             highlights = {
-                incoming = "DiffText",
-                current = "DiffAdd",
-              }
-          })
-          vim.api.nvim_create_autocmd({ "User" }, {
-            group = pluginGroup,
-            pattern = 'GitConflictDetected',
-            callback = function()
-              vim.notify('Conflict detected in '..vim.fn.expand('<afile>'))
-              vim.keymap.set('n', 'cww', function()
-                engage.conflict_buster()
-                create_buffer_local_mappings()
-              end)
-            end
-          })
+          vim.defer_fn(function()
+            require("git-conflict").setup({
+               highlights = {
+                  incoming = "DiffText",
+                  current = "DiffAdd",
+                }
+            })
+            vim.api.nvim_create_autocmd({ "User" }, {
+              group = pluginGroup,
+              pattern = 'GitConflictDetected',
+              callback = function()
+                vim.notify('Conflict detected in '..vim.fn.expand('<afile>'))
+                vim.keymap.set('n', 'cww', function()
+                  engage.conflict_buster()
+                  create_buffer_local_mappings()
+                end)
+              end
+            })
+          end, 200)
         end
       },
       {
@@ -189,10 +197,17 @@ return packer.startup({
         event = "CursorHold",
         after = { "nvim-treesitter" },
         config = function()
-          require("treesitter-context").setup({
-            mode = "topline",
-          })
+          vim.defer_fn(function()
+            require("treesitter-context").setup({
+              mode = "topline",
+            })
+          end, 200)
         end
+      },
+      {
+        "windwp/nvim-ts-autotag",
+        event = "InsertEnter",
+        ft = developmentFiles,
       },
       {
         "neovim/nvim-lspconfig",
@@ -202,7 +217,6 @@ return packer.startup({
         requires = {
           "williamboman/nvim-lsp-installer",
           "junegunn/fzf",
-          "windwp/nvim-ts-autotag",
           "ray-x/lsp_signature.nvim",
           "folke/lsp-colors.nvim",
           "gfanto/fzf-lsp.nvim",
@@ -213,20 +227,32 @@ return packer.startup({
         config = require("configs.lsp")
       },
       {
+        "zbirenbaum/copilot.lua",
+        event = "VimEnter",
+        ft = developmentFiles,
+        config = function()
+          vim.defer_fn(function()
+            require("copilot").setup()
+          end, 200)
+        end,
+      },
+      {
         "hrsh7th/nvim-cmp",
         ft = developmentFiles,
         event = "CursorHoldI",
-        after = { "nvim-treesitter" },
+        after = { "nvim-treesitter", "zenbones.nvim" },
         requires = {
           "onsails/lspkind.nvim",
-          "L3MON4D3/LuaSnip",
-          "saadparwaiz1/cmp_luasnip",
           "hrsh7th/nvim-cmp",
           "hrsh7th/cmp-nvim-lsp",
           "hrsh7th/cmp-buffer",
           "hrsh7th/cmp-path",
           "hrsh7th/cmp-nvim-lua",
           "mtoohey31/cmp-fish",
+          {
+            "zbirenbaum/copilot-cmp",
+            module = "copilot_cmp"
+          }
         },
         config = require("configs.cmp")
       },
@@ -235,7 +261,9 @@ return packer.startup({
         requires = { "kyazdani42/nvim-web-devicons" },
         event = "CursorHold",
         config = function()
-          require("trouble").setup()
+          vim.defer_fn(function()
+            require("trouble").setup()
+          end, 300)
         end
       },
       {
@@ -256,7 +284,9 @@ return packer.startup({
         after = { "zenbones.nvim" },
         event = "CursorHold",
         config = function()
-          require("todo-comments").setup()
+          vim.defer_fn(function()
+            require("todo-comments").setup()
+          end, 200)
         end
       },
       {
@@ -291,7 +321,9 @@ return packer.startup({
         after = { "zenbones.nvim" },
         ft = developmentFiles,
         config = function()
-          require("gitsigns").setup()
+          vim.defer_fn(function()
+            require("gitsigns").setup()
+          end, 200)
         end
       },
       {

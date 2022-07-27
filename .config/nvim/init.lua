@@ -1,11 +1,27 @@
+require("impatient")
+require("autocmd")
+
 vim.g.mapleader = " "
 vim.o.sessionoptions = "blank,buffers,help,tabpages,winsize,winpos,terminal"
+vim.g.did_load_filetypes = 1
 
 local set = vim.opt
 
-require("impatient")
-require("keymap")
-require("autocmd")
+-- misc
+set.re = 0
+set.ttyfast = true
+set.lazyredraw = false
+set.compatible = false
+set.updatetime = 2000
+
+-- visual
+set.termguicolors = true
+set.shortmess:append("at")
+set.number = true
+set.signcolumn = "yes"
+set.wrap = false
+set.ruler = true
+set.relativenumber = true
 
 -- file history
 set.backup = true
@@ -14,56 +30,58 @@ set.undofile = true
 set.undodir = vim.fn.expand("~/.config") .. "/nvim/.undo//"
 set.backupdir = vim.fn.expand("~/.config") .. "/nvim/.backup//"
 set.directory = vim.fn.expand("~/.config") .. "/nvim/.swp//"
-
-set.shortmess:append("at")
-set.background = "dark"
-set.signcolumn = "yes"
-set.timeoutlen = 1000
-set.list = true
-set.path:append("**")
-set.mouse = "a"
-set.showcmd = true
-set.showmode = false
-set.re = 0
-set.scrolloff = 8
-set.gdefault = true
-set.expandtab = true
-set.compatible = false
-set.wildignore = "*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Caches/*,*log*,*.dat*,*.kbx*,*.zip*"
 set.fileencoding = "utf-8"
-set.foldmethod = "marker"
-set.foldlevelstart = 0
-set.rtp:append("/opt/homebrew/opt/fzf")
-set.foldexpr = "nvim_treesitter#foldexpr()"
-set.wrap = false
-set.backspace = "indent,eol,start"
-set.number = true
 
-set.tabstop = 2
-set.hidden = true
-set.errorbells = false
-set.shiftwidth = 2
-set.autoindent = true
-set.expandtab = true
-set.softtabstop = 2
-set.smartindent = true
-set.relativenumber = true
-set.ignorecase = true
-set.cursorline = true
-set.smartcase = true
-set.incsearch = true
-set.hlsearch = false
-set.clipboard:append("unnamedplus")
-set.complete = "kspell"
-set.completeopt = "menu,menuone,noinsert"
-set.updatetime = 500
-set.lazyredraw = true
-set.ttyfast = true
-set.termguicolors = true
-set.winblend = 0
-set.wildoptions = "pum"
-set.pumblend = 10
-set.ruler = true
+-- fold
+set.foldlevelstart = 0
+set.foldmethod = "marker"
+set.backspace = "indent,eol,start"
+set.foldexpr = "nvim_treesitter#foldexpr()"
+
+vim.defer_fn(function()
+  require("keymap")
+
+  set.scrolloff = 8
+  set.list = true
+  set.hidden = true
+  set.mouse = "a"
+  set.cursorline = true
+  set.clipboard:append("unnamedplus")
+  set.errorbells = false
+  -- visual
+  set.pumblend = 10
+  set.winblend = 0
+  set.lazyredraw = true
+  set.background = "dark"
+  -- timings
+  set.timeoutlen = 1000
+  set.updatetime = 750
+  -- paths
+  set.rtp:append("/opt/homebrew/opt/fzf")
+  set.path:append("**")
+  set.wildoptions = "pum"
+  set.wildignore = "*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Caches/*,*log*,*.dat*,*.kbx*,*.zip*"
+  -- tab & indentation
+  set.tabstop = 2
+  set.shiftwidth = 2
+  set.autoindent = true
+  set.expandtab = true
+  set.smartindent = true
+  set.softtabstop = 2
+  set.expandtab = true
+  -- show
+  set.showcmd = true
+  set.showmode = false
+  -- completion
+  set.complete = "kspell"
+  set.completeopt = "menu,menuone,noinsert"
+  -- casing
+  set.ignorecase = true
+  set.smartcase = true
+  -- search
+  set.incsearch = true
+  set.hlsearch = false
+end, 100)
 
 local disabled_built_ins = {
   "2html_plugin",
@@ -84,6 +102,8 @@ local disabled_built_ins = {
   "vimballPlugin",
   "zip",
   "zipPlugin",
+  "remote_plugins",
+  "filetype"
 }
 
 for _, plugin in pairs(disabled_built_ins) do

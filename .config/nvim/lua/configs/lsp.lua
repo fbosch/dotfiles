@@ -7,6 +7,10 @@ return function()
       border = "rounded"
     }
   })
+  require(".configs.null-ls")()
+  require(".configs.prettier")()
+  require("fzf_lsp").setup()
+  require("nvim-ts-autotag").setup()
   require("nvim-lsp-installer").setup({
     ui = {
       border = "rounded",
@@ -17,12 +21,6 @@ return function()
       }
     }
   })
-  require("nvim-ts-autotag").setup()
-  require(".configs.null-ls")()
-  require(".configs.prettier")()
-
-  require("fzf_lsp").setup()
-
 
   local capabilities = vim.lsp.protocol.make_client_capabilities()
 
@@ -103,5 +101,4 @@ return function()
       on_attach(client, bufnr)
     end
   })
-
 end
