@@ -1,12 +1,11 @@
 vim.g.mapleader = " "
-vim.o.sessionoptions = "blank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal"
+vim.o.sessionoptions = "blank,buffers,help,tabpages,winsize,winpos,terminal"
 
 local set = vim.opt
 
 require("impatient")
 require("keymap")
 require("autocmd")
-
 
 -- file history
 set.backup = true
@@ -34,6 +33,7 @@ set.wildignore = "*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Cache
 set.fileencoding = "utf-8"
 set.foldmethod = "marker"
 set.foldlevelstart = 0
+set.rtp:append("/opt/homebrew/opt/fzf")
 set.foldexpr = "nvim_treesitter#foldexpr()"
 set.wrap = false
 set.backspace = "indent,eol,start"

@@ -1,5 +1,5 @@
 -- Use a protected call so we don't error out on first use
-local status_ok, packer = pcall(require, "packer")
+  local status_ok, packer = pcall(require, "packer")
 if not status_ok then
   local install_path = vim.fn.stdpath('data')..'/site/pack/packer/start/packer.nvim'
   if vim.fn.empty(vim.fn.glob(install_path)) > 0 then
@@ -24,7 +24,7 @@ packer.init({
 })
 
 local developmentFiles = { "html", "css", "javascript", "javascriptreact", "typescript", "typescriptreact", "json", "lua" }
-local pluginGroup = vim.api.nvim_create_augroup("plugsin", {})
+local pluginGroup = vim.api.nvim_create_augroup("plugins", {})
 
 
 -- install packages
@@ -33,6 +33,7 @@ return packer.startup({
     use({
       "wbthomason/packer.nvim",
       "lewis6991/impatient.nvim",
+      "luukvbaal/stabilize.nvim",
       "tweekmonster/startuptime.vim",
       "antoinemadec/FixCursorHold.nvim",
       {
@@ -58,6 +59,7 @@ return packer.startup({
         "rmagatti/auto-session",
         config = function()
           require("auto-session").setup({
+            auto_session_root_dir = vim.fn.expand('~/.config')..'/nvim/.sessions//',
             log_level = "error",
           })
         end
@@ -95,6 +97,29 @@ return packer.startup({
           })
         end,
         event = "VimEnter"
+      },
+      {
+        "akinsho/git-conflict.nvim",
+        after = "zenbones.nvim",
+        config = function()
+          require("git-conflict").setup({
+             highlights = {
+                incoming = 'DiffText',
+                current = 'DiffAdd',
+              }
+          })
+          vim.api.nvim_create_autocmd({ "BufRead" }, {
+            group = pluginGroup,
+            pattern = 'GitConflictDetected',
+            callback = function()
+              vim.notify('Conflict detected in '..vim.fn.expand('<afile>'))
+              vim.keymap.set('n', 'cww', function()
+                engage.conflict_buster()
+                create_buffer_local_mappings()
+              end)
+            end
+          })
+        end
       },
       {
         "f-person/git-blame.nvim",

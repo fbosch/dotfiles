@@ -44,7 +44,6 @@ return function()
     vim.keymap.set('n', '<leader>f', vim.lsp.buf.formatting, bufopts)
   end
 
-
   lspconfig.tailwindcss.setup({
     cmd = { "tailwindcss-language-server", "--stdio" },
     capabilities = capabilities,
@@ -70,7 +69,6 @@ return function()
       vim.api.nvim_buf_set_keymap(bufnr, "n", "gs", ":TSLspOrganize<CR>", opts)
       vim.api.nvim_buf_set_keymap(bufnr, "n", "gr", ":TSLspRenameFile<CR>", opts)
       vim.api.nvim_buf_set_keymap(bufnr, "n", "gi", ":TSLspImportAll<CR>", opts)
-      
       on_attach(client, bufnr)
     end
   })

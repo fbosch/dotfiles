@@ -9,10 +9,7 @@ cmd({ "VimLeavePre" }, {
         vim.api.nvim_win_close(win, false)
       end
     end
-    vim.cmd("NvimTreeClose")
-    vim.cmd("UndotreeHide")
-    vim.cmd("DiffviewClose")
-    vim.cmd("TroubleClose")
+    vim.cmd("NvimTreeClose | UndotreeHide | DiffviewClose | TroubleClose")
   end,
   group = group,
 })
@@ -31,6 +28,21 @@ cmd({ "BufWritePost" }, {
   command = "source <afile> | PackerCompile",
   group = group
 })
+-- cmd({ "BufNewFile", "BufRead" }, {
+--   pattern = { ".{es6,mjs}" },
+--   command = "setf javascript",
+--   group = group
+-- })
+-- cmd({ "BufNewFile", "BufRead" }, {
+--   pattern = { ".tsx" },
+--   command = "setf typescriptreact",
+--   group = group
+-- })
+-- cmd({ "BufNewFile", "BufRead"}, {
+--   pattern = { ".md", ".mdx" },
+--   command = "setf markdown",
+--   group = group
+-- })
 cmd({ "TextYankPost" }, {
   command = "lua vim.highlight.on_yank({ higroup = 'IncSearch', timeout = 500 })",
   group = group

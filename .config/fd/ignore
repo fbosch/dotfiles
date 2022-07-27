@@ -1,4 +1,16 @@
 Downloads/*
+Applications/*
+etc/*
+tmp/*
+sbin/*
+bin/*
+private/*
+usr/*
+Users/*
+var/*
+opt/*
+.file
+System/*
 go/*
 Library/*
 .brave-bin/*
@@ -19,3 +31,5 @@ Cache/**/*
 **/.swp/*
 **/.backup/*
 **/.undo/*
+**/.sessions/*
+

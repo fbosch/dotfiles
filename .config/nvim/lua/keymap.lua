@@ -7,6 +7,7 @@ map("n", "<leader>e", ":NvimTreeToggle<CR>", silent)
 map("n", "<leader>uu", ":UndotreeToggle<CR>", silent)
 map("n", "<leader>dff", ":DiffviewOpen<CR>", silent)
 map("n", "<leader>dfq", ":DiffviewClose<CR>", silent)
+map("n", "<Leader>s", ":wa<CR>", silent)
 
 -- move lines with move.nvim using Alt + hjkl
 map("n", "<A-j>", ":MoveLine(1)<CR>", silent)
