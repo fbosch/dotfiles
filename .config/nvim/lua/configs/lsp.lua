@@ -2,7 +2,7 @@ return function()
   local lspconfig = require("lspconfig")
   require("lsp_signature").setup({
     bind = true,
-    hint_prefix = "📖 ",
+    hint_prefix = "﬌ ",
     handler_opts = {
       border = "rounded"
     }
@@ -23,6 +23,20 @@ return function()
 
   require("fzf_lsp").setup()
 
+  local signs = { Error = " ", Warn = " ", Hint = " ", Info = " " }
+  for type, icon in pairs(signs) do
+    local hl = "DiagnosticSign" .. type
+    vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = hl })
+  end
+
+  vim.diagnostic.config({
+    virtual_text = false,
+    signs = true,
+    underline = true,
+    update_in_insert = true,
+    severity_sort = false,
+  })
+
   local capabilities = vim.lsp.protocol.make_client_capabilities()
 
   local on_attach = function(client, bufnr)
@@ -42,6 +56,22 @@ return function()
     vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, bufopts)
     vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, bufopts)
     vim.keymap.set('n', '<leader>f', vim.lsp.buf.formatting, bufopts)
+
+    -- floating diagnostics
+    vim.api.nvim_create_autocmd("CursorHold", {
+      buffer = bufnr,
+      callback = function()
+         local opts = {
+          focusable = false,
+          close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
+          border = 'rounded',
+          source = 'always',
+          prefix = '  ',
+          scope = 'cursor',
+        }
+        vim.diagnostic.open_float(nil, opts)
+      end
+    })
   end
 
   lspconfig.tailwindcss.setup({

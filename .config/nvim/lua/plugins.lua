@@ -104,11 +104,12 @@ return packer.startup({
         config = function()
           require("git-conflict").setup({
              highlights = {
-                incoming = 'DiffText',
-                current = 'DiffAdd',
+                incoming = "DiffText",
+                current = "DiffAdd",
+                ancestor = "diffFile"
               }
           })
-          vim.api.nvim_create_autocmd({ "BufRead" }, {
+          vim.api.nvim_create_autocmd({ "User" }, {
             group = pluginGroup,
             pattern = 'GitConflictDetected',
             callback = function()
