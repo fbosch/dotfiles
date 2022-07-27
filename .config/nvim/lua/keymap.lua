@@ -86,11 +86,19 @@ map("n", "<Space>", "<NOP>", silent)
 map("n", "q", "<NOP>", silent)
 
 -- trouble toggling
-map("n", "<leader>tx", "<cmd>Trouble<CR>", silent)
-map("n", "<leader>tw", "<cmd>Trouble workspace_diagnostics<CR>", silent)
-map("n", "<leader>td", "<cmd>Trouble document_diagnostics<CR>", silent)
-map("n", "<leader>tl", "<cmd>Trouble loclist<CR>", silent)
-map("n", "<leader>tq", "<cmd>Trouble quickfix<CR>", silent)
-map("n", "<leader>tr", "<cmd>Trouble lsp_references<CR>", silent)
+map("n", "<leader>tx", ":Trouble<CR>", silent)
+map("n", "<leader>tw", ":Trouble workspace_diagnostics<CR>", silent)
+map("n", "<leader>td", ":Trouble document_diagnostics<CR>", silent)
+map("n", "<leader>tt", ":TodoTrouble<CR>", silent)
+map("n", "<leader>tl", ":Trouble loclist<CR>", silent)
+map("n", "<leader>tq", ":Trouble quickfix<CR>", silent)
+map("n", "<leader>tr", ":Trouble lsp_references<CR>", silent)
+map("n", "<leader>tz", ":TroubleClose<CR>", silent)
 
-
+-- hop bindings
+map("n", "<leader>h", ":HopWord<CR>", silent)
+map("n", "<leader>cl", ":HopWordCurrentLine<CR>", silent)
+map("n", "<leader>lh", ":HopLineStart<CR>", silent)
+map("n", "<leader>la", ":HopLineStartAC<CR>", silent)
+map("n", "<leader>lb", ":HopLineStartBC<CR>", silent)
+map("n", "<leader>vh", ":HopVertical<CR>", silent)

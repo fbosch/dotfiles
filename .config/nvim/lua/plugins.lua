@@ -87,26 +87,37 @@ return packer.startup({
         ft = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
       },
       {
+        "phaazon/hop.nvim",
+        event = "CursorHold",
+        ft = developmentFiles,
+        config = function()
+          require("hop").setup({
+            keys = "etovxqpdygfblzhckisuran"
+          })
+        end
+      },
+      {
         "folke/which-key.nvim",
         after = { "zenbones.nvim" },
+        event = "VimEnter",
         config = function()
           require("which-key").setup({
             window = {
               border = "rounded"
             }
           })
-        end,
-        event = "VimEnter"
+        end
       },
       {
         "akinsho/git-conflict.nvim",
         after = "zenbones.nvim",
+        event = "VimEnter",
+        ft = developmentFiles,
         config = function()
           require("git-conflict").setup({
              highlights = {
                 incoming = "DiffText",
                 current = "DiffAdd",
-                ancestor = "diffFile"
               }
           })
           vim.api.nvim_create_autocmd({ "User" }, {
@@ -203,6 +214,7 @@ return packer.startup({
       },
       {
         "hrsh7th/nvim-cmp",
+        ft = developmentFiles,
         event = "CursorHoldI",
         after = { "nvim-treesitter" },
         requires = {
@@ -263,11 +275,13 @@ return packer.startup({
         "nvim-lualine/lualine.nvim",
         requires = { "kyazdani42/nvim-web-devicons", "f-person/git-blame.nvim" },
         after = { "zenbones.nvim", "lush.nvim" },
+        event = "VimEnter",
         config = require("configs.lualine")
       },
       {
         "gelguy/wilder.nvim",
         after = { "zenbones.nvim" },
+        event = "VimEnter",
         requires = { "kyazdani42/nvim-web-devicons", "romgrk/fzy-lua-native", "zenbones.nvim" },
         config = require("configs.wilder")
       },
