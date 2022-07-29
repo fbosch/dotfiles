@@ -1,26 +1,28 @@
 return function()
   local lspconfig = require("lspconfig")
-  require("lsp_signature").setup({
-    bind = true,
-    hint_prefix = "﬌ ",
-    handler_opts = {
-      border = "rounded"
-    }
-  })
-  require(".configs.null-ls")()
-  require(".configs.prettier")()
-  require("fzf_lsp").setup()
-  require("nvim-ts-autotag").setup()
-  require("nvim-lsp-installer").setup({
-    ui = {
-      border = "rounded",
-      icons = {
-        server_installed = "✓",
-        server_pending = "➜",
-        server_uninstalled = "✗"
+  vim.defer_fn(function()
+    require("lsp_signature").setup({
+      bind = true,
+      hint_prefix = "﬌ ",
+      handler_opts = {
+        border = "rounded"
       }
-    }
-  })
+    })
+    require(".configs.null-ls")()
+    require(".configs.prettier")()
+    require("fzf_lsp").setup()
+    require("nvim-ts-autotag").setup()
+    require("nvim-lsp-installer").setup({
+      ui = {
+        border = "rounded",
+        icons = {
+          server_installed = "✓",
+          server_pending = "➜",
+          server_uninstalled = "✗"
+        }
+      }
+    })
+  end, 200)
 
   local capabilities = vim.lsp.protocol.make_client_capabilities()
 

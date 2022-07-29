@@ -2,7 +2,8 @@ return function()
   local cmp = require("cmp")
   local types = require("cmp.types")
   local lspkind = require("lspkind")
-  vim.defer_fn(function()
+  vim.schedule(function()
+    require("luasnip.loaders.from_snipmate").lazy_load({ paths = "~/.config/nvim/snippets" })
     cmp.setup({
       completion = {
         completeopt = "menu,menuone,noinsert"
@@ -11,21 +12,18 @@ return function()
         completion = cmp.config.window.bordered(),
         documentation = cmp.config.window.bordered()
       },
-      formatting = {
-       format = function (entry, vim_item)
-        if entry.source.name == "copilot" then
-          vim_item.kind = ""
-          vim_item.kind_hl_group = "CmpItemKindCopilot"
-          return vim_item
-          end
-          return lspkind.cmp_format({ with_text = false, maxwidth = 50 })(entry, vim_item)
+      snippet = {
+        expand = function(args)
+          require("luasnip").lsp_expand(args.body)
         end
       },
+      formatting = {
+        format = lspkind.cmp_format({ with_text = false, maxwidth = 50 })
+      },
       sources = cmp.config.sources({
-        { name = "copilot" },
         { name = "nvim_lsp" },
         { name = "buffer" },
-        -- { name = "luasnip" },
+        { name = "luasnip" },
         { name = "fish" },
         { name = "nvim_lua" },
       }),
@@ -39,6 +37,7 @@ return function()
         ["<C-k>"] = cmp.mapping.select_prev_item({ behavior = types.cmp.SelectBehavior.Select })
       })
     })
-  end, 200)
+  end)
 end
+
 

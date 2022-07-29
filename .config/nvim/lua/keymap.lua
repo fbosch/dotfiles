@@ -2,12 +2,21 @@ local map = vim.keymap.set
 local options = { noremap = true }
 local silent = { noremap = true, silent = true }
 
+-- disable
+map("n", "<Space>", "<NOP>", silent)
+
+-- ctrl+p
 map("n", "<C-p>", ":lua require('fzf-lua').files()<CR>", silent)
+
+-- history
 map("n", "<leader>e", ":NvimTreeToggle<CR>", silent)
 map("n", "<leader>uu", ":UndotreeToggle<CR>", silent)
 map("n", "<leader>dff", ":DiffviewOpen<CR>", silent)
 map("n", "<leader>dfq", ":DiffviewClose<CR>", silent)
-map("n", "<Leader>s", ":wa<CR>", silent)
+
+-- save files
+map("n", "<leader>s", ":wa<CR>", silent)
+map("n", "<leader>S", ":wqa!<CR>", silent)
 
 -- move lines with move.nvim using Alt + hjkl
 map("n", "<A-j>", ":MoveLine(1)<CR>", silent)
@@ -23,9 +32,8 @@ map("v", "<A-l>", ":MoveHBlock(-1)<CR>", silent)
 map("v", "<", "<gv", options)
 map("v", ">", ">gv", options)
 
--- clear highlighted search with Escape in normal mode
-map("n", "<esc>", ":noh<CR>", silent)
-map("n", "<esc>^[", "<esc>[", silent)
+-- find and replace all
+map("n", "S", ":%s//<Left>", silent)
 
 -- remap split navigation to CTRL + hjkl
 map("n", "<S-k>", ":wincmd k<CR>", silent)
@@ -81,9 +89,6 @@ map("n", "<C-7>", ":BufferGoto 7<CR>", silent)
 map("n", "<C-8>", ":BufferGoto 8<CR>", silent)
 map("n", "<C-9>", ":BufferGoto 9<CR>", silent)
 
--- disable
-map("n", "<Space>", "<NOP>", silent)
-map("n", "q", "<NOP>", silent)
 
 -- trouble toggling
 map("n", "<leader>tx", ":Trouble<CR>", silent)

@@ -24,7 +24,7 @@ cmd({ "BufWritePost" }, {
   group = group
 })
 cmd({ "BufWritePost" }, {
-  pattern = { "nvim/*.lua" },
+  pattern = { "*.lua" },
   command = "source <afile> | PackerCompile",
   group = group
 })

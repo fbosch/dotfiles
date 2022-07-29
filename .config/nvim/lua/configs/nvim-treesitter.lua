@@ -1,6 +1,8 @@
 return function()
   vim.defer_fn(function()
-    require("nvim-autopairs").setup()
+    vim.schedule(function()
+      require("nvim-autopairs").setup()
+    end)
     require("nvim-treesitter.configs").setup({
       autopairs = { enable = true },
       autotag = { enable = true },
