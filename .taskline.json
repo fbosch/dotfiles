@@ -1,6 +1,6 @@
 {
   "language": "en",
-  "tasklineDirectory": "~",
+  "tasklineDirectory": "~/Documents/journal/tasks",
   "displayCompleteTasks": true,
   "displayProgressOverview": true,
   "storageModule": "local",

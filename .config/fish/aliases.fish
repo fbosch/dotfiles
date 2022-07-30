@@ -35,14 +35,15 @@ abbr cfdu 'nvim ~/.config/dunst/dunstrc'
 abbr prj 'cd ~/Projects'
 abbr pjo 'pj open '
 abbr h 'cd ~/'
+abbr jn 'cd ~/Documents/journal'
 
 # Helpers
-
 abbr src 'source ~/.config/fish/config.fish'
 abbr makins 'sudo make && sudo make clean install'
 abbr cl 'clear'
 abbr t 'yarn test'
 abbr mki 'sudo make && sudo make clean install'
+alias copykey 'pbcopy < ~/.ssh/id_rsa.pub'
 
 # Extended defaults
 alias cat 'bat --style=plain --color=always'

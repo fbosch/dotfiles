@@ -25,6 +25,7 @@ return function()
         { name = "buffer" },
         { name = "luasnip" },
         { name = "fish" },
+        { name = "spell" },
         { name = "nvim_lua" },
       }),
       mapping = cmp.mapping.preset.insert({

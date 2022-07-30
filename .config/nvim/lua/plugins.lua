@@ -23,7 +23,7 @@ packer.init({
 
 local developmentFiles = { "html", "css", "javascript", "javascriptreact", "typescript", "typescriptreact", "json", "lua" }
 local pluginGroup = vim.api.nvim_create_augroup("plugins", {})
-local function lazyPlugin(plugin)
+local function lazy(plugin)
   return {
     plugin,
     event = "VimEnter",
@@ -41,8 +41,14 @@ return packer.startup({
       "luukvbaal/stabilize.nvim",
       "antoinemadec/FixCursorHold.nvim",
       "nathom/filetype.nvim",
-      lazyPlugin("tpope/vim-fugitive"),
-      lazyPlugin("mbbill/undotree"),
+      lazy("tpope/vim-fugitive"),
+      {
+        "mbbill/undotree",
+        event = "VimEnter",
+        config = function()
+          vim.g.undotree_WindowLayout = 2
+        end
+      },
       {
         "rmagatti/auto-session",
         event = "VimEnter",
@@ -68,20 +74,22 @@ return packer.startup({
       {
         "fedepujol/move.nvim",
         ft = developmentFiles,
-        event = "BufEnter",
+        event = "VimEnter",
      },
       {
         "echasnovski/mini.nvim",
         event = "CursorHold",
         config = function()
-          require("mini.trailspace").setup({
-            only_in_normal_buffers = true
-          })
+          vim.schedule(function()
+            require("mini.trailspace").setup({
+              only_in_normal_buffers = true
+            })
+          end)
         end
       },
       {
         "mcchrish/zenbones.nvim",
-        requires = { lazyPlugin("rktjmp/lush.nvim") },
+        requires = { lazy("rktjmp/lush.nvim") },
         event = "VimEnter",
         config = require("configs.colorscheme")
       },
@@ -92,14 +100,21 @@ return packer.startup({
         ft = developmentFiles,
         config = function()
           vim.defer_fn(function()
-            require("neoscroll").setup({
-              pre_hook = function()
-                vim.api.nvim_command("TSContextDisable")
-              end,
-              post_hook = function()
-                vim.api.nvim_command("TSContextEnable")
-              end
-            })
+            vim.schedule(function()
+              require("neoscroll").setup({
+                pre_hook = function()
+                  vim.api.nvim_command("TSContextDisable")
+                end,
+                post_hook = function()
+                  vim.schedule(function()
+                    vim.api.nvim_command("TSContextEnable")
+                    vim.schedule(function()
+                      vim.cmd("Beacon")
+                    end)
+                  end)
+                end
+              })
+            end)
           end, 300)
         end
       },
@@ -113,9 +128,11 @@ return packer.startup({
         event = "CursorHold",
         ft = developmentFiles,
         config = function()
+          vim.schedule(function()
             require("hop").setup({
               keys = "etovxqpdygfblzhckisuran"
             })
+          end)
         end
       },
       {
@@ -135,14 +152,20 @@ return packer.startup({
       {
         "f-person/git-blame.nvim",
         event = "CursorHold",
+        ft = developmentFiles,
       },
       {
         "tpope/vim-commentary",
         event = "CursorHold",
+        ft = developmentFiles
       },
       {
         "tpope/vim-surround",
         event = "InsertEnter",
+      },
+      {
+        "lukas-reineke/indent-blankline.nvim",
+        event = "CursorHold",
       },
       {
         "danilamihailov/beacon.nvim",
@@ -166,12 +189,7 @@ return packer.startup({
       },
       {
         "sindrets/diffview.nvim",
-        requires = { lazyPlugin("nvim-lua/plenary.nvim") },
-        ft = developmentFiles,
-        event = "CursorHold"
-      },
-      {
-        "lukas-reineke/indent-blankline.nvim",
+        requires = { lazy("nvim-lua/plenary.nvim") },
         ft = developmentFiles,
         event = "CursorHold"
       },
@@ -180,7 +198,7 @@ return packer.startup({
         run = ":TSUpdate",
         event = "VimEnter",
         ft = developmentFiles,
-        requires = { lazyPlugin("windwp/nvim-autopairs") },
+        requires = { lazy("windwp/nvim-autopairs") },
         config = require("configs.nvim-treesitter")
       },
       {
@@ -210,13 +228,13 @@ return packer.startup({
         event = "VimEnter",
         requires = {
           "jose-elias-alvarez/nvim-lsp-ts-utils",
-          lazyPlugin("williamboman/nvim-lsp-installer"),
-          lazyPlugin("junegunn/fzf"),
-          lazyPlugin("ray-x/lsp_signature.nvim"),
-          lazyPlugin("folke/lsp-colors.nvim"),
-          lazyPlugin("gfanto/fzf-lsp.nvim"),
-          lazyPlugin("MunifTanjim/prettier.nvim"),
-          lazyPlugin("jose-elias-alvarez/null-ls.nvim"),
+          lazy("williamboman/nvim-lsp-installer"),
+          lazy("junegunn/fzf"),
+          lazy("ray-x/lsp_signature.nvim"),
+          lazy("folke/lsp-colors.nvim"),
+          lazy("gfanto/fzf-lsp.nvim"),
+          lazy("MunifTanjim/prettier.nvim"),
+          lazy("jose-elias-alvarez/null-ls.nvim"),
         },
         config = require("configs.lsp")
       },
@@ -234,18 +252,26 @@ return packer.startup({
         requires = {
           "onsails/lspkind.nvim",
           "hrsh7th/nvim-cmp",
-          lazyPlugin("saadparwaiz1/cmp_luasnip"),
-          lazyPlugin("hrsh7th/cmp-nvim-lsp"),
-          lazyPlugin("hrsh7th/cmp-path"),
-          lazyPlugin("hrsh7th/cmp-nvim-lua"),
-          lazyPlugin("mtoohey31/cmp-fish"),
-          lazyPlugin("hrsh7th/cmp-buffer"),
+          {
+            "f3fora/cmp-spell",
+            ft = { "markdown" },
+            config = function()
+              vim.opt.spell = true
+              vim.opt.spelllang = { "en_us" }
+            end
+          },
+          lazy("saadparwaiz1/cmp_luasnip"),
+          lazy("hrsh7th/cmp-nvim-lsp"),
+          lazy("hrsh7th/cmp-path"),
+          lazy("hrsh7th/cmp-nvim-lua"),
+          lazy("mtoohey31/cmp-fish"),
+          lazy("hrsh7th/cmp-buffer"),
         },
         config = require("configs.cmp")
       },
       {
         "folke/trouble.nvim",
-        requires = { lazyPlugin("kyazdani42/nvim-web-devicons") },
+        requires = { lazy("kyazdani42/nvim-web-devicons") },
         event = "CursorHold",
         config = function()
           vim.defer_fn(function()
@@ -258,18 +284,16 @@ return packer.startup({
         run = "make hexokinase",
         event = "CursorHold",
         config = function()
-          vim.schedule(function()
-            vim.g.Hexokinase_highlighters = {"virtual"}
-            vim.g.Hexokinase_optInPatterns = {
-              "full_hex", "rgb", "rgba", "hsl", "hsla"
-            }
-          end)
+          vim.g.Hexokinase_highlighters = {"virtual"}
+          vim.g.Hexokinase_optInPatterns = {
+            "full_hex", "rgb", "rgba", "hsl", "hsla"
+          }
         end
       },
       {
         "folke/todo-comments.nvim",
         requires = {
-          lazyPlugin("nvim-lua/plenary.nvim"),
+          lazy("nvim-lua/plenary.nvim"),
         },
         ft = developmentFiles,
         after = { "zenbones.nvim" },
@@ -283,8 +307,8 @@ return packer.startup({
       {
         "nvim-lualine/lualine.nvim",
         requires = {
-          lazyPlugin("kyazdani42/nvim-web-devicons"),
-          lazyPlugin("f-person/git-blame.nvim")
+          lazy("kyazdani42/nvim-web-devicons"),
+          lazy("f-person/git-blame.nvim")
         },
         after = { "lush.nvim" },
         event = "VimEnter",
@@ -295,8 +319,8 @@ return packer.startup({
         after = { "zenbones.nvim" },
         event = "VimEnter",
         requires = {
-          lazyPlugin("kyazdani42/nvim-web-devicons"),
-          lazyPlugin("romgrk/fzy-lua-native")
+          lazy("kyazdani42/nvim-web-devicons"),
+          lazy("romgrk/fzy-lua-native")
         },
         config = require("configs.wilder")
       },
@@ -314,14 +338,14 @@ return packer.startup({
       {
         "nvim-telescope/telescope.nvim",
         event = "VimEnter",
-        requires = { lazyPlugin("nvim-telescope/telescope-file-browser.nvim")  },
+        requires = { lazy("nvim-telescope/telescope-file-browser.nvim")  },
         config = require("configs.telescope")
       },
       {
         "ibhagwan/fzf-lua",
         event = "VimEnter",
         after = { "zenbones.nvim" },
-        requires = { lazyPlugin("kyazdani42/nvim-web-devicons") },
+        requires = { lazy("kyazdani42/nvim-web-devicons") },
         config = require("configs.fzf")
       },
       {

@@ -16,11 +16,7 @@ return function()
       local bufferline_state = require("bufferline.state")
 
       nvim_tree_events.on_tree_open(function()
-        bufferline_state.set_offset(get_tree_size())
-      end)
-
-      nvim_tree_events.on_tree_resize(function()
-        bufferline_state.set_offset(get_tree_size())
+        bufferline_state.set_offset(31)
       end)
 
       nvim_tree_events.on_tree_close(function()
