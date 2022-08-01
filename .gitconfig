@@ -33,7 +33,11 @@
   diffFilter = delta --color-only --features=interactive
   pager = delta
 
+[mergetool "nvim"]
+  cmd = nvim -d -f -c \"Gdiffsplit!\" \"$MERGED\"
+
 [merge]
+  tool = nvim
   conflictstyle = diff3
 
 [diff]

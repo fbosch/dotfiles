@@ -62,6 +62,7 @@ return packer.startup({
       {
        "romgrk/barbar.nvim",
         after = { "zenbones.nvim" },
+        event = "ColorSchemePre",
         requires = { "kyazdani42/nvim-web-devicons" },
         config = function()
           require("bufferline").setup({
@@ -143,6 +144,7 @@ return packer.startup({
       },
       {
         "tpope/vim-surround",
+        ft = developmentFiles,
         event = "InsertEnter",
       },
       {
@@ -189,13 +191,11 @@ return packer.startup({
         event = "CursorHold",
         after = { "nvim-treesitter" },
         config = function()
-          vim.defer_fn(function()
-            vim.schedule(function()
-              require("treesitter-context").setup({
-                mode = "topline"
-              })
-            end)
-          end, 200)
+          vim.schedule(function()
+            require("treesitter-context").setup({
+              mode = "topline"
+            })
+          end)
         end
       },
       {
@@ -285,15 +285,16 @@ return packer.startup({
         ft = { "markdown" },
         event = "CursorHold",
         config = function()
-          vim.defer_fn(function() 
-            vim.schedule(function() 
+          vim.defer_fn(function()
+            vim.schedule(function()
               require("glow").setup({
                 style = "dark",
                 width = 200,
                 border = "rounded",
               })
+              vim.keymap.set("n", "<leader>G", ":Glow<CR>", { noremap = true, silent = true })
             end)
-          end, 200)
+          end, 500)
         end
       },
       {
@@ -315,7 +316,7 @@ return packer.startup({
           lazy("f-person/git-blame.nvim")
         },
         after = { "lush.nvim" },
-        event = "VimEnter",
+        event = "ColorSchemePre",
         config = require("configs.lualine")
       },
       {
@@ -330,7 +331,7 @@ return packer.startup({
       },
       {
         "lewis6991/gitsigns.nvim",
-        event = "CursorHold",
+        event = "ColorSchemePre",
         after = { "zenbones.nvim" },
         ft = developmentFiles,
         config = function()

@@ -19,7 +19,6 @@ cache/**/*
 Cache/**/*
 **/.yarn/**/*
 **/node_modules/**/*
-*.log
 *.session
 *.history
 */.vscode/*

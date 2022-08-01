@@ -8,9 +8,6 @@ map("n", "<Space>", "<NOP>", silent)
 -- ctrl+p
 map("n", "<C-p>", ":lua require('fzf-lua').files()<CR>", silent)
 
--- glow markdown preview
-map("n", "<leader>G", ":Glow<CR>", silent)
-
 -- history
 map("n", "<leader>e", ":NvimTreeToggle<CR>", silent)
 map("n", "<leader>uu", ":UndotreeToggle<CR>", silent)

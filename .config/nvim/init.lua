@@ -49,7 +49,7 @@ set.termguicolors = true
 set.number = true
 set.signcolumn = "yes"
 set.wrap = false
-set.ruler = true
+-- set.ruler = true
 set.relativenumber = true
 set.cursorline = true
 
@@ -82,18 +82,11 @@ vim.schedule(function()
   require("plugins")
   vim.schedule(function()
     require("keymap")
-    set.scrolloff = 8
     set.list = true
     set.hidden = true
     set.mouse = "a"
     set.clipboard:append("unnamedplus")
     set.errorbells = false
-    set.lazyredraw = false
-    -- visual
-    set.pumblend = 10
-    set.winblend = 0
-    set.lazyredraw = true
-    set.background = "dark"
     -- paths
     set.rtp:append("/opt/homebrew/opt/fzf")
     set.path:append("**")
