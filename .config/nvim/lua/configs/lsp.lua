@@ -26,6 +26,29 @@ return function()
 
   local capabilities = vim.lsp.protocol.make_client_capabilities()
 
+  vim.diagnostic.config({
+    virtual_text = false,
+    signs = true,
+    underline = true,
+    update_in_insert = true,
+    severity_sort = false,
+  })
+
+  vim.api.nvim_create_autocmd("CursorHold", {
+    buffer = bufnr,
+    callback = function()
+       local opts = {
+        focusable = false,
+        close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
+        border = 'rounded',
+        source = 'always',
+        prefix = '  ',
+        scope = 'cursor',
+      }
+      vim.diagnostic.open_float(nil, opts)
+    end
+  })
+
   local on_attach = function(client, bufnr)
     local bufopts = { noremap=true, silent=true, buffer=bufnr }
     vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, bufopts)
@@ -51,28 +74,6 @@ return function()
       vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = hl })
     end
 
-    vim.diagnostic.config({
-      virtual_text = false,
-      signs = true,
-      underline = true,
-      update_in_insert = true,
-      severity_sort = false,
-    })
-
-    vim.api.nvim_create_autocmd("CursorHold", {
-      buffer = bufnr,
-      callback = function()
-         local opts = {
-          focusable = false,
-          close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
-          border = 'rounded',
-          source = 'always',
-          prefix = '  ',
-          scope = 'cursor',
-        }
-        vim.diagnostic.open_float(nil, opts)
-      end
-    })
   end
 
   lspconfig.tailwindcss.setup({

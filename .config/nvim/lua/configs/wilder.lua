@@ -1,5 +1,5 @@
 return function()
-  vim.defer_fn(function()
+  vim.schedule(function()
     local wilder = require("wilder")
     wilder.setup({
       modes = { ":", "/", "?" },
@@ -46,5 +46,5 @@ return function()
         },
       })
     ))
-  end, 100)
+  end)
 end

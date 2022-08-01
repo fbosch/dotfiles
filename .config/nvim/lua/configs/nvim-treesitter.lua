@@ -6,7 +6,16 @@ return function()
     require("nvim-treesitter.configs").setup({
       autopairs = { enable = true },
       autotag = { enable = true },
-      ensure_installed = "all",
+      ensure_installed = { 
+        "javascript",
+        "jsdoc",
+        "typescript",
+        "html",
+        "css",
+        "markdown",
+        "yaml",
+        "regex",
+      },
       highlight = { enable = true },
       indent = { enable = true }
     })

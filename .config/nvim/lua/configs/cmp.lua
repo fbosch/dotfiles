@@ -24,6 +24,7 @@ return function()
         { name = "nvim_lsp" },
         { name = "buffer" },
         { name = "luasnip" },
+        { name = "emoji" },
         { name = "fish" },
         { name = "spell" },
         { name = "nvim_lua" },

@@ -23,7 +23,6 @@ local disabled_built_ins = {
   "vimballPlugin",
   "zip",
   "zipPlugin",
-  "remote_plugins",
   "filetype",
   "tutor_mode_plugin",
 }
@@ -39,6 +38,10 @@ set.re = 0 -- regex engine auto
 set.shortmess:append("at")
 set.compatible = false
 
+-- timings
+set.timeoutlen = 1000
+set.updatetime = 300
+
 -- visual
 set.lazyredraw = true
 set.ttyfast = true
@@ -48,6 +51,7 @@ set.signcolumn = "yes"
 set.wrap = false
 set.ruler = true
 set.relativenumber = true
+set.cursorline = true
 
 -- file history
 set.backup = true
@@ -73,27 +77,23 @@ set.smartindent = true
 set.softtabstop = 2
 set.expandtab = true
 
+require("autocmd")
 vim.schedule(function()
   require("plugins")
-  require("autocmd")
-  require("keymap")
   vim.schedule(function()
+    require("keymap")
     set.scrolloff = 8
     set.list = true
     set.hidden = true
     set.mouse = "a"
-    set.cursorline = true
     set.clipboard:append("unnamedplus")
     set.errorbells = false
-    set.lazyredraw = true
+    set.lazyredraw = false
     -- visual
     set.pumblend = 10
     set.winblend = 0
     set.lazyredraw = true
     set.background = "dark"
-    -- timings
-    set.timeoutlen = 1000
-    set.updatetime = 750
     -- paths
     set.rtp:append("/opt/homebrew/opt/fzf")
     set.path:append("**")

@@ -8,6 +8,9 @@ map("n", "<Space>", "<NOP>", silent)
 -- ctrl+p
 map("n", "<C-p>", ":lua require('fzf-lua').files()<CR>", silent)
 
+-- glow markdown preview
+map("n", "<leader>G", ":Glow<CR>", silent)
+
 -- history
 map("n", "<leader>e", ":NvimTreeToggle<CR>", silent)
 map("n", "<leader>uu", ":UndotreeToggle<CR>", silent)
@@ -88,7 +91,6 @@ map("n", "<C-6>", ":BufferGoto 6<CR>", silent)
 map("n", "<C-7>", ":BufferGoto 7<CR>", silent)
 map("n", "<C-8>", ":BufferGoto 8<CR>", silent)
 map("n", "<C-9>", ":BufferGoto 9<CR>", silent)
-
 
 -- trouble toggling
 map("n", "<leader>tx", ":Trouble<CR>", silent)

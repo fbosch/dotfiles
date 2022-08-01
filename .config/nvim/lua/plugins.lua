@@ -21,7 +21,7 @@ packer.init({
   },
 })
 
-local developmentFiles = { "html", "css", "javascript", "javascriptreact", "typescript", "typescriptreact", "json", "lua" }
+local developmentFiles = { "html", "css", "javascript", "javascriptreact", "typescript", "typescriptreact", "json", "lua", "markdown" }
 local pluginGroup = vim.api.nvim_create_augroup("plugins", {})
 local function lazy(plugin)
   return {
@@ -91,31 +91,13 @@ return packer.startup({
         "mcchrish/zenbones.nvim",
         requires = { lazy("rktjmp/lush.nvim") },
         event = "VimEnter",
-        config = require("configs.colorscheme")
-      },
-      {
-        "karb94/neoscroll.nvim",
-        event = "CursorHold",
-        after = { "nvim-treesitter-context" },
-        ft = developmentFiles,
         config = function()
-          vim.defer_fn(function()
-            vim.schedule(function()
-              require("neoscroll").setup({
-                pre_hook = function()
-                  vim.api.nvim_command("TSContextDisable")
-                end,
-                post_hook = function()
-                  vim.schedule(function()
-                    vim.api.nvim_command("TSContextEnable")
-                    vim.schedule(function()
-                      vim.cmd("Beacon")
-                    end)
-                  end)
-                end
-              })
-            end)
-          end, 300)
+          vim.cmd("colorscheme zenwritten")
+          vim.schedule(require("configs.colorscheme"))
+          vim.api.nvim_create_autocmd({ "ColorScheme" }, {
+            callback = require("configs.colorscheme"),
+            group = pluginGroup
+          })
         end
       },
       {
@@ -210,7 +192,7 @@ return packer.startup({
           vim.defer_fn(function()
             vim.schedule(function()
               require("treesitter-context").setup({
-                mode = "topline",
+                mode = "topline"
               })
             end)
           end, 200)
@@ -255,16 +237,22 @@ return packer.startup({
           {
             "f3fora/cmp-spell",
             ft = { "markdown" },
-            config = function()
-              vim.opt.spell = true
-              vim.opt.spelllang = { "en_us" }
-            end
+            event = "VimEnter",
           },
+          {
+            "mtoohey31/cmp-fish",
+            event = "VimEnter",
+            ft = { "fish" }
+          },
+          {
+            "hrsh7th/cmp-nvim-lua",
+            event = "VimEnter",
+            ft = { "lua" }
+          },
+          lazy("hrsh7th/cmp-emoji"),
           lazy("saadparwaiz1/cmp_luasnip"),
           lazy("hrsh7th/cmp-nvim-lsp"),
           lazy("hrsh7th/cmp-path"),
-          lazy("hrsh7th/cmp-nvim-lua"),
-          lazy("mtoohey31/cmp-fish"),
           lazy("hrsh7th/cmp-buffer"),
         },
         config = require("configs.cmp")
@@ -275,7 +263,9 @@ return packer.startup({
         event = "CursorHold",
         config = function()
           vim.defer_fn(function()
-            require("trouble").setup()
+            vim.schedule(function()
+              require("trouble").setup()
+            end)
           end, 300)
         end
       },
@@ -291,6 +281,22 @@ return packer.startup({
         end
       },
       {
+        "ellisonleao/glow.nvim",
+        ft = { "markdown" },
+        event = "CursorHold",
+        config = function()
+          vim.defer_fn(function() 
+            vim.schedule(function() 
+              require("glow").setup({
+                style = "dark",
+                width = 200,
+                border = "rounded",
+              })
+            end)
+          end, 200)
+        end
+      },
+      {
         "folke/todo-comments.nvim",
         requires = {
           lazy("nvim-lua/plenary.nvim"),
@@ -299,9 +305,7 @@ return packer.startup({
         after = { "zenbones.nvim" },
         event = "CursorHold",
         config = function()
-          vim.schedule(function()
             require("todo-comments").setup()
-          end)
         end
       },
       {
