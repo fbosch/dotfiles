@@ -94,7 +94,7 @@ return packer.startup({
         event = "VimEnter",
         config = function()
           vim.cmd("colorscheme zenwritten")
-          vim.schedule(require("configs.colorscheme"))
+          require("configs.colorscheme")()
           vim.api.nvim_create_autocmd({ "ColorScheme" }, {
             callback = require("configs.colorscheme"),
             group = pluginGroup
@@ -131,11 +131,6 @@ return packer.startup({
             })
           end)
         end,
-      },
-      {
-        "f-person/git-blame.nvim",
-        event = "CursorHold",
-        ft = developmentFiles,
       },
       {
         "tpope/vim-commentary",
@@ -186,19 +181,6 @@ return packer.startup({
         config = require("configs.nvim-treesitter")
       },
       {
-        "nvim-treesitter/nvim-treesitter-context",
-        ft = developmentFiles,
-        event = "CursorHold",
-        after = { "nvim-treesitter" },
-        config = function()
-          vim.schedule(function()
-            require("treesitter-context").setup({
-              mode = "topline"
-            })
-          end)
-        end
-      },
-      {
         "windwp/nvim-ts-autotag",
         ft = developmentFiles,
         event = "InsertEnter",
@@ -212,7 +194,6 @@ return packer.startup({
           "jose-elias-alvarez/nvim-lsp-ts-utils",
           lazy("williamboman/nvim-lsp-installer"),
           lazy("junegunn/fzf"),
-          lazy("ray-x/lsp_signature.nvim"),
           lazy("folke/lsp-colors.nvim"),
           lazy("gfanto/fzf-lsp.nvim"),
           lazy("MunifTanjim/prettier.nvim"),

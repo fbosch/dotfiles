@@ -40,7 +40,7 @@ set.compatible = false
 
 -- timings
 set.timeoutlen = 1000
-set.updatetime = 300
+set.updatetime = 250
 
 -- visual
 set.lazyredraw = true
@@ -77,11 +77,11 @@ set.smartindent = true
 set.softtabstop = 2
 set.expandtab = true
 
+require("keymap")
 require("autocmd")
 vim.schedule(function()
   require("plugins")
   vim.schedule(function()
-    require("keymap")
     set.list = true
     set.hidden = true
     set.mouse = "a"

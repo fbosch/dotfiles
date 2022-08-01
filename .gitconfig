@@ -5,6 +5,12 @@
 [core]
   pager = delta
 
+[push]
+  default = current
+
+[pull]
+  rebase =false
+
 [delta]
   navigate = true
   light = false
@@ -34,11 +40,12 @@
   pager = delta
 
 [mergetool "nvim"]
-  cmd = nvim -d -f -c \"Gdiffsplit!\" \"$MERGED\"
+  cmd = nvim -f -c \"Gdiffsplit!\" \"$MERGED\"
 
 [merge]
   tool = nvim
   conflictstyle = diff3
 
 [diff]
+  algorithm = patience
   colorMoved = default

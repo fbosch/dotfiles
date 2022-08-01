@@ -8,6 +8,13 @@ map("n", "<Space>", "<NOP>", silent)
 -- ctrl+p
 map("n", "<C-p>", ":lua require('fzf-lua').files()<CR>", silent)
 
+-- git blame
+map("n", "<leader>gbo", ":GitBlameOpenCommitURL<CR>", silent)
+map("n", "<leader>gbc", ":GitBlameCopySHA<CR>", silent)
+
+-- lsp
+map("n", "<leader>k", ":lua vim.lsp.buf.hover()<CR>", silent)
+
 -- history
 map("n", "<leader>e", ":NvimTreeToggle<CR>", silent)
 map("n", "<leader>uu", ":UndotreeToggle<CR>", silent)

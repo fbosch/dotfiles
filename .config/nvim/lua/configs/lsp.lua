@@ -1,13 +1,6 @@
 return function()
   local lspconfig = require("lspconfig")
-  vim.defer_fn(function()
-    require("lsp_signature").setup({
-      bind = true,
-      hint_prefix = "﬌ ",
-      handler_opts = {
-        border = "rounded"
-      }
-    })
+  vim.schedule(function()
     require(".configs.null-ls")()
     require(".configs.prettier")()
     require("fzf_lsp").setup()
@@ -22,31 +15,13 @@ return function()
         }
       }
     })
-  end, 200)
+
+  end)
 
   local capabilities = vim.lsp.protocol.make_client_capabilities()
 
-  vim.diagnostic.config({
-    virtual_text = false,
-    signs = true,
-    underline = true,
-    update_in_insert = true,
-    severity_sort = false,
-  })
-
-  vim.api.nvim_create_autocmd("CursorHold", {
-    buffer = bufnr,
-    callback = function()
-       local opts = {
-        focusable = false,
-        close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
-        border = 'rounded',
-        source = 'always',
-        prefix = '  ',
-        scope = 'cursor',
-      }
-      vim.diagnostic.open_float(nil, opts)
-    end
+  vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
+    border = "rounded",
   })
 
   local on_attach = function(client, bufnr)
@@ -66,7 +41,7 @@ return function()
     vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, bufopts)
     vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, bufopts)
     vim.keymap.set('n', '<leader>f', vim.lsp.buf.formatting, bufopts)
-
+    
     -- floating diagnostics
     local signs = { Error = " ", Warn = " ", Hint = " ", Info = " " }
     for type, icon in pairs(signs) do
@@ -74,17 +49,40 @@ return function()
       vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = hl })
     end
 
+    vim.diagnostic.config({
+      virtual_text = false,
+      signs = true,
+      underline = true,
+      update_in_insert = true,
+      severity_sort = false,
+    })
+    vim.api.nvim_create_autocmd("CursorHold", {
+      buffer = bufnr,
+      callback = function()
+         local opts = {
+          focusable = false,
+          close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
+          border = 'rounded',
+          source = 'always',
+          prefix = '  ',
+          scope = 'cursor',
+        }
+        vim.diagnostic.open_float(nil, opts)
+      end
+    })
   end
 
   lspconfig.tailwindcss.setup({
     cmd = { "tailwindcss-language-server", "--stdio" },
     capabilities = capabilities,
     on_attach = on_attach,
+    handlers = handlers
   })
 
   lspconfig.tsserver.setup({
     init_options = require("nvim-lsp-ts-utils").init_options,
     capabilities = capabilities,
+    handlers = handlers,
     on_attach = function(client, bufnr)
       client.resolved_capabilities.document_formatting = false
       client.resolved_capabilities.document_range_formatting = false
