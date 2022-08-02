@@ -5,6 +5,7 @@ local options = { noremap = true }
 -- jobs
 map("n", "<leader>yd", require("jobs.devserver"), silent)
 map("n", "<leader>ys", require("jobs.storybook"), silent)
+map("n", "<leader>yt", require("jobs.testserver"), silent)
 
 -- disable
 map("n", "<Space>", "<NOP>", silent)
