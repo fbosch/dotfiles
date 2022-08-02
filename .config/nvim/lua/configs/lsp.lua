@@ -1,25 +1,23 @@
 return function()
   local lspconfig = require("lspconfig")
-  vim.schedule(function()
-    require(".configs.null-ls")()
-    require(".configs.prettier")()
-    require("fzf_lsp").setup()
-    require("nvim-ts-autotag").setup()
-    require("nvim-lsp-installer").setup({
-      ui = {
-        border = "rounded",
-        icons = {
-          server_installed = "✓",
-          server_pending = "➜",
-          server_uninstalled = "✗"
-        }
-      }
-    })
-
-  end)
-
+  local group = vim.api.nvim_create_augroup("lsp", {})
   local capabilities = vim.lsp.protocol.make_client_capabilities()
 
+  require(".configs.null-ls")()
+  require(".configs.prettier")()
+  require("fzf_lsp").setup()
+  require("nvim-ts-autotag").setup()
+  require("nvim-lsp-installer").setup({
+    ui = {
+      border = "rounded",
+      icons = {
+        server_installed = "✓",
+        server_pending = "➜",
+        server_uninstalled = "✗"
+      }
+    }
+  })
+ 
   vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
     border = "rounded",
   })
@@ -32,6 +30,7 @@ return function()
     vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, bufopts)
     vim.keymap.set('n', 'gr', vim.lsp.buf.references, bufopts)
     vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, bufopts)
+    vim.keymap.set('n', '<leader>k', vim.lsp.buf.hover, bufopts)
     vim.keymap.set('n', '<leader>wa', vim.lsp.buf.add_workspace_folder, bufopts)
     vim.keymap.set('n', '<leader>wr', vim.lsp.buf.remove_workspace_folder, bufopts)
     vim.keymap.set('n', '<leader>wl', function()
@@ -41,7 +40,7 @@ return function()
     vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, bufopts)
     vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, bufopts)
     vim.keymap.set('n', '<leader>f', vim.lsp.buf.formatting, bufopts)
-    
+ 
     -- floating diagnostics
     local signs = { Error = " ", Warn = " ", Hint = " ", Info = " " }
     for type, icon in pairs(signs) do
@@ -56,8 +55,10 @@ return function()
       update_in_insert = true,
       severity_sort = false,
     })
+
     vim.api.nvim_create_autocmd("CursorHold", {
       buffer = bufnr,
+      group = group,
       callback = function()
          local opts = {
           focusable = false,
@@ -76,13 +77,11 @@ return function()
     cmd = { "tailwindcss-language-server", "--stdio" },
     capabilities = capabilities,
     on_attach = on_attach,
-    handlers = handlers
   })
 
   lspconfig.tsserver.setup({
     init_options = require("nvim-lsp-ts-utils").init_options,
     capabilities = capabilities,
-    handlers = handlers,
     on_attach = function(client, bufnr)
       client.resolved_capabilities.document_formatting = false
       client.resolved_capabilities.document_range_formatting = false
@@ -102,4 +101,5 @@ return function()
       on_attach(client, bufnr)
     end
   })
+
 end

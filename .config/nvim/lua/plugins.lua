@@ -41,7 +41,16 @@ return packer.startup({
       "luukvbaal/stabilize.nvim",
       "antoinemadec/FixCursorHold.nvim",
       "nathom/filetype.nvim",
-      lazy("tpope/vim-fugitive"),
+      "travonted/luajob",
+      lazy("dinhhuy258/git.nvim"),
+      {
+        "rcarriga/nvim-notify",
+        ft = developmentFiles,
+        event = "VimEnter",
+        config = function()
+          vim.schedule(require("configs.notify"))
+        end
+      },
       {
         "mbbill/undotree",
         event = "VimEnter",
@@ -62,7 +71,6 @@ return packer.startup({
       {
        "romgrk/barbar.nvim",
         after = { "zenbones.nvim" },
-        event = "ColorSchemePre",
         requires = { "kyazdani42/nvim-web-devicons" },
         config = function()
           require("bufferline").setup({
@@ -94,11 +102,7 @@ return packer.startup({
         event = "VimEnter",
         config = function()
           vim.cmd("colorscheme zenwritten")
-          require("configs.colorscheme")()
-          vim.api.nvim_create_autocmd({ "ColorScheme" }, {
-            callback = require("configs.colorscheme"),
-            group = pluginGroup
-          })
+          vim.schedule(require("configs.colorscheme"))
         end
       },
       {
@@ -285,9 +289,9 @@ return packer.startup({
         },
         ft = developmentFiles,
         after = { "zenbones.nvim" },
-        event = "CursorHold",
+        event = "ColorSchemePre",
         config = function()
-            require("todo-comments").setup()
+          require("todo-comments").setup()
         end
       },
       {
@@ -303,7 +307,7 @@ return packer.startup({
       {
         "gelguy/wilder.nvim" ,
         after = { "zenbones.nvim" },
-        event = "VimEnter",
+        event = "ColorSchemePre",
         requires = {
           lazy("kyazdani42/nvim-web-devicons"),
           lazy("romgrk/fzy-lua-native")

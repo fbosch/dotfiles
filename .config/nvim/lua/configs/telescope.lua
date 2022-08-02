@@ -1,8 +1,9 @@
 return function()
-  vim.defer_fn(function()
+  vim.schedule(function()
     local telescope = require("telescope")
     local actions = require("telescope.actions")
     telescope.load_extension("file_browser")
+    telescope.load_extension("notify")
     vim.schedule(function()
       telescope.setup({
         defaults = {
@@ -37,5 +38,5 @@ return function()
         }
       })
     end)
-  end, 500)
+  end)
 end
