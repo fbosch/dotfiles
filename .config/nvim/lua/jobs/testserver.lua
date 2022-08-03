@@ -28,6 +28,7 @@ return function()
   vim.schedule(yarnTest.start)
   vim.schedule_wrap(vim.notify(" ﭧ Running Test Suite", "info", {
     render = "minimal",
+    timeout = 100
   }))
   vim.api.nvim_create_autocmd({ "VimLeavePre" }, {
     callback = function()

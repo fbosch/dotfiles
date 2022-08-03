@@ -35,7 +35,7 @@ local set = vim.opt
 
 -- misc
 set.re = 0 -- regex engine auto
-set.shortmess:append("at")
+set.shortmess:append("I")
 set.compatible = false
 
 -- timings
@@ -49,9 +49,8 @@ set.termguicolors = true
 set.number = true
 set.signcolumn = "yes"
 set.wrap = false
--- set.ruler = true
 set.relativenumber = true
-set.cursorline = true
+-- set.cursorline = true
 
 -- file history
 set.backup = true

@@ -18,6 +18,12 @@ return function()
       end
     end
   })
+  vim.schedule(function()
+    vim.notify("  Starting Storybook", "info", {
+      render = "minimal",
+      timeout = 100
+    })
+  end)
   vim.schedule(yarnStorybook.start)
   vim.api.nvim_create_autocmd({ "VimLeavePre" }, {
     callback = function()
