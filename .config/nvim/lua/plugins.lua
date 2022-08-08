@@ -297,11 +297,9 @@ return packer.startup({
       {
         "nvim-lualine/lualine.nvim",
         requires = {
-          lazy("kyazdani42/nvim-web-devicons"),
-          lazy("f-person/git-blame.nvim")
+          "kyazdani42/nvim-web-devicons",
+          "f-person/git-blame.nvim"
         },
-        after = { "lush.nvim" },
-        event = "ColorSchemePre",
         config = require("configs.lualine")
       },
       {

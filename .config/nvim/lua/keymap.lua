@@ -3,9 +3,9 @@ local group = vim.api.nvim_create_augroup("keymap", {})
 local options = { noremap = true }
 
 -- jobs
-map("n", "<leader>yka", function()
+map("n", "<leader>yka", function() 
   -- kill all running jobs
-  vim.schedule(function()
+  vim.schedule(function() 
     vim.notify(" ﮊ Killed all running jobs", "error", {
       render = "minimal",
       timeout = 200

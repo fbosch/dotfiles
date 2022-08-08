@@ -25,4 +25,4 @@ end
 
 status is-interactive &&
     set --query nvm_default_version && ! set --query nvm_current_version &&
-    nvm use $nvm_default_version >/dev/null
+    nvm use $nvm_default_version --silent >/dev/null
