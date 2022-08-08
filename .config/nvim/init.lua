@@ -1,7 +1,7 @@
 require("impatient")
 
 vim.g.mapleader = " "
-vim.o.sessionoptions = "blank,buffers,help,tabpages,winsize,winpos,terminal"
+vim.o.sessionoptions = "buffers,help,tabpages,winsize,winpos,terminal"
 vim.g.did_load_filetypes = 1
 
 local disabled_built_ins = {

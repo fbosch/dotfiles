@@ -3,9 +3,9 @@
 . ~/.config/fish/colors.fish
 . ~/.config/fish/nvm.fish
 
-
 function fish_greeting
   if [ "$KITTY_WINDOW_ID" = "1" ]
+    eval command 'curl "wttr.in/Copenhagen?format=\n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"'
     eval command tl
   end
 end
@@ -34,18 +34,12 @@ function lfcd --description "lf to switch directories"
     end
 end
 
-# set kitty_id echo (kitty @ ls | jq ".[] | select(.is_focused = true)" | grep "id" | head -1 | grep -o "[0-9]*")
-function kitty_id --description "kitty id"
-  set --local kitty_list $(kitty @ ls)
-  set --local jq_args ".[] | select(.is_focused == true)"
-  echo "$kitty_list" | jq "$jq_args" | grep "id" | head -1 | grep -o "[0-9]*"
-end
-
 bind -M insert \cc kill-whole-line repaint
 
 # Keybindings
 function fish_user_keybindings
   fish_vi_key_bindings
 end
+
 
 starship init fish | source

@@ -1,4 +1,4 @@
-set -gx PROJECT_PATHS ~/Projects
+# set -gx PROJECT_PATHS ~/Projects
 set -gx nvm_default_version "17"
 set -gx ARCHPREFERENCE "arm64"
 set -gx EDITOR "nvim"

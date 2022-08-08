@@ -13,7 +13,8 @@ abbr bu 'brew upgrade'
 alias vimdiff 'nvim -d'
 abbr kssh 'kitty +kitten ssh'
 alias snvim 'sudo -E -s nvim' # launch vim in sudo but preserve env config
-alias logikill 'kill -9 $(ps ax | grep -E "Logi Options" | head -1 | cut -f 1 -d " ")' # quickfix for dying logitech driver on M1 Mac
+alias logikill 'ps -ef | grep -i "Logi Options" | grep "Applications" | awk \'{print $2}\' | xargs kill -9' # quickfix for dying logitech driver on M1 Mac
+# alias wtr 'curl "wttr.in/Copenhagen?format=\n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"'
 
 # Config Shortcuts
 abbr cali 'cat ~/.config/fish/aliases.fish'
@@ -34,7 +35,7 @@ abbr cfdu 'nvim ~/.config/dunst/dunstrc'
 # Directory shortcuts
 abbr prj 'cd ~/Projects'
 abbr pjo 'pj open '
-abbr h 'cd ~/'
+# abbr h 'cd ~/'
 abbr jn 'cd ~/Documents/journal'
 
 # Helpers
