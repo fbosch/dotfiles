@@ -50,7 +50,7 @@ set.number = true
 set.signcolumn = "yes"
 set.wrap = false
 set.relativenumber = true
--- set.cursorline = true
+set.cursorline = true
 
 -- file history
 set.backup = true
@@ -76,33 +76,34 @@ set.smartindent = true
 set.softtabstop = 2
 set.expandtab = true
 
+set.list = true
+set.hidden = true
+set.mouse = "a"
+set.clipboard:append("unnamedplus")
+set.errorbells = false
+
+-- paths
+set.rtp:append("/opt/homebrew/opt/fzf")
+set.path:append("**")
+set.wildoptions = "pum"
+set.wildignore = "*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Caches/*,*log*,*.dat*,*.kbx*,*.zip*"
+
+-- show
+set.showcmd = true
+set.showmode = false
+
+-- completion
+set.complete = "kspell"
+set.completeopt = "menu,menuone,noinsert"
+
+-- casing
+set.ignorecase = true
+set.smartcase = true
+
+-- search
+set.incsearch = true
+set.hlsearch = false
+
 require("keymap")
 require("autocmd")
-vim.schedule(function()
-  require("plugins")
-  vim.schedule(function()
-    set.list = true
-    set.hidden = true
-    set.mouse = "a"
-    set.clipboard:append("unnamedplus")
-    set.errorbells = false
-    -- paths
-    set.rtp:append("/opt/homebrew/opt/fzf")
-    set.path:append("**")
-    set.wildoptions = "pum"
-    set.wildignore = "*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Caches/*,*log*,*.dat*,*.kbx*,*.zip*"
-    -- show
-    set.showcmd = true
-    set.showmode = false
-    -- completion
-    set.complete = "kspell"
-    set.completeopt = "menu,menuone,noinsert"
-    -- casing
-    set.ignorecase = true
-    set.smartcase = true
-    -- search
-    set.incsearch = true
-    set.hlsearch = false
-  end)
-end)
-
+require("plugins")

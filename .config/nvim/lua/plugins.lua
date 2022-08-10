@@ -42,7 +42,7 @@ return packer.startup({
       "antoinemadec/FixCursorHold.nvim",
       "nathom/filetype.nvim",
       "travonted/luajob",
-      lazy("dinhhuy258/git.nvim"),
+      "tpope/vim-fugitive",
       {
         "rcarriga/nvim-notify",
         ft = developmentFiles,
