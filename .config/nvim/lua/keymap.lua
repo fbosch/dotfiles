@@ -23,6 +23,15 @@ map("n", "<Space>", "<NOP>", silent)
 -- ctrl+p
 map("n", "<C-p>", ":lua require('fzf-lua').files()<CR>", silent)
 
+-- pick window
+map("n", "<leader>w", function()
+  local winpick = require("winpick")
+  local winid = winpick.select()
+
+  if winid then
+    vim.api.nvim_set_current_win(winid)
+  end
+end, silent)
 
 -- git blame
 map("n", "<leader>gbo", ":GitBlameOpenCommitURL<CR>", silent)

@@ -41,8 +41,17 @@ return packer.startup({
       "luukvbaal/stabilize.nvim",
       "antoinemadec/FixCursorHold.nvim",
       "nathom/filetype.nvim",
-      "travonted/luajob",
       "tpope/vim-fugitive",
+      {
+        "gbrlsnchs/winpick.nvim",
+        event = "VimEnter",
+        config = function()
+          require("winpick").setup({
+            border = "rounded",
+            chars = { "W", "Q", "E", "A", "S", "D", "R", "F", "T", "G" }
+          })
+        end
+      },
       {
         "rcarriga/nvim-notify",
         ft = developmentFiles,
@@ -90,6 +99,7 @@ return packer.startup({
         event = "CursorHold",
         config = function()
           vim.schedule(function()
+            require('mini.ai').setup()
             require("mini.trailspace").setup({
               only_in_normal_buffers = true
             })

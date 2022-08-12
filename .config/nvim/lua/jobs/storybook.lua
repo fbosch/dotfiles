@@ -2,16 +2,17 @@ local group = vim.api.nvim_create_augroup("storybook", {})
 
 
 return function()
-  local job = require("luajob")
+  local job = require(".jobs.job")
   local yarnStorybook = job:new({
     cmd = "yarn storybook",
-    on_stdout = function(err, data)
+    on_stdout = function(self, err, data)
       if data then
         if string.match(data, "for React started") then
           vim.schedule(function()
             vim.notify(data, "info", {
               title = "Storybook",
-              icon = ""
+              icon = "",
+              timeout = 250
             })
           end)
         end

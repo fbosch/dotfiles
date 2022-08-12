@@ -2,10 +2,10 @@ local group = vim.api.nvim_create_augroup("test", {})
 
 
 return function()
-  local job = require("luajob")
+  local job = require(".jobs.job")
   local yarnTest = job:new({
     cmd = "yarn test",
-    on_stdout = function(err, data)
+    on_stdout = function(self, err, data)
       if data then
         if string.match(data, "exit code 0") then
           vim.schedule(function()
@@ -18,7 +18,8 @@ return function()
           vim.schedule(function()
             vim.notify(data, "warn", {
               title = "Tests",
-              icon = "ﭧ"
+              icon = "ﭧ",
+              timeout = 250
             })
           end)
         end

@@ -2,10 +2,10 @@ local group = vim.api.nvim_create_augroup("devserver", {})
 
 
 return function()
-  local job = require("luajob")
+  local job = require('.jobs.job')
   local yarnDev = job:new({
     cmd = "yarn dev",
-    on_stdout = function(err, data)
+    on_stdout = function(self, err, data)
       vim.schedule(function()
         if (err) then
           vim.notify(err, "error", {
@@ -18,14 +18,15 @@ return function()
               timeout = 100
             })
           elseif string.match(data, "hmr") then
-            vim.notify("  Hot Module Reload", "info", { 
+            vim.notify("  Hot Module Reload", "info", {
               render = "minimal",
               timeout = 100,
             })
           else
             vim.notify(data, "info", {
               title = "Dev Server",
-              icon = ""
+              icon = "",
+              timeout = 250
             })
           end
         end
