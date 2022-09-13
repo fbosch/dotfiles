@@ -50,7 +50,7 @@ set.number = true
 set.signcolumn = "yes"
 set.wrap = false
 set.relativenumber = true
--- set.cursorline = true
+set.cursorline = true
 
 -- file history
 set.backup = true

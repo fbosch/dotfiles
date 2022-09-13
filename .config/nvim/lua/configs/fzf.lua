@@ -5,9 +5,8 @@ return function()
         previewers = {
           bat = {
             cmd = "bat",
-            args = "--style=numbers,changes --color=always --line-range=:70",
+            -- args = "--style=numbers,changes --color=always --line-range=:70",
             theme = 'Zenwritten Dark',
-            config = nil
           }
         },
         files = {

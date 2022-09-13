@@ -24,7 +24,7 @@ map("n", "<Space>", "<NOP>", silent)
 map("n", "<C-p>", ":lua require('fzf-lua').files()<CR>", silent)
 
 -- pick window
-map("n", "<leader>w", function()
+map("n", "<leader>pw", function()
   local winpick = require("winpick")
   local winid = winpick.select()
 
@@ -102,8 +102,8 @@ map("n", "<leader>z", ":bp <bar> :bd #<CR>", silent) -- close buffer but keep sp
 map("n", "-", ":b#<CR>", silent) --  previously active buffer
 
 -- barbar buffer controls
-map("n", "<leader>x", ":only <bar> :BufferCloseAllButCurrentOrPinned<CR>", silent) -- close all buffers except current
-map("n", "<leader>p", ":BufferPin<CR>", silent) -- pin current buffer
+map("n", "<leader>x", ":only <bar> :BufferCloseAllButCurrentOrPinned<CR>", silent) -- close all buffers except current
+map("n", "<leader>P", ":BufferPin<CR>", silent) -- pin current buffer
 map("n", "<C-h>", ":BufferPrevious<CR>", silent)
 map("n", "<C-l>", ":BufferNext<CR>", silent)
 map("n", "<C-A-h>", ":BufferMovePrevious<CR>", silent)

@@ -253,6 +253,22 @@ return packer.startup({
         config = require("configs.cmp")
       },
       {
+        "rcarriga/nvim-dap-ui",
+        ft = developmentFiles,
+        requires = { "mfussenegger/nvim-dap" },
+        event = "VimEnter",
+        config = function()
+          vim.schedule(function()
+            require("dapui").setup()
+          end)
+        end
+      },
+      {
+        "mfussenegger/nvim-dap",
+        ft = developmentFiles,
+        event = "VimEnter"
+      },
+      {
         "folke/trouble.nvim",
         requires = { lazy("kyazdani42/nvim-web-devicons") },
         event = "CursorHold",
