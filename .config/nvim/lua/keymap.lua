@@ -3,19 +3,19 @@ local group = vim.api.nvim_create_augroup("keymap", {})
 local options = { noremap = true }
 
 -- jobs
-map("n", "<leader>yka", function() 
-  -- kill all running jobs
-  vim.schedule(function() 
-    vim.notify(" ﮊ Killed all running jobs", "error", {
-      render = "minimal",
-      timeout = 200
-    })
-    os.execute("ps -ef | grep -i \"$(pwd)\" | grep \"test\\|dev\\|vite\\|storybook\" | awk '{print $2}' | xargs kill -9")
-  end)
-end, silent)
-map("n", "<leader>yd", require("jobs.devserver"), silent)
-map("n", "<leader>ys", require("jobs.storybook"), silent)
-map("n", "<leader>yt", require("jobs.testserver"), silent)
+-- map("n", "<leader>yka", function()
+--   -- kill all running jobs
+--   vim.schedule(function()
+--     vim.notify(" ﮊ Killed all running jobs", "error", {
+--       render = "minimal",
+--       timeout = 200
+--     })
+--     os.execute("ps -ef | grep -i \"$(pwd)\" | grep \"test\\|dev\\|vite\\|storybook\" | awk '{print $2}' | xargs kill -9")
+--   end)
+-- end, silent)
+-- map("n", "<leader>yd", require("jobs.devserver"), silent)
+-- map("n", "<leader>ys", require("jobs.storybook"), silent)
+-- map("n", "<leader>yt", require("jobs.testserver"), silent)
 
 -- disable
 map("n", "<Space>", "<NOP>", silent)

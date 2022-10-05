@@ -3,20 +3,20 @@ return function()
   local group = vim.api.nvim_create_augroup("lsp", {})
   local capabilities = vim.lsp.protocol.make_client_capabilities()
 
-  require(".configs.null-ls")()
+  -- require(".configs.null-ls")()
   require(".configs.prettier")()
   require("fzf_lsp").setup()
-  require("nvim-ts-autotag").setup()
-  require("nvim-lsp-installer").setup({
-    ui = {
-      border = "rounded",
-      icons = {
-        server_installed = "✓",
-        server_pending = "➜",
-        server_uninstalled = "✗"
-      }
-    }
-  })
+  -- require("nvim-ts-autotag").setup()
+  -- require("nvim-lsp-installer").setup({
+  --   ui = {
+  --     border = "rounded",
+  --     icons = {
+  --       server_installed = "✓",
+  --       server_pending = "➜",
+  --       server_uninstalled = "✗"
+  --     }
+  --   }
+  -- })
  
   vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
     border = "rounded",
@@ -82,8 +82,8 @@ return function()
     init_options = require("nvim-lsp-ts-utils").init_options,
     capabilities = capabilities,
     on_attach = function(client, bufnr)
-      client.resolved_capabilities.document_formatting = false
-      client.resolved_capabilities.document_range_formatting = false
+      client.server_capabilities.documentFormattingProvider = false
+      client.server_capabilities.documentRangeFormattingProvider = false
       local ts_utils = require("nvim-lsp-ts-utils")
 
       ts_utils.setup({

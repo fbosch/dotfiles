@@ -40,7 +40,7 @@ return packer.startup({
       "lewis6991/impatient.nvim",
       "luukvbaal/stabilize.nvim",
       "antoinemadec/FixCursorHold.nvim",
-      "nathom/filetype.nvim",
+      -- "nathom/filetype.nvim",
       "tpope/vim-fugitive",
       {
         "gbrlsnchs/winpick.nvim",
@@ -57,7 +57,7 @@ return packer.startup({
         ft = developmentFiles,
         event = "VimEnter",
         config = function()
-          vim.schedule(require("configs.notify"))
+          require("configs.notify")
         end
       },
       {
@@ -98,12 +98,10 @@ return packer.startup({
         "echasnovski/mini.nvim",
         event = "CursorHold",
         config = function()
-          vim.schedule(function()
-            require('mini.ai').setup()
-            require("mini.trailspace").setup({
-              only_in_normal_buffers = true
-            })
-          end)
+          require('mini.ai').setup()
+          require("mini.trailspace").setup({
+            only_in_normal_buffers = true
+          })
         end
       },
       {
@@ -125,11 +123,9 @@ return packer.startup({
         event = "CursorHold",
         ft = developmentFiles,
         config = function()
-          vim.schedule(function()
-            require("hop").setup({
-              keys = "etovxqpdygfblzhckisuran"
-            })
-          end)
+          require("hop").setup({
+            keys = "etovxqpdygfblzhckisuran"
+          })
         end
       },
       {
@@ -165,19 +161,15 @@ return packer.startup({
         event = "VimEnter",
         config = function()
           vim.g.beacon_enable = 0
-          vim.defer_fn(function()
-            vim.schedule(function()
-              vim.g.beacon_ignore_filetypes = { "fzf" }
-              vim.g.beacon_size = 30
-              vim.g.beacon_enable = 1
-              vim.schedule(function()
-                vim.api.nvim_create_autocmd({ "WinEnter" }, {
-                  command = "Beacon",
-                  group = pluginGroup
-                })
-              end)
-            end)
-          end, 500)
+          vim.g.beacon_ignore_filetypes = { "fzf" }
+          vim.g.beacon_size = 30
+          vim.g.beacon_enable = 1
+          vim.schedule(function()
+            vim.api.nvim_create_autocmd({ "WinEnter" }, {
+              command = "Beacon",
+              group = pluginGroup
+            })
+          end)
         end
       },
       {
@@ -186,12 +178,18 @@ return packer.startup({
         ft = developmentFiles,
         event = "CursorHold"
       },
+        -- {
+      --   'lewis6991/spellsitter.nvim',
+      --   after = { "nvim-treesitter" },
+      --   config = function()
+      --     require('spellsitter').setup()
+      --   end
+      -- },
       {
         "nvim-treesitter/nvim-treesitter",
         run = ":TSUpdate",
-        event = "VimEnter",
         ft = developmentFiles,
-        requires = { lazy("windwp/nvim-autopairs") },
+        requires = { "windwp/nvim-autopairs" },
         config = require("configs.nvim-treesitter")
       },
       {
@@ -201,14 +199,13 @@ return packer.startup({
       },
       {
         "neovim/nvim-lspconfig",
-        ft = developmentFiles,
-        after = { "nvim-treesitter" },
-        event = "VimEnter",
+        -- ft = developmentFiles,
+        -- after = { "nvim-treesitter" },
         requires = {
           "jose-elias-alvarez/nvim-lsp-ts-utils",
-          lazy("williamboman/nvim-lsp-installer"),
+          -- lazy("williamboman/nvim-lsp-installer"),
           lazy("junegunn/fzf"),
-          lazy("folke/lsp-colors.nvim"),
+          -- lazy("folke/lsp-colors.nvim"),
           lazy("gfanto/fzf-lsp.nvim"),
           lazy("MunifTanjim/prettier.nvim"),
           lazy("jose-elias-alvarez/null-ls.nvim"),
@@ -252,32 +249,28 @@ return packer.startup({
         },
         config = require("configs.cmp")
       },
-      {
-        "rcarriga/nvim-dap-ui",
-        ft = developmentFiles,
-        requires = { "mfussenegger/nvim-dap" },
-        event = "VimEnter",
-        config = function()
-          vim.schedule(function()
-            require("dapui").setup()
-          end)
-        end
-      },
-      {
-        "mfussenegger/nvim-dap",
-        ft = developmentFiles,
-        event = "VimEnter"
-      },
+      -- {
+      --   "rcarriga/nvim-dap-ui",
+      --   ft = developmentFiles,
+      --   requires = { "mfussenegger/nvim-dap" },
+      --   event = "VimEnter",
+      --   config = function()
+      --     vim.schedule(function()
+      --       require("dapui").setup()
+      --     end)
+      --   end
+      -- },
+      -- {
+      --   "mfussenegger/nvim-dap",
+      --   ft = developmentFiles,
+      --   event = "VimEnter"
+      -- },
       {
         "folke/trouble.nvim",
         requires = { lazy("kyazdani42/nvim-web-devicons") },
         event = "CursorHold",
         config = function()
-          vim.defer_fn(function()
-            vim.schedule(function()
-              require("trouble").setup()
-            end)
-          end, 300)
+          require("trouble").setup()
         end
       },
       {
@@ -296,16 +289,12 @@ return packer.startup({
         ft = { "markdown" },
         event = "CursorHold",
         config = function()
-          vim.defer_fn(function()
-            vim.schedule(function()
-              require("glow").setup({
-                style = "dark",
-                width = 200,
-                border = "rounded",
-              })
-              vim.keymap.set("n", "<leader>G", ":Glow<CR>", { noremap = true, silent = true })
-            end)
-          end, 500)
+          require("glow").setup({
+            style = "dark",
+            width = 200,
+            border = "rounded",
+          })
+          vim.keymap.set("n", "<leader>G", ":Glow<CR>", { noremap = true, silent = true })
         end
       },
       {
@@ -344,9 +333,7 @@ return packer.startup({
         after = { "zenbones.nvim" },
         ft = developmentFiles,
         config = function()
-          vim.schedule(function()
-            require("gitsigns").setup()
-          end)
+          require("gitsigns").setup()
         end
       },
       {
@@ -365,10 +352,12 @@ return packer.startup({
       {
         "kyazdani42/nvim-tree.lua",
         event = "VimEnter",
-        after = { "zenbones.nvim", "barbar.nvim" },
+        after = { "zenbones.nvim" },
         requires = { "kyazdani42/nvim-web-devicons" },
         config = require("configs.nvim-tree")
       },
     })
   end
 })
+
+

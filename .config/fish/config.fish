@@ -5,7 +5,6 @@
 
 function fish_greeting
   if [ "$KITTY_WINDOW_ID" = "1" ]
-    eval command 'curl "wttr.in/Copenhagen?format=\n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"'
     eval command tl
   end
 end
