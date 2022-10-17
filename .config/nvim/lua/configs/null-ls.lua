@@ -3,7 +3,7 @@ return function()
 
   null_ls.setup({
     on_attach = function(client, bufnr)
-       if client.server_capabilities.documentFormattingProvider then
+      if client.server_capabilities.documentFormattingProvider then
         vim.cmd("nnoremap <silent><buffer> <Leader>f :lua vim.lsp.buf.formatting()<CR>")
         -- format on save
         vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
@@ -11,7 +11,7 @@ return function()
           group = augroup,
           buffer = bufnr,
           callback = function()
-            vim.lsp.buf.formatting_sync()
+            vim.lsp.buf.format()
           end
         })
       end

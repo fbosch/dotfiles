@@ -82,8 +82,10 @@ return function()
     init_options = require("nvim-lsp-ts-utils").init_options,
     capabilities = capabilities,
     on_attach = function(client, bufnr)
-      client.server_capabilities.documentFormattingProvider = false
-      client.server_capabilities.documentRangeFormattingProvider = false
+      -- client.server_capabilities.documentFormattingProvider = false
+      -- client.resolved_capabilities.document_formatting = false
+      -- client.server_capabilities.documentRangeFormattingProvider = false
+      -- client.resolved_capabilities.document_range_formatting = false
       local ts_utils = require("nvim-lsp-ts-utils")
 
       ts_utils.setup({

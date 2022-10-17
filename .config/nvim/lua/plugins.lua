@@ -38,26 +38,18 @@ return packer.startup({
       "tweekmonster/startuptime.vim",
       "wbthomason/packer.nvim",
       "lewis6991/impatient.nvim",
-      "luukvbaal/stabilize.nvim",
       "antoinemadec/FixCursorHold.nvim",
-      -- "nathom/filetype.nvim",
+      "nathom/filetype.nvim",
       "tpope/vim-fugitive",
+      "TaDaa/vimade",
       {
-        "gbrlsnchs/winpick.nvim",
+       "gbrlsnchs/winpick.nvim",
         event = "VimEnter",
         config = function()
           require("winpick").setup({
             border = "rounded",
             chars = { "W", "Q", "E", "A", "S", "D", "R", "F", "T", "G" }
           })
-        end
-      },
-      {
-        "rcarriga/nvim-notify",
-        ft = developmentFiles,
-        event = "VimEnter",
-        config = function()
-          require("configs.notify")
         end
       },
       {
@@ -199,16 +191,15 @@ return packer.startup({
       },
       {
         "neovim/nvim-lspconfig",
-        -- ft = developmentFiles,
-        -- after = { "nvim-treesitter" },
+        ft = developmentFiles,
         requires = {
           "jose-elias-alvarez/nvim-lsp-ts-utils",
           -- lazy("williamboman/nvim-lsp-installer"),
-          lazy("junegunn/fzf"),
-          -- lazy("folke/lsp-colors.nvim"),
-          lazy("gfanto/fzf-lsp.nvim"),
-          lazy("MunifTanjim/prettier.nvim"),
-          lazy("jose-elias-alvarez/null-ls.nvim"),
+          "junegunn/fzf",
+          "folke/lsp-colors.nvim",
+          "gfanto/fzf-lsp.nvim",
+          "MunifTanjim/prettier.nvim",
+          "jose-elias-alvarez/null-ls.nvim",
         },
         config = require("configs.lsp")
       },
@@ -285,16 +276,14 @@ return packer.startup({
         end
       },
       {
-        "ellisonleao/glow.nvim",
-        ft = { "markdown" },
-        event = "CursorHold",
+        "chentoast/marks.nvim",
+        ft = developmentFiles,
         config = function()
-          require("glow").setup({
-            style = "dark",
-            width = 200,
-            border = "rounded",
+          require('marks').setup({
+             bookmark_0 = {
+              sign = "",
+            },
           })
-          vim.keymap.set("n", "<leader>G", ":Glow<CR>", { noremap = true, silent = true })
         end
       },
       {

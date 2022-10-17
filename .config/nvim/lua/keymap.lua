@@ -2,21 +2,6 @@ local map = vim.keymap.set
 local group = vim.api.nvim_create_augroup("keymap", {})
 local options = { noremap = true }
 
--- jobs
--- map("n", "<leader>yka", function()
---   -- kill all running jobs
---   vim.schedule(function()
---     vim.notify(" ﮊ Killed all running jobs", "error", {
---       render = "minimal",
---       timeout = 200
---     })
---     os.execute("ps -ef | grep -i \"$(pwd)\" | grep \"test\\|dev\\|vite\\|storybook\" | awk '{print $2}' | xargs kill -9")
---   end)
--- end, silent)
--- map("n", "<leader>yd", require("jobs.devserver"), silent)
--- map("n", "<leader>ys", require("jobs.storybook"), silent)
--- map("n", "<leader>yt", require("jobs.testserver"), silent)
-
 -- disable
 map("n", "<Space>", "<NOP>", silent)
 
@@ -24,7 +9,7 @@ map("n", "<Space>", "<NOP>", silent)
 map("n", "<C-p>", ":lua require('fzf-lua').files()<CR>", silent)
 
 -- pick window
-map("n", "<leader>pw", function()
+map("n", "<leader>p", function()
   local winpick = require("winpick")
   local winid = winpick.select()
 
@@ -44,8 +29,8 @@ map("n", "<leader>dff", ":DiffviewOpen<CR>", silent)
 map("n", "<leader>dfq", ":DiffviewClose<CR>", silent)
 
 -- save files
-map("n", "<leader>s", ":wa<CR>", silent)
-map("n", "<leader>S", ":wqa!<CR>", silent)
+map("n", "<leader>s", ":lua vim.lsp.buf.format()<CR> <bar> :wa<CR>", silent)
+map("n", "<leader>S", ":lua vim.lsp.buf.format()<CR> <bar> :wqa!<CR>", silent)
 
 -- move lines with move.nvim using Alt + hjkl
 map("n", "<A-j>", ":MoveLine(1)<CR>", silent)

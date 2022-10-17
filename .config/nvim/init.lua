@@ -1,8 +1,15 @@
-require("impatient")
+  require("impatient")
 
 vim.g.mapleader = " "
 vim.o.sessionoptions = "buffers,help,tabpages,winsize,winpos,terminal"
--- vim.g.did_load_filetypes = 1
+vim.g.did_load_filetypes = 1
+
+
+vim.g.vimade = {
+  fadelevel = 0.6,
+  usecursorhold = true,
+  detecttermcolors = true
+}
 
 local disabled_built_ins = {
   "2html_plugin",
@@ -23,7 +30,7 @@ local disabled_built_ins = {
   "vimballPlugin",
   "zip",
   "zipPlugin",
-  -- "filetype",
+  "filetype",
   "tutor_mode_plugin",
 }
 
