@@ -3,12 +3,15 @@
 vim.g.mapleader = " "
 vim.o.sessionoptions = "buffers,help,tabpages,winsize,winpos,terminal"
 vim.g.did_load_filetypes = 1
-
+vim.g.spellfile_URL = "http://ftp.vim.org/vim/runtime/spell"
 
 vim.g.vimade = {
   fadelevel = 0.6,
   usecursorhold = true,
-  detecttermcolors = true
+  updatetime = 20,
+  detecttermcolors = true,
+  enablescroll = 1,
+  enabletreesitter = 1
 }
 
 local disabled_built_ins = {
@@ -73,6 +76,10 @@ set.foldlevelstart = 0
 set.foldmethod = "marker"
 set.backspace = "indent,eol,start"
 set.foldexpr = "nvim_treesitter#foldexpr()"
+
+-- spellchecking
+set.spell = true
+set.spelllang = "en,da"
 
 -- tab & indentation
 set.tabstop = 2

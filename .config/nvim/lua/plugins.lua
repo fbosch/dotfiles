@@ -170,19 +170,20 @@ return packer.startup({
         ft = developmentFiles,
         event = "CursorHold"
       },
-        -- {
-      --   'lewis6991/spellsitter.nvim',
-      --   after = { "nvim-treesitter" },
-      --   config = function()
-      --     require('spellsitter').setup()
-      --   end
-      -- },
       {
         "nvim-treesitter/nvim-treesitter",
         run = ":TSUpdate",
         ft = developmentFiles,
         requires = { "windwp/nvim-autopairs" },
         config = require("configs.nvim-treesitter")
+      },
+      {
+        "lewis6991/spellsitter.nvim",
+        config = function()
+          require("spellsitter").setup({
+            highlight = { enable = true },
+          })
+        end
       },
       {
         "windwp/nvim-ts-autotag",
