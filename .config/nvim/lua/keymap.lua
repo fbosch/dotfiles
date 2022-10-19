@@ -18,9 +18,15 @@ map("n", "<leader>p", function()
   end
 end, silent)
 
--- git blame
+-- overseer
+map("n", "<leader>ot", ":OverseerToggle<CR>", silent)
+map("n", "<leader>or", ":OverseerRun<CR>", silent)
+map("n", "<leader>od", ":OverseerLoadBundle dev<CR>", silent)
+
+-- git
 map("n", "<leader>gbo", ":GitBlameOpenCommitURL<CR>", silent)
 map("n", "<leader>gbc", ":GitBlameCopySHA<CR>", silent)
+map("n", "<leader>gg", ":LazyGit<CR>", silent)
 
 -- history
 map("n", "<leader>e", ":NvimTreeToggle<CR>", silent)

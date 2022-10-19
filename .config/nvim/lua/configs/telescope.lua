@@ -3,7 +3,8 @@ return function()
     local telescope = require("telescope")
     local actions = require("telescope.actions")
     telescope.load_extension("file_browser")
-    -- telescope.load_extension("notify")
+    telescope.load_extension("lazygit")
+    telescope.load_extension("notify")
     vim.schedule(function()
       telescope.setup({
         defaults = {

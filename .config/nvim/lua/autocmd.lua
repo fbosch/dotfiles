@@ -18,11 +18,6 @@ cmd({ "BufRead", "BufNewFile" }, {
   command = "setlocal ft=json5",
   group = group
 })
--- cmd({ "BufRead", "BufNewFile" }, {
---   pattern = { "*.md" },
---   command = "setlocal spell spelllang=en_us",
---   group = group
--- })
 cmd({ "FileType" }, {
   pattern = { "markdown", "gitcommit" },
   command = "setlocal spell spelllang=en_us",

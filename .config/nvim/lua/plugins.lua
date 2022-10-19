@@ -42,6 +42,17 @@ return packer.startup({
       "nathom/filetype.nvim",
       "tpope/vim-fugitive",
       "TaDaa/vimade",
+      "stevearc/dressing.nvim",
+      {
+        "stevearc/overseer.nvim",
+        config = function()
+          require("overseer").setup({
+            form = {
+              border = "rounded",
+            }
+          })
+        end
+      },
       {
        "gbrlsnchs/winpick.nvim",
         event = "VimEnter",
@@ -50,6 +61,14 @@ return packer.startup({
             border = "rounded",
             chars = { "W", "Q", "E", "A", "S", "D", "R", "F", "T", "G" }
           })
+        end
+      },
+      {
+       "rcarriga/nvim-notify",
+        ft = developmentFiles,
+        event = "VimEnter",
+        config = function()
+          require("configs.notify")
         end
       },
       {
@@ -178,14 +197,6 @@ return packer.startup({
         config = require("configs.nvim-treesitter")
       },
       {
-        "lewis6991/spellsitter.nvim",
-        config = function()
-          require("spellsitter").setup({
-            highlight = { enable = true },
-          })
-        end
-      },
-      {
         "windwp/nvim-ts-autotag",
         ft = developmentFiles,
         event = "InsertEnter",
@@ -195,7 +206,6 @@ return packer.startup({
         ft = developmentFiles,
         requires = {
           "jose-elias-alvarez/nvim-lsp-ts-utils",
-          -- lazy("williamboman/nvim-lsp-installer"),
           "junegunn/fzf",
           "folke/lsp-colors.nvim",
           "gfanto/fzf-lsp.nvim",
@@ -329,7 +339,7 @@ return packer.startup({
       {
         "nvim-telescope/telescope.nvim",
         event = "VimEnter",
-        requires = { lazy("nvim-telescope/telescope-file-browser.nvim")  },
+        requires = { lazy("nvim-telescope/telescope-file-browser.nvim"), "kdheepak/lazygit.nvim" },
         config = require("configs.telescope")
       },
       {
