@@ -43,7 +43,7 @@ return packer.startup({
       "tpope/vim-fugitive",
       "TaDaa/vimade",
       "stevearc/dressing.nvim",
-      {
+     {
         "stevearc/overseer.nvim",
         config = function()
           require("overseer").setup({

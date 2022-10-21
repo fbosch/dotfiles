@@ -5,8 +5,12 @@ local options = { noremap = true }
 -- disable
 map("n", "<Space>", "<NOP>", silent)
 
--- ctrl+p
+-- fzf
 map("n", "<C-p>", ":lua require('fzf-lua').files()<CR>", silent)
+map("n", "<leader>gf", ":lua require('fzf-lua').git_files()<CR>", silent)
+map("n", "<leader>lg", ":lua require('fzf-lua').live_grep_native()<CR>", options)
+map("n", "<leader>b", ":lua require('fzf-lua').buffers()<CR>", options)
+map("n", "<leader>of", ":lua require('fzf-lua').oldfiles()<CR>", options)
 
 -- pick window
 map("n", "<leader>p", function()
@@ -70,13 +74,6 @@ map("n", "<C-Left>", ":vertical resize +3<CR>", silent)
 map("n", "<C-Right>", ":vertical resize -3<CR>", silent)
 map("n", "<C-Up>", ":resize -3<CR>", silent)
 map("n", "<C-Down>", ":resize +3<CR>", silent)
-
--- telescope
-map("n", "<leader>ff", ":Telescope find_files<CR>", options)
-map("n", "<leader>lg", ":Telescope live_grep<CR>", options)
-map("n", "<leader>of", ":Telescope oldfiles<CR>", options)
-map("n", "<leader>fb", ":Telescope file_browser<CR>", options)
-map("n", "<leader>fh", ":Telescope help_tags<CR>", options)
 
 -- tab controls
 map("n", "th", ":tabfirst<CR>", options)

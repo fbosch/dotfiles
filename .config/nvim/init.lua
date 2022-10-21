@@ -80,7 +80,7 @@ set.foldexpr = "nvim_treesitter#foldexpr()"
 -- spellchecking
 set.spell = true
 set.spelllang = "en,da"
-set.spelloptions = "noplainbuffer,camel"
+set.spelloptions:append("camel,noplainbuffer")
 
 -- tab & indentation
 set.tabstop = 2

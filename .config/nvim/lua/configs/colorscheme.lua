@@ -6,11 +6,13 @@ return function()
   vim.opt.winblend = 0
   vim.opt.scrolloff = 8
   vim.api.nvim_set_hl(0, "TreesitterContext", { bg = "#2c2c2c" })
+  vim.api.nvim_set_hl(0, "SpellBad", { undercurl=true, special="#A8334C" })
 
   -- popup menu highlights (wilder, telescope, etc.)
   vim.api.nvim_set_hl(0, "NormalFloat", { bg = "#191919" })
   vim.api.nvim_set_hl(0, "Pmenu", { bg = "#191919" })
   vim.api.nvim_set_hl(0, "Beacon", { bg = "#bbbbbb", ctermbg = 15 })
+  
 
   -- cmp highlights
   vim.api.nvim_set_hl(0, "CmpItemAbbrDeprecated", { bg=0, fg="#bbbbbb", strikethrough = true })
