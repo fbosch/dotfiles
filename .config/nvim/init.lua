@@ -50,7 +50,7 @@ set.compatible = false
 
 -- timings
 set.timeoutlen = 1000
-set.updatetime = 250
+set.updatetime = 150
 
 -- visual
 set.lazyredraw = true
@@ -78,7 +78,7 @@ set.backspace = "indent,eol,start"
 set.foldexpr = "nvim_treesitter#foldexpr()"
 
 -- spellchecking
-set.spell = true
+set.spell = false 
 set.spelllang = "en,da"
 set.spelloptions:append("camel,noplainbuffer")
 

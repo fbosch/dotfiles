@@ -6,9 +6,9 @@ local options = { noremap = true }
 map("n", "<Space>", "<NOP>", silent)
 
 -- fzf
-map("n", "<C-p>", ":lua require('fzf-lua').files()<CR>", silent)
+map("n", "<C-p>", ":lua require('fzf-lua').files({ cmd = 'fd --type file' })<CR>", silent)
 map("n", "<leader>gf", ":lua require('fzf-lua').git_files()<CR>", silent)
-map("n", "<leader>lg", ":lua require('fzf-lua').live_grep_native()<CR>", options)
+map("n", "<leader>lg", ":lua require('fzf-lua').live_grep({ cmd = 'rg' })<CR>", options)
 map("n", "<leader>b", ":lua require('fzf-lua').buffers()<CR>", options)
 map("n", "<leader>of", ":lua require('fzf-lua').oldfiles()<CR>", options)
 

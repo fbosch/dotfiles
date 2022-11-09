@@ -1,25 +1,26 @@
 return function()
-  vim.defer_fn(function()
-    vim.schedule(function()
-      require("fzf-lua").setup({
-        previewers = {
-          bat = {
-            cmd = "bat",
-            -- args = "--style=numbers,changes --color=always --line-range=:70",
-            theme = 'Zenwritten Dark',
-          }
+  vim.schedule(function()
+    require("fzf-lua").setup({
+      previewers = {
+        builtin = {
+          hl_cursorline = "Search", -- cursor line highlight
         },
-        files = {
-          previewer = 'bat',
-          prompt = "Files ",
+        bat = {
+          cmd = "bat",
+          args = "--style=numbers,changes --color=always --line-range=:70",
+          theme = 'Zenwritten Dark',
+        }
+      },
+      files = {
+        previewer = 'bat',
+        prompt = "Files ",
+      },
+      keymap = {
+        builtin = {
+          ["K"] = "preview-page-up",
+          ["J"] = "preview-page-down",
         },
-        keymap = {
-          builtin = {
-            ["K"] = "preview-page-up",
-            ["J"] = "preview-page-down",
-          },
-        },
-      })
-    end)
-  end, 100)
+      },
+    })
+  end)
 end

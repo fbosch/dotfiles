@@ -41,7 +41,7 @@ return packer.startup({
       "antoinemadec/FixCursorHold.nvim",
       "nathom/filetype.nvim",
       "tpope/vim-fugitive",
-      "TaDaa/vimade",
+      -- "TaDaa/vimade",
       "stevearc/dressing.nvim",
      {
         "stevearc/overseer.nvim",

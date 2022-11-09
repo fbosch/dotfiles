@@ -4,9 +4,6 @@
 . ~/.config/fish/nvm.fish
 
 function fish_greeting
-  if [ "$KITTY_WINDOW_ID" = "1" ]
-    eval command tl
-  end
 end
 
 # Custom Function for a sudo !! replacement
@@ -71,4 +68,5 @@ function set_nvm --on-event fish_prompt
     end
 end
 
+zoxide init fish | source
 starship init fish | source
