@@ -12,7 +12,6 @@ return function()
   vim.api.nvim_set_hl(0, "NormalFloat", { bg = "#191919" })
   vim.api.nvim_set_hl(0, "Pmenu", { bg = "#191919" })
   vim.api.nvim_set_hl(0, "Beacon", { bg = "#bbbbbb", ctermbg = 15 })
-  
 
   -- cmp highlights
   vim.api.nvim_set_hl(0, "CmpItemAbbrDeprecated", { bg=0, fg="#bbbbbb", strikethrough = true })

@@ -78,9 +78,9 @@ set.backspace = "indent,eol,start"
 set.foldexpr = "nvim_treesitter#foldexpr()"
 
 -- spellchecking
-set.spell = false 
+set.spell = false
 set.spelllang = "en,da"
-set.spelloptions:append("camel,noplainbuffer")
+set.spelloptions = "camel"
 
 -- tab & indentation
 set.tabstop = 2
