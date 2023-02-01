@@ -344,7 +344,7 @@ return packer.startup({
       },
       {
         "ibhagwan/fzf-lua",
-        event = "VimEnter",
+        -- event = "VimEnter",
         after = { "zenbones.nvim" },
         requires = { lazy("kyazdani42/nvim-web-devicons") },
         config = require("configs.fzf")
