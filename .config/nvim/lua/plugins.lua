@@ -335,11 +335,11 @@ return packer.startup({
         config = function()
           require("gitsigns").setup()
         end
-      },
+          },
       {
         "nvim-telescope/telescope.nvim",
         event = "VimEnter",
-        requires = { lazy("nvim-telescope/telescope-file-browser.nvim"), "kdheepak/lazygit.nvim" },
+        requires = { "nvim-telescope/telescope-file-browser.nvim", "kdheepak/lazygit.nvim" },
         config = require("configs.telescope")
       },
       {

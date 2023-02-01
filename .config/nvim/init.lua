@@ -1,4 +1,4 @@
-  require("impatient")
+require("impatient")
 
 vim.g.mapleader = " "
 vim.o.sessionoptions = "buffers,help,tabpages,winsize,winpos,terminal"
