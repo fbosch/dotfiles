@@ -1,0 +1,17 @@
+# Don't let ripgrep vomit really long lines to my terminal, and show a preview.
+--max-columns=100
+--max-columns-preview
+--line-number
+--sort-files
+--no-heading
+
+# Add 'web' type.
+--type-add
+web:*.{html,css,js}*
+
+# Using glob patterns to include/exclude files or folders
+--glob=!{.git,node_modules}/*
+
+# Because who cares about case!?
+--smart-case
+--threads=4
