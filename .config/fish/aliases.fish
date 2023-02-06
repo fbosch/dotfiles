@@ -45,6 +45,7 @@ abbr makins 'sudo make && sudo make clean install'
 abbr cl 'clear'
 abbr t 'yarn test'
 abbr mki 'sudo make && sudo make clean install'
+abbr lk 'logikill'
 alias copykey 'pbcopy < ~/.ssh/id_rsa.pub'
 
 # Extended defaults
