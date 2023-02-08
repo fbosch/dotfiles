@@ -105,16 +105,16 @@ return packer.startup({
         ft = developmentFiles,
         event = "VimEnter",
      },
-      {
-        "echasnovski/mini.nvim",
-        event = "CursorHold",
-        config = function()
-          require('mini.ai').setup()
-          require("mini.trailspace").setup({
-            only_in_normal_buffers = true
-          })
-        end
-      },
+      -- {
+      --   "echasnovski/mini.nvim",
+      --   event = "CursorHold",
+      --   config = function()
+      --     require('mini.ai').setup()
+      --     require("mini.trailspace").setup({
+      --       only_in_normal_buffers = true
+      --     })
+      --   end
+      -- },
       {
         "mcchrish/zenbones.nvim",
         requires = { lazy("rktjmp/lush.nvim") },

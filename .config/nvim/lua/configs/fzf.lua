@@ -13,7 +13,7 @@ return function()
     files = {
       previewer = 'bat_async',
       args = "--style=numbers,changes --color=always --line-range=:70",
-      prompt = "Files ",
+      cmd = { "fd", ".", "--type", "file", "--threads=4", "-E", "*.{png,jpg,jpeg,bmp,webp,log}", '-H', "--strip-cwd-prefix" },
     },
     keymap = {
       builtin = {

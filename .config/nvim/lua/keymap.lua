@@ -60,10 +60,16 @@ map("v", ">", ">gv", options)
 map("n", "S", ":%s//<Left>", silent)
 
 -- remap split navigation to CTRL + hjkl
-map("n", "<S-k>", ":wincmd k<CR>", silent)
-map("n", "<S-j>", ":wincmd j<CR>", silent)
 map("n", "<S-h>", ":wincmd h<CR>", silent)
+map("n", "<S-j>", ":wincmd j<CR>", silent)
+map("n", "<S-k>", ":wincmd k<CR>", silent)
 map("n", "<S-l>", ":wincmd l<CR>", silent)
+
+-- remap split manipulation to SHIFT + CTRL + hjkl
+map("n", "<C-S-h>", ":wincmd H<CR>", silent)
+map("n", "<C-S-j>", ":wincmd J<CR>", silent)
+map("n", "<C-S-k>", ":wincmd K<CR>", silent)
+map("n", "<C-S-l>", ":wincmd L<CR>", silent)
 
 -- autoswitch to newly created split
 map("n", "<C-W>v", ":vsplit<CR> <bar> :wincmd l<CR>", silent)
@@ -77,8 +83,8 @@ map("n", "<C-Down>", ":resize +3<CR>", silent)
 
 -- tab controls
 map("n", "th", ":tabfirst<CR>", options)
-map("n", "tk", ":tabnext<CR>", options)
 map("n", "tj", ":tabprev<CR>", options)
+map("n", "tk", ":tabnext<CR>", options)
 map("n", "tl", ":tablast<CR>", options)
 map("n", "tt", ":tabedit<Space>", options)
 map("n", "tm", ":tabm<Space>", options)

@@ -1,7 +1,7 @@
 return function()
   vim.defer_fn(function()
     vim.schedule(function()
-      require("nvim-autopairs").setup()
+      require("nvim-autopairs").setup({ check_ts = true })
     end)
     require("nvim-treesitter.configs").setup({
       additional_vim_regex_highlighting = false,

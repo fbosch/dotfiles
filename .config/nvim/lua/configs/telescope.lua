@@ -19,7 +19,7 @@ return function()
         pickers = {
           find_files = {
             prompt_prefix = "🔍",
-            find_command = { "fd", ".", "--type", "file", "--threads=4", "-E", "*.{png,jpg,jpeg,bmp,webp,log}", "--strip-cwd-prefix" },
+            find_command = { "fd", ".", "--type", "file", "--threads=4", "-E", "*.{png,jpg,jpeg,bmp,webp,log}", '-H', "--strip-cwd-prefix" },
             theme = "dropdown"
           },
           grep_string = {
