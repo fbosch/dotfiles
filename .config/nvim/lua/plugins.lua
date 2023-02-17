@@ -42,9 +42,29 @@ return packer.startup({
       "nathom/filetype.nvim",
       "tpope/vim-fugitive",
       -- "TaDaa/vimade",
-      "stevearc/dressing.nvim",
+      {
+        "j-hui/fidget.nvim",
+        config = function() 
+          require("fidget").setup()
+        end
+      },
+      {
+        "ray-x/sad.nvim",
+        requires = { "ray-x/guihua.lua", run = "cd lua/fzy && make" },
+        config = function()
+          require("sad").setup()
+        end
+      },
+      {
+        "stevearc/dressing.nvim",
+        event = "VimEnter",
+        config = function() 
+          require("configs.dressing")
+        end
+     },
      {
         "stevearc/overseer.nvim",
+        event = "VimEnter",
         config = function()
           require("overseer").setup({
             form = {
@@ -65,8 +85,6 @@ return packer.startup({
       },
       {
        "rcarriga/nvim-notify",
-        ft = developmentFiles,
-        event = "VimEnter",
         config = function()
           require("configs.notify")
         end
@@ -197,14 +215,38 @@ return packer.startup({
         config = require("configs.nvim-treesitter")
       },
       {
-        "windwp/nvim-ts-autotag",
+        "folke/zen-mode.nvim",
+        event = "CursorHold",
         ft = developmentFiles,
-        event = "InsertEnter",
+        config = function() 
+          require("zen-mode").setup()
+        end
       },
+      {
+        "folke/twilight.nvim",
+        ft = developmentFiles,
+        event = "CursorHold",
+        requires = { "nvim-treesitter/nvim-treesitter" },
+        config = function()
+          require("twilight").setup({
+            context = 8,
+            inactive = true,
+            term_bg = "#181818",
+            treesitter = true,
+          })
+        end
+      },
+      -- {
+      --   "windwp/nvim-ts-autotag",
+      --   ft = developmentFiles,
+      --   event = "InsertEnter",
+      -- },
       {
         "neovim/nvim-lspconfig",
         ft = developmentFiles,
         requires = {
+          "williamboman/mason.nvim",
+          "lukas-reineke/lsp-format.nvim",
           "jose-elias-alvarez/nvim-lsp-ts-utils",
           "junegunn/fzf",
           "folke/lsp-colors.nvim",
@@ -336,12 +378,12 @@ return packer.startup({
           require("gitsigns").setup()
         end
           },
-      {
-        "nvim-telescope/telescope.nvim",
-        event = "VimEnter",
-        requires = { "nvim-telescope/telescope-file-browser.nvim", "kdheepak/lazygit.nvim" },
-        config = require("configs.telescope")
-      },
+      -- {
+      --   "nvim-telescope/telescope.nvim",
+      --   event = "VimEnter",
+      --   requires = { "nvim-telescope/telescope-file-browser.nvim", "kdheepak/lazygit.nvim" },
+      --   config = require("configs.telescope")
+      -- },
       {
         "ibhagwan/fzf-lua",
         -- event = "VimEnter",

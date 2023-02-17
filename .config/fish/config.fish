@@ -4,6 +4,8 @@
 . ~/.config/fish/nvm.fish
 
 function fish_greeting
+  if [ "$KITTY_WINDOW_ID" = "1" ]
+  end
 end
 
 # Custom Function for a sudo !! replacement
@@ -70,3 +72,8 @@ end
 
 zoxide init fish | source
 starship init fish | source
+
+# pnpm
+set -gx PNPM_HOME "/Users/fbb/Library/pnpm"
+set -gx PATH "$PNPM_HOME" $PATH
+# pnpm end

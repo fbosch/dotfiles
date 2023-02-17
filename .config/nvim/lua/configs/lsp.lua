@@ -2,27 +2,29 @@ return function()
   local lspconfig = require("lspconfig")
   local group = vim.api.nvim_create_augroup("lsp", {})
   local capabilities = vim.lsp.protocol.make_client_capabilities()
+  local lspformat = require("lsp-format")
 
   -- require(".configs.null-ls")()
   require(".configs.prettier")()
   require("fzf_lsp").setup()
   -- require("nvim-ts-autotag").setup()
-  -- require("nvim-lsp-installer").setup({
-  --   ui = {
-  --     border = "rounded",
-  --     icons = {
-  --       server_installed = "✓",
-  --       server_pending = "➜",
-  --       server_uninstalled = "✗"
-  --     }
-  --   }
-  -- })
+  require("mason").setup({
+    ui = {
+      border = 'rounded',
+      icons = {
+        package_installed = "",
+        package_pending = "",
+        package_uninstalled = ""
+      }
+    }
+  })
  
   vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
     border = "rounded",
   })
 
   local on_attach = function(client, bufnr)
+    lspformat.setup(client)
     local bufopts = { noremap=true, silent=true, buffer=bufnr }
     vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, bufopts)
     vim.keymap.set('n', 'gd', vim.lsp.buf.definition, bufopts)

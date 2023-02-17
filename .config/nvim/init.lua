@@ -53,7 +53,7 @@ set.timeoutlen = 1000
 set.updatetime = 150
 
 -- visual
-set.lazyredraw = true
+set.lazyredraw = false
 set.ttyfast = true
 set.termguicolors = true
 set.number = true
