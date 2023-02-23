@@ -74,6 +74,9 @@ return packer.startup({
         end
       },
       {
+        "voldikss/vim-floaterm"
+      },
+      {
        "gbrlsnchs/winpick.nvim",
         event = "VimEnter",
         config = function()
@@ -85,6 +88,7 @@ return packer.startup({
       },
       {
        "rcarriga/nvim-notify",
+        event = "VimEnter",
         config = function()
           require("configs.notify")
         end
@@ -115,6 +119,13 @@ return packer.startup({
             animation = false,
             icon_pinned = "",
             auto_hide = true,
+            maximum_padding = 6,
+            diagnostics = {
+              [vim.diagnostic.severity.ERROR] = {enabled = true, icon = ''},
+              [vim.diagnostic.severity.WARN] = {enabled = true, icon = ''},
+              [vim.diagnostic.severity.INFO] = {enabled = true, icon = ''},
+              [vim.diagnostic.severity.HINT] = {enabled = true, icon = ''},
+            }
           })
         end
       },
@@ -145,6 +156,7 @@ return packer.startup({
       {
         "github/copilot.vim",
         event = "CursorHoldI",
+        ft = developmentFiles,
         ft = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
       },
       {
@@ -219,7 +231,14 @@ return packer.startup({
         event = "CursorHold",
         ft = developmentFiles,
         config = function() 
-          require("zen-mode").setup()
+          require("zen-mode").setup({
+            plugins = {
+              kitty = {
+                enabled = true,
+                font = "+4",
+              }
+            }
+          })
         end
       },
       {
@@ -236,11 +255,6 @@ return packer.startup({
           })
         end
       },
-      -- {
-      --   "windwp/nvim-ts-autotag",
-      --   ft = developmentFiles,
-      --   event = "InsertEnter",
-      -- },
       {
         "neovim/nvim-lspconfig",
         ft = developmentFiles,
@@ -255,6 +269,50 @@ return packer.startup({
           "jose-elias-alvarez/null-ls.nvim",
         },
         config = require("configs.lsp")
+      },
+      {
+        "DNLHC/glance.nvim",
+        ft = developmentFiles,
+        event = "CursorHold",
+        config = function()
+          require("glance").setup({
+            height = 18,
+            width = 60,
+            border = {
+              enable = true
+            }
+          })
+        end
+      },
+      {
+        "anuvyklack/pretty-fold.nvim",
+        ft = developmentFiles,
+        config = function()
+          require("pretty-fold").setup({
+            fill_char = "‗",
+          })
+        end
+      },
+      {
+        "utilyre/barbecue.nvim",
+        tag = "*",
+        event = "VimEnter",
+        requires = {
+          "SmiteshP/nvim-navic",
+          "nvim-tree/nvim-web-devicons", -- optional dependency
+        },
+        after = "nvim-web-devicons", -- keep this if you're using NvChad
+        config = require("configs.barbecue")
+      },
+      {
+        "anuvyklack/fold-preview.nvim",
+        ft = developmentFiles,
+        requires = 'anuvyklack/keymap-amend.nvim',
+        config = function() 
+          require("fold-preview").setup({
+            border = 'rounded'
+          })
+        end
       },
       {
         "L3MON4D3/LuaSnip",
@@ -352,7 +410,12 @@ return packer.startup({
         end
       },
       {
+        "Mofiqul/vscode.nvim",
+        event = "ColorSchemePre",
+      },
+      {
         "nvim-lualine/lualine.nvim",
+        event = "VimEnter",
         requires = {
           "kyazdani42/nvim-web-devicons",
           "f-person/git-blame.nvim"
@@ -378,12 +441,12 @@ return packer.startup({
           require("gitsigns").setup()
         end
           },
-      -- {
-      --   "nvim-telescope/telescope.nvim",
-      --   event = "VimEnter",
-      --   requires = { "nvim-telescope/telescope-file-browser.nvim", "kdheepak/lazygit.nvim" },
-      --   config = require("configs.telescope")
-      -- },
+      {
+        "nvim-telescope/telescope.nvim",
+        event = "VimEnter",
+        requires = { "nvim-telescope/telescope-file-browser.nvim", "kdheepak/lazygit.nvim" },
+        config = require("configs.telescope")
+      },
       {
         "ibhagwan/fzf-lua",
         -- event = "VimEnter",

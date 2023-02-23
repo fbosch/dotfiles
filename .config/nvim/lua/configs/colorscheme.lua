@@ -47,4 +47,15 @@ return function()
   vim.api.nvim_set_hl(0, "NotifyINFOTitle", { fg = "#bbbbbb" })
   vim.api.nvim_set_hl(0, "NotifyDEBUGTitle", { fg = "#aaaaaa" })
   vim.api.nvim_set_hl(0, "NotifyTRACETitle", { fg = "#b279a7" })
+
+  -- diagnostics
+  vim.api.nvim_set_hl(0, "BufferDefaultVisibleHINT", { fg = "#b279a7" })
+  vim.api.nvim_set_hl(0, "BufferDefaultCurrentHINT", { fg = "#b279a7" })
+  vim.api.nvim_set_hl(0, "BufferDefaultInactiveHINT", { fg = "#b279a7" })
+  vim.api.nvim_set_hl(0, "BufferDefaultVisibleERROR", { fg = "#DE6E7C" })
+  vim.api.nvim_set_hl(0, "BufferDefaultCurrentERROR", { fg = "#DE6E7C" })
+  vim.api.nvim_set_hl(0, "BufferDefaultInactiveERROR", { fg = "#DE6E7C" })
+  vim.api.nvim_set_hl(0, "BufferDefaultVisibleWARN", { fg = "#D68C67" })
+  vim.api.nvim_set_hl(0, "BufferDefaultCurrentWARN", { fg = "#D68C67" })
+  vim.api.nvim_set_hl(0, "BufferDefaultInactiveWARN", { fg = "#D68C67" })
 end

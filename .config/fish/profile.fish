@@ -1,5 +1,6 @@
 # set -gx PROJECT_PATHS ~/Projects
-set -gx nvm_default_version "18"
+set -gx XDG_CONFIG_HOME "$HOME/.config"
+set -gx nvm_default_version "18.13.0"
 set -gx ARCHPREFERENCE "arm64"
 set -gx EDITOR "nvim"
 set -gx TERM "xterm-kitty"

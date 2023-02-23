@@ -40,6 +40,7 @@ abbr pjo 'pj open '
 abbr jn 'cd ~/Documents/journal'
 
 # Helpers
+abbr x 'exit'
 abbr src 'source ~/.config/fish/config.fish'
 abbr makins 'sudo make && sudo make clean install'
 abbr cl 'clear'

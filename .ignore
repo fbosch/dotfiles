@@ -4,6 +4,8 @@ etc/*
 tmp/*
 sbin/*
 bin/*
+.yarn/*
+dist/*
 private/*
 usr/*
 Users/*
