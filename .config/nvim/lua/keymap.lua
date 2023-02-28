@@ -1,6 +1,6 @@
 local map = vim.keymap.set
-local group = vim.api.nvim_create_augroup("keymap", {})
 local options = { noremap = true }
+local silent = { noremap = true, silent = true }
 
 -- disable
 map("n", "<Space>", "<NOP>", silent)
@@ -51,6 +51,7 @@ map("n", "<leader>gg", ":LazyGit<CR>", silent)
 
 -- history
 map("n", "<leader>e", ":NvimTreeToggle<CR>", silent)
+map("n", "<leader>ff", ":NvimTreeFindFile<CR>", silent)
 map("n", "<leader>uu", ":UndotreeToggle<CR>", silent)
 map("n", "<leader>dff", ":DiffviewOpen<CR>", silent)
 map("n", "<leader>dfq", ":DiffviewClose<CR>", silent)
@@ -90,6 +91,7 @@ map("n", "<C-S-l>", ":wincmd L<CR>", silent)
 
 -- autoswitch to newly created split
 map("n", "<C-W>v", ":vsplit<CR> <bar> :wincmd l<CR>", silent)
+
 map("n", "<C-W>s", ":split<CR> <bar> :wincmd j<CR>", silent)
 
 -- adjust split sizes with CTRL + arrows

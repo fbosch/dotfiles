@@ -33,4 +33,4 @@ Cache/**/*
 **/.backup/*
 **/.undo/*
 **/.sessions/*
-
+**/storybook-static/**/*

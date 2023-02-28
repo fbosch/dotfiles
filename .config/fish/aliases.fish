@@ -47,6 +47,7 @@ abbr cl 'clear'
 abbr t 'yarn test'
 abbr mki 'sudo make && sudo make clean install'
 abbr lk 'logikill'
+abbr bp 'bundle-phobia '
 alias copykey 'pbcopy < ~/.ssh/id_rsa.pub'
 
 # Extended defaults

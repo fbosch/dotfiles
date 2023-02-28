@@ -41,7 +41,7 @@ return packer.startup({
       "antoinemadec/FixCursorHold.nvim",
       "nathom/filetype.nvim",
       "tpope/vim-fugitive",
-      -- "TaDaa/vimade",
+      "voldikss/vim-floaterm",
       {
         "j-hui/fidget.nvim",
         config = function() 
@@ -58,23 +58,13 @@ return packer.startup({
       {
         "stevearc/dressing.nvim",
         event = "VimEnter",
-        config = function() 
+        config = 
           require("configs.dressing")
-        end
      },
      {
         "stevearc/overseer.nvim",
         event = "VimEnter",
-        config = function()
-          require("overseer").setup({
-            form = {
-              border = "rounded",
-            }
-          })
-        end
-      },
-      {
-        "voldikss/vim-floaterm"
+        config = require("configs.overseer")
       },
       {
        "gbrlsnchs/winpick.nvim",
@@ -89,9 +79,7 @@ return packer.startup({
       {
        "rcarriga/nvim-notify",
         event = "VimEnter",
-        config = function()
-          require("configs.notify")
-        end
+        config = require("configs.notify")
       },
       {
         "mbbill/undotree",
@@ -147,7 +135,6 @@ return packer.startup({
       {
         "mcchrish/zenbones.nvim",
         requires = { lazy("rktjmp/lush.nvim") },
-        event = "VimEnter",
         config = function()
           vim.cmd("colorscheme zenwritten")
           vim.schedule(require("configs.colorscheme"))
@@ -182,6 +169,27 @@ return packer.startup({
             })
           end)
         end,
+      },
+      {
+        "kwkarlwang/bufresize.nvim",
+        event = "VimEnter",
+        config = function() 
+          require("bufresize").setup()
+        end
+      },
+      {
+        "mrjones2014/smart-splits.nvim",
+        event = "VimEnter",
+        after = { "bufresize.nvim" },
+        config = function()
+          require("smart-splits").setup({
+              resize_mode = {
+              hooks = {
+                on_leave = require('bufresize').register,
+              },
+            },
+          })
+        end
       },
       {
         "tpope/vim-commentary",
@@ -226,35 +234,35 @@ return packer.startup({
         requires = { "windwp/nvim-autopairs" },
         config = require("configs.nvim-treesitter")
       },
-      {
-        "folke/zen-mode.nvim",
-        event = "CursorHold",
-        ft = developmentFiles,
-        config = function() 
-          require("zen-mode").setup({
-            plugins = {
-              kitty = {
-                enabled = true,
-                font = "+4",
-              }
-            }
-          })
-        end
-      },
-      {
-        "folke/twilight.nvim",
-        ft = developmentFiles,
-        event = "CursorHold",
-        requires = { "nvim-treesitter/nvim-treesitter" },
-        config = function()
-          require("twilight").setup({
-            context = 8,
-            inactive = true,
-            term_bg = "#181818",
-            treesitter = true,
-          })
-        end
-      },
+      -- {
+      --   "folke/zen-mode.nvim",
+      --   event = "CursorHold",
+      --   ft = developmentFiles,
+      --   config = function() 
+      --     require("zen-mode").setup({
+      --       plugins = {
+      --         kitty = {
+      --           enabled = true,
+      --           font = "+4",
+      --         }
+      --       }
+      --     })
+      --   end
+      -- },
+      -- {
+      --   "folke/twilight.nvim",
+      --   ft = developmentFiles,
+      --   event = "CursorHold",
+      --   requires = { "nvim-treesitter/nvim-treesitter" },
+      --   config = function()
+      --     require("twilight").setup({
+      --       context = 8,
+      --       inactive = true,
+      --       term_bg = "#181818",
+      --       treesitter = true,
+      --     })
+      --   end
+      -- },
       {
         "neovim/nvim-lspconfig",
         ft = developmentFiles,
@@ -323,7 +331,6 @@ return packer.startup({
       {
         "hrsh7th/nvim-cmp",
         ft = developmentFiles,
-        event = "CursorHoldI",
         after = { "nvim-treesitter", "zenbones.nvim" },
         requires = {
           "onsails/lspkind.nvim",
@@ -415,7 +422,7 @@ return packer.startup({
       },
       {
         "nvim-lualine/lualine.nvim",
-        event = "VimEnter",
+        event = "ColorSchemePre",
         requires = {
           "kyazdani42/nvim-web-devicons",
           "f-person/git-blame.nvim"

@@ -2,6 +2,7 @@ require("impatient")
 
 vim.g.mapleader = " "
 vim.o.sessionoptions = "buffers,help,tabpages,winsize,winpos,terminal"
+vim.o.cmdheight = 0
 vim.g.did_load_filetypes = 1
 vim.g.spellfile_URL = "http://ftp.vim.org/vim/runtime/spell"
 
@@ -61,6 +62,8 @@ set.signcolumn = "yes"
 set.wrap = false
 set.relativenumber = true
 set.cursorline = true
+set.fillchars:append("eob:·")
+
 
 -- file history
 set.backup = true

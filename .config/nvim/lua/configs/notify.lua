@@ -2,8 +2,12 @@ return function()
   require("notify").setup({
     stages = "fade",
     fps = 60,
+    max_width = 90,
+    top_down = false
   })
+
   vim.notify = require("notify")
+ 
   local client_notifs = {}
 
   local function get_notif_data(client_id, token)

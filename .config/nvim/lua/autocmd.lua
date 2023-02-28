@@ -37,7 +37,7 @@ cmd({ "TextYankPost" }, {
   command = "lua vim.highlight.on_yank({ higroup = 'IncSearch', timeout = 500 })",
   group = group
 })
-cmd({ "VimEnter" }, {
-  command = "set nolazyredraw",
-  group = group
-})
+-- cmd({ "VimEnter" }, {
+--   command = "set nolazyredraw",
+--   group = group
+-- })
