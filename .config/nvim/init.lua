@@ -1,4 +1,3 @@
-require("impatient")
 
 vim.g.mapleader = " "
 vim.o.sessionoptions = "buffers,help,tabpages,winsize,winpos,terminal"
@@ -57,6 +56,7 @@ set.updatetime = 150
 set.lazyredraw = false
 set.ttyfast = true
 set.termguicolors = true
+set.background = "dark"
 set.number = true
 set.signcolumn = "yes"
 set.wrap = false
@@ -124,4 +124,4 @@ set.hlsearch = false
 
 require("keymap")
 require("autocmd")
-require("plugins")
+require("plugin")

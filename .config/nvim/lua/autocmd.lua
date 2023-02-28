@@ -23,21 +23,7 @@ cmd({ "FileType" }, {
   command = "setlocal spell spelllang=en_us",
   group = group
 })
-cmd({ "BufWritePost" }, {
-  pattern = { "plugins.lua" },
-  command = "source <afile> | PackerSync",
-  group = group
-})
-cmd({ "BufWritePost" }, {
-  pattern = { "*.lua" },
-  command = "source <afile> | PackerCompile",
-  group = group
-})
 cmd({ "TextYankPost" }, {
   command = "lua vim.highlight.on_yank({ higroup = 'IncSearch', timeout = 500 })",
   group = group
 })
--- cmd({ "VimEnter" }, {
---   command = "set nolazyredraw",
---   group = group
--- })
