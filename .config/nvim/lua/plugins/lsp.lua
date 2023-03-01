@@ -16,16 +16,12 @@ return {
     local group = vim.api.nvim_create_augroup("lsp", {})
     local capabilities = vim.lsp.protocol.make_client_capabilities()
     local lspformat = require("lsp-format")
+    local null_ls = require("null-ls")
+
+    null_ls.setup()
 
     local prettier = require("prettier")
     prettier.setup({
-      -- ["null-ls"] = {
-      --   condition = function()
-      --     return prettier.config_exists({
-      --       check_package_json = true
-      --     })
-      --   end
-      -- },
       bin = "prettier",
       filetypes = {
         "css",

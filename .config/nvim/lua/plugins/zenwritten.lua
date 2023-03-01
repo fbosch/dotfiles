@@ -6,7 +6,6 @@ return {
   config = function()
     vim.cmd([[colorscheme zenwritten]])
     vim.opt.ruler = true
-    vim.opt.lazyredraw = true
     vim.opt.background = "dark"
     vim.opt.pumblend = 10
     vim.opt.winblend = 0

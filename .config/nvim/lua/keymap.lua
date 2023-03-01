@@ -12,10 +12,10 @@ map("n", "<leader>lg", ":lua require('fzf-lua').live_grep({ cmd = 'rg --hidden -
 map("n", "<leader>b", ":lua require('fzf-lua').buffers()<CR>", options)
 map("n", "<leader>of", ":lua require('fzf-lua').oldfiles()<CR>", options)
 
--- copilot
-map("i", "<C-j>", "<Plug>(copilot-next)", silent)
-map("i", "<C-j>", "<Plug>(copilot-previous)", silent)
-map("i", "<C-\\>", "<Plug>(copilot-dismiss)", silent)
+-- -- copilot
+-- map("i", "<C-j>", "<Plug>(copilot-next)", silent)
+-- map("i", "<C-j>", "<Plug>(copilot-previous)", silent)
+-- map("i", "<C-\\>", "<Plug>(copilot-dismiss)", silent)
 
 -- misc
 map("n", "<leader>m", ":Mason<CR>", silent)

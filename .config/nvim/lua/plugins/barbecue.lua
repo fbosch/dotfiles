@@ -1,10 +1,10 @@
 return {
   "utilyre/barbecue.nvim",
-  lazy = true,
   dependencies = {
     "SmiteshP/nvim-navic",
     "kyazdani42/nvim-web-devicons",
   },
+  priority = 100,
   config = function()
     local barbecue = require("barbecue")
     barbecue.setup({
@@ -28,7 +28,6 @@ return {
         context_variable = { fg = '#97bdde' },
         context_field = { fg = '#ffffff' },
         context_property = { fg = '#ffffff' },
-
       }
     })
 
@@ -37,7 +36,6 @@ return {
       "BufWinEnter",
       "CursorHold",
       "InsertLeave",
-
       -- include these if you have set `show_modified` to `true`
       "BufWritePost",
       "TextChanged",

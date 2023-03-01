@@ -8,7 +8,7 @@ vim.g.spellfile_URL = "http://ftp.vim.org/vim/runtime/spell"
 vim.g.vimade = {
   fadelevel = 0.6,
   usecursorhold = true,
-  updatetime = 20,
+  updatetime = 50,
   detecttermcolors = true,
   enablescroll = 1,
   enabletreesitter = 1
@@ -50,10 +50,10 @@ set.compatible = false
 
 -- timings
 set.timeoutlen = 1000
-set.updatetime = 150
+set.updatetime = 100
 
 -- visual
-set.lazyredraw = false
+set.lazyredraw = true
 set.ttyfast = true
 set.termguicolors = true
 set.background = "dark"
