@@ -7,6 +7,7 @@ return {
   priority = 100,
   config = function()
     local barbecue = require("barbecue")
+
     barbecue.setup({
       create_autocmd = false,
       show_basename = true,

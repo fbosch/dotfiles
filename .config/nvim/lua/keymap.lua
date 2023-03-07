@@ -6,9 +6,13 @@ local silent = { noremap = true, silent = true }
 map("n", "<Space>", "<NOP>", silent)
 
 -- fzf
-map("n", "<C-p>", ":lua require('fzf-lua').files({ cmd = 'rg --files --follow --no-ignore-vcs --hidden -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*}\"' })<CR>", silent)
+map("n", "<C-p>",
+  ":lua require('fzf-lua').files({ cmd = 'rg --files --follow --no-ignore-vcs --hidden -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*}\"' })<CR>",
+  silent)
 map("n", "<leader>gf", ":lua require('fzf-lua').git_files()<CR>", silent)
-map("n", "<leader>lg", ":lua require('fzf-lua').live_grep({ cmd = 'rg --hidden --no-ignore -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*}\"' })<CR>", options)
+map("n", "<leader>lg",
+  ":lua require('fzf-lua').live_grep({ cmd = 'rg --hidden --no-ignore -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*}\"' })<CR>",
+  options)
 map("n", "<leader>b", ":lua require('fzf-lua').buffers()<CR>", options)
 map("n", "<leader>of", ":lua require('fzf-lua').oldfiles()<CR>", options)
 
@@ -21,6 +25,7 @@ map("n", "<leader>of", ":lua require('fzf-lua').oldfiles()<CR>", options)
 map("n", "<leader>m", ":Mason<CR>", silent)
 map("n", "<leader>fm", ":ZenMode<CR>", silent)
 map("n", "<leader>ra", ":Sad<CR>", silent)
+map("n", "<leader>pc", ":CccPick<CR>", silent)
 
 -- flaot term
 map("n", "<leader>ft", ":FloatermToggle<CR>", silent)
@@ -112,11 +117,11 @@ map("n", "<C-t>d", ":tabclose<CR>", silent)
 
 -- buffer controls
 map("n", "<leader>z", ":bp <bar> :bd #<CR>", silent) -- close buffer but keep split
-map("n", "-", ":b#<CR>", silent) --  previously active buffer
+map("n", "-", ":b#<CR>", silent)                     --  previously active buffer
 
 -- barbar buffer controls
 map("n", "<leader>x", ":only <bar> :BufferCloseAllButCurrentOrPinned<CR>", silent) -- close all buffers except current
-map("n", "<leader>P", ":BufferPin<CR>", silent) -- pin current buffer
+map("n", "<leader>P", ":BufferPin<CR>", silent)                                    -- pin current buffer
 map("n", "<C-h>", ":BufferPrevious<CR>", silent)
 map("n", "<C-l>", ":BufferNext<CR>", silent)
 map("n", "<C-A-h>", ":BufferMovePrevious<CR>", silent)

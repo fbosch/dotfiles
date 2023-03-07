@@ -1,4 +1,3 @@
-
 vim.g.mapleader = " "
 vim.o.sessionoptions = "buffers,help,tabpages,winsize,winpos,terminal"
 vim.o.cmdheight = 0
@@ -8,38 +7,11 @@ vim.g.spellfile_URL = "http://ftp.vim.org/vim/runtime/spell"
 vim.g.vimade = {
   fadelevel = 0.6,
   usecursorhold = true,
-  updatetime = 50,
+  updatetime = 20,
   detecttermcolors = true,
   enablescroll = 1,
   enabletreesitter = 1
 }
-
-local disabled_built_ins = {
-  "2html_plugin",
-  "getscript",
-  "getscriptPlugin",
-  "gzip",
-  "logipat",
-  "netrw",
-  "netrwPlugin",
-  "netrwSettings",
-  "netrwFileHandlers",
-  "matchit",
-  "matchparen",
-  "tar",
-  "tarPlugin",
-  "rrhelper",
-  "vimball",
-  "vimballPlugin",
-  "zip",
-  "zipPlugin",
-  "filetype",
-  "tutor_mode_plugin",
-}
-
-for _, plugin in pairs(disabled_built_ins) do
-  vim.g["loaded_" .. plugin] = 1
-end
 
 local set = vim.opt
 
@@ -63,6 +35,7 @@ set.wrap = false
 set.relativenumber = true
 set.cursorline = true
 set.fillchars:append("eob:·")
+set.laststatus = 3
 
 
 -- file history
@@ -108,7 +81,7 @@ set.wildignore = "*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Cache
 
 -- show
 set.showcmd = true
-set.showmode = false
+set.showmode = true
 
 -- completion
 set.complete = "kspell"

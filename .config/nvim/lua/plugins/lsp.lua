@@ -10,14 +10,18 @@ return {
     "gfanto/fzf-lsp.nvim",
     "MunifTanjim/prettier.nvim",
     "jose-elias-alvarez/null-ls.nvim",
+    "folke/neodev.nvim"
   },
   config = function()
+    local neodev = require("neodev")
     local lspconfig = require("lspconfig")
     local group = vim.api.nvim_create_augroup("lsp", {})
-    local capabilities = vim.lsp.protocol.make_client_capabilities()
+    -- local capabilities = vim.lsp.protocol.make_client_capabilities()
+    local capabilities = require('cmp_nvim_lsp').default_capabilities()
     local lspformat = require("lsp-format")
     local null_ls = require("null-ls")
 
+    neodev.setup()
     null_ls.setup()
 
     local prettier = require("prettier")
@@ -52,14 +56,13 @@ return {
       }
     })
 
-   
     vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
       border = "rounded",
     })
 
     local on_attach = function(client, bufnr)
       lspformat.setup(client)
-      local bufopts = { noremap=true, silent=true, buffer=bufnr }
+      local bufopts = { noremap = true, silent = true, buffer = bufnr }
       vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, bufopts)
       vim.keymap.set('n', 'gd', vim.lsp.buf.definition, bufopts)
       vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, bufopts)
@@ -75,7 +78,7 @@ return {
       vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, bufopts)
       vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, bufopts)
       vim.keymap.set('n', '<leader>f', vim.lsp.buf.formatting, bufopts)
-   
+
       -- floating diagnostics
       local signs = { Error = " ", Warn = " ", Hint = " ", Info = " " }
       for type, icon in pairs(signs) do
@@ -95,7 +98,7 @@ return {
         buffer = bufnr,
         group = group,
         callback = function()
-           local opts = {
+          local opts = {
             focusable = false,
             close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
             border = 'rounded',
@@ -137,6 +140,16 @@ return {
         vim.api.nvim_buf_set_keymap(bufnr, "n", "gi", ":TSLspImportAll<CR>", opts)
         on_attach(client, bufnr)
       end
+    })
+
+    lspconfig.lua_ls.setup({
+      settings = {
+        Lua = {
+          completion = {
+            callSnippet = "Replace"
+          }
+        }
+      }
     })
   end
 }

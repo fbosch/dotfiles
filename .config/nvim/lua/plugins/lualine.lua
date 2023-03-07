@@ -1,6 +1,6 @@
 return {
   "nvim-lualine/lualine.nvim",
-  event = "ColorSchemePre",
+  -- event = "VeryLazy",
   priority = 100,
   dependencies = {
     "kyazdani42/nvim-web-devicons",
@@ -12,7 +12,7 @@ return {
     vim.g.gitblame_message_template = " <author>  﨟<date>"
     local git_blame = require('gitblame')
     require("lualine").setup({
-      options = { theme = "auto" },
+      options = { theme = "auto", globalstatus = true },
       extensions = { "fugitive", "symbols-outline" },
       sections = {
         lualine_c = { require("auto-session-library").current_session_name },
@@ -21,6 +21,9 @@ return {
         },
         lualine_x = {
           { git_blame.get_current_blame_text, cond = git_blame.is_blame_text_available }
+        },
+        lualine_z = {
+          "os.date('%H:%M')"
         }
       }
     })
