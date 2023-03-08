@@ -49,6 +49,7 @@ abbr mki 'sudo make && sudo make clean install'
 abbr lk 'logikill'
 abbr bp 'bundle-phobia '
 alias copykey 'pbcopy < ~/.ssh/id_rsa.pub'
+alias prettierdstatus 'cat ~/.prettier_d_slim'
 
 # Extended defaults
 alias cat 'bat --style=plain --color=always'

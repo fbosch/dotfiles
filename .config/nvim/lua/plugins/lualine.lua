@@ -12,7 +12,10 @@ return {
     vim.g.gitblame_message_template = " <author>  﨟<date>"
     local git_blame = require('gitblame')
     require("lualine").setup({
-      options = { theme = "auto", globalstatus = true },
+      options = {
+        theme = "auto",
+        globalstatus = true,
+      },
       extensions = { "fugitive", "symbols-outline" },
       sections = {
         lualine_c = { require("auto-session-library").current_session_name },

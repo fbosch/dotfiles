@@ -16,16 +16,12 @@ map("n", "<leader>lg",
 map("n", "<leader>b", ":lua require('fzf-lua').buffers()<CR>", options)
 map("n", "<leader>of", ":lua require('fzf-lua').oldfiles()<CR>", options)
 
--- -- copilot
--- map("i", "<C-j>", "<Plug>(copilot-next)", silent)
--- map("i", "<C-j>", "<Plug>(copilot-previous)", silent)
--- map("i", "<C-\\>", "<Plug>(copilot-dismiss)", silent)
-
 -- misc
 map("n", "<leader>m", ":Mason<CR>", silent)
 map("n", "<leader>fm", ":ZenMode<CR>", silent)
 map("n", "<leader>ra", ":Sad<CR>", silent)
 map("n", "<leader>pc", ":CccPick<CR>", silent)
+map("n", "<leader>wk", ":WhichKey<CR>", silent)
 
 -- flaot term
 map("n", "<leader>ft", ":FloatermToggle<CR>", silent)
@@ -62,7 +58,7 @@ map("n", "<leader>dff", ":DiffviewOpen<CR>", silent)
 map("n", "<leader>dfq", ":DiffviewClose<CR>", silent)
 
 -- save files
-map("n", "<leader>s", ":lua vim.lsp.buf.format()<CR> <bar> :wa<CR>", silent)
+map("n", "<leader>s", ":wa<CR> <bar> :lua vim.lsp.buf.format()<CR> <bar> :wa<CR>", silent)
 map("n", "<leader>S", ":lua vim.lsp.buf.format()<CR> <bar> :wqa!<CR>", silent)
 
 -- move lines with move.nvim using Alt + hjkl
@@ -100,10 +96,14 @@ map("n", "<C-W>v", ":vsplit<CR> <bar> :wincmd l<CR>", silent)
 map("n", "<C-W>s", ":split<CR> <bar> :wincmd j<CR>", silent)
 
 -- adjust split sizes with CTRL + arrows
-map("n", "<C-Left>", ":vertical resize +3<CR>", silent)
-map("n", "<C-Right>", ":vertical resize -3<CR>", silent)
-map("n", "<C-Up>", ":resize -3<CR>", silent)
-map("n", "<C-Down>", ":resize +3<CR>", silent)
+-- map("n", "<C-Left>", ":vertical resize +3<CR>", silent)
+map("n", "<C-Left>", ":SmartResizeLeft<CR>", silent)
+-- map("n", "<C-Right>", ":vertical resize -3<CR>", silent)
+map("n", "<C-Right>", ":SmartResizeRight<CR>", silent)
+-- map("n", "<C-Up>", ":resize -3<CR>", silent)
+map("n", "<C-Up>", ":SmartResizeUp<CR>", silent)
+-- map("n", "<C-Down>", ":resize +3<CR>", silent)
+map("n", "<C-Down>", ":SmartResizeDown<CR>", silent)
 
 -- tab controls
 map("n", "th", ":tabfirst<CR>", options)

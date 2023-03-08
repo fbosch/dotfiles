@@ -10,7 +10,9 @@ return {
     "gfanto/fzf-lsp.nvim",
     "MunifTanjim/prettier.nvim",
     "jose-elias-alvarez/null-ls.nvim",
-    "folke/neodev.nvim"
+    "folke/neodev.nvim",
+    "sigmasd/deno-nvim"
+
   },
   config = function()
     local neodev = require("neodev")
@@ -21,12 +23,12 @@ return {
     local lspformat = require("lsp-format")
     local null_ls = require("null-ls")
 
-    neodev.setup()
     null_ls.setup()
+
 
     local prettier = require("prettier")
     prettier.setup({
-      bin = "prettier",
+      bin = "prettierd",
       filetypes = {
         "css",
         "graphql",
@@ -43,6 +45,7 @@ return {
       },
       single_quote = true,
     })
+
 
     require("fzf_lsp").setup()
     require("mason").setup({
@@ -116,6 +119,13 @@ return {
       capabilities = capabilities,
       on_attach = on_attach,
     })
+
+    neodev.setup({
+      on_attach = on_attach,
+      capabilities = capabilities,
+    })
+
+
 
     lspconfig.tsserver.setup({
       init_options = require("nvim-lsp-ts-utils").init_options,

@@ -11,7 +11,7 @@ return {
     vim.opt.winblend = 0
     vim.opt.scrolloff = 8
     vim.api.nvim_set_hl(0, "TreesitterContext", { bg = "#2c2c2c" })
-    vim.api.nvim_set_hl(0, "SpellBad", { undercurl=true, special="#A8334C" })
+    vim.api.nvim_set_hl(0, "SpellBad", { undercurl = true, special = "#A8334C" })
 
     -- popup menu highlights (wilder, telescope, etc.)
     vim.api.nvim_set_hl(0, "NormalFloat", { bg = "#191919" })
@@ -19,18 +19,18 @@ return {
     vim.api.nvim_set_hl(0, "Beacon", { bg = "#bbbbbb", ctermbg = 15 })
 
     -- cmp highlights
-    vim.api.nvim_set_hl(0, "CmpItemAbbrDeprecated", { bg=0, fg="#bbbbbb", strikethrough = true })
-    vim.api.nvim_set_hl(0, "CmpItemAbbrMatch", { bg=0, fg="#aaaaaa" })
-    vim.api.nvim_set_hl(0, "CmpItemAbbrMatchFuzzy", { bg=0, fg="#aaaaaa" })
-    vim.api.nvim_set_hl(0, "CmpItemKindVariable", { bg=0, fg="#97bdde" })
-    vim.api.nvim_set_hl(0, "CmpItemKindInterface", { bg=0, fg="#97bdde" })
-    vim.api.nvim_set_hl(0, "CmpItemKindText", { bg=0, fg="#97bdde" })
-    vim.api.nvim_set_hl(0, "CmpItemKindFunction", { bg=0, fg="#b279a7" })
-    vim.api.nvim_set_hl(0, "CmpItemKindMethod", { bg=0, fg="#b279a7" })
-    vim.api.nvim_set_hl(0, "CmpItemKindKeyword", { bg=0, fg="#bbbbbb" })
-    vim.api.nvim_set_hl(0, "CmpItemKindProperty", { bg=0, fg="#ffffff" })
-    vim.api.nvim_set_hl(0, "CmpItemKindUnit", { bg=0, fg="#ffffff" })
-    vim.api.nvim_set_hl(0, "CmpItemKindSnippet", { bg=0, fg="#D68C67" })
+    vim.api.nvim_set_hl(0, "CmpItemAbbrDeprecated", { bg = 0, fg = "#bbbbbb", strikethrough = true })
+    vim.api.nvim_set_hl(0, "CmpItemAbbrMatch", { bg = 0, fg = "#aaaaaa" })
+    vim.api.nvim_set_hl(0, "CmpItemAbbrMatchFuzzy", { bg = 0, fg = "#aaaaaa" })
+    vim.api.nvim_set_hl(0, "CmpItemKindVariable", { bg = 0, fg = "#97bdde" })
+    vim.api.nvim_set_hl(0, "CmpItemKindInterface", { bg = 0, fg = "#97bdde" })
+    vim.api.nvim_set_hl(0, "CmpItemKindText", { bg = 0, fg = "#97bdde" })
+    vim.api.nvim_set_hl(0, "CmpItemKindFunction", { bg = 0, fg = "#b279a7" })
+    vim.api.nvim_set_hl(0, "CmpItemKindMethod", { bg = 0, fg = "#b279a7" })
+    vim.api.nvim_set_hl(0, "CmpItemKindKeyword", { bg = 0, fg = "#bbbbbb" })
+    vim.api.nvim_set_hl(0, "CmpItemKindProperty", { bg = 0, fg = "#ffffff" })
+    vim.api.nvim_set_hl(0, "CmpItemKindUnit", { bg = 0, fg = "#ffffff" })
+    vim.api.nvim_set_hl(0, "CmpItemKindSnippet", { bg = 0, fg = "#D68C67" })
 
     -- which-key
     vim.api.nvim_set_hl(0, "WhichKeyFloat", { bg = "#191919" })
@@ -63,7 +63,7 @@ return {
     vim.api.nvim_set_hl(0, "BufferDefaultVisibleWARN", { fg = "#D68C67" })
     vim.api.nvim_set_hl(0, "BufferDefaultCurrentWARN", { fg = "#D68C67" })
     vim.api.nvim_set_hl(0, "BufferDefaultInactiveWARN", { fg = "#D68C67", bg = "#252525" })
-   
+
     -- fold
     vim.api.nvim_set_hl(0, "Folded", { fg = "#bbbbbb", bg = "#252525" })
   end

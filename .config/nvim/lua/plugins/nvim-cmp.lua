@@ -68,14 +68,14 @@ return {
         end
       },
       sources = cmp.config.sources({
-        { name = "nvim_lsp" },
-        { name = "buffer" },
-        { name = "luasnip" },
-        { name = "emoji" },
-        { name = "spell" },
-        { name = "nvim_lua" },
-        { name = "npm" },
-        { name = "cmp_tabnine" }
+        { name = "nvim_lsp",    max_item_count = 10 },
+        { name = "buffer",      max_item_count = 3 },
+        { name = "luasnip",     max_item_count = 4 },
+        { name = "emoji",       max_item_count = 20 },
+        { name = "spell",       max_item_count = 3 },
+        { name = "nvim_lua",    max_item_count = 5 },
+        { name = "npm",         max_item_count = 3 },
+        { name = "cmp_tabnine", max_item_count = 5 },
       }),
       mapping = cmp.mapping.preset.insert({
             ["<C-f>"] = cmp.mapping.scroll_docs(4),
