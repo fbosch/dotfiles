@@ -6,19 +6,24 @@ local silent = { noremap = true, silent = true }
 map("n", "<Space>", "<NOP>", silent)
 
 -- fzf
-map("n", "<C-p>",
+map(
+  "n",
+  "<C-p>",
   ":lua require('fzf-lua').files({ cmd = 'rg --files --follow --no-ignore-vcs --hidden -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*}\"' })<CR>",
-  silent)
+  silent
+)
 map("n", "<leader>gf", ":lua require('fzf-lua').git_files()<CR>", silent)
-map("n", "<leader>lg",
+map(
+  "n",
+  "<leader>lg",
   ":lua require('fzf-lua').live_grep({ cmd = 'rg --hidden --no-ignore -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*}\"' })<CR>",
-  options)
+  options
+)
 map("n", "<leader>b", ":lua require('fzf-lua').buffers()<CR>", options)
 map("n", "<leader>of", ":lua require('fzf-lua').oldfiles()<CR>", options)
 
 -- misc
 map("n", "<leader>m", ":Mason<CR>", silent)
-map("n", "<leader>fm", ":ZenMode<CR>", silent)
 map("n", "<leader>ra", ":Sad<CR>", silent)
 map("n", "<leader>pc", ":CccPick<CR>", silent)
 map("n", "<leader>wk", ":WhichKey<CR>", silent)
@@ -58,7 +63,7 @@ map("n", "<leader>dff", ":DiffviewOpen<CR>", silent)
 map("n", "<leader>dfq", ":DiffviewClose<CR>", silent)
 
 -- save files
-map("n", "<leader>s", ":wa<CR> <bar> :lua vim.lsp.buf.format()<CR> <bar> :wa<CR>", silent)
+map("n", "<leader>s", "<bar> :lua vim.lsp.buf.format()<CR> <bar> :wa<CR>", silent)
 map("n", "<leader>S", ":lua vim.lsp.buf.format()<CR> <bar> :wqa!<CR>", silent)
 
 -- move lines with move.nvim using Alt + hjkl

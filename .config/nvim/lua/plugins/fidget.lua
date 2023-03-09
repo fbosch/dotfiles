@@ -1,17 +1,18 @@
 return {
   "j-hui/fidget.nvim",
   event = "BufRead",
-  config = function() 
+  config = function()
     require("fidget").setup({
       text = {
         spinner = "dots_scrolling",
-        done = " "
+        done = " ",
       },
       window = {
+        zindex = 100,
         relative = "editor",
         border = "rounded",
-        blend = 200
-      }
+        blend = 200,
+      },
     })
-  end
+  end,
 }

@@ -11,52 +11,27 @@ return {
     "MunifTanjim/prettier.nvim",
     "jose-elias-alvarez/null-ls.nvim",
     "folke/neodev.nvim",
-    "sigmasd/deno-nvim"
-
+    "sigmasd/deno-nvim",
   },
   config = function()
     local neodev = require("neodev")
     local lspconfig = require("lspconfig")
     local group = vim.api.nvim_create_augroup("lsp", {})
     -- local capabilities = vim.lsp.protocol.make_client_capabilities()
-    local capabilities = require('cmp_nvim_lsp').default_capabilities()
-    local lspformat = require("lsp-format")
+    local capabilities = require("cmp_nvim_lsp").default_capabilities()
     local null_ls = require("null-ls")
-
-    null_ls.setup()
-
-
-    local prettier = require("prettier")
-    prettier.setup({
-      bin = "prettierd",
-      filetypes = {
-        "css",
-        "graphql",
-        "html",
-        "javascript",
-        "javascriptreact",
-        "json",
-        "scss",
-        "less",
-        "markdown",
-        "typescript",
-        "typescriptreact",
-        "yaml"
-      },
-      single_quote = true,
-    })
-
+    local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
 
     require("fzf_lsp").setup()
     require("mason").setup({
       ui = {
-        border = 'rounded',
+        border = "rounded",
         icons = {
           package_installed = "",
           package_pending = "",
-          package_uninstalled = ""
-        }
-      }
+          package_uninstalled = "",
+        },
+      },
     })
 
     vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
@@ -64,23 +39,32 @@ return {
     })
 
     local on_attach = function(client, bufnr)
-      lspformat.setup(client)
+      if client.supports_method("textDocument/formatting") then
+        vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
+        vim.api.nvim_create_autocmd("BufWritePre", {
+          group = augroup,
+          buffer = bufnr,
+          callback = function()
+            vim.lsp.buf.format({ bufnr = bufnr })
+          end,
+        })
+      end
       local bufopts = { noremap = true, silent = true, buffer = bufnr }
-      vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, bufopts)
-      vim.keymap.set('n', 'gd', vim.lsp.buf.definition, bufopts)
-      vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, bufopts)
-      vim.keymap.set('n', 'gr', vim.lsp.buf.references, bufopts)
-      vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, bufopts)
-      vim.keymap.set('n', '<leader>k', vim.lsp.buf.hover, bufopts)
-      vim.keymap.set('n', '<leader>wa', vim.lsp.buf.add_workspace_folder, bufopts)
-      vim.keymap.set('n', '<leader>wr', vim.lsp.buf.remove_workspace_folder, bufopts)
-      vim.keymap.set('n', '<leader>wl', function()
+      vim.keymap.set("n", "gD", vim.lsp.buf.declaration, bufopts)
+      vim.keymap.set("n", "gd", vim.lsp.buf.definition, bufopts)
+      vim.keymap.set("n", "gi", vim.lsp.buf.implementation, bufopts)
+      vim.keymap.set("n", "gr", vim.lsp.buf.references, bufopts)
+      vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, bufopts)
+      vim.keymap.set("n", "<leader>k", vim.lsp.buf.hover, bufopts)
+      vim.keymap.set("n", "<leader>wa", vim.lsp.buf.add_workspace_folder, bufopts)
+      vim.keymap.set("n", "<leader>wr", vim.lsp.buf.remove_workspace_folder, bufopts)
+      vim.keymap.set("n", "<leader>wl", function()
         print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
       end, bufopts)
-      vim.keymap.set('n', '<leader>D', vim.lsp.buf.type_definition, bufopts)
-      vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, bufopts)
-      vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, bufopts)
-      vim.keymap.set('n', '<leader>f', vim.lsp.buf.formatting, bufopts)
+      vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, bufopts)
+      vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, bufopts)
+      vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, bufopts)
+      vim.keymap.set("n", "<leader>f", vim.lsp.buf.formatting, bufopts)
 
       -- floating diagnostics
       local signs = { Error = " ", Warn = " ", Hint = " ", Info = " " }
@@ -104,13 +88,13 @@ return {
           local opts = {
             focusable = false,
             close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
-            border = 'rounded',
-            source = 'always',
-            prefix = '  ',
-            scope = 'cursor',
+            border = "rounded",
+            source = "always",
+            prefix = "  ",
+            scope = "cursor",
           }
           vim.diagnostic.open_float(nil, opts)
-        end
+        end,
       })
     end
 
@@ -125,7 +109,20 @@ return {
       capabilities = capabilities,
     })
 
+    local b = null_ls.builtins
 
+    local sources = {
+      b.formatting.prettierd.with({ filetypes = { "html", "yaml", "markdown" } }),
+      -- markdown diagnostic
+      b.diagnostics.markdownlint,
+      -- Lua formatting
+      b.formatting.stylua,
+    }
+
+    null_ls.setup({
+      on_attach = on_attach,
+      sources = sources,
+    })
 
     lspconfig.tsserver.setup({
       init_options = require("nvim-lsp-ts-utils").init_options,
@@ -139,7 +136,7 @@ return {
 
         ts_utils.setup({
           enable_import_on_completion = true,
-          auto_inlay_hints = false
+          auto_inlay_hints = false,
         })
 
         ts_utils.setup_client(client)
@@ -149,17 +146,17 @@ return {
         vim.api.nvim_buf_set_keymap(bufnr, "n", "gr", ":TSLspRenameFile<CR>", opts)
         vim.api.nvim_buf_set_keymap(bufnr, "n", "gi", ":TSLspImportAll<CR>", opts)
         on_attach(client, bufnr)
-      end
+      end,
     })
 
     lspconfig.lua_ls.setup({
       settings = {
         Lua = {
           completion = {
-            callSnippet = "Replace"
-          }
-        }
-      }
+            callSnippet = "Replace",
+          },
+        },
+      },
     })
-  end
+  end,
 }
