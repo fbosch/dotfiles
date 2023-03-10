@@ -28,7 +28,11 @@ map("n", "<leader>ra", ":Sad<CR>", silent)
 map("n", "<leader>pc", ":CccPick<CR>", silent)
 map("n", "<leader>wk", ":WhichKey<CR>", silent)
 
--- flaot term
+-- yank
+map("n", "<C-a>", "ggVG<CR>", silent)
+map("n", "<leader>pc", ":let @+=expand('%:p')<CR>", silent)
+
+-- float term
 map("n", "<leader>ft", ":FloatermToggle<CR>", silent)
 
 -- pick window
@@ -44,6 +48,17 @@ end, silent)
 -- glance
 map("n", "<leader>gD", ":Glance definitions<CR>", silent)
 map("n", "<leader>gR", ":Glance references<CR>", silent)
+
+-- dap
+map("n", "<leader>du", ":lua require('dapui').toggle()<CR>", silent)
+map("n", "<F5>", ":lua require('dap').continue()<CR>", silent)
+map("n", "<F10>", ":lua require('dap').step_over()<CR>", silent)
+map("n", "<F11>", ":lua require('dap').step_into()<CR>", silent)
+map("n", "<F12>", ":lua require('dap').step_out()<CR>", silent)
+map("n", "<leader>b", ":lua require('dap').toggle_breakpoint()<CR>", silent)
+map("n", "<leader>B", ":lua require('dap').set_breakpoint(vim.fn.input('Breakpoint condition: '))<CR>", silent)
+map("n", "<leader>lp", ":lua require('dap').set_breakpoint(nil, nil, vim.fn.input('Log point message: '))<CR>", silent)
+map("n", "<leader>dr", ":lua require('dap').repl.open()<CR>", silent)
 
 -- overseer
 map("n", "<leader>ot", ":OverseerToggle<CR>", silent)
@@ -63,8 +78,8 @@ map("n", "<leader>dff", ":DiffviewOpen<CR>", silent)
 map("n", "<leader>dfq", ":DiffviewClose<CR>", silent)
 
 -- save files
-map("n", "<leader>s", "<bar> :lua vim.lsp.buf.format()<CR> <bar> :wa<CR>", silent)
-map("n", "<leader>S", ":lua vim.lsp.buf.format()<CR> <bar> :wqa!<CR>", silent)
+map("n", "<leader>s", ":wa<CR>", silent)
+map("n", "<leader>S", ":wqa!<CR>", silent)
 
 -- move lines with move.nvim using Alt + hjkl
 map("n", "<A-j>", ":MoveLine(1)<CR>", silent)
@@ -81,7 +96,7 @@ map("v", "<", "<gv", options)
 map("v", ">", ">gv", options)
 
 -- find and replace all
-map("n", "S", ":%s//<Left>", silent)
+-- map("n", "S", ":%s//<Left>", silent)
 
 -- remap split navigation to CTRL + hjkl
 map("n", "<S-h>", ":wincmd h<CR>", silent)

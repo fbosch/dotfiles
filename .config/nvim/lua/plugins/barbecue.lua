@@ -4,10 +4,9 @@ return {
     "SmiteshP/nvim-navic",
     "kyazdani42/nvim-web-devicons",
   },
-  priority = 100,
+  event = "ColorScheme",
   config = function()
     local barbecue = require("barbecue")
-
     barbecue.setup({
       create_autocmd = false,
       show_basename = true,
@@ -15,23 +14,22 @@ return {
       show_modified = true,
       show_navic = true,
       theme = {
-        normal = { bg = '#212121', fg = '#aaaaaa' },
+        normal = { bg = "#212121", fg = "#aaaaaa" },
         basename = { bold = true },
-        separator = { fg = '#636363' },
-        modified = { fg = '#D68C67' },
+        separator = { fg = "#636363" },
+        modified = { fg = "#D68C67" },
         -- context
-        context_module = { fg = '#b279a7' },
-        context_constant = { fg = '#636363' },
-        context_namespace = { fg = '#97bdde' },
-        context_function = { fg = '#b279a7' },
-        context_method = { fg = '#b279a7' },
-        context_type_parameter = { fg = '#b279a7' },
-        context_variable = { fg = '#97bdde' },
-        context_field = { fg = '#ffffff' },
-        context_property = { fg = '#ffffff' },
-      }
+        context_module = { fg = "#b279a7" },
+        context_constant = { fg = "#636363" },
+        context_namespace = { fg = "#97bdde" },
+        context_function = { fg = "#b279a7" },
+        context_method = { fg = "#b279a7" },
+        context_type_parameter = { fg = "#b279a7" },
+        context_variable = { fg = "#97bdde" },
+        context_field = { fg = "#ffffff" },
+        context_property = { fg = "#ffffff" },
+      },
     })
-
     vim.api.nvim_create_autocmd({
       "WinScrolled", -- or WinResized on NVIM-v0.9 and higher
       "BufWinEnter",
@@ -47,5 +45,5 @@ return {
         require("barbecue.ui").update()
       end,
     })
-  end
+  end,
 }

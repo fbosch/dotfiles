@@ -5,6 +5,7 @@ return {
   lazy = false,
   config = function()
     vim.cmd([[colorscheme zenwritten]])
+
     vim.opt.ruler = true
     vim.opt.background = "dark"
     vim.opt.pumblend = 10
@@ -66,5 +67,5 @@ return {
 
     -- fold
     vim.api.nvim_set_hl(0, "Folded", { fg = "#bbbbbb", bg = "#252525" })
-  end
+  end,
 }

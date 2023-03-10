@@ -50,6 +50,7 @@ abbr lk 'logikill'
 abbr bp 'bundle-phobia '
 alias copykey 'pbcopy < ~/.ssh/id_rsa.pub'
 alias prettierdstatus 'cat ~/.prettier_d_slim'
+alias chrdebug '/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222'
 
 # Extended defaults
 alias cat 'bat --style=plain --color=always'

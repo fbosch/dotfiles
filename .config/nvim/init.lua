@@ -1,99 +1,91 @@
 vim.g.mapleader = " "
-vim.o.sessionoptions = "buffers,help,tabpages,winsize,winpos,terminal"
-vim.o.cmdheight = 0
 vim.g.did_load_filetypes = 1
 vim.g.spellfile_URL = "http://ftp.vim.org/vim/runtime/spell"
 
-vim.g.vimade = {
-  fadelevel = 0.6,
-  usecursorhold = true,
-  updatetime = 0,
-  detecttermcolors = true,
-  enablescroll = 1,
-  enabletreesitter = 1
-}
-
-local set = vim.opt
-
 -- misc
-set.re = 0 -- regex engine auto
-set.shortmess:append("I")
-set.compatible = false
+vim.opt.re = 0 -- regex engine auto
+vim.opt.shortmess:append("I")
+vim.opt.compatible = false
+vim.opt.shell = "fish"
+vim.opt.title = false
 
 -- timings
-set.timeoutlen = 1000
-set.updatetime = 100
+vim.opt.timeoutlen = 1000
+vim.opt.updatetime = 100
 
 -- visual
-set.lazyredraw = true
-set.ttyfast = true
-set.termguicolors = true
-set.background = "dark"
-set.number = true
-set.signcolumn = "yes"
-set.wrap = false
-set.relativenumber = true
-set.cursorline = true
-set.fillchars:append("eob:·")
-set.laststatus = 3
-
+vim.opt.lazyredraw = true
+vim.opt.ttyfast = true
+vim.opt.termguicolors = true
+vim.opt.background = "dark"
+vim.opt.number = true
+vim.opt.signcolumn = "yes"
+vim.opt.wrap = false -- disable line wrap
+vim.opt.relativenumber = true
+vim.opt.cursorline = true
+vim.opt.fillchars:append("eob:·")
+vim.opt.laststatus = 3
 
 -- file history
-set.backup = true
-set.swapfile = false
-set.undofile = true
-set.undodir = vim.fn.expand("~/.config") .. "/nvim/.undo//"
-set.backupdir = vim.fn.expand("~/.config") .. "/nvim/.backup//"
-set.directory = vim.fn.expand("~/.config") .. "/nvim/.swp//"
-set.fileencoding = "utf-8"
+vim.opt.backup = true
+vim.opt.swapfile = false
+vim.opt.undofile = true
+vim.opt.undodir = vim.fn.expand("~/.config") .. "/nvim/.undo//"
+vim.opt.backupdir = vim.fn.expand("~/.config") .. "/nvim/.backup//"
+vim.opt.directory = vim.fn.expand("~/.config") .. "/nvim/.swp//"
+vim.opt.sessionoptions = "buffers,help,tabpages,winsize,winpos,terminal"
+vim.opt.fileencoding = "utf-8"
+vim.opt.autoread = true
 
 -- fold
-set.foldlevelstart = 0
-set.foldmethod = "marker"
-set.backspace = "indent,eol,start"
-set.foldexpr = "nvim_treesitter#foldexpr()"
+vim.opt.foldlevelstart = 0
+vim.opt.foldmethod = "marker"
+vim.opt.backspace = "indent,eol,start"
+vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
 
 -- spellchecking
-set.spell = false
-set.spelllang = "en,da"
-set.spelloptions = "camel"
+vim.opt.spell = false
+vim.opt.spelllang = "en,da"
+vim.opt.spelloptions = "camel"
 
 -- tab & indentation
-set.tabstop = 2
-set.shiftwidth = 2
-set.autoindent = true
-set.expandtab = true
-set.smartindent = true
-set.softtabstop = 2
-set.expandtab = true
+vim.opt.tabstop = 2
+vim.opt.shiftwidth = 2
+vim.opt.autoindent = true
+vim.opt.expandtab = true
+vim.opt.smartindent = true
+vim.opt.softtabstop = 2
+vim.opt.expandtab = true
 
-set.list = true
-set.hidden = true
-set.mouse = "a"
-set.clipboard:append("unnamedplus")
-set.errorbells = false
+vim.opt.list = true
+vim.opt.hidden = true
+vim.opt.mouse = "a"
+vim.opt.clipboard:append("unnamedplus")
+vim.opt.errorbells = false
 
 -- paths
-set.rtp:append("/opt/homebrew/opt/fzf")
-set.path:append("**")
-set.wildoptions = "pum"
-set.wildignore = "*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Caches/*,*log*,*.dat*,*.kbx*,*.zip*"
+vim.opt.rtp:append("/opt/homebrew/opt/fzf")
+vim.opt.path:append("**")
+vim.opt.wildoptions = "pum"
+vim.opt.wildignore:append(
+  "*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Caches/*,*log*,*.dat*,*.kbx*,*.zip*"
+)
 
 -- show
-set.showcmd = true
-set.showmode = true
+vim.opt.showcmd = true
+vim.opt.showmode = true
 
 -- completion
-set.complete = "kspell"
-set.completeopt = "menu,menuone,noinsert"
+vim.opt.complete = "kspell"
+vim.opt.completeopt = "menu,menuone,noinsert"
 
 -- casing
-set.ignorecase = true
-set.smartcase = true
+vim.opt.ignorecase = true
+vim.opt.smartcase = true
 
 -- search
-set.incsearch = true
-set.hlsearch = false
+vim.opt.incsearch = true
+vim.opt.hlsearch = false
 
 require("keymap")
 require("autocmd")

@@ -11,7 +11,6 @@ return {
     "MunifTanjim/prettier.nvim",
     "jose-elias-alvarez/null-ls.nvim",
     "folke/neodev.nvim",
-    "sigmasd/deno-nvim",
   },
   config = function()
     local neodev = require("neodev")
@@ -107,6 +106,11 @@ return {
     neodev.setup({
       on_attach = on_attach,
       capabilities = capabilities,
+      library = {
+        plugins = {
+          { "nvim-dap-ui", types = true },
+        },
+      },
     })
 
     local b = null_ls.builtins
