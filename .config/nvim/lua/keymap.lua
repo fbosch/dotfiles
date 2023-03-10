@@ -70,6 +70,10 @@ map("n", "<leader>gbo", ":GitBlameOpenCommitURL<CR>", silent)
 map("n", "<leader>gbc", ":GitBlameCopySHA<CR>", silent)
 map("n", "<leader>gg", ":LazyGit<CR>", silent)
 
+-- worktrees
+map("n", "<leader>wt", ":lua require('telescope').extensions.git_worktree.git_worktrees()<CR>", silent)
+-- map("n", "<leader>wta", ":lua require('telescope').extensions.git_worktree.create_git_worktree()<CR>", silent)
+
 -- history
 map("n", "<leader>e", ":NvimTreeToggle<CR>", silent)
 map("n", "<leader>ff", ":NvimTreeFindFile<CR>", silent)

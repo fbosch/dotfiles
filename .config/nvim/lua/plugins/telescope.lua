@@ -4,14 +4,15 @@ return {
   event = "VeryLazy",
   config = function()
     local telescope = require("telescope")
-    local actions = require("telescope.actions")
     telescope.load_extension("file_browser")
     telescope.load_extension("lazygit")
+    telescope.load_extension("git_worktree")
     telescope.setup({
       defaults = {
         layout_config = {
+          width = 0.9,
           scroll_speed = 1.5,
-          preview_cutoff = 400
+          preview_cutoff = 400,
         },
       },
       extensions = {
@@ -20,12 +21,22 @@ return {
       pickers = {
         find_files = {
           prompt_prefix = "🔍",
-          find_command = { "fd", ".", "--type", "file", "--threads=4", "-E", "*.{png,jpg,jpeg,bmp,webp,log}", '-H', "--strip-cwd-prefix" },
-          theme = "dropdown"
+          find_command = {
+            "fd",
+            ".",
+            "--type",
+            "file",
+            "--threads=4",
+            "-E",
+            "*.{png,jpg,jpeg,bmp,webp,log}",
+            "-H",
+            "--strip-cwd-prefix",
+          },
+          theme = "dropdown",
         },
         grep_string = {
           theme = "dropdown",
-          disable_coordinates = true
+          disable_coordinates = true,
         },
         live_grep = {
           theme = "dropdown",
@@ -35,9 +46,9 @@ return {
           theme = "dropdown",
           disable_coordinates = true,
           only_cwd = true,
-          sort_mru = true
-        }
-      }
+          sort_mru = true,
+        },
+      },
     })
-  end
+  end,
 }

@@ -54,7 +54,7 @@ return {
     vim.api.nvim_set_hl(0, "DapStopped", { ctermbg = 0, fg = "#98bd99" })
     vim.fn.sign_define(
       "DapBreakpoint",
-      { text = "", texthl = "DapBreakpoint", linehl = "DapBreakpoint", numhl = "DapBreakpoint" }
+      { text = "", texthl = "DapBreakpoint", linehl = "", numhl = "DapBreakpoint" }
     )
     vim.fn.sign_define(
       "DapBreakpointCondition",
