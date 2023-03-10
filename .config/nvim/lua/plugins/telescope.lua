@@ -10,7 +10,8 @@ return {
     telescope.setup({
       defaults = {
         layout_config = {
-          width = 0.9,
+          width = 0.4,
+          height = 0.4,
           scroll_speed = 1.5,
           preview_cutoff = 400,
         },

@@ -28,14 +28,13 @@ return {
             vim.fn.expand("~/.config/nvim/.sessions/" .. string.gsub(metadata.path, "\\/", "%") .. ".vim")
 
         vim.cmd(":RestoreSessionFromFile " .. sessionFile)
-        vim.cmd(":RestoreSession")
         local from = string_diff(metadata.prev_path, metadata.path)
         local to = string_diff(metadata.path, metadata.prev_path)
 
         if from ~= to then
-          vim.notify("  " .. from .. "     " .. to, "info", {
+          vim.notify(" " .. from .. "    " .. to, "info", {
             title = "Worktree",
-            icon = "󰊢",
+            icon = "",
           })
         end
       end

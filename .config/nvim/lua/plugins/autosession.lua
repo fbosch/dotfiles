@@ -9,8 +9,11 @@ return {
       cwd_change_handling = {
         restore_upcoming_session = true,
         post_cwd_changed_hook = function()
-          require("lualine").refresh()
-          vim.cmd(":VimadeRedraw")
+          vim.schedule(function()
+            vim.cmd(":VimadeRedraw")
+            vim.cmd(":syntax on")
+            require("lualine").refresh()
+          end)
         end,
       },
     })

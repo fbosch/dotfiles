@@ -5,7 +5,6 @@
 
 function fish_greeting
   if [ "$KITTY_WINDOW_ID" = "1" ]
-    # eval command prettier_d_slim start > /dev/null
   end
 end
 
