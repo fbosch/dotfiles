@@ -26,9 +26,11 @@ added_style = "bold blue"
 format = '[+$added]($added_style)/[-$deleted]($deleted_style) '
 
 [directory]
-truncation_length = 6
+truncation_length = 8
+truncate_to_repo = true
 truncation_symbol = "…/"
 read_only = "  "
+
 
 [nodejs]
 format = '[](bold fg:#84ba64)  [$version](fg:#84ba64) '

@@ -5,6 +5,7 @@ return {
     "kyazdani42/nvim-web-devicons",
     "f-person/git-blame.nvim",
   },
+  event = "ColorScheme",
   config = function()
     vim.g.gitblame_display_virtual_text = 0 -- Disable virtual text
     vim.g.gitblame_date_format = "%r"

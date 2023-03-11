@@ -8,7 +8,7 @@ return {
         done = " ",
       },
       window = {
-        zindex = 100,
+        zindex = 1000,
         relative = "editor",
         border = "rounded",
         blend = 200,

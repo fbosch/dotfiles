@@ -24,6 +24,7 @@ return {
     worktree.setup({})
     worktree.on_tree_change(function(op, metadata)
       if op == worktree.Operations.Switch then
+        vim.cmd(":NvimTreeClose")
         local sessionFile =
             vim.fn.expand("~/.config/nvim/.sessions/" .. string.gsub(metadata.path, "\\/", "%") .. ".vim")
 

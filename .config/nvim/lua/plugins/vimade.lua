@@ -1,6 +1,5 @@
 return {
   "TaDaa/vimade",
-  event = "VeryLazy",
   config = function()
     vim.g.vimade = {
       fadelevel = 0.6,
@@ -9,6 +8,20 @@ return {
       detecttermcolors = true,
       enablescroll = 1,
       enabletreesitter = 1,
+      basegroups = {
+        "Folded",
+        "Search",
+        "SignColumn",
+        -- "LineNr",
+        -- "CursorLine",
+        -- "CursorLineNr",
+        "DiffAdd",
+        "DiffChange",
+        "DiffDelete",
+        "DiffText",
+        "FoldColumn",
+        "Whitespace",
+      },
     }
   end,
 }

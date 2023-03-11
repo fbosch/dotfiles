@@ -116,11 +116,23 @@ return {
     local b = null_ls.builtins
 
     local sources = {
-      b.formatting.prettierd.with({ filetypes = { "html", "yaml", "markdown" } }),
+      b.formatting.prettierd.with({
+        filetypes = {
+          "html",
+          "yaml",
+          "markdown",
+          "json",
+          "javascript",
+          "javascriptreact",
+          "typescript",
+          "typescriptreact",
+        },
+      }),
       -- markdown diagnostic
       b.diagnostics.markdownlint,
       -- Lua formatting
       b.formatting.stylua,
+      b.formatting.jq,
     }
 
     null_ls.setup({
