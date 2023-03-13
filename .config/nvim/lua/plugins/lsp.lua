@@ -128,9 +128,10 @@ return {
           "typescriptreact",
         },
       }),
-      -- markdown diagnostic
+      -- diagnostics
       b.diagnostics.markdownlint,
-      -- Lua formatting
+      b.diagnostics.stylelint,
+      -- formatting
       b.formatting.stylua,
       b.formatting.jq,
     }
