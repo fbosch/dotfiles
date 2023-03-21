@@ -16,7 +16,6 @@ return {
     local neodev = require("neodev")
     local lspconfig = require("lspconfig")
     local group = vim.api.nvim_create_augroup("lsp", {})
-    -- local capabilities = vim.lsp.protocol.make_client_capabilities()
     local capabilities = require("cmp_nvim_lsp").default_capabilities()
     local null_ls = require("null-ls")
     local augroup = vim.api.nvim_create_augroup("LspFormatting", {})

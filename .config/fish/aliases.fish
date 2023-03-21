@@ -56,7 +56,7 @@ alias ls 'exa --icons -F'
 alias l 'ls -lh'
 alias la 'ls -a'
 alias lla 'ls -la'
-alias lt 'ls --tree'
+alias tree 'exa --tree --level=2'
 
 # Tmux
 abbr xtm 'pkill -f tmux'
