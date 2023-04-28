@@ -10,7 +10,7 @@ return {
     vim.opt.winblend = 0
     vim.opt.scrolloff = 8
     vim.api.nvim_set_hl(0, "TreesitterContext", { bg = "#2c2c2c" })
-    vim.api.nvim_set_hl(0, "SpellBad", { undercurl = true, special = "#A8334C" })
+    vim.api.nvim_set_hl(0, "SpellBad", { undercurl = true, sp = "#A8334C" })
 
     -- popup menu highlights (wilder, telescope, etc.)
     vim.api.nvim_set_hl(0, "NormalFloat", { bg = "#191919" })
@@ -65,5 +65,10 @@ return {
 
     -- fold
     vim.api.nvim_set_hl(0, "Folded", { fg = "#bbbbbb", bg = "#252525" })
+
+    -- indent-blankline context
+    vim.api.nvim_set_hl(0, "IndentBlanklineContextChar", { fg = "#6e8aa5" })
+    vim.api.nvim_set_hl(0, "IndentBlanklineContextSpaceChar", { fg = "#6e8aa5" })
+    vim.api.nvim_set_hl(0, "IndentBlanklineContextStart", { underline = true, sp = "#6e8aa5" })
   end,
 }

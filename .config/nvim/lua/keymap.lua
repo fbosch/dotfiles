@@ -26,7 +26,7 @@ map("n", "<leader>of", ":lua require('fzf-lua').oldfiles()<CR>", options)
 map("n", "<leader>m", ":Mason<CR>", silent)
 map("n", "<leader>ra", ":Sad<CR>", silent)
 map("n", "<leader>pc", ":CccPick<CR>", silent)
-map("n", "<leader>wk", ":WhichKey<CR>", silent)
+-- map("n", "<leader>wk", ":WhichKey<CR>", silent)
 
 -- yank
 map("n", "<C-a>", "ggVG<CR>", silent)
@@ -50,15 +50,15 @@ map("n", "<leader>gD", ":Glance definitions<CR>", silent)
 map("n", "<leader>gR", ":Glance references<CR>", silent)
 
 -- dap
-map("n", "<leader>du", ":lua require('dapui').toggle()<CR>", silent)
-map("n", "<F5>", ":lua require('dap').continue()<CR>", silent)
-map("n", "<F10>", ":lua require('dap').step_over()<CR>", silent)
-map("n", "<F11>", ":lua require('dap').step_into()<CR>", silent)
-map("n", "<F12>", ":lua require('dap').step_out()<CR>", silent)
-map("n", "<leader>b", ":lua require('dap').toggle_breakpoint()<CR>", silent)
-map("n", "<leader>B", ":lua require('dap').set_breakpoint(vim.fn.input('Breakpoint condition: '))<CR>", silent)
-map("n", "<leader>lp", ":lua require('dap').set_breakpoint(nil, nil, vim.fn.input('Log point message: '))<CR>", silent)
-map("n", "<leader>dr", ":lua require('dap').repl.open()<CR>", silent)
+-- map("n", "<leader>du", ":lua require('dapui').toggle()<CR>", silent)
+-- map("n", "<F5>", ":lua require('dap').continue()<CR>", silent)
+-- map("n", "<F10>", ":lua require('dap').step_over()<CR>", silent)
+-- map("n", "<F11>", ":lua require('dap').step_into()<CR>", silent)
+-- map("n", "<F12>", ":lua require('dap').step_out()<CR>", silent)
+-- map("n", "<leader>b", ":lua require('dap').toggle_breakpoint()<CR>", silent)
+-- map("n", "<leader>B", ":lua require('dap').set_breakpoint(vim.fn.input('Breakpoint condition: '))<CR>", silent)
+-- map("n", "<leader>lp", ":lua require('dap').set_breakpoint(nil, nil, vim.fn.input('Log point message: '))<CR>", silent)
+-- map("n", "<leader>dr", ":lua require('dap').repl.open()<CR>", silent)
 
 -- overseer
 map("n", "<leader>ot", ":OverseerToggle<CR>", silent)

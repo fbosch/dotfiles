@@ -6,14 +6,18 @@ return {
   config = function()
     require("bufferline").setup({
       animation = false,
-      icon_pinned = "",
       auto_hide = true,
       maximum_padding = 6,
-      diagnostics = {
-            [vim.diagnostic.severity.ERROR] = { enabled = true, icon = "" },
-            [vim.diagnostic.severity.WARN] = { enabled = true, icon = "" },
-            [vim.diagnostic.severity.INFO] = { enabled = true, icon = "󰋼" },
-            [vim.diagnostic.severity.HINT] = { enabled = true, icon = "󰌵" },
+      icons = {
+        pinned = {
+          button = "",
+        },
+        diagnostics = {
+          [vim.diagnostic.severity.ERROR] = { enabled = true, icon = "" },
+          [vim.diagnostic.severity.WARN] = { enabled = true, icon = "" },
+          [vim.diagnostic.severity.INFO] = { enabled = true, icon = "󰋼" },
+          [vim.diagnostic.severity.HINT] = { enabled = true, icon = "󰌵" },
+        },
       },
     })
     -- diagnostics

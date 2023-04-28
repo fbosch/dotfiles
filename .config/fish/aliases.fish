@@ -91,6 +91,7 @@ abbr bad 'git bisect bad'
 abbr good 'git bisect good'
 
 # Webdev
+alias pnpx 'pnpm dlx'
 abbr y 'swpm'
 alias ya 'swpm add'
 alias yr 'swpm remove'

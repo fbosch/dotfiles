@@ -18,12 +18,12 @@ return {
       },
       extensions = { "fugitive", "symbols-outline" },
       sections = {
-        lualine_c = { require("auto-session-library").current_session_name },
-        lualine_y = {
-          "filetype",
-        },
+        lualine_c = { require("auto-session.session-lens.library").current_session_name },
         lualine_x = {
           { git_blame.get_current_blame_text, cond = git_blame.is_blame_text_available },
+        },
+        lualine_y = {
+          "filetype",
         },
         lualine_z = {
           "os.date('%H:%M')",

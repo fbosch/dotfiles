@@ -6,8 +6,8 @@ return {
       height = 18,
       width = 60,
       border = {
-        enable = true
-      }
+        enable = true,
+      },
     })
-  end
+  end,
 }

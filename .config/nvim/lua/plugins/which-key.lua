@@ -4,8 +4,8 @@ return {
   config = function()
     require("which-key").setup({
       window = {
-        border = "rounded"
-      }
+        border = "rounded",
+      },
     })
-  end
+  end,
 }
