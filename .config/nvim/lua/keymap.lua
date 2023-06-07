@@ -9,14 +9,14 @@ map("n", "<Space>", "<NOP>", silent)
 map(
   "n",
   "<C-p>",
-  ":lua require('fzf-lua').files({ cmd = 'rg --files --follow --no-ignore-vcs --hidden -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*}\"' })<CR>",
+  ":lua require('fzf-lua').files({ cmd = 'rg --files --follow --no-ignore-vcs --hidden -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*}\" --no-heading --smart-case' })<CR>",
   silent
 )
 map("n", "<leader>gf", ":lua require('fzf-lua').git_files()<CR>", silent)
 map(
   "n",
   "<leader>lg",
-  ":lua require('fzf-lua').live_grep({ cmd = 'rg --hidden --no-ignore -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*}\"' })<CR>",
+  ":lua require('fzf-lua').live_grep({ rg_glob = true, glob_flag = \"--iglob\", exec_empty_query = true, rg_opts = '--hidden --no-ignore -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*}\" --smart-case --no-heading' })<CR>",
   options
 )
 map("n", "<leader>b", ":lua require('fzf-lua').buffers()<CR>", options)
@@ -26,7 +26,7 @@ map("n", "<leader>of", ":lua require('fzf-lua').oldfiles()<CR>", options)
 map("n", "<leader>m", ":Mason<CR>", silent)
 map("n", "<leader>ra", ":Sad<CR>", silent)
 map("n", "<leader>pc", ":CccPick<CR>", silent)
--- map("n", "<leader>wk", ":WhichKey<CR>", silent)
+map("n", "<leader>wk", ":WhichKey<CR>", silent)
 
 -- yank
 map("n", "<C-a>", "ggVG<CR>", silent)

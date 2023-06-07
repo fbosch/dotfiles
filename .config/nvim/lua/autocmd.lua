@@ -16,14 +16,14 @@ cmd({ "VimLeavePre" }, {
 cmd({ "BufRead", "BufNewFile" }, {
   pattern = { ".{eslint,babel,stylelint,prettier}rc" },
   command = "setlocal ft=json5",
-  group = group
+  group = group,
 })
 cmd({ "FileType" }, {
   pattern = { "markdown", "gitcommit" },
   command = "setlocal spell spelllang=en_us",
-  group = group
+  group = group,
 })
 cmd({ "TextYankPost" }, {
   command = "lua vim.highlight.on_yank({ higroup = 'IncSearch', timeout = 500 })",
-  group = group
+  group = group,
 })
