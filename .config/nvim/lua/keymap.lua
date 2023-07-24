@@ -4,6 +4,7 @@ local silent = { noremap = true, silent = true }
 
 -- disable
 map("n", "<Space>", "<NOP>", silent)
+map("n", "q", "<NOP>", silent)
 
 -- fzf
 map(
