@@ -1,5 +1,6 @@
 return {
   "L3MON4D3/LuaSnip",
   dependencies = { "nvim-treesitter/nvim-treesitter" },
-  event = "VeryLazy"
+  event = "VeryLazy",
+  -- config = function() end,
 }

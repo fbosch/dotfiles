@@ -3,7 +3,7 @@ return {
   build = ":TSUpdate",
   dependencies = { "windwp/nvim-autopairs" },
   event = { "BufReadPost", "BufNewFile" },
-  config = function() 
+  config = function()
     require("nvim-autopairs").setup({ check_ts = true })
     require("nvim-treesitter.configs").setup({
       auto_install = true,
@@ -19,10 +19,10 @@ return {
         "markdown",
         "yaml",
         "regex",
-        "vim"
+        "vim",
       },
       highlight = { enable = true },
-      indent = { enable = true }
+      indent = { enable = true },
     })
-  end
+  end,
 }

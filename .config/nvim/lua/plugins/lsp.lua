@@ -140,6 +140,11 @@ return {
       sources = sources,
     })
 
+    lspconfig.html.setup({
+      on_attach = on_attach,
+      capabilities = capabilities,
+    })
+
     lspconfig.tsserver.setup({
       init_options = require("nvim-lsp-ts-utils").init_options,
       capabilities = capabilities,

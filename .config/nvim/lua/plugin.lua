@@ -15,7 +15,7 @@ vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup("plugins", {
   change_detection = {
-    notify = false
+    notify = false,
   },
   performance = {
     rtp = {
@@ -38,8 +38,7 @@ require("lazy").setup("plugins", {
         "vimballPlugin",
         "zip",
         "zipPlugin",
-        "filetype",
-        "tutor_mode_plugin"
+        "tutor_mode_plugin",
       },
     },
   },

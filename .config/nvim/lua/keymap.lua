@@ -142,7 +142,7 @@ map("n", "<C-t>d", ":tabclose<CR>", silent)
 
 -- buffer controls
 map("n", "<leader>z", ":bp <bar> :bd #<CR>", silent) -- close buffer but keep split
-map("n", "-", ":b#<CR>", silent)                     --  previously active buffer
+map("n", "<leader>0", ":b#<CR>", silent)             --  previously active buffer
 
 -- barbar buffer controls
 map("n", "<leader>x", ":only <bar> :BufferCloseAllButCurrentOrPinned<CR>", silent) -- close all buffers except current
