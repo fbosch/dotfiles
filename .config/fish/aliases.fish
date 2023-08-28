@@ -90,6 +90,14 @@ abbr lg 'lazygit'
 abbr bad 'git bisect bad'
 abbr good 'git bisect good'
 
+# worktree add
+function wta
+    set branch_name $argv[1]
+    echo $branch_name | worktree-add.sh
+    cd -- $branch_name
+end
+
+
 # Webdev
 alias pnpx 'pnpm dlx'
 abbr y 'swpm'

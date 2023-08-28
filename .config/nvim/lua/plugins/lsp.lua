@@ -18,6 +18,17 @@ return {
     local group = vim.api.nvim_create_augroup("lsp", {})
     local capabilities = require("cmp_nvim_lsp").default_capabilities()
     local null_ls = require("null-ls")
+    capabilities.textDocument.foldingRange = {
+      dynamicRegistration = false,
+      lineFoldingOnly = true,
+    }
+    local language_servers = require("lspconfig").util.available_servers() -- or list servers manually like {'gopls', 'clangd'}
+    for _, ls in ipairs(language_servers) do
+      require("lspconfig")[ls].setup({
+        capabilities = capabilities,
+        -- you can add other fields for setting up lsp server in this table
+      })
+    end
     local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
 
     require("fzf_lsp").setup()

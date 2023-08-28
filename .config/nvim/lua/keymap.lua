@@ -27,7 +27,7 @@ map("n", "<leader>of", ":lua require('fzf-lua').oldfiles()<CR>", options)
 map("n", "<leader>m", ":Mason<CR>", silent)
 map("n", "<leader>ra", ":Sad<CR>", silent)
 map("n", "<leader>pc", ":CccPick<CR>", silent)
-map("n", "<leader>wk", ":WhichKey<CR>", silent)
+-- map("n", "<leader>wk", ":WhichKey<CR>", silent)
 
 -- yank
 map("n", "<C-a>", "ggVG<CR>", silent)

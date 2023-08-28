@@ -1,6 +1,9 @@
 vim.g.mapleader = " "
-vim.g.did_load_filetypes = 1
 vim.g.spellfile_URL = "http://ftp.vim.org/vim/runtime/spell"
+
+-- disable netrw
+vim.g.loaded_netrw = 1
+vim.g.loaded_netrwPlugin = 1
 
 -- misc
 vim.opt.re = 0 -- regex engine auto
@@ -8,6 +11,7 @@ vim.opt.shortmess:append("I")
 vim.opt.compatible = false
 vim.opt.shell = "fish"
 vim.opt.title = false
+vim.opt.filetype = "on"
 
 -- timings
 vim.opt.timeoutlen = 1000
@@ -38,6 +42,10 @@ vim.opt.fileencoding = "utf-8"
 vim.opt.autoread = true
 
 -- fold
+vim.opt.foldcolumn = "1"
+vim.o.foldlevel = "99"
+vim.o.foldlevelstart = "99"
+vim.o.foldenable = true
 vim.opt.foldlevelstart = 0
 vim.opt.foldmethod = "marker"
 vim.opt.backspace = "indent,eol,start"
