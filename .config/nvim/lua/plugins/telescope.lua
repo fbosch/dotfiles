@@ -2,11 +2,11 @@ return {
   "nvim-telescope/telescope.nvim",
   dependencies = { "nvim-telescope/telescope-file-browser.nvim", "kdheepak/lazygit.nvim" },
   event = "VeryLazy",
+  priority = 1000,
   config = function()
     local telescope = require("telescope")
     telescope.load_extension("file_browser")
     telescope.load_extension("lazygit")
-    telescope.load_extension("git_worktree")
     telescope.setup({
       defaults = {
         layout_config = {

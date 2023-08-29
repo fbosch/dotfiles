@@ -1,5 +1,5 @@
 return {
-  "ahmedkhalf/project.nvim",
-  config = function()
-  end,
+  -- "ahmedkhalf/project.nvim",
+  -- config = function()
+  -- end,
 }

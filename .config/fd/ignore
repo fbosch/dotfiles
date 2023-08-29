@@ -21,14 +21,14 @@ Cache/**/*
 **/node_modules/**/*
 *.session
 *.history
-*/.vscode/*
+*/.vscode/**/*
 *.plist
 *.db
 *.kgbd
-*/Photos Library.photoslibrary/*
+*/Photos Library.photoslibrary/**/*
 .DS_Store
-**/.swp/*
-**/.backup/*
-**/.undo/*
-**/.sessions/*
+**/.swp/**/*
+**/.backup/**/*
+**/.undo/**/*
+**/.sessions/**/*
 **/storybook-static/**/*

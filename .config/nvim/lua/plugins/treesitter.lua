@@ -2,7 +2,7 @@ return {
   "nvim-treesitter/nvim-treesitter",
   build = ":TSUpdate",
   dependencies = { "windwp/nvim-autopairs" },
-  event = { "BufReadPost", "BufNewFile" },
+  event = { "BufReadPost", "BufNewFile", "LspAttach" },
   config = function()
     require("nvim-autopairs").setup({ check_ts = true })
     require("nvim-treesitter.configs").setup({

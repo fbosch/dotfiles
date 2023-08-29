@@ -22,9 +22,9 @@ return {
     "David-Kunz/cmp-npm",
     {
       "tzachar/cmp-tabnine",
-      build = './install.sh',
+      build = "./install.sh",
       dependencies = "hrsh7th/nvim-cmp",
-    }
+    },
   },
   event = "VeryLazy",
   priority = 100,
@@ -36,16 +36,16 @@ return {
     require("luasnip.loaders.from_snipmate").lazy_load({ paths = "~/.config/nvim/snippets" })
     cmp.setup({
       completion = {
-        completeopt = "menu,menuone,noinsert"
+        completeopt = "menu,menuone,noinsert",
       },
       window = {
         completion = cmp.config.window.bordered(),
-        documentation = cmp.config.window.bordered()
+        documentation = cmp.config.window.bordered(),
       },
       snippet = {
         expand = function(args)
           require("luasnip").lsp_expand(args.body)
-        end
+        end,
       },
       formatting = {
         format = function(entry, vim_item)
@@ -54,18 +54,18 @@ return {
           if entry.source.name == "cmp_tabnine" then
             local detail = (entry.completion_item.data or {}).detail
             vim_item.kind = ""
-            if detail and detail:find('.*%%.*') then
-              vim_item.kind = vim_item.kind .. ' ' .. detail
+            if detail and detail:find(".*%%.*") then
+              vim_item.kind = vim_item.kind .. " " .. detail
             end
 
             if (entry.completion_item.data or {}).multiline then
-              vim_item.kind = vim_item.kind .. ' ' .. '[ML]'
+              vim_item.kind = vim_item.kind .. " " .. "[ML]"
             end
           end
           local maxwidth = 80
           vim_item.abbr = string.sub(vim_item.abbr, 1, maxwidth)
           return vim_item
-        end
+        end,
       },
       sources = cmp.config.sources({
         { name = "nvim_lsp",    max_item_count = 10 },
@@ -78,14 +78,14 @@ return {
         { name = "cmp_tabnine", max_item_count = 5 },
       }),
       mapping = cmp.mapping.preset.insert({
-            ["<C-f>"] = cmp.mapping.scroll_docs(4),
-            ["<C-d>"] = cmp.mapping.scroll_docs(-4),
-            ["<C-e>"] = cmp.mapping.abort(),
+        ["<C-f>"] = cmp.mapping.scroll_docs(4),
+        ["<C-d>"] = cmp.mapping.scroll_docs(-4),
+        ["<C-e>"] = cmp.mapping.abort(),
         -- ["<Space>"] = cmp.mapping.confirm({ select = true }),
-            ["<CR>"] = cmp.mapping.confirm({ select = false }),
-            ["<C-j>"] = cmp.mapping.select_next_item({ behavior = types.cmp.SelectBehavior.Select }),
-            ["<C-k>"] = cmp.mapping.select_prev_item({ behavior = types.cmp.SelectBehavior.Select })
-      })
+        ["<CR>"] = cmp.mapping.confirm({ select = false }),
+        ["<C-j>"] = cmp.mapping.select_next_item({ behavior = types.cmp.SelectBehavior.Select }),
+        ["<C-k>"] = cmp.mapping.select_prev_item({ behavior = types.cmp.SelectBehavior.Select }),
+      }),
     })
 
     -- highlights
@@ -101,5 +101,5 @@ return {
     vim.api.nvim_set_hl(0, "CmpItemKindProperty", { fg = "#ffffff" })
     vim.api.nvim_set_hl(0, "CmpItemKindUnit", { fg = "#ffffff" })
     vim.api.nvim_set_hl(0, "CmpItemKindSnippet", { fg = "#D68C67" })
-  end
+  end,
 }
