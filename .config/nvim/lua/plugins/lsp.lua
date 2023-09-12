@@ -40,19 +40,19 @@ return {
 
 		local group = vim.api.nvim_create_augroup("lsp", {})
 		local capabilities = require("cmp_nvim_lsp").default_capabilities()
-		lspconfig.util.root_pattern(
-			".eslintrc",
-			".eslintrc.js",
-			".eslintrc.json",
-			"package.json",
-			"pnpm-lock.yaml",
-			"yarn.lock",
-			".git"
-		)
+		lspconfig.util.root_pattern(".eslintrc", ".eslintrc.js", ".eslintrc.json", "package.json")
 		capabilities.textDocument.foldingRange = {
 			dynamicRegistration = false,
 			lineFoldingOnly = true,
 		}
+
+		local language_servers = require("lspconfig").util.available_servers() -- or list servers manually like {'gopls', 'clangd'}
+		for _, ls in ipairs(language_servers) do
+			require("lspconfig")[ls].setup({
+				capabilities = capabilities,
+				-- you can add other fields for setting up lsp server in this table
+			})
+		end
 
 		local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
 
@@ -62,12 +62,15 @@ return {
 			},
 			formatters_by_ft = {
 				lua = { "stylua" },
-				javascript = { { "prettierd", "prettier" } },
-				javascriptreact = { { "prettierd", "prettier" } },
-				["javascript.jsx"] = { { "prettierd", "prettier" } },
-				typescript = { { "prettierd", "prettier" } },
-				typescriptreact = { { "prettierd", "prettier" } },
-				["typescript.tsx"] = { { "prettierd", "prettier" } },
+				markdown = { "prettierme", "prettierd", "prettier" },
+				mdx = { "prettierme", "prettierd", "prettier" },
+				html = { { "prettierme", "prettierd", "prettier" } },
+				javascript = { { "prettierme", "prettierd", "prettier" } },
+				javascriptreact = { { "prettierme", "prettierd", "prettier" } },
+				["javascript.jsx"] = { { "prettierme", "prettierd", "prettier" } },
+				typescript = { { "prettierme", "prettierd", "prettier" } },
+				typescriptreact = { { "prettierme", "prettierd", "prettier" } },
+				["typescript.tsx"] = { { "prettierme", "prettierd", "prettier" } },
 			},
 		})
 
@@ -86,9 +89,7 @@ return {
 		vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
 			border = "rounded",
 		})
-
 		local on_attach = function(client, bufnr)
-			vim.api.nvim_buf_set_option(bufnr, "omnifunc", "v:lua.vim.lsp.omnifunc")
 			if client.supports_method("textDocument/formatting") then
 				vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
 				vim.api.nvim_create_autocmd("BufWritePre", {
@@ -173,11 +174,6 @@ return {
 			init_options = require("nvim-lsp-ts-utils").init_options,
 			capabilities = capabilities,
 			on_attach = function(client, bufnr)
-				if client.config.flags then
-					client.config.flags.allow_incremental_sync = true
-				end
-				client.resolved_capabilities.document_formatting = false
-
 				local ts_utils = require("nvim-lsp-ts-utils")
 
 				ts_utils.setup({
@@ -197,7 +193,6 @@ return {
 		})
 
 		lspconfig.lua_ls.setup({
-			capabilities = capabilities,
 			settings = {
 				Lua = {
 					completion = {
@@ -207,40 +202,15 @@ return {
 			},
 		})
 
-		local eslint = {
-			lintCommand = "eslint_d -f unix --stdin --stdin-filename ${INPUT}",
-			lintStdin = true,
-			lintFormats = { "%f:%l:%c: %m" },
-			lintIgnoreExitCode = true,
-			formatCommand = "eslint_d --fix-to-stdout --stdin --stdin-filename=${INPUT}",
-			formatStdin = true,
-		}
-
-		lspconfig.efm.setup({
-			capabilities = capabilities,
+		lspconfig.eslint.setup({
 			on_attach = function(client, bufnr)
 				on_attach(client, bufnr)
-				client.resolved_capabilities.document_formatting = true
-				client.resolved_capabilities.goto_definition = false
+				vim.api.nvim_create_autocmd("BufWritePre", {
+					buffer = bufnr,
+					command = "EslintFixAll",
+				})
 			end,
-			settings = {
-				languages = {
-					javascript = { eslint },
-					javascriptreact = { eslint },
-					["javascript.jsx"] = { eslint },
-					typescript = { eslint },
-					["typescript.tsx"] = { eslint },
-					typescriptreact = { eslint },
-				},
-			},
-			filetypes = {
-				"javascript",
-				"javascriptreact",
-				"javascript.jsx",
-				"typescript",
-				"typescript.tsx",
-				"typescriptreact",
-			},
+			capabilities = capabilities,
 		})
 	end,
 }
