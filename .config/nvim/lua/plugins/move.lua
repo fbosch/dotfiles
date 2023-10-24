@@ -1,4 +1,4 @@
 return {
-  "fedepujol/move.nvim",
-  event = "VeryLazy"
+	"fedepujol/move.nvim",
+	event = { "BufReadPre", "BufNewFile" },
 }

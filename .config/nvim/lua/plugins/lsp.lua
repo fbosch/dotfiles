@@ -5,74 +5,29 @@ return {
 		"williamboman/mason.nvim",
 		"lukas-reineke/lsp-format.nvim",
 		"jose-elias-alvarez/nvim-lsp-ts-utils",
-		"junegunn/fzf",
-		"folke/lsp-colors.nvim",
-		"gfanto/fzf-lsp.nvim",
-		"MunifTanjim/prettier.nvim",
-		"MunifTanjim/eslint.nvim",
-		"jose-elias-alvarez/null-ls.nvim",
 		"folke/neodev.nvim",
 		"stevearc/conform.nvim",
+		"junegunn/fzf",
+    "gfanto/fzf-lsp.nvim",
+		-- "folke/lsp-colors.nvim",
+		-- "MunifTanjim/prettier.nvim",
+		-- "MunifTanjim/eslint.nvim",
+		-- "jose-elias-alvarez/null-ls.nvim",
 	},
 	config = function()
 		local neodev = require("neodev")
 		local lspconfig = require("lspconfig")
-		local prettier = require("prettier")
 		local conform = require("conform")
-
-		prettier.setup({
-			bin = "prettierd",
-			filetypes = {
-				"css",
-				"graphql",
-				"html",
-				"javascript",
-				"javascriptreact",
-				"json",
-				"less",
-				"markdown",
-				"scss",
-				"typescript",
-				"typescriptreact",
-				"yaml",
-			},
-		})
 
 		local group = vim.api.nvim_create_augroup("lsp", {})
 		local capabilities = require("cmp_nvim_lsp").default_capabilities()
-		lspconfig.util.root_pattern(".eslintrc", ".eslintrc.js", ".eslintrc.json", "package.json")
+		-- lspconfig.util.root_pattern(".eslintrc", ".eslintrc.js", ".eslintrc.json", "package.json")
 		capabilities.textDocument.foldingRange = {
 			dynamicRegistration = false,
 			lineFoldingOnly = true,
 		}
 
-		local language_servers = require("lspconfig").util.available_servers() -- or list servers manually like {'gopls', 'clangd'}
-		for _, ls in ipairs(language_servers) do
-			require("lspconfig")[ls].setup({
-				capabilities = capabilities,
-				-- you can add other fields for setting up lsp server in this table
-			})
-		end
-
 		local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
-
-		conform.setup({
-			format_on_save = {
-				lsp_fallback = true,
-			},
-			formatters_by_ft = {
-				lua = { "stylua" },
-				markdown = { "prettierme", "prettierd", "prettier" },
-				mdx = { "prettierme", "prettierd", "prettier" },
-				html = { { "prettierme", "prettierd", "prettier" } },
-				javascript = { { "prettierme", "prettierd", "prettier" } },
-				javascriptreact = { { "prettierme", "prettierd", "prettier" } },
-				["javascript.jsx"] = { { "prettierme", "prettierd", "prettier" } },
-				typescript = { { "prettierme", "prettierd", "prettier" } },
-				typescriptreact = { { "prettierme", "prettierd", "prettier" } },
-				["typescript.tsx"] = { { "prettierme", "prettierd", "prettier" } },
-			},
-		})
 
 		require("fzf_lsp").setup()
 		require("mason").setup({
@@ -147,6 +102,33 @@ return {
 					vim.diagnostic.open_float(nil, opts)
 				end,
 			})
+			conform.setup({
+				format_on_save = {
+					lsp_fallback = true,
+					bufnr = bufnr,
+					quiet = true,
+				},
+				formatters_by_ft = {
+					lua = { { "stylua" } },
+					markdown = { { "prettierme", "prettierd", "prettier" } },
+					mdx = { "prettierme", "prettierd", "prettier" },
+					html = { { "prettierme", "prettierd", "prettier" } },
+					javascript = { { "prettierme", "prettierd", "prettier" } },
+					javascriptreact = { { "prettierme", "prettierd", "prettier" } },
+					["javascript.jsx"] = { { "prettierme", "prettierd", "prettier" } },
+					typescript = { { "prettierme", "prettierd", "prettier" } },
+					typescriptreact = { { "prettierme", "prettierd", "prettier" } },
+					["typescript.tsx"] = { { "prettierme", "prettierd", "prettier" } },
+				},
+			})
+		end
+
+		local language_servers = require("lspconfig").util.available_servers() -- or list servers manually like {'gopls', 'clangd'}
+		for _, ls in ipairs(language_servers) do
+			require("lspconfig")[ls].setup({
+				capabilities = capabilities,
+				on_attach = on_attach,
+			})
 		end
 
 		lspconfig.tailwindcss.setup({
@@ -166,8 +148,8 @@ return {
 		})
 
 		lspconfig.html.setup({
-			on_attach = on_attach,
 			capabilities = capabilities,
+			on_attach = on_attach,
 		})
 
 		lspconfig.tsserver.setup({
@@ -193,10 +175,16 @@ return {
 		})
 
 		lspconfig.lua_ls.setup({
+			capabilities = capabilities,
+			on_attach = on_attach,
 			settings = {
 				Lua = {
 					completion = {
 						callSnippet = "Replace",
+					},
+					format = {
+						enable = true,
+						formatter = "stylua",
 					},
 				},
 			},

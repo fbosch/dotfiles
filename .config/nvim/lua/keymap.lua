@@ -8,17 +8,17 @@ map("n", "q", "<NOP>", silent)
 
 -- fzf
 map(
-  "n",
-  "<C-p>",
-  ":lua require('fzf-lua').files({ cmd = 'rg --files --follow --no-ignore-vcs --hidden -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*}\" --no-heading --smart-case' })<CR>",
-  silent
+	"n",
+	"<C-p>",
+	":lua require('fzf-lua').files({ cmd = 'rg --files --follow --no-ignore-vcs --hidden -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*}\" --no-heading --smart-case' })<CR>",
+	silent
 )
 map("n", "<leader>gf", ":lua require('fzf-lua').git_files()<CR>", silent)
 map(
-  "n",
-  "<leader>lg",
-  ":lua require('fzf-lua').live_grep({ rg_glob = true, glob_flag = \"--iglob\", exec_empty_query = true, rg_opts = '--hidden --no-ignore -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*}\" --smart-case --no-heading' })<CR>",
-  options
+	"n",
+	"<leader>lg",
+	":lua require('fzf-lua').live_grep_resume({ rg_glob = true, glob_flag = \"--iglob\", exec_empty_query = true, rg_opts = '--hidden --no-ignore -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*}\" --smart-case --no-heading' })<CR>",
+	options
 )
 map("n", "<leader>b", ":lua require('fzf-lua').buffers()<CR>", options)
 map("n", "<leader>of", ":lua require('fzf-lua').oldfiles()<CR>", options)
@@ -27,7 +27,7 @@ map("n", "<leader>of", ":lua require('fzf-lua').oldfiles()<CR>", options)
 map("n", "<leader>m", ":Mason<CR>", silent)
 map("n", "<leader>ra", ":Sad<CR>", silent)
 map("n", "<leader>pc", ":CccPick<CR>", silent)
--- map("n", "<leader>wk", ":WhichKey<CR>", silent)
+map("n", "<leader>wk", ":WhichKey<CR>", silent)
 
 -- yank
 map("n", "<C-a>", "ggVG<CR>", silent)
@@ -38,12 +38,12 @@ map("n", "<leader>ft", ":FloatermToggle<CR>", silent)
 
 -- pick window
 map("n", "<leader>p", function()
-  local winpick = require("winpick")
-  local winid = winpick.select()
+	local winpick = require("winpick")
+	local winid = winpick.select()
 
-  if winid then
-    vim.api.nvim_set_current_win(winid)
-  end
+	if winid then
+		vim.api.nvim_set_current_win(winid)
+	end
 end, silent)
 
 -- glance
@@ -72,8 +72,8 @@ map("n", "<leader>gbc", ":GitBlameCopySHA<CR>", silent)
 map("n", "<leader>gg", ":LazyGit<CR>", silent)
 
 -- worktrees
-map("n", "<leader>wt", ":lua require('telescope').extensions.git_worktree.git_worktrees()<CR>", silent)
-map("n", "<leader>awt", ":lua require('telescope').extensions.git_worktree.create_git_worktree()<CR>", silent)
+-- map("n", "<leader>wt", ":lua require('telescope').extensions.git_worktree.git_worktrees()<CR>", silent)
+-- map("n", "<leader>awt", ":lua require('telescope').extensions.git_worktree.create_git_worktree()<CR>", silent)
 
 -- history
 map("n", "<leader>e", ":NvimTreeToggle<CR>", silent)
@@ -142,11 +142,11 @@ map("n", "<C-t>d", ":tabclose<CR>", silent)
 
 -- buffer controls
 map("n", "<leader>z", ":bp <bar> :bd #<CR>", silent) -- close buffer but keep split
-map("n", "<leader>0", ":b#<CR>", silent)             --  previously active buffer
+map("n", "<leader>0", ":b#<CR>", silent) --  previously active buffer
 
 -- barbar buffer controls
 map("n", "<leader>x", ":only <bar> :BufferCloseAllButCurrentOrPinned<CR>", silent) -- close all buffers except current
-map("n", "<leader>P", ":BufferPin<CR>", silent)                                    -- pin current buffer
+map("n", "<leader>P", ":BufferPin<CR>", silent) -- pin current buffer
 map("n", "<C-h>", ":BufferPrevious<CR>", silent)
 map("n", "<C-l>", ":BufferNext<CR>", silent)
 map("n", "<C-A-h>", ":BufferMovePrevious<CR>", silent)

@@ -34,9 +34,9 @@ vim.opt.laststatus = 3
 vim.opt.backup = true
 vim.opt.swapfile = false
 vim.opt.undofile = true
-vim.opt.undodir = vim.fn.expand("~/.config") .. "/nvim/.undo//"
-vim.opt.backupdir = vim.fn.expand("~/.config") .. "/nvim/.backup//"
-vim.opt.directory = vim.fn.expand("~/.config") .. "/nvim/.swp//"
+vim.opt.undodir = vim.fn.stdpath("config") .. "/nvim/.undo//"
+vim.opt.backupdir = vim.fn.stdpath("config") .. "/nvim/.backup//"
+vim.opt.directory = vim.fn.stdpath("config") .. "/nvim/.swp//"
 vim.opt.sessionoptions = "buffers,help,tabpages,winsize,winpos,terminal,options"
 vim.opt.fileencoding = "utf-8"
 vim.opt.autoread = true
@@ -60,7 +60,6 @@ vim.opt.spelloptions = "camel"
 vim.opt.tabstop = 2
 vim.opt.shiftwidth = 2
 vim.opt.autoindent = true
-vim.opt.expandtab = true
 vim.opt.smartindent = true
 vim.opt.softtabstop = 2
 vim.opt.expandtab = true
@@ -76,7 +75,7 @@ vim.opt.rtp:append("/opt/homebrew/opt/fzf")
 vim.opt.path:append("**")
 vim.opt.wildoptions = "pum"
 vim.opt.wildignore:append(
-  "*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Caches/*,*log*,*.dat*,*.kbx*,*.zip*"
+	"*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Caches/*,*log*,*.dat*,*.kbx*,*.zip*"
 )
 
 -- show
