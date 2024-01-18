@@ -8,9 +8,9 @@ return {
 		"folke/neodev.nvim",
 		"stevearc/conform.nvim",
 		"junegunn/fzf",
-    "gfanto/fzf-lsp.nvim",
+		"gfanto/fzf-lsp.nvim",
 		-- "folke/lsp-colors.nvim",
-		-- "MunifTanjim/prettier.nvim",
+		"MunifTanjim/prettier.nvim",
 		-- "MunifTanjim/eslint.nvim",
 		-- "jose-elias-alvarez/null-ls.nvim",
 	},
@@ -21,7 +21,7 @@ return {
 
 		local group = vim.api.nvim_create_augroup("lsp", {})
 		local capabilities = require("cmp_nvim_lsp").default_capabilities()
-		-- lspconfig.util.root_pattern(".eslintrc", ".eslintrc.js", ".eslintrc.json", "package.json")
+		lspconfig.util.root_pattern(".eslintrc", ".eslintrc.js", ".eslintrc.cjs", ".eslintrc.json", "package.json")
 		capabilities.textDocument.foldingRange = {
 			dynamicRegistration = false,
 			lineFoldingOnly = true,
@@ -110,15 +110,15 @@ return {
 				},
 				formatters_by_ft = {
 					lua = { { "stylua" } },
-					markdown = { { "prettierme", "prettierd", "prettier" } },
-					mdx = { "prettierme", "prettierd", "prettier" },
-					html = { { "prettierme", "prettierd", "prettier" } },
-					javascript = { { "prettierme", "prettierd", "prettier" } },
-					javascriptreact = { { "prettierme", "prettierd", "prettier" } },
-					["javascript.jsx"] = { { "prettierme", "prettierd", "prettier" } },
-					typescript = { { "prettierme", "prettierd", "prettier" } },
-					typescriptreact = { { "prettierme", "prettierd", "prettier" } },
-					["typescript.tsx"] = { { "prettierme", "prettierd", "prettier" } },
+					markdown = { { "prettierd" } },
+					mdx = { { "prettierd" } },
+					html = { { "prettierd" } },
+					javascript = { { "prettierd" } },
+					javascriptreact = { { "prettierd" } },
+					["javascript.jsx"] = { { "prettierd" } },
+					typescript = { { "prettierd" } },
+					typescriptreact = { { "prettierd" } },
+					["typescript.tsx"] = { { "prettierd" } },
 				},
 			})
 		end
@@ -136,6 +136,21 @@ return {
 			capabilities = capabilities,
 			on_attach,
 		})
+
+		-- lspconfig.biome.setup({
+		-- 	cmd = { "biome", "lsp-proxy" },
+		-- 	filetypes = {
+		-- 		"javascript",
+		-- 		"javascriptreact",
+		-- 		"json",
+		-- 		"jsonc",
+		-- 		"typescript",
+		-- 		"typescript.tsx",
+		-- 		"typescriptreact",
+		-- 	},
+		-- 	capabilities = capabilities,
+		-- 	on_attach = on_attach,
+		-- })
 
 		neodev.setup({
 			capabilities = capabilities,

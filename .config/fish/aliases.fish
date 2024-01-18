@@ -42,7 +42,7 @@ abbr x 'exit'
 abbr src 'source ~/.config/fish/config.fish'
 abbr makins 'sudo make && sudo make clean install'
 abbr cl 'clear'
-abbr t 'yarn test'
+abbr t 'swpm test'
 abbr mki 'sudo make && sudo make clean install'
 abbr lk 'logikill'
 
@@ -98,18 +98,16 @@ function wta
     cd -- $branch_name
 end
 
-
 # Webdev
 alias pnpx 'pnpm dlx'
-abbr y 'swpm'
-alias ya 'swpm add'
-alias yr 'swpm remove'
-abbr yw 'swpm workspace'
-abbr yup 'swpm upgrade-interactive'
-abbr yt 'swpm test'
-abbr yb 'swpm build'
-abbr dev 'swpm dev'
-abbr sb 'swpm storybook'
-abbr sblg 'swpm cross-env NODE_OPTIONS=--openssl-legacy-provider start-storybook -p 9000'
-abbr lint 'swpm lint'
-abbr ts 'swpm tsc'
+alias p 'swpm'
+alias pa 'swpm add'
+alias pr 'swpm remove'
+alias pw 'swpm workspace'
+alias pup 'spwm update-interactive'
+alias t 'spwm tst'
+alias dev 'swpm dev'
+alias sb 'swpm storybook'
+alias sblg 'swpm cross-env NODE_OPTIONS=--openssl-legacy-provider start-storybook -p 9000'
+alias lint 'swpm lint'
+

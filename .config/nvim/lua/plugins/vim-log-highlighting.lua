@@ -1,4 +1,4 @@
 return {
-  "MTDL9/vim-log-highlighting",
-  event = "VeryLazy",
+	-- "MTDL9/vim-log-highlighting",
+	-- event = "VeryLazy",
 }

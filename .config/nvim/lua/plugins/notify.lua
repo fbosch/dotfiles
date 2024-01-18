@@ -1,13 +1,14 @@
 return {
-  "rcarriga/nvim-notify",
-  config = function()
-    require("notify").setup({
-      stages = "fade",
-      fps = 60,
-      max_width = 80,
-      top_down = true,
-    })
+	"rcarriga/nvim-notify",
+	config = function()
+		require("notify").setup({
+			border = "rounded",
+			stages = "fade",
+			fps = 100,
+			max_width = 60,
+			top_down = true,
+		})
 
-    vim.notify = require("notify")
-  end,
+		vim.notify = require("notify")
+	end,
 }

@@ -1,6 +1,8 @@
 vim.g.mapleader = " "
 vim.g.spellfile_URL = "http://ftp.vim.org/vim/runtime/spell"
 
+vim.api.nvim_create_user_command("Z", "wa | qa", {})
+
 -- disable netrw
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1

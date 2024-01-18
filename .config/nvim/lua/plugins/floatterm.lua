@@ -1,4 +1,4 @@
 return {
-  "voldikss/vim-floaterm",
-  cmd = "FloatermToggle",
+	"voldikss/vim-floaterm",
+	cmd = "FloatermToggle",
 }

@@ -17,6 +17,7 @@ Library/*
 Desktop/*
 cache/**/*
 Cache/**/*
+.pnpm-store
 **/.yarn/**/*
 **/node_modules/**/*
 *.session
@@ -31,6 +32,7 @@ Cache/**/*
 **/.backup/**/*
 **/.undo/**/*
 **/.sessions/**/*
+**/.pnpm-store/**/*
 **/storybook-static/**/*
 .Trash/**/*
 **/.backup/**/*
