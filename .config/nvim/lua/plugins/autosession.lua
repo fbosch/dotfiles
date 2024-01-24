@@ -10,8 +10,10 @@ return {
 	},
 	config = function()
 		local overseer = require("overseer")
+		local root_dir = vim.fn.expand("~/.config") .. "/nvim/.sessions//"
+
 		require("auto-session").setup({
-			auto_session_root_dir = vim.fn.expand("~/.config") .. "/nvim/.sessions//",
+			auto_session_root_dir = root_dir,
 			-- auto_session_use_git_branch = true,
 			auto_restore_enabled = true,
 			log_level = vim.log.levels.WARN,
@@ -25,7 +27,7 @@ return {
 			pre_save_cmds = {
 				function()
 					overseer.save_task_bundle(
-						get_cwd_as_name(),
+						root_dir .. get_cwd_as_name(),
 						-- Passing nil will use config.opts.save_task_opts. You can call list_tasks() explicitly and
 						-- pass in the results if you want to save specific tasks.
 						nil,
@@ -42,7 +44,7 @@ return {
 			},
 			post_restore_cmds = {
 				function()
-					overseer.load_task_bundle(get_cwd_as_name(), { ignore_missing = true })
+					overseer.load_task_bundle(root_dir .. get_cwd_as_name(), { ignore_missing = true })
 				end,
 			},
 		})

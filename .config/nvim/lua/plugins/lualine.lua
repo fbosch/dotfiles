@@ -4,15 +4,14 @@ return {
 	dependencies = {
 		"kyazdani42/nvim-web-devicons",
 		"f-person/git-blame.nvim",
-		"stevearc/overseer.nvim",
 	},
-	event = { "ColorScheme" },
+	event = "VeryLazy",
 	config = function()
+		local overseer = require("overseer")
+		local git_blame = require("gitblame")
 		vim.g.gitblame_display_virtual_text = 0 -- Disable virtual text
 		vim.g.gitblame_date_format = "%r"
 		vim.g.gitblame_message_template = " <author>  﨟<date>"
-		local overseer = require("overseer")
-		local git_blame = require("gitblame")
 		require("lualine").setup({
 			options = {
 				theme = "auto",
