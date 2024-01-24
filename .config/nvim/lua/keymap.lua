@@ -1,4 +1,4 @@
-local map = vim.keymap.set
+local map = vim.api.nvim_set_keymap
 local options = { noremap = true }
 local silent = { noremap = true, silent = true }
 
@@ -6,18 +6,33 @@ local silent = { noremap = true, silent = true }
 map("n", "<Space>", "<NOP>", silent)
 map("n", "q", "<NOP>", silent)
 
+local colors =
+	'--color=ansi --colors="match:bg:magenta" --colors="match:fg:black" --colors="line:fg:yellow" --colors="path:fg:white" '
+
+local excludeGlob =
+	"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*,**/.pnpm-store/*,**/.backup/*,**/.sessions/*,**/.undo/*,**/.DS_Store}"
+
+local combinedOptions = '--max-columns=200 -g "'
+	.. excludeGlob
+	.. '" --smart-case --no-heading --no-messages '
+	.. colors
+
 -- fzf
 map(
 	"n",
 	"<C-p>",
-	":lua require('fzf-lua').files({ cmd = 'rg --files --follow --no-ignore-vcs --hidden -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*,**/.pnpm-store/*}\" --no-heading --smart-case' })<CR>",
+	":lua require('fzf-lua').files({ cmd = 'rg --files --hidden --follow --no-ignore-vcs --fixed-strings --dfa-size-limit=1G --no-ignore-dot --sort=path "
+		.. combinedOptions
+		.. "' })<CR>",
 	silent
 )
 map("n", "<leader>gf", ":lua require('fzf-lua').git_files()<CR>", silent)
 map(
 	"n",
 	"<leader>lg",
-	":lua require('fzf-lua').live_grep_resume({ rg_glob = true, glob_flag = \"--iglob\", exec_empty_query = true, rg_opts = '--hidden --no-ignore -g \"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*,**/.pnpm-store/*}\" --smart-case --no-heading' })<CR>",
+	":lua require('fzf-lua').live_grep_resume({ rg_glob = true, glob_flag = \"--iglob\", exec_empty_query = false, rg_opts = '"
+		.. combinedOptions
+		.. " --with-filename  '})<CR>",
 	options
 )
 map("n", "<leader>b", ":lua require('fzf-lua').buffers()<CR>", options)
@@ -34,10 +49,10 @@ map("n", "<C-a>", "ggVG<CR>", silent)
 map("n", "<leader>pc", ":let @+=expand('%:p')<CR>", silent)
 
 -- float term
-map("n", "<leader>ft", ":FloatermToggle<CR>", silent)
+map("n", "<leader>ft", ":FTermToggle<CR>", silent)
 
 -- pick window
-map("n", "<leader>p", function()
+vim.keymap.set("n", "<leader>p", function()
 	local winpick = require("winpick")
 	local winid = winpick.select()
 
@@ -162,7 +177,7 @@ map("n", "<C-8>", ":BufferGoto 8<CR>", silent)
 map("n", "<C-9>", ":BufferGoto 9<CR>", silent)
 
 -- trouble toggling
-map("n", "<leader>tx", ":Trouble<CR>", silent)
+map("n", "<leader>tx", ":TroubleToggle<CR>", silent)
 map("n", "<leader>tw", ":Trouble workspace_diagnostics<CR>", silent)
 map("n", "<leader>td", ":Trouble document_diagnostics<CR>", silent)
 map("n", "<leader>tt", ":TodoTrouble<CR>", silent)

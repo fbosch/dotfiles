@@ -1,17 +1,16 @@
 return {
 	"j-hui/fidget.nvim",
-	tag = "legacy",
-	event = "VeryLazy",
+	event = "BufWinEnter",
 	config = function()
 		require("fidget").setup({
-			text = {
-				spinner = "dots_scrolling",
-				done = "",
+			progress = {
+				display = {
+					done_icon = "",
+					progress_icon = { pattern = "dots_scrolling" },
+				},
 			},
-			window = {
-				zindex = 1000,
-				relative = "editor",
-				blend = 20,
+			notification = {
+				filter = vim.log.levels.INFO,
 			},
 		})
 	end,

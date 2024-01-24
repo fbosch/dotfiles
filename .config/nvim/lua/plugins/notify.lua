@@ -4,7 +4,7 @@ return {
 		require("notify").setup({
 			border = "rounded",
 			stages = "fade",
-			fps = 100,
+			fps = 60,
 			max_width = 60,
 			top_down = true,
 		})

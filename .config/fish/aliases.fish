@@ -6,9 +6,10 @@ abbr cfr 'config remove'
 abbr cfs 'config status'
 
 # Programs
-alias vim 'nvim'
+alias nvim 'nvim -n -i NONE'
 abbr n 'nvim'
 abbr v 'nvim'
+
 abbr bu 'brew upgrade'
 alias vimdiff 'nvim -d'
 abbr kssh 'kitty +kitten ssh'
@@ -66,7 +67,7 @@ abbr atm 'tmux attach-session -t'
 # Git
 abbr g 'git'
 abbr gs 'git status'
-abbr gd 'git diff'
+abbr gd 'git diff -- . ":!pnpm-lock.yaml" ":!package-lock.json" "!:yarn.lock"'
 abbr gp 'git push'
 abbr gpl 'git pull'
 abbr gf 'git fetch'
@@ -80,6 +81,7 @@ abbr gaa 'git add --all'
 abbr gsa 'git stash apply'
 abbr gpo 'git pull origin'
 abbr gdorig 'find . -name \*.orig -delete'
+abbr cm 'aicommits --type conventional -x "pnpm-lock.yaml"'
 abbr gcm 'git commit -m "'
 abbr gca 'git commit --amend --no-edit'
 abbr gmt 'git mergetool'
@@ -99,6 +101,7 @@ function wta
 end
 
 # Webdev
+alias scr 'jq -r \'.scripts | to_entries[] | "\(.key):\n \(.value)\n"\' package.json | awk \'BEGIN{idx=1} {print "\033[3"idx"m" $0 "\033[0m"; idx = idx % 3 + 1}\''
 alias pnpx 'pnpm dlx'
 alias p 'swpm'
 alias pa 'swpm add'

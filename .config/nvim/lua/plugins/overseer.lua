@@ -4,6 +4,7 @@ return {
 		"nvim-telescope/telescope.nvim",
 		"stevearc/dressing.nvim",
 	},
+	event = "BufWinEnter",
 	config = function()
 		require("overseer").setup({
 			strategy = {

@@ -1,8 +1,9 @@
 return {
 	"kyazdani42/nvim-tree.lua",
 	event = "VeryLazy",
-	dependencies = { "kyazdani42/nvim-web-devicons", "mcchrish/zenbones.nvim" },
+	dependencies = { "nvim-tree/nvim-web-devicons", "mcchrish/zenbones.nvim" },
 	config = function()
+		require("nvim-web-devicons").setup()
 		require("nvim-tree").setup({
 			sync_root_with_cwd = true,
 			respect_buf_cwd = true,
@@ -20,8 +21,8 @@ return {
 				},
 			},
 			view = {
-				number = true,
-				relativenumber = true,
+				number = false,
+				relativenumber = false,
 				adaptive_size = true,
 				-- hide_root_folder = true,
 			},
