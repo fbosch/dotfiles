@@ -9,8 +9,8 @@ return {
 		local barbecue = require("barbecue")
 		barbecue.setup({
 			create_autocmd = true,
-			show_basename = true,
-			show_dirname = true,
+			show_basename = false,
+			show_dirname = false,
 			show_modified = true,
 			show_navic = true,
 			theme = {
