@@ -9,7 +9,7 @@ return {
 		local barbecue = require("barbecue")
 		barbecue.setup({
 			create_autocmd = true,
-			show_basename = false,
+			show_basename = true,
 			show_dirname = true,
 			show_modified = true,
 			show_navic = true,
@@ -31,7 +31,6 @@ return {
 			},
 		})
 		-- vim.api.nvim_create_autocmd({
-		-- 	"WinScrolled", -- or WinResized on NVIM-v0.9 and higher
 		-- 	"WinResized",
 		-- 	"BufWinEnter",
 		-- 	"CursorHold",

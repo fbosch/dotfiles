@@ -4,6 +4,7 @@ return {
 		"stevearc/dressing.nvim",
 	},
 	event = "VeryLazy",
+	priority = 70,
 	config = function()
 		vim.defer_fn(function()
 			require("overseer").setup({

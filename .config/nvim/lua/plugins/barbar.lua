@@ -1,9 +1,9 @@
 return {
 	"romgrk/barbar.nvim",
 	dependencies = { "kyazdani42/nvim-web-devicons" },
-	priority = 100,
 	event = { "BufRead", "LspAttach" },
 	cmd = { "BufferNext", "BufferPrevious", "BufferClose", "BufferPick" },
+	priority = 50,
 	config = function()
 		require("bufferline").setup({
 			animation = false,

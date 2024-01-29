@@ -1,4 +1,4 @@
 return {
-  "tpope/vim-commentary",
-  event = "VeryLazy"
+	"tpope/vim-commentary",
+	event = "BufRead",
 }

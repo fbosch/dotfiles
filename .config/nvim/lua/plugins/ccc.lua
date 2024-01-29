@@ -1,6 +1,7 @@
 return {
 	"uga-rosa/ccc.nvim",
-	event = "BufRead",
+	cmd = "CccPick",
+	event = { "BufRead" },
 	config = function()
 		local ccc = require("ccc")
 		ccc.setup({

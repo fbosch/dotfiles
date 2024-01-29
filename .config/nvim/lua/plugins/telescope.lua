@@ -6,7 +6,7 @@ return {
 		"stevearc/dressing.nvim",
 	},
 	event = "VeryLazy",
-	priority = 1000,
+	priority = 20,
 	config = function()
 		local telescope = require("telescope")
 		telescope.load_extension("file_browser")

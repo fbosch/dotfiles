@@ -6,43 +6,18 @@ local silent = { noremap = true, silent = true }
 map("n", "<Space>", "<NOP>", silent)
 map("n", "q", "<NOP>", silent)
 
-local colors =
-	'--color=ansi --colors="match:bg:magenta" --colors="match:fg:black" --colors="line:fg:yellow" --colors="path:fg:white" '
-
-local excludeGlob =
-	"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*,**/.pnpm-store/*,**/.backup/*,**/.sessions/*,**/.undo/*,**/.DS_Store}"
-
-local combinedOptions = '--max-columns=200 -g "'
-	.. excludeGlob
-	.. '" --smart-case --no-heading --no-messages '
-	.. colors
-
 -- fzf
-map(
-	"n",
-	"<C-p>",
-	":lua require('fzf-lua').files({ cmd = 'rg --files --hidden --follow --no-ignore-vcs --fixed-strings --dfa-size-limit=1G --no-ignore-dot --sort=path "
-		.. combinedOptions
-		.. "' })<CR>",
-	silent
-)
-map("n", "<leader>gf", ":lua require('fzf-lua').git_files()<CR>", silent)
-map(
-	"n",
-	"<leader>lg",
-	":lua require('fzf-lua').live_grep_resume({ rg_glob = true, glob_flag = \"--iglob\", exec_empty_query = false, rg_opts = '"
-		.. combinedOptions
-		.. " --with-filename  '})<CR>",
-	options
-)
-map("n", "<leader>b", ":lua require('fzf-lua').buffers()<CR>", options)
-map("n", "<leader>of", ":lua require('fzf-lua').oldfiles()<CR>", options)
+map("n", "<C-p>", ":FzfFd<CR>", silent)
+map("n", "<leader>lg", ":FzfRg<CR>", options)
+map("n", "<leader>b", ":FzfLua buffers<CR>", options)
+map("n", "<leader>of", ":FzfLua oldfiles<CR>", options)
 
 -- misc
 map("n", "<leader>m", ":Mason<CR>", silent)
 map("n", "<leader>ra", ":Sad<CR>", silent)
 map("n", "<leader>pc", ":CccPick<CR>", silent)
 map("n", "<leader>wk", ":WhichKey<CR>", silent)
+map("n", "<leader>tw", "<CMD>TWValues<CR>", silent)
 
 -- yank
 map("n", "<C-a>", "ggVG<CR>", silent)

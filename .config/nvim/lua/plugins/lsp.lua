@@ -3,13 +3,30 @@ return {
 	event = { "BufReadPre", "BufNewFile" },
 	dependencies = {
 		"lukas-reineke/lsp-format.nvim",
-		"jose-elias-alvarez/nvim-lsp-ts-utils",
+		{
+			"jose-elias-alvarez/nvim-lsp-ts-utils",
+			ft = { "typescript", "typescriptreact" },
+		},
+		{
+			"MunifTanjim/prettier.nvim",
+			ft = {
+				"javascript",
+				"javascriptreact",
+				"typescript",
+				"typescriptreact",
+				"css",
+				"scss",
+				"json",
+				"html",
+				"vue",
+			},
+		},
 		"folke/neodev.nvim",
 		"stevearc/conform.nvim",
 		"junegunn/fzf",
 		"gfanto/fzf-lsp.nvim",
-		"MunifTanjim/prettier.nvim",
 	},
+	priority = 50,
 	config = function()
 		local neodev = require("neodev")
 		local lspconfig = require("lspconfig")

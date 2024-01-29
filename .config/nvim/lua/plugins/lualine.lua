@@ -1,11 +1,11 @@
 return {
 	"nvim-lualine/lualine.nvim",
-	priority = 100,
 	dependencies = {
 		"kyazdani42/nvim-web-devicons",
 		"f-person/git-blame.nvim",
 	},
 	event = { "BufRead", "LspAttach" },
+	priority = 50,
 	config = function()
 		local overseer = require("overseer")
 		local git_blame = require("gitblame")
