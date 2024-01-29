@@ -20,10 +20,6 @@ require("lazy").setup("plugins", {
 	change_detection = {
 		notify = false,
 	},
-	checker = {
-		enabled = true,
-		frequency = 3600,
-	},
 	performance = {
 		cache = {
 			enabled = true,

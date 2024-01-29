@@ -2,53 +2,41 @@ return {
 	"neovim/nvim-lspconfig",
 	event = { "BufReadPre", "BufNewFile" },
 	dependencies = {
-		"williamboman/mason.nvim",
 		"lukas-reineke/lsp-format.nvim",
 		"jose-elias-alvarez/nvim-lsp-ts-utils",
 		"folke/neodev.nvim",
 		"stevearc/conform.nvim",
 		"junegunn/fzf",
 		"gfanto/fzf-lsp.nvim",
-		-- "folke/lsp-colors.nvim",
 		"MunifTanjim/prettier.nvim",
-		-- "MunifTanjim/eslint.nvim",
-		-- "jose-elias-alvarez/null-ls.nvim",
 	},
 	config = function()
 		local neodev = require("neodev")
 		local lspconfig = require("lspconfig")
 		local conform = require("conform")
 
-		local group = vim.api.nvim_create_augroup("lsp", {})
 		local capabilities = require("cmp_nvim_lsp").default_capabilities()
-		lspconfig.util.root_pattern(".eslintrc", ".eslintrc.js", ".eslintrc.cjs", ".eslintrc.json", "package.json")
 		capabilities.textDocument.foldingRange = {
 			dynamicRegistration = false,
 			lineFoldingOnly = true,
 		}
+		lspconfig.util.root_pattern(".eslintrc", ".eslintrc.js", ".eslintrc.cjs", ".eslintrc.json", "package.json")
 
-		local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
+		local group = vim.api.nvim_create_augroup("lsp", {})
+
+		local formatting_augroup = vim.api.nvim_create_augroup("LspFormatting", {})
 
 		require("fzf_lsp").setup()
-		require("mason").setup({
-			ui = {
-				border = "rounded",
-				icons = {
-					package_installed = "",
-					package_pending = "",
-					package_uninstalled = "",
-				},
-			},
-		})
 
 		vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
 			border = "rounded",
 		})
+
 		local on_attach = function(client, bufnr)
 			if client.supports_method("textDocument/formatting") then
-				vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
+				vim.api.nvim_clear_autocmds({ group = formatting_augroup, buffer = bufnr })
 				vim.api.nvim_create_autocmd("BufWritePre", {
-					group = augroup,
+					group = formatting_augroup,
 					buffer = bufnr,
 					callback = function()
 						conform.format({ bufnr = bufnr })
@@ -98,10 +86,12 @@ return {
 						source = "always",
 						prefix = "  ",
 						scope = "cursor",
+						max_width = 100,
 					}
 					vim.diagnostic.open_float(nil, opts)
 				end,
 			})
+
 			conform.setup({
 				format_on_save = {
 					lsp_fallback = true,
@@ -136,21 +126,6 @@ return {
 			capabilities = capabilities,
 			on_attach,
 		})
-
-		-- lspconfig.biome.setup({
-		-- 	cmd = { "biome", "lsp-proxy" },
-		-- 	filetypes = {
-		-- 		"javascript",
-		-- 		"javascriptreact",
-		-- 		"json",
-		-- 		"jsonc",
-		-- 		"typescript",
-		-- 		"typescript.tsx",
-		-- 		"typescriptreact",
-		-- 	},
-		-- 	capabilities = capabilities,
-		-- 	on_attach = on_attach,
-		-- })
 
 		neodev.setup({
 			capabilities = capabilities,

@@ -56,11 +56,12 @@ vim.o.foldenable = true
 vim.opt.foldlevelstart = 0
 vim.opt.foldmethod = "marker"
 vim.opt.backspace = "indent,eol,start"
+vim.wo.foldtext = ""
 vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
 
 -- spellchecking
-vim.opt.spell = false
-vim.opt.spelllang = "en,da"
+vim.opt.spell = true
+vim.opt.spelllang = "en_us,da"
 vim.opt.spelloptions = "camel"
 
 -- tab & indentation

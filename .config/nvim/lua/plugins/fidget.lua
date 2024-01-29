@@ -1,6 +1,6 @@
 return {
 	"j-hui/fidget.nvim",
-	event = "BufWinEnter",
+	event = "VeryLazy",
 	config = function()
 		require("fidget").setup({
 			progress = {

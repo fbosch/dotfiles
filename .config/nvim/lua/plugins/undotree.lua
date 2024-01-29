@@ -1,7 +1,7 @@
 return {
-  "mbbill/undotree",
-  event = "VeryLazy",
-  config = function()
-    vim.g.undotree_WindowLayout = 2
-  end
+	"mbbill/undotree",
+	cmd = { "UndotreeToggle", "UndotreeShow", "UndotreeHide" },
+	config = function()
+		vim.g.undotree_WindowLayout = 2
+	end,
 }

@@ -5,7 +5,7 @@ return {
 		"kyazdani42/nvim-web-devicons",
 		"f-person/git-blame.nvim",
 	},
-	event = "VeryLazy",
+	event = { "BufRead", "LspAttach" },
 	config = function()
 		local overseer = require("overseer")
 		local git_blame = require("gitblame")

@@ -12,6 +12,8 @@ return {
 				"  .",
 				"   ",
 			},
+			pretty_errors = true,
 		})
+		vim.api.nvim_set_keymap("n", "<leader>ts", ":TSC<CR>", { noremap = true, silent = true })
 	end,
 }

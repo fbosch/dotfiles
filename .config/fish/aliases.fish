@@ -53,11 +53,12 @@ alias chrdebug '/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome -
 
 # Extended defaults
 alias cat 'bat --style=plain --color=always'
-alias ls 'exa --icons -F'
+alias ls 'eza --icons -F'
 alias l 'ls -lh'
-alias la 'ls -a'
+alias la 'ls -A'
 alias lla 'ls -la'
-alias tree 'exa --tree --level=2'
+alias ld 'ls -l --sort=date --ignore-glob="node_modules" -D --time-style=relative'
+alias lt 'exa --tree --level=2 --sort=date --ignore-glob="node_modules"'
 
 # Tmux
 abbr xtm 'pkill -f tmux'

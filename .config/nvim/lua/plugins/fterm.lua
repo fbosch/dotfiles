@@ -1,6 +1,6 @@
 return {
 	"numtostr/FTerm.nvim",
-	event = "VeryLazy",
+	cmd = { "FTermOpen", "FTermClose", "FTermExit", "FTermToggle" },
 	config = function()
 		require("FTerm").setup({
 			border = "rounded",

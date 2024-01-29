@@ -1,7 +1,7 @@
 return {
 	"kyazdani42/nvim-tree.lua",
-	event = "VeryLazy",
 	dependencies = { "nvim-tree/nvim-web-devicons", "mcchrish/zenbones.nvim" },
+	cmd = "NvimTreeToggle",
 	config = function()
 		require("nvim-web-devicons").setup()
 		require("nvim-tree").setup({

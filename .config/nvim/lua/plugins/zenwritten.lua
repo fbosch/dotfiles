@@ -2,13 +2,16 @@ return {
 	"mcchrish/zenbones.nvim",
 	dependencies = { "rktjmp/lush.nvim" },
 	priority = 1000,
+
 	config = function()
-		vim.cmd([[colorscheme zenwritten]])
 		vim.opt.ruler = true
 		vim.opt.background = "dark"
 		vim.opt.pumblend = 10
 		vim.opt.winblend = 0
 		vim.opt.scrolloff = 8
+
+		vim.cmd([[colorscheme zenwritten]])
+
 		vim.api.nvim_set_hl(0, "TreesitterContext", { bg = "#2c2c2c" })
 		vim.api.nvim_set_hl(0, "SpellBad", { undercurl = true, sp = "#A8334C" })
 		vim.api.nvim_set_hl(0, "MatchParen", { fg = "#252525", bg = "#6e8aa5" })
@@ -53,17 +56,6 @@ return {
 		vim.api.nvim_set_hl(0, "NotifyDEBUGTitle", { fg = "#aaaaaa" })
 		vim.api.nvim_set_hl(0, "NotifyTRACETitle", { fg = "#b279a7" })
 
-		-- diagnostics
-		vim.api.nvim_set_hl(0, "BufferDefaultVisibleHINT", { fg = "#b279a7" })
-		vim.api.nvim_set_hl(0, "BufferDefaultCurrentHINT", { fg = "#b279a7" })
-		vim.api.nvim_set_hl(0, "BufferDefaultInactiveHINT", { fg = "#b279a7", bg = "#252525" })
-		vim.api.nvim_set_hl(0, "BufferDefaultVisibleERROR", { fg = "#DE6E7C" })
-		vim.api.nvim_set_hl(0, "BufferDefaultCurrentERROR", { fg = "#DE6E7C" })
-		vim.api.nvim_set_hl(0, "BufferDefaultInactiveERROR", { fg = "#DE6E7C", bg = "#252525" })
-		vim.api.nvim_set_hl(0, "BufferDefaultVisibleWARN", { fg = "#D68C67" })
-		vim.api.nvim_set_hl(0, "BufferDefaultCurrentWARN", { fg = "#D68C67" })
-		vim.api.nvim_set_hl(0, "BufferDefaultInactiveWARN", { fg = "#D68C67", bg = "#252525" })
-
 		-- fold
 		vim.api.nvim_set_hl(0, "Folded", { fg = "#bbbbbb", bg = "#252525" })
 
@@ -72,19 +64,5 @@ return {
 
 		-- fzf
 		vim.api.nvim_set_hl(0, "FzfLuaBorder", { fg = "#bbbbbb" })
-
-		-- diagnostics
-		vim.api.nvim_set_hl(0, "BufferDefaultVisibleHINT", { fg = "#b279a7" })
-		vim.api.nvim_set_hl(0, "BufferDefaultCurrentHINT", { fg = "#b279a7" })
-		vim.api.nvim_set_hl(0, "BufferDefaultInactiveHINT", { fg = "#b279a7", bg = "#252525" })
-		vim.api.nvim_set_hl(0, "BufferDefaultVisibleINFO", { fg = "#97bdde" })
-		vim.api.nvim_set_hl(0, "BufferDefaultCurrentINFO", { fg = "#97bdde" })
-		vim.api.nvim_set_hl(0, "BufferDefaultInactiveINFO", { fg = "#97bdde", bg = "#252525" })
-		vim.api.nvim_set_hl(0, "BufferDefaultVisibleERROR", { fg = "#DE6E7C" })
-		vim.api.nvim_set_hl(0, "BufferDefaultCurrentERROR", { fg = "#DE6E7C" })
-		vim.api.nvim_set_hl(0, "BufferDefaultInactiveERROR", { fg = "#DE6E7C", bg = "#252525" })
-		vim.api.nvim_set_hl(0, "BufferDefaultVisibleWARN", { fg = "#D68C67" })
-		vim.api.nvim_set_hl(0, "BufferDefaultCurrentWARN", { fg = "#D68C67" })
-		vim.api.nvim_set_hl(0, "BufferDefaultInactiveWARN", { fg = "#D68C67", bg = "#252525" })
 	end,
 }

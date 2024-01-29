@@ -25,7 +25,7 @@ return {
 			build = "./install.sh",
 		},
 	},
-	event = "VeryLazy",
+	event = { "InsertEnter" },
 	priority = 100,
 	config = function()
 		local cmp = require("cmp")

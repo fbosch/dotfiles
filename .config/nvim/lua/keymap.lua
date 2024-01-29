@@ -52,18 +52,7 @@ map("n", "<leader>pc", ":let @+=expand('%:p')<CR>", silent)
 map("n", "<leader>ft", ":FTermToggle<CR>", silent)
 
 -- pick window
-vim.keymap.set("n", "<leader>p", function()
-	local winpick = require("winpick")
-	local winid = winpick.select()
-
-	if winid then
-		vim.api.nvim_set_current_win(winid)
-	end
-end, silent)
-
--- glance
-map("n", "<leader>gD", ":Glance definitions<CR>", silent)
-map("n", "<leader>gR", ":Glance references<CR>", silent)
+map("n", "<leader>pw", ":PickWindow<CR>", silent)
 
 -- dap
 -- map("n", "<leader>du", ":lua require('dapui').toggle()<CR>", silent)
@@ -175,16 +164,6 @@ map("n", "<C-6>", ":BufferGoto 6<CR>", silent)
 map("n", "<C-7>", ":BufferGoto 7<CR>", silent)
 map("n", "<C-8>", ":BufferGoto 8<CR>", silent)
 map("n", "<C-9>", ":BufferGoto 9<CR>", silent)
-
--- trouble toggling
-map("n", "<leader>tx", ":TroubleToggle<CR>", silent)
-map("n", "<leader>tw", ":Trouble workspace_diagnostics<CR>", silent)
-map("n", "<leader>td", ":Trouble document_diagnostics<CR>", silent)
-map("n", "<leader>tt", ":TodoTrouble<CR>", silent)
-map("n", "<leader>tl", ":Trouble loclist<CR>", silent)
-map("n", "<leader>tq", ":Trouble quickfix<CR>", silent)
-map("n", "<leader>tr", ":Trouble lsp_references<CR>", silent)
-map("n", "<leader>tz", ":TroubleClose<CR>", silent)
 
 -- hop bindings
 map("n", "<leader>h", ":HopWord<CR>", silent)

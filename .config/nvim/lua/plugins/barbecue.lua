@@ -10,7 +10,7 @@ return {
 		barbecue.setup({
 			create_autocmd = true,
 			show_basename = false,
-			show_dirname = false,
+			show_dirname = true,
 			show_modified = true,
 			show_navic = true,
 			theme = {

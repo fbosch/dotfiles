@@ -1,6 +1,6 @@
 return {
 	"monkoose/matchparen.nvim",
-	event = "VeryLazy",
+	event = { "InsertEnter" },
 	config = function()
 		require("matchparen").setup({})
 	end,

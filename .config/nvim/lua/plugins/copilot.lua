@@ -27,11 +27,7 @@ return {
 					dismiss = "<C-\\>",
 				},
 			},
-			server_opts_overrides = {
-				handlers = {},
-			},
 		})
-
 		local typescript_filetypes = {
 			"javascript",
 			"javascriptreact",
@@ -40,8 +36,11 @@ return {
 		}
 		api.notify_accepted = function(client, params)
 			return api.request(client, "notifyAccepted", params, function()
+				-- auto import TypeScript dependencies after suggestion is accepted
 				if vim.tbl_contains(typescript_filetypes, vim.bo.filetype) then
-					vim.cmd("TSLspImportCurrent")
+					vim.defer_fn(function()
+						vim.cmd("TSLspImportAll")
+					end, 100)
 				end
 			end)
 		end

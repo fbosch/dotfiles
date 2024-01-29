@@ -1,9 +1,16 @@
 return {
-  "phaazon/hop.nvim",
-  event = "VeryLazy",
-  config = function()
-    require("hop").setup({
-      keys = "etovxqpdygfblzhckisuran"
-    })
-  end
+	"phaazon/hop.nvim",
+	cmd = {
+		"HopWord",
+		"HopWordCurrentLine",
+		"HowLineStart",
+		"HopLineStartAC",
+		"HopLineStartBC",
+		"HopVertical",
+	},
+	config = function()
+		require("hop").setup({
+			keys = "etovxqpdygfblzhckisuran",
+		})
+	end,
 }
