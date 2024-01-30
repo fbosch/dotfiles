@@ -57,7 +57,7 @@ return {
 
 		vim.api.nvim_create_user_command("FzfFd", function()
 			fzf.files({
-				cmd = "fd --threads=4 --color=always",
+				cmd = "fd --threads=4 --color=always -tf",
 			})
 		end, {})
 

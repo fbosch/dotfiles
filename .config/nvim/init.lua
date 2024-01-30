@@ -2,8 +2,6 @@ vim.loader.enable()
 vim.g.mapleader = " "
 vim.g.spellfile_URL = "http://ftp.vim.org/vim/runtime/spell"
 
-vim.api.nvim_create_user_command("Z", "wa | qa", {})
-
 -- disable built-in plugins
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
@@ -44,7 +42,7 @@ vim.opt.undofile = true
 vim.opt.undodir = vim.fn.stdpath("config") .. "/nvim/.undo//"
 vim.opt.backupdir = vim.fn.stdpath("config") .. "/nvim/.backup//"
 vim.opt.directory = vim.fn.stdpath("config") .. "/nvim/.swp//"
-vim.opt.sessionoptions = "buffers,help,tabpages,winsize,winpos,terminal,options"
+vim.opt.sessionoptions = "buffers,help,tabpages,winsize,winpos,options"
 vim.opt.fileencoding = "utf-8"
 vim.opt.autoread = true
 
@@ -60,7 +58,7 @@ vim.wo.foldtext = ""
 vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
 
 -- spellchecking
-vim.opt.spell = true
+vim.opt.spell = false
 vim.opt.spelllang = "en_us,da"
 vim.opt.spelloptions = "camel"
 
@@ -102,6 +100,7 @@ vim.opt.smartcase = true
 vim.opt.incsearch = true
 vim.opt.hlsearch = false
 
+vim.api.nvim_create_user_command("Z", "wa | qa", {})
 require("keymap")
 require("autocmd")
 require("plugin")

@@ -15,6 +15,7 @@ return {
 				javascriptreact = true,
 				typescript = true,
 				typescriptreact = true,
+				rust = true,
 				["*"] = false,
 			},
 			suggestion = {

@@ -37,7 +37,14 @@ return {
 			dynamicRegistration = false,
 			lineFoldingOnly = true,
 		}
-		lspconfig.util.root_pattern(".eslintrc", ".eslintrc.js", ".eslintrc.cjs", ".eslintrc.json", "package.json")
+		lspconfig.util.root_pattern(
+			".eslintrc",
+			".eslintrc.js",
+			".eslintrc.cjs",
+			".eslintrc.json",
+			"package.json",
+			"Cargo.toml"
+		)
 
 		local group = vim.api.nvim_create_augroup("lsp", {})
 
@@ -126,6 +133,7 @@ return {
 					typescript = { { "prettierd" } },
 					typescriptreact = { { "prettierd" } },
 					["typescript.tsx"] = { { "prettierd" } },
+					rust = { { "cargo fmt -- --force" } },
 				},
 			})
 		end
@@ -155,6 +163,11 @@ return {
 		})
 
 		lspconfig.html.setup({
+			capabilities = capabilities,
+			on_attach = on_attach,
+		})
+
+		lspconfig.rust_analyzer.setup({
 			capabilities = capabilities,
 			on_attach = on_attach,
 		})

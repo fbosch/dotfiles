@@ -5,10 +5,15 @@ return {
 	cmd = { "BufferNext", "BufferPrevious", "BufferClose", "BufferPick" },
 	priority = 50,
 	config = function()
-		require("bufferline").setup({
+		vim.opt.sessionoptions:append("globals")
+		require("barbar").setup({
 			animation = false,
 			auto_hide = true,
 			maximum_padding = 6,
+			-- sidebar_filetypes = {
+			-- 	NvimTree = true,
+			-- 	undotree = { text = "undotree" },
+			-- },
 			icons = {
 				pinned = {
 					button = "",
