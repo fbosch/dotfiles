@@ -1,8 +1,7 @@
 return {
 	"mrjones2014/smart-splits.nvim",
 	dependencies = "kwkarlwang/bufresize.nvim",
-	event = { "VeryLazy" },
-	cmd = { "SmartResizeUp", "SmartResizeDown", "SmartResizeLeft", "SmartResizeRight" },
+	cmd = { "SmartResizeLeft", "SmartResizeRight", "SmartResizeUp", "SmartResizeDown" },
 	keys = {
 		{
 			mode = { "n" },
@@ -30,10 +29,13 @@ return {
 		},
 	},
 	config = function()
+		local bufresize = require("bufresize")
+
+		bufresize.setup()
 		require("smart-splits").setup({
 			resize_mode = {
 				hooks = {
-					on_leave = require("bufresize").register,
+					on_leave = bufresize.register,
 				},
 			},
 		})

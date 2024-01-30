@@ -4,7 +4,7 @@ return {
 	keys = {
 		{
 			mode = "n",
-			"<leader>tt",
+			"<leader>ft",
 			"<cmd>FTermToggle<cr>",
 			desc = "toggle floating terminal",
 		},

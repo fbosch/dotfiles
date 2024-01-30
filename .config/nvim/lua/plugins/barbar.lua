@@ -22,7 +22,7 @@ return {
 		{
 			mode = { "n" },
 			"<leader>x",
-			"<cmd>only <bar> <cmd>BufferCloseAllButCurrentOrPinned<cr>",
+			":only <bar> :BufferCloseAllButCurrentOrPinned<cr>",
 			desc = "close all but currentl active buffer or pinned buffers",
 		},
 		{
