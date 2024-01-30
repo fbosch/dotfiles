@@ -1,6 +1,14 @@
 return {
 	"gbrlsnchs/winpick.nvim",
 	cmd = { "PickWindow" },
+	keys = {
+		{
+			mode = "n",
+			"<leader>pw",
+			"<cmd>PickWindow<cr>",
+			desc = "pick window",
+		},
+	},
 	config = function()
 		local winpick = require("winpick")
 		winpick.setup({

@@ -14,7 +14,7 @@ return {
 		require("auto-session").setup({
 			auto_session_root_dir = root_dir,
 			-- auto_session_use_git_branch = true,
-			auto_restore_enabled = true,
+			auto_restore_enabled = false,
 			log_level = vim.log.levels.WARN,
 			cwd_change_handling = {
 				restore_upcoming_session = true,

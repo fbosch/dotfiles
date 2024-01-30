@@ -1,6 +1,14 @@
 return {
 	"numtostr/FTerm.nvim",
 	cmd = { "FTermOpen", "FTermClose", "FTermExit", "FTermToggle" },
+	keys = {
+		{
+			mode = "n",
+			"<leader>tt",
+			"<cmd>FTermToggle<cr>",
+			desc = "toggle floating terminal",
+		},
+	},
 	config = function()
 		require("FTerm").setup({
 			border = "rounded",

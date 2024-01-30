@@ -1,6 +1,20 @@
 return {
 	"kyazdani42/nvim-tree.lua",
 	dependencies = { "nvim-tree/nvim-web-devicons", "mcchrish/zenbones.nvim" },
+	keys = {
+		{
+			mode = { "n" },
+			"<leader>e",
+			"<cmd>NvimTreeToggle<cr>",
+			desc = "toggle file explorer",
+		},
+		{
+			mode = { "n" },
+			"<leader>ff",
+			"<cmd>NvimTreeFindFile<cr>",
+			desc = "find file in file explorer",
+		},
+	},
 	config = function()
 		require("nvim-web-devicons").setup()
 		require("nvim-tree").setup({

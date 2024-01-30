@@ -2,6 +2,32 @@ return {
 	"ibhagwan/fzf-lua",
 	dependencies = { "kyazdani42/nvim-web-devicons" },
 	cmd = { "FzfLua", "FzfFd", "FzfRg" },
+	keys = {
+		{
+			mode = { "n" },
+			"<C-p>",
+			"<cmd>FzfFd<cr>",
+			desc = "find files",
+		},
+		{
+			mode = { "n" },
+			"<leader>lg",
+			"<cmd>FzfRg<cr>",
+			desc = "livegrep ripgrep search",
+		},
+		{
+			mode = { "n" },
+			"<leader>b",
+			"<cmd>FzfLua buffers<cr>",
+			desc = "buffers",
+		},
+		{
+			mode = { "n" },
+			"<leader>of",
+			"<cmd>FzfLua oldfiles<cr>",
+			desc = "oldfiles",
+		},
+	},
 	config = function()
 		local fzf = require("fzf-lua")
 		fzf.setup({

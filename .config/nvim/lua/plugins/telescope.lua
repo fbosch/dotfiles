@@ -7,6 +7,14 @@ return {
 	},
 	event = "VeryLazy",
 	priority = 20,
+	keys = {
+		{
+			mode = { "n" },
+			"<leader>gg",
+			"<cmd>LazyGit<cr>",
+			desc = "lazygit",
+		},
+	},
 	config = function()
 		local telescope = require("telescope")
 		telescope.load_extension("file_browser")

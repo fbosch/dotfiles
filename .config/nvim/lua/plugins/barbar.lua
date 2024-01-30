@@ -1,19 +1,68 @@
+local function buffer_index_keybinds()
+	local values = {}
+	for i = 1, 9 do
+		local value = {
+			mode = { "n" },
+			"<C-" .. i .. ">",
+			"<cmd>BufferGoto " .. i .. "<cr>",
+			desc = "go to buffer " .. i,
+		}
+		table.insert(values, value)
+	end
+	return values
+end
+
 return {
 	"romgrk/barbar.nvim",
 	dependencies = { "kyazdani42/nvim-web-devicons" },
 	event = { "BufRead", "LspAttach" },
 	cmd = { "BufferNext", "BufferPrevious", "BufferClose", "BufferPick" },
 	priority = 50,
+	keys = {
+		{
+			mode = { "n" },
+			"<leader>x",
+			"<cmd>only <bar> <cmd>BufferCloseAllButCurrentOrPinned<cr>",
+			desc = "close all but currentl active buffer or pinned buffers",
+		},
+		{
+			mode = { "n" },
+			"<leader>P",
+			"<cmd>BufferPin<cr>",
+			desc = "pin current buffer",
+		},
+		{
+			mode = { "n" },
+			"<C-h>",
+			"<cmd>BufferPrevious<cr>",
+			desc = "previous buffer",
+		},
+		{
+			mode = { "n" },
+			"<C-l>",
+			"<cmd>BufferNext<cr>",
+			desc = "next buffer",
+		},
+		{
+			mode = { "n" },
+			"<C-A-h>",
+			"<cmd>BufferMovePrevious<cr>",
+			desc = "move buffer left",
+		},
+		{
+			mode = { "n" },
+			"<C-A-l>",
+			"<cmd>BufferMoveNext<cr>",
+			desc = "move buffer right",
+		},
+		unpack(buffer_index_keybinds()),
+	},
 	config = function()
 		vim.opt.sessionoptions:append("globals")
 		require("barbar").setup({
 			animation = false,
 			auto_hide = true,
 			maximum_padding = 6,
-			-- sidebar_filetypes = {
-			-- 	NvimTree = true,
-			-- 	undotree = { text = "undotree" },
-			-- },
 			icons = {
 				pinned = {
 					button = "",

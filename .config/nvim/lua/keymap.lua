@@ -6,81 +6,23 @@ local silent = { noremap = true, silent = true }
 map("n", "<Space>", "<NOP>", silent)
 map("n", "q", "<NOP>", silent)
 
--- fzf
-map("n", "<C-p>", ":FzfFd<CR>", silent)
-map("n", "<leader>lg", ":FzfRg<CR>", options)
-map("n", "<leader>b", ":FzfLua buffers<CR>", options)
-map("n", "<leader>of", ":FzfLua oldfiles<CR>", options)
-
--- misc
-map("n", "<leader>m", ":Mason<CR>", silent)
+-- replace text
 map("n", "<leader>ra", ":Sad<CR>", silent)
-map("n", "<leader>pc", ":CccPick<CR>", silent)
-map("n", "<leader>wk", ":WhichKey<CR>", silent)
-map("n", "<leader>tw", "<CMD>TWValues<CR>", silent)
 
 -- yank
 map("n", "<C-a>", "ggVG<CR>", silent)
-map("n", "<leader>pc", ":let @+=expand('%:p')<CR>", silent)
-
--- float term
-map("n", "<leader>ft", ":FTermToggle<CR>", silent)
-
--- pick window
-map("n", "<leader>pw", ":PickWindow<CR>", silent)
-
--- dap
--- map("n", "<leader>du", ":lua require('dapui').toggle()<CR>", silent)
--- map("n", "<F5>", ":lua require('dap').continue()<CR>", silent)
--- map("n", "<F10>", ":lua require('dap').step_over()<CR>", silent)
--- map("n", "<F11>", ":lua require('dap').step_into()<CR>", silent)
--- map("n", "<F12>", ":lua require('dap').step_out()<CR>", silent)
--- map("n", "<leader>b", ":lua require('dap').toggle_breakpoint()<CR>", silent)
--- map("n", "<leader>B", ":lua require('dap').set_breakpoint(vim.fn.input('Breakpoint condition: '))<CR>", silent)
--- map("n", "<leader>lp", ":lua require('dap').set_breakpoint(nil, nil, vim.fn.input('Log point message: '))<CR>", silent)
--- map("n", "<leader>dr", ":lua require('dap').repl.open()<CR>", silent)
-
--- overseer
-map("n", "<leader>ot", ":OverseerToggle<CR>", silent)
-map("n", "<leader>or", ":OverseerRun<CR>", silent)
-map("n", "<leader>od", ":OverseerLoadBundle dev<CR>", silent)
-
--- git
-map("n", "<leader>gbo", ":GitBlameOpenCommitURL<CR>", silent)
-map("n", "<leader>gbc", ":GitBlameCopySHA<CR>", silent)
-map("n", "<leader>gg", ":LazyGit<CR>", silent)
-
--- worktrees
--- map("n", "<leader>wt", ":lua require('telescope').extensions.git_worktree.git_worktrees()<CR>", silent)
--- map("n", "<leader>awt", ":lua require('telescope').extensions.git_worktree.create_git_worktree()<CR>", silent)
-
--- history
-map("n", "<leader>e", ":NvimTreeToggle<CR>", silent)
-map("n", "<leader>ff", ":NvimTreeFindFile<CR>", silent)
-map("n", "<leader>uu", ":UndotreeToggle<CR>", silent)
-map("n", "<leader>dff", ":DiffviewOpen<CR>", silent)
-map("n", "<leader>dfq", ":DiffviewClose<CR>", silent)
 
 -- save files
 map("n", "<leader>s", ":wa<CR>", silent)
 map("n", "<leader>S", ":wqa!<CR>", silent)
 
--- move lines with move.nvim using Alt + hjkl
-map("n", "<A-j>", ":MoveLine(1)<CR>", silent)
-map("n", "<A-k>", ":MoveLine(-1)<CR>", silent)
-map("v", "<A-j>", ":MoveBlock(1)<CR>", silent)
-map("v", "<A-k>", ":MoveBlock(-1)<CR>", silent)
-map("n", "<A-l>", ":MoveHChar(1)<CR>", silent)
-map("n", "<A-h>", ":MoveHChar(-1)<CR>", silent)
-map("v", "<A-l>", ":MoveHBlock(1)<CR>", silent)
-map("v", "<A-l>", ":MoveHBlock(-1)<CR>", silent)
-
 -- easier indentation in visual mode
 map("v", "<", "<gv", options)
 map("v", ">", ">gv", options)
 
--- find and replace all
--- map("n", "S", ":%s//<Left>", silent)
+-- autoswitch to newly created split
+map("n", "<C-W>v", ":vsplit<CR> <bar> :wincmd l<CR>", silent)
+map("n", "<C-W>s", ":split<CR> <bar> :wincmd j<CR>", silent)
 
 -- remap split navigation to CTRL + hjkl
 map("n", "<S-h>", ":wincmd h<CR>", silent)
@@ -93,21 +35,6 @@ map("n", "<C-S-h>", ":wincmd H<CR>", silent)
 map("n", "<C-S-j>", ":wincmd J<CR>", silent)
 map("n", "<C-S-k>", ":wincmd K<CR>", silent)
 map("n", "<C-S-l>", ":wincmd L<CR>", silent)
-
--- autoswitch to newly created split
-map("n", "<C-W>v", ":vsplit<CR> <bar> :wincmd l<CR>", silent)
-
-map("n", "<C-W>s", ":split<CR> <bar> :wincmd j<CR>", silent)
-
--- adjust split sizes with CTRL + arrows
--- map("n", "<C-Left>", ":vertical resize +3<CR>", silent)
-map("n", "<C-Left>", ":SmartResizeLeft<CR>", silent)
--- map("n", "<C-Right>", ":vertical resize -3<CR>", silent)
-map("n", "<C-Right>", ":SmartResizeRight<CR>", silent)
--- map("n", "<C-Up>", ":resize -3<CR>", silent)
-map("n", "<C-Up>", ":SmartResizeUp<CR>", silent)
--- map("n", "<C-Down>", ":resize +3<CR>", silent)
-map("n", "<C-Down>", ":SmartResizeDown<CR>", silent)
 
 -- tab controls
 map("n", "th", ":tabfirst<CR>", options)
@@ -123,27 +50,13 @@ map("n", "<C-t>d", ":tabclose<CR>", silent)
 map("n", "<leader>z", ":bp <bar> :bd #<CR>", silent) -- close buffer but keep split
 map("n", "<leader>0", ":b#<CR>", silent) --  previously active buffer
 
--- barbar buffer controls
-map("n", "<leader>x", ":only <bar> :BufferCloseAllButCurrentOrPinned<CR>", silent) -- close all buffers except current
-map("n", "<leader>P", ":BufferPin<CR>", silent) -- pin current buffer
-map("n", "<C-h>", ":BufferPrevious<CR>", silent)
-map("n", "<C-l>", ":BufferNext<CR>", silent)
-map("n", "<C-A-h>", ":BufferMovePrevious<CR>", silent)
-map("n", "<C-A-l>", ":BufferMoveNext<CR>", silent)
-map("n", "<C-1>", ":BufferGoto 1<CR>", silent)
-map("n", "<C-2>", ":BufferGoto 2<CR>", silent)
-map("n", "<C-3>", ":BufferGoto 3<CR>", silent)
-map("n", "<C-4>", ":BufferGoto 4<CR>", silent)
-map("n", "<C-5>", ":BufferGoto 5<CR>", silent)
-map("n", "<C-6>", ":BufferGoto 6<CR>", silent)
-map("n", "<C-7>", ":BufferGoto 7<CR>", silent)
-map("n", "<C-8>", ":BufferGoto 8<CR>", silent)
-map("n", "<C-9>", ":BufferGoto 9<CR>", silent)
-
--- hop bindings
-map("n", "<leader>h", ":HopWord<CR>", silent)
-map("n", "<leader>cl", ":HopWordCurrentLine<CR>", silent)
-map("n", "<leader>lh", ":HopLineStart<CR>", silent)
-map("n", "<leader>la", ":HopLineStartAC<CR>", silent)
-map("n", "<leader>lb", ":HopLineStartBC<CR>", silent)
-map("n", "<leader>vh", ":HopVertical<CR>", silent)
+-- dap
+-- map("n", "<leader>du", ":lua require('dapui').toggle()<CR>", silent)
+-- map("n", "<F5>", ":lua require('dap').continue()<CR>", silent)
+-- map("n", "<F10>", ":lua require('dap').step_over()<CR>", silent)
+-- map("n", "<F11>", ":lua require('dap').step_into()<CR>", silent)
+-- map("n", "<F12>", ":lua require('dap').step_out()<CR>", silent)
+-- map("n", "<leader>b", ":lua require('dap').toggle_breakpoint()<CR>", silent)
+-- map("n", "<leader>B", ":lua require('dap').set_breakpoint(vim.fn.input('Breakpoint condition: '))<CR>", silent)
+-- map("n", "<leader>lp", ":lua require('dap').set_breakpoint(nil, nil, vim.fn.input('Log point message: '))<CR>", silent)
+-- map("n", "<leader>dr", ":lua require('dap').repl.open()<CR>", silent)

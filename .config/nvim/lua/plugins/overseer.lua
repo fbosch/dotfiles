@@ -4,7 +4,28 @@ return {
 		"stevearc/dressing.nvim",
 	},
 	event = "VeryLazy",
+	cmd = { "OverseerToggle", "OverseerRun", "OverseerLoadBundle" },
 	priority = 70,
+	keys = {
+		{
+			mode = { "n" },
+			"<leader>ot",
+			"<cmd>OverseerToggle<cr>",
+			desc = "Toggle the task list",
+		},
+		{
+			mode = { "n" },
+			"<leader>or",
+			"<cmd>OverseerRun<cr>",
+			desc = "Run the selected task",
+		},
+		{
+			mode = { "n" },
+			"<leader>od",
+			"<cmd>OverseerLoadBundle dev<cr>",
+			desc = "Load the dev bundle",
+		},
+	},
 	config = function()
 		vim.defer_fn(function()
 			require("overseer").setup({
