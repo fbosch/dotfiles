@@ -1,7 +1,10 @@
 return {
 	"rmagatti/auto-session",
 	dependencies = {
-		"stevearc/overseer.nvim",
+    {
+      "stevearc/overseer.nvim",
+      event = "VeryLazy"
+    }
 	},
 	config = function()
 		local cwd = vim.v.cwd or vim.fn.getcwd(0)

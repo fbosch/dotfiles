@@ -186,9 +186,9 @@ return {
 				ts_utils.setup_client(client)
 
 				local opts = { silent = true }
-				vim.api.nvim_buf_set_keymap(bufnr, "n", "gs", ":TSLspOrganize<CR>", opts)
-				vim.api.nvim_buf_set_keymap(bufnr, "n", "gr", ":TSLspRenameFile<CR>", opts)
-				vim.api.nvim_buf_set_keymap(bufnr, "n", "gi", ":TSLspImportAll<CR>", opts)
+				vim.api.nvim_buf_set_keymap(bufnr, "n", "gs", "<cmd>TSLspOrganize<cr>", opts)
+				vim.api.nvim_buf_set_keymap(bufnr, "n", "gr", "<cmd>TSLspRenameFile<cr>", opts)
+				vim.api.nvim_buf_set_keymap(bufnr, "n", "gi", "<cmd>TSLspImportAll<cr>", opts)
 
 				on_attach(client, bufnr)
 			end,

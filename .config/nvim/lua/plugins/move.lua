@@ -1,6 +1,8 @@
 return {
 	"fedepujol/move.nvim",
+	event = { "VeryLazy" },
 	-- move lines with Alt + hjkl
+	cmd = { "MoveLine", "MoveBlock", "MoveHChar", "MoveHBlock" },
 	keys = {
 		{
 			mode = { "n" },
@@ -51,5 +53,4 @@ return {
 		-- 	desc = "move block left",
 		-- },
 	},
-	event = { "BufReadPre", "BufNewFile" },
 }

@@ -17,6 +17,7 @@ vim.opt.shell = "fish"
 vim.opt.title = false
 vim.opt.filetype = "on"
 vim.opt.shadafile = "NONE"
+vim.opt.foldenable = false
 
 -- timings
 vim.opt.timeoutlen = 1000
@@ -101,6 +102,6 @@ vim.opt.incsearch = true
 vim.opt.hlsearch = false
 
 vim.api.nvim_create_user_command("Z", "wa | qa", {})
-require("keymap")
-require("autocmd")
 require("plugin")
+require("autocmd")
+require("keymap")

@@ -7,7 +7,7 @@ return {
 	event = "InsertEnter",
 	config = function()
 		local copilot = require("copilot")
-		local api = require("copilot.api")
+		-- local api = require("copilot.api")
 		copilot.setup({
 			filetypes = {
 				lua = true,
@@ -29,21 +29,21 @@ return {
 				},
 			},
 		})
-		local typescript_filetypes = {
-			"javascript",
-			"javascriptreact",
-			"typescript",
-			"typescriptreact",
-		}
-		api.notify_accepted = function(client, params)
-			return api.request(client, "notifyAccepted", params, function()
-				-- auto import TypeScript dependencies after suggestion is accepted
-				if vim.tbl_contains(typescript_filetypes, vim.bo.filetype) then
-					vim.defer_fn(function()
-						vim.cmd("TSLspImportAll")
-					end, 100)
-				end
-			end)
-		end
+		-- local typescript_filetypes = {
+		-- 	"javascript",
+		-- 	"javascriptreact",
+		-- 	"typescript",
+		-- 	"typescriptreact",
+		-- }
+		-- api.notify_accepted = function(client, params)
+		-- 	return api.request(client, "notifyAccepted", params, function()
+		-- 		-- auto import TypeScript dependencies after suggestion is accepted
+		-- 		if vim.tbl_contains(typescript_filetypes, vim.bo.filetype) then
+		-- 			vim.defer_fn(function()
+		-- 				vim.cmd("TSLspImportAll")
+		-- 			end, 100)
+		-- 		end
+		-- 	end)
+		-- end
 	end,
 }

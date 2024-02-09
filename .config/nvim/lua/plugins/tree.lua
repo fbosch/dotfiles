@@ -16,8 +16,25 @@ return {
 		},
 	},
 	config = function()
+		local function on_attach(bufnr)
+			local api = require("nvim-tree.api")
+			-- default mappings
+			api.config.mappings.default_on_attach(bufnr)
+
+			local function opts(desc)
+				return { desc = "nvim-tree: " .. desc, buffer = bufnr, noremap = true, silent = true, nowait = true }
+			end
+
+			-- custom mappings
+			vim.keymap.set("n", "H", ":wincmd h<CR>", opts("move to left window"))
+			vim.keymap.set("n", "J", ":wincmd j<CR>", opts("move to bottom window"))
+			vim.keymap.set("n", "K", ":wincmd k<CR>", opts("move to top window"))
+			vim.keymap.set("n", "L", ":wincmd l<CR>", opts("move to right window"))
+		end
+
 		require("nvim-web-devicons").setup()
 		require("nvim-tree").setup({
+			on_attach = on_attach,
 			sync_root_with_cwd = true,
 			respect_buf_cwd = true,
 			update_focused_file = {
@@ -33,11 +50,13 @@ return {
 					},
 				},
 			},
+			filters = {
+				custom = { "node_modules" },
+			},
 			view = {
 				number = false,
 				relativenumber = false,
 				adaptive_size = true,
-				-- hide_root_folder = true,
 			},
 			modified = {
 				enable = true,

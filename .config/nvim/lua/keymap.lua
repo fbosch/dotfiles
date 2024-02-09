@@ -25,10 +25,10 @@ map("n", "<C-W>v", ":vsplit<CR> <bar> :wincmd l<CR>", silent)
 map("n", "<C-W>s", ":split<CR> <bar> :wincmd j<CR>", silent)
 
 -- remap split navigation to CTRL + hjkl
-map("n", "<S-h>", ":wincmd h<CR>", silent)
-map("n", "<S-j>", ":wincmd j<CR>", silent)
-map("n", "<S-k>", ":wincmd k<CR>", silent)
-map("n", "<S-l>", ":wincmd l<CR>", silent)
+map("n", "<S-h>", ":wincmd h<CR>", { silent = true })
+map("n", "<S-j>", ":wincmd j<CR>", { silent = true })
+map("n", "<S-k>", ":wincmd k<CR>", { silent = true })
+map("n", "<S-l>", ":wincmd l<CR>", { silent = true })
 
 -- remap split manipulation to SHIFT + CTRL + hjkl
 map("n", "<C-S-h>", ":wincmd H<CR>", silent)

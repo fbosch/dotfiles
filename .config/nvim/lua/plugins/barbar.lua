@@ -1,17 +1,3 @@
-local function buffer_index_keybinds()
-	local values = {}
-	for i = 1, 9 do
-		local value = {
-			mode = { "n" },
-			"<C-" .. i .. ">",
-			"<cmd>BufferGoto " .. i .. "<cr>",
-			desc = "go to buffer " .. i,
-		}
-		table.insert(values, value)
-	end
-	return values
-end
-
 return {
 	"romgrk/barbar.nvim",
 	dependencies = { "kyazdani42/nvim-web-devicons" },
@@ -55,7 +41,19 @@ return {
 			"<cmd>BufferMoveNext<cr>",
 			desc = "move buffer right",
 		},
-		unpack(buffer_index_keybinds()),
+		unpack((function()
+      local values = {}
+      for i = 1, 9 do
+        local value = {
+          mode = { "n" },
+          "<C-" .. i .. ">",
+          "<cmd>BufferGoto " .. i .. "<cr>",
+          desc = "go to buffer " .. i,
+        }
+        table.insert(values, value)
+      end
+      return values
+    end)()),
 	},
 	config = function()
 		vim.opt.sessionoptions:append("globals")

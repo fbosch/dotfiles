@@ -31,6 +31,7 @@ return {
 	config = function()
 		local fzf = require("fzf-lua")
 		fzf.setup({
+			profile = "max-perf",
 			winopts = {
 				hl = { border = "rounded" },
 				default = {
@@ -46,7 +47,7 @@ return {
 					},
 				},
 				bat = {
-					cmd = "bat_async",
+					cmd = "bat_native",
 					args = "--style=numbers,changes --color=always --line-range=:70",
 					theme = "Zenwritten Dark",
 				},
@@ -56,20 +57,9 @@ return {
 			},
 			oldfiles = {
 				args = "--style=numbers,changes --color=always --line-range=:70",
-				cmd = {
-					"fd",
-					".",
-					"--type",
-					"file",
-					"--threads=4",
-					"-E",
-					"*.{png,jpg,jpeg,bmp,webp,log}",
-					"-H",
-					"--strip-cwd-prefix",
-				},
 			},
 			live_grep = {
-				previewer = "bat_async",
+				previewer = "bat_native",
 				args = "--style=numbers,changes --color=always --line-range=:70",
 				keep_last = true,
 			},
@@ -83,7 +73,7 @@ return {
 
 		vim.api.nvim_create_user_command("FzfFd", function()
 			fzf.files({
-				cmd = "fd --threads=4 --color=always -tf",
+				cmd = "fd --threads=4 --color=always -tf --strip-cwd-prefix -H",
 			})
 		end, {})
 

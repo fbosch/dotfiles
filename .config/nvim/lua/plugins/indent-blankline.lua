@@ -3,13 +3,11 @@ return {
 	-- version = "v2.20.8",
 	event = "VeryLazy",
 	config = function()
-		vim.opt.list = true
 		require("ibl").setup({
 			indent = { char = "▎" },
 			scope = {
 				char = "▎",
 				enabled = true,
-				highlight = "IndentBlanklineScope",
 			},
 		})
 		-- require("indent_blankline").setup({
