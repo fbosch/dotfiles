@@ -1,8 +1,6 @@
 local wezterm = require("wezterm")
-
 local config = wezterm.config_builder()
 
-config.front_end = "WebGpu"
 config.max_fps = 120
 
 -- fonts
@@ -50,12 +48,13 @@ config.window_padding = {
 -- tabs
 config.tab_bar_at_bottom = true
 config.use_fancy_tab_bar = false
+config.hide_tab_bar_if_only_one_tab = true
 
 config.keys = {
 	{
 		key = "w",
 		mods = "CMD",
-		action = wezterm.action.CloseCurrentTab({ confirm = false }),
+		action = wezterm.action.CloseCurrentPane({ confirm = false }),
 	},
 	{
 		key = "RightArrow",
