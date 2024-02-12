@@ -1,7 +1,8 @@
 .cfg
 .config/fish/fish_variables
-.config/nvim/.sessions/**/*
-.config/nvim/.undo/**/*
 .config/github-copilot/**/*
+lazy-lock.json
+**/nvim/.sessions/**/*
+**/nvim/.undo/**/*
 **/TabNine/**/*
 **/.backup/**/*

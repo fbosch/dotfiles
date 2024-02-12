@@ -1,5 +1,6 @@
 tap "homebrew/bundle"
 tap "homebrew/cask"
+tap "fsouza/prettierd"
 
 cask "wezterm"
 
@@ -28,3 +29,4 @@ brew "stylua"
 brew "stow"
 brew "zoxide"
 brew "ms-jpq/sad/sad"
+brew "fsouza/prettierd/prettierd"

@@ -3,6 +3,9 @@
     "tap": {
       "homebrew/bundle": {
         "revision": "2f22c21799744c6b027a0695b36a37185d66a6a6"
+      },
+      "fsouza/prettierd": {
+        "revision": "bade1509fb0f8484c47e9dd33a6541562013f7ac"
       }
     },
     "brew": {
@@ -1139,6 +1142,10 @@
       },
       "ms-jpq/sad/sad": {
         "version": "0.4.23",
+        "bottle": false
+      },
+      "fsouza/prettierd/prettierd": {
+        "version": "0.25.2",
         "bottle": false
       }
     }
