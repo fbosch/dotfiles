@@ -4,6 +4,8 @@ tap "fsouza/prettierd"
 tap "oven-sh/bun"
 
 # system 
+brew "cmake" if OS.mac?
+brew "coreutils" if OS.mac?
 brew "fish"
 brew "fisher"
 brew "stow"
@@ -11,9 +13,6 @@ brew "peco"
 brew "ripgrep"
 brew "readline"
 brew "btop"
-
-# programs
-cask "wezterm"
 
 # directories
 brew "zoxide"
@@ -37,7 +36,9 @@ brew "git"
 brew "git-delta"
 brew "go"
 
-# mac
-brew "numi" if OS.mac?
-brew "cmake" if OS.mac?
-brew "coreutils" if OS.mac?
+# programs - mac
+if OS.mac?
+  cask "wezterm"
+  cask "raycast"
+  brew "numi"
+end
