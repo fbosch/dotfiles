@@ -10,7 +10,7 @@ alias nvim 'nvim -n -i NONE'
 abbr n 'nvim'
 abbr v 'nvim'
 
-abbr bu 'brew upgrade'
+abbr bup 'brew upgrade'
 alias vimdiff 'nvim -d'
 abbr kssh 'kitty +kitten ssh'
 alias snvim 'sudo -E -s nvim' # launch vim in sudo but preserve env config

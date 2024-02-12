@@ -1,4 +1,5 @@
 .cfg
+.config/fish/fish_variables
 **/TabNine/**/*
 **/.backup/**/*
 **/.undo/**/*
