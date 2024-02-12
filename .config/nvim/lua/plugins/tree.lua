@@ -1,7 +1,7 @@
 return {
 	"kyazdani42/nvim-tree.lua",
 	dependencies = { "nvim-tree/nvim-web-devicons", "mcchrish/zenbones.nvim" },
-	events = { "BufWinEnter", "LspAttach" },
+	event = { "BufWinEnter", "LspAttach", "VeryLazy" },
 	keys = {
 		{
 			mode = { "n" },

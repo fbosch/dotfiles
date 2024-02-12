@@ -53,6 +53,11 @@ config.use_fancy_tab_bar = false
 
 config.keys = {
 	{
+		key = "w",
+		mods = "CMD",
+		action = wezterm.action.CloseCurrentTab({ confirm = false }),
+	},
+	{
 		key = "RightArrow",
 		mods = "CTRL",
 		action = wezterm.action.DisableDefaultAssignment,
@@ -63,5 +68,13 @@ config.keys = {
 		action = wezterm.action.DisableDefaultAssignment,
 	},
 }
+
+local is_windows = package.config:sub(1, 1) == "\\"
+
+if is_windows then
+	config.default_domain = "WSL:Ubuntu"
+	config.window_decorations = "TITLE | RESIZE"
+	config.font_size = 12
+end
 
 return config

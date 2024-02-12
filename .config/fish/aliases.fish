@@ -5,31 +5,13 @@ abbr v 'nvim'
 
 abbr bup 'brew upgrade'
 alias vimdiff 'nvim -d'
-abbr kssh 'kitty +kitten ssh'
 alias snvim 'sudo -E -s nvim' # launch vim in sudo but preserve env config
 alias logikill 'ps -ef | grep -i "Logi Options" | grep "Applications" | awk \'{print $2}\' | xargs kill -9' # quickfix for dying logitech driver on M1 Mac
 alias wtr 'curl "wttr.in/Copenhagen?format=\n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"'
 alias batbuild 'batch cache --build'
 
-# Config Shortcuts
-abbr cali 'cat ~/.config/fish/aliases.fish'
-abbr cfx 'snvim ~/.xinitrc'
-abbr cfish 'nvim ~/.config/fish/config.fish'
-abbr cfali 'nvim ~/.config/fish/aliases.fish'
-abbr cfx 'snvim ~/.xinitrc'
-abbr cfst 'nvim ~/.config/starship.toml'
-abbr cfpic 'snvim ~/.config/picom/picom.conf'
-abbr cfkit 'nvim ~/.config/kitty/kitty.conf'
-abbr cfas 'snvim ~/.local/share/dwm/autostart.sh'
-abbr cfvi 'nvim ~/.config/nvim/init.lua'
-abbr cfvp 'nvim ~/.config/nvim/lua/plugins.lua'
-abbr cftm 'nvim ~/.config/tmux/tmux.conf'
-abbr cflf 'nvim ~/.config/lf/lfrc'
-abbr cfdu 'nvim ~/.config/dunst/dunstrc'
-
 # Directory shortcuts
 abbr prj 'cd ~/Projects'
-abbr pjo 'pj open '
 
 # Helpers
 abbr x 'exit'
