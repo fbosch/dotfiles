@@ -37,7 +37,7 @@ config.colors = {
 }
 
 -- window
-config.window_decorations = "RESIZE"
+config.window_decorations = "RESIZE|MACOS_FORCE_DISABLE_SHADOW"
 config.window_padding = {
 	left = 3,
 	right = 3,
