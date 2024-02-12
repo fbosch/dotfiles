@@ -1,17 +1,17 @@
 return {
 	"rmagatti/auto-session",
 	dependencies = {
-    {
-      "stevearc/overseer.nvim",
-      event = "VeryLazy"
-    }
+		{
+			"stevearc/overseer.nvim",
+			event = "VeryLazy",
+		},
 	},
 	config = function()
 		local cwd = vim.v.cwd or vim.fn.getcwd(0)
 		local function get_cwd_as_name()
 			return cwd:gsub("[^A-Za-z0-9]", "_")
 		end
-		local root_dir = vim.fn.expand("~/.config") .. "/nvim/.sessions/"
+		local root_dir = vim.fn.expand("~/.config") .. "/.sessions/"
 		local bundle = root_dir .. get_cwd_as_name()
 
 		vim.api.nvim_create_user_command("WipeAllSessions", function()

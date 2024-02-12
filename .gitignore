@@ -1,5 +1,7 @@
 .cfg
 .config/fish/fish_variables
+.config/nvim/.sessions/**/*
+.config/nvim/.undo/**/*
+.config/github-copilot/**/*
 **/TabNine/**/*
 **/.backup/**/*
-**/.undo/**/*
