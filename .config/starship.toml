@@ -33,7 +33,7 @@ read_only = "  "
 
 
 [nodejs]
-format = '[](bold fg:#84ba64)  [$version](fg:#84ba64) '
+format = '[󰎙](bold fg:#84ba64)  [$version](fg:#84ba64) '
 
 [time]
 disabled = false

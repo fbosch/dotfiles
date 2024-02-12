@@ -46,13 +46,23 @@ config.window_padding = {
 	bottom = 3,
 }
 
-config.window_background_opacity = 0.93
-config.macos_window_background_blur = 40
-
 -- tabs
 config.tab_bar_at_bottom = true
 config.use_fancy_tab_bar = false
 config.hide_tab_bar_if_only_one_tab = true
+
+config.skip_close_confirmation_for_processes_named = {
+	"bash",
+	"sh",
+	"zsh",
+	"fish",
+	"tmux",
+	"nu",
+	"cmd.exe",
+	"pwsh.exe",
+	"powershell.exe",
+	"starship",
+}
 
 config.keys = {
 	{
@@ -78,6 +88,9 @@ if is_windows then
 	config.default_domain = "WSL:Ubuntu"
 	config.window_decorations = "TITLE | RESIZE"
 	config.font_size = 12
+else
+	config.window_background_opacity = 0.93
+	config.macos_window_background_blur = 40
 end
 
 return config
