@@ -1,33 +1,43 @@
 tap "homebrew/bundle"
 tap "homebrew/cask"
 tap "fsouza/prettierd"
+tap "oven-sh/bun"
 
+# system 
+brew "fish"
+brew "fisher"
+brew "stow"
+brew "peco"
+brew "ripgrep"
+brew "readline"
+brew "btop"
+
+# programs
 cask "wezterm"
 
-brew "fish"
-brew "node@18"
-brew "btop"
-brew "bat"
-brew "cloc"
-brew "cmake"
-brew "coreutils"
-brew "readline"
+# directories
+brew "zoxide"
 brew "eza"
 brew "fd"
 brew "fzf"
+brew "lf"
+brew "bat"
+
+# development
+brew "node@18"
+brew "corepack"
+brew "fsouza/prettierd/prettierd"
+brew "cloc"
+brew "neovim"
+brew "bun"
+brew "stylua"
+brew "ms-jpq/sad/sad"
+brew "lazygit"
 brew "git"
 brew "git-delta"
 brew "go"
-brew "lf"
-brew "lazygit"
-brew "peco"
-brew "lynx"
-brew "neovim"
-brew "yarn"
-brew "ripgrep"
-brew "stylua"
-brew "stow"
-brew "zoxide"
-brew "ms-jpq/sad/sad"
-brew "fsouza/prettierd/prettierd"
-brew "fisher"
+
+# mac
+brew "numi" if OS.mac?
+brew "cmake" if OS.mac?
+brew "coreutils" if OS.mac?

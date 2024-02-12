@@ -6,6 +6,9 @@
       },
       "fsouza/prettierd": {
         "revision": "bade1509fb0f8484c47e9dd33a6541562013f7ac"
+      },
+      "oven-sh/bun": {
+        "revision": "4ef598b09bc7fa6bb0ccfa12bd13fa10e930795d"
       }
     },
     "brew": {
@@ -1205,13 +1208,31 @@
             }
           }
         }
+      },
+      "bun": {
+        "version": "1.0.26",
+        "bottle": false
+      },
+      "corepack": {
+        "version": "0.24.1",
+        "bottle": {
+          "rebuild": 0,
+          "root_url": "https://ghcr.io/v2/homebrew/core",
+          "files": {
+            "all": {
+              "cellar": ":any_skip_relocation",
+              "url": "https://ghcr.io/v2/homebrew/core/corepack/blobs/sha256:32ceaa0d6829631896a292860c561c861a84fbc53ab57675d90b6120e88f406a",
+              "sha256": "32ceaa0d6829631896a292860c561c861a84fbc53ab57675d90b6120e88f406a"
+            }
+          }
+        }
       }
     }
   },
   "system": {
     "linux": {
       "Ubuntu 22.04.3 LTS (jammy)": {
-        "HOMEBREW_VERSION": "4.2.7",
+        "HOMEBREW_VERSION": "4.2.8",
         "HOMEBREW_PREFIX": "/home/linuxbrew/.linuxbrew",
         "Homebrew/homebrew-core": "api",
         "GCC": "11.4.0"
