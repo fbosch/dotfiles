@@ -22,3 +22,8 @@ cmd({ "FileType" }, {
 	command = "cabbrev wqa Z",
 	group = group,
 })
+
+cmd({ "InsertLeave" }, {
+	command = "set nopaste",
+	group = group,
+})

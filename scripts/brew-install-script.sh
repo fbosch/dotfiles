@@ -19,6 +19,9 @@ if [[ $(command -v brew) == "" ]]; then
   esac
   
   brew bundle install
+  corepack enable pnpm
+  corepack enable yarn
+  npm i -g swpm
 
   curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source && fisher install jorgebucaran/fisher
 else 

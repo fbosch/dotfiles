@@ -13,6 +13,7 @@ brew "peco"
 brew "ripgrep"
 brew "readline"
 brew "btop"
+brew "tldr"
 
 # directories
 brew "zoxide"
@@ -35,6 +36,7 @@ brew "lazygit"
 brew "git"
 brew "git-delta"
 brew "go"
+brew "jq"
 
 # programs - mac
 if OS.mac?
