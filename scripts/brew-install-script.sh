@@ -1,6 +1,5 @@
 #!/bin/bash
 
-which brew
 if [[ $(command -v brew) == "" ]]; then
   echo "Installing homebrew..."
   os_name=$(uname -s)
@@ -18,14 +17,14 @@ if [[ $(command -v brew) == "" ]]; then
           echo "Unknown or unsupported operating system"
           ;;
   esac
+  
+  brew bundle install
+
+  curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source && fisher install jorgebucaran/fisher
 else 
   echo "Updating homebrew..."
   brew update
 fi
 
-brew bundle install
 
-fish
-fish_add_path /opt/homebrew/bin
-echo "opt/homebrew/bin/fish" | sudo tee -a /etc/shells
-chsh -s opt/homebrew/bin/fish
+brew bundle install
