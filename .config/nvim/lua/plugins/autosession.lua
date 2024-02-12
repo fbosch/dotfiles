@@ -11,7 +11,7 @@ return {
 		local function get_cwd_as_name()
 			return cwd:gsub("[^A-Za-z0-9]", "_")
 		end
-		local root_dir = vim.fn.expand("~/.config") .. "/.sessions/"
+		local root_dir = vim.fn.expand("~/.sessions")
 		local bundle = root_dir .. get_cwd_as_name()
 
 		vim.api.nvim_create_user_command("WipeAllSessions", function()
