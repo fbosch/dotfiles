@@ -1,5 +1,6 @@
 . ~/.config/fish/aliases.fish
 . ~/.config/fish/profile.fish
+. ~/.config/fish/private.fish
 . ~/.config/fish/colors.fish
 
 if test (uname) = "Linux"
