@@ -12,6 +12,7 @@ config.font = wezterm.font_with_fallback({
 	"Noto Sans Runic",
 	{ family = "Symbols Nerd Font Mono", scale = 0.8 },
 	"Apple Color Emoji",
+	"Segoe UI Emoji",
 })
 config.font_size = 16.0
 config.underline_thickness = "0.1cell"
