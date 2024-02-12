@@ -14,9 +14,9 @@ $time
 """
 
 [character]
-success_symbol = "[ ᚠᛒᛒ ](#9e9e9e)[᛫](cyan)"
-error_symbol = "[ ᛖᚱᚱ ](bold red)[᛫](red)"
-vicmd_symbol = "[ ᚹᛁ ᛫](bold green)"
+success_symbol = "[  ᚠᛒᛒ ](#9e9e9e)[᛫](cyan)"
+error_symbol = "[  ᛖᚱᚱ ](bold red)[᛫](red)"
+vicmd_symbol = "[  ᚹᛁ ᛫](bold green)"
 
 [python]
 disabled = true
