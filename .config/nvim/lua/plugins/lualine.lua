@@ -11,7 +11,7 @@ return {
 		local git_blame = require("gitblame")
 		vim.g.gitblame_display_virtual_text = 0 -- Disable virtual text
 		vim.g.gitblame_date_format = "%r"
-		vim.g.gitblame_message_template = " <author>  﨟<date>"
+		vim.g.gitblame_message_template = " <author>   <date>"
 		require("lualine").setup({
 			options = {
 				theme = "auto",
@@ -30,7 +30,7 @@ return {
 							[overseer.STATUS.SUCCESS] = "󱤶 ",
 							[overseer.STATUS.RUNNING] = "󱑠 ",
 						},
-						unique = false, -- Unique-ify non-running task count by name
+						unique = true, -- Unique-ify non-running task count by name
 						name_not = false, -- When true, invert the name search
 						status = nil, -- List of task statuses to display
 						status_not = false, -- When true, invert the status search
@@ -44,7 +44,26 @@ return {
 					"filetype",
 				},
 				lualine_z = {
-					"os.date('%H:%M')",
+					function()
+						local current_hour = tonumber(os.date("%I"))
+						local current_time = os.date("%H:%M")
+						local icon_tbl = {
+							[1] = "󱐿",
+							[2] = "󱑀",
+							[3] = "󱑁",
+							[4] = "󱑂",
+							[5] = "󱑃",
+							[6] = "󱑄",
+							[7] = "󱑅",
+							[8] = "󱑆",
+							[9] = "󱑇",
+							[10] = "󱑈",
+							[11] = "󱑉",
+							[12] = "󱑊",
+						}
+						local icon = icon_tbl[current_hour]
+						return icon .. " " .. current_time
+					end,
 				},
 			},
 		})

@@ -24,6 +24,7 @@ brew "lf"
 brew "bat"
 
 # development
+brew "tmux"
 brew "node@18"
 brew "corepack"
 brew "fsouza/prettierd/prettierd"

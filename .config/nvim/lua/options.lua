@@ -2,6 +2,8 @@
 vim.cmd([[let &t_Cs = "\e[4:3m"]])
 vim.cmd([[let &t_Ce = "\e[4:0m"]])
 
+vim.g.zenbones_solid_line_nr = true
+
 -- misc
 vim.opt.re = 0 -- regex engine auto
 vim.opt.shortmess:append("I")
@@ -53,7 +55,7 @@ vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
 
 -- spellchecking
 vim.opt.spell = false
-vim.opt.mouse:append("a")
+-- vim.opt.mouse:append("a")
 vim.opt.spelllang = "en_us,da"
 vim.opt.spelloptions = "camel"
 
