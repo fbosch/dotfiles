@@ -16,7 +16,7 @@ vim.opt.foldenable = false
 
 -- timings
 vim.opt.timeoutlen = 1000
-vim.opt.updatetime = 750
+vim.opt.updatetime = 200
 
 -- visual
 vim.opt.lazyredraw = true
@@ -30,6 +30,11 @@ vim.opt.relativenumber = true
 vim.opt.cursorline = true
 vim.opt.fillchars:append("eob:·")
 vim.opt.laststatus = 3
+vim.opt.ruler = true
+vim.opt.background = "dark"
+vim.opt.pumblend = 10
+vim.opt.winblend = 0
+vim.opt.scrolloff = 8
 
 -- file history
 vim.opt.backup = true
@@ -38,7 +43,7 @@ vim.opt.undofile = true
 vim.opt.undodir = vim.fn.stdpath("config") .. "/nvim/.undo//"
 vim.opt.backupdir = vim.fn.stdpath("config") .. "/nvim/.backup//"
 vim.opt.directory = vim.fn.stdpath("config") .. "/nvim/.swp//"
-vim.opt.sessionoptions = "buffers,help,tabpages,winsize,winpos,options"
+vim.opt.sessionoptions = "buffers,help,tabpages,winsize,winpos,options,globals"
 vim.opt.fileencoding = "utf-8"
 vim.opt.autoread = true
 

@@ -33,6 +33,7 @@ map("n", "<S-l>", ":wincmd l<CR>", { silent = true })
 -- remap split manipulation to SHIFT + CTRL + hjkl
 map("n", "<C-S-h>", ":wincmd H<CR>", silent)
 map("n", "<C-S-j>", ":wincmd J<CR>", silent)
+
 map("n", "<C-S-k>", ":wincmd K<CR>", silent)
 map("n", "<C-S-l>", ":wincmd L<CR>", silent)
 
@@ -44,7 +45,7 @@ map("n", "tl", ":tablast<CR>", options)
 map("n", "tt", ":tabedit<Space>", options)
 map("n", "tm", ":tabm<Space>", options)
 map("n", "<C-t>n", ":tabnew<CR>", silent)
-map("n", "<C-t>d", ":tabclose<CR>", silent)
+-- map("n", "<C-t>d", ":tabclose<CR>", silent)
 
 -- buffer controls
 map("n", "<leader>z", ":bp <bar> :bd #<CR>", silent) -- close buffer but keep split

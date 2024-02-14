@@ -11,6 +11,12 @@ return {
 			},
 			notification = {
 				filter = vim.log.levels.INFO,
+				override_vim_notify = true,
+			},
+			integration = {
+				["nvim-tree"] = {
+					enable = true,
+				},
 			},
 		})
 	end,

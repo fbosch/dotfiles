@@ -21,17 +21,18 @@ config.custom_block_glyphs = true
 
 -- colors
 config.color_scheme = "zenwritten_dark"
-config.tab_max_width = 64
+config.tab_max_width = 32
+config.show_new_tab_button_in_tab_bar = false
 config.colors = {
 	tab_bar = {
 		background = "#191919",
 		active_tab = {
-			bg_color = "#525252",
+			bg_color = "#252525",
 			fg_color = "#ffffff",
 			intensity = "Normal",
 		},
 		inactive_tab = {
-			bg_color = "#2e2e2e",
+			bg_color = "#191919",
 			fg_color = "#9e9e9e",
 		},
 	},

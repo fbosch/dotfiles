@@ -5,13 +5,14 @@ return {
 		"kyazdani42/nvim-web-devicons",
 	},
 	event = "ColorScheme",
+	enabled = false,
 	config = function()
 		local barbecue = require("barbecue")
 		barbecue.setup({
 			create_autocmd = true,
-			show_basename = true,
-			show_dirname = true,
-			show_modified = true,
+			show_basename = false,
+			show_dirname = false,
+			show_modified = false,
 			show_navic = true,
 			theme = {
 				normal = { bg = "#191919", fg = "#aaaaaa" },
@@ -30,20 +31,5 @@ return {
 				context_property = { fg = "#ffffff" },
 			},
 		})
-		-- vim.api.nvim_create_autocmd({
-		-- 	"WinResized",
-		-- 	"BufWinEnter",
-		-- 	"CursorHold",
-		-- 	"InsertLeave",
-		-- 	-- include these if you have set `show_modified` to `true`
-		-- 	"BufWritePost",
-		-- 	"TextChanged",
-		-- 	"TextChangedI",
-		-- }, {
-		-- 	group = vim.api.nvim_create_augroup("barbecue.updater", {}),
-		-- 	callback = function()
-		-- 		require("barbecue.ui").update()
-		-- 	end,
-		-- })
 	end,
 }

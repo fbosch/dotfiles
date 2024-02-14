@@ -1,6 +1,7 @@
 return {
 	"gbrlsnchs/winpick.nvim",
 	cmd = { "PickWindow" },
+	enable = false,
 	keys = {
 		{
 			mode = "n",

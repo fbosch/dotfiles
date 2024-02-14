@@ -4,12 +4,13 @@ return {
 	config = function()
 		require("notify").setup({
 			border = "rounded",
-			stages = "fade",
+			render = "wrapped-compact",
 			fps = 60,
-			max_width = 60,
+			max_width = 50,
 			top_down = true,
 		})
-
-		vim.notify = require("notify")
+		vim.schedule_wrap(function()
+			vim.notify = require("notify")
+		end)
 	end,
 }
