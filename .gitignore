@@ -4,6 +4,7 @@ lazy-lock.json
 .config/github-copilot/**/*
 .config/configstore/**/*
 .config/raycast/**/*
+.config/broot/**/*
 **/nvim/.sessions/**/*
 **/nvim/.undo/**/*
 **/TabNine/**/*
