@@ -65,5 +65,6 @@ return {
 		vim.api.nvim_set_hl(0, "TreesitterContextBottom", { bg = "#1d1d1d", underline = true, sp = "#2e2e2e" })
 
 		-- incline
+		vim.api.nvim_set_hl(0, "InclineNormal", { bg = "#1d1d1d" })
 	end,
 }

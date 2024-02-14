@@ -18,7 +18,7 @@ return {
 				},
 				margin = {
 					horizontal = 0,
-					vertical = 0,
+					vertical = 1,
 				},
 			},
 			render = function(props)
