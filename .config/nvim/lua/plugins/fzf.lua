@@ -73,8 +73,8 @@ return {
 
 		vim.api.nvim_create_user_command("FzfFd", function()
 			fzf.files({
-				cmd = "fd",
-				fzf_opts = { { "--threads=4", "--color=always", "-tf", "--strip-cwd-prefix" } },
+				-- cmd = "fd ",
+				-- fzf_opts = { { "--threads=4", "--color=always", "-tf", "--strip-cwd-prefix", } },
 			})
 		end, {})
 

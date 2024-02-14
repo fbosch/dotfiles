@@ -45,6 +45,7 @@ return {
 			disable_netrw = true,
 			hijack_netrw = true,
 			renderer = {
+				root_folder_label = false,
 				icons = {
 					glyphs = {
 						modified = "",
