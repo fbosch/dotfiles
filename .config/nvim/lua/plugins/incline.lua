@@ -17,8 +17,8 @@ return {
 					vertical = "top",
 				},
 				margin = {
-					horizontal = 0,
-					vertical = 1,
+					horizontal = 1,
+					vertical = 2,
 				},
 			},
 			render = function(props)
