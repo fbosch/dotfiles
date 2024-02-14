@@ -1,3 +1,4 @@
+set -gx TERM wezterm 
 set -gx PROJECT_PATHS ~/Projects
 set -gx XDG_CONFIG_HOME "$HOME/.config"
 set -gx nvm_default_version "18.13.0"

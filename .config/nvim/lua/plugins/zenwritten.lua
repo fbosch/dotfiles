@@ -59,8 +59,8 @@ return {
 			vim.api.nvim_set_hl(0, "Folded", { fg = "#bbbbbb", bg = "#252525" })
 
 			-- indent blank line
-			vim.api.nvim_set_hl(0, "IndentBlanklineScope", { fg = "#bbbbbb" })
-			vim.api.nvim_set_hl(0, "IblScope", { fg = "#bbbbbb" })
+			vim.api.nvim_set_hl(0, "IndentBlanklineScope", { fg = "#6e8aa5" })
+			vim.api.nvim_set_hl(0, "IblScope", { fg = "#6e8aa5" })
 			-- vim.api.nvim_set_hl(0, "IblIndent", { fg = "#6e8aa5" })
 
 			-- fzf

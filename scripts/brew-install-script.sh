@@ -24,6 +24,12 @@ if [[ $(command -v brew) == "" ]]; then
   npm i -g swpm
 
   curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source && fisher install jorgebucaran/fisher
+  
+  tempfile=$(mktemp)
+  curl -o $tempfile https://raw.githubusercontent.com/wez/wezterm/master/termwiz/data/wezterm.terminfo
+  tic -x -o ~/.terminfo $tempfile 
+  rm $tempfile
+
 else 
   echo "Updating homebrew..."
   brew update
