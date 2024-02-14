@@ -3,6 +3,7 @@ lazy-lock.json
 .config/fish/fish_variables
 .config/github-copilot/**/*
 .config/configstore/**/*
+.config/raycast/**/*
 **/nvim/.sessions/**/*
 **/nvim/.undo/**/*
 **/TabNine/**/*

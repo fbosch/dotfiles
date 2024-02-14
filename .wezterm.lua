@@ -89,8 +89,8 @@ if is_windows then
 	config.window_decorations = "TITLE | RESIZE"
 	config.font_size = 12
 else
-	config.window_background_opacity = 0.93
-	config.macos_window_background_blur = 40
+	config.window_background_opacity = 0.98
+	config.macos_window_background_blur = 50
 end
 
 return config

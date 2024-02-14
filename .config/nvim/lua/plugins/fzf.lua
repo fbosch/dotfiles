@@ -42,8 +42,8 @@ return {
 				builtin = {
 					hl_cursorline = "IncSearch", -- cursor line highlight
 					extensions = {
-						["png"] = { "viu", "-t", "-h=33", "-x=10", "-y=3" },
-						["jpg"] = { "viu", "-t", "-h=33", "-x=10", "-y=3" },
+						["png"] = "imgcat",
+						["jpg"] = "imgcat",
 					},
 				},
 				bat = {
@@ -74,7 +74,7 @@ return {
 		vim.api.nvim_create_user_command("FzfFd", function()
 			fzf.files({
 				cmd = "fd",
-				args = "--threads=4 --color=always -tf --strip-cwd-prefix -H",
+				fzf_opts = { { "--threads=4", "--color=always", "-tf", "--strip-cwd-prefix" } },
 			})
 		end, {})
 

@@ -9,6 +9,7 @@ alias snvim 'sudo -E -s nvim' # launch vim in sudo but preserve env config
 alias logikill 'ps -ef | grep -i "Logi Options" | grep "Applications" | awk \'{print $2}\' | xargs kill -9' # quickfix for dying logitech driver on M1 Mac
 alias wtr 'curl "wttr.in/Copenhagen?format=\n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"'
 alias batbuild 'batch cache --build'
+alias imgcat 'wezterm imgcat'
 
 # Directory shortcuts
 abbr prj 'cd ~/Projects'
