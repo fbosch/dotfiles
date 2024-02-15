@@ -58,20 +58,6 @@ return {
 	config = function()
 		vim.api.nvim_set_hl(0, "BufferCurrent", { fg = "#97bdde" })
 		-- diagnostics
-		vim.schedule_wrap(function()
-			vim.api.nvim_set_hl(0, "BufferDefaultVisibleHINT", { fg = "#b279a7" })
-			vim.api.nvim_set_hl(0, "BufferDefaultCurrentHINT", { fg = "#b279a7" })
-			vim.api.nvim_set_hl(0, "BufferDefaultInactiveHINT", { fg = "#b279a7", bg = "#303030" })
-			vim.api.nvim_set_hl(0, "BufferDefaultVisibleERROR", { fg = "#DE6E7C" })
-			vim.api.nvim_set_hl(0, "BufferDefaultCurrentERROR", { fg = "#DE6E7C" })
-			vim.api.nvim_set_hl(0, "BufferDefaultInactiveERROR", { fg = "#DE6E7C", bg = "#303030" })
-			vim.api.nvim_set_hl(0, "BufferDefaultVisibleWARN", { fg = "#D68C67" })
-			vim.api.nvim_set_hl(0, "BufferDefaultCurrentWARN", { fg = "#D68C67" })
-			vim.api.nvim_set_hl(0, "BufferDefaultInactiveWARN", { fg = "#D68C67", bg = "#303030" })
-			vim.api.nvim_set_hl(0, "BufferDefaultVisibleINFO", { fg = "#97bdde" })
-			vim.api.nvim_set_hl(0, "BufferDefaultCurrentINFO", { fg = "#97bdde" })
-			vim.api.nvim_set_hl(0, "BufferDefaultInactiveINFO", { fg = "#97bdde", bg = "#303030" })
-		end)
 
 		require("barbar").setup({
 			animation = false,
@@ -96,5 +82,20 @@ return {
 				},
 			},
 		})
+
+		vim.schedule_wrap(function()
+			vim.api.nvim_set_hl(0, "BufferDefaultVisibleHINT", { fg = "#b279a7" })
+			vim.api.nvim_set_hl(0, "BufferDefaultCurrentHINT", { fg = "#b279a7" })
+			vim.api.nvim_set_hl(0, "BufferDefaultInactiveHINT", { fg = "#b279a7", bg = "#303030" })
+			vim.api.nvim_set_hl(0, "BufferDefaultVisibleERROR", { fg = "#DE6E7C" })
+			vim.api.nvim_set_hl(0, "BufferDefaultCurrentERROR", { fg = "#DE6E7C" })
+			vim.api.nvim_set_hl(0, "BufferDefaultInactiveERROR", { fg = "#DE6E7C", bg = "#303030" })
+			vim.api.nvim_set_hl(0, "BufferDefaultVisibleWARN", { fg = "#D68C67" })
+			vim.api.nvim_set_hl(0, "BufferDefaultCurrentWARN", { fg = "#D68C67" })
+			vim.api.nvim_set_hl(0, "BufferDefaultInactiveWARN", { fg = "#D68C67", bg = "#303030" })
+			vim.api.nvim_set_hl(0, "BufferDefaultVisibleINFO", { fg = "#97bdde" })
+			vim.api.nvim_set_hl(0, "BufferDefaultCurrentINFO", { fg = "#97bdde" })
+			vim.api.nvim_set_hl(0, "BufferDefaultInactiveINFO", { fg = "#97bdde", bg = "#303030" })
+		end)
 	end,
 }

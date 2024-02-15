@@ -2,7 +2,6 @@ return {
 	"uga-rosa/ccc.nvim",
 	cmd = "CccPick",
 	event = { "BufRead" },
-	enabled = false,
 	keys = {
 		{
 			mode = { "n" },
