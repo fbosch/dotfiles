@@ -7,6 +7,7 @@ lazy-lock.json
 .config/configstore/**/*
 .config/raycast/**/*
 .config/broot/**/*
+.config/neofetch/**/*
 **/nvim/.sessions/**/*
 **/nvim/.undo/**/*
 **/TabNine/**/*
