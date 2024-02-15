@@ -2,6 +2,14 @@ return {
 	"dmmulroy/tsc.nvim",
 	cmd = "TSC",
 	ft = { "typescript", "typescriptreact" },
+	keys = {
+		{
+			mode = "n",
+			"<leader>ts",
+			"<cmd>TSC<cr>",
+			desc = "Run typescript validation in current buffer",
+		},
+	},
 	config = function()
 		require("tsc").setup({
 			spinner = {
@@ -14,6 +22,5 @@ return {
 			},
 			pretty_errors = true,
 		})
-		vim.api.nvim_set_keymap("n", "<leader>ts", ":TSC<CR>", { noremap = true, silent = true })
 	end,
 }

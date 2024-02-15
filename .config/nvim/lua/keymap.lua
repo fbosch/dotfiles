@@ -51,6 +51,14 @@ map("n", "<C-t>n", ":tabnew<CR>", silent)
 map("n", "<leader>z", ":bp <bar> :bd #<CR>", silent) -- close buffer but keep split
 map("n", "<leader>0", ":b#<CR>", silent) --  previously active buffer
 
+-- move lines
+map("n", "<A-j>", ":m .+1<CR>==", { noremap = true, silent = true })
+map("n", "<A-k>", ":m .-2<CR>==", { noremap = true, silent = true })
+map("i", "<A-j>", "<Esc>:m .+1<CR>==gi", { noremap = true, silent = true })
+map("i", "<A-k>", "<Esc>:m .-2<CR>==gi", { noremap = true, silent = true })
+map("v", "<A-j>", ":m '>+1<CR>gv=gv", { noremap = true, silent = true })
+map("v", "<A-k>", ":m '<-2<CR>gv=gv", { noremap = true, silent = true })
+
 -- dap
 -- map("n", "<leader>du", ":lua require('dapui').toggle()<CR>", silent)
 -- map("n", "<F5>", ":lua require('dap').continue()<CR>", silent)
