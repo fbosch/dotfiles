@@ -1,6 +1,7 @@
 lazy-lock.json
 .config/fish/private.fish
 .config/fish/fish_variables
+.config/fish/functions/__*
 .config/github-copilot/**/*
 .config/configstore/**/*
 .config/raycast/**/*
