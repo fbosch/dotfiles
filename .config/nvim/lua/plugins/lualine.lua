@@ -46,28 +46,28 @@ return {
 				lualine_y = {
 					"filetype",
 				},
-				lualine_z = {
-					function()
-						local current_hour = tonumber(os.date("%I"))
-						local current_time = os.date("%H:%M")
-						local icon_tbl = {
-							[1] = "󱐿",
-							[2] = "󱑀",
-							[3] = "󱑁",
-							[4] = "󱑂",
-							[5] = "󱑃",
-							[6] = "󱑄",
-							[7] = "󱑅",
-							[8] = "󱑆",
-							[9] = "󱑇",
-							[10] = "󱑈",
-							[11] = "󱑉",
-							[12] = "󱑊",
-						}
-						local icon = icon_tbl[current_hour]
-						return icon .. " " .. current_time
-					end,
-				},
+				-- lualine_z = {
+				-- 	function()
+				-- 		local current_hour = tonumber(os.date("%I"))
+				-- 		local current_time = os.date("%H:%M")
+				-- 		local icon_tbl = {
+				-- 			[1] = "󱐿",
+				-- 			[2] = "󱑀",
+				-- 			[3] = "󱑁",
+				-- 			[4] = "󱑂",
+				-- 			[5] = "󱑃",
+				-- 			[6] = "󱑄",
+				-- 			[7] = "󱑅",
+				-- 			[8] = "󱑆",
+				-- 			[9] = "󱑇",
+				-- 			[10] = "󱑈",
+				-- 			[11] = "󱑉",
+				-- 			[12] = "󱑊",
+				-- 		}
+				-- 		local icon = icon_tbl[current_hour]
+				-- 		return icon .. " " .. current_time
+				-- 	end,
+				-- },
 			},
 		})
 	end,

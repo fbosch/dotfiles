@@ -67,9 +67,59 @@ config.skip_close_confirmation_for_processes_named = {
 
 config.keys = {
 	{
+		key = "Enter",
+		mods = "CTRL",
+		action = wezterm.action.SplitHorizontal({ domain = "CurrentPaneDomain" }),
+	},
+	{
+		key = "Enter",
+		mods = "CTRL|SHIFT",
+		action = wezterm.action.SplitVertical({ domain = "CurrentPaneDomain" }),
+	},
+	{
+		key = "l",
+		mods = "CTRL|SHIFT",
+		action = wezterm.action.ActivatePaneDirection("Right"),
+	},
+	{
+		key = "h",
+		mods = "CTRL|SHIFT",
+		action = wezterm.action.ActivatePaneDirection("Left"),
+	},
+	{
+		key = "j",
+		mods = "CTRL|SHIFT",
+		action = wezterm.action.ActivatePaneDirection("Down"),
+	},
+	{
+		key = "k",
+		mods = "CTRL|SHIFT",
+		action = wezterm.action.ActivatePaneDirection("Up"),
+	},
+	{
+		key = "RightArrow",
+		mods = "CTRL|SHIFT",
+		action = wezterm.action.AdjustPaneSize({ "Right", 5 }),
+	},
+	{
+		key = "LeftArrow",
+		mods = "CTRL|SHIFT",
+		action = wezterm.action.AdjustPaneSize({ "Left", 5 }),
+	},
+	{
+		key = "UpArrow",
+		mods = "CTRL|SHIFT",
+		action = wezterm.action.AdjustPaneSize({ "Up", 5 }),
+	},
+	{
+		key = "DownArrow",
+		mods = "CTRL|SHIFT",
+		action = wezterm.action.AdjustPaneSize({ "Down", 5 }),
+	},
+	{
 		key = "w",
 		mods = "CMD",
-		action = wezterm.action.CloseCurrentPane({ confirm = false }),
+		action = wezterm.action.CloseCurrentTab({ confirm = false }),
 	},
 	{
 		key = "RightArrow",
