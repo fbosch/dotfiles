@@ -19,6 +19,7 @@ cache/**/*
 Cache/**/*
 .pnpm-store
 **/.yarn/**/*
+**/.bare/**/*
 **/node_modules/**/*
 *.session
 *.history

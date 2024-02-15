@@ -1,18 +1,29 @@
 return {
 	"b0o/incline.nvim",
-	event = "VeryLazy",
+	event = "ColorScheme",
 	config = function()
-		-- highlight
-		vim.api.nvim_set_hl(0, "InclineNormal", { bg = "#191919" })
-
+		vim.api.nvim_set_hl(0, "InclineNormal", { bg = "#2e2e2e" })
+		vim.api.nvim_set_hl(0, "InclineNormalNC", { bg = "#191919" })
 		require("incline").setup({
+			highlight = {
+				groups = {
+					InclineNormal = {
+						default = true,
+						group = "InclineNormal",
+					},
+					InclineNormalNC = {
+						default = true,
+						group = "InclineNormalNC",
+					},
+				},
+			},
 			window = {
 				placement = {
 					horizontal = "right",
 					vertical = "top",
 				},
 				margin = {
-					horizontal = 1,
+					horizontal = 2,
 					vertical = 2,
 				},
 			},
@@ -63,7 +74,6 @@ return {
 					{ get_git_diff() },
 					{ (ft_icon or "") .. " ", guifg = ft_color, guibg = "none" },
 					{ filename .. " ", gui = "bold", guifg = is_modified and "#D68C67" or "#aaaaaa" },
-					-- { "┊  " .. vim.api.nvim_win_get_number(props.win), group = "DevIconWindows" },
 				}
 			end,
 		})
