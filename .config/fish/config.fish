@@ -42,7 +42,7 @@ function fish_user_keybindings
 end
 
 
-zoxide init --cmd cd fish | source
+zoxide init fish | source
 starship init fish | source
 
 # pnpm

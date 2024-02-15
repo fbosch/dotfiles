@@ -32,7 +32,6 @@ return {
 			vim.keymap.set("n", "K", ":wincmd k<CR>", opts("move to top window"))
 			vim.keymap.set("n", "L", ":wincmd l<CR>", opts("move to right window"))
 		end
-
 		require("nvim-web-devicons").setup()
 		require("nvim-tree").setup({
 			on_attach = on_attach,
