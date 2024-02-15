@@ -15,3 +15,4 @@ set -U FZF_FIND_FILE_COMMAND "$FZF_DEFAULT_COMMAND"
 set -U FZF_PREVIEW_FILE_CMD "bat --paging=never --color=always --style=numbers --line-range :100"
 set -U FZF_ENABLE_OPEN_PREVIEW 1
 set -U FZF_PREVIEW_DIR_CMD "lt"
+set -U zoxide_cmd "cd"

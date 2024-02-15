@@ -23,6 +23,7 @@ brew "fzf"
 brew "lf"
 brew "bat"
 brew "broot"
+brew "sk"
 
 # development
 brew "tmux"

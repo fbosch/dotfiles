@@ -1,10 +1,3 @@
--- local source_mapping = {
--- 	buffer = "[Buffer]",
--- 	nvim_lsp = "[LSP]",
--- 	nvim_lua = "[Lua]",
--- 	cmp_tabnine = "[TN]",
--- 	path = "[Path]",
--- }
 return {
 	"hrsh7th/nvim-cmp",
 	dependencies = {

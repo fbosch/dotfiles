@@ -1,16 +1,11 @@
 return {
 	"b0o/incline.nvim",
-	event = "ColorScheme",
+	event = "VeryLazy",
 	config = function()
+		-- highlight
+		vim.api.nvim_set_hl(0, "InclineNormal", { bg = "#191919" })
+
 		require("incline").setup({
-			-- highlight = {
-			-- 	groups = {
-			-- 		InclineNormal = {
-			-- 			default = true,
-			-- 			group = "InclineNormal",
-			-- 		},
-			-- 	},
-			-- },
 			window = {
 				placement = {
 					horizontal = "right",

@@ -31,37 +31,16 @@ return {
 	config = function()
 		local fzf = require("fzf-lua")
 		fzf.setup({
-			profile = "max-perf",
 			winopts = {
 				hl = { border = "rounded" },
 				default = {
-					preview = "bat_native",
+					preview = "bat_async",
 				},
 			},
 			previewers = {
 				builtin = {
 					hl_cursorline = "IncSearch", -- cursor line highlight
-					extensions = {
-						["png"] = "imgcat",
-						["jpg"] = "imgcat",
-					},
 				},
-				bat = {
-					cmd = "bat_native",
-					args = "--style=numbers,changes --color=always --line-range=:70",
-					theme = "Zenwritten Dark",
-				},
-			},
-			files = {
-				args = "--style=numbers,changes --color=always --line-range=:70",
-			},
-			oldfiles = {
-				args = "--style=numbers,changes --color=always --line-range=:70",
-			},
-			live_grep = {
-				previewer = "bat_native",
-				args = "--style=numbers,changes --color=always --line-range=:70",
-				keep_last = true,
 			},
 			keymap = {
 				builtin = {
@@ -71,11 +50,11 @@ return {
 			},
 		})
 
+		-- highlight
+		vim.api.nvim_set_hl(0, "FzfLuaBorder", { fg = "#bbbbbb" })
+
 		vim.api.nvim_create_user_command("FzfFd", function()
-			fzf.files({
-				-- cmd = "fd ",
-				-- fzf_opts = { { "--threads=4", "--color=always", "-tf", "--strip-cwd-prefix", } },
-			})
+			fzf.files()
 		end, {})
 
 		vim.api.nvim_create_user_command("FzfRg", function()

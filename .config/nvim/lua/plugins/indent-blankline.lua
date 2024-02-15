@@ -10,5 +10,8 @@ return {
 				enabled = true,
 			},
 		})
+		-- indent blank line
+		vim.api.nvim_set_hl(0, "IndentBlanklineScope", { fg = "#6e8aa5" })
+		vim.api.nvim_set_hl(0, "IblScope", { fg = "#6e8aa5" })
 	end,
 }
