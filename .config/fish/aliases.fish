@@ -4,12 +4,11 @@ abbr n 'nvim'
 abbr v 'nvim'
 
 abbr bup 'brew upgrade'
-alias vimdiff 'nvim -d'
-alias snvim 'sudo -E -s nvim' # launch vim in sudo but preserve env config
-alias logikill 'ps -ef | grep -i "Logi Options" | grep "Applications" | awk \'{print $2}\' | xargs kill -9' # quickfix for dying logitech driver on M1 Mac
-alias wtr 'curl "wttr.in/Copenhagen?format=\n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"'
-alias batbuild 'batch cache --build'
-alias imgcat 'wezterm imgcat'
+function vimdiff; nvim -d $argv; end
+function snvim; sudo -E -s nvim $argv; end
+function logikill; ps -ef | grep -i "Logi Options" | grep "Applications" | awk '{print $2}' | xargs kill -9; end
+function wtr; curl "wttr.in/Copenhagen?format=%n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"; end
+function batbuild; batch cache --build $argv; end
 
 # Directory shortcuts
 abbr prj 'cd ~/Projects'
@@ -23,18 +22,17 @@ abbr t 'swpm test'
 abbr mki 'sudo make && sudo make clean install'
 abbr lk 'logikill'
 
-alias copykey 'pbcopy < ~/.ssh/id_rsa.pub'
-alias prettierdstatus 'cat ~/.prettier_d_slim'
-alias chrdebug '/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222'
+function copykey; pbcopy < ~/.ssh/id_rsa.pub; end; 
+function chrdebug;/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222; end;
 
 # Extended defaults
-alias cat 'bat --style=plain --color=always'
-alias ls 'eza --icons -F'
-alias l 'ls -lh'
-alias la 'ls -A'
-alias lla 'ls -la'
-alias ld 'ls -l --sort=date --ignore-glob="node_modules" -D --time-style=relative'
-alias lt 'exa --tree --level=2 --sort=date --ignore-glob="node_modules"'
+function cat; bat --style=plain --color=always $argv; end
+function ls; eza --icons -F $argv; end
+function l; ls -lh $argv; end
+function la; ls -A $argv; end
+function lla; ls -la $argv; end
+function ld; ls -l --sort=date --ignore-glob="node_modules" -D --time-style=relative $argv; end
+function lt; exa --tree --level=2 --sort=date --ignore-glob="node_modules" $argv; end
 
 # Tmux
 abbr xtm 'pkill -f tmux'
@@ -78,16 +76,16 @@ function wta
 end
 
 # Webdev
-alias scr 'jq -r \'.scripts | to_entries[] | "\(.key):\n \(.value)\n"\' package.json | awk \'BEGIN{idx=1} {print "\033[3"idx"m" $0 "\033[0m"; idx = idx % 3 + 1}\''
-alias pnpx 'pnpm dlx'
-alias p 'swpm'
-alias pa 'swpm add'
-alias pr 'swpm remove'
-alias pw 'swpm workspace'
-alias pup 'spwm update-interactive'
-alias t 'spwm tst'
-alias dev 'swpm dev'
-alias sb 'swpm storybook'
-alias sblg 'swpm cross-env NODE_OPTIONS=--openssl-legacy-provider start-storybook -p 9000'
-alias lint 'swpm lint'
 
+function src;  jq -r \'.scripts | to_entries[] | "\(.key):\n \(.value)\n"\' package.json | awk \'BEGIN{idx=1} {print "\033[3"idx"m" $0 "\033[0m"; idx = idx % 3 + 1}\'; end;
+function pnpx; pnpm dlx $argv; end;
+function p; swpm; end;
+function pa; swpm add $argv; end
+function pr; swpm remove $argv; end
+function pw; swpm workspace $argv; end
+function pup; spwm update-interactive $argv; end
+function t; spwm tst $argv; end
+function dev; swpm dev $argv; end
+function sb; swpm storybook $argv; end
+function sblg; swpm cross-env NODE_OPTIONS=--openssl-legacy-provider start-storybook -p 9000 $argv; end
+function lint; swpm lint $argv; end
