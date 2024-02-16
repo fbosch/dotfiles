@@ -234,6 +234,9 @@ return {
 				on_attach = on_attach,
 				settings = {
 					Lua = {
+						diagnostics = {
+							globals = { "vim" },
+						},
 						completion = {
 							callSnippet = "Replace",
 						},

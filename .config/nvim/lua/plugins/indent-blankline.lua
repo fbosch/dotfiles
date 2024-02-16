@@ -1,12 +1,12 @@
 return {
 	"lukas-reineke/indent-blankline.nvim",
 	-- version = "v2.20.8",
-	event = "VeryLazy",
+	event = "ColorScheme",
 	config = function()
 		require("ibl").setup({
-			indent = { char = "▎" },
+			indent = { char = "▏" },
 			scope = {
-				char = "▎",
+				char = "▏",
 				enabled = true,
 			},
 		})

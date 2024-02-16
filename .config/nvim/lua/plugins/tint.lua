@@ -1,6 +1,6 @@
 return {
 	"levouh/tint.nvim",
-	event = "VeryLazy",
+	event = "ColorScheme",
 	enabled = false,
 	config = function()
 		require("tint").setup()

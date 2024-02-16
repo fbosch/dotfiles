@@ -16,6 +16,7 @@ config.font = wezterm.font_with_fallback({
 })
 config.font_size = 16.0
 config.underline_thickness = "0.1cell"
+config.underline_position = "-0.11cell"
 config.cursor_thickness = 1
 config.custom_block_glyphs = true
 
