@@ -41,9 +41,13 @@ function fish_user_keybindings
   fish_vi_key_bindings
 end
 
-
+function starship_transient_prompt_func
+   starship module character
+end
 zoxide init fish | source
 starship init fish | source
+enable_transience
+
 
 # pnpm
 set -gx PNPM_HOME "/Users/fbb/Library/pnpm"
