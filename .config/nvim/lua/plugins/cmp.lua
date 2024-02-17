@@ -19,7 +19,6 @@ return {
 		},
 	},
 	event = { "InsertEnter" },
-	priority = 20,
 	config = function()
 		local cmp = require("cmp")
 		local types = require("cmp.types")

@@ -10,7 +10,4 @@ return {
 			desc = "tailwind values",
 		},
 	},
-	config = function()
-		require("tw-values").setup()
-	end,
 }

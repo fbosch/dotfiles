@@ -1,11 +1,9 @@
 return {
 	"levouh/tint.nvim",
-	event = "VeryLazy",
+	event = { "VeryLazy", "BufEnter" },
 	priority = 1000,
-	config = function()
-		require("tint").setup({
-			show_first_indent_level = false,
-			highlight_ignore_patterns = { "IndentBlankline*", "Ibl*", "Whitespace", "NonText" },
-		})
-	end,
+	opts = {
+		show_first_indent_level = false,
+		highlight_ignore_patterns = { "IndentBlankline*", "Ibl*", "Whitespace", "NonText" },
+	},
 }

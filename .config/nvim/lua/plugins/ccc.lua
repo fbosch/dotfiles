@@ -10,13 +10,10 @@ return {
 			desc = "pick color",
 		},
 	},
-	config = function()
-		local ccc = require("ccc")
-		ccc.setup({
-			highlighter = {
-				highlight_mode = "fg",
-				auto_enable = true,
-			},
-		})
-	end,
+	opts = {
+		highlighter = {
+			highlight_mode = "fg",
+			auto_enable = true,
+		},
+	},
 }

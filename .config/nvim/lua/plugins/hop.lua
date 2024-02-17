@@ -1,5 +1,8 @@
 return {
 	"phaazon/hop.nvim",
+	opts = {
+		keys = "etovxqpdygfblzhckisuran",
+	},
 	cmd = {
 		"HopWord",
 		"HopWordCurrentLine",
@@ -46,9 +49,4 @@ return {
 			desc = "hop to vertical",
 		},
 	},
-	config = function()
-		require("hop").setup({
-			keys = "etovxqpdygfblzhckisuran",
-		})
-	end,
 }

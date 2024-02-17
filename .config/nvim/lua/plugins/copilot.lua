@@ -5,28 +5,25 @@ return {
 	},
 	cmd = "Copilot",
 	event = "InsertEnter",
-	config = function()
-		local copilot = require("copilot")
-		copilot.setup({
-			filetypes = {
-				lua = true,
-				javascript = true,
-				javascriptreact = true,
-				typescript = true,
-				typescriptreact = true,
-				rust = true,
-				["*"] = false,
+	opts = {
+		filetypes = {
+			lua = true,
+			javascript = true,
+			javascriptreact = true,
+			typescript = true,
+			typescriptreact = true,
+			rust = true,
+			["*"] = false,
+		},
+		suggestion = {
+			auto_trigger = true,
+			debounce = 50,
+			keymap = {
+				accept = "<Tab>",
+				next = "<C-j>",
+				prev = "<C-k>",
+				dismiss = "<C-\\>",
 			},
-			suggestion = {
-				auto_trigger = true,
-				debounce = 50,
-				keymap = {
-					accept = "<Tab>",
-					next = "<C-j>",
-					prev = "<C-k>",
-					dismiss = "<C-\\>",
-				},
-			},
-		})
-	end,
+		},
+	},
 }
