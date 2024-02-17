@@ -68,12 +68,12 @@ config.skip_close_confirmation_for_processes_named = {
 
 config.keys = {
 	{
-		key = "Enter",
-		mods = "CTRL",
+		key = "v",
+		mods = "CTRL|SHIFT",
 		action = wezterm.action.SplitHorizontal({ domain = "CurrentPaneDomain" }),
 	},
 	{
-		key = "Enter",
+		key = "s",
 		mods = "CTRL|SHIFT",
 		action = wezterm.action.SplitVertical({ domain = "CurrentPaneDomain" }),
 	},

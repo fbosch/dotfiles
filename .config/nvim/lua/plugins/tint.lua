@@ -1,7 +1,7 @@
 return {
 	"levouh/tint.nvim",
 	event = "VeryLazy",
-	-- enabled = false,
+	priority = 1000,
 	config = function()
 		require("tint").setup({
 			show_first_indent_level = false,
