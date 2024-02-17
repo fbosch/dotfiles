@@ -4,7 +4,8 @@ return {
 	-- enabled = false,
 	config = function()
 		require("tint").setup({
-			highlight_ignore_patterns = { "IndentBlankline*", "IblScope" },
+			show_first_indent_level = false,
+			highlight_ignore_patterns = { "IndentBlankline*", "Ibl*", "Whitespace", "NonText" },
 		})
 	end,
 }
