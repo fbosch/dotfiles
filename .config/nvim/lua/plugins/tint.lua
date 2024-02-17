@@ -1,8 +1,10 @@
 return {
 	"levouh/tint.nvim",
-	event = "ColorScheme",
-	enabled = false,
+	event = "VeryLazy",
+	-- enabled = false,
 	config = function()
-		require("tint").setup()
+		require("tint").setup({
+			highlight_ignore_patterns = { "IndentBlankline*", "IblScope" },
+		})
 	end,
 }

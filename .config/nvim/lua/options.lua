@@ -73,7 +73,7 @@ vim.opt.smartindent = true
 vim.opt.softtabstop = 2
 vim.opt.expandtab = true
 
-vim.opt.list = true
+vim.opt.list = false
 vim.opt.hidden = true
 vim.opt.mouse = ""
 vim.opt.clipboard:append("unnamedplus")
