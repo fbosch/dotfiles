@@ -68,6 +68,20 @@ abbr lg 'lazygit'
 abbr bad 'git bisect bad'
 abbr good 'git bisect good'
 
+# rust
+abbr cn 'cargo new'
+abbr cc 'cargo check'
+abbr cin 'cargo init'
+abbr cdoc 'cargo doc'
+abbr ca 'cargo add'
+abbr crm 'cargo remove'
+abbr cb 'cargo build'
+abbr cbn 'cargo bench'
+abbr cs 'cargo search'
+abbr r 'cargo run'
+abbr ct 'cargo test'
+abbr cu 'cargo update'
+
 # worktree add
 function wta
     set branch_name $argv[1]
@@ -76,7 +90,6 @@ function wta
 end
 
 # Webdev
-
 function src;  jq -r \'.scripts | to_entries[] | "\(.key):\n \(.value)\n"\' package.json | awk \'BEGIN{idx=1} {print "\033[3"idx"m" $0 "\033[0m"; idx = idx % 3 + 1}\'; end;
 function pnpx; pnpm dlx $argv; end;
 function p; swpm; end;
