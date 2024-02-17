@@ -14,9 +14,11 @@ return {
 		vim.g.gitblame_message_template = " <author>   <date>   <sha> "
 		require("lualine").setup({
 			options = {
-				-- theme = "auto",
 				theme = "auto",
+				-- section_separators = { left = "", right = "" },
+				section_separators = { left = "", right = "" },
 				globalstatus = true,
+				always_divide_middle = false,
 			},
 			extensions = { "fugitive", "symbols-outline" },
 			sections = {
@@ -41,7 +43,10 @@ return {
 					"branch",
 				},
 				lualine_x = {
-					{ git_blame.get_current_blame_text, cond = git_blame.is_blame_text_available },
+					{
+						git_blame.get_current_blame_text,
+						cond = git_blame.is_blame_text_available,
+					},
 				},
 				lualine_y = {
 					"filetype",
