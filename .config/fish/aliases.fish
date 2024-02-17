@@ -1,5 +1,5 @@
 # Programs
-alias nvim 'nvim -n -i NONE'
+alias nvim 'nvim -n -i NONE --noplugin'
 abbr n 'nvim'
 abbr v 'nvim'
 

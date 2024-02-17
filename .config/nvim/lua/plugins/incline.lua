@@ -1,6 +1,6 @@
 return {
 	"b0o/incline.nvim",
-	event = "ColorScheme",
+	event = "VeryLazy",
 	config = function()
 		vim.api.nvim_set_hl(0, "InclineNormal", { bg = "#2e2e2e" })
 		vim.api.nvim_set_hl(0, "InclineNormalNC", { bg = "#191919" })

@@ -6,14 +6,14 @@ return {
 			"nvim-tree/nvim-tree.lua",
 		},
 		event = "LspAttach",
-		config = function()
+		config = vim.schedule_wrap(function()
 			require("lsp-file-operations").setup()
-		end,
+		end),
 	},
 	{
 		"j-hui/fidget.nvim",
 		event = "LspAttach",
-		config = function()
+		config = vim.schedule_wrap(function()
 			require("fidget").setup({
 				progress = {
 					display = {
@@ -31,7 +31,7 @@ return {
 					},
 				},
 			})
-		end,
+		end),
 	},
 	{
 		"neovim/nvim-lspconfig",

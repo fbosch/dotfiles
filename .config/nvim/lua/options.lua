@@ -2,17 +2,18 @@
 vim.cmd([[let &t_Cs = "\e[4:3m"]])
 vim.cmd([[let &t_Ce = "\e[4:0m"]])
 
-vim.g.zenbones_solid_line_nr = true
-
 -- misc
+vim.opt.loadplugins = true
 vim.opt.re = 0 -- regex engine auto
 vim.opt.shortmess:append("I")
 vim.opt.compatible = false
 vim.opt.shell = "fish"
 vim.opt.title = false
 vim.opt.filetype = "on"
-vim.opt.shadafile = "NONE"
 vim.opt.foldenable = false
+vim.defer_fn(function()
+	vim.opt.shadafile = ""
+end, 10)
 
 -- timings
 vim.opt.timeoutlen = 1000

@@ -1,8 +1,11 @@
 return {
 	"mcchrish/zenbones.nvim",
 	dependencies = { "rktjmp/lush.nvim" },
-	priority = 1337,
+	priority = 10000,
+	event = "VeryLazy",
 	config = function()
+		vim.g.zenbones_solid_line_nr = true
+
 		vim.cmd([[colorscheme zenwritten]])
 
 		vim.api.nvim_set_hl(0, "NotifyBackground", { bg = "#191919" })

@@ -1,7 +1,7 @@
 return {
 	"lukas-reineke/indent-blankline.nvim",
 	-- version = "v2.20.8",
-	event = "ColorScheme",
+	event = "VeryLazy",
 	config = function()
 		require("ibl").setup({
 			indent = { char = "▏" },

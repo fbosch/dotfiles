@@ -31,8 +31,8 @@ return {
 	},
 	{
 		"nvim-treesitter/nvim-treesitter-context",
-		event = "LspAttach",
-		config = function()
+		event = { "LspAttach", "BufWinEnter" },
+		config = vim.schedule_wrap(function()
 			-- highlight
 			vim.api.nvim_set_hl(0, "TreesitterContext", { bg = "#1d1d1d" })
 			vim.api.nvim_set_hl(0, "TreesitterContextLineNumber", { bg = "#1d1d1d" })
@@ -44,6 +44,6 @@ return {
 					throttle = true, -- Throttles plugin updates (may improve performance)
 				},
 			})
-		end,
+		end),
 	},
 }

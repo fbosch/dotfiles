@@ -1,5 +1,23 @@
 return {
 	{
+		"kdheepak/lazygit.nvim",
+		keys = {
+			{
+				mode = { "n" },
+				"<leader>gg",
+				"<cmd>LazyGit<cr>",
+				desc = "lazygit",
+			},
+		},
+		cmd = {
+			"LazyGit",
+		},
+		config = function()
+			local telescope = require("telescope")
+			telescope.load_extension("lazygit")
+		end,
+	},
+	{
 
 		"dinhhuy258/git.nvim",
 		event = "VeryLazy",
