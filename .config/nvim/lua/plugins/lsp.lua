@@ -1,5 +1,10 @@
 return {
 	{
+		"jmbuhr/otter.nvim",
+		event = "LspAttach",
+		ft = { "markdown" },
+	},
+	{
 		"antosha417/nvim-lsp-file-operations",
 		dependencies = {
 			"nvim-lua/plenary.nvim",

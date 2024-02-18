@@ -14,9 +14,9 @@ return {
 				named_parameters = true,
 			},
 			colorpalette = {
-				{ fg = "#71d0a9" },
-				{ fg = "#83699b" },
 				{ fg = "#699a9b" },
+				{ fg = "#83699b" },
+				{ fg = "#71d0a9" },
 				{ fg = "#CA9F35" },
 				{ fg = "#a9d071" },
 				{ fg = "#9b6981" },
@@ -26,7 +26,7 @@ return {
 				{ fg = "#6e62de" },
 				{ fg = "#C5653A" },
 				{ fg = "#d071a9" },
-				{ fg = "#3AC565" },
+				{ fg = "#5cc565" },
 				{ fg = "#3566af" },
 				{ fg = "#bf528c" },
 				-- -- originals
@@ -44,7 +44,7 @@ return {
 				-- { fg = "#EEF06D" },
 				-- { fg = "#8FB272" },
 			},
-			hl_priority = 1000,
+			hl_priority = 500,
 		})
 	end),
 }

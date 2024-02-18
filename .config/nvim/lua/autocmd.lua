@@ -27,3 +27,31 @@ cmd({ "InsertLeave" }, {
 	command = "set nopaste",
 	group = group,
 })
+
+cmd({ "InsertEnter" }, {
+	command = "normal! zz",
+	group = group,
+})
+
+-- enable relative line numbers in insert mode
+cmd({ "BufEnter", "FocusGained", "InsertLeave", "CmdlineLeave", "WinEnter" }, {
+	pattern = "*",
+	group = group,
+	callback = function()
+		if vim.o.nu and vim.api.nvim_get_mode().mode ~= "i" then
+			vim.opt.relativenumber = true
+		end
+	end,
+})
+
+-- disable relative line numbers in normal mode
+cmd({ "BufLeave", "FocusLost", "InsertEnter", "CmdlineEnter", "WinLeave" }, {
+	pattern = "*",
+	group = group,
+	callback = function()
+		if vim.o.nu then
+			vim.opt.relativenumber = false
+			vim.cmd("redraw")
+		end
+	end,
+})
