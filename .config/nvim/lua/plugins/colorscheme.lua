@@ -5,11 +5,11 @@ return {
 	event = "VeryLazy",
 	config = function()
 		vim.g.zenbones_solid_line_nr = true
-		local colors = require("colors")
 
 		vim.cmd([[colorscheme zenwritten]])
 
 		local hl = vim.api.nvim_set_hl
+		local colors = require("colors")
 
 		hl(0, "NotifyBackground", { bg = colors.background })
 		hl(0, "TreesitterContext", { bg = colors.dark_gray })
