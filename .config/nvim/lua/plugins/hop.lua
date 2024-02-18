@@ -1,10 +1,13 @@
 return {
+	-- replace with: https://github.com/folke/flash.nvim
 	"phaazon/hop.nvim",
+	branch = "v2",
 	opts = {
 		keys = "etovxqpdygfblzhckisuran",
 	},
 	cmd = {
 		"HopWord",
+		"HopWordMW",
 		"HopWordCurrentLine",
 		"HowLineStart",
 		"HopLineStartAC",
@@ -15,7 +18,7 @@ return {
 		{
 			mode = { "n" },
 			"<leader>h",
-			"<cmd>HopWord<cr>",
+			"<cmd>HopWordMW<cr>",
 			desc = "hop to word",
 		},
 		{
@@ -27,13 +30,13 @@ return {
 		{
 			mode = { "n" },
 			"<leader>lh",
-			"<cmd>HopLineStart<cr>",
+			"<cmd>HopLineStartMW<cr>",
 			desc = "hop to line start",
 		},
 		{
 			mode = { "n" },
 			"<leader>la",
-			"<cmd>HopLineStartAC<cr>",
+			"<cmd>HopLineStartMW<cr>",
 			desc = "hop to line start after character",
 		},
 		{
