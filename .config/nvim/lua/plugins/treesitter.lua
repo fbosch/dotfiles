@@ -33,10 +33,15 @@ return {
 		"nvim-treesitter/nvim-treesitter-context",
 		event = { "LspAttach", "BufWinEnter" },
 		config = vim.schedule_wrap(function()
+			local colors = require("colors")
 			-- highlight
-			vim.api.nvim_set_hl(0, "TreesitterContext", { bg = "#1d1d1d" })
-			vim.api.nvim_set_hl(0, "TreesitterContextLineNumber", { bg = "#1d1d1d" })
-			vim.api.nvim_set_hl(0, "TreesitterContextBottom", { bg = "#1d1d1d", underline = true, sp = "#2e2e2e" })
+			vim.api.nvim_set_hl(0, "TreesitterContext", { bg = colors.darkest_gray })
+			vim.api.nvim_set_hl(0, "TreesitterContextLineNumber", { bg = colors.darkest_gray })
+			vim.api.nvim_set_hl(
+				0,
+				"TreesitterContextBottom",
+				{ bg = colors.darkest_gray, underline = true, sp = colors.dark_gray }
+			)
 
 			require("nvim-treesitter.configs").setup({
 				context = {

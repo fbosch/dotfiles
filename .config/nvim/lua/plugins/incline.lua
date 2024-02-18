@@ -2,8 +2,9 @@ return {
 	"b0o/incline.nvim",
 	event = "VeryLazy",
 	config = function()
-		vim.api.nvim_set_hl(0, "InclineNormal", { bg = "#2e2e2e" })
-		vim.api.nvim_set_hl(0, "InclineNormalNC", { bg = "#191919" })
+		local colors = require("colors")
+		vim.api.nvim_set_hl(0, "InclineNormal", { bg = colors.dark_gray })
+		vim.api.nvim_set_hl(0, "InclineNormalNC", { bg = colors.background })
 		require("incline").setup({
 			highlight = {
 				groups = {
@@ -46,7 +47,7 @@ return {
 						end
 					end
 					if #labels > 0 then
-						table.insert(labels, { "┊ ", guifg = "#616161" })
+						table.insert(labels, { "┊ ", guifg = colors.light_gray })
 					end
 					return labels
 				end
@@ -64,7 +65,7 @@ return {
 						end
 					end
 					if #label > 0 then
-						table.insert(label, { "┊ ", guifg = "#616161" })
+						table.insert(label, { "┊ ", guifg = colors.light_gray })
 					end
 					return label
 				end
@@ -73,7 +74,7 @@ return {
 					{ get_diagnostic_label() },
 					{ get_git_diff() },
 					{ (ft_icon or "") .. " ", guifg = ft_color, guibg = "none" },
-					{ filename .. " ", gui = "bold", guifg = is_modified and "#D68C67" or "#aaaaaa" },
+					{ filename .. " ", gui = "bold", guifg = is_modified and colors.orange or colors.lighter_gray },
 				}
 			end,
 		})

@@ -6,6 +6,7 @@ return {
 		"romgrk/fzy-lua-native",
 	},
 	config = function()
+		local colors = require("colors")
 		local wilder = require("wilder")
 		wilder.setup({
 			modes = { ":", "/", "?" },
@@ -40,7 +41,7 @@ return {
 					accent = wilder.make_hl(
 						"WilderAccent",
 						"Pmenu",
-						{ { foreground = "#ffffff" }, { background = -1 }, { foreground = "#B279A7" } }
+						{ { foreground = colors.white }, { background = -1 }, { foreground = colors.purple } }
 					),
 				},
 				left = {
@@ -48,7 +49,7 @@ return {
 					wilder.popupmenu_devicons(),
 					wilder.popupmenu_buffer_flags({
 						flags = " a + ",
-						icons = { ["+"] = "", a = "", h = "" },
+						-- icons = { ["+"] = "", a = "", h = "" },
 					}),
 				},
 				right = {

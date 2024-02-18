@@ -79,18 +79,22 @@ return {
 			}),
 		})
 
-		-- highlights
-		vim.api.nvim_set_hl(0, "CmpItemAbbrDeprecated", { fg = "#bbbbbb", strikethrough = true })
-		vim.api.nvim_set_hl(0, "CmpItemAbbrMatch", { fg = "#aaaaaa" })
-		vim.api.nvim_set_hl(0, "CmpItemAbbrMatchFuzzy", { fg = "#aaaaaa" })
-		vim.api.nvim_set_hl(0, "CmpItemKindVariable", { fg = "#97bdde" })
-		vim.api.nvim_set_hl(0, "CmpItemKindInterface", { fg = "#97bdde" })
-		vim.api.nvim_set_hl(0, "CmpItemKindText", { fg = "#97bdde" })
-		vim.api.nvim_set_hl(0, "CmpItemKindFunction", { fg = "#b279a7" })
-		vim.api.nvim_set_hl(0, "CmpItemKindMethod", { fg = "#b279a7" })
-		vim.api.nvim_set_hl(0, "CmpItemKindKeyword", { fg = "#bbbbbb" })
-		vim.api.nvim_set_hl(0, "CmpItemKindProperty", { fg = "#ffffff" })
-		vim.api.nvim_set_hl(0, "CmpItemKindUnit", { fg = "#ffffff" })
-		vim.api.nvim_set_hl(0, "CmpItemKindSnippet", { fg = "#D68C67" })
+		vim.schedule_wrap(function()
+			local colors = require("colors")
+
+			-- highlights
+			vim.api.nvim_set_hl(0, "CmpItemAbbrDeprecated", { fg = colors.lighter_gray, strikethrough = true })
+			vim.api.nvim_set_hl(0, "CmpItemAbbrMatch", { fg = colors.lighter_gray })
+			vim.api.nvim_set_hl(0, "CmpItemAbbrMatchFuzzy", { fg = colors.lighter_gray })
+			vim.api.nvim_set_hl(0, "CmpItemKindVariable", { fg = colors.blue })
+			vim.api.nvim_set_hl(0, "CmpItemKindInterface", { fg = colors.blue })
+			vim.api.nvim_set_hl(0, "CmpItemKindText", { fg = colors.blue })
+			vim.api.nvim_set_hl(0, "CmpItemKindFunction", { fg = colors.purple })
+			vim.api.nvim_set_hl(0, "CmpItemKindMethod", { fg = colors.purple })
+			vim.api.nvim_set_hl(0, "CmpItemKindKeyword", { fg = colors.lighter_gray })
+			vim.api.nvim_set_hl(0, "CmpItemKindProperty", { fg = colors.white })
+			vim.api.nvim_set_hl(0, "CmpItemKindUnit", { fg = colors.white })
+			vim.api.nvim_set_hl(0, "CmpItemKindSnippet", { fg = colors.orange })
+		end)
 	end,
 }

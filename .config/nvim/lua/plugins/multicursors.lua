@@ -5,6 +5,7 @@ return {
 		"smoka7/hydra.nvim",
 	},
 	opts = {},
+	enabled = false,
 	cmd = { "MCstart", "MCvisual", "MCclear", "MCpattern", "MCvisualPattern", "MCunderCursor" },
 	keys = {
 		{
@@ -15,18 +16,19 @@ return {
 		},
 	},
 	config = function()
+		local colors = require("colors")
 		require("multicursors").setup({
 			hint_config = {
 				border = "rounded",
 			},
 		})
 
-		vim.api.nvim_set_hl(0, "MultiCursor", { fg = "#E5B769" })
-		vim.api.nvim_set_hl(0, "MultiCursorMain", { bg = "#F4AC45", fg = "#252525" })
+		vim.api.nvim_set_hl(0, "MultiCursor", { fg = colors.yellow })
+		vim.api.nvim_set_hl(0, "MultiCursorMain", { bg = colors.yellow, fg = colors.darker_gray })
 		-- hydra.nvim highlights
-		vim.api.nvim_set_hl(0, "HydraPink", { fg = "#b279a7" })
-		vim.api.nvim_set_hl(0, "HydraTeal", { fg = "#97bdde" })
-		vim.api.nvim_set_hl(0, "HydraBlue", { fg = "#97bdde" })
-		vim.api.nvim_set_hl(0, "HydraRed", { fg = "#DE6E7C" })
+		vim.api.nvim_set_hl(0, "HydraPink", { fg = colors.purple })
+		vim.api.nvim_set_hl(0, "HydraTeal", { fg = colors.blue })
+		vim.api.nvim_set_hl(0, "HydraBlue", { fg = colors.blue })
+		vim.api.nvim_set_hl(0, "HydraRed", { fg = colors.red })
 	end,
 }

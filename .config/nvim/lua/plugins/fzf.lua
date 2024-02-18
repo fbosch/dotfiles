@@ -51,7 +51,7 @@ return {
 		})
 
 		-- highlight
-		vim.api.nvim_set_hl(0, "FzfLuaBorder", { fg = "#bbbbbb" })
+		vim.api.nvim_set_hl(0, "FzfLuaBorder", { fg = require("colors").lighter_gray })
 
 		vim.api.nvim_create_user_command("FzfFd", function()
 			fzf.files()

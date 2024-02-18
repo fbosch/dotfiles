@@ -10,9 +10,10 @@ return {
 		},
 	},
 	config = function()
+		local colors = require("colors")
 		-- highlights
-		vim.api.nvim_set_hl(0, "WhichKeyFloat", { bg = "#191919" })
-		vim.api.nvim_set_hl(0, "WhichKey", { fg = "#97bdde" })
+		vim.api.nvim_set_hl(0, "WhichKeyFloat", { bg = colors.background })
+		vim.api.nvim_set_hl(0, "WhichKey", { fg = colors.blue })
 
 		require("which-key").setup({
 			plugins = {
