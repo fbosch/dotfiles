@@ -36,7 +36,12 @@ return {
 			},
 		},
 		config = function()
-			require("git").setup()
+			require("git").setup({
+				keymaps = {
+					diff = "<leader>df",
+					diff_close = "<leader>dF",
+				},
+			})
 		end,
 	},
 	{

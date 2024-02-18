@@ -16,29 +16,6 @@ return {
 		end),
 	},
 	{
-		"j-hui/fidget.nvim",
-		event = "LspAttach",
-		config = vim.schedule_wrap(function()
-			require("fidget").setup({
-				progress = {
-					display = {
-						done_icon = "",
-						progress_icon = { pattern = "dots_scrolling" },
-					},
-				},
-				notification = {
-					filter = vim.log.levels.INFO,
-					override_vim_notify = true,
-				},
-				integration = {
-					["nvim-tree"] = {
-						enable = true,
-					},
-				},
-			})
-		end),
-	},
-	{
 		"neovim/nvim-lspconfig",
 		event = { "BufReadPre", "BufNewFile" },
 		dependencies = {
