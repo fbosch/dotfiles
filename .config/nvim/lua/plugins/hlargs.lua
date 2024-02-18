@@ -1,0 +1,42 @@
+return {
+	"m-demare/hlargs.nvim",
+	event = "LspAttach",
+	config = function()
+		require("hlargs").setup({
+			use_colorpalette = true,
+			sequential_colorpalette = true,
+			colorpalette = {
+				{ fg = "#71d0a9" },
+				{ fg = "#83699b" },
+				{ fg = "#699a9b" },
+				{ fg = "#CA9F35" },
+				{ fg = "#a9d071" },
+				{ fg = "#9b6981" },
+				{ fg = "#59a868" },
+				{ fg = "#ded16e" },
+				{ fg = "#ff93c8" },
+				{ fg = "#6e62de" },
+				{ fg = "#C5653A" },
+				{ fg = "#d071a9" },
+				{ fg = "#3AC565" },
+				{ fg = "#3566af" },
+				{ fg = "#bf528c" },
+				-- -- originals
+				-- { fg = "#3AC6BE" },
+				-- { fg = "#35D27F" },
+				-- { fg = "#EB75D6" },
+				-- { fg = "#E5D180" },
+				-- { fg = "#8997F5" },
+				-- { fg = "#D49DA5" },
+				-- { fg = "#7FEC35" },
+				-- { fg = "#F6B223" },
+				-- { fg = "#F67C1B" },
+				-- { fg = "#DE9A4E" },
+				-- { fg = "#BBEA87" },
+				-- { fg = "#EEF06D" },
+				-- { fg = "#8FB272" },
+			},
+			hl_priority = 200,
+		})
+	end,
+}

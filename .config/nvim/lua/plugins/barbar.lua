@@ -74,7 +74,7 @@ return {
 					[vim.diagnostic.severity.ERROR] = { enabled = true, icon = " ", custom_color = true },
 					[vim.diagnostic.severity.WARN] = { enabled = true, icon = " ", custom_color = true },
 					[vim.diagnostic.severity.INFO] = { enabled = true, icon = "󰋼 ", custom_color = true },
-					[vim.diagnostic.severity.HINT] = { enabled = true, icon = " ", custom_color = true },
+					[vim.diagnostic.severity.HINT] = { enabled = true, icon = " ", custom_color = true },
 					gitsigns = {
 						added = { enabled = true, icon = "" },
 						changed = { enabled = true, icon = "~" },

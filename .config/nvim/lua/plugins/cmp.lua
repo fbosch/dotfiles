@@ -61,7 +61,7 @@ return {
 			sources = cmp.config.sources({
 				{ name = "nvim_lsp", max_item_count = 10 },
 				{ name = "buffer", max_item_count = 3 },
-				{ name = "luasnip", max_item_count = 4 },
+				-- { name = "luasnip", max_item_count = 4 },
 				{ name = "emoji", max_item_count = 20 },
 				{ name = "spell", max_item_count = 3 },
 				{ name = "nvim_lua", max_item_count = 5 },
