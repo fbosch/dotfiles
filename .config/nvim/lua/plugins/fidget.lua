@@ -1,7 +1,7 @@
 return {
 	"j-hui/fidget.nvim",
 	event = "LspAttach",
-	config = vim.schedule_wrap(function()
+	config = function()
 		require("fidget").setup({
 			progress = {
 				display = {
@@ -35,5 +35,5 @@ return {
 				},
 			},
 		})
-	end),
+	end,
 }

@@ -7,6 +7,7 @@ return {
 	event = "ColorScheme",
 	enabled = false,
 	config = function()
+		local colors = require("colors")
 		local barbecue = require("barbecue")
 		barbecue.setup({
 			create_autocmd = true,
@@ -15,20 +16,20 @@ return {
 			show_modified = false,
 			show_navic = true,
 			theme = {
-				normal = { bg = "#191919", fg = "#aaaaaa" },
+				normal = { bg = colors.background, fg = colors.lighter_gray },
 				basename = { bold = true },
-				separator = { fg = "#636363" },
-				modified = { fg = "#D68C67" },
+				separator = { fg = colors.light_gray },
+				modified = { fg = colors.orange },
 				-- context
-				context_module = { fg = "#b279a7" },
-				context_constant = { fg = "#636363" },
-				context_namespace = { fg = "#97bdde" },
-				context_function = { fg = "#b279a7" },
-				context_method = { fg = "#b279a7" },
-				context_type_parameter = { fg = "#b279a7" },
-				context_variable = { fg = "#97bdde" },
-				context_field = { fg = "#ffffff" },
-				context_property = { fg = "#ffffff" },
+				context_module = { fg = colors.purple },
+				context_constant = { fg = colors.light_gray },
+				context_namespace = { fg = colors.blue },
+				context_function = { fg = colors.purple },
+				context_method = { fg = colors.purple },
+				context_type_parameter = { fg = colors.purple },
+				context_variable = { fg = colors.blue },
+				context_field = { fg = colors.white },
+				context_property = { fg = colors.white },
 			},
 		})
 	end,

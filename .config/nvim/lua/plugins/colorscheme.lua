@@ -5,41 +5,44 @@ return {
 	event = "VeryLazy",
 	config = function()
 		vim.g.zenbones_solid_line_nr = true
+		local colors = require("colors")
 
 		vim.cmd([[colorscheme zenwritten]])
 
-		vim.api.nvim_set_hl(0, "NotifyBackground", { bg = "#191919" })
-		vim.api.nvim_set_hl(0, "TreesitterContext", { bg = "#2c2c2c" })
-		vim.api.nvim_set_hl(0, "SpellBad", { undercurl = true, sp = "#A8334C" })
-		vim.api.nvim_set_hl(0, "MatchParen", { fg = "#252525", bg = "#6e8aa5" })
+		local hl = vim.api.nvim_set_hl
+
+		hl(0, "NotifyBackground", { bg = colors.background })
+		hl(0, "TreesitterContext", { bg = colors.dark_gray })
+		hl(0, "SpellBad", { undercurl = true, sp = colors.mispell_red })
+		hl(0, "MatchParen", { fg = colors.darker_gray, bg = colors.match_blue })
 
 		-- popup menu highlights (wilder, telescope, etc.)
-		vim.api.nvim_set_hl(0, "NormalFloat", { bg = "#191919" })
-		vim.api.nvim_set_hl(0, "Pmenu", { bg = "#191919" })
-		vim.api.nvim_set_hl(0, "Beacon", { bg = "#bbbbbb", ctermbg = 15 })
+		hl(0, "NormalFloat", { bg = colors.background })
+		hl(0, "Pmenu", { bg = colors.background })
+		hl(0, "Beacon", { bg = colors.lighter_gray, ctermbg = 15 })
 
 		-- notify
-		vim.api.nvim_set_hl(0, "NotifyERRORBorder", { fg = "#DE6E7C" })
-		vim.api.nvim_set_hl(0, "NotifyWARNBorder", { fg = "#D68C67" })
-		vim.api.nvim_set_hl(0, "NotifyINFOBorder", { fg = "#2c2c2c" })
-		vim.api.nvim_set_hl(0, "NotifyDEBUGBorder", { fg = "#aaaaaa" })
-		vim.api.nvim_set_hl(0, "NotifyTRACEBorder", { fg = "#b279a7" })
-		vim.api.nvim_set_hl(0, "NotifyERRORIcon", { fg = "#DE6E7C" })
-		vim.api.nvim_set_hl(0, "NotifyWARNIcon", { fg = "#D68C67" })
-		vim.api.nvim_set_hl(0, "NotifyINFOIcon", { fg = "#97bdde" })
-		vim.api.nvim_set_hl(0, "NotifyDEBUGIcon", { fg = "#aaaaaa" })
-		vim.api.nvim_set_hl(0, "NotifyTRACEIcon", { fg = "#b279a7" })
-		vim.api.nvim_set_hl(0, "NotifyERRORTitle", { fg = "#DE6E7C" })
-		vim.api.nvim_set_hl(0, "NotifyWARNTitle", { fg = "#D68C67" })
-		vim.api.nvim_set_hl(0, "NotifyINFOTitle", { fg = "#bbbbbb" })
-		vim.api.nvim_set_hl(0, "NotifyDEBUGTitle", { fg = "#aaaaaa" })
-		vim.api.nvim_set_hl(0, "NotifyTRACETitle", { fg = "#b279a7" })
+		hl(0, "NotifyERRORBorder", { fg = colors.red })
+		hl(0, "NotifyWARNBorder", { fg = colors.orange })
+		hl(0, "NotifyINFOBorder", { fg = colors.dark_gray })
+		hl(0, "NotifyDEBUGBorder", { fg = colors.lighter_gray })
+		hl(0, "NotifyTRACEBorder", { fg = colors.purple })
+		hl(0, "NotifyERRORIcon", { fg = colors.red })
+		hl(0, "NotifyWARNIcon", { fg = colors.orange })
+		hl(0, "NotifyINFOIcon", { fg = colors.blue })
+		hl(0, "NotifyDEBUGIcon", { fg = colors.lighter_gray })
+		hl(0, "NotifyTRACEIcon", { fg = colors.purple })
+		hl(0, "NotifyERRORTitle", { fg = colors.red })
+		hl(0, "NotifyWARNTitle", { fg = colors.orange })
+		hl(0, "NotifyINFOTitle", { fg = colors.lighter_gray })
+		hl(0, "NotifyDEBUGTitle", { fg = colors.lighter_gray })
+		hl(0, "NotifyTRACETitle", { fg = colors.purple })
 
 		-- fold
-		vim.api.nvim_set_hl(0, "Folded", { fg = "#bbbbbb", bg = "#252525" })
+		hl(0, "Folded", { fg = colors.lighter_gray, bg = colors.darker_gray })
 		-- indent
 
-		vim.api.nvim_set_hl(0, "IndentBlanklineScope", { fg = "#6e8aa5" })
-		vim.api.nvim_set_hl(0, "IblScope", { fg = "#6e8aa5" })
+		hl(0, "IndentBlanklineScope", { fg = colors.match_blue })
+		hl(0, "IblScope", { fg = colors.match_blue })
 	end,
 }

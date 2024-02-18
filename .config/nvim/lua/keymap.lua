@@ -3,7 +3,7 @@ local opts = { noremap = true, silent = true }
 
 -- disable
 map("n", "<Space>", "<NOP>", opts)
-map("n", "q", "<NOP>", opts)
+-- map("n", "q", "<NOP>", opts)
 
 -- disable arrow keys in insert mode
 map("i", "<Up>", "<NOP>", opts)
