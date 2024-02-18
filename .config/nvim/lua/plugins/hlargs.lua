@@ -1,10 +1,18 @@
 return {
 	"m-demare/hlargs.nvim",
-	event = "LspAttach",
-	config = function()
+	event = { "VeryLazy" },
+	priority = 100,
+	config = vim.schedule_wrap(function()
 		require("hlargs").setup({
 			use_colorpalette = true,
 			sequential_colorpalette = true,
+			paint_catch_blocks = {
+				declarations = true,
+				usages = true,
+			},
+			extras = {
+				named_parameters = true,
+			},
 			colorpalette = {
 				{ fg = "#71d0a9" },
 				{ fg = "#83699b" },
@@ -36,7 +44,7 @@ return {
 				-- { fg = "#EEF06D" },
 				-- { fg = "#8FB272" },
 			},
-			hl_priority = 200,
+			hl_priority = 1000,
 		})
-	end,
+	end),
 }
