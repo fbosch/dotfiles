@@ -15,6 +15,7 @@ brew "readline"
 brew "btop"
 brew "tldr"
 brew "grc"
+brew "gnu-units"
 
 # directories
 brew "zoxide"

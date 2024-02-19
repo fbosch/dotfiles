@@ -6,7 +6,7 @@ return {
 			event = "VeryLazy",
 		},
 	},
-	event = "VimEnter",
+	enabled = true,
 	config = function()
 		local cwd = vim.v.cwd or vim.fn.getcwd(0)
 		local function get_cwd_as_name()

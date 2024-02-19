@@ -1,7 +1,7 @@
 return {
 	"romgrk/barbar.nvim",
 	dependencies = { "kyazdani42/nvim-web-devicons" },
-	event = { "BufRead", "LspAttach" },
+	event = { "VeryLazy" },
 	cmd = { "BufferNext", "BufferPrevious", "BufferClose", "BufferPick" },
 	priority = 50,
 	keys = {

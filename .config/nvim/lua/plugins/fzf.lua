@@ -1,12 +1,12 @@
 return {
 	"ibhagwan/fzf-lua",
 	dependencies = { "kyazdani42/nvim-web-devicons" },
-	cmd = { "FzfLua", "FzfFd", "FzfRg" },
+	cmd = { "FzfLua", "FzfRg" },
 	keys = {
 		{
 			mode = { "n" },
 			"<C-p>",
-			"<cmd>FzfFd<cr>",
+			"<cmd>FzfLua files<cr>",
 			desc = "find files",
 		},
 		{
@@ -52,10 +52,6 @@ return {
 
 		-- highlight
 		vim.api.nvim_set_hl(0, "FzfLuaBorder", { fg = require("colors").lighter_gray })
-
-		vim.api.nvim_create_user_command("FzfFd", function()
-			fzf.files()
-		end, {})
 
 		vim.api.nvim_create_user_command("FzfRg", function()
 			local colors =
