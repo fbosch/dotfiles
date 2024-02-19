@@ -11,7 +11,7 @@ vim.opt.filetype = "on"
 vim.opt.foldenable = false
 vim.defer_fn(function()
 	vim.opt.shadafile = ""
-end, 50)
+end, 10)
 
 -- timings
 vim.opt.timeoutlen = 1000
@@ -42,7 +42,7 @@ vim.opt.undofile = true
 vim.opt.undodir = vim.fn.stdpath("config") .. "/nvim/.undo//"
 vim.opt.backupdir = vim.fn.stdpath("config") .. "/nvim/.backup//"
 vim.opt.directory = vim.fn.stdpath("config") .. "/nvim/.swp//"
-vim.opt.sessionoptions = "curdir,localoptions,buffers,tabpages,winsize,winpos,globals"
+vim.opt.sessionoptions = "curdir,localoptions,options,buffers,tabpages,winsize,winpos,globals"
 vim.opt.fileencoding = "utf-8"
 vim.opt.autoread = true
 

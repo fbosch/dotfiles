@@ -83,10 +83,22 @@ abbr ct 'cargo test'
 abbr cu 'cargo update'
 
 # worktree add
-function wta
+abbr wta "worktree_add"
+function worktree_add
     set branch_name $argv[1]
-    echo $branch_name | worktree-add.sh
-    cd -- $branch_name
+    
+    set remote_branch_exists (git ls-remote --exit-code --heads origin $branch_name; echo $status)
+    
+    if test $remote_branch_exists -eq 0
+        # Branch exists on remote, create directory without -b option
+        git worktree add $branch_name $branch_name
+    else
+        # Branch doesn't exist on remote, create directory with -b option
+        git worktree add -b $branch_name $branch_name
+    end
+
+    cd $branch_name
+    swpm install
 end
 
 # Webdev

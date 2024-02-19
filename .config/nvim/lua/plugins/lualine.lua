@@ -4,7 +4,7 @@ return {
 		"kyazdani42/nvim-web-devicons",
 		"f-person/git-blame.nvim",
 	},
-	event = { "BufRead", "LspAttach" },
+	event = { "BufRead", "LspAttach", "ColorScheme" },
 	priority = 50,
 	config = function()
 		local overseer = require("overseer")
