@@ -3,15 +3,15 @@ vim.cmd([[let &t_Cs = "\e[4:3m"]])
 vim.cmd([[let &t_Ce = "\e[4:0m"]])
 
 -- misc
-vim.opt.loadplugins = true
 vim.opt.re = 0 -- regex engine auto
-vim.opt.shortmess = "I"
 vim.opt.compatible = false
 vim.opt.shell = "fish"
 vim.opt.title = false
 vim.opt.filetype = "on"
 vim.opt.foldenable = false
-vim.opt.shadafile = ""
+vim.defer_fn(function()
+	vim.opt.shadafile = ""
+end, 50)
 
 -- timings
 vim.opt.timeoutlen = 1000
@@ -42,7 +42,7 @@ vim.opt.undofile = true
 vim.opt.undodir = vim.fn.stdpath("config") .. "/nvim/.undo//"
 vim.opt.backupdir = vim.fn.stdpath("config") .. "/nvim/.backup//"
 vim.opt.directory = vim.fn.stdpath("config") .. "/nvim/.swp//"
-vim.opt.sessionoptions = "buffers,help,tabpages,winsize,winpos,options,globals"
+vim.opt.sessionoptions = "curdir,localoptions,buffers,tabpages,winsize,winpos,globals"
 vim.opt.fileencoding = "utf-8"
 vim.opt.autoread = true
 
