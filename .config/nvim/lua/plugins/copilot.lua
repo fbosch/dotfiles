@@ -13,6 +13,7 @@ return {
 			typescript = true,
 			typescriptreact = true,
 			rust = true,
+			fish = true,
 			["*"] = false,
 		},
 		suggestion = {
