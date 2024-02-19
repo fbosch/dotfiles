@@ -99,6 +99,9 @@ function worktree_add
 
     cd $branch_name
     swpm install
+    git reset --hard HEAD
+   
+    echo "Worktree added and installed ✅"
 end
 abbr wtc "worktrees_clean"
 function worktrees_clean 
@@ -111,8 +114,8 @@ function worktrees_clean
     set progress_percent (math "100 * $current_folder_index / $total_folders")
 
     echo -n (printf "Removing old worktrees: %.2f%%\r" $progress_percent)
-    git branch --merged | egrep -v "$subfolder" | xargs --no-run-if-empty git branch -d
     rm -rf $subfolder
+    git branch --merged | egrep -v "$subfolder" | xargs --no-run-if-empty git branch -d
   end
 end
 
