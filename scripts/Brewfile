@@ -41,6 +41,7 @@ brew "git"
 brew "git-delta"
 brew "go"
 brew "jq"
+brew "luarocks"
 
 # programs - mac
 if OS.mac?

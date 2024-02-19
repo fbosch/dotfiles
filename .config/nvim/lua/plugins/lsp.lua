@@ -45,6 +45,7 @@ return {
 		},
 		priority = 50,
 		config = function()
+			vim.lsp.set_log_level("off")
 			local neodev = require("neodev")
 			local lspconfig = require("lspconfig")
 			local conform = require("conform")

@@ -1,6 +1,6 @@
 return {
 	"kyazdani42/nvim-tree.lua",
-	dependencies = { "nvim-tree/nvim-web-devicons", "mcchrish/zenbones.nvim" },
+	dependencies = { "kyazdani42/nvim-web-devicons", "mcchrish/zenbones.nvim" },
 	event = { "BufWinEnter", "LspAttach", "VeryLazy" },
 	cmd = { "NvimTreeToggle", "NvimTreeFindFile" },
 	keys = {

@@ -2,9 +2,11 @@ return {
 	-- replace with: https://github.com/folke/flash.nvim
 	"phaazon/hop.nvim",
 	branch = "v2",
-	opts = {
-		keys = "etovxqpdygfblzhckisuran",
-	},
+	config = function()
+		require("hop").setup({
+			keys = "etovxqpdygfblzhckisuran",
+		})
+	end,
 	cmd = {
 		"HopWord",
 		"HopWordMW",

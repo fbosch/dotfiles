@@ -71,7 +71,7 @@ return {
 
 			fzf.live_grep_resume({
 				rg_glob = true,
-				glob_flag = "--iglob",
+				-- glob_flag = "--iglob",
 				exec_empty_query = false,
 				rg_opts = combined_options,
 			})
