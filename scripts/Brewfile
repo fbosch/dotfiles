@@ -16,6 +16,7 @@ brew "btop"
 brew "tldr"
 brew "grc"
 brew "gnu-units"
+brew "ast-grep"
 
 # directories
 brew "zoxide"
