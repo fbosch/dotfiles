@@ -1,3 +1,4 @@
+. ~/.config/fish/scripts.fish
 . ~/.config/fish/aliases.fish
 . ~/.config/fish/profile.fish
 . ~/.config/fish/private.fish

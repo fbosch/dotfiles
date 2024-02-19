@@ -11,7 +11,7 @@ vim.opt.filetype = "on"
 vim.opt.foldenable = false
 vim.defer_fn(function()
 	vim.opt.shadafile = ""
-end, 10)
+end, 100)
 
 -- timings
 vim.opt.timeoutlen = 1000
@@ -48,8 +48,8 @@ vim.opt.autoread = true
 
 -- fold
 vim.opt.foldcolumn = "1"
-vim.o.foldlevel = "99"
-vim.o.foldlevelstart = "99"
+-- vim.o.foldlevel = 99
+-- vim.o.foldlevelstart = 99
 vim.o.foldenable = true
 vim.opt.foldlevelstart = 0
 vim.opt.foldmethod = "syntax"
