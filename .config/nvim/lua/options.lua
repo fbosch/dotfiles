@@ -7,19 +7,20 @@ vim.opt.re = 0 -- regex engine auto
 vim.opt.compatible = false
 vim.opt.shell = "fish"
 vim.opt.title = false
-vim.opt.filetype = "on"
 vim.opt.foldenable = false
-vim.defer_fn(function()
-	vim.opt.shadafile = ""
-end, 100)
+vim.opt.filetype = "off"
+vim.opt.syntax = "off"
+vim.opt.shadafile = "NONE"
+-- vim.defer_fn(function()
+-- 	vim.opt.shadafile = ""
+-- end, 200)
 
 -- timings
-vim.opt.timeoutlen = 1000
-vim.opt.updatetime = 200
+vim.opt.timeoutlen = 500
+vim.opt.updatetime = 2000
 
 -- visual
 vim.opt.lazyredraw = true
-vim.opt.ttyfast = true
 vim.opt.termguicolors = true
 vim.opt.background = "dark"
 vim.opt.number = true

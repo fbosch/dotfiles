@@ -1,7 +1,7 @@
 return {
 	"mcchrish/zenbones.nvim",
 	dependencies = { "rktjmp/lush.nvim" },
-	priority = 10000,
+	priority = 1000,
 	event = "VeryLazy",
 	config = function()
 		vim.g.zenbones_solid_line_nr = true

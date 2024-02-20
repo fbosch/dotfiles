@@ -3,7 +3,7 @@ return {
 		"nvim-treesitter/nvim-treesitter",
 		build = ":TSUpdate",
 		dependencies = { "andymass/vim-matchup", "windwp/nvim-ts-autotag" },
-		event = { "BufReadPost", "BufNewFile", "LspAttach" },
+		event = "VeryLazy",
 		config = function()
 			require("nvim-treesitter.configs").setup({
 				matchup = {
@@ -17,6 +17,7 @@ return {
 					"javascript",
 					"jsdoc",
 					"typescript",
+					"tsx",
 					"html",
 					"css",
 					"markdown",
@@ -31,7 +32,7 @@ return {
 	},
 	{
 		"nvim-treesitter/nvim-treesitter-context",
-		event = { "LspAttach", "BufWinEnter" },
+		event = "VeryLazy",
 		config = vim.schedule_wrap(function()
 			local colors = require("colors")
 			-- highlight

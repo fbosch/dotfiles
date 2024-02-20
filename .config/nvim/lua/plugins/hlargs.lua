@@ -1,9 +1,32 @@
 return {
 	"m-demare/hlargs.nvim",
-	event = { "VeryLazy" },
 	priority = 100,
+	dependencies = {
+		"nvim-treesitter/nvim-treesitter",
+	},
+	event = "VeryLazy",
+	ft = { "lua", "rsut" }, -- right now it doesn't work in TS / JS
 	config = vim.schedule_wrap(function()
-		require("hlargs").setup({
+		local hlargs = require("hlargs")
+		local colorpalette = {
+			{ fg = "#699a9b" },
+			{ fg = "#83699b" },
+			{ fg = "#71d0a9" },
+			{ fg = "#CA9F35" },
+			{ fg = "#a9d071" },
+			{ fg = "#9b6981" },
+			{ fg = "#59a868" },
+			{ fg = "#ded16e" },
+			{ fg = "#ff93c8" },
+			{ fg = "#6e62de" },
+			{ fg = "#C5653A" },
+			{ fg = "#d071a9" },
+			{ fg = "#5cc565" },
+			{ fg = "#3566af" },
+			{ fg = "#bf528c" },
+		}
+		hlargs.setup({
+			enabled = true,
 			use_colorpalette = true,
 			sequential_colorpalette = true,
 			paint_catch_blocks = {
@@ -13,37 +36,7 @@ return {
 			extras = {
 				named_parameters = true,
 			},
-			colorpalette = {
-				{ fg = "#699a9b" },
-				{ fg = "#83699b" },
-				{ fg = "#71d0a9" },
-				{ fg = "#CA9F35" },
-				{ fg = "#a9d071" },
-				{ fg = "#9b6981" },
-				{ fg = "#59a868" },
-				{ fg = "#ded16e" },
-				{ fg = "#ff93c8" },
-				{ fg = "#6e62de" },
-				{ fg = "#C5653A" },
-				{ fg = "#d071a9" },
-				{ fg = "#5cc565" },
-				{ fg = "#3566af" },
-				{ fg = "#bf528c" },
-				-- -- originals
-				-- { fg = "#3AC6BE" },
-				-- { fg = "#35D27F" },
-				-- { fg = "#EB75D6" },
-				-- { fg = "#E5D180" },
-				-- { fg = "#8997F5" },
-				-- { fg = "#D49DA5" },
-				-- { fg = "#7FEC35" },
-				-- { fg = "#F6B223" },
-				-- { fg = "#F67C1B" },
-				-- { fg = "#DE9A4E" },
-				-- { fg = "#BBEA87" },
-				-- { fg = "#EEF06D" },
-				-- { fg = "#8FB272" },
-			},
+			colorpalette = colorpalette,
 			hl_priority = 500,
 		})
 	end),
