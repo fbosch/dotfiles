@@ -3,7 +3,7 @@ return {
 		"nvim-treesitter/nvim-treesitter",
 		build = ":TSUpdate",
 		dependencies = { "andymass/vim-matchup", "windwp/nvim-ts-autotag" },
-		event = "VeryLazy",
+		event = { "BufReadPost", "BufNewFile", "LspAttach" },
 		config = function()
 			require("nvim-treesitter.configs").setup({
 				matchup = {
