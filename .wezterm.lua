@@ -126,7 +126,6 @@ wezterm.on('update-right-status', function(window, pane)
         table.insert(status, { Foreground = { Color = "#bbbbbb" } })
       end
       local hours_string = string.format("%.1f", math.floor(hours_worked * 2 ) / 2)
-      -- replace .0 with empty string
       hours_string = string.gsub(hours_string, "%.0", "")
       table.insert(status, { Text = icon .. " " .. hours_string .. " "})
     end
