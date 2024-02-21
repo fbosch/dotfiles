@@ -1,3 +1,4 @@
+local is_windows = package.config:sub(1, 1) == "\\"
 local wezterm = require("wezterm")
 local config = wezterm.config_builder()
 
@@ -96,43 +97,45 @@ wezterm.on(
   end
 )
 
-wezterm.on('update-right-status', function(window, pane)
-  local date = wezterm.strftime '%a %b %-d '
-  local time = wezterm.strftime '%H:%M'
+if (not is_windows) then
+  wezterm.on('update-right-status', function(window, pane)
+    local date = wezterm.strftime '%a %b %-d '
+    local time = wezterm.strftime '%H:%M'
 
-  local status = {
-    { Foreground = { Color = "#636363" } },
-    { Text = date },
-    { Foreground = { Color = "#bbbbbb"}},
-    { Text = time }
-  }
+    local status = {
+      { Foreground = { Color = "#636363" } },
+      { Text = date },
+      { Foreground = { Color = "#bbbbbb"}},
+      { Text = time }
+    }
 
-  local wday = os.date("*t").wday
-  if (wday ~= 1 or wday ~= 7) then
-    local hours_worked = tonumber(pane:get_user_vars().hours_worked) or 0;
-    if hours_worked > 0 then
-      local icon = wezterm.nerdfonts.fa_hourglass_start
-      table.insert(status, { Text = " " })
-      if (hours_worked > 8) then
-        icon = wezterm.nerdfonts.fa_hourglass_o
-        table.insert(status, { Foreground = { Color = "#DE6E7C" } })
-      elseif (hours_worked >= 7) then
-        icon = wezterm.nerdfonts.fa_hourglass_end
-        table.insert(status, { Foreground = { Color = "#819B69" } })
-      elseif (hours_worked < 7) then
-        icon = wezterm.nerdfonts.fa_hourglass_half
-        table.insert(status, { Foreground = { Color = "#B77E64" } })
-      elseif (hours_worked <= 6) then
-        table.insert(status, { Foreground = { Color = "#bbbbbb" } })
+    local wday = os.date("*t").wday
+    if (wday ~= 1 or wday ~= 7) then
+      local hours_worked = tonumber(pane:get_user_vars().hours_worked) or 0;
+      if hours_worked > 0 then
+        local icon = wezterm.nerdfonts.fa_hourglass_start
+        table.insert(status, { Text = " " })
+        if (hours_worked > 8) then
+          icon = wezterm.nerdfonts.fa_hourglass_o
+          table.insert(status, { Foreground = { Color = "#DE6E7C" } })
+        elseif (hours_worked >= 7) then
+          icon = wezterm.nerdfonts.fa_hourglass_end
+          table.insert(status, { Foreground = { Color = "#819B69" } })
+        elseif (hours_worked < 7) then
+          icon = wezterm.nerdfonts.fa_hourglass_half
+          table.insert(status, { Foreground = { Color = "#B77E64" } })
+        elseif (hours_worked <= 6) then
+          table.insert(status, { Foreground = { Color = "#bbbbbb" } })
+        end
+        local hours_string = string.format("%.1f", math.floor(hours_worked * 2 ) / 2)
+        hours_string = string.gsub(hours_string, "%.0", "")
+        table.insert(status, { Text = icon .. " " .. hours_string .. " " })
       end
-      local hours_string = string.format("%.1f", math.floor(hours_worked * 2 ) / 2)
-      hours_string = string.gsub(hours_string, "%.0", "")
-      table.insert(status, { Text = icon .. " " .. hours_string .. " "})
     end
-  end
 
-  window:set_right_status(wezterm.format(status))
-end)
+    window:set_right_status(wezterm.format(status))
+  end)
+end
 
 config.skip_close_confirmation_for_processes_named = {
 	"bash",
@@ -215,7 +218,6 @@ config.keys = {
 	},
 }
 
-local is_windows = package.config:sub(1, 1) == "\\"
 
 if is_windows then
 	config.default_domain = "WSL:Ubuntu"

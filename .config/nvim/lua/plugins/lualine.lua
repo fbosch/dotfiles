@@ -11,7 +11,7 @@ return {
 		local git_blame = require("gitblame")
 		vim.g.gitblame_display_virtual_text = 0 -- Disable virtual text
 		vim.g.gitblame_date_format = "%r"
-		vim.g.gitblame_message_template = " <author>   <date>   <sha> "
+		vim.g.gitblame_message_template = " <author>   <date>   <sha> "
 		require("lualine").setup({
 			options = {
 				theme = "auto",
