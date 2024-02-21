@@ -109,18 +109,24 @@ wezterm.on('update-right-status', function(window, pane)
   }
 
   if hours_worked > 0 then
+    local icon = wezterm.nerdfonts.fa_hourglass_start
+    table.insert(status, { Foreground = { Color = "#636363" }})
+    table.insert(status, { Text = " " })
     if (hours_worked > 8) then
-      table.insert(status, { Foreground = { Color = "#e84e32" } })
+      icon = wezterm.nerdfonts.fa_hourglass_o
+      table.insert(status, { Foreground = { Color = "#DE6E7C" } })
     elseif (hours_worked >= 7) then
-      table.insert(status, { Foreground = { Color = "#54a23d" } })
+      icon = wezterm.nerdfonts.fa_hourglass_end
+      table.insert(status, { Foreground = { Color = "#819B69" } })
     elseif (hours_worked <= 7) then
-      table.insert(status, { Foreground = { Color = "#e0af68" } })
+      icon = wezterm.nerdfonts.fa_hourglass_half
+      table.insert(status, { Foreground = { Color = "#B77E64" } })
     elseif (hours_worked <= 6) then
       table.insert(status, { Foreground = { Color = "#bbbbbb" } })
     end
 
-    local hours_string = string.format("%.2f", math.floor(hours_worked * 2 ) / 2)
-    table.insert(status, { Text = "  " .. hours_string .. " " })
+    local hours_string = string.format("%.1f", math.floor(hours_worked * 2 ) / 2)
+    table.insert(status, { Text = hours_string .. " " .. icon .. " " })
   end
 
   window:set_right_status(wezterm.format(status))

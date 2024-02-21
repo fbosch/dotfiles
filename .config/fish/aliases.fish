@@ -14,7 +14,7 @@ function batbuild; batch cache --build $argv; end
 abbr prj 'cd ~/Projects'
 
 # Helpers
-abbr x 'exit'
+alias x 'exit'
 abbr src 'source ~/.config/fish/config.fish'
 abbr makins 'sudo make && sudo make clean install'
 abbr cl 'clear'

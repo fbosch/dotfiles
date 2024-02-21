@@ -123,8 +123,8 @@ function workday
 
   # Display the result with colored formatting
   if test $minutes_passed -eq 0
-      echo -e "Work hours passed since $given_hour: \n$emoji $color$hours_passed hour(s)$reset_color"
+      echo -e "hours passed since $given_hour: \n$emoji $color$hours_passed hour(s)$reset_color"
   else
-      echo -e "Work hours passed since $given_hour: \n$emoji $color$hours_passed hour(s) and $minutes_passed minutes$reset_color"
+      echo -e "hours passed since $given_hour: \n$emoji $color$hours_passed hour(s) and $minutes_passed minutes$reset_color"
   end
 end
