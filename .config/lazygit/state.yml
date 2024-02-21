@@ -1,7 +1,8 @@
 lastupdatecheck: 0
 recentrepos:
-- /home/fbb/Projects/rust/slice_type
-startuppopupversion: 0
+- /Users/fbb/Projects/kommuneKredit.Frontend/fix/30797-missing-close-reasons
+- /Users/fbb/dotfiles
+startuppopupversion: 5
 customcommandshistory: []
 hidecommandlog: false
 ignorewhitespaceindiffview: false

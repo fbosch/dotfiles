@@ -86,6 +86,11 @@ return {
 					})
 				end
 				local bufopts = { noremap = true, silent = true, buffer = bufnr }
+
+				if client.server_capabilities.inlayHintProvider then
+					vim.lsp.inlay_hint.enable(bufnr, true)
+				end
+
 				vim.keymap.set("n", "gD", vim.lsp.buf.declaration, bufopts)
 				vim.keymap.set("n", "gd", vim.lsp.buf.definition, bufopts)
 				vim.keymap.set("n", "gi", vim.lsp.buf.implementation, bufopts)

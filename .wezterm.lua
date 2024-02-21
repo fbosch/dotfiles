@@ -51,7 +51,80 @@ config.window_padding = {
 -- tabs
 config.tab_bar_at_bottom = true
 config.use_fancy_tab_bar = false
-config.hide_tab_bar_if_only_one_tab = true
+config.hide_tab_bar_if_only_one_tab = false
+
+-- This function returns the suggested title for a tab.
+-- It prefers the title that was set via `tab:set_title()`
+-- or `wezterm cli set-tab-title`, but falls back to the
+-- title of the active pane in that tab.
+local function tab_title(tab_info)
+  local title = tab_info.tab_title
+  -- if the tab title is explicitly set, take that
+  if title and #title > 0 then
+    return title
+  end
+  -- Otherwise, use the title from the active pane
+  -- in that tab
+  return tab_info.active_pane.title
+end
+
+wezterm.on(
+  'format-tab-title',
+  function(tab, tabs, panes, config, hover, max_width)
+    local title = '' .. tab_title(tab) .. ' '
+
+    local tab_title = {
+      { Foreground ={ Color = "#636363"  } },
+      { Text = ' [' .. tab.tab_index + 1 .. '] ' },
+    }
+
+    if (string.find(title, "nvim")) then
+      table.insert(tab_title, { Foreground = { Color = "#54a23d"  }} )
+      table.insert(tab_title,  { Text =  "" })
+      title = string.gsub(title, "nvim", "")
+    end
+
+    if (string.find(title, "lazygit")) then
+      table.insert(tab_title, { Foreground ={ Color = "#e84e32"  }} )
+      table.insert(tab_title,  { Text =  "" })
+      title = string.gsub(title, "lazygit", "")
+    end
+
+    table.insert(tab_title, { Foreground ={ Color = "#bbbbbb"  }} )
+    table.insert(tab_title, { Text = title })
+    return tab_title
+  end
+)
+
+wezterm.on('update-right-status', function(window, pane)
+  local date = wezterm.strftime '%a %b %-d '
+  local time = wezterm.strftime '%H:%M'
+  local hours_worked = tonumber(pane:get_user_vars().HOURS_WORKED) or 0;
+
+  local status = {
+    { Foreground = { Color = "#636363" } },
+    { Text = date },
+    { Foreground = { Color = "#bbbbbb"}},
+    { Text = time }
+  }
+
+  if hours_worked > 0 then
+    if (hours_worked > 8) then
+      table.insert(status, { Foreground = { Color = "#e84e32" } })
+    elseif (hours_worked >= 7) then
+      table.insert(status, { Foreground = { Color = "#54a23d" } })
+    elseif (hours_worked <= 7) then
+      table.insert(status, { Foreground = { Color = "#e0af68" } })
+    elseif (hours_worked <= 6) then
+      table.insert(status, { Foreground = { Color = "#bbbbbb" } })
+    end
+
+    local hours_string = string.format("%.2f", math.floor(hours_worked * 2 ) / 2)
+    table.insert(status, { Text = "  " .. hours_string .. " " })
+  end
+
+  window:set_right_status(wezterm.format(status))
+end)
 
 config.skip_close_confirmation_for_processes_named = {
 	"bash",

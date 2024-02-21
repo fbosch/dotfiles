@@ -9,6 +9,7 @@ if test (uname) = "Linux"
 end
 
 function fish_greeting
+  fish ~/.config/fish/work_hours.fish & 
 end
 
 # Custom Function for a sudo !! replacement
@@ -57,3 +58,4 @@ set --export BUN_INSTALL "$HOME/.bun"
 set --export PATH $BUN_INSTALL/bin $PATH
 
 [ -f ~/.inshellisense/key-bindings.fish ] && source ~/.inshellisense/key-bindings.fish
+
