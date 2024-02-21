@@ -9,7 +9,8 @@ if test (uname) = "Linux"
 end
 
 function fish_greeting
-  fish ~/.config/fish/work_hours.fish &; disown; 
+  fish ~/.config/fish/work_hours.fish &; disown
+  commandline --function repaint
 end
 
 # Custom Function for a sudo !! replacement

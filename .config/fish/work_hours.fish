@@ -14,8 +14,8 @@ end
 
 if test (uname -s) = "Darwin"
   while true 
-    set -Ux HOURS_WORKED (hours_since_workday_start)
-    wezterm_set_user_var "HOURS_WORKED" $HOURS_WORKED
+    set -Ux _hours_worked (hours_since_workday_start)
+    wezterm_set_user_var "hours_worked" $_hours_worked
     # wait for 5 minutes
     sleep 300
   end

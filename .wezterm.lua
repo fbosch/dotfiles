@@ -99,7 +99,7 @@ wezterm.on(
 wezterm.on('update-right-status', function(window, pane)
   local date = wezterm.strftime '%a %b %-d '
   local time = wezterm.strftime '%H:%M'
-  local hours_worked = tonumber(pane:get_user_vars().HOURS_WORKED) or 0;
+  local hours_worked = tonumber(pane:get_user_vars().hours_worked) or 0;
 
   local status = {
     { Foreground = { Color = "#636363" } },
@@ -125,8 +125,11 @@ wezterm.on('update-right-status', function(window, pane)
       table.insert(status, { Foreground = { Color = "#bbbbbb" } })
     end
 
+
     local hours_string = string.format("%.1f", math.floor(hours_worked * 2 ) / 2)
-    table.insert(status, { Text = hours_string .. " " .. icon .. " " })
+    -- replace .0 with empty string
+    hours_string = string.gsub(hours_string, "%.0", "")
+    table.insert(status, { Text = icon .. " " .. hours_string .. " "})
   end
 
   window:set_right_status(wezterm.format(status))
