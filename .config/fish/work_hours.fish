@@ -1,6 +1,5 @@
 . ~/.config/fish/scripts.fish
 
-
 if test (uname -s) = "Darwin"
   while true 
     set -Ux _hours_worked (hours_since_workday_start)

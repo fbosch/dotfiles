@@ -10,6 +10,7 @@ end
 
 function fish_greeting
   fish ~/.config/fish/work_hours.fish &; disown
+  clear;
   commandline --function repaint
 end
 

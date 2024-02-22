@@ -121,11 +121,11 @@ if (not is_windows) then
         elseif (hours_worked >= 7) then
           icon = wezterm.nerdfonts.fa_hourglass_end
           table.insert(status, { Foreground = { Color = "#819B69" } })
-        elseif (hours_worked < 7) then
+        elseif (hours_worked >= 3) then
           icon = wezterm.nerdfonts.fa_hourglass_half
           table.insert(status, { Foreground = { Color = "#B77E64" } })
-        elseif (hours_worked <= 6) then
-          table.insert(status, { Foreground = { Color = "#bbbbbb" } })
+        else
+          table.insert(status, { Foreground = { Color = "#999999" } })
         end
         local hours_string = string.format("%.1f", math.floor(hours_worked * 2 ) / 2)
         hours_string = string.gsub(hours_string, "%.0", "")
