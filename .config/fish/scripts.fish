@@ -49,23 +49,10 @@ end
 
 function first_login_of_the_day
   set current_date (date "+%Y-%m-%d")
-  # if _first_login starts with current date, return the cached time
-
-  if test -n "$_first_login"
-    set cached_date (string split ";" $_first_login)[1]
-    if test $cached_date = $current_date
-      set cached_time (string split ";" $_first_login)[2]
-      echo $cached_time
-      return
-    end
-  end
-
-  set cached_time (cat /tmp/.first_login/$current_date^ 2> /dev/null)
+  set cached_time (cat "/tmp/.first_login/$current_date" 2> /dev/null)
 
   if test -n "$cached_time"
     # join the date and time global variable
-    set -Ux _first_login "$current_date;$cached_time"
-
     echo $cached_time
     return 
   end
@@ -79,11 +66,16 @@ function first_login_of_the_day
   mkdir -p /tmp/.first_login
   echo $time > /tmp/.first_login/$current_date
 
-  set -Ux _first_login "$current_date;$time"
-
   echo $time
 end
- 
+
+
+function remove_leading_zeros
+  set input $argv[1]
+  set output (string replace -ra '^(0*)(?!$)' '' -- $input)
+  echo $output
+end
+
 function hours_since_workday_start
   set current_hour (date "+%H")
   set current_minute (date "+%M")
@@ -92,12 +84,7 @@ function hours_since_workday_start
 
   set total_minutes_since_start (math "($current_hour - $workday_start_hour) * 60 + $current_minute - $workday_start_minute")
 
-  if test $total_minutes_since_start -lt 0
-    set total_minutes_since_start (math "24 * 60 + $total_minutes_since_start")
-  end
-  
   echo (math $total_minutes_since_start / 60)
-    # echo $hours_since_start
 end
 
 function workday 
