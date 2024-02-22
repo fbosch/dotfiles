@@ -14,6 +14,7 @@ return {
 				autopairs = { enable = true },
 				autotag = { enable = true },
 				ensure_installed = {
+					"rust",
 					"javascript",
 					"jsdoc",
 					"typescript",

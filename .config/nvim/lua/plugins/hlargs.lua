@@ -1,12 +1,9 @@
 return {
 	"m-demare/hlargs.nvim",
-	priority = 100,
 	dependencies = {
 		"nvim-treesitter/nvim-treesitter",
 	},
-	event = "VeryLazy",
-	ft = { "lua", "rsut" }, -- right now it doesn't work in TS / JS
-	config = vim.schedule_wrap(function()
+	config = function()
 		local hlargs = require("hlargs")
 		local colorpalette = {
 			{ fg = "#699a9b" },
@@ -37,7 +34,7 @@ return {
 				named_parameters = true,
 			},
 			colorpalette = colorpalette,
-			hl_priority = 500,
+			hl_priority = 300,
 		})
-	end),
+	end,
 }

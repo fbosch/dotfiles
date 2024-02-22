@@ -89,6 +89,25 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_wid
 		title = string.gsub(title, "brew", "")
 	end
 
+	if string.find(title, "fish") then
+		table.insert(tab_title, { Foreground = { Color = "#97bdde" } })
+		table.insert(tab_title, { Text = "" })
+		title = string.gsub(title, "fish", "")
+	end
+
+	if string.find(title, "wsl") then
+		table.insert(tab_title, { Foreground = { Color = "#e95420" } })
+		table.insert(tab_title, { Text = "" })
+		title = string.gsub(title, "wsl.exe", "")
+		title = string.gsub(title, "wslhost.exe", "")
+	end
+
+	if string.find(title, "cargo") then
+		table.insert(tab_title, { Foreground = { Color = "#CE412B" } })
+		table.insert(tab_title, { Text = "" })
+		title = string.gsub(title, "cargo", "")
+	end
+
 	if string.find(title, "lazygit") then
 		table.insert(tab_title, { Foreground = { Color = "#e84e32" } })
 		table.insert(tab_title, { Text = "" })
