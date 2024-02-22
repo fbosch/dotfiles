@@ -12,14 +12,7 @@ return {
 	},
 	config = function()
 		require("tsc").setup({
-			spinner = {
-				".  ",
-				".. ",
-				"...",
-				" ..",
-				"  .",
-				"   ",
-			},
+			enable_progress_notifications = false,
 			pretty_errors = true,
 		})
 	end,

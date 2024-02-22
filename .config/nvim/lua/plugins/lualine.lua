@@ -31,7 +31,7 @@ return {
 							[overseer.STATUS.FAILURE] = "󰚌 ",
 							[overseer.STATUS.CANCELED] = " ",
 							[overseer.STATUS.SUCCESS] = " ",
-							[overseer.STATUS.RUNNING] = " ",
+							[overseer.STATUS.RUNNING] = " ",
 						},
 						unique = true, -- Unique-ify non-running task count by name
 						name_not = false, -- When true, invert the name search

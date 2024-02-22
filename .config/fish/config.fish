@@ -40,10 +40,6 @@ end
 
 bind -M insert \cc kill-whole-line repaint
 
-# Keybindings
-function fish_user_keybindings
-  fish_vi_key_bindings
-end
 
 zoxide init fish | source
 starship init fish | source
@@ -58,6 +54,12 @@ end
 # bun
 set --export BUN_INSTALL "$HOME/.bun"
 set --export PATH $BUN_INSTALL/bin $PATH
+
+# Keybindings
+bind \cP 'fzfcd'
+# function fish_user_keybindings
+#   # fish_vi_key_bindings
+# end
 
 [ -f ~/.inshellisense/key-bindings.fish ] && source ~/.inshellisense/key-bindings.fish
 

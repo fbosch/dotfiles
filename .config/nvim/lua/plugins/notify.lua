@@ -10,8 +10,6 @@ return {
 			max_width = 50,
 			top_down = true,
 		})
-		vim.schedule_wrap(function()
-			vim.notify = require("notify")
-		end)
+		vim.notify = require("notify")
 	end,
 }

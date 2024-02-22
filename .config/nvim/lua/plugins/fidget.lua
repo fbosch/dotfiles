@@ -28,6 +28,11 @@ return {
 				},
 				filter = vim.log.levels.INFO,
 				override_vim_notify = true,
+				redirect = function(msg, level, opts)
+					if opts and opts.on_open then
+						return require("fidget.integration.nvim-notify").delegate(msg, level, opts)
+					end
+				end,
 			},
 			integration = {
 				["nvim-tree"] = {
