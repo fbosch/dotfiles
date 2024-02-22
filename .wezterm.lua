@@ -23,7 +23,7 @@ config.custom_block_glyphs = true
 
 -- colors
 config.color_scheme = "zenwritten_dark"
-config.tab_max_width = 32
+config.tab_max_width = 64 
 config.show_new_tab_button_in_tab_bar = false
 config.colors = {
 	tab_bar = {
@@ -127,7 +127,7 @@ if (not is_windows) then
         else
           table.insert(status, { Foreground = { Color = "#999999" } })
         end
-        local hours_string = string.format("%.1f", math.floor(hours_worked * 2 ) / 2)
+        local hours_string = string.format("%.1f", math.floor(hours_worked * 2 + 0.5) / 2)
         hours_string = string.gsub(hours_string, "%.0", "")
         table.insert(status, { Text = icon .. " " .. hours_string .. " " })
       end
