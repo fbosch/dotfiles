@@ -116,6 +116,11 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_wid
 		end
 		if string.find(title, "git commit") then
 			table.insert(tab_title, { Text = "󰜘" })
+			title = string.gsub(title, "git commit", "")
+		end
+		if string.find(title, "git push") then
+			table.insert(tab_title, { Text = "" })
+			title = string.gsub(title, "git push", "")
 		end
 	end
 
