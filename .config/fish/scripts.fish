@@ -1,3 +1,15 @@
+function wezterm_set_user_var
+    if hash base64 2>/dev/null
+        if test -z "$TMUX"
+            printf "\033]1337;SetUserVar=%s=%s\007" "$argv[1]" (echo -n "$argv[2]" | base64)
+        else
+            # <https://github.com/tmux/tmux/wiki/FAQ#what-is-the-passthrough-escape-sequence-and-how-do-i-use-it>
+            # Note that you ALSO need to add "set -g allow-passthrough on" to your tmux.conf
+            printf "\033Ptmux;\033\033]1337;SetUserVar=%s=%s\007\033\\" "$argv[1]" (echo -n "$argv[2]" | base64)
+        end
+    end
+end
+ 
 function worktree_add
     set branch_name $argv[1]
     
@@ -78,10 +90,8 @@ function hours_since_workday_start
   set workday_start_minute (string split ":" (first_login_of_the_day))[2]
 
   set total_minutes_since_start (math "($current_hour - $workday_start_hour) * 60 + $current_minute - $workday_start_minute")
-
-  set value (math $total_minutes_since_start / 60)
   
-  echo $value
+  echo (math $total_minutes_since_start / 60)
     # echo $hours_since_start
 end
 
@@ -123,8 +133,8 @@ function workday
 
   # Display the result with colored formatting
   if test $minutes_passed -eq 0
-      echo -e "hours passed since $given_hour: \n$emoji $color$hours_passed hour(s)$reset_color"
+      echo -e "Work hours passed since $given_hour: \n$emoji $color$hours_passed hour(s)$reset_color"
   else
-      echo -e "hours passed since $given_hour: \n$emoji $color$hours_passed hour(s) and $minutes_passed minutes$reset_color"
+      echo -e "Work hours passed since $given_hour: \n$emoji $color$hours_passed hour(s) and $minutes_passed minutes$reset_color"
   end
 end
