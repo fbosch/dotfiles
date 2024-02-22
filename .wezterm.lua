@@ -7,7 +7,7 @@ config.max_fps = 120
 -- fonts
 config.font = wezterm.font_with_fallback({
 	{
-		family = "JetBrainsMono Nerd Font Mono",
+		family = "JetBrains Mono",
 		harfbuzz_features = { "calt=0", "clig=0", "liga=0" },
 	},
 	"Noto Sans Runic",
@@ -23,7 +23,7 @@ config.custom_block_glyphs = true
 
 -- colors
 config.color_scheme = "zenwritten_dark"
-config.tab_max_width = 32 
+config.tab_max_width = 32
 config.show_new_tab_button_in_tab_bar = false
 config.colors = {
 	tab_bar = {
@@ -59,89 +59,88 @@ config.hide_tab_bar_if_only_one_tab = false
 -- or `wezterm cli set-tab-title`, but falls back to the
 -- title of the active pane in that tab.
 local function tab_title(tab_info)
-  local title = tab_info.tab_title
-  -- if the tab title is explicitly set, take that
-  if title and #title > 0 then
-    return title
-  end
-  -- Otherwise, use the title from the active pane
-  -- in that tab
-  return tab_info.active_pane.title
+	local title = tab_info.tab_title
+	-- if the tab title is explicitly set, take that
+	if title and #title > 0 then
+		return title
+	end
+	-- Otherwise, use the title from the active pane
+	-- in that tab
+	return tab_info.active_pane.title
 end
 
-wezterm.on(
-  'format-tab-title',
-  function(tab, tabs, panes, config, hover, max_width)
-    local title = '' .. tab_title(tab) .. ' '
+wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_width)
+	local title = "" .. tab_title(tab) .. " "
 
-    local tab_title = {
-      { Foreground ={ Color = "#636363"  } },
-      { Text = ' [' .. tab.tab_index + 1 .. '] ' },
-    }
+	local tab_title = {
+		{ Foreground = { Color = "#636363" } },
+		{ Text = " [" .. tab.tab_index + 1 .. "] " },
+	}
 
-    if (string.find(title, "nvim")) then
-      table.insert(tab_title, { Foreground = { Color = "#54a23d"  }} )
-      table.insert(tab_title,  { Text =  "" })
-      title = string.gsub(title, "nvim", "")
-    end
+	if string.find(title, "nvim") then
+		table.insert(tab_title, { Foreground = { Color = "#54a23d" } })
+		table.insert(tab_title, { Text = "" })
+		title = string.gsub(title, "nvim", "")
+	end
 
+	if string.find(title, "brew") then
+		table.insert(tab_title, { Foreground = { Color = "#c0a23d" } })
+		table.insert(tab_title, { Text = "" })
+		title = string.gsub(title, "brew", "")
+	end
 
-    if (string.find(title, "brew")) then
-      table.insert(tab_title, { Foreground = { Color = "#c0a23d"  }} )
-      table.insert(tab_title,  { Text =  "" })
-      title = string.gsub(title, "brew", "")
-    end
+	if string.find(title, "lazygit") then
+		table.insert(tab_title, { Foreground = { Color = "#e84e32" } })
+		table.insert(tab_title, { Text = "" })
+		title = string.gsub(title, "lazygit", "")
+	end
 
-    if (string.find(title, "lazygit")) then
-      table.insert(tab_title, { Foreground ={ Color = "#e84e32"  }} )
-      table.insert(tab_title,  { Text =  "" })
-      title = string.gsub(title, "lazygit", "")
-    end
+	table.insert(tab_title, { Foreground = { Color = "#bbbbbb" } })
+	table.insert(tab_title, { Text = title })
+	return tab_title
+end)
 
-    table.insert(tab_title, { Foreground ={ Color = "#bbbbbb"  }} )
-    table.insert(tab_title, { Text = title })
-    return tab_title
-  end
-)
+if not is_windows then
+	wezterm.on("update-right-status", function(window, pane)
+		local date = wezterm.strftime("%a %b %-d ")
+		local time = wezterm.strftime("%H:%M")
 
-if (not is_windows) then
-  wezterm.on('update-right-status', function(window, pane)
-    local date = wezterm.strftime '%a %b %-d '
-    local time = wezterm.strftime '%H:%M'
+		local status = {
+			{ Foreground = { Color = "#636363" } },
+			{ Text = date },
+			{ Foreground = { Color = "#bbbbbb" } },
+			{ Text = time },
+		}
 
-    local status = {
-      { Foreground = { Color = "#636363" } },
-      { Text = date },
-      { Foreground = { Color = "#bbbbbb"}},
-      { Text = time }
-    }
+		local wday = os.date("*t").wday
+		if wday ~= 1 or wday ~= 7 then
+			local hours_worked = tonumber(pane:get_user_vars().hours_worked) or 0
+			if hours_worked > 0 then
+				local icon = wezterm.nerdfonts.fa_hourglass_start
+				table.insert(status, { Text = " " })
+				if hours_worked > 8 then
+					icon = wezterm.nerdfonts.fa_hourglass_o
+					table.insert(status, { Foreground = { Color = "#DE6E7C" } })
+				elseif hours_worked >= 7 then
+					icon = wezterm.nerdfonts.fa_hourglass_end
+					table.insert(status, { Foreground = { Color = "#819B69" } })
+				elseif hours_worked >= 5 then
+					icon = wezterm.nerdfonts.fa_hourglass_half
+					table.insert(status, { Foreground = { Color = "#d2af0d" } })
+				elseif hours_worked <= 3 then
+					icon = wezterm.nerdfonts.fa_hourglass_half
+					table.insert(status, { Foreground = { Color = "#B77E64" } })
+				else
+					table.insert(status, { Foreground = { Color = "#999999" } })
+				end
+				local hours_string = string.format("%.1f", math.floor(hours_worked * 2 + 0.5) / 2)
+				hours_string = string.gsub(hours_string, "%.0", "")
+				table.insert(status, { Text = icon .. " " .. hours_string .. " " })
+			end
+		end
 
-    local wday = os.date("*t").wday
-    if (wday ~= 1 or wday ~= 7) then
-      local hours_worked = tonumber(pane:get_user_vars().hours_worked) or 0;
-      if hours_worked > 0 then
-        local icon = wezterm.nerdfonts.fa_hourglass_start
-        table.insert(status, { Text = " " })
-        if (hours_worked > 8) then
-          icon = wezterm.nerdfonts.fa_hourglass_o
-          table.insert(status, { Foreground = { Color = "#DE6E7C" } })
-        elseif (hours_worked >= 7) then
-          icon = wezterm.nerdfonts.fa_hourglass_end
-          table.insert(status, { Foreground = { Color = "#819B69" } })
-        elseif (hours_worked >= 3) then
-          icon = wezterm.nerdfonts.fa_hourglass_half
-          table.insert(status, { Foreground = { Color = "#B77E64" } })
-        else
-          table.insert(status, { Foreground = { Color = "#999999" } })
-        end
-        local hours_string = string.format("%.1f", math.floor(hours_worked * 2 + 0.5) / 2)
-        hours_string = string.gsub(hours_string, "%.0", "")
-        table.insert(status, { Text = icon .. " " .. hours_string .. " " })
-      end
-    end
-
-    window:set_right_status(wezterm.format(status))
-  end)
+		window:set_right_status(wezterm.format(status))
+	end)
 end
 
 config.skip_close_confirmation_for_processes_named = {
@@ -224,7 +223,6 @@ config.keys = {
 		action = wezterm.action.DisableDefaultAssignment,
 	},
 }
-
 
 if is_windows then
 	config.default_domain = "WSL:Ubuntu"

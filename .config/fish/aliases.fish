@@ -26,10 +26,9 @@ abbr lk 'logikill'
 function copykey; pbcopy < ~/.ssh/id_rsa.pub; end; 
 function chrdebug;/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222; end;
 
-
 function fzfcd
   # find all folders with .git in them and select one using fzf
-  set selected_dir (fd -tf --max-depth=3 --color=never "\.git\$" -H | rev | cut -c 6- | rev | fzf --preview "lt {}" --preview-window "25%")  # Select directory using fzf
+  set selected_dir (fd -tf --max-depth=4 --color=never "\.git\$" -H | rev | cut -c 6- | rev | fzf --preview "lt {}" --preview-window "25%")  # Select directory using fzf
   if test -n "$selected_dir"
     z "$selected_dir"  # Change directory if selection is not empty
     commandline --function repaint

@@ -11,8 +11,8 @@ end
 function fish_greeting
   fish ~/.config/fish/work_hours.fish &; disown
   clear;
-  commandline --function repaint
-end
+  commandline --function repaint;
+end;
 
 # Custom Function for a sudo !! replacement
 function sudo --description "replacement for 'sudo !!' command to run last command using sudo"
@@ -54,12 +54,13 @@ end
 # bun
 set --export BUN_INSTALL "$HOME/.bun"
 set --export PATH $BUN_INSTALL/bin $PATH
+set -U fish_key_bindings fish_default_key_bindings
+bind \cP 'fzfcd'
 
 # Keybindings
-bind \cP 'fzfcd'
-# function fish_user_keybindings
-#   # fish_vi_key_bindings
-# end
+function fish_user_keybindings
+  fish_vi_key_bindings
+end
 
 [ -f ~/.inshellisense/key-bindings.fish ] && source ~/.inshellisense/key-bindings.fish
 

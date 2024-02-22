@@ -8,6 +8,7 @@ function wezterm_set_user_var
             printf "\033Ptmux;\033\033]1337;SetUserVar=%s=%s\007\033\\" "$argv[1]" (echo -n "$argv[2]" | base64)
         end
     end
+    commandline --function repaint
 end
  
 function worktree_add
@@ -90,6 +91,10 @@ function hours_since_workday_start
   set workday_start_minute (string split ":" (first_login_of_the_day))[2]
 
   set total_minutes_since_start (math "($current_hour - $workday_start_hour) * 60 + $current_minute - $workday_start_minute")
+
+  if test $total_minutes_since_start -lt 0
+    set total_minutes_since_start (math "24 * 60 + $total_minutes_since_start")
+  end
   
   echo (math $total_minutes_since_start / 60)
     # echo $hours_since_start
