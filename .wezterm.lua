@@ -23,7 +23,7 @@ config.custom_block_glyphs = true
 
 -- colors
 config.color_scheme = "zenwritten_dark"
-config.tab_max_width = 64 
+config.tab_max_width = 32 
 config.show_new_tab_button_in_tab_bar = false
 config.colors = {
 	tab_bar = {
@@ -83,6 +83,13 @@ wezterm.on(
       table.insert(tab_title, { Foreground = { Color = "#54a23d"  }} )
       table.insert(tab_title,  { Text =  "" })
       title = string.gsub(title, "nvim", "")
+    end
+
+
+    if (string.find(title, "brew")) then
+      table.insert(tab_title, { Foreground = { Color = "#c0a23d"  }} )
+      table.insert(tab_title,  { Text =  "" })
+      title = string.gsub(title, "brew", "")
     end
 
     if (string.find(title, "lazygit")) then
