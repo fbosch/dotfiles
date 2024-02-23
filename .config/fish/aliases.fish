@@ -15,7 +15,7 @@ abbr prj 'cd ~/Projects'
 abbr cf 'cd ~/.config'
 
 # Helpers
-alias x 'exit'
+abbr x 'exit'
 abbr src 'source ~/.config/fish/config.fish'
 abbr makins 'sudo make && sudo make clean install'
 abbr cl 'clear'

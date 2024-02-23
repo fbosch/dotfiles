@@ -28,11 +28,6 @@ cmd({ "InsertLeave" }, {
 	group = group,
 })
 
-cmd({ "InsertEnter" }, {
-	command = "normal! zz",
-	group = group,
-})
-
 -- enable relative line numbers in insert mode
 cmd({ "BufEnter", "FocusGained", "InsertLeave", "CmdlineLeave", "WinEnter" }, {
 	pattern = "*",
