@@ -9,7 +9,7 @@ cmd({ "BufRead", "BufNewFile" }, {
 
 cmd({ "FileType" }, {
 	pattern = { "markdown", "gitcommit" },
-	command = "setlocal spell spelllang=en_us",
+	command = "setlocal spell spelllang=en_us colorcolumn=80",
 	group = group,
 })
 
