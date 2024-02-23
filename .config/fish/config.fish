@@ -15,8 +15,8 @@ end;
 
 function fish_greeting
   update_work_hours &;
-  clear;
   commandline --function repaint;
+  clear;
 end;
 
 # Custom Function for a sudo !! replacement

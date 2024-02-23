@@ -10,10 +10,6 @@ vim.opt.title = false
 vim.opt.foldenable = false
 vim.opt.filetype = "off"
 vim.opt.syntax = "off"
-vim.opt.shadafile = "NONE"
--- vim.defer_fn(function()
--- 	vim.opt.shadafile = ""
--- end, 200)
 
 -- timings
 vim.opt.timeoutlen = 500

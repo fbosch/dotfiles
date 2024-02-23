@@ -69,6 +69,10 @@ local function tab_title(tab_info)
 	return tab_info.active_pane.title
 end
 
+function string.starts(String,Start)
+   return string.sub(String,1,string.len(Start))==Start
+end
+
 wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_width)
 	local title = "" .. tab_title(tab) .. " "
 
@@ -77,14 +81,13 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_wid
 		{ Text = " [" .. tab.tab_index + 1 .. "] " },
 	}
 
-	-- TODO: fix to check if title starts with a string, not only contains it
-	if string.find(title, "nvim") then
+	if string.starts(title, "nvim") then
 		table.insert(tab_title, { Foreground = { Color = "#54a23d" } })
 		table.insert(tab_title, { Text = "" })
 		title = string.gsub(title, "nvim", "")
 	end
 
-	if string.find(title, "brew") then
+	if string.starts(title, "brew") then
 		table.insert(tab_title, { Foreground = { Color = "#c0a23d" } })
 		table.insert(tab_title, { Text = "" })
 		title = string.gsub(title, "brew", "")
@@ -96,36 +99,36 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_wid
 	-- 		title = string.gsub(title, "fish", "")
 	-- 	end
 
-	if string.find(title, "wsl") then
+	if string.starts(title, "wsl") then
 		table.insert(tab_title, { Foreground = { Color = "#e95420" } })
 		table.insert(tab_title, { Text = "" })
 		title = string.gsub(title, "wsl.exe", "")
 		title = string.gsub(title, "wslhost.exe", "")
 	end
 
-	if string.find(title, "cargo") then
+	if string.starts(title, "cargo") then
 		table.insert(tab_title, { Foreground = { Color = "#CE412B" } })
 		table.insert(tab_title, { Text = "" })
 		title = string.gsub(title, "cargo", "")
 	end
 
-	if string.find(title, "lazygit") then
+	if string.starts(title, "lazygit") then
 		table.insert(tab_title, { Foreground = { Color = "#e84e32" } })
 		table.insert(tab_title, { Text = "" })
 		title = string.gsub(title, "lazygit", "")
 	end
 
-	if string.find(title, "git") then
+	if string.starts(title, "git") then
 		table.insert(tab_title, { Foreground = { Color = "#e84e32" } })
-		if string.find(title, "git pull") then
+		if string.starts(title, "git pull") then
 			table.insert(tab_title, { Text = "󰓂" })
 			title = string.gsub(title, "git pull", "")
 		end
-		if string.find(title, "git commit") then
+		if string.starts(title, "git commit") then
 			table.insert(tab_title, { Text = "󰜘" })
 			title = string.gsub(title, "git commit", "")
 		end
-		if string.find(title, "git push") then
+		if string.starts(title, "git push") then
 			table.insert(tab_title, { Text = "" })
 			title = string.gsub(title, "git push", "")
 		end
