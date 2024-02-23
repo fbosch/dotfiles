@@ -16,7 +16,11 @@ return {
 			fish = true,
 			["*"] = false,
 		},
+		panel = {
+			enabled = false,
+		},
 		suggestion = {
+			enabled = true,
 			auto_trigger = true,
 			debounce = 50,
 			keymap = {

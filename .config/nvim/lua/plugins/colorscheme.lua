@@ -8,8 +8,8 @@ return {
 
 		vim.cmd([[colorscheme zenwritten]])
 
-		local hl = vim.api.nvim_set_hl
 		local colors = require("colors")
+		local hl = vim.api.nvim_set_hl
 
 		hl(0, "NotifyBackground", { bg = colors.background })
 		hl(0, "TreesitterContext", { bg = colors.dark_gray })

@@ -1,6 +1,7 @@
 return {
 	"DNLHC/glance.nvim",
 	cmd = { "Glance" },
+	enabled = false,
 	keys = {
 		{
 			mode = "n",

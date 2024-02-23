@@ -9,7 +9,7 @@ vim.opt.shell = "fish"
 vim.opt.title = false
 vim.opt.foldenable = false
 vim.opt.filetype = "off"
--- vim.opt.syntax = "off"
+vim.opt.syntax = "off"
 
 -- timings
 vim.opt.timeoutlen = 500
@@ -62,7 +62,7 @@ vim.opt.spelloptions = "camel"
 
 -- tab & indentation
 vim.opt.tabstop = 2
-vim.opt.shiftwidth = 0
+vim.opt.shiftwidth = 2
 vim.opt.autoindent = true
 vim.opt.smartindent = true
 vim.opt.softtabstop = 22

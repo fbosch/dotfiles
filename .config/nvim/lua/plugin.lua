@@ -10,8 +10,8 @@ vim.opt.loadplugins = true
 require("lazy").setup({
 	spec = {
 		{ import = "plugins" },
-		{ import = "plugins/interface" },
 		{ import = "plugins/editor" },
+		{ import = "plugins/interface" },
 		{ import = "plugins/workflow" },
 	},
 	change_detection = { notify = false },

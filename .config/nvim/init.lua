@@ -16,8 +16,7 @@ vim.g.loaded_zip = 1
 vim.g.do_filetype_lua = 1
 
 vim.api.nvim_create_user_command("Z", "wa | qa", {})
-
+require("keymap")
 require("plugin")
 require("options")
 require("autocmd")
-require("keymap")

@@ -129,7 +129,10 @@ return {
 			},
 			{
 				"Fildo7525/pretty_hover",
-				config = true,
+				event = { "LspAttach" },
+				opts = {
+					maxwidth = 80,
+				},
 			},
 		},
 		init = function()
