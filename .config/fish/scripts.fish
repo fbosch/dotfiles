@@ -85,26 +85,23 @@ end
 
 function workday 
   set given_hour (first_login_of_the_day)
-  set current_hour (date +%H)
-  set current_minute (date +%M)
-
-  # Extract the hour and minute from the given time
-  set given_hour_hour (string split : $given_hour)[1]
-  set given_hour_minute (string split : $given_hour)[2]
+  set current_hour (date "+%-H")
+  set current_minute (date "+%-M")
 
   # Remove leading zeros if present
-  set given_hour_hour (string replace -r '^0' '' $given_hour_hour)
-  set given_hour_minute (string replace -r '^0' '' $given_hour_minute)
+  set start_hour (echo $first_login | rg -o '[1-9]+:[1-9]+' | cut -d ':' -f2)
+  set start_minute (echo $first_login | rg -o '[1-9]+:[1-9]+' | cut -d ':' -f3)
 
   # Calculate the hours and minutes passed
-  set hours_passed (math "$current_hour - $given_hour_hour")
-  set minutes_passed (math "$current_minute - $given_hour_minute")
+  set hours_passed (math "$current_hour - $start_hour")
+  set minutes_passed (math "$current_minute - $start_minute")
 
   # Adjust for negative minutes
   if test $minutes_passed -lt 0
       set minutes_passed (math "$minutes_passed + 60")
       set hours_passed (math "$hours_passed - 1")
   end
+
 
   # Determine the color and emoji based on the number of hours passed
   if test $hours_passed -gt 6
