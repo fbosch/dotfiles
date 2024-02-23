@@ -193,6 +193,7 @@ config.skip_close_confirmation_for_processes_named = {
 }
 
 config.keys = {
+	-- TODO: find better keys for splitting panes
 	{
 		key = "v",
 		mods = "CTRL|SHIFT",

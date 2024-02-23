@@ -128,11 +128,19 @@ return {
 					max_width = 100,
 				}
 
-				vim.api.nvim_create_autocmd("CursorMoved", {
+				vim.api.nvim_create_autocmd({ "CursorMoved" }, {
 					buffer = bufnr,
 					group = group,
 					callback = function()
 						vim.diagnostic.open_float(nil, diag_opts)
+					end,
+				})
+
+				vim.api.nvim_create_autocmd({ "InsertMode" }, {
+					buffer = bufnr,
+					group = group,
+					callback = function()
+						vim.diagnostic.close_float()
 					end,
 				})
 

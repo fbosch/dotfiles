@@ -11,11 +11,12 @@ end
 
 function update_work_hours --on-event __zoxide_hook
   fish -c 'fish ~/.config/fish/work_hours.fish &; disown;'; 
-  commandline --function repaint;
 end;
 
 function fish_greeting
   update_work_hours &;
+  clear;
+  commandline --function repaint;
 end;
 
 # Custom Function for a sudo !! replacement
