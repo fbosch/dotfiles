@@ -31,18 +31,18 @@ return {
 			highlight_ignore_patterns = { "IndentBlankline*", "Ibl*", "Whitespace", "NonText", "Hop*" },
 		},
 	},
-  {
-    "lukas-reineke/indent-blankline.nvim",
-    event = "VeryLazy",
-    priority = 100,
-    config = function()
-      require("ibl").setup({
-        indent = { char = "▏" },
-        scope = {
-          char = "▏",
-          enabled = true,
-        },
-      })
-    end,
-  }
+	{
+		"lukas-reineke/indent-blankline.nvim",
+		event = "VeryLazy",
+		priority = 100,
+		config = function()
+			require("ibl").setup({
+				indent = { char = "▏" },
+				scope = {
+					char = "▏",
+					enabled = true,
+				},
+			})
+		end,
+	},
 }

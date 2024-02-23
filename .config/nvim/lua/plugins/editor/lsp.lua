@@ -6,14 +6,6 @@ local function setup_diagnostics(bufnr)
 		vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = hl })
 	end
 
-	vim.diagnostic.config({
-		virtual_text = false,
-		signs = true,
-		underline = true,
-		update_in_insert = true,
-		severity_sort = true,
-	})
-
 	local diag_opts = {
 		focusable = false,
 		close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
@@ -66,6 +58,7 @@ local function setup_formatters(client, bufnr)
 			markdown = { { "biome format" } },
 			mdx = { { "biome format" } },
 			html = { { "prettierd" } },
+			json = { { "biome format" } },
 			javascript = { { "prettierd" } },
 			javascriptreact = { { "prettierd" } },
 			["javascript.jsx"] = { { "prettierd" } },
@@ -144,9 +137,15 @@ return {
 			vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
 				border = "rounded",
 			})
+			vim.diagnostic.config({
+				virtual_text = false,
+				signs = true,
+				underline = true,
+				update_in_insert = true,
+				severity_sort = true,
+			})
 		end,
 		config = function()
-			local neodev = require("neodev")
 			local lspconfig = require("lspconfig")
 			lspconfig.util.root_pattern(
 				".eslintrc",
@@ -169,18 +168,28 @@ return {
 				setup_formatters(client, bufnr)
 			end
 
-			local language_servers = lspconfig.util.available_servers()
-			for _, server in ipairs(language_servers) do
-				lspconfig[server].setup({ capabilities = capabilities, on_attach = on_attach })
-			end
+			-- html
+			lspconfig.html.setup({ capabilities = capabilities, on_attach })
 
-			neodev.setup({ capabilities = capabilities, on_attach })
+			-- css
 			lspconfig.tailwindcss.setup({
 				cmd = { "tailwindcss-language-server", "--stdio" },
 				capabilities = capabilities,
 				on_attach,
 			})
+			lspconfig.cssls.setup({
+				capabilities = capabilities,
+				settings = {
+					css = {
+						lint = {
+							unknownAtRules = "ignore",
+						},
+					},
+				},
+				on_attach,
+			})
 
+			-- typescript
 			local use_ts_tools = true
 			if use_ts_tools then
 				require("typescript-tools").setup({
@@ -195,6 +204,9 @@ return {
 					on_attach = on_attach,
 				})
 			end
+
+			-- lua
+			require("neodev").setup({ capabilities = capabilities, on_attach })
 			lspconfig.lua_ls.setup({
 				capabilities = capabilities,
 				on_attach = on_attach,

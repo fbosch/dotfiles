@@ -1,7 +1,7 @@
 return {
 	"hrsh7th/nvim-cmp",
 	dependencies = {
-
+		"neovim/nvim-lspconfig",
 		"nvim-treesitter/nvim-treesitter",
 		"L3MON4D3/LuaSnip",
 		"nvim-lua/plenary.nvim",
@@ -14,7 +14,7 @@ return {
 		"hrsh7th/cmp-nvim-lsp",
 		"hrsh7th/cmp-path",
 		"hrsh7th/cmp-buffer",
-		"David-Kunz/cmp-npm",
+		"hrsh7th/cmp-omni",
 		{
 			"tzachar/cmp-tabnine",
 			build = "./install.sh",
@@ -25,7 +25,6 @@ return {
 		local cmp = require("cmp")
 		local types = require("cmp.types")
 		local lspkind = require("lspkind")
-		require("cmp-npm").setup({})
 		-- require("luasnip.loaders.from_snipmate").lazy_load({ paths = "~/.config/nvim/snippets" })
 		cmp.setup({
 			completion = {
@@ -41,31 +40,39 @@ return {
 				end,
 			},
 			formatting = {
-				format = function(entry, vim_item)
-					vim_item.kind = lspkind.symbolic(vim_item.kind, { mode = "symbol" })
-					-- vim_item.menu = source_mapping[entry.source.name]
-					if entry.source.name == "cmp_tabnine" then
-						local detail = (entry.completion_item.data or {}).detail
-						vim_item.kind = ""
-						if detail and detail:find(".*%%.*") then
-							vim_item.kind = vim_item.kind .. " " .. detail
+				format = lspkind.cmp_format({
+					mode = "symbol",
+					ellipsis_char = "...",
+					symbol_map = {
+						TabNine = "",
+					},
+					before = function(entry, vim_item)
+						if entry.source.name == "cmp_tabnine" then
+							local detail = (entry.completion_item.data or {}).detail
+							if detail and detail:find(".*%%.*") then
+								vim_item.kind = vim_item.kind .. " " .. detail
+							end
+							if (entry.completion_item.data or {}).multiline then
+								vim_item.kind = vim_item.kind .. " " .. "[ML]"
+							end
 						end
-
-						if (entry.completion_item.data or {}).multiline then
-							vim_item.kind = vim_item.kind .. " " .. "[ML]"
-						end
-					end
-					local maxwidth = 80
-					vim_item.abbr = string.sub(vim_item.abbr, 1, maxwidth)
-					return vim_item
-				end,
+						return vim_item
+					end,
+				}),
 			},
 			sources = cmp.config.sources({
-				{ name = "nvim_lsp", max_item_count = 10 },
+				{ name = "nvim_lsp", max_item_count = 5 },
+				{
+					name = "omni",
+					max_item_count = 5,
+					option = {
+						disable_omnifuncs = { "v:lua.vim.lsp.omnifunc" },
+					},
+				},
 				{ name = "buffer", max_item_count = 3 },
 				-- { name = "luasnip", max_item_count = 4 },
-				{ name = "emoji", max_item_count = 20 },
-				{ name = "spell", max_item_count = 3 },
+				{ name = "emoji", max_item_count = 15 },
+				{ name = "spell", max_item_count = 4 },
 				{ name = "nvim_lua", max_item_count = 5 },
 				{ name = "npm", max_item_count = 3 },
 				{ name = "cmp_tabnine", max_item_count = 5 },
@@ -95,5 +102,6 @@ return {
 		vim.api.nvim_set_hl(0, "CmpItemKindProperty", { fg = colors.white })
 		vim.api.nvim_set_hl(0, "CmpItemKindUnit", { fg = colors.white })
 		vim.api.nvim_set_hl(0, "CmpItemKindSnippet", { fg = colors.orange })
+		vim.api.nvim_set_hl(0, "CmpItemKindTabNine", { fg = "#ad5df0" })
 	end,
 }
