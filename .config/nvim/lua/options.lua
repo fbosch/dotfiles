@@ -17,7 +17,7 @@ vim.opt.shadafile = "NONE"
 
 -- timings
 vim.opt.timeoutlen = 500
-vim.opt.updatetime = 2000
+vim.opt.updatetime = 1000
 
 -- visual
 vim.opt.lazyredraw = true
