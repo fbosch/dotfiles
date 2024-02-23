@@ -35,7 +35,7 @@ return {
 	config = function()
 		local cmp = require("cmp")
 		local types = require("cmp.types")
-		require("copilot_cmp").setup()
+		-- require("copilot_cmp").setup()
 		local lspkind = require("lspkind")
 		-- require("luasnip.loaders.from_snipmate").lazy_load({ paths = "~/.config/nvim/snippets" })
 		cmp.setup({

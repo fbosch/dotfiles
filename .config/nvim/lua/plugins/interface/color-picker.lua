@@ -2,6 +2,7 @@ return {
 	{
 		"RRethy/vim-hexokinase",
 		build = "make hexokinase",
+		enabled = false,
 		init = function()
 			vim.g.Hexokinase_highlighters = { "sign_column" }
 			vim.g.Hexokinase_optInPatterns = "full_hex,rgb,rgba,hsl,hsla"
@@ -23,6 +24,7 @@ return {
 	{
 		"max397574/colortils.nvim",
 		cmd = "Colortils",
+		enabled = false,
 		keys = {
 			{
 				mode = "n",
@@ -42,7 +44,15 @@ return {
 	{
 		"uga-rosa/ccc.nvim",
 		event = { "BufRead" },
-		enabled = false,
+		enabled = true,
+		keys = {
+			{
+				mode = "n",
+				"<leader>pc",
+				"<cmd>CccPick<cr>",
+				desc = "pick color",
+			},
+		},
 		config = function()
 			local ccc = require("ccc")
 			ccc.setup({
