@@ -109,6 +109,12 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_wid
 		title = string.gsub(title, "cargo", "")
 	end
 
+	if string.find(title, "lazygit") then
+		table.insert(tab_title, { Foreground = { Color = "#e84e32" } })
+		table.insert(tab_title, { Text = "" })
+		title = string.gsub(title, "lazygit", "")
+	end
+
 	if string.find(title, "git") then
 		table.insert(tab_title, { Foreground = { Color = "#e84e32" } })
 		if string.find(title, "git pull") then
