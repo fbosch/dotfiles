@@ -123,4 +123,8 @@ function workday
   else
       echo -e "Work hours passed since $given_hour: \n$emoji $color$hours_passed hour(s) and $minutes_passed minutes$reset_color"
   end
+    
+  set -Ux _hours_worked (hours_since_workday_start)
+  wezterm_set_user_var "hours_worked" $_hours_worked
+  commandline --function repaint
 end

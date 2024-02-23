@@ -22,6 +22,7 @@ abbr cl 'clear'
 abbr t 'swpm test'
 abbr mki 'sudo make && sudo make clean install'
 abbr lk 'logikill'
+abbr wd 'workday'
 
 function copykey; pbcopy < ~/.ssh/id_rsa.pub; end; 
 function chrdebug;/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222; end;

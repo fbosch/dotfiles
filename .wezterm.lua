@@ -154,10 +154,10 @@ if not is_windows then
 				elseif hours_worked >= 7 then
 					icon = wezterm.nerdfonts.fa_hourglass_end
 					table.insert(status, { Foreground = { Color = "#819B69" } })
-				elseif hours_worked >= 5 then
+				elseif hours_worked >= 4 then
 					icon = wezterm.nerdfonts.fa_hourglass_half
 					table.insert(status, { Foreground = { Color = "#d2af0d" } })
-				elseif hours_worked <= 3 then
+				elseif hours_worked >= 2 then
 					icon = wezterm.nerdfonts.fa_hourglass_half
 					table.insert(status, { Foreground = { Color = "#B77E64" } })
 				else
