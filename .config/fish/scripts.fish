@@ -88,6 +88,7 @@ function workday
   set current_hour (date "+%-H")
   set current_minute (date "+%-M")
 
+  set first_login (first_login_of_the_day)
   # Remove leading zeros if present
   set start_hour (echo $first_login | rg -o '[1-9]+:[1-9]+' | cut -d ':' -f2)
   set start_minute (echo $first_login | rg -o '[1-9]+:[1-9]+' | cut -d ':' -f3)
@@ -96,7 +97,7 @@ function workday
   set hours_passed (math "$current_hour - $start_hour")
   set minutes_passed (math "$current_minute - $start_minute")
 
-  # Adjust for negative minutes
+  # # Adjust for negative minutes
   if test $minutes_passed -lt 0
       set minutes_passed (math "$minutes_passed + 60")
       set hours_passed (math "$hours_passed - 1")
