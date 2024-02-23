@@ -52,7 +52,7 @@ config.window_padding = {
 -- tabs
 config.tab_bar_at_bottom = true
 config.use_fancy_tab_bar = false
-config.hide_tab_bar_if_only_one_tab = false
+config.hide_tab_bar_if_only_one_tab = true
 
 -- This function returns the suggested title for a tab.
 -- It prefers the title that was set via `tab:set_title()`
@@ -69,8 +69,8 @@ local function tab_title(tab_info)
 	return tab_info.active_pane.title
 end
 
-function string.starts(String,Start)
-   return string.sub(String,1,string.len(Start))==Start
+function string.starts(String, Start)
+	return string.sub(String, 1, string.len(Start)) == Start
 end
 
 wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_width)
@@ -93,11 +93,11 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_wid
 		title = string.gsub(title, "brew", "")
 	end
 
-  if string.starts(title, "fish") then
-    table.insert(tab_title, { Foreground = { Color = "#97bdde" } })
-    table.insert(tab_title, { Text = "" })
-    title = string.gsub(title, "fish", "")
-  end
+	if string.starts(title, "fish") then
+		table.insert(tab_title, { Foreground = { Color = "#97bdde" } })
+		table.insert(tab_title, { Text = "" })
+		title = string.gsub(title, "fish", "")
+	end
 
 	if string.starts(title, "wsl") then
 		table.insert(tab_title, { Foreground = { Color = "#e95420" } })

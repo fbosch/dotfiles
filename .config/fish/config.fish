@@ -14,9 +14,10 @@ function update_work_hours --on-event __zoxide_hook
 end;
 
 function fish_greeting
-  update_work_hours &;
-  commandline --function repaint;
-  clear;
+  # TODO: Find another way to do this
+  # update_work_hours &;
+  # clear;
+  # commandline --function repaint;
 end;
 
 # Custom Function for a sudo !! replacement
