@@ -77,6 +77,7 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_wid
 		{ Text = " [" .. tab.tab_index + 1 .. "] " },
 	}
 
+	-- TODO: fix to check if title starts with a string, not only contains it
 	if string.find(title, "nvim") then
 		table.insert(tab_title, { Foreground = { Color = "#54a23d" } })
 		table.insert(tab_title, { Text = "" })
@@ -89,11 +90,11 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_wid
 		title = string.gsub(title, "brew", "")
 	end
 
-	if string.find(title, "fish") then
-		table.insert(tab_title, { Foreground = { Color = "#97bdde" } })
-		table.insert(tab_title, { Text = "" })
-		title = string.gsub(title, "fish", "")
-	end
+	-- 	if string.find(title, "fish") then
+	-- 		table.insert(tab_title, { Foreground = { Color = "#97bdde" } })
+	-- 		table.insert(tab_title, { Text = "" })
+	-- 		title = string.gsub(title, "fish", "")
+	-- 	end
 
 	if string.find(title, "wsl") then
 		table.insert(tab_title, { Foreground = { Color = "#e95420" } })

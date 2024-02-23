@@ -118,20 +118,21 @@ return {
 					severity_sort = true,
 				})
 
-				vim.api.nvim_create_autocmd("CursorHold", {
+				local diag_opts = {
+					focusable = false,
+					close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
+					border = "rounded",
+					source = "always",
+					prefix = "  ",
+					scope = "cursor",
+					max_width = 100,
+				}
+
+				vim.api.nvim_create_autocmd("CursorMoved", {
 					buffer = bufnr,
 					group = group,
 					callback = function()
-						local opts = {
-							focusable = false,
-							close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
-							border = "rounded",
-							source = "always",
-							prefix = "  ",
-							scope = "cursor",
-							max_width = 100,
-						}
-						vim.diagnostic.open_float(nil, opts)
+						vim.diagnostic.open_float(nil, diag_opts)
 					end,
 				})
 

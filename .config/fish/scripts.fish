@@ -70,45 +70,39 @@ function first_login_of_the_day
 end
 
 
-function remove_leading_zeros
-  set input $argv[1]
-  set output (string replace -ra '^(0*)(?!$)' '' -- $input)
-  echo $output
-end
-
 function hours_since_workday_start
-  set current_hour (date "+%H")
-  set current_minute (date "+%M")
-  set workday_start_hour (string split ":" (first_login_of_the_day))[1]
-  set workday_start_minute (string split ":" (first_login_of_the_day))[2]
+  set current_hour (date "+%-H")
+  set current_minute (date "+%-M")
 
-  set total_minutes_since_start (math "($current_hour - $workday_start_hour) * 60 + $current_minute - $workday_start_minute")
+  set first_login (first_login_of_the_day)
+  set start_hour (echo $first_login | rg -o '[1-9]+:[1-9]+' | cut -d ':' -f2)
+  set start_minute (echo $first_login | rg -o '[1-9]+:[1-9]+' | cut -d ':' -f3)
+
+  set total_minutes_since_start (math "($current_hour - $start_hour) * 60 + $current_minute - $start_minute")
 
   echo (math $total_minutes_since_start / 60)
 end
 
 function workday 
   set given_hour (first_login_of_the_day)
-  set current_hour (date +%H)
-  set current_minute (date +%M)
+  set current_hour (date "+%-H")
+  set current_minute (date "+%-M")
 
-  # Extract the hour and minute from the given time
-  set given_hour_hour (string split : $given_hour)[1]
-  set given_hour_minute (string split : $given_hour)[2]
-
+  set first_login (first_login_of_the_day)
   # Remove leading zeros if present
-  set given_hour_hour (string replace -r '^0' '' $given_hour_hour)
-  set given_hour_minute (string replace -r '^0' '' $given_hour_minute)
+  set start_hour (echo $first_login | rg -o '[1-9]+:[1-9]+' | cut -d ':' -f2)
+  set start_minute (echo $first_login | rg -o '[1-9]+:[1-9]+' | cut -d ':' -f3)
 
   # Calculate the hours and minutes passed
-  set hours_passed (math "$current_hour - $given_hour_hour")
-  set minutes_passed (math "$current_minute - $given_hour_minute")
+  set hours_passed (math "$current_hour - $start_hour")
+  set minutes_passed (math "$current_minute - $start_minute")
 
-  # Adjust for negative minutes
+  # # Adjust for negative minutes
   if test $minutes_passed -lt 0
       set minutes_passed (math "$minutes_passed + 60")
       set hours_passed (math "$hours_passed - 1")
   end
+
 
   # Determine the color and emoji based on the number of hours passed
   if test $hours_passed -gt 6

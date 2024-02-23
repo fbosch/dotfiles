@@ -8,10 +8,14 @@ if test (uname) = "Linux"
   eval (/home/linuxbrew/.linuxbrew/bin/brew shellenv)
 end
 
+
+function update_work_hours --on-event __zoxide_hook
+  fish -c 'fish ~/.config/fish/work_hours.fish &; disown;'; 
+  commandline --function repaint;
+end;
+
 function fish_greeting
-  # fish ~/.config/fish/work_hours.fish &; disown
-  # clear;
-  # commandline --function repaint;
+  update_work_hours &;
 end;
 
 # Custom Function for a sudo !! replacement
