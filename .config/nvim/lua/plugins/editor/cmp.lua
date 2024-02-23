@@ -1,7 +1,9 @@
 return {
 	"hrsh7th/nvim-cmp",
 	dependencies = {
+
 		"nvim-treesitter/nvim-treesitter",
+		"L3MON4D3/LuaSnip",
 		"nvim-lua/plenary.nvim",
 		"onsails/lspkind.nvim",
 		"hrsh7th/nvim-cmp",
@@ -79,22 +81,19 @@ return {
 			}),
 		})
 
-		vim.schedule_wrap(function()
-			local colors = require("colors")
-
-			-- highlights
-			vim.api.nvim_set_hl(0, "CmpItemAbbrDeprecated", { fg = colors.lighter_gray, strikethrough = true })
-			vim.api.nvim_set_hl(0, "CmpItemAbbrMatch", { fg = colors.lighter_gray })
-			vim.api.nvim_set_hl(0, "CmpItemAbbrMatchFuzzy", { fg = colors.lighter_gray })
-			vim.api.nvim_set_hl(0, "CmpItemKindVariable", { fg = colors.blue })
-			vim.api.nvim_set_hl(0, "CmpItemKindInterface", { fg = colors.blue })
-			vim.api.nvim_set_hl(0, "CmpItemKindText", { fg = colors.blue })
-			vim.api.nvim_set_hl(0, "CmpItemKindFunction", { fg = colors.purple })
-			vim.api.nvim_set_hl(0, "CmpItemKindMethod", { fg = colors.purple })
-			vim.api.nvim_set_hl(0, "CmpItemKindKeyword", { fg = colors.lighter_gray })
-			vim.api.nvim_set_hl(0, "CmpItemKindProperty", { fg = colors.white })
-			vim.api.nvim_set_hl(0, "CmpItemKindUnit", { fg = colors.white })
-			vim.api.nvim_set_hl(0, "CmpItemKindSnippet", { fg = colors.orange })
-		end)
+		-- highlights
+		local colors = require("colors")
+		vim.api.nvim_set_hl(0, "CmpItemAbbrDeprecated", { fg = colors.lighter_gray, strikethrough = true })
+		vim.api.nvim_set_hl(0, "CmpItemAbbrMatch", { fg = colors.lighter_gray })
+		vim.api.nvim_set_hl(0, "CmpItemAbbrMatchFuzzy", { fg = colors.lighter_gray })
+		vim.api.nvim_set_hl(0, "CmpItemKindVariable", { fg = colors.blue })
+		vim.api.nvim_set_hl(0, "CmpItemKindInterface", { fg = colors.blue })
+		vim.api.nvim_set_hl(0, "CmpItemKindText", { fg = colors.blue })
+		vim.api.nvim_set_hl(0, "CmpItemKindFunction", { fg = colors.purple })
+		vim.api.nvim_set_hl(0, "CmpItemKindMethod", { fg = colors.purple })
+		vim.api.nvim_set_hl(0, "CmpItemKindKeyword", { fg = colors.lighter_gray })
+		vim.api.nvim_set_hl(0, "CmpItemKindProperty", { fg = colors.white })
+		vim.api.nvim_set_hl(0, "CmpItemKindUnit", { fg = colors.white })
+		vim.api.nvim_set_hl(0, "CmpItemKindSnippet", { fg = colors.orange })
 	end,
 }

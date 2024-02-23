@@ -10,13 +10,12 @@ vim.opt.loadplugins = true
 require("lazy").setup({
 	spec = {
 		{ import = "plugins" },
+		{ import = "plugins/interface" },
+		{ import = "plugins/editor" },
+		{ import = "plugins/workflow" },
 	},
-	change_detection = {
-		notify = false,
-	},
-	ui = {
-		border = "rounded",
-	},
+	change_detection = { notify = false },
+	ui = { border = "rounded" },
 	performance = {
 		cache = {
 			enabled = true,

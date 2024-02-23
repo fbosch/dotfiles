@@ -9,7 +9,7 @@ vim.opt.shell = "fish"
 vim.opt.title = false
 vim.opt.foldenable = false
 vim.opt.filetype = "off"
-vim.opt.syntax = "off"
+-- vim.opt.syntax = "off"
 
 -- timings
 vim.opt.timeoutlen = 500

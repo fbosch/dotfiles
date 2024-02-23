@@ -45,6 +45,7 @@ brew "go"
 brew "jq"
 brew "luarocks"
 brew "rust"
+brew "biome"
 
 # programs - mac
 if OS.mac?

@@ -93,11 +93,11 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_wid
 		title = string.gsub(title, "brew", "")
 	end
 
-	-- 	if string.find(title, "fish") then
-	-- 		table.insert(tab_title, { Foreground = { Color = "#97bdde" } })
-	-- 		table.insert(tab_title, { Text = "" })
-	-- 		title = string.gsub(title, "fish", "")
-	-- 	end
+  if string.starts(title, "fish") then
+    table.insert(tab_title, { Foreground = { Color = "#97bdde" } })
+    table.insert(tab_title, { Text = "" })
+    title = string.gsub(title, "fish", "")
+  end
 
 	if string.starts(title, "wsl") then
 		table.insert(tab_title, { Foreground = { Color = "#e95420" } })
@@ -154,17 +154,17 @@ if not is_windows then
 		local wday = os.date("*t").wday
 		if wday ~= 1 or wday ~= 7 then
 			local hours_worked = tonumber(pane:get_user_vars().hours_worked) or 0
-			if hours_worked > 0 then
-				local icon = wezterm.nerdfonts.fa_hourglass_start
+			if hours_worked > 0 and hours_worked < 8.5 then
+				local icon = ""
 				table.insert(status, { Text = " " })
-				if hours_worked > 8 then
+				if hours_worked > 7.5 then
 					icon = wezterm.nerdfonts.fa_hourglass_o
-					table.insert(status, { Foreground = { Color = "#DE6E7C" } })
+					table.insert(status, { Foreground = { Color = "#999999" } })
 				elseif hours_worked >= 7 then
-					icon = wezterm.nerdfonts.fa_hourglass_end
+					icon = wezterm.nerdfonts.fa_hourglass_o
 					table.insert(status, { Foreground = { Color = "#819B69" } })
 				elseif hours_worked >= 4 then
-					icon = wezterm.nerdfonts.fa_hourglass_half
+					icon = wezterm.nerdfonts.fa_hourglass_end
 					table.insert(status, { Foreground = { Color = "#d2af0d" } })
 				elseif hours_worked >= 2 then
 					icon = wezterm.nerdfonts.fa_hourglass_half

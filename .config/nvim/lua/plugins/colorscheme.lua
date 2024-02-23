@@ -1,7 +1,7 @@
 return {
 	"mcchrish/zenbones.nvim",
 	dependencies = { "rktjmp/lush.nvim" },
-	priority = 1000,
+	priority = 10000,
 	event = "VeryLazy",
 	config = function()
 		vim.g.zenbones_solid_line_nr = true
@@ -40,9 +40,14 @@ return {
 
 		-- fold
 		hl(0, "Folded", { fg = colors.lighter_gray, bg = colors.darker_gray })
-		-- indent
 
+		-- indent
 		hl(0, "IndentBlanklineScope", { fg = colors.match_blue })
 		hl(0, "IblScope", { fg = colors.match_blue })
+
+		-- treesitter
+		hl(0, "TreesitterContext", { bg = colors.darkest_gray })
+		hl(0, "TreesitterContextLineNumber", { bg = colors.darkest_gray })
+		hl(0, "TreesitterContextBottom", { bg = colors.darkest_gray, underline = true, sp = colors.dark_gray })
 	end,
 }
