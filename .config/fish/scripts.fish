@@ -70,19 +70,15 @@ function first_login_of_the_day
 end
 
 
-function remove_leading_zeros
-  set input $argv[1]
-  set output (string replace -ra '^(0*)(?!$)' '' -- $input)
-  echo $output
-end
-
 function hours_since_workday_start
-  set current_hour (date "+%H")
-  set current_minute (date "+%M")
-  set workday_start_hour (string split ":" (first_login_of_the_day))[1]
-  set workday_start_minute (string split ":" (first_login_of_the_day))[2]
+  set current_hour (date "+%-H")
+  set current_minute (date "+%-M")
 
-  set total_minutes_since_start (math "($current_hour - $workday_start_hour) * 60 + $current_minute - $workday_start_minute")
+  set first_login (first_login_of_the_day)
+  set start_hour (echo $first_login | rg -o '[1-9]+:[1-9]+' | cut -d ':' -f2)
+  set start_minute (echo $first_login | rg -o '[1-9]+:[1-9]+' | cut -d ':' -f3)
+
+  set total_minutes_since_start (math "($current_hour - $start_hour) * 60 + $current_minute - $start_minute")
 
   echo (math $total_minutes_since_start / 60)
 end
