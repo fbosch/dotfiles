@@ -1,4 +1,4 @@
-vim.opt.shortmess:append("I")
+vim.opt.shortmess = "I"
 vim.loader.enable()
 
 vim.g.mapleader = " "
