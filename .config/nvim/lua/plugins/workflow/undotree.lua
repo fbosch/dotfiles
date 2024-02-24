@@ -3,10 +3,11 @@ return {
 	cmd = { "UndotreeToggle", "UndotreeShow", "UndotreeHide" },
 	keys = {
 		{
-			mode = { "n" },
 			"<leader>uu",
 			"<cmd>UndotreeToggle<cr>",
 			desc = "undotree toggle",
+			mode = { "n" },
+			silent = true,
 		},
 	},
 	config = function()

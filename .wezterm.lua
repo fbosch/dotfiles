@@ -52,7 +52,7 @@ config.window_padding = {
 -- tabs
 config.tab_bar_at_bottom = true
 config.use_fancy_tab_bar = false
-config.hide_tab_bar_if_only_one_tab = true
+config.hide_tab_bar_if_only_one_tab = false
 
 -- This function returns the suggested title for a tab.
 -- It prefers the title that was set via `tab:set_title()`

@@ -4,28 +4,32 @@ return {
 	cmd = { "FzfLua", "FzfRg" },
 	keys = {
 		{
-			mode = { "n" },
 			"<C-p>",
 			"<cmd>FzfLua files<cr>",
 			desc = "find files",
+			mode = { "n" },
+      silent = true
 		},
 		{
-			mode = { "n" },
 			"<leader>lg",
 			"<cmd>FzfRg<cr>",
 			desc = "livegrep ripgrep search",
+			mode = { "n" },
+      silent = true
 		},
 		{
-			mode = { "n" },
 			"<leader>b",
 			"<cmd>FzfLua buffers<cr>",
 			desc = "buffers",
+			mode = { "n" },
+      silent = true
 		},
 		{
-			mode = { "n" },
 			"<leader>of",
 			"<cmd>FzfLua oldfiles<cr>",
 			desc = "oldfiles",
+			mode = { "n" },
+      silent = true
 		},
 	},
 	config = function()

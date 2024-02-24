@@ -1,31 +1,34 @@
 return {
 	"stevearc/overseer.nvim",
 	dependencies = {
-    {
-      "stevearc/dressing.nvim",
-      event = "VeryLazy"
-    }
+		{
+			"stevearc/dressing.nvim",
+			event = "VeryLazy",
+		},
 	},
 	cmd = { "OverseerToggle", "OverseerRun", "OverseerLoadBundle" },
 	priority = 70,
 	keys = {
 		{
-			mode = { "n" },
 			"<leader>ot",
 			"<cmd>OverseerToggle<cr>",
 			desc = "Toggle the task list",
+			mode = { "n" },
+			silent = true,
 		},
 		{
-			mode = { "n" },
 			"<leader>or",
 			"<cmd>OverseerRun<cr>",
 			desc = "Run the selected task",
+			mode = { "n" },
+			silent = true,
 		},
 		{
-			mode = { "n" },
 			"<leader>od",
 			"<cmd>OverseerLoadBundle dev<cr>",
 			desc = "Load the dev bundle",
+			mode = { "n" },
+			silent = true,
 		},
 	},
 	config = function()

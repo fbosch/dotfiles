@@ -1,10 +1,58 @@
-local map = vim.api.nvim_set_keymap
-local silent = { noremap = true, silent = true }
-
 return {
 	"folke/trouble.nvim",
 	dependencies = { "kyazdani42/nvim-web-devicons" },
 	cmd = { "TroubleToggle", "Trouble", "TodoTrouble" },
+	keys = {
+
+		{
+			"<leader>tx",
+			"<cmd>TroubleToggle<cr>",
+			mode = { "n" },
+			silent = true,
+		},
+		{
+			"<leader>tw",
+			"<cmd>Trouble workspace_diagnostics<cr>",
+			mode = { "n" },
+			silent = true,
+		},
+		{
+			"<leader>td",
+			"<cmd>Trouble document_diagnostics<cr>",
+			mode = { "n" },
+			silent = true,
+		},
+		{
+			"<leader>tt",
+			"<cmd>TodoTrouble<cr>",
+			mode = { "n" },
+			silent = true,
+		},
+		{
+			"<leader>tl",
+			"<cmd>Trouble loclist<cr>",
+			mode = { "n" },
+			silent = true,
+		},
+		{
+			"<leader>tq",
+			"<cmd>Trouble quickfix<cr>",
+			mode = { "n" },
+			silent = true,
+		},
+		{
+			"<leader>tr",
+			"<cmd>Trouble lsp_references<cr>",
+			mode = { "n" },
+			silent = true,
+		},
+		{
+			"<leader>tz",
+			"<cmd>TroubleClose<cr>",
+			mode = { "n" },
+			silent = true,
+		},
+	},
 	config = function()
 		require("trouble").setup()
 
@@ -30,15 +78,5 @@ return {
 			group = group,
 			callback = replace_quickfix_with_trouble,
 		})
-
-		-- trouble toggling
-		map("n", "<leader>tx", ":TroubleToggle<CR>", silent)
-		map("n", "<leader>tw", ":Trouble workspace_diagnostics<CR>", silent)
-		map("n", "<leader>td", ":Trouble document_diagnostics<CR>", silent)
-		map("n", "<leader>tt", ":TodoTrouble<CR>", silent)
-		map("n", "<leader>tl", ":Trouble loclist<CR>", silent)
-		map("n", "<leader>tq", ":Trouble quickfix<CR>", silent)
-		map("n", "<leader>tr", ":Trouble lsp_references<CR>", silent)
-		map("n", "<leader>tz", ":TroubleClose<CR>", silent)
 	end,
 }

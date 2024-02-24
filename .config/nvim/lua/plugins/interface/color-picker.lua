@@ -51,6 +51,7 @@ return {
 				"<leader>pc",
 				"<cmd>CccPick<cr>",
 				desc = "pick color",
+        silent = true,
 			},
 		},
 		config = function()

@@ -10,36 +10,42 @@ return {
 			"<leader>x",
 			":only <bar> :BufferCloseAllButCurrentOrPinned<cr>",
 			desc = "close all but currentl active buffer or pinned buffers",
+			silent = true,
 		},
 		{
 			mode = { "n" },
 			"<leader>P",
 			"<cmd>BufferPin<cr>",
 			desc = "pin current buffer",
+			silent = true,
 		},
 		{
 			mode = { "n" },
 			"<C-h>",
 			"<cmd>BufferPrevious<cr>",
 			desc = "previous buffer",
+			silent = true,
 		},
 		{
 			mode = { "n" },
 			"<C-l>",
 			"<cmd>BufferNext<cr>",
 			desc = "next buffer",
+			silent = true,
 		},
 		{
 			mode = { "n" },
 			"<C-A-h>",
 			"<cmd>BufferMovePrevious<cr>",
 			desc = "move buffer left",
+			silent = true,
 		},
 		{
 			mode = { "n" },
 			"<C-A-l>",
 			"<cmd>BufferMoveNext<cr>",
 			desc = "move buffer right",
+			silent = true,
 		},
 		unpack((function()
 			local values = {}

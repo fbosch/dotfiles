@@ -3,10 +3,11 @@ return {
 	cmd = { "FTermOpen", "FTermClose", "FTermExit", "FTermToggle" },
 	keys = {
 		{
-			mode = "n",
 			"<leader>ft",
 			"<cmd>FTermToggle<cr>",
 			desc = "toggle floating terminal",
+			mode = "n",
+      silent = true
 		},
 	},
 	config = function()
