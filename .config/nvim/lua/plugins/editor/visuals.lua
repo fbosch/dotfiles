@@ -28,7 +28,15 @@ return {
 		event = { "VimEnter" },
 		opts = {
 			show_first_indent_level = false,
-			highlight_ignore_patterns = { "IndentBlankline*", "Ibl*", "Whitespace", "NonText", "Hop*", "Ccc*" },
+			highlight_ignore_patterns = {
+				"IndentBlankline*",
+				"Ibl*",
+				"Whitespace",
+				"NonText",
+				"Hop*",
+				"Ccc*",
+				"Leap*",
+			},
 		},
 	},
 	{

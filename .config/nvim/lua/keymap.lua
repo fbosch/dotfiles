@@ -3,16 +3,12 @@ local opts = { noremap = true, silent = true }
 
 -- disable
 map("n", "<Space>", "<NOP>", opts)
--- map("n", "q", "<NOP>", opts)
 
 -- disable arrow keys in insert mode
 map("i", "<Up>", "<NOP>", opts)
 map("i", "<Down>", "<NOP>", opts)
 map("i", "<Left>", "<NOP>", opts)
 map("i", "<Right>", "<NOP>", opts)
-
--- replace text
-map("n", "<leader>ra", ":Sad<CR>", opts)
 
 -- increment and decrement
 map("n", "+", "<C-a>", opts)

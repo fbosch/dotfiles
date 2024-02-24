@@ -10,6 +10,12 @@ return {
 		-- find and replace
 		"ray-x/sad.nvim",
 		dependencies = { "ray-x/guihua.lua", run = "cd lua/fzy && make" },
+    keys = { {
+      "<leader>ra",
+      "<cmd>Sad<CR>",
+      mode = { "n" },
+      silent = true
+    }},
 		cmd = { "Sad" },
 	},
 	{

@@ -46,16 +46,12 @@ return {
 			hijack_netrw = true,
 			renderer = {
 				root_folder_label = false,
-				icons = {
-					glyphs = {
-						modified = "",
-					},
-				},
 			},
 			filters = {
 				custom = { "node_modules" },
 			},
 			view = {
+				side = "right",
 				number = false,
 				relativenumber = false,
 				adaptive_size = true,
