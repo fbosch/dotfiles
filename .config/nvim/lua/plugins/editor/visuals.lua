@@ -2,7 +2,8 @@ return {
 	{ "Bekaboo/deadcolumn.nvim", event = "VeryLazy" },
 	{
 		"petertriho/nvim-scrollbar",
-		event = "BufRead",
+		event = "VeryLazy",
+		config = true,
 	},
 	{
 		"folke/todo-comments.nvim",

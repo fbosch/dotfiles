@@ -14,8 +14,25 @@ return {
 		end,
 	},
 	{
+		"ggandor/leap.nvim",
+		event = "VeryLazy",
+		keys = {
+			{ "s", mode = { "n", "x", "o" }, desc = "Leap forward to" },
+			{ "S", mode = { "n", "x", "o" }, desc = "Leap backward to" },
+			{ "gs", mode = { "n", "x", "o" }, desc = "Leap from windows" },
+		},
+		config = function(_, opts)
+			local leap = require("leap")
+			for k, v in pairs(opts) do
+				leap.opts[k] = v
+			end
+			leap.add_default_mappings(true)
+		end,
+	},
+	{
 		"phaazon/hop.nvim",
 		branch = "v2",
+		enabled = false,
 		config = function()
 			require("hop").setup({
 				keys = "etovxqpdygfblzhckisuran",

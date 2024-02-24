@@ -40,4 +40,20 @@ return {
 			})
 		end,
 	},
+	{
+		"Wansmer/treesj",
+		keys = {
+			{
+				"<leader>m",
+				"<cmd>TSJToggle<CR>",
+				mode = { "n" },
+				silent = true,
+			},
+		},
+		cmd = { "TSJToggle" },
+		dependencies = { "nvim-treesitter/nvim-treesitter" },
+		opts = {
+			use_default_keymaps = false,
+		},
+	},
 }

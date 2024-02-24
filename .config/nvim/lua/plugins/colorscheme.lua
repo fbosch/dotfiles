@@ -6,6 +6,10 @@ return {
 	config = function()
 		vim.g.zenbones_solid_line_nr = true
 
+		-- undercurl
+		vim.cmd([[let &t_Cs = "\e[4:3m"]])
+		vim.cmd([[let &t_Ce = "\e[4:0m"]])
+
 		vim.cmd([[colorscheme zenwritten]])
 
 		local colors = require("colors")
@@ -49,5 +53,9 @@ return {
 		hl(0, "TreesitterContext", { bg = colors.darkest_gray })
 		hl(0, "TreesitterContextLineNumber", { bg = colors.darkest_gray })
 		hl(0, "TreesitterContextBottom", { bg = colors.darkest_gray, underline = true, sp = colors.dark_gray })
+
+		-- leap
+		hl(0, "LeapMatch", { fg = colors.blue, underline = true })
+		hl(0, "LeapLabelPrimary", { fg = colors.purple, underline = true })
 	end,
 }

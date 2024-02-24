@@ -98,8 +98,18 @@ return {
 			silent = true,
 		},
 	},
-  opts = {
-    openai_params = { model = "gpt-4-1106-preview" },
-    openai_edit_params = { model = "gpt-4-1106-preview" },
-  },
+	opts = {
+		openai_params = { model = "gpt-4-1106-preview" },
+		openai_edit_params = { model = "gpt-4-1106-preview" },
+		chat = {
+			welcome_message = "",
+			sessions_window = {
+				active_sign = " 󰭹 ",
+				inactive_sign = " 󰻞 ",
+			},
+			keymaps = {
+				select_session = "<cr>",
+			},
+		},
+	},
 }

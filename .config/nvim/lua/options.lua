@@ -1,6 +1,3 @@
--- undercurl
-vim.cmd([[let &t_Cs = "\e[4:3m"]])
-vim.cmd([[let &t_Ce = "\e[4:0m"]])
 
 -- misc
 vim.opt.re = 0 -- regex engine auto
@@ -13,7 +10,7 @@ vim.opt.syntax = "off"
 
 -- timings
 vim.opt.timeoutlen = 500
-vim.opt.updatetime = 1000
+vim.opt.updatetime = 500
 
 -- visual
 vim.opt.lazyredraw = true
