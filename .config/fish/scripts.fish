@@ -1,3 +1,22 @@
+function customized_delta 
+  delta -s -n \
+  --color-only \
+  --dark \
+  --syntax-theme='Zenwritten Dark'  \
+  --features 'line-numbers side-by-side' \
+  --paging 'never' \ 
+  --file-decoration-style 'none' \
+  --commit-decoration-style 'bold white box' \
+  --hunk-header-style 'file line-number syntax' \
+  --hunk-header-decoration-style '"#3D3839" box ul' \
+  --plus-style 'syntax "#233017"' \
+  --minus-style 'syntax "#531b28"' \
+  --line-numbers-plus-style "#819B69" \
+  --line-numbers-minus-style "#D16D7E" \
+  --line-numbers-left-style "#3D3839" \
+  --line-numbers-right-style "#3D3839" 
+end
+
 function wezterm_set_user_var
     if hash base64 2>/dev/null
         if test -z "$TMUX"

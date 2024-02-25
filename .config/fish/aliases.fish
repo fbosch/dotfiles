@@ -79,6 +79,7 @@ abbr lg 'lazygit'
 abbr bad 'git bisect bad'
 abbr good 'git bisect good'
 
+
 # rust
 abbr cn 'cargo new'
 abbr cc 'cargo check'
