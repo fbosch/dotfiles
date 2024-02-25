@@ -41,6 +41,7 @@ config.colors = {
 }
 
 -- window
+config.audible_bell = "Disabled"
 config.window_decorations = "RESIZE|MACOS_FORCE_DISABLE_SHADOW"
 config.window_padding = {
 	left = 2,

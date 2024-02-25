@@ -1,5 +1,4 @@
 git:
   paging:
     colorArg: always
-    pager: delta -s -n --features="line-numbers side-by-side decorations" --dark --syntax-theme='Zenwritten Dark' --paging 'never' --file-decoration-style 'none' --commit-decoration-style 'bold white box' --hunk-header-style 'file line-number syntax' --hunk-header-decoration-style '"#3D3839" box ul' --plus-style 'syntax "#233017"' --minus-style 'syntax "#531b28"' --line-numbers-plus-style "#819B69" --line-numbers-minus-style "#D16D7E" --line-numbers-left-style "#3D3839" --line-numbers-right-style "#3D3839"
-
+    useConfig: true
