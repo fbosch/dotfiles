@@ -8,6 +8,10 @@ return {
 					done_icon = "",
 					progress_icon = { pattern = "dots_scrolling" },
 				},
+				-- How to get a progress message's notification group key
+				notification_group = function(msg)
+					return msg.lsp_client.name
+				end,
 			},
 			notification = {
 				configs = {

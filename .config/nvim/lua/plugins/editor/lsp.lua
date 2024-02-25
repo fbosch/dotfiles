@@ -99,6 +99,12 @@ local function setup_keymaps(bufnr)
 	vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, bufopts)
 end
 
+local on_attach = function(client, bufnr)
+	setup_keymaps(bufnr)
+	setup_diagnostics(bufnr)
+	setup_formatters(client, bufnr)
+end
+
 return {
 	{
 		"neovim/nvim-lspconfig",
@@ -165,11 +171,11 @@ return {
 				lineFoldingOnly = true,
 			}
 
-			local on_attach = function(client, bufnr)
-				setup_keymaps(bufnr)
-				setup_diagnostics(bufnr)
-				setup_formatters(client, bufnr)
-			end
+			-- rust
+			lspconfig.rust_analyzer.setup({
+				capabilities = capabilities,
+				on_attach = on_attach,
+			})
 
 			-- html
 			lspconfig.html.setup({ capabilities = capabilities, on_attach })

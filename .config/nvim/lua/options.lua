@@ -1,4 +1,4 @@
-
+vim.opt.shortmess = "I"
 -- misc
 vim.opt.re = 0 -- regex engine auto
 vim.opt.compatible = false
@@ -52,10 +52,9 @@ vim.wo.foldtext = ""
 vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
 
 -- spellchecking
-vim.opt.spell = false
--- vim.opt.mouse:append("a")
+vim.opt.spell = true
 vim.opt.spelllang = "en_us,da"
-vim.opt.spelloptions = "camel"
+vim.opt.spelloptions:append("noplainbuffer")
 
 -- tab & indentation
 vim.opt.tabstop = 2

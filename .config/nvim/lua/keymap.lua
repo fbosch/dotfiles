@@ -10,7 +10,7 @@ map("i", "<Down>", "<NOP>", opts)
 map("i", "<Left>", "<NOP>", opts)
 map("i", "<Right>", "<NOP>", opts)
 
--- increment and decrement
+-- increment and deccrement
 map("n", "+", "<C-a>", opts)
 map("n", "-", "<C-x>", opts)
 
