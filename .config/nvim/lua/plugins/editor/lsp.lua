@@ -7,12 +7,13 @@ local function setup_diagnostics(bufnr)
 	end
 
 	local diag_opts = {
+    header = "",
 		focusable = false,
 		close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
 		border = "rounded",
 		source = "always",
-		prefix = "  ",
-		scope = "cursor",
+		prefix = "  ",
+		scope = "line",
 		max_width = 100,
 	}
 
@@ -20,7 +21,7 @@ local function setup_diagnostics(bufnr)
 		buffer = bufnr,
 		group = group,
 		callback = function()
-			vim.diagnostic.open_float(nil, diag_opts)
+			vim.diagnostic.open_float(bufnr, diag_opts)
 		end,
 	})
 end
