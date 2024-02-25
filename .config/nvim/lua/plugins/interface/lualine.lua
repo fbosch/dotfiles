@@ -20,7 +20,7 @@ return {
 				globalstatus = true,
 				always_divide_middle = false,
 			},
-			extensions = { "fugitive", "symbols-outline" },
+			extensions = { "symbols-outline" },
 			sections = {
 				lualine_b = {
 					{

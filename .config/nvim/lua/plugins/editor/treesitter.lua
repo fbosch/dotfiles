@@ -10,7 +10,7 @@ return {
 			"windwp/nvim-ts-autotag",
 			"nvim-treesitter/nvim-treesitter-context",
 		},
-		event = { "BufReadPost", "BufNewFile", "LspAttach" },
+		event = { "BufRead", "BufNewFile", "LspAttach" },
 		config = function()
 			require("nvim-treesitter.configs").setup({
 				modules = {},

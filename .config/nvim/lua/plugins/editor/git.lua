@@ -1,6 +1,7 @@
 return {
 	{
 		"kdheepak/lazygit.nvim",
+		dependencies = { "nvim-telescope/telescope.nvim" },
 		keys = {
 			{
 				mode = { "n" },
@@ -9,9 +10,7 @@ return {
 				desc = "lazygit",
 			},
 		},
-		cmd = {
-			"LazyGit",
-		},
+		cmd = { "LazyGit" },
 		config = function()
 			local telescope = require("telescope")
 			telescope.load_extension("lazygit")
@@ -20,7 +19,10 @@ return {
 	{
 
 		"dinhhuy258/git.nvim",
-		event = "VeryLazy",
+		cmd = {
+			"GitBlameOpenCommitURL",
+			"GitBlameCopySHA",
+		},
 		keys = {
 			{
 				mode = { "n" },
@@ -50,7 +52,7 @@ return {
 	},
 	{
 		"lewis6991/gitsigns.nvim",
-		event = { "InsertEnter", "BufRead" },
+		event = { "BufRead" },
 		config = function()
 			require("gitsigns").setup()
 		end,
