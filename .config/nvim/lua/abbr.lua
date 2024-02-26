@@ -4,6 +4,7 @@ local abbreviations = {
 	{ ["seperate"] = "separate" },
 	{ ["definately"] = "definitely" },
 	{ ["cahnge"] = "change" },
+	{ ["futher"] = "further" },
 }
 
 vim.schedule_wrap(function()

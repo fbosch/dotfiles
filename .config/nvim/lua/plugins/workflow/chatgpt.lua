@@ -102,6 +102,7 @@ return {
 		openai_params = { model = "gpt-4-1106-preview" },
 		openai_edit_params = { model = "gpt-4-1106-preview" },
 		chat = {
+			max_line_length = 120,
 			welcome_message = "",
 			sessions_window = {
 				active_sign = " 󰭹 ",
