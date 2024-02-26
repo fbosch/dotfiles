@@ -3,6 +3,7 @@ local abbreviations = {
 	{ ["teh"] = "the" },
 	{ ["seperate"] = "separate" },
 	{ ["definately"] = "definitely" },
+	{ ["cahnge"] = "change" },
 }
 
 vim.api.nvim_create_autocmd({ "VimEnter" }, {

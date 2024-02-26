@@ -49,7 +49,6 @@ return {
 					wilder.popupmenu_devicons(),
 					wilder.popupmenu_buffer_flags({
 						flags = " a + ",
-						-- icons = { ["+"] = "", a = "", h = "" },
 					}),
 				},
 				right = {

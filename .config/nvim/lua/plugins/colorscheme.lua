@@ -21,7 +21,12 @@ return {
 		hl(0, "MatchParen", { fg = colors.darker_gray, bg = colors.match_blue })
 
 		-- popup menu highlights (wilder, telescope, etc.)
+		local border_color = { fg = colors.light_gray }
 		hl(0, "NormalFloat", { bg = colors.background })
+		hl(0, "FloatBorder", border_color)
+		hl(0, "LspInfoBorder", border_color)
+		hl(0, "FzfLuaBorder", border_color)
+		hl(0, "NormalFloatBorder", border_color)
 		hl(0, "Pmenu", { bg = colors.background })
 		hl(0, "Beacon", { bg = colors.lighter_gray, ctermbg = 15 })
 

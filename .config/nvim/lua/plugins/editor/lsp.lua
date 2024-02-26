@@ -7,7 +7,7 @@ local function setup_diagnostics(bufnr)
 	end
 
 	local diag_opts = {
-    header = "",
+		header = "",
 		focusable = false,
 		close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
 		border = "rounded",
@@ -200,7 +200,7 @@ return {
 			})
 
 			-- typescript
-			local use_ts_tools = true
+			local use_ts_tools = false
 			if use_ts_tools then
 				require("typescript-tools").setup({
 					capabilities = capabilities,

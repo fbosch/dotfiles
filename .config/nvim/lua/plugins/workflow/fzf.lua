@@ -8,28 +8,28 @@ return {
 			"<cmd>FzfLua files<cr>",
 			desc = "find files",
 			mode = { "n" },
-      silent = true
+			silent = true,
 		},
 		{
 			"<leader>lg",
 			"<cmd>FzfRg<cr>",
 			desc = "livegrep ripgrep search",
 			mode = { "n" },
-      silent = true
+			silent = true,
 		},
 		{
 			"<leader>b",
 			"<cmd>FzfLua buffers<cr>",
 			desc = "buffers",
 			mode = { "n" },
-      silent = true
+			silent = true,
 		},
 		{
 			"<leader>of",
 			"<cmd>FzfLua oldfiles<cr>",
 			desc = "oldfiles",
 			mode = { "n" },
-      silent = true
+			silent = true,
 		},
 	},
 	config = function()
@@ -54,9 +54,6 @@ return {
 			},
 		})
 
-		-- highlight
-		vim.api.nvim_set_hl(0, "FzfLuaBorder", { fg = require("colors").lighter_gray })
-
 		vim.api.nvim_create_user_command("FzfRg", function()
 			local colors =
 				'--color=ansi --colors="match:bg:magenta" --colors="match:fg:black" --colors="line:fg:yellow" --colors="path:fg:white" '
@@ -71,7 +68,6 @@ return {
 
 			fzf.live_grep_resume({
 				rg_glob = true,
-				-- glob_flag = "--iglob",
 				exec_empty_query = false,
 				rg_opts = combined_options,
 			})

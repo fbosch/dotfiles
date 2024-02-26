@@ -14,10 +14,6 @@ function update_work_hours --on-event __zoxide_hook
 end;
 
 function fish_greeting
-  # TODO: Find another way to do this
-  # update_work_hours &;
-  # clear;
-  # commandline --function repaint;
 end;
 
 # Custom Function for a sudo !! replacement
@@ -29,7 +25,7 @@ else
     end
 end
 
-# Switch directories using LF
+# Switch directories using lf
 function lfcd --description "lf to switch directories"
     set --local tmp "(mktemp)"
     eval command lf -last-dir-path="$tmp" "$argv"
