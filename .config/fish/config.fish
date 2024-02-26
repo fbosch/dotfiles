@@ -9,10 +9,11 @@ if test (uname) = "Linux"
 end
 
 function fish_greeting
-  if test (uname) = "Darwin"
+  if test (uname) = "Darwin" && test "$PWD" = "$HOME" && test (wezterm cli list | count) -eq 2
     first_login_of_the_day --silent &
   end
 end
+
 
 # Custom Function for a sudo (!!) replacement
 function sudo --description "replacement for 'sudo !!' command to run last command using sudo"
@@ -39,7 +40,6 @@ function lfcd --description "lf to switch directories"
 end
 
 bind -M insert \cc kill-whole-line repaint
-
 
 zoxide init fish | source
 starship init fish | source
