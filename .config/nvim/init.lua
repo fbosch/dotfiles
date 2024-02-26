@@ -15,6 +15,7 @@ vim.g.loaded_zip = 1
 vim.g.do_filetype_lua = 1
 
 require("usercmd")
+require("abbr")
 require("keymap")
 require("plugin")
 require("options")

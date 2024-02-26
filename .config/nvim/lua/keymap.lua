@@ -10,12 +10,16 @@ map("i", "<Down>", "<NOP>", opts)
 map("i", "<Left>", "<NOP>", opts)
 map("i", "<Right>", "<NOP>", opts)
 
--- increment and deccrement
+-- increment and decrement
 map("n", "+", "<C-a>", opts)
 map("n", "-", "<C-x>", opts)
 
 -- yank
 map("n", "<C-a>", "ggVG<CR>", opts)
+
+-- replace words under cursor
+map("n", "<leader>rw", ":%s/<C-R><C-W>//gI<left><left><left>", opts) -- in buffer
+map("n", "<leader>rW", ":s/<C-R><C-W>//gI<left><left><left>", opts) -- on line
 
 -- save files
 map("n", "<leader>s", ":wall<CR>", opts)
@@ -33,7 +37,7 @@ map("i", "<A-k>", "<Esc>:m .-2<CR>==gi", opts)
 map("v", "<A-j>", ":m '>+1<CR>gv=gv", opts)
 map("v", "<A-k>", ":m '<-2<CR>gv=gv", opts)
 
--- autoswitch to newly created splits
+-- auto switch to newly created splits
 map("n", "<C-W>v", ":vsplit<CR> <bar> :wincmd l<CR>", opts)
 map("n", "<C-W>s", ":split<CR> <bar> :wincmd j<CR>", opts)
 
