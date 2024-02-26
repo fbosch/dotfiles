@@ -25,7 +25,7 @@ return {
 	},
 	{
 		"levouh/tint.nvim",
-		event = { "VimEnter" },
+		event = { "VeryLazy" },
 		opts = {
 			show_first_indent_level = false,
 			highlight_ignore_patterns = {

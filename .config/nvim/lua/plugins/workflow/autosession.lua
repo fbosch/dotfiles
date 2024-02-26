@@ -1,27 +1,24 @@
+local cwd = vim.v.cwd or vim.fn.getcwd(0)
+local function get_cwd_as_name()
+	return cwd:gsub("[^A-Za-z0-9]", "_")
+end
+local root_dir = vim.fn.expand("~/.config") .. "/nvim/.sessions//"
+local bundle = root_dir .. get_cwd_as_name()
+
 return {
 	"rmagatti/auto-session",
 	dependencies = {
-		{
-			"stevearc/overseer.nvim",
-			event = "VeryLazy",
-		},
+		"stevearc/overseer.nvim",
 	},
 	enabled = true,
 	config = function()
-		local cwd = vim.v.cwd or vim.fn.getcwd(0)
-		local function get_cwd_as_name()
-			return cwd:gsub("[^A-Za-z0-9]", "_")
-		end
-		local root_dir = vim.fn.expand("~/.config") .. "/nvim/.sessions//"
-		local bundle = root_dir .. get_cwd_as_name()
-
-		vim.api.nvim_create_user_command("WipeAllSessions", function()
-			local cmd = string.format("rm -rf %s", root_dir)
-			os.execute(cmd)
-			vim.notify("Wiped all sessions", vim.log.levels.INFO, {
-				title = "AutoSession",
-			})
-		end, { bang = true })
+    vim.api.nvim_create_user_command("WipeAllSessions", function()
+      local cmd = string.format("rm -rf %s", root_dir)
+      os.execute(cmd)
+      vim.notify("Wiped all sessions", vim.log.levels.INFO, {
+        title = "AutoSession",
+      })
+    end, { bang = true })
 
 		require("auto-session").setup({
 			log_level = "error",
