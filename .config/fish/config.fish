@@ -1,5 +1,5 @@
-. ~/.config/fish/scripts.fish
 . ~/.config/fish/aliases.fish
+. ~/.config/fish/scripts.fish
 . ~/.config/fish/profile.fish
 . ~/.config/fish/private.fish
 . ~/.config/fish/colors.fish
@@ -8,15 +8,11 @@ if test (uname) = "Linux"
   eval (/home/linuxbrew/.linuxbrew/bin/brew shellenv)
 end
 
-
-function update_work_hours --on-event __zoxide_hook
-  fish -c 'fish ~/.config/fish/work_hours.fish &; disown;'; 
-end;
-
 function fish_greeting
+  first_login_of_the_day > /dev/null &;
 end;
 
-# Custom Function for a sudo !! replacement
+# Custom Function for a sudo (!!) replacement
 function sudo --description "replacement for 'sudo !!' command to run last command using sudo"
     if test "$argv" = !!
     eval command sudo $history[1]

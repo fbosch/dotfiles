@@ -1,4 +1,4 @@
-vim.opt.shortmess = "I"
+vim.opt.shm:append("I")
 -- misc
 vim.opt.re = 0 -- regex engine auto
 vim.opt.compatible = false
@@ -36,7 +36,7 @@ vim.opt.undofile = true
 vim.opt.undodir = vim.fn.stdpath("config") .. "/nvim/.undo//"
 vim.opt.backupdir = vim.fn.stdpath("config") .. "/nvim/.backup//"
 vim.opt.directory = vim.fn.stdpath("config") .. "/nvim/.swp//"
-vim.opt.sessionoptions = "curdir,localoptions,options,buffers,tabpages,winsize,winpos,globals"
+vim.opt.sessionoptions = "buffers,curdir,tabpages,winsize,winpos,localoptions"
 vim.opt.fileencoding = "utf-8"
 vim.opt.autoread = true
 

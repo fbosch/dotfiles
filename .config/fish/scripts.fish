@@ -4,7 +4,6 @@ function wezterm_set_user_var
             printf "\033]1337;SetUserVar=%s=%s\007" "$argv[1]" (echo -n "$argv[2]" | base64)
         else
             # <https://github.com/tmux/tmux/wiki/FAQ#what-is-the-passthrough-escape-sequence-and-how-do-i-use-it>
-            # Note that you ALSO need to add "set -g allow-passthrough on" to your tmux.conf
             printf "\033Ptmux;\033\033]1337;SetUserVar=%s=%s\007\033\\" "$argv[1]" (echo -n "$argv[2]" | base64)
         end
     end
@@ -48,12 +47,13 @@ end
 
 
 function first_login_of_the_day
-  set current_date (date "+%Y-%m-%d")
-  set cached_time (cat "/tmp/.first_login/$current_date" 2> /dev/null)
+  set current_date (date "+%y-%m-%d")
+  set cached_time (bat_fast "/tmp/.first_login/$current_date" 2> /dev/null)
 
   if test -n "$cached_time"
     # join the date and time global variable
     echo $cached_time
+    wezterm_set_user_var "first_login" $cached_time
     return 
   end
   set login_item (log show --style syslog --predicate 'process == "loginwindow"' --debug --info --last 8h | rg --max-count=1 "LUIAuthenticationServiceProvider deactivateWithContext:]_block_invoke")
@@ -65,6 +65,7 @@ function first_login_of_the_day
   # cache the result
   mkdir -p /tmp/.first_login
   echo $time > /tmp/.first_login/$current_date
+  wezterm_set_user_var "first_login" $time
 
   echo $time
 end

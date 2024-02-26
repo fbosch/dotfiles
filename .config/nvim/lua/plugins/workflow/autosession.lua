@@ -24,10 +24,10 @@ return {
 		end, { bang = true })
 
 		require("auto-session").setup({
+			log_level = "error",
 			auto_session_root_dir = root_dir,
 			-- auto_session_use_git_branch = true,
 			auto_restore_enabled = true,
-			log_level = vim.log.levels.WARN,
 			cwd_change_handling = {
 				restore_upcoming_session = true,
 			},

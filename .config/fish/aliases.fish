@@ -9,6 +9,7 @@ function snvim; sudo -E -s nvim $argv; end
 function logikill; ps -ef | grep -i "Logi Options" | grep "Applications" | awk '{print $2}' | xargs kill -9; end
 function wtr; curl "wttr.in/Copenhagen?format=%n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"; end
 function batbuild; batch cache --build $argv; end
+function bat_fast; bat --style=plain --color=never --wrap=never --paging=never $argv; end
 
 # Directory shortcuts
 abbr prj 'cd ~/Projects'

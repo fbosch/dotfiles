@@ -6,13 +6,10 @@ local abbreviations = {
 	{ ["cahnge"] = "change" },
 }
 
-vim.api.nvim_create_autocmd({ "VimEnter" }, {
-	callback = function()
-		for _, value in pairs(abbreviations) do
-			for k, v in pairs(value) do
-				vim.cmd.abbreviate(k, v)
-			end
+vim.schedule_wrap(function()
+	for _, value in pairs(abbreviations) do
+		for k, v in pairs(value) do
+			vim.cmd.abbreviate(k, v)
 		end
-	end,
-	group = vim.api.nvim_create_augroup("abbreviations", {}),
-})
+	end
+end)

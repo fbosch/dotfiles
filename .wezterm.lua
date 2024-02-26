@@ -140,10 +140,33 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_wid
 	return tab_title
 end)
 
+local function parse_time(time_str)
+	local hour, minute, second = time_str:match("(%d+):(%d+):(%d+)")
+	return tonumber(hour), tonumber(minute), tonumber(second)
+end
+
+local function calculate_hour_difference(time_str1, time_str2)
+	local hour1, minute1, second1 = parse_time(time_str1)
+	local hour2, minute2, second2 = parse_time(time_str2)
+
+	-- Convert times to seconds
+	local totalSeconds1 = hour1 * 3600 + minute1 * 60 + second1
+	local totalSeconds2 = hour2 * 3600 + minute2 * 60 + second2
+
+	-- Calculate the difference in seconds
+	local differenceInSeconds = totalSeconds2 - totalSeconds1
+
+	-- Convert the difference back to hours
+	local differenceInHours = differenceInSeconds / 3600
+
+	return differenceInHours
+end
+
 if not is_windows then
 	wezterm.on("update-right-status", function(window, pane)
 		local date = wezterm.strftime("%a %b %-d ")
 		local time = wezterm.strftime("%H:%M")
+		local first_login = pane:get_user_vars().first_login
 
 		local status = {
 			{ Foreground = { Color = "#636363" } },
@@ -154,7 +177,8 @@ if not is_windows then
 
 		local wday = os.date("*t").wday
 		if wday ~= 1 or wday ~= 7 then
-			local hours_worked = tonumber(pane:get_user_vars().hours_worked) or 0
+			local hours_worked = calculate_hour_difference(first_login, wezterm.strftime("%H:%M:%S")) or 0
+
 			if hours_worked > 0 and hours_worked < 8.5 then
 				local icon = ""
 				table.insert(status, { Text = " " })
