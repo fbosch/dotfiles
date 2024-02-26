@@ -8,7 +8,6 @@ return {
 			"nvim-lua/plenary.nvim",
 			"onsails/lspkind.nvim",
 			"hrsh7th/nvim-cmp",
-			-- "zbirenbaum/copilot-cmp",
 			"f3fora/cmp-spell",
 			{
 				"hrsh7th/cmp-nvim-lua",

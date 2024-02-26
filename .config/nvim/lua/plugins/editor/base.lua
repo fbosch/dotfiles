@@ -2,7 +2,6 @@ return {
 	{ "tpope/vim-repeat", event = "BufRead" },
 	{ "windwp/nvim-autopairs", event = { "InsertEnter" } },
 	{ "monkoose/matchparen.nvim", event = { "InsertEnter" } },
-	-- { "tpope/vim-commentary", event = "BufRead" },
 	{ "numToStr/Comment.nvim", event = "BufRead", config = true },
 	{ "echasnovski/mini.surround", event = { "InsertEnter" } },
 	{ "nguyenvukhang/nvim-toggler", event = { "BufReadPost" }, config = true },
@@ -12,11 +11,11 @@ return {
 		dependencies = { "ray-x/guihua.lua", run = "cd lua/fzy && make" },
 		keys = { {
 			"<leader>ra",
-			"<cmd>Sad<CR>",
+			"<cmd>Sad<cr>",
 			mode = { "n" },
-			silent = true,
 		} },
 		cmd = { "Sad" },
+		config = true,
 	},
 	{
 		-- json editing tools
