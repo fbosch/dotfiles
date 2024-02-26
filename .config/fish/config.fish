@@ -9,7 +9,7 @@ if test (uname) = "Linux"
 end
 
 function fish_greeting
-  first_login_of_the_day > /dev/null &;
+  first_login_of_the_day --silent &;
 end;
 
 # Custom Function for a sudo (!!) replacement

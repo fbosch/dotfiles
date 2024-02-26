@@ -46,15 +46,18 @@ function worktrees_clean
 end
 
 
-function first_login_of_the_day
+function first_login_of_the_day 
+  set silent (string match -- "--silent" $argv)
   set current_date (date "+%y-%m-%d")
   set cached_time (bat_fast "/tmp/.first_login/$current_date" 2> /dev/null)
 
   if test -n "$cached_time"
     # join the date and time global variable
-    echo $cached_time
     wezterm_set_user_var "first_login" $cached_time
-    return 
+    if test -n "$silent"
+      return
+    end
+    echo $cached_time
   end
   set login_item (log show --style syslog --predicate 'process == "loginwindow"' --debug --info --last 8h | rg --max-count=1 "LUIAuthenticationServiceProvider deactivateWithContext:]_block_invoke")
 
@@ -64,10 +67,13 @@ function first_login_of_the_day
 
   # cache the result
   mkdir -p /tmp/.first_login
-  echo $time > /tmp/.first_login/$current_date
   wezterm_set_user_var "first_login" $time
+  echo $time > /tmp/.first_login/$current_date
 
-  echo $time
+  if test -n "$silent"
+    return
+  end
+  echo $cached_time
 end
 
 
