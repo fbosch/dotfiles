@@ -1,6 +1,5 @@
 return {
 	"gelguy/wilder.nvim",
-	event = { "CmdLineEnter", "VeryLazy" },
 	dependencies = {
 		"kyazdani42/nvim-web-devicons",
 		"romgrk/fzy-lua-native",

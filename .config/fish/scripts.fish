@@ -58,6 +58,7 @@ function first_login_of_the_day
       return
     end
     echo $cached_time
+    return
   end
   set login_item (log show --style syslog --predicate 'process == "loginwindow"' --debug --info --last 8h | rg --max-count=1 "LUIAuthenticationServiceProvider deactivateWithContext:]_block_invoke")
 

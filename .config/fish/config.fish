@@ -9,8 +9,10 @@ if test (uname) = "Linux"
 end
 
 function fish_greeting
-  first_login_of_the_day --silent &;
-end;
+  if test (uname) = "Darwin"
+    first_login_of_the_day --silent &
+  end
+end
 
 # Custom Function for a sudo (!!) replacement
 function sudo --description "replacement for 'sudo !!' command to run last command using sudo"
