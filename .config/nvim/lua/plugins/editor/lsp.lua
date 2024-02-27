@@ -47,25 +47,27 @@ local function setup_formatters(client, bufnr)
 		})
 	end
 
+	local web_formatters = { { "biome format", "prettierd", "prettier" } }
 	conform.setup({
 		format_on_save = {
+			timeout = 2000, -- 2s (prettier is slow sometimes)
 			lsp_fallback = true,
 			bufnr = bufnr,
 			quiet = true,
 		},
 		formatters_by_ft = {
+			html = web_formatters,
+			javascript = web_formatters,
+			javascriptreact = web_formatters,
+			["javascript.jsx"] = web_formatters,
+			typescript = web_formatters,
+			typescriptreact = web_formatters,
+			["typescript.tsx"] = web_formatters,
 			fish = { { "fish_indent" } },
 			lua = { { "stylua" } },
 			markdown = { { "biome format" } },
 			mdx = { { "biome format" } },
-			html = { { "prettierd" } },
 			json = { { "biome format" } },
-			javascript = { { "prettierd" } },
-			javascriptreact = { { "prettierd" } },
-			["javascript.jsx"] = { { "prettierd" } },
-			typescript = { { "prettierd" } },
-			typescriptreact = { { "prettierd" } },
-			["typescript.tsx"] = { { "prettierd" } },
 			rust = { { "cargo fmt -- --force" } },
 		},
 	})
@@ -110,7 +112,7 @@ end
 return {
 	{
 		"neovim/nvim-lspconfig",
-		event = { "BufReadPre", "BufNewFile" },
+		event = { "BufReadPost", "BufNewFile" },
 		dependencies = {
 			"stevearc/conform.nvim",
 			{

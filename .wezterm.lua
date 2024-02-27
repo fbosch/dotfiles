@@ -180,22 +180,22 @@ if not is_windows then
 			local hours_worked = math.ceil(calculate_hour_difference(first_login, wezterm.strftime("%H:%M:%S")) * 2) / 2
 				or 0
 
-			if hours_worked > 0 and hours_worked < 8.5 then
+			if hours_worked > 0 and hours_worked < 10 then
 				local icon = ""
 				table.insert(status, { Text = " " })
 				if hours_worked > 7.5 then
 					icon = wezterm.nerdfonts.fa_hourglass_o
-					table.insert(status, { Foreground = { Color = "#999999" } })
+					table.insert(status, { Foreground = { Color = "#d79999" } })
 				elseif hours_worked >= 7 then
 					icon = wezterm.nerdfonts.fa_hourglass_o
 					table.insert(status, { Foreground = { Color = "#819B69" } })
-				elseif hours_worked >= 4 then
+				elseif hours_worked >= 5 then
 					icon = wezterm.nerdfonts.fa_hourglass_end
 					table.insert(status, { Foreground = { Color = "#d2af0d" } })
 				elseif hours_worked >= 2 then
 					icon = wezterm.nerdfonts.fa_hourglass_half
 					table.insert(status, { Foreground = { Color = "#B77E64" } })
-				else
+				elseif hours_worked <= 2 then
 					icon = wezterm.nerdfonts.fa_hourglass_start
 					table.insert(status, { Foreground = { Color = "#999999" } })
 				end

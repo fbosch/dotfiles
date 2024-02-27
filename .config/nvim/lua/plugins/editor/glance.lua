@@ -31,6 +31,7 @@ return {
 	config = function()
 		require("glance").setup({
 			height = 15,
+			detached = false,
 			border = {
 				enable = false,
 			},

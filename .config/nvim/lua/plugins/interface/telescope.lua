@@ -4,7 +4,6 @@ return {
 		"stevearc/dressing.nvim",
 	},
 	cmd = { "Telescope" },
-	priority = 10,
 	config = function()
 		local telescope = require("telescope")
 		telescope.setup({

@@ -43,7 +43,7 @@ return {
 	},
 	{
 		"uga-rosa/ccc.nvim",
-		event = { "BufRead" },
+		event = { "BufReadPost" },
 		enabled = true,
 		keys = {
 			{
@@ -51,7 +51,7 @@ return {
 				"<leader>pc",
 				"<cmd>CccPick<cr>",
 				desc = "pick color",
-        silent = true,
+				silent = true,
 			},
 		},
 		config = function()
