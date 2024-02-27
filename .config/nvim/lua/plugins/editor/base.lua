@@ -4,6 +4,7 @@ return {
 	{ "monkoose/matchparen.nvim", event = { "InsertEnter" } },
 	{ "numToStr/Comment.nvim", event = "BufRead", config = true },
 	{ "echasnovski/mini.surround", event = { "InsertEnter" } },
+	{ "smjonas/live-command.nvim", event = "BufRead" },
 	{ "nguyenvukhang/nvim-toggler", event = { "BufReadPost" }, config = true },
 	{
 		-- find and replace

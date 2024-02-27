@@ -195,6 +195,7 @@ if not is_windows then
 					icon = wezterm.nerdfonts.fa_hourglass_half
 					table.insert(status, { Foreground = { Color = "#B77E64" } })
 				else
+					icon = wezterm.nerdfonts.fa_hourglass_start
 					table.insert(status, { Foreground = { Color = "#999999" } })
 				end
 				local hours_string = string.format("%.1f", math.floor(hours_worked * 2 + 0.5) / 2)

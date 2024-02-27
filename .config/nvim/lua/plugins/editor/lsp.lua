@@ -96,7 +96,8 @@ local function setup_keymaps(bufnr)
 		print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
 	end, bufopts)
 	vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, bufopts)
-	vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, bufopts)
+	-- vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, bufopts)
+	vim.keymap.set("n", "<leader>rn", ":IncRename ", bufopts)
 	vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, bufopts)
 end
 
@@ -125,6 +126,7 @@ return {
 					},
 				},
 			},
+			{ "smjonas/inc-rename.nvim" },
 			{ "folke/neodev.nvim", ft = { "lua" } },
 			{
 				"pmizio/typescript-tools.nvim",
@@ -156,6 +158,7 @@ return {
 			})
 		end,
 		config = function()
+			require("inc_rename").setup()
 			local lspconfig = require("lspconfig")
 			lspconfig.util.root_pattern(
 				".eslintrc",

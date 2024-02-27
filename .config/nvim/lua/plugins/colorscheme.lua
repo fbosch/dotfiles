@@ -20,6 +20,8 @@ return {
 		hl(0, "SpellBad", { undercurl = true, sp = colors.mispell_red })
 		hl(0, "MatchParen", { fg = colors.darker_gray, bg = colors.match_blue })
 
+		hl(0, "Substitute", { bg = colors.orange, fg = colors.darker_gray })
+
 		-- popup menu highlights (wilder, telescope, etc.)
 		local border_color = { fg = colors.light_gray }
 		hl(0, "NormalFloat", { bg = colors.background })
