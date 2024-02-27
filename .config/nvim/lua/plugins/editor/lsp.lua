@@ -158,7 +158,9 @@ return {
 			})
 		end,
 		config = function()
-			require("inc_rename").setup()
+			require("inc_rename").setup({
+        input_buffer_type = "dressing"
+      })
 			local lspconfig = require("lspconfig")
 			lspconfig.util.root_pattern(
 				".eslintrc",

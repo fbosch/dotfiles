@@ -14,7 +14,7 @@ cmd({ "FileType" }, {
 })
 
 cmd({ "TextYankPost" }, {
-	command = "lua vim.highlight.on_yank({ higroup = 'IncSearch', timeout = 500 })",
+	command = "lua vim.highlight.on_yank({ higroup = 'IncSearch', timeout = 300 })",
 	group = group,
 })
 

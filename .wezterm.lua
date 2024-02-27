@@ -34,7 +34,7 @@ config.colors = {
 			intensity = "Normal",
 		},
 		inactive_tab = {
-			bg_color = "#191919",
+			bg_color = "#191918",
 			fg_color = "#9e9e9e",
 		},
 	},
@@ -177,7 +177,8 @@ if not is_windows then
 
 		local wday = os.date("*t").wday
 		if wday ~= 1 or wday ~= 7 then
-			local hours_worked = calculate_hour_difference(first_login, wezterm.strftime("%H:%M:%S")) or 0
+			local hours_worked = math.ceil(calculate_hour_difference(first_login, wezterm.strftime("%H:%M:%S")) * 2) / 2
+				or 0
 
 			if hours_worked > 0 and hours_worked < 8.5 then
 				local icon = ""
