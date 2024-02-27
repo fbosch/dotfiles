@@ -138,7 +138,6 @@ return {
 			},
 			{
 				"Fildo7525/pretty_hover",
-				event = { "LspAttach" },
 				opts = {
 					maxwidth = 80,
 				},
@@ -159,8 +158,8 @@ return {
 		end,
 		config = function()
 			require("inc_rename").setup({
-        input_buffer_type = "dressing"
-      })
+				input_buffer_type = "dressing",
+			})
 			local lspconfig = require("lspconfig")
 			lspconfig.util.root_pattern(
 				".eslintrc",
@@ -209,7 +208,6 @@ return {
 			if use_ts_tools then
 				require("typescript-tools").setup({
 					capabilities = capabilities,
-					init_options = require("nvim-lsp-ts-utils").init_options,
 					on_attach = on_attach,
 				})
 			else
