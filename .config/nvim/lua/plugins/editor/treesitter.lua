@@ -3,12 +3,9 @@ return {
 		"nvim-treesitter/nvim-treesitter",
 		build = ":TSUpdate",
 		dependencies = {
-			{
-				"andymass/vim-matchup",
-				enabled = false,
-			},
+			"andymass/vim-matchup",
 			"windwp/nvim-ts-autotag",
-			"nvim-treesitter/nvim-treesitter-context",
+      "nvim-treesitter/nvim-treesitter-context",
 		},
 		event = { "BufRead", "BufNewFile", "LspAttach" },
 		config = function()
@@ -16,7 +13,7 @@ return {
 				modules = {},
 				ignore_install = {},
 				context = { enable = true },
-				matchup = { enable = false },
+				matchup = { enable = true },
 				sync_install = true,
 				auto_install = true,
 				additional_vim_regex_highlighting = false,

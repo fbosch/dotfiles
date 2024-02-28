@@ -43,7 +43,7 @@ return {
 	},
 	{
 		"uga-rosa/ccc.nvim",
-		event = { "BufReadPost" },
+		event = { "BufReadPost", "BufWritePost" },
 		enabled = true,
 		keys = {
 			{

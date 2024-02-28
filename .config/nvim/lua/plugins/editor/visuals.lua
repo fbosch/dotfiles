@@ -25,7 +25,7 @@ return {
 	},
 	{
 		"levouh/tint.nvim",
-		event = { "VeryLazy" },
+    event = "BufReadPost",
 		opts = {
 			show_first_indent_level = false,
 			highlight_ignore_patterns = {
@@ -41,7 +41,7 @@ return {
 	},
 	{
 		"lukas-reineke/indent-blankline.nvim",
-		event = "VeryLazy",
+		event = "BufEnter",
 		priority = 100,
 		config = function()
 			require("ibl").setup({

@@ -25,16 +25,16 @@ return {
 		},
 		keys = {
 			{
-				mode = { "n" },
 				"<leader>gbo",
 				"<cmd>GitBlameOpenCommitURL<CR>",
 				desc = "git blame open commit url",
+				mode = { "n" },
 			},
 			{
-				mode = { "n" },
 				"<leader>gbc",
 				"<cmd>GitBlameCopySHA<CR>",
 				desc = "git blame copy commit sha",
+				mode = { "n" },
 			},
 		},
 		config = function()

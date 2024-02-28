@@ -34,7 +34,7 @@ function l; ls -lh $argv; end
 function la; ls -A $argv; end
 function lla; ls -la $argv; end
 function ld; ls -l --sort=date --ignore-glob="node_modules" -D --time-style=relative $argv; end
-function lt; exa --tree --level=2 --sort=date --ignore-glob="node_modules" $argv; end
+function lt; exa --tree -m --git --level=2 --ignore-glob="node_modules" $argv; end
 
 # Tmux
 abbr xtm 'pkill -f tmux'
