@@ -4,6 +4,7 @@ return {
 		"kyazdani42/nvim-web-devicons",
 		"romgrk/fzy-lua-native",
 	},
+	event = "CmdlineEnter",
 	config = function()
 		local colors = require("colors")
 		local wilder = require("wilder")

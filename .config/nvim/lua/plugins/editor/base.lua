@@ -1,12 +1,13 @@
 return {
 	{ "tpope/vim-repeat", event = "BufRead" },
-	{ "windwp/nvim-autopairs", event = { "InsertEnter" }, config = true },
-	{ "m4xshen/autoclose.nvim", event = { "InsertEnter" }, config = true },
-	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, config = true },
-	{ "numToStr/Comment.nvim", event = "BufRead", config = true },
-	{ "echasnovski/mini.surround", event = { "InsertEnter" }, config = true },
-	{ "smjonas/live-command.nvim", event = "BufRead", config = true },
-	{ "nguyenvukhang/nvim-toggler", event = { "BufReadPost" }, config = true },
+	{ "smjonas/inc-rename.nvim", event = "BufRead", opts = {} },
+	{ "windwp/nvim-autopairs", event = { "InsertEnter" }, opts = {} },
+	{ "m4xshen/autoclose.nvim", event = { "InsertEnter" }, opts = {} },
+	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },
+	{ "numToStr/Comment.nvim", event = "BufRead", opts = {} },
+	{ "echasnovski/mini.surround", event = { "InsertEnter" }, opts = {} },
+	{ "smjonas/live-command.nvim", event = "BufRead", opts = {} },
+	{ "nguyenvukhang/nvim-toggler", event = { "BufReadPost" }, opts = {} },
 	{
 		-- find and replace
 		"ray-x/sad.nvim",
@@ -17,13 +18,12 @@ return {
 			mode = { "n" },
 		} },
 		cmd = { "Sad" },
-		config = true,
+		opts = {},
 	},
 	{
 		-- json editing tools
 		"gennaro-tedesco/nvim-jqx",
 		ft = { "json", "yaml" },
 		event = "BufWritePost",
-		config = true,
 	},
 }

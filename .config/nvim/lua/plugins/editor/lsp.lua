@@ -128,7 +128,6 @@ return {
 		"neovim/nvim-lspconfig",
 		event = { "BufReadPost", "BufNewFile" },
 		dependencies = {
-			"stevearc/conform.nvim",
 			{
 				"williamboman/mason.nvim",
 				opts = {
@@ -144,7 +143,6 @@ return {
 			},
 			"williamboman/mason-lspconfig.nvim",
 			"WhoIsSethDaniel/mason-tool-installer.nvim",
-			"smjonas/inc-rename.nvim",
 			{ "folke/neodev.nvim", ft = { "lua" }, opts = {} },
 			{
 				"pmizio/typescript-tools.nvim",
@@ -231,11 +229,14 @@ return {
 					},
 				},
 			}
+
 			local ensure_installed = vim.tbl_keys(servers or {})
 			vim.list_extend(ensure_installed, {
-				"stylua", -- Used to format lua code
+				"stylua",
 				"biome",
 				"tsserver",
+				"prettier",
+				"prettierd",
 			})
 
 			require("mason-tool-installer").setup({ ensure_installed = ensure_installed })

@@ -7,7 +7,7 @@ return {
 			"windwp/nvim-ts-autotag",
 			"nvim-treesitter/nvim-treesitter-context",
 		},
-		event = { "BufRead", "BufNewFile", "LspAttach" },
+		ft = { "rust", "javascript", "typescript", "tsx", "html", "css", "markdown", "yaml", "vim", "help" },
 		config = function()
 			require("nvim-treesitter.configs").setup({
 				modules = {},
@@ -33,6 +33,7 @@ return {
 					"yaml",
 					"regex",
 					"vim",
+					"vimdoc",
 				},
 			})
 		end,
@@ -44,7 +45,6 @@ return {
 				"<leader>m",
 				"<cmd>TSJToggle<CR>",
 				mode = { "n" },
-				silent = true,
 			},
 		},
 		cmd = { "TSJToggle" },
