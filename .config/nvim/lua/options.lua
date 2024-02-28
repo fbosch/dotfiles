@@ -1,4 +1,5 @@
 vim.opt.shm:append("I")
+
 -- misc
 vim.opt.re = 0 -- regex engine auto
 vim.opt.compatible = false
@@ -9,8 +10,8 @@ vim.opt.filetype = "off"
 vim.opt.syntax = "off"
 
 -- timings
-vim.opt.timeoutlen = 500
-vim.opt.updatetime = 500
+vim.opt.timeoutlen = 300
+vim.opt.updatetime = 250
 
 -- visual
 vim.opt.lazyredraw = true
@@ -28,6 +29,10 @@ vim.opt.background = "dark"
 vim.opt.pumblend = 10
 vim.opt.winblend = 0
 vim.opt.scrolloff = 8
+
+-- splits
+vim.opt.splitright = true
+vim.opt.splitbelow = true
 
 -- file history
 vim.opt.backup = true
@@ -63,8 +68,12 @@ vim.opt.autoindent = true
 vim.opt.smartindent = true
 vim.opt.softtabstop = 22
 vim.opt.expandtab = true
+vim.opt.breakindent = true
 
-vim.opt.list = false
+-- list
+vim.opt.list = true
+vim.opt.listchars = { tab = "▏ ", trail = "·", nbsp = "␣" }
+
 vim.opt.hidden = true
 vim.opt.mouse = "a"
 vim.opt.clipboard:append("unnamedplus")
@@ -80,7 +89,10 @@ vim.opt.wildignore:append(
 
 -- show
 vim.opt.showcmd = true
-vim.opt.showmode = true
+vim.opt.showmode = false
+
+-- substitute
+vim.opt.inccommand = "split"
 
 -- completion
 vim.opt.complete = "kspell"

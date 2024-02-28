@@ -1,4 +1,4 @@
-local function setup_diagnostics(bufnr)
+local setup_diagnostics = function(bufnr)
 	local group = vim.api.nvim_create_augroup("LspDiagnostic", {})
 	local signs = { Error = " ", Warn = " ", Hint = " ", Info = " " }
 	for type, icon in pairs(signs) do
@@ -26,7 +26,7 @@ local function setup_diagnostics(bufnr)
 	})
 end
 
-local function setup_formatters(client, bufnr)
+local setup_formatters = function(client, bufnr)
 	local conform = require("conform")
 	local group = vim.api.nvim_create_augroup("LspFormatting", {})
 
@@ -84,31 +84,37 @@ local function setup_formatters(client, bufnr)
 	end
 end
 
-local function setup_keymaps(client, bufnr)
-	local bufopts = { noremap = true, silent = true, buffer = bufnr }
-	vim.keymap.set("n", "gD", vim.lsp.buf.declaration, bufopts)
-	vim.keymap.set("n", "gi", vim.lsp.buf.implementation, bufopts)
-	vim.keymap.set("n", "gr", vim.lsp.buf.references, bufopts)
-	vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, bufopts)
-	vim.keymap.set("n", "<leader>k", vim.lsp.buf.hover, bufopts)
-	vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, bufopts)
-	vim.keymap.set("n", "<leader>rn", ":IncRename ", bufopts)
-	vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, bufopts)
+local setup_keymaps = function(client, bufnr)
+	function nmap(keys, cmd, desc)
+		if desc then
+			desc = "LSP: " .. desc
+		end
+		vim.keymap.set("n", keys, cmd, { buffer = bufnr, desc = desc })
+	end
+
+	nmap("gD", vim.lsp.buf.declaration, "[G]o to [D]eclaration")
+	nmap("gi", vim.lsp.buf.implementation, "[G]o to [I]mplementation")
+	nmap("gr", vim.lsp.buf.references, "[G]o to [R]eferences")
+	nmap("<C-k>", vim.lsp.buf.signature_help, "Signature Help")
+	nmap("<leader>k", vim.lsp.buf.hover, "Hover")
+	nmap("gtd", vim.lsp.buf.type_definition, "[G]o to [T]ype [D]efinition")
+	nmap("<leader>r", ":IncRename ", "[R]ename")
+	nmap("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
 
 	if client.name == "typescript-tools" then
-		vim.keymap.set("n", "<leader>fr", ":TSToolsRenameFile<cr>", bufopts)
-		vim.keymap.set("n", "<leader>ru", ":TSToolsRemoveUnused<cr>", bufopts)
-		vim.keymap.set("n", "<leader>rui", ":TSToolsRemoveUnusedImports<cr>", bufopts)
-    vim.keymap.set("n", "<leader>ia", ":TSToolsAddMissingImports<cr>", bufopts)
-		vim.keymap.set("n", "gd", ":TSToolsGoToSourceDefinition<cr>", bufopts)
+		nmap("<leader>fr", ":TSToolsRenameFile<cr>", "[R]ename [F]ile")
+		nmap("<leader>ru", ":TSToolsRemoveUnused<cr>", "[R]emove [U]nused")
+		nmap("<leader>rui", ":TSToolsRemoveUnusedImports<cr>", "[R]emove [U]nused [I]mports")
+		nmap("<leader>ia", ":TSToolsAddMissingImports<cr>", "[I]mport [A]ll")
+		nmap("gd", ":TSToolsGoToSourceDefinition<cr>", "[G]o to [D]efinition")
 		return
 	end
 
 	if client.name == "tsserver" then
-		vim.keymap.set("n", "<leader>rf", ":TSLspRenameFile<cr>", bufopts)
+		nmap("<leader>rf", ":TSLspRenameFile<cr>", "[R]ename [F]ile")
 	end
 
-	vim.keymap.set("n", "gd", vim.lsp.buf.definition, bufopts)
+	nmap("gd", vim.lsp.buf.definition, "[G]o to [D]efinition")
 end
 
 local on_attach = function(client, bufnr)
@@ -136,8 +142,10 @@ return {
 					},
 				},
 			},
-			{ "smjonas/inc-rename.nvim" },
-			{ "folke/neodev.nvim", ft = { "lua" } },
+			"williamboman/mason-lspconfig.nvim",
+			"WhoIsSethDaniel/mason-tool-installer.nvim",
+			"smjonas/inc-rename.nvim",
+			{ "folke/neodev.nvim", ft = { "lua" }, opts = {} },
 			{
 				"pmizio/typescript-tools.nvim",
 				ft = { "typescript", "typescriptreact" },
@@ -157,16 +165,15 @@ return {
 			},
 		},
 		init = function()
-      local hover_config = {
-        title = '',
-        border = "rounded",
-        max_width = 100,
-        focusable = false,
-      }
-
+			local hover_config = {
+				title = "",
+				border = "rounded",
+				max_width = 100,
+				focusable = false,
+			}
 			vim.lsp.set_log_level("off")
 			vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, hover_config)
-      vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(vim.lsp.handlers.signature_help, hover_config)
+			vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(vim.lsp.handlers.signature_help, hover_config)
 			vim.diagnostic.config({
 				virtual_text = false,
 				signs = true,
@@ -179,6 +186,73 @@ return {
 			require("inc_rename").setup({
 				input_buffer_type = "dressing",
 			})
+
+			local capabilities = vim.lsp.protocol.make_client_capabilities()
+			capabilities = vim.tbl_deep_extend("force", capabilities, require("cmp_nvim_lsp").default_capabilities())
+			capabilities.textDocument.foldingRange = {
+				dynamicRegistration = false,
+				lineFoldingOnly = true,
+			}
+
+			local servers = {
+				rust_analyzer = {},
+				html = {},
+				tailwindcss = {
+					cmd = { "tailwindcss-language-server", "--stdio" },
+				},
+				cssls = {
+					settings = {
+						css = {
+							lint = {
+								unknownAtRules = "ignore",
+							},
+						},
+					},
+				},
+				lua_ls = {
+					settings = {
+						Lua = {
+							runtime = { version = "LuaJIT" },
+							diagnostics = {
+								globals = { "vim" },
+							},
+							library = {
+								"${3rd}/luv/library",
+								unpack(vim.api.nvim_get_runtime_file("", true)),
+							},
+							completion = {
+								callSnippet = "Replace",
+							},
+							format = {
+								enable = true,
+								formatter = "stylua",
+							},
+						},
+					},
+				},
+			}
+			local ensure_installed = vim.tbl_keys(servers or {})
+			vim.list_extend(ensure_installed, {
+				"stylua", -- Used to format lua code
+				"biome",
+				"tsserver",
+			})
+
+			require("mason-tool-installer").setup({ ensure_installed = ensure_installed })
+			require("mason").setup()
+			require("mason-lspconfig").setup({
+				handlers = {
+					function(server_name)
+						local server = servers[server_name] or {}
+						require("lspconfig")[server_name].setup({
+							capabilities = vim.tbl_deep_extend("force", {}, capabilities, server.capabilities or {}),
+							on_attach = on_attach,
+							settings = server.settings,
+							cmd = server.cmd,
+						})
+					end,
+				},
+			})
 			local lspconfig = require("lspconfig")
 			lspconfig.util.root_pattern(
 				".eslintrc",
@@ -188,40 +262,6 @@ return {
 				"package.json",
 				"Cargo.toml"
 			)
-
-			local capabilities = require("cmp_nvim_lsp").default_capabilities()
-			capabilities.textDocument.foldingRange = {
-				dynamicRegistration = false,
-				lineFoldingOnly = true,
-			}
-
-			-- rust
-			lspconfig.rust_analyzer.setup({
-				capabilities = capabilities,
-				on_attach = on_attach,
-			})
-
-			-- html
-			lspconfig.html.setup({ capabilities = capabilities, on_attach })
-
-			-- css
-			lspconfig.tailwindcss.setup({
-				cmd = { "tailwindcss-language-server", "--stdio" },
-				capabilities = capabilities,
-				on_attach,
-			})
-
-			lspconfig.cssls.setup({
-				capabilities = capabilities,
-				settings = {
-					css = {
-						lint = {
-							unknownAtRules = "ignore",
-						},
-					},
-				},
-				on_attach,
-			})
 
 			-- typescript
 			local use_ts_tools = true
@@ -239,26 +279,8 @@ return {
 				})
 			end
 
-			-- lua
+			-- neovim
 			require("neodev").setup({ capabilities = capabilities, on_attach })
-			lspconfig.lua_ls.setup({
-				capabilities = capabilities,
-				on_attach = on_attach,
-				settings = {
-					Lua = {
-						diagnostics = {
-							globals = { "vim" },
-						},
-						completion = {
-							callSnippet = "Replace",
-						},
-						format = {
-							enable = true,
-							formatter = "stylua",
-						},
-					},
-				},
-			})
 		end,
 	},
 }
