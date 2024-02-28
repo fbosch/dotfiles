@@ -987,3 +987,5 @@ fileExtension
 indexedDB
 Dev
 Auth
+devtoolsEnabled
+localStorage

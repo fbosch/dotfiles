@@ -90,10 +90,7 @@ local function setup_keymaps(client, bufnr)
 	vim.keymap.set("n", "gi", vim.lsp.buf.implementation, bufopts)
 	vim.keymap.set("n", "gr", vim.lsp.buf.references, bufopts)
 	vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, bufopts)
-	vim.keymap.set("n", "<leader>k", require("pretty_hover").hover, bufopts)
-	vim.keymap.set("n", "<leader>wl", function()
-		print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
-	end, bufopts)
+	vim.keymap.set("n", "<leader>k", vim.lsp.buf.hover, bufopts)
 	vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, bufopts)
 	vim.keymap.set("n", "<leader>rn", ":IncRename ", bufopts)
 	vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, bufopts)
@@ -149,12 +146,6 @@ return {
 				"jose-elias-alvarez/nvim-lsp-ts-utils",
 				ft = { "typescript", "typescriptreact" },
 			},
-			{
-				"Fildo7525/pretty_hover",
-				opts = {
-					maxwidth = 80,
-				},
-			},
 		},
 		keys = {
 			{
@@ -166,10 +157,16 @@ return {
 			},
 		},
 		init = function()
+      local hover_config = {
+        title = '',
+        border = "rounded",
+        max_width = 100,
+        focusable = false,
+      }
+
 			vim.lsp.set_log_level("off")
-			vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
-				border = "rounded",
-			})
+			vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, hover_config)
+      vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(vim.lsp.handlers.signature_help, hover_config)
 			vim.diagnostic.config({
 				virtual_text = false,
 				signs = true,
