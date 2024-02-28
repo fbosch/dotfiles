@@ -12,13 +12,13 @@ return {
 	},
 	enabled = true,
 	config = function()
-    vim.api.nvim_create_user_command("WipeAllSessions", function()
-      local cmd = string.format("rm -rf %s", root_dir)
-      os.execute(cmd)
-      vim.notify("Wiped all sessions", vim.log.levels.INFO, {
-        title = "AutoSession",
-      })
-    end, { bang = true })
+		vim.api.nvim_create_user_command("WipeAllSessions", function()
+			local cmd = string.format("rm -rf %s", root_dir)
+			os.execute(cmd)
+			vim.notify("Wiped all sessions", vim.log.levels.INFO, {
+				title = "AutoSession",
+			})
+		end, { bang = true })
 
 		require("auto-session").setup({
 			log_level = "error",

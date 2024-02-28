@@ -84,27 +84,38 @@ local function setup_formatters(client, bufnr)
 	end
 end
 
-local function setup_keymaps(bufnr)
+local function setup_keymaps(client, bufnr)
 	local bufopts = { noremap = true, silent = true, buffer = bufnr }
 	vim.keymap.set("n", "gD", vim.lsp.buf.declaration, bufopts)
-	vim.keymap.set("n", "gd", vim.lsp.buf.definition, bufopts)
 	vim.keymap.set("n", "gi", vim.lsp.buf.implementation, bufopts)
 	vim.keymap.set("n", "gr", vim.lsp.buf.references, bufopts)
 	vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, bufopts)
 	vim.keymap.set("n", "<leader>k", require("pretty_hover").hover, bufopts)
-	vim.keymap.set("n", "<leader>wa", vim.lsp.buf.add_workspace_folder, bufopts)
-	vim.keymap.set("n", "<leader>wr", vim.lsp.buf.remove_workspace_folder, bufopts)
 	vim.keymap.set("n", "<leader>wl", function()
 		print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
 	end, bufopts)
 	vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, bufopts)
-	-- vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, bufopts)
 	vim.keymap.set("n", "<leader>rn", ":IncRename ", bufopts)
 	vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, bufopts)
+
+	if client.name == "typescript-tools" then
+		vim.keymap.set("n", "<leader>fr", ":TSToolsRenameFile<cr>", bufopts)
+		vim.keymap.set("n", "<leader>ru", ":TSToolsRemoveUnused<cr>", bufopts)
+		vim.keymap.set("n", "<leader>rui", ":TSToolsRemoveUnusedImports<cr>", bufopts)
+    vim.keymap.set("n", "<leader>ia", ":TSToolsAddMissingImports<cr>", bufopts)
+		vim.keymap.set("n", "gd", ":TSToolsGoToSourceDefinition<cr>", bufopts)
+		return
+	end
+
+	if client.name == "tsserver" then
+		vim.keymap.set("n", "<leader>rf", ":TSLspRenameFile<cr>", bufopts)
+	end
+
+	vim.keymap.set("n", "gd", vim.lsp.buf.definition, bufopts)
 end
 
 local on_attach = function(client, bufnr)
-	setup_keymaps(bufnr)
+	setup_keymaps(client, bufnr)
 	setup_diagnostics(bufnr)
 	setup_formatters(client, bufnr)
 end
@@ -216,11 +227,12 @@ return {
 			})
 
 			-- typescript
-			local use_ts_tools = false
+			local use_ts_tools = true
 			if use_ts_tools then
 				require("typescript-tools").setup({
 					capabilities = capabilities,
 					on_attach = on_attach,
+					settings = {},
 				})
 			else
 				lspconfig.tsserver.setup({

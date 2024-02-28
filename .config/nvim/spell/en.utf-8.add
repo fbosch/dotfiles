@@ -983,3 +983,4 @@ isAmountWithinVarianceRange
 PBI
 loanCase
 closeReasonCode
+fileExtension
