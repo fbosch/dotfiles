@@ -10,6 +10,8 @@ function logikill; ps -ef | grep -i "Logi Options" | grep "Applications" | awk '
 function wtr; curl "wttr.in/Copenhagen?format=%n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"; end
 function batbuild; batch cache --build $argv; end
 function bat_fast; bat --style=plain --color=never --wrap=never --paging=never $argv; end
+function copykey; pbcopy < ~/.ssh/id_rsa.pub; end; 
+function chrdebug;/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222; end;
 
 # Directory shortcuts
 abbr prj 'cd ~/Projects'
@@ -24,18 +26,6 @@ abbr t 'swpm test'
 abbr mki 'sudo make && sudo make clean install'
 abbr lk 'logikill'
 abbr wd 'workday'
-
-function copykey; pbcopy < ~/.ssh/id_rsa.pub; end; 
-function chrdebug;/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222; end;
-
-function fzfcd
-  # find all folders with .git in them and select one using fzf
-  set selected_dir (fd -tf --max-depth=4 --color=never "\.git\$" -H | rev | cut -c 6- | rev | fzf --preview "lt {}" --preview-window "25%")  # Select directory using fzf
-  if test -n "$selected_dir"
-    z "$selected_dir"  # Change directory if selection is not empty
-    commandline --function repaint
-  end
-end
 
 # Extended defaults
 function cat; bat --style=plain --color=always $argv; end
@@ -79,7 +69,6 @@ abbr gl 'git log --graph --oneline --decorate'
 abbr lg 'lazygit'
 abbr bad 'git bisect bad'
 abbr good 'git bisect good'
-
 
 # rust
 abbr cn 'cargo new'

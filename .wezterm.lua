@@ -23,7 +23,7 @@ config.custom_block_glyphs = true
 
 -- colors
 config.color_scheme = "zenwritten_dark"
-config.tab_max_width = 32
+config.tab_max_width = 128
 config.show_new_tab_button_in_tab_bar = false
 config.colors = {
 	tab_bar = {
