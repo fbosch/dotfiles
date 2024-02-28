@@ -63,7 +63,6 @@ return {
 			task_win = {
 				border = "rounded",
 				winblend = 10,
-				max_width = 0.9,
 			},
 			task_list = {
 				default_detail = 1,

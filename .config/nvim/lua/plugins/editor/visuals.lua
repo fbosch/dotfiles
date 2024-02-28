@@ -3,6 +3,7 @@ return {
 	{
 		"petertriho/nvim-scrollbar",
 		event = "VeryLazy",
+		priority = 10,
 		config = true,
 	},
 	{
@@ -10,11 +11,12 @@ return {
 		dependencies = {
 			"nvim-lua/plenary.nvim",
 		},
-		event = { "BufReadPost", "ColorScheme" },
+		event = { "BufRead" },
 	},
 	{
 		"smjonas/live-command.nvim",
 		event = "VeryLazy",
+		priority = 10,
 		config = function()
 			require("live-command").setup({
 				commands = {
@@ -25,19 +27,29 @@ return {
 	},
 	{
 		"levouh/tint.nvim",
-    event = "BufReadPost",
-		opts = {
-			show_first_indent_level = false,
-			highlight_ignore_patterns = {
-				"IndentBlankline*",
-				"Ibl*",
-				"Whitespace",
-				"NonText",
-				"Hop*",
-				"Ccc*",
-				"Leap*",
-			},
-		},
+		event = "VeryLazy",
+		priority = 10,
+		config = function()
+			local tint = require("tint")
+			local transforms = require("tint.transforms")
+			local colors = require("colors")
+
+			tint.setup({
+				transforms = {
+					transforms.tint_with_threshold(-40, colors.background, 100),
+					transforms.saturate(0.4),
+				},
+				highlight_ignore_patterns = {
+					"IndentBlankline*",
+					"Ibl*",
+					"Whitespace",
+					"NonText",
+					"Hop*",
+					"Ccc*",
+					"Leap*",
+				},
+			})
+		end,
 	},
 	{
 		"lukas-reineke/indent-blankline.nvim",
