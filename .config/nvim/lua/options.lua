@@ -66,7 +66,7 @@ vim.opt.expandtab = true
 
 vim.opt.list = false
 vim.opt.hidden = true
-vim.opt.mouse = ""
+vim.opt.mouse = "a"
 vim.opt.clipboard:append("unnamedplus")
 vim.opt.errorbells = false
 

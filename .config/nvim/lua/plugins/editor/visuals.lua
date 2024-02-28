@@ -12,6 +12,7 @@ return {
 			"nvim-lua/plenary.nvim",
 		},
 		event = { "BufRead" },
+		config = true,
 	},
 	{
 		"smjonas/live-command.nvim",

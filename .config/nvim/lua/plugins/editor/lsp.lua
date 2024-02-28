@@ -145,15 +145,15 @@ return {
 				},
 			},
 		},
-    keys = {
-      {
-        "<leader>lsp",
-        "<cmd>:LspRestart<cr>",
-        desc = "restart langauge server",
-        silent = true,
-        { mode = "n" }
-      }
-    },
+		keys = {
+			{
+				"<leader>lsp",
+				"<cmd>:LspRestart<cr>",
+				desc = "restart langauge server",
+				silent = true,
+				{ mode = "n" },
+			},
+		},
 		init = function()
 			vim.lsp.set_log_level("off")
 			vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
@@ -202,6 +202,7 @@ return {
 				capabilities = capabilities,
 				on_attach,
 			})
+
 			lspconfig.cssls.setup({
 				capabilities = capabilities,
 				settings = {
