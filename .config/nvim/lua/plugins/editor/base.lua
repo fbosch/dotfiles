@@ -1,5 +1,5 @@
 return {
-	{ "tpope/vim-repeat", event = "BufRead", config = true },
+	{ "tpope/vim-repeat", event = "BufRead" },
 	{ "windwp/nvim-autopairs", event = { "InsertEnter" }, config = true },
 	{ "m4xshen/autoclose.nvim", event = { "InsertEnter" }, config = true },
 	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, config = true },
