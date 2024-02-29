@@ -1,4 +1,4 @@
-local is_windows = package.config:sub(1, 1) == "\\"
+local is_windows = package.config:sub(0, 1) == "\\"
 local wezterm = require("wezterm")
 local config = wezterm.config_builder()
 
@@ -165,18 +165,37 @@ end
 if not is_windows then
 	wezterm.on("update-right-status", function(window, pane)
 		local date = wezterm.strftime("(%Y-%m-%d) %a %b %-d ")
-		local time = wezterm.strftime("%H:%M")
-		local first_login = pane:get_user_vars().first_login
+		local hour = tonumber(wezterm.strftime("%H"))
+		local clock_icon = ""
+
+		if hour >= 0 and hour < 3 then
+			clock_icon = wezterm.nerdfonts.weather_time_1
+		elseif hour < 6 then
+			clock_icon = wezterm.nerdfonts.weather_time_2
+		elseif hour < 9 then
+			clock_icon = wezterm.nerdfonts.weather_time_3
+		elseif hour < 12 then
+			clock_icon = wezterm.nerdfonts.weather_time_4
+		elseif hour < 15 then
+			clock_icon = wezterm.nerdfonts.weather_time_5
+		elseif hour < 18 then
+			clock_icon = wezterm.nerdfonts.weather_time_6
+		elseif hour < 21 then
+			clock_icon = wezterm.nerdfonts.weather_time_7
+		else
+			clock_icon = wezterm.nerdfonts.weather_time_8
+		end
 
 		local status = {
 			{ Foreground = { Color = "#7c7c7c" } },
 			{ Text = date },
 			{ Foreground = { Color = "#bbbbbb" } },
-			{ Text = time },
+			{ Text = clock_icon .. " " .. time },
 		}
 
 		local wday = os.date("*t").wday
 		if wday ~= 1 or wday ~= 7 then
+			local first_login = pane:get_user_vars().first_login
 			local hours_worked = math.ceil(calculate_hour_difference(first_login, wezterm.strftime("%H:%M:%S")) * 2) / 2
 				or 0
 
