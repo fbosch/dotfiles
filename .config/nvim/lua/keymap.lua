@@ -59,3 +59,6 @@ map("n", "<C-S-l>", ":wincmd L<CR>", opts)
 -- buffer controls
 map("n", "<leader>z", ":bp <bar> :bd #<CR>", opts) -- close buffer but keep split
 map("n", "<leader>0", ":b#<CR>", opts) --  previously active buffer
+
+-- delete backwards to start of previous line
+map("n", "<leader>db", "d?$<cr>", opts)
