@@ -59,7 +59,7 @@ config.hide_tab_bar_if_only_one_tab = false
 -- It prefers the title that was set via `tab:set_title()`
 -- or `wezterm cli set-tab-title`, but falls back to the
 -- title of the active pane in that tab.
-local function tab_title(tab_info)
+local function Tab_title(tab_info)
 	local title = tab_info.tab_title
 	-- if the tab title is explicitly set, take that
 	if title and #title > 0 then
@@ -75,7 +75,7 @@ function string.starts(String, Start)
 end
 
 wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_width)
-	local title = "" .. tab_title(tab) .. " "
+	local title = "" .. Tab_title(tab) .. " "
 
 	local tab_title = {
 		{ Foreground = { Color = "#636363" } },
@@ -165,32 +165,19 @@ end
 if not is_windows then
 	wezterm.on("update-right-status", function(window, pane)
 		local date = wezterm.strftime("(%Y-%m-%d) %a %b %-d ")
+		local time = wezterm.strftime("%H:%M")
 		local hour = tonumber(wezterm.strftime("%H"))
-		local clock_icon = ""
-
-		if hour >= 0 and hour < 3 then
-			clock_icon = wezterm.nerdfonts.weather_time_1
-		elseif hour < 6 then
-			clock_icon = wezterm.nerdfonts.weather_time_2
-		elseif hour < 9 then
-			clock_icon = wezterm.nerdfonts.weather_time_3
-		elseif hour < 12 then
-			clock_icon = wezterm.nerdfonts.weather_time_4
-		elseif hour < 15 then
-			clock_icon = wezterm.nerdfonts.weather_time_5
-		elseif hour < 18 then
-			clock_icon = wezterm.nerdfonts.weather_time_6
-		elseif hour < 21 then
-			clock_icon = wezterm.nerdfonts.weather_time_7
-		else
-			clock_icon = wezterm.nerdfonts.weather_time_8
-		end
+		local clock_icon = Get_hour_icon(hour)
 
 		local status = {
 			{ Foreground = { Color = "#7c7c7c" } },
 			{ Text = date },
+			{ Foreground = { Color = "#515151" } },
+			{ Text = "▏" },
 			{ Foreground = { Color = "#bbbbbb" } },
 			{ Text = clock_icon .. " " .. time },
+			{ Foreground = { Color = "#515151" } },
+			{ Text = "▕" },
 		}
 
 		local wday = os.date("*t").wday
@@ -317,6 +304,61 @@ if is_windows then
 else
 	config.window_background_opacity = 0.98
 	config.macos_window_background_blur = 50
+end
+
+function Get_hour_icon(hour)
+	local clock_icon = ""
+	if hour >= 0 and hour < 1 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_one
+	elseif hour < 2 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_two
+	elseif hour < 3 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_three
+	elseif hour < 4 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_four
+	elseif hour < 5 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_five
+	elseif hour < 6 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_six
+	elseif hour < 7 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_seven
+	elseif hour < 8 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_eight
+	elseif hour < 9 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_nine
+	elseif hour < 10 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_ten
+	elseif hour < 11 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_eleven
+	elseif hour < 12 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_twelve
+	elseif hour < 13 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_one
+	elseif hour < 14 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_two
+	elseif hour < 15 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_three
+	elseif hour < 16 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_four
+	elseif hour < 17 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_five
+	elseif hour < 18 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_six
+	elseif hour < 19 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_seven
+	elseif hour < 20 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_eight
+	elseif hour < 21 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_nine
+	elseif hour < 22 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_ten
+	elseif hour < 23 then
+		clock_icon = wezterm.nerdfonts.md_clock_time_eleven
+	else
+		clock_icon = wezterm.nerdfonts.md_clock_time_twelve
+	end
+
+	return clock_icon
 end
 
 return config

@@ -81,7 +81,9 @@ vim.opt.errorbells = false
 vim.opt.rtp:append("/opt/homebrew/opt/fzf")
 vim.opt.path:append("**")
 vim.opt.wildoptions = "pum"
-vim.opt.wildignore:append("*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Caches/*,*log*,*.dat*,*.kbx*,*.zip*")
+vim.opt.wildignore:append(
+	"*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Caches/*,*log*,*.dat*,*.kbx*,*.zip*"
+)
 
 -- show
 vim.opt.showcmd = true
