@@ -189,7 +189,7 @@ if not is_windows then
 			if hours_worked > 0 and hours_worked < 10 then
 				local icon = ""
 				table.insert(status, { Text = " " })
-				if hours_worked > 7.5 then
+				if hours_worked > 8 then
 					icon = wezterm.nerdfonts.fa_hourglass_o
 					table.insert(status, { Foreground = { Color = "#d79999" } })
 				elseif hours_worked >= 7 then
