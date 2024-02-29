@@ -1,8 +1,5 @@
 return {
 	"zbirenbaum/copilot.lua",
-	dependencies = {
-		"stevearc/conform.nvim",
-	},
 	cmd = "Copilot",
 	event = "InsertEnter",
 	opts = {

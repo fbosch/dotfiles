@@ -63,9 +63,9 @@ local setup_formatters = function(client, bufnr)
 			typescript = web_formatters,
 			typescriptreact = web_formatters,
 			["typescript.tsx"] = web_formatters,
+      markdown = web_formatters,
 			fish = { { "fish_indent" } },
 			lua = { { "stylua" } },
-			markdown = { { "biome format" } },
 			mdx = { { "biome format" } },
 			json = { { "biome format" } },
 			rust = { { "cargo fmt -- --force" } },
@@ -143,6 +143,7 @@ return {
 			},
 			"williamboman/mason-lspconfig.nvim",
 			"WhoIsSethDaniel/mason-tool-installer.nvim",
+      "stevearc/conform.nvim",
 			{ "folke/neodev.nvim", ft = { "lua" }, opts = {} },
 			{
 				"pmizio/typescript-tools.nvim",
