@@ -207,6 +207,9 @@ return {
 						},
 					},
 				},
+        tsserver = {
+					init_options = require("nvim-lsp-ts-utils").init_options,
+        },
 				lua_ls = {
 					settings = {
 						Lua = {
@@ -241,9 +244,20 @@ return {
 
 			require("mason-tool-installer").setup({ ensure_installed = ensure_installed })
 			require("mason").setup()
+
+			local use_ts_tools = true
 			require("mason-lspconfig").setup({
 				handlers = {
 					function(server_name)
+						if use_ts_tools and server_name == "tsserver" then
+              -- typescript
+              require("typescript-tools").setup({
+                capabilities = capabilities,
+                on_attach = on_attach,
+                settings = {},
+              })
+							return
+						end
 						local server = servers[server_name] or {}
 						require("lspconfig")[server_name].setup({
 							capabilities = vim.tbl_deep_extend("force", {}, capabilities, server.capabilities or {}),
@@ -263,22 +277,6 @@ return {
 				"package.json",
 				"Cargo.toml"
 			)
-
-			-- typescript
-			local use_ts_tools = true
-			if use_ts_tools then
-				require("typescript-tools").setup({
-					capabilities = capabilities,
-					on_attach = on_attach,
-					settings = {},
-				})
-			else
-				lspconfig.tsserver.setup({
-					capabilities = capabilities,
-					init_options = require("nvim-lsp-ts-utils").init_options,
-					on_attach = on_attach,
-				})
-			end
 
 			-- neovim
 			require("neodev").setup({ capabilities = capabilities, on_attach })

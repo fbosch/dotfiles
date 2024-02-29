@@ -5,27 +5,27 @@ return {
 	},
 	config = function()
 		local hlargs = require("hlargs")
-		local colorpalette = {
-			{ fg = "#8cabaf" },
-			{ fg = "#9e8eb4" },
-			{ fg = "#91cca9" },
+		colorpalette = {
+			{ fg = "#92a6a9" },
+			{ fg = "#9f97ab" },
+			{ fg = "#9dc0ab" },
 			{ fg = "#f6c890" },
-			{ fg = "#c6e5ab" },
-			{ fg = "#b5899c" },
-			{ fg = "#a0ca8c" },
-			{ fg = "#e9dd8d" },
-			{ fg = "#ffc0c8" },
-			{ fg = "#ac98f0" },
-			{ fg = "#d18d6f" },
-			{ fg = "#d071a9" },
-			{ fg = "#5cc565" },
-			{ fg = "#3566af" },
-			{ fg = "#bf528c" },
+			{ fg = "#c6deb2" },
+			{ fg = "#dfda97" },
+			{ fg = "#f3ccd1" },
+			{ fg = "#b9b0d8" },
+			{ fg = "#af92a3" },
+			{ fg = "#96b492" },
+			{ fg = "#80a9c8" },
+			{ fg = "#d9a8f2" },
+			{ fg = "#e9b3aa" },
+			{ fg = "#a1f2b5" },
+			{ fg = "#f2e3a8" },
 		}
 		hlargs.setup({
 			enabled = true,
 			use_colorpalette = true,
-			sequential_colorpalette = true,
+			-- sequential_colorpalette = true,
 			paint_catch_blocks = {
 				declarations = true,
 				usages = true,
