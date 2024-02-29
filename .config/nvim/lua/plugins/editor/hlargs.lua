@@ -14,18 +14,17 @@ return {
 			{ fg = "#dfda97" },
 			{ fg = "#f3ccd1" },
 			{ fg = "#b9b0d8" },
-			{ fg = "#af92a3" },
+			{ fg = "#c69eb6" },
 			{ fg = "#96b492" },
 			{ fg = "#80a9c8" },
-			{ fg = "#d9a8f2" },
 			{ fg = "#e9b3aa" },
+			{ fg = "#dcbdec" },
 			{ fg = "#a1f2b5" },
 			{ fg = "#f2e3a8" },
 		}
 		hlargs.setup({
 			enabled = true,
 			use_colorpalette = true,
-			-- sequential_colorpalette = true,
 			paint_catch_blocks = {
 				declarations = true,
 				usages = true,

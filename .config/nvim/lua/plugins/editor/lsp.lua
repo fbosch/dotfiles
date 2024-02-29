@@ -207,9 +207,9 @@ return {
 						},
 					},
 				},
-        tsserver = {
+				tsserver = {
 					init_options = require("nvim-lsp-ts-utils").init_options,
-        },
+				},
 				lua_ls = {
 					settings = {
 						Lua = {
@@ -250,12 +250,12 @@ return {
 				handlers = {
 					function(server_name)
 						if use_ts_tools and server_name == "tsserver" then
-              -- typescript
-              require("typescript-tools").setup({
-                capabilities = capabilities,
-                on_attach = on_attach,
-                settings = {},
-              })
+							-- typescript
+							require("typescript-tools").setup({
+								capabilities = capabilities,
+								on_attach = on_attach,
+								settings = {},
+							})
 							return
 						end
 						local server = servers[server_name] or {}

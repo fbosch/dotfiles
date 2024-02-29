@@ -4,8 +4,8 @@ return {
 		build = ":TSUpdate",
 		dependencies = {
 			{ "andymass/vim-matchup", enabled = false },
+      { "nvim-treesitter/nvim-treesitter-context", enabled = false },
 			"windwp/nvim-ts-autotag",
-			"nvim-treesitter/nvim-treesitter-context",
 		},
 		ft = { "rust", "javascript", "typescript", "tsx", "html", "css", "markdown", "yaml", "vim", "help" },
 		config = function()
