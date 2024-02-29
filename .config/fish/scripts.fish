@@ -45,7 +45,6 @@ function worktrees_clean
     end
 end
 
-
 function first_login_of_the_day
     set silent (string match -- "--silent" $argv)
     set current_date (date "+%y-%m-%d")

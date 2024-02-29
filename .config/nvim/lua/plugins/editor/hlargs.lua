@@ -5,8 +5,8 @@ return {
 	},
 	config = function()
 		local hlargs = require("hlargs")
-		colorpalette = {
-			{ fg = "#92a6a9" },
+		local colorpalette = {
+			{ fg = "#9ec5cb" },
 			{ fg = "#9f97ab" },
 			{ fg = "#9dc0ab" },
 			{ fg = "#f6c890" },
@@ -21,6 +21,11 @@ return {
 			{ fg = "#dcbdec" },
 			{ fg = "#a1f2b5" },
 			{ fg = "#f2e3a8" },
+			{ fg = "#a8d0e6" },
+			{ fg = "#f9a7c3" },
+			{ fg = "#90dce5" },
+			{ fg = "#efa998" },
+			{ fg = "#cceaff" },
 		}
 		hlargs.setup({
 			enabled = true,

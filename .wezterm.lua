@@ -164,12 +164,12 @@ end
 
 if not is_windows then
 	wezterm.on("update-right-status", function(window, pane)
-		local date = wezterm.strftime("%a %b %-d ")
+		local date = wezterm.strftime("(%Y-%m-%d) %a %b %-d ")
 		local time = wezterm.strftime("%H:%M")
 		local first_login = pane:get_user_vars().first_login
 
 		local status = {
-			{ Foreground = { Color = "#636363" } },
+			{ Foreground = { Color = "#7c7c7c" } },
 			{ Text = date },
 			{ Foreground = { Color = "#bbbbbb" } },
 			{ Text = time },
