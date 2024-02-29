@@ -990,3 +990,6 @@ Auth
 devtoolsEnabled
 localStorage
 neovim
+mdx
+UserConfig
+vite

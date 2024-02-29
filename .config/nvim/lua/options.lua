@@ -59,7 +59,7 @@ vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
 -- spellchecking
 vim.opt.spell = true
 vim.opt.spelllang = "en_us,da"
-vim.opt.spelloptions:append("noplainbuffer")
+vim.opt.spelloptions:append("noplainbuffer,camel")
 
 -- tab & indentation
 vim.opt.tabstop = 2
