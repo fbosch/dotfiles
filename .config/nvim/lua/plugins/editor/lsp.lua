@@ -195,6 +195,7 @@ return {
 			local servers = {
 				rust_analyzer = {},
 				html = {},
+				marksman = {},
 				tailwindcss = {
 					cmd = { "tailwindcss-language-server", "--stdio" },
 				},

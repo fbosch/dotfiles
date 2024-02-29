@@ -47,8 +47,6 @@ vim.opt.autoread = true
 
 -- fold
 vim.opt.foldcolumn = "1"
--- vim.o.foldlevel = 99
--- vim.o.foldlevelstart = 99
 vim.o.foldenable = true
 vim.opt.foldlevelstart = 0
 vim.opt.foldmethod = "syntax"
@@ -59,7 +57,7 @@ vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
 -- spellchecking
 vim.opt.spell = true
 vim.opt.spelllang = "en_us,da"
-vim.opt.spelloptions:append("noplainbuffer,camel")
+vim.opt.spelloptions:append("noplainbuffer")
 
 -- tab & indentation
 vim.opt.tabstop = 2
@@ -83,9 +81,7 @@ vim.opt.errorbells = false
 vim.opt.rtp:append("/opt/homebrew/opt/fzf")
 vim.opt.path:append("**")
 vim.opt.wildoptions = "pum"
-vim.opt.wildignore:append(
-	"*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Caches/*,*log*,*.dat*,*.kbx*,*.zip*"
-)
+vim.opt.wildignore:append("*/node_modules/*,*/.npm/*,*.cache*,*go*,*.swp*,*/tmp/*,*/Caches/*,*log*,*.dat*,*.kbx*,*.zip*")
 
 -- show
 vim.opt.showcmd = true
