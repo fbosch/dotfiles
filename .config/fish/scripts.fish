@@ -77,66 +77,6 @@ function first_login_of_the_day
     echo $cached_time
 end
 
-
-function hours_since_workday_start
-    set current_hour (date "+%-H")
-    set current_minute (date "+%-M")
-
-    set first_login (first_login_of_the_day)
-    set start_hour (echo $first_login | rg -o '[1-9]+:[1-9]+' | cut -d ':' -f2)
-    set start_minute (echo $first_login | rg -o '[1-9]+:[1-9]+' | cut -d ':' -f3)
-
-    set total_minutes_since_start (math "($current_hour - $start_hour) * 60 + $current_minute - $start_minute")
-
-    echo (math $total_minutes_since_start / 60)
-end
-
-function workday
-    set given_hour (first_login_of_the_day)
-    set current_hour (date "+%-H")
-    set current_minute (date "+%-M")
-
-    set first_login (first_login_of_the_day)
-    # Remove leading zeros if present
-    set start_hour (echo $first_login | rg -o '[1-9]+:[1-9]+' | cut -d ':' -f2)
-    set start_minute (echo $first_login | rg -o '[1-9]+:[1-9]+' | cut -d ':' -f3)
-
-    # Calculate the hours and minutes passed
-    set hours_passed (math "$current_hour - $start_hour")
-    set minutes_passed (math "$current_minute - $start_minute")
-
-    # # Adjust for negative minutes
-    if test $minutes_passed -lt 0
-        set minutes_passed (math "$minutes_passed + 60")
-        set hours_passed (math "$hours_passed - 1")
-    end
-
-
-    # Determine the color and emoji based on the number of hours passed
-    if test $hours_passed -gt 6
-        set emoji "✅" # Check mark
-        set color (set_color green) # Green
-    else if test $hours_passed -gt 4
-        set emoji "⌛" # Hourglass
-        set color (set_color yellow) # Orange
-    else
-        set color (set_color red) # Red
-    end
-
-    set reset_color (set_color normal)
-
-    # Display the result with colored formatting
-    if test $minutes_passed -eq 0
-        echo -e "Work hours passed since $given_hour: \n$emoji $color$hours_passed hour(s)$reset_color"
-    else
-        echo -e "Work hours passed since $given_hour: \n$emoji $color$hours_passed hour(s) and $minutes_passed minutes$reset_color"
-    end
-
-    set -Ux _hours_worked (hours_since_workday_start)
-    wezterm_set_user_var hours_worked $_hours_worked
-    commandline --function repaint
-end
-
 function fzfcd
     if test -d .git -a -f .git/HEAD
         # if current directory is a .bare git repository, search for child directories contains .git folders only
