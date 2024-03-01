@@ -1,40 +1,69 @@
 # Programs
 alias nvim 'nvim -n -i NONE --noplugin'
-abbr n 'nvim'
-abbr v 'nvim'
+abbr n nvim
+abbr v nvim
 
 abbr bup 'brew upgrade'
-function vimdiff; nvim -d $argv; end
-function snvim; sudo -E -s nvim $argv; end
-function logikill; ps -ef | grep -i "Logi Options" | grep "Applications" | awk '{print $2}' | xargs kill -9; end
-function wtr; curl "wttr.in/Copenhagen?format=%n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"; end
-function batbuild; batch cache --build $argv; end
-function bat_fast; bat --style=plain --color=never --wrap=never --paging=never $argv; end
-function copykey; pbcopy < ~/.ssh/id_rsa.pub; end; 
-function chrdebug;/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222; end;
+function vimdiff
+    nvim -d $argv
+end
+function snvim
+    sudo -E -s nvim $argv
+end
+function logikill
+    ps -ef | grep -i "Logi Options" | grep Applications | awk '{print $2}' | xargs kill -9
+end
+function wtr
+    curl "wttr.in/Copenhagen?format=%n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"
+end
+function batbuild
+    batch cache --build $argv
+end
+function bat_fast
+    bat --style=plain --color=never --wrap=never --paging=never $argv
+end
+function copykey
+    pbcopy <~/.ssh/id_rsa.pub
+end
+function chrdebug
+    /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+end
 
 # Directory shortcuts
 abbr prj 'cd ~/Projects'
 abbr cf 'cd ~/.config'
 
 # Helpers
-abbr x 'exit'
+abbr x exit
 abbr src 'source ~/.config/fish/config.fish'
 abbr makins 'sudo make && sudo make clean install'
-abbr cl 'clear'
+abbr cl clear
 abbr t 'swpm test'
 abbr mki 'sudo make && sudo make clean install'
-abbr lk 'logikill'
-abbr wd 'workday'
+abbr lk logikill
 
 # Extended defaults
-function cat; bat --style=plain --color=always $argv; end
-function ls; eza --icons -F $argv; end
-function l; ls -lh $argv; end
-function la; ls -A $argv; end
-function lla; ls -la $argv; end
-function ld; ls -l --sort=date --ignore-glob="node_modules" -D --time-style=relative $argv; end
-function lt; exa --tree -m --git --level=2 --ignore-glob="node_modules" $argv; end
+function cat
+    bat --style=plain --color=always $argv
+end
+function ls
+    eza --icons -F $argv
+end
+function l
+    ls -lh $argv
+end
+function la
+    ls -A $argv
+end
+function lla
+    ls -la $argv
+end
+function ld
+    ls -l --sort=date --ignore-glob="node_modules" -D --time-style=relative $argv
+end
+function lt
+    exa --tree -m --git --level=2 --ignore-glob="node_modules" $argv
+end
 
 # Tmux
 abbr xtm 'pkill -f tmux'
@@ -42,7 +71,7 @@ abbr ntm 'tmux new -s'
 abbr atm 'tmux attach-session -t'
 
 # Git
-abbr g 'git'
+abbr g git
 abbr gs 'git status'
 abbr gd 'git diff -- . ":!pnpm-lock.yaml" ":!package-lock.json" "!:yarn.lock"'
 abbr gp 'git push'
@@ -66,7 +95,7 @@ abbr grhh 'git reset --hard HEAD'
 abbr gcfd 'git clean -fd'
 abbr gbda 'git branch | egrep -v "(master|main|develop|\*)" | xargs git branch -D'
 abbr gl 'git log --graph --oneline --decorate'
-abbr lg 'lazygit'
+abbr lg lazygit
 abbr bad 'git bisect bad'
 abbr good 'git bisect good'
 
@@ -85,19 +114,43 @@ abbr ct 'cargo test'
 abbr cu 'cargo update'
 
 # worktree scripts
-abbr wta "worktree_add"
-abbr wtc "worktrees_clean"
+abbr wta worktree_add
+abbr wtc worktrees_clean
 
 # Webdev
-function src;  jq -r \'.scripts | to_entries[] | "\(.key):\n \(.value)\n"\' package.json | awk \'BEGIN{idx=1} {print "\033[3"idx"m" $0 "\033[0m"; idx = idx % 3 + 1}\'; end;
-function pnpx; pnpm dlx $argv; end;
-function p; swpm $argv; end;
-function pa; swpm add $argv; end
-function pr; swpm remove $argv; end
-function pw; swpm workspace $argv; end
-function pup; spwm update-interactive $argv; end
-function t; spwm tst $argv; end
-function dev; swpm dev $argv; end
-function sb; swpm storybook $argv; end
-function sblg; swpm cross-env NODE_OPTIONS=--openssl-legacy-provider start-storybook -p 9000 $argv; end
-function lint; swpm lint $argv; end
+function src
+    jq -r \'.scripts | to_entries[] | "\(.key):\n \(.value)\n"\' package.json | awk \'BEGIN{idx=1} {print "\033[3"idx"m" $0 "\033[0m"; idx = idx % 3 + 1}\'
+end
+function pnpx
+    pnpm dlx $argv
+end
+function p
+    swpm $argv
+end
+function pa
+    swpm add $argv
+end
+function pr
+    swpm remove $argv
+end
+function pw
+    swpm workspace $argv
+end
+function pup
+    spwm update-interactive $argv
+end
+function t
+    spwm tst $argv
+end
+function dev
+    swpm dev $argv
+end
+function sb
+    swpm storybook $argv
+end
+function sblg
+    swpm cross-env NODE_OPTIONS=--openssl-legacy-provider start-storybook -p 9000 $argv
+end
+function lint
+    swpm lint $argv
+end
