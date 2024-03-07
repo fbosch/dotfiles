@@ -19,7 +19,7 @@
 	changeHunkIndicators = false
 
 [mergetool "nvim"]
-  cmd = nvim -f -c \"Gdiffsplit!\" \"$MERGED\"
+  cmd = nvim -f -c \"DiffviewOpen\" \"$MERGED\"
 
 [merge]
   tool = nvim

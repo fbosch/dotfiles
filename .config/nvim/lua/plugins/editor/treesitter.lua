@@ -2,6 +2,7 @@ return {
 	{
 		"nvim-treesitter/nvim-treesitter",
 		build = ":TSUpdate",
+		event = "VeryLazy",
 		dependencies = {
 			{ "andymass/vim-matchup", enabled = false },
 			{ "nvim-treesitter/nvim-treesitter-context", enabled = false },
