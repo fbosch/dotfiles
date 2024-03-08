@@ -25,9 +25,6 @@ return {
 			sections = {
 				lualine_b = {
 					{
-						require("NeoComposer.ui").status_recording,
-					},
-					{
 						"overseer",
 						label = "", -- Prefix for task counts
 						colored = true, -- Color the task icons and counts

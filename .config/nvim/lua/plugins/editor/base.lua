@@ -12,7 +12,8 @@ return {
     "ecthelionvi/NeoComposer.nvim",
     dependencies = { "kkharji/sqlite.lua" },
     event = "VeryLazy",
-    opts = {}
+    opts = {},
+    enabled = false  -- clashes with keybinds
 	},
 	{
 		-- find and replace
