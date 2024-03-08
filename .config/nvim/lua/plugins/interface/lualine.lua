@@ -3,6 +3,7 @@ return {
 	dependencies = {
 		"kyazdani42/nvim-web-devicons",
 		"f-person/git-blame.nvim",
+		"ecthelionvi/NeoComposer.nvim",
 	},
 	event = { "VeryLazy" },
 	priority = 50,
@@ -23,6 +24,9 @@ return {
 			extensions = { "symbols-outline" },
 			sections = {
 				lualine_b = {
+					{
+						require("NeoComposer.ui").status_recording,
+					},
 					{
 						"overseer",
 						label = "", -- Prefix for task counts

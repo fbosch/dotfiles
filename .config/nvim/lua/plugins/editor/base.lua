@@ -9,6 +9,12 @@ return {
 	{ "smjonas/live-command.nvim", event = "BufRead", opts = {} },
 	{ "nguyenvukhang/nvim-toggler", event = { "BufReadPost" }, opts = {} },
 	{
+    "ecthelionvi/NeoComposer.nvim",
+    dependencies = { "kkharji/sqlite.lua" },
+    event = "VeryLazy",
+    opts = {}
+	},
+	{
 		-- find and replace
 		"ray-x/sad.nvim",
 		dependencies = { "ray-x/guihua.lua", run = "cd lua/fzy && make" },
