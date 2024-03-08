@@ -1042,3 +1042,15 @@ Pre
 pre
 v18
 KommuneKredit
+addon
+prerender
+env
+polyfill
+native-url
+dir
+jest-expect
+dev
+outDir
+i18n
+i18next
+xss
