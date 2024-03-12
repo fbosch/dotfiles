@@ -1,5 +1,5 @@
 return {
-	{ "Bekaboo/deadcolumn.nvim", event = "VeryLazy" },
+	-- { "Bekaboo/deadcolumn.nvim", event = "VeryLazy" },
 	{
 		"petertriho/nvim-scrollbar",
 		event = "VeryLazy",

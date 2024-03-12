@@ -9,14 +9,14 @@ cmd({ "BufRead", "BufNewFile" }, {
 
 -- set mdx files to jsx filetype
 cmd({ "BufRead", "BufNewFile" }, {
-  pattern = { ".mdx" },
-  command = "setlocal ft=jsx",
-  group = group,
+	pattern = { ".mdx" },
+	command = "setlocal ft=jsx",
+	group = group,
 })
 
 cmd({ "FileType" }, {
 	pattern = { "markdown", "gitcommit" },
-	command = "setlocal spell spelllang=en_us colorcolumn=100",
+	command = "setlocal spell spelllang=en_us",
 	group = group,
 })
 
