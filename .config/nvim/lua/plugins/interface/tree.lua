@@ -49,6 +49,7 @@ return {
 			},
 			filters = {
 				custom = { "node_modules" },
+				dotfiles = false,
 			},
 			view = {
 				side = "right",

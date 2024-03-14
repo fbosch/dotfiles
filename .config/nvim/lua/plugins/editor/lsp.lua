@@ -98,7 +98,7 @@ local setup_keymaps = function(client, bufnr)
 	nmap("<C-k>", vim.lsp.buf.signature_help, "Signature Help")
 	nmap("<leader>k", vim.lsp.buf.hover, "Hover")
 	nmap("gtd", vim.lsp.buf.type_definition, "[G]o to [T]ype [D]efinition")
-	nmap("<leader>r", ":IncRename ", "[R]ename")
+	nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
 	nmap("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
 
 	if client.name == "typescript-tools" then
@@ -197,6 +197,8 @@ return {
 				rust_analyzer = {},
 				html = {},
 				marksman = {},
+				dockerls = {},
+				docker_compose_language_service = {},
 				tailwindcss = {
 					cmd = { "tailwindcss-language-server", "--stdio" },
 				},

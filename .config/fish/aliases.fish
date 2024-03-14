@@ -31,6 +31,7 @@ end
 
 # Directory shortcuts
 abbr prj 'cd ~/Projects'
+abbr rpj 'cd ~/Projects'
 abbr cf 'cd ~/.config'
 
 # Helpers
