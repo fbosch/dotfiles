@@ -47,7 +47,7 @@ local setup_formatters = function(client, bufnr)
 		})
 	end
 
-	local web_formatters = { { "biome format", "prettierd", "prettier" } }
+	local web_formatters = { { "prettierd", "prettier" } }
 	conform.setup({
 		format_on_save = {
 			timeout = 2000, -- 2s (prettier is slow sometimes)
@@ -69,6 +69,7 @@ local setup_formatters = function(client, bufnr)
 			mdx = { { "biome format" } },
 			json = { { "biome format" } },
 			rust = { { "cargo fmt -- --force" } },
+			yaml = { { "prettierd", "prettier" } },
 		},
 	})
 

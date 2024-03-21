@@ -167,8 +167,8 @@ if not is_windows then
 	wezterm.on("update-right-status", function(window, pane)
 		local date = wezterm.strftime("(%Y-%m-%d) %a %b %-d ")
 		local time = wezterm.strftime("%H:%M")
-		local hour = tonumber(wezterm.strftime("%H"))
-		local clock_icon = Get_hour_icon(hour)
+		-- local hour = tonumber(wezterm.strftime("%H"))
+		-- local clock_icon = Get_hour_icon(hour)
 
 		local status = {
 			{ Foreground = { Color = "#7c7c7c" } },
@@ -176,7 +176,7 @@ if not is_windows then
 			{ Foreground = { Color = "#515151" } },
 			{ Text = "▏" },
 			{ Foreground = { Color = "#bbbbbb" } },
-			{ Text = clock_icon .. " " .. time },
+			{ Text = time },
 			{ Foreground = { Color = "#515151" } },
 			{ Text = "▕" },
 		}

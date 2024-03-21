@@ -1,7 +1,7 @@
 return {
 	{
 		"robitx/gp.nvim",
-    cmd = { "GpChatToggle" },
+		cmd = { "GpChatToggle" },
 		keys = {
 			{
 				"<leader>gp",
@@ -24,7 +24,7 @@ return {
 			"nvim-lua/plenary.nvim",
 			"nvim-telescope/telescope.nvim",
 		},
-		enabled = false,
+		enabled = true,
 		cmd = { "ChatGPT", "ChatGPTEditWithInstruction", "ChatGPTRun" },
 		keys = {
 			{

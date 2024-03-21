@@ -53,8 +53,8 @@ return {
 			},
 			view = {
 				side = "right",
-				number = false,
-				relativenumber = false,
+				number = true,
+				relativenumber = true,
 				adaptive_size = true,
 			},
 			modified = {
