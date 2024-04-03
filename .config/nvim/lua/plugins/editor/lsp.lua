@@ -250,7 +250,7 @@ return {
 			require("mason-tool-installer").setup({ ensure_installed = ensure_installed })
 			require("mason").setup()
 
-			local use_ts_tools = true
+			local use_ts_tools = false
 			require("mason-lspconfig").setup({
 				handlers = {
 					function(server_name)
