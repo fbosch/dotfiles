@@ -18,6 +18,7 @@ return {
 				highlighter = {
 					highlight_mode = "fg",
 					auto_enable = true,
+          lsp = true
 				},
 			})
 		end,

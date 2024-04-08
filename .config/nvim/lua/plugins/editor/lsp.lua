@@ -46,43 +46,6 @@ local setup_formatters = function(client, bufnr)
 			group = group,
 		})
 	end
-
-	local web_formatters = { { "prettierd", "prettier" } }
-	conform.setup({
-		format_on_save = {
-			timeout = 2000, -- 2s (prettier is slow sometimes)
-			lsp_fallback = true,
-			bufnr = bufnr,
-			quiet = true,
-		},
-		formatters_by_ft = {
-			html = web_formatters,
-			javascript = web_formatters,
-			javascriptreact = web_formatters,
-			["javascript.jsx"] = web_formatters,
-			typescript = web_formatters,
-			typescriptreact = web_formatters,
-			["typescript.tsx"] = web_formatters,
-			fish = { { "fish_indent" } },
-			lua = { { "stylua" } },
-			markdown = { { "prettierd", "prettier" } },
-			mdx = { { "biome format" } },
-			json = { { "biome format" } },
-			rust = { { "cargo fmt -- --force" } },
-			yaml = { { "prettierd", "prettier" } },
-		},
-	})
-
-	if client.supports_method("textDocument/formatting") then
-		vim.api.nvim_clear_autocmds({ group = group, buffer = bufnr })
-		vim.api.nvim_create_autocmd("BufWritePre", {
-			group = group,
-			buffer = bufnr,
-			callback = function()
-				conform.format({ bufnr = bufnr })
-			end,
-		})
-	end
 end
 
 local setup_keymaps = function(client, bufnr)
@@ -126,8 +89,45 @@ end
 
 return {
 	{
+		"stevearc/conform.nvim",
+		config = function()
+			local conform = require("conform")
+			local web_formatters = { { "prettierd", "prettier" } }
+			conform.setup({
+				format_on_save = {
+					bufnr = bufnr,
+					quiet = true,
+				},
+				formatters_by_ft = {
+					html = web_formatters,
+					javascript = web_formatters,
+					javascriptreact = web_formatters,
+					["javascript.jsx"] = web_formatters,
+					typescript = web_formatters,
+					typescriptreact = web_formatters,
+					["typescript.tsx"] = web_formatters,
+					fish = { { "fish_indent" } },
+					lua = { { "stylua" } },
+					markdown = { { "prettierd", "prettier" } },
+					mdx = { { "biome format" } },
+					json = { { "biome format" } },
+					rust = { { "cargo fmt -- --force" } },
+					yaml = { { "prettierd", "prettier" } },
+				},
+			})
+
+			vim.api.nvim_create_autocmd("BufWritePre", {
+				group = group,
+				buffer = bufnr,
+				callback = function()
+					conform.format({ bufnr = bufnr })
+				end,
+			})
+		end,
+	},
+	{
 		"neovim/nvim-lspconfig",
-		event = { "BufReadPost", "BufNewFile" },
+		event = { "BufReadPre", "BufNewFile" },
 		dependencies = {
 			{
 				"williamboman/mason.nvim",
@@ -144,7 +144,6 @@ return {
 			},
 			"williamboman/mason-lspconfig.nvim",
 			"WhoIsSethDaniel/mason-tool-installer.nvim",
-			"stevearc/conform.nvim",
 			{ "folke/neodev.nvim", ft = { "lua" }, opts = {} },
 			{
 				"pmizio/typescript-tools.nvim",
