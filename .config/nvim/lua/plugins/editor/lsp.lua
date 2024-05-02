@@ -27,7 +27,6 @@ local setup_diagnostics = function(bufnr)
 end
 
 local setup_formatters = function(client, bufnr)
-	local conform = require("conform")
 	local group = vim.api.nvim_create_augroup("LspFormatting", {})
 
 	if client.name == "tsserver" or client.name == "typescript-tools" then
@@ -91,11 +90,11 @@ return {
 	{
 		"stevearc/conform.nvim",
 		config = function()
+			local group = vim.api.nvim_create_augroup("Conform", {})
 			local conform = require("conform")
 			local web_formatters = { { "prettierd", "prettier" } }
 			conform.setup({
 				format_on_save = {
-					bufnr = bufnr,
 					quiet = true,
 				},
 				formatters_by_ft = {
@@ -118,9 +117,8 @@ return {
 
 			vim.api.nvim_create_autocmd("BufWritePre", {
 				group = group,
-				buffer = bufnr,
 				callback = function()
-					conform.format({ bufnr = bufnr })
+					conform.format()
 				end,
 			})
 		end,
@@ -170,7 +168,18 @@ return {
 				{ mode = "n" },
 			},
 		},
-		init = function()
+		config = function()
+			require("inc_rename").setup({
+				input_buffer_type = "dressing",
+			})
+
+			local capabilities = vim.lsp.protocol.make_client_capabilities()
+			capabilities = vim.tbl_deep_extend("force", capabilities, require("cmp_nvim_lsp").default_capabilities())
+			capabilities.textDocument.foldingRange = {
+				dynamicRegistration = false,
+				lineFoldingOnly = true,
+			}
+
 			local hover_config = {
 				title = "",
 				border = "rounded",
@@ -187,18 +196,6 @@ return {
 				update_in_insert = true,
 				severity_sort = true,
 			})
-		end,
-		config = function()
-			require("inc_rename").setup({
-				input_buffer_type = "dressing",
-			})
-
-			local capabilities = vim.lsp.protocol.make_client_capabilities()
-			capabilities = vim.tbl_deep_extend("force", capabilities, require("cmp_nvim_lsp").default_capabilities())
-			capabilities.textDocument.foldingRange = {
-				dynamicRegistration = false,
-				lineFoldingOnly = true,
-			}
 
 			local servers = {
 				rust_analyzer = {},
