@@ -32,6 +32,9 @@ map("n", "<leader>S", ":wqa!<CR>", opts)
 map("v", "<", "<gv", opts)
 map("v", ">", ">gv", opts)
 
+-- format
+map("n", "<leader>fb", ":lua vim.lsp.buf.format()<CR>", opts)
+
 -- move lines
 map("n", "<A-j>", ":m .+1<CR>==", opts)
 map("n", "<A-k>", ":m .-2<CR>==", opts)

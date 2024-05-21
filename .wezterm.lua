@@ -231,16 +231,16 @@ config.skip_close_confirmation_for_processes_named = {
 
 config.keys = {
 	-- TODO: find better keys for splitting panes
-	-- {
-	-- 	key = "v",
-	-- 	mods = "CTRL|SHIFT",
-	-- 	action = wezterm.action.SplitHorizontal({ domain = "CurrentPaneDomain" }),
-	-- },
-	-- {
-	-- 	key = "s",
-	-- 	mods = "CTRL|SHIFT",
-	-- 	action = wezterm.action.SplitVertical({ domain = "CurrentPaneDomain" }),
-	-- },
+	{
+		key = "v",
+		mods = "CTRL|SHIFT",
+		action = wezterm.action.SplitHorizontal({ domain = "CurrentPaneDomain" }),
+	},
+	{
+		key = "s",
+		mods = "CTRL|SHIFT",
+		action = wezterm.action.SplitVertical({ domain = "CurrentPaneDomain" }),
+	},
 	{
 		key = "l",
 		mods = "CTRL|SHIFT",

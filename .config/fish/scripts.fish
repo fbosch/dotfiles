@@ -11,6 +11,10 @@ function wezterm_set_user_var
 end
 
 function worktree_add
+    if not test -d .bare
+        echo (set_color yellow)"Warning: Cannot create worktree outside a bare Git repository root. Aborting! ⚠️"(set_color normal)
+        return 1
+    end
     set branch_name $argv[1]
 
     set remote_branch_exists (git ls-remote --exit-code --heads origin $branch_name; echo $status)

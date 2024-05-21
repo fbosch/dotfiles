@@ -74,7 +74,7 @@ abbr atm 'tmux attach-session -t'
 # Git
 abbr g git
 abbr gs 'git status'
-abbr gd 'git diff -- . ":!pnpm-lock.yaml" ":!package-lock.json" "!:yarn.lock"'
+abbr gd 'git diff'
 abbr gp 'git push'
 abbr gpl 'git pull'
 abbr gf 'git fetch'

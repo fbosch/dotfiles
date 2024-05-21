@@ -29,7 +29,7 @@ end
 local setup_formatters = function(client, bufnr)
 	local group = vim.api.nvim_create_augroup("LspFormatting", {})
 
-	if client.name == "tsserver" or client.name == "typescript-tools" then
+	if client.name == "tsserver" or client.name == "typescript-tools" or client.name == "vtls" then
 		local ts_utils = require("nvim-lsp-ts-utils")
 		ts_utils.setup({
 			enable_import_on_completion = true,
@@ -243,6 +243,9 @@ return {
 
 			local ensure_installed = vim.tbl_keys(servers or {})
 			vim.list_extend(ensure_installed, {
+				"eslint_d",
+				"vtsls",
+				-- "eslint-lsp",
 				"stylua",
 				"biome",
 				"tsserver",
@@ -253,17 +256,10 @@ return {
 			require("mason-tool-installer").setup({ ensure_installed = ensure_installed })
 			require("mason").setup()
 
-			local use_ts_tools = false
 			require("mason-lspconfig").setup({
 				handlers = {
 					function(server_name)
-						if use_ts_tools and server_name == "tsserver" then
-							-- typescript
-							require("typescript-tools").setup({
-								capabilities = capabilities,
-								on_attach = on_attach,
-								settings = {},
-							})
+						if server_name == "tsserver" then
 							return
 						end
 						local server = servers[server_name] or {}
@@ -282,6 +278,7 @@ return {
 				".eslintrc.js",
 				".eslintrc.cjs",
 				".eslintrc.json",
+				"biome.json",
 				"package.json",
 				"Cargo.toml"
 			)
