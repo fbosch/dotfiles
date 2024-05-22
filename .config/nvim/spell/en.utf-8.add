@@ -1133,3 +1133,7 @@ showSearchInFilter
 filterOptionLabel
 biome-ignore
 noExplicitAny
+Accessor
+filterFns
+filterFn
+filterOptionValueAccessor

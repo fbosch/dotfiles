@@ -1,5 +1,5 @@
-local setup_diagnostics = function(bufnr)
-	local group = vim.api.nvim_create_augroup("LspDiagnostic", {})
+local setup_diagnostics = function()
+	local group = vim.api.nvim_create_augroup("diagnostics", {})
 	local signs = { Error = " ", Warn = " ", Hint = " ", Info = " " }
 	for type, icon in pairs(signs) do
 		local hl = "DiagnosticSign" .. type
@@ -17,11 +17,10 @@ local setup_diagnostics = function(bufnr)
 		max_width = 100,
 	}
 
-	vim.api.nvim_create_autocmd({ "CursorMoved" }, {
-		buffer = bufnr,
+	vim.api.nvim_create_autocmd({ "CursorMoved", "BufEnter" }, {
 		group = group,
 		callback = function()
-			vim.diagnostic.open_float(bufnr, diag_opts)
+			vim.diagnostic.open_float(vim.api.nvim_get_current_buf(), diag_opts)
 		end,
 	})
 end
@@ -129,6 +128,10 @@ return {
 		event = "VeryLazy",
 		opts = {},
 		enabled = false,
+	},
+	{
+		"cseickel/diagnostic-window.nvim",
+		dependencies = { "MunifTanjim/nui.nvim" },
 	},
 	{
 		"neovim/nvim-lspconfig",
