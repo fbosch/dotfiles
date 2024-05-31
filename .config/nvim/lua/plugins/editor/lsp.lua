@@ -240,14 +240,14 @@ return {
 							lspconfig.eslint.setup({
 								on_attach = on_attach,
 								capabilities = capabilities,
-								cmd = { "eslint_d", "--stdio" },
+								settings = settings,
 								root_dir = lspconfig.util.root_pattern(
-									".eslintrc",
 									".eslintrc.js",
-									".eslintrc.cjs",
 									".eslintrc.json",
+									".eslintrc",
+									".eslintrc.yml",
 									".eslintrc.yaml",
-									".eslintrc.yml"
+									"package.json"
 								),
 							})
 							return
