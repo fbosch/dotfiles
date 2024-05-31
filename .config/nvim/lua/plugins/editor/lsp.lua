@@ -246,9 +246,19 @@ return {
 									".eslintrc.json",
 									".eslintrc",
 									".eslintrc.yml",
-									".eslintrc.yaml",
-									"package.json"
+									".eslintrc.yaml"
 								),
+							})
+							return
+						end
+
+						if server_name == "biome" then
+							lspconfig.biome.setup({
+								on_attach = on_attach,
+								capabilities = capabilities,
+								settings = settings,
+								cmd = server.cmd,
+								root_dir = lspconfig.util.root_pattern("biome.json"),
 							})
 							return
 						end

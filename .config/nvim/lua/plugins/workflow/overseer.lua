@@ -2,6 +2,7 @@ return {
 	"stevearc/overseer.nvim",
 	dependencies = {
 		"stevearc/dressing.nvim",
+		"nvim-telescope/telescope.nvim",
 	},
 	cmd = { "OverseerToggle", "OverseerRun", "OverseerLoadBundle" },
 	priority = 70,
@@ -46,8 +47,7 @@ return {
 			winblend = 10,
 		},
 		task_list = {
-			default_detail = 1,
-			max_width = { 30, 0.2 },
+			default_detail = 2,
 		},
 		form = {
 			border = "rounded",

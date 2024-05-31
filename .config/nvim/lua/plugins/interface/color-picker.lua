@@ -1,7 +1,6 @@
 return {
 	{
 		"uga-rosa/ccc.nvim",
-		event = { "BufReadPost", "BufWritePost" },
 		enabled = true,
 		keys = {
 			{
@@ -18,7 +17,7 @@ return {
 				highlighter = {
 					highlight_mode = "fg",
 					auto_enable = true,
-          lsp = true
+					lsp = true,
 				},
 			})
 		end,

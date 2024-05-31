@@ -10,7 +10,7 @@ return {
 	dependencies = {
 		"stevearc/overseer.nvim",
 	},
-	enabled = true,
+	enabled = false,
 	config = function()
 		vim.api.nvim_create_user_command("WipeAllSessions", function()
 			local cmd = string.format("rm -rf %s", root_dir)
