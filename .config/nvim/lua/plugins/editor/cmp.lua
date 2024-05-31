@@ -89,12 +89,12 @@ return {
 					}),
 				},
 				sources = cmp.config.sources({
-					{ name = "nvim_lsp", max_item_count = 5 },
+					{ name = "nvim_lsp", max_item_count = 10 },
 					-- { name = "copilot", max_item_count = 3 },
-					{ name = "cmp_tabnine", max_item_count = 5 },
-					{ name = "path", max_item_count = 5 },
 					{ name = "buffer", max_item_count = 3 },
-					{ name = "emoji", max_item_count = 15 },
+					{ name = "cmp_tabnine", max_item_count = 2 },
+					{ name = "path", max_item_count = 5 },
+					-- { name = "emoji", max_item_count = 15 },
 					-- { name = "spell", max_item_count = 4 },
 					{ name = "nvim_lua", max_item_count = 5 },
 					{

@@ -28,15 +28,6 @@ end
 local setup_formatters = function(client, bufnr)
 	local group = vim.api.nvim_create_augroup("LspFormatting", {})
 
-	if client.name == "tsserver" or client.name == "typescript-tools" or client.name == "vtls" then
-		local ts_utils = require("nvim-lsp-ts-utils")
-		ts_utils.setup({
-			enable_import_on_completion = true,
-			auto_inlay_hints = true,
-		})
-		ts_utils.setup_client(client)
-	end
-
 	if client.name == "eslint" then
 		vim.api.nvim_create_autocmd("BufWritePre", {
 			buffer = bufnr,
@@ -63,15 +54,6 @@ local setup_keymaps = function(client, bufnr)
 	nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
 	nmap("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
 
-	if client.name == "typescript-tools" then
-		nmap("<leader>fr", ":TSToolsRenameFile<cr>", "[R]ename [F]ile")
-		nmap("<leader>ru", ":TSToolsRemoveUnused<cr>", "[R]emove [U]nused")
-		nmap("<leader>rui", ":TSToolsRemoveUnusedImports<cr>", "[R]emove [U]nused [I]mports")
-		nmap("<leader>ia", ":TSToolsAddMissingImports<cr>", "[I]mport [A]ll")
-		nmap("gd", ":TSToolsGoToSourceDefinition<cr>", "[G]o to [D]efinition")
-		return
-	end
-
 	if client.name == "tsserver" then
 		nmap("<leader>rf", ":TSLspRenameFile<cr>", "[R]ename [F]ile")
 	end
@@ -81,7 +63,7 @@ end
 
 local on_attach = function(client, bufnr)
 	setup_keymaps(client, bufnr)
-	setup_diagnostics(bufnr)
+	setup_diagnostics()
 	setup_formatters(client, bufnr)
 end
 
@@ -153,14 +135,6 @@ return {
 			"williamboman/mason-lspconfig.nvim",
 			"WhoIsSethDaniel/mason-tool-installer.nvim",
 			{ "folke/neodev.nvim", ft = { "lua" }, opts = {} },
-			{
-				"pmizio/typescript-tools.nvim",
-				ft = { "typescript", "typescriptreact" },
-			},
-			{
-				"jose-elias-alvarez/nvim-lsp-ts-utils",
-				ft = { "typescript", "typescriptreact" },
-			},
 		},
 		keys = {
 			{
@@ -176,6 +150,8 @@ return {
 				input_buffer_type = "dressing",
 			})
 
+			local lspconfig = require("lspconfig")
+
 			local capabilities = vim.lsp.protocol.make_client_capabilities()
 			capabilities = vim.tbl_deep_extend("force", capabilities, require("cmp_nvim_lsp").default_capabilities())
 			capabilities.textDocument.foldingRange = {
@@ -189,7 +165,6 @@ return {
 				max_width = 100,
 				focusable = false,
 			}
-			vim.lsp.set_log_level("off")
 			vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, hover_config)
 			vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(vim.lsp.handlers.signature_help, hover_config)
 			vim.diagnostic.config({
@@ -218,9 +193,6 @@ return {
 						},
 					},
 				},
-				tsserver = {
-					init_options = require("nvim-lsp-ts-utils").init_options,
-				},
 				lua_ls = {
 					settings = {
 						Lua = {
@@ -248,7 +220,6 @@ return {
 			vim.list_extend(ensure_installed, {
 				"eslint_d",
 				"vtsls",
-				-- "eslint-lsp",
 				"stylua",
 				"biome",
 				"tsserver",
@@ -262,29 +233,36 @@ return {
 			require("mason-lspconfig").setup({
 				handlers = {
 					function(server_name)
-						if server_name == "tsserver" then
+						local server = servers[server_name] or {}
+						local settings = server.settings or {}
+
+						if server_name == "eslint" then
+							lspconfig.eslint.setup({
+								on_attach = on_attach,
+								capabilities = capabilities,
+								cmd = { "eslint_d", "--stdio" },
+								root_dir = lspconfig.util.root_pattern(
+									".eslintrc",
+									".eslintrc.js",
+									".eslintrc.cjs",
+									".eslintrc.json",
+									".eslintrc.yaml",
+									".eslintrc.yml"
+								),
+							})
 							return
 						end
-						local server = servers[server_name] or {}
-						require("lspconfig")[server_name].setup({
+
+						lspconfig[server_name].setup({
 							capabilities = vim.tbl_deep_extend("force", {}, capabilities, server.capabilities or {}),
 							on_attach = on_attach,
-							settings = server.settings,
+							settings = settings,
 							cmd = server.cmd,
+							root_dir = server.root_dir or lspconfig.util.root_pattern(server.root_files or {}),
 						})
 					end,
 				},
 			})
-			local lspconfig = require("lspconfig")
-			lspconfig.util.root_pattern(
-				".eslintrc",
-				".eslintrc.js",
-				".eslintrc.cjs",
-				".eslintrc.json",
-				"biome.json",
-				"package.json",
-				"Cargo.toml"
-			)
 
 			-- neovim
 			require("neodev").setup({ capabilities = capabilities, on_attach })

@@ -30,8 +30,13 @@ function worktree_add
     cd $branch_name
     swpm install
     git reset --hard HEAD
+    echo (pwd) >>/tmp/.recent-worktrees
+    echo (set_color green)"Worktree created and dependencies installed ✅"(set_color normal)
+end
 
-    echo "Worktree added and installed ✅"
+
+function latest_worktree
+    echo (tail -n 1 /tmp/.recent-worktrees)
 end
 
 function worktrees_clean

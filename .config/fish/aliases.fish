@@ -41,7 +41,6 @@ abbr makins 'sudo make && sudo make clean install'
 abbr cl clear
 abbr t 'swpm test'
 abbr mki 'sudo make && sudo make clean install'
-abbr lk logikill
 
 # Extended defaults
 function cat
@@ -66,6 +65,9 @@ function lt
     exa --tree -m --git --level=2 --ignore-glob="node_modules" $argv
 end
 
+
+alias lw 'cd (latest_worktree)'
+
 # Tmux
 abbr xtm 'pkill -f tmux'
 abbr ntm 'tmux new -s'
@@ -77,6 +79,7 @@ abbr gs 'git status'
 abbr gd 'git diff'
 abbr gp 'git push'
 abbr gpl 'git pull'
+abbr gplr 'git pull --rebase'
 abbr gf 'git fetch'
 abbr gw 'git worktree'
 abbr gwa 'git worktree add'
@@ -87,6 +90,7 @@ abbr gco 'git checkout'
 abbr gaa 'git add --all'
 abbr gsa 'git stash apply'
 abbr gpo 'git pull origin'
+abbr gpor 'git pull origin --rebase'
 abbr gdorig 'find . -name \*.orig -delete'
 abbr cm 'aicommits --type conventional -x "pnpm-lock.yaml"'
 abbr gcm --set-cursor 'git commit -m "%"'
