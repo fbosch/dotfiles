@@ -1,6 +1,10 @@
 return {
 	"kyazdani42/nvim-tree.lua",
-	dependencies = { "kyazdani42/nvim-web-devicons", "mcchrish/zenbones.nvim" },
+	dependencies = {
+		"kyazdani42/nvim-web-devicons",
+		"mcchrish/zenbones.nvim",
+		"rachartier/tiny-devicons-auto-colors.nvim",
+	},
 	event = { "BufWinEnter", "LspAttach", "VeryLazy" },
 	cmd = { "NvimTreeToggle", "NvimTreeFindFile" },
 	keys = {
@@ -34,6 +38,21 @@ return {
 			vim.keymap.set("n", "L", ":wincmd l<CR>", opts("move to right window"))
 		end
 		require("nvim-web-devicons").setup()
+
+		local colors = require("colors")
+		local colorValues = {
+			colors.red,
+			colors.orange,
+			colors.blue,
+			colors.dark_blue,
+			colors.purple,
+			colors.yellow,
+			colors.green,
+			colors.cyan,
+		}
+		require("tiny-devicons-auto-colors").setup({
+			colors = colorValues,
+		})
 		require("nvim-tree").setup({
 			on_attach = on_attach,
 			sync_root_with_cwd = true,

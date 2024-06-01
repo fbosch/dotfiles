@@ -2,6 +2,7 @@ return {
 	{
 		"uga-rosa/ccc.nvim",
 		enabled = true,
+		event = "VeryLazy",
 		keys = {
 			{
 				mode = "n",
