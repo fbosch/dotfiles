@@ -15,7 +15,10 @@ M.match_blue = "#6e8aa5"
 M.red = "#DE6E7C"
 M.orange = "#D68C67"
 M.blue = "#97bdde"
+M.dark_blue = "#6099C0"
 M.purple = "#b279a7"
 M.yellow = "#E5B769"
+M.green = "#8BAE68"
+M.cyan = "#65B8C1"
 
 return M
