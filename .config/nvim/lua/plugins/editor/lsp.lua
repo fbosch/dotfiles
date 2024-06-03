@@ -17,12 +17,15 @@ local setup_diagnostics = function()
 		max_width = 100,
 	}
 
-	vim.api.nvim_create_autocmd({ "CursorMoved", "BufEnter" }, {
-		group = group,
-		callback = function()
-			vim.diagnostic.open_float(vim.api.nvim_get_current_buf(), diag_opts)
-		end,
-	})
+	vim.api.nvim_create_autocmd(
+		{ "CursorMoved", "CursorMovedI", "TextChanged", "TextChangedI", "TextYankPost", "BufEnter" },
+		{
+			group = group,
+			callback = function()
+				vim.diagnostic.open_float(vim.api.nvim_get_current_buf(), diag_opts)
+			end,
+		}
+	)
 end
 
 local setup_formatters = function(client, bufnr)
