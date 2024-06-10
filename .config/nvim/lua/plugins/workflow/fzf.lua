@@ -1,7 +1,7 @@
 return {
 	"ibhagwan/fzf-lua",
 	dependencies = { "kyazdani42/nvim-web-devicons" },
-	cmd = { "FzfLua", "FzfRg" },
+	cmd = { "FzfLua", "FzfRg", "FzfRgVisualSelection" },
 	keys = {
 		{
 			"<C-p>",
@@ -15,6 +15,13 @@ return {
 			"<cmd>FzfRg<cr>",
 			desc = "livegrep ripgrep search",
 			mode = { "n" },
+			silent = true,
+		},
+		{
+			"<leader>lg",
+			"<cmd>FzfRgVisualSelection<cr>",
+			desc = "ripgrep search visual selection",
+			mode = { "v" },
 			silent = true,
 		},
 		{
@@ -54,19 +61,27 @@ return {
 			},
 		})
 
+		local colors =
+			'--color=ansi --colors="match:bg:magenta" --colors="match:fg:black" --colors="line:fg:yellow" --colors="path:fg:white" '
+
+		local exclude_glob =
+			"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*,**/.pnpm-store/*,**/.backup/*,**/.sessions/*,**/.undo/*,**/.DS_Store}"
+
+		local combined_options = "--with-filename --max-columns=200 --smart-case --vimgrep -g '"
+			.. exclude_glob
+			.. "' "
+			.. colors
+
+		vim.api.nvim_create_user_command("FzfRgVisualSelection", function()
+			fzf.grep_visual({
+				rg_glob = true,
+				exec_empty_query = false,
+				rg_opts = combined_options,
+			})
+		end, {})
+
 		vim.api.nvim_create_user_command("FzfRg", function()
-			local colors =
-				'--color=ansi --colors="match:bg:magenta" --colors="match:fg:black" --colors="line:fg:yellow" --colors="path:fg:white" '
-
-			local exclude_glob =
-				"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*,**/.pnpm-store/*,**/.backup/*,**/.sessions/*,**/.undo/*,**/.DS_Store}"
-
-			local combined_options = "--with-filename --max-columns=200 --smart-case --vimgrep -g '"
-				.. exclude_glob
-				.. "' "
-				.. colors
-
-			fzf.live_grep_resume({
+			fzf.live_grep_native({
 				rg_glob = true,
 				exec_empty_query = false,
 				rg_opts = combined_options,
