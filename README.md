@@ -37,7 +37,7 @@ I use [WezTerm](https://wezfurlong.org/wezterm/index.html) as my terminal emulat
 - [bat](https://github.com/sharkdp/bat)
 - [fd](https://github.com/sharkdp/fd)
 - [lf](https://github.com/gokcehan/lf)
-- [exa](https://github.com/ogham/exa)
+- [eza](https://github.com/eza-community/eza)
 - [stow](https://www.gnu.org/software/stow/)
 - [git-delta](https://github.com/dandavison/delta)
 - [lazygit](https://github.com/jesseduffield/lazygit)
