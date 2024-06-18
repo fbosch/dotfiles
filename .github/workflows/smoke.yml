@@ -1,0 +1,24 @@
+name: Smoke Test
+
+on: [push]
+
+defaults:
+  run:
+    shell: bash
+    working-directory: ./scripts
+
+jobs:
+  macos:
+    name: "Installs on macOS"
+    runs-on: macOS-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Install
+        run: ./brew-install-script.sh
+  linux:
+    name: "Installs on Linux"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Install
+        run: ./brew-install-script.sh
