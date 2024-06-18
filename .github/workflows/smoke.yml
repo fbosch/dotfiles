@@ -8,13 +8,15 @@ defaults:
     working-directory: ./scripts
 
 jobs:
-  "installs on macOS":
+  macos:
+    name: "Installs on macOS"
     runs-on: macOS-latest
     steps:
       - uses: actions/checkout@v1
       - name: Install
         run: ./brew-install-script.sh
-  "installs on Linux":
+  linux:
+    name: "Installs on Linux"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
