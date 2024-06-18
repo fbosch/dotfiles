@@ -7,6 +7,10 @@ defaults:
     shell: bash
     working-directory: ./scripts
 
+concurrency:
+  group: ${{ github.head_ref }}
+  cancel-in-progress: true
+
 jobs:
   macos:
     name: "Installs on macOS"
