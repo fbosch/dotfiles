@@ -73,7 +73,7 @@ return {
 		config = function()
 			local group = vim.api.nvim_create_augroup("Conform", {})
 			local conform = require("conform")
-			local web_formatters = { { "prettierd", "prettier" } }
+			local web_formatters = { { "prettierd", "prettier", "biome format" } }
 			conform.setup({
 				format_on_save = {
 					quiet = true,
@@ -103,13 +103,6 @@ return {
 				end,
 			})
 		end,
-	},
-	{
-		"zeioth/garbage-day.nvim",
-		dependencies = "neovim/nvim-lspconfig",
-		event = "VeryLazy",
-		opts = {},
-		enabled = false,
 	},
 	{
 		"cseickel/diagnostic-window.nvim",
@@ -235,6 +228,11 @@ return {
 					function(server_name)
 						local server = servers[server_name] or {}
 						local settings = server.settings or {}
+
+						if server_name == "tsserver" then
+							-- using vtsls instead
+							return
+						end
 
 						if server_name == "eslint" then
 							lspconfig.eslint.setup({

@@ -3,6 +3,7 @@ return {
 	dependencies = {
 		"nvim-treesitter/nvim-treesitter",
 	},
+	event = "BufRead",
 	config = function()
 		local hlargs = require("hlargs")
 		local colorpalette = {

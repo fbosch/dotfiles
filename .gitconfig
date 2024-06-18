@@ -55,3 +55,13 @@
 [interactive]
   diffFilter = delta --color-only --features=interactive 
 
+# automatically fix typos
+[alias]
+  psuh = push
+  pushj = push
+  pul = pull
+  comit = commit
+  commti = commit
+  chekcout = checkout
+  brnach = branch
+

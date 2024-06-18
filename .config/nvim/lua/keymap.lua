@@ -19,6 +19,8 @@ map("n", "<C-a>", "ggVG<CR>", opts)
 -- paste last thing yanked(not system copied), not deleted
 map("n", ",p", '"0p', opts)
 map("n", ",P", '"0P', opts)
+-- yank current file
+map("n", "<leader>yf", ":%y<cr>", opts)
 
 -- replace words under cursor
 map("n", "<leader>rw", ":%s/<C-R><C-W>//gI<left><left><left>", opts) -- in buffer

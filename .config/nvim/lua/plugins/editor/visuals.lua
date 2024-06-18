@@ -36,8 +36,8 @@ return {
 
 			tint.setup({
 				transforms = {
-					transforms.tint_with_threshold(-40, colors.background, 100),
-					transforms.saturate(0.4),
+					transforms.tint_with_threshold(-30, colors.background, 100),
+					transforms.saturate(0.25),
 				},
 				highlight_ignore_patterns = {
 					"IndentBlankline*",
