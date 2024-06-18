@@ -8,8 +8,14 @@ defaults:
     working-directory: ./scripts
 
 jobs:
-  build:
+  "installs on macOS":
     runs-on: macOS-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Install
+        run: ./brew-install-script.sh
+  "installs on Linux":
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
       - name: Install
