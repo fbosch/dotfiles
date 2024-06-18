@@ -1194,3 +1194,5 @@ multi-step
 step
 NextButton
 initialValue
+and
+WezTerm
