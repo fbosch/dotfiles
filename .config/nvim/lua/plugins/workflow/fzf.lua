@@ -43,10 +43,10 @@ return {
 		local fzf = require("fzf-lua")
 		fzf.setup({
 			winopts = {
+				height = 0.8,
+				width = 0.9,
 				hl = { border = "rounded" },
-				default = {
-					preview = "bat_async",
-				},
+				preview = { "bat_async", flip_columns = 200 },
 			},
 			previewers = {
 				builtin = {

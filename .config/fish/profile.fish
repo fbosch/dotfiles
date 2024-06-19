@@ -10,7 +10,7 @@ set -x RIPGREP_CONFIG_PATH "$HOME/.ripgreprc"
 set -U FZF_DEFAULT_COMMAND fd
 # set -U FZF_CTRL_T_COMMAND "$FZF_DEFAULT_COMMAND"
 # set -U FZF_OPEN_COMMAND "$FZF_DEFAULT_COMMAND"
-set -U FZF_DEFAULT_OPTS "--ansi --type f --strip-cwd-prefix --follow --threads 4"
+set -U FZF_DEFAULT_OPTS "--ansi --type f --strip-cwd-prefix --follow --threads 16"
 set -U FZF_FIND_FILE_COMMAND "$FZF_DEFAULT_COMMAND"
 set -U FZF_PREVIEW_FILE_CMD "bat --paging=never --color=always --style=numbers --line-range :100"
 set -U FZF_ENABLE_OPEN_PREVIEW 1
