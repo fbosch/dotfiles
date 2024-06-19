@@ -142,13 +142,27 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_wid
 end)
 
 local function parse_time(time_str)
+	if not time_str then
+		return nil
+	end
 	local hour, minute, second = time_str:match("(%d+):(%d+):(%d+)")
+	if not (hour and minute and second) then
+		return nil
+	end
 	return tonumber(hour), tonumber(minute), tonumber(second)
 end
 
 local function calculate_hour_difference(time_str1, time_str2)
+	if not time_str1 or not time_str2 then
+		return nil, "Invalid input: one or both time strings are nil"
+	end
+
 	local hour1, minute1, second1 = parse_time(time_str1)
 	local hour2, minute2, second2 = parse_time(time_str2)
+
+	if not (hour1 and minute1 and second1 and hour2 and minute2 and second2) then
+		return nil, "Invalid input: unable to parse time strings"
+	end
 
 	-- Convert times to seconds
 	local totalSeconds1 = hour1 * 3600 + minute1 * 60 + second1
@@ -184,8 +198,8 @@ if not is_windows then
 		local wday = os.date("*t").wday
 		if wday ~= 1 or wday ~= 7 then
 			local first_login = pane:get_user_vars().first_login
-			local hours_worked = math.ceil(calculate_hour_difference(first_login, wezterm.strftime("%H:%M:%S")) * 2) / 2
-				or 0
+			local calculated_hours = calculate_hour_difference(first_login, wezterm.strftime("%H:%M:%S"))
+			local hours_worked = calculated_hours and math.ceil(calculated_hours * 2) / 2 or 0
 
 			if hours_worked > 0 and hours_worked < 10 then
 				local icon = ""
@@ -263,22 +277,22 @@ config.keys = {
 	},
 	{
 		key = "RightArrow",
-		mods = "CTRL|SHIFT",
+		mods = "CMD",
 		action = wezterm.action.AdjustPaneSize({ "Right", 5 }),
 	},
 	{
 		key = "LeftArrow",
-		mods = "CTRL|SHIFT",
+		mods = "CMD",
 		action = wezterm.action.AdjustPaneSize({ "Left", 5 }),
 	},
 	{
 		key = "UpArrow",
-		mods = "CTRL|SHIFT",
+		mods = "CMD",
 		action = wezterm.action.AdjustPaneSize({ "Up", 5 }),
 	},
 	{
 		key = "DownArrow",
-		mods = "CTRL|SHIFT",
+		mods = "CMD",
 		action = wezterm.action.AdjustPaneSize({ "Down", 5 }),
 	},
 	{
