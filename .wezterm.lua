@@ -233,12 +233,12 @@ config.keys = {
 	-- TODO: find better keys for splitting panes
 	{
 		key = "v",
-		mods = "CMD, CTRL|SHIFT",
+		mods = "CMD",
 		action = wezterm.action.SplitHorizontal({ domain = "CurrentPaneDomain" }),
 	},
 	{
 		key = "s",
-		mods = "CMD, CTRL|SHIFT",
+		mods = "CMD",
 		action = wezterm.action.SplitVertical({ domain = "CurrentPaneDomain" }),
 	},
 	{
