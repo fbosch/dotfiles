@@ -55,6 +55,8 @@ end
 set --export BUN_INSTALL "$HOME/.bun"
 set --export PATH $BUN_INSTALL/bin $PATH
 set -U fish_key_bindings fish_default_key_bindings
+
+# bind ctrl-p to fzf utility to change directories
 bind \cP fzfcd
 
 # Keybindings

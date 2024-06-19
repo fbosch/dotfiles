@@ -22,7 +22,7 @@ return {
 		dependencies = {
 			"muniftanjim/nui.nvim",
 			"nvim-lua/plenary.nvim",
-			"nvim-telescope/telescope.nvim",
+			{ "nvim-telescope/telescope.nvim", event = "VeryLazy" },
 		},
 		enabled = true,
 		cmd = { "ChatGPT", "ChatGPTEditWithInstruction", "ChatGPTRun" },

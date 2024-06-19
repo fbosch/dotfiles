@@ -13,6 +13,19 @@ return {
 		opts = {}, -- required even with default settings, since it calls `setup()`
 	},
 	{
+		"cshuaimin/ssr.nvim",
+		opts = {
+			adjust_window = true,
+		},
+		keys = {
+			{
+				"<leader>sr",
+				"<cmd>lua require('ssr').open()<cr>",
+				mode = { "n", "v" },
+			},
+		},
+	},
+	{
 		-- find and replace
 		"ray-x/sad.nvim",
 		dependencies = { "ray-x/guihua.lua", run = "cd lua/fzy && make" },
@@ -23,6 +36,7 @@ return {
 		} },
 		cmd = { "Sad" },
 		opts = {},
+		enabled = false,
 	},
 	{
 		-- json editing tools
