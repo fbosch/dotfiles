@@ -1196,3 +1196,6 @@ NextButton
 initialValue
 and
 WezTerm
+interestPaymentFrequency
+Rentefrekvens
+Listbox

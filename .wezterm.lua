@@ -233,34 +233,34 @@ config.keys = {
 	-- TODO: find better keys for splitting panes
 	{
 		key = "v",
-		mods = "CTRL|SHIFT",
+		mods = "CMD, CTRL|SHIFT",
 		action = wezterm.action.SplitHorizontal({ domain = "CurrentPaneDomain" }),
 	},
 	{
 		key = "s",
-		mods = "CTRL|SHIFT",
+		mods = "CMD, CTRL|SHIFT",
 		action = wezterm.action.SplitVertical({ domain = "CurrentPaneDomain" }),
 	},
 	{
 		key = "l",
-		mods = "CTRL|SHIFT",
-		action = wezterm.action.DisableDefaultAssignment,
+		mods = "CMD",
+		action = wezterm.action.ActivatePaneDirection("Right"),
 	},
-	-- {
-	-- 	key = "h",
-	-- 	mods = "CTRL|SHIFT",
-	-- 	action = wezterm.action.ActivatePaneDirection("Left"),
-	-- },
-	-- {
-	-- 	key = "j",
-	-- 	mods = "CTRL|SHIFT",
-	-- 	action = wezterm.action.ActivatePaneDirection("Down"),
-	-- },
-	-- {
-	-- 	key = "k",
-	-- 	mods = "CTRL|SHIFT",
-	-- 	action = wezterm.action.ActivatePaneDirection("Up"),
-	-- },
+	{
+		key = "h",
+		mods = "CMD",
+		action = wezterm.action.ActivatePaneDirection("Left"),
+	},
+	{
+		key = "j",
+		mods = "CMD",
+		action = wezterm.action.ActivatePaneDirection("Down"),
+	},
+	{
+		key = "k",
+		mods = "CMD",
+		action = wezterm.action.ActivatePaneDirection("Up"),
+	},
 	{
 		key = "RightArrow",
 		mods = "CTRL|SHIFT",

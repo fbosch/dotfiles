@@ -16,8 +16,8 @@ return {
 			notification = {
 				configs = {
 					default = {
-						name = "󱞽 Notifications",
-						icon = "󰂚",
+						name = "",
+						icon = "",
 						icon_style = "Special",
 						annote_style = "DiagnosticInfo",
 						debug_style = "Comment",

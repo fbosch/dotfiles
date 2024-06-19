@@ -8,11 +8,9 @@ return {
 	{ "smjonas/live-command.nvim", event = "BufRead", opts = {} },
 	{ "nguyenvukhang/nvim-toggler", event = { "BufReadPost" }, opts = {} },
 	{
-		"ecthelionvi/NeoComposer.nvim",
-		dependencies = { "kkharji/sqlite.lua" },
-		event = "VeryLazy",
-		opts = {},
-		enabled = false, -- clashes with keybinds
+		"chrisgrieser/nvim-recorder",
+		dependencies = "rcarriga/nvim-notify", -- optional
+		opts = {}, -- required even with default settings, since it calls `setup()`
 	},
 	{
 		-- find and replace
