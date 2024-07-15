@@ -30,7 +30,6 @@ return {
 	},
 	config = function()
 		local bufresize = require("bufresize")
-
 		bufresize.setup()
 		require("smart-splits").setup({
 			resize_mode = {

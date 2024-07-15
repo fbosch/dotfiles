@@ -76,7 +76,9 @@ return {
 			local web_formatters = { { "prettierd", "prettier", "biome format" } }
 			conform.setup({
 				format_on_save = {
+					lsp_fallback = true,
 					quiet = true,
+					async = false,
 				},
 				formatters_by_ft = {
 					html = web_formatters,
@@ -103,10 +105,6 @@ return {
 				end,
 			})
 		end,
-	},
-	{
-		"cseickel/diagnostic-window.nvim",
-		dependencies = { "MunifTanjim/nui.nvim" },
 	},
 	{
 		"neovim/nvim-lspconfig",
@@ -211,7 +209,6 @@ return {
 
 			local ensure_installed = vim.tbl_keys(servers or {})
 			vim.list_extend(ensure_installed, {
-				"eslint_d",
 				"vtsls",
 				"stylua",
 				"biome",
@@ -238,6 +235,7 @@ return {
 							lspconfig.eslint.setup({
 								on_attach = on_attach,
 								capabilities = capabilities,
+								-- cmd = { "eslint_d", "--stdio" },
 								settings = settings,
 								root_dir = lspconfig.util.root_pattern(
 									".eslintrc.js",

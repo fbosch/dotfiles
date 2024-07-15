@@ -24,9 +24,9 @@ return {
 					suggestions = 20,
 				},
 			},
-			window = {
-				border = "rounded",
-			},
+			-- window = {
+			-- 	border = "rounded",
+			-- },
 		})
 	end,
 }
