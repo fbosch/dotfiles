@@ -199,7 +199,8 @@ if not is_windows then
 		if wday ~= 1 or wday ~= 7 then
 			local first_login = pane:get_user_vars().first_login
 			local calculated_hours = calculate_hour_difference(first_login, wezterm.strftime("%H:%M:%S"))
-			local hours_worked = calculated_hours and math.ceil(calculated_hours * 2) / 2 or 0
+			print(calculated_hours)
+			local hours_worked = calculated_hours and math.ceil(calculated_hours) or 0
 
 			if hours_worked > 0 and hours_worked < 10 then
 				local icon = ""
@@ -247,52 +248,52 @@ config.keys = {
 	-- TODO: find better keys for splitting panes
 	{
 		key = "v",
-		mods = "CMD",
+		mods = "CMD|SHIFT",
 		action = wezterm.action.SplitHorizontal({ domain = "CurrentPaneDomain" }),
 	},
 	{
 		key = "s",
-		mods = "CMD",
+		mods = "CMD|SHIFT",
 		action = wezterm.action.SplitVertical({ domain = "CurrentPaneDomain" }),
 	},
 	{
 		key = "l",
-		mods = "CMD",
+		mods = "CMD|SHIFT",
 		action = wezterm.action.ActivatePaneDirection("Right"),
 	},
 	{
 		key = "h",
-		mods = "CMD",
+		mods = "CMD|SHIFT",
 		action = wezterm.action.ActivatePaneDirection("Left"),
 	},
 	{
 		key = "j",
-		mods = "CMD",
+		mods = "CMD|SHIFT",
 		action = wezterm.action.ActivatePaneDirection("Down"),
 	},
 	{
 		key = "k",
-		mods = "CMD",
+		mods = "CMD|SHIFT",
 		action = wezterm.action.ActivatePaneDirection("Up"),
 	},
 	{
 		key = "RightArrow",
-		mods = "CMD",
+		mods = "CMD|SHIFT",
 		action = wezterm.action.AdjustPaneSize({ "Right", 5 }),
 	},
 	{
 		key = "LeftArrow",
-		mods = "CMD",
+		mods = "CMD|SHIFT",
 		action = wezterm.action.AdjustPaneSize({ "Left", 5 }),
 	},
 	{
 		key = "UpArrow",
-		mods = "CMD",
+		mods = "CMD|SHIFT",
 		action = wezterm.action.AdjustPaneSize({ "Up", 5 }),
 	},
 	{
 		key = "DownArrow",
-		mods = "CMD",
+		mods = "CMD|SHIFT",
 		action = wezterm.action.AdjustPaneSize({ "Down", 5 }),
 	},
 	{

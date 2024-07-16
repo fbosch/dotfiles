@@ -9,7 +9,7 @@ if test (uname) = Linux
 end
 
 function fish_greeting
-    if test (uname) = Darwin && test "$PWD" = "$HOME" && test (wezterm cli list | count) -eq 2
+    if test (uname) = Darwin
         first_login_of_the_day --silent &
     end
 end

@@ -98,7 +98,6 @@ function fzfcd
     end
 end
 
-
 function toggle_proxy
     set current_status (networksetup -getwebproxy "Wi-Fi" | grep Enabled | cut -d " " -f 2 | head -1)
     if test "$current_status" = No
