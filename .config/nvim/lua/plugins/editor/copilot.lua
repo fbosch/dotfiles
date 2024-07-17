@@ -2,7 +2,7 @@ return {
 	{
 		"supermaven-inc/supermaven-nvim",
 		event = "InsertEnter",
-		enabled = false,
+		commit = "df3ecf7",
 		opts = {
 			keymaps = {
 				accept_suggestion = "<Tab>",
