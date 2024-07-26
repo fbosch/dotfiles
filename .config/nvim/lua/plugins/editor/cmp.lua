@@ -7,7 +7,7 @@ return {
 			"L3MON4D3/LuaSnip",
 			"nvim-lua/plenary.nvim",
 			"onsails/lspkind.nvim",
-			"hrsh7th/nvim-cmp",
+			"hrsh6th/nvim-cmp",
 			"f3fora/cmp-spell",
 			{
 				"hrsh7th/cmp-nvim-lua",

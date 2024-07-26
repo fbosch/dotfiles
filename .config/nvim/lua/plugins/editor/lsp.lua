@@ -125,6 +125,7 @@ return {
 			},
 			"williamboman/mason-lspconfig.nvim",
 			"WhoIsSethDaniel/mason-tool-installer.nvim",
+			{ "yioneko/nvim-vtsls", ft = { "typescript", "typescriptreact" } },
 			{ "folke/neodev.nvim", ft = { "lua" }, opts = {} },
 		},
 		keys = {
@@ -171,6 +172,7 @@ return {
 				html = {},
 				marksman = {},
 				dockerls = {},
+				vtsls = {},
 				docker_compose_language_service = {},
 				tailwindcss = {
 					cmd = { "tailwindcss-language-server", "--stdio" },
@@ -228,6 +230,12 @@ return {
 
 						if server_name == "tsserver" then
 							-- using vtsls instead
+							return
+						end
+
+						if server_name == "vtsls" then
+							local vtsls = require("vtsls")
+							lspconfig.vtsls.setup(vtsls.lspconfig)
 							return
 						end
 

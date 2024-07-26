@@ -62,7 +62,7 @@ function ld
     ls -l --sort=date --ignore-glob="node_modules" -D --time-style=relative $argv
 end
 function lt
-    exa --tree -m --git --level=2 --ignore-glob="node_modules" $argv
+    eza --tree -m --git --level=2 --ignore-glob="node_modules" $argv
 end
 
 
