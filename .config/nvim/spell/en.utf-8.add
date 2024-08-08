@@ -1231,3 +1231,11 @@ in-term
 dueDate
 payDate
 companyId
+fixedInterestPeriodType
+maturityDateUnadjusted
+datepicker
+principalValueDate
+saturday
+consistent-type-assertions
+eslint-disable-line
+dot-notation

@@ -46,6 +46,7 @@ local setup_keymaps = function(client, bufnr)
 	end
 
 	nmap("gD", vim.lsp.buf.declaration, "[G]o to [D]eclaration")
+	nmap("gd", vim.lsp.buf.definition, "[G]o to [D]efinition")
 	nmap("gi", vim.lsp.buf.implementation, "[G]o to [I]mplementation")
 	nmap("gr", vim.lsp.buf.references, "[G]o to [R]eferences")
 	nmap("<C-k>", vim.lsp.buf.signature_help, "Signature Help")
@@ -54,11 +55,10 @@ local setup_keymaps = function(client, bufnr)
 	nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
 	nmap("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
 
-	if client.name == "tsserver" then
-		nmap("<leader>rf", ":TSLspRenameFile<cr>", "[R]ename [F]ile")
+	if client.name == "typescript-tools" then
+		nmap("<leader>mi", ":TSToolsAddMissingImports<cr>", "[M]issing [I]mports")
+		nmap("<leader>ui", ":TSToolsRemoveUnusedImport<cr>", "Remove [U]nused [I]mports")
 	end
-
-	nmap("gd", vim.lsp.buf.definition, "[G]o to [D]efinition")
 end
 
 local on_attach = function(client, bufnr)
@@ -84,6 +84,7 @@ return {
 				},
 				formatters_by_ft = {
 					html = web_formatters,
+					css = web_formatters,
 					javascript = web_formatters,
 					javascriptreact = web_formatters,
 					["javascript.jsx"] = web_formatters,
@@ -110,6 +111,10 @@ return {
 				end,
 			})
 		end,
+	},
+	{
+		"pmizio/typescript-tools.nvim",
+		requires = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig" },
 	},
 	{
 		"neovim/nvim-lspconfig",
@@ -216,7 +221,7 @@ return {
 
 			local ensure_installed = vim.tbl_keys(servers or {})
 			vim.list_extend(ensure_installed, {
-				"vtsls",
+				-- "vtsls",
 				"stylua",
 				"biome",
 				"tsserver",
@@ -234,13 +239,13 @@ return {
 						local settings = server.settings or {}
 
 						if server_name == "tsserver" then
-							-- using vtsls instead
-							return
-						end
-
-						if server_name == "vtsls" then
-							local vtsls = require("vtsls")
-							lspconfig.vtsls.setup(vtsls.lspconfig)
+							local typescript_tools = require("typescript-tools")
+							typescript_tools.setup({
+								on_attach = on_attach,
+								capabilities = capabilities,
+								settings = settings,
+								root_dir = lspconfig.util.root_pattern("tsconfig.json"),
+							})
 							return
 						end
 
