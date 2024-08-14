@@ -54,11 +54,6 @@ local setup_keymaps = function(client, bufnr)
 	nmap("gtd", vim.lsp.buf.type_definition, "[G]o to [T]ype [D]efinition")
 	nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
 	nmap("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
-
-	if client.name == "typescript-tools" then
-		nmap("<leader>mi", ":TSToolsAddMissingImports<cr>", "[M]issing [I]mports")
-		nmap("<leader>ui", ":TSToolsRemoveUnusedImport<cr>", "Remove [U]nused [I]mports")
-	end
 end
 
 local on_attach = function(client, bufnr)
@@ -111,10 +106,6 @@ return {
 				end,
 			})
 		end,
-	},
-	{
-		"pmizio/typescript-tools.nvim",
-		requires = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig" },
 	},
 	{
 		"neovim/nvim-lspconfig",
@@ -183,6 +174,9 @@ return {
 				marksman = {},
 				dockerls = {},
 				vtsls = {},
+				tsserver = {
+					enabled = false,
+				},
 				docker_compose_language_service = {},
 				tailwindcss = {
 					cmd = { "tailwindcss-language-server", "--stdio" },
@@ -221,7 +215,7 @@ return {
 
 			local ensure_installed = vim.tbl_keys(servers or {})
 			vim.list_extend(ensure_installed, {
-				-- "vtsls",
+				"vtsls",
 				"stylua",
 				"biome",
 				"tsserver",
@@ -237,15 +231,7 @@ return {
 					function(server_name)
 						local server = servers[server_name] or {}
 						local settings = server.settings or {}
-
-						if server_name == "tsserver" then
-							local typescript_tools = require("typescript-tools")
-							typescript_tools.setup({
-								on_attach = on_attach,
-								capabilities = capabilities,
-								settings = settings,
-								root_dir = lspconfig.util.root_pattern("tsconfig.json"),
-							})
+						if server.enabled == false then
 							return
 						end
 
