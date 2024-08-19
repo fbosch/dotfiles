@@ -173,7 +173,16 @@ return {
 				html = {},
 				marksman = {},
 				dockerls = {},
-				vtsls = {},
+				vtsls = {
+					filetypes = {
+						"javascript",
+						"javascriptreact",
+						"javascript.jsx",
+						"typescript",
+						"typescriptreact",
+						"typescript.tsx",
+					},
+				},
 				tsserver = {
 					enabled = false,
 				},
