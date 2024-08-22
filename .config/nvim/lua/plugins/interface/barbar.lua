@@ -8,7 +8,7 @@ return {
 		{
 			mode = { "n" },
 			"<leader>x",
-			":only <bar> :BufferCloseAllButCurrentOrPinned<cr>",
+			":only <bar> :BufferCloseAllButVisible<cr>",
 			desc = "close all but currentl active buffer or pinned buffers",
 			silent = true,
 		},

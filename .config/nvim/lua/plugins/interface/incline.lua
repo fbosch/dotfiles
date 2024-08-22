@@ -7,9 +7,6 @@ return {
 		vim.api.nvim_set_hl(0, "InclineNormal", { bg = "NONE" })
 		vim.api.nvim_set_hl(0, "InclineNormalNC", { bg = "NONE" })
 		require("incline").setup({
-			hide = {
-				focused_win = true,
-			},
 			highlight = {
 				groups = {
 					InclineNormal = {

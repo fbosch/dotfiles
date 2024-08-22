@@ -88,6 +88,7 @@ return {
 			fzf.live_grep_native({
 				rg_glob = true,
 				exec_empty_query = false,
+				resume = true,
 				rg_opts = combined_options,
 			})
 		end, {})

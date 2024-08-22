@@ -4,6 +4,8 @@ local opts = { noremap = true, silent = true }
 -- disable
 map("n", "<Space>", "<NOP>", opts)
 
+map("v", "<leader>dc", "<CMD>DiffClip<CR>", opts)
+
 -- disable arrow keys in insert mode
 map("i", "<Up>", "<NOP>", opts)
 map("i", "<Down>", "<NOP>", opts)
