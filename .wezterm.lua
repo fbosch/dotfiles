@@ -181,9 +181,6 @@ if not is_windows then
 	wezterm.on("update-right-status", function(window, pane)
 		local date = wezterm.strftime("(%Y-%m-%d) %a %b %-d ")
 		local time = wezterm.strftime("%H:%M")
-		-- local hour = tonumber(wezterm.strftime("%H"))
-		-- local clock_icon = Get_hour_icon(hour)
-
 		local status = {
 			{ Foreground = { Color = "#7c7c7c" } },
 			{ Text = date },
@@ -199,8 +196,7 @@ if not is_windows then
 		if wday ~= 1 or wday ~= 7 then
 			local first_login = pane:get_user_vars().first_login
 			local calculated_hours = calculate_hour_difference(first_login, wezterm.strftime("%H:%M:%S"))
-			print(calculated_hours)
-			local hours_worked = calculated_hours and math.ceil(calculated_hours) or 0
+			local hours_worked = calculated_hours or 0
 
 			if hours_worked > 0 and hours_worked < 10 then
 				local icon = ""
@@ -221,7 +217,7 @@ if not is_windows then
 					icon = wezterm.nerdfonts.fa_hourglass_start
 					table.insert(status, { Foreground = { Color = "#999999" } })
 				end
-				local hours_string = string.format("%.1f", math.floor(hours_worked * 2 + 0.5) / 2)
+				local hours_string = string.format("%.1f", hours_worked)
 				hours_string = string.gsub(hours_string, "%.0", "")
 				table.insert(status, { Text = icon .. " " .. hours_string .. " " })
 			end
