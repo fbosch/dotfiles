@@ -186,6 +186,9 @@ return {
 				tsserver = {
 					enabled = false,
 				},
+				ts_ls = {
+					enabled = false,
+				},
 				docker_compose_language_service = {},
 				tailwindcss = {
 					cmd = { "tailwindcss-language-server", "--stdio" },
