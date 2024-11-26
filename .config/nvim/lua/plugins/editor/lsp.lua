@@ -126,7 +126,12 @@ return {
 			},
 			"williamboman/mason-lspconfig.nvim",
 			"WhoIsSethDaniel/mason-tool-installer.nvim",
-			{ "yioneko/nvim-vtsls", ft = { "typescript", "typescriptreact" } },
+			{
+				"pmizio/typescript-tools.nvim",
+				dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig" },
+				opts = {},
+			},
+			{ "yioneko/nvim-vtsls", ft = { "typescript", "typescriptreact" }, enabled = false },
 			{ "folke/neodev.nvim", ft = { "lua" }, opts = {} },
 		},
 		keys = {
@@ -145,8 +150,14 @@ return {
 
 			local lspconfig = require("lspconfig")
 
-			local capabilities = vim.lsp.protocol.make_client_capabilities()
-			capabilities = vim.tbl_deep_extend("force", capabilities, require("cmp_nvim_lsp").default_capabilities())
+			local capabilities = vim.tbl_deep_extend("force", vim.lsp.protocol.make_client_capabilities(), {
+				workspace = {
+					didChangeWatchedFiles = {
+						dynamicRegistration = false,
+					},
+				},
+			})
+			capabilities = vim.tbl_deep_extend("force", require("cmp_nvim_lsp").default_capabilities(), capabilities)
 			capabilities.textDocument.foldingRange = {
 				dynamicRegistration = false,
 				lineFoldingOnly = true,
@@ -174,6 +185,7 @@ return {
 				marksman = {},
 				dockerls = {},
 				vtsls = {
+					enabled = false,
 					filetypes = {
 						"javascript",
 						"javascriptreact",
@@ -184,7 +196,7 @@ return {
 					},
 				},
 				tsserver = {
-					enabled = false,
+					enabled = true,
 				},
 				ts_ls = {
 					enabled = false,
