@@ -16,4 +16,4 @@ set -U FZF_PREVIEW_FILE_CMD "bat --paging=never --color=always --style=numbers -
 set -U FZF_ENABLE_OPEN_PREVIEW 1
 set -U FZF_PREVIEW_DIR_CMD lt
 set -gx COREPACK_ENABLE_STRICT 0
-set -U nvm_default_version "20.14.0"
+set -U nvm_default_version 20

@@ -44,7 +44,10 @@ return {
 					end
 					for name, icon in pairs(icons) do
 						if tonumber(signs[name]) and signs[name] > 0 then
-							table.insert(labels, { icon .. " " .. signs[name] .. " ", group = "Diff" .. name })
+							table.insert(labels, {
+								icon .. " " .. signs[name] .. " ",
+								group = "GitSigns" .. name,
+							})
 						end
 					end
 					if #labels > 0 then

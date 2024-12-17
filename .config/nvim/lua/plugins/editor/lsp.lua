@@ -128,10 +128,21 @@ return {
 			"WhoIsSethDaniel/mason-tool-installer.nvim",
 			{
 				"pmizio/typescript-tools.nvim",
+				ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
 				dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig" },
-				opts = {},
+				config = function()
+					require("typescript-tools").setup({
+						on_attach = on_attach,
+						separate_diagnostic_server = true,
+						publish_diagnostic_on = "insert_leave",
+						complete_function_calls = false,
+						jsx_close_tag = {
+							enable = false,
+							filetypes = { "javascriptreact", "typescriptreact" },
+						},
+					})
+				end,
 			},
-			{ "yioneko/nvim-vtsls", ft = { "typescript", "typescriptreact" }, enabled = false },
 			{ "folke/neodev.nvim", ft = { "lua" }, opts = {} },
 		},
 		keys = {
@@ -184,19 +195,8 @@ return {
 				html = {},
 				marksman = {},
 				dockerls = {},
-				vtsls = {
-					enabled = false,
-					filetypes = {
-						"javascript",
-						"javascriptreact",
-						"javascript.jsx",
-						"typescript",
-						"typescriptreact",
-						"typescript.tsx",
-					},
-				},
 				tsserver = {
-					enabled = true,
+					enabled = false,
 				},
 				ts_ls = {
 					enabled = false,
