@@ -130,6 +130,7 @@ return {
 				"pmizio/typescript-tools.nvim",
 				ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
 				dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig" },
+				enabled = false,
 				config = function()
 					require("typescript-tools").setup({
 						on_attach = on_attach,
@@ -196,10 +197,10 @@ return {
 				marksman = {},
 				dockerls = {},
 				tsserver = {
-					enabled = false,
+					enabled = true,
 				},
 				ts_ls = {
-					enabled = false,
+					enabled = true,
 				},
 				docker_compose_language_service = {},
 				tailwindcss = {
