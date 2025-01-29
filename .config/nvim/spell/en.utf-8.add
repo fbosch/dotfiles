@@ -1307,3 +1307,9 @@ ClientConfig
 ClientConfiguration
 getCookie
 server-side
+Etableringsomkostninger
+principalAmount
+FixedInterest
+averageDuration
+isDirty
+isSubmitted

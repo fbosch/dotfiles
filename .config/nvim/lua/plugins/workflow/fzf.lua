@@ -48,11 +48,11 @@ return {
 				hl = { border = "rounded" },
 				preview = { "bat_async", flip_columns = 200 },
 			},
-			previewers = {
-				builtin = {
-					hl_cursorline = "IncSearch", -- cursor line highlight
-				},
-			},
+			-- previewers = {
+			-- 	builtin = {
+			-- 		hl_cursorline = "IncSearch", -- cursor line highlight
+			-- 	},
+			-- },
 			keymap = {
 				builtin = {
 					["C-k"] = "preview-page-up",
