@@ -48,14 +48,50 @@ map("v", "<A-j>", ":m '>+1<CR>gv=gv", opts)
 map("v", "<A-k>", ":m '<-2<CR>gv=gv", opts)
 
 -- auto switch to newly created splits
-map("n", "<C-W>v", ":vsplit<CR> <bar> :wincmd l<CR>", opts)
-map("n", "<C-W>s", ":split<CR> <bar> :wincmd j<CR>", opts)
+map(
+	"n",
+	"<C-W>v",
+	(
+		vim.g.vscode and ":lua require('vscode').call('workbench.action.splitEditor')<CR>"
+		or ":vsplit<CR> <bar> :wincmd l<CR>"
+	),
+	opts
+)
+map(
+	"n",
+	"<C-W>s",
+	(
+		vim.g.vscode and ":lua require('vscode').call('workbench.action.splitEditorDown')<CR>"
+		or ":split<CR> <bar> :wincmd j<CR>"
+	),
+	opts
+)
 
 -- remap split navigation to CTRL + hjkl
-map("n", "<S-h>", ":wincmd h<CR>", opts)
-map("n", "<S-j>", ":wincmd j<CR>", opts)
-map("n", "<S-k>", ":wincmd k<CR>", opts)
-map("n", "<S-l>", ":wincmd l<CR>", opts)
+map(
+	"n",
+	"<S-h>",
+	(vim.g.vscode and ":lua require('vscode').call('workbench.action.focusPreviousGroup')<CR>" or ":wincmd h<CR>"),
+	opts
+)
+map(
+	"n",
+	"<S-j>",
+	(vim.g.vscode and ":lua require('vscode').call('workbench.action.focusNextGroup')<CR>" or ":wincmd j<CR>"),
+	opts
+)
+map(
+	"n",
+	"<S-k>",
+	(vim.g.vscode and ":lua require('vscode').call('workbench.action.focusPreviousGroup')<CR>" or ":wincmd k<CR>"),
+	opts
+)
+map(
+	"n",
+	"<S-l>",
+	(vim.g.vscode and ":lua require('vscode').call('workbench.action.focusNextGroup')<CR>" or ":wincmd l<CR>"),
+	opts
+)
 
 -- remap split manipulation to SHIFT + CTRL + hjkl
 map("n", "<C-S-h>", ":wincmd H<CR>", opts)
@@ -69,3 +105,18 @@ map("n", "<leader>0", ":b#<CR>", opts) --  previously active buffer
 
 -- delete backwards to start of previous line
 map("n", "<leader>db", "d?$<cr>", opts)
+
+if vim.g.vscode then
+	map("n", "<C-l>", ":lua require('vscode').call('workbench.action.nextEditor')<CR>", opts)
+	map("n", "<C-h>", ":lua require('vscode').call('workbench.action.previousEditor')<CR>", opts)
+	map(
+		"n",
+		"<leader>x",
+		"<CMD>lua require('vscode').call('workbench.action.closeOtherEditors')<CR><BAR><CMD>lua require('vscode').call('workbench.action.closeEditorsInOtherGroups')<CR><BAR><CMD>lua require('vscode').call('workbench.action.closeSidebar')<CR>",
+		opts
+	)
+	map("n", "<leader>e", ":lua require('vscode').call('workbench.action.toggleSidebarVisibility')<CR>", opts)
+	map("i", "<Esc>", "<ESC><BAR><CDM>lua require('vscode').call('vscode-neovim.escape')<CR>", opts)
+	map("n", "C-p", ":lua require('vscode').call('workbench.action.quickOpen')<CR>", opts)
+	map("n", "<leader>lg", ":lua require('vscode').call('workbench.action.findInFiles')<CR>", opts)
+end

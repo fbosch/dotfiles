@@ -130,7 +130,7 @@ return {
 				"pmizio/typescript-tools.nvim",
 				ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
 				dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig" },
-				enabled = false,
+				enabled = true,
 				config = function()
 					require("typescript-tools").setup({
 						on_attach = on_attach,
@@ -197,10 +197,10 @@ return {
 				marksman = {},
 				dockerls = {},
 				tsserver = {
-					enabled = true,
+					enabled = false,
 				},
 				ts_ls = {
-					enabled = true,
+					enabled = false,
 				},
 				docker_compose_language_service = {},
 				tailwindcss = {
@@ -264,9 +264,11 @@ return {
 							lspconfig.eslint.setup({
 								on_attach = on_attach,
 								capabilities = capabilities,
-								-- cmd = { "eslint_d", "--stdio" },
 								settings = settings,
 								root_dir = lspconfig.util.root_pattern(
+									"eslint.config.js",
+									"eslint.config.cjs",
+									"eslint.config.mjs",
 									".eslintrc.js",
 									".eslintrc.json",
 									".eslintrc",

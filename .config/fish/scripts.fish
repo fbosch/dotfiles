@@ -57,6 +57,7 @@ end
 function first_login_of_the_day
     set silent (string match -- "--silent" $argv)
     set current_date (date "+%y-%m-%d")
+    echo $current_date
 
     set cached_time (bat_fast "/tmp/.first_login/$current_date" 2> /dev/null)
 
@@ -69,6 +70,7 @@ function first_login_of_the_day
         echo $cached_time
         return
     end
+
     set login_item (log show --style syslog --predicate 'process == "loginwindow"' --debug --info --last 8h | rg --max-count=1 "LUIAuthenticationServiceProvider deactivateWithContext:]_block_invoke")
 
     # extract the date from the log

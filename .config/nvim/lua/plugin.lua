@@ -7,13 +7,19 @@ end
 vim.opt.rtp:prepend(vim.env.LAZY or lazypath)
 vim.opt.loadplugins = true
 
+local spec = {
+	{ import = "plugins" },
+}
+
+if not vim.g.vscode then
+	table.insert(spec, { import = "plugins/interface" })
+	table.insert(spec, { import = "plugins/workflow" })
+end
+
+table.insert(spec, { import = "plugins/editor" })
+
 require("lazy").setup({
-	spec = {
-		{ import = "plugins" },
-		{ import = "plugins/editor" },
-		{ import = "plugins/interface" },
-		{ import = "plugins/workflow" },
-	},
+	spec = spec,
 	change_detection = { notify = false },
 	ui = { border = "rounded" },
 	performance = {

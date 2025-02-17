@@ -3,6 +3,7 @@ return {
 	dependencies = { "rktjmp/lush.nvim" },
 	priority = 10000,
 	event = "VeryLazy",
+	enabled = not vim.g.vscode,
 	config = function()
 		vim.g.zenbones_solid_line_nr = true
 
