@@ -70,7 +70,7 @@ function first_login_of_the_day
         return
     end
 
-    set login_item (log show --start "$(date '+%Y-%m-%d 00:00:00')" --predicate 'process == "loginwindow"' | rg -i "success" | head -1)
+    set login_item (log show --start "$(date '+%Y-%m-%d 07:30:00')" --predicate 'process == "loginwindow"' | rg -i "success" | head -1)
 
     # extract the date from the log
     set date (echo $login_item | rg -o -N '\d{4}-\d{2}-\d{2}\b' )

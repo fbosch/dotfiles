@@ -115,7 +115,12 @@ if vim.g.vscode then
 		"<CMD>lua require('vscode').call('workbench.action.closeOtherEditors')<CR><BAR><CMD>lua require('vscode').call('workbench.action.closeEditorsInOtherGroups')<CR><BAR><CMD>lua require('vscode').call('workbench.action.closeSidebar')<CR>",
 		opts
 	)
-	map("n", "<leader>e", ":lua require('vscode').call('workbench.action.toggleSidebarVisibility')<CR>", opts)
+	map(
+		"n",
+		"<leader>e",
+		":lua require('vscode').call('workbench.action.toggleSidebarVisibility')<CR>:lua require('vscode').call('workbench.action.focusSideBar')<CR>",
+		opts
+	)
 	map("i", "<Esc>", "<ESC><BAR><CDM>lua require('vscode').call('vscode-neovim.escape')<CR>", opts)
 	map("n", "C-p", ":lua require('vscode').call('workbench.action.quickOpen')<CR>", opts)
 	map("n", "<leader>lg", ":lua require('vscode').call('workbench.action.findInFiles')<CR>", opts)
