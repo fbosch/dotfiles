@@ -1,5 +1,6 @@
 # Programs
 alias nvim 'nvim -n -i NONE --noplugin'
+alias code cursor
 abbr n nvim
 abbr v nvim
 

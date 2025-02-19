@@ -7,6 +7,7 @@ set -gx EDITOR nvim
 set -gx NVIM_INIT "$HOME/.config/nvim/init.lua"
 set -gx LS_COLORS "(vivid generate ~/.config/vivid/themes/zenwritten-dark.yml)"
 set -x RIPGREP_CONFIG_PATH "$HOME/.ripgreprc"
+set -gx PATH $HOME/.cargo/bin $PATH
 set -U FZF_DEFAULT_COMMAND fd
 # set -U FZF_CTRL_T_COMMAND "$FZF_DEFAULT_COMMAND"
 # set -U FZF_OPEN_COMMAND "$FZF_DEFAULT_COMMAND"
