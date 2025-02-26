@@ -17,14 +17,17 @@ return {
 		config = true,
 	},
 	{
-		"folke/snacks.nvim",
-		opts = {
-			animate = {},
-		},
-	},
-	{
 		"tzachar/local-highlight.nvim",
-		event = { "BufEnter", "BufRead" },
+		event = { "VeryLazy", "BufWinEnter" },
+		dependencies = {
+			{
+				"folke/snacks.nvim",
+				opts = {
+					animate = {},
+					util = {},
+				},
+			},
+		},
 		config = function()
 			require("local-highlight").setup({
 				hlgroup = "LocalHighlight",
