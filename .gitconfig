@@ -2,8 +2,16 @@
   name = Frederik Bosch
   email = 6979916+fbosch@users.noreply.github.com
 
+[includeif "gitdir:~/Projects/KommuneKredit.Frontend/"]
+    path = ~/Projects/KommuneKredit.Frontend/.gitconfig
+
 [core]
   pager = delta --diff-so-fancy
+	untrackedcache = true
+	fsmonitor = true
+
+[status]
+  relativePaths = true
 
 [push]
   default = current
@@ -65,3 +73,9 @@
   chekcout = checkout
   brnach = branch
 
+[rerere]
+	enabled = true
+[gpp]
+	format = ssh
+[maintenance]
+	repo = /Users/fbb/Projects/KommuneKredit.Frontend/main

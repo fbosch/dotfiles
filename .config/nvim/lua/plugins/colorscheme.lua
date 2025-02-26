@@ -16,6 +16,8 @@ return {
 		local colors = require("colors")
 		local hl = vim.api.nvim_set_hl
 
+		hl(0, "LocalHighlight", { bg = colors.gray })
+
 		hl(0, "NotifyBackground", { bg = colors.background })
 		hl(0, "TreesitterContext", { bg = colors.dark_gray })
 		hl(0, "SpellBad", { undercurl = true, sp = colors.mispell_red })

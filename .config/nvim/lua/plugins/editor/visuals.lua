@@ -17,6 +17,21 @@ return {
 		config = true,
 	},
 	{
+		"folke/snacks.nvim",
+		opts = {
+			animate = {},
+		},
+	},
+	{
+		"tzachar/local-highlight.nvim",
+		event = { "BufEnter", "BufRead" },
+		config = function()
+			require("local-highlight").setup({
+				hlgroup = "LocalHighlight",
+			})
+		end,
+	},
+	{
 		"smjonas/live-command.nvim",
 		event = "VeryLazy",
 		priority = 10,

@@ -3,6 +3,7 @@ alias nvim 'nvim -n -i NONE --noplugin'
 alias code cursor
 abbr n nvim
 abbr v nvim
+abbr p pnpm
 
 abbr bup 'brew upgrade'
 function vimdiff
@@ -79,6 +80,7 @@ abbr g git
 abbr gs 'git status'
 abbr gd 'git diff'
 abbr gp 'git push'
+abbr gpn 'git push --no-verify'
 abbr gpl 'git pull'
 abbr gplr 'git pull --rebase'
 abbr gf 'git fetch'
@@ -95,6 +97,7 @@ abbr gpor 'git pull origin --rebase'
 abbr gdorig 'find . -name \*.orig -delete'
 abbr cm 'aicommits --type conventional -x "pnpm-lock.yaml"'
 abbr gcm --set-cursor 'git commit -m "%"'
+abbr gcmn --set-cursor 'git commit -m "%" --no-verify'
 abbr gca 'git commit --amend --no-edit'
 abbr gmt 'git mergetool'
 abbr grhh 'git reset --hard HEAD'

@@ -13,6 +13,39 @@ return {
 		opts = {}, -- required even with default settings, since it calls `setup()`
 	},
 	{
+
+		"caliguIa/zendiagram.nvim",
+		event = "BufRead",
+		enabled = false,
+		keys = {
+			{
+				"<leader>zd",
+				"<cmd>lua require('zendiagram').open()<cr>",
+				mode = { "n" },
+			},
+		},
+		config = function()
+			require("zendiagram").setup({
+				-- Below are the default values
+				header = "Diagnostics", -- Header text
+				max_width = 50, -- The maximum width of the float window
+				min_width = 25, -- The minimum width of the float window
+				max_height = 10, -- The maximum height of the float window
+				border = "single", -- Border style. Can be single, double, rounded, solid, shadow.
+				position = {
+					row = 3, -- The offset from the top of the screen
+					col_offset = 2, -- The offset from the right of the screen
+				},
+				highlights = { -- Highlight groups for each section of the float
+					ZendiagramHeader = "Error", -- Accepts a highlight group name or a table of highlight group opts
+					ZendiagramSeparator = "NonText",
+					ZendiagramText = "Normal",
+					ZendiagramKeyword = "Keyword",
+				},
+			})
+		end,
+	},
+	{
 		"cshuaimin/ssr.nvim",
 		opts = {
 			adjust_window = true,
