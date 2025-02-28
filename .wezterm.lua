@@ -55,19 +55,73 @@ config.tab_bar_at_bottom = true
 config.use_fancy_tab_bar = false
 config.hide_tab_bar_if_only_one_tab = false
 
--- This function returns the suggested title for a tab.
--- It prefers the title that was set via `tab:set_title()`
--- or `wezterm cli set-tab-title`, but falls back to the
--- title of the active pane in that tab.
-local function Tab_title(tab_info)
-	local title = tab_info.tab_title
-	-- if the tab title is explicitly set, take that
-	if title and #title > 0 then
-		return title
+local function truncate_path(path)
+	-- Normalize path separators
+	path = path:gsub("\\", "/")
+
+	-- Split path into components
+	local parts = {}
+	for part in path:gmatch("[^/]+") do
+		table.insert(parts, part)
 	end
-	-- Otherwise, use the title from the active pane
-	-- in that tab
-	return tab_info.active_pane.title
+
+	-- Git repository root detection
+	local git_root_index = nil
+	for i = #parts, 1, -1 do
+		if parts[i] == ".git" then
+			git_root_index = i - 1
+			break
+		end
+	end
+
+	-- Truncation logic
+	local max_components = 3
+	local start_index = 1
+
+	-- If in a git repository, adjust starting point
+	if git_root_index then
+		start_index = math.max(1, git_root_index - max_components + 1)
+	else
+		-- For non-git paths, start from the end
+		start_index = math.max(1, #parts - max_components + 1)
+	end
+
+	-- Construct truncated path
+	local truncated_parts = {}
+	local ellipsis_added = false
+
+	for i = start_index, #parts do
+		-- Add ellipsis before git root or first meaningful component
+		if not ellipsis_added and i > start_index then
+			table.insert(truncated_parts, "…")
+			ellipsis_added = true
+		end
+
+		table.insert(truncated_parts, parts[i])
+	end
+
+	-- Handle special cases
+	if #truncated_parts == 0 then
+		return path
+	end
+
+	return table.concat(truncated_parts, "/")
+end
+
+local function Tab_title(tab_info)
+	-- Early return for explicitly set tab title
+	if tab_info.tab_title and #tab_info.tab_title > 0 then
+		return tab_info.tab_title
+	end
+
+	-- Ensure active pane and title exist
+	local title = tab_info.active_pane and tab_info.active_pane.title or ""
+	if #title == 0 then
+		return "Untitled"
+	end
+
+	-- Truncate path
+	return truncate_path(title)
 end
 
 function string.starts(String, Start)
@@ -319,58 +373,27 @@ else
 end
 
 function Get_hour_icon(hour)
-	local clock_icon = ""
-	if hour >= 0 and hour < 1 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_one
-	elseif hour < 2 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_two
-	elseif hour < 3 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_three
-	elseif hour < 4 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_four
-	elseif hour < 5 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_five
-	elseif hour < 6 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_six
-	elseif hour < 7 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_seven
-	elseif hour < 8 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_eight
-	elseif hour < 9 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_nine
-	elseif hour < 10 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_ten
-	elseif hour < 11 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_eleven
-	elseif hour < 12 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_twelve
-	elseif hour < 13 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_one
-	elseif hour < 14 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_two
-	elseif hour < 15 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_three
-	elseif hour < 16 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_four
-	elseif hour < 17 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_five
-	elseif hour < 18 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_six
-	elseif hour < 19 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_seven
-	elseif hour < 20 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_eight
-	elseif hour < 21 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_nine
-	elseif hour < 22 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_ten
-	elseif hour < 23 then
-		clock_icon = wezterm.nerdfonts.md_clock_time_eleven
-	else
-		clock_icon = wezterm.nerdfonts.md_clock_time_twelve
-	end
+	-- Use integer division and modulo to simplify the logic
+	local hour_12 = hour % 12
+	hour_12 = hour_12 == 0 and 12 or hour_12 -- Convert 0 to 12
 
-	return clock_icon
+	-- Use a single lookup table to reduce repetitive code
+	local clock_icons = {
+		[1] = wezterm.nerdfonts.md_clock_time_one,
+		[2] = wezterm.nerdfonts.md_clock_time_two,
+		[3] = wezterm.nerdfonts.md_clock_time_three,
+		[4] = wezterm.nerdfonts.md_clock_time_four,
+		[5] = wezterm.nerdfonts.md_clock_time_five,
+		[6] = wezterm.nerdfonts.md_clock_time_six,
+		[7] = wezterm.nerdfonts.md_clock_time_seven,
+		[8] = wezterm.nerdfonts.md_clock_time_eight,
+		[9] = wezterm.nerdfonts.md_clock_time_nine,
+		[10] = wezterm.nerdfonts.md_clock_time_ten,
+		[11] = wezterm.nerdfonts.md_clock_time_eleven,
+		[12] = wezterm.nerdfonts.md_clock_time_twelve,
+	}
+
+	return clock_icons[hour_12]
 end
 
 return config
