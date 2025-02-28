@@ -69,7 +69,7 @@ return {
 		} },
 		cmd = { "Sad" },
 		opts = {},
-		enabled = false,
+		enabled = true,
 	},
 	{
 		-- json editing tools

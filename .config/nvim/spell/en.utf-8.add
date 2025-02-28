@@ -1340,3 +1340,7 @@ startDate
 Rentebinding
 partialredemptiondate
 T00
+LazyComponent
+lazyWithPreload
+MyComponent
+TanStack

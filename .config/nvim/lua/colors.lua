@@ -11,6 +11,7 @@ M.darkest_gray = "#1d1d1d"
 
 M.mispell_red = "#A8334C"
 M.match_blue = "#6e8aa5"
+M.search_backdrop = "#797979"
 
 M.red = "#DE6E7C"
 M.orange = "#D68C67"

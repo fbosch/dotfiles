@@ -66,7 +66,8 @@ return {
 		hl(0, "TreesitterContextBottom", { bg = colors.darkest_gray, underline = true, sp = colors.dark_gray })
 
 		-- leap
-		-- hl(0, "LeapMatch", { fg = colors.blue, underline = true })
-		-- hl(0, "LeapLabelPrimary", { fg = colors.purple, underline = true })
+		hl(0, "LeapMatch", { fg = colors.blue, underline = true })
+		hl(0, "LeapLabelPrimary", { fg = colors.purple, underline = true })
+		hl(0, "LeapBackdrop", { fg = colors.search_backdrop })
 	end,
 }
