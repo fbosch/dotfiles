@@ -235,11 +235,17 @@ if not is_windows then
 	wezterm.on("update-right-status", function(window, pane)
 		local date = wezterm.strftime("(%Y-%m-%d) %a %b %-d ")
 		local time = wezterm.strftime("%H:%M")
+		local week_number = os.date("%V")
+
 		local status = {
 			{ Foreground = { Color = "#7c7c7c" } },
 			{ Text = date },
 			{ Foreground = { Color = "#515151" } },
 			{ Text = "▏" },
+			{ Foreground = { Color = "#7c7c7c" } },
+			{ Text = wezterm.nerdfonts.cod_calendar .. " " .. tonumber(week_number) },
+			{ Foreground = { Color = "#515151" } },
+			{ Text = " ▏" },
 			{ Foreground = { Color = "#bbbbbb" } },
 			{ Text = time },
 			{ Foreground = { Color = "#515151" } },
