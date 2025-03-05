@@ -1,6 +1,5 @@
 return {
 	{ "tpope/vim-repeat", event = "BufRead" },
-	{ "kevinhwang91/nvim-bqf", ft = "qf", event = "BufRead" },
 	{ "smjonas/inc-rename.nvim", event = "BufRead", opts = {} },
 	{ "windwp/nvim-autopairs", event = { "InsertEnter" }, opts = {} },
 	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },

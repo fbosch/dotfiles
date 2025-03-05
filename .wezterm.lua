@@ -251,10 +251,10 @@ if not is_windows then
 			local first_login = pane:get_user_vars().first_login
 			local calculated_hours = calculate_hour_difference(first_login, wezterm.strftime("%H:%M:%S"))
 			local hours_worked = calculated_hours or 0
+			local icon = ""
+			table.insert(status, { Text = " " })
 
 			if hours_worked > 0 and hours_worked < 10 then
-				local icon = ""
-				table.insert(status, { Text = " " })
 				if hours_worked > 8 then
 					icon = wezterm.nerdfonts.fa_hourglass_o
 					table.insert(status, { Foreground = { Color = "#d79999" } })
@@ -273,6 +273,11 @@ if not is_windows then
 				end
 				local hours_string = string.format("%.1f", hours_worked)
 				hours_string = string.gsub(hours_string, "%.0", "")
+				table.insert(status, { Text = icon .. " " .. hours_string .. " " })
+			else
+				local hours_string = "-.-"
+				icon = wezterm.nerdfonts.fa_hourglass_start
+				table.insert(status, { Foreground = { Color = "#999999" } })
 				table.insert(status, { Text = icon .. " " .. hours_string .. " " })
 			end
 		end
