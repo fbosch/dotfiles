@@ -139,53 +139,53 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_wid
 
 	if string.starts(title, "nvim") then
 		table.insert(tab_title, { Foreground = { Color = "#54a23d" } })
-		table.insert(tab_title, { Text = "" })
+		table.insert(tab_title, { Text = wezterm.nerdfonts.linux_neovim })
 		title = string.gsub(title, "nvim", "")
 	end
 
 	if string.starts(title, "brew") then
 		table.insert(tab_title, { Foreground = { Color = "#c0a23d" } })
-		table.insert(tab_title, { Text = "" })
+		table.insert(tab_title, { Text = wezterm.nerdfonts.fa_beer })
 		title = string.gsub(title, "brew", "")
 	end
 
 	if string.starts(title, "fish") then
 		table.insert(tab_title, { Foreground = { Color = "#97bdde" } })
-		table.insert(tab_title, { Text = "" })
+		table.insert(tab_title, { Text = wezterm.nerdfonts.md_fish })
 		title = string.gsub(title, "fish", "")
 	end
 
 	if string.starts(title, "wsl") then
 		table.insert(tab_title, { Foreground = { Color = "#e95420" } })
-		table.insert(tab_title, { Text = "" })
+		table.insert(tab_title, { Text = wezterm.nerdfonts.cod_terminal_ubuntu })
 		title = string.gsub(title, "wsl.exe", "")
 		title = string.gsub(title, "wslhost.exe", "")
 	end
 
 	if string.starts(title, "cargo") then
 		table.insert(tab_title, { Foreground = { Color = "#CE412B" } })
-		table.insert(tab_title, { Text = "" })
+		table.insert(tab_title, { Text = wezterm.nerdfonts.md_language_rust })
 		title = string.gsub(title, "cargo", "")
 	end
 
 	if string.starts(title, "lazygit") then
 		table.insert(tab_title, { Foreground = { Color = "#e84e32" } })
-		table.insert(tab_title, { Text = "" })
+		table.insert(tab_title, { Text = wezterm.nerdfonts.md_git })
 		title = string.gsub(title, "lazygit", "")
 	end
 
 	if string.starts(title, "git") then
 		table.insert(tab_title, { Foreground = { Color = "#e84e32" } })
 		if string.starts(title, "git pull") then
-			table.insert(tab_title, { Text = "󰓂" })
+			table.insert(tab_title, { Text = wezterm.nerdfonts.cod_repo_pull })
 			title = string.gsub(title, "git pull", "")
 		end
 		if string.starts(title, "git commit") then
-			table.insert(tab_title, { Text = "󰜘" })
+			table.insert(tab_title, { Text = wezterm.nerdfonts.cod_repo_commit })
 			title = string.gsub(title, "git commit", "")
 		end
 		if string.starts(title, "git push") then
-			table.insert(tab_title, { Text = "" })
+			table.insert(tab_title, { Text = wezterm.nerdfonts.cod_repo_push })
 			title = string.gsub(title, "git push", "")
 		end
 	end
