@@ -14,7 +14,6 @@ function fish_greeting
     end
 end
 
-
 # Custom Function for a sudo (!!) replacement
 function sudo --description "replacement for 'sudo !!' command to run last command using sudo"
     if test "$argv" = !!

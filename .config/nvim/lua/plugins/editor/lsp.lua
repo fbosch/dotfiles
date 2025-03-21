@@ -196,9 +196,6 @@ return {
 				html = {},
 				marksman = {},
 				dockerls = {},
-				tsserver = {
-					enabled = false,
-				},
 				ts_ls = {
 					enabled = false,
 				},
@@ -239,19 +236,12 @@ return {
 			}
 
 			local ensure_installed = vim.tbl_keys(servers or {})
-			vim.list_extend(ensure_installed, {
-				"vtsls",
-				"stylua",
-				"biome",
-				"tsserver",
-				"prettier",
-				"prettierd",
-			})
-
 			require("mason-tool-installer").setup({ ensure_installed = ensure_installed })
 			require("mason").setup()
 
 			require("mason-lspconfig").setup({
+				ensure_installed = ensure_installed,
+				automatic_installation = false,
 				handlers = {
 					function(server_name)
 						local server = servers[server_name] or {}
@@ -261,6 +251,9 @@ return {
 						end
 
 						if server_name == "eslint" then
+							settings.experimental = {
+								useFlatConfig = true,
+							}
 							lspconfig.eslint.setup({
 								on_attach = on_attach,
 								capabilities = capabilities,

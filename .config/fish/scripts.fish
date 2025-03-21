@@ -34,7 +34,6 @@ function worktree_add
     echo (set_color green)"Worktree created and dependencies installed ✅"(set_color normal)
 end
 
-
 function latest_worktree
     echo (tail -n 1 /tmp/.recent-worktrees)
 end
@@ -49,9 +48,26 @@ function worktrees_clean
         set progress_percent (math "100 * $current_folder_index / $total_folders")
 
         echo -n (printf "Removing old worktrees: %.2f%%\r" $progress_percent)
-        rm -rf $subfolder
-        git branch --merged | egrep -v "$subfolder" | xargs --no-run-if-empty git branch -d
+
+        # Get the branch name from the folder path
+        set branch_name (basename "$folder")
+
+        # First, remove the worktree
+        git worktree remove "$folder" 2>/dev/null
+
+        # Then try to delete the branch
+        if git show-ref --verify --quiet "refs/heads/$branch_name"
+            git branch -D "$branch_name" 2>/dev/null
+        end
+
+        # Remove the physical folder if it still exists
+        if test -d "$folder"
+            rm -rf "$folder"
+        end
     end
+
+    # Prune any stale worktree references
+    git worktree prune
 end
 
 function first_login_of_the_day

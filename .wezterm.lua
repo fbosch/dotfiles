@@ -128,7 +128,7 @@ function string.starts(String, Start)
 	return string.sub(String, 1, string.len(Start)) == Start
 end
 
-config.status_update_interval = 1000
+config.status_update_interval = 10000
 wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_width)
 	local title = "" .. Tab_title(tab) .. " "
 

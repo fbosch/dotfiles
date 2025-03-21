@@ -66,6 +66,7 @@
 # automatically fix typos
 [alias]
   psuh = push
+  puhs = push
   pushj = push
   pul = pull
   comit = commit
@@ -75,7 +76,9 @@
 
 [rerere]
 	enabled = true
-[gpp]
-	format = ssh
 [maintenance]
 	repo = /Users/fbb/Projects/KommuneKredit.Frontend/main
+[gpg]
+	format = ssh
+; [commit]
+; 	gpgsign = true
