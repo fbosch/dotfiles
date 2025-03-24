@@ -2,6 +2,7 @@
 alias nvim 'nvim -n -i NONE --noplugin'
 alias code cursor
 abbr n nvim
+abbr lu 'nvim --headless +"Lazy! sync" +qa' # lazy update neovim plugins
 abbr v nvim
 abbr p pnpm
 
@@ -66,7 +67,6 @@ end
 function lt
     eza --tree -m --git --level=2 --ignore-glob="node_modules" $argv
 end
-
 
 alias lw 'cd (latest_worktree)'
 
