@@ -1,8 +1,9 @@
 return {
 	"nvim-telescope/telescope.nvim",
 	dependencies = {
-		"stevearc/dressing.nvim",
+		{ "stevearc/dressing.nvim", event = "VeryLazy" },
 	},
+	event = "VeryLazy",
 	cmd = { "Telescope" },
 	config = function()
 		local dressing = require("dressing")

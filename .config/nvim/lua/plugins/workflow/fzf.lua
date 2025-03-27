@@ -45,8 +45,10 @@ return {
 			winopts = {
 				height = 0.8,
 				width = 0.9,
-				hl = { border = "rounded" },
 				preview = { "bat_async", flip_columns = 200 },
+			},
+			hls = {
+				border = "FloatBorder",
 			},
 			-- previewers = {
 			-- 	builtin = {

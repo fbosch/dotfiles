@@ -3,6 +3,7 @@ alias nvim 'nvim -n -i NONE --noplugin'
 alias code cursor
 abbr n nvim
 abbr lu 'nvim --headless +"Lazy! sync" +qa' # lazy update neovim plugins
+abbr nwipe 'nvim --headless +"WipeAllSessions!" +qa'
 abbr v nvim
 abbr p pnpm
 

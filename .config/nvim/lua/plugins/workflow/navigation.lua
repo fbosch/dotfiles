@@ -2,6 +2,7 @@ return {
 	{ "tpope/vim-unimpaired", event = "VeryLazy" },
 	{
 		"jinh0/eyeliner.nvim",
+		event = "VeryLazy",
 		config = function()
 			local colors = require("colors")
 			require("eyeliner").setup({
