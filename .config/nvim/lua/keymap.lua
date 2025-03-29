@@ -67,6 +67,14 @@ map(
 	opts
 )
 
+-- Search for the word under the cursor and jump to the next match.
+vim.keymap.set("n", "<leader>fn", function()
+	local word = vim.fn.expand("<cword>")
+	vim.fn.setreg("/", "\\<" .. word .. "\\>")
+	vim.cmd("normal! l") -- move cursor right to avoid matching the current word
+	vim.cmd("normal! n") -- jump to the next occurrence
+end, { noremap = true, silent = true })
+
 -- remap split navigation to CTRL + hjkl
 map(
 	"n",

@@ -55,7 +55,7 @@ local setup_keymaps = function(client, bufnr)
 	nmap("gi", vim.lsp.buf.implementation, "[G]o to [I]mplementation")
 	nmap("gr", vim.lsp.buf.references, "[G]o to [R]eferences")
 	nmap("<C-k>", vim.lsp.buf.signature_help, "Signature Help")
-	nmap("<leader>k", vim.lsp.buf.hover, "Hover")
+	nmap("<leader>k", "<cmd>Lspsaga hover_doc<CR>", "Hover")
 	nmap("gtd", vim.lsp.buf.type_definition, "[G]o to [T]ype [D]efinition")
 	nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
 	nmap("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
@@ -140,12 +140,16 @@ return {
 						},
 						ui = {
 							border = "rounded",
+							winblend = 20,
 						},
 						definition = {
 							edit = "false",
 						},
 						symbol_in_winbar = {
 							enable = false,
+						},
+						hover = {
+							silent = true,
 						},
 					})
 				end,
