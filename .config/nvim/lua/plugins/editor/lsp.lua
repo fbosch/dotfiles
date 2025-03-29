@@ -47,6 +47,11 @@ local setup_keymaps = function(client, bufnr)
 
 	nmap("gD", vim.lsp.buf.declaration, "[G]o to [D]eclaration")
 	nmap("gd", vim.lsp.buf.definition, "[G]o to [D]efinition")
+	nmap("<leader>gd", function()
+		vim.cmd("vsplit")
+		vim.lsp.buf.definition()
+	end, "[G]o to [D]efinition in split")
+	nmap("<leader>pd", "<cmd>Lspsaga peek_definition<CR>", "[P]eek [D]efinition")
 	nmap("gi", vim.lsp.buf.implementation, "[G]o to [I]mplementation")
 	nmap("gr", vim.lsp.buf.references, "[G]o to [R]eferences")
 	nmap("<C-k>", vim.lsp.buf.signature_help, "Signature Help")
@@ -126,6 +131,22 @@ return {
 			},
 			"williamboman/mason-lspconfig.nvim",
 			"WhoIsSethDaniel/mason-tool-installer.nvim",
+			{
+				"nvimdev/lspsaga.nvim",
+				config = function()
+					require("lspsaga").setup({
+						lightbulb = {
+							enable = false,
+						},
+						ui = {
+							border = "rounded",
+						},
+						definition = {
+							edit = "false",
+						},
+					})
+				end,
+			},
 			{
 				"pmizio/typescript-tools.nvim",
 				ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
