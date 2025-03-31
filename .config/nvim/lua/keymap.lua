@@ -4,6 +4,7 @@ local opts = { noremap = true, silent = true }
 -- disable
 map("n", "<Space>", "<NOP>", opts)
 
+-- compare selection with clipboard
 map("v", "<leader>dc", "<CMD>DiffClip<CR>", opts)
 
 -- disable arrow keys in insert mode
@@ -18,9 +19,11 @@ map("n", "-", "<C-x>", opts)
 
 -- yank
 map("n", "<C-a>", "ggVG<CR>", opts)
--- paste last thing yanked(not system copied), not deleted
+
+-- paste last thing yanked (not system copied), not deleted
 map("n", ",p", '"0p', opts)
 map("n", ",P", '"0P', opts)
+
 -- yank current file
 map("n", "<leader>yf", ":%y<cr>", opts)
 
@@ -32,11 +35,15 @@ map("n", "<leader>rW", ":s/<C-R><C-W>//gI<left><left><left>", opts) -- on line
 map("n", "<leader>s", ":wall<CR>", opts)
 map("n", "<leader>S", ":wqa!<CR>", opts)
 
+-- quit
+map("n", "<leader>q", ":qa<CR>", opts)
+map("n", "<leader>Q", ":qa!<CR>", opts)
+
 -- easier indentation in visual mode
 map("v", "<", "<gv", opts)
 map("v", ">", ">gv", opts)
 
--- format
+-- format buffer
 map("n", "<leader>fb", ":lua vim.lsp.buf.format()<CR>", opts)
 
 -- move lines
@@ -46,6 +53,9 @@ map("i", "<A-j>", "<Esc>:m .+1<CR>==gi", opts)
 map("i", "<A-k>", "<Esc>:m .-2<CR>==gi", opts)
 map("v", "<A-j>", ":m '>+1<CR>gv=gv", opts)
 map("v", "<A-k>", ":m '<-2<CR>gv=gv", opts)
+
+-- delete backwards to start of previous line
+map("n", "<leader>db", "d?$<cr>", opts)
 
 -- auto switch to newly created splits
 map(
@@ -75,6 +85,16 @@ vim.keymap.set("n", "<leader>fn", function()
 	vim.cmd("normal! n") -- jump to the next occurrence
 end, { noremap = true, silent = true })
 
+-- remap split manipulation to SHIFT + CTRL + hjkl
+map("n", "<C-S-h>", ":wincmd H<CR>", opts)
+map("n", "<C-S-j>", ":wincmd J<CR>", opts)
+map("n", "<C-S-k>", ":wincmd K<CR>", opts)
+map("n", "<C-S-l>", ":wincmd L<CR>", opts)
+
+-- buffer controls
+map("n", "<leader>z", ":bp <bar> :bd #<CR>", opts) -- close buffer but keep split
+map("n", "<leader>0", ":b#<CR>", opts) --  previously active buffer
+
 -- remap split navigation to CTRL + hjkl
 map(
 	"n",
@@ -100,19 +120,6 @@ map(
 	(vim.g.vscode and ":lua require('vscode').call('workbench.action.focusNextGroup')<CR>" or ":wincmd l<CR>"),
 	opts
 )
-
--- remap split manipulation to SHIFT + CTRL + hjkl
-map("n", "<C-S-h>", ":wincmd H<CR>", opts)
-map("n", "<C-S-j>", ":wincmd J<CR>", opts)
-map("n", "<C-S-k>", ":wincmd K<CR>", opts)
-map("n", "<C-S-l>", ":wincmd L<CR>", opts)
-
--- buffer controls
-map("n", "<leader>z", ":bp <bar> :bd #<CR>", opts) -- close buffer but keep split
-map("n", "<leader>0", ":b#<CR>", opts) --  previously active buffer
-
--- delete backwards to start of previous line
-map("n", "<leader>db", "d?$<cr>", opts)
 
 if vim.g.vscode then
 	map("n", "<C-l>", ":lua require('vscode').call('workbench.action.nextEditor')<CR>", opts)
