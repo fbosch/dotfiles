@@ -116,6 +116,8 @@ return {
 		"neovim/nvim-lspconfig",
 		event = { "BufReadPre", "BufNewFile" },
 		dependencies = {
+			"williamboman/mason-lspconfig.nvim",
+			"WhoIsSethDaniel/mason-tool-installer.nvim",
 			{
 				"williamboman/mason.nvim",
 				opts = {
@@ -129,8 +131,6 @@ return {
 					},
 				},
 			},
-			"williamboman/mason-lspconfig.nvim",
-			"WhoIsSethDaniel/mason-tool-installer.nvim",
 			{
 				"nvimdev/lspsaga.nvim",
 				config = function()
@@ -184,10 +184,6 @@ return {
 			},
 		},
 		config = function()
-			require("inc_rename").setup({
-				input_buffer_type = "dressing",
-			})
-
 			local lspconfig = require("lspconfig")
 
 			local capabilities = vim.tbl_deep_extend("force", vim.lsp.protocol.make_client_capabilities(), {

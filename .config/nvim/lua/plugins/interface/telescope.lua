@@ -6,17 +6,6 @@ return {
 	event = "VeryLazy",
 	cmd = { "Telescope" },
 	config = function()
-		local dressing = require("dressing")
-		dressing.setup({
-			input = {
-				insert_only = false,
-			},
-			select = {
-				enabled = true,
-				backend = { "fzf_lua", "fzf", "builtin", "nui" },
-				trim_prompt = true,
-			},
-		})
 		local telescope = require("telescope")
 		telescope.setup({
 			defaults = {

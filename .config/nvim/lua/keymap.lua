@@ -4,8 +4,21 @@ local opts = { noremap = true, silent = true }
 -- disable
 map("n", "<Space>", "<NOP>", opts)
 
+-- Swap ; and :
+map("n", ":", ";", opts)
+map("n", ";", ":", opts)
+map("x", ":", ";", opts)
+map("x", ";", ":", opts)
+
 -- compare selection with clipboard
 map("v", "<leader>dc", "<CMD>DiffClip<CR>", opts)
+
+-- Clear search highlights
+map("n", "<esc>", ":nohlsearch<CR>", opts)
+map("n", "<esc>^[", "<esc>^[", opts)
+
+-- find conflicts
+map("n", "<leader>fc", "/<<<<CR>", opts)
 
 -- disable arrow keys in insert mode
 map("i", "<Up>", "<NOP>", opts)
@@ -23,6 +36,9 @@ map("n", "<C-a>", "ggVG<CR>", opts)
 -- paste last thing yanked (not system copied), not deleted
 map("n", ",p", '"0p', opts)
 map("n", ",P", '"0P', opts)
+
+-- Don't yank on put
+map("x", "p", '"_dP', opts)
 
 -- yank current file
 map("n", "<leader>yf", ":%y<cr>", opts)
@@ -83,7 +99,8 @@ vim.keymap.set("n", "<leader>fn", function()
 	vim.fn.setreg("/", "\\<" .. word .. "\\>")
 	vim.cmd("normal! l") -- move cursor right to avoid matching the current word
 	vim.cmd("normal! n") -- jump to the next occurrence
-end, { noremap = true, silent = true })
+	vim.cmd("normal! zz") -- center the screen on the current line
+end, opts)
 
 -- remap split manipulation to SHIFT + CTRL + hjkl
 map("n", "<C-S-h>", ":wincmd H<CR>", opts)
