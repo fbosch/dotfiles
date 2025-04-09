@@ -69,5 +69,10 @@ return {
 		hl(0, "LeapMatch", { fg = colors.blue, underline = true })
 		hl(0, "LeapLabelPrimary", { fg = colors.purple, underline = true })
 		hl(0, "LeapBackdrop", { fg = colors.search_backdrop })
+
+		-- gitsigns
+		hl(0, "GitSignsAdded", { fg = colors.green })
+		hl(0, "GitSignsChanged", { fg = colors.yellow })
+		hl(0, "GitSignsRemoved", { fg = colors.red })
 	end,
 }

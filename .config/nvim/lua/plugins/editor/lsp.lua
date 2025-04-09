@@ -58,6 +58,7 @@ local setup_keymaps = function(client, bufnr)
 	nmap("<leader>k", "<cmd>Lspsaga hover_doc<CR>", "Hover")
 	nmap("gtd", vim.lsp.buf.type_definition, "[G]o to [T]ype [D]efinition")
 	nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
+	nmap("<leader>fi", "<cmd>TSToolsAddMissingImports<CR>", "[F]ix [I]mports")
 	nmap("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
 end
 
