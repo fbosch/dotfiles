@@ -22,12 +22,9 @@ return {
 
 		require("auto-session").setup({
 			log_level = "error",
-			auto_session_root_dir = root_dir,
-			-- auto_session_use_git_branch = true,
-			auto_restore_enabled = true,
-			cwd_change_handling = {
-				restore_upcoming_session = true,
-			},
+			root_dir = root_dir,
+			auto_restore = true,
+			cwd_change_handling = true,
 			pre_save_cmds = {
 				function()
 					local overseer = require("overseer")
