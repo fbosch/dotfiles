@@ -15,14 +15,7 @@ local setup_diagnostics = function()
 			},
 			linehl = {},
 		},
-		virtual_text = {
-			enabled = false,
-			prefix = "●",
-			source = false,
-			format = function(diagnostic)
-				return string.format("%s %s", diagnostic.source, diagnostic.message)
-			end,
-		},
+		virtual_text = false,
 		float = {
 			show_header = true,
 			source = "if_many",
@@ -60,7 +53,7 @@ local setup_diagnostics = function()
 					"FocusLost",
 				},
 				source = "if_many",
-				scope = "cursor",
+				scope = "line",
 			})
 		end,
 	})

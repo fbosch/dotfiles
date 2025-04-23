@@ -1368,3 +1368,8 @@ generate
 date-time
 YYYY-MM-DD
 ISODateTime
+nullable
+betalingsService
+debitorGroupNumber
+betalingsServiceNumber
+customerNumber
