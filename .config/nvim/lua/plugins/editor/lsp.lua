@@ -1,26 +1,67 @@
 local setup_diagnostics = function()
-	local group = vim.api.nvim_create_augroup("diagnostics", {})
-	local signs = { Error = " ", Warn = " ", Hint = " ", Info = " " }
-	for type, icon in pairs(signs) do
-		local hl = "DiagnosticSign" .. type
-		vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = hl })
-	end
+	vim.diagnostic.config({
+		signs = {
+			text = {
+				[vim.diagnostic.severity.ERROR] = " ",
+				[vim.diagnostic.severity.WARN] = " ",
+				[vim.diagnostic.severity.HINT] = " ",
+				[vim.diagnostic.severity.INFO] = " ",
+			},
+			numhl = {
+				[vim.diagnostic.severity.ERROR] = "DiagnosticSignError",
+				[vim.diagnostic.severity.WARN] = "DiagnosticSignWarn",
+				[vim.diagnostic.severity.HINT] = "DiagnosticSignHint",
+				[vim.diagnostic.severity.INFO] = "DiagnosticSignInfo",
+			},
+			linehl = {},
+		},
+		virtual_text = {
+			enabled = false,
+			prefix = "●",
+			source = false,
+			format = function(diagnostic)
+				return string.format("%s %s", diagnostic.source, diagnostic.message)
+			end,
+		},
+		float = {
+			show_header = true,
+			source = "if_many",
+			border = "rounded",
+			focusable = false,
+			max_width = 100,
+			max_height = 10,
+			close_events = {
+				"BufLeave",
+				"CursorMoved",
+				"InsertEnter",
+				"FocusLost",
+			},
+		},
+		underline = {
+			severity = { min = vim.diagnostic.severity.WARN },
+		},
+		severity_sort = {
+			reverse = false,
+		},
+		update_in_insert = false,
+	})
 
-	local diag_opts = {
-		header = "",
-		focusable = false,
-		close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
-		border = "rounded",
-		source = "always",
-		prefix = "  ",
-		scope = "line",
-		max_width = 100,
-	}
-
-	vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI", "TextChanged", "TextChangedI", "BufEnter" }, {
-		group = group,
+	-- Optional: Create autocmd for showing diagnostics on cursor hold
+	local diagnostics_group = vim.api.nvim_create_augroup("DiagnosticsGroup", { clear = true })
+	vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
+		group = diagnostics_group,
 		callback = function()
-			vim.diagnostic.open_float(vim.api.nvim_get_current_buf(), diag_opts)
+			vim.diagnostic.open_float(nil, {
+				focusable = false,
+				close_events = {
+					"BufLeave",
+					"CursorMoved",
+					"InsertEnter",
+					"FocusLost",
+				},
+				source = "if_many",
+				scope = "cursor",
+			})
 		end,
 	})
 end
