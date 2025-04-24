@@ -143,7 +143,12 @@ function get_week_dates
     set -l week_number (date +%V)
     if set -q argv[1]
         and string match -r '^\d+$' -- "$argv[1]"
+        and test "$argv[1]" -ge 1
+        and test "$argv[1]" -le 53
         set week_number $argv[1]
+    else if set -q argv[1]
+        echo "Error: Week number must be between 1 and 53"
+        return 1
     end
 
     # Validate and set year
