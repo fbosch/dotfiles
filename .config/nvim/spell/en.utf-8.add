@@ -1373,3 +1373,12 @@ betalingsService
 debitorGroupNumber
 betalingsServiceNumber
 customerNumber
+InsertPayment
+EAN
+paymentAdvise
+ean
+somewhere
+somewhere
+choose
+customerPortalApi
+customer-portal
