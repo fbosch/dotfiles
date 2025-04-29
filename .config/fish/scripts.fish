@@ -45,7 +45,7 @@ function worktrees_clean
 
     for folder in $old_worktrees
         set current_folder_index (math $current_folder_index + 1)
-        set progress_percent (math "100 * $current_folder_index / $total_folders")
+        set progress_percent (math "99 * $current_folder_index / $total_folders")
 
         echo -n (printf "Removing old worktrees: %.2f%%\r" $progress_percent)
 
@@ -102,6 +102,70 @@ function first_login_of_the_day
     if test $silent -eq 0
         echo "$time"
     end
+end
+
+function workday_end
+    # Get the first login time of the day in silent mode
+    set start (first_login_of_the_day --silent)
+
+    # Validate start's format (expecting HH:MM:SS with 8 characters)
+    if test -z "$start" -o (string length "$start") -ne 8
+        set start "08:08:26"
+    end
+
+    set today (date +'%Y-%m-%d')
+    set start_ts (date -j -f "%Y-%m-%d %H:%M:%S" "$today $start" +"%s")
+
+    # Number of seconds to add (7 hours 30 minutes = 27,000 seconds)
+    set seconds_to_add 27000
+    set end_ts (math "$start_ts + $seconds_to_add")
+
+    date -r $end_ts +"%T"
+end
+
+function remaining_work_hours
+    # Get first login time
+    set -l first_login (first_login_of_the_day)
+
+    if test -z "$first_login"
+        echo "Error: No first login time"
+        return 1
+    end
+
+    # Current time
+    set -l current_time (date "+%H:%M")
+
+    # Work hours
+    set -l work_end (workday_end)
+
+    # Convert times to minutes
+    set -l current_hours (string split ":" "$current_time")[1]
+    set -l current_minutes (string split ":" "$current_time")[2]
+    set -l end_hours (string split ":" "$work_end")[1]
+    set -l end_minutes (string split ":" "$work_end")[2]
+
+    # Calculate remaining time
+    set -l remaining_hours (math $end_hours - $current_hours)
+    set -l remaining_minutes (math $end_minutes - $current_minutes)
+
+    # Adjust for negative minutes
+    if test $remaining_minutes -lt 0
+        set remaining_hours (math $remaining_hours - 1)
+        set remaining_minutes (math $remaining_minutes + 60)
+    end
+
+    # Output remaining time and the workday end timestamp
+    if test $remaining_hours -gt 0
+        printf "%d hours and %d minutes left\n" $remaining_hours $remaining_minutes
+    else if test $remaining_minutes -gt 0
+        printf "%d minutes left\n" $remaining_minutes
+    else
+        echo "Work day is over"
+        return
+    end
+
+    # Also output the workday end timestamp for reference
+    printf "Workday ends at: %s\n" $work_end
 end
 
 function fzfcd

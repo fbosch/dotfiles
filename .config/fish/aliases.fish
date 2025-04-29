@@ -2,6 +2,7 @@
 alias nvim 'nvim -n -i NONE --noplugin'
 alias code cursor
 alias uge get_week_dates
+alias rw remaining_work_hours
 abbr n nvim
 abbr lu 'nvim --headless +"Lazy! sync" +qa' # lazy update neovim plugins
 abbr nwipe 'nvim --headless +"WipeAllSessions!" +qa'

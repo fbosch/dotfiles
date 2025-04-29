@@ -25,6 +25,9 @@ return {
 				opts = {
 					animate = {},
 					util = {},
+					image = {
+						enabled = false,
+					},
 				},
 			},
 		},
