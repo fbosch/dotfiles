@@ -87,11 +87,7 @@ function first_login_of_the_day
         return
     end
 
-    set -l login_item (log show \
-        --start (date '+%Y-%m-%d 07:30:00') \
-        --predicate 'process == "loginwindow"' \
-        | grep -i "success" \
-        | head -n1)
+    set -l login_item (log show --start (date '+%Y-%m-%d 07:30:00') --predicate 'process == "loginwindow"' | grep -i "success" | head -n1)
 
     set -l time (string match -r '\d{2}:\d{2}:\d{2}\b' "$login_item")
 

@@ -43,6 +43,8 @@ if [[ $(command -v brew) == "" ]]; then
   tic -x -o ~/.terminfo $tempfile 
   rm $tempfile
 
+  chsh -s $(which fish)
+  bat cache --build
 else 
   echo "Updating homebrew..."
   brew update

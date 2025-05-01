@@ -49,7 +49,15 @@ brew "difftastic"
 
 # programs - mac
 if OS.mac?
+  brew "starship"
   cask "wezterm"
   cask "raycast"
   cask "numi"
+  cask "font-noto-sans-runic"
+  cask "rectangle"
+  cask "bitwarden"
+  cask "1password"
+  cask "firefox"
+  cask "floorp"
+  case "alt-tab"
 end
