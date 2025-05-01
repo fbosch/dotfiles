@@ -59,5 +59,6 @@ if OS.mac?
   cask "1password"
   cask "firefox"
   cask "floorp"
-  case "alt-tab"
+  cask "alt-tab"
+  cask "replacicon"
 end

@@ -1,8 +1,15 @@
 local is_windows = package.config:sub(0, 1) == "\\"
 local wezterm = require("wezterm")
 local config = wezterm.config_builder()
+local mux = wezterm.mux
 
 config.max_fps = 120
+
+-- maximize first window
+wezterm.on("gui-startup", function()
+	local tab, pane, window = mux.spawn_window({})
+	window:gui_window():maximize()
+end)
 
 -- fonts
 config.font = wezterm.font_with_fallback({
@@ -34,7 +41,7 @@ config.colors = {
 	tab_bar = {
 		background = "#191919",
 		active_tab = {
-			bg_color = "#3f3f3f",
+			bg_color = "#353535",
 			fg_color = "#ffffff",
 			intensity = "Normal",
 		},

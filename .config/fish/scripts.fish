@@ -102,11 +102,11 @@ end
 
 function workday_end
     # Get the first login time of the day in silent mode
-    set start (first_login_of_the_day --silent)
+    set start (first_login_of_the_day)
 
     # Validate start's format (expecting HH:MM:SS with 8 characters)
     if test -z "$start" -o (string length "$start") -ne 8
-        set start "08:08:26"
+        set start "08:15:00"
     end
 
     set today (date +'%Y-%m-%d')
