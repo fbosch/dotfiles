@@ -3,6 +3,8 @@ alias nvim 'nvim -n -i NONE --noplugin'
 alias code cursor
 alias uge get_week_dates
 alias rw remaining_work_hours
+alias mntnas 'osascript -e \'mount volume "smb://100.86.100.78"\''
+
 abbr n nvim
 abbr lu 'nvim --headless +"Lazy! sync" +qa' # lazy update neovim plugins
 abbr nwipe 'nvim --headless +"WipeAllSessions!" +qa'
