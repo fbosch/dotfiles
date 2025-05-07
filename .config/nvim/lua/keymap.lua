@@ -4,7 +4,7 @@ local function map(mode, lhs, rhs, desc)
 	vim.keymap.set(mode, lhs, rhs, opts)
 end
 
--- disable
+-- disable key that is used as leader
 map("n", "<Space>", "<NOP>")
 
 -- Swap ; and :
@@ -12,6 +12,16 @@ map("n", ":", ";")
 map("n", ";", ":")
 map("x", ":", ";")
 map("x", ";", ":")
+
+-- remap nordic keys in normal mode, to minimize how often I have to toggle between keyboard layouts
+map("n", "æ", ":")
+map("n", "ø", "'")
+map("n", "å", "[")
+map("n", "¨", "]")
+map("x", "æ", ":")
+map("x", "ø", "'")
+map("x", "å", "[")
+map("x", "¨", "]")
 
 -- compare selection with clipboard
 map("v", "<leader>dc", "<CMD>DiffClip<CR>", "Compare selection with clipboard")
@@ -80,7 +90,7 @@ map("n", "<leader>db", "d?$<cr>", "Delete backwards to start of previous line")
 map("n", "<leader>in", function()
 	vim.diagnostic.jump({
 		count = 1,
-		severity_limit = vim.diagnostic.severity.WARN,
+		severity_limit = vim.diagnostic.severity.ERROR,
 	})
 	vim.cmd("normal! zz")
 end, "Navigate to the next issue in the current buffer")
@@ -89,7 +99,7 @@ end, "Navigate to the next issue in the current buffer")
 map("n", "<leader>ip", function()
 	vim.diagnostic.jump({
 		count = -1,
-		severity_limit = vim.diagnostic.severity.WARN,
+		severity_limit = vim.diagnostic.severity.ERROR,
 	})
 	vim.cmd("normal! zz")
 end, "Navigate to the previous issue in the current buffer")

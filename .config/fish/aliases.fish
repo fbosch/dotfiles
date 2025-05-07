@@ -10,6 +10,7 @@ abbr lu 'nvim --headless +"Lazy! sync" +qa' # lazy update neovim plugins
 abbr nwipe 'nvim --headless +"WipeAllSessions!" +qa'
 abbr v nvim
 abbr p pnpm
+abbr pui 'pnpm upgrade --interactive --latest --recursive'
 
 abbr bup 'brew upgrade'
 function vimdiff

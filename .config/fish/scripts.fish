@@ -244,3 +244,7 @@ function get_week_dates
     echo "Start date: $start_date"
     echo "End date: $end_date"
 end
+
+function disk_space
+    df -h / | awk 'NR==2 {print "Total: " $2 "\nUsed: " $3 "\nAvailable: " $4 "\nPercentage Used: " $5}'
+end

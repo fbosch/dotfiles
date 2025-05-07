@@ -61,4 +61,5 @@ if OS.mac?
   cask "floorp"
   cask "alt-tab"
   cask "replacicon"
+  cask "cursor"
 end

@@ -22,7 +22,7 @@ require("lazy").setup({
 	spec = spec,
 	change_detection = { notify = false },
 	ui = { border = "rounded" },
-	concurrency = 16,
+	concurrency = 32,
 	performance = {
 		cache = {
 			enabled = true,
