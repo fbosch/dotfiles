@@ -1,9 +1,12 @@
 local base_opts = { noremap = true, silent = true }
-local function map(mode, lhs, rhs, desc)
-	local opts = vim.tbl_extend("force", base_opts, desc and { desc = desc } or {})
+local function map(mode, lhs, rhs, opts_or_desc)
+	local opts = vim.tbl_extend(
+		"force",
+		base_opts,
+		type(opts_or_desc) == "string" and { desc = opts_or_desc } or (opts_or_desc or {})
+	)
 	vim.keymap.set(mode, lhs, rhs, opts)
 end
-
 -- disable key that is used as leader
 map("n", "<Space>", "<NOP>")
 
@@ -103,6 +106,27 @@ map("n", "<leader>ip", function()
 	})
 	vim.cmd("normal! zz")
 end, "Navigate to the previous issue in the current buffer")
+
+-- yoink diagnostic message under cursor
+map("n", "<leader>yd", function()
+	local pos = vim.api.nvim_win_get_cursor(0)
+	local diagnostics = vim.diagnostic.get(0, { lnum = pos[1] - 1 })
+	if #diagnostics > 0 then
+		local message = diagnostics[1].message
+		vim.fn.setreg("+", message) -- System clipboard
+		vim.notify("Diagnostics copied to clipboard", vim.log.levels.INFO, { title = "Diagnostics" })
+	else
+		vim.notify("No diagnostic under cursor.", vim.log.levels.WARN, { title = "Diagnostics" })
+	end
+end, "Yank diagnostic message under cursor")
+
+map("n", "<leader>qf", function()
+	if vim.fn.getqflist({ winid = 0 }).winid ~= 0 then
+		vim.cmd("cclose")
+	else
+		vim.cmd("copen")
+	end
+end, "Toggle Quickfix List")
 
 -- auto switch to newly created splits
 map(

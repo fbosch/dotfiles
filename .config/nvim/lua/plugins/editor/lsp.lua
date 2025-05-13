@@ -294,7 +294,15 @@ return {
 				},
 			}
 
-			local ensure_installed = vim.tbl_keys(servers or {})
+			local ensure_installed = {
+				"eslint",
+			}
+			for name, config in pairs(servers) do
+				if config.enabled ~= false then
+					table.insert(ensure_installed, name)
+				end
+			end
+
 			require("mason-tool-installer").setup({ ensure_installed = ensure_installed })
 			require("mason").setup()
 

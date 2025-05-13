@@ -48,7 +48,12 @@ return {
 	},
 	{
 		"akinsho/git-conflict.nvim",
-		event = { "BufReadPost" },
+		opts = {
+			highlights = {
+				incoming = "DiffAdd",
+				outgoing = "DiffDelete",
+			},
+		},
 	},
 	{
 		"lewis6991/gitsigns.nvim",

@@ -46,6 +46,7 @@ brew "luarocks"
 brew "rust"
 brew "biome"
 brew "difftastic"
+brew "deno"
 
 # programs - mac
 if OS.mac?

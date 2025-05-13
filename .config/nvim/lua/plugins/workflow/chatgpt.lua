@@ -119,8 +119,8 @@ return {
 			},
 		},
 		opts = {
-			openai_params = { model = "gpt-4-1106-preview" },
-			openai_edit_params = { model = "gpt-4-1106-preview" },
+			openai_params = { model = "gpt-4.1" },
+			openai_edit_params = { model = "gpt-4.1" },
 			chat = {
 				max_line_length = 120,
 				welcome_message = "",

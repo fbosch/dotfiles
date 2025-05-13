@@ -45,16 +45,13 @@ return {
 			winopts = {
 				height = 0.8,
 				width = 0.9,
-				preview = { "bat_async", flip_columns = 200 },
+				preview = {
+					default = { "bat_async", flip_columns = 200 },
+				},
 			},
 			hls = {
 				border = "FloatBorder",
 			},
-			-- previewers = {
-			-- 	builtin = {
-			-- 		hl_cursorline = "IncSearch", -- cursor line highlight
-			-- 	},
-			-- },
 			keymap = {
 				builtin = {
 					["C-k"] = "preview-page-up",
