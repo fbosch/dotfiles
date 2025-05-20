@@ -120,6 +120,24 @@ map("n", "<leader>yd", function()
 	end
 end, "Yank diagnostic message under cursor")
 
+map("n", "<leader>yad", function()
+	local diagnostics = vim.diagnostic.get(0)
+	if #diagnostics == 0 then
+		vim.notify("No diagnostics in buffer.", vim.log.levels.WARN, { title = "Diagnostics" })
+		return
+	end
+
+	local messages = {}
+	for _, diag in ipairs(diagnostics) do
+		table.insert(messages, string.format("[%s:%d] %s", diag.source or "LSP", diag.lnum + 1, diag.message))
+	end
+
+	local result = table.concat(messages, "\n")
+	vim.fn.setreg("+", result) -- System clipboard
+
+	vim.notify("All diagnostics copied to clipboard", vim.log.levels.INFO, { title = "Diagnostics" })
+end, "Yank all diagnostics in buffer")
+
 map("n", "<leader>qf", function()
 	if vim.fn.getqflist({ winid = 0 }).winid ~= 0 then
 		vim.cmd("cclose")

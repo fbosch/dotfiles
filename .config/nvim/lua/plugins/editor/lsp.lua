@@ -88,8 +88,8 @@ local setup_keymaps = function(client, bufnr)
 	nmap("<leader>pd", "<cmd>Lspsaga peek_definition<CR>", "[P]eek [D]efinition")
 	nmap("gi", vim.lsp.buf.implementation, "[G]o to [I]mplementation")
 	nmap("gr", vim.lsp.buf.references, "[G]o to [R]eferences")
-	nmap("<C-k>", vim.lsp.buf.signature_help, "Signature Help")
-	nmap("<leader>k", "<cmd>Lspsaga hover_doc<CR>", "Hover")
+	nmap("<leader>k", vim.lsp.buf.signature_help, "Signature Help")
+	-- nmap("<leader>k", "<cmd>Lspsaga hover_doc<CR>", "Hover")
 	nmap("gtd", vim.lsp.buf.type_definition, "[G]o to [T]ype [D]efinition")
 	nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
 	nmap("<leader>fi", "<cmd>TSToolsAddMissingImports<CR>", "[F]ix [I]mports")
@@ -197,7 +197,7 @@ return {
 				config = function()
 					require("typescript-tools").setup({
 						on_attach = on_attach,
-						separate_diagnostic_server = true,
+						separate_diagnostic_server = false,
 						publish_diagnostic_on = "insert_leave",
 						complete_function_calls = false,
 						jsx_close_tag = {
@@ -256,6 +256,9 @@ return {
 				marksman = {},
 				dockerls = {},
 				ts_ls = {
+					enabled = false,
+				},
+				tsserver = {
 					enabled = false,
 				},
 				docker_compose_language_service = {},

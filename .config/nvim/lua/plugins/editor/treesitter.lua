@@ -63,4 +63,39 @@ return {
 			use_default_keymaps = false,
 		},
 	},
+	{
+		"aaronik/treewalker.nvim",
+		keys = {
+			{
+				"<C-k>",
+				"<cmd>Treewalker Up<CR>",
+				mode = { "n", "x" },
+				desc = "Treewalker up",
+				silent = true,
+			},
+			{
+				"<C-j>",
+				"<cmd>Treewalker Down<CR>",
+				mode = { "n", "x" },
+				desc = "Treewalker down",
+				silent = true,
+			},
+			{
+				"<C-A-k>",
+				"<cmd>Treewalker SwapUp<CR>",
+				mode = { "n" },
+				desc = "Treewalker swap up",
+				silent = true,
+			},
+			{
+				"<C-A-j>",
+				"<cmd>Treewalker SwapDown<CR>",
+				mode = { "n" },
+				desc = "Treewalker swap down",
+				silent = true,
+			},
+		},
+		cmd = { "Treewalker" },
+		opts = {},
+	},
 }

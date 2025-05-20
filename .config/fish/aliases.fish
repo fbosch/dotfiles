@@ -38,9 +38,11 @@ function chrdebug
     /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
 end
 
-# Directory shortcuts
+# Directory shortcuts - fingers too fast for accuracy ⚡
 abbr prj 'cd ~/Projects'
+abbr pjr 'cd ~/Projects'
 abbr rpj 'cd ~/Projects'
+
 abbr cf 'cd ~/.config'
 
 # Helpers
