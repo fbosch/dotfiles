@@ -9,6 +9,10 @@ if test (uname) = Linux
 end
 
 function fish_greeting
+    if set -q IN_NEOVIM
+        return
+    end
+
     if test (uname) = Darwin
         first_login_of_the_day --silent &
     end

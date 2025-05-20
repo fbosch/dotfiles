@@ -7,12 +7,15 @@ return {
 			"<cmd>FTermToggle<cr>",
 			desc = "toggle floating terminal",
 			mode = "n",
-      silent = true
+			silent = true,
 		},
 	},
 	config = function()
 		require("FTerm").setup({
 			border = "rounded",
+			env = {
+				["IN_NEOVIM"] = "1",
+			},
 		})
 		vim.api.nvim_create_user_command("FTermOpen", require("FTerm").open, { bang = true })
 		vim.api.nvim_create_user_command("FTermClose", require("FTerm").close, { bang = true })
