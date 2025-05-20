@@ -1,20 +1,19 @@
-# Don't let ripgrep vomit really long lines to my terminal, and show a preview.
 --max-columns=150
 --max-columns-preview
+--threads=8
+
 --line-number
---sort-files
 --no-heading
+--sort-files
 
-# Add my 'web' type.
---type-add
-web:*.{html,css,js}*
-
-# Using glob patterns to include/exclude files or folders
---glob=*!{.git,node_modules,.backup,.Trash,.pnpm-store}/*
-
-# Set the colors.
+--smart-case
 --colors=always
 
-# Because who cares about case!?
---smart-case
+--type-add=web:*.{html,css,js}
 
+# Improved glob exclusion pattern (use --glob=!<pattern> for each exclusion)
+--glob=!.git/**
+--glob=!node_modules/**
+--glob=!.backup/**
+--glob=!.Trash/**
+--glob=!.pnpm-store/**

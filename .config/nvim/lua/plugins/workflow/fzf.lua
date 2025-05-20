@@ -46,7 +46,7 @@ return {
 				height = 0.8,
 				width = 0.9,
 				preview = {
-					default = { "bat_async", flip_columns = 200 },
+					default = { "bat_async --line-range:1:100", flip_columns = 200 },
 				},
 			},
 			hls = {

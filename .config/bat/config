@@ -1,1 +1,3 @@
 --theme="Zenwritten Dark"
+--color=always
+--line-range=1:500

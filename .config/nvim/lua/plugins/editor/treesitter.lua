@@ -25,10 +25,8 @@ return {
 				incremental_selection = {
 					enable = true,
 					keymaps = {
-						init_selection = false,
 						node_incremental = "v",
 						node_decremental = "V",
-						scope_incremental = false,
 					},
 				},
 				ensure_installed = {
@@ -92,6 +90,20 @@ return {
 				"<cmd>Treewalker SwapDown<CR>",
 				mode = { "n" },
 				desc = "Treewalker swap down",
+				silent = true,
+			},
+			{
+				"<C-A-h>",
+				"<cmd>Treewalker SwapLeft<CR>",
+				mode = { "n" },
+				desc = "Treewalker swap left",
+				silent = true,
+			},
+			{
+				"<C-A-l>",
+				"<cmd>Treewalker SwapRight<CR>",
+				mode = { "n" },
+				desc = "Treewalker swap right",
 				silent = true,
 			},
 		},
