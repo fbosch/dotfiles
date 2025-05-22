@@ -7,6 +7,10 @@ local function map(mode, lhs, rhs, opts_or_desc)
 	)
 	vim.keymap.set(mode, lhs, rhs, opts)
 end
+local function vscode_adaptive_map(mode, lhs, vscode_cmd, nvim_cmd)
+	map(mode, lhs, vim.g.vscode and (":lua require('vscode').call('" .. vscode_cmd .. "')<CR>") or nvim_cmd)
+end
+
 -- disable key that is used as leader
 map("n", "<Space>", "<NOP>")
 
@@ -16,7 +20,7 @@ map("n", ";", ":")
 map("x", ":", ";")
 map("x", ";", ":")
 
--- remap nordic keys in normal mode, to minimize how often I have to toggle between keyboard layouts
+-- remap nordic key layout in normal mode, to minimize how often I have to toggle between keyboard layouts
 map("n", "æ", ":")
 map("n", "ø", "'")
 map("n", "å", "[")
@@ -25,6 +29,7 @@ map("x", "æ", ":")
 map("x", "ø", "'")
 map("x", "å", "[")
 map("x", "¨", "]")
+map("n", "-", "/")
 
 -- compare selection with clipboard
 map("v", "<leader>dc", "<CMD>DiffClip<CR>", "Compare selection with clipboard")
@@ -41,13 +46,6 @@ map("i", "<Up>", "<NOP>")
 map("i", "<Down>", "<NOP>")
 map("i", "<Left>", "<NOP>")
 map("i", "<Right>", "<NOP>")
-
--- increment and decrement
-map("n", "+", "<C-a>", "Increment")
-map("n", "-", "<C-x>", "Decrement")
-
--- yank
-map("n", "<C-a>", "ggVG<CR>", "Select all")
 
 -- paste last thing yanked (not system copied), not deleted
 map("n", ",p", '"0p')
@@ -182,41 +180,36 @@ map("n", "<C-S-k>", ":wincmd K<CR>")
 map("n", "<C-S-l>", ":wincmd L<CR>")
 
 -- buffer controls
-map("n", "<leader>z", ":bp <bar> :bd #<CR>", "Close buffer but keep split") -- close buffer but keep split
+map("n", "<leader>bd", ":bp <bar> :bd #<CR>", "Close buffer but keep split") -- close buffer but keep split
 map("n", "<leader>0", ":b#<CR>", "Go to previoulsy active buffer") --  previously active buffer
 
--- remap split navigation to CTRL + hjkl
-map(
-	"n",
-	"<S-h>",
-	(vim.g.vscode and ":lua require('vscode').call('workbench.action.focusPreviousGroup')<CR>" or ":wincmd h<CR>")
-)
-map(
-	"n",
-	"<S-j>",
-	(vim.g.vscode and ":lua require('vscode').call('workbench.action.focusNextGroup')<CR>" or ":wincmd j<CR>")
-)
-map(
-	"n",
-	"<S-k>",
-	(vim.g.vscode and ":lua require('vscode').call('workbench.action.focusPreviousGroup')<CR>" or ":wincmd k<CR>")
-)
-map(
-	"n",
-	"<S-l>",
-	(vim.g.vscode and ":lua require('vscode').call('workbench.action.focusNextGroup')<CR>" or ":wincmd l<CR>")
-)
+-- Split navigation (Shift+h/j/k/l)
+vscode_adaptive_map("n", "<S-h>", "workbench.action.focusPreviousGroup", ":wincmd h<CR>")
+vscode_adaptive_map("n", "<S-j>", "workbench.action.focusNextGroup", ":wincmd j<CR>")
+vscode_adaptive_map("n", "<S-k>", "workbench.action.focusPreviousGroup", ":wincmd k<CR>")
+vscode_adaptive_map("n", "<S-l>", "workbench.action.focusNextGroup", ":wincmd l<CR>")
 
+-- vscode exclusive keybindings
 if vim.g.vscode then
-	map("n", "<C-l>", ":lua require('vscode').call('workbench.action.nextEditor')<CR>")
-	map("n", "<C-h>", ":lua require('vscode').call('workbench.action.previousEditor')<CR>")
+	local call = function(cmd)
+		return ":lua require('vscode').call('" .. cmd .. "')<CR>"
+	end
+
+	map("n", "<C-l>", call("workbench.action.nextEditor"))
+	map("n", "<C-h>", call("workbench.action.previousEditor"))
+
 	map(
 		"n",
 		"<leader>x",
-		"<CMD>lua require('vscode').call('workbench.action.closeOtherEditors')<CR><BAR><CMD>lua require('vscode').call('workbench.action.closeEditorsInOtherGroups')<CR><BAR><CMD>lua require('vscode').call('workbench.action.closeSidebar')<CR>"
+		table.concat({
+			call("workbench.action.closeOtherEditors"),
+			call("workbench.action.closeEditorsInOtherGroups"),
+			call("workbench.action.closeSidebar"),
+		}, "<BAR>")
 	)
-	map("n", "<leader>e", ":lua require('vscode').call('workbench.action.toggleSidebarVisibility')<CR>")
-	map("i", "<Esc>", "<ESC><BAR><CDM>lua require('vscode').call('vscode-neovim.escape')<CR>")
-	map("n", "C-p", ":lua require('vscode').call('workbench.action.quickOpen')<CR>")
-	map("n", "<leader>lg", ":lua require('vscode').call('workbench.action.findInFiles')<CR>")
+
+	map("n", "<leader>e", call("workbench.action.toggleSidebarVisibility"))
+	map("i", "<Esc>", "<ESC><BAR>:lua require('vscode').call('vscode-neovim.escape')<CR>")
+	map("n", "<C-p>", call("workbench.action.quickOpen"))
+	map("n", "<leader>lg", call("workbench.action.findInFiles"))
 end
