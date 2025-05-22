@@ -3,10 +3,17 @@ return {
 	cmd = { "FTermOpen", "FTermClose", "FTermExit", "FTermToggle" },
 	keys = {
 		{
-			"<leader>ft",
+			"<A-t>",
 			"<cmd>FTermToggle<cr>",
 			desc = "toggle floating terminal",
 			mode = "n",
+			silent = true,
+		},
+		{
+			"<A-t>",
+			"<C-\\><C-n><cmd>FTermToggle<cr>",
+			desc = "toggle floating terminal",
+			mode = "t",
 			silent = true,
 		},
 	},
@@ -15,6 +22,10 @@ return {
 			border = "rounded",
 			env = {
 				["IN_NEOVIM"] = "1",
+			},
+			dimensions = {
+				height = 0.85,
+				width = 0.85,
 			},
 		})
 		vim.api.nvim_create_user_command("FTermOpen", require("FTerm").open, { bang = true })

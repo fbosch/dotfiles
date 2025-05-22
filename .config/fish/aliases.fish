@@ -26,7 +26,7 @@ function wtr
     curl "wttr.in/Copenhagen?format=%n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"
 end
 function batbuild
-    batch cache --build $argv
+    bat cache --build $argv
 end
 function bat_fast
     bat --style=plain --color=never --wrap=never --paging=never $argv
