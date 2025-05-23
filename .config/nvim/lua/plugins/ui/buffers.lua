@@ -65,8 +65,6 @@ return {
 		config = function()
 			local colors = require("config.colors")
 			vim.api.nvim_set_hl(0, "BufferCurrent", { fg = colors.blue })
-			-- diagnostics
-
 			require("barbar").setup({
 				animation = false,
 				auto_hide = true,

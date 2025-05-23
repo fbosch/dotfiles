@@ -1,5 +1,4 @@
 return {
-	docker_compose_language_service = {},
 	tailwindcss = {
 		cmd = { "tailwindcss-language-server", "--stdio" },
 	},
@@ -15,13 +14,17 @@ return {
 	lua_ls = {
 		settings = {
 			Lua = {
-				runtime = { version = "LuaJIT" },
-				diagnostics = {
-					globals = { "vim" },
+				runtime = {
+					version = "LuaJIT",
 				},
-				library = {
-					"${3rd}/luv/library",
-					unpack(vim.api.nvim_get_runtime_file("", true)),
+				diagnostics = {
+					globals = { "vim", "use" },
+				},
+				workspace = {
+					checkThirdParty = false,
+					library = {
+						vim.env.VIMRUNTIME,
+					},
 				},
 				completion = {
 					callSnippet = "Replace",

@@ -1,7 +1,6 @@
 return {
 	{
 		"nvim-telescope/telescope.nvim",
-		event = "VeryLazy",
 		cmd = { "Telescope" },
 		config = function()
 			local telescope = require("telescope")
@@ -18,7 +17,6 @@ return {
 		end,
 	},
 	{
-
 		"ibhagwan/fzf-lua",
 		dependencies = { "kyazdani42/nvim-web-devicons" },
 		cmd = { "FzfLua", "FzfRg", "FzfRgVisualSelection" },

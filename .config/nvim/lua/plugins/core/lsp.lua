@@ -40,7 +40,16 @@ local function setup_lsp_handlers()
 end
 
 local function get_ensure_installed(servers)
-	local ensure = { "eslint", "html", "marksman", "rust_analyzer" }
+	local ensure = {
+		"eslint",
+		"html",
+		"marksman",
+		"rust_analyzer",
+		"docker_compose_language_service",
+		"tailwindcss",
+		"cssls",
+		"lua_ls",
+	}
 	for name, config in pairs(servers) do
 		if config.enabled ~= false then
 			table.insert(ensure, name)
@@ -142,7 +151,7 @@ return {
 				},
 			},
 		},
-		{ "folke/neodev.nvim", ft = { "lua" }, opts = {} },
+		{ "folke/lazydev.nvim", ft = { "lua" } },
 		{
 			"pmizio/typescript-tools.nvim",
 			ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
@@ -174,6 +183,6 @@ return {
 			automatic_installation = false,
 			handlers = { mason_handlers(servers, capabilities, on_attach) },
 		})
-		require("neodev").setup({ capabilities = capabilities, on_attach })
+		require("lazydev").setup({ capabilities = capabilities, on_attach })
 	end,
 }
