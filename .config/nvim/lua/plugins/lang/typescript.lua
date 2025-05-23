@@ -1,20 +1,25 @@
 return {
 	{
-		"pmizio/typescript-tools.nvim",
+		"MaximilianLloyd/tw-values.nvim",
+		cmd = "TWValues",
 		ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
-		dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig" },
-		enabled = true,
-		config = function()
-			require("typescript-tools").setup({
-				on_attach = on_attach,
-				separate_diagnostic_server = false,
-				publish_diagnostic_on = "insert_leave",
-				complete_function_calls = false,
-				jsx_close_tag = {
-					enable = false,
-					filetypes = { "javascriptreact", "typescriptreact" },
-				},
-			})
-		end,
+		keys = {
+			{
+				mode = "n",
+				"<leader>tw",
+				"<cmd>TWValues<cr>",
+				desc = "tailwind values",
+			},
+		},
+	},
+	{
+		"dmmulroy/tsc.nvim",
+		ft = { "typescript", "typescriptreact" },
+		opts = {
+			auto_close_qflist = true,
+			auto_start_watch_mode = true,
+			enable_progress_notifications = false,
+			flags = { watch = false },
+		},
 	},
 }

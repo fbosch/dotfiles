@@ -2,7 +2,6 @@ return {
 	"folke/trouble.nvim",
 	dependencies = { "kyazdani42/nvim-web-devicons" },
 	cmd = { "TroubleToggle", "Trouble", "TodoTrouble" },
-  event= "VeryLazy",
 	keys = {
 
 		{
@@ -19,7 +18,7 @@ return {
 		},
 		{
 			"<leader>td",
-			"<cmd>Trouble document_diagnostics<cr>",
+			"<cmd>Trouble diagnostics<cr>",
 			mode = { "n" },
 			silent = true,
 		},

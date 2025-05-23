@@ -1,18 +1,10 @@
 local M = {}
-local base_opts = { noremap = true, silent = true }
 
-local function map(mode, lhs, rhs, opts_or_desc)
-	local opts = vim.tbl_extend(
-		"force",
-		base_opts,
-		type(opts_or_desc) == "string" and { desc = opts_or_desc } or (opts_or_desc or {})
-	)
-	vim.keymap.set(mode, lhs, rhs, opts)
-end
+local utils = require("utils")
 
-local function vscode_adaptive_map(mode, lhs, vscode_cmd, nvim_cmd)
-	map(mode, lhs, vim.g.vscode and (":lua require('vscode').call('" .. vscode_cmd .. "')<CR>") or nvim_cmd)
-end
+local map = utils.set_keymap
+local vscode_call = utils.vscode_call
+local vscode_adaptive_map = utils.vscode_adaptive_map
 
 -- disable key that is used as leader
 map("n", "<Space>", "<NOP>")
@@ -194,30 +186,26 @@ vscode_adaptive_map("n", "<S-l>", "workbench.action.focusNextGroup", ":wincmd l<
 
 -- vscode exclusive keybindings
 if vim.g.vscode then
-	local call = function(cmd)
-		return ":lua require('vscode').call('" .. cmd .. "')<CR>"
-	end
-
-	map("n", "<C-l>", call("workbench.action.nextEditor"))
-	map("n", "<C-h>", call("workbench.action.previousEditor"))
+	map("n", "<C-l>", vscode_call("workbench.action.nextEditor"))
+	map("n", "<C-h>", vscode_call("workbench.action.previousEditor"))
 
 	map(
 		"n",
 		"<leader>x",
 		table.concat({
-			call("workbench.action.closeOtherEditors"),
-			call("workbench.action.closeEditorsInOtherGroups"),
-			call("workbench.action.closeSidebar"),
+			vscode_call("workbench.action.closeOtherEditors"),
+			vscode_call("workbench.action.closeEditorsInOtherGroups"),
+			vscode_call("workbench.action.closeSidebar"),
 		}, "<BAR>")
 	)
 
-	map("n", "<leader>e", call("workbench.action.toggleSidebarVisibility"))
-	map("i", "<Esc>", "<ESC><BAR>:lua require('vscode').call('vscode-neovim.escape')<CR>")
-	map("n", "<C-p>", call("workbench.action.quickOpen"))
-	map("n", "<leader>lg", call("workbench.action.findInFiles"))
+	map("n", "<leader>e", vscode_call("workbench.action.toggleSidebarVisibility"))
+	map("i", "<Esc>", "<ESC><BAR>" .. vscode_call("vscode-neovim.escape"))
+	map("n", "<C-p>", vscode_call("workbench.action.quickOpen"))
+	map("n", "<leader>lg", vscode_call("workbench.action.findInFiles"))
 end
 
-function M.setup_lsp_keymap(client, bufnr)
+function M.setup_lsp_keymaps(client, bufnr)
 	function nmap(keys, cmd, desc)
 		if desc then
 			desc = "LSP: " .. desc

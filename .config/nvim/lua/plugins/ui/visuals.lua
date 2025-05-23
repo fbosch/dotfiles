@@ -13,7 +13,6 @@ return {
 			for _, color in ipairs(colors.highlight_args) do
 				table.insert(colorpalette, { fg = color })
 			end
-
 			hlargs.setup({
 				enabled = true,
 				use_colorpalette = true,

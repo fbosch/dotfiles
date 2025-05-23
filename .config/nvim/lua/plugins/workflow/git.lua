@@ -1,23 +1,5 @@
 return {
 	{
-		"kdheepak/lazygit.nvim",
-		dependencies = { "nvim-telescope/telescope.nvim" },
-		keys = {
-			{
-				mode = { "n" },
-				"<leader>gg",
-				"<cmd>LazyGit<cr>",
-				desc = "lazygit",
-			},
-		},
-		cmd = { "LazyGit" },
-		config = function()
-			local telescope = require("telescope")
-			telescope.load_extension("lazygit")
-		end,
-	},
-	{
-
 		"dinhhuy258/git.nvim",
 		cmd = {
 			"GitBlameOpenCommitURL",
@@ -37,17 +19,16 @@ return {
 				mode = { "n" },
 			},
 		},
-		config = function()
-			require("git").setup({
-				keymaps = {
-					diff = "<leader>df",
-					diff_close = "<leader>dF",
-				},
-			})
-		end,
+		opts = {
+			keymaps = {
+				blame_line = "gbc",
+				blame_tree = "gbt",
+			},
+		},
 	},
 	{
 		"akinsho/git-conflict.nvim",
+		event = "BufReadPost",
 		opts = {
 			highlights = {
 				incoming = "DiffAdd",

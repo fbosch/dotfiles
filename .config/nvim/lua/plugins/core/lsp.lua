@@ -4,7 +4,7 @@ local servers = require("config.servers")
 
 local on_attach = function(client, bufnr)
 	autocmd.setup_diagnostics()
-	keymap.setup_lsp_keymap(client, bufnr)
+	keymap.setup_lsp_keymaps(client, bufnr)
 	autocmd.setup_formatters(client, bufnr)
 end
 
@@ -40,7 +40,7 @@ local function setup_lsp_handlers()
 end
 
 local function get_ensure_installed(servers)
-	local ensure = { "eslint" }
+	local ensure = { "eslint", "html", "marksman", "rust_analyzer" }
 	for name, config in pairs(servers) do
 		if config.enabled ~= false then
 			table.insert(ensure, name)
@@ -90,7 +90,8 @@ local function mason_handlers(servers, capabilities, on_attach)
 			return
 		end
 
-		lspconfig.setup({
+		-- default lsp setup
+		lspconfig[server_name].setup({
 			capabilities = vim.tbl_deep_extend("force", {}, capabilities, server.capabilities or {}),
 			on_attach = on_attach,
 			settings = settings,
@@ -142,6 +143,24 @@ return {
 			},
 		},
 		{ "folke/neodev.nvim", ft = { "lua" }, opts = {} },
+		{
+			"pmizio/typescript-tools.nvim",
+			ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
+			dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig" },
+			enabled = true,
+			config = function()
+				require("typescript-tools").setup({
+					on_attach = on_attach,
+					separate_diagnostic_server = false,
+					publish_diagnostic_on = "insert_leave",
+					complete_function_calls = false,
+					jsx_close_tag = {
+						enable = false,
+						filetypes = { "javascriptreact", "typescriptreact" },
+					},
+				})
+			end,
+		},
 	},
 	config = function()
 		local capabilities = get_capabilities()

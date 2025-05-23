@@ -8,43 +8,12 @@ return {
 	{ "smjonas/live-command.nvim", event = "BufRead", opts = {} },
 	{ "nguyenvukhang/nvim-toggler", event = { "BufReadPost" }, opts = {} },
 	{
-
-		"caliguIa/zendiagram.nvim",
-		event = "BufRead",
-		enabled = false,
-		keys = {
-			{
-				"<leader>zd",
-				"<cmd>lua require('zendiagram').open()<cr>",
-				mode = { "n" },
-			},
-		},
-		config = function()
-			require("zendiagram").setup({
-				-- Below are the default values
-				header = "Diagnostics", -- Header text
-				max_width = 50, -- The maximum width of the float window
-				min_width = 25, -- The minimum width of the float window
-				max_height = 10, -- The maximum height of the float window
-				border = "single", -- Border style. Can be single, double, rounded, solid, shadow.
-				position = {
-					row = 3, -- The offset from the top of the screen
-					col_offset = 2, -- The offset from the right of the screen
-				},
-				highlights = { -- Highlight groups for each section of the float
-					ZendiagramHeader = "Error", -- Accepts a highlight group name or a table of highlight group opts
-					ZendiagramSeparator = "NonText",
-					ZendiagramText = "Normal",
-					ZendiagramKeyword = "Keyword",
-				},
-			})
-		end,
-	},
-	{
+		-- structural search and replace
 		"cshuaimin/ssr.nvim",
 		opts = {
 			adjust_window = true,
 		},
+		event = "VeryLazy",
 		keys = {
 			{
 				"<leader>sr",
@@ -67,28 +36,11 @@ return {
 		enabled = true,
 	},
 	{
-		-- json editing tools
-		"gennaro-tedesco/nvim-jqx",
-		ft = { "json", "yaml" },
-		event = "BufWritePost",
-	},
-	{
-		"MaximilianLloyd/tw-values.nvim",
-		cmd = "TWValues",
-		ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
-		keys = {
-			{
-				mode = "n",
-				"<leader>tw",
-				"<cmd>TWValues<cr>",
-				desc = "tailwind values",
-			},
-		},
-	},
-	{
 		"chrisgrieser/nvim-spider",
+		event = "BufRead",
 		keys = {
 			{
+				-- override motions for word, line and block to be sensetive to camelCase etc.
 				"w",
 				"<cmd>lua require('spider').motion('w')<CR>",
 				mode = { "n", "o", "x" },

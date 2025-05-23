@@ -1,14 +1,4 @@
 return {
-	rust_analyzer = {},
-	html = {},
-	marksman = {},
-	dockerls = {},
-	ts_ls = {
-		enabled = false,
-	},
-	tsserver = {
-		enabled = false,
-	},
 	docker_compose_language_service = {},
 	tailwindcss = {
 		cmd = { "tailwindcss-language-server", "--stdio" },
