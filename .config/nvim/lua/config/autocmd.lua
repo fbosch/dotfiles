@@ -1,6 +1,7 @@
 local cmd = vim.api.nvim_create_autocmd
 local group = vim.api.nvim_create_augroup("autocommands", {})
 
+-- set json files to json5 filetype
 cmd({ "BufRead", "BufNewFile" }, {
 	pattern = { ".{eslint,babel,stylelint,prettier}rc" },
 	command = "setlocal ft=json5",

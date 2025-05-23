@@ -6,7 +6,7 @@ return {
 	},
 	event = "CmdlineEnter",
 	config = function()
-		local colors = require("colors")
+		local colors = require("config.colors")
 		local wilder = require("wilder")
 		wilder.setup({
 			modes = { ":", "/", "?" },

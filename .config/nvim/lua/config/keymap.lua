@@ -1,4 +1,5 @@
 local base_opts = { noremap = true, silent = true }
+
 local function map(mode, lhs, rhs, opts_or_desc)
 	local opts = vim.tbl_extend(
 		"force",
@@ -7,6 +8,7 @@ local function map(mode, lhs, rhs, opts_or_desc)
 	)
 	vim.keymap.set(mode, lhs, rhs, opts)
 end
+
 local function vscode_adaptive_map(mode, lhs, vscode_cmd, nvim_cmd)
 	map(mode, lhs, vim.g.vscode and (":lua require('vscode').call('" .. vscode_cmd .. "')<CR>") or nvim_cmd)
 end

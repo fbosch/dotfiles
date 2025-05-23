@@ -117,7 +117,7 @@ return {
 			})
 
 			-- highlights
-			local colors = require("colors")
+			local colors = require("config.colors")
 			vim.api.nvim_set_hl(0, "CmpItemAbbrDeprecated", { fg = colors.lighter_gray, strikethrough = true })
 			vim.api.nvim_set_hl(0, "CmpItemAbbrMatch", { fg = colors.lighter_gray })
 			vim.api.nvim_set_hl(0, "CmpItemAbbrMatchFuzzy", { fg = colors.lighter_gray })

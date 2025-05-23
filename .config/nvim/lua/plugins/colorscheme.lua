@@ -13,7 +13,7 @@ return {
 
 		vim.cmd([[colorscheme zenwritten]])
 
-		local colors = require("colors")
+		local colors = require("config.colors")
 		local hl = vim.api.nvim_set_hl
 
 		hl(0, "LocalHighlight", { bg = colors.gray })

@@ -39,7 +39,7 @@ return {
 		end
 		require("nvim-web-devicons").setup()
 
-		local colors = require("colors")
+		local colors = require("config.colors")
 		local colorValues = {
 			colors.red,
 			colors.orange,

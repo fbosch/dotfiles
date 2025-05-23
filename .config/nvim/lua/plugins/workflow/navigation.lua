@@ -4,7 +4,7 @@ return {
 		"jinh0/eyeliner.nvim",
 		event = "VeryLazy",
 		config = function()
-			local colors = require("colors")
+			local colors = require("config.colors")
 			require("eyeliner").setup({
 				highlight_on_key = true,
 				dim = true,

@@ -62,7 +62,7 @@ return {
 		end)()),
 	},
 	config = function()
-		local colors = require("colors")
+		local colors = require("config.colors")
 		vim.api.nvim_set_hl(0, "BufferCurrent", { fg = colors.blue })
 		-- diagnostics
 

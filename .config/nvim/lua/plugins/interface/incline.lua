@@ -3,7 +3,7 @@ return {
 	event = "VeryLazy",
 	enabled = true,
 	config = function()
-		local colors = require("colors")
+		local colors = require("config.colors")
 		vim.api.nvim_set_hl(0, "InclineNormal", { bg = "NONE" })
 		vim.api.nvim_set_hl(0, "InclineNormalNC", { bg = "NONE" })
 		require("incline").setup({
