@@ -1,3 +1,4 @@
+local M = {}
 local cmd = vim.api.nvim_create_autocmd
 local group = vim.api.nvim_create_augroup("autocommands", {})
 
@@ -58,3 +59,77 @@ cmd({ "BufLeave", "FocusLost", "InsertEnter", "CmdlineEnter", "WinLeave" }, {
 		end
 	end,
 })
+
+function M.setup_diagnostics()
+	vim.diagnostic.config({
+		signs = {
+			text = {
+				[vim.diagnostic.severity.ERROR] = " ",
+				[vim.diagnostic.severity.WARN] = " ",
+				[vim.diagnostic.severity.HINT] = " ",
+				[vim.diagnostic.severity.INFO] = " ",
+			},
+			numhl = {
+				[vim.diagnostic.severity.ERROR] = "DiagnosticSignError",
+				[vim.diagnostic.severity.WARN] = "DiagnosticSignWarn",
+				[vim.diagnostic.severity.HINT] = "DiagnosticSignHint",
+				[vim.diagnostic.severity.INFO] = "DiagnosticSignInfo",
+			},
+			linehl = {},
+		},
+		virtual_text = false,
+		float = {
+			show_header = true,
+			source = "if_many",
+			border = "rounded",
+			focusable = false,
+			max_width = 100,
+			max_height = 10,
+			close_events = {
+				"BufLeave",
+				"CursorMoved",
+				"InsertEnter",
+				"FocusLost",
+			},
+		},
+		underline = {
+			severity = { min = vim.diagnostic.severity.WARN },
+		},
+		severity_sort = {
+			reverse = false,
+		},
+		update_in_insert = false,
+	})
+
+	local diagnostics_group = vim.api.nvim_create_augroup("DiagnosticsGroup", { clear = true })
+	cmd({ "CursorHold", "CursorHoldI" }, {
+		group = diagnostics_group,
+		callback = function()
+			vim.diagnostic.open_float(nil, {
+				focusable = false,
+				close_events = {
+					"BufLeave",
+					"CursorMoved",
+					"InsertEnter",
+					"FocusLost",
+				},
+				source = "if_many",
+				scope = "line",
+			})
+		end,
+	})
+end
+
+function M.setup_formatters(client, bufnr)
+	local group = vim.api.nvim_create_augroup("LspFormatting", {})
+
+	if client.name == "eslint" then
+		vim.api.nvim_create_autocmd("BufWritePre", {
+			buffer = bufnr,
+			command = "EslintFixAll",
+			group = group,
+		})
+	end
+end
+
+return M

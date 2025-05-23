@@ -27,13 +27,13 @@ return {
 					{
 						"overseer",
 						label = "", -- Prefix for task counts
-						colored = true, -- Color the task icons and counts
 						symbols = {
 							[overseer.STATUS.FAILURE] = "󰚌 ",
 							[overseer.STATUS.CANCELED] = " ",
 							[overseer.STATUS.SUCCESS] = " ",
 							[overseer.STATUS.RUNNING] = " ",
 						},
+						colored = true, -- Color the task icons and counts
 						unique = true, -- Unique-ify non-running task count by name
 						name_not = false, -- When true, invert the name search
 						status = nil, -- List of task statuses to display

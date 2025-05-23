@@ -1,3 +1,4 @@
+local M = {}
 local base_opts = { noremap = true, silent = true }
 
 local function map(mode, lhs, rhs, opts_or_desc)
@@ -215,3 +216,30 @@ if vim.g.vscode then
 	map("n", "<C-p>", call("workbench.action.quickOpen"))
 	map("n", "<leader>lg", call("workbench.action.findInFiles"))
 end
+
+function M.setup_lsp_keymap(client, bufnr)
+	function nmap(keys, cmd, desc)
+		if desc then
+			desc = "LSP: " .. desc
+		end
+		vim.keymap.set("n", keys, cmd, { buffer = bufnr, desc = desc })
+	end
+
+	nmap("gD", vim.lsp.buf.declaration, "[G]o to [D]eclaration")
+	nmap("gd", vim.lsp.buf.definition, "[G]o to [D]efinition")
+	nmap("<leader>gd", function()
+		vim.cmd("vsplit")
+		vim.lsp.buf.definition()
+	end, "[G]o to [D]efinition in split")
+	nmap("<leader>pd", "<cmd>Lspsaga peek_definition<CR>", "[P]eek [D]efinition")
+	nmap("gi", vim.lsp.buf.implementation, "[G]o to [I]mplementation")
+	nmap("gr", vim.lsp.buf.references, "[G]o to [R]eferences")
+	nmap("<leader>k", "<cmd>Lspsaga hover_doc<CR>", "Hover")
+	nmap("gtd", vim.lsp.buf.type_definition, "[G]o to [T]ype [D]efinition")
+	nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
+	nmap("<leader>fi", "<cmd>TSToolsAddMissingImports<CR>", "[F]ix [I]mports")
+	nmap("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
+	nmap("<leader>lsp", "<cmd>:LspRestart<CR>", "restart langauge server")
+end
+
+return M

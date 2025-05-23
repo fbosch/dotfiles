@@ -1,7 +1,6 @@
 return {
 	"stevearc/overseer.nvim",
 	dependencies = {
-		{ "stevearc/dressing.nvim", event = "VeryLazy" },
 		{ "nvim-telescope/telescope.nvim", event = "VeryLazy" },
 	},
 	cmd = { "OverseerToggle", "OverseerRun", "OverseerLoadBundle" },

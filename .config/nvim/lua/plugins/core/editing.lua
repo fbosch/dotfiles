@@ -8,11 +8,6 @@ return {
 	{ "smjonas/live-command.nvim", event = "BufRead", opts = {} },
 	{ "nguyenvukhang/nvim-toggler", event = { "BufReadPost" }, opts = {} },
 	{
-		"chrisgrieser/nvim-recorder",
-		dependencies = "rcarriga/nvim-notify", -- optional
-		opts = {}, -- required even with default settings, since it calls `setup()`
-	},
-	{
 
 		"caliguIa/zendiagram.nvim",
 		event = "BufRead",
