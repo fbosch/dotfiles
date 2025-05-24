@@ -1,13 +1,4 @@
-local utils = require("utils")
 local ft_abbr = require("config.autocmd").setup_filetype_abbreviations
-
-local typos = {
-	teh = "the",
-	seperate = "separate",
-	definately = "definitely",
-	cahnge = "change",
-	futher = "further",
-}
 
 ft_abbr({ "javascript", "javascriptreact", "typescript", "typescriptreact" }, {
 	cl = "console.log()<esc>h",
@@ -24,12 +15,40 @@ ft_abbr({ "javascript", "javascriptreact", "typescript", "typescriptreact" }, {
 
 ft_abbr({ "lua" }, {
 	pr = 'print("")<esc>h',
-	req = 'require("")<esc>h',
+	req = 'require("")<esc>hi',
 })
 
-local abbreviations = utils.merge_tables(typos)
+local typos = {
+	cahnge = "change",
+	futher = "further",
+	teh = "the",
+	seperate = "separate",
+	definately = "definitely",
+	recieve = "receive",
+	occured = "occurred",
+	untill = "until",
+	adress = "address",
+	acheive = "achieve",
+	occassion = "occasion",
+	intial = "initial",
+	sucess = "success",
+	sucessful = "successful",
+	environment = "environment",
+	enviroment = "environment",
+	promsie = "promise",
+	promse = "promise",
+	visiblity = "visibility",
+	satic = "static",
+	stuct = "struct",
+	listner = "listener",
+	moduel = "module",
+	pakage = "package",
+	temproary = "temporary",
+	temprary = "temporary",
+}
+
 vim.schedule(function()
-	for k, v in pairs(abbreviations) do
+	for k, v in pairs(typos) do
 		vim.cmd(string.format("abbreviate %s %s", k, v))
 	end
 end)
