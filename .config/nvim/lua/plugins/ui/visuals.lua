@@ -67,13 +67,18 @@ return {
 		"smjonas/live-command.nvim",
 		event = "VeryLazy",
 		priority = 10,
-		config = function()
-			require("live-command").setup({
-				commands = {
-					Norm = { cmd = "norm" },
-				},
-			})
-		end,
+		opts = {
+			commands = {
+				Norm = { cmd = "norm" },
+			},
+			enable_highlighting = true,
+			inline_highlighting = true,
+			hl_groups = {
+				insertion = "DiffAdd",
+				deletion = "DiffDelete",
+				change = "DiffChange",
+			},
+		},
 	},
 	{
 		"levouh/tint.nvim",

@@ -1,23 +1,5 @@
 return {
 	{
-		"robitx/gp.nvim",
-		cmd = { "GpChatToggle" },
-		keys = {
-			{
-				"<leader>gp",
-				"<cmd>GpChatToggle vsplit<cr>",
-				desc = "Toggle ChatGPT VSplit",
-				silent = true,
-			},
-		},
-		config = function()
-			require("gp").setup({
-				chat_user_prefix = "󰭹 : ",
-				chat_assistant_prefix = { "󰚩 : ", "[{{agent}}]" },
-			})
-		end,
-	},
-	{
 		"jackmort/chatgpt.nvim",
 		dependencies = {
 			"muniftanjim/nui.nvim",

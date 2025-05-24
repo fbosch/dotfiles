@@ -1,7 +1,7 @@
 return {
 	{
 		"romgrk/barbar.nvim",
-		dependencies = { "kyazdani42/nvim-web-devicons" },
+		dependencies = { "nvim-tree/nvim-web-devicons" },
 		event = { "VeryLazy" },
 		cmd = { "BufferNext", "BufferPrevious", "BufferClose", "BufferPick" },
 		priority = 50,
@@ -107,7 +107,7 @@ return {
 	{
 		"b0o/incline.nvim",
 		event = "VeryLazy",
-		dependencies = { "kyazdani42/nvim-web-devicons" },
+		dependencies = { "nvim-tree/nvim-web-devicons" },
 		config = function()
 			local colors = require("config.colors")
 			vim.api.nvim_set_hl(0, "InclineNormal", { bg = "NONE" })

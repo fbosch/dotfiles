@@ -6,7 +6,6 @@ return {
 			"nvim-treesitter/nvim-treesitter",
 			"L3MON4D3/LuaSnip",
 			"nvim-lua/plenary.nvim",
-			"onsails/lspkind.nvim",
 			"hrsh6th/nvim-cmp",
 			"f3fora/cmp-spell",
 			{
@@ -18,18 +17,17 @@ return {
 				ft = { "fish" },
 			},
 			"saadparwaiz1/cmp_luasnip",
-			"hrsh7th/cmp-emoji",
 			{
 				"hrsh7th/cmp-nvim-lsp",
+				event = "LspAttach",
+			},
+			{
+				"onsails/lspkind.nvim",
 				event = "LspAttach",
 			},
 			"hrsh7th/cmp-path",
 			"hrsh7th/cmp-buffer",
 			"hrsh7th/cmp-omni",
-			{
-				"tzachar/cmp-tabnine",
-				build = "./install.sh",
-			},
 		},
 		event = { "InsertEnter" },
 		config = function()
@@ -37,7 +35,6 @@ return {
 			local types = require("cmp.types")
 			local cmp_autopairs = require("nvim-autopairs.completion.cmp")
 			cmp.event:on("confirm_done", cmp_autopairs.on_confirm_done())
-			-- require("copilot_cmp").setup()
 			local lspkind = require("lspkind")
 			-- require("luasnip.loaders.from_snipmate").lazy_load({ paths = "~/.config/nvim/snippets" })
 			cmp.setup({
@@ -69,33 +66,12 @@ return {
 					format = lspkind.cmp_format({
 						mode = "symbol_text",
 						ellipsis_char = "",
-						symbol_map = {
-							TabNine = "",
-							Copilot = "",
-						},
-						before = function(entry, vim_item)
-							if entry.source.name == "cmp_tabnine" then
-								local detail = (entry.completion_item.data or {}).detail
-								if detail and detail:find(".*%%.*") then
-									vim_item.kind = vim_item.kind .. " " .. detail
-								end
-								if (entry.completion_item.data or {}).multiline then
-									vim_item.kind = vim_item.kind .. " " .. "[ML]"
-								end
-							end
-							vim_item.menu = nil
-							return vim_item
-						end,
 					}),
 				},
 				sources = cmp.config.sources({
 					{ name = "nvim_lsp", max_item_count = 10 },
-					-- { name = "copilot", max_item_count = 3 },
 					{ name = "buffer", max_item_count = 3 },
-					{ name = "cmp_tabnine", max_item_count = 2 },
 					{ name = "path", max_item_count = 10 },
-					-- { name = "emoji", max_item_count = 15 },
-					-- { name = "spell", max_item_count = 4 },
 					{ name = "nvim_lua", max_item_count = 5 },
 					{
 						name = "omni",
@@ -109,7 +85,6 @@ return {
 					["<C-f>"] = cmp.mapping.scroll_docs(4),
 					["<C-d>"] = cmp.mapping.scroll_docs(-4),
 					["<C-e>"] = cmp.mapping.abort(),
-					-- ["<Space>"] = cmp.mapping.confirm({ select = true }),
 					["<C-y>"] = cmp.mapping.confirm({ behavior = types.cmp.ConfirmBehavior.Insert, select = true }),
 					["<C-j>"] = cmp.mapping.select_next_item({ behavior = types.cmp.SelectBehavior.Select }),
 					["<C-k>"] = cmp.mapping.select_prev_item({ behavior = types.cmp.SelectBehavior.Select }),
@@ -130,8 +105,6 @@ return {
 			vim.api.nvim_set_hl(0, "CmpItemKindProperty", { fg = colors.white })
 			vim.api.nvim_set_hl(0, "CmpItemKindUnit", { fg = colors.white })
 			vim.api.nvim_set_hl(0, "CmpItemKindSnippet", { fg = colors.orange })
-			vim.api.nvim_set_hl(0, "CmpItemKindTabNine", { fg = "#ad5df0" })
-			vim.api.nvim_set_hl(0, "CmpItemKindCopilot", { fg = "#13d8d9" })
 		end,
 	},
 }

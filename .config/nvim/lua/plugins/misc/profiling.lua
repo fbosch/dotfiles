@@ -1,5 +1,4 @@
 return {
-  "tweekmonster/startuptime.vim",
-  -- , "dstein64/vim-startuptime",
-  cmd = "StartupTime",
+	"tweekmonster/startuptime.vim",
+	cmd = "StartupTime",
 }

@@ -18,7 +18,7 @@ return {
 	},
 	{
 		"ibhagwan/fzf-lua",
-		dependencies = { "kyazdani42/nvim-web-devicons" },
+		dependencies = { "nvim-tree/nvim-web-devicons" },
 		cmd = { "FzfLua", "FzfRg", "FzfRgVisualSelection" },
 		keys = {
 			{
@@ -78,6 +78,7 @@ return {
 					fzf = {
 						["ctrl-u"] = "half-page-up",
 						["ctrl-d"] = "half-page-down",
+						["ctrl-q"] = "select-all+accept",
 					},
 				},
 			})
@@ -94,6 +95,10 @@ return {
 				.. colors
 
 			vim.api.nvim_create_user_command("FzfRgVisualSelection", function()
+				-- 1. add visual selection to the clipboard
+				-- 2. search for the selection
+				-- 3. add to quicklist
+				-- 4. create command to search and replace the quickfix list with clipboard content
 				fzf.grep_visual({
 					rg_glob = true,
 					exec_empty_query = false,

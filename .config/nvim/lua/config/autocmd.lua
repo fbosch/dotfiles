@@ -1,6 +1,7 @@
 local M = {}
 local cmd = vim.api.nvim_create_autocmd
-local group = vim.api.nvim_create_augroup("autocommands", {})
+local map = require("utils").set_keymap
+local group = vim.api.nvim_create_augroup("default", {})
 
 -- set json files to json5 filetype
 cmd({ "BufRead", "BufNewFile" }, {
@@ -37,6 +38,17 @@ cmd({ "InsertLeave" }, {
 	group = group,
 })
 
+cmd({ "FileType" }, {
+	pattern = "qf",
+	callback = function()
+		map("n", "q", ":cclose<CR>", "Close quickfix window")
+		map("n", "<ESC>", ":cclose<CR>", "Close quickfix window")
+		map("n", "<leader>R", function()
+			require("utils").project_find_and_replace(vim.fn.getreg("v"))
+		end, "Initialize find and replace with text from cliboard")
+	end,
+})
+
 -- enable relative line numbers in insert mode
 cmd({ "BufEnter", "FocusGained", "InsertLeave", "CmdlineLeave", "WinEnter" }, {
 	pattern = "*",
@@ -59,6 +71,19 @@ cmd({ "BufLeave", "FocusLost", "InsertEnter", "CmdlineEnter", "WinLeave" }, {
 		end
 	end,
 })
+
+function M.setup_filetype_abbreviations(pattern, abbr)
+	return cmd({ "FileType" }, {
+		pattern = pattern,
+		callback = function()
+			vim.schedule(function()
+				for k, v in pairs(abbr) do
+					vim.cmd(string.format("abbreviate %s %s", k, v))
+				end
+			end)
+		end,
+	})
+end
 
 function M.setup_diagnostics()
 	vim.diagnostic.config({

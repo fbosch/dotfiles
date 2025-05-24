@@ -1,8 +1,8 @@
 return {
-	"kyazdani42/nvim-tree.lua",
+	"nvim-tree/nvim-tree.lua",
 	dependencies = {
 		"stevearc/dressing.nvim",
-		"kyazdani42/nvim-web-devicons",
+		"nvim-tree/nvim-web-devicons",
 		"mcchrish/zenbones.nvim",
 		"rachartier/tiny-devicons-auto-colors.nvim",
 	},

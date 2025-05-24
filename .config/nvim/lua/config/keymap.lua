@@ -1,10 +1,10 @@
 local M = {}
-
 local utils = require("utils")
+local vscode = require("utils.vscode")
 
 local map = utils.set_keymap
-local vscode_call = utils.vscode_call
-local vscode_adaptive_map = utils.vscode_adaptive_map
+local vscode_call = vscode.call
+local vscode_adaptive_map = vscode.adaptive_map
 
 -- disable key that is used as leader
 map("n", "<Space>", "<NOP>")
@@ -52,9 +52,31 @@ map("x", "p", '"_dP')
 -- yank current file
 map("n", "<leader>yf", ":%y<cr>", "Yank current file")
 
--- replace words under cursor
-map("n", "<leader>rw", ":%s/<C-R><C-W>//gI<left><left><left>", "Replace words under cursor in buffer") -- in buffer
-map("n", "<leader>rW", ":s/<C-R><C-W>//gI<left><left><left>", "Replace words under cursor on line") -- on line
+-- Search for the word under the cursor and jump to the next match.
+map("n", "<leader>fn", function()
+	local word = vim.fn.expand("<cword>")
+	vim.fn.setreg("/", "\\<" .. word .. "\\>")
+	vim.cmd("normal! l") -- move cursor right to avoid matching the current word
+	vim.cmd("normal! n") -- jump to the next occurrence
+	vim.cmd("normal! zz") -- center the screen on the current line
+end, "Find next occurrence of word under cursor")
+
+-- find and replace
+map("n", "<leader>r", ":%s/<C-R><C-W>//gI<left><left><left>", "Replace words under cursor in buffer") -- in buffer
+map("n", "<leader>R", function()
+	local word = vim.fn.expand("<cword>")
+	vim.fn.setreg("v", word) -- yank word under cursor
+	utils.project_find_and_replace(word, { word = true })
+end, "Project-wide find and replace")
+map("x", "<leader>R", function()
+	vim.cmd('normal! "vy') -- yank visual selection
+	local selection = vim.fn.getreg("v")
+	if not selection or selection == "" then
+		vim.notify("No text selected.", vim.log.levels.WARN)
+		return
+	end
+	utils.project_find_and_replace(selection)
+end, "Project-wide replace")
 
 -- save files
 map("n", "<leader>s", ":wall<CR>", "Save all files")
@@ -140,33 +162,8 @@ map("n", "<leader>qf", function()
 end, "Toggle Quickfix List")
 
 -- auto switch to newly created splits
-map(
-	"n",
-	"<C-W>v",
-	(
-		vim.g.vscode and ":lua require('vscode').call('workbench.action.splitEditor')<CR>"
-		or ":vsplit<CR> <bar> :wincmd l<CR>"
-	),
-	"Create a new vertical split and switch to it"
-)
-map(
-	"n",
-	"<C-W>s",
-	(
-		vim.g.vscode and ":lua require('vscode').call('workbench.action.splitEditorDown')<CR>"
-		or ":split<CR> <bar> :wincmd j<CR>"
-	),
-	"Create a new horizontal split and switch to it"
-)
-
--- Search for the word under the cursor and jump to the next match.
-map("n", "<leader>fn", function()
-	local word = vim.fn.expand("<cword>")
-	vim.fn.setreg("/", "\\<" .. word .. "\\>")
-	vim.cmd("normal! l") -- move cursor right to avoid matching the current word
-	vim.cmd("normal! n") -- jump to the next occurrence
-	vim.cmd("normal! zz") -- center the screen on the current line
-end, "Find next occurrence of word under cursor")
+vscode_adaptive_map("n", "<C-W>v", "workbench.action.splitEditor", ":vsplit<CR> <bar> :wincmd l<CR>")
+vscode_adaptive_map("n", "<C-W>s", "workbench.action.splitEditorDown", ":split<CR> <bar> :wincmd j<CR>")
 
 -- remap split manipulation to SHIFT + CTRL + hjkl
 map("n", "<C-S-h>", ":wincmd H<CR>")
