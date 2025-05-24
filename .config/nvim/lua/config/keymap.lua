@@ -2,6 +2,7 @@ local M = {}
 local utils = require("utils")
 local yank = require("utils.yank")
 local vscode = require("utils.vscode")
+local refactor = require("utils.refactor")
 
 local map = utils.set_keymap
 local vscode_adaptive_map = vscode.adaptive_map
@@ -49,8 +50,12 @@ map("n", ",P", '"0P')
 -- Don't yank on put
 map("x", "p", '"_dP')
 
--- yank current file
+-- yanking
 map("n", "<leader>yf", ":%y<cr>", "Yank current file")
+map("n", "<leader>yd", yank.cursor_diagnostics, "Copy diagnostic message under cursor to clipboard")
+map("n", "<leader>yad", yank.all_diagnostics, "Copy all diagnostics in buffer to clipboard")
+map("x", "<leader>ym", yank.selection_to_markdown, "Copy visual selection to clipboard as markdown code block")
+map("n", "<leader>yfm", yank.file_to_markdown, "Copy buffer to clipboard as markdown code block")
 
 -- Search for the word under the cursor and jump to the next match.
 map("n", "<leader>fn", function()
@@ -63,8 +68,8 @@ end, "Find next occurrence of word under cursor")
 
 -- find and replace
 map("n", "<leader>r", ":%s/<C-R><C-W>//gI<left><left><left>", "Replace words under cursor in buffer") -- in buffer
-map("n", "<leader>R", ":ProjectFindAndReplaceWord<cr>")
-map("x", "<leader>R", ":ProjectFindAndReplaceSelection<cr>")
+map("n", "<leader>R", refactor.find_and_replace_word, "Replace word under cursor in project")
+map("x", "<leader>R", refactor.find_and_replace_selection, "Replace text selection in project")
 
 -- save files
 map("n", "<leader>s", ":wall<CR>", "Save all files")
@@ -109,12 +114,6 @@ map("n", "<leader>ip", function()
 	})
 	vim.cmd("normal! zz")
 end, "Navigate to the previous issue in the current buffer")
-
--- yanking scenarios
-map("n", "<leader>yd", yank.cursor_diagnostics, "Copy diagnostic message under cursor to clipboard")
-map("n", "<leader>yad", yank.all_diagnostics, "Copy all diagnostics in buffer to clipboard")
-map("x", "<leader>ym", yank.selection_to_markdown, "Copy visual selection to clipboard as markdown code block")
-map("n", "<leader>yam", yank.file_to_markdown, "Copy buffer to clipboard as markdown code block")
 
 -- remap split manipulation to SHIFT + CTRL + hjkl
 map("n", "<C-S-h>", ":wincmd H<CR>")
@@ -176,7 +175,7 @@ function M.setup_lsp_keymaps(client, bufnr)
 	nmap("gr", vim.lsp.buf.references, "[G]o to [R]eferences")
 	nmap("<leader>k", "<cmd>Lspsaga hover_doc<CR>", "Hover")
 	nmap("gtd", vim.lsp.buf.type_definition, "[G]o to [T]ype [D]efinition")
-	nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
+	nmap("<leader>r", vim.lsp.buf.rename, "[R]e[n]ame")
 	nmap("<leader>fi", "<cmd>TSToolsAddMissingImports<CR>", "[F]ix [I]mports")
 	nmap("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
 	nmap("<leader>lsp", "<cmd>:LspRestart<CR>", "restart langauge server")
