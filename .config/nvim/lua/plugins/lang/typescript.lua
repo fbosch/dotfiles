@@ -15,7 +15,7 @@ return {
 	{
 		"dmmulroy/tsc.nvim",
 		ft = { "typescript", "typescriptreact" },
-		event = "LspAttach",
+		cmd = { "TSCOpen", "TSCClose", "TSCRestart", "TSCToggle" },
 		opts = {
 			auto_close_qflist = true,
 			auto_start_watch_mode = true,

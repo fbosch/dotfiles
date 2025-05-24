@@ -12,14 +12,6 @@ return {
 	},
 	enabled = true,
 	config = function()
-		vim.api.nvim_create_user_command("WipeAllSessions", function()
-			local cmd = string.format("rm -rf %s", root_dir)
-			os.execute(cmd)
-			vim.notify("Wiped all sessions", vim.log.levels.INFO, {
-				title = "AutoSession",
-			})
-		end, { bang = true })
-
 		require("auto-session").setup({
 			log_level = "error",
 			root_dir = root_dir,
@@ -28,13 +20,7 @@ return {
 			pre_save_cmds = {
 				function()
 					local overseer = require("overseer")
-					overseer.save_task_bundle(
-						bundle,
-						-- Passing nil will use config.opts.save_task_opts. You can call list_tasks() explicitly and
-						-- pass in the results if you want to save specific tasks.
-						nil,
-						{ on_conflict = "overwrite" } -- Overwrite existing bundle, if any
-					)
+					overseer.save_task_bundle(bundle, nil, { on_conflict = "overwrite" })
 				end,
 			},
 			pre_restore_cmds = {

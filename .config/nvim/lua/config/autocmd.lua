@@ -39,6 +39,19 @@ cmd({ "InsertLeave" }, {
 })
 
 cmd({ "FileType" }, {
+	pattern = "snacks_input",
+	group = group,
+	callback = function(args)
+		local bufnr = args.buf
+		cmd({ "BufLeave", "WinLeave" }, {
+			buffer = bufnr,
+			once = true,
+			callback = function() end,
+		})
+	end,
+})
+
+cmd({ "FileType" }, {
 	pattern = "qf",
 	callback = function()
 		map("n", "q", ":cclose<CR>", "Close quickfix window")

@@ -3,9 +3,9 @@ local utils = require("utils")
 local yank = require("utils.yank")
 local vscode = require("utils.vscode")
 local refactor = require("utils.refactor")
+local kagi = require("utils.kagi")
 
 local map = utils.set_keymap
-local vscode_adaptive_map = vscode.adaptive_map
 
 -- disable key that is used as leader
 map("n", "<Space>", "<NOP>")
@@ -26,6 +26,15 @@ map("x", "ø", "'")
 map("x", "å", "[")
 map("x", "¨", "]")
 map("n", "-", "/")
+
+map("n", "<leader>ka", kagi.ask, "Ask a question")
+-- map("x", "<leader>ka", function()
+-- 	vim.cmd('normal! ""y')
+-- 	local text = vim.fn.getreg('"')
+-- 	local prompt = text:gsub("[\r\n]+", " "):gsub("%s%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+-- 	kagi.ask(prompt)
+-- end, "Ask a question")
+map("n", "<leader>kp", kagi.show_previous_response, "Show previous answer")
 
 -- compare selection with clipboard
 map("v", "<leader>dc", "<CMD>DiffClip<CR>", "Compare selection with clipboard")
@@ -126,14 +135,14 @@ map("n", "<leader>bd", ":bp <bar> :bd #<CR>", "Close buffer but keep split") -- 
 map("n", "<leader>0", ":b#<CR>", "Go to previoulsy active buffer") --  previously active buffer
 
 -- auto switch to newly created splits
-vscode_adaptive_map("n", "<C-W>v", "workbench.action.splitEditor", ":vsplit<CR> <bar> :wincmd l<CR>")
-vscode_adaptive_map("n", "<C-W>s", "workbench.action.splitEditorDown", ":split<CR> <bar> :wincmd j<CR>")
+vscode.adaptive_map("n", "<C-W>v", "workbench.action.splitEditor", ":vsplit<CR> <bar> :wincmd l<CR>")
+vscode.adaptive_map("n", "<C-W>s", "workbench.action.splitEditorDown", ":split<CR> <bar> :wincmd j<CR>")
 
 -- split navigation (Shift+h/j/k/l)
-vscode_adaptive_map("n", "<S-h>", "workbench.action.focusPreviousGroup", ":wincmd h<CR>")
-vscode_adaptive_map("n", "<S-j>", "workbench.action.focusNextGroup", ":wincmd j<CR>")
-vscode_adaptive_map("n", "<S-k>", "workbench.action.focusPreviousGroup", ":wincmd k<CR>")
-vscode_adaptive_map("n", "<S-l>", "workbench.action.focusNextGroup", ":wincmd l<CR>")
+vscode.adaptive_map("n", "<S-h>", "workbench.action.focusPreviousGroup", ":wincmd h<CR>")
+vscode.adaptive_map("n", "<S-j>", "workbench.action.focusNextGroup", ":wincmd j<CR>")
+vscode.adaptive_map("n", "<S-k>", "workbench.action.focusPreviousGroup", ":wincmd k<CR>")
+vscode.adaptive_map("n", "<S-l>", "workbench.action.focusNextGroup", ":wincmd l<CR>")
 
 -- vscode exclusive keybindings
 if vim.g.vscode then

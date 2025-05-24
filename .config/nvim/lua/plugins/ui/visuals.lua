@@ -1,5 +1,10 @@
 return {
 	{
+		"folke/snacks.nvim",
+		event = "VeryLazy",
+		config = true,
+	},
+	{
 		"m-demare/hlargs.nvim",
 		dependencies = {
 			"nvim-treesitter/nvim-treesitter",

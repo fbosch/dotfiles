@@ -1,3 +1,5 @@
+local os = require("utils.fn").detect_os()
+
 return {
 	{
 		"romgrk/barbar.nvim",
@@ -107,6 +109,7 @@ return {
 	{
 		"b0o/incline.nvim",
 		event = "VeryLazy",
+		enabled = not os.is_wsl,
 		dependencies = { "nvim-tree/nvim-web-devicons" },
 		config = function()
 			local colors = require("config.colors")

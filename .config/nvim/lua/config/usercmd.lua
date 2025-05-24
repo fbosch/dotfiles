@@ -25,3 +25,5 @@ usrcmd("DiffClip", function()
 		ftype
 	))
 end, "Compare Active File with Clipboard")
+
+usrcmd("WipeAllSessions", utils.wipe_all_sessions, { bang = true, desc = "Wipe all sessions" })

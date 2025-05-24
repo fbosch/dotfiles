@@ -6,7 +6,7 @@ return {
 			"nvim-lua/plenary.nvim",
 			"nvim-telescope/telescope.nvim",
 		},
-		enabled = true,
+		enabled = false,
 		cmd = { "ChatGPT", "ChatGPTEditWithInstruction", "ChatGPTRun" },
 		keys = {
 			{

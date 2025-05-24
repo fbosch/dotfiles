@@ -8,4 +8,13 @@ return {
 		vim.api.nvim_create_user_command("PeekOpen", require("peek").open, {})
 		vim.api.nvim_create_user_command("PeekClose", require("peek").close, {})
 	end,
+	{
+		"MeanderingProgrammer/render-markdown.nvim",
+		ft = { "markdown" },
+		config = function()
+			require("render-markdown").setup({
+				completions = { lsp = { enabled = true } },
+			})
+		end,
+	},
 }
