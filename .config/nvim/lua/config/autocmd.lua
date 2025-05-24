@@ -44,7 +44,18 @@ cmd({ "FileType" }, {
 		map("n", "q", ":cclose<CR>", "Close quickfix window")
 		map("n", "<ESC>", ":cclose<CR>", "Close quickfix window")
 		map("n", "<leader>R", function()
-			require("utils").project_find_and_replace(vim.fn.getreg("v"))
+			require("utils.refactor").project_find_and_replace(vim.fn.getreg("v"))
+		end, "Initialize find and replace with text from cliboard")
+	end,
+})
+
+cmd({ "FileType" }, {
+	pattern = "Trouble",
+	callback = function()
+		vim.notify("Trouble!")
+		map("n", "<ESC>", ":TroubleClose<CR>")
+		map("n", "<leader>R", function()
+			require("utils.refactor").project_find_and_replace(vim.fn.getreg("v"))
 		end, "Initialize find and replace with text from cliboard")
 	end,
 })

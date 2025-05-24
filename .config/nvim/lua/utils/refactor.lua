@@ -1,7 +1,6 @@
 local M = {}
 
 function M.find_and_replace(pattern, opts)
-	local trouble = require("trouble")
 	opts = opts or {}
 	local literal = opts.literal ~= false -- default: true (use -F)
 
@@ -33,10 +32,15 @@ function M.find_and_replace(pattern, opts)
 	end
 	vim.fn.setqflist(qf_list, "r")
 	if #qf_list > 0 then
-		trouble.open("quickfix")
+		local ok, trouble = pcall(require, "trouble")
+		if ok then
+			trouble.open({ mode = "quickfix", focus = false, refresh = true })
+		else
+			vim.cmd("ccopen")
+		end
 		vim.defer_fn(function()
 			vim.api.nvim_feedkeys(":cfdo %s/" .. pattern .. "/", "n", false)
-		end, 20)
+		end, 100)
 	else
 		vim.notify("No matches found.", vim.log.levels.INFO)
 	end
@@ -56,14 +60,6 @@ function M.find_and_replace_selection()
 		return
 	end
 	M.find_and_replace(selection)
-end
-
-function M.replace_quickfix_with_trouble()
-	local ok, trouble = pcall(require, "trouble")
-	if ok then
-		vim.cmd("cclose")
-		trouble.open("quickfix")
-	end
 end
 
 return M
