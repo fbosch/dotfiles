@@ -1,9 +1,9 @@
 local M = {}
 local utils = require("utils")
+local yank = require("utils.yank")
 local vscode = require("utils.vscode")
 
 local map = utils.set_keymap
-local vscode_call = vscode.call
 local vscode_adaptive_map = vscode.adaptive_map
 
 -- disable key that is used as leader
@@ -56,27 +56,15 @@ map("n", "<leader>yf", ":%y<cr>", "Yank current file")
 map("n", "<leader>fn", function()
 	local word = vim.fn.expand("<cword>")
 	vim.fn.setreg("/", "\\<" .. word .. "\\>")
-	vim.cmd("normal! l") -- move cursor right to avoid matching the current word
-	vim.cmd("normal! n") -- jump to the next occurrence
-	vim.cmd("normal! zz") -- center the screen on the current line
+	vim.cmd("normal! l")
+	vim.cmd("normal! n")
+	vim.cmd("normal! zz")
 end, "Find next occurrence of word under cursor")
 
 -- find and replace
 map("n", "<leader>r", ":%s/<C-R><C-W>//gI<left><left><left>", "Replace words under cursor in buffer") -- in buffer
-map("n", "<leader>R", function()
-	local word = vim.fn.expand("<cword>")
-	vim.fn.setreg("v", word) -- yank word under cursor
-	utils.project_find_and_replace(word, { word = true })
-end, "Project-wide find and replace")
-map("x", "<leader>R", function()
-	vim.cmd('normal! "vy') -- yank visual selection
-	local selection = vim.fn.getreg("v")
-	if not selection or selection == "" then
-		vim.notify("No text selected.", vim.log.levels.WARN)
-		return
-	end
-	utils.project_find_and_replace(selection)
-end, "Project-wide replace")
+map("n", "<leader>R", ":ProjectFindAndReplaceWord<cr>")
+map("x", "<leader>R", ":ProjectFindAndReplaceSelection<cr>")
 
 -- save files
 map("n", "<leader>s", ":wall<CR>", "Save all files")
@@ -122,48 +110,11 @@ map("n", "<leader>ip", function()
 	vim.cmd("normal! zz")
 end, "Navigate to the previous issue in the current buffer")
 
--- yoink diagnostic message under cursor
-map("n", "<leader>yd", function()
-	local pos = vim.api.nvim_win_get_cursor(0)
-	local diagnostics = vim.diagnostic.get(0, { lnum = pos[1] - 1 })
-	if #diagnostics > 0 then
-		local message = diagnostics[1].message
-		vim.fn.setreg("+", message) -- System clipboard
-		vim.notify("Diagnostics copied to clipboard", vim.log.levels.INFO, { title = "Diagnostics" })
-	else
-		vim.notify("No diagnostic under cursor.", vim.log.levels.WARN, { title = "Diagnostics" })
-	end
-end, "Yank diagnostic message under cursor")
-
-map("n", "<leader>yad", function()
-	local diagnostics = vim.diagnostic.get(0)
-	if #diagnostics == 0 then
-		vim.notify("No diagnostics in buffer.", vim.log.levels.WARN, { title = "Diagnostics" })
-		return
-	end
-
-	local messages = {}
-	for _, diag in ipairs(diagnostics) do
-		table.insert(messages, string.format("[%s:%d] %s", diag.source or "LSP", diag.lnum + 1, diag.message))
-	end
-
-	local result = table.concat(messages, "\n")
-	vim.fn.setreg("+", result) -- System clipboard
-
-	vim.notify("All diagnostics copied to clipboard", vim.log.levels.INFO, { title = "Diagnostics" })
-end, "Yank all diagnostics in buffer")
-
-map("n", "<leader>qf", function()
-	if vim.fn.getqflist({ winid = 0 }).winid ~= 0 then
-		vim.cmd("cclose")
-	else
-		vim.cmd("copen")
-	end
-end, "Toggle Quickfix List")
-
--- auto switch to newly created splits
-vscode_adaptive_map("n", "<C-W>v", "workbench.action.splitEditor", ":vsplit<CR> <bar> :wincmd l<CR>")
-vscode_adaptive_map("n", "<C-W>s", "workbench.action.splitEditorDown", ":split<CR> <bar> :wincmd j<CR>")
+-- yanking scenarios
+map("n", "<leader>yd", yank.cursor_diagnostics, "Copy diagnostic message under cursor to clipboard")
+map("n", "<leader>yad", yank.all_diagnostics, "Copy all diagnostics in buffer to clipboard")
+map("x", "<leader>ym", yank.selection_to_markdown, "Copy visual selection to clipboard as markdown code block")
+map("n", "<leader>yam", yank.file_to_markdown, "Copy buffer to clipboard as markdown code block")
 
 -- remap split manipulation to SHIFT + CTRL + hjkl
 map("n", "<C-S-h>", ":wincmd H<CR>")
@@ -175,6 +126,10 @@ map("n", "<C-S-l>", ":wincmd L<CR>")
 map("n", "<leader>bd", ":bp <bar> :bd #<CR>", "Close buffer but keep split") -- close buffer but keep split
 map("n", "<leader>0", ":b#<CR>", "Go to previoulsy active buffer") --  previously active buffer
 
+-- auto switch to newly created splits
+vscode_adaptive_map("n", "<C-W>v", "workbench.action.splitEditor", ":vsplit<CR> <bar> :wincmd l<CR>")
+vscode_adaptive_map("n", "<C-W>s", "workbench.action.splitEditorDown", ":split<CR> <bar> :wincmd j<CR>")
+
 -- Split navigation (Shift+h/j/k/l)
 vscode_adaptive_map("n", "<S-h>", "workbench.action.focusPreviousGroup", ":wincmd h<CR>")
 vscode_adaptive_map("n", "<S-j>", "workbench.action.focusNextGroup", ":wincmd j<CR>")
@@ -183,23 +138,23 @@ vscode_adaptive_map("n", "<S-l>", "workbench.action.focusNextGroup", ":wincmd l<
 
 -- vscode exclusive keybindings
 if vim.g.vscode then
-	map("n", "<C-l>", vscode_call("workbench.action.nextEditor"))
-	map("n", "<C-h>", vscode_call("workbench.action.previousEditor"))
+	map("n", "<C-l>", vscode.call("workbench.action.nextEditor"))
+	map("n", "<C-h>", vscode.call("workbench.action.previousEditor"))
 
 	map(
 		"n",
 		"<leader>x",
 		table.concat({
-			vscode_call("workbench.action.closeOtherEditors"),
-			vscode_call("workbench.action.closeEditorsInOtherGroups"),
-			vscode_call("workbench.action.closeSidebar"),
+			vscode.call("workbench.action.closeOtherEditors"),
+			vscode.call("workbench.action.closeEditorsInOtherGroups"),
+			vscode.call("workbench.action.closeSidebar"),
 		}, "<BAR>")
 	)
 
-	map("n", "<leader>e", vscode_call("workbench.action.toggleSidebarVisibility"))
-	map("i", "<Esc>", "<ESC><BAR>" .. vscode_call("vscode-neovim.escape"))
-	map("n", "<C-p>", vscode_call("workbench.action.quickOpen"))
-	map("n", "<leader>lg", vscode_call("workbench.action.findInFiles"))
+	map("n", "<leader>e", vscode.call("workbench.action.toggleSidebarVisibility"))
+	map("i", "<Esc>", "<ESC><BAR>" .. vscode.call("vscode-neovim.escape"))
+	map("n", "<C-p>", vscode.call("workbench.action.quickOpen"))
+	map("n", "<leader>lg", vscode.call("workbench.action.findInFiles"))
 end
 
 function M.setup_lsp_keymaps(client, bufnr)
@@ -207,7 +162,7 @@ function M.setup_lsp_keymaps(client, bufnr)
 		if desc then
 			desc = "LSP: " .. desc
 		end
-		vim.keymap.set("n", keys, cmd, { buffer = bufnr, desc = desc })
+		map("n", keys, cmd, { buffer = bufnr, desc = desc })
 	end
 
 	nmap("gD", vim.lsp.buf.declaration, "[G]o to [D]eclaration")

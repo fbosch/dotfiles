@@ -1,5 +1,14 @@
 local M = {}
 
+function M.set_usrcmd(cmd, callback, opts_or_desc)
+	opts = opts or {}
+	vim.api.nvim_create_user_command(
+		cmd,
+		callback,
+		type(opts_or_desc) == "string" and { desc = opts_or_desc } or (opts_or_desc or {})
+	)
+end
+
 function M.set_keymap(mode, lhs, rhs, opts_or_desc)
 	local opts = vim.tbl_extend(
 		"force",
