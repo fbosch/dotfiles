@@ -30,7 +30,7 @@ map("n", "-", "/")
 -- compare selection with clipboard
 map("v", "<leader>dc", "<CMD>DiffClip<CR>", "Compare selection with clipboard")
 
--- Clear search highlights
+-- clear search highlights
 map("n", "<esc>", ":nohlsearch<CR>", "Clear search highlights")
 map("n", "<esc>^[", "<esc>^[", "Clear search highlights")
 
@@ -47,17 +47,17 @@ map("i", "<Right>", "<NOP>")
 map("n", ",p", '"0p')
 map("n", ",P", '"0P')
 
--- Don't yank on put
+-- don't yank on put
 map("x", "p", '"_dP')
 
--- yanking
-map("n", "<leader>yf", ":%y<cr>", "Yank current file")
-map("n", "<leader>yd", yank.cursor_diagnostics, "Copy diagnostic message under cursor to clipboard")
-map("n", "<leader>yad", yank.all_diagnostics, "Copy all diagnostics in buffer to clipboard")
-map("x", "<leader>ym", yank.selection_to_markdown, "Copy visual selection to clipboard as markdown code block")
-map("n", "<leader>yfm", yank.file_to_markdown, "Copy buffer to clipboard as markdown code block")
+-- special yanking utilities
+map("n", "<leader>yf", ":%y<cr>", "Yank current buffer")
+map("n", "<leader>yd", yank.cursor_diagnostics, "Yank diagnostic message under cursor")
+map("n", "<leader>yad", yank.all_diagnostics, "Yank all diagnostics in buffer")
+map("x", "<leader>ym", yank.selection_to_markdown, "Yank visual selection as markdown code block")
+map("n", "<leader>yfm", yank.file_to_markdown, "Yank current buffer as markdown code block")
 
--- Search for the word under the cursor and jump to the next match.
+-- search for the word under the cursor and jump to the next match.
 map("n", "<leader>fn", function()
 	local word = vim.fn.expand("<cword>")
 	vim.fn.setreg("/", "\\<" .. word .. "\\>")
@@ -129,7 +129,7 @@ map("n", "<leader>0", ":b#<CR>", "Go to previoulsy active buffer") --  previousl
 vscode_adaptive_map("n", "<C-W>v", "workbench.action.splitEditor", ":vsplit<CR> <bar> :wincmd l<CR>")
 vscode_adaptive_map("n", "<C-W>s", "workbench.action.splitEditorDown", ":split<CR> <bar> :wincmd j<CR>")
 
--- Split navigation (Shift+h/j/k/l)
+-- split navigation (Shift+h/j/k/l)
 vscode_adaptive_map("n", "<S-h>", "workbench.action.focusPreviousGroup", ":wincmd h<CR>")
 vscode_adaptive_map("n", "<S-j>", "workbench.action.focusNextGroup", ":wincmd j<CR>")
 vscode_adaptive_map("n", "<S-k>", "workbench.action.focusPreviousGroup", ":wincmd k<CR>")
@@ -143,6 +143,7 @@ if vim.g.vscode then
 	map(
 		"n",
 		"<leader>x",
+		-- replicates :BufferCloseAllButVisible
 		table.concat({
 			vscode.call("workbench.action.closeOtherEditors"),
 			vscode.call("workbench.action.closeEditorsInOtherGroups"),

@@ -114,6 +114,7 @@ return {
 	"neovim/nvim-lspconfig",
 	event = { "BufReadPre", "BufNewFile" },
 	dependencies = {
+		"antosha417/nvim-lsp-file-operations",
 		"williamboman/mason-lspconfig.nvim",
 		"WhoIsSethDaniel/mason-tool-installer.nvim",
 		{
@@ -175,7 +176,6 @@ return {
 		local capabilities = get_capabilities()
 		setup_lsp_handlers()
 		local ensure_installed = get_ensure_installed(servers)
-
 		require("mason-tool-installer").setup({ ensure_installed = ensure_installed })
 		require("mason").setup()
 		require("mason-lspconfig").setup({
@@ -184,5 +184,6 @@ return {
 			handlers = { mason_handlers(servers, capabilities, on_attach) },
 		})
 		require("lazydev").setup({ capabilities = capabilities, on_attach })
+		require("lsp-file-operations").setup()
 	end,
 }

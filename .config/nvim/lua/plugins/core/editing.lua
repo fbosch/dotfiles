@@ -5,7 +5,6 @@ return {
 	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },
 	{ "folke/ts-comments.nvim", event = "BufRead", opts = {} },
 	{ "echasnovski/mini.surround", event = { "InsertEnter" }, opts = {} },
-	{ "smjonas/live-command.nvim", event = "BufRead", opts = {} },
 	{ "nguyenvukhang/nvim-toggler", event = { "BufReadPost" }, opts = {} },
 	{
 		"chrisgrieser/nvim-spider",
