@@ -2,31 +2,40 @@ name: Smoke Test
 
 on: [push]
 
-defaults:
-  run:
-    shell: bash
-    working-directory: ./scripts
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  macos:
-    name: "Installs on macOS"
-    runs-on: macOS-latest
+  test:
+    name: Install & Checkhealth (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v1
-      - name: Install
-        run: ./brew-install-script.sh
-      - name: Neovim
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: ./scripts/brew-install-script.sh
+
+      - name: Neovim Plugin Sync
         run: nvim --headless +"lazy! sync" +qa
-  linux:
-    name: "Installs on Linux"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v1
-      - name: Install
-        run: ./brew-install-script.sh
-      - name: Neovim
-        run: nvim --headless +"lazy! sync" +qa
+
+      - name: Neovim Checkhealth
+        run: |
+          nvim --headless "+checkhealth | redir => out | silent messages | redir END | w! checkhealth.log | q"
+          cat checkhealth.log
+
+      - name: Fail on Neovim Health Error
+        run: |
+          if grep -q "ERROR" checkhealth.log; then
+            echo "::error::Neovim checkhealth found errors"
+            exit 1
+          fi
+
+      - name: Upload health log
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkhealth-${{ matrix.os }}
+          path: checkhealth.log

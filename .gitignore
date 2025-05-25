@@ -27,6 +27,7 @@ lazy-lock.json
 
 # Other
 **/.backup/
+checkhealth.log
 
 # Ignore swap/backup files for vim/neovim
 *.swp
