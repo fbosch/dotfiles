@@ -1,6 +1,0 @@
-cmd - h [
-  "kitty" : skhd -k ""
-]
-ctrl + 125 [
-  "kitty" : skhd -k ""
-]

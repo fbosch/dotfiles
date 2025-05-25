@@ -1,19 +1,34 @@
+# macOS system files
 .DS_Store
+
+# Editor and tool state files
 lazy-lock.json
-nix-fbb/result
 .config/lazygit/state.yml
+.config/nodemon*
+.config/TabNine/
+.config/github-copilot/
+.config/configstore/
+.config/raycast/
+.config/broot/
+.config/neofetch/
+.config/zed/
+
+# Neovim local data
+.config/nvim/sessions/
+.config/nvim/nvim/.undo/
+
+# Fish shell state (ignore all generated/variable data, not main config)
 .config/fish/private.fish
 .config/fish/fish_variables
-.config/fish/completions/**/*
-.config/fish/conf.d/**/*
-.config/fish/functions/**/*
-.config/github-copilot/**/*
-.config/configstore/**/*
-.config/raycast/**/*
-.config/broot/**/*
-.config/neofetch/**/*
-.config/zed/**/*
-**/nvim/.sessions/**/*
-**/nvim/.undo/**/*
-**/TabNine/**/*
-**/.backup/**/*
+.config/fish/completions/
+.config/fish/conf.d/
+.config/fish/functions/
+
+# Other
+**/.backup/
+
+# Ignore swap/backup files for vim/neovim
+*.swp
+*.swo
+*~
+
