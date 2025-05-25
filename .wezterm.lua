@@ -22,6 +22,7 @@ config.font = wezterm.font_with_fallback({
 		family = "JetBrains Mono",
 		harfbuzz_features = { "calt=0", "clig=0", "liga=0" },
 	},
+	"BabelStone Runic Elder Futhark",
 	"Noto Sans Runic",
 	{ family = "Symbols Nerd Font Mono", scale = 0.8 },
 	"Apple Color Emoji",
