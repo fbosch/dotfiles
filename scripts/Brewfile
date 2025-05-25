@@ -1,5 +1,4 @@
 tap "homebrew/bundle"
-tap "homebrew/cask"
 tap "fsouza/prettierd"
 tap "oven-sh/bun"
 
@@ -35,7 +34,6 @@ brew "corepack"
 brew "fsouza/prettierd/prettierd"
 brew "cloc"
 brew "neovim"
-brew "bun"
 brew "stylua"
 brew "lazygit"
 brew "git"
