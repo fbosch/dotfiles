@@ -1,17 +1,99 @@
 local format = require("utils.format")
 local layout = require("utils.layout")
+local web = require("utils.web")
+
 local M = {}
 
 local group = vim.api.nvim_create_augroup("Kagi", { clear = true })
-
 local current_win = nil
 local latest_response = nil
 local previous_response = nil
 
-function M.fastgpt(prompt, cb)
+local function get_kagi_token()
 	local token = os.getenv("KAGI_API_TOKEN")
-	if token == nil then
+	if not token then
 		vim.notify("Kagi API token not found", vim.log.levels.ERROR)
+	end
+	return token
+end
+
+local function with_progress(title)
+	local fidget_available, progress = pcall(require, "fidget.progress")
+	if fidget_available then
+		return progress.handle.create({ title = title, lsp_client = { name = "Kagi" } })
+	end
+end
+
+local function handle_result(result, opts)
+	local progress_handle = opts and opts.progress_handle
+	local prompt = opts and opts.prompt
+	local cb = opts and opts.cb
+
+	if result.code ~= 0 then
+		vim.schedule(function()
+			if progress_handle then
+				progress_handle:cancel()
+			end
+			vim.notify("Kagi API error: " .. result.stderr, vim.log.levels.ERROR)
+		end)
+		return
+	end
+
+	local decoded = vim.json.decode(result.stdout, { object = true, array = true })
+	if decoded and decoded.error ~= nil then
+		vim.schedule(function()
+			if progress_handle then
+				progress_handle:cancel()
+			end
+			vim.notify(decoded.error[1].message, vim.log.levels.ERROR)
+			if prompt then
+				vim.notify("Prompt: " .. prompt)
+			end
+		end)
+		return
+	end
+
+	if progress_handle then
+		vim.schedule(function()
+			progress_handle:cancel()
+		end)
+	end
+
+	if cb then
+		cb(decoded and decoded.data or decoded)
+	end
+end
+
+function M.summarize(url, cb)
+	local token = get_kagi_token()
+	if not token then
+		return
+	end
+
+	local url_with_params =
+		web.build_url("https://kagi.com/api/v0/summarize", { url = url, engine = "muriel", summary_type = "summary" })
+
+	local cmd = {
+		"curl",
+		"-v",
+		"-H",
+		"Authorization: Bot " .. token,
+		url_with_params,
+	}
+
+	local progress_handle = with_progress("summarizing")
+	vim.system(cmd, {}, function(result)
+		handle_result(result, {
+			progress_handle = progress_handle,
+			cb = cb,
+		})
+	end)
+end
+
+function M.fastgpt(prompt, cb)
+	local token = get_kagi_token()
+	if not token then
+		return
 	end
 
 	local cmd = {
@@ -24,36 +106,14 @@ function M.fastgpt(prompt, cb)
 		'{"query": "' .. prompt .. '"}',
 		"https://kagi.com/api/v0/fastgpt",
 	}
-	local fidget_available, progress = pcall(require, "fidget.progress")
-	local progress_handle
-
-	if fidget_available then
-		progress_handle = progress.handle.create({ title = "fetching answer", lsp_client = { name = "Kagi" } })
-	end
+	local progress_handle = with_progress("fetching answer")
 
 	vim.system(cmd, {}, function(result)
-		if result.code ~= 0 then
-			vim.schedule(function()
-				if progress_handle then
-					progress_handle:cancel()
-				end
-				vim.notify("Kagi API error: " .. result.stderr, vim.log.levels.ERROR)
-			end)
-			return
-		end
-
-		local decoded = vim.json.decode(result.stdout, { object = true, array = true })
-		if decoded.error ~= nil then
-			vim.schedule(function()
-				if progress_handle then
-					progress_handle:cancel()
-				end
-				vim.notify(decoded.error[1].message, vim.log.levels.ERROR)
-				vim.notify("Prompt:", prompt)
-			end)
-		end
-
-		cb(decoded.data)
+		handle_result(result, {
+			progress_handle = progress_handle,
+			prompt = prompt,
+			cb = cb,
+		})
 	end)
 end
 
@@ -85,7 +145,7 @@ local function show_response(response)
 	-- calculate the height of the window
 	local num_lines = #lines
 	local max_height = math.floor(vim.o.lines * 0.8)
-	local min_height = 4
+	local min_height = 1
 	local height = math.max(math.min(num_lines, max_height), min_height) + 2
 
 	-- close the current window if it exists
@@ -145,7 +205,7 @@ function M.show_previous_response()
 	show_response(previous_response)
 end
 
-function M.ask(default)
+function M.prompt_fastgpt(default)
 	local ok, Snacks = pcall(require, "snacks")
 
 	local height = 1
@@ -187,6 +247,21 @@ function M.ask(default)
 			end,
 		})
 	end
+end
+
+function M.summarize_nearest_url()
+	local line = vim.fn.getline(".")
+	local url = line:match("https?://[%w-_%.%?%.:/%+=&%%#@%!]+")
+	if not url then
+		vim.notify("No URL found", vim.log.levels.WARN)
+		return
+	end
+
+	M.summarize(url, function(response)
+		vim.schedule(function()
+			show_response(response)
+		end)
+	end)
 end
 
 return M

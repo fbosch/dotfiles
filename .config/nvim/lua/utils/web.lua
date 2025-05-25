@@ -1,6 +1,25 @@
 local M = {}
 local platform = require("utils.platform")
 
+function M.url_encode(str)
+	return (str:gsub("[^%w%-_%.~]", function(c)
+		return string.format("%%%02X", string.byte(c))
+	end))
+end
+
+function M.build_url(endpoint, params)
+	if not params or vim.tbl_isempty(params) then
+		return endpoint
+	end
+	local query = {}
+	for k, v in pairs(params) do
+		if v ~= nil then
+			table.insert(query, M.url_encode(k) .. "=" .. M.url_encode(tostring(v)))
+		end
+	end
+	return endpoint .. "?" .. table.concat(query, "&")
+end
+
 function M.extract_uris(lines)
 	opts = opts or {}
 	local uris, seen = {}, {}
@@ -19,6 +38,21 @@ function M.extract_uris(lines)
 		end
 	end
 	return uris
+end
+
+function M.extract_uris_from_selection()
+	vim.cmd('normal! ""y')
+	local content = vim.fn.getreg('"')
+
+	if not content or content == "" then
+		vim.notify("No visual selection found", vim.log.levels.WARN)
+		return
+	end
+	local lines = {}
+	for line in content:gmatch("[^\n]+") do
+		table.insert(lines, line)
+	end
+	return M.extract_uris(lines)
 end
 
 local CONFIRM_THRESHOLD = 5
@@ -70,19 +104,7 @@ function M.open_uris_in_buffer(bufnr)
 end
 
 function M.open_uris_in_selection()
-	vim.cmd('normal! ""y')
-	local content = vim.fn.getreg('"')
-
-	if not content or content == "" then
-		vim.notify("No visual selection found", vim.log.levels.WARN)
-		return
-	end
-	local lines = {}
-	for line in content:gmatch("[^\n]+") do
-		table.insert(lines, line)
-	end
-	local uris = M.extract_uris(lines)
-	M.open_uris(uris)
+	M.open_uris(M.extract_uris_from_selection())
 end
 
 return M

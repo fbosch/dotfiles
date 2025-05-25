@@ -29,8 +29,9 @@ map("x", "¨", "]")
 map("n", "-", "/")
 
 -- kagi
-map("n", "<leader>ka", kagi.ask, "Ask a question")
+map("n", "<leader>ka", kagi.prompt_fastgpt, "Prompt kagi fastgpt")
 map("n", "<leader>kp", kagi.show_previous_response, "Show previous answer")
+map("n", "<leader>ks", kagi.summarize_nearest_url, "Summarize URL")
 
 -- web
 map("n", "<leader>oa", web.open_uris_in_buffer, "Open all URIs in current buffer")
