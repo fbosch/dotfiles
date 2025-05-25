@@ -47,7 +47,8 @@ I use [WezTerm](https://wezfurlong.org/wezterm/index.html) as my terminal emulat
 
 ![terminal](./terminal.png)
 
-> colorscheme: [zenwritten dark](https://github.com/zenbones-theme/zenbones.nvim);
+> colorscheme: [zenwritten dark](https://github.com/zenbones-theme/zenbones.nvim)
+
 > fonts:
 >
 > - [Zenbones Brainy](https://github.com/zenbones-theme/zenbones-mono)
