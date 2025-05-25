@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: ./scripts/brew-install-script.sh
+        run: ./brew-install-script.sh
 
       - name: Neovim Plugin Sync
         run: nvim --headless +"lazy! sync" +qa
