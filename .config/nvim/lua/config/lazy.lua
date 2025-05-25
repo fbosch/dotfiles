@@ -17,8 +17,7 @@ end
 vim.opt.rtp:prepend(vim.env.LAZY or lazypath)
 vim.opt.loadplugins = true
 
--- Define disabled built-in plugins
-local disabled_plugins = {
+local disabled_builtin_plugins = {
 	"2html_plugin",
 	"getscript",
 	"getscriptPlugin",
@@ -51,7 +50,7 @@ require("lazy").setup({
 		reset_patckpath = true,
 		rtp = {
 			reset = true,
-			disabled_plugins = disabled_plugins,
+			disabled_plugins = disabled_builtin_plugins,
 		},
 	},
 })

@@ -1,11 +1,146 @@
-local autocmd = require("config.autocmd")
-local keymap = require("config.keymap")
-local servers = require("config.servers")
+local map = require("utils").set_keymap
+
+local servers = {
+	tailwindcss = {
+		cmd = { "tailwindcss-language-server", "--stdio" },
+	},
+	cssls = {
+		settings = {
+			css = {
+				lint = {
+					unknownAtRules = "ignore",
+				},
+			},
+		},
+	},
+	lua_ls = {
+		settings = {
+			Lua = {
+				runtime = {
+					version = "LuaJIT",
+				},
+				diagnostics = {
+					globals = { "vim", "use" },
+				},
+				workspace = {
+					checkThirdParty = false,
+					library = {
+						vim.env.VIMRUNTIME,
+					},
+				},
+				completion = {
+					callSnippet = "Replace",
+				},
+				format = {
+					enable = true,
+					formatter = "stylua",
+				},
+			},
+		},
+	},
+}
+
+local function setup_lsp_keymaps(client, bufnr)
+	function nmap(keys, cmd, desc)
+		if desc then
+			desc = "LSP: " .. desc
+		end
+		map("n", keys, cmd, { buffer = bufnr, desc = desc })
+	end
+
+	nmap("gD", vim.lsp.buf.declaration, "[G]o to [D]eclaration")
+	nmap("gd", vim.lsp.buf.definition, "[G]o to [D]efinition")
+	nmap("<leader>gd", function()
+		vim.cmd("vsplit")
+		vim.lsp.buf.definition()
+	end, "[G]o to [D]efinition in split")
+	nmap("<leader>pd", "<cmd>Lspsaga peek_definition<CR>", "[P]eek [D]efinition")
+	nmap("gi", vim.lsp.buf.implementation, "[G]o to [I]mplementation")
+	nmap("gr", vim.lsp.buf.references, "[G]o to [R]eferences")
+	nmap("<leader>k", "<cmd>Lspsaga hover_doc<CR>", "Hover")
+	nmap("gtd", vim.lsp.buf.type_definition, "[G]o to [T]ype [D]efinition")
+	nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
+	nmap("<leader>fi", "<cmd>TSToolsAddMissingImports<CR>", "[F]ix [I]mports")
+	nmap("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
+	nmap("<leader>lsp", "<cmd>:LspRestart<CR>", "restart langauge server")
+end
+
+local function setup_formatters(client, bufnr)
+	local group = vim.api.nvim_create_augroup("LspFormatting", {})
+
+	if client.name == "eslint" then
+		vim.api.nvim_create_autocmd("BufWritePre", {
+			buffer = bufnr,
+			command = "EslintFixAll",
+			group = group,
+		})
+	end
+end
+
+function setup_diagnostics()
+	vim.diagnostic.config({
+		signs = {
+			text = {
+				[vim.diagnostic.severity.ERROR] = " ",
+				[vim.diagnostic.severity.WARN] = " ",
+				[vim.diagnostic.severity.HINT] = " ",
+				[vim.diagnostic.severity.INFO] = " ",
+			},
+			numhl = {
+				[vim.diagnostic.severity.ERROR] = "DiagnosticSignError",
+				[vim.diagnostic.severity.WARN] = "DiagnosticSignWarn",
+				[vim.diagnostic.severity.HINT] = "DiagnosticSignHint",
+				[vim.diagnostic.severity.INFO] = "DiagnosticSignInfo",
+			},
+			linehl = {},
+		},
+		virtual_text = false,
+		float = {
+			show_header = true,
+			source = "if_many",
+			border = "rounded",
+			focusable = false,
+			max_width = 100,
+			max_height = 10,
+			close_events = {
+				"BufLeave",
+				"CursorMoved",
+				"InsertEnter",
+				"FocusLost",
+			},
+		},
+		underline = {
+			severity = { min = vim.diagnostic.severity.WARN },
+		},
+		severity_sort = {
+			reverse = false,
+		},
+		update_in_insert = false,
+	})
+
+	local diagnostics_group = vim.api.nvim_create_augroup("DiagnosticsGroup", { clear = true })
+	cmd({ "CursorHold", "CursorHoldI" }, {
+		group = diagnostics_group,
+		callback = function()
+			vim.diagnostic.open_float(nil, {
+				focusable = false,
+				close_events = {
+					"BufLeave",
+					"CursorMoved",
+					"InsertEnter",
+					"FocusLost",
+				},
+				source = "if_many",
+				scope = "line",
+			})
+		end,
+	})
+end
 
 local on_attach = function(client, bufnr)
-	autocmd.setup_diagnostics()
-	keymap.setup_lsp_keymaps(client, bufnr)
-	autocmd.setup_formatters(client, bufnr)
+	setup_diagnostics()
+	setup_lsp_keymaps(client, bufnr)
+	setup_formatters(client, bufnr)
 end
 
 local function get_capabilities()

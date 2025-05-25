@@ -11,9 +11,15 @@ return {
 	},
 	config = function()
 		local colors = require("config.colors")
-		-- highlights
-		vim.api.nvim_set_hl(0, "WhichKeyFloat", { bg = colors.background })
-		vim.api.nvim_set_hl(0, "WhichKey", { fg = colors.blue })
+
+		require("utils").load_highlights({
+			WhichKey = { fg = colors.blue },
+			WhichKeyGroup = { fg = colors.blue },
+			WhichKeyDesc = { fg = colors.white },
+			WhichKeySeperator = { fg = colors.light_gray },
+			WhichKeyFloat = { bg = colors.background },
+			WhichKeyValue = { fg = colors.light_gray },
+		})
 
 		require("which-key").setup({
 			plugins = {

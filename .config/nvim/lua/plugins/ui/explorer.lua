@@ -1,3 +1,4 @@
+local platform = require("utils.platform")
 return {
 	"nvim-tree/nvim-tree.lua",
 	dependencies = {
@@ -28,20 +29,25 @@ return {
 			-- default mappings
 			api.config.mappings.default_on_attach(bufnr)
 
-			local function opts(desc)
-				return { desc = "nvim-tree: " .. desc, buffer = bufnr, noremap = true, silent = true, nowait = true }
+			local map = function(mode, lhs, rhs, desc)
+				return require("utils").set_keymap(mode, lhs, rhs, {
+					desc = "nvim-tree: " .. desc,
+					noremap = true,
+					buffer = bufnr,
+					silent = true,
+					nowait = true,
+				})
 			end
 
-			-- custom mappings
-			vim.keymap.set("n", "H", ":wincmd h<CR>", opts("move to left window"))
-			vim.keymap.set("n", "J", ":wincmd j<CR>", opts("move to bottom window"))
-			vim.keymap.set("n", "K", ":wincmd k<CR>", opts("move to top window"))
-			vim.keymap.set("n", "L", ":wincmd l<CR>", opts("move to right window"))
+			-- allow for moving out of the tree with HJKL
+			map("n", "H", ":wincmd h<CR>", "Move to left window")
+			map("n", "J", ":wincmd j<CR>", "Move to bottom window")
+			map("n", "K", ":wincmd k<CR>", "Move to top window")
+			map("n", "L", ":wincmd l<CR>", "Move to right window")
 		end
 		require("nvim-web-devicons").setup()
-
 		local colors = require("config.colors")
-		local colorValues = {
+		local colorValues = vim.list_extend({
 			colors.red,
 			colors.orange,
 			colors.blue,
@@ -50,11 +56,12 @@ return {
 			colors.yellow,
 			colors.green,
 			colors.cyan,
-		}
+		}, colors.highlight_args)
+
 		require("tiny-devicons-auto-colors").setup({
 			colors = colorValues,
 			cache = {
-				enabled = true,
+				enabled = not platform.is_wsl(),
 				path = vim.fn.stdpath("cache") .. "/tiny-devicons-auto-colors-cache.json",
 			},
 		})

@@ -1,4 +1,15 @@
-local ft_abbr = require("config.autocmd").setup_filetype_abbreviations
+local function ft_abbr(filetypes, abbr)
+	return vim.api.nvim_create_autocmd({ "FileType" }, {
+		pattern = pattern,
+		callback = function()
+			vim.schedule(function()
+				for k, v in pairs(abbr) do
+					vim.cmd(string.format("abbreviate %s %s", k, v))
+				end
+			end)
+		end,
+	})
+end
 
 ft_abbr({ "javascript", "javascriptreact", "typescript", "typescriptreact" }, {
 	cl = "console.log()<esc>h",
