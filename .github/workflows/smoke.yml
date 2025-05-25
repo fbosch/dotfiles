@@ -33,14 +33,12 @@ jobs:
             echo "/home/linuxbrew/.linuxbrew/bin" >> $GITHUB_PATH
           fi
 
-      - name: Set TERM environment variable
-        run: echo 'export TERM=xterm-256color' >> $GITHUB_ENV
-
       - name: Neovim Plugin Sync
         run: nvim --headless +"Lazy! sync" +qa
 
       - name: Neovim Checkhealth
         run: |
+          export TERM=xterm-256color
           nvim --headless "+checkhealth | redir => out | silent messages | redir END | w! checkhealth.log | q"
           cat checkhealth.log
 
