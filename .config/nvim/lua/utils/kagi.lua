@@ -124,15 +124,6 @@ function M.fastgpt(prompt, cb)
 	end)
 end
 
-function M.search(query)
-	query = query and web.url_encode(query) or nil
-	if not query then
-		vim.notify("No query provided", vim.log.levels.WARN)
-		return
-	end
-	platform.system_open("https://kagi.com/search?q=" .. query)
-end
-
 local function format_output_text(output)
 	return output:gsub("【(%d+)】", "[%1]")
 end
@@ -223,12 +214,22 @@ function M.show_previous_response()
 	show_response("Previous response", previous_response)
 end
 
+function M.search(query)
+	query = query and web.url_encode(query) or nil
+	if not query then
+		vim.notify("No query provided", vim.log.levels.WARN)
+		return
+	end
+	platform.system_open("https://kagi.com/search?q=" .. query)
+end
+
 function M.search_query(default)
 	local ok, Snacks = pcall(require, "snacks")
 	if not ok then
 		vim.notify("Snacks not found.", vim.log.levels.ERROR)
 		return
 	end
+	vim.loop.getaddrinfo("kagi.com", nil, {}, function() end) -- DNS prefetch
 	local row = layout.get_centered_row_col(1) - 5
 	local input = Snacks.input({
 		icon = " ",
