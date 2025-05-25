@@ -12,6 +12,7 @@ lazy-lock.json
 .config/broot/
 .config/neofetch/
 .config/zed/
+.config/go
 
 # Neovim local data
 .config/nvim/sessions/

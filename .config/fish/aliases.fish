@@ -6,8 +6,9 @@ alias rw remaining_work_hours
 alias mntnas 'osascript -e \'mount volume "smb://100.86.100.78"\''
 
 abbr n nvim
-abbr lu 'nvim --headless +"Lazy! sync" +qa' # lazy update neovim plugins
+abbr nlup 'nvim --headless +"Lazy! sync" +qa' # lazy update neovim plugins
 abbr nwipe 'nvim --headless +"WipeAllSessions!" +qa'
+abbr ncheck 'nvim --headless +"checkhealth" +qa'
 abbr v nvim
 abbr p pnpm
 abbr pui 'pnpm upgrade --interactive --latest --recursive'
@@ -18,9 +19,6 @@ function vimdiff
 end
 function snvim
     sudo -E -s nvim $argv
-end
-function logikill
-    ps -ef | grep -i "Logi Options" | grep Applications | awk '{print $2}' | xargs kill -9
 end
 function wtr
     curl "wttr.in/Copenhagen?format=%n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"
