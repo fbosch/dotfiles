@@ -1,6 +1,7 @@
 local format = require("utils.format")
 local layout = require("utils.layout")
 local web = require("utils.web")
+local platform = require("utils.platform")
 
 local M = {}
 
@@ -123,6 +124,15 @@ function M.fastgpt(prompt, cb)
 	end)
 end
 
+function M.search(query)
+	query = query and web.url_encode(query) or nil
+	if not query then
+		vim.notify("No query provided", vim.log.levels.WARN)
+		return
+	end
+	platform.system_open("https://kagi.com/search?q=" .. query)
+end
+
 local function format_output_text(output)
 	return output:gsub("【(%d+)】", "[%1]")
 end
@@ -213,48 +223,79 @@ function M.show_previous_response()
 	show_response("Previous response", previous_response)
 end
 
+function M.search_query(default)
+	local ok, Snacks = pcall(require, "snacks")
+	if not ok then
+		vim.notify("Snacks not found.", vim.log.levels.ERROR)
+		return
+	end
+	local row = layout.get_centered_row_col(1) - 5
+	local input = Snacks.input({
+		icon = " ",
+		prompt = "",
+		default = default or "",
+		win = {
+			height = height,
+			border = "solid",
+			backdrop = { transparent = true, blend = 60 },
+			title_pos = "right",
+			row = row,
+		},
+	}, function(prompt)
+		M.search(prompt)
+		vim.notify("Opening browser...", vim.log.levels.INFO)
+	end)
+
+	-- auto-close the input window when the buffer is closed
+	vim.api.nvim_create_autocmd({ "BufLeave", "BufDelete" }, {
+		buffer = input.bufnr,
+		once = true,
+		group = group,
+		callback = function()
+			input:close()
+		end,
+	})
+end
+
 function M.prompt_fastgpt(default)
 	local ok, Snacks = pcall(require, "snacks")
+	if not ok then
+		vim.notify("Snacks not found.", vim.log.levels.ERROR)
+		return
+	end
 
-	local height = 1
-	local row = layout.get_centered_row_col(height, width) - 5
-
-	if ok then
-		local input = Snacks.input({
-			icon = "󰒊 ",
-			icon_hl = "SnacksIcon",
-			icon_pos = "right",
-			prompt = "",
-			default = default or "",
-			win = {
-				style = "scratch",
-				height = height,
-				border = "solid",
-				backdrop = { transparent = true, blend = 60 },
-				title_pos = "right",
-				row = row,
-			},
-		}, function(prompt)
-			if prompt == nil or prompt == "" then
-				return
-			end
-			M.fastgpt(prompt, function(response)
-				vim.schedule(function()
-					show_response(prompt, response)
-				end)
+	local row = layout.get_centered_row_col(1) - 5
+	local input = Snacks.input({
+		icon = "󰒊 ",
+		prompt = "",
+		default = default or "",
+		win = {
+			height = height,
+			border = "solid",
+			backdrop = { transparent = true, blend = 60 },
+			title_pos = "right",
+			row = row,
+		},
+	}, function(prompt)
+		if prompt == nil or prompt == "" then
+			return
+		end
+		M.fastgpt(prompt, function(response)
+			vim.schedule(function()
+				show_response(prompt, response)
 			end)
 		end)
+	end)
 
-		-- auto-close the input window when the buffer is closed
-		vim.api.nvim_create_autocmd({ "BufLeave", "BufDelete" }, {
-			buffer = input.bufnr,
-			once = true,
-			group = group,
-			callback = function()
-				input:close()
-			end,
-		})
-	end
+	-- auto-close the input window when the buffer is closed
+	vim.api.nvim_create_autocmd({ "BufLeave", "BufDelete" }, {
+		buffer = input.bufnr,
+		once = true,
+		group = group,
+		callback = function()
+			input:close()
+		end,
+	})
 end
 
 function M.summarize_nearest_url()

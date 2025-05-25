@@ -29,9 +29,10 @@ map("x", "¨", "]")
 map("n", "-", "/")
 
 -- kagi
-map("n", "<leader>ka", kagi.prompt_fastgpt, "Prompt kagi fastgpt")
-map("n", "<leader>kp", kagi.show_previous_response, "Show previous answer")
-map("n", "<leader>ks", kagi.summarize_nearest_url, "Summarize URL")
+map("n", "<leader>ka", kagi.prompt_fastgpt, "Prompt Kagi FastGPT")
+map("n", "<leader>kp", kagi.show_previous_response, "Show previous Kagi response")
+map("n", "<leader>ks", kagi.summarize_nearest_url, "Summarize URL under cursor with Kagi")
+map("n", "<leader>ko", kagi.search_query, "Search query in browser with Kagi")
 
 -- web
 map("n", "<leader>oa", web.open_uris_in_buffer, "Open all URIs in current buffer")
