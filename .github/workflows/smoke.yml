@@ -34,7 +34,7 @@ jobs:
           fi
 
       - name: Neovim Plugin Sync
-        run: nvim --headless +"Lazy! sync" +qa
+        run: nvim --headless "+Lazy! sync" +qa
 
       - name: Neovim Checkhealth
         run: |
