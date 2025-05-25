@@ -33,8 +33,9 @@ jobs:
             echo "/home/linuxbrew/.linuxbrew/bin" >> $GITHUB_PATH
           fi
 
-      - name: Neovim Plugin Sync
-        run: nvim --headless "+Lazy! sync" +qa
+      - name: Neovim Bootstrap
+        run: |
+          nvim --headless "+q"
 
       - name: Neovim Checkhealth
         run: |
