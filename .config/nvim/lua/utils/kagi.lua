@@ -24,6 +24,12 @@ local function with_progress(title)
 	end
 end
 
+local function get_price_of_tokens(tokens)
+	tokens = tonumber(tokens)
+	local price_usd = tokens * 0.00003
+	return string.format("$%.2f", price_usd)
+end
+
 local function handle_result(result, opts)
 	local progress_handle = opts and opts.progress_handle
 	local prompt = opts and opts.prompt
@@ -45,7 +51,7 @@ local function handle_result(result, opts)
 			if progress_handle then
 				progress_handle:cancel()
 			end
-			vim.notify(decoded.error[1].message, vim.log.levels.ERROR)
+			vim.notify(decoded.error[1].msg, vim.log.levels.ERROR)
 			if prompt then
 				vim.notify("Prompt: " .. prompt)
 			end
@@ -71,7 +77,7 @@ function M.summarize(url, cb)
 	end
 
 	local url_with_params =
-		web.build_url("https://kagi.com/api/v0/summarize", { url = url, engine = "muriel", summary_type = "summary" })
+		web.build_url("https://kagi.com/api/v0/summarize", { url = url, engine = "cecil", summary_type = "summary" })
 
 	local cmd = {
 		"curl",
@@ -133,20 +139,20 @@ local function format_references(references)
 	return lines
 end
 
-local function show_response(response)
+local function show_response(title, response)
 	latest_response = response
 	previous_response = response
 
 	-- format the output text
 	local output_text = format_output_text(response.output)
-	local lines = format.word_wrap(output_text, vim.o.columns * 0.36)
+	local lines = format.word_wrap(output_text, vim.o.columns * 0.28)
 	vim.list_extend(lines, format_references(response.references))
 
 	-- calculate the height of the window
 	local num_lines = #lines
 	local max_height = math.floor(vim.o.lines * 0.8)
-	local min_height = 1
-	local height = math.max(math.min(num_lines, max_height), min_height) + 2
+	local min_height = 5
+	local height = math.max(math.min(num_lines, max_height), min_height)
 
 	-- close the current window if it exists
 	if current_win ~= nil then
@@ -155,12 +161,14 @@ local function show_response(response)
 
 	current_win = Snacks.win({
 		name = "FastGPT",
+		title = title .. " (" .. get_price_of_tokens(response.tokens) .. ")",
+		title_pos = "right",
 		style = "help",
 		backdrop = false,
 		border = "rounded",
 		fix_buf = true,
 		text = lines,
-		width = 0.4,
+		width = 0.3,
 		height = height,
 		col = -3,
 		row = -3,
@@ -190,7 +198,7 @@ local function show_response(response)
 		callback = function()
 			vim.schedule(function()
 				if latest_response ~= nil then
-					show_response(latest_response)
+					show_response(title, latest_response)
 				end
 			end)
 		end,
@@ -202,7 +210,7 @@ function M.show_previous_response()
 		vim.notify("No previous response", vim.log.levels.INFO)
 		return
 	end
-	show_response(previous_response)
+	show_response("Previous response", previous_response)
 end
 
 function M.prompt_fastgpt(default)
@@ -232,7 +240,7 @@ function M.prompt_fastgpt(default)
 			end
 			M.fastgpt(prompt, function(response)
 				vim.schedule(function()
-					show_response(response)
+					show_response(prompt, response)
 				end)
 			end)
 		end)
@@ -259,7 +267,7 @@ function M.summarize_nearest_url()
 
 	M.summarize(url, function(response)
 		vim.schedule(function()
-			show_response(response)
+			show_response(url, response)
 		end)
 	end)
 end
