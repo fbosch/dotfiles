@@ -1,5 +1,10 @@
 return {
 	{
+		"folke/snacks.nvim",
+		event = "VeryLazy",
+		config = true,
+	},
+	{
 		"m-demare/hlargs.nvim",
 		dependencies = {
 			"nvim-treesitter/nvim-treesitter",
@@ -51,7 +56,9 @@ return {
 		"petertriho/nvim-scrollbar",
 		event = "VeryLazy",
 		priority = 10,
-		config = true,
+		opts = {
+			excluded_buftypes = { "terminal", "prompt" },
+		},
 	},
 	{
 		"folke/todo-comments.nvim",
@@ -59,7 +66,9 @@ return {
 			"nvim-lua/plenary.nvim",
 		},
 		event = { "BufRead" },
-		config = true,
+		opts = {
+			excluded_buftypes = { "terminal", "prompt" },
+		},
 	},
 	{
 		"tzachar/local-highlight.nvim",

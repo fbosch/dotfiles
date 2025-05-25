@@ -7,8 +7,7 @@ if [[ $(command -v brew) == "" ]]; then
       "Darwin")
           # install homebrew
           /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 
-          # install rust
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+          eval "$(/opt/homebrew/bin/brew shellenv || /usr/local/bin/brew shellenv)"
           ;;
       "Linux")
           # install homebrew
@@ -16,14 +15,15 @@ if [[ $(command -v brew) == "" ]]; then
           test -d ~/.linuxbrew && eval "(~/.linuxbrew/bin/brew shellenv)"
           test -d /home/linuxbrew/.linuxbrew && eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
           echo "eval \"\$($(brew --prefix)/bin/brew shellenv)\"" >> ~/.bashrc
-          # install rust
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
           ;;
       *)
           echo "Unknown or unsupported operating system"
           ;;
   esac
   
+  # install rust
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
   # installs brew bundle
   brew bundle install
 
@@ -33,6 +33,7 @@ if [[ $(command -v brew) == "" ]]; then
 
   # install swpm
   npm i -g swpm
+  npm i -g neovim
 
   # install fisher
   curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source && fisher install jorgebucaran/fisher
@@ -48,6 +49,7 @@ if [[ $(command -v brew) == "" ]]; then
 else 
   echo "Updating homebrew..."
   brew update
+  bat cache --build
 fi
 
 

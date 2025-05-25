@@ -39,18 +39,29 @@ cmd({ "InsertLeave" }, {
 })
 
 cmd({ "FileType" }, {
-	pattern = "qf",
-	callback = function()
-		map("n", "q", ":cclose<CR>", "Close quickfix window")
-		map("n", "<ESC>", ":cclose<CR>", "Close quickfix window")
-		map("n", "<leader>R", function()
-			require("utils.refactor").project_find_and_replace(vim.fn.getreg("v"))
-		end, "Initialize find and replace with text from cliboard")
+	pattern = "snacks_input",
+	group = group,
+	callback = function(args)
+		local bufnr = args.buf
+		cmd({ "BufLeave", "WinLeave" }, {
+			buffer = bufnr,
+			once = true,
+			callback = function() end,
+		})
+	end,
+})
+
+cmd({ "FileType" }, {
+	pattern = "help",
+	group = group,
+	callback = function(args)
+		map("n", "<ESC>", "<C-w>c", { buffer = args.buf, silent = true })
 	end,
 })
 
 cmd({ "FileType" }, {
 	pattern = "Trouble",
+	group = group,
 	callback = function()
 		vim.notify("Trouble!")
 		map("n", "<ESC>", ":TroubleClose<CR>")

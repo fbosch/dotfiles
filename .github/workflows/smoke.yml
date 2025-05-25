@@ -12,17 +12,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  macos:
-    name: "Installs on macOS"
-    runs-on: macOS-latest
+  test:
+    name: Install & Checkhealth (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v1
-      - name: Install
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
         run: ./brew-install-script.sh
-  linux:
-    name: "Installs on Linux"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v1
-      - name: Install
-        run: ./brew-install-script.sh
+
+      - name: Add Homebrew to PATH
+        run: |
+          echo "Adding Homebrew bin to PATH"
+          if [[ $(uname) == "Darwin" ]]; then
+            echo "/opt/homebrew/bin" >> $GITHUB_PATH
+          else
+            echo "/home/linuxbrew/.linuxbrew/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Lazy Install
+        run: git clone --filter=blob:none --branch=stable https://github.com/folke/lazy.nvim.git ~/.local/share/nvim/lazy/lazy.nvim
+
+      - name: Neovim Lazy Plugin Sync
+        run: nvim --headless "+Lazy! sync" +qa
+
+      - name: Neovim Checkhealth
+        run: |
+          export TERM=xterm-256color
+          nvim --headless "+checkhealth | redir => out | silent messages | redir END | w! checkhealth.log | q"
+          cat checkhealth.log
+
+      - name: Fail on Neovim Health Error
+        run: |
+          if grep -q "ERROR" checkhealth.log; then
+            echo "::error::Neovim checkhealth found errors"
+            exit 1
+          fi

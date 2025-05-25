@@ -1,7 +1,6 @@
 return {
 	"mrjones2014/smart-splits.nvim",
 	dependencies = "kwkarlwang/bufresize.nvim",
-	event = "VeryLazy",
 	cmd = { "SmartResizeLeft", "SmartResizeRight", "SmartResizeUp", "SmartResizeDown" },
 	keys = {
 		{

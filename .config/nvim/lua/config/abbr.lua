@@ -45,6 +45,10 @@ local typos = {
 	pakage = "package",
 	temproary = "temporary",
 	temprary = "temporary",
+	cancle = "cancel",
+	destory = "destroy",
+	histroy = "history",
+	requrie = "require",
 }
 
 vim.schedule(function()

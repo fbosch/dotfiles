@@ -1,11 +1,10 @@
-tap "homebrew/bundle"
-tap "homebrew/cask"
 tap "fsouza/prettierd"
 tap "oven-sh/bun"
 
 # system 
 brew "cmake" if OS.mac?
 brew "coreutils" if OS.mac?
+brew "neovim"
 brew "fish"
 brew "fisher"
 brew "stow"
@@ -35,7 +34,6 @@ brew "corepack"
 brew "fsouza/prettierd/prettierd"
 brew "cloc"
 brew "neovim"
-brew "bun"
 brew "stylua"
 brew "lazygit"
 brew "git"
