@@ -2,11 +2,11 @@ command_timeout = 2000
 
 format = "$character"
 right_format = """
-$directory\
-$git_branch\
-$git_state\
-$git_metrics\
-$git_status\
+$directory
+$git_branch
+$git_state
+$git_metrics
+$git_status
 $cmd_duration
 """
 
