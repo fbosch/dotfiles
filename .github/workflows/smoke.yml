@@ -36,6 +36,7 @@ jobs:
       - name: Neovim Bootstrap
         run: |
           nvim --headless "+q"
+          nvim --headless "+Lazy! sync" +qa
 
       - name: Neovim Checkhealth
         run: |
