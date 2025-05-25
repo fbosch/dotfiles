@@ -25,7 +25,7 @@ local function buffer_index_keys()
 	for i = 1, 9 do
 		t[#t + 1] = {
 			mode = { "n" },
-			"<C-" .. i .. ">",
+			"<A-" .. i .. ">",
 			"<cmd>BufferGoto " .. i .. "<cr>",
 			desc = "go to buffer " .. i,
 			silent = true,
