@@ -42,4 +42,21 @@ function M.wipe_all_sessions()
 	end
 end
 
+function M.get_visual_selection_lines(bufnr)
+	bufnr = bufnr or vim.api.nvim_get_current_buf()
+	local mode = vim.fn.mode()
+	if mode ~= "v" and mode ~= "V" then
+		return nil
+	end
+	local start = vim.fn.getpos("'<")
+	local finish = vim.fn.getpos("'>")
+	local lines = vim.api.nvim_buf_get_lines(bufnr, start[2] - 1, finish[2], false)
+	-- If visual mode is characterwise, trim first and last lines
+	if mode == "v" and #lines > 0 then
+		lines[1] = lines[1]:sub(start[3])
+		lines[#lines] = lines[#lines]:sub(1, finish[3])
+	end
+	return lines
+end
+
 return M

@@ -48,6 +48,7 @@ local typos = {
 	cancle = "cancel",
 	destory = "destroy",
 	histroy = "history",
+	requrie = "require",
 }
 
 vim.schedule(function()

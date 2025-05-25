@@ -1,4 +1,5 @@
-local fn = require("utils.fn")
+local format = require("utils.format")
+local layout = require("utils.layout")
 local M = {}
 
 local group = vim.api.nvim_create_augroup("Kagi", { clear = true })
@@ -78,7 +79,7 @@ local function show_response(response)
 
 	-- format the output text
 	local output_text = format_output_text(response.output)
-	local lines = fn.word_wrap(output_text, vim.o.columns * 0.36)
+	local lines = format.word_wrap(output_text, vim.o.columns * 0.36)
 	vim.list_extend(lines, format_references(response.references))
 
 	-- calculate the height of the window
@@ -148,7 +149,7 @@ function M.ask(default)
 	local ok, Snacks = pcall(require, "snacks")
 
 	local height = 1
-	local row = fn.get_centered_row_col(height, width) - 5
+	local row = layout.get_centered_row_col(height, width) - 5
 
 	if ok then
 		local input = Snacks.input({

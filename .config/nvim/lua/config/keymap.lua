@@ -4,6 +4,7 @@ local yank = require("utils.yank")
 local vscode = require("utils.vscode")
 local refactor = require("utils.refactor")
 local kagi = require("utils.kagi")
+local web = require("utils.web")
 
 local map = utils.set_keymap
 
@@ -27,14 +28,13 @@ map("x", "å", "[")
 map("x", "¨", "]")
 map("n", "-", "/")
 
+-- kagi
 map("n", "<leader>ka", kagi.ask, "Ask a question")
--- map("x", "<leader>ka", function()
--- 	vim.cmd('normal! ""y')
--- 	local text = vim.fn.getreg('"')
--- 	local prompt = text:gsub("[\r\n]+", " "):gsub("%s%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
--- 	kagi.ask(prompt)
--- end, "Ask a question")
 map("n", "<leader>kp", kagi.show_previous_response, "Show previous answer")
+
+-- web
+map("n", "<leader>oa", web.open_uris_in_buffer, "Open all URIs in current buffer")
+map("x", "<leader>oa", web.open_uris_in_selection, "Open all URIs in selection")
 
 -- compare selection with clipboard
 map("v", "<leader>dc", "<CMD>DiffClip<CR>", "Compare selection with clipboard")
