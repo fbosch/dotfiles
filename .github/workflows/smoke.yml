@@ -37,7 +37,7 @@ jobs:
         run: echo 'export TERM=xterm-256color' >> $GITHUB_ENV
 
       - name: Neovim Plugin Sync
-        run: nvim --headless +"lazy! sync" +qa
+        run: nvim --headless +"Lazy! sync" +qa
 
       - name: Neovim Checkhealth
         run: |
