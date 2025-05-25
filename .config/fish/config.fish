@@ -9,7 +9,14 @@ if test (uname) = Linux
 end
 
 function fish_greeting
+    # skip in neovim terminal buffer
     if set -q IN_NEOVIM
+        return
+    end
+
+    # skip if weekend
+    set day_of_week (date +%u)
+    if test $day_of_week -eq 6 -o $day_of_week -eq 7
         return
     end
 
