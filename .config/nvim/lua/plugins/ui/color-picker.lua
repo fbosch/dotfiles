@@ -2,7 +2,7 @@ return {
 	{
 		"uga-rosa/ccc.nvim",
 		enabled = true,
-		event = "VeryLazy",
+		event = { "VeryLazy", "BufEnter" },
 		keys = {
 			{
 				mode = "n",
