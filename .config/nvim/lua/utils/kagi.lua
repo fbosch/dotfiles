@@ -1,4 +1,3 @@
-local utils = require("utils")
 local fn = require("utils.fn")
 local M = {}
 
@@ -154,8 +153,7 @@ function M.ask(default)
 			icon = "󰒊 ",
 			icon_hl = "SnacksIcon",
 			icon_pos = "right",
-			prompt = "FastGPT",
-			noautocmd = false,
+			prompt = "",
 			default = default or "",
 			win = {
 				style = "scratch",
@@ -169,7 +167,6 @@ function M.ask(default)
 			if prompt == nil or prompt == "" then
 				return
 			end
-
 			M.fastgpt(prompt, function(response)
 				vim.schedule(function()
 					show_response(response)
