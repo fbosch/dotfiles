@@ -48,9 +48,3 @@ jobs:
             echo "::error::Neovim checkhealth found errors"
             exit 1
           fi
-
-      - name: Upload health log
-        uses: actions/upload-artifact@v4
-        with:
-          name: checkhealth-${{ matrix.os }}
-          path: checkhealth.log
