@@ -33,10 +33,11 @@ jobs:
             echo "/home/linuxbrew/.linuxbrew/bin" >> $GITHUB_PATH
           fi
 
-      - name: Neovim Bootstrap
-        run: |
-          nvim --headless "+q"
-          nvim --headless "+Lazy! sync" +qa
+      - name: Lazy Install
+        run: git clone --filter=blob:none --branch=stable https://github.com/folke/lazy.nvim.git ~/.local/share/nvim/lazy/lazy.nvim
+
+      - name: Neovim Lazy Plugin Sync
+        run: nvim --headless "+Lazy! sync" +qa
 
       - name: Neovim Checkhealth
         run: |
