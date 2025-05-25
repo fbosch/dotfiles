@@ -48,7 +48,12 @@ I use [WezTerm](https://wezfurlong.org/wezterm/index.html) as my terminal emulat
 ![terminal](./terminal.png)
 
 > colorscheme: [zenwritten dark](https://github.com/zenbones-theme/zenbones.nvim);
-> font: [JetBrains Mono](https://www.jetbrains.com/lp/mono/)
+> fonts:
+>
+> - [Zenbones Brainy](https://github.com/zenbones-theme/zenbones-mono)
+> - [JetBrains Mono](https://www.jetbrains.com/lp/mono/)
+> - [BabelStone Runic Elder Futhark](https://www.babelstone.co.uk/Fonts/)
+> - [Symbols Nerd Font](https://github.com/ryanoasis/nerd-fonts)
 
 ### Editor
 
