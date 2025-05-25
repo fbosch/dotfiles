@@ -1,8 +1,6 @@
 local fn = require("utils.fn")
 local M = {}
 
-local instruction_prompt = ""
-
 local group = vim.api.nvim_create_augroup("Kagi", { clear = true })
 
 local current_win = nil
@@ -22,7 +20,7 @@ function M.fastgpt(prompt, cb)
 		"-H",
 		"Content-Type: application/json",
 		"-d",
-		'{"query": "' .. instruction_prompt .. prompt .. '"}',
+		'{"query": "' .. prompt .. '"}',
 		"https://kagi.com/api/v0/fastgpt",
 	}
 	local fidget_available, progress = pcall(require, "fidget.progress")
@@ -148,6 +146,10 @@ end
 
 function M.ask(default)
 	local ok, Snacks = pcall(require, "snacks")
+
+	local height = 1
+	local row = fn.get_centered_row_col(height, width) - 5
+
 	if ok then
 		local input = Snacks.input({
 			icon = "󰒊 ",
@@ -157,11 +159,11 @@ function M.ask(default)
 			default = default or "",
 			win = {
 				style = "scratch",
-				height = 1,
+				height = height,
 				border = "solid",
 				backdrop = { transparent = true, blend = 60 },
 				title_pos = "right",
-				row = 20,
+				row = row,
 			},
 		}, function(prompt)
 			if prompt == nil or prompt == "" then
