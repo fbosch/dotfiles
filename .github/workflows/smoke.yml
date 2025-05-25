@@ -33,6 +33,9 @@ jobs:
             echo "/home/linuxbrew/.linuxbrew/bin" >> $GITHUB_PATH
           fi
 
+      - name: Set TERM environment variable
+        run: echo 'export TERM=xterm-256color' >> $GITHUB_ENV
+
       - name: Neovim Plugin Sync
         run: nvim --headless +"lazy! sync" +qa
 

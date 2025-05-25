@@ -33,6 +33,7 @@ if [[ $(command -v brew) == "" ]]; then
 
   # install swpm
   npm i -g swpm
+  npm i -g neovim
 
   # install fisher
   curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source && fisher install jorgebucaran/fisher
