@@ -13,6 +13,28 @@ function M.get_remote_url()
 	return result ~= "" and result or nil
 end
 
+function M.get_branch_name()
+	local handle = io.popen("git rev-parse --abbrev-ref HEAD 2>/dev/null")
+	if handle == nil then
+		return nil
+	end
+
+	local result = handle:read("*a")
+	handle:close()
+
+	result = result and result:gsub("%s+", "")
+	return result ~= "" and result or nil
+end
+
+function M.extract_workitem_id_from_branch()
+	local branch = M.get_branch_name()
+	if not branch then
+		return nil
+	end
+	local id = branch:match("/(%d+)%D") or branch:match("/(%d+)$")
+	return id
+end
+
 function M.extract_azure_org(url)
 	local org, project = url:match("https://[^@]*@?dev%.azure%.com/([^/]+)/([^/]+)/_git")
 	if org and project then

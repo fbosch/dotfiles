@@ -55,7 +55,7 @@ local function setup_lsp_keymaps(client, bufnr)
 	nmap("<leader>pd", "<cmd>Lspsaga peek_definition<CR>", "[P]eek [D]efinition")
 	nmap("gi", vim.lsp.buf.implementation, "[G]o to [I]mplementation")
 	nmap("gr", vim.lsp.buf.references, "[G]o to [R]eferences")
-	nmap("<leader>k", "<cmd>Lspsaga hover_doc<CR>", "Hover")
+	nmap("<leader>k", vim.lsp.buf.hover, "Hover")
 	nmap("gtd", vim.lsp.buf.type_definition, "[G]o to [T]ype [D]efinition")
 	nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
 	nmap("<leader>fi", "<cmd>TSToolsAddMissingImports<CR>", "[F]ix [I]mports")
@@ -265,7 +265,7 @@ return {
 		},
 		{
 			"nvimdev/lspsaga.nvim",
-			event = "VeryLazy",
+			event = "LspAttach",
 			opts = {
 				lightbulb = {
 					enable = false,
@@ -294,7 +294,7 @@ return {
 			config = function()
 				require("typescript-tools").setup({
 					on_attach = on_attach,
-					separate_diagnostic_server = false,
+					separate_diagnostic_server = true,
 					publish_diagnostic_on = "insert_leave",
 					complete_function_calls = false,
 					jsx_close_tag = {

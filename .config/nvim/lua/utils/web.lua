@@ -1,5 +1,6 @@
 local M = {}
 local platform = require("utils.platform")
+local git = require("utils.git")
 
 function M.url_encode(str)
 	return (str:gsub("[^%w%-_%.~]", function(c)
@@ -105,6 +106,23 @@ end
 
 function M.open_uris_in_selection()
 	M.open_uris(M.extract_uris_from_selection())
+end
+
+function M.open_branch_workitem()
+	local branch = git.get_branch_name()
+	if not branch then
+		vim.notify("No branch name found", vim.log.levels.WARN)
+		return
+	end
+	local workitem_id = git.extract_workitem_id_from_branch()
+	if not workitem_id then
+		vim.notify("No workitem ID found in branch name", vim.log.levels.WARN)
+		return
+	end
+	local azure_org = git.extract_azure_org(git.get_remote_url())
+	if azure_org then
+		platform.system_open(azure_org .. "/_workitems/edit/" .. workitem_id)
+	end
 end
 
 return M

@@ -185,7 +185,6 @@ local function show_response(title, response)
 	})
 
 	vim.api.nvim_create_autocmd({ "BufLeave", "BufDelete" }, {
-		buffer = current_win.bufnr,
 		once = true,
 		group = group,
 		callback = function()
@@ -285,13 +284,16 @@ function M.search_query(default)
 			row = row,
 		},
 	}, function(prompt)
+		if prompt == nil or prompt == "" then
+			return
+		end
 		M.search(prompt)
 		vim.notify("Opening browser...", vim.log.levels.INFO)
 	end)
 
 	-- auto-close the input window when the buffer is closed
 	vim.api.nvim_create_autocmd({ "BufLeave", "BufDelete" }, {
-		buffer = input.bufnr,
+		pattern = "snacks_input",
 		once = true,
 		group = group,
 		callback = function()
@@ -331,7 +333,7 @@ function M.prompt_fastgpt(default)
 
 	-- auto-close the input window when the buffer is closed
 	vim.api.nvim_create_autocmd({ "BufLeave", "BufDelete" }, {
-		buffer = input.bufnr,
+		pattern = "snacks_input",
 		once = true,
 		group = group,
 		callback = function()
