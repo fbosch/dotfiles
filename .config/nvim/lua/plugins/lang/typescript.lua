@@ -35,7 +35,7 @@ return {
 		opts = {
 			translation_source = { "**/{locales,messages}/**/*.json" }, -- Pattern for translation resources
 			virt_text = {
-				enabled = false,
+				enabled = true,
 			},
 			diagnostic = {
 				enabled = true,
