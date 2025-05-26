@@ -1,14 +1,14 @@
 return {
-	{ "tpope/vim-repeat", event = "BufRead" },
-	{ "smjonas/inc-rename.nvim", event = "BufRead", opts = {} },
+	{ "tpope/vim-repeat", event = "BufEnter" },
+	{ "smjonas/inc-rename.nvim", event = "BufEnter", opts = {} },
 	{ "windwp/nvim-autopairs", event = { "InsertEnter" }, opts = {} },
 	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },
-	{ "folke/ts-comments.nvim", event = "BufRead", opts = {} },
+	{ "folke/ts-comments.nvim", event = "BufEnter", opts = {} },
 	{ "echasnovski/mini.surround", event = { "InsertEnter" }, opts = {} },
-	{ "nguyenvukhang/nvim-toggler", event = { "BufReadPost" }, opts = {} },
+	{ "nguyenvukhang/nvim-toggler", event = { "BufEnter" }, opts = {} },
 	{
 		"chrisgrieser/nvim-spider",
-		event = "BufRead",
+		event = { "BufEnter" },
 		-- override motions for word, line and block to be sensetive to camelCase etc.
 		keys = {
 			{

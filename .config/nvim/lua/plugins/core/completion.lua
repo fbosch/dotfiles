@@ -93,18 +93,21 @@ return {
 
 			-- highlights
 			local colors = require("config.colors")
-			vim.api.nvim_set_hl(0, "CmpItemAbbrDeprecated", { fg = colors.lighter_gray, strikethrough = true })
-			vim.api.nvim_set_hl(0, "CmpItemAbbrMatch", { fg = colors.lighter_gray })
-			vim.api.nvim_set_hl(0, "CmpItemAbbrMatchFuzzy", { fg = colors.lighter_gray })
-			vim.api.nvim_set_hl(0, "CmpItemKindVariable", { fg = colors.blue })
-			vim.api.nvim_set_hl(0, "CmpItemKindInterface", { fg = colors.blue })
-			vim.api.nvim_set_hl(0, "CmpItemKindText", { fg = colors.blue })
-			vim.api.nvim_set_hl(0, "CmpItemKindFunction", { fg = colors.purple })
-			vim.api.nvim_set_hl(0, "CmpItemKindMethod", { fg = colors.purple })
-			vim.api.nvim_set_hl(0, "CmpItemKindKeyword", { fg = colors.lighter_gray })
-			vim.api.nvim_set_hl(0, "CmpItemKindProperty", { fg = colors.white })
-			vim.api.nvim_set_hl(0, "CmpItemKindUnit", { fg = colors.white })
-			vim.api.nvim_set_hl(0, "CmpItemKindSnippet", { fg = colors.orange })
+
+			require("utils").load_highlights({
+				CmpItemAbbrDeprecated = { fg = colors.lighter_gray, strikethrough = true },
+				CmpItemAbbrMatch = { fg = colors.lighter_gray },
+				CmpItemAbbrMatchFuzzy = { fg = colors.lighter_gray },
+				CmpItemKindVariable = { fg = colors.blue },
+				CmpItemKindInterface = { fg = colors.blue },
+				CmpItemKindText = { fg = colors.blue },
+				CmpItemKindFunction = { fg = colors.purple },
+				CmpItemKindMethod = { fg = colors.purple },
+				CmpItemKindKeyword = { fg = colors.lighter_gray },
+				CmpItemKindProperty = { fg = colors.white },
+				CmpItemKindUnit = { fg = colors.white },
+				CmpItemKindSnippet = { fg = colors.orange },
+			})
 		end,
 	},
 }

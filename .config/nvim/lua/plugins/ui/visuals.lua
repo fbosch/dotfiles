@@ -3,8 +3,21 @@ local platform = require("utils.platform")
 return {
 	{
 		"folke/snacks.nvim",
-		event = "VeryLazy",
-		config = true,
+		opts = function()
+			-- Toggle the profiler
+			Snacks.toggle.profiler():map("<leader>pp")
+			-- Toggle the profiler highlights
+			Snacks.toggle.profiler_highlights():map("<leader>ph")
+		end,
+		keys = {
+			{
+				"<leader>ps",
+				function()
+					Snacks.profiler.scratch()
+				end,
+				desc = "Profiler Scratch Buffer",
+			},
+		},
 	},
 	{
 		"m-demare/hlargs.nvim",
@@ -74,16 +87,14 @@ return {
 	},
 	{
 		"tzachar/local-highlight.nvim",
-		event = { "VeryLazy", "BufWinEnter" },
+		event = { "BufEnter", "BufWinEnter" },
 		dependencies = {
 			{
 				"folke/snacks.nvim",
+				lazy = true,
 				opts = {
 					animate = {},
 					util = {},
-					image = {
-						enabled = false,
-					},
 				},
 			},
 		},

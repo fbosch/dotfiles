@@ -1,7 +1,7 @@
 return {
 	"stevearc/overseer.nvim",
 	dependencies = {
-		"nvim-telescope/telescope.nvim",
+		{ "nvim-telescope/telescope.nvim", lazy = true },
 	},
 	cmd = { "OverseerToggle", "OverseerRun", "OverseerLoadBundle" },
 	priority = 70,

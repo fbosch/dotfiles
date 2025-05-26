@@ -7,7 +7,7 @@ return {
 		"mcchrish/zenbones.nvim",
 		"rachartier/tiny-devicons-auto-colors.nvim",
 	},
-	event = { "BufWinEnter", "LspAttach", "VeryLazy" },
+	lazy = false,
 	cmd = { "NvimTreeToggle", "NvimTreeFindFile" },
 	keys = {
 		{
