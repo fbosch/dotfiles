@@ -322,6 +322,7 @@ return {
 			automatic_installation = false,
 			handlers = { mason_handlers(servers, capabilities, on_attach) },
 		})
+
 		require("lazydev").setup({ capabilities = capabilities, on_attach })
 		require("lsp-file-operations").setup()
 	end,
