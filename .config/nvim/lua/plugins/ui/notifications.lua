@@ -2,6 +2,7 @@ return {
 	{
 		"chrisgrieser/nvim-recorder",
 		dependencies = "rcarriga/nvim-notify",
+		event = "VeryLazy",
 		opts = {}, -- required even with default settings, since it calls `setup()`
 	},
 	{

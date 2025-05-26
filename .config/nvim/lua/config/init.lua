@@ -1,6 +1,6 @@
+require("config.opts")
 require("config.usercmd")
+require("config.autocmd")
 require("config.abbr")
 require("config.keymaps")
-require("config.opts")
-require("config.autocmd")
 require("config.lazy")

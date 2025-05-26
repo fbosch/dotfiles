@@ -16,7 +16,6 @@ return {
 			require("render-markdown").setup({
 				completions = { lsp = { enabled = true } },
 			})
-			local colors = require("config.colors")
 			local load_highlights = require("utils").load_highlights
 			load_highlights({
 				RenderMarkdownCode = { bg = "NONE" },

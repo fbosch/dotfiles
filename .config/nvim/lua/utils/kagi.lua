@@ -236,7 +236,7 @@ local function resolve_bang_url(query)
 	local default = "https://kagi.com/search?q=" .. web.url_encode(query)
 
 	return fn.switch(engine, {
-		az = function()
+		ad = function() -- azure devops
 			if azure_org_url then
 				if q:match("^%d+$") then
 					-- if number, treat as work item ID
