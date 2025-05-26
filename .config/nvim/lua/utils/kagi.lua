@@ -1,6 +1,8 @@
+local git = require("utils.git")
 local format = require("utils.format")
 local layout = require("utils.layout")
 local web = require("utils.web")
+local fn = require("utils.fn")
 local platform = require("utils.platform")
 
 local M = {}
@@ -214,13 +216,41 @@ function M.show_previous_response()
 	show_response("Previous response", previous_response)
 end
 
+local function resolve_bang_url(query)
+	local engine, rest = query:match("^!(%S+)%s+(.*)")
+	local q = vim.trim(web.url_encode(rest or query))
+	local git_remote_url = git.get_remote_url()
+	local azure_org_url = git.extract_azure_org(git_remote_url)
+	local default = "https://kagi.com/search?q=" .. web.url_encode(query)
+
+	return fn.switch(engine, {
+		az = function()
+			if azure_org_url then
+				if q:match("^%d+$") then
+					-- if number, treat as work item ID
+					return azure_org_url .. "/_workitems/edit/" .. q
+				elseif q:match("wiki") then
+					-- if wiki, treat as wiki search
+					return azure_org_url .. "/_search?text=" .. q .. "&type=wiki"
+				else
+					-- Standard search
+					return azure_org_url .. "/_search?text=" .. q .. "&type=workitem"
+				end
+			end
+			vim.notify("Azure DevOps URL not found", vim.log.levels.WARN)
+			return default
+		end,
+		default = default,
+	})
+end
+
 function M.search(query)
-	query = query and web.url_encode(query) or nil
 	if not query then
 		vim.notify("No query provided", vim.log.levels.WARN)
 		return
 	end
-	platform.system_open("https://kagi.com/search?q=" .. query)
+
+	platform.system_open(resolve_bang_url(query))
 end
 
 function M.search_query(default)
@@ -236,7 +266,6 @@ function M.search_query(default)
 		prompt = "",
 		default = default or "",
 		win = {
-			height = height,
 			border = "solid",
 			backdrop = { transparent = true, blend = 60 },
 			title_pos = "right",
@@ -271,7 +300,6 @@ function M.prompt_fastgpt(default)
 		prompt = "",
 		default = default or "",
 		win = {
-			height = height,
 			border = "solid",
 			backdrop = { transparent = true, blend = 60 },
 			title_pos = "right",

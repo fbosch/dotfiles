@@ -1,5 +1,3 @@
-local map = require("utils").set_keymap
-
 local servers = {
 	tailwindcss = {
 		cmd = { "tailwindcss-language-server", "--stdio" },
@@ -45,7 +43,7 @@ local function setup_lsp_keymaps(client, bufnr)
 		if desc then
 			desc = "LSP: " .. desc
 		end
-		map("n", keys, cmd, { buffer = bufnr, desc = desc })
+		require("utils").set_keymap("n", keys, cmd, { buffer = bufnr, desc = desc })
 	end
 
 	nmap("gD", vim.lsp.buf.declaration, "[G]o to [D]eclaration")
@@ -119,7 +117,7 @@ function setup_diagnostics()
 	})
 
 	local diagnostics_group = vim.api.nvim_create_augroup("DiagnosticsGroup", { clear = true })
-	cmd({ "CursorHold", "CursorHoldI" }, {
+	vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
 		group = diagnostics_group,
 		callback = function()
 			vim.diagnostic.open_float(nil, {
