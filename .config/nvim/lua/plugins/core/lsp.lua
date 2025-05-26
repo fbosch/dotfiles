@@ -55,7 +55,7 @@ local function setup_lsp_keymaps(client, bufnr)
 	nmap("<leader>pd", "<cmd>Lspsaga peek_definition<CR>", "[P]eek [D]efinition")
 	nmap("gi", vim.lsp.buf.implementation, "[G]o to [I]mplementation")
 	nmap("gr", vim.lsp.buf.references, "[G]o to [R]eferences")
-	nmap("<leader>k", vim.lsp.buf.hover, "Hover")
+	nmap("<leader>k", "<cmd>Lspsaga hover_doc<CR>", "Hover")
 	nmap("gtd", vim.lsp.buf.type_definition, "[G]o to [T]ype [D]efinition")
 	nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
 	nmap("<leader>fi", "<cmd>TSToolsAddMissingImports<CR>", "[F]ix [I]mports")
@@ -265,7 +265,7 @@ return {
 		},
 		{
 			"nvimdev/lspsaga.nvim",
-			event = "LspAttach",
+			event = { "BufReadPre", "BufNewFile" },
 			opts = {
 				lightbulb = {
 					enable = false,
@@ -281,6 +281,9 @@ return {
 					enable = false,
 				},
 				hover = {
+					silent = true,
+				},
+				hover_doc = {
 					silent = true,
 				},
 			},

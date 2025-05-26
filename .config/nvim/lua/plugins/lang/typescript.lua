@@ -23,4 +23,23 @@ return {
 			flags = { watch = false },
 		},
 	},
+	{
+		"nabekou29/js-i18n.nvim",
+		ft = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
+		event = { "BufReadPre", "BufNewFile" },
+		dependencies = {
+			"neovim/nvim-lspconfig",
+			"nvim-treesitter/nvim-treesitter",
+			"nvim-lua/plenary.nvim",
+		},
+		opts = {
+			translation_source = { "**/{locales,messages}/**/*.json" }, -- Pattern for translation resources
+			virt_text = {
+				enabled = false,
+			},
+			diagnostic = {
+				enabled = true,
+			},
+		},
+	},
 }

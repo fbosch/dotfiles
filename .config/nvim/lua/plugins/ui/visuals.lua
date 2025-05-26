@@ -141,12 +141,10 @@ return {
 		dependencies = { "nvim-tree/nvim-web-devicons" },
 		config = function()
 			local colors = require("config.colors")
-
 			require("utils").load_highlights({
 				InclineNormal = { bg = "NONE" },
 				InclineNormalNC = { bg = "NONE" },
 			})
-
 			require("incline").setup({
 				highlight = {
 					groups = {
@@ -161,6 +159,7 @@ return {
 					},
 				},
 				window = {
+					zindex = 40,
 					placement = {
 						horizontal = "right",
 						vertical = "top",
