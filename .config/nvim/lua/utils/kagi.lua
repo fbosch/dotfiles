@@ -217,8 +217,21 @@ function M.show_previous_response()
 end
 
 local function resolve_bang_url(query)
-	local engine, rest = query:match("^!(%S+)%s+(.*)")
-	local q = vim.trim(web.url_encode(rest or query))
+	local engine, raw
+	-- Try prefix bang
+	local e, r = query:match("^!(%S+)%s*(.*)")
+	if e then
+		engine, raw = e, r
+	else
+		-- Try suffix bang
+		local r2, e2 = query:match("^(.-)%s+!(%S+)$")
+		if e2 then
+			engine, raw = e2, r2
+		end
+	end
+
+	raw = vim.trim(raw or query)
+	local q = vim.trim(web.url_encode(raw or query))
 	local git_remote_url = git.get_remote_url()
 	local azure_org_url = git.extract_azure_org(git_remote_url)
 	local default = "https://kagi.com/search?q=" .. web.url_encode(query)
