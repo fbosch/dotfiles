@@ -43,7 +43,7 @@ local function setup_lsp_keymaps(client, bufnr)
 		if desc then
 			desc = "LSP: " .. desc
 		end
-		require("utils").set_keymap("n", keys, cmd, { buffer = bufnr, desc = desc })
+		require("utils").set_keymap("n", keys, cmd, { buffer = bufnr, desc = desc, silent = true })
 	end
 
 	nmap("gD", vim.lsp.buf.declaration, "[G]o to [D]eclaration")
@@ -53,9 +53,9 @@ local function setup_lsp_keymaps(client, bufnr)
 		vim.lsp.buf.definition()
 	end, "[G]o to [D]efinition in split")
 	nmap("<leader>pd", "<cmd>Lspsaga peek_definition<CR>", "[P]eek [D]efinition")
+	nmap("<leader>k", "<cmd>Lspsaga hover_doc ++quiet<CR>", "Hover")
 	nmap("gi", vim.lsp.buf.implementation, "[G]o to [I]mplementation")
 	nmap("gr", vim.lsp.buf.references, "[G]o to [R]eferences")
-	nmap("<leader>k", "<cmd>Lspsaga hover_doc<CR>", "Hover")
 	nmap("gtd", vim.lsp.buf.type_definition, "[G]o to [T]ype [D]efinition")
 	nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
 	nmap("<leader>fi", "<cmd>TSToolsAddMissingImports<CR>", "[F]ix [I]mports")
@@ -137,8 +137,14 @@ end
 
 local on_attach = function(client, bufnr)
 	setup_diagnostics()
-	setup_lsp_keymaps(client, bufnr)
 	setup_formatters(client, bufnr)
+	vim.api.nvim_create_autocmd("LspAttach", {
+		buffer = bufnr,
+		once = true,
+		callback = function()
+			setup_lsp_keymaps(client, bufnr)
+		end,
+	})
 end
 
 local function get_capabilities()
@@ -265,7 +271,6 @@ return {
 		},
 		{
 			"nvimdev/lspsaga.nvim",
-			event = { "BufReadPre", "BufNewFile" },
 			opts = {
 				lightbulb = {
 					enable = false,
@@ -281,9 +286,6 @@ return {
 					enable = false,
 				},
 				hover = {
-					silent = true,
-				},
-				hover_doc = {
 					silent = true,
 				},
 			},
