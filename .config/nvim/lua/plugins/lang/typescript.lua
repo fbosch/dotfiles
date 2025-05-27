@@ -2,7 +2,8 @@ return {
 	{
 		"MaximilianLloyd/tw-values.nvim",
 		cmd = "TWValues",
-		ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
+		enabled = false,
+		ft = { "typescriptreact", "javascriptreact" },
 		keys = {
 			{
 				mode = "n",
@@ -24,8 +25,23 @@ return {
 		},
 	},
 	{
+		"luckasRanarison/tailwind-tools.nvim",
+		build = ":UpdateRemotePlugins",
+		ft = { "javascriptreact", "typescriptreact" },
+		event = "VeryLazy",
+		dependencies = {
+			"nvim-treesitter/nvim-treesitter",
+			"nvim-telescope/telescope.nvim",
+			"neovim/nvim-lspconfig",
+		},
+		opts = {},
+	},
+	{
+		-- dir = "~/Projects/js-i18n.nvim",
+		-- "nabekou29/js-i18n.nvim",
 		"fbosch/js-i18n.nvim",
 		ft = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
+		cmd = { "I18nEditTranslation" },
 		dependencies = {
 			"neovim/nvim-lspconfig",
 			"nvim-treesitter/nvim-treesitter",
@@ -38,6 +54,14 @@ return {
 			},
 			diagnostic = {
 				enabled = true,
+			},
+		},
+		keys = {
+			{
+				mode = "n",
+				"<leader>te",
+				"<cmd>I18nEditTranslation<cr>",
+				desc = "Edit translation",
 			},
 		},
 	},
