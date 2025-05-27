@@ -137,15 +137,8 @@ end
 
 local on_attach = function(client, bufnr)
 	setup_diagnostics()
-	-- setup_lsp_keymaps(client, bufnr)
 	setup_formatters(client, bufnr)
-	vim.api.nvim_create_autocmd("LspAttach", {
-		buffer = bufnr,
-		once = true,
-		callback = function()
-			setup_lsp_keymaps(client, bufnr)
-		end,
-	})
+	setup_lsp_keymaps(client, bufnr)
 end
 
 local function get_capabilities()
