@@ -179,7 +179,7 @@ local function setup_lsp_handlers()
 	})
 end
 
-local function get_ensure_installed(servers)
+local function get_ensure_installed()
 	local ensure = {
 		"eslint",
 		"html",
@@ -291,12 +291,12 @@ return {
 				},
 			},
 		},
-		{ "folke/lazydev.nvim", ft = { "lua" } },
+		{ "folke/lazydev.nvim" },
 		{
 			"pmizio/typescript-tools.nvim",
 			ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
 			dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig" },
-      event = { "VeryLazy" }
+			event = { "VeryLazy" },
 			config = function()
 				require("typescript-tools").setup({
 					on_attach = on_attach,
@@ -314,7 +314,7 @@ return {
 	config = function()
 		local capabilities = get_capabilities()
 		setup_lsp_handlers()
-		local ensure_installed = get_ensure_installed(servers)
+		local ensure_installed = get_ensure_installed()
 		require("mason-tool-installer").setup({ ensure_installed = ensure_installed })
 		require("mason").setup()
 		require("mason-lspconfig").setup({
