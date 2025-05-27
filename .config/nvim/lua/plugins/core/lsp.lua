@@ -162,14 +162,6 @@ local function get_capabilities()
 end
 
 local function setup_lsp_handlers()
-	local hover_config = {
-		title = "",
-		border = "rounded",
-		max_width = 100,
-		focusable = false,
-	}
-	vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, hover_config)
-	vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(vim.lsp.handlers.signature_help, hover_config)
 	vim.diagnostic.config({
 		virtual_text = false,
 		signs = true,

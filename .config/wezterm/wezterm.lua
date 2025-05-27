@@ -7,7 +7,7 @@ config.max_fps = 120
 
 -- maximize first window
 wezterm.on("gui-startup", function()
-	local tab, pane, window = mux.spawn_window({})
+	local _, _, window = mux.spawn_window({})
 	window:gui_window():maximize()
 end)
 
@@ -22,15 +22,15 @@ config.font = wezterm.font_with_fallback({
 		family = "JetBrains Mono",
 		harfbuzz_features = { "calt=0", "clig=0", "liga=0" },
 	},
+	{ family = "Symbols Nerd Font Mono", scale = 0.8 },
 	"BabelStone Runic Elder Futhark",
 	"Noto Sans Runic",
-	{ family = "Symbols Nerd Font Mono", scale = 0.8 },
 	"Apple Color Emoji",
 	"Segoe UI Emoji",
 })
 config.font_size = 16.0
-config.underline_thickness = "0.10cell"
-config.underline_position = "-0.14cell"
+config.underline_thickness = "0.08cell"
+config.underline_position = "-0.16cell"
 config.cursor_thickness = 1
 config.custom_block_glyphs = true
 

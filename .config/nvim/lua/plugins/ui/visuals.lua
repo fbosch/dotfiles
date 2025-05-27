@@ -2,6 +2,51 @@ local platform = require("utils.platform")
 
 return {
 	{
+
+		"nvim-tree/nvim-web-devicons",
+		dependencies = {
+			"rachartier/tiny-devicons-auto-colors.nvim",
+		},
+		event = "VeryLazy",
+		config = function()
+			local colors = require("config.colors")
+			require("nvim-web-devicons").setup({
+				override_by_filename = {
+					[".prettierignore"] = {
+						icon = "",
+						color = colors.orange,
+						name = "prettierignore",
+					},
+				},
+				override_by_extension = {
+					["css"] = {
+						icon = "",
+						color = colors.purple,
+						name = "css",
+					},
+				},
+			})
+			local colorValues = vim.list_extend({
+				colors.red,
+				colors.orange,
+				colors.blue,
+				colors.dark_blue,
+				colors.purple,
+				colors.yellow,
+				colors.green,
+				colors.cyan,
+			}, colors.highlight_args)
+
+			require("tiny-devicons-auto-colors").setup({
+				colors = colorValues,
+				cache = {
+					enabled = not platform.is_wsl(),
+					path = vim.fn.stdpath("cache") .. "/tiny-devicons-auto-colors-cache.json",
+				},
+			})
+		end,
+	},
+	{
 		"folke/snacks.nvim",
 		opts = function()
 			-- Toggle the profiler
