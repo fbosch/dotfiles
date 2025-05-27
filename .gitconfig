@@ -76,7 +76,9 @@
 
 [rerere]
 	enabled = true
+
 [maintenance]
 	repo = /Users/fbb/Projects/KommuneKredit.Frontend/main
+
 [gpg]
 	format = ssh

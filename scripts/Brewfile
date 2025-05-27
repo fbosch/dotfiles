@@ -45,6 +45,7 @@ brew "rust"
 brew "biome"
 brew "difftastic"
 brew "deno"
+brew "gum"
 
 # programs - mac
 if OS.mac?

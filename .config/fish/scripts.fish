@@ -248,3 +248,13 @@ end
 function disk_space
     df -h / | awk 'NR==2 {print "Total: " $2 "\nUsed: " $3 "\nAvailable: " $4 "\nPercentage Used: " $5}'
 end
+
+function git_add_gum
+    if test -z "$files"
+        echo (set_color --bold --background=yellow black)"[NOTICE] No changes to stage."(set_color normal)
+        return
+    end
+
+    set selected (printf "%s\n" $files | gum choose --no-limit --header="   Select files to stage" --header.foreground=214)
+    git add $selected
+end
