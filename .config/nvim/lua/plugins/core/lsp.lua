@@ -257,6 +257,7 @@ return {
 		"antosha417/nvim-lsp-file-operations",
 		"williamboman/mason-lspconfig.nvim",
 		"WhoIsSethDaniel/mason-tool-installer.nvim",
+		"folke/lazydev.nvim",
 		{
 			"williamboman/mason.nvim",
 			opts = {
@@ -291,7 +292,6 @@ return {
 				},
 			},
 		},
-		{ "folke/lazydev.nvim" },
 		{
 			"pmizio/typescript-tools.nvim",
 			ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
