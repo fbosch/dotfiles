@@ -3,7 +3,6 @@ alias nvim 'nvim -n -i NONE --noplugin'
 alias code cursor
 alias uge get_week_dates
 alias rw remaining_work_hours
-alias mntnas 'osascript -e \'mount volume "smb://100.86.100.78"\''
 
 abbr n nvim
 abbr nlup 'nvim --headless +"Lazy! sync" +qa' # lazy update neovim plugins
@@ -31,9 +30,6 @@ function bat_fast
 end
 function copykey
     pbcopy <~/.ssh/id_rsa.pub
-end
-function chrdebug
-    /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
 end
 
 # Directory shortcuts - fingers too fast for accuracy ⚡
