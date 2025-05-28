@@ -6,8 +6,7 @@ local web = require("utils.web")
 map("n", "<leader>/a", kagi.prompt_fastgpt, "Prompt Kagi FastGPT")
 map("n", "<leader>/p", kagi.show_previous_response, "Show previous Kagi response")
 map("n", "<leader>/s", kagi.summarize_nearest_url, "Summarize URL under cursor with Kagi")
-map("n", "<leader>//", kagi.search_query, "Search in browser with Kagi")
-map("n", "<leader>--", kagi.search_query, "Search in browser with Kagi") -- nordic keyboard
+map("n", { "<leader>//", "<leader>--" }, kagi.search_query, "Search in browser with Kagi") -- nordic keyboard
 
 -- web
 map("n", "<leader>ou", web.open_uris_in_buffer, "Open all URIs in current buffer")
