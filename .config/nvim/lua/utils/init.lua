@@ -21,7 +21,13 @@ function M.set_keymap(mode, lhs, rhs, opts_or_desc)
 		{ noremap = true, silent = true },
 		type(opts_or_desc) == "string" and { desc = opts_or_desc } or (opts_or_desc or {})
 	)
-	vim.keymap.set(mode, lhs, rhs, opts)
+	if type(lhs) == "table" then
+		for _, key in ipairs(lhs) do
+			vim.keymap.set(mode, key, rhs, opts)
+		end
+	else
+		vim.keymap.set(mode, lhs, rhs, opts)
+	end
 end
 
 function M.wipe_all_sessions()

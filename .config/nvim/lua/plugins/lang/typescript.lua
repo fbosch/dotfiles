@@ -38,8 +38,8 @@ return {
 	},
 	{
 		-- dir = "~/Projects/js-i18n.nvim",
-		-- "nabekou29/js-i18n.nvim",
-		"fbosch/js-i18n.nvim",
+		"nabekou29/js-i18n.nvim",
+		-- "fbosch/js-i18n.nvim",
 		ft = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
 		cmd = { "I18nEditTranslation" },
 		dependencies = {
@@ -48,6 +48,7 @@ return {
 			"nvim-lua/plenary.nvim",
 		},
 		opts = {
+			key_separator = "?", -- allow for flattened json
 			translation_source = { "**/{locales,messages}/**/*.json" }, -- Pattern for translation resources
 			virt_text = {
 				enabled = true,
