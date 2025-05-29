@@ -7,13 +7,13 @@ return {
 		},
 		keys = {
 			{
-				"<leader>gbo",
+				"<leader>gBo",
 				"<cmd>GitBlameOpenCommitURL<CR>",
 				desc = "git blame open commit url",
 				mode = { "n" },
 			},
 			{
-				"<leader>gbc",
+				"<leader>gBc",
 				"<cmd>GitBlameCopySHA<CR>",
 				desc = "git blame copy commit sha",
 				mode = { "n" },
@@ -46,6 +46,57 @@ return {
 				delete = { text = "-▕" },
 				topdelete = { text = "‾" },
 				changedelete = { text = "~" },
+			},
+			preview_config = {
+				border = "rounded",
+				style = "minimal",
+				relative = "cursor",
+				col = 3,
+				row = -3,
+			},
+		},
+		keys = {
+			{
+				mode = { "n" },
+				"<leader>gs",
+				":Gitsigns stage_buffer<CR>",
+				desc = "git stage buffer",
+			},
+			{
+				mode = { "n" },
+				"<leader>grb",
+				":Gitsigns reset_buffer<CR>",
+				desc = "git reset buffer",
+			},
+			{
+				mode = { "n" },
+				"<leader>grh",
+				":Gitsigns reset_hunk<CR>",
+				desc = "git reset hunk",
+			},
+			{
+				mode = { "n" },
+				"<leader>gn",
+				":Gitsigns next_hunk<CR>",
+				desc = "git next hunk",
+			},
+			{
+				mode = { "n" },
+				"<leader>gN",
+				":Gitsigns prev_hunk<CR>",
+				desc = "git previous hunk",
+			},
+			{
+				mode = { "n" },
+				"<leader>gb",
+				":Gitsigns blame_line<CR>",
+				desc = "git blame line",
+			},
+			{
+				mode = { "n" },
+				"<leader>gB",
+				":Gitsigns blame<CR>",
+				desc = "git blame",
 			},
 		},
 	},

@@ -1,7 +1,12 @@
 local servers = {
+	typescript = {
+		enabled = false, -- use typescript-tools.nvim instead
+	},
 	tailwindcss = {
 		cmd = { "tailwindcss-language-server", "--stdio" },
 	},
+	jqls = {},
+	astro = {},
 	cssls = {
 		settings = {
 			css = {
@@ -184,7 +189,7 @@ local function get_ensure_installed()
 end
 
 -- Special handling for specific servers
-local function mason_handlers(servers, capabilities, on_attach)
+local function mason_handlers(capabilities, on_attach)
 	return function(server_name)
 		local server = servers[server_name] or {}
 		if server.enabled == false then
@@ -192,6 +197,8 @@ local function mason_handlers(servers, capabilities, on_attach)
 		end
 		local lspconfig = require("lspconfig")
 		local settings = server.settings or {}
+
+		print("LSP: " .. server_name)
 
 		if server_name == "eslint" then
 			settings.experimental = { useFlatConfig = true }
@@ -305,7 +312,7 @@ return {
 		require("mason-lspconfig").setup({
 			ensure_installed = ensure_installed,
 			automatic_installation = false,
-			handlers = { mason_handlers(servers, capabilities, on_attach) },
+			handlers = { mason_handlers(capabilities, on_attach) },
 		})
 
 		require("lazydev").setup({ capabilities = capabilities, on_attach })

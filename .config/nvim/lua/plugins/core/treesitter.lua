@@ -8,7 +8,21 @@ return {
 			{ "nvim-treesitter/nvim-treesitter-context", enabled = false },
 			"windwp/nvim-ts-autotag",
 		},
-		ft = { "rust", "javascript", "typescript", "tsx", "html", "css", "markdown", "yaml", "vim", "help" },
+		ft = {
+			"rust",
+			"javascript",
+			"typescript",
+			"tsx",
+			"html",
+			"css",
+			"markdown",
+			"yaml",
+			"vim",
+			"help",
+			"json",
+			"toml",
+			"astro",
+		},
 		config = function()
 			require("nvim-treesitter.configs").setup({
 				modules = {},

@@ -20,6 +20,7 @@ set -U FZF_PREVIEW_DIR_CMD lt
 set -gx COREPACK_ENABLE_STRICT 0
 set -U nvm_default_version 20
 
+# TODO: move this and make it consistent
 set -gx GUM_CHOOSE_HEADER_FOREGROUND 110 # blue (header)
 set -gx GUM_CHOOSE_ITEM_FOREGROUND 244 # gray (default items)
 set -gx GUM_CHOOSE_SELECTED_FOREGROUND 2 # green (added)

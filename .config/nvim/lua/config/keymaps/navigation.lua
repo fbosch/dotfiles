@@ -10,7 +10,7 @@ map("n", "<leader>in", function()
 end, "Navigate to the next issue in the current buffer")
 
 -- navigate to the previous issue in the current file
-map("n", "<leader>ip", function()
+map("n", "<leader>iN", function()
 	vim.diagnostic.jump({
 		count = -1,
 		severity_limit = vim.diagnostic.severity.ERROR,
