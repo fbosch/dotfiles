@@ -19,6 +19,10 @@ map("x", "ø", "'")
 map("x", "å", "[")
 map("x", "¨", "]")
 map("n", "-", "/")
+map("n", ",", "<")
+map("n", ".", ">")
+map("x", ",", "<")
+map("x", ".", ">")
 
 -- clear search highlights
 map("n", "<esc>", ":nohlsearch<CR>", "Clear search highlights")

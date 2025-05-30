@@ -26,7 +26,7 @@ return {
 				lua = { "stylua" },
 				markdown = { "prettierd", "prettier", stop_after_first = true },
 				mdx = { "biome format" },
-				json = { "biome format" },
+				json = { "jq", "biome format" },
 				rust = { "cargo fmt -- --force" },
 				yaml = { "prettierd", "prettier", stop_after_first = true },
 			},

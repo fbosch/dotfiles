@@ -65,6 +65,7 @@ local typos = {
 	"occas{sion,ion} occasion",
 	"occurr{ance,ence,ed,ed} occurr{ence,ed}",
 	"pakage package",
+	"sorround surround",
 	"persist{ance,ences} persistence",
 	"plese please",
 	"pr{omise,omsie,omse} promise",
