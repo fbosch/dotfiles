@@ -1,4 +1,6 @@
-local function ft_abbr(filetypes, abbr)
+local M = {}
+
+function M.ft_abbr(filetypes, abbr)
 	return vim.api.nvim_create_autocmd({ "FileType" }, {
 		pattern = pattern,
 		callback = function()
@@ -11,7 +13,7 @@ local function ft_abbr(filetypes, abbr)
 	})
 end
 
-ft_abbr({ "javascript", "javascriptreact", "typescript", "typescriptreact" }, {
+M.ft_abbr({ "javascript", "javascriptreact", "typescript", "typescriptreact" }, {
 	cl = "console.log()<esc>h",
 	cdir = "console.dir()<esc>h",
 	cer = "console.error()<esc>h",
@@ -24,13 +26,13 @@ ft_abbr({ "javascript", "javascriptreact", "typescript", "typescriptreact" }, {
 	NOTE = "// NOTE:",
 })
 
-ft_abbr({ "lua" }, {
+M.ft_abbr({ "lua" }, {
 	pr = 'print("")<esc>h',
 	req = 'require("")<esc>hi',
 	ret = "return ",
 })
 
-local typos = {
+M.typos = {
 	"acheive achieve",
 	"adn and",
 	"adress address",
@@ -73,10 +75,10 @@ local typos = {
 	"q{uo,ou,uo,uote,oute}te quote",
 	"rec{ei,ie}ve receive",
 	"rec{ieve,eived,eiving} receive{}",
-	"requ{ire,ier,ieer,iere,rie,ere} require",
+	"requ{ire,ier,ieer,iere,rie,re} require",
 	"resutl result",
 	"retrun return",
-	"r{e,eq,qui,quiq,quir,quire} require",
+	"r{e,eq,qui,quiq,quir,quire,qure} require",
 	"se{p,e}rate separate",
 	"satic static",
 	"self self",
@@ -96,9 +98,11 @@ local typos = {
 	"visiblity visibility",
 }
 
--- utilize vim-abolish for common typos
-vim.schedule(function()
-	for _, v in pairs(typos) do
+-- utilize vim-abolish for fixing common typos
+function M.autofix_typos()
+	for _, v in pairs(M.typos) do
 		vim.cmd(string.format("Abolish %s", v))
 	end
-end)
+end
+
+return M

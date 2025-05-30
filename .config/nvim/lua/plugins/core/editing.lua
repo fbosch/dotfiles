@@ -1,6 +1,10 @@
 return {
 	{ "tpope/vim-repeat", event = "BufEnter" },
-	{ "tpope/vim-abolish", lazy = false },
+	{
+		"tpope/vim-abolish",
+		event = "InsertEnter",
+		config = require("config.abbr").autofix_typos,
+	},
 	{ "smjonas/inc-rename.nvim", event = "BufEnter", opts = {} },
 	{ "windwp/nvim-autopairs", event = { "InsertEnter" }, opts = {} },
 	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },
