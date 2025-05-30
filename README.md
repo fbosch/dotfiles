@@ -74,4 +74,4 @@ I use my own custom configuration for [NeoVim](https://neovim.io/), which is set
 
 ![editor](./docs/editor.png)
 
-> colorscheme: [zenwritten dark](https://github.com/zenbones-theme/zenbones.nvim)
+> 🎨 Colorscheme: [zenwritten dark](https://github.com/zenbones-theme/zenbones.nvim)
