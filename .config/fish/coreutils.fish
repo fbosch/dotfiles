@@ -14,7 +14,6 @@ if test -d "$HOMEBREW_PREFIX/bin" -a (count $HOMEBREW_PREFIX/bin/u*) -gt 0
     alias rm $HOMEBREW_PREFIX/bin/urm
     alias rmdir $HOMEBREW_PREFIX/bin/urmdir
     alias env $HOMEBREW_PREFIX/bin/uenv
-    alias echo $HOMEBREW_PREFIX/bin/uecho
     alias cut $HOMEBREW_PREFIX/bin/ucut
     alias join $HOMEBREW_PREFIX/bin/ujoin
     alias printenv $HOMEBREW_PREFIX/bin/uprintenv
