@@ -27,27 +27,38 @@ brew "bat"
 brew "broot"
 brew "sk"
 
-# development
-brew "tmux"
-brew "node@18"
-brew "corepack"
-brew "fsouza/prettierd/prettierd"
+# utilities
+brew "tmux" # terminal multiplexer
+brew "xh" # for sending http requests
+brew "dust" # disk space usage (non-interactive)
+brew "dua-cli" # disk space usage (interactive)
+brew "hyperfine" # benchmarking
+brew "mprocs"
 brew "cloc"
-brew "neovim"
-brew "stylua"
+
+# git
 brew "lazygit"
 brew "git"
 brew "git-delta"
+brew "difftastic"
+
+# development
+brew "node"
+brew "fnm" # node version manager
+brew "corepack"
+brew "fsouza/prettierd/prettierd"
+brew "neovim"
+brew "stylua"
 brew "go"
 brew "jq"
 brew "luarocks"
-brew "rust"
 brew "biome"
-brew "difftastic"
 brew "deno"
 brew "gum"
 brew "docker"
 brew "docker-buildx"
+brew "rust"
+brew "bacon"
 
 # programs - mac
 if OS.mac?
