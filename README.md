@@ -1,9 +1,9 @@
-# Dotfiles
+# 🗂️ Dotfiles
 
 Config files and scripts for my development environment.  
 Managed with [GNU Stow](https://www.gnu.org/software/stow/) for easy symlink management.
 
-## Installation
+## ⚡ Installation
 
 ```sh
 # navigate to home directory
@@ -19,16 +19,16 @@ cd dotfiles
 bash ./scripts/install.sh
 
 # initiate GNU Stow
-stow .config
+stow .
 ```
 
 ## What do I use?
 
-### Terminal
+### 🖥️ Terminal
 
 I use [WezTerm](https://wezfurlong.org/wezterm/index.html) as my terminal emulator with [fish](https://fishshell.com/) as my primary shell and a minimal configuration of [starship](https://starship.rs/) for my prompt.
 
-#### CLI Tooling
+#### 🧰 CLI Tooling
 
 - [fzf](https://github.com/junegunn/fzf)
 - [zoxide](https://github.com/ajeetdsouza/zoxide)
@@ -46,19 +46,19 @@ I use [WezTerm](https://wezfurlong.org/wezterm/index.html) as my terminal emulat
 
 ![terminal](./docs/terminal.png)
 
-> colorscheme: [zenwritten dark](https://github.com/zenbones-theme/zenbones.nvim)
-> fonts:
+> 🎨 colorscheme: [zenwritten dark](https://github.com/zenbones-theme/zenbones.nvim)
+> 📓 fonts:
 >
 > - [Zenbones Brainy](https://github.com/zenbones-theme/zenbones-mono)
 > - [JetBrains Mono](https://www.jetbrains.com/lp/mono/)
 > - [BabelStone Runic Elder Futhark](https://www.babelstone.co.uk/Fonts/)
 > - [Symbols Nerd Font](https://github.com/ryanoasis/nerd-fonts)
 
-### Editor
+### 📝 Editor
 
 I use my own custom configuration for [NeoVim](https://neovim.io/), which is setup and managed with [Lua](https://lua.org/) and [LazyNvim](https://github.com/folke/lazy.nvim).
 
-#### Features
+#### ✨ Features
 
 - [lsp](https://neovim.io/doc/user/lsp.html)
 - [treesitter](https://github.com/nvim-treesitter/nvim-treesitter)

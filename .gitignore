@@ -16,7 +16,9 @@ lazy-lock.json
 
 # Neovim local data
 .config/nvim/.sessions/
-.config/nvim/nvim/.undo/
+.config/nvim/.undo/
+.config/nvim/.backup/
+.config/nvim/nvim/
 
 # Fish shell state (ignore all generated/variable data, not main config)
 .config/fish/private.fish
