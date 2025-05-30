@@ -31,6 +31,7 @@ return {
 			"renderer",
 			wilder.popupmenu_renderer(wilder.popupmenu_border_theme({
 				pumblend = 10,
+				max_height = 15,
 				border = "rounded",
 				background = "dark",
 				highlighter = {

@@ -17,6 +17,11 @@ return {
 		end,
 	},
 	{
+		"nacro90/numb.nvim",
+		event = "CmdLineEnter",
+		opts = {},
+	},
+	{
 		"ggandor/leap.nvim",
 		event = "VeryLazy",
 		keys = {
