@@ -33,7 +33,7 @@ The installation script will install all dependencies in the bundle.
 brew bundle install
 ```
 
-## 🧰 What do I use?
+## ⚙ What do I use?
 
 ### Terminal
 
@@ -55,17 +55,6 @@ I use [WezTerm](https://wezfurlong.org/wezterm/index.html) as my terminal emulat
 
 ---
 
-![terminal](./docs/terminal.png)
-
-> 🎨 Colorscheme: [zenwritten dark](https://github.com/zenbones-theme/zenbones.nvim)
->
-> Fonts:
->
-> - [Zenbones Brainy](https://github.com/zenbones-theme/zenbones-mono)
-> - [JetBrains Mono](https://www.jetbrains.com/lp/mono/)
-> - [BabelStone Runic Elder Futhark](https://www.babelstone.co.uk/Fonts/)
-> - [Symbols Nerd Font](https://github.com/ryanoasis/nerd-fonts)
-
 ### Editor
 
 I use my own custom configuration for [NeoVim](https://neovim.io/), which is setup and managed with [Lua](https://lua.org/) and [LazyNvim](https://github.com/folke/lazy.nvim).
@@ -86,3 +75,10 @@ I use my own custom configuration for [NeoVim](https://neovim.io/), which is set
 ![editor](./docs/editor.png)
 
 > 🎨 Colorscheme: [zenwritten dark](https://github.com/zenbones-theme/zenbones.nvim)
+>
+> Fonts:
+>
+> - [Zenbones Brainy](https://github.com/zenbones-theme/zenbones-mono)
+> - [JetBrains Mono](https://www.jetbrains.com/lp/mono/)
+> - [BabelStone Runic Elder Futhark](https://www.babelstone.co.uk/Fonts/)
+> - [Symbols Nerd Font](https://github.com/ryanoasis/nerd-fonts)
