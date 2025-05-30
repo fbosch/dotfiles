@@ -31,8 +31,6 @@ The installation script will install all dependencies in the bundle.
 ```sh
 # ~/
 brew bundle install
-
-
 ```
 
 ## ⚙ What do I use?
