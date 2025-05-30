@@ -27,6 +27,7 @@ ft_abbr({ "javascript", "javascriptreact", "typescript", "typescriptreact" }, {
 ft_abbr({ "lua" }, {
 	pr = 'print("")<esc>h',
 	req = 'require("")<esc>hi',
+	ret = "return ",
 })
 
 local typos = {
@@ -37,9 +38,11 @@ local typos = {
 	"occas{sion,ion} occasion",
 	"occurr{ance,ence,ed,ed} occurr{ence,ed}",
 	"init{ial,ialize,ialized,ialize} init{ial,ialize,ialized,ialize}",
+	"depend{e,a}nc{ie,ei,y,i}es dependencies",
 	"se{p,e}rate separate",
 	"funct{ion,ion,oin} function",
 	"defin{ately,etely,atly,ately} definitely",
+	"q{uo,ou,uo,uote,oute}te quote",
 	"cahnge change",
 	"futher further",
 	"intial initial",

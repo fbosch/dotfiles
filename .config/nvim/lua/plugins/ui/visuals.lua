@@ -11,6 +11,11 @@ return {
 			local colors = require("config.colors")
 			require("nvim-web-devicons").setup({
 				override_by_filename = {
+					["Brewfile"] = {
+						icon = "",
+						color = colors.yellow,
+						name = "Brewfile",
+					},
 					[".prettierignore"] = {
 						icon = "",
 						color = colors.orange,

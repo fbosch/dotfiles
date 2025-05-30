@@ -4,8 +4,8 @@ local map = require("utils").set_keymap
 map("n", "<Space>", "<NOP>")
 
 -- Swap ; and :
-map("n", ":", ";")
 map("n", ";", ":")
+map("n", ":", ";")
 map("x", ":", ";")
 map("x", ";", ":")
 
