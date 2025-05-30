@@ -22,6 +22,17 @@ bash ./scripts/install.sh
 stow .
 ```
 
+## 🍺 Dependencies
+
+All essential tools and dependencies are managed with [Homebrew](https://brew.sh/) and tracked in the [Brewfile](./Brewfile).
+
+The installation script will install all dependencies in the bundle.
+
+```sh
+# ~/
+brew bundle install
+```
+
 ## What do I use?
 
 ### 🖥️ Terminal

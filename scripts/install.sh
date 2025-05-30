@@ -44,13 +44,12 @@ if [[ $(command -v brew) == "" ]]; then
   tic -x -o ~/.terminfo $tempfile 
   rm $tempfile
 
-  chsh -s $(which fish)
-  bat cache --build
+  chsh -s $(which fish) # set fish as default shell
+  bat cache --build # build the bat cache for colorscheme to work
+  stow . # stow the dotfiles
 else 
   echo "Updating homebrew..."
+  brew bundle install
   brew update
   bat cache --build
 fi
-
-
-brew bundle install
