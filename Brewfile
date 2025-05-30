@@ -35,6 +35,7 @@ brew "dua-cli" # disk space usage (interactive)
 brew "hyperfine" # benchmarking
 brew "mprocs"
 brew "cloc"
+brew "uutils-coreutils"
 
 # git
 brew "lazygit"

@@ -12,7 +12,12 @@ return {
 			require("nvim-web-devicons").setup({
 				override_by_filename = {
 					["Brewfile"] = {
-						icon = "",
+						icon = "󱄖",
+						color = colors.yellow,
+						name = "Brewfile",
+					},
+					["Brewfile.lock.json"] = {
+						icon = "",
 						color = colors.yellow,
 						name = "Brewfile",
 					},
@@ -23,6 +28,11 @@ return {
 					},
 				},
 				override_by_extension = {
+					["fish"] = {
+						icon = "",
+						color = colors.blue,
+						name = "fish",
+					},
 					["css"] = {
 						icon = "",
 						color = colors.purple,

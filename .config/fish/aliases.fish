@@ -1,36 +1,39 @@
-# Programs
+# Neovim
 alias nvim 'nvim -n -i NONE --noplugin'
-alias code cursor
-alias uge get_week_dates
-alias rw remaining_work_hours
-
 abbr n nvim
 abbr nlup 'nvim --headless +"Lazy! sync" +qa' # lazy update neovim plugins
 abbr nwipe 'nvim --headless +"WipeAllSessions!" +qa'
 abbr ncheck 'nvim --headless +"checkhealth" +qa'
 abbr v nvim
+
 abbr p pnpm
 abbr pui 'pnpm upgrade --interactive --latest --recursive'
-
 abbr bup 'brew upgrade'
+
 function vimdiff
     nvim -d $argv
 end
+
 function snvim
     sudo -E -s nvim $argv
 end
+
 function wtr
     curl "wttr.in/Copenhagen?format=%n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"
 end
+
 function batbuild
     bat cache --build $argv
 end
+
 function bat_fast
     bat --style=plain --color=never --wrap=never --paging=never $argv
 end
 function copykey
     pbcopy <~/.ssh/id_rsa.pub
 end
+alias uge get_week_dates
+alias rw remaining_work_hours
 
 # Directory shortcuts - fingers too fast for accuracy ⚡
 abbr prj 'cd ~/Projects'
@@ -128,10 +131,11 @@ abbr cu 'cargo update'
 abbr wta worktree_add
 abbr wtc worktrees_clean
 
-# Webdev
 function src
     jq -r \'.scripts | to_entries[] | "\(.key):\n \(.value)\n"\' package.json | awk \'BEGIN{idx=1} {print "\033[3"idx"m" $0 "\033[0m"; idx = idx % 3 + 1}\'
 end
+
+# Webdev
 function pnpx
     pnpm dlx $argv
 end

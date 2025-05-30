@@ -18,7 +18,7 @@ return {
 	},
 	{
 		"uga-rosa/ccc.nvim",
-		ft = { "css", "typescriptreact", "javascriptreact", "html" },
+		ft = { "css", "typescriptreact", "javascriptreact", "html", "lua" },
 		keys = {
 			{
 				mode = "n",

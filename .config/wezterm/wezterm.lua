@@ -152,13 +152,13 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_wid
 
 	if string.starts(title, "nvim") then
 		table.insert(tab_title, { Foreground = { Color = "#54a23d" } })
-		table.insert(tab_title, { Text = wezterm.nerdfonts.linux_neovim })
+		table.insert(tab_title, { Text = wezterm.nerdfonts.dev_neovim })
 		title = string.gsub(title, "nvim", "")
 	end
 
 	if string.starts(title, "brew") then
 		table.insert(tab_title, { Foreground = { Color = "#c0a23d" } })
-		table.insert(tab_title, { Text = wezterm.nerdfonts.fa_beer })
+		table.insert(tab_title, { Text = wezterm.nerdfonts.md_glass_mug_variant })
 		title = string.gsub(title, "brew", "")
 	end
 

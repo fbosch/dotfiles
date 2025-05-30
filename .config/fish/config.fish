@@ -1,3 +1,4 @@
+. ~/.config/fish/coreutils.fish
 . ~/.config/fish/aliases.fish
 . ~/.config/fish/scripts.fish
 . ~/.config/fish/profile.fish
