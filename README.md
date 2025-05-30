@@ -1,7 +1,7 @@
 # Dotfiles
 
-Various configuration files for my development environment.
-Managed with [stow](https://www.gnu.org/software/stow/).
+Config files and scripts for my development environment.  
+Managed with [GNU Stow](https://www.gnu.org/software/stow/) for easy symlink management.
 
 ## Installation
 
@@ -19,7 +19,7 @@ cd dotfiles
 bash ./scripts/install.sh
 
 # initiate GNU Stow
-stow .
+stow .config
 ```
 
 ## What do I use?
@@ -41,7 +41,6 @@ I use [WezTerm](https://wezfurlong.org/wezterm/index.html) as my terminal emulat
 - [stow](https://www.gnu.org/software/stow/)
 - [git-delta](https://github.com/dandavison/delta)
 - [lazygit](https://github.com/jesseduffield/lazygit)
-- [btop](https://github.com/aristocratos/btop)
 
 ---
 
@@ -66,7 +65,7 @@ I use my own custom configuration for [NeoVim](https://neovim.io/), which is set
 - [fzf-lua](https://github.com/ibhagwan/fzf-lua)
 - [telescope](https://github.com/nvim-telescope/telescope.nvim)
 - [lualine](https://github.com/nvim-lualine/lualine.nvim)
-- [autosession](https://github.com/rmagatti/autosession.nvim)
+- [autosession](https://github.com/rmagatti/auto-session)
 
 ... and more
 
