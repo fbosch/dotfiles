@@ -5,7 +5,14 @@ return {
 	{ "windwp/nvim-autopairs", event = { "InsertEnter" }, opts = {} },
 	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },
 	{ "folke/ts-comments.nvim", event = "BufEnter", opts = {} },
-	{ "echasnovski/mini.surround", event = { "InsertEnter" }, opts = {} },
+	{
+		"kylechui/nvim-surround",
+		version = "^3.0.0",
+		event = "VeryLazy",
+		config = function()
+			require("nvim-surround").setup({})
+		end,
+	},
 	{ "nguyenvukhang/nvim-toggler", event = { "BufEnter" }, opts = {} },
 	{
 		"chrisgrieser/nvim-spider",
