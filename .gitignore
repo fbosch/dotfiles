@@ -1,5 +1,5 @@
 # macOS system files
-.DS_Store
+**/.DS_Store
 
 # Editor and tool state files
 lazy-lock.json
