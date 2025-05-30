@@ -1,18 +1,37 @@
+local is_git_repo = require("utils.git").is_git_repo()
+
 return {
 	"nvim-lualine/lualine.nvim",
 	dependencies = {
 		"nvim-tree/nvim-web-devicons",
-		"f-person/git-blame.nvim",
 		"ecthelionvi/NeoComposer.nvim",
+		{
+			"f-person/git-blame.nvim",
+			cond = is_git_repo,
+		},
 	},
 	event = { "VeryLazy" },
 	priority = 50,
 	config = function()
 		local overseer = require("overseer")
-		local git_blame = require("gitblame")
-		vim.g.gitblame_display_virtual_text = 0 -- Disable virtual text
-		vim.g.gitblame_date_format = "%r"
-		vim.g.gitblame_message_template = " <author>   <date>   <sha> "
+
+		local lualine_x = {}
+		local lualine_c = {}
+		if is_git_repo then
+			local git_blame = require("gitblame")
+			vim.g.gitblame_display_virtual_text = 0 -- Disable virtual text
+			vim.g.gitblame_date_format = "%r"
+			vim.g.gitblame_message_template = " <author>   <date>   <sha> "
+			lualine_c = {
+				"branch",
+			}
+			lualine_x = {
+				{
+					git_blame.get_current_blame_text,
+					cond = git_blame.is_blame_text_available,
+				},
+			}
+		end
 		require("lualine").setup({
 			options = {
 				theme = "auto",
@@ -40,15 +59,8 @@ return {
 						status_not = false, -- When true, invert the status search
 					},
 				},
-				lualine_c = {
-					"branch",
-				},
-				lualine_x = {
-					{
-						git_blame.get_current_blame_text,
-						cond = git_blame.is_blame_text_available,
-					},
-				},
+				lualine_c = lualine_c,
+				lualine_x = lualine_x,
 				lualine_y = {
 					"filetype",
 				},

@@ -99,8 +99,7 @@ return {
 	},
 	{
 		"smjonas/live-command.nvim",
-		event = "VeryLazy",
-		priority = 10,
+		event = "CmdLineEnter",
 		config = function()
 			require("live-command").setup({
 				commands = {
@@ -136,7 +135,7 @@ return {
 	},
 	{
 		"tzachar/local-highlight.nvim",
-		event = { "BufEnter", "BufWinEnter" },
+		event = { "CursorMoved" },
 		dependencies = {
 			{
 				"folke/snacks.nvim",
@@ -155,29 +154,30 @@ return {
 	},
 	{
 		"levouh/tint.nvim",
-		event = "VeryLazy",
-		priority = 10,
+		event = "BufWinEnter",
 		config = function()
-			local tint = require("tint")
-			local transforms = require("tint.transforms")
-			local colors = require("config.colors")
+			vim.schedule(function()
+				local tint = require("tint")
+				local transforms = require("tint.transforms")
+				local colors = require("config.colors")
 
-			tint.setup({
-				transforms = {
-					transforms.tint_with_threshold(-40, colors.background, 100),
-					transforms.saturate(0.4),
-				},
-				highlight_ignore_patterns = {
-					"NvimTree*",
-					"IndentBlankline*",
-					"Ibl*",
-					"Whitespace",
-					"NonText",
-					"Hop*",
-					"Ccc*",
-					"Leap*",
-				},
-			})
+				tint.setup({
+					transforms = {
+						transforms.tint_with_threshold(-40, colors.background, 100),
+						transforms.saturate(0.4),
+					},
+					highlight_ignore_patterns = {
+						"NvimTree*",
+						"IndentBlankline*",
+						"Ibl*",
+						"Whitespace",
+						"NonText",
+						"Hop*",
+						"Ccc*",
+						"Leap*",
+					},
+				})
+			end)
 		end,
 	},
 	{

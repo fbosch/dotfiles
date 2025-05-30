@@ -50,4 +50,14 @@ function M.extract_azure_org(url)
 	return nil
 end
 
+local is_git_repo = nil
+function M.is_git_repo()
+	if is_git_repo then
+		return is_git_repo
+	end
+	local root = vim.fs.root(vim.fn.getcwd(), { ".git" })
+	is_git_repo = root and true or false
+	return is_git_repo
+end
+
 return M

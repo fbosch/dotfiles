@@ -1,6 +1,21 @@
 return {
 	"stevearc/conform.nvim",
 	event = { "BufEnter", "BufWinEnter" },
+	ft = {
+		"html",
+		"css",
+		"javascript",
+		"javascriptreact",
+		"typescript",
+		"typescriptreact",
+		"markdown",
+		"json",
+		"yaml",
+		"lua",
+		"fish",
+		"rust",
+		"mdx",
+	},
 	config = function()
 		local group = vim.api.nvim_create_augroup("Conform", {})
 		local conform = require("conform")

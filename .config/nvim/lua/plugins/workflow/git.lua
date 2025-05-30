@@ -1,3 +1,4 @@
+local is_git_repo = require("utils.git").is_git_repo()
 return {
 	{
 		"dinhhuy258/git.nvim",
@@ -5,6 +6,7 @@ return {
 			"GitBlameOpenCommitURL",
 			"GitBlameCopySHA",
 		},
+		cond = is_git_repo,
 		keys = {
 			{
 				"<leader>gBo",
@@ -29,6 +31,7 @@ return {
 	{
 		"akinsho/git-conflict.nvim",
 		event = "BufReadPost",
+		cond = is_git_repo,
 		opts = {
 			highlights = {
 				incoming = "DiffAdd",
@@ -39,6 +42,7 @@ return {
 	{
 		"lewis6991/gitsigns.nvim",
 		event = { "BufReadPost" },
+		cond = is_git_repo,
 		opts = {
 			signs = {
 				add = { text = "+▕" },
@@ -103,6 +107,7 @@ return {
 	{
 		"sindrets/diffview.nvim",
 		dependencies = { "nvim-lua/plenary.nvim" },
+		cond = is_git_repo,
 		keys = {
 			{
 				mode = { "n" },

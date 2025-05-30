@@ -2,9 +2,7 @@ return {
 	"nvim-tree/nvim-tree.lua",
 	dependencies = {
 		"stevearc/dressing.nvim",
-		"mcchrish/zenbones.nvim",
 	},
-	lazy = false,
 	cmd = { "NvimTreeToggle", "NvimTreeFindFile" },
 	keys = {
 		{

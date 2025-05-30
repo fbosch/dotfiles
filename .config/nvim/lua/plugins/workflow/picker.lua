@@ -18,8 +18,7 @@ return {
 	},
 	{
 		"uga-rosa/ccc.nvim",
-		enabled = true,
-		event = { "VeryLazy", "BufEnter" },
+		ft = { "css", "typescriptreact", "javascriptreact", "html" },
 		keys = {
 			{
 				mode = "n",

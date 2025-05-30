@@ -28,7 +28,6 @@ return {
 		"luckasRanarison/tailwind-tools.nvim",
 		build = ":UpdateRemotePlugins",
 		ft = { "javascriptreact", "typescriptreact" },
-		event = "VeryLazy",
 		dependencies = {
 			"nvim-treesitter/nvim-treesitter",
 			"nvim-telescope/telescope.nvim",

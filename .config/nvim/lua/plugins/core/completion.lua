@@ -4,30 +4,46 @@ return {
 		dependencies = {
 			"neovim/nvim-lspconfig",
 			"nvim-treesitter/nvim-treesitter",
-			"L3MON4D3/LuaSnip",
+			{
+				"L3MON4D3/LuaSnip",
+				event = "InsertEnter",
+			},
 			"nvim-lua/plenary.nvim",
-			"hrsh6th/nvim-cmp",
-			"f3fora/cmp-spell",
+			{
+				"f3fora/cmp-spell",
+				event = "InsertEnter",
+			},
 			{
 				"hrsh7th/cmp-nvim-lua",
 				ft = { "lua" },
+				event = "InsertEnter",
 			},
 			{
 				"mtoohey31/cmp-fish",
 				ft = { "fish" },
+				event = "InsertEnter",
 			},
 			"saadparwaiz1/cmp_luasnip",
 			{
 				"hrsh7th/cmp-nvim-lsp",
-				event = "LspAttach",
+				event = { "LspAttach", "InsertEnter" },
 			},
 			{
 				"onsails/lspkind.nvim",
-				event = "LspAttach",
+				event = { "LspAttach", "InsertEnter" },
 			},
-			"hrsh7th/cmp-path",
-			"hrsh7th/cmp-buffer",
-			"hrsh7th/cmp-omni",
+			{
+				"hrsh7th/cmp-path",
+				event = "InsertEnter",
+			},
+			{
+				"hrsh7th/cmp-buffer",
+				event = "InsertEnter",
+			},
+			{
+				"hrsh7th/cmp-omni",
+				event = "InsertEnter",
+			},
 		},
 		event = { "InsertEnter" },
 		config = function()

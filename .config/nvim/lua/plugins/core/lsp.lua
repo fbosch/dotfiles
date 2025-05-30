@@ -249,7 +249,10 @@ return {
 		"antosha417/nvim-lsp-file-operations",
 		"williamboman/mason-lspconfig.nvim",
 		"WhoIsSethDaniel/mason-tool-installer.nvim",
-		"folke/lazydev.nvim",
+		{
+			"folke/lazydev.nvim",
+			ft = { "lua" },
+		},
 		{
 			"williamboman/mason.nvim",
 			opts = {
@@ -288,7 +291,6 @@ return {
 			"pmizio/typescript-tools.nvim",
 			ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
 			dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig" },
-			event = { "VeryLazy" },
 			config = function()
 				require("typescript-tools").setup({
 					on_attach = on_attach,
