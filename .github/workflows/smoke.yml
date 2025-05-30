@@ -5,7 +5,7 @@ on: [push]
 defaults:
   run:
     shell: bash
-    working-directory: ./scripts
+    working-directory: ./
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: ./brew-install-script.sh
+        run: ./scripts/install.sh
 
       - name: Add Homebrew to PATH
         run: |

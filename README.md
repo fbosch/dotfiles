@@ -16,7 +16,7 @@ git clone git@github.com:fbosch/dotfiles.git
 cd dotfiles
 
 # install the dependencies
-bash ./scripts/brew-install-script.sh
+bash ./scripts/install.sh
 
 # initiate GNU Stow
 stow .
@@ -45,7 +45,7 @@ I use [WezTerm](https://wezfurlong.org/wezterm/index.html) as my terminal emulat
 
 ---
 
-![terminal](./terminal.png)
+![terminal](./docs/terminal.png)
 
 > colorscheme: [zenwritten dark](https://github.com/zenbones-theme/zenbones.nvim)
 > fonts:
@@ -72,6 +72,6 @@ I use my own custom configuration for [NeoVim](https://neovim.io/), which is set
 
 ---
 
-![editor](./editor.png)
+![editor](./docs/editor.png)
 
 > colorscheme: [zenwritten dark](https://github.com/zenbones-theme/zenbones.nvim)

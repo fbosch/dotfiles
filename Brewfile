@@ -46,6 +46,8 @@ brew "biome"
 brew "difftastic"
 brew "deno"
 brew "gum"
+brew "docker"
+brew "docker-buildx"
 
 # programs - mac
 if OS.mac?
