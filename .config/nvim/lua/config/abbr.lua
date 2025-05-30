@@ -30,40 +30,37 @@ ft_abbr({ "lua" }, {
 })
 
 local typos = {
-	cahnge = "change",
-	futher = "further",
-	teh = "the",
-	seperate = "separate",
-	definately = "definitely",
-	recieve = "receive",
-	occured = "occurred",
-	untill = "until",
-	adress = "address",
-	acheive = "achieve",
-	occassion = "occasion",
-	intial = "initial",
-	sucess = "success",
-	sucessful = "successful",
-	environment = "environment",
-	enviroment = "environment",
-	promsie = "promise",
-	promse = "promise",
-	visiblity = "visibility",
-	satic = "static",
-	stuct = "struct",
-	listner = "listener",
-	moduel = "module",
-	pakage = "package",
-	temproary = "temporary",
-	temprary = "temporary",
-	cancle = "cancel",
-	destory = "destroy",
-	histroy = "history",
-	requrie = "require",
+	"enviro{n,}ment environment",
+	"proms{e,ie} promise",
+	"succes{,sful} success{}",
+	"tempor{ary,ry} temporary",
+	"occas{sion,ion} occasion",
+	"oc{cur,cu}red occurred",
+	"cahnge change",
+	"futher further",
+	"teh the",
+	"se{p,e}rate separate",
+	"definat{e,ely,ly} definitely",
+	"rec{ei,ie}ve receive",
+	"requir{e,er,} require",
+	"untill until",
+	"adress address",
+	"acheive achieve",
+	"intial initial",
+	"visiblity visibility",
+	"satic static",
+	"stuct struct",
+	"listner listener",
+	"moduel module",
+	"pakage package",
+	"cancle cancel",
+	"destory destroy",
+	"histroy history",
 }
 
+-- utilize vim-abolish for common typos
 vim.schedule(function()
-	for k, v in pairs(typos) do
-		vim.cmd(string.format("abbreviate %s %s", k, v))
+	for _, v in pairs(typos) do
+		vim.cmd(string.format("Abolish %s", v))
 	end
 end)

@@ -31,6 +31,8 @@ The installation script will install all dependencies in the bundle.
 ```sh
 # ~/
 brew bundle install
+
+
 ```
 
 ## ⚙ What do I use?
@@ -69,8 +71,6 @@ I use my own custom configuration for [NeoVim](https://neovim.io/), which is set
 - [autosession](https://github.com/rmagatti/auto-session)
 
 ... and more
-
----
 
 ![editor](./docs/editor.png)
 
