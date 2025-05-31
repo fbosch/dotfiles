@@ -14,15 +14,29 @@ vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 vim.g.spellfile_URL = "http://ftp.vim.org/vim/runtime/spell"
 
--- disable built-in plugins
-vim.g.loaded_netrw = 1
-vim.g.loaded_netrwFileHandlers = 1
-vim.g.loaded_netrwSettings = 1
-vim.g.loaded_gitignore = 1
-vim.g.loaded_netrwPlugin = 1
-vim.g.loaded_shada_plugin = 1
-vim.g.loaded_matchparen = 1
-vim.g.loaded_zip = 1
-vim.g.do_filetype_lua = 1
+local disabled_built_ins = {
+	"netrw",
+	"netrwPlugin",
+	"netrwSettings",
+	"netrwFileHandlers",
+	"gzip",
+	"zip",
+	"zipPlugin",
+	"tar",
+	"tarPlugin",
+	"getscript",
+	"getscriptPlugin",
+	"vimball",
+	"vimballPlugin",
+	"2html_plugin",
+	"logipat",
+	"rrhelper",
+	"spellfile_plugin",
+	"matchit",
+}
+
+for _, plugin in pairs(disabled_built_ins) do
+	vim.g["loaded_" .. plugin] = 1
+end
 
 require("config")

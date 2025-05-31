@@ -4,48 +4,19 @@ return {
 		dependencies = {
 			"neovim/nvim-lspconfig",
 			"nvim-treesitter/nvim-treesitter",
-			{
-				"L3MON4D3/LuaSnip",
-				event = "InsertEnter",
-			},
+			"L3MON4D3/LuaSnip",
 			"nvim-lua/plenary.nvim",
-			{
-				"f3fora/cmp-spell",
-				event = "InsertEnter",
-			},
-			{
-				"hrsh7th/cmp-nvim-lua",
-				ft = { "lua" },
-				event = "InsertEnter",
-			},
-			{
-				"mtoohey31/cmp-fish",
-				ft = { "fish" },
-				event = "InsertEnter",
-			},
+			{ "f3fora/cmp-spell" },
+			{ "hrsh7th/cmp-nvim-lua", ft = { "lua" } },
+			{ "mtoohey31/cmp-fish", ft = { "fish" } },
 			"saadparwaiz1/cmp_luasnip",
-			{
-				"hrsh7th/cmp-nvim-lsp",
-				event = { "LspAttach", "InsertEnter" },
-			},
-			{
-				"onsails/lspkind.nvim",
-				event = { "LspAttach", "InsertEnter" },
-			},
-			{
-				"hrsh7th/cmp-path",
-				event = "InsertEnter",
-			},
-			{
-				"hrsh7th/cmp-buffer",
-				event = "InsertEnter",
-			},
-			{
-				"hrsh7th/cmp-omni",
-				event = "InsertEnter",
-			},
+			"hrsh7th/cmp-nvim-lsp",
+			"onsails/lspkind.nvim",
+			"hrsh7th/cmp-path",
+			"hrsh7th/cmp-buffer",
+			"hrsh7th/cmp-omni",
 		},
-		event = { "InsertEnter" },
+		event = { "CursorHoldI" },
 		config = function()
 			local cmp = require("cmp")
 			local types = require("cmp.types")

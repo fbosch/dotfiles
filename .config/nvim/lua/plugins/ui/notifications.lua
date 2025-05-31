@@ -2,13 +2,13 @@ return {
 	{
 		"chrisgrieser/nvim-recorder",
 		dependencies = "rcarriga/nvim-notify",
-		event = "VeryLazy",
+		event = "RecordingEnter",
 		opts = {}, -- required even with default settings, since it calls `setup()`
 	},
 	{
 		"j-hui/fidget.nvim",
 		dependencies = "rcarriga/nvim-notify",
-		event = "VeryLazy",
+		event = "LspNotify",
 		config = function()
 			require("fidget").setup({
 				progress = {

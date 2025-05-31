@@ -4,17 +4,15 @@ return {
 	"nvim-lualine/lualine.nvim",
 	dependencies = {
 		"nvim-tree/nvim-web-devicons",
-		"ecthelionvi/NeoComposer.nvim",
+		-- "ecthelionvi/NeoComposer.nvim",
 		{
 			"f-person/git-blame.nvim",
 			cond = is_git_repo,
 		},
 	},
-	event = { "VeryLazy" },
-	priority = 50,
+	event = "BufWinEnter",
 	config = function()
 		local overseer = require("overseer")
-
 		local lualine_x = {}
 		local lualine_c = {}
 		if is_git_repo then
@@ -64,28 +62,6 @@ return {
 				lualine_y = {
 					"filetype",
 				},
-				-- lualine_z = {
-				-- 	function()
-				-- 		local current_hour = tonumber(os.date("%I"))
-				-- 		local current_time = os.date("%H:%M")
-				-- 		local icon_tbl = {
-				-- 			[1] = "󱐿",
-				-- 			[2] = "󱑀",
-				-- 			[3] = "󱑁",
-				-- 			[4] = "󱑂",
-				-- 			[5] = "󱑃",
-				-- 			[6] = "󱑄",
-				-- 			[7] = "󱑅",
-				-- 			[8] = "󱑆",
-				-- 			[9] = "󱑇",
-				-- 			[10] = "󱑈",
-				-- 			[11] = "󱑉",
-				-- 			[12] = "󱑊",
-				-- 		}
-				-- 		local icon = icon_tbl[current_hour]
-				-- 		return icon .. " " .. current_time
-				-- 	end,
-				-- },
 			},
 		})
 	end,
