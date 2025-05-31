@@ -1,0 +1,3 @@
+procs:
+  dev:
+    cmd: ["swpm run dev"]

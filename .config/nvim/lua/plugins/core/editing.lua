@@ -5,7 +5,14 @@ return {
 		event = "InsertEnter",
 		config = require("config.abbr").autofix_typos,
 	},
-	{ "smjonas/inc-rename.nvim", cmd = { "IncRename" }, opts = {} },
+	{
+		"smjonas/inc-rename.nvim",
+		cmd = { "IncRename" },
+		opts = {},
+		keys = {
+			{ "<leader>rn", "<cmd>IncRename<cr>", mode = "n", desc = "rename" },
+		},
+	},
 	{ "windwp/nvim-autopairs", event = { "InsertEnter" }, opts = {} },
 	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },
 	{ "folke/ts-comments.nvim", event = "BufEnter", opts = {} },

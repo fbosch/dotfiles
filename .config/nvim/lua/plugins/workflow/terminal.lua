@@ -1,7 +1,7 @@
 return {
 	{
 		"numtostr/FTerm.nvim",
-		cmd = { "FTermOpen", "FTermClose", "FTermExit", "FTermToggle" },
+		cmd = { "FTermOpen", "FTermClose", "FTermExit", "FTermToggle", "FtermMProcs" },
 		keys = {
 			{
 				"<A-t>",
@@ -17,9 +17,25 @@ return {
 				mode = "t",
 				silent = true,
 			},
+			{
+				"<A-m>",
+				"<cmd>FTermMProcs<cr>",
+				desc = "toggle floating terminal with mprocs",
+				mode = "n",
+				silent = true,
+			},
+			{
+				"<A-m>",
+				"<C-\\><C-n><cmd>FTermMProcs<cr>",
+				desc = "toggle floating terminal with mprocs",
+				mode = "t",
+				silent = true,
+			},
 		},
 		config = function()
-			require("FTerm").setup({
+			local usrcmd = vim.api.nvim_create_user_command
+			local fterm = require("FTerm")
+			fterm.setup({
 				border = "rounded",
 				env = {
 					["IN_NEOVIM"] = "1",
@@ -29,10 +45,33 @@ return {
 					width = 0.85,
 				},
 			})
-			vim.api.nvim_create_user_command("FTermOpen", require("FTerm").open, { bang = true })
-			vim.api.nvim_create_user_command("FTermClose", require("FTerm").close, { bang = true })
-			vim.api.nvim_create_user_command("FTermExit", require("FTerm").exit, { bang = true })
-			vim.api.nvim_create_user_command("FTermToggle", require("FTerm").toggle, { bang = true })
+
+			local project_types = require("utils.project").get_project_types()
+			local yaml_config = require("utils.fn").classify(project_types, {
+				{
+					{ "typescript", "javascript", "react" },
+					"--npm",
+				},
+			})
+
+			local mprocs = fterm:new({
+				ft = "fterm_mprocs",
+				cmd = string.format("mprocs %s", yaml_config or ""),
+				dimensions = {
+					height = 0.65,
+					width = 0.75,
+				},
+			})
+
+			usrcmd("FTermOpen", fterm.open, { bang = true })
+			usrcmd("FTermClose", fterm.close, { bang = true })
+			usrcmd("FTermExit", fterm.exit, { bang = true })
+			usrcmd("FTermToggle", fterm.toggle, { bang = true })
+
+			usrcmd("FTermMProcs", function()
+				print(mprocs_yaml)
+				mprocs:toggle()
+			end, { bang = true })
 		end,
 	},
 	{
