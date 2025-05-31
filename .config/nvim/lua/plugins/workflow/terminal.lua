@@ -52,15 +52,17 @@ return {
 			local env = {
 				["IN_NEOVIM"] = "1",
 			}
+			local dimensions = {
+				height = 0.65,
+				width = 0.70,
+			}
 
 			fterm.setup({
 				border = "rounded",
 				env = env,
-				dimensions = {
-					height = 0.85,
-					width = 0.85,
-				},
+				dimensions = dimensions,
 			})
+
 			usrcmd("FTermOpen", fterm.open, { bang = true })
 			usrcmd("FTermClose", fterm.close, { bang = true })
 			usrcmd("FTermExit", fterm.exit, { bang = true })
@@ -75,10 +77,7 @@ return {
 						env = env,
 						shell = "dash",
 						cmd = string.format("mprocs %s", args),
-						dimensions = {
-							height = 0.65,
-							width = 0.65,
-						},
+						dimensions = dimensions,
 					})
 				end
 				mprocs_instance:toggle()
@@ -92,10 +91,7 @@ return {
 						env = env,
 						shell = "dash",
 						cmd = "gitui",
-						dimensions = {
-							height = 0.65,
-							width = 0.65,
-						},
+						dimensions = dimensions,
 					})
 				end
 				gitui_instance:toggle()
