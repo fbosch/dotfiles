@@ -31,6 +31,14 @@ vim.g.terminal_color_12 = "#61ABDA"
 vim.g.terminal_color_13 = "#CF86C1"
 vim.g.terminal_color_14 = "#65B8C1"
 vim.g.terminal_color_15 = "#8E8E8E"
-vim.api.nvim_set_hl(0, "Normal", { fg = "#BBBBBB", bg = "#191919" })
+require("utils").load_highlights({
+	Normal = { fg = "#BBBBBB", bg = "#191919" },
+	Comment = { fg = "#686868", bg = "#191919", italic = true },
+	Constant = { fg = "#8B8B8B", italic = true },
+	String = { fg = "#8B8B8B", italic = true },
+	LineNr = { fg = "#616161" },
+	Function = { fg = "#353535", italic = true },
+	Identifier = { fg = "#505050", italic = true },
+})
 
 require("config")
