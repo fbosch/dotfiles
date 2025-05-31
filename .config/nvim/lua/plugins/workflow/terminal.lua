@@ -90,6 +90,7 @@ return {
 					gitui_instance = fterm:new({
 						ft = "fterm_gitui",
 						env = env,
+						shell = "dash",
 						cmd = "gitui",
 						dimensions = {
 							height = 0.65,

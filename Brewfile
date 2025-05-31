@@ -17,6 +17,7 @@ brew "tldr"
 brew "grc"
 brew "gnu-units"
 brew "ast-grep"
+brew "keychain"
 
 # directories
 brew "zoxide"
