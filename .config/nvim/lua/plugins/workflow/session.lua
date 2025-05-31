@@ -39,14 +39,14 @@ return {
 				callback = function()
 					local existing_session = vim.loop.fs_stat(path)
 					if existing_session and existing_session.type == "file" then
-						require("mini.sessions").read(session_file)
+						sessions.read(session_file)
 					end
 				end,
 			})
 
 			vim.api.nvim_create_autocmd({ "VimLeavePre" }, {
 				callback = function()
-					require("mini.sessions").write(session_file)
+					sessions.write(session_file)
 				end,
 			})
 		end,

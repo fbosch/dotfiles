@@ -69,7 +69,6 @@ return {
 			usrcmd("FTermToggle", fterm.toggle, { bang = true })
 
 			usrcmd("FTermMProcs", function()
-				print(mprocs_yaml)
 				mprocs:toggle()
 			end, { bang = true })
 		end,
