@@ -1,10 +1,10 @@
 procs:
   dev:
     autostart: true
-    cmd: ["swpm run dev"]
+    shell: "swpm run dev"
   build:
     autostart: false
-    cmd: ["swpm run build"]
+    shell: "swpm run build"
   test:
     autostart: false
-    cmd: ["swpm run test"]
+    shell: "swpm run test"

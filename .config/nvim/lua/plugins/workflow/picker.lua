@@ -37,7 +37,7 @@ return {
 				highlighter = {
 					auto_enable = true,
 					lsp = true,
-					filetypes = { "css", "typescriptreact", "javascriptreact", "html", "lua" },
+					filetypes = { "css", "typescriptreact", "javascriptreact", "html", "lua", "ron", "xml" },
 				},
 			})
 		end,

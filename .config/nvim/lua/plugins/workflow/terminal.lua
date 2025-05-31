@@ -1,7 +1,7 @@
 return {
 	{
 		"numtostr/FTerm.nvim",
-		cmd = { "FTermOpen", "FTermClose", "FTermExit", "FTermToggle", "FtermMProcs" },
+		cmd = { "FTermOpen", "FTermClose", "FTermExit", "FTermToggle", "FtermMProcs", "FTermGitUI" },
 		keys = {
 			{
 				"<A-t>",
@@ -31,45 +31,74 @@ return {
 				mode = "t",
 				silent = true,
 			},
+			{
+				"<A-g>",
+				"<cmd>FTermGitUI<cr>",
+				desc = "toggle floating terminal with gitui",
+				mode = "n",
+				silent = true,
+			},
+			{
+				"<A-g>",
+				"<C-\\><C-n><cmd>FTermGitUI<cr>",
+				desc = "toggle floating terminal with gitui",
+				mode = "t",
+				silent = true,
+			},
 		},
 		config = function()
 			local usrcmd = vim.api.nvim_create_user_command
 			local fterm = require("FTerm")
+			local env = {
+				["IN_NEOVIM"] = "1",
+			}
+
 			fterm.setup({
 				border = "rounded",
-				env = {
-					["IN_NEOVIM"] = "1",
-				},
+				env = env,
 				dimensions = {
 					height = 0.85,
 					width = 0.85,
 				},
 			})
-
-			local project_types = require("utils.project").get_project_types()
-			local yaml_config = require("utils.fn").classify(project_types, {
-				{
-					{ "typescript", "javascript", "react" },
-					"--npm",
-				},
-			})
-
-			local mprocs = fterm:new({
-				ft = "fterm_mprocs",
-				cmd = string.format("mprocs %s", yaml_config or ""),
-				dimensions = {
-					height = 0.65,
-					width = 0.75,
-				},
-			})
-
 			usrcmd("FTermOpen", fterm.open, { bang = true })
 			usrcmd("FTermClose", fterm.close, { bang = true })
 			usrcmd("FTermExit", fterm.exit, { bang = true })
 			usrcmd("FTermToggle", fterm.toggle, { bang = true })
 
+			local mprocs_instance = nil
 			usrcmd("FTermMProcs", function()
-				mprocs:toggle()
+				if not mprocs_instance then
+					local args = require("utils.project").resolve_mprocs_args()
+					mprocs_instance = fterm:new({
+						ft = "fterm_mprocs",
+						env = env,
+						shell = "dash",
+						cmd = string.format("mprocs %s", args),
+						dimensions = {
+							height = 0.65,
+							width = 0.65,
+						},
+					})
+				end
+				mprocs_instance:toggle()
+			end, { bang = true })
+
+			local gitui_instance = nil
+			usrcmd("FTermGitUI", function()
+				if not gitui_instance then
+					gitui_instance = fterm:new({
+						ft = "fterm_gitui",
+						env = env,
+						shell = "dash",
+						cmd = "gitui",
+						dimensions = {
+							height = 0.65,
+							width = 0.65,
+						},
+					})
+				end
+				gitui_instance:toggle()
 			end, { bang = true })
 		end,
 	},

@@ -7,6 +7,7 @@ brew "coreutils" if OS.mac?
 brew "neovim"
 brew "fish"
 brew "fisher"
+brew "dash"
 brew "stow"
 brew "peco"
 brew "ripgrep"

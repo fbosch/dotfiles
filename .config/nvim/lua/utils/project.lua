@@ -1,3 +1,5 @@
+local fn = require("utils.fn")
+
 local M = {}
 
 local __package_json_cache = {}
@@ -94,4 +96,35 @@ function M.get_project_types()
 	end
 	return matches
 end
+
+function M.find_mprocs_yaml()
+	local root = vim.fs.root(vim.fn.getcwd(), { "package.json", ".git" })
+	if not root then
+		return nil
+	end
+	for _, fname in ipairs({ "mprocs.yaml", "mprocs.yml" }) do
+		local candidate = root .. "/" .. fname
+		if vim.loop.fs_stat(candidate) then
+			return candidate
+		end
+	end
+end
+
+function M.resolve_mprocs_args()
+	local project_mprocs_yaml = M.find_mprocs_yaml()
+
+	if project_mprocs_yaml then
+		return string.format("--config %s", project_mprocs_yaml)
+	end
+
+	local project_types = M.get_project_types()
+
+	return fn.classify(project_types, {
+		{
+			{ "typescript", "javascript", "react" },
+			"--npm",
+		},
+	}) or ""
+end
+
 return M
