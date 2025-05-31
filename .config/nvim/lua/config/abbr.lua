@@ -44,6 +44,7 @@ M.typos = {
 	"covert convert",
 	"defin{ately,etely,atly,ately} definitely",
 	"depend{e,a}nc{ie,ei,y,i}es dependencies",
+	"depenedencies dependencies",
 	"dont don't",
 	"enviro{n,}ment environment",
 	"erros errors",

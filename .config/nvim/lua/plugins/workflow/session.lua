@@ -3,42 +3,51 @@ local function get_cwd_as_name()
 	return cwd:gsub("[^A-Za-z0-9]", "_")
 end
 local root_dir = vim.fn.expand("~/.config") .. "/nvim/.sessions//"
-local bundle = root_dir .. get_cwd_as_name()
+
+local session_file = get_cwd_as_name()
+local path = root_dir .. session_file
 
 return {
-	"rmagatti/auto-session",
-	dependencies = {
-		"stevearc/overseer.nvim",
-	},
-	opts = {
-		log_level = "error",
-		root_dir = root_dir,
-		auto_restore = true,
-		cwd_change_handling = true,
-		purge_after_minutes = 2880, -- 2 days
-		pre_save_cmds = {
-			function()
-				local overseer = require("overseer")
-				overseer.save_task_bundle(bundle, nil, { on_conflict = "overwrite" })
-			end,
-		},
-		pre_restore_cmds = {
-			function()
-				local overseer = require("overseer")
-				for _, task in ipairs(overseer.list_tasks({})) do
-					task:dispose(true)
-				end
-				vim.defer_fn(function()
-					overseer.preload_task_cache({ dir = cwd })
-				end, 50)
-			end,
-		},
-		post_restore_cmds = {
-			function()
-				vim.defer_fn(function()
-					require("overseer").load_task_bundle(bundle, { ignore_missing = true })
-				end, 100)
-			end,
-		},
+	{
+		"echasnovski/mini.sessions",
+		version = "*",
+		lazy = false,
+		priority = 500,
+		config = function()
+			local sessions = require("mini.sessions")
+			sessions.setup({
+				directory = root_dir,
+				file = "",
+				hooks = {
+					pre = {
+						write = function()
+							local tree_ok, tree_api = pcall(require, "nvim-tree.api")
+							if tree_ok then
+								tree_api.tree.close()
+							end
+						end,
+					},
+				},
+				verbose = {
+					read = false,
+					write = false,
+					delete = false,
+				},
+			})
+
+			vim.api.nvim_create_autocmd({ "VimEnter" }, {
+				callback = function()
+					if vim.loop.fs_stat(path).type == "file" then
+						require("mini.sessions").read(session_file)
+					end
+				end,
+			})
+
+			vim.api.nvim_create_autocmd({ "VimLeavePre" }, {
+				callback = function()
+					require("mini.sessions").write(session_file)
+				end,
+			})
+		end,
 	},
 }

@@ -138,7 +138,7 @@ return {
 		dependencies = {
 			"nvim-lua/plenary.nvim",
 		},
-		event = { "BufRead" },
+		event = { "VeryLazy" },
 		opts = {
 			excluded_buftypes = { "terminal", "prompt" },
 		},

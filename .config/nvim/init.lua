@@ -31,6 +31,7 @@ vim.g.terminal_color_12 = "#61ABDA"
 vim.g.terminal_color_13 = "#CF86C1"
 vim.g.terminal_color_14 = "#65B8C1"
 vim.g.terminal_color_15 = "#8E8E8E"
+
 require("utils").load_highlights({
 	Normal = { fg = "#BBBBBB", bg = "#191919" },
 	Comment = { fg = "#686868", bg = "#191919", italic = true },

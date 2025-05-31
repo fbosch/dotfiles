@@ -8,7 +8,7 @@ return {
 	{
 		"j-hui/fidget.nvim",
 		dependencies = "rcarriga/nvim-notify",
-		event = "LspNotify",
+		event = "VeryLazy",
 		config = function()
 			require("fidget").setup({
 				progress = {

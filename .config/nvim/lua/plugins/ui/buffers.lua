@@ -39,8 +39,6 @@ return {
 		"romgrk/barbar.nvim",
 		dependencies = { "nvim-tree/nvim-web-devicons" },
 		event = "VeryLazy",
-		cmd = { "BufferNext", "BufferPrevious", "BufferClose", "BufferPick", "ColorScheme" },
-		priority = 50,
 		keys = vim.list_extend({
 			{
 				mode = { "n" },

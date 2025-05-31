@@ -18,8 +18,7 @@ return {
 	},
 	{
 		"uga-rosa/ccc.nvim",
-		ft = { "css", "typescriptreact", "javascriptreact", "html", "lua" },
-		event = "BufRead",
+		event = "VeryLazy",
 		keys = {
 			{
 				mode = "n",
@@ -32,10 +31,13 @@ return {
 		config = function()
 			local ccc = require("ccc")
 			ccc.setup({
+				highlight_mode = "virtual",
+				virtual_symbol = " ",
+				virtual_pos = "inline-left",
 				highlighter = {
-					highlight_mode = "fg",
 					auto_enable = true,
 					lsp = true,
+					filetypes = { "css", "typescriptreact", "javascriptreact", "html", "lua" },
 				},
 			})
 		end,

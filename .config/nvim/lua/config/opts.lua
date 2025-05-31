@@ -41,7 +41,7 @@ vim.opt.undofile = true
 vim.opt.undodir = vim.fn.stdpath("config") .. "/.undo//"
 vim.opt.backupdir = vim.fn.stdpath("config") .. "/.backup//"
 vim.opt.directory = vim.fn.stdpath("config") .. "/.swp//"
-vim.opt.sessionoptions = "localoptions,blank,buffers,tabpages,folds,curdir,winsize,winpos"
+vim.opt.sessionoptions = "localoptions,blank,buffers,folds,winsize,winpos"
 vim.opt.fileencoding = "utf-8"
 vim.opt.autoread = true
 
