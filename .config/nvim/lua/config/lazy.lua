@@ -39,9 +39,16 @@ local disabled_builtin_plugins = {
 	"tutor_mode_plugin",
 }
 
+for _, plugin in pairs(disabled_builtin_plugins) do
+	vim.g["loaded_" .. plugin] = 1
+end
+
 -- Setup lazy.nvim
 require("lazy").setup({
-	spec = { import = "plugins" },
+	spec = {
+		{ import = "plugins.ui.colorscheme" },
+		{ import = "plugins" },
+	},
 	change_detection = { notify = false },
 	ui = { border = "rounded" },
 	concurrency = 32,

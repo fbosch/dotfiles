@@ -2,7 +2,8 @@ return {
 	"mcchrish/zenbones.nvim",
 	dependencies = { "rktjmp/lush.nvim" },
 	lazy = false,
-	priority = 10000,
+	priority = 1000,
+	cond = vim.g.colors_name ~= "zenwritten",
 	config = function()
 		vim.g.zenbones_solid_line_nr = true
 
