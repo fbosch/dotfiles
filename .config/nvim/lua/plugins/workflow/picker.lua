@@ -19,6 +19,7 @@ return {
 	{
 		"uga-rosa/ccc.nvim",
 		ft = { "css", "typescriptreact", "javascriptreact", "html", "lua" },
+		event = "BufRead",
 		keys = {
 			{
 				mode = "n",

@@ -10,8 +10,6 @@ return {
 	dependencies = {
 		"stevearc/overseer.nvim",
 	},
-	lazy = false,
-	enabled = true,
 	opts = {
 		log_level = "error",
 		root_dir = root_dir,
