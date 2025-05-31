@@ -37,7 +37,8 @@ return {
 
 			vim.api.nvim_create_autocmd({ "VimEnter" }, {
 				callback = function()
-					if vim.loop.fs_stat(path).type == "file" then
+					local existing_session = vim.loop.fs_stat(path)
+					if existing_session and existing_session.type == "file" then
 						require("mini.sessions").read(session_file)
 					end
 				end,
