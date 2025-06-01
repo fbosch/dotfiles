@@ -28,19 +28,16 @@ return {
 				silent = true,
 			},
 		},
-		config = function()
-			local ccc = require("ccc")
-			ccc.setup({
-				highlight_mode = "virtual",
-				virtual_symbol = " ",
-				virtual_pos = "inline-left",
-				highlighter = {
-					auto_enable = true,
-					lsp = true,
-					filetypes = { "css", "typescriptreact", "javascriptreact", "html", "lua", "ron", "xml" },
-				},
-			})
-		end,
+		opts = {
+			highlight_mode = "virtual",
+			virtual_symbol = " ",
+			virtual_pos = "inline-left",
+			highlighter = {
+				auto_enable = true,
+				lsp = true,
+				filetypes = { "css", "typescriptreact", "javascriptreact", "html", "lua", "ron", "xml" },
+			},
+		},
 	},
 	{
 		"2kabhishek/nerdy.nvim",

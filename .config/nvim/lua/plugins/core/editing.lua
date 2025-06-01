@@ -1,5 +1,9 @@
 return {
+	{ "echasnovski/mini.ai", version = "*", opts = {} },
 	{ "tpope/vim-repeat", event = "BufEnter" },
+	{ "windwp/nvim-autopairs", event = { "InsertEnter" }, opts = {} },
+	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },
+	{ "folke/ts-comments.nvim", event = "BufEnter", opts = {} },
 	{
 		"tpope/vim-abolish",
 		event = "InsertEnter",
@@ -13,9 +17,6 @@ return {
 			{ "<leader>rn", "<cmd>IncRename<cr>", mode = "n", desc = "rename" },
 		},
 	},
-	{ "windwp/nvim-autopairs", event = { "InsertEnter" }, opts = {} },
-	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },
-	{ "folke/ts-comments.nvim", event = "BufEnter", opts = {} },
 	{
 		"kylechui/nvim-surround",
 		version = "^3.0.0",
