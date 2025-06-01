@@ -60,4 +60,27 @@ function M.is_git_repo()
 	return is_git_repo
 end
 
+function M.is_git_message_buffer()
+	local bufname = vim.api.nvim_buf_get_name(0)
+	local filename = vim.fn.fnamemodify(bufname, ":t")
+	local git_msg_files = {
+		"COMMIT_EDITMSG",
+		"MERGE_MSG",
+		"TAG_EDITMSG",
+		"SQUASH_MSG",
+		"REBASE_EDITMSG",
+		"PULLREQ_EDITMSG",
+		"EDIT_DESCRIPTION",
+	}
+	for _, pattern in ipairs(git_msg_files) do
+		if filename == pattern then
+			return true
+		end
+	end
+	if os.getenv("GIT_EDITOR") or os.getenv("GIT_COMMIT") then
+		return true
+	end
+	return false
+end
+
 return M

@@ -1,3 +1,4 @@
+local git = require("utils.git")
 local cwd = vim.v.cwd or vim.fn.getcwd(0)
 local function get_cwd_as_name()
 	return cwd:gsub("[^A-Za-z0-9]", "_")
@@ -35,8 +36,11 @@ return {
 				},
 			})
 
+			if git.is_git_message_buffer() then
+				return -- don't read or write to session if git buffer
+			end
+
 			vim.api.nvim_create_autocmd({ "VimEnter" }, {
-				-- TODO:: adjust this so that entering git commit --amend won't restore session and overwrite buffer
 				callback = function()
 					local existing_session = vim.loop.fs_stat(path)
 					if existing_session and existing_session.type == "file" then
