@@ -86,7 +86,7 @@ return {
 		config = function()
 			require("barbar").setup({
 				animation = false,
-				auto_hide = true,
+				auto_hide = false,
 				maximum_padding = 6,
 				highlight_inactive_file_icons = true,
 				icons = {

@@ -16,7 +16,7 @@ return {
 			"hrsh7th/cmp-buffer",
 			"hrsh7th/cmp-omni",
 		},
-		event = { "InsertEnter", "CmdlineEnter" },
+		event = { "CursorHoldI", "InsertEnter" },
 		config = function()
 			local cmp = require("cmp")
 			local types = require("cmp.types")

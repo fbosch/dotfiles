@@ -1,4 +1,10 @@
+local wezterm = require("wezterm")
+local gpus = wezterm.gui.enumerate_gpus()
+
 return function(config)
+	config.front_end = "WebGpu"
+	config.webgpu_power_preference = "HighPerformance"
+	config.webgpu_preferred_adapter = gpus[1]
 	config.max_fps = 120
 	config.audible_bell = "Disabled"
 	config.status_update_interval = 10000
@@ -19,6 +25,7 @@ return function(config)
 		"cmd.exe",
 		"pwsh.exe",
 		"powershell.exe",
+		"wsl.exe",
 		"starship",
 	}
 end

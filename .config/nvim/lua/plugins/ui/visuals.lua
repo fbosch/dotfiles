@@ -145,7 +145,8 @@ return {
 		end,
 	},
 	{
-		"levouh/tint.nvim",
+		-- "levouh/tint.nvim",
+		"fbosch/tint.nvim",
 		event = "BufWinEnter",
 		config = function()
 			vim.schedule(function()
@@ -154,6 +155,7 @@ return {
 				local colors = require("config.colors")
 
 				tint.setup({
+					tint_background_colors = true,
 					transforms = {
 						transforms.tint_with_threshold(-40, colors.background, 100),
 						transforms.saturate(0.4),
