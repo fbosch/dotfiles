@@ -14,6 +14,7 @@ return {
 		version = "*",
 		lazy = false,
 		priority = 500,
+		cond = not git.is_git_message_buffer(), -- don't read or write session if git buffer
 		config = function()
 			local sessions = require("mini.sessions")
 			sessions.setup({
@@ -35,10 +36,6 @@ return {
 					delete = false,
 				},
 			})
-
-			if git.is_git_message_buffer() then
-				return -- don't read or write to session if git buffer
-			end
 
 			vim.api.nvim_create_autocmd({ "VimEnter" }, {
 				callback = function()
