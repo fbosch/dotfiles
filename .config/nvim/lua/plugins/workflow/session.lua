@@ -36,6 +36,7 @@ return {
 			})
 
 			vim.api.nvim_create_autocmd({ "VimEnter" }, {
+				-- TODO:: adjust this so that entering git commit --amend won't restore session and overwrite buffer
 				callback = function()
 					local existing_session = vim.loop.fs_stat(path)
 					if existing_session and existing_session.type == "file" then
