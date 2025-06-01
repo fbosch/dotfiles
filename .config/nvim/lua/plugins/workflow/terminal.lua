@@ -1,51 +1,37 @@
+local function term_keymaps(mappings)
+	local res = {}
+	for _, map in ipairs(mappings) do
+		local keys, cmd, desc = map[1], map[2], map[3]
+		-- normal mode mapping
+		table.insert(res, {
+			keys,
+			"<cmd>" .. cmd .. "<cr>",
+			desc = desc,
+			mode = "n",
+			silent = true,
+		})
+		-- terminal mode mapping (with escape from terminal mode)
+		table.insert(res, {
+			keys,
+			"<C-\\><C-n><cmd>" .. cmd .. "<cr>",
+			desc = desc,
+			mode = "t",
+			silent = true,
+		})
+	end
+	return res
+end
+
 return {
 	{
 		"numtostr/FTerm.nvim",
 		cmd = { "FTermOpen", "FTermClose", "FTermExit", "FTermToggle", "FtermMProcs", "FTermGitUI" },
-		keys = {
-			{
-				"<A-t>",
-				"<cmd>FTermToggle<cr>",
-				desc = "toggle floating terminal",
-				mode = "n",
-				silent = true,
-			},
-			{
-				"<A-t>",
-				"<C-\\><C-n><cmd>FTermToggle<cr>",
-				desc = "toggle floating terminal",
-				mode = "t",
-				silent = true,
-			},
-			{
-				"<A-m>",
-				"<cmd>FTermMProcs<cr>",
-				desc = "toggle floating terminal with mprocs",
-				mode = "n",
-				silent = true,
-			},
-			{
-				"<A-m>",
-				"<C-\\><C-n><cmd>FTermMProcs<cr>",
-				desc = "toggle floating terminal with mprocs",
-				mode = "t",
-				silent = true,
-			},
-			{
-				"<A-g>",
-				"<cmd>FTermGitUI<cr>",
-				desc = "toggle floating terminal with gitui",
-				mode = "n",
-				silent = true,
-			},
-			{
-				"<A-g>",
-				"<C-\\><C-n><cmd>FTermGitUI<cr>",
-				desc = "toggle floating terminal with gitui",
-				mode = "t",
-				silent = true,
-			},
-		},
+		keys = term_keymaps({
+			{ "<A-t>", "FTermToggle", "toggle floating terminal" },
+			{ "<A-m>", "FTermMProcs", "toggle floating terminal with mprocs" },
+			{ "<A-g>", "FTermGitUI", "toggle floating terminal with gitui" },
+			{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
+		}),
 		config = function()
 			local usrcmd = vim.api.nvim_create_user_command
 			local fterm = require("FTerm")
@@ -96,6 +82,22 @@ return {
 				end
 				gitui_instance:toggle()
 			end, { bang = true })
+
+			local btop_instance = nil
+
+			usrcmd("FTermBtop", function()
+				if not btop_instance then
+					btop_instance = fterm:new({
+						ft = "fterm_btop",
+						env = env,
+						shell = "dash",
+						cmd = "btop -p 2 --update 1000",
+						dimensions = dimensions,
+					})
+				end
+
+				btop_instance:toggle()
+			end, { bang = true })
 		end,
 	},
 	{
@@ -103,8 +105,8 @@ return {
 		event = "VeryLazy",
 		opts = {
 			size = 20,
-			open_mapping = [[<c-\>]],
-			close_mapping = [[<c-\>]],
+			open_mapping = [[<a-\>]],
+			close_mapping = [[<a-\>]],
 			hide_numbers = true,
 			shade_filetypes = {},
 			shade_terminals = true,

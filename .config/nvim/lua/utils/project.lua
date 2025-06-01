@@ -98,7 +98,7 @@ function M.get_project_types()
 end
 
 function M.find_mprocs_yaml()
-	local root_bare = vim.fs.root(vim.fn.cwd(), { ".bare" }) -- support for worktrees, placing mprocs.lua near .bare symlink
+	local root_bare = vim.fs.root(vim.fn.getcwd(), { ".bare" }) -- support for worktrees, placing mprocs.lua near .bare symlink
 	local root_other = vim.fs.root(vim.fn.getcwd(), { "package.json", ".git", "Cargo.toml" })
 	local root = root_bare or root_other
 	if not root then
