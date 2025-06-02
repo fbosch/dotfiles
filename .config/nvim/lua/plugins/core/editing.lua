@@ -36,7 +36,7 @@ return {
 	{
 		"chrisgrieser/nvim-spider",
 		event = { "BufEnter" },
-		-- override motions for word, line and block to be sensetive to camelCase etc.
+		-- override motions for word, line and block to be sensitive to camelCase etc.
 		keys = {
 			{
 				"w",
