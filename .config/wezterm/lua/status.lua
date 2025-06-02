@@ -24,7 +24,8 @@ local function update_right_status(window, pane)
 	local wday = os.date("*t").wday
 	if wday ~= 1 and wday ~= 7 then
 		local first_login = pane:get_user_vars().first_login
-		local calculated_hours = calculate_hour_difference(first_login, wezterm.strftime("%H:%M:%S"))
+		local calculated_hours =
+			require("lua.utils.time").calculate_hour_difference(first_login, wezterm.strftime("%H:%M:%S"))
 		local hours_worked = calculated_hours or 0
 		local icon = ""
 		table.insert(status, { Text = " " })
