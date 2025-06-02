@@ -141,7 +141,6 @@ function setup_diagnostics()
 end
 
 local on_attach = function(client, bufnr)
-	-- setup_diagnostics()
 	setup_formatters(client, bufnr)
 	setup_lsp_keymaps(client, bufnr)
 end

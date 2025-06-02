@@ -25,11 +25,11 @@ end
 return {
 	{
 		"numtostr/FTerm.nvim",
-		cmd = { "FTermOpen", "FTermClose", "FTermExit", "FTermToggle", "FtermMProcs", "FTermGitUI" },
+		cmd = { "FTermOpen", "FTermClose", "FTermExit", "FTermToggle", "FtermMProcs", "FTermLazyGit" },
 		keys = term_keymaps({
 			{ "<A-t>", "FTermToggle", "toggle floating terminal" },
 			{ "<A-m>", "FTermMProcs", "toggle floating terminal with mprocs" },
-			{ "<A-g>", "FTermGitUI", "toggle floating terminal with gitui" },
+			{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
 			{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
 		}),
 		config = function()
@@ -69,19 +69,18 @@ return {
 				mprocs_instance:toggle()
 			end, { bang = true })
 
-			-- replace with lazygit
-			local gitui_instance = nil
-			usrcmd("FTermGitUI", function()
-				if not gitui_instance then
-					gitui_instance = fterm:new({
+			local lazygit_instance = nil
+			usrcmd("FTermLazyGit", function()
+				if not lazygit_instance then
+					lazygit_instance = fterm:new({
 						ft = "fterm_gitui",
 						env = env,
 						shell = "dash",
-						cmd = "gitui",
+						cmd = "lazygit",
 						dimensions = dimensions,
 					})
 				end
-				gitui_instance:toggle()
+				lazygit_instance:toggle()
 			end, { bang = true })
 
 			local btop_instance = nil

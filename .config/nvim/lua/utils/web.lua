@@ -125,4 +125,17 @@ function M.open_branch_workitem()
 	end
 end
 
+function M.open_git_remote_url()
+	local git_remote_url = git.get_remote_url()
+
+	print(git_remote_url)
+
+	if git_remote_url then
+		platform.system_open(git_remote_url)
+		return
+	end
+
+	vim.notify("Not a git repository", vim.log.levels.INFO)
+end
+
 return M
