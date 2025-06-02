@@ -1,3 +1,4 @@
+local is_windows = package.config:sub(0, 1) == "\\"
 local wezterm = require("wezterm")
 
 function get_max_cols(window)
@@ -24,6 +25,9 @@ return function(config)
 	config.tab_max_width = 999
 
 	local status_bar_offset_cols = 44
+	if is_windows then
+		status_bar_offset_cols = 0
+	end
 
 	wezterm.on("window-config-reloaded", function(window)
 		wezterm.GLOBAL.cols = get_max_cols(window) - status_bar_offset_cols
