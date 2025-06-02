@@ -101,6 +101,7 @@ M.typos = {
 	"variabel variable",
 	"visiblity visibility",
 	"purposesly purposesly",
+	"sensetive sensitive",
 }
 
 -- utilize vim-abolish for fixing common typos

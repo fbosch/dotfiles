@@ -1424,3 +1424,10 @@ untracked
 symlink
 vim-abolish
 keymaps
+Middleware
+middleware
+codemod
+server-components
+route-handlers
+api-reference
+camelCase
