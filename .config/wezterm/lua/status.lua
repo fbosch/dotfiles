@@ -62,6 +62,6 @@ end
 
 return function(config)
 	if not is_windows then
-		config.on("update-right-status", update_right_status)
+		wezterm.on("update-right-status", update_right_status)
 	end
 end

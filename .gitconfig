@@ -73,6 +73,7 @@
   commti = commit
   chekcout = checkout
   brnach = branch
+  retore = restore
 
 [rerere]
 	enabled = true
