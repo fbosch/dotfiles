@@ -141,7 +141,7 @@ function setup_diagnostics()
 end
 
 local on_attach = function(client, bufnr)
-	setup_diagnostics()
+	-- setup_diagnostics()
 	setup_formatters(client, bufnr)
 	setup_lsp_keymaps(client, bufnr)
 end
@@ -157,16 +157,6 @@ local function get_capabilities()
 		}
 	)
 	return capabilities
-end
-
-local function setup_lsp_handlers()
-	vim.diagnostic.config({
-		virtual_text = false,
-		signs = true,
-		underline = true,
-		update_in_insert = true,
-		severity_sort = true,
-	})
 end
 
 local function get_ensure_installed()
@@ -308,7 +298,6 @@ return {
 	},
 	config = function()
 		local capabilities = get_capabilities()
-		setup_lsp_handlers()
 		local ensure_installed = get_ensure_installed()
 		require("mason-tool-installer").setup({ ensure_installed = ensure_installed })
 		require("mason").setup()
@@ -319,5 +308,6 @@ return {
 		})
 		require("lazydev").setup({ capabilities = capabilities, on_attach = on_attach })
 		require("lsp-file-operations").setup()
+		setup_diagnostics()
 	end,
 }
