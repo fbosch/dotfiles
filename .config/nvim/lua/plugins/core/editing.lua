@@ -14,7 +14,14 @@ return {
 		cmd = { "IncRename" },
 		opts = {},
 		keys = {
-			{ "<leader>rn", "<cmd>IncRename<cr>", mode = "n", desc = "rename" },
+			{
+				"<leader>rn",
+				function()
+					return ":IncRename " .. vim.fn.expand("<cword>")
+				end,
+				mode = "n",
+				desc = "rename",
+			},
 		},
 	},
 	{

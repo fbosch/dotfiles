@@ -13,8 +13,8 @@ vim.opt.filetype = "off"
 vim.opt.syntax = "off"
 
 -- timings
-vim.opt.timeoutlen = 300
-vim.opt.updatetime = 250
+vim.opt.timeoutlen = 200
+vim.opt.updatetime = 300
 
 -- visual
 vim.opt.lazyredraw = true

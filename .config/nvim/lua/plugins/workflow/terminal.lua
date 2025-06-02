@@ -39,8 +39,8 @@ return {
 				["IN_NEOVIM"] = "1",
 			}
 			local dimensions = {
-				height = 0.65,
-				width = 0.70,
+				height = 0.85,
+				width = 0.85,
 			}
 
 			fterm.setup({
@@ -69,6 +69,7 @@ return {
 				mprocs_instance:toggle()
 			end, { bang = true })
 
+			-- replace with lazygit
 			local gitui_instance = nil
 			usrcmd("FTermGitUI", function()
 				if not gitui_instance then
