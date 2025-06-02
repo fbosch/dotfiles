@@ -5,7 +5,7 @@ return function(config)
 			background = "#191919",
 			active_tab = {
 				bg_color = "#262626",
-				fg_color = "#ffffff",
+				fg_color = "#b7b7b7",
 				intensity = "Normal",
 			},
 			inactive_tab = {

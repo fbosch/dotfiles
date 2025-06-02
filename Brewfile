@@ -3,7 +3,7 @@ tap "oven-sh/bun"
 
 # system 
 brew "cmake" if OS.mac?
-brew "coreutils" if OS.mac?
+# brew "coreutils" if OS.mac?
 brew "neovim"
 brew "fish"
 brew "fisher"
@@ -44,6 +44,7 @@ brew "lazygit"
 brew "git"
 brew "git-delta"
 brew "difftastic"
+brew "gitui"
 
 # development
 brew "node"

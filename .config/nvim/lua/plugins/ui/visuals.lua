@@ -65,8 +65,7 @@ return {
 		dependencies = {
 			"nvim-treesitter/nvim-treesitter",
 		},
-		event = "BufRead",
-		enabled = true,
+		event = { "BufReadPre", "UIEnter", "LspAttach" },
 		config = function()
 			local hlargs = require("hlargs")
 			local colors = require("config.colors")

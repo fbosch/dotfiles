@@ -6,7 +6,7 @@ return function(config)
 		config.window_decorations = "TITLE | RESIZE"
 		config.font_size = 12
 	else
-		config.window_background_opacity = 0.98
-		config.macos_window_background_blur = 50
+		config.window_background_opacity = 0.96
+		config.macos_window_background_blur = 30
 	end
 end

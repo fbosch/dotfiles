@@ -2,7 +2,7 @@ local M = {}
 
 function M.ft_abbr(filetypes, abbr)
 	return vim.api.nvim_create_autocmd({ "FileType" }, {
-		pattern = pattern,
+		pattern = filetypes,
 		callback = function()
 			vim.schedule(function()
 				for k, v in pairs(abbr) do
@@ -100,6 +100,7 @@ M.typos = {
 	"valud valid",
 	"variabel variable",
 	"visiblity visibility",
+	"purposesly purposesly",
 }
 
 -- utilize vim-abolish for fixing common typos

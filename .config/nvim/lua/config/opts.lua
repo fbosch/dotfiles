@@ -1,5 +1,8 @@
 vim.opt.shm:append("I")
 
+-- language
+vim.opt.langmap = "æ:,ø',å[,¨],-/,\\,<,,.>"
+
 -- misc
 vim.opt.re = 0 -- regex engine auto
 vim.opt.compatible = false
@@ -23,7 +26,7 @@ vim.opt.wrap = false -- disable line wrap
 vim.opt.relativenumber = true
 vim.opt.cursorline = true
 vim.opt.fillchars:append("eob: ")
-vim.opt.laststatus = 3
+vim.opt.laststatus = 2
 vim.opt.ruler = true
 vim.opt.background = "dark"
 vim.opt.pumblend = 10

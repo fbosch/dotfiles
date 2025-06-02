@@ -16,9 +16,9 @@ map("n", "<leader>db", "d?$<cr>", "Delete backwards to start of previous line")
 map("n", "<leader>s", ":wall<CR>", "Save all files")
 map("n", "<leader>S", ":wqa!<CR>", "Save all files and quit")
 
--- easier indentation in visual mode (+nordic keymap)
-map("v", { "<", ";" }, "<gv", "Indent left")
-map("v", { ">", ":" }, ">gv", "Indent right")
+-- easier indentation in visual mode
+map("v", "<", "<gv", "Indent left")
+map("v", ">", ">gv", "Indent right")
 
 -- move lines
 map("n", "<A-j>", ":m .+1<CR>==")

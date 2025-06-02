@@ -1,19 +1,5 @@
 return {
 	{
-		"MaximilianLloyd/tw-values.nvim",
-		cmd = "TWValues",
-		enabled = false,
-		ft = { "typescriptreact", "javascriptreact" },
-		keys = {
-			{
-				mode = "n",
-				"<leader>tw",
-				"<cmd>TWValues<cr>",
-				desc = "tailwind values",
-			},
-		},
-	},
-	{
 		"dmmulroy/tsc.nvim",
 		ft = { "typescript", "typescriptreact" },
 		cmd = { "TSCOpen", "TSCClose", "TSCRestart", "TSCToggle" },
@@ -33,14 +19,18 @@ return {
 			"nvim-telescope/telescope.nvim",
 			"neovim/nvim-lspconfig",
 		},
-		opts = {},
+		opts = {
+			document_color = {
+				inline_symbol = " ",
+			},
+		},
 	},
 	{
-		-- dir = "~/Projects/js-i18n.nvim",
-		"nabekou29/js-i18n.nvim",
+		dir = "~/Projects/js-i18n.nvim",
+		-- "nabekou29/js-i18n.nvim",
 		-- "fbosch/js-i18n.nvim",
 		ft = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
-		cmd = { "I18nEditTranslation" },
+		lazy = true,
 		dependencies = {
 			"neovim/nvim-lspconfig",
 			"nvim-treesitter/nvim-treesitter",

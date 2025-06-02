@@ -9,21 +9,6 @@ map("n", ":", ";")
 map("x", ":", ";")
 map("x", ";", ":")
 
--- remap nordic key layout in normal mode, to minimize how often I have to toggle between keyboard layouts
-map("n", "æ", ":")
-map("n", "ø", "'")
-map("n", "å", "[")
-map("n", "¨", "]")
-map("x", "æ", ":")
-map("x", "ø", "'")
-map("x", "å", "[")
-map("x", "¨", "]")
-map("n", "-", "/")
-map("n", ",", "<")
-map("n", ".", ">")
-map("x", ",", "<")
-map("x", ".", ">")
-
 -- clear search highlights
 map("n", "<esc>", ":nohlsearch<CR>", "Clear search highlights")
 map("n", "<esc>^[", "<esc>^[", "Clear search highlights")

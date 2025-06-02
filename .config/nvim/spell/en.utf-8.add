@@ -1422,3 +1422,5 @@ colorscheme
 symlinked
 untracked
 symlink
+vim-abolish
+keymaps

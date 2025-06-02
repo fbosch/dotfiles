@@ -11,18 +11,30 @@ return {
 	},
 	event = "BufWinEnter",
 	config = function()
-		local lualine_x = {}
+		local lualine_x = {
+			{
+				"lsp_status",
+				icon = "",
+				use_mode_colors = true,
+				symbols = {
+					spinner = {},
+					done = "",
+					separator = " | ",
+				},
+			},
+		}
 		local lualine_c = {}
+		local lualine_b = {}
 
 		if is_git_repo then
 			local git_blame = require("gitblame")
 			vim.g.gitblame_display_virtual_text = 0 -- Disable virtual text
 			vim.g.gitblame_date_format = "%r"
 			vim.g.gitblame_message_template = " <author>   <date>   <sha> "
-			lualine_c = {
+			lualine_b = {
 				"branch",
 			}
-			lualine_x = {
+			lualine_c = {
 				{
 					git_blame.get_current_blame_text,
 					cond = git_blame.is_blame_text_available,
@@ -39,7 +51,7 @@ return {
 			},
 			extensions = { "symbols-outline" },
 			sections = {
-				lualine_b = {},
+				lualine_b = lualine_b,
 				lualine_c = lualine_c,
 				lualine_x = lualine_x,
 				lualine_y = {
