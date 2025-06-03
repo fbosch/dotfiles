@@ -1,5 +1,5 @@
 return {
-	{ "tpope/vim-unimpaired", event = "VeryLazy" },
+	-- { "tpope/vim-unimpaired", event = "VeryLazy" },
 	{
 		"jinh0/eyeliner.nvim",
 		event = "VeryLazy",

@@ -1,7 +1,7 @@
 vim.opt.shm:append("I")
 
 -- language
-vim.opt.langmap = "æ:,ø',å[,¨],-/,\\,<,,.>"
+vim.opt.langmap = "æ:,ø',å[,¨],-/,"
 
 -- misc
 vim.opt.re = 0 -- regex engine auto
