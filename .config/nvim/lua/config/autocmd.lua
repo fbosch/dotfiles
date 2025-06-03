@@ -92,3 +92,17 @@ cmd({ "BufLeave", "FocusLost", "InsertEnter", "CmdlineEnter", "WinLeave" }, {
 		end
 	end,
 })
+
+cmd({ "FileType" }, {
+	pattern = { "markdown" },
+	callback = function()
+		local filename = vim.fn.expand("%:t"):lower()
+		local targets = { "todo.md", ".todo.md" }
+
+		for _, target in ipairs(targets) do
+			if filename == target then
+				vim.opt_local.wrap = true
+			end
+		end
+	end,
+})

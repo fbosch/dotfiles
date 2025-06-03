@@ -211,6 +211,9 @@ return {
 						},
 					},
 				},
+				hide = {
+					only_win = true,
+				},
 				window = {
 					zindex = 40,
 					placement = {

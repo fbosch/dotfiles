@@ -10,14 +10,18 @@ return {
 	{
 		"MeanderingProgrammer/render-markdown.nvim",
 		dependencies = { "nvim-treesitter/nvim-treesitter" }, -- if you use the mini.nvim suite
-		ft = { "markdown" },
+		ft = { "markdown", "vimwiki" },
 		config = function()
 			require("render-markdown").setup({
+				enabled = false,
 				completions = { lsp = { enabled = true } },
-			})
-			local load_highlights = require("utils").load_highlights
-			load_highlights({
-				RenderMarkdownCode = { bg = "NONE" },
+				on = {
+					attach = function()
+						require("utils").load_highlights({
+							RenderMarkdownCode = { bg = "NONE" },
+						})
+					end,
+				},
 			})
 		end,
 	},

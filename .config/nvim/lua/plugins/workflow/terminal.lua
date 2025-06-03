@@ -31,6 +31,7 @@ return {
 			{ "<A-m>", "FTermMProcs", "toggle floating terminal with mprocs" },
 			{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
 			{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
+			{ "<A-c>", "FTermCheckmate", "toggle floating terminal with checkmate in neovim instance" },
 		}),
 		config = function()
 			local usrcmd = vim.api.nvim_create_user_command
@@ -84,7 +85,6 @@ return {
 			end, { bang = true })
 
 			local btop_instance = nil
-
 			usrcmd("FTermBtop", function()
 				if not btop_instance then
 					btop_instance = fterm:new({
@@ -97,6 +97,31 @@ return {
 				end
 
 				btop_instance:toggle()
+			end, { bang = true })
+
+			local checkmate_instance = nil
+			usrcmd("FTermCheckmate", function()
+				local todo_file =
+					require("utils.project").find_file_in_project_root({ "todo.md", ".todo.md", "TODO.md" })
+
+				if not todo_file then
+					vim.notify("No todo file found in project root", vim.log.levels.WARN)
+					return
+				end
+
+				if not checkmate_instance then
+					checkmate_instance = fterm:new({
+						ft = "fterm_checkmate",
+						env = env,
+						cmd = string.format("nvim %s", todo_file),
+						dimensions = {
+							height = 0.65,
+							width = 0.45,
+						},
+					})
+				end
+
+				checkmate_instance:toggle()
 			end, { bang = true })
 		end,
 	},

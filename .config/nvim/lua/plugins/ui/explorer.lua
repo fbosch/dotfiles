@@ -56,6 +56,7 @@ return {
 			filters = {
 				custom = { "node_modules" },
 				dotfiles = false,
+				git_ignored = false,
 			},
 			view = {
 				side = "right",

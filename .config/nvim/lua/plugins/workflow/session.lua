@@ -8,13 +8,18 @@ local root_dir = vim.fn.expand("~/.config") .. "/nvim/.sessions//"
 local session_file = get_cwd_as_name()
 local path = root_dir .. session_file
 
+local should_persist_session = not (
+	git.is_git_message_buffer() -- opened git message buffer
+	or vim.fn.argc() > 0 -- opened specific file
+)
+
 return {
 	{
 		"echasnovski/mini.sessions",
 		version = "*",
 		lazy = false,
 		priority = 500,
-		cond = not git.is_git_message_buffer(), -- don't read or write session if git buffer
+		cond = should_persist_session,
 		config = function()
 			local sessions = require("mini.sessions")
 			sessions.setup({
