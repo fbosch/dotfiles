@@ -57,6 +57,22 @@ cmd({ "FileType" }, {
 	callback = function(args)
 		vim.cmd("wincmd L") -- move help buffer to vertical right
 		map("n", "<ESC>", "<C-w>c", { buffer = args.buf, silent = true })
+		map("n", "gd", function()
+			local word = vim.fn.expand("<cword>")
+			vim.cmd("helpgrep " .. vim.fn.escape(word, " "))
+			local qflist = vim.fn.getqflist()
+			if #qflist == 1 then
+				-- Jump directly to the match, replace current buffer
+				vim.cmd("cfirst")
+				-- Optionally close quickfix if it pops up (shouldn't with cfirst, but for safety)
+				vim.cmd("Trouble close")
+			else
+				vim.cmd("Trouble qflist")
+			end
+		end, {
+			buffer = args.buf,
+			silent = true,
+		})
 	end,
 })
 

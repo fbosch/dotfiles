@@ -190,7 +190,6 @@ return {
 	{
 		"b0o/incline.nvim",
 		event = "VeryLazy",
-		enabled = not platform.is_wsl(),
 		dependencies = { "nvim-tree/nvim-web-devicons" },
 		config = function()
 			local colors = require("config.colors")

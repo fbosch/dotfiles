@@ -37,7 +37,7 @@ return {
 				"<leader>?",
 				function()
 					vim.cmd('normal! ""y')
-					local default_text = vim.fn.getreg('"')
+					local default_text = vim.fn.escape(vim.fn.getreg('"'), " ")
 					require("telescope.builtin").help_tags({ default_text = default_text })
 				end,
 				desc = "Telescope help tags visual selection",

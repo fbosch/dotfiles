@@ -65,6 +65,7 @@ M.typos = {
 	"lib{ary,aries} library{}",
 	"listner listener",
 	"moduel module",
+	"escpae escape",
 	"ne{ccessary,cesary} necessary",
 	"occas{sion,ion} occasion",
 	"occurr{ance,ence,ed,ed} occurr{ence,ed}",
