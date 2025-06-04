@@ -50,10 +50,12 @@ cmd({ "FileType" }, {
 	end,
 })
 
+-- help buffer
 cmd({ "FileType" }, {
 	pattern = "help",
 	group = group,
 	callback = function(args)
+		vim.cmd("wincmd L") -- move help buffer to vertical right
 		map("n", "<ESC>", "<C-w>c", { buffer = args.buf, silent = true })
 	end,
 })

@@ -8,6 +8,7 @@ M.gray = "#303030"
 M.dark_gray = "#2c2c2c"
 M.darker_gray = "#252525"
 M.darkest_gray = "#1d1d1d"
+M.almost_black = "#131313"
 
 M.mispell_red = "#A8334C"
 M.match_blue = "#6e8aa5"

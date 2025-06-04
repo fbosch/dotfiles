@@ -8,4 +8,5 @@ return {
 	NormalFloatBorder = border_color,
 	Pmenu = { bg = colors.background },
 	Beacon = { bg = colors.lighter_gray, ctermbg = 15 },
+	FloatShadow = { bg = colors.almost_black },
 }
