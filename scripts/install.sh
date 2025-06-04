@@ -32,8 +32,8 @@ if [[ $(command -v brew) == "" ]]; then
   corepack enable yarn
 
   if [ -f "npm-globals.json" ]; then
-    echo "Installing global npm packages from $HOME/dotfiles/npm-globals.json"
-    npm install -g $(jq -r 'to_entries[] | "\(.key)@\(.value)"' "$HOME/dotfiles/npm-globals.json")
+    echo "Installing global npm packages from npm-globals.json"
+    npm install -g $(jq -r 'to_entries[] | "\(.key)@\(.value)"' "npm-globals.json")
   fi
 
   # install fisher
