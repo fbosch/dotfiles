@@ -32,6 +32,7 @@ return {
 							if tree_ok then
 								tree_api.tree.close()
 							end
+							vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
 						end,
 					},
 				},

@@ -45,7 +45,7 @@ return {
 
 		require("lualine").setup({
 			options = {
-				theme = "auto",
+				theme = "zenwritten",
 				section_separators = { left = "", right = "" },
 				globalstatus = true,
 				always_divide_middle = false,

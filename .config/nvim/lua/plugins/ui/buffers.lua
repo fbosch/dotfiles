@@ -39,7 +39,7 @@ return {
 		"romgrk/barbar.nvim",
 		dependencies = { "nvim-tree/nvim-web-devicons" },
 		event = "VeryLazy",
-		keys = vim.list_extend({
+		keys = vim.list_extend(buffer_index_keys(), {
 			{
 				mode = { "n" },
 				"<leader>x",
@@ -82,16 +82,20 @@ return {
 				desc = "move buffer right",
 				silent = true,
 			},
-		}, buffer_index_keys()),
+		}),
 		config = function()
 			require("barbar").setup({
 				animation = false,
 				auto_hide = true,
-				maximum_padding = 6,
-				highlight_inactive_file_icons = true,
+				maximum_padding = 10,
+				highlight_inactive_file_icons = false,
+				sidebar_filetypes = {
+					NvimTree = true,
+				},
 				icons = {
 					pinned = {
-						button = "",
+						button = "󰐃",
+						filename = true,
 					},
 					separator = { left = "▎", right = "" },
 					separator_at_end = false,
