@@ -30,10 +30,12 @@ if [[ $(command -v brew) == "" ]]; then
   # install pnpm & yarn
   corepack enable pnpm
   corepack enable yarn
-
-  # install swpm
-  npm i -g swpm
-  npm i -g neovim
+  
+  # install global npm packages
+  if [ -f "npm-globals.json" ]; then
+    echo "Installing global npm packages from $HOME/dotfiles/npm-globals.json"
+    npm install -g $(jq -r 'to_entries[] | "\(.key)@\(.value)"' "$HOME/dotfiles/npm-globals.json")
+  end
 
   # install fisher
   curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source && fisher install jorgebucaran/fisher
@@ -46,12 +48,13 @@ if [[ $(command -v brew) == "" ]]; then
 
   chsh -s $(which fish) # set fish as default shell
   bat cache --build # build the bat cache for colorscheme to work
+
+  
   stow . # stow the dotfiles
-  fish -c "install_npm_globals" # install npm globals
+
 else 
   echo "Updating homebrew..."
   brew bundle install
   brew update
-  fish -c "install_npm_globals"
   bat cache --build
 fi

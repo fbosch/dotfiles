@@ -324,7 +324,8 @@ function export_npm_globals
         mv $new_file $old_file
     end
 
-    npm list -g --depth=0 --json | jq '.dependencies | map_values(.version)' >$new_file
+    # Exclude 'npm' itself from export
+    npm list -g --depth=0 --json | jq 'del(.dependencies.npm) | .dependencies | map_values(.version)' >$new_file
 
     if test -f $old_file
         echo "Diff (old vs new):"
@@ -351,6 +352,8 @@ function install_npm_globals
         set_color normal
         return 1
     end
+
+    rm -rf (npm root -g)/*
 
     set_color cyan
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
