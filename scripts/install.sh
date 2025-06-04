@@ -47,6 +47,7 @@ if [[ $(command -v brew) == "" ]]; then
   chsh -s $(which fish) # set fish as default shell
   bat cache --build # build the bat cache for colorscheme to work
   stow . # stow the dotfiles
+  fish -c "install_npm_globals" # install npm globals
 else 
   echo "Updating homebrew..."
   brew bundle install
