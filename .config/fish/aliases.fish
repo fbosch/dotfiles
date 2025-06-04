@@ -4,6 +4,7 @@ abbr n nvim
 abbr nlup 'nvim --headless +"Lazy! sync" +qa' # lazy update neovim plugins
 abbr nwipe 'nvim --headless +"WipeAllSessions!" +qa'
 abbr ncheck 'nvim --headless +"checkhealth" +qa'
+abbr :qa exit
 abbr egnpm export_npm_globals
 abbr v nvim
 

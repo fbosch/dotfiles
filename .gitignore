@@ -1,8 +1,11 @@
 # macOS system files
 **/.DS_Store
 
-# Editor and tool state files
+# lock files
 lazy-lock.json
+Brewfile.lock.json
+
+# editor and tool state files
 .config/lazygit/state.yml
 .config/nodemon*
 .config/TabNine/
