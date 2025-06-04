@@ -4,6 +4,7 @@ abbr n nvim
 abbr nlup 'nvim --headless +"Lazy! sync" +qa' # lazy update neovim plugins
 abbr nwipe 'nvim --headless +"WipeAllSessions!" +qa'
 abbr ncheck 'nvim --headless +"checkhealth" +qa'
+abbr egnpm export_npm_globals
 abbr v nvim
 
 abbr p pnpm
@@ -33,6 +34,7 @@ end
 function copykey
     pbcopy <~/.ssh/id_rsa.pub
 end
+
 alias uge get_week_dates
 alias rw remaining_work_hours
 
