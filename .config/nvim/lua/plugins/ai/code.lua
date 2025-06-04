@@ -3,6 +3,7 @@ return {
 		"supermaven-inc/supermaven-nvim",
 		event = "InsertEnter",
 		opts = {
+			ignore_filetypes = { markdown = true },
 			keymaps = {
 				accept_suggestion = "<Tab>",
 				clear_suggestion = "<C-]>",
