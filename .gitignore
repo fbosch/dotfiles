@@ -35,6 +35,7 @@ checkhealth.log
 *.swp
 *.swo
 *~
+*.bak
 
 # Ignore log files
 *.log

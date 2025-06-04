@@ -1,6 +1,7 @@
 .git
 .gitignore
 scripts
+npm-globals.json
 docs
 README.md
 
