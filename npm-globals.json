@@ -2,7 +2,7 @@
   "astro": "5.8.0",
   "corepack": "0.32.0",
   "neovim": "5.3.0",
-  "npm": "11.3.0",
+  "npm-check-updates": "18.0.1",
   "prettier": "3.5.3",
   "swpm": "2.6.0",
   "typescript-language-server": "4.3.4",

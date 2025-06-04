@@ -51,5 +51,6 @@ else
   echo "Updating homebrew..."
   brew bundle install
   brew update
+  fish -c "install_npm_globals"
   bat cache --build
 fi
