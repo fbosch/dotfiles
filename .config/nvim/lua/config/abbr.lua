@@ -21,9 +21,6 @@ M.ft_abbr({ "javascript", "javascriptreact", "typescript", "typescriptreact" }, 
 	cinf = "console.info()<esc>h",
 	cdgb = "console.debug()<esc>h",
 	ret = "return ",
-	TODO = "// TODO:",
-	FIX = "// FIX:",
-	NOTE = "// NOTE:",
 })
 
 M.ft_abbr({ "lua" }, {
@@ -55,6 +52,8 @@ M.typos = {
 	"flase false",
 	"futher further",
 	"funct{ion,ion,oin} function",
+	"functino function",
+	"fucntion function",
 	"hieght height",
 	"histroy history",
 	"hte the",

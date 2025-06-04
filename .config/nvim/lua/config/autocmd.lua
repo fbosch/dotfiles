@@ -58,18 +58,6 @@ cmd({ "FileType" }, {
 	end,
 })
 
--- cmd({ "FileType" }, {
--- 	pattern = "Trouble",
--- 	group = group,
--- 	callback = function()
--- 		vim.notify("Trouble!")
--- 		map("n", "<ESC>", ":TroubleClose<CR>")
--- 		map("n", "<leader>R", function()
--- 			require("utils.refactor").project_find_and_replace(vim.fn.getreg("v"))
--- 		end, "Initialize find and replace with text from cliboard")
--- 	end,
--- })
-
 -- enable relative line numbers in insert mode
 cmd({ "BufEnter", "FocusGained", "InsertLeave", "CmdlineLeave", "WinEnter" }, {
 	pattern = "*",
@@ -89,20 +77,6 @@ cmd({ "BufLeave", "FocusLost", "InsertEnter", "CmdlineEnter", "WinLeave" }, {
 		if vim.o.nu then
 			vim.opt.relativenumber = false
 			vim.cmd("redraw")
-		end
-	end,
-})
-
-cmd({ "FileType" }, {
-	pattern = { "markdown" },
-	callback = function()
-		local filename = vim.fn.expand("%:t"):lower()
-		local targets = { "todo.md", ".todo.md" }
-
-		for _, target in ipairs(targets) do
-			if filename == target then
-				vim.opt_local.wrap = true
-			end
 		end
 	end,
 })

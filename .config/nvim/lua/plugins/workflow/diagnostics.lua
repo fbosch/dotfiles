@@ -2,56 +2,6 @@ return {
 	"folke/trouble.nvim",
 	dependencies = { "nvim-tree/nvim-web-devicons" },
 	cmd = { "TroubleToggle", "Trouble", "TodoTrouble", "TroubleClose" },
-	keys = {
-		{
-			"<leader>tx",
-			"<cmd>TroubleToggle<cr>",
-			mode = { "n" },
-			silent = true,
-		},
-		{
-			"<leader>tw",
-			"<cmd>Trouble workspace_diagnostics<cr>",
-			mode = { "n" },
-			silent = true,
-		},
-		{
-			"<leader>td",
-			"<cmd>Trouble diagnostics<cr>",
-			mode = { "n" },
-			silent = true,
-		},
-		{
-			"<leader>tt",
-			"<cmd>TodoTrouble<cr>",
-			mode = { "n" },
-			silent = true,
-		},
-		{
-			"<leader>tl",
-			"<cmd>Trouble loclist<cr>",
-			mode = { "n" },
-			silent = true,
-		},
-		{
-			"<leader>tq",
-			"<cmd>Trouble quickfix<cr>",
-			mode = { "n" },
-			silent = true,
-		},
-		{
-			"<leader>tr",
-			"<cmd>Trouble lsp_references<cr>",
-			mode = { "n" },
-			silent = true,
-		},
-		{
-			"<leader>tz",
-			"<cmd>TroubleClose<cr>",
-			mode = { "n" },
-			silent = true,
-		},
-	},
 	config = function()
 		require("trouble").setup()
 

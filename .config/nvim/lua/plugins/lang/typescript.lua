@@ -49,7 +49,7 @@ return {
 		keys = {
 			{
 				mode = "n",
-				"<leader>te",
+				"<leader>ine",
 				"<cmd>I18nEditTranslation<cr>",
 				desc = "Edit translation",
 			},

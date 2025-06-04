@@ -6,6 +6,7 @@ return {
 		"nvim-tree/nvim-web-devicons",
 		{
 			"f-person/git-blame.nvim",
+			event = "VeryLazy",
 			cond = is_git_repo,
 		},
 	},
