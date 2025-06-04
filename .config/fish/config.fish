@@ -1,13 +1,17 @@
+if test (uname) = Linux
+    eval (/home/linuxbrew/.linuxbrew/bin/brew shellenv)
+end
+
+if test (uname) = Darwin
+    eval (brew shellenv fish)
+end
+
 . ~/.config/fish/coreutils.fish
 . ~/.config/fish/aliases.fish
 . ~/.config/fish/scripts.fish
 . ~/.config/fish/profile.fish
 . ~/.config/fish/private.fish
 . ~/.config/fish/colors.fish
-
-if test (uname) = Linux
-    eval (/home/linuxbrew/.linuxbrew/bin/brew shellenv)
-end
 
 function fish_greeting
     # skip in neovim terminal buffer

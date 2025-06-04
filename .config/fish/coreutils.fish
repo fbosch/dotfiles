@@ -20,4 +20,5 @@ if test -d "$HOMEBREW_PREFIX/bin" -a (count $HOMEBREW_PREFIX/bin/u*) -gt 0
     alias mktemp $HOMEBREW_PREFIX/bin/umktemp
     alias sort $HOMEBREW_PREFIX/bin/usort
     alias seq $HOMEBREW_PREFIX/bin/useq
+    alias head $HOMEBREW_PREFIX/bin/uhead
 end
