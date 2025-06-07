@@ -353,8 +353,6 @@ function install_npm_globals
         return 1
     end
 
-    rm -rf (npm root -g)/*
-
     set_color cyan
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo " 󰏗  Installing global npm packages:"
