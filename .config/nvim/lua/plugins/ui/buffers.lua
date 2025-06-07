@@ -87,18 +87,27 @@ return {
 			require("barbar").setup({
 				animation = false,
 				auto_hide = true,
-				maximum_padding = 10,
-				highlight_inactive_file_icons = false,
+				maximum_padding = 5,
+				tabpages = true,
+				highlight_inactive_file_icons = true,
+				highlight_alternate = true,
 				sidebar_filetypes = {
 					NvimTree = true,
 				},
+				exclude_name = {
+					"startup-log.txt",
+				},
 				icons = {
+					filetype = {
+						custom_colors = false,
+						enabled = true,
+					},
 					pinned = {
 						button = "󰐃",
 						filename = true,
 					},
 					separator = { left = "▎", right = "" },
-					separator_at_end = false,
+					separator_at_end = true,
 					diagnostics = {
 						[vim.diagnostic.severity.ERROR] = { enabled = true, icon = " ", custom_color = true },
 						[vim.diagnostic.severity.WARN] = { enabled = true, icon = " ", custom_color = true },

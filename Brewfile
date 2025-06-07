@@ -38,6 +38,7 @@ brew "hyperfine" # benchmarking
 brew "mprocs"
 brew "cloc"
 brew "uutils-coreutils"
+brew "lynx"
 
 # git
 brew "lazygit"

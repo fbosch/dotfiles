@@ -58,6 +58,7 @@ bind -M insert \cc kill-whole-line repaint
 
 zoxide init fish | source
 starship init fish | source
+fnm env --use-on-cd --shell fish | source
 
 # pnpm
 set -gx PNPM_HOME /Users/fbb/Library/pnpm
