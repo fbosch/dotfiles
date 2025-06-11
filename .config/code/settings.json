@@ -1,0 +1,107 @@
+{
+    "[javascript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[json]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[typescript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[typescriptreact]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "customizeUI.activityBar": "wide",
+    "customizeUI.titleBar": "inline",
+    "editor.accessibilitySupport": "off",
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit"
+    },
+    "editor.codeLens": true,
+    "editor.fontFamily": "Zenbones Brainy, JetBrains Mono",
+    "editor.fontSize": 14,
+    "editor.formatOnSave": true,
+    "editor.inlineSuggest.enabled": true,
+    "editor.lineNumbers": "relative",
+    "editor.suggestSelection": "first",
+    "editor.tabSize": 2,
+    "explorer.confirmDelete": false,
+    "guides.enabled": false,
+    "javascript.updateImportsOnFileMove.enabled": "always",
+    "javascript.validate.enable": false,
+    "terminal.integrated.env.osx": {
+        "FIG_NEW_SESSION": "1"
+    },
+    "typescript.updateImportsOnFileMove.enabled": "always",
+    "typescript.validate.enable": true,
+    "vscode-neovim.neovimExecutablePaths.darwin": "/opt/homebrew/bin/nvim",
+    "vsintellicode.modify.editor.suggestSelection": "automaticallyOverrodeDefaultValue",
+    "workbench.colorCustomizations": {
+        "editor.background": "#141313",
+        "editorBracketHighlight.foreground1": "#657A8B",
+        "editorBracketHighlight.foreground2": "#B19A74",
+        "editorBracketHighlight.foreground3": "#82688A",
+        "editorBracketHighlight.foreground4": "#5E7E81",
+        "editorBracketHighlight.foreground5": "#7A8D67",
+        "editorBracketHighlight.foreground6": "#8E94A0",
+        "gitDecoration.modifiedResourceForeground": "#8db5db",
+        "sideBar.background": "#1a1818",
+        "sideBar.border": "#222",
+        "sideBarSectionHeader.background": "#222",
+        "sideBarSectionHeader.foreground": "#888",
+        "statusBar.background": "#222",
+        "statusBar.border": "#333",
+        "statusBar.foreground": "#999",
+        "tab.activeBackground": "#222",
+        "tab.activeBorderTop": "#999",
+        "tab.activeForeground": "#fff",
+        "tab.border": "#222",
+        "tab.hoverBackground": "#333",
+        "tab.inactiveBackground": "#000",
+        "terminal.ansiBlack": "#000",
+        "terminal.ansiYellow": "#fff"
+    },
+    "workbench.iconTheme": "chalice-icon-theme",
+    "zenMode.centerLayout": false,
+    "zenMode.fullScreen": false,
+    "zenMode.hideStatusBar": false,
+    "javascript.inlayHints.functionLikeReturnTypes.enabled": true,
+    "typescript.preferences.importModuleSpecifier": "project-relative",
+    "typescript.preferences.includePackageJsonAutoImports": "on",
+    "folder-path-color.folders": [],
+    "explorer.confirmDragAndDrop": false,
+    "codeSight.telemetry.enablement": false,
+    "extensions.experimental.affinity": {
+        "asvetliakov.vscode-neovim": 1
+    },
+    "editor.lineHeight": 1.5,
+    "cursor.cpp.disabledLanguages": [
+        "plaintext",
+        "markdown",
+        "scminput"
+    ],
+    "workbench.colorTheme": "Zenbones Zenwritten Dark",
+    "window.customTitleBarVisibility": "never",
+    "breadcrumbs.enabled": false,
+    "github.copilot.enable": {
+        "*": false,
+        "plaintext": false,
+        "markdown": false,
+        "scminput": false
+    },
+    "gitlens.hovers.annotations.enabled": false,
+    "gitlens.blame.highlight.enabled": false,
+    "terminal.integrated.fontFamily": "Zenbones Brainy, JetBrains Mono, Symbols Nerd Font Mono, BabelStone Runic Elder Futhark",
+    "terminal.integrated.fontSize": 14,
+    "terminal.integrated.fontLigatures": true,
+    "vscode-neovim.compositeKeys": {},
+    "workbench.sideBar.location": "right",
+    "workbench.statusBar.visible": false,
+    "window.density.editorTabHeight": "compact",
+    "editor.stickyScroll.enabled": false,
+    "editor.scrollbar.horizontal": "hidden",
+    "editor.scrollbar.vertical": "hidden",
+    "workbench.editor.highlightModifiedTabs": true,
+    "workbench.layoutControl.enabled": false,
+    "typescript.tsserver.maxTsServerMemory": 4096
+}

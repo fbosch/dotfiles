@@ -22,11 +22,10 @@ return {
 				end
 			end
 
-			local group = vim.api.nvim_create_augroup("ReplaceQuickfixWithTrouble", {})
 			vim.api.nvim_create_autocmd("BufWinEnter", {
 				pattern = "quickfix",
-				group = group,
 				callback = replace_quickfix_with_trouble,
+				once = true,
 			})
 		end,
 	},

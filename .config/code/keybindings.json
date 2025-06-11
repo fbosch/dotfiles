@@ -1,0 +1,135 @@
+// Place your key bindings in this file to override the defaultsauto[]
+[
+  {
+    "key": "space s",
+    "command": "saveAll",
+    "when": "editorTextFocus && neovim.mode != insert",
+  },
+  {
+    "key": "ctrl+w v",
+    "command": "workbench.action.splitEditor",
+    "when": "editorTextFocus && neovim.mode != insert",
+  },
+  {
+    "key": "ctrl+w s",
+    "command": "workbench.action.splitEditorDown",
+    "when": "editorTextFocus && neovim.mode != insert",
+  },
+  {
+    "key": "space x",
+    "command": "runCommands",
+    "args": {
+      "commands": [
+        "workbench.action.closeOtherEditors",
+        "workbench.action.closeEditorsInOtherGroups",
+        "workbench.action.closeSidebar"
+      ]
+    },
+    "when": "editorTextFocus && neovim.mode != insert",
+  },
+  {
+    "key": "space e",
+    "command": "runCommands",
+    "when": "editorTextFocus && neovim.mode != insert && !sideBarVisible",
+    "args": {
+      "commands": [
+        "workbench.action.toggleSidebarVisibility",
+        "workbench.action.focusSideBar"
+      ]
+    }
+  },
+  {
+    "key": "space e",
+    "command": "workbench.action.toggleSidebarVisibility",
+    "when": "editorTextFocus && neovim.mode != insert && sideBarVisible"
+  },
+  {
+    "key": "space e",
+    "command": "runCommands",
+    "when": "explorerViewletFocus",
+    "args": {
+      "commands": [
+        "workbench.action.toggleSidebarVisibility",
+        "workbench.action.focusFirstEditorGroup"
+      ]
+    }
+  },
+  {
+    "key": "escape",
+    "command": "workbench.action.toggleSidebarVisibility",
+    "when": "searchViewletFocus"
+  },
+  {
+    "key": "space e",
+    "command": "runCommands",
+    "when": "scmViewletFocus",
+    "args": {
+      "commands": [
+        "workbench.action.toggleSidebarVisibility",
+        "workbench.action.focusFirstEditorGroup"
+      ]
+    }
+  },
+  {
+    "key": "ctrl+y",
+    "command": "acceptSelectedSuggestion",
+    "when": "suggestWidgetHasFocusedSuggestion && suggestWidgetVisible && textInputFocus"
+  },
+  {
+    "key": "tab",
+    "command": "-acceptSelectedSuggestion",
+    "when": "suggestWidgetHasFocusedSuggestion && suggestWidgetVisible && textInputFocus"
+  },
+  {
+    "key": "ctrl+j",
+    "command": "selectNextSuggestion",
+    "when": "suggestWidgetMultipleSuggestions && suggestWidgetVisible && textInputFocus || suggestWidgetVisible && textInputFocus && !suggestWidgetHasFocusedSuggestion"
+  },
+  {
+    "key": "ctrl+k",
+    "command": "selectPrevSuggestion",
+    "when": "suggestWidgetMultipleSuggestions && suggestWidgetVisible && textInputFocus || suggestWidgetVisible && textInputFocus && !suggestWidgetHasFocusedSuggestion"
+  },
+  {
+    "key": "alt+\\",
+    "command": "workbench.action.terminal.toggleTerminal",
+    "when": "terminal.active"
+  },
+  {
+    "key": "space l",
+    "command": "workbench.action.findInFiles",
+    "when": "editorTextFocus && neovim.mode != insert",
+  },
+  {
+    "key": "ctrl+`",
+    "command": "-workbench.action.terminal.toggleTerminal",
+    "when": "terminal.active"
+  },
+  {
+    "key": "cmd+w",
+    "command": "-workbench.action.closeActiveEditor"
+  },
+  {
+    "key": "ctrl+p",
+    "command": "-vscode-neovim.send-cmdline",
+    "when": "neovim.init && neovim.mode == 'cmdline'"
+  },
+  {
+    "key": "ctrl+p",
+    "command": "workbench.action.quickOpen"
+  },
+  {
+    "key": "cmd+p",
+    "command": "-workbench.action.quickOpen"
+  },
+  {
+    "key": "ctrl+v",
+    "command": "search.action.openResultToSide",
+    "when": "fileMatchOrMatchFocus && searchViewletVisible"
+  },
+  {
+    "key": "ctrl+enter",
+    "command": "-search.action.openResultToSide",
+    "when": "fileMatchOrMatchFocus && searchViewletVisible"
+  }
+]

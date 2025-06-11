@@ -42,4 +42,3 @@ checkhealth.log
 
 # Ignore log files
 *.log
-.config

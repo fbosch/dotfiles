@@ -52,14 +52,14 @@ return {
 				silent = true,
 			},
 			{
-				"<leader>lg",
+				"<leader>l",
 				"<cmd>FzfRg<cr>",
 				desc = "livegrep ripgrep search",
 				mode = { "n" },
 				silent = true,
 			},
 			{
-				"<leader>lg",
+				"<leader>l",
 				"<cmd>FzfRgVisualSelection<cr>",
 				desc = "ripgrep search visual selection",
 				mode = { "v" },

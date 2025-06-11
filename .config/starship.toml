@@ -33,7 +33,7 @@ added_style = 'italic dimmed green'
 deleted_style = 'italic dimmed red'
 
 [directory]
-home_symbol = "ᛟ"
+home_symbol = "~"
 truncation_length = 6 
 truncate_to_repo = true
 truncation_symbol = "…/"
