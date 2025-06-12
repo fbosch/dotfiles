@@ -16,6 +16,46 @@
     "when": "editorTextFocus && neovim.mode != insert",
   },
   {
+    "key": "shift+h",
+    "command": "workbench.action.focusLeftGroupWithoutWrap",
+    "when": "editorTextFocus && neovim.mode != insert",
+  },
+  {
+    "key": "shift+h",
+    "command": "workbench.action.focusLastEditorGroup",
+    "when": "explorerViewletFocus",
+  },
+  {
+    "key": "shift+h",
+    "command": "workbench.action.focusLastEditorGroup",
+    "when": "searchViewletFocus",
+  },
+  {
+    "key": "shift+l",
+    "command": "runCommands",
+    "when": "editorTextFocus && neovim.mode != insert && !activeEditorGroupLast",
+    "args": {
+      "commands": [
+        "workbench.action.focusRightGroupWithoutWrap"
+      ]
+    }
+  },
+  {
+    "key": "shift+l",
+    "command": "workbench.action.focusSideBar",
+    "when": "editorTextFocus && neovim.mode != insert && activeEditorGroupLast && sideBarVisible"
+  },
+  {
+    "key": "shift+j",
+    "command": "workbench.action.focusBelowGroup",
+    "when": "editorTextFocus && neovim.mode != insert"
+  },
+  {
+    "key": "shift+k",
+    "command": "workbench.action.focusAboveGroup",
+    "when": "editorTextFocus && neovim.mode != insert"
+  },
+  {
     "key": "space x",
     "command": "runCommands",
     "args": {
@@ -34,7 +74,8 @@
     "args": {
       "commands": [
         "workbench.action.toggleSidebarVisibility",
-        "workbench.action.focusSideBar"
+        "workbench.view.explorer",
+        "workbench.action.focusSideBar",
       ]
     }
   },
@@ -128,8 +169,28 @@
     "when": "fileMatchOrMatchFocus && searchViewletVisible"
   },
   {
+    "key": "ctrl+j",
+    "command": "search.action.focusNextSearchResult",
+    "when": "fileMatchOrMatchFocus && searchViewletVisible"
+  },
+  {
+    "key": "ctrl+k",
+    "command": "search.action.focusPreviousSearchResult",
+    "when": "fileMatchOrMatchFocus && searchViewletVisible"
+  },
+  {
     "key": "ctrl+enter",
     "command": "-search.action.openResultToSide",
     "when": "fileMatchOrMatchFocus && searchViewletVisible"
+  },
+  {
+    "key": "ctrl+u",
+    "command": "cursorPageUp",
+    "when": "editorTextFocus && neovim.mode != insert"
+  },
+  {
+    "key": "ctrl+d",
+    "command": "cursorPageDown",
+    "when": "editorTextFocus && neovim.mode != insert"
   }
 ]
