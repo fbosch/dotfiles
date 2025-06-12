@@ -19,6 +19,7 @@ if test -d "$HOMEBREW_PREFIX/bin" -a (count $HOMEBREW_PREFIX/bin/u*) -gt 0
     alias join $HOMEBREW_PREFIX/bin/ujoin
     alias printenv $HOMEBREW_PREFIX/bin/uprintenv
     alias mktemp $HOMEBREW_PREFIX/bin/umktemp
+    alias uname $HOMEBREW_PREFIX/bin/uuname
     alias sort $HOMEBREW_PREFIX/bin/usort
     alias tsort $HOMEBREW_PREFIX/bin/utsort
     alias seq $HOMEBREW_PREFIX/bin/useq
