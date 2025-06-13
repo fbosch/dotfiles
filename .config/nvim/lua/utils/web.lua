@@ -120,6 +120,8 @@ function M.open_branch_workitem()
 		return
 	end
 	local azure_org = git.extract_azure_org(git.get_remote_url())
+
+	print(git.get_remote_url())
 	if azure_org then
 		platform.system_open(azure_org .. "/_workitems/edit/" .. workitem_id)
 	end
@@ -127,8 +129,6 @@ end
 
 function M.open_git_remote_url()
 	local git_remote_url = git.get_remote_url()
-
-	print(git_remote_url)
 
 	if git_remote_url then
 		platform.system_open(git_remote_url)

@@ -19,6 +19,8 @@
     "vscode-neovim.neovimExecutablePaths.darwin": "/opt/homebrew/bin/nvim",
     "editor.bracketPairColorization.enabled": false,
     "workbench.colorCustomizations": {
+        "window.activeBorder": "#19191900",
+        "window.inactiveBorder": "#19191900",
         "editorGroupHeader.tabsBackground": "#191919",
         "editorGroupHeader.border": "#191919",
         "editor.background": "#191919",
