@@ -12,18 +12,7 @@ return {
 	},
 	event = "BufWinEnter",
 	config = function()
-		local lualine_x = {
-			{
-				"lsp_status",
-				icon = "",
-				use_mode_colors = true,
-				symbols = {
-					spinner = {},
-					done = "",
-					separator = " | ",
-				},
-			},
-		}
+		local lualine_x = {}
 		local lualine_c = {}
 		local lualine_b = {}
 

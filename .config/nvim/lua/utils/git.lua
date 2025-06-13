@@ -36,25 +36,21 @@ function M.extract_workitem_id_from_branch()
 end
 
 function M.extract_azure_org(url)
-	-- Modern HTTPS format (with or without user)
 	local org, project = url:match("https://[^@/]*@?dev%.azure%.com/([^/]+)/([^/]+)/_git")
 	if org and project then
 		return string.format("https://dev.azure.com/%s/%s", org, project)
 	end
 
-	-- Legacy Visual Studio HTTPS
 	local user, legacy_org, legacy_project = url:match("https://([^@]+)@([^.]+)%.visualstudio%.com/.+/(.+)/_git")
 	if user and legacy_org and legacy_project then
 		return string.format("https://%s.visualstudio.com/%s", legacy_org, legacy_project)
 	end
 
-	-- Azure DevOps SSH
 	local ssh_org, ssh_project = url:match("git@ssh%.dev%.azure%.com:v3/([^/]+)/([^/]+)/[^/]+")
 	if ssh_org and ssh_project then
 		return string.format("https://dev.azure.com/%s/%s", ssh_org, ssh_project)
 	end
 
-	-- Visual Studio SSH
 	local vs_ssh_org, vs_ssh_project = url:match("[^@]+@vs%-ssh%.visualstudio%.com:v3/([^/]+)/([^/]+)/[^/]+")
 	if vs_ssh_org and vs_ssh_project then
 		return string.format("https://%s.visualstudio.com/%s", vs_ssh_org, vs_ssh_project)

@@ -192,5 +192,30 @@
     "key": "ctrl+d",
     "command": "cursorPageDown",
     "when": "editorTextFocus && neovim.mode != insert"
-  }
+  },
+  {
+    "key": "shift+>",
+    "command": "editor.action.indentLines",
+    "when": "textInputFocus && !editorReadonly"
+  },
+  {
+    "key": "shift+<",
+    "command": "editor.action.outdentLines",
+    "when": "textInputFocus && !editorReadonly && neovim.mode != insert"
+  },
+  {
+    "key": "alt+j",
+    "command": "editor.action.moveLinesDownAction",
+    "when": "textInputFocus && !editorReadonly && neovim.mode != insert"
+  },
+  {
+    "key": "alt+k",
+    "command": "editor.action.moveLinesUpAction",
+    "when": "textInputFocus && !editorReadonly && neovim.mode != insert"
+  },
+  {
+    "key": "space k",
+    "command": "editor.action.showHover",
+    "when": "editorTextFocus && neovim.mode != insert"
+  },
 ]
