@@ -218,4 +218,14 @@
     "command": "editor.action.showHover",
     "when": "editorTextFocus && neovim.mode != insert"
   },
+  {
+    "key": "g d",
+    "command": "editor.action.revealDefinition",
+    "when": "editorHasDefinitionProvider && editorTextFocus && neovim.mode != insert"
+  },
+  {
+    "key": "f12",
+    "command": "-editor.action.revealDefinition",
+    "when": "editorHasDefinitionProvider && editorTextFocus"
+  },
 ]

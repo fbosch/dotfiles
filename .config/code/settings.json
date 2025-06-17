@@ -70,7 +70,6 @@
     "terminal.integrated.fontSize": 14,
     "terminal.integrated.fontLigatures": true,
     "workbench.sideBar.location": "right",
-    "workbench.statusBar.visible": false,
     "editor.stickyScroll.enabled": false,
     "editor.scrollbar.horizontal": "hidden",
     "editor.scrollbar.vertical": "hidden",
@@ -92,8 +91,6 @@
     "accessibility.dimUnfocused.enabled": true,
     "accessibility.dimUnfocused.opacity": 0.6,
     "workbench.editor.showTabs": "none",
-    "gitlens.plusFeatures.enabled": false,
-    "errorLens.gutterIconsEnabled": true,
     "scm.diffDecorationsIgnoreTrimWhitespace": "true",
     "window.density.editorTabHeight": "compact",
     "workbench.editor.pinnedTabSizing": "compact",
@@ -102,5 +99,10 @@
     "breadcrumbs.symbolPath": "off",
     "workbench.editor.editorActionsLocation": "hidden",
     "workbench.layoutControl.enabled": false,
-    "workbench.navigationControl.enabled": false
+    "workbench.navigationControl.enabled": false,
+    "vscode-neovim.compositeKeys": {},
+    "workbench.activityBar.location": "hidden",
+    "workbench.activityBar.orientation": "vertical",
+    "workbench.statusBar.visible": false,
+    "vscode-neovim.neovimInitVimPaths.darwin": "/Users/fbb/dotfiles/.config/nvim/init.lua"
 }

@@ -58,7 +58,7 @@ vim.wo.foldtext = ""
 vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
 
 -- spellchecking
-vim.opt.spell = true
+vim.opt.spell = not vim.g.vscode
 vim.opt.spelllang = "en_us,da"
 vim.opt.spelloptions:append("noplainbuffer")
 

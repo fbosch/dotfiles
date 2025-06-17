@@ -38,6 +38,7 @@ M.typos = {
 	"cancle cancel",
 	"cahnge change",
 	"compar{ision,isons} comparison{}",
+	"cosnt const",
 	"covert convert",
 	"defin{ately,etely,atly,ately} definitely",
 	"depend{e,a}nc{ie,ei,y,i}es dependencies",

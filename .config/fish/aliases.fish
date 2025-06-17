@@ -9,7 +9,8 @@ abbr egnpm export_npm_globals
 abbr v nvim
 
 abbr p pnpm
-abbr pui 'pnpm upgrade --interactive --latest --recursive'
+abbr pugi 'pnpm upgrade --interactive --latest --recursive'
+abbr pupi 'pnpm update --interactive --recursive'
 abbr bup 'brew upgrade'
 
 function vimdiff
