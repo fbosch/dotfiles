@@ -1,7 +1,5 @@
 local map = require("utils").set_keymap
-
--- disable key that is used as leader
-map("n", "<Space>", "<NOP>")
+local vscode = require("utils.vscode")
 
 -- Swap ; and :
 map("n", ";", ":")
@@ -20,13 +18,13 @@ map("i", "<Left>", "<NOP>")
 map("i", "<Right>", "<NOP>")
 
 -- search for the word under the cursor and jump to the next match.
-map("n", "<leader>fn", function()
+vscode.adaptive_map("n", "<leader>fn", "editor.action.nextMatchFindAction", function()
 	local word = vim.fn.expand("<cword>")
 	vim.fn.setreg("/", "\\<" .. word .. "\\>")
 	vim.cmd("normal! l")
 	vim.cmd("normal! n")
 	vim.cmd("normal! zz")
-end, "Find next occurrence of word under cursor")
+end)
 
 -- compare selection with clipboard
 map("v", "<leader>dc", "<CMD>DiffClip<CR>", "Compare selection with clipboard")

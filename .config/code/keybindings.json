@@ -1,9 +1,31 @@
 // Place your key bindings in this file to override the defaultsauto[]
 [
   {
-    "key": "space s",
-    "command": "saveAll",
-    "when": "editorTextFocus && neovim.mode != insert",
+    "key": "space e",
+    "command": "runCommands",
+    "when": "explorerViewletFocus",
+    "args": {
+      "commands": [
+        "workbench.action.toggleSidebarVisibility",
+        "workbench.action.focusFirstEditorGroup"
+      ]
+    }
+  },
+  {
+    "key": "escape",
+    "command": "workbench.action.toggleSidebarVisibility",
+    "when": "searchViewletFocus"
+  },
+  {
+    "key": "space e",
+    "command": "runCommands",
+    "when": "scmViewletFocus",
+    "args": {
+      "commands": [
+        "workbench.action.toggleSidebarVisibility",
+        "workbench.action.focusFirstEditorGroup"
+      ]
+    }
   },
   {
     "key": "ctrl+w v",
@@ -56,60 +78,9 @@
     "when": "editorTextFocus && neovim.mode != insert"
   },
   {
-    "key": "space x",
-    "command": "runCommands",
-    "args": {
-      "commands": [
-        "workbench.action.closeOtherEditors",
-        "workbench.action.closeEditorsInOtherGroups",
-        "workbench.action.closeSidebar"
-      ]
-    },
-    "when": "editorTextFocus && neovim.mode != insert",
-  },
-  {
-    "key": "space e",
-    "command": "runCommands",
-    "when": "editorTextFocus && neovim.mode != insert && !sideBarVisible",
-    "args": {
-      "commands": [
-        "workbench.action.toggleSidebarVisibility",
-        "workbench.view.explorer",
-        "workbench.action.focusSideBar",
-      ]
-    }
-  },
-  {
-    "key": "space e",
-    "command": "workbench.action.toggleSidebarVisibility",
-    "when": "editorTextFocus && neovim.mode != insert && sideBarVisible"
-  },
-  {
-    "key": "space e",
-    "command": "runCommands",
-    "when": "explorerViewletFocus",
-    "args": {
-      "commands": [
-        "workbench.action.toggleSidebarVisibility",
-        "workbench.action.focusFirstEditorGroup"
-      ]
-    }
-  },
-  {
     "key": "escape",
     "command": "workbench.action.toggleSidebarVisibility",
-    "when": "searchViewletFocus"
-  },
-  {
-    "key": "space e",
-    "command": "runCommands",
-    "when": "scmViewletFocus",
-    "args": {
-      "commands": [
-        "workbench.action.toggleSidebarVisibility",
-        "workbench.action.focusFirstEditorGroup"
-      ]
-    }
+    "when": "sideBarVisible && sideBarFocus"
   },
   {
     "key": "ctrl+y",
@@ -135,11 +106,6 @@
     "key": "alt+\\",
     "command": "workbench.action.terminal.toggleTerminal",
     "when": "terminal.active"
-  },
-  {
-    "key": "space l",
-    "command": "workbench.action.findInFiles",
-    "when": "editorTextFocus && neovim.mode != insert",
   },
   {
     "key": "ctrl+`",
@@ -212,11 +178,6 @@
     "key": "alt+k",
     "command": "editor.action.moveLinesUpAction",
     "when": "textInputFocus && !editorReadonly && neovim.mode != insert"
-  },
-  {
-    "key": "space k",
-    "command": "editor.action.showHover",
-    "when": "editorTextFocus && neovim.mode != insert"
   },
   {
     "key": "g d",
