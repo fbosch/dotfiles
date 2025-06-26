@@ -189,4 +189,14 @@
     "command": "-editor.action.revealDefinition",
     "when": "editorHasDefinitionProvider && editorTextFocus"
   },
+  {
+    "key": "n",
+    "command": "editor.action.nextMatchFindAction",
+    "when": "editorFocus && findInputFocussed == false && findWidgetVisible && neovim.mode != insert"
+  },
+  {
+    "key": "shift+n",
+    "command": "editor.action.previousMatchFindAction",
+    "when": "editorFocus && findInputFocussed == false && findWidgetVisible && neovim.mode != insert"
+  },
 ]

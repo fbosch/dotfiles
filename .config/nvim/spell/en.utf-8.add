@@ -1449,3 +1449,6 @@ dependantRequests
 globalThis
 validateRecaptcha
 Workzone
+isIndividualPriceSettingRequired
+NewLoan
+orchestrationhandlers
