@@ -4,7 +4,7 @@
         "source.fixAll.eslint": "explicit"
     },
     "editor.codeLens": true,
-    "editor.fontFamily": "Zenbones Brainy, JetBrains Mono",
+    "editor.fontFamily": "Zenbones Brainy, JetBrains Mono, Symbols Nerd Font Mono",
     "editor.fontSize": 16,
     "editor.formatOnSave": true,
     "editor.inlineSuggest.enabled": true,
@@ -98,9 +98,19 @@
     "breadcrumbs.showArrays": false,
     "breadcrumbs.symbolPath": "off",
     "workbench.editor.editorActionsLocation": "hidden",
-    "workbench.layoutControl.enabled": false,
     "workbench.navigationControl.enabled": false,
     "workbench.activityBar.location": "hidden",
     "workbench.activityBar.orientation": "vertical",
-    "workbench.statusBar.visible": false
+    "colorize.decoration_type": "square-dot",
+    "colorize.include": [
+        "**/*.lua",
+        "**/*.css",
+        "**/*.scss",
+        "**/*.sass",
+        "**/*.less",
+        "**/*.styl"
+    ],
+    "workbench.statusBar.visible": false,
+    "workbench.layoutControl.enabled": false,
+    "cursor.composer.textSizeScale": 1.15
 }

@@ -105,6 +105,7 @@ M.typos = {
 	"una{ail,ial,ali}able unavailable",
 	"sensetive sensitive",
 	"craete create",
+	"visble visible",
 }
 
 -- utilize vim-abolish for fixing common typos

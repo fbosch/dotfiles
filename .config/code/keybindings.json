@@ -53,6 +53,16 @@
     "when": "searchViewletFocus",
   },
   {
+    "key": "ctrl+h",
+    "command": "workbench.action.openPreviousRecentlyUsedEditorInGroup",
+    "when": "editorTextFocus && neovim.mode != insert"
+  },
+  {
+    "key": "ctrl+l",
+    "command": "workbench.action.openNextRecentlyUsedEditorInGroup",
+    "when": "editorTextFocus && neovim.mode != insert"
+  },
+  {
     "key": "shift+l",
     "command": "runCommands",
     "when": "editorTextFocus && neovim.mode != insert && !activeEditorGroupLast",

@@ -3,7 +3,3 @@ require("config.keymaps.navigation")
 require("config.keymaps.yank")
 require("config.keymaps.editing")
 require("config.keymaps.plugins")
-
-if vim.g.vscode then
-	require("config.keymaps.vscode")
-end
