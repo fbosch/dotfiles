@@ -19,7 +19,7 @@
   {
     "key": "space e",
     "command": "runCommands",
-    "when": "scmViewletFocus",
+    "when": "editorTextFocus && neovim.mode != insert",
     "args": {
       "commands": [
         "workbench.action.toggleSidebarVisibility",
@@ -219,4 +219,17 @@
     "command": "-composer.createNewWithPrevContext",
     "when": "composerFocused || focusedView =~ /^workbench.panel.aichat.view/"
   },
+  {
+    "key": "cmd+e",
+    "command": "composerMode.background"
+  },
+  {
+    "key": "ctrl+s",
+    "command": "-workbench.action.files.save",
+  },
+  {
+    "key": "space s",
+    "when": "editorTextFocus && neovim.mode != insert",
+    "command": "workbench.action.files.saveAll"
+  }
 ]
