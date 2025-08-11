@@ -209,4 +209,14 @@
     "command": "editor.action.previousMatchFindAction",
     "when": "editorFocus && findInputFocussed == false && findWidgetVisible && neovim.mode != insert"
   },
+  {
+    "key": "alt+n",
+    "command": "composer.createNewWithPrevContext",
+    "when": "composerFocused || focusedView =~ /^workbench.panel.aichat.view/"
+  },
+  {
+    "key": "cmd+n",
+    "command": "-composer.createNewWithPrevContext",
+    "when": "composerFocused || focusedView =~ /^workbench.panel.aichat.view/"
+  },
 ]

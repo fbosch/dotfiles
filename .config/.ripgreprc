@@ -17,3 +17,4 @@
 --glob=!.backup/**
 --glob=!.Trash/**
 --glob=!.pnpm-store/**
+--silent=true

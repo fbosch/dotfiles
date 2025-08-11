@@ -49,10 +49,14 @@ return {
 
 		vim.api.nvim_create_autocmd("BufWritePre", {
 			group = group,
-			callback = function()
+			callback = function(args)
+				if vim.fn.fnamemodify(args.file, ":t") == "todo.md" then
+					return
+				end
 				conform.format({
 					lsp_format = "fallback",
 					quiet = true,
+					async = true,
 				})
 			end,
 		})

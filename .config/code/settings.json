@@ -110,7 +110,34 @@
         "**/*.less",
         "**/*.styl"
     ],
-    "workbench.statusBar.visible": false,
     "workbench.layoutControl.enabled": false,
-    "cursor.composer.textSizeScale": 1.15
+    "cursor.composer.textSizeScale": 1.15,
+    "terminal.integrated.altClickMovesCursor": false,
+    "terminal.integrated.defaultProfile.osx": "dash",
+    "terminal.integrated.env.osx": {
+        "INSIDE_CURSOR": "1",
+    },
+    "terminal.integrated.profiles.osx": {
+        "bash": {
+            "path": "bash",
+            "args": [
+                "-l"
+            ],
+            "icon": "terminal-bash"
+        },
+        "dash": {
+            "path": "dash",
+            "args": [
+                "-l"
+            ],
+        },
+        "fish": {
+            "path": "fish",
+            "args": [
+                "-l"
+            ]
+        },
+    },
+    "terminal.integrated.shellIntegration.enabled": false,
+    "terminal.integrated.defaultProfile.linux": "bash"
 }

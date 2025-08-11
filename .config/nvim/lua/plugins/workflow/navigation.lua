@@ -129,8 +129,6 @@ return {
 				local bufnr = vim.api.nvim_get_current_buf()
 				local root = vim.fs.root(bufnr, { "package.json", ".git" })
 				local rel_path = vim.fn.fnamemodify(root, ":~:.")
-
-				print(rel_path)
 				fzf.files({
 					resume = true,
 					exec_empty_query = false,
@@ -146,6 +144,7 @@ return {
 					exec_empty_query = false,
 					resume = true,
 					rg_opts = combined_options,
+					silent = true,
 				})
 			end, {})
 		end,
