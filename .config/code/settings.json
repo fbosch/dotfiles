@@ -90,7 +90,6 @@
     "search.quickAccess.preserveInput": true,
     "accessibility.dimUnfocused.enabled": true,
     "accessibility.dimUnfocused.opacity": 0.6,
-    "workbench.editor.showTabs": "none",
     "scm.diffDecorationsIgnoreTrimWhitespace": "true",
     "window.density.editorTabHeight": "compact",
     "workbench.editor.pinnedTabSizing": "compact",
@@ -113,7 +112,7 @@
     "workbench.layoutControl.enabled": false,
     "cursor.composer.textSizeScale": 1.15,
     "terminal.integrated.altClickMovesCursor": false,
-    "terminal.integrated.defaultProfile.osx": "dash",
+    "terminal.integrated.defaultProfile.osx": "fish",
     "terminal.integrated.env.osx": {
         "INSIDE_CURSOR": "1",
     },
@@ -139,5 +138,9 @@
         },
     },
     "terminal.integrated.shellIntegration.enabled": false,
-    "terminal.integrated.defaultProfile.linux": "bash"
+    "terminal.integrated.defaultProfile.linux": "bash",
+    "breadcrumbs.enabled": false,
+    "symbols.hidesExplorerArrows": false,
+    "workbench.iconTheme": "vscode-jetbrains-icon-theme-2023-dark",
+    "git.autofetch": true
 }

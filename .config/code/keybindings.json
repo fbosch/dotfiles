@@ -231,5 +231,30 @@
     "key": "space s",
     "when": "editorTextFocus && neovim.mode != insert",
     "command": "workbench.action.files.saveAll"
+  },
+  {
+    "key": "space x",
+    "when": "editorTextFocus && neovim.mode != insert",
+    "command": "runCommands",
+    "args": {
+      "commands": [
+        "workbench.action.closeOtherEditors",
+        "workbench.action.closeEditorsInOtherGroups",
+        "workbench.action.closeSidebar",
+      ]
+    }
+  },
+  {
+    "key": "alt+t",
+    "command": "workbench.action.terminal.toggleTerminal"
+  },
+  {
+    "key": "space l",
+    "when": "editorTextFocus && neovim.mode != insert",
+    "command": "workbench.action.findInFiles"
+  },
+  {
+    "key": "shift+cmd+f",
+    "command": "-workbench.action.findInFiles"
   }
 ]

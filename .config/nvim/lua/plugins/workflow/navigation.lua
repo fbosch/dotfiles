@@ -122,6 +122,7 @@ return {
 					rg_glob = true,
 					exec_empty_query = false,
 					rg_opts = combined_options,
+					silent = true,
 				})
 			end, {})
 
