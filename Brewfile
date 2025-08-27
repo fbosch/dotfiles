@@ -39,6 +39,7 @@ brew "mprocs"
 brew "cloc"
 brew "uutils-coreutils"
 brew "lynx"
+brew "uv"
 
 # git
 brew "lazygit"

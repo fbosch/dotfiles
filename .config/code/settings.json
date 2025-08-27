@@ -142,5 +142,12 @@
     "breadcrumbs.enabled": false,
     "symbols.hidesExplorerArrows": false,
     "workbench.iconTheme": "vscode-jetbrains-icon-theme-2023-dark",
-    "git.autofetch": true
+    "git.autofetch": true,
+    "terminal.integrated.ignoreProcessNames": [
+        "starship",
+        "oh-my-posh",
+        "bash",
+        "zsh",
+        "fish"
+    ]
 }
