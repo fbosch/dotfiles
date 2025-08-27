@@ -3,6 +3,8 @@ set -g CURSOR_EDITOR false
 # Check for Cursor editor using TERM_PROGRAM = vscode
 if string match -q "vscode" $TERM_PROGRAM
     set -g CURSOR_EDITOR true
+    # Switch to bash in Cursor editor to avoid fish configuration issues
+    exec dash
 end
 
 # Always initialize brew (needed for PATH and basic functionality)
@@ -25,8 +27,8 @@ for file in coreutils aliases scripts profile private colors
 end
 
 function fish_greeting
-    # skip in neovim terminal buffer or Cursor editor
-    if set -q IN_NEOVIM; or $CURSOR_EDITOR
+    # skip in neovim terminal buffer
+    if set -q IN_NEOVIM
         return
     end
 
@@ -65,42 +67,24 @@ function lfcd --description "lf to switch directories"
 end
 
 # --- Keybindings ---
-# Simplified keybindings for Cursor editor to reduce complexity
-if $CURSOR_EDITOR
-    # Minimal keybindings for Cursor editor
-    bind \cP fzfcd
-else
-    # Full keybindings for regular terminals
-    bind -M insert \cc kill-whole-line
-    bind -M insert \cc repaint
-    bind \cP fzfcd
-end
+bind -M insert \cc kill-whole-line
+bind -M insert \cc repaint
+bind \cP fzfcd
 
 function fish_user_keybindings
-    # Use simpler keybinding mode in Cursor editor
-    if $CURSOR_EDITOR
-        fish_default_key_bindings
-    else
-        fish_vi_key_bindings
-    end
+    fish_vi_key_bindings
 end
 
 # --- Third-party Tools ---
-# Initialize tools with Cursor editor optimizations
-if $CURSOR_EDITOR
-    # Skip heavy tools in Cursor editor to prevent hanging
-    # These tools can cause terminal hangs in editor environments
-else
-    # Full initialization for regular terminals
-    if type -q zoxide
-        zoxide init fish | source
-    end
-    if type -q starship
-        starship init fish | source
-    end
-    if type -q fnm
-        fnm env --use-on-cd --shell fish | source
-    end
+# Initialize all tools for regular terminals
+if type -q zoxide
+    zoxide init fish | source
+end
+if type -q starship
+    starship init fish | source
+end
+if type -q fnm
+    fnm env --use-on-cd --shell fish | source
 end
 
 # --- pnpm ---
@@ -114,30 +98,9 @@ set -gx BUN_INSTALL "$HOME/.bun"
 set -gx PATH $BUN_INSTALL/bin $PATH
 
 # --- Inshellisense ---
-# Skip in Cursor editor as it has its own completion
-if not $CURSOR_EDITOR; and test -f ~/.inshellisense/key-bindings.fish
+if test -f ~/.inshellisense/key-bindings.fish
     source ~/.inshellisense/key-bindings.fish
 end
 
 # --- Set universal keybinding mode ---
-# Use simpler keybindings in Cursor editor for better performance
-if $CURSOR_EDITOR
-    set -U fish_key_bindings fish_default_key_bindings
-else
-    set -U fish_key_bindings fish_vi_key_bindings
-end
-
-# --- Cursor Editor Specific Optimizations ---
-if $CURSOR_EDITOR
-    # Disable fish greeting completely in Cursor editor
-    set -g fish_greeting ""
-    
-    # Reduce history size for editor terminals
-    set -g history_size 1000
-    
-    # Disable fish_private_mode for faster startup
-    set -g fish_private_mode 0
-    
-    # Optimize PATH handling - avoid duplicate PATH entries
-    set -g fish_user_paths $fish_user_paths
-end
+set -U fish_key_bindings fish_vi_key_bindings
