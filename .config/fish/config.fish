@@ -3,7 +3,8 @@ set -g CURSOR_EDITOR false
 # Check for Cursor editor using TERM_PROGRAM = vscode
 if string match -q "vscode" $TERM_PROGRAM
     set -g CURSOR_EDITOR true
-    # Switch to bash in Cursor editor to avoid fish configuration issues
+    # Switch to dash in Cursor editor to avoid fish configuration issues
+    set -x ENV "$HOME/.shinit"
     exec dash
 end
 

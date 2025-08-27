@@ -37,7 +37,7 @@ brew bundle install
 
 ### Terminal
 
-I use [WezTerm](https://wezfurlong.org/wezterm/index.html) as my terminal emulator with [fish](https://fishshell.com/) as my primary shell and a minimal configuration of [starship](https://starship.rs/) for my prompt.
+I use [WezTerm](https://wezfurlong.org/wezterm/index.html) as my terminal emulator with [fish](https://fishshell.com/) as my primary shell and a minimal configuration of [starship](https://starship.rs/) for my prompt. 
 
 #### CLI Tooling
 

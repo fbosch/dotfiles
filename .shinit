@@ -1,0 +1,22 @@
+# Minimal dash configuration for Cursor editor
+# Optimized for maximum startup speed while maintaining essential tool access
+
+# Set basic PATH for essential tools
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+# Add Homebrew to PATH on macOS (essential for development tools)
+if [ -x /opt/homebrew/bin/brew ]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
+
+# Add pnpm to PATH (matching fish configuration)
+export PNPM_HOME="$HOME/Library/pnpm"
+export PATH="$PNPM_HOME:$PATH"
+
+# Add bun to PATH (matching fish configuration)
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+# Only set essential environment variables
+export EDITOR=nvim
+export VISUAL=nvim
