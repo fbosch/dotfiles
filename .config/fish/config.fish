@@ -1,14 +1,10 @@
-# Detect if running inside Cursor editor (more reliable detection)
-set -g CURSOR_EDITOR false
-# Check for Cursor editor using TERM_PROGRAM = vscode
+
 if string match -q "vscode" $TERM_PROGRAM
-    set -g CURSOR_EDITOR true
     # Switch to dash in Cursor editor to avoid fish configuration issues
     set -x ENV "$HOME/.shinit"
     exec dash
 end
 
-# Always initialize brew (needed for PATH and basic functionality)
 switch (uname)
     case Linux
         if test -x /home/linuxbrew/.linuxbrew/bin/brew
@@ -20,7 +16,6 @@ switch (uname)
         end
 end
 
-# Always source core configuration files
 for file in coreutils aliases scripts profile private colors
     if test -f ~/.config/fish/$file.fish
         source ~/.config/fish/$file.fish
@@ -77,16 +72,9 @@ function fish_user_keybindings
 end
 
 # --- Third-party Tools ---
-# Initialize all tools for regular terminals
-if type -q zoxide
-    zoxide init fish | source
-end
-if type -q starship
-    starship init fish | source
-end
-if type -q fnm
-    fnm env --use-on-cd --shell fish | source
-end
+zoxide init fish | source
+starship init fish | source
+fnm env --use-on-cd --shell fish | source
 
 # --- pnpm ---
 set -gx PNPM_HOME "$HOME/Library/pnpm"
@@ -104,4 +92,4 @@ if test -f ~/.inshellisense/key-bindings.fish
 end
 
 # --- Set universal keybinding mode ---
-set -U fish_key_bindings fish_vi_key_bindings
+set -U fish_key_bindings fish_default_key_bindings

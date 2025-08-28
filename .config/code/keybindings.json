@@ -28,6 +28,11 @@
     }
   },
   {
+    "key": "space r n",
+    "command": "editor.action.rename",
+    "when": "editorHasRenameProvider && editorTextFocus && neovim.mode != insert"
+  },
+  {
     "key": "ctrl+w v",
     "command": "workbench.action.splitEditor",
     "when": "editorTextFocus && neovim.mode != insert",

@@ -112,7 +112,7 @@
     "workbench.layoutControl.enabled": false,
     "cursor.composer.textSizeScale": 1.15,
     "terminal.integrated.altClickMovesCursor": false,
-    "terminal.integrated.defaultProfile.osx": "fish",
+    "terminal.integrated.defaultProfile.osx": "dash",
     "terminal.integrated.env.osx": {
         "INSIDE_CURSOR": "1",
     },
