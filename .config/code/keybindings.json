@@ -261,5 +261,10 @@
   {
     "key": "shift+cmd+f",
     "command": "-workbench.action.findInFiles"
+  },
+  {
+    "key": "space k",
+    "when": "editorTextFocus && neovim.mode != insert",
+    "command": "editor.action.showHover"
   }
 ]
