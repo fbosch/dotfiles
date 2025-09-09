@@ -40,6 +40,7 @@ brew "cloc"
 brew "uutils-coreutils"
 brew "lynx"
 brew "uv"
+brew "azure-cli"
 
 # git
 brew "lazygit"

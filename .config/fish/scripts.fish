@@ -38,35 +38,62 @@ function latest_worktree
     echo (tail -n 1 /tmp/.recent-worktrees)
 end
 
-function worktrees_clean
-    set old_worktrees (fd --type d --min-depth 2 --max-depth 2 --changed-before 7d)
-    set total_folders (count $old_worktrees)
-    set current_folder_index 0
+function worktrees_clean --description "Remove stale git worktrees (>7d) and their local branches"
+    set -l worktrees (fd -t d --min-depth 2 --max-depth 2 --changed-before 7d)
+    set -l total (count $worktrees)
 
-    for folder in $old_worktrees
-        set current_folder_index (math $current_folder_index + 1)
-        set progress_percent (math "99 * $current_folder_index / $total_folders")
+    if test $total -eq 0
+        echo "No old worktrees found (>7d)."
+        return 0
+    end
 
-        echo -n (printf "Removing old worktrees: %.2f%%\r" $progress_percent)
+    set -l i 0
+    set -l protected_branches main master develop release
 
-        # Get the branch name from the folder path
-        set branch_name (basename "$folder")
-
-        # First, remove the worktree
-        git worktree remove "$folder" 2>/dev/null
-
-        # Then try to delete the branch
-        if git show-ref --verify --quiet "refs/heads/$branch_name"
-            git branch -D "$branch_name" 2>/dev/null
+    for wt in $worktrees
+        # Ensure it looks like a git worktree (has .git file pointing to gitdir)
+        if not test -f "$wt/.git"
+            continue
+        end
+        if not string match -rq '^gitdir:' (head -n1 "$wt/.git")
+            continue
         end
 
-        # Remove the physical folder if it still exists
-        if test -d "$folder"
-            rm -rf "$folder"
+        # Resolve actual branch checked out in this worktree (may be 'HEAD' if detached)
+        set -l branch (git -C "$wt" rev-parse --abbrev-ref HEAD 2>/dev/null)
+
+        # Progress
+        set i (math $i + 1)
+        set -l pct (math "100.0 * $i / $total")
+        printf "Removing old worktrees: %.2f%%\r" $pct
+
+        # Remove worktree (clean only; add --force if you truly want to nuke dirty trees)
+        git worktree remove "$wt" 2>/dev/null
+        or begin
+            # If removal failed because it’s checked out/dirty, skip branch deletion
+            continue
+        end
+
+        # Delete local branch if:
+        #  - it resolves to a real branch (not 'HEAD')
+        #  - it exists in refs/heads
+        #  - it’s not protected
+        if test "$branch" != "" -a "$branch" != HEAD
+            if git show-ref --verify --quiet "refs/heads/$branch"
+                if not contains -- $branch $protected_branches
+                    # Git refuses deleting a branch checked out in ANY worktree; -D still fails then.
+                    git branch -D "$branch" 2>/dev/null
+                end
+            end
+        end
+
+        # Remove folder if still present (belt-and-suspenders)
+        if test -d "$wt"
+            rm -rf "$wt"
         end
     end
 
-    # Prune any stale worktree references
+    printf "\n"
     git worktree prune
 end
 

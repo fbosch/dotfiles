@@ -22,8 +22,7 @@
     "when": "editorTextFocus && neovim.mode != insert",
     "args": {
       "commands": [
-        "workbench.action.toggleSidebarVisibility",
-        "workbench.action.focusFirstEditorGroup"
+        "workbench.files.action.focusFilesExplorer",
       ]
     }
   },
@@ -138,6 +137,8 @@
   },
   {
     "key": "ctrl+p",
+    // "command": "periscope.searchFiles"
+    // "command": "search-preview.quickOpenWithPreview"
     "command": "workbench.action.quickOpen"
   },
   {
@@ -256,7 +257,7 @@
   {
     "key": "space l",
     "when": "editorTextFocus && neovim.mode != insert",
-    "command": "workbench.action.findInFiles"
+    "command": "periscope.search"
   },
   {
     "key": "shift+cmd+f",
@@ -266,5 +267,15 @@
     "key": "space k",
     "when": "editorTextFocus && neovim.mode != insert",
     "command": "editor.action.showHover"
+  },
+  {
+    "key": "ctrl+j",
+    "command": "workbench.action.quickOpenSelectNext",
+    "when": "inQuickOpen"
+  },
+  {
+    "key": "ctrl+h",
+    "command": "workbench.action.quickOpenSelectPrevious",
+    "when": "inQuickOpen"
   }
 ]
