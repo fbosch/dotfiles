@@ -55,10 +55,8 @@
   "javascript.inlayHints.functionLikeReturnTypes.enabled": true,
   "typescript.preferences.importModuleSpecifier": "project-relative",
   "typescript.preferences.includePackageJsonAutoImports": "on",
+  "typescript.experimental.useTsgo": true,
   "explorer.confirmDragAndDrop": false,
-  "extensions.experimental.affinity": {
-    "asvetliakov.vscode-neovim": 1
-  },
   "editor.lineHeight": 1.5,
   "cursor.cpp.disabledLanguages": ["plaintext", "markdown", "scminput"],
   "workbench.editor.enablePreviewFromQuickOpen": true,
@@ -167,5 +165,10 @@
   "periscope.startFolderDisplayDepth": 2,
   "periscope.endFolderDisplayDepth": 2,
   "explorer.excludeGitIgnore": false,
-  "editor.defaultFormatter": "esbenp.prettier-vscode"
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "extensions.experimental.affinity": {
+    "asvetliakov.vscode-neovim": 1
+  },
+  "clock.dateFormat": "HH:MM",
+  "git.openRepositoryInParentFolders": "never"
 }

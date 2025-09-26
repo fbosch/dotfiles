@@ -3,9 +3,15 @@ return {
 	ft = "markdown",
 	config = function()
 		require("checkmate").setup({
-			todo_markers = {
-				unchecked = "󰄱 ",
-				checked = "󰄲 ",
+			todo_states = {
+				unchecked = {
+					marker = "󰄱 ",
+					order = 1,
+				},
+				checked = {
+					marker = "󰄲 ",
+					order = 2,
+				},
 			},
 		})
 		vim.api.nvim_create_autocmd("FileType", {

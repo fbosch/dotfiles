@@ -19,42 +19,45 @@
   {
     "key": "space e",
     "command": "runCommands",
-    "when": "editorTextFocus && neovim.mode != insert",
+    "when": "editorTextFocus && neovim.mode != insert && !inputFocus && !renameInputFocussed",
     "args": {
-      "commands": [
-        "workbench.files.action.focusFilesExplorer",
-      ]
+      "commands": ["workbench.files.action.focusFilesExplorer"]
     }
+  },
+  {
+    "key": "space f i",
+    "command": "editor.action.organizeImports",
+    "when": "editorTextFocus && neovim.mode != insert && !inputFocus && !renameInputFocussed"
   },
   {
     "key": "space r n",
     "command": "editor.action.rename",
-    "when": "editorHasRenameProvider && editorTextFocus && neovim.mode != insert"
+    "when": "editorHasRenameProvider && editorTextFocus && neovim.mode != insert && !inputFocus && !renameInputFocussed"
   },
   {
     "key": "ctrl+w v",
     "command": "workbench.action.splitEditor",
-    "when": "editorTextFocus && neovim.mode != insert",
+    "when": "editorTextFocus && neovim.mode != insert"
   },
   {
     "key": "ctrl+w s",
     "command": "workbench.action.splitEditorDown",
-    "when": "editorTextFocus && neovim.mode != insert",
+    "when": "editorTextFocus && neovim.mode != insert"
   },
   {
     "key": "shift+h",
     "command": "workbench.action.focusLeftGroupWithoutWrap",
-    "when": "editorTextFocus && neovim.mode != insert",
+    "when": "editorTextFocus && neovim.mode != insert"
   },
   {
     "key": "shift+h",
     "command": "workbench.action.focusLastEditorGroup",
-    "when": "explorerViewletFocus",
+    "when": "explorerViewletFocus"
   },
   {
     "key": "shift+h",
     "command": "workbench.action.focusLastEditorGroup",
-    "when": "searchViewletFocus",
+    "when": "searchViewletFocus"
   },
   {
     "key": "ctrl+h",
@@ -71,9 +74,7 @@
     "command": "runCommands",
     "when": "editorTextFocus && neovim.mode != insert && !activeEditorGroupLast",
     "args": {
-      "commands": [
-        "workbench.action.focusRightGroupWithoutWrap"
-      ]
+      "commands": ["workbench.action.focusRightGroupWithoutWrap"]
     }
   },
   {
@@ -226,27 +227,23 @@
     "when": "composerFocused || focusedView =~ /^workbench.panel.aichat.view/"
   },
   {
-    "key": "cmd+e",
-    "command": "composerMode.background"
-  },
-  {
     "key": "ctrl+s",
-    "command": "-workbench.action.files.save",
+    "command": "-workbench.action.files.save"
   },
   {
     "key": "space s",
-    "when": "editorTextFocus && neovim.mode != insert",
+    "when": "editorTextFocus && neovim.mode != insert && !inputFocus && !renameInputFocussed",
     "command": "workbench.action.files.saveAll"
   },
   {
     "key": "space x",
-    "when": "editorTextFocus && neovim.mode != insert",
+    "when": "editorTextFocus && neovim.mode != insert && !inputFocus && !renameInputFocussed",
     "command": "runCommands",
     "args": {
       "commands": [
         "workbench.action.closeOtherEditors",
         "workbench.action.closeEditorsInOtherGroups",
-        "workbench.action.closeSidebar",
+        "workbench.action.closeSidebar"
       ]
     }
   },
@@ -256,7 +253,7 @@
   },
   {
     "key": "space l",
-    "when": "editorTextFocus && neovim.mode != insert",
+    "when": "editorTextFocus && neovim.mode != insert && !inputFocus && !renameInputFocussed",
     "command": "periscope.search"
   },
   {
@@ -265,7 +262,7 @@
   },
   {
     "key": "space k",
-    "when": "editorTextFocus && neovim.mode != insert",
+    "when": "editorTextFocus && neovim.mode != insert && !inputFocus && !renameInputFocussed",
     "command": "editor.action.showHover"
   },
   {

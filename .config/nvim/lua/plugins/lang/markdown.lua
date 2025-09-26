@@ -2,6 +2,7 @@ return {
 	"toppair/peek.nvim",
 	build = "deno task --quiet build:fast",
 	ft = { "markdown" },
+	enabled = false,
 	config = function()
 		require("peek").setup()
 		vim.api.nvim_create_user_command("PeekOpen", require("peek").open, {})
@@ -11,9 +12,10 @@ return {
 		"MeanderingProgrammer/render-markdown.nvim",
 		dependencies = { "nvim-treesitter/nvim-treesitter" }, -- if you use the mini.nvim suite
 		ft = { "markdown", "vimwiki" },
+		enabled = false,
 		config = function()
 			require("render-markdown").setup({
-				enabled = false,
+				checkbox = { enabled = false },
 				completions = { lsp = { enabled = true } },
 				on = {
 					attach = function()
