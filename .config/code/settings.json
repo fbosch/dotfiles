@@ -55,7 +55,6 @@
   "javascript.inlayHints.functionLikeReturnTypes.enabled": true,
   "typescript.preferences.importModuleSpecifier": "project-relative",
   "typescript.preferences.includePackageJsonAutoImports": "on",
-  "typescript.experimental.useTsgo": true,
   "explorer.confirmDragAndDrop": false,
   "editor.lineHeight": 1.5,
   "cursor.cpp.disabledLanguages": ["plaintext", "markdown", "scminput"],
@@ -170,5 +169,8 @@
     "asvetliakov.vscode-neovim": 1
   },
   "clock.dateFormat": "HH:MM",
-  "git.openRepositoryInParentFolders": "never"
+  "git.openRepositoryInParentFolders": "never",
+  "cursor.general.disableHttp2": true,
+  "cursor.general.disableHttp1SSE": true,
+  "typescript.inlayHints.parameterTypes.enabled": true
 }
