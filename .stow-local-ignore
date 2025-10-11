@@ -1,7 +1,7 @@
-.git
-.gitignore
-scripts
-npm-globals.json
-docs
-README.md
-
+^\.git
+^\.gitignore
+^\.github
+^scripts
+^npm-globals\.json
+^docs
+^README\.md
