@@ -3,8 +3,8 @@
   "position": "bottom",
   "height": 40,
 
-  "modules-left": ["hyprland/workspaces", "wlr/taskbar"],
-  "modules-center": [],
+  "modules-left": ["hyprland/workspaces"],
+  "modules-center": ["wlr/taskbar"],
   "modules-right": ["tray", "hyprland/language", "clock"],
 
   "tray": {

@@ -15,8 +15,6 @@ window#waybar {
 
 window#waybar {
   padding: 0 5px;
-
-
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   background-color: rgba(0, 0, 0, 0.4);
   transition-property: background-color;
@@ -30,6 +28,10 @@ window#waybar {
 #clock {
   font-size: 12px;
   margin-left: 10px;
+}
+
+#tray {
+  padding: 0 10px;
 }
 
 #taskbar button {
