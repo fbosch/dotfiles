@@ -1,16 +1,6 @@
-/* * { */
-  /* font-family: FontAwesome, Roboto, Helvetica, Arial, sans-serif; */
-  /* font-family: "JetBrains Mono", sans-serif; */
-  /* border: none; */
-  /* text-shadow: none; */
-  /* box-shadow: none; */
-  /* border-radius: 0; */
-  /* font-weight: 500; */
-  /* font-size: 12.7px; */
-/* } */
-
 * {
   font-family: "Tahoma", sans-serif;
+  font-size: 0.85rem;
 }
 
 window#waybar {
@@ -25,24 +15,31 @@ window#waybar {
   transition-duration: 0.5s;
 }
 
-
-
 .modules-right {
-  padding: 0 10px;
+  padding: 3px 10px;
+}
+
+#network {
+  margin-left: 10px;
+  font-size: 0.9rem;
 }
 
 #clock {
-  font-size: 12px;
+  font-size: 0.75rem;
   margin-left: 10px;
 }
 
 #tray {
-  padding: 0 10px;
+  padding: 0 15px;
+}
+
+#language {
+  font-size: 11px;
 }
 
 #taskbar button {
   border-radius: 0;
-  border-bottom: 3px solid #969696;
+  border-bottom: 2px solid transparent;
   text-shadow: 1px 1px rgba(0, 0, 0, 0.5);
 
   transition-property: border-color;
@@ -50,17 +47,17 @@ window#waybar {
 }
 
 #taskbar button.active {
-  border-bottom: 3px solid #808080;
+  border-bottom: 2px solid #fff;
+  font-weight: bold;
 }
 
 #workspaces button {
-  border-bottom: 3px solid #969696;
-
+  border-bottom: 2px solid transparent;
   transition-property: border-color;
   transition-duration: 150ms;
 }
 
 #workspaces button.active {
-  border-bottom: 3px solid #fff;
+  border-bottom: 2px solid #fff;
   border-radius: 0;
 }

@@ -5,7 +5,7 @@
 
   "modules-left": ["hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],
-  "modules-right": ["tray", "hyprland/language", "clock"],
+  "modules-right": ["tray", "hyprland/language", "network", "clock"],
 
   "tray": {
     "spacing": 5,
@@ -28,6 +28,16 @@
     "icon-size": 20,
     "on-click": "activate",
   },
+
+  
+  "network": { 
+    "interface": "enp0s3",
+    "format": "{ifname}",
+    "format-wifi": "",
+    "format-ethernet": "󰈀 ",
+    "format-disconnected": "󰈂",
+   },
+
 
   "clock": {
     "format": "{:>%H:%M\n %d/%m/%Y}",
