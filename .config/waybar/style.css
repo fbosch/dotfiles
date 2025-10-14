@@ -9,6 +9,10 @@
   /* font-size: 12.7px; */
 /* } */
 
+* {
+  font-family: "Tahoma", sans-serif;
+}
+
 window#waybar {
   all: unset;
 }
@@ -20,6 +24,8 @@ window#waybar {
   transition-property: background-color;
   transition-duration: 0.5s;
 }
+
+
 
 .modules-right {
   padding: 0 10px;
@@ -35,16 +41,16 @@ window#waybar {
 }
 
 #taskbar button {
-  min-width: 175px;
   border-radius: 0;
   border-bottom: 3px solid #969696;
+  text-shadow: 1px 1px rgba(0, 0, 0, 0.5);
 
   transition-property: border-color;
   transition-duration: 150ms;
 }
 
 #taskbar button.active {
-  border-bottom: 3px solid #333333;
+  border-bottom: 3px solid #808080;
 }
 
 #workspaces button {
@@ -55,5 +61,6 @@ window#waybar {
 }
 
 #workspaces button.active {
-  border-bottom: 3px solid #333333;
+  border-bottom: 3px solid #fff;
+  border-radius: 0;
 }
