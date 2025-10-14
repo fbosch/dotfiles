@@ -18,8 +18,8 @@
   "hyprland/language": {
     "format": "{}",
     "format-en": "EN",
-    "format-dk": "DA",
-    "on-click": "hyprctl switchxkbllayout at-translated-set-2-keyboard-next"
+    "format-da": "DA",
+    "on-click": "hyprctl switchxkblayout at-translated-set-2-keyboard next",
   },
 
   "wlr/taskbar": {
