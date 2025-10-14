@@ -1,0 +1,37 @@
+{
+  "layer": "top",
+  "position": "bottom",
+  "height": 40,
+
+  "modules-left": ["hyprland/workspaces", "wlr/taskbar"],
+  "modules-center": [],
+  "modules-right": ["tray", "clock"],
+
+  "tray": {
+    "spacing": 5,
+  },
+
+  "hyprland/workspaces": {
+    "format": "{name}",
+  },
+
+  "wlr/taskbar": {
+    "format": "{icon}   {title:.25}",
+    "markup": true,
+    "icon-size": 25,
+    "on-click": "activate",
+  },
+
+  "clock": {
+    "format": "{:>%H:%M\n %d/%m/%Y}",
+    "interval": 1,
+    "align": 1,
+    "justify": "right",
+  },
+
+  "custom/power": {
+    "format": "⏻",
+    "tooltip": "Power Off",
+    "on-click": "poweroff",
+  },
+}
