@@ -18,6 +18,7 @@ brew "grc"
 brew "gnu-units"
 brew "ast-grep"
 brew "keychain"
+brew "nixfmt"
 
 # directories
 brew "zoxide"
