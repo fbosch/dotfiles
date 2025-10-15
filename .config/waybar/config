@@ -1,0 +1,54 @@
+{
+  "layer": "top",
+  "position": "bottom",
+  "height": 40,
+
+  "modules-left": ["hyprland/workspaces"],
+  "modules-center": ["wlr/taskbar"],
+  "modules-right": ["tray", "hyprland/language", "network", "clock"],
+
+  "tray": {
+    "spacing": 5,
+  },
+
+  "hyprland/workspaces": {
+    "format": "{name}",
+  },
+
+  "hyprland/language": {
+    "format": "{}",
+    "format-en": "EN",
+    "format-da": "DA",
+    "on-click": "hyprctl switchxkblayout at-translated-set-2-keyboard next",
+  },
+
+  "wlr/taskbar": {
+    "format": "{icon}  {title:.25}",
+    "markup": true,
+    "icon-size": 20,
+    "on-click": "activate",
+  },
+
+  
+  "network": { 
+    "interface": "enp0s3",
+    "format": "{ifname}",
+    "format-wifi": "",
+    "format-ethernet": "󰈀 ",
+    "format-disconnected": "󰈂",
+   },
+
+
+  "clock": {
+    "format": "{:>%H:%M\n %d/%m/%Y}",
+    "interval": 1,
+    "align": 1,
+    "justify": "right",
+  },
+
+  "custom/power": {
+    "format": "⏻",
+    "tooltip": "Power Off",
+    "on-click": "poweroff",
+  },
+}

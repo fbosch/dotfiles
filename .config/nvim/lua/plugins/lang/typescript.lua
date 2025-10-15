@@ -26,8 +26,8 @@ return {
 		},
 	},
 	{
-		dir = "~/Projects/js-i18n.nvim",
-		-- "nabekou29/js-i18n.nvim",
+		-- dir = "~/Projects/js-i18n.nvim",
+		"nabekou29/js-i18n.nvim",
 		-- "fbosch/js-i18n.nvim",
 		ft = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
 		lazy = true,

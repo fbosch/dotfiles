@@ -10,7 +10,7 @@
 --colors=always
 
 --type-add=web:*.{html,css,js}
-
+,
 # Improved glob exclusion pattern (use --glob=!<pattern> for each exclusion)
 --glob=!.git/**
 --glob=!node_modules/**
