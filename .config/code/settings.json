@@ -170,7 +170,8 @@
   },
   "clock.dateFormat": "HH:MM",
   "git.openRepositoryInParentFolders": "never",
-  "cursor.general.disableHttp2": true,
-  "cursor.general.disableHttp1SSE": true,
-  "typescript.inlayHints.parameterTypes.enabled": true
+  "typescript.inlayHints.parameterTypes.enabled": true,
+  "eslint.codeActionsOnSave.mode": "problems",
+  "git.enableSmartCommit": true,
+  "git.confirmSync": false
 }

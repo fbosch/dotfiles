@@ -19,7 +19,7 @@
   {
     "key": "space e",
     "command": "runCommands",
-    "when": "editorTextFocus && neovim.mode != insert && !inputFocus && !renameInputFocussed",
+    "when": "editorTextFocus && neovim.mode != insert && !renameInputFocussed",
     "args": {
       "commands": ["workbench.files.action.focusFilesExplorer"]
     }
@@ -47,17 +47,17 @@
   {
     "key": "shift+h",
     "command": "workbench.action.focusLeftGroupWithoutWrap",
-    "when": "editorTextFocus && neovim.mode != insert"
+    "when": "editorTextFocus && neovim.mode != insert && !renameInputFocused && !inputFocus"
   },
   {
     "key": "shift+h",
     "command": "workbench.action.focusLastEditorGroup",
-    "when": "explorerViewletFocus"
+    "when": "explorerViewletFocus && !renameInputFocused && !inputFocus"
   },
   {
     "key": "shift+h",
     "command": "workbench.action.focusLastEditorGroup",
-    "when": "searchViewletFocus"
+    "when": "searchViewletFocus && !renameInputFocused && !inputFocus"
   },
   {
     "key": "ctrl+h",
@@ -85,7 +85,7 @@
   {
     "key": "shift+j",
     "command": "workbench.action.focusBelowGroup",
-    "when": "editorTextFocus && neovim.mode != insert"
+    "when": "editorTextFocus && neovim.mode != insert && !renameInputFocused"
   },
   {
     "key": "shift+k",
@@ -249,12 +249,12 @@
   {
     "key": "space s",
     "command": "workbench.action.files.saveAll",
-    "when": "editorTextFocus && neovim.mode != insert && !inputFocus && !renameInputFocussed"
+    "when": "editorTextFocus && neovim.mode != insert && !renameInputFocussed"
   },
   {
     "key": "space x",
     "command": "runCommands",
-    "when": "editorTextFocus && neovim.mode != insert && !inputFocus && !renameInputFocussed",
+    "when": "editorTextFocus && neovim.mode != insert && !renameInputFocussed",
     "args": {
       "commands": [
         "workbench.action.closeOtherEditors",
@@ -270,7 +270,7 @@
   {
     "key": "space l",
     "command": "periscope.search",
-    "when": "editorTextFocus && neovim.mode != insert && !inputFocus && !renameInputFocussed"
+    "when": "editorTextFocus && neovim.mode != insert && !renameInputFocussed"
   },
   {
     "key": "shift+cmd+f",

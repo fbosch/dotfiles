@@ -1506,3 +1506,5 @@ useSearchResults
 booleans
 liability-specific
 ValidationResponse
+signingDeadline
+payoutDate
