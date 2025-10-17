@@ -5,10 +5,23 @@
 
   "modules-left": ["hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],
-  "modules-right": ["tray", "hyprland/language", "network", "clock"],
+  "modules-right": ["tray", "hyprland/language", "network", "pulseaudio", "clock"],
 
   "tray": {
     "spacing": 5,
+  },
+
+
+  "pulseaudio#audio": {
+    "format": "{icon} {volume}",
+    "format-bluetooth-muted": "󰟎",
+    "format-muted": "󰸈",
+    "format-icons": {
+     "headphone": "",
+     "default": ""
+    },
+    "on-click" : "pavucontrol",
+    "tooltip": false
   },
 
   "hyprland/workspaces": {
