@@ -12,16 +12,16 @@
   },
 
 
-  "pulseaudio#audio": {
-    "format": "{icon} {volume}",
+  "pulseaudio": {
+    "format": "{icon} ",
     "format-bluetooth-muted": "󰟎",
     "format-muted": "󰸈",
     "format-icons": {
      "headphone": "",
-     "default": ""
+     "default": ["", "", ""]
     },
     "on-click" : "pavucontrol",
-    "tooltip": false
+    "tooltip": true
   },
 
   "hyprland/workspaces": {

@@ -37,6 +37,10 @@ window#waybar {
   padding: 0 15px;
 }
 
+#pulseaudio {
+  margin-left: 5px;
+}
+
 #language {
   font-size: 11px;
 }
