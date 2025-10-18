@@ -5,7 +5,6 @@ local servers = {
 	tailwindcss = {
 		cmd = { "tailwindcss-language-server", "--stdio" },
 	},
-	jqls = {},
 	astro = {},
 	cssls = {
 		settings = {
