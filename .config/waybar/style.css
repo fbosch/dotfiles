@@ -1,5 +1,5 @@
 * {
-  font-family: "Tahoma", "Segoe Fluent Icons", sans-serif;
+  font-family: "SF Pro Text", "Segoe Fluent Icons", sans-serif;
   font-size: 0.85rem;
   color: #fff;
 }
@@ -9,12 +9,13 @@ window#waybar {
 }
 
 window#waybar {
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+
   padding: 0 5px;
-  background-color: rgba(25, 25, 25, 0.4);
+  background-color: rgba(44, 44, 44, 0.7);
   transition-property: background-color;
   transition-duration: 0.5s;
-  text-shadow: 0px 0px 2px rgba(0,0,0, 0.7);
+  text-shadow: 0px 0px 2px rgba(0, 0, 0, 0.7);
   letter-spacing: 0.05em;
 }
 
@@ -26,12 +27,22 @@ window#waybar {
   opacity: 0;
 }
 
+.custom.power {
+  margin-left: 0.75em;
+  background-color: red;
+}
+
 #cpu,
 #memory {
   font-weight: 700;
   margin-left: 0.75em;
   font-size: 0.8rem;
   letter-spacing: 0.05em;
+}
+
+#cpu {
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  padding-right: 0.7em;
 }
 
 #cpu.idle {
@@ -64,10 +75,10 @@ window#waybar {
 }
 
 #tray {
-  padding: 0 8px;
-  margin: 2px 5px 0 2px;
-  border-radius: 5px;
-  background-color: rgba(25, 25, 25, 0.5)
+  padding: 0px 10px 2px 0;
+  margin-right: 0.35em;
+  border-radius: 0px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 #pulseaudio {

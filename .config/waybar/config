@@ -5,29 +5,31 @@
 
   "modules-left": ["hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],
-  "modules-right": ["tray", "memory", "cpu", "network", "pulseaudio", "hyprland/language", "clock"],
+  "modules-right": ["tray", "memory", "cpu", "network", "pulseaudio", "hyprland/language", "clock", "custom/power"],
 
   "tray": {
     "spacing": 5,
+    "icon-size": 14,
   },
 
   "cpu": {
     "format": "{icon} {usage}% ",
     "tooltip-format": "{usage}%",
-    "format-icons": ["", " "," ", "", "" ],
-    "icon-size": 16,
+    "format-icons": ["", " ", " ", " ", " "," ", "","", "" ],
     "states": {
       "idle": 0,
-      "normal": 10,
+      "normal": 9,
       "warning": 70,
       "critical": 90
-    }
+    },
+    "on-click": "sh -c 'if pgrep -f \"^missioncenter\" > /dev/null; then pkill -f \"^missioncenter\"; else missioncenter & disown; fi'"
   },
 
   "memory": {
     "format": "{icon} {percentage}%",
     "tooltip-format": "{used:0.1f} GiB / {avail} GiB \n({swapPercentage}% Swap)",
     "format-icons": [""],
+    "on-click": "sh -c 'if pgrep -f \"^missioncenter\" > /dev/null; then pkill -f \"^missioncenter\"; else missioncenter & disown; fi'"
   },
 
   "pulseaudio": {
@@ -81,7 +83,13 @@
 
   "custom/power": {
     "format": "⏻",
-    "tooltip": "Power Off",
-    "on-click": "poweroff",
+    "tooltip": false,
+    "menu-file": "~/.config/waybar/power_menu.xml",
+    "menu-actions": {
+      "shutdown": "shutdown",
+      "reboot": "reboot",
+      "suspend": "systemctl suspend",
+      "hibernate": "systemctl hibernate",
+    }
   },
 }
