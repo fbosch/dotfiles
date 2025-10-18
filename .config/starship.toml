@@ -20,8 +20,8 @@ error_symbol = "[ ᚾᚨᚢᚦ ](bold red)[᛬](red)"
 
 [sudo]
 format = "[$symbol]($style)"
-style = "bold italic bright-purple"
-symbol = "ᛊ"
+style = "bold italic bright-red"
+symbol = "ᛊ "
 disabled = false
 
 [python]

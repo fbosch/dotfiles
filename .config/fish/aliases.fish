@@ -46,6 +46,8 @@ abbr pjr 'cd ~/Projects'
 abbr rpj 'cd ~/Projects'
 
 abbr cf 'cd ~/.config'
+abbr cnx 'cd /etc/nixos'
+abbr nxrb 'sudo nixos-rebuild switch --flake ~/nixos'
 
 # Helpers
 abbr x exit
