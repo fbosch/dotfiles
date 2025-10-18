@@ -25,13 +25,14 @@ end
 return {
 	{
 		"numtostr/FTerm.nvim",
-		cmd = { "FTermOpen", "FTermClose", "FTermExit", "FTermToggle", "FtermMProcs", "FTermLazyGit" },
+		cmd = { "FTermOpen", "FTermClose", "FTermExit", "FTermToggle", "FtermMProcs", "FTermLazyGit", "FTermCursorAgent" },
 		keys = term_keymaps({
 			{ "<A-t>", "FTermToggle", "toggle floating terminal" },
 			{ "<A-m>", "FTermMProcs", "toggle floating terminal with mprocs" },
 			{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
 			{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
 			{ "<A-c>", "FTermCheckmate", "toggle floating terminal with checkmate in neovim instance" },
+			{ "<A-a>", "FTermCursorAgent", "toggle floating terminal with cursor-agent" },
 		}),
 		config = function()
 			local usrcmd = vim.api.nvim_create_user_command
@@ -122,6 +123,21 @@ return {
 				end
 
 				checkmate_instance:toggle()
+			end, { bang = true })
+
+			local cursor_agent_instance = nil
+			usrcmd("FTermCursorAgent", function()
+				if not cursor_agent_instance then
+					cursor_agent_instance = fterm:new({
+						ft = "fterm_cursor_agent",
+						env = env,
+						shell = "dash",
+						cmd = "cursor-agent",
+						dimensions = dimensions,
+					})
+				end
+
+				cursor_agent_instance:toggle()
 			end, { bang = true })
 		end,
 	},
