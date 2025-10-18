@@ -65,6 +65,10 @@ window#waybar {
   transition-duration: 150ms;
 }
 
+#workspaces button:only-child {
+  opacity: 0;
+}
+
 #workspaces button.active {
   border-bottom: 2px solid #fff;
   border-radius: 0;
