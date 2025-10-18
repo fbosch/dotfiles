@@ -5,12 +5,11 @@
 
   "modules-left": ["hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],
-  "modules-right": ["tray", "hyprland/language", "network", "pulseaudio", "clock"],
+  "modules-right": ["tray", "network", "pulseaudio", "hyprland/language", "clock"],
 
   "tray": {
-    "spacing": 5,
+    "spacing": 5
   },
-
 
   "pulseaudio": {
     "format": "{icon} ",
@@ -49,6 +48,7 @@
     "format-wifi": "",
     "format-ethernet": "󰈀 ",
     "format-disconnected": "󰈂",
+    "tooltip-format": "{ifname}",
    },
 
 

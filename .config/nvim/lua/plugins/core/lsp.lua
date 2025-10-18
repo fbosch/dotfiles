@@ -1,3 +1,5 @@
+local platform = require("utils.platform")
+
 local servers = {
 	typescript = {
 		enabled = false, -- use typescript-tools.nvim instead
@@ -16,6 +18,7 @@ local servers = {
 		},
 	},
 	lua_ls = {
+		cmd = platform.is_nixos() and { "lua-language-server" } or nil,
 		settings = {
 			Lua = {
 				runtime = {
@@ -166,13 +169,22 @@ local function get_ensure_installed()
 		"docker_compose_language_service",
 		"tailwindcss",
 		"cssls",
-		"lua_ls",
 	}
+	
+	if not platform.is_nixos() then
+		table.insert(ensure, "lua_ls")
+	end
+	
 	for name, config in pairs(servers) do
-		if config.enabled ~= false then
+		if config.enabled ~= false and name ~= "lua_ls" then
 			table.insert(ensure, name)
 		end
 	end
+	
+	if not platform.is_nixos() then
+		table.insert(ensure, "lua_ls")
+	end
+	
 	return ensure
 end
 

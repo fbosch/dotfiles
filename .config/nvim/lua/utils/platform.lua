@@ -14,6 +14,19 @@ function M.is_linux()
 	return sysname == "Linux"
 end
 
+function M.is_nixos()
+	if not M.is_linux() then
+		return false
+	 end
+	local f = io.open("/etc/os-release", "r")
+	if not f then
+		return false
+	end
+	local content = f:read("*a")
+	f:close()
+	return content:match("ID=nixos") ~= nil
+end
+
 function M.is_wsl()
 	local is_wsl = false
 	if M.is_windows() or M.is_linux() then

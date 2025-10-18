@@ -15,6 +15,7 @@ return {
 		"fish",
 		"rust",
 		"mdx",
+    "nix"
 	},
 	config = function()
 		local group = vim.api.nvim_create_augroup("Conform", {})
@@ -44,6 +45,7 @@ return {
 				json = { "jq", "biome format" },
 				rust = { "cargo fmt -- --force" },
 				yaml = { "prettierd", "prettier", stop_after_first = true },
+        nix = { "nixpkgs-fmt" },
 			},
 		})
 
