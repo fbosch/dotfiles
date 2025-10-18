@@ -126,14 +126,104 @@ return {
 			end, { bang = true })
 
 			local cursor_agent_instance = nil
+			local last_notification_time = 0
+			local notification_cooldown = 5000
+			local terminal_open_time = 0
+			local launch_grace_period = 10000
+			
 			usrcmd("FTermCursorAgent", function()
 				if not cursor_agent_instance then
-					cursor_agent_instance = fterm:new({
-						ft = "fterm_cursor_agent",
-						env = env,
-						shell = "dash",
-						cmd = "cursor-agent",
-						dimensions = dimensions,
+					local Terminal = require("toggleterm.terminal").Terminal
+					
+					cursor_agent_instance = Terminal:new({
+						cmd = "cursor-agent resume",
+						direction = "vertical",
+						size = function(term)
+							if term.direction == "vertical" then
+								return vim.o.columns * 0.33
+							end
+						end,
+						hidden = false,
+						on_stdout = function(_, _, data)
+							if not data then
+								return
+							end
+							
+							local current_time = vim.loop.now()
+							
+							if current_time - terminal_open_time < launch_grace_period then
+								return
+							end
+							
+							if current_time - last_notification_time < notification_cooldown then
+								return
+							end
+							
+							for _, line in ipairs(data) do
+								if line:match("%?%s*%(y/n%)") or 
+								   line:match("%?%s*%(Y/n%)") or
+								   line:match("Approve%?") or
+								   line:match("Accept%?") or
+								   line:match("Allow%?") or
+								   line:match("Continue%?") then
+									last_notification_time = current_time
+									vim.schedule(function()
+										vim.notify("Cursor Agent: Permission request pending", vim.log.levels.WARN)
+									end)
+									break
+								end
+							end
+						end,
+						on_open = function(term)
+							terminal_open_time = vim.loop.now()
+							
+							vim.cmd("wincmd H")
+							local width = math.floor(vim.o.columns * 0.33)
+							vim.cmd("vertical resize " .. width)
+							
+							vim.api.nvim_buf_set_keymap(
+								term.bufnr,
+								"n",
+								"q",
+								"<cmd>close<CR>",
+								{ noremap = true, silent = true }
+							)
+							vim.api.nvim_buf_set_keymap(
+								term.bufnr,
+								"t",
+								"<A-a>",
+								"<cmd>close<CR>",
+								{ noremap = true, silent = true }
+							)
+							vim.api.nvim_buf_set_keymap(
+								term.bufnr,
+								"t",
+								"<S-h>",
+								"<C-\\><C-n><C-w>h",
+								{ noremap = true, silent = true }
+							)
+							vim.api.nvim_buf_set_keymap(
+								term.bufnr,
+								"t",
+								"<S-l>",
+								"<C-\\><C-n><C-w>l",
+								{ noremap = true, silent = true }
+							)
+							vim.api.nvim_buf_set_keymap(
+								term.bufnr,
+								"t",
+								"<S-j>",
+								"<C-\\><C-n><C-w>j",
+								{ noremap = true, silent = true }
+							)
+							vim.api.nvim_buf_set_keymap(
+								term.bufnr,
+								"t",
+								"<S-k><D-a>",
+								"<C-\\><C-n><C-w>k",
+								{ noremap = true, silent = true }
+							)
+						end,
 					})
 				end
 
