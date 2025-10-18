@@ -19,11 +19,18 @@ window#waybar {
   padding: 3px 10px;
 }
 
-
 .modules-left button:nth-child(1):only-child {
   opacity: 0;
 }
 
+#cpu { 
+  margin-left: 0.5em;
+}
+
+#memory {
+  margin-left: 0.5em;
+}
+  
 #network {
   margin-left: 0.75em;
   margin-right: 0.25em;
@@ -37,7 +44,7 @@ window#waybar {
 
 #tray {
   padding: 0 8px;
-  margin: 2px 0px;
+  margin: 2px 5px 0 2px;
   border-radius: 5px;
   background-color: rgba(25,25,25,0.5)
 }

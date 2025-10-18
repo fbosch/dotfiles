@@ -5,10 +5,20 @@
 
   "modules-left": ["hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],
-  "modules-right": ["tray", "network", "pulseaudio", "hyprland/language", "clock"],
+  "modules-right": ["tray", "memory", "cpu", "network", "pulseaudio", "hyprland/language", "clock"],
 
   "tray": {
-    "spacing": 5
+    "spacing": 5,
+  },
+
+  "cpu": {
+    "format": "  {usage}%",
+    "tooltip-format": "{usage}%",
+  },
+
+  "memory": {
+    "format": "  {percentage}%",
+    "tooltip-format": "{used:0.1f} GiB / {avail} GiB \n ({swapPercentage}% Swap)"
   },
 
   "pulseaudio": {
