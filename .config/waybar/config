@@ -20,7 +20,7 @@
      "headphone": "",
       "default": ["",  "", "", "", "", ""]
     },
-    "on-click" : "pavucontrol",
+    "on-click": "sh -c 'if pgrep -f \"^pavucontrol\" > /dev/null; then pkill -f \"^pavucontrol\"; else pavucontrol & disown; fi'",
     "on-click-middle": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
     "tooltip": true
   },
@@ -50,6 +50,7 @@
     "format-ethernet": "",
     "format-disconnected": "󰈂",
     "tooltip-format": "{ifname}",
+    "on-click": "sh -c 'if pgrep -f \"^nm-connection-editor\" > /dev/null; then pkill -f \"^nm-connection-editor\"; else nm-connection-editor & disown; fi'",
    },
 
   "clock": {
