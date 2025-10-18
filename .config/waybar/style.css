@@ -1,6 +1,6 @@
 * {
   font-family: "SF Pro Text", "Segoe Fluent Icons", sans-serif;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #fff;
 }
 
@@ -11,7 +11,6 @@ window#waybar {
 window#waybar {
   border-top: 1px solid rgba(255, 255, 255, 0.15);
 
-  padding: 0 5px;
   background-color: rgba(44, 44, 44, 0.7);
   transition-property: background-color;
   transition-duration: 0.5s;
@@ -27,9 +26,9 @@ window#waybar {
   opacity: 0;
 }
 
-.custom.power {
+#custom-power {
   margin-left: 0.75em;
-  background-color: red;
+  padding: 0px 2px;
 }
 
 #cpu,
@@ -79,6 +78,10 @@ window#waybar {
   margin-right: 0.35em;
   border-radius: 0px;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#tray button {
+  margin-left: 10px;
 }
 
 #pulseaudio {
