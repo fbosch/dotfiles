@@ -15,9 +15,10 @@
     "format": "{icon} ",
     "format-bluetooth-muted": "󰟎",
     "format-muted": "󰸈",
+    "icon-size": 20,
     "format-icons": {
      "headphone": "",
-     "default": ["", "", ""]
+      "default": ["󰸈",  "", "", "", "", ""]
     },
     "on-click" : "pavucontrol",
     "tooltip": true

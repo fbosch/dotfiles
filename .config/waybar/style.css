@@ -1,5 +1,5 @@
 * {
-  font-family: "Tahoma", sans-serif;
+  font-family: "Tahoma", "Ionicons", sans-serif;
   font-size: 0.85rem;
 }
 
@@ -34,14 +34,16 @@ window#waybar {
 }
 
 #tray {
-  padding:0;
+  padding: 0;
 }
 
 #pulseaudio {
   margin: 0 5px;
+  font-size: 1.1rem;
+  min-width: 20px;
 }
 
-#language {
+#languager{
   font-size: 11px;
 }
 

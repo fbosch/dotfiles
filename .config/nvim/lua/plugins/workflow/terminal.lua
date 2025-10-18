@@ -197,30 +197,30 @@ return {
 							)
 							vim.api.nvim_buf_set_keymap(
 								term.bufnr,
-								"t",
+								"n",
 								"<S-h>",
-								"<C-\\><C-n><C-w>h",
+								"<C-w>h",
 								{ noremap = true, silent = true }
 							)
 							vim.api.nvim_buf_set_keymap(
 								term.bufnr,
-								"t",
+								"n",
 								"<S-l>",
-								"<C-\\><C-n><C-w>l",
+								"<C-w>l",
 								{ noremap = true, silent = true }
 							)
 							vim.api.nvim_buf_set_keymap(
 								term.bufnr,
-								"t",
+								"n",
 								"<S-j>",
-								"<C-\\><C-n><C-w>j",
+								"<C-w>j",
 								{ noremap = true, silent = true }
 							)
 							vim.api.nvim_buf_set_keymap(
 								term.bufnr,
-								"t",
-								"<S-k><D-a>",
-								"<C-\\><C-n><C-w>k",
+								"n",
+								"<S-k>",
+								"<C-w>k",
 								{ noremap = true, silent = true }
 							)
 						end,
