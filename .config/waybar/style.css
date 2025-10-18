@@ -1,6 +1,7 @@
 * {
   font-family: "Tahoma", "Segoe Fluent Icons", sans-serif;
   font-size: 0.85rem;
+  color: #fff;
 }
 
 window#waybar {
@@ -13,6 +14,8 @@ window#waybar {
   background-color: rgba(25, 25, 25, 0.4);
   transition-property: background-color;
   transition-duration: 0.5s;
+  text-shadow: 0px 0px 2px rgba(0,0,0, 0.7);
+  letter-spacing: 0.05em;
 }
 
 .modules-right {
@@ -23,14 +26,32 @@ window#waybar {
   opacity: 0;
 }
 
-#cpu { 
-  margin-left: 0.5em;
+#cpu,
+#memory {
+  font-weight: 700;
+  margin-left: 0.75em;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
 }
 
-#memory {
-  margin-left: 0.5em;
+#cpu.idle {
+  color: #73bc6f;
 }
-  
+
+#cpu.normal {
+  color: #fff;
+}
+
+#cpu.warning {
+  color: #dea721;
+  opacity: 1;
+}
+
+#cpu.critical {
+  color: #e35245;
+  opacity: 1;
+}
+
 #network {
   margin-left: 0.75em;
   margin-right: 0.25em;
@@ -46,7 +67,7 @@ window#waybar {
   padding: 0 8px;
   margin: 2px 5px 0 2px;
   border-radius: 5px;
-  background-color: rgba(25,25,25,0.5)
+  background-color: rgba(25, 25, 25, 0.5)
 }
 
 #pulseaudio {
@@ -55,8 +76,8 @@ window#waybar {
   min-width: 25px;
 }
 
-#language{
-  font-size: 1rem;
+#language {
+  font-size: 0.8rem;
 }
 
 #taskbar button {

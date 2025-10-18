@@ -12,13 +12,22 @@
   },
 
   "cpu": {
-    "format": "  {usage}%",
+    "format": "{icon} {usage}% ",
     "tooltip-format": "{usage}%",
+    "format-icons": ["", " "," ", "", "" ],
+    "icon-size": 16,
+    "states": {
+      "idle": 0,
+      "normal": 10,
+      "warning": 70,
+      "critical": 90
+    }
   },
 
   "memory": {
-    "format": "  {percentage}%",
-    "tooltip-format": "{used:0.1f} GiB / {avail} GiB \n ({swapPercentage}% Swap)"
+    "format": "{icon} {percentage}%",
+    "tooltip-format": "{used:0.1f} GiB / {avail} GiB \n({swapPercentage}% Swap)",
+    "format-icons": [""],
   },
 
   "pulseaudio": {
@@ -41,8 +50,8 @@
 
   "hyprland/language": {
     "format": "{}",
-    "format-en": "EN",
-    "format-da": "DA",
+    "format-en": "ENG",
+    "format-da": "DAN",
     "on-click": "hyprctl switchxkblayout at-translated-set-2-keyboard next",
   },
 
