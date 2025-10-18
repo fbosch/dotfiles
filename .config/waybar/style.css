@@ -1,5 +1,5 @@
 * {
-  font-family: "Tahoma", "Ionicons", sans-serif;
+  font-family: "Tahoma", "Segoe Fluent Icons", sans-serif;
   font-size: 0.85rem;
 }
 
@@ -19,28 +19,33 @@ window#waybar {
   padding: 3px 10px;
 }
 
+
 .modules-left button:nth-child(1):only-child {
   opacity: 0;
 }
 
 #network {
-  margin-left: 10px;
+  margin-left: 0.75em;
+  margin-right: 0.25em;
   font-size: 0.9rem;
 }
 
 #clock {
   font-size: 0.75rem;
-  margin-left: 10px;
+  margin-left: 0.75em;
 }
 
 #tray {
-  padding: 0;
+  padding: 0 8px;
+  margin: 2px 0px;
+  border-radius: 5px;
+  background-color: rgba(25,25,25,0.5)
 }
 
 #pulseaudio {
   margin: 0 5px;
   font-size: 1.1rem;
-  min-width: 20px;
+  min-width: 22px;
 }
 
 #languager{

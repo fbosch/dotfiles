@@ -14,11 +14,11 @@
   "pulseaudio": {
     "format": "{icon} ",
     "format-bluetooth-muted": "󰟎",
-    "format-muted": "󰸈",
+    "format-muted": "",
     "icon-size": 20,
     "format-icons": {
      "headphone": "",
-      "default": ["󰸈",  "", "", "", "", ""]
+      "default": ["",  "", "", "", "", ""]
     },
     "on-click" : "pavucontrol",
     "tooltip": true
@@ -41,17 +41,15 @@
     "icon-size": 20,
     "on-click": "activate",
   },
-
   
   "network": { 
     "interface": "enp0s3",
     "format": "{ifname}",
-    "format-wifi": "",
-    "format-ethernet": "󰈀 ",
+    "format-wifi": ["", "", ""],
+    "format-ethernet": "",
     "format-disconnected": "󰈂",
     "tooltip-format": "{ifname}",
    },
-
 
   "clock": {
     "format": "{:>%H:%M\n %d/%m/%Y}",
