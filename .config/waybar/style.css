@@ -45,11 +45,11 @@ window#waybar {
 #pulseaudio {
   margin: 0 5px;
   font-size: 1.1rem;
-  min-width: 22px;
+  min-width: 25px;
 }
 
-#languager{
-  font-size: 11px;
+#language{
+  font-size: 1rem;
 }
 
 #taskbar button {
