@@ -1,6 +1,7 @@
 set -gx TERM wezterm
 set -gx PROJECT_PATHS ~/Projects
 set -gx XDG_CONFIG_HOME "$HOME/.config"
+set -gx ZDOTDIR "$HOME/.config/zsh"
 set -gx ARCHPREFERENCE arm64
 set -gx MANPAGER "sh -c 'col -bx | bat -l man -p'"
 set -gx EDITOR nvim

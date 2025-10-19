@@ -19,8 +19,10 @@ end
 
 switch (uname)
     case Linux
-        if test -x /home/linuxbrew/.linuxbrew/bin/brew
-            eval (/home/linuxbrew/.linuxbrew/bin/brew shellenv)
+        if not test -f /etc/NIXOS
+            if test -x /home/linuxbrew/.linuxbrew/bin/brew
+                eval (/home/linuxbrew/.linuxbrew/bin/brew shellenv)
+            end
         end
     case Darwin
         if type -q brew
