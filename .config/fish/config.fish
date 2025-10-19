@@ -4,8 +4,17 @@ if string match -q vscode $TERM_PROGRAM
     exec dash
 end
 
-if test -z "$WAYLAND_DISPLAY" && test "$XDG_VTNR" = 1
+function hyprstart
     exec uwsm start -S hyprland-uwsm.desktop &
+end
+
+if test -z "$WAYLAND_DISPLAY" && test "$XDG_VTNR" = 1
+    set -l flag_file "/run/user/"(id -u)"/hyprland-started"
+
+    if not test -f "$flag_file"
+        touch "$flag_file"
+        hyprstart
+    end
 end
 
 switch (uname)
