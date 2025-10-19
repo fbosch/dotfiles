@@ -31,6 +31,33 @@
   /* margin: 12px; */
 }
 
+.control-center-list {
+  background: var(--bg-color);
+  border-radius: 12px 12px 0 0;
+  border: 1px solid var(--border-color);
+  border-bottom: none;
+}
+
+.control-center-list .notification {
+  background: var(--solid-bg-color);
+}
+
+.notification-list-scroll {
+  background: var(--bg-color);
+}
+
+.notification-group-header {
+  padding: 8px 4px;
+}
+
+.notification-group-icon {
+  margin-left: 8px;
+}
+
+.notification-list-header {
+  color: red;
+}
+
 /* Widget Title */
 .control-center .widget-title {
   background: var(--bg-color);
@@ -38,9 +65,9 @@
   font-size: 20px;
   font-weight: 600;
   padding: 10px 16px;
-  border-radius: 12px 12px 0 0;
+  border-radius: 0 0 12px 12px;
   border: 1px solid var(--border-color);
-  border-bottom: none;
+  border-top: none;
 }
 
 .control-center .widget-title>button {
@@ -189,7 +216,7 @@
 .widget-dnd {
   background: var(--bg-color);
   padding: 8px;
-  margin: 8px;
+  margin-top: 8px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
 }
@@ -220,7 +247,7 @@
 .widget-buttons-grid {
   background: var(--bg-color);
   padding: 8px;
-    margin: 8px 0px;
+  margin: 8px 0px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
 }

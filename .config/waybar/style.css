@@ -86,8 +86,8 @@ window#waybar {
 /* Clock */
 #clock {
   font-size: 0.75rem;
-  margin-left: 0.75rem;
-  padding: 0 0.5rem;
+  padding: 0 0.5rem 0 0.25rem;
+  margin-left: 0.5rem;
 }
 
 #clock:hover {
