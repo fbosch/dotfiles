@@ -1,8 +1,11 @@
-
-if string match -q "vscode" $TERM_PROGRAM
+if string match -q vscode $TERM_PROGRAM
     # Switch to dash in Cursor editor to avoid fish configuration issues
     set -x ENV "$HOME/.shinit"
     exec dash
+end
+
+if test -z "$WAYLAND_DISPLAY" && test "$XDG_VTNR" = 1
+    exec uwsm start -S hyprland-uwsm.desktop &
 end
 
 switch (uname)

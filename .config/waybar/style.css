@@ -27,12 +27,12 @@ window#waybar {
 }
 
 #custom-power {
-  margin-left: 0.5em;
   padding: 0px 2px;
 }
 
 #custom-nix-updates {
   letter-spacing: -0.5rem;
+  margin-left: 0.75em;
 }
 
 #cpu,
