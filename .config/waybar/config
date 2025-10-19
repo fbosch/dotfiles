@@ -5,12 +5,18 @@
 
   "modules-left": ["hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],
-  "modules-right": [ "memory", "cpu", "custom/nix-updates", "tray", "pulseaudio", "hyprland/language", "clock",  "custom/power"],
+  "modules-right": [ "memory", "cpu", "custom/nix-updates", "tray", "pulseaudio", "hyprland/language", "clock", "custom/swaync"],
 
   "tray": {
-    "spacing": 5,
+    "spacing": 8,
     "icon-size": 16,
+    "reverse-direction": false,
   },
+
+  "custom/swaync": {
+    "exec": "swaync-client -t",
+    "icon": "",
+   },
 
   "custom/nix-updates": {
     "exec": "~/.config/waybar/scripts/update-checker",
@@ -98,6 +104,7 @@
     "interval": 1,
     "align": 1,
     "justify": "right",
+    "on-click": "swaync-client -t",
   },
 
   "custom/power": {

@@ -1,3 +1,13 @@
+/*
+ * DESIGN SYSTEM REFERENCE (for maintainability)
+ * 
+ * Spacing scale: 0.5rem, 0.75rem, 1rem
+ * Font sizes: 0.75rem (xs), 0.8rem (sm), 0.9rem (base), 1.1rem (lg)
+ * State colors: #73bc6f (idle), #dea721 (warning), #e35245 (critical)
+ * Border dividers: 1px solid rgba(255, 255, 255, 0.1)
+ * Transitions: 150ms (fast), 500ms (slow)
+ */
+
 * {
   font-family: "SF Pro Text", "Segoe Fluent Icons", sans-serif;
   font-size: 0.9rem;
@@ -6,48 +16,48 @@
 
 window#waybar {
   all: unset;
-}
-
-window#waybar {
   border-top: 1px solid rgba(255, 255, 255, 0.15);
-
   background-color: rgba(44, 44, 44, 0.7);
   transition-property: background-color;
-  transition-duration: 0.5s;
-  text-shadow: 0px 0px 2px rgba(0, 0, 0, 0.7);
+  transition-duration: 500ms;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.7);
   letter-spacing: 0.05em;
 }
 
+/* Module containers */
 .modules-right {
-  padding: 3px 10px;
+  padding: 0.25rem;
 }
 
 .modules-left button:nth-child(1):only-child {
   opacity: 0;
 }
 
+/* Custom modules */
 #custom-power {
-  padding: 0px 2px;
+  padding: 0 0.25rem;
 }
 
 #custom-nix-updates {
   letter-spacing: -0.5rem;
-  margin-left: 0.75em;
+  margin-left: 0.75rem;
 }
 
+/* System monitors - shared styles */
 #cpu,
 #memory {
   font-weight: 700;
-  margin-left: 0.75em;
+  margin-left: 0.75rem;
   font-size: 0.8rem;
   letter-spacing: 0.05em;
 }
 
 #cpu {
   border-right: 1px solid rgba(255, 255, 255, 0.1);
-  padding-right: 0.7em;
+  padding-right: 0.75rem;
 }
 
+/* CPU states */
 #cpu.idle {
   color: #73bc6f;
 }
@@ -66,44 +76,52 @@ window#waybar {
   opacity: 1;
 }
 
+/* Network */
 #network {
-  margin-left: 0.75em;
-  margin-right: 0.25em;
+  margin-left: 0.75rem;
+  margin-right: 0.5rem;
   font-size: 0.9rem;
 }
 
+/* Clock */
 #clock {
   font-size: 0.75rem;
-  margin-left: 0.75em;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-  padding-right: 10px;
-  margin-right: 10px;
+  margin-left: 0.75rem;
+  padding: 0 0.5rem;
 }
 
+#clock:hover {
+  background-color: rgba(255, 255, 255, 0.1); 
+  border-radius: 0.25rem;
+}
+
+/* Tray */
 #tray {
-  margin-left: 0.75em;
-  border-radius: 0px;
+  margin-left: 0.75rem;
+  border-radius: 0;
 }
 
 #tray button {
-  margin-left: 10px;
+  margin-left: 1rem;
 }
 
+/* Audio */
 #pulseaudio {
-  margin: 0 5px;
+  margin: 0 0.5rem;
   font-size: 1.1rem;
   min-width: 25px;
 }
 
+/* Language */
 #language {
   font-size: 0.8rem;
 }
 
+/* Taskbar buttons */
 #taskbar button {
   border-radius: 0;
   border-bottom: 2px solid transparent;
   text-shadow: 1px 1px rgba(0, 0, 0, 0.5);
-
   transition-property: border-color;
   transition-duration: 150ms;
 }
@@ -113,6 +131,7 @@ window#waybar {
   font-weight: bold;
 }
 
+/* Workspace buttons */
 #workspaces button {
   border-bottom: 2px solid transparent;
   transition-property: border-color;
