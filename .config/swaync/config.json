@@ -37,9 +37,7 @@
     }
   },
   "widgets": [
-    "label",
     "buttons-grid",
-    "mpris",
     "title",
     "notifications",
     "dnd"
