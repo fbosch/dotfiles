@@ -1,0 +1,356 @@
+/* SwayNC Theme */
+/* GTK-based notification center styling */
+
+* {
+  all: unset;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px;
+}
+
+/* Color Variables - Dark Theme */
+@define-color bg_color rgba(32, 32, 32, 0.98);
+@define-color surface_color rgba(45, 45, 45, 0.95);
+@define-color surface_hover rgba(55, 55, 55, 0.95);
+@define-color surface_active rgba(65, 65, 65, 0.95);
+@define-color accent_color #0067c0;
+@define-color accent_hover #106ebe;
+@define-color text_color #ffffff;
+@define-color text_secondary #cccccc;
+@define-color text_tertiary #999999;
+@define-color border_color rgba(255, 255, 255, 0.08);
+@define-color critical_color #c42b1c;
+
+/* Control Center Widget */
+.control-center {
+  background: @bg_color;
+  border-radius: 12px;
+  border: 1px solid @border_color;
+  /* box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45); */
+  /* margin: 12px; */
+}
+
+/* Widget Title */
+.control-center .widget-title {
+  background: transparent;
+  color: @text_color;
+  font-size: 20px;
+  font-weight: 600;
+    padding: 10px 16px;
+}
+
+.control-center .widget-title>button {
+  background: @surface_color;
+  border-radius: 6px;
+  color: @text_color;
+  padding: 6px 12px;
+  margin: 0 4px;
+  border: 1px solid transparent;
+  transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.control-center .widget-title>button:hover {
+  background: @surface_hover;
+  border-color: @border_color;
+}
+
+.control-center .widget-title>button:active {
+  background: @surface_active;
+  transition-duration: 100ms;
+}
+
+/* Notification Popup Window */
+.notification-window {
+  background: transparent;
+}
+
+/* Individual Notification */
+.notification {
+  background: @bg_color;
+  border-radius: 8px;
+  border: 1px solid @border_color;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  margin: 8px;
+  padding: 0;
+  transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.notification:hover {
+  background: @surface_color;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Notification Content */
+.notification-content {
+  padding: 16px;
+  margin: 0;
+}
+
+.notification-default-action {
+  padding: 0;
+  margin: 0;
+}
+
+/* Notification Row (header) */
+.notification-row {
+  margin-bottom: 8px;
+}
+
+.app-name {
+  color: @text_secondary;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 8px;
+}
+
+.time {
+  color: @text_tertiary;
+  font-size: 11px;
+  margin-left: auto;
+}
+
+/* Notification Icon */
+.notification-icon {
+  margin-right: 2rem;
+}
+
+.notification-icon image {
+  border-radius: 6px;
+}
+
+/* Notification Text */
+.summary {
+  color: @text_color;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.body {
+  color: @text_secondary;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Notification Image */
+.image {
+  border-radius: 6px;
+  margin-right: 1rem;
+}
+
+/* Notification Actions */
+.notification-action {
+  background: @surface_color;
+  border-radius: 6px;
+  color: @text_color;
+  padding: 8px 16px;
+  margin: 8px 4px 0 0;
+  border: 1px solid @border_color;
+  transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.notification-action:hover {
+  background: @surface_hover;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.notification-action:active {
+  background: @surface_active;
+}
+
+/* Close Button */
+.close-button {
+  background: transparent;
+  border-radius: 50%;
+  color: @text_secondary;
+  padding: 4px;
+  margin: 4px;
+  min-width: 24px;
+  min-height: 24px;
+  transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.close-button:hover {
+  background: @surface_hover;
+  color: @text_color;
+}
+
+.close-button:active {
+  background: @surface_active;
+}
+
+/* Do Not Disturb Widget */
+.widget-dnd {
+  background: transparent;
+  padding: 8px;
+  margin: 0 8px;
+}
+
+.widget-dnd>switch {
+  background: @surface_color;
+  border-radius: 16px;
+  border: 1px solid @border_color;
+  padding: 2px;
+  min-width: 44px;
+  min-height: 24px;
+}
+
+.widget-dnd>switch:checked {
+  background: @accent_color;
+  border-color: @accent_color;
+}
+
+.widget-dnd>switch slider {
+  background: @text_color;
+  border-radius: 50%;
+  min-width: 18px;
+  min-height: 18px;
+  margin: 2px;
+}
+
+/* Buttons Grid Widget */
+.widget-buttons-grid {
+  margin: 0 8px;
+}
+
+.widget-buttons-grid>flowbox>flowboxchild>button {
+  background: @surface_color;
+  border-radius: 8px;
+  color: @text_color;
+  padding: 8px 16px;
+  margin: 0 4px;
+  border: 1px solid @border_color;
+  transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.widget-buttons-grid>flowbox>flowboxchild>button:hover {
+  background: @surface_hover;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.widget-buttons-grid>flowbox>flowboxchild>button:active {
+  background: @surface_active;
+}
+
+/* MPRIS Widget (Media Controls) */
+.widget-mpris {
+  background: @surface_color;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px;
+  border: 1px solid @border_color;
+}
+
+.widget-mpris-player {
+  background: transparent;
+  padding: 0;
+}
+
+.widget-mpris-album-art {
+  border-radius: 8px;
+}
+
+.widget-mpris-title {
+  color: @text_color;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.widget-mpris-subtitle {
+  color: @text_secondary;
+  font-size: 12px;
+}
+
+.widget-mpris>button {
+  background: transparent;
+  border-radius: 50%;
+  color: @text_secondary;
+  padding: 8px;
+  margin: 0 4px;
+  border: 1px solid transparent;
+  transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.widget-mpris>button:hover {
+  background: @surface_hover;
+  color: @text_color;
+  border-color: @border_color;
+}
+
+/* Label Widget */
+.widget-label {
+  color: @text_secondary;
+  font-size: 14px;
+  padding: 12px;
+  margin: 0 8px;
+}
+
+/* Notification List */
+.notification-list {
+  background: transparent;
+  padding: 8px;
+  margin: 0 8px;
+}
+
+/* Scrollbar */
+scrollbar {
+  background: transparent;
+  border-radius: 12px;
+  padding: 2px;
+}
+
+scrollbar trough {
+  /* background: rgba(255, 255, 255, 0.03); */
+  background: transparent;
+  border-radius: 8px;
+}
+
+scrollbar slider {
+  /* background: rgba(255, 255, 255, 0.2); */
+  background: transparent;
+  border-radius: 6px;
+  min-width: 6px;
+  min-height: 40px;
+  transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+scrollbar slider:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+scrollbar slider:active {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Urgency Levels */
+.notification.low {
+  opacity: 0.9;
+}
+
+.notification.critical {
+  background: rgba(196, 43, 28, 0.2);
+  border-color: @critical_color;
+  border-width: 2px;
+}
+
+.notification.critical .summary {
+  color: #ff6b6b;
+}
+
+/* Empty State */
+.blank-window {
+  background: transparent;
+}
+
+.widget-label.placeholder {
+  color: @text_tertiary;
+  font-size: 16px;
+  padding: 32px;
+}
+
+/* Focus States */
+button:focus {
+  outline: 2px solid @accent_color;
+  outline-offset: 2px;
+}

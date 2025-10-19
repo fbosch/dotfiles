@@ -4,13 +4,13 @@
   "positionY": "bottom",
   "cssPriority": "user",
   "control-center-width": 380,
-  "control-center-height": 860,
-  "control-center-margin-top": 2,
-  "control-center-margin-bottom": 2,
-  "control-center-margin-right": 1,
+  "control-center-height": 560,
+  "control-center-margin-top": 10,
+  "control-center-margin-bottom": 10,
+  "control-center-margin-right": 10,
   "control-center-margin-left": 0,
-  "notification-window-width": 400,
-  "notification-icon-size": 48,
+  "notification-window-width": 330,
+  "notification-icon-size": 24,
   "notification-body-image-height": 160,
   "notification-body-image-width": 200,
   "timeout": 4,
@@ -41,8 +41,8 @@
     "buttons-grid",
     "mpris",
     "title",
-    "dnd",
-    "notifications"
+    "notifications",
+    "dnd"
   ],
   "widget-config": {
     "title": {
@@ -68,7 +68,7 @@
     "buttons-grid": {
       "actions": [
         {
-          "label": " ",
+          "label": "",
           "command": "amixer set Master toggle"
         },
         {
@@ -76,7 +76,7 @@
           "command": "amixer set Capture toggle"
         },
         {
-          "label": " ",
+          "label": "",
           "command": "nm-connection-editor"
         },
         {

@@ -13,10 +13,6 @@
     "reverse-direction": false,
   },
 
-  "custom/swaync": {
-    "exec": "swaync-client -t",
-    "icon": "",
-   },
 
   "custom/nix-updates": {
     "exec": "~/.config/waybar/scripts/update-checker",
