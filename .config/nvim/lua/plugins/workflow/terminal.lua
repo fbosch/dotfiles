@@ -136,7 +136,7 @@ return {
 					local Terminal = require("toggleterm.terminal").Terminal
 					
 					cursor_agent_instance = Terminal:new({
-						cmd = "cursor-agent resume",
+						cmd = "cursor-agent ",
 						direction = "vertical",
 						size = function(term)
 							if term.direction == "vertical" then
