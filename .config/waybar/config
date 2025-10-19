@@ -5,11 +5,11 @@
 
   "modules-left": ["hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],
-  "modules-right": ["tray", "memory", "cpu", "custom/nix-updates", "network", "pulseaudio", "hyprland/language", "clock",  "custom/power"],
+  "modules-right": [ "memory", "cpu", "custom/nix-updates", "tray", "pulseaudio", "hyprland/language", "clock",  "custom/power"],
 
   "tray": {
     "spacing": 5,
-    "icon-size": 14,
+    "icon-size": 16,
   },
 
   "custom/nix-updates": {
