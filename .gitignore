@@ -16,6 +16,7 @@ Brewfile.lock.json
 .config/neofetch/
 .config/zed/
 .config/go
+.config/waybar/scripts/update-checker
 
 # Neovim local data
 .config/nvim/.sessions/

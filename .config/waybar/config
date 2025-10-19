@@ -5,11 +5,29 @@
 
   "modules-left": ["hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],
-  "modules-right": ["tray", "memory", "cpu", "network", "pulseaudio", "hyprland/language", "clock", "custom/power"],
+  "modules-right": ["tray", "memory", "cpu", "network", "pulseaudio", "hyprland/language", "clock", "custom/nix-updates",  "custom/power"],
 
   "tray": {
     "spacing": 5,
     "icon-size": 14,
+  },
+
+  "custom/nix-updates": {
+    "exec": "~/.config/waybar/scripts/update-checker",
+    "signal": 12,
+    "interval": 3600,
+    "on-click": "~/.config/waybar/scripts/update-checker toggle",
+    "on-click-right": "rm ~/.cache/nix-update-last-run",
+    "on-click-middle": "rm ~/.cache/nix-update-updating-flag",
+    "format": "{icon}",
+    "return-type": "json",
+    "format-icons": {
+      "has-updates": " ",
+      "updating": " ",
+      "updated": "",
+      "disabled": "",
+      "error": "",
+    },
   },
 
   "cpu": {
@@ -18,7 +36,7 @@
     "format-icons": ["", " ", " ", " ", " "," ", "","", "" ],
     "states": {
       "idle": 0,
-      "normal": 8,
+      "normal": 11,
       "warning": 70,
       "critical": 90
     },
@@ -87,7 +105,7 @@
     "menu": "on-click",
     "menu-file": "~/.config/waybar/power_menu.xml",
     "menu-actions": {
-      "shutdown": "shutdown",
+      "shutdown": "shutdown 0",
       "reboot": "reboot",
       "suspend": "systemctl suspend",
       "hibernate": "systemctl hibernate",
