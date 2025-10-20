@@ -19,7 +19,20 @@ local function setup_barbar_highlights()
 	})
 end
 
--- generate keymaps 1-9 for buffer navigation
+local function close_all_but_visible_and_terminals()
+	local current_win = vim.api.nvim_get_current_win()
+	for _, win in ipairs(vim.api.nvim_list_wins()) do
+		if win ~= current_win then
+			local buf = vim.api.nvim_win_get_buf(win)
+			local buftype = vim.api.nvim_buf_get_option(buf, "buftype")
+			if buftype ~= "terminal" then
+				vim.api.nvim_win_close(win, false)
+			end
+		end
+	end
+	vim.cmd("BufferCloseAllButVisible")
+end
+
 local function buffer_index_keys()
 	local t = {}
 	for i = 1, 9 do
@@ -40,13 +53,13 @@ return {
 		dependencies = { "nvim-tree/nvim-web-devicons" },
 		event = "VeryLazy",
 		keys = vim.list_extend(buffer_index_keys(), {
-			{
-				mode = { "n" },
-				"<leader>x",
-				":only <bar> :BufferCloseAllButVisible<cr>",
-				desc = "close all but currentl active buffer or pinned buffers",
-				silent = true,
-			},
+		{
+			mode = { "n" },
+			"<leader>x",
+			close_all_but_visible_and_terminals,
+			desc = "close all but currentl active buffer or pinned buffers",
+			silent = true,
+		},
 			{
 				mode = { "n" },
 				"<leader>P",

@@ -117,3 +117,16 @@ cmd({ "FileChangedShellPost" }, {
 		vim.notify("File changed on disk. Buffer reloaded.", vim.log.levels.WARN)
 	end,
 })
+
+cmd({ "WinEnter", "BufEnter", "FocusGained" }, {
+	group = group,
+	callback = function()
+		local bufnr = vim.api.nvim_get_current_buf()
+		local filetype = vim.bo[bufnr].filetype
+		if filetype == "toggleterm" then
+			vim.defer_fn(function()
+				vim.cmd("startinsert")
+			end, 20)
+		end
+	end,
+})

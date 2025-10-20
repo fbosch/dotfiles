@@ -300,6 +300,13 @@ function M.setup(prompt)
 			vim.cmd("vertical resize " .. width)
 
 			vim.api.nvim_buf_set_keymap(term.bufnr, "n", "q", "<cmd>close<CR>", { noremap = true, silent = true })
+			vim.api.nvim_buf_set_keymap(
+				term.bufnr,
+				"t",
+				"<Esc>",
+				"<C-\\><C-n><C-w>l",
+				{ noremap = true, silent = true }
+			)
 			vim.api.nvim_buf_set_keymap(term.bufnr, "t", "<A-a>", "<cmd>close<CR>", { noremap = true, silent = true })
 			vim.api.nvim_buf_set_keymap(term.bufnr, "n", "<S-h>", "<C-w>h", { noremap = true, silent = true })
 			vim.api.nvim_buf_set_keymap(term.bufnr, "n", "<S-l>", "<C-w>l", { noremap = true, silent = true })
