@@ -13,7 +13,6 @@
     "reverse-direction": false,
   },
 
-
   "custom/nix-updates": {
     "exec": "~/.config/waybar/scripts/update-checker",
     "signal": 12,
@@ -101,6 +100,14 @@
     "align": 1,
     "justify": "right",
     "on-click": "swaync-client -t",
+    "menu": "on-click-right",
+    "menu-file": "~/.config/waybar/power_menu.xml",
+    "menu-actions": {
+      "shutdown": "shutdown 0",
+      "reboot": "reboot",
+      "suspend": "systemctl suspend",
+      "hibernate": "systemctl hibernate",
+    }
   },
 
   "custom/power": {

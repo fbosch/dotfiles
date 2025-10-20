@@ -54,6 +54,11 @@
   margin-left: 8px;
 }
 
+.notifications-placeholder {
+  background: var(--bg-color);
+}
+
+
 .notification-list-header {
   color: red;
 }
