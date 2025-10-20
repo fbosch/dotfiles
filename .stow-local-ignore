@@ -2,6 +2,7 @@
 ^\.gitignore
 ^\.github
 ^scripts
+^nix.conf
 ^npm-globals\.json
 ^docs
 ^.DS_Store
