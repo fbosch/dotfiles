@@ -25,7 +25,15 @@ end
 return {
 	{
 		"numtostr/FTerm.nvim",
-		cmd = { "FTermOpen", "FTermClose", "FTermExit", "FTermToggle", "FtermMProcs", "FTermLazyGit", "FTermCursorAgent" },
+		cmd = {
+			"FTermOpen",
+			"FTermClose",
+			"FTermExit",
+			"FTermToggle",
+			"FtermMProcs",
+			"FTermLazyGit",
+			"FTermCursorAgent",
+		},
 		keys = term_keymaps({
 			{ "<A-t>", "FTermToggle", "toggle floating terminal" },
 			{ "<A-m>", "FTermMProcs", "toggle floating terminal with mprocs" },
@@ -130,13 +138,13 @@ return {
 			local notification_cooldown = 5000
 			local terminal_open_time = 0
 			local launch_grace_period = 10000
-			
+
 			usrcmd("FTermCursorAgent", function()
 				if not cursor_agent_instance then
 					local Terminal = require("toggleterm.terminal").Terminal
-					
+
 					cursor_agent_instance = Terminal:new({
-						cmd = "cursor-agent ",
+						cmd = "cursor-agent resume",
 						direction = "vertical",
 						size = function(term)
 							if term.direction == "vertical" then
@@ -148,24 +156,26 @@ return {
 							if not data then
 								return
 							end
-							
+
 							local current_time = vim.loop.now()
-							
+
 							if current_time - terminal_open_time < launch_grace_period then
 								return
 							end
-							
+
 							if current_time - last_notification_time < notification_cooldown then
 								return
 							end
-							
+
 							for _, line in ipairs(data) do
-								if line:match("%?%s*%(y/n%)") or 
-								   line:match("%?%s*%(Y/n%)") or
-								   line:match("Approve%?") or
-								   line:match("Accept%?") or
-								   line:match("Allow%?") or
-								   line:match("Continue%?") then
+								if
+									line:match("%?%s*%(y/n%)")
+									or line:match("%?%s*%(Y/n%)")
+									or line:match("Approve%?")
+									or line:match("Accept%?")
+									or line:match("Allow%?")
+									or line:match("Continue%?")
+								then
 									last_notification_time = current_time
 									vim.schedule(function()
 										vim.notify("Cursor Agent: Permission request pending", vim.log.levels.WARN)
@@ -176,11 +186,11 @@ return {
 						end,
 						on_open = function(term)
 							terminal_open_time = vim.loop.now()
-							
+
 							vim.cmd("wincmd H")
 							local width = math.floor(vim.o.columns * 0.33)
 							vim.cmd("vertical resize " .. width)
-							
+
 							vim.api.nvim_buf_set_keymap(
 								term.bufnr,
 								"n",
@@ -229,6 +239,40 @@ return {
 
 				cursor_agent_instance:toggle()
 			end, { bang = true })
+
+			local function send_selection_to_cursor_agent()
+				if not cursor_agent_instance then
+					vim.notify("Cursor Agent not initialized. Press <A-a> first.", vim.log.levels.WARN)
+					return
+				end
+
+				local start_line = vim.fn.line("'<")
+				local end_line = vim.fn.line("'>")
+				local filename = vim.api.nvim_buf_get_name(0)
+
+				if filename == "" then
+					vim.notify("No file name for current buffer", vim.log.levels.WARN)
+					return
+				end
+
+				local relative_path = vim.fn.fnamemodify(filename, ":.")
+				local formatted_text = string.format("@%s (%d-%d)", relative_path, start_line, end_line)
+
+				if not cursor_agent_instance:is_open() then
+					cursor_agent_instance:open()
+				end
+
+				cursor_agent_instance:send(formatted_text)
+
+				vim.notify(string.format("Sent to Cursor Agent: %s", formatted_text), vim.log.levels.INFO)
+			end
+
+			usrcmd("SendSelectionToCursorAgent", send_selection_to_cursor_agent, { range = true })
+
+			vim.keymap.set("v", "<A-a>", ":<C-u>SendSelectionToCursorAgent<CR>", {
+				desc = "Send visual selection to Cursor Agent",
+				silent = true,
+			})
 		end,
 	},
 	{
