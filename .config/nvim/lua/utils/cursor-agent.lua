@@ -5,10 +5,6 @@ local last_notification_time = 0
 local notification_cooldown = 5000
 local terminal_open_time = 0
 local launch_grace_period = 10000
-local sent_context = {
-	buffers = {},
-	selections = {},
-}
 local cursor_agent_progress = nil
 local cursor_agent_mode = "ready"
 local last_hexagon_time = 0
@@ -57,6 +53,41 @@ local function focus_terminal()
 	end
 end
 
+local function is_already_in_terminal(text)
+	if not cursor_agent_instance or not cursor_agent_instance:is_open() then
+		return false
+	end
+
+	local bufnr = cursor_agent_instance.bufnr
+	if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+		return false
+	end
+
+	local total_lines = vim.api.nvim_buf_line_count(bufnr)
+	local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+
+	local input_start_line = nil
+	for i = total_lines, 1, -1 do
+		local line = lines[i]
+		if line and (line:match("^%s*→") or line:match("^%s*>")) then
+			input_start_line = i
+			break
+		end
+	end
+
+	if not input_start_line then
+		return false
+	end
+
+	local input_lines = {}
+	for i = input_start_line, total_lines do
+		table.insert(input_lines, lines[i])
+	end
+
+	local input_content = table.concat(input_lines, "\n")
+	return input_content:find(text, 1, true) ~= nil
+end
+
 local function send_selection_to_cursor_agent()
 	if not cursor_agent_instance then
 		vim.notify("Cursor Agent not initialized. Press <A-a> first.", vim.log.levels.WARN)
@@ -77,18 +108,15 @@ local function send_selection_to_cursor_agent()
 	local lines = vim.api.nvim_buf_get_lines(bufnr, start_line - 1, end_line, false)
 	local selected_text = table.concat(lines, "\n")
 
-	local selection_key = string.format("%s:%d-%d", relative_path, start_line, end_line)
+	local formatted_text = string.format("@%s(%d-%d)\n```\n%s\n```", relative_path, start_line, end_line, selected_text)
 
-	if sent_context.selections[selection_key] then
+	if is_already_in_terminal(formatted_text) then
 		vim.notify(
 			string.format("Selection @%s(%d-%d) already sent", relative_path, start_line, end_line),
 			vim.log.levels.INFO
 		)
 		return
 	end
-
-	local formatted_text =
-		string.format("@%s(%d-%d)\n```\n%s\n```", relative_path, start_line, end_line, selected_text)
 
 	if not cursor_agent_instance:is_open() then
 		cursor_agent_instance:open()
@@ -99,8 +127,6 @@ local function send_selection_to_cursor_agent()
 
 	vim.defer_fn(function()
 		cursor_agent_instance:send(formatted_text)
-		sent_context.selections[selection_key] = true
-
 		vim.defer_fn(focus_terminal, 50)
 	end, delay)
 
@@ -131,9 +157,8 @@ local function send_visible_buffers_to_cursor_agent()
 				local relative_path = vim.fn.fnamemodify(filename, ":.")
 				local file_ref = "@" .. relative_path
 
-				if not sent_context.buffers[relative_path] then
+				if not is_already_in_terminal(file_ref) then
 					table.insert(new_files, file_ref)
-					sent_context.buffers[relative_path] = true
 				end
 				table.insert(visible_files, file_ref)
 			end
@@ -166,17 +191,11 @@ local function send_visible_buffers_to_cursor_agent()
 	vim.defer_fn(focus_terminal, 100)
 end
 
-local function clear_sent_context()
-	sent_context.buffers = {}
-	sent_context.selections = {}
-	vim.notify("Cleared sent context tracking", vim.log.levels.INFO)
-end
-
 function M.setup()
 	local Terminal = require("toggleterm.terminal").Terminal
 
 	cursor_agent_instance = Terminal:new({
-		cmd = "cursor-agent resume",
+		cmd = "cursor-agent resume 2>/dev/null || cursor-agent",
 		direction = "vertical",
 		size = function(term)
 			if term.direction == "vertical" then
@@ -226,9 +245,7 @@ function M.setup()
 							or lower_line:match("%(yes/no%)")
 						then
 							last_notification_time = current_time
-							require("fidget").notify("⚠️  Permission needed - check terminal", vim.log.levels.WARN, {
-								annote = "Cursor Agent",
-							})
+							require("fidget").notify("⚠️  Permission needed - check terminal", vim.log.levels.WARN)
 						end
 					end
 				end
@@ -236,8 +253,8 @@ function M.setup()
 				if found_hexagon and hexagon_message and hexagon_message ~= "" then
 					if not cursor_agent_progress then
 						cursor_agent_progress = require("fidget.progress").handle.create({
-							title = "Cursor Agent",
 							message = hexagon_message,
+							icon = "󰫄 ",
 							lsp_client = { name = "cursor-agent" },
 						})
 					else
@@ -253,8 +270,6 @@ function M.setup()
 		end,
 		on_open = function(term)
 			terminal_open_time = vim.loop.now()
-			sent_context.buffers = {}
-			sent_context.selections = {}
 			last_hexagon_time = 0
 			if cursor_agent_progress then
 				cursor_agent_progress:finish()
@@ -294,7 +309,6 @@ end
 function M.register_commands()
 	vim.api.nvim_create_user_command("SendSelectionToCursorAgent", send_selection_to_cursor_agent, { range = true })
 	vim.api.nvim_create_user_command("SendVisibleBuffersToCursorAgent", send_visible_buffers_to_cursor_agent, {})
-	vim.api.nvim_create_user_command("ClearCursorAgentContext", clear_sent_context, {})
 end
 
 function M.setup_keymaps()

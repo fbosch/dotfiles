@@ -2,6 +2,18 @@ local platform = require("utils.platform")
 
 return {
 	{
+		"DanilaMihailov/beacon.nvim",
+		event = "VeryLazy",
+		config = function()
+			vim.g.beacon_size = 40
+			vim.g.beacon_fade = 1
+			vim.g.beacon_minimal_jump = 10
+			vim.g.beacon_show_jumps = 1
+			vim.g.beacon_ignore_buffers = { "\\w*term\\w*", "nofile", "terminal" }
+			vim.g.beacon_ignore_filetypes = { "qf", "help", "netrw", "NvimTree", "toggleterm" }
+		end,
+	},
+	{
 		"nvim-tree/nvim-web-devicons",
 		dependencies = {
 			"rachartier/tiny-devicons-auto-colors.nvim",

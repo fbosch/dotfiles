@@ -41,7 +41,7 @@ return {
 	},
 	{
 		"lewis6991/gitsigns.nvim",
-		event = { "BufReadPost" },
+		event = { "BufReadPost", "BufNewFile", "BufWritePost" },
 		cond = is_git_repo,
 		opts = {
 			signs = {
