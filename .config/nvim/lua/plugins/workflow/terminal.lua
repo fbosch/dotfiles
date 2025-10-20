@@ -33,14 +33,25 @@ return {
 			"FtermMProcs",
 			"FTermLazyGit",
 			"FTermCursorAgent",
+			"SendSelectionToCursorAgent",
+			"SendVisibleBuffersToCursorAgent",
 		},
-		keys = term_keymaps({
+		keys = vim.list_extend(term_keymaps({
 			{ "<A-t>", "FTermToggle", "toggle floating terminal" },
 			{ "<A-m>", "FTermMProcs", "toggle floating terminal with mprocs" },
 			{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
 			{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
 			{ "<A-c>", "FTermCheckmate", "toggle floating terminal with checkmate in neovim instance" },
 			{ "<A-a>", "FTermCursorAgent", "toggle floating terminal with cursor-agent" },
+			{ "<A-x>", "SendVisibleBuffersToCursorAgent", "send context (buffers) to cursor agent" },
+		}), {
+			{
+				"<A-x>",
+				":<C-u>SendSelectionToCursorAgent<CR>",
+				desc = "send context (selection) to cursor agent",
+				mode = "v",
+				silent = true,
+			},
 		}),
 		config = function()
 			local usrcmd = vim.api.nvim_create_user_command

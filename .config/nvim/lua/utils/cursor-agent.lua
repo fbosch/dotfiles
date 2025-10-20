@@ -37,7 +37,7 @@ local function ensure_insert_mode()
 		cursor_agent_mode = "insert"
 		return true
 	end
-	return false
+	return true
 end
 
 local function focus_terminal()
@@ -89,11 +89,6 @@ local function is_already_in_terminal(text)
 end
 
 local function send_selection_to_cursor_agent()
-	if not cursor_agent_instance then
-		vim.notify("Cursor Agent not initialized. Press <A-a> first.", vim.log.levels.WARN)
-		return
-	end
-
 	local start_line = vim.fn.line("'<")
 	local end_line = vim.fn.line("'>")
 	local filename = vim.api.nvim_buf_get_name(0)
@@ -109,6 +104,17 @@ local function send_selection_to_cursor_agent()
 	local selected_text = table.concat(lines, "\n")
 
 	local formatted_text = string.format("@%s(%d-%d)\n```\n%s\n```", relative_path, start_line, end_line, selected_text)
+
+	if not cursor_agent_instance then
+		M.setup(formatted_text)
+		cursor_agent_instance:open()
+		vim.notify(
+			string.format("Sent to Cursor Agent: @%s(%d-%d) with %d lines", relative_path, start_line, end_line, #lines),
+			vim.log.levels.INFO
+		)
+		vim.defer_fn(focus_terminal, 50)
+		return
+	end
 
 	if is_already_in_terminal(formatted_text) then
 		vim.notify(
@@ -137,11 +143,6 @@ local function send_selection_to_cursor_agent()
 end
 
 local function send_visible_buffers_to_cursor_agent()
-	if not cursor_agent_instance then
-		vim.notify("Cursor Agent not initialized. Press <A-a> first.", vim.log.levels.WARN)
-		return
-	end
-
 	local visible_files = {}
 	local seen_buffers = {}
 	local new_files = {}
@@ -157,7 +158,7 @@ local function send_visible_buffers_to_cursor_agent()
 				local relative_path = vim.fn.fnamemodify(filename, ":.")
 				local file_ref = "@" .. relative_path
 
-				if not is_already_in_terminal(file_ref) then
+				if not cursor_agent_instance or not is_already_in_terminal(file_ref) then
 					table.insert(new_files, file_ref)
 				end
 				table.insert(visible_files, file_ref)
@@ -171,6 +172,17 @@ local function send_visible_buffers_to_cursor_agent()
 	end
 
 	local formatted_text = table.concat(new_files, " ")
+
+	if not cursor_agent_instance then
+		M.setup(formatted_text)
+		cursor_agent_instance:open()
+		vim.notify(
+			string.format("Sent %d buffers to Cursor Agent (%d total visible)", #new_files, #visible_files),
+			vim.log.levels.INFO
+		)
+		vim.defer_fn(focus_terminal, 100)
+		return
+	end
 
 	if not cursor_agent_instance:is_open() then
 		cursor_agent_instance:open()
@@ -191,11 +203,18 @@ local function send_visible_buffers_to_cursor_agent()
 	vim.defer_fn(focus_terminal, 100)
 end
 
-function M.setup()
+function M.setup(prompt)
 	local Terminal = require("toggleterm.terminal").Terminal
 
+	local cmd
+	if prompt and prompt ~= "" then
+		cmd = string.format("cursor-agent %s", vim.fn.shellescape(prompt))
+	else
+		cmd = "cursor-agent resume 2>/dev/null || cursor-agent"
+	end
+
 	cursor_agent_instance = Terminal:new({
-		cmd = "cursor-agent resume 2>/dev/null || cursor-agent",
+		cmd = cmd,
 		direction = "vertical",
 		size = function(term)
 			if term.direction == "vertical" then
@@ -312,15 +331,18 @@ function M.register_commands()
 end
 
 function M.setup_keymaps()
-	vim.keymap.set("v", "<A-c>", ":<C-u>SendSelectionToCursorAgent<CR>", {
+	vim.keymap.set("v", "<A-x>", ":<C-u>SendSelectionToCursorAgent<CR>", {
 		desc = "Send context (selection) to Cursor Agent",
 		silent = true,
 	})
 
-	vim.keymap.set("n", "<A-c>", send_visible_buffers_to_cursor_agent, {
+	vim.keymap.set("n", "<A-x>", send_visible_buffers_to_cursor_agent, {
 		desc = "Send context (buffers) to Cursor Agent",
 		silent = true,
 	})
 end
+
+M.register_commands()
+M.setup_keymaps()
 
 return M
