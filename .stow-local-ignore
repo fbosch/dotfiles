@@ -4,4 +4,5 @@
 ^scripts
 ^npm-globals\.json
 ^docs
+^.DS_Store
 ^README\.md
