@@ -107,3 +107,4 @@ end
 
 # --- Set universal keybinding mode ---
 set -U fish_key_bindings fish_default_key_bindings
+fish_add_path $HOME/.local/bin
