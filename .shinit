@@ -18,16 +18,19 @@ export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
 # Add Rust/Cargo to PATH
-export PATH="$HOME/.cargo/bin:$PATH"
+if [ -d "$HOME/.cargo/bin" ]; then
+    export PATH="$HOME/.cargo/bin:$PATH"
+fi
 
-# Add Node Version Manager (nvm) to PATH
-export PATH="$HOME/.local/share/nvm/v20.19.2/bin:$PATH"
-
-# Add fnm (Fast Node Manager) to PATH
-export PATH="$HOME/.local/state/fnm_multishells/15027_1756372618705/bin:$PATH"
+# Add fnm (Fast Node Manager) - dynamic initialization
+if command -v fnm >/dev/null 2>&1; then
+    eval "$(fnm env --shell bash)"
+fi
 
 # Add .NET tools to PATH
-export PATH="$HOME/.dotnet/tools:$PATH"
+if [ -d "$HOME/.dotnet/tools" ]; then
+    export PATH="$HOME/.dotnet/tools:$PATH"
+fi
 
 # Only set essential environment variables
 export EDITOR=nvim
