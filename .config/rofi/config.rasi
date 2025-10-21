@@ -83,7 +83,7 @@ configuration {
 
 	/*---------- Misc setting ----------*/
 	terminal: "rofi-sensible-terminal";
-	font: "Mono 12";
+	font: "SF Pro Display Regular, Segoe Fluent Icons 10";
 	sort: false;
 	threads: 0;
 	click-to-exit: true;
@@ -180,4 +180,5 @@ configuration {
 */
 }
 
-@theme "~/.config/rofi/launchers/type-3/style-1.rasi"
+
+@theme "/home/fbb/.config/rofi/themes/spotlight-dark.rasi"
