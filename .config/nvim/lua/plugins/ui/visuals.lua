@@ -26,6 +26,16 @@ return {
 						color = colors.orange,
 						name = "prettierignore",
 					},
+					["vite.config.js"] = {
+						icon = "",
+						color = colors.purple,
+						name = "vite",
+					},
+					["vite.config.ts"] = {
+						icon = "",
+						color = colors.purple,
+						name = "vite",
+					},
 				},
 				override_by_extension = {
 					["fish"] = {
@@ -55,7 +65,7 @@ return {
 				colors = colorValues,
 				cache = {
 					enabled = not platform.is_wsl(),
-					path = vim.fn.stdpath("cache") .. "/tiny-devicons-auto-colors-cache.json",
+					path = "/tmp/tiny-devicons-auto-colors-cache.json",
 				},
 			})
 		end,
