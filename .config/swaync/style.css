@@ -51,10 +51,8 @@
 }
 
 .control-center-list {
-  background: var(--bg-color);
+  background: transparent;
   border-radius: 12px 12px 0 0;
-  border: 1px solid var(--border-color);
-  border-bottom: none;
 }
 
 .control-center-list .notification {
@@ -80,6 +78,11 @@
 
 .notifications-placeholder {
   background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 24px;
+  margin: 8px;
+  box-shadow: var(--shadow-elevation-low);
 }
 
 
@@ -90,10 +93,21 @@
   font-size: 20px;
   font-weight: 600;
   padding: 10px 16px;
-  border-radius: 0 0 12px 12px;
+  border-radius: 12px;
+  margin-top: 8px;
   border: 1px solid var(--border-color);
-  border-top: none;
 }
+
+.control-center-list-placeholder {
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 24px;
+  margin: 8px;
+  box-shadow: var(--shadow-elevation-low);
+  opacity: 0.8;
+}
+
 
 .control-center .widget-title>button {
   background: var(--surface-color);
@@ -362,9 +376,6 @@
   margin: 0 8px;
 }
 
-.notifications {
-  background: var(--bg-color);
-}
 
 .notification-list .notification {
   background: var(--bg-color);
@@ -423,9 +434,15 @@ scrollbar slider:active {
 }
 
 .widget-label.placeholder {
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
   color: var(--text-tertiary);
   font-size: 16px;
+  font-weight: 500;
   padding: 32px;
+  text-align: center;
+  box-shadow: var(--shadow-elevation-low);
 }
 
 /* Focus States */
