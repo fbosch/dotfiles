@@ -48,7 +48,12 @@ abbr rpj 'cd ~/Projects'
 abbr cf 'cd ~/.config'
 abbr cnx 'cd /etc/nixos'
 abbr nxe 'nvim ~/nixos'
-abbr nxrb 'sudo nixos-rebuild switch --flake ~/nixos'
+
+function nxrb
+    set -l host (hostname)
+    sudo nixos-rebuild switch --flake ~/nixos\#$host
+end
+
 abbr nxgc nix-collect-garbage
 
 # Helpers

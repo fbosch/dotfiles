@@ -17,6 +17,7 @@ Brewfile.lock.json
 .config/zed/
 .config/go
 .config/waybar/scripts/update-checker
+.cursor/.agent-tools
 
 # Neovim local data
 .config/nvim/.sessions/

@@ -80,8 +80,10 @@
   "wlr/taskbar": {
     "format": "{icon}  {title:.25}",
     "markup": true,
-    "icon-size": 20,
+    "icon-size": 22,
+    "sort-by-app-id": true,
     "on-click": "activate",
+    "on-click-middle": "close"
   },
   
   "network": { 

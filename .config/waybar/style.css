@@ -29,8 +29,12 @@ window#waybar {
   padding: 0.25rem;
 }
 
+.modules-left {
+  margin-left: 0.2rem;
+}
+
 .modules-left button:nth-child(1):only-child {
-  opacity: 0;
+  opacity: 0
 }
 
 /* Custom modules */
@@ -91,7 +95,7 @@ window#waybar {
 }
 
 #clock:hover {
-  background-color: rgba(255, 255, 255, 0.1); 
+  background-color: rgba(255, 255, 255, 0.1);
   border-radius: 0.25rem;
 }
 
@@ -120,22 +124,41 @@ window#waybar {
 /* Taskbar buttons */
 #taskbar button {
   border-radius: 0;
-  border-bottom: 2px solid transparent;
+  border: 1px solid transparent;
   text-shadow: 1px 1px rgba(0, 0, 0, 0.5);
-  transition-property: border-color;
   transition-duration: 150ms;
+  margin: 0.3rem;
+  padding: 0 0.5rem;
+  border-radius: 0.25rem;
+  transition-property: border-color, background-color;
+  transition-duration: 150ms;
+  transition-timing-function: ease-in-out;
+}
+
+#taskbar button:hover {
+  background-color: rgba(255, 255, 255, 0.01);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 #taskbar button.active {
-  border-bottom: 2px solid #fff;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   font-weight: bold;
+}
+
+#taskbar button.active:hover {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* Workspace buttons */
 #workspaces button {
-  border-bottom: 2px solid transparent;
-  transition-property: border-color;
+  border-radius: 0.25rem;
+  border: 1px solid transparent;
+  opacity: 1;
+  transition-property: border-color, background-color;
   transition-duration: 150ms;
+  transition-timing-function: ease-in-out;
+  margin: 0.3rem 0;
 }
 
 #workspaces button:only-child {
@@ -143,6 +166,7 @@ window#waybar {
 }
 
 #workspaces button.active {
-  border-bottom: 2px solid #fff;
-  border-radius: 0;
+  font-weight: bold;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.05);
 }

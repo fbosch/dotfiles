@@ -1,7 +1,8 @@
 ^\.git
 ^\.gitignore
 ^\.github
-^scripts
+^/scripts$
+^nix.conf
 ^npm-globals\.json
 ^docs
 ^.DS_Store
