@@ -217,6 +217,8 @@ function M.setup(prompt)
 		cmd = cmd,
     shell = "zsh",
 		direction = "vertical",
+    start_in_insert = true,
+    auto_scroll = true,
 		size = function(term)
 			if term.direction == "vertical" then
 				return vim.o.columns * 0.33
