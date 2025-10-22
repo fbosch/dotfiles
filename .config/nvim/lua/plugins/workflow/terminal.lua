@@ -68,6 +68,8 @@ return {
 				border = "rounded",
 				env = env,
 				dimensions = dimensions,
+        shell = "fish",
+        cmd = "fish"
 			})
 
 			usrcmd("FTermOpen", fterm.open, { bang = true })
@@ -133,6 +135,7 @@ return {
 					checkmate_instance = fterm:new({
 						ft = "fterm_checkmate",
 						env = env,
+            shell = "dash",
 						cmd = string.format("nvim %s", todo_file),
 						dimensions = {
 							height = 0.65,

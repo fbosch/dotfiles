@@ -215,6 +215,7 @@ function M.setup(prompt)
 
 	cursor_agent_instance = Terminal:new({
 		cmd = cmd,
+    shell = "zsh",
 		direction = "vertical",
 		size = function(term)
 			if term.direction == "vertical" then

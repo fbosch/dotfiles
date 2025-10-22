@@ -91,9 +91,10 @@
   font-size: 20px;
   font-weight: 600;
   padding: 8px 8px 8px 16px;
-  border-radius: 12px;
   margin-top: 8px;
   border: 1px solid var(--border-color);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
 }
 
 .control-center-list-placeholder {
@@ -109,10 +110,9 @@
 
 .control-center .widget-title>button {
   background: var(--surface-color);
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--text-color);
-  padding: 6px 12px;
-  margin: 0 4px;
+  padding: 6px 10px;
   border: 1px solid transparent;
   transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
@@ -258,9 +258,9 @@
 .widget-dnd {
   background: var(--bg-color);
   padding: 8px 8px 8px 16px;
-  margin-top: 8px;
-  border-radius: 8px;
+  border-radius: 0 0 8px 8px;
   border: 1px solid var(--border-color);
+  border-top: none;
 }
 
 .widget-dnd>switch {
@@ -287,6 +287,7 @@
 
 /* Buttons Grid Widget */
 .widget-buttons-grid {
+  font-family: "Segoe Fluent Icons";
   background: var(--bg-color);
   padding: 8px;
   margin: 8px 0px;
@@ -298,7 +299,7 @@
   background: var(--surface-color);
   border-radius: 8px;
   color: var(--text-color);
-  padding: 8px 16px;
+  padding: 8px;
   margin: 0 4px;
   border: 1px solid var(--border-color);
   transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
