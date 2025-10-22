@@ -1,7 +1,8 @@
 {
-    "closeOnFocusLoss": false,
+    "closeOnFocusLoss": true,
     "faviconService": "twenty",
     "font": {
+        "normal": "SF Pro Rounded",
         "size": 10
     },
     "keybinding": "default",
@@ -12,11 +13,12 @@
         "searchFiles": true
     },
     "theme": {
+        "iconTheme": "Win11",
         "name": "vicinae-dark"
     },
     "window": {
         "csd": true,
-        "opacity": 0.98,
+        "opacity": 0.88,
         "rounding": 10
     }
 }
