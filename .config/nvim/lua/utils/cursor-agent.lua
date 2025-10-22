@@ -270,14 +270,20 @@ function M.setup(prompt)
 				end
 
 				if found_hexagon and hexagon_message and hexagon_message ~= "" then
+					-- Pad the message to ensure consistent length during animation
+					local padded_message = hexagon_message
+					if #padded_message < 15 then
+						padded_message = padded_message .. string.rep(" ", 15 - #padded_message)
+					end
+
 					if not cursor_agent_progress then
 						cursor_agent_progress = require("fidget.progress").handle.create({
-							message = hexagon_message,
-							icon = "󰫄 ",
+							message = padded_message,
+							key = "cursor-agent",
 							lsp_client = { name = "cursor-agent" },
 						})
 					else
-						cursor_agent_progress:report({ message = hexagon_message })
+						cursor_agent_progress:report({ message = padded_message })
 					end
 				end
 
