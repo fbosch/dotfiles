@@ -1,14 +1,90 @@
 local M = {}
 
-local cursor_agent_instance = nil
+local config = {
+	shell = "zsh",
+	primary_cli = "codex",
+	fallback_cli = "cursor-agent",
+	prompt_mode = "argument", -- "argument" or "stdin"
+	prompt_cli = nil,
+	prompt_builder = nil,
+	interactive_builder = nil,
+	progress_key = "agent",
+	progress_client_name = "agent",
+	size_ratio = 0.33,
+}
+
+local agent_instance = nil
+local commands_registered = false
+local keymaps_registered = false
 local last_notification_time = 0
 local notification_cooldown = 5000
 local terminal_open_time = 0
 local launch_grace_period = 10000
-local cursor_agent_progress = nil
-local cursor_agent_mode = "ready"
+local agent_progress = nil
+local agent_mode = "ready"
 local last_hexagon_time = 0
 local hexagon_timeout = 2000
+local pending_initial_text = nil
+
+local function build_interactive_command()
+	if config.interactive_builder then
+		return config.interactive_builder(config)
+	end
+
+	local primary = config.primary_cli
+	local fallback = config.fallback_cli
+
+	if (not primary or primary == "") and fallback and fallback ~= "" then
+		return fallback
+	end
+
+	primary = primary or "codex"
+
+	if fallback and fallback ~= "" and fallback ~= primary then
+		return string.format("%s 2>/dev/null || %s", primary, fallback)
+	end
+
+	return primary
+end
+
+local function build_prompt_command(prompt)
+	if not prompt or prompt == "" then
+		return nil
+	end
+
+	if config.prompt_builder then
+		return config.prompt_builder(prompt, config)
+	end
+
+	local cli = config.prompt_cli or config.primary_cli
+	if not cli or cli == "" then
+		return nil
+	end
+
+	return string.format("%s %s", cli, vim.fn.shellescape(prompt))
+end
+
+local function resolve_command(prompt)
+	if prompt and prompt ~= "" then
+		if config.prompt_mode == "argument" then
+			local prompt_cmd = build_prompt_command(prompt)
+			if prompt_cmd then
+				return prompt_cmd, false
+			end
+		end
+		return build_interactive_command(), true
+	end
+
+	return build_interactive_command(), false
+end
+
+function M.configure(opts)
+	if not opts then
+		return
+	end
+
+	config = vim.tbl_deep_extend("force", config, opts)
+end
 
 local function has_hexagon_symbol(line)
 	if line:match("⬡") or line:match("⬢") then
@@ -32,19 +108,19 @@ local function is_hexagon_active()
 end
 
 local function ensure_insert_mode()
-	if cursor_agent_mode == "normal" then
-		cursor_agent_instance:send("i")
-		cursor_agent_mode = "insert"
+	if agent_mode == "normal" then
+		agent_instance:send("i")
+		agent_mode = "insert"
 		return true
 	end
-	return true
+	return false
 end
 
 local function focus_terminal()
-	if cursor_agent_instance and cursor_agent_instance:is_open() then
+	if agent_instance and agent_instance:is_open() then
 		for _, win in ipairs(vim.api.nvim_list_wins()) do
 			local buf = vim.api.nvim_win_get_buf(win)
-			if buf == cursor_agent_instance.bufnr then
+			if buf == agent_instance.bufnr then
 				vim.api.nvim_set_current_win(win)
 				vim.cmd("startinsert")
 				break
@@ -54,11 +130,11 @@ local function focus_terminal()
 end
 
 local function is_already_in_terminal(text)
-	if not cursor_agent_instance or not cursor_agent_instance:is_open() then
+	if not agent_instance or not agent_instance:is_open() then
 		return false
 	end
 
-	local bufnr = cursor_agent_instance.bufnr
+	local bufnr = agent_instance.bufnr
 	if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
 		return false
 	end
@@ -88,7 +164,7 @@ local function is_already_in_terminal(text)
 	return input_content:find(text, 1, true) ~= nil
 end
 
-local function send_selection_to_cursor_agent()
+local function send_selection_to_agent()
 	local start_line = vim.fn.line("'<")
 	local end_line = vim.fn.line("'>")
 	local filename = vim.api.nvim_buf_get_name(0)
@@ -105,11 +181,13 @@ local function send_selection_to_cursor_agent()
 
 	local formatted_text = string.format("@%s(%d-%d)\n```\n%s\n```", relative_path, start_line, end_line, selected_text)
 
-	if not cursor_agent_instance then
-		M.setup(formatted_text)
-		cursor_agent_instance:open()
+	if not agent_instance then
+		if not M.setup(formatted_text) then
+			return
+		end
+		agent_instance:open()
 		vim.notify(
-			string.format("Sent to Cursor Agent: @%s(%d-%d) with %d lines", relative_path, start_line, end_line, #lines),
+			string.format("Sent to Agent: @%s(%d-%d) with %d lines", relative_path, start_line, end_line, #lines),
 			vim.log.levels.INFO
 		)
 		vim.defer_fn(focus_terminal, 50)
@@ -124,25 +202,25 @@ local function send_selection_to_cursor_agent()
 		return
 	end
 
-	if not cursor_agent_instance:is_open() then
-		cursor_agent_instance:open()
+	if not agent_instance:is_open() then
+		agent_instance:open()
 	end
 
 	local needs_mode_switch = ensure_insert_mode()
 	local delay = needs_mode_switch and 100 or 0
 
 	vim.defer_fn(function()
-		cursor_agent_instance:send(formatted_text)
+		agent_instance:send(formatted_text)
 		vim.defer_fn(focus_terminal, 50)
 	end, delay)
 
 	vim.notify(
-		string.format("Sent to Cursor Agent: @%s(%d-%d) with %d lines", relative_path, start_line, end_line, #lines),
+		string.format("Sent to Agent: @%s(%d-%d) with %d lines", relative_path, start_line, end_line, #lines),
 		vim.log.levels.INFO
 	)
 end
 
-local function send_visible_buffers_to_cursor_agent()
+local function send_visible_buffers_to_agent()
 	local visible_files = {}
 	local seen_buffers = {}
 	local new_files = {}
@@ -158,7 +236,7 @@ local function send_visible_buffers_to_cursor_agent()
 				local relative_path = vim.fn.fnamemodify(filename, ":.")
 				local file_ref = "@" .. relative_path
 
-				if not cursor_agent_instance or not is_already_in_terminal(file_ref) then
+				if not agent_instance or not is_already_in_terminal(file_ref) then
 					table.insert(new_files, file_ref)
 				end
 				table.insert(visible_files, file_ref)
@@ -167,36 +245,38 @@ local function send_visible_buffers_to_cursor_agent()
 	end
 
 	if #new_files == 0 then
-		vim.notify("All visible buffers already sent to Cursor Agent", vim.log.levels.INFO)
+		vim.notify("All visible buffers already sent to Agent", vim.log.levels.INFO)
 		return
 	end
 
 	local formatted_text = table.concat(new_files, " ")
 
-	if not cursor_agent_instance then
-		M.setup(formatted_text)
-		cursor_agent_instance:open()
+	if not agent_instance then
+		if not M.setup(formatted_text) then
+			return
+		end
+		agent_instance:open()
 		vim.notify(
-			string.format("Sent %d buffers to Cursor Agent (%d total visible)", #new_files, #visible_files),
+			string.format("Sent %d buffers to Agent (%d total visible)", #new_files, #visible_files),
 			vim.log.levels.INFO
 		)
 		vim.defer_fn(focus_terminal, 100)
 		return
 	end
 
-	if not cursor_agent_instance:is_open() then
-		cursor_agent_instance:open()
+	if not agent_instance:is_open() then
+		agent_instance:open()
 	end
 
 	local needs_mode_switch = ensure_insert_mode()
 	local delay = needs_mode_switch and 100 or 0
 
 	vim.defer_fn(function()
-		cursor_agent_instance:send(formatted_text)
+		agent_instance:send(formatted_text)
 	end, delay)
 
 	vim.notify(
-		string.format("Sent %d new buffers to Cursor Agent (%d total visible)", #new_files, #visible_files),
+		string.format("Sent %d new buffers to Agent (%d total visible)", #new_files, #visible_files),
 		vim.log.levels.INFO
 	)
 
@@ -206,22 +286,31 @@ end
 function M.setup(prompt)
 	local Terminal = require("toggleterm.terminal").Terminal
 
-	local cmd
-	if prompt and prompt ~= "" then
-		cmd = string.format("codex %s", vim.fn.shellescape(prompt))
-	else
-		cmd = "codex 2>/dev/null || cursor-agent"
+	local cmd, send_initial_via_input = resolve_command(prompt)
+	if not cmd or cmd == "" then
+		vim.notify("Agent CLI command is not configured", vim.log.levels.ERROR)
+		return nil
 	end
 
-	cursor_agent_instance = Terminal:new({
+	if send_initial_via_input and prompt and prompt ~= "" then
+		pending_initial_text = prompt
+	else
+		pending_initial_text = nil
+	end
+
+	agent_instance = Terminal:new({
 		cmd = cmd,
-		shell = "zsh",
+		shell = config.shell or vim.o.shell,
 		direction = "vertical",
 		start_in_insert = true,
 		auto_scroll = true,
 		size = function(term)
 			if term.direction == "vertical" then
-				return vim.o.columns * 0.33
+				local ratio = config.size_ratio or 0.33
+				if ratio <= 0 or ratio >= 1 then
+					ratio = 0.33
+				end
+				return math.max(20, math.floor(vim.o.columns * ratio))
 			end
 		end,
 		hidden = false,
@@ -244,9 +333,9 @@ function M.setup(prompt)
 					local lower_line = line:lower()
 
 					if lower_line:match("%-%-+ insert %-%-+") or lower_line:match("insert mode") then
-						cursor_agent_mode = "insert"
+						agent_mode = "insert"
 					elseif lower_line:match("%-%-+ normal %-%-+") or lower_line:match("normal mode") then
-						cursor_agent_mode = "normal"
+						agent_mode = "normal"
 					end
 
 					if has_hexagon_symbol(line) then
@@ -267,7 +356,7 @@ function M.setup(prompt)
 							or lower_line:match("%(yes/no%)")
 						then
 							last_notification_time = current_time
-							require("fidget").notify("⚠️  Permission needed -tcheck terminal", vim.log.levels.WARN)
+							require("fidget").notify("⚠️  Permission needed - check terminal", vim.log.levels.WARN)
 						end
 					end
 				end
@@ -279,33 +368,37 @@ function M.setup(prompt)
 						padded_message = padded_message .. string.rep(" ", 15 - #padded_message)
 					end
 
-					if not cursor_agent_progress then
-						cursor_agent_progress = require("fidget.progress").handle.create({
+					if not agent_progress then
+						agent_progress = require("fidget.progress").handle.create({
 							message = padded_message,
-							key = "cursor-agent",
-							lsp_client = { name = "cursor-agent" },
+							key = config.progress_key or "agent",
+							lsp_client = { name = config.progress_client_name or "agent" },
 						})
 					else
-						cursor_agent_progress:report({ message = padded_message })
+						agent_progress:report({ message = padded_message })
 					end
 				end
 
-				if cursor_agent_progress and not found_hexagon and not is_hexagon_active() then
-					cursor_agent_progress:finish()
-					cursor_agent_progress = nil
+				if agent_progress and not found_hexagon and not is_hexagon_active() then
+					agent_progress:finish()
+					agent_progress = nil
 				end
 			end)
 		end,
 		on_open = function(term)
 			terminal_open_time = vim.loop.now()
 			last_hexagon_time = 0
-			if cursor_agent_progress then
-				cursor_agent_progress:finish()
-				cursor_agent_progress = nil
+			if agent_progress then
+				agent_progress:finish()
+				agent_progress = nil
 			end
 
 			vim.cmd("wincmd H")
-			local width = math.floor(vim.o.columns * 0.33)
+			local ratio = config.size_ratio or 0.33
+			if ratio <= 0 or ratio >= 1 then
+				ratio = 0.33
+			end
+			local width = math.max(20, math.floor(vim.o.columns * ratio))
 			vim.cmd("vertical resize " .. width)
 
 			vim.api.nvim_buf_set_keymap(term.bufnr, "n", "q", "<cmd>close<CR>", { noremap = true, silent = true })
@@ -321,44 +414,72 @@ function M.setup(prompt)
 			vim.api.nvim_buf_set_keymap(term.bufnr, "n", "<S-l>", "<C-w>l", { noremap = true, silent = true })
 			vim.api.nvim_buf_set_keymap(term.bufnr, "n", "<S-j>", "<C-w>j", { noremap = true, silent = true })
 			vim.api.nvim_buf_set_keymap(term.bufnr, "n", "<S-k>", "<C-w>k", { noremap = true, silent = true })
+
+			if pending_initial_text and pending_initial_text ~= "" then
+				local text = pending_initial_text
+				pending_initial_text = nil
+				vim.defer_fn(function()
+					if not agent_instance or not agent_instance:is_open() then
+						return
+					end
+
+					local needs_mode_switch = ensure_insert_mode()
+					local delay = needs_mode_switch and 100 or 0
+
+					vim.defer_fn(function()
+						agent_instance:send(text)
+						vim.defer_fn(focus_terminal, 50)
+					end, delay)
+				end, 120)
+			end
 		end,
 		on_close = function()
 			last_hexagon_time = 0
-			if cursor_agent_progress then
-				cursor_agent_progress:finish()
-				cursor_agent_progress = nil
+			pending_initial_text = nil
+			if agent_progress then
+				agent_progress:finish()
+				agent_progress = nil
 			end
 		end,
 	})
 
-	return cursor_agent_instance
+	return agent_instance
 end
 
 function M.toggle()
-	if not cursor_agent_instance then
+	if not agent_instance then
 		M.setup()
 	end
-	cursor_agent_instance:toggle()
+	if agent_instance then
+		agent_instance:toggle()
+	end
 end
 
 function M.register_commands()
-	vim.api.nvim_create_user_command("SendSelectionToCursorAgent", send_selection_to_cursor_agent, { range = true })
-	vim.api.nvim_create_user_command("SendVisibleBuffersToCursorAgent", send_visible_buffers_to_cursor_agent, {})
+	if commands_registered then
+		return
+	end
+
+	vim.api.nvim_create_user_command("SendSelectionToAgent", send_selection_to_agent, { range = true })
+	vim.api.nvim_create_user_command("SendVisibleBuffersToAgent", send_visible_buffers_to_agent, {})
+	commands_registered = true
 end
 
 function M.setup_keymaps()
-	vim.keymap.set("v", "<A-x>", ":<C-u>SendSelectionToCursorAgent<CR>", {
-		desc = "Send context (selection) to Cursor Agent",
+	if keymaps_registered then
+		return
+	end
+
+	vim.keymap.set("v", "<A-x>", ":<C-u>SendSelectionToAgent<CR>", {
+		desc = "Send context (selection) to Agent",
 		silent = true,
 	})
 
-	vim.keymap.set("n", "<A-x>", send_visible_buffers_to_cursor_agent, {
-		desc = "Send context (buffers) to Cursor Agent",
+	vim.keymap.set("n", "<A-x>", send_visible_buffers_to_agent, {
+		desc = "Send context (buffers) to Agent",
 		silent = true,
 	})
+	keymaps_registered = true
 end
-
-M.register_commands()
-M.setup_keymaps()
 
 return M

@@ -32,9 +32,9 @@ return {
 			"FTermToggle",
 			"FtermMProcs",
 			"FTermLazyGit",
-			"FTermCursorAgent",
-			"SendSelectionToCursorAgent",
-			"SendVisibleBuffersToCursorAgent",
+			"FTermAgent",
+			"SendSelectionToAgent",
+			"SendVisibleBuffersToAgent",
 		},
 		keys = vim.list_extend(term_keymaps({
 			{ "<A-t>", "FTermToggle", "toggle floating terminal" },
@@ -42,13 +42,13 @@ return {
 			{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
 			{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
 			{ "<A-c>", "FTermCheckmate", "toggle floating terminal with checkmate in neovim instance" },
-			{ "<A-a>", "FTermCursorAgent", "toggle floating terminal with cursor-agent" },
-			{ "<A-x>", "SendVisibleBuffersToCursorAgent", "send context (buffers) to cursor agent" },
+			{ "<A-a>", "FTermAgent", "toggle floating terminal with agent CLI" },
+			{ "<A-x>", "SendVisibleBuffersToAgent", "send context (buffers) to agent" },
 		}), {
 			{
 				"<A-x>",
-				":<C-u>SendSelectionToCursorAgent<CR>",
-				desc = "send context (selection) to cursor agent",
+				":<C-u>SendSelectionToAgent<CR>",
+				desc = "send context (selection) to agent",
 				mode = "v",
 				silent = true,
 			},
@@ -147,10 +147,10 @@ return {
 				checkmate_instance:toggle()
 			end, { bang = true })
 
-		local cursor_agent = require("utils.cursor-agent")
-		usrcmd("FTermCursorAgent", cursor_agent.toggle, { bang = true })
-		cursor_agent.register_commands()
-		cursor_agent.setup_keymaps()
+		local agent = require("utils.agent")
+		usrcmd("FTermAgent", agent.toggle, { bang = true })
+		agent.register_commands()
+		agent.setup_keymaps()
 		end,
 	},
 	{
