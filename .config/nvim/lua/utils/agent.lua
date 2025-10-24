@@ -8,8 +8,6 @@ local config = {
 	prompt_cli = nil,
 	prompt_builder = nil,
 	interactive_builder = nil,
-	progress_key = "agent",
-	progress_client_name = "agent",
 	size_ratio = 0.33,
 }
 
@@ -20,11 +18,16 @@ local last_notification_time = 0
 local notification_cooldown = 5000
 local terminal_open_time = 0
 local launch_grace_period = 10000
-local agent_progress = nil
 local agent_mode = "ready"
-local last_hexagon_time = 0
-local hexagon_timeout = 2000
 local pending_initial_text = nil
+
+local function get_terminal_width()
+	local ratio = config.size_ratio or 0.33
+	if ratio <= 0 or ratio >= 1 then
+		ratio = 0.33
+	end
+	return math.max(20, math.floor(vim.o.columns * ratio))
+end
 
 local function build_interactive_command()
 	if config.interactive_builder then
@@ -86,29 +89,8 @@ function M.configure(opts)
 	config = vim.tbl_deep_extend("force", config, opts)
 end
 
-local function has_hexagon_symbol(line)
-	if line:match("⬡") or line:match("⬢") then
-		return true
-	end
-	if line:match("\226\172\161") or line:match("\226\172\162") then
-		return true
-	end
-	return false
-end
-
-local function strip_ansi_codes(str)
-	str = str:gsub("\027%[[%d;]*m", "")
-	str = str:gsub("\027%[[%d;]*[ABCDEFGJKST]", "")
-	return str
-end
-
-local function is_hexagon_active()
-	local current_time = vim.loop.now()
-	return current_time - last_hexagon_time < hexagon_timeout
-end
-
 local function ensure_insert_mode()
-	if agent_mode == "normal" then
+	if agent_mode == "normal" and agent_instance then
 		agent_instance:send("i")
 		agent_mode = "insert"
 		return true
@@ -117,16 +99,58 @@ local function ensure_insert_mode()
 end
 
 local function focus_terminal()
-	if agent_instance and agent_instance:is_open() then
-		for _, win in ipairs(vim.api.nvim_list_wins()) do
-			local buf = vim.api.nvim_win_get_buf(win)
-			if buf == agent_instance.bufnr then
-				vim.api.nvim_set_current_win(win)
-				vim.cmd("startinsert")
-				break
-			end
-		end
+	if not agent_instance or not agent_instance:is_open() then
+		return
 	end
+
+	local wins = vim.fn.win_findbuf(agent_instance.bufnr)
+	if not wins or #wins == 0 then
+		return
+	end
+
+	if pcall(vim.api.nvim_set_current_win, wins[1]) then
+		vim.cmd("startinsert")
+	end
+end
+
+local function ensure_agent(initial_text, focus_delay)
+	focus_delay = focus_delay or 50
+
+	if agent_instance then
+		return true, false
+	end
+
+	if not M.setup(initial_text) then
+		return false, false
+	end
+
+	agent_instance:open()
+	vim.defer_fn(focus_terminal, focus_delay)
+	return true, true
+end
+
+local function send_text_to_agent(text, opts)
+	opts = opts or {}
+
+	if not agent_instance then
+		return false
+	end
+
+	if not agent_instance:is_open() then
+		agent_instance:open()
+	end
+
+	local needs_mode_switch = ensure_insert_mode()
+	local delay = needs_mode_switch and (opts.mode_switch_delay or 100) or 0
+
+	vim.defer_fn(function()
+		agent_instance:send(text)
+		if opts.focus_delay then
+			vim.defer_fn(focus_terminal, opts.focus_delay)
+		end
+	end, delay)
+
+	return true
 end
 
 local function is_already_in_terminal(text)
@@ -140,11 +164,9 @@ local function is_already_in_terminal(text)
 	end
 
 	local total_lines = vim.api.nvim_buf_line_count(bufnr)
-	local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-
-	local input_start_line = nil
+	local input_start_line
 	for i = total_lines, 1, -1 do
-		local line = lines[i]
+		local line = vim.api.nvim_buf_get_lines(bufnr, i - 1, i, false)[1]
 		if line and (line:match("^%s*→") or line:match("^%s*>")) then
 			input_start_line = i
 			break
@@ -155,11 +177,7 @@ local function is_already_in_terminal(text)
 		return false
 	end
 
-	local input_lines = {}
-	for i = input_start_line, total_lines do
-		table.insert(input_lines, lines[i])
-	end
-
+	local input_lines = vim.api.nvim_buf_get_lines(bufnr, input_start_line - 1, total_lines, false)
 	local input_content = table.concat(input_lines, "\n")
 	return input_content:find(text, 1, true) ~= nil
 end
@@ -181,16 +199,16 @@ local function send_selection_to_agent()
 
 	local formatted_text = string.format("@%s(%d-%d)\n```\n%s\n```", relative_path, start_line, end_line, selected_text)
 
-	if not agent_instance then
-		if not M.setup(formatted_text) then
-			return
-		end
-		agent_instance:open()
+	local ok, created = ensure_agent(formatted_text, 50)
+	if not ok then
+		return
+	end
+
+	if created then
 		vim.notify(
 			string.format("Sent to Agent: @%s(%d-%d) with %d lines", relative_path, start_line, end_line, #lines),
 			vim.log.levels.INFO
 		)
-		vim.defer_fn(focus_terminal, 50)
 		return
 	end
 
@@ -202,17 +220,7 @@ local function send_selection_to_agent()
 		return
 	end
 
-	if not agent_instance:is_open() then
-		agent_instance:open()
-	end
-
-	local needs_mode_switch = ensure_insert_mode()
-	local delay = needs_mode_switch and 100 or 0
-
-	vim.defer_fn(function()
-		agent_instance:send(formatted_text)
-		vim.defer_fn(focus_terminal, 50)
-	end, delay)
+	send_text_to_agent(formatted_text, { focus_delay = 50 })
 
 	vim.notify(
 		string.format("Sent to Agent: @%s(%d-%d) with %d lines", relative_path, start_line, end_line, #lines),
@@ -251,36 +259,25 @@ local function send_visible_buffers_to_agent()
 
 	local formatted_text = table.concat(new_files, " ")
 
-	if not agent_instance then
-		if not M.setup(formatted_text) then
-			return
-		end
-		agent_instance:open()
+	local ok, created = ensure_agent(formatted_text, 100)
+	if not ok then
+		return
+	end
+
+	if created then
 		vim.notify(
 			string.format("Sent %d buffers to Agent (%d total visible)", #new_files, #visible_files),
 			vim.log.levels.INFO
 		)
-		vim.defer_fn(focus_terminal, 100)
 		return
 	end
 
-	if not agent_instance:is_open() then
-		agent_instance:open()
-	end
-
-	local needs_mode_switch = ensure_insert_mode()
-	local delay = needs_mode_switch and 100 or 0
-
-	vim.defer_fn(function()
-		agent_instance:send(formatted_text)
-	end, delay)
+	send_text_to_agent(formatted_text, { focus_delay = 100 })
 
 	vim.notify(
 		string.format("Sent %d new buffers to Agent (%d total visible)", #new_files, #visible_files),
 		vim.log.levels.INFO
 	)
-
-	vim.defer_fn(focus_terminal, 100)
 end
 
 function M.setup(prompt)
@@ -306,11 +303,7 @@ function M.setup(prompt)
 		auto_scroll = true,
 		size = function(term)
 			if term.direction == "vertical" then
-				local ratio = config.size_ratio or 0.33
-				if ratio <= 0 or ratio >= 1 then
-					ratio = 0.33
-				end
-				return math.max(20, math.floor(vim.o.columns * ratio))
+				return get_terminal_width()
 			end
 		end,
 		hidden = false,
@@ -326,25 +319,13 @@ function M.setup(prompt)
 			end
 
 			vim.schedule(function()
-				local found_hexagon = false
-				local hexagon_message = nil
-
 				for _, line in ipairs(data) do
-					local lower_line = line:lower()
+					local lower_line = (line or ""):lower()
 
 					if lower_line:match("%-%-+ insert %-%-+") or lower_line:match("insert mode") then
 						agent_mode = "insert"
 					elseif lower_line:match("%-%-+ normal %-%-+") or lower_line:match("normal mode") then
 						agent_mode = "normal"
-					end
-
-					if has_hexagon_symbol(line) then
-						found_hexagon = true
-						last_hexagon_time = current_time
-						hexagon_message = line:gsub("⬡", ""):gsub("⬢", "")
-						hexagon_message = hexagon_message:gsub("\226\172\161", ""):gsub("\226\172\162", "")
-						hexagon_message = strip_ansi_codes(hexagon_message)
-						hexagon_message = hexagon_message:gsub("^%s*(.-)%s*$", "%1")
 					end
 
 					if current_time - last_notification_time >= notification_cooldown then
@@ -356,64 +337,32 @@ function M.setup(prompt)
 							or lower_line:match("%(yes/no%)")
 						then
 							last_notification_time = current_time
-							require("fidget").notify("⚠️  Permission needed - check terminal", vim.log.levels.WARN)
+							vim.notify("Permission needed - check terminal", vim.log.levels.WARN)
 						end
 					end
-				end
-
-				if found_hexagon and hexagon_message and hexagon_message ~= "" then
-					-- Pad the message to ensure consistent length during animation
-					local padded_message = hexagon_message
-					if #padded_message < 15 then
-						padded_message = padded_message .. string.rep(" ", 15 - #padded_message)
-					end
-
-					if not agent_progress then
-						agent_progress = require("fidget.progress").handle.create({
-							message = padded_message,
-							key = config.progress_key or "agent",
-							lsp_client = { name = config.progress_client_name or "agent" },
-						})
-					else
-						agent_progress:report({ message = padded_message })
-					end
-				end
-
-				if agent_progress and not found_hexagon and not is_hexagon_active() then
-					agent_progress:finish()
-					agent_progress = nil
 				end
 			end)
 		end,
 		on_open = function(term)
 			terminal_open_time = vim.loop.now()
-			last_hexagon_time = 0
-			if agent_progress then
-				agent_progress:finish()
-				agent_progress = nil
-			end
 
 			vim.cmd("wincmd H")
-			local ratio = config.size_ratio or 0.33
-			if ratio <= 0 or ratio >= 1 then
-				ratio = 0.33
-			end
-			local width = math.max(20, math.floor(vim.o.columns * ratio))
+			local width = get_terminal_width()
 			vim.cmd("vertical resize " .. width)
 
-			vim.api.nvim_buf_set_keymap(term.bufnr, "n", "q", "<cmd>close<CR>", { noremap = true, silent = true })
-			vim.api.nvim_buf_set_keymap(
-				term.bufnr,
-				"t",
-				"<Esc>",
-				"<C-\\><C-n><C-w>l",
-				{ noremap = true, silent = true }
-			)
-			vim.api.nvim_buf_set_keymap(term.bufnr, "t", "<A-a>", "<cmd>close<CR>", { noremap = true, silent = true })
-			vim.api.nvim_buf_set_keymap(term.bufnr, "n", "<S-h>", "<C-w>h", { noremap = true, silent = true })
-			vim.api.nvim_buf_set_keymap(term.bufnr, "n", "<S-l>", "<C-w>l", { noremap = true, silent = true })
-			vim.api.nvim_buf_set_keymap(term.bufnr, "n", "<S-j>", "<C-w>j", { noremap = true, silent = true })
-			vim.api.nvim_buf_set_keymap(term.bufnr, "n", "<S-k>", "<C-w>k", { noremap = true, silent = true })
+			local keymaps = {
+				{ mode = "n", lhs = "q", rhs = "<cmd>close<CR>" },
+				{ mode = "t", lhs = "<Esc>", rhs = "<C-\\><C-n><C-w>l" },
+				{ mode = "t", lhs = "<A-a>", rhs = "<cmd>close<CR>" },
+				{ mode = "n", lhs = "<S-h>", rhs = "<C-w>h" },
+				{ mode = "n", lhs = "<S-l>", rhs = "<C-w>l" },
+				{ mode = "n", lhs = "<S-j>", rhs = "<C-w>j" },
+				{ mode = "n", lhs = "<S-k>", rhs = "<C-w>k" },
+			}
+
+			for _, map in ipairs(keymaps) do
+				vim.api.nvim_buf_set_keymap(term.bufnr, map.mode, map.lhs, map.rhs, { noremap = true, silent = true })
+			end
 
 			if pending_initial_text and pending_initial_text ~= "" then
 				local text = pending_initial_text
@@ -434,12 +383,7 @@ function M.setup(prompt)
 			end
 		end,
 		on_close = function()
-			last_hexagon_time = 0
 			pending_initial_text = nil
-			if agent_progress then
-				agent_progress:finish()
-				agent_progress = nil
-			end
 		end,
 	})
 
