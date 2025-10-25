@@ -181,4 +181,4 @@ configuration {
 }
 
 
-@theme "/home/fbb/.config/rofi/themes/spotlight-dark.rasi"
+@theme "~/.config/rofi/launchers/type-3/style-3.rasi"
