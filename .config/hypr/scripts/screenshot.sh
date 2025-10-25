@@ -32,10 +32,15 @@ if [[ "${mode}" == "ocr" ]]; then
         exit 1
     fi
 
-    tmpfile="$(mktemp --suffix=.png)"
-    trap 'rm -f "${tmpfile}"' EXIT
+    tmpdir="$(mktemp -d)"
+    tmpfile="${tmpdir}/capture.png"
+    trap 'rm -rf "${tmpdir}"' EXIT
 
     if ! grimblast save "${target}" "${tmpfile}"; then
+        if [[ ! -s "${tmpfile}" ]]; then
+            # Assume the user cancelled the selection.
+            exit 0
+        fi
         notify-send "Screenshot OCR failed" "Could not capture selection."
         exit 1
     fi
@@ -45,8 +50,8 @@ if [[ "${mode}" == "ocr" ]]; then
         exit 1
     fi
 
-    # Cleanup temp file immediately after OCR completes.
-    rm -f "${tmpfile}"
+    # Cleanup temp files immediately after OCR completes.
+    rm -rf "${tmpdir}"
     trap - EXIT
 
     text="${raw_text}"
@@ -76,6 +81,10 @@ timestamp="$(date '+%Y-%m-%d_%H-%M-%S')"
 file="${shots_dir}/screenshot-${mode}-${timestamp}.png"
 
 if ! grimblast copysave "${target}" "${file}"; then
+    if [[ "${target}" == "area" && ! -f "${file}" ]]; then
+        # Assume user cancelled the selection.
+        exit 0
+    fi
     notify-send "Screenshot failed" "Could not capture ${label,,}."
     exit 1
 fi
