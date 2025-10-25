@@ -13,7 +13,7 @@ if test -z "$WAYLAND_DISPLAY" && test "$XDG_VTNR" = 1
 
     if not test -f "$flag_file"
         touch "$flag_file"
-        #        hyprstart
+        hyprstart
     end
 end
 

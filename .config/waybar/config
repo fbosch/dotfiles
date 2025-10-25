@@ -1,4 +1,4 @@
-{
+{              
   "layer": "top",
   "position": "bottom",
   "height": 40,
@@ -15,7 +15,8 @@
 
   "custom/startbutton": {
     "format": "",
-  },              
+    "on-click": "rofi -show drun"
+  },
 
   "custom/nix-updates": {
     "exec": "~/.config/waybar/scripts/update-checker",

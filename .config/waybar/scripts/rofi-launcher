@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+# Toggle the main rofi launcher used by the Waybar start button.
+set -euo pipefail
+
+if pgrep -x rofi >/dev/null; then
+  pkill -x rofi
+  exit 0
+fi
+
+theme_default="$HOME/.config/rofi/launchers/type-3/style-3.rasi"
+theme="${ROFI_THEME:-$theme_default}"
+
+if [[ -f "$theme" ]]; then
+  exec rofi -show drun -theme "$theme"
+else
+  exec rofi -show drun
+fi
