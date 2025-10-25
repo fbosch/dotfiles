@@ -186,6 +186,8 @@
 }
 
 .notification-icon image {
+  min-height: 100%;
+  width: 300px;
 }
 
 /* Notification Text */
@@ -208,6 +210,18 @@
   border-radius: var(--radius-small);
   margin-right: 1.25rem;
   margin-left: 0.25rem;
+}
+
+.body-image {
+  margin-top: 4px;
+  margin-right: 1.25rem;
+  margin-left: 0.25rem;
+  min-width: 22rem;
+  min-height: 12rem;
+  border-radius: var(--radius-medium);
+  overflow: hidden;
+  box-shadow: var(--shadow-elevation-low);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 /* Notification Actions */

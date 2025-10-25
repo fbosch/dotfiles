@@ -91,7 +91,13 @@ fi
 
 if command -v notify-send >/dev/null 2>&1; then
     (
-        action=$(notify-send --wait --action=default=Open -i "${file}" "Screenshot saved" "${label} saved to ${file}") || true
+        action=$(notify-send \
+            --wait \
+            --action=default=Open \
+            --hint="string:image-path:${file}" \
+            -i camera-photo \
+            "Screenshot saved" \
+            "${label} saved to ${file}") || true
         if [[ "${action}" == "default" ]]; then
             if command -v xdg-open >/dev/null 2>&1; then
                 xdg-open "${file}" >/dev/null 2>&1 &
