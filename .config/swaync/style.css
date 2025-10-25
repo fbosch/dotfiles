@@ -15,6 +15,9 @@
   --border-color: rgba(255, 255, 255, 0.08);
   --critical-color: #c42b1c;
   --shadow-color: 0deg 0% 0%;
+  --radius-large: 22px;
+  --radius-medium: 18px;
+  --radius-small: 12px;
   --shadow-elevation-low:
     0.4px 0.8px 0.7px hsl(var(--shadow-color) / 0.15),
     0.5px 1px 0.8px -2.5px hsl(var(--shadow-color) / 0.1),
@@ -44,26 +47,27 @@
 /* Control Center Widget */
 .control-center {
   background: transparent;
-  border-radius: 12px;
-  border: none;
+  border-radius: var(--radius-large);
+  overflow: hidden;
   /* box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45); */
   /* margin: 12px; */
 }
 
 .control-center-list {
   background: transparent;
-  border-radius: 12px 12px 0 0;
+  overflow: hidden;
 }
 
 .control-center-list .notification {
   background: var(--solid-bg-color);
+  border-radius: var(--radius-large);
+  overflow: hidden;
   box-shadow: var(--shadow-elevation-medium);
 }
 
 .notification-list-scroll {
   background: var(--bg-color);
 }
-
 
 .notification-group-header {
   padding: 16px;
@@ -77,12 +81,11 @@
 .notifications-placeholder {
   background: var(--bg-color);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--radius-medium);
   padding: 24px;
   margin: 8px;
   box-shadow: var(--shadow-elevation-low);
 }
-
 
 /* Widget Title */
 .control-center .widget-title {
@@ -94,13 +97,13 @@
   margin-top: 8px;
   border: 1px solid var(--border-color);
   border-bottom: none;
-  border-radius: 8px 8px 0 0;
+  border-radius: var(--radius-medium) var(--radius-medium) 0 0;
 }
 
 .control-center-list-placeholder {
   background: var(--bg-color);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--radius-medium);
   padding: 24px;
   margin: 8px;
   box-shadow: var(--shadow-elevation-low);
@@ -110,7 +113,7 @@
 
 .control-center .widget-title>button {
   background: var(--surface-color);
-  border-radius: 8px;
+  border-radius: var(--radius-small);
   color: var(--text-color);
   padding: 6px 10px;
   border: 1px solid transparent;
@@ -136,8 +139,9 @@
 /* Individual Notification */
 .notification {
   background: var(--bg-color);
-  border-radius: 6px;
+  border-radius: var(--radius-large);
   border: 1px solid var(--border-color);
+  overflow: hidden;
   transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
   box-shadow: var(--shadow-elevation-high);
 }
@@ -182,7 +186,6 @@
 }
 
 .notification-icon image {
-  border-radius: 6px;
 }
 
 /* Notification Text */
@@ -202,7 +205,7 @@
 
 /* Notification Image */
 .image {
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   margin-right: 1.25rem;
   margin-left: 0.25rem;
 }
@@ -210,7 +213,7 @@
 /* Notification Actions */
 .notification-action {
   background: var(--surface-color);
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   color: var(--text-color);
   padding: 8px 16px;
   margin: 8px 4px 0 0;
@@ -258,7 +261,7 @@
 .widget-dnd {
   background: var(--bg-color);
   padding: 8px 8px 8px 16px;
-  border-radius: 0 0 8px 8px;
+  border-radius: 0 0 var(--radius-medium) var(--radius-medium);
   border: 1px solid var(--border-color);
   border-top: none;
 }
@@ -291,13 +294,13 @@
   background: var(--bg-color);
   padding: 8px;
   margin: 8px 0px;
-  border-radius: 8px;
+  border-radius: var(--radius-medium);
   border: 1px solid var(--border-color);
 }
 
 .widget-buttons-grid>flowbox>flowboxchild>button {
   background: var(--surface-color);
-  border-radius: 8px;
+  border-radius: var(--radius-small);
   color: var(--text-color);
   padding: 8px;
   margin: 0 4px;
@@ -317,7 +320,7 @@
 /* MPRIS Widget (Media Controls) */
 .widget-mpris {
   background: var(--surface-color);
-  border-radius: 8px;
+  border-radius: var(--radius-medium);
   padding: 12px;
   margin: 8px;
   border: 1px solid var(--border-color);
@@ -329,7 +332,7 @@
 }
 
 .widget-mpris-album-art {
-  border-radius: 8px;
+  border-radius: var(--radius-medium);
 }
 
 .widget-mpris-title {
@@ -366,7 +369,7 @@
   font-size: 14px;
   padding: 12px;
   margin: 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-medium);
   border: 1px solid var(--border-color);
 }
 
@@ -386,20 +389,20 @@
 /* Scrollbar */
 scrollbar {
   background: transparent;
-  border-radius: 12px;
+  border-radius: var(--radius-medium);
   padding: 2px;
 }
 
 scrollbar trough {
   /* background: rgba(255, 255, 255, 0.03); */
   background: transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-small);
 }
 
 scrollbar slider {
   /* background: rgba(255, 255, 255, 0.2); */
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   min-width: 6px;
   min-height: 40px;
   transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -436,7 +439,7 @@ scrollbar slider:active {
 .widget-label.placeholder {
   background: var(--surface-color);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--radius-medium);
   color: var(--text-tertiary);
   font-size: 16px;
   font-weight: 500;
