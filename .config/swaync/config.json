@@ -31,6 +31,10 @@
     }
   },
   "notification-visibility": {
+    "keyboard-layout-switch": {
+      "state": "transient",
+      "app-name": "^Layout Switcher$"
+    },
     "example-name": {
       "state": "muted",
       "urgency": "Low",
