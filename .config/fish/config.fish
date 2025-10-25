@@ -5,7 +5,7 @@ if string match -q vscode $TERM_PROGRAM
 end
 
 function hyprstart
-    exec uwsm start -S hyprland-uwsm.desktop &
+    exec uwsm start hyprland-uwsm.desktop
 end
 
 if test -z "$WAYLAND_DISPLAY" && test "$XDG_VTNR" = 1
@@ -13,7 +13,7 @@ if test -z "$WAYLAND_DISPLAY" && test "$XDG_VTNR" = 1
 
     if not test -f "$flag_file"
         touch "$flag_file"
-        hyprstart
+        #        hyprstart
     end
 end
 

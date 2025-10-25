@@ -1,0 +1,215 @@
+plugin = $HYPR_PLUGIN_DIR/lib/libhy3.so # layout
+plugin = $HYPR_PLUGIN_DIR/lib/libhyprexpo.so # expo
+plugin = $HYPR_PLUGIN_DIR/lib/libhyprbars.so # bars
+plugin = $HYPR_PLUGIN_DIR/lib/libHyprspace.so # yprspace 
+
+# This is an example Hyprland config file.
+# Refer to the wiki for more information.
+# https://wiki.hypr.land/Configuring/
+
+# You can split this configuration into multiple files
+# Create your files separately and then link them to this file like this:
+# source = ~/.config/hypr/myColors.conf
+
+###################
+### MY PROGRAMS ###
+###################
+
+# See https://wiki.hypr.land/Configuring/Monitors/
+monitor=,preferred,auto,1
+
+# Set programs that you use
+$terminal = foot
+$fileManager = nemo
+$menu = vicinae toggle
+ 
+source = ~/.config/hypr/hy3.conf
+source = ~/.config/hypr/hyprbars.conf
+source = ~/.config/hypr/keybinds.conf
+source = ~/.config/hypr/rules.conf
+source = ~/.config/hypr/hyprexpo.conf
+source = ~/.config/hypr/animations.conf
+
+#################
+### AUTOSTART ###
+#################
+
+# Autostart necessary processes (like notifications daemons, status bars, etc.)
+# Or execute your favorite apps at launch like this:
+
+# exec-once = $terminal
+# exec-once = nm-applet &
+exec-once = waybar & hyprpaper & tailscale-systray &
+exec-once = polkit-agent-helper-1 &
+exec-once = vicinae server &
+exec-once = systemctl start --user polkit-gnome-authentication-agent-1
+exec-once = swaync -c ~/.config/swaync/config.json -s ~/.config/swaync/style.css
+
+#############################
+### ENVIRONMENT VARIABLES ###
+#############################
+
+# See https://wiki.hypr.land/Configuring/Environment-variables/
+
+env = XCURSOR_SIZE,24
+env = HYPRCURSOR_SIZE,24
+
+###################
+### PERMISSIONS ###
+###################
+
+# See https://wiki.hypr.land/Configuring/Permissions/
+# Please note permission changes here require a Hyprland restart and are not applied on-the-fly
+# for security reasons
+
+# ecosystem {
+#   enforce_permissions = 1
+# }
+
+# permission = /usr/(bin|local/bin)/grim, screencopy, allow
+# permission = /usr/(lib|libexec|lib64)/xdg-desktop-portal-hyprland, screencopy, allow
+# permission = /usr/(bin|local/bin)/hyprpm, plugin, allow
+
+
+#####################
+### LOOK AND FEEL ###
+#####################
+
+# Refer to https://wiki.hypr.land/Configuring/Variables/
+
+# https://wiki.hypr.land/Configuring/Variables/#general
+general {
+    gaps_in = 1 
+    gaps_out = 5
+
+    border_size = 1 
+
+    # https://wiki.hypr.land/Configuring/Variables/#variable-types for info about colors
+    col.active_border = rgba(ffffff66)
+    col.inactive_border = rgba(59595940)
+
+    # Set to true enable resizing windows by clicking and dragging on borders and gaps
+    resize_on_border = true
+
+    # Please see https://wiki.hypr.land/Configuring/Tearing/ before you turn this on
+    allow_tearing = false
+
+  layout = dwindle
+  # layout = hy3
+}
+
+dwindle {
+  single_window_aspect_ratio = 4 3 
+  single_window_aspect_ratio_tolerance = 0.1
+}
+
+# https://wiki.hypr.land/Configuring/Variables/#decoration
+decoration {
+    rounding = 4
+    rounding_power = 8
+    # Change transparency of focused and unfocused windows
+    active_opacity = 1.0
+    inactive_opacity = 1.0
+
+    shadow {
+        enabled = false
+        range = 4
+        render_power = 3
+        color = rgba(1a1a1aee)
+    }
+
+    # https://wiki.hypr.land/Configuring/Variables/#blur
+    blur {
+        enabled = true
+        size = 2 
+        popups = true
+        passes = 4
+        new_optimizations = yes
+        ignore_opacity = false 
+
+        vibrancy = 0.1696
+    }
+}
+
+
+# See https://wiki.hypr.land/Configuring/Dwindle-Layout/ for more
+dwindle {
+    pseudotile = true # Master switch for pseudotiling. Enabling is bound to mainMod + P in the keybinds section below
+    preserve_split = true # You probably want this
+}
+
+# See https://wiki.hypr.land/Configuring/Master-Layout/ for more
+master {
+    new_status = master
+}
+
+# https://wiki.hypr.land/Configuring/Variables/#misc
+misc {
+    force_default_wallpaper = -1 # Set to 0 or 1 to disable the anime mascot wallpapers
+    disable_hyprland_logo = true # If true disables the random hyprland logo / anime girl background. :(
+    layerrule = blur,waybar
+    layerrule = blur,vicinae
+    layerrule = blur,rofi
+    layerrule = blur,nemo
+    layerrule = noanim,rofi
+    layerrule = noanim,vicinae
+    layerrule = ignorealpha 0,rofi
+    layerrule = blur,swaync-control-center
+    layerrule = blur,swaync-notification-window
+    layerrule = ignorealpha 0.3,vicinae
+    layerrule = ignorealpha 0.3,swaync-control-center
+    layerrule = ignorealpha 0.3,swaync-notification-window
+}
+
+
+#############
+### INPUT ###
+#############
+
+# https://wiki.hypr.land/Configuring/Variables/#input
+input {
+    kb_layout = us,dk
+    kb_variant =
+    kb_model =
+    # kb_options = grp:win_space_toggle
+    kb_options =
+    kb_rules = 
+    repeat_rate = 40
+    repeat_delay = 400
+
+    follow_mouse = 0
+
+    sensitivity = 0 # -1.0 - 1.0, 0 means no modification.
+
+    touchpad {
+        natural_scroll = false
+    }
+}
+
+
+
+# See https://wiki.hypr.land/Configuring/Gestures
+gesture = 3, horizontal, workspace
+
+# Example per-device config
+# See https://wiki.hypr.land/Configuring/Keywords/#per-device-input-configs for more
+device {
+    name = epic-mouse-v1
+    sensitivity = -0.5
+}
+
+##############################
+### WINDOWS AND WORKSPACES ###
+##############################
+
+# See https://wiki.hypr.land/Configuring/Window-Rules/ for more
+# See https://wiki.hypr.land/Configuring/Workspace-Rules/ for workspace rules
+
+# Example windowrule
+# windowrule = float,class:^(kitty)$,title:^(kitty)$
+
+# Ignore maximize requests from apps. You'll probably like this.
+windowrule = suppressevent maximize, class:.*
+
+# Fix some dragging issues with XWayland
+windowrule = nofocus,class:^$,title:^$,xwayland:1,floating:1,fullscreen:0,pinned:0

@@ -3,7 +3,7 @@
   "position": "bottom",
   "height": 40,
 
-  "modules-left": ["hyprland/workspaces"],
+  "modules-left": ["custom/startbutton", "hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],
   "modules-right": [ "memory", "cpu", "custom/nix-updates", "tray", "pulseaudio", "hyprland/language", "clock", "custom/swaync"],
 
@@ -12,6 +12,10 @@
     "icon-size": 16,
     "reverse-direction": false,
   },
+
+  "custom/startbutton": {
+    "format": "",
+  },              
 
   "custom/nix-updates": {
     "exec": "~/.config/waybar/scripts/update-checker",

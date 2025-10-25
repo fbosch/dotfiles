@@ -4,6 +4,7 @@
 # lock files
 lazy-lock.json
 Brewfile.lock.json
+node_modules
 
 # editor and tool state files
 .config/lazygit/state.yml

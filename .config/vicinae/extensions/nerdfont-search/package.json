@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/vicinaehq/vicinae/refs/heads/main/extra/schemas/extension.json",
+  "name": "nerdfont-search",
+  "title": "NerdFont Search",
+  "description": "utility to search and find nerdfont icons and add them to your clipboard",
+  "categories": [],
+  "license": "MIT",
+  "author": "fbosch",
+  "contributors": [],
+  "pastContributors": [],
+  "icon": "extension_icon.png",
+  "commands": [
+    {
+      "name": "nerdfonts",
+      "title": "Nerdfonts",
+      "subtitle": "search for icons",
+      "description": "find icons",
+      "mode": "view"
+    }
+  ],
+  "preferences": [],
+  "scripts": {
+    "build": "vici build",
+    "dev": "vici develop"
+  },
+  "dependencies": {
+    "@vicinae/api": "^0.15.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}
