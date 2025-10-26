@@ -1,7 +1,12 @@
 {              
-  "layer": "top",
+  "layer": "overlay",
   "position": "bottom",
   "height": 40,
+  "exclusive": false,
+  "passthrough": false,
+  "start_hidden": true,
+  "on-sigusr1": "show",
+  "on-sigusr2": "hide",
 
   "modules-left": ["custom/startbutton", "hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],
@@ -26,7 +31,7 @@
     "format-icons": ["", " ", " ", " "," ", " ", " "," ", "","", "" ],
     "states": {
       "idle": 0,
-      "normal": 11,
+      "normal": 10,
       "warning": 70,
       "critical": 90
     },
@@ -91,6 +96,7 @@
     "justify": "right",
     "on-click": "swaync-client -t",
     "menu": "on-click-right",
+    "tooltip": false,
     "menu-file": "~/.config/waybar/power_menu.xml",
     "menu-actions": {
       "shutdown": "shutdown 0",
