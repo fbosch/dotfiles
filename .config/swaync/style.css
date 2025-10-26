@@ -263,8 +263,12 @@
   opacity: 1;
 }
 
+.floating-notifications {
+  margin-bottom: 40px;
+}
+
 .floating-notifications .notification  {
-  margin-right: 8px;
+  margin-right: 20px;
 }
 
 .close-button:active {

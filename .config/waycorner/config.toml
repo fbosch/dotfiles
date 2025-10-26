@@ -6,5 +6,5 @@ enter_command = ["/home/fbb/.config/hypr/scripts/toggle-waybar.sh", "show"]
 exit_command = ["/home/fbb/.config/hypr/scripts/toggle-waybar.sh", "hide"]
 locations = ["bottom"]
 margin = 0
-size = 25
+size = 45
 timeout_ms = 350
