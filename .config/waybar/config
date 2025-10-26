@@ -5,7 +5,7 @@
 
   "modules-left": ["custom/startbutton", "hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],
-  "modules-right": [ "memory", "cpu", "custom/nix-updates", "tray", "pulseaudio", "hyprland/language", "clock", "custom/swaync"],
+  "modules-right": [ "memory", "cpu", "tray", "pulseaudio", "hyprland/language", "clock", "custom/swaync"],
 
   "tray": {
     "spacing": 8,
@@ -15,32 +15,15 @@
 
   "custom/startbutton": {
     "format": "",
-    "on-click": "rofi -show drun"
+    "on-click": "rofi -show drun",
+    "tooltip": false
   },
 
-  "custom/nix-updates": {
-    "exec": "~/.config/waybar/scripts/update-checker",
-    "signal": 12,
-    "interval": 3600,
-    "on-click": "~/.config/waybar/scripts/update-checker toggle",
-    "on-click-right": "rm ~/.cache/nix-update-last-run",
-    "on-click-middle": "rm ~/.cache/nix-update-updating-flag",
-    "format": "{icon}",
-    "return-type": "json",
-    "tooltip": true,
-    "format-icons": {
-      "has-updates": " ",
-      "updating": " ",
-      "updated": "",
-      "disabled": "",
-      "error": "",
-    },
-  },
 
   "cpu": {
     "format": "{icon} {usage}% ",
     "tooltip-format": "{usage}%",
-    "format-icons": ["", " ", " ", " ", " "," ", "","", "" ],
+    "format-icons": ["", " ", " ", " "," ", " ", " "," ", "","", "" ],
     "states": {
       "idle": 0,
       "normal": 11,
