@@ -1,10 +1,13 @@
 {              
-  "layer": "overlay",
+  "layer": "top",
   "position": "bottom",
   "height": 40,
   "exclusive": false,
   "passthrough": false,
   "start_hidden": true,
+  "on-sigusr1": "show",
+  "on-sigusr2": "hide",
+  "mode": "dock",
 
   "modules-left": ["custom/startbutton", "hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],

@@ -7,7 +7,7 @@ hyprctl reload
 # Gracefully stop relevant background services if they are running.
 pkill waybar 2>/dev/null || true
 pkill hyprpaper 2>/dev/null || true
-pkill waycorners 2>/dev/null || true
+pkill -f "waybar-hover.sh" 2>/dev/null || true
 
 sleep 0.2
 
@@ -16,4 +16,4 @@ waybar &
 hyprpaper &
 swaync-client -R &
 swaync-client -rs &
-waycorners --config /home/fbb/.config/waycorner/config.toml &
+bash ~/.config/hypr/scripts/waybar-hover.sh &
