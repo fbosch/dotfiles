@@ -1,0 +1,15 @@
+# Trigger Waybar toggling by hitting the bottom edge of any monitor.
+# See `waycorners --help` for more information on valid values.
+
+cooldown_ms = 450
+
+[[bindings]]
+name = "toggle-waybar-bottom"
+mode = "tap"
+command = "/home/fbb/.config/hypr/scripts/toggle-waybar.sh"
+
+[bindings.region]
+monitor = "*"
+edge = "bottom"
+length = 1.0
+thickness = 0.02

@@ -5,8 +5,6 @@
   "exclusive": false,
   "passthrough": false,
   "start_hidden": true,
-  "on-sigusr1": "show",
-  "on-sigusr2": "hide",
 
   "modules-left": ["custom/startbutton", "hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],
@@ -23,7 +21,6 @@
     "on-click": "rofi -show drun",
     "tooltip": false
   },
-
 
   "cpu": {
     "format": "{icon} {usage}% ",
