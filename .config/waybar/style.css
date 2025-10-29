@@ -10,7 +10,7 @@
 
 * {
   font-family: "SF Pro Text", "Segoe Fluent Icons", sans-serif;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: #fff;
 }
 
@@ -20,10 +20,9 @@ window#waybar {
   background-color: rgba(44, 44, 44, 0.7);
   transition-property: background-color;
   transition-duration: 500ms;
-  text-shadow: 0 0 2px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
   letter-spacing: 0.05em;
 }
-
 
 /* Module containers */
 .modules-right {

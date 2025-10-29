@@ -2,7 +2,7 @@ local M = {}
 
 local config = {
 	shell = "zsh",
-	primary_cli = "codex resume",
+	primary_cli = "cursor-agent",
 	fallback_cli = "cursor-agent",
 	prompt_mode = "argument", -- "argument" or "stdin"
 	prompt_cli = nil,

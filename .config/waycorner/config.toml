@@ -2,9 +2,9 @@
 # See https://github.com/AndreasBackx/waycorner for configuration options.
 
 [toggle_waybar]
-enter_command = ["/home/fbb/.config/hypr/scripts/toggle-waybar.sh", "show"]
-exit_command = ["/home/fbb/.config/hypr/scripts/toggle-waybar.sh", "hide"]
+enter_command = ["pkill", "-SIGUSR1", "waybar"]
+exit_command = ["sleep", "0.5", "pkill", "-SIGUSR2", "waybar"]
 locations = ["bottom"]
 margin = 0
-size = 45
-timeout_ms = 350
+size = 50
+timeout_ms = 450
