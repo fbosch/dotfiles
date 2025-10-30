@@ -1509,3 +1509,6 @@ ValidationResponse
 signingDeadline
 payoutDate
 hyprspace
+nixos
+nixos-generate-config
+dendritic
