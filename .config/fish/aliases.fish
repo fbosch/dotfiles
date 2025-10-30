@@ -12,6 +12,7 @@ abbr p pnpm
 abbr pugi 'pnpm upgrade --interactive --latest --recursive'
 abbr pupi 'pnpm update --interactive --recursive'
 abbr bup 'brew upgrade'
+abbr ff freshfetch
 
 function vimdiff
     nvim -d $argv

@@ -7,7 +7,7 @@
   "on-sigusr1": "show",
   "on-sigusr2": "hide",
   "passthrough": false,
-  "mode": "hide",
+  "mode": "dock",
 
   "modules-left": ["custom/startbutton", "hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],

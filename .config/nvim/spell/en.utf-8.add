@@ -1512,3 +1512,6 @@ hyprspace
 nixos
 nixos-generate-config
 dendritic
+exec-once
+nm-applet
+hypr
