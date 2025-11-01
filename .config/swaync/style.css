@@ -40,7 +40,7 @@
 
 * {
   all: unset;
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   font-size: 14px;
 }
 
@@ -110,8 +110,7 @@
   opacity: 0.8;
 }
 
-
-.control-center .widget-title>button {
+.control-center .widget-title > button {
   background: var(--surface-color);
   border-radius: var(--radius-small);
   color: var(--text-color);
@@ -120,12 +119,12 @@
   transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-.control-center .widget-title>button:hover {
+.control-center .widget-title > button:hover {
   background: var(--surface-hover);
   border-color: var(--border-color);
 }
 
-.control-center .widget-title>button:active {
+.control-center .widget-title > button:active {
   background: var(--surface-active);
   transition-duration: 100ms;
 }
@@ -264,10 +263,10 @@
 }
 
 .floating-notifications {
-  margin-bottom: 45px;
+  margin-bottom: 8px;
 }
 
-.floating-notifications .notification  {
+.floating-notifications .notification {
   margin-right: 20px;
 }
 
@@ -284,7 +283,7 @@
   border-top: none;
 }
 
-.widget-dnd>switch {
+.widget-dnd > switch {
   background: var(--surface-color);
   border-radius: 16px;
   border: 1px solid var(--border-color);
@@ -293,12 +292,12 @@
   min-height: 24px;
 }
 
-.widget-dnd>switch:checked {
+.widget-dnd > switch:checked {
   background: var(--accent-color);
   border-color: var(--accent-color);
 }
 
-.widget-dnd>switch slider {
+.widget-dnd > switch slider {
   background: var(--text-color);
   border-radius: 50%;
   min-width: 18px;
@@ -316,7 +315,7 @@
   border: 1px solid var(--border-color);
 }
 
-.widget-buttons-grid>flowbox>flowboxchild>button {
+.widget-buttons-grid > flowbox > flowboxchild > button {
   background: var(--surface-color);
   border-radius: var(--radius-small);
   color: var(--text-color);
@@ -326,12 +325,12 @@
   transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-.widget-buttons-grid>flowbox>flowboxchild>button:hover {
+.widget-buttons-grid > flowbox > flowboxchild > button:hover {
   background: var(--surface-hover);
   border-color: rgba(255, 255, 255, 0.15);
 }
 
-.widget-buttons-grid>flowbox>flowboxchild>button:active {
+.widget-buttons-grid > flowbox > flowboxchild > button:active {
   background: var(--surface-active);
 }
 
@@ -364,7 +363,7 @@
   font-size: 12px;
 }
 
-.widget-mpris>button {
+.widget-mpris > button {
   background: transparent;
   border-radius: 50%;
   color: var(--text-secondary);
@@ -374,7 +373,7 @@
   transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-.widget-mpris>button:hover {
+.widget-mpris > button:hover {
   background: var(--surface-hover);
   color: var(--text-color);
   border-color: var(--border-color);
@@ -396,7 +395,6 @@
   padding: 8px;
   margin: 0 8px;
 }
-
 
 .notification-list .notification {
   background: var(--bg-color);
