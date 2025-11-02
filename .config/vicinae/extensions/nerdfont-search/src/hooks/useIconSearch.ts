@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useIconData, type IconIndex, type GlyphRecord } from "./useIconData";
 
@@ -26,7 +26,10 @@ function createIconDataURL(char: string, _code: string): string {
 
 function splitNameIntoWords(value: string): string[] {
   if (!value) return [];
-  return value.split(/[_-]/g).map((part) => part.trim()).filter(Boolean);
+  return value
+    .split(/[_-]/g)
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 async function createIconEntry(
@@ -143,7 +146,12 @@ export function useIconSearch(
   debouncedSearch: string,
 ) {
   const shouldLoadData = debouncedSearch.length >= 3;
-  const { iconIndex, glyphnames, isLoading: dataLoading, fuseInstance } = useIconData(shouldLoadData);
+  const {
+    iconIndex,
+    glyphnames,
+    isLoading: dataLoading,
+    fuseInstance,
+  } = useIconData(shouldLoadData);
 
   // Sync filtering with Fuse
   const filteredIndex = useMemo(() => {
@@ -175,7 +183,7 @@ export function useIconSearch(
 
   // Create a stable key from filteredIndex to ensure cache correctness
   const filteredIndexKey = useMemo(() => {
-    return filteredIndex.map(item => item.id).join(',');
+    return filteredIndex.map((item) => item.id).join(",");
   }, [filteredIndex]);
 
   // Async loading of full icon entries
@@ -183,6 +191,7 @@ export function useIconSearch(
     queryKey: ["iconEntries", filteredIndexKey],
     queryFn: () => loadIconEntries(filteredIndex, glyphnames!),
     enabled: filteredIndex.length > 0 && glyphnames !== null,
+    placeholderData: keepPreviousData,
     staleTime: Infinity, // Cache indefinitely - same filteredIndex always returns same results
     gcTime: 300000, // Keep in cache for 5 minutes
   });
