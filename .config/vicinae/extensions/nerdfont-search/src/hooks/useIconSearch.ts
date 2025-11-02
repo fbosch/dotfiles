@@ -166,10 +166,11 @@ export function useIconSearch(
 
   // Async loading of full icon entries
   const { data: icons = [], isLoading: entriesLoading } = useQuery({
-    queryKey: ["iconEntries", debouncedSearch, selectedPack, filteredIndex.length],
+    queryKey: ["iconEntries", debouncedSearch, selectedPack],
     queryFn: () => loadIconEntries(filteredIndex, glyphnames!),
     enabled: filteredIndex.length > 0 && glyphnames !== null,
-    staleTime: 60000, // Cache for 1 minute
+    staleTime: Infinity, // Cache indefinitely - same search always returns same results
+    gcTime: 300000, // Keep in cache for 5 minutes
   });
 
   return {
