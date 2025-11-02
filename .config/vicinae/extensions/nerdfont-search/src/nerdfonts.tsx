@@ -1,8 +1,10 @@
 import React from "react";
 import { Grid, ActionPanel, Action, Icon, LocalStorage } from "@vicinae/api";
 
-const RECENT_ICONS_KEY = "recentIcons";
+const RECENT_ICONS_KEY = "recentIconsData";
 const MAX_RECENT_ICONS = 20;
+
+type RecentIcon = Pick<IconEntry, "id" | "char" | "code" | "displayName" | "nerdFontId" | "packLabel" | "iconPath">;
 
 type GlyphRecord = Record<string, { char: string; code: string }>;
 
@@ -62,169 +64,12 @@ const PACK_LABELS: Record<string, string> = {
   weather: "Weather Icons",
 };
 
-const ACRONYMS = new Set([
-  "api",
-  "aws",
-  "css",
-  "cpu",
-  "db",
-  "dev",
-  "doc",
-  "gpu",
-  "html",
-  "id",
-  "ip",
-  "js",
-  "nfc",
-  "npm",
-  "pdf",
-  "sql",
-  "ui",
-  "url",
-  "usb",
-  "vm",
-  "vpn",
-  "xml",
-]);
-
-const TOKEN_SYNONYMS: Record<string, string[]> = {
-  account: ["user", "profile", "person", "avatar"],
-  add: ["plus", "new"],
-  alert: ["warning", "caution", "triangle"],
-  anchor: ["ship", "boat"],
-  app: ["application", "program"],
-  arrow: ["direction", "chevron", "pointer"],
-  audio: ["sound", "speaker", "volume"],
-  back: ["previous", "left"],
-  bell: ["notification", "alert"],
-  bird: ["animal"],
-  bolt: ["lightning", "electric", "flash"],
-  book: ["read", "library", "manual"],
-  box: ["container", "package"],
-  bug: ["issue", "defect", "problem"],
-  bulb: ["idea", "light"],
-  camera: ["photo", "picture"],
-  cancel: ["close", "stop", "abort"],
-  car: ["vehicle", "auto"],
-  cart: ["shopping", "basket"],
-  certificate: ["badge", "award"],
-  chat: ["message", "speech", "bubble"],
-  check: ["tick", "confirm", "done", "ok", "success"],
-  circle: ["round", "button"],
-  clipboard: ["copy", "paste"],
-  close: ["cross", "cancel", "x"],
-  cloud: ["upload", "download", "storage"],
-  code: ["developer", "program"],
-  cog: ["settings", "gear", "preferences"],
-  column: ["layout"],
-  comment: ["message", "chat"],
-  compass: ["navigation", "direction"],
-  copy: ["duplicate", "clone"],
-  cpu: ["processor", "chip"],
-  cross: ["close", "cancel", "multiply"],
-  delete: ["remove", "trash", "bin"],
-  desktop: ["computer", "monitor"],
-  document: ["file", "paper"],
-  download: ["save", "arrow down"],
-  edit: ["pencil", "write"],
-  email: ["mail", "envelope"],
-  error: ["issue", "problem", "warning"],
-  exit: ["logout", "leave"],
-  file: ["document", "paper"],
-  filter: ["funnel", "narrow"],
-  flag: ["marker", "milestone"],
-  folder: ["directory"],
-  forward: ["next", "right"],
-  gift: ["present"],
-  globe: ["world", "earth"],
-  graph: ["chart"],
-  grid: ["layout"],
-  heart: ["like", "love", "favorite"],
-  help: ["question", "support"],
-  home: ["house"],
-  image: ["picture", "photo"],
-  info: ["information", "details"],
-  light: ["sun", "bright"],
-  link: ["chain", "url"],
-  list: ["menu", "items", "bullet"],
-  lock: ["secure", "security"],
-  login: ["sign in"],
-  logout: ["sign out", "exit"],
-  magnifier: ["search", "find"],
-  menu: ["hamburger", "navigation"],
-  message: ["chat", "speech"],
-  microphone: ["audio", "voice", "record"],
-  minus: ["remove", "dash"],
-  moon: ["night", "dark"],
-  music: ["audio", "note", "song"],
-  mute: ["silent", "speaker"],
-  notification: ["alert", "bell"],
-  open: ["unlock"],
-  palette: ["color", "paint"],
-  paperclip: ["attachment"],
-  pause: ["stop"],
-  pay: ["money", "currency"],
-  pen: ["edit", "write", "pencil"],
-  pencil: ["edit", "draw", "write"],
-  people: ["users", "group", "team"],
-  phone: ["call", "telephone"],
-  picture: ["photo", "image"],
-  play: ["start", "triangle"],
-  plug: ["power", "electric"],
-  plus: ["add", "new"],
-  power: ["shutdown", "off"],
-  print: ["printer"],
-  question: ["help", "support"],
-  redo: ["forward", "arrow"],
-  refresh: ["reload", "sync", "update"],
-  remove: ["delete", "trash"],
-  repeat: ["loop"],
-  reply: ["answer"],
-  rocket: ["ship", "launch"],
-  save: ["disk"],
-  search: ["find", "magnifying", "magnifier"],
-  settings: ["cog", "gear", "preferences"],
-  share: ["export", "send"],
-  shield: ["security", "protection"],
-  skip: ["jump"],
-  sort: ["order"],
-  speaker: ["audio", "sound", "volume"],
-  star: ["favorite", "bookmark", "rating"],
-  status: ["indicator"],
-  stop: ["square", "halt"],
-  sun: ["day", "light"],
-  sync: ["refresh", "reload", "update"],
-  tag: ["label", "badge"],
-  target: ["aim", "bullseye"],
-  terminal: ["cli", "command", "prompt"],
-  text: ["font", "type"],
-  time: ["clock", "schedule"],
-  timer: ["clock", "alarm"],
-  toggle: ["switch"],
-  trash: ["delete", "remove", "bin"],
-  unlock: ["access", "open"],
-  update: ["refresh", "sync"],
-  upload: ["arrow up"],
-  user: ["person", "account", "profile"],
-  video: ["movie", "camera"],
-  volume: ["speaker", "sound", "audio"],
-  warning: ["alert", "triangle"],
-  wifi: ["network", "signal"],
-  window: ["app", "application"],
-  write: ["edit", "pencil"],
-  x: ["close", "cancel", "cross"],
-  dog: ["puppy", "animal", "pet"],
-  cat: ["kitten", "animal", "pet"],
-  left: ["previous", "west", "back"],
-  right: ["next", "east", "forward"],
-  up: ["north", "increase", "raise"],
-  down: ["south", "decrease", "lower"],
-  times: ["close", "cross", "multiply"],
-  lightning: ["bolt", "electric"],
-};
-
 async function buildIconIndex(): Promise<IconIndex[]> {
-  const glyphnamesData = await loadGlyphnames();
+  const [glyphnamesData, { addSynonyms }] = await Promise.all([
+    loadGlyphnames(),
+    import("./synonyms"),
+  ]);
+  
   const { METADATA: _metadata, ...rawGlyphs } = glyphnamesData as GlyphRecord & {
     METADATA?: unknown;
   };
@@ -257,7 +102,7 @@ async function buildIconIndex(): Promise<IconIndex[]> {
     });
 }
 
-function getIconEntry(index: IconIndex, glyphnames: GlyphRecord): IconEntry {
+async function getIconEntry(index: IconIndex, glyphnames: GlyphRecord): Promise<IconEntry> {
   // Check cache first
   if (iconCache.has(index.id)) {
     return iconCache.get(index.id)!;
@@ -265,7 +110,7 @@ function getIconEntry(index: IconIndex, glyphnames: GlyphRecord): IconEntry {
   
   // Create full entry on demand
   const glyph = glyphnames[index.id];
-  const entry = createIconEntry(index.id, glyph);
+  const entry = await createIconEntry(index.id, glyph);
   
   // Cache it
   iconCache.set(index.id, entry);
@@ -286,100 +131,154 @@ function getPackFilterOptions(iconIndex: IconIndex[]) {
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = React.useState<T>(value);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 export default function NerdFontSearch() {
   const [selectedPack, setSelectedPack] = React.useState<string>("all");
   const [iconIndex, setIconIndex] = React.useState<IconIndex[]>([]);
   const [glyphnames, setGlyphnames] = React.useState<GlyphRecord | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [searchText, setSearchText] = React.useState<string>("");
-  const [debouncedSearch, setDebouncedSearch] = React.useState<string>("");
-  const [recentIconIds, setRecentIconIds] = React.useState<string[]>([]);
+  const [recentIcons, setRecentIcons] = React.useState<RecentIcon[]>([]);
+  const [filteredIcons, setFilteredIcons] = React.useState<IconEntry[]>([]);
 
-  React.useEffect(() => {
-    let cancelled = false;
+  const debouncedSearch = useDebounce(searchText, 300);
 
-    const loadData = async () => {
-      const [index, glyphs] = await Promise.all([
-        buildIconIndex(),
-        loadGlyphnames(),
-      ]);
-      
-      if (!cancelled) {
-        setIconIndex(index);
-        setGlyphnames(glyphs);
-        setIsLoading(false);
-      }
-    };
-
-    loadData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
+  // Load recent icons immediately (no dependency on icon index)
   React.useEffect(() => {
     LocalStorage.getItem<string>(RECENT_ICONS_KEY).then((stored) => {
       if (stored) {
         try {
-          setRecentIconIds(JSON.parse(stored));
-        } catch (e) {
-          setRecentIconIds([]);
+          const recent = JSON.parse(stored) as RecentIcon[];
+          setRecentIcons(recent);
+          // Show recent icons immediately
+          setFilteredIcons(recent as IconEntry[]);
+          setIsLoading(false);
+        } catch {
+          setRecentIcons([]);
+          setIsLoading(false);
         }
+      } else {
+        setIsLoading(false);
       }
     });
   }, []);
 
+  // Load full index only when user starts searching
   React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchText);
-    }, 300);
+    if (debouncedSearch.length >= 3 && iconIndex.length === 0) {
+      let cancelled = false;
 
-    return () => clearTimeout(timer);
-  }, [searchText]);
+      const loadData = async () => {
+        const [index, glyphs] = await Promise.all([
+          buildIconIndex(),
+          loadGlyphnames(),
+        ]);
+        
+        if (!cancelled) {
+          setIconIndex(index);
+          setGlyphnames(glyphs);
+        }
+      };
+
+      loadData();
+
+      return () => {
+        cancelled = true;
+      };
+    }
+  }, [debouncedSearch, iconIndex.length]);
 
   const packFilterOptions = React.useMemo(
     () => (iconIndex.length > 0 ? getPackFilterOptions(iconIndex) : []),
     [iconIndex]
   );
 
-  const filteredIcons = React.useMemo(() => {
-    if (!glyphnames) return [];
-    
+  // Filtered index (lightweight, sync) - only when searching
+  const filteredIndex = React.useMemo(() => {
+    // Show recent icons when not searching
+    if (debouncedSearch.length === 0) {
+      return [];
+    }
+
+    if (debouncedSearch.length < 3 || iconIndex.length === 0) {
+      return [];
+    }
+
     let filtered = iconIndex;
 
     if (selectedPack !== "all") {
       filtered = filtered.filter((idx) => idx.pack === selectedPack);
     }
 
-    if (debouncedSearch.length >= 3) {
-      const searchLower = debouncedSearch.toLowerCase();
-      filtered = filtered.filter((idx) =>
-        idx.searchTokens.some((token) => token.includes(searchLower))
-      );
-    } else if (debouncedSearch.length === 0 && recentIconIds.length > 0) {
-      const recentIndices = recentIconIds
-        .map((id) => filtered.find((idx) => idx.id === id))
-        .filter((idx): idx is IconIndex => idx !== undefined);
-      return recentIndices.map(idx => getIconEntry(idx, glyphnames));
-    } else {
-      return [];
+    const searchLower = debouncedSearch.toLowerCase();
+    return filtered.filter((idx) =>
+      idx.searchTokens.some((token) => token.includes(searchLower))
+    );
+  }, [iconIndex, selectedPack, debouncedSearch]);
+
+  // Convert filtered index to full entries (async) - only when searching
+  React.useEffect(() => {
+    if (debouncedSearch.length === 0) {
+      // Show recent icons when not searching
+      setFilteredIcons(recentIcons as IconEntry[]);
+      return;
     }
 
-    // Convert index to full IconEntry only for displayed results
-    return filtered.map(idx => getIconEntry(idx, glyphnames));
-  }, [selectedPack, iconIndex, glyphnames, debouncedSearch, recentIconIds]);
+    if (debouncedSearch.length < 3) {
+      setFilteredIcons([]);
+      return;
+    }
+
+    if (!glyphnames || filteredIndex.length === 0) {
+      setFilteredIcons([]);
+      return;
+    }
+    
+    let cancelled = false;
+    
+    Promise.all(filteredIndex.map(idx => getIconEntry(idx, glyphnames)))
+      .then(entries => {
+        if (!cancelled) {
+          setFilteredIcons(entries);
+        }
+      });
+    
+    return () => {
+      cancelled = true;
+    };
+  }, [filteredIndex, glyphnames, debouncedSearch, recentIcons]);
 
   const addRecentIcon = React.useCallback(
-    (iconId: string) => {
-      const updated = [iconId, ...recentIconIds.filter((id) => id !== iconId)].slice(
-        0,
-        MAX_RECENT_ICONS
-      );
-      setRecentIconIds(updated);
+    (icon: IconEntry) => {
+      const recentIcon: RecentIcon = {
+        id: icon.id,
+        char: icon.char,
+        code: icon.code,
+        displayName: icon.displayName,
+        nerdFontId: icon.nerdFontId,
+        packLabel: icon.packLabel,
+        iconPath: icon.iconPath,
+      };
+
+      const updated = [
+        recentIcon,
+        ...recentIcons.filter((r) => r.id !== icon.id)
+      ].slice(0, MAX_RECENT_ICONS);
+
+      setRecentIcons(updated);
       LocalStorage.setItem(RECENT_ICONS_KEY, JSON.stringify(updated));
     },
-    [recentIconIds]
+    [recentIcons]
   );
 
   return (
@@ -423,7 +322,7 @@ export default function NerdFontSearch() {
               ? "Enter at least 3 characters to search"
               : debouncedSearch.length >= 3
               ? "Try a different search term or pick another icon pack"
-              : recentIconIds.length > 0
+              : recentIcons.length > 0
               ? "Your recently copied icons will appear here"
               : "Enter at least 3 characters to search for icons"
           }
@@ -432,7 +331,7 @@ export default function NerdFontSearch() {
       ) : (
         <Grid.Section
           title={
-            debouncedSearch.length === 0 && recentIconIds.length > 0
+            debouncedSearch.length === 0 && recentIcons.length > 0
               ? "Recently Copied"
               : selectedPack === "all"
               ? "All icon packs"
@@ -447,8 +346,8 @@ export default function NerdFontSearch() {
               content={icon.iconPath}
               title={icon.displayName}
               subtitle={icon.nerdFontId}
-              keywords={icon.keywords}
-              actions={<IconActions icon={icon} onCopy={() => addRecentIcon(icon.id)} />}
+              keywords={icon.keywords || []}
+              actions={<IconActions icon={icon} onCopy={() => addRecentIcon(icon)} />}
             />
           ))}
         </Grid.Section>
@@ -507,16 +406,20 @@ function createIconDataURL(char: string, code: string): string {
   return "data:image/svg+xml," + encodeURIComponent(svg);
 }
 
-function createIconEntry(
+async function createIconEntry(
   id: string,
   glyph: { char: string; code: string },
-): IconEntry {
+): Promise<IconEntry> {
+  const { addSynonyms } = await import("./synonyms");
+  
   const [pack, ...rest] = id.split("-");
   const rawName = rest.join("-");
   const packLabel = PACK_LABELS[pack] ?? pack.toUpperCase();
   const words = splitNameIntoWords(rawName);
   const displayName =
-    words.length > 0 ? words.map(toTitleCase).join(" ") : toTitleCase(pack);
+    words.length > 0 
+      ? (await Promise.all(words.map(toTitleCase))).join(" ")
+      : await toTitleCase(pack);
 
   const codeUpper = glyph.code.toUpperCase();
   const nerdFontId = `nf-${id.replace(/_/g, "-")}`;
@@ -599,9 +502,11 @@ function splitNameIntoWords(value: string): string[] {
     .filter(Boolean);
 }
 
-function toTitleCase(word: string): string {
+async function toTitleCase(word: string): Promise<string> {
   const lower = word.toLowerCase();
 
+  const { ACRONYMS } = await import("./synonyms");
+  
   if (ACRONYMS.has(lower)) {
     return lower.toUpperCase();
   }
@@ -615,24 +520,4 @@ function toTitleCase(word: string): string {
   }
 
   return word.charAt(0).toUpperCase() + word.slice(1);
-}
-
-function addSynonyms(token: string): string[] {
-  const synonyms = TOKEN_SYNONYMS[token] ?? [];
-  const extras: string[] = [];
-
-  if (token === "plus") {
-    extras.push("+", "add");
-  }
-  if (token === "minus") {
-    extras.push("-", "subtract");
-  }
-  if (token === "times") {
-    extras.push("x");
-  }
-  if (token === "close") {
-    extras.push("quit");
-  }
-
-  return [...synonyms, ...extras].map((entry) => entry.toLowerCase());
 }
