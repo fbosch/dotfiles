@@ -22,7 +22,10 @@
   "scripts": {
     "prebuild": "node scripts/build-index.js",
     "build": "vici build",
-    "dev": "vici develop"
+    "dev": "vici develop",
+    "test:consistency": "node test/search-consistency.test.js",
+    "test:stable-sort": "node test/verify-stable-sort.test.js",
+    "test": "npm run test:consistency && npm run test:stable-sort"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.6",

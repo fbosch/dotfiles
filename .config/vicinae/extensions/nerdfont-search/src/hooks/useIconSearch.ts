@@ -159,17 +159,31 @@ export function useIconSearch(
       );
     }
 
-    // Fuse.js already sorted by relevance (shouldSort: true)
-    // Just extract items and limit results
+    // Add stable secondary sort by ID for items with same score
+    // This ensures consistent ordering when scores are identical
+    searchResults.sort((a, b) => {
+      const scoreDiff = (a.score || 0) - (b.score || 0);
+      if (Math.abs(scoreDiff) < 0.000001) {
+        // Scores are essentially equal, sort by ID for stability
+        return a.item.id.localeCompare(b.item.id);
+      }
+      return scoreDiff;
+    });
+
     return searchResults.slice(0, 200).map((result) => result.item);
   }, [iconIndex, selectedPack, debouncedSearch, fuseInstance]);
 
+  // Create a stable key from filteredIndex to ensure cache correctness
+  const filteredIndexKey = useMemo(() => {
+    return filteredIndex.map(item => item.id).join(',');
+  }, [filteredIndex]);
+
   // Async loading of full icon entries
   const { data: icons = [], isLoading: entriesLoading } = useQuery({
-    queryKey: ["iconEntries", debouncedSearch, selectedPack],
+    queryKey: ["iconEntries", filteredIndexKey],
     queryFn: () => loadIconEntries(filteredIndex, glyphnames!),
     enabled: filteredIndex.length > 0 && glyphnames !== null,
-    staleTime: Infinity, // Cache indefinitely - same search always returns same results
+    staleTime: Infinity, // Cache indefinitely - same filteredIndex always returns same results
     gcTime: 300000, // Keep in cache for 5 minutes
   });
 
