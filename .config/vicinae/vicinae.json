@@ -13,6 +13,7 @@
         "searchFiles": true
     },
     "theme": {
+        "iconTheme": "Win11",
         "name": "vicinae-dark"
     },
     "window": {
