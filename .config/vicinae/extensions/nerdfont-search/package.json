@@ -20,11 +20,14 @@
   ],
   "preferences": [],
   "scripts": {
+    "prebuild": "node scripts/build-index.js",
     "build": "vici build",
     "dev": "vici develop"
   },
   "dependencies": {
-    "@vicinae/api": "^0.15.2"
+    "@tanstack/react-query": "^5.90.6",
+    "@vicinae/api": "^0.15.2",
+    "fuse.js": "^7.0.0"
   },
   "devDependencies": {
     "typescript": "^5.9.2"
