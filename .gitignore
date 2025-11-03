@@ -19,6 +19,8 @@ node_modules
 .config/go
 .config/waybar/scripts/update-checker
 .cursor/.agent-tools
+.config/codex/**/*(!config.toml)
+.config/codex/config.toml
 
 # Neovim local data
 .config/nvim/.sessions/
