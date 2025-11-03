@@ -61,13 +61,26 @@ Configure default search settings in the extension preferences:
 
 The extension uses react-query's `useInfiniteQuery` to efficiently manage wallpaper loading. When you click "Load More", the next page is fetched and appended to your current view. All previously loaded pages remain visible, allowing you to browse through hundreds of wallpapers seamlessly. The section subtitle shows how many wallpapers you've loaded versus the total available.
 
-### Caching
+### Caching & Rate Limiting
 
-Query results are automatically cached to localStorage for 12 hours. This means:
-- Repeated searches are instant (no API calls)
+The extension implements smart caching and debouncing to respect Wallhaven's 45 requests/minute rate limit:
+
+**Debouncing:**
+- Search input is debounced by 800ms
+- Prevents rapid-fire API requests while typing
+- Only searches after you stop typing for 800ms
+
+**Caching:**
+- All queries are cached in localStorage for 12 hours
+- Identical searches return instant results (no API call)
 - Cache persists across extension restarts
 - Cached data automatically expires after 12 hours
-- Reduces load on Wallhaven API
+
+**Benefits:**
+- Respects Wallhaven API rate limits
+- Fast, responsive search experience
+- Reduces unnecessary API load
+- Works offline for cached searches
 
 ## API Options
 

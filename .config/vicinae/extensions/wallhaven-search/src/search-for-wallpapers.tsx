@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Grid,
   ActionPanel,
@@ -15,7 +15,6 @@ import {
   useInfiniteQuery,
   useQuery,
 } from "@tanstack/react-query";
-import { persistQueryClient } from "@tanstack/react-query-persist-client";
 
 type Preferences = {
   apiKey?: string;
@@ -29,6 +28,9 @@ type UserSettings = {
   purity: string[];
   categories: string[];
   toplist_range: string;
+  resolutions: string[];
+  aspect_ratios: string[];
+  ai_art_filter: number;
 };
 
 type Wallpaper = {
@@ -74,52 +76,6 @@ const queryClient = new QueryClient({
   },
 });
 
-const localStoragePersister = {
-  persistClient: async (client: any) => {
-    try {
-      const data = {
-        timestamp: Date.now(),
-        clientState: client,
-      };
-      localStorage.setItem("wallhaven-cache", JSON.stringify(data));
-    } catch (error) {
-      console.error("Failed to persist cache:", error);
-    }
-  },
-  restoreClient: async () => {
-    try {
-      const cached = localStorage.getItem("wallhaven-cache");
-      if (!cached) return undefined;
-
-      const data = JSON.parse(cached);
-      const age = Date.now() - data.timestamp;
-      const maxAge = 12 * 60 * 60 * 1000; // 12 hours
-
-      if (age > maxAge) {
-        localStorage.removeItem("wallhaven-cache");
-        return undefined;
-      }
-
-      return data.clientState;
-    } catch (error) {
-      console.error("Failed to restore cache:", error);
-      return undefined;
-    }
-  },
-  removeClient: async () => {
-    try {
-      localStorage.removeItem("wallhaven-cache");
-    } catch (error) {
-      console.error("Failed to remove cache:", error);
-    }
-  },
-};
-
-persistQueryClient({
-  queryClient,
-  persister: localStoragePersister,
-});
-
 type SearchParams = {
   query: string;
   categories: string;
@@ -128,12 +84,15 @@ type SearchParams = {
   topRange?: string;
   page: number;
   apiKey?: string;
+  resolutions?: string[];
+  aspectRatios?: string[];
+  aiArtFilter?: number;
 };
 
 async function fetchUserSettings(apiKey: string): Promise<UserSettings | null> {
   try {
     const response = await fetch(
-      `https://wallhaven.cc/api/v1/settings?apikey=${apiKey}`,
+      `https://wallhaven.cc/api/v1/settings?apikey=${apiKey.trim()}`,
     );
 
     if (!response.ok) {
@@ -142,6 +101,7 @@ async function fetchUserSettings(apiKey: string): Promise<UserSettings | null> {
     }
 
     const data = await response.json();
+    console.log("User Settings Fetched:", data.data);
     return data.data;
   } catch (error) {
     console.error("Error fetching user settings:", error);
@@ -174,18 +134,37 @@ async function searchWallpapers(
   }
 
   if (params.apiKey) {
-    urlParams.append("apikey", params.apiKey);
+    urlParams.append("apikey", params.apiKey.trim());
   }
 
-  const response = await fetch(
-    `https://wallhaven.cc/api/v1/search?${urlParams.toString()}`,
-  );
+  if (params.resolutions && params.resolutions.length > 0 && params.resolutions[0] !== "") {
+    urlParams.append("resolutions", params.resolutions.join(","));
+  }
+
+  if (params.aspectRatios && params.aspectRatios.length > 0 && params.aspectRatios[0] !== "") {
+    urlParams.append("ratios", params.aspectRatios.join(","));
+  }
+
+  if (params.aiArtFilter !== undefined) {
+    urlParams.append("ai_art_filter", params.aiArtFilter.toString());
+  }
+
+  const url = `https://wallhaven.cc/api/v1/search?${urlParams.toString()}`;
+  console.log("Wallhaven API Request:", url);
+
+  const response = await fetch(url);
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
   }
 
   const data: WallhavenResponse = await response.json();
+  console.log("Wallhaven API Response:", {
+    resultsCount: data.data.length,
+    page: data.meta.current_page,
+    total: data.meta.total,
+  });
+  
   return data;
 }
 
@@ -197,14 +176,6 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   };
-
-  const tags =
-    wallpaper.tags && wallpaper.tags.length > 0
-      ? wallpaper.tags.map((tag) => tag.name).join(", ")
-      : "None";
-
-  const colors =
-    wallpaper.colors.length > 0 ? wallpaper.colors.join(", ") : "None";
 
   const markdown = `
 ![Wallpaper](${wallpaper.path})
@@ -268,10 +239,27 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
   );
 }
 
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 function WallhavenSearchContent() {
   const preferences = getPreferenceValues<Preferences>();
   const [searchText, setSearchText] = useState("");
   const [categories, setCategories] = useState("111");
+  const debouncedSearchText = useDebounce(searchText, 800);
 
   const { data: userSettings } = useQuery({
     queryKey: ["userSettings", preferences.apiKey],
@@ -290,6 +278,16 @@ function WallhavenSearchContent() {
       ? userSettings.toplist_range
       : preferences.topRange;
 
+  console.log("Settings:", {
+    useUserSettings: preferences.useUserSettings,
+    hasUserSettings: Boolean(userSettings),
+    userSettingsPurity: userSettings?.purity,
+    effectivePurity,
+    preferencePurity: preferences.purity,
+    effectiveTopRange,
+    sorting: preferences.sorting,
+  });
+
   const {
     data,
     isLoading,
@@ -301,23 +299,31 @@ function WallhavenSearchContent() {
   } = useInfiniteQuery({
     queryKey: [
       "wallpapers",
-      searchText,
+      debouncedSearchText,
       categories,
       effectivePurity,
       preferences.sorting,
       effectiveTopRange,
       preferences.apiKey,
+      preferences.useUserSettings && userSettings ? userSettings.resolutions : undefined,
+      preferences.useUserSettings && userSettings ? userSettings.aspect_ratios : undefined,
+      preferences.useUserSettings && userSettings ? userSettings.ai_art_filter : undefined,
     ],
     queryFn: ({ pageParam = 1 }) =>
       searchWallpapers({
-        query: searchText,
+        query: debouncedSearchText,
         categories,
         purity: effectivePurity,
         sorting: preferences.sorting,
         topRange: effectiveTopRange,
         page: pageParam,
         apiKey: preferences.apiKey,
+        resolutions: preferences.useUserSettings && userSettings ? userSettings.resolutions : undefined,
+        aspectRatios: preferences.useUserSettings && userSettings ? userSettings.aspect_ratios : undefined,
+        aiArtFilter: preferences.useUserSettings && userSettings ? userSettings.ai_art_filter : undefined,
       }),
+    staleTime: 12 * 60 * 60 * 1000, // 12 hours - avoid refetching
+    gcTime: 12 * 60 * 60 * 1000, // 12 hours - keep in cache
     getNextPageParam: (lastPage) => {
       if (lastPage.meta.current_page < lastPage.meta.last_page) {
         return lastPage.meta.current_page + 1;

@@ -42,15 +42,15 @@
       "required": false,
       "title": "Content Purity",
       "description": "Filter by content rating",
-      "default": "110",
+      "default": "100",
       "data": [
-        {
-          "title": "SFW + Sketchy",
-          "value": "110"
-        },
         {
           "title": "SFW Only",
           "value": "100"
+        },
+        {
+          "title": "SFW + Sketchy",
+          "value": "110"
         }
       ]
     },
@@ -60,8 +60,12 @@
       "required": false,
       "title": "Default Sorting",
       "description": "How to sort wallpapers",
-      "default": "toplist",
+      "default": "relevance",
       "data": [
+        {
+          "title": "Relevance",
+          "value": "relevance"
+        },
         {
           "title": "Top List",
           "value": "toplist"
@@ -79,10 +83,6 @@
           "value": "favorites"
         },
         {
-          "title": "Relevance",
-          "value": "relevance"
-        },
-        {
           "title": "Random",
           "value": "random"
         }
@@ -93,8 +93,8 @@
       "type": "dropdown",
       "required": false,
       "title": "Top Range",
-      "description": "Time range for top list sorting",
-      "default": "1M",
+      "description": "Time range for top list sorting (only applies when sorting is 'Top List')",
+      "default": "1y",
       "data": [
         {
           "title": "Last Day",
@@ -133,7 +133,6 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.14",
-    "@tanstack/react-query-persist-client": "^5.62.14",
     "@vicinae/api": "^0.15.7"
   },
   "devDependencies": {
