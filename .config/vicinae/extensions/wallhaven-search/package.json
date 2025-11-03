@@ -1,0 +1,124 @@
+{
+  "$schema": "https://raw.githubusercontent.com/vicinaehq/vicinae/refs/heads/main/extra/schemas/extension.json",
+  "name": "wallhaven",
+  "title": "Wallhaven",
+  "description": "search for wallpapers",
+  "categories": [],
+  "license": "MIT",
+  "author": "fbosch",
+  "contributors": [],
+  "pastContributors": [],
+  "icon": "extension_icon.png",
+  "commands": [
+    {
+      "name": "search-for-wallpapers",
+      "title": "Search for Wallpapers",
+      "subtitle": "Find wallpapers on wallhaven",
+      "description": "Searches for wallpapers on wallhaven.cc",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "purity",
+      "type": "dropdown",
+      "required": false,
+      "title": "Content Purity",
+      "description": "Filter by content rating",
+      "default": "sfw",
+      "data": [
+        {
+          "title": "SFW Only",
+          "value": "100"
+        },
+        {
+          "title": "SFW + Sketchy",
+          "value": "110"
+        }
+      ]
+    },
+    {
+      "name": "sorting",
+      "type": "dropdown",
+      "required": false,
+      "title": "Default Sorting",
+      "description": "How to sort wallpapers",
+      "default": "toplist",
+      "data": [
+        {
+          "title": "Top List",
+          "value": "toplist"
+        },
+        {
+          "title": "Most Recent",
+          "value": "date_added"
+        },
+        {
+          "title": "Most Views",
+          "value": "views"
+        },
+        {
+          "title": "Most Favorites",
+          "value": "favorites"
+        },
+        {
+          "title": "Relevance",
+          "value": "relevance"
+        },
+        {
+          "title": "Random",
+          "value": "random"
+        }
+      ]
+    },
+    {
+      "name": "topRange",
+      "type": "dropdown",
+      "required": false,
+      "title": "Top Range",
+      "description": "Time range for top list sorting",
+      "default": "1M",
+      "data": [
+        {
+          "title": "Last Day",
+          "value": "1d"
+        },
+        {
+          "title": "Last 3 Days",
+          "value": "3d"
+        },
+        {
+          "title": "Last Week",
+          "value": "1w"
+        },
+        {
+          "title": "Last Month",
+          "value": "1M"
+        },
+        {
+          "title": "Last 3 Months",
+          "value": "3M"
+        },
+        {
+          "title": "Last 6 Months",
+          "value": "6M"
+        },
+        {
+          "title": "Last Year",
+          "value": "1y"
+        }
+      ]
+    }
+  ],
+  "scripts": {
+    "build": "vici build",
+    "dev": "vici develop"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.62.14",
+    "@vicinae/api": "^0.15.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

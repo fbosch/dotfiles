@@ -12,6 +12,7 @@ abbr p pnpm
 abbr pugi 'pnpm upgrade --interactive --latest --recursive'
 abbr pupi 'pnpm update --interactive --recursive'
 abbr bup 'brew upgrade'
+abbr ff freshfetch
 
 function vimdiff
     nvim -d $argv
@@ -50,8 +51,12 @@ abbr cnx 'cd /etc/nixos'
 abbr nxe 'nvim ~/nixos'
 
 function nxrb
-    set -l host (hostname)
-    sudo nixos-rebuild switch --flake ~/nixos\#$host
+    if command -q nh
+        nh os switch ~/nixos
+    else
+        set -l host (hostname)
+        sudo nixos-rebuild switch --flake ~/nixos\#$host
+    end
 end
 
 abbr nxgc nix-collect-garbage
