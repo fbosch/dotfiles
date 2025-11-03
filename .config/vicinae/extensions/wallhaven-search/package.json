@@ -20,20 +20,37 @@
   ],
   "preferences": [
     {
+      "name": "apiKey",
+      "type": "password",
+      "required": false,
+      "title": "API Key",
+      "description": "Optional Wallhaven API key for accessing additional features",
+      "placeholder": "Enter your API key"
+    },
+    {
+      "name": "useUserSettings",
+      "type": "checkbox",
+      "required": false,
+      "title": "Use User Settings",
+      "description": "Use your Wallhaven account settings (requires API key)",
+      "default": false,
+      "label": "Override extension settings with your Wallhaven preferences"
+    },
+    {
       "name": "purity",
       "type": "dropdown",
       "required": false,
       "title": "Content Purity",
       "description": "Filter by content rating",
-      "default": "sfw",
+      "default": "110",
       "data": [
-        {
-          "title": "SFW Only",
-          "value": "100"
-        },
         {
           "title": "SFW + Sketchy",
           "value": "110"
+        },
+        {
+          "title": "SFW Only",
+          "value": "100"
         }
       ]
     },
@@ -116,6 +133,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.14",
+    "@tanstack/react-query-persist-client": "^5.62.14",
     "@vicinae/api": "^0.15.7"
   },
   "devDependencies": {

@@ -7,18 +7,28 @@ import {
   Toast,
   Detail,
   getPreferenceValues,
+  Icon,
 } from "@vicinae/api";
 import {
-  keepPreviousData,
   QueryClient,
   QueryClientProvider,
+  useInfiniteQuery,
   useQuery,
 } from "@tanstack/react-query";
+import { persistQueryClient } from "@tanstack/react-query-persist-client";
 
 type Preferences = {
+  apiKey?: string;
+  useUserSettings: boolean;
   purity: string;
   sorting: string;
   topRange: string;
+};
+
+type UserSettings = {
+  purity: string[];
+  categories: string[];
+  toplist_range: string;
 };
 
 type Wallpaper = {
@@ -30,6 +40,13 @@ type Wallpaper = {
   resolution: string;
   colors: string[];
   path: string;
+  category: string;
+  purity: string;
+  file_size: number;
+  tags: Array<{
+    id: number;
+    name: string;
+  }>;
   thumbs: {
     large: string;
     original: string;
@@ -49,11 +66,58 @@ type WallhavenResponse = {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000,
+      staleTime: 12 * 60 * 60 * 1000, // 12 hours - queries stay fresh for 12 hours
+      gcTime: 12 * 60 * 60 * 1000, // 12 hours - cache cleanup after 12 hours
       refetchOnWindowFocus: false,
       retry: 1,
     },
   },
+});
+
+const localStoragePersister = {
+  persistClient: async (client: any) => {
+    try {
+      const data = {
+        timestamp: Date.now(),
+        clientState: client,
+      };
+      localStorage.setItem("wallhaven-cache", JSON.stringify(data));
+    } catch (error) {
+      console.error("Failed to persist cache:", error);
+    }
+  },
+  restoreClient: async () => {
+    try {
+      const cached = localStorage.getItem("wallhaven-cache");
+      if (!cached) return undefined;
+
+      const data = JSON.parse(cached);
+      const age = Date.now() - data.timestamp;
+      const maxAge = 12 * 60 * 60 * 1000; // 12 hours
+
+      if (age > maxAge) {
+        localStorage.removeItem("wallhaven-cache");
+        return undefined;
+      }
+
+      return data.clientState;
+    } catch (error) {
+      console.error("Failed to restore cache:", error);
+      return undefined;
+    }
+  },
+  removeClient: async () => {
+    try {
+      localStorage.removeItem("wallhaven-cache");
+    } catch (error) {
+      console.error("Failed to remove cache:", error);
+    }
+  },
+};
+
+persistQueryClient({
+  queryClient,
+  persister: localStoragePersister,
 });
 
 type SearchParams = {
@@ -62,9 +126,39 @@ type SearchParams = {
   purity: string;
   sorting: string;
   topRange?: string;
+  page: number;
+  apiKey?: string;
 };
 
-async function searchWallpapers(params: SearchParams): Promise<Wallpaper[]> {
+async function fetchUserSettings(apiKey: string): Promise<UserSettings | null> {
+  try {
+    const response = await fetch(
+      `https://wallhaven.cc/api/v1/settings?apikey=${apiKey}`,
+    );
+
+    if (!response.ok) {
+      console.error("Failed to fetch user settings:", response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.data;
+  } catch (error) {
+    console.error("Error fetching user settings:", error);
+    return null;
+  }
+}
+
+function convertUserSettingsToPurity(purityArray: string[]): string {
+  const sfw = purityArray.includes("sfw") ? "1" : "0";
+  const sketchy = purityArray.includes("sketchy") ? "1" : "0";
+  const nsfw = purityArray.includes("nsfw") ? "1" : "0";
+  return `${sfw}${sketchy}${nsfw}`;
+}
+
+async function searchWallpapers(
+  params: SearchParams,
+): Promise<WallhavenResponse> {
   const searchQuery = params.query.trim() || "nature";
 
   const urlParams = new URLSearchParams({
@@ -72,10 +166,15 @@ async function searchWallpapers(params: SearchParams): Promise<Wallpaper[]> {
     categories: params.categories,
     purity: params.purity,
     sorting: params.sorting,
+    page: params.page.toString(),
   });
 
   if (params.sorting === "toplist" && params.topRange) {
     urlParams.append("topRange", params.topRange);
+  }
+
+  if (params.apiKey) {
+    urlParams.append("apikey", params.apiKey);
   }
 
   const response = await fetch(
@@ -87,25 +186,67 @@ async function searchWallpapers(params: SearchParams): Promise<Wallpaper[]> {
   }
 
   const data: WallhavenResponse = await response.json();
-  return data.data;
+  return data;
 }
 
 function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
-  const markdown = `
-![Preview](${wallpaper.path})
-# ${wallpaper.resolution}
-## Stats
-- **Favorites:** ❤️ ${wallpaper.favorites.toLocaleString()}
-- **Views:** 👁️ ${wallpaper.views.toLocaleString()}
-- **Resolution:** ${wallpaper.resolution}
-- **Colors:** ${wallpaper.colors.join(", ")}
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
+  };
 
-[View on Wallhaven](${wallpaper.short_url})
+  const tags =
+    wallpaper.tags && wallpaper.tags.length > 0
+      ? wallpaper.tags.map((tag) => tag.name).join(", ")
+      : "None";
+
+  const colors =
+    wallpaper.colors.length > 0 ? wallpaper.colors.join(", ") : "None";
+
+  const markdown = `
+![Wallpaper](${wallpaper.path})
 `;
 
   return (
     <Detail
       markdown={markdown}
+      metadata={
+        <Detail.Metadata>
+          <Detail.Metadata.Label
+            title="Resolution"
+            text={wallpaper.resolution}
+          />
+          <Detail.Metadata.Label
+            title="Size"
+            text={formatBytes(wallpaper.file_size)}
+          />
+
+          <Detail.Metadata.Separator />
+
+          <Detail.Metadata.Label
+            title="Favorites"
+            text={`★ ${wallpaper.favorites.toLocaleString()}`}
+          />
+          <Detail.Metadata.Label
+            title="Views"
+            text={wallpaper.views.toLocaleString()}
+          />
+
+          {wallpaper.tags && wallpaper.tags.length > 0 && (
+            <>
+              <Detail.Metadata.Separator />
+              <Detail.Metadata.TagList title="Tags">
+                {wallpaper.tags.map((tag) => (
+                  <Detail.Metadata.TagList.Item key={tag.id} text={tag.name} />
+                ))}
+              </Detail.Metadata.TagList>
+            </>
+          )}
+        </Detail.Metadata>
+      }
       actions={
         <ActionPanel>
           <Action.OpenInBrowser
@@ -132,23 +273,63 @@ function WallhavenSearchContent() {
   const [searchText, setSearchText] = useState("");
   const [categories, setCategories] = useState("111");
 
+  const { data: userSettings } = useQuery({
+    queryKey: ["userSettings", preferences.apiKey],
+    queryFn: () => fetchUserSettings(preferences.apiKey!),
+    enabled: Boolean(preferences.apiKey && preferences.useUserSettings),
+    staleTime: 60 * 60 * 1000, // Cache for 1 hour
+  });
+
+  const effectivePurity =
+    preferences.useUserSettings && userSettings
+      ? convertUserSettingsToPurity(userSettings.purity)
+      : preferences.purity;
+
+  const effectiveTopRange =
+    preferences.useUserSettings && userSettings
+      ? userSettings.toplist_range
+      : preferences.topRange;
+
   const {
-    data: wallpapers = [],
+    data,
     isLoading,
     isError,
     error,
-  } = useQuery({
-    queryKey: ["wallpapers", searchText, categories, preferences.purity, preferences.sorting, preferences.topRange],
-    queryFn: () =>
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: [
+      "wallpapers",
+      searchText,
+      categories,
+      effectivePurity,
+      preferences.sorting,
+      effectiveTopRange,
+      preferences.apiKey,
+    ],
+    queryFn: ({ pageParam = 1 }) =>
       searchWallpapers({
         query: searchText,
         categories,
-        purity: preferences.purity,
+        purity: effectivePurity,
         sorting: preferences.sorting,
-        topRange: preferences.topRange,
+        topRange: effectiveTopRange,
+        page: pageParam,
+        apiKey: preferences.apiKey,
       }),
-    placeholderData: keepPreviousData,
+    getNextPageParam: (lastPage) => {
+      if (lastPage.meta.current_page < lastPage.meta.last_page) {
+        return lastPage.meta.current_page + 1;
+      }
+      return undefined;
+    },
+    initialPageParam: 1,
   });
+
+  const wallpapers = data?.pages.flatMap((page) => page.data) ?? [];
+  const meta = data?.pages[data.pages.length - 1]?.meta;
+  const currentPage = meta?.current_page ?? 1;
 
   if (isError && error) {
     showToast({
@@ -166,7 +347,6 @@ function WallhavenSearchContent() {
       isLoading={isLoading}
       searchBarPlaceholder="Search wallpapers..."
       onSearchTextChange={setSearchText}
-      throttle
       searchBarAccessory={
         <Grid.Dropdown
           tooltip="Categories"
@@ -182,44 +362,73 @@ function WallhavenSearchContent() {
         </Grid.Dropdown>
       }
     >
-      {wallpapers.map((wallpaper) => (
-        <Grid.Item
-          key={wallpaper.id}
-          content={{
-            value: wallpaper.thumbs.large,
-            inset: Grid.Inset.None,
-            rounded: true,
-          }}
-          title={wallpaper.resolution}
-          subtitle={`❤️ ${wallpaper.favorites} · 👁️ ${wallpaper.views}`}
-          actions={
-            <ActionPanel>
-              <Action.Push
-                title="Show Preview"
-                target={<WallpaperDetail wallpaper={wallpaper} />}
-              />
-              <Action.OpenInBrowser
-                title="Open in Browser"
-                url={wallpaper.short_url}
-              />
-              <Action.CopyToClipboard
-                title="Copy Image URL"
-                content={wallpaper.path}
-              />
-              <Action.CopyToClipboard
-                title="Copy Page URL"
-                content={wallpaper.short_url}
-                shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
-              />
-              <Action.OpenInBrowser
-                title="Download Original"
-                url={wallpaper.path}
-                shortcut={{ modifiers: ["cmd"], key: "d" }}
-              />
-            </ActionPanel>
-          }
-        />
-      ))}
+      <Grid.Section
+        title={meta ? `Page ${currentPage} of ${meta.last_page}` : "Wallpapers"}
+        subtitle={
+          meta
+            ? `${wallpapers.length} / ${meta.total.toLocaleString()} loaded`
+            : undefined
+        }
+      >
+        {wallpapers.map((wallpaper, index) => (
+          <Grid.Item
+            key={wallpaper.id}
+            id={`wallpaper-${index}`}
+            content={{
+              value: wallpaper.thumbs.large,
+            }}
+            title={wallpaper.resolution}
+            subtitle={`★ ${wallpaper.favorites} · ${wallpaper.views} views`}
+            actions={
+              <ActionPanel>
+                <Action.Push
+                  title="Show Preview"
+                  target={<WallpaperDetail wallpaper={wallpaper} />}
+                />
+                <ActionPanel.Section>
+                  <Action.OpenInBrowser
+                    title="Open in Browser"
+                    url={wallpaper.short_url}
+                  />
+                  <Action.CopyToClipboard
+                    title="Copy Image URL"
+                    content={wallpaper.path}
+                  />
+                  <Action.CopyToClipboard
+                    title="Copy Page URL"
+                    content={wallpaper.short_url}
+                    shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
+                  />
+                  <Action.OpenInBrowser
+                    title="Download Original"
+                    url={wallpaper.path}
+                    shortcut={{ modifiers: ["cmd"], key: "d" }}
+                  />
+                </ActionPanel.Section>
+              </ActionPanel>
+            }
+          />
+        ))}
+        {hasNextPage && (
+          <Grid.Item
+            key="load-more"
+            id={`wallpaper-${wallpapers.length}`}
+            content={{
+              value:
+                "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23888888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14M19 12l-7 7-7-7'/%3E%3C/svg%3E",
+            }}
+            title={isFetchingNextPage ? "Loading..." : "Load More"}
+            subtitle={
+              meta ? `Page ${currentPage + 1} of ${meta.last_page}` : undefined
+            }
+            actions={
+              <ActionPanel>
+                <Action title="Load More" onAction={() => fetchNextPage()} />
+              </ActionPanel>
+            }
+          />
+        )}
+      </Grid.Section>
     </Grid>
   );
 }
