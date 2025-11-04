@@ -52,6 +52,7 @@ return {
 			hijack_netrw = true,
 			renderer = {
 				root_folder_label = false,
+				symlink_destination = false,
 			},
 			filters = {
 				custom = { "node_modules" },
