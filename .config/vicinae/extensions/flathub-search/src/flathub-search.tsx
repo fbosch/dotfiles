@@ -6,6 +6,7 @@ import {
   showToast,
   Icon,
   Toast,
+  Cache,
 } from "@vicinae/api";
 import {
   keepPreviousData,
@@ -38,6 +39,43 @@ type FlathubSearchResponse = {
   }>;
 };
 
+const cache = new Cache();
+const POPULAR_APPS_CACHE_KEY = "popular-apps-v1";
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
+type CachedData = {
+  apps: FlathubApp[];
+  cachedAt: number;
+};
+
+function getCachedPopularApps(): FlathubApp[] | null {
+  const cached = cache.get(POPULAR_APPS_CACHE_KEY);
+  if (!cached) return null;
+
+  try {
+    const data: CachedData = JSON.parse(cached);
+    const age = Date.now() - data.cachedAt;
+    
+    if (age < CACHE_DURATION) {
+      return data.apps;
+    }
+    
+    cache.remove(POPULAR_APPS_CACHE_KEY);
+    return null;
+  } catch {
+    cache.remove(POPULAR_APPS_CACHE_KEY);
+    return null;
+  }
+}
+
+function setCachedPopularApps(apps: FlathubApp[]): void {
+  const data: CachedData = {
+    apps,
+    cachedAt: Date.now(),
+  };
+  cache.set(POPULAR_APPS_CACHE_KEY, JSON.stringify(data));
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -65,7 +103,7 @@ async function searchFlathub(query: string): Promise<FlathubApp[]> {
 
   const data: FlathubSearchResponse = await response.json();
   const results = data.hits || [];
-  
+
   return results.sort((a, b) => {
     const aInstalls = a.installs_last_month || 0;
     const bInstalls = b.installs_last_month || 0;
@@ -84,7 +122,7 @@ async function getPopularApps(): Promise<FlathubApp[]> {
 
   const data = await response.json();
 
-  return data
+  const apps = data
     .filter((app: any) => app.iconDesktopUrl)
     .slice(0, 20)
     .map((app: any) => ({
@@ -94,11 +132,15 @@ async function getPopularApps(): Promise<FlathubApp[]> {
       icon: app.iconDesktopUrl,
       project_license: undefined,
     }));
+  
+  setCachedPopularApps(apps);
+  
+  return apps;
 }
 
 function formatInstalls(count?: number): string {
   if (!count) return "";
-  
+
   if (count >= 1000000) {
     return `${(count / 1000000).toFixed(1)}M installs`;
   }
@@ -114,6 +156,7 @@ function FlathubSearchContent() {
   const { data: popularApps = [], isLoading: isLoadingPopular } = useQuery({
     queryKey: ["popular-apps"],
     queryFn: getPopularApps,
+    initialData: () => getCachedPopularApps() || undefined,
     staleTime: 10 * 60 * 1000,
   });
 
@@ -145,7 +188,6 @@ function FlathubSearchContent() {
       isLoading={isLoading}
       searchBarPlaceholder="Search Flathub applications..."
       onSearchTextChange={setSearchText}
-      throttle
     >
       {displayedApps.length === 0 && searchText.trim() !== "" && !isLoading ? (
         <List.EmptyView
