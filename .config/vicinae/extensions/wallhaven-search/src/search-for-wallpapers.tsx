@@ -263,7 +263,7 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
   };
 
   const markdown = `
-![Wallpaper](${wallpaper.path})
+![Wallpaper](${wallpaper.thumbs.large})
 `;
 
   return (
@@ -448,7 +448,7 @@ function WallhavenSearchContent() {
   return (
     <Grid
       columns={3}
-      fit={Grid.Fit.Fill}
+      fit={Grid.Fit.Contain}
       aspectRatio="16/9"
       isLoading={isLoading}
       searchBarPlaceholder="Search wallpapers..."
@@ -483,6 +483,7 @@ function WallhavenSearchContent() {
             content={{
               value: wallpaper.thumbs.large,
             }}
+            fit={Grid.Fit.Contain}
             title={wallpaper.resolution}
             subtitle={`★ ${wallpaper.favorites} · ${wallpaper.views} views`}
             actions={
@@ -523,6 +524,7 @@ function WallhavenSearchContent() {
               value:
                 "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23888888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14M19 12l-7 7-7-7'/%3E%3C/svg%3E",
             }}
+            fit={Grid.Fit.Contain}
             title={isFetchingNextPage ? "Loading..." : "Load More"}
             subtitle={
               meta ? `Page ${currentPage + 1} of ${meta.last_page}` : undefined

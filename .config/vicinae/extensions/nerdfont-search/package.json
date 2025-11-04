@@ -29,10 +29,10 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.6",
-    "@vicinae/api": "^0.15.2",
-    "fuse.js": "^7.0.0"
+    "@vicinae/api": "^0.15.7",
+    "fuse.js": "^7.1.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.3"
   }
 }

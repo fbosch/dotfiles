@@ -132,10 +132,10 @@
     "dev": "vici develop"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.62.14",
+    "@tanstack/react-query": "^5.90.6",
     "@vicinae/api": "^0.15.7"
   },
   "devDependencies": {
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.3"
   }
 }
