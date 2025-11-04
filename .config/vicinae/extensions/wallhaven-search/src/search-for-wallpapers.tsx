@@ -89,11 +89,11 @@ function getCachedUserSettings(): UserSettings | null {
   try {
     const data: CachedUserSettings = JSON.parse(cached);
     const age = Date.now() - data.cachedAt;
-    
+
     if (age < SETTINGS_CACHE_DURATION) {
       return data.settings;
     }
-    
+
     cache.remove(USER_SETTINGS_CACHE_KEY);
     return null;
   } catch {
@@ -117,11 +117,11 @@ function getCachedDefaultWallpapers(): WallhavenResponse | null {
   try {
     const data: CachedWallpapers = JSON.parse(cached);
     const age = Date.now() - data.cachedAt;
-    
+
     if (age < WALLPAPERS_CACHE_DURATION) {
       return data.wallpapers;
     }
-    
+
     cache.remove(DEFAULT_WALLPAPERS_CACHE_KEY);
     return null;
   } catch {
@@ -176,9 +176,9 @@ async function fetchUserSettings(apiKey: string): Promise<UserSettings | null> {
     const data = await response.json();
     console.log("User Settings Fetched:", data.data);
     const settings = data.data;
-    
+
     setCachedUserSettings(settings);
-    
+
     return settings;
   } catch (error) {
     console.error("Error fetching user settings:", error);
@@ -214,11 +214,19 @@ async function searchWallpapers(
     urlParams.append("apikey", params.apiKey.trim());
   }
 
-  if (params.resolutions && params.resolutions.length > 0 && params.resolutions[0] !== "") {
+  if (
+    params.resolutions &&
+    params.resolutions.length > 0 &&
+    params.resolutions[0] !== ""
+  ) {
     urlParams.append("resolutions", params.resolutions.join(","));
   }
 
-  if (params.aspectRatios && params.aspectRatios.length > 0 && params.aspectRatios[0] !== "") {
+  if (
+    params.aspectRatios &&
+    params.aspectRatios.length > 0 &&
+    params.aspectRatios[0] !== ""
+  ) {
     urlParams.append("ratios", params.aspectRatios.join(","));
   }
 
@@ -241,15 +249,16 @@ async function searchWallpapers(
     page: data.meta.current_page,
     total: data.meta.total,
   });
-  
-  const isDefaultSearch = params.query.trim() === "" && 
-                          params.page === 1 && 
-                          params.categories === "111";
-  
+
+  const isDefaultSearch =
+    params.query.trim() === "" &&
+    params.page === 1 &&
+    params.categories === "111";
+
   if (isDefaultSearch) {
     setCachedDefaultWallpapers(data);
   }
-  
+
   return data;
 }
 
@@ -374,8 +383,9 @@ function WallhavenSearchContent() {
     sorting: preferences.sorting,
   });
 
-  const isDefaultSearch = debouncedSearchText.trim() === "" && categories === "111";
-  
+  const isDefaultSearch =
+    debouncedSearchText.trim() === "" && categories === "111";
+
   const {
     data,
     isLoading,
@@ -393,9 +403,15 @@ function WallhavenSearchContent() {
       preferences.sorting,
       effectiveTopRange,
       preferences.apiKey,
-      preferences.useUserSettings && userSettings ? userSettings.resolutions : undefined,
-      preferences.useUserSettings && userSettings ? userSettings.aspect_ratios : undefined,
-      preferences.useUserSettings && userSettings ? userSettings.ai_art_filter : undefined,
+      preferences.useUserSettings && userSettings
+        ? userSettings.resolutions
+        : undefined,
+      preferences.useUserSettings && userSettings
+        ? userSettings.aspect_ratios
+        : undefined,
+      preferences.useUserSettings && userSettings
+        ? userSettings.ai_art_filter
+        : undefined,
     ],
     queryFn: ({ pageParam = 1 }) =>
       searchWallpapers({
@@ -406,9 +422,18 @@ function WallhavenSearchContent() {
         topRange: effectiveTopRange,
         page: pageParam,
         apiKey: preferences.apiKey,
-        resolutions: preferences.useUserSettings && userSettings ? userSettings.resolutions : undefined,
-        aspectRatios: preferences.useUserSettings && userSettings ? userSettings.aspect_ratios : undefined,
-        aiArtFilter: preferences.useUserSettings && userSettings ? userSettings.ai_art_filter : undefined,
+        resolutions:
+          preferences.useUserSettings && userSettings
+            ? userSettings.resolutions
+            : undefined,
+        aspectRatios:
+          preferences.useUserSettings && userSettings
+            ? userSettings.aspect_ratios
+            : undefined,
+        aiArtFilter:
+          preferences.useUserSettings && userSettings
+            ? userSettings.ai_art_filter
+            : undefined,
       }),
     initialData: () => {
       if (isDefaultSearch) {
@@ -448,7 +473,7 @@ function WallhavenSearchContent() {
   return (
     <Grid
       columns={3}
-      fit={Grid.Fit.Contain}
+      fit={Grid.Fit.Fill}
       aspectRatio="16/9"
       isLoading={isLoading}
       searchBarPlaceholder="Search wallpapers..."
@@ -481,9 +506,8 @@ function WallhavenSearchContent() {
             key={wallpaper.id}
             id={`wallpaper-${index}`}
             content={{
-              value: wallpaper.thumbs.large,
+              value: wallpaper.thumbs.small,
             }}
-            fit={Grid.Fit.Contain}
             title={wallpaper.resolution}
             subtitle={`★ ${wallpaper.favorites} · ${wallpaper.views} views`}
             actions={
@@ -524,7 +548,6 @@ function WallhavenSearchContent() {
               value:
                 "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23888888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14M19 12l-7 7-7-7'/%3E%3C/svg%3E",
             }}
-            fit={Grid.Fit.Contain}
             title={isFetchingNextPage ? "Loading..." : "Load More"}
             subtitle={
               meta ? `Page ${currentPage + 1} of ${meta.last_page}` : undefined
