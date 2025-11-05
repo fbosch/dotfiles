@@ -2,7 +2,7 @@
     "closeOnFocusLoss": true,
     "faviconService": "twenty",
     "font": {
-        "normal": "SF Pro Display",
+        "normal": "SF Pro Rounded",
         "size": 10.5
     },
     "keybinding": "default",
@@ -18,7 +18,7 @@
     },
     "window": {
         "csd": true,
-        "opacity": 0.81,
+        "opacity": 0.88,
         "rounding": 10
     }
 }
