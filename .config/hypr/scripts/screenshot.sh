@@ -89,10 +89,7 @@ if ! grimblast save "${target}" "${file}"; then
     exit 1
 fi
 
-# Copy to clipboard. Terminal apps like cursor-agent typically need the file path.
-# We copy as plain text since that's what most terminal apps can paste.
 if command -v wl-copy >/dev/null 2>&1; then
-    # Copy just the file path as plain text (easiest for terminal apps to paste)
     printf '%s' "${file}" | wl-copy || true
 fi
 
