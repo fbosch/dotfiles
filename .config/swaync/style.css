@@ -36,6 +36,18 @@
     11.2px 21.5px 18.2px -3.6px hsl(var(--shadow-color) / 0.06),
     19.1px 36.7px 31px -4.3px hsl(var(--shadow-color) / 0.04),
     30.1px 57.7px 48.8px -5px hsl(var(--shadow-color) / 0.02);
+  --volume-bg: var(--bg-color);
+  --volume-surface: rgba(255, 255, 255, 0.05);
+  --volume-surface-hover: rgba(255, 255, 255, 0.08);
+  --volume-track-bg: rgba(255, 255, 255, 0.07);
+  --volume-track-border: rgba(255, 255, 255, 0.12);
+  --volume-track-fill: linear-gradient(
+    135deg,
+    rgba(0, 103, 192, 0.9),
+    rgba(16, 110, 190, 0.78)
+  );
+  --volume-thumb-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --volume-label-bg: rgba(255, 255, 255, 0.14);
 }
 
 * {
@@ -303,6 +315,170 @@
   min-width: 18px;
   min-height: 18px;
   margin: 2px;
+}
+
+/* Volume Widget */
+
+.widget-volume {
+  background: var(--volume-bg);
+  border-radius: var(--radius-medium);
+  border: 1px solid var(--border-color);
+  padding: 8px 10px 10px 10px;
+  /* margin: 6px 8px 4px 8px; */
+  margin-top: 8px;
+  box-shadow: var(--shadow-elevation-low);
+  row-gap: 6px;
+}
+
+.widget-volume > box:first-child {
+  border-radius: calc(var(--radius-medium) - 8px);
+}
+
+.widget-volume > box:first-child > label {
+  background: var(--volume-label-bg);
+  border-radius: 12px;
+  color: var(--text-color);
+  font-size: 17px;
+  font-weight: 600;
+  padding: 4px 10px;
+  margin-right: 10px;
+  min-width: 36px;
+  text-align: center;
+}
+
+.widget-volume > box:first-child > button {
+  border-radius: 12px;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  margin-left: 8px;
+  min-height: 26px;
+  min-width: 26px;
+  padding: 4px 8px;
+  transition: all 160ms ease;
+}
+
+.widget-volume > box:first-child > button:hover {
+  color: var(--text-color);
+}
+
+.widget-volume > box:first-child > button:checked,
+.widget-volume > box:first-child > button:active {
+  background: var(--accent-color);
+  color: #ffffff;
+}
+
+.widget-volume > box:first-child > button image {
+  -gtk-icon-size: 16px;
+}
+
+.widget-volume > box:first-child > button label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.widget-volume scale {
+  margin-right: 8px;
+  min-height: 22px;
+}
+
+.widget-volume scale trough {
+  background: var(--volume-track-bg);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  min-height: 6px;
+  transition: background 120ms ease;
+}
+
+.widget-volume scale:hover trough,
+.widget-volume scale:focus-within trough {
+  background: var(--volume-surface-hover);
+}
+
+.widget-volume scale trough highlight,
+.widget-volume scale trough fill,
+.widget-volume scale trough progress {
+  background: var(--volume-track-fill);
+  border-radius: inherit;
+}
+
+.widget-volume scale slider {
+  background: #ffffff;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  min-height: 16px;
+  min-width: 16px;
+  box-shadow: var(--volume-thumb-shadow);
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.widget-volume scale:hover slider,
+.widget-volume scale slider:focus,
+.widget-volume scale slider:active {
+  transform: scale(1.05);
+  box-shadow:
+    0 0 0 3px rgba(0, 103, 192, 0.25),
+    var(--volume-thumb-shadow);
+}
+
+.widget-volume .per-app-volume {
+  /* background: var(--volume-surface); */
+  border-radius: calc(var(--radius-medium) - 8px);
+  margin: 0;
+  padding: 4px 0 4px 0;
+}
+
+.widget-volume .per-app-volume > label {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  padding: 6px 12px 6px 12px;
+  text-align: center;
+}
+
+.widget-volume .per-app-volume row {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+  margin: 2px 6px;
+  padding: 6px 8px;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+.widget-volume .per-app-volume row:hover,
+.widget-volume .per-app-volume row:focus {
+  background: var(--volume-surface-hover);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.widget-volume .per-app-volume row > box {
+  padding: 0;
+  column-gap: 10px;
+}
+
+.widget-volume .per-app-volume row image {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 4px;
+  margin-right: 8px;
+}
+
+.widget-volume .per-app-volume row label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.widget-volume .per-app-volume row scale {
+  margin: 0;
+  min-height: 20px;
+}
+
+.widget-volume .per-app-volume row scale slider {
+  min-height: 16px;
+  min-width: 16px;
 }
 
 /* Buttons Grid Widget */

@@ -45,6 +45,7 @@
     "notifications",
     "title",
     "dnd",
+    "volume",
     "buttons-grid"
   ],
   "widget-config": {

@@ -80,13 +80,20 @@ mkdir -p "${shots_dir}"
 timestamp="$(date '+%Y-%m-%d_%H-%M-%S')"
 file="${shots_dir}/screenshot-${mode}-${timestamp}.png"
 
-if ! grimblast copysave "${target}" "${file}"; then
+if ! grimblast save "${target}" "${file}"; then
     if [[ "${target}" == "area" && ! -f "${file}" ]]; then
         # Assume user cancelled the selection.
         exit 0
     fi
     notify-send "Screenshot failed" "Could not capture ${label,,}."
     exit 1
+fi
+
+# Copy to clipboard. Terminal apps like cursor-agent typically need the file path.
+# We copy as plain text since that's what most terminal apps can paste.
+if command -v wl-copy >/dev/null 2>&1; then
+    # Copy just the file path as plain text (easiest for terminal apps to paste)
+    printf '%s' "${file}" | wl-copy || true
 fi
 
 if command -v notify-send >/dev/null 2>&1; then
