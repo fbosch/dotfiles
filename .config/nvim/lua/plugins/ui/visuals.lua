@@ -112,7 +112,8 @@ return {
 		dependencies = {
 			{
 				"folke/snacks.nvim",
-				lazy = true,
+				lazy = false,
+				priority = 1000,
 				opts = {
 					animate = {},
 					util = {},
