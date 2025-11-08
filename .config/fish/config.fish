@@ -8,14 +8,14 @@ function hyprstart
     exec uwsm start hyprland-uwsm.desktop
 end
 
-if test -z "$WAYLAND_DISPLAY" && test "$XDG_VTNR" = 1
-    set -l flag_file "/run/user/"(id -u)"/hyprland-started"
-
-    if not test -f "$flag_file"
-        touch "$flag_file"
-        hyprstart
-    end
-end
+# if test -z "$WAYLAND_DISPLAY" && test "$XDG_VTNR" = 1
+#     set -l flag_file "/run/user/"(id -u)"/hyprland-started"
+#
+#     if not test -f "$flag_file"
+#         touch "$flag_file"
+#         hyprstart
+#     end
+# end
 
 switch (uname)
     case Linux
