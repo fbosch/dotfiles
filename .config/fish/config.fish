@@ -87,7 +87,24 @@ end
 
 # --- Third-party Tools ---
 zoxide init fish | source
+
+# --- Starship Configuration ---
+# Use TTY-safe config for console (TTY1), unicode config for terminal emulators
+if test (uname) = Linux
+    # Check if we're in TTY1 (console) vs terminal emulator
+    # TTY1 typically doesn't have DISPLAY/WAYLAND_DISPLAY and tty shows /dev/tty1
+    set -l tty_device (tty 2>/dev/null)
+    if test -z "$DISPLAY" -a -z "$WAYLAND_DISPLAY" -a -n "$tty_device" -a (string match -q "/dev/tty*" "$tty_device")
+        set -gx STARSHIP_CONFIG "$HOME/.config/starship-tty.toml"
+    else
+        set -gx STARSHIP_CONFIG "$HOME/.config/starship.toml"
+    end
+else
+    # On macOS, assume terminal emulator (always use unicode config)
+    set -gx STARSHIP_CONFIG "$HOME/.config/starship.toml"
+end
 starship init fish | source
+
 fnm env --use-on-cd --shell fish | source
 
 # --- pnpm ---

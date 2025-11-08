@@ -1,0 +1,51 @@
+command_timeout = 2000
+continuation_prompt = "[> ](dimmed white)"
+
+format = """$character\
+$sudo"""
+
+right_format = """
+$directory
+$git_branch
+$git_state
+$git_metrics
+$git_status
+$memory_usage
+$cmd_duration
+"""
+
+[character]
+success_symbol = "[ fbb ](#9e9e9e)[>](cyan)"
+error_symbol = "[ ERR ](bold red)[>>](red)"
+
+[sudo]
+format = "[$symbol]($style)"
+style = "bold italic bright-red"
+symbol = "$ "
+disabled = false
+
+[python]
+disabled = true
+
+[git_metrics]
+format = '[+$added]($added_style)/[-$deleted]($deleted_style) '
+added_style = 'italic dimmed green'
+deleted_style = 'italic dimmed red'
+
+[directory]
+home_symbol = "~"
+truncation_length = 6 
+truncate_to_repo = true
+truncation_symbol = ".../"
+read_only = " [R] "
+
+[nodejs]
+format = '[Node](bold fg:#84ba64) -> [$version](fg:#84ba64) '
+
+[time]
+disabled = false
+time_format = '%R'
+
+[memory_usage]
+symbol = "[ ] "
+format = " mem [${ram}( ${swap})]($style)"
