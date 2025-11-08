@@ -1,5 +1,7 @@
 vim.opt.shm:append("I")
 
+local terminal = require("utils.terminal")
+
 -- language
 vim.opt.langmap = "æ:,ø',å[,¨],-/,"
 
@@ -73,7 +75,11 @@ vim.opt.breakindent = true
 
 -- list
 vim.opt.list = true
-vim.opt.listchars = { tab = "▏ ", trail = "·", nbsp = "␣" }
+if terminal.is_terminal_emulator() then
+	vim.opt.listchars = { tab = "▏ ", trail = "·", nbsp = "␣" }
+else
+	vim.opt.listchars = { tab = "| ", trail = ".", nbsp = " " }
+end
 
 vim.opt.hidden = true
 vim.opt.mouse = "a"

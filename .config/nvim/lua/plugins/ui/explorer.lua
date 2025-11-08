@@ -19,6 +19,9 @@ return {
 		},
 	},
 	config = function()
+		local terminal = require("utils.terminal")
+		local is_terminal_emulator = terminal.is_terminal_emulator()
+
 		local function on_attach(bufnr)
 			local api = require("nvim-tree.api")
 			-- default mappings
@@ -53,6 +56,38 @@ return {
 			renderer = {
 				root_folder_label = false,
 				symlink_destination = false,
+				icons = {
+					show = {
+						file = is_terminal_emulator,
+						-- folder = is_terminal_emulator,
+						-- folder_arrow = is_terminal_emulator,
+						-- git = is_terminal_emulator,
+					},
+					glyphs = is_terminal_emulator and {} or {
+						default = " ",
+						symlink = "->",
+						bookmark = "BM",
+						folder = {
+							arrow_closed = ">",
+							arrow_open = "v",
+							default = "+",
+							open = "-",
+							empty = ".",
+							empty_open = "-",
+							symlink = "->",
+							symlink_open = "->",
+						},
+						git = {
+							unstaged = "!",
+							staged = "+",
+							unmerged = "=",
+							renamed = "R",
+							untracked = "?",
+							deleted = "D",
+							ignored = "I",
+						},
+					},
+				},
 			},
 			filters = {
 				custom = { "node_modules" },

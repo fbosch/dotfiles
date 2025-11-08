@@ -9,7 +9,7 @@ function M.is_plain_tty()
 
 	-- Get TTY device path (same way fish detects it)
 	local tty_path = ""
-	
+
 	-- Try tty command first (most reliable)
 	local ok, result = pcall(function()
 		local handle = io.popen("tty 2>/dev/null")
@@ -67,6 +67,13 @@ function M.is_plain_tty()
 	end
 
 	return false
+end
+
+--- Check if running in a terminal emulator (not a plain TTY)
+-- Terminal emulators support unicode, colors, and advanced features
+-- @return boolean true if in terminal emulator
+function M.is_terminal_emulator()
+	return not M.is_plain_tty()
 end
 
 return M

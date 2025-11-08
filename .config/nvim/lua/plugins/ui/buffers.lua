@@ -98,6 +98,7 @@ return {
 			},
 		}),
 		config = function()
+			local is_rich = terminal.is_terminal_emulator()
 			require("barbar").setup({
 				animation = false,
 				auto_hide = true,
@@ -114,13 +115,13 @@ return {
 				icons = {
 					filetype = {
 						custom_colors = false,
-						enabled = not terminal.is_plain_tty(),
+						enabled = is_rich,
 					},
 					pinned = {
-						button = "󰐃",
+						button = is_rich and "󰐃" or "[P]",
 						filename = true,
 					},
-					separator = { left = "▎", right = "" },
+					separator = { left = is_rich and "▎" or "|", right = "" },
 					separator_at_end = true,
 					diagnostics = {
 						[vim.diagnostic.severity.ERROR] = { enabled = true, icon = " ", custom_color = true },
@@ -128,9 +129,9 @@ return {
 						[vim.diagnostic.severity.INFO] = { enabled = true, icon = "󰋼 ", custom_color = true },
 						[vim.diagnostic.severity.HINT] = { enabled = true, icon = " ", custom_color = true },
 						gitsigns = {
-							added = { enabled = true, icon = "" },
+							added = { enabled = true, icon = is_rich and "" or "+" },
 							changed = { enabled = true, icon = "~" },
-							deleted = { enabled = true, icon = "" },
+							deleted = { enabled = true, icon = is_rich and "" or "-" },
 						},
 					},
 				},

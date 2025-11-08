@@ -40,19 +40,19 @@ return {
 					},
 					filter = vim.log.levels.INFO,
 					override_vim_notify = true,
-			redirect = function(msg, level, opts)
-				-- HACK: to prevent LSPSaga from showing useless notifications
-				if msg == "No information available" then
-					return function() end
-				end
-				if opts and opts.on_open then
-					return require("fidget.integration.nvim-notify").delegate(msg, level, opts)
-				end
-			end,
-			window = {
-				avoid = { "NvimTree" },
-			},
-		},
+					redirect = function(msg, level, opts)
+						-- HACK: to prevent LSPSaga from showing useless notifications
+						if msg == "No information available" then
+							return function() end
+						end
+						if opts and opts.on_open then
+							return require("fidget.integration.nvim-notify").delegate(msg, level, opts)
+						end
+					end,
+					window = {
+						avoid = { "NvimTree" },
+					},
+				},
 			})
 		end,
 	},
