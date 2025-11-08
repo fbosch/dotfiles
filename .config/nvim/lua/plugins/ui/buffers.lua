@@ -1,4 +1,5 @@
 local utils = require("utils")
+local terminal = require("utils.terminal")
 
 local function setup_barbar_highlights()
 	local colors = require("config.colors")
@@ -53,13 +54,13 @@ return {
 		dependencies = { "nvim-tree/nvim-web-devicons" },
 		event = "VeryLazy",
 		keys = vim.list_extend(buffer_index_keys(), {
-		{
-			mode = { "n" },
-			"<leader>x",
-			close_all_but_visible_and_terminals,
-			desc = "close all but currentl active buffer or pinned buffers",
-			silent = true,
-		},
+			{
+				mode = { "n" },
+				"<leader>x",
+				close_all_but_visible_and_terminals,
+				desc = "close all but currentl active buffer or pinned buffers",
+				silent = true,
+			},
 			{
 				mode = { "n" },
 				"<leader>P",
@@ -113,7 +114,7 @@ return {
 				icons = {
 					filetype = {
 						custom_colors = false,
-						enabled = true,
+						enabled = not terminal.is_plain_tty(),
 					},
 					pinned = {
 						button = "󰐃",

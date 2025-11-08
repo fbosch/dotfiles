@@ -1,4 +1,5 @@
 local platform = require("utils.platform")
+local terminal = require("utils.terminal")
 
 return {
 	{
@@ -161,10 +162,13 @@ return {
 		event = "BufEnter",
 		priority = 100,
 		config = function()
+			local is_tty = terminal.is_plain_tty()
+			local indent_char = is_tty and "|" or "▏"
+			local scope_char = is_tty and "|" or "▏"
 			require("ibl").setup({
-				indent = { char = "▏" },
+				indent = { char = indent_char },
 				scope = {
-					char = "▏",
+					char = scope_char,
 					enabled = true,
 				},
 			})
@@ -208,12 +212,18 @@ return {
 					},
 				},
 				render = function(props)
+					local is_tty = terminal.is_plain_tty()
 					local filename = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(props.buf), ":t")
-					local ft_icon, ft_color = require("nvim-web-devicons").get_icon_color(filename)
+					local ft_icon, ft_color = is_tty and { nil, nil }
+						or require("nvim-web-devicons").get_icon_color(filename)
 					local is_modified = vim.bo[props.buf].modified
 
 					local function get_git_diff()
-						local icons = { removed = "", changed = "", added = "" }
+						local icons = {
+							removed = is_tty and "-" or "",
+							changed = is_tty and "~" or "",
+							added = is_tty and "+" or "",
+						}
 						icons["changed"] = icons.modified
 						local signs = vim.b[props.buf].gitsigns_status_dict
 						local labels = {}
