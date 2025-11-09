@@ -21,7 +21,7 @@ error_symbol = "[ ERR ](bold red)[>>](red)"
 [sudo]
 format = "[$symbol]($style)"
 style = "bold italic bright-red"
-symbol = "$ "
+symbol = "su: "
 disabled = false
 
 [python]
