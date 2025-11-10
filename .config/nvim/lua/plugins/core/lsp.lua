@@ -120,7 +120,6 @@ end
 local lsp_keymaps = require("config.keymaps.lsp")
 
 local on_attach = function(client, bufnr)
-	vim.notify("LSP attached: " .. client.name .. " to buffer " .. bufnr, vim.log.levels.INFO)
 	setup_formatters(client, bufnr)
 	-- Use vim.schedule to ensure keymaps are set after buffer is ready
 	vim.schedule(function()
@@ -308,10 +307,6 @@ return {
 				local bufnr = args.buf
 				local client = vim.lsp.get_client_by_id(args.data.client_id)
 				if client then
-					vim.notify(
-						"LspAttach autocmd: Setting keymaps for buffer " .. bufnr .. " (client: " .. client.name .. ")",
-						vim.log.levels.INFO
-					)
 					-- Use vim.schedule to ensure this runs after other plugins
 					vim.schedule(function()
 						on_attach(client, bufnr)
