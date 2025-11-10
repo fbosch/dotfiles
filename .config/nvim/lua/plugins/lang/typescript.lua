@@ -30,6 +30,7 @@ return {
 		"nabekou29/js-i18n.nvim",
 		-- "fbosch/js-i18n.nvim",
 		ft = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
+		enabled = false,
 		lazy = true,
 		dependencies = {
 			"neovim/nvim-lspconfig",

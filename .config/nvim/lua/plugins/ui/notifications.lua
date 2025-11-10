@@ -38,6 +38,11 @@ return {
 							debug_annote = "",
 						},
 					},
+					integration = {
+						["nvim-tree"] = {
+							enable = true,
+						},
+					},
 					filter = vim.log.levels.INFO,
 					override_vim_notify = true,
 					redirect = function(msg, level, opts)

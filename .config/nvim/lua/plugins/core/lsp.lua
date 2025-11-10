@@ -45,31 +45,6 @@ local servers = {
 	},
 }
 
-local function setup_lsp_keymaps(client, bufnr)
-	function nmap(keys, cmd, desc)
-		if desc then
-			desc = "LSP: " .. desc
-		end
-		require("utils").set_keymap("n", keys, cmd, { buffer = bufnr, desc = desc, silent = true })
-	end
-
-	nmap("gD", vim.lsp.buf.declaration, "[G]o to [D]eclaration")
-	nmap("gd", vim.lsp.buf.definition, "[G]o to [D]efinition")
-	nmap("<leader>gd", function()
-		vim.cmd("vsplit")
-		vim.lsp.buf.definition()
-	end, "[G]o to [D]efinition in split")
-	nmap("<leader>pd", "<cmd>Lspsaga peek_definition<CR>", "[P]eek [D]efinition")
-	nmap("<leader>k", "<cmd>Lspsaga hover_doc<CR>", "Hover")
-	nmap("gi", vim.lsp.buf.implementation, "[G]o to [I]mplementation")
-	nmap("gr", vim.lsp.buf.references, "[G]o to [R]eferences")
-	nmap("gtd", vim.lsp.buf.type_definition, "[G]o to [T]ype [D]efinition")
-	nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
-	nmap("<leader>fi", "<cmd>TSToolsAddMissingImports<CR>", "[F]ix [I]mports")
-	nmap("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
-	nmap("<leader>lsp", "<cmd>:LspRestart<CR>", "restart langauge server")
-end
-
 local function setup_formatters(client, bufnr)
 	local group = vim.api.nvim_create_augroup("LspFormatting", {})
 
@@ -142,9 +117,15 @@ function setup_diagnostics()
 	})
 end
 
+local lsp_keymaps = require("config.keymaps.lsp")
+
 local on_attach = function(client, bufnr)
+	vim.notify("LSP attached: " .. client.name .. " to buffer " .. bufnr, vim.log.levels.INFO)
 	setup_formatters(client, bufnr)
-	setup_lsp_keymaps(client, bufnr)
+	-- Use vim.schedule to ensure keymaps are set after buffer is ready
+	vim.schedule(function()
+		lsp_keymaps.setup(client, bufnr)
+	end)
 end
 
 local function get_capabilities()
@@ -170,21 +151,21 @@ local function get_ensure_installed()
 		"tailwindcss",
 		"cssls",
 	}
-	
+
 	if not platform.is_nixos() then
 		table.insert(ensure, "lua_ls")
 	end
-	
+
 	for name, config in pairs(servers) do
 		if config.enabled ~= false and name ~= "lua_ls" then
 			table.insert(ensure, name)
 		end
 	end
-	
+
 	if not platform.is_nixos() then
 		table.insert(ensure, "lua_ls")
 	end
-	
+
 	return ensure
 end
 
@@ -195,18 +176,18 @@ local function mason_handlers(capabilities, on_attach)
 		if server.enabled == false then
 			return
 		end
-		local lspconfig = require("lspconfig")
+		local config = require("lspconfig")
 		local settings = server.settings or {}
 
 		print("LSP: " .. server_name)
 
 		if server_name == "eslint" then
 			settings.experimental = { useFlatConfig = true }
-			lspconfig.eslint.setup({
+			config.eslint.setup({
 				on_attach = on_attach,
 				capabilities = capabilities,
 				settings = settings,
-				root_dir = require("lspconfig").util.root_pattern(
+				root_dir = config.util.root_pattern(
 					"eslint.config.js",
 					"eslint.config.cjs",
 					"eslint.config.mjs",
@@ -221,23 +202,23 @@ local function mason_handlers(capabilities, on_attach)
 		end
 
 		if server_name == "biome" then
-			lspconfig.biome.setup({
+			config.biome.setup({
 				on_attach = on_attach,
 				capabilities = capabilities,
 				settings = settings,
 				cmd = server.cmd,
-				root_dir = lspconfig.util.root_pattern("biome.json"),
+				root_dir = config.util.root_pattern("biome.json"),
 			})
 			return
 		end
 
 		-- default lsp setup
-		lspconfig[server_name].setup({
+		config[server_name].setup({
 			capabilities = vim.tbl_deep_extend("force", {}, capabilities, server.capabilities or {}),
 			on_attach = on_attach,
 			settings = settings,
 			cmd = server.cmd,
-			root_dir = server.root_dir or lspconfig.util.root_pattern(server.root_files or {}),
+			root_dir = server.root_dir or config.util.root_pattern(server.root_files or {}),
 		})
 	end
 end
@@ -319,5 +300,24 @@ return {
 		require("lazydev").setup({ capabilities = capabilities, on_attach = on_attach })
 		require("lsp-file-operations").setup()
 		setup_diagnostics()
+
+		-- Backup: Set keymaps via autocmd to ensure they're always set
+		vim.api.nvim_create_autocmd("LspAttach", {
+			group = vim.api.nvim_create_augroup("LspKeymapsAuto", { clear = true }),
+			callback = function(args)
+				local bufnr = args.buf
+				local client = vim.lsp.get_client_by_id(args.data.client_id)
+				if client then
+					vim.notify(
+						"LspAttach autocmd: Setting keymaps for buffer " .. bufnr .. " (client: " .. client.name .. ")",
+						vim.log.levels.INFO
+					)
+					-- Use vim.schedule to ensure this runs after other plugins
+					vim.schedule(function()
+						on_attach(client, bufnr)
+					end)
+				end
+			end,
+		})
 	end,
 }
