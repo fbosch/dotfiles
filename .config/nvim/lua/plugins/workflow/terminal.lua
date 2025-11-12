@@ -32,26 +32,13 @@ return {
 			"FTermToggle",
 			"FtermMProcs",
 			"FTermLazyGit",
-			"FTermAgent",
-			"SendSelectionToAgent",
-			"SendVisibleBuffersToAgent",
 		},
-		keys = vim.list_extend(term_keymaps({
+		keys = term_keymaps({
 			{ "<A-t>", "FTermToggle", "toggle floating terminal" },
 			{ "<A-m>", "FTermMProcs", "toggle floating terminal with mprocs" },
 			{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
 			{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
 			{ "<A-c>", "FTermCheckmate", "toggle floating terminal with checkmate in neovim instance" },
-			{ "<A-a>", "FTermAgent", "toggle floating terminal with agent CLI" },
-			{ "<A-x>", "SendVisibleBuffersToAgent", "send context (buffers) to agent" },
-		}), {
-			{
-				"<A-x>",
-				":<C-u>SendSelectionToAgent<CR>",
-				desc = "send context (selection) to agent",
-				mode = "v",
-				silent = true,
-			},
 		}),
 		config = function()
 			local usrcmd = vim.api.nvim_create_user_command
@@ -147,10 +134,6 @@ return {
 				checkmate_instance:toggle()
 			end, { bang = true })
 
-		local agent = require("utils.agent")
-		usrcmd("FTermAgent", agent.toggle, { bang = true })
-		agent.register_commands()
-		agent.setup_keymaps()
 		end,
 	},
 	{

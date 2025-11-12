@@ -12,7 +12,9 @@ return {
 	},
 	event = "BufWinEnter",
 	config = function()
-		local lualine_x = {}
+		local lualine_x = {
+			require("opencode").statusline,
+		}
 		local lualine_c = {}
 		local lualine_b = {}
 
