@@ -6,6 +6,12 @@
     "docs/*.md",
     ".cursor/rules/*.md*"
   ],
+  "provider": {
+     "github-copilot": {
+       "npm": "@opeoginni/github-copilot-openai-compatible",
+       "id": "github-copilot"
+     },
+  },
   "mcp": {
     "context7": {
       "type": "remote",

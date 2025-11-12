@@ -26,6 +26,7 @@ return {
 			lualine_b = {
 				"branch",
 			}
+
 			lualine_c = {
 				{
 					git_blame.get_current_blame_text,

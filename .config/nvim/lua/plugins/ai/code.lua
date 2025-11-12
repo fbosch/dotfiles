@@ -2,6 +2,7 @@ return {
 	{
 		"supermaven-inc/supermaven-nvim",
 		event = "InsertEnter",
+		enabled = true,
 		opts = {
 			ignore_filetypes = { markdown = true },
 			keymaps = {
@@ -33,7 +34,6 @@ return {
 			suggestion = {
 				enabled = true,
 				auto_trigger = true,
-				debounce = 50,
 				keymap = {
 					accept = "<Tab>",
 					next = "<C-j>",
