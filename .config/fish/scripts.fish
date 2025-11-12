@@ -375,7 +375,7 @@ function install_npm_globals
     set args (jq -r 'to_entries[] | "\(.key)@\(.value)"' $file)
     if test (count $args) -eq 0
         set_color yellow
-        echo "  No packages found in $file."
+        echo "  No packages found in $file."
         set_color normal
         return 1
     end
@@ -399,10 +399,125 @@ function install_npm_globals
 
     if test $status -eq 0
         set_color green
-        echo "  All packages installed successfully."
+        echo "  All packages installed successfully."
     else
         set_color red
-        echo "  Error installing one or more packages."
+        echo "  Error installing one or more packages."
     end
     set_color normal
+end
+
+function ai_commit --description "Generate AI-powered Commitizen commit message from branch context"
+    # Check if we're in a git repository
+    if not git rev-parse --git-dir >/dev/null 2>&1
+        gum style --foreground 196 "✗ Not in a git repository"
+        return 1
+    end
+
+    # Check if there are staged changes
+    set -l staged_files (git diff --cached --name-only)
+    if test -z "$staged_files"
+        gum style --foreground 214 "⚠ No staged changes to commit"
+        return 1
+    end
+
+    # Get current branch name
+    set branch_name (git rev-parse --abbrev-ref HEAD)
+
+    # Extract ticket number if present (supports formats like: fix/50147-desc, feat/AB-1234-desc, etc.)
+    set ticket_number ""
+    if string match -qr '(\d+)' $branch_name
+        set ticket_number (string match -r '\d+' $branch_name)
+    end
+
+    # Extract branch prefix hint (fix/, feat/, docs/, etc.)
+    set branch_hint ""
+    if string match -qr '^([a-z]+)/' $branch_name
+        set branch_hint (string match -r '^([a-z]+)/' $branch_name | string split '/')[1]
+    end
+
+    # Build context prompt for OpenCode
+    set -l context_parts
+    test -n "$branch_hint" && set -a context_parts "Branch prefix: $branch_hint"
+    test -n "$ticket_number" && set -a context_parts "Ticket number: $ticket_number"
+
+    set context_info (string join ", " $context_parts)
+    test -n "$context_info" && set context_info " ($context_info)"
+
+    # Create comprehensive prompt for OpenCode
+    set prompt "Analyze the staged git changes and generate a Commitizen-compliant commit message.
+
+REQUIREMENTS:
+- Use Commitizen format: type(scope): description
+- Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
+- Choose the type based on ACTUAL changes, not just branch name
+- Keep description concise (max 72 chars for first line)
+- Use imperative mood (\"add\" not \"added\")
+- Do NOT include body or footer, just the one-line message
+
+CONTEXT:$context_info
+- Branch: $branch_name"
+
+    # Add ticket reference instruction if ticket number found
+    if test -n "$ticket_number"
+        set prompt "$prompt
+- MUST include ticket reference as scope: AB#$ticket_number
+- Format: type(AB#$ticket_number): description"
+    end
+
+    set prompt "$prompt
+
+OUTPUT FORMAT:
+Return ONLY the commit message, nothing else. No markdown, no explanations.
+Example: fix(AB#50147): resolve memory leak in data processor"
+
+    # Run OpenCode with spinner and extract response
+    set temp_prompt (mktemp -t opencode_prompt.XXXXXX)
+    set temp_output (mktemp -t opencode_output.XXXXXX)
+    
+    # Write prompt to file to avoid escaping issues
+    printf '%s' "$prompt" > $temp_prompt
+    
+    # Use gum spin to show loading indicator while AI is thinking
+    # Pass prompt as positional arguments by reading from file
+    gum spin --spinner dot --title "🤖 Analyzing changes with AI..." -- sh -c "opencode run -m openai/gpt-4.1-mini --format json \$(cat $temp_prompt) > $temp_output 2>&1"
+    
+    # Extract the text from JSON response (strip ANSI codes, filter JSON, extract text)
+    set commit_msg (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | string trim)
+    
+    # Cleanup
+    rm -f $temp_prompt $temp_output
+
+    # Validate we got a response
+    if test -z "$commit_msg"
+        gum style --foreground 196 "✗ Failed to generate commit message"
+        return 1
+    end
+
+    # Display the generated message using gum format for better presentation
+    echo
+    echo "# Generated Commit Message" | gum format
+    echo
+    gum style \
+        --foreground 110 \
+        --border rounded \
+        --border-foreground 110 \
+        --padding "1 2" \
+        --width 80 \
+        "$commit_msg"
+    echo
+
+    # Prompt user for confirmation using gum
+    if gum confirm --default --affirmative="Commit" --negative="Cancel" "Proceed with this commit?"
+        git commit -m "$commit_msg"
+        if test $status -eq 0
+            gum style --foreground 46 "✓ Commit successful!"
+        else
+            gum style --foreground 196 "✗ Commit failed"
+            return 1
+        end
+    else
+        gum style --foreground 214 "✗ Commit cancelled"
+        return 1
+    end
 end

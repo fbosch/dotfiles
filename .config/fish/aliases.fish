@@ -122,6 +122,7 @@ abbr gdorig 'find . -name \*.orig -delete'
 abbr gcm --set-cursor 'git commit -m "%"'
 abbr gcmn --set-cursor 'git commit -m "%" --no-verify'
 abbr gca 'git commit --amend --no-edit'
+abbr gaic ai_commit # AI-powered Commitizen commit
 abbr gmt 'git mergetool'
 abbr grhh 'git reset --hard HEAD'
 abbr gcfd 'git clean -fd'
