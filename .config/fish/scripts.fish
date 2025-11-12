@@ -408,7 +408,7 @@ end
 
 function ai_commit --description "Generate AI-powered Commitizen commit message from branch context"
     # Model configuration
-    set -l ai_model "openai/gpt-4.1-mini"
+    set -l ai_model github-copilot/claude-haiku-4.5
 
     # Check if we're in a git repository
     if not git rev-parse --git-dir >/dev/null 2>&1
@@ -486,14 +486,29 @@ Example: fix(AB#50147): resolve memory leak in data processor"
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "opencode run -m $ai_model --format json \$(cat $temp_prompt) > $temp_output 2>&1"
 
     # Extract the text from JSON response (strip ANSI codes, filter JSON, extract text)
-    set commit_msg (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | string trim)
+    set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | string trim)
 
-    # Cleanup
+    # Cleanup temp files
     rm -f $temp_prompt $temp_output
 
     # Validate we got a response
-    if test -z "$commit_msg"
+    if test -z "$raw_output"
         gum style " Failed to generate commit message"
+        return 1
+    end
+
+    # Extract only the commit message line (first line matching Commitizen format)
+    # Matches: type(scope): description OR type: description
+    set commit_msg (string split \n $raw_output | string match -r '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?: .+' | head -n 1)
+
+    # Fallback: if no Commitizen format found, take first non-empty line
+    if test -z "$commit_msg"
+        set commit_msg (string split \n $raw_output | string match -r '\S+' | head -n 1)
+    end
+
+    # Final validation
+    if test -z "$commit_msg"
+        gum style " Failed to extract valid commit message"
         return 1
     end
 
@@ -501,16 +516,16 @@ Example: fix(AB#50147): resolve memory leak in data processor"
     echo
     gum style --foreground 110 --bold "  Generated Commit Message"
     echo
-    
+
     # Allow user to edit the commit message with prefilled value
     set edited_msg (gum input --value "$commit_msg" --width 100 --prompt "󰏫 " --placeholder "Edit commit message or press Enter to accept...")
-    
+
     # Check if user cancelled (Ctrl+C) or provided empty input
     if test $status -ne 0
         gum style --foreground 1 "󰜺 Commit cancelled"
         return 1
     end
-    
+
     # If user cleared the message completely, cancel
     if test -z "$edited_msg"
         gum style --foreground 1 "󰜺 Commit cancelled (empty message)"
