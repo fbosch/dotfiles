@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "theme": "zenwritten-dark",
+  "theme": "vesper",
   "instructions": [
     "AGENTS.md",
     "docs/*.md",
@@ -16,19 +16,33 @@
     },
     "vitest": {
       "type": "local",
-      "command": ["npx", "-y", "@djankies/vitest-mcp"]
+      "command": [
+        "npx",
+        "-y",
+        "@djankies/vitest-mcp"
+      ]
     },
     "playwright": {
       "type": "local",
-      "command": ["npx", "@playwright/mcp@latest"]
+      "command": [
+        "npx",
+        "@playwright/mcp@latest"
+      ]
     },
     "eslint": {
       "type": "local",
-      "command": ["npx", "@eslint/mcp@latest"]
+      "command": [
+        "npx",
+        "@eslint/mcp@latest"
+      ]
     },
     "sequential-thinking": {
       "type": "local",
-      "command": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"]
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
     },
     "figma": {
       "type": "remote",
@@ -36,11 +50,18 @@
     },
     "nixos": {
       "type": "local",
-      "command": ["uvx", "mcp-nixos"]
+      "command": [
+        "uvx",
+        "mcp-nixos"
+      ]
     },
     "neovim": {
       "type": "local",
-      "command": ["npx", "-y", "mcp-neovim-server"],
+      "command": [
+        "npx",
+        "-y",
+        "mcp-neovim-server"
+      ],
       "environment": {
         "ALLOW_SHELL_COMMANDS": "true",
         "NVIM_SOCKET_PATH": "/tmp/nvim"

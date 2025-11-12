@@ -1,4 +1,4 @@
-set -gx TERM wezterm
+set -gx TERM xterm-256color
 set -gx PROJECT_PATHS ~/Projects
 set -gx XDG_CONFIG_HOME "$HOME/.config"
 set -gx ZDOTDIR "$HOME/.config/zsh"
