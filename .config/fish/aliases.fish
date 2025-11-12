@@ -100,6 +100,7 @@ abbr ntm 'tmux new -s'
 abbr atm 'tmux attach-session -t'
 
 # Git
+abbr ac ai_commit
 abbr g git
 abbr gs 'git status'
 abbr gd 'git diff'
