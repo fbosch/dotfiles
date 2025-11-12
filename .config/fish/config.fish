@@ -30,7 +30,7 @@ switch (uname)
         end
 end
 
-for file in coreutils aliases scripts profile private colors
+for file in coreutils aliases scripts profile gum private colors
     if test -f ~/.config/fish/$file.fish
         source ~/.config/fish/$file.fish
     end

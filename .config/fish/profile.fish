@@ -22,26 +22,3 @@ set -U FZF_PREVIEW_DIR_CMD lt
 set -gx COREPACK_ENABLE_STRICT 0
 set -gx GPG_TTY (tty)
 set -U nvm_default_version 20
-
-# TODO: move this and make it consistent
-set -gx GUM_CHOOSE_HEADER_FOREGROUND 110 # blue (header)
-set -gx GUM_CHOOSE_ITEM_FOREGROUND 244 # gray (default items)
-set -gx GUM_CHOOSE_SELECTED_FOREGROUND 2 # green (added)
-set -gx GUM_CHOOSE_UNSELECTED_FOREGROUND 1 # red (unstaged)
-set -gx GUM_CHOOSE_CURSOR_FOREGROUND 140 # purple
-set -gx GUM_CHOOSE_SELECTED_PREFIX "󰄲 "
-set -gx GUM_CHOOSE_UNSELECTED_PREFIX "󰄱 "
-set -gx GUM_CHOOSE_CURSOR_PREFIX "󰡖 "
-set -gx GUM_CHOOSE_HEADER_BACKGROUND ""
-set -gx GUM_CHOOSE_ITEM_BACKGROUND ""
-set -gx GUM_CHOOSE_SELECTED_BACKGROUND ""
-set -gx GUM_CHOOSE_UNSELECTED_BACKGROUND ""
-set -gx GUM_CHOOSE_STRIP_ANSI false
-set -gx GUM_INPUT_CURSOR_FOREGROUND "#97bdde" # Accent blue (zenwritten)
-set -gx GUM_INPUT_CURSOR_BACKGROUND "#191919" # Main background
-set -gx GUM_INPUT_PROMPT_FOREGROUND "#97bdde" # Accent blue (zenwritten)
-set -gx GUM_INPUT_PROMPT_BACKGROUND "#191919" # Background
-set -gx GUM_INPUT_TEXT_FOREGROUND "#bbbbbb" # Light gray (zenwritten)
-set -gx GUM_INPUT_PLACEHOLDER_FOREGROUND "#636363" # Placeholder: muted gray
-set -gx GUM_INPUT_BORDER_FOREGROUND "#303030" # Border: medium/dark gray
-set -gx GUM_INPUT_BACKGROUND "#191919" # Input background
