@@ -28,20 +28,20 @@
         "@djankies/vitest-mcp"
       ]
     },
-    "playwright": {
-      "type": "local",
-      "command": [
-        "npx",
-        "@playwright/mcp@latest"
-      ]
-    },
-    "eslint": {
-      "type": "local",
-      "command": [
-        "npx",
-        "@eslint/mcp@latest"
-      ]
-    },
+    // "playwright": {
+    //   "type": "local",
+    //   "command": [
+    //     "npx",
+    //     "@playwright/mcp@latest"
+    //   ]
+    // },
+    // "eslint": {
+    //   "type": "local",
+    //   "command": [
+    //     "npx",
+    //     "@eslint/mcp@latest"
+    //   ]
+    // },
     "sequential-thinking": {
       "type": "local",
       "command": [
@@ -57,17 +57,5 @@
         "mcp-nixos"
       ]
     },
-    "neovim": {
-      "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "mcp-neovim-server"
-      ],
-      "environment": {
-        "ALLOW_SHELL_COMMANDS": "true",
-        "NVIM_SOCKET_PATH": "/tmp/nvim"
-      }
-    }
   }
 }
