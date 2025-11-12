@@ -512,11 +512,6 @@ Example: fix(AB#50147): resolve memory leak in data processor"
         return 1
     end
 
-    # Display the generated message
-    echo
-    gum style --foreground 110 --bold "  Generated Commit Message"
-    echo
-
     # Allow user to edit the commit message with prefilled value
     set edited_msg (gum input --value "$commit_msg" --width 100 --prompt "󰏫 " --placeholder "Edit commit message or press Enter to accept...")
 
