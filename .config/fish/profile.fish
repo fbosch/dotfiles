@@ -5,7 +5,8 @@ set -gx ZDOTDIR "$HOME/.config/zsh"
 set -gx ARCHPREFERENCE arm64
 set -gx MANPAGER "sh -c 'col -bx | bat -l man -p'"
 set -gx EDITOR nvim
-set -gx NVIM_INIT "$HOME/.config/nvim/init.lua"
+set -gx NVIM_INIT $HOME/.config/nvim/init.lua
+set -gx OPENCODE_CONFIG_DIR $HOME/.config/opencode
 set -gx LS_COLORS "(vivid generate ~/.config/vivid/themes/zenwritten-dark.yml)"
 set -x RIPGREP_CONFIG_PATH "$HOME/.config/ripgrep/ripgreprc"
 set -gx PATH $HOME/.cargo/bin $PATH

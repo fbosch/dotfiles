@@ -1,4 +1,50 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "theme": "zenwritten-dark"
+  "theme": "zenwritten-dark",
+  "instructions": [
+    "AGENTS.md",
+    "docs/*.md",
+    ".cursor/rules/*.md*"
+  ],
+  "mcp": {
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
+      }
+    },
+    "vitest": {
+      "type": "local",
+      "command": ["npx", "-y", "@djankies/vitest-mcp"]
+    },
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "@playwright/mcp@latest"]
+    },
+    "eslint": {
+      "type": "local",
+      "command": ["npx", "@eslint/mcp@latest"]
+    },
+    "sequential-thinking": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"]
+    },
+    "figma": {
+      "type": "remote",
+      "url": "http://127.0.0.1:3845/mcp"
+    },
+    "nixos": {
+      "type": "local",
+      "command": ["uvx", "mcp-nixos"]
+    },
+    "neovim": {
+      "type": "local",
+      "command": ["npx", "-y", "mcp-neovim-server"],
+      "environment": {
+        "ALLOW_SHELL_COMMANDS": "true",
+        "NVIM_SOCKET_PATH": "/tmp/nvim"
+      }
+    }
+  }
 }

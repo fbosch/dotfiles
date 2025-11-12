@@ -1,7 +1,7 @@
 local M = {}
 
 local config = {
-	shell = "zsh",
+	shell = "fish",
 	primary_cli = "opencode -c",
 	fallback_cli = "cursor-agent",
 	prompt_mode = "argument", -- "argument" or "stdin"
@@ -352,7 +352,7 @@ function M.setup(prompt)
 
 			local keymaps = {
 				{ mode = "n", lhs = "q", rhs = "<cmd>close<CR>" },
-				{ mode = "t", lhs = "<Esc>", rhs = "<C-\\><C-n><C-w>l" },
+				{ mode = "t", lhs = "<C-Esc>", rhs = "<C-\\><C-n><C-w>l" },
 				{ mode = "t", lhs = "<A-a>", rhs = "<cmd>close<CR>" },
 				{ mode = "n", lhs = "<S-h>", rhs = "<C-w>h" },
 				{ mode = "n", lhs = "<S-l>", rhs = "<C-w>l" },
