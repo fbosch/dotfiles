@@ -453,7 +453,8 @@ REQUIREMENTS:
 - Use Commitizen format: type(scope): description
 - Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
 - Choose the type based on ACTUAL changes, not just branch name
-- Keep description concise (max 72 chars for first line)
+- Keep description SHORT and concise (aim for 50-60 chars, 72 char HARD LIMIT)
+- Do NOT try to use all available characters - brevity is preferred
 - Use imperative mood (\"add\" not \"added\")
 - Do NOT include body or footer, just the one-line message
 
@@ -500,21 +501,28 @@ Example: fix(AB#50147): resolve memory leak in data processor"
     echo
     gum style --foreground 110 --bold "  Generated Commit Message"
     echo
-    # Highlight the full commit message in green
-    gum style --foreground 2 --bold --border rounded --border-foreground 110 --padding "1 2" --width 80 "$commit_msg"
-    echo
+    
+    # Allow user to edit the commit message with prefilled value
+    set edited_msg (gum input --value "$commit_msg" --width 100 --prompt "󰏫 " --placeholder "Edit commit message or press Enter to accept...")
+    
+    # Check if user cancelled (Ctrl+C) or provided empty input
+    if test $status -ne 0
+        gum style --foreground 1 "󰜺 Commit cancelled"
+        return 1
+    end
+    
+    # If user cleared the message completely, cancel
+    if test -z "$edited_msg"
+        gum style --foreground 1 "󰜺 Commit cancelled (empty message)"
+        return 1
+    end
 
-    # Prompt user for confirmation using gum
-    if gum confirm --default --affirmative="󰸞 Commit" --negative="󰜺 Cancel" "Proceed with this commit?"
-        git commit -m "$commit_msg"
-        if test $status -eq 0
-            gum style " Commit successful!"
-        else
-            gum style " Commit failed"
-            return 1
-        end
+    # Commit with the edited message
+    git commit -m "$edited_msg"
+    if test $status -eq 0
+        gum style --foreground 2 "󰸞 Commit successful!"
     else
-        gum style " Commit cancelled"
+        gum style --foreground 1 "󱎘 Commit failed"
         return 1
     end
 end
