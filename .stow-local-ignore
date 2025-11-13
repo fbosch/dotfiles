@@ -4,6 +4,7 @@
 ^/scripts$
 ^nix.conf
 ^npm-globals\.json
+^vicinae\.json
 ^docs
 ^.DS_Store
 ^README\.md

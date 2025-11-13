@@ -21,6 +21,7 @@ node_modules
 .cursor/.agent-tools
 .config/codex/**/*(!config.toml)
 .config/codex/config.toml
+.config/vicinae/vicinae.json
 
 # Neovim local data
 .config/nvim/.sessions/
