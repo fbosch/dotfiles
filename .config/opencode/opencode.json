@@ -23,8 +23,7 @@
     "vitest": {
       "type": "local",
       "command": [
-        "npx",
-        "-y",
+        "bunx",
         "@djankies/vitest-mcp"
       ]
     },
@@ -32,6 +31,7 @@
       "type": "local",
       "command": [
         "npx",
+        "-y",
         "@playwright/mcp@latest"
       ]
     },
@@ -39,6 +39,7 @@
       "type": "local",
       "command": [
         "npx",
+        "-y",
         "@eslint/mcp@latest"
       ]
     },
@@ -50,12 +51,5 @@
         "@modelcontextprotocol/server-sequential-thinking"
       ]
     },
-    "nixos": {
-      "type": "local",
-      "command": [
-        "uvx",
-        "mcp-nixos"
-      ]
-    }
   }
 }

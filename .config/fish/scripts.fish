@@ -408,7 +408,8 @@ end
 
 function ai_commit --description "Generate AI-powered Commitizen commit message from branch context"
     # Model configuration
-    set -l ai_model github-copilot/claude-haiku-4.5
+    # set -l ai_model github-copilot/claude-haiku-4.5
+    set -l ai_model opencode/grok-code
 
     # Check if we're in a git repository
     if not git rev-parse --git-dir >/dev/null 2>&1
