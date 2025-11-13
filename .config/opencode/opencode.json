@@ -30,26 +30,45 @@
     "playwright": {
       "type": "local",
       "command": [
-        "npx",
-        "-y",
+        "bunx",
         "@playwright/mcp@latest"
       ]
     },
     "eslint": {
       "type": "local",
       "command": [
-        "npx",
-        "-y",
+        "bunx",
         "@eslint/mcp@latest"
       ]
     },
     "sequential-thinking": {
       "type": "local",
       "command": [
-        "npx",
-        "-y",
+        "bunx",
         "@modelcontextprotocol/server-sequential-thinking"
       ]
     },
+    "nixos": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "mcp-nixos"
+      ]
+    },
+    "filesystem": {
+      "type": "local",
+      "command": [
+        "bunx",
+        "@cyanheads/filesystem-mcp-server",
+        "stdio"
+      ]
+    },
+    "deepwiki": {
+      "type": "local",
+      "command": [
+        "bunx",
+        "mcp-deepwiki@latest"
+      ]
+    }
   }
 }
