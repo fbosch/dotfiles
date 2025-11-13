@@ -1,16 +1,16 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "theme": "vesper",
+  "theme": "zenwritten-dark",
   "instructions": [
     "AGENTS.md",
     "docs/*.md",
     ".cursor/rules/*.md*"
   ],
   "provider": {
-     "github-copilot": {
-       "npm": "@opeoginni/github-copilot-openai-compatible",
-       "id": "github-copilot"
-     }
+    "github-copilot": {
+      "npm": "@opeoginni/github-copilot-openai-compatible",
+      "id": "github-copilot"
+    }
   },
   "mcp": {
     "context7": {
