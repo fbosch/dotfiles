@@ -1,8 +1,7 @@
 {
-    "closeOnFocusLoss": true,
-    "faviconService": "twenty",
+    "closeOnFocusLoss": false,
+    "faviconService": "google",
     "font": {
-        "normal": "SF Pro Rounded",
         "size": 10.5
     },
     "keybinding": "default",
@@ -13,12 +12,11 @@
         "searchFiles": true
     },
     "theme": {
-        "iconTheme": "Win11",
         "name": "vicinae-dark"
     },
     "window": {
         "csd": true,
-        "opacity": 0.88,
+        "opacity": 0.98,
         "rounding": 10
     }
 }
