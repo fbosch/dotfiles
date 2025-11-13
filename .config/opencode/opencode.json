@@ -28,20 +28,20 @@
         "@djankies/vitest-mcp"
       ]
     },
-    // "playwright": {
-    //   "type": "local",
-    //   "command": [
-    //     "npx",
-    //     "@playwright/mcp@latest"
-    //   ]
-    // },
-    // "eslint": {
-    //   "type": "local",
-    //   "command": [
-    //     "npx",
-    //     "@eslint/mcp@latest"
-    //   ]
-    // },
+    "playwright": {
+      "type": "local",
+      "command": [
+        "npx",
+        "@playwright/mcp@latest"
+      ]
+    },
+    "eslint": {
+      "type": "local",
+      "command": [
+        "npx",
+        "@eslint/mcp@latest"
+      ]
+    },
     "sequential-thinking": {
       "type": "local",
       "command": [

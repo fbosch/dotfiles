@@ -48,13 +48,13 @@ local servers = {
 local function setup_formatters(client, bufnr)
 	local group = vim.api.nvim_create_augroup("LspFormatting", {})
 
-	if client.name == "eslint" then
-		vim.api.nvim_create_autocmd("BufWritePre", {
-			buffer = bufnr,
-			command = "EslintFixAll",
-			group = group,
-		})
-	end
+	-- if client.name == "eslint" then
+	-- 	vim.api.nvim_create_autocmd("BufWritePre", {
+	-- 		buffer = bufnr,
+	-- 		command = "EslintFixAll",
+	-- 		group = group,
+	-- 	})
+	-- end
 end
 
 function setup_diagnostics()
