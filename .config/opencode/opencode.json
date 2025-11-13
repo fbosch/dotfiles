@@ -1,16 +1,16 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "theme": "vesper",
+  "theme": "zenwritten-dark",
   "instructions": [
     "AGENTS.md",
     "docs/*.md",
     ".cursor/rules/*.md*"
   ],
   "provider": {
-     "github-copilot": {
-       "npm": "@opeoginni/github-copilot-openai-compatible",
-       "id": "github-copilot"
-     },
+    "github-copilot": {
+      "npm": "@opeoginni/github-copilot-openai-compatible",
+      "id": "github-copilot"
+    }
   },
   "mcp": {
     "context7": {
@@ -28,20 +28,20 @@
         "@djankies/vitest-mcp"
       ]
     },
-    // "playwright": {
-    //   "type": "local",
-    //   "command": [
-    //     "npx",
-    //     "@playwright/mcp@latest"
-    //   ]
-    // },
-    // "eslint": {
-    //   "type": "local",
-    //   "command": [
-    //     "npx",
-    //     "@eslint/mcp@latest"
-    //   ]
-    // },
+    "playwright": {
+      "type": "local",
+      "command": [
+        "npx",
+        "@playwright/mcp@latest"
+      ]
+    },
+    "eslint": {
+      "type": "local",
+      "command": [
+        "npx",
+        "@eslint/mcp@latest"
+      ]
+    },
     "sequential-thinking": {
       "type": "local",
       "command": [
@@ -56,6 +56,6 @@
         "uvx",
         "mcp-nixos"
       ]
-    },
+    }
   }
 }

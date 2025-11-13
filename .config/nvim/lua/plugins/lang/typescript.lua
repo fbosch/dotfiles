@@ -10,20 +10,29 @@ return {
 			flags = { watch = false },
 		},
 	},
+	-- Tailwind CSS tooling
+	-- Note: tailwind-tools.nvim was archived by author on Aug 29, 2024
+	-- Alternative options:
+	-- 1. tailwindcss-colorizer-cmp.nvim (368⭐) - color hints in completion
+	-- 2. tailwind-fold.nvim (95⭐) - conceal long class attributes
+	-- 3. tailwind-sorter.nvim (159⭐) - sort classes without prettier
+	-- 4. themaxmarchuk/tailwindcss-colors.nvim (57⭐) - highlights when LSP connected
 	{
-		"luckasRanarison/tailwind-tools.nvim",
-		build = ":UpdateRemotePlugins",
-		ft = { "javascriptreact", "typescriptreact" },
-		dependencies = {
-			"nvim-treesitter/nvim-treesitter",
-			"nvim-telescope/telescope.nvim",
-			"neovim/nvim-lspconfig",
-		},
+		"roobert/tailwindcss-colorizer-cmp.nvim",
+		ft = { "html", "css", "javascriptreact", "typescriptreact", "vue", "svelte" },
+		config = function()
+			require("tailwindcss-colorizer-cmp").setup({
+				color_square_width = 2,
+			})
+		end,
+	},
+	{
+		"razak17/tailwind-fold.nvim",
+		ft = { "html", "css", "javascriptreact", "typescriptreact", "vue", "svelte" },
 		opts = {
-			document_color = {
-				inline_symbol = " ",
-			},
+			min_chars = 50, -- Only fold classes longer than 50 chars
 		},
+		dependencies = { "nvim-treesitter/nvim-treesitter" },
 	},
 	{
 		-- dir = "~/Projects/js-i18n.nvim",
