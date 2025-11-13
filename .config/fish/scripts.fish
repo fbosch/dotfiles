@@ -438,40 +438,24 @@ function ai_commit --description "Generate AI-powered Commitizen commit message 
         set branch_hint (string match -r '^([a-z]+)/' $branch_name | string split '/')[1]
     end
 
-    # Build context prompt for OpenCode
-    set -l context_parts
-    test -n "$branch_hint" && set -a context_parts "Branch prefix: $branch_hint"
-    test -n "$ticket_number" && set -a context_parts "Ticket number: $ticket_number"
+    # Build compressed prompt for faster inference (OpenCode will analyze full diff automatically)
+    set prompt "Generate Commitizen commit: type(scope): description
+Types: feat|fix|docs|style|refactor|perf|test|build|ci|chore
+Rules: imperative mood, <72 chars, concise, use ACTUAL changes not branch name
+Branch: $branch_name"
 
-    set context_info (string join ", " $context_parts)
-    test -n "$context_info" && set context_info " ($context_info)"
-
-    # Create comprehensive prompt for OpenCode
-    set prompt "Analyze the staged git changes and generate a Commitizen-compliant commit message.
-
-REQUIREMENTS:
-- Use Commitizen format: type(scope): description
-- Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
-- Choose the type based on ACTUAL changes, not just branch name
-- Keep description SHORT and concise (aim for 50-60 chars, 72 char HARD LIMIT)
-- Do NOT try to use all available characters - brevity is preferred
-- Use imperative mood (\"add\" not \"added\")
-- Do NOT include body or footer, just the one-line message
-
-CONTEXT:$context_info
-- Branch: $branch_name"
+    # Add context hints if available
+    test -n "$branch_hint" && set prompt "$prompt (hint: $branch_hint)"
 
     # Add ticket reference instruction if ticket number found
     if test -n "$ticket_number"
         set prompt "$prompt
-- MUST include ticket reference as scope: AB#$ticket_number
-- Format: type(AB#$ticket_number): description"
+Scope MUST be: AB#$ticket_number"
     end
 
     set prompt "$prompt
 
-OUTPUT FORMAT:
-Return ONLY the commit message, nothing else. No markdown, no explanations.
+Output: commit message only, no markdown/explanations
 Example: fix(AB#50147): resolve memory leak in data processor"
 
     # Run OpenCode with spinner and extract response
@@ -482,7 +466,6 @@ Example: fix(AB#50147): resolve memory leak in data processor"
     printf '%s' "$prompt" >$temp_prompt
 
     # Use gum spin to show loading indicator while AI is thinking
-    # Pass prompt as positional arguments by reading from file
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "opencode run -m $ai_model --format json \$(cat $temp_prompt) > $temp_output 2>&1"
 
     # Extract the text from JSON response (strip ANSI codes, filter JSON, extract text)
