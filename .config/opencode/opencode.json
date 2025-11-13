@@ -55,14 +55,6 @@
         "mcp-nixos"
       ]
     },
-    "filesystem": {
-      "type": "local",
-      "command": [
-        "bunx",
-        "@cyanheads/filesystem-mcp-server",
-        "stdio"
-      ]
-    },
     "deepwiki": {
       "type": "local",
       "command": [
