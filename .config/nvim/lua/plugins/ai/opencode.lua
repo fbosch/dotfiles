@@ -10,15 +10,15 @@ return {
 			vim.g.opencode_opts = {
 				auto_reload = true,
 				provider = {
-					cmd = "opencode -c --log-level ERROR",
+					cmd = "opencode -c",
 					enabled = "snacks",
-				snacks = {
-					-- Terminal configuration
-					win = {
-						position = "left",
-						width = 80,  -- Fixed width in columns (or use 0.3 for 30% of screen)
+					snacks = {
+						-- Terminal configuration
+						win = {
+							position = "left",
+							width = 80, -- Fixed width in columns (or use 0.3 for 30% of screen)
+						},
 					},
-				},
 				},
 			}
 
