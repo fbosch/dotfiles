@@ -520,3 +520,160 @@ Example: fix(AB#50147): resolve memory leak in data processor"
         return 1
     end
 end
+
+function ai_pr --description "Generate AI-powered PR description comparing current branch against main"
+    # Model configuration
+    set -l ai_model opencode/grok-code
+
+    # Check if we're in a git repository
+    if not git rev-parse --git-dir >/dev/null 2>&1
+        gum style " Not in a git repository"
+        return 1
+    end
+
+    # Get current branch name
+    set branch_name (git rev-parse --abbrev-ref HEAD)
+
+    # Determine main branch (try main first, then master)
+    set main_branch ""
+    if git show-ref --verify --quiet refs/heads/main
+        set main_branch main
+    else if git show-ref --verify --quiet refs/heads/master
+        set main_branch master
+    else
+        gum style " Could not find main or master branch"
+        return 1
+    end
+
+    # Check if current branch is already main/master
+    if test "$branch_name" = "$main_branch"
+        gum style " Current branch is $main_branch, cannot compare against itself"
+        return 1
+    end
+
+    # Check if there are any differences
+    set diff_stat (git diff $main_branch..HEAD --stat)
+    if test -z "$diff_stat"
+        gum style " No differences found between $branch_name and $main_branch"
+        return 1
+    end
+
+    # Get list of changed files
+    set changed_files (git diff --name-only $main_branch..HEAD)
+
+    # Extract ticket number if present
+    set ticket_number ""
+    if string match -qr '(\d+)' $branch_name
+        set ticket_number (string match -r '\d+' $branch_name)
+    end
+
+    # Extract branch prefix hint
+    set branch_hint ""
+    if string match -qr '^([a-z]+)/' $branch_name
+        set branch_hint (string match -r '^([a-z]+)/' $branch_name | string split '/')[1]
+    end
+
+    # Build prompt for PR description
+    set prompt "Generate a pull request description in markdown format comparing branch '$branch_name' against '$main_branch'.
+
+Analyze the git diff between these branches and create a comprehensive PR description.
+
+Include:
+- Clear summary of changes
+- Key changes and improvements
+- Any breaking changes (if applicable)
+- Testing notes (if applicable)
+
+Branch: $branch_name
+Base branch: $main_branch
+Changed files: "(string join ", " $changed_files)"
+Diff summary:
+$diff_stat"
+
+    # Add context hints if available
+    if test -n "$branch_hint"
+        set prompt "$prompt
+Branch type: $branch_hint"
+    end
+
+    # Add ticket reference if found
+    if test -n "$ticket_number"
+        set prompt "$prompt
+Related ticket: AB#$ticket_number"
+    end
+
+    set prompt "$prompt
+
+Output: Markdown formatted PR description only, no explanations or meta-commentary."
+
+    # Run OpenCode with spinner and extract response
+    set temp_prompt (mktemp -t opencode_prompt.XXXXXX)
+    set temp_output (mktemp -t opencode_output.XXXXXX)
+    set temp_pr_desc (mktemp -t pr_description.XXXXXX)
+
+    # Write prompt to file
+    printf '%s' "$prompt" >$temp_prompt
+
+    # Use gum spin to show loading indicator
+    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "opencode run -m $ai_model --format json \$(cat $temp_prompt) > $temp_output 2>&1"
+
+    # Extract the text from JSON response
+    set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | string trim)
+
+    # Cleanup temp files
+    rm -f $temp_prompt $temp_output
+
+    # Validate we got a response
+    if test -z "$raw_output"
+        gum style " Failed to generate PR description"
+        return 1
+    end
+
+    # Write initial PR description to temp file
+    printf '%s' "$raw_output" >$temp_pr_desc
+
+    # Allow user to edit the PR description with gum write
+    # gum write reads from stdin and outputs edited content on save (Ctrl+D)
+    set edited_content (cat $temp_pr_desc | gum write --width 100 --height 20 --placeholder "Edit PR description... (Ctrl+D to save, Ctrl+C to cancel)")
+
+    # Check if user cancelled (Ctrl+C)
+    if test $status -ne 0
+        rm -f $temp_pr_desc
+        gum style --foreground 1 "󰜺 PR description cancelled"
+        return 1
+    end
+
+    # If user cleared the content completely, cancel
+    if test -z "$edited_content"
+        rm -f $temp_pr_desc
+        gum style --foreground 1 "󰜺 PR description cancelled (empty content)"
+        return 1
+    end
+
+    # Copy to clipboard based on platform
+    set clipboard_cmd ""
+    if test (uname) = Darwin
+        set clipboard_cmd pbcopy
+    else if test (uname) = Linux
+        if command -v wl-copy >/dev/null 2>&1
+            set clipboard_cmd wl-copy
+        else if command -v xclip >/dev/null 2>&1
+            set clipboard_cmd "xclip -selection clipboard"
+        end
+    end
+
+    if test -n "$clipboard_cmd"
+        printf '%s' "$edited_content" | $clipboard_cmd
+        if test $status -eq 0
+            gum style --foreground 2 "󰸞 PR description copied to clipboard!"
+        else
+            gum style --foreground 1 "󱎘 Failed to copy to clipboard"
+        end
+    else
+        gum style --foreground 3 "󰦨 Clipboard command not found, displaying content:"
+        echo "$edited_content"
+    end
+
+    # Cleanup
+    rm -f $temp_pr_desc
+end
