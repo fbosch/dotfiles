@@ -525,6 +525,27 @@ function ai_pr --description "Generate AI-powered PR description comparing curre
     # Model configuration
     set -l ai_model opencode/grok-code
 
+    # Parse language argument (default: English)
+    set -l language "en"
+    if set -q argv[1]
+        set language $argv[1]
+    end
+
+    # Validate language option
+    if test "$language" != "en" -a "$language" != "dk"
+        gum style --foreground 1 "Invalid language option: $language"
+        gum style "Usage: ai_pr [en|dk]"
+        gum style "  en - English (default)"
+        gum style "  dk - Danish"
+        return 1
+    end
+
+    # Set language name for prompt
+    set -l language_name "English"
+    if test "$language" = "dk"
+        set language_name "Danish"
+    end
+
     # Check if we're in a git repository
     if not git rev-parse --git-dir >/dev/null 2>&1
         gum style " Not in a git repository"
@@ -561,6 +582,30 @@ function ai_pr --description "Generate AI-powered PR description comparing curre
     # Get list of changed files
     set changed_files (git diff --name-only $main_branch..HEAD)
 
+    # Get commit messages from the branch
+    set commit_messages (git log $main_branch..HEAD --pretty=format:"%s" --no-merges)
+
+    # Get the actual diff content - write to temp file to avoid shell variable size limits
+    set temp_diff (mktemp -t pr_diff.XXXXXX)
+    git diff $main_branch..HEAD >$temp_diff
+    
+    # Check diff size and limit if needed
+    set diff_line_count (wc -l <$temp_diff | string trim)
+    set actual_diff_file $temp_diff
+    
+    # If diff is too large, create a summary version
+    # Use more conservative limit to avoid OpenCode token/argument limits
+    if test $diff_line_count -gt 2000
+        set actual_diff_file (mktemp -t pr_diff_summary.XXXXXX)
+        git diff $main_branch..HEAD --stat >$actual_diff_file
+        echo "" >>$actual_diff_file
+        echo "(Diff is too large to include in full. Showing file changes only. Focus on the commit messages and file list above for context.)" >>$actual_diff_file
+        # Include first 500 lines for context (more conservative)
+        git diff $main_branch..HEAD | head -n 500 >>$actual_diff_file
+        echo "" >>$actual_diff_file
+        echo "... (diff truncated, $diff_line_count total lines) ..." >>$actual_diff_file
+    end
+
     # Extract ticket number if present
     set ticket_number ""
     if string match -qr '(\d+)' $branch_name
@@ -573,22 +618,53 @@ function ai_pr --description "Generate AI-powered PR description comparing curre
         set branch_hint (string match -r '^([a-z]+)/' $branch_name | string split '/')[1]
     end
 
-    # Build prompt for PR description
-    set prompt "Generate a pull request description in markdown format comparing branch '$branch_name' against '$main_branch'.
+    # Set section headers based on language
+    set -l section_summary "## Summary"
+    set -l section_changes "## Changes"
+    set -l section_testing "## Testing"
+    set -l section_breaking "## Breaking Changes"
+    
+    if test "$language" = "dk"
+        set section_summary "## Resumé"
+        set section_changes "## Ændringer"
+        set section_testing "## Test"
+        set section_breaking "## Breaking Changes"
+    end
 
-Analyze the git diff between these branches and create a comprehensive PR description.
+    # Build concise prompt for PR description
+    set prompt "Generate PR description in $language_name (markdown) for branch '$branch_name' vs '$main_branch'.
 
-Include:
-- Clear summary of changes
-- Key changes and improvements
-- Any breaking changes (if applicable)
-- Testing notes (if applicable)
+CRITICAL - OMIT TRIVIAL CHANGES:
+- If diff shows ONLY: trailing whitespace removal, commented code deletion, whitespace-only, formatting-only, empty lines, import reordering (non-functional), style-only → OMIT file entirely from PR description
+- Do NOT list these as changes. Skip files that only have trivial changes.
 
-Branch: $branch_name
-Base branch: $main_branch
-Changed files: "(string join ", " $changed_files)"
-Diff summary:
-$diff_stat"
+INCLUDE ONLY:
+- Functional code changes, bug fixes that change behavior, new features, API/config changes, tests, significant docs
+
+RULES:
+- Plain technical language (no marketing: avoid \"enhanced\", \"optimized\", \"robust\", etc.)
+- Simple verbs: added/removed/changed/fixed/updated
+- For fixes: what was broken + how fixed
+- For changes: what changed from/to + why
+- Prefer lists, use backticks for \`files\`/\`functions\`/\`APIs\`, blank lines between sections
+
+STRUCTURE:
+$section_summary
+1-2 sentence overview.
+
+$section_changes
+Lists only. Only substantive changes visible in diff. Skip files with only trivial changes.
+
+$section_testing
+Lists only. How tested, manual steps, coverage.
+
+$section_breaking
+ONLY if breaking changes in diff. Omit entirely if none.
+
+Branch: $branch_name | Base: $main_branch | Files: "(string join ", " $changed_files)"
+Commits: "(string join " | " $commit_messages)"
+
+Diff below. Describe ONLY visible substantive changes. Skip trivial changes entirely."
 
     # Add context hints if available
     if test -n "$branch_hint"
@@ -596,56 +672,130 @@ $diff_stat"
 Branch type: $branch_hint"
     end
 
-    # Add ticket reference if found
-    if test -n "$ticket_number"
-        set prompt "$prompt
-Related ticket: AB#$ticket_number"
-    end
+    # Note: Ticket references are handled by the platform, not included in PR description
 
     set prompt "$prompt
 
-Output: Markdown formatted PR description only, no explanations or meta-commentary."
+Output: Markdown PR description in $language_name. All text in $language_name. No explanations."
 
     # Run OpenCode with spinner and extract response
     set temp_prompt (mktemp -t opencode_prompt.XXXXXX)
     set temp_output (mktemp -t opencode_output.XXXXXX)
-    set temp_pr_desc (mktemp -t pr_description.XXXXXX)
+    set temp_pr_desc (mktemp).md
 
-    # Write prompt to file
+    # Write prompt to file, then append diff from file to avoid shell variable issues
+    # Use printf to write the base prompt (same as ai_commit)
     printf '%s' "$prompt" >$temp_prompt
+    echo "" >>$temp_prompt
+    cat $actual_diff_file >>$temp_prompt
+    
+    # Cleanup temp diff file (only delete temp_diff if it's different from actual_diff_file)
+    if test "$temp_diff" != "$actual_diff_file"
+        rm -f $temp_diff
+    end
+    
+    # Verify prompt file was written and has content
+    if not test -s "$temp_prompt"
+        gum style --foreground 1 " Error: Prompt file is empty"
+        rm -f $temp_prompt $temp_output $temp_pr_desc
+        return 1
+    end
+    
+    # Check prompt file size
+    set prompt_size (wc -c <$temp_prompt | string trim)
+    if test $prompt_size -eq 0
+        gum style --foreground 1 " Error: Prompt file has 0 bytes"
+        rm -f $temp_prompt $temp_output $temp_pr_desc
+        return 1
+    end
 
-    # Use gum spin to show loading indicator
-    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "opencode run -m $ai_model --format json \$(cat $temp_prompt) > $temp_output 2>&1"
+    # Use gum spin to show loading indicator while AI is thinking
+    # Use same approach as ai_commit - pass prompt via command substitution
+    # Read the file and pass as argument, ensuring it's treated as a single argument
+    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "prompt_content=\$(cat '$temp_prompt'); opencode run -m $ai_model --format json \"\$prompt_content\" > $temp_output 2>&1"
 
-    # Extract the text from JSON response
-    set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | string trim)
+    # Extract the text from JSON response and write directly to file to preserve newlines
+    # jq -r outputs raw strings with newlines preserved, automatically unescaping \n sequences
+    # Write directly to file to avoid any shell variable processing that might affect newlines
+    cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null >$temp_pr_desc
+
+    # Check for errors in output (before deleting temp_output)
+    set error_in_output (cat $temp_output | grep -i "error\|fail" | head -n 3)
+    set json_lines (cat $temp_output | grep '^{' | head -n 5)
+
+    # Cleanup temp prompt file
+    rm -f $temp_prompt
+
+    # Validate we got a response (check if file has content)
+    if not test -s "$temp_pr_desc"
+        gum style --foreground 1 " Failed to generate PR description"
+        
+        if test -n "$error_in_output"
+            gum style --foreground 3 "Error details:"
+            echo "$error_in_output"
+        else if test -n "$json_lines"
+            gum style --foreground 3 "Received JSON but couldn't extract text. JSON preview:"
+            echo "$json_lines"
+        else
+            gum style --foreground 3 "OpenCode output (last 20 lines):"
+            cat $temp_output | tail -n 20
+        end
+        
+        rm -f $temp_output $temp_pr_desc
+        return 1
+    end
+    
+    # Cleanup temp output file after successful extraction
+    rm -f $temp_output
+
+    # Trim only the very first and last lines (not each line individually)
+    # This preserves internal formatting and line breaks
+    if test -s "$temp_pr_desc"
+        # Remove leading blank lines
+        sed -i '' '/./,$!d' "$temp_pr_desc" 2>/dev/null || sed -i '/./,$!d' "$temp_pr_desc" 2>/dev/null
+        # Remove trailing blank lines  
+        sed -i '' -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$temp_pr_desc" 2>/dev/null || sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$temp_pr_desc" 2>/dev/null
+        # Ensure file ends with newline
+        if test -s "$temp_pr_desc"
+            printf '\n' >>"$temp_pr_desc"
+        end
+    end
 
     # Cleanup temp files
     rm -f $temp_prompt $temp_output
 
-    # Validate we got a response
-    if test -z "$raw_output"
+    # Validate we got a response (check if file has content)
+    if not test -s "$temp_pr_desc"
+        rm -f "$temp_pr_desc"
         gum style " Failed to generate PR description"
         return 1
     end
 
-    # Write initial PR description to temp file
-    printf '%s' "$raw_output" >$temp_pr_desc
+    # Open in ephemeral Neovim instance for editing
+    # -f: foreground (blocking)
+    # --cmd: commands before loading config (runs before user config)
+    # -c: commands to run after loading config
+    # Session persistence is automatically disabled when opening a specific file (argc > 0)
+    # Combine settings to minimize command count
+    nvim -f \
+        --cmd "set noswapfile nobackup nowritebackup" \
+        -c "set filetype=markdown wrap linebreak spell textwidth=0 wrapmargin=0 nolist conceallevel=0" \
+        -c "set formatoptions-=t formatoptions+=l" \
+        -c "set statusline=%f\ %=[PR\ Description\ -\ :wq\ to\ save\ and\ exit] | normal! gg" \
+        "$temp_pr_desc"
 
-    # Allow user to edit the PR description with gum write
-    # gum write reads from stdin and outputs edited content on save (Ctrl+D)
-    set edited_content (cat $temp_pr_desc | gum write --width 100 --height 20 --placeholder "Edit PR description... (Ctrl+D to save, Ctrl+C to cancel)")
-
-    # Check if user cancelled (Ctrl+C)
-    if test $status -ne 0
-        rm -f $temp_pr_desc
+    # Check if file still exists (user might have deleted it or cancelled)
+    if not test -f "$temp_pr_desc"
         gum style --foreground 1 "󰜺 PR description cancelled"
         return 1
     end
 
+    # Read the edited content
+    set edited_content (cat "$temp_pr_desc" 2>/dev/null | string trim)
+
     # If user cleared the content completely, cancel
     if test -z "$edited_content"
-        rm -f $temp_pr_desc
+        rm -f "$temp_pr_desc"
         gum style --foreground 1 "󰜺 PR description cancelled (empty content)"
         return 1
     end
@@ -674,6 +824,6 @@ Output: Markdown formatted PR description only, no explanations or meta-commenta
         echo "$edited_content"
     end
 
-    # Cleanup
-    rm -f $temp_pr_desc
+    # Cleanup temp file
+    rm -f "$temp_pr_desc"
 end
