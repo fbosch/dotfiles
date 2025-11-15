@@ -36,6 +36,16 @@ for file in coreutils aliases scripts profile gum private colors
     end
 end
 
+# Source modular scripts (utils first for dependencies)
+if test -d /home/fbb/dotfiles/.config/fish/scripts
+    if test -f /home/fbb/dotfiles/.config/fish/scripts/utils.fish
+        source /home/fbb/dotfiles/.config/fish/scripts/utils.fish
+    end
+    for script in (ls -1 /home/fbb/dotfiles/.config/fish/scripts/*.fish | grep -v utils.fish)
+        source $script
+    end
+end
+
 function fish_greeting
     # skip in neovim terminal buffer
     if set -q IN_NEOVIM
