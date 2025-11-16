@@ -49,6 +49,7 @@ abbr rpj 'cd ~/Projects'
 abbr cf 'cd ~/.config'
 abbr cnx 'cd /etc/nixos'
 abbr nxe 'nvim ~/nixos'
+abbr nxu flake_update_interactive
 
 function nxrb
     if command -q nh
