@@ -1,5 +1,5 @@
 # Neovim
-alias nvim 'nvim -n -i NONE --noplugin'
+alias nvim-minimal 'nvim -n -i NONE --noplugin'
 abbr n nvim
 abbr nlup 'nvim --headless +"Lazy! sync" +qa' # lazy update neovim plugins
 abbr nwipe 'nvim --headless +"WipeAllSessions!" +qa'
