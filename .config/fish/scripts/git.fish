@@ -464,29 +464,11 @@ Diff below. Provide specific, actionable feedback. Skip empty sections if no iss
     cat $actual_diff_file >>$temp_prompt
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "cat $temp_prompt | opencode run -m \"$ai_model\" --format json > $temp_output 2>&1"
     
-    # Debug: save raw output for inspection
-    set debug_raw_output "/tmp/ai_review_raw_output.json"
-    cp $temp_output $debug_raw_output
-    
     # Extract text from JSON output, stripping ANSI codes first (same approach as ai_pr)
     set review_feedback (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{"type":"text"' | jq -r '.part.text' 2>/dev/null | string trim)
     
     if test -z "$review_feedback"
         gum style --foreground 1 " Failed to generate review feedback"
-        echo ""
-        gum style --foreground 8 "Debug info:"
-        gum style --foreground 8 "  Raw output saved to: $debug_raw_output"
-        gum style --foreground 8 "  Prompt saved to: $temp_prompt (check if exists)"
-        if test -f $temp_output
-            set output_size (wc -c <$temp_output | string trim)
-            gum style --foreground 8 "  Output size: $output_size bytes"
-            if test $output_size -gt 0
-                echo ""
-                gum style --foreground 8 "First 500 chars of output:"
-                head -c 500 $temp_output
-                echo ""
-            end
-        end
         rm -f $temp_prompt $temp_output
         if test "$actual_diff_file" != "$temp_diff"
             rm -f $actual_diff_file
@@ -519,10 +501,6 @@ Diff below. Provide specific, actionable feedback. Skip empty sections if no iss
     sed -E 's/^- /\n- /g' | \
     fold -s -w 100 >$temp_review
     
-    # Debug: save to a persistent location for inspection
-    set debug_file "/tmp/ai_review_last.md"
-    cp $temp_review $debug_file
-    
     if test -n "$clipboard_cmd"
         cat $temp_review | eval $clipboard_cmd
         if test $status -eq 0
@@ -533,8 +511,6 @@ Diff below. Provide specific, actionable feedback. Skip empty sections if no iss
     else
         gum style --foreground 3 "󰦨 Clipboard command not found"
     end
-    echo ""
-    gum style --foreground 8 "Debug: Raw output saved to $debug_file"
     echo ""
     if command -v glow >/dev/null 2>&1
         # Use glow with word wrapping disabled for better formatting
