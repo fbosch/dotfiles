@@ -296,17 +296,26 @@ end
 # AI-powered code review feedback
 function ai_review --description "Generate actionable code review feedback for current changes"
     set -l ai_model opencode/grok-code
+    
+    # Track temp files for cleanup
+    set -l temp_files_to_cleanup
+    
     if not git rev-parse --git-dir >/dev/null 2>&1
         gum style " Not in a git repository"
         return 1
     end
-    set branch_name (git rev-parse --abbrev-ref HEAD)
+    set branch_name (git rev-parse --abbrev-ref HEAD 2>/dev/null)
+    if test -z "$branch_name"
+        gum style --foreground 1 " Failed to get current branch"
+        return 1
+    end
     
     # Priority: staged > unstaged > unpushed commits > feature branch vs main
     set diff_stat ""
     set diff_type ""
     set diff_base ""
     set commit_messages ""
+    set changed_files ""
     
     # 1. Check for staged changes
     set diff_stat (git diff --cached --stat)
@@ -314,6 +323,7 @@ function ai_review --description "Generate actionable code review feedback for c
         set diff_type "staged changes"
         set changed_files (git diff --cached --name-only)
         set temp_diff (mktemp -t review_diff.XXXXXX)
+        set -a temp_files_to_cleanup $temp_diff
         git diff --cached >$temp_diff
     # 2. Check for unstaged changes
     else
@@ -452,17 +462,14 @@ Diff below. Provide specific, actionable feedback. Skip empty sections if no iss
     set temp_output (mktemp -t opencode_output.XXXXXX)
     echo "$prompt" >$temp_prompt
     cat $actual_diff_file >>$temp_prompt
-    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "cat $temp_prompt | opencode run -m $ai_model --format json > $temp_output 2>&1"
+    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "cat $temp_prompt | opencode run -m \"$ai_model\" --format json > $temp_output 2>&1"
     
     # Debug: save raw output for inspection
     set debug_raw_output "/tmp/ai_review_raw_output.json"
     cp $temp_output $debug_raw_output
     
-    set temp_feedback (mktemp -t review_feedback.XXXXXX)
-    # Extract all text parts from JSON output and join them
-    cat $temp_output | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' | grep '^{"type":"text"' | jq -r '.part.text' 2>/dev/null >$temp_feedback
-    set review_feedback (cat $temp_feedback)
-    rm -f $temp_feedback
+    # Extract text from JSON output, stripping ANSI codes first (same approach as ai_pr)
+    set review_feedback (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{"type":"text"' | jq -r '.part.text' 2>/dev/null | string trim)
     
     if test -z "$review_feedback"
         gum style --foreground 1 " Failed to generate review feedback"
@@ -503,18 +510,14 @@ Diff below. Provide specific, actionable feedback. Skip empty sections if no iss
             set clipboard_cmd "xclip -selection clipboard"
         end
     end
-    # Clean up ANSI codes and add proper line breaks
-    # Write raw feedback to temp file first, then clean it
-    set temp_raw (mktemp -t review_raw.XXXXXX.md)
-    printf '%s' "$review_feedback" >$temp_raw
-    
+    # Format the markdown for better readability
     set temp_review (mktemp -t review_output.XXXXXX.md)
-    # Strip ANSI codes, then add newlines after markdown patterns
-    sed -E 's/\x1b\[[0-9;]*[mK]//g' $temp_raw | \
+    # Add newlines before headers and bullets, then wrap long lines
+    echo "$review_feedback" | \
     sed -E 's/(##[^#])/\n\1/g' | \
+    sed -E 's/([.?!])  - /\1\n\n- /g' | \
     sed -E 's/^- /\n- /g' | \
-    sed -E 's/  - /\n- /g' >$temp_review
-    rm -f $temp_raw
+    fold -s -w 100 >$temp_review
     
     # Debug: save to a persistent location for inspection
     set debug_file "/tmp/ai_review_last.md"
@@ -534,7 +537,8 @@ Diff below. Provide specific, actionable feedback. Skip empty sections if no iss
     gum style --foreground 8 "Debug: Raw output saved to $debug_file"
     echo ""
     if command -v glow >/dev/null 2>&1
-        glow -s dark $temp_review
+        # Use glow with word wrapping disabled for better formatting
+        glow -s dark -w 0 $temp_review
     else if command -v bat >/dev/null 2>&1
         bat --language markdown --style=plain --paging=never $temp_review
     else
