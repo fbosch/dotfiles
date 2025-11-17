@@ -255,22 +255,54 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     set temp_output (mktemp -t opencode_output.XXXXXX)
     echo "$prompt" >$temp_prompt
     cat $actual_diff_file >>$temp_prompt
+    set temp_pr_desc (mktemp).md
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "opencode run -m $ai_model --format json \"$(cat $temp_prompt)\" > $temp_output 2>&1"
-    set pr_desc (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | string trim)
+    
+    # Extract the text from JSON response and write directly to file to preserve newlines
+    # jq -r outputs raw strings with newlines preserved, automatically unescaping \n sequences
+    # Write directly to file to avoid any shell variable processing that might affect newlines
+    cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null >$temp_pr_desc
+    
     rm -f $temp_prompt $temp_output $temp_diff
-    if test -z "$pr_desc"
+    
+    # Validate we got a response (check if file has content)
+    if not test -s "$temp_pr_desc"
+        rm -f "$temp_pr_desc"
         gum style --foreground 1 " Failed to generate PR description"
         return 1
     end
-    set edited_content (gum input --value "$pr_desc" --width 100 --prompt "󰏫 " --placeholder "Edit PR description or press Enter to accept...")
-    if test $status -ne 0
+    
+    # Open in ephemeral Neovim instance for editing
+    # -f: foreground (blocking)
+    # --cmd: commands before loading config (runs before user config)
+    # -c: commands to run after loading config
+    # Session persistence is automatically disabled when opening a specific file (argc > 0)
+    # Combine settings to minimize command count
+    nvim -f \
+        --cmd "set noswapfile nobackup nowritebackup" \
+        -c "set filetype=markdown wrap linebreak spell textwidth=0 wrapmargin=0 nolist conceallevel=0" \
+        -c "set formatoptions-=t formatoptions+=l" \
+        -c "set statusline=%f\ %=[PR\ Description\ -\ :wq\ to\ save\ and\ exit] | normal! gg" \
+        "$temp_pr_desc"
+    
+    # Check if file still exists (user might have deleted it or cancelled)
+    if not test -f "$temp_pr_desc"
         gum style --foreground 1 "󰜺 PR description cancelled"
         return 1
     end
+    
+    # Read the edited content
+    set edited_content (cat "$temp_pr_desc" 2>/dev/null | string trim)
+    
+    # If user cleared the content completely, cancel
     if test -z "$edited_content"
+        rm -f "$temp_pr_desc"
         gum style --foreground 1 "󰜺 PR description cancelled (empty content)"
         return 1
     end
+    
+    # Cleanup temp file
+    rm -f "$temp_pr_desc"
     set clipboard_cmd ""
     if test (uname) = Darwin
         set clipboard_cmd pbcopy
@@ -460,16 +492,21 @@ Diff below. Provide specific, actionable feedback. Skip empty sections if no iss
     rm -f $temp_prompt_file
     set temp_prompt (mktemp -t opencode_prompt.XXXXXX)
     set temp_output (mktemp -t opencode_output.XXXXXX)
+    set temp_review (mktemp -t review_output.XXXXXX.md)
+    
     echo "$prompt" >$temp_prompt
     cat $actual_diff_file >>$temp_prompt
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "cat $temp_prompt | opencode run -m \"$ai_model\" --format json > $temp_output 2>&1"
     
-    # Extract text from JSON output, stripping ANSI codes first (same approach as ai_pr)
-    set review_feedback (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{"type":"text"' | jq -r '.part.text' 2>/dev/null | string trim)
+    # Extract text from JSON output and write directly to file to preserve newlines
+    # jq -r outputs raw strings with newlines preserved, automatically unescaping \n sequences
+    # Write directly to file to avoid any shell variable processing that might affect newlines
+    cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{"type":"text"' | jq -r '.part.text' 2>/dev/null >$temp_review
     
-    if test -z "$review_feedback"
+    # Validate we got a response (check if file has content)
+    if not test -s "$temp_review"
         gum style --foreground 1 " Failed to generate review feedback"
-        rm -f $temp_prompt $temp_output
+        rm -f $temp_prompt $temp_output $temp_review
         if test "$actual_diff_file" != "$temp_diff"
             rm -f $actual_diff_file
         end
@@ -482,6 +519,7 @@ Diff below. Provide specific, actionable feedback. Skip empty sections if no iss
         rm -f $actual_diff_file
     end
     rm -f $temp_diff
+    
     set clipboard_cmd ""
     if test (uname) = Darwin
         set clipboard_cmd pbcopy
@@ -492,14 +530,6 @@ Diff below. Provide specific, actionable feedback. Skip empty sections if no iss
             set clipboard_cmd "xclip -selection clipboard"
         end
     end
-    # Format the markdown for better readability
-    set temp_review (mktemp -t review_output.XXXXXX.md)
-    # Add newlines before headers and bullets, then wrap long lines
-    echo "$review_feedback" | \
-    sed -E 's/(##[^#])/\n\1/g' | \
-    sed -E 's/([.?!])  - /\1\n\n- /g' | \
-    sed -E 's/^- /\n- /g' | \
-    fold -s -w 100 >$temp_review
     
     if test -n "$clipboard_cmd"
         cat $temp_review | eval $clipboard_cmd
