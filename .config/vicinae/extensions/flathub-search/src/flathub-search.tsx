@@ -112,30 +112,37 @@ async function searchFlathub(query: string): Promise<FlathubApp[]> {
 }
 
 async function getPopularApps(): Promise<FlathubApp[]> {
-  const response = await fetch(
-    "https://flathub.org/api/v1/apps/collection/popular",
-  );
+  const response = await fetch("https://flathub.org/api/v2/search", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query: "" }),
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch popular apps: ${response.statusText}`);
   }
 
-  const data = await response.json();
+  const data: FlathubSearchResponse = await response.json();
+  const apps = data.hits || [];
 
-  const apps = data
-    .filter((app: any) => app.iconDesktopUrl)
+  const sortedApps = apps
     .slice(0, 20)
-    .map((app: any) => ({
-      app_id: app.flatpakAppId,
+    .map((app) => ({
+      app_id: app.app_id,
       name: app.name,
       summary: app.summary,
-      icon: app.iconDesktopUrl,
-      project_license: undefined,
+      icon: app.icon,
+      project_license: app.project_license,
+      installs_last_month: app.installs_last_month,
+      trending: app.trending,
+      favorites_count: app.favorites_count,
     }));
   
-  setCachedPopularApps(apps);
+  setCachedPopularApps(sortedApps);
   
-  return apps;
+  return sortedApps;
 }
 
 function formatInstalls(count?: number): string {
