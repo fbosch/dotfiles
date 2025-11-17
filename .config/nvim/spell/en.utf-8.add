@@ -1521,3 +1521,11 @@ exec-once
 nm-applet
 hypr
 typescript-tools
+dotfiles
+flake-parts
+nixpkgs
+hyprland
+vicinae
+winapps
+virtualbox-vm
+deduplication
