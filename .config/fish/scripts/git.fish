@@ -291,18 +291,14 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
         return 1
     end
     
-    # Read the edited content
-    set edited_content (cat "$temp_pr_desc" 2>/dev/null | string trim)
-    
-    # If user cleared the content completely, cancel
-    if test -z "$edited_content"
+    # Validate file has content (user didn't clear it completely)
+    if not test -s "$temp_pr_desc"
         rm -f "$temp_pr_desc"
         gum style --foreground 1 "󰜺 PR description cancelled (empty content)"
         return 1
     end
     
-    # Cleanup temp file
-    rm -f "$temp_pr_desc"
+    # Copy to clipboard directly from file to preserve formatting and newlines
     set clipboard_cmd ""
     if test (uname) = Darwin
         set clipboard_cmd pbcopy
@@ -314,7 +310,8 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
         end
     end
     if test -n "$clipboard_cmd"
-        echo -n "$edited_content" | eval $clipboard_cmd
+        # Copy directly from file, stripping any ANSI codes
+        sed 's/\x1b\[[0-9;]*m//g' "$temp_pr_desc" | eval $clipboard_cmd
         if test $status -eq 0
             gum style --foreground 2 "󰸞 PR description copied to clipboard!"
         else
@@ -322,8 +319,11 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
         end
     else
         gum style --foreground 3 "󰦨 Clipboard command not found, displaying content:"
-        echo "$edited_content"
+        cat "$temp_pr_desc"
     end
+    
+    # Cleanup temp file
+    rm -f "$temp_pr_desc"
 end
 # AI-powered code review feedback
 function ai_review --description "Generate actionable code review feedback for current changes"
