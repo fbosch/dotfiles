@@ -37,11 +37,11 @@ for file in coreutils aliases scripts profile gum private colors
 end
 
 # Source modular scripts (utils first for dependencies)
-if test -d /home/fbb/dotfiles/.config/fish/scripts
-    if test -f /home/fbb/dotfiles/.config/fish/scripts/utils.fish
-        source /home/fbb/dotfiles/.config/fish/scripts/utils.fish
+if test -d ~/.config/fish/scripts
+    if test -f ~/.config/fish/scripts/utils.fish
+        source ~/.config/fish/scripts/utils.fish
     end
-    for script in (ls -1 /home/fbb/dotfiles/.config/fish/scripts/*.fish | grep -v utils.fish)
+    for script in (ls -1 ~/.config/fish/scripts/*.fish | grep -v utils.fish)
         source $script
     end
 end
@@ -132,6 +132,4 @@ if test -f ~/.inshellisense/key-bindings.fish
     source ~/.inshellisense/key-bindings.fish
 end
 
-# --- Set universal keybinding mode ---
-set -U fish_key_bindings fish_default_key_bindings
 fish_add_path $HOME/.local/bin

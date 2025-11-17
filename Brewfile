@@ -27,6 +27,7 @@ brew "fd"
 brew "fzf"
 brew "lf"
 brew "bat"
+brew "glow"
 brew "broot"
 brew "sk"
 
