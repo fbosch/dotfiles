@@ -302,48 +302,102 @@ function ai_review --description "Generate actionable code review feedback for c
     end
     set branch_name (git rev-parse --abbrev-ref HEAD)
     
-    # Check for staged changes first, then uncommitted changes
+    # Priority: staged > unstaged > unpushed commits > feature branch vs main
+    set diff_stat ""
+    set diff_type ""
+    set diff_base ""
+    set commit_messages ""
+    
+    # 1. Check for staged changes
     set diff_stat (git diff --cached --stat)
-    set diff_type "staged"
-    if test -z "$diff_stat"
-        set diff_stat (git diff --stat)
-        set diff_type "unstaged"
-    end
-    
-    if test -z "$diff_stat"
-        gum style " No changes to review (nothing staged or modified)"
-        return 1
-    end
-    
-    set changed_files (git diff --cached --name-only)
-    if test "$diff_type" = "unstaged"
-        set changed_files (git diff --name-only)
-    end
-    
-    set temp_diff (mktemp -t review_diff.XXXXXX)
-    if test "$diff_type" = "staged"
+    if test -n "$diff_stat"
+        set diff_type "staged changes"
+        set changed_files (git diff --cached --name-only)
+        set temp_diff (mktemp -t review_diff.XXXXXX)
         git diff --cached >$temp_diff
+    # 2. Check for unstaged changes
     else
-        git diff >$temp_diff
+        set diff_stat (git diff --stat)
+        if test -n "$diff_stat"
+            set diff_type "unstaged changes"
+            set changed_files (git diff --name-only)
+            set temp_diff (mktemp -t review_diff.XXXXXX)
+            git diff >$temp_diff
+        # 3. Check for unpushed commits (compare to remote tracking branch)
+        else
+            set remote_branch (git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null)
+            if test -n "$remote_branch"
+                set diff_stat (git diff $remote_branch..HEAD --stat)
+                if test -n "$diff_stat"
+                    set diff_type "unpushed commits"
+                    set diff_base $remote_branch
+                    set changed_files (git diff --name-only $remote_branch..HEAD)
+                    set commit_messages (git log $remote_branch..HEAD --pretty=format:"%s" --no-merges)
+                    set temp_diff (mktemp -t review_diff.XXXXXX)
+                    git diff $remote_branch..HEAD >$temp_diff
+                end
+            end
+            
+            # 4. Fallback: compare feature branch against main/master
+            if test -z "$diff_stat"
+                set main_branch ""
+                if git show-ref --verify --quiet refs/heads/main
+                    set main_branch main
+                else if git show-ref --verify --quiet refs/heads/master
+                    set main_branch master
+                end
+                
+                if test -n "$main_branch" -a "$branch_name" != "$main_branch"
+                    set diff_stat (git diff $main_branch..HEAD --stat)
+                    if test -n "$diff_stat"
+                        set diff_type "branch changes vs $main_branch"
+                        set diff_base $main_branch
+                        set changed_files (git diff --name-only $main_branch..HEAD)
+                        set commit_messages (git log $main_branch..HEAD --pretty=format:"%s" --no-merges)
+                        set temp_diff (mktemp -t review_diff.XXXXXX)
+                        git diff $main_branch..HEAD >$temp_diff
+                    end
+                end
+            end
+        end
+    end
+    
+    if test -z "$diff_stat"
+        gum style " No changes to review"
+        gum style --foreground 8 "  Tried: staged, unstaged, unpushed commits, branch vs main"
+        return 1
     end
     
     set diff_line_count (wc -l <$temp_diff | string trim)
     set actual_diff_file $temp_diff
     if test $diff_line_count -gt 3000
         set actual_diff_file (mktemp -t review_diff_summary.XXXXXX)
-        if test "$diff_type" = "staged"
-            git diff --cached --stat >$actual_diff_file
-        else
-            git diff --stat >$actual_diff_file
-        end
+        echo "$diff_stat" >$actual_diff_file
         echo "" >>$actual_diff_file
         echo "(Diff is very large. Showing file changes overview and partial diff for context.)" >>$actual_diff_file
         head -n 1000 $temp_diff >>$actual_diff_file
         echo "" >>$actual_diff_file
         echo "... (diff truncated at 1000 lines out of $diff_line_count total) ..." >>$actual_diff_file
     end
-    set prompt "Review code changes ($diff_type) and provide actionable feedback.
+    set changed_files_list (string join ', ' $changed_files)
+    set commits_list ""
+    if test -n "$commit_messages"
+        set commits_list (string join ' | ' $commit_messages)
+    end
+    
+    # Build prompt without using variables in multiline strings to avoid shell expansion issues
+    set temp_prompt_file (mktemp -t ai_review_prompt.XXXXXX)
+    echo "Review code changes and provide actionable feedback.
 
+Branch: $branch_name
+Type: $diff_type
+Files: $changed_files_list" >$temp_prompt_file
+    
+    if test -n "$commits_list"
+        echo "Commits: $commits_list" >>$temp_prompt_file
+    end
+    
+    echo "
 FOCUS AREAS:
 1. Logic & Correctness: bugs, edge cases, error handling, race conditions
 2. Security: vulnerabilities, input validation, sensitive data exposure
@@ -360,22 +414,21 @@ RULES:
 - Be constructive: explain WHY something is an issue and HOW to fix it
 - Use plain technical language, no fluff
 
-OUTPUT FORMAT (markdown with proper line breaks):
-# Code Review
+OUTPUT FORMAT (markdown with line breaks after EACH item):
 
-Branch: $branch_name
-Changes: $diff_type
-Files: "(string join ', ' $changed_files)"
+# Code Review
 
 ## Critical Issues
 (Issues that must be fixed before merge)
 
 - [File/Function]: Issue description + suggested fix
+- [File/Function]: Another issue
 
 ## Improvements
 (Important but not blocking)
 
 - [File/Function]: Suggestion + rationale
+- [File/Function]: Another suggestion
 
 ## Minor Notes
 (Nice-to-haves, optional)
@@ -386,27 +439,60 @@ Files: "(string join ', ' $changed_files)"
 (What was done well)
 
 - Good practice observed
+- Another positive observation
 
-Diff below. Provide specific, actionable feedback. Skip empty sections if no issues found."
+IMPORTANT: Put each bullet point on its OWN LINE. Add a blank line between sections. Use proper markdown formatting with line breaks.
+
+Diff below. Provide specific, actionable feedback. Skip empty sections if no issues found.
+" >>$temp_prompt_file
+    
+    set prompt (cat $temp_prompt_file)
+    rm -f $temp_prompt_file
     set temp_prompt (mktemp -t opencode_prompt.XXXXXX)
     set temp_output (mktemp -t opencode_output.XXXXXX)
     echo "$prompt" >$temp_prompt
     cat $actual_diff_file >>$temp_prompt
-    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "opencode run -m $ai_model --format json \"$(cat $temp_prompt)\" > $temp_output 2>&1"
+    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "cat $temp_prompt | opencode run -m $ai_model --format json > $temp_output 2>&1"
+    
+    # Debug: save raw output for inspection
+    set debug_raw_output "/tmp/ai_review_raw_output.json"
+    cp $temp_output $debug_raw_output
+    
     set temp_feedback (mktemp -t review_feedback.XXXXXX)
-    # Extract JSON text parts, strip all ANSI codes, and replace literal [0m with newlines to restore formatting
-    cat $temp_output | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | sed -E 's/\[0m */\n/g; s/\[[0-9;]+m//g' >$temp_feedback
+    # Extract all text parts from JSON output and join them
+    cat $temp_output | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' | grep '^{"type":"text"' | jq -r '.part.text' 2>/dev/null >$temp_feedback
     set review_feedback (cat $temp_feedback)
     rm -f $temp_feedback
+    
+    if test -z "$review_feedback"
+        gum style --foreground 1 " Failed to generate review feedback"
+        echo ""
+        gum style --foreground 8 "Debug info:"
+        gum style --foreground 8 "  Raw output saved to: $debug_raw_output"
+        gum style --foreground 8 "  Prompt saved to: $temp_prompt (check if exists)"
+        if test -f $temp_output
+            set output_size (wc -c <$temp_output | string trim)
+            gum style --foreground 8 "  Output size: $output_size bytes"
+            if test $output_size -gt 0
+                echo ""
+                gum style --foreground 8 "First 500 chars of output:"
+                head -c 500 $temp_output
+                echo ""
+            end
+        end
+        rm -f $temp_prompt $temp_output
+        if test "$actual_diff_file" != "$temp_diff"
+            rm -f $actual_diff_file
+        end
+        rm -f $temp_diff
+        return 1
+    end
+    
     rm -f $temp_prompt $temp_output
     if test "$actual_diff_file" != "$temp_diff"
         rm -f $actual_diff_file
     end
     rm -f $temp_diff
-    if test -z "$review_feedback"
-        gum style --foreground 1 " Failed to generate review feedback"
-        return 1
-    end
     set clipboard_cmd ""
     if test (uname) = Darwin
         set clipboard_cmd pbcopy
@@ -417,13 +503,18 @@ Diff below. Provide specific, actionable feedback. Skip empty sections if no iss
             set clipboard_cmd "xclip -selection clipboard"
         end
     end
-    set temp_review (mktemp -t review_output.XXXXXX.md)
-    echo "$review_feedback" >$temp_review
+    # Clean up ANSI codes and add proper line breaks
+    # Write raw feedback to temp file first, then clean it
+    set temp_raw (mktemp -t review_raw.XXXXXX.md)
+    printf '%s' "$review_feedback" >$temp_raw
     
-    # Clean up ANSI codes: first strip ESC sequences, then convert spaces after them to newlines
-    set temp_clean (mktemp -t review_clean.XXXXXX.md)
-    sed -E 's/\x1b\[[0-9;]*[mK]//g' $temp_review | sed -E 's/  +/\n/g' >$temp_clean
-    mv $temp_clean $temp_review
+    set temp_review (mktemp -t review_output.XXXXXX.md)
+    # Strip ANSI codes, then add newlines after markdown patterns
+    sed -E 's/\x1b\[[0-9;]*[mK]//g' $temp_raw | \
+    sed -E 's/(##[^#])/\n\1/g' | \
+    sed -E 's/^- /\n- /g' | \
+    sed -E 's/  - /\n- /g' >$temp_review
+    rm -f $temp_raw
     
     # Debug: save to a persistent location for inspection
     set debug_file "/tmp/ai_review_last.md"
