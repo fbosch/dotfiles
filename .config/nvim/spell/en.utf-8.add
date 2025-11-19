@@ -1522,3 +1522,11 @@ nm-applet
 hypr
 typescript-tools
 Content-Disposition
+dotfiles
+flake-parts
+nixpkgs
+hyprland
+vicinae
+winapps
+virtualbox-vm
+deduplication
