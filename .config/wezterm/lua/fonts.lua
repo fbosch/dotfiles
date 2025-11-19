@@ -5,14 +5,15 @@ return function(config)
 		{
 			family = "Zenbones Brainy",
 			harfbuzz_features = { "calt=0", "clig=0", "liga=0" },
-			weight = 500,
+			weight = 300,
 		},
 		{
 			family = "JetBrains Mono",
 			harfbuzz_features = { "calt=0", "clig=0", "liga=0" },
+			weight = 300,
 		},
 		{ family = "Symbols Nerd Font Mono", scale = 0.9 },
-		{ family = "BabelStone Runic Elder Futhark" },
+		{ family = "BabelStone Runic Elder Futhark", scale = 0.9 },
 		"Noto Sans Runic",
 		"Apple Color Emoji",
 		"Segoe UI Emoji",
