@@ -17,7 +17,7 @@ return function(config)
 		"Apple Color Emoji",
 		"Segoe UI Emoji",
 	})
-	config.line_height = 0.95
+	config.line_height = 1
 	config.font_size = 16.0
 	config.underline_thickness = "0.08cell"
 	config.underline_position = "-0.16cell"
