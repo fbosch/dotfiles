@@ -24,7 +24,7 @@ return function(config)
 		},
 		{
 			source = {
-				File = "/Users/fbb/dotfiles/.config/wezterm/scanlines.png",
+				File = os.getenv("HOME") .. "/.config/wezterm/scanlines.png",
 			},
 			width = "1px",
 			height = "1cell",
