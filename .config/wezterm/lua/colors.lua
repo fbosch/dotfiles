@@ -14,4 +14,23 @@ return function(config)
 			},
 		},
 	}
+	config.background = {
+		{
+			source = {
+				Color = "#191919",
+			},
+			width = "100%",
+			height = "100%",
+		},
+		{
+			source = {
+				File = "/Users/fbb/dotfiles/.config/wezterm/scanlines.png",
+			},
+			width = "1px",
+			height = "1cell",
+			repeat_x = "Repeat",
+			repeat_y = "Repeat",
+			opacity = 0.3,
+		},
+	}
 end
