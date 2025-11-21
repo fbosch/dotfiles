@@ -31,7 +31,7 @@ return function(config)
 			height = "1cell",
 			repeat_x = "Repeat",
 			repeat_y = "Repeat",
-			opacity = 0.5,
+			opacity = 1,
 		},
 	}
 end

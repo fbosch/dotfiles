@@ -7,6 +7,6 @@ return function(config)
 		config.font_size = 12
 	else
 		config.window_background_opacity = 0.96
-		config.macos_window_background_blur = 30
+		config.macos_window_background_blur = 80
 	end
 end
