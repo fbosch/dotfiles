@@ -99,7 +99,6 @@ M.typos = {
 	"unkown unknown",
 	"untill until",
 	"valud valid",
-	"variabel variable",
 	"visiblity visibility",
 	"purposesly purposesly",
 	"una{ail,ial,ali}able unavailable",
