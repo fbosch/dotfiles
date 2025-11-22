@@ -12,9 +12,11 @@ current_address="$(hyprctl activewindow -j | jq -r '.address // empty')"
 # identifier alongside each entry so we can hop between workspaces as needed.
 addresses=()
 workspace_refs=()
-while IFS=$'\t' read -r address workspace_ref; do
+titles=()
+while IFS=$'\t' read -r address workspace_ref title; do
     addresses+=("$address")
     workspace_refs+=("$workspace_ref")
+    titles+=("$title")
 done < <(hyprctl clients -j | jq -r '
     map(select(.workspace.id != -1)) |
     sort_by([.class, (.title // ""), .address]) |
@@ -25,7 +27,7 @@ done < <(hyprctl clients -j | jq -r '
         elif (.workspace.id != null) then (.workspace.id | tostring)
         else ""
         end
-    )
+    ) + "\t" + (.title // "")
 ')
 
 window_count=${#addresses[@]}
@@ -78,3 +80,10 @@ if [[ -n "${target_workspace_ref}" ]]; then
 fi
 
 hyprctl dispatch focuswindow "address:${addresses[$next_index]}"
+
+# Debug
+echo "Current address: $current_address" > /tmp/alt-tab-debug.log
+echo "Addresses: ${addresses[@]}" >> /tmp/alt-tab-debug.log
+echo "Titles: ${titles[@]}" >> /tmp/alt-tab-debug.log
+echo "Next index: $next_index" >> /tmp/alt-tab-debug.log
+echo "Next address: ${addresses[$next_index]}" >> /tmp/alt-tab-debug.log
