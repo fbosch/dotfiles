@@ -9,6 +9,8 @@ import {
   getPreferenceValues,
   Icon,
   Cache,
+  confirmAlert,
+  Alert,
 } from "@vicinae/api";
 import {
   QueryClient,
@@ -286,7 +288,7 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
   };
 
   const markdown = `
-![Wallpaper](${wallpaper.thumbs.large})
+<img src="${wallpaper.thumbs.large}" alt="Wallpaper" style="max-width: 100%; height: auto; object-fit: contain;" />
 `;
 
   return (
@@ -295,34 +297,19 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
       metadata={
         <Detail.Metadata>
           <Detail.Metadata.Label
-            title="Resolution"
-            text={wallpaper.resolution}
+            title="Info"
+            text={`${wallpaper.resolution} · ${formatBytes(wallpaper.file_size)}`}
           />
           <Detail.Metadata.Label
-            title="Size"
-            text={formatBytes(wallpaper.file_size)}
+            title="Stats"
+            text={`★ ${wallpaper.favorites.toLocaleString()} · ${wallpaper.views.toLocaleString()} views`}
           />
-
-          <Detail.Metadata.Separator />
-
-          <Detail.Metadata.Label
-            title="Favorites"
-            text={`★ ${wallpaper.favorites.toLocaleString()}`}
-          />
-          <Detail.Metadata.Label
-            title="Views"
-            text={wallpaper.views.toLocaleString()}
-          />
-
           {wallpaper.tags && wallpaper.tags.length > 0 && (
-            <>
-              <Detail.Metadata.Separator />
-              <Detail.Metadata.TagList title="Tags">
-                {wallpaper.tags.map((tag) => (
-                  <Detail.Metadata.TagList.Item key={tag.id} text={tag.name} />
-                ))}
-              </Detail.Metadata.TagList>
-            </>
+            <Detail.Metadata.TagList title="Tags">
+              {wallpaper.tags.map((tag) => (
+                <Detail.Metadata.TagList.Item key={tag.id} text={tag.name} />
+              ))}
+            </Detail.Metadata.TagList>
           )}
         </Detail.Metadata>
       }

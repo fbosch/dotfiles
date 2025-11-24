@@ -1,4 +1,4 @@
-import { showToast, Toast } from "@vicinae/api";
+import { showToast, Toast, Application } from "@vicinae/api";
 
 export interface DownloadResult {
   success: boolean;
@@ -70,11 +70,29 @@ export async function downloadWallpaper(
       // Write file
       await fs.writeFile(filePath, buffer);
 
-      // Update toast to success
+      // Update toast to success with action to open file
       toast.style = Toast.Style.Success;
       toast.title = "Wallpaper downloaded!";
       toast.message = `Saved to ${filePath}`;
+      toast.primaryAction = {
+        title: "Open",
+        onAction: async () => {
+          try {
+            await Application.open(filePath);
+          } catch (err) {
+            console.error("Failed to open file:", err);
+          }
+        },
+      };
       await toast.show();
+
+      // Automatically open the downloaded image in default viewer
+      try {
+        await Application.open(filePath);
+      } catch (err) {
+        console.error("Failed to auto-open file:", err);
+        // Don't fail the download if we can't open the file
+      }
 
       return {
         success: true,
