@@ -133,6 +133,10 @@ Branch: $branch_name"
         gum style --foreground 1 "󰜺 Commit cancelled (empty message)"
         return 1
     end
+    # Add the commit command to shell history before executing
+    # This allows easy re-run if pre-commit hooks fail
+    history --save --merge
+    history --save -- git commit -m "$edited_msg"
     git commit -m "$edited_msg"
     if test $status -eq 0
         gum style --foreground 2 "󰸞 Commit successful!"

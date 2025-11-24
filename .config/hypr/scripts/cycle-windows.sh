@@ -81,9 +81,21 @@ fi
 
 hyprctl dispatch focuswindow "address:${addresses[$next_index]}"
 
-# Debug
-echo "Current address: $current_address" > /tmp/alt-tab-debug.log
-echo "Addresses: ${addresses[@]}" >> /tmp/alt-tab-debug.log
-echo "Titles: ${titles[@]}" >> /tmp/alt-tab-debug.log
-echo "Next index: $next_index" >> /tmp/alt-tab-debug.log
-echo "Next address: ${addresses[$next_index]}" >> /tmp/alt-tab-debug.log
+# Write window list and selection to /tmp/hypr-tab-cycle.json for AGS overlay
+(
+  printf '['
+  for i in "${!addresses[@]}"; do
+    printf '{"title": "%s", "address": "%s", "workspace": "%s"}' "${titles[$i]//"/\\"}" "${addresses[$i]}" "${workspace_refs[$i]}"
+    if (( i < window_count - 1 )); then printf ','; fi
+  done
+  printf ']'
+) > /tmp/hypr-tab-cycle-windows.json
+
+jq -n \
+  --argjson windows "$(cat /tmp/hypr-tab-cycle-windows.json)" \
+  --arg current_index "$next_index" \
+  --arg direction "$direction" \
+  '{windows: $windows, current_index: ($current_index|tonumber), direction: $direction}' \
+  > /tmp/hypr-tab-cycle.json
+
+rm -f /tmp/hypr-tab-cycle-windows.json

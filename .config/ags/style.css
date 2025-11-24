@@ -1,0 +1,18 @@
+.tab-overlay {
+  background: rgba(30, 30, 30, 0.9);
+  border-radius: 12px;
+  padding: 32px;
+  min-width: 300px;
+  min-height: 100px;
+}
+
+.tab-overlay label {
+  font-size: 1.2em;
+  color: #fff;
+  margin: 8px 0;
+}
+
+.tab-overlay label.selected {
+  font-weight: bold;
+  color: #ffcc00;
+}
