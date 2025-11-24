@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   List,
   ActionPanel,
@@ -15,7 +15,7 @@ import {
   useQuery,
 } from "@tanstack/react-query";
 
-type FlathubApp = {
+export type FlathubApp = {
   app_id: string;
   name: string;
   summary: string;
@@ -26,22 +26,17 @@ type FlathubApp = {
   favorites_count?: number;
 };
 
-type FlathubSearchResponse = {
-  hits: Array<{
-    app_id: string;
-    name: string;
-    summary: string;
-    icon?: string;
-    project_license?: string;
-    installs_last_month?: number;
-    trending?: number;
-    favorites_count?: number;
-  }>;
+export type FlathubSearchResponse = {
+  hits: FlathubApp[];
 };
 
-const cache = new Cache();
+const FLATHUB_SEARCH_URL = "https://flathub.org/api/v2/search";
 const POPULAR_APPS_CACHE_KEY = "popular-apps-v1";
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24h
+const POPULAR_LIMIT = 20;
+const SEARCH_DEBOUNCE_MS = 500;
+
+const cache = new Cache();
 
 type CachedData = {
   apps: FlathubApp[];
@@ -51,15 +46,11 @@ type CachedData = {
 function getCachedPopularApps(): FlathubApp[] | null {
   const cached = cache.get(POPULAR_APPS_CACHE_KEY);
   if (!cached) return null;
-
   try {
     const data: CachedData = JSON.parse(cached);
-    const age = Date.now() - data.cachedAt;
-    
-    if (age < CACHE_DURATION) {
+    if (Date.now() - data.cachedAt < CACHE_DURATION) {
       return data.apps;
     }
-    
     cache.remove(POPULAR_APPS_CACHE_KEY);
     return null;
   } catch {
@@ -69,11 +60,10 @@ function getCachedPopularApps(): FlathubApp[] | null {
 }
 
 function setCachedPopularApps(apps: FlathubApp[]): void {
-  const data: CachedData = {
-    apps,
-    cachedAt: Date.now(),
-  };
-  cache.set(POPULAR_APPS_CACHE_KEY, JSON.stringify(data));
+  cache.set(
+    POPULAR_APPS_CACHE_KEY,
+    JSON.stringify({ apps, cachedAt: Date.now() } satisfies CachedData),
+  );
 }
 
 const queryClient = new QueryClient({
@@ -86,97 +76,79 @@ const queryClient = new QueryClient({
   },
 });
 
-async function searchFlathub(query: string): Promise<FlathubApp[]> {
-  if (!query.trim()) return [];
-
-  const response = await fetch("https://flathub.org/api/v2/search", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Search failed: ${response.statusText}`);
-  }
-
-  const data: FlathubSearchResponse = await response.json();
-  const results = data.hits || [];
-
-  return results.sort((a, b) => {
-    const aInstalls = a.installs_last_month || 0;
-    const bInstalls = b.installs_last_month || 0;
-    return bInstalls - aInstalls;
-  });
-}
-
-async function getPopularApps(): Promise<FlathubApp[]> {
-  const response = await fetch("https://flathub.org/api/v2/search", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query: "" }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch popular apps: ${response.statusText}`);
-  }
-
-  const data: FlathubSearchResponse = await response.json();
-  const apps = data.hits || [];
-
-  const sortedApps = apps
-    .slice(0, 20)
-    .map((app) => ({
-      app_id: app.app_id,
-      name: app.name,
-      summary: app.summary,
-      icon: app.icon,
-      project_license: app.project_license,
-      installs_last_month: app.installs_last_month,
-      trending: app.trending,
-      favorites_count: app.favorites_count,
-    }));
-  
-  setCachedPopularApps(sortedApps);
-  
-  return sortedApps;
-}
-
 function formatInstalls(count?: number): string {
   if (!count) return "";
-
-  if (count >= 1000000) {
-    return `${(count / 1000000).toFixed(1)}M installs`;
-  }
-  if (count >= 1000) {
-    return `${(count / 1000).toFixed(1)}K installs`;
-  }
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M installs`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K installs`;
   return `${count} installs`;
+}
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
+}
+
+// Unified POST helper
+async function postFlathubSearch(query: string): Promise<FlathubApp[]> {
+  const response = await fetch(FLATHUB_SEARCH_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Flathub request failed: ${response.status} ${response.statusText}`,
+    );
+  }
+  const data: FlathubSearchResponse = await response.json();
+  return data.hits || [];
+}
+
+async function searchFlathub(query: string): Promise<FlathubApp[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+  const results = await postFlathubSearch(trimmed);
+  // Sort by installs descending for relevance
+  return results.sort(
+    (a, b) => (b.installs_last_month || 0) - (a.installs_last_month || 0),
+  );
+}
+
+async function fetchPopularApps(): Promise<FlathubApp[]> {
+  // Empty query returns overall list; we slice top POPULAR_LIMIT
+  const apps = await postFlathubSearch("");
+  const subset = apps.slice(0, POPULAR_LIMIT);
+  setCachedPopularApps(subset);
+  return subset;
 }
 
 function FlathubSearchContent() {
   const [searchText, setSearchText] = useState("");
+  const debouncedSearch = useDebounce(searchText, SEARCH_DEBOUNCE_MS);
 
-  const { data: popularApps = [], isLoading: isLoadingPopular } = useQuery({
-    queryKey: ["popular-apps"],
-    queryFn: getPopularApps,
+  // Popular apps query
+  const { data: popularApps = [], isLoading: loadingPopular } = useQuery({
+    queryKey: ["flathub", "popular"],
+    queryFn: fetchPopularApps,
     initialData: () => getCachedPopularApps() || undefined,
     staleTime: 10 * 60 * 1000,
   });
 
+  // Search query
   const {
     data: searchResults = [],
-    isLoading: isSearching,
+    isLoading: loadingSearch,
     isError,
     error,
   } = useQuery({
-    queryKey: ["search", searchText],
-    queryFn: () => searchFlathub(searchText),
+    queryKey: ["flathub", "search", debouncedSearch],
+    queryFn: () => searchFlathub(debouncedSearch),
+    enabled: debouncedSearch.trim().length > 0,
     placeholderData: keepPreviousData,
-    enabled: searchText.trim().length > 0,
   });
 
   if (isError && error) {
@@ -187,8 +159,9 @@ function FlathubSearchContent() {
     });
   }
 
-  const displayedApps = searchText.trim() ? searchResults : popularApps;
-  const isLoading = searchText.trim() ? isSearching : isLoadingPopular;
+  const showingSearch = debouncedSearch.trim().length > 0;
+  const displayed = showingSearch ? searchResults : popularApps;
+  const isLoading = showingSearch ? loadingSearch : loadingPopular;
 
   return (
     <List
@@ -196,17 +169,17 @@ function FlathubSearchContent() {
       searchBarPlaceholder="Search Flathub applications..."
       onSearchTextChange={setSearchText}
     >
-      {displayedApps.length === 0 && searchText.trim() !== "" && !isLoading ? (
+      {displayed.length === 0 && showingSearch && !isLoading ? (
         <List.EmptyView
           title="No applications found"
           description="Try different search terms"
         />
       ) : (
         <>
-          {!searchText.trim() && displayedApps.length > 0 && (
+          {!showingSearch && displayed.length > 0 && (
             <List.Section title="Popular Applications" />
           )}
-          {displayedApps.map((app) => (
+          {displayed.map((app) => (
             <List.Item
               key={app.app_id}
               title={app.name}
@@ -216,7 +189,7 @@ function FlathubSearchContent() {
                 ...(app.installs_last_month
                   ? [{ text: formatInstalls(app.installs_last_month) }]
                   : []),
-                { text: app.app_id },
+                { text: app.project_license || app.app_id },
               ]}
               actions={
                 <ActionPanel>
