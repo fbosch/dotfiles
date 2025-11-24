@@ -135,7 +135,7 @@ Branch: $branch_name"
     end
     # Add the commit command to shell history before executing
     # This allows easy re-run if pre-commit hooks fail
-    history add git\ commit\ -m\ "$edited_msg"
+    history add git\ commit\ -m\ "$edited_msg" >/dev/null 2>&1
     git commit -m "$edited_msg"
     if test $status -eq 0
         gum style --foreground 2 "󰸞 Commit successful!"
