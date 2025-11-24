@@ -17,6 +17,7 @@ import {
   useQuery,
 } from "@tanstack/react-query";
 import { downloadWallpaper } from "./utils/download";
+import { createRoundedImageSVG } from "./utils/imageWithRoundedCorners";
 
 type Preferences = {
   apiKey?: string;
@@ -534,11 +535,8 @@ function WallhavenSearchContent() {
           <Grid.Item
             key={wallpaper.id}
             id={`wallpaper-${index}`}
-            content={{
-              value: wallpaper.thumbs.small,
-            }}
-            title={wallpaper.resolution}
-            subtitle={`★ ${wallpaper.favorites} · ${wallpaper.views} views`}
+            content={wallpaper.thumbs.large}
+            subtitle={`${wallpaper.resolution} · ★ ${wallpaper.favorites} · ${wallpaper.views} views`}
             actions={
               <ActionPanel>
                 <Action.Push
