@@ -16,6 +16,7 @@ import {
   useInfiniteQuery,
   useQuery,
 } from "@tanstack/react-query";
+import { downloadWallpaper } from "./utils/download";
 
 type Preferences = {
   apiKey?: string;
@@ -23,6 +24,7 @@ type Preferences = {
   purity: string;
   sorting: string;
   topRange: string;
+  downloadDirectory: string;
 };
 
 type UserSettings = {
@@ -263,12 +265,23 @@ async function searchWallpapers(
 }
 
 function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
+  const preferences = getPreferenceValues<Preferences>();
+
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 Bytes";
     const k = 1024;
     const sizes = ["Bytes", "KB", "MB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
+  };
+
+  const handleDownload = async () => {
+    await downloadWallpaper(
+      wallpaper.path,
+      wallpaper.id,
+      wallpaper.resolution,
+      preferences.downloadDirectory,
+    );
   };
 
   const markdown = `
@@ -314,19 +327,26 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
       }
       actions={
         <ActionPanel>
-          <Action.OpenInBrowser
-            title="Open in Browser"
-            url={wallpaper.short_url}
-          />
-          <Action.CopyToClipboard
-            title="Copy Image URL"
-            content={wallpaper.path}
-          />
-          <Action.OpenInBrowser
-            title="Download Original"
-            url={wallpaper.path}
+          <Action
+            title="Download Wallpaper"
+            icon={Icon.Download}
+            onAction={handleDownload}
             shortcut={{ modifiers: ["cmd"], key: "d" }}
           />
+          <ActionPanel.Section>
+            <Action.OpenInBrowser
+              title="Open in Browser"
+              url={wallpaper.short_url}
+            />
+            <Action.CopyToClipboard
+              title="Copy Image URL"
+              content={wallpaper.path}
+            />
+            <Action.OpenInBrowser
+              title="Download in Browser"
+              url={wallpaper.path}
+            />
+          </ActionPanel.Section>
         </ActionPanel>
       }
     />
@@ -354,6 +374,15 @@ function WallhavenSearchContent() {
   const [searchText, setSearchText] = useState("");
   const [categories, setCategories] = useState("111");
   const debouncedSearchText = useDebounce(searchText, 800);
+
+  const handleDownload = async (wallpaper: Wallpaper) => {
+    await downloadWallpaper(
+      wallpaper.path,
+      wallpaper.id,
+      wallpaper.resolution,
+      preferences.downloadDirectory,
+    );
+  };
 
   const { data: userSettings } = useQuery({
     queryKey: ["userSettings", preferences.apiKey],
@@ -516,6 +545,12 @@ function WallhavenSearchContent() {
                   title="Show Preview"
                   target={<WallpaperDetail wallpaper={wallpaper} />}
                 />
+                <Action
+                  title="Download Wallpaper"
+                  icon={Icon.Download}
+                  onAction={() => handleDownload(wallpaper)}
+                  shortcut={{ modifiers: ["cmd"], key: "d" }}
+                />
                 <ActionPanel.Section>
                   <Action.OpenInBrowser
                     title="Open in Browser"
@@ -531,9 +566,8 @@ function WallhavenSearchContent() {
                     shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
                   />
                   <Action.OpenInBrowser
-                    title="Download Original"
+                    title="Download in Browser"
                     url={wallpaper.path}
-                    shortcut={{ modifiers: ["cmd"], key: "d" }}
                   />
                 </ActionPanel.Section>
               </ActionPanel>

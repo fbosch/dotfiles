@@ -125,6 +125,15 @@
           "value": "1y"
         }
       ]
+    },
+    {
+      "name": "downloadDirectory",
+      "type": "textfield",
+      "required": false,
+      "title": "Download Directory",
+      "description": "Directory where wallpapers will be downloaded (supports ~ for home directory)",
+      "default": "~/Pictures/Wallpapers",
+      "placeholder": "~/Pictures/Wallpapers"
     }
   ],
   "scripts": {

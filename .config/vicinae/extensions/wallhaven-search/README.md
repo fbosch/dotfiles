@@ -15,7 +15,7 @@ Search and browse wallpapers from [Wallhaven.cc](https://wallhaven.cc) directly 
 - ?? View favorites and view counts
 - ?? Copy wallpaper URLs
 - ?? Open in browser
-- ?? Download original images
+- ??? **Direct wallpaper downloads** - Save wallpapers directly to your filesystem with custom directory
 
 ## Preferences
 
@@ -26,6 +26,7 @@ Configure default search settings in the extension preferences:
 - **Content Purity**: SFW Only or SFW + Sketchy (overridden when "Use User Settings" is enabled)
 - **Default Sorting**: Top List, Most Recent, Most Views, Most Favorites, Relevance, or Random
 - **Top Range**: Time range for top list sorting (Last Day to Last Year) (overridden when "Use User Settings" is enabled)
+- **Download Directory**: Directory where wallpapers will be saved (default: `~/Pictures/Wallpapers`, supports `~` for home directory)
 
 ### Using Your Wallhaven Account Settings
 
@@ -49,10 +50,11 @@ Configure default search settings in the extension preferences:
 
 ### On Wallpapers
 - **Enter**: Show full-size preview
+- **Cmd+D**: Download wallpaper directly to your configured download directory
 - **Cmd+O**: Open wallpaper page in browser
 - **Cmd+C**: Copy image URL
 - **Cmd+Shift+C**: Copy page URL
-- **Cmd+D**: Download original image
+- **Download in Browser**: Fallback option to download via browser
 
 ### On "Load More" Item
 - **Enter**: Load and append next page of wallpapers
@@ -91,6 +93,23 @@ The extension uses the Wallhaven API with support for:
 - **Sorting**: Multiple sorting options including toplist, recent, views, favorites, relevance, and random
 - **Top Range**: Time-based filtering for toplist results
 - **Infinite Loading**: Seamlessly append pages to browse through thousands of results
+
+## Direct Download Feature
+
+The extension now supports direct wallpaper downloads to your local filesystem:
+
+1. **Configure download directory** in extension preferences (default: `~/Pictures/Wallpapers`)
+2. Press **Cmd+D** on any wallpaper to download it directly
+3. Files are saved with descriptive names: `wallhaven-{id}-{resolution}.{ext}`
+4. Download progress is shown with toast notifications
+5. If direct download isn't available in your environment, use the "Download in Browser" fallback action
+
+### Download Behavior
+
+- **Success**: Toast shows "Wallpaper downloaded!" with the file path
+- **Failure**: Toast shows error message with details
+- **Fallback**: If filesystem access is unavailable, the extension attempts browser-based download
+- **Directory creation**: The download directory is created automatically if it doesn't exist
 
 ## Build
 
