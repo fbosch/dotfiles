@@ -20,7 +20,6 @@ import {
   useQuery,
 } from "@tanstack/react-query";
 import { downloadWallpaper } from "./utils/download";
-import { createRoundedImageSVG } from "./utils/imageWithRoundedCorners";
 
 type Preferences = {
   apiKey?: string;
@@ -296,11 +295,7 @@ async function fetchWallpaperDetails(
   return data.data;
 }
 
-function WallpaperDetail({
-  wallpaper,
-}: {
-  wallpaper: Wallpaper;
-}) {
+function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
   const preferences = getPreferenceValues<Preferences>();
 
   // Fetch full wallpaper details to get tags
@@ -319,21 +314,21 @@ function WallpaperDetail({
 
   const getTagColor = (category?: string): Color => {
     if (!category) return Color.Blue;
-    
+
     // Color mapping based on tag categories
     const categoryColors: Record<string, Color> = {
       "Anime & Manga": Color.Magenta,
-      "People": Color.Orange,
-      "Landscapes": Color.Green,
-      "Nature": Color.Green,
-      "Plants": Color.Green,
-      "Architecture": Color.Purple,
-      "Animals": Color.Yellow,
-      "Fantasy": Color.Magenta,
-      "Vehicles": Color.Red,
-      "Technology": Color.Blue,
+      People: Color.Orange,
+      Landscapes: Color.Green,
+      Nature: Color.Green,
+      Plants: Color.Green,
+      Architecture: Color.Purple,
+      Animals: Color.Yellow,
+      Fantasy: Color.Magenta,
+      Vehicles: Color.Red,
+      Technology: Color.Blue,
     };
-    
+
     return categoryColors[category] || Color.Blue;
   };
 
