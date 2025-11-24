@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Grid,
   ActionPanel,
@@ -11,6 +11,7 @@ import {
   Cache,
   confirmAlert,
   Alert,
+  Color,
 } from "@vicinae/api";
 import {
   QueryClient,
@@ -51,9 +52,19 @@ type Wallpaper = {
   category: string;
   purity: string;
   file_size: number;
+  file_type?: string;
+  created_at?: string;
+  ratio?: string;
+  source?: string;
+  uploader?: {
+    username: string;
+    group: string;
+  };
   tags: Array<{
     id: number;
     name: string;
+    category?: string;
+    purity?: string;
   }>;
   thumbs: {
     large: string;
@@ -267,8 +278,64 @@ async function searchWallpapers(
   return data;
 }
 
-function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
+async function fetchWallpaperDetails(
+  id: string,
+  apiKey?: string,
+): Promise<Wallpaper> {
+  const url = apiKey
+    ? `https://wallhaven.cc/api/v1/w/${id}?apikey=${apiKey.trim()}`
+    : `https://wallhaven.cc/api/v1/w/${id}`;
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch wallpaper details: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.data;
+}
+
+function WallpaperDetail({
+  wallpaper,
+}: {
+  wallpaper: Wallpaper;
+}) {
   const preferences = getPreferenceValues<Preferences>();
+
+  // Fetch full wallpaper details to get tags
+  const { data: fullWallpaper, isLoading } = useQuery({
+    queryKey: ["wallpaper-detail", wallpaper.id],
+    queryFn: () => fetchWallpaperDetails(wallpaper.id, preferences.apiKey),
+    staleTime: 12 * 60 * 60 * 1000, // 12 hours
+  });
+
+  console.log("WallpaperDetail - fullWallpaper:", {
+    id: fullWallpaper?.id,
+    hasTags: Boolean(fullWallpaper?.tags),
+    tagsLength: fullWallpaper?.tags?.length,
+    tags: fullWallpaper?.tags,
+  });
+
+  const getTagColor = (category?: string): Color => {
+    if (!category) return Color.Blue;
+    
+    // Color mapping based on tag categories
+    const categoryColors: Record<string, Color> = {
+      "Anime & Manga": Color.Magenta,
+      "People": Color.Orange,
+      "Landscapes": Color.Green,
+      "Nature": Color.Green,
+      "Plants": Color.Green,
+      "Architecture": Color.Purple,
+      "Animals": Color.Yellow,
+      "Fantasy": Color.Magenta,
+      "Vehicles": Color.Red,
+      "Technology": Color.Blue,
+    };
+    
+    return categoryColors[category] || Color.Blue;
+  };
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 Bytes";
@@ -278,18 +345,72 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   };
 
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    return date.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const formatCategory = (category: string) => {
+    return category.charAt(0).toUpperCase() + category.slice(1);
+  };
+
+  const formatFileType = (fileType?: string) => {
+    if (!fileType) return null;
+    return fileType.replace("image/", "").toUpperCase();
+  };
+
   const handleDownload = async () => {
+    const wallpaperToDownload = fullWallpaper || wallpaper;
     await downloadWallpaper(
-      wallpaper.path,
-      wallpaper.id,
-      wallpaper.resolution,
+      wallpaperToDownload.path,
+      wallpaperToDownload.id,
+      wallpaperToDownload.resolution,
       preferences.downloadDirectory,
     );
   };
 
+  const displayWallpaper = fullWallpaper || wallpaper;
+
   const markdown = `
 <img src="${wallpaper.thumbs.large}" alt="Wallpaper" style="max-width: 100%; height: auto; object-fit: contain;" />
 `;
+
+  // Show minimal metadata while loading to avoid layout shift
+  if (isLoading) {
+    return (
+      <Detail
+        isLoading={true}
+        markdown={markdown}
+        metadata={
+          <Detail.Metadata>
+            <Detail.Metadata.Label
+              title="Resolution"
+              text={wallpaper.resolution}
+            />
+            <Detail.Metadata.Label
+              title="File"
+              text={formatBytes(wallpaper.file_size)}
+            />
+          </Detail.Metadata>
+        }
+        actions={
+          <ActionPanel>
+            <Action
+              title="Download Wallpaper"
+              icon={Icon.Download}
+              onAction={handleDownload}
+              shortcut={{ modifiers: ["cmd"], key: "d" }}
+            />
+          </ActionPanel>
+        }
+      />
+    );
+  }
 
   return (
     <Detail
@@ -297,19 +418,54 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
       metadata={
         <Detail.Metadata>
           <Detail.Metadata.Label
-            title="Info"
-            text={`${wallpaper.resolution} · ${formatBytes(wallpaper.file_size)}`}
+            title="Resolution"
+            text={`${displayWallpaper.resolution}${displayWallpaper.ratio ? ` (${displayWallpaper.ratio})` : ""}`}
+          />
+          <Detail.Metadata.Label
+            title="File"
+            text={`${formatBytes(displayWallpaper.file_size)}${formatFileType(displayWallpaper.file_type) ? ` · ${formatFileType(displayWallpaper.file_type)}` : ""}`}
+          />
+          {displayWallpaper.tags && displayWallpaper.tags.length > 0 && (
+            <>
+              <Detail.Metadata.Separator />
+              <Detail.Metadata.TagList title="Tags">
+                {displayWallpaper.tags.map((tag) => (
+                  <Detail.Metadata.TagList.Item
+                    key={tag.id}
+                    text={tag.name}
+                    color={getTagColor(tag.category)}
+                  />
+                ))}
+              </Detail.Metadata.TagList>
+            </>
+          )}
+          <Detail.Metadata.Separator />
+          <Detail.Metadata.Label
+            title="Category"
+            text={formatCategory(displayWallpaper.category)}
           />
           <Detail.Metadata.Label
             title="Stats"
-            text={`★ ${wallpaper.favorites.toLocaleString()} · ${wallpaper.views.toLocaleString()} views`}
+            text={`★ ${displayWallpaper.favorites.toLocaleString()} favorites · ${displayWallpaper.views.toLocaleString()} views`}
           />
-          {wallpaper.tags && wallpaper.tags.length > 0 && (
-            <Detail.Metadata.TagList title="Tags">
-              {wallpaper.tags.map((tag) => (
-                <Detail.Metadata.TagList.Item key={tag.id} text={tag.name} />
-              ))}
-            </Detail.Metadata.TagList>
+          {displayWallpaper.uploader && (
+            <Detail.Metadata.Label
+              title="Uploader"
+              text={displayWallpaper.uploader.username}
+            />
+          )}
+          {displayWallpaper.created_at && (
+            <Detail.Metadata.Label
+              title="Uploaded"
+              text={formatDate(displayWallpaper.created_at) || "Unknown"}
+            />
+          )}
+          {displayWallpaper.source && (
+            <Detail.Metadata.Link
+              title="Source"
+              text={displayWallpaper.source}
+              target={displayWallpaper.source}
+            />
           )}
         </Detail.Metadata>
       }
@@ -324,15 +480,11 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
           <ActionPanel.Section>
             <Action.OpenInBrowser
               title="Open in Browser"
-              url={wallpaper.short_url}
+              url={displayWallpaper.short_url}
             />
             <Action.CopyToClipboard
               title="Copy Image URL"
-              content={wallpaper.path}
-            />
-            <Action.OpenInBrowser
-              title="Download in Browser"
-              url={wallpaper.path}
+              content={displayWallpaper.path}
             />
           </ActionPanel.Section>
         </ActionPanel>
@@ -528,7 +680,11 @@ function WallhavenSearchContent() {
               <ActionPanel>
                 <Action.Push
                   title="Show Preview"
-                  target={<WallpaperDetail wallpaper={wallpaper} />}
+                  target={
+                    <QueryClientProvider client={queryClient}>
+                      <WallpaperDetail wallpaper={wallpaper} />
+                    </QueryClientProvider>
+                  }
                 />
                 <Action
                   title="Download Wallpaper"
@@ -549,10 +705,6 @@ function WallhavenSearchContent() {
                     title="Copy Page URL"
                     content={wallpaper.short_url}
                     shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
-                  />
-                  <Action.OpenInBrowser
-                    title="Download in Browser"
-                    url={wallpaper.path}
                   />
                 </ActionPanel.Section>
               </ActionPanel>
