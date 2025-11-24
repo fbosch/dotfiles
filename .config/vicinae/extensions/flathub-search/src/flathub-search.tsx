@@ -185,12 +185,7 @@ function FlathubSearchContent() {
               title={app.name}
               subtitle={app.summary}
               icon={app.icon || Icon.AppWindow}
-              accessories={[
-                ...(app.installs_last_month
-                  ? [{ text: formatInstalls(app.installs_last_month) }]
-                  : []),
-                { text: app.project_license || app.app_id },
-              ]}
+              accessories={app.installs_last_month ? [ { text: formatInstalls(app.installs_last_month) } ] : []}
               actions={
                 <ActionPanel>
                   <Action.CopyToClipboard
