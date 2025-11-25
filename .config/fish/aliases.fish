@@ -123,6 +123,7 @@ abbr gpor 'git pull origin --rebase'
 abbr gdorig 'find . -name \*.orig -delete'
 abbr gcm --set-cursor 'git commit -m "%"'
 abbr gcmn --set-cursor 'git commit -m "%" --no-verify'
+abbr co copy_output
 abbr gca 'git commit --amend --no-edit'
 abbr gaic ai_commit # AI-powered Commitizen commit
 abbr gmt 'git mergetool'

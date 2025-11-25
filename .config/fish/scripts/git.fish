@@ -259,21 +259,50 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     echo "$prompt" >$temp_prompt
     cat $actual_diff_file >>$temp_prompt
     set temp_pr_desc (mktemp).md
-    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "opencode run -m $ai_model --format json \"$(cat $temp_prompt)\" > $temp_output 2>&1"
+    
+    # Run opencode by piping the prompt instead of command substitution
+    set opencode_exit_code 0
+    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "cat $temp_prompt | opencode run -m $ai_model --format json > $temp_output 2>&1"
+    or set opencode_exit_code $status
+    
+    # Check if opencode failed
+    if test $opencode_exit_code -ne 0
+        gum style --foreground 1 " OpenCode command failed (exit $opencode_exit_code)"
+        if test -s "$temp_output"
+            echo "Output:"
+            cat $temp_output
+        end
+        rm -f "$temp_pr_desc" $temp_prompt $temp_output $temp_diff
+        return 1
+    end
+    
+    # Check if output file has content
+    if not test -s "$temp_output"
+        gum style --foreground 1 " OpenCode produced no output"
+        rm -f "$temp_pr_desc" $temp_prompt $temp_output $temp_diff
+        return 1
+    end
     
     # Extract the text from JSON response and write directly to file to preserve newlines
     # jq -r outputs raw strings with newlines preserved, automatically unescaping \n sequences
     # Write directly to file to avoid any shell variable processing that might affect newlines
-    cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null >$temp_pr_desc
-    
-    rm -f $temp_prompt $temp_output $temp_diff
+    cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' >$temp_pr_desc 2>$temp_output.err
     
     # Validate we got a response (check if file has content)
     if not test -s "$temp_pr_desc"
-        rm -f "$temp_pr_desc"
-        gum style --foreground 1 " Failed to generate PR description"
+        # Check for errors
+        if test -s "$temp_output.err"
+            gum style --foreground 1 " JSON parsing error:"
+            cat "$temp_output.err"
+        else
+            gum style --foreground 1 " No JSON output found. Raw response:"
+            cat $temp_output | head -n 50
+        end
+        rm -f "$temp_pr_desc" "$temp_output.err" $temp_prompt $temp_output $temp_diff
         return 1
     end
+    
+    rm -f $temp_prompt $temp_output $temp_diff "$temp_output.err"
     
     # Open in ephemeral Neovim instance for editing
     # -f: foreground (blocking)
