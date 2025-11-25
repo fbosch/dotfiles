@@ -285,7 +285,8 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
         --cmd "set noswapfile nobackup nowritebackup" \
         -c "set filetype=markdown wrap linebreak spell textwidth=0 wrapmargin=0 nolist conceallevel=0" \
         -c "set formatoptions-=t formatoptions+=l" \
-        -c "set statusline=%f\ %=[PR\ Description\ -\ :wq\ to\ save\ and\ exit] | normal! gg" \
+        -c "autocmd VimLeavePre * silent! write" \
+        -c "set statusline=%f\ %=[PR\ Description\ -\ exit\ to\ copy\ to\ clipboard] | normal! gg" \
         "$temp_pr_desc"
     
     # Check if file still exists (user might have deleted it or cancelled)
