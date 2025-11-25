@@ -1,10 +1,11 @@
 function copy_output --description "Copy output of previous command to clipboard"
-    set -l last_output (eval $history[1] 2>&1)
+    set -l last_cmd $history[1]
+    set -l last_output (eval $last_cmd 2>&1)
     if test -n "$last_output"
         echo $last_output | pbcopy
-        echo "Copied output of: $history[1]"
+        gum style --foreground 2 "✓ Copied output of: $last_cmd"
     else
-        echo "No output to copy"
+        gum style --foreground 3 "⚠ No output to copy"
     end
 end
 
