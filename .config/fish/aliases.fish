@@ -153,6 +153,9 @@ abbr cu 'cargo update'
 abbr wta worktree_add
 abbr wtc worktrees_clean
 
+# work item extraction
+abbr wi workitems_on_date
+
 function src
     jq -r \'.scripts | to_entries[] | "\(.key):\n \(.value)\n"\' package.json | awk \'BEGIN{idx=1} {print "\033[3"idx"m" $0 "\033[0m"; idx = idx % 3 + 1}\'
 end
