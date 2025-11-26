@@ -74,6 +74,20 @@ function git_add_gum
     git add $selected
 end
 
+# Helper function to delete the most recent opencode session
+function _cleanup_last_opencode_session
+    # Get the most recent session ID and delete it
+    set -l last_session (opencode export 2>/dev/null | jq -r '.sessions[-1].id' 2>/dev/null)
+    if test -n "$last_session" -a "$last_session" != "null"
+        # Sessions are stored in ~/.opencode/projects/{hash}/sessions/{id}/
+        # Find and remove the session directory
+        set -l opencode_dir "$HOME/.opencode"
+        if test -d "$opencode_dir"
+            fd -t d "^$last_session\$" "$opencode_dir" -x rm -rf {} \; 2>/dev/null
+        end
+    end
+end
+
 # AI-powered Commitizen commit message
 function ai_commit --description "Generate AI-powered Commitizen commit message from branch context"
     set -l ai_model opencode/grok-code
@@ -109,7 +123,9 @@ Branch: $branch_name"
     set temp_prompt (mktemp -t opencode_prompt.XXXXXX)
     set temp_output (mktemp -t opencode_output.XXXXXX)
     echo "$prompt" > $temp_prompt
-    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "opencode run -m $ai_model --format json \"$(cat $temp_prompt)\" > $temp_output 2>&1"
+    # Use pipe instead of command substitution to avoid shell expansion issues
+    # opencode run without --continue flag is stateless (no session persistence)
+    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "cat $temp_prompt | opencode run -m $ai_model --format json > $temp_output 2>&1"
     set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | string trim)
     rm -f $temp_prompt $temp_output
     if test -z "$raw_output"
@@ -141,8 +157,10 @@ Branch: $branch_name"
         gum style --foreground 2 "󰸞 Commit successful!"
     else
         gum style --foreground 1 "󱎘 Commit failed"
+        _cleanup_last_opencode_session
         return 1
     end
+    _cleanup_last_opencode_session
 end
 
 # AI-powered PR description
@@ -355,8 +373,9 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
         cat "$temp_pr_desc"
     end
     
-    # Cleanup temp file
+    # Cleanup temp file and opencode session
     rm -f "$temp_pr_desc"
+    _cleanup_last_opencode_session
 end
 # AI-powered code review feedback
 function ai_review --description "Generate actionable code review feedback for current changes"
@@ -584,4 +603,5 @@ Diff below. Provide specific, actionable feedback. Skip empty sections if no iss
         cat $temp_review
     end
     rm -f $temp_review
+    _cleanup_last_opencode_session
 end

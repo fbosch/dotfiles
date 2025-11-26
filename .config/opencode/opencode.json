@@ -27,6 +27,20 @@
         "@djankies/vitest-mcp"
       ]
     },
+    "playwright": {
+      "type": "local",
+      "command": [
+        "bunx",
+        "@playwright/mcp@latest"
+      ]
+    },
+    "eslint": {
+      "type": "local",
+      "command": [
+        "bunx",
+        "@eslint/mcp@latest"
+      ]
+    },
     "sequential-thinking": {
       "type": "local",
       "command": [
@@ -41,5 +55,12 @@
         "mcp-nixos"
       ]
     },
+    "deepwiki": {
+      "type": "local",
+      "command": [
+        "bunx",
+        "mcp-deepwiki@latest"
+      ]
+    }
   }
 }
