@@ -536,63 +536,53 @@ function workitems_on_date --description "Extract Azure DevOps work item numbers
         return 1
     end
     
-    # Get branches with commits or modifications on the target date
-    # Using --format with %(committerdate:short) and %(authordate:short) to find target date's branches
-    set -l all_branches (git for-each-ref --sort=-committerdate refs/heads/ --format='%(refname:short)|%(committerdate:short)')
+    # Get all branches
+    set -l all_branches (git for-each-ref refs/heads/ --format='%(refname:short)')
     
     set -l workitem_numbers
     set -l found_branches
     
-    for branch_info in $all_branches
-        set -l parts (string split '|' $branch_info)
-        set -l branch_name $parts[1]
-        set -l commit_date $parts[2]
+    for branch_name in $all_branches
+        # Check if this branch has any commits on the target date
+        set -l commits_on_date (git log --all --since="$target_date 00:00:00" --until="$target_date 23:59:59" --pretty=format:"%H" --branches=$branch_name)
         
-        # Only process branches with commits from target date
-        if test "$commit_date" = "$target_date"
-            # Extract work item number from branch name
-            # First try to match AB#12345 pattern (Azure DevOps format)
-            set -l workitem ""
-            if string match -qr 'AB#(\d+)' $branch_name
-                set workitem (string match -r 'AB#(\d+)' $branch_name | tail -n 1)
-            # Otherwise match standalone numbers in patterns like: fix/12345-xyz, feature/12345-abc
-            else if string match -qr '(\d+)' $branch_name
-                set workitem (string match -r '\d+' $branch_name | head -n 1)
+        # Skip if no commits on target date
+        if test -z "$commits_on_date"
+            continue
+        end
+        
+        # Extract work item from branch name first
+        set -l workitem ""
+        if string match -qr 'AB#(\d+)' $branch_name
+            set workitem (string match -r 'AB#(\d+)' $branch_name | tail -n 1)
+        else if string match -qr '(\d+)' $branch_name
+            set workitem (string match -r '\d+' $branch_name | head -n 1)
+        end
+        
+        # Add work item from branch name if found
+        if test -n "$workitem"
+            if not contains $workitem $workitem_numbers
+                set -a workitem_numbers $workitem
+                set -a found_branches $branch_name
             end
+        else
+            # No work item in branch name, check commit messages
+            set -l commit_msgs (git log --all --since="$target_date 00:00:00" --until="$target_date 23:59:59" --pretty=format:"%s" --branches=$branch_name)
             
-            # Add if we found a work item and it's not already in the list (dedupe)
-            if test -n "$workitem" -a ! -z "$workitem"
-                if not contains $workitem $workitem_numbers
-                    set -a workitem_numbers $workitem
-                    set -a found_branches $branch_name
-                end
-            else
-                # Branch name doesn't contain a work item, check commit messages
-                # Get commits from this branch that were made on the target date
-                set -l commits_on_date (git log --all --since="$target_date 00:00:00" --until="$target_date 23:59:59" --pretty=format:"%H|%s" --branches=$branch_name)
-                
-                for commit_info in $commits_on_date
-                    set -l commit_parts (string split '|' $commit_info)
-                    set -l commit_msg $commit_parts[2]
-                    
-                    # Look for AB#12345 pattern in commit message
-                    if string match -qr 'AB#(\d+)' $commit_msg
-                        set -l commit_workitems (string match -ar 'AB#(\d+)' $commit_msg)
-                        # Extract just the numbers (every second match from -ar is the captured group)
-                        set -l idx 1
-                        for item in $commit_workitems
-                            # Skip the full match, only take captured group (odd indices)
-                            if test (math "$idx % 2") -eq 0
-                                if not contains $item $workitem_numbers
-                                    set -a workitem_numbers $item
-                                    # Only add branch to found_branches once
-                                    if not contains $branch_name $found_branches
-                                        set -a found_branches $branch_name
-                                    end
+            for commit_msg in $commit_msgs
+                if string match -qr 'AB#(\d+)' $commit_msg
+                    set -l commit_workitems (string match -ar 'AB#(\d+)' $commit_msg)
+                    set -l idx 1
+                    for item in $commit_workitems
+                        if test (math "$idx % 2") -eq 0
+                            if not contains $item $workitem_numbers
+                                set -a workitem_numbers $item
+                                if not contains $branch_name $found_branches
+                                    set -a found_branches $branch_name
                                 end
                             end
-                            set idx (math $idx + 1)
                         end
+                        set idx (math $idx + 1)
                     end
                 end
             end
