@@ -29,10 +29,11 @@ return {
 	{
 		"razak17/tailwind-fold.nvim",
 		ft = { "html", "css", "javascriptreact", "typescriptreact", "vue", "svelte" },
+		dependencies = { "nvim-treesitter/nvim-treesitter" },
+		enabled = false, -- Disabled: nil value error when switching buffers in .tsx files
 		opts = {
 			min_chars = 50, -- Only fold classes longer than 50 chars
 		},
-		dependencies = { "nvim-treesitter/nvim-treesitter" },
 	},
 	{
 		-- dir = "~/Projects/js-i18n.nvim",
