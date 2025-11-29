@@ -100,6 +100,10 @@ return {
 - **Abbreviations:** Prefer `abbr` over `alias` for shell expansion (e.g., `abbr n nvim`)
 - **Functions:** Use for complex logic, `snake_case` naming
 - **Conditionals:** `switch/case` for platform detection
+- **Cross-platform compatibility:** Terminal emulator and shell scripts should work across macOS, Linux, and BSD unless otherwise specified
+  - Use `switch (uname)` to handle platform-specific behavior
+  - Test for command availability with `command -v` before using platform-specific tools
+  - Prefer standard POSIX utilities when possible
 
 ## 📂 File Organization
 
