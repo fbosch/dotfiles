@@ -33,9 +33,61 @@ return {
 		event = "BufReadPost",
 		cond = is_git_repo,
 		opts = {
+			default_mappings = {
+				ours = "co", -- choose current (ours)
+				theirs = "ct", -- choose incoming (theirs)
+				both = "cb", -- choose both changes
+				none = "c0", -- choose none (delete conflict)
+				prev = "[x", -- go to previous conflict
+				next = "]x", -- go to next conflict
+			},
 			highlights = {
 				incoming = "DiffAdd",
-				outgoing = "DiffDelete",
+				current = "DiffDelete",
+			},
+		},
+		keys = {
+			{
+				mode = { "n" },
+				"<leader>gco",
+				"<cmd>GitConflictChooseOurs<CR>",
+				desc = "git conflict choose ours",
+			},
+			{
+				mode = { "n" },
+				"<leader>gct",
+				"<cmd>GitConflictChooseTheirs<CR>",
+				desc = "git conflict choose theirs",
+			},
+			{
+				mode = { "n" },
+				"<leader>gcb",
+				"<cmd>GitConflictChooseBoth<CR>",
+				desc = "git conflict choose both",
+			},
+			{
+				mode = { "n" },
+				"<leader>gc0",
+				"<cmd>GitConflictChooseNone<CR>",
+				desc = "git conflict choose none",
+			},
+			{
+				mode = { "n" },
+				"<leader>gcn",
+				"<cmd>GitConflictNextConflict<CR>",
+				desc = "git conflict next",
+			},
+			{
+				mode = { "n" },
+				"<leader>gcp",
+				"<cmd>GitConflictPrevConflict<CR>",
+				desc = "git conflict previous",
+			},
+			{
+				mode = { "n" },
+				"<leader>gcl",
+				"<cmd>GitConflictListQf<CR>",
+				desc = "git conflict list in quickfix",
 			},
 		},
 	},
