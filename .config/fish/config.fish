@@ -108,11 +108,6 @@ starship init fish | source
 
 fnm env --use-on-cd --shell fish | source
 
-# Silence fnm version switching output
-function fnm_auto_switch --on-variable PWD
-    fnm use --silent-if-unchanged 2>/dev/null
-end
-
 # --- pnpm ---
 set -gx PNPM_HOME "$HOME/Library/pnpm"
 if not string match -q -- $PNPM_HOME $PATH

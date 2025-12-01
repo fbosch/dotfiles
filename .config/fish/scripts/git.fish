@@ -155,12 +155,13 @@ Branch: $branch_name"
     git commit -m "$edited_msg"
     if test $status -eq 0
         gum style --foreground 2 "󰸞 Commit successful!"
+        _cleanup_last_opencode_session
+        return 0
     else
         gum style --foreground 1 "󱎘 Commit failed"
         _cleanup_last_opencode_session
         return 1
     end
-    _cleanup_last_opencode_session
 end
 
 # AI-powered PR description
