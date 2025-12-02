@@ -4,7 +4,7 @@ function workitems_on_date --description 'Extract Azure DevOps work item numbers
         return 1
     end
 
-    # Parse the date using the flexible date parser
+    # Parse the date using the flexible date parser (defaults to today if no arg provided)
     set -l target_date (parse_flexible_date $argv[1])
     
     # Check if parsing failed
@@ -26,7 +26,7 @@ function workitems_on_date --description 'Extract Azure DevOps work item numbers
     
     for branch_name in $all_branches
         # Check if this branch has any commits on the target date
-        set -l commits_on_date (git log --all --since="$target_date 00:00:00" --until="$target_date 23:59:59" --pretty=format:"%H" --branches=$branch_name)
+        set -l commits_on_date (git log $branch_name --since="$target_date 00:00:00" --until="$target_date 23:59:59" --pretty=format:"%H")
         
         # Skip if no commits on target date
         if test -z "$commits_on_date"
@@ -49,7 +49,7 @@ function workitems_on_date --description 'Extract Azure DevOps work item numbers
             end
         else
             # No work item in branch name, check commit messages
-            set -l commit_msgs (git log --all --since="$target_date 00:00:00" --until="$target_date 23:59:59" --pretty=format:"%s" --branches=$branch_name)
+            set -l commit_msgs (git log $branch_name --since="$target_date 00:00:00" --until="$target_date 23:59:59" --pretty=format:"%s")
             
             for commit_msg in $commit_msgs
                 if string match -qr 'AB#(\d+)' $commit_msg

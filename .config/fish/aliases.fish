@@ -112,6 +112,7 @@ abbr wtc worktrees_clean
 
 # work item extraction
 abbr wi workitems_on_date
+abbr wid workitems_on_date
 abbr wiw workitems_week
 
 # Package manager shortcuts (swpm wrappers)

@@ -224,7 +224,7 @@ return {
 					},
 				},
 				render = function(props)
-					local is_tty = terminal.is_plain_tty()
+					local is_tty = vim.env.TERM == "xterm" or vim.env.TERM == "linux"
 					local filename = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(props.buf), ":t")
 					local ft_icon, ft_color = is_tty and { nil, nil }
 						or require("nvim-web-devicons").get_icon_color(filename)
