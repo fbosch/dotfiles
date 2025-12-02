@@ -701,6 +701,11 @@ function WallhavenSearchContent() {
                     content={wallpaper.short_url}
                     shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
                   />
+                  <Action.OpenInBrowser
+                    title="Open Wallhaven Settings"
+                    url="https://wallhaven.cc/settings/account"
+                    shortcut={{ modifiers: ["cmd", "shift"], key: "s" }}
+                  />
                 </ActionPanel.Section>
               </ActionPanel>
             }
@@ -721,6 +726,13 @@ function WallhavenSearchContent() {
             actions={
               <ActionPanel>
                 <Action title="Load More" onAction={() => fetchNextPage()} />
+                <ActionPanel.Section>
+                  <Action.OpenInBrowser
+                    title="Open Wallhaven Settings"
+                    url="https://wallhaven.cc/settings/account"
+                    shortcut={{ modifiers: ["cmd", "shift"], key: "s" }}
+                  />
+                </ActionPanel.Section>
               </ActionPanel>
             }
           />
