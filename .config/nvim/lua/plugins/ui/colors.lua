@@ -1,7 +1,8 @@
 return {
 	{
 		"uga-rosa/ccc.nvim",
-		event = "VeryLazy",
+		ft = { "css", "scss", "less", "sass", "html", "typescriptreact", "javascriptreact" },
+		cmd = { "CccPick", "CccHighlighterToggle", "CccConvert" },
 		keys = {
 			{
 				mode = "n",
@@ -19,7 +20,7 @@ return {
 				auto_enable = true,
 				lsp = true,
 				filetypes = { "css", "typescriptreact", "javascriptreact", "html", "lua", "ron", "xml" },
-				update_insert = false, -- Prevent updates in insert mode to avoid race conditions
+				update_insert = false,
 			},
 		},
 		config = function(_, opts)

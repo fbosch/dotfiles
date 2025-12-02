@@ -52,16 +52,7 @@ return {
 	{
 		"romgrk/barbar.nvim",
 		dependencies = { "nvim-tree/nvim-web-devicons" },
-		event = "BufAdd",
-		init = function()
-			vim.api.nvim_create_autocmd("BufAdd", {
-				group = vim.api.nvim_create_augroup("BarbarLazyLoad", { clear = true }),
-				once = true,
-				callback = function()
-					require("lazy").load({ plugins = { "barbar.nvim" } })
-				end,
-			})
-		end,
+		event = { "BufReadPost", "BufNewFile" },
 		keys = vim.list_extend(buffer_index_keys(), {
 			{
 				mode = { "n" },
