@@ -116,7 +116,20 @@ return {
 				opts = {
 					animate = {},
 					util = {},
+					input = {
+						enabled = true,
+					},
+					picker = {
+						enabled = true,
+					},
 				},
+				config = function(_, opts)
+					local snacks = require("snacks")
+					snacks.setup(opts)
+					-- Set vim.ui overrides
+					vim.ui.input = snacks.input.input
+					vim.ui.select = snacks.picker.select
+				end,
 			},
 		},
 		config = function()

@@ -20,7 +20,7 @@ return {
 	config = function()
 		local group = vim.api.nvim_create_augroup("Conform", {})
 		local conform = require("conform")
-		local web_formatters = { "prettierd", "prettier", "biome format", stop_after_first = true }
+		local web_formatters = { "prettierd", "prettier", "biome", stop_after_first = true }
 		conform.setup({
 			default_format_options = {
 				timeout = 1000,
@@ -28,6 +28,12 @@ return {
 			},
 			format_on_save = {
 				quiet = true,
+			},
+			formatters = {
+				["cargo fmt"] = {
+					command = "cargo",
+					args = { "fmt", "--", "--force" },
+				},
 			},
 			formatters_by_ft = {
 				html = web_formatters,
@@ -41,11 +47,11 @@ return {
 				fish = { "fish_indent" },
 				lua = { "stylua" },
 				markdown = { "prettierd", "prettier", stop_after_first = true },
-				mdx = { "biome format" },
-				json = { "jq", "biome format" },
-				rust = { "cargo fmt -- --force" },
+				mdx = { "biome" },
+				json = { "jq", "biome" },
+				rust = { "cargo fmt" },
 				yaml = { "prettierd", "prettier", stop_after_first = true },
-        nix = { "nixpkgs-fmt" },
+				nix = { "nixfmt" },
 			},
 		})
 
