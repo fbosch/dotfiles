@@ -1,5 +1,5 @@
 function ai_pr --description 'Generate AI-powered PR description comparing current branch against main'
-    set -l ai_model opencode/grok-code
+    set -l ai_model github-copilot/claude-haiku-4.5
     set -l language "en"
     if set -q argv[1]
         set language $argv[1]
@@ -235,7 +235,6 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
         cat "$temp_pr_desc"
     end
     
-    # Cleanup temp file and opencode session
+    # Cleanup temp file
     rm -f "$temp_pr_desc"
-    _cleanup_last_opencode_session
 end

@@ -223,5 +223,4 @@ Diff below. Provide specific, actionable feedback. Skip empty sections if no iss
         cat $temp_review
     end
     rm -f $temp_review
-    _cleanup_last_opencode_session
 end

@@ -111,11 +111,9 @@ STAGED DIFF (focus on THIS change):
     git commit -m "$edited_msg"
     if test $status -eq 0
         gum style --foreground 2 "󰸞 Commit successful!"
-        _cleanup_last_opencode_session
         return 0
     else
         gum style --foreground 1 "󱎘 Commit failed"
-        _cleanup_last_opencode_session
         return 1
     end
 end
