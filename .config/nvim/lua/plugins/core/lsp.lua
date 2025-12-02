@@ -222,10 +222,29 @@ local function mason_handlers(capabilities, on_attach)
 	end
 end
 
+local trigger_filetypes = {
+	"astro",
+	"css",
+	"scss",
+	"less",
+	"sass",
+	"html",
+	"javascript",
+	"javascriptreact",
+	"json",
+	"lua",
+	"markdown",
+	"rust",
+	"typescript",
+	"typescriptreact",
+	"yaml",
+}
+
 return {
 	"neovim/nvim-lspconfig",
 	event = { "BufReadPre", "BufNewFile" },
 	dependencies = {
+
 		"antosha417/nvim-lsp-file-operations",
 		"williamboman/mason-lspconfig.nvim",
 		"WhoIsSethDaniel/mason-tool-installer.nvim",
