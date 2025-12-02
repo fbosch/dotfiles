@@ -115,34 +115,8 @@ end
 # Note: starship_cache.fish is auto-sourced from conf.d/
 
 # fnm (Fast Node Manager)
-# Load eagerly in non-interactive shells (e.g., mprocs, scripts)
-# Lazy-load in interactive shells for faster startup
-if status is-interactive
-    # Lazy-load fnm on first node/npm/npx/pnpm use
-    function node --wraps node
-        fnm env --use-on-cd --log-level=quiet --shell fish | source
-        functions -e node npm npx pnpm  # Remove wrapper functions
-        node $argv
-    end
-    function npm --wraps npm
-        fnm env --use-on-cd --log-level=quiet --shell fish | source
-        functions -e node npm npx pnpm
-        npm $argv
-    end
-    function npx --wraps npx
-        fnm env --use-on-cd --log-level=quiet --shell fish | source
-        functions -e node npm npx pnpm
-        npx $argv
-    end
-    function pnpm --wraps pnpm
-        fnm env --use-on-cd --log-level=quiet --shell fish | source
-        functions -e node npm npx pnpm
-        pnpm $argv
-    end
-else
-    # Non-interactive: load fnm immediately for scripts/mprocs
-    fnm env --use-on-cd --log-level=quiet --shell fish | source
-end
+# Load eagerly - lazy loading causes issues with git hooks, mprocs, etc.
+fnm env --use-on-cd --log-level=quiet --shell fish | source
 
 # --- pnpm ---
 set -gx PNPM_HOME "$HOME/Library/pnpm"

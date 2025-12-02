@@ -104,7 +104,7 @@ Include ONLY when the diff obviously breaks behavior. Omit section otherwise.
 Branch: $branch_name | Base: $main_branch | Files: "(string join ', ' $changed_files)"
 Commits: "(string join ' | ' $commit_messages)"
 
-Diff below. Describe ONLY visible substantive changes. Skip trivial changes entirely."}
+Diff below. Describe ONLY visible substantive changes. Skip trivial changes entirely."
     if test -n "$branch_hint"
         set prompt "$prompt\nBranch type: $branch_hint"
     end
