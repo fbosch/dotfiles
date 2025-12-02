@@ -1,5 +1,7 @@
 # Neovim
 alias nvim-minimal 'nvim -n -i NONE --noplugin'
+alias snvim 'sudo -E -s nvim'
+alias vimdiff 'nvim -d'
 abbr n nvim
 abbr nlup 'nvim --headless +"Lazy! sync" +qa' # lazy update neovim plugins
 abbr nwipe 'nvim --headless +"WipeAllSessions!" +qa'
@@ -34,8 +36,12 @@ abbr x exit
 abbr src 'source ~/.config/fish/config.fish'
 abbr makins 'sudo make && sudo make clean install'
 abbr cl clear
-abbr t 'swpm test'
 abbr mki 'sudo make && sudo make clean install'
+
+# File viewing (bat wrappers)
+alias cat 'bat --style=plain --color=always'
+alias bat_fast 'bat --style=plain --color=never --wrap=never --paging=never'
+alias batbuild 'bat cache --build'
 
 # ls aliases using eza
 alias ls 'eza --icons -F'
@@ -108,4 +114,15 @@ abbr wtc worktrees_clean
 abbr wi workitems_on_date
 abbr wiw workitems_week
 
-# NOTE: Webdev functions (pnpx, p, pa, pr, pw, pup, t, dev, sb, sblg, lint) are now autoloaded from functions/
+# Package manager shortcuts (swpm wrappers)
+alias dev 'swpm dev'
+alias t 'swpm test'
+alias pr 'swpm remove'
+alias sb 'swpm storybook'
+alias sblg 'swpm cross-env NODE_OPTIONS=--openssl-legacy-provider start-storybook -p 9000'
+alias lint 'swpm lint'
+alias pw 'swpm workspace'
+alias pup 'swpm update-interactive'
+
+# Weather
+alias wtr 'curl "wttr.in/Copenhagen?format=%n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"'
