@@ -170,13 +170,19 @@ return {
 	},
 	{
 		"lukas-reineke/indent-blankline.nvim",
-		event = "BufReadPost",
+		event = "BufEnter",
 		priority = 100,
 		config = function()
 			local terminal = require("utils.terminal")
 			local is_tty = terminal.is_plain_tty()
 			local indent_char = is_tty and "|" or "▏"
 			local scope_char = is_tty and "|" or "▏"
+			
+			-- Set highlights before setup to ensure colors are applied
+			local colors = require("config.colors")
+			vim.api.nvim_set_hl(0, "IblIndent", { fg = colors.dark_gray })
+			vim.api.nvim_set_hl(0, "IblScope", { fg = colors.match_blue })
+			
 			require("ibl").setup({
 				indent = { char = indent_char },
 				scope = {
