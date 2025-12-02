@@ -14,30 +14,6 @@ abbr pupi 'pnpm update --interactive --recursive'
 abbr bup 'brew upgrade'
 abbr ff freshfetch
 
-function vimdiff
-    nvim -d $argv
-end
-
-function snvim
-    sudo -E -s nvim $argv
-end
-
-function wtr
-    curl "wttr.in/Copenhagen?format=%n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"
-end
-
-function batbuild
-    bat cache --build $argv
-end
-
-function bat_fast
-    bat --style=plain --color=never --wrap=never --paging=never $argv
-end
-
-function copykey
-    pbcopy <~/.ssh/id_rsa.pub
-end
-
 alias uge get_week_dates
 alias rw remaining_work_hours
 
@@ -51,15 +27,6 @@ abbr cnx 'cd /etc/nixos'
 abbr nxe 'nvim ~/nixos'
 abbr nxu flake_update_interactive
 
-function nxrb
-    if command -q nh
-        nh os switch ~/nixos
-    else
-        set -l host (hostname)
-        sudo nixos-rebuild switch --flake ~/nixos\#$host
-    end
-end
-
 abbr nxgc nix-collect-garbage
 
 # Helpers
@@ -70,28 +37,7 @@ abbr cl clear
 abbr t 'swpm test'
 abbr mki 'sudo make && sudo make clean install'
 
-# Extended defaults
-function cat
-    bat --style=plain --color=always $argv
-end
-function ls
-    eza --icons -F $argv
-end
-function l
-    ls -lh $argv
-end
-function la
-    ls -A $argv
-end
-function lla
-    ls -la $argv
-end
-function ld
-    ls -l --sort=date --ignore-glob="node_modules" -D --time-style=relative $argv
-end
-function lt
-    eza --tree -m --git --level=2 --ignore-glob="node_modules" $argv
-end
+# NOTE: Extended defaults (cat, ls, l, la, lla, ld, lt) are now autoloaded from functions/
 
 alias lw 'cd (latest_worktree)'
 
@@ -117,7 +63,6 @@ abbr gwl 'git worktree list'
 abbr gau 'git add -u'
 abbr gco 'git checkout'
 abbr gaa 'git add --all'
-# abbr gsa 'git stash apply'
 abbr gpo 'git pull origin'
 abbr gpor 'git pull origin --rebase'
 abbr gdorig 'find . -name \*.orig -delete'
@@ -157,41 +102,4 @@ abbr wtc worktrees_clean
 abbr wi workitems_on_date
 abbr wiw workitems_week
 
-function src
-    jq -r \'.scripts | to_entries[] | "\(.key):\n \(.value)\n"\' package.json | awk \'BEGIN{idx=1} {print "\033[3"idx"m" $0 "\033[0m"; idx = idx % 3 + 1}\'
-end
-
-# Webdev
-function pnpx
-    pnpm dlx $argv
-end
-function p
-    swpm $argv
-end
-function pa
-    swpm add $argv
-end
-function pr
-    swpm remove $argv
-end
-function pw
-    swpm workspace $argv
-end
-function pup
-    spwm update-interactive $argv
-end
-function t
-    spwm tst $argv
-end
-function dev
-    swpm dev $argv
-end
-function sb
-    swpm storybook $argv
-end
-function sblg
-    swpm cross-env NODE_OPTIONS=--openssl-legacy-provider start-storybook -p 9000 $argv
-end
-function lint
-    swpm lint $argv
-end
+# NOTE: Webdev functions (pnpx, p, pa, pr, pw, pup, t, dev, sb, sblg, lint) are now autoloaded from functions/

@@ -33,24 +33,22 @@ end
 
 # Disabled coreutils to improve startup time (saves ~160ms)
 # Use uutils commands explicitly (ucp, umv, etc.) if needed
-for file in aliases scripts profile gum private colors
+# gum.fish is lazy-loaded via functions/gum.fish wrapper
+for file in aliases scripts profile private colors
     if test -f ~/.config/fish/$file.fish
         source ~/.config/fish/$file.fish
     end
 end
 
 # Source modular scripts (utils first for dependencies)
+# NOTE: Most functions are now autoloaded from ~/.config/fish/functions/
+# Only source scripts that have non-function code (variables, setup, etc.)
 if test -d ~/.config/fish/scripts
-    if test -f ~/.config/fish/scripts/utils.fish
-        source ~/.config/fish/scripts/utils.fish
-    end
-    # Use glob directly instead of ls | grep pipeline
-    for script in ~/.config/fish/scripts/*.fish
-        # Skip utils.fish (already sourced) and skip if no matches (glob returns pattern)
-        if test -f "$script" -a "$script" != ~/.config/fish/scripts/utils.fish
-            source $script
-        end
-    end
+    # Only source utils.fish if it has non-function initialization code
+    # if test -f ~/.config/fish/scripts/utils.fish
+    #     source ~/.config/fish/scripts/utils.fish
+    # end
+    # Other scripts are autoloaded via functions/ directory
 end
 
 function fish_greeting
