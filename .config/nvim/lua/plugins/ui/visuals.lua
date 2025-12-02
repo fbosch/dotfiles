@@ -4,7 +4,7 @@ return {
 		dependencies = {
 			"rachartier/tiny-devicons-auto-colors.nvim",
 		},
-		event = { "BufReadPost", "BufNewFile" },
+		event = "VeryLazy",
 		config = function()
 			local colors = require("config.colors")
 			require("nvim-web-devicons").setup({
@@ -170,7 +170,7 @@ return {
 	},
 	{
 		"lukas-reineke/indent-blankline.nvim",
-		event = { "BufReadPost", "BufNewFile" },
+		event = "BufEnter",
 		priority = 100,
 		config = function()
 			local terminal = require("utils.terminal")

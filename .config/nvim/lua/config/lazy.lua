@@ -53,8 +53,10 @@ require("lazy").setup({
 	ui = { border = "rounded" },
 	concurrency = 32,
 	performance = {
-		cache = { enabled = true },
-		reset_patckpath = true,
+		cache = {
+			enabled = true,
+		},
+		reset_packpath = true,
 		rtp = {
 			reset = true,
 			disabled_plugins = disabled_builtin_plugins,

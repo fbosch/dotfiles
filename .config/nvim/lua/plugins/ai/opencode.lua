@@ -1,7 +1,8 @@
 return {
 	{
 		"NickvanDyke/opencode.nvim",
-		-- Lazy load on first use for faster Neovim startup
+		-- NOTE: plugin/ directory contains autoload files that prevent full lazy loading
+		-- Using keys-only trigger for best balance
 		keys = {
 			{ "<leader>ac", mode = { "n", "x" }, desc = "Ask opencode" },
 			{ "<leader>as", mode = { "n", "x" }, desc = "opencode actions" },
@@ -20,23 +21,20 @@ return {
 			{ "<leader>al", mode = { "n", "v" }, desc = "Code readability" },
 		},
 		dependencies = {
-			-- Required for snacks provider and UI components
-			{ "folke/snacks.nvim", opts = { input = {}, picker = {}, terminal = {} } },
+			"folke/snacks.nvim",
 		},
-		config = function()
-			---@type opencode.Opts
+		init = function()
+			-- Set global options before plugin loads
 			vim.g.opencode_opts = {
 				auto_reload = true,
 				provider = {
 					cmd = "opencode",
 					enabled = "snacks",
 					snacks = {
-						-- Terminal configuration
 						win = {
 							position = "left",
-							width = 80, -- Fixed width in columns (or use 0.3 for 30% of screen)
+							width = 80,
 						},
-						-- Speed up initial opening with dash shell
 						terminal = {
 							enabled = true,
 						},
@@ -46,10 +44,9 @@ return {
 					},
 				},
 			}
-
-			-- Required for auto_reload
 			vim.o.autoread = true
-
+		end,
+		config = function()
 			-- Set up opencode terminal-specific keymaps
 			vim.api.nvim_create_autocmd("FileType", {
 				pattern = "opencode_terminal",
