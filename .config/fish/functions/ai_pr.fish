@@ -51,14 +51,34 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
         echo "" >>$actual_diff_file
         echo "... (diff truncated, $diff_line_count total lines) ..." >>$actual_diff_file
     end
-    set ticket_number ""
-    if string match -qr '(\d+)' $branch_name
-        set ticket_number (string match -r '\d+' $branch_name)
-    end
-    set branch_hint ""
-    if string match -qr '^([a-z]+)/' $branch_name
-        set branch_hint (string match -r '^([a-z]+)/' $branch_name | string split '/')[1]
-    end
+     set ticket_number ""
+     if string match -qr '(\d+)' $branch_name
+         set ticket_number (string match -r '\d+' $branch_name)
+     end
+     set branch_hint ""
+     if string match -qr '^([a-z]+)/' $branch_name
+         set branch_hint (string match -r '^([a-z]+)/' $branch_name | string split '/')[1]
+     end
+     # Map branch hint to commitizen category
+     set commitizen_type "chore"
+     switch $branch_hint
+         case feat feature
+             set commitizen_type "feat"
+         case fix bugfix
+             set commitizen_type "fix"
+         case docs doc
+             set commitizen_type "docs"
+         case style
+             set commitizen_type "style"
+         case refactor
+             set commitizen_type "refactor"
+         case perf performance
+             set commitizen_type "perf"
+         case test tests
+             set commitizen_type "test"
+         case ci
+             set commitizen_type "ci"
+     end
     set section_summary "## Summary"
     set section_changes "## Changes"
     set section_testing "## Testing"
@@ -89,6 +109,11 @@ RULES:
 - Keep each bullet under 12 words for readability
 
 STRUCTURE:
+# TITLE LINE FORMAT: [commitizen_type](#ticket): brief description
+Write the PR title as the first line using this format:
+  $commitizen_type(#$ticket_number): Brief description (max 60 chars after colon, present tense)
+Example: feat(#12345): Add user authentication flow
+
 $section_summary
 Max 2 short sentences describing the overall change.
 
@@ -108,7 +133,7 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     if test -n "$branch_hint"
         set prompt "$prompt\nBranch type: $branch_hint"
     end
-    set prompt "$prompt\n\nOutput: Markdown PR description in $language_name. All text in $language_name. No explanations."
+     set prompt "$prompt\n\nOutput: First line = PR title in format: $commitizen_type(#$ticket_number): description (max 72 chars total). Blank line. Then markdown PR description in $language_name. All text in $language_name. No explanations."
     set temp_prompt (mktemp -t opencode_prompt.XXXXXX)
     set temp_output (mktemp -t opencode_output.XXXXXX)
     echo "$prompt" >$temp_prompt
@@ -117,7 +142,7 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     
     # Run opencode by piping the prompt instead of command substitution
     set opencode_exit_code 0
-    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "cat $temp_prompt | opencode run -m $ai_model --format json > $temp_output 2>&1"
+    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "cat $temp_prompt | opencode run -m $ai_model -c --format json > $temp_output 2>&1"
     or set opencode_exit_code $status
     
     # Check if opencode failed
