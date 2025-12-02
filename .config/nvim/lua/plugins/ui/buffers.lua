@@ -52,7 +52,7 @@ return {
 	{
 		"romgrk/barbar.nvim",
 		dependencies = { "nvim-tree/nvim-web-devicons" },
-		event = { "BufReadPost", "BufNewFile" },
+		lazy = false,
 		keys = vim.list_extend(buffer_index_keys(), {
 			{
 				mode = { "n" },
