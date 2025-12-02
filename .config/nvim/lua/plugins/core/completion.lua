@@ -2,28 +2,36 @@ return {
 	{
 		"hrsh7th/nvim-cmp",
 		dependencies = {
-			"neovim/nvim-lspconfig",
-			"nvim-treesitter/nvim-treesitter",
 			"L3MON4D3/LuaSnip",
-			"nvim-lua/plenary.nvim",
-			{ "f3fora/cmp-spell" },
-			{ "hrsh7th/cmp-nvim-lua", ft = { "lua" } },
-			{ "mtoohey31/cmp-fish", ft = { "fish" } },
 			"saadparwaiz1/cmp_luasnip",
 			"hrsh7th/cmp-nvim-lsp",
-			"onsails/lspkind.nvim",
 			"hrsh7th/cmp-path",
 			"hrsh7th/cmp-buffer",
-			"hrsh7th/cmp-omni",
+			"onsails/lspkind.nvim",
+			{ "f3fora/cmp-spell", ft = { "gitcommit", "markdown", "text" } },
+			{ "hrsh7th/cmp-nvim-lua", ft = { "lua" } },
+			{ "mtoohey31/cmp-fish", ft = { "fish" } },
+			{ "hrsh7th/cmp-omni", ft = { "tex", "plaintex" } },
 		},
-		event = { "CursorHoldI", "InsertEnter" },
+		event = "InsertEnter",
 		config = function()
 			local cmp = require("cmp")
 			local types = require("cmp.types")
 			local cmp_autopairs = require("nvim-autopairs.completion.cmp")
 			cmp.event:on("confirm_done", cmp_autopairs.on_confirm_done())
 			local lspkind = require("lspkind")
-			-- require("luasnip.loaders.from_snipmate").lazy_load({ paths = "~/.config/nvim/snippets" })
+
+			local base_sources = cmp.config.sources(
+				{
+					{ name = "nvim_lsp", max_item_count = 10 },
+					{ name = "luasnip", max_item_count = 5 },
+				},
+				{
+					{ name = "path", max_item_count = 10 },
+					{ name = "buffer", max_item_count = 5, keyword_length = 3 },
+				}
+			)
+
 			cmp.setup({
 				enabled = function()
 					-- disable completion in comments
@@ -55,19 +63,7 @@ return {
 						ellipsis_char = "",
 					}),
 				},
-				sources = cmp.config.sources({
-					{ name = "nvim_lsp", max_item_count = 10 },
-					{ name = "buffer", max_item_count = 3 },
-					{ name = "path", max_item_count = 10 },
-					{ name = "nvim_lua", max_item_count = 5 },
-					{
-						name = "omni",
-						max_item_count = 5,
-						option = {
-							disable_omnifuncs = { "v:lua.vim.lsp.omnifunc" },
-						},
-					},
-				}),
+				sources = base_sources,
 				mapping = cmp.mapping.preset.insert({
 					["<C-f>"] = cmp.mapping.scroll_docs(4),
 					["<C-d>"] = cmp.mapping.scroll_docs(-4),
@@ -76,6 +72,18 @@ return {
 					["<C-j>"] = cmp.mapping.select_next_item({ behavior = types.cmp.SelectBehavior.Select }),
 					["<C-k>"] = cmp.mapping.select_prev_item({ behavior = types.cmp.SelectBehavior.Select }),
 				}),
+			})
+
+			cmp.setup.filetype({ "lua" }, {
+				sources = cmp.config.sources({ { name = "nvim_lua", max_item_count = 5 } }, base_sources),
+			})
+
+			cmp.setup.filetype({ "markdown", "text", "gitcommit" }, {
+				sources = cmp.config.sources({ { name = "spell", max_item_count = 5 } }, base_sources),
+			})
+
+			cmp.setup.filetype({ "tex", "plaintex" }, {
+				sources = cmp.config.sources({ { name = "omni", max_item_count = 5 } }, base_sources),
 			})
 
 			-- highlights
