@@ -19,7 +19,7 @@ import {
   useInfiniteQuery,
   useQuery,
 } from "@tanstack/react-query";
-import { downloadWallpaper } from "./utils/download";
+import { downloadWallpaper, downloadAndApplyWallpaper } from "./utils/download";
 
 type Preferences = {
   apiKey?: string;
@@ -369,6 +369,17 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
     );
   };
 
+  const handleDownloadAndApply = async () => {
+    const wallpaperToDownload = fullWallpaper || wallpaper;
+    await downloadAndApplyWallpaper(
+      wallpaperToDownload.path,
+      wallpaperToDownload.id,
+      wallpaperToDownload.resolution,
+      preferences.downloadDirectory,
+      preferences.hyprpaperConfigPath,
+    );
+  };
+
   const displayWallpaper = fullWallpaper || wallpaper;
 
   const markdown = `
@@ -400,6 +411,12 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
               icon={Icon.Download}
               onAction={handleDownload}
               shortcut={{ modifiers: ["cmd"], key: "d" }}
+            />
+            <Action
+              title="Download and Apply"
+              icon={Icon.Desktop}
+              onAction={handleDownloadAndApply}
+              shortcut={{ modifiers: ["cmd"], key: "s" }}
             />
           </ActionPanel>
         }
@@ -472,6 +489,12 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
             onAction={handleDownload}
             shortcut={{ modifiers: ["cmd"], key: "d" }}
           />
+          <Action
+            title="Download and Apply"
+            icon={Icon.Desktop}
+            onAction={handleDownloadAndApply}
+            shortcut={{ modifiers: ["cmd"], key: "s" }}
+          />
           <ActionPanel.Section>
             <Action.OpenInBrowser
               title="Open in Browser"
@@ -516,6 +539,16 @@ function WallhavenSearchContent() {
       wallpaper.id,
       wallpaper.resolution,
       preferences.downloadDirectory,
+    );
+  };
+
+  const handleDownloadAndApply = async (wallpaper: Wallpaper) => {
+    await downloadAndApplyWallpaper(
+      wallpaper.path,
+      wallpaper.id,
+      wallpaper.resolution,
+      preferences.downloadDirectory,
+      preferences.hyprpaperConfigPath,
     );
   };
 
@@ -686,6 +719,12 @@ function WallhavenSearchContent() {
                   icon={Icon.Download}
                   onAction={() => handleDownload(wallpaper)}
                   shortcut={{ modifiers: ["cmd"], key: "d" }}
+                />
+                <Action
+                  title="Download and Apply"
+                  icon={Icon.Desktop}
+                  onAction={() => handleDownloadAndApply(wallpaper)}
+                  shortcut={{ modifiers: ["cmd"], key: "s" }}
                 />
                 <ActionPanel.Section>
                   <Action.OpenInBrowser

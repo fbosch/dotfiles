@@ -7,6 +7,7 @@ export type Preferences = {
   sorting: string;
   topRange: string;
   downloadDirectory: string;
+  hyprpaperConfigPath: string;
 };
 
 export type UserSettings = {

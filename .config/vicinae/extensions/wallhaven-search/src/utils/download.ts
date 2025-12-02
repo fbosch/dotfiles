@@ -1,4 +1,5 @@
 import { showToast, Toast, Application } from "@vicinae/api";
+import { applyWallpaper } from "./hyprpaper";
 
 export interface DownloadResult {
   success: boolean;
@@ -163,5 +164,102 @@ function getFileExtension(url: string): string {
     return match ? match[1] : "jpg";
   } catch {
     return "jpg";
+  }
+}
+
+/**
+ * Downloads a wallpaper and applies it as the desktop background
+ * @param url - The URL of the wallpaper to download
+ * @param id - The wallpaper ID for naming
+ * @param resolution - The wallpaper resolution for naming
+ * @param downloadDir - The directory to save the file
+ * @param hyprpaperConfigPath - Path to hyprpaper.conf
+ * @returns Promise with download result
+ */
+export async function downloadAndApplyWallpaper(
+  url: string,
+  id: string,
+  resolution: string,
+  downloadDir: string,
+  hyprpaperConfigPath: string
+): Promise<DownloadResult> {
+  const toast = await showToast({
+    style: Toast.Style.Animated,
+    title: "Downloading and applying wallpaper...",
+    message: "Please wait",
+  });
+
+  try {
+    // First download the wallpaper
+    const urlParts = url.split(".");
+    const extension = urlParts[urlParts.length - 1].split("?")[0] || "jpg";
+    const sanitizedResolution = resolution.replace(/[^a-zA-Z0-9]/g, "x");
+    const filename = `wallhaven-${id}-${sanitizedResolution}.${extension}`;
+
+    const defaultDir = downloadDir || "~/Pictures/Wallpapers";
+    const expandedDir = defaultDir.replace(
+      /^~/,
+      process.env.HOME || process.env.USERPROFILE || ""
+    );
+
+    const filePath = `${expandedDir}/${filename}`;
+
+    console.log("Downloading wallpaper:", { url, filePath });
+
+    // Fetch the image
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    // Get image data as array buffer
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    console.log("Downloaded, writing to file:", filePath);
+
+    // Write file
+    const fs = await import("fs/promises");
+    const path = await import("path");
+
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, buffer);
+
+    console.log("File written, applying wallpaper:", { filePath, hyprpaperConfigPath });
+
+    toast.title = "Applying wallpaper...";
+    await toast.show();
+
+    // Apply the wallpaper
+    await applyWallpaper(filePath, hyprpaperConfigPath);
+
+    console.log("Wallpaper applied successfully");
+
+    toast.style = Toast.Style.Success;
+    toast.title = "Wallpaper downloaded and applied!";
+    toast.message = `Saved to ${filePath}`;
+    await toast.show();
+
+    return {
+      success: true,
+      filePath,
+    };
+  } catch (error) {
+    console.error("Error in downloadAndApplyWallpaper:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorStack = error instanceof Error ? error.stack : "";
+
+    toast.style = Toast.Style.Failure;
+    toast.title = "Failed to download and apply";
+    toast.message = errorMessage;
+    await toast.show();
+
+    console.error("Full error details:", { errorMessage, errorStack });
+
+    return {
+      success: false,
+      error: errorMessage,
+    };
   }
 }

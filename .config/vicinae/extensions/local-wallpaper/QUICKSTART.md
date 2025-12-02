@@ -19,25 +19,20 @@ npm run dev
 ## Usage
 
 1. Open Vicinae
-2. Search for "Browse Local Wallpapers" command
+2. Search for "Change Wallpaper" command
 3. Your wallpapers from `~/Pictures/wallpapers` will appear in a grid
-4. Press **Enter** on any wallpaper to preview
-5. Press **Cmd+S** to set as desktop wallpaper
+4. Press **Enter** or **Cmd+S** to set as desktop wallpaper
+5. Press **Ctrl+X** to delete a wallpaper (with confirmation)
 
 ## Keyboard Shortcuts
 
 ### In Grid View
 - **Type**: Search/filter by filename
-- **Enter**: Show full preview
-- **Cmd+S**: Set as wallpaper
+- **Enter** or **Cmd+S**: Set as wallpaper
+- **Cmd+O**: Open in image viewer
 - **Cmd+C**: Copy file path
 - **Cmd+R**: Refresh wallpaper list
-- **Cmd+Shift+F**: Show in file manager
-
-### In Preview
-- **Cmd+S**: Set as wallpaper
-- **Cmd+O**: Open in image viewer
-- **Esc**: Return to grid
+- **Ctrl+X**: Delete wallpaper (asks for confirmation)
 
 ## Configuration
 

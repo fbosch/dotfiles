@@ -27,6 +27,7 @@ Configure default search settings in the extension preferences:
 - **Default Sorting**: Top List, Most Recent, Most Views, Most Favorites, Relevance, or Random
 - **Top Range**: Time range for top list sorting (Last Day to Last Year) (overridden when "Use User Settings" is enabled)
 - **Download Directory**: Directory where wallpapers will be saved (default: `~/Pictures/Wallpapers`, supports `~` for home directory)
+- **Hyprpaper Config Path**: Path to your hyprpaper.conf file for the "Download and Apply" action (default: `~/.config/hypr/hyprpaper.conf`)
 
 ### Using Your Wallhaven Account Settings
 
@@ -51,10 +52,11 @@ Configure default search settings in the extension preferences:
 ### On Wallpapers
 - **Enter**: Show full-size preview
 - **Cmd+D**: Download wallpaper directly to your configured download directory
+- **Cmd+S**: Download and apply wallpaper (downloads to directory and sets as desktop background via hyprpaper)
 - **Cmd+O**: Open wallpaper page in browser
 - **Cmd+C**: Copy image URL
 - **Cmd+Shift+C**: Copy page URL
-- **Download in Browser**: Fallback option to download via browser
+- **Cmd+Shift+S**: Open Wallhaven settings page
 
 ### On "Load More" Item
 - **Enter**: Load and append next page of wallpapers

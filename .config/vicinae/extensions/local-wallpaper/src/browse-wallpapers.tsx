@@ -8,6 +8,8 @@ import {
   getPreferenceValues,
   Icon,
   Application,
+  confirmAlert,
+  Alert,
 } from "@vicinae/api";
 import type { LocalWallpaper, Preferences } from "./types";
 import {
@@ -69,6 +71,41 @@ export default function BrowseWallpapers() {
       await showToast({
         style: Toast.Style.Failure,
         title: "Failed to open image",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  };
+
+  const handleDeleteWallpaper = async (wallpaper: LocalWallpaper) => {
+    const confirmed = await confirmAlert({
+      title: "Delete Wallpaper",
+      message: `Are you sure you want to delete "${wallpaper.path}"? This action cannot be undone.`,
+      primaryAction: {
+        title: "Delete",
+        style: Alert.ActionStyle.Destructive,
+      },
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const fs = await import("fs/promises");
+      await fs.unlink(wallpaper.absolutePath);
+
+      await showToast({
+        style: Toast.Style.Success,
+        title: "Wallpaper deleted",
+        message: wallpaper.path,
+      });
+
+      // Reload wallpapers list
+      await loadWallpapers();
+    } catch (error) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Failed to delete wallpaper",
         message: error instanceof Error ? error.message : "Unknown error",
       });
     }
@@ -167,6 +204,15 @@ export default function BrowseWallpapers() {
                     icon={Icon.ArrowClockwise}
                     onAction={loadWallpapers}
                     shortcut={{ modifiers: ["cmd"], key: "r" }}
+                  />
+                </ActionPanel.Section>
+                <ActionPanel.Section>
+                  <Action
+                    title="Delete Wallpaper"
+                    icon={Icon.Trash}
+                    style={Action.Style.Destructive}
+                    onAction={() => handleDeleteWallpaper(wallpaper)}
+                    shortcut={{ modifiers: ["ctrl"], key: "x" }}
                   />
                 </ActionPanel.Section>
               </ActionPanel>

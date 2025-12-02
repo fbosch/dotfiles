@@ -134,6 +134,15 @@
       "description": "Directory where wallpapers will be downloaded (supports ~ for home directory)",
       "default": "~/Pictures/Wallpapers",
       "placeholder": "~/Pictures/Wallpapers"
+    },
+    {
+      "name": "hyprpaperConfigPath",
+      "type": "textfield",
+      "required": false,
+      "title": "Hyprpaper Config Path",
+      "description": "Path to your hyprpaper.conf file (for Download and Apply action)",
+      "default": "~/.config/hypr/hyprpaper.conf",
+      "placeholder": "~/.config/hypr/hyprpaper.conf"
     }
   ],
   "scripts": {

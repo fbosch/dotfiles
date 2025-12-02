@@ -42,18 +42,13 @@ Configure the extension in Vicinae preferences:
 ## Actions
 
 ### On Wallpapers
-- **Enter**: Show full-size preview with metadata
-- **Cmd+S**: Set as wallpaper (updates hyprpaper.conf and reloads)
+- **Enter** or **Cmd+S**: Set as wallpaper (updates hyprpaper.conf and reloads)
 - **Cmd+O**: Open in default image viewer
 - **Cmd+C**: Copy file path to clipboard
-- **Cmd+Shift+F**: Show in file manager
 - **Cmd+R**: Refresh wallpaper list
+- **Ctrl+X**: Delete wallpaper (with confirmation)
 
-### In Preview
-- **Cmd+S**: Set as wallpaper
-- **Cmd+O**: Open in image viewer
-- **Copy File Path**: Copy absolute path to clipboard
-- **Show in Finder**: Open containing folder
+
 
 ## How It Works
 
