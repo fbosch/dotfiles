@@ -1,6 +1,24 @@
 return {
 	{
 		"NickvanDyke/opencode.nvim",
+		-- Lazy load on first use for faster Neovim startup
+		keys = {
+			{ "<leader>ac", mode = { "n", "x" }, desc = "Ask opencode" },
+			{ "<leader>as", mode = { "n", "x" }, desc = "opencode actions" },
+			{ "ga", mode = { "n", "x" }, desc = "Add to opencode" },
+			{ "<A-a>", mode = { "n", "t" }, desc = "Toggle opencode" },
+			{ "<A-x>", mode = { "n", "v" }, desc = "Send to opencode" },
+			{ "<leader>ae", mode = { "n", "v" }, desc = "Explain code" },
+			{ "<leader>ao", mode = { "n", "v" }, desc = "Optimize code" },
+			{ "<leader>ad", mode = { "n", "v" }, desc = "Add documentation" },
+			{ "<leader>aa", mode = { "n", "v" }, desc = "Add tests" },
+			{ "<leader>ar", mode = { "n", "v" }, desc = "Review code" },
+			{ "<leader>af", mode = { "n", "v" }, desc = "Fix diagnostics" },
+			{ "<leader>ax", mode = { "n", "v" }, desc = "Explain diagnostics" },
+			{ "<leader>ag", mode = { "n", "v" }, desc = "Grammar correction" },
+			{ "<leader>ak", mode = { "n", "v" }, desc = "Extract keywords" },
+			{ "<leader>al", mode = { "n", "v" }, desc = "Code readability" },
+		},
 		dependencies = {
 			-- Required for snacks provider and UI components
 			{ "folke/snacks.nvim", opts = { input = {}, picker = {}, terminal = {} } },
@@ -10,13 +28,20 @@ return {
 			vim.g.opencode_opts = {
 				auto_reload = true,
 				provider = {
-					cmd = "opencode -c",
+					cmd = "opencode",
 					enabled = "snacks",
 					snacks = {
 						-- Terminal configuration
 						win = {
 							position = "left",
 							width = 80, -- Fixed width in columns (or use 0.3 for 30% of screen)
+						},
+						-- Speed up initial opening with dash shell
+						terminal = {
+							enabled = true,
+						},
+						env = {
+							SHELL = "/bin/dash",
 						},
 					},
 				},

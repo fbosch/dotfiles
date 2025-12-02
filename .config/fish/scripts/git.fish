@@ -102,6 +102,8 @@ function ai_commit --description "Generate AI-powered Commitizen commit message 
         gum style " No staged changes to commit"
         return 1
     end
+    
+    # Get branch context
     set branch_name (git rev-parse --abbrev-ref HEAD)
     set ticket_number ""
     if string match -qr '(\d+)' $branch_name
@@ -111,29 +113,72 @@ function ai_commit --description "Generate AI-powered Commitizen commit message 
     if string match -qr '^([a-z]+)/' $branch_name
         set branch_hint (string match -r '^([a-z]+)/' $branch_name | string split '/')[1]
     end
-    set prompt "Generate Commitizen commit: type(scope): description
-Types: feat|fix|docs|style|refactor|perf|test|build|ci|chore
-Rules: imperative mood, <72 chars, concise, use ACTUAL changes not branch name
-Branch: $branch_name"
-    if test -n "$branch_hint"
-        set prompt "$prompt (hint: $branch_hint)"
+    
+    # Get recent commit for context (helps AI understand the narrative)
+    set -l last_commit_msg ""
+    set -l commit_count (git rev-list --count HEAD 2>/dev/null)
+    if test "$commit_count" -gt 0
+        set last_commit_msg (git log -1 --pretty=format:"%s" 2>/dev/null)
     end
-    if test -n "$ticket_number"
-        set prompt "$prompt\nScope MUST be: AB#$ticket_number"
-    end
-    set prompt "$prompt\n\nOutput: commit message only, no markdown/explanations\nExample: fix(AB#50147): resolve memory leak in data processor"
+    
+    # Generate the diff - focus on staged changes against HEAD
+    set temp_diff (mktemp -t commit_diff.XXXXXX)
+    git diff --cached >$temp_diff
+    
+    # Build the prompt focusing on atomic changes
     set temp_prompt (mktemp -t opencode_prompt.XXXXXX)
+    echo "Generate Commitizen commit message for STAGED changes only.
+
+CONTEXT:
+Branch: $branch_name" >$temp_prompt
+    
+    if test -n "$last_commit_msg"
+        echo "Previous commit: $last_commit_msg" >>$temp_prompt
+    end
+    
+    if test -n "$branch_hint"
+        echo "Branch type: $branch_hint" >>$temp_prompt
+    end
+    
+    echo "
+RULES:
+- Types: feat|fix|docs|style|refactor|perf|test|build|ci|chore
+- Imperative mood (e.g., 'add', 'fix', 'update', not 'added', 'fixes')
+- <72 chars total
+- Describe THIS commit's changes, not entire branch or feature
+- Be specific and atomic (like a changelog entry, not a summary)
+- Focus on WHAT changed in this diff, not branch name or previous work" >>$temp_prompt
+    
+    if test -n "$ticket_number"
+        echo "- Scope MUST be: AB#$ticket_number" >>$temp_prompt
+    end
+    
+    echo "
+EXAMPLES (atomic, specific commits):
+- fix(AB#50147): prevent null pointer in user validation
+- feat(AB#50147): add email field to registration form
+- refactor(AB#50147): extract validation logic to helper function
+- test(AB#50147): add edge case tests for empty input
+
+OUTPUT: commit message only, no markdown/explanations
+
+STAGED DIFF (focus on THIS change):
+" >>$temp_prompt
+    
+    cat $temp_diff >>$temp_prompt
+    
+    # Run AI generation
     set temp_output (mktemp -t opencode_output.XXXXXX)
-    echo "$prompt" > $temp_prompt
-    # Use pipe instead of command substitution to avoid shell expansion issues
-    # opencode run without --continue flag is stateless (no session persistence)
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "cat $temp_prompt | opencode run -m $ai_model --format json > $temp_output 2>&1"
+    
     set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | string trim)
-    rm -f $temp_prompt $temp_output
+    rm -f $temp_prompt $temp_output $temp_diff
+    
     if test -z "$raw_output"
         gum style " Failed to generate commit message"
         return 1
     end
+    
     set commit_msg (string split \n $raw_output | string match -r '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?: .+' | head -n 1)
     if test -z "$commit_msg"
         set commit_msg (string split \n $raw_output | string match -r '\S+' | head -n 1)
@@ -142,6 +187,7 @@ Branch: $branch_name"
         gum style " Failed to extract valid commit message"
         return 1
     end
+    
     set edited_msg (gum input --value "$commit_msg" --width 100 --prompt "󰏫 " --placeholder "Edit commit message or press Enter to accept...")
     if test $status -ne 0
         gum style --foreground 1 "󰜺 Commit cancelled"
@@ -151,6 +197,7 @@ Branch: $branch_name"
         gum style --foreground 1 "󰜺 Commit cancelled (empty message)"
         return 1
     end
+    
     # Add the commit command to shell history before executing
     # This allows easy re-run if pre-commit hooks fail
     history add git\ commit\ -m\ "$edited_msg" >/dev/null 2>&1
