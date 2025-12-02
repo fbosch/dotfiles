@@ -41,22 +41,26 @@ return {
 					write = false,
 					delete = false,
 				},
-			})
+		})
 
-			vim.api.nvim_create_autocmd({ "VimEnter" }, {
-				callback = function()
-					local existing_session = vim.loop.fs_stat(path)
-					if existing_session and existing_session.type == "file" then
-						sessions.read(session_file)
-					end
-				end,
-			})
+		vim.api.nvim_create_autocmd({ "VimEnter" }, {
+			callback = function()
+				local existing_session = vim.loop.fs_stat(path)
+				if existing_session and existing_session.type == "file" then
+					sessions.read(session_file)
+				end
+			end,
+		})
 
-			vim.api.nvim_create_autocmd({ "VimLeavePre" }, {
-				callback = function()
+		vim.api.nvim_create_autocmd({ "VimLeavePre" }, {
+			callback = function()
+				-- Check if session directory still exists before writing
+				local dir_exists = vim.loop.fs_stat(root_dir)
+				if dir_exists and dir_exists.type == "directory" then
 					sessions.write(session_file)
-				end,
-			})
-		end,
+				end
+			end,
+		})
+	end,
 	},
 }

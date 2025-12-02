@@ -170,7 +170,7 @@ return {
 	},
 	{
 		"lukas-reineke/indent-blankline.nvim",
-		event = "BufEnter",
+		event = { "BufReadPost", "BufNewFile" },
 		priority = 100,
 		config = function()
 			local terminal = require("utils.terminal")

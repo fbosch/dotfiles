@@ -1,6 +1,5 @@
 return {
 	"stevearc/conform.nvim",
-	event = { "BufEnter", "BufWinEnter" },
 	ft = {
 		"html",
 		"css",

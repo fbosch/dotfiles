@@ -3,7 +3,7 @@ return {
 	dependencies = {
 		"nvim-tree/nvim-web-devicons",
 	},
-	event = "BufWinEnter",
+	event = "VeryLazy",
 	config = function()
 		local git = require("utils.git")
 
