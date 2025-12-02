@@ -47,7 +47,10 @@ return {
 			callback = function()
 				local existing_session = vim.loop.fs_stat(path)
 				if existing_session and existing_session.type == "file" then
-					sessions.read(session_file)
+					-- Defer session read to avoid conflicts with plugin initialization
+					vim.defer_fn(function()
+						sessions.read(session_file)
+					end, 50)
 				end
 			end,
 		})

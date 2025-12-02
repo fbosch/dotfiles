@@ -49,10 +49,13 @@ return {
 			respect_buf_cwd = true,
 			update_focused_file = {
 				enable = true,
-				-- update_root = true,
+				update_root = false,
 			},
 			disable_netrw = true,
 			hijack_netrw = true,
+			-- Performance optimization: reduce lag on first open
+			hijack_cursor = false,
+			reload_on_bufenter = false,
 			renderer = {
 				root_folder_label = false,
 				symlink_destination = false,
@@ -98,11 +101,21 @@ return {
 				side = "right",
 				number = true,
 				relativenumber = true,
-				adaptive_size = true,
+				-- Use fixed width instead of adaptive_size to prevent resize jank
+				width = 35,
 			},
 			modified = {
 				enable = true,
 				show_on_open_dirs = false,
+			},
+			-- Disable filesystem watchers for better performance
+			filesystem_watchers = {
+				enable = true,
+				debounce_delay = 50,
+				ignore_dirs = {
+					"node_modules",
+					".git",
+				},
 			},
 		})
 	end,

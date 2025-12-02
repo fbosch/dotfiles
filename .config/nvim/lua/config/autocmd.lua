@@ -88,6 +88,10 @@ cmd({ "BufEnter", "FocusGained", "InsertLeave", "CmdlineLeave", "WinEnter" }, {
 	pattern = "*",
 	group = group,
 	callback = function()
+		-- Skip nvim-tree and other special buffers
+		if vim.bo.filetype == "NvimTree" or vim.bo.buftype ~= "" then
+			return
+		end
 		if vim.o.nu and vim.api.nvim_get_mode().mode ~= "i" then
 			vim.opt.relativenumber = true
 		end
@@ -99,6 +103,10 @@ cmd({ "BufLeave", "FocusLost", "InsertEnter", "CmdlineEnter", "WinLeave" }, {
 	pattern = "*",
 	group = group,
 	callback = function()
+		-- Skip nvim-tree and other special buffers
+		if vim.bo.filetype == "NvimTree" or vim.bo.buftype ~= "" then
+			return
+		end
 		if vim.o.nu then
 			vim.opt.relativenumber = false
 			vim.cmd("redraw")
