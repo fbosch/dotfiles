@@ -37,7 +37,13 @@ abbr cl clear
 abbr t 'swpm test'
 abbr mki 'sudo make && sudo make clean install'
 
-# NOTE: Extended defaults (cat, ls, l, la, lla, ld, lt) are now autoloaded from functions/
+# ls aliases using eza
+alias ls 'eza --icons -F'
+alias l 'eza --icons -F -lh'
+alias la 'eza --icons -F -A'
+alias lla 'eza --icons -F -la'
+alias ld 'eza --icons -F -l --sort=date --ignore-glob="node_modules" -D --time-style=relative'
+alias lt 'eza --tree -m --git --level=2 --ignore-glob="node_modules"'
 
 alias lw 'cd (latest_worktree)'
 
