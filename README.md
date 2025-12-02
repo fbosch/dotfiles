@@ -20,9 +20,6 @@ bash ./scripts/install.sh
 
 # initiate GNU Stow
 stow .
-
-# generate fish shell caches for optimal performance (optional)
-bash ./scripts/fish-generate-caches.sh
 ```
 
 ## 🍺 Dependencies

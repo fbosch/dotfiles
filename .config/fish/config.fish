@@ -93,11 +93,8 @@ function fish_user_keybindings
 end
 
 # --- Third-party Tools ---
-# Zoxide initialization (cached for performance)
-if test -f ~/.config/fish/conf.d/zoxide_cache.fish
-    # Cache exists, already auto-sourced from conf.d/
-else if command -v zoxide >/dev/null 2>&1
-    # No cache, initialize directly (regenerate cache with: zoxide init fish > ~/.config/fish/conf.d/zoxide_cache.fish)
+# Zoxide initialization
+if command -v zoxide >/dev/null 2>&1
     zoxide init fish | source
 end
 
@@ -117,11 +114,8 @@ else
     set -gx STARSHIP_CONFIG "$HOME/.config/starship.toml"
 end
 
-# Starship initialization (cached for performance)
-if test -f ~/.config/fish/conf.d/starship_cache.fish
-    # Cache exists, already auto-sourced from conf.d/
-else if command -v starship >/dev/null 2>&1
-    # No cache, initialize directly (regenerate cache with: starship init fish --print-full-init > ~/.config/fish/conf.d/starship_cache.fish)
+# Starship initialization
+if command -v starship >/dev/null 2>&1
     starship init fish | source
 end
 
