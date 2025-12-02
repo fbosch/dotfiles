@@ -93,8 +93,13 @@ function fish_user_keybindings
 end
 
 # --- Third-party Tools ---
-# Use cached zoxide init for faster startup (regenerate with: zoxide init fish > ~/.config/fish/conf.d/zoxide_cache.fish)
-# Note: zoxide_cache.fish is auto-sourced from conf.d/
+# Zoxide initialization (cached for performance)
+if test -f ~/.config/fish/conf.d/zoxide_cache.fish
+    # Cache exists, already auto-sourced from conf.d/
+else if command -v zoxide >/dev/null 2>&1
+    # No cache, initialize directly (regenerate cache with: zoxide init fish > ~/.config/fish/conf.d/zoxide_cache.fish)
+    zoxide init fish | source
+end
 
 # --- Starship Configuration ---
 # Use TTY-safe config for console (TTY1), unicode config for terminal emulators
@@ -111,8 +116,14 @@ else
     # On macOS, assume terminal emulator (always use unicode config)
     set -gx STARSHIP_CONFIG "$HOME/.config/starship.toml"
 end
-# Use cached starship init for faster startup (regenerate with: starship init fish --print-full-init > ~/.config/fish/conf.d/starship_cache.fish)
-# Note: starship_cache.fish is auto-sourced from conf.d/
+
+# Starship initialization (cached for performance)
+if test -f ~/.config/fish/conf.d/starship_cache.fish
+    # Cache exists, already auto-sourced from conf.d/
+else if command -v starship >/dev/null 2>&1
+    # No cache, initialize directly (regenerate cache with: starship init fish --print-full-init > ~/.config/fish/conf.d/starship_cache.fish)
+    starship init fish | source
+end
 
 # fnm (Fast Node Manager)
 # Load eagerly - lazy loading causes issues with git hooks, mprocs, etc.
