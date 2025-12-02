@@ -1,6 +1,6 @@
 return {
 	{ "echasnovski/mini.ai", version = "*", opts = {} },
-	{ "tpope/vim-unimpaired", event = "BufEnter" },
+	{ "tpope/vim-unimpaired", keys = { "]", "[" } },
 	{ "tpope/vim-repeat", event = "BufEnter" },
 	{ "windwp/nvim-autopairs", event = { "InsertEnter" }, opts = {} },
 	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },

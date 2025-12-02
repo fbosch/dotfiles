@@ -1,7 +1,5 @@
 vim.opt.shm:append("I")
 
-local terminal = require("utils.terminal")
-
 -- language
 vim.opt.langmap = "æ:,ø',å[,¨],-/,"
 
@@ -75,7 +73,9 @@ vim.opt.breakindent = true
 
 -- list
 vim.opt.list = true
-if terminal.is_terminal_emulator() then
+-- Inline terminal emulator check to avoid loading utils.terminal at startup
+-- Check if we're in a GUI or have TERM set (indicating terminal emulator with unicode support)
+if vim.fn.has("gui_running") == 0 and vim.env.TERM ~= nil then
 	vim.opt.listchars = { tab = "▏ ", trail = "·", nbsp = "␣" }
 else
 	vim.opt.listchars = { tab = "| ", trail = ".", nbsp = " " }

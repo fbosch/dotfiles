@@ -1,6 +1,17 @@
 local is_git_repo = require("utils.git").is_git_repo()
 return {
 	{
+		"f-person/git-blame.nvim",
+		event = "VeryLazy",
+		cond = is_git_repo,
+		init = function()
+			-- Configure before loading
+			vim.g.gitblame_display_virtual_text = 0
+			vim.g.gitblame_date_format = "%r"
+			vim.g.gitblame_message_template = " <author>   <date>   <sha> "
+		end,
+	},
+	{
 		"dinhhuy258/git.nvim",
 		cmd = {
 			"GitBlameOpenCommitURL",

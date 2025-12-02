@@ -2,21 +2,10 @@ return {
 	"nvim-lualine/lualine.nvim",
 	dependencies = {
 		"nvim-tree/nvim-web-devicons",
-		{
-			"f-person/git-blame.nvim",
-			event = "VeryLazy",
-			-- Always load, let the statusline decide when to show it
-		},
 	},
 	event = "BufWinEnter",
 	config = function()
 		local git = require("utils.git")
-		local git_blame = require("gitblame")
-
-		-- Configure git-blame
-		vim.g.gitblame_display_virtual_text = 0 -- Disable virtual text
-		vim.g.gitblame_date_format = "%r"
-		vim.g.gitblame_message_template = " <author>   <date>   <sha> "
 
 		local lualine_x = {
 			require("opencode").statusline,
@@ -34,9 +23,17 @@ return {
 
 		local lualine_c = {
 			{
-				git_blame.get_current_blame_text,
+				function()
+					-- Lazy-load git-blame only when needed
+					local ok, git_blame = pcall(require, "gitblame")
+					if ok then
+						return git_blame.get_current_blame_text()
+					end
+					return ""
+				end,
 				cond = function()
-					return git.is_git_repo() and git_blame.is_blame_text_available()
+					local ok, git_blame = pcall(require, "gitblame")
+					return git.is_git_repo() and ok and git_blame.is_blame_text_available()
 				end,
 			},
 		}

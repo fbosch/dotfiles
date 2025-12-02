@@ -1,6 +1,3 @@
-local platform = require("utils.platform")
-local terminal = require("utils.terminal")
-
 return {
 	{
 		"nvim-tree/nvim-web-devicons",
@@ -62,6 +59,7 @@ return {
 				colors.cyan,
 			}, colors.highlight_args)
 
+			local platform = require("utils.platform")
 			require("tiny-devicons-auto-colors").setup({
 				colors = colorValues,
 				cache = {
@@ -159,9 +157,10 @@ return {
 	},
 	{
 		"lukas-reineke/indent-blankline.nvim",
-		event = "BufEnter",
+		event = "BufReadPost",
 		priority = 100,
 		config = function()
+			local terminal = require("utils.terminal")
 			local is_tty = terminal.is_plain_tty()
 			local indent_char = is_tty and "|" or "▏"
 			local scope_char = is_tty and "|" or "▏"
