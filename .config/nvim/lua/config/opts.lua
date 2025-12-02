@@ -57,10 +57,8 @@ vim.opt.backspace = "indent,eol,start"
 vim.wo.foldtext = ""
 vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
 
--- spellchecking
-vim.opt.spell = not vim.g.vscode
-vim.opt.spelllang = "en_us,da"
-vim.opt.spelloptions:append("noplainbuffer")
+-- spellchecking (deferred to text filetypes for faster startup)
+-- Spell settings add ~29ms at startup, so we defer to FileType autocmd
 
 -- tab & indentation
 vim.opt.tabstop = 2

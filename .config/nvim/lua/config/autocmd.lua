@@ -16,10 +16,17 @@ cmd({ "BufRead", "BufNewFile" }, {
 	group = group,
 })
 
+-- Enable spell checking for text-heavy filetypes (deferred for faster startup)
 cmd({ "FileType" }, {
-	pattern = { "markdown", "gitcommit" },
-	command = "setlocal spell spelllang=en_us",
+	pattern = { "markdown", "gitcommit", "text", "tex", "plaintex" },
 	group = group,
+	callback = function()
+		if not vim.g.vscode then
+			vim.opt_local.spell = true
+			vim.opt_local.spelllang = "en_us,da"
+			vim.opt_local.spelloptions:append("noplainbuffer")
+		end
+	end,
 })
 
 cmd({ "TextYankPost" }, {
