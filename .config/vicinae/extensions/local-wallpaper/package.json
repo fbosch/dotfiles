@@ -1,0 +1,90 @@
+{
+  "$schema": "https://raw.githubusercontent.com/vicinaehq/vicinae/refs/heads/main/extra/schemas/extension.json",
+  "name": "local-wallpaper",
+  "title": "Wallpaper",
+  "description": "Browse and apply wallpapers from your local collection",
+  "categories": [],
+  "license": "MIT",
+  "author": "fbosch",
+  "contributors": [],
+  "pastContributors": [],
+  "icon": "extension_icon.png",
+  "commands": [
+    {
+      "name": "browse-wallpapers",
+      "title": "Change Wallpaper",
+      "subtitle": "View and apply wallpapers from your collection",
+      "description": "Browse your local wallpaper collection and apply them to your desktop",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "wallpapersDirectory",
+      "type": "textfield",
+      "required": false,
+      "title": "Wallpapers Directory",
+      "description": "Directory containing your wallpapers (supports ~ for home directory)",
+      "default": "~/Pictures/wallpapers",
+      "placeholder": "~/Pictures/wallpapers"
+    },
+    {
+      "name": "hyprpaperConfigPath",
+      "type": "textfield",
+      "required": false,
+      "title": "Hyprpaper Config Path",
+      "description": "Path to your hyprpaper.conf file",
+      "default": "~/.config/hypr/hyprpaper.conf",
+      "placeholder": "~/.config/hypr/hyprpaper.conf"
+    },
+    {
+      "name": "fileExtensions",
+      "type": "textfield",
+      "required": false,
+      "title": "File Extensions",
+      "description": "Comma-separated list of image extensions to include",
+      "default": "png,jpg,jpeg,webp",
+      "placeholder": "png,jpg,jpeg,webp"
+    },
+    {
+      "name": "sortBy",
+      "type": "dropdown",
+      "required": false,
+      "title": "Sort By",
+      "description": "How to sort wallpapers",
+      "default": "name",
+      "data": [
+        {
+          "title": "Name (A-Z)",
+          "value": "name"
+        },
+        {
+          "title": "Date Modified (Newest)",
+          "value": "modified-desc"
+        },
+        {
+          "title": "Date Modified (Oldest)",
+          "value": "modified-asc"
+        },
+        {
+          "title": "Size (Largest)",
+          "value": "size-desc"
+        },
+        {
+          "title": "Size (Smallest)",
+          "value": "size-asc"
+        }
+      ]
+    }
+  ],
+  "scripts": {
+    "build": "vici build",
+    "dev": "vici develop"
+  },
+  "dependencies": {
+    "@vicinae/api": "^0.15.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
