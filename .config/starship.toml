@@ -1,5 +1,5 @@
-# Reduced from 2000ms - most commands should complete within 1s
-command_timeout = 1000
+# Timeout for git commands - increased for repos with many files
+command_timeout = 2000
 continuation_prompt = "[ᛃ︁ ](dimmed white)"
 
 format = """$character\

@@ -40,16 +40,8 @@ for file in aliases scripts profile private colors
     end
 end
 
-# Source modular scripts (utils first for dependencies)
-# NOTE: Most functions are now autoloaded from ~/.config/fish/functions/
-# Only source scripts that have non-function code (variables, setup, etc.)
-if test -d ~/.config/fish/scripts
-    # Only source utils.fish if it has non-function initialization code
-    # if test -f ~/.config/fish/scripts/utils.fish
-    #     source ~/.config/fish/scripts/utils.fish
-    # end
-    # Other scripts are autoloaded via functions/ directory
-end
+# All functions are now autoloaded from ~/.config/fish/functions/
+# Old scripts archived to ~/.config/fish/scripts.old/
 
 function fish_greeting
     # skip in neovim terminal buffer
