@@ -8,7 +8,12 @@ function hyprstart
     exec uwsm start hyprland-uwsm.desktop
 end
 
-switch (uname)
+# Cache uname result as a universal variable (persists across sessions)
+if not set -q OS_TYPE
+    set -U OS_TYPE (uname)
+end
+
+switch $OS_TYPE
     case Linux
         if not test -f /etc/NIXOS
             if test -x /home/linuxbrew/.linuxbrew/bin/brew
@@ -16,12 +21,19 @@ switch (uname)
             end
         end
     case Darwin
-        if type -q brew
-            eval (brew shellenv fish)
+        # Cache brew shellenv to avoid calling external command on every startup
+        if not set -q HOMEBREW_PREFIX
+            if test -x /opt/homebrew/bin/brew
+                eval (/opt/homebrew/bin/brew shellenv fish)
+            else if test -x /usr/local/bin/brew
+                eval (/usr/local/bin/brew shellenv fish)
+            end
         end
 end
 
-for file in coreutils aliases scripts profile gum private colors
+# Disabled coreutils to improve startup time (saves ~160ms)
+# Use uutils commands explicitly (ucp, umv, etc.) if needed
+for file in aliases scripts profile gum private colors
     if test -f ~/.config/fish/$file.fish
         source ~/.config/fish/$file.fish
     end
@@ -32,8 +44,12 @@ if test -d ~/.config/fish/scripts
     if test -f ~/.config/fish/scripts/utils.fish
         source ~/.config/fish/scripts/utils.fish
     end
-    for script in (ls -1 ~/.config/fish/scripts/*.fish | grep -v utils.fish)
-        source $script
+    # Use glob directly instead of ls | grep pipeline
+    for script in ~/.config/fish/scripts/*.fish
+        # Skip utils.fish (already sourced) and skip if no matches (glob returns pattern)
+        if test -f "$script" -a "$script" != ~/.config/fish/scripts/utils.fish
+            source $script
+        end
     end
 end
 
@@ -87,11 +103,12 @@ function fish_user_keybindings
 end
 
 # --- Third-party Tools ---
-zoxide init fish | source
+# Use cached zoxide init for faster startup (regenerate with: zoxide init fish > ~/.config/fish/conf.d/zoxide_cache.fish)
+# Note: zoxide_cache.fish is auto-sourced from conf.d/
 
 # --- Starship Configuration ---
 # Use TTY-safe config for console (TTY1), unicode config for terminal emulators
-if test (uname) = Linux
+if test $OS_TYPE = Linux
     # Check if we're in TTY1 (console) vs terminal emulator
     # TTY1 typically doesn't have DISPLAY/WAYLAND_DISPLAY and tty shows /dev/tty1
     set -l tty_device (tty 2>/dev/null)
@@ -104,9 +121,25 @@ else
     # On macOS, assume terminal emulator (always use unicode config)
     set -gx STARSHIP_CONFIG "$HOME/.config/starship.toml"
 end
-starship init fish | source
+# Use cached starship init for faster startup (regenerate with: starship init fish --print-full-init > ~/.config/fish/conf.d/starship_cache.fish)
+# Note: starship_cache.fish is auto-sourced from conf.d/
 
-fnm env --use-on-cd --log-level=quiet --shell fish | source
+# Lazy-load fnm on first node/npm/npx/pnpm use for faster startup
+function node --wraps node
+    fnm env --use-on-cd --log-level=quiet --shell fish | source
+    functions -e node npm npx pnpm  # Remove wrapper functions
+    node $argv
+end
+function npm --wraps npm
+    fnm env --use-on-cd --log-level=quiet --shell fish | source
+    functions -e node npm npx pnpm
+    npm $argv
+end
+function npx --wraps npx
+    fnm env --use-on-cd --log-level=quiet --shell fish | source
+    functions -e node npm npx pnpm
+    npx $argv
+end
 
 # --- pnpm ---
 set -gx PNPM_HOME "$HOME/Library/pnpm"
