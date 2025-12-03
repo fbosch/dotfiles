@@ -1,5 +1,7 @@
 function ai_commit --description 'Generate AI-powered Commitizen commit message from branch context'
     set -l ai_model opencode/grok-code
+    set -l fallback_model github-copilot/grok-code-fast-1
+    
     if not git rev-parse --git-dir >/dev/null 2>&1
         gum style " Not in a git repository"
         return 1
@@ -74,11 +76,20 @@ STAGED DIFF (focus on THIS change):
     
     cat $temp_diff >>$temp_prompt
     
-    # Run AI generation
+    # Run AI generation with fallback
     set temp_output (mktemp -t opencode_output.XXXXXX)
-    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "cat $temp_prompt | opencode run -m $ai_model --format json > $temp_output 2>&1"
+    set current_model $ai_model
+    gum spin --spinner pulse --title "󰚩 Analyzing changes with $current_model..." -- sh -c "cat $temp_prompt | opencode run -m $current_model --format json > $temp_output 2>&1"
     
     set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | string trim)
+    
+    # Try fallback model if primary failed
+    if test -z "$raw_output"
+        set current_model $fallback_model
+        gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- sh -c "cat $temp_prompt | opencode run -m $current_model --format json > $temp_output 2>&1"
+        set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | string trim)
+    end
+    
     rm -f $temp_prompt $temp_output $temp_diff
     
     if test -z "$raw_output"

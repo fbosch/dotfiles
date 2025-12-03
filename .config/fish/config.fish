@@ -56,7 +56,8 @@ function fish_greeting
     end
 
     if test (uname) = Darwin
-        first_login_of_the_day --silent &
+        # Run in completely detached process to avoid any shell startup delay
+        fish -c "first_login_of_the_day --silent" &
     end
 end
 
