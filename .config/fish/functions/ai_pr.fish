@@ -142,7 +142,7 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     
     # Run opencode by piping the prompt instead of command substitution
     set opencode_exit_code 0
-    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "cat $temp_prompt | opencode run -m $ai_model -c --format json > $temp_output 2>&1"
+    gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "cat $temp_prompt | opencode run -m $ai_model --format json > $temp_output 2>&1"
     or set opencode_exit_code $status
     
     # Check if opencode failed

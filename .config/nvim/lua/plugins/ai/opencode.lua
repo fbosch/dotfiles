@@ -38,9 +38,9 @@ return {
 						terminal = {
 							enabled = true,
 						},
-						env = {
-							SHELL = "/bin/dash",
-						},
+						-- env = {
+						-- 	SHELL = "/bin/dash",
+						-- },
 					},
 				},
 			}
