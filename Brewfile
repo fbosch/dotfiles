@@ -39,7 +39,7 @@ brew "dua-cli" # disk space usage (interactive)
 brew "hyperfine" # benchmarking
 brew "mprocs"
 brew "cloc"
-brew "uutils-coreutils"
+# brew "uutils-coreutils"
 brew "lynx"
 brew "uv"
 brew "azure-cli"
