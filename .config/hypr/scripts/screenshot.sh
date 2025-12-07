@@ -45,7 +45,7 @@ if [[ "${mode}" == "ocr" ]]; then
         exit 1
     fi
 
-    if ! raw_text="$(tesseract "${tmpfile}" stdout 2>/dev/null)"; then
+    if ! raw_text="$(tesseract "${tmpfile}" stdout --psm 11 2>/dev/null)"; then
         notify-send "Screenshot OCR failed" "tesseract could not read the image."
         exit 1
     fi
