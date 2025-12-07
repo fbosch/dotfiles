@@ -28,12 +28,12 @@ esac
 
 if [[ "${mode}" == "ocr" ]]; then
     if ! command -v tesseract >/dev/null 2>&1; then
-        notify-send "Screenshot OCR failed" "tesseract is not installed."
+        notify-send "Text extraction failed" "tesseract is not installed."
         exit 1
     fi
 
     if ! command -v magick >/dev/null 2>&1; then
-        notify-send "Screenshot OCR failed" "ImageMagick is not installed."
+        notify-send "Text extraction failed" "ImageMagick is not installed."
         exit 1
     fi
 
@@ -47,12 +47,12 @@ if [[ "${mode}" == "ocr" ]]; then
             # Assume the user cancelled the selection.
             exit 0
         fi
-        notify-send "Screenshot OCR failed" "Could not capture selection."
+        notify-send "Text extraction failed" "Could not capture selection."
         exit 1
     fi
 
     # Show processing notification and capture its ID for replacement
-    notification_id="$(notify-send --print-id "Processing OCR..." "Extracting text from screenshot...")"
+    notification_id="$(notify-send --print-id "Reading text..." "Extracting text from screenshot...")"
 
     # Preprocess image for better OCR accuracy:
     # - Convert to grayscale (removes color noise)
@@ -63,13 +63,13 @@ if [[ "${mode}" == "ocr" ]]; then
         -auto-level \
         -sharpen 0x1 \
         "${preprocessed}" 2>/dev/null; then
-        notify-send --replace-id="${notification_id}" "Screenshot OCR failed" "Image preprocessing failed."
+        notify-send --replace-id="${notification_id}" "Text extraction failed" "Image preprocessing failed."
         exit 1
     fi
 
     # Use tesseract with PSM 6 (single block) and OEM 1 (LSTM engine)
     if ! raw_text="$(tesseract "${preprocessed}" stdout --psm 6 --oem 1 2>/dev/null)"; then
-        notify-send --replace-id="${notification_id}" "Screenshot OCR failed" "tesseract could not read the image."
+        notify-send --replace-id="${notification_id}" "Text extraction failed" "Could not read text from image."
         exit 1
     fi
 
@@ -91,7 +91,7 @@ if [[ "${mode}" == "ocr" ]]; then
     fi
 
     if command -v notify-send >/dev/null 2>&1; then
-        notify-send --replace-id="${notification_id}" "OCR copied to clipboard" "${summary}"
+        notify-send --replace-id="${notification_id}" "Text copied to clipboard" "${summary}"
     fi
 
     exit 0
