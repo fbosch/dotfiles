@@ -25,12 +25,12 @@ function workitems_week --description 'Display calendar view of work items touch
     end
     
     # Build arrays for each day of the week
-    set -l weekdays Monday Tuesday Wednesday Thursday Friday Saturday Sunday
+    set -l weekdays Monday Tuesday Wednesday Thursday Friday
     set -l dates
     set -l workitems_by_day
     
-    # Generate dates for the week
-    for i in (seq 0 6)
+    # Generate dates for the week (Monday-Friday only)
+    for i in (seq 0 4)
         if test (uname) = Darwin
             if command -v gdate >/dev/null 2>&1
                 set -a dates (gdate -d "$monday +$i days" +%Y-%m-%d)
@@ -57,7 +57,7 @@ function workitems_week --description 'Display calendar view of work items touch
     set -l today (command date +%Y-%m-%d)
     
     # Collect work items for each day
-    for day_idx in (seq 1 7)
+    for day_idx in (seq 1 5)
         set -l target_date $dates[$day_idx]
         set -l day_workitems
         
@@ -119,7 +119,7 @@ function workitems_week --description 'Display calendar view of work items touch
     printf "────────────────┼──────────────┼────────────────────────────────────────\n"
     
     # Print each day
-    for i in (seq 1 7)
+    for i in (seq 1 5)
         set -l day $weekdays[$i]
         set -l date_val $dates[$i]
         set -l date_display (format_date_display $date_val)
