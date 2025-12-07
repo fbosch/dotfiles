@@ -45,8 +45,12 @@ if [[ "${mode}" == "ocr" ]]; then
         exit 1
     fi
 
+    # Show processing notification and capture its ID for replacement
+    notification_id="$(notify-send --print-id "Processing OCR..." "Extracting text from screenshot...")"
+
+    # Use tesseract with PSM 11 (sparse text) for better spacing
     if ! raw_text="$(tesseract "${tmpfile}" stdout --psm 11 2>/dev/null)"; then
-        notify-send "Screenshot OCR failed" "tesseract could not read the image."
+        notify-send --replace-id="${notification_id}" "Screenshot OCR failed" "tesseract could not read the image."
         exit 1
     fi
 
@@ -68,7 +72,7 @@ if [[ "${mode}" == "ocr" ]]; then
     fi
 
     if command -v notify-send >/dev/null 2>&1; then
-        notify-send "OCR copied to clipboard" "${summary}"
+        notify-send --replace-id="${notification_id}" "OCR copied to clipboard" "${summary}"
     fi
 
     exit 0
