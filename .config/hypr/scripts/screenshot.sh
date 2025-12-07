@@ -32,48 +32,25 @@ if [[ "${mode}" == "ocr" ]]; then
         exit 1
     fi
 
-    if ! command -v magick >/dev/null 2>&1; then
-        notify-send "Text extraction failed" "ImageMagick is not installed."
-        exit 1
-    fi
-
     tmpdir="$(mktemp -d)"
     tmpfile="${tmpdir}/capture.png"
-    preprocessed="${tmpdir}/preprocessed.png"
     trap 'rm -rf "${tmpdir}"' EXIT
 
     if ! grimblast save "${target}" "${tmpfile}"; then
         if [[ ! -s "${tmpfile}" ]]; then
-            # Assume the user cancelled the selection.
             exit 0
         fi
         notify-send "Text extraction failed" "Could not capture selection."
         exit 1
     fi
 
-    # Show processing notification and capture its ID for replacement
     notification_id="$(notify-send --print-id "Reading text..." "Extracting text from screenshot...")"
 
-    # Preprocess image for better OCR accuracy:
-    # - Convert to grayscale (removes color noise)
-    # - Auto-level (enhances contrast)
-    # - Sharpen (clearer character boundaries)
-    if ! magick "${tmpfile}" \
-        -colorspace Gray \
-        -auto-level \
-        -sharpen 0x1 \
-        "${preprocessed}" 2>/dev/null; then
-        notify-send --replace-id="${notification_id}" "Text extraction failed" "Image preprocessing failed."
-        exit 1
-    fi
-
-    # Use tesseract with PSM 6 (single block) and OEM 1 (LSTM engine)
-    if ! raw_text="$(tesseract "${preprocessed}" stdout --psm 6 --oem 1 2>/dev/null)"; then
+    if ! raw_text="$(tesseract "${tmpfile}" stdout --psm 6 --oem 1 2>/dev/null)"; then
         notify-send --replace-id="${notification_id}" "Text extraction failed" "Could not read text from image."
         exit 1
     fi
 
-    # Cleanup temp files immediately after OCR completes.
     rm -rf "${tmpdir}"
     trap - EXIT
 
