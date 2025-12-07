@@ -32,8 +32,14 @@ if [[ "${mode}" == "ocr" ]]; then
         exit 1
     fi
 
+    if ! command -v magick >/dev/null 2>&1; then
+        notify-send "Screenshot OCR failed" "ImageMagick is not installed."
+        exit 1
+    fi
+
     tmpdir="$(mktemp -d)"
     tmpfile="${tmpdir}/capture.png"
+    preprocessed="${tmpdir}/preprocessed.png"
     trap 'rm -rf "${tmpdir}"' EXIT
 
     if ! grimblast save "${target}" "${tmpfile}"; then
@@ -48,8 +54,21 @@ if [[ "${mode}" == "ocr" ]]; then
     # Show processing notification and capture its ID for replacement
     notification_id="$(notify-send --print-id "Processing OCR..." "Extracting text from screenshot...")"
 
-    # Use tesseract with PSM 11 (sparse text) for better spacing
-    if ! raw_text="$(tesseract "${tmpfile}" stdout --psm 11 2>/dev/null)"; then
+    # Preprocess image for better OCR accuracy:
+    # - Convert to grayscale (removes color noise)
+    # - Auto-level (enhances contrast)
+    # - Sharpen (clearer character boundaries)
+    if ! magick "${tmpfile}" \
+        -colorspace Gray \
+        -auto-level \
+        -sharpen 0x1 \
+        "${preprocessed}" 2>/dev/null; then
+        notify-send --replace-id="${notification_id}" "Screenshot OCR failed" "Image preprocessing failed."
+        exit 1
+    fi
+
+    # Use tesseract with PSM 6 (single block) and OEM 1 (LSTM engine)
+    if ! raw_text="$(tesseract "${preprocessed}" stdout --psm 6 --oem 1 2>/dev/null)"; then
         notify-send --replace-id="${notification_id}" "Screenshot OCR failed" "tesseract could not read the image."
         exit 1
     fi
