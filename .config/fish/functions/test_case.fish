@@ -155,8 +155,8 @@ $description
 ## Test Steps
 $steps"
     
-    # Render the full markdown using glow
-    printf "%s\n" "$markdown_output" | glow -
+    # Render the full markdown using glow with Zenwritten Dark theme
+    printf "%s\n" "$markdown_output" | glow -s "$HOME/.config/glow/zenwritten-dark.json" -
     
     # Copy to clipboard
     set -l clipboard_cmd ""
