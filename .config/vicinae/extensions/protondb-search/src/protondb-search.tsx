@@ -27,44 +27,51 @@ const PROTONDB_RATING_URL = "https://www.protondb.com/api/v1/reports/summaries";
 const STEAM_APPDETAILS_URL = "https://www.protondb.com/proxy/steam/api/appdetails";
 const STEAM_FEATURED_URL = "https://store.steampowered.com/api/featuredcategories";
 const SEARCH_DEBOUNCE_MS = 500;
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
+// Query cache configuration
+const QUERY_STALE_TIME = 12 * 60 * 60 * 1000; // 12 hours
+const QUERY_GC_TIME = 12 * 60 * 60 * 1000; // 12 hours
+
+// Vicinae Cache only for featured games initial load
 const cache = new Cache();
+const FEATURED_GAMES_CACHE_KEY = "protondb-featured-games-v1";
+const FEATURED_CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
 
-type CachedRating = {
-  rating: ProtonDBRating;
+type CachedFeaturedGames = {
+  games: SteamGame[];
   cachedAt: number;
 };
 
-function getCachedRating(appId: string): ProtonDBRating | null {
-  const cached = cache.get(`protondb-rating-${appId}`);
+function getCachedFeaturedGames(): SteamGame[] | null {
+  const cached = cache.get(FEATURED_GAMES_CACHE_KEY);
   if (!cached) return null;
 
   try {
-    const data: CachedRating = JSON.parse(cached);
-    if (Date.now() - data.cachedAt < CACHE_DURATION) {
-      return data.rating;
+    const data: CachedFeaturedGames = JSON.parse(cached);
+    if (Date.now() - data.cachedAt < FEATURED_CACHE_DURATION) {
+      return data.games;
     }
-    cache.remove(`protondb-rating-${appId}`);
+    cache.remove(FEATURED_GAMES_CACHE_KEY);
     return null;
   } catch {
-    cache.remove(`protondb-rating-${appId}`);
+    cache.remove(FEATURED_GAMES_CACHE_KEY);
     return null;
   }
 }
 
-function setCachedRating(appId: string, rating: ProtonDBRating): void {
-  const data: CachedRating = {
-    rating,
+function setCachedFeaturedGames(games: SteamGame[]): void {
+  const data: CachedFeaturedGames = {
+    games,
     cachedAt: Date.now(),
   };
-  cache.set(`protondb-rating-${appId}`, JSON.stringify(data));
+  cache.set(FEATURED_GAMES_CACHE_KEY, JSON.stringify(data));
 }
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000,
+      staleTime: QUERY_STALE_TIME,
+      gcTime: QUERY_GC_TIME,
       refetchOnWindowFocus: false,
       retry: 1,
     },
@@ -146,6 +153,7 @@ async function fetchFeaturedGames(): Promise<SteamGame[]> {
       if (games.length >= 10) break;
     }
 
+    setCachedFeaturedGames(games);
     return games;
   } catch (error) {
     console.error("Failed to fetch featured games:", error);
@@ -167,7 +175,6 @@ async function fetchProtonDBRating(
     }
 
     const rating: ProtonDBRating = await response.json();
-    setCachedRating(appId, rating);
     return rating;
   } catch (error) {
     console.error(`Failed to fetch ProtonDB rating for ${appId}:`, error);
@@ -263,14 +270,11 @@ function GameDetail({ game }: { game: SteamGame }) {
   const { data: rating, isLoading: loadingRating } = useQuery({
     queryKey: ["protondb-rating", game.appid],
     queryFn: () => fetchProtonDBRating(game.appid),
-    initialData: () => getCachedRating(game.appid) || undefined,
-    staleTime: 10 * 60 * 1000,
   });
 
   const { data: gameDetails, isLoading: loadingDetails } = useQuery({
     queryKey: ["game-details", game.appid],
     queryFn: () => fetchGameDetails(game.appid),
-    staleTime: 10 * 60 * 1000,
   });
 
   // Build markdown conditionally to avoid layout shift
@@ -418,8 +422,6 @@ function GameListItem({ game }: { game: SteamGame }) {
   const { data: rating, isLoading } = useQuery({
     queryKey: ["protondb-rating", game.appid],
     queryFn: () => fetchProtonDBRating(game.appid),
-    initialData: () => getCachedRating(game.appid) || undefined,
-    staleTime: 10 * 60 * 1000,
   });
 
   const tierText = isLoading
@@ -501,7 +503,7 @@ function ProtonDBSearchContent() {
   const { data: featuredGames = [], isLoading: loadingFeatured } = useQuery({
     queryKey: ["featured-games"],
     queryFn: fetchFeaturedGames,
-    staleTime: 10 * 60 * 1000,
+    initialData: () => getCachedFeaturedGames() || undefined,
   });
 
   // Search query
