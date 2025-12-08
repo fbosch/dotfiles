@@ -1,9 +1,9 @@
-function test_case --description 'Get Azure DevOps test case contents by ID, render it, and copy to clipboard'
+function ado_test_case --description 'Get Azure DevOps test case contents by ID, render it, and copy to clipboard'
     # Check if test case ID was provided
     if test (count $argv) -eq 0
         gum style --foreground 1 " Test case ID required"
-        gum style --foreground 8 "  Usage: test_case <ID>"
-        gum style --foreground 8 "  Example: test_case 50894"
+        gum style --foreground 8 "  Usage: ado_test_case <ID>"
+        gum style --foreground 8 "  Example: ado_test_case 50894"
         return 1
     end
     
