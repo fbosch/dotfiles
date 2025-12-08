@@ -36,20 +36,22 @@ function test_case --description 'Get Azure DevOps test case contents by ID, ren
     set -l test_case_json
     if test -f $cache_file
         gum style --foreground 8 " Loading test case #$test_case_id from cache..."
-        set test_case_json (cat $cache_file)
+        set test_case_json (string join \n < $cache_file)
     else
-        # Fetch the test case using Azure CLI
+        # Fetch the test case using Azure CLI and cache it directly
         gum style --foreground 8 " Fetching test case #$test_case_id..."
         
         if test -n "$org_url"
-            set test_case_json (az boards work-item show --id $test_case_id --org $org_url --output json 2>&1)
+            az boards work-item show --id $test_case_id --org $org_url --output json > $cache_file 2>&1
         else
-            set test_case_json (az boards work-item show --id $test_case_id --output json 2>&1)
+            az boards work-item show --id $test_case_id --output json > $cache_file 2>&1
         end
         
-        # Cache the result if successful
         if test $status -eq 0
-            printf "%s" "$test_case_json" > $cache_file
+            set test_case_json (string join \n < $cache_file)
+        else
+            set test_case_json (cat $cache_file)
+            rm $cache_file  # Remove failed cache file
         end
     end
     
