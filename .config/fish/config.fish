@@ -5,7 +5,9 @@ if string match -q vscode $TERM_PROGRAM
 end
 
 function hyprstart
-    exec uwsm start hyprland-uwsm.desktop
+    # Launch Hyprland with UWSM for proper systemd integration and watchdog notifications
+    # The -F flag (finalize) enables watchdog support, preventing TXT_KEY_NOTIF_NO_WATCHDOG warnings
+    exec uwsm start -F hyprland.desktop
 end
 
 # Cache uname result as a universal variable (persists across sessions)
