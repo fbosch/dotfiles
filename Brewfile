@@ -43,6 +43,7 @@ brew "cloc"
 brew "lynx"
 brew "uv"
 brew "azure-cli"
+brew "html2text"
 
 # git
 brew "lazygit"

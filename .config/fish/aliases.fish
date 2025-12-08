@@ -110,6 +110,9 @@ abbr cu 'cargo update'
 abbr wta worktree_add
 abbr wtc worktrees_clean
 
+# Azure DevOps
+abbr atc ado_test_case
+
 # work item extraction
 abbr wi workitems_on_date
 abbr wid workitems_on_date
