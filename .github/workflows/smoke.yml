@@ -47,7 +47,21 @@ jobs:
 
       - name: Fail on Neovim Health Error
         run: |
-          if grep -q "ERROR" checkhealth.log; then
-            echo "::error::Neovim checkhealth found errors"
+          # Filter out errors from disabled plugin features
+          # Only report errors from enabled features
+          errors=$(awk '
+            /^[A-Za-z]/ { current_section = $1; disabled = 0 }
+            /WARNING setup {disabled}/ { disabled = 1 }
+            /ERROR/ { 
+              if (!disabled) {
+                print current_section ": " $0
+              }
+            }
+          ' checkhealth.log)
+          
+          if [ -n "$errors" ]; then
+            echo "::error::Neovim checkhealth found errors in enabled features:"
+            echo "$errors"
             exit 1
           fi
+          echo "✅ No critical errors found in checkhealth"
