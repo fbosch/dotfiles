@@ -16,8 +16,8 @@ function test_case --description 'Get Azure DevOps test case contents by ID, ren
         return 1
     end
     
-    # Setup cache directory
-    set -l cache_dir ~/.cache/azure-devops
+    # Setup cache in /tmp (cleared on reboot)
+    set -l cache_dir /tmp/azure-devops-cache
     mkdir -p $cache_dir
     set -l cache_file "$cache_dir/test_case_$test_case_id.json"
     
