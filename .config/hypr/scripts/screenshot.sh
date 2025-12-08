@@ -3,6 +3,7 @@
 set -euo pipefail
 
 # Requires grimblast, wl-copy, notify-send, and tesseract (for OCR mode).
+# Optional: ImageMagick (magick/convert) for improved OCR preprocessing.
 # Default to area capture when no mode is provided.
 mode="${1:-area}"
 
@@ -26,6 +27,7 @@ case "$mode" in
         ;;
 esac
 
+
 if [[ "${mode}" == "ocr" ]]; then
     if ! command -v tesseract >/dev/null 2>&1; then
         notify-send "Text extraction failed" "tesseract is not installed."
@@ -46,7 +48,40 @@ if [[ "${mode}" == "ocr" ]]; then
 
     notification_id="$(notify-send --print-id "Reading text..." "Extracting text from screenshot...")"
 
-    if ! raw_text="$(tesseract "${tmpfile}" stdout --psm 6 --oem 1 2>/dev/null)"; then
+    # Preprocess image for better OCR accuracy
+    preprocessed="${tmpdir}/preprocessed.png"
+    if command -v magick >/dev/null 2>&1; then
+        # ImageMagick v7 preprocessing:
+        # - Upscale 2x (helps with small text)
+        # - Convert to grayscale
+        # - Increase contrast and brightness
+        # - Sharpen text edges
+        # - Remove noise
+        magick "${tmpfile}" \
+            -resize 200% \
+            -colorspace Gray \
+            -brightness-contrast 10x30 \
+            -sharpen 0x1 \
+            -despeckle \
+            "${preprocessed}" 2>/dev/null || cp "${tmpfile}" "${preprocessed}"
+    elif command -v convert >/dev/null 2>&1; then
+        # ImageMagick v6 preprocessing
+        convert "${tmpfile}" \
+            -resize 200% \
+            -colorspace Gray \
+            -brightness-contrast 10x30 \
+            -sharpen 0x1 \
+            -despeckle \
+            "${preprocessed}" 2>/dev/null || cp "${tmpfile}" "${preprocessed}"
+    else
+        # Fallback: use original image if ImageMagick not available
+        preprocessed="${tmpfile}"
+    fi
+
+    # PSM 3 = Auto page segmentation (works better with mixed layouts)
+    # Add --dpi 300 to hint at higher resolution
+    # Add -l eng for explicit English (change to your language if needed)
+    if ! raw_text="$(tesseract "${preprocessed}" stdout --psm 3 --oem 1 --dpi 300 -l eng 2>/dev/null)"; then
         notify-send --replace-id="${notification_id}" "Text extraction failed" "Could not read text from image."
         exit 1
     fi
