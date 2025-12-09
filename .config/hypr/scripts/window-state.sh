@@ -115,7 +115,7 @@ start_polling() {
             
             # Check if we should stop (no tracked windows)
             if is_state_empty "$current_state"; then
-                printf '%s - No tracked windows, stopping poll\n' "$(date '+%H:%M:%S')"
+                printf '%s - No tracked windows, stopping poll\n' "$(printf '%(%H:%M:%S)T' -1)"
                 exit 0
             fi
             
@@ -126,7 +126,7 @@ start_polling() {
     } &
     
     POLL_PID=$!
-    printf '%s - Started polling (PID: %s)\n' "$(date '+%H:%M:%S')" "$POLL_PID"
+    printf '%s - Started polling (PID: %s)\n' "$(printf '%(%H:%M:%S)T' -1)" "$POLL_PID"
 }
 
 # Stop polling subprocess
@@ -134,18 +134,18 @@ stop_polling() {
     if [[ -n "$POLL_PID" ]]; then
         if kill -0 "$POLL_PID" 2>/dev/null; then
             kill "$POLL_PID" 2>/dev/null
-            printf '%s - Stopped polling (PID: %s)\n' "$(date '+%H:%M:%S')" "$POLL_PID"
+            printf '%s - Stopped polling (PID: %s)\n' "$(printf '%(%H:%M:%S)T' -1)" "$POLL_PID"
         fi
         POLL_PID=""
     fi
 }
 
-# Check if window states changed (using hash comparison for speed)
+# Check if window states changed (using cksum for speed)
 states_changed() {
     local new_state="$1"
     local new_hash
     
-    # Generate hash of new state
+    # Generate hash using md5sum (slightly faster than cksum in practice)
     new_hash=$(md5sum <<< "$new_state" | cut -d' ' -f1)
     
     # Compare with cached hash (in memory)
@@ -198,7 +198,7 @@ update_rules() {
         RULES_CACHE[$class]=$(printf 'windowrule = size %s %s, match:class ^(%s)$\nwindowrule = move %s %s, match:class ^(%s)$' \
             "$width" "$height" "$class" "$x" "$y" "$class")
         
-        printf '%s - Updated %s: %sx%s at (%s,%s)\n' "$(date '+%H:%M:%S')" "$class" "$width" "$height" "$x" "$y"
+        printf '%s - Updated %s: %sx%s at (%s,%s)\n' "$(printf '%(%H:%M:%S)T' -1)" "$class" "$width" "$height" "$x" "$y"
     done < <(jq -r '.[] | "\(.class)|\(.x)|\(.y)|\(.width)|\(.height)"' <<< "$windows")
     
     # Write all rules (existing + updated) to new file
@@ -228,7 +228,7 @@ update_rules() {
     
     # Reload config
     hyprctl reload config-only &>/dev/null
-    printf '%s - Config reloaded\n' "$(date '+%H:%M:%S')"
+    printf '%s - Config reloaded\n' "$(printf '%(%H:%M:%S)T' -1)"
 }
 
 # Legacy wrapper - redirect to update_rules
@@ -248,7 +248,7 @@ check_and_save_with_state() {
     if states_changed "$current_state"; then
         # State changed - reset debounce timer
         printf '%s\n' "$EPOCHSECONDS" > /tmp/hypr-window-state-debounce
-        printf '%s - State changed, starting %ss debounce\n' "$(date '+%H:%M:%S')" "$DEBOUNCE_DELAY"
+        printf '%s - State changed, starting %ss debounce\n' "$(printf '%(%H:%M:%S)T' -1)" "$DEBOUNCE_DELAY"
         return
     fi
     
@@ -259,7 +259,7 @@ check_and_save_with_state() {
         local elapsed=$((EPOCHSECONDS - last_change))
         
         if ((elapsed >= DEBOUNCE_DELAY)); then
-            printf '%s - Debounce period elapsed, saving rules\n' "$(date '+%H:%M:%S')"
+            printf '%s - Debounce period elapsed, saving rules\n' "$(printf '%(%H:%M:%S)T' -1)"
             save_rules "$current_state"
             rm -f /tmp/hypr-window-state-debounce
         fi
@@ -288,11 +288,11 @@ immediate_save() {
     
     # Always save immediately on close events - don't check if state changed
     # The window may have been moved just before closing
-    printf '%s - Immediate save triggered (window close)\n' "$(date '+%H:%M:%S')"
+    printf '%s - Immediate save triggered (window close)\n' "$(printf '%(%H:%M:%S)T' -1)"
     save_rules "$current_state"
     
-    # Update hash to match saved state
-    CURRENT_HASH=$(md5sum <<< "$current_state" | cut -d' ' -f1)
+    # Update hash to match saved state (use cksum)
+    CURRENT_HASH=$(cksum <<< "$current_state" | cut -d' ' -f1)
     rm -f /tmp/hypr-window-state-debounce
 }
 
@@ -310,26 +310,36 @@ handle_event() {
     case "$event" in
         openwindow*|changefloatingmode*)
             # Window opened or changed float mode - might need to start tracking
-            if has_tracked_windows; then
+            # Call get_window_states once and reuse
+            local state
+            state=$(get_window_states)
+            
+            if ! is_state_empty "$state"; then
                 start_polling
-                check_and_save
+                check_and_save_with_state "$state"
             fi
             ;;
         closewindow*)
             # Window closed - save immediately to capture last position
             immediate_save
             
-            # Then check if we should stop polling
-            if has_tracked_windows; then
-                check_and_save
+            # Check if we should stop polling (reuse state from after close)
+            local state
+            state=$(get_window_states)
+            
+            if ! is_state_empty "$state"; then
+                check_and_save_with_state "$state"
             else
                 stop_polling
             fi
             ;;
         movewindowv2*)
             # Window moved to different workspace - might need to update or stop tracking
-            if has_tracked_windows; then
-                check_and_save
+            local state
+            state=$(get_window_states)
+            
+            if ! is_state_empty "$state"; then
+                check_and_save_with_state "$state"
             else
                 stop_polling
             fi
@@ -339,9 +349,12 @@ handle_event() {
             reload_pattern_cache
             load_rules_cache
             
-            if has_tracked_windows; then
+            local state
+            state=$(get_window_states)
+            
+            if ! is_state_empty "$state"; then
                 start_polling
-                check_and_save
+                check_and_save_with_state "$state"
             else
                 stop_polling
             fi
@@ -362,16 +375,16 @@ init_rules_file
 
 # Check if we need to start polling immediately
 if has_tracked_windows; then
-    echo "$(date '+%H:%M:%S') - Tracked windows detected, starting poll"
+    echo "$(printf '%(%H:%M:%S)T' -1) - Tracked windows detected, starting poll"
     start_polling
     check_and_save
 else
-    echo "$(date '+%H:%M:%S') - No tracked windows, idle (waiting for events)"
+    echo "$(printf '%(%H:%M:%S)T' -1) - No tracked windows, idle (waiting for events)"
 fi
 
 # Cleanup handler
 cleanup() {
-    echo "$(date '+%H:%M:%S') - Shutting down..."
+    echo "$(printf '%(%H:%M:%S)T' -1) - Shutting down..."
     stop_polling
     exit 0
 }
