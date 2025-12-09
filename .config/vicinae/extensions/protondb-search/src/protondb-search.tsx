@@ -33,6 +33,21 @@ const STEAM_APPDETAILS_URL = "https://www.protondb.com/proxy/steam/api/appdetail
 const STEAM_FEATURED_URL = "https://store.steampowered.com/api/featuredcategories";
 const SEARCH_DEBOUNCE_MS = 500;
 
+// Fallback popular game IDs for when featured games API fails
+const FALLBACK_GAME_IDS = [
+  570,      // Dota 2
+  730,      // Counter-Strike 2
+  1172470,  // Apex Legends
+  1091500,  // Cyberpunk 2077
+  1086940,  // Baldur's Gate 3
+  1938090,  // Call of Duty
+  813780,   // Age of Empires IV
+  1623730,  // Palworld
+  2358720,  // Black Myth: Wukong
+  271590,   // GTA V
+];
+
+
 // Query cache configuration
 const QUERY_STALE_TIME = 12 * 60 * 60 * 1000; // 12 hours
 const QUERY_GC_TIME = 12 * 60 * 60 * 1000; // 12 hours
@@ -100,15 +115,62 @@ async function searchSteamGames(query: string): Promise<SteamGame[]> {
   return games.slice(0, 20); // Limit to 20 results
 }
 
+async function fetchGamesByIds(appIds: number[]): Promise<SteamGame[]> {
+  // Fetch all game details in parallel
+  const gameDetailsPromises = appIds.map(async (appId) => {
+    try {
+      const detailsResponse = await fetch(`${STEAM_APPDETAILS_URL}?appids=${appId}`);
+      if (!detailsResponse.ok) return null;
+
+      const detailsData: SteamAppDetailsResponse = await detailsResponse.json();
+      const gameData = detailsData[appId];
+
+      if (gameData?.success && gameData?.data && gameData.data.type === "game") {
+        return {
+          appid: String(appId),
+          name: gameData.data.name,
+          logo: gameData.data.capsule_imagev5 || gameData.data.header_image || "",
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error(`Failed to fetch game ${appId}:`, error);
+      return null;
+    }
+  });
+
+  const gameDetails = await Promise.all(gameDetailsPromises);
+  const validGames = gameDetails.filter((game): game is { appid: string; name: string; logo: string } => game !== null);
+
+  // Batch fetch icons for all games in parallel
+  const iconPromises = validGames.map(async (game) => {
+    try {
+      const searchResponse = await fetch(`${STEAM_SEARCH_URL}/${encodeURIComponent(game.name)}`);
+      if (searchResponse.ok) {
+        const searchResults: SteamGame[] = await searchResponse.json();
+        const matchingGame = searchResults.find((g) => g.appid === game.appid);
+        return { appid: game.appid, icon: matchingGame?.icon || "" };
+      }
+    } catch (error) {
+      console.error(`Failed to fetch icon for ${game.name}:`, error);
+    }
+    return { appid: game.appid, icon: "" };
+  });
+
+  const icons = await Promise.all(iconPromises);
+  const iconMap = new Map(icons.map((i) => [i.appid, i.icon]));
+
+  // Combine game details with icons
+  return validGames.map((game) => ({
+    ...game,
+    icon: iconMap.get(game.appid) || "",
+  }));
+}
+
 async function fetchFeaturedGames(): Promise<SteamGame[]> {
   try {
     const response = await fetch(STEAM_FEATURED_URL);
     if (!response.ok) {
-      showToast({
-        style: Toast.Style.Failure,
-        title: "Failed to load featured games",
-        message: `Steam API returned ${response.status}`,
-      });
       throw new Error(`Steam featured API failed: ${response.status}`);
     }
 
@@ -117,77 +179,33 @@ async function fetchFeaturedGames(): Promise<SteamGame[]> {
     const specials = data.specials?.items || [];
     
     const seenAppIds = new Set<number>();
+    const STEAM_DECK_APP_ID = 1675200;
     
     // Combine top sellers and specials, deduplicate and filter out Steam Deck
     const allItems = [...topSellers, ...specials];
     const appIds = allItems
       .map((item: SteamFeaturedItem) => item.id)
       .filter((id: number) => {
-        if (!id || id === 1675200 || seenAppIds.has(id)) return false;
+        if (!id || id === STEAM_DECK_APP_ID || seenAppIds.has(id)) return false;
         seenAppIds.add(id);
         return true;
-      });
+      })
+      .slice(0, 10);
 
-    // Fetch all game details in parallel
-    const gameDetailsPromises = appIds.slice(0, 10).map(async (appId) => {
-      try {
-        const detailsResponse = await fetch(`${STEAM_APPDETAILS_URL}?appids=${appId}`);
-        if (!detailsResponse.ok) return null;
-
-        const detailsData: SteamAppDetailsResponse = await detailsResponse.json();
-        const gameData = detailsData[appId];
-
-        if (gameData?.success && gameData?.data && gameData.data.type === "game") {
-          return {
-            appid: String(appId),
-            name: gameData.data.name,
-            logo: gameData.data.capsule_imagev5 || gameData.data.header_image || "",
-          };
-        }
-        return null;
-      } catch (error) {
-        console.error(`Failed to fetch game ${appId}:`, error);
-        return null;
-      }
-    });
-
-    const gameDetails = await Promise.all(gameDetailsPromises);
-    const validGames = gameDetails.filter((game): game is { appid: string; name: string; logo: string } => game !== null);
-
-    // Batch fetch icons for all games in parallel
-    const iconPromises = validGames.map(async (game) => {
-      try {
-        const searchResponse = await fetch(`${STEAM_SEARCH_URL}/${encodeURIComponent(game.name)}`);
-        if (searchResponse.ok) {
-          const searchResults: SteamGame[] = await searchResponse.json();
-          const matchingGame = searchResults.find((g) => g.appid === game.appid);
-          return { appid: game.appid, icon: matchingGame?.icon || "" };
-        }
-      } catch (error) {
-        console.error(`Failed to fetch icon for ${game.name}:`, error);
-      }
-      return { appid: game.appid, icon: "" };
-    });
-
-    const icons = await Promise.all(iconPromises);
-    const iconMap = new Map(icons.map((i) => [i.appid, i.icon]));
-
-    // Combine game details with icons
-    const games: SteamGame[] = validGames.map((game) => ({
-      ...game,
-      icon: iconMap.get(game.appid) || "",
-    }));
-
+    const games = await fetchGamesByIds(appIds);
     setCachedFeaturedGames(games);
     return games;
   } catch (error) {
     console.error("Failed to fetch featured games:", error);
     showToast({
       style: Toast.Style.Failure,
-      title: "Failed to load featured games",
-      message: error instanceof Error ? error.message : "Unknown error",
+      title: "Using fallback games",
+      message: "Could not load featured games from Steam",
     });
-    return [];
+    
+    // Return fallback games
+    const fallbackGames = await fetchGamesByIds(FALLBACK_GAME_IDS);
+    return fallbackGames;
   }
 }
 
