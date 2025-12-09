@@ -303,6 +303,58 @@ ${gameDetails?.short_description || ""}`;
         <Detail.Metadata>
           <Detail.Metadata.Label title="Steam App ID" text={game.appid} />
 
+          {gameDetails && (
+            <>
+              {gameDetails.release_date?.date && (
+                <Detail.Metadata.Label
+                  title="Release Date"
+                  text={gameDetails.release_date.date}
+                />
+              )}
+              {gameDetails.developers && gameDetails.developers.length > 0 && (
+                <Detail.Metadata.Label
+                  title="Developer"
+                  text={gameDetails.developers.join(", ")}
+                />
+              )}
+              {gameDetails.publishers && gameDetails.publishers.length > 0 && (
+                <Detail.Metadata.Label
+                  title="Publisher"
+                  text={gameDetails.publishers.join(", ")}
+                />
+              )}
+              {gameDetails.genres && gameDetails.genres.length > 0 && (
+                <Detail.Metadata.TagList title="Genres">
+                  {gameDetails.genres.slice(0, 5).map((genre: any) => (
+                    <Detail.Metadata.TagList.Item
+                      key={genre.id}
+                      text={genre.description}
+                    />
+                  ))}
+                </Detail.Metadata.TagList>
+              )}
+              {gameDetails.price_overview && (
+                <Detail.Metadata.Label
+                  title="Price"
+                  text={
+                    gameDetails.price_overview.discount_percent > 0
+                      ? `${gameDetails.price_overview.final_formatted} (${gameDetails.price_overview.discount_percent}% off)`
+                      : gameDetails.price_overview.final_formatted
+                  }
+                />
+              )}
+              {!gameDetails.price_overview && gameDetails.is_free && (
+                <Detail.Metadata.Label title="Price" text="Free to Play" />
+              )}
+              {gameDetails.metacritic?.score && (
+                <Detail.Metadata.Label
+                  title="Metacritic Score"
+                  text={`${gameDetails.metacritic.score}/100`}
+                />
+              )}
+            </>
+          )}
+
           {rating && (
             <>
               <Detail.Metadata.Separator />
@@ -427,16 +479,14 @@ ${gameDetails?.short_description || ""}`;
 }
 
 function GameListItem({ game }: { game: SteamGame }) {
-  const { data: rating, isLoading } = useQuery({
+  const { data: rating } = useQuery({
     queryKey: ["protondb-rating", game.appid],
     queryFn: () => fetchProtonDBRating(game.appid),
   });
 
-  const tierText = isLoading
-    ? "Loading..."
-    : rating
-      ? `${getTierEmoji(rating.tier)} ${formatTierName(rating.tier)}${formatConfidence(rating.confidence)}`
-      : "No rating";
+  const tierText = !rating
+    ? "No rating"
+    : `${getTierEmoji(rating.tier)} ${formatTierName(rating.tier)}${formatConfidence(rating.confidence)}`;
 
   const accessories = [
     {
