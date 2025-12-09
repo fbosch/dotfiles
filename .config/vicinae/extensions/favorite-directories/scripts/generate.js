@@ -7,6 +7,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { execSync } = require("child_process");
 
 // Configuration - edit this to add/remove directories
 // Icons use freedesktop icon names that Vicinae will resolve from the selected icon theme
@@ -14,17 +15,12 @@ const path = require("path");
 //               folder-git, folder-development, folder-root, user-desktop, user-home, etc.
 // Find more at: https://specifications.freedesktop.org/icon-naming-spec/latest/ar01s04.html
 const DIRECTORIES = [
+  // Local directories
   {
-    name: "downloads",      // Unique identifier (used in filename)
-    title: "Downloads",     // Display name in Vicinae
-    path: "~/Downloads",    // Path to directory (supports ~ expansion)
+    name: "downloads", // Unique identifier (used in filename)
+    title: "Downloads", // Display name in Vicinae
+    path: "~/Downloads", // Path to directory (supports ~ expansion)
     icon: "folder-download", // Freedesktop icon name
-  },
-  {
-    name: "documents",
-    title: "Documents",
-    path: "~/Documents",
-    icon: "folder-documents",
   },
   {
     name: "pictures",
@@ -44,16 +40,47 @@ const DIRECTORIES = [
     path: "~/dotfiles",
     icon: "folder-git",
   },
-  // Add more directories here (uncomment and customize):
-  // { name: "config", title: "Config", path: "~/.config", icon: "folder-root" },
-  // { name: "music", title: "Music", path: "~/Music", icon: "folder-music" },
-  // { name: "videos", title: "Videos", path: "~/Videos", icon: "folder-videos" },
-  // { name: "projects", title: "Projects", path: "~/projects", icon: "folder-development" },
-  // { name: "tmp", title: "Temp", path: "/tmp", icon: "folder-temp" },
+  
+  // NAS directories (denoted with cloud icon)
+  {
+    name: "nas-documents",
+    title: "Documents (NAS)",
+    path: "/mnt/nas/FrederikDocs",
+    icon: "folder-cloud-documents",
+  },
+  {
+    name: "nas-downloads",
+    title: "Downloads (NAS)",
+    path: "/mnt/nas/downloads",
+    icon: "folder-cloud-download",
+  },
+  {
+    name: "nas-music",
+    title: "Music (NAS)",
+    path: "/mnt/nas/music",
+    icon: "folder-cloud-music",
+  },
+  {
+    name: "nas-photos",
+    title: "Photos (NAS)",
+    path: "/mnt/nas/photo",
+    icon: "folder-cloud-photos",
+  },
+  {
+    name: "nas-videos",
+    title: "Videos (NAS)",
+    path: "/mnt/nas/video",
+    icon: "folder-cloud-videos",
+  },
 ];
 
 const SRC_DIR = path.join(__dirname, "..", "src");
+const ASSETS_DIR = path.join(__dirname, "..", "assets");
 const PACKAGE_JSON = path.join(__dirname, "..", "package.json");
+const ICON_THEME_PATH = path.join(
+  process.env.HOME,
+  ".local/share/icons/Win11/places/scalable"
+);
 
 // Template for command files
 function getCommandTemplate(dirPath) {
@@ -64,6 +91,92 @@ export default async function Command() {
 }
 `;
 }
+
+// Icon mapping: extension icon name -> theme icon name
+const ICON_MAP = {
+  "folder-download": "folder-download.svg",
+  "folder-documents": "folder-documents.svg",
+  "folder-pictures": "folder-images.svg",
+  "folder-photos": "folder-images.svg",
+  "folder-music": "folder-music.svg",
+  "folder-videos": "folder-videos.svg",
+  "folder-git": "folder-git.svg",
+  "user-desktop": "user-desktop.svg",
+};
+
+// Generate PNG icon from SVG
+function generateIcon(iconName, outputName, addCloudBadge = false) {
+  const iconPath = path.join(ICON_THEME_PATH, iconName);
+  const outputPath = path.join(ASSETS_DIR, outputName);
+
+  if (!fs.existsSync(iconPath)) {
+    console.warn(`   ⚠ Warning: Icon not found: ${iconPath}`);
+    return false;
+  }
+
+  try {
+    if (addCloudBadge) {
+      // Generate with cloud badge overlay
+      const cloudPath = path.join(ICON_THEME_PATH, "folder-cloud.svg");
+      const tmpBase = `/tmp/${Date.now()}-base.png`;
+      const tmpCloud = `/tmp/${Date.now()}-cloud.png`;
+
+      execSync(
+        `magick "${iconPath}" -background none -resize 256x256 "${tmpBase}"`,
+        { stdio: "pipe" }
+      );
+      execSync(
+        `magick "${cloudPath}" -background none -resize 80x80 "${tmpCloud}"`,
+        { stdio: "pipe" }
+      );
+      execSync(
+        `magick "${tmpBase}" "${tmpCloud}" -background none -gravity SouthEast -geometry +10+10 -composite "${outputPath}"`,
+        { stdio: "pipe" }
+      );
+
+      fs.unlinkSync(tmpBase);
+      fs.unlinkSync(tmpCloud);
+    } else {
+      // Simple conversion
+      execSync(
+        `magick "${iconPath}" -background none -resize 256x256 "${outputPath}"`,
+        { stdio: "pipe" }
+      );
+    }
+    return true;
+  } catch (error) {
+    console.warn(`   ⚠ Warning: Failed to generate ${outputName}: ${error.message}`);
+    return false;
+  }
+}
+
+// Generate icons
+console.log(`\n🎨 Generating icons...\n`);
+const iconsToGenerate = new Set();
+DIRECTORIES.forEach(({ icon }) => {
+  iconsToGenerate.add(icon);
+});
+
+iconsToGenerate.forEach((iconName) => {
+  const isCloudIcon = iconName.startsWith("folder-cloud-");
+  const outputName = `${iconName}.png`;
+
+  if (isCloudIcon) {
+    // Extract base icon name (e.g., "folder-cloud-documents" -> "folder-documents")
+    const baseIconName = iconName.replace("folder-cloud-", "folder-");
+    const themeIcon = ICON_MAP[baseIconName] || `${baseIconName}.svg`;
+    
+    if (generateIcon(themeIcon, outputName, true)) {
+      console.log(`   ✓ ${outputName} (with cloud badge)`);
+    }
+  } else {
+    const themeIcon = ICON_MAP[iconName] || `${iconName}.svg`;
+    
+    if (generateIcon(themeIcon, outputName, false)) {
+      console.log(`   ✓ ${outputName}`);
+    }
+  }
+});
 
 // Generate command files
 console.log(`\n📝 Generating ${DIRECTORIES.length} command files...\n`);
@@ -87,7 +200,7 @@ packageJson.commands = DIRECTORIES.map(
     subtitle: `Open ${title} folder`,
     description: `Open ${dirPath} in file manager`,
     mode: "no-view",
-    icon: icon,
+    icon: `${icon}.png`, // Use PNG files from assets/
   }),
 );
 

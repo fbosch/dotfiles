@@ -1,9 +1,13 @@
-import { showToast, Toast, closeMainWindow } from "@vicinae/api";
+import { showToast, Toast, closeMainWindow, getPreferenceValues } from "@vicinae/api";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { expandPath, isDirectory, detectFileManager } from "./filesystem";
 
 const execAsync = promisify(exec);
+
+interface Preferences {
+  fileManager: string;
+}
 
 /**
  * Opens a directory in the default file manager
@@ -26,13 +30,24 @@ export async function openDirectory(path: string): Promise<void> {
       return;
     }
 
-    // Detect file manager
-    const fileManager = await detectFileManager();
-    if (!fileManager) {
-      toast.style = Toast.Style.Failure;
-      toast.title = "No file manager found";
-      toast.message = "Please install nautilus, dolphin, thunar, nemo, or pcmanfm";
-      return;
+    // Get file manager from preferences
+    const preferences = getPreferenceValues<Preferences>();
+    const preferredFileManager = preferences.fileManager || "auto";
+    
+    let fileManager: string | null;
+    
+    if (preferredFileManager === "auto") {
+      // Auto-detect file manager (with caching)
+      fileManager = await detectFileManager();
+      if (!fileManager) {
+        toast.style = Toast.Style.Failure;
+        toast.title = "No file manager found";
+        toast.message = "Please install nautilus, dolphin, thunar, nemo, or pcmanfm";
+        return;
+      }
+    } else {
+      // Use preference directly (no detection needed - fastest!)
+      fileManager = preferredFileManager;
     }
 
     // Open directory
