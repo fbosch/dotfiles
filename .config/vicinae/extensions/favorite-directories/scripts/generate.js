@@ -40,7 +40,7 @@ const DIRECTORIES = [
     path: "~/dotfiles",
     icon: "folder-git",
   },
-  
+
   // NAS directories (denoted with mounted emblem)
   {
     name: "nas-documents",
@@ -78,12 +78,12 @@ const DIRECTORIES = [
     path: "/mnt/nas/encrypted",
     icon: "folder-cloud-encrypted",
   },
-  
+
   // External drives
   {
     name: "lacie",
     title: "LaCie",
-    path: "/mnt/LaCie",
+    path: "/mnt/nas/LaCie",
     icon: "folder-cloud-lacie",
   },
 ];
@@ -93,11 +93,11 @@ const ASSETS_DIR = path.join(__dirname, "..", "assets");
 const PACKAGE_JSON = path.join(__dirname, "..", "package.json");
 const ICON_THEME_PATH = path.join(
   process.env.HOME,
-  ".local/share/icons/Win11/places/scalable"
+  ".local/share/icons/Win11/places/scalable",
 );
 const ICON_THEME_EMBLEMS_PATH = path.join(
   process.env.HOME,
-  ".local/share/icons/Win11/emblems/24"
+  ".local/share/icons/Win11/emblems/24",
 );
 
 // Template for command files
@@ -137,21 +137,24 @@ function generateIcon(iconName, outputName, addCloudBadge = false) {
   try {
     if (addCloudBadge) {
       // Generate with mounted emblem badge overlay
-      const badgePath = path.join(ICON_THEME_EMBLEMS_PATH, "emblem-mounted.svg");
+      const badgePath = path.join(
+        ICON_THEME_EMBLEMS_PATH,
+        "emblem-mounted.svg",
+      );
       const tmpBase = `/tmp/${Date.now()}-base.png`;
       const tmpBadge = `/tmp/${Date.now()}-badge.png`;
 
       execSync(
         `convert -background none -resize 256x256 "${iconPath}" "${tmpBase}"`,
-        { stdio: "pipe" }
+        { stdio: "pipe" },
       );
       execSync(
         `convert -background none -resize 80x80 "${badgePath}" "${tmpBadge}"`,
-        { stdio: "pipe" }
+        { stdio: "pipe" },
       );
       execSync(
         `convert "${tmpBase}" "${tmpBadge}" -gravity SouthEast -geometry +5+5 -composite "${outputPath}"`,
-        { stdio: "pipe" }
+        { stdio: "pipe" },
       );
 
       fs.unlinkSync(tmpBase);
@@ -160,12 +163,14 @@ function generateIcon(iconName, outputName, addCloudBadge = false) {
       // Simple conversion
       execSync(
         `convert -background none -resize 256x256 "${iconPath}" "${outputPath}"`,
-        { stdio: "pipe" }
+        { stdio: "pipe" },
       );
     }
     return true;
   } catch (error) {
-    console.warn(`   ⚠ Warning: Failed to generate ${outputName}: ${error.message}`);
+    console.warn(
+      `   ⚠ Warning: Failed to generate ${outputName}: ${error.message}`,
+    );
     return false;
   }
 }
@@ -185,13 +190,13 @@ iconsToGenerate.forEach((iconName) => {
     // Extract base icon name (e.g., "folder-cloud-documents" -> "folder-documents")
     const baseIconName = iconName.replace("folder-cloud-", "folder-");
     const themeIcon = ICON_MAP[baseIconName] || `${baseIconName}.svg`;
-    
+
     if (generateIcon(themeIcon, outputName, true)) {
       console.log(`   ✓ ${outputName} (with cloud badge)`);
     }
   } else {
     const themeIcon = ICON_MAP[iconName] || `${iconName}.svg`;
-    
+
     if (generateIcon(themeIcon, outputName, false)) {
       console.log(`   ✓ ${outputName}`);
     }
