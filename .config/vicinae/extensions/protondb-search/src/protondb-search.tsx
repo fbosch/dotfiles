@@ -124,7 +124,7 @@ async function fetchFeaturedGames(): Promise<SteamGame[]> {
       });
 
     // Fetch all game details in parallel
-    const gamePromises = appIds.slice(0, 10).map(async (appId) => {
+    const gameDetailsPromises = appIds.slice(0, 10).map(async (appId) => {
       try {
         const detailsResponse = await fetch(`${STEAM_APPDETAILS_URL}?appids=${appId}`);
         if (!detailsResponse.ok) return null;
@@ -133,20 +133,9 @@ async function fetchFeaturedGames(): Promise<SteamGame[]> {
         const gameData = detailsData[appId];
 
         if (gameData?.success && gameData?.data && gameData.data.type === "game") {
-          // Search for the game to get the icon URL
-          const searchResponse = await fetch(`${STEAM_SEARCH_URL}/${encodeURIComponent(gameData.data.name)}`);
-          let iconUrl = "";
-          
-          if (searchResponse.ok) {
-            const searchResults: SteamGame[] = await searchResponse.json();
-            const matchingGame = searchResults.find((g) => g.appid === String(appId));
-            iconUrl = matchingGame?.icon || "";
-          }
-
           return {
             appid: String(appId),
             name: gameData.data.name,
-            icon: iconUrl,
             logo: gameData.data.capsule_imagev5 || gameData.data.header_image || "",
           };
         }
@@ -157,8 +146,32 @@ async function fetchFeaturedGames(): Promise<SteamGame[]> {
       }
     });
 
-    const results = await Promise.all(gamePromises);
-    const games = results.filter((game): game is SteamGame => game !== null);
+    const gameDetails = await Promise.all(gameDetailsPromises);
+    const validGames = gameDetails.filter((game): game is { appid: string; name: string; logo: string } => game !== null);
+
+    // Batch fetch icons for all games in parallel
+    const iconPromises = validGames.map(async (game) => {
+      try {
+        const searchResponse = await fetch(`${STEAM_SEARCH_URL}/${encodeURIComponent(game.name)}`);
+        if (searchResponse.ok) {
+          const searchResults: SteamGame[] = await searchResponse.json();
+          const matchingGame = searchResults.find((g) => g.appid === game.appid);
+          return { appid: game.appid, icon: matchingGame?.icon || "" };
+        }
+      } catch (error) {
+        console.error(`Failed to fetch icon for ${game.name}:`, error);
+      }
+      return { appid: game.appid, icon: "" };
+    });
+
+    const icons = await Promise.all(iconPromises);
+    const iconMap = new Map(icons.map((i) => [i.appid, i.icon]));
+
+    // Combine game details with icons
+    const games: SteamGame[] = validGames.map((game) => ({
+      ...game,
+      icon: iconMap.get(game.appid) || "",
+    }));
 
     setCachedFeaturedGames(games);
     return games;
