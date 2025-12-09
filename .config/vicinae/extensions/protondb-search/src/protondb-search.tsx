@@ -510,13 +510,13 @@ ${gameDetails?.short_description || ""}`;
 }
 
 function GameListItem({ game }: { game: SteamGame }) {
-  const { data: rating } = useQuery({
+  const { data: rating, isLoading: loadingRating } = useQuery({
     queryKey: ["protondb-rating", game.appid],
     queryFn: () => fetchProtonDBRating(game.appid),
   });
 
   const tierText = !rating
-    ? "No rating"
+    ? ""
     : `${getTierEmoji(rating.tier)} ${formatTierName(rating.tier)}${formatConfidence(rating.confidence)}`;
 
   const accessories = [
