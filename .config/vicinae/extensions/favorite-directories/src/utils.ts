@@ -1,9 +1,6 @@
 import { showToast, Toast, closeMainWindow, getPreferenceValues } from "@vicinae/api";
 import { exec } from "child_process";
-import { promisify } from "util";
-import { expandPath, isDirectory, detectFileManager } from "./filesystem";
-
-const execAsync = promisify(exec);
+import { expandPath, detectFileManager } from "./filesystem";
 
 interface Preferences {
   fileManager: string;
@@ -13,23 +10,9 @@ interface Preferences {
  * Opens a directory in the default file manager
  */
 export async function openDirectory(path: string): Promise<void> {
-  const toast = await showToast({
-    style: Toast.Style.Animated,
-    title: "Opening directory...",
-  });
-
   try {
     const expandedPath = expandPath(path);
     
-    // Check if directory exists
-    const exists = await isDirectory(expandedPath);
-    if (!exists) {
-      toast.style = Toast.Style.Failure;
-      toast.title = "Directory not found";
-      toast.message = expandedPath;
-      return;
-    }
-
     // Get file manager from preferences
     const preferences = getPreferenceValues<Preferences>();
     const preferredFileManager = preferences.fileManager || "auto";
@@ -40,9 +23,11 @@ export async function openDirectory(path: string): Promise<void> {
       // Auto-detect file manager (with caching)
       fileManager = await detectFileManager();
       if (!fileManager) {
-        toast.style = Toast.Style.Failure;
-        toast.title = "No file manager found";
-        toast.message = "Please install nautilus, dolphin, thunar, nemo, or pcmanfm";
+        await showToast({
+          style: Toast.Style.Failure,
+          title: "No file manager found",
+          message: "Please install nautilus, dolphin, thunar, nemo, or pcmanfm",
+        });
         return;
       }
     } else {
@@ -50,17 +35,30 @@ export async function openDirectory(path: string): Promise<void> {
       fileManager = preferredFileManager;
     }
 
-    // Open directory
-    await execAsync(`${fileManager} "${expandedPath}"`);
-    
-    toast.style = Toast.Style.Success;
-    toast.title = "Directory opened";
-    
+    // Close window immediately for faster perceived performance
     await closeMainWindow();
+
+    // Open directory asynchronously (fire and forget)
+    // Use --existing-window for nemo to reuse existing instance (much faster)
+    const command = fileManager === 'nemo' 
+      ? `${fileManager} --existing-window "${expandedPath}"`
+      : `${fileManager} "${expandedPath}"`;
+    
+    exec(command, (error) => {
+      if (error) {
+        showToast({
+          style: Toast.Style.Failure,
+          title: "Failed to open directory",
+          message: error.message,
+        });
+      }
+    });
   } catch (error) {
-    toast.style = Toast.Style.Failure;
-    toast.title = "Failed to open directory";
-    toast.message = error instanceof Error ? error.message : "Unknown error";
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "Failed to open directory",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
   }
 }
 
