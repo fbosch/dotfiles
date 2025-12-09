@@ -99,6 +99,11 @@ async function fetchFeaturedGames(): Promise<SteamGame[]> {
   try {
     const response = await fetch(STEAM_FEATURED_URL);
     if (!response.ok) {
+      showToast({
+        style: Toast.Style.Failure,
+        title: "Failed to load featured games",
+        message: `Steam API returned ${response.status}`,
+      });
       throw new Error(`Steam featured API failed: ${response.status}`);
     }
 
@@ -159,6 +164,11 @@ async function fetchFeaturedGames(): Promise<SteamGame[]> {
     return games;
   } catch (error) {
     console.error("Failed to fetch featured games:", error);
+    showToast({
+      style: Toast.Style.Failure,
+      title: "Failed to load featured games",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
     return [];
   }
 }
@@ -274,10 +284,20 @@ function GameDetail({ game }: { game: SteamGame }) {
     queryFn: () => fetchProtonDBRating(game.appid),
   });
 
-  const { data: gameDetails, isLoading: loadingDetails } = useQuery({
+  const { data: gameDetails, isLoading: loadingDetails, isError: detailsError } = useQuery({
     queryKey: ["game-details", game.appid],
     queryFn: () => fetchGameDetails(game.appid),
+    retry: 2,
   });
+
+  // Show toast if game details fail to load
+  if (detailsError) {
+    showToast({
+      style: Toast.Style.Failure,
+      title: "Failed to load game details",
+      message: "Could not fetch information from Steam",
+    });
+  }
 
   // Build markdown conditionally to avoid layout shift
   // Only show image when gameDetails is loaded (has header_image)
