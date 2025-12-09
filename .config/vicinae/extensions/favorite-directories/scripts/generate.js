@@ -10,13 +10,15 @@ const path = require("path");
 
 // Configuration - edit this to add/remove directories
 // Icons use freedesktop icon names that Vicinae will resolve from the selected icon theme
-// Common icons: folder-download, folder-documents, folder-pictures, folder-music, folder-videos, etc.
+// Common icons: folder-download, folder-documents, folder-pictures, folder-music, folder-videos,
+//               folder-git, folder-development, folder-root, user-desktop, user-home, etc.
+// Find more at: https://specifications.freedesktop.org/icon-naming-spec/latest/ar01s04.html
 const DIRECTORIES = [
   {
-    name: "downloads",
-    title: "Downloads",
-    path: "~/Downloads",
-    icon: "folder-download",
+    name: "downloads",      // Unique identifier (used in filename)
+    title: "Downloads",     // Display name in Vicinae
+    path: "~/Downloads",    // Path to directory (supports ~ expansion)
+    icon: "folder-download", // Freedesktop icon name
   },
   {
     name: "documents",
@@ -42,16 +44,12 @@ const DIRECTORIES = [
     path: "~/dotfiles",
     icon: "folder-git",
   },
-  {
-    name: "projects",
-    title: "Projects",
-    path: "~/Projects",
-    icon: "folder-development",
-  },
-  // Add more directories here:
+  // Add more directories here (uncomment and customize):
   // { name: "config", title: "Config", path: "~/.config", icon: "folder-root" },
   // { name: "music", title: "Music", path: "~/Music", icon: "folder-music" },
   // { name: "videos", title: "Videos", path: "~/Videos", icon: "folder-videos" },
+  // { name: "projects", title: "Projects", path: "~/projects", icon: "folder-development" },
+  // { name: "tmp", title: "Temp", path: "/tmp", icon: "folder-temp" },
 ];
 
 const SRC_DIR = path.join(__dirname, "..", "src");

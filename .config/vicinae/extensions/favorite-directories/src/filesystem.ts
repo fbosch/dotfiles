@@ -2,6 +2,7 @@ import { homedir } from "os";
 import { promises as fs } from "fs";
 import { resolve, join, basename, dirname } from "path";
 import type { DirectoryEntry } from "./types";
+import { getCachedFileManager, setCachedFileManager } from "./cache";
 
 /**
  * Expands tilde (~) to home directory
@@ -151,9 +152,16 @@ export function filterDirectories(
 }
 
 /**
- * Detects available file manager
+ * Detects available file manager (with caching)
  */
 export async function detectFileManager(): Promise<string | null> {
+  // Check cache first
+  const cached = getCachedFileManager();
+  if (cached) {
+    return cached;
+  }
+
+  // Detect file manager
   const { exec } = require("child_process");
   const { promisify } = require("util");
   const execAsync = promisify(exec);
@@ -163,6 +171,8 @@ export async function detectFileManager(): Promise<string | null> {
   for (const fm of fileManagers) {
     try {
       await execAsync(`which ${fm}`);
+      // Cache the result
+      setCachedFileManager(fm);
       return fm;
     } catch {
       // Try next
