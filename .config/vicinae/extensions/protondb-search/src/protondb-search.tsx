@@ -294,14 +294,43 @@ function formatConfidence(confidence: ProtonDBConfidence | undefined): string {
 
 function stripHtmlTags(html: string): string {
   if (!html) return "";
+  
   return html
+    // Handle line breaks first
     .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n")
+    
+    // Handle lists
     .replace(/<\/li>/gi, "\n")
     .replace(/<li[^>]*>/gi, "• ")
-    .replace(/<ul[^>]*>/gi, "")
-    .replace(/<\/ul>/gi, "")
+    .replace(/<\/?[ou]l[^>]*>/gi, "\n")
+    
+    // Handle headings
+    .replace(/<\/h[1-6]>/gi, "\n\n")
+    .replace(/<h[1-6][^>]*>/gi, "")
+    
+    // Preserve content in emphasis tags
     .replace(/<strong>(.*?)<\/strong>/gi, "$1")
+    .replace(/<b>(.*?)<\/b>/gi, "$1")
+    .replace(/<em>(.*?)<\/em>/gi, "$1")
+    .replace(/<i>(.*?)<\/i>/gi, "$1")
+    
+    // Remove all other tags
     .replace(/<[^>]+>/g, "")
+    
+    // Decode common HTML entities
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    
+    // Clean up extra whitespace
+    .replace(/\n\s*\n\s*\n/g, "\n\n") // Max 2 consecutive newlines
+    .replace(/[ \t]+/g, " ") // Multiple spaces to single space
     .trim();
 }
 
