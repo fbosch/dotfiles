@@ -1,2 +1,4 @@
 --target=$HOME
 
+
+--ignore=.github

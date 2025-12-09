@@ -398,6 +398,12 @@ ${gameDetails?.short_description || ""}`;
             icon={Icon.Store}
             shortcut={{ modifiers: ["cmd"], key: "s" }}
           />
+          <Action.OpenInBrowser
+            title="Open in Steam"
+            url={`steam://store/${game.appid}`}
+            icon={Icon.AppWindow}
+            shortcut={{ modifiers: ["cmd", "shift"], key: "s" }}
+          />
           <ActionPanel.Section>
             <Action.CopyToClipboard
               title="Copy ProtonDB URL"
@@ -474,6 +480,12 @@ function GameListItem({ game }: { game: SteamGame }) {
             url={`https://store.steampowered.com/app/${game.appid}`}
             icon={Icon.Store}
             shortcut={{ modifiers: ["cmd"], key: "s" }}
+          />
+          <Action.OpenInBrowser
+            title="Open in Steam"
+            url={`steam://store/${game.appid}`}
+            icon={Icon.AppWindow}
+            shortcut={{ modifiers: ["cmd", "shift"], key: "s" }}
           />
           <ActionPanel.Section>
             <Action.CopyToClipboard
