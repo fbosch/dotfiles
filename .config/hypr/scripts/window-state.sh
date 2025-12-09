@@ -70,12 +70,12 @@ adaptive_sleep() {
     # Compare load to CPU count (if load > cores, system is busy)
     if command -v bc &>/dev/null; then
         if (( $(echo "$load > $CPU_COUNT" | bc -l 2>/dev/null || echo 0) )); then
-            sleep 1.0  # System busy - poll slower
+            sleep 0.5  # System busy - poll slower but still responsive
         else
-            sleep 0.4  # System idle - poll faster for responsiveness
+            sleep 0.25  # System idle - poll very fast to catch quick window closes
         fi
     else
-        sleep 0.5  # Fallback if bc not available
+        sleep 0.3  # Fallback if bc not available
     fi
 }
 
@@ -179,9 +179,11 @@ check_and_save_with_state() {
     
     is_state_empty "$current_state" && return
     
+    # Always update cache file so immediate_save() has latest position
+    printf '%s\n' "$current_state" > "$STATE_FILE"
+    
     if states_changed "$current_state"; then
-        # State changed - save to cache and reset debounce timer
-        printf '%s\n' "$current_state" > "$STATE_FILE"
+        # State changed - reset debounce timer
         printf '%s\n' "$EPOCHSECONDS" > /tmp/hypr-window-state-debounce
         printf '%s - State changed, starting %ss debounce\n' "$(date '+%H:%M:%S')" "$DEBOUNCE_DELAY"
         return
@@ -287,7 +289,7 @@ echo "Config: $CONFIG_FILE"
 echo "Rules: $RULES_FILE"
 echo "Debounce delay: ${DEBOUNCE_DELAY}s"
 echo "Scheduling: SCHED_IDLE (runs only when CPU is idle)"
-echo "Poll rate: Adaptive based on system load (0.4s-1.0s)"
+echo "Poll rate: Adaptive based on system load (0.25s-0.5s)"
 echo ""
 
 init_rules_file
