@@ -1,0 +1,66 @@
+{
+  "$schema": "https://raw.githubusercontent.com/vicinaehq/vicinae/refs/heads/main/extra/schemas/extension.json",
+  "name": "favorite-directories",
+  "title": "Favorite Directories",
+  "description": "Quickly search and navigate to your favorite directories",
+  "categories": [],
+  "license": "MIT",
+  "author": "fbosch",
+  "contributors": [],
+  "pastContributors": [],
+  "icon": "extension_icon.png",
+  "commands": [
+    {
+      "name": "open-downloads",
+      "title": "Downloads",
+      "subtitle": "Open Downloads folder",
+      "description": "Open ~/Downloads in file manager",
+      "mode": "no-view",
+      "icon": "folder-download"
+    },
+    {
+      "name": "open-documents",
+      "title": "Documents",
+      "subtitle": "Open Documents folder",
+      "description": "Open ~/Documents in file manager",
+      "mode": "no-view",
+      "icon": "folder-documents"
+    },
+    {
+      "name": "open-pictures",
+      "title": "Pictures",
+      "subtitle": "Open Pictures folder",
+      "description": "Open ~/Pictures in file manager",
+      "mode": "no-view",
+      "icon": "folder-pictures"
+    },
+    {
+      "name": "open-desktop",
+      "title": "Desktop",
+      "subtitle": "Open Desktop folder",
+      "description": "Open ~/Desktop in file manager",
+      "mode": "no-view",
+      "icon": "user-desktop"
+    },
+    {
+      "name": "open-dotfiles",
+      "title": "Dotfiles",
+      "subtitle": "Open Dotfiles folder",
+      "description": "Open ~/dotfiles in file manager",
+      "mode": "no-view",
+      "icon": "folder-git"
+    }
+  ],
+  "preferences": [],
+  "scripts": {
+    "generate": "node scripts/generate.js",
+    "build": "vici build",
+    "dev": "vici develop"
+  },
+  "dependencies": {
+    "@vicinae/api": "^0.15.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
