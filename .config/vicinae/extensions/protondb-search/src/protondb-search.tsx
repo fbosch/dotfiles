@@ -296,6 +296,55 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced;
 }
 
+function GameActions({ 
+  game, 
+  rating,
+  showDetailsAction,
+}: { 
+  game: SteamGame; 
+  rating: ProtonDBRating | null;
+  showDetailsAction?: React.ReactNode;
+}) {
+  return (
+    <ActionPanel>
+      {showDetailsAction}
+      <Action.OpenInBrowser
+        title="Open on ProtonDB"
+        url={`https://www.protondb.com/app/${game.appid}`}
+        icon={Icon.Globe}
+        shortcut={showDetailsAction ? { modifiers: ["cmd"], key: "p" } : undefined}
+      />
+      <Action.OpenInBrowser
+        title="Open on Steam"
+        url={`https://store.steampowered.com/app/${game.appid}`}
+        icon={Icon.Store}
+        shortcut={{ modifiers: ["cmd"], key: "s" }}
+      />
+      <Action.OpenInBrowser
+        title="Open in Steam"
+        url={`steam://store/${game.appid}`}
+        icon={Icon.AppWindow}
+        shortcut={{ modifiers: ["cmd", "shift"], key: "s" }}
+      />
+      <ActionPanel.Section>
+        <Action.CopyToClipboard
+          title="Copy ProtonDB URL"
+          content={`https://www.protondb.com/app/${game.appid}`}
+          shortcut={{ modifiers: ["cmd"], key: "c" }}
+        />
+        {rating && (
+          <Action.CopyToClipboard
+            title="Copy Compatibility Info"
+            content={`${game.name}: ${formatTierName(rating.tier)} (${rating.total} reports, ${rating.confidence} confidence)`}
+            shortcut={{ modifiers: ["cmd", "shift"], key: "i" }}
+          />
+        )}
+      </ActionPanel.Section>
+    </ActionPanel>
+  );
+}
+
+
 function GameDetail({ game }: { game: SteamGame }) {
   const { data: rating, isLoading: loadingRating } = useQuery({
     queryKey: ["protondb-rating", game.appid],
@@ -475,41 +524,7 @@ ${gameDetails?.short_description || ""}`;
           )}
         </Detail.Metadata>
       }
-      actions={
-        <ActionPanel>
-          <Action.OpenInBrowser
-            title="Open on ProtonDB"
-            url={`https://www.protondb.com/app/${game.appid}`}
-            icon={Icon.Globe}
-          />
-          <Action.OpenInBrowser
-            title="Open on Steam"
-            url={`https://store.steampowered.com/app/${game.appid}`}
-            icon={Icon.Store}
-            shortcut={{ modifiers: ["cmd"], key: "s" }}
-          />
-          <Action.OpenInBrowser
-            title="Open in Steam"
-            url={`steam://store/${game.appid}`}
-            icon={Icon.AppWindow}
-            shortcut={{ modifiers: ["cmd", "shift"], key: "s" }}
-          />
-          <ActionPanel.Section>
-            <Action.CopyToClipboard
-              title="Copy ProtonDB URL"
-              content={`https://www.protondb.com/app/${game.appid}`}
-              shortcut={{ modifiers: ["cmd"], key: "c" }}
-            />
-            {rating && (
-              <Action.CopyToClipboard
-                title="Copy Compatibility Info"
-                content={`${game.name}: ${formatTierName(rating.tier)} (${rating.total} reports, ${rating.confidence} confidence)`}
-                shortcut={{ modifiers: ["cmd", "shift"], key: "i" }}
-              />
-            )}
-          </ActionPanel.Section>
-        </ActionPanel>
-      }
+      actions={<GameActions game={game} rating={rating} />}
     />
   );
 }
@@ -547,50 +562,22 @@ function GameListItem({ game }: { game: SteamGame }) {
       icon={{ source: game.icon }}
       accessories={accessories}
       actions={
-        <ActionPanel>
-          <Action.Push
-            title="Show Details"
-            target={
-              <QueryClientProvider client={queryClient}>
-                <GameDetail game={game} />
-              </QueryClientProvider>
-            }
-            icon={Icon.Eye}
-            shortcut={{ modifiers: ["cmd"], key: "d" }}
-          />
-          <Action.OpenInBrowser
-            title="Open on ProtonDB"
-            url={`https://www.protondb.com/app/${game.appid}`}
-            icon={Icon.Globe}
-            shortcut={{ modifiers: ["cmd"], key: "p" }}
-          />
-          <Action.OpenInBrowser
-            title="Open on Steam"
-            url={`https://store.steampowered.com/app/${game.appid}`}
-            icon={Icon.Store}
-            shortcut={{ modifiers: ["cmd"], key: "s" }}
-          />
-          <Action.OpenInBrowser
-            title="Open in Steam"
-            url={`steam://store/${game.appid}`}
-            icon={Icon.AppWindow}
-            shortcut={{ modifiers: ["cmd", "shift"], key: "s" }}
-          />
-          <ActionPanel.Section>
-            <Action.CopyToClipboard
-              title="Copy ProtonDB URL"
-              content={`https://www.protondb.com/app/${game.appid}`}
-              shortcut={{ modifiers: ["cmd"], key: "c" }}
+        <GameActions 
+          game={game} 
+          rating={rating}
+          showDetailsAction={
+            <Action.Push
+              title="Show Details"
+              target={
+                <QueryClientProvider client={queryClient}>
+                  <GameDetail game={game} />
+                </QueryClientProvider>
+              }
+              icon={Icon.Eye}
+              shortcut={{ modifiers: ["cmd"], key: "d" }}
             />
-            {rating && (
-              <Action.CopyToClipboard
-                title="Copy Compatibility Info"
-                content={`${game.name}: ${formatTierName(rating.tier)} (${rating.total} reports, ${rating.confidence} confidence)`}
-                shortcut={{ modifiers: ["cmd", "shift"], key: "i" }}
-              />
-            )}
-          </ActionPanel.Section>
-        </ActionPanel>
+          }
+        />
       }
     />
   );
