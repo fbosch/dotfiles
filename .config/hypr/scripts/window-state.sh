@@ -13,11 +13,12 @@ fi
 CONFIG_FILE="$HOME/.config/hypr/window-state.conf"
 RULES_FILE="$HOME/.config/hypr/window-state-rules.conf"
 STATE_FILE="/tmp/hypr-window-state.cache"
-STATE_HASH_FILE="/tmp/hypr-window-state.hash"
 DEBOUNCE_DELAY=1  # Wait 1 second after last change before saving
 POLL_PID=""  # Track polling subprocess
 CPU_COUNT=$(nproc)  # Number of CPU cores for load calculation
 CURRENT_HASH=""  # Memory cache for state hash
+PATTERN_CACHE=""  # Cache for compiled regex pattern
+declare -A RULES_CACHE  # Cache for existing rules (class -> rules mapping)
 
 # Load window class patterns from config
 load_patterns() {
@@ -25,9 +26,19 @@ load_patterns() {
     grep -v '^#' "$CONFIG_FILE" | grep -v '^[[:space:]]*$'
 }
 
-# Build regex pattern for matching
+# Build regex pattern for matching (cached)
 build_pattern() {
-    load_patterns | paste -sd '|'
+    # Return cached pattern if available
+    [[ -n "$PATTERN_CACHE" ]] && echo "$PATTERN_CACHE" && return
+    
+    # Build and cache pattern
+    PATTERN_CACHE=$(load_patterns | paste -sd '|')
+    echo "$PATTERN_CACHE"
+}
+
+# Reload pattern cache (called when config changes)
+reload_pattern_cache() {
+    PATTERN_CACHE=$(load_patterns | paste -sd '|')
 }
 
 # Initialize rules file if needed
@@ -67,15 +78,15 @@ adaptive_sleep() {
     local load
     load=$(awk '{print $1}' /proc/loadavg 2>/dev/null || echo "0")
     
-    # Compare load to CPU count (if load > cores, system is busy)
-    if command -v bc &>/dev/null; then
-        if (( $(echo "$load > $CPU_COUNT" | bc -l 2>/dev/null || echo 0) )); then
-            sleep 0.5  # System busy - poll slower but still responsive
-        else
-            sleep 0.25  # System idle - poll very fast to catch quick window closes
-        fi
+    # Use bash arithmetic for comparison (faster than bc)
+    # Convert float to integer by multiplying by 100
+    local load_int=$(awk '{print int($1 * 100)}' <<< "$load")
+    local threshold=$((CPU_COUNT * 100))
+    
+    if ((load_int > threshold)); then
+        sleep 0.5  # System busy - poll slower but still responsive
     else
-        sleep 0.3  # Fallback if bc not available
+        sleep 0.25  # System idle - poll very fast to catch quick window closes
     fi
 }
 
@@ -134,29 +145,37 @@ states_changed() {
     return 1
 }
 
+# Load existing rules into cache
+load_rules_cache() {
+    RULES_CACHE=()  # Clear cache
+    
+    [[ ! -f "$RULES_FILE" || ! -s "$RULES_FILE" ]] && return
+    
+    local current_class=""
+    while IFS= read -r line; do
+        # Match class comments like "# org.gnome.TextEditor"
+        if [[ "$line" =~ ^#\ ([a-zA-Z0-9._-]+)$ ]]; then
+            current_class="${BASH_REMATCH[1]}"
+        elif [[ -n "$current_class" ]] && [[ -n "$line" ]]; then
+            # Store rules for this class (skip empty lines)
+            if [[ -z "${RULES_CACHE[$current_class]}" ]]; then
+                RULES_CACHE[$current_class]="$line"
+            else
+                RULES_CACHE[$current_class]+=$'\n'"$line"
+            fi
+        fi
+    done < "$RULES_FILE"
+}
+
 # Update or add rules for specific window classes (preserves existing rules)
 update_rules() {
     local windows="$1"
     
     [[ -z "$windows" || "$windows" == "[]" ]] && return
     
-    # Read existing rules into associative array
-    declare -A existing_rules
-    if [[ -f "$RULES_FILE" ]] && [[ -s "$RULES_FILE" ]]; then
-        local current_class=""
-        while IFS= read -r line; do
-            # Match class comments like "# org.gnome.TextEditor"
-            if [[ "$line" =~ ^#\ ([a-zA-Z0-9._-]+)$ ]]; then
-                current_class="${BASH_REMATCH[1]}"
-            elif [[ -n "$current_class" ]] && [[ -n "$line" ]]; then
-                # Store rules for this class (skip empty lines)
-                if [[ -z "${existing_rules[$current_class]}" ]]; then
-                    existing_rules[$current_class]="$line"
-                else
-                    existing_rules[$current_class]+=$'\n'"$line"
-                fi
-            fi
-        done < "$RULES_FILE"
+    # Load existing rules into cache if empty
+    if ((${#RULES_CACHE[@]} == 0)); then
+        load_rules_cache
     fi
     
     # Update rules for currently open windows
@@ -164,7 +183,7 @@ update_rules() {
         [[ -z "$class" ]] && continue
         
         # Update rules for this class
-        existing_rules[$class]=$(printf 'windowrule = size %s %s, match:class ^(%s)$\nwindowrule = move %s %s, match:class ^(%s)$' \
+        RULES_CACHE[$class]=$(printf 'windowrule = size %s %s, match:class ^(%s)$\nwindowrule = move %s %s, match:class ^(%s)$' \
             "$width" "$height" "$class" "$x" "$y" "$class")
         
         printf '%s - Updated %s: %sx%s at (%s,%s)\n' "$(date '+%H:%M:%S')" "$class" "$width" "$height" "$x" "$y"
@@ -181,10 +200,10 @@ update_rules() {
     } > "$temp_file"
     
     # Write rules for all classes (sorted)
-    for class in $(printf '%s\n' "${!existing_rules[@]}" | sort); do
+    for class in $(printf '%s\n' "${!RULES_CACHE[@]}" | sort); do
         {
             printf '# %s\n' "$class"
-            printf '%s\n' "${existing_rules[$class]}"
+            printf '%s\n' "${RULES_CACHE[$class]}"
             printf '\n'
         } >> "$temp_file"
     done
@@ -304,7 +323,10 @@ handle_event() {
             fi
             ;;
         configreloaded*)
-            # Config reloaded - recheck what we're tracking
+            # Config reloaded - reload caches and recheck what we're tracking
+            reload_pattern_cache
+            load_rules_cache
+            
             if has_tracked_windows; then
                 start_polling
                 check_and_save
