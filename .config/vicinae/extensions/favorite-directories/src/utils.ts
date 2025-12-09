@@ -9,40 +9,43 @@ const execAsync = promisify(exec);
  * Opens a directory in the default file manager
  */
 export async function openDirectory(path: string): Promise<void> {
+  const toast = await showToast({
+    style: Toast.Style.Animated,
+    title: "Opening directory...",
+  });
+
   try {
     const expandedPath = expandPath(path);
     
     // Check if directory exists
     const exists = await isDirectory(expandedPath);
     if (!exists) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Directory not found",
-        message: expandedPath,
-      });
+      toast.style = Toast.Style.Failure;
+      toast.title = "Directory not found";
+      toast.message = expandedPath;
       return;
     }
 
     // Detect file manager
     const fileManager = await detectFileManager();
     if (!fileManager) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "No file manager found",
-        message: "Please install nautilus, dolphin, thunar, nemo, or pcmanfm",
-      });
+      toast.style = Toast.Style.Failure;
+      toast.title = "No file manager found";
+      toast.message = "Please install nautilus, dolphin, thunar, nemo, or pcmanfm";
       return;
     }
 
     // Open directory
     await execAsync(`${fileManager} "${expandedPath}"`);
+    
+    toast.style = Toast.Style.Success;
+    toast.title = "Directory opened";
+    
     await closeMainWindow();
   } catch (error) {
-    await showToast({
-      style: Toast.Style.Failure,
-      title: "Failed to open directory",
-      message: error instanceof Error ? error.message : "Unknown error",
-    });
+    toast.style = Toast.Style.Failure;
+    toast.title = "Failed to open directory";
+    toast.message = error instanceof Error ? error.message : "Unknown error";
   }
 }
 
@@ -50,17 +53,20 @@ export async function openDirectory(path: string): Promise<void> {
  * Opens a directory in the terminal
  */
 export async function openInTerminal(path: string): Promise<void> {
+  const toast = await showToast({
+    style: Toast.Style.Animated,
+    title: "Opening terminal...",
+  });
+
   try {
     const expandedPath = expandPath(path);
     
     // Check if directory exists
     const exists = await isDirectory(expandedPath);
     if (!exists) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Directory not found",
-        message: expandedPath,
-      });
+      toast.style = Toast.Style.Failure;
+      toast.title = "Directory not found";
+      toast.message = expandedPath;
       return;
     }
 
@@ -77,6 +83,10 @@ export async function openInTerminal(path: string): Promise<void> {
     for (const terminal of terminals) {
       try {
         await execAsync(`${terminal.cmd} ${terminal.args} "${expandedPath}"`);
+        
+        toast.style = Toast.Style.Success;
+        toast.title = "Terminal opened";
+        
         await closeMainWindow();
         return;
       } catch {
@@ -85,16 +95,12 @@ export async function openInTerminal(path: string): Promise<void> {
       }
     }
 
-    await showToast({
-      style: Toast.Style.Failure,
-      title: "No terminal emulator found",
-      message: "Please install foot, kitty, alacritty, or gnome-terminal",
-    });
+    toast.style = Toast.Style.Failure;
+    toast.title = "No terminal emulator found";
+    toast.message = "Please install foot, kitty, alacritty, or gnome-terminal";
   } catch (error) {
-    await showToast({
-      style: Toast.Style.Failure,
-      title: "Failed to open terminal",
-      message: error instanceof Error ? error.message : "Unknown error",
-    });
+    toast.style = Toast.Style.Failure;
+    toast.title = "Failed to open terminal";
+    toast.message = error instanceof Error ? error.message : "Unknown error";
   }
 }
