@@ -81,6 +81,10 @@ const ICON_THEME_PATH = path.join(
   process.env.HOME,
   ".local/share/icons/Win11/places/scalable"
 );
+const ICON_THEME_EMBLEMS_PATH = path.join(
+  process.env.HOME,
+  ".local/share/icons/Win11/emblems/24"
+);
 
 // Template for command files
 function getCommandTemplate(dirPath) {
@@ -116,26 +120,26 @@ function generateIcon(iconName, outputName, addCloudBadge = false) {
 
   try {
     if (addCloudBadge) {
-      // Generate with cloud badge overlay
-      const cloudPath = path.join(ICON_THEME_PATH, "folder-cloud.svg");
+      // Generate with mounted emblem badge overlay
+      const badgePath = path.join(ICON_THEME_EMBLEMS_PATH, "emblem-mounted.svg");
       const tmpBase = `/tmp/${Date.now()}-base.png`;
-      const tmpCloud = `/tmp/${Date.now()}-cloud.png`;
+      const tmpBadge = `/tmp/${Date.now()}-badge.png`;
 
       execSync(
         `convert -background none -resize 256x256 "${iconPath}" "${tmpBase}"`,
         { stdio: "pipe" }
       );
       execSync(
-        `convert -background none -resize 80x80 "${cloudPath}" "${tmpCloud}"`,
+        `convert -background none -resize 80x80 "${badgePath}" "${tmpBadge}"`,
         { stdio: "pipe" }
       );
       execSync(
-        `convert "${tmpBase}" "${tmpCloud}" -gravity SouthEast -geometry +10+10 -composite "${outputPath}"`,
+        `convert "${tmpBase}" "${tmpBadge}" -gravity SouthEast -geometry +5+5 -composite "${outputPath}"`,
         { stdio: "pipe" }
       );
 
       fs.unlinkSync(tmpBase);
-      fs.unlinkSync(tmpCloud);
+      fs.unlinkSync(tmpBadge);
     } else {
       // Simple conversion
       execSync(
