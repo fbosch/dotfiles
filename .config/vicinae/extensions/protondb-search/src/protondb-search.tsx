@@ -32,10 +32,10 @@ const SEARCH_DEBOUNCE_MS = 500;
 const QUERY_STALE_TIME = 12 * 60 * 60 * 1000; // 12 hours
 const QUERY_GC_TIME = 12 * 60 * 60 * 1000; // 12 hours
 
-// Vicinae Cache only for featured games initial load
+// Vicinae Cache for featured games persistence between sessions
 const cache = new Cache();
 const FEATURED_GAMES_CACHE_KEY = "protondb-featured-games-v1";
-const FEATURED_CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
+const FEATURED_CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours (match React Query)
 
 type CachedFeaturedGames = {
   games: SteamGame[];
