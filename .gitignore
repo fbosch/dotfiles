@@ -35,6 +35,10 @@ node_modules
 .config/fish/completions/
 .config/fish/conf.d/
 
+# Hyprland machine-specific configs (use .example files as templates)
+.config/hypr/monitors.conf
+.config/hypr/hyprpaper.conf
+
 # Other
 **/.backup/
 checkhealth.log

@@ -1,0 +1,20 @@
+# Hyprpaper wallpaper configuration
+#
+# This file uses placeholder paths that won't break hyprpaper.
+# Customize locally for your setup - changes won't be committed to git (see .gitignore)
+#
+# SETUP:
+# 1. Replace paths below with your actual wallpaper locations
+# 2. Update monitor names to match your setup (see monitors.conf)
+#
+# Find your monitor names with: hyprctl monitors
+
+# Preload wallpapers into memory (update paths to your images)
+# preload = /home/user/Pictures/wallpapers/image.png
+
+# Set wallpaper for each monitor
+# Format: wallpaper = MONITOR_NAME,/path/to/wallpaper.png
+# Use empty monitor name for all monitors: wallpaper = ,/path/to/wallpaper.png
+
+# Disable splash screen
+splash = false

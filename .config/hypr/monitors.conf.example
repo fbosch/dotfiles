@@ -1,0 +1,24 @@
+# Machine-specific monitor configuration
+# 
+# This file uses safe defaults that work on any system.
+# Customize locally for your setup - changes won't be committed to git (see .gitignore)
+#
+# CONFIGURATION OPTIONS:
+# 1. Use nwg-displays (GUI tool) - will overwrite this file
+# 2. Edit manually using examples below
+#
+# EXAMPLES:
+# Single monitor:
+#   monitor=DP-1,1920x1080@60,0x0,1.0
+#
+# Multiple monitors (side-by-side):
+#   monitor=DP-1,2560x1440@144,0x0,1.0
+#   monitor=HDMI-A-1,1920x1080@60,2560x0,1.0
+#
+# Laptop with HiDPI:
+#   monitor=eDP-1,1920x1080@60,0x0,1.5
+#
+# Find your monitor names with: hyprctl monitors
+
+# Default: Use preferred resolution for all monitors (safe for any system)
+monitor=,preferred,auto,1

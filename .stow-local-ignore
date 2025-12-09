@@ -1,10 +1,17 @@
-^\.git
-^\.gitignore
-^\.github
-^/scripts$
-^nix.conf
-^npm-globals\.json
-^vicinae\.json
-^docs
-^.DS_Store
-^README\.md
+# Stow ignore patterns
+\.git
+\.gitignore
+\.stow-local-ignore
+^/README.*
+^/LICENSE.*
+^/COPYING
+^/.*\.md$
+scripts
+docs
+node_modules
+\.backup
+lazy-lock\.json
+Brewfile\.lock\.json
+
+# Example files should not be stowed, only used as templates
+\.example$
