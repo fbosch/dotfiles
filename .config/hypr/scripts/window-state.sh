@@ -13,9 +13,11 @@ fi
 CONFIG_FILE="$HOME/.config/hypr/window-state.conf"
 RULES_FILE="$HOME/.config/hypr/window-state-rules.conf"
 STATE_FILE="/tmp/hypr-window-state.cache"
+STATE_HASH_FILE="/tmp/hypr-window-state.hash"
 DEBOUNCE_DELAY=1  # Wait 1 second after last change before saving
 POLL_PID=""  # Track polling subprocess
 CPU_COUNT=$(nproc)  # Number of CPU cores for load calculation
+CURRENT_HASH=""  # Memory cache for state hash
 
 # Load window class patterns from config
 load_patterns() {
@@ -54,11 +56,10 @@ get_window_states() {
     '
 }
 
-# Check if any tracked floating windows exist
-has_tracked_windows() {
-    local state
-    state=$(get_window_states)
-    [[ "$state" != "[]" && -n "$state" ]]
+# Check if any tracked floating windows exist (checks if state is non-empty)
+is_state_empty() {
+    local state="$1"
+    [[ -z "$state" || "$state" == "[]" ]]
 }
 
 # Adaptive sleep based on system load
@@ -85,19 +86,24 @@ start_polling() {
     
     {
         while true; do
+            # Get window states once per iteration
+            local current_state
+            current_state=$(get_window_states)
+            
             # Check if we should stop (no tracked windows)
-            if ! has_tracked_windows; then
-                echo "$(date '+%H:%M:%S') - No tracked windows, stopping poll"
+            if is_state_empty "$current_state"; then
+                printf '%s - No tracked windows, stopping poll\n' "$(date '+%H:%M:%S')"
                 exit 0
             fi
             
-            check_and_save
+            # Pass state to avoid re-fetching
+            check_and_save_with_state "$current_state"
             adaptive_sleep
         done
     } &
     
     POLL_PID=$!
-    echo "$(date '+%H:%M:%S') - Started polling (PID: $POLL_PID)"
+    printf '%s - Started polling (PID: %s)\n' "$(date '+%H:%M:%S')" "$POLL_PID"
 }
 
 # Stop polling subprocess
@@ -105,21 +111,27 @@ stop_polling() {
     if [[ -n "$POLL_PID" ]]; then
         if kill -0 "$POLL_PID" 2>/dev/null; then
             kill "$POLL_PID" 2>/dev/null
-            echo "$(date '+%H:%M:%S') - Stopped polling (PID: $POLL_PID)"
+            printf '%s - Stopped polling (PID: %s)\n' "$(date '+%H:%M:%S')" "$POLL_PID"
         fi
         POLL_PID=""
     fi
 }
 
-# Check if window states changed
+# Check if window states changed (using hash comparison for speed)
 states_changed() {
     local new_state="$1"
-    local old_state
+    local new_hash
     
-    [[ ! -f "$STATE_FILE" ]] && return 0
+    # Generate hash of new state
+    new_hash=$(md5sum <<< "$new_state" | cut -d' ' -f1)
     
-    old_state=$(cat "$STATE_FILE")
-    [[ "$new_state" != "$old_state" ]]
+    # Compare with cached hash (in memory)
+    if [[ "$new_hash" != "$CURRENT_HASH" ]]; then
+        CURRENT_HASH="$new_hash"
+        return 0
+    fi
+    
+    return 1
 }
 
 # Save window states to rules file
@@ -138,62 +150,62 @@ save_rules() {
 
 EOF
     
-    # Process each window
-    echo "$windows" | jq -c '.[]' | while IFS= read -r window; do
-        local class x y width height
-        class=$(echo "$window" | jq -r '.class')
-        x=$(echo "$window" | jq -r '.x')
-        y=$(echo "$window" | jq -r '.y')
-        width=$(echo "$window" | jq -r '.width')
-        height=$(echo "$window" | jq -r '.height')
-        
+    # Process each window (optimize jq parsing - do it once)
+    jq -r '.[] | "\(.class)|\(.x)|\(.y)|\(.width)|\(.height)"' <<< "$windows" | while IFS='|' read -r class x y width height; do
         {
-            echo "# $class"
-            echo "windowrule = size $width $height, match:class ^($class)\$"
-            echo "windowrule = move $x $y, match:class ^($class)\$"
-            echo ""
+            printf '# %s\n' "$class"
+            printf 'windowrule = size %s %s, match:class ^(%s)$\n' "$width" "$height" "$class"
+            printf 'windowrule = move %s %s, match:class ^(%s)$\n' "$x" "$y" "$class"
+            printf '\n'
         } >> "$temp_file"
         
-        echo "$(date '+%H:%M:%S') - Saved $class: ${width}x${height} at ($x,$y)"
+        printf '%s - Saved %s: %sx%s at (%s,%s)\n' "$(date '+%H:%M:%S')" "$class" "$width" "$height" "$x" "$y"
     done
     
     # Atomically replace rules file
     mv "$temp_file" "$RULES_FILE"
     
     # Save state cache
-    echo "$windows" > "$STATE_FILE"
+    printf '%s\n' "$windows" > "$STATE_FILE"
     
     # Reload config
     hyprctl reload config-only &>/dev/null
-    echo "$(date '+%H:%M:%S') - Config reloaded"
+    printf '%s - Config reloaded\n' "$(date '+%H:%M:%S')"
 }
 
-# Debounced check and save
-check_and_save() {
-    local current_state
-    current_state=$(get_window_states)
+# Debounced check and save (accepts pre-fetched state)
+check_and_save_with_state() {
+    local current_state="$1"
     
-    [[ -z "$current_state" || "$current_state" == "[]" ]] && return
+    is_state_empty "$current_state" && return
     
     if states_changed "$current_state"; then
         # State changed - save to cache and reset debounce timer
-        echo "$current_state" > "$STATE_FILE"
-        echo "$EPOCHSECONDS" > /tmp/hypr-window-state-debounce
-        echo "$(date '+%H:%M:%S') - State changed, starting ${DEBOUNCE_DELAY}s debounce"
+        printf '%s\n' "$current_state" > "$STATE_FILE"
+        printf '%s\n' "$EPOCHSECONDS" > /tmp/hypr-window-state-debounce
+        printf '%s - State changed, starting %ss debounce\n' "$(date '+%H:%M:%S')" "$DEBOUNCE_DELAY"
         return
     fi
     
     # No change - check if debounce period has elapsed
     if [[ -f /tmp/hypr-window-state-debounce ]]; then
-        local last_change=$(cat /tmp/hypr-window-state-debounce)
+        local last_change
+        last_change=$(< /tmp/hypr-window-state-debounce)
         local elapsed=$((EPOCHSECONDS - last_change))
         
         if ((elapsed >= DEBOUNCE_DELAY)); then
-            echo "$(date '+%H:%M:%S') - Debounce period elapsed, saving rules"
+            printf '%s - Debounce period elapsed, saving rules\n' "$(date '+%H:%M:%S')"
             save_rules "$current_state"
             rm -f /tmp/hypr-window-state-debounce
         fi
     fi
+}
+
+# Legacy wrapper for backwards compatibility
+check_and_save() {
+    local current_state
+    current_state=$(get_window_states)
+    check_and_save_with_state "$current_state"
 }
 
 # Immediate save (bypass debounce) - used for critical events like window close
@@ -203,19 +215,27 @@ immediate_save() {
     
     # If no windows remain, we still want to save the state before they all closed
     # So we use the cached state if current is empty
-    if [[ -z "$current_state" || "$current_state" == "[]" ]]; then
-        if [[ -f "$STATE_FILE" ]]; then
-            current_state=$(cat "$STATE_FILE")
-        fi
+    if is_state_empty "$current_state" && [[ -f "$STATE_FILE" ]]; then
+        current_state=$(< "$STATE_FILE")
     fi
     
-    [[ -z "$current_state" || "$current_state" == "[]" ]] && return
+    is_state_empty "$current_state" && return
     
-    if states_changed "$current_state"; then
-        echo "$(date '+%H:%M:%S') - Immediate save triggered"
-        save_rules "$current_state"
-        rm -f /tmp/hypr-window-state-debounce
-    fi
+    # Always save immediately on close events - don't check if state changed
+    # The window may have been moved just before closing
+    printf '%s - Immediate save triggered (window close)\n' "$(date '+%H:%M:%S')"
+    save_rules "$current_state"
+    
+    # Update hash to match saved state
+    CURRENT_HASH=$(md5sum <<< "$current_state" | cut -d' ' -f1)
+    rm -f /tmp/hypr-window-state-debounce
+}
+
+# Helper to check if tracked windows exist (fetches state)
+has_tracked_windows() {
+    local state
+    state=$(get_window_states)
+    ! is_state_empty "$state"
 }
 
 # Event handler for socket2
