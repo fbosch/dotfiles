@@ -284,20 +284,18 @@ function GameDetail({ game }: { game: SteamGame }) {
     queryFn: () => fetchProtonDBRating(game.appid),
   });
 
-  const { data: gameDetails, isLoading: loadingDetails, isError: detailsError } = useQuery({
+  const { data: gameDetails, isLoading: loadingDetails } = useQuery({
     queryKey: ["game-details", game.appid],
     queryFn: () => fetchGameDetails(game.appid),
     retry: 2,
+    onError: (error) => {
+      showToast({
+        style: Toast.Style.Failure,
+        title: "Failed to load game details",
+        message: "Could not fetch information from Steam",
+      });
+    },
   });
-
-  // Show toast if game details fail to load
-  if (detailsError) {
-    showToast({
-      style: Toast.Style.Failure,
-      title: "Failed to load game details",
-      message: "Could not fetch information from Steam",
-    });
-  }
 
   // Build markdown conditionally to avoid layout shift
   // Only show image when gameDetails is loaded (has header_image)
@@ -540,6 +538,7 @@ function GameListItem({ game }: { game: SteamGame }) {
               </QueryClientProvider>
             }
             icon={Icon.Eye}
+            shortcut={{ modifiers: ["cmd"], key: "d" }}
           />
           <Action.OpenInBrowser
             title="Open on ProtonDB"
