@@ -122,15 +122,15 @@ function generateIcon(iconName, outputName, addCloudBadge = false) {
       const tmpCloud = `/tmp/${Date.now()}-cloud.png`;
 
       execSync(
-        `magick "${iconPath}" -background none -resize 256x256 "${tmpBase}"`,
+        `convert -background none -resize 256x256 "${iconPath}" "${tmpBase}"`,
         { stdio: "pipe" }
       );
       execSync(
-        `magick "${cloudPath}" -background none -resize 80x80 "${tmpCloud}"`,
+        `convert -background none -resize 80x80 "${cloudPath}" "${tmpCloud}"`,
         { stdio: "pipe" }
       );
       execSync(
-        `magick "${tmpBase}" "${tmpCloud}" -background none -gravity SouthEast -geometry +10+10 -composite "${outputPath}"`,
+        `convert "${tmpBase}" "${tmpCloud}" -gravity SouthEast -geometry +10+10 -composite "${outputPath}"`,
         { stdio: "pipe" }
       );
 
@@ -139,7 +139,7 @@ function generateIcon(iconName, outputName, addCloudBadge = false) {
     } else {
       // Simple conversion
       execSync(
-        `magick "${iconPath}" -background none -resize 256x256 "${outputPath}"`,
+        `convert -background none -resize 256x256 "${iconPath}" "${outputPath}"`,
         { stdio: "pipe" }
       );
     }
