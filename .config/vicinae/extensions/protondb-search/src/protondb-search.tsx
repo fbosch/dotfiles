@@ -106,7 +106,6 @@ async function fetchFeaturedGames(): Promise<SteamGame[]> {
     const topSellers = data.top_sellers?.items || [];
     const specials = data.specials?.items || [];
     
-    const games: SteamGame[] = [];
     const seenAppIds = new Set<number>();
     
     // Combine top sellers and specials, deduplicate and filter out Steam Deck
@@ -119,10 +118,11 @@ async function fetchFeaturedGames(): Promise<SteamGame[]> {
         return true;
       });
 
-    for (const appId of appIds) {
+    // Fetch all game details in parallel
+    const gamePromises = appIds.slice(0, 10).map(async (appId) => {
       try {
         const detailsResponse = await fetch(`${STEAM_APPDETAILS_URL}?appids=${appId}`);
-        if (!detailsResponse.ok) continue;
+        if (!detailsResponse.ok) return null;
 
         const detailsData = await detailsResponse.json();
         const gameData = detailsData[appId];
@@ -138,20 +138,22 @@ async function fetchFeaturedGames(): Promise<SteamGame[]> {
             iconUrl = matchingGame?.icon || "";
           }
 
-          games.push({
+          return {
             appid: String(appId),
             name: gameData.data.name,
             icon: iconUrl,
             logo: gameData.data.capsule_imagev5 || gameData.data.header_image || "",
-          });
+          };
         }
+        return null;
       } catch (error) {
         console.error(`Failed to fetch game ${appId}:`, error);
+        return null;
       }
+    });
 
-      // Stop at 10 games
-      if (games.length >= 10) break;
-    }
+    const results = await Promise.all(gamePromises);
+    const games = results.filter((game): game is SteamGame => game !== null);
 
     setCachedFeaturedGames(games);
     return games;
