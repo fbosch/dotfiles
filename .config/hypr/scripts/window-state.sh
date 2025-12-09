@@ -291,8 +291,8 @@ immediate_save() {
     printf '%s - Immediate save triggered (window close)\n' "$(printf '%(%H:%M:%S)T' -1)"
     save_rules "$current_state"
     
-    # Update hash to match saved state (use cksum)
-    CURRENT_HASH=$(cksum <<< "$current_state" | cut -d' ' -f1)
+    # Update hash to match saved state (use md5sum to match states_changed())
+    CURRENT_HASH=$(md5sum <<< "$current_state" | cut -d' ' -f1)
     rm -f /tmp/hypr-window-state-debounce
 }
 
