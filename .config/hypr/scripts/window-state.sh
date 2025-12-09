@@ -23,6 +23,7 @@ declare -A RULES_CACHE  # Cache for existing rules (class -> rules mapping)
 # Load window class patterns from config
 load_patterns() {
     [[ ! -f "$CONFIG_FILE" ]] && return 1
+    # Use grep for small files (faster than rg due to lower startup overhead)
     grep -v '^#' "$CONFIG_FILE" | grep -v '^[[:space:]]*$'
 }
 
@@ -31,14 +32,22 @@ build_pattern() {
     # Return cached pattern if available
     [[ -n "$PATTERN_CACHE" ]] && echo "$PATTERN_CACHE" && return
     
-    # Build and cache pattern
-    PATTERN_CACHE=$(load_patterns | paste -sd '|')
+    # Build and cache pattern (pure bash, no paste)
+    local patterns
+    mapfile -t patterns < <(load_patterns)
+    
+    # Join with pipe separator
+    local IFS='|'
+    PATTERN_CACHE="${patterns[*]}"
     echo "$PATTERN_CACHE"
 }
 
 # Reload pattern cache (called when config changes)
 reload_pattern_cache() {
-    PATTERN_CACHE=$(load_patterns | paste -sd '|')
+    local patterns
+    mapfile -t patterns < <(load_patterns)
+    local IFS='|'
+    PATTERN_CACHE="${patterns[*]}"
 }
 
 # Initialize rules file if needed
@@ -75,13 +84,16 @@ is_state_empty() {
 
 # Adaptive sleep based on system load
 adaptive_sleep() {
-    local load
-    load=$(awk '{print $1}' /proc/loadavg 2>/dev/null || echo "0")
+    # Read load average directly (pure bash, no awk)
+    local load rest
+    read load rest < /proc/loadavg
     
-    # Use bash arithmetic for comparison (faster than bc)
-    # Convert float to integer by multiplying by 100
-    local load_int=$(awk '{print int($1 * 100)}' <<< "$load")
+    # Convert float to integer for comparison (e.g., "1.23" -> "123")
+    local load_int="${load//./}"  # Remove decimal point
     local threshold=$((CPU_COUNT * 100))
+    
+    # Handle leading zeros (e.g., "0.5" -> "05" -> "5")
+    load_int=$((10#$load_int))
     
     if ((load_int > threshold)); then
         sleep 0.5  # System busy - poll slower but still responsive
