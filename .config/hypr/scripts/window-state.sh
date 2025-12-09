@@ -134,32 +134,59 @@ states_changed() {
     return 1
 }
 
-# Save window states to rules file
-save_rules() {
+# Update or add rules for specific window classes (preserves existing rules)
+update_rules() {
     local windows="$1"
     
     [[ -z "$windows" || "$windows" == "[]" ]] && return
     
-    # Create new rules file content
-    local temp_file=$(mktemp)
-    cat > "$temp_file" << EOF
-# Auto-generated window state persistence rules
-# Last updated: $(date '+%Y-%m-%d %H:%M:%S')
-# Config: $CONFIG_FILE
-# DO NOT EDIT MANUALLY - This file is managed by window-state.sh
-
-EOF
+    # Read existing rules into associative array
+    declare -A existing_rules
+    if [[ -f "$RULES_FILE" ]] && [[ -s "$RULES_FILE" ]]; then
+        local current_class=""
+        while IFS= read -r line; do
+            # Match class comments like "# org.gnome.TextEditor"
+            if [[ "$line" =~ ^#\ ([a-zA-Z0-9._-]+)$ ]]; then
+                current_class="${BASH_REMATCH[1]}"
+            elif [[ -n "$current_class" ]] && [[ -n "$line" ]]; then
+                # Store rules for this class (skip empty lines)
+                if [[ -z "${existing_rules[$current_class]}" ]]; then
+                    existing_rules[$current_class]="$line"
+                else
+                    existing_rules[$current_class]+=$'\n'"$line"
+                fi
+            fi
+        done < "$RULES_FILE"
+    fi
     
-    # Process each window (optimize jq parsing - do it once)
-    jq -r '.[] | "\(.class)|\(.x)|\(.y)|\(.width)|\(.height)"' <<< "$windows" | while IFS='|' read -r class x y width height; do
+    # Update rules for currently open windows
+    while IFS='|' read -r class x y width height; do
+        [[ -z "$class" ]] && continue
+        
+        # Update rules for this class
+        existing_rules[$class]=$(printf 'windowrule = size %s %s, match:class ^(%s)$\nwindowrule = move %s %s, match:class ^(%s)$' \
+            "$width" "$height" "$class" "$x" "$y" "$class")
+        
+        printf '%s - Updated %s: %sx%s at (%s,%s)\n' "$(date '+%H:%M:%S')" "$class" "$width" "$height" "$x" "$y"
+    done < <(jq -r '.[] | "\(.class)|\(.x)|\(.y)|\(.width)|\(.height)"' <<< "$windows")
+    
+    # Write all rules (existing + updated) to new file
+    local temp_file=$(mktemp)
+    {
+        printf '# Auto-generated window state persistence rules\n'
+        printf '# Last updated: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
+        printf '# Config: %s\n' "$CONFIG_FILE"
+        printf '# DO NOT EDIT MANUALLY - This file is managed by window-state.sh\n'
+        printf '\n'
+    } > "$temp_file"
+    
+    # Write rules for all classes (sorted)
+    for class in $(printf '%s\n' "${!existing_rules[@]}" | sort); do
         {
             printf '# %s\n' "$class"
-            printf 'windowrule = size %s %s, match:class ^(%s)$\n' "$width" "$height" "$class"
-            printf 'windowrule = move %s %s, match:class ^(%s)$\n' "$x" "$y" "$class"
+            printf '%s\n' "${existing_rules[$class]}"
             printf '\n'
         } >> "$temp_file"
-        
-        printf '%s - Saved %s: %sx%s at (%s,%s)\n' "$(date '+%H:%M:%S')" "$class" "$width" "$height" "$x" "$y"
     done
     
     # Atomically replace rules file
@@ -171,6 +198,11 @@ EOF
     # Reload config
     hyprctl reload config-only &>/dev/null
     printf '%s - Config reloaded\n' "$(date '+%H:%M:%S')"
+}
+
+# Legacy wrapper - redirect to update_rules
+save_rules() {
+    update_rules "$@"
 }
 
 # Debounced check and save (accepts pre-fetched state)
