@@ -20,6 +20,11 @@ import type {
   ProtonDBRating,
   ProtonDBTier,
   ProtonDBConfidence,
+  SteamFeaturedCategories,
+  SteamFeaturedItem,
+  SteamAppDetailsResponse,
+  SteamAppDetails,
+  SteamGenre,
 } from "./types";
 
 const STEAM_SEARCH_URL = "https://steamcommunity.com/actions/SearchApps";
@@ -107,7 +112,7 @@ async function fetchFeaturedGames(): Promise<SteamGame[]> {
       throw new Error(`Steam featured API failed: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data: SteamFeaturedCategories = await response.json();
     const topSellers = data.top_sellers?.items || [];
     const specials = data.specials?.items || [];
     
@@ -116,7 +121,7 @@ async function fetchFeaturedGames(): Promise<SteamGame[]> {
     // Combine top sellers and specials, deduplicate and filter out Steam Deck
     const allItems = [...topSellers, ...specials];
     const appIds = allItems
-      .map((item: any) => item.id)
+      .map((item: SteamFeaturedItem) => item.id)
       .filter((id: number) => {
         if (!id || id === 1675200 || seenAppIds.has(id)) return false;
         seenAppIds.add(id);
@@ -129,7 +134,7 @@ async function fetchFeaturedGames(): Promise<SteamGame[]> {
         const detailsResponse = await fetch(`${STEAM_APPDETAILS_URL}?appids=${appId}`);
         if (!detailsResponse.ok) return null;
 
-        const detailsData = await detailsResponse.json();
+        const detailsData: SteamAppDetailsResponse = await detailsResponse.json();
         const gameData = detailsData[appId];
 
         if (gameData?.success && gameData?.data && gameData.data.type === "game") {
@@ -207,14 +212,14 @@ async function fetchProtonDBRating(
   }
 }
 
-async function fetchGameDetails(appId: string): Promise<any> {
+async function fetchGameDetails(appId: string): Promise<SteamAppDetails | null> {
   try {
     const response = await fetch(`${STEAM_APPDETAILS_URL}?appids=${appId}`);
     if (!response.ok) {
       throw new Error(`Steam API request failed: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data: SteamAppDetailsResponse = await response.json();
     const gameData = data[appId];
 
     if (gameData?.success && gameData?.data) {
@@ -356,7 +361,7 @@ ${gameDetails?.short_description || ""}`;
               )}
               {gameDetails.genres && gameDetails.genres.length > 0 && (
                 <Detail.Metadata.TagList title="Genres">
-                  {gameDetails.genres.slice(0, 5).map((genre: any) => (
+                  {gameDetails.genres.slice(0, 5).map((genre: SteamGenre) => (
                     <Detail.Metadata.TagList.Item
                       key={genre.id}
                       text={genre.description}
