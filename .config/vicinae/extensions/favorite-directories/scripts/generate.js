@@ -41,7 +41,7 @@ const DIRECTORIES = [
     icon: "folder-git",
   },
   
-  // NAS directories (denoted with cloud icon)
+  // NAS directories (denoted with mounted emblem)
   {
     name: "nas-documents",
     title: "Documents (NAS)",
@@ -71,6 +71,20 @@ const DIRECTORIES = [
     title: "Videos (NAS)",
     path: "/mnt/nas/video",
     icon: "folder-cloud-videos",
+  },
+  {
+    name: "nas-encrypted",
+    title: "Encrypted (NAS)",
+    path: "/mnt/nas/encrypted",
+    icon: "folder-cloud-encrypted",
+  },
+  
+  // External drives
+  {
+    name: "lacie",
+    title: "LaCie",
+    path: "/mnt/LaCie",
+    icon: "folder-cloud-lacie",
   },
 ];
 
@@ -105,6 +119,8 @@ const ICON_MAP = {
   "folder-music": "folder-music.svg",
   "folder-videos": "folder-videos.svg",
   "folder-git": "folder-git.svg",
+  "folder-encrypted": "folder-encrypted.svg",
+  "folder-lacie": "folder-cloud.svg",
   "user-desktop": "user-desktop.svg",
 };
 

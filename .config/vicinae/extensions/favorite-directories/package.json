@@ -81,6 +81,22 @@
       "description": "Open /mnt/nas/video in file manager",
       "mode": "no-view",
       "icon": "folder-cloud-videos.png"
+    },
+    {
+      "name": "open-nas-encrypted",
+      "title": "Encrypted (NAS)",
+      "subtitle": "Open Encrypted (NAS) folder",
+      "description": "Open /mnt/nas/encrypted in file manager",
+      "mode": "no-view",
+      "icon": "folder-cloud-encrypted.png"
+    },
+    {
+      "name": "open-lacie",
+      "title": "LaCie",
+      "subtitle": "Open LaCie folder",
+      "description": "Open /mnt/LaCie in file manager",
+      "mode": "no-view",
+      "icon": "folder-cloud-lacie.png"
     }
   ],
   "preferences": [
