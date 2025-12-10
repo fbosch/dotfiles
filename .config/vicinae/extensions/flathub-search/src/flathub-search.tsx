@@ -176,11 +176,6 @@ function AppDetail({ app }: { app: FlathubApp }) {
   const screenshots = displayApp.screenshots || [];
   const latestRelease = displayApp.releases?.[0];
 
-  console.log("Screenshots data:", {
-    count: screenshots.length,
-    firstScreenshot: screenshots[0],
-  });
-
   // Create markdown with screenshots using HTML img tags and PNG format (not WebP)
   let markdown = "";
   
