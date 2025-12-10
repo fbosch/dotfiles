@@ -41,13 +41,7 @@
       "app-name": "Spotify"
     }
   },
-  "widgets": [
-    "notifications",
-    "title",
-    "dnd",
-    "volume",
-    "buttons-grid"
-  ],
+  "widgets": ["notifications", "title", "dnd", "volume"],
   "widget-config": {
     "title": {
       "text": "Notifications",
