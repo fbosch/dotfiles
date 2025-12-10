@@ -53,12 +53,12 @@ function workitems_week --description 'Display calendar view of work items touch
     # Get today's date for highlighting
     set -l today (command date +%Y-%m-%d)
     
-    # Extract work items for each day separately (allows caching of past days)
+    # Extract work items for each day (uses cache when available)
     for day_idx in (seq 1 5)
         set -l target_date $dates[$day_idx]
         set -l day_workitems
         
-        # Extract work items for this single day (past days will be cached)
+        # Extract work items for this single day (automatically cached if past date)
         set -l extracted_items (__workitems_extract $target_date $target_date)
         
         # Collect unique work items for this day
