@@ -50,8 +50,11 @@ function workitems_week --description 'Display calendar view of work items touch
         end
     end
     
-    # Get all branches and their commit dates
-    set -l all_branches (git for-each-ref --sort=-committerdate refs/heads/ --format='%(refname:short)|%(committerdate:short)')
+    # Get current git user email for author filtering
+    set -l git_user_email (git config user.email)
+    
+    # Get all branches
+    set -l all_branches (git for-each-ref refs/heads/ --format='%(refname:short)')
     
     # Get today's date for highlighting
     set -l today (command date +%Y-%m-%d)
@@ -61,40 +64,50 @@ function workitems_week --description 'Display calendar view of work items touch
         set -l target_date $dates[$day_idx]
         set -l day_workitems
         
-        for branch_info in $all_branches
-            set -l parts (string split '|' $branch_info)
-            set -l branch_name $parts[1]
-            set -l commit_date $parts[2]
+        for branch_name in $all_branches
+            # Check if this branch has any commits on the target date (authored by you, excluding merges)
+            set -l commits_on_date (git log $branch_name --author="$git_user_email" --no-merges --since="$target_date 00:00:00" --until="$target_date 23:59:59" --pretty=format:"%H" 2>/dev/null)
             
-            if test "$commit_date" = "$target_date"
-                # Extract work item from branch name
-                set -l workitem ""
-                if string match -qr 'AB#(\d+)' $branch_name
-                    set workitem (string match -r 'AB#(\d+)' $branch_name | tail -n 1)
-                else if string match -qr '(\d+)' $branch_name
-                    set workitem (string match -r '\d+' $branch_name | head -n 1)
+            # Skip if no commits on target date
+            if test -z "$commits_on_date"
+                continue
+            end
+            
+            # Extract work item from branch name first
+            set -l workitem ""
+            if string match -qr 'AB#(\d+)' $branch_name
+                set workitem (string match -r 'AB#(\d+)' $branch_name | tail -n 1)
+            else if string match -qr '(\d+)' $branch_name
+                set workitem (string match -r '\d+' $branch_name | head -n 1)
+                # Skip if it looks like a date format (8 digits)
+                if test (string length $workitem) -eq 8
+                    set workitem ""
                 end
+            end
+            
+            # Add work item from branch name if found
+            if test -n "$workitem"
+                if not contains $workitem $day_workitems
+                    set -a day_workitems $workitem
+                end
+            else
+                # No work item in branch name, check commit messages (authored by you, excluding merges)
+                set -l commit_msgs (git log $branch_name --author="$git_user_email" --no-merges --since="$target_date 00:00:00" --until="$target_date 23:59:59" --pretty=format:"%s" 2>/dev/null)
                 
-                if test -n "$workitem"
-                    if not contains $workitem $day_workitems
-                        set -a day_workitems $workitem
-                    end
-                else
-                    # Check commit messages
-                    set -l commits_on_date (git log --all --since="$target_date 00:00:00" --until="$target_date 23:59:59" --pretty=format:"%s" --branches=$branch_name)
-                    
-                    for commit_msg in $commits_on_date
-                        if string match -qr 'AB#(\d+)' $commit_msg
-                            set -l commit_workitems (string match -ar 'AB#(\d+)' $commit_msg)
-                            set -l idx 1
-                            for item in $commit_workitems
-                                if test (math "$idx % 2") -eq 0
+                for commit_msg in $commit_msgs
+                    if string match -qr 'AB#(\d+)' $commit_msg
+                        set -l commit_workitems (string match -ar 'AB#(\d+)' $commit_msg)
+                        set -l idx 1
+                        for item in $commit_workitems
+                            if test (math "$idx % 2") -eq 0
+                                # Skip if it looks like a date format (8 digits)
+                                if test (string length $item) -ne 8
                                     if not contains $item $day_workitems
                                         set -a day_workitems $item
                                     end
                                 end
-                                set idx (math $idx + 1)
                             end
+                            set idx (math $idx + 1)
                         end
                     end
                 end

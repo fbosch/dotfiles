@@ -24,9 +24,12 @@ function workitems_on_date --description 'Extract Azure DevOps work item numbers
     set -l workitem_numbers
     set -l found_branches
     
+    # Get current git user email for author filtering
+    set -l git_user_email (git config user.email)
+    
     for branch_name in $all_branches
-        # Check if this branch has any commits on the target date
-        set -l commits_on_date (git log $branch_name --since="$target_date 00:00:00" --until="$target_date 23:59:59" --pretty=format:"%H")
+        # Check if this branch has any commits on the target date (authored by you, excluding merges)
+        set -l commits_on_date (git log $branch_name --author="$git_user_email" --no-merges --since="$target_date 00:00:00" --until="$target_date 23:59:59" --pretty=format:"%H")
         
         # Skip if no commits on target date
         if test -z "$commits_on_date"
@@ -39,6 +42,10 @@ function workitems_on_date --description 'Extract Azure DevOps work item numbers
             set workitem (string match -r 'AB#(\d+)' $branch_name | tail -n 1)
         else if string match -qr '(\d+)' $branch_name
             set workitem (string match -r '\d+' $branch_name | head -n 1)
+            # Skip if it looks like a date format (8 digits)
+            if test (string length $workitem) -eq 8
+                set workitem ""
+            end
         end
         
         # Add work item from branch name if found
@@ -48,8 +55,8 @@ function workitems_on_date --description 'Extract Azure DevOps work item numbers
                 set -a found_branches $branch_name
             end
         else
-            # No work item in branch name, check commit messages
-            set -l commit_msgs (git log $branch_name --since="$target_date 00:00:00" --until="$target_date 23:59:59" --pretty=format:"%s")
+            # No work item in branch name, check commit messages (authored by you, excluding merges)
+            set -l commit_msgs (git log $branch_name --author="$git_user_email" --no-merges --since="$target_date 00:00:00" --until="$target_date 23:59:59" --pretty=format:"%s")
             
             for commit_msg in $commit_msgs
                 if string match -qr 'AB#(\d+)' $commit_msg
@@ -57,10 +64,13 @@ function workitems_on_date --description 'Extract Azure DevOps work item numbers
                     set -l idx 1
                     for item in $commit_workitems
                         if test (math "$idx % 2") -eq 0
-                            if not contains $item $workitem_numbers
-                                set -a workitem_numbers $item
-                                if not contains $branch_name $found_branches
-                                    set -a found_branches $branch_name
+                            # Skip if it looks like a date format (8 digits)
+                            if test (string length $item) -ne 8
+                                if not contains $item $workitem_numbers
+                                    set -a workitem_numbers $item
+                                    if not contains $branch_name $found_branches
+                                        set -a found_branches $branch_name
+                                    end
                                 end
                             end
                         end

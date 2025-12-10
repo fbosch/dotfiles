@@ -77,31 +77,19 @@ STAGED DIFF (focus on THIS change):
     cat $temp_diff >>$temp_prompt
     
     # Run AI generation with fallback
+    # Note: OpenCode CLI doesn't support ephemeral sessions or programmatic deletion
+    # Sessions will accumulate and need manual cleanup via 'opencode session list' in TUI
     set temp_output (mktemp -t opencode_output.XXXXXX)
     set current_model $ai_model
-    set session_id ""
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $current_model..." -- sh -c "cat $temp_prompt | opencode run -m $current_model --format json > $temp_output 2>&1"
     
     set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | string trim)
-    
-    # Extract session ID for cleanup
-    set session_id (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "session") | .sessionId' 2>/dev/null | head -n 1)
     
     # Try fallback model if primary failed
     if test -z "$raw_output"
         set current_model $fallback_model
         gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- sh -c "cat $temp_prompt | opencode run -m $current_model --format json > $temp_output 2>&1"
         set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | string trim)
-        
-        # Update session ID if fallback was used
-        if test -z "$session_id"
-            set session_id (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "session") | .sessionId' 2>/dev/null | head -n 1)
-        end
-    end
-    
-    # Clean up session immediately after getting output
-    if test -n "$session_id"
-        opencode session delete "$session_id" >/dev/null 2>&1
     end
     
     rm -f $temp_prompt $temp_output $temp_diff
