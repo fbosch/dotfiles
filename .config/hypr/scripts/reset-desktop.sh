@@ -8,6 +8,7 @@ hyprctl reload
 pkill waybar 2>/dev/null || true
 pkill hyprpaper 2>/dev/null || true
 pkill -f "waybar-hover.sh" 2>/dev/null || true
+pkill gjs 2>/dev/null || true  # Kill AGS instances
 
 sleep 0.2
 

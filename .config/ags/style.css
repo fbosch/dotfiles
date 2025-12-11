@@ -16,3 +16,99 @@
   font-weight: bold;
   color: #ffcc00;
 }
+
+/* Confirmation Dialog */
+.confirm-dialog {
+  background-color: transparent;
+}
+
+.dialog-box {
+  background-color: rgb(32, 32, 32);
+  border-radius: 12px;
+  padding: 32px 40px;
+  min-width: 400px;
+  max-width: 450px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0.4px 0.8px 0.7px hsl(0deg 0% 0% / 0.15),
+    0.7px 1.3px 1.1px -1.7px hsl(0deg 0% 0% / 0.12),
+    2.4px 4.6px 3.9px -3.3px hsl(0deg 0% 0% / 0.08),
+    7.1px 13.6px 11.5px -5px hsl(0deg 0% 0% / 0.04);
+}
+
+.dialog-icon {
+  font-size: 48px;
+  color: #ff9800;
+  margin-bottom: 16px;
+}
+
+.dialog-title {
+  font-family: "SF Pro Rounded", system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 8px;
+}
+
+.dialog-message {
+  font-family: "SF Pro Rounded", system-ui, sans-serif;
+  font-size: 13px;
+  color: #999999;
+  margin-bottom: 24px;
+}
+
+.dialog-button {
+  padding: 10px 32px;
+  font-family: "SF Pro Rounded", system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 6px;
+  min-width: 140px;
+  transition: none;
+}
+
+.dialog-button label {
+  font-family: "SF Pro Rounded", system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: inherit;
+}
+
+.dialog-button.cancel {
+  background-color: transparent;
+  color: #ffffff;
+  border: 1px solid #0067c0;
+}
+
+.dialog-button.cancel:hover {
+  background-color: rgba(0, 103, 192, 0.1);
+  border-color: #1a7fd4;
+}
+
+.dialog-button.cancel:active {
+  background-color: rgba(0, 103, 192, 0.2);
+}
+
+.dialog-button.cancel:focus {
+  outline: 2px solid #0067c0;
+  outline-offset: 2px;
+}
+
+.dialog-button.confirm {
+  background-color: transparent;
+  color: #ff6b6b;
+  border: 1px solid transparent;
+}
+
+.dialog-button.confirm:hover {
+  color: #ff8585;
+}
+
+.dialog-button.confirm:active {
+  color: #ff5252;
+}
+
+.dialog-button.confirm:focus {
+  outline: 2px solid #ff6b6b;
+  outline-offset: 2px;
+}
