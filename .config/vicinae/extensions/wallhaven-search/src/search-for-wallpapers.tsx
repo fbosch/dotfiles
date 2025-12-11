@@ -529,7 +529,7 @@ function WallhavenSearchContent() {
 	const preferences = getPreferenceValues<Preferences>();
 	const [searchText, setSearchText] = useState("");
 	const [categories, setCategories] = useState("111");
-	const debouncedSearchText = useDebounce(searchText, 800);
+	const debouncedSearchText = useDebounce(searchText, 400);
 
 	const handleDownload = async (wallpaper: Wallpaper) => {
 		await downloadWallpaper(

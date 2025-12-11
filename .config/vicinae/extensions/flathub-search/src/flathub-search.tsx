@@ -313,11 +313,7 @@ function FlathubSearchContent() {
 									? [{ text: formatInstalls(app.installs_last_month) }]
 									: []
 							}
-							detail={
-								<QueryClientProvider client={queryClient}>
-									<AppDetail app={app} />
-								</QueryClientProvider>
-							}
+							detail={<AppDetail app={app} />}
 							actions={
 								<ActionPanel>
 									<Action
@@ -340,11 +336,18 @@ function FlathubSearchContent() {
 											}}
 											shortcut={{ modifiers: ["cmd"], key: "c" }}
 										/>
-										<Action.OpenInBrowser
-											title="Open on Flathub"
-											url={`https://flathub.org/apps/${app.app_id}`}
-											shortcut={{ modifiers: ["cmd"], key: "o" }}
-										/>
+									<Action.OpenInBrowser
+										title="Open on Flathub"
+										url={`https://flathub.org/apps/${app.app_id}`}
+										shortcut={{ modifiers: ["cmd"], key: "o" }}
+										onOpen={async () => {
+											await showToast({
+												style: Toast.Style.Success,
+												title: "Opening on Flathub",
+												message: app.name,
+											});
+										}}
+									/>
 										<Action.CopyToClipboard
 											title="Copy Install Command"
 											content={`flatpak install flathub ${app.app_id}`}
