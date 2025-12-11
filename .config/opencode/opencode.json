@@ -1,11 +1,47 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "theme": "zenwritten-dark",
-  "instructions": [
-    "AGENTS.md",
-    "docs/*.md",
-    ".cursor/rules/*.md*"
-  ],
+  "instructions": ["AGENTS.md", "docs/*.md", ".cursor/rules/*.md*"],
+  "keybinds": {
+    "leader": "ctrl+x",
+    "app_exit": "ctrl+c,ctrl+d,<leader>q",
+    "editor_open": "<leader>e",
+    "theme_list": "<leader>t",
+    "sidebar_toggle": "<leader>b",
+    "status_view": "<leader>s",
+    "session_export": "<leader>x",
+    "session_new": "<leader>n",
+    "session_list": "<leader>l",
+    "session_timeline": "<leader>g",
+    "session_interrupt": "escape",
+    "session_compact": "<leader>c",
+    "session_child_cycle": "<leader>+right",
+    "session_child_cycle_reverse": "<leader>+left",
+    "messages_page_up": "ctrl+u,pageup",
+    "messages_page_down": "ctrl+d,pagedown",
+    "messages_half_page_up": "ctrl+b",
+    "messages_half_page_down": "ctrl+f",
+    "messages_first": "ctrl+g,home",
+    "messages_last": "ctrl+alt+g,end",
+    "messages_copy": "<leader>y",
+    "messages_undo": "<leader>u",
+    "messages_redo": "<leader>r",
+    "messages_last_user": "none",
+    "messages_toggle_conceal": "<leader>h",
+    "model_list": "<leader>m",
+    "model_cycle_recent": "f2",
+    "model_cycle_recent_reverse": "shift+f2",
+    "command_list": "ctrl+p",
+    "agent_list": "<leader>a",
+    "agent_cycle": "tab",
+    "agent_cycle_reverse": "shift+tab",
+    "input_clear": "ctrl+c",
+    "input_paste": "ctrl+v",
+    "input_submit": "enter",
+    "input_newline": "shift+enter,ctrl+j",
+    "history_previous": "up,ctrl+k",
+    "history_next": "down,ctrl+j"
+  },
   "provider": {
     "github-copilot": {
       "npm": "@opeoginni/github-copilot-openai-compatible",
@@ -22,45 +58,27 @@
     },
     "vitest": {
       "type": "local",
-      "command": [
-        "bunx",
-        "@djankies/vitest-mcp"
-      ]
+      "command": ["bunx", "@djankies/vitest-mcp"]
     },
     "playwright": {
       "type": "local",
-      "command": [
-        "bunx",
-        "@playwright/mcp@latest"
-      ]
+      "command": ["bunx", "@playwright/mcp@latest"]
     },
     "eslint": {
       "type": "local",
-      "command": [
-        "bunx",
-        "@eslint/mcp@latest"
-      ]
+      "command": ["bunx", "@eslint/mcp@latest"]
     },
     "sequential-thinking": {
       "type": "local",
-      "command": [
-        "bunx",
-        "@modelcontextprotocol/server-sequential-thinking"
-      ]
+      "command": ["bunx", "@modelcontextprotocol/server-sequential-thinking"]
     },
     "nixos": {
       "type": "local",
-      "command": [
-        "uvx",
-        "mcp-nixos"
-      ]
+      "command": ["uvx", "mcp-nixos"]
     },
     "deepwiki": {
       "type": "local",
-      "command": [
-        "bunx",
-        "mcp-deepwiki@latest"
-      ]
+      "command": ["bunx", "mcp-deepwiki@latest"]
     }
   }
 }
