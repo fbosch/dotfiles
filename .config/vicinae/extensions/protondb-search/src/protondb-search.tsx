@@ -7,6 +7,7 @@ import {
 	Action,
 	ActionPanel,
 	Cache,
+	closeMainWindow,
 	Color,
 	Detail,
 	Icon,
@@ -385,6 +386,7 @@ function GameActions({
 						title: "Opening on ProtonDB",
 						message: game.name,
 					});
+					await closeMainWindow();
 				}}
 			/>
 			<Action.OpenInBrowser
@@ -398,6 +400,7 @@ function GameActions({
 						title: "Opening on Steam",
 						message: game.name,
 					});
+					await closeMainWindow();
 				}}
 			/>
 			<Action.OpenInBrowser
@@ -411,6 +414,7 @@ function GameActions({
 						title: "Opening in Steam app",
 						message: game.name,
 					});
+					await closeMainWindow();
 				}}
 			/>
 			<ActionPanel.Section>

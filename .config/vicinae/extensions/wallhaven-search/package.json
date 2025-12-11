@@ -3,7 +3,7 @@
   "name": "wallhaven",
   "title": "Wallhaven",
   "description": "search for wallpapers",
-  "categories": [],
+  "categories": ["Design Tools", "Media"],
   "license": "MIT",
   "author": "fbosch",
   "contributors": [],

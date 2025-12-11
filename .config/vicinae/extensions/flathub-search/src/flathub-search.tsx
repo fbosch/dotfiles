@@ -9,6 +9,7 @@ import {
 	ActionPanel,
 	Cache,
 	Clipboard,
+	closeMainWindow,
 	Icon,
 	List,
 	showToast,
@@ -346,6 +347,7 @@ function FlathubSearchContent() {
 												title: "Opening on Flathub",
 												message: app.name,
 											});
+											await closeMainWindow();
 										}}
 									/>
 										<Action.CopyToClipboard

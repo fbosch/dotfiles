@@ -3,7 +3,7 @@
   "name": "nerdfont-search",
   "title": "NerdFonts",
   "description": "utility to search and find nerdfont icons and add them to your clipboard",
-  "categories": [],
+  "categories": ["Developer Tools", "Design Tools"],
   "license": "MIT",
   "author": "fbosch",
   "contributors": [],

@@ -37,6 +37,13 @@ nvim --headless +"Lazy! sync" +qa    # Update plugins
 nvim --headless +checkhealth +qa     # Validate setup
 ```
 
+### Vicinae Extensions
+
+```bash
+./scripts/vicinae-build-extensions.sh  # Build all extensions
+# See .config/vicinae/extensions/AGENTS.md for extension development guide
+```
+
 ### Testing Changes
 
 ```bash
@@ -123,6 +130,7 @@ return {
   aliases.fish             # Aliases and abbreviations
   profile.fish             # Environment variables
   scripts.fish             # Helper functions
+.config/vicinae/extensions/ # Custom Vicinae extensions (see AGENTS.md in this dir)
 scripts/                    # Repo maintenance scripts (ignored by stow)
 Brewfile                    # All Homebrew dependencies
 ```

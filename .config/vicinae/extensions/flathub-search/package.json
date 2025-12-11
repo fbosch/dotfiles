@@ -3,7 +3,7 @@
   "name": "flathub-search",
   "title": "Flathub",
   "description": "Search for flatpak applications",
-  "categories": [],
+  "categories": ["Applications", "System"],
   "license": "MIT",
   "author": "fbosch",
   "contributors": [],

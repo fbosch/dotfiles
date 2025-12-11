@@ -3,7 +3,7 @@
   "name": "protondb-search",
   "title": "ProtonDB",
   "description": "Search Steam games and check Linux compatibility via Proton",
-  "categories": [],
+  "categories": ["Applications", "Fun"],
   "license": "MIT",
   "author": "fbosch",
   "contributors": [],

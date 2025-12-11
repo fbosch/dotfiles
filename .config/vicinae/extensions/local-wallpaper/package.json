@@ -3,7 +3,7 @@
   "name": "local-wallpaper",
   "title": "Wallpaper",
   "description": "Browse and apply wallpapers from your local collection",
-  "categories": [],
+  "categories": ["Design Tools", "Media", "System"],
   "license": "MIT",
   "author": "fbosch",
   "contributors": [],

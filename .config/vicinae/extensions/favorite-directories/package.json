@@ -3,7 +3,7 @@
   "name": "favorite-directories",
   "title": "Favorite Directories",
   "description": "Quickly search and navigate to your favorite directories",
-  "categories": [],
+  "categories": ["Productivity", "System"],
   "license": "MIT",
   "author": "fbosch",
   "contributors": [],
