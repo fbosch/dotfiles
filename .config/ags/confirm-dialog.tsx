@@ -269,39 +269,29 @@ function createWindow() {
   updateCSS(currentConfig);
 }
 
-// IPC to receive show/hide commands
-const configFile = GLib.get_user_runtime_dir() + "/ags-confirm-config.json";
-
-function watchConfig() {
-  const file = Gio.File.new_for_path(configFile);
-  const monitor = file.monitor(Gio.FileMonitorFlags.NONE, null);
-  
-  monitor.connect('changed', (monitor, file, other_file, event_type) => {
-    if (event_type === Gio.FileMonitorEvent.CHANGED || event_type === Gio.FileMonitorEvent.CREATED) {
-      try {
-        const [ok, contents] = GLib.file_get_contents(configFile);
-        if (ok) {
-          const decoder = new TextDecoder();
-          const configData = JSON.parse(decoder.decode(contents));
-          
-          if (configData.action === "show") {
-            showDialog(configData.config);
-          } else if (configData.action === "hide") {
-            hideDialog();
-          }
-        }
-      } catch (e) {
-        print("Error reading config:", e);
-      }
-    }
-  });
-}
-
+// IPC to receive show/hide commands via AGS messaging
 app.start({
   main() {
     createWindow();
-    watchConfig();
     return win;
   },
   instanceName: "confirm-dialog-daemon",
+  requestHandler(request: string, res: (response: any) => void) {
+    try {
+      const data = JSON.parse(request);
+      
+      if (data.action === "show") {
+        showDialog(data.config);
+        res("shown");
+      } else if (data.action === "hide") {
+        hideDialog();
+        res("hidden");
+      } else {
+        res("unknown action");
+      }
+    } catch (e) {
+      print("Error handling request:", e);
+      res("error: " + e);
+    }
+  },
 });

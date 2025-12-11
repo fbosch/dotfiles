@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Client script to show confirm dialog via daemon
+# Client script to show confirm dialog via daemon using AGS request
 # Usage: confirm-dialog-show.sh --icon "⚠" --title "Exit" ...
-
-CONFIG_FILE="$XDG_RUNTIME_DIR/ags-confirm-config.json"
 
 # Build JSON config from arguments
 icon="⚠"
@@ -26,8 +24,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Write config to file (will trigger file monitor in daemon)
-cat > "$CONFIG_FILE" <<EOF
+# Send request directly to AGS daemon with instance name
+ags request -i confirm-dialog-daemon "$(cat <<EOF
 {
   "action": "show",
   "config": {
@@ -41,3 +39,4 @@ cat > "$CONFIG_FILE" <<EOF
   }
 }
 EOF
+)"
