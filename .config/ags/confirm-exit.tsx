@@ -11,6 +11,7 @@ app.start({
       background-color: rgba(0, 0, 0, 0);
       background: none;
       border: none;
+      padding: 40px;
     }
     
     box.dialog-box {
@@ -19,6 +20,7 @@ app.start({
       padding: 28px 32px 24px 32px;
       min-width: 360px;
       border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
     }
     
     box.content-box {
