@@ -80,11 +80,11 @@
     "ignore-list": ["vicinae", "Vicinae Launcher"],
     "app_ids-mapping": {
       "chrome-chat.openai.com__-ChatGPTProfile": "ChatGPT",
-      "chrome-music.youtube.com__-YouTubeMusicProfile": "YouTube Music",
+      "chrome-music.youtube.com__-YoutubeMusicProfile": "YouTube Music",
       "chrome-www.notion.so__-NotionProfile": "Notion",
-      "chrome-mail.proton.me__-ProtonMailProfile": "Proton Mail",
+      "chrome-mail.proton.me__-ProtonmailProfile": "Proton Mail",
       "chrome-calendar.proton.me__-ProtonCalendarProfile": "Proton Calendar",
-      "chrome-photos.rbn-nas.home__-SynologyPhotosProfile": "Synology Photos",
+      "chrome-photos.corvus-corax.synology.me__-SynologyPhotosProfile": "Synology Photos",
       "chrome-device.realforce.co.jp__-RealforceProfile": "Realforce"
     }
   },
