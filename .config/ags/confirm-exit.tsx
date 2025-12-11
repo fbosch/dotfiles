@@ -80,49 +80,49 @@ app.start({
     box.dialog-box {
       background-color: #2a2a2a;
       border-radius: 12px;
-      padding: 28px 32px 24px 32px;
-      min-width: 360px;
+      padding: 24px 28px 20px 28px;
+      min-width: 320px;
       border: 1px solid rgba(255, 255, 255, 0.1);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
     }
     
     box.content-box {
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
     
     label.dialog-icon {
-      font-size: 38px;
+      font-size: 32px;
       color: ${colors.iconColor};
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
     
     label.dialog-title {
-      font-family: "JetBrains Mono", "SF Pro Rounded", system-ui, sans-serif;
-      font-size: 17px;
-      font-weight: 600;
+      font-family: "SF Pro Rounded", "SF Pro Text", system-ui, sans-serif;
+      font-size: 15px;
+      font-weight: 500;
       color: #ffffff;
       letter-spacing: -0.2px;
-      margin-bottom: 6px;
+      margin-bottom: 5px;
     }
     
     label.dialog-message {
-      font-family: "JetBrains Mono", "SF Pro Rounded", system-ui, sans-serif;
+      font-family: "SF Pro Rounded", "SF Pro Text", system-ui, sans-serif;
       font-size: 13px;
       font-weight: 400;
       color: #999999;
     }
     
     button.dialog-button {
-      padding: 8px 16px;
+      padding: 6px 14px;
       font-size: 13px;
       font-weight: 500;
       border-radius: 6px;
-      min-height: 34px;
+      min-height: 30px;
       transition: background-color 150ms ease, color 150ms ease;
     }
     
     button.dialog-button label {
-      font-family: "JetBrains Mono", "SF Pro Rounded", system-ui, sans-serif;
+      font-family: "SF Pro Rounded", "SF Pro Text", system-ui, sans-serif;
       color: inherit;
     }
     
