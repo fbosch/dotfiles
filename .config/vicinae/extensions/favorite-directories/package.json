@@ -43,6 +43,14 @@
       "icon": "folder-git.png"
     },
     {
+      "name": "open-projects",
+      "title": "Projects",
+      "subtitle": "Open Projects folder",
+      "description": "Open ~/Projects in file manager",
+      "mode": "no-view",
+      "icon": "folder-git.png"
+    },
+    {
       "name": "open-nas-documents",
       "title": "Documents (NAS)",
       "subtitle": "Open Documents (NAS) folder",

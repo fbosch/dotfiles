@@ -246,7 +246,7 @@ function AppDetail({ app }: { app: FlathubApp }) {
 
 function FlathubSearchContent() {
   const [searchText, setSearchText] = useState("");
-  const [showingDetail, setShowingDetail] = useState(true);
+  const [showingDetail, setShowingDetail] = useState(false);
   const debouncedSearch = useDebounce(searchText, SEARCH_DEBOUNCE_MS);
 
   // Popular apps query
