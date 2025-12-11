@@ -5,6 +5,69 @@ const GLib = imports.gi.GLib;
 const Gtk = imports.gi.Gtk;
 const Gdk = imports.gi.Gdk;
 
+// Parse command line arguments for configuration
+interface ConfirmConfig {
+  icon: string;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  confirmCommand: string;
+  variant: "danger" | "warning" | "info";
+}
+
+function parseArgs(): ConfirmConfig {
+  const args = ARGV || [];
+  const config: ConfirmConfig = {
+    icon: "⚠",
+    title: "Are you sure",
+    message: "High-impact operation, please confirm",
+    confirmLabel: "Confirm",
+    cancelLabel: "Cancel",
+    confirmCommand: "uwsm stop",
+    variant: "danger",
+  };
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--icon" && args[i + 1]) config.icon = args[++i];
+    if (arg === "--title" && args[i + 1]) config.title = args[++i];
+    if (arg === "--message" && args[i + 1]) config.message = args[++i];
+    if (arg === "--confirm-label" && args[i + 1]) config.confirmLabel = args[++i];
+    if (arg === "--cancel-label" && args[i + 1]) config.cancelLabel = args[++i];
+    if (arg === "--confirm-command" && args[i + 1]) config.confirmCommand = args[++i];
+    if (arg === "--variant" && args[i + 1]) config.variant = args[++i] as "danger" | "warning" | "info";
+  }
+
+  return config;
+}
+
+const config = parseArgs();
+
+// Variant color schemes
+const variants = {
+  danger: {
+    iconColor: "#e74c3c",
+    confirmColor: "#e74c3c",
+    confirmFocusColor: "#e74c3c",
+    confirmHoverColor: "#ff6b5a",
+  },
+  warning: {
+    iconColor: "#f39c12",
+    confirmColor: "#f39c12",
+    confirmFocusColor: "#f39c12",
+    confirmHoverColor: "#ffb84d",
+  },
+  info: {
+    iconColor: "#3498db",
+    confirmColor: "#3498db",
+    confirmFocusColor: "#3498db",
+    confirmHoverColor: "#5dade2",
+  },
+};
+
+const colors = variants[config.variant];
+
 app.start({
   css: `
     window.confirm-dialog {
@@ -29,7 +92,7 @@ app.start({
     
     label.dialog-icon {
       font-size: 38px;
-      color: #e74c3c;
+      color: ${colors.iconColor};
       margin-bottom: 12px;
     }
     
@@ -80,16 +143,16 @@ app.start({
     
     button.confirm {
       background-color: transparent;
-      color: #e74c3c;
+      color: ${colors.confirmColor};
       border: none;
     }
     
     button.confirm:hover {
-      color: #ff6b5a;
+      color: ${colors.confirmHoverColor};
     }
     
     button.confirm:focus {
-      outline: 2px solid #e74c3c;
+      outline: 2px solid ${colors.confirmFocusColor};
       outline-offset: 2px;
     }
   `,
@@ -133,13 +196,13 @@ app.start({
     });
     contentBox.add_css_class("content-box");
     
-    const icon = new Gtk.Label({ label: "⚠", halign: Gtk.Align.CENTER });
+    const icon = new Gtk.Label({ label: config.icon, halign: Gtk.Align.CENTER });
     icon.add_css_class("dialog-icon");
     
-    const title = new Gtk.Label({ label: "Are you sure", halign: Gtk.Align.CENTER });
+    const title = new Gtk.Label({ label: config.title, halign: Gtk.Align.CENTER });
     title.add_css_class("dialog-title");
     
-    const message = new Gtk.Label({ label: "High-impact operation, please confirm", halign: Gtk.Align.CENTER });
+    const message = new Gtk.Label({ label: config.message, halign: Gtk.Align.CENTER });
     message.add_css_class("dialog-message");
     
     contentBox.append(icon);
@@ -156,15 +219,17 @@ app.start({
     const cancelButton = new Gtk.Button({ hexpand: true, can_focus: true });
     cancelButton.add_css_class("dialog-button");
     cancelButton.add_css_class("cancel");
-    cancelButton.set_child(new Gtk.Label({ label: "Cancel" }));
+    cancelButton.set_child(new Gtk.Label({ label: config.cancelLabel }));
     cancelButton.connect("clicked", () => app.quit());
     
     const confirmButton = new Gtk.Button({ hexpand: true, can_focus: true });
     confirmButton.add_css_class("dialog-button");
     confirmButton.add_css_class("confirm");
-    confirmButton.set_child(new Gtk.Label({ label: "Confirm" }));
+    confirmButton.set_child(new Gtk.Label({ label: config.confirmLabel }));
     confirmButton.connect("clicked", () => {
-      GLib.spawn_command_line_async("uwsm stop");
+      if (config.confirmCommand) {
+        GLib.spawn_command_line_async(config.confirmCommand);
+      }
       app.quit();
     });
     

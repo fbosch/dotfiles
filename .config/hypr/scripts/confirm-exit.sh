@@ -7,5 +7,12 @@ if ags list | grep -q "confirm-exit"; then
     exit 0
 fi
 
-# Launch AGS confirmation dialog
-ags run ~/.config/ags/confirm-exit.tsx
+# Launch AGS confirmation dialog with uwsm stop parameters
+ags run ~/.config/ags/confirm-exit.tsx -- \
+    --icon "⚠" \
+    --title "Exit Hyprland" \
+    --message "This will end your Wayland session" \
+    --confirm-label "Exit" \
+    --cancel-label "Cancel" \
+    --confirm-command "uwsm stop" \
+    --variant "danger"
