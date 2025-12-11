@@ -18,3 +18,4 @@ hyprpaper &
 swaync-client -R &
 swaync-client -rs &
 bash ~/.config/hypr/scripts/waybar-hover.sh &
+ags run ~/.config/ags/confirm-dialog.tsx &

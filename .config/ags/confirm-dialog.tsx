@@ -62,53 +62,54 @@ function updateCSS(config: ConfirmConfig) {
   
   app.apply_css(`
     window.confirm-dialog {
-      background-color: rgba(0, 0, 0, 0);
-      background: none;
+      background-color: transparent;
       border: none;
       padding: 40px;
     }
     
     box.dialog-box {
-      background-color: #2a2a2a;
+      background-color: rgba(42, 42, 42, 0.75);
       border-radius: 12px;
-      padding: 24px 28px 20px 28px;
-      min-width: 320px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 24px 24px 20px 24px;
+      min-width: 300px;
+      max-width: 340px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
     }
     
     box.content-box {
-      margin-bottom: 16px;
+      margin-bottom: 20px;
     }
     
     label.dialog-icon {
-      font-size: 32px;
+      font-size: 36px;
       color: ${colors.iconColor};
-      margin-bottom: 10px;
+      margin-bottom: 16px;
     }
     
     label.dialog-title {
       font-family: "SF Pro Rounded", "SF Pro Text", system-ui, sans-serif;
-      font-size: 16px;
-      font-weight: 500;
+      font-size: 14px;
+      font-weight: 600;
       color: #ffffff;
-      letter-spacing: -0.2px;
-      margin-bottom: 7px;
+      letter-spacing: 0px;
+      margin-bottom: 4px;
     }
     
     label.dialog-message {
       font-family: "SF Pro Rounded", "SF Pro Text", system-ui, sans-serif;
-      font-size: 14px;
+      font-size: 12px;
       font-weight: 400;
-      color: #999999;
+      color: #b3b3b3;
+      line-height: 1.5;
     }
     
     button.dialog-button {
-      padding: 6px 14px;
+      padding: 6px 16px;
       font-size: 13px;
       font-weight: 500;
       border-radius: 6px;
-      min-height: 30px;
+      min-height: 24px;
       transition: background-color 150ms ease, color 150ms ease;
     }
     
