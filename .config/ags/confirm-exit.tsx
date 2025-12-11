@@ -48,12 +48,12 @@ app.start({
     }
     
     button.dialog-button {
-      padding: 10px 20px;
-      font-size: 14px;
+      padding: 8px 16px;
+      font-size: 13px;
       font-weight: 500;
       border-radius: 6px;
-      min-height: 38px;
-      transition: all 150ms ease;
+      min-height: 34px;
+      transition: background-color 150ms ease, color 150ms ease;
     }
     
     button.dialog-button label {
@@ -65,7 +65,6 @@ app.start({
       background-color: #3b5998;
       color: #ffffff;
       border: none;
-      outline: none;
     }
     
     button.cancel:hover {
@@ -81,7 +80,6 @@ app.start({
       background-color: transparent;
       color: #e74c3c;
       border: none;
-      outline: none;
     }
     
     button.confirm:hover {
@@ -175,6 +173,12 @@ app.start({
     dialogBox.append(contentBox);
     dialogBox.append(buttonBox);
     win.set_child(dialogBox);
+    
+    // Focus cancel button after window is fully assembled
+    GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+      cancelButton.grab_focus();
+      return GLib.SOURCE_REMOVE;
+    });
     
     return win;
   },
