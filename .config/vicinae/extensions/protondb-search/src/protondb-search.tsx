@@ -379,18 +379,39 @@ function GameActions({
 				shortcut={
 					showDetailsAction ? { modifiers: ["cmd"], key: "p" } : undefined
 				}
+				onOpen={async () => {
+					await showToast({
+						style: Toast.Style.Success,
+						title: "Opening on ProtonDB",
+						message: game.name,
+					});
+				}}
 			/>
 			<Action.OpenInBrowser
 				title="Open on Steam"
 				url={`https://store.steampowered.com/app/${game.appid}`}
 				icon={Icon.Store}
 				shortcut={{ modifiers: ["cmd"], key: "s" }}
+				onOpen={async () => {
+					await showToast({
+						style: Toast.Style.Success,
+						title: "Opening on Steam",
+						message: game.name,
+					});
+				}}
 			/>
 			<Action.OpenInBrowser
 				title="Open in Steam"
 				url={`steam://store/${game.appid}`}
 				icon={Icon.AppWindow}
 				shortcut={{ modifiers: ["cmd", "shift"], key: "s" }}
+				onOpen={async () => {
+					await showToast({
+						style: Toast.Style.Success,
+						title: "Opening in Steam app",
+						message: game.name,
+					});
+				}}
 			/>
 			<ActionPanel.Section>
 				<Action.CopyToClipboard
