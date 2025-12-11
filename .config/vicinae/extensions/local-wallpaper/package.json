@@ -79,12 +79,15 @@
   ],
   "scripts": {
     "build": "vici build",
-    "dev": "vici develop"
+    "dev": "vici develop",
+    "format": "biome format --write src",
+    "lint": "vici lint"
   },
   "dependencies": {
-    "@vicinae/api": "^0.15.7"
+    "@vicinae/api": "^0.16.14"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.2",
     "typescript": "^5.9.3"
   }
 }

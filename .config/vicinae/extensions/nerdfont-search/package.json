@@ -23,16 +23,19 @@
     "prebuild": "node scripts/build-index.js",
     "build": "vici build",
     "dev": "vici develop",
+    "format": "biome format --write src",
+    "lint": "vici lint",
     "test:consistency": "node test/search-consistency.test.js",
     "test:stable-sort": "node test/verify-stable-sort.test.js",
     "test": "npm run test:consistency && npm run test:stable-sort"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.6",
-    "@vicinae/api": "^0.15.7",
+    "@vicinae/api": "^0.16.14",
     "fuse.js": "^7.1.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.2",
     "typescript": "^5.9.3"
   }
 }
