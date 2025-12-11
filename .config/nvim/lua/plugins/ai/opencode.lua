@@ -51,52 +51,24 @@ return {
 			vim.api.nvim_create_autocmd("FileType", {
 				pattern = "opencode_terminal",
 				callback = function(args)
-					local opts = { buffer = args.buf, silent = true }
+					local buf_opts = { buffer = args.buf, silent = true }
 
-					-- Exit terminal with Ctrl-Esc or q (in normal mode)
+					-- Exit terminal with Ctrl-Esc (from terminal mode)
 					vim.keymap.set("t", "<C-Esc>", function()
 						vim.cmd("stopinsert")
 						vim.cmd("wincmd p")
-					end, vim.tbl_extend("force", opts, { desc = "Exit opencode terminal" }))
+					end, vim.tbl_extend("force", buf_opts, { desc = "Exit opencode terminal" }))
 
+					-- Exit with q (from normal mode only)
 					vim.keymap.set("n", "q", function()
 						vim.cmd("wincmd p")
-					end, vim.tbl_extend("force", opts, { desc = "Exit opencode terminal" }))
+					end, vim.tbl_extend("force", buf_opts, { desc = "Exit opencode terminal" }))
 
-					-- Navigate splits with Shift + hjkl
-					vim.keymap.set(
-						"n",
-						"<S-h>",
-						"<C-w>h",
-						vim.tbl_extend("force", opts, { desc = "Move to left split" })
-					)
-					vim.keymap.set(
-						"n",
-						"<S-j>",
-						"<C-w>j",
-						vim.tbl_extend("force", opts, { desc = "Move to below split" })
-					)
-					vim.keymap.set(
-						"n",
-						"<S-k>",
-						"<C-w>k",
-						vim.tbl_extend("force", opts, { desc = "Move to above split" })
-					)
-					vim.keymap.set(
-						"n",
-						"<S-l>",
-						"<C-w>l",
-						vim.tbl_extend("force", opts, { desc = "Move to right split" })
-					)
-
-					-- Session navigation (Shift+Ctrl to avoid conflict with Vim's scroll)
-					vim.keymap.set("n", "<S-C-u>", function()
-						require("opencode").command("session.half.page.up")
-					end, vim.tbl_extend("force", opts, { desc = "opencode half page up" }))
-
-					vim.keymap.set("n", "<S-C-d>", function()
-						require("opencode").command("session.half.page.down")
-					end, vim.tbl_extend("force", opts, { desc = "opencode half page down" }))
+					-- Navigate splits in normal mode only (avoid terminal mode conflicts)
+					vim.keymap.set("n", "<C-h>", "<C-w>h", buf_opts)
+					vim.keymap.set("n", "<C-j>", "<C-w>j", buf_opts)
+					vim.keymap.set("n", "<C-k>", "<C-w>k", buf_opts)
+					vim.keymap.set("n", "<C-l>", "<C-w>l", buf_opts)
 				end,
 			})
 

@@ -98,16 +98,16 @@ app.start({
     
     label.dialog-title {
       font-family: "SF Pro Rounded", "SF Pro Text", system-ui, sans-serif;
-      font-size: 15px;
+      font-size: 16px;
       font-weight: 500;
       color: #ffffff;
       letter-spacing: -0.2px;
-      margin-bottom: 5px;
+      margin-bottom: 7px;
     }
     
     label.dialog-message {
       font-family: "SF Pro Rounded", "SF Pro Text", system-ui, sans-serif;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 400;
       color: #999999;
     }
@@ -167,7 +167,6 @@ app.start({
     win.set_layer(Astal.Layer.OVERLAY);
     win.set_exclusivity(Astal.Exclusivity.EXCLUSIVE);
     win.set_keymode(Astal.Keymode.EXCLUSIVE);
-    
     win.add_css_class("confirm-dialog");
     
     // Add escape key handler
@@ -181,14 +180,13 @@ app.start({
     });
     win.add_controller(keyController);
     
-    // Build UI programmatically to ensure proper layout
+    // Build UI programmatically
     const dialogBox = new Gtk.Box({
       orientation: Gtk.Orientation.VERTICAL,
       spacing: 0,
     });
     dialogBox.add_css_class("dialog-box");
     
-    // Content section with icon, title, message
     const contentBox = new Gtk.Box({
       orientation: Gtk.Orientation.VERTICAL,
       spacing: 8,
@@ -209,7 +207,6 @@ app.start({
     contentBox.append(title);
     contentBox.append(message);
     
-    // Button section
     const buttonBox = new Gtk.Box({
       orientation: Gtk.Orientation.HORIZONTAL,
       spacing: 8,
@@ -236,16 +233,12 @@ app.start({
     buttonBox.append(cancelButton);
     buttonBox.append(confirmButton);
     
-    // Assemble everything
     dialogBox.append(contentBox);
     dialogBox.append(buttonBox);
     win.set_child(dialogBox);
     
-    // Focus cancel button after window is fully assembled
-    GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-      cancelButton.grab_focus();
-      return GLib.SOURCE_REMOVE;
-    });
+    // Focus cancel button immediately (no idle delay)
+    cancelButton.grab_focus();
     
     return win;
   },
