@@ -78,7 +78,7 @@ function updateCSS(config: ConfirmConfig) {
       min-width: 300px;
       max-width: 340px;
       border: 1px solid rgba(255, 255, 255, 0.15);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     
     box.content-box {
@@ -178,7 +178,13 @@ function showDialog(config: ConfirmConfig) {
   // Play warning sound if audioFile is provided (using pw-play for faster startup)
   if (config.audioFile) {
     try {
-      GLib.spawn_async(null, ["pw-play", config.audioFile], null, GLib.SpawnFlags.SEARCH_PATH, null);
+      GLib.spawn_async(
+        null,
+        ["pw-play", config.audioFile],
+        null,
+        GLib.SpawnFlags.SEARCH_PATH,
+        null,
+      );
     } catch (e) {
       print(`Failed to play audio: ${e}`);
     }
