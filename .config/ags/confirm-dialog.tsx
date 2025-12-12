@@ -238,7 +238,12 @@ function createWindow() {
     visible: false,
   });
 
-  win.set_anchor(Astal.WindowAnchor.CENTER);
+  win.set_anchor(
+    Astal.WindowAnchor.TOP |
+    Astal.WindowAnchor.BOTTOM |
+    Astal.WindowAnchor.LEFT |
+    Astal.WindowAnchor.RIGHT
+  );
   win.set_layer(Astal.Layer.OVERLAY);
   win.set_exclusivity(Astal.Exclusivity.EXCLUSIVE);
   win.set_keymode(Astal.Keymode.EXCLUSIVE);
@@ -328,8 +333,10 @@ app.start({
     return win;
   },
   instanceName: "confirm-dialog-daemon",
-  requestHandler(request: string, res: (response: any) => void) {
+  requestHandler(argv: string[], res: (response: any) => void) {
     try {
+      // Join argv into a single string and parse as JSON
+      const request = argv.join(" ");
       const data = JSON.parse(request);
 
       if (data.action === "show") {
