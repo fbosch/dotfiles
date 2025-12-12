@@ -128,7 +128,9 @@
   color: var(--text-color);
   padding: 6px 10px;
   border: 1px solid transparent;
-  transition: background 150ms ease, border-color 150ms ease;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
 }
 
 .control-center .widget-title > button:hover {
@@ -153,8 +155,10 @@
   border-radius: var(--radius-large);
   border: 1px solid var(--border-color);
   overflow: hidden;
-  transition: background 150ms ease, border-color 150ms ease;
-  box-shadow: var(--shadow-elevation-high);
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+  /* box-shadow: var(--shadow-elevation-high); */
 }
 
 .notification:hover {
@@ -243,7 +247,9 @@
   padding: 8px 16px;
   margin: 8px 4px 0 0;
   border: 1px solid var(--border-color);
-  transition: background 150ms ease, border-color 150ms ease;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
 }
 
 .notification-action:hover {
@@ -265,7 +271,10 @@
   margin: 8px 12px 0 0;
   padding: 0;
   opacity: 0;
-  transition: background 150ms ease, color 150ms ease, opacity 150ms ease;
+  transition:
+    background 150ms ease,
+    color 150ms ease,
+    opacity 150ms ease;
 }
 
 .close-button:hover {

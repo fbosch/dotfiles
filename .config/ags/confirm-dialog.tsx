@@ -238,12 +238,7 @@ function createWindow() {
     visible: false,
   });
 
-  win.set_anchor(
-    Astal.WindowAnchor.TOP |
-    Astal.WindowAnchor.BOTTOM |
-    Astal.WindowAnchor.LEFT |
-    Astal.WindowAnchor.RIGHT
-  );
+  win.set_anchor(Astal.WindowAnchor.NONE);
   win.set_layer(Astal.Layer.OVERLAY);
   win.set_exclusivity(Astal.Exclusivity.EXCLUSIVE);
   win.set_keymode(Astal.Keymode.EXCLUSIVE);
