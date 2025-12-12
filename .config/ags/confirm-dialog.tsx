@@ -59,8 +59,9 @@ let confirmButton: Gtk.Button | null = null;
 
 function updateCSS(config: ConfirmConfig) {
   const colors = variants[config.variant];
-  
-  app.apply_css(`
+
+  app.apply_css(
+    `
     window.confirm-dialog {
       background-color: transparent;
       border: none;
@@ -68,7 +69,7 @@ function updateCSS(config: ConfirmConfig) {
     }
     
     box.dialog-box {
-      background-color: rgba(42, 42, 42, 0.75);
+      background-color: rgba(42, 42, 42, 0.90);
       border-radius: 12px;
       padding: 24px 24px 20px 24px;
       min-width: 300px;
@@ -147,7 +148,9 @@ function updateCSS(config: ConfirmConfig) {
       outline: 2px solid ${colors.confirmFocusColor};
       outline-offset: 2px;
     }
-  `, false);
+  `,
+    false,
+  );
 }
 
 function hideDialog() {
@@ -158,11 +161,11 @@ function hideDialog() {
 
 function showDialog(config: ConfirmConfig) {
   currentConfig = config;
-  
+
   if (!win) {
     createWindow();
   }
-  
+
   // Update content
   if (icon) icon.set_label(config.icon);
   if (title) title.set_label(config.title);
@@ -175,10 +178,10 @@ function showDialog(config: ConfirmConfig) {
     const label = confirmButton.get_child() as Gtk.Label;
     if (label) label.set_label(config.confirmLabel);
   }
-  
+
   // Update CSS for variant colors
   updateCSS(config);
-  
+
   // Show window
   if (win) {
     win.set_visible(true);
@@ -192,13 +195,13 @@ function createWindow() {
     namespace: "ags-confirm",
     visible: false,
   });
-  
+
   win.set_anchor(Astal.WindowAnchor.CENTER);
   win.set_layer(Astal.Layer.OVERLAY);
   win.set_exclusivity(Astal.Exclusivity.EXCLUSIVE);
   win.set_keymode(Astal.Keymode.EXCLUSIVE);
   win.add_css_class("confirm-dialog");
-  
+
   // Add escape key handler
   const keyController = new Gtk.EventControllerKey();
   keyController.connect("key-pressed", (_, keyval) => {
@@ -209,46 +212,52 @@ function createWindow() {
     return false;
   });
   win.add_controller(keyController);
-  
+
   // Build UI
   const dialogBox = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
     spacing: 0,
   });
   dialogBox.add_css_class("dialog-box");
-  
+
   const contentBox = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
     spacing: 8,
     halign: Gtk.Align.CENTER,
   });
   contentBox.add_css_class("content-box");
-  
+
   icon = new Gtk.Label({ label: currentConfig.icon, halign: Gtk.Align.CENTER });
   icon.add_css_class("dialog-icon");
-  
-  title = new Gtk.Label({ label: currentConfig.title, halign: Gtk.Align.CENTER });
+
+  title = new Gtk.Label({
+    label: currentConfig.title,
+    halign: Gtk.Align.CENTER,
+  });
   title.add_css_class("dialog-title");
-  
-  message = new Gtk.Label({ label: currentConfig.message, halign: Gtk.Align.CENTER });
+
+  message = new Gtk.Label({
+    label: currentConfig.message,
+    halign: Gtk.Align.CENTER,
+  });
   message.add_css_class("dialog-message");
-  
+
   contentBox.append(icon);
   contentBox.append(title);
   contentBox.append(message);
-  
+
   const buttonBox = new Gtk.Box({
     orientation: Gtk.Orientation.HORIZONTAL,
     spacing: 8,
     homogeneous: false,
   });
-  
+
   cancelButton = new Gtk.Button({ hexpand: true, can_focus: true });
   cancelButton.add_css_class("dialog-button");
   cancelButton.add_css_class("cancel");
   cancelButton.set_child(new Gtk.Label({ label: currentConfig.cancelLabel }));
   cancelButton.connect("clicked", () => hideDialog());
-  
+
   confirmButton = new Gtk.Button({ hexpand: true, can_focus: true });
   confirmButton.add_css_class("dialog-button");
   confirmButton.add_css_class("confirm");
@@ -259,14 +268,14 @@ function createWindow() {
     }
     hideDialog();
   });
-  
+
   buttonBox.append(cancelButton);
   buttonBox.append(confirmButton);
-  
+
   dialogBox.append(contentBox);
   dialogBox.append(buttonBox);
   win.set_child(dialogBox);
-  
+
   updateCSS(currentConfig);
 }
 
@@ -280,7 +289,7 @@ app.start({
   requestHandler(request: string, res: (response: any) => void) {
     try {
       const data = JSON.parse(request);
-      
+
       if (data.action === "show") {
         showDialog(data.config);
         res("shown");
