@@ -1,10 +1,8 @@
 import app from "ags/gtk4/app";
 import { Astal } from "ags/gtk4";
-
-const GLib = imports.gi.GLib;
-const Gtk = imports.gi.Gtk;
-const Gdk = imports.gi.Gdk;
-const Gio = imports.gi.Gio;
+import GLib from "gi://GLib?version=2.0";
+import Gtk from "gi://Gtk?version=4.0";
+import Gdk from "gi://Gdk?version=4.0";
 
 // Configuration interface
 interface ConfirmConfig {
@@ -178,15 +176,9 @@ function showDialog(config: ConfirmConfig) {
   // Play warning sound if audioFile is provided (using pw-play for faster startup)
   if (config.audioFile) {
     try {
-      GLib.spawn_async(
-        null,
-        ["pw-play", config.audioFile],
-        null,
-        GLib.SpawnFlags.SEARCH_PATH,
-        null,
-      );
+      GLib.spawn_command_line_async(`pw-play ${config.audioFile}`);
     } catch (e) {
-      print(`Failed to play audio: ${e}`);
+      console.error(`Failed to play audio: ${e}`);
     }
   }
 
@@ -241,7 +233,7 @@ function createWindow() {
 
   // Add escape key handler
   const keyController = new Gtk.EventControllerKey();
-  keyController.connect("key-pressed", (_, keyval) => {
+  keyController.connect("key-pressed", (_: Gtk.EventControllerKey, keyval: number) => {
     if (keyval === Gdk.KEY_Escape) {
       hideDialog();
       return true;
@@ -337,7 +329,7 @@ app.start({
         res("unknown action");
       }
     } catch (e) {
-      print("Error handling request:", e);
+      console.error("Error handling request:", e);
       res("error: " + e);
     }
   },
