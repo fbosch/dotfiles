@@ -15,6 +15,8 @@ interface ConfirmConfig {
   cancelLabel: string;
   confirmCommand: string;
   variant: "danger" | "warning" | "info";
+  audioFile?: string; // Optional audio file to play when showing dialog
+  showDelay?: number; // Optional delay in milliseconds before showing dialog
 }
 
 // Default config
@@ -56,6 +58,7 @@ let title: Gtk.Label | null = null;
 let message: Gtk.Label | null = null;
 let cancelButton: Gtk.Button | null = null;
 let confirmButton: Gtk.Button | null = null;
+let isVisible: boolean = false;
 
 function updateCSS(config: ConfirmConfig) {
   const colors = variants[config.variant];
@@ -156,14 +159,29 @@ function updateCSS(config: ConfirmConfig) {
 function hideDialog() {
   if (win) {
     win.set_visible(false);
+    isVisible = false;
   }
 }
 
 function showDialog(config: ConfirmConfig) {
+  // Ignore if dialog is already visible
+  if (isVisible) {
+    return;
+  }
+
   currentConfig = config;
 
   if (!win) {
     createWindow();
+  }
+
+  // Play warning sound if audioFile is provided (using pw-play for faster startup)
+  if (config.audioFile) {
+    try {
+      GLib.spawn_async(null, ["pw-play", config.audioFile], null, GLib.SpawnFlags.SEARCH_PATH, null);
+    } catch (e) {
+      print(`Failed to play audio: ${e}`);
+    }
   }
 
   // Update content
@@ -182,10 +200,23 @@ function showDialog(config: ConfirmConfig) {
   // Update CSS for variant colors
   updateCSS(config);
 
-  // Show window
-  if (win) {
-    win.set_visible(true);
-    if (cancelButton) cancelButton.grab_focus();
+  // Function to show the window
+  const showWindow = () => {
+    if (win) {
+      win.set_visible(true);
+      isVisible = true;
+      if (cancelButton) cancelButton.grab_focus();
+    }
+  };
+
+  // Show window with optional delay
+  if (config.showDelay && config.showDelay > 0) {
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, config.showDelay, () => {
+      showWindow();
+      return false; // Don't repeat
+    });
+  } else {
+    showWindow();
   }
 }
 
