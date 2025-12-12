@@ -57,6 +57,7 @@ let message: Gtk.Label | null = null;
 let cancelButton: Gtk.Button | null = null;
 let confirmButton: Gtk.Button | null = null;
 let isVisible: boolean = false;
+let showTimeoutId: number | null = null;
 
 function updateCSS(config: ConfirmConfig) {
   const colors = variants[config.variant];
@@ -159,14 +160,21 @@ function hideDialog() {
     win.set_visible(false);
     isVisible = false;
   }
+  // Cancel any pending show timeout
+  if (showTimeoutId !== null) {
+    GLib.source_remove(showTimeoutId);
+    showTimeoutId = null;
+  }
 }
 
 function showDialog(config: ConfirmConfig) {
-  // Ignore if dialog is already visible
+  // Ignore if dialog is already visible or pending
   if (isVisible) {
     return;
   }
 
+  // Mark as visible immediately to prevent duplicate calls
+  isVisible = true;
   currentConfig = config;
 
   if (!win) {
@@ -202,14 +210,19 @@ function showDialog(config: ConfirmConfig) {
   const showWindow = () => {
     if (win) {
       win.set_visible(true);
-      isVisible = true;
       if (cancelButton) cancelButton.grab_focus();
     }
+    showTimeoutId = null;
   };
+
+  // Cancel any existing timeout
+  if (showTimeoutId !== null) {
+    GLib.source_remove(showTimeoutId);
+  }
 
   // Show window with optional delay
   if (config.showDelay && config.showDelay > 0) {
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, config.showDelay, () => {
+    showTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, config.showDelay, () => {
       showWindow();
       return false; // Don't repeat
     });
