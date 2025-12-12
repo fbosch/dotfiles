@@ -5,6 +5,7 @@
 ^/README.*
 ^/LICENSE.*
 ^/COPYING
+.DS_Store
 ^/.*\.md$
 scripts
 docs
