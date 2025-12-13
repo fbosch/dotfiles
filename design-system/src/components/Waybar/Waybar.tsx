@@ -17,28 +17,25 @@ const waybarVariants = cva(
   },
 );
 
-const moduleVariants = cva(
-  "flex items-center gap-2 text-xs tracking-wide",
-  {
-    variants: {
-      type: {
-        cpu: "border-r border-white/10 pr-3 py-2",
-        memory: "",
-        default: "",
-      },
-      state: {
-        idle: "text-state-success",
-        normal: "text-white",
-        warning: "text-state-warning",
-        critical: "text-state-error",
-      },
+const moduleVariants = cva("flex items-center gap-2 text-xs tracking-wide", {
+  variants: {
+    type: {
+      cpu: "border-r border-white/10 pr-3 py-2",
+      memory: "",
+      default: "",
     },
-    defaultVariants: {
-      type: "default",
-      state: "normal",
+    state: {
+      idle: "text-state-success",
+      normal: "text-white",
+      warning: "text-state-warning",
+      critical: "text-state-error",
     },
   },
-);
+  defaultVariants: {
+    type: "default",
+    state: "normal",
+  },
+});
 
 const buttonVariants = cva(
   "border border-transparent rounded transition-all duration-150 ease-in-out",
@@ -87,11 +84,11 @@ export const Waybar: React.FC<WaybarProps> = ({
       style={{ height: `${height}px` }}
     >
       {/* Left modules */}
-      <div className="flex items-center ml-1">
+      <div className="flex items-center ml-1 h-full">
         <button type="button" className={buttonVariants({ variant: "start" })}>
-          <span className="font-nerd"></span>
+          <span className="font-nerd"></span>
         </button>
-        <div className="flex items-center gap-0">
+        <div className="flex items-center gap-0 h-full">
           <button
             type="button"
             className={buttonVariants({ variant: "workspace" })}
@@ -114,7 +111,7 @@ export const Waybar: React.FC<WaybarProps> = ({
       </div>
 
       {/* Center modules - Taskbar */}
-      <div className="flex items-center flex-1 justify-center">
+      <div className="flex items-center flex-1 justify-center h-full">
         <button
           type="button"
           className={buttonVariants({ variant: "task", active: true })}
@@ -145,7 +142,7 @@ export const Waybar: React.FC<WaybarProps> = ({
       </div>
 
       {/* Right modules */}
-      <div className="flex items-center gap-3 pr-1">
+      <div className="flex items-center gap-1 pr-1 h-full">
         <div className={moduleVariants({ type: "memory" })}>
           <span className="font-fluent font-bold"></span>
           <span className="font-medium">45%</span>
@@ -158,15 +155,11 @@ export const Waybar: React.FC<WaybarProps> = ({
 
         <div className="flex items-center gap-2 ml-3">
           <button type="button" className={buttonVariants({ variant: "tray" })}>
-            <span className="font-fluent"></span>
+            <span className="font-fluent"></span>
           </button>
-          <button type="button" className={buttonVariants({ variant: "tray" })}>
-            <span className="font-fluent">󰟎</span>
-          </button>
-        </div>
-
-        <div className="flex items-center mx-2">
-          <span className="text-lg font-fluent"></span>
+          <div className="flex items-center mx-2">
+            <span className="text-lg font-fluent"></span>
+          </div>
         </div>
 
         <div className="text-xs">
