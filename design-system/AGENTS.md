@@ -52,6 +52,57 @@ export function cn(...inputs: ClassValue[]) {
 
 **Use CVA composition properly - avoid duplicating styles across variants.**
 
+**CRITICAL: Keep variants minimal. Only create variants that are truly needed.**
+
+### Variant Guidelines
+- **Minimal variants**: Only add variants when specifically requested or absolutely necessary
+- **Essential only**: Prefer 2-4 variants maximum per component
+- **Don't over-engineer**: Avoid creating variants for every possible visual state
+- **User can extend**: Users can add more variants if needed; start minimal
+
+**DON'T:**
+```typescript
+// ❌ Too many variants without being asked
+variants: {
+  variant: {
+    primary: '...',
+    secondary: '...',
+    ghost: '...',
+    danger: '...',
+    warning: '...',
+    info: '...',
+    success: '...',
+    outline: '...',
+    link: '...',
+  },
+  size: {
+    xs: '...',
+    sm: '...',
+    md: '...',
+    lg: '...',
+    xl: '...',
+    '2xl': '...',
+  },
+}
+```
+
+**DO:**
+```typescript
+// ✅ Essential variants only (2-4 per property)
+variants: {
+  variant: {
+    primary: 'bg-accent-primary hover:bg-accent-hover',
+    secondary: 'bg-background-tertiary hover:bg-background-tertiary/80',
+    ghost: 'bg-transparent hover:bg-white/5',
+  },
+  size: {
+    sm: 'px-3 py-1.5 text-xs',
+    md: 'px-4 py-1.5 text-sm',
+    lg: 'px-6 py-2 text-base',
+  },
+}
+```
+
 ```typescript
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/utils/cn';
@@ -247,7 +298,40 @@ design-system/
 
 ## 🎭 Storybook Stories
 
+**IMPORTANT: Keep stories minimal and essential. Only create what's truly needed to demonstrate the component.**
+
+### Story Guidelines
+- **One story per essential variant/state**: Create individual stories for each important variant (primary, danger, etc.)
+- **No "All Variants" showcases**: Don't create composite stories showing all variants together
+- **No redundant combinations**: Don't create stories for every size × variant combination
+- **Use args and controls**: Let users explore size, disabled, and other properties through Storybook controls
+
+**DON'T:**
 ```typescript
+// ❌ Unnecessary showcase stories
+export const AllVariants: Story = {
+  render: () => (
+    <div className="flex gap-4">
+      <Button variant="primary">Primary</Button>
+      <Button variant="secondary">Secondary</Button>
+      <Button variant="ghost">Ghost</Button>
+    </div>
+  ),
+};
+
+// ❌ Redundant size stories when controls work fine
+export const Small: Story = { args: { size: 'sm' } };
+export const Medium: Story = { args: { size: 'md' } };
+export const Large: Story = { args: { size: 'lg' } };
+
+// ❌ Over-specific use case stories
+export const DeleteConfirmation: Story = { ... };
+export const LogoutConfirmation: Story = { ... };
+```
+
+**DO:**
+```typescript
+// ✅ Essential individual variant stories
 import type { Meta, StoryObj } from '@storybook/react';
 import { Button } from './Button';
 
@@ -260,20 +344,33 @@ const meta: Meta<typeof Button> = {
 export default meta;
 type Story = StoryObj<typeof Button>;
 
+// One story per essential variant
 export const Primary: Story = {
   args: {
     variant: 'primary',
-    children: 'Click me',
+    children: 'Primary Button',
   },
 };
 
-export const AllVariants: Story = {
-  render: () => (
-    <div className="flex gap-4">
-      <Button variant="primary">Primary</Button>
-      <Button variant="ghost">Ghost</Button>
-    </div>
-  ),
+export const Secondary: Story = {
+  args: {
+    variant: 'secondary',
+    children: 'Secondary Button',
+  },
+};
+
+export const Ghost: Story = {
+  args: {
+    variant: 'ghost',
+    children: 'Ghost Button',
+  },
+};
+
+export const Danger: Story = {
+  args: {
+    variant: 'danger',
+    children: 'Danger Button',
+  },
 };
 ```
 

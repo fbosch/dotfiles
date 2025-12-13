@@ -25,8 +25,11 @@ export default {
         },
         state: {
           success: "#73bc6f",
+          "success-hover": "#82cc7d",
           warning: "#dea721",
+          "warning-hover": "#e8b230",
           error: "#e35245",
+          "error-hover": "#ff6b5a",
           info: "#0067c0",
         },
         border: {
