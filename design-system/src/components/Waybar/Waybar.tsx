@@ -45,12 +45,12 @@ const buttonVariants = cva(
         start:
           "text-white/40 text-2xl px-2 h-full flex items-center mx-1 text-shadow-none hover:bg-white/10 hover:border-white/10 hover:text-white",
         workspace:
-          "px-3 h-full flex items-center mx-1 tracking-normal hover:bg-white/5 hover:border-white/10",
+          "px-3 h-full flex items-center justify-center aspect-square mx-0.5 tracking-normal hover:bg-white/5 hover:border-white/10",
         task: "flex items-center gap-2 px-2 h-full mx-0.5 text-shadow-waybar-button hover:bg-white/[0.01] hover:border-white/10",
         tray: "",
       },
       active: {
-        true: "bg-white/5 border-white/10",
+        true: "bg-white/5 border-white/10 font-bold",
         false: "",
       },
     },
@@ -86,7 +86,7 @@ export const Waybar: React.FC<WaybarProps> = ({
       {/* Left modules */}
       <div className="flex items-center ml-1 h-full">
         <button type="button" className={buttonVariants({ variant: "start" })}>
-          <span className="font-nerd"></span>
+          <span className="font-nerd"></span>
         </button>
         <div className="flex items-center gap-0 h-full">
           <button
