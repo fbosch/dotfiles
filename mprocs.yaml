@@ -7,7 +7,7 @@ procs:
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   
   storybook:
-    autostart: true
+    autostart: false
     shell: "(cd design-system && pnpm storybook)"
     stop: "SIGTERM"
   
