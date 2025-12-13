@@ -3,6 +3,7 @@ import { Astal } from "ags/gtk4";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import Gdk from "gi://Gdk?version=4.0";
+import tokens from "../../design-system/tokens.json";
 
 // Configuration interface
 interface ConfirmConfig {
@@ -28,26 +29,25 @@ let currentConfig: ConfirmConfig = {
   variant: "danger",
 };
 
-// Variant color schemes - exactly matching design system tokens
-// Source: design-system/tokens.json
+// Variant color schemes - imported from design system tokens
 const variants = {
   danger: {
-    iconColor: "#e35245",       // state.error
-    confirmBg: "#e35245",        // state.error
-    confirmHoverBg: "#ff6b5a",   // state.error-hover
-    confirmFocusColor: "#e35245", // state.error
+    iconColor: tokens.colors.state.error.value,
+    confirmBg: tokens.colors.state.error.value,
+    confirmHoverBg: tokens.colors.state["error-hover"].value,
+    confirmFocusColor: tokens.colors.state.error.value,
   },
   warning: {
-    iconColor: "#dea721",        // state.warning
-    confirmBg: "#dea721",         // state.warning
-    confirmHoverBg: "#e8b230",    // state.warning-hover
-    confirmFocusColor: "#dea721", // state.warning
+    iconColor: tokens.colors.state.warning.value,
+    confirmBg: tokens.colors.state.warning.value,
+    confirmHoverBg: tokens.colors.state["warning-hover"].value,
+    confirmFocusColor: tokens.colors.state.warning.value,
   },
   info: {
-    iconColor: "#0067c0",         // accent.primary / state.info
-    confirmBg: "#0067c0",          // accent.primary
-    confirmHoverBg: "#106ebe",     // accent.hover
-    confirmFocusColor: "#0067c0",  // accent.primary
+    iconColor: tokens.colors.accent.primary.value,
+    confirmBg: tokens.colors.accent.primary.value,
+    confirmHoverBg: tokens.colors.accent.hover.value,
+    confirmFocusColor: tokens.colors.accent.primary.value,
   },
 };
 
@@ -72,16 +72,16 @@ function updateCSS(config: ConfirmConfig) {
       padding: 40px;
     }
     
-    /* Dialog box - matches design-system Dialog component */
-    /* bg-background-secondary/90 backdrop-blur-sm rounded-xl p-6 */
+    /* Dialog box - matches design-system Dialog component sm size */
+    /* bg-background-secondary/90 backdrop-blur-sm rounded-xl p-4 */
     /* border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.2),0_2px_8px_rgba(0,0,0,0.1)] */
     box.dialog-box {
-      background-color: rgba(45, 45, 45, 0.90); /* #2d2d2d = background-secondary */
+      background-color: rgba(45, 45, 45, 0.90); /* ${tokens.colors.background.secondary.value} */
       border-radius: 12px;
-      padding: 24px;
-      min-width: 340px;
-      max-width: 384px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 16px;
+      min-width: 280px;
+      max-width: 320px;
+      border: 1px solid ${tokens.colors.border.hover.value};
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     
@@ -99,19 +99,19 @@ function updateCSS(config: ConfirmConfig) {
     
     /* Title - text-sm font-semibold text-foreground-primary mb-1 */
     label.dialog-title {
-      font-family: "SF Pro Display", system-ui, sans-serif;
+      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       font-size: 14px;
       font-weight: 600;
-      color: #ffffff; /* foreground-primary */
+      color: ${tokens.colors.foreground.primary.value};
       margin-bottom: 6px;
     }
     
     /* Message - text-xs text-foreground-tertiary leading-relaxed */
     label.dialog-message {
-      font-family: "SF Pro Display", system-ui, sans-serif;
+      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       font-size: 12px;
       font-weight: 400;
-      color: #999999; /* foreground-tertiary */
+      color: ${tokens.colors.foreground.tertiary.value};
       line-height: 1.5;
     }
     
@@ -124,7 +124,7 @@ function updateCSS(config: ConfirmConfig) {
       border-radius: 6px;
       min-height: 28px;
       transition: all 150ms ease;
-      font-family: "SF Pro Rounded", "SF Pro Display", system-ui, sans-serif;
+      font-family: "${tokens.typography.fontFamily.button.value}", "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
     }
     
     button.dialog-button label {
@@ -248,10 +248,14 @@ function showDialog(config: ConfirmConfig) {
 
   // Show window with optional delay
   if (config.showDelay && config.showDelay > 0) {
-    showTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, config.showDelay, () => {
-      showWindow();
-      return false; // Don't repeat
-    });
+    showTimeoutId = GLib.timeout_add(
+      GLib.PRIORITY_DEFAULT,
+      config.showDelay,
+      () => {
+        showWindow();
+        return false; // Don't repeat
+      },
+    );
   } else {
     showWindow();
   }
@@ -272,13 +276,16 @@ function createWindow() {
 
   // Add escape key handler
   const keyController = new Gtk.EventControllerKey();
-  keyController.connect("key-pressed", (_: Gtk.EventControllerKey, keyval: number) => {
-    if (keyval === Gdk.KEY_Escape) {
-      hideDialog();
-      return true;
-    }
-    return false;
-  });
+  keyController.connect(
+    "key-pressed",
+    (_: Gtk.EventControllerKey, keyval: number) => {
+      if (keyval === Gdk.KEY_Escape) {
+        hideDialog();
+        return true;
+      }
+      return false;
+    },
+  );
   win.add_controller(keyController);
 
   // Build UI
@@ -320,13 +327,13 @@ function createWindow() {
     homogeneous: false,
   });
 
-  cancelButton = new Gtk.Button({ hexpand: true, can_focus: true });
+  cancelButton = new Gtk.Button({ can_focus: true, hexpand: true });
   cancelButton.add_css_class("dialog-button");
   cancelButton.add_css_class("cancel");
   cancelButton.set_child(new Gtk.Label({ label: currentConfig.cancelLabel }));
   cancelButton.connect("clicked", () => hideDialog());
 
-  confirmButton = new Gtk.Button({ hexpand: true, can_focus: true });
+  confirmButton = new Gtk.Button({ can_focus: true, hexpand: true });
   confirmButton.add_css_class("dialog-button");
   confirmButton.add_css_class("confirm");
   confirmButton.set_child(new Gtk.Label({ label: currentConfig.confirmLabel }));
