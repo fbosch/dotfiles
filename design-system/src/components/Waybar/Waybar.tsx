@@ -3,7 +3,7 @@ import type React from "react";
 import { cn } from "../../utils/cn";
 
 const waybarVariants = cva(
-  "w-full flex items-center justify-between bg-waybar-bg text-white text-xs tracking-wide text-shadow-waybar transition-colors duration-500 py-1",
+  "w-full flex items-center justify-between bg-waybar-bg backdrop-blur text-white text-xs tracking-wide text-shadow-waybar transition-colors duration-500 py-1",
   {
     variants: {
       position: {
@@ -43,7 +43,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         start:
-          "text-white/40 text-2xl px-1.5 h-full flex items-center mx-1 text-shadow-none hover:bg-white/10 hover:border-white/10 hover:text-white",
+          "text-white/40 text-xl px-1.5 h-full flex items-center mx-1 text-shadow-none hover:bg-white/10 hover:border-white/10 hover:text-white",
         workspace:
           "px-3 h-full flex items-center justify-center aspect-square mx-0.5 tracking-normal hover:bg-white/5 hover:border-white/10",
         task: "flex items-center gap-2 px-2 h-full mx-0.5 text-shadow-waybar-button hover:bg-white/[0.01] hover:border-white/10",
@@ -142,8 +142,8 @@ export const Waybar: React.FC<WaybarProps> = ({
       </div>
 
       {/* Right modules */}
-      <div className="flex items-center gap-1 pr-1 h-full">
-        <div className="flex items-center space-x-3 mr-2">
+      <div className="flex items-center pr-1 h-full">
+        <div className="flex items-center gap-3">
           <div className={moduleVariants({ type: "memory" })}>
             <span className="font-fluent font-bold"></span>
             <span className="font-medium">45%</span>
@@ -155,7 +155,7 @@ export const Waybar: React.FC<WaybarProps> = ({
           </div>
         </div>
 
-        <div className="h-full border-r border-white/10" />
+        <div className="h-full border-r border-white/10 mx-2" />
 
         <div className="flex items-center gap-2 ml-3">
           <button type="button" className={buttonVariants({ variant: "tray" })}>

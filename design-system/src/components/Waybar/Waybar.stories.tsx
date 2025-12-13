@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Waybar } from './Waybar';
+import { Desktop } from '../Desktop';
 
 const meta: Meta<typeof Waybar> = {
   title: 'Components/Waybar',
@@ -31,22 +32,9 @@ export const Default: Story = {
   },
   decorators: [
     (Story: React.ComponentType) => (
-      <div
-        style={{
-          minHeight: '80vh',
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'flex-end',
-          backgroundColor: '#202020',
-          padding: 0,
-          margin: 0,
-        }}
-      >
-        <div style={{ width: '100%' }}>
-          <Story />
-        </div>
-      </div>
+      <Desktop>
+        <Story />
+      </Desktop>
     ),
   ],
 };

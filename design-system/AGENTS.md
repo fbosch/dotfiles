@@ -220,6 +220,7 @@ design-system/
 - **Props interfaces:** Export interfaces for composition
 - **Button elements:** Always include `type="button"` attribute
 - **Conditional classes:** Use `cn()` utility for merging
+- **Unicode characters in JSX:** When editing JSX that contains unicode characters (icons, symbols, emojis), be extremely careful to preserve them EXACTLY. If using the Edit tool, ensure the oldString includes the unicode character verbatim. If uncertain about the exact character, use Read tool first or use a different approach that doesn't risk losing the character.
 
 ## 🎭 Storybook Stories
 
