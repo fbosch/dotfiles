@@ -51,11 +51,11 @@ const hyperbarVariants = cva(
 );
 
 const buttonVariants = cva(
-  "flex items-center justify-center text-white/60 hover:text-white/90 hover:bg-white/5 transition-colors duration-150",
+  "flex items-center justify-center text-white/60 transition-none cursor-pointer",
   {
     variants: {
       type: {
-        close: "hover:bg-red-500/10 font-nerd font-bold",
+        close: "font-nerd font-bold",
         maximize: "font-nerd",
         minimize: "font-nerd",
       },

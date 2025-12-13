@@ -4,7 +4,7 @@
     "type": "file",
     "source": "~/.config/fastfetch/rvn.txt",
     "color": {
-      "1": "38;5;240"
+      "1": "38;2;126;186;228"
     }
   },
   "modules": [
