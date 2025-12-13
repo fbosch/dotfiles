@@ -2,27 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
-@font-face {
-  font-family: 'Segoe Fluent Icons';
-  src: url('/fonts/Segoe Fluent Icons.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Symbols Nerd Font';
-  src: url('/fonts/SymbolsNerdFont-Regular.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
+/* 
+ * Fonts are loaded from system fonts (~/.local/share/fonts)
+ * Make sure you have these fonts installed:
+ * - SF Pro Text
+ * - Segoe Fluent Icons
+ * - Symbols Nerd Font
+ */
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: "SF Pro Text", "Segoe Fluent Icons", sans-serif;
   font-size: 0.85rem;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
