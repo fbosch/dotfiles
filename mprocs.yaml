@@ -5,80 +5,80 @@ procs:
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   # Development Servers (autostart enabled)
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  
+
   storybook:
-    autostart: false
+    autostart: true
     shell: "(cd design-system && pnpm storybook)"
     stop: "SIGTERM"
-  
+
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   # Build Commands (manual)
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  
+
   vicinae-build:
     autostart: false
     shell: "bash ./scripts/vicinae-build-extensions.sh"
-  
+
   fish-cache:
     autostart: false
     shell: "bash ./scripts/fish-generate-caches.sh"
-  
+
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   # Vicinae Extensions Dev (manual)
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  
+
   vicinae-favorite-directories:
     autostart: false
     shell: "(cd .config/vicinae/extensions/favorite-directories && npm run dev)"
-  
+
   vicinae-flathub-search:
     autostart: false
     shell: "(cd .config/vicinae/extensions/flathub-search && npm run dev)"
-  
+
   vicinae-local-wallpaper:
     autostart: false
     shell: "(cd .config/vicinae/extensions/local-wallpaper && npm run dev)"
-  
+
   vicinae-nerdfont-search:
     autostart: false
     shell: "(cd .config/vicinae/extensions/nerdfont-search && npm run dev)"
-  
+
   vicinae-protondb-search:
     autostart: false
     shell: "(cd .config/vicinae/extensions/protondb-search && npm run dev)"
-  
+
   vicinae-wallhaven-search:
     autostart: false
     shell: "(cd .config/vicinae/extensions/wallhaven-search && npm run dev)"
-  
+
   build-storybook:
     autostart: false
     shell: "(cd design-system && pnpm build-storybook)"
-  
+
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   # Package Management (manual)
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  
+
   brew-install:
     autostart: false
     shell: "brew bundle install"
-  
+
   brew-check:
     autostart: false
     shell: "brew bundle check"
-  
+
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   # Stow Operations (manual)
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  
+
   stow-check:
     autostart: false
     shell: "stow -n ."
-  
+
   stow-apply:
     autostart: false
     shell: "stow ."
-  
+
   stow-restow:
     autostart: false
     shell: "stow -R ."
