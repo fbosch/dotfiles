@@ -20,7 +20,7 @@ const waybarVariants = cva(
 const moduleVariants = cva("flex items-center gap-2 text-xs tracking-wide", {
   variants: {
     type: {
-      cpu: "border-r border-white/10 pr-3 py-2",
+      cpu: "",
       memory: "",
       default: "",
     },
@@ -143,15 +143,19 @@ export const Waybar: React.FC<WaybarProps> = ({
 
       {/* Right modules */}
       <div className="flex items-center gap-1 pr-1 h-full">
-        <div className={moduleVariants({ type: "memory" })}>
-          <span className="font-fluent font-bold"></span>
-          <span className="font-medium">45%</span>
+        <div className="flex items-center space-x-3 mr-2">
+          <div className={moduleVariants({ type: "memory" })}>
+            <span className="font-fluent font-bold"></span>
+            <span className="font-medium">45%</span>
+          </div>
+
+          <div className={moduleVariants({ type: "cpu", state: "idle" })}>
+            <span className="font-fluent font-bold"></span>
+            <span className="font-medium">12%</span>
+          </div>
         </div>
 
-        <div className={moduleVariants({ type: "cpu", state: "idle" })}>
-          <span className="font-fluent font-bold"></span>
-          <span className="font-medium">12%</span>
-        </div>
+        <div className="h-full border-r border-white/10" />
 
         <div className="flex items-center gap-2 ml-3">
           <button type="button" className={buttonVariants({ variant: "tray" })}>
