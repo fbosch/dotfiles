@@ -1,5 +1,27 @@
 # Design System - Agent Guide
 
+## 🎯 Design Goal
+
+This design system creates a familiar yet refined desktop environment for tech-savvy users transitioning from or using both Windows 11 and macOS.
+
+**Target Audience:** Technical users (developers, power users, system administrators) who:
+- Are comfortable with Windows 11's interface patterns
+- Appreciate macOS's polish and attention to detail
+- Value efficiency and customization over hand-holding
+
+**Design Philosophy:**
+- **Familiar foundation:** Windows 11 spatial layout and organization patterns (taskbar positioning, window controls, system tray)
+- **macOS refinement:** Subtle animations, refined typography, thoughtful spacing, and premium feel
+- **Technical transparency:** Surface system information, expose power-user controls, support keyboard-driven workflows
+- **Consistent theming:** Zenwritten Dark colorscheme across all applications and components
+
+**Visual Language:**
+- Clean, modern interfaces with purposeful use of space
+- Subtle depth through layering (backgrounds: primary → secondary → tertiary)
+- Accent colors used sparingly for interactive elements and state indication
+- Typography that balances readability with information density
+- Smooth, non-distracting transitions that provide feedback without slowing workflow
+
 ## ⚠️ Core Principles
 
 ### No Custom CSS Classes
