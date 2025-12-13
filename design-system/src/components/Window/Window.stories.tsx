@@ -122,3 +122,38 @@ export const Default: Story = {
     ),
   ],
 };
+
+export const WithoutTitlebar: Story = {
+  args: {
+    state: "active",
+    shadow: true,
+    showTitlebar: false,
+    width: "600px",
+    height: "400px",
+    children: (
+      <div className="p-6 bg-background-primary h-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">🎵</div>
+          <h2 className="text-lg font-bold text-foreground-primary mb-2">
+            Now Playing
+          </h2>
+          <p className="text-sm text-foreground-secondary mb-1">
+            Resonance
+          </p>
+          <p className="text-xs text-foreground-tertiary">
+            Home - Odyssey
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  decorators: [
+    (Story: React.ComponentType) => (
+      <Desktop minHeight="100vh" alignItems="center">
+        <div className="flex items-center justify-center">
+          <Story />
+        </div>
+      </Desktop>
+    ),
+  ],
+};
