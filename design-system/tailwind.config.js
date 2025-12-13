@@ -42,8 +42,17 @@ export default {
       },
       fontFamily: {
         primary: [
+          "SF Pro Display",
           "SF Pro Text",
           "Segoe Fluent Icons",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
+          "sans-serif",
+        ],
+        button: [
+          "SF Pro Rounded",
+          "SF Pro Display",
           "-apple-system",
           "BlinkMacSystemFont",
           "Segoe UI",

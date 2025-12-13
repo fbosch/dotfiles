@@ -28,25 +28,26 @@ let currentConfig: ConfirmConfig = {
   variant: "danger",
 };
 
-// Variant color schemes
+// Variant color schemes - exactly matching design system tokens
+// Source: design-system/tokens.json
 const variants = {
   danger: {
-    iconColor: "#e74c3c",
-    confirmColor: "#e74c3c",
-    confirmFocusColor: "#e74c3c",
-    confirmHoverColor: "#ff6b5a",
+    iconColor: "#e35245",       // state.error
+    confirmBg: "#e35245",        // state.error
+    confirmHoverBg: "#ff6b5a",   // state.error-hover
+    confirmFocusColor: "#e35245", // state.error
   },
   warning: {
-    iconColor: "#f39c12",
-    confirmColor: "#f39c12",
-    confirmFocusColor: "#f39c12",
-    confirmHoverColor: "#ffb84d",
+    iconColor: "#dea721",        // state.warning
+    confirmBg: "#dea721",         // state.warning
+    confirmHoverBg: "#e8b230",    // state.warning-hover
+    confirmFocusColor: "#dea721", // state.warning
   },
   info: {
-    iconColor: "#3498db",
-    confirmColor: "#3498db",
-    confirmFocusColor: "#3498db",
-    confirmHoverColor: "#5dade2",
+    iconColor: "#0067c0",         // accent.primary / state.info
+    confirmBg: "#0067c0",          // accent.primary
+    confirmHoverBg: "#106ebe",     // accent.hover
+    confirmFocusColor: "#0067c0",  // accent.primary
   },
 };
 
@@ -64,91 +65,116 @@ function updateCSS(config: ConfirmConfig) {
 
   app.apply_css(
     `
+    /* Window container - transparent backdrop */
     window.confirm-dialog {
       background-color: transparent;
       border: none;
       padding: 40px;
     }
     
+    /* Dialog box - matches design-system Dialog component */
+    /* bg-background-secondary/90 backdrop-blur-sm rounded-xl p-6 */
+    /* border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.2),0_2px_8px_rgba(0,0,0,0.1)] */
     box.dialog-box {
-      background-color: rgba(42, 42, 42, 0.90);
+      background-color: rgba(45, 45, 45, 0.90); /* #2d2d2d = background-secondary */
       border-radius: 12px;
-      padding: 24px 24px 20px 24px;
-      min-width: 300px;
-      max-width: 340px;
+      padding: 24px;
+      min-width: 340px;
+      max-width: 384px;
       border: 1px solid rgba(255, 255, 255, 0.15);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     
+    /* Content area spacing */
     box.content-box {
-      margin-bottom: 20px;
-    }
-    
-    label.dialog-icon {
-      font-size: 36px;
-      color: ${colors.iconColor};
       margin-bottom: 16px;
     }
     
-    label.dialog-title {
-      font-family: "SF Pro Rounded", "SF Pro Text", system-ui, sans-serif;
-      font-size: 14px;
-      font-weight: 600;
-      color: #ffffff;
-      letter-spacing: 0px;
-      margin-bottom: 4px;
+    /* Icon - text-4xl mb-4 */
+    label.dialog-icon {
+      font-size: 36px;
+      color: ${colors.iconColor};
+      margin-bottom: 12px;
     }
     
+    /* Title - text-sm font-semibold text-foreground-primary mb-1 */
+    label.dialog-title {
+      font-family: "SF Pro Display", system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      color: #ffffff; /* foreground-primary */
+      margin-bottom: 6px;
+    }
+    
+    /* Message - text-xs text-foreground-tertiary leading-relaxed */
     label.dialog-message {
-      font-family: "SF Pro Rounded", "SF Pro Text", system-ui, sans-serif;
+      font-family: "SF Pro Display", system-ui, sans-serif;
       font-size: 12px;
       font-weight: 400;
-      color: #b3b3b3;
+      color: #999999; /* foreground-tertiary */
       line-height: 1.5;
     }
     
+    /* Button base - matches design-system Button component */
+    /* h-7 px-3 text-xs (sm size) font-button (SF Pro Rounded) font-medium rounded-md transition-all duration-150 */
     button.dialog-button {
-      padding: 6px 16px;
-      font-size: 13px;
+      padding: 4px 12px;
+      font-size: 12px;
       font-weight: 500;
       border-radius: 6px;
-      min-height: 24px;
-      transition: background-color 150ms ease, color 150ms ease;
+      min-height: 28px;
+      transition: all 150ms ease;
+      font-family: "SF Pro Rounded", "SF Pro Display", system-ui, sans-serif;
     }
     
     button.dialog-button label {
-      font-family: "SF Pro Rounded", "SF Pro Text", system-ui, sans-serif;
       color: inherit;
     }
     
+    /* Cancel button - matches 'default' variant */
+    /* bg-background-tertiary text-foreground-primary */
+    /* border border-white/10 hover:border-white/20 */
     button.cancel {
-      background-color: #3b5998;
-      color: #ffffff;
-      border: none;
+      background-color: #373737; /* background-tertiary */
+      color: #ffffff; /* foreground-primary */
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }
     
     button.cancel:hover {
-      background-color: #4a6bb3;
+      background-color: rgba(55, 55, 55, 0.9);
+      border-color: rgba(255, 255, 255, 0.2);
     }
     
     button.cancel:focus {
-      outline: 2px solid #5a9fd4;
+      outline: 2px solid rgba(255, 255, 255, 0.3);
       outline-offset: 2px;
     }
     
+    button.cancel:active {
+      transform: scale(0.98);
+    }
+    
+    /* Confirm button - matches semantic variants (danger/warning/primary) */
+    /* shadow-sm hover:shadow focus-visible:outline-2 */
     button.confirm {
-      background-color: transparent;
-      color: ${colors.confirmColor};
+      background-color: ${colors.confirmBg};
+      color: #ffffff;
       border: none;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     }
     
     button.confirm:hover {
-      color: ${colors.confirmHoverColor};
+      background-color: ${colors.confirmHoverBg};
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
     
     button.confirm:focus {
       outline: 2px solid ${colors.confirmFocusColor};
       outline-offset: 2px;
+    }
+    
+    button.confirm:active {
+      transform: scale(0.98);
     }
   `,
     false,
@@ -264,7 +290,7 @@ function createWindow() {
 
   const contentBox = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
-    spacing: 8,
+    spacing: 0,
     halign: Gtk.Align.CENTER,
   });
   contentBox.add_css_class("content-box");
