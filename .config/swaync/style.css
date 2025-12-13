@@ -200,17 +200,12 @@
   margin-right: 2.25rem;
 }
 
-.notification-icon image {
-  min-height: 100%;
-  width: 300px;
-}
-
 /* Notification Text */
 .summary {
   color: var(--text-color);
   font-size: 14px;
   font-weight: 600;
-  margin-bottom: 0.25rem;
+  /* margin-bottom: 0.25rem; */
 }
 
 .body {
@@ -222,7 +217,6 @@
 
 /* Notification Image */
 .image {
-  border-radius: var(--radius-small);
   margin-right: 1.25rem;
   margin-left: 0.25rem;
 }

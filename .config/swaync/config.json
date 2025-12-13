@@ -31,6 +31,10 @@
     }
   },
   "notification-visibility": {
+    "hyprland-reset": {
+      "state": "transient",
+      "app-name": "^Hyprland$"
+    },
     "keyboard-layout-switch": {
       "state": "transient",
       "app-name": "^Layout Switcher$"
