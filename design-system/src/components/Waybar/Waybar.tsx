@@ -3,7 +3,7 @@ import type React from "react";
 import { cn } from "../../utils/cn";
 
 const waybarVariants = cva(
-  "w-full flex items-center justify-between bg-waybar-bg text-white text-sm tracking-wide text-shadow-waybar transition-colors duration-500",
+  "w-full flex items-center justify-between bg-waybar-bg text-white text-xs tracking-wide text-shadow-waybar transition-colors duration-500 py-1",
   {
     variants: {
       position: {
@@ -17,25 +17,28 @@ const waybarVariants = cva(
   },
 );
 
-const moduleVariants = cva("flex items-center gap-2 text-xs tracking-wide", {
-  variants: {
-    type: {
-      cpu: "border-r border-white/10 pr-3",
-      memory: "ml-3",
-      default: "",
+const moduleVariants = cva(
+  "flex items-center gap-2 text-xs tracking-wide",
+  {
+    variants: {
+      type: {
+        cpu: "border-r border-white/10 pr-3 py-2",
+        memory: "",
+        default: "",
+      },
+      state: {
+        idle: "text-state-success",
+        normal: "text-white",
+        warning: "text-state-warning",
+        critical: "text-state-error",
+      },
     },
-    state: {
-      idle: "text-state-success",
-      normal: "text-white",
-      warning: "text-state-warning",
-      critical: "text-state-error",
+    defaultVariants: {
+      type: "default",
+      state: "normal",
     },
   },
-  defaultVariants: {
-    type: "default",
-    state: "normal",
-  },
-});
+);
 
 const buttonVariants = cva(
   "border border-transparent rounded transition-all duration-150 ease-in-out",
@@ -43,14 +46,14 @@ const buttonVariants = cva(
     variants: {
       variant: {
         start:
-          "text-white/40 text-2xl px-3 pl-3 py-0 m-1 text-shadow-none hover:bg-white/10 hover:border-white/10 hover:text-white",
+          "text-white/40 text-2xl px-2 h-full flex items-center mx-1 text-shadow-none hover:bg-white/10 hover:border-white/10 hover:text-white",
         workspace:
-          "px-3 py-1.5 mx-1 my-1 hover:bg-white/5 hover:border-white/10",
-        task: "flex items-center gap-2 px-2 py-1.5 mx-1 my-1 text-shadow-waybar-button hover:bg-white/[0.01] hover:border-white/10",
-        tray: "ml-4",
+          "px-3 h-full flex items-center mx-1 tracking-normal hover:bg-white/5 hover:border-white/10",
+        task: "flex items-center gap-2 px-2 h-full mx-0.5 text-shadow-waybar-button hover:bg-white/[0.01] hover:border-white/10",
+        tray: "",
       },
       active: {
-        true: "bg-white/5 border-white/10 font-bold",
+        true: "bg-white/5 border-white/10",
         false: "",
       },
     },
@@ -86,7 +89,7 @@ export const Waybar: React.FC<WaybarProps> = ({
       {/* Left modules */}
       <div className="flex items-center ml-1">
         <button type="button" className={buttonVariants({ variant: "start" })}>
-          <span className="font-fluent"></span>
+          <span className="font-nerd"></span>
         </button>
         <div className="flex items-center gap-0">
           <button
@@ -144,13 +147,13 @@ export const Waybar: React.FC<WaybarProps> = ({
       {/* Right modules */}
       <div className="flex items-center gap-3 pr-1">
         <div className={moduleVariants({ type: "memory" })}>
-          <span className="font-fluent"></span>
-          <span>45%</span>
+          <span className="font-fluent font-bold"></span>
+          <span className="font-medium">45%</span>
         </div>
 
         <div className={moduleVariants({ type: "cpu", state: "idle" })}>
-          <span className="font-fluent"></span>
-          <span>12%</span>
+          <span className="font-fluent font-bold"></span>
+          <span className="font-medium">12%</span>
         </div>
 
         <div className="flex items-center gap-2 ml-3">
