@@ -243,6 +243,7 @@ design-system/
 - **Button elements:** Always include `type="button"` attribute
 - **Conditional classes:** Use `cn()` utility for merging
 - **Unicode characters in JSX:** When editing JSX that contains unicode characters (icons, symbols, emojis), be extremely careful to preserve them EXACTLY. If using the Edit tool, ensure the oldString includes the unicode character verbatim. If uncertain about the exact character, use Read tool first or use a different approach that doesn't risk losing the character.
+- **Preserve user changes:** If the user makes manual edits to files between agent edits, those changes MUST be preserved. Always read the file before making edits to see the current state. User edits take precedence over agent suggestions.
 
 ## 🎭 Storybook Stories
 
