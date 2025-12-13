@@ -17,6 +17,11 @@ interface DesktopProps {
    * @default true
    */
   useWallpaper?: boolean;
+  /**
+   * Vertical alignment of content
+   * @default 'flex-end' (bottom aligned for Waybar)
+   */
+  alignItems?: "flex-start" | "center" | "flex-end";
 }
 
 /**
@@ -31,6 +36,7 @@ export function Desktop({
   minHeight = "100vh",
   backgroundColor = "#191919",
   useWallpaper = true,
+  alignItems = "flex-end",
 }: DesktopProps) {
   return (
     <div
@@ -39,7 +45,8 @@ export function Desktop({
         width: "100%",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "flex-end",
+        justifyContent: alignItems,
+        alignItems: "center",
         backgroundColor,
         backgroundImage: useWallpaper ? "url(/wallpaper.png)" : undefined,
         backgroundSize: "cover",
