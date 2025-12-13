@@ -16,6 +16,10 @@
         "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
       }
     },
+    "design-system": {
+      "type": "remote",
+      "url": "http://localhost:6006/mcp"
+    },
     "vitest": {
       "type": "local",
       "command": ["bunx", "@djankies/vitest-mcp"]

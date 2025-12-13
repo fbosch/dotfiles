@@ -10,6 +10,7 @@
 scripts
 docs
 node_modules
+design-system
 \.backup
 lazy-lock\.json
 Brewfile\.lock\.json
