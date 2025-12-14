@@ -61,8 +61,6 @@
   background: transparent;
   border-radius: var(--radius-large);
   overflow: hidden;
-  /* box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45); */
-  /* margin: 12px; */
 }
 
 .control-center-list {
@@ -158,12 +156,11 @@
   transition:
     background 150ms ease,
     border-color 150ms ease;
-  /* box-shadow: var(--shadow-elevation-high); */
 }
 
 .notification:hover {
   background: var(--surface-color);
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* Notification Content */
@@ -197,7 +194,7 @@
 
 /* Notification Icon */
 .notification-icon {
-  margin-right: 2.25rem;
+  margin-right: 0.75rem;
 }
 
 /* Notification Text */
@@ -205,28 +202,28 @@
   color: var(--text-color);
   font-size: 14px;
   font-weight: 600;
-  /* margin-bottom: 0.25rem; */
+  margin-bottom: 4px;
 }
 
 .body {
   color: var(--text-secondary);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.5;
   margin-right: 8px;
 }
 
 /* Notification Image */
 .image {
-  margin-right: 1.25rem;
-  margin-left: 0.25rem;
+  margin-right: 0.75rem;
 }
 
 .body-image {
-  margin-top: 4px;
-  margin-right: 1.25rem;
-  margin-left: 0.25rem;
-  min-width: 22rem;
-  min-height: 12rem;
+  margin-top: 8px;
+  margin-right: 0;
+  margin-left: 0;
+  min-width: 100%;
+  max-width: 100%;
+  min-height: 160px;
   border-radius: var(--radius-medium);
   overflow: hidden;
   box-shadow: var(--shadow-elevation-low);
@@ -234,40 +231,50 @@
 }
 
 /* Notification Actions - matches Button component (variant=default, size=sm) */
+/* Removed flexbox properties - GTK doesn't support them */
+
+/* FlowBox container - prevent child expansion */
+.notification-alt-actions,
+.notification-default-action + box {
+  margin: 8px 0 0 0;
+  padding: 0 12px 12px 12px;
+}
+
+.notification-alt-actions flowbox,
+.notification-alt-actions .all-actions-box {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.notification-alt-actions flowboxchild {
+  min-width: 0;
+  padding: 0;
+  margin: 0 6px 0 0;
+}
+
+.notification-alt-actions flowboxchild:last-child {
+  margin-right: 0;
+}
+
+/* Action buttons */
 .notification-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
   background: #373737;
   border-radius: 6px;
   color: #ffffff;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   line-height: 1;
-  white-space: nowrap;
-  flex-shrink: 0;
-  flex-grow: 0;
-  width: auto;
-  min-width: auto;
-  height: 28px;
+  min-width: 0;
+  min-height: 28px;
+  max-height: 28px;
   padding: 0 12px;
-  margin: 8px 6px 0 0;
+  margin: 0;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  cursor: pointer;
-  box-sizing: border-box;
   transition:
     background 150ms ease,
     border-color 150ms ease,
     transform 150ms ease;
-}
-
-.notification-action:first-child {
-  margin-left: 0;
-}
-
-.notification-action:last-child {
-  margin-right: 0;
 }
 
 .notification-action:hover {
@@ -357,13 +364,11 @@
 }
 
 /* Volume Widget */
-
 .widget-volume {
   background: var(--volume-bg);
   border-radius: var(--radius-medium);
   border: 1px solid var(--border-color);
   padding: 8px 10px 10px 10px;
-  /* margin: 6px 8px 4px 8px; */
   margin-top: 8px;
   box-shadow: var(--shadow-elevation-low);
   row-gap: 6px;
@@ -462,7 +467,6 @@
 }
 
 .widget-volume .per-app-volume {
-  /* background: var(--volume-surface); */
   border-radius: calc(var(--radius-medium) - 8px);
   margin: 0;
   padding: 4px 0 4px 0;
@@ -625,13 +629,11 @@ scrollbar {
 }
 
 scrollbar trough {
-  /* background: rgba(255, 255, 255, 0.03); */
   background: transparent;
   border-radius: var(--radius-small);
 }
 
 scrollbar slider {
-  /* background: rgba(255, 255, 255, 0.2); */
   background: transparent;
   border-radius: var(--radius-small);
   min-width: 6px;

@@ -46,7 +46,7 @@ if [[ "${mode}" == "ocr" ]]; then
         exit 1
     fi
 
-    notification_id="$(notify-send --print-id "Reading text..." "Extracting text from screenshot...")"
+    notification_id="$(notify-send --app-name="OCR" --print-id "Reading text..." "Extracting text from screenshot...")"
 
     # Preprocess image for better OCR accuracy
     preprocessed="${tmpdir}/preprocessed.png"
@@ -82,7 +82,7 @@ if [[ "${mode}" == "ocr" ]]; then
     # Add --dpi 300 to hint at higher resolution
     # Add -l eng for explicit English (change to your language if needed)
     if ! raw_text="$(tesseract "${preprocessed}" stdout --psm 3 --oem 1 --dpi 300 -l eng 2>/dev/null)"; then
-        notify-send --replace-id="${notification_id}" "Text extraction failed" "Could not read text from image."
+        notify-send --app-name="OCR" --replace-id="${notification_id}" "Text extraction failed" "Could not read text from image."
         exit 1
     fi
 
@@ -103,7 +103,7 @@ if [[ "${mode}" == "ocr" ]]; then
     fi
 
     if command -v notify-send >/dev/null 2>&1; then
-        notify-send --replace-id="${notification_id}" "Text copied to clipboard" "${summary}"
+        notify-send --app-name="OCR" --replace-id="${notification_id}" "Text copied to clipboard" "${summary}"
     fi
 
     exit 0
@@ -130,19 +130,33 @@ fi
 
 if command -v notify-send >/dev/null 2>&1; then
     (
+        # Get file size for display
+        file_size=$(du -h "${file}" | cut -f1)
+        
         action=$(notify-send \
             --wait \
-            --action=default=Open \
+            --app-name="SCREENSHOTS" \
+            --action="open=View Screenshot" \
+            --action="folder=Open Folder" \
             --hint="string:image-path:${file}" \
-            -i camera-photo \
-            "Screenshot saved" \
-            "${label} saved to ${file}") || true
-        if [[ "${action}" == "default" ]]; then
-            if command -v xdg-open >/dev/null 2>&1; then
-                xdg-open "${file}" >/dev/null 2>&1 &
-            elif command -v gio >/dev/null 2>&1; then
-                gio open "${file}" >/dev/null 2>&1 &
-            fi
-        fi
+            "Screenshot Captured" \
+            "${label} screenshot saved (${file_size})") || true
+        
+        case "${action}" in
+            open)
+                if command -v xdg-open >/dev/null 2>&1; then
+                    xdg-open "${file}" >/dev/null 2>&1 &
+                elif command -v gio >/dev/null 2>&1; then
+                    gio open "${file}" >/dev/null 2>&1 &
+                fi
+                ;;
+            folder)
+                if command -v xdg-open >/dev/null 2>&1; then
+                    xdg-open "${shots_dir}" >/dev/null 2>&1 &
+                elif command -v gio >/dev/null 2>&1; then
+                    gio open "${shots_dir}" >/dev/null 2>&1 &
+                fi
+                ;;
+        esac
     ) &
 fi
