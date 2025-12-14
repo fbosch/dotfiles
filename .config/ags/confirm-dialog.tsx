@@ -331,12 +331,14 @@ function createWindow() {
   cancelButton.add_css_class("dialog-button");
   cancelButton.add_css_class("cancel");
   cancelButton.set_child(new Gtk.Label({ label: currentConfig.cancelLabel }));
+  cancelButton.set_cursor_from_name("pointer");
   cancelButton.connect("clicked", () => hideDialog());
 
   confirmButton = new Gtk.Button({ can_focus: true, hexpand: true });
   confirmButton.add_css_class("dialog-button");
   confirmButton.add_css_class("confirm");
   confirmButton.set_child(new Gtk.Label({ label: currentConfig.confirmLabel }));
+  confirmButton.set_cursor_from_name("pointer");
   confirmButton.connect("clicked", () => {
     if (currentConfig.confirmCommand) {
       GLib.spawn_command_line_async(currentConfig.confirmCommand);

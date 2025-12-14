@@ -53,7 +53,7 @@
 * {
   all: unset;
   font-family: "SF Pro Rounded", system-ui, sans-serif;
-  font-size: 16px;
+  font-size: 14px;
 }
 
 /* Control Center Widget */
@@ -202,7 +202,7 @@
   color: var(--text-color);
   font-size: 14px;
   font-weight: 600;
-  margin-bottom: 4px;
+  /* margin-bottom: 4px; */
 }
 
 .body {
@@ -262,7 +262,7 @@
   background: #373737;
   border-radius: 6px;
   color: #ffffff;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
   line-height: 1;
   min-width: 0;
@@ -271,6 +271,7 @@
   padding: 0 12px;
   margin: 0;
   border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
   transition:
     background 150ms ease,
     border-color 150ms ease,

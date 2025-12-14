@@ -5,14 +5,14 @@ import { Button } from "../Button";
 
 /**
  * Notification component - SwayNC design system
- * 
+ *
  * Matches SwayNC GTK notification styling exactly:
- * - 290px wide floating cards with backdrop blur
+ * - 340px wide floating cards with backdrop blur
  * - SF Pro Rounded typography throughout
  * - Three urgency levels: normal, low (0.9 opacity), critical (red border)
  * - Hover-revealed close button
  * - Custom action buttons matching SwayNC style
- * 
+ *
  * Layout structure:
  * - Optional header row: app-name (left) + time (right)
  * - Summary: Main notification title (bold, larger text)
@@ -22,7 +22,7 @@ import { Button } from "../Button";
 
 const notificationVariants = cva(
   // Base styles - matches .notification CSS (using brighter border to match actual appearance)
-  "group relative w-[290px] bg-background-primary/85 backdrop-blur-sm border border-white/[0.15] rounded-3xl overflow-hidden transition-all duration-150",
+  "group relative w-[340px] bg-background-primary/85 backdrop-blur-sm border border-white/[0.15] rounded-[22px] overflow-hidden transition-all duration-150",
   {
     variants: {
       urgency: {
@@ -64,7 +64,8 @@ export interface NotificationAction {
   onClick: () => void;
 }
 
-export interface NotificationProps extends VariantProps<typeof notificationVariants> {
+export interface NotificationProps
+  extends VariantProps<typeof notificationVariants> {
   /**
    * Application name (optional, shown in header if provided)
    */
@@ -150,7 +151,7 @@ export const Notification: React.FC<NotificationProps> = ({
             <div className={cn(summaryVariants({ urgency }), "mb-1")}>
               {summary}
             </div>
-            
+
             {/* Body - matches .body (secondary details) */}
             {body && (
               <div className="font-button text-xs leading-normal text-foreground-secondary">
@@ -160,33 +161,36 @@ export const Notification: React.FC<NotificationProps> = ({
 
             {/* Optional body image - matches .body-image */}
             {image && (
-              <div className="mt-1 mr-5 ml-1 rounded-2xl overflow-hidden bg-white/[0.04] shadow-sm">
-                <img 
-                  src={image} 
-                  alt="" 
-                  className="w-full h-auto object-cover"
+              <div className="mt-2 rounded-[18px] overflow-hidden bg-white/[0.04] shadow-sm">
+                <img
+                  src={image}
+                  alt=""
+                  className="w-full h-auto min-h-[160px] object-cover"
                 />
               </div>
             )}
           </div>
         </div>
+      </div>
 
-        {/* Optional action buttons */}
-        {actions && actions.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
+      {/* Optional action buttons - matches .notification-alt-actions padding */}
+      {actions && actions.length > 0 && (
+        <div className="mt-2 px-3 pb-3">
+          <div className="flex flex-wrap gap-1.5">
             {actions.map((action) => (
               <Button
                 key={action.id}
                 variant="default"
                 size="sm"
                 onClick={action.onClick}
+                className="flex-1"
               >
                 {action.label}
               </Button>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Close button - matches .close-button */}
       {onClose && (

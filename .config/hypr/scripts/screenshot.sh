@@ -133,12 +133,16 @@ if command -v notify-send >/dev/null 2>&1; then
         # Get file size for display
         file_size=$(du -h "${file}" | cut -f1)
         
+        # Use both --icon and image-path hint
+        # --icon: Shows thumbnail in notification icon area  
+        # image-path hint: Tells SwayNC to show full image in body
         action=$(notify-send \
             --wait \
             --app-name="SCREENSHOTS" \
+            --icon="${file}" \
+            --hint="string:image-path:${file}" \
             --action="open=View Screenshot" \
             --action="folder=Open Folder" \
-            --hint="string:image-path:${file}" \
             "Screenshot Captured" \
             "${label} screenshot saved (${file_size})") || true
         
