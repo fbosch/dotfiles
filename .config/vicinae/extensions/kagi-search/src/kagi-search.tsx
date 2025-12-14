@@ -20,6 +20,37 @@ import type { KagiSearchResult } from "./types";
 
 const SEARCH_DEBOUNCE_MS = 500;
 
+/**
+ * Detect if query contains a Kagi bang and extract the bang + query
+ * Bangs can appear at start, end, or middle of query
+ * Examples: "!g react hooks", "react hooks !g", "react !g hooks"
+ */
+function detectBang(query: string): { bang: string; cleanQuery: string } | null {
+	const trimmed = query.trim();
+	// Match bang pattern: ! followed by letters/numbers
+	const bangPattern = /(![\w]+)/;
+	const match = trimmed.match(bangPattern);
+	
+	if (match) {
+		const bang = match[1];
+		// Remove the bang from the query to get clean search terms
+		const cleanQuery = trimmed.replace(bang, "").trim();
+		return { bang, cleanQuery };
+	}
+	
+	return null;
+}
+
+/**
+ * Get the redirect URL for a Kagi bang
+ * Kagi processes bangs server-side, so we construct the Kagi search URL
+ * and let Kagi handle the redirect
+ */
+function getBangRedirectUrl(bang: string, query: string): string {
+	const encoded = encodeURIComponent(`${bang} ${query}`);
+	return `https://kagi.com/search?q=${encoded}`;
+}
+
 const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
@@ -100,6 +131,10 @@ function KagiSearchContent() {
 		}
 	}, [preferences.sessionToken]);
 
+	// Detect bang in search query
+	const bangDetection = detectBang(debouncedSearch);
+	const hasBang = bangDetection !== null;
+
 	// Search query
 	const {
 		data: searchResults,
@@ -110,7 +145,9 @@ function KagiSearchContent() {
 		queryKey: ["kagi-search", debouncedSearch],
 		queryFn: () => searchKagi(debouncedSearch, preferences.sessionToken),
 		enabled:
-			debouncedSearch.trim().length > 0 && !!preferences.sessionToken,
+			debouncedSearch.trim().length > 0 && 
+			!!preferences.sessionToken &&
+			!hasBang, // Don't search if there's a bang - we'll redirect instead
 		placeholderData: keepPreviousData,
 	});
 
@@ -142,6 +179,30 @@ function KagiSearchContent() {
 					title="Search Kagi"
 					description="Type to search the web with Kagi"
 					icon={Icon.MagnifyingGlass}
+				/>
+			) : hasBang ? (
+				// Show bang redirect option
+				<List.Item
+					title={`${bangDetection.bang} ${bangDetection.cleanQuery}`}
+					subtitle={`Open in browser with Kagi bang`}
+					icon={Icon.ArrowRight}
+					accessories={[{ text: "Press Enter to redirect" }]}
+					actions={
+						<ActionPanel>
+							<Action.OpenInBrowser
+								title="Open Bang in Browser"
+								url={getBangRedirectUrl(bangDetection.bang, bangDetection.cleanQuery)}
+								onOpen={async () => {
+									await showToast({
+										style: Toast.Style.Success,
+										title: "Redirecting",
+										message: `Opening ${bangDetection.bang} search`,
+									});
+									await closeMainWindow();
+								}}
+							/>
+						</ActionPanel>
+					}
 				/>
 			) : results.length === 0 && !isLoading ? (
 				<List.EmptyView
