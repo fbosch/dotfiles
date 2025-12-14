@@ -51,6 +51,10 @@ procs:
     autostart: false
     shell: "(cd .config/vicinae/extensions/wallhaven-search && npm run dev)"
 
+  vicinae-hyprprop:
+    autostart: false
+    shell: "(cd .config/vicinae/extensions/hyprprop && npm run dev)"
+
   build-storybook:
     autostart: false
     shell: "(cd design-system && pnpm build-storybook)"
