@@ -22,50 +22,58 @@ function formatWindowInfo(info: HyprpropWindowInfo): string {
   // Title
   sections.push(`# ${info.title}`);
   sections.push("");
-  sections.push(`**Class:** ${info.class}`);
+  sections.push(`**${info.class}** • PID ${info.pid}`);
   sections.push("");
 
-  // Active states (only show what's enabled)
-  const states: string[] = [];
-  if (info.floating) states.push("Floating");
-  if (info.fullscreen) states.push(info.fakeFullscreen ? "Fake Fullscreen" : "Fullscreen");
-  if (info.pinned) states.push("Pinned");
-  if (info.hidden) states.push("Hidden");
-  
-  if (states.length > 0) {
-    sections.push("## State");
-    for (const state of states) {
-      sections.push(`- ${state}`);
-    }
-    sections.push("");
-  }
+  // Window Identity
+  sections.push("## Window Identity");
+  sections.push("");
+  sections.push("| Property | Value |");
+  sections.push("|----------|-------|");
+  sections.push(`| Class | \`${info.class}\` |`);
+  sections.push(`| Initial Class | \`${info.initialClass}\` |`);
+  sections.push(`| Address | \`${info.address}\` |`);
+  sections.push(`| Title | ${info.title} |`);
+  sections.push(`| Initial Title | ${info.initialTitle} |`);
+  sections.push("");
 
-  // Position & Size
+  // Layout
   sections.push("## Layout");
-  sections.push(`- **Position:** (${info.at[0]}, ${info.at[1]})`);
-  sections.push(`- **Size:** ${info.size[0]}×${info.size[1]} px`);
-  sections.push(`- **Workspace:** ${info.workspace.name} (ID: ${info.workspace.id})`);
-  sections.push(`- **Monitor:** ${info.monitor}`);
+  sections.push("");
+  sections.push("| Property | Value |");
+  sections.push("|----------|-------|");
+  sections.push(`| Position | \`(${info.at[0]}, ${info.at[1]})\` |`);
+  sections.push(`| Size | \`${info.size[0]} × ${info.size[1]}\` px |`);
+  sections.push(`| Workspace | ${info.workspace.name} (ID: ${info.workspace.id}) |`);
+  sections.push(`| Monitor | ${info.monitor} |`);
   sections.push("");
 
-  // Technical Details in code block for monospace font testing
-  sections.push("## Technical Details");
+  // State
+  sections.push("## State");
   sections.push("");
-  sections.push("```");
-  sections.push(`Address:          ${info.address}`);
-  sections.push(`PID:              ${info.pid}`);
-  sections.push(`Initial Class:    ${info.initialClass}`);
-  sections.push(`Initial Title:    ${info.initialTitle}`);
-  sections.push(`Focus History ID: ${info.focusHistoryID}`);
-  sections.push(`Mapped:           ${info.mapped ? "Yes" : "No"}`);
-  sections.push(`XWayland:         ${info.xwayland ? "Yes" : "No"}`);
+  sections.push("| Property | Value |");
+  sections.push("|----------|-------|");
+  sections.push(`| Floating | ${info.floating ? "✓ Yes" : "✗ No"} |`);
+  sections.push(`| Fullscreen | ${info.fullscreen ? (info.fakeFullscreen ? "⚠ Fake" : "✓ Yes") : "✗ No"} |`);
+  sections.push(`| Pinned | ${info.pinned ? "✓ Yes" : "✗ No"} |`);
+  sections.push(`| Hidden | ${info.hidden ? "✓ Yes" : "✗ No"} |`);
+  sections.push(`| Mapped | ${info.mapped ? "✓ Yes" : "✗ No"} |`);
+  sections.push("");
+
+  // Technical
+  sections.push("## Technical");
+  sections.push("");
+  sections.push("| Property | Value |");
+  sections.push("|----------|-------|");
+  sections.push(`| PID | \`${info.pid}\` |`);
+  sections.push(`| XWayland | ${info.xwayland ? "✓ Yes" : "✗ No"} |`);
+  sections.push(`| Focus History ID | \`${info.focusHistoryID}\` |`);
   if (info.swallowing) {
-    sections.push(`Swallowing:       ${info.swallowing}`);
+    sections.push(`| Swallowing | \`${info.swallowing}\` |`);
   }
   if (info.grouped && info.grouped.length > 0) {
-    sections.push(`Grouped:          ${JSON.stringify(info.grouped)}`);
+    sections.push(`| Grouped | \`${JSON.stringify(info.grouped)}\` |`);
   }
-  sections.push("```");
   sections.push("");
 
   return sections.join("\n");
@@ -157,7 +165,7 @@ export default function Command() {
       metadata={
         <Detail.Metadata>
           <Detail.Metadata.Label
-            title="Window Class"
+            title="Application"
             text={windowInfo.class}
             icon={Icon.AppWindow}
           />
@@ -166,32 +174,27 @@ export default function Command() {
             text={String(windowInfo.pid)}
             icon={Icon.Code}
           />
-          <Detail.Metadata.Label
-            title="Address"
-            text={windowInfo.address}
-            icon={Icon.Link}
-          />
-          <Detail.Metadata.Separator />
-          <Detail.Metadata.Label
-            title="Position"
-            text={`(${windowInfo.at[0]}, ${windowInfo.at[1]})`}
-            icon={Icon.Pin}
-          />
-          <Detail.Metadata.Label
-            title="Size"
-            text={`${windowInfo.size[0]}×${windowInfo.size[1]}`}
-            icon={Icon.Box}
-          />
           <Detail.Metadata.Separator />
           <Detail.Metadata.Label
             title="Workspace"
-            text={`${windowInfo.workspace.name} (ID: ${windowInfo.workspace.id})`}
+            text={`${windowInfo.workspace.name} (${windowInfo.workspace.id})`}
             icon={Icon.Desktop}
           />
           <Detail.Metadata.Label
             title="Monitor"
             text={String(windowInfo.monitor)}
             icon={Icon.Monitor}
+          />
+          <Detail.Metadata.Separator />
+          <Detail.Metadata.Label
+            title="Position"
+            text={`${windowInfo.at[0]}, ${windowInfo.at[1]}`}
+            icon={Icon.Pin}
+          />
+          <Detail.Metadata.Label
+            title="Size"
+            text={`${windowInfo.size[0]} × ${windowInfo.size[1]}`}
+            icon={Icon.Box}
           />
           <Detail.Metadata.Separator />
           {(windowInfo.floating || windowInfo.fullscreen || windowInfo.pinned || windowInfo.xwayland || windowInfo.hidden) ? (
