@@ -137,19 +137,34 @@ export default function Command() {
   }, [loadWindowInfo]);
 
   if (isLoading) {
-    return <Detail markdown="Loading window information..." />;
+    return <Detail markdown={`# Select a Window
+
+**Hyprprop** is waiting for you to select a window.
+
+Click on any window to view its properties...`} />;
   }
 
   if (!windowInfo) {
     return (
       <Detail
-        markdown="# No Window Information\n\nFailed to retrieve window information. Please try again."
+        markdown={`# No Window Information
+
+Failed to retrieve window information. Please try again.
+
+## Possible Reasons
+
+- No window was selected
+- Hyprprop command failed
+- Window closed before info could be retrieved
+
+Press **⌘R** to retry.`}
         actions={
           <ActionPanel>
             <Action
               title="Retry"
               icon={Icon.ArrowClockwise}
               onAction={loadWindowInfo}
+              shortcut={{ modifiers: ["cmd"], key: "r" }}
             />
           </ActionPanel>
         }
