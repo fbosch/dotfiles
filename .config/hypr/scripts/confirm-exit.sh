@@ -14,6 +14,6 @@ ags request -i confirm-dialog-daemon '{
     "confirmCommand": "uwsm stop",
     "variant": "danger",
     "audioFile": "/home/fbb/.config/hypr/assets/warn.ogg",
-    "showDelay": 180
+    "showDelay": 190
   }
 }'
