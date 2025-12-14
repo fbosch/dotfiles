@@ -148,6 +148,15 @@ Brewfile                    # All Homebrew dependencies
 - **Linux:** May use Homebrew from `/home/linuxbrew/.linuxbrew` or native package managers
 - **Cursor/VSCode:** Fish auto-switches to dash (see `.config/fish/config.fish:1-4`)
 
+## 🚫 Git Commit Policy
+
+**NEVER commit changes unless explicitly asked by the user.**
+
+- You may stage files for review (`git add`) if the user asks to see what would be committed
+- You may show diffs and suggest commit messages
+- You may prepare changes and inform the user they are ready to commit
+- But ONLY create commits when the user explicitly requests it with commands like "commit this", "make a commit", etc.
+
 ## 🧪 Validation Checklist
 
 Before committing config changes:

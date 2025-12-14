@@ -173,7 +173,7 @@ export const Notification: React.FC<NotificationProps> = ({
 
         {/* Optional action buttons */}
         {actions && actions.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-3">
+          <div className="flex flex-wrap gap-1.5 mt-2">
             {actions.map((action) => (
               <Button
                 key={action.id}
