@@ -1,0 +1,47 @@
+{
+  "$schema": "https://raw.githubusercontent.com/vicinaehq/vicinae/refs/heads/main/extra/schemas/extension.json",
+  "name": "kagi-search",
+  "title": "Kagi Search",
+  "description": "Search the web using Kagi search engine",
+  "categories": ["Productivity", "Web"],
+  "license": "MIT",
+  "author": "fbosch",
+  "contributors": [],
+  "pastContributors": [],
+  "icon": "extension_icon.png",
+  "commands": [
+    {
+      "name": "kagi-search",
+      "title": "Search Kagi",
+      "subtitle": "Search the web with Kagi",
+      "description": "Search the web using Kagi search engine",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "sessionToken",
+      "type": "password",
+      "required": true,
+      "title": "Kagi Session Link",
+      "description": "Your Kagi session link from https://kagi.com/settings/user_details (paste the full URL)",
+      "placeholder": "https://kagi.com/?token=..."
+    }
+  ],
+  "scripts": {
+    "build": "vici build",
+    "dev": "vici develop",
+    "format": "biome format --write src",
+    "lint": "vici lint"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.12",
+    "@vicinae/api": "^0.16.14",
+    "cheerio": "^1.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.8",
+    "@types/cheerio": "^0.22.35",
+    "typescript": "^5.9.3"
+  }
+}
