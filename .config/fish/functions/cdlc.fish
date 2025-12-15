@@ -12,7 +12,7 @@ function cdlc -d "Change to the latest created directory in current working dire
     end
 
     # Use fd to find directories, sort by creation time (newest first)
-    set -l latest_dir (fd --type d --max-depth 1 --base-directory $target_dir --exec stat -f "%B {}" \; 2>/dev/null | sort -rn | head -n 1 | awk '{print $2}' | sed 's|^\./||')
+    set -l latest_dir (fd --type d --max-depth 1 --base-directory $target_dir --exec stat -f "%B %N" {} \; 2>/dev/null | sort -rn | head -n 1 | awk '{print $2}' | sed 's|^\./||')
 
     # Check if we found any directories
     if test -z "$latest_dir"
@@ -20,8 +20,8 @@ function cdlc -d "Change to the latest created directory in current working dire
         return 1
     end
 
-    # Build the full path
-    set -l full_path $target_dir/$latest_dir
+    # Build the full path and normalize it
+    set -l full_path (string replace -r '/\./' '/' "$target_dir/$latest_dir")
 
     # Change to the latest directory
     cd $full_path
