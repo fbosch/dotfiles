@@ -19,9 +19,35 @@ let currentLayouts: string[] = [];
 let isVisible: boolean = false;
 let hideTimeoutId: number | null = null;
 let pillOffset: number = 0; // Store the calculated offset for animation
+let currentSize: "sm" | "md" | "lg" = "sm"; // Track current size to avoid redundant CSS updates
+let lastActiveLayout: string | null = null; // Track last active to avoid redundant updates
 
 // Size configurations matching design-system component
-const sizes = {
+interface SizeConfig {
+  containerPadding: string;
+  badgePaddingX: string;
+  badgePaddingY: string;
+  fontSize: string;
+  minWidth: string;
+  gap: string;
+}
+
+interface CalculatedDimensions {
+  badgeWidth: number;
+  badgePaddingX: number;
+  badgePaddingY: number;
+  gap: number;
+  fontSize: number;
+  borderWidth: number;
+  fullBadgeWidth: number;
+  fullBadgeHeight: number;
+  pillOffset: number;
+  containerPadding: number;
+  innerWidth: number;
+  containerWidth: number;
+}
+
+const sizes: Record<"sm" | "md" | "lg", SizeConfig> = {
   sm: {
     containerPadding: "4px",
     badgePaddingX: "8px",
@@ -48,27 +74,46 @@ const sizes = {
   },
 };
 
-function updateCSS(size: "sm" | "md" | "lg" = "sm") {
-  const sizeConfig = sizes[size];
+// Pre-calculate all dimensions for each size on startup
+const calculatedSizes: Record<"sm" | "md" | "lg", CalculatedDimensions> = {} as any;
 
-  // Calculate dimensions for pill positioning
-  const badgeWidth = Number.parseInt(sizeConfig.minWidth, 10);
-  const badgePaddingX = Number.parseInt(sizeConfig.badgePaddingX, 10);
-  const badgePaddingY = Number.parseInt(sizeConfig.badgePaddingY, 10);
-  const gap = Number.parseInt(sizeConfig.gap, 10);
-  const fontSize = Number.parseInt(sizeConfig.fontSize, 10);
-  const borderWidth = 2; // 1px border on each side
-  const fullBadgeWidth = badgeWidth + badgePaddingX * 2 + borderWidth;
-  const fullBadgeHeight = fontSize + badgePaddingY * 2 + borderWidth;
+function precalculateDimensions() {
+  for (const [sizeName, sizeConfig] of Object.entries(sizes) as [keyof typeof sizes, SizeConfig][]) {
+    const badgeWidth = Number.parseInt(sizeConfig.minWidth, 10);
+    const badgePaddingX = Number.parseInt(sizeConfig.badgePaddingX, 10);
+    const badgePaddingY = Number.parseInt(sizeConfig.badgePaddingY, 10);
+    const gap = Number.parseInt(sizeConfig.gap, 10);
+    const fontSize = Number.parseInt(sizeConfig.fontSize, 10);
+    const borderWidth = 2; // 1px border on each side
+    const fullBadgeWidth = badgeWidth + badgePaddingX * 2 + borderWidth;
+    const fullBadgeHeight = fontSize + badgePaddingY * 2 + borderWidth;
+    const pillOffset = fullBadgeWidth + gap;
+    const containerPadding = Number.parseInt(sizeConfig.containerPadding, 10);
+    const innerWidth = fullBadgeWidth * 2;
+    const containerWidth = innerWidth + containerPadding * 2;
 
-  // Store globally for animation
-  pillOffset = fullBadgeWidth + gap;
+    calculatedSizes[sizeName] = {
+      badgeWidth,
+      badgePaddingX,
+      badgePaddingY,
+      gap,
+      fontSize,
+      borderWidth,
+      fullBadgeWidth,
+      fullBadgeHeight,
+      pillOffset,
+      containerPadding,
+      innerWidth,
+      containerWidth,
+    };
+  }
+}
 
-  // Container should fit both badges plus gap
-  const containerPadding = Number.parseInt(sizeConfig.containerPadding, 10);
-  const innerWidth = fullBadgeWidth * 2;
-  const containerWidth = innerWidth + containerPadding * 2;
+// Pre-calculate on module load
+precalculateDimensions();
 
+// Apply static CSS once on module load
+function applyStaticCSS() {
   app.apply_css(
     `
     window.keyboard-layout-switcher {
@@ -95,51 +140,26 @@ function updateCSS(size: "sm" | "md" | "lg" = "sm") {
       background-color: rgba(55, 55, 55, 0.80);
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 9999px;
-      padding: ${sizeConfig.containerPadding};
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-      min-width: ${containerWidth}px;
-      max-width: ${containerWidth}px;
-    }
-    
-    overlay {
-      min-width: ${innerWidth}px;
-      max-width: ${innerWidth}px;
-    }
-    
-    box.pill-wrapper {
-      /* Must be wide enough to contain pill in both positions */
-      min-width: ${innerWidth}px;
-      max-width: ${innerWidth}px;
     }
     
     box.pill-background {
       background-color: ${tokens.colors.accent.primary.value};
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 9999px;
-      min-width: ${fullBadgeWidth}px;
-      min-height: ${fullBadgeHeight}px;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
       transform: translateX(0px);
       transition: transform 300ms cubic-bezier(0.4, 0, 0.1, 1);
     }
     
-    box.pill-background.position-1 {
-      transform: translateX(${pillOffset}px);
-    }
-    
     box.badges-container {
       margin: 0px;
       padding: 0px;
-      min-width: ${innerWidth}px;
-      max-width: ${innerWidth}px;
     }
     
     label.layout-badge {
       font-family: "${tokens.typography.fontFamily.button.value}", "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       font-weight: 700;
-      font-size: ${sizeConfig.fontSize};
-      padding: ${sizeConfig.badgePaddingY} ${sizeConfig.badgePaddingX};
-      min-width: ${sizeConfig.minWidth};
       border-radius: 9999px;
       color: ${tokens.colors.foreground.tertiary.value};
       background-color: transparent;
@@ -153,6 +173,61 @@ function updateCSS(size: "sm" | "md" | "lg" = "sm") {
   `,
     false,
   );
+}
+
+// Apply static CSS on module load
+applyStaticCSS();
+
+let dynamicStyleElement: Gtk.CssProvider | null = null;
+
+function updateCSS(size: "sm" | "md" | "lg" = "sm") {
+  const sizeConfig = sizes[size];
+  const dims = calculatedSizes[size];
+  
+  // Store globally for animation
+  pillOffset = dims.pillOffset;
+
+  // Use inline CSS with custom properties for dynamic sizing
+  // This is much faster than regenerating the entire stylesheet
+  const dynamicCSS = `
+    box.switcher-container {
+      padding: ${sizeConfig.containerPadding};
+      min-width: ${dims.containerWidth}px;
+      max-width: ${dims.containerWidth}px;
+    }
+    
+    overlay {
+      min-width: ${dims.innerWidth}px;
+      max-width: ${dims.innerWidth}px;
+    }
+    
+    box.pill-wrapper {
+      min-width: ${dims.innerWidth}px;
+      max-width: ${dims.innerWidth}px;
+    }
+    
+    box.pill-background {
+      min-width: ${dims.fullBadgeWidth}px;
+      min-height: ${dims.fullBadgeHeight}px;
+    }
+    
+    box.pill-background.position-1 {
+      transform: translateX(${dims.pillOffset}px);
+    }
+    
+    box.badges-container {
+      min-width: ${dims.innerWidth}px;
+      max-width: ${dims.innerWidth}px;
+    }
+    
+    label.layout-badge {
+      font-size: ${sizeConfig.fontSize};
+      padding: ${sizeConfig.badgePaddingY} ${sizeConfig.badgePaddingX};
+      min-width: ${sizeConfig.minWidth};
+    }
+  `;
+
+  app.apply_css(dynamicCSS, false);
 }
 
 function hideSwitcher() {
@@ -170,8 +245,8 @@ function hideSwitcher() {
   shadowWrapper.remove_css_class("visible");
   shadowWrapper.add_css_class("hiding");
 
-  // Hide window after fade out completes
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+  // Hide window after fade out completes (50ms animation + 10ms buffer)
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 60, () => {
     if (win) {
       win.set_visible(false);
     }
@@ -184,9 +259,32 @@ function hideSwitcher() {
 }
 
 function showSwitcher(config: LayoutSwitchConfig) {
-  // Create window on first call
+  const size = config.size || "sm";
+  
+  // Check if we need to recreate window (layouts changed or doesn't exist)
+  const layoutsChanged = win !== null && 
+    (currentLayouts.length !== config.layouts.length || 
+     !currentLayouts.every((l, i) => l === config.layouts[i]));
+  
+  if (layoutsChanged) {
+    // Layouts changed, need to recreate window
+    if (win) {
+      win.destroy();
+      win = null;
+    }
+    layoutLabels.clear();
+    pill = null;
+    shadowWrapper = null;
+    lastActiveLayout = null;
+  }
+  
+  // Create window on first call or after recreation
   if (!win) {
-    createWindow(config.layouts, config.size || "sm");
+    createWindow(config.layouts, size);
+  } else if (size !== currentSize) {
+    // Size changed but layouts same - just update CSS
+    currentSize = size;
+    updateCSS(size);
   }
 
   // Update the active indicator
@@ -202,51 +300,62 @@ function showSwitcher(config: LayoutSwitchConfig) {
     // Trigger fade in animation
     if (shadowWrapper) {
       shadowWrapper.remove_css_class("hiding");
-      // Use timeout to ensure class is applied after visibility change
-      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 10, () => {
+      // Use idle_add for better performance than fixed timeout
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         shadowWrapper?.add_css_class("visible");
         return false;
       });
     }
   }
 
-  // Cancel existing timer and start new one
+  // Reset auto-hide timer (cancel existing and start new one)
   // This resets the countdown on each switch
   if (hideTimeoutId !== null) {
     GLib.source_remove(hideTimeoutId);
-    hideTimeoutId = null;
   }
 
   // Auto-hide after 550ms display time + 150ms fade in = 700ms total
   hideTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 700, () => {
     hideSwitcher();
+    hideTimeoutId = null;
     return false;
   });
 }
 
 function updateActiveState(activeLayout: string) {
   if (!pill) return;
+  
+  // Skip update if layout hasn't changed
+  if (lastActiveLayout === activeLayout) return;
+  lastActiveLayout = activeLayout;
 
   // Find the index of the active layout
   const activeIndex = currentLayouts.indexOf(activeLayout);
   if (activeIndex === -1) return;
 
-  // Update pill position with CSS class
-  pill.remove_css_class("position-0");
-  pill.remove_css_class("position-1");
+  // Update pill position with CSS class (only remove old, add new)
+  const oldPosition = pill.get_css_classes().find(c => c.startsWith("position-"));
+  if (oldPosition) {
+    pill.remove_css_class(oldPosition);
+  }
   pill.add_css_class(`position-${activeIndex}`);
 
-  // Update label colors
+  // Update label colors - only change the ones that need changing
   for (const [layoutCode, label] of layoutLabels.entries()) {
-    label.remove_css_class("active");
-    if (layoutCode === activeLayout) {
+    const shouldBeActive = layoutCode === activeLayout;
+    const isActive = label.has_css_class("active");
+    
+    if (shouldBeActive && !isActive) {
       label.add_css_class("active");
+    } else if (!shouldBeActive && isActive) {
+      label.remove_css_class("active");
     }
   }
 }
 
 function createWindow(layouts: string[], size: "sm" | "md" | "lg") {
   currentLayouts = layouts;
+  currentSize = size;
 
   win = new Astal.Window({
     name: "keyboard-layout-switcher",
@@ -292,9 +401,10 @@ function createWindow(layouts: string[], size: "sm" | "md" | "lg") {
   pillWrapper.append(pill);
 
   // Create badges container
+  const dims = calculatedSizes[size];
   const badgesContainer = new Gtk.Box({
     orientation: Gtk.Orientation.HORIZONTAL,
-    spacing: Number.parseInt(sizes[size].gap, 10),
+    spacing: dims.gap,
   });
   badgesContainer.add_css_class("badges-container");
 
