@@ -24,7 +24,7 @@ let pillOffset: number = 0; // Store the calculated offset for animation
 const sizes = {
   sm: {
     containerPadding: "4px",
-    badgePaddingX: "16px",
+    badgePaddingX: "8px",
     badgePaddingY: "6px",
     fontSize: "14px",
     minWidth: "56px",
@@ -48,7 +48,7 @@ const sizes = {
   },
 };
 
-function updateCSS(size: "sm" | "md" | "lg") {
+function updateCSS(size: "sm" | "md" | "lg" = "sm") {
   const sizeConfig = sizes[size];
 
   // Calculate dimensions for pill positioning
@@ -60,7 +60,7 @@ function updateCSS(size: "sm" | "md" | "lg") {
   const borderWidth = 2; // 1px border on each side
   const fullBadgeWidth = badgeWidth + badgePaddingX * 2 + borderWidth;
   const fullBadgeHeight = fontSize + badgePaddingY * 2 + borderWidth;
-  
+
   // Store globally for animation
   pillOffset = fullBadgeWidth + gap;
 
@@ -79,7 +79,7 @@ function updateCSS(size: "sm" | "md" | "lg") {
     box.shadow-wrapper {
       padding: 24px;
       opacity: 0;
-      transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+      transition: opacity 100ms cubic-bezier(0.4, 0, 0.2, 1);
     }
     
     box.shadow-wrapper.visible {
@@ -88,7 +88,7 @@ function updateCSS(size: "sm" | "md" | "lg") {
     
     box.shadow-wrapper.hiding {
       opacity: 0;
-      transition: opacity 100ms cubic-bezier(0.4, 0, 1, 1);
+      transition: opacity 50ms cubic-bezier(0.4, 0, 1, 1);
     }
     
     box.switcher-container {
@@ -96,7 +96,7 @@ function updateCSS(size: "sm" | "md" | "lg") {
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 9999px;
       padding: ${sizeConfig.containerPadding};
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
       min-width: ${containerWidth}px;
       max-width: ${containerWidth}px;
     }
@@ -198,7 +198,7 @@ function showSwitcher(config: LayoutSwitchConfig) {
       win.set_visible(true);
     }
     isVisible = true;
-    
+
     // Trigger fade in animation
     if (shadowWrapper) {
       shadowWrapper.remove_css_class("hiding");
