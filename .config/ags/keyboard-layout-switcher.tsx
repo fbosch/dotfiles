@@ -13,6 +13,8 @@ interface LayoutSwitchConfig {
 
 let win: Astal.Window | null = null;
 const layoutLabels: Map<string, Gtk.Label> = new Map();
+let pill: Gtk.Box | null = null;
+let currentLayouts: string[] = [];
 let isVisible: boolean = false;
 let hideTimeoutId: number | null = null;
 
@@ -47,6 +49,22 @@ const sizes = {
 function updateCSS(size: "sm" | "md" | "lg") {
   const sizeConfig = sizes[size];
 
+  // Calculate dimensions for pill positioning
+  const badgeWidth = Number.parseInt(sizeConfig.minWidth, 10);
+  const badgePaddingX = Number.parseInt(sizeConfig.badgePaddingX, 10);
+  const badgePaddingY = Number.parseInt(sizeConfig.badgePaddingY, 10);
+  const gap = Number.parseInt(sizeConfig.gap, 10);
+  const fontSize = Number.parseInt(sizeConfig.fontSize, 10);
+  const borderWidth = 2; // 1px border on each side
+  const fullBadgeWidth = badgeWidth + badgePaddingX * 2 + borderWidth;
+  const fullBadgeHeight = fontSize + badgePaddingY * 2 + borderWidth;
+  const pillOffset = fullBadgeWidth + gap;
+
+  // Container should fit both badges plus gap
+  const containerPadding = Number.parseInt(sizeConfig.containerPadding, 10);
+  const innerWidth = fullBadgeWidth * 2;
+  const containerWidth = innerWidth + containerPadding * 2;
+
   app.apply_css(
     `
     window.keyboard-layout-switcher {
@@ -64,6 +82,41 @@ function updateCSS(size: "sm" | "md" | "lg") {
       border-radius: 9999px;
       padding: ${sizeConfig.containerPadding};
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+      min-width: ${containerWidth}px;
+      max-width: ${containerWidth}px;
+    }
+    
+    overlay {
+      min-width: ${innerWidth}px;
+      max-width: ${innerWidth}px;
+    }
+    
+    box.pill-wrapper {
+      /* Must be wide enough to contain pill in both positions */
+      min-width: ${innerWidth}px;
+      max-width: ${innerWidth}px;
+    }
+    
+    box.pill-background {
+      background-color: ${tokens.colors.accent.primary.value};
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 9999px;
+      min-width: ${fullBadgeWidth}px;
+      min-height: ${fullBadgeHeight}px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      transform: translateX(0px);
+      transition: transform 200ms cubic-bezier(0.4, 0.0, 0.2, 1);
+    }
+    
+    box.pill-background.position-1 {
+      transform: translateX(${pillOffset}px);
+    }
+    
+    box.badges-container {
+      margin: 0px;
+      padding: 0px;
+      min-width: ${innerWidth}px;
+      max-width: ${innerWidth}px;
     }
     
     label.layout-badge {
@@ -73,20 +126,14 @@ function updateCSS(size: "sm" | "md" | "lg") {
       padding: ${sizeConfig.badgePaddingY} ${sizeConfig.badgePaddingX};
       min-width: ${sizeConfig.minWidth};
       border-radius: 9999px;
-      transition: all 200ms ease;
-    }
-    
-    label.from-badge {
-      background-color: transparent;
       color: ${tokens.colors.foreground.tertiary.value};
+      background-color: transparent;
       border: 1px solid transparent;
+      transition: color 200ms ease;
     }
     
-    label.to-badge {
-      background-color: ${tokens.colors.accent.primary.value};
+    label.layout-badge.active {
       color: ${tokens.colors.foreground.primary.value};
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
   `,
     false,
@@ -116,7 +163,7 @@ function showSwitcher(config: LayoutSwitchConfig) {
 
   // Update the active indicator
   updateActiveState(config.activeLayout);
-  
+
   // Show window if not visible
   if (!isVisible) {
     if (win) {
@@ -140,19 +187,29 @@ function showSwitcher(config: LayoutSwitchConfig) {
 }
 
 function updateActiveState(activeLayout: string) {
+  if (!pill) return;
+
+  // Find the index of the active layout
+  const activeIndex = currentLayouts.indexOf(activeLayout);
+  if (activeIndex === -1) return;
+
+  // Update pill position
+  pill.remove_css_class("position-0");
+  pill.remove_css_class("position-1");
+  pill.add_css_class(`position-${activeIndex}`);
+
+  // Update label colors
   for (const [layoutCode, label] of layoutLabels.entries()) {
-    label.remove_css_class("from-badge");
-    label.remove_css_class("to-badge");
-    
+    label.remove_css_class("active");
     if (layoutCode === activeLayout) {
-      label.add_css_class("to-badge");
-    } else {
-      label.add_css_class("from-badge");
+      label.add_css_class("active");
     }
   }
 }
 
 function createWindow(layouts: string[], size: "sm" | "md" | "lg") {
+  currentLayouts = layouts;
+
   win = new Astal.Window({
     name: "keyboard-layout-switcher",
     namespace: "ags-layout-switcher",
@@ -174,10 +231,29 @@ function createWindow(layouts: string[], size: "sm" | "md" | "lg") {
 
   const switcherContainer = new Gtk.Box({
     orientation: Gtk.Orientation.HORIZONTAL,
-    spacing: Number.parseInt(sizes[size].gap, 10),
+    hexpand: false,
   });
   switcherContainer.add_css_class("switcher-container");
 
+  // Create overlay to layer pill behind badges
+  const overlay = new Gtk.Overlay();
+
+  // Create a fixed-width wrapper for the pill to prevent it from affecting overlay size
+  const pillWrapper = new Gtk.Box({
+    orientation: Gtk.Orientation.HORIZONTAL,
+    halign: Gtk.Align.START,
+  });
+  pillWrapper.add_css_class("pill-wrapper");
+
+  // Create the animated pill (background indicator)
+  pill = new Gtk.Box({
+    orientation: Gtk.Orientation.HORIZONTAL,
+  });
+  pill.add_css_class("pill-background");
+
+  pillWrapper.append(pill);
+
+  // Create badges container
   const badgesContainer = new Gtk.Box({
     orientation: Gtk.Orientation.HORIZONTAL,
     spacing: Number.parseInt(sizes[size].gap, 10),
@@ -192,13 +268,16 @@ function createWindow(layouts: string[], size: "sm" | "md" | "lg") {
       valign: Gtk.Align.CENTER,
     });
     label.add_css_class("layout-badge");
-    label.add_css_class("from-badge");
-    
+
     layoutLabels.set(layoutCode, label);
     badgesContainer.append(label);
   }
 
-  switcherContainer.append(badgesContainer);
+  // Layer structure: pill wrapper at bottom, badges on top
+  overlay.set_child(pillWrapper);
+  overlay.add_overlay(badgesContainer);
+
+  switcherContainer.append(overlay);
   shadowWrapper.append(switcherContainer);
   win.set_child(shadowWrapper);
 
