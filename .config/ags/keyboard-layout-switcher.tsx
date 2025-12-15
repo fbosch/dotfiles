@@ -17,6 +17,7 @@ let pill: Gtk.Box | null = null;
 let currentLayouts: string[] = [];
 let isVisible: boolean = false;
 let hideTimeoutId: number | null = null;
+let pillOffset: number = 0; // Store the calculated offset for animation
 
 // Size configurations matching design-system component
 const sizes = {
@@ -58,7 +59,9 @@ function updateCSS(size: "sm" | "md" | "lg") {
   const borderWidth = 2; // 1px border on each side
   const fullBadgeWidth = badgeWidth + badgePaddingX * 2 + borderWidth;
   const fullBadgeHeight = fontSize + badgePaddingY * 2 + borderWidth;
-  const pillOffset = fullBadgeWidth + gap;
+  
+  // Store globally for animation
+  pillOffset = fullBadgeWidth + gap;
 
   // Container should fit both badges plus gap
   const containerPadding = Number.parseInt(sizeConfig.containerPadding, 10);
@@ -105,7 +108,7 @@ function updateCSS(size: "sm" | "md" | "lg") {
       min-height: ${fullBadgeHeight}px;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
       transform: translateX(0px);
-      transition: transform 200ms cubic-bezier(0.4, 0.0, 0.2, 1);
+      transition: transform 300ms cubic-bezier(0.4, 0, 0.1, 1);
     }
     
     box.pill-background.position-1 {
@@ -193,7 +196,7 @@ function updateActiveState(activeLayout: string) {
   const activeIndex = currentLayouts.indexOf(activeLayout);
   if (activeIndex === -1) return;
 
-  // Update pill position
+  // Update pill position with CSS class
   pill.remove_css_class("position-0");
   pill.remove_css_class("position-1");
   pill.add_css_class(`position-${activeIndex}`);
