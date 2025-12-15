@@ -14,6 +14,7 @@ interface LayoutSwitchConfig {
 let win: Astal.Window | null = null;
 const layoutLabels: Map<string, Gtk.Label> = new Map();
 let pill: Gtk.Box | null = null;
+let shadowWrapper: Gtk.Box | null = null;
 let currentLayouts: string[] = [];
 let isVisible: boolean = false;
 let hideTimeoutId: number | null = null;
@@ -77,6 +78,17 @@ function updateCSS(size: "sm" | "md" | "lg") {
     
     box.shadow-wrapper {
       padding: 24px;
+      opacity: 0;
+      transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    box.shadow-wrapper.visible {
+      opacity: 1;
+    }
+    
+    box.shadow-wrapper.hiding {
+      opacity: 0;
+      transition: opacity 100ms cubic-bezier(0.4, 0, 1, 1);
     }
     
     box.switcher-container {
@@ -144,7 +156,7 @@ function updateCSS(size: "sm" | "md" | "lg") {
 }
 
 function hideSwitcher() {
-  if (!isVisible || !win) {
+  if (!isVisible || !win || !shadowWrapper) {
     return;
   }
 
@@ -154,8 +166,21 @@ function hideSwitcher() {
     hideTimeoutId = null;
   }
 
-  win.set_visible(false);
-  isVisible = false;
+  // Start fade out animation
+  shadowWrapper.remove_css_class("visible");
+  shadowWrapper.add_css_class("hiding");
+
+  // Hide window after fade out completes
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+    if (win) {
+      win.set_visible(false);
+    }
+    isVisible = false;
+    if (shadowWrapper) {
+      shadowWrapper.remove_css_class("hiding");
+    }
+    return false;
+  });
 }
 
 function showSwitcher(config: LayoutSwitchConfig) {
@@ -173,6 +198,16 @@ function showSwitcher(config: LayoutSwitchConfig) {
       win.set_visible(true);
     }
     isVisible = true;
+    
+    // Trigger fade in animation
+    if (shadowWrapper) {
+      shadowWrapper.remove_css_class("hiding");
+      // Use timeout to ensure class is applied after visibility change
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 10, () => {
+        shadowWrapper?.add_css_class("visible");
+        return false;
+      });
+    }
   }
 
   // Cancel existing timer and start new one
@@ -182,8 +217,8 @@ function showSwitcher(config: LayoutSwitchConfig) {
     hideTimeoutId = null;
   }
 
-  // Auto-hide after 250ms delay + 300ms display time = 550ms total
-  hideTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 550, () => {
+  // Auto-hide after 550ms display time + 150ms fade in = 700ms total
+  hideTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 700, () => {
     hideSwitcher();
     return false;
   });
@@ -225,7 +260,7 @@ function createWindow(layouts: string[], size: "sm" | "md" | "lg") {
   win.set_keymode(Astal.Keymode.NONE);
   win.add_css_class("keyboard-layout-switcher");
 
-  const shadowWrapper = new Gtk.Box({
+  shadowWrapper = new Gtk.Box({
     orientation: Gtk.Orientation.HORIZONTAL,
     halign: Gtk.Align.CENTER,
     valign: Gtk.Align.CENTER,
