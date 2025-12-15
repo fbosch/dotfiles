@@ -1,28 +1,24 @@
 #!/bin/bash
 
-# Get current keyboard layout from the main keyboard
-current_layout=$(hyprctl devices | grep -A 10 "at-translated-set-2-keyboard" | grep "active keymap:" | sed 's/.*active keymap: //')
+# Configuration: Map layout codes to display codes for UI
+# Add entries here for each keyboard layout you use
+declare -A LAYOUT_DISPLAY_CODES=(
+    ["us"]="ENG"
+    ["dk"]="DAN"
+)
 
-# Define layouts array with display names and short codes for UI
-layouts=("us" "dk")
-layout_names=("English (US)" "Danish")
-layout_codes=("EN" "DA")
+# Get keyboard info from hyprctl
+keyboard_info=$(hyprctl devices -j | jq -r '.keyboards[] | select(.main == true)')
 
-# Find current layout index
-current_index=0
-for i in "${!layouts[@]}"; do
-    if [[ "${layout_names[$i]}" == "$current_layout" ]]; then
-        current_index=$i
-        break
-    fi
-done
+# Extract configured layouts
+IFS=',' read -ra layouts <<< "$(echo "$keyboard_info" | jq -r '.layout')"
 
-# Get the short code for the current layout
-current_code="${layout_codes[$current_index]}"
+# Get current active layout info
+current_layout=$(echo "$keyboard_info" | jq -r '.active_keymap')
+current_index=$(echo "$keyboard_info" | jq -r '.active_layout_index')
 
-# Calculate next layout index
-next_index=$(( (current_index + 1) % ${#layouts[@]} ))
-next_code="${layout_codes[$next_index]}"
+# Get the display code for current layout
+current_code="${LAYOUT_DISPLAY_CODES[${layouts[$current_index]}]}"
 
 # Switch to next layout
 hyprctl switchxkblayout at-translated-set-2-keyboard next
@@ -30,17 +26,13 @@ hyprctl switchxkblayout at-translated-set-2-keyboard next
 # Wait a moment for the layout to change
 sleep 0.1
 
-# Get the new layout after switching
-new_layout=$(hyprctl devices | grep -A 10 "at-translated-set-2-keyboard" | grep "active keymap:" | sed 's/.*active keymap: //')
+# Get updated keyboard info after switch
+keyboard_info=$(hyprctl devices -j | jq -r '.keyboards[] | select(.main == true)')
+new_layout=$(echo "$keyboard_info" | jq -r '.active_keymap')
+new_index=$(echo "$keyboard_info" | jq -r '.active_layout_index')
 
-# Find which layout is now active
-active_code="EN"
-for i in "${!layout_names[@]}"; do
-    if [[ "${layout_names[$i]}" == "$new_layout" ]]; then
-        active_code="${layout_codes[$i]}"
-        break
-    fi
-done
+# Get the display code for the new active layout
+active_code="${LAYOUT_DISPLAY_CODES[${layouts[$new_index]}]}"
 
 # Show the AGS keyboard layout switcher overlay
 # Start the daemon if it's not running
@@ -49,9 +41,17 @@ if ! ags list | grep -q "keyboard-layout-switcher-daemon"; then
     sleep 0.2
 fi
 
-# Always send layouts in the same order, just indicate which is active
-# For 2 layouts: always show EN and DA, with activeLayout indicating which is current
-ags request -i keyboard-layout-switcher-daemon '{"action":"show","config":{"layouts":["EN","DA"],"activeLayout":"'"$active_code"'","size":"sm"}}'
+# Build layouts array with display codes for AGS
+layout_codes_array=()
+for layout in "${layouts[@]}"; do
+    layout_codes_array+=("${LAYOUT_DISPLAY_CODES[$layout]}")
+done
+
+# Convert bash array to JSON array for AGS
+layouts_json=$(printf '%s\n' "${layout_codes_array[@]}" | jq -R . | jq -s .)
+
+# Send to AGS with the active layout indicated
+ags request -i keyboard-layout-switcher-daemon "{\"action\":\"show\",\"config\":{\"layouts\":$layouts_json,\"activeLayout\":\"$active_code\",\"size\":\"sm\"}}"
 
 # Log to hyprland log for debugging
 echo "Keyboard layout switched from $current_layout to $new_layout (code: $active_code)" >> /tmp/hyprland-layout.log
