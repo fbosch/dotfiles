@@ -24,6 +24,9 @@ storybook-static
 .config/codex/config.toml
 .config/vicinae/vicinae.json
 
+# window state rules (auto-generated)
+.config/hypr/window-state-rules.conf
+
 # Neovim local data
 .config/nvim/.sessions/
 .config/nvim/.undo/
