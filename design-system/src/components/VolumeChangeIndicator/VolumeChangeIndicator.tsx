@@ -21,13 +21,13 @@ import { cn } from "../../utils/cn";
 
 const indicatorVariants = cva(
   // Base styles - macOS glass effect matching KeyboardLayoutSwitcher
-  "bg-background-tertiary/80 border border-white/10 backdrop-blur-sm shadow-[0_4px_16px_rgba(0,0,0,0.3)] rounded-full flex items-center gap-3 animate-in fade-in-0 zoom-in-95 duration-150",
+  "bg-background-tertiary/80 border border-white/10 backdrop-blur-sm shadow-[0_4px_16px_rgba(0,0,0,0.3)] rounded-full flex items-center animate-in fade-in-0 zoom-in-95 duration-150",
   {
     variants: {
       size: {
-        sm: "px-3 py-2",
-        md: "px-4 py-3",
-        lg: "px-5 py-4",
+        sm: "px-3 py-1.5",
+        md: "px-3 py-2",
+        lg: "px-4 py-3",
       },
     },
     defaultVariants: {
@@ -37,7 +37,7 @@ const indicatorVariants = cva(
 );
 
 const iconContainerVariants = cva(
-  "flex items-center justify-center flex-shrink-0",
+  "flex items-center justify-center flex-shrink-0 align-middle mr-3",
   {
     variants: {
       size: {
@@ -52,12 +52,12 @@ const iconContainerVariants = cva(
   },
 );
 
-const progressBarContainerVariants = cva("flex gap-0.5 flex-shrink-0", {
+const progressBarContainerVariants = cva("flex gap-0.5 flex-1 justify-center", {
   variants: {
     size: {
-      sm: "w-28",
-      md: "w-36",
-      lg: "w-44",
+      sm: "",
+      md: "",
+      lg: "",
     },
   },
   defaultVariants: {
@@ -65,33 +65,30 @@ const progressBarContainerVariants = cva("flex gap-0.5 flex-shrink-0", {
   },
 });
 
-const progressSquareVariants = cva(
-  "rounded-[1px] transition-all duration-150",
-  {
-    variants: {
-      filled: {
-        true: "bg-white",
-        false: "bg-white/20",
-      },
-      size: {
-        sm: "h-2 w-[5px]",
-        md: "h-2.5 w-[6px]",
-        lg: "h-3 w-[7px]",
-      },
+const progressSquareVariants = cva("rounded-sm transition-all duration-150", {
+  variants: {
+    filled: {
+      true: "bg-white",
+      false: "bg-white/20",
     },
-    defaultVariants: {
-      filled: false,
-      size: "sm",
+    size: {
+      sm: "h-2 w-2",
+      md: "h-2.5 w-2.5",
+      lg: "h-3 w-3",
     },
   },
-);
+  defaultVariants: {
+    filled: false,
+    size: "sm",
+  },
+});
 
 const labelVariants = cva(
-  "font-button font-bold text-foreground-primary flex-shrink-0",
+  "font-button font-bold text-foreground-primary flex-shrink-0 text-right",
   {
     variants: {
       size: {
-        sm: "text-sm min-w-[42px]",
+        sm: "text-xs min-w-[42px]",
         md: "text-base min-w-[48px]",
         lg: "text-lg min-w-[56px]",
       },
@@ -222,7 +219,14 @@ export const VolumeChangeIndicator: React.FC<VolumeChangeIndicatorProps> = ({
       </div>
 
       {/* Volume label */}
-      <div className={labelVariants({ size })}>{label}</div>
+      <div
+        className={cn(
+          labelVariants({ size }),
+          muted || clampedVolume === 0 ? "text-foreground-tertiary" : "",
+        )}
+      >
+        {label}
+      </div>
     </div>
   );
 };
