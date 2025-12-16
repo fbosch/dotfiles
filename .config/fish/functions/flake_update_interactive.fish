@@ -309,8 +309,11 @@ function flake_update_interactive --description 'Interactively update nix flake 
                     gum style --foreground 2 "✓ System rebuilt successfully!"
 
                     # Regenerate update cache and trigger start-menu refresh
-                    if command -q flake_updates_daemon
+                    if type -q flake_updates_daemon
                         gum spin --spinner pulse --title "Refreshing update cache..." -- flake_updates_daemon refresh
+                    else if command -q flake-check-updates
+                        # Fallback to direct call if daemon function not available
+                        gum spin --spinner pulse --title "Refreshing update cache..." -- flake-check-updates ~/nixos
                     end
 
                     # Send desktop notification if --notify flag was passed

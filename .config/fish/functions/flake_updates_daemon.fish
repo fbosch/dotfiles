@@ -58,7 +58,7 @@ function flake_updates_daemon --description 'Manage the flake updates checker sy
             end
             
             # Update cache metadata with current generation and rebuild timestamp
-            if command -q flake_update_cache_metadata
+            if type -q flake_update_cache_metadata
                 flake_update_cache_metadata >/dev/null 2>&1
             end
             
