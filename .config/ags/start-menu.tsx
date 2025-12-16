@@ -16,6 +16,21 @@ interface MenuItem {
   variant?: "default" | "warning" | "danger" | "suspend";
 }
 
+// Flake update data interface
+interface FlakeUpdate {
+  name: string;
+  currentRev: string;
+  currentShort: string;
+  newRev: string;
+  newShort: string;
+}
+
+interface FlakeUpdatesData {
+  count: number;
+  updates: FlakeUpdate[];
+  timestamp: string;
+}
+
 // Default menu items - matching design system
 const defaultMenuItems: MenuItem[] = [
   {
@@ -81,9 +96,73 @@ let win: Astal.Window | null = null;
 let menuBox: Gtk.Box | null = null;
 let isVisible: boolean = false;
 let systemUpdatesCount: number = 0;
+let systemUpdatesData: FlakeUpdatesData | null = null;
 const currentMenuItems: MenuItem[] = defaultMenuItems;
 const menuItemButtons: Map<string, Gtk.Button> = new Map();
 let updateBadgeButton: Gtk.Button | null = null;
+
+// Function to read flake updates from cache file
+function readFlakeUpdatesCache(): FlakeUpdatesData | null {
+  try {
+    const cacheDir = GLib.get_user_cache_dir();
+    const cachePath = `${cacheDir}/flake-updates.json`;
+    
+    if (!GLib.file_test(cachePath, GLib.FileTest.EXISTS)) {
+      console.log("Flake updates cache file not found");
+      return null;
+    }
+
+    const [success, contents] = GLib.file_get_contents(cachePath);
+    if (!success || !contents) {
+      console.error("Failed to read flake updates cache");
+      return null;
+    }
+
+    const decoder = new TextDecoder("utf-8");
+    const jsonStr = decoder.decode(contents);
+    const data = JSON.parse(jsonStr) as FlakeUpdatesData;
+    
+    console.log(`Loaded flake updates: ${data.count} updates available`);
+    return data;
+  } catch (e) {
+    console.error("Error reading flake updates cache:", e);
+    return null;
+  }
+}
+
+// Format time difference for tooltip
+function formatTimeSince(timestamp: string): string {
+  try {
+    const then = new Date(timestamp).getTime();
+    const now = Date.now();
+    const diffMs = now - then;
+    
+    const minutes = Math.floor(diffMs / (1000 * 60));
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) {
+      const remainingHours = hours % 24;
+      if (remainingHours > 0) {
+        return `${days} day${days !== 1 ? "s" : ""} and ${remainingHours} hour${remainingHours !== 1 ? "s" : ""} ago`;
+      }
+      return `${days} day${days !== 1 ? "s" : ""} ago`;
+    } else if (hours > 0) {
+      const remainingMinutes = minutes % 60;
+      if (remainingMinutes > 0) {
+        return `${hours} hour${hours !== 1 ? "s" : ""} and ${remainingMinutes} minute${remainingMinutes !== 1 ? "s" : ""} ago`;
+      }
+      return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
+    } else if (minutes > 0) {
+      return `${minutes} minute${minutes !== 1 ? "s" : ""} ago`;
+    } else {
+      return "just now";
+    }
+  } catch (e) {
+    console.error("Error formatting timestamp:", e);
+    return "";
+  }
+}
 
 // Variant color schemes - using proper state colors from design tokens
 const itemVariants = {
@@ -154,7 +233,7 @@ function applyStaticCSS() {
     /* w-full flex items-center gap-2 px-2 py-1 text-sm rounded-md transition-colors duration-150 */
     button.menu-item {
       padding: 2px 6px; /* More compact: reduced from 4px 8px */
-      font-size: 13px;
+      font-size: 14px;
       border-radius: 6px;
       min-height: 24px; /* More compact: reduced from 28px */
       ${transitionStyle}
@@ -184,13 +263,18 @@ function applyStaticCSS() {
     /* Icon styling */
     label.menu-item-icon {
       font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
-      font-size: 13px;
+      font-size: 14px;
+      min-width: 14px;
+      max-width: 14px;
+      min-height: 14px;
+      max-height: 14px;
+      text-align: center;
     }
 
     /* Text styling */
     label.menu-item-label {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 400;
     }
 
@@ -203,10 +287,10 @@ function applyStaticCSS() {
 
     /* System updates badge button */
     button.system-updates-badge {
-      padding: 4px 8px;
-      font-size: 13px;
+      padding: 2px 6px;
+      font-size: 14px;
       border-radius: 6px;
-      min-height: 28px;
+      min-height: 24px;
       ${transitionStyle}
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       border: none;
@@ -231,11 +315,20 @@ function applyStaticCSS() {
     label.updates-badge {
       background-color: ${tokens.colors.accent.primary.value};
       color: #ffffff;
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 6px;
-      border-radius: 4px;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 0px 4px !important;
+      margin: 0px !important;
+      border-radius: 9999px; /* fully rounded pill shape */
       min-width: 16px;
+      max-width: 24px;
+      width: auto;
+      min-height: 16px !important;
+      max-height: 16px !important;
+      height: 16px !important;
+      line-height: 16px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      vertical-align: middle;
     }
   `,
     false,
@@ -262,9 +355,27 @@ function showMenu(updatesCount?: number) {
     `showMenu called with updatesCount: ${updatesCount}, current count: ${systemUpdatesCount}`,
   );
 
-  // Update system updates count if provided
-  if (updatesCount !== undefined && updatesCount !== systemUpdatesCount) {
+  // Read updates from cache if not provided
+  if (updatesCount === undefined) {
+    const cacheData = readFlakeUpdatesCache();
+    if (cacheData) {
+      const oldCount = systemUpdatesCount;
+      systemUpdatesCount = cacheData.count;
+      systemUpdatesData = cacheData;
+      // Rebuild menu if count changed or if window already exists
+      if (win && oldCount !== systemUpdatesCount) {
+        console.log(`Updating menu items from cache: ${oldCount} -> ${systemUpdatesCount}`);
+        updateMenuItems();
+      }
+    }
+  } else if (updatesCount !== systemUpdatesCount) {
+    // Update system updates count if provided and different
     systemUpdatesCount = updatesCount;
+    // Also try to load the details from cache
+    const cacheData = readFlakeUpdatesCache();
+    if (cacheData) {
+      systemUpdatesData = cacheData;
+    }
     console.log(`Updating menu items for new count: ${updatesCount}`);
     // Only update menu items if updates count changed
     updateMenuItems();
@@ -411,7 +522,7 @@ function updateMenuItems() {
         const badgeContent = new Gtk.Box({
           orientation: Gtk.Orientation.HORIZONTAL,
           spacing: 8,
-          halign: Gtk.Align.START,
+          halign: Gtk.Align.FILL,
         });
         badgeContent.add_css_class("system-updates-content");
 
@@ -424,16 +535,47 @@ function updateMenuItems() {
         const badgeText = new Gtk.Label({
           label: "System Updates",
           halign: Gtk.Align.START,
+          hexpand: true,
         });
         badgeText.add_css_class("menu-item-label");
         badgeContent.append(badgeText);
 
-        // Badge count
-        const badge = new Gtk.Label({ label: systemUpdatesCount.toString() });
+        // Badge count wrapper - fixed size container to prevent GTK expansion
+        const badgeWrapper = new Gtk.Box({
+          orientation: Gtk.Orientation.HORIZONTAL,
+          halign: Gtk.Align.END,
+          valign: Gtk.Align.CENTER,
+        });
+        badgeWrapper.set_size_request(20, 20);
+        
+        const badge = new Gtk.Label({ 
+          label: systemUpdatesCount.toString(),
+          halign: Gtk.Align.CENTER,
+          valign: Gtk.Align.CENTER,
+        });
         badge.add_css_class("updates-badge");
-        badgeContent.append(badge);
+        
+        badgeWrapper.append(badge);
+        badgeContent.append(badgeWrapper);
 
         badgeButton.set_child(badgeContent);
+        
+        // Add tooltip with update details if available
+        if (systemUpdatesData && systemUpdatesData.updates.length > 0) {
+          const tooltipText = systemUpdatesData.updates
+            .map((u) => `• ${u.name}: ${u.currentShort} → ${u.newShort}`)
+            .join("\n");
+          const timeAgo = formatTimeSince(systemUpdatesData.timestamp);
+          const lastCheckedText = timeAgo ? `\n\nLast checked: ${timeAgo}` : "";
+          badgeButton.set_tooltip_text(
+            `${systemUpdatesCount} update${systemUpdatesCount !== 1 ? "s" : ""} available:\n${tooltipText}${lastCheckedText}`
+          );
+        } else {
+          badgeButton.set_tooltip_text(
+            `${systemUpdatesCount} update${systemUpdatesCount !== 1 ? "s" : ""} available`
+          );
+        }
+        
         badgeButton.connect("clicked", () =>
           executeMenuCommand("system-updates"),
         );
