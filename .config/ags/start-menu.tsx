@@ -489,7 +489,7 @@ function updateMenuItems() {
           badgeBox.add_css_class("updates-badge");
 
           const badgeLabel = new Gtk.Label({
-            label: `\uF313 ${flakeUpdatesCount.toString()}`,
+            label: `\uF313  ${flakeUpdatesCount.toString()}`,
             halign: Gtk.Align.CENTER,
             valign: Gtk.Align.CENTER,
           });
@@ -784,7 +784,7 @@ function applyStaticCSS() {
     /* Icon styling */
     label.menu-item-icon {
       font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
-      font-size: 16px;
+      font-size: 14px;
       min-width: 20px;
     }
 
@@ -799,7 +799,7 @@ function applyStaticCSS() {
     box.updates-badge {
       background-color: ${tokens.colors.accent.primary.value};
       color: ${tokens.colors.foreground.primary.value};
-      padding: 2px 6px;
+      padding: 1px 4px;
       border-radius: 10px;
       font-size: 11px;
       font-weight: 600;
@@ -811,6 +811,7 @@ function applyStaticCSS() {
       font-size: 11px;
       font-weight: 600;
       color: inherit;
+      letter-spacing: 0.5px;
     }
 
     /* Menu dividers */
