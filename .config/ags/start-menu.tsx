@@ -120,14 +120,11 @@ const menuCommands: Record<string, string> = {
 function applyStaticCSS() {
   app.apply_css(
     `
-    /* Window container - transparent backdrop, positioned above Waybar */
+    /* Window container - fullscreen transparent to capture clicks */
     window.start-menu {
       background-color: transparent;
       border: none;
       padding: 0;
-      /* Position above Waybar using bottom margin (since anchored to BOTTOM) */
-      margin-bottom: 53px; /* Waybar height (45px) + gap (8px) */
-      margin-left: 8px; /* Align with start button */
     }
 
     /* Menu container - matches design-system StartMenu component */
@@ -417,8 +414,13 @@ function createWindow() {
     visible: false,
   });
 
-  // Configure window properties - position relative to Waybar
-  win.set_anchor(Astal.WindowAnchor.BOTTOM | Astal.WindowAnchor.LEFT);
+  // Configure window properties - fullscreen transparent to capture all clicks
+  win.set_anchor(
+    Astal.WindowAnchor.TOP |
+    Astal.WindowAnchor.BOTTOM |
+    Astal.WindowAnchor.LEFT |
+    Astal.WindowAnchor.RIGHT
+  );
   win.set_layer(Astal.Layer.OVERLAY);
   win.set_exclusivity(Astal.Exclusivity.IGNORE);
   win.set_keymode(Astal.Keymode.ON_DEMAND);
@@ -495,6 +497,13 @@ function createWindow() {
   });
   win.add_controller(clickController);
 
+  // Create outer container for positioning
+  const outerBox = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    valign: Gtk.Align.END,
+    halign: Gtk.Align.START,
+  });
+  
   // Create menu container
   menuBox = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
@@ -505,15 +514,14 @@ function createWindow() {
   // Initialize menu items
   updateMenuItems();
 
-  win.set_child(menuBox);
+  outerBox.append(menuBox);
+  win.set_child(outerBox);
 
-  // Position relative to Waybar after window is created
-  // Waybar is at bottom with height 45px, menu should be just above it
-  // With BOTTOM | LEFT anchoring, use margin-bottom to move up
+  // Position menu above Waybar with margin
   app.apply_css(
     `
-    window.start-menu {
-      margin-bottom: calc(45px + 8px);
+    box.start-menu-container {
+      margin-bottom: 53px; /* Waybar height (45px) + gap (8px) */
       margin-left: 8px;
     }
   `,
