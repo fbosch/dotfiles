@@ -18,7 +18,9 @@ hyprpaper &
 swaync-client -R &
 swaync-client -rs &
 bash ~/.config/hypr/scripts/waybar-hover.sh &
-ags run ~/.config/ags/confirm-dialog.tsx &
+
+# Launch AGS daemons via start-daemons script
+bash ~/.config/ags/start-daemons.sh &
 
 # Wait for services to be ready before showing notification
 sleep 0.5
