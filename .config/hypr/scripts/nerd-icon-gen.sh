@@ -15,7 +15,7 @@ if [[ -z "$CHAR" ]]; then
 fi
 
 # Generate SVG using printf (faster than cat heredoc)
-# Use very small viewBox (10x10) to zoom in and fill space edge-to-edge
-printf '<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><text x="5" y="5" font-family="JetBrainsMonoNL Nerd Font, JetBrainsMono Nerd Font, Symbols Nerd Font, monospace" font-size="10" fill="%s" text-anchor="middle" dominant-baseline="central">%s</text></svg>\n' "$COLOR" "$CHAR" > "$OUTPUT"
+# Use proper viewBox (100x100) with centered text to avoid clipping
+printf '<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text x="50" y="50" font-family="JetBrainsMonoNL Nerd Font, JetBrainsMono Nerd Font, Symbols Nerd Font, monospace" font-size="80" fill="%s" text-anchor="middle" dominant-baseline="central">%s</text></svg>\n' "$COLOR" "$CHAR" > "$OUTPUT"
 
 echo "$OUTPUT"
