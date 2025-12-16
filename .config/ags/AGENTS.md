@@ -643,18 +643,19 @@ hyprctl reload
 
 ## Best Practices
 
-1. **Prefer programmatic GTK widget creation over JSX** for complex layouts to ensure proper rendering
-2. **Use explicit GTK constructors** like `new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })`
-3. **Add CSS classes with `.add_css_class()`** method, not `cssClasses: []` in constructor
-4. **Always use inline CSS** in `app.start({ css: ... })` for single-file components
-5. **Set `namespace` prop** on windows for Hyprland layer rules
-6. **Use enums not strings:** `Astal.Layer.OVERLAY` not `"overlay"`
-7. **Avoid invalid GTK CSS properties** like `max-width` (use `min-width` or GTK properties)
-8. **Kill `gjs` processes** to reload CSS changes: `pkill gjs`
-9. **Test with GTK Inspector** (`ags inspect`) to debug styling
-10. **Use `keymode={Astal.Keymode.EXCLUSIVE}`** for dialogs that need focus
-11. **Check Hyprland layer rules** - avoid `ignore_alpha` for solid backgrounds
-12. **Call `win.set_child()` and `win.show()`** before returning window from main()
+1. **Avoid too many nested if statements in favor of early returns** for better code readability and maintainability
+2. **Prefer programmatic GTK widget creation over JSX** for complex layouts to ensure proper rendering
+3. **Use explicit GTK constructors** like `new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })`
+4. **Add CSS classes with `.add_css_class()`** method, not `cssClasses: []` in constructor
+5. **Always use inline CSS** in `app.start({ css: ... })` for single-file components
+6. **Set `namespace` prop** on windows for Hyprland layer rules
+7. **Use enums not strings:** `Astal.Layer.OVERLAY` not `"overlay"`
+8. **Avoid invalid GTK CSS properties** like `max-width` (use `min-width` or GTK properties)
+9. **Kill `gjs` processes** to reload CSS changes: `pkill gjs`
+10. **Test with GTK Inspector** (`ags inspect`) to debug styling
+11. **Use `keymode={Astal.Keymode.EXCLUSIVE}`** for dialogs that need focus
+12. **Check Hyprland layer rules** - avoid `ignore_alpha` for solid backgrounds
+13. **Call `win.set_child()` and `win.show()`** before returning window from main()
 
 ## Resources
 
