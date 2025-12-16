@@ -178,39 +178,79 @@ let isVisible = false;
 let soundDebounceTimeout: number | null = null;
 const SOUND_DEBOUNCE = 150; // ms - wait for changes to stop before playing sound
 
+// Cache last update state to avoid redundant DOM operations
+let lastVolume = -1;
+let lastMuted = false;
+let lastSpeakerState: SpeakerState | null = null;
+
 function update() {
   if (!iconLabel || !volumeLabel) return;
 
   const { volume, muted } = getVolumeInfo();
+  
+  // Early return if nothing changed
+  if (volume === lastVolume && muted === lastMuted) return;
+  
   const speakerState = getSpeakerState(volume, muted);
 
-  // Update icon
-  iconLabel.set_label(speakerIcons[speakerState]);
-  if (speakerState === "muted") {
-    iconLabel.add_css_class("muted");
-  } else {
-    iconLabel.remove_css_class("muted");
+  // Update icon only if state changed
+  if (speakerState !== lastSpeakerState) {
+    iconLabel.set_label(speakerIcons[speakerState]);
+    
+    // Toggle muted class only if changed
+    const wasMuted = lastSpeakerState === "muted";
+    const isMuted = speakerState === "muted";
+    if (wasMuted !== isMuted) {
+      if (isMuted) {
+        iconLabel.add_css_class("muted");
+      } else {
+        iconLabel.remove_css_class("muted");
+      }
+    }
+    lastSpeakerState = speakerState;
   }
 
-  // Update volume label
-  volumeLabel.set_label(muted ? "Muted" : `${volume}%`);
-  if (muted || volume === 0) {
-    volumeLabel.add_css_class("muted");
-  } else {
-    volumeLabel.remove_css_class("muted");
-  }
-
-  // Update progress squares
-  const filledCount = muted ? 0 : Math.round((volume / 100) * 16);
-  for (let i = 0; i < progressSquares.length; i++) {
-    if (i < filledCount) {
-      progressSquares[i].add_css_class("filled");
-      progressSquares[i].remove_css_class("empty");
-    } else {
-      progressSquares[i].remove_css_class("filled");
-      progressSquares[i].add_css_class("empty");
+  // Update volume label only if changed
+  if (volume !== lastVolume || muted !== lastMuted) {
+    volumeLabel.set_label(muted ? "Muted" : `${volume}%`);
+    
+    // Toggle muted class only if changed
+    const shouldBeMuted = muted || volume === 0;
+    const wasMutedLabel = lastMuted || lastVolume === 0;
+    if (shouldBeMuted !== wasMutedLabel) {
+      if (shouldBeMuted) {
+        volumeLabel.add_css_class("muted");
+      } else {
+        volumeLabel.remove_css_class("muted");
+      }
     }
   }
+
+  // Update progress squares only if volume changed
+  if (volume !== lastVolume || muted !== lastMuted) {
+    const filledCount = muted ? 0 : Math.round((volume / 100) * 16);
+    const lastFilledCount = lastMuted ? 0 : Math.round((lastVolume / 100) * 16);
+    
+    // Only update squares that changed state
+    if (filledCount !== lastFilledCount) {
+      const minChange = Math.min(filledCount, lastFilledCount);
+      const maxChange = Math.max(filledCount, lastFilledCount);
+      
+      for (let i = minChange; i < maxChange; i++) {
+        if (i < filledCount) {
+          progressSquares[i].add_css_class("filled");
+          progressSquares[i].remove_css_class("empty");
+        } else {
+          progressSquares[i].remove_css_class("filled");
+          progressSquares[i].add_css_class("empty");
+        }
+      }
+    }
+  }
+  
+  // Update cache
+  lastVolume = volume;
+  lastMuted = muted;
 }
 
 function hideIndicator() {
