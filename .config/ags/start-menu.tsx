@@ -106,7 +106,7 @@ function readFlakeUpdatesCache(): FlakeUpdatesData | null {
   try {
     const cacheDir = GLib.get_user_cache_dir();
     const cachePath = `${cacheDir}/flake-updates.json`;
-    
+
     if (!GLib.file_test(cachePath, GLib.FileTest.EXISTS)) {
       return null;
     }
@@ -131,11 +131,11 @@ function formatTimeSince(timestamp: string): string {
     const then = new Date(timestamp).getTime();
     const now = Date.now();
     const diffMs = now - then;
-    
+
     const minutes = Math.floor(diffMs / (1000 * 60));
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
-    
+
     if (days > 0) {
       const remainingHours = hours % 24;
       if (remainingHours > 0) {
@@ -159,52 +159,28 @@ function formatTimeSince(timestamp: string): string {
   }
 }
 
-// Variant color schemes - using proper state colors from design tokens
-const itemVariants = {
-  default: {
-    textColor: tokens.colors.foreground.primary.value,
-    hoverBg: "#ffffff1a", // 10% opacity white
-    focusBg: "#ffffff1a",
-  },
-  warning: {
-    textColor: tokens.colors.state.warning.value,
-    hoverBg: `${tokens.colors.state.warning.value}1a`, // 10% opacity
-    focusBg: `${tokens.colors.state.warning.value}1a`,
-  },
-  danger: {
-    textColor: tokens.colors.state.error.value,
-    hoverBg: `${tokens.colors.state.error.value}1a`, // 10% opacity
-    focusBg: `${tokens.colors.state.error.value}1a`,
-  },
-  suspend: {
-    textColor: tokens.colors.state.purple.value,
-    hoverBg: `${tokens.colors.state.purple.value}1a`, // 10% opacity
-    focusBg: `${tokens.colors.state.purple.value}1a`,
-  },
-};
-
 // Menu item commands - matching design system actions
 // Cache terminal lookup for performance
 let cachedTerminal: string | null = null;
 const getTerminal = (): string => {
   if (cachedTerminal) return cachedTerminal;
-  
+
   // Check for preferred terminal in order: TERMINAL env var, then fallback to common terminals
   const terminal = GLib.getenv("TERMINAL");
   if (terminal) {
     cachedTerminal = terminal;
     return terminal;
   }
-  
+
   // Check for common terminals
-  const terminals = ["kitty", "wezterm", "alacritty", "foot", "gnome-terminal"];
+  const terminals = ["foot", "kitty", "wezterm", "alacritty", "gnome-terminal"];
   for (const term of terminals) {
     if (GLib.find_program_in_path(term)) {
       cachedTerminal = term;
       return term;
     }
   }
-  
+
   cachedTerminal = "xterm"; // Ultimate fallback
   return cachedTerminal;
 };
@@ -212,17 +188,43 @@ const getTerminal = (): string => {
 // Cache home directory for performance
 const homeDir = GLib.get_home_dir();
 
+// Build terminal command with correct flags based on terminal
+const getSystemUpdatesCommand = (): string => {
+  const terminal = getTerminal();
+  
+  // flake_update_interactive is a Fish function, so we need to invoke it through Fish
+  const fishCommand = "fish -c flake_update_interactive";
+  
+  // Different terminals use different flags for setting window class/app-id
+  switch (terminal) {
+    case "foot":
+      return `${terminal} --app-id=flake_update_terminal ${fishCommand}`;
+    case "kitty":
+      return `${terminal} --class flake_update_terminal -e ${fishCommand}`;
+    case "alacritty":
+      return `${terminal} --class flake_update_terminal -e ${fishCommand}`;
+    case "wezterm":
+      // WezTerm doesn't support --class flag, use start subcommand
+      return `${terminal} start ${fishCommand}`;
+    case "gnome-terminal":
+      return `${terminal} -- ${fishCommand}`;
+    default:
+      // Fallback for xterm and others
+      return `${terminal} -e ${fishCommand}`;
+  }
+};
+
 const menuCommands: Record<string, string> = {
   "system-settings": "gnome-tweaks",
   "lock-screen": "hyprlock",
-  applications: `nemo --existing-window ${homeDir}`,
+  applications: "io.github.flattool.Warehouse",
   documents: "nemo --existing-window /mnt/nas/FrederikDocs",
   pictures: `nemo --existing-window ${homeDir}/Pictures`,
   downloads: `nemo --existing-window ${homeDir}/Downloads`,
   suspend: `${homeDir}/.config/hypr/scripts/confirm-suspend.sh`,
   restart: `${homeDir}/.config/hypr/scripts/confirm-restart.sh`,
   shutdown: `${homeDir}/.config/hypr/scripts/confirm-shutdown.sh`,
-  "system-updates": `${getTerminal()} --class flake_update_terminal -e flake_update_interactive`,
+  "system-updates": getSystemUpdatesCommand(),
 };
 
 // Apply static CSS once on module load
@@ -463,12 +465,16 @@ function showMenu(updatesCount?: number) {
 
 function executeMenuCommand(itemId: string) {
   const command = menuCommands[itemId];
+  console.log(`Executing command for ${itemId}:`, command);
   if (command) {
     try {
       GLib.spawn_command_line_async(command);
+      console.log(`Successfully spawned command for ${itemId}`);
     } catch (e) {
       console.error(`Failed to execute command for ${itemId}:`, e);
     }
+  } else {
+    console.error(`No command found for ${itemId}`);
   }
   hideMenu();
 }
@@ -476,11 +482,14 @@ function executeMenuCommand(itemId: string) {
 function updateMenuItems() {
   if (!menuBox) return;
 
+  // Type assertion to help TypeScript understand menuBox is non-null after guard
+  const box = menuBox as Gtk.Box;
+
   // Clear existing items
-  let child = menuBox.get_first_child();
+  let child = box.get_first_child();
   while (child) {
-    menuBox.remove(child);
-    child = menuBox.get_first_child();
+    box.remove(child);
+    child = box.get_first_child();
   }
 
   // Clear button references
@@ -495,7 +504,7 @@ function updateMenuItems() {
         orientation: Gtk.Orientation.HORIZONTAL,
       });
       separator.add_css_class("menu-divider");
-      menuBox.append(separator);
+      box.append(separator);
     } else {
       // Add menu item button
       const button = new Gtk.Button({ can_focus: true });
@@ -534,7 +543,7 @@ function updateMenuItems() {
         executeMenuCommand(item.id);
       });
 
-      menuBox.append(button);
+      box.append(button);
       menuItemButtons.set(item.id, button);
 
       // Add system updates badge if applicable
@@ -571,19 +580,19 @@ function updateMenuItems() {
           valign: Gtk.Align.CENTER,
         });
         badgeWrapper.set_size_request(20, 20);
-        
-        const badge = new Gtk.Label({ 
+
+        const badge = new Gtk.Label({
           label: systemUpdatesCount.toString(),
           halign: Gtk.Align.CENTER,
           valign: Gtk.Align.CENTER,
         });
         badge.add_css_class("updates-badge");
-        
+
         badgeWrapper.append(badge);
         badgeContent.append(badgeWrapper);
 
         badgeButton.set_child(badgeContent);
-        
+
         // Add tooltip with update details if available
         if (systemUpdatesData && systemUpdatesData.updates.length > 0) {
           const tooltipText = systemUpdatesData.updates
@@ -592,19 +601,19 @@ function updateMenuItems() {
           const timeAgo = formatTimeSince(systemUpdatesData.timestamp);
           const lastCheckedText = timeAgo ? `\n\nLast checked: ${timeAgo}` : "";
           badgeButton.set_tooltip_text(
-            `${systemUpdatesCount} update${systemUpdatesCount !== 1 ? "s" : ""} available:\n${tooltipText}${lastCheckedText}`
+            `${systemUpdatesCount} update${systemUpdatesCount !== 1 ? "s" : ""} available:\n${tooltipText}${lastCheckedText}`,
           );
         } else {
           badgeButton.set_tooltip_text(
-            `${systemUpdatesCount} update${systemUpdatesCount !== 1 ? "s" : ""} available`
+            `${systemUpdatesCount} update${systemUpdatesCount !== 1 ? "s" : ""} available`,
           );
         }
-        
+
         badgeButton.connect("clicked", () =>
           executeMenuCommand("system-updates"),
         );
 
-        menuBox.append(badgeButton);
+        box.append(badgeButton);
         updateBadgeButton = badgeButton;
         menuItemButtons.set("system-updates", badgeButton);
       }
@@ -648,7 +657,7 @@ function createWindow() {
 
       if (focusableButtons.length === 0) return false;
 
-      let currentFocus = focusableButtons.find((btn) => btn.has_focus());
+      let currentFocus = focusableButtons.find((btn) => btn.has_focus);
       let currentIndex = currentFocus
         ? focusableButtons.indexOf(currentFocus)
         : -1;
@@ -745,7 +754,7 @@ app.start({
       systemUpdatesCount = cacheData.count;
       systemUpdatesData = cacheData;
     }
-    
+
     // Create window immediately for responsiveness
     createWindow();
     return null;

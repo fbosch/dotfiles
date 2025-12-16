@@ -43,6 +43,9 @@ storybook-static
 .config/hypr/monitors.conf
 .config/hypr/hyprpaper.conf
 
+# AGS generated types (regenerate with: ags types)
+.config/ags/@girs/
+
 # Other
 **/.backup/
 checkhealth.log

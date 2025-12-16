@@ -10,6 +10,28 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI elements. Currently includ
 
 **Important:** AGS no longer uses external CSS files. All styling is done inline via the `css` property in `app.start()`.
 
+## Setup
+
+### TypeScript Type Definitions
+
+AGS requires TypeScript type definitions for GObject Introspection libraries (GTK, GLib, etc.). These are auto-generated and stored in `.config/ags/@girs/`.
+
+**Important:** The `@girs/` directory is git-ignored and must be regenerated on new systems.
+
+```bash
+# Generate types (run after installing AGS or updating system libraries)
+cd ~/.config/ags
+ags types
+
+# Types are generated to @girs/ directory
+# This typically takes 30-60 seconds
+```
+
+**When to regenerate:**
+- Fresh system setup
+- After updating AGS or system GTK libraries
+- If TypeScript shows "Cannot find module" errors for GI imports
+
 ## AGS Command Reference
 
 ```bash
@@ -28,7 +50,7 @@ ags quit <instance-name>
 # Toggle window visibility
 ags toggle <window-name>
 
-# Generate TypeScript types
+# Generate TypeScript types for GObject Introspection
 ags types
 
 # Bundle an app
