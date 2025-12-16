@@ -142,7 +142,6 @@ function readFlakeUpdatesCache(): FlakeUpdatesData | null {
   }
 }
 
-
 // Function to read flatpak updates from cache file
 function readFlatpakUpdatesCache(): FlatpakUpdatesData | null {
   try {
@@ -233,14 +232,15 @@ const homeDir = GLib.get_home_dir();
 // Build terminal command with correct flags based on terminal
 const getSystemUpdatesCommand = (): string => {
   const terminal = getTerminal();
-  
+
   // flake_update_interactive is a Fish function, so we need to invoke it through Fish
   // Add --rebuild flag to prompt for system rebuild after updates
   // Add --cache flag to use cached update data (instant startup)
   // Add --header flag to show decorative ASCII header with flake info
   // IMPORTANT: Put the entire Fish command in quotes so flags are passed to the function
-  const fishCommand = 'fish -c "flake_update_interactive --rebuild --cache --header"';
-  
+  const fishCommand =
+    'fish -c "flake_update_interactive --rebuild --cache --header"';
+
   // Different terminals use different flags for setting window class/app-id
   switch (terminal) {
     case "foot":
@@ -424,23 +424,20 @@ function applyStaticCSS() {
     }
 
     /* Updates badge - matches design-system Tag component primary variant */
-    label.updates-badge {
+    box.updates-badge {
       background-color: ${tokens.colors.accent.primary.value};
       color: #ffffff;
-      font-size: 9px;
-      font-weight: 700;
-      padding: 0px 4px !important;
-      margin: 0px !important;
-      border-radius: 9999px; /* fully rounded pill shape */
-      min-width: 16px;
-      max-width: 24px;
-      width: auto;
-      min-height: 16px !important;
-      max-height: 16px !important;
-      height: 16px !important;
-      line-height: 16px;
+      padding: 2px 4px;
+      font-weight: 600;
+      border-radius: 12px; /* fully rounded pill shape */
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-      vertical-align: middle;
+    }
+
+    box.updates-badge label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: #ffffff;
     }
   `,
     false,
@@ -466,9 +463,9 @@ function showMenu(updatesCount?: number) {
   // Read updates from both caches
   const flakeCacheData = readFlakeUpdatesCache();
   const flatpakCacheData = readFlatpakUpdatesCache();
-  
+
   let needsUpdate = false;
-  
+
   if (flakeCacheData) {
     const oldCount = flakeUpdatesCount;
     flakeUpdatesCount = flakeCacheData.count;
@@ -477,7 +474,7 @@ function showMenu(updatesCount?: number) {
       needsUpdate = true;
     }
   }
-  
+
   if (flatpakCacheData) {
     const oldCount = flatpakUpdatesCount;
     flatpakUpdatesCount = flatpakCacheData.count;
@@ -486,7 +483,7 @@ function showMenu(updatesCount?: number) {
       needsUpdate = true;
     }
   }
-  
+
   if (needsUpdate) {
     updateMenuItems();
   }
@@ -626,23 +623,22 @@ function updateMenuItems() {
         badgeText.add_css_class("menu-item-label");
         badgeContent.append(badgeText);
 
-        // Badge count wrapper - fixed size container to prevent GTK expansion
-        const badgeWrapper = new Gtk.Box({
+        // Badge count with snowflake icon - wrapped in a box for padding support
+        const badgeBox = new Gtk.Box({
           orientation: Gtk.Orientation.HORIZONTAL,
           halign: Gtk.Align.END,
           valign: Gtk.Align.CENTER,
         });
-        badgeWrapper.set_size_request(20, 20);
+        badgeBox.add_css_class("updates-badge");
 
         const badge = new Gtk.Label({
-          label: flakeUpdatesCount.toString(),
+          label: `  ${flakeUpdatesCount.toString()}`,
           halign: Gtk.Align.CENTER,
           valign: Gtk.Align.CENTER,
         });
-        badge.add_css_class("updates-badge");
 
-        badgeWrapper.append(badge);
-        badgeContent.append(badgeWrapper);
+        badgeBox.append(badge);
+        badgeContent.append(badgeBox);
 
         badgeButton.set_child(badgeContent);
 
@@ -698,23 +694,22 @@ function updateMenuItems() {
         badgeText.add_css_class("menu-item-label");
         badgeContent.append(badgeText);
 
-        // Badge count wrapper
-        const badgeWrapper = new Gtk.Box({
+        // Badge count - wrapped in a box for padding support
+        const badgeBox = new Gtk.Box({
           orientation: Gtk.Orientation.HORIZONTAL,
           halign: Gtk.Align.END,
           valign: Gtk.Align.CENTER,
         });
-        badgeWrapper.set_size_request(20, 20);
+        badgeBox.add_css_class("updates-badge");
 
         const badge = new Gtk.Label({
-          label: flatpakUpdatesCount.toString(),
+          label: ` ${flatpakUpdatesCount.toString()}`,
           halign: Gtk.Align.CENTER,
           valign: Gtk.Align.CENTER,
         });
-        badge.add_css_class("updates-badge");
 
-        badgeWrapper.append(badge);
-        badgeContent.append(badgeWrapper);
+        badgeBox.append(badge);
+        badgeContent.append(badgeBox);
 
         badgeButton.set_child(badgeContent);
 
@@ -879,7 +874,7 @@ app.start({
       flakeUpdatesCount = flakeCacheData.count;
       flakeUpdatesData = flakeCacheData;
     }
-    
+
     const flatpakCacheData = readFlatpakUpdatesCache();
     if (flatpakCacheData) {
       flatpakUpdatesCount = flatpakCacheData.count;

@@ -38,16 +38,23 @@ export interface TagProps
    * Content to display in the tag
    */
   children: React.ReactNode;
+  /**
+   * Optional icon to display before the content
+   * Expects a Unicode character (e.g., "\uE895" for Fluent Icons)
+   */
+  icon?: string;
 }
 
 export const Tag: React.FC<TagProps> = ({
   variant,
   className,
   children,
+  icon,
   ...props
 }) => {
   return (
     <span className={cn(tagVariants({ variant }), className)} {...props}>
+      {icon && <span className="mr-1 font-fluent">{icon}</span>}
       {children}
     </span>
   );
