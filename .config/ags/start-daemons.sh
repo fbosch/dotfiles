@@ -17,6 +17,7 @@ BOOT_DAEMONS=(
     "confirm-dialog.tsx"
     "volume-change-indicator.tsx"
     "keyboard-layout-switcher.tsx"
+    "start-menu.tsx"
 )
 
 # Startup behavior

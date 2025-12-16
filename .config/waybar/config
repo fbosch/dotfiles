@@ -21,7 +21,7 @@
 
   "custom/startbutton": {
     "format": "",
-    "on-click": "rofi -show drun",
+    "on-click": "ags request -i start-menu-daemon '{\"action\":\"show\"}'",
     "tooltip": false
   },
 
