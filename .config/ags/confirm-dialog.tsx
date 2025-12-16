@@ -13,7 +13,7 @@ interface ConfirmConfig {
   confirmLabel: string;
   cancelLabel: string;
   confirmCommand: string;
-  variant: "danger" | "warning" | "info";
+  variant: "danger" | "warning" | "info" | "suspend";
   audioFile?: string; // Optional audio file to play when showing dialog
   showDelay?: number; // Optional delay in milliseconds before showing dialog
 }
@@ -52,6 +52,13 @@ const variants = {
     confirmFocusColor: tokens.colors.accent.primary.value,
     confirmTextColor: "#ffffff", // Primary buttons use white text
   },
+  suspend: {
+    iconColor: tokens.colors.state.purple.value,
+    confirmBg: tokens.colors.state.purple.value,
+    confirmHoverBg: tokens.colors.state["purple-hover"].value,
+    confirmFocusColor: tokens.colors.state.purple.value,
+    confirmTextColor: tokens.colors.state["purple-text"].value,
+  },
 };
 
 let win: Astal.Window | null = null;
@@ -62,7 +69,7 @@ let cancelButton: Gtk.Button | null = null;
 let confirmButton: Gtk.Button | null = null;
 let isVisible: boolean = false;
 let showTimeoutId: number | null = null;
-let currentVariant: "danger" | "warning" | "info" | null = null;
+let currentVariant: "danger" | "warning" | "info" | "suspend" | null = null;
 
 // Apply static CSS once on module load
 function applyStaticCSS() {
@@ -179,7 +186,7 @@ function applyStaticCSS() {
 applyStaticCSS();
 
 // Update only variant-specific colors (called only when variant changes)
-function updateVariantCSS(variant: "danger" | "warning" | "info") {
+function updateVariantCSS(variant: "danger" | "warning" | "info" | "suspend") {
   // Skip if variant hasn't changed
   if (currentVariant === variant) return;
   currentVariant = variant;

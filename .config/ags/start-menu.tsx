@@ -111,15 +111,15 @@ const itemVariants = {
 
 // Menu item commands - matching design system actions
 const menuCommands: Record<string, string> = {
-  "system-settings": "nwg-look",
+  "system-settings": "gnome-tweaks",
   "lock-screen": "hyprlock",
   applications: "io.github.flattool.Warehouse",
   documents: "nemo --existing-window /mnt/nas/FrederikDocs",
   pictures: `nemo --existing-window ${GLib.get_home_dir()}/Pictures`,
   downloads: `nemo --existing-window ${GLib.get_home_dir()}/Downloads`,
-  suspend: "systemctl suspend",
-  restart: "systemctl reboot",
-  shutdown: "systemctl poweroff",
+  suspend: `ags request -i confirm-dialog-daemon '{"action":"show","config":{"icon":"󰒲","title":"Suspend System","message":"This will suspend your system to RAM","confirmLabel":"Suspend","cancelLabel":"Cancel","confirmCommand":"systemctl suspend","variant":"suspend","audioFile":"~/.config/hypr/assets/warn.ogg","showDelay":180}}'`,
+  restart: `ags request -i confirm-dialog-daemon '{"action":"show","config":{"icon":"󰜉","title":"Restart System","message":"This will reboot your system","confirmLabel":"Restart","cancelLabel":"Cancel","confirmCommand":"systemctl reboot","variant":"warning","audioFile":"~/.config/hypr/assets/warn.ogg","showDelay":180}}'`,
+  shutdown: `ags request -i confirm-dialog-daemon '{"action":"show","config":{"icon":"󰐥","title":"Shutdown System","message":"This will power off your system","confirmLabel":"Shutdown","cancelLabel":"Cancel","confirmCommand":"systemctl poweroff","variant":"danger","audioFile":"~/.config/hypr/assets/warn.ogg","showDelay":180}}'`,
   "system-updates":
     "kitty --class flake_update_terminal -e flake_update_interactive",
 };
@@ -151,10 +151,10 @@ function applyStaticCSS() {
     }
 
     /* Menu item base - matches design-system menuItemVariants */
-    /* w-full flex items-center gap-2 px-2 py-1 text-xs rounded-md transition-colors duration-150 */
+    /* w-full flex items-center gap-2 px-2 py-1 text-sm rounded-md transition-colors duration-150 */
     button.menu-item {
       padding: 2px 6px; /* More compact: reduced from 4px 8px */
-      font-size: 12px;
+      font-size: 13px;
       border-radius: 6px;
       min-height: 24px; /* More compact: reduced from 28px */
       ${transitionStyle}
@@ -184,13 +184,13 @@ function applyStaticCSS() {
     /* Icon styling */
     label.menu-item-icon {
       font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
-      font-size: 12px;
+      font-size: 13px;
     }
 
     /* Text styling */
     label.menu-item-label {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 400;
     }
 
@@ -204,7 +204,7 @@ function applyStaticCSS() {
     /* System updates badge button */
     button.system-updates-badge {
       padding: 4px 8px;
-      font-size: 12px;
+      font-size: 13px;
       border-radius: 6px;
       min-height: 28px;
       ${transitionStyle}
@@ -361,20 +361,20 @@ function updateMenuItems() {
       iconLabel.add_css_class("menu-item-icon");
       contentBox.append(iconLabel);
 
-       // Add text
-       const textLabel = new Gtk.Label({
-         label: item.label,
-         halign: Gtk.Align.START,
-       });
-       textLabel.add_css_class("menu-item-label");
+      // Add text
+      const textLabel = new Gtk.Label({
+        label: item.label,
+        halign: Gtk.Align.START,
+      });
+      textLabel.add_css_class("menu-item-label");
 
-       // Apply variant colors
-       const variant = itemVariants[item.variant || "default"];
-       if (variant) {
-         button.add_css_class(`menu-variant-${item.variant || "default"}`);
-         // Apply variant-specific CSS
-         app.apply_css(
-           `
+      // Apply variant colors
+      const variant = itemVariants[item.variant || "default"];
+      if (variant) {
+        button.add_css_class(`menu-variant-${item.variant || "default"}`);
+        // Apply variant-specific CSS
+        app.apply_css(
+          `
            button.menu-variant-${item.variant || "default"} {
              color: ${variant.textColor};
            }
@@ -385,11 +385,11 @@ function updateMenuItems() {
              background-color: ${variant.focusBg};
            }
            `,
-           false,
-         );
-       }
+          false,
+        );
+      }
 
-       contentBox.append(textLabel);
+      contentBox.append(textLabel);
 
       button.set_child(contentBox);
 
