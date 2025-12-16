@@ -175,6 +175,8 @@ let progressSquares: Gtk.Box[] = [];
 let iconLabel: Gtk.Label | null = null;
 let volumeLabel: Gtk.Label | null = null;
 let isVisible = false;
+let soundDebounceTimeout: number | null = null;
+const SOUND_DEBOUNCE = 150; // ms - wait for changes to stop before playing sound
 
 function update() {
   if (!iconLabel || !volumeLabel) return;
@@ -239,11 +241,44 @@ function hideIndicator() {
   });
 }
 
+// Play volume feedback sound
+// Play volume feedback sound (debounced and low priority)
+function playVolumeSound() {
+  // Cancel any pending sound
+  if (soundDebounceTimeout !== null) {
+    GLib.source_remove(soundDebounceTimeout);
+    soundDebounceTimeout = null;
+  }
+  
+  // Schedule sound to play after changes stop (debounced)
+  soundDebounceTimeout = GLib.timeout_add(GLib.PRIORITY_LOW, SOUND_DEBOUNCE, () => {
+    const { muted } = getVolumeInfo();
+    
+    if (!muted) {
+      // Play a short beep sound asynchronously (non-blocking)
+      // Using sox to generate a 30ms sine wave at 800Hz, played through pw-play
+      try {
+        GLib.spawn_command_line_async(
+          "sh -c 'sox -n -t wav - synth 0.03 sine 800 vol 0.2 2>/dev/null | pw-play - --volume=0.5 2>/dev/null &'",
+        );
+      } catch (e) {
+        // Silently fail if sound playback fails
+      }
+    }
+    
+    soundDebounceTimeout = null;
+    return false;
+  });
+}
+
 function showIndicator() {
   if (!win || !shadowWrapper) return;
 
   // Update volume info before showing
   update();
+  
+  // Play volume feedback sound
+  playVolumeSound();
 
   // Show window if not visible
   if (!isVisible) {
