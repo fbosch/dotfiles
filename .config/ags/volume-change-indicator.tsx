@@ -118,11 +118,15 @@ app.apply_css(
   
   box.progress-container {
     margin-right: 12px;
+    min-height: ${size.squareSize}px;
+    max-height: ${size.squareSize}px;
   }
   
   box.progress-square {
     min-width: ${size.squareSize}px;
     min-height: ${size.squareSize}px;
+    max-width: ${size.squareSize}px;
+    max-height: ${size.squareSize}px;
     border-radius: 2px;
     transition: background-color 150ms ease;
   }
@@ -295,6 +299,7 @@ function createWindow() {
   const progressContainer = new Gtk.Box({
     orientation: Gtk.Orientation.HORIZONTAL,
     spacing: size.squareGap,
+    valign: Gtk.Align.CENTER,
   });
   progressContainer.add_css_class("progress-container");
 
@@ -302,6 +307,10 @@ function createWindow() {
   for (let i = 0; i < 16; i++) {
     const square = new Gtk.Box({
       orientation: Gtk.Orientation.HORIZONTAL,
+      hexpand: false,
+      vexpand: false,
+      halign: Gtk.Align.CENTER,
+      valign: Gtk.Align.CENTER,
     });
     square.add_css_class("progress-square");
     square.add_css_class("empty");
