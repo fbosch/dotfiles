@@ -3,8 +3,8 @@
 ## Overview
 
 AGS (Aylur's GTK Shell) configuration for Hyprland UI elements. Currently includes:
-- `app.tsx` - Alt-Tab window switcher overlay
-- `confirm-exit.tsx` - Exit confirmation dialog
+- `confirm-dialog.tsx` - Confirmation dialog for high-impact operations
+- `keyboard-layout-switcher.tsx` - Keyboard layout switcher overlay
 
 **Important:** AGS no longer uses external CSS files. All styling is done inline via the `css` property in `app.start()`.
 
@@ -304,32 +304,27 @@ monitor.connect('changed', (monitor, file, other_file, event_type) => {
 
 ## Current Implementations
 
-### app.tsx - Alt-Tab Overlay
-- Watches `/tmp/hypr-tab-cycle.json` for changes
-- Shows window list with current selection highlighted
-- Auto-hides after 700ms
-- Triggered by `~/.config/hypr/scripts/cycle-windows.sh`
-- Uses external CSS from `style.css`
+### confirm-dialog.tsx - Confirmation Dialog
+- Generic confirmation dialog for high-impact operations
+- Supports variant colors (danger/warning/info)
+- Pre-creates window in `main()` for instant display ✅
+- **Optimized CSS handling:**
+  - Static CSS applied once on module load ✅
+  - Dynamic CSS only updates variant colors when changed ✅
+  - Reduces CSS regeneration from ~180 lines to ~10 lines ✅
+- Optional audio alert on show
+- Optional display delay
+- Bound to various high-impact operations in Hyprland
 
-### confirm-exit.tsx - Exit Confirmation Dialog
-- Shows confirmation dialog before exiting Hyprland
-- Launches via `~/.config/hypr/scripts/confirm-exit.sh`
-- Bound to `Super+M` in keybinds.conf
-- **Key implementation details:**
-  - **Uses programmatic GTK widget creation** instead of JSX for reliable layout
-  - **Inline CSS** via `css:` property in `app.start()`
-  - Creates all widgets using `new Gtk.Box()`, `new Gtk.Label()`, etc.
-  - Uses proper GTK enums: `Gtk.Orientation.VERTICAL`, `Gtk.Align.CENTER`
-  - Adds CSS classes via `.add_css_class()` method after widget creation
-  - Appends children explicitly with `.append()` method
-  - Window created directly in `main()`, not in separate function
-  - Uses `namespace="ags-confirm"` for Hyprland layer rules
-  - Uses `layer={Astal.Layer.OVERLAY}` (enum, not string `"overlay"`)
-  - Escape key handler via `Gtk.EventControllerKey` added to window
-  - Uses `keymode={Astal.Keymode.EXCLUSIVE}` to grab keyboard input
-  - Button `onClicked` handlers connected via `.connect("clicked", callback)`
-  - Must call `win.set_child(mainBox)` and optionally `win.show()` before returning
-  - CSS must not contain invalid properties like `max-width`
+### keyboard-layout-switcher.tsx - Layout Switcher Overlay
+- Shows current keyboard layout when switching
+- Pre-calculates dimensions on module load ✅
+- Applies static CSS once on load ✅  
+- Pre-initializes window structure in `main()` ✅
+- Caches widget references for fast updates ✅
+- Auto-hides after 700ms
+- Triggered by Hyprland keybindings
+- IPC daemon pattern with `requestHandler`
 
 ## Common Issues
 

@@ -278,8 +278,11 @@ function showSwitcher(config: LayoutSwitchConfig) {
     lastActiveLayout = null;
   }
   
+  // Track if window is being created for the first time
+  const isFirstCreation = !win;
+  
   // Create window on first call or after recreation
-  if (!win) {
+  if (isFirstCreation) {
     createWindow(config.layouts, size);
   } else if (size !== currentSize) {
     // Size changed but layouts same - just update CSS
@@ -292,19 +295,40 @@ function showSwitcher(config: LayoutSwitchConfig) {
 
   // Show window if not visible
   if (!isVisible) {
-    if (win) {
-      win.set_visible(true);
-    }
-    isVisible = true;
-
-    // Trigger fade in animation
-    if (shadowWrapper) {
-      shadowWrapper.remove_css_class("hiding");
-      // Use idle_add for better performance than fixed timeout
+    // If window was just created, defer showing by one frame
+    // to allow GTK to process CSS and layout
+    if (isFirstCreation) {
       GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-        shadowWrapper?.add_css_class("visible");
+        if (win) {
+          win.set_visible(true);
+        }
+        isVisible = true;
+
+        // Trigger fade in animation
+        if (shadowWrapper) {
+          shadowWrapper.remove_css_class("hiding");
+          GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            shadowWrapper?.add_css_class("visible");
+            return false;
+          });
+        }
         return false;
       });
+    } else {
+      // Window already existed, show immediately
+      if (win) {
+        win.set_visible(true);
+      }
+      isVisible = true;
+
+      // Trigger fade in animation
+      if (shadowWrapper) {
+        shadowWrapper.remove_css_class("hiding");
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+          shadowWrapper?.add_css_class("visible");
+          return false;
+        });
+      }
     }
   }
 
@@ -435,6 +459,10 @@ function createWindow(layouts: string[], size: "sm" | "md" | "lg") {
 // IPC to receive show/hide commands via AGS messaging
 app.start({
   main() {
+    // Pre-initialize the window with a default 2-layout configuration
+    // This ensures GTK processes all CSS and layout during daemon startup
+    // rather than on first trigger, eliminating the "doesn't show properly" issue
+    createWindow(["", ""], "sm");
     return null;
   },
   instanceName: "keyboard-layout-switcher-daemon",

@@ -59,10 +59,10 @@ let cancelButton: Gtk.Button | null = null;
 let confirmButton: Gtk.Button | null = null;
 let isVisible: boolean = false;
 let showTimeoutId: number | null = null;
+let currentVariant: "danger" | "warning" | "info" | null = null;
 
-function updateCSS(config: ConfirmConfig) {
-  const colors = variants[config.variant];
-
+// Apply static CSS once on module load
+function applyStaticCSS() {
   app.apply_css(
     `
     /* Window container - transparent backdrop */
@@ -93,7 +93,6 @@ function updateCSS(config: ConfirmConfig) {
     /* Icon - text-4xl mb-4 */
     label.dialog-icon {
       font-size: 36px;
-      color: ${colors.iconColor};
       margin-bottom: 12px;
     }
     
@@ -157,24 +156,51 @@ function updateCSS(config: ConfirmConfig) {
     /* Confirm button - matches semantic variants (danger/warning/primary) */
     /* shadow-sm hover:shadow focus-visible:outline-2 */
     button.confirm {
-      background-color: ${colors.confirmBg};
       color: #ffffff;
       border: none;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     }
     
     button.confirm:hover {
-      background-color: ${colors.confirmHoverBg};
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    button.confirm:active {
+      transform: scale(0.98);
+    }
+  `,
+    false,
+  );
+}
+
+// Apply static CSS on module load
+applyStaticCSS();
+
+// Update only variant-specific colors (called only when variant changes)
+function updateVariantCSS(variant: "danger" | "warning" | "info") {
+  // Skip if variant hasn't changed
+  if (currentVariant === variant) return;
+  currentVariant = variant;
+
+  const colors = variants[variant];
+
+  app.apply_css(
+    `
+    label.dialog-icon {
+      color: ${colors.iconColor};
+    }
+    
+    button.confirm {
+      background-color: ${colors.confirmBg};
+    }
+    
+    button.confirm:hover {
+      background-color: ${colors.confirmHoverBg};
     }
     
     button.confirm:focus {
       outline: 2px solid ${colors.confirmFocusColor};
       outline-offset: 2px;
-    }
-    
-    button.confirm:active {
-      transform: scale(0.98);
     }
   `,
     false,
@@ -229,8 +255,8 @@ function showDialog(config: ConfirmConfig) {
     if (label) label.set_label(config.confirmLabel);
   }
 
-  // Update CSS for variant colors
-  updateCSS(config);
+  // Update CSS for variant colors (only if changed)
+  updateVariantCSS(config.variant);
 
   // Function to show the window
   const showWindow = () => {
@@ -353,7 +379,8 @@ function createWindow() {
   dialogBox.append(buttonBox);
   win.set_child(dialogBox);
 
-  updateCSS(currentConfig);
+  // Initialize with default variant colors
+  updateVariantCSS(currentConfig.variant);
 }
 
 // IPC to receive show/hide commands via AGS messaging
