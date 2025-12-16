@@ -60,11 +60,11 @@ const menuItemVariants = cva(
         default:
           "text-foreground-primary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none",
         warning:
-          "text-state-warning hover:bg-state-warning/10 focus-visible:bg-state-warning/10 focus-visible:outline-none",
+          "text-foreground-primary hover:text-state-warning hover:bg-state-warning/10 focus-visible:text-state-warning focus-visible:bg-state-warning/10 focus-visible:outline-none",
         danger:
-          "text-state-error hover:bg-state-error/10 focus-visible:bg-state-error/10 focus-visible:outline-none",
+          "text-foreground-primary hover:text-state-error hover:bg-state-error/10 focus-visible:text-state-error focus-visible:bg-state-error/10 focus-visible:outline-none",
         purple:
-          "text-state-purple hover:bg-state-purple/10 focus-visible:bg-state-purple/10 focus-visible:outline-none",
+          "text-foreground-primary hover:text-state-purple hover:bg-state-purple/10 focus-visible:text-state-purple focus-visible:bg-state-purple/10 focus-visible:outline-none",
       },
       animated: {
         true: "transition-colors duration-150",
