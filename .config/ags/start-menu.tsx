@@ -459,7 +459,7 @@ function hideMenu() {
   }
 }
 
-function showMenu(updatesCount?: number) {
+function showMenu() {
   // Read updates from both caches
   const flakeCacheData = readFlakeUpdatesCache();
   const flatpakCacheData = readFlatpakUpdatesCache();
@@ -548,17 +548,17 @@ function updateMenuItems() {
 
   // Build dynamic menu with Updates item if there are updates
   const menuItems: MenuItem[] = [];
-  
+
   // Add Updates item at the top if there are any updates
   if (flakeUpdatesCount > 0 || flatpakUpdatesCount > 0) {
     menuItems.push({
       id: "updates",
       label: "Updates",
-      icon: "\uE896", // Download icon
+      icon: "\uE777", // UpdateRestore icon
       variant: "default",
     });
   }
-  
+
   // Add all default menu items
   menuItems.push(...defaultMenuItems);
 
@@ -615,7 +615,7 @@ function updateMenuItems() {
           badgeBox.add_css_class("updates-badge");
 
           const badgeLabel = new Gtk.Label({
-            label: ` ${flakeUpdatesCount.toString()}`,
+            label: `  ${flakeUpdatesCount.toString()}`,
             halign: Gtk.Align.CENTER,
             valign: Gtk.Align.CENTER,
           });
@@ -637,7 +637,7 @@ function updateMenuItems() {
           badgeBox.add_css_class("updates-badge");
 
           const badgeLabel = new Gtk.Label({
-            label: flatpakUpdatesCount.toString(),
+            label: `  ${flatpakUpdatesCount.toString()}`,
             halign: Gtk.Align.CENTER,
             valign: Gtk.Align.CENTER,
           });
@@ -658,9 +658,13 @@ function updateMenuItems() {
               .join("\n");
             const timeAgo = formatTimeSince(flakeUpdatesData.timestamp);
             const lastCheckedText = timeAgo ? ` (checked ${timeAgo})` : "";
-            tooltipParts.push(`NixOS Updates${lastCheckedText}:\n${tooltipText}`);
+            tooltipParts.push(
+              `NixOS Updates${lastCheckedText}:\n${tooltipText}`,
+            );
           } else {
-            tooltipParts.push(`${flakeUpdatesCount} NixOS update${flakeUpdatesCount !== 1 ? "s" : ""} available`);
+            tooltipParts.push(
+              `${flakeUpdatesCount} NixOS update${flakeUpdatesCount !== 1 ? "s" : ""} available`,
+            );
           }
         }
         if (flatpakUpdatesCount > 0) {
@@ -670,9 +674,13 @@ function updateMenuItems() {
               .join("\n");
             const timeAgo = formatTimeSince(flatpakUpdatesData.timestamp);
             const lastCheckedText = timeAgo ? ` (checked ${timeAgo})` : "";
-            tooltipParts.push(`Flatpak Updates${lastCheckedText}:\n${tooltipText}`);
+            tooltipParts.push(
+              `Flatpak Updates${lastCheckedText}:\n${tooltipText}`,
+            );
           } else {
-            tooltipParts.push(`${flatpakUpdatesCount} Flatpak update${flatpakUpdatesCount !== 1 ? "s" : ""} available`);
+            tooltipParts.push(
+              `${flatpakUpdatesCount} Flatpak update${flatpakUpdatesCount !== 1 ? "s" : ""} available`,
+            );
           }
         }
         if (tooltipParts.length > 0) {
@@ -852,7 +860,7 @@ app.start({
 
       if (data.action === "show") {
         try {
-          showMenu(data.systemUpdatesCount);
+          showMenu();
           res("shown");
         } catch (e) {
           console.error("Error in showMenu:", e);
@@ -864,7 +872,7 @@ app.start({
             hideMenu();
             res("hidden");
           } else {
-            showMenu(data.systemUpdatesCount);
+            showMenu();
             res("shown");
           }
         } catch (e) {
@@ -881,12 +889,6 @@ app.start({
           console.error("Error in hideMenu:", e);
           res("error: hide failed");
         }
-      } else if (data.action === "update-count") {
-        systemUpdatesCount = data.count || 0;
-        if (isVisible) {
-          updateMenuItems();
-        }
-        res("updated");
       } else {
         res("unknown action");
       }
