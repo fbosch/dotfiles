@@ -28,7 +28,12 @@ while true; do
     
     # Calculate distance from bottom (integer arithmetic)
     distance_from_bottom=$((MONITOR_HEIGHT - cursor_y))
-    
+
+    # Check if start menu is visible
+    start_menu_visible=$(ags request -i start-menu-daemon '{"action":"is-visible"}' 2>/dev/null || echo "false")
+    # Debug: uncomment to log
+    echo "$(date): distance=$distance_from_bottom, menu_visible=$start_menu_visible" >> /tmp/edge-debug.log
+
     # State machine logic
     if (( waybar_visible == 0 )); then
         # Waybar hidden - check if cursor is near bottom
@@ -57,9 +62,9 @@ while true; do
         if (( distance_from_bottom > HIDE_THRESHOLD )); then
             # Cursor is away - increment timer
             hide_timer_ms=$((hide_timer_ms + check_interval_ms))
-            
-            # Hide after delay
-            if (( hide_timer_ms >= HIDE_DELAY_MS )); then
+
+            # Hide after delay, but only if start menu is not visible
+            if (( hide_timer_ms >= HIDE_DELAY_MS )) && [ "$start_menu_visible" != "true" ]; then
                 pkill -SIGUSR2 waybar
                 waybar_visible=0
                 hide_timer_ms=0

@@ -240,33 +240,54 @@ function hideMenu() {
   if (win) {
     win.set_visible(false);
     isVisible = false;
+    // Clear any focused elements
+    const focused = win.get_focus();
+    if (focused) {
+      win.set_focus(null);
+    }
   }
 }
 
 function showMenu(updatesCount?: number) {
-  if (updatesCount !== undefined) {
+  console.log(`showMenu called with updatesCount: ${updatesCount}, current count: ${systemUpdatesCount}`);
+
+  // Update system updates count if provided
+  if (updatesCount !== undefined && updatesCount !== systemUpdatesCount) {
     systemUpdatesCount = updatesCount;
+    console.log(`Updating menu items for new count: ${updatesCount}`);
+    // Only update menu items if updates count changed
+    updateMenuItems();
   }
 
   if (!win) {
+    console.log("Window not created yet, creating...");
     createWindow();
   }
 
-  // Update menu if system updates count changed
-  updateMenuItems();
-
   if (win) {
+    console.log("Making window visible");
     win.set_visible(true);
     isVisible = true;
+    // Clear any existing focus to ensure clean state
+    const currentFocus = win.get_focus();
+    if (currentFocus) {
+      win.set_focus(null);
+    }
+    // Also remove focus styling from all buttons
+    for (const button of menuItemButtons.values()) {
+      button.remove_css_class("focused");
+      // Force style update
+      button.get_style_context().remove_class("focused");
+    }
     // Ensure Waybar stays visible while menu is open
     try {
       GLib.spawn_command_line_async("pkill -SIGUSR1 waybar");
     } catch (e) {
       console.error("Failed to show waybar:", e);
     }
-    // Focus first menu item
-    const firstButton = menuItemButtons.get("system-settings");
-    if (firstButton) firstButton.grab_focus();
+    // Don't autofocus any element - let keyboard navigation handle focus
+  } else {
+    console.log("Window is null, cannot show");
   }
 }
 
@@ -306,8 +327,9 @@ function updateMenuItems() {
       separator.add_css_class("menu-divider");
       menuBox.append(separator);
     } else {
+      console.log(`Creating menu item: ${item.id}`);
       // Add menu item button
-      const button = new Gtk.Button();
+      const button = new Gtk.Button({ can_focus: true });
       button.add_css_class("menu-item");
       button.set_cursor_from_name("pointer");
 
@@ -335,7 +357,10 @@ function updateMenuItems() {
       button.set_child(contentBox);
 
       // Connect click handler
-      button.connect("clicked", () => executeMenuCommand(item.id));
+      button.connect("clicked", () => {
+        console.log(`Menu item clicked: ${item.id}`);
+        executeMenuCommand(item.id);
+      });
 
       menuBox.append(button);
       menuItemButtons.set(item.id, button);
@@ -385,6 +410,7 @@ function updateMenuItems() {
 }
 
 function createWindow() {
+  console.log("Creating start menu window...");
   win = new Astal.Window({
     name: "start-menu",
     namespace: "ags-start-menu",
@@ -394,11 +420,11 @@ function createWindow() {
   // Configure window properties - position relative to Waybar
   win.set_anchor(Astal.WindowAnchor.BOTTOM | Astal.WindowAnchor.LEFT);
   win.set_layer(Astal.Layer.OVERLAY);
-  win.set_exclusivity(Astal.Exclusivity.NORMAL);
-  win.set_keymode(Astal.Keymode.NONE);
+  win.set_exclusivity(Astal.Exclusivity.IGNORE);
+  win.set_keymode(Astal.Keymode.ON_DEMAND);
   win.add_css_class("start-menu");
 
-  // Add escape key handler
+  // Add escape key handler and keyboard navigation
   const keyController = new Gtk.EventControllerKey();
   keyController.connect(
     "key-pressed",
@@ -407,36 +433,66 @@ function createWindow() {
         hideMenu();
         return true;
       }
+
+      // Keyboard navigation
+      const focusableButtons = Array.from(menuItemButtons.values()).filter(
+        (btn) => btn.can_focus,
+      );
+
+      if (focusableButtons.length === 0) return false;
+
+      let currentFocus = focusableButtons.find((btn) => btn.has_focus());
+      let currentIndex = currentFocus
+        ? focusableButtons.indexOf(currentFocus)
+        : -1;
+
+      if (keyval === Gdk.KEY_Tab || keyval === Gdk.KEY_Down) {
+        // Move to next item
+        const nextIndex = (currentIndex + 1) % focusableButtons.length;
+        focusableButtons[nextIndex].grab_focus();
+        return true;
+      } else if (keyval === Gdk.KEY_ISO_Left_Tab || keyval === Gdk.KEY_Up) {
+        // Move to previous item (Shift+Tab or Up arrow)
+        const prevIndex =
+          currentIndex <= 0 ? focusableButtons.length - 1 : currentIndex - 1;
+        focusableButtons[prevIndex].grab_focus();
+        return true;
+      } else if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_space) {
+        // Activate current item
+        if (currentFocus) {
+          currentFocus.activate();
+          return true;
+        }
+      }
+
       return false;
     },
   );
   win.add_controller(keyController);
 
-  // Add click-outside handler
+  // Add click-anywhere handler - close menu on any click when visible
+  // We need to check if the click target is outside the menu container
   const clickController = new Gtk.GestureClick();
-  clickController.connect(
-    "pressed",
-    (gesture: Gtk.GestureClick, nPress: number, x: number, y: number) => {
-      // Check if click is outside the menu box
-      if (menuBox) {
-        const allocation = menuBox.get_allocation();
-        const menuX = allocation.x;
-        const menuY = allocation.y;
-        const menuWidth = allocation.width;
-        const menuHeight = allocation.height;
-
-        // If click is outside menu bounds, hide menu
-        if (
-          x < menuX ||
-          x > menuX + menuWidth ||
-          y < menuY ||
-          y > menuY + menuHeight
-        ) {
-          hideMenu();
-        }
+  clickController.connect("pressed", (_controller, _n_press, x, y) => {
+    if (!isVisible) return;
+    
+    // Check if click is outside the menu container
+    if (menuBox) {
+      const allocation = menuBox.get_allocation();
+      const menuX = allocation.x;
+      const menuY = allocation.y;
+      const menuWidth = allocation.width;
+      const menuHeight = allocation.height;
+      
+      // If click is outside menu bounds, close menu
+      if (x < menuX || x > menuX + menuWidth || y < menuY || y > menuY + menuHeight) {
+        console.log(`Click outside menu bounds: click=(${x},${y}), menu=(${menuX},${menuY},${menuWidth},${menuHeight})`);
+        hideMenu();
+      } else {
+        console.log(`Click inside menu bounds: click=(${x},${y}), menu=(${menuX},${menuY},${menuWidth},${menuHeight})`);
       }
-    },
-  );
+    }
+  });
   win.add_controller(clickController);
 
   // Create menu container
@@ -457,7 +513,7 @@ function createWindow() {
   app.apply_css(
     `
     window.start-menu {
-      margin-bottom: 8px;
+      margin-bottom: calc(45px + 8px);
       margin-left: 8px;
     }
   `,
@@ -468,7 +524,9 @@ function createWindow() {
 // IPC to receive show/hide commands via AGS messaging
 app.start({
   main() {
+    console.log("Start menu daemon: initializing...");
     createWindow();
+    console.log("Start menu daemon: ready for requests");
     return null;
   },
   instanceName: "start-menu-daemon",
@@ -476,27 +534,63 @@ app.start({
     try {
       const request = argv.join(" ");
 
+      console.log(`IPC request received: "${request}"`);
+
       // Handle empty requests (daemon startup without arguments)
       if (!request || request.trim() === "") {
+        console.log("Empty request, responding ready");
         res("ready");
         return;
       }
 
       const data = JSON.parse(request);
+      console.log(`Parsed data:`, data);
 
       if (data.action === "show") {
-        showMenu(data.systemUpdatesCount);
-        res("shown");
+        console.log("Action: show");
+        try {
+          showMenu(data.systemUpdatesCount);
+          console.log("showMenu completed successfully");
+          res("shown");
+        } catch (e) {
+          console.error("Error in showMenu:", e);
+          res("error: show failed");
+        }
+      } else if (data.action === "toggle") {
+        console.log("Action: toggle");
+        try {
+          if (isVisible) {
+            hideMenu();
+            res("hidden");
+          } else {
+            showMenu(data.systemUpdatesCount);
+            res("shown");
+          }
+        } catch (e) {
+          console.error("Error in toggle:", e);
+          res("error: toggle failed");
+        }
+      } else if (data.action === "is-visible") {
+        console.log("Action: is-visible");
+        res(isVisible ? "true" : "false");
       } else if (data.action === "hide") {
-        hideMenu();
-        res("hidden");
+        console.log("Action: hide");
+        try {
+          hideMenu();
+          res("hidden");
+        } catch (e) {
+          console.error("Error in hideMenu:", e);
+          res("error: hide failed");
+        }
       } else if (data.action === "update-count") {
+        console.log("Action: update-count");
         systemUpdatesCount = data.count || 0;
         if (isVisible) {
           updateMenuItems();
         }
         res("updated");
       } else {
+        console.log(`Unknown action: ${data.action}`);
         res("unknown action");
       }
     } catch (e) {
@@ -505,4 +599,3 @@ app.start({
     }
   },
 });
-

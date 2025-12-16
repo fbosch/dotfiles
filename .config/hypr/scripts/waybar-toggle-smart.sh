@@ -13,11 +13,18 @@ WAYBAR_START=$((monitor_height - WAYBAR_HEIGHT))
 # Calculate if cursor is in waybar area (within 60px of bottom for some margin)
 distance_from_bottom=$((monitor_height - cursor_y))
 
-# If cursor is in waybar area (within 60px of bottom), don't hide
-if [ "$distance_from_bottom" -le 60 ]; then
-    # Cursor is near/in waybar - do nothing (keep it visible)
+# Check if start menu is currently visible
+start_menu_visible=$(ags request -i start-menu-daemon '{"action":"is-visible"}' 2>/dev/null || echo "false")
+
+# Debug: log the decision
+echo "$(date): distance=$distance_from_bottom, menu_visible=$start_menu_visible, will_hide=$([ "$distance_from_bottom" -le 60 ] || [ "$start_menu_visible" = "true" ] && echo "no" || echo "yes")" >> /tmp/waybar-debug.log
+
+# If cursor is in waybar area OR start menu is visible, don't hide
+if [ "$distance_from_bottom" -le 60 ] || [ "$start_menu_visible" = "true" ]; then
+    # Cursor is near/in waybar OR start menu is open - keep waybar visible
     exit 0
 else
-    # Cursor is away from waybar - toggle it (hide)
+    # Cursor is away from waybar and start menu is closed - toggle it (hide)
+    echo "$(date): HIDING WAYBAR" >> /tmp/waybar-debug.log
     pkill -SIGUSR2 waybar
 fi

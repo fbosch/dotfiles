@@ -21,7 +21,7 @@
 
   "custom/startbutton": {
     "format": "",
-    "on-click": "ags request -i start-menu-daemon '{\"action\":\"show\"}'",
+    "on-click": "ags request -i start-menu-daemon '{\"action\":\"toggle\"}'",
     "tooltip": false
   },
 
