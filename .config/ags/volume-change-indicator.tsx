@@ -42,7 +42,18 @@ function getSpeakerState(volume: number, muted: boolean): SpeakerState {
 }
 
 // Get current volume and mute status from wpctl
+// Cache for volume info to reduce wpctl calls during rapid updates
+let volumeCache = { volume: 0, muted: false, timestamp: 0 };
+const CACHE_DURATION = 30; // ms - cache to handle rapid volume changes
+
 function getVolumeInfo(): { volume: number; muted: boolean } {
+  const now = Date.now();
+  
+  // Return cached value if very recent (for rapid key presses)
+  if (now - volumeCache.timestamp < CACHE_DURATION) {
+    return { volume: volumeCache.volume, muted: volumeCache.muted };
+  }
+
   try {
     // Get volume for default audio sink (@DEFAULT_AUDIO_SINK@)
     const [ok, stdout, stderr, exit_status] = GLib.spawn_command_line_sync(
@@ -50,7 +61,7 @@ function getVolumeInfo(): { volume: number; muted: boolean } {
     );
 
     if (!ok || exit_status !== 0) {
-      return { volume: 0, muted: false };
+      return volumeCache.timestamp > 0 ? volumeCache : { volume: 0, muted: false };
     }
 
     const volumeText = new TextDecoder().decode(stdout);
@@ -62,10 +73,13 @@ function getVolumeInfo(): { volume: number; muted: boolean } {
       : 0;
     const muted = volumeText.includes("[MUTED]");
 
+    // Update cache
+    volumeCache = { volume, muted, timestamp: now };
+    
     return { volume, muted };
   } catch (e) {
     console.error("Failed to get volume info:", e);
-    return { volume: 0, muted: false };
+    return volumeCache.timestamp > 0 ? volumeCache : { volume: 0, muted: false };
   }
 }
 
