@@ -189,18 +189,33 @@ const itemVariants = {
 };
 
 // Menu item commands - matching design system actions
+const getTerminal = (): string => {
+  // Check for preferred terminal in order: TERMINAL env var, then fallback to common terminals
+  const terminal = GLib.getenv("TERMINAL");
+  if (terminal) return terminal;
+  
+  // Check for common terminals
+  const terminals = ["kitty", "wezterm", "alacritty", "foot", "gnome-terminal"];
+  for (const term of terminals) {
+    if (GLib.find_program_in_path(term)) {
+      return term;
+    }
+  }
+  
+  return "xterm"; // Ultimate fallback
+};
+
 const menuCommands: Record<string, string> = {
   "system-settings": "gnome-tweaks",
   "lock-screen": "hyprlock",
-  applications: "io.github.flattool.Warehouse",
+  applications: `nemo --existing-window ${GLib.get_home_dir()}`,
   documents: "nemo --existing-window /mnt/nas/FrederikDocs",
   pictures: `nemo --existing-window ${GLib.get_home_dir()}/Pictures`,
   downloads: `nemo --existing-window ${GLib.get_home_dir()}/Downloads`,
   suspend: `${GLib.get_home_dir()}/.config/hypr/scripts/confirm-suspend.sh`,
   restart: `${GLib.get_home_dir()}/.config/hypr/scripts/confirm-restart.sh`,
   shutdown: `${GLib.get_home_dir()}/.config/hypr/scripts/confirm-shutdown.sh`,
-  "system-updates":
-    "kitty --class flake_update_terminal -e flake_update_interactive",
+  "system-updates": `${getTerminal()} --class flake_update_terminal -e flake_update_interactive`,
 };
 
 // Apply static CSS once on module load
