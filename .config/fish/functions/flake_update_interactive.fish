@@ -285,6 +285,11 @@ function flake_update_interactive --description 'Interactively update nix flake 
 
     # Update selected inputs
     pushd $flake_path
+    
+    # Backup flake.lock before updating in case rebuild fails
+    set flake_lock_backup (mktemp)
+    cp flake.lock $flake_lock_backup
+    
     gum spin --spinner pulse --title "Updating flake inputs..." -- nix flake update $selected_inputs
     set update_status $status
     popd
@@ -307,6 +312,9 @@ function flake_update_interactive --description 'Interactively update nix flake 
 
                 if test $rebuild_status -eq 0
                     gum style --foreground 2 "✓ System rebuilt successfully!"
+                    
+                    # Clean up backup since rebuild succeeded
+                    rm -f $flake_lock_backup
 
                     # Regenerate update cache and trigger start-menu refresh
                     if type -q flake_updates_daemon
@@ -336,6 +344,15 @@ function flake_update_interactive --description 'Interactively update nix flake 
                     end
                 else
                     gum style --foreground 1 "✗ System rebuild failed"
+                    
+                    # Restore flake.lock to pre-update state
+                    if test -f "$flake_lock_backup"
+                        pushd $flake_path
+                        cp $flake_lock_backup flake.lock
+                        popd
+                        rm -f $flake_lock_backup
+                        gum style --foreground 3 "ℹ Restored flake.lock to pre-update state"
+                    end
 
                     # Send failure notification if --notify flag was passed
                     if set -q _flag_notify
@@ -367,10 +384,17 @@ function flake_update_interactive --description 'Interactively update nix flake 
                 end
             else
                 gum style --foreground 3 "Rebuild skipped. Run 'nxrb' when ready."
+                # Clean up backup since user chose not to rebuild
+                rm -f $flake_lock_backup
             end
+        else
+            # No --rebuild flag, clean up backup
+            rm -f $flake_lock_backup
         end
     else
         gum style --foreground 1 "✗ Failed to update some flake inputs"
+        # Clean up backup
+        rm -f $flake_lock_backup
         return 1
     end
 end
