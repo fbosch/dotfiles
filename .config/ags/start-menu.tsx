@@ -117,9 +117,9 @@ const menuCommands: Record<string, string> = {
   documents: "nemo --existing-window /mnt/nas/FrederikDocs",
   pictures: `nemo --existing-window ${GLib.get_home_dir()}/Pictures`,
   downloads: `nemo --existing-window ${GLib.get_home_dir()}/Downloads`,
-  suspend: `ags request -i confirm-dialog-daemon '{"action":"show","config":{"icon":"󰒲","title":"Suspend System","message":"This will suspend your system to RAM","confirmLabel":"Suspend","cancelLabel":"Cancel","confirmCommand":"systemctl suspend","variant":"suspend","audioFile":"~/.config/hypr/assets/warn.ogg","showDelay":180}}'`,
-  restart: `ags request -i confirm-dialog-daemon '{"action":"show","config":{"icon":"󰜉","title":"Restart System","message":"This will reboot your system","confirmLabel":"Restart","cancelLabel":"Cancel","confirmCommand":"systemctl reboot","variant":"warning","audioFile":"~/.config/hypr/assets/warn.ogg","showDelay":180}}'`,
-  shutdown: `ags request -i confirm-dialog-daemon '{"action":"show","config":{"icon":"󰐥","title":"Shutdown System","message":"This will power off your system","confirmLabel":"Shutdown","cancelLabel":"Cancel","confirmCommand":"systemctl poweroff","variant":"danger","audioFile":"~/.config/hypr/assets/warn.ogg","showDelay":180}}'`,
+  suspend: `${GLib.get_home_dir()}/.config/hypr/scripts/confirm-suspend.sh`,
+  restart: `${GLib.get_home_dir()}/.config/hypr/scripts/confirm-restart.sh`,
+  shutdown: `${GLib.get_home_dir()}/.config/hypr/scripts/confirm-shutdown.sh`,
   "system-updates":
     "kitty --class flake_update_terminal -e flake_update_interactive",
 };
