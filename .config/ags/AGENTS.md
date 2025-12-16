@@ -5,6 +5,8 @@
 AGS (Aylur's GTK Shell) configuration for Hyprland UI elements. Currently includes:
 - `confirm-dialog.tsx` - Confirmation dialog for high-impact operations
 - `keyboard-layout-switcher.tsx` - Keyboard layout switcher overlay
+- `volume-change-indicator.tsx` - Volume change indicator with automatic monitoring
+- `start-daemons.sh` - Wrapper script to start all AGS daemons at boot
 
 **Important:** AGS no longer uses external CSS files. All styling is done inline via the `css` property in `app.start()`.
 
@@ -16,6 +18,9 @@ ags run <file.tsx>
 
 # List running AGS instances
 ags list
+
+# Send a request to a running instance
+ags request -i <instance-name> '<json-payload>'
 
 # Quit an instance
 ags quit <instance-name>
@@ -31,6 +36,9 @@ ags bundle <file.tsx>
 
 # Launch GTK Inspector for debugging
 ags inspect
+
+# Start all AGS daemons (wrapper script)
+~/.config/ags/start-daemons.sh
 ```
 
 ## TSX/JSX Conventions
@@ -302,6 +310,161 @@ monitor.connect('changed', (monitor, file, other_file, event_type) => {
 });
 ```
 
+## Daemon Architecture
+
+### Overview
+AGS components in this config use a **daemon pattern** where long-running processes are started at boot and respond to IPC (Inter-Process Communication) requests. This provides instant UI display and efficient resource usage.
+
+### Daemon Lifecycle
+
+**Boot-time Daemons (Managed by `start-daemons.sh`)**
+- `confirm-dialog.tsx` - Always available for confirmation prompts
+- `volume-change-indicator.tsx` - Ready to show on volume changes
+- `keyboard-layout-switcher.tsx` - Pre-initialized for instant display on layout switches
+
+### Daemon Startup Script (`start-daemons.sh`)
+
+**Purpose:** Centralized management of all boot-time AGS daemons.
+
+**Location:** `~/.config/ags/start-daemons.sh`
+
+**Features:**
+- **Parallel startup** - Launches all daemons simultaneously for fast initialization
+- **Idle detection** - Waits for Hyprland IPC to be ready before starting
+- **Configurable delays** - Adjustable wait times via config variables
+- Checks if daemons are already running before starting
+- Provides colored console output and logging
+- Logs to `/tmp/ags-daemons.log` for debugging
+- Easy to extend by adding entries to `BOOT_DAEMONS` array
+- Can be run manually to restart all daemons
+
+**Performance:**
+- Sequential startup: ~0.9s (0.3s × 3 daemons)
+- Parallel startup: ~0.5s (one verification wait)
+- Idle wait: 2-10s (prevents blocking Hyprland startup)
+
+**Usage:**
+```bash
+# Automatic (called from hyprland.conf)
+exec-once = ~/.config/ags/start-daemons.sh
+
+# Manual restart
+~/.config/ags/start-daemons.sh
+
+# Check logs
+cat /tmp/ags-daemons.log
+
+# List running daemons
+ags list
+```
+
+**Configuration:**
+Edit the configuration section at the top of `start-daemons.sh`:
+```bash
+# Idle detection settings
+IDLE_WAIT_ENABLED=true           # Wait for system to be ready
+IDLE_WAIT_DELAY=2                # Additional delay after Hyprland ready (seconds)
+HYPRLAND_TIMEOUT=10              # Max time to wait for Hyprland IPC (seconds)
+STARTUP_VERIFICATION_WAIT=0.5    # Time to wait before verifying (seconds)
+```
+
+- `IDLE_WAIT_ENABLED`: Set to `false` to start immediately without waiting
+- `IDLE_WAIT_DELAY`: Increase on slow systems, decrease on fast systems
+- `HYPRLAND_TIMEOUT`: Max time to wait for Hyprland before giving up
+- `STARTUP_VERIFICATION_WAIT`: Time to wait for daemons to initialize
+
+**Adding a New Daemon:**
+1. Create your daemon `.tsx` file in `~/.config/ags/`
+2. Add filename to `BOOT_DAEMONS` array in `start-daemons.sh`
+3. Add Hyprland layer rules if needed in `hyprland.conf`
+4. Restart: `~/.config/ags/start-daemons.sh`
+
+**Example:**
+```bash
+# In start-daemons.sh
+BOOT_DAEMONS=(
+    "confirm-dialog.tsx"
+    "volume-change-indicator.tsx"
+    "keyboard-layout-switcher.tsx"
+    "my-new-daemon.tsx"  # Add here
+)
+```
+
+### IPC Communication Pattern
+
+All daemons use the same communication pattern:
+
+**Daemon Side (TypeScript):**
+```tsx
+app.start({
+  main() {
+    // Pre-create UI for instant display
+    createWindow();
+    return win;
+  },
+  instanceName: "my-daemon-name",
+  requestHandler(argv: string[], res: (response: string) => void) {
+    try {
+      const data = JSON.parse(argv.join(" "));
+      
+      if (data.action === "show") {
+        showWindow();
+        res("shown");
+      } else if (data.action === "hide") {
+        hideWindow();
+        res("hidden");
+      } else {
+        res("unknown action");
+      }
+    } catch (e) {
+      res(`error: ${e}`);
+    }
+  },
+});
+```
+
+**Client Side (Bash/Shell):**
+```bash
+# Send request to daemon
+ags request -i my-daemon-name '{"action":"show"}'
+
+# From Hyprland keybind
+bind = $mainMod, X, exec, ags request -i my-daemon-name '{"action":"show"}'
+```
+
+### Daemon Best Practices
+
+1. **Pre-create UI in `main()`** - Ensures instant display when triggered
+2. **Use unique `instanceName`** - Convention: `{component-name}-daemon`
+3. **Set unique `namespace`** - Convention: `ags-{component-name}` for layer rules
+4. **Keep daemons stateless** - Refresh state on each show request
+5. **Add error handling** - Always wrap JSON parsing in try-catch
+6. **Return responses** - Confirm success/failure to caller
+7. **Pre-initialize expensive operations** - Do calculations in `main()`, not on each show
+
+### Troubleshooting Daemons
+
+```bash
+# Check which daemons are running
+ags list
+
+# View startup logs
+cat /tmp/ags-daemons.log
+
+# Kill all daemons and restart
+pkill gjs
+~/.config/ags/start-daemons.sh
+
+# Test a specific daemon manually
+ags run ~/.config/ags/confirm-dialog.tsx
+
+# Send test request
+ags request -i confirm-dialog-daemon '{"action":"hide"}'
+
+# Check for errors
+journalctl --user -u uwsm-app@Hyprland.service | grep -i ags
+```
+
 ## Current Implementations
 
 ### confirm-dialog.tsx - Confirmation Dialog
@@ -318,13 +481,36 @@ monitor.connect('changed', (monitor, file, other_file, event_type) => {
 
 ### keyboard-layout-switcher.tsx - Layout Switcher Overlay
 - Shows current keyboard layout when switching
+- **Pre-started at boot by start-daemons.sh** for instant display ✅
 - Pre-calculates dimensions on module load ✅
 - Applies static CSS once on load ✅  
 - Pre-initializes window structure in `main()` ✅
 - Caches widget references for fast updates ✅
 - Auto-hides after 700ms
-- Triggered by Hyprland keybindings
+- Triggered by `switch-layout.sh` via IPC (daemon already running)
 - IPC daemon pattern with `requestHandler`
+
+### volume-change-indicator.tsx - Volume Change Indicator
+- macOS-inspired volume overlay with speaker icon, progress bar, and percentage
+- **Triggered by Hyprland keybinds** - shows when volume keys are pressed ✅
+- Pre-creates window in `main()` for instant display ✅
+- **Optimized CSS handling:**
+  - Static CSS applied once on module load ✅
+  - Dynamic CSS only updates on size changes ✅
+- Shows on volume change, auto-hides after 2 seconds
+- 16 progress squares matching macOS style
+- Segoe Fluent Icons for speaker states (muted/low/medium/high)
+- Matches design-system VolumeChangeIndicator component
+- IPC daemon pattern with `requestHandler`
+- Bound to volume keybinds in `keybinds.conf`:
+  ```bash
+  bindel = ,XF86AudioRaiseVolume, exec, wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ && ags request -i volume-indicator-daemon '{"action":"show"}'
+  ```
+
+### start-daemons.sh - AGS Daemons Starter
+- **Centralized daemon management** - starts all AGS daemons from one script ✅
+- See **Daemon Architecture** section above for detailed usage
+- Currently manages: confirm-dialog, volume-change-indicator, keyboard-layout-switcher
 
 ## Common Issues
 

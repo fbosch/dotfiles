@@ -80,7 +80,6 @@ function applyStaticCSS() {
       border-radius: 12px;
       padding: 16px;
       min-width: 280px;
-      max-width: 320px;
       border: 1px solid ${tokens.colors.border.hover.value};
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
     }
@@ -387,13 +386,20 @@ function createWindow() {
 app.start({
   main() {
     createWindow();
-    return win;
+    return null;
   },
   instanceName: "confirm-dialog-daemon",
   requestHandler(argv: string[], res: (response: any) => void) {
     try {
       // Join argv into a single string and parse as JSON
       const request = argv.join(" ");
+      
+      // Handle empty requests (daemon startup without arguments)
+      if (!request || request.trim() === "") {
+        res("ready");
+        return;
+      }
+      
       const data = JSON.parse(request);
 
       if (data.action === "show") {

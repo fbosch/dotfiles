@@ -35,11 +35,7 @@ new_index=$(echo "$keyboard_info" | jq -r '.active_layout_index')
 active_code="${LAYOUT_DISPLAY_CODES[${layouts[$new_index]}]}"
 
 # Show the AGS keyboard layout switcher overlay
-# Start the daemon if it's not running
-if ! ags list | grep -q "keyboard-layout-switcher-daemon"; then
-    ags run ~/.config/ags/keyboard-layout-switcher.tsx &
-    sleep 0.2
-fi
+# (Daemon is pre-started at boot by start-daemons.sh)
 
 # Build layouts array with display codes for AGS
 layout_codes_array=()

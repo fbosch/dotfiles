@@ -193,17 +193,17 @@ function updateCSS(size: "sm" | "md" | "lg" = "sm") {
     box.switcher-container {
       padding: ${sizeConfig.containerPadding};
       min-width: ${dims.containerWidth}px;
-      max-width: ${dims.containerWidth}px;
+      #max-width: ${dims.containerWidth}px;
     }
     
     overlay {
       min-width: ${dims.innerWidth}px;
-      max-width: ${dims.innerWidth}px;
+      #max-width: ${dims.innerWidth}px;
     }
     
     box.pill-wrapper {
       min-width: ${dims.innerWidth}px;
-      max-width: ${dims.innerWidth}px;
+      #max-width: ${dims.innerWidth}px;
     }
     
     box.pill-background {
@@ -217,7 +217,7 @@ function updateCSS(size: "sm" | "md" | "lg" = "sm") {
     
     box.badges-container {
       min-width: ${dims.innerWidth}px;
-      max-width: ${dims.innerWidth}px;
+      #max-width: ${dims.innerWidth}px;
     }
     
     label.layout-badge {
