@@ -193,7 +193,11 @@ const getSystemUpdatesCommand = (): string => {
   const terminal = getTerminal();
   
   // flake_update_interactive is a Fish function, so we need to invoke it through Fish
-  const fishCommand = "fish -c flake_update_interactive";
+  // Add --rebuild flag to prompt for system rebuild after updates
+  // Add --cache flag to use cached update data (instant startup)
+  // Add --header flag to show decorative ASCII header with flake info
+  // IMPORTANT: Put the entire Fish command in quotes so flags are passed to the function
+  const fishCommand = 'fish -c "flake_update_interactive --rebuild --cache --header"';
   
   // Different terminals use different flags for setting window class/app-id
   switch (terminal) {
@@ -468,7 +472,8 @@ function executeMenuCommand(itemId: string) {
   console.log(`Executing command for ${itemId}:`, command);
   if (command) {
     try {
-      GLib.spawn_command_line_async(command);
+      // Use sh -c to properly handle complex commands with pipes and arguments
+      GLib.spawn_command_line_async(`sh -c '${command}'`);
       console.log(`Successfully spawned command for ${itemId}`);
     } catch (e) {
       console.error(`Failed to execute command for ${itemId}:`, e);
