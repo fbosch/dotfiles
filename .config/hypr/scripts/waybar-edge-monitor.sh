@@ -1,55 +1,80 @@
 #!/usr/bin/env bash
 # Monitor mouse position and show/hide waybar based on screen edge proximity
-# Adaptive polling for efficiency
+# Optimized for low resource usage with integer arithmetic
 
-WAYBAR_HEIGHT=45       # Height of waybar in pixels
-SHOW_THRESHOLD=25      # Distance from bottom to trigger show (should be >= half waybar height)
-HIDE_THRESHOLD=60      # Distance from bottom before hiding (waybar height + margin)
-FAST_CHECK=0.05        # Fast polling when waybar visible or near edge (50ms)
-SLOW_CHECK=0.3         # Slow polling when far from edge (300ms)
+# Configuration (all in milliseconds for integer math)
+readonly SHOW_THRESHOLD=25      # Distance from bottom to trigger show (pixels)
+readonly HIDE_THRESHOLD=60      # Distance from bottom before hiding (pixels)
+readonly SHOW_DELAY_MS=200      # Milliseconds to wait before showing (prevents quick hovers)
+readonly HIDE_DELAY_MS=300      # Milliseconds to wait before hiding (linger time)
+readonly FAST_CHECK_MS=50       # Fast polling interval (50ms)
+readonly SLOW_CHECK_MS=300      # Slow polling interval (300ms)
 
-# Get monitor height once at startup
-monitor_height=$(hyprctl monitors -j 2>/dev/null | jq -r '.[0].height')
+# Get monitor height once at startup (cached)
+readonly MONITOR_HEIGHT=$(hyprctl monitors -j 2>/dev/null | jq -r '.[0].height')
 
-# Track waybar state
-waybar_visible=false
+# State variables
+waybar_visible=0  # 0 = hidden, 1 = visible
+show_timer_ms=0
+hide_timer_ms=0
 
 while true; do
-    # Get cursor Y position
-    cursor_y=$(hyprctl cursorpos 2>/dev/null | cut -d',' -f2 | tr -d ' ')
+    # Get cursor Y position (single read, minimal processing)
+    IFS=',' read -r _ cursor_y <<< "$(hyprctl cursorpos 2>/dev/null)"
+    cursor_y=${cursor_y## }  # Trim leading spaces (bash built-in)
     
-    if [ -z "$cursor_y" ]; then
-        sleep "$SLOW_CHECK"
-        continue
-    fi
+    # Skip if cursor position unavailable
+    [[ -z "$cursor_y" ]] && { sleep 0.3; continue; }
     
-    # Calculate distance from bottom
-    distance_from_bottom=$((monitor_height - cursor_y))
+    # Calculate distance from bottom (integer arithmetic)
+    distance_from_bottom=$((MONITOR_HEIGHT - cursor_y))
     
-    # Show waybar if cursor is close to bottom edge
-    if [ "$distance_from_bottom" -le "$SHOW_THRESHOLD" ] && [ "$waybar_visible" = false ]; then
-        pkill -SIGUSR1 waybar
-        waybar_visible=true
-    fi
-    
-    # Hide waybar only if cursor moves away from the entire waybar area
-    if [ "$waybar_visible" = true ]; then
-        # Use fast polling while waybar is visible for responsive hiding
-        check_interval="$FAST_CHECK"
-        
-        # Hide if cursor is far enough away
-        if [ "$distance_from_bottom" -gt "$HIDE_THRESHOLD" ]; then
-            pkill -SIGUSR2 waybar
-            waybar_visible=false
+    # State machine logic
+    if (( waybar_visible == 0 )); then
+        # Waybar hidden - check if cursor is near bottom
+        if (( distance_from_bottom <= SHOW_THRESHOLD )); then
+            # Cursor is near bottom - increment show timer
+            show_timer_ms=$((show_timer_ms + FAST_CHECK_MS))
+            check_interval_ms=$FAST_CHECK_MS
+            
+            # Show after delay (prevents quick hovers)
+            if (( show_timer_ms >= SHOW_DELAY_MS )); then
+                pkill -SIGUSR1 waybar
+                waybar_visible=1
+                show_timer_ms=0
+                hide_timer_ms=0
+            fi
+        else
+            # Cursor moved away - reset show timer
+            show_timer_ms=0
+            # Adaptive polling when hidden
+            check_interval_ms=$(( distance_from_bottom <= HIDE_THRESHOLD + 50 ? FAST_CHECK_MS : SLOW_CHECK_MS ))
         fi
     else
-        # Adaptive polling when waybar is hidden
-        if [ "$distance_from_bottom" -le "$((HIDE_THRESHOLD + 50))" ]; then
-            check_interval="$FAST_CHECK"
+        # Waybar visible - check if cursor moved away
+        check_interval_ms=$FAST_CHECK_MS
+        
+        if (( distance_from_bottom > HIDE_THRESHOLD )); then
+            # Cursor is away - increment timer
+            hide_timer_ms=$((hide_timer_ms + check_interval_ms))
+            
+            # Hide after delay
+            if (( hide_timer_ms >= HIDE_DELAY_MS )); then
+                pkill -SIGUSR2 waybar
+                waybar_visible=0
+                hide_timer_ms=0
+            fi
         else
-            check_interval="$SLOW_CHECK"
+            # Cursor came back - reset timer
+            hide_timer_ms=0
         fi
     fi
     
-    sleep "$check_interval"
+    # Sleep with calculated interval (convert ms to seconds)
+    # 50ms = 0.05s, 300ms = 0.3s
+    if (( check_interval_ms == FAST_CHECK_MS )); then
+        sleep 0.05
+    else
+        sleep 0.3
+    fi
 done
