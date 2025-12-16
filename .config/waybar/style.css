@@ -43,7 +43,7 @@ window#waybar {
 }
 
 #custom-startbutton {
-  margin: 0.25rem 0.33rem;
+  margin: 0.33rem;
   font-size: 1.4rem;
   border-radius: 0.25rem;
   padding: 0 1.2rem 0 0.6rem;

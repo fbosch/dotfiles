@@ -489,7 +489,7 @@ function updateMenuItems() {
           badgeBox.add_css_class("updates-badge");
 
           const badgeLabel = new Gtk.Label({
-            label: ` ${flakeUpdatesCount.toString()}`,
+            label: `\uF313 ${flakeUpdatesCount.toString()}`,
             halign: Gtk.Align.CENTER,
             valign: Gtk.Align.CENTER,
           });
@@ -532,9 +532,13 @@ function updateMenuItems() {
               .join("\n");
             const timeAgo = formatTimeSince(flakeUpdatesData.timestamp);
             const lastCheckedText = timeAgo ? ` (checked ${timeAgo})` : "";
-            tooltipParts.push(`NixOS Updates${lastCheckedText}:\n${tooltipText}`);
+            tooltipParts.push(
+              `NixOS Updates${lastCheckedText}:\n${tooltipText}`,
+            );
           } else {
-            tooltipParts.push(`${flakeUpdatesCount} NixOS update${flakeUpdatesCount !== 1 ? "s" : ""} available`);
+            tooltipParts.push(
+              `${flakeUpdatesCount} NixOS update${flakeUpdatesCount !== 1 ? "s" : ""} available`,
+            );
           }
         }
         if (flatpakUpdatesCount > 0) {
@@ -544,9 +548,13 @@ function updateMenuItems() {
               .join("\n");
             const timeAgo = formatTimeSince(flatpakUpdatesData.timestamp);
             const lastCheckedText = timeAgo ? ` (checked ${timeAgo})` : "";
-            tooltipParts.push(`Flatpak Updates${lastCheckedText}:\n${tooltipText}`);
+            tooltipParts.push(
+              `Flatpak Updates${lastCheckedText}:\n${tooltipText}`,
+            );
           } else {
-            tooltipParts.push(`${flatpakUpdatesCount} Flatpak update${flatpakUpdatesCount !== 1 ? "s" : ""} available`);
+            tooltipParts.push(
+              `${flatpakUpdatesCount} Flatpak update${flatpakUpdatesCount !== 1 ? "s" : ""} available`,
+            );
           }
         }
         if (tooltipParts.length > 0) {
@@ -819,7 +827,6 @@ function applyStaticCSS() {
 // Apply static CSS on module load
 applyStaticCSS();
 
-
 // IPC to receive show/hide commands via AGS messaging
 app.start({
   main() {
@@ -836,54 +843,59 @@ app.start({
   },
   instanceName: "start-menu-daemon",
   requestHandler(argv: string[], res: (response: string) => void) {
-    try {
-      const request = argv.join(" ");
+    const request = argv.join(" ");
 
-      // Handle empty requests (daemon startup without arguments)
-      if (!request || request.trim() === "") {
-        res("ready");
+    // Handle empty requests (daemon startup without arguments)
+    if (!request || request.trim() === "") {
+      res("ready");
+      return;
+    }
+
+    let data: { action?: string };
+    try {
+      data = JSON.parse(request);
+    } catch (e) {
+      console.error("Error parsing request:", e);
+      res(`error: invalid JSON`);
+      return;
+    }
+
+    // Handle is-visible query (no error handling needed)
+    if (data.action === "is-visible") {
+      res(isVisible ? "true" : "false");
+      return;
+    }
+
+    // Handle actions that can throw errors
+    try {
+      if (data.action === "show") {
+        showMenu();
+        res("shown");
         return;
       }
 
-      const data = JSON.parse(request);
+      if (data.action === "hide") {
+        hideMenu();
+        res("hidden");
+        return;
+      }
 
-      if (data.action === "show") {
-        try {
-          showMenu();
-          res("shown");
-        } catch (e) {
-          console.error("Error in showMenu:", e);
-          res("error: show failed");
-        }
-      } else if (data.action === "toggle") {
-        try {
-          if (isVisible) {
-            hideMenu();
-            res("hidden");
-          } else {
-            showMenu();
-            res("shown");
-          }
-        } catch (e) {
-          console.error("Error in toggle:", e);
-          res("error: toggle failed");
-        }
-      } else if (data.action === "is-visible") {
-        res(isVisible ? "true" : "false");
-      } else if (data.action === "hide") {
-        try {
+      if (data.action === "toggle") {
+        if (isVisible) {
           hideMenu();
           res("hidden");
-        } catch (e) {
-          console.error("Error in hideMenu:", e);
-          res("error: hide failed");
+        } else {
+          showMenu();
+          res("shown");
         }
-      } else {
-        res("unknown action");
+        return;
       }
+
+      // Unknown action
+      res("unknown action");
     } catch (e) {
-      console.error("Error handling request:", e);
-      res(`error: ${e}`);
+      console.error(`Error handling action '${data.action}':`, e);
+      res(`error: ${data.action} failed`);
     }
   },
 });
