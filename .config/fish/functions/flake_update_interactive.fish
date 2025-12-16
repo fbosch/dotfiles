@@ -310,7 +310,7 @@ function flake_update_interactive --description 'Interactively update nix flake 
 
                     # Regenerate update cache and trigger start-menu refresh
                     if command -q flake_updates_daemon
-                        flake_updates_daemon refresh >/dev/null 2>&1 &
+                        gum spin --spinner pulse --title "Refreshing update cache..." -- flake_updates_daemon refresh
                     end
 
                     # Send desktop notification if --notify flag was passed

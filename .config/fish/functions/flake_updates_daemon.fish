@@ -50,18 +50,11 @@ function flake_updates_daemon --description 'Manage the flake updates checker sy
         case refresh
             # Regenerate cache and trigger UI refresh
             # This is typically called after a successful system rebuild
-            systemctl --user start flake-update-checker.service 2>/dev/null
-            
-            # Wait for service to complete (max 30 seconds)
-            set -l timeout 30
-            set -l elapsed 0
-            while systemctl --user is-active flake-update-checker.service >/dev/null 2>&1
-                sleep 0.5
-                set elapsed (math $elapsed + 0.5)
-                if test $elapsed -ge $timeout
-                    echo "Warning: Cache refresh timed out after 30 seconds"
-                    break
-                end
+            if command -q flake-check-updates
+                flake-check-updates ~/nixos >/dev/null 2>&1
+            else
+                echo "Warning: flake-check-updates command not found"
+                return 1
             end
             
             # Update cache metadata with current generation and rebuild timestamp
