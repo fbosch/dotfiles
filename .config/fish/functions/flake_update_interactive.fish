@@ -26,18 +26,26 @@ function flake_update_interactive --description 'Interactively update nix flake 
         gum style --foreground 8 "  Path: $flake_path"
         gum style --foreground 8 "  Host: $host_name"
 
-        # Show last check timestamp if cache exists
-        set cache_file "$XDG_CACHE_HOME/flake-updates.json"
-        if test -z "$XDG_CACHE_HOME"
-            set cache_file ~/.cache/flake-updates.json
-        end
-
-        if test -f "$cache_file"
-            set timestamp (jq -r '.timestamp // ""' $cache_file 2>/dev/null)
-            if test -n "$timestamp"
+        # Show current NixOS generation and last rebuild time
+        set system_profile /nix/var/nix/profiles/system
+        if test -L "$system_profile"
+            # Get generation number from symlink name (format: system-123-link)
+            set generation (basename (readlink $system_profile) | string replace 'system-' '' | string replace -- '-link' '')
+            
+            # Get timestamp of last rebuild (stat format differs by OS)
+            set timestamp ""
+            if test (uname) = Linux
+                set timestamp (stat -c %Y $system_profile 2>/dev/null)
+            else if test (uname) = Darwin
+                set timestamp (stat -f %m $system_profile 2>/dev/null)
+            end
+            
+            if test -n "$timestamp" -a -n "$generation"
                 set time_ago (__time_ago_from_timestamp "$timestamp")
                 if test -n "$time_ago"
-                    gum style --foreground 8 "  Last: $timestamp ($time_ago)"
+                    gum style --foreground 8 "  Generation: $generation (rebuilt $time_ago)"
+                else
+                    gum style --foreground 8 "  Generation: $generation"
                 end
             end
         end
@@ -176,6 +184,48 @@ function flake_update_interactive --description 'Interactively update nix flake 
         rm -f $lock_backup
 
         popd
+
+        # Write results to cache file for future --cache invocations
+        set cache_file "$XDG_CACHE_HOME/flake-updates.json"
+        if test -z "$XDG_CACHE_HOME"
+            set cache_file ~/.cache/flake-updates.json
+        end
+
+        # Ensure cache directory exists
+        mkdir -p (dirname $cache_file)
+
+        # Build JSON cache data
+        set update_count (count $input_options)
+        set timestamp (date -Iseconds)
+        
+        if test $update_count -gt 0
+            # Build updates array
+            set updates_json "["
+            set first true
+            for option in $input_options
+                # Parse: "name: current → new"
+                set parts (string split ": " $option)
+                set name $parts[1]
+                set versions (string split " → " $parts[2])
+                set current_short $versions[1]
+                set new_short $versions[2]
+                
+                if test "$first" = true
+                    set first false
+                else
+                    set updates_json "$updates_json,"
+                end
+                
+                set updates_json "$updates_json{\"name\":\"$name\",\"currentShort\":\"$current_short\",\"newShort\":\"$new_short\"}"
+            end
+            set updates_json "$updates_json]"
+            
+            # Write complete JSON to cache
+            echo "{\"timestamp\":\"$timestamp\",\"count\":$update_count,\"updates\":$updates_json}" >$cache_file
+        else
+            # No updates available
+            echo "{\"timestamp\":\"$timestamp\",\"count\":0,\"updates\":[]}" >$cache_file
+        end
     end # End of manual update check
 
     if test -z "$input_options"

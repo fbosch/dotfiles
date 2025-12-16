@@ -64,6 +64,11 @@ function flake_updates_daemon --description 'Manage the flake updates checker sy
                 end
             end
             
+            # Update cache metadata with current generation and rebuild timestamp
+            if command -q flake_update_cache_metadata
+                flake_update_cache_metadata >/dev/null 2>&1
+            end
+            
             # Trigger AGS start-menu refresh to re-read the updated cache
             if command -q ags
                 ags request -i start-menu-daemon '{"action":"refresh"}' >/dev/null 2>&1
