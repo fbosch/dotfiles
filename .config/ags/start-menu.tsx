@@ -31,6 +31,20 @@ interface FlakeUpdatesData {
   timestamp: string;
 }
 
+// Flatpak update data interface
+interface FlatpakUpdate {
+  name: string;
+  appId: string;
+  currentVersion: string;
+  newVersion: string;
+}
+
+interface FlatpakUpdatesData {
+  count: number;
+  updates: FlatpakUpdate[];
+  timestamp: string;
+}
+
 // Default menu items - matching design system
 const defaultMenuItems: MenuItem[] = [
   {
@@ -95,11 +109,14 @@ const defaultMenuItems: MenuItem[] = [
 let win: Astal.Window | null = null;
 let menuBox: Gtk.Box | null = null;
 let isVisible: boolean = false;
-let systemUpdatesCount: number = 0;
-let systemUpdatesData: FlakeUpdatesData | null = null;
+let flakeUpdatesCount: number = 0;
+let flakeUpdatesData: FlakeUpdatesData | null = null;
+let flatpakUpdatesCount: number = 0;
+let flatpakUpdatesData: FlatpakUpdatesData | null = null;
 const currentMenuItems: MenuItem[] = defaultMenuItems;
 const menuItemButtons: Map<string, Gtk.Button> = new Map();
-let updateBadgeButton: Gtk.Button | null = null;
+let flakeUpdateBadgeButton: Gtk.Button | null = null;
+let flatpakUpdateBadgeButton: Gtk.Button | null = null;
 
 // Function to read flake updates from cache file
 function readFlakeUpdatesCache(): FlakeUpdatesData | null {
@@ -121,6 +138,31 @@ function readFlakeUpdatesCache(): FlakeUpdatesData | null {
     return JSON.parse(jsonStr) as FlakeUpdatesData;
   } catch (e) {
     console.error("Error reading flake updates cache:", e);
+    return null;
+  }
+}
+
+
+// Function to read flatpak updates from cache file
+function readFlatpakUpdatesCache(): FlatpakUpdatesData | null {
+  try {
+    const cacheDir = GLib.get_user_cache_dir();
+    const cachePath = `${cacheDir}/flatpak-updates.json`;
+
+    if (!GLib.file_test(cachePath, GLib.FileTest.EXISTS)) {
+      return null;
+    }
+
+    const [success, contents] = GLib.file_get_contents(cachePath);
+    if (!success || !contents) {
+      return null;
+    }
+
+    const decoder = new TextDecoder("utf-8");
+    const jsonStr = decoder.decode(contents);
+    return JSON.parse(jsonStr) as FlatpakUpdatesData;
+  } catch (e) {
+    console.error("Error reading flatpak updates cache:", e);
     return null;
   }
 }
@@ -228,7 +270,8 @@ const menuCommands: Record<string, string> = {
   suspend: `${homeDir}/.config/hypr/scripts/confirm-suspend.sh`,
   restart: `${homeDir}/.config/hypr/scripts/confirm-restart.sh`,
   shutdown: `${homeDir}/.config/hypr/scripts/confirm-shutdown.sh`,
-  "system-updates": getSystemUpdatesCommand(),
+  "nixos-updates": getSystemUpdatesCommand(),
+  "flatpak-updates": getSystemUpdatesCommand(), // Both updated during NixOS rebuild
 };
 
 // Apply static CSS once on module load
@@ -420,27 +463,31 @@ function hideMenu() {
 }
 
 function showMenu(updatesCount?: number) {
-  // Read updates from cache if not provided
-  if (updatesCount === undefined) {
-    const cacheData = readFlakeUpdatesCache();
-    if (cacheData) {
-      const oldCount = systemUpdatesCount;
-      systemUpdatesCount = cacheData.count;
-      systemUpdatesData = cacheData;
-      // Rebuild menu if count changed
-      if (oldCount !== systemUpdatesCount) {
-        updateMenuItems();
-      }
+  // Read updates from both caches
+  const flakeCacheData = readFlakeUpdatesCache();
+  const flatpakCacheData = readFlatpakUpdatesCache();
+  
+  let needsUpdate = false;
+  
+  if (flakeCacheData) {
+    const oldCount = flakeUpdatesCount;
+    flakeUpdatesCount = flakeCacheData.count;
+    flakeUpdatesData = flakeCacheData;
+    if (oldCount !== flakeUpdatesCount) {
+      needsUpdate = true;
     }
-  } else if (updatesCount !== systemUpdatesCount) {
-    // Update system updates count if provided and different
-    systemUpdatesCount = updatesCount;
-    // Also try to load the details from cache
-    const cacheData = readFlakeUpdatesCache();
-    if (cacheData) {
-      systemUpdatesData = cacheData;
+  }
+  
+  if (flatpakCacheData) {
+    const oldCount = flatpakUpdatesCount;
+    flatpakUpdatesCount = flatpakCacheData.count;
+    flatpakUpdatesData = flatpakCacheData;
+    if (oldCount !== flatpakUpdatesCount) {
+      needsUpdate = true;
     }
-    // Update menu items if count changed
+  }
+  
+  if (needsUpdate) {
     updateMenuItems();
   }
 
@@ -499,7 +546,8 @@ function updateMenuItems() {
 
   // Clear button references
   menuItemButtons.clear();
-  updateBadgeButton = null;
+  flakeUpdateBadgeButton = null;
+  flatpakUpdateBadgeButton = null;
 
   // Add menu items
   currentMenuItems.forEach((item) => {
@@ -551,8 +599,8 @@ function updateMenuItems() {
       box.append(button);
       menuItemButtons.set(item.id, button);
 
-      // Add system updates badge if applicable
-      if (item.id === "system-settings" && systemUpdatesCount > 0) {
+      // Add NixOS flake updates badge if applicable
+      if (item.id === "system-settings" && flakeUpdatesCount > 0) {
         const badgeButton = new Gtk.Button();
         badgeButton.add_css_class("system-updates-badge");
         badgeButton.set_cursor_from_name("pointer");
@@ -571,7 +619,7 @@ function updateMenuItems() {
 
         // Text
         const badgeText = new Gtk.Label({
-          label: "System Updates",
+          label: "Updates",
           halign: Gtk.Align.START,
           hexpand: true,
         });
@@ -587,7 +635,7 @@ function updateMenuItems() {
         badgeWrapper.set_size_request(20, 20);
 
         const badge = new Gtk.Label({
-          label: systemUpdatesCount.toString(),
+          label: flakeUpdatesCount.toString(),
           halign: Gtk.Align.CENTER,
           valign: Gtk.Align.CENTER,
         });
@@ -599,28 +647,100 @@ function updateMenuItems() {
         badgeButton.set_child(badgeContent);
 
         // Add tooltip with update details if available
-        if (systemUpdatesData && systemUpdatesData.updates.length > 0) {
-          const tooltipText = systemUpdatesData.updates
+        if (flakeUpdatesData && flakeUpdatesData.updates.length > 0) {
+          const tooltipText = flakeUpdatesData.updates
             .map((u) => `• ${u.name}: ${u.currentShort} → ${u.newShort}`)
             .join("\n");
-          const timeAgo = formatTimeSince(systemUpdatesData.timestamp);
+          const timeAgo = formatTimeSince(flakeUpdatesData.timestamp);
           const lastCheckedText = timeAgo ? `\n\nLast checked: ${timeAgo}` : "";
           badgeButton.set_tooltip_text(
-            `${systemUpdatesCount} update${systemUpdatesCount !== 1 ? "s" : ""} available:\n${tooltipText}${lastCheckedText}`,
+            `${flakeUpdatesCount} update${flakeUpdatesCount !== 1 ? "s" : ""} available:\n${tooltipText}${lastCheckedText}`,
           );
         } else {
           badgeButton.set_tooltip_text(
-            `${systemUpdatesCount} update${systemUpdatesCount !== 1 ? "s" : ""} available`,
+            `${flakeUpdatesCount} update${flakeUpdatesCount !== 1 ? "s" : ""} available`,
           );
         }
 
         badgeButton.connect("clicked", () =>
-          executeMenuCommand("system-updates"),
+          executeMenuCommand("nixos-updates"),
         );
 
         box.append(badgeButton);
-        updateBadgeButton = badgeButton;
-        menuItemButtons.set("system-updates", badgeButton);
+        flakeUpdateBadgeButton = badgeButton;
+        menuItemButtons.set("nixos-updates", badgeButton);
+      }
+
+      // Add Flatpak updates badge if applicable
+      if (item.id === "system-settings" && flatpakUpdatesCount > 0) {
+        const badgeButton = new Gtk.Button();
+        badgeButton.add_css_class("system-updates-badge");
+        badgeButton.set_cursor_from_name("pointer");
+
+        const badgeContent = new Gtk.Box({
+          orientation: Gtk.Orientation.HORIZONTAL,
+          spacing: 8,
+          halign: Gtk.Align.FILL,
+        });
+        badgeContent.add_css_class("system-updates-content");
+
+        // Icon
+        const badgeIcon = new Gtk.Label({ label: "\uF187" }); // Package icon
+        badgeIcon.add_css_class("menu-item-icon");
+        badgeContent.append(badgeIcon);
+
+        // Text
+        const badgeText = new Gtk.Label({
+          label: "Flatpak Updates",
+          halign: Gtk.Align.START,
+          hexpand: true,
+        });
+        badgeText.add_css_class("menu-item-label");
+        badgeContent.append(badgeText);
+
+        // Badge count wrapper
+        const badgeWrapper = new Gtk.Box({
+          orientation: Gtk.Orientation.HORIZONTAL,
+          halign: Gtk.Align.END,
+          valign: Gtk.Align.CENTER,
+        });
+        badgeWrapper.set_size_request(20, 20);
+
+        const badge = new Gtk.Label({
+          label: flatpakUpdatesCount.toString(),
+          halign: Gtk.Align.CENTER,
+          valign: Gtk.Align.CENTER,
+        });
+        badge.add_css_class("updates-badge");
+
+        badgeWrapper.append(badge);
+        badgeContent.append(badgeWrapper);
+
+        badgeButton.set_child(badgeContent);
+
+        // Add tooltip with update details if available
+        if (flatpakUpdatesData && flatpakUpdatesData.updates.length > 0) {
+          const tooltipText = flatpakUpdatesData.updates
+            .map((u) => `• ${u.name}: ${u.currentVersion} → ${u.newVersion}`)
+            .join("\n");
+          const timeAgo = formatTimeSince(flatpakUpdatesData.timestamp);
+          const lastCheckedText = timeAgo ? `\n\nLast checked: ${timeAgo}` : "";
+          badgeButton.set_tooltip_text(
+            `${flatpakUpdatesCount} Flatpak update${flatpakUpdatesCount !== 1 ? "s" : ""} available:\n${tooltipText}${lastCheckedText}`,
+          );
+        } else {
+          badgeButton.set_tooltip_text(
+            `${flatpakUpdatesCount} Flatpak update${flatpakUpdatesCount !== 1 ? "s" : ""} available`,
+          );
+        }
+
+        badgeButton.connect("clicked", () =>
+          executeMenuCommand("flatpak-updates"),
+        );
+
+        box.append(badgeButton);
+        flatpakUpdateBadgeButton = badgeButton;
+        menuItemButtons.set("flatpak-updates", badgeButton);
       }
     }
   });
@@ -754,10 +874,16 @@ function createWindow() {
 app.start({
   main() {
     // Load cache data on startup for instant display
-    const cacheData = readFlakeUpdatesCache();
-    if (cacheData) {
-      systemUpdatesCount = cacheData.count;
-      systemUpdatesData = cacheData;
+    const flakeCacheData = readFlakeUpdatesCache();
+    if (flakeCacheData) {
+      flakeUpdatesCount = flakeCacheData.count;
+      flakeUpdatesData = flakeCacheData;
+    }
+    
+    const flatpakCacheData = readFlatpakUpdatesCache();
+    if (flatpakCacheData) {
+      flatpakUpdatesCount = flatpakCacheData.count;
+      flatpakUpdatesData = flatpakCacheData;
     }
 
     // Create window immediately for responsiveness
