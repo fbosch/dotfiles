@@ -249,11 +249,11 @@ function update() {
         }
       }
 
-      // Play sound when segment count changes
-      if (filledCount !== lastSegmentCount) {
+      // Play sound when segment count changes (but not on first initialization)
+      if (filledCount !== lastSegmentCount && lastSegmentCount !== -1) {
         playVolumeSound();
-        lastSegmentCount = filledCount;
       }
+      lastSegmentCount = filledCount;
     }
   }
 
