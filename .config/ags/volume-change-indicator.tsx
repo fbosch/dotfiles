@@ -74,6 +74,7 @@ app.apply_css(
   `
   window.volume-indicator {
     background-color: transparent;
+    border: none;
   }
   
   box.shadow-wrapper {
