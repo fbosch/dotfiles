@@ -264,7 +264,7 @@ const menuCommands: Record<string, string> = {
   updates: getSystemUpdatesCommand(), // Combined NixOS and Flatpak updates
   "system-settings": "gnome-tweaks",
   "lock-screen": "hyprlock",
-  applications: "io.github.flattool.Warehouse",
+  applications: "com.github.tchx84.Flatseal",
   documents: "nemo --existing-window /mnt/nas/FrederikDocs",
   pictures: `nemo --existing-window ${homeDir}/Pictures`,
   downloads: `nemo --existing-window ${homeDir}/Downloads`,
