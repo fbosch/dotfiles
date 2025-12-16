@@ -108,22 +108,17 @@ function readFlakeUpdatesCache(): FlakeUpdatesData | null {
     const cachePath = `${cacheDir}/flake-updates.json`;
     
     if (!GLib.file_test(cachePath, GLib.FileTest.EXISTS)) {
-      console.log("Flake updates cache file not found");
       return null;
     }
 
     const [success, contents] = GLib.file_get_contents(cachePath);
     if (!success || !contents) {
-      console.error("Failed to read flake updates cache");
       return null;
     }
 
     const decoder = new TextDecoder("utf-8");
     const jsonStr = decoder.decode(contents);
-    const data = JSON.parse(jsonStr) as FlakeUpdatesData;
-    
-    console.log(`Loaded flake updates: ${data.count} updates available`);
-    return data;
+    return JSON.parse(jsonStr) as FlakeUpdatesData;
   } catch (e) {
     console.error("Error reading flake updates cache:", e);
     return null;
@@ -189,32 +184,44 @@ const itemVariants = {
 };
 
 // Menu item commands - matching design system actions
+// Cache terminal lookup for performance
+let cachedTerminal: string | null = null;
 const getTerminal = (): string => {
+  if (cachedTerminal) return cachedTerminal;
+  
   // Check for preferred terminal in order: TERMINAL env var, then fallback to common terminals
   const terminal = GLib.getenv("TERMINAL");
-  if (terminal) return terminal;
+  if (terminal) {
+    cachedTerminal = terminal;
+    return terminal;
+  }
   
   // Check for common terminals
   const terminals = ["kitty", "wezterm", "alacritty", "foot", "gnome-terminal"];
   for (const term of terminals) {
     if (GLib.find_program_in_path(term)) {
+      cachedTerminal = term;
       return term;
     }
   }
   
-  return "xterm"; // Ultimate fallback
+  cachedTerminal = "xterm"; // Ultimate fallback
+  return cachedTerminal;
 };
+
+// Cache home directory for performance
+const homeDir = GLib.get_home_dir();
 
 const menuCommands: Record<string, string> = {
   "system-settings": "gnome-tweaks",
   "lock-screen": "hyprlock",
-  applications: `nemo --existing-window ${GLib.get_home_dir()}`,
+  applications: `nemo --existing-window ${homeDir}`,
   documents: "nemo --existing-window /mnt/nas/FrederikDocs",
-  pictures: `nemo --existing-window ${GLib.get_home_dir()}/Pictures`,
-  downloads: `nemo --existing-window ${GLib.get_home_dir()}/Downloads`,
-  suspend: `${GLib.get_home_dir()}/.config/hypr/scripts/confirm-suspend.sh`,
-  restart: `${GLib.get_home_dir()}/.config/hypr/scripts/confirm-restart.sh`,
-  shutdown: `${GLib.get_home_dir()}/.config/hypr/scripts/confirm-shutdown.sh`,
+  pictures: `nemo --existing-window ${homeDir}/Pictures`,
+  downloads: `nemo --existing-window ${homeDir}/Downloads`,
+  suspend: `${homeDir}/.config/hypr/scripts/confirm-suspend.sh`,
+  restart: `${homeDir}/.config/hypr/scripts/confirm-restart.sh`,
+  shutdown: `${homeDir}/.config/hypr/scripts/confirm-shutdown.sh`,
   "system-updates": `${getTerminal()} --class flake_update_terminal -e flake_update_interactive`,
 };
 
@@ -268,6 +275,47 @@ function applyStaticCSS() {
 
     button.menu-item:active {
       transform: scale(0.98);
+    }
+
+    /* Variant-specific styles - applied statically for performance */
+    button.menu-variant-default {
+      color: ${tokens.colors.foreground.primary.value};
+    }
+    button.menu-variant-default:hover {
+      background-color: #ffffff1a;
+    }
+    button.menu-variant-default:focus {
+      background-color: #ffffff1a;
+    }
+
+    button.menu-variant-warning {
+      color: ${tokens.colors.state.warning.value};
+    }
+    button.menu-variant-warning:hover {
+      background-color: ${tokens.colors.state.warning.value}1a;
+    }
+    button.menu-variant-warning:focus {
+      background-color: ${tokens.colors.state.warning.value}1a;
+    }
+
+    button.menu-variant-danger {
+      color: ${tokens.colors.state.error.value};
+    }
+    button.menu-variant-danger:hover {
+      background-color: ${tokens.colors.state.error.value}1a;
+    }
+    button.menu-variant-danger:focus {
+      background-color: ${tokens.colors.state.error.value}1a;
+    }
+
+    button.menu-variant-suspend {
+      color: ${tokens.colors.state.purple.value};
+    }
+    button.menu-variant-suspend:hover {
+      background-color: ${tokens.colors.state.purple.value}1a;
+    }
+    button.menu-variant-suspend:focus {
+      background-color: ${tokens.colors.state.purple.value}1a;
     }
 
     /* Menu item label layout */
@@ -366,10 +414,6 @@ function hideMenu() {
 }
 
 function showMenu(updatesCount?: number) {
-  console.log(
-    `showMenu called with updatesCount: ${updatesCount}, current count: ${systemUpdatesCount}`,
-  );
-
   // Read updates from cache if not provided
   if (updatesCount === undefined) {
     const cacheData = readFlakeUpdatesCache();
@@ -377,9 +421,8 @@ function showMenu(updatesCount?: number) {
       const oldCount = systemUpdatesCount;
       systemUpdatesCount = cacheData.count;
       systemUpdatesData = cacheData;
-      // Rebuild menu if count changed or if window already exists
-      if (win && oldCount !== systemUpdatesCount) {
-        console.log(`Updating menu items from cache: ${oldCount} -> ${systemUpdatesCount}`);
+      // Rebuild menu if count changed
+      if (oldCount !== systemUpdatesCount) {
         updateMenuItems();
       }
     }
@@ -391,18 +434,11 @@ function showMenu(updatesCount?: number) {
     if (cacheData) {
       systemUpdatesData = cacheData;
     }
-    console.log(`Updating menu items for new count: ${updatesCount}`);
-    // Only update menu items if updates count changed
+    // Update menu items if count changed
     updateMenuItems();
   }
 
-  if (!win) {
-    console.log("Window not created yet, creating...");
-    createWindow();
-  }
-
   if (win) {
-    console.log("Making window visible");
     win.set_visible(true);
     isVisible = true;
     // Clear any existing focus to ensure clean state
@@ -422,24 +458,17 @@ function showMenu(updatesCount?: number) {
     } catch (e) {
       console.error("Failed to show waybar:", e);
     }
-    // Don't autofocus any element - let keyboard navigation handle focus
-  } else {
-    console.log("Window is null, cannot show");
   }
 }
 
 function executeMenuCommand(itemId: string) {
   const command = menuCommands[itemId];
   if (command) {
-    console.log(`Executing command for ${itemId}: ${command}`);
     try {
       GLib.spawn_command_line_async(command);
-      console.log(`Command executed successfully`);
     } catch (e) {
       console.error(`Failed to execute command for ${itemId}:`, e);
     }
-  } else {
-    console.warn(`No command found for item: ${itemId}`);
   }
   hideMenu();
 }
@@ -468,7 +497,6 @@ function updateMenuItems() {
       separator.add_css_class("menu-divider");
       menuBox.append(separator);
     } else {
-      console.log(`Creating menu item: ${item.id}`);
       // Add menu item button
       const button = new Gtk.Button({ can_focus: true });
       button.add_css_class("menu-item");
@@ -494,26 +522,8 @@ function updateMenuItems() {
       });
       textLabel.add_css_class("menu-item-label");
 
-      // Apply variant colors
-      const variant = itemVariants[item.variant || "default"];
-      if (variant) {
-        button.add_css_class(`menu-variant-${item.variant || "default"}`);
-        // Apply variant-specific CSS
-        app.apply_css(
-          `
-           button.menu-variant-${item.variant || "default"} {
-             color: ${variant.textColor};
-           }
-           button.menu-variant-${item.variant || "default"}:hover {
-             background-color: ${variant.hoverBg};
-           }
-           button.menu-variant-${item.variant || "default"}:focus {
-             background-color: ${variant.focusBg};
-           }
-           `,
-          false,
-        );
-      }
+      // Apply variant colors via CSS class only (CSS is static)
+      button.add_css_class(`menu-variant-${item.variant || "default"}`);
 
       contentBox.append(textLabel);
 
@@ -521,7 +531,6 @@ function updateMenuItems() {
 
       // Connect click handler
       button.connect("clicked", () => {
-        console.log(`Menu item clicked: ${item.id}`);
         executeMenuCommand(item.id);
       });
 
@@ -604,7 +613,6 @@ function updateMenuItems() {
 }
 
 function createWindow() {
-  console.log("Creating start menu window...");
   win = new Astal.Window({
     name: "start-menu",
     namespace: "ags-start-menu",
@@ -690,14 +698,7 @@ function createWindow() {
         y < menuY ||
         y > menuY + menuHeight
       ) {
-        console.log(
-          `Click outside menu bounds: click=(${x},${y}), menu=(${menuX},${menuY},${menuWidth},${menuHeight})`,
-        );
         hideMenu();
-      } else {
-        console.log(
-          `Click inside menu bounds: click=(${x},${y}), menu=(${menuX},${menuY},${menuWidth},${menuHeight})`,
-        );
       }
     }
   });
@@ -738,9 +739,15 @@ function createWindow() {
 // IPC to receive show/hide commands via AGS messaging
 app.start({
   main() {
-    console.log("Start menu daemon: initializing...");
+    // Load cache data on startup for instant display
+    const cacheData = readFlakeUpdatesCache();
+    if (cacheData) {
+      systemUpdatesCount = cacheData.count;
+      systemUpdatesData = cacheData;
+    }
+    
+    // Create window immediately for responsiveness
     createWindow();
-    console.log("Start menu daemon: ready for requests");
     return null;
   },
   instanceName: "start-menu-daemon",
@@ -748,30 +755,23 @@ app.start({
     try {
       const request = argv.join(" ");
 
-      console.log(`IPC request received: "${request}"`);
-
       // Handle empty requests (daemon startup without arguments)
       if (!request || request.trim() === "") {
-        console.log("Empty request, responding ready");
         res("ready");
         return;
       }
 
       const data = JSON.parse(request);
-      console.log(`Parsed data:`, data);
 
       if (data.action === "show") {
-        console.log("Action: show");
         try {
           showMenu(data.systemUpdatesCount);
-          console.log("showMenu completed successfully");
           res("shown");
         } catch (e) {
           console.error("Error in showMenu:", e);
           res("error: show failed");
         }
       } else if (data.action === "toggle") {
-        console.log("Action: toggle");
         try {
           if (isVisible) {
             hideMenu();
@@ -785,10 +785,8 @@ app.start({
           res("error: toggle failed");
         }
       } else if (data.action === "is-visible") {
-        console.log("Action: is-visible");
         res(isVisible ? "true" : "false");
       } else if (data.action === "hide") {
-        console.log("Action: hide");
         try {
           hideMenu();
           res("hidden");
@@ -797,14 +795,12 @@ app.start({
           res("error: hide failed");
         }
       } else if (data.action === "update-count") {
-        console.log("Action: update-count");
         systemUpdatesCount = data.count || 0;
         if (isVisible) {
           updateMenuItems();
         }
         res("updated");
       } else {
-        console.log(`Unknown action: ${data.action}`);
         res("unknown action");
       }
     } catch (e) {
