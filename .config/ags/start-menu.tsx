@@ -892,6 +892,12 @@ app.start({
         return;
       }
 
+      if (data.action === "refresh") {
+        refreshCacheData();
+        res("refreshed");
+        return;
+      }
+
       // Unknown action
       res("unknown action");
     } catch (e) {

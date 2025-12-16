@@ -258,6 +258,11 @@ function flake_update_interactive --description 'Interactively update nix flake 
                 if test $rebuild_status -eq 0
                     gum style --foreground 2 "✓ System rebuilt successfully!"
 
+                    # Trigger start-menu cache refresh to update counters
+                    if command -q ags
+                        ags request -i start-menu-daemon '{"action":"refresh"}' >/dev/null 2>&1 &
+                    end
+
                     # Send desktop notification if --notify flag was passed
                     if set -q _flag_notify
                         # Generate custom icon using nerd-icon-gen.sh
