@@ -3,7 +3,8 @@ function flake_update_interactive --description 'Interactively update nix flake 
     # -r/--rebuild: Prompt to rebuild NixOS after successful update
     # -c/--cache: Read available updates from cache file instead of checking
     # -h/--header: Show decorative ASCII header with flake info
-    argparse r/rebuild c/cache h/header -- $argv
+    # -n/--notify: Send desktop notification after successful rebuild
+    argparse r/rebuild c/cache h/header n/notify -- $argv
     or return
 
     # Default to ~/nixos if no path provided
@@ -318,8 +319,61 @@ function flake_update_interactive --description 'Interactively update nix flake 
 
                 if test $rebuild_status -eq 0
                     gum style --foreground 2 "✓ System rebuilt successfully!"
+
+                    # Send desktop notification if --notify flag was passed
+                    if set -q _flag_notify
+                        # Generate custom icon using nerd-icon-gen.sh
+                        set icon_path (mktemp --suffix=.svg)
+                        ~/.config/hypr/scripts/nerd-icon-gen.sh "" 64 "#4ade80" "$icon_path" >/dev/null 2>&1
+
+                        if command -q notify-send
+                            notify-send \
+                                --app-name="NixOS Update" \
+                                --icon="$icon_path" \
+                                --urgency=normal \
+                                "NixOS Update Complete" \
+                                "System has been successfully rebuilt and switched. A restart may be required for some changes."
+                        else if command -q dunstify
+                            dunstify \
+                                --appname="NixOS Update" \
+                                --icon="$icon_path" \
+                                --urgency=normal \
+                                "NixOS Update Complete" \
+                                "System has been successfully rebuilt and switched. A restart may be required for some changes."
+                        end
+
+                        # Clean up temp icon file after a short delay
+                        fish -c "sleep 5; rm -f '$icon_path'" &
+                    end
                 else
                     gum style --foreground 1 "✗ System rebuild failed"
+
+                    # Send failure notification if --notify flag was passed
+                    if set -q _flag_notify
+                        # Generate custom icon using nerd-icon-gen.sh (red for error)
+                        set icon_path (mktemp --suffix=.svg)
+                        ~/.config/hypr/scripts/nerd-icon-gen.sh "󱈸" 64 "#ef4444" "$icon_path" >/dev/null 2>&1
+
+                        if command -q notify-send
+                            notify-send \
+                                --app-name="NixOS Update" \
+                                --icon="$icon_path" \
+                                --urgency=critical \
+                                "NixOS Update Failed" \
+                                "The system update encountered an error. Please check the terminal output for details."
+                        else if command -q dunstify
+                            dunstify \
+                                --appname="NixOS Update" \
+                                --icon="$icon_path" \
+                                --urgency=critical \
+                                "NixOS Update Failed" \
+                                "The system update encountered an error. Please check the terminal output for details."
+                        end
+
+                        # Clean up temp icon file after a short delay
+                        fish -c "sleep 5; rm -f '$icon_path'" &
+                    end
+
                     return 1
                 end
             else

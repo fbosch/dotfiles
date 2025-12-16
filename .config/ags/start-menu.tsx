@@ -1,8 +1,8 @@
 import app from "ags/gtk4/app";
 import { Astal } from "ags/gtk4";
+import Gdk from "gi://Gdk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
-import Gdk from "gi://Gdk?version=4.0";
 import tokens from "../../design-system/tokens.json";
 
 // Configuration
@@ -236,9 +236,10 @@ const getSystemUpdatesCommand = (): string => {
   // Add --rebuild flag to prompt for system rebuild after updates
   // Add --cache flag to use cached update data (instant startup)
   // Add --header flag to show decorative ASCII header with flake info
+  // Add --notify flag to send desktop notification after successful rebuild
   // IMPORTANT: Put the entire Fish command in quotes so flags are passed to the function
   const fishCommand =
-    'fish -c "flake_update_interactive --rebuild --cache --header"';
+    'fish -c "flake_update_interactive --rebuild --cache --header --notify"';
 
   // Different terminals use different flags for setting window class/app-id
   switch (terminal) {
@@ -274,178 +275,51 @@ const menuCommands: Record<string, string> = {
   "flatpak-updates": getSystemUpdatesCommand(), // Both updated during NixOS rebuild
 };
 
-// Apply static CSS once on module load
-function applyStaticCSS() {
-  const transitionStyle = ENABLE_ANIMATIONS
-    ? "transition: all 150ms ease;"
-    : "";
+// Periodic cache refresh every 5 minutes (300 seconds)
+let cacheRefreshTimer: number | null = null;
 
-  app.apply_css(
-    `
-    /* Window container - fullscreen transparent to capture clicks */
-    window.start-menu {
-      background-color: transparent;
-      border: none;
-      padding: 0;
-    }
+function startCacheRefreshTimer() {
+  // Clear any existing timer
+  if (cacheRefreshTimer !== null) {
+    GLib.source_remove(cacheRefreshTimer);
+  }
 
-    /* Menu container - matches design-system StartMenu component */
-    /* bg-background-secondary/90 border border-white/15 backdrop-blur-sm shadow rounded-lg p-1 w-52 */
-    box.start-menu-container {
-      background-color: rgba(45, 45, 45, 0.90);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 6px;
-      padding: 5px; /* Better internal spacing */
-      min-width: 208px; /* w-52 = 13rem = 208px */
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
-    }
-
-    /* Menu item base - matches design-system menuItemVariants */
-    /* w-full flex items-center gap-2 px-2 py-1 text-sm rounded-md transition-colors duration-150 */
-    button.menu-item {
-      padding: 2px 6px; /* More compact: reduced from 4px 8px */
-      font-size: 14px;
-      border-radius: 6px;
-      min-height: 24px; /* More compact: reduced from 28px */
-      ${transitionStyle}
-      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      border: none;
-      background-color: transparent;
-    }
-
-    button.menu-item:hover {
-      background-color: rgba(255, 255, 255, 0.1);
-    }
-
-    button.menu-item:focus {
-      outline: 2px solid rgba(255, 255, 255, 0.3);
-      outline-offset: 2px;
-    }
-
-    button.menu-item:active {
-      transform: scale(0.98);
-    }
-
-    /* Variant-specific styles - applied statically for performance */
-    button.menu-variant-default {
-      color: ${tokens.colors.foreground.primary.value};
-    }
-    button.menu-variant-default:hover {
-      background-color: #ffffff1a;
-    }
-    button.menu-variant-default:focus {
-      background-color: #ffffff1a;
-    }
-
-    button.menu-variant-warning {
-      color: ${tokens.colors.state.warning.value};
-    }
-    button.menu-variant-warning:hover {
-      background-color: ${tokens.colors.state.warning.value}1a;
-    }
-    button.menu-variant-warning:focus {
-      background-color: ${tokens.colors.state.warning.value}1a;
-    }
-
-    button.menu-variant-danger {
-      color: ${tokens.colors.state.error.value};
-    }
-    button.menu-variant-danger:hover {
-      background-color: ${tokens.colors.state.error.value}1a;
-    }
-    button.menu-variant-danger:focus {
-      background-color: ${tokens.colors.state.error.value}1a;
-    }
-
-    button.menu-variant-suspend {
-      color: ${tokens.colors.state.purple.value};
-    }
-    button.menu-variant-suspend:hover {
-      background-color: ${tokens.colors.state.purple.value}1a;
-    }
-    button.menu-variant-suspend:focus {
-      background-color: ${tokens.colors.state.purple.value}1a;
-    }
-
-    /* Menu item label layout */
-    box.menu-item-content {
-      /* spacing handled by GTK widget properties */
-    }
-
-    /* Icon styling */
-    label.menu-item-icon {
-      font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
-      font-size: 14px;
-      min-width: 14px;
-      max-width: 14px;
-      min-height: 14px;
-      max-height: 14px;
-      text-align: center;
-    }
-
-    /* Text styling */
-    label.menu-item-label {
-      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 14px;
-      font-weight: 400;
-    }
-
-    /* Divider */
-    separator.menu-divider {
-      margin: 4px 0;
-      background-color: rgba(255, 255, 255, 0.1);
-      min-height: 1px;
-    }
-
-    /* System updates badge button */
-    button.system-updates-badge {
-      padding: 2px 6px;
-      font-size: 14px;
-      border-radius: 6px;
-      min-height: 24px;
-      ${transitionStyle}
-      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      border: none;
-      background-color: transparent;
-    }
-
-    button.system-updates-badge:hover {
-      background-color: rgba(255, 255, 255, 0.1);
-    }
-
-    button.system-updates-badge:focus {
-      outline: 2px solid rgba(255, 255, 255, 0.3);
-      outline-offset: 2px;
-    }
-
-    /* Badge content layout */
-    box.system-updates-content {
-      /* spacing handled by GTK widget properties */
-    }
-
-    /* Updates badge - matches design-system Tag component primary variant */
-    box.updates-badge {
-      background-color: ${tokens.colors.accent.primary.value};
-      color: #ffffff;
-      padding: 2px 4px;
-      font-weight: 600;
-      border-radius: 12px; /* fully rounded pill shape */
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    }
-
-    box.updates-badge label {
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      color: #ffffff;
-    }
-  `,
-    false,
-  );
+  // Set up timer to refresh cache every 5 minutes
+  cacheRefreshTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300000, () => {
+    refreshCacheData();
+    return GLib.SOURCE_CONTINUE; // Continue the timer
+  });
 }
 
-// Apply static CSS on module load
-applyStaticCSS();
+function refreshCacheData() {
+  const flakeCacheData = readFlakeUpdatesCache();
+  const flatpakCacheData = readFlatpakUpdatesCache();
+
+  let needsMenuUpdate = false;
+
+  if (flakeCacheData) {
+    const oldCount = flakeUpdatesCount;
+    flakeUpdatesCount = flakeCacheData.count;
+    flakeUpdatesData = flakeCacheData;
+    if (oldCount !== flakeUpdatesCount) {
+      needsMenuUpdate = true;
+    }
+  }
+
+  if (flatpakCacheData) {
+    const oldCount = flatpakUpdatesCount;
+    flatpakUpdatesCount = flatpakCacheData.count;
+    flatpakUpdatesData = flatpakCacheData;
+    if (oldCount !== flatpakUpdatesCount) {
+      needsMenuUpdate = true;
+    }
+  }
+
+  // Update menu if counts changed (always update, not just when visible)
+  if (needsMenuUpdate) {
+    updateMenuItems();
+  }
+}
 
 function hideMenu() {
   if (win) {
@@ -615,7 +489,7 @@ function updateMenuItems() {
           badgeBox.add_css_class("updates-badge");
 
           const badgeLabel = new Gtk.Label({
-            label: `  ${flakeUpdatesCount.toString()}`,
+            label: ` ${flakeUpdatesCount.toString()}`,
             halign: Gtk.Align.CENTER,
             valign: Gtk.Align.CENTER,
           });
@@ -637,7 +511,7 @@ function updateMenuItems() {
           badgeBox.add_css_class("updates-badge");
 
           const badgeLabel = new Gtk.Label({
-            label: `  ${flatpakUpdatesCount.toString()}`,
+            label: flatpakUpdatesCount.toString(),
             halign: Gtk.Align.CENTER,
             valign: Gtk.Align.CENTER,
           });
@@ -658,13 +532,9 @@ function updateMenuItems() {
               .join("\n");
             const timeAgo = formatTimeSince(flakeUpdatesData.timestamp);
             const lastCheckedText = timeAgo ? ` (checked ${timeAgo})` : "";
-            tooltipParts.push(
-              `NixOS Updates${lastCheckedText}:\n${tooltipText}`,
-            );
+            tooltipParts.push(`NixOS Updates${lastCheckedText}:\n${tooltipText}`);
           } else {
-            tooltipParts.push(
-              `${flakeUpdatesCount} NixOS update${flakeUpdatesCount !== 1 ? "s" : ""} available`,
-            );
+            tooltipParts.push(`${flakeUpdatesCount} NixOS update${flakeUpdatesCount !== 1 ? "s" : ""} available`);
           }
         }
         if (flatpakUpdatesCount > 0) {
@@ -674,13 +544,9 @@ function updateMenuItems() {
               .join("\n");
             const timeAgo = formatTimeSince(flatpakUpdatesData.timestamp);
             const lastCheckedText = timeAgo ? ` (checked ${timeAgo})` : "";
-            tooltipParts.push(
-              `Flatpak Updates${lastCheckedText}:\n${tooltipText}`,
-            );
+            tooltipParts.push(`Flatpak Updates${lastCheckedText}:\n${tooltipText}`);
           } else {
-            tooltipParts.push(
-              `${flatpakUpdatesCount} Flatpak update${flatpakUpdatesCount !== 1 ? "s" : ""} available`,
-            );
+            tooltipParts.push(`${flatpakUpdatesCount} Flatpak update${flatpakUpdatesCount !== 1 ? "s" : ""} available`);
           }
         }
         if (tooltipParts.length > 0) {
@@ -812,37 +678,160 @@ function createWindow() {
 
   outerBox.append(menuBox);
   win.set_child(outerBox);
+}
 
-  // Position menu above Waybar with margin
+// Apply static CSS once on module load
+function applyStaticCSS() {
+  const transitionStyle = ENABLE_ANIMATIONS
+    ? "transition: all 150ms ease;"
+    : "";
+
   app.apply_css(
     `
+    /* Window container - fullscreen transparent to capture clicks */
+    window.start-menu {
+      background-color: transparent;
+      border: none;
+      padding: 0;
+    }
+
+    /* Menu container - matches design-system StartMenu component */
     box.start-menu-container {
+      background-color: rgba(45, 45, 45, 0.90);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      padding: 5px;
+      min-width: 208px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
       margin-bottom: 53px; /* Waybar height (45px) + gap (8px) */
       margin-left: 8px;
+    }
+
+    /* Menu item base */
+    button.menu-item {
+      padding: 2px 6px;
+      font-size: 14px;
+      border-radius: 6px;
+      min-height: 24px;
+      ${transitionStyle}
+      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+      border: none;
+      background-color: transparent;
+    }
+
+    button.menu-item:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    button.menu-item:focus {
+      outline: 2px solid rgba(255, 255, 255, 0.3);
+      outline-offset: 2px;
+    }
+
+    button.menu-item:active {
+      transform: scale(0.98);
+    }
+
+    /* Variant-specific styles */
+    button.menu-variant-default {
+      color: ${tokens.colors.foreground.primary.value};
+    }
+    button.menu-variant-default:hover {
+      background-color: #ffffff1a;
+    }
+    button.menu-variant-default:focus {
+      background-color: #ffffff1a;
+    }
+
+    button.menu-variant-warning {
+      color: ${tokens.colors.state.warning.value};
+    }
+    button.menu-variant-warning:hover {
+      background-color: ${tokens.colors.state.warning.value}1a;
+    }
+    button.menu-variant-warning:focus {
+      background-color: ${tokens.colors.state.warning.value}1a;
+    }
+
+    button.menu-variant-danger {
+      color: ${tokens.colors.state.error.value};
+    }
+    button.menu-variant-danger:hover {
+      background-color: ${tokens.colors.state.error.value}1a;
+    }
+    button.menu-variant-danger:focus {
+      background-color: ${tokens.colors.state.error.value}1a;
+    }
+
+    button.menu-variant-suspend {
+      color: ${tokens.colors.state.purple.value};
+    }
+    button.menu-variant-suspend:hover {
+      background-color: ${tokens.colors.state.purple.value}1a;
+    }
+    button.menu-variant-suspend:focus {
+      background-color: ${tokens.colors.state.purple.value}1a;
+    }
+
+    /* Icon styling */
+    label.menu-item-icon {
+      font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
+      font-size: 16px;
+      min-width: 20px;
+    }
+
+    /* Label styling */
+    label.menu-item-label {
+      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+      font-size: 14px;
+      color: inherit;
+    }
+
+    /* Update badges */
+    box.updates-badge {
+      background-color: ${tokens.colors.accent.primary.value};
+      color: ${tokens.colors.foreground.primary.value};
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 6px;
+    }
+
+    box.updates-badge label {
+      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      color: inherit;
+    }
+
+    /* Menu dividers */
+    separator.menu-divider {
+      background-color: rgba(255, 255, 255, 0.1);
+      min-height: 1px;
+      margin: 4px 0;
     }
   `,
     false,
   );
 }
 
+// Apply static CSS on module load
+applyStaticCSS();
+
+
 // IPC to receive show/hide commands via AGS messaging
 app.start({
   main() {
-    // Load cache data on startup for instant display
-    const flakeCacheData = readFlakeUpdatesCache();
-    if (flakeCacheData) {
-      flakeUpdatesCount = flakeCacheData.count;
-      flakeUpdatesData = flakeCacheData;
-    }
-
-    const flatpakCacheData = readFlatpakUpdatesCache();
-    if (flatpakCacheData) {
-      flatpakUpdatesCount = flatpakCacheData.count;
-      flatpakUpdatesData = flatpakCacheData;
-    }
-
     // Create window immediately for responsiveness
     createWindow();
+
+    // Load cache data on startup and update menu
+    refreshCacheData();
+
+    // Start periodic cache refresh timer (every 5 minutes)
+    startCacheRefreshTimer();
+
     return null;
   },
   instanceName: "start-menu-daemon",
