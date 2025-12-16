@@ -238,7 +238,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({
                   </span>
                   <span className="text-left">System Updates</span>
                 </span>
-                <Tag variant="danger">{systemUpdatesCount}</Tag>
+                <Tag variant="primary">{systemUpdatesCount}</Tag>
               </button>
             )}
           </div>

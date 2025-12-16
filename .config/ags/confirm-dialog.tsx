@@ -36,7 +36,7 @@ const variants = {
     confirmBg: tokens.colors.state.error.value,
     confirmHoverBg: tokens.colors.state["error-hover"].value,
     confirmFocusColor: tokens.colors.state.error.value,
-    confirmTextColor: tokens.colors.state["error-text"].value,
+    confirmTextColor: "#ffffff",
   },
   warning: {
     iconColor: tokens.colors.state.warning.value,
@@ -121,11 +121,12 @@ function applyStaticCSS() {
     button.dialog-button {
       padding: 4px 12px;
       font-size: 14px;
-      font-weight: 500;
+      font-weight: 700;
       border-radius: 6px;
       min-height: 28px;
       transition: all 150ms ease;
       font-family: "${tokens.typography.fontFamily.button.value}", "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     }
     
     button.dialog-button label {

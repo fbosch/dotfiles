@@ -91,6 +91,7 @@ export default {
       textShadow: {
         waybar: "0 0 2px rgba(0, 0, 0, 0.3)",
         "waybar-button": "1px 1px rgba(0, 0, 0, 0.5)",
+        subtle: "0 1px 2px rgba(0, 0, 0, 0.2)",
       },
     },
   },
