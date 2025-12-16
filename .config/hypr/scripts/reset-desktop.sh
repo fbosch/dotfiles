@@ -6,7 +6,7 @@ hyprctl reload
 
 # Gracefully stop relevant background services if they are running.
 pkill waybar 2>/dev/null || true
-pkill -f "waybar-hover.sh" 2>/dev/null || true
+pkill waycorner 2>/dev/null || true
 pkill gjs 2>/dev/null || true  # Kill AGS instances
 
 sleep 0.2
@@ -15,7 +15,6 @@ sleep 0.2
 uwsm app -- waybar &
 uwsm app -- swaync-client -R &
 uwsm app -- swaync-client -rs &
-uwsm app -- bash ~/.config/hypr/scripts/waybar-hover.sh &
 
 # Launch AGS daemons via start-daemons script
 uwsm app -- bash ~/.config/ags/start-daemons.sh &

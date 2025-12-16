@@ -3,8 +3,8 @@
 
 [toggle_waybar]
 enter_command = ["pkill", "-SIGUSR1", "waybar"]
-exit_command = ["sleep", "0.5", "pkill", "-SIGUSR2", "waybar"]
+exit_command = ["pkill", "-SIGUSR2", "waybar"]
 locations = ["bottom"]
 margin = 0
-size = 50
+size = 25
 timeout_ms = 450

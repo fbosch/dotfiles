@@ -48,7 +48,7 @@ const CACHE_DURATION = 30; // ms - cache to handle rapid volume changes
 
 function getVolumeInfo(): { volume: number; muted: boolean } {
   const now = Date.now();
-  
+
   // Return cached value if very recent (for rapid key presses)
   if (now - volumeCache.timestamp < CACHE_DURATION) {
     return { volume: volumeCache.volume, muted: volumeCache.muted };
@@ -61,7 +61,9 @@ function getVolumeInfo(): { volume: number; muted: boolean } {
     );
 
     if (!ok || exit_status !== 0) {
-      return volumeCache.timestamp > 0 ? volumeCache : { volume: 0, muted: false };
+      return volumeCache.timestamp > 0
+        ? volumeCache
+        : { volume: 0, muted: false };
     }
 
     const volumeText = new TextDecoder().decode(stdout);
@@ -75,11 +77,13 @@ function getVolumeInfo(): { volume: number; muted: boolean } {
 
     // Update cache
     volumeCache = { volume, muted, timestamp: now };
-    
+
     return { volume, muted };
   } catch (e) {
     console.error("Failed to get volume info:", e);
-    return volumeCache.timestamp > 0 ? volumeCache : { volume: 0, muted: false };
+    return volumeCache.timestamp > 0
+      ? volumeCache
+      : { volume: 0, muted: false };
   }
 }
 
@@ -111,7 +115,7 @@ app.apply_css(
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 9999px;
     padding: ${size.containerPadding};
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   }
   
   box.icon-container {
@@ -175,28 +179,27 @@ let progressSquares: Gtk.Box[] = [];
 let iconLabel: Gtk.Label | null = null;
 let volumeLabel: Gtk.Label | null = null;
 let isVisible = false;
-let soundDebounceTimeout: number | null = null;
-const SOUND_DEBOUNCE = 150; // ms - wait for changes to stop before playing sound
 
 // Cache last update state to avoid redundant DOM operations
 let lastVolume = -1;
 let lastMuted = false;
 let lastSpeakerState: SpeakerState | null = null;
+let lastSegmentCount = -1;
 
 function update() {
   if (!iconLabel || !volumeLabel) return;
 
   const { volume, muted } = getVolumeInfo();
-  
+
   // Early return if nothing changed
   if (volume === lastVolume && muted === lastMuted) return;
-  
+
   const speakerState = getSpeakerState(volume, muted);
 
   // Update icon only if state changed
   if (speakerState !== lastSpeakerState) {
     iconLabel.set_label(speakerIcons[speakerState]);
-    
+
     // Toggle muted class only if changed
     const wasMuted = lastSpeakerState === "muted";
     const isMuted = speakerState === "muted";
@@ -213,7 +216,7 @@ function update() {
   // Update volume label only if changed
   if (volume !== lastVolume || muted !== lastMuted) {
     volumeLabel.set_label(muted ? "Muted" : `${volume}%`);
-    
+
     // Toggle muted class only if changed
     const shouldBeMuted = muted || volume === 0;
     const wasMutedLabel = lastMuted || lastVolume === 0;
@@ -228,14 +231,14 @@ function update() {
 
   // Update progress squares only if volume changed
   if (volume !== lastVolume || muted !== lastMuted) {
-    const filledCount = muted ? 0 : Math.round((volume / 100) * 16);
-    const lastFilledCount = lastMuted ? 0 : Math.round((lastVolume / 100) * 16);
-    
+    const filledCount = muted ? 0 : Math.round((volume / 100) * 20);
+    const lastFilledCount = lastMuted ? 0 : Math.round((lastVolume / 100) * 20);
+
     // Only update squares that changed state
     if (filledCount !== lastFilledCount) {
       const minChange = Math.min(filledCount, lastFilledCount);
       const maxChange = Math.max(filledCount, lastFilledCount);
-      
+
       for (let i = minChange; i < maxChange; i++) {
         if (i < filledCount) {
           progressSquares[i].add_css_class("filled");
@@ -245,9 +248,15 @@ function update() {
           progressSquares[i].add_css_class("empty");
         }
       }
+
+      // Play sound when segment count changes
+      if (filledCount !== lastSegmentCount) {
+        playVolumeSound();
+        lastSegmentCount = filledCount;
+      }
     }
   }
-  
+
   // Update cache
   lastVolume = volume;
   lastMuted = muted;
@@ -281,44 +290,28 @@ function hideIndicator() {
   });
 }
 
-// Play volume feedback sound
-// Play volume feedback sound (debounced and low priority)
+// Play volume feedback sound immediately when segment changes
 function playVolumeSound() {
-  // Cancel any pending sound
-  if (soundDebounceTimeout !== null) {
-    GLib.source_remove(soundDebounceTimeout);
-    soundDebounceTimeout = null;
-  }
-  
-  // Schedule sound to play after changes stop (debounced)
-  soundDebounceTimeout = GLib.timeout_add(GLib.PRIORITY_LOW, SOUND_DEBOUNCE, () => {
-    const { muted } = getVolumeInfo();
-    
-    if (!muted) {
-      // Play a short beep sound asynchronously (non-blocking)
-      // Using sox to generate a 30ms sine wave at 800Hz, played through pw-play
-      try {
-        GLib.spawn_command_line_async(
-          "sh -c 'sox -n -t wav - synth 0.03 sine 800 vol 0.2 2>/dev/null | pw-play - --volume=0.5 2>/dev/null &'",
-        );
-      } catch (e) {
-        // Silently fail if sound playback fails
-      }
+  const { muted } = getVolumeInfo();
+
+  if (!muted) {
+    // Play a short beep sound asynchronously (non-blocking)
+    // Using sox to generate a 30ms sine wave at 800Hz, played through pw-play
+    try {
+      GLib.spawn_command_line_async(
+        "sh -c 'sox -n -t wav - synth 0.03 sine 800 vol 0.2 2>/dev/null | pw-play - --volume=0.5 2>/dev/null &'",
+      );
+    } catch (e) {
+      // Silently fail if sound playback fails
     }
-    
-    soundDebounceTimeout = null;
-    return false;
-  });
+  }
 }
 
 function showIndicator() {
   if (!win || !shadowWrapper) return;
 
-  // Update volume info before showing
+  // Update volume info before showing (this will play sound if segment changed)
   update();
-  
-  // Play volume feedback sound
-  playVolumeSound();
 
   // Show window if not visible
   if (!isVisible) {
@@ -393,7 +386,7 @@ function createWindow() {
   progressContainer.add_css_class("progress-container");
 
   progressSquares = [];
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < 20; i++) {
     const square = new Gtk.Box({
       orientation: Gtk.Orientation.HORIZONTAL,
       hexpand: false,
