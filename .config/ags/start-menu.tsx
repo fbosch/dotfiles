@@ -113,7 +113,6 @@ let flakeUpdatesCount: number = 0;
 let flakeUpdatesData: FlakeUpdatesData | null = null;
 let flatpakUpdatesCount: number = 0;
 let flatpakUpdatesData: FlatpakUpdatesData | null = null;
-const currentMenuItems: MenuItem[] = defaultMenuItems;
 const menuItemButtons: Map<string, Gtk.Button> = new Map();
 let flakeUpdateBadgeButton: Gtk.Button | null = null;
 let flatpakUpdateBadgeButton: Gtk.Button | null = null;
@@ -261,6 +260,7 @@ const getSystemUpdatesCommand = (): string => {
 };
 
 const menuCommands: Record<string, string> = {
+  updates: getSystemUpdatesCommand(), // Combined NixOS and Flatpak updates
   "system-settings": "gnome-tweaks",
   "lock-screen": "hyprlock",
   applications: "io.github.flattool.Warehouse",
@@ -546,8 +546,24 @@ function updateMenuItems() {
   flakeUpdateBadgeButton = null;
   flatpakUpdateBadgeButton = null;
 
+  // Build dynamic menu with Updates item if there are updates
+  const menuItems: MenuItem[] = [];
+  
+  // Add Updates item at the top if there are any updates
+  if (flakeUpdatesCount > 0 || flatpakUpdatesCount > 0) {
+    menuItems.push({
+      id: "updates",
+      label: "Updates",
+      icon: "\uE896", // Download icon
+      variant: "default",
+    });
+  }
+  
+  // Add all default menu items
+  menuItems.push(...defaultMenuItems);
+
   // Add menu items
-  currentMenuItems.forEach((item) => {
+  menuItems.forEach((item) => {
     if (item.id.startsWith("divider")) {
       // Add divider
       const separator = new Gtk.Separator({
@@ -565,7 +581,7 @@ function updateMenuItems() {
       const contentBox = new Gtk.Box({
         orientation: Gtk.Orientation.HORIZONTAL,
         spacing: 8,
-        halign: Gtk.Align.START,
+        halign: Gtk.Align.FILL,
       });
       contentBox.add_css_class("menu-item-content");
 
@@ -578,6 +594,7 @@ function updateMenuItems() {
       const textLabel = new Gtk.Label({
         label: item.label,
         halign: Gtk.Align.START,
+        hexpand: true,
       });
       textLabel.add_css_class("menu-item-label");
 
@@ -585,6 +602,83 @@ function updateMenuItems() {
       button.add_css_class(`menu-variant-${item.variant || "default"}`);
 
       contentBox.append(textLabel);
+
+      // Add update badges if this is the updates item
+      if (item.id === "updates") {
+        // Add flake updates badge if applicable
+        if (flakeUpdatesCount > 0) {
+          const badgeBox = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            halign: Gtk.Align.END,
+            valign: Gtk.Align.CENTER,
+          });
+          badgeBox.add_css_class("updates-badge");
+
+          const badgeLabel = new Gtk.Label({
+            label: ` ${flakeUpdatesCount.toString()}`,
+            halign: Gtk.Align.CENTER,
+            valign: Gtk.Align.CENTER,
+          });
+
+          badgeBox.append(badgeLabel);
+          contentBox.append(badgeBox);
+
+          // Store reference for tooltip update
+          flakeUpdateBadgeButton = button;
+        }
+
+        // Add flatpak updates badge if applicable
+        if (flatpakUpdatesCount > 0) {
+          const badgeBox = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            halign: Gtk.Align.END,
+            valign: Gtk.Align.CENTER,
+          });
+          badgeBox.add_css_class("updates-badge");
+
+          const badgeLabel = new Gtk.Label({
+            label: flatpakUpdatesCount.toString(),
+            halign: Gtk.Align.CENTER,
+            valign: Gtk.Align.CENTER,
+          });
+
+          badgeBox.append(badgeLabel);
+          contentBox.append(badgeBox);
+
+          // Store reference for tooltip update
+          flatpakUpdateBadgeButton = button;
+        }
+
+        // Set tooltip with both update types if applicable
+        const tooltipParts: string[] = [];
+        if (flakeUpdatesCount > 0) {
+          if (flakeUpdatesData && flakeUpdatesData.updates.length > 0) {
+            const tooltipText = flakeUpdatesData.updates
+              .map((u) => `• ${u.name}: ${u.currentShort} → ${u.newShort}`)
+              .join("\n");
+            const timeAgo = formatTimeSince(flakeUpdatesData.timestamp);
+            const lastCheckedText = timeAgo ? ` (checked ${timeAgo})` : "";
+            tooltipParts.push(`NixOS Updates${lastCheckedText}:\n${tooltipText}`);
+          } else {
+            tooltipParts.push(`${flakeUpdatesCount} NixOS update${flakeUpdatesCount !== 1 ? "s" : ""} available`);
+          }
+        }
+        if (flatpakUpdatesCount > 0) {
+          if (flatpakUpdatesData && flatpakUpdatesData.updates.length > 0) {
+            const tooltipText = flatpakUpdatesData.updates
+              .map((u) => `• ${u.name}: ${u.currentVersion} → ${u.newVersion}`)
+              .join("\n");
+            const timeAgo = formatTimeSince(flatpakUpdatesData.timestamp);
+            const lastCheckedText = timeAgo ? ` (checked ${timeAgo})` : "";
+            tooltipParts.push(`Flatpak Updates${lastCheckedText}:\n${tooltipText}`);
+          } else {
+            tooltipParts.push(`${flatpakUpdatesCount} Flatpak update${flatpakUpdatesCount !== 1 ? "s" : ""} available`);
+          }
+        }
+        if (tooltipParts.length > 0) {
+          button.set_tooltip_text(tooltipParts.join("\n\n"));
+        }
+      }
 
       button.set_child(contentBox);
 
@@ -595,148 +689,6 @@ function updateMenuItems() {
 
       box.append(button);
       menuItemButtons.set(item.id, button);
-
-      // Add NixOS flake updates badge if applicable
-      if (item.id === "system-settings" && flakeUpdatesCount > 0) {
-        const badgeButton = new Gtk.Button();
-        badgeButton.add_css_class("system-updates-badge");
-        badgeButton.set_cursor_from_name("pointer");
-
-        const badgeContent = new Gtk.Box({
-          orientation: Gtk.Orientation.HORIZONTAL,
-          spacing: 8,
-          halign: Gtk.Align.FILL,
-        });
-        badgeContent.add_css_class("system-updates-content");
-
-        // Icon
-        const badgeIcon = new Gtk.Label({ label: "\uE895" }); // Download icon
-        badgeIcon.add_css_class("menu-item-icon");
-        badgeContent.append(badgeIcon);
-
-        // Text
-        const badgeText = new Gtk.Label({
-          label: "Updates",
-          halign: Gtk.Align.START,
-          hexpand: true,
-        });
-        badgeText.add_css_class("menu-item-label");
-        badgeContent.append(badgeText);
-
-        // Badge count with snowflake icon - wrapped in a box for padding support
-        const badgeBox = new Gtk.Box({
-          orientation: Gtk.Orientation.HORIZONTAL,
-          halign: Gtk.Align.END,
-          valign: Gtk.Align.CENTER,
-        });
-        badgeBox.add_css_class("updates-badge");
-
-        const badge = new Gtk.Label({
-          label: `  ${flakeUpdatesCount.toString()}`,
-          halign: Gtk.Align.CENTER,
-          valign: Gtk.Align.CENTER,
-        });
-
-        badgeBox.append(badge);
-        badgeContent.append(badgeBox);
-
-        badgeButton.set_child(badgeContent);
-
-        // Add tooltip with update details if available
-        if (flakeUpdatesData && flakeUpdatesData.updates.length > 0) {
-          const tooltipText = flakeUpdatesData.updates
-            .map((u) => `• ${u.name}: ${u.currentShort} → ${u.newShort}`)
-            .join("\n");
-          const timeAgo = formatTimeSince(flakeUpdatesData.timestamp);
-          const lastCheckedText = timeAgo ? `\n\nLast checked: ${timeAgo}` : "";
-          badgeButton.set_tooltip_text(
-            `${flakeUpdatesCount} update${flakeUpdatesCount !== 1 ? "s" : ""} available:\n${tooltipText}${lastCheckedText}`,
-          );
-        } else {
-          badgeButton.set_tooltip_text(
-            `${flakeUpdatesCount} update${flakeUpdatesCount !== 1 ? "s" : ""} available`,
-          );
-        }
-
-        badgeButton.connect("clicked", () =>
-          executeMenuCommand("nixos-updates"),
-        );
-
-        box.append(badgeButton);
-        flakeUpdateBadgeButton = badgeButton;
-        menuItemButtons.set("nixos-updates", badgeButton);
-      }
-
-      // Add Flatpak updates badge if applicable
-      if (item.id === "system-settings" && flatpakUpdatesCount > 0) {
-        const badgeButton = new Gtk.Button();
-        badgeButton.add_css_class("system-updates-badge");
-        badgeButton.set_cursor_from_name("pointer");
-
-        const badgeContent = new Gtk.Box({
-          orientation: Gtk.Orientation.HORIZONTAL,
-          spacing: 8,
-          halign: Gtk.Align.FILL,
-        });
-        badgeContent.add_css_class("system-updates-content");
-
-        // Icon
-        const badgeIcon = new Gtk.Label({ label: "\uF187" }); // Package icon
-        badgeIcon.add_css_class("menu-item-icon");
-        badgeContent.append(badgeIcon);
-
-        // Text
-        const badgeText = new Gtk.Label({
-          label: "Flatpak Updates",
-          halign: Gtk.Align.START,
-          hexpand: true,
-        });
-        badgeText.add_css_class("menu-item-label");
-        badgeContent.append(badgeText);
-
-        // Badge count - wrapped in a box for padding support
-        const badgeBox = new Gtk.Box({
-          orientation: Gtk.Orientation.HORIZONTAL,
-          halign: Gtk.Align.END,
-          valign: Gtk.Align.CENTER,
-        });
-        badgeBox.add_css_class("updates-badge");
-
-        const badge = new Gtk.Label({
-          label: ` ${flatpakUpdatesCount.toString()}`,
-          halign: Gtk.Align.CENTER,
-          valign: Gtk.Align.CENTER,
-        });
-
-        badgeBox.append(badge);
-        badgeContent.append(badgeBox);
-
-        badgeButton.set_child(badgeContent);
-
-        // Add tooltip with update details if available
-        if (flatpakUpdatesData && flatpakUpdatesData.updates.length > 0) {
-          const tooltipText = flatpakUpdatesData.updates
-            .map((u) => `• ${u.name}: ${u.currentVersion} → ${u.newVersion}`)
-            .join("\n");
-          const timeAgo = formatTimeSince(flatpakUpdatesData.timestamp);
-          const lastCheckedText = timeAgo ? `\n\nLast checked: ${timeAgo}` : "";
-          badgeButton.set_tooltip_text(
-            `${flatpakUpdatesCount} Flatpak update${flatpakUpdatesCount !== 1 ? "s" : ""} available:\n${tooltipText}${lastCheckedText}`,
-          );
-        } else {
-          badgeButton.set_tooltip_text(
-            `${flatpakUpdatesCount} Flatpak update${flatpakUpdatesCount !== 1 ? "s" : ""} available`,
-          );
-        }
-
-        badgeButton.connect("clicked", () =>
-          executeMenuCommand("flatpak-updates"),
-        );
-
-        box.append(badgeButton);
-        flatpakUpdateBadgeButton = badgeButton;
-        menuItemButtons.set("flatpak-updates", badgeButton);
-      }
     }
   });
 }
