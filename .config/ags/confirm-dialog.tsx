@@ -36,18 +36,21 @@ const variants = {
     confirmBg: tokens.colors.state.error.value,
     confirmHoverBg: tokens.colors.state["error-hover"].value,
     confirmFocusColor: tokens.colors.state.error.value,
+    confirmTextColor: tokens.colors.state["error-text"].value,
   },
   warning: {
     iconColor: tokens.colors.state.warning.value,
     confirmBg: tokens.colors.state.warning.value,
     confirmHoverBg: tokens.colors.state["warning-hover"].value,
     confirmFocusColor: tokens.colors.state.warning.value,
+    confirmTextColor: tokens.colors.state["warning-text"].value,
   },
   info: {
     iconColor: tokens.colors.accent.primary.value,
     confirmBg: tokens.colors.accent.primary.value,
     confirmHoverBg: tokens.colors.accent.hover.value,
     confirmFocusColor: tokens.colors.accent.primary.value,
+    confirmTextColor: "#ffffff", // Primary buttons use white text
   },
 };
 
@@ -155,7 +158,6 @@ function applyStaticCSS() {
     /* Confirm button - matches semantic variants (danger/warning/primary) */
     /* shadow-sm hover:shadow focus-visible:outline-2 */
     button.confirm {
-      color: #ffffff;
       border: none;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     }
@@ -188,15 +190,16 @@ function updateVariantCSS(variant: "danger" | "warning" | "info") {
     label.dialog-icon {
       color: ${colors.iconColor};
     }
-    
+
     button.confirm {
       background-color: ${colors.confirmBg};
+      color: ${colors.confirmTextColor};
     }
-    
+
     button.confirm:hover {
       background-color: ${colors.confirmHoverBg};
     }
-    
+
     button.confirm:focus {
       outline: 2px solid ${colors.confirmFocusColor};
       outline-offset: 2px;
@@ -349,17 +352,17 @@ function createWindow() {
   const buttonBox = new Gtk.Box({
     orientation: Gtk.Orientation.HORIZONTAL,
     spacing: 8,
-    homogeneous: false,
+    homogeneous: true,
   });
 
-  cancelButton = new Gtk.Button({ can_focus: true, hexpand: true });
+  cancelButton = new Gtk.Button({ can_focus: true, hexpand: true, halign: Gtk.Align.FILL });
   cancelButton.add_css_class("dialog-button");
   cancelButton.add_css_class("cancel");
   cancelButton.set_child(new Gtk.Label({ label: currentConfig.cancelLabel }));
   cancelButton.set_cursor_from_name("pointer");
   cancelButton.connect("clicked", () => hideDialog());
 
-  confirmButton = new Gtk.Button({ can_focus: true, hexpand: true });
+  confirmButton = new Gtk.Button({ can_focus: true, hexpand: true, halign: Gtk.Align.FILL });
   confirmButton.add_css_class("dialog-button");
   confirmButton.add_css_class("confirm");
   confirmButton.set_child(new Gtk.Label({ label: currentConfig.confirmLabel }));

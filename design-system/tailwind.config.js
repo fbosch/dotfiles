@@ -26,10 +26,13 @@ export default {
         state: {
           success: "#73bc6f",
           "success-hover": "#82cc7d",
+          "success-text": "#00480b",
           warning: "#dea721",
           "warning-hover": "#e8b230",
+          "warning-text": "#613900",
           error: "#e35245",
           "error-hover": "#ff6b5a",
+          "error-text": "#400000",
           info: "#0067c0",
         },
         border: {

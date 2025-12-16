@@ -127,6 +127,13 @@ const componentVariants = cva("shared-base-styles", {
 - Mono: JetBrains Mono (developer-friendly)
 - Specialized: Nerd Font symbols, Fluent icons
 
+**Icon Fonts:**
+
+- **Segoe Fluent Icons** (`font-fluent`): Primary icon font for UI elements
+- **Segoe MDL2 Assets**: Legacy icon font (use Fluent Icons instead when possible)
+- Icon reference: [Segoe MDL2 Assets Documentation](https://github.com/MicrosoftDocs/windows-dev-docs/blob/docs/hub/apps/design/style/segoe-ui-symbol-font.md)
+- Use unicode characters directly in JSX: `<span className="font-fluent"></span>` (E713 = Settings icon)
+
 **Size Scale:**
 
 - Uses Tailwind defaults: `text-xs` (0.75rem), `text-sm` (0.875rem), `text-base` (1rem)
