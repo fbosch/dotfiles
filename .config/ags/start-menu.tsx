@@ -752,32 +752,38 @@ function applyStaticCSS() {
     }
 
     button.menu-variant-warning {
-      color: ${tokens.colors.state.warning.value};
+      color: ${tokens.colors.foreground.primary.value};
     }
     button.menu-variant-warning:hover {
+      color: ${tokens.colors.state.warning.value};
       background-color: ${tokens.colors.state.warning.value}1a;
     }
     button.menu-variant-warning:focus {
+      color: ${tokens.colors.state.warning.value};
       background-color: ${tokens.colors.state.warning.value}1a;
     }
 
     button.menu-variant-danger {
-      color: ${tokens.colors.state.error.value};
+      color: ${tokens.colors.foreground.primary.value};
     }
     button.menu-variant-danger:hover {
+      color: ${tokens.colors.state.error.value};
       background-color: ${tokens.colors.state.error.value}1a;
     }
     button.menu-variant-danger:focus {
+      color: ${tokens.colors.state.error.value};
       background-color: ${tokens.colors.state.error.value}1a;
     }
 
     button.menu-variant-suspend {
-      color: ${tokens.colors.state.purple.value};
+      color: ${tokens.colors.foreground.primary.value};
     }
     button.menu-variant-suspend:hover {
+      color: ${tokens.colors.state.purple.value};
       background-color: ${tokens.colors.state.purple.value}1a;
     }
     button.menu-variant-suspend:focus {
+      color: ${tokens.colors.state.purple.value};
       background-color: ${tokens.colors.state.purple.value}1a;
     }
 
