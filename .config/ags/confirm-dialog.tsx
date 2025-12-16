@@ -119,7 +119,7 @@ function updateCSS(config: ConfirmConfig) {
     /* h-7 px-3 text-xs (sm size) font-button (SF Pro Rounded) font-medium rounded-md transition-all duration-150 */
     button.dialog-button {
       padding: 4px 12px;
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 500;
       border-radius: 6px;
       min-height: 28px;
