@@ -85,27 +85,27 @@ const currentMenuItems: MenuItem[] = defaultMenuItems;
 const menuItemButtons: Map<string, Gtk.Button> = new Map();
 let updateBadgeButton: Gtk.Button | null = null;
 
-// Variant color schemes
+// Variant color schemes - using proper state colors from design tokens
 const itemVariants = {
   default: {
     textColor: tokens.colors.foreground.primary.value,
-    hoverBg: "rgba(255, 255, 255, 0.1)",
-    focusBg: "rgba(255, 255, 255, 0.1)",
+    hoverBg: "#ffffff1a", // 10% opacity white
+    focusBg: "#ffffff1a",
   },
   warning: {
     textColor: tokens.colors.state.warning.value,
-    hoverBg: "rgba(255, 255, 255, 0.1)",
-    focusBg: "rgba(255, 255, 255, 0.1)",
+    hoverBg: `${tokens.colors.state.warning.value}1a`, // 10% opacity
+    focusBg: `${tokens.colors.state.warning.value}1a`,
   },
   danger: {
     textColor: tokens.colors.state.error.value,
-    hoverBg: "rgba(255, 255, 255, 0.1)",
-    focusBg: "rgba(255, 255, 255, 0.1)",
+    hoverBg: `${tokens.colors.state.error.value}1a`, // 10% opacity
+    focusBg: `${tokens.colors.state.error.value}1a`,
   },
   suspend: {
     textColor: tokens.colors.state.purple.value,
-    hoverBg: "rgba(167, 139, 250, 0.1)", // purple with alpha
-    focusBg: "rgba(167, 139, 250, 0.1)",
+    hoverBg: `${tokens.colors.state.purple.value}1a`, // 10% opacity
+    focusBg: `${tokens.colors.state.purple.value}1a`,
   },
 };
 
@@ -145,7 +145,7 @@ function applyStaticCSS() {
       background-color: rgba(45, 45, 45, 0.90);
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 6px;
-      padding: 4px;
+      padding: 5px; /* Better internal spacing */
       min-width: 208px; /* w-52 = 13rem = 208px */
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
     }
@@ -153,10 +153,10 @@ function applyStaticCSS() {
     /* Menu item base - matches design-system menuItemVariants */
     /* w-full flex items-center gap-2 px-2 py-1 text-xs rounded-md transition-colors duration-150 */
     button.menu-item {
-      padding: 4px 8px;
+      padding: 2px 6px; /* More compact: reduced from 4px 8px */
       font-size: 12px;
       border-radius: 6px;
-      min-height: 28px;
+      min-height: 24px; /* More compact: reduced from 28px */
       ${transitionStyle}
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       border: none;
@@ -361,13 +361,35 @@ function updateMenuItems() {
       iconLabel.add_css_class("menu-item-icon");
       contentBox.append(iconLabel);
 
-      // Add text
-      const textLabel = new Gtk.Label({
-        label: item.label,
-        halign: Gtk.Align.START,
-      });
-      textLabel.add_css_class("menu-item-label");
-      contentBox.append(textLabel);
+       // Add text
+       const textLabel = new Gtk.Label({
+         label: item.label,
+         halign: Gtk.Align.START,
+       });
+       textLabel.add_css_class("menu-item-label");
+
+       // Apply variant colors
+       const variant = itemVariants[item.variant || "default"];
+       if (variant) {
+         button.add_css_class(`menu-variant-${item.variant || "default"}`);
+         // Apply variant-specific CSS
+         app.apply_css(
+           `
+           button.menu-variant-${item.variant || "default"} {
+             color: ${variant.textColor};
+           }
+           button.menu-variant-${item.variant || "default"}:hover {
+             background-color: ${variant.hoverBg};
+           }
+           button.menu-variant-${item.variant || "default"}:focus {
+             background-color: ${variant.focusBg};
+           }
+           `,
+           false,
+         );
+       }
+
+       contentBox.append(textLabel);
 
       button.set_child(contentBox);
 
