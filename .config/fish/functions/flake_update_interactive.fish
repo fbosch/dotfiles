@@ -24,6 +24,85 @@ function flake_update_interactive --description 'Interactively update nix flake 
         '
         gum style --foreground 8 "  Path: $flake_path"
         gum style --foreground 8 "  Host: $host_name"
+
+        # Show last check timestamp if cache exists
+        set cache_file "$XDG_CACHE_HOME/flake-updates.json"
+        if test -z "$XDG_CACHE_HOME"
+            set cache_file ~/.cache/flake-updates.json
+        end
+
+        if test -f "$cache_file"
+            set timestamp (jq -r '.timestamp // ""' $cache_file 2>/dev/null)
+            if test -n "$timestamp"
+                # Calculate time difference
+                set then_epoch (date -d "$timestamp" +%s 2>/dev/null)
+                set now_epoch (date +%s)
+                set diff_seconds (math $now_epoch - $then_epoch)
+
+                # Convert to human-readable format
+                set days (math "floor($diff_seconds / 86400)")
+                set hours (math "floor(($diff_seconds % 86400) / 3600)")
+                set minutes (math "floor(($diff_seconds % 3600) / 60)")
+
+                set time_ago ""
+                if test $days -gt 0
+                    if test $hours -gt 0
+                        if test $days -eq 1
+                            if test $hours -eq 1
+                                set time_ago "$days day and $hours hour ago"
+                            else
+                                set time_ago "$days day and $hours hours ago"
+                            end
+                        else
+                            if test $hours -eq 1
+                                set time_ago "$days days and $hours hour ago"
+                            else
+                                set time_ago "$days days and $hours hours ago"
+                            end
+                        end
+                    else
+                        if test $days -eq 1
+                            set time_ago "$days day ago"
+                        else
+                            set time_ago "$days days ago"
+                        end
+                    end
+                else if test $hours -gt 0
+                    if test $minutes -gt 0
+                        if test $hours -eq 1
+                            if test $minutes -eq 1
+                                set time_ago "$hours hour and $minutes minute ago"
+                            else
+                                set time_ago "$hours hour and $minutes minutes ago"
+                            end
+                        else
+                            if test $minutes -eq 1
+                                set time_ago "$hours hours and $minutes minute ago"
+                            else
+                                set time_ago "$hours hours and $minutes minutes ago"
+                            end
+                        end
+                    else
+                        if test $hours -eq 1
+                            set time_ago "$hours hour ago"
+                        else
+                            set time_ago "$hours hours ago"
+                        end
+                    end
+                else if test $minutes -gt 0
+                    if test $minutes -eq 1
+                        set time_ago "$minutes minute ago"
+                    else
+                        set time_ago "$minutes minutes ago"
+                    end
+                else
+                    set time_ago "just now"
+                end
+
+                gum style --foreground 8 "  Last: $timestamp ($time_ago)"
+            end
+        end
+
         echo ""
     end
 
