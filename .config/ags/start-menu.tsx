@@ -5,12 +5,15 @@ import Gtk from "gi://Gtk?version=4.0";
 import Gdk from "gi://Gdk?version=4.0";
 import tokens from "../../design-system/tokens.json";
 
+// Configuration
+const ENABLE_ANIMATIONS = false; // Set to false for better performance on slower systems
+
 // Menu item interface - matching design system
 interface MenuItem {
   id: string;
   label: string;
   icon: string;
-  variant?: "default" | "warning" | "danger";
+  variant?: "default" | "warning" | "danger" | "suspend";
 }
 
 // Default menu items - matching design system
@@ -54,10 +57,10 @@ const defaultMenuItems: MenuItem[] = [
   },
   { id: "divider-2", label: "", icon: "", variant: "default" },
   {
-    id: "sleep",
-    label: "Sleep",
+    id: "suspend",
+    label: "Suspend",
     icon: "\uE708", // QuietHours
-    variant: "default",
+    variant: "suspend",
   },
   {
     id: "restart",
@@ -99,6 +102,11 @@ const itemVariants = {
     hoverBg: "rgba(255, 255, 255, 0.1)",
     focusBg: "rgba(255, 255, 255, 0.1)",
   },
+  suspend: {
+    textColor: tokens.colors.state.purple.value,
+    hoverBg: "rgba(167, 139, 250, 0.1)", // purple with alpha
+    focusBg: "rgba(167, 139, 250, 0.1)",
+  },
 };
 
 // Menu item commands - matching design system actions
@@ -106,10 +114,10 @@ const menuCommands: Record<string, string> = {
   "system-settings": "nwg-look",
   "lock-screen": "hyprlock",
   applications: "io.github.flattool.Warehouse",
-  documents: "xdg-open ~/Documents",
-  pictures: "xdg-open ~/Pictures",
-  downloads: "xdg-open ~/Downloads",
-  sleep: "systemctl suspend",
+  documents: "nemo --existing-window /mnt/nas/FrederikDocs",
+  pictures: `nemo --existing-window ${GLib.get_home_dir()}/Pictures`,
+  downloads: `nemo --existing-window ${GLib.get_home_dir()}/Downloads`,
+  suspend: "systemctl suspend",
   restart: "systemctl reboot",
   shutdown: "systemctl poweroff",
   "system-updates":
@@ -118,6 +126,10 @@ const menuCommands: Record<string, string> = {
 
 // Apply static CSS once on module load
 function applyStaticCSS() {
+  const transitionStyle = ENABLE_ANIMATIONS
+    ? "transition: all 150ms ease;"
+    : "";
+
   app.apply_css(
     `
     /* Window container - fullscreen transparent to capture clicks */
@@ -145,7 +157,7 @@ function applyStaticCSS() {
       font-size: 12px;
       border-radius: 6px;
       min-height: 28px;
-      transition: all 150ms ease;
+      ${transitionStyle}
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       border: none;
       background-color: transparent;
@@ -195,7 +207,7 @@ function applyStaticCSS() {
       font-size: 12px;
       border-radius: 6px;
       min-height: 28px;
-      transition: all 150ms ease;
+      ${transitionStyle}
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       border: none;
       background-color: transparent;
@@ -246,7 +258,9 @@ function hideMenu() {
 }
 
 function showMenu(updatesCount?: number) {
-  console.log(`showMenu called with updatesCount: ${updatesCount}, current count: ${systemUpdatesCount}`);
+  console.log(
+    `showMenu called with updatesCount: ${updatesCount}, current count: ${systemUpdatesCount}`,
+  );
 
   // Update system updates count if provided
   if (updatesCount !== undefined && updatesCount !== systemUpdatesCount) {
@@ -291,11 +305,15 @@ function showMenu(updatesCount?: number) {
 function executeMenuCommand(itemId: string) {
   const command = menuCommands[itemId];
   if (command) {
+    console.log(`Executing command for ${itemId}: ${command}`);
     try {
       GLib.spawn_command_line_async(command);
+      console.log(`Command executed successfully`);
     } catch (e) {
       console.error(`Failed to execute command for ${itemId}:`, e);
     }
+  } else {
+    console.warn(`No command found for item: ${itemId}`);
   }
   hideMenu();
 }
@@ -417,9 +435,9 @@ function createWindow() {
   // Configure window properties - fullscreen transparent to capture all clicks
   win.set_anchor(
     Astal.WindowAnchor.TOP |
-    Astal.WindowAnchor.BOTTOM |
-    Astal.WindowAnchor.LEFT |
-    Astal.WindowAnchor.RIGHT
+      Astal.WindowAnchor.BOTTOM |
+      Astal.WindowAnchor.LEFT |
+      Astal.WindowAnchor.RIGHT,
   );
   win.set_layer(Astal.Layer.OVERLAY);
   win.set_exclusivity(Astal.Exclusivity.IGNORE);
@@ -473,11 +491,11 @@ function createWindow() {
   win.add_controller(keyController);
 
   // Add click-anywhere handler - close menu on any click when visible
-  // We need to check if the click target is outside the menu container
+  // Use 'released' instead of 'pressed' to let button clicks process first
   const clickController = new Gtk.GestureClick();
-  clickController.connect("pressed", (_controller, _n_press, x, y) => {
+  clickController.connect("released", (_controller, _n_press, x, y) => {
     if (!isVisible) return;
-    
+
     // Check if click is outside the menu container
     if (menuBox) {
       const allocation = menuBox.get_allocation();
@@ -485,13 +503,22 @@ function createWindow() {
       const menuY = allocation.y;
       const menuWidth = allocation.width;
       const menuHeight = allocation.height;
-      
+
       // If click is outside menu bounds, close menu
-      if (x < menuX || x > menuX + menuWidth || y < menuY || y > menuY + menuHeight) {
-        console.log(`Click outside menu bounds: click=(${x},${y}), menu=(${menuX},${menuY},${menuWidth},${menuHeight})`);
+      if (
+        x < menuX ||
+        x > menuX + menuWidth ||
+        y < menuY ||
+        y > menuY + menuHeight
+      ) {
+        console.log(
+          `Click outside menu bounds: click=(${x},${y}), menu=(${menuX},${menuY},${menuWidth},${menuHeight})`,
+        );
         hideMenu();
       } else {
-        console.log(`Click inside menu bounds: click=(${x},${y}), menu=(${menuX},${menuY},${menuWidth},${menuHeight})`);
+        console.log(
+          `Click inside menu bounds: click=(${x},${y}), menu=(${menuX},${menuY},${menuWidth},${menuHeight})`,
+        );
       }
     }
   });
@@ -503,7 +530,7 @@ function createWindow() {
     valign: Gtk.Align.END,
     halign: Gtk.Align.START,
   });
-  
+
   // Create menu container
   menuBox = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,

@@ -21,7 +21,7 @@ import { cn } from "../../utils/cn";
  * - Documents: Opens file manager in ~/Documents
  * - Pictures: Opens file manager in ~/Pictures
  * - Downloads: Opens file manager in ~/Downloads
- * - Sleep: Suspends the system
+ * - Suspend: Suspends the system
  * - Restart: Reboots the system
  * - Shutdown: Powers off the system
  *
@@ -33,22 +33,27 @@ import { cn } from "../../utils/cn";
  */
 
 const menuVariants = cva(
-  "bg-background-secondary/90 border border-white/15 backdrop-blur-sm shadow-[0_8px_32px_rgba(0,0,0,0.2),0_2px_8px_rgba(0,0,0,0.1)] rounded-lg p-1 w-52 transition-all duration-200",
+  "bg-background-secondary/90 border border-white/15 backdrop-blur-sm shadow-[0_8px_32px_rgba(0,0,0,0.2),0_2px_8px_rgba(0,0,0,0.1)] rounded-lg p-1 w-52",
   {
     variants: {
       isOpen: {
         true: "opacity-100 scale-100",
         false: "opacity-0 scale-y-0 pointer-events-none",
       },
+      animated: {
+        true: "transition-all duration-200",
+        false: "",
+      },
     },
     defaultVariants: {
       isOpen: false,
+      animated: true,
     },
   },
 );
 
 const menuItemVariants = cva(
-  "w-full flex items-center gap-2 px-2 py-1 text-xs rounded-md transition-colors duration-150 cursor-pointer",
+  "w-full flex items-center gap-2 px-2 py-1 text-xs rounded-md cursor-pointer",
   {
     variants: {
       variant: {
@@ -58,10 +63,17 @@ const menuItemVariants = cva(
           "text-state-warning hover:bg-state-warning/10 focus-visible:bg-state-warning/10 focus-visible:outline-none",
         danger:
           "text-state-error hover:bg-state-error/10 focus-visible:bg-state-error/10 focus-visible:outline-none",
+        purple:
+          "text-state-purple hover:bg-state-purple/10 focus-visible:bg-state-purple/10 focus-visible:outline-none",
+      },
+      animated: {
+        true: "transition-colors duration-150",
+        false: "",
       },
     },
     defaultVariants: {
       variant: "default",
+      animated: true,
     },
   },
 );
@@ -70,7 +82,7 @@ export interface MenuItem {
   id: string;
   label: string;
   icon: string;
-  variant?: "default" | "warning" | "danger";
+  variant?: "default" | "warning" | "danger" | "purple";
   onClick?: () => void;
 }
 
@@ -88,6 +100,10 @@ export interface StartMenuProps extends VariantProps<typeof menuVariants> {
    * Shows conditional badge below System Settings when > 0
    */
   systemUpdatesCount?: number;
+  /**
+   * Disable animations for better performance on slower systems
+   */
+  disableAnimations?: boolean;
   /**
    * Callback when menu should close
    */
@@ -146,10 +162,10 @@ const defaultMenuItems: MenuItem[] = [
   },
   { id: "divider-2", label: "", icon: "", variant: "default" },
   {
-    id: "sleep",
-    label: "Sleep",
+    id: "suspend",
+    label: "Suspend",
     icon: "\uE708", // QuietHours
-    variant: "default",
+    variant: "purple",
   },
   {
     id: "restart",
@@ -169,6 +185,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({
   isOpen = false,
   items = defaultMenuItems,
   systemUpdatesCount = 0,
+  disableAnimations = false,
   onClose,
   onItemClick,
   className,
@@ -192,7 +209,11 @@ export const StartMenu: React.FC<StartMenuProps> = ({
 
   return (
     <div
-      className={cn(menuVariants({ isOpen }), "origin-bottom-left", className)}
+      className={cn(
+        menuVariants({ isOpen, animated: !disableAnimations }),
+        "origin-bottom-left",
+        className,
+      )}
       style={style}
       role="menu"
       aria-hidden={!isOpen}
@@ -211,7 +232,10 @@ export const StartMenu: React.FC<StartMenuProps> = ({
           <div key={item.id}>
             <button
               type="button"
-              className={menuItemVariants({ variant: item.variant })}
+              className={menuItemVariants({
+                variant: item.variant,
+                animated: !disableAnimations,
+              })}
               onClick={() => handleItemClick(item)}
               role="menuitem"
               tabIndex={isOpen ? 0 : -1}
@@ -224,7 +248,10 @@ export const StartMenu: React.FC<StartMenuProps> = ({
             {showUpdateBadge && (
               <button
                 type="button"
-                className="w-full flex items-center justify-between gap-2 px-2 py-1 text-xs rounded-md transition-colors duration-150 cursor-pointer text-foreground-primary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none pl-6"
+                className={cn(
+                  "w-full flex items-center justify-between gap-2 px-2 py-1 text-xs rounded-md cursor-pointer text-foreground-primary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none pl-6",
+                  !disableAnimations && "transition-colors duration-150",
+                )}
                 onClick={() => {
                   if (onItemClick) onItemClick("system-updates");
                   if (onClose) onClose();

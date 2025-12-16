@@ -100,3 +100,63 @@ export const WithSystemUpdates: Story = {
     ),
   ],
 };
+
+/**
+ * With animations disabled (better performance on slower systems)
+ */
+export const WithoutAnimations: Story = {
+  args: {
+    isOpen: true,
+    systemUpdatesCount: 3,
+    disableAnimations: true,
+  },
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div className="bg-background-primary min-h-screen p-8">
+        <Story />
+      </div>
+    ),
+  ],
+};
+
+/**
+ * Purple variant demo - showing the suspend action color
+ */
+export const PurpleVariant: Story = {
+  args: {
+    isOpen: true,
+    items: [
+      {
+        id: "system-settings",
+        label: "System Settings",
+        icon: "\uE713",
+        variant: "default",
+      },
+      {
+        id: "suspend",
+        label: "Suspend",
+        icon: "\uE708",
+        variant: "purple",
+      },
+      {
+        id: "restart",
+        label: "Restart",
+        icon: "\uE777",
+        variant: "warning",
+      },
+      {
+        id: "shutdown",
+        label: "Shutdown",
+        icon: "\uE7E8",
+        variant: "danger",
+      },
+    ],
+  },
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div className="bg-background-primary min-h-screen p-8">
+        <Story />
+      </div>
+    ),
+  ],
+};

@@ -34,7 +34,7 @@ This design system creates a familiar yet refined desktop environment for tech-s
 - **Background layers** (`primary` → `secondary` → `tertiary`): Progressive lightening (#202020 → #2d2d2d → #373737) creates depth through subtle contrast
 - **Foreground tiers** (`primary` → `secondary` → `tertiary`): Decreasing opacity (#ffffff → #cccccc → #999999) establishes typographic hierarchy
 - **Accent system**: Single blue accent (#0067c0) with hover and active states provides consistent interaction color
-- **Semantic states**: Dedicated colors for success, warning, error, and info contexts
+- **Semantic states**: Dedicated colors for success, warning, error, info, and secondary actions (purple)
 
 **Token Pattern:**
 
@@ -144,9 +144,21 @@ const componentVariants = cva("shared-base-styles", {
 
 **Semantic Color Variants:**
 
-- Each semantic state (success, warning, danger) has matching hover state
+- Each semantic state (success, warning, danger, purple) has matching hover state
 - Provides clear visual feedback for state-specific actions
 - Consistent with both Windows 11 (clear semantics) and macOS (subtle refinement)
+
+**State Color Palette:**
+
+- **success**: Green (#73bc6f) - positive actions (confirm, save)
+- **warning**: Yellow (#dea721) - caution actions (restart)
+- **error**: Red (#e35245) - destructive actions (shutdown, delete)
+- **info**: Blue (#0067c0) - informational actions
+- **purple**: Light purple (#9b59b6) - secondary actions (suspend, secondary confirmations)
+
+**Purple Color Rationale:**
+
+The purple color (#a78bfa) is intentionally lighter and more subtle than the primary state colors to align with the Zenwritten Dark theme's emphasis on readability and reduced visual noise. It serves as a softer alternative to the more prominent warning/error colors, appropriate for less critical secondary actions like system suspend. The color maintains sufficient contrast while being less attention-grabbing than the brighter warning and danger states.
 
 ## ⚠️ Core Principles
 

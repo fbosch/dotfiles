@@ -34,6 +34,9 @@ export default {
           "error-hover": "#ff6b5a",
           "error-text": "#400000",
           info: "#0067c0",
+          purple: "#a78bfa",
+          "purple-hover": "#c084fc",
+          "purple-text": "#581c87",
         },
         border: {
           DEFAULT: "rgba(255, 255, 255, 0.08)",
