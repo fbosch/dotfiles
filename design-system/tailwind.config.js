@@ -26,11 +26,17 @@ export default {
         state: {
           success: "#73bc6f",
           "success-hover": "#82cc7d",
+          "success-text": "#00480b",
           warning: "#dea721",
           "warning-hover": "#e8b230",
+          "warning-text": "#613900",
           error: "#e35245",
           "error-hover": "#ff6b5a",
+          "error-text": "#400000",
           info: "#0067c0",
+          purple: "#a78bfa",
+          "purple-hover": "#c084fc",
+          "purple-text": "#581c87",
         },
         border: {
           DEFAULT: "rgba(255, 255, 255, 0.08)",
@@ -88,6 +94,7 @@ export default {
       textShadow: {
         waybar: "0 0 2px rgba(0, 0, 0, 0.3)",
         "waybar-button": "1px 1px rgba(0, 0, 0, 0.5)",
+        subtle: "0 1px 2px rgba(0, 0, 0, 0.2)",
       },
     },
   },

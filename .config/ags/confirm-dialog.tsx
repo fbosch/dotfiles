@@ -13,7 +13,7 @@ interface ConfirmConfig {
   confirmLabel: string;
   cancelLabel: string;
   confirmCommand: string;
-  variant: "danger" | "warning" | "info";
+  variant: "danger" | "warning" | "info" | "suspend";
   audioFile?: string; // Optional audio file to play when showing dialog
   showDelay?: number; // Optional delay in milliseconds before showing dialog
 }
@@ -36,18 +36,28 @@ const variants = {
     confirmBg: tokens.colors.state.error.value,
     confirmHoverBg: tokens.colors.state["error-hover"].value,
     confirmFocusColor: tokens.colors.state.error.value,
+    confirmTextColor: "#ffffff",
   },
   warning: {
     iconColor: tokens.colors.state.warning.value,
     confirmBg: tokens.colors.state.warning.value,
     confirmHoverBg: tokens.colors.state["warning-hover"].value,
     confirmFocusColor: tokens.colors.state.warning.value,
+    confirmTextColor: tokens.colors.state["warning-text"].value,
   },
   info: {
     iconColor: tokens.colors.accent.primary.value,
     confirmBg: tokens.colors.accent.primary.value,
     confirmHoverBg: tokens.colors.accent.hover.value,
     confirmFocusColor: tokens.colors.accent.primary.value,
+    confirmTextColor: "#ffffff", // Primary buttons use white text
+  },
+  suspend: {
+    iconColor: tokens.colors.state.purple.value,
+    confirmBg: tokens.colors.state.purple.value,
+    confirmHoverBg: tokens.colors.state["purple-hover"].value,
+    confirmFocusColor: tokens.colors.state.purple.value,
+    confirmTextColor: tokens.colors.state["purple-text"].value,
   },
 };
 
@@ -59,10 +69,10 @@ let cancelButton: Gtk.Button | null = null;
 let confirmButton: Gtk.Button | null = null;
 let isVisible: boolean = false;
 let showTimeoutId: number | null = null;
+let currentVariant: "danger" | "warning" | "info" | "suspend" | null = null;
 
-function updateCSS(config: ConfirmConfig) {
-  const colors = variants[config.variant];
-
+// Apply static CSS once on module load
+function applyStaticCSS() {
   app.apply_css(
     `
     /* Window container - transparent backdrop */
@@ -80,7 +90,6 @@ function updateCSS(config: ConfirmConfig) {
       border-radius: 12px;
       padding: 16px;
       min-width: 280px;
-      max-width: 320px;
       border: 1px solid ${tokens.colors.border.hover.value};
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
     }
@@ -93,7 +102,6 @@ function updateCSS(config: ConfirmConfig) {
     /* Icon - text-4xl mb-4 */
     label.dialog-icon {
       font-size: 36px;
-      color: ${colors.iconColor};
       margin-bottom: 12px;
     }
     
@@ -119,12 +127,13 @@ function updateCSS(config: ConfirmConfig) {
     /* h-7 px-3 text-xs (sm size) font-button (SF Pro Rounded) font-medium rounded-md transition-all duration-150 */
     button.dialog-button {
       padding: 4px 12px;
-      font-size: 12px;
-      font-weight: 500;
+      font-size: 14px;
+      font-weight: 700;
       border-radius: 6px;
       min-height: 28px;
       transition: all 150ms ease;
       font-family: "${tokens.typography.fontFamily.button.value}", "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     }
     
     button.dialog-button label {
@@ -157,24 +166,51 @@ function updateCSS(config: ConfirmConfig) {
     /* Confirm button - matches semantic variants (danger/warning/primary) */
     /* shadow-sm hover:shadow focus-visible:outline-2 */
     button.confirm {
-      background-color: ${colors.confirmBg};
-      color: #ffffff;
       border: none;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     }
     
     button.confirm:hover {
-      background-color: ${colors.confirmHoverBg};
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    }
-    
-    button.confirm:focus {
-      outline: 2px solid ${colors.confirmFocusColor};
-      outline-offset: 2px;
     }
     
     button.confirm:active {
       transform: scale(0.98);
+    }
+  `,
+    false,
+  );
+}
+
+// Apply static CSS on module load
+applyStaticCSS();
+
+// Update only variant-specific colors (called only when variant changes)
+function updateVariantCSS(variant: "danger" | "warning" | "info" | "suspend") {
+  // Skip if variant hasn't changed
+  if (currentVariant === variant) return;
+  currentVariant = variant;
+
+  const colors = variants[variant];
+
+  app.apply_css(
+    `
+    label.dialog-icon {
+      color: ${colors.iconColor};
+    }
+
+    button.confirm {
+      background-color: ${colors.confirmBg};
+      color: ${colors.confirmTextColor};
+    }
+
+    button.confirm:hover {
+      background-color: ${colors.confirmHoverBg};
+    }
+
+    button.confirm:focus {
+      outline: 2px solid ${colors.confirmFocusColor};
+      outline-offset: 2px;
     }
   `,
     false,
@@ -229,8 +265,8 @@ function showDialog(config: ConfirmConfig) {
     if (label) label.set_label(config.confirmLabel);
   }
 
-  // Update CSS for variant colors
-  updateCSS(config);
+  // Update CSS for variant colors (only if changed)
+  updateVariantCSS(config.variant);
 
   // Function to show the window
   const showWindow = () => {
@@ -324,17 +360,17 @@ function createWindow() {
   const buttonBox = new Gtk.Box({
     orientation: Gtk.Orientation.HORIZONTAL,
     spacing: 8,
-    homogeneous: false,
+    homogeneous: true,
   });
 
-  cancelButton = new Gtk.Button({ can_focus: true, hexpand: true });
+  cancelButton = new Gtk.Button({ can_focus: true, hexpand: true, halign: Gtk.Align.FILL });
   cancelButton.add_css_class("dialog-button");
   cancelButton.add_css_class("cancel");
   cancelButton.set_child(new Gtk.Label({ label: currentConfig.cancelLabel }));
   cancelButton.set_cursor_from_name("pointer");
   cancelButton.connect("clicked", () => hideDialog());
 
-  confirmButton = new Gtk.Button({ can_focus: true, hexpand: true });
+  confirmButton = new Gtk.Button({ can_focus: true, hexpand: true, halign: Gtk.Align.FILL });
   confirmButton.add_css_class("dialog-button");
   confirmButton.add_css_class("confirm");
   confirmButton.set_child(new Gtk.Label({ label: currentConfig.confirmLabel }));
@@ -353,20 +389,28 @@ function createWindow() {
   dialogBox.append(buttonBox);
   win.set_child(dialogBox);
 
-  updateCSS(currentConfig);
+  // Initialize with default variant colors
+  updateVariantCSS(currentConfig.variant);
 }
 
 // IPC to receive show/hide commands via AGS messaging
 app.start({
   main() {
     createWindow();
-    return win;
+    return null;
   },
   instanceName: "confirm-dialog-daemon",
   requestHandler(argv: string[], res: (response: any) => void) {
     try {
       // Join argv into a single string and parse as JSON
       const request = argv.join(" ");
+      
+      // Handle empty requests (daemon startup without arguments)
+      if (!request || request.trim() === "") {
+        res("ready");
+        return;
+      }
+      
       const data = JSON.parse(request);
 
       if (data.action === "show") {

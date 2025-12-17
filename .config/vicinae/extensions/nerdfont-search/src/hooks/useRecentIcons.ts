@@ -8,6 +8,8 @@ type RecentIcon = {
 	id: string;
 	char: string;
 	code: string;
+	hexCode: string;
+	htmlEntity: string;
 	displayName: string;
 	nerdFontId: string;
 	packLabel: string;

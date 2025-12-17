@@ -656,7 +656,7 @@ scrollbar slider:active {
 }
 
 .notification.critical {
-  background: rgba(196, 43, 28, 0.2);
+  background: rgba(40, 15, 15, 0.75);
   border-color: var(--critical-color);
   border-width: 2px;
 }

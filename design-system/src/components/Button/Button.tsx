@@ -23,14 +23,14 @@ import { cn } from "../../utils/cn";
 
 const buttonVariants = cva(
   // Base styles (always applied)
-  "inline-flex items-center justify-center gap-2 font-button font-medium rounded-md transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]",
+   "inline-flex items-center justify-center gap-2 font-button font-bold rounded-md transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] text-shadow-subtle",
   {
     variants: {
       variant: {
         default: "bg-background-tertiary text-foreground-primary hover:bg-background-tertiary/90 border border-white/10 hover:border-white/20 focus-visible:outline-white/30",
         primary: "bg-accent-primary text-white hover:bg-accent-hover shadow-sm hover:shadow focus-visible:outline-accent-primary",
-        success: "bg-state-success text-white hover:bg-state-success-hover shadow-sm hover:shadow focus-visible:outline-state-success",
-        warning: "bg-state-warning text-white hover:bg-state-warning-hover shadow-sm hover:shadow focus-visible:outline-state-warning",
+        success: "bg-state-success text-state-success-text hover:bg-state-success-hover shadow-sm hover:shadow focus-visible:outline-state-success",
+        warning: "bg-state-warning text-state-warning-text hover:bg-state-warning-hover shadow-sm hover:shadow focus-visible:outline-state-warning",
         danger: "bg-state-error text-white hover:bg-state-error-hover shadow-sm hover:shadow focus-visible:outline-state-error",
         outline: "bg-transparent text-foreground-primary border border-white/20 hover:bg-white/8 hover:border-white/30 focus-visible:outline-white/30",
         ghost: "bg-white/5 text-foreground-secondary hover:bg-white/10 hover:text-foreground-primary focus-visible:outline-white/20",

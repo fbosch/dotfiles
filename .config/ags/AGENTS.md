@@ -3,10 +3,34 @@
 ## Overview
 
 AGS (Aylur's GTK Shell) configuration for Hyprland UI elements. Currently includes:
-- `app.tsx` - Alt-Tab window switcher overlay
-- `confirm-exit.tsx` - Exit confirmation dialog
+- `confirm-dialog.tsx` - Confirmation dialog for high-impact operations
+- `keyboard-layout-switcher.tsx` - Keyboard layout switcher overlay
+- `volume-change-indicator.tsx` - Volume change indicator with automatic monitoring
+- `start-daemons.sh` - Wrapper script to start all AGS daemons at boot
 
 **Important:** AGS no longer uses external CSS files. All styling is done inline via the `css` property in `app.start()`.
+
+## Setup
+
+### TypeScript Type Definitions
+
+AGS requires TypeScript type definitions for GObject Introspection libraries (GTK, GLib, etc.). These are auto-generated and stored in `.config/ags/@girs/`.
+
+**Important:** The `@girs/` directory is git-ignored and must be regenerated on new systems.
+
+```bash
+# Generate types (run after installing AGS or updating system libraries)
+cd ~/.config/ags
+ags types
+
+# Types are generated to @girs/ directory
+# This typically takes 30-60 seconds
+```
+
+**When to regenerate:**
+- Fresh system setup
+- After updating AGS or system GTK libraries
+- If TypeScript shows "Cannot find module" errors for GI imports
 
 ## AGS Command Reference
 
@@ -17,13 +41,16 @@ ags run <file.tsx>
 # List running AGS instances
 ags list
 
+# Send a request to a running instance
+ags request -i <instance-name> '<json-payload>'
+
 # Quit an instance
 ags quit <instance-name>
 
 # Toggle window visibility
 ags toggle <window-name>
 
-# Generate TypeScript types
+# Generate TypeScript types for GObject Introspection
 ags types
 
 # Bundle an app
@@ -31,6 +58,9 @@ ags bundle <file.tsx>
 
 # Launch GTK Inspector for debugging
 ags inspect
+
+# Start all AGS daemons (wrapper script)
+~/.config/ags/start-daemons.sh
 ```
 
 ## TSX/JSX Conventions
@@ -302,34 +332,207 @@ monitor.connect('changed', (monitor, file, other_file, event_type) => {
 });
 ```
 
+## Daemon Architecture
+
+### Overview
+AGS components in this config use a **daemon pattern** where long-running processes are started at boot and respond to IPC (Inter-Process Communication) requests. This provides instant UI display and efficient resource usage.
+
+### Daemon Lifecycle
+
+**Boot-time Daemons (Managed by `start-daemons.sh`)**
+- `confirm-dialog.tsx` - Always available for confirmation prompts
+- `volume-change-indicator.tsx` - Ready to show on volume changes
+- `keyboard-layout-switcher.tsx` - Pre-initialized for instant display on layout switches
+
+### Daemon Startup Script (`start-daemons.sh`)
+
+**Purpose:** Centralized management of all boot-time AGS daemons.
+
+**Location:** `~/.config/ags/start-daemons.sh`
+
+**Features:**
+- **Parallel startup** - Launches all daemons simultaneously for fast initialization
+- **Idle detection** - Waits for Hyprland IPC to be ready before starting
+- **Configurable delays** - Adjustable wait times via config variables
+- Checks if daemons are already running before starting
+- Provides colored console output and logging
+- Logs to `/tmp/ags-daemons.log` for debugging
+- Easy to extend by adding entries to `BOOT_DAEMONS` array
+- Can be run manually to restart all daemons
+
+**Performance:**
+- Sequential startup: ~0.9s (0.3s × 3 daemons)
+- Parallel startup: ~0.5s (one verification wait)
+- Idle wait: 2-10s (prevents blocking Hyprland startup)
+
+**Usage:**
+```bash
+# Automatic (called from hyprland.conf)
+exec-once = ~/.config/ags/start-daemons.sh
+
+# Manual restart
+~/.config/ags/start-daemons.sh
+
+# Check logs
+cat /tmp/ags-daemons.log
+
+# List running daemons
+ags list
+```
+
+**Configuration:**
+Edit the configuration section at the top of `start-daemons.sh`:
+```bash
+# Idle detection settings
+IDLE_WAIT_ENABLED=true           # Wait for system to be ready
+IDLE_WAIT_DELAY=2                # Additional delay after Hyprland ready (seconds)
+HYPRLAND_TIMEOUT=10              # Max time to wait for Hyprland IPC (seconds)
+STARTUP_VERIFICATION_WAIT=0.5    # Time to wait before verifying (seconds)
+```
+
+- `IDLE_WAIT_ENABLED`: Set to `false` to start immediately without waiting
+- `IDLE_WAIT_DELAY`: Increase on slow systems, decrease on fast systems
+- `HYPRLAND_TIMEOUT`: Max time to wait for Hyprland before giving up
+- `STARTUP_VERIFICATION_WAIT`: Time to wait for daemons to initialize
+
+**Adding a New Daemon:**
+1. Create your daemon `.tsx` file in `~/.config/ags/`
+2. Add filename to `BOOT_DAEMONS` array in `start-daemons.sh`
+3. Add Hyprland layer rules if needed in `hyprland.conf`
+4. Restart: `~/.config/ags/start-daemons.sh`
+
+**Example:**
+```bash
+# In start-daemons.sh
+BOOT_DAEMONS=(
+    "confirm-dialog.tsx"
+    "volume-change-indicator.tsx"
+    "keyboard-layout-switcher.tsx"
+    "my-new-daemon.tsx"  # Add here
+)
+```
+
+### IPC Communication Pattern
+
+All daemons use the same communication pattern:
+
+**Daemon Side (TypeScript):**
+```tsx
+app.start({
+  main() {
+    // Pre-create UI for instant display
+    createWindow();
+    return win;
+  },
+  instanceName: "my-daemon-name",
+  requestHandler(argv: string[], res: (response: string) => void) {
+    try {
+      const data = JSON.parse(argv.join(" "));
+      
+      if (data.action === "show") {
+        showWindow();
+        res("shown");
+      } else if (data.action === "hide") {
+        hideWindow();
+        res("hidden");
+      } else {
+        res("unknown action");
+      }
+    } catch (e) {
+      res(`error: ${e}`);
+    }
+  },
+});
+```
+
+**Client Side (Bash/Shell):**
+```bash
+# Send request to daemon
+ags request -i my-daemon-name '{"action":"show"}'
+
+# From Hyprland keybind
+bind = $mainMod, X, exec, ags request -i my-daemon-name '{"action":"show"}'
+```
+
+### Daemon Best Practices
+
+1. **Pre-create UI in `main()`** - Ensures instant display when triggered
+2. **Use unique `instanceName`** - Convention: `{component-name}-daemon`
+3. **Set unique `namespace`** - Convention: `ags-{component-name}` for layer rules
+4. **Keep daemons stateless** - Refresh state on each show request
+5. **Add error handling** - Always wrap JSON parsing in try-catch
+6. **Return responses** - Confirm success/failure to caller
+7. **Pre-initialize expensive operations** - Do calculations in `main()`, not on each show
+
+### Troubleshooting Daemons
+
+```bash
+# Check which daemons are running
+ags list
+
+# View startup logs
+cat /tmp/ags-daemons.log
+
+# Kill all daemons and restart
+pkill gjs
+~/.config/ags/start-daemons.sh
+
+# Test a specific daemon manually
+ags run ~/.config/ags/confirm-dialog.tsx
+
+# Send test request
+ags request -i confirm-dialog-daemon '{"action":"hide"}'
+
+# Check for errors
+journalctl --user -u uwsm-app@Hyprland.service | grep -i ags
+```
+
 ## Current Implementations
 
-### app.tsx - Alt-Tab Overlay
-- Watches `/tmp/hypr-tab-cycle.json` for changes
-- Shows window list with current selection highlighted
-- Auto-hides after 700ms
-- Triggered by `~/.config/hypr/scripts/cycle-windows.sh`
-- Uses external CSS from `style.css`
+### confirm-dialog.tsx - Confirmation Dialog
+- Generic confirmation dialog for high-impact operations
+- Supports variant colors (danger/warning/info)
+- Pre-creates window in `main()` for instant display ✅
+- **Optimized CSS handling:**
+  - Static CSS applied once on module load ✅
+  - Dynamic CSS only updates variant colors when changed ✅
+  - Reduces CSS regeneration from ~180 lines to ~10 lines ✅
+- Optional audio alert on show
+- Optional display delay
+- Bound to various high-impact operations in Hyprland
 
-### confirm-exit.tsx - Exit Confirmation Dialog
-- Shows confirmation dialog before exiting Hyprland
-- Launches via `~/.config/hypr/scripts/confirm-exit.sh`
-- Bound to `Super+M` in keybinds.conf
-- **Key implementation details:**
-  - **Uses programmatic GTK widget creation** instead of JSX for reliable layout
-  - **Inline CSS** via `css:` property in `app.start()`
-  - Creates all widgets using `new Gtk.Box()`, `new Gtk.Label()`, etc.
-  - Uses proper GTK enums: `Gtk.Orientation.VERTICAL`, `Gtk.Align.CENTER`
-  - Adds CSS classes via `.add_css_class()` method after widget creation
-  - Appends children explicitly with `.append()` method
-  - Window created directly in `main()`, not in separate function
-  - Uses `namespace="ags-confirm"` for Hyprland layer rules
-  - Uses `layer={Astal.Layer.OVERLAY}` (enum, not string `"overlay"`)
-  - Escape key handler via `Gtk.EventControllerKey` added to window
-  - Uses `keymode={Astal.Keymode.EXCLUSIVE}` to grab keyboard input
-  - Button `onClicked` handlers connected via `.connect("clicked", callback)`
-  - Must call `win.set_child(mainBox)` and optionally `win.show()` before returning
-  - CSS must not contain invalid properties like `max-width`
+### keyboard-layout-switcher.tsx - Layout Switcher Overlay
+- Shows current keyboard layout when switching
+- **Pre-started at boot by start-daemons.sh** for instant display ✅
+- Pre-calculates dimensions on module load ✅
+- Applies static CSS once on load ✅  
+- Pre-initializes window structure in `main()` ✅
+- Caches widget references for fast updates ✅
+- Auto-hides after 700ms
+- Triggered by `switch-layout.sh` via IPC (daemon already running)
+- IPC daemon pattern with `requestHandler`
+
+### volume-change-indicator.tsx - Volume Change Indicator
+- macOS-inspired volume overlay with speaker icon, progress bar, and percentage
+- **Triggered by Hyprland keybinds** - shows when volume keys are pressed ✅
+- Pre-creates window in `main()` for instant display ✅
+- **Optimized CSS handling:**
+  - Static CSS applied once on module load ✅
+  - Dynamic CSS only updates on size changes ✅
+- Shows on volume change, auto-hides after 2 seconds
+- 16 progress squares matching macOS style
+- Segoe Fluent Icons for speaker states (muted/low/medium/high)
+- Matches design-system VolumeChangeIndicator component
+- IPC daemon pattern with `requestHandler`
+- Bound to volume keybinds in `keybinds.conf`:
+  ```bash
+  bindel = ,XF86AudioRaiseVolume, exec, wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ && ags request -i volume-indicator-daemon '{"action":"show"}'
+  ```
+
+### start-daemons.sh - AGS Daemons Starter
+- **Centralized daemon management** - starts all AGS daemons from one script ✅
+- See **Daemon Architecture** section above for detailed usage
+- Currently manages: confirm-dialog, volume-change-indicator, keyboard-layout-switcher
 
 ## Common Issues
 
@@ -440,18 +643,19 @@ hyprctl reload
 
 ## Best Practices
 
-1. **Prefer programmatic GTK widget creation over JSX** for complex layouts to ensure proper rendering
-2. **Use explicit GTK constructors** like `new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })`
-3. **Add CSS classes with `.add_css_class()`** method, not `cssClasses: []` in constructor
-4. **Always use inline CSS** in `app.start({ css: ... })` for single-file components
-5. **Set `namespace` prop** on windows for Hyprland layer rules
-6. **Use enums not strings:** `Astal.Layer.OVERLAY` not `"overlay"`
-7. **Avoid invalid GTK CSS properties** like `max-width` (use `min-width` or GTK properties)
-8. **Kill `gjs` processes** to reload CSS changes: `pkill gjs`
-9. **Test with GTK Inspector** (`ags inspect`) to debug styling
-10. **Use `keymode={Astal.Keymode.EXCLUSIVE}`** for dialogs that need focus
-11. **Check Hyprland layer rules** - avoid `ignore_alpha` for solid backgrounds
-12. **Call `win.set_child()` and `win.show()`** before returning window from main()
+1. **Avoid too many nested if statements in favor of early returns** for better code readability and maintainability
+2. **Prefer programmatic GTK widget creation over JSX** for complex layouts to ensure proper rendering
+3. **Use explicit GTK constructors** like `new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })`
+4. **Add CSS classes with `.add_css_class()`** method, not `cssClasses: []` in constructor
+5. **Always use inline CSS** in `app.start({ css: ... })` for single-file components
+6. **Set `namespace` prop** on windows for Hyprland layer rules
+7. **Use enums not strings:** `Astal.Layer.OVERLAY` not `"overlay"`
+8. **Avoid invalid GTK CSS properties** like `max-width` (use `min-width` or GTK properties)
+9. **Kill `gjs` processes** to reload CSS changes: `pkill gjs`
+10. **Test with GTK Inspector** (`ags inspect`) to debug styling
+11. **Use `keymode={Astal.Keymode.EXCLUSIVE}`** for dialogs that need focus
+12. **Check Hyprland layer rules** - avoid `ignore_alpha` for solid backgrounds
+13. **Call `win.set_child()` and `win.show()`** before returning window from main()
 
 ## Resources
 

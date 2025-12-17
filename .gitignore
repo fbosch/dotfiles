@@ -24,6 +24,9 @@ storybook-static
 .config/codex/config.toml
 .config/vicinae/vicinae.json
 
+# window state rules (auto-generated)
+.config/hypr/window-state-rules.conf
+
 # Neovim local data
 .config/nvim/.sessions/
 .config/nvim/.undo/
@@ -39,6 +42,9 @@ storybook-static
 # Hyprland machine-specific configs (use .example files as templates)
 .config/hypr/monitors.conf
 .config/hypr/hyprpaper.conf
+
+# AGS generated types (regenerate with: ags types)
+.config/ags/@girs/
 
 # Other
 **/.backup/

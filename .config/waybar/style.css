@@ -17,7 +17,7 @@
 window#waybar {
   all: unset;
   border-top: 1px solid rgba(255, 255, 255, 0.15);
-  background-color: rgba(44, 44, 44, 0.7);
+  background-color: rgba(44, 44, 44, 0.85);
   transition-property: background-color;
   transition-duration: 500ms;
   text-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
@@ -34,7 +34,7 @@ window#waybar {
 }
 
 .modules-left button:nth-child(1):only-child {
-  opacity: 0
+  opacity: 0;
 }
 
 /* Custom modules */
@@ -46,7 +46,7 @@ window#waybar {
   margin: 0.33rem;
   font-size: 1.4rem;
   border-radius: 0.25rem;
-  padding: 0 1.1rem 0 0.6rem;
+  padding: 0 1.2rem 0 0.6rem;
   border: 1px solid transparent;
   color: rgba(255, 255, 255, 0.4);
   transition-property: border-color, background-color;
@@ -55,7 +55,7 @@ window#waybar {
   text-shadow: none;
 }
 
-#custom-startbutton:hover { 
+#custom-startbutton:hover {
   background-color: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 1);
@@ -177,7 +177,7 @@ window#waybar {
   transition-property: border-color, background-color;
   transition-duration: 150ms;
   transition-timing-function: ease-in-out;
-  margin: 0.3rem 0;
+  margin: 0.3rem 0.15rem;
 }
 
 #workspaces button:only-child {

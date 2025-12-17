@@ -89,6 +89,8 @@ function NerdFontSearchInner() {
 			id: icon.id,
 			char: icon.char,
 			code: icon.code,
+			hexCode: icon.hexCode,
+			htmlEntity: icon.htmlEntity,
 			displayName: icon.displayName,
 			nerdFontId: icon.nerdFontId,
 			packLabel: icon.packLabel,

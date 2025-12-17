@@ -28,6 +28,7 @@ abbr cf 'cd ~/.config'
 abbr cnx 'cd /etc/nixos'
 abbr nxe 'nvim ~/nixos'
 abbr nxu flake_update_interactive
+abbr nxud flake_updates_daemon
 
 abbr nxgc nix-collect-garbage
 

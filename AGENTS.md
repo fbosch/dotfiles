@@ -7,6 +7,7 @@
 - `.config/nvim/.sessions/`, `.config/nvim/.undo/`, `.config/nvim/.backup/` - Neovim state
 - `.config/fish/{fish_variables,completions,conf.d,functions}/` - Fish shell state (managed by fisher)
 - `.config/lazygit/state.yml` - Lazygit state
+- `.config/ags/@girs/` - AGS TypeScript type definitions (regenerate with `ags types`)
 - **Focus on source configs only!**
 
 ## 📦 Repository Overview
