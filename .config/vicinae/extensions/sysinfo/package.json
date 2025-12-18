@@ -1,0 +1,79 @@
+{
+  "$schema": "https://raw.githubusercontent.com/vicinaehq/vicinae/refs/heads/main/extra/schemas/extension.json",
+  "name": "sysinfo",
+  "title": "System Info",
+  "description": "View detailed system information with a beautiful visual interface",
+  "categories": [
+    "System",
+    "Developer Tools"
+  ],
+  "license": "MIT",
+  "author": "fbosch",
+  "contributors": [],
+  "pastContributors": [],
+  "icon": "extension_icon.png",
+  "commands": [
+    {
+      "name": "system-info",
+      "title": "Show System Info",
+      "subtitle": "View system information",
+      "description": "Display detailed system information including OS, CPU, memory, disk, and network",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "showDistroArt",
+      "type": "checkbox",
+      "required": false,
+      "title": "Show Distribution Logo",
+      "label": "Display ASCII art logo for Linux distributions",
+      "description": "Show a visual representation of your Linux distribution",
+      "default": true
+    },
+    {
+      "name": "refreshInterval",
+      "type": "dropdown",
+      "required": false,
+      "title": "Auto-refresh Interval",
+      "description": "How often to auto-refresh system stats (0 = manual only)",
+      "default": "5000",
+      "data": [
+        {
+          "title": "Disabled",
+          "value": "0"
+        },
+        {
+          "title": "Every 5 seconds",
+          "value": "5000"
+        },
+        {
+          "title": "Every 10 seconds",
+          "value": "10000"
+        },
+        {
+          "title": "Every 30 seconds",
+          "value": "30000"
+        },
+        {
+          "title": "Every minute",
+          "value": "60000"
+        }
+      ]
+    }
+  ],
+  "scripts": {
+    "build": "vici build",
+    "dev": "vici develop",
+    "format": "biome format --write src",
+    "lint": "vici lint"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.12",
+    "@vicinae/api": "^0.16.14"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.8",
+    "typescript": "^5.9.3"
+  }
+}

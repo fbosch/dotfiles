@@ -59,6 +59,10 @@ procs:
     autostart: false
     shell: "(cd .config/vicinae/extensions/kagi-search && npm run dev)"
 
+  vicinae-sysinfo:
+    autostart: false
+    shell: "(cd .config/vicinae/extensions/sysinfo && npm run dev)"
+
   build-storybook:
     autostart: false
     shell: "(cd design-system && pnpm build-storybook)"
