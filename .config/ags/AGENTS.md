@@ -65,12 +65,80 @@ ags inspect
 
 ## TSX/JSX Conventions
 
+**Important:** AGS v3 with Gnim provides full JSX support for GTK widgets. **Always prefer JSX over programmatic widget creation** for cleaner, more maintainable code.
+
 ### Property Names
 - Use `class` NOT `className` for CSS classes
   ```tsx
   ✅ <box class="my-class">
   ❌ <box className="my-class">
   ```
+
+### Common Widgets
+```tsx
+// Window with layer shell
+<window
+  name="window-name"
+  namespace="unique-namespace"  // Important for Hyprland layer rules
+  visible={true}
+  anchor={Astal.WindowAnchor.CENTER}
+  layer={Astal.Layer.OVERLAY}  // Use enum, not string!
+  exclusivity={Astal.Exclusivity.EXCLUSIVE}
+  keymode={Astal.Keymode.EXCLUSIVE}
+  class="window-class"
+>
+  {/* content */}
+</window>
+
+// Box container
+<box orientation="horizontal" spacing={12} halign="center" class="box-class">
+  {/* children */}
+</box>
+
+// Button (no type prop in AGS)
+<button onClicked={() => {}} class="button-class">
+  <label label="Button Text" />
+</button>
+
+// Label
+<label label="Text content" class="label-class" halign="center" />
+```
+
+### Capturing Widget References with `setup`
+When you need imperative access to widgets (for updates, class manipulation, etc.), use the `setup` callback:
+
+```tsx
+let myLabel: Gtk.Label | null = null;
+
+<label
+  label="Initial text"
+  setup={(self: Gtk.Label) => {
+    myLabel = self;
+  }}
+/>
+
+// Later, update the label imperatively
+myLabel?.set_label("Updated text");
+myLabel?.add_css_class("active");
+```
+
+### Dynamic Children
+For arrays of widgets, use `map` or create them in a loop:
+
+```tsx
+// Using map
+const items = ["Item 1", "Item 2", "Item 3"];
+<box orientation="vertical">
+  {items.map(item => <label label={item} />)}
+</box>
+
+// Using a loop
+const squares: JSX.Element[] = [];
+for (let i = 0; i < 20; i++) {
+  squares.push(<box class={`square-${i}`} />);
+}
+<box>{squares}</box>
+```
 
 ### Common Widgets
 ```tsx
@@ -521,7 +589,7 @@ journalctl --user -u uwsm-app@Hyprland.service | grep -i ags
   - Dynamic CSS only updates on size changes ✅
 - Shows on volume change, auto-hides after 2 seconds
 - 16 progress squares matching macOS style
-- Segoe Fluent Icons for speaker states (muted/low/medium/high)
+- Segoe Fluent Icons for speaker states (Unicode: \uE74F muted, \uE992 verylow, \uE993 low, \uE994 medium, \uE995 high/veryhigh)
 - Matches design-system VolumeChangeIndicator component
 - IPC daemon pattern with `requestHandler`
 - Bound to volume keybinds in `keybinds.conf`:
@@ -543,44 +611,49 @@ journalctl --user -u uwsm-app@Hyprland.service | grep -i ags
 4. **Check namespace:** Window needs `namespace` prop for layer rules
 5. **Kill old instances:** `pkill gjs` before testing
 
-### JSX vs Programmatic Widget Creation
-**Issue:** JSX with lowercase tags like `<box>` and `<label>` may not properly create GTK widgets with correct layout properties, causing layout issues (e.g., vertical boxes rendering horizontally).
+### JSX Best Practices
 
-**Solutions:**
-1. **Use programmatic GTK widget creation** when JSX fails:
-   ```tsx
-   // Instead of JSX:
-   // <box orientation="vertical" spacing={8}>
-   //   <label label="Text" />
-   // </box>
-   
-   // Use explicit GTK constructors:
-   const box = new Gtk.Box({
-     orientation: Gtk.Orientation.VERTICAL,
-     spacing: 8
-   });
-   const label = new Gtk.Label({ label: "Text" });
-   box.append(label);
-   ```
+**Always prefer JSX over programmatic widget creation** for better readability and maintainability.
 
-2. **Use proper GTK enums:**
-   - `Gtk.Orientation.VERTICAL` / `Gtk.Orientation.HORIZONTAL`
-   - `Gtk.Align.CENTER` / `Gtk.Align.START` / `Gtk.Align.END`
-   
-3. **Add CSS classes after construction:**
-   ```tsx
-   const widget = new Gtk.Button({ label: "Click" });
-   widget.add_css_class("my-class");
-   widget.add_css_class("another-class");
-   // NOT: cssClasses: ["my-class"] in constructor
-   ```
+**Good (JSX):**
+```tsx
+<box orientation="vertical" spacing={8} class="my-box">
+  <label label="Hello World" />
+  <button onClicked={() => console.log("clicked")}>
+    <label label="Click me" />
+  </button>
+</box>
+```
 
-4. **Ensure window has a child and shows:**
-   ```tsx
-   win.set_child(mainBox);
-   win.show();  // May be needed in some cases
-   return win;
-   ```
+**Avoid (Programmatic):**
+```tsx
+const box = new Gtk.Box({
+  orientation: Gtk.Orientation.VERTICAL,
+  spacing: 8
+});
+box.add_css_class("my-box");
+
+const label = new Gtk.Label({ label: "Hello World" });
+box.append(label);
+
+const button = new Gtk.Button();
+button.connect("clicked", () => console.log("clicked"));
+box.append(button);
+```
+
+**When you need widget references**, use the `setup` callback:
+```tsx
+let myWidget: Gtk.Box | null = null;
+
+<box setup={(self: Gtk.Box) => {
+  myWidget = self;
+}}>
+  {/* content */}
+</box>
+
+// Later, update imperatively
+myWidget?.add_css_class("active");
+```
 
 ### GTK CSS Property Limitations
 **Invalid GTK CSS properties** (will cause errors):
@@ -643,19 +716,21 @@ hyprctl reload
 
 ## Best Practices
 
-1. **Avoid too many nested if statements in favor of early returns** for better code readability and maintainability
-2. **Prefer programmatic GTK widget creation over JSX** for complex layouts to ensure proper rendering
-3. **Use explicit GTK constructors** like `new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })`
-4. **Add CSS classes with `.add_css_class()`** method, not `cssClasses: []` in constructor
-5. **Always use inline CSS** in `app.start({ css: ... })` for single-file components
-6. **Set `namespace` prop** on windows for Hyprland layer rules
-7. **Use enums not strings:** `Astal.Layer.OVERLAY` not `"overlay"`
-8. **Avoid invalid GTK CSS properties** like `max-width` (use `min-width` or GTK properties)
-9. **Kill `gjs` processes** to reload CSS changes: `pkill gjs`
-10. **Test with GTK Inspector** (`ags inspect`) to debug styling
-11. **Use `keymode={Astal.Keymode.EXCLUSIVE}`** for dialogs that need focus
-12. **Check Hyprland layer rules** - avoid `ignore_alpha` for solid backgrounds
-13. **Call `win.set_child()` and `win.show()`** before returning window from main()
+1. **Always prefer JSX over programmatic widget creation** - JSX is cleaner, more maintainable, and the recommended approach in AGS v3
+2. **Use the `setup` callback to capture widget references** when you need imperative access
+   ```tsx
+   let myWidget: Gtk.Label | null = null;
+   <label setup={(self: Gtk.Label) => { myWidget = self; }} />
+   ```
+3. **Avoid too many nested if statements in favor of early returns** for better code readability
+4. **Always use inline CSS** in `app.start({ css: ... })` or `app.apply_css()` for components
+5. **Set `namespace` prop** on windows for Hyprland layer rules
+6. **Use enums not strings:** `Astal.Layer.OVERLAY` not `"overlay"`
+7. **Avoid invalid GTK CSS properties** like `max-width` (use `min-width` or GTK properties)
+8. **Kill `gjs` processes** to reload CSS changes: `pkill gjs`
+9. **Test with GTK Inspector** (`ags inspect`) to debug styling
+10. **Use `keymode={Astal.Keymode.EXCLUSIVE}`** for dialogs that need focus
+11. **Check Hyprland layer rules** - avoid `ignore_alpha` for solid backgrounds
 
 ## Resources
 

@@ -23,12 +23,12 @@ type SpeakerState =
 
 // Segoe Fluent Icons glyphs for volume levels
 const speakerIcons: Record<SpeakerState, string> = {
-  muted: "", // Muted/Volume 0
-  verylow: "", // Very low volume
-  low: "", // Low volume
-  medium: "", // Medium volume
-  high: "", // High volume
-  veryhigh: "", // Very high volume
+  muted: "\uE74F", // Muted/Volume 0
+  verylow: "\uE992", // Very low volume
+  low: "\uE993", // Low volume
+  medium: "\uE994", // Medium volume
+  high: "\uE995", // High volume
+  veryhigh: "\uE995", // Very high volume
 };
 
 function getSpeakerState(volume: number, muted: boolean): SpeakerState {
@@ -43,7 +43,7 @@ function getSpeakerState(volume: number, muted: boolean): SpeakerState {
 
 // Get current volume and mute status from wpctl
 // Cache for volume info to reduce wpctl calls during rapid updates
-let volumeCache = { volume: 0, muted: false, timestamp: 0 };
+const volumeCache = { volume: 0, muted: false, timestamp: 0 };
 const CACHE_DURATION = 30; // ms - cache to handle rapid volume changes
 
 function getVolumeInfo(): { volume: number; muted: boolean } {
@@ -56,11 +56,11 @@ function getVolumeInfo(): { volume: number; muted: boolean } {
 
   try {
     // Get volume for default audio sink (@DEFAULT_AUDIO_SINK@)
-    const [ok, stdout, stderr, exit_status] = GLib.spawn_command_line_sync(
+    const [ok, stdout, , exit_status] = GLib.spawn_command_line_sync(
       "wpctl get-volume @DEFAULT_AUDIO_SINK@",
     );
 
-    if (!ok || exit_status !== 0) {
+    if (!ok || exit_status !== 0 || !stdout) {
       return volumeCache.timestamp > 0
         ? volumeCache
         : { volume: 0, muted: false };
@@ -76,7 +76,9 @@ function getVolumeInfo(): { volume: number; muted: boolean } {
     const muted = volumeText.includes("[MUTED]");
 
     // Update cache
-    volumeCache = { volume, muted, timestamp: now };
+    volumeCache.volume = volume;
+    volumeCache.muted = muted;
+    volumeCache.timestamp = now;
 
     return { volume, muted };
   } catch (e) {
@@ -301,7 +303,7 @@ function playVolumeSound() {
       GLib.spawn_command_line_async(
         "sh -c 'sox -n -t wav - synth 0.03 sine 800 vol 0.2 2>/dev/null | pw-play - --volume=0.5 2>/dev/null &'",
       );
-    } catch (e) {
+    } catch {
       // Silently fail if sound playback fails
     }
   }
@@ -340,76 +342,78 @@ function showIndicator() {
 }
 
 function createWindow() {
-  win = new Astal.Window({
-    name: "volume-indicator",
-    namespace: "ags-volume-indicator",
-    visible: false,
-  });
-
-  win.set_anchor(Astal.WindowAnchor.NONE);
-  win.set_layer(Astal.Layer.OVERLAY);
-  win.set_exclusivity(Astal.Exclusivity.NORMAL);
-  win.set_keymode(Astal.Keymode.NONE);
-  win.add_css_class("volume-indicator");
-
-  shadowWrapper = new Gtk.Box({
-    orientation: Gtk.Orientation.HORIZONTAL,
-    halign: Gtk.Align.CENTER,
-    valign: Gtk.Align.CENTER,
-  });
-  shadowWrapper.add_css_class("shadow-wrapper");
-
-  const indicatorContainer = new Gtk.Box({
-    orientation: Gtk.Orientation.HORIZONTAL,
-    spacing: 0,
-  });
-  indicatorContainer.add_css_class("indicator-container");
-
-  // Icon container
-  const iconContainer = new Gtk.Box({
-    orientation: Gtk.Orientation.HORIZONTAL,
-    halign: Gtk.Align.CENTER,
-    valign: Gtk.Align.CENTER,
-  });
-  iconContainer.add_css_class("icon-container");
-
-  iconLabel = new Gtk.Label({ label: "" });
-  iconLabel.add_css_class("speaker-icon");
-  iconContainer.append(iconLabel);
-
-  // Progress squares container
-  const progressContainer = new Gtk.Box({
-    orientation: Gtk.Orientation.HORIZONTAL,
-    spacing: size.squareGap,
-    valign: Gtk.Align.CENTER,
-  });
-  progressContainer.add_css_class("progress-container");
-
-  progressSquares = [];
+  // Create progress squares using JSX
+  const squares: JSX.Element[] = [];
   for (let i = 0; i < 20; i++) {
-    const square = new Gtk.Box({
-      orientation: Gtk.Orientation.HORIZONTAL,
-      hexpand: false,
-      vexpand: false,
-      halign: Gtk.Align.CENTER,
-      valign: Gtk.Align.CENTER,
-    });
-    square.add_css_class("progress-square");
-    square.add_css_class("empty");
-    progressSquares.push(square);
-    progressContainer.append(square);
+    squares.push(
+      <box
+        class="progress-square empty"
+        $={(self: Gtk.Box) => {
+          progressSquares[i] = self;
+        }}
+      />,
+    );
   }
 
-  // Volume label
-  volumeLabel = new Gtk.Label({ label: "0%" });
-  volumeLabel.add_css_class("volume-label");
+  win = (
+    <window
+      name="volume-indicator"
+      namespace="ags-volume-indicator"
+      visible={false}
+      anchor={Astal.WindowAnchor.NONE}
+      layer={Astal.Layer.OVERLAY}
+      exclusivity={Astal.Exclusivity.NORMAL}
+      keymode={Astal.Keymode.NONE}
+      class="volume-indicator"
+    >
+      <box
+        orientation={Gtk.Orientation.HORIZONTAL}
+        halign={Gtk.Align.CENTER}
+        valign={Gtk.Align.CENTER}
+        class="shadow-wrapper"
+        $={(self: Gtk.Box) => {
+          shadowWrapper = self;
+        }}
+      >
+        <box orientation={Gtk.Orientation.HORIZONTAL} spacing={0} class="indicator-container">
+          {/* Icon container */}
+          <box
+            orientation={Gtk.Orientation.HORIZONTAL}
+            halign={Gtk.Align.CENTER}
+            valign={Gtk.Align.CENTER}
+            class="icon-container"
+          >
+            <label
+              label=""
+              class="speaker-icon"
+              $={(self: Gtk.Label) => {
+                iconLabel = self;
+              }}
+            />
+          </box>
 
-  // Assemble
-  indicatorContainer.append(iconContainer);
-  indicatorContainer.append(progressContainer);
-  indicatorContainer.append(volumeLabel);
-  shadowWrapper.append(indicatorContainer);
-  win.set_child(shadowWrapper);
+          {/* Progress squares container */}
+          <box
+            orientation={Gtk.Orientation.HORIZONTAL}
+            spacing={size.squareGap}
+            valign={Gtk.Align.CENTER}
+            class="progress-container"
+          >
+            {squares}
+          </box>
+
+          {/* Volume label */}
+          <label
+            label="0%"
+            class="volume-label"
+            $={(self: Gtk.Label) => {
+              volumeLabel = self;
+            }}
+          />
+        </box>
+      </box>
+    </window>
+  ) as Astal.Window;
 
   // Initial update
   update();
@@ -425,6 +429,13 @@ app.start({
   requestHandler(argv: string[], res: (response: string) => void) {
     try {
       const request = argv.join(" ");
+      
+      // Handle empty requests gracefully
+      if (!request || request.trim() === "") {
+        res("ok");
+        return;
+      }
+      
       const data = JSON.parse(request);
 
       if (data.action === "show") {

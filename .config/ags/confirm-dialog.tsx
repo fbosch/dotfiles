@@ -298,96 +298,109 @@ function showDialog(config: ConfirmConfig) {
 }
 
 function createWindow() {
-  win = new Astal.Window({
-    name: "confirm-dialog",
-    namespace: "ags-confirm",
-    visible: false,
-  });
+  // Create window with JSX
+  win = (
+    <window
+      name="confirm-dialog"
+      namespace="ags-confirm"
+      visible={false}
+      anchor={Astal.WindowAnchor.NONE}
+      layer={Astal.Layer.OVERLAY}
+      exclusivity={Astal.Exclusivity.EXCLUSIVE}
+      keymode={Astal.Keymode.EXCLUSIVE}
+      class="confirm-dialog"
+      $={(self: Astal.Window) => {
+        // Add escape key handler
+        const keyController = new Gtk.EventControllerKey();
+        keyController.connect(
+          "key-pressed",
+          (_: Gtk.EventControllerKey, keyval: number) => {
+            if (keyval === Gdk.KEY_Escape) {
+              hideDialog();
+              return true;
+            }
+            return false;
+          },
+        );
+        self.add_controller(keyController);
+      }}
+    >
+      <box orientation={Gtk.Orientation.VERTICAL} spacing={0} class="dialog-box">
+        {/* Content area */}
+        <box
+          orientation={Gtk.Orientation.VERTICAL}
+          spacing={0}
+          halign={Gtk.Align.CENTER}
+          class="content-box"
+        >
+          <label
+            label={currentConfig.icon}
+            halign={Gtk.Align.CENTER}
+            class="dialog-icon"
+            $={(self: Gtk.Label) => {
+              icon = self;
+            }}
+          />
+          <label
+            label={currentConfig.title}
+            halign={Gtk.Align.CENTER}
+            class="dialog-title"
+            $={(self: Gtk.Label) => {
+              title = self;
+            }}
+          />
+          <label
+            label={currentConfig.message}
+            halign={Gtk.Align.CENTER}
+            class="dialog-message"
+            $={(self: Gtk.Label) => {
+              message = self;
+            }}
+          />
+        </box>
 
-  win.set_anchor(Astal.WindowAnchor.NONE);
-  win.set_layer(Astal.Layer.OVERLAY);
-  win.set_exclusivity(Astal.Exclusivity.EXCLUSIVE);
-  win.set_keymode(Astal.Keymode.EXCLUSIVE);
-  win.add_css_class("confirm-dialog");
+        {/* Button area */}
+        <box
+          orientation={Gtk.Orientation.HORIZONTAL}
+          spacing={8}
+          homogeneous={true}
+        >
+          <button
+            canFocus={true}
+            hexpand={true}
+            halign={Gtk.Align.FILL}
+            class="dialog-button cancel"
+            onClicked={() => hideDialog()}
+            $={(self: Gtk.Button) => {
+              cancelButton = self;
+              self.set_cursor_from_name("pointer");
+            }}
+          >
+            <label label={currentConfig.cancelLabel} />
+          </button>
 
-  // Add escape key handler
-  const keyController = new Gtk.EventControllerKey();
-  keyController.connect(
-    "key-pressed",
-    (_: Gtk.EventControllerKey, keyval: number) => {
-      if (keyval === Gdk.KEY_Escape) {
-        hideDialog();
-        return true;
-      }
-      return false;
-    },
-  );
-  win.add_controller(keyController);
-
-  // Build UI
-  const dialogBox = new Gtk.Box({
-    orientation: Gtk.Orientation.VERTICAL,
-    spacing: 0,
-  });
-  dialogBox.add_css_class("dialog-box");
-
-  const contentBox = new Gtk.Box({
-    orientation: Gtk.Orientation.VERTICAL,
-    spacing: 0,
-    halign: Gtk.Align.CENTER,
-  });
-  contentBox.add_css_class("content-box");
-
-  icon = new Gtk.Label({ label: currentConfig.icon, halign: Gtk.Align.CENTER });
-  icon.add_css_class("dialog-icon");
-
-  title = new Gtk.Label({
-    label: currentConfig.title,
-    halign: Gtk.Align.CENTER,
-  });
-  title.add_css_class("dialog-title");
-
-  message = new Gtk.Label({
-    label: currentConfig.message,
-    halign: Gtk.Align.CENTER,
-  });
-  message.add_css_class("dialog-message");
-
-  contentBox.append(icon);
-  contentBox.append(title);
-  contentBox.append(message);
-
-  const buttonBox = new Gtk.Box({
-    orientation: Gtk.Orientation.HORIZONTAL,
-    spacing: 8,
-    homogeneous: true,
-  });
-
-  cancelButton = new Gtk.Button({ can_focus: true, hexpand: true, halign: Gtk.Align.FILL });
-  cancelButton.add_css_class("dialog-button");
-  cancelButton.add_css_class("cancel");
-  cancelButton.set_child(new Gtk.Label({ label: currentConfig.cancelLabel }));
-  cancelButton.set_cursor_from_name("pointer");
-  cancelButton.connect("clicked", () => hideDialog());
-
-  confirmButton = new Gtk.Button({ can_focus: true, hexpand: true, halign: Gtk.Align.FILL });
-  confirmButton.add_css_class("dialog-button");
-  confirmButton.add_css_class("confirm");
-  confirmButton.set_child(new Gtk.Label({ label: currentConfig.confirmLabel }));
-  confirmButton.set_cursor_from_name("pointer");
-  confirmButton.connect("clicked", () => {
-    if (currentConfig.confirmCommand) {
-      GLib.spawn_command_line_async(currentConfig.confirmCommand);
-    }
-    hideDialog();
-  });
-
-  buttonBox.append(cancelButton);
-  buttonBox.append(confirmButton);
-
-  dialogBox.append(contentBox);
-  dialogBox.append(buttonBox);
-  win.set_child(dialogBox);
+          <button
+            canFocus={true}
+            hexpand={true}
+            halign={Gtk.Align.FILL}
+            class="dialog-button confirm"
+            onClicked={() => {
+              if (currentConfig.confirmCommand) {
+                GLib.spawn_command_line_async(currentConfig.confirmCommand);
+              }
+              hideDialog();
+            }}
+            $={(self: Gtk.Button) => {
+              confirmButton = self;
+              self.set_cursor_from_name("pointer");
+            }}
+          >
+            <label label={currentConfig.confirmLabel} />
+          </button>
+        </box>
+      </box>
+    </window>
+  ) as Astal.Window;
 
   // Initialize with default variant colors
   updateVariantCSS(currentConfig.variant);
