@@ -87,6 +87,155 @@ function getUsageColor(percent: number, colors: ThemeColors): string {
   return colors.danger;
 }
 
+// Generate macOS-style storage visualization with categories
+function generateStorageItem(
+  storage: SystemInfo["storage"][0],
+  x: number,
+  y: number,
+  colors: ThemeColors,
+): { svg: string; height: number } {
+  const barWidth = 338;
+  const barHeight = 12;
+  const legendItemHeight = 18;
+  
+  // If no categories, show simple progress bar
+  if (!storage.categories || storage.categories.length === 0) {
+    const usageColor = getUsageColor(storage.usagePercent, colors);
+    const fillWidth = (barWidth * storage.usagePercent) / 100;
+    
+    const svg = `
+      <!-- Mount Point -->
+      <text x="${x}" y="${y}" 
+            font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+            font-size="14" font-weight="500" 
+            fill="${colors.textPrimary}"
+            text-rendering="geometricPrecision">${escapeXml(storage.mountPoint)}</text>
+      
+      <!-- Usage Summary -->
+      <text x="${x}" y="${y + 18}" 
+            font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+            font-size="12" 
+            fill="${colors.textTertiary}"
+            text-rendering="geometricPrecision">${formatBytes(storage.available)} free of ${formatBytes(storage.total)}</text>
+      
+      <!-- Simple Progress Bar -->
+      <rect x="${x}" y="${y + 32}" width="${barWidth}" height="${barHeight}" 
+            rx="6" fill="${colors.progressBackground}"/>
+      <rect x="${x}" y="${y + 32}" width="${fillWidth}" height="${barHeight}" 
+            rx="6" fill="${usageColor}">
+        <animate attributeName="width" from="0" to="${fillWidth}" 
+                 dur="0.8s" fill="freeze"/>
+      </rect>
+    `;
+    
+    return { svg, height: 58 };
+  }
+  
+  // macOS-style categorized storage
+  const sortedCategories = [...storage.categories].sort((a, b) => b.bytes - a.bytes);
+  let currentX = x;
+  const clipPathId = `clip-${Math.random().toString(36).substr(2, 9)}`;
+  
+  // Generate stacked bar segments (without border radius on individual segments)
+  const barSegments = sortedCategories.map((category) => {
+    const percent = (category.bytes / storage.total) * 100;
+    const segmentWidth = (barWidth * percent) / 100;
+    const svg = `
+      <rect x="${currentX}" y="${y + 32}" width="${segmentWidth}" height="${barHeight}" 
+            fill="${category.color}"/>
+    `;
+    currentX += segmentWidth;
+    return svg;
+  }).join("");
+  
+  // Generate legend items horizontally (macOS-style with name on top, size below)
+  const legendStartY = y + 58;
+  const squareSize = 10;
+  const itemSpacing = 20; // Space between legend items
+  const maxWidth = barWidth;
+  let currentRow = 0;
+  let legendX = x;
+  
+  const legendItems: string[] = [];
+  
+  sortedCategories.forEach((category, index) => {
+    // Estimate item width (square + gap + text, using longer of name or size)
+    const nameLength = category.name.length;
+    const sizeLength = formatBytes(category.bytes).length;
+    const maxTextLength = Math.max(nameLength, sizeLength);
+    const estimatedWidth = squareSize + 8 + (maxTextLength * 7); // ~7px per char
+    
+    // Check if we need to wrap to next row
+    if (legendX + estimatedWidth > x + maxWidth && index > 0) {
+      currentRow++;
+      legendX = x;
+    }
+    
+    const legendY = legendStartY + (currentRow * 34); // 34px per row (accounts for 2 lines)
+    
+    legendItems.push(`
+      <!-- Category Color Square -->
+      <rect x="${legendX}" y="${legendY - 8}" width="${squareSize}" height="${squareSize}" 
+            rx="2" fill="${category.color}"/>
+      
+      <!-- Category Name -->
+      <text x="${legendX + squareSize + 8}" y="${legendY}" 
+            font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+            font-size="12" font-weight="500"
+            fill="${colors.textPrimary}"
+            text-rendering="geometricPrecision">${escapeXml(category.name)}</text>
+      
+      <!-- Category Size (on new line) -->
+      <text x="${legendX + squareSize + 8}" y="${legendY + 14}" 
+            font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+            font-size="11" 
+            fill="${colors.textTertiary}"
+            text-rendering="geometricPrecision">${formatBytes(category.bytes)}</text>
+    `);
+    
+    legendX += estimatedWidth + itemSpacing;
+  });
+  
+  const totalHeight = 72 + (currentRow * 34); // Dynamic height based on legend rows
+  
+  const svg = `
+    <!-- Mount Point (Device Name) -->
+    <text x="${x}" y="${y}" 
+          font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+          font-size="14" font-weight="500" 
+          fill="${colors.textPrimary}"
+          text-rendering="geometricPrecision">${escapeXml(storage.name.split('/').pop() || storage.mountPoint)}</text>
+    
+    <!-- Usage Summary (macOS-style) -->
+    <text x="${x}" y="${y + 18}" 
+          font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+          font-size="12" 
+          fill="${colors.textTertiary}"
+          text-rendering="geometricPrecision">${formatBytes(storage.available)} free of ${formatBytes(storage.total)}</text>
+    
+    <!-- Clip path for rounded corners -->
+    <defs>
+      <clipPath id="${clipPathId}">
+        <rect x="${x}" y="${y + 32}" width="${barWidth}" height="${barHeight}" rx="6"/>
+      </clipPath>
+    </defs>
+    
+    <!-- Stacked Category Bar Background -->
+    <rect x="${x}" y="${y + 32}" width="${barWidth}" height="${barHeight}" 
+          rx="6" fill="${colors.progressBackground}"/>
+    
+    <!-- Category Segments (clipped to rounded rectangle) -->
+    <g clip-path="url(#${clipPathId})">
+      ${barSegments}
+    </g>
+    
+    <!-- Legend -->
+    ${legendItems.join("")}
+  `;
+  
+  return { svg, height: totalHeight };
+}
+
 function generateProgressBar(
   x: number,
   y: number,
@@ -307,27 +456,18 @@ export function generateSystemInfoSVG(
   );
   currentY += memoryHeight + cardSpacing;
 
-  // Storage Card(s)
-  const storageItemHeight = 70;
-  const storageHeight = 40 + info.storage.length * storageItemHeight + 10;
-  const storageContent = info.storage
-    .map(
-      (storage, index) => `
-      <text x="${margin + cardPadding}" y="${currentY + 46 + index * storageItemHeight}" 
-            font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
-            font-size="14" font-weight="500" 
-            fill="${colors.textPrimary}"
-            text-rendering="geometricPrecision">${escapeXml(storage.mountPoint)}</text>
-      <text x="${margin + cardPadding}" y="${currentY + 64 + index * storageItemHeight}" 
-            font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
-            font-size="12" 
-            fill="${colors.textTertiary}"
-            text-rendering="geometricPrecision">${formatBytes(storage.used)} of ${formatBytes(storage.total)}</text>
-      
-      ${generateProgressBar(margin + cardPadding, currentY + 76 + index * storageItemHeight, progressBarWidth, 7, storage.usagePercent, colors, percentageXPos)}
-    `,
-    )
-    .join("");
+  // Storage Card(s) - macOS-style with categories
+  let storageContentArray: Array<{ svg: string; height: number }> = [];
+  let storageContentY = currentY + 46;
+  
+  for (const storage of info.storage) {
+    const item = generateStorageItem(storage, margin + cardPadding, storageContentY, colors);
+    storageContentArray.push(item);
+    storageContentY += item.height + 20; // Add spacing between storage devices
+  }
+  
+  const storageContent = storageContentArray.map(item => item.svg).join("");
+  const storageHeight = 40 + storageContentArray.reduce((sum, item) => sum + item.height + 20, 0);
 
   const storageCard = generateCard(
     margin,

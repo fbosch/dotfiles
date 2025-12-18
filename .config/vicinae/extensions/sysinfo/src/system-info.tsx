@@ -19,7 +19,7 @@ import { exec } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { generateSystemInfoSVG, svgToDataUri } from "./svg-generator";
-import type { DynamicSystemInfo, Preferences, StaticSystemInfo } from "./types";
+import type { DynamicSystemInfo, Preferences, StaticSystemInfo, StorageCategory } from "./types";
 
 const execAsync = promisify(exec);
 
@@ -27,6 +27,7 @@ const execAsync = promisify(exec);
 const cache = new Cache();
 const STATIC_INFO_CACHE_KEY = "static-system-info-v1";
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const STORAGE_CATEGORIES_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
 type CachedStaticInfo = {
   info: StaticSystemInfo;
@@ -93,6 +94,112 @@ async function getStaticSystemInfo(): Promise<StaticSystemInfo> {
   setCachedStaticInfo(info);
   
   return info;
+}
+
+// Cache helper functions for storage categories
+function getCachedStorageCategories(mountPoint: string): StorageCategory[] | null {
+  const cacheKey = `storage-categories-${mountPoint}-v1`;
+  const cached = cache.get(cacheKey);
+  if (!cached) return null;
+  try {
+    const data: { categories: StorageCategory[]; cachedAt: number } = JSON.parse(cached);
+    if (Date.now() - data.cachedAt < STORAGE_CATEGORIES_CACHE_DURATION) {
+      return data.categories;
+    }
+    cache.remove(cacheKey);
+    return null;
+  } catch {
+    cache.remove(cacheKey);
+    return null;
+  }
+}
+
+function setCachedStorageCategories(mountPoint: string, categories: StorageCategory[]): void {
+  const cacheKey = `storage-categories-${mountPoint}-v1`;
+  cache.set(
+    cacheKey,
+    JSON.stringify({ categories, cachedAt: Date.now() }),
+  );
+}
+
+// Analyze storage by categories using parallel du commands
+async function analyzeStorageCategories(
+  mountPoint: string,
+  totalUsed: number,
+): Promise<StorageCategory[]> {
+  // Check cache first
+  const cached = getCachedStorageCategories(mountPoint);
+  if (cached) {
+    return cached;
+  }
+
+  // Only analyze the main filesystem (/)
+  if (mountPoint !== "/") {
+    return [];
+  }
+
+  try {
+    // Define categories with their directories and vibrant colors (inspired by macOS)
+    const categoryDefs = [
+      { name: "Apps", paths: ["/usr", "/opt", "/var/lib/flatpak", "/var/lib/snapd"], color: "#5FA8D3" },      // bright blue
+      { name: "Documents", paths: ["~/Documents", "~/Desktop"], color: "#F9B572" },                             // bright orange
+      { name: "Photos", paths: ["~/Pictures"], color: "#E85D75" },                                              // bright pink/red
+      { name: "Music", paths: ["~/Music"], color: "#C77DBB" },                                                  // bright purple
+      { name: "Videos", paths: ["~/Videos"], color: "#8CC265" },                                                // bright green
+      { name: "Downloads", paths: ["~/Downloads"], color: "#62C3D1" },                                          // bright cyan
+      { name: "System", paths: ["/boot", "/var/log", "/tmp"], color: "#9B9B9B" },                              // gray
+    ];
+
+    // Run all du commands in parallel for speed
+    const categoryPromises = categoryDefs.map(async (catDef) => {
+      // Run du commands in parallel for each category's paths
+      const pathPromises = catDef.paths.map(async (path) => {
+        try {
+          const expandedPath = path.startsWith("~")
+            ? path.replace("~", process.env.HOME || "")
+            : path;
+          
+          const { stdout } = await execAsync(
+            `test -d "${expandedPath}" && timeout 5 du -sb "${expandedPath}" 2>/dev/null | cut -f1 || echo "0"`,
+          );
+          return Number.parseInt(stdout.trim() || "0", 10);
+        } catch {
+          return 0;
+        }
+      });
+
+      const bytesPerPath = await Promise.all(pathPromises);
+      const totalBytes = bytesPerPath.reduce((sum, bytes) => sum + bytes, 0);
+
+      return {
+        name: catDef.name,
+        bytes: totalBytes,
+        color: catDef.color,
+      };
+    });
+
+    const categories = (await Promise.all(categoryPromises)).filter(cat => cat.bytes > 0);
+    
+    // Calculate "Other" category (space used but not accounted for)
+    const accountedBytes = categories.reduce((sum, cat) => sum + cat.bytes, 0);
+    const otherBytes = totalUsed - accountedBytes;
+    
+    if (otherBytes > 0 && otherBytes > totalUsed * 0.01) { // Only show if > 1% of total
+      categories.push({
+        name: "Other",
+        bytes: otherBytes,
+        color: "#7C7C7C",
+      });
+    }
+
+    // Cache the results
+    setCachedStorageCategories(mountPoint, categories);
+    
+    return categories;
+  } catch (error) {
+    console.error("Failed to analyze storage categories:", error);
+    return [];
+  }
 }
 
 // Dynamic system info - things that change frequently
@@ -416,77 +523,52 @@ function SystemInfoContent() {
     },
   });
 
-  // If we don't have static info yet, show loading state
-  if (!staticInfo) {
+  // Progressive enhancement: Load storage categories after initial data is loaded
+  const { data: enrichedStorage } = useQuery({
+    queryKey: ["storage-categories", dynamicInfo?.storage],
+    queryFn: async () => {
+      if (!dynamicInfo?.storage) return undefined;
+      
+      // Enrich each storage device with categories
+      return await Promise.all(
+        dynamicInfo.storage.map(async (device) => {
+          // Only analyze / mount point
+          if (device.mountPoint !== "/") {
+            return device;
+          }
+          
+          // Get categories (from cache or analyze)
+          const categories = await analyzeStorageCategories(device.mountPoint, device.used);
+          return { ...device, categories: categories.length > 0 ? categories : undefined };
+        }),
+      );
+    },
+    enabled: !!dynamicInfo?.storage && dynamicInfo.storage.length > 0,
+    staleTime: STORAGE_CATEGORIES_CACHE_DURATION,
+  });
+
+  // Use enriched storage if available, fallback to basic storage
+  const displayDynamicInfo = enrichedStorage ? {
+    ...dynamicInfo!,
+    storage: enrichedStorage,
+  } : dynamicInfo;
+
+  // If we don't have static or dynamic info yet, show loading state
+  if (!staticInfo || !dynamicInfo) {
     return <Detail markdown="Loading system information..." />;
   }
 
-  // If we don't have dynamic info yet, show loading with static info in sidebar
-  if (!dynamicInfo) {
-    return (
-      <Detail
-        markdown="Loading usage data..."
-        metadata={
-          <Detail.Metadata>
-            <Detail.Metadata.Label
-              title="Computer Name"
-              text={staticInfo.hostname}
-              icon={Icon.ComputerChip}
-            />
-            {staticInfo.model && (
-              <Detail.Metadata.Label title="Model" text={staticInfo.model} />
-            )}
-            <Detail.Metadata.Separator />
-            <Detail.Metadata.Label
-              title="Processor"
-              text={staticInfo.cpu.name}
-              icon={Icon.ComputerChip}
-            />
-            <Detail.Metadata.Label
-              title="Cores"
-              text={`${staticInfo.cpu.cores}C / ${staticInfo.cpu.threads}T`}
-            />
-            {staticInfo.gpu && (
-              <>
-                <Detail.Metadata.Separator />
-                <Detail.Metadata.Label
-                  title="Graphics"
-                  text={staticInfo.gpu.name}
-                  icon={Icon.Desktop}
-                />
-              </>
-            )}
-            {staticInfo.displays && staticInfo.displays.length > 0 && (
-              <>
-                <Detail.Metadata.Separator />
-                {staticInfo.displays.map((display, index) => (
-                  <Detail.Metadata.Label
-                    key={index}
-                    title={index === 0 ? "Display" : `Display ${index + 1}`}
-                    text={`${display.resolution}${display.refreshRate ? ` @ ${display.refreshRate.toFixed(0)}Hz` : ""}`}
-                    icon={index === 0 ? Icon.Monitor : undefined}
-                  />
-                ))}
-              </>
-            )}
-            <Detail.Metadata.Separator />
-            <Detail.Metadata.Label
-              title="Kernel"
-              text={staticInfo.os.kernel}
-              icon={Icon.Terminal}
-            />
-            <Detail.Metadata.Label
-              title="Architecture"
-              text={staticInfo.os.architecture}
-            />
-          </Detail.Metadata>
-        }
-      />
-    );
-  }
-
   // Combine static and dynamic info for SVG generation
-  const combinedInfo = {
+  const combinedInfo = displayDynamicInfo ? {
+    ...staticInfo,
+    memory: displayDynamicInfo.memory,
+    swap: displayDynamicInfo.swap,
+    storage: displayDynamicInfo.storage,
+    os: {
+      ...staticInfo.os,
+      uptime: displayDynamicInfo.uptime,
+    },
+  } : {
     ...staticInfo,
     memory: dynamicInfo.memory,
     swap: dynamicInfo.swap,

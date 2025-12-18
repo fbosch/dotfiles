@@ -74,6 +74,12 @@ export type SystemInfo = StaticSystemInfo & {
 };
 
 
+export type StorageCategory = {
+  name: string;
+  bytes: number;
+  color: string;
+};
+
 export type StorageDevice = {
   name: string;
   mountPoint: string;
@@ -82,6 +88,7 @@ export type StorageDevice = {
   available: number;
   usagePercent: number;
   filesystem?: string;
+  categories?: StorageCategory[];
 };
 
 export type Display = {
