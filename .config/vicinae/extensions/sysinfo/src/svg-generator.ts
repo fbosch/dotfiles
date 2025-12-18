@@ -515,29 +515,19 @@ export function generateSystemInfoSVG(
   // Memory Section - no card wrapper
   const hasSwap = info.swap.total > 0;
   const memoryHeight = 85;
-
-  // Calculate combined memory usage
-  const totalMemory = info.memory.total + (hasSwap ? info.swap.total : 0);
-  const totalUsed = info.memory.used + (hasSwap ? info.swap.used : 0);
-  const ramPercent = (info.memory.used / totalMemory) * 100;
-  const swapPercent = hasSwap ? (info.swap.used / totalMemory) * 100 : 0;
-  const totalPercent = (totalUsed / totalMemory) * 100;
-
-  // Generate stacked progress bar
+  
+  // Calculate memory usage percentages (RAM only)
+  const ramPercent = info.memory.usagePercent;
   const ramFillWidth = (progressBarWidth * ramPercent) / 100;
-  const swapFillWidth = (progressBarWidth * swapPercent) / 100;
   const ramColor = getUsageColor(info.memory.usagePercent, colors);
-  const swapColor = colors.warning;
-
+  
   const clipPathMemory = `clip-memory-${Math.random().toString(36).substr(2, 9)}`;
-
+  
   const memoryTitleText = hasSwap
     ? `${formatBytes(info.memory.total)} (${formatBytes(info.swap.total)} swap)`
     : formatBytes(info.memory.total);
-
-  const memoryDetailsText = hasSwap
-    ? `${formatBytes(info.memory.used)} used (${formatBytes(info.swap.used)} swap), ${formatBytes(info.memory.available)} available`
-    : `${formatBytes(info.memory.used)} used, ${formatBytes(info.memory.available)} available`;
+  
+  const memoryDetailsText = `${formatBytes(info.memory.used)} used, ${formatBytes(info.memory.available)} available`;
 
   const memorySection = `
     <!-- Memory Section Header -->
@@ -575,14 +565,6 @@ export function generateSystemInfoSVG(
     <g mask="url(#${clipPathMemory})">
       <rect x="${sectionMargin}" y="${currentY + 68}" width="${ramFillWidth}" height="${memoryBarHeight}" 
             fill="${ramColor}"/>
-      ${
-        hasSwap
-          ? `
-      <rect x="${sectionMargin + ramFillWidth}" y="${currentY + 68}" width="${swapFillWidth}" height="${memoryBarHeight}" 
-            fill="${swapColor}"/>
-      `
-          : ""
-      }
     </g>
   `;
   currentY += memoryHeight + sectionSpacing;
