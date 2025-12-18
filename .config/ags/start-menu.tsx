@@ -54,6 +54,12 @@ const defaultMenuItems: MenuItem[] = [
     variant: "default",
   },
   {
+    id: "system-info",
+    label: "System Info",
+    icon: "\uE946", // System (Info icon)
+    variant: "default",
+  },
+  {
     id: "lock-screen",
     label: "Lock Screen",
     icon: "\uE72E", // Lock
@@ -263,6 +269,7 @@ const getSystemUpdatesCommand = (): string => {
 const menuCommands: Record<string, string> = {
   updates: getSystemUpdatesCommand(), // Combined NixOS and Flatpak updates
   "system-settings": "gnome-tweaks",
+  "system-info": "xdg-open 'vicinae://extensions/fbosch/sysinfo/system-info'",
   "lock-screen": "hyprlock",
   applications: "com.github.tchx84.Flatseal",
   documents: "nemo --existing-window /mnt/nas/FrederikDocs",
