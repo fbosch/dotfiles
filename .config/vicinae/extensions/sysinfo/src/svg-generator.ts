@@ -136,6 +136,14 @@ function generateStorageItem(
             fill="${colors.textTertiary}"
             text-rendering="geometricPrecision">${formatBytes(storage.available)} free of ${formatBytes(storage.total)}</text>
       
+      <!-- Usage Percentage -->
+      <text x="${x + barWidth}" y="${y + 18}" 
+            font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+            font-size="12" 
+            fill="${storage.usagePercent >= 90 ? colors.danger : colors.textTertiary}"
+            text-anchor="end"
+            text-rendering="geometricPrecision">${storage.usagePercent.toFixed(1)}%</text>
+      
       <!-- Simple Progress Bar -->
       <rect x="${x}" y="${y + 32}" width="${barWidth}" height="${barHeight}" 
             rx="5" fill="${colors.progressBackground}"/>
@@ -234,6 +242,14 @@ function generateStorageItem(
           font-size="12" 
           fill="${colors.textTertiary}"
           text-rendering="geometricPrecision">${formatBytes(storage.available)} free of ${formatBytes(storage.total)}</text>
+    
+    <!-- Usage Percentage -->
+    <text x="${x + barWidth}" y="${y + 18}" 
+          font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+          font-size="12" 
+          fill="${storage.usagePercent >= 90 ? colors.danger : colors.textTertiary}"
+          text-anchor="end"
+          text-rendering="geometricPrecision">${storage.usagePercent.toFixed(1)}%</text>
     
     <!-- Mask for rounded corners -->
     <defs>
@@ -527,7 +543,9 @@ export function generateSystemInfoSVG(
     ? `${formatBytes(info.memory.total)} (${formatBytes(info.swap.total)} swap)`
     : formatBytes(info.memory.total);
   
-  const memoryDetailsText = `${formatBytes(info.memory.used)} used, ${formatBytes(info.memory.available)} available`;
+  const memoryDetailsText = hasSwap && info.swap.used > 0
+    ? `${formatBytes(info.memory.used)} used, ${formatBytes(info.memory.available)} available, ${formatBytes(info.swap.used)} swap used`
+    : `${formatBytes(info.memory.used)} used, ${formatBytes(info.memory.available)} available`;
 
   const memorySection = `
     <!-- Memory Section Header -->
@@ -548,6 +566,12 @@ export function generateSystemInfoSVG(
           font-size="12" 
           fill="${colors.textTertiary}"
           text-rendering="geometricPrecision">${memoryDetailsText}</text>
+    <text x="${sectionMargin + progressBarWidth}" y="${currentY + 56}" 
+          font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+          font-size="12" 
+          fill="${ramPercent >= 90 ? colors.danger : colors.textTertiary}"
+          text-anchor="end"
+          text-rendering="geometricPrecision">${ramPercent.toFixed(1)}%</text>
     
     <!-- Mask for memory bar rounded corners -->
     <defs>
