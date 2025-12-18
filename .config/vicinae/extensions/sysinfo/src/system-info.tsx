@@ -1,904 +1,353 @@
 import {
-  QueryClient,
-  QueryClientProvider,
-  useQuery,
+	QueryClient,
+	QueryClientProvider,
+	useQuery,
 } from "@tanstack/react-query";
 import {
-  Action,
-  ActionPanel,
-  Cache,
-  Clipboard,
-  Detail,
-  Icon,
-  Toast,
-  environment,
-  getPreferenceValues,
-  showToast,
+	Action,
+	ActionPanel,
+	Clipboard,
+	Detail,
+	environment,
+	getPreferenceValues,
+	Icon,
+	showToast,
+	Toast,
 } from "@vicinae/api";
-import { exec } from "node:child_process";
-import { readFile } from "node:fs/promises";
-import { promisify } from "node:util";
-import pLimit from "p-limit";
+import { getDynamicSystemInfo, getStaticSystemInfo } from "./aggregators";
+import {
+	getCachedStaticInfo,
+	STORAGE_CATEGORIES_CACHE_DURATION,
+} from "./cache";
+import { analyzeStorageCategories } from "./storage-analyzer";
 import { generateSystemInfoSVG, svgToDataUri } from "./svg-generator";
-import type {
-  DynamicSystemInfo,
-  Preferences,
-  StaticSystemInfo,
-  StorageCategory,
-} from "./types";
-
-const execAsync = promisify(exec);
-
-// Concurrency limiter for du commands to prevent OOM
-const duLimit = pLimit(3);
-
-// Vicinae Cache for static system info persistence between sessions
-const cache = new Cache();
-const STATIC_INFO_CACHE_KEY = "static-system-info-v4"; // Bumped version for packages object structure
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-const STORAGE_CATEGORIES_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
-
-type CachedStaticInfo = {
-  info: StaticSystemInfo;
-  cachedAt: number;
-};
-
-function getCachedStaticInfo(): StaticSystemInfo | null {
-  // Cache is now enabled in dev mode to prevent OOM errors
-  const cached = cache.get(STATIC_INFO_CACHE_KEY);
-  if (!cached) return null;
-  try {
-    const data: CachedStaticInfo = JSON.parse(cached);
-    if (Date.now() - data.cachedAt < CACHE_DURATION) {
-      return data.info;
-    }
-    cache.remove(STATIC_INFO_CACHE_KEY);
-    return null;
-  } catch {
-    cache.remove(STATIC_INFO_CACHE_KEY);
-    return null;
-  }
-}
-
-function setCachedStaticInfo(info: StaticSystemInfo): void {
-  // Cache is now enabled in dev mode to prevent OOM errors
-  cache.set(
-    STATIC_INFO_CACHE_KEY,
-    JSON.stringify({ info, cachedAt: Date.now() } satisfies CachedStaticInfo),
-  );
-}
+import type { Preferences } from "./types";
+import { execAsync } from "./utils";
 
 const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-      // Prevent concurrent fetches - only one query at a time per key
-      refetchInterval: false, // Disable automatic refetch by default
-      staleTime: 5000, // Consider data fresh for 5 seconds
-    },
-  },
+	defaultOptions: {
+		queries: {
+			refetchOnWindowFocus: false,
+			retry: 1,
+			// Prevent concurrent fetches - only one query at a time per key
+			refetchInterval: false, // Disable automatic refetch by default
+			staleTime: 5000, // Consider data fresh for 5 seconds
+		},
+	},
 });
 
-// Static system info - things that don't change during runtime
-async function getStaticSystemInfo(): Promise<StaticSystemInfo> {
-  const [hostname, osInfo, cpuInfo, gpuInfo, displayInfo, packageCount] = await Promise.all([
-    execAsync("hostname").then((r) => r.stdout.trim()),
-    getOSInfo(),
-    getCPUInfo(),
-    getGPUInfo(),
-    getDisplayInfo(),
-    getPackageCount(),
-  ]);
-
-  const info: StaticSystemInfo = {
-    hostname,
-    model: osInfo.model,
-    cpu: cpuInfo,
-    gpu: gpuInfo,
-    displays: displayInfo,
-    os: {
-      name: osInfo.osName,
-      version: osInfo.osVersion,
-      codename: osInfo.osCodename,
-      kernel: osInfo.kernel,
-      architecture: osInfo.architecture,
-      packages: packageCount,
-    },
-  };
-
-  // Cache static info for future opens
-  setCachedStaticInfo(info);
-
-  return info;
-}
-
-// Cache helper functions for storage categories
-function getCachedStorageCategories(
-  mountPoint: string,
-): StorageCategory[] | null {
-  // Cache is now enabled in dev mode to prevent OOM errors
-  const cacheKey = `storage-categories-${mountPoint}-v1`;
-  const cached = cache.get(cacheKey);
-  if (!cached) return null;
-  try {
-    const data: { categories: StorageCategory[]; cachedAt: number } =
-      JSON.parse(cached);
-    if (Date.now() - data.cachedAt < STORAGE_CATEGORIES_CACHE_DURATION) {
-      return data.categories;
-    }
-    cache.remove(cacheKey);
-    return null;
-  } catch {
-    cache.remove(cacheKey);
-    return null;
-  }
-}
-
-function setCachedStorageCategories(
-  mountPoint: string,
-  categories: StorageCategory[],
-): void {
-  // Cache is now enabled in dev mode to prevent OOM errors
-  const cacheKey = `storage-categories-${mountPoint}-v1`;
-  cache.set(
-    cacheKey,
-    JSON.stringify({ categories, cachedAt: Date.now() }),
-  );
-}
-
-// Analyze storage by categories using parallel du commands
-async function analyzeStorageCategories(
-  mountPoint: string,
-  totalUsed: number,
-): Promise<StorageCategory[]> {
-  // Check cache first
-  const cached = getCachedStorageCategories(mountPoint);
-  if (cached) {
-    return cached;
-  }
-
-  // Only analyze the main filesystem (/)
-  if (mountPoint !== "/") {
-    return [];
-  }
-
-  try {
-    // Define categories with their directories and vibrant colors (inspired by macOS)
-    const categoryDefs = [
-      {
-        name: "Apps",
-        paths: ["/usr", "/opt", "/var/lib/flatpak", "/var/lib/snapd"],
-        color: "#5FA8D3",
-      }, // bright blue
-      {
-        name: "Documents",
-        paths: ["~/Documents", "~/Desktop"],
-        color: "#F9B572",
-      }, // bright orange
-      { name: "Photos", paths: ["~/Pictures"], color: "#E85D75" }, // bright pink/red
-      { name: "Music", paths: ["~/Music"], color: "#C77DBB" }, // bright purple
-      { name: "Videos", paths: ["~/Videos"], color: "#8CC265" }, // bright green
-      { name: "Downloads", paths: ["~/Downloads"], color: "#62C3D1" }, // bright cyan
-      {
-        name: "System",
-        paths: ["/boot", "/var/log", "/tmp"],
-        color: "#9B9B9B",
-      }, // gray
-    ];
-
-    // Run du commands with concurrency limit to prevent memory issues
-    const categoryPromises = categoryDefs.map(async (catDef) => {
-      // Run du commands with p-limit to control concurrency
-      const pathPromises = catDef.paths.map((path) =>
-        duLimit(async () => {
-          try {
-            const expandedPath = path.startsWith("~")
-              ? path.replace("~", process.env.HOME || "")
-              : path;
-
-            const { stdout } = await execAsync(
-              `test -d "${expandedPath}" && timeout 5 du -sb "${expandedPath}" 2>/dev/null | cut -f1 || echo "0"`,
-            );
-            return Number.parseInt(stdout.trim() || "0", 10);
-          } catch {
-            return 0;
-          }
-        })
-      );
-
-      const bytesPerPath = await Promise.all(pathPromises);
-      const totalBytes = bytesPerPath.reduce((sum, bytes) => sum + bytes, 0);
-
-      return {
-        name: catDef.name,
-        bytes: totalBytes,
-        color: catDef.color,
-      };
-    });
-
-    const categories = (await Promise.all(categoryPromises)).filter(
-      (cat) => cat.bytes > 0,
-    );
-
-    // Calculate "Other" category (space used but not accounted for)
-    const accountedBytes = categories.reduce((sum, cat) => sum + cat.bytes, 0);
-    const otherBytes = totalUsed - accountedBytes;
-
-    if (otherBytes > 0 && otherBytes > totalUsed * 0.01) {
-      // Only show if > 1% of total
-      categories.push({
-        name: "Other",
-        bytes: otherBytes,
-        color: "#7C7C7C",
-      });
-    }
-
-    // Cache the results
-    setCachedStorageCategories(mountPoint, categories);
-
-    return categories;
-  } catch (error) {
-    console.error("Failed to analyze storage categories:", error);
-    return [];
-  }
-}
-
-// Dynamic system info - things that change frequently
-async function getDynamicSystemInfo(): Promise<DynamicSystemInfo> {
-  const [memAndSwap, storageInfo, uptimeInfo] = await Promise.all([
-    getMemoryAndSwapInfo(),
-    getStorageInfo(),
-    getUptime(),
-  ]);
-
-  return {
-    memory: memAndSwap.memory,
-    swap: memAndSwap.swap,
-    storage: storageInfo,
-    uptime: uptimeInfo,
-  };
-}
-
-async function getOSInfo() {
-  try {
-    // Parallelize all independent operations
-    const [osRelease, kernel, arch, modelInfo] = await Promise.all([
-      readFile("/etc/os-release", "utf-8"),
-      execAsync("uname -r").then((r) => r.stdout.trim()),
-      execAsync("uname -m").then((r) => r.stdout.trim()),
-      // Try to get model info in parallel
-      Promise.all([
-        readFile("/sys/devices/virtual/dmi/id/product_name", "utf-8").then((s) => s.trim()).catch(() => ""),
-        readFile("/sys/devices/virtual/dmi/id/product_version", "utf-8").then((s) => s.trim()).catch(() => ""),
-      ]).catch(() => ["", ""]),
-    ]);
-
-    const prettyName = osRelease.match(/PRETTY_NAME="([^"]+)"/)?.[1] || "Linux";
-    const versionId = osRelease.match(/VERSION_ID="([^"]+)"/)?.[1] || "";
-    const versionCodename = osRelease
-      .match(/VERSION_CODENAME=([^\n]+)/)?.[1]
-      ?.trim();
-
-    console.log("OS Info:", { prettyName, versionId, versionCodename });
-
-    // Process model info
-    const [productName, productVersion] = modelInfo;
-    const model =
-      productName && productVersion && productVersion !== "None"
-        ? `${productName} ${productVersion}`
-        : productName || undefined;
-
-    return {
-      osName: prettyName,
-      osVersion: versionId,
-      osCodename: versionCodename,
-      kernel,
-      architecture: arch,
-      model,
-    };
-  } catch {
-    // Fallback
-    const uname = await execAsync("uname -a").then((r) => r.stdout.trim());
-    return {
-      osName: "Linux",
-      osVersion: "",
-      kernel: uname,
-      architecture: "unknown",
-    };
-  }
-}
-
-async function getCPUInfo() {
-  try {
-    const cpuinfo = await readFile("/proc/cpuinfo", "utf-8");
-    const modelMatch = cpuinfo.match(/model name\s*:\s*(.+)/);
-    const cpuName = modelMatch ? modelMatch[1].trim() : "Unknown CPU";
-
-    // Count physical cores and threads
-    const coreIds = new Set<string>();
-    const processors = cpuinfo.match(/processor\s*:/g)?.length || 1;
-
-    for (const line of cpuinfo.split("\n")) {
-      if (line.startsWith("core id")) {
-        coreIds.add(line);
-      }
-    }
-
-    const cores = coreIds.size || processors;
-
-    // Try to get CPU frequency
-    let speed: string | undefined;
-    try {
-      const freq = await readFile(
-        "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq",
-        "utf-8",
-      );
-      const ghz = (Number.parseInt(freq.trim(), 10) / 1000000).toFixed(2);
-      speed = `${ghz} GHz`;
-    } catch {
-      // Frequency scaling might not be available
-    }
-
-    return {
-      name: cpuName,
-      cores,
-      threads: processors,
-      speed,
-    };
-  } catch {
-    return {
-      name: "Unknown CPU",
-      cores: 1,
-      threads: 1,
-    };
-  }
-}
-
-// Combined function to read /proc/meminfo once for both memory and swap
-async function getMemoryAndSwapInfo() {
-  try {
-    const meminfo = await readFile("/proc/meminfo", "utf-8");
-    
-    // Parse memory info
-    const memTotal =
-      Number.parseInt(meminfo.match(/MemTotal:\s+(\d+)/)?.[1] || "0", 10) * 1024;
-    const memAvailable =
-      Number.parseInt(meminfo.match(/MemAvailable:\s+(\d+)/)?.[1] || "0", 10) * 1024;
-    const memUsed = memTotal - memAvailable;
-    const memUsagePercent = memTotal > 0 ? (memUsed / memTotal) * 100 : 0;
-    
-    // Parse swap info
-    const swapTotal =
-      Number.parseInt(meminfo.match(/SwapTotal:\s+(\d+)/)?.[1] || "0", 10) * 1024;
-    const swapFree =
-      Number.parseInt(meminfo.match(/SwapFree:\s+(\d+)/)?.[1] || "0", 10) * 1024;
-    const swapUsed = swapTotal - swapFree;
-    const swapUsagePercent = swapTotal > 0 ? (swapUsed / swapTotal) * 100 : 0;
-
-    return {
-      memory: {
-        total: memTotal,
-        used: memUsed,
-        available: memAvailable,
-        usagePercent: memUsagePercent,
-      },
-      swap: {
-        total: swapTotal,
-        used: swapUsed,
-        free: swapFree,
-        usagePercent: swapUsagePercent,
-      },
-    };
-  } catch {
-    return {
-      memory: {
-        total: 0,
-        used: 0,
-        available: 0,
-        usagePercent: 0,
-      },
-      swap: {
-        total: 0,
-        used: 0,
-        free: 0,
-        usagePercent: 0,
-      },
-    };
-  }
-}
-
-async function getStorageInfo() {
-  try {
-    const { stdout } = await execAsync(
-      "df -B1 / /home 2>/dev/null | tail -n +2",
-    );
-    const lines = stdout.trim().split("\n");
-    const devices = new Set<string>();
-
-    return lines
-      .map((line) => {
-        const parts = line.trim().split(/\s+/);
-        if (parts.length < 6) return null;
-
-        const [device, totalStr, usedStr, availStr, , mountPoint] = parts;
-
-        // Skip duplicate mount points
-        if (devices.has(device)) return null;
-        devices.add(device);
-
-        const total = Number.parseInt(totalStr, 10);
-        const used = Number.parseInt(usedStr, 10);
-        const available = Number.parseInt(availStr, 10);
-        const usagePercent = total > 0 ? (used / total) * 100 : 0;
-
-        return {
-          name: device,
-          mountPoint,
-          total,
-          used,
-          available,
-          usagePercent,
-        };
-      })
-      .filter((d): d is NonNullable<typeof d> => d !== null);
-  } catch {
-    return [];
-  }
-}
-
-async function getGPUInfo() {
-  try {
-    // Try lspci first
-    const { stdout } = await execAsync("lspci | grep -i 'vga\\|3d\\|display'");
-    const firstGPU = stdout.split("\n")[0];
-    if (firstGPU) {
-      // Extract GPU name from lspci output
-      const match = firstGPU.match(/: (.+)/);
-      if (match) {
-        return { name: match[1].trim() };
-      }
-    }
-  } catch {
-    // lspci might not be available
-  }
-
-  return undefined;
-}
-
-async function getUptime() {
-  try {
-    const uptimeStr = await readFile("/proc/uptime", "utf-8");
-    return Number.parseFloat(uptimeStr.split(" ")[0]);
-  } catch {
-    return 0;
-  }
-}
-
-async function getPackageCount(): Promise<{
-  nix?: number;
-  flatpak?: number;
-  dpkg?: number;
-  rpm?: number;
-  pacman?: number;
-} | undefined> {
-  const packages: {
-    nix?: number;
-    flatpak?: number;
-    dpkg?: number;
-    rpm?: number;
-    pacman?: number;
-  } = {};
-
-  // Run all package manager checks in parallel
-  const [nixResult, dpkgResult, rpmResult, pacmanResult, flatpakResult] = await Promise.all([
-    // NixOS (system + user)
-    Promise.all([
-      execAsync("nix-store -q --requisites /run/current-system 2>/dev/null | wc -l").catch(() => ({ stdout: "0" })),
-      execAsync("nix-store -q --requisites ~/.nix-profile 2>/dev/null | wc -l").catch(() => ({ stdout: "0" })),
-    ]).then(([nixSystem, nixUser]) => {
-      const systemCount = Number.parseInt(nixSystem.stdout.trim(), 10);
-      const userCount = Number.parseInt(nixUser.stdout.trim(), 10);
-      return systemCount + userCount;
-    }).catch(() => 0),
-    
-    // dpkg (Debian/Ubuntu)
-    execAsync("dpkg -l | grep '^ii' | wc -l")
-      .then(({ stdout }) => Number.parseInt(stdout.trim(), 10))
-      .catch(() => 0),
-    
-    // rpm (RedHat/Fedora/CentOS)
-    execAsync("rpm -qa | wc -l")
-      .then(({ stdout }) => Number.parseInt(stdout.trim(), 10))
-      .catch(() => 0),
-    
-    // pacman (Arch)
-    execAsync("pacman -Q | wc -l")
-      .then(({ stdout }) => Number.parseInt(stdout.trim(), 10))
-      .catch(() => 0),
-    
-    // Flatpak
-    execAsync("flatpak list --app 2>/dev/null | wc -l")
-      .then(({ stdout }) => Number.parseInt(stdout.trim(), 10))
-      .catch(() => 0),
-  ]);
-
-  if (nixResult > 0) packages.nix = nixResult;
-  if (dpkgResult > 0) packages.dpkg = dpkgResult;
-  if (rpmResult > 0) packages.rpm = rpmResult;
-  if (pacmanResult > 0) packages.pacman = pacmanResult;
-  if (flatpakResult > 0) packages.flatpak = flatpakResult;
-
-  return Object.keys(packages).length > 0 ? packages : undefined;
-}
-
-async function getDisplayInfo() {
-  try {
-    // Try to get display info from Hyprland if available
-    const { stdout } = await execAsync("hyprctl monitors -j");
-    type HyprMonitor = {
-      name: string;
-      width: number;
-      height: number;
-      refreshRate: number;
-      scale: number;
-    };
-    const monitors = JSON.parse(stdout) as HyprMonitor[];
-
-    return monitors.map((m) => ({
-      name: m.name || "Unknown",
-      resolution: `${m.width}×${m.height}`,
-      refreshRate: m.refreshRate,
-      scale: m.scale,
-    }));
-  } catch {
-    // Hyprland not available, try xrandr
-    try {
-      const { stdout } = await execAsync("xrandr --current");
-      const displays = [];
-      const lines = stdout.split("\n");
-
-      for (const line of lines) {
-        if (line.includes(" connected")) {
-          const match = line.match(/^(\S+)\s+connected.*?(\d+x\d+)/);
-          if (match) {
-            displays.push({
-              name: match[1],
-              resolution: match[2].replace("x", "×"),
-            });
-          }
-        }
-      }
-
-      return displays.length > 0 ? displays : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-}
-
 function SystemInfoContent() {
-  const preferences = getPreferenceValues<Preferences>();
-  const refreshInterval = Number.parseInt(preferences.refreshInterval, 10);
+	const preferences = getPreferenceValues<Preferences>();
+	const refreshInterval = Number.parseInt(preferences.refreshInterval, 10);
 
-  // Static system info - load from cache first, then refresh in background
-  const { data: staticInfo } = useQuery({
-    queryKey: ["system-info-static"],
-    queryFn: getStaticSystemInfo,
-    staleTime: 60 * 60 * 1000, // 1 hour in react-query cache
-    initialData: () => getCachedStaticInfo() || undefined, // Load from persistent cache immediately
-    throwOnError: (error) => {
-      showToast({
-        style: Toast.Style.Failure,
-        title: "Failed to load system info",
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
-      return false;
-    },
-  });
+	// Static system info - load from cache first, then refresh in background
+	const { data: staticInfo } = useQuery({
+		queryKey: ["system-info-static"],
+		queryFn: getStaticSystemInfo,
+		staleTime: 60 * 60 * 1000, // 1 hour in react-query cache
+		initialData: () => getCachedStaticInfo() || undefined, // Load from persistent cache immediately
+		throwOnError: (error) => {
+			showToast({
+				style: Toast.Style.Failure,
+				title: "Failed to load system info",
+				message: error instanceof Error ? error.message : "Unknown error",
+			});
+			return false;
+		},
+	});
 
-  // Dynamic system info - refreshed frequently (memory, storage usage)
-  // React Query prevents concurrent fetches automatically
-  const { data: dynamicInfo, refetch: refetchDynamic } = useQuery({
-    queryKey: ["system-info-dynamic"],
-    queryFn: getDynamicSystemInfo,
-    staleTime: 5000, // 5 seconds - prevents unnecessary refetches
-    enabled: !!staticInfo, // Only fetch dynamic info after static info is loaded
-    refetchInterval: refreshInterval > 0 ? refreshInterval : false, // Auto-refresh based on preference
-    refetchIntervalInBackground: false, // Don't refetch when window is not focused
-    refetchOnMount: false, // Don't refetch on remount if data is fresh
-    throwOnError: (error) => {
-      showToast({
-        style: Toast.Style.Failure,
-        title: "Failed to load usage data",
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
-      return false;
-    },
-  });
+	// Dynamic system info - refreshed frequently (memory, storage usage)
+	// React Query prevents concurrent fetches automatically
+	const { data: dynamicInfo, refetch: refetchDynamic } = useQuery({
+		queryKey: ["system-info-dynamic"],
+		queryFn: getDynamicSystemInfo,
+		staleTime: 5000, // 5 seconds - prevents unnecessary refetches
+		enabled: !!staticInfo, // Only fetch dynamic info after static info is loaded
+		refetchInterval: refreshInterval > 0 ? refreshInterval : false, // Auto-refresh based on preference
+		refetchIntervalInBackground: false, // Don't refetch when window is not focused
+		refetchOnMount: false, // Don't refetch on remount if data is fresh
+		throwOnError: (error) => {
+			showToast({
+				style: Toast.Style.Failure,
+				title: "Failed to load usage data",
+				message: error instanceof Error ? error.message : "Unknown error",
+			});
+			return false;
+		},
+	});
 
-  // Progressive enhancement: Load storage categories after initial data is loaded
-  // This query is throttled to prevent memory issues from running du commands
-  const { data: enrichedStorage } = useQuery({
-    queryKey: ["storage-categories", dynamicInfo?.storage],
-    queryFn: async () => {
-      if (!dynamicInfo?.storage) return undefined;
+	// Progressive enhancement: Load storage categories after initial data is loaded
+	// This query is throttled to prevent memory issues from running du commands
+	const { data: enrichedStorage } = useQuery({
+		queryKey: ["storage-categories", dynamicInfo?.storage],
+		queryFn: async () => {
+			if (!dynamicInfo?.storage) return undefined;
 
-      // Enrich each storage device with categories
-      return await Promise.all(
-        dynamicInfo.storage.map(async (device) => {
-          // Only analyze / mount point
-          if (device.mountPoint !== "/") {
-            return device;
-          }
+			// Enrich each storage device with categories
+			return await Promise.all(
+				dynamicInfo.storage.map(async (device) => {
+					// Only analyze / mount point
+					if (device.mountPoint !== "/") {
+						return device;
+					}
 
-          // Get categories (from cache or analyze)
-          const categories = await analyzeStorageCategories(
-            device.mountPoint,
-            device.used,
-          );
-          return {
-            ...device,
-            categories: categories.length > 0 ? categories : undefined,
-          };
-        }),
-      );
-    },
-    enabled: !!dynamicInfo?.storage && dynamicInfo.storage.length > 0,
-    staleTime: STORAGE_CATEGORIES_CACHE_DURATION, // Use cache for 10 minutes
-    refetchOnMount: false, // Don't refetch on remount
-    refetchOnWindowFocus: false, // Don't refetch on window focus
-    refetchOnReconnect: false, // Don't refetch on reconnect
-  });
+					// Get categories (from cache or analyze)
+					const categories = await analyzeStorageCategories(
+						device.mountPoint,
+						device.used,
+					);
+					return {
+						...device,
+						categories: categories.length > 0 ? categories : undefined,
+					};
+				}),
+			);
+		},
+		enabled: !!dynamicInfo?.storage && dynamicInfo.storage.length > 0,
+		staleTime: STORAGE_CATEGORIES_CACHE_DURATION, // Use cache for 10 minutes
+		refetchOnMount: false, // Don't refetch on remount
+		refetchOnWindowFocus: false, // Don't refetch on window focus
+		refetchOnReconnect: false, // Don't refetch on reconnect
+	});
 
-  // Use enriched storage if available, fallback to basic storage
-  const displayDynamicInfo = enrichedStorage && dynamicInfo
-    ? {
-        ...dynamicInfo,
-        storage: enrichedStorage,
-      }
-    : dynamicInfo;
+	// Use enriched storage if available, fallback to basic storage
+	const displayDynamicInfo =
+		enrichedStorage && dynamicInfo
+			? {
+					...dynamicInfo,
+					storage: enrichedStorage,
+				}
+			: dynamicInfo;
 
-  // If we don't have static or dynamic info yet, show loading state
-  if (!staticInfo || !dynamicInfo) {
-    return <Detail markdown="" />;
-  }
+	// If we don't have static or dynamic info yet, show loading state
+	if (!staticInfo || !dynamicInfo) {
+		return <Detail markdown="" />;
+	}
 
-  // Combine static and dynamic info for SVG generation
-  const combinedInfo = displayDynamicInfo
-    ? {
-        ...staticInfo,
-        memory: displayDynamicInfo.memory,
-        swap: displayDynamicInfo.swap,
-        storage: displayDynamicInfo.storage,
-        os: {
-          ...staticInfo.os,
-          uptime: displayDynamicInfo.uptime,
-        },
-      }
-    : {
-        ...staticInfo,
-        memory: dynamicInfo.memory,
-        swap: dynamicInfo.swap,
-        storage: dynamicInfo.storage,
-        os: {
-          ...staticInfo.os,
-          uptime: dynamicInfo.uptime,
-        },
-      };
+	// Combine static and dynamic info for SVG generation
+	const combinedInfo = displayDynamicInfo
+		? {
+				...staticInfo,
+				memory: displayDynamicInfo.memory,
+				swap: displayDynamicInfo.swap,
+				storage: displayDynamicInfo.storage,
+				os: {
+					...staticInfo.os,
+					uptime: displayDynamicInfo.uptime,
+				},
+			}
+		: {
+				...staticInfo,
+				memory: dynamicInfo.memory,
+				swap: dynamicInfo.swap,
+				storage: dynamicInfo.storage,
+				os: {
+					...staticInfo.os,
+					uptime: dynamicInfo.uptime,
+				},
+			};
 
-  // Generate SVG with current theme appearance and convert to data URI
-  const svg = generateSystemInfoSVG(combinedInfo, environment.appearance);
-  const dataUri = svgToDataUri(svg);
-  const markdown = `![System Information](${dataUri})`;
+	// Generate SVG with current theme appearance and convert to data URI
+	const svg = generateSystemInfoSVG(combinedInfo, environment.appearance);
+	const dataUri = svgToDataUri(svg);
+	const markdown = `![System Information](${dataUri})`;
 
-  return (
-    <Detail
-      markdown={markdown}
-      metadata={
-        <Detail.Metadata>
-          <Detail.Metadata.Label
-            title="Hostname"
-            text={staticInfo.hostname}
-          />
-          {staticInfo.model && (
-            <Detail.Metadata.Label title="Model" text={staticInfo.model} />
-          )}
-          <Detail.Metadata.Separator />
-          <Detail.Metadata.Label
-            title="Processor"
-            text={staticInfo.cpu.name}
-            icon={Icon.ComputerChip}
-          />
-          <Detail.Metadata.Label
-            title="Cores"
-            text={`${staticInfo.cpu.cores}C / ${staticInfo.cpu.threads}T`}
-          />
-          {staticInfo.gpu && (
-            <>
-              <Detail.Metadata.Separator />
-              <Detail.Metadata.Label
-                title="Graphics"
-                text={staticInfo.gpu.name}
-                icon={Icon.Desktop}
-              />
-            </>
-          )}
-          {staticInfo.displays && staticInfo.displays.length > 0 && (
-            <>
-              <Detail.Metadata.Separator />
-              {staticInfo.displays.map((display, index) => (
-                <Detail.Metadata.Label
-                  key={index}
-                  title={index === 0 ? "Display" : `Display ${index + 1}`}
-                  text={`${display.resolution}${display.refreshRate ? ` @ ${display.refreshRate.toFixed(0)}Hz` : ""}`}
-                  icon={index === 0 ? Icon.Monitor : undefined}
-                />
-              ))}
-            </>
-          )}
-          <Detail.Metadata.Separator />
-          <Detail.Metadata.Label
-            title="Kernel"
-            text={staticInfo.os.kernel}
-            icon={Icon.Terminal}
-          />
-          <Detail.Metadata.Label
-            title="Architecture"
-            text={staticInfo.os.architecture}
-          />
-        </Detail.Metadata>
-      }
-      actions={
-        <ActionPanel>
-          <Action
-            title="Refresh"
-            icon={Icon.ArrowClockwise}
-            onAction={() => refetchDynamic()}
-            shortcut={{ modifiers: ["cmd"], key: "r" }}
-          />
-          <ActionPanel.Section title="Launch">
-            <Action
-              title="Open System Monitor"
-              icon={Icon.Monitor}
-              onAction={async () => {
-                try {
-                  // Check all available tools in parallel
-                  const [hasMissionCenter, hasBtop, hasHtop] = await Promise.all([
-                    execAsync("which missioncenter").then(() => true).catch(() => false),
-                    execAsync("which btop").then(() => true).catch(() => false),
-                    execAsync("which htop").then(() => true).catch(() => false),
-                  ]);
-                  
-                  // Launch the first available tool
-                  if (hasMissionCenter) {
-                    await execAsync("missioncenter &");
-                  } else if (hasBtop) {
-                    await execAsync("foot btop &");
-                  } else if (hasHtop) {
-                    await execAsync("foot htop &");
-                  } else {
-                    throw new Error("No system monitor found (tried missioncenter, btop, htop)");
-                  }
-                  
-                  await showToast({
-                    style: Toast.Style.Success,
-                    title: "Launched System Monitor",
-                  });
-                } catch (error) {
-                  await showToast({
-                    style: Toast.Style.Failure,
-                    title: "Failed to open system monitor",
-                    message: error instanceof Error ? error.message : "Unknown error",
-                  });
-                }
-              }}
-              shortcut={{ modifiers: ["cmd"], key: "m" }}
-            />
-            <Action
-              title="Open Disk Usage Analyzer"
-              icon={Icon.HardDrive}
-              onAction={async () => {
-                try {
-                  // Check all available tools in parallel
-                  const [hasBaobab, hasNcdu] = await Promise.all([
-                    execAsync("which baobab").then(() => true).catch(() => false),
-                    execAsync("which ncdu").then(() => true).catch(() => false),
-                  ]);
-                  
-                  // Launch the first available tool
-                  if (hasBaobab) {
-                    await execAsync("baobab &");
-                  } else if (hasNcdu) {
-                    await execAsync("foot ncdu / &");
-                  } else {
-                    throw new Error("No disk analyzer found (tried baobab, ncdu)");
-                  }
-                  
-                  await showToast({
-                    style: Toast.Style.Success,
-                    title: "Launched Disk Usage Analyzer",
-                  });
-                } catch (error) {
-                  await showToast({
-                    style: Toast.Style.Failure,
-                    title: "Failed to open disk analyzer",
-                    message: error instanceof Error ? error.message : "Unknown error",
-                  });
-                }
-              }}
-              shortcut={{ modifiers: ["cmd"], key: "d" }}
-            />
-            <Action
-              title="Open Disk Usage Analyzer"
-              icon={Icon.HardDrive}
-              onAction={async () => {
-                try {
-                  // Try baobab (GNOME Disk Usage Analyzer) first, fallback to ncdu (TUI)
-                  await execAsync("which baobab").then(() =>
-                    execAsync("baobab &")
-                  ).catch(() =>
-                    execAsync("foot ncdu / &")
-                  );
-                  await showToast({
-                    style: Toast.Style.Success,
-                    title: "Launched Disk Usage Analyzer",
-                  });
-                } catch (error) {
-                  await showToast({
-                    style: Toast.Style.Failure,
-                    title: "Failed to open disk analyzer",
-                    message: error instanceof Error ? error.message : "Unknown error",
-                  });
-                }
-              }}
-              shortcut={{ modifiers: ["cmd"], key: "d" }}
-            />
-          </ActionPanel.Section>
-          <ActionPanel.Section title="Copy">
-            <Action
-              title="Copy Hostname"
-              icon={Icon.Clipboard}
-              onAction={async () => {
-                await Clipboard.copy(staticInfo.hostname);
-                await showToast({
-                  style: Toast.Style.Success,
-                  title: "Copied Hostname",
-                  message: staticInfo.hostname,
-                });
-              }}
-              shortcut={{ modifiers: ["cmd"], key: "c" }}
-            />
-            <Action
-              title="Copy OS Info"
-              icon={Icon.Clipboard}
-              onAction={async () => {
-                const text = `${staticInfo.os.name} ${staticInfo.os.version} (${staticInfo.os.kernel})`;
-                await Clipboard.copy(text);
-                await showToast({
-                  style: Toast.Style.Success,
-                  title: "Copied OS Info",
-                  message: text,
-                });
-              }}
-              shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
-            />
-            <Action.CopyToClipboard
-              title="Copy All Info"
-              content={markdown}
-              shortcut={{ modifiers: ["cmd", "shift"], key: "a" }}
-            />
-          </ActionPanel.Section>
-        </ActionPanel>
-      }
-    />
-  );
+	return (
+		<Detail
+			markdown={markdown}
+			metadata={
+				<Detail.Metadata>
+					<Detail.Metadata.Label title="Hostname" text={staticInfo.hostname} />
+					{staticInfo.model && (
+						<Detail.Metadata.Label title="Model" text={staticInfo.model} />
+					)}
+					<Detail.Metadata.Separator />
+					<Detail.Metadata.Label
+						title="Processor"
+						text={staticInfo.cpu.name}
+						icon={Icon.ComputerChip}
+					/>
+					<Detail.Metadata.Label
+						title="Cores"
+						text={`${staticInfo.cpu.cores}C / ${staticInfo.cpu.threads}T`}
+					/>
+					{staticInfo.gpu && (
+						<>
+							<Detail.Metadata.Separator />
+							<Detail.Metadata.Label
+								title="Graphics"
+								text={staticInfo.gpu.name}
+								icon={Icon.Desktop}
+							/>
+						</>
+					)}
+					{staticInfo.displays && staticInfo.displays.length > 0 && (
+						<>
+							<Detail.Metadata.Separator />
+							{staticInfo.displays.map((display, index) => (
+								<Detail.Metadata.Label
+									key={index}
+									title={index === 0 ? "Display" : `Display ${index + 1}`}
+									text={`${display.resolution}${display.refreshRate ? ` @ ${display.refreshRate.toFixed(0)}Hz` : ""}`}
+									icon={index === 0 ? Icon.Monitor : undefined}
+								/>
+							))}
+						</>
+					)}
+					<Detail.Metadata.Separator />
+					<Detail.Metadata.Label
+						title="Kernel"
+						text={staticInfo.os.kernel}
+						icon={Icon.Terminal}
+					/>
+					<Detail.Metadata.Label
+						title="Architecture"
+						text={staticInfo.os.architecture}
+					/>
+				</Detail.Metadata>
+			}
+			actions={
+				<ActionPanel>
+					<Action
+						title="Refresh"
+						icon={Icon.ArrowClockwise}
+						onAction={() => refetchDynamic()}
+						shortcut={{ modifiers: ["cmd"], key: "r" }}
+					/>
+					<ActionPanel.Section title="Launch">
+						<Action
+							title="Open System Monitor"
+							icon={Icon.LineChart}
+							onAction={async () => {
+								try {
+									// Check all available tools in parallel
+									const [hasMissionCenter, hasBtop, hasHtop] =
+										await Promise.all([
+											execAsync("which missioncenter")
+												.then(() => true)
+												.catch(() => false),
+											execAsync("which btop")
+												.then(() => true)
+												.catch(() => false),
+											execAsync("which htop")
+												.then(() => true)
+												.catch(() => false),
+										]);
+
+									// Launch the first available tool
+									if (hasMissionCenter) {
+										await execAsync("missioncenter &");
+									} else if (hasBtop) {
+										await execAsync("foot btop &");
+									} else if (hasHtop) {
+										await execAsync("foot htop &");
+									} else {
+										throw new Error(
+											"No system monitor found (tried missioncenter, btop, htop)",
+										);
+									}
+
+									await showToast({
+										style: Toast.Style.Success,
+										title: "Launched System Monitor",
+									});
+								} catch (error) {
+									await showToast({
+										style: Toast.Style.Failure,
+										title: "Failed to open system monitor",
+										message:
+											error instanceof Error ? error.message : "Unknown error",
+									});
+								}
+							}}
+							shortcut={{ modifiers: ["cmd"], key: "m" }}
+						/>
+						<Action
+							title="Open Disk Usage Analyzer"
+							icon={Icon.HardDrive}
+							onAction={async () => {
+								try {
+									// Check all available tools in parallel
+									const [hasBaobab, hasNcdu] = await Promise.all([
+										execAsync("which baobab")
+											.then(() => true)
+											.catch(() => false),
+										execAsync("which ncdu")
+											.then(() => true)
+											.catch(() => false),
+									]);
+
+									// Launch the first available tool
+									if (hasBaobab) {
+										await execAsync("baobab &");
+									} else if (hasNcdu) {
+										await execAsync("foot ncdu / &");
+									} else {
+										throw new Error(
+											"No disk analyzer found (tried baobab, ncdu)",
+										);
+									}
+
+									await showToast({
+										style: Toast.Style.Success,
+										title: "Launched Disk Usage Analyzer",
+									});
+								} catch (error) {
+									await showToast({
+										style: Toast.Style.Failure,
+										title: "Failed to open disk analyzer",
+										message:
+											error instanceof Error ? error.message : "Unknown error",
+									});
+								}
+							}}
+							shortcut={{ modifiers: ["cmd"], key: "d" }}
+						/>
+					</ActionPanel.Section>
+					<ActionPanel.Section title="Copy">
+						<Action
+							title="Copy Hostname"
+							icon={Icon.Clipboard}
+							onAction={async () => {
+								await Clipboard.copy(staticInfo.hostname);
+								await showToast({
+									style: Toast.Style.Success,
+									title: "Copied Hostname",
+									message: staticInfo.hostname,
+								});
+							}}
+							shortcut={{ modifiers: ["cmd"], key: "c" }}
+						/>
+						<Action
+							title="Copy OS Info"
+							icon={Icon.Clipboard}
+							onAction={async () => {
+								const text = `${staticInfo.os.name} ${staticInfo.os.version} (${staticInfo.os.kernel})`;
+								await Clipboard.copy(text);
+								await showToast({
+									style: Toast.Style.Success,
+									title: "Copied OS Info",
+									message: text,
+								});
+							}}
+							shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
+						/>
+						<Action.CopyToClipboard
+							title="Copy All Info"
+							content={markdown}
+							shortcut={{ modifiers: ["cmd", "shift"], key: "a" }}
+						/>
+					</ActionPanel.Section>
+				</ActionPanel>
+			}
+		/>
+	);
 }
 
 export default function SystemInfoCommand() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <SystemInfoContent />
-    </QueryClientProvider>
-  );
+	return (
+		<QueryClientProvider client={queryClient}>
+			<SystemInfoContent />
+		</QueryClientProvider>
+	);
 }
