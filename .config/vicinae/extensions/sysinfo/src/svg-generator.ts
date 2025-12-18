@@ -67,6 +67,20 @@ function formatBytes(bytes: number): string {
   return `${(bytes / k ** i).toFixed(1)} ${sizes[i]}`;
 }
 
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  
+  if (days > 0) {
+    return `${days}d ${hours}h ${minutes}m`;
+  }
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
 function getUsageColor(percent: number, colors: ThemeColors): string {
   if (percent < 60) return colors.success;
   if (percent < 80) return colors.warning;
@@ -170,37 +184,105 @@ export function generateSystemInfoSVG(
                      osNameLower.includes('alpine') ? '\uf300' :     // nf-linux-alpine
                      '\uf17c'; // nf-fa-linux (generic tux)
   
-  // OS Header Section (macOS-style) - no background, floating
-  const osHeaderHeight = 95;
+  // OS Header Section - left-aligned with logo and details side by side
+  const osHeaderHeight = 110;
+  const logoX = margin + 20;
+  const logoY = currentY + 55;
+  const logoSize = 70;
+  const textStartX = logoX + logoSize + 20;
+  const textStartY = currentY + 28;
+  
   const osHeader = `
+    <!-- Distro Logo Circle Background -->
+    <circle cx="${logoX + logoSize/2}" cy="${logoY}" r="${logoSize/2}" 
+            fill="${colors.progressBackground}" 
+            stroke="${colors.cardBorder}" stroke-width="2"/>
+    
     <!-- Distro Logo -->
-    <text x="${width / 2}" y="${currentY + 42}" 
+    <text x="${logoX + logoSize/2}" y="${logoY + 14}" 
           font-family="JetBrainsMono Nerd Font, monospace" 
-          font-size="48" 
+          font-size="42" 
           fill="${colors.accent}"
           text-anchor="middle"
+          dominant-baseline="middle"
           text-rendering="geometricPrecision">${distroLogo}</text>
     
-    <!-- OS Name -->
-    <text x="${width / 2}" y="${currentY + 68}" 
+    <!-- OS Name and Version (larger) -->
+    <text x="${textStartX}" y="${textStartY}" 
           font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
-          font-size="16" font-weight="600" 
+          font-size="18" font-weight="600" 
           fill="${colors.textPrimary}"
-          text-anchor="middle"
           text-rendering="geometricPrecision">${escapeXml(info.os.name)}</text>
-    
-    <!-- OS Version -->
-    <text x="${width / 2}" y="${currentY + 84}" 
+    <text x="${textStartX}" y="${textStartY + 22}" 
           font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
-          font-size="12" 
-          fill="${colors.textTertiary}"
-          text-anchor="middle"
+          font-size="13" 
+          fill="${colors.textSecondary}"
           text-rendering="geometricPrecision">Version ${escapeXml(info.os.version)}</text>
+    
+    <!-- Uptime -->
+    <text x="${textStartX}" y="${textStartY + 44}" 
+          font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+          font-size="13" 
+          fill="${colors.textSecondary}"
+          text-rendering="geometricPrecision">Uptime ${formatUptime(info.os.uptime)}</text>
   `;
   currentY += osHeaderHeight + cardSpacing;
 
-  // Memory Card
+  // Memory Card - combined RAM and Swap in a single bar
+  const hasSwap = info.swap.total > 0;
   const memoryHeight = 100;
+  
+  // Calculate combined memory usage
+  const totalMemory = info.memory.total + (hasSwap ? info.swap.total : 0);
+  const totalUsed = info.memory.used + (hasSwap ? info.swap.used : 0);
+  const ramPercent = (info.memory.used / totalMemory) * 100;
+  const swapPercent = hasSwap ? (info.swap.used / totalMemory) * 100 : 0;
+  const totalPercent = (totalUsed / totalMemory) * 100;
+  
+  // Generate stacked progress bar
+  const ramFillWidth = (progressBarWidth * ramPercent) / 100;
+  const swapFillWidth = (progressBarWidth * swapPercent) / 100;
+  const ramColor = getUsageColor(info.memory.usagePercent, colors);
+  const swapColor = colors.warning; // Use warning color for swap
+  
+  const combinedProgressBar = `
+    <!-- Progress Bar Background -->
+    <rect x="${margin + cardPadding}" y="${currentY + 76}" width="${progressBarWidth}" height="7" 
+          rx="3" fill="${colors.progressBackground}"/>
+    
+    <!-- RAM Fill -->
+    <rect x="${margin + cardPadding}" y="${currentY + 76}" width="${ramFillWidth}" height="7" 
+          rx="3" fill="${ramColor}">
+      <animate attributeName="width" from="0" to="${ramFillWidth}" 
+               dur="0.8s" fill="freeze"/>
+    </rect>
+    
+    <!-- Swap Fill (stacked after RAM) -->
+    ${hasSwap ? `
+    <rect x="${margin + cardPadding + ramFillWidth}" y="${currentY + 76}" width="${swapFillWidth}" height="7" 
+          rx="3" fill="${swapColor}">
+      <animate attributeName="width" from="0" to="${swapFillWidth}" 
+               dur="0.8s" fill="freeze"/>
+    </rect>
+    ` : ''}
+    
+    <!-- Progress Label -->
+    <text x="${percentageXPos}" y="${currentY + 76 + 7 / 2 + 1}" 
+          font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+          font-size="13" fill="${ramColor}" 
+          text-rendering="geometricPrecision"
+          text-anchor="end"
+          dominant-baseline="middle">${totalPercent.toFixed(1)}%</text>
+  `;
+
+  const memoryTitleText = hasSwap 
+    ? `${formatBytes(info.memory.total)} (${formatBytes(info.swap.total)} swap)`
+    : formatBytes(info.memory.total);
+  
+  const memoryDetailsText = hasSwap 
+    ? `${formatBytes(info.memory.used)} used (${formatBytes(info.swap.used)} swap), ${formatBytes(info.memory.available)} available`
+    : `${formatBytes(info.memory.used)} used, ${formatBytes(info.memory.available)} available`;
+
   const memoryCard = generateCard(
     margin,
     currentY,
@@ -212,14 +294,14 @@ export function generateSystemInfoSVG(
             font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
             font-size="14" font-weight="500" 
             fill="${colors.textPrimary}"
-            text-rendering="geometricPrecision">${formatBytes(info.memory.total)}</text>
+            text-rendering="geometricPrecision">${memoryTitleText}</text>
       <text x="${margin + cardPadding}" y="${currentY + 64}" 
             font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
             font-size="12" 
             fill="${colors.textTertiary}"
-            text-rendering="geometricPrecision">${formatBytes(info.memory.used)} used, ${formatBytes(info.memory.available)} available</text>
+            text-rendering="geometricPrecision">${memoryDetailsText}</text>
       
-      ${generateProgressBar(margin + cardPadding, currentY + 76, progressBarWidth, 7, info.memory.usagePercent, colors, percentageXPos)}
+      ${combinedProgressBar}
     `,
     colors,
   );
