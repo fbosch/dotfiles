@@ -32,9 +32,6 @@ const execAsync = promisify(exec);
 // Concurrency limiter for du commands to prevent OOM
 const duLimit = pLimit(3);
 
-// Development mode detection - cache is now enabled in dev to prevent OOM
-const IS_DEV = environment.isDevelopment || process.env.NODE_ENV === 'development';
-
 // Vicinae Cache for static system info persistence between sessions
 const cache = new Cache();
 const STATIC_INFO_CACHE_KEY = "static-system-info-v4"; // Bumped version for packages object structure
@@ -633,7 +630,7 @@ function SystemInfoContent() {
 
   // Dynamic system info - refreshed frequently (memory, storage usage)
   // React Query prevents concurrent fetches automatically
-  const { data: dynamicInfo, refetch: refetchDynamic, isFetching: isDynamicFetching } = useQuery({
+  const { data: dynamicInfo, refetch: refetchDynamic } = useQuery({
     queryKey: ["system-info-dynamic"],
     queryFn: getDynamicSystemInfo,
     staleTime: 5000, // 5 seconds - prevents unnecessary refetches
@@ -653,7 +650,7 @@ function SystemInfoContent() {
 
   // Progressive enhancement: Load storage categories after initial data is loaded
   // This query is throttled to prevent memory issues from running du commands
-  const { data: enrichedStorage, isFetching: isCategoriesFetching } = useQuery({
+  const { data: enrichedStorage } = useQuery({
     queryKey: ["storage-categories", dynamicInfo?.storage],
     queryFn: async () => {
       if (!dynamicInfo?.storage) return undefined;
@@ -686,9 +683,9 @@ function SystemInfoContent() {
   });
 
   // Use enriched storage if available, fallback to basic storage
-  const displayDynamicInfo = enrichedStorage
+  const displayDynamicInfo = enrichedStorage && dynamicInfo
     ? {
-        ...dynamicInfo!,
+        ...dynamicInfo,
         storage: enrichedStorage,
       }
     : dynamicInfo;

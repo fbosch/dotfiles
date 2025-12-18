@@ -114,7 +114,6 @@ function generateStorageItem(
 ): { svg: string; height: number } {
   const barWidth = 419; // Full width (435 - 8*2 margins)
   const barHeight = 14; // Storage bar height (thicker for better category visibility)
-  const legendItemHeight = 18;
 
   // If no categories, show simple progress bar
   if (!storage.categories || storage.categories.length === 0) {
@@ -162,7 +161,7 @@ function generateStorageItem(
     (a, b) => b.bytes - a.bytes,
   );
   let currentX = x;
-  const clipPathId = `clip-${Math.random().toString(36).substr(2, 9)}`;
+  const clipPathId = `clip-${Math.random().toString(36).substring(2, 11)}`;
 
   // Generate stacked bar segments (without border radius on individual segments)
   const barSegments = sortedCategories
@@ -275,70 +274,6 @@ function generateStorageItem(
   return { svg, height: totalHeight };
 }
 
-function generateProgressBar(
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  percent: number,
-  colors: ThemeColors,
-  percentageX: number, // Explicit X position for percentage text
-): string {
-  const fillWidth = (width * percent) / 100;
-  const color = getUsageColor(percent, colors);
-
-  return `
-    <!-- Progress Bar Background -->
-    <rect x="${x}" y="${y}" width="${width}" height="${height}" 
-          rx="3" fill="${colors.progressBackground}"/>
-    
-    <!-- Progress Bar Fill -->
-    <rect x="${x}" y="${y}" width="${fillWidth}" height="${height}" 
-          rx="3" fill="${color}">
-      <animate attributeName="width" from="0" to="${fillWidth}" 
-               dur="0.8s" fill="freeze"/>
-    </rect>
-    
-    <!-- Progress Label -->
-    <text x="${percentageX}" y="${y + height / 2 + 1}" 
-          font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
-          font-size="13" fill="${color}" 
-          text-rendering="geometricPrecision"
-          text-anchor="end"
-          dominant-baseline="middle">${percent.toFixed(1)}%</text>
-  `;
-}
-
-function generateCard(
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  title: string,
-  content: string,
-  colors: ThemeColors,
-): string {
-  return `
-    <!-- Card -->
-    <g>
-      <rect x="${x}" y="${y}" width="${width}" height="${height}" 
-            rx="8" fill="${colors.cardBackground}" 
-            stroke="${colors.cardBorder}" stroke-width="1"/>
-      
-      <!-- Card Title -->
-      <text x="${x + 18}" y="${y + 24}" 
-            font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
-            font-size="11" font-weight="600" 
-            fill="${colors.textSecondary}"
-            letter-spacing="0.5"
-            text-rendering="geometricPrecision">${escapeXml(title)}</text>
-      
-      <!-- Card Content -->
-      ${content}
-    </g>
-  `;
-}
-
 export function generateSystemInfoSVG(
   info: SystemInfo,
   appearance: "light" | "dark" = "dark",
@@ -350,40 +285,32 @@ export function generateSystemInfoSVG(
   const sectionMargin = 8; // Small margin without card borders
   const sectionSpacing = 6; // Space between sections (minimized for tighter layout)
   const progressBarWidth = 419; // Full width minus small margins (435 - 8*2)
-  const contentWidth = 419; // Available content width
   const memoryBarHeight = 14; // Memory bar height (matches storage bar)
-  const storageBarHeight = 14; // Storage bar height
 
   let currentY = 0;
 
   // Detect distro for logo (Nerd Font icons)
   const osNameLower = info.os.name.toLowerCase();
-  const distroLogo = osNameLower.includes("nixos")
-    ? "\uf313" // nf-linux-nixos
-    : osNameLower.includes("arch")
-      ? "\uf303" // nf-linux-archlinux
-      : osNameLower.includes("ubuntu")
-        ? "\uf31b" // nf-linux-ubuntu
-        : osNameLower.includes("debian")
-          ? "\uf306" // nf-linux-debian
-          : osNameLower.includes("fedora")
-            ? "\uf30a" // nf-linux-fedora
-            : osNameLower.includes("manjaro")
-              ? "\uf312" // nf-linux-manjaro
-              : osNameLower.includes("opensuse")
-                ? "\uf314" // nf-linux-opensuse
-                : osNameLower.includes("gentoo")
-                  ? "\uf30d" // nf-linux-gentoo
-                  : osNameLower.includes("redhat") ||
-                      osNameLower.includes("rhel")
-                    ? "\uf316" // nf-linux-redhat
-                    : osNameLower.includes("centos")
-                      ? "\uf304" // nf-linux-centos
-                      : osNameLower.includes("mint")
-                        ? "\uf30e" // nf-linux-linuxmint
-                        : osNameLower.includes("alpine")
-                          ? "\uf300" // nf-linux-alpine
-                          : "\uf17c"; // nf-fa-linux (generic tux)
+  
+  const distroMap: Record<string, string> = {
+    nixos: "\uf313", // nf-linux-nixos
+    arch: "\uf303", // nf-linux-archlinux
+    ubuntu: "\uf31b", // nf-linux-ubuntu
+    debian: "\uf306", // nf-linux-debian
+    fedora: "\uf30a", // nf-linux-fedora
+    manjaro: "\uf312", // nf-linux-manjaro
+    opensuse: "\uf314", // nf-linux-opensuse
+    gentoo: "\uf30d", // nf-linux-gentoo
+    redhat: "\uf316", // nf-linux-redhat
+    rhel: "\uf316", // nf-linux-redhat
+    centos: "\uf304", // nf-linux-centos
+    mint: "\uf30e", // nf-linux-linuxmint
+    alpine: "\uf300", // nf-linux-alpine
+  };
+  
+  const distroLogo =
+    Object.entries(distroMap).find(([key]) => osNameLower.includes(key))?.[1] ||
+    "\uf17c"; // nf-fa-linux (generic tux)
 
   // OS Header Section - left-aligned with logo and details side by side
   const osHeaderHeight = 88 + (info.os.packages ? 20 : 0); // Reduced height for compact layout
@@ -392,7 +319,6 @@ export function generateSystemInfoSVG(
   const logoSize = 70;
   const textStartX = logoX + logoSize + 24; // More gap between logo and text (was 16)
   const textStartY = currentY + 32;
-  const maxTextWidth = width - textStartX - 16; // Add right margin
 
   // Parse OS name to extract distro name (e.g., "NixOS 24.11 (Vicuna)" -> "NixOS")
   const distroName = info.os.name.split(" ")[0];
@@ -404,9 +330,9 @@ export function generateSystemInfoSVG(
   const distroNameWithSpacing = codename ? `${distroName} ` : distroName;
 
   // Generate unique IDs for gradients and filters
-  const logoGradientId = `logoGradient-${Math.random().toString(36).substr(2, 9)}`;
-  const logoShadowId = `logoShadow-${Math.random().toString(36).substr(2, 9)}`;
-  const iconGradientId = `iconGradient-${Math.random().toString(36).substr(2, 9)}`;
+  const logoGradientId = `logoGradient-${Math.random().toString(36).substring(2, 11)}`;
+  const logoShadowId = `logoShadow-${Math.random().toString(36).substring(2, 11)}`;
+  const iconGradientId = `iconGradient-${Math.random().toString(36).substring(2, 11)}`;
 
   const osHeader = `
     <!-- Distro Logo Circle with Gradient and Shadow -->
@@ -537,7 +463,7 @@ export function generateSystemInfoSVG(
   const ramFillWidth = (progressBarWidth * ramPercent) / 100;
   const ramColor = getUsageColor(info.memory.usagePercent, colors);
   
-  const clipPathMemory = `clip-memory-${Math.random().toString(36).substr(2, 9)}`;
+  const clipPathMemory = `clip-memory-${Math.random().toString(36).substring(2, 11)}`;
   
   const memoryTitleText = hasSwap
     ? `${formatBytes(info.memory.total)} (${formatBytes(info.swap.total)} swap)`
