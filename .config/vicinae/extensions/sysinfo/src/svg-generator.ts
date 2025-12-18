@@ -81,6 +81,18 @@ function formatUptime(seconds: number): string {
   return `${minutes}m`;
 }
 
+function formatPackageCount(packages: { nix?: number; flatpak?: number; dpkg?: number; rpm?: number; pacman?: number }): string {
+  const counts: string[] = [];
+  
+  if (packages.nix) counts.push(`${packages.nix} nix`);
+  if (packages.flatpak) counts.push(`${packages.flatpak} flatpak`);
+  if (packages.dpkg) counts.push(`${packages.dpkg} dpkg`);
+  if (packages.rpm) counts.push(`${packages.rpm} rpm`);
+  if (packages.pacman) counts.push(`${packages.pacman} pacman`);
+  
+  return counts.join(', ');
+}
+
 function getUsageColor(percent: number, colors: ThemeColors): string {
   if (percent < 60) return colors.success;
   if (percent < 80) return colors.warning;
@@ -310,7 +322,7 @@ export function generateSystemInfoSVG(
   // Exact available width in Vicinae Detail view (no rescaling)
   const width = 435;
   const sectionMargin = 8; // Small margin without card borders
-  const sectionSpacing = 10; // Space between sections (reduced for tighter layout)
+  const sectionSpacing = 6; // Space between sections (minimized for tighter layout)
   const progressBarWidth = 419; // Full width minus small margins (435 - 8*2)
   const contentWidth = 419; // Available content width
   const memoryBarHeight = 14; // Memory bar height (matches storage bar)
@@ -335,7 +347,7 @@ export function generateSystemInfoSVG(
                      '\uf17c'; // nf-fa-linux (generic tux)
   
   // OS Header Section - left-aligned with logo and details side by side
-  const osHeaderHeight = 110;
+  const osHeaderHeight = 88 + (info.os.packages ? 20 : 0); // Reduced height for compact layout
   const logoX = sectionMargin + 10; // Move logo more to the left
   const logoY = currentY + 55;
   const logoSize = 70;
@@ -388,8 +400,28 @@ export function generateSystemInfoSVG(
           fill="${colors.textSecondary}"
           xml:space="preserve"
           text-rendering="geometricPrecision"><tspan font-weight="700">Uptime </tspan><tspan font-weight="400">${formatUptime(info.os.uptime)}</tspan></text>
+    
+     <!-- Packages -->
+     ${info.os.packages ? `
+     <text x="${textStartX}" y="${textStartY + 64}" 
+           font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+           font-size="13" 
+           fill="${colors.textSecondary}"
+           xml:space="preserve"
+           text-rendering="geometricPrecision"><tspan font-weight="700">Packages </tspan><tspan font-weight="400">${formatPackageCount(info.os.packages)}</tspan></text>
+     ` : ''}
   `;
-  currentY += osHeaderHeight + sectionSpacing;
+  currentY += osHeaderHeight;
+
+  // Horizontal spacer line  
+  const spacerY = currentY + 6; // 6px padding before the line
+  const spacer = `
+    <line x1="${sectionMargin}" y1="${spacerY}" x2="${width - sectionMargin}" y2="${spacerY}" 
+          stroke="${colors.cardBorder}" 
+          stroke-width="1" 
+          opacity="0.3"/>
+  `;
+  currentY = spacerY + 6; // 6px padding after the line (12px total spacing)
 
   // Memory Section - no card wrapper
   const hasSwap = info.swap.total > 0;
@@ -498,6 +530,9 @@ export function generateSystemInfoSVG(
   
   <!-- OS Header -->
   ${osHeader}
+  
+  <!-- Spacer -->
+  ${spacer}
   
   <!-- Sections -->
   ${memorySection}

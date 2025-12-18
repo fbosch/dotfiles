@@ -16,6 +16,13 @@ export type StaticSystemInfo = {
     codename?: string;
     kernel: string;
     architecture: string;
+    packages?: {
+      nix?: number;
+      flatpak?: number;
+      dpkg?: number;
+      rpm?: number;
+      pacman?: number;
+    };
   };
   
   // Graphics (doesn't change)

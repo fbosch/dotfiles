@@ -29,16 +29,15 @@ import type {
 
 const execAsync = promisify(exec);
 
-// Limit concurrent du commands to prevent memory issues
-const duLimit = pLimit(3); // Maximum 3 concurrent du processes
+// Concurrency limiter for du commands to prevent OOM
+const duLimit = pLimit(3);
 
-// Development mode detection
-const IS_DEV =
-  environment.isDevelopment || process.env.NODE_ENV === "development";
+// Development mode detection - cache is now enabled in dev to prevent OOM
+const IS_DEV = environment.isDevelopment || process.env.NODE_ENV === 'development';
 
 // Vicinae Cache for static system info persistence between sessions
 const cache = new Cache();
-const STATIC_INFO_CACHE_KEY = "static-system-info-v2"; // Bumped version to invalidate old cache
+const STATIC_INFO_CACHE_KEY = "static-system-info-v4"; // Bumped version for packages object structure
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 const STORAGE_CATEGORIES_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
@@ -48,7 +47,7 @@ type CachedStaticInfo = {
 };
 
 function getCachedStaticInfo(): StaticSystemInfo | null {
-  if (IS_DEV) return null; // Skip cache in development mode
+  // Cache is now enabled in dev mode to prevent OOM errors
   const cached = cache.get(STATIC_INFO_CACHE_KEY);
   if (!cached) return null;
   try {
@@ -65,7 +64,7 @@ function getCachedStaticInfo(): StaticSystemInfo | null {
 }
 
 function setCachedStaticInfo(info: StaticSystemInfo): void {
-  if (IS_DEV) return; // Skip cache in development mode
+  // Cache is now enabled in dev mode to prevent OOM errors
   cache.set(
     STATIC_INFO_CACHE_KEY,
     JSON.stringify({ info, cachedAt: Date.now() } satisfies CachedStaticInfo),
@@ -86,12 +85,13 @@ const queryClient = new QueryClient({
 
 // Static system info - things that don't change during runtime
 async function getStaticSystemInfo(): Promise<StaticSystemInfo> {
-  const [hostname, osInfo, cpuInfo, gpuInfo, displayInfo] = await Promise.all([
+  const [hostname, osInfo, cpuInfo, gpuInfo, displayInfo, packageCount] = await Promise.all([
     execAsync("hostname").then((r) => r.stdout.trim()),
     getOSInfo(),
     getCPUInfo(),
     getGPUInfo(),
     getDisplayInfo(),
+    getPackageCount(),
   ]);
 
   const info: StaticSystemInfo = {
@@ -106,6 +106,7 @@ async function getStaticSystemInfo(): Promise<StaticSystemInfo> {
       codename: osInfo.osCodename,
       kernel: osInfo.kernel,
       architecture: osInfo.architecture,
+      packages: packageCount,
     },
   };
 
@@ -119,7 +120,7 @@ async function getStaticSystemInfo(): Promise<StaticSystemInfo> {
 function getCachedStorageCategories(
   mountPoint: string,
 ): StorageCategory[] | null {
-  if (IS_DEV) return null; // Skip cache in development mode
+  // Cache is now enabled in dev mode to prevent OOM errors
   const cacheKey = `storage-categories-${mountPoint}-v1`;
   const cached = cache.get(cacheKey);
   if (!cached) return null;
@@ -141,9 +142,12 @@ function setCachedStorageCategories(
   mountPoint: string,
   categories: StorageCategory[],
 ): void {
-  if (IS_DEV) return; // Skip cache in development mode
+  // Cache is now enabled in dev mode to prevent OOM errors
   const cacheKey = `storage-categories-${mountPoint}-v1`;
-  cache.set(cacheKey, JSON.stringify({ categories, cachedAt: Date.now() }));
+  cache.set(
+    cacheKey,
+    JSON.stringify({ categories, cachedAt: Date.now() }),
+  );
 }
 
 // Analyze storage by categories using parallel du commands
@@ -186,24 +190,28 @@ async function analyzeStorageCategories(
       }, // gray
     ];
 
-    // Run all du commands in parallel for speed, but limit concurrency to prevent memory issues
+    // Run du commands with concurrency limit to prevent memory issues
     const categoryPromises = categoryDefs.map(async (catDef) => {
-      // Run du commands sequentially for each category's paths to reduce memory pressure
-      let totalBytes = 0;
-      for (const path of catDef.paths) {
-        try {
-          const expandedPath = path.startsWith("~")
-            ? path.replace("~", process.env.HOME || "")
-            : path;
+      // Run du commands with p-limit to control concurrency
+      const pathPromises = catDef.paths.map((path) =>
+        duLimit(async () => {
+          try {
+            const expandedPath = path.startsWith("~")
+              ? path.replace("~", process.env.HOME || "")
+              : path;
 
-          const { stdout } = await execAsync(
-            `test -d "${expandedPath}" && timeout 5 du -sb "${expandedPath}" 2>/dev/null | cut -f1 || echo "0"`,
-          );
-          totalBytes += Number.parseInt(stdout.trim() || "0", 10);
-        } catch {
-          // Ignore errors for individual paths
-        }
-      }
+            const { stdout } = await execAsync(
+              `test -d "${expandedPath}" && timeout 5 du -sb "${expandedPath}" 2>/dev/null | cut -f1 || echo "0"`,
+            );
+            return Number.parseInt(stdout.trim() || "0", 10);
+          } catch {
+            return 0;
+          }
+        })
+      );
+
+      const bytesPerPath = await Promise.all(pathPromises);
+      const totalBytes = bytesPerPath.reduce((sum, bytes) => sum + bytes, 0);
 
       return {
         name: catDef.name,
@@ -477,6 +485,85 @@ async function getUptime() {
   } catch {
     return 0;
   }
+}
+
+async function getPackageCount(): Promise<{
+  nix?: number;
+  flatpak?: number;
+  dpkg?: number;
+  rpm?: number;
+  pacman?: number;
+} | undefined> {
+  const packages: {
+    nix?: number;
+    flatpak?: number;
+    dpkg?: number;
+    rpm?: number;
+    pacman?: number;
+  } = {};
+
+  try {
+    // Count NixOS system packages
+    const { stdout: nixSystem } = await execAsync("nix-store -q --requisites /run/current-system 2>/dev/null | wc -l");
+    const systemCount = Number.parseInt(nixSystem.trim(), 10);
+    
+    // Count NixOS user packages
+    const { stdout: nixUser } = await execAsync("nix-store -q --requisites ~/.nix-profile 2>/dev/null | wc -l");
+    const userCount = Number.parseInt(nixUser.trim(), 10);
+    
+    const totalNix = systemCount + userCount;
+    if (totalNix > 0) {
+      packages.nix = totalNix;
+    }
+  } catch {
+    // NixOS not available or command failed
+  }
+
+  try {
+    // Count dpkg packages (Debian/Ubuntu)
+    const { stdout } = await execAsync("dpkg -l | grep '^ii' | wc -l");
+    const count = Number.parseInt(stdout.trim(), 10);
+    if (count > 0) {
+      packages.dpkg = count;
+    }
+  } catch {
+    // dpkg not available
+  }
+
+  try {
+    // Count rpm packages (RedHat/Fedora/CentOS)
+    const { stdout } = await execAsync("rpm -qa | wc -l");
+    const count = Number.parseInt(stdout.trim(), 10);
+    if (count > 0) {
+      packages.rpm = count;
+    }
+  } catch {
+    // rpm not available
+  }
+
+  try {
+    // Count pacman packages (Arch)
+    const { stdout } = await execAsync("pacman -Q | wc -l");
+    const count = Number.parseInt(stdout.trim(), 10);
+    if (count > 0) {
+      packages.pacman = count;
+    }
+  } catch {
+    // pacman not available
+  }
+
+  try {
+    // Count Flatpak packages (user + system)
+    const { stdout } = await execAsync("flatpak list --app 2>/dev/null | wc -l");
+    const count = Number.parseInt(stdout.trim(), 10);
+    if (count > 0) {
+      packages.flatpak = count;
+    }
+  } catch {
+    // Flatpak not available
+  }
+
+  return Object.keys(packages).length > 0 ? packages : undefined;
 }
 
 async function getDisplayInfo() {

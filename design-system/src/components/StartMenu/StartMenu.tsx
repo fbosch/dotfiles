@@ -15,6 +15,7 @@ import { cn } from "../../utils/cn";
  *
  * Menu item actions:
  * - System Settings: Opens nwg-look (GTK theme configurator)
+ * - System Info: Opens Vicinae system info extension (vicinae://extensions/fbosch/sysinfo/system-info)
  * - System Updates: Opens terminal with flake_update_interactive command
  * - Lock Screen: Locks the session (hyprlock)
  * - Applications: Opens Warehouse (Flatpak/app store)
@@ -127,6 +128,12 @@ const defaultMenuItems: MenuItem[] = [
     id: "system-settings",
     label: "System Settings",
     icon: "\uE713", // Setting
+    variant: "default",
+  },
+  {
+    id: "system-info",
+    label: "System Info",
+    icon: "\uE946", // System (Info icon)
     variant: "default",
   },
   {
