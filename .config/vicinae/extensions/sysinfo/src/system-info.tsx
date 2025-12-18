@@ -14,6 +14,7 @@ import {
 	showToast,
 	Toast,
 } from "@vicinae/api";
+import { useMemo } from "react";
 import { getDynamicSystemInfo, getStaticSystemInfo } from "./aggregators";
 import {
 	getCachedStaticInfo,
@@ -23,6 +24,23 @@ import { analyzeStorageCategories } from "./storage-analyzer";
 import { generateSystemInfoSVG, svgToDataUri } from "./svg-generator";
 import type { Preferences } from "./types";
 import { execAsync } from "./utils";
+
+// Cache tool availability to avoid repeated "which" command execution
+const toolCache = new Map<string, boolean>();
+
+async function checkToolAvailability(toolName: string): Promise<boolean> {
+	if (toolCache.has(toolName)) {
+		return toolCache.get(toolName)!;
+	}
+	try {
+		await execAsync(`which ${toolName}`);
+		toolCache.set(toolName, true);
+		return true;
+	} catch {
+		toolCache.set(toolName, false);
+		return false;
+	}
+}
 
 const queryClient = new QueryClient({
 	defaultOptions: {
@@ -38,7 +56,11 @@ const queryClient = new QueryClient({
 
 function SystemInfoContent() {
 	const preferences = getPreferenceValues<Preferences>();
-	const refreshInterval = Number.parseInt(preferences.refreshInterval, 10);
+	// Memoize refresh interval parsing to avoid repeated Number.parseInt() calls
+	const refreshInterval = useMemo(
+		() => Number.parseInt(preferences.refreshInterval, 10),
+		[preferences.refreshInterval],
+	);
 
 	// Static system info - load from cache first, then refresh in background
 	const { data: staticInfo } = useQuery({
@@ -111,32 +133,26 @@ function SystemInfoContent() {
 	});
 
 	// Use enriched storage if available, fallback to basic storage
-	const displayDynamicInfo =
-		enrichedStorage && dynamicInfo
-			? {
-					...dynamicInfo,
-					storage: enrichedStorage,
-				}
-			: dynamicInfo;
-
-	// If we don't have static or dynamic info yet, show loading state
-	if (!staticInfo || !dynamicInfo) {
-		return <Detail markdown="" />;
-	}
+	// Memoize to prevent unnecessary object recreation
+	const displayDynamicInfo = useMemo(
+		() =>
+			enrichedStorage && dynamicInfo
+				? {
+						...dynamicInfo,
+						storage: enrichedStorage,
+					}
+				: dynamicInfo,
+		[enrichedStorage, dynamicInfo],
+	);
 
 	// Combine static and dynamic info for SVG generation
-	const combinedInfo = displayDynamicInfo
-		? {
-				...staticInfo,
-				memory: displayDynamicInfo.memory,
-				swap: displayDynamicInfo.swap,
-				storage: displayDynamicInfo.storage,
-				os: {
-					...staticInfo.os,
-					uptime: displayDynamicInfo.uptime,
-				},
-			}
-		: {
+	// Memoize to prevent unnecessary object recreation
+	const combinedInfo = useMemo(() => {
+		if (!staticInfo || !dynamicInfo) {
+			return null;
+		}
+		if (!displayDynamicInfo) {
+			return {
 				...staticInfo,
 				memory: dynamicInfo.memory,
 				swap: dynamicInfo.swap,
@@ -146,11 +162,32 @@ function SystemInfoContent() {
 					uptime: dynamicInfo.uptime,
 				},
 			};
+		}
+		return {
+			...staticInfo,
+			memory: displayDynamicInfo.memory,
+			swap: displayDynamicInfo.swap,
+			storage: displayDynamicInfo.storage,
+			os: {
+				...staticInfo.os,
+				uptime: displayDynamicInfo.uptime,
+			},
+		};
+	}, [staticInfo, dynamicInfo, displayDynamicInfo]);
 
 	// Generate SVG with current theme appearance and convert to data URI
-	const svg = generateSystemInfoSVG(combinedInfo, environment.appearance);
-	const dataUri = svgToDataUri(svg);
-	const markdown = `![System Information](${dataUri})`;
+	// Memoize expensive SVG generation to prevent unnecessary recalculation
+	const markdown = useMemo(() => {
+		if (!combinedInfo) return "";
+		const svg = generateSystemInfoSVG(combinedInfo, environment.appearance);
+		const dataUri = svgToDataUri(svg);
+		return `![System Information](${dataUri})`;
+	}, [combinedInfo, environment.appearance]);
+
+	// If we don't have static or dynamic info yet, show loading state
+	if (!staticInfo || !dynamicInfo) {
+		return <Detail markdown="" />;
+	}
 
 	return (
 		<Detail
@@ -220,18 +257,12 @@ function SystemInfoContent() {
 							icon={Icon.LineChart}
 							onAction={async () => {
 								try {
-									// Check all available tools in parallel
+									// Check all available tools in parallel (cached)
 									const [hasMissionCenter, hasBtop, hasHtop] =
 										await Promise.all([
-											execAsync("which missioncenter")
-												.then(() => true)
-												.catch(() => false),
-											execAsync("which btop")
-												.then(() => true)
-												.catch(() => false),
-											execAsync("which htop")
-												.then(() => true)
-												.catch(() => false),
+											checkToolAvailability("missioncenter"),
+											checkToolAvailability("btop"),
+											checkToolAvailability("htop"),
 										]);
 
 									// Launch the first available tool
@@ -267,14 +298,10 @@ function SystemInfoContent() {
 							icon={Icon.HardDrive}
 							onAction={async () => {
 								try {
-									// Check all available tools in parallel
+									// Check all available tools in parallel (cached)
 									const [hasBaobab, hasNcdu] = await Promise.all([
-										execAsync("which baobab")
-											.then(() => true)
-											.catch(() => false),
-										execAsync("which ncdu")
-											.then(() => true)
-											.catch(() => false),
+										checkToolAvailability("baobab"),
+										checkToolAvailability("ncdu"),
 									]);
 
 									// Launch the first available tool
