@@ -439,253 +439,246 @@ function updateMenuItems() {
   // Add menu items
   menuItems.forEach((item) => {
     if (item.id.startsWith("divider")) {
-      // Add divider
+      // Add divider - Separator doesn't have JSX support, create programmatically
       const separator = new Gtk.Separator({
         orientation: Gtk.Orientation.HORIZONTAL,
       });
       separator.add_css_class("menu-divider");
       box.append(separator);
     } else {
-      // Add menu item button
-      const button = new Gtk.Button({ can_focus: true });
-      button.add_css_class("menu-item");
-      button.set_cursor_from_name("pointer");
-
-      // Create content box
-      const contentBox = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 8,
-        halign: Gtk.Align.FILL,
-      });
-      contentBox.add_css_class("menu-item-content");
-
-      // Add icon
-      const iconLabel = new Gtk.Label({ label: item.icon });
-      iconLabel.add_css_class("menu-item-icon");
-      contentBox.append(iconLabel);
-
-      // Add text
-      const textLabel = new Gtk.Label({
-        label: item.label,
-        halign: Gtk.Align.START,
-        hexpand: true,
-      });
-      textLabel.add_css_class("menu-item-label");
-
-      // Apply variant colors via CSS class only (CSS is static)
-      button.add_css_class(`menu-variant-${item.variant || "default"}`);
-
-      contentBox.append(textLabel);
-
-      // Add update badges if this is the updates item
+      // Create badges if this is the updates item
+      const badges: JSX.Element[] = [];
+      
       if (item.id === "updates") {
         // Add flake updates badge if applicable
         if (flakeUpdatesCount > 0) {
-          const badgeBox = new Gtk.Box({
-            orientation: Gtk.Orientation.HORIZONTAL,
-            halign: Gtk.Align.END,
-            valign: Gtk.Align.CENTER,
-          });
-          badgeBox.add_css_class("updates-badge");
-
-          const badgeLabel = new Gtk.Label({
-            label: `\uF313  ${flakeUpdatesCount.toString()}`,
-            halign: Gtk.Align.CENTER,
-            valign: Gtk.Align.CENTER,
-          });
-
-          badgeBox.append(badgeLabel);
-          contentBox.append(badgeBox);
-
-          // Store reference for tooltip update
-          flakeUpdateBadgeButton = button;
+          badges.push(
+            <box
+              orientation={Gtk.Orientation.HORIZONTAL}
+              halign={Gtk.Align.END}
+              valign={Gtk.Align.CENTER}
+              class="updates-badge"
+            >
+              <label
+                label={`\uF313  ${flakeUpdatesCount.toString()}`}
+                halign={Gtk.Align.CENTER}
+                valign={Gtk.Align.CENTER}
+              />
+            </box>
+          );
         }
 
         // Add flatpak updates badge if applicable
         if (flatpakUpdatesCount > 0) {
-          const badgeBox = new Gtk.Box({
-            orientation: Gtk.Orientation.HORIZONTAL,
-            halign: Gtk.Align.END,
-            valign: Gtk.Align.CENTER,
-          });
-          badgeBox.add_css_class("updates-badge");
-
-          const badgeLabel = new Gtk.Label({
-            label: flatpakUpdatesCount.toString(),
-            halign: Gtk.Align.CENTER,
-            valign: Gtk.Align.CENTER,
-          });
-
-          badgeBox.append(badgeLabel);
-          contentBox.append(badgeBox);
-
-          // Store reference for tooltip update
-          flatpakUpdateBadgeButton = button;
-        }
-
-        // Set tooltip with both update types if applicable
-        const tooltipParts: string[] = [];
-        if (flakeUpdatesCount > 0) {
-          if (flakeUpdatesData && flakeUpdatesData.updates.length > 0) {
-            const tooltipText = flakeUpdatesData.updates
-              .map((u) => `• ${u.name}: ${u.currentShort} → ${u.newShort}`)
-              .join("\n");
-            const timeAgo = formatTimeSince(flakeUpdatesData.timestamp);
-            const lastCheckedText = timeAgo ? ` (checked ${timeAgo})` : "";
-            tooltipParts.push(
-              `NixOS Updates${lastCheckedText}:\n${tooltipText}`,
-            );
-          } else {
-            tooltipParts.push(
-              `${flakeUpdatesCount} NixOS update${flakeUpdatesCount !== 1 ? "s" : ""} available`,
-            );
-          }
-        }
-        if (flatpakUpdatesCount > 0) {
-          if (flatpakUpdatesData && flatpakUpdatesData.updates.length > 0) {
-            const tooltipText = flatpakUpdatesData.updates
-              .map((u) => `• ${u.name}: ${u.currentVersion} → ${u.newVersion}`)
-              .join("\n");
-            const timeAgo = formatTimeSince(flatpakUpdatesData.timestamp);
-            const lastCheckedText = timeAgo ? ` (checked ${timeAgo})` : "";
-            tooltipParts.push(
-              `Flatpak Updates${lastCheckedText}:\n${tooltipText}`,
-            );
-          } else {
-            tooltipParts.push(
-              `${flatpakUpdatesCount} Flatpak update${flatpakUpdatesCount !== 1 ? "s" : ""} available`,
-            );
-          }
-        }
-        if (tooltipParts.length > 0) {
-          button.set_tooltip_text(tooltipParts.join("\n\n"));
+          badges.push(
+            <box
+              orientation={Gtk.Orientation.HORIZONTAL}
+              halign={Gtk.Align.END}
+              valign={Gtk.Align.CENTER}
+              class="updates-badge"
+            >
+              <label
+                label={flatpakUpdatesCount.toString()}
+                halign={Gtk.Align.CENTER}
+                valign={Gtk.Align.CENTER}
+              />
+            </box>
+          );
         }
       }
 
-      button.set_child(contentBox);
-
-      // Connect click handler
-      button.connect("clicked", () => {
-        executeMenuCommand(item.id);
-      });
+      // Add menu item button using JSX
+      const button = (
+        <button
+          canFocus={true}
+          class={`menu-item menu-variant-${item.variant || "default"}`}
+          onClicked={() => executeMenuCommand(item.id)}
+          $={(self: Gtk.Button) => {
+            self.set_cursor_from_name("pointer");
+            menuItemButtons.set(item.id, self);
+            
+            // Set tooltip if this is the updates item
+            if (item.id === "updates") {
+              const tooltipParts: string[] = [];
+              if (flakeUpdatesCount > 0) {
+                if (flakeUpdatesData && flakeUpdatesData.updates.length > 0) {
+                  const tooltipText = flakeUpdatesData.updates
+                    .map((u) => `• ${u.name}: ${u.currentShort} → ${u.newShort}`)
+                    .join("\n");
+                  const timeAgo = formatTimeSince(flakeUpdatesData.timestamp);
+                  const lastCheckedText = timeAgo ? ` (checked ${timeAgo})` : "";
+                  tooltipParts.push(
+                    `NixOS Updates${lastCheckedText}:\n${tooltipText}`,
+                  );
+                } else {
+                  tooltipParts.push(
+                    `${flakeUpdatesCount} NixOS update${flakeUpdatesCount !== 1 ? "s" : ""} available`,
+                  );
+                }
+              }
+              if (flatpakUpdatesCount > 0) {
+                if (flatpakUpdatesData && flatpakUpdatesData.updates.length > 0) {
+                  const tooltipText = flatpakUpdatesData.updates
+                    .map((u) => `• ${u.name}: ${u.currentVersion} → ${u.newVersion}`)
+                    .join("\n");
+                  const timeAgo = formatTimeSince(flatpakUpdatesData.timestamp);
+                  const lastCheckedText = timeAgo ? ` (checked ${timeAgo})` : "";
+                  tooltipParts.push(
+                    `Flatpak Updates${lastCheckedText}:\n${tooltipText}`,
+                  );
+                } else {
+                  tooltipParts.push(
+                    `${flatpakUpdatesCount} Flatpak update${flatpakUpdatesCount !== 1 ? "s" : ""} available`,
+                  );
+                }
+              }
+              if (tooltipParts.length > 0) {
+                self.set_tooltip_text(tooltipParts.join("\n\n"));
+              }
+              
+              // Store reference for tooltip updates
+              if (flakeUpdatesCount > 0) {
+                flakeUpdateBadgeButton = self;
+              }
+              if (flatpakUpdatesCount > 0) {
+                flatpakUpdateBadgeButton = self;
+              }
+            }
+          }}
+        >
+          <box
+            orientation={Gtk.Orientation.HORIZONTAL}
+            spacing={8}
+            halign={Gtk.Align.FILL}
+            class="menu-item-content"
+          >
+            <label label={item.icon} class="menu-item-icon" />
+            <label
+              label={item.label}
+              halign={Gtk.Align.START}
+              hexpand={true}
+              class="menu-item-label"
+            />
+            {badges}
+          </box>
+        </button>
+      ) as Gtk.Button;
 
       box.append(button);
-      menuItemButtons.set(item.id, button);
     }
   });
 }
 
 function createWindow() {
-  win = new Astal.Window({
-    name: "start-menu",
-    namespace: "ags-start-menu",
-    visible: false,
-  });
-
-  // Configure window properties - fullscreen transparent to capture all clicks
-  win.set_anchor(
-    Astal.WindowAnchor.TOP |
-      Astal.WindowAnchor.BOTTOM |
-      Astal.WindowAnchor.LEFT |
-      Astal.WindowAnchor.RIGHT,
-  );
-  win.set_layer(Astal.Layer.OVERLAY);
-  win.set_exclusivity(Astal.Exclusivity.IGNORE);
-  win.set_keymode(Astal.Keymode.ON_DEMAND);
-  win.add_css_class("start-menu");
-
-  // Add escape key handler and keyboard navigation
-  const keyController = new Gtk.EventControllerKey();
-  keyController.connect(
-    "key-pressed",
-    (_: Gtk.EventControllerKey, keyval: number) => {
-      if (keyval === Gdk.KEY_Escape) {
-        hideMenu();
-        return true;
+  // Create window with JSX
+  win = (
+    <window
+      name="start-menu"
+      namespace="ags-start-menu"
+      visible={false}
+      anchor={
+        Astal.WindowAnchor.TOP |
+        Astal.WindowAnchor.BOTTOM |
+        Astal.WindowAnchor.LEFT |
+        Astal.WindowAnchor.RIGHT
       }
+      layer={Astal.Layer.OVERLAY}
+      exclusivity={Astal.Exclusivity.IGNORE}
+      keymode={Astal.Keymode.ON_DEMAND}
+      class="start-menu"
+      $={(self: Astal.Window) => {
+        // Add escape key handler and keyboard navigation
+        const keyController = new Gtk.EventControllerKey();
+        keyController.connect(
+          "key-pressed",
+          (_: Gtk.EventControllerKey, keyval: number) => {
+            if (keyval === Gdk.KEY_Escape) {
+              hideMenu();
+              return true;
+            }
 
-      // Keyboard navigation
-      const focusableButtons = Array.from(menuItemButtons.values()).filter(
-        (btn) => btn.can_focus,
-      );
+            // Keyboard navigation
+            const focusableButtons = Array.from(menuItemButtons.values()).filter(
+              (btn) => btn.can_focus,
+            );
 
-      if (focusableButtons.length === 0) return false;
+            if (focusableButtons.length === 0) return false;
 
-      let currentFocus = focusableButtons.find((btn) => btn.has_focus);
-      let currentIndex = currentFocus
-        ? focusableButtons.indexOf(currentFocus)
-        : -1;
+            let currentFocus = focusableButtons.find((btn) => btn.has_focus);
+            let currentIndex = currentFocus
+              ? focusableButtons.indexOf(currentFocus)
+              : -1;
 
-      if (keyval === Gdk.KEY_Tab || keyval === Gdk.KEY_Down) {
-        // Move to next item
-        const nextIndex = (currentIndex + 1) % focusableButtons.length;
-        focusableButtons[nextIndex].grab_focus();
-        return true;
-      } else if (keyval === Gdk.KEY_ISO_Left_Tab || keyval === Gdk.KEY_Up) {
-        // Move to previous item (Shift+Tab or Up arrow)
-        const prevIndex =
-          currentIndex <= 0 ? focusableButtons.length - 1 : currentIndex - 1;
-        focusableButtons[prevIndex].grab_focus();
-        return true;
-      } else if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_space) {
-        // Activate current item
-        if (currentFocus) {
-          currentFocus.activate();
-          return true;
-        }
-      }
+            if (keyval === Gdk.KEY_Tab || keyval === Gdk.KEY_Down) {
+              // Move to next item
+              const nextIndex = (currentIndex + 1) % focusableButtons.length;
+              focusableButtons[nextIndex].grab_focus();
+              return true;
+            } else if (keyval === Gdk.KEY_ISO_Left_Tab || keyval === Gdk.KEY_Up) {
+              // Move to previous item (Shift+Tab or Up arrow)
+              const prevIndex =
+                currentIndex <= 0 ? focusableButtons.length - 1 : currentIndex - 1;
+              focusableButtons[prevIndex].grab_focus();
+              return true;
+            } else if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_space) {
+              // Activate current item
+              if (currentFocus) {
+                currentFocus.activate();
+                return true;
+              }
+            }
 
-      return false;
-    },
-  );
-  win.add_controller(keyController);
+            return false;
+          },
+        );
+        self.add_controller(keyController);
 
-  // Add click-anywhere handler - close menu on any click when visible
-  // Use 'released' instead of 'pressed' to let button clicks process first
-  const clickController = new Gtk.GestureClick();
-  clickController.connect("released", (_controller, _n_press, x, y) => {
-    if (!isVisible) return;
+        // Add click-anywhere handler - close menu on any click when visible
+        // Use 'released' instead of 'pressed' to let button clicks process first
+        const clickController = new Gtk.GestureClick();
+        clickController.connect("released", (_controller, _n_press, x, y) => {
+          if (!isVisible) return;
 
-    // Check if click is outside the menu container
-    if (menuBox) {
-      const allocation = menuBox.get_allocation();
-      const menuX = allocation.x;
-      const menuY = allocation.y;
-      const menuWidth = allocation.width;
-      const menuHeight = allocation.height;
+          // Check if click is outside the menu container
+          if (menuBox) {
+            const allocation = menuBox.get_allocation();
+            const menuX = allocation.x;
+            const menuY = allocation.y;
+            const menuWidth = allocation.width;
+            const menuHeight = allocation.height;
 
-      // If click is outside menu bounds, close menu
-      if (
-        x < menuX ||
-        x > menuX + menuWidth ||
-        y < menuY ||
-        y > menuY + menuHeight
-      ) {
-        hideMenu();
-      }
-    }
-  });
-  win.add_controller(clickController);
-
-  // Create outer container for positioning
-  const outerBox = new Gtk.Box({
-    orientation: Gtk.Orientation.VERTICAL,
-    valign: Gtk.Align.END,
-    halign: Gtk.Align.START,
-  });
-
-  // Create menu container
-  menuBox = new Gtk.Box({
-    orientation: Gtk.Orientation.VERTICAL,
-    spacing: 0,
-  });
-  menuBox.add_css_class("start-menu-container");
-
-  // Initialize menu items
-  updateMenuItems();
-
-  outerBox.append(menuBox);
-  win.set_child(outerBox);
+            // If click is outside menu bounds, close menu
+            if (
+              x < menuX ||
+              x > menuX + menuWidth ||
+              y < menuY ||
+              y > menuY + menuHeight
+            ) {
+              hideMenu();
+            }
+          }
+        });
+        self.add_controller(clickController);
+      }}
+    >
+      <box
+        orientation={Gtk.Orientation.VERTICAL}
+        valign={Gtk.Align.END}
+        halign={Gtk.Align.START}
+      >
+        <box
+          orientation={Gtk.Orientation.VERTICAL}
+          spacing={0}
+          class="start-menu-container"
+          $={(self: Gtk.Box) => {
+            menuBox = self;
+            // Initialize menu items
+            updateMenuItems();
+          }}
+        />
+      </box>
+    </window>
+  ) as Astal.Window;
 }
 
 // Apply static CSS once on module load

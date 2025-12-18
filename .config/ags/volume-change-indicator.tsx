@@ -158,7 +158,7 @@ app.apply_css(
   box.progress-square.empty {
     background-color: rgba(255, 255, 255, 0.2);
   }
-  
+
   label.volume-label {
     font-family: system-ui, sans-serif;
     font-weight: 700;
@@ -375,7 +375,11 @@ function createWindow() {
           shadowWrapper = self;
         }}
       >
-        <box orientation={Gtk.Orientation.HORIZONTAL} spacing={0} class="indicator-container">
+        <box
+          orientation={Gtk.Orientation.HORIZONTAL}
+          spacing={0}
+          class="indicator-container"
+        >
           {/* Icon container */}
           <box
             orientation={Gtk.Orientation.HORIZONTAL}
@@ -429,13 +433,13 @@ app.start({
   requestHandler(argv: string[], res: (response: string) => void) {
     try {
       const request = argv.join(" ");
-      
+
       // Handle empty requests gracefully
       if (!request || request.trim() === "") {
         res("ok");
         return;
       }
-      
+
       const data = JSON.parse(request);
 
       if (data.action === "show") {
