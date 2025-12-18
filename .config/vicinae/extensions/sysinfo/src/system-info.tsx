@@ -732,9 +732,8 @@ function SystemInfoContent() {
       metadata={
         <Detail.Metadata>
           <Detail.Metadata.Label
-            title="Computer Name"
+            title="Hostname"
             text={staticInfo.hostname}
-            icon={Icon.ComputerChip}
           />
           {staticInfo.model && (
             <Detail.Metadata.Label title="Model" text={staticInfo.model} />
