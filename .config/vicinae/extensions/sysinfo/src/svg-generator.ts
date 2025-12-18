@@ -1,5 +1,11 @@
 import type { SystemInfo } from "./types";
 
+// Simple counter for generating unique IDs (faster than Math.random())
+let idCounter = 0;
+function generateId(prefix: string): string {
+  return `${prefix}-${++idCounter}`;
+}
+
 // Zenwritten color palette with light/dark variants
 export interface ThemeColors {
   cardBackground: string;
@@ -64,7 +70,8 @@ function formatBytes(bytes: number): string {
   const k = 1024;
   const sizes = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / k ** i).toFixed(1)} ${sizes[i]}`;
+  const divisor = k ** i; // Cache the power calculation
+  return `${(bytes / divisor).toFixed(1)} ${sizes[i]}`;
 }
 
 function formatUptime(seconds: number): string {
@@ -157,25 +164,22 @@ function generateStorageItem(
   }
 
   // macOS-style categorized storage
-  const sortedCategories = [...storage.categories].sort(
-    (a, b) => b.bytes - a.bytes,
-  );
+  // Sort in-place instead of creating a copy
+  const sortedCategories = storage.categories.sort((a, b) => b.bytes - a.bytes);
   let currentX = x;
-  const clipPathId = `clip-${Math.random().toString(36).substring(2, 11)}`;
+  const clipPathId = generateId("clip");
 
-  // Generate stacked bar segments (without border radius on individual segments)
-  const barSegments = sortedCategories
-    .map((category) => {
-      const percent = (category.bytes / storage.total) * 100;
-      const segmentWidth = (barWidth * percent) / 100;
-      const svg = `
+  // Generate stacked bar segments using string concatenation (faster than array operations)
+  let barSegments = "";
+  for (const category of sortedCategories) {
+    const percent = (category.bytes / storage.total) * 100;
+    const segmentWidth = (barWidth * percent) / 100;
+    barSegments += `
       <rect x="${currentX}" y="${y + 32}" width="${segmentWidth}" height="${barHeight}" 
             fill="${category.color}"/>
     `;
-      currentX += segmentWidth;
-      return svg;
-    })
-    .join("");
+    currentX += segmentWidth;
+  }
 
   // Generate legend items horizontally (macOS-style with name on top, size below)
   const legendStartY = y + 64; // Increased from 58 to add more space below bar
@@ -330,9 +334,9 @@ export function generateSystemInfoSVG(
   const distroNameWithSpacing = codename ? `${distroName} ` : distroName;
 
   // Generate unique IDs for gradients and filters
-  const logoGradientId = `logoGradient-${Math.random().toString(36).substring(2, 11)}`;
-  const logoShadowId = `logoShadow-${Math.random().toString(36).substring(2, 11)}`;
-  const iconGradientId = `iconGradient-${Math.random().toString(36).substring(2, 11)}`;
+  const logoGradientId = generateId("logoGradient");
+  const logoShadowId = generateId("logoShadow");
+  const iconGradientId = generateId("iconGradient");
 
   const osHeader = `
     <!-- Distro Logo Circle with Gradient and Shadow -->
@@ -463,7 +467,7 @@ export function generateSystemInfoSVG(
   const ramFillWidth = (progressBarWidth * ramPercent) / 100;
   const ramColor = getUsageColor(info.memory.usagePercent, colors);
   
-  const clipPathMemory = `clip-memory-${Math.random().toString(36).substring(2, 11)}`;
+  const clipPathMemory = generateId("clip-memory");
   
   const memoryTitleText = hasSwap
     ? `${formatBytes(info.memory.total)} (${formatBytes(info.swap.total)} swap)`
@@ -520,7 +524,7 @@ export function generateSystemInfoSVG(
   currentY += memoryHeight + sectionSpacing;
 
   // Storage Section - no card wrapper
-  let storageContentArray: Array<{ svg: string; height: number }> = [];
+  const storageContentArray: Array<{ svg: string; height: number }> = [];
 
   // Section header
   const storageSectionHeader = `
@@ -576,9 +580,44 @@ export function generateSystemInfoSVG(
 }
 
 export function svgToDataUri(svg: string): string {
-  // Encode SVG for data URI
-  const encoded = encodeURIComponent(svg)
-    .replace(/'/g, "%27")
-    .replace(/"/g, "%22");
+  // Optimize encoding with single pass character replacement
+  // Significantly faster than chained replace() calls on large SVG strings
+  let encoded = "";
+  for (let i = 0; i < svg.length; i++) {
+    const char = svg[i];
+    switch (char) {
+      case "'":
+        encoded += "%27";
+        break;
+      case '"':
+        encoded += "%22";
+        break;
+      case "#":
+        encoded += "%23";
+        break;
+      case "%":
+        encoded += "%25";
+        break;
+      case "<":
+        encoded += "%3C";
+        break;
+      case ">":
+        encoded += "%3E";
+        break;
+      case " ":
+        encoded += "%20";
+        break;
+      case "\n":
+        encoded += "%0A";
+        break;
+      default:
+        // Only encode non-ASCII characters
+        if (char.charCodeAt(0) > 127) {
+          encoded += encodeURIComponent(char);
+        } else {
+          encoded += char;
+        }
+    }
+  }
   return `data:image/svg+xml,${encoded}`;
 }
