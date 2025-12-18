@@ -246,16 +246,15 @@ async function analyzeStorageCategories(
 
 // Dynamic system info - things that change frequently
 async function getDynamicSystemInfo(): Promise<DynamicSystemInfo> {
-  const [memInfo, swapInfo, storageInfo, uptimeInfo] = await Promise.all([
-    getMemoryInfo(),
-    getSwapInfo(),
+  const [memAndSwap, storageInfo, uptimeInfo] = await Promise.all([
+    getMemoryAndSwapInfo(),
     getStorageInfo(),
     getUptime(),
   ]);
 
   return {
-    memory: memInfo,
-    swap: swapInfo,
+    memory: memAndSwap.memory,
+    swap: memAndSwap.swap,
     storage: storageInfo,
     uptime: uptimeInfo,
   };
@@ -263,8 +262,18 @@ async function getDynamicSystemInfo(): Promise<DynamicSystemInfo> {
 
 async function getOSInfo() {
   try {
-    // Try to get pretty name from os-release
-    const osRelease = await readFile("/etc/os-release", "utf-8");
+    // Parallelize all independent operations
+    const [osRelease, kernel, arch, modelInfo] = await Promise.all([
+      readFile("/etc/os-release", "utf-8"),
+      execAsync("uname -r").then((r) => r.stdout.trim()),
+      execAsync("uname -m").then((r) => r.stdout.trim()),
+      // Try to get model info in parallel
+      Promise.all([
+        readFile("/sys/devices/virtual/dmi/id/product_name", "utf-8").then((s) => s.trim()).catch(() => ""),
+        readFile("/sys/devices/virtual/dmi/id/product_version", "utf-8").then((s) => s.trim()).catch(() => ""),
+      ]).catch(() => ["", ""]),
+    ]);
+
     const prettyName = osRelease.match(/PRETTY_NAME="([^"]+)"/)?.[1] || "Linux";
     const versionId = osRelease.match(/VERSION_ID="([^"]+)"/)?.[1] || "";
     const versionCodename = osRelease
@@ -273,27 +282,12 @@ async function getOSInfo() {
 
     console.log("OS Info:", { prettyName, versionId, versionCodename });
 
-    const kernel = await execAsync("uname -r").then((r) => r.stdout.trim());
-    const arch = await execAsync("uname -m").then((r) => r.stdout.trim());
-
-    // Try to get model info
-    let model: string | undefined;
-    try {
-      const productName = await readFile(
-        "/sys/devices/virtual/dmi/id/product_name",
-        "utf-8",
-      ).then((s) => s.trim());
-      const productVersion = await readFile(
-        "/sys/devices/virtual/dmi/id/product_version",
-        "utf-8",
-      ).then((s) => s.trim());
-      model =
-        productVersion && productVersion !== "None"
-          ? `${productName} ${productVersion}`
-          : productName;
-    } catch {
-      // Not available, likely a VM or unsupported system
-    }
+    // Process model info
+    const [productName, productVersion] = modelInfo;
+    const model =
+      productName && productVersion && productVersion !== "None"
+        ? `${productName} ${productVersion}`
+        : productName || undefined;
 
     return {
       osName: prettyName,
@@ -361,58 +355,55 @@ async function getCPUInfo() {
   }
 }
 
-async function getMemoryInfo() {
+// Combined function to read /proc/meminfo once for both memory and swap
+async function getMemoryAndSwapInfo() {
   try {
     const meminfo = await readFile("/proc/meminfo", "utf-8");
-    const total =
-      Number.parseInt(meminfo.match(/MemTotal:\s+(\d+)/)?.[1] || "0", 10) *
-      1024;
-    const available =
-      Number.parseInt(meminfo.match(/MemAvailable:\s+(\d+)/)?.[1] || "0", 10) *
-      1024;
-    const used = total - available;
-    const usagePercent = total > 0 ? (used / total) * 100 : 0;
+    
+    // Parse memory info
+    const memTotal =
+      Number.parseInt(meminfo.match(/MemTotal:\s+(\d+)/)?.[1] || "0", 10) * 1024;
+    const memAvailable =
+      Number.parseInt(meminfo.match(/MemAvailable:\s+(\d+)/)?.[1] || "0", 10) * 1024;
+    const memUsed = memTotal - memAvailable;
+    const memUsagePercent = memTotal > 0 ? (memUsed / memTotal) * 100 : 0;
+    
+    // Parse swap info
+    const swapTotal =
+      Number.parseInt(meminfo.match(/SwapTotal:\s+(\d+)/)?.[1] || "0", 10) * 1024;
+    const swapFree =
+      Number.parseInt(meminfo.match(/SwapFree:\s+(\d+)/)?.[1] || "0", 10) * 1024;
+    const swapUsed = swapTotal - swapFree;
+    const swapUsagePercent = swapTotal > 0 ? (swapUsed / swapTotal) * 100 : 0;
 
     return {
-      total,
-      used,
-      available,
-      usagePercent,
+      memory: {
+        total: memTotal,
+        used: memUsed,
+        available: memAvailable,
+        usagePercent: memUsagePercent,
+      },
+      swap: {
+        total: swapTotal,
+        used: swapUsed,
+        free: swapFree,
+        usagePercent: swapUsagePercent,
+      },
     };
   } catch {
     return {
-      total: 0,
-      used: 0,
-      available: 0,
-      usagePercent: 0,
-    };
-  }
-}
-
-async function getSwapInfo() {
-  try {
-    const meminfo = await readFile("/proc/meminfo", "utf-8");
-    const total =
-      Number.parseInt(meminfo.match(/SwapTotal:\s+(\d+)/)?.[1] || "0", 10) *
-      1024;
-    const free =
-      Number.parseInt(meminfo.match(/SwapFree:\s+(\d+)/)?.[1] || "0", 10) *
-      1024;
-    const used = total - free;
-    const usagePercent = total > 0 ? (used / total) * 100 : 0;
-
-    return {
-      total,
-      used,
-      free,
-      usagePercent,
-    };
-  } catch {
-    return {
-      total: 0,
-      used: 0,
-      free: 0,
-      usagePercent: 0,
+      memory: {
+        total: 0,
+        used: 0,
+        available: 0,
+        usagePercent: 0,
+      },
+      swap: {
+        total: 0,
+        used: 0,
+        free: 0,
+        usagePercent: 0,
+      },
     };
   }
 }
@@ -499,66 +490,44 @@ async function getPackageCount(): Promise<{
     pacman?: number;
   } = {};
 
-  try {
-    // Count NixOS system packages
-    const { stdout: nixSystem } = await execAsync("nix-store -q --requisites /run/current-system 2>/dev/null | wc -l");
-    const systemCount = Number.parseInt(nixSystem.trim(), 10);
+  // Run all package manager checks in parallel
+  const [nixResult, dpkgResult, rpmResult, pacmanResult, flatpakResult] = await Promise.all([
+    // NixOS (system + user)
+    Promise.all([
+      execAsync("nix-store -q --requisites /run/current-system 2>/dev/null | wc -l").catch(() => ({ stdout: "0" })),
+      execAsync("nix-store -q --requisites ~/.nix-profile 2>/dev/null | wc -l").catch(() => ({ stdout: "0" })),
+    ]).then(([nixSystem, nixUser]) => {
+      const systemCount = Number.parseInt(nixSystem.stdout.trim(), 10);
+      const userCount = Number.parseInt(nixUser.stdout.trim(), 10);
+      return systemCount + userCount;
+    }).catch(() => 0),
     
-    // Count NixOS user packages
-    const { stdout: nixUser } = await execAsync("nix-store -q --requisites ~/.nix-profile 2>/dev/null | wc -l");
-    const userCount = Number.parseInt(nixUser.trim(), 10);
+    // dpkg (Debian/Ubuntu)
+    execAsync("dpkg -l | grep '^ii' | wc -l")
+      .then(({ stdout }) => Number.parseInt(stdout.trim(), 10))
+      .catch(() => 0),
     
-    const totalNix = systemCount + userCount;
-    if (totalNix > 0) {
-      packages.nix = totalNix;
-    }
-  } catch {
-    // NixOS not available or command failed
-  }
+    // rpm (RedHat/Fedora/CentOS)
+    execAsync("rpm -qa | wc -l")
+      .then(({ stdout }) => Number.parseInt(stdout.trim(), 10))
+      .catch(() => 0),
+    
+    // pacman (Arch)
+    execAsync("pacman -Q | wc -l")
+      .then(({ stdout }) => Number.parseInt(stdout.trim(), 10))
+      .catch(() => 0),
+    
+    // Flatpak
+    execAsync("flatpak list --app 2>/dev/null | wc -l")
+      .then(({ stdout }) => Number.parseInt(stdout.trim(), 10))
+      .catch(() => 0),
+  ]);
 
-  try {
-    // Count dpkg packages (Debian/Ubuntu)
-    const { stdout } = await execAsync("dpkg -l | grep '^ii' | wc -l");
-    const count = Number.parseInt(stdout.trim(), 10);
-    if (count > 0) {
-      packages.dpkg = count;
-    }
-  } catch {
-    // dpkg not available
-  }
-
-  try {
-    // Count rpm packages (RedHat/Fedora/CentOS)
-    const { stdout } = await execAsync("rpm -qa | wc -l");
-    const count = Number.parseInt(stdout.trim(), 10);
-    if (count > 0) {
-      packages.rpm = count;
-    }
-  } catch {
-    // rpm not available
-  }
-
-  try {
-    // Count pacman packages (Arch)
-    const { stdout } = await execAsync("pacman -Q | wc -l");
-    const count = Number.parseInt(stdout.trim(), 10);
-    if (count > 0) {
-      packages.pacman = count;
-    }
-  } catch {
-    // pacman not available
-  }
-
-  try {
-    // Count Flatpak packages (user + system)
-    const { stdout } = await execAsync("flatpak list --app 2>/dev/null | wc -l");
-    const count = Number.parseInt(stdout.trim(), 10);
-    if (count > 0) {
-      packages.flatpak = count;
-    }
-  } catch {
-    // Flatpak not available
-  }
+  if (nixResult > 0) packages.nix = nixResult;
+  if (dpkgResult > 0) packages.dpkg = dpkgResult;
+  if (rpmResult > 0) packages.rpm = rpmResult;
+  if (pacmanResult > 0) packages.pacman = pacmanResult;
+  if (flatpakResult > 0) packages.flatpak = flatpakResult;
 
   return Object.keys(packages).length > 0 ? packages : undefined;
 }
@@ -791,19 +760,27 @@ function SystemInfoContent() {
           <ActionPanel.Section title="Launch">
             <Action
               title="Open System Monitor"
-              icon={Icon.LineChart}
+              icon={Icon.Monitor}
               onAction={async () => {
                 try {
-                  // Try Mission Center first (GUI), fallback to btop/htop (TUI)
-                  await execAsync("which missioncenter").then(() => 
-                    execAsync("missioncenter &")
-                  ).catch(() => 
-                    execAsync("which btop").then(() => 
-                      execAsync("foot btop &")
-                    ).catch(() =>
-                      execAsync("foot htop &")
-                    )
-                  );
+                  // Check all available tools in parallel
+                  const [hasMissionCenter, hasBtop, hasHtop] = await Promise.all([
+                    execAsync("which missioncenter").then(() => true).catch(() => false),
+                    execAsync("which btop").then(() => true).catch(() => false),
+                    execAsync("which htop").then(() => true).catch(() => false),
+                  ]);
+                  
+                  // Launch the first available tool
+                  if (hasMissionCenter) {
+                    await execAsync("missioncenter &");
+                  } else if (hasBtop) {
+                    await execAsync("foot btop &");
+                  } else if (hasHtop) {
+                    await execAsync("foot htop &");
+                  } else {
+                    throw new Error("No system monitor found (tried missioncenter, btop, htop)");
+                  }
+                  
                   await showToast({
                     style: Toast.Style.Success,
                     title: "Launched System Monitor",
@@ -817,6 +794,40 @@ function SystemInfoContent() {
                 }
               }}
               shortcut={{ modifiers: ["cmd"], key: "m" }}
+            />
+            <Action
+              title="Open Disk Usage Analyzer"
+              icon={Icon.HardDrive}
+              onAction={async () => {
+                try {
+                  // Check all available tools in parallel
+                  const [hasBaobab, hasNcdu] = await Promise.all([
+                    execAsync("which baobab").then(() => true).catch(() => false),
+                    execAsync("which ncdu").then(() => true).catch(() => false),
+                  ]);
+                  
+                  // Launch the first available tool
+                  if (hasBaobab) {
+                    await execAsync("baobab &");
+                  } else if (hasNcdu) {
+                    await execAsync("foot ncdu / &");
+                  } else {
+                    throw new Error("No disk analyzer found (tried baobab, ncdu)");
+                  }
+                  
+                  await showToast({
+                    style: Toast.Style.Success,
+                    title: "Launched Disk Usage Analyzer",
+                  });
+                } catch (error) {
+                  await showToast({
+                    style: Toast.Style.Failure,
+                    title: "Failed to open disk analyzer",
+                    message: error instanceof Error ? error.message : "Unknown error",
+                  });
+                }
+              }}
+              shortcut={{ modifiers: ["cmd"], key: "d" }}
             />
             <Action
               title="Open Disk Usage Analyzer"
