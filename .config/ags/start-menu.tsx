@@ -268,7 +268,27 @@ const getSystemUpdatesCommand = (): string => {
 
 const menuCommands: Record<string, string> = {
   updates: getSystemUpdatesCommand(), // Combined NixOS and Flatpak updates
-  "system-settings": "gnome-tweaks",
+  "system-settings": (() => {
+    const terminal = getTerminal();
+    const nixosPath = `${homeDir}/nixos`;
+
+    // Different terminals use different flags for command execution
+    switch (terminal) {
+      case "foot":
+        return `${terminal} sh -c "cd ${nixosPath} && nvim"`;
+      case "kitty":
+        return `${terminal} sh -c "cd ${nixosPath} && nvim"`;
+      case "alacritty":
+        return `${terminal} -e sh -c "cd ${nixosPath} && nvim"`;
+      case "wezterm":
+        return `${terminal} start --cwd ${nixosPath} -- nvim`;
+      case "gnome-terminal":
+        return `${terminal} --working-directory=${nixosPath} -- nvim`;
+      default:
+        // Fallback for xterm and others
+        return `${terminal} -e sh -c "cd ${nixosPath} && nvim"`;
+    }
+  })(),
   "system-info": "xdg-open 'vicinae://extensions/fbosch/sysinfo/system-info'",
   "lock-screen": "hyprlock",
   applications: "com.github.tchx84.Flatseal",
@@ -395,7 +415,7 @@ function showMenu() {
 // Generate tooltip text for updates menu item
 function generateUpdatesTooltip(): string {
   const tooltipParts: string[] = [];
-  
+
   if (flakeUpdatesCount > 0) {
     if (flakeUpdatesData && flakeUpdatesData.updates.length > 0) {
       const tooltipText = flakeUpdatesData.updates
@@ -410,7 +430,7 @@ function generateUpdatesTooltip(): string {
       );
     }
   }
-  
+
   if (flatpakUpdatesCount > 0) {
     if (flatpakUpdatesData && flatpakUpdatesData.updates.length > 0) {
       const tooltipText = flatpakUpdatesData.updates
@@ -425,14 +445,14 @@ function generateUpdatesTooltip(): string {
       );
     }
   }
-  
+
   return tooltipParts.join("\n\n");
 }
 
 // Create update badges for the updates menu item
 function createUpdateBadges(): JSX.Element[] {
   const badges: JSX.Element[] = [];
-  
+
   // Add flake updates badge if applicable
   if (flakeUpdatesCount > 0) {
     badges.push(
@@ -447,7 +467,7 @@ function createUpdateBadges(): JSX.Element[] {
           halign={Gtk.Align.CENTER}
           valign={Gtk.Align.CENTER}
         />
-      </box>
+      </box>,
     );
   }
 
@@ -465,10 +485,10 @@ function createUpdateBadges(): JSX.Element[] {
           halign={Gtk.Align.CENTER}
           valign={Gtk.Align.CENTER}
         />
-      </box>
+      </box>,
     );
   }
-  
+
   return badges;
 }
 
@@ -486,14 +506,14 @@ function createMenuItem(item: MenuItem): Gtk.Button {
       $={(self: Gtk.Button) => {
         self.set_cursor_from_name("pointer");
         menuItemButtons.set(item.id, self);
-        
+
         // Set tooltip if this is the updates item
         if (item.id === "updates") {
           const tooltip = generateUpdatesTooltip();
           if (tooltip) {
             self.set_tooltip_text(tooltip);
           }
-          
+
           // Store reference for tooltip updates
           if (flakeUpdatesCount > 0) {
             flakeUpdateBadgeButton = self;
@@ -614,9 +634,7 @@ function handleKeyboardNavigation(keyval: number): boolean {
   if (focusableButtons.length === 0) return false;
 
   let currentFocus = focusableButtons.find((btn) => btn.has_focus);
-  let currentIndex = currentFocus
-    ? focusableButtons.indexOf(currentFocus)
-    : -1;
+  let currentIndex = currentFocus ? focusableButtons.indexOf(currentFocus) : -1;
 
   if (keyval === Gdk.KEY_Tab || keyval === Gdk.KEY_Down) {
     // Move to next item
