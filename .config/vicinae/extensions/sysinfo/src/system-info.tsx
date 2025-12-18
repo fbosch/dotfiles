@@ -97,14 +97,16 @@ async function getStaticSystemInfo(): Promise<StaticSystemInfo> {
 
 // Dynamic system info - things that change frequently
 async function getDynamicSystemInfo(): Promise<DynamicSystemInfo> {
-  const [memInfo, storageInfo, uptimeInfo] = await Promise.all([
+  const [memInfo, swapInfo, storageInfo, uptimeInfo] = await Promise.all([
     getMemoryInfo(),
+    getSwapInfo(),
     getStorageInfo(),
     getUptime(),
   ]);
 
   return {
     memory: memInfo,
+    swap: swapInfo,
     storage: storageInfo,
     uptime: uptimeInfo,
   };
@@ -232,6 +234,32 @@ async function getMemoryInfo() {
   }
 }
 
+async function getSwapInfo() {
+  try {
+    const meminfo = await readFile("/proc/meminfo", "utf-8");
+    const total =
+      Number.parseInt(meminfo.match(/SwapTotal:\s+(\d+)/)?.[1] || "0", 10) * 1024;
+    const free =
+      Number.parseInt(meminfo.match(/SwapFree:\s+(\d+)/)?.[1] || "0", 10) * 1024;
+    const used = total - free;
+    const usagePercent = total > 0 ? (used / total) * 100 : 0;
+
+    return {
+      total,
+      used,
+      free,
+      usagePercent,
+    };
+  } catch {
+    return {
+      total: 0,
+      used: 0,
+      free: 0,
+      usagePercent: 0,
+    };
+  }
+}
+
 async function getStorageInfo() {
   try {
     const { stdout } = await execAsync(
@@ -353,7 +381,6 @@ function SystemInfoContent() {
   // Static system info - load from cache first, then refresh in background
   const {
     data: staticInfo,
-    isLoading: isLoadingStatic,
   } = useQuery({
     queryKey: ["system-info-static"],
     queryFn: getStaticSystemInfo,
@@ -391,15 +418,14 @@ function SystemInfoContent() {
 
   // If we don't have static info yet, show loading state
   if (!staticInfo) {
-    return <Detail isLoading={true} markdown="" />;
+    return <Detail markdown="Loading system information..." />;
   }
 
   // If we don't have dynamic info yet, show loading with static info in sidebar
   if (!dynamicInfo) {
     return (
       <Detail
-        isLoading={true}
-        markdown=""
+        markdown="Loading usage data..."
         metadata={
           <Detail.Metadata>
             <Detail.Metadata.Label
@@ -463,6 +489,7 @@ function SystemInfoContent() {
   const combinedInfo = {
     ...staticInfo,
     memory: dynamicInfo.memory,
+    swap: dynamicInfo.swap,
     storage: dynamicInfo.storage,
     os: {
       ...staticInfo.os,

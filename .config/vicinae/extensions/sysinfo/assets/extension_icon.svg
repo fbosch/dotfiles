@@ -1,8 +1,66 @@
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <rect width="512" height="512" rx="115" fill="#4A90E2"/>
-  <circle cx="256" cy="180" r="80" fill="white" opacity="0.9"/>
-  <rect x="140" y="290" width="232" height="20" rx="10" fill="white" opacity="0.9"/>
-  <rect x="140" y="330" width="180" height="20" rx="10" fill="white" opacity="0.7"/>
-  <rect x="140" y="370" width="200" height="20" rx="10" fill="white" opacity="0.7"/>
-  <rect x="140" y="410" width="150" height="20" rx="10" fill="white" opacity="0.5"/>
+  <!-- Background with gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563eb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1e40af;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="chipGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" rx="115" fill="url(#bgGradient)"/>
+  
+  <!-- CPU Chip outline -->
+  <rect x="126" y="126" width="260" height="260" rx="28" fill="url(#chipGradient)" stroke="white" stroke-width="5"/>
+  
+  <!-- CPU pins (left side) -->
+  <rect x="80" y="170" width="46" height="10" rx="2" fill="white" opacity="0.9"/>
+  <rect x="80" y="210" width="46" height="10" rx="2" fill="white" opacity="0.9"/>
+  <rect x="80" y="250" width="46" height="10" rx="2" fill="white" opacity="0.9"/>
+  <rect x="80" y="290" width="46" height="10" rx="2" fill="white" opacity="0.9"/>
+  <rect x="80" y="330" width="46" height="10" rx="2" fill="white" opacity="0.9"/>
+  
+  <!-- CPU pins (right side) -->
+  <rect x="386" y="170" width="46" height="10" rx="2" fill="white" opacity="0.9"/>
+  <rect x="386" y="210" width="46" height="10" rx="2" fill="white" opacity="0.9"/>
+  <rect x="386" y="250" width="46" height="10" rx="2" fill="white" opacity="0.9"/>
+  <rect x="386" y="290" width="46" height="10" rx="2" fill="white" opacity="0.9"/>
+  <rect x="386" y="330" width="46" height="10" rx="2" fill="white" opacity="0.9"/>
+  
+  <!-- CPU pins (top side) -->
+  <rect x="170" y="80" width="10" height="46" rx="2" fill="white" opacity="0.9"/>
+  <rect x="210" y="80" width="10" height="46" rx="2" fill="white" opacity="0.9"/>
+  <rect x="250" y="80" width="10" height="46" rx="2" fill="white" opacity="0.9"/>
+  <rect x="290" y="80" width="10" height="46" rx="2" fill="white" opacity="0.9"/>
+  <rect x="330" y="80" width="10" height="46" rx="2" fill="white" opacity="0.9"/>
+  
+  <!-- CPU pins (bottom side) -->
+  <rect x="170" y="386" width="10" height="46" rx="2" fill="white" opacity="0.9"/>
+  <rect x="210" y="386" width="10" height="46" rx="2" fill="white" opacity="0.9"/>
+  <rect x="250" y="386" width="10" height="46" rx="2" fill="white" opacity="0.9"/>
+  <rect x="290" y="386" width="10" height="46" rx="2" fill="white" opacity="0.9"/>
+  <rect x="330" y="386" width="10" height="46" rx="2" fill="white" opacity="0.9"/>
+  
+  <!-- Inner chip detail - circuit pattern -->
+  <rect x="161" y="161" width="190" height="190" rx="16" fill="rgba(255,255,255,0.15)"/>
+  
+  <!-- Central "i" for info -->
+  <circle cx="256" cy="220" r="16" fill="white"/>
+  <rect x="240" y="252" width="32" height="84" rx="5" fill="white"/>
+  
+  <!-- Circuit lines -->
+  <path d="M 161 190 L 210 190 L 210 220" stroke="white" stroke-width="4" fill="none" opacity="0.6"/>
+  <path d="M 161 230 L 195 230 L 195 275" stroke="white" stroke-width="4" fill="none" opacity="0.6"/>
+  <path d="M 351 190 L 302 190 L 302 220" stroke="white" stroke-width="4" fill="none" opacity="0.6"/>
+  <path d="M 351 230 L 317 230 L 317 275" stroke="white" stroke-width="4" fill="none" opacity="0.6"/>
+  
+  <!-- Small dots for circuit nodes -->
+  <circle cx="210" cy="220" r="5" fill="white" opacity="0.8"/>
+  <circle cx="195" cy="275" r="5" fill="white" opacity="0.8"/>
+  <circle cx="302" cy="220" r="5" fill="white" opacity="0.8"/>
+  <circle cx="317" cy="275" r="5" fill="white" opacity="0.8"/>
 </svg>

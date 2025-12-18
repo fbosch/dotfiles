@@ -36,6 +36,14 @@ export type DynamicSystemInfo = {
     usagePercent: number;
   };
   
+  // Swap usage (changes frequently)
+  swap: {
+    total: number;
+    used: number;
+    free: number;
+    usagePercent: number;
+  };
+  
   // Storage usage (changes frequently)
   storage: StorageDevice[];
   
@@ -45,6 +53,7 @@ export type DynamicSystemInfo = {
 
 export type SystemInfo = StaticSystemInfo & {
   memory: DynamicSystemInfo["memory"];
+  swap: DynamicSystemInfo["swap"];
   storage: DynamicSystemInfo["storage"];
   os: StaticSystemInfo["os"] & {
     uptime: number;
