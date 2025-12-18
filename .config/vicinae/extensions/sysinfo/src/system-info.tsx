@@ -791,7 +791,63 @@ function SystemInfoContent() {
             onAction={() => refetchDynamic()}
             shortcut={{ modifiers: ["cmd"], key: "r" }}
           />
-          <ActionPanel.Section>
+          <ActionPanel.Section title="Launch">
+            <Action
+              title="Open System Monitor"
+              icon={Icon.LineChart}
+              onAction={async () => {
+                try {
+                  // Try Mission Center first (GUI), fallback to btop/htop (TUI)
+                  await execAsync("which missioncenter").then(() => 
+                    execAsync("missioncenter &")
+                  ).catch(() => 
+                    execAsync("which btop").then(() => 
+                      execAsync("foot btop &")
+                    ).catch(() =>
+                      execAsync("foot htop &")
+                    )
+                  );
+                  await showToast({
+                    style: Toast.Style.Success,
+                    title: "Launched System Monitor",
+                  });
+                } catch (error) {
+                  await showToast({
+                    style: Toast.Style.Failure,
+                    title: "Failed to open system monitor",
+                    message: error instanceof Error ? error.message : "Unknown error",
+                  });
+                }
+              }}
+              shortcut={{ modifiers: ["cmd"], key: "m" }}
+            />
+            <Action
+              title="Open Disk Usage Analyzer"
+              icon={Icon.HardDrive}
+              onAction={async () => {
+                try {
+                  // Try baobab (GNOME Disk Usage Analyzer) first, fallback to ncdu (TUI)
+                  await execAsync("which baobab").then(() =>
+                    execAsync("baobab &")
+                  ).catch(() =>
+                    execAsync("foot ncdu / &")
+                  );
+                  await showToast({
+                    style: Toast.Style.Success,
+                    title: "Launched Disk Usage Analyzer",
+                  });
+                } catch (error) {
+                  await showToast({
+                    style: Toast.Style.Failure,
+                    title: "Failed to open disk analyzer",
+                    message: error instanceof Error ? error.message : "Unknown error",
+                  });
+                }
+              }}
+              shortcut={{ modifiers: ["cmd"], key: "d" }}
+            />
+          </ActionPanel.Section>
+          <ActionPanel.Section title="Copy">
             <Action
               title="Copy Hostname"
               icon={Icon.Clipboard}
