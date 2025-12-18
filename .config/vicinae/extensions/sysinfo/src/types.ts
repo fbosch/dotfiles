@@ -13,6 +13,7 @@ export type StaticSystemInfo = {
   os: {
     name: string;
     version: string;
+    codename?: string;
     kernel: string;
     architecture: string;
   };

@@ -18,14 +18,27 @@ import {
 import { exec } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
+import pLimit from "p-limit";
 import { generateSystemInfoSVG, svgToDataUri } from "./svg-generator";
-import type { DynamicSystemInfo, Preferences, StaticSystemInfo, StorageCategory } from "./types";
+import type {
+  DynamicSystemInfo,
+  Preferences,
+  StaticSystemInfo,
+  StorageCategory,
+} from "./types";
 
 const execAsync = promisify(exec);
 
+// Limit concurrent du commands to prevent memory issues
+const duLimit = pLimit(3); // Maximum 3 concurrent du processes
+
+// Development mode detection
+const IS_DEV =
+  environment.isDevelopment || process.env.NODE_ENV === "development";
+
 // Vicinae Cache for static system info persistence between sessions
 const cache = new Cache();
-const STATIC_INFO_CACHE_KEY = "static-system-info-v1";
+const STATIC_INFO_CACHE_KEY = "static-system-info-v2"; // Bumped version to invalidate old cache
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 const STORAGE_CATEGORIES_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
@@ -35,6 +48,7 @@ type CachedStaticInfo = {
 };
 
 function getCachedStaticInfo(): StaticSystemInfo | null {
+  if (IS_DEV) return null; // Skip cache in development mode
   const cached = cache.get(STATIC_INFO_CACHE_KEY);
   if (!cached) return null;
   try {
@@ -51,6 +65,7 @@ function getCachedStaticInfo(): StaticSystemInfo | null {
 }
 
 function setCachedStaticInfo(info: StaticSystemInfo): void {
+  if (IS_DEV) return; // Skip cache in development mode
   cache.set(
     STATIC_INFO_CACHE_KEY,
     JSON.stringify({ info, cachedAt: Date.now() } satisfies CachedStaticInfo),
@@ -62,6 +77,9 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
+      // Prevent concurrent fetches - only one query at a time per key
+      refetchInterval: false, // Disable automatic refetch by default
+      staleTime: 5000, // Consider data fresh for 5 seconds
     },
   },
 });
@@ -85,6 +103,7 @@ async function getStaticSystemInfo(): Promise<StaticSystemInfo> {
     os: {
       name: osInfo.osName,
       version: osInfo.osVersion,
+      codename: osInfo.osCodename,
       kernel: osInfo.kernel,
       architecture: osInfo.architecture,
     },
@@ -92,17 +111,21 @@ async function getStaticSystemInfo(): Promise<StaticSystemInfo> {
 
   // Cache static info for future opens
   setCachedStaticInfo(info);
-  
+
   return info;
 }
 
 // Cache helper functions for storage categories
-function getCachedStorageCategories(mountPoint: string): StorageCategory[] | null {
+function getCachedStorageCategories(
+  mountPoint: string,
+): StorageCategory[] | null {
+  if (IS_DEV) return null; // Skip cache in development mode
   const cacheKey = `storage-categories-${mountPoint}-v1`;
   const cached = cache.get(cacheKey);
   if (!cached) return null;
   try {
-    const data: { categories: StorageCategory[]; cachedAt: number } = JSON.parse(cached);
+    const data: { categories: StorageCategory[]; cachedAt: number } =
+      JSON.parse(cached);
     if (Date.now() - data.cachedAt < STORAGE_CATEGORIES_CACHE_DURATION) {
       return data.categories;
     }
@@ -114,12 +137,13 @@ function getCachedStorageCategories(mountPoint: string): StorageCategory[] | nul
   }
 }
 
-function setCachedStorageCategories(mountPoint: string, categories: StorageCategory[]): void {
+function setCachedStorageCategories(
+  mountPoint: string,
+  categories: StorageCategory[],
+): void {
+  if (IS_DEV) return; // Skip cache in development mode
   const cacheKey = `storage-categories-${mountPoint}-v1`;
-  cache.set(
-    cacheKey,
-    JSON.stringify({ categories, cachedAt: Date.now() }),
-  );
+  cache.set(cacheKey, JSON.stringify({ categories, cachedAt: Date.now() }));
 }
 
 // Analyze storage by categories using parallel du commands
@@ -141,35 +165,45 @@ async function analyzeStorageCategories(
   try {
     // Define categories with their directories and vibrant colors (inspired by macOS)
     const categoryDefs = [
-      { name: "Apps", paths: ["/usr", "/opt", "/var/lib/flatpak", "/var/lib/snapd"], color: "#5FA8D3" },      // bright blue
-      { name: "Documents", paths: ["~/Documents", "~/Desktop"], color: "#F9B572" },                             // bright orange
-      { name: "Photos", paths: ["~/Pictures"], color: "#E85D75" },                                              // bright pink/red
-      { name: "Music", paths: ["~/Music"], color: "#C77DBB" },                                                  // bright purple
-      { name: "Videos", paths: ["~/Videos"], color: "#8CC265" },                                                // bright green
-      { name: "Downloads", paths: ["~/Downloads"], color: "#62C3D1" },                                          // bright cyan
-      { name: "System", paths: ["/boot", "/var/log", "/tmp"], color: "#9B9B9B" },                              // gray
+      {
+        name: "Apps",
+        paths: ["/usr", "/opt", "/var/lib/flatpak", "/var/lib/snapd"],
+        color: "#5FA8D3",
+      }, // bright blue
+      {
+        name: "Documents",
+        paths: ["~/Documents", "~/Desktop"],
+        color: "#F9B572",
+      }, // bright orange
+      { name: "Photos", paths: ["~/Pictures"], color: "#E85D75" }, // bright pink/red
+      { name: "Music", paths: ["~/Music"], color: "#C77DBB" }, // bright purple
+      { name: "Videos", paths: ["~/Videos"], color: "#8CC265" }, // bright green
+      { name: "Downloads", paths: ["~/Downloads"], color: "#62C3D1" }, // bright cyan
+      {
+        name: "System",
+        paths: ["/boot", "/var/log", "/tmp"],
+        color: "#9B9B9B",
+      }, // gray
     ];
 
-    // Run all du commands in parallel for speed
+    // Run all du commands in parallel for speed, but limit concurrency to prevent memory issues
     const categoryPromises = categoryDefs.map(async (catDef) => {
-      // Run du commands in parallel for each category's paths
-      const pathPromises = catDef.paths.map(async (path) => {
+      // Run du commands sequentially for each category's paths to reduce memory pressure
+      let totalBytes = 0;
+      for (const path of catDef.paths) {
         try {
           const expandedPath = path.startsWith("~")
             ? path.replace("~", process.env.HOME || "")
             : path;
-          
+
           const { stdout } = await execAsync(
             `test -d "${expandedPath}" && timeout 5 du -sb "${expandedPath}" 2>/dev/null | cut -f1 || echo "0"`,
           );
-          return Number.parseInt(stdout.trim() || "0", 10);
+          totalBytes += Number.parseInt(stdout.trim() || "0", 10);
         } catch {
-          return 0;
+          // Ignore errors for individual paths
         }
-      });
-
-      const bytesPerPath = await Promise.all(pathPromises);
-      const totalBytes = bytesPerPath.reduce((sum, bytes) => sum + bytes, 0);
+      }
 
       return {
         name: catDef.name,
@@ -178,13 +212,16 @@ async function analyzeStorageCategories(
       };
     });
 
-    const categories = (await Promise.all(categoryPromises)).filter(cat => cat.bytes > 0);
-    
+    const categories = (await Promise.all(categoryPromises)).filter(
+      (cat) => cat.bytes > 0,
+    );
+
     // Calculate "Other" category (space used but not accounted for)
     const accountedBytes = categories.reduce((sum, cat) => sum + cat.bytes, 0);
     const otherBytes = totalUsed - accountedBytes;
-    
-    if (otherBytes > 0 && otherBytes > totalUsed * 0.01) { // Only show if > 1% of total
+
+    if (otherBytes > 0 && otherBytes > totalUsed * 0.01) {
+      // Only show if > 1% of total
       categories.push({
         name: "Other",
         bytes: otherBytes,
@@ -194,7 +231,7 @@ async function analyzeStorageCategories(
 
     // Cache the results
     setCachedStorageCategories(mountPoint, categories);
-    
+
     return categories;
   } catch (error) {
     console.error("Failed to analyze storage categories:", error);
@@ -223,9 +260,13 @@ async function getOSInfo() {
   try {
     // Try to get pretty name from os-release
     const osRelease = await readFile("/etc/os-release", "utf-8");
-    const prettyName =
-      osRelease.match(/PRETTY_NAME="([^"]+)"/)?.[1] || "Linux";
+    const prettyName = osRelease.match(/PRETTY_NAME="([^"]+)"/)?.[1] || "Linux";
     const versionId = osRelease.match(/VERSION_ID="([^"]+)"/)?.[1] || "";
+    const versionCodename = osRelease
+      .match(/VERSION_CODENAME=([^\n]+)/)?.[1]
+      ?.trim();
+
+    console.log("OS Info:", { prettyName, versionId, versionCodename });
 
     const kernel = await execAsync("uname -r").then((r) => r.stdout.trim());
     const arch = await execAsync("uname -m").then((r) => r.stdout.trim());
@@ -252,6 +293,7 @@ async function getOSInfo() {
     return {
       osName: prettyName,
       osVersion: versionId,
+      osCodename: versionCodename,
       kernel,
       architecture: arch,
       model,
@@ -318,7 +360,8 @@ async function getMemoryInfo() {
   try {
     const meminfo = await readFile("/proc/meminfo", "utf-8");
     const total =
-      Number.parseInt(meminfo.match(/MemTotal:\s+(\d+)/)?.[1] || "0", 10) * 1024;
+      Number.parseInt(meminfo.match(/MemTotal:\s+(\d+)/)?.[1] || "0", 10) *
+      1024;
     const available =
       Number.parseInt(meminfo.match(/MemAvailable:\s+(\d+)/)?.[1] || "0", 10) *
       1024;
@@ -345,9 +388,11 @@ async function getSwapInfo() {
   try {
     const meminfo = await readFile("/proc/meminfo", "utf-8");
     const total =
-      Number.parseInt(meminfo.match(/SwapTotal:\s+(\d+)/)?.[1] || "0", 10) * 1024;
+      Number.parseInt(meminfo.match(/SwapTotal:\s+(\d+)/)?.[1] || "0", 10) *
+      1024;
     const free =
-      Number.parseInt(meminfo.match(/SwapFree:\s+(\d+)/)?.[1] || "0", 10) * 1024;
+      Number.parseInt(meminfo.match(/SwapFree:\s+(\d+)/)?.[1] || "0", 10) *
+      1024;
     const used = total - free;
     const usagePercent = total > 0 ? (used / total) * 100 : 0;
 
@@ -409,9 +454,7 @@ async function getStorageInfo() {
 async function getGPUInfo() {
   try {
     // Try lspci first
-    const { stdout } = await execAsync(
-      "lspci | grep -i 'vga\\|3d\\|display'",
-    );
+    const { stdout } = await execAsync("lspci | grep -i 'vga\\|3d\\|display'");
     const firstGPU = stdout.split("\n")[0];
     if (firstGPU) {
       // Extract GPU name from lspci output
@@ -486,9 +529,7 @@ function SystemInfoContent() {
   const refreshInterval = Number.parseInt(preferences.refreshInterval, 10);
 
   // Static system info - load from cache first, then refresh in background
-  const {
-    data: staticInfo,
-  } = useQuery({
+  const { data: staticInfo } = useQuery({
     queryKey: ["system-info-static"],
     queryFn: getStaticSystemInfo,
     staleTime: 60 * 60 * 1000, // 1 hour in react-query cache
@@ -504,15 +545,15 @@ function SystemInfoContent() {
   });
 
   // Dynamic system info - refreshed frequently (memory, storage usage)
-  const {
-    data: dynamicInfo,
-    refetch: refetchDynamic,
-  } = useQuery({
+  // React Query prevents concurrent fetches automatically
+  const { data: dynamicInfo, refetch: refetchDynamic, isFetching: isDynamicFetching } = useQuery({
     queryKey: ["system-info-dynamic"],
     queryFn: getDynamicSystemInfo,
-    staleTime: 5000, // 5 seconds
+    staleTime: 5000, // 5 seconds - prevents unnecessary refetches
     enabled: !!staticInfo, // Only fetch dynamic info after static info is loaded
     refetchInterval: refreshInterval > 0 ? refreshInterval : false, // Auto-refresh based on preference
+    refetchIntervalInBackground: false, // Don't refetch when window is not focused
+    refetchOnMount: false, // Don't refetch on remount if data is fresh
     throwOnError: (error) => {
       showToast({
         style: Toast.Style.Failure,
@@ -524,11 +565,12 @@ function SystemInfoContent() {
   });
 
   // Progressive enhancement: Load storage categories after initial data is loaded
-  const { data: enrichedStorage } = useQuery({
+  // This query is throttled to prevent memory issues from running du commands
+  const { data: enrichedStorage, isFetching: isCategoriesFetching } = useQuery({
     queryKey: ["storage-categories", dynamicInfo?.storage],
     queryFn: async () => {
       if (!dynamicInfo?.storage) return undefined;
-      
+
       // Enrich each storage device with categories
       return await Promise.all(
         dynamicInfo.storage.map(async (device) => {
@@ -536,48 +578,61 @@ function SystemInfoContent() {
           if (device.mountPoint !== "/") {
             return device;
           }
-          
+
           // Get categories (from cache or analyze)
-          const categories = await analyzeStorageCategories(device.mountPoint, device.used);
-          return { ...device, categories: categories.length > 0 ? categories : undefined };
+          const categories = await analyzeStorageCategories(
+            device.mountPoint,
+            device.used,
+          );
+          return {
+            ...device,
+            categories: categories.length > 0 ? categories : undefined,
+          };
         }),
       );
     },
     enabled: !!dynamicInfo?.storage && dynamicInfo.storage.length > 0,
-    staleTime: STORAGE_CATEGORIES_CACHE_DURATION,
+    staleTime: STORAGE_CATEGORIES_CACHE_DURATION, // Use cache for 10 minutes
+    refetchOnMount: false, // Don't refetch on remount
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnReconnect: false, // Don't refetch on reconnect
   });
 
   // Use enriched storage if available, fallback to basic storage
-  const displayDynamicInfo = enrichedStorage ? {
-    ...dynamicInfo!,
-    storage: enrichedStorage,
-  } : dynamicInfo;
+  const displayDynamicInfo = enrichedStorage
+    ? {
+        ...dynamicInfo!,
+        storage: enrichedStorage,
+      }
+    : dynamicInfo;
 
   // If we don't have static or dynamic info yet, show loading state
   if (!staticInfo || !dynamicInfo) {
-    return <Detail markdown="Loading system information..." />;
+    return <Detail markdown="" />;
   }
 
   // Combine static and dynamic info for SVG generation
-  const combinedInfo = displayDynamicInfo ? {
-    ...staticInfo,
-    memory: displayDynamicInfo.memory,
-    swap: displayDynamicInfo.swap,
-    storage: displayDynamicInfo.storage,
-    os: {
-      ...staticInfo.os,
-      uptime: displayDynamicInfo.uptime,
-    },
-  } : {
-    ...staticInfo,
-    memory: dynamicInfo.memory,
-    swap: dynamicInfo.swap,
-    storage: dynamicInfo.storage,
-    os: {
-      ...staticInfo.os,
-      uptime: dynamicInfo.uptime,
-    },
-  };
+  const combinedInfo = displayDynamicInfo
+    ? {
+        ...staticInfo,
+        memory: displayDynamicInfo.memory,
+        swap: displayDynamicInfo.swap,
+        storage: displayDynamicInfo.storage,
+        os: {
+          ...staticInfo.os,
+          uptime: displayDynamicInfo.uptime,
+        },
+      }
+    : {
+        ...staticInfo,
+        memory: dynamicInfo.memory,
+        swap: dynamicInfo.swap,
+        storage: dynamicInfo.storage,
+        os: {
+          ...staticInfo.os,
+          uptime: dynamicInfo.uptime,
+        },
+      };
 
   // Generate SVG with current theme appearance and convert to data URI
   const svg = generateSystemInfoSVG(combinedInfo, environment.appearance);

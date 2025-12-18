@@ -94,8 +94,8 @@ function generateStorageItem(
   y: number,
   colors: ThemeColors,
 ): { svg: string; height: number } {
-  const barWidth = 338;
-  const barHeight = 12;
+  const barWidth = 419; // Full width (435 - 8*2 margins)
+  const barHeight = 14; // Storage bar height (thicker for better category visibility)
   const legendItemHeight = 18;
   
   // If no categories, show simple progress bar
@@ -120,9 +120,9 @@ function generateStorageItem(
       
       <!-- Simple Progress Bar -->
       <rect x="${x}" y="${y + 32}" width="${barWidth}" height="${barHeight}" 
-            rx="6" fill="${colors.progressBackground}"/>
+            rx="5" fill="${colors.progressBackground}"/>
       <rect x="${x}" y="${y + 32}" width="${fillWidth}" height="${barHeight}" 
-            rx="6" fill="${usageColor}">
+            rx="5" fill="${usageColor}">
         <animate attributeName="width" from="0" to="${fillWidth}" 
                  dur="0.8s" fill="freeze"/>
       </rect>
@@ -149,9 +149,9 @@ function generateStorageItem(
   }).join("");
   
   // Generate legend items horizontally (macOS-style with name on top, size below)
-  const legendStartY = y + 58;
+  const legendStartY = y + 64; // Increased from 58 to add more space below bar
   const squareSize = 10;
-  const itemSpacing = 20; // Space between legend items
+  const itemSpacing = 12; // Space between legend items (reduced from 20)
   const maxWidth = barWidth;
   let currentRow = 0;
   let legendX = x;
@@ -163,7 +163,7 @@ function generateStorageItem(
     const nameLength = category.name.length;
     const sizeLength = formatBytes(category.bytes).length;
     const maxTextLength = Math.max(nameLength, sizeLength);
-    const estimatedWidth = squareSize + 8 + (maxTextLength * 7); // ~7px per char
+    const estimatedWidth = squareSize + 8 + (maxTextLength * 6); // ~6px per char (SF Pro Text 12px)
     
     // Check if we need to wrap to next row
     if (legendX + estimatedWidth > x + maxWidth && index > 0) {
@@ -179,14 +179,14 @@ function generateStorageItem(
             rx="2" fill="${category.color}"/>
       
       <!-- Category Name -->
-      <text x="${legendX + squareSize + 8}" y="${legendY}" 
+      <text x="${legendX + squareSize + 5}" y="${legendY}" 
             font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
             font-size="12" font-weight="500"
             fill="${colors.textPrimary}"
             text-rendering="geometricPrecision">${escapeXml(category.name)}</text>
       
       <!-- Category Size (on new line) -->
-      <text x="${legendX + squareSize + 8}" y="${legendY + 14}" 
+      <text x="${legendX + squareSize + 5}" y="${legendY + 14}" 
             font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
             font-size="11" 
             fill="${colors.textTertiary}"
@@ -213,19 +213,20 @@ function generateStorageItem(
           fill="${colors.textTertiary}"
           text-rendering="geometricPrecision">${formatBytes(storage.available)} free of ${formatBytes(storage.total)}</text>
     
-    <!-- Clip path for rounded corners -->
+    <!-- Mask for rounded corners -->
     <defs>
-      <clipPath id="${clipPathId}">
-        <rect x="${x}" y="${y + 32}" width="${barWidth}" height="${barHeight}" rx="6"/>
-      </clipPath>
+      <mask id="${clipPathId}">
+        <rect x="${x}" y="${y + 32}" width="${barWidth}" height="${barHeight}" 
+              rx="5" fill="white"/>
+      </mask>
     </defs>
     
     <!-- Stacked Category Bar Background -->
     <rect x="${x}" y="${y + 32}" width="${barWidth}" height="${barHeight}" 
-          rx="6" fill="${colors.progressBackground}"/>
+          rx="5" fill="${colors.progressBackground}"/>
     
-    <!-- Category Segments (clipped to rounded rectangle) -->
-    <g clip-path="url(#${clipPathId})">
+    <!-- Category Segments (masked to rounded rectangle) -->
+    <g mask="url(#${clipPathId})">
       ${barSegments}
     </g>
     
@@ -308,12 +309,12 @@ export function generateSystemInfoSVG(
 
   // Exact available width in Vicinae Detail view (no rescaling)
   const width = 435;
-  const cardWidth = 435;
-  const margin = 0;
-  const cardSpacing = 12; // Space between cards
-  const cardPadding = 20; // Internal card padding
-  const progressBarWidth = 338; // Progress bar width
-  const percentageXPos = width - 20; // Position percentage text 20px from right edge
+  const sectionMargin = 8; // Small margin without card borders
+  const sectionSpacing = 10; // Space between sections (reduced for tighter layout)
+  const progressBarWidth = 419; // Full width minus small margins (435 - 8*2)
+  const contentWidth = 419; // Available content width
+  const memoryBarHeight = 14; // Memory bar height (matches storage bar)
+  const storageBarHeight = 14; // Storage bar height
 
   let currentY = 0;
 
@@ -335,11 +336,19 @@ export function generateSystemInfoSVG(
   
   // OS Header Section - left-aligned with logo and details side by side
   const osHeaderHeight = 110;
-  const logoX = margin + 20;
+  const logoX = sectionMargin + 10; // Move logo more to the left
   const logoY = currentY + 55;
   const logoSize = 70;
-  const textStartX = logoX + logoSize + 20;
-  const textStartY = currentY + 28;
+  const textStartX = logoX + logoSize + 24; // More gap between logo and text (was 16)
+  const textStartY = currentY + 32;
+  const maxTextWidth = width - textStartX - 16; // Add right margin
+  
+  // Parse OS name to extract distro name (e.g., "NixOS 24.11 (Vicuna)" -> "NixOS")
+  const distroName = info.os.name.split(' ')[0];
+  // Capitalize codename first letter - NO leading space here
+  const codename = info.os.codename ? `${info.os.codename.charAt(0).toUpperCase() + info.os.codename.slice(1)}` : '';
+  // Add single trailing space to distro name if there's a codename
+  const distroNameWithSpacing = codename ? `${distroName} ` : distroName;
   
   const osHeader = `
     <!-- Distro Logo Circle Background -->
@@ -356,30 +365,35 @@ export function generateSystemInfoSVG(
           dominant-baseline="middle"
           text-rendering="geometricPrecision">${distroLogo}</text>
     
-    <!-- OS Name and Version (larger) -->
+    <!-- OS Name and Codename -->
     <text x="${textStartX}" y="${textStartY}" 
           font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
-          font-size="18" font-weight="600" 
+          font-size="20" 
           fill="${colors.textPrimary}"
-          text-rendering="geometricPrecision">${escapeXml(info.os.name)}</text>
-    <text x="${textStartX}" y="${textStartY + 22}" 
+          xml:space="preserve"
+          text-rendering="geometricPrecision"><tspan font-weight="700">${escapeXml(distroNameWithSpacing)}</tspan>${codename ? `<tspan font-weight="400">${escapeXml(codename)}</tspan>` : ''}</text>
+    
+    <!-- Version -->
+    <text x="${textStartX}" y="${textStartY + 24}" 
           font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
           font-size="13" 
           fill="${colors.textSecondary}"
-          text-rendering="geometricPrecision">Version ${escapeXml(info.os.version)}</text>
+          xml:space="preserve"
+          text-rendering="geometricPrecision"><tspan font-weight="700">Version </tspan><tspan font-weight="400">${escapeXml(info.os.version)}</tspan></text>
     
     <!-- Uptime -->
     <text x="${textStartX}" y="${textStartY + 44}" 
           font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
           font-size="13" 
           fill="${colors.textSecondary}"
-          text-rendering="geometricPrecision">Uptime ${formatUptime(info.os.uptime)}</text>
+          xml:space="preserve"
+          text-rendering="geometricPrecision"><tspan font-weight="700">Uptime </tspan><tspan font-weight="400">${formatUptime(info.os.uptime)}</tspan></text>
   `;
-  currentY += osHeaderHeight + cardSpacing;
+  currentY += osHeaderHeight + sectionSpacing;
 
-  // Memory Card - combined RAM and Swap in a single bar
+  // Memory Section - no card wrapper
   const hasSwap = info.swap.total > 0;
-  const memoryHeight = 100;
+  const memoryHeight = 85;
   
   // Calculate combined memory usage
   const totalMemory = info.memory.total + (hasSwap ? info.swap.total : 0);
@@ -392,38 +406,10 @@ export function generateSystemInfoSVG(
   const ramFillWidth = (progressBarWidth * ramPercent) / 100;
   const swapFillWidth = (progressBarWidth * swapPercent) / 100;
   const ramColor = getUsageColor(info.memory.usagePercent, colors);
-  const swapColor = colors.warning; // Use warning color for swap
+  const swapColor = colors.warning;
   
-  const combinedProgressBar = `
-    <!-- Progress Bar Background -->
-    <rect x="${margin + cardPadding}" y="${currentY + 76}" width="${progressBarWidth}" height="7" 
-          rx="3" fill="${colors.progressBackground}"/>
-    
-    <!-- RAM Fill -->
-    <rect x="${margin + cardPadding}" y="${currentY + 76}" width="${ramFillWidth}" height="7" 
-          rx="3" fill="${ramColor}">
-      <animate attributeName="width" from="0" to="${ramFillWidth}" 
-               dur="0.8s" fill="freeze"/>
-    </rect>
-    
-    <!-- Swap Fill (stacked after RAM) -->
-    ${hasSwap ? `
-    <rect x="${margin + cardPadding + ramFillWidth}" y="${currentY + 76}" width="${swapFillWidth}" height="7" 
-          rx="3" fill="${swapColor}">
-      <animate attributeName="width" from="0" to="${swapFillWidth}" 
-               dur="0.8s" fill="freeze"/>
-    </rect>
-    ` : ''}
-    
-    <!-- Progress Label -->
-    <text x="${percentageXPos}" y="${currentY + 76 + 7 / 2 + 1}" 
-          font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
-          font-size="13" fill="${ramColor}" 
-          text-rendering="geometricPrecision"
-          text-anchor="end"
-          dominant-baseline="middle">${totalPercent.toFixed(1)}%</text>
-  `;
-
+  const clipPathMemory = `clip-memory-${Math.random().toString(36).substr(2, 9)}`;
+  
   const memoryTitleText = hasSwap 
     ? `${formatBytes(info.memory.total)} (${formatBytes(info.swap.total)} swap)`
     : formatBytes(info.memory.total);
@@ -432,53 +418,75 @@ export function generateSystemInfoSVG(
     ? `${formatBytes(info.memory.used)} used (${formatBytes(info.swap.used)} swap), ${formatBytes(info.memory.available)} available`
     : `${formatBytes(info.memory.used)} used, ${formatBytes(info.memory.available)} available`;
 
-  const memoryCard = generateCard(
-    margin,
-    currentY,
-    cardWidth,
-    memoryHeight,
-    "MEMORY",
-    `
-      <text x="${margin + cardPadding}" y="${currentY + 46}" 
-            font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
-            font-size="14" font-weight="500" 
-            fill="${colors.textPrimary}"
-            text-rendering="geometricPrecision">${memoryTitleText}</text>
-      <text x="${margin + cardPadding}" y="${currentY + 64}" 
-            font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
-            font-size="12" 
-            fill="${colors.textTertiary}"
-            text-rendering="geometricPrecision">${memoryDetailsText}</text>
-      
-      ${combinedProgressBar}
-    `,
-    colors,
-  );
-  currentY += memoryHeight + cardSpacing;
+  const memorySection = `
+    <!-- Memory Section Header -->
+    <text x="${sectionMargin}" y="${currentY + 18}" 
+          font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+          font-size="11" font-weight="600" 
+          fill="${colors.textSecondary}"
+          letter-spacing="0.5"
+          text-rendering="geometricPrecision">MEMORY</text>
+    
+    <text x="${sectionMargin}" y="${currentY + 38}" 
+          font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+          font-size="14" font-weight="500" 
+          fill="${colors.textPrimary}"
+          text-rendering="geometricPrecision">${memoryTitleText}</text>
+    <text x="${sectionMargin}" y="${currentY + 56}" 
+          font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+          font-size="12" 
+          fill="${colors.textTertiary}"
+          text-rendering="geometricPrecision">${memoryDetailsText}</text>
+    
+    <!-- Mask for memory bar rounded corners -->
+    <defs>
+      <mask id="${clipPathMemory}">
+        <rect x="${sectionMargin}" y="${currentY + 68}" width="${progressBarWidth}" height="${memoryBarHeight}" 
+              rx="5" fill="white"/>
+      </mask>
+    </defs>
+    
+    <!-- Progress Bar Background -->
+    <rect x="${sectionMargin}" y="${currentY + 68}" width="${progressBarWidth}" height="${memoryBarHeight}" 
+          rx="5" fill="${colors.progressBackground}"/>
+    
+    <!-- Memory bars (masked) -->
+    <g mask="url(#${clipPathMemory})">
+      <rect x="${sectionMargin}" y="${currentY + 68}" width="${ramFillWidth}" height="${memoryBarHeight}" 
+            fill="${ramColor}"/>
+      ${hasSwap ? `
+      <rect x="${sectionMargin + ramFillWidth}" y="${currentY + 68}" width="${swapFillWidth}" height="${memoryBarHeight}" 
+            fill="${swapColor}"/>
+      ` : ''}
+    </g>
+  `;
+  currentY += memoryHeight + sectionSpacing;
 
-  // Storage Card(s) - macOS-style with categories
+  // Storage Section - no card wrapper
   let storageContentArray: Array<{ svg: string; height: number }> = [];
-  let storageContentY = currentY + 46;
+  
+  // Section header
+  const storageSectionHeader = `
+    <!-- Storage Section Header -->
+    <text x="${sectionMargin}" y="${currentY + 18}" 
+          font-family="SF Pro Text, system-ui, -apple-system, sans-serif" 
+          font-size="11" font-weight="600" 
+          fill="${colors.textSecondary}"
+          letter-spacing="0.5"
+          text-rendering="geometricPrecision">STORAGE</text>
+  `;
+  
+  let storageContentY = currentY + 38;
   
   for (const storage of info.storage) {
-    const item = generateStorageItem(storage, margin + cardPadding, storageContentY, colors);
+    const item = generateStorageItem(storage, sectionMargin, storageContentY, colors);
     storageContentArray.push(item);
     storageContentY += item.height + 20; // Add spacing between storage devices
   }
   
   const storageContent = storageContentArray.map(item => item.svg).join("");
-  const storageHeight = 40 + storageContentArray.reduce((sum, item) => sum + item.height + 20, 0);
-
-  const storageCard = generateCard(
-    margin,
-    currentY,
-    cardWidth,
-    storageHeight,
-    "STORAGE",
-    storageContent,
-    colors,
-  );
-  currentY += storageHeight + cardSpacing;
+  const storageHeight = 38 + storageContentArray.reduce((sum, item) => sum + item.height + 20, 0);
+  currentY += storageHeight;
 
   // Calculate final height
   const height = currentY;
@@ -491,9 +499,10 @@ export function generateSystemInfoSVG(
   <!-- OS Header -->
   ${osHeader}
   
-  <!-- Cards -->
-  ${memoryCard}
-  ${storageCard}
+  <!-- Sections -->
+  ${memorySection}
+  ${storageSectionHeader}
+  ${storageContent}
 </svg>
   `.trim();
 
