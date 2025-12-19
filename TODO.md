@@ -3,3 +3,4 @@
 [ ] - Add tab navigation UI similar to windows 11 with image previews of the applications
 [ ] - Fix setting and reading $TERMINAL
 [ ] - Find solution to surgically overwrite a specific icon in an icon pack and provide new ones.
+[ ] - Design and integrate custom hyprlock screen
