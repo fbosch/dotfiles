@@ -11,7 +11,7 @@ import tokens from "../../design-system/tokens.json";
  * 1. Icon caching - Desktop file lookups are cached to avoid repeated I/O
  * 2. Smart UI updates - Only rebuild UI when window list changes; otherwise just update CSS classes
  * 3. Window list caching - During switcher session, reuse window list instead of re-fetching
- * 4. Reduced polling - Alt key monitoring at 30fps (33ms) instead of 60fps for lower CPU usage
+ * 4. Event-driven Alt monitoring - Uses GDK key events instead of polling for better performance
  */
 
 // Hyprland client interface
@@ -54,31 +54,28 @@ const iconCache = new Map<string, string | null>();
 // Get icon name from desktop file based on app class
 function getIconNameForClass(appClass: string): string | null {
   if (!appClass) return null;
-  
+
   // Check cache first
   if (iconCache.has(appClass)) {
     return iconCache.get(appClass)!;
   }
-  
+
   // Try to find desktop file for this app class
   // Try exact class name first, then lowercase
-  const attempts = [
-    `${appClass}.desktop`,
-    `${appClass.toLowerCase()}.desktop`,
-  ];
-  
+  const attempts = [`${appClass}.desktop`, `${appClass.toLowerCase()}.desktop`];
+
   let iconName: string | null = null;
-  
+
   for (const desktopId of attempts) {
     try {
       // @ts-ignore - DesktopAppInfo exists in Gio but may not be in type definitions
       const appInfo = Gio.DesktopAppInfo.new(desktopId);
       if (!appInfo) continue;
-      
+
       // Get the icon from the desktop file
       const icon = appInfo.get_icon();
       if (!icon) continue;
-      
+
       // If it's a themed icon, get the icon name
       if (icon instanceof Gio.ThemedIcon) {
         const names = icon.get_names();
@@ -88,7 +85,7 @@ function getIconNameForClass(appClass: string): string | null {
           break;
         }
       }
-      
+
       // If it's a file icon, we could get the path, but for now skip
       // as we want themed icons for consistency
     } catch (e) {
@@ -96,16 +93,16 @@ function getIconNameForClass(appClass: string): string | null {
       continue;
     }
   }
-  
+
   // If no desktop file found, try checking icon theme directly
   // This handles apps that install icons but not desktop files
   if (!iconName && iconTheme) {
     const iconAttempts = [
       appClass,
       appClass.toLowerCase(),
-      appClass.toLowerCase().replace(/\s+/g, '-'),
+      appClass.toLowerCase().replace(/\s+/g, "-"),
     ];
-    
+
     for (const name of iconAttempts) {
       if (iconTheme.has_icon(name)) {
         iconName = name;
@@ -113,7 +110,7 @@ function getIconNameForClass(appClass: string): string | null {
       }
     }
   }
-  
+
   // Cache the result (even if null)
   iconCache.set(appClass, iconName);
   return iconName;
@@ -124,20 +121,20 @@ function getWindows(): WindowInfo[] {
   try {
     const [ok, stdout] = GLib.spawn_command_line_sync("hyprctl clients -j");
     if (!ok || !stdout) return [];
-    
+
     const decoder = new TextDecoder("utf-8");
     const jsonStr = decoder.decode(stdout);
     const clients = JSON.parse(jsonStr) as HyprlandClient[];
-    
+
     // Filter out special workspaces and sort by class, title, address
     return clients
-      .filter(c => c.workspace.id !== -1)
+      .filter((c) => c.workspace.id !== -1)
       .sort((a, b) => {
         if (a.class !== b.class) return a.class.localeCompare(b.class);
         if (a.title !== b.title) return a.title.localeCompare(b.title);
         return a.address.localeCompare(b.address);
       })
-      .map(c => ({
+      .map((c) => ({
         address: c.address,
         class: c.class || "",
         title: c.title || "",
@@ -152,9 +149,11 @@ function getWindows(): WindowInfo[] {
 // Get currently active window address
 function getActiveWindowAddress(): string | null {
   try {
-    const [ok, stdout] = GLib.spawn_command_line_sync("hyprctl activewindow -j");
+    const [ok, stdout] = GLib.spawn_command_line_sync(
+      "hyprctl activewindow -j",
+    );
     if (!ok || !stdout) return null;
-    
+
     const decoder = new TextDecoder("utf-8");
     const jsonStr = decoder.decode(stdout);
     const activeWindow = JSON.parse(jsonStr);
@@ -166,9 +165,13 @@ function getActiveWindowAddress(): string | null {
 }
 
 // Create an app icon button
-function createAppButton(window: WindowInfo, isSelected: boolean, index: number): Gtk.Button {
+function createAppButton(
+  window: WindowInfo,
+  isSelected: boolean,
+  index: number,
+): Gtk.Button {
   const iconName = getIconNameForClass(window.class || "");
-  
+
   const button = (
     <button
       canFocus={false}
@@ -211,7 +214,7 @@ function createAppButton(window: WindowInfo, isSelected: boolean, index: number)
       </box>
     </button>
   ) as Gtk.Button;
-  
+
   return button;
 }
 
@@ -221,13 +224,13 @@ let previousWindowAddresses: string[] = [];
 // Update the switcher display with new data
 function updateSwitcher() {
   if (!containerBox || !selectedNameLabel) return;
-  
+
   // Check if window list has changed
-  const currentAddresses = currentWindows.map(w => w.address);
-  const windowListChanged = 
+  const currentAddresses = currentWindows.map((w) => w.address);
+  const windowListChanged =
     previousWindowAddresses.length !== currentAddresses.length ||
     previousWindowAddresses.some((addr, idx) => addr !== currentAddresses[idx]);
-  
+
   if (windowListChanged) {
     // Rebuild entire UI only when window list changes
     let child = containerBox.get_first_child();
@@ -236,7 +239,7 @@ function updateSwitcher() {
       child = containerBox.get_first_child();
     }
     windowButtons.clear();
-    
+
     // Create buttons for each window
     currentWindows.forEach((window, index) => {
       const isSelected = index === currentIndex;
@@ -244,18 +247,18 @@ function updateSwitcher() {
       containerBox!.append(button);
       windowButtons.set(window.address, button);
     });
-    
+
     previousWindowAddresses = currentAddresses;
   } else {
     // Just update selection classes (much faster)
     currentWindows.forEach((window, index) => {
       const button = windowButtons.get(window.address);
       if (!button) return;
-      
+
       const isSelected = index === currentIndex;
       const classes = button.get_css_classes();
       const hasSelected = classes.includes("selected");
-      
+
       if (isSelected && !hasSelected) {
         button.add_css_class("selected");
       } else if (!isSelected && hasSelected) {
@@ -263,7 +266,7 @@ function updateSwitcher() {
       }
     });
   }
-  
+
   // Update selected app name
   const selectedWindow = currentWindows[currentIndex];
   if (selectedWindow) {
@@ -277,19 +280,21 @@ function commitSwitch() {
     hideSwitcher();
     return;
   }
-  
+
   const targetWindow = currentWindows[currentIndex];
   if (!targetWindow) {
     hideSwitcher();
     return;
   }
-  
+
   try {
-    GLib.spawn_command_line_async(`hyprctl dispatch focuswindow address:${targetWindow.address}`);
+    GLib.spawn_command_line_async(
+      `hyprctl dispatch focuswindow address:${targetWindow.address}`,
+    );
   } catch (e) {
     console.error("Error focusing window:", e);
   }
-  
+
   hideSwitcher();
 }
 
@@ -298,156 +303,85 @@ function cycleWindow(direction: "next" | "prev") {
   // On first call (when not visible), fetch windows and initialize
   if (!isVisible) {
     const windows = getWindows();
-    
+
     if (windows.length === 0) return;
     if (windows.length === 1) return;
-    
+
     const activeAddress = getActiveWindowAddress();
-    let currentIdx = windows.findIndex(w => w.address === activeAddress);
-    
+    let currentIdx = windows.findIndex((w) => w.address === activeAddress);
+
     // If current window not found, start from first/last based on direction
     if (currentIdx === -1) {
       currentIdx = direction === "next" ? 0 : windows.length - 1;
     }
-    
+
     currentWindows = windows;
     currentIndex = currentIdx;
   }
-  
+
   // For subsequent calls, reuse cached window list
   if (currentWindows.length === 0) return;
   if (currentWindows.length === 1) return;
-  
+
   // Cycle the selection
   if (direction === "next") {
     currentIndex = (currentIndex + 1) % currentWindows.length;
   } else {
-    currentIndex = (currentIndex - 1 + currentWindows.length) % currentWindows.length;
+    currentIndex =
+      (currentIndex - 1 + currentWindows.length) % currentWindows.length;
   }
-  
+
   // Show/update the overlay immediately
   showSwitcher();
 }
 
 // Show the switcher overlay
-let showDelayTimeout: number | null = null;
-
 function showSwitcher() {
   if (!win) return;
-  
+
   updateSwitcher();
-  
+
   if (!isVisible) {
-    // Start monitoring immediately (even before showing)
-    startAltMonitoring();
-    
-    // Delay showing the window by 50ms
-    // If Alt is released before 50ms, monitoring will commit and hide before window appears
-    if (showDelayTimeout) {
-      GLib.Source.remove(showDelayTimeout);
-    }
-    
-    showDelayTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-      if (isVisible) {
-        // Already visible somehow, cleanup
-        showDelayTimeout = null;
-        return GLib.SOURCE_REMOVE;
-      }
-      
-      win!.set_visible(true);
-      isVisible = true;
-      showDelayTimeout = null;
-      return GLib.SOURCE_REMOVE;
-    });
-  }
-}
-
-// Aggressive Alt key monitoring - poll frequently
-let altMonitorInterval: number | null = null;
-
-function startAltMonitoring() {
-  // Clear any existing interval
-  if (altMonitorInterval) {
-    GLib.Source.remove(altMonitorInterval);
-  }
-  
-  // Poll every 33ms (~30fps) to check if Alt is still pressed
-  // 30fps is sufficient for responsive feel while using less CPU
-  altMonitorInterval = GLib.timeout_add(GLib.PRIORITY_HIGH, 33, () => {
-    if (!isVisible) {
-      altMonitorInterval = null;
-      return GLib.SOURCE_REMOVE;
-    }
-    
-    // Check if Alt modifier is currently pressed
-    const display = Gdk.Display.get_default();
-    if (!display) return GLib.SOURCE_CONTINUE;
-    
-    const seat = display.get_default_seat();
-    if (!seat) return GLib.SOURCE_CONTINUE;
-    
-    const device = seat.get_keyboard();
-    if (!device) return GLib.SOURCE_CONTINUE;
-    
-    // Get the current modifier state
-    const modifiers = device.get_modifier_state();
-    
-    // Check if Alt is NOT pressed (ALT_MASK = Alt)
-    const altPressed = (modifiers & Gdk.ModifierType.ALT_MASK) !== 0;
-    
-    if (!altPressed) {
-      console.log("Alt released - committing");
-      commitSwitch();
-      altMonitorInterval = null;
-      return GLib.SOURCE_REMOVE;
-    }
-    
-    return GLib.SOURCE_CONTINUE;
-  });
-}
-
-function stopAltMonitoring() {
-  if (altMonitorInterval) {
-    GLib.Source.remove(altMonitorInterval);
-    altMonitorInterval = null;
+    win.set_visible(true);
+    isVisible = true;
   }
 }
 
 // Monitor for Alt key release using GDK events (set up once at window creation)
 function setupAltMonitoring() {
   if (!win) return;
-  
+
   // Create a key event controller
   const controller = new Gtk.EventControllerKey();
-  
+
   // Listen for key release events
-  controller.connect("key-released", (_ctrl: Gtk.EventControllerKey, keyval: number, _keycode: number, _state: Gdk.ModifierType) => {
-    // Only act if switcher is visible
-    if (!isVisible) return;
-    
-    // Check if Alt key was released
-    // Alt_L = 65513 (0xffe9), Alt_R = 65514 (0xffea)
-    if (keyval === 65513 || keyval === 65514) {
-      console.log("Alt key released, committing switch");
-      commitSwitch();
-    }
-  });
-  
+  controller.connect(
+    "key-released",
+    (
+      _ctrl: Gtk.EventControllerKey,
+      keyval: number,
+      _keycode: number,
+      _state: Gdk.ModifierType,
+    ) => {
+      // Only act if switcher is visible
+      if (!isVisible) return;
+
+      // Check if Alt key was released
+      // Alt_L = 65513 (0xffe9), Alt_R = 65514 (0xffea)
+      if (keyval === 65513 || keyval === 65514) {
+        console.log("Alt key released, committing switch");
+        commitSwitch();
+      }
+    },
+  );
+
   win.add_controller(controller);
 }
 
 // Hide the switcher overlay
 function hideSwitcher() {
   if (!win) return;
-  
-  // Cancel show delay if it hasn't fired yet
-  if (showDelayTimeout) {
-    GLib.Source.remove(showDelayTimeout);
-    showDelayTimeout = null;
-  }
-  
-  stopAltMonitoring();
-  
+
   if (isVisible) {
     win.set_visible(false);
     isVisible = false;
@@ -461,7 +395,7 @@ function createWindow() {
   if (display) {
     iconTheme = Gtk.IconTheme.get_for_display(display);
   }
-  
+
   win = (
     <window
       name="window-switcher"
@@ -498,7 +432,7 @@ function createWindow() {
               containerBox = self;
             }}
           />
-          
+
           {/* Selected app name */}
           <label
             label=""
@@ -514,7 +448,7 @@ function createWindow() {
       </box>
     </window>
   ) as Astal.Window;
-  
+
   // Set up Alt key monitoring (always listening, but only acts when visible)
   setupAltMonitoring();
 }
@@ -604,22 +538,24 @@ app.start({
   requestHandler(argv: string[], res: (response: string) => void) {
     try {
       const request = argv.join(" ");
-      
+
       if (!request || request.trim() === "") {
         res("ready");
         return;
       }
-      
+
       const data = JSON.parse(request);
-      
+
       if (data.action === "show") {
         // Initialize the switcher with first window selected
         const windows = getWindows();
         if (windows.length > 0) {
           const activeAddress = getActiveWindowAddress();
-          let currentIdx = windows.findIndex(w => w.address === activeAddress);
+          let currentIdx = windows.findIndex(
+            (w) => w.address === activeAddress,
+          );
           currentIdx = currentIdx === -1 ? 0 : currentIdx;
-          
+
           currentWindows = windows;
           currentIndex = currentIdx;
           showSwitcher();
