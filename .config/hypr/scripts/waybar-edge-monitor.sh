@@ -2,6 +2,9 @@
 # Monitor mouse position and show/hide waybar based on screen edge proximity
 # Optimized for low resource usage with integer arithmetic
 
+# Source shared library
+source "$(dirname "$0")/waybar-lib.sh"
+
 # Configuration (all in milliseconds for integer math)
 readonly SHOW_THRESHOLD=45      # Distance from bottom to trigger show (pixels)
 readonly HIDE_THRESHOLD=60      # Distance from bottom before hiding (pixels)
@@ -28,15 +31,6 @@ while true; do
     
     # Calculate distance from bottom (integer arithmetic)
     distance_from_bottom=$((MONITOR_HEIGHT - cursor_y))
-
-    # Check if start menu is visible
-    start_menu_visible=$(ags request -i start-menu-daemon '{"action":"is-visible"}' 2>/dev/null || echo "false")
-    
-    # Check if SwayNC notification center is visible
-    swaync_visible=$(busctl --user call org.erikreider.swaync.cc /org/erikreider/swaync/cc org.erikreider.swaync.cc GetVisibility 2>/dev/null | awk '{print $2}' || echo "false")
-    
-    # Debug: uncomment to log
-    echo "$(date): distance=$distance_from_bottom, menu_visible=$start_menu_visible, swaync_visible=$swaync_visible" >> /tmp/edge-debug.log
 
     # State machine logic
     if (( waybar_visible == 0 )); then
@@ -67,11 +61,20 @@ while true; do
             # Cursor is away - increment timer
             hide_timer_ms=$((hide_timer_ms + check_interval_ms))
 
-            # Hide after delay, but only if start menu is not visible and swaync is not visible
-            if (( hide_timer_ms >= HIDE_DELAY_MS )) && [ "$start_menu_visible" != "true" ] && [ "$swaync_visible" != "true" ]; then
-                pkill -SIGUSR2 waybar
-                waybar_visible=0
-                hide_timer_ms=0
+            # Check if waybar should stay visible (using shared logic)
+            if (( hide_timer_ms >= HIDE_DELAY_MS )); then
+                if ! should_waybar_stay_visible "$distance_from_bottom" "$HIDE_THRESHOLD"; then
+                    # Debug: uncomment to log
+                    echo "$(date): distance=$distance_from_bottom, menu_visible=$START_MENU_VISIBLE, swaync_visible=$SWAYNC_VISIBLE - HIDING" >> /tmp/edge-debug.log
+                    pkill -SIGUSR2 waybar
+                    waybar_visible=0
+                    hide_timer_ms=0
+                else
+                    # Debug: uncomment to log
+                    echo "$(date): distance=$distance_from_bottom, menu_visible=$START_MENU_VISIBLE, swaync_visible=$SWAYNC_VISIBLE - KEEPING VISIBLE" >> /tmp/edge-debug.log
+                    # Reset timer since we want to keep checking
+                    hide_timer_ms=0
+                fi
             fi
         else
             # Cursor came back - reset timer
