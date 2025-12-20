@@ -326,8 +326,7 @@ function enterActiveState(windows: WindowInfo[], index: number) {
 
     // Safety check: if Alt was already released before window became visible,
     // commit immediately. This handles the "quick Alt+Tab" edge case.
-    // We use a short timeout to ensure the window is fully visible first.
-    GLib.timeout_add(GLib.PRIORITY_HIGH, 16, () => {
+    GLib.timeout_add(GLib.PRIORITY_HIGH, 33, () => {
       if (state === SwitcherState.ACTIVE && !isAltPressed()) {
         console.log("Alt already released, committing immediately");
         onCommit();
@@ -534,6 +533,7 @@ function createWindow() {
       exclusivity={Astal.Exclusivity.IGNORE}
       keymode={Astal.Keymode.ON_DEMAND}
       class="window-switcher"
+      application={app}
     >
       <box
         orientation={Gtk.Orientation.VERTICAL}
@@ -585,11 +585,14 @@ app.apply_css(
   }
   
   box.switcher-container {
-    background-color: rgba(45, 45, 45, 0.90);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background-color: rgba(25, 25, 25, 0.5);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 18px;
     padding: 24px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2),
+                0 0 0 1px rgba(255, 255, 255, 0.05) inset;
   }
   
   box.apps-row {
@@ -605,15 +608,19 @@ app.apply_css(
   }
   
   button.app-button:hover {
-    border-color: rgba(255, 255, 255, 0.3);
+    background-color: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.2);
   }
   
   button.app-button.selected {
-    background-color: rgba(55, 55, 55, 0.6);
+    background-color: rgba(55, 55, 55, 0.7);
     border-color: ${tokens.colors.accent.active.value};
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2),
+                0 0 0 1px ${tokens.colors.accent.active.value}33 inset;
   }
   
   button.app-button.selected:hover {
+    background-color: rgba(65, 65, 65, 0.8);
     border-color: ${tokens.colors.accent.active.value};
   }
   
@@ -625,6 +632,7 @@ app.apply_css(
   
   box.icon-container.letter-icon {
     background-color: ${tokens.colors.accent.primary.value};
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   }
   
   image.app-icon-image {
@@ -646,6 +654,7 @@ app.apply_css(
     font-size: 14px;
     color: ${tokens.colors.foreground.primary.value};
     max-width: 600px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   }
   `,
   false,
