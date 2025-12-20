@@ -259,23 +259,127 @@ function cycleWindow(direction: "next" | "prev") {
 }
 
 // Show the switcher overlay
+let showDelayTimeout: number | null = null;
+
 function showSwitcher() {
   if (!win) return;
   
   updateSwitcher();
   
   if (!isVisible) {
-    win.set_visible(true);
-    isVisible = true;
+    // Start monitoring immediately (even before showing)
+    startAltMonitoring();
+    
+    // Delay showing the window by 50ms
+    // If Alt is released before 50ms, monitoring will commit and hide before window appears
+    if (showDelayTimeout) {
+      GLib.Source.remove(showDelayTimeout);
+    }
+    
+    showDelayTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+      if (isVisible) {
+        // Already visible somehow, cleanup
+        showDelayTimeout = null;
+        return GLib.SOURCE_REMOVE;
+      }
+      
+      win.set_visible(true);
+      isVisible = true;
+      showDelayTimeout = null;
+      return GLib.SOURCE_REMOVE;
+    });
   }
+}
+
+// Aggressive Alt key monitoring - poll frequently
+let altMonitorInterval: number | null = null;
+
+function startAltMonitoring() {
+  // Clear any existing interval
+  if (altMonitorInterval) {
+    GLib.Source.remove(altMonitorInterval);
+  }
+  
+  // Poll every 16ms (~60fps) to check if Alt is still pressed
+  altMonitorInterval = GLib.timeout_add(GLib.PRIORITY_HIGH, 16, () => {
+    if (!isVisible) {
+      altMonitorInterval = null;
+      return GLib.SOURCE_REMOVE;
+    }
+    
+    // Check if Alt modifier is currently pressed
+    const display = Gdk.Display.get_default();
+    if (!display) return GLib.SOURCE_CONTINUE;
+    
+    const seat = display.get_default_seat();
+    if (!seat) return GLib.SOURCE_CONTINUE;
+    
+    const device = seat.get_keyboard();
+    if (!device) return GLib.SOURCE_CONTINUE;
+    
+    // Get the current modifier state
+    const modifiers = device.get_modifier_state();
+    
+    // Check if Alt is NOT pressed (ALT_MASK = Alt)
+    const altPressed = (modifiers & Gdk.ModifierType.ALT_MASK) !== 0;
+    
+    if (!altPressed) {
+      console.log("Alt released - committing");
+      commitSwitch();
+      altMonitorInterval = null;
+      return GLib.SOURCE_REMOVE;
+    }
+    
+    return GLib.SOURCE_CONTINUE;
+  });
+}
+
+function stopAltMonitoring() {
+  if (altMonitorInterval) {
+    GLib.Source.remove(altMonitorInterval);
+    altMonitorInterval = null;
+  }
+}
+
+// Monitor for Alt key release using GDK events (set up once at window creation)
+function setupAltMonitoring() {
+  if (!win) return;
+  
+  // Create a key event controller
+  const controller = new Gtk.EventControllerKey();
+  
+  // Listen for key release events
+  controller.connect("key-released", (_ctrl: Gtk.EventControllerKey, keyval: number, _keycode: number, _state: Gdk.ModifierType) => {
+    // Only act if switcher is visible
+    if (!isVisible) return;
+    
+    // Check if Alt key was released
+    // Alt_L = 65513 (0xffe9), Alt_R = 65514 (0xffea)
+    if (keyval === 65513 || keyval === 65514) {
+      console.log("Alt key released, committing switch");
+      commitSwitch();
+    }
+  });
+  
+  win.add_controller(controller);
 }
 
 // Hide the switcher overlay
 function hideSwitcher() {
-  if (!win || !isVisible) return;
+  if (!win) return;
   
-  win.set_visible(false);
-  isVisible = false;
+  // Cancel show delay if it hasn't fired yet
+  if (showDelayTimeout) {
+    GLib.Source.remove(showDelayTimeout);
+    showDelayTimeout = null;
+  }
+  
+  stopAltMonitoring();
+  
+  if (isVisible) {
+    win.set_visible(false);
+    isVisible = false;
+  }
 }
 
 // Create the switcher window
@@ -299,7 +403,7 @@ function createWindow() {
       }
       layer={Astal.Layer.OVERLAY}
       exclusivity={Astal.Exclusivity.IGNORE}
-      keymode={Astal.Keymode.NONE}
+      keymode={Astal.Keymode.ON_DEMAND}
       class="window-switcher"
     >
       <box
@@ -338,6 +442,9 @@ function createWindow() {
       </box>
     </window>
   ) as Astal.Window;
+  
+  // Set up Alt key monitoring (always listening, but only acts when visible)
+  setupAltMonitoring();
 }
 
 // Apply static CSS
