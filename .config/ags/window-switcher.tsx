@@ -12,7 +12,23 @@ import tokens from "../../design-system/tokens.json";
  * 2. Smart UI updates - Only rebuild UI when window list changes; otherwise just update CSS classes
  * 3. Window list caching - During switcher session, reuse window list instead of re-fetching
  * 4. Event-driven Alt monitoring - Uses GDK key events instead of polling for better performance
+ *
+ * State Machine:
+ * - IDLE: Switcher hidden, waiting for Alt+Tab
+ * - ACTIVE: Switcher visible, cycling through windows, waiting for Alt release
+ *
+ * Transitions:
+ * - IDLE + (next/prev with >1 windows) -> ACTIVE
+ * - ACTIVE + next/prev -> ACTIVE (cycles selection)
+ * - ACTIVE + Alt release -> IDLE (commits and hides)
+ * - ACTIVE + hide -> IDLE (just hides)
  */
+
+// State machine
+enum SwitcherState {
+  IDLE = "IDLE",
+  ACTIVE = "ACTIVE",
+}
 
 // Hyprland client interface
 interface HyprlandClient {
@@ -37,10 +53,11 @@ interface WindowInfo {
 const ICON_SIZE = 64;
 
 // State
+let state: SwitcherState = SwitcherState.IDLE;
 let win: Astal.Window | null = null;
 let containerBox: Gtk.Box | null = null;
 let selectedNameLabel: Gtk.Label | null = null;
-let isVisible = false;
+let isVisible = false; // Derived from state, kept for GTK
 let windowButtons: Map<string, Gtk.Button> = new Map();
 let currentWindows: WindowInfo[] = [];
 let currentIndex = 0;
@@ -274,16 +291,145 @@ function updateSwitcher() {
   }
 }
 
-// Focus the currently selected window
-function commitSwitch() {
+// ============================================================================
+// State Machine Transitions
+// ============================================================================
+
+// Check if Alt modifier is currently pressed
+function isAltPressed(): boolean {
+  const display = Gdk.Display.get_default();
+  if (!display) return false;
+
+  const seat = display.get_default_seat();
+  if (!seat) return false;
+
+  const device = seat.get_keyboard();
+  if (!device) return false;
+
+  const modifiers = device.get_modifier_state();
+  return (modifiers & Gdk.ModifierType.ALT_MASK) !== 0;
+}
+
+// Transition to ACTIVE state
+function enterActiveState(windows: WindowInfo[], index: number) {
+  console.log(
+    `[State] IDLE -> ACTIVE (${windows.length} windows, index ${index})`,
+  );
+  state = SwitcherState.ACTIVE;
+  currentWindows = windows;
+  currentIndex = index;
+  isVisible = true;
+
+  if (win) {
+    updateSwitcher();
+    win.set_visible(true);
+
+    // Safety check: if Alt was already released before window became visible,
+    // commit immediately. This handles the "quick Alt+Tab" edge case.
+    // We use a short timeout to ensure the window is fully visible first.
+    GLib.timeout_add(GLib.PRIORITY_HIGH, 16, () => {
+      if (state === SwitcherState.ACTIVE && !isAltPressed()) {
+        console.log("Alt already released, committing immediately");
+        onCommit();
+      }
+      return GLib.SOURCE_REMOVE;
+    });
+  }
+}
+
+// Transition to IDLE state
+function enterIdleState() {
+  console.log(`[State] ${state} -> IDLE`);
+  state = SwitcherState.IDLE;
+  isVisible = false;
+
+  if (win) {
+    win.set_visible(false);
+  }
+}
+
+// ============================================================================
+// Event Handlers
+// ============================================================================
+
+// Handle next window event
+function onNext() {
+  if (state === SwitcherState.IDLE) {
+    // Fetch windows and initialize
+    const windows = getWindows();
+
+    if (windows.length === 0) return;
+    if (windows.length === 1) return;
+
+    const activeAddress = getActiveWindowAddress();
+    let index = windows.findIndex((w) => w.address === activeAddress);
+
+    // If current window not found, start from first
+    if (index === -1) {
+      index = 0;
+    }
+
+    // Cycle to next
+    index = (index + 1) % windows.length;
+
+    enterActiveState(windows, index);
+  } else if (state === SwitcherState.ACTIVE) {
+    // Cycle within current session
+    if (currentWindows.length === 0) return;
+    if (currentWindows.length === 1) return;
+
+    currentIndex = (currentIndex + 1) % currentWindows.length;
+    updateSwitcher();
+  }
+}
+
+// Handle previous window event
+function onPrev() {
+  if (state === SwitcherState.IDLE) {
+    // Fetch windows and initialize
+    const windows = getWindows();
+
+    if (windows.length === 0) return;
+    if (windows.length === 1) return;
+
+    const activeAddress = getActiveWindowAddress();
+    let index = windows.findIndex((w) => w.address === activeAddress);
+
+    // If current window not found, start from last
+    if (index === -1) {
+      index = windows.length - 1;
+    }
+
+    // Cycle to previous
+    index = (index - 1 + windows.length) % windows.length;
+
+    enterActiveState(windows, index);
+  } else if (state === SwitcherState.ACTIVE) {
+    // Cycle within current session
+    if (currentWindows.length === 0) return;
+    if (currentWindows.length === 1) return;
+
+    currentIndex =
+      (currentIndex - 1 + currentWindows.length) % currentWindows.length;
+    updateSwitcher();
+  }
+}
+
+// Handle commit and hide
+function onCommit() {
+  if (state !== SwitcherState.ACTIVE) {
+    enterIdleState();
+    return;
+  }
+
   if (currentWindows.length === 0) {
-    hideSwitcher();
+    enterIdleState();
     return;
   }
 
   const targetWindow = currentWindows[currentIndex];
   if (!targetWindow) {
-    hideSwitcher();
+    enterIdleState();
     return;
   }
 
@@ -295,55 +441,46 @@ function commitSwitch() {
     console.error("Error focusing window:", e);
   }
 
-  hideSwitcher();
+  enterIdleState();
 }
 
-// Cycle to next/previous window (shows UI immediately, commits only on release)
+// Handle hide without commit
+function onHide() {
+  enterIdleState();
+}
+
+// Handle Alt key release
+function onAltRelease() {
+  if (state !== SwitcherState.ACTIVE) return;
+  console.log("Alt key released, committing switch");
+  onCommit();
+}
+
+// ============================================================================
+// Legacy function wrappers (for compatibility during transition)
+// ============================================================================
+
 function cycleWindow(direction: "next" | "prev") {
-  // On first call (when not visible), fetch windows and initialize
-  if (!isVisible) {
-    const windows = getWindows();
-
-    if (windows.length === 0) return;
-    if (windows.length === 1) return;
-
-    const activeAddress = getActiveWindowAddress();
-    let currentIdx = windows.findIndex((w) => w.address === activeAddress);
-
-    // If current window not found, start from first/last based on direction
-    if (currentIdx === -1) {
-      currentIdx = direction === "next" ? 0 : windows.length - 1;
-    }
-
-    currentWindows = windows;
-    currentIndex = currentIdx;
-  }
-
-  // For subsequent calls, reuse cached window list
-  if (currentWindows.length === 0) return;
-  if (currentWindows.length === 1) return;
-
-  // Cycle the selection
   if (direction === "next") {
-    currentIndex = (currentIndex + 1) % currentWindows.length;
+    onNext();
   } else {
-    currentIndex =
-      (currentIndex - 1 + currentWindows.length) % currentWindows.length;
+    onPrev();
   }
-
-  // Show/update the overlay immediately
-  showSwitcher();
 }
 
-// Show the switcher overlay
+function commitSwitch() {
+  onCommit();
+}
+
+function hideSwitcher() {
+  onHide();
+}
+
 function showSwitcher() {
-  if (!win) return;
-
-  updateSwitcher();
-
-  if (!isVisible) {
-    win.set_visible(true);
-    isVisible = true;
+  // This function is now handled by enterActiveState
+  // Keeping for compatibility but it shouldn't be called directly
+  if (state === SwitcherState.ACTIVE) {
+    updateSwitcher();
   }
 }
 
@@ -363,29 +500,15 @@ function setupAltMonitoring() {
       _keycode: number,
       _state: Gdk.ModifierType,
     ) => {
-      // Only act if switcher is visible
-      if (!isVisible) return;
-
       // Check if Alt key was released
       // Alt_L = 65513 (0xffe9), Alt_R = 65514 (0xffea)
       if (keyval === 65513 || keyval === 65514) {
-        console.log("Alt key released, committing switch");
-        commitSwitch();
+        onAltRelease();
       }
     },
   );
 
   win.add_controller(controller);
-}
-
-// Hide the switcher overlay
-function hideSwitcher() {
-  if (!win) return;
-
-  if (isVisible) {
-    win.set_visible(false);
-    isVisible = false;
-  }
 }
 
 // Create the switcher window
@@ -549,29 +672,25 @@ app.start({
       if (data.action === "show") {
         // Initialize the switcher with first window selected
         const windows = getWindows();
-        if (windows.length > 0) {
+        if (windows.length > 1) {
           const activeAddress = getActiveWindowAddress();
-          let currentIdx = windows.findIndex(
-            (w) => w.address === activeAddress,
-          );
-          currentIdx = currentIdx === -1 ? 0 : currentIdx;
+          let index = windows.findIndex((w) => w.address === activeAddress);
+          index = index === -1 ? 0 : index;
 
-          currentWindows = windows;
-          currentIndex = currentIdx;
-          showSwitcher();
+          enterActiveState(windows, index);
         }
         res("shown");
       } else if (data.action === "next") {
-        cycleWindow("next");
+        onNext();
         res("cycled next");
       } else if (data.action === "prev") {
-        cycleWindow("prev");
+        onPrev();
         res("cycled prev");
       } else if (data.action === "commit") {
-        commitSwitch();
+        onCommit();
         res("committed");
       } else if (data.action === "hide") {
-        hideSwitcher();
+        onHide();
         res("hidden");
       } else {
         res("unknown action");
