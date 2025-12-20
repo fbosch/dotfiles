@@ -1,6 +1,6 @@
-import type React from 'react';
-import { cn } from '../../utils/cn';
-import { Notification, type NotificationProps } from '../Notification';
+import type React from "react";
+import { cn } from "../../utils/cn";
+import { Notification, type NotificationProps } from "../Notification";
 
 /**
  * NotificationCenter component - SwayNC control center
@@ -21,21 +21,39 @@ import { Notification, type NotificationProps } from '../Notification';
 // Fluent Icon SVG Components
 // Clear All Icon - U+F039F
 const ClearAllIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="currentColor"
+    aria-hidden="true"
+  >
     <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z" />
   </svg>
 );
 
 // Chat Message Icon - U+F0361
 const ChatMessageIcon = () => (
-  <svg width="56" height="56" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+  <svg
+    width="56"
+    height="56"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    aria-hidden="true"
+  >
     <path d="M5.25 18A3.25 3.25 0 0 1 2 14.75v-8.5A3.25 3.25 0 0 1 5.25 3h13.5A3.25 3.25 0 0 1 22 6.25v8.5A3.25 3.25 0 0 1 18.75 18h-5.738L8 21.75a1.25 1.25 0 0 1-1.999-1V18h-.75Zm7.264-1.5h6.236a1.75 1.75 0 0 0 1.75-1.75v-8.5a1.75 1.75 0 0 0-1.75-1.75H5.25a1.75 1.75 0 0 0-1.75 1.75v8.5c0 .966.784 1.75 1.75 1.75H6.5v2.25L12.514 16.5Z" />
   </svg>
 );
 
 // Speaker Volume Icon - U+F057E
 const SpeakerVolumeIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="currentColor"
+    aria-hidden="true"
+  >
     <path d="M11.553 3.064A.75.75 0 1 0 10.447 4.11a4.978 4.978 0 0 1 0 7.778.75.75 0 0 0 1.106 1.046 6.478 6.478 0 0 0 0-9.872Z" />
     <path d="M8.757 2.146A.75.75 0 0 1 9.5 2.75v10.5a.75.75 0 0 1-1.238.571L4.47 10.5H2.75A1.75 1.75 0 0 1 1 8.75v-1.5C1 6.56 1.56 6 2.75 6H4.47l3.792-3.321a.75.75 0 0 1 .495-.533ZM8 4.367L5.212 6.69a.75.75 0 0 1-.495.185H2.75a.25.25 0 0 0-.25.25v1.5c0 .138.112.25.25.25h1.967a.75.75 0 0 1 .495.185L8 11.633V4.367Z" />
   </svg>
@@ -43,7 +61,13 @@ const SpeakerVolumeIcon = () => (
 
 // Chevron Up Icon - U+F0615
 const ChevronUpIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="currentColor"
+    aria-hidden="true"
+  >
     <path d="M3.22 10.53a.75.75 0 0 0 1.06 0L8 6.81l3.72 3.72a.75.75 0 1 0 1.06-1.06l-4.25-4.25a.75.75 0 0 0-1.06 0L3.22 9.47a.75.75 0 0 0 0 1.06Z" />
   </svg>
 );
@@ -91,16 +115,16 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-xl',
-        'w-[380px] h-[560px]',
-        'flex flex-col',
-        'bg-background-primary/85 backdrop-blur-sm',
-        className
+        "relative overflow-hidden rounded-xl",
+        "w-[380px] h-[560px]",
+        "flex flex-col",
+        "bg-background-primary/85 backdrop-blur-sm",
+        className,
       )}
     >
       {/* Title Widget - matches .widget-title */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.15]">
-        <h2 className="text-[20px] font-semibold text-foreground-primary font-button">
+        <h2 className="text-[18px] font-semibold text-foreground-primary font-button">
           Notifications
         </h2>
         <button
@@ -140,24 +164,26 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
       {/* DND Widget - matches .widget-dnd */}
       <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.15]">
-        <span className="text-[15px] text-foreground-primary font-button">Do not disturb</span>
+        <span className="text-[15px] text-foreground-primary font-button">
+          Do not disturb
+        </span>
         <button
           type="button"
           onClick={() => onDoNotDisturbChange?.(!doNotDisturb)}
           className={cn(
-            'relative inline-flex items-center rounded-full border transition-all duration-200',
-            'w-11 h-6',
+            "relative inline-flex items-center rounded-full border transition-all duration-200",
+            "w-11 h-6",
             doNotDisturb
-              ? 'bg-accent-primary border-accent-primary'
-              : 'bg-background-secondary/60 border-white/[0.12]'
+              ? "bg-accent-primary border-accent-primary"
+              : "bg-background-secondary/60 border-white/[0.12]",
           )}
           role="switch"
           aria-checked={doNotDisturb}
         >
           <span
             className={cn(
-              'inline-block w-5 h-5 rounded-full bg-foreground-primary transition-transform duration-200 shadow-md',
-              doNotDisturb ? 'translate-x-[22px]' : 'translate-x-0.5'
+              "inline-block w-5 h-5 rounded-full bg-foreground-primary transition-transform duration-200 shadow-md",
+              doNotDisturb ? "translate-x-[22px]" : "translate-x-0.5",
             )}
           />
         </button>
@@ -165,11 +191,11 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
       {/* Volume Widget - matches .widget-volume */}
       <div className="px-3 py-3 border-t border-white/[0.15]">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           {/* Volume icon left */}
           <button
             type="button"
-            className="w-7 h-7 flex items-center justify-center text-foreground-secondary hover:text-foreground-primary transition-colors"
+            className="w-5 h-5 flex items-center justify-center text-foreground-secondary hover:text-foreground-primary transition-colors"
           >
             <SpeakerVolumeIcon />
           </button>
@@ -203,6 +229,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                   border: none;
                   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
                   cursor: pointer;
+w
                   transition: transform 140ms ease, box-shadow 140ms ease;
                 }
                 
@@ -235,7 +262,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
           {/* Volume icon right */}
           <button
             type="button"
-            className="w-7 h-7 flex items-center justify-center text-foreground-secondary hover:text-foreground-primary transition-colors"
+            className="w-5 h-5 flex items-center justify-center text-foreground-secondary hover:text-foreground-primary transition-colors"
             title="Show per-app volume"
           >
             <ChevronUpIcon />

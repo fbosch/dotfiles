@@ -12,13 +12,14 @@
   --text-color: #ffffff;
   --text-secondary: #cccccc;
   --text-tertiary: #999999;
-  --border-color: rgba(255, 255, 255, 0.15);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.15);
   --critical-color: #c42b1c;
   --shadow-color: 0deg 0% 0%;
   --radius-large: 12px;
   --radius-medium: 18px;
   --radius-small: 6px;
-  --radius-control-center: 22px;
+  --radius-control-center: 12px;
   --shadow-elevation-low:
     0.4px 0.8px 0.7px hsl(var(--shadow-color) / 0.15),
     0.5px 1px 0.8px -2.5px hsl(var(--shadow-color) / 0.1),
@@ -99,13 +100,51 @@
   overflow: hidden;
 }
 
+.notification-group-headers {
+  padding: 8px 16px 8px 16px;
+  margin: 0 0 6px 0;
+}
+
 .notification-group-header {
-  padding: 16px;
+  margin-left: 0;
 }
 
 .notification-group-icon {
-  margin-left: 8px;
-  opacity: 0.8;
+  margin-right: 12px;
+}
+
+.notification-group-buttons {
+  margin-left: auto;
+  padding-left: 12px;
+  margin-right: 12px;
+}
+
+.notification-group-close-button {
+  color: var(--text-secondary);
+  min-width: 20px;
+  min-height: 20px;
+  max-width: 20px;
+  max-height: 20px;
+  padding: 0;
+  margin: 0;
+  border-radius: 9999px;
+  transition:
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.notification-group-close-button * {
+  min-width: 20px;
+  min-height: 20px;
+  max-width: 20px;
+  max-height: 20px;
+  padding: 0;
+  margin: 0;
+}
+
+.notification-group-close-button:hover {
+  background: var(--surface-hover);
+  color: var(--text-color);
 }
 
 .notifications-placeholder {
@@ -121,7 +160,7 @@
 .control-center .widget-title {
   background: transparent;
   color: var(--text-color);
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   padding: 12px 16px;
   border: none;
@@ -129,15 +168,22 @@
   border-radius: 0;
 }
 
+.control-center .widget-title > label {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
 .control-center-list-placeholder {
   background: transparent;
-  border: 1px solid var(--border-color);
+  border: none;
   border-radius: var(--radius-medium);
   padding: 32px 24px;
   margin: 0;
   box-shadow: none;
   opacity: 1;
   text-align: center;
+  font-size: 15px;
 }
 
 .control-center .widget-title > button {
@@ -309,8 +355,9 @@
 }
 
 .notification-action:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.35);
+  outline: 2px solid rgba(0, 103, 192, 0.5);
   outline-offset: 2px;
+  border-radius: var(--radius-small);
 }
 
 .notification-action:disabled {
@@ -326,7 +373,7 @@
   color: var(--text-secondary);
   min-width: 24px;
   min-height: 24px;
-  margin: 8px 12px 0 0;
+  margin: 8px 20px 0 0;
   padding: 0;
   opacity: 0;
   transition:
@@ -360,15 +407,17 @@
   border: none;
   border-top: 1px solid var(--border-color);
   border-radius: 0;
+  font-size: 15px;
 }
 
 .widget-dnd > switch {
-  background: var(--surface-color);
-  border-radius: var(--radius-large);
-  border: 1px solid var(--border-color);
-  padding: 2px;
+  background: rgba(45, 45, 45, 0.6);
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0;
   min-width: 44px;
   min-height: 24px;
+  transition: all 200ms ease;
 }
 
 .widget-dnd > switch:checked {
@@ -377,11 +426,15 @@
 }
 
 .widget-dnd > switch slider {
-  background: var(--text-color);
+  background: #ffffff;
   border-radius: 50%;
-  min-width: 18px;
-  min-height: 18px;
-  margin: 2px;
+  min-width: 20px;
+  min-height: 20px;
+  margin: 0;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transition: transform 200ms ease;
 }
 
 /* Volume Widget */
@@ -390,7 +443,7 @@
   border: none;
   border-top: 1px solid var(--border-color);
   border-radius: 0;
-  padding: 12px 10px;
+  padding: 12px;
   row-gap: 6px;
 }
 
@@ -398,27 +451,27 @@
   border-radius: calc(var(--radius-medium) - 8px);
 }
 
-.widget-volume > box:first-child > label {
-  background: var(--volume-label-bg);
-  border-radius: var(--radius-large);
-  color: var(--text-color);
-  font-size: 17px;
-  font-weight: 600;
-  padding: 4px 10px;
-  margin-right: 10px;
-  min-width: 36px;
-  text-align: center;
+/* Volume icon label - speaker icon on the left */
+.widget-volume > box:first-child > label:first-child {
+  color: var(--text-secondary);
+  font-size: 16px;
+  min-width: 20px;
+  min-height: 20px;
+  padding: 2px;
+  margin: 0 12px 0 0;
+  transition: color 160ms ease;
 }
 
 .widget-volume > box:first-child > button {
-  border-radius: var(--radius-large);
-  border: 1px solid transparent;
+  /* Simplified: just icon with color transition, no background/border */
+  border: none;
+  background: transparent;
   color: var(--text-secondary);
-  margin-left: 8px;
-  min-height: 26px;
-  min-width: 26px;
-  padding: 4px 8px;
-  transition: all 160ms ease;
+  margin: 0 0 0 12px;
+  min-height: 20px;
+  min-width: 20px;
+  padding: 2px;
+  transition: color 160ms ease;
 }
 
 .widget-volume > box:first-child > button:hover {
@@ -427,12 +480,24 @@
 
 .widget-volume > box:first-child > button:checked,
 .widget-volume > box:first-child > button:active {
-  background: var(--accent-color);
-  color: #ffffff;
+  background: transparent;
+  color: var(--accent-color);
+}
+
+.widget-volume > box:first-child > button:hover {
+  color: var(--text-color);
+}
+
+.widget-volume > box:first-child > button:checked,
+.widget-volume > box:first-child > button:active {
+  background: transparent;
+  color: var(--accent-color);
 }
 
 .widget-volume > box:first-child > button image {
-  -gtk-icon-size: 16px;
+  -gtk-icon-size: 18px;
+  min-width: 18px;
+  min-height: 18px;
 }
 
 .widget-volume > box:first-child > button label {
@@ -441,8 +506,8 @@
 }
 
 .widget-volume scale {
-  margin-right: 8px;
-  min-height: 22px;
+  margin: 0;
+  min-height: 18px;
 }
 
 .widget-volume scale trough {
@@ -468,10 +533,10 @@
 .widget-volume scale slider {
   background: #ffffff;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  min-height: 16px;
-  min-width: 16px;
-  box-shadow: var(--volume-thumb-shadow);
+  border: none;
+  min-height: 14px;
+  min-width: 14px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
   transition:
     transform 140ms ease,
     box-shadow 140ms ease;
@@ -480,10 +545,10 @@
 .widget-volume scale:hover slider,
 .widget-volume scale slider:focus,
 .widget-volume scale slider:active {
-  transform: scale(1.05);
+  transform: scale(1.15);
   box-shadow:
-    0 0 0 3px rgba(0, 103, 192, 0.25),
-    var(--volume-thumb-shadow);
+    0 0 0 4px rgba(0, 103, 192, 0.2),
+    0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 .widget-volume .per-app-volume {
@@ -536,12 +601,48 @@
 
 .widget-volume .per-app-volume row scale {
   margin: 0;
-  min-height: 20px;
+  min-height: 18px;
+}
+
+.widget-volume .per-app-volume row scale trough {
+  background: var(--volume-track-bg);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  min-height: 6px;
+  transition: background 120ms ease;
+}
+
+.widget-volume .per-app-volume row scale:hover trough,
+.widget-volume .per-app-volume row scale:focus-within trough {
+  background: var(--volume-surface-hover);
+}
+
+.widget-volume .per-app-volume row scale trough highlight,
+.widget-volume .per-app-volume row scale trough fill,
+.widget-volume .per-app-volume row scale trough progress {
+  background: var(--volume-track-fill);
+  border-radius: inherit;
 }
 
 .widget-volume .per-app-volume row scale slider {
-  min-height: 16px;
-  min-width: 16px;
+  background: #ffffff;
+  border-radius: 50%;
+  border: none;
+  min-height: 14px;
+  min-width: 14px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.widget-volume .per-app-volume row scale:hover slider,
+.widget-volume .per-app-volume row scale slider:focus,
+.widget-volume .per-app-volume row scale slider:active {
+  transform: scale(1.15);
+  box-shadow:
+    0 0 0 4px rgba(0, 103, 192, 0.2),
+    0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 /* Buttons Grid Widget */
@@ -702,7 +803,14 @@ scrollbar slider:active {
 }
 
 /* Focus States */
-button:focus {
-  outline: 2px solid var(--accent-color);
+button:focus-visible {
+  outline: 2px solid rgba(0, 103, 192, 0.4);
   outline-offset: 2px;
+}
+
+/* Remove focus outline for buttons that have their own focus styles */
+.close-button:focus-visible,
+.widget-volume button:focus-visible,
+.widget-dnd switch:focus-visible {
+  outline: none;
 }
