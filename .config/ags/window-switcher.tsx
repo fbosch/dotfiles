@@ -226,7 +226,7 @@ function commitSwitch() {
   hideSwitcher();
 }
 
-// Cycle to next/previous window (visual only, doesn't switch until commit)
+// Cycle to next/previous window (shows UI immediately, commits only on release)
 function cycleWindow(direction: "next" | "prev") {
   const windows = getWindows();
   
@@ -245,16 +245,16 @@ function cycleWindow(direction: "next" | "prev") {
     
     currentWindows = windows;
     currentIndex = currentIdx;
-  } else {
-    // Already visible, now cycle the selection
-    if (direction === "next") {
-      currentIndex = (currentIndex + 1) % currentWindows.length;
-    } else {
-      currentIndex = (currentIndex - 1 + currentWindows.length) % currentWindows.length;
-    }
   }
   
-  // Show/update the overlay
+  // Cycle the selection
+  if (direction === "next") {
+    currentIndex = (currentIndex + 1) % currentWindows.length;
+  } else {
+    currentIndex = (currentIndex - 1 + currentWindows.length) % currentWindows.length;
+  }
+  
+  // Show/update the overlay immediately
   showSwitcher();
 }
 
@@ -328,6 +328,8 @@ function createWindow() {
             label=""
             halign={Gtk.Align.CENTER}
             class="app-name"
+            ellipsize={3}
+            maxWidthChars={50}
             $={(self: Gtk.Label) => {
               selectedNameLabel = self;
             }}
@@ -407,6 +409,7 @@ app.apply_css(
     font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
     font-size: 14px;
     color: ${tokens.colors.foreground.primary.value};
+    max-width: 600px;
   }
   `,
   false,
