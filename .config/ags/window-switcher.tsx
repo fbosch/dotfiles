@@ -30,6 +30,12 @@ enum SwitcherState {
   ACTIVE = "ACTIVE",
 }
 
+// Display mode
+enum DisplayMode {
+  ICONS = "ICONS",
+  PREVIEWS = "PREVIEWS",
+}
+
 // Hyprland client interface
 interface HyprlandClient {
   address: string;
@@ -47,13 +53,24 @@ interface WindowInfo {
   class: string;
   title: string;
   workspace: string;
+  size?: {
+    width: number;
+    height: number;
+  };
+  position?: {
+    x: number;
+    y: number;
+  };
 }
 
 // Configuration
 const ICON_SIZE = 64;
+const PREVIEW_MAX_WIDTH = 240;
+const PREVIEW_MAX_HEIGHT = 180;
 
 // State
 let state: SwitcherState = SwitcherState.IDLE;
+let displayMode: DisplayMode = DisplayMode.PREVIEWS;
 let win: Astal.Window | null = null;
 let containerBox: Gtk.Box | null = null;
 let selectedNameLabel: Gtk.Label | null = null;
@@ -133,6 +150,39 @@ function getIconNameForClass(appClass: string): string | null {
   return iconName;
 }
 
+// Calculate scaled dimensions for window preview
+function calculatePreviewDimensions(window: WindowInfo): {
+  width: number;
+  height: number;
+} {
+  if (!window.size) {
+    // Fallback to square if no size info
+    return { width: PREVIEW_MAX_WIDTH / 2, height: PREVIEW_MAX_HEIGHT / 2 };
+  }
+
+  const { width: actualWidth, height: actualHeight } = window.size;
+  const aspectRatio = actualWidth / actualHeight;
+
+  let width = PREVIEW_MAX_WIDTH;
+  let height = PREVIEW_MAX_HEIGHT;
+
+  // Scale to fit within max dimensions while preserving aspect ratio
+  if (aspectRatio > PREVIEW_MAX_WIDTH / PREVIEW_MAX_HEIGHT) {
+    // Width-constrained
+    width = PREVIEW_MAX_WIDTH;
+    height = PREVIEW_MAX_WIDTH / aspectRatio;
+  } else {
+    // Height-constrained
+    height = PREVIEW_MAX_HEIGHT;
+    width = PREVIEW_MAX_HEIGHT * aspectRatio;
+  }
+
+  return {
+    width: Math.round(width),
+    height: Math.round(height),
+  };
+}
+
 // Get windows from hyprctl
 function getWindows(): WindowInfo[] {
   try {
@@ -156,6 +206,12 @@ function getWindows(): WindowInfo[] {
         class: c.class || "",
         title: c.title || "",
         workspace: c.workspace.name || c.workspace.id.toString(),
+        size: (c as any).size
+          ? { width: (c as any).size[0], height: (c as any).size[1] }
+          : undefined,
+        position: (c as any).at
+          ? { x: (c as any).at[0], y: (c as any).at[1] }
+          : undefined,
       }));
   } catch (e) {
     console.error("Error getting windows from hyprctl:", e);
@@ -189,15 +245,78 @@ function createAppButton(
 ): Gtk.Button {
   const iconName = getIconNameForClass(window.class || "");
 
-  const button = (
-    <button
-      canFocus={false}
-      class={`app-button ${isSelected ? "selected" : ""}`}
-      onClicked={() => {
-        currentIndex = index;
-        commitSwitch();
-      }}
-    >
+  // Determine content based on display mode
+  let content: JSX.Element;
+
+  if (displayMode === DisplayMode.PREVIEWS) {
+    // Preview mode: show aspect-ratio box with header
+    const dimensions = calculatePreviewDimensions(window);
+
+    content = (
+      <box
+        orientation={Gtk.Orientation.VERTICAL}
+        spacing={0}
+        halign={Gtk.Align.CENTER}
+        valign={Gtk.Align.CENTER}
+        class="preview-wrapper"
+      >
+        {/* Preview container with header and body */}
+        <box
+          orientation={Gtk.Orientation.VERTICAL}
+          spacing={0}
+          class="window-preview"
+          css={`
+            min-width: ${dimensions.width}px;
+            max-width: ${dimensions.width}px;
+          `}
+        >
+          {/* Header with icon and title */}
+          <box
+            orientation={Gtk.Orientation.HORIZONTAL}
+            spacing={8}
+            class="preview-header"
+            halign={Gtk.Align.FILL}
+          >
+            {/* App icon */}
+            {iconName ? (
+              <image iconName={iconName} pixelSize={20} class="preview-header-icon" />
+            ) : (
+              <box class="preview-header-icon-fallback">
+                <label
+                  label={(window.class || "?").charAt(0).toUpperCase()}
+                  class="preview-header-letter"
+                />
+              </box>
+            )}
+            
+            {/* App title */}
+            <label
+              label={window.title}
+              halign={Gtk.Align.START}
+              class="preview-header-title"
+              ellipsize={3}
+              maxWidthChars={25}
+            />
+          </box>
+
+          {/* Preview body with aspect ratio */}
+          <box
+            class="preview-body"
+            halign={Gtk.Align.CENTER}
+            valign={Gtk.Align.CENTER}
+            css={`
+              min-width: ${dimensions.width}px;
+              min-height: ${dimensions.height}px;
+              max-width: ${dimensions.width}px;
+              max-height: ${dimensions.height}px;
+            `}
+          />
+        </box>
+      </box>
+    );
+  } else {
+    // Icon mode: original behavior
+    content = (
       <box
         orientation={Gtk.Orientation.VERTICAL}
         spacing={0}
@@ -229,6 +348,19 @@ function createAppButton(
           )}
         </box>
       </box>
+    );
+  }
+
+  const button = (
+    <button
+      canFocus={false}
+      class={`app-button ${isSelected ? "selected" : ""}`}
+      onClicked={() => {
+        currentIndex = index;
+        commitSwitch();
+      }}
+    >
+      {content}
     </button>
   ) as Gtk.Button;
 
@@ -459,28 +591,8 @@ function onAltRelease() {
 // Legacy function wrappers (for compatibility during transition)
 // ============================================================================
 
-function cycleWindow(direction: "next" | "prev") {
-  if (direction === "next") {
-    onNext();
-  } else {
-    onPrev();
-  }
-}
-
 function commitSwitch() {
   onCommit();
-}
-
-function hideSwitcher() {
-  onHide();
-}
-
-function showSwitcher() {
-  // This function is now handled by enterActiveState
-  // Keeping for compatibility but it shouldn't be called directly
-  if (state === SwitcherState.ACTIVE) {
-    updateSwitcher();
-  }
 }
 
 // Monitor for Alt key release using GDK events (set up once at window creation)
@@ -656,6 +768,53 @@ app.apply_css(
     max-width: 600px;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   }
+  
+  /* Preview mode styles */
+  box.window-preview {
+    background-color: rgba(30, 30, 30, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3),
+                0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  }
+  
+  box.preview-header {
+    background-color: rgba(40, 40, 40, 0.95);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px 8px 0 0;
+    padding: 8px 12px;
+  }
+  
+  image.preview-header-icon {
+    min-width: 20px;
+    min-height: 20px;
+  }
+  
+  box.preview-header-icon-fallback {
+    min-width: 20px;
+    min-height: 20px;
+    border-radius: 4px;
+    background-color: ${tokens.colors.accent.primary.value};
+  }
+  
+  label.preview-header-letter {
+    font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 12px;
+    color: ${tokens.colors.foreground.primary.value};
+  }
+  
+  label.preview-header-title {
+    font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: ${tokens.colors.foreground.primary.value};
+  }
+  
+  box.preview-body {
+    background: linear-gradient(135deg, rgba(40, 40, 40, 0.9) 0%, rgba(25, 25, 25, 0.9) 100%);
+  }
   `,
   false,
 );
@@ -701,6 +860,40 @@ app.start({
       } else if (data.action === "hide") {
         onHide();
         res("hidden");
+      } else if (data.action === "set-mode") {
+        // Set display mode
+        const mode = data.mode?.toUpperCase();
+        if (mode === "ICONS") {
+          displayMode = DisplayMode.ICONS;
+          // Force UI rebuild if switcher is active
+          if (state === SwitcherState.ACTIVE) {
+            previousWindowAddresses = []; // Force rebuild
+            updateSwitcher();
+          }
+          res(`mode set to ${mode}`);
+        } else if (mode === "PREVIEWS") {
+          displayMode = DisplayMode.PREVIEWS;
+          // Force UI rebuild if switcher is active
+          if (state === SwitcherState.ACTIVE) {
+            previousWindowAddresses = []; // Force rebuild
+            updateSwitcher();
+          }
+          res(`mode set to ${mode}`);
+        } else {
+          res("invalid mode, use 'icons' or 'previews'");
+        }
+      } else if (data.action === "toggle-mode") {
+        // Toggle between modes
+        displayMode =
+          displayMode === DisplayMode.ICONS
+            ? DisplayMode.PREVIEWS
+            : DisplayMode.ICONS;
+        // Force UI rebuild if switcher is active
+        if (state === SwitcherState.ACTIVE) {
+          previousWindowAddresses = []; // Force rebuild
+          updateSwitcher();
+        }
+        res(`mode toggled to ${displayMode}`);
       } else {
         res("unknown action");
       }
