@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 ICON=$(~/.config/hypr/scripts/nerd-icon-gen.sh "󰹑" 64 "#ffffff")
+ERROR_ICON=$(~/.config/hypr/scripts/nerd-icon-gen.sh "" 64 "#ef4444")
 
 set -euo pipefail
 
@@ -24,7 +25,13 @@ case "$mode" in
         label="OCR"
         ;;
     *)
-        notify-send "Screenshot failed" "Unknown mode: ${mode}"
+        notify-send \
+            --app-name="Screenshot" \
+            --hint=string:desktop-entry:org.gnome.Loupe \
+            --icon="${ERROR_ICON}" \
+            --urgency=critical \
+            "Screenshot failed" \
+            "Unknown mode: ${mode}"
         exit 1
         ;;
 esac
@@ -32,7 +39,12 @@ esac
 
 if [[ "${mode}" == "ocr" ]]; then
     if ! command -v tesseract >/dev/null 2>&1; then
-        notify-send "Text extraction failed" "tesseract is not installed."
+        notify-send \
+            --app-name="OCR" \
+            --icon="${ERROR_ICON}" \
+            --urgency=critical \
+            "Text extraction failed" \
+            "tesseract is not installed."
         exit 1
     fi
 
@@ -44,7 +56,12 @@ if [[ "${mode}" == "ocr" ]]; then
         if [[ ! -s "${tmpfile}" ]]; then
             exit 0
         fi
-        notify-send "Text extraction failed" "Could not capture selection."
+        notify-send \
+            --app-name="OCR" \
+            --icon="${ERROR_ICON}" \
+            --urgency=critical \
+            "Text extraction failed" \
+            "Could not capture selection."
         exit 1
     fi
 
@@ -84,7 +101,13 @@ if [[ "${mode}" == "ocr" ]]; then
     # Add --dpi 300 to hint at higher resolution
     # Add -l eng for explicit English (change to your language if needed)
     if ! raw_text="$(tesseract "${preprocessed}" stdout --psm 3 --oem 1 --dpi 300 -l eng 2>/dev/null)"; then
-        notify-send --app-name="OCR" --replace-id="${notification_id}" "Text extraction failed" "Could not read text from image."
+        notify-send \
+            --app-name="OCR" \
+            --replace-id="${notification_id}" \
+            --icon="${ERROR_ICON}" \
+            --urgency=critical \
+            "Text extraction failed" \
+            "Could not read text from image."
         exit 1
     fi
 
@@ -122,7 +145,13 @@ if ! grimblast save "${target}" "${file}"; then
         # Assume user cancelled the selection.
         exit 0
     fi
-    notify-send "Screenshot failed" "Could not capture ${label,,}."
+    notify-send \
+        --app-name="Screenshot" \
+        --hint=string:desktop-entry:org.gnome.Loupe \
+        --icon="${ERROR_ICON}" \
+        --urgency=critical \
+        "Screenshot failed" \
+        "Could not capture ${label,,}."
     exit 1
 fi
 
@@ -141,11 +170,12 @@ if command -v notify-send >/dev/null 2>&1; then
         action=$(notify-send \
             --wait \
             --app-name="Screenshot" \
+            --hint=string:desktop-entry:org.gnome.Loupe \
             --icon="${ICON}" \
             --action="default=Open Screenshot" \
-            --action="open=   View" \
-            --action="folder=   Open" \
-            --action="delete=   Delete" \
+            --action="open=   View" \
+            --action="folder=   Open" \
+            --action="delete=   Delete" \
             "Screenshot Captured" \
             "<img src=\"${file}\"/>${label} screenshot saved (${file_size})") || true
         

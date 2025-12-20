@@ -7,11 +7,21 @@ set -euo pipefail
 CHAR="${1:-}"
 SIZE="${2:-64}"
 COLOR="${3:-white}"
-OUTPUT="${4:-/tmp/nerd-icon-temp.svg}"
 
 if [[ -z "$CHAR" ]]; then
   echo "Usage: $0 <character> [size=64] [color=white] [output_path]" >&2
   exit 1
+fi
+
+# If output path is provided, use it; otherwise generate unique path based on icon and color
+if [[ -n "${4:-}" ]]; then
+  OUTPUT="$4"
+else
+  # Generate unique filename based on character codepoint and color hash
+  # Use printf to get hex codepoint, md5sum for color hash
+  CHAR_HASH=$(printf "%s" "$CHAR" | md5sum | cut -c1-8)
+  COLOR_HASH=$(printf "%s" "$COLOR" | md5sum | cut -c1-8)
+  OUTPUT="/tmp/nerd-icon-${CHAR_HASH}-${COLOR_HASH}.svg"
 fi
 
 # Generate SVG using printf (faster than cat heredoc)
