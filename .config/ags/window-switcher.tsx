@@ -6,6 +6,14 @@ import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../design-system/tokens.json";
 
+/**
+ * Performance Optimizations:
+ * 1. Icon caching - Desktop file lookups are cached to avoid repeated I/O
+ * 2. Smart UI updates - Only rebuild UI when window list changes; otherwise just update CSS classes
+ * 3. Window list caching - During switcher session, reuse window list instead of re-fetching
+ * 4. Reduced polling - Alt key monitoring at 30fps (33ms) instead of 60fps for lower CPU usage
+ */
+
 // Hyprland client interface
 interface HyprlandClient {
   address: string;
@@ -40,9 +48,17 @@ let currentIndex = 0;
 // Icon theme reference (initialized in createWindow)
 let iconTheme: Gtk.IconTheme | null = null;
 
+// Icon name cache to avoid repeated desktop file lookups
+const iconCache = new Map<string, string | null>();
+
 // Get icon name from desktop file based on app class
 function getIconNameForClass(appClass: string): string | null {
   if (!appClass) return null;
+  
+  // Check cache first
+  if (iconCache.has(appClass)) {
+    return iconCache.get(appClass)!;
+  }
   
   // Try to find desktop file for this app class
   // Try exact class name first, then lowercase
@@ -51,8 +67,11 @@ function getIconNameForClass(appClass: string): string | null {
     `${appClass.toLowerCase()}.desktop`,
   ];
   
+  let iconName: string | null = null;
+  
   for (const desktopId of attempts) {
     try {
+      // @ts-ignore - DesktopAppInfo exists in Gio but may not be in type definitions
       const appInfo = Gio.DesktopAppInfo.new(desktopId);
       if (!appInfo) continue;
       
@@ -65,7 +84,8 @@ function getIconNameForClass(appClass: string): string | null {
         const names = icon.get_names();
         if (names && names.length > 0) {
           // Return the first icon name
-          return names[0];
+          iconName = names[0];
+          break;
         }
       }
       
@@ -77,8 +97,26 @@ function getIconNameForClass(appClass: string): string | null {
     }
   }
   
-  // No icon found
-  return null;
+  // If no desktop file found, try checking icon theme directly
+  // This handles apps that install icons but not desktop files
+  if (!iconName && iconTheme) {
+    const iconAttempts = [
+      appClass,
+      appClass.toLowerCase(),
+      appClass.toLowerCase().replace(/\s+/g, '-'),
+    ];
+    
+    for (const name of iconAttempts) {
+      if (iconTheme.has_icon(name)) {
+        iconName = name;
+        break;
+      }
+    }
+  }
+  
+  // Cache the result (even if null)
+  iconCache.set(appClass, iconName);
+  return iconName;
 }
 
 // Get windows from hyprctl
@@ -163,8 +201,8 @@ function createAppButton(window: WindowInfo, isSelected: boolean, index: number)
             <box class="app-icon-wrapper">
               <label
                 label={(window.class || "?").charAt(0).toUpperCase()}
-                halign={Gtk.Align.Center}
-                valign={Gtk.Align.Center}
+                halign={Gtk.Align.CENTER}
+                valign={Gtk.Align.CENTER}
                 class="app-icon-letter"
               />
             </box>
@@ -177,25 +215,54 @@ function createAppButton(window: WindowInfo, isSelected: boolean, index: number)
   return button;
 }
 
+// Previous window list to detect changes
+let previousWindowAddresses: string[] = [];
+
 // Update the switcher display with new data
 function updateSwitcher() {
   if (!containerBox || !selectedNameLabel) return;
   
-  // Clear existing buttons
-  let child = containerBox.get_first_child();
-  while (child) {
-    containerBox.remove(child);
-    child = containerBox.get_first_child();
-  }
-  windowButtons.clear();
+  // Check if window list has changed
+  const currentAddresses = currentWindows.map(w => w.address);
+  const windowListChanged = 
+    previousWindowAddresses.length !== currentAddresses.length ||
+    previousWindowAddresses.some((addr, idx) => addr !== currentAddresses[idx]);
   
-  // Create buttons for each window
-  currentWindows.forEach((window, index) => {
-    const isSelected = index === currentIndex;
-    const button = createAppButton(window, isSelected, index);
-    containerBox.append(button);
-    windowButtons.set(window.address, button);
-  });
+  if (windowListChanged) {
+    // Rebuild entire UI only when window list changes
+    let child = containerBox.get_first_child();
+    while (child) {
+      containerBox.remove(child);
+      child = containerBox.get_first_child();
+    }
+    windowButtons.clear();
+    
+    // Create buttons for each window
+    currentWindows.forEach((window, index) => {
+      const isSelected = index === currentIndex;
+      const button = createAppButton(window, isSelected, index);
+      containerBox!.append(button);
+      windowButtons.set(window.address, button);
+    });
+    
+    previousWindowAddresses = currentAddresses;
+  } else {
+    // Just update selection classes (much faster)
+    currentWindows.forEach((window, index) => {
+      const button = windowButtons.get(window.address);
+      if (!button) return;
+      
+      const isSelected = index === currentIndex;
+      const classes = button.get_css_classes();
+      const hasSelected = classes.includes("selected");
+      
+      if (isSelected && !hasSelected) {
+        button.add_css_class("selected");
+      } else if (!isSelected && hasSelected) {
+        button.remove_css_class("selected");
+      }
+    });
+  }
   
   // Update selected app name
   const selectedWindow = currentWindows[currentIndex];
@@ -228,13 +295,13 @@ function commitSwitch() {
 
 // Cycle to next/previous window (shows UI immediately, commits only on release)
 function cycleWindow(direction: "next" | "prev") {
-  const windows = getWindows();
-  
-  if (windows.length === 0) return;
-  if (windows.length === 1) return;
-  
-  // On first call, initialize from active window and stay on it
+  // On first call (when not visible), fetch windows and initialize
   if (!isVisible) {
+    const windows = getWindows();
+    
+    if (windows.length === 0) return;
+    if (windows.length === 1) return;
+    
     const activeAddress = getActiveWindowAddress();
     let currentIdx = windows.findIndex(w => w.address === activeAddress);
     
@@ -246,6 +313,10 @@ function cycleWindow(direction: "next" | "prev") {
     currentWindows = windows;
     currentIndex = currentIdx;
   }
+  
+  // For subsequent calls, reuse cached window list
+  if (currentWindows.length === 0) return;
+  if (currentWindows.length === 1) return;
   
   // Cycle the selection
   if (direction === "next") {
@@ -283,7 +354,7 @@ function showSwitcher() {
         return GLib.SOURCE_REMOVE;
       }
       
-      win.set_visible(true);
+      win!.set_visible(true);
       isVisible = true;
       showDelayTimeout = null;
       return GLib.SOURCE_REMOVE;
@@ -300,8 +371,9 @@ function startAltMonitoring() {
     GLib.Source.remove(altMonitorInterval);
   }
   
-  // Poll every 16ms (~60fps) to check if Alt is still pressed
-  altMonitorInterval = GLib.timeout_add(GLib.PRIORITY_HIGH, 16, () => {
+  // Poll every 33ms (~30fps) to check if Alt is still pressed
+  // 30fps is sufficient for responsive feel while using less CPU
+  altMonitorInterval = GLib.timeout_add(GLib.PRIORITY_HIGH, 33, () => {
     if (!isVisible) {
       altMonitorInterval = null;
       return GLib.SOURCE_REMOVE;
