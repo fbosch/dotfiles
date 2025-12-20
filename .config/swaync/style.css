@@ -16,8 +16,9 @@
   --critical-color: #c42b1c;
   --shadow-color: 0deg 0% 0%;
   --radius-large: 12px;
-  --radius-medium: 8px;
+  --radius-medium: 18px;
   --radius-small: 6px;
+  --radius-control-center: 22px;
   --shadow-elevation-low:
     0.4px 0.8px 0.7px hsl(var(--shadow-color) / 0.15),
     0.5px 1px 0.8px -2.5px hsl(var(--shadow-color) / 0.1),
@@ -58,8 +59,9 @@
 
 /* Control Center Widget */
 .control-center {
-  background: transparent;
-  border-radius: var(--radius-large);
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-control-center);
   overflow: hidden;
 }
 
@@ -70,13 +72,31 @@
 
 .control-center-list .notification {
   background: var(--solid-bg-color);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-large);
   overflow: hidden;
-  box-shadow: var(--shadow-elevation-medium);
+  box-shadow: none;
+  margin: 0 12px 6px 12px;
+  transition: none;
+}
+
+.control-center-list .notification:hover {
+  background: var(--solid-bg-color);
+  border-color: var(--border-color);
+}
+
+.control-center-list .notification:last-child {
+  margin-bottom: 12px;
 }
 
 .notification-list-scroll {
-  background: var(--bg-color);
+  background: transparent;
+  padding: 12px 0;
+}
+
+.control-center-list {
+  background: transparent;
+  overflow: hidden;
 }
 
 .notification-group-header {
@@ -99,41 +119,41 @@
 
 /* Widget Title */
 .control-center .widget-title {
-  background: var(--bg-color);
+  background: transparent;
   color: var(--text-color);
   font-size: 20px;
   font-weight: 600;
-  padding: 8px 8px 8px 16px;
-  margin-top: 8px;
-  border: 1px solid var(--border-color);
-  border-bottom: none;
-  border-radius: var(--radius-medium) var(--radius-medium) 0 0;
+  padding: 12px 16px;
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 0;
 }
 
 .control-center-list-placeholder {
-  background: var(--bg-color);
+  background: transparent;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-medium);
-  padding: 24px;
-  margin: 8px;
-  box-shadow: var(--shadow-elevation-low);
-  opacity: 0.8;
+  padding: 32px 24px;
+  margin: 0;
+  box-shadow: none;
+  opacity: 1;
+  text-align: center;
 }
 
 .control-center .widget-title > button {
-  background: var(--surface-color);
+  background: transparent;
   border-radius: var(--radius-small);
-  color: var(--text-color);
-  padding: 6px 10px;
-  border: 1px solid transparent;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border: none;
   transition:
     background 150ms ease,
-    border-color 150ms ease;
+    color 150ms ease;
 }
 
 .control-center .widget-title > button:hover {
   background: var(--surface-hover);
-  border-color: var(--border-color);
+  color: var(--text-color);
 }
 
 .control-center .widget-title > button:active {
@@ -335,11 +355,11 @@
 
 /* Do Not Disturb Widget */
 .widget-dnd {
-  background: var(--bg-color);
-  padding: 8px 8px 8px 16px;
-  border-radius: 0 0 var(--radius-medium) var(--radius-medium);
-  border: 1px solid var(--border-color);
-  border-top: none;
+  background: transparent;
+  padding: 12px 16px;
+  border: none;
+  border-top: 1px solid var(--border-color);
+  border-radius: 0;
 }
 
 .widget-dnd > switch {
@@ -366,12 +386,11 @@
 
 /* Volume Widget */
 .widget-volume {
-  background: var(--volume-bg);
-  border-radius: var(--radius-medium);
-  border: 1px solid var(--border-color);
-  padding: 8px 10px 10px 10px;
-  margin-top: 8px;
-  box-shadow: var(--shadow-elevation-low);
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border-color);
+  border-radius: 0;
+  padding: 12px 10px;
   row-gap: 6px;
 }
 
