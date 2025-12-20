@@ -15,9 +15,9 @@
   --border-color: rgba(255, 255, 255, 0.15);
   --critical-color: #c42b1c;
   --shadow-color: 0deg 0% 0%;
-  --radius-large: 22px;
-  --radius-medium: 18px;
-  --radius-small: 12px;
+  --radius-large: 12px;
+  --radius-medium: 8px;
+  --radius-small: 6px;
   --shadow-elevation-low:
     0.4px 0.8px 0.7px hsl(var(--shadow-color) / 0.15),
     0.5px 1px 0.8px -2.5px hsl(var(--shadow-color) / 0.1),
@@ -260,7 +260,7 @@
 /* Action buttons */
 .notification-action {
   background: #373737;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   color: #ffffff;
   font-size: 10px;
   font-weight: 500;
@@ -344,7 +344,7 @@
 
 .widget-dnd > switch {
   background: var(--surface-color);
-  border-radius: 16px;
+  border-radius: var(--radius-large);
   border: 1px solid var(--border-color);
   padding: 2px;
   min-width: 44px;
@@ -381,7 +381,7 @@
 
 .widget-volume > box:first-child > label {
   background: var(--volume-label-bg);
-  border-radius: 12px;
+  border-radius: var(--radius-large);
   color: var(--text-color);
   font-size: 17px;
   font-weight: 600;
@@ -392,7 +392,7 @@
 }
 
 .widget-volume > box:first-child > button {
-  border-radius: 12px;
+  border-radius: var(--radius-large);
   border: 1px solid transparent;
   color: var(--text-secondary);
   margin-left: 8px;

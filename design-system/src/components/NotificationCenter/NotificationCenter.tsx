@@ -91,15 +91,15 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-[22px]',
+        'relative overflow-hidden rounded-xl',
         'w-[380px] h-[560px]',
         'flex flex-col',
-        'bg-background-primary/95 backdrop-blur-md',
+        'bg-background-primary/85 backdrop-blur-sm',
         className
       )}
     >
       {/* Title Widget - matches .widget-title */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.08]">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.15]">
         <h2 className="text-[20px] font-semibold text-foreground-primary font-button">
           Notifications
         </h2>
@@ -117,7 +117,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
         {notifications.length === 0 ? (
           // Empty State - matches .control-center-list-placeholder
-          <div className="bg-background-secondary/40 border border-white/[0.08] rounded-[18px] p-8 flex flex-col items-center justify-center text-center min-h-[180px]">
+          <div className="bg-background-primary/85 backdrop-blur-sm border border-white/[0.15] rounded-lg p-8 flex flex-col items-center justify-center text-center min-h-[180px]">
             <div className="mb-3 text-foreground-tertiary/50">
               <ChatMessageIcon />
             </div>
@@ -139,7 +139,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
       </div>
 
       {/* DND Widget - matches .widget-dnd */}
-      <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.08]">
+      <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.15]">
         <span className="text-[15px] text-foreground-primary font-button">Do not disturb</span>
         <button
           type="button"
@@ -164,7 +164,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
       </div>
 
       {/* Volume Widget - matches .widget-volume */}
-      <div className="px-3 py-3 border-t border-white/[0.08]">
+      <div className="px-3 py-3 border-t border-white/[0.15]">
         <div className="flex items-center gap-2.5">
           {/* Volume icon left */}
           <button

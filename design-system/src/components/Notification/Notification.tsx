@@ -21,8 +21,8 @@ import { Button } from "../Button";
  */
 
 const notificationVariants = cva(
-  // Base styles - matches .notification CSS (using brighter border to match actual appearance)
-  "group relative w-[340px] bg-background-primary/85 backdrop-blur-sm border border-white/[0.15] rounded-[22px] overflow-hidden transition-all duration-150",
+  // Base styles - macOS-style with tighter border radius
+  "group relative w-[340px] bg-background-primary/85 backdrop-blur-sm border border-white/[0.15] rounded-xl overflow-hidden transition-all duration-150",
   {
     variants: {
       urgency: {
@@ -161,7 +161,7 @@ export const Notification: React.FC<NotificationProps> = ({
 
             {/* Optional body image - matches .body-image */}
             {image && (
-              <div className="mt-2 rounded-[18px] overflow-hidden bg-white/[0.04] shadow-sm">
+              <div className="mt-2 rounded-lg overflow-hidden bg-white/[0.04] shadow-sm">
                 <img
                   src={image}
                   alt=""

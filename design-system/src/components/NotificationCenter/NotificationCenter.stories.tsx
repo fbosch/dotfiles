@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { NotificationCenter } from './NotificationCenter';
+import { Notification } from '../Notification';
 
 const meta: Meta<typeof NotificationCenter> = {
   title: 'Components/NotificationCenter',
@@ -47,66 +48,63 @@ export const WithFloatingNotifications: Story = {
     onClearAll: () => console.log('Clear all clicked'),
   },
   decorators: [
-    (Story) => {
-      const { Notification } = require('../Notification');
-      return (
-        <div
-          className="flex items-end justify-end min-h-screen p-8"
-          style={{
-            backgroundImage: 'url(/wallpaper.png)',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-        >
-          <div className="relative">
-            {/* Floating notifications - positioned above the notification center */}
-            <div className="absolute bottom-full right-0 mb-2 space-y-2">
-              <Notification
-                urgency="critical"
-                summary="Screenshot failed"
-                body="Could not capture active monitor."
-                time="Now"
-                onClose={() => console.log('Notification 1 closed')}
-              />
-              <Notification
-                urgency="normal"
-                summary="Screenshot Captured"
-                body="Selection screenshot saved (108k)"
-                time="Now"
-                icon={
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    aria-hidden="true"
-                  >
-                    <title>Screenshot</title>
-                    <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
-                  </svg>
-                }
-                actions={[
-                  {
-                    id: 'view',
-                    label: 'View Screenshot',
-                    onClick: () => console.log('View screenshot'),
-                  },
-                  {
-                    id: 'open',
-                    label: 'Open Folder',
-                    onClick: () => console.log('Open folder'),
-                  },
-                ]}
-                onClose={() => console.log('Notification 2 closed')}
-              />
-            </div>
-
-            {/* Notification Center */}
-            <Story />
+    (Story) => (
+      <div
+        className="flex items-end justify-end min-h-screen p-8"
+        style={{
+          backgroundImage: 'url(/wallpaper.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        <div className="relative">
+          {/* Floating notifications - positioned above the notification center */}
+          <div className="absolute bottom-full right-0 mb-2 space-y-2">
+            <Notification
+              urgency="critical"
+              summary="Screenshot failed"
+              body="Could not capture active monitor."
+              time="Now"
+              onClose={() => console.log('Notification 1 closed')}
+            />
+            <Notification
+              urgency="normal"
+              summary="Screenshot Captured"
+              body="Selection screenshot saved (108k)"
+              time="Now"
+              icon={
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <title>Screenshot</title>
+                  <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+                </svg>
+              }
+              actions={[
+                {
+                  id: 'view',
+                  label: 'View Screenshot',
+                  onClick: () => console.log('View screenshot'),
+                },
+                {
+                  id: 'open',
+                  label: 'Open Folder',
+                  onClick: () => console.log('Open folder'),
+                },
+              ]}
+              onClose={() => console.log('Notification 2 closed')}
+            />
           </div>
+
+          {/* Notification Center */}
+          <Story />
         </div>
-      );
-    },
+      </div>
+    ),
   ],
 };
 
