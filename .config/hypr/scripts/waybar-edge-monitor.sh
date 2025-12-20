@@ -31,8 +31,12 @@ while true; do
 
     # Check if start menu is visible
     start_menu_visible=$(ags request -i start-menu-daemon '{"action":"is-visible"}' 2>/dev/null || echo "false")
+    
+    # Check if SwayNC notification center is visible
+    swaync_visible=$(busctl --user call org.erikreider.swaync.cc /org/erikreider/swaync/cc org.erikreider.swaync.cc GetVisibility 2>/dev/null | awk '{print $2}' || echo "false")
+    
     # Debug: uncomment to log
-    echo "$(date): distance=$distance_from_bottom, menu_visible=$start_menu_visible" >> /tmp/edge-debug.log
+    echo "$(date): distance=$distance_from_bottom, menu_visible=$start_menu_visible, swaync_visible=$swaync_visible" >> /tmp/edge-debug.log
 
     # State machine logic
     if (( waybar_visible == 0 )); then
@@ -63,8 +67,8 @@ while true; do
             # Cursor is away - increment timer
             hide_timer_ms=$((hide_timer_ms + check_interval_ms))
 
-            # Hide after delay, but only if start menu is not visible
-            if (( hide_timer_ms >= HIDE_DELAY_MS )) && [ "$start_menu_visible" != "true" ]; then
+            # Hide after delay, but only if start menu is not visible and swaync is not visible
+            if (( hide_timer_ms >= HIDE_DELAY_MS )) && [ "$start_menu_visible" != "true" ] && [ "$swaync_visible" != "true" ]; then
                 pkill -SIGUSR2 waybar
                 waybar_visible=0
                 hide_timer_ms=0
