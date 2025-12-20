@@ -153,7 +153,7 @@
   border-radius: var(--radius-medium);
   padding: 24px;
   margin: 8px;
-  box-shadow: var(--shadow-elevation-low);
+  box-shadow: var(--shadow-elevation-medium);
 }
 
 /* Widget Title */
@@ -239,7 +239,7 @@
 
 /* Notification Row (header) */
 .notification-row {
-  /* margin-bottom: 8px; */
+  margin-bottom: 8px;
 }
 
 .app-name {
@@ -282,16 +282,22 @@
 }
 
 .body-image {
-  margin-top: 8px;
-  margin-right: 0;
-  margin-left: 0;
-  min-width: 100%;
-  max-width: 100%;
-  min-height: 160px;
+  height: auto;
+  width: 100%;
   border-radius: var(--radius-medium);
   overflow: hidden;
-  box-shadow: var(--shadow-elevation-low);
+  box-shadow: var(--shadow-elevation-medium);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(255, 255, 255, 0.04);
+}
+
+/* Larger preview for screenshot notifications */
+.notification[data-app-name="Screenshot"] .body-image,
+.notification[data-app-name="OCR"] .body-image {
+  height: auto;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: var(--shadow-elevation-medium);
+  border-radius: 12px;
 }
 
 /* Notification Actions - matches Button component (variant=default, size=sm) */
@@ -797,7 +803,7 @@ scrollbar slider:active {
   font-weight: 500;
   padding: 32px;
   text-align: center;
-  box-shadow: var(--shadow-elevation-low);
+  box-shadow: var(--shadow-elevation-medium);
 }
 
 /* Focus States */
@@ -811,4 +817,70 @@ button:focus-visible {
 .widget-volume button:focus-visible,
 .widget-dnd switch:focus-visible {
   outline: none;
+}
+
+/* Tighter spacing for screenshot notifications */
+.notification[data-app-name="Screenshot"] .notification-content {
+  padding: 8px;
+}
+
+.notification[data-app-name="Screenshot"] .notification-row {
+  margin-bottom: 4px;
+}
+
+.notification[data-app-name="Screenshot"] .body {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+/* Add border radius to img/picture elements in screenshot notifications */
+.notification[data-app-name="Screenshot"] picture,
+.notification[data-app-name="Screenshot"] image {
+  border-radius: 12px;
+}
+
+/* Smaller action buttons for screenshot notifications to fit 3 buttons */
+.notification[data-app-name="Screenshot"] .notification-action {
+  font-size: 9px;
+  padding: 0 8px;
+  min-height: 26px;
+  max-height: 26px;
+}
+
+
+/* Tighter spacing for screenshot notifications */
+.notification[data-app-name="Screenshot"] .notification-content {
+  padding: 8px;
+}
+
+.notification[data-app-name="Screenshot"] .notification-row {
+  margin-bottom: 4px;
+}
+
+.notification[data-app-name="Screenshot"] .body {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+/* More compact action buttons for screenshot notifications */
+.notification[data-app-name="Screenshot"] .notification-action {
+  font-size: 9px;
+  padding: 0 6px;
+  min-height: 24px;
+  max-height: 24px;
+  min-width: 0;
+}
+
+/* Extra compact buttons for floating screenshot notifications */
+.floating-notifications .notification[data-app-name="Screenshot"] .notification-action {
+  font-size: 8px;
+  padding: 0 4px;
+  min-height: 22px;
+  max-height: 22px;
+}
+
+/* Add border radius to img/picture elements in screenshot notifications */
+.notification[data-app-name="Screenshot"] picture,
+.notification[data-app-name="Screenshot"] image {
+  border-radius: 12px;
 }

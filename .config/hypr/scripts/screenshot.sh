@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+ICON=$(~/.config/hypr/scripts/nerd-icon-gen.sh "󰹑" 64 "#ffffff")
+
 set -euo pipefail
 
 # Requires grimblast, wl-copy, notify-send, and tesseract (for OCR mode).
@@ -133,21 +135,22 @@ if command -v notify-send >/dev/null 2>&1; then
         # Get file size for display
         file_size=$(du -h "${file}" | cut -f1)
         
-        # Use both --icon and image-path hint
-        # --icon: Shows thumbnail in notification icon area  
-        # image-path hint: Tells SwayNC to show full image in body
+        # Use HTML img tag in body to show larger preview
+        # Default action (clicking notification) opens the screenshot
+        # Using Nerd Font icons:  = image,  = folder,  = trash
         action=$(notify-send \
             --wait \
-            --app-name="SCREENSHOTS" \
-            --icon="${file}" \
-            --hint="string:image-path:${file}" \
-            --action="open=View Screenshot" \
-            --action="folder=Open Folder" \
+            --app-name="Screenshot" \
+            --icon="${ICON}" \
+            --action="default=Open Screenshot" \
+            --action="open=   View" \
+            --action="folder=   Open" \
+            --action="delete=   Delete" \
             "Screenshot Captured" \
-            "${label} screenshot saved (${file_size})") || true
+            "<img src=\"${file}\"/>${label} screenshot saved (${file_size})") || true
         
         case "${action}" in
-            open)
+            default|open)
                 if command -v xdg-open >/dev/null 2>&1; then
                     xdg-open "${file}" >/dev/null 2>&1 &
                 elif command -v gio >/dev/null 2>&1; then
@@ -160,6 +163,10 @@ if command -v notify-send >/dev/null 2>&1; then
                 elif command -v gio >/dev/null 2>&1; then
                     gio open "${shots_dir}" >/dev/null 2>&1 &
                 fi
+                ;;
+            delete)
+                rm -f "${file}"
+                notify-send --app-name="Screenshot" --transient "Screenshot Deleted" "Screenshot has been removed"
                 ;;
         esac
     ) &
