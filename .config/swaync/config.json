@@ -71,7 +71,23 @@
       "actions": [
         {
           "label": "󱤅",
-          "command": "bash ~/.config/hypr/scripts/toggle-performance-mode.sh"
+          "command": "bash ~/.config/hypr/scripts/toggle-performance-mode.sh",
+          "tooltip": "Toggle Performance Mode"
+        },
+        {
+          "label": "󰖔",
+          "command": "bash ~/.config/hypr/scripts/toggle-night-light.sh",
+          "tooltip": "Toggle Night Light"
+        },
+        {
+          "label": "󰅶",
+          "command": "bash ~/.config/hypr/scripts/toggle-hypridle.sh",
+          "tooltip": "Toggle Caffeine Mode"
+        },
+        {
+          "label": "󰑓",
+          "command": "bash ~/.config/hypr/scripts/reset-desktop.sh",
+          "tooltip": "Reset Desktop"
         }
       ]
     }
