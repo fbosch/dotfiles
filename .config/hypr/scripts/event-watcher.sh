@@ -15,9 +15,9 @@ get_time_ms() {
   date +%s%3N
 }
 
-# Screenshot all windows on a given workspace (runs in background)
-screenshot_workspace_windows() {
-  local workspace_id="$1"
+# Screenshot a single window (runs in background)
+screenshot_active_window() {
+  local window_address="$1"
   
   # Debounce: skip if called too recently
   if [[ -f "$LAST_SCREENSHOT_FILE" ]]; then
@@ -31,54 +31,58 @@ screenshot_workspace_windows() {
   fi
   
   # Update last screenshot time
-  get_time_ms > "$LAST_SCREENSHOT_FILE"
+  local timestamp=$(get_time_ms)
+  echo "$timestamp" > "$LAST_SCREENSHOT_FILE"
   
   # Small delay to let animations settle
   sleep 0.05
   
-  # Get all clients on the workspace
-  hyprctl clients -j | jq -r --arg ws "$workspace_id" '
-    .[] | 
-    select(.workspace.id == ($ws | tonumber) or .workspace.name == $ws) | 
-    @json
-  ' | while IFS= read -r window_json; do
-    # Extract window properties
-    local address=$(echo "$window_json" | jq -r '.address')
-    local x=$(echo "$window_json" | jq -r '.at[0]')
-    local y=$(echo "$window_json" | jq -r '.at[1]')
-    local width=$(echo "$window_json" | jq -r '.size[0]')
-    local height=$(echo "$window_json" | jq -r '.size[1]')
-    
-    # Clean address for filename (remove 0x prefix)
-    local filename="${address#0x}.jpg"
-    local output_path="$SCREENSHOT_DIR/$filename"
-    
-    # Screenshot the window region with low priority and optimized settings
-    # -s 0.5: Half resolution for faster capture
-    # -t jpeg: Faster encoding than PNG
-    # -q 60: Lower quality for smaller files and faster encoding
-    nice -n 19 grim -s 0.5 -t jpeg -q 60 -g "${x},${y} ${width}x${height}" "$output_path" 2>/dev/null || true
-  done
+  # Get window info
+  local window_json=$(hyprctl clients -j | jq -r --arg addr "$window_address" '.[] | select(.address == $addr) | @json')
+  
+  if [[ -z "$window_json" ]]; then
+    return 0
+  fi
+  
+  # Extract window properties
+  local x=$(echo "$window_json" | jq -r '.at[0]')
+  local y=$(echo "$window_json" | jq -r '.at[1]')
+  local width=$(echo "$window_json" | jq -r '.size[0]')
+  local height=$(echo "$window_json" | jq -r '.size[1]')
+  
+  # Clean address for filename (remove 0x prefix)
+  local address_clean="${window_address#0x}"
+  local filename="${address_clean}_${timestamp}.jpg"
+  local output_path="$SCREENSHOT_DIR/$filename"
+  
+  # Use grimblast to capture the active window (compositor-aware, no overlaps)
+  # Falls back to grim if grimblast fails
+  if command -v grimblast &>/dev/null; then
+    nice -n 19 grimblast -t jpeg save active "$output_path" 2>/dev/null || \
+      nice -n 19 grim -t jpeg -q 60 -g "${x},${y} ${width}x${height}" "$output_path" 2>/dev/null || true
+  else
+    nice -n 19 grim -t jpeg -q 60 -g "${x},${y} ${width}x${height}" "$output_path" 2>/dev/null || true
+  fi
+  
+  # Clean up old screenshots for this window (keep only latest)
+  # Delete all timestamped files except the one we just created
+  fd -t f "^${address_clean}_.*\.jpg$" "$SCREENSHOT_DIR" \
+    --exec bash -c 'if [[ "{}" != "'"$output_path"'" ]]; then rm "{}"; fi' 2>/dev/null || true
 }
 
 # Handle Hyprland IPC events
 handle_event() {
   case $1 in
-    workspace\>\>*|workspace,*)
-      # Extract workspace info (handles both >> and , formats)
-      workspace="${1#workspace>>}"
-      workspace="${workspace#workspace,}"
-      # Run in background to avoid blocking
-      screenshot_workspace_windows "$workspace" &
-      ;;
     activewindow\>\>*|activewindow,*)
-      # Extract window info for active window screenshot
+      # Extract window info - format: class,title or >>class>>title
       window_info="${1#activewindow>>}"
       window_info="${window_info#activewindow,}"
       
-      # Get the active workspace and screenshot all its windows (in background)
-      active_workspace=$(hyprctl activeworkspace -j | jq -r '.id')
-      screenshot_workspace_windows "$active_workspace" &
+      # Get the active window address and screenshot it
+      local active_address=$(hyprctl activewindow -j | jq -r '.address')
+      if [[ -n "$active_address" && "$active_address" != "null" ]]; then
+        screenshot_active_window "$active_address" &
+      fi
       ;;
   esac
 }

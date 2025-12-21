@@ -68,8 +68,9 @@ interface WindowInfo {
 
 // Configuration
 const ICON_SIZE = 64;
-const PREVIEW_MAX_WIDTH = 240;
-const PREVIEW_MAX_HEIGHT = 180;
+const PREVIEW_HEIGHT = 180; // Target height for previews
+const PREVIEW_MAX_WIDTH = 320; // Maximum width for very wide windows
+const PREVIEW_MIN_WIDTH = 30; // Minimum width for very narrow windows
 
 // State
 let state: SwitcherState = SwitcherState.IDLE;
@@ -88,99 +89,56 @@ let iconTheme: Gtk.IconTheme | null = null;
 // Icon name cache to avoid repeated desktop file lookups
 const iconCache = new Map<string, string | null>();
 
-// Window preview cache to avoid repeated screenshot captures
-const previewCache = new Map<string, string | null>();
+// Directory for window preview screenshots (managed by event-watcher.sh)
+const PREVIEW_CACHE_DIR = `${GLib.get_tmp_dir()}/hypr-window-captures`;
 
-// Directory for temporary window previews
-const PREVIEW_CACHE_DIR = `${GLib.get_tmp_dir()}/ags-window-previews`;
-
-// Ensure preview cache directory exists
-function ensurePreviewCacheDir() {
-  try {
-    GLib.mkdir_with_parents(PREVIEW_CACHE_DIR, 0o755);
-  } catch (e) {
-    console.error("Failed to create preview cache directory:", e);
-  }
-}
-
-// Capture window screenshot and return file path
+// Get window preview path if it exists (screenshots managed by event-watcher.sh)
+// Screenshots are named {address}_{timestamp}.jpg - find the latest one
 function captureWindowPreview(windowAddress: string): string | null {
   if (!windowAddress) return null;
 
-  // Check cache first
-  if (previewCache.has(windowAddress)) {
-    return previewCache.get(windowAddress)!;
-  }
-
-  ensurePreviewCacheDir();
-
-  const outputPath = `${PREVIEW_CACHE_DIR}/${windowAddress.replace(/^0x/, "")}.png`;
+  const addressClean = windowAddress.replace(/^0x/, "");
 
   try {
-    // First, get window geometry from hyprctl
-    const [ok1, stdout1] = GLib.spawn_command_line_sync("hyprctl clients -j");
-    if (!ok1 || !stdout1) {
-      previewCache.set(windowAddress, null);
-      return null;
-    }
-
-    const decoder = new TextDecoder("utf-8");
-    const jsonStr = decoder.decode(stdout1);
-    const clients = JSON.parse(jsonStr) as HyprlandClient[];
-    
-    const client = clients.find((c) => c.address === windowAddress);
-    if (!client || !client.at || !client.size) {
-      previewCache.set(windowAddress, null);
-      return null;
-    }
-
-    // Build geometry string for grim
-    const geometry = `${client.at[0]},${client.at[1]} ${client.size[0]}x${client.size[1]}`;
-    
-    // Capture screenshot with grim
-    const [ok2] = GLib.spawn_command_line_sync(`grim -g "${geometry}" "${outputPath}"`);
-    
-    if (!ok2) {
-      previewCache.set(windowAddress, null);
-      return null;
-    }
-    
-    // Verify file exists
-    const file = Gio.File.new_for_path(outputPath);
-    if (file.query_exists(null)) {
-      previewCache.set(windowAddress, outputPath);
-      return outputPath;
-    }
-  } catch (e) {
-    console.error(`Failed to capture preview for ${windowAddress}:`, e);
-  }
-
-  previewCache.set(windowAddress, null);
-  return null;
-}
-
-// Clear preview cache (call when window list changes)
-function clearPreviewCache() {
-  try {
+    // List all screenshots for this window address
     const dir = Gio.File.new_for_path(PREVIEW_CACHE_DIR);
-    if (dir.query_exists(null)) {
-      const enumerator = dir.enumerate_children(
-        "standard::name",
-        Gio.FileQueryInfoFlags.NONE,
-        null
-      );
+    if (!dir.query_exists(null)) return null;
+
+    const enumerator = dir.enumerate_children(
+      "standard::name",
+      Gio.FileQueryInfoFlags.NONE,
+      null
+    );
+
+    let latestFile: string | null = null;
+    let latestTimestamp = 0;
+
+    // Find the file with the latest timestamp
+    let fileInfo = enumerator.next_file(null);
+    while (fileInfo !== null) {
+      const filename = fileInfo.get_name();
       
-      let fileInfo: Gio.FileInfo | null = enumerator.next_file(null);
-      while (fileInfo !== null) {
-        const child = dir.get_child(fileInfo.get_name());
-        child.delete(null);
-        fileInfo = enumerator.next_file(null);
+      // Match pattern: {address}_{timestamp}.jpg
+      const pattern = new RegExp(`^${addressClean}_(\\d+)\\.jpg$`);
+      const match = filename.match(pattern);
+      
+      if (match) {
+        const timestamp = parseInt(match[1], 10);
+        if (timestamp > latestTimestamp) {
+          latestTimestamp = timestamp;
+          latestFile = `${PREVIEW_CACHE_DIR}/${filename}`;
+        }
       }
+      
+      fileInfo = enumerator.next_file(null);
     }
+
+    return latestFile;
   } catch (e) {
-    console.error("Failed to clear preview cache:", e);
+    console.error(`Failed to find preview for ${windowAddress}:`, e);
   }
-  previewCache.clear();
+
+  return null;
 }
 
 // Get icon name from desktop file based on app class
@@ -248,37 +206,56 @@ function getIconNameForClass(appClass: string): string | null {
   return iconName;
 }
 
-// Calculate scaled dimensions for window preview
-function calculatePreviewDimensions(window: WindowInfo): {
+// Get preview dimensions directly from image file (source of truth)
+// Uses PREVIEW_HEIGHT as the target, constrains width to PREVIEW_MAX_WIDTH
+function calculatePreviewDimensions(imagePath: string | null): {
   width: number;
   height: number;
 } {
-  if (!window.size) {
-    // Fallback to square if no size info
-    return { width: PREVIEW_MAX_WIDTH / 2, height: PREVIEW_MAX_HEIGHT / 2 };
+  if (!imagePath) {
+    // Fallback to minimum width with target height if no image
+    return { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
   }
 
-  const { width: actualWidth, height: actualHeight } = window.size;
-  const aspectRatio = actualWidth / actualHeight;
+  try {
+    // Load the image via memory stream to bypass caching
+    const file = Gio.File.new_for_path(imagePath);
+    const [success, contents] = file.load_contents(null);
+    
+    if (!success || !contents) {
+      return { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
+    }
+    
+    const stream = Gio.MemoryInputStream.new_from_bytes(new GLib.Bytes(contents));
+    const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
+    
+    if (!pixbuf) {
+      return { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
+    }
 
-  let width = PREVIEW_MAX_WIDTH;
-  let height = PREVIEW_MAX_HEIGHT;
+    // Get actual image dimensions
+    const imageWidth = pixbuf.get_width();
+    const imageHeight = pixbuf.get_height();
+    const aspectRatio = imageWidth / imageHeight;
 
-  // Scale to fit within max dimensions while preserving aspect ratio
-  if (aspectRatio > PREVIEW_MAX_WIDTH / PREVIEW_MAX_HEIGHT) {
-    // Width-constrained
-    width = PREVIEW_MAX_WIDTH;
-    height = PREVIEW_MAX_WIDTH / aspectRatio;
-  } else {
-    // Height-constrained
-    height = PREVIEW_MAX_HEIGHT;
-    width = PREVIEW_MAX_HEIGHT * aspectRatio;
+    // Start with target height
+    let height = PREVIEW_HEIGHT;
+    let width = Math.round(height * aspectRatio);
+
+    // If width exceeds maximum, constrain by width instead
+    if (width > PREVIEW_MAX_WIDTH) {
+      width = PREVIEW_MAX_WIDTH;
+      height = Math.round(width / aspectRatio);
+    }
+
+    // Enforce minimum width
+    width = Math.max(PREVIEW_MIN_WIDTH, width);
+
+    return { width, height };
+  } catch (e) {
+    console.error("Failed to get image dimensions:", e);
+    return { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
   }
-
-  return {
-    width: Math.round(width),
-    height: Math.round(height),
-  };
 }
 
 // Get windows from hyprctl
@@ -348,8 +325,8 @@ function createAppButton(
 
   if (displayMode === DisplayMode.PREVIEWS) {
     // Preview mode: show aspect-ratio box with header
-    const dimensions = calculatePreviewDimensions(window);
     const previewPath = captureWindowPreview(window.address);
+    const dimensions = calculatePreviewDimensions(previewPath);
 
     content = (
       <box
@@ -378,7 +355,11 @@ function createAppButton(
           >
             {/* App icon */}
             {iconName ? (
-              <image iconName={iconName} pixelSize={20} class="preview-header-icon" />
+              <image
+                iconName={iconName}
+                pixelSize={20}
+                class="preview-header-icon"
+              />
             ) : (
               <box class="preview-header-icon-fallback">
                 <label
@@ -387,7 +368,7 @@ function createAppButton(
                 />
               </box>
             )}
-            
+
             {/* App title */}
             <label
               label={window.title}
@@ -412,23 +393,33 @@ function createAppButton(
             $={(self: Gtk.Box) => {
               if (previewPath) {
                 // Load and scale the image using GdkPixbuf
+                // Read file contents directly to bypass GdkPixbuf file caching
                 try {
-                  const pixbuf = GdkPixbuf.Pixbuf.new_from_file(previewPath);
-                  if (pixbuf) {
-                    const scaledPixbuf = pixbuf.scale_simple(
-                      dimensions.width,
-                      dimensions.height,
-                      GdkPixbuf.InterpType.BILINEAR
+                  const file = Gio.File.new_for_path(previewPath);
+                  const [success, contents] = file.load_contents(null);
+                  
+                  if (success && contents) {
+                    const stream = Gio.MemoryInputStream.new_from_bytes(
+                      new GLib.Bytes(contents)
                     );
+                    const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
                     
-                    if (scaledPixbuf) {
-                      const texture = Gdk.Texture.new_for_pixbuf(scaledPixbuf);
-                      const picture = Gtk.Picture.new_for_paintable(texture);
-                      picture.set_halign(Gtk.Align.FILL);
-                      picture.set_valign(Gtk.Align.FILL);
-                      picture.set_can_shrink(false);
-                      picture.add_css_class("preview-image");
-                      self.append(picture);
+                    if (pixbuf) {
+                      const scaledPixbuf = pixbuf.scale_simple(
+                        dimensions.width,
+                        dimensions.height,
+                        GdkPixbuf.InterpType.BILINEAR,
+                      );
+
+                      if (scaledPixbuf) {
+                        const texture = Gdk.Texture.new_for_pixbuf(scaledPixbuf);
+                        const picture = Gtk.Picture.new_for_paintable(texture);
+                        picture.set_halign(Gtk.Align.FILL);
+                        picture.set_valign(Gtk.Align.FILL);
+                        picture.set_can_shrink(false);
+                        picture.add_css_class("preview-image");
+                        self.append(picture);
+                      }
                     }
                   }
                 } catch (e) {
@@ -506,11 +497,11 @@ function updateSwitcher() {
     previousWindowAddresses.length !== currentAddresses.length ||
     previousWindowAddresses.some((addr, idx) => addr !== currentAddresses[idx]);
 
-  if (windowListChanged) {
-    // Clear preview cache when window list changes
-    clearPreviewCache();
-    
-    // Rebuild entire UI only when window list changes
+  // In preview mode, always rebuild UI to get fresh screenshots
+  const shouldRebuild = windowListChanged || displayMode === DisplayMode.PREVIEWS;
+
+  if (shouldRebuild) {
+    // Rebuild entire UI
     let child = containerBox.get_first_child();
     while (child) {
       containerBox.remove(child);
@@ -528,7 +519,7 @@ function updateSwitcher() {
 
     previousWindowAddresses = currentAddresses;
   } else {
-    // Just update selection classes (much faster)
+    // Just update selection classes (only in icon mode when window list unchanged)
     currentWindows.forEach((window, index) => {
       const button = windowButtons.get(window.address);
       if (!button) return;
@@ -974,14 +965,18 @@ function handleSetMode(mode: string | undefined): string {
     return "invalid mode, use 'icons' or 'previews'";
   }
 
-  displayMode = normalizedMode === "ICONS" ? DisplayMode.ICONS : DisplayMode.PREVIEWS;
+  displayMode =
+    normalizedMode === "ICONS" ? DisplayMode.ICONS : DisplayMode.PREVIEWS;
   rebuildUIIfActive();
 
   return `mode set to ${normalizedMode}`;
 }
 
 function handleToggleMode() {
-  displayMode = displayMode === DisplayMode.ICONS ? DisplayMode.PREVIEWS : DisplayMode.ICONS;
+  displayMode =
+    displayMode === DisplayMode.ICONS
+      ? DisplayMode.PREVIEWS
+      : DisplayMode.ICONS;
   rebuildUIIfActive();
 }
 
