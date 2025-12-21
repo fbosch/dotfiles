@@ -12,8 +12,8 @@
   --text-color: #ffffff;
   --text-secondary: #cccccc;
   --text-tertiary: #999999;
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-hover: rgba(255, 255, 255, 0.15);
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(255, 255, 255, 0.25);
   --critical-color: #c42b1c;
   --shadow-color: 0deg 0% 0%;
   --radius-large: 12px;
@@ -424,8 +424,8 @@
   border-radius: 9999px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   padding: 0;
-  min-width: 44px;
-  min-height: 24px;
+  min-width: 38px;
+  min-height: 20px;
   transition: all 200ms ease;
 }
 
@@ -437,8 +437,8 @@
 .widget-dnd > switch slider {
   background: #ffffff;
   border-radius: 50%;
-  min-width: 20px;
-  min-height: 20px;
+  min-width: 16px;
+  min-height: 16px;
   margin: 0;
   box-shadow:
     0 4px 6px -1px rgba(0, 0, 0, 0.1),
@@ -662,31 +662,54 @@
 
 /* Buttons Grid Widget */
 .widget-buttons-grid {
-  font-family: "Segoe Fluent Icons";
-  background: var(--bg-color);
-  padding: 8px;
-  margin: 8px 0px;
-  border-radius: var(--radius-medium);
-  border: 1px solid var(--border-color);
+  background: transparent;
+  padding: 12px 16px;
+  margin: 0;
+  border: none;
+  border-top: 1px solid var(--border-color);
+  border-radius: 0;
+}
+
+.widget-buttons-grid > flowbox {
+  padding: 0;
+  margin: 0;
+}
+
+.widget-buttons-grid > flowbox > flowboxchild {
+  padding: 0;
+  margin: 0 6px 0 0;
+}
+
+.widget-buttons-grid > flowbox > flowboxchild:last-child {
+  margin-right: 0;
 }
 
 .widget-buttons-grid > flowbox > flowboxchild > button {
   background: var(--surface-color);
   border-radius: var(--radius-small);
   color: var(--text-color);
-  padding: 8px;
-  margin: 0 4px;
+  font-size: 16px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  margin: 0;
   border: 1px solid var(--border-color);
-  transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: all 150ms ease;
+}
+
+.widget-buttons-grid > flowbox > flowboxchild > button label {
+  font-size: 16px;
 }
 
 .widget-buttons-grid > flowbox > flowboxchild > button:hover {
   background: var(--surface-hover);
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: var(--border-hover);
+  transform: scale(1.02);
 }
 
 .widget-buttons-grid > flowbox > flowboxchild > button:active {
   background: var(--surface-active);
+  transform: scale(0.98);
 }
 
 /* MPRIS Widget (Media Controls) */
@@ -858,7 +881,6 @@ button:focus-visible {
   max-height: 26px;
 }
 
-
 /* Tighter spacing for screenshot notifications */
 .notification[data-app-name="Screenshot"] .notification-content {
   padding: 8px;
@@ -883,7 +905,9 @@ button:focus-visible {
 }
 
 /* Extra compact buttons for floating screenshot notifications */
-.floating-notifications .notification[data-app-name="Screenshot"] .notification-action {
+.floating-notifications
+  .notification[data-app-name="Screenshot"]
+  .notification-action {
   font-size: 8px;
   padding: 0 4px;
   min-height: 22px;
