@@ -33,7 +33,8 @@
   "notification-visibility": {
     "hyprland-reset": {
       "state": "transient",
-      "app-name": "^Hyprland$"
+      "app-name": "^Hyprland$",
+      "body": "^Config Reloaded$"
     },
     "keyboard-layout-switch": {
       "state": "transient",
