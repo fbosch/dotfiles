@@ -196,7 +196,7 @@ if command -v notify-send >/dev/null 2>&1; then
                 ;;
             delete)
                 rm -f "${file}"
-                notify-send --app-name="Screenshot" --transient "Screenshot Deleted" "Screenshot has been removed"
+                # notify-send --app-name="Screenshot" --transient "Screenshot Deleted" "Screenshot has been removed"
                 ;;
         esac
     ) &

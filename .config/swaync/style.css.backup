@@ -229,7 +229,14 @@
 
 /* Auto-width for floating notifications */
 .floating-notifications .notification {
-  max-width: 340px;
+  min-width: 200px;
+  max-width: 420px;
+  width: fit-content;
+}
+
+.floating-notifications .notification-content {
+  min-width: 0;
+  width: auto;
 }
 
 /* Notification Content */
