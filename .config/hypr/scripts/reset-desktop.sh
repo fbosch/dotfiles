@@ -4,6 +4,9 @@ set -euo pipefail
 
 hyprctl reload
 
+# Clear performance mode flag since hyprctl reload resets Hyprland state
+rm -f /tmp/hypr-performance-mode
+
 # Gracefully stop relevant background services if they are running.
 pkill waybar 2>/dev/null || true
 pkill gjs 2>/dev/null || true  # Kill AGS instances
@@ -25,12 +28,6 @@ uwsm app -- bash ~/.config/ags/start-daemons.sh &
 
 # Launch window capture daemon
 ~/.config/hypr/scripts/window-capture-daemon.sh &
-
-# If performance mode was active, re-apply it after daemon restart
-if [[ -f /tmp/hypr-performance-mode ]]; then
-  sleep 0.3
-  pkill -STOP -f window-capture-daemon 2>/dev/null || true
-fi
 
 # Wait for services to be ready before showing notification
 sleep 1
