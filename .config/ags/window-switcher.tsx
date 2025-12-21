@@ -1,6 +1,7 @@
 import app from "ags/gtk4/app";
 import { Astal } from "ags/gtk4";
 import Gdk from "gi://Gdk?version=4.0";
+import GdkPixbuf from "gi://GdkPixbuf?version=2.0";
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
@@ -45,6 +46,8 @@ interface HyprlandClient {
     id: number;
     name: string;
   };
+  at?: [number, number];
+  size?: [number, number];
 }
 
 // Window info for display
@@ -84,6 +87,101 @@ let iconTheme: Gtk.IconTheme | null = null;
 
 // Icon name cache to avoid repeated desktop file lookups
 const iconCache = new Map<string, string | null>();
+
+// Window preview cache to avoid repeated screenshot captures
+const previewCache = new Map<string, string | null>();
+
+// Directory for temporary window previews
+const PREVIEW_CACHE_DIR = `${GLib.get_tmp_dir()}/ags-window-previews`;
+
+// Ensure preview cache directory exists
+function ensurePreviewCacheDir() {
+  try {
+    GLib.mkdir_with_parents(PREVIEW_CACHE_DIR, 0o755);
+  } catch (e) {
+    console.error("Failed to create preview cache directory:", e);
+  }
+}
+
+// Capture window screenshot and return file path
+function captureWindowPreview(windowAddress: string): string | null {
+  if (!windowAddress) return null;
+
+  // Check cache first
+  if (previewCache.has(windowAddress)) {
+    return previewCache.get(windowAddress)!;
+  }
+
+  ensurePreviewCacheDir();
+
+  const outputPath = `${PREVIEW_CACHE_DIR}/${windowAddress.replace(/^0x/, "")}.png`;
+
+  try {
+    // First, get window geometry from hyprctl
+    const [ok1, stdout1] = GLib.spawn_command_line_sync("hyprctl clients -j");
+    if (!ok1 || !stdout1) {
+      previewCache.set(windowAddress, null);
+      return null;
+    }
+
+    const decoder = new TextDecoder("utf-8");
+    const jsonStr = decoder.decode(stdout1);
+    const clients = JSON.parse(jsonStr) as HyprlandClient[];
+    
+    const client = clients.find((c) => c.address === windowAddress);
+    if (!client || !client.at || !client.size) {
+      previewCache.set(windowAddress, null);
+      return null;
+    }
+
+    // Build geometry string for grim
+    const geometry = `${client.at[0]},${client.at[1]} ${client.size[0]}x${client.size[1]}`;
+    
+    // Capture screenshot with grim
+    const [ok2] = GLib.spawn_command_line_sync(`grim -g "${geometry}" "${outputPath}"`);
+    
+    if (!ok2) {
+      previewCache.set(windowAddress, null);
+      return null;
+    }
+    
+    // Verify file exists
+    const file = Gio.File.new_for_path(outputPath);
+    if (file.query_exists(null)) {
+      previewCache.set(windowAddress, outputPath);
+      return outputPath;
+    }
+  } catch (e) {
+    console.error(`Failed to capture preview for ${windowAddress}:`, e);
+  }
+
+  previewCache.set(windowAddress, null);
+  return null;
+}
+
+// Clear preview cache (call when window list changes)
+function clearPreviewCache() {
+  try {
+    const dir = Gio.File.new_for_path(PREVIEW_CACHE_DIR);
+    if (dir.query_exists(null)) {
+      const enumerator = dir.enumerate_children(
+        "standard::name",
+        Gio.FileQueryInfoFlags.NONE,
+        null
+      );
+      
+      let fileInfo: Gio.FileInfo | null = enumerator.next_file(null);
+      while (fileInfo !== null) {
+        const child = dir.get_child(fileInfo.get_name());
+        child.delete(null);
+        fileInfo = enumerator.next_file(null);
+      }
+    }
+  } catch (e) {
+    console.error("Failed to clear preview cache:", e);
+  }
+  previewCache.clear();
+}
 
 // Get icon name from desktop file based on app class
 function getIconNameForClass(appClass: string): string | null {
@@ -251,6 +349,7 @@ function createAppButton(
   if (displayMode === DisplayMode.PREVIEWS) {
     // Preview mode: show aspect-ratio box with header
     const dimensions = calculatePreviewDimensions(window);
+    const previewPath = captureWindowPreview(window.address);
 
     content = (
       <box
@@ -299,7 +398,7 @@ function createAppButton(
             />
           </box>
 
-          {/* Preview body with aspect ratio */}
+          {/* Preview body with screenshot or gradient fallback */}
           <box
             class="preview-body"
             halign={Gtk.Align.CENTER}
@@ -310,6 +409,33 @@ function createAppButton(
               max-width: ${dimensions.width}px;
               max-height: ${dimensions.height}px;
             `}
+            $={(self: Gtk.Box) => {
+              if (previewPath) {
+                // Load and scale the image using GdkPixbuf
+                try {
+                  const pixbuf = GdkPixbuf.Pixbuf.new_from_file(previewPath);
+                  if (pixbuf) {
+                    const scaledPixbuf = pixbuf.scale_simple(
+                      dimensions.width,
+                      dimensions.height,
+                      GdkPixbuf.InterpType.BILINEAR
+                    );
+                    
+                    if (scaledPixbuf) {
+                      const texture = Gdk.Texture.new_for_pixbuf(scaledPixbuf);
+                      const picture = Gtk.Picture.new_for_paintable(texture);
+                      picture.set_halign(Gtk.Align.FILL);
+                      picture.set_valign(Gtk.Align.FILL);
+                      picture.set_can_shrink(false);
+                      picture.add_css_class("preview-image");
+                      self.append(picture);
+                    }
+                  }
+                } catch (e) {
+                  console.error("Failed to load preview image:", e);
+                }
+              }
+            }}
           />
         </box>
       </box>
@@ -381,6 +507,9 @@ function updateSwitcher() {
     previousWindowAddresses.some((addr, idx) => addr !== currentAddresses[idx]);
 
   if (windowListChanged) {
+    // Clear preview cache when window list changes
+    clearPreviewCache();
+    
     // Rebuild entire UI only when window list changes
     let child = containerBox.get_first_child();
     while (child) {
@@ -814,6 +943,11 @@ app.apply_css(
   
   box.preview-body {
     background: linear-gradient(135deg, rgba(40, 40, 40, 0.9) 0%, rgba(25, 25, 25, 0.9) 100%);
+    overflow: hidden;
+  }
+  
+  image.preview-image {
+    border-radius: 0 0 8px 8px;
   }
   `,
   false,
