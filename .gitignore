@@ -22,8 +22,6 @@ storybook-static
 .cursor/.agent-tools
 .config/codex/**/*(!config.toml)
 .config/codex/config.toml
-.config/vicinae/settings.json
-.config/vicinae/vicinae.json
 
 # window state rules (auto-generated)
 .config/hypr/window-state-rules.conf
