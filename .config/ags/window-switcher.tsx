@@ -819,6 +819,45 @@ app.apply_css(
   false,
 );
 
+// Helper functions for request handler
+function handleShowAction() {
+  const windows = getWindows();
+  if (windows.length <= 1) {
+    return;
+  }
+
+  const activeAddress = getActiveWindowAddress();
+  let index = windows.findIndex((w) => w.address === activeAddress);
+  index = index === -1 ? 0 : index;
+
+  enterActiveState(windows, index);
+}
+
+function handleSetMode(mode: string | undefined): string {
+  const normalizedMode = mode?.toUpperCase();
+
+  if (normalizedMode !== "ICONS" && normalizedMode !== "PREVIEWS") {
+    return "invalid mode, use 'icons' or 'previews'";
+  }
+
+  displayMode = normalizedMode === "ICONS" ? DisplayMode.ICONS : DisplayMode.PREVIEWS;
+  rebuildUIIfActive();
+
+  return `mode set to ${normalizedMode}`;
+}
+
+function handleToggleMode() {
+  displayMode = displayMode === DisplayMode.ICONS ? DisplayMode.PREVIEWS : DisplayMode.ICONS;
+  rebuildUIIfActive();
+}
+
+function rebuildUIIfActive() {
+  if (state === SwitcherState.ACTIVE) {
+    previousWindowAddresses = [];
+    updateSwitcher();
+  }
+}
+
 // IPC daemon
 app.start({
   main() {
@@ -836,67 +875,51 @@ app.start({
       }
 
       const data = JSON.parse(request);
+      const action = data.action;
 
-      if (data.action === "show") {
-        // Initialize the switcher with first window selected
-        const windows = getWindows();
-        if (windows.length > 1) {
-          const activeAddress = getActiveWindowAddress();
-          let index = windows.findIndex((w) => w.address === activeAddress);
-          index = index === -1 ? 0 : index;
-
-          enterActiveState(windows, index);
-        }
+      if (action === "show") {
+        handleShowAction();
         res("shown");
-      } else if (data.action === "next") {
+        return;
+      }
+
+      if (action === "next") {
         onNext();
         res("cycled next");
-      } else if (data.action === "prev") {
+        return;
+      }
+
+      if (action === "prev") {
         onPrev();
         res("cycled prev");
-      } else if (data.action === "commit") {
+        return;
+      }
+
+      if (action === "commit") {
         onCommit();
         res("committed");
-      } else if (data.action === "hide") {
+        return;
+      }
+
+      if (action === "hide") {
         onHide();
         res("hidden");
-      } else if (data.action === "set-mode") {
-        // Set display mode
-        const mode = data.mode?.toUpperCase();
-        if (mode === "ICONS") {
-          displayMode = DisplayMode.ICONS;
-          // Force UI rebuild if switcher is active
-          if (state === SwitcherState.ACTIVE) {
-            previousWindowAddresses = []; // Force rebuild
-            updateSwitcher();
-          }
-          res(`mode set to ${mode}`);
-        } else if (mode === "PREVIEWS") {
-          displayMode = DisplayMode.PREVIEWS;
-          // Force UI rebuild if switcher is active
-          if (state === SwitcherState.ACTIVE) {
-            previousWindowAddresses = []; // Force rebuild
-            updateSwitcher();
-          }
-          res(`mode set to ${mode}`);
-        } else {
-          res("invalid mode, use 'icons' or 'previews'");
-        }
-      } else if (data.action === "toggle-mode") {
-        // Toggle between modes
-        displayMode =
-          displayMode === DisplayMode.ICONS
-            ? DisplayMode.PREVIEWS
-            : DisplayMode.ICONS;
-        // Force UI rebuild if switcher is active
-        if (state === SwitcherState.ACTIVE) {
-          previousWindowAddresses = []; // Force rebuild
-          updateSwitcher();
-        }
-        res(`mode toggled to ${displayMode}`);
-      } else {
-        res("unknown action");
+        return;
       }
+
+      if (action === "set-mode") {
+        const response = handleSetMode(data.mode);
+        res(response);
+        return;
+      }
+
+      if (action === "toggle-mode") {
+        handleToggleMode();
+        res(`mode toggled to ${displayMode}`);
+        return;
+      }
+
+      res("unknown action");
     } catch (e) {
       res(`error: ${e}`);
     }
