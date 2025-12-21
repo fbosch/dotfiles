@@ -34,9 +34,6 @@ screenshot_active_window() {
   local timestamp=$(get_time_ms)
   echo "$timestamp" > "$LAST_SCREENSHOT_FILE"
   
-  # Small delay to let animations settle
-  sleep 0.05
-  
   # Get window info
   local window_json=$(hyprctl clients -j | jq -r --arg addr "$window_address" '.[] | select(.address == $addr) | @json')
   
@@ -55,14 +52,10 @@ screenshot_active_window() {
   local filename="${address_clean}_${timestamp}.jpg"
   local output_path="$SCREENSHOT_DIR/$filename"
   
-  # Use grimblast to capture the active window (compositor-aware, no overlaps)
-  # Falls back to grim if grimblast fails
-  if command -v grimblast &>/dev/null; then
-    nice -n 19 grimblast -t jpeg save active "$output_path" 2>/dev/null || \
-      nice -n 19 grim -t jpeg -q 60 -g "${x},${y} ${width}x${height}" "$output_path" 2>/dev/null || true
-  else
-    nice -n 19 grim -t jpeg -q 60 -g "${x},${y} ${width}x${height}" "$output_path" 2>/dev/null || true
-  fi
+  # Use grim directly with geometry to avoid cursor capture
+  # grimblast's "active" mode seems to capture cursors on some Hyprland versions
+  # Using direct geometry capture with grim gives us more control
+  nice -n 19 grim -t jpeg -q 85 -g "${x},${y} ${width}x${height}" "$output_path" 2>/dev/null || true
   
   # Clean up old screenshots for this window (keep only latest)
   # Delete all timestamped files except the one we just created
