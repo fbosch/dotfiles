@@ -10,8 +10,9 @@ if [[ -f "$STATE_FILE" ]]; then
   # Disable performance mode - restore normal operation
   echo "Disabling performance mode..."
   
-  # Resume window capture daemon
+  # Resume daemons
   pkill -CONT -f window-capture-daemon 2>/dev/null || true
+  pkill -CONT -f waybar-edge-monitor 2>/dev/null || true
   
   # Set window switcher to previews mode
   ags request --instance window-switcher-daemon '{"action": "set-mode", "mode": "previews"}' 2>/dev/null || true
@@ -40,8 +41,9 @@ else
   # Enable performance mode - maximize performance
   echo "Enabling performance mode..."
   
-  # Pause window capture daemon (stops taking screenshots)
+  # Pause background daemons
   pkill -STOP -f window-capture-daemon 2>/dev/null || true
+  pkill -STOP -f waybar-edge-monitor 2>/dev/null || true
   
   # Set window switcher to icons mode (no preview loading)
   ags request --instance window-switcher-daemon '{"action": "set-mode", "mode": "icons"}' 2>/dev/null || true
