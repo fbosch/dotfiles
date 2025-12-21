@@ -26,6 +26,12 @@ uwsm app -- bash ~/.config/ags/start-daemons.sh &
 # Launch window capture daemon
 ~/.config/hypr/scripts/window-capture-daemon.sh &
 
+# If performance mode was active, re-apply it after daemon restart
+if [[ -f /tmp/hypr-performance-mode ]]; then
+  sleep 0.3
+  pkill -STOP -f window-capture-daemon 2>/dev/null || true
+fi
+
 # Wait for services to be ready before showing notification
 sleep 1
 HYPR_ICON=""

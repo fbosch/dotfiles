@@ -74,7 +74,19 @@ const PREVIEW_MIN_WIDTH = 30; // Minimum width for very narrow windows
 
 // State
 let state: SwitcherState = SwitcherState.IDLE;
+
+// Check if performance mode is active on startup
 let displayMode: DisplayMode = DisplayMode.PREVIEWS;
+try {
+  const perfModeFile = Gio.File.new_for_path("/tmp/hypr-performance-mode");
+  if (perfModeFile.query_exists(null)) {
+    displayMode = DisplayMode.ICONS;
+    console.log("Performance mode detected, starting in ICONS mode");
+  }
+} catch (e) {
+  // Ignore errors, default to PREVIEWS
+}
+
 let win: Astal.Window | null = null;
 let containerBox: Gtk.Box | null = null;
 let selectedNameLabel: Gtk.Label | null = null;
@@ -345,6 +357,8 @@ function createAppButton(
 ): Gtk.Button {
   const iconName = getIconNameForClass(window.class || "");
 
+  console.log(`Creating button for ${window.class} in ${displayMode} mode`);
+
   // Determine content based on display mode
   let content: JSX.Element;
 
@@ -515,6 +529,7 @@ function createAppButton(
 
 // Previous window list to detect changes
 let previousWindowAddresses: string[] = [];
+let previousDisplayMode: DisplayMode = displayMode;
 
 // Update the switcher display with new data
 function updateSwitcher() {
@@ -526,8 +541,12 @@ function updateSwitcher() {
     previousWindowAddresses.length !== currentAddresses.length ||
     previousWindowAddresses.some((addr, idx) => addr !== currentAddresses[idx]);
 
+  // Check if display mode has changed
+  const modeChanged = previousDisplayMode !== displayMode;
+
   // In preview mode, always rebuild UI to get fresh screenshots
-  const shouldRebuild = windowListChanged || displayMode === DisplayMode.PREVIEWS;
+  // Also rebuild if mode changed or window list changed
+  const shouldRebuild = windowListChanged || modeChanged || displayMode === DisplayMode.PREVIEWS;
 
   if (shouldRebuild) {
     // Rebuild entire UI
@@ -547,6 +566,7 @@ function updateSwitcher() {
     });
 
     previousWindowAddresses = currentAddresses;
+    previousDisplayMode = displayMode;
   } else {
     // Just update selection classes (only in icon mode when window list unchanged)
     currentWindows.forEach((window, index) => {
@@ -1017,7 +1037,9 @@ function handleToggleMode() {
 
 function rebuildUIIfActive() {
   if (state === SwitcherState.ACTIVE) {
+    // Force rebuild by clearing previous addresses
     previousWindowAddresses = [];
+    windowButtons.clear();
     updateSwitcher();
   }
 }
@@ -1080,6 +1102,11 @@ app.start({
       if (action === "toggle-mode") {
         handleToggleMode();
         res(`mode toggled to ${displayMode}`);
+        return;
+      }
+
+      if (action === "get-mode") {
+        res(`current mode: ${displayMode}`);
         return;
       }
 
