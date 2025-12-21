@@ -1,1 +1,25 @@
-/nix/store/8703b6m9a8n2q1p313cn0vfzap52xsr7-home-manager-files/.config/vicinae/vicinae.json
+{
+    "closeOnFocusLoss": false,
+    "considerPreedit": false,
+    "faviconService": "twenty",
+    "font": {
+        "normal": "SF Pro Text",
+        "size": 11
+    },
+    "keybinding": "default",
+    "keybinds": {
+    },
+    "popToRootOnClose": true,
+    "rootSearch": {
+        "searchFiles": false
+    },
+    "theme": {
+        "iconTheme": "Win11",
+        "name": "vicinae-dark"
+    },
+    "window": {
+        "csd": true,
+        "opacity": 0.88,
+        "rounding": 10
+    }
+}
