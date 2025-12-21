@@ -3,7 +3,10 @@
   "name": "favorite-directories",
   "title": "Favorite Directories",
   "description": "Quickly search and navigate to your favorite directories",
-  "categories": ["Productivity", "System"],
+  "categories": [
+    "Productivity",
+    "System"
+  ],
   "license": "MIT",
   "author": "fbosch",
   "contributors": [],
@@ -151,7 +154,7 @@
     "lint": "vici lint"
   },
   "dependencies": {
-    "@vicinae/api": "^0.16.14"
+    "@vicinae/api": "^0.17.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.8",

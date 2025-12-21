@@ -3,7 +3,10 @@
   "name": "kagi-search",
   "title": "Kagi Search",
   "description": "Search the web using Kagi search engine",
-  "categories": ["Productivity", "Web"],
+  "categories": [
+    "Productivity",
+    "Web"
+  ],
   "license": "MIT",
   "author": "fbosch",
   "contributors": [],
@@ -36,7 +39,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.12",
-    "@vicinae/api": "^0.16.14",
+    "@vicinae/api": "^0.17.0",
     "cheerio": "^1.0.0"
   },
   "devDependencies": {

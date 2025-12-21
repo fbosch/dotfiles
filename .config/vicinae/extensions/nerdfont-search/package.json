@@ -3,7 +3,10 @@
   "name": "nerdfont-search",
   "title": "NerdFonts",
   "description": "utility to search and find nerdfont icons and add them to your clipboard",
-  "categories": ["Developer Tools", "Design Tools"],
+  "categories": [
+    "Developer Tools",
+    "Design Tools"
+  ],
   "license": "MIT",
   "author": "fbosch",
   "contributors": [],
@@ -31,7 +34,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.12",
-    "@vicinae/api": "^0.16.14",
+    "@vicinae/api": "^0.17.0",
     "fuse.js": "^7.1.0"
   },
   "devDependencies": {

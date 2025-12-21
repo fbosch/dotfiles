@@ -3,7 +3,10 @@
   "name": "flathub-search",
   "title": "Flathub",
   "description": "Search for flatpak applications",
-  "categories": ["Applications", "System"],
+  "categories": [
+    "Applications",
+    "System"
+  ],
   "license": "MIT",
   "author": "fbosch",
   "contributors": [],
@@ -27,7 +30,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.12",
-    "@vicinae/api": "^0.16.14"
+    "@vicinae/api": "^0.17.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.8",

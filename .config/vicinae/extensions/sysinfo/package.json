@@ -70,7 +70,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.12",
-    "@vicinae/api": "^0.16.14",
+    "@vicinae/api": "^0.17.0",
     "p-limit": "^7.2.0"
   },
   "devDependencies": {
