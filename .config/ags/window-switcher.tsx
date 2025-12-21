@@ -206,6 +206,29 @@ function getIconNameForClass(appClass: string): string | null {
   return iconName;
 }
 
+/**
+ * Truncate title to fit within available width
+ * Font: 13px at 500 weight (medium)
+ * Average character width: ~6px for proportional fonts
+ */
+function truncateTitle(title: string, availableWidth: number): string {
+  const AVG_CHAR_WIDTH = 6; // Less conservative for better fit
+  const ELLIPSIS_WIDTH = 12; // Actual width of "…" 
+  
+  const maxChars = Math.floor((availableWidth - ELLIPSIS_WIDTH) / AVG_CHAR_WIDTH);
+  
+  if (maxChars <= 0) {
+    return "…";
+  }
+  
+  if (title.length <= maxChars) {
+    return title;
+  }
+  
+  // Truncate and add ellipsis
+  return title.substring(0, maxChars) + "…";
+}
+
 // Get preview dimensions directly from image file (source of truth)
 // Uses PREVIEW_HEIGHT as the target, constrains width to PREVIEW_MAX_WIDTH
 function calculatePreviewDimensions(imagePath: string | null): {
@@ -250,6 +273,8 @@ function calculatePreviewDimensions(imagePath: string | null): {
 
     // Enforce minimum width
     width = Math.max(PREVIEW_MIN_WIDTH, width);
+
+    console.log(`Preview dimensions for ${imagePath}: ${imageWidth}x${imageHeight} → ${width}x${height} (aspect: ${aspectRatio.toFixed(2)})`);
 
     return { width, height };
   } catch (e) {
@@ -342,7 +367,6 @@ function createAppButton(
           spacing={0}
           class="window-preview"
           css={`
-            min-width: ${dimensions.width}px;
             max-width: ${dimensions.width}px;
           `}
         >
@@ -352,6 +376,7 @@ function createAppButton(
             spacing={8}
             class="preview-header"
             halign={Gtk.Align.FILL}
+            widthRequest={dimensions.width}
           >
             {/* App icon */}
             {iconName ? (
@@ -369,13 +394,12 @@ function createAppButton(
               </box>
             )}
 
-            {/* App title */}
+            {/* App title - truncated to fit available width */}
             <label
-              label={window.title}
-              halign={Gtk.Align.START}
+              label={truncateTitle(window.title, dimensions.width - 28 - 24)}
+              xalign={0}
               class="preview-header-title"
-              ellipsize={3}
-              maxWidthChars={25}
+              wrap={false}
             />
           </box>
 
@@ -405,6 +429,10 @@ function createAppButton(
                     const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
                     
                     if (pixbuf) {
+                      const actualWidth = pixbuf.get_width();
+                      const actualHeight = pixbuf.get_height();
+                      console.log(`Rendering ${previewPath.split('/').pop()}: image=${actualWidth}x${actualHeight}, target=${dimensions.width}x${dimensions.height}`);
+                      
                       const scaledPixbuf = pixbuf.scale_simple(
                         dimensions.width,
                         dimensions.height,
@@ -417,6 +445,7 @@ function createAppButton(
                         picture.set_halign(Gtk.Align.FILL);
                         picture.set_valign(Gtk.Align.FILL);
                         picture.set_can_shrink(false);
+                        picture.set_content_fit(Gtk.ContentFit.FILL);
                         picture.add_css_class("preview-image");
                         self.append(picture);
                       }
@@ -904,6 +933,7 @@ app.apply_css(
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px 8px 0 0;
     padding: 8px 12px;
+    box-sizing: border-box;
   }
   
   image.preview-header-icon {
@@ -930,6 +960,9 @@ app.apply_css(
     font-size: 13px;
     font-weight: 500;
     color: ${tokens.colors.foreground.primary.value};
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   
   box.preview-body {
@@ -937,7 +970,9 @@ app.apply_css(
     overflow: hidden;
   }
   
-  image.preview-image {
+  picture.preview-image {
+    min-width: 100%;
+    min-height: 100%;
     border-radius: 0 0 8px 8px;
   }
   `,
