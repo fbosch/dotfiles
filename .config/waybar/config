@@ -20,7 +20,7 @@
   },
 
   "custom/startbutton": {
-    "format": "",
+    "format": "",
     "on-click": "ags request -i ags-bundled start-menu '{\"action\":\"toggle\"}'",
     "tooltip": false
   },

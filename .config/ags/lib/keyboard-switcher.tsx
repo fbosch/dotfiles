@@ -460,8 +460,7 @@ function createWindow(layouts: string[], size: "sm" | "md" | "lg") {
 function initKeyboardSwitcher() {
   precalculateDimensions();
   applyStaticCSS();
-  // Pre-initialize with default 2-layout configuration
-  createWindow(["", ""], "sm");
+  // Window created lazily on first show (see showSwitcher line 285)
 }
 
 function handleKeyboardSwitcherRequest(argv: string[], res: (response: string) => void) {

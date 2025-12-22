@@ -375,7 +375,7 @@ function createWindow() {
 // Functions for bundled mode (using global namespace pattern)
 function initConfirmDialog() {
   applyStaticCSS();
-  createWindow();
+  // Window created lazily on first show (see showDialog line 218)
 }
 
 function handleConfirmDialogRequest(argv: string[], res: (response: any) => void) {

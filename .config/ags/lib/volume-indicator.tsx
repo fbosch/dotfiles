@@ -95,7 +95,7 @@ let lastSpeakerState: SpeakerState | null = null;
 let lastSegmentCount = -1;
 
 function update() {
-  if (!iconLabel || !volumeLabel) return;
+  if (!iconLabel || !volumeLabel || progressSquares.length === 0) return;
 
   const { volume, muted } = getVolumeInfo();
 
@@ -141,6 +141,8 @@ function update() {
       const maxChange = Math.max(filledCount, lastFilledCount);
 
       for (let i = minChange; i < maxChange; i++) {
+        if (!progressSquares[i]) continue; // Skip if element not initialized yet
+        
         if (i < filledCount) {
           progressSquares[i].add_css_class("filled");
           progressSquares[i].remove_css_class("empty");
@@ -201,7 +203,11 @@ function playVolumeSound() {
 }
 
 function showIndicator() {
-  if (!win || !shadowWrapper) return;
+  if (!win) {
+    createWindow();
+  }
+  
+  if (!shadowWrapper) return;
 
   update();
 
@@ -394,7 +400,7 @@ function applyCSS() {
 // Functions for bundled mode (using global namespace pattern)
 function initVolumeIndicator() {
   applyCSS();
-  createWindow();
+  // Window created lazily on first show (see showIndicator line 204)
 }
 
 function handleVolumeIndicatorRequest(argv: string[], res: (response: string) => void) {

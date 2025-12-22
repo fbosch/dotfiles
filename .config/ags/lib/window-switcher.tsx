@@ -985,6 +985,10 @@ app.apply_css(
 
 // Helper functions for request handler
 function handleShowAction() {
+  if (!win) {
+    createWindow();
+  }
+  
   const windows = getWindows();
   if (windows.length <= 1) {
     return;
@@ -1030,7 +1034,7 @@ function rebuildUIIfActive() {
 
 // Functions for bundled mode (using global namespace pattern)
 function initWindowSwitcher() {
-  createWindow();
+  // Window created lazily on first show (see handleShowAction line 988)
 }
 
 function handleWindowSwitcherRequest(argv: string[], res: (response: string) => void) {

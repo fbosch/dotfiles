@@ -389,6 +389,10 @@ function showMenu() {
     updateMenuItems();
   }
 
+  if (!win) {
+    createWindow();
+  }
+
   if (win) {
     win.set_visible(true);
     isVisible = true;
@@ -890,7 +894,7 @@ applyStaticCSS();
 
 // Functions for bundled mode (using global namespace pattern)
 function initStartMenu() {
-  createWindow();
+  // Window created lazily on first show (see showMenu line 393)
   refreshCacheData();
 }
 
