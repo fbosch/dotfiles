@@ -6,11 +6,6 @@ set -euo pipefail
 SCREENSHOT_DIR="/tmp/hypr-window-captures"
 mkdir -p "$SCREENSHOT_DIR"
 
-# Debug log file
-DEBUG_LOG="$SCREENSHOT_DIR/daemon-debug.log"
-exec 2>> "$DEBUG_LOG"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] ========== Daemon started ==========" >&2
-
 # Tracking files
 LAST_SCREENSHOT_FILE="$SCREENSHOT_DIR/.last_screenshot"
 LAST_EVENT_FILE="$SCREENSHOT_DIR/.last_event"
@@ -24,6 +19,7 @@ OVERLAY_COOLDOWN_MS=2000  # Wait this long after overlay disappears
 # Scale factor for reducing image size (balanced for quality and performance)
 # UI displays at max 320x180px, we store at ~1.5x for sharpness on scaling
 SCALE_FACTOR=0.25
+SCALE_PERCENT=25  # Pre-calculated as integer for bash arithmetic (0.25 * 100)
 JPEG_QUALITY=70
 
 # Delay after activewindow event before capturing
@@ -47,7 +43,6 @@ is_any_overlay_visible() {
     local response=$(ags request -i "$daemon" '{"action":"get-visibility"}' 2>/dev/null)
     
     if [[ "$response" == "visible" ]]; then
-      echo "[$(date '+%H:%M:%S')] Overlay detected: $daemon is visible" >&2
       echo "$(get_time_ms)" > "$LAST_OVERLAY_FILE"
       return 0
     fi
@@ -67,7 +62,6 @@ is_in_overlay_cooldown() {
   local elapsed=$((current_time - last_overlay_time))
   
   if [[ $elapsed -lt $OVERLAY_COOLDOWN_MS ]]; then
-    echo "[$(date '+%H:%M:%S')] Still in cooldown period (${elapsed}ms / ${OVERLAY_COOLDOWN_MS}ms)" >&2
     return 0
   fi
   
@@ -88,46 +82,35 @@ capture_screenshot() {
     local elapsed=$((current_time - last_time))
     
     if [[ $elapsed -lt $DEBOUNCE_MS ]]; then
-      echo "[$(date '+%H:%M:%S')] Screenshot blocked: debounce (${elapsed}ms / ${DEBOUNCE_MS}ms)" >&2
       return 0
     fi
   fi
   
   # CRITICAL: Check for overlays IMMEDIATELY, before any delay
   # This catches overlays that close quickly (like window-switcher on Alt release)
-  echo "[$(date '+%H:%M:%S')] Pre-delay overlay check..." >&2
   if is_any_overlay_visible; then
-    echo "[$(date '+%H:%M:%S')] Screenshot blocked: overlay present (pre-delay)" >&2
     return 0
   fi
   
   # Check if we're still in cooldown after an overlay
   if is_in_overlay_cooldown; then
-    echo "[$(date '+%H:%M:%S')] Screenshot blocked: overlay cooldown" >&2
     return 0
   fi
   
   # Sleep to let window animations settle
-  echo "[$(date '+%H:%M:%S')] Waiting ${CAPTURE_DELAY_MS}ms for animations..." >&2
   sleep $(awk "BEGIN {printf \"%.3f\", $CAPTURE_DELAY_MS / 1000}")
   
   # Verify workspace is still correct after delay
   local current_workspace=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
-  echo "[$(date '+%H:%M:%S')] Post-delay workspace check: $current_workspace (target: $target_workspace)" >&2
   
   if [[ "$current_workspace" != "$target_workspace" ]]; then
-    echo "[$(date '+%H:%M:%S')] Screenshot blocked: workspace changed" >&2
     return 0
   fi
   
   # Double-check overlays after delay (catches overlays that opened during the wait)
-  echo "[$(date '+%H:%M:%S')] Post-delay overlay check..." >&2
   if is_any_overlay_visible; then
-    echo "[$(date '+%H:%M:%S')] Screenshot blocked: overlay present (post-delay)" >&2
     return 0
   fi
-  
-  echo "[$(date '+%H:%M:%S')] Capturing screenshot for workspace $current_workspace" >&2
   
   # Update last screenshot time
   local timestamp=$(get_time_ms)
@@ -142,14 +125,13 @@ capture_screenshot() {
     return 0
   fi
   
-  # Scale down
-  local scale_percent=$(awk "BEGIN {printf \"%.0f\", $SCALE_FACTOR * 100}")
-  local temp_scaled="$SCREENSHOT_DIR/.fullscreen_scaled_${timestamp}.jpg"
-  nice -n 19 convert "$temp_fullscreen" -scale ${scale_percent}% -quality "$JPEG_QUALITY" "$temp_scaled" 2>/dev/null || { rm -f "$temp_fullscreen"; return 0; }
+  # Scale down and convert to MPC (Magick Persistent Cache) for faster cropping
+  local temp_mpc="$SCREENSHOT_DIR/.fullscreen_scaled_${timestamp}.mpc"
+  nice -n 19 convert "$temp_fullscreen" -scale ${SCALE_PERCENT}% -quality "$JPEG_QUALITY" "$temp_mpc" 2>/dev/null || { rm -f "$temp_fullscreen"; return 0; }
   rm -f "$temp_fullscreen"
   
-  if [[ ! -s "$temp_scaled" ]]; then
-    rm -f "$temp_scaled"
+  if [[ ! -f "$temp_mpc" ]]; then
+    rm -f "${temp_mpc%.mpc}.cache" 2>/dev/null
     return 0
   fi
   
@@ -169,10 +151,11 @@ capture_screenshot() {
       continue
     fi
     
-    local scaled_x=$(awk "BEGIN {printf \"%.0f\", $x * $SCALE_FACTOR}")
-    local scaled_y=$(awk "BEGIN {printf \"%.0f\", $y * $SCALE_FACTOR}")
-    local scaled_width=$(awk "BEGIN {printf \"%.0f\", $width * $SCALE_FACTOR}")
-    local scaled_height=$(awk "BEGIN {printf \"%.0f\", $height * $SCALE_FACTOR}")
+    # Use bash arithmetic instead of awk (much faster)
+    local scaled_x=$(( x * SCALE_PERCENT / 100 ))
+    local scaled_y=$(( y * SCALE_PERCENT / 100 ))
+    local scaled_width=$(( width * SCALE_PERCENT / 100 ))
+    local scaled_height=$(( height * SCALE_PERCENT / 100 ))
     
     if [[ "$scaled_width" -le 0 ]] || [[ "$scaled_height" -le 0 ]]; then
       continue
@@ -184,31 +167,30 @@ capture_screenshot() {
     local temp_output="$SCREENSHOT_DIR/.temp_${filename}"
     local output_path="$SCREENSHOT_DIR/$filename"
     
-    nice -n 19 convert "$temp_scaled" \
+    # Crop from MPC and validate dimensions in single operation
+    # Use -format to get width/height without separate identify call
+    local crop_result=$(nice -n 19 convert "$temp_mpc" \
       -crop "${scaled_width}x${scaled_height}+${scaled_x}+${scaled_y}" \
       +repage \
       -quality "$JPEG_QUALITY" \
-      "$temp_output" 2>/dev/null || continue
+      -write "$temp_output" \
+      -format "%w %h" info: 2>/dev/null)
     
+    # Validate output
     if [[ ! -s "$temp_output" ]]; then
       rm -f "$temp_output"
       continue
     fi
     
-    local file_size=$(stat -f%z "$temp_output" 2>/dev/null || stat -c%s "$temp_output" 2>/dev/null || echo "0")
-    if [[ "$file_size" -lt 500 ]]; then
-      rm -f "$temp_output"
-      continue
-    fi
-    
-    local img_info=$(identify -format "%w %h" "$temp_output" 2>/dev/null)
-    if [[ -z "$img_info" ]]; then
-      rm -f "$temp_output"
-      continue
-    fi
-    
-    read -r img_width img_height <<< "$img_info"
-    if [[ "$img_width" -le 10 ]] || [[ "$img_height" -le 10 ]]; then
+    # Check dimensions from convert output (no separate identify needed)
+    if [[ -n "$crop_result" ]]; then
+      read -r img_width img_height <<< "$crop_result"
+      if [[ "$img_width" -le 10 ]] || [[ "$img_height" -le 10 ]]; then
+        rm -f "$temp_output"
+        continue
+      fi
+    else
+      # Fallback if -format failed
       rm -f "$temp_output"
       continue
     fi
@@ -217,7 +199,8 @@ capture_screenshot() {
     mv "$temp_output" "$output_path"
   done
   
-  rm -f "$temp_scaled"
+  # Cleanup MPC cache files
+  rm -f "$temp_mpc" "${temp_mpc%.mpc}.cache"
   
   # Release lock
   rm -f "$CAPTURE_LOCK_FILE"
@@ -225,23 +208,17 @@ capture_screenshot() {
 
 # Handle Hyprland IPC events
 handle_event() {
-  echo "[$(date '+%H:%M:%S')] Event received: $1" >&2
-  
   case $1 in
     activewindow\>\>*|activewindow,*)
-      echo "[$(date '+%H:%M:%S')] Processing activewindow event" >&2
-      
       # Check if a capture is already in progress
       if [[ -f "$CAPTURE_LOCK_FILE" ]]; then
         # Check if lock is stale (older than 10 seconds)
         local lock_age=$(( $(get_time_ms) - $(cat "$CAPTURE_LOCK_FILE" 2>/dev/null || echo 0) ))
         if [[ $lock_age -lt 10000 ]]; then
           # Fresh lock, skip this event
-          echo "[$(date '+%H:%M:%S')] Skipping: capture already in progress (lock age: ${lock_age}ms)" >&2
           return 0
         fi
         # Stale lock, remove it and continue
-        echo "[$(date '+%H:%M:%S')] Removing stale lock (age: ${lock_age}ms)" >&2
         rm -f "$CAPTURE_LOCK_FILE"
       fi
       
@@ -254,19 +231,14 @@ handle_event() {
       
       # Get workspace and trigger screenshot
       local workspace_at_event=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
-      echo "[$(date '+%H:%M:%S')] Starting capture for workspace $workspace_at_event" >&2
       
       # Start new screenshot process
       capture_screenshot "$workspace_at_event" &
-      ;;
-    *)
-      echo "[$(date '+%H:%M:%S')] Ignoring non-activewindow event" >&2
       ;;
   esac
 }
 
 # Connect to Hyprland socket and process events
-echo "[$(date '+%H:%M:%S')] Connecting to Hyprland socket..." >&2
 socat -U - "UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock" \
   | while read -r line; do
       handle_event "$line"
