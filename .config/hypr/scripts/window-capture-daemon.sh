@@ -16,6 +16,7 @@ LAST_SCREENSHOT_FILE="$SCREENSHOT_DIR/.last_screenshot"
 LAST_EVENT_FILE="$SCREENSHOT_DIR/.last_event"
 LAST_OVERLAY_FILE="$SCREENSHOT_DIR/.last_overlay"
 CAPTURE_LOCK_FILE="$SCREENSHOT_DIR/.capture_lock"
+WORKSPACE_CHANGE_FILE="$SCREENSHOT_DIR/.workspace_change"
 
 # ============================================================================
 # CONFIGURATION - Tune these values for performance/quality tradeoff
@@ -27,6 +28,7 @@ OVERLAY_COOLDOWN_MS=2000     # Wait after overlay disappears before capturing
 CAPTURE_DELAY_MS=800         # Wait after activewindow event (for animations)
                              # Reduce if you have fast/no animations (min: 100-200ms)
                              # Increase if screenshots capture mid-animation (max: 1000-1500ms)
+WORKSPACE_DELAY_MS=1200      # Wait after workspace change (longer for workspace animations)
 
 # Image quality
 SCALE_FACTOR=0.25            # Scale factor (0.25 = 25% of original size)
@@ -81,6 +83,8 @@ is_in_overlay_cooldown() {
 # Capture all visible windows from a single fullscreen screenshot
 capture_screenshot() {
   local target_workspace="$1"
+  local event_type="${2:-activewindow}"  # Default to activewindow if not specified
+  local capture_id="$3"  # Unique ID for this capture attempt
   
   # Ensure lock is always released
   trap 'rm -f "$CAPTURE_LOCK_FILE"' RETURN
@@ -107,8 +111,28 @@ capture_screenshot() {
     return 0
   fi
   
-  # Sleep to let window animations settle
-  sleep $(awk "BEGIN {printf \"%.3f\", $CAPTURE_DELAY_MS / 1000}")
+  # Use different delay based on event type
+  local delay_ms="$CAPTURE_DELAY_MS"
+  if [[ "$event_type" == "workspace" ]]; then
+    delay_ms="$WORKSPACE_DELAY_MS"
+  fi
+  
+  # Sleep in small increments and check if workspace changed
+  local elapsed_sleep=0
+  local sleep_increment=50  # Check every 50ms
+  while [[ $elapsed_sleep -lt $delay_ms ]]; do
+    sleep 0.05  # 50ms
+    elapsed_sleep=$((elapsed_sleep + sleep_increment))
+    
+    # If workspace changed, abort this capture (newer one will be triggered)
+    if [[ -f "$WORKSPACE_CHANGE_FILE" ]]; then
+      local current_change_id=$(cat "$WORKSPACE_CHANGE_FILE")
+      if [[ "$current_change_id" != "$capture_id" ]]; then
+        # A newer workspace change happened, abort
+        return 0
+      fi
+    fi
+  done
   
   # Verify workspace is still correct after delay
   local current_workspace=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
@@ -218,34 +242,48 @@ capture_screenshot() {
 
 # Handle Hyprland IPC events
 handle_event() {
+  local event_type=""
+  
   case $1 in
     activewindow\>\>*|activewindow,*)
-      # Check if a capture is already in progress
-      if [[ -f "$CAPTURE_LOCK_FILE" ]]; then
-        # Check if lock is stale (older than 10 seconds)
-        local lock_age=$(( $(get_time_ms) - $(cat "$CAPTURE_LOCK_FILE" 2>/dev/null || echo 0) ))
-        if [[ $lock_age -lt 10000 ]]; then
-          # Fresh lock, skip this event
-          return 0
-        fi
-        # Stale lock, remove it and continue
-        rm -f "$CAPTURE_LOCK_FILE"
-      fi
-      
-      # Create lock with current timestamp
-      get_time_ms > "$CAPTURE_LOCK_FILE"
-      
-      # Record this event
-      local timestamp=$(get_time_ms)
-      echo "$timestamp" > "$LAST_EVENT_FILE"
-      
-      # Get workspace and trigger screenshot
-      local workspace_at_event=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
-      
-      # Start new screenshot process
-      capture_screenshot "$workspace_at_event" &
+      event_type="activewindow"
+      ;;
+    workspace\>\>*|workspace,*)
+      event_type="workspace"
+      ;;
+    *)
+      return 0
       ;;
   esac
+  
+  # Check if a capture is already in progress
+  if [[ -f "$CAPTURE_LOCK_FILE" ]]; then
+    # Check if lock is stale (older than 10 seconds)
+    local lock_age=$(( $(get_time_ms) - $(cat "$CAPTURE_LOCK_FILE" 2>/dev/null || echo 0) ))
+    if [[ $lock_age -lt 10000 ]]; then
+      # Fresh lock, skip this event
+      return 0
+    fi
+    # Stale lock, remove it and continue
+    rm -f "$CAPTURE_LOCK_FILE"
+  fi
+  
+  # Create lock with current timestamp
+  get_time_ms > "$CAPTURE_LOCK_FILE"
+  
+  # Record this event
+  local timestamp=$(get_time_ms)
+  echo "$timestamp" > "$LAST_EVENT_FILE"
+  
+  # Create unique capture ID for this event
+  local capture_id="${timestamp}_${event_type}"
+  echo "$capture_id" > "$WORKSPACE_CHANGE_FILE"
+  
+  # Get workspace and trigger screenshot
+  local workspace_at_event=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
+  
+  # Start new screenshot process with event type and capture ID
+  capture_screenshot "$workspace_at_event" "$event_type" "$capture_id" &
 }
 
 # Connect to Hyprland socket and process events
