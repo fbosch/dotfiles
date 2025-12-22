@@ -985,10 +985,7 @@ app.apply_css(
 
 // Helper functions for request handler
 function handleShowAction() {
-  if (!win) {
-    createWindow();
-  }
-  
+  // Window is pre-created at init for Alt monitoring
   const windows = getWindows();
   if (windows.length <= 1) {
     return;
@@ -1034,7 +1031,9 @@ function rebuildUIIfActive() {
 
 // Functions for bundled mode (using global namespace pattern)
 function initWindowSwitcher() {
-  // Window created lazily on first show (see handleShowAction line 988)
+  // Window-switcher needs to be created immediately for Alt monitoring to work
+  // This is the only component that can't be lazy-loaded due to its Alt key event handling
+  createWindow();
 }
 
 function handleWindowSwitcherRequest(argv: string[], res: (response: string) => void) {
