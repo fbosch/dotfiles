@@ -756,7 +756,7 @@ function applyStaticCSS() {
     }
 
     /* Menu container - matches design-system StartMenu component */
-    box.start-menu-container {
+    window.start-menu box.start-menu-container {
       background-color: rgba(45, 45, 45, 0.90);
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 6px;
@@ -768,7 +768,7 @@ function applyStaticCSS() {
     }
 
     /* Menu item base */
-    button.menu-item {
+    window.start-menu button.menu-item {
       padding: 2px 6px;
       font-size: 14px;
       border-radius: 6px;
@@ -779,82 +779,82 @@ function applyStaticCSS() {
       background-color: transparent;
     }
 
-    button.menu-item:hover {
+    window.start-menu button.menu-item:hover {
       background-color: rgba(255, 255, 255, 0.1);
     }
 
-    button.menu-item:focus {
+    window.start-menu button.menu-item:focus {
       outline: 2px solid rgba(255, 255, 255, 0.3);
       outline-offset: 2px;
     }
 
-    button.menu-item:active {
+    window.start-menu button.menu-item:active {
       transform: scale(0.98);
     }
 
     /* Variant-specific styles */
-    button.menu-variant-default {
+    window.start-menu button.menu-variant-default {
       color: ${tokens.colors.foreground.primary.value};
     }
-    button.menu-variant-default:hover {
+    window.start-menu button.menu-variant-default:hover {
       background-color: #ffffff1a;
     }
-    button.menu-variant-default:focus {
+    window.start-menu button.menu-variant-default:focus {
       background-color: #ffffff1a;
     }
 
-    button.menu-variant-warning {
+    window.start-menu button.menu-variant-warning {
       color: ${tokens.colors.foreground.primary.value};
     }
-    button.menu-variant-warning:hover {
+    window.start-menu button.menu-variant-warning:hover {
       color: ${tokens.colors.state.warning.value};
       background-color: ${tokens.colors.state.warning.value}1a;
     }
-    button.menu-variant-warning:focus {
+    window.start-menu button.menu-variant-warning:focus {
       color: ${tokens.colors.state.warning.value};
       background-color: ${tokens.colors.state.warning.value}1a;
     }
 
-    button.menu-variant-danger {
+    window.start-menu button.menu-variant-danger {
       color: ${tokens.colors.foreground.primary.value};
     }
-    button.menu-variant-danger:hover {
+    window.start-menu button.menu-variant-danger:hover {
       color: ${tokens.colors.state.error.value};
       background-color: ${tokens.colors.state.error.value}1a;
     }
-    button.menu-variant-danger:focus {
+    window.start-menu button.menu-variant-danger:focus {
       color: ${tokens.colors.state.error.value};
       background-color: ${tokens.colors.state.error.value}1a;
     }
 
-    button.menu-variant-suspend {
+    window.start-menu button.menu-variant-suspend {
       color: ${tokens.colors.foreground.primary.value};
     }
-    button.menu-variant-suspend:hover {
+    window.start-menu button.menu-variant-suspend:hover {
       color: ${tokens.colors.state.purple.value};
       background-color: ${tokens.colors.state.purple.value}1a;
     }
-    button.menu-variant-suspend:focus {
+    window.start-menu button.menu-variant-suspend:focus {
       color: ${tokens.colors.state.purple.value};
       background-color: ${tokens.colors.state.purple.value}1a;
     }
 
     /* Icon styling */
-    label.menu-item-icon {
+    window.start-menu label.menu-item-icon {
       font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
       font-size: 14px;
       min-width: 20px;
     }
 
     /* Label styling */
-    label.menu-item-label {
+    window.start-menu label.menu-item-label {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       font-size: 14px;
       color: inherit;
     }
 
     /* Update badges */
-    box.updates-badge {
+    window.start-menu box.updates-badge {
       background-color: ${tokens.colors.accent.primary.value};
       color: ${tokens.colors.foreground.primary.value};
       padding: 1px 4px;
@@ -864,7 +864,7 @@ function applyStaticCSS() {
       margin-left: 6px;
     }
 
-    box.updates-badge label {
+    window.start-menu box.updates-badge label {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       font-size: 11px;
       font-weight: 600;
@@ -873,7 +873,7 @@ function applyStaticCSS() {
     }
 
     /* Menu dividers */
-    separator.menu-divider {
+    window.start-menu separator.menu-divider {
       background-color: rgba(255, 255, 255, 0.1);
       min-height: 1px;
       margin: 4px 0;

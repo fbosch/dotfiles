@@ -80,7 +80,7 @@ function applyStaticCSS() {
       padding: 40px;
     }
     
-    box.dialog-box {
+    window.confirm-dialog box.dialog-box {
       background-color: rgba(45, 45, 45, 0.90);
       border-radius: 12px;
       padding: 16px;
@@ -89,16 +89,16 @@ function applyStaticCSS() {
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     
-    box.content-box {
+    window.confirm-dialog box.content-box {
       margin-bottom: 16px;
     }
     
-    label.dialog-icon {
+    window.confirm-dialog label.dialog-icon {
       font-size: 36px;
       margin-bottom: 12px;
     }
     
-    label.dialog-title {
+    window.confirm-dialog label.dialog-title {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       font-size: 14px;
       font-weight: 600;
@@ -106,7 +106,7 @@ function applyStaticCSS() {
       margin-bottom: 6px;
     }
     
-    label.dialog-message {
+    window.confirm-dialog label.dialog-message {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       font-size: 12px;
       font-weight: 400;
@@ -114,7 +114,7 @@ function applyStaticCSS() {
       line-height: 1.5;
     }
     
-    button.dialog-button {
+    window.confirm-dialog button.dialog-button {
       padding: 4px 12px;
       font-size: 14px;
       font-weight: 700;
@@ -125,40 +125,40 @@ function applyStaticCSS() {
       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     }
     
-    button.dialog-button label {
+    window.confirm-dialog button.dialog-button label {
       color: inherit;
     }
     
-    button.cancel {
+    window.confirm-dialog button.cancel {
       background-color: #373737;
       color: #ffffff;
       border: 1px solid rgba(255, 255, 255, 0.1);
     }
     
-    button.cancel:hover {
+    window.confirm-dialog button.cancel:hover {
       background-color: rgba(55, 55, 55, 0.9);
       border-color: rgba(255, 255, 255, 0.2);
     }
     
-    button.cancel:focus {
+    window.confirm-dialog button.cancel:focus {
       outline: 2px solid rgba(255, 255, 255, 0.3);
       outline-offset: 2px;
     }
     
-    button.cancel:active {
+    window.confirm-dialog button.cancel:active {
       transform: scale(0.98);
     }
     
-    button.confirm {
+    window.confirm-dialog button.confirm {
       border: none;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     }
     
-    button.confirm:hover {
+    window.confirm-dialog button.confirm:hover {
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
     
-    button.confirm:active {
+    window.confirm-dialog button.confirm:active {
       transform: scale(0.98);
     }
   `,
@@ -174,20 +174,20 @@ function updateVariantCSS(variant: "danger" | "warning" | "info" | "suspend") {
 
   app.apply_css(
     `
-    label.dialog-icon {
+    window.confirm-dialog label.dialog-icon {
       color: ${colors.iconColor};
     }
 
-    button.confirm {
+    window.confirm-dialog button.confirm {
       background-color: ${colors.confirmBg};
       color: ${colors.confirmTextColor};
     }
 
-    button.confirm:hover {
+    window.confirm-dialog button.confirm:hover {
       background-color: ${colors.confirmHoverBg};
     }
 
-    button.confirm:focus {
+    window.confirm-dialog button.confirm:focus {
       outline: 2px solid ${colors.confirmFocusColor};
       outline-offset: 2px;
     }

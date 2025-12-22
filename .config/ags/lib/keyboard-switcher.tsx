@@ -121,29 +121,29 @@ function applyStaticCSS() {
       border: none;
     }
     
-    box.shadow-wrapper {
+    window.keyboard-layout-switcher box.shadow-wrapper {
       padding: 24px;
       opacity: 0;
       transition: opacity 100ms cubic-bezier(0.4, 0, 0.2, 1);
     }
     
-    box.shadow-wrapper.visible {
+    window.keyboard-layout-switcher box.shadow-wrapper.visible {
       opacity: 1;
     }
     
-    box.shadow-wrapper.hiding {
+    window.keyboard-layout-switcher box.shadow-wrapper.hiding {
       opacity: 0;
       transition: opacity 50ms cubic-bezier(0.4, 0, 1, 1);
     }
     
-    box.keyboard-switcher-container {
+    window.keyboard-layout-switcher box.keyboard-switcher-container {
       background-color: rgba(55, 55, 55, 0.80);
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 9999px;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     }
     
-    box.pill-background {
+    window.keyboard-layout-switcher box.pill-background {
       background-color: ${tokens.colors.accent.primary.value};
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 9999px;
@@ -152,12 +152,12 @@ function applyStaticCSS() {
       transition: transform 300ms cubic-bezier(0.4, 0, 0.1, 1);
     }
     
-    box.badges-container {
+    window.keyboard-layout-switcher box.badges-container {
       margin: 0px;
       padding: 0px;
     }
     
-    label.layout-badge {
+    window.keyboard-layout-switcher label.layout-badge {
       font-family: "${tokens.typography.fontFamily.button.value}", "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       font-weight: 700;
       border-radius: 9999px;
@@ -167,7 +167,7 @@ function applyStaticCSS() {
       transition: color 200ms ease;
     }
     
-    label.layout-badge.active {
+    window.keyboard-layout-switcher label.layout-badge.active {
       color: ${tokens.colors.foreground.primary.value};
     }
   `,
@@ -190,37 +190,37 @@ function updateCSS(size: "sm" | "md" | "lg" = "sm") {
   // Use inline CSS with custom properties for dynamic sizing
   // This is much faster than regenerating the entire stylesheet
   const dynamicCSS = `
-    box.keyboard-switcher-container {
+    window.keyboard-layout-switcher box.keyboard-switcher-container {
       padding: ${sizeConfig.containerPadding};
       min-width: ${dims.containerWidth}px;
       #max-width: ${dims.containerWidth}px;
     }
     
-    overlay {
+    window.keyboard-layout-switcher overlay {
       min-width: ${dims.innerWidth}px;
       #max-width: ${dims.innerWidth}px;
     }
     
-    box.pill-wrapper {
+    window.keyboard-layout-switcher box.pill-wrapper {
       min-width: ${dims.innerWidth}px;
       #max-width: ${dims.innerWidth}px;
     }
     
-    box.pill-background {
+    window.keyboard-layout-switcher box.pill-background {
       min-width: ${dims.fullBadgeWidth}px;
       min-height: ${dims.fullBadgeHeight}px;
     }
     
-    box.pill-background.position-1 {
+    window.keyboard-layout-switcher box.pill-background.position-1 {
       transform: translateX(${dims.pillOffset}px);
     }
     
-    box.badges-container {
+    window.keyboard-layout-switcher box.badges-container {
       min-width: ${dims.innerWidth}px;
       #max-width: ${dims.innerWidth}px;
     }
     
-    label.layout-badge {
+    window.keyboard-layout-switcher label.layout-badge {
       font-size: ${sizeConfig.fontSize};
       padding: ${sizeConfig.badgePaddingY} ${sizeConfig.badgePaddingX};
       min-width: ${sizeConfig.minWidth};

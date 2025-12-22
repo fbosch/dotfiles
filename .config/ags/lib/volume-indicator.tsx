@@ -313,22 +313,22 @@ function applyCSS() {
     border: none;
   }
   
-  box.shadow-wrapper {
+  window.volume-indicator box.shadow-wrapper {
     padding: 40px;
     opacity: 0;
     transition: opacity 100ms cubic-bezier(0.4, 0, 0.2, 1);
   }
   
-  box.shadow-wrapper.visible {
+  window.volume-indicator box.shadow-wrapper.visible {
     opacity: 1;
   }
   
-  box.shadow-wrapper.hiding {
+  window.volume-indicator box.shadow-wrapper.hiding {
     opacity: 0;
     transition: opacity 50ms cubic-bezier(0.4, 0, 1, 1);
   }
   
-  box.indicator-container {
+  window.volume-indicator box.indicator-container {
     background-color: rgba(55, 55, 55, 0.80);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 9999px;
@@ -336,29 +336,29 @@ function applyCSS() {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   }
   
-  box.icon-container {
+  window.volume-indicator box.icon-container {
     min-width: ${size.iconSize}px;
     min-height: ${size.iconSize}px;
     margin-right: 12px;
   }
   
-  label.speaker-icon {
+  window.volume-indicator label.speaker-icon {
     font-family: "Segoe Fluent Icons";
     font-size: ${size.iconSize}px;
     color: white;
   }
   
-  label.speaker-icon.muted {
+  window.volume-indicator label.speaker-icon.muted {
     color: rgba(255, 255, 255, 0.5);
   }
   
-  box.progress-container {
+  window.volume-indicator box.progress-container {
     margin-right: 12px;
     min-height: ${size.squareSize}px;
     max-height: ${size.squareSize}px;
   }
   
-  box.progress-square {
+  window.volume-indicator box.progress-square {
     min-width: ${size.squareSize}px;
     min-height: ${size.squareSize}px;
     max-width: ${size.squareSize}px;
@@ -367,15 +367,15 @@ function applyCSS() {
     transition: background-color 150ms ease;
   }
   
-  box.progress-square.filled {
+  window.volume-indicator box.progress-square.filled {
     background-color: white;
   }
   
-  box.progress-square.empty {
+  window.volume-indicator box.progress-square.empty {
     background-color: rgba(255, 255, 255, 0.2);
   }
 
-  label.volume-label {
+  window.volume-indicator label.volume-label {
     font-family: system-ui, sans-serif;
     font-weight: 700;
     font-size: ${size.fontSize}px;
@@ -383,7 +383,7 @@ function applyCSS() {
     min-width: 42px;
   }
   
-  label.volume-label.muted {
+  window.volume-indicator label.volume-label.muted {
     color: rgba(255, 255, 255, 0.5);
   }
 `,
