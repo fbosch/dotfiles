@@ -481,7 +481,7 @@ function createUpdateBadges(): JSX.Element[] {
         class="updates-badge"
       >
         <label
-          label={flatpakUpdatesCount.toString()}
+          label={`\uF487   s${flatpakUpdatesCount.toString()}`}
           halign={Gtk.Align.CENTER}
           valign={Gtk.Align.CENTER}
         />
