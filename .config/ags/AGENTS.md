@@ -2,60 +2,76 @@
 
 ## Overview
 
-AGS (Aylur's GTK Shell) configuration for Hyprland UI elements. Currently includes:
-- `confirm-dialog.tsx` - Confirmation dialog for high-impact operations
-- `keyboard-layout-switcher.tsx` - Keyboard layout switcher overlay
-- `volume-change-indicator.tsx` - Volume change indicator with automatic monitoring
-- `start-menu.tsx` - System start menu with update badges
-- `window-switcher.tsx` - Alt+Tab window switcher with previews
-- `start-daemons.sh` - Wrapper script to start all AGS daemons at boot
-- **`config.tsx` - Bundled entry point (recommended)** ✅
+AGS (Aylur's GTK Shell) configuration for Hyprland UI elements using **bundled mode architecture**.
 
-**Important:** AGS no longer uses external CSS files. All styling is done inline via `app.apply_css()` or in the `css` property of `app.start()`.
+**Components** (all in `lib/` directory):
+- `lib/confirm-dialog.tsx` - Confirmation dialog for high-impact operations
+- `lib/keyboard-switcher.tsx` - Keyboard layout switcher overlay
+- `lib/volume-indicator.tsx` - Volume change indicator with automatic monitoring
+- `lib/start-menu.tsx` - System start menu with update badges
+- `lib/window-switcher.tsx` - Alt+Tab window switcher with previews
 
-## Bundled Mode (Recommended)
+**Entry Points:**
+- `config-bundled.tsx` - Main bundled configuration (imports all components)
+- `start-daemons.sh` - Boot script to start AGS in bundled mode
+
+**Important:** 
+- AGS no longer uses external CSS files. All styling is done inline via `app.apply_css()` or in the `css` property of `app.start()`.
+- All components run as a single bundled process for improved performance.
+
+## Bundled Mode Architecture
 
 ### Overview
 
-**Bundled mode combines all 5 daemons into a single process** for improved performance and resource usage.
+**Bundled mode combines all 5 components into a single process** for improved performance and resource usage.
 
 **Benefits:**
 - ⚡ **Faster startup**: ~50-100ms total vs 500-1000ms for 5 separate processes (5-10x faster)
-- 💾 **Lower memory**: ~40-50MB vs ~200-250MB (75% reduction)
+- 💾 **Lower memory**: ~104MB vs ~375MB (72% reduction)
 - 🚀 **Faster IPC**: <1ms internal calls vs 2-5ms socket communication
-- 📦 **Single artifact**: One compiled file instead of 5
+- 📦 **Single artifact**: One process hosting all components
 
 **How it works:**
-- All components are imported into `config.tsx`
-- Each component's `app.start()` call executes with its own `instanceName`
+- All components from `lib/` are imported into `config-bundled.tsx`
+- Each component's window is created with its own namespace
 - All CSS is applied during module loading
 - Single GTK process hosts all windows
-- Each daemon remains independently accessible via IPC
+- Components export to `globalThis` namespace for communication
+
+**File Structure:**
+```
+.config/ags/
+├── lib/                        # Component library (canonical source)
+│   ├── confirm-dialog.tsx
+│   ├── keyboard-switcher.tsx
+│   ├── volume-indicator.tsx
+│   ├── start-menu.tsx
+│   └── window-switcher.tsx
+├── config-bundled.tsx          # Main entry point (imports from lib/)
+├── config.tsx                  # Stub (bundled mode required)
+└── start-daemons.sh            # Boot script (runs config-bundled.tsx)
+```
 
 ### Usage
 
-**Default mode** (automatically enabled in `start-daemons.sh`):
+**Start bundled AGS** (automatically runs at boot via `hyprland.conf`):
 ```bash
 ./start-daemons.sh
 ```
 
-**Manual bundling:**
+**Manual start:**
 ```bash
-# Bundle TypeScript into JavaScript
-ags bundle config.tsx
-
-# Run bundled version
-ags run config.js
+ags run ~/.config/ags/config-bundled.tsx
 ```
 
-**IPC remains the same** - each daemon keeps its own instance name:
+**IPC communication** - interact with components via `globalThis` namespace:
 ```bash
-ags msg window-switcher-daemon '{"action":"next"}'
-ags msg start-menu-daemon '{"action":"toggle"}'
-ags msg volume-indicator-daemon '{"action":"show"}'
+# Example IPC calls (actual API depends on component implementation)
+ags msg ags-bundled '{"window":"start-menu","action":"toggle"}'
+ags msg ags-bundled '{"window":"window-switcher","action":"next"}'
 ```
 
-See `README.md` for complete bundling documentation.
+See component-specific sections below for exact IPC APIs.
 
 ## Setup
 
@@ -450,40 +466,40 @@ monitor.connect('changed', (monitor, file, other_file, event_type) => {
 ## Daemon Architecture
 
 ### Overview
-AGS components in this config use a **daemon pattern** where long-running processes are started at boot and respond to IPC (Inter-Process Communication) requests. This provides instant UI display and efficient resource usage.
+AGS runs as a **single bundled process** started at boot. All 5 components are loaded into one process with shared resources, providing instant UI display and efficient resource usage.
 
-### Daemon Lifecycle
+### Lifecycle
 
-**Boot-time Daemons (Managed by `start-daemons.sh`)**
-- `confirm-dialog.tsx` - Always available for confirmation prompts
-- `volume-change-indicator.tsx` - Ready to show on volume changes
-- `keyboard-layout-switcher.tsx` - Pre-initialized for instant display on layout switches
+**Boot Process:**
+1. Hyprland starts and runs `~/.config/ags/start-daemons.sh`
+2. Script waits for Hyprland to be ready
+3. Launches `ags run config-bundled.tsx`
+4. All 5 components initialize in a single process
+5. Windows are pre-created (hidden) for instant display
 
-### Daemon Startup Script (`start-daemons.sh`)
+**Components in bundled process:**
+- `confirm-dialog` - Always available for confirmation prompts
+- `volume-indicator` - Ready to show on volume changes
+- `keyboard-switcher` - Pre-initialized for instant display on layout switches
+- `start-menu` - Ready to toggle on Super key
+- `window-switcher` - Ready for Alt+Tab switching
 
-**Purpose:** Centralized management of all boot-time AGS daemons.
+### Startup Script (`start-daemons.sh`)
+
+**Purpose:** Manages the bundled AGS process lifecycle.
 
 **Location:** `~/.config/ags/start-daemons.sh`
 
 **Features:**
-- **Parallel startup** - Launches all daemons simultaneously for fast initialization
-- **Idle detection** - Waits for Hyprland IPC to be ready before starting
-- **Configurable delays** - Adjustable wait times via config variables
-- Checks if daemons are already running before starting
+- Waits for Hyprland to be ready before starting
+- Checks if bundled process is already running
 - Provides colored console output and logging
 - Logs to `/tmp/ags-daemons.log` for debugging
-- Easy to extend by adding entries to `BOOT_DAEMONS` array
-- Can be run manually to restart all daemons
-
-**Performance:**
-- Sequential startup: ~0.9s (0.3s × 3 daemons)
-- Parallel startup: ~0.5s (one verification wait)
-- Idle wait: 2-10s (prevents blocking Hyprland startup)
 
 **Usage:**
 ```bash
 # Automatic (called from hyprland.conf)
-exec-once = ~/.config/ags/start-daemons.sh
+exec-once = uwsm app -- ~/.config/ags/start-daemons.sh
 
 # Manual restart
 ~/.config/ags/start-daemons.sh
@@ -491,67 +507,62 @@ exec-once = ~/.config/ags/start-daemons.sh
 # Check logs
 cat /tmp/ags-daemons.log
 
-# List running daemons
+# Verify bundled process is running
 ags list
 ```
 
 **Configuration:**
 Edit the configuration section at the top of `start-daemons.sh`:
 ```bash
-# Idle detection settings
-IDLE_WAIT_ENABLED=true           # Wait for system to be ready
-IDLE_WAIT_DELAY=2                # Additional delay after Hyprland ready (seconds)
-HYPRLAND_TIMEOUT=10              # Max time to wait for Hyprland IPC (seconds)
-STARTUP_VERIFICATION_WAIT=0.5    # Time to wait before verifying (seconds)
+WAIT_FOR_HYPRLAND=true    # Wait for Hyprland to be ready
+HYPRLAND_TIMEOUT=4        # Max time to wait for Hyprland (seconds)
 ```
 
-- `IDLE_WAIT_ENABLED`: Set to `false` to start immediately without waiting
-- `IDLE_WAIT_DELAY`: Increase on slow systems, decrease on fast systems
-- `HYPRLAND_TIMEOUT`: Max time to wait for Hyprland before giving up
-- `STARTUP_VERIFICATION_WAIT`: Time to wait for daemons to initialize
+### Communication Pattern
 
-**Adding a New Daemon:**
-1. Create your daemon `.tsx` file in `~/.config/ags/`
-2. Add filename to `BOOT_DAEMONS` array in `start-daemons.sh`
-3. Add Hyprland layer rules if needed in `hyprland.conf`
-4. Restart: `~/.config/ags/start-daemons.sh`
+Components in the bundled process communicate via the `globalThis` namespace:
 
-**Example:**
-```bash
-# In start-daemons.sh
-BOOT_DAEMONS=(
-    "confirm-dialog.tsx"
-    "volume-change-indicator.tsx"
-    "keyboard-layout-switcher.tsx"
-    "my-new-daemon.tsx"  # Add here
-)
-```
-
-### IPC Communication Pattern
-
-All daemons use the same communication pattern:
-
-**Daemon Side (TypeScript):**
+**Component Side (TypeScript in `lib/` files):**
 ```tsx
+// Export component interface to globalThis
+globalThis.myComponent = {
+  show: () => myWindow.show(),
+  hide: () => myWindow.hide(),
+  toggle: () => myWindow.visible ? myWindow.hide() : myWindow.show(),
+};
+
+// Component initialization
+const myWindow = (
+  <window name="my-window" namespace="ags-myapp" visible={false}>
+    {/* content */}
+  </window>
+);
+```
+
+**Main Config (`config-bundled.tsx`):**
+```tsx
+import "gi://Astal?version=4.0";
+import app from "ags/gtk4/app";
+
+// Import all components (they register to globalThis)
+import "./lib/confirm-dialog.tsx";
+import "./lib/keyboard-switcher.tsx";
+import "./lib/volume-indicator.tsx";
+import "./lib/start-menu.tsx";
+import "./lib/window-switcher.tsx";
+
 app.start({
-  main() {
-    // Pre-create UI for instant display
-    createWindow();
-    return win;
-  },
-  instanceName: "my-daemon-name",
+  instanceName: "ags-bundled",
   requestHandler(argv: string[], res: (response: string) => void) {
     try {
       const data = JSON.parse(argv.join(" "));
+      const component = globalThis[data.window];
       
-      if (data.action === "show") {
-        showWindow();
-        res("shown");
-      } else if (data.action === "hide") {
-        hideWindow();
-        res("hidden");
+      if (component && typeof component[data.action] === "function") {
+        component[data.action]();
+        res("success");
       } else {
-        res("unknown action");
+        res("unknown window or action");
       }
     } catch (e) {
       res(`error: ${e}`);
@@ -562,41 +573,41 @@ app.start({
 
 **Client Side (Bash/Shell):**
 ```bash
-# Send request to daemon
-ags request -i my-daemon-name '{"action":"show"}'
+# Send request to bundled process
+ags request -i ags-bundled '{"window":"start-menu","action":"toggle"}'
 
 # From Hyprland keybind
-bind = $mainMod, X, exec, ags request -i my-daemon-name '{"action":"show"}'
+bind = $mainMod, X, exec, ags request -i ags-bundled '{"window":"start-menu","action":"toggle"}'
 ```
 
-### Daemon Best Practices
+### Best Practices
 
-1. **Pre-create UI in `main()`** - Ensures instant display when triggered
-2. **Use unique `instanceName`** - Convention: `{component-name}-daemon`
-3. **Set unique `namespace`** - Convention: `ags-{component-name}` for layer rules
-4. **Keep daemons stateless** - Refresh state on each show request
-5. **Add error handling** - Always wrap JSON parsing in try-catch
-6. **Return responses** - Confirm success/failure to caller
-7. **Pre-initialize expensive operations** - Do calculations in `main()`, not on each show
+1. **Component files in `lib/`** - All components live in the `lib/` directory
+2. **Export to `globalThis`** - Make component APIs available for IPC
+3. **Pre-create windows** - Create windows during import for instant display
+4. **Use unique `namespace`** - Convention: `ags-{component-name}` for layer rules
+5. **Keep components stateless** - Refresh state on each show request
+6. **Add error handling** - Always wrap JSON parsing in try-catch
+7. **CSS namespacing** - Use `window.{component-name}` selectors to avoid conflicts
 
-### Troubleshooting Daemons
+### Troubleshooting
 
 ```bash
-# Check which daemons are running
+# Check if bundled process is running
 ags list
 
 # View startup logs
 cat /tmp/ags-daemons.log
 
-# Kill all daemons and restart
+# Kill and restart
 pkill gjs
 ~/.config/ags/start-daemons.sh
 
-# Test a specific daemon manually
-ags run ~/.config/ags/confirm-dialog.tsx
+# Test bundled config manually
+ags run ~/.config/ags/config-bundled.tsx
 
 # Send test request
-ags request -i confirm-dialog-daemon '{"action":"hide"}'
+ags request -i ags-bundled '{"window":"start-menu","action":"toggle"}'
 
 # Check for errors
 journalctl --user -u uwsm-app@Hyprland.service | grep -i ags
@@ -604,50 +615,46 @@ journalctl --user -u uwsm-app@Hyprland.service | grep -i ags
 
 ## Current Implementations
 
-### confirm-dialog.tsx - Confirmation Dialog
+### lib/confirm-dialog.tsx - Confirmation Dialog
 - Generic confirmation dialog for high-impact operations
 - Supports variant colors (danger/warning/info)
-- Pre-creates window in `main()` for instant display ✅
-- **Optimized CSS handling:**
-  - Static CSS applied once on module load ✅
-  - Dynamic CSS only updates variant colors when changed ✅
-  - Reduces CSS regeneration from ~180 lines to ~10 lines ✅
+- Pre-creates window during module load for instant display
+- Static CSS applied once on module load
 - Optional audio alert on show
 - Optional display delay
 - Bound to various high-impact operations in Hyprland
+- Exports to `globalThis.confirmDialog`
 
-### keyboard-layout-switcher.tsx - Layout Switcher Overlay
+### lib/keyboard-switcher.tsx - Layout Switcher Overlay
 - Shows current keyboard layout when switching
-- **Pre-started at boot by start-daemons.sh** for instant display ✅
-- Pre-calculates dimensions on module load ✅
-- Applies static CSS once on load ✅  
-- Pre-initializes window structure in `main()` ✅
-- Caches widget references for fast updates ✅
+- Pre-calculates dimensions on module load
+- Pre-creates window structure during import
+- Caches widget references for fast updates
 - Auto-hides after 700ms
-- Triggered by `switch-layout.sh` via IPC (daemon already running)
-- IPC daemon pattern with `requestHandler`
+- Triggered by `switch-layout.sh` via IPC
+- Exports to `globalThis.keyboardSwitcher`
 
-### volume-change-indicator.tsx - Volume Change Indicator
+### lib/volume-indicator.tsx - Volume Change Indicator
 - macOS-inspired volume overlay with speaker icon, progress bar, and percentage
-- **Triggered by Hyprland keybinds** - shows when volume keys are pressed ✅
-- Pre-creates window in `main()` for instant display ✅
-- **Optimized CSS handling:**
-  - Static CSS applied once on module load ✅
-  - Dynamic CSS only updates on size changes ✅
+- Triggered by Hyprland volume keybinds
+- Pre-creates window during module load for instant display
+- Static CSS applied once on module load
 - Shows on volume change, auto-hides after 2 seconds
 - 16 progress squares matching macOS style
-- Segoe Fluent Icons for speaker states (Unicode: \uE74F muted, \uE992 verylow, \uE993 low, \uE994 medium, \uE995 high/veryhigh)
+- Segoe Fluent Icons for speaker states
 - Matches design-system VolumeChangeIndicator component
-- IPC daemon pattern with `requestHandler`
-- Bound to volume keybinds in `keybinds.conf`:
-  ```bash
-  bindel = ,XF86AudioRaiseVolume, exec, wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ && ags request -i volume-indicator-daemon '{"action":"show"}'
-  ```
+- Bound to volume keybinds in `keybinds.conf`
+- Exports to `globalThis.volumeIndicator`
 
-### start-daemons.sh - AGS Daemons Starter
-- **Centralized daemon management** - starts all AGS daemons from one script ✅
-- See **Daemon Architecture** section above for detailed usage
-- Currently manages: confirm-dialog, volume-change-indicator, keyboard-layout-switcher
+### lib/start-menu.tsx - System Start Menu
+- Application launcher and system menu
+- Exports to `globalThis.startMenu`
+- Bound to Super key in Hyprland
+
+### lib/window-switcher.tsx - Window Switcher
+- Alt+Tab style window switcher with previews
+- Exports to `globalThis.windowSwitcher`
+- Bound to Alt+Tab in Hyprland
 
 ## Common Issues
 
