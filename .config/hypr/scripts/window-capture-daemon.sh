@@ -26,13 +26,41 @@ CAPTURE_DELAY_MS=800  # Wait this long after activewindow event
 # AGS daemons to check for visibility
 AGS_DAEMONS="window-switcher-daemon keyboard-layout-switcher-daemon volume-indicator-daemon"
 
+# Only check AGS if overlay was detected within this time window
+AGS_CHECK_WINDOW_MS=5000  # 5 seconds
+
 # Get current time in milliseconds
 get_time_ms() {
   date +%s%3N
 }
 
 # Check if any AGS overlay is visible
+# Optimized: only polls AGS if overlay was recently active
 is_any_overlay_visible() {
+  # Check if we should even bother polling AGS
+  local should_check_ags=false
+  
+  if [[ -f "$LAST_OVERLAY_FILE" ]]; then
+    local last_overlay_time=$(cat "$LAST_OVERLAY_FILE")
+    local current_time=$(get_time_ms)
+    local elapsed=$((current_time - last_overlay_time))
+    
+    # Only check AGS if overlay was seen recently
+    if [[ $elapsed -lt $AGS_CHECK_WINDOW_MS ]]; then
+      should_check_ags=true
+    fi
+  else
+    # First run or no overlay history - do check once
+    should_check_ags=true
+  fi
+  
+  if [[ "$should_check_ags" == "false" ]]; then
+    # No recent overlay activity, skip expensive AGS polling
+    echo "[$(date '+%H:%M:%S')] Skipping AGS check (no recent overlay activity)" >&2
+    return 1
+  fi
+  
+  # Poll AGS daemons
   for daemon in $AGS_DAEMONS; do
     local response=$(ags request -i "$daemon" '{"action":"get-visibility"}' 2>/dev/null)
     
