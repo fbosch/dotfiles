@@ -23,12 +23,12 @@ WORKSPACE_CHANGE_FILE="$SCREENSHOT_DIR/.workspace_change"
 # ============================================================================
 
 # Debounce and timing
-DEBOUNCE_MS=500              # Minimum time between screenshots
-OVERLAY_COOLDOWN_MS=2000     # Wait after overlay disappears before capturing
-CAPTURE_DELAY_MS=800         # Wait after activewindow event (for animations)
+DEBOUNCE_MS=100              # Minimum time between screenshots
+OVERLAY_COOLDOWN_MS=0        # Wait after overlay disappears before capturing
+CAPTURE_DELAY_MS=100         # Wait after activewindow event (for animations)
                              # Reduce if you have fast/no animations (min: 100-200ms)
                              # Increase if screenshots capture mid-animation (max: 1000-1500ms)
-WORKSPACE_DELAY_MS=1200      # Wait after workspace change (longer for workspace animations)
+WORKSPACE_DELAY_MS=300       # Wait after workspace change (longer for workspace animations)
 
 # Image quality
 SCALE_FACTOR=0.25            # Scale factor (0.25 = 25% of original size)
