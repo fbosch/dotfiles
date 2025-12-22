@@ -33,10 +33,10 @@ interface FlakeUpdatesData {
 
 // Flatpak update data interface
 interface FlatpakUpdate {
-  name: string;
-  appId: string;
+  app: string;
   currentVersion: string;
   newVersion: string;
+  branch: string;
 }
 
 interface FlatpakUpdatesData {
@@ -434,7 +434,7 @@ function generateUpdatesTooltip(): string {
   if (flatpakUpdatesCount > 0) {
     if (flatpakUpdatesData && flatpakUpdatesData.updates.length > 0) {
       const tooltipText = flatpakUpdatesData.updates
-        .map((u) => `• ${u.name}: ${u.currentVersion} → ${u.newVersion}`)
+        .map((u) => `• ${u.app}: ${u.currentVersion} → ${u.newVersion}`)
         .join("\n");
       const timeAgo = formatTimeSince(flatpakUpdatesData.timestamp);
       const lastCheckedText = timeAgo ? ` (checked ${timeAgo})` : "";
@@ -481,7 +481,7 @@ function createUpdateBadges(): JSX.Element[] {
         class="updates-badge"
       >
         <label
-          label={`\uF487   s${flatpakUpdatesCount.toString()}`}
+          label={`\uF487  ${flatpakUpdatesCount.toString()}`}
           halign={Gtk.Align.CENTER}
           valign={Gtk.Align.CENTER}
         />
