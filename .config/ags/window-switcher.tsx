@@ -1091,6 +1091,11 @@ app.start({
         return;
       }
 
+      if (action === "get-visibility") {
+        res(isVisible ? "visible" : "hidden");
+        return;
+      }
+
       res("unknown action");
     } catch (e) {
       res(`error: ${e}`);

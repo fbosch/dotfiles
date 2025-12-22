@@ -477,6 +477,8 @@ app.start({
       } else if (data.action === "hide") {
         hideSwitcher();
         res("hidden");
+      } else if (data.action === "get-visibility") {
+        res(isVisible ? "visible" : "hidden");
       } else {
         res("unknown action");
       }

@@ -9,9 +9,12 @@ mkdir -p "$SCREENSHOT_DIR"
 # Tracking files
 LAST_SCREENSHOT_FILE="$SCREENSHOT_DIR/.last_screenshot"
 LAST_EVENT_FILE="$SCREENSHOT_DIR/.last_event"
+LAST_OVERLAY_FILE="$SCREENSHOT_DIR/.last_overlay"
+CAPTURE_LOCK_FILE="$SCREENSHOT_DIR/.capture_lock"
 
 # Debounce tracking
-DEBOUNCE_MS=500  # Increased minimum time between screenshots
+DEBOUNCE_MS=500  # Minimum time between screenshots
+OVERLAY_COOLDOWN_MS=2000  # Wait this long after overlay disappears
 
 # Scale factor for reducing image size (1/3 of original)
 SCALE_FACTOR=0.33
@@ -20,24 +23,22 @@ JPEG_QUALITY=70
 # Delay after activewindow event before capturing
 CAPTURE_DELAY_MS=800  # Wait this long after activewindow event
 
-# Permanent layers that are always present
-PERMANENT_LAYERS="hyprpaper waybar"
+# AGS daemons to check for visibility
+AGS_DAEMONS="window-switcher-daemon keyboard-layout-switcher-daemon volume-indicator-daemon"
 
 # Get current time in milliseconds
 get_time_ms() {
   date +%s%3N
 }
 
-# Check if there are any transient layers present
-has_transient_layers() {
-  local current_layers=$(hyprctl layers -j 2>/dev/null | jq -r '[.. | .namespace? // empty] | unique | .[]' 2>/dev/null | tr '\n' ' ')
-  
-  if [[ -z "$current_layers" ]]; then
-    return 1
-  fi
-  
-  for layer in $current_layers; do
-    if ! echo "$PERMANENT_LAYERS" | grep -qw "$layer"; then
+# Check if any AGS overlay is visible
+is_any_overlay_visible() {
+  for daemon in $AGS_DAEMONS; do
+    local response=$(ags request -i "$daemon" '{"action":"get-visibility"}' 2>/dev/null)
+    
+    if [[ "$response" == "visible" ]]; then
+      echo "[$(date '+%H:%M:%S')] Overlay detected: $daemon is visible" >&2
+      echo "$(get_time_ms)" > "$LAST_OVERLAY_FILE"
       return 0
     fi
   done
@@ -45,9 +46,30 @@ has_transient_layers() {
   return 1
 }
 
+# Check if we're still in cooldown period after an overlay
+is_in_overlay_cooldown() {
+  if [[ ! -f "$LAST_OVERLAY_FILE" ]]; then
+    return 1
+  fi
+  
+  local last_overlay_time=$(cat "$LAST_OVERLAY_FILE")
+  local current_time=$(get_time_ms)
+  local elapsed=$((current_time - last_overlay_time))
+  
+  if [[ $elapsed -lt $OVERLAY_COOLDOWN_MS ]]; then
+    echo "[$(date '+%H:%M:%S')] Still in cooldown period (${elapsed}ms / ${OVERLAY_COOLDOWN_MS}ms)" >&2
+    return 0
+  fi
+  
+  return 1
+}
+
 # Capture all visible windows from a single fullscreen screenshot
 capture_screenshot() {
   local target_workspace="$1"
+  
+  # Ensure lock is always released
+  trap 'rm -f "$CAPTURE_LOCK_FILE"' RETURN
   
   # Check debounce
   if [[ -f "$LAST_SCREENSHOT_FILE" ]]; then
@@ -69,10 +91,19 @@ capture_screenshot() {
     return 0
   fi
   
-  # Check for transient layers
-  if has_transient_layers; then
+  # Check for overlays
+  if is_any_overlay_visible; then
+    echo "[$(date '+%H:%M:%S')] Screenshot blocked: overlay present" >&2
     return 0
   fi
+  
+  # Check if we're still in cooldown after an overlay
+  if is_in_overlay_cooldown; then
+    echo "[$(date '+%H:%M:%S')] Screenshot blocked: overlay cooldown" >&2
+    return 0
+  fi
+  
+  echo "[$(date '+%H:%M:%S')] Capturing screenshot for workspace $current_workspace" >&2
   
   # Update last screenshot time
   local timestamp=$(get_time_ms)
@@ -163,21 +194,36 @@ capture_screenshot() {
   done
   
   rm -f "$temp_scaled"
+  
+  # Release lock
+  rm -f "$CAPTURE_LOCK_FILE"
 }
 
 # Handle Hyprland IPC events
 handle_event() {
   case $1 in
     activewindow\>\>*|activewindow,*)
+      # Check if a capture is already in progress
+      if [[ -f "$CAPTURE_LOCK_FILE" ]]; then
+        # Check if lock is stale (older than 10 seconds)
+        local lock_age=$(( $(get_time_ms) - $(cat "$CAPTURE_LOCK_FILE" 2>/dev/null || echo 0) ))
+        if [[ $lock_age -lt 10000 ]]; then
+          # Fresh lock, skip this event
+          return 0
+        fi
+        # Stale lock, remove it and continue
+        rm -f "$CAPTURE_LOCK_FILE"
+      fi
+      
+      # Create lock with current timestamp
+      get_time_ms > "$CAPTURE_LOCK_FILE"
+      
       # Record this event
       local timestamp=$(get_time_ms)
       echo "$timestamp" > "$LAST_EVENT_FILE"
       
       # Get workspace and trigger screenshot
       local workspace_at_event=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
-      
-      # Kill any pending screenshot processes for this workspace
-      pkill -f "capture_screenshot $workspace_at_event" 2>/dev/null || true
       
       # Start new screenshot process
       capture_screenshot "$workspace_at_event" &
