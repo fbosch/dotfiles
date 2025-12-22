@@ -15,7 +15,7 @@ if [[ -f "$STATE_FILE" ]]; then
   pkill -CONT -f waybar-edge-monitor 2>/dev/null || true
   
   # Set window switcher to previews mode
-  ags request --instance window-switcher-daemon '{"action": "set-mode", "mode": "previews"}' 2>/dev/null || true
+  ags request --instance ags-bundled window-switcher '{"action": "set-mode", "mode": "previews"}' 2>/dev/null || true
   
   # Re-enable animations and shadows, restore blur to 4 passes
   hyprctl keyword animations:enabled 1 >/dev/null
@@ -46,7 +46,7 @@ else
   pkill -STOP -f waybar-edge-monitor 2>/dev/null || true
   
   # Set window switcher to icons mode (no preview loading)
-  ags request --instance window-switcher-daemon '{"action": "set-mode", "mode": "icons"}' 2>/dev/null || true
+  ags request --instance ags-bundled window-switcher '{"action": "set-mode", "mode": "icons"}' 2>/dev/null || true
   
   # Disable animations and shadows, reduce blur to 1 pass for performance
   hyprctl keyword animations:enabled 0 >/dev/null

@@ -7,8 +7,8 @@ action="$1"
 
 case "$action" in
   next|prev)
-    # Send action to AGS
-    ags request -i window-switcher-daemon "{\"action\":\"$action\"}"
+    # Send action to AGS bundled daemon
+    ags request -i ags-bundled window-switcher "{\"action\":\"$action\"}"
     
     # Fork a background process to monitor for Alt release
     # This uses a simple polling approach checking if the parent shell is still running
@@ -31,17 +31,17 @@ case "$action" in
       done
       
       # Timeout reached or Alt released - commit the switch
-      ags request -i window-switcher-daemon '{"action":"commit"}' 2>/dev/null || true
+      ags request -i ags-bundled window-switcher '{"action":"commit"}' 2>/dev/null || true
     ) &
     
     # Mark this instance as the active one
     echo $$ > "/tmp/ags-switcher-active-$$"
     ;;
   commit)
-    ags request -i window-switcher-daemon '{"action":"commit"}'
+    ags request -i ags-bundled window-switcher '{"action":"commit"}'
     ;;
   hide)
-    ags request -i window-switcher-daemon '{"action":"hide"}'
+    ags request -i ags-bundled window-switcher '{"action":"hide"}'
     ;;
   *)
     echo "Usage: $0 {next|prev|commit|hide}"

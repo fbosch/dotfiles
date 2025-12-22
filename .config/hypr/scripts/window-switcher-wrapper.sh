@@ -5,9 +5,9 @@
 action="${1:-next}"
 
 # Check if window-switcher daemon is ready
-if ags request -i window-switcher-daemon "" &>/dev/null; then
+if ags request -i ags-bundled window-switcher "" &>/dev/null; then
   # Daemon is ready, use it (handles state and delayed UI internally)
-  ags request -i window-switcher-daemon "{\"action\":\"$action\"}"
+  ags request -i ags-bundled window-switcher "{\"action\":\"$action\"}"
 else
   # Daemon is dead/not ready, fallback to cycle-windows.sh
   case "$action" in

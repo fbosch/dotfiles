@@ -3,7 +3,7 @@
 
 # Check if start menu is currently visible
 check_start_menu_visible() {
-    ags request -i start-menu-daemon '{"action":"is-visible"}' 2>/dev/null || echo "false"
+    ags request -i ags-bundled start-menu '{"action":"is-visible"}' 2>/dev/null || echo "false"
 }
 
 # Check if SwayNC notification center is currently visible

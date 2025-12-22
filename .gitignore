@@ -45,6 +45,9 @@ storybook-static
 # AGS generated types (regenerate with: ags types)
 .config/ags/@girs/
 
+# AGS bundled output (regenerate with: ags bundle config.tsx config.js --gtk 4)
+.config/ags/config.js
+
 # Other
 **/.backup/
 checkhealth.log

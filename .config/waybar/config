@@ -20,8 +20,8 @@
   },
 
   "custom/startbutton": {
-    "format": "",
-    "on-click": "ags request -i start-menu-daemon '{\"action\":\"toggle\"}'",
+    "format": "",
+    "on-click": "ags request -i ags-bundled start-menu '{\"action\":\"toggle\"}'",
     "tooltip": false
   },
 

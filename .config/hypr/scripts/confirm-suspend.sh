@@ -3,7 +3,7 @@
 # Sends request directly to the AGS confirm-dialog daemon
 # Audio and duplicate prevention handled by AGS component
 
-ags request -i confirm-dialog-daemon '{
+ags request -i ags-bundled confirm-dialog '{
   "action": "show",
   "config": {
     "icon": "󰒲",

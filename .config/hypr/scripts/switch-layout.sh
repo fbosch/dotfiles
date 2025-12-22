@@ -46,8 +46,8 @@ done
 # Convert bash array to JSON array for AGS
 layouts_json=$(printf '%s\n' "${layout_codes_array[@]}" | jq -R . | jq -s .)
 
-# Send to AGS with the active layout indicated
-ags request -i keyboard-layout-switcher-daemon "{\"action\":\"show\",\"config\":{\"layouts\":$layouts_json,\"activeLayout\":\"$active_code\",\"size\":\"sm\"}}"
+# Send to AGS bundled daemon with the active layout indicated
+ags request -i ags-bundled keyboard-switcher "{\"action\":\"show\",\"config\":{\"layouts\":$layouts_json,\"activeLayout\":\"$active_code\",\"size\":\"sm\"}}"
 
 # Log to hyprland log for debugging
 echo "Keyboard layout switched from $current_layout to $new_layout (code: $active_code)" >> /tmp/hyprland-layout.log

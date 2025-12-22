@@ -107,5 +107,5 @@ jq -n \
 
 rm -f /tmp/hypr-tab-cycle-windows.json
 
-# Notify AGS window-switcher daemon to show/update
-ags request -i window-switcher-daemon '{"action":"show"}' &>/dev/null || true
+# Notify AGS bundled daemon to show window-switcher
+ags request -i ags-bundled window-switcher '{"action":"show"}' &>/dev/null || true
