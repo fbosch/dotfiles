@@ -104,48 +104,19 @@ const iconCache = new Map<string, string | null>();
 // Directory for window preview screenshots (managed by event-watcher.sh)
 const PREVIEW_CACHE_DIR = `${GLib.get_tmp_dir()}/hypr-window-captures`;
 
-// Get window preview path if it exists (screenshots managed by event-watcher.sh)
-// Screenshots are named {address}_{timestamp}.jpg - find the latest one
+// Get window preview path if it exists (screenshots managed by window-capture-daemon.sh)
+// Screenshots are named {address}.jpg (fixed filename, no timestamp)
 function captureWindowPreview(windowAddress: string): string | null {
   if (!windowAddress) return null;
 
   const addressClean = windowAddress.replace(/^0x/, "");
+  const previewPath = `${PREVIEW_CACHE_DIR}/${addressClean}.jpg`;
 
   try {
-    // List all screenshots for this window address
-    const dir = Gio.File.new_for_path(PREVIEW_CACHE_DIR);
-    if (!dir.query_exists(null)) return null;
-
-    const enumerator = dir.enumerate_children(
-      "standard::name",
-      Gio.FileQueryInfoFlags.NONE,
-      null
-    );
-
-    let latestFile: string | null = null;
-    let latestTimestamp = 0;
-
-    // Find the file with the latest timestamp
-    let fileInfo = enumerator.next_file(null);
-    while (fileInfo !== null) {
-      const filename = fileInfo.get_name();
-      
-      // Match pattern: {address}_{timestamp}.jpg
-      const pattern = new RegExp(`^${addressClean}_(\\d+)\\.jpg$`);
-      const match = filename.match(pattern);
-      
-      if (match) {
-        const timestamp = parseInt(match[1], 10);
-        if (timestamp > latestTimestamp) {
-          latestTimestamp = timestamp;
-          latestFile = `${PREVIEW_CACHE_DIR}/${filename}`;
-        }
-      }
-      
-      fileInfo = enumerator.next_file(null);
+    const file = Gio.File.new_for_path(previewPath);
+    if (file.query_exists(null)) {
+      return previewPath;
     }
-
-    return latestFile;
   } catch (e) {
     console.error(`Failed to find preview for ${windowAddress}:`, e);
   }
@@ -432,20 +403,30 @@ function createAppButton(
               if (previewPath) {
                 // Load and scale the image using GdkPixbuf
                 // Read file contents directly to bypass GdkPixbuf file caching
+                // Force fresh load by reading file every time UI rebuilds
                 try {
                   const file = Gio.File.new_for_path(previewPath);
+                  
+                  // Query file info to ensure we're getting the latest version
+                  const fileInfo = file.query_info(
+                    "standard::*,time::modified",
+                    Gio.FileQueryInfoFlags.NONE,
+                    null
+                  );
+                  const modTime = fileInfo.get_modification_time().tv_sec;
+                  
                   const [success, contents] = file.load_contents(null);
                   
                   if (success && contents) {
-                    const stream = Gio.MemoryInputStream.new_from_bytes(
-                      new GLib.Bytes(contents)
-                    );
+                    // Create a unique stream for each load to prevent caching
+                    const bytes = new GLib.Bytes(contents);
+                    const stream = Gio.MemoryInputStream.new_from_bytes(bytes);
                     const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
                     
                     if (pixbuf) {
                       const actualWidth = pixbuf.get_width();
                       const actualHeight = pixbuf.get_height();
-                      console.log(`Rendering ${previewPath.split('/').pop()}: image=${actualWidth}x${actualHeight}, target=${dimensions.width}x${dimensions.height}`);
+                      console.log(`Rendering ${previewPath.split('/').pop()} (mtime: ${modTime}): image=${actualWidth}x${actualHeight}, target=${dimensions.width}x${dimensions.height}`);
                       
                       const scaledPixbuf = pixbuf.scale_simple(
                         dimensions.width,
