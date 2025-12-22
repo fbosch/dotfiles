@@ -119,9 +119,9 @@ capture_screenshot() {
   
   # Sleep in small increments and check if workspace changed
   local elapsed_sleep=0
-  local sleep_increment=50  # Check every 50ms
+  local sleep_increment=100  # Check every 100ms
   while [[ $elapsed_sleep -lt $delay_ms ]]; do
-    sleep 0.05  # 50ms
+    sleep 0.1  # 100ms
     elapsed_sleep=$((elapsed_sleep + sleep_increment))
     
     # If workspace changed, abort this capture (newer one will be triggered)
@@ -152,7 +152,7 @@ capture_screenshot() {
   
   # Capture full screen
   local temp_fullscreen="$SCREENSHOT_DIR/.fullscreen_${timestamp}.jpg"
-  nice -n 19 grim -t jpeg -q "$JPEG_QUALITY" "$temp_fullscreen" 2>/dev/null || return 0
+  grim -t jpeg -q "$JPEG_QUALITY" "$temp_fullscreen" 2>/dev/null || return 0
   
   if [[ ! -s "$temp_fullscreen" ]]; then
     rm -f "$temp_fullscreen"
@@ -161,7 +161,11 @@ capture_screenshot() {
   
   # Scale down and convert to MPC (Magick Persistent Cache) for faster cropping
   local temp_mpc="$SCREENSHOT_DIR/.fullscreen_scaled_${timestamp}.mpc"
-  nice -n 19 convert "$temp_fullscreen" -scale ${SCALE_PERCENT}% -quality "$JPEG_QUALITY" "$temp_mpc" 2>/dev/null || { rm -f "$temp_fullscreen"; return 0; }
+  convert "$temp_fullscreen" \
+    -scale ${SCALE_PERCENT}% \
+    -quality "$JPEG_QUALITY" \
+    -define jpeg:dct-method=fast \
+    "$temp_mpc" 2>/dev/null || { rm -f "$temp_fullscreen"; return 0; }
   rm -f "$temp_fullscreen"
   
   if [[ ! -f "$temp_mpc" ]]; then
@@ -199,28 +203,16 @@ capture_screenshot() {
     
     # Crop from MPC in parallel (background each crop operation)
     (
-      local crop_result=$(nice -n 19 convert "$temp_mpc" \
+      convert "$temp_mpc" \
         -crop "${scaled_width}x${scaled_height}+${scaled_x}+${scaled_y}" \
         +repage \
         -quality "$JPEG_QUALITY" \
-        -write "$temp_output" \
-        -format "%w %h" info: 2>/dev/null)
+        -define jpeg:dct-method=fast \
+        -define jpeg:optimize-coding=false \
+        "$temp_output" 2>/dev/null
       
-      # Validate output
+      # Validate output exists and has content
       if [[ ! -s "$temp_output" ]]; then
-        rm -f "$temp_output"
-        exit 0
-      fi
-      
-      # Check dimensions from convert output (no separate identify needed)
-      if [[ -n "$crop_result" ]]; then
-        read -r img_width img_height <<< "$crop_result"
-        if [[ "$img_width" -le 10 ]] || [[ "$img_height" -le 10 ]]; then
-          rm -f "$temp_output"
-          exit 0
-        fi
-      else
-        # Fallback if -format failed
         rm -f "$temp_output"
         exit 0
       fi
