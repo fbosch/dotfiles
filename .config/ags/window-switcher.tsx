@@ -101,8 +101,11 @@ let iconTheme: Gtk.IconTheme | null = null;
 // Icon name cache to avoid repeated desktop file lookups
 const iconCache = new Map<string, string | null>();
 
-// Directory for window preview screenshots (managed by event-watcher.sh)
-const PREVIEW_CACHE_DIR = `${GLib.get_tmp_dir()}/hypr-window-captures`;
+// Directory for window preview screenshots (managed by window-capture-daemon.sh)
+// Uses /dev/shm (tmpfs) for faster I/O, falls back to /tmp if unavailable
+const PREVIEW_CACHE_DIR = GLib.file_test("/dev/shm", GLib.FileTest.IS_DIR)
+  ? "/dev/shm/hypr-window-captures"
+  : `${GLib.get_tmp_dir()}/hypr-window-captures`;
 
 // Get window preview path if it exists (screenshots managed by window-capture-daemon.sh)
 // Screenshots are named {address}.jpg (fixed filename, no timestamp)

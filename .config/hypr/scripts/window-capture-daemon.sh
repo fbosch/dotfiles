@@ -2,8 +2,13 @@
 
 set -euo pipefail
 
-# Window capture directory
-SCREENSHOT_DIR="/tmp/hypr-window-captures"
+# Window capture directory - using /dev/shm (tmpfs) for faster I/O
+# Falls back to /tmp if /dev/shm is not available
+if [[ -d "/dev/shm" ]]; then
+  SCREENSHOT_DIR="/dev/shm/hypr-window-captures"
+else
+  SCREENSHOT_DIR="/tmp/hypr-window-captures"
+fi
 mkdir -p "$SCREENSHOT_DIR"
 
 # Tracking files
@@ -12,24 +17,29 @@ LAST_EVENT_FILE="$SCREENSHOT_DIR/.last_event"
 LAST_OVERLAY_FILE="$SCREENSHOT_DIR/.last_overlay"
 CAPTURE_LOCK_FILE="$SCREENSHOT_DIR/.capture_lock"
 
-# Debounce tracking
-DEBOUNCE_MS=500  # Minimum time between screenshots
-OVERLAY_COOLDOWN_MS=2000  # Wait this long after overlay disappears
+# ============================================================================
+# CONFIGURATION - Tune these values for performance/quality tradeoff
+# ============================================================================
 
-# Scale factor for reducing image size (balanced for quality and performance)
-# UI displays at max 320x180px, we store at ~1.5x for sharpness on scaling
-SCALE_FACTOR=0.25
-SCALE_PERCENT=25  # Pre-calculated as integer for bash arithmetic (0.25 * 100)
-JPEG_QUALITY=70
+# Debounce and timing
+DEBOUNCE_MS=500              # Minimum time between screenshots
+OVERLAY_COOLDOWN_MS=2000     # Wait after overlay disappears before capturing
+CAPTURE_DELAY_MS=800         # Wait after activewindow event (for animations)
+                             # Reduce if you have fast/no animations (min: 100-200ms)
+                             # Increase if screenshots capture mid-animation (max: 1000-1500ms)
 
-# Delay after activewindow event before capturing
-CAPTURE_DELAY_MS=800  # Wait this long after activewindow event
+# Image quality
+SCALE_FACTOR=0.25            # Scale factor (0.25 = 25% of original size)
+SCALE_PERCENT=25             # Pre-calculated as integer for bash arithmetic
+JPEG_QUALITY=70              # JPEG compression quality (60-80 recommended)
+                             # Lower = smaller files, faster processing, lower quality
+                             # Higher = larger files, slower processing, better quality
 
-# AGS daemons to check for visibility
+# AGS overlay detection
 AGS_DAEMONS="window-switcher-daemon keyboard-layout-switcher-daemon volume-indicator-daemon"
+AGS_CHECK_WINDOW_MS=5000     # Time window for overlay detection (unused, kept for future)
 
-# Only check AGS if overlay was detected within this time window
-AGS_CHECK_WINDOW_MS=5000  # 5 seconds
+# ============================================================================
 
 # Get current time in milliseconds
 get_time_ms() {
@@ -138,15 +148,10 @@ capture_screenshot() {
   # Crop each window (parallel for better performance)
   # Use process substitution instead of pipe to avoid subshell issues with background jobs
   while read -r window_json; do
-    local address=$(echo "$window_json" | jq -r '.address')
-    local mapped=$(echo "$window_json" | jq -r '.mapped // true')
+    # Parse all fields in a single jq invocation (6 jq calls → 1)
+    IFS='|' read -r address mapped x y width height <<< "$(echo "$window_json" | jq -r '[.address, (.mapped // true), .at[0], .at[1], .size[0], .size[1]] | join("|")')"
     
     [[ "$mapped" == "false" ]] && continue
-    
-    local x=$(echo "$window_json" | jq -r '.at[0]')
-    local y=$(echo "$window_json" | jq -r '.at[1]')
-    local width=$(echo "$window_json" | jq -r '.size[0]')
-    local height=$(echo "$window_json" | jq -r '.size[1]')
     
     if [[ "$width" -le 0 ]] || [[ "$height" -le 0 ]]; then
       continue
