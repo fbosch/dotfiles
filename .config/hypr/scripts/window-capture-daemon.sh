@@ -6,6 +6,11 @@ set -euo pipefail
 SCREENSHOT_DIR="/tmp/hypr-window-captures"
 mkdir -p "$SCREENSHOT_DIR"
 
+# Debug log file
+DEBUG_LOG="$SCREENSHOT_DIR/daemon-debug.log"
+exec 2>> "$DEBUG_LOG"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] ========== Daemon started ==========" >&2
+
 # Tracking files
 LAST_SCREENSHOT_FILE="$SCREENSHOT_DIR/.last_screenshot"
 LAST_EVENT_FILE="$SCREENSHOT_DIR/.last_event"
@@ -16,8 +21,9 @@ CAPTURE_LOCK_FILE="$SCREENSHOT_DIR/.capture_lock"
 DEBOUNCE_MS=500  # Minimum time between screenshots
 OVERLAY_COOLDOWN_MS=2000  # Wait this long after overlay disappears
 
-# Scale factor for reducing image size (1/3 of original)
-SCALE_FACTOR=0.33
+# Scale factor for reducing image size (balanced for quality and performance)
+# UI displays at max 320x180px, we store at ~1.5x for sharpness on scaling
+SCALE_FACTOR=0.25
 JPEG_QUALITY=70
 
 # Delay after activewindow event before capturing
@@ -35,31 +41,7 @@ get_time_ms() {
 }
 
 # Check if any AGS overlay is visible
-# Optimized: only polls AGS if overlay was recently active
 is_any_overlay_visible() {
-  # Check if we should even bother polling AGS
-  local should_check_ags=false
-  
-  if [[ -f "$LAST_OVERLAY_FILE" ]]; then
-    local last_overlay_time=$(cat "$LAST_OVERLAY_FILE")
-    local current_time=$(get_time_ms)
-    local elapsed=$((current_time - last_overlay_time))
-    
-    # Only check AGS if overlay was seen recently
-    if [[ $elapsed -lt $AGS_CHECK_WINDOW_MS ]]; then
-      should_check_ags=true
-    fi
-  else
-    # First run or no overlay history - do check once
-    should_check_ags=true
-  fi
-  
-  if [[ "$should_check_ags" == "false" ]]; then
-    # No recent overlay activity, skip expensive AGS polling
-    echo "[$(date '+%H:%M:%S')] Skipping AGS check (no recent overlay activity)" >&2
-    return 1
-  fi
-  
   # Poll AGS daemons
   for daemon in $AGS_DAEMONS; do
     local response=$(ags request -i "$daemon" '{"action":"get-visibility"}' 2>/dev/null)
@@ -106,28 +88,42 @@ capture_screenshot() {
     local elapsed=$((current_time - last_time))
     
     if [[ $elapsed -lt $DEBOUNCE_MS ]]; then
+      echo "[$(date '+%H:%M:%S')] Screenshot blocked: debounce (${elapsed}ms / ${DEBOUNCE_MS}ms)" >&2
       return 0
     fi
   fi
   
-  # Sleep to let everything settle
-  sleep $(awk "BEGIN {printf \"%.3f\", $CAPTURE_DELAY_MS / 1000}")
-  
-  # Verify workspace is still correct after delay
-  local current_workspace=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
-  if [[ "$current_workspace" != "$target_workspace" ]]; then
-    return 0
-  fi
-  
-  # Check for overlays
+  # CRITICAL: Check for overlays IMMEDIATELY, before any delay
+  # This catches overlays that close quickly (like window-switcher on Alt release)
+  echo "[$(date '+%H:%M:%S')] Pre-delay overlay check..." >&2
   if is_any_overlay_visible; then
-    echo "[$(date '+%H:%M:%S')] Screenshot blocked: overlay present" >&2
+    echo "[$(date '+%H:%M:%S')] Screenshot blocked: overlay present (pre-delay)" >&2
     return 0
   fi
   
   # Check if we're still in cooldown after an overlay
   if is_in_overlay_cooldown; then
     echo "[$(date '+%H:%M:%S')] Screenshot blocked: overlay cooldown" >&2
+    return 0
+  fi
+  
+  # Sleep to let window animations settle
+  echo "[$(date '+%H:%M:%S')] Waiting ${CAPTURE_DELAY_MS}ms for animations..." >&2
+  sleep $(awk "BEGIN {printf \"%.3f\", $CAPTURE_DELAY_MS / 1000}")
+  
+  # Verify workspace is still correct after delay
+  local current_workspace=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
+  echo "[$(date '+%H:%M:%S')] Post-delay workspace check: $current_workspace (target: $target_workspace)" >&2
+  
+  if [[ "$current_workspace" != "$target_workspace" ]]; then
+    echo "[$(date '+%H:%M:%S')] Screenshot blocked: workspace changed" >&2
+    return 0
+  fi
+  
+  # Double-check overlays after delay (catches overlays that opened during the wait)
+  echo "[$(date '+%H:%M:%S')] Post-delay overlay check..." >&2
+  if is_any_overlay_visible; then
+    echo "[$(date '+%H:%M:%S')] Screenshot blocked: overlay present (post-delay)" >&2
     return 0
   fi
   
@@ -229,17 +225,23 @@ capture_screenshot() {
 
 # Handle Hyprland IPC events
 handle_event() {
+  echo "[$(date '+%H:%M:%S')] Event received: $1" >&2
+  
   case $1 in
     activewindow\>\>*|activewindow,*)
+      echo "[$(date '+%H:%M:%S')] Processing activewindow event" >&2
+      
       # Check if a capture is already in progress
       if [[ -f "$CAPTURE_LOCK_FILE" ]]; then
         # Check if lock is stale (older than 10 seconds)
         local lock_age=$(( $(get_time_ms) - $(cat "$CAPTURE_LOCK_FILE" 2>/dev/null || echo 0) ))
         if [[ $lock_age -lt 10000 ]]; then
           # Fresh lock, skip this event
+          echo "[$(date '+%H:%M:%S')] Skipping: capture already in progress (lock age: ${lock_age}ms)" >&2
           return 0
         fi
         # Stale lock, remove it and continue
+        echo "[$(date '+%H:%M:%S')] Removing stale lock (age: ${lock_age}ms)" >&2
         rm -f "$CAPTURE_LOCK_FILE"
       fi
       
@@ -252,14 +254,19 @@ handle_event() {
       
       # Get workspace and trigger screenshot
       local workspace_at_event=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
+      echo "[$(date '+%H:%M:%S')] Starting capture for workspace $workspace_at_event" >&2
       
       # Start new screenshot process
       capture_screenshot "$workspace_at_event" &
+      ;;
+    *)
+      echo "[$(date '+%H:%M:%S')] Ignoring non-activewindow event" >&2
       ;;
   esac
 }
 
 # Connect to Hyprland socket and process events
+echo "[$(date '+%H:%M:%S')] Connecting to Hyprland socket..." >&2
 socat -U - "UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock" \
   | while read -r line; do
       handle_event "$line"
