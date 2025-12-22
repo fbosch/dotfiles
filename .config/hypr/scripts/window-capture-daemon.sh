@@ -135,8 +135,9 @@ capture_screenshot() {
     return 0
   fi
   
-  # Crop each window
-  hyprctl clients -j 2>/dev/null | jq -c --arg ws "$current_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | {address, at, size, mapped}' 2>/dev/null | while read -r window_json; do
+  # Crop each window (parallel for better performance)
+  # Use process substitution instead of pipe to avoid subshell issues with background jobs
+  while read -r window_json; do
     local address=$(echo "$window_json" | jq -r '.address')
     local mapped=$(echo "$window_json" | jq -r '.mapped // true')
     
@@ -167,37 +168,41 @@ capture_screenshot() {
     local temp_output="$SCREENSHOT_DIR/.temp_${filename}"
     local output_path="$SCREENSHOT_DIR/$filename"
     
-    # Crop from MPC and validate dimensions in single operation
-    # Use -format to get width/height without separate identify call
-    local crop_result=$(nice -n 19 convert "$temp_mpc" \
-      -crop "${scaled_width}x${scaled_height}+${scaled_x}+${scaled_y}" \
-      +repage \
-      -quality "$JPEG_QUALITY" \
-      -write "$temp_output" \
-      -format "%w %h" info: 2>/dev/null)
-    
-    # Validate output
-    if [[ ! -s "$temp_output" ]]; then
-      rm -f "$temp_output"
-      continue
-    fi
-    
-    # Check dimensions from convert output (no separate identify needed)
-    if [[ -n "$crop_result" ]]; then
-      read -r img_width img_height <<< "$crop_result"
-      if [[ "$img_width" -le 10 ]] || [[ "$img_height" -le 10 ]]; then
+    # Crop from MPC in parallel (background each crop operation)
+    (
+      local crop_result=$(nice -n 19 convert "$temp_mpc" \
+        -crop "${scaled_width}x${scaled_height}+${scaled_x}+${scaled_y}" \
+        +repage \
+        -quality "$JPEG_QUALITY" \
+        -write "$temp_output" \
+        -format "%w %h" info: 2>/dev/null)
+      
+      # Validate output
+      if [[ ! -s "$temp_output" ]]; then
         rm -f "$temp_output"
-        continue
+        exit 0
       fi
-    else
-      # Fallback if -format failed
-      rm -f "$temp_output"
-      continue
-    fi
-    
-    # Only overwrite if validation passed
-    mv "$temp_output" "$output_path"
-  done
+      
+      # Check dimensions from convert output (no separate identify needed)
+      if [[ -n "$crop_result" ]]; then
+        read -r img_width img_height <<< "$crop_result"
+        if [[ "$img_width" -le 10 ]] || [[ "$img_height" -le 10 ]]; then
+          rm -f "$temp_output"
+          exit 0
+        fi
+      else
+        # Fallback if -format failed
+        rm -f "$temp_output"
+        exit 0
+      fi
+      
+      # Only overwrite if validation passed
+      mv "$temp_output" "$output_path"
+    ) &
+  done < <(hyprctl clients -j 2>/dev/null | jq -c --arg ws "$current_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | {address, at, size, mapped}' 2>/dev/null)
+  
+  # Wait for all parallel crops to complete
+  wait
   
   # Cleanup MPC cache files
   rm -f "$temp_mpc" "${temp_mpc%.mpc}.cache"
