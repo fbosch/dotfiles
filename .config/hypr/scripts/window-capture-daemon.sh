@@ -37,6 +37,11 @@ JPEG_QUALITY=70              # JPEG compression quality (60-80 recommended)
                              # Lower = smaller files, faster processing, lower quality
                              # Higher = larger files, slower processing, better quality
 
+# Hyprland gaps (dynamically read from hyprctl)
+# Extract first value from "2 2 2 2" format (top gap, but they're usually uniform)
+GAPS_IN=$(hyprctl getoption general:gaps_in -j 2>/dev/null | jq -r '.custom' | awk '{print $1}')
+GAPS_OUT=$(hyprctl getoption general:gaps_out -j 2>/dev/null | jq -r '.custom' | awk '{print $1}')
+
 # AGS overlay detection
 AGS_DAEMONS="window-switcher-daemon keyboard-layout-switcher-daemon volume-indicator-daemon"
 AGS_CHECK_WINDOW_MS=5000     # Time window for overlay detection (unused, kept for future)
@@ -186,10 +191,11 @@ capture_screenshot() {
     fi
     
     # Use bash arithmetic instead of awk (much faster)
-    local scaled_x=$(( x * SCALE_PERCENT / 100 ))
-    local scaled_y=$(( y * SCALE_PERCENT / 100 ))
-    local scaled_width=$(( width * SCALE_PERCENT / 100 ))
-    local scaled_height=$(( height * SCALE_PERCENT / 100 ))
+    # Adjust coordinates to exclude gaps_in from the capture
+    local scaled_x=$(( (x + GAPS_IN) * SCALE_PERCENT / 100 ))
+    local scaled_y=$(( (y + GAPS_IN) * SCALE_PERCENT / 100 ))
+    local scaled_width=$(( (width - 2 * GAPS_IN) * SCALE_PERCENT / 100 ))
+    local scaled_height=$(( (height - 2 * GAPS_IN) * SCALE_PERCENT / 100 ))
     
     if [[ "$scaled_width" -le 0 ]] || [[ "$scaled_height" -le 0 ]]; then
       continue
