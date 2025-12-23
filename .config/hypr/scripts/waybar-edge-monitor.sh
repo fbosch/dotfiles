@@ -13,24 +13,106 @@ readonly HIDE_DELAY_MS=300      # Milliseconds to wait before hiding (linger tim
 readonly FAST_CHECK_MS=50       # Fast polling interval (50ms)
 readonly SLOW_CHECK_MS=300      # Slow polling interval (300ms)
 
-# Get monitor height once at startup (cached)
-readonly MONITOR_HEIGHT=$(hyprctl monitors -j 2>/dev/null | jq -r '.[0].height')
+# Cache monitor info (updated periodically)
+declare -A MONITOR_CACHE
+monitor_cache_time=0
+readonly CACHE_REFRESH_S=5  # Refresh monitor cache every 5 seconds
+
+# Function to get current monitor info based on cursor position
+get_current_monitor_height() {
+    local cursor_x=$1
+    local cursor_y=$2
+    local current_time=$(date +%s)
+    
+    # Refresh cache if needed
+    if (( current_time - monitor_cache_time > CACHE_REFRESH_S )); then
+        MONITOR_CACHE=()
+        while IFS='|' read -r name x y width height transform; do
+            # Account for monitor rotation (transforms 1 and 3 swap width/height)
+            if [[ "$transform" == "1" || "$transform" == "3" ]]; then
+                # 90° or 270° rotation - swap dimensions
+                MONITOR_CACHE["$name"]="$x|$y|$height|$width"
+            else
+                MONITOR_CACHE["$name"]="$x|$y|$width|$height"
+            fi
+        done < <(hyprctl monitors -j 2>/dev/null | jq -r '.[] | "\(.name)|\(.x)|\(.y)|\(.width)|\(.height)|\(.transform)"')
+        monitor_cache_time=$current_time
+    fi
+    
+    # Find which monitor contains the cursor
+    # First pass: exact match (cursor is actually within monitor bounds)
+    for monitor_name in "${!MONITOR_CACHE[@]}"; do
+        IFS='|' read -r mon_x mon_y mon_width mon_height <<< "${MONITOR_CACHE[$monitor_name]}"
+        
+        if (( cursor_x >= mon_x && cursor_x < mon_x + mon_width && 
+              cursor_y >= mon_y && cursor_y < mon_y + mon_height )); then
+            # Cursor is within this monitor
+            local relative_y=$((cursor_y - mon_y))
+            echo $((mon_height - relative_y))
+            return 0
+        fi
+    done
+    
+    # Second pass: check with margin for edge cases (cursor pushed past edge)
+    local margin=50
+    local best_match=""
+    local best_distance=999999
+    
+    for monitor_name in "${!MONITOR_CACHE[@]}"; do
+        IFS='|' read -r mon_x mon_y mon_width mon_height <<< "${MONITOR_CACHE[$monitor_name]}"
+        
+        # Check if cursor is within this monitor's bounds (with small margin for edges)
+        if (( cursor_x >= mon_x - margin && cursor_x < mon_x + mon_width + margin && 
+              cursor_y >= mon_y - margin && cursor_y < mon_y + mon_height + margin )); then
+            
+            # Clamp cursor position to monitor bounds
+            local clamped_y=$cursor_y
+            (( clamped_y < mon_y )) && clamped_y=$mon_y
+            (( clamped_y >= mon_y + mon_height )) && clamped_y=$((mon_y + mon_height - 1))
+            
+            local relative_y=$((clamped_y - mon_y))
+            local dist_from_bottom=$((mon_height - relative_y))
+            
+            # Choose the closest monitor to cursor
+            if (( dist_from_bottom < best_distance )); then
+                best_distance=$dist_from_bottom
+                best_match=$monitor_name
+            fi
+        fi
+    done
+    
+    # Return the best match from second pass
+    if [[ -n "$best_match" ]]; then
+        echo $best_distance
+        return 0
+    fi
+    
+    # Fallback: return -1 if no monitor found
+    echo -1
+}
 
 # State variables
 waybar_visible=0  # 0 = hidden, 1 = visible
 show_timer_ms=0
 hide_timer_ms=0
 
+# Enable debugging
+echo "$(date): Script started" > /tmp/edge-debug.log
+
 while true; do
-    # Get cursor Y position (single read, minimal processing)
-    IFS=',' read -r _ cursor_y <<< "$(hyprctl cursorpos 2>/dev/null)"
+    # Get cursor position (single read, minimal processing)
+    IFS=',' read -r cursor_x cursor_y <<< "$(hyprctl cursorpos 2>/dev/null)"
+    cursor_x=${cursor_x## }  # Trim leading spaces (bash built-in)
     cursor_y=${cursor_y## }  # Trim leading spaces (bash built-in)
     
     # Skip if cursor position unavailable
-    [[ -z "$cursor_y" ]] && { sleep 0.3; continue; }
+    [[ -z "$cursor_x" || -z "$cursor_y" ]] && { sleep 0.3; continue; }
     
-    # Calculate distance from bottom (integer arithmetic)
-    distance_from_bottom=$((MONITOR_HEIGHT - cursor_y))
+    # Calculate distance from bottom of current monitor (integer arithmetic)
+    distance_from_bottom=$(get_current_monitor_height "$cursor_x" "$cursor_y")
+    
+    # Skip if we couldn't determine the monitor
+    [[ $distance_from_bottom -lt 0 ]] && { sleep 0.3; continue; }
 
     # State machine logic
     if (( waybar_visible == 0 )); then
@@ -40,8 +122,11 @@ while true; do
             show_timer_ms=$((show_timer_ms + FAST_CHECK_MS))
             check_interval_ms=$FAST_CHECK_MS
             
+            echo "$(date +%T): Near edge dist=$distance_from_bottom timer=$show_timer_ms" >> /tmp/edge-debug.log
+            
             # Show after delay (prevents quick hovers)
             if (( show_timer_ms >= SHOW_DELAY_MS )); then
+                echo "$(date +%T): SHOWING waybar" >> /tmp/edge-debug.log
                 pkill -SIGUSR1 waybar
                 waybar_visible=1
                 show_timer_ms=0
@@ -64,13 +149,11 @@ while true; do
             # Check if waybar should stay visible (using shared logic)
             if (( hide_timer_ms >= HIDE_DELAY_MS )); then
                 if ! should_waybar_stay_visible "$distance_from_bottom" "$HIDE_THRESHOLD"; then
-                    # Debug: uncomment to log
                     echo "$(date): distance=$distance_from_bottom, menu_visible=$START_MENU_VISIBLE, swaync_visible=$SWAYNC_VISIBLE - HIDING" >> /tmp/edge-debug.log
                     pkill -SIGUSR2 waybar
                     waybar_visible=0
                     hide_timer_ms=0
                 else
-                    # Debug: uncomment to log
                     echo "$(date): distance=$distance_from_bottom, menu_visible=$START_MENU_VISIBLE, swaync_visible=$SWAYNC_VISIBLE - KEEPING VISIBLE" >> /tmp/edge-debug.log
                     # Reset timer since we want to keep checking
                     hide_timer_ms=0

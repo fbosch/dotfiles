@@ -8,23 +8,18 @@ return {
 			{ "nvim-treesitter/nvim-treesitter-context", enabled = false },
 			"windwp/nvim-ts-autotag",
 		},
-		ft = {
-			"rust",
-			"javascript",
-			"typescript",
-			"tsx",
-			"html",
-			"css",
-			"markdown",
-			"yaml",
-			"vim",
-			"help",
-			"json",
-			"toml",
-			"astro",
-		},
 		config = function()
-			require("nvim-treesitter.configs").setup({
+			local ok, configs = pcall(require, "nvim-treesitter.configs")
+			if not ok then
+				-- Try the new API
+				ok, configs = pcall(require, "nvim-treesitter")
+				if not ok then
+					vim.notify("nvim-treesitter not found", vim.log.levels.ERROR)
+					return
+				end
+			end
+
+			configs.setup({
 				modules = {},
 				ignore_install = {},
 				context = { enable = true },
