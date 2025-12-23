@@ -12,11 +12,13 @@ pkill waybar 2>/dev/null || true
 pkill gjs 2>/dev/null || true  # Kill AGS instances
 pkill -f waybar-edge-monitor 2>/dev/null || true
 pkill -f window-capture-daemon 2>/dev/null || true
+pkill -f hyprpaper 2>/dev/null || true
 
 sleep 0.2
 
 # Relaunch the desktop helpers.
 uwsm app -- waybar &
+uwsm app -- hyprpaper &
 uwsm app -- swaync-client -R &
 uwsm app -- swaync-client -rs &
 

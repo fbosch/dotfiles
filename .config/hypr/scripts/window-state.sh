@@ -63,17 +63,38 @@ init_rules_file() {
     fi
 }
 
-# Get current window states as JSON
+# Get current window states as JSON (with monitor-relative coordinates)
 get_window_states() {
     local pattern
     pattern=$(build_pattern)
     
     [[ -z "$pattern" ]] && echo "[]" && return
     
-    hyprctl clients -j | jq -c --arg pattern "$pattern" '
+    # Get monitors info and clients in parallel, then combine with jq
+    local monitors clients
+    monitors=$(hyprctl monitors -j)
+    clients=$(hyprctl clients -j)
+    
+    jq -c --arg pattern "$pattern" --argjson monitors "$monitors" '
+        # Build monitor lookup table
+        ($monitors | map({id: .id, x: .x, y: .y, width: .width, height: .height}) | INDEX(.id)) as $mon_map |
+        
+        # Process clients
         [.[] | select(.floating and (.class | test($pattern))) |
-        {class: .class, x: .at[0], y: .at[1], width: .size[0], height: .size[1]}] | sort_by(.class)
-    '
+        
+        # Get monitor offset
+        ($mon_map[.monitor | tostring] // {x: 0, y: 0}) as $mon |
+        
+        # Convert to monitor-relative coordinates
+        {
+            class: .class,
+            monitor: .monitor,
+            x: (.at[0] - $mon.x),
+            y: (.at[1] - $mon.y),
+            width: .size[0],
+            height: .size[1]
+        }] | sort_by(.class)
+    ' <<< "$clients"
 }
 
 # Check if any tracked floating windows exist (checks if state is non-empty)
@@ -191,15 +212,15 @@ update_rules() {
     fi
     
     # Update rules for currently open windows
-    while IFS='|' read -r class x y width height; do
+    while IFS='|' read -r class monitor x y width height; do
         [[ -z "$class" ]] && continue
         
-        # Update rules for this class
+        # Update rules for this class (using monitor-relative coordinates)
         RULES_CACHE[$class]=$(printf 'windowrule = size %s %s, match:class ^(%s)$\nwindowrule = move %s %s, match:class ^(%s)$' \
             "$width" "$height" "$class" "$x" "$y" "$class")
         
-        printf '%s - Updated %s: %sx%s at (%s,%s)\n' "$(printf '%(%H:%M:%S)T' -1)" "$class" "$width" "$height" "$x" "$y"
-    done < <(jq -r '.[] | "\(.class)|\(.x)|\(.y)|\(.width)|\(.height)"' <<< "$windows")
+        printf '%s - Updated %s: %sx%s at (%s,%s) on monitor %s\n' "$(printf '%(%H:%M:%S)T' -1)" "$class" "$width" "$height" "$x" "$y" "$monitor"
+    done < <(jq -r '.[] | "\(.class)|\(.monitor)|\(.x)|\(.y)|\(.width)|\(.height)"' <<< "$windows")
     
     # Write all rules (existing + updated) to new file
     local temp_file=$(mktemp)
