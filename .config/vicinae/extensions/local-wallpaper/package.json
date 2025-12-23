@@ -29,8 +29,8 @@
       "required": false,
       "title": "Wallpapers Directory",
       "description": "Directory containing your wallpapers (supports ~ for home directory)",
-      "default": "~/Pictures/wallpapers",
-      "placeholder": "~/Pictures/wallpapers"
+      "default": "~/Pictures/Wallpapers",
+      "placeholder": "~/Pictures/Wallpapers"
     },
     {
       "name": "hyprpaperConfigPath",

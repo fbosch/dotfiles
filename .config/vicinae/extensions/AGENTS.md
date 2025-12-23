@@ -220,19 +220,21 @@ extension-name/
 
 ### Building Extensions
 
-Use the build script to install dependencies and build all extensions:
+**⚠️ IMPORTANT: Always build extensions individually to save time and avoid unnecessary rebuilds.**
 
-```bash
-# From dotfiles root
-./scripts/vicinae-build-extensions.sh
-```
-
-Or build individually:
+Build a single extension:
 
 ```bash
 cd .config/vicinae/extensions/extension-name
-npm install
+npm install  # Only needed if dependencies changed
 npm run build
+```
+
+Only use the bulk build script for fresh system setup or major updates:
+
+```bash
+# From dotfiles root - rebuilds ALL extensions (slow!)
+./scripts/vicinae-build-extensions.sh
 ```
 
 ### Code Style

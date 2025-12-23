@@ -17,6 +17,24 @@ async function readHyprpaperConfig(configPath: string): Promise<string> {
 	try {
 		const fs = await import("node:fs/promises");
 		const expandedPath = expandPath(configPath);
+		
+		// Check if file exists, if not create a minimal config
+		try {
+			await fs.access(expandedPath);
+		} catch {
+			// File doesn't exist, create minimal config
+			const minimalConfig = `# Hyprpaper wallpaper configuration
+# Auto-managed by Vicinae wallpaper extensions
+
+preload = 
+wallpaper = ,
+
+splash = false
+`;
+			await fs.writeFile(expandedPath, minimalConfig, "utf-8");
+			return minimalConfig;
+		}
+		
 		return await fs.readFile(expandedPath, "utf-8");
 	} catch (error) {
 		console.error("Error reading hyprpaper config:", error);
