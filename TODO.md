@@ -5,3 +5,5 @@
 [ ] - Find solution to surgically overwrite a specific icon in an icon pack and provide new ones.
 [ ] - Design and integrate custom hyprlock screen
 [ ] - Adjust local-wallpaper and wallhaven-search extension to handle multiple monitors and fit modes
+[ ] - fix missing package.json in ags
+[ ] - fix startmenu $TERMINAL reading

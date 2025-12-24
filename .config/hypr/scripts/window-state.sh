@@ -19,8 +19,9 @@ CPU_COUNT=$(nproc)  # Number of CPU cores for load calculation
 CURRENT_HASH=""  # Memory cache for state hash
 PATTERN_CACHE=""  # Cache for compiled regex pattern
 declare -A RULES_CACHE  # Cache for existing rules (class -> rules mapping)
+declare -a MATCHER_PATTERNS=()  # Array of matcher:pattern pairs
 
-# Load window class patterns from config
+# Load window patterns from config (new format: "matcher pattern")
 load_patterns() {
     [[ ! -f "$CONFIG_FILE" ]] && return 1
     # Use grep for small files (faster than rg due to lower startup overhead)
@@ -42,12 +43,29 @@ build_pattern() {
     echo "$PATTERN_CACHE"
 }
 
+# Parse config and build matcher array
+parse_matchers() {
+    MATCHER_PATTERNS=()
+    
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        
+        # Parse "matcher pattern" format (e.g., "match:class Mullvad VPN")
+        if [[ "$line" =~ ^(match:[a-zA-Z]+)[[:space:]]+(.+)$ ]]; then
+            local matcher="${BASH_REMATCH[1]}"
+            local pattern="${BASH_REMATCH[2]}"
+            MATCHER_PATTERNS+=("$matcher|$pattern")
+        fi
+    done < <(load_patterns)
+}
+
 # Reload pattern cache (called when config changes)
 reload_pattern_cache() {
     local patterns
     mapfile -t patterns < <(load_patterns)
     local IFS='|'
     PATTERN_CACHE="${patterns[*]}"
+    parse_matchers
 }
 
 # Initialize rules file if needed
@@ -65,29 +83,72 @@ init_rules_file() {
 
 # Get current window states as JSON (with monitor-relative coordinates)
 get_window_states() {
-    local pattern
-    pattern=$(build_pattern)
+    # Parse matchers if not already done
+    if ((${#MATCHER_PATTERNS[@]} == 0)); then
+        parse_matchers
+    fi
     
-    [[ -z "$pattern" ]] && echo "[]" && return
+    [[ ${#MATCHER_PATTERNS[@]} -eq 0 ]] && echo "[]" && return
+    
+    # Build matcher array for jq using jq itself to ensure proper JSON encoding
+    local matchers_json="[]"
+    for entry in "${MATCHER_PATTERNS[@]}"; do
+        local matcher="${entry%%|*}"
+        local pattern="${entry#*|}"
+        
+        # Map matcher to JSON field
+        local field=""
+        case "$matcher" in
+            match:class) field="class" ;;
+            match:title) field="title" ;;
+            match:initialClass) field="initialClass" ;;
+            match:initialTitle) field="initialTitle" ;;
+            *) continue ;;
+        esac
+        
+        # Use jq to build properly escaped JSON
+        matchers_json=$(jq -nc --arg field "$field" --arg pattern "$pattern" --arg matcher "$matcher" \
+            --argjson existing "$matchers_json" \
+            '$existing + [{field: $field, pattern: $pattern, matcher: $matcher}]')
+    done
     
     # Get monitors info and clients in parallel, then combine with jq
     local monitors clients
     monitors=$(hyprctl monitors -j)
     clients=$(hyprctl clients -j)
     
-    jq -c --arg pattern "$pattern" --argjson monitors "$monitors" '
-        # Build monitor lookup table
+    jq -c --argjson matchers "$matchers_json" --argjson monitors "$monitors" '
         ($monitors | map({id: .id, x: .x, y: .y, width: .width, height: .height}) | INDEX(.id)) as $mon_map |
-        
-        # Process clients
-        [.[] | select(.floating and (.class | test($pattern))) |
-        
-        # Get monitor offset
+        [.[] | select(.floating) |
+        . as $window |
+        select(
+            ($matchers | map(
+                . as $m | 
+                $window |
+                if $m.field == "class" then .class
+                elif $m.field == "title" then .title
+                elif $m.field == "initialClass" then .initialClass
+                elif $m.field == "initialTitle" then .initialTitle
+                else empty
+                end | test($m.pattern)
+            ) | any)
+        ) |
         ($mon_map[.monitor | tostring] // {x: 0, y: 0}) as $mon |
-        
-        # Convert to monitor-relative coordinates
+        ($matchers | map(
+            . as $m |
+            $window |
+            (if $m.field == "class" then .class
+            elif $m.field == "title" then .title
+            elif $m.field == "initialClass" then .initialClass
+            elif $m.field == "initialTitle" then .initialTitle
+            else empty
+            end | test($m.pattern)) |
+            if . then $m else empty end
+        ) | first) as $matched |
         {
             class: .class,
+            matcher: $matched.matcher,
+            pattern: $matched.pattern,
             monitor: .monitor,
             x: (.at[0] - $mon.x),
             y: (.at[1] - $mon.y),
@@ -184,17 +245,17 @@ load_rules_cache() {
     
     [[ ! -f "$RULES_FILE" || ! -s "$RULES_FILE" ]] && return
     
-    local current_class=""
+    local current_key=""
     while IFS= read -r line; do
-        # Match class comments like "# org.gnome.TextEditor"
-        if [[ "$line" =~ ^#\ ([a-zA-Z0-9._-]+)$ ]]; then
-            current_class="${BASH_REMATCH[1]}"
-        elif [[ -n "$current_class" ]] && [[ -n "$line" ]]; then
-            # Store rules for this class (skip empty lines)
-            if [[ -z "${RULES_CACHE[$current_class]}" ]]; then
-                RULES_CACHE[$current_class]="$line"
+        # Match class comments like "# match:class org.gnome.TextEditor"
+        if [[ "$line" =~ ^#\ (match:[a-zA-Z]+)\ (.+)$ ]]; then
+            current_key="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
+        elif [[ -n "$current_key" ]] && [[ -n "$line" ]]; then
+            # Store rules for this key (skip empty lines)
+            if [[ -z "${RULES_CACHE[$current_key]}" ]]; then
+                RULES_CACHE[$current_key]="$line"
             else
-                RULES_CACHE[$current_class]+=$'\n'"$line"
+                RULES_CACHE[$current_key]+=$'\n'"$line"
             fi
         fi
     done < "$RULES_FILE"
@@ -212,15 +273,29 @@ update_rules() {
     fi
     
     # Update rules for currently open windows
-    while IFS='|' read -r class monitor x y width height; do
+    while IFS='|' read -r class matcher pattern monitor x y width height; do
         [[ -z "$class" ]] && continue
         
-        # Update rules for this class (using monitor-relative coordinates)
-        RULES_CACHE[$class]=$(printf 'windowrule = size %s %s, match:class ^(%s)$\nwindowrule = move %s %s, match:class ^(%s)$' \
-            "$width" "$height" "$class" "$x" "$y" "$class")
+        # Create unique key for this matcher+pattern combo
+        local key="$matcher $pattern"
         
-        printf '%s - Updated %s: %sx%s at (%s,%s) on monitor %s\n' "$(printf '%(%H:%M:%S)T' -1)" "$class" "$width" "$height" "$x" "$y" "$monitor"
-    done < <(jq -r '.[] | "\(.class)|\(.monitor)|\(.x)|\(.y)|\(.width)|\(.height)"' <<< "$windows")
+        # Escape pattern for regex (simple escape for common cases)
+        local escaped_pattern="$pattern"
+        # Only escape if pattern contains regex special chars (except spaces)
+        if [[ "$pattern" =~ [\.\[\]()*+?] ]]; then
+            # Pattern contains regex - use as-is
+            escaped_pattern="$pattern"
+        else
+            # Plain text - just add anchors, don't escape dots in spaces
+            escaped_pattern="^${pattern}$"
+        fi
+        
+        # Update rules for this matcher (using monitor-relative coordinates)
+        RULES_CACHE[$key]=$(printf 'windowrule = size %s %s, %s (%s)\nwindowrule = move %s %s, %s (%s)' \
+            "$width" "$height" "$matcher" "$escaped_pattern" "$x" "$y" "$matcher" "$escaped_pattern")
+        
+        printf '%s - Updated %s "%s": %sx%s at (%s,%s) on monitor %s\n' "$(printf '%(%H:%M:%S)T' -1)" "$matcher" "$pattern" "$width" "$height" "$x" "$y" "$monitor"
+    done < <(jq -r '.[] | "\(.class)|\(.matcher)|\(.pattern)|\(.monitor)|\(.x)|\(.y)|\(.width)|\(.height)"' <<< "$windows")
     
     # Write all rules (existing + updated) to new file
     local temp_file=$(mktemp)
@@ -232,11 +307,15 @@ update_rules() {
         printf '\n'
     } > "$temp_file"
     
-    # Write rules for all classes (sorted)
-    for class in $(printf '%s\n' "${!RULES_CACHE[@]}" | sort); do
+    # Write rules for all keys (sorted)
+    # First, create a sorted array of keys to avoid word-splitting issues
+    local -a sorted_keys
+    IFS=$'\n' read -r -d '' -a sorted_keys < <(printf '%s\n' "${!RULES_CACHE[@]}" | sort && printf '\0')
+    
+    for key in "${sorted_keys[@]}"; do
         {
-            printf '# %s\n' "$class"
-            printf '%s\n' "${RULES_CACHE[$class]}"
+            printf '# %s\n' "$key"
+            printf '%s\n' "${RULES_CACHE[$key]}"
             printf '\n'
         } >> "$temp_file"
     done
@@ -393,6 +472,7 @@ echo "Poll rate: Adaptive based on system load (0.25s-0.5s)"
 echo ""
 
 init_rules_file
+parse_matchers  # Parse matchers on startup
 
 # Check if we need to start polling immediately
 if has_tracked_windows; then
