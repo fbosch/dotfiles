@@ -1,6 +1,6 @@
 # Local Wallpaper Extension
 
-Browse and apply wallpapers from your local collection directly in Vicinae. Seamlessly integrates with Hyprland's hyprpaper to set desktop backgrounds.
+Browse and apply wallpapers from your local collection directly in Vicinae. Seamlessly integrates with Hyprland's hyprpaper to set desktop backgrounds with multi-monitor support.
 
 ## Features
 
@@ -8,7 +8,8 @@ Browse and apply wallpapers from your local collection directly in Vicinae. Seam
 - 🎨 Grid view with image previews (edge-to-edge display)
 - 🔍 Search wallpapers by name
 - 📊 Multiple sorting options (name, date modified, size)
-- 🖥️ One-click wallpaper application via hyprpaper
+- 🖥️ **Multi-monitor support** - set wallpapers per monitor or all at once
+- 🎯 One-click wallpaper application via hyprpaper
 - 👁️ Full-size preview with detailed metadata
 - 📋 Copy file paths to clipboard
 - 🔄 Refresh wallpaper list on demand
@@ -42,13 +43,44 @@ Configure the extension in Vicinae preferences:
 ## Actions
 
 ### On Wallpapers
-- **Enter** or **Cmd+S**: Set as wallpaper (updates hyprpaper.conf and reloads)
+- **Enter** or **Cmd+S**: Set as wallpaper
+  - **Single monitor**: Sets wallpaper immediately
+  - **Multiple monitors**: Opens submenu to choose:
+    - "All Monitors" - Apply to all displays
+    - Individual monitors (e.g., "DP-1 (2560x1440)")
 - **Cmd+O**: Open in default image viewer
 - **Cmd+C**: Copy file path to clipboard
 - **Cmd+R**: Refresh wallpaper list
 - **Ctrl+X**: Delete wallpaper (with confirmation)
 
+## Multi-Monitor Support
 
+When multiple monitors are detected, the extension automatically provides a submenu when setting wallpapers:
+
+1. **All Monitors**: Apply the wallpaper to every connected display (default behavior)
+2. **Individual Monitors**: Set different wallpapers for each monitor
+   - Displays monitor name and resolution (e.g., "DP-1 (2560x1440)")
+   - Each monitor can have its own unique wallpaper
+   - Settings persist in hyprpaper.conf
+
+### How It Works
+
+The extension detects monitors using `hyprctl monitors -j` and updates the hyprpaper configuration accordingly:
+
+```conf
+# Multiple preloaded wallpapers
+preload = /path/to/wallpaper1.png
+preload = /path/to/wallpaper2.png
+
+# Per-monitor assignments
+wallpaper = DP-1,/path/to/wallpaper1.png
+wallpaper = HDMI-A-1,/path/to/wallpaper2.png
+
+# Or all monitors
+wallpaper = ,/path/to/wallpaper.png
+
+splash = false
+```
 
 ## How It Works
 
@@ -57,8 +89,9 @@ Configure the extension in Vicinae preferences:
 When you set a wallpaper, the extension:
 
 1. **Updates hyprpaper.conf**: Modifies the `preload` and `wallpaper` lines with the new wallpaper path
-2. **Reloads hyprpaper**: Kills the existing hyprpaper process and starts a new one
-3. **Shows confirmation**: Displays a toast notification when successful
+2. **Preserves multi-monitor setup**: Keeps existing per-monitor configurations when updating
+3. **Reloads hyprpaper**: Kills the existing hyprpaper process and starts a new one
+4. **Shows confirmation**: Displays a toast notification when successful
 
 ### Configuration Format
 
@@ -72,7 +105,7 @@ wallpaper = ,/path/to/wallpaper.png
 splash = false
 ```
 
-The extension preserves monitor specifications if present (e.g., `wallpaper = Virtual-1,/path/to/wallpaper.png`).
+The extension preserves and manages monitor specifications (e.g., `wallpaper = Virtual-1,/path/to/wallpaper.png`).
 
 ### File Scanning
 
@@ -109,10 +142,20 @@ Configure additional formats in preferences by adding extensions to the comma-se
 - Verify the config file is writable
 - Check system logs for hyprpaper errors
 
+### Multi-monitor issues
+- Verify monitors are detected: `hyprctl monitors -j`
+- Check that monitor names match those in Hyprland
+- Reload extension after connecting/disconnecting monitors
+
 ### Images not displaying in grid
 - Ensure Vicinae has filesystem access permissions
 - Verify image files are valid and not corrupted
 - Check that file paths don't contain special characters that need escaping
+
+## Future Enhancements
+
+### Fill Modes (Planned)
+The extension has a framework for wallpaper fill modes (cover, contain, center, tile, stretch), but this feature depends on hyprpaper adding native support. The types and infrastructure are in place for when this becomes available.
 
 ## Build
 

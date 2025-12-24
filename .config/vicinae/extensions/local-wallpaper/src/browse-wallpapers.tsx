@@ -11,20 +11,37 @@ import {
 	Toast,
 } from "@vicinae/api";
 import { useEffect, useState } from "react";
-import type { LocalWallpaper, Preferences } from "./types";
+import type { LocalWallpaper, Monitor, Preferences } from "./types";
 import { expandPath, formatFileSize, scanWallpapers } from "./utils/filesystem";
 import { setWallpaper } from "./utils/hyprpaper";
+import {
+	getConnectedMonitors,
+	formatMonitorName,
+} from "./utils/monitors";
 
 export default function BrowseWallpapers() {
 	const preferences = getPreferenceValues<Preferences>();
 	const [wallpapers, setWallpapers] = useState<LocalWallpaper[]>([]);
+	const [monitors, setMonitors] = useState<Monitor[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [searchText, setSearchText] = useState("");
 
-	// Load wallpapers on mount
+	// Load wallpapers and monitors on mount
 	useEffect(() => {
 		loadWallpapers();
+		loadMonitors();
 	}, []);
+
+	const loadMonitors = async () => {
+		try {
+			const connectedMonitors = await getConnectedMonitors();
+			setMonitors(connectedMonitors);
+		} catch (error) {
+			console.error("Failed to load monitors:", error);
+			// Continue without monitor info
+			setMonitors([]);
+		}
+	};
 
 	const loadWallpapers = async () => {
 		setIsLoading(true);
@@ -52,8 +69,15 @@ export default function BrowseWallpapers() {
 		}
 	};
 
-	const handleSetWallpaper = async (wallpaper: LocalWallpaper) => {
-		await setWallpaper(wallpaper.absolutePath, preferences.hyprpaperConfigPath);
+	const handleSetWallpaper = async (
+		wallpaper: LocalWallpaper,
+		monitor?: string,
+	) => {
+		await setWallpaper(
+			wallpaper.absolutePath,
+			preferences.hyprpaperConfigPath,
+			monitor,
+		);
 	};
 
 	const handleOpenInViewer = async (wallpaper: LocalWallpaper) => {
@@ -174,12 +198,38 @@ export default function BrowseWallpapers() {
 						subtitle={`${formatFileSize(wallpaper.size)} · ${wallpaper.extension.toUpperCase()}`}
 						actions={
 							<ActionPanel>
-								<Action
-									title="Set as Wallpaper"
-									icon={Icon.Desktop}
-									onAction={() => handleSetWallpaper(wallpaper)}
-									shortcut={{ modifiers: ["cmd"], key: "s" }}
-								/>
+								{monitors.length > 1 ? (
+									<ActionPanel.Submenu
+										title="Set as Wallpaper"
+										icon={Icon.Desktop}
+										shortcut={{ modifiers: ["cmd"], key: "s" }}
+									>
+										<Action
+											title="All Monitors"
+											icon={Icon.Monitor}
+											onAction={() => handleSetWallpaper(wallpaper)}
+										/>
+										<ActionPanel.Section title="Individual Monitors">
+											{monitors.map((monitor) => (
+												<Action
+													key={monitor.name}
+													title={formatMonitorName(monitor)}
+													icon={Icon.Monitor}
+													onAction={() =>
+														handleSetWallpaper(wallpaper, monitor.name)
+													}
+												/>
+											))}
+										</ActionPanel.Section>
+									</ActionPanel.Submenu>
+								) : (
+									<Action
+										title="Set as Wallpaper"
+										icon={Icon.Desktop}
+										onAction={() => handleSetWallpaper(wallpaper)}
+										shortcut={{ modifiers: ["cmd"], key: "s" }}
+									/>
+								)}
 								<Action
 									title="Open in Image Viewer"
 									icon={Icon.Eye}

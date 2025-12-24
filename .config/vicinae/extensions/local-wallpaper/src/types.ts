@@ -28,3 +28,31 @@ export type SortOption =
 	| "modified-asc"
 	| "size-desc"
 	| "size-asc";
+
+export type Monitor = {
+	id: number;
+	name: string;
+	width: number;
+	height: number;
+	x: number;
+	y: number;
+	scale: number;
+	refreshRate: number;
+	activeWorkspace: {
+		id: number;
+		name: string;
+	};
+	focused: boolean;
+	dpmsStatus: boolean;
+	transform: number;
+};
+
+// Fill modes for wallpaper display
+// NOTE: hyprpaper may not support all modes natively
+// This is a framework for future implementation
+export type FillMode =
+	| "cover" // Fill screen, crop if needed (default)
+	| "contain" // Fit entire image within screen
+	| "center" // Center image, no scaling
+	| "tile" // Repeat image to fill
+	| "stretch"; // Stretch to fill (may distort)

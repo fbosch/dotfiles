@@ -56,47 +56,83 @@ export async function writeHyprpaperConfig(
 
 /**
  * Updates the hyprpaper.conf with a new wallpaper
+ * @param configPath Path to hyprpaper.conf
+ * @param wallpaperPath Path to the wallpaper image
+ * @param monitor Optional monitor name. If undefined, applies to all monitors
  */
 export async function updateHyprpaperConfig(
 	configPath: string,
 	wallpaperPath: string,
+	monitor?: string,
 ): Promise<void> {
 	try {
 		const config = await readHyprpaperConfig(configPath);
 		const lines = config.split("\n");
 
-		// Find and update the preload and wallpaper lines
-		const updatedLines = lines.map((line) => {
+		// Parse existing config
+		const preloadPaths = new Set<string>();
+		const monitorWallpapers = new Map<string, string>();
+
+		for (const line of lines) {
+			const trimmed = line.trim();
+			if (trimmed.startsWith("preload =")) {
+				const path = trimmed.substring("preload =".length).trim();
+				preloadPaths.add(path);
+			} else if (trimmed.startsWith("wallpaper =")) {
+				const value = trimmed.substring("wallpaper =".length).trim();
+				const parts = value.split(",");
+				if (parts.length >= 2) {
+					const monitorName = parts[0].trim();
+					const path = parts.slice(1).join(",").trim();
+					monitorWallpapers.set(monitorName || "__all__", path);
+				}
+			}
+		}
+
+		// Add new wallpaper to preload set
+		preloadPaths.add(wallpaperPath);
+
+		// Update or add wallpaper for specified monitor
+		if (monitor) {
+			// Set for specific monitor
+			monitorWallpapers.set(monitor, wallpaperPath);
+		} else {
+			// Set for all monitors
+			monitorWallpapers.set("__all__", wallpaperPath);
+		}
+
+		// Build new config
+		const updatedLines: string[] = [];
+
+		for (const line of lines) {
 			const trimmed = line.trim();
 
-			// Update preload line
-			if (trimmed.startsWith("preload =")) {
-				return `preload = ${wallpaperPath}`;
+			// Skip old preload and wallpaper lines - we'll add them at the end
+			if (trimmed.startsWith("preload =") || trimmed.startsWith("wallpaper =")) {
+				continue;
 			}
 
-			// Update wallpaper line (maintain monitor specification)
-			if (trimmed.startsWith("wallpaper =")) {
-				const parts = trimmed.split(",");
-				if (parts.length >= 2) {
-					// Keep the monitor part, update the path
-					return `wallpaper = ${parts[0].split("=")[1].trim()},${wallpaperPath}`;
-				}
-				// If no monitor specified, set for all monitors
-				return `wallpaper = ,${wallpaperPath}`;
-			}
-
-			return line;
-		});
-
-		// If no preload or wallpaper lines exist, add them
-		if (!updatedLines.some((l) => l.trim().startsWith("preload ="))) {
-			updatedLines.push(`preload = ${wallpaperPath}`);
-		}
-		if (!updatedLines.some((l) => l.trim().startsWith("wallpaper ="))) {
-			updatedLines.push(`wallpaper = ,${wallpaperPath}`);
+			// Keep non-wallpaper config lines
+			updatedLines.push(line);
 		}
 
-		const newConfig = updatedLines.join("\n");
+		// Add all preload statements
+		updatedLines.push("");
+		updatedLines.push("# Preloaded wallpapers");
+		for (const path of preloadPaths) {
+			updatedLines.push(`preload = ${path}`);
+		}
+
+		// Add all wallpaper statements
+		updatedLines.push("");
+		updatedLines.push("# Monitor wallpaper assignments");
+		for (const [mon, path] of monitorWallpapers.entries()) {
+			const monitorSpec = mon === "__all__" ? "" : mon;
+			updatedLines.push(`wallpaper = ${monitorSpec},${path}`);
+		}
+
+		// Ensure file ends with newline
+		const newConfig = `${updatedLines.join("\n")}\n`;
 		await writeHyprpaperConfig(configPath, newConfig);
 	} catch (error) {
 		console.error("Error updating hyprpaper config:", error);
@@ -131,27 +167,32 @@ export async function reloadHyprpaper(): Promise<void> {
 
 /**
  * Sets a wallpaper as the current desktop background
+ * @param wallpaperPath Path to the wallpaper image
+ * @param configPath Path to hyprpaper.conf
+ * @param monitor Optional monitor name. If undefined, applies to all monitors
  */
 export async function setWallpaper(
 	wallpaperPath: string,
 	configPath: string,
+	monitor?: string,
 ): Promise<void> {
+	const monitorDisplay = monitor ? ` on ${monitor}` : " on all monitors";
 	const toast = await showToast({
 		style: Toast.Style.Animated,
 		title: "Setting wallpaper...",
-		message: wallpaperPath,
+		message: `${wallpaperPath}${monitorDisplay}`,
 	});
 
 	try {
 		// Update config
-		await updateHyprpaperConfig(configPath, wallpaperPath);
+		await updateHyprpaperConfig(configPath, wallpaperPath, monitor);
 
 		// Reload hyprpaper
 		await reloadHyprpaper();
 
 		toast.style = Toast.Style.Success;
 		toast.title = "Wallpaper applied!";
-		toast.message = `Set to ${wallpaperPath}`;
+		toast.message = `Set ${monitor || "all monitors"} to ${wallpaperPath}`;
 		await toast.show();
 	} catch (error) {
 		toast.style = Toast.Style.Failure;
