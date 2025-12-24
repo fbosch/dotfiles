@@ -47,12 +47,10 @@ export type Monitor = {
 	transform: number;
 };
 
-// Fill modes for wallpaper display
-// NOTE: hyprpaper may not support all modes natively
-// This is a framework for future implementation
+// Fill modes for wallpaper display (supported by hyprpaper)
+// See: https://wiki.hyprland.org/Hypr-Ecosystem/hyprpaper/
 export type FillMode =
 	| "cover" // Fill screen, crop if needed (default)
 	| "contain" // Fit entire image within screen
-	| "center" // Center image, no scaling
 	| "tile" // Repeat image to fill
-	| "stretch"; // Stretch to fill (may distort)
+	| "fill"; // Stretch to fill (may distort)

@@ -2,6 +2,13 @@
 
 ## [Unreleased] - Multi-Monitor & Fill Mode Support
 
+### Fixed
+- **Config generation for hyprpaper v0.7+**: Ensure `monitor` field is always present in wallpaper blocks
+  - Empty `monitor =` field for fallback wallpapers (applies to all monitors)
+  - Specific monitor name for per-monitor wallpapers
+  - Properly parses both empty and populated monitor fields
+  - Fixes compatibility with hyprpaper v0.7.6 new block syntax requirements
+
 ### Added
 - **Multi-monitor support**: Detect and set wallpapers per monitor or all at once
   - Automatic monitor detection using `hyprctl monitors -j`

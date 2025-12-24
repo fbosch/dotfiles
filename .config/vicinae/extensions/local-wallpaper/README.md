@@ -9,6 +9,7 @@ Browse and apply wallpapers from your local collection directly in Vicinae. Seam
 - 🔍 Search wallpapers by name
 - 📊 Multiple sorting options (name, date modified, size)
 - 🖥️ **Multi-monitor support** - set wallpapers per monitor or all at once
+- 🎯 **Fill mode selection** - choose how wallpapers fit the screen (cover, contain, tile, fill)
 - 🎯 One-click wallpaper application via hyprpaper
 - 👁️ Full-size preview with detailed metadata
 - 📋 Copy file paths to clipboard
@@ -18,6 +19,8 @@ Browse and apply wallpapers from your local collection directly in Vicinae. Seam
 ## Requirements
 
 - **Hyprland** with **hyprpaper** installed
+  - **Per-monitor fit modes** require hyprpaper v0.8+ (unreleased as of Dec 2024)
+  - hyprpaper v0.7.x supports setting wallpapers per monitor, but not custom fit modes per monitor
 - Node.js filesystem access (works in desktop Vicinae)
 - Wallpapers directory with image files
 
@@ -43,11 +46,14 @@ Configure the extension in Vicinae preferences:
 ## Actions
 
 ### On Wallpapers
-- **Enter** or **Cmd+S**: Set as wallpaper
-  - **Single monitor**: Sets wallpaper immediately
-  - **Multiple monitors**: Opens submenu to choose:
-    - "All Monitors" - Apply to all displays
-    - Individual monitors (e.g., "DP-1 (2560x1440)")
+- **Enter** or **Cmd+S**: Set as wallpaper with fill mode selection
+  - **Single monitor**: Opens submenu to choose fill mode
+  - **Multiple monitors**: Opens submenu to choose monitor, then fill mode for each
+  - Fill modes available:
+    - **Cover (default)**: Fill screen, crop edges if needed (maintains aspect ratio)
+    - **Contain**: Fit entire image within screen (may show bars)
+    - **Tile**: Repeat image to fill screen
+    - **Fill**: Stretch to fill screen (may distort image)
 - **Cmd+O**: Open in default image viewer
 - **Cmd+C**: Copy file path to clipboard
 - **Cmd+R**: Refresh wallpaper list
@@ -57,30 +63,71 @@ Configure the extension in Vicinae preferences:
 
 When multiple monitors are detected, the extension automatically provides a submenu when setting wallpapers:
 
-1. **All Monitors**: Apply the wallpaper to every connected display (default behavior)
-2. **Individual Monitors**: Set different wallpapers for each monitor
+1. **All Monitors**: Apply the wallpaper to every connected display with chosen fill mode
+2. **Individual Monitors**: Set different wallpapers and fill modes for each monitor
    - Displays monitor name and resolution (e.g., "DP-1 (2560x1440)")
-   - Each monitor can have its own unique wallpaper
+   - Each monitor can have its own unique wallpaper and fill mode
    - Settings persist in hyprpaper.conf
+
+### Fill Modes
+
+The extension supports hyprpaper's fill modes:
+
+- **Cover** (default): Fills the screen while maintaining aspect ratio, cropping edges if necessary
+- **Contain**: Fits the entire image within the screen, may show bars on sides
+- **Tile**: Repeats the image to fill the screen
+- **Fill**: Stretches the image to fill the screen (may distort the image)
+
+**Version Note**: Per-monitor fit modes are only available with hyprpaper v0.8+. With hyprpaper v0.7.x:
+- Fill modes work when applying to **all monitors**
+- Individual monitor wallpapers use the default fit mode (cover)
 
 ### How It Works
 
-The extension detects monitors using `hyprctl monitors -j` and updates the hyprpaper configuration accordingly:
+The extension detects monitors using `hyprctl monitors -j` and updates the hyprpaper configuration.
 
+**Hyprpaper v0.8+ (new block syntax)**:
 ```conf
-# Multiple preloaded wallpapers
+# Preloaded wallpapers
 preload = /path/to/wallpaper1.png
 preload = /path/to/wallpaper2.png
 
-# Per-monitor assignments
-wallpaper = DP-1,/path/to/wallpaper1.png
-wallpaper = HDMI-A-1,/path/to/wallpaper2.png
+# Monitor wallpaper assignments (new block syntax)
+wallpaper {
+    monitor = DP-1
+    path = /path/to/wallpaper1.png
+    fit_mode = cover
+}
 
-# Or all monitors
-wallpaper = ,/path/to/wallpaper.png
+wallpaper {
+    monitor = HDMI-A-1
+    path = /path/to/wallpaper2.png
+    fit_mode = tile
+}
+
+# Or apply to all monitors (no monitor specified)
+wallpaper {
+    path = /path/to/wallpaper.png
+    fit_mode = contain
+}
 
 splash = false
 ```
+
+**Hyprpaper v0.7.x (legacy syntax)**:
+```conf
+# Preloaded wallpapers
+preload = /path/to/wallpaper1.png
+preload = /path/to/wallpaper2.png
+
+# Monitor wallpaper assignments (legacy syntax, no per-monitor fit modes)
+wallpaper = DP-1,/path/to/wallpaper1.png
+wallpaper = HDMI-A-1,/path/to/wallpaper2.png
+
+splash = false
+```
+
+The extension automatically uses the appropriate format based on your hyprpaper version.
 
 ## How It Works
 
@@ -88,24 +135,43 @@ splash = false
 
 When you set a wallpaper, the extension:
 
-1. **Updates hyprpaper.conf**: Modifies the `preload` and `wallpaper` lines with the new wallpaper path
-2. **Preserves multi-monitor setup**: Keeps existing per-monitor configurations when updating
-3. **Reloads hyprpaper**: Kills the existing hyprpaper process and starts a new one
-4. **Shows confirmation**: Displays a toast notification when successful
+1. **Detects hyprpaper version**: Automatically uses compatible syntax (v0.8+ block format or v0.7.x legacy format)
+2. **Updates hyprpaper.conf**: Writes wallpaper configuration with monitor and fit mode settings
+3. **Preserves multi-monitor setup**: Keeps existing per-monitor configurations when updating
+4. **Reloads hyprpaper**: Kills the existing hyprpaper process and starts a new one
+5. **Shows confirmation**: Displays a toast notification with monitor and fill mode details
+
+**Note**: Per-monitor fit mode selection is only applied when using hyprpaper v0.8+. With v0.7.x, individual monitor wallpapers use the default fit mode.
 
 ### Configuration Format
 
-The extension expects `hyprpaper.conf` in this format:
+The extension automatically detects your hyprpaper version and uses the appropriate format.
 
+**Hyprpaper v0.8+ (new block syntax with fit modes)**:
 ```conf
+# Preloaded wallpapers
 preload = /path/to/wallpaper.png
 
-wallpaper = ,/path/to/wallpaper.png
+# Monitor wallpaper assignments
+wallpaper {
+    monitor = DP-1
+    path = /path/to/wallpaper.png
+    fit_mode = cover
+}
 
 splash = false
 ```
 
-The extension preserves and manages monitor specifications (e.g., `wallpaper = Virtual-1,/path/to/wallpaper.png`).
+**Hyprpaper v0.7.x (legacy syntax)**:
+```conf
+# Preloaded wallpapers
+preload = /path/to/wallpaper.png
+
+# Monitor wallpaper assignments (no per-monitor fit modes)
+wallpaper = DP-1,/path/to/wallpaper.png
+
+splash = false
+```
 
 ### File Scanning
 
@@ -147,6 +213,15 @@ Configure additional formats in preferences by adding extensions to the comma-se
 - Check that monitor names match those in Hyprland
 - Reload extension after connecting/disconnecting monitors
 
+### Fill mode not working
+- The extension currently uses hyprpaper v0.7.x compatible syntax
+- Per-monitor fit modes require hyprpaper v0.8+ (unreleased)
+- With v0.7.x:
+  - Fill modes work when setting wallpaper for **all monitors**
+  - Individual monitor wallpapers use the default fit mode (cover)
+- Check your hyprpaper version: `hyprpaper --version`
+- When v0.8+ is released, the extension will automatically support per-monitor fit modes
+
 ### Images not displaying in grid
 - Ensure Vicinae has filesystem access permissions
 - Verify image files are valid and not corrupted
@@ -154,8 +229,9 @@ Configure additional formats in preferences by adding extensions to the comma-se
 
 ## Future Enhancements
 
-### Fill Modes (Planned)
-The extension has a framework for wallpaper fill modes (cover, contain, center, tile, stretch), but this feature depends on hyprpaper adding native support. The types and infrastructure are in place for when this becomes available.
+- **Version Detection**: Automatically detect hyprpaper version and switch to v0.8+ block syntax when available
+- **Wallpaper Collections**: Save and load wallpaper sets for different moods/themes
+- **Dynamic Wallpapers**: Support for time-based wallpaper rotation
 
 ## Build
 

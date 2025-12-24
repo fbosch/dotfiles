@@ -11,7 +11,7 @@ import {
 	Toast,
 } from "@vicinae/api";
 import { useEffect, useState } from "react";
-import type { LocalWallpaper, Monitor, Preferences } from "./types";
+import type { LocalWallpaper, Monitor, Preferences, FillMode } from "./types";
 import { expandPath, formatFileSize, scanWallpapers } from "./utils/filesystem";
 import { setWallpaper } from "./utils/hyprpaper";
 import {
@@ -72,11 +72,13 @@ export default function BrowseWallpapers() {
 	const handleSetWallpaper = async (
 		wallpaper: LocalWallpaper,
 		monitor?: string,
+		fillMode: FillMode = "cover",
 	) => {
 		await setWallpaper(
 			wallpaper.absolutePath,
 			preferences.hyprpaperConfigPath,
 			monitor,
+			fillMode,
 		);
 	};
 
@@ -204,31 +206,103 @@ export default function BrowseWallpapers() {
 										icon={Icon.Desktop}
 										shortcut={{ modifiers: ["cmd"], key: "s" }}
 									>
-										<Action
+										<ActionPanel.Submenu
 											title="All Monitors"
 											icon={Icon.Monitor}
-											onAction={() => handleSetWallpaper(wallpaper)}
-										/>
+										>
+											<Action
+												title="Cover (default)"
+												onAction={() =>
+													handleSetWallpaper(wallpaper, undefined, "cover")
+												}
+											/>
+											<Action
+												title="Contain"
+												onAction={() =>
+													handleSetWallpaper(wallpaper, undefined, "contain")
+												}
+											/>
+											<Action
+												title="Tile"
+												onAction={() =>
+													handleSetWallpaper(wallpaper, undefined, "tile")
+												}
+											/>
+											<Action
+												title="Fill"
+												onAction={() =>
+													handleSetWallpaper(wallpaper, undefined, "fill")
+												}
+											/>
+										</ActionPanel.Submenu>
 										<ActionPanel.Section title="Individual Monitors">
 											{monitors.map((monitor) => (
-												<Action
+												<ActionPanel.Submenu
 													key={monitor.name}
 													title={formatMonitorName(monitor)}
 													icon={Icon.Monitor}
-													onAction={() =>
-														handleSetWallpaper(wallpaper, monitor.name)
-													}
-												/>
+												>
+													<Action
+														title="Cover (default)"
+														onAction={() =>
+															handleSetWallpaper(
+																wallpaper,
+																monitor.name,
+																"cover",
+															)
+														}
+													/>
+													<Action
+														title="Contain"
+														onAction={() =>
+															handleSetWallpaper(
+																wallpaper,
+																monitor.name,
+																"contain",
+															)
+														}
+													/>
+													<Action
+														title="Tile"
+														onAction={() =>
+															handleSetWallpaper(wallpaper, monitor.name, "tile")
+														}
+													/>
+													<Action
+														title="Fill"
+														onAction={() =>
+															handleSetWallpaper(wallpaper, monitor.name, "fill")
+														}
+													/>
+												</ActionPanel.Submenu>
 											))}
 										</ActionPanel.Section>
 									</ActionPanel.Submenu>
 								) : (
-									<Action
+									<ActionPanel.Submenu
 										title="Set as Wallpaper"
 										icon={Icon.Desktop}
-										onAction={() => handleSetWallpaper(wallpaper)}
 										shortcut={{ modifiers: ["cmd"], key: "s" }}
-									/>
+									>
+										<Action
+											title="Cover (default)"
+											onAction={() => handleSetWallpaper(wallpaper, undefined, "cover")}
+										/>
+										<Action
+											title="Contain"
+											onAction={() =>
+												handleSetWallpaper(wallpaper, undefined, "contain")
+											}
+										/>
+										<Action
+											title="Tile"
+											onAction={() => handleSetWallpaper(wallpaper, undefined, "tile")}
+										/>
+										<Action
+											title="Fill"
+											onAction={() => handleSetWallpaper(wallpaper, undefined, "fill")}
+										/>
+									</ActionPanel.Submenu>
 								)}
 								<Action
 									title="Open in Image Viewer"
