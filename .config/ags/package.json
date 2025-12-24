@@ -1,0 +1,24 @@
+{
+  "name": "ags-config",
+  "version": "1.0.0",
+  "description": "AGS (Aylur's GTK Shell) configuration for Hyprland",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "postinstall": "ags types",
+    "start": "ags run config-bundled.tsx",
+    "dev": "ags run config-bundled.tsx",
+    "types": "ags types",
+    "bundle": "ags bundle config-bundled.tsx",
+    "inspect": "ags inspect",
+    "list": "ags list"
+  },
+  "keywords": [
+    "ags",
+    "hyprland",
+    "gtk",
+    "wayland"
+  ],
+  "author": "",
+  "license": "UNLICENSED"
+}
