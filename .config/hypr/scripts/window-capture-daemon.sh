@@ -155,33 +155,45 @@ capture_screenshot() {
   local timestamp=$(get_time_ms)
   echo "$timestamp" > "$LAST_SCREENSHOT_FILE"
   
-  # Capture full screen
-  local temp_fullscreen="$SCREENSHOT_DIR/.fullscreen_${timestamp}.jpg"
-  grim -t jpeg -q "$JPEG_QUALITY" "$temp_fullscreen" 2>/dev/null || return 0
+  # Get all monitors and their geometries
+  local monitors_json=$(hyprctl monitors -j 2>/dev/null)
   
-  if [[ ! -s "$temp_fullscreen" ]]; then
-    rm -f "$temp_fullscreen"
-    return 0
-  fi
+  # Capture each monitor separately and build a composite MPC
+  local monitor_index=0
+  declare -A monitor_mpc_files
+  declare -A monitor_offsets
   
-  # Scale down and convert to MPC (Magick Persistent Cache) for faster cropping
-  local temp_mpc="$SCREENSHOT_DIR/.fullscreen_scaled_${timestamp}.mpc"
-  convert "$temp_fullscreen" \
-    -scale ${SCALE_PERCENT}% \
-    -quality "$JPEG_QUALITY" \
-    -define jpeg:dct-method=fast \
-    "$temp_mpc" 2>/dev/null || { rm -f "$temp_fullscreen"; return 0; }
-  rm -f "$temp_fullscreen"
+  while read -r monitor_data; do
+    IFS='|' read -r mon_name mon_x mon_y mon_width mon_height <<< "$monitor_data"
+    
+    # Capture this monitor
+    local temp_monitor_shot="$SCREENSHOT_DIR/.monitor_${monitor_index}_${timestamp}.jpg"
+    grim -t jpeg -q "$JPEG_QUALITY" -o "$mon_name" "$temp_monitor_shot" 2>/dev/null || { monitor_index=$((monitor_index + 1)); continue; }
+    
+    if [[ ! -s "$temp_monitor_shot" ]]; then
+      rm -f "$temp_monitor_shot"
+      monitor_index=$((monitor_index + 1))
+      continue
+    fi
+    
+    # Scale down and convert to MPC
+    local temp_monitor_mpc="$SCREENSHOT_DIR/.monitor_${monitor_index}_${timestamp}.mpc"
+    convert "$temp_monitor_shot" \
+      -scale ${SCALE_PERCENT}% \
+      -quality "$JPEG_QUALITY" \
+      -define jpeg:dct-method=fast \
+      "$temp_monitor_mpc" 2>/dev/null || { rm -f "$temp_monitor_shot"; monitor_index=$((monitor_index + 1)); continue; }
+    rm -f "$temp_monitor_shot"
+    
+    # Store MPC file and offset for this monitor
+    monitor_mpc_files[$monitor_index]="$temp_monitor_mpc"
+    monitor_offsets[$monitor_index]="${mon_x}|${mon_y}|${mon_width}|${mon_height}"
+    
+    monitor_index=$((monitor_index + 1))
+  done < <(echo "$monitors_json" | jq -r '.[] | [.name, .x, .y, .width, .height] | join("|")')
   
-  if [[ ! -f "$temp_mpc" ]]; then
-    rm -f "${temp_mpc%.mpc}.cache" 2>/dev/null
-    return 0
-  fi
-  
-  # Crop each window (parallel for better performance)
-  # Use process substitution instead of pipe to avoid subshell issues with background jobs
+  # Process each window
   while read -r window_json; do
-    # Parse all fields in a single jq invocation (6 jq calls → 1)
     IFS='|' read -r address mapped x y width height <<< "$(echo "$window_json" | jq -r '[.address, (.mapped // true), .at[0], .at[1], .size[0], .size[1]] | join("|")')"
     
     [[ "$mapped" == "false" ]] && continue
@@ -190,10 +202,40 @@ capture_screenshot() {
       continue
     fi
     
-    # Use bash arithmetic instead of awk (much faster)
-    # Adjust coordinates to exclude gaps_in from the capture
-    local scaled_x=$(( (x + GAPS_IN) * SCALE_PERCENT / 100 ))
-    local scaled_y=$(( (y + GAPS_IN) * SCALE_PERCENT / 100 ))
+    # Determine which monitor this window belongs to
+    local window_center_x=$(( x + width / 2 ))
+    local window_center_y=$(( y + height / 2 ))
+    local target_monitor_index=-1
+    local target_monitor_mpc=""
+    local mon_offset_x=0
+    local mon_offset_y=0
+    
+    # Find the monitor containing the window's center point
+    for idx in "${!monitor_offsets[@]}"; do
+      IFS='|' read -r mon_x mon_y mon_w mon_h <<< "${monitor_offsets[$idx]}"
+      
+      if [[ $window_center_x -ge $mon_x ]] && [[ $window_center_x -lt $(( mon_x + mon_w )) ]] && \
+         [[ $window_center_y -ge $mon_y ]] && [[ $window_center_y -lt $(( mon_y + mon_h )) ]]; then
+        target_monitor_index=$idx
+        target_monitor_mpc="${monitor_mpc_files[$idx]}"
+        mon_offset_x=$mon_x
+        mon_offset_y=$mon_y
+        break
+      fi
+    done
+    
+    # Skip if no monitor found (shouldn't happen, but be safe)
+    if [[ $target_monitor_index -eq -1 ]] || [[ -z "$target_monitor_mpc" ]]; then
+      continue
+    fi
+    
+    # Adjust coordinates relative to monitor origin
+    local relative_x=$(( x - mon_offset_x ))
+    local relative_y=$(( y - mon_offset_y ))
+    
+    # Scale and adjust for gaps
+    local scaled_x=$(( (relative_x + GAPS_IN) * SCALE_PERCENT / 100 ))
+    local scaled_y=$(( (relative_y + GAPS_IN) * SCALE_PERCENT / 100 ))
     local scaled_width=$(( (width - 2 * GAPS_IN) * SCALE_PERCENT / 100 ))
     local scaled_height=$(( (height - 2 * GAPS_IN) * SCALE_PERCENT / 100 ))
     
@@ -207,9 +249,9 @@ capture_screenshot() {
     local temp_output="$SCREENSHOT_DIR/.temp_${filename}"
     local output_path="$SCREENSHOT_DIR/$filename"
     
-    # Crop from MPC in parallel (background each crop operation)
+    # Crop from the appropriate monitor's MPC in parallel
     (
-      convert "$temp_mpc" \
+      convert "$target_monitor_mpc" \
         -crop "${scaled_width}x${scaled_height}+${scaled_x}+${scaled_y}" \
         +repage \
         -quality "$JPEG_QUALITY" \
@@ -231,8 +273,11 @@ capture_screenshot() {
   # Wait for all parallel crops to complete
   wait
   
-  # Cleanup MPC cache files
-  rm -f "$temp_mpc" "${temp_mpc%.mpc}.cache"
+  # Cleanup all monitor MPC cache files
+  for idx in "${!monitor_mpc_files[@]}"; do
+    local mpc_file="${monitor_mpc_files[$idx]}"
+    rm -f "$mpc_file" "${mpc_file%.mpc}.cache"
+  done
   
   # Release lock
   rm -f "$CAPTURE_LOCK_FILE"

@@ -9,9 +9,9 @@
     "keybinding": "default",
     "keybinds": {
     },
-    "popToRootOnClose": false,
+    "popToRootOnClose": true,
     "rootSearch": {
-        "searchFiles": false
+        "searchFiles": true
     },
     "theme": {
         "iconTheme": "Win11",
