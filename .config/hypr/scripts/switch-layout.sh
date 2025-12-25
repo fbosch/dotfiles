@@ -10,6 +10,9 @@ declare -A LAYOUT_DISPLAY_CODES=(
 # Get keyboard info from hyprctl
 keyboard_info=$(hyprctl devices -j | jq -r '.keyboards[] | select(.main == true)')
 
+# Get the keyboard name for switching
+keyboard_name=$(echo "$keyboard_info" | jq -r '.name')
+
 # Extract configured layouts
 IFS=',' read -ra layouts <<< "$(echo "$keyboard_info" | jq -r '.layout')"
 
@@ -20,8 +23,8 @@ current_index=$(echo "$keyboard_info" | jq -r '.active_layout_index')
 # Get the display code for current layout
 current_code="${LAYOUT_DISPLAY_CODES[${layouts[$current_index]}]}"
 
-# Switch to next layout
-hyprctl switchxkblayout at-translated-set-2-keyboard next
+# Switch to next layout using the actual keyboard name
+hyprctl switchxkblayout "$keyboard_name" next
 
 # Wait a moment for the layout to change
 sleep 0.1
