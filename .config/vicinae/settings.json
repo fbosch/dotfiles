@@ -11,6 +11,10 @@
 {
    "pop_to_root_on_close": true,
    "favorites": [
+      "@fbosch/flathub-search:flathub-search",
+      "applications:bitwarden",
+      "applications:steam",
+      "applications:helium-browser",
       "applications:chromium-protonmail",
       "applications:app.zen_browser.zen"
    ],
