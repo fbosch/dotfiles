@@ -26,6 +26,15 @@
                "enabled": false
             }
          }
+      },
+      "power": {
+         "entrypoints": {
+            "lock": {
+               "preferences": {
+                  "customProgram": "hyprlock"
+               }
+            }
+         }
       }
    }
 }
