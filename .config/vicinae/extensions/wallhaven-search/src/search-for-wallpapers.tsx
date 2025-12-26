@@ -206,6 +206,13 @@ function convertUserSettingsToPurity(purityArray: string[]): string {
 	return `${sfw}${sketchy}${nsfw}`;
 }
 
+function convertUserSettingsToCategories(categoriesArray: string[]): string {
+	const general = categoriesArray.includes("general") ? "1" : "0";
+	const anime = categoriesArray.includes("anime") ? "1" : "0";
+	const people = categoriesArray.includes("people") ? "1" : "0";
+	return `${general}${anime}${people}`;
+}
+
 async function searchWallpapers(
 	params: SearchParams,
 ): Promise<WallhavenResponse> {
@@ -571,18 +578,26 @@ function WallhavenSearchContent() {
 			? userSettings.toplist_range
 			: preferences.topRange;
 
+	const effectiveCategories =
+		preferences.useUserSettings && userSettings
+			? convertUserSettingsToCategories(userSettings.categories)
+			: categories;
+
 	console.log("Settings:", {
 		useUserSettings: preferences.useUserSettings,
 		hasUserSettings: Boolean(userSettings),
 		userSettingsPurity: userSettings?.purity,
 		effectivePurity,
 		preferencePurity: preferences.purity,
+		userSettingsCategories: userSettings?.categories,
+		effectiveCategories,
+		categoryDropdown: categories,
 		effectiveTopRange,
 		sorting: preferences.sorting,
 	});
 
 	const isDefaultSearch =
-		debouncedSearchText.trim() === "" && categories === "111";
+		debouncedSearchText.trim() === "" && effectiveCategories === "111";
 
 	const {
 		data,
@@ -596,7 +611,7 @@ function WallhavenSearchContent() {
 		queryKey: [
 			"wallpapers",
 			debouncedSearchText,
-			categories,
+			effectiveCategories,
 			effectivePurity,
 			preferences.sorting,
 			effectiveTopRange,
@@ -614,7 +629,7 @@ function WallhavenSearchContent() {
 		queryFn: ({ pageParam = 1 }) =>
 			searchWallpapers({
 				query: debouncedSearchText,
-				categories,
+				categories: effectiveCategories,
 				purity: effectivePurity,
 				sorting: preferences.sorting,
 				topRange: effectiveTopRange,
@@ -681,7 +696,12 @@ function WallhavenSearchContent() {
 					tooltip="Categories"
 					storeValue
 					onChange={setCategories}
-					value={categories}
+					value={
+						preferences.useUserSettings && userSettings
+							? effectiveCategories
+							: categories
+					}
+					isDisabled={preferences.useUserSettings && Boolean(userSettings)}
 				>
 					<Grid.Dropdown.Item title="All Categories" value="111" />
 					<Grid.Dropdown.Item title="General" value="100" />

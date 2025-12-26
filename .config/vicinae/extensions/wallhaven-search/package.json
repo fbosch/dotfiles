@@ -37,7 +37,7 @@
       "title": "Use User Settings",
       "description": "Use your Wallhaven account settings (requires API key)",
       "default": false,
-      "label": "Override extension settings with your Wallhaven preferences"
+      "label": "Use account preferences"
     },
     {
       "name": "purity",

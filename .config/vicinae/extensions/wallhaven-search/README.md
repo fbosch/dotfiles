@@ -34,7 +34,15 @@ Configure default search settings in the extension preferences:
 1. Get your API key from https://wallhaven.cc/settings/account
 2. Enter it in the extension preferences
 3. Enable "Use User Settings" checkbox
-4. The extension will now use your Wallhaven account preferences for purity and top range settings
+4. The extension will now use your Wallhaven account preferences for:
+   - **Purity settings** (SFW/Sketchy/NSFW filters)
+   - **Categories** (General/Anime/People) - the category dropdown will be disabled and show your account's default categories
+   - **Top range** (time range for top list sorting)
+   - **Resolutions** (filter by preferred resolutions)
+   - **Aspect ratios** (filter by preferred aspect ratios)
+   - **AI art filter** (exclude AI-generated art if configured)
+
+When "Use User Settings" is enabled, your Wallhaven account settings override the extension preferences for these values. The category dropdown in the UI will be disabled and display your account's configured categories.
 
 ## Usage
 

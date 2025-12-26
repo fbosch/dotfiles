@@ -9,8 +9,23 @@
 // Learn more about configuration at https://docs.vicinae.com/config
 
 {
+   "pop_to_root_on_close": true,
    "favorites": [
       "applications:chromium-protonmail",
       "applications:app.zen_browser.zen"
-   ]
+   ],
+   "providers": {
+      "@fbosch/wallhaven": {
+         "preferences": {
+            "useUserSettings": true
+         }
+      },
+      "applications": {
+         "entrypoints": {
+            "hyprprop": {
+               "enabled": false
+            }
+         }
+      }
+   }
 }

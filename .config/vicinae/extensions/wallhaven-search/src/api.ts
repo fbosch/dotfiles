@@ -39,6 +39,15 @@ export function convertUserSettingsToPurity(purityArray: string[]): string {
 	return `${sfw}${sketchy}${nsfw}`;
 }
 
+export function convertUserSettingsToCategories(
+	categoriesArray: string[],
+): string {
+	const general = categoriesArray.includes("general") ? "1" : "0";
+	const anime = categoriesArray.includes("anime") ? "1" : "0";
+	const people = categoriesArray.includes("people") ? "1" : "0";
+	return `${general}${anime}${people}`;
+}
+
 export async function searchWallpapers(
 	params: SearchParams,
 ): Promise<WallhavenResponse> {
