@@ -11,6 +11,8 @@
 {
    "pop_to_root_on_close": true,
    "favorites": [
+      "@aurelleb/store.vicinae.mullvad:connect",
+      "@aurelleb/store.vicinae.mullvad:disconnect",
       "@fbosch/flathub-search:flathub-search",
       "applications:bitwarden",
       "applications:steam",
@@ -25,6 +27,9 @@
          }
       },
       "applications": {
+         "preferences": {
+            "launchPrefix": "uwsm app --"
+         },
          "entrypoints": {
             "hyprprop": {
                "enabled": false

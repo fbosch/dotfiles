@@ -51,7 +51,7 @@ parse_matchers() {
         [[ -z "$line" ]] && continue
         
         # Parse "matcher pattern" format (e.g., "match:class Mullvad VPN")
-        if [[ "$line" =~ ^(match:[a-zA-Z]+)[[:space:]]+(.+)$ ]]; then
+        if [[ "$line" =~ ^(match:[a-zA-Z_]+)[[:space:]]+(.+)$ ]]; then
             local matcher="${BASH_REMATCH[1]}"
             local pattern="${BASH_REMATCH[2]}"
             MATCHER_PATTERNS+=("$matcher|$pattern")
@@ -101,8 +101,8 @@ get_window_states() {
         case "$matcher" in
             match:class) field="class" ;;
             match:title) field="title" ;;
-            match:initialClass) field="initialClass" ;;
-            match:initialTitle) field="initialTitle" ;;
+            match:initialClass|match:initial_class) field="initialClass" ;;
+            match:initialTitle|match:initial_title) field="initialTitle" ;;
             *) continue ;;
         esac
         
