@@ -16,6 +16,8 @@ abbr pupi 'pnpm update --interactive --recursive'
 abbr bup 'brew upgrade'
 abbr ff freshfetch
 
+alias cdwow 'cd "/home/fbb/.steam/steam/steamapps/compatdata/3598746258/pfx/drive_c/Program Files (x86)/World of Warcraft"'
+
 alias uge get_week_dates
 alias rw remaining_work_hours
 

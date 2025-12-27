@@ -28,6 +28,7 @@ declare global {
   var KeyboardSwitcher: ComponentModule;
   var StartMenu: ComponentModule;
   var WindowSwitcher: ComponentModule;
+  var DesktopClock: ComponentModule;
 }
 
 // Load components using global namespace pattern (no ES6 exports)
@@ -36,6 +37,7 @@ import "./lib/volume-indicator.tsx";
 import "./lib/keyboard-switcher.tsx";
 import "./lib/start-menu.tsx";
 import "./lib/window-switcher.tsx";
+import "./lib/desktop-clock.tsx";
 
 // Component registry for request routing
 type ComponentHandler = (argv: string[], res: (response: string) => void) => void;
@@ -140,6 +142,15 @@ app.start({
       console.log(`[Bundled AGS] ✓ ${globalThis.WindowSwitcher.instanceName} initialized`);
     } catch (e) {
       console.error(`[Bundled AGS] ✗ Failed to initialize window-switcher:`, e);
+    }
+    
+    // Initialize desktop-clock
+    try {
+      globalThis.DesktopClock.init();
+      registerComponent(globalThis.DesktopClock.instanceName, globalThis.DesktopClock.handleRequest);
+      console.log(`[Bundled AGS] ✓ ${globalThis.DesktopClock.instanceName} initialized`);
+    } catch (e) {
+      console.error(`[Bundled AGS] ✗ Failed to initialize desktop-clock:`, e);
     }
     
     console.log("[Bundled AGS] All components initialized");

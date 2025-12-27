@@ -12,7 +12,7 @@ AGS_CONFIG_DIR="$HOME/.config/ags"
 LOG_FILE="/tmp/ags-daemons.log"
 
 # Bundled mode settings
-# Using global namespace pattern to bundle all 5 components
+# Using global namespace pattern to bundle all 6 components
 # Reduces memory usage by ~72% (375MB -> 104MB)
 BUNDLED_CONFIG="config-bundled.tsx"  # Bundled configuration entry point
 BUNDLED_INSTANCE="ags-bundled"       # Bundled daemon instance name
@@ -113,7 +113,7 @@ main() {
     if is_bundled_running; then
         log "${GREEN}✓${NC} Bundled daemon started successfully: $BUNDLED_INSTANCE"
         log "${BLUE}ℹ${NC} Bundled PID: $pid"
-        log "${GREEN}✓${NC} All 5 components initialized (confirm-dialog, volume-indicator, keyboard-switcher, start-menu, window-switcher)"
+        log "${GREEN}✓${NC} All 6 components initialized (confirm-dialog, volume-indicator, keyboard-switcher, start-menu, window-switcher, desktop-clock)"
         log "════════════════════════════════════════"
         log "${GREEN}✓${NC} Memory usage: ~104 MB (vs ~375 MB for separate processes)"
         return 0
