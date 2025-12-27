@@ -9,8 +9,24 @@
 // Learn more about configuration at https://docs.vicinae.com/config
 
 {
+   "close_on_focus_loss": false,
    "pop_to_root_on_close": true,
+   "font": {
+      "normal": {
+         "family": "SF Pro Text",
+         "size": 10
+      }
+   },
+   "theme": {
+      "dark": {
+         "icon_theme": "Win11"
+      }
+   },
+   "launcher_window": {
+      "opacity": 0.88
+   },
    "favorites": [
+      "applications:com.discordapp.Discord",
       "@aurelleb/store.vicinae.mullvad:connect",
       "@aurelleb/store.vicinae.mullvad:disconnect",
       "@fbosch/flathub-search:flathub-search",

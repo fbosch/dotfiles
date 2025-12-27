@@ -6,7 +6,7 @@
 source "$(dirname "$0")/waybar-lib.sh"
 
 # Configuration (all in milliseconds for integer math)
-readonly SHOW_THRESHOLD=45      # Distance from bottom to trigger show (pixels)
+readonly SHOW_THRESHOLD=20     # Distance from bottom to trigger show (pixels)
 readonly HIDE_THRESHOLD=60      # Distance from bottom before hiding (pixels)
 readonly SHOW_DELAY_MS=200      # Milliseconds to wait before showing (prevents quick hovers)
 readonly HIDE_DELAY_MS=300      # Milliseconds to wait before hiding (linger time)
