@@ -71,6 +71,11 @@ const ICON_SIZE = 64;
 const PREVIEW_HEIGHT = 180; // Target height for previews
 const PREVIEW_MAX_WIDTH = 320; // Maximum width for very wide windows
 const PREVIEW_MIN_WIDTH = 30; // Minimum width for very narrow windows
+const SWITCHER_PADDING = 24; // Padding inside switcher container
+const SWITCHER_MARGIN = 48; // Margin from screen edges (total for both sides)
+const MONITOR_EDGE_MARGIN = 30; // Additional margin from monitor edges (per side)
+const BUTTON_SPACING = 8; // Spacing between buttons
+const BUTTON_PADDING = 8; // Padding inside each button
 
 // State
 let state: SwitcherState = SwitcherState.IDLE;
@@ -89,6 +94,7 @@ try {
 
 let win: Astal.Window | null = null;
 let containerBox: Gtk.Box | null = null;
+let appsRowBox: Gtk.Box | null = null; // Reference to apps-row for wrapping
 let selectedNameLabel: Gtk.Label | null = null;
 let isVisible = false; // Derived from state, kept for GTK
 let windowButtons: Map<string, Gtk.Button> = new Map();
@@ -100,6 +106,74 @@ let iconTheme: Gtk.IconTheme | null = null;
 
 // Icon name cache to avoid repeated desktop file lookups
 const iconCache = new Map<string, string | null>();
+
+// Get current monitor width
+function getMonitorWidth(): number {
+  try {
+    const display = Gdk.Display.get_default();
+    if (!display) {
+      GLib.file_set_contents('/tmp/monitor-debug.log', 'No display found\n');
+      return 1920; // Fallback
+    }
+    
+    // Get the monitor containing the mouse pointer
+    const seat = display.get_default_seat();
+    if (!seat) {
+      GLib.file_set_contents('/tmp/monitor-debug.log', 'No seat found\n');
+      return 1920;
+    }
+    
+    const pointer = seat.get_pointer();
+    if (!pointer) {
+      GLib.file_set_contents('/tmp/monitor-debug.log', 'No pointer found\n');
+      return 1920;
+    }
+    
+    const [, x, y] = pointer.get_position();
+    const monitor = display.get_monitor_at_point(x, y);
+    
+    if (!monitor) {
+      GLib.file_set_contents('/tmp/monitor-debug.log', `No monitor at point ${x},${y}\n`);
+      return 1920;
+    }
+    
+    const geometry = monitor.get_geometry();
+    const model = monitor.get_model() || "unknown";
+    const scaleFactor = monitor.get_scale_factor();
+    
+    const debugInfo = `Monitor: ${model}
+Geometry width: ${geometry.width}
+Geometry height: ${geometry.height}
+Scale factor: ${scaleFactor}
+Physical width: ${geometry.width * scaleFactor}
+Mouse position: ${x},${y}
+`;
+    GLib.file_set_contents('/tmp/monitor-debug.log', debugInfo);
+    
+    return geometry.width;
+  } catch (e) {
+    GLib.file_set_contents('/tmp/monitor-debug.log', `Error: ${e}\n`);
+    console.error("Failed to get monitor width:", e);
+    return 1920; // Fallback to common resolution
+  }
+}
+
+// Calculate button width based on display mode and window info
+// IMPORTANT: This must match the actual button size created in createAppButton
+function calculateButtonWidth(window: WindowInfo): number {
+  if (displayMode === DisplayMode.ICONS) {
+    // Icon mode: button padding (8*2) + border (2*2) + icon size (64) + GTK overhead (12)
+    return ICON_SIZE + (BUTTON_PADDING * 2) + 4 + 12;
+  } else {
+    // Preview mode: calculate from preview dimensions
+    const previewPath = captureWindowPreview(window.address);
+    const dimensions = calculatePreviewDimensions(previewPath);
+    // Button width = preview content width + button padding + border + GTK layout overhead
+    // Preview content includes: preview-header padding (12*2) already in dimensions.width
+    // Add extra 48px for GTK's internal layout, focus rings, margins, and box model discrepancies
+    return dimensions.width + (BUTTON_PADDING * 2) + 4 + 48;
+  }
+}
 
 // Directory for window preview screenshots (managed by window-capture-daemon.sh)
 // Uses /dev/shm (tmpfs) for faster I/O, falls back to /tmp if unavailable
@@ -533,7 +607,7 @@ function updateSwitcher() {
   const shouldRebuild = windowListChanged || modeChanged || displayMode === DisplayMode.PREVIEWS;
 
   if (shouldRebuild) {
-    // Rebuild entire UI
+    // Clear existing UI
     let child = containerBox.get_first_child();
     while (child) {
       containerBox.remove(child);
@@ -541,13 +615,110 @@ function updateSwitcher() {
     }
     windowButtons.clear();
 
-    // Create buttons for each window
-    currentWindows.forEach((window, index) => {
-      const isSelected = index === currentIndex;
-      const button = createAppButton(window, isSelected, index);
-      containerBox!.append(button);
-      windowButtons.set(window.address, button);
-    });
+    // Calculate available width for buttons
+    const monitorWidth = getMonitorWidth();
+    // Use 75% of monitor width - conservative limit to prevent overflow
+    // GTK adds significant overhead (borders, focus rings, spacing) that's hard to calculate precisely
+    const maxWidth = Math.floor(monitorWidth * 0.75);
+    
+    // Calculate button widths
+    const buttonWidths = currentWindows.map(w => calculateButtonWidth(w));
+    
+    // Write debug info to file for inspection
+    const debugInfo = `[Window Switcher Debug - ${new Date().toISOString()}]
+Monitor: ${monitorWidth}px
+Max width (75% of monitor): ${maxWidth}px
+Button widths: [${buttonWidths.join(', ')}]
+Total width needed: ${buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.length - 1) * BUTTON_SPACING}px
+Will wrap: ${(buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.length - 1) * BUTTON_SPACING) > maxWidth}
+`;
+    GLib.file_set_contents('/tmp/ags-window-switcher-debug.log', debugInfo);
+    
+    console.log(`[Window Switcher] Button widths: [${buttonWidths.join(', ')}]`);
+    
+    const totalWidth = buttonWidths.reduce((sum, w) => sum + w, 0) + 
+                      (currentWindows.length - 1) * BUTTON_SPACING;
+    
+    console.log(`[Window Switcher] Monitor: ${monitorWidth}px, Available (75%): ${maxWidth}px, Total needed: ${totalWidth}px, Will wrap: ${totalWidth > maxWidth}`);
+    
+    // Determine if we need to wrap
+    if (totalWidth > maxWidth) {
+      // Multi-row layout
+      console.log("Using multi-row layout");
+      
+      // Create rows and distribute windows
+      const rows: WindowInfo[][] = [];
+      let currentRow: WindowInfo[] = [];
+      let currentRowWidth = 0;
+      
+      currentWindows.forEach((window, idx) => {
+        const buttonWidth = buttonWidths[idx];
+        const widthWithSpacing = currentRowWidth > 0 ? buttonWidth + BUTTON_SPACING : buttonWidth;
+        
+        console.log(`[Window Switcher] Window ${idx} (${window.class}): width=${buttonWidth}px, currentRowWidth=${currentRowWidth}px, will add=${widthWithSpacing}px, fits=${currentRowWidth + widthWithSpacing <= maxWidth}`);
+        
+        if (currentRowWidth + widthWithSpacing <= maxWidth) {
+          // Fits in current row
+          currentRow.push(window);
+          currentRowWidth += widthWithSpacing;
+        } else {
+          // Start new row
+          if (currentRow.length > 0) {
+            console.log(`[Window Switcher] Row ${rows.length} complete with ${currentRow.length} windows, total width: ${currentRowWidth}px`);
+            rows.push(currentRow);
+          }
+          currentRow = [window];
+          currentRowWidth = buttonWidth;
+        }
+      });
+      
+      // Add last row
+      if (currentRow.length > 0) {
+        console.log(`[Window Switcher] Row ${rows.length} (final) complete with ${currentRow.length} windows, total width: ${currentRowWidth}px`);
+        rows.push(currentRow);
+      }
+      
+      console.log(`[Window Switcher] Created ${rows.length} rows, max allowed width per row: ${maxWidth}px`);
+      
+      // Build rows
+      rows.forEach(rowWindows => {
+        const rowBox = new Gtk.Box({
+          orientation: Gtk.Orientation.HORIZONTAL,
+          spacing: BUTTON_SPACING,
+          halign: Gtk.Align.CENTER,
+        });
+        rowBox.add_css_class("apps-row");
+        
+        rowWindows.forEach(window => {
+          const windowIndex = currentWindows.indexOf(window);
+          const isSelected = windowIndex === currentIndex;
+          const button = createAppButton(window, isSelected, windowIndex);
+          rowBox.append(button);
+          windowButtons.set(window.address, button);
+        });
+        
+        containerBox!.append(rowBox);
+      });
+    } else {
+      // Single-row layout (original behavior)
+      console.log("Using single-row layout");
+      
+      const rowBox = new Gtk.Box({
+        orientation: Gtk.Orientation.HORIZONTAL,
+        spacing: BUTTON_SPACING,
+        halign: Gtk.Align.CENTER,
+      });
+      rowBox.add_css_class("apps-row");
+      
+      currentWindows.forEach((window, index) => {
+        const isSelected = index === currentIndex;
+        const button = createAppButton(window, isSelected, index);
+        rowBox.append(button);
+        windowButtons.set(window.address, button);
+      });
+      
+      containerBox!.append(rowBox);
+    }
 
     previousWindowAddresses = currentAddresses;
     previousDisplayMode = displayMode;
@@ -810,12 +981,12 @@ function createWindow() {
           spacing={12}
           class="switcher-container"
         >
-          {/* App icons row */}
+          {/* Apps container - can have multiple rows */}
           <box
-            orientation={Gtk.Orientation.HORIZONTAL}
+            orientation={Gtk.Orientation.VERTICAL}
             spacing={8}
             halign={Gtk.Align.CENTER}
-            class="apps-row"
+            class="apps-container"
             $={(self: Gtk.Box) => {
               containerBox = self;
             }}
@@ -858,6 +1029,10 @@ app.apply_css(
     padding: 24px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2),
                 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  }
+  
+  window.window-switcher box.apps-container {
+    /* Container for potentially multiple rows */
   }
   
   window.window-switcher box.apps-row {
