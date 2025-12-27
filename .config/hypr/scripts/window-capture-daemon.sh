@@ -43,7 +43,8 @@ GAPS_IN=$(hyprctl getoption general:gaps_in -j 2>/dev/null | jq -r '.custom' | a
 GAPS_OUT=$(hyprctl getoption general:gaps_out -j 2>/dev/null | jq -r '.custom' | awk '{print $1}')
 
 # AGS overlay detection
-AGS_DAEMONS="window-switcher-daemon keyboard-layout-switcher-daemon volume-indicator-daemon"
+# Using bundled AGS instance - check window-switcher component visibility
+AGS_BUNDLED_INSTANCE="ags-bundled"
 AGS_CHECK_WINDOW_MS=5000     # Time window for overlay detection (unused, kept for future)
 
 # ============================================================================
@@ -55,15 +56,13 @@ get_time_ms() {
 
 # Check if any AGS overlay is visible
 is_any_overlay_visible() {
-  # Poll AGS daemons
-  for daemon in $AGS_DAEMONS; do
-    local response=$(ags request -i "$daemon" '{"action":"get-visibility"}' 2>/dev/null)
-    
-    if [[ "$response" == "visible" ]]; then
-      echo "$(get_time_ms)" > "$LAST_OVERLAY_FILE"
-      return 0
-    fi
-  done
+  # Check window-switcher visibility in bundled AGS instance
+  local response=$(ags request -i "$AGS_BUNDLED_INSTANCE" window-switcher '{"action":"get-visibility"}' 2>/dev/null)
+  
+  if [[ "$response" == "visible" ]]; then
+    echo "$(get_time_ms)" > "$LAST_OVERLAY_FILE"
+    return 0
+  fi
   
   return 1
 }
@@ -82,6 +81,42 @@ is_in_overlay_cooldown() {
     return 0
   fi
   
+  return 1
+}
+
+# Check if a window is obscured by any floating windows
+# Arguments: window_x window_y window_width window_height workspace_id
+# Returns: 0 if obscured, 1 if not obscured
+is_window_obscured() {
+  local win_x=$1
+  local win_y=$2
+  local win_width=$3
+  local win_height=$4
+  local workspace=$5
+  
+  # Get all floating windows in the same workspace
+  while read -r floating_data; do
+    [[ -z "$floating_data" ]] && continue
+    
+    IFS='|' read -r float_x float_y float_width float_height <<< "$floating_data"
+    
+    # Check if the floating window overlaps with our target window
+    # Two rectangles overlap if:
+    # - float_x < win_x + win_width (floating window's left edge is before target's right edge)
+    # - float_x + float_width > win_x (floating window's right edge is after target's left edge)
+    # - float_y < win_y + win_height (floating window's top edge is before target's bottom edge)
+    # - float_y + float_height > win_y (floating window's bottom edge is after target's top edge)
+    
+    if [[ $float_x -lt $(( win_x + win_width )) ]] && \
+       [[ $(( float_x + float_width )) -gt $win_x ]] && \
+       [[ $float_y -lt $(( win_y + win_height )) ]] && \
+       [[ $(( float_y + float_height )) -gt $win_y ]]; then
+      # Overlap detected - window is obscured
+      return 0
+    fi
+  done < <(hyprctl clients -j 2>/dev/null | jq -r --arg ws "$workspace" '.[] | select(.workspace.id == ($ws | tonumber) and .floating == true) | [.at[0], .at[1], .size[0], .size[1]] | join("|")' 2>/dev/null)
+  
+  # No overlap found
   return 1
 }
 
@@ -194,7 +229,7 @@ capture_screenshot() {
   
   # Process each window
   while read -r window_json; do
-    IFS='|' read -r address mapped x y width height <<< "$(echo "$window_json" | jq -r '[.address, (.mapped // true), .at[0], .at[1], .size[0], .size[1]] | join("|")')"
+    IFS='|' read -r address mapped floating x y width height <<< "$(echo "$window_json" | jq -r '[.address, (.mapped // true), .floating, .at[0], .at[1], .size[0], .size[1]] | join("|")')"
     
     [[ "$mapped" == "false" ]] && continue
     
@@ -249,8 +284,22 @@ capture_screenshot() {
     local temp_output="$SCREENSHOT_DIR/.temp_${filename}"
     local output_path="$SCREENSHOT_DIR/$filename"
     
+    # Check if window is obscured by a floating window (unless it's floating itself)
+    local is_obscured=false
+    if [[ "$floating" == "false" ]] && is_window_obscured "$x" "$y" "$width" "$height" "$current_workspace"; then
+      is_obscured=true
+    fi
+    
     # Crop from the appropriate monitor's MPC in parallel
     (
+      # Only save if window is not obscured
+      # This prevents capturing previews of windows hidden behind floating windows
+      if [[ "$is_obscured" == "true" ]]; then
+        # Window is obscured - don't save the cropped image
+        # The old preview (if any) will remain, or no preview will exist
+        exit 0
+      fi
+      
       convert "$target_monitor_mpc" \
         -crop "${scaled_width}x${scaled_height}+${scaled_x}+${scaled_y}" \
         +repage \
@@ -265,10 +314,21 @@ capture_screenshot() {
         exit 0
       fi
       
+      # Check if image is completely (or nearly) black
+      # Get mean brightness as percentage (0-100)
+      local mean_brightness=$(convert "$temp_output" -colorspace Gray -format "%[fx:100*mean]" info: 2>/dev/null)
+      
+      # If brightness is very low (< 1%), image is essentially black - discard it
+      # This catches minimized windows, off-screen windows, or capture errors
+      if (( $(echo "$mean_brightness < 1.0" | bc -l 2>/dev/null || echo 0) )); then
+        rm -f "$temp_output"
+        exit 0
+      fi
+      
       # Only overwrite if validation passed
       mv "$temp_output" "$output_path"
     ) &
-  done < <(hyprctl clients -j 2>/dev/null | jq -c --arg ws "$current_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | {address, at, size, mapped}' 2>/dev/null)
+  done < <(hyprctl clients -j 2>/dev/null | jq -c --arg ws "$current_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | {address, at, size, mapped, floating}' 2>/dev/null)
   
   # Wait for all parallel crops to complete
   wait
