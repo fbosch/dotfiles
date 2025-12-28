@@ -216,23 +216,23 @@ function applyCSS() {
     }
     
     window.desktop-clock box.clock-container {
-      padding: 20px 24px;
-      background-color: rgba(25, 25, 25, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 16px 24px;
+      background-color: rgba(0, 0, 0, 0.35);
+      border: none;
       border-radius: 16px;
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
     }
     
     window.desktop-clock label.time-label {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 48px;
+      font-family: "SF Mono", monospace;
+      font-size: 56px;
       font-weight: 700;
       color: rgba(255, 255, 255, 0.95);
-      text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+      text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
+      min-width: 280px;
     }
     
     window.desktop-clock label.date-label {
-      font-family: system-ui, sans-serif;
+      font-family: "SF Pro Display", system-ui, sans-serif;
       font-size: 16px;
       font-weight: 500;
       color: rgba(255, 255, 255, 0.7);
@@ -256,7 +256,7 @@ function createWindow() {
   });
 
   win.set_anchor(Astal.WindowAnchor.TOP | Astal.WindowAnchor.RIGHT);
-  win.set_layer(Astal.Layer.BACKGROUND);
+  win.set_layer(Astal.Layer.BOTTOM);
   win.set_exclusivity(Astal.Exclusivity.NORMAL);
   win.set_keymode(Astal.Keymode.NONE);
   win.add_css_class("desktop-clock");

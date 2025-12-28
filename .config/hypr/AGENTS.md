@@ -20,12 +20,17 @@ hyprctl version
 
 ## 🔧 Configuration Validation
 
-**ALWAYS validate config changes before committing:**
+**CRITICAL: Run after EVERY config change:**
 
 ```bash
-hyprctl configerrors  # Check for parsing errors
-hyprctl reload        # Apply changes and validate
+hyprctl configerrors  # Check for parsing errors - MUST run after every edit
+hyprctl reload        # Apply changes and validate (optional)
 ```
+
+**Agent Protocol:**
+- Run `hyprctl configerrors` immediately after modifying any `.conf` file
+- If errors are found, fix them before proceeding
+- Do NOT skip this step - invalid configs can break the compositor
 
 ## 📐 Layer Rules
 

@@ -237,6 +237,23 @@ Only use the bulk build script for fresh system setup or major updates:
 ./scripts/vicinae-build-extensions.sh
 ```
 
+### Adding Extensions to mprocs.yaml
+
+**⚠️ IMPORTANT: When creating a new extension, always add it to `mprocs.yaml` for easy development.**
+
+Add a new entry under the "Vicinae Extensions Dev (manual)" section:
+
+```yaml
+vicinae-extension-name:
+  autostart: false
+  shell: "(cd .config/vicinae/extensions/extension-name && npm run dev)"
+```
+
+This allows developers to:
+- Run `mprocs -c mprocs.yaml` and select the extension from the process list
+- Start the extension in dev mode with hot reload
+- Manage multiple extensions simultaneously
+
 ### Code Style
 
 - Use TypeScript with strict mode
