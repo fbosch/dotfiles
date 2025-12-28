@@ -12,15 +12,25 @@ type ExtensionPreferences = {
 declare type Preferences = ExtensionPreferences
 
 declare namespace Preferences {
-  /** Command: Color Tools */
-	export type ColorTools = ExtensionPreferences & {
+  /** Command: Tailwind Colors */
+	export type TailwindColors = ExtensionPreferences & {
+		
+	}
+
+	/** Command: Hex Opacity Converter */
+	export type HexOpacity = ExtensionPreferences & {
 		
 	}
 }
 
 declare namespace Arguments {
-  /** Command: Color Tools */
-	export type ColorTools = {
+  /** Command: Tailwind Colors */
+	export type TailwindColors = {
+		
+	}
+
+	/** Command: Hex Opacity Converter */
+	export type HexOpacity = {
 		
 	}
 }

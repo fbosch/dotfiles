@@ -14,10 +14,17 @@
   "icon": "extension_icon.png",
   "commands": [
     {
-      "name": "color-tools",
-      "title": "Color Tools",
-      "subtitle": "Browse and convert colors",
-      "description": "Hex color table with opacity controls",
+      "name": "tailwind-colors",
+      "title": "Tailwind Colors",
+      "subtitle": "Browse Tailwind color palette",
+      "description": "Browse and copy Tailwind colors with opacity controls",
+      "mode": "view"
+    },
+    {
+      "name": "hex-opacity",
+      "title": "Hex Opacity Converter",
+      "subtitle": "Convert opacity to hex",
+      "description": "Convert opacity percentage to hex alpha values",
       "mode": "view"
     }
   ],

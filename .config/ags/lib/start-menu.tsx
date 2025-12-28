@@ -1,6 +1,8 @@
 import app from "ags/gtk4/app";
 import { Astal } from "ags/gtk4";
 import Gdk from "gi://Gdk?version=4.0";
+import GdkPixbuf from "gi://GdkPixbuf?version=2.0";
+import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
@@ -558,6 +560,62 @@ function createDivider(): Gtk.Separator {
   return separator;
 }
 
+// Create user profile header (non-interactive)
+function createUserProfile(): Gtk.Box {
+  const username = GLib.get_real_name() || GLib.get_user_name() || "User";
+  const cacheDir = GLib.get_user_cache_dir();
+  const avatarSize = 28;
+  
+  // Find the avatar file with pattern ags-avatar-*.png
+  let avatarPath: string | null = null;
+  try {
+    const dir = Gio.File.new_for_path(cacheDir);
+    const enumerator = dir.enumerate_children("standard::name", Gio.FileQueryInfoFlags.NONE, null);
+    let fileInfo;
+    while ((fileInfo = enumerator.next_file(null)) !== null) {
+      const name = fileInfo.get_name();
+      if (name.startsWith("ags-avatar-") && name.endsWith(".png")) {
+        avatarPath = `${cacheDir}/${name}`;
+        break;
+      }
+    }
+  } catch (e) {
+    console.error("Failed to find avatar:", e);
+  }
+  
+  const profileBox = (
+    <box
+      orientation={Gtk.Orientation.HORIZONTAL}
+      spacing={10}
+      halign={Gtk.Align.FILL}
+      class="user-profile"
+    >
+      <box
+        class="user-avatar-image"
+        $={(self: Gtk.Box) => {
+          self.set_size_request(avatarSize, avatarSize);
+          if (avatarPath && GLib.file_test(avatarPath, GLib.FileTest.EXISTS)) {
+            const pixbuf = GdkPixbuf.Pixbuf.new_from_file(avatarPath);
+            const image = Gtk.Image.new_from_pixbuf(pixbuf);
+            image.set_size_request(avatarSize, avatarSize);
+            image.set_pixel_size(avatarSize);
+            self.append(image);
+          }
+        }}
+      />
+      <label
+        label={username}
+        halign={Gtk.Align.START}
+        valign={Gtk.Align.CENTER}
+        hexpand={true}
+        class="user-name"
+      />
+    </box>
+  ) as Gtk.Box;
+
+  return profileBox;
+}
+
 // Build the list of menu items with dynamic updates item
 function buildMenuItemsList(): MenuItem[] {
   const menuItems: MenuItem[] = [];
@@ -613,6 +671,10 @@ function updateMenuItems() {
   menuItemButtons.clear();
   flakeUpdateBadgeButton = null;
   flatpakUpdateBadgeButton = null;
+
+  // Add user profile at the top
+  box.append(createUserProfile());
+  box.append(createDivider());
 
   // Add menu items
   menuItems.forEach((item) => {
@@ -771,6 +833,29 @@ function applyStaticCSS() {
       margin-left: 8px;
     }
 
+    /* User profile header */
+    window.start-menu box.user-profile {
+      padding: 6px 8px;
+    }
+
+    window.start-menu box.user-avatar-image {
+      min-width: 28px;
+      min-height: 28px;
+    }
+    
+    window.start-menu box.user-avatar-image image {
+      min-width: 28px;
+      min-height: 28px;
+      -gtk-icon-size: 28px;
+    }
+
+    window.start-menu label.user-name {
+      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      color: ${tokens.colors.foreground.primary.value};
+    }
+
     /* Menu item base */
     window.start-menu button.menu-item {
       padding: 2px 6px;
@@ -894,6 +979,16 @@ applyStaticCSS();
 
 // Functions for bundled mode (using global namespace pattern)
 function initStartMenu() {
+  // Generate circular avatar from .face file
+  const scriptPath = `${GLib.get_home_dir()}/.config/ags/scripts/generate-circular-avatar.sh`;
+  if (GLib.file_test(scriptPath, GLib.FileTest.EXISTS)) {
+    try {
+      GLib.spawn_command_line_async(scriptPath);
+    } catch (e) {
+      console.error("Failed to generate circular avatar:", e);
+    }
+  }
+  
   // Window created lazily on first show (see showMenu line 393)
   refreshCacheData();
 }

@@ -55,7 +55,7 @@
 * {
   all: unset;
   font-family: "SF Pro Rounded", system-ui, sans-serif;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 /* Control Center Widget */
@@ -247,6 +247,17 @@
   margin-bottom: 8px;
 }
 
+.notification-row image,
+.notification-row .image {
+  min-width: 24px !important;
+  min-height: 24px !important;
+  max-width: 24px !important;
+  max-height: 24px !important;
+  -gtk-icon-size: 24px;
+  padding: 0;
+  margin-right: 8px;
+}
+
 .app-name {
   color: var(--text-secondary);
   font-size: 12px;
@@ -264,6 +275,31 @@
 /* Notification Icon */
 .notification-icon {
   margin-right: 0.75rem;
+  min-width: 24px;
+  min-height: 24px;
+  max-width: 24px;
+  max-height: 24px;
+  padding: 0;
+}
+
+.notification-icon * {
+  min-width: 24px;
+  min-height: 24px;
+  max-width: 24px;
+  max-height: 24px;
+  padding: 0;
+  margin: 0;
+  -gtk-icon-size: 24px;
+}
+
+.notification-icon image {
+  -gtk-icon-size: 24px;
+}
+
+/* Ensure app icons in notification content don't stretch */
+.notification-content image {
+  min-width: unset;
+  min-height: unset;
 }
 
 /* Notification Text */
@@ -281,7 +317,7 @@
   margin-right: 8px;
 }
 
-/* Notification Image */
+/* Notification Image (body content images, NOT app icons) */
 .image {
   margin-right: 0.75rem;
 }

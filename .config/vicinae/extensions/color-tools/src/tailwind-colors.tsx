@@ -155,13 +155,9 @@ function hexWithAlpha(hex: string, opacity: number): string {
   return `${hex}${alphaHex}`;
 }
 
-function generateColorSVG(hex: string, opacity: number): string {
-  const rgba = hexToRgba(hex, opacity);
-  return `data:image/svg+xml,${encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-      <rect width="64" height="64" fill="${rgba}" rx="4"/>
-    </svg>
-  `)}`;
+function getColorContent(hex: string): { value: string } {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" fill="${hex}" rx="32"/></svg>`;
+  return { value: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}` };
 }
 
 export default function ColorTools() {
@@ -255,7 +251,7 @@ export default function ColorTools() {
             <Grid.Item
               key={color.id}
               id={color.id}
-              content={generateColorSVG(color.hex, opacity)}
+              content={getColorContent(color.hex)}
               title={color.name}
               subtitle={opacity === 100 ? color.hex : color.hexWithOpacity}
               keywords={[color.hex, color.category, color.rgba]}
