@@ -22,6 +22,8 @@ storybook-static
 .cursor/.agent-tools
 .config/codex/**/*(!config.toml)
 .config/codex/config.toml
+.config/gtk-4.0/**/*
+.config/gtk-3.0/**/*
 
 # window state rules (auto-generated)
 .config/hypr/window-state-rules.conf

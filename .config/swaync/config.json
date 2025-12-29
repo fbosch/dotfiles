@@ -5,7 +5,7 @@
   "positionY": "bottom",
   "cssPriority": "user",
   "control-center-width": 380,
-  "control-center-height": 640,
+  "control-center-height": 840,
   "control-center-margin-top": 10,
   "control-center-margin-bottom": 8,
   "control-center-margin-right": 8,
@@ -17,7 +17,7 @@
   "timeout": 5,
   "timeout-low": 5,
   "timeout-critical": 0,
-  "fit-to-screen": true,
+  "fit-to-screen": false,
   "keyboard-shortcuts": true,
   "image-visibility": "when-available",
   "transition-time": 150,
@@ -34,7 +34,7 @@
     "hyprland-reset": {
       "state": "transient",
       "app-name": "^Hyprland$",
-      "body": "^Config Reloaded$"
+      "body": "Config Reloaded"
     },
     "keyboard-layout-switch": {
       "state": "transient",
