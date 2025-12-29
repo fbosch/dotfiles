@@ -58,6 +58,19 @@
         "uvx",
         "mcp-nixos"
       ]
+    },
+    "context-portal": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "--from",
+        "context-portal-mcp",
+        "conport-mcp",
+        "--mode",
+        "stdio",
+        "--log-level",
+        "INFO"
+      ]
     }
   }
 }
