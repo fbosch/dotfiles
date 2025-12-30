@@ -1,0 +1,20 @@
+{
+  "name": "vicinae-extensions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vicinae extension workspace",
+  "packageManager": "pnpm@10.19.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r dev",
+    "lint": "pnpm -r lint",
+    "format": "pnpm -r format",
+    "clean": "pnpm -r exec rm -rf dist node_modules"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.8",
+    "@tanstack/react-query": "^5.90.12",
+    "@vicinae/api": "^0.17.0",
+    "typescript": "^5.9.3"
+  }
+}

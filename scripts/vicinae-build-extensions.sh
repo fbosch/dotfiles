@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build all Vicinae extensions
+# Build all Vicinae extensions using pnpm workspace
 # This script installs dependencies and builds all extensions in .config/vicinae/extensions/
 
 set -e
@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_ROOT="$(dirname "$SCRIPT_DIR")"
 EXTENSIONS_DIR="$DOTFILES_ROOT/.config/vicinae/extensions"
 
-echo "🔍 Building Vicinae extensions..."
+echo "🔍 Building Vicinae extensions with pnpm workspace..."
 echo "Extensions directory: $EXTENSIONS_DIR"
 echo ""
 
@@ -17,54 +17,30 @@ if [ ! -d "$EXTENSIONS_DIR" ]; then
   exit 1
 fi
 
-# Find all directories with package.json
-extension_count=0
-failed_extensions=()
+# Change to extensions directory
+cd "$EXTENSIONS_DIR"
 
-for ext_dir in "$EXTENSIONS_DIR"/*/; do
-  if [ -f "$ext_dir/package.json" ]; then
-    ext_name=$(basename "$ext_dir")
-    extension_count=$((extension_count + 1))
-    
-    echo "📦 [$extension_count] Building: $ext_name"
-    echo "   Directory: $ext_dir"
-    
-    # Install dependencies
-    echo "   → Installing dependencies..."
-    if (cd "$ext_dir" && npm install --silent); then
-      echo "   ✓ Dependencies installed"
-    else
-      echo "   ✗ Failed to install dependencies"
-      failed_extensions+=("$ext_name (install)")
-      continue
-    fi
-    
-    # Build extension
-    echo "   → Building extension..."
-    if (cd "$ext_dir" && npm run build); then
-      echo "   ✓ Build successful"
-    else
-      echo "   ✗ Build failed"
-      failed_extensions+=("$ext_name (build)")
-    fi
-    
-    echo ""
-  fi
-done
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-if [ ${#failed_extensions[@]} -eq 0 ]; then
-  echo "✅ All $extension_count extensions built successfully!"
-else
-  echo "⚠️  Built with errors:"
-  echo "   Total extensions: $extension_count"
-  echo "   Failed: ${#failed_extensions[@]}"
+# Install dependencies for workspace
+echo "📦 Installing workspace dependencies..."
+if pnpm install; then
+  echo "✓ Dependencies installed"
   echo ""
-  echo "Failed extensions:"
-  for ext in "${failed_extensions[@]}"; do
-    echo "   • $ext"
-  done
+else
+  echo "✗ Failed to install dependencies"
+  exit 1
+fi
+
+# Build all extensions
+echo "🔨 Building all extensions..."
+if pnpm -r build; then
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  echo "✅ All extensions built successfully!"
+else
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  echo "❌ Build failed"
   exit 1
 fi

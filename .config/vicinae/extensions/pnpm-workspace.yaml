@@ -1,0 +1,11 @@
+packages:
+  - 'color-tools'
+  - 'favorite-directories'
+  - 'flathub-search'
+  - 'hyprprop'
+  - 'kagi-search'
+  - 'local-wallpaper'
+  - 'nerdfont-search'
+  - 'protondb-search'
+  - 'sysinfo'
+  - 'wallhaven-search'

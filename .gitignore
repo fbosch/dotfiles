@@ -7,6 +7,9 @@ Brewfile.lock.json
 node_modules
 storybook-static
 
+# Vicinae extensions use pnpm workspace (ignore npm lock files)
+.config/vicinae/extensions/*/package-lock.json
+
 # editor and tool state files
 .config/lazygit/state.yml
 .config/nodemon*
