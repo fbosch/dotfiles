@@ -42,6 +42,27 @@ return {
 			map("n", "J", ":wincmd j<CR>", "Move to bottom window")
 			map("n", "K", ":wincmd k<CR>", "Move to top window")
 			map("n", "L", ":wincmd l<CR>", "Move to right window")
+
+			-- Override default edit behavior for image files
+			map("n", "<CR>", function()
+				local node = api.tree.get_node_under_cursor()
+				if node and node.type == "file" then
+					local filename = node.absolute_path
+					local extension = filename:match("^.+%.(.+)$")
+					if extension then
+						extension = extension:lower()
+						local image_extensions = { "png", "jpg", "jpeg", "gif", "bmp", "webp", "svg", "ico" }
+						for _, ext in ipairs(image_extensions) do
+							if extension == ext then
+								vim.fn.jobstart({ "xdg-open", filename }, { detach = true })
+								return
+							end
+						end
+					end
+				end
+				-- Default behavior for non-image files
+				api.node.open.edit()
+			end, "Open file (images with xdg-open)")
 		end
 		require("nvim-tree").setup({
 			on_attach = on_attach,
