@@ -61,6 +61,7 @@
 
   "hyprland/workspaces": {
     "format": "{name}",
+    "all-outputs": false
   },
 
   "hyprland/language": {

@@ -940,6 +940,16 @@ function setupAltMonitoring() {
       if (keyval === 65513 || keyval === 65514) {
         onAltRelease();
       }
+      
+      // Handle Print key for screenshots (Print = 0xff61 = 65377)
+      if (keyval === 65377) {
+        try {
+          GLib.spawn_command_line_async("bash ~/.config/hypr/scripts/screenshot.sh screen");
+          console.log("Screenshot triggered from window-switcher");
+        } catch (e) {
+          console.error("Failed to trigger screenshot:", e);
+        }
+      }
     },
   );
 
