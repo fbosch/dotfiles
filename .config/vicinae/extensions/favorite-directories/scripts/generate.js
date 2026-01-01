@@ -9,6 +9,26 @@ const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
 
+// Read XDG user directories
+function getXdgUserDir(dirName) {
+  const configPath = path.join(
+    process.env.XDG_CONFIG_HOME || path.join(process.env.HOME, ".config"),
+    "user-dirs.dirs",
+  );
+
+  try {
+    const content = fs.readFileSync(configPath, "utf8");
+    const match = content.match(new RegExp(`^${dirName}="?(.+?)"?$`, "m"));
+    if (match) {
+      // Replace $HOME with actual home directory
+      return match[1].replace(/\$HOME/g, process.env.HOME);
+    }
+  } catch (error) {
+    // Fallback to default if config doesn't exist
+  }
+  return null;
+}
+
 // Configuration - edit this to add/remove directories
 // Icons use freedesktop icon names that Vicinae will resolve from the selected icon theme
 // Common icons: folder-download, folder-documents, folder-pictures, folder-music, folder-videos,
@@ -19,19 +39,19 @@ const DIRECTORIES = [
   {
     name: "downloads", // Unique identifier (used in filename)
     title: "Downloads", // Display name in Vicinae
-    path: "~/Downloads", // Path to directory (supports ~ expansion)
+    path: getXdgUserDir("XDG_DOWNLOAD_DIR") || "~/Downloads", // Path to directory (supports ~ expansion)
     icon: "folder-download", // Freedesktop icon name
   },
   {
     name: "pictures",
     title: "Pictures",
-    path: "~/Pictures",
+    path: getXdgUserDir("XDG_PICTURES_DIR") || "~/Pictures",
     icon: "folder-pictures",
   },
   {
     name: "desktop",
     title: "Desktop",
-    path: "~/Desktop",
+    path: getXdgUserDir("XDG_DESKTOP_DIR") || "~/Desktop",
     icon: "user-desktop",
   },
   {
