@@ -1,0 +1,38 @@
+{
+  "$schema": "https://raw.githubusercontent.com/vicinaehq/vicinae/refs/heads/main/extra/schemas/extension.json",
+  "name": "hypr-quickrule",
+  "title": "Hyprland Quick Rule",
+  "description": "Quick apply window rules to Hyprland windows using common profiles",
+  "categories": [
+    "System",
+    "Productivity"
+  ],
+  "license": "MIT",
+  "author": "fbosch",
+  "contributors": [],
+  "pastContributors": [],
+  "icon": "extension_icon.png",
+  "commands": [
+    {
+      "name": "hypr-quickrule",
+      "title": "Apply Quick Window Rule",
+      "subtitle": "Select a window and apply common rules",
+      "description": "Pick a Hyprland window and apply common window rules from predefined profiles",
+      "mode": "view"
+    }
+  ],
+  "preferences": [],
+  "scripts": {
+    "build": "vici build",
+    "dev": "vici develop",
+    "format": "biome format --write src",
+    "lint": "vici lint"
+  },
+  "dependencies": {
+    "@vicinae/api": "^0.17.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.8",
+    "typescript": "^5.9.3"
+  }
+}

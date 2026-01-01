@@ -67,6 +67,10 @@ procs:
     autostart: false
     shell: "(cd .config/vicinae/extensions/color-tools && npm run dev)"
 
+  vicinae-hypr-quickrule:
+    autostart: false
+    shell: "(cd .config/vicinae/extensions/hypr-quickrule && npm run dev)"
+
   build-storybook:
     autostart: false
     shell: "(cd design-system && pnpm build-storybook)"
