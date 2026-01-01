@@ -291,8 +291,9 @@ update_rules() {
         fi
         
         # Update rules for this matcher (using monitor-relative coordinates)
-        RULES_CACHE[$key]=$(printf 'windowrule = size %s %s, %s (%s)\nwindowrule = move %s %s, %s (%s)' \
-            "$width" "$height" "$matcher" "$escaped_pattern" "$x" "$y" "$matcher" "$escaped_pattern")
+        # Include monitor specifier to ensure window appears on correct monitor
+        RULES_CACHE[$key]=$(printf 'windowrulev2 = size %s %s, %s (%s)\nwindowrulev2 = move %s %s, %s (%s)\nwindowrulev2 = monitor %s, %s (%s)' \
+            "$width" "$height" "$matcher" "$escaped_pattern" "$x" "$y" "$matcher" "$escaped_pattern" "$monitor" "$matcher" "$escaped_pattern")
         
         printf '%s - Updated %s "%s": %sx%s at (%s,%s) on monitor %s\n' "$(printf '%(%H:%M:%S)T' -1)" "$matcher" "$pattern" "$width" "$height" "$x" "$y" "$monitor"
     done < <(jq -r '.[] | "\(.class)|\(.matcher)|\(.pattern)|\(.monitor)|\(.x)|\(.y)|\(.width)|\(.height)"' <<< "$windows")
