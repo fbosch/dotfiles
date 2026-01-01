@@ -3,6 +3,7 @@ import {
 	QueryClientProvider,
 	useInfiniteQuery,
 	useQuery,
+	useQueryClient,
 } from "@tanstack/react-query";
 import {
 	Action,
@@ -537,6 +538,7 @@ function WallhavenSearchContent() {
 	const [searchText, setSearchText] = useState("");
 	const [categories, setCategories] = useState("111");
 	const debouncedSearchText = useDebounce(searchText, 400);
+	const queryClientInstance = useQueryClient();
 
 	const handleDownload = async (wallpaper: Wallpaper) => {
 		await downloadWallpaper(
@@ -555,6 +557,40 @@ function WallhavenSearchContent() {
 			preferences.downloadDirectory,
 			preferences.hyprpaperConfigPath,
 		);
+	};
+
+	const handleRefreshSettings = async () => {
+		try {
+			await showToast({
+				style: Toast.Style.Animated,
+				title: "Refreshing settings...",
+			});
+
+			// Clear the cache
+			cache.remove(USER_SETTINGS_CACHE_KEY);
+			cache.remove(DEFAULT_WALLPAPERS_CACHE_KEY);
+
+			// Invalidate React Query cache
+			await queryClientInstance.invalidateQueries({
+				queryKey: ["userSettings"],
+			});
+			await queryClientInstance.invalidateQueries({
+				queryKey: ["wallpapers"],
+			});
+
+			// Refetch will happen automatically due to invalidation
+			await showToast({
+				style: Toast.Style.Success,
+				title: "Settings refreshed",
+				message: "Cache cleared and settings reloaded",
+			});
+		} catch (error) {
+			await showToast({
+				style: Toast.Style.Failure,
+				title: "Refresh failed",
+				message: error instanceof Error ? error.message : "Unknown error",
+			});
+		}
 	};
 
 	const { data: rawUserSettings } = useQuery({
@@ -776,6 +812,14 @@ function WallhavenSearchContent() {
 										shortcut={{ modifiers: ["cmd", "shift"], key: "s" }}
 									/>
 								</ActionPanel.Section>
+								<ActionPanel.Section>
+									<Action
+										title="Refresh Settings & Cache"
+										icon={Icon.ArrowClockwise}
+										onAction={handleRefreshSettings}
+										shortcut={{ modifiers: ["cmd", "shift"], key: "r" }}
+									/>
+								</ActionPanel.Section>
 							</ActionPanel>
 						}
 					/>
@@ -800,6 +844,14 @@ function WallhavenSearchContent() {
 										title="Open Wallhaven Settings"
 										url="https://wallhaven.cc/settings/account"
 										shortcut={{ modifiers: ["cmd", "shift"], key: "s" }}
+									/>
+								</ActionPanel.Section>
+								<ActionPanel.Section>
+									<Action
+										title="Refresh Settings & Cache"
+										icon={Icon.ArrowClockwise}
+										onAction={handleRefreshSettings}
+										shortcut={{ modifiers: ["cmd", "shift"], key: "r" }}
 									/>
 								</ActionPanel.Section>
 							</ActionPanel>

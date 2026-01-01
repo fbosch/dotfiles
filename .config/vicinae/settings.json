@@ -39,7 +39,7 @@
    "providers": {
       "@fbosch/wallhaven": {
          "preferences": {
-            "useUserSettings": false
+            "useUserSettings": true
          }
       },
       "applications": {

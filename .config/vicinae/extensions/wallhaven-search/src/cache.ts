@@ -76,3 +76,12 @@ export function setCachedDefaultWallpapers(
 	};
 	cache.set(DEFAULT_WALLPAPERS_CACHE_KEY, JSON.stringify(data));
 }
+
+export function clearAllCache(): void {
+	cache.remove(USER_SETTINGS_CACHE_KEY);
+	cache.remove(DEFAULT_WALLPAPERS_CACHE_KEY);
+}
+
+export function clearUserSettingsCache(): void {
+	cache.remove(USER_SETTINGS_CACHE_KEY);
+}
