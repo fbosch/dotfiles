@@ -33,11 +33,6 @@ declare namespace Preferences {
 		
 	}
 
-	/** Command: Projects */
-	export type OpenProjects = ExtensionPreferences & {
-		
-	}
-
 	/** Command: Documents (NAS) */
 	export type OpenNasDocuments = ExtensionPreferences & {
 		
@@ -92,11 +87,6 @@ declare namespace Arguments {
 
 	/** Command: Dotfiles */
 	export type OpenDotfiles = {
-		
-	}
-
-	/** Command: Projects */
-	export type OpenProjects = {
 		
 	}
 

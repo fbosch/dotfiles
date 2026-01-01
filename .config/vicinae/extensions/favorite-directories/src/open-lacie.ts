@@ -1,5 +1,5 @@
 import { openDirectory } from "./utils";
 
 export default async function Command() {
-	await openDirectory("/mnt/nas/LaCie");
+  await openDirectory("/mnt/nas/LaCie");
 }
