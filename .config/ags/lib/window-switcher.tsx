@@ -37,6 +37,12 @@ enum DisplayMode {
   PREVIEWS = "PREVIEWS",
 }
 
+// Sort mode
+enum SortMode {
+  ALPHABETICAL = "ALPHABETICAL",
+  RECENCY = "RECENCY",
+}
+
 // Hyprland client interface
 interface HyprlandClient {
   address: string;
@@ -82,6 +88,7 @@ let state: SwitcherState = SwitcherState.IDLE;
 
 // Check if performance mode is active on startup
 let displayMode: DisplayMode = DisplayMode.PREVIEWS;
+let sortMode: SortMode = SortMode.RECENCY; // Default to recency like Windows 11
 try {
   const perfModeFile = Gio.File.new_for_path("/tmp/hypr-performance-mode");
   if (perfModeFile.query_exists(null)) {
@@ -106,6 +113,10 @@ let iconTheme: Gtk.IconTheme | null = null;
 
 // Icon name cache to avoid repeated desktop file lookups
 const iconCache = new Map<string, string | null>();
+
+// Persistent focus history for recency-based sorting
+// Most recently focused window is at index 0
+let focusHistory: string[] = [];
 
 // Get current monitor width
 function getMonitorWidth(): number {
@@ -353,14 +364,9 @@ function getWindows(): WindowInfo[] {
     const jsonStr = decoder.decode(stdout);
     const clients = JSON.parse(jsonStr) as HyprlandClient[];
 
-    // Filter out special workspaces and sort by class, title, address
-    return clients
+    // Filter out special workspaces
+    const filteredClients = clients
       .filter((c) => c.workspace.id !== -1)
-      .sort((a, b) => {
-        if (a.class !== b.class) return a.class.localeCompare(b.class);
-        if (a.title !== b.title) return a.title.localeCompare(b.title);
-        return a.address.localeCompare(b.address);
-      })
       .map((c) => ({
         address: c.address,
         class: c.class || "",
@@ -373,10 +379,71 @@ function getWindows(): WindowInfo[] {
           ? { x: (c as any).at[0], y: (c as any).at[1] }
           : undefined,
       }));
+
+    // Sort based on current sort mode
+    if (sortMode === SortMode.RECENCY) {
+      // Get focus history for recency-based sorting
+      const focusHistory = getWindowFocusHistory();
+      
+      return filteredClients.sort((a, b) => {
+        const indexA = focusHistory.indexOf(a.address);
+        const indexB = focusHistory.indexOf(b.address);
+        
+        // Windows in history come first, sorted by recency (lower index = more recent)
+        // Windows not in history come last, sorted alphabetically
+        if (indexA !== -1 && indexB !== -1) {
+          return indexA - indexB; // Most recent first
+        } else if (indexA !== -1) {
+          return -1; // a is in history, b is not
+        } else if (indexB !== -1) {
+          return 1; // b is in history, a is not
+        } else {
+          // Neither in history, sort alphabetically as fallback
+          if (a.class !== b.class) return a.class.localeCompare(b.class);
+          if (a.title !== b.title) return a.title.localeCompare(b.title);
+          return a.address.localeCompare(b.address);
+        }
+      });
+    } else {
+      // ALPHABETICAL mode - original behavior
+      return filteredClients.sort((a, b) => {
+        if (a.class !== b.class) return a.class.localeCompare(b.class);
+        if (a.title !== b.title) return a.title.localeCompare(b.title);
+        return a.address.localeCompare(b.address);
+      });
+    }
   } catch (e) {
     console.error("Error getting windows from hyprctl:", e);
     return [];
   }
+}
+
+// Get window focus history from Hyprland event logs
+// Returns array of window addresses sorted by recency (most recent first)
+function getWindowFocusHistory(): string[] {
+  return focusHistory;
+}
+
+// Update focus history when a window is focused
+// Most recently focused window goes to index 0
+function updateFocusHistory(address: string) {
+  if (!address) return;
+  
+  // Remove address if it exists (to avoid duplicates)
+  const index = focusHistory.indexOf(address);
+  if (index !== -1) {
+    focusHistory.splice(index, 1);
+  }
+  
+  // Add to front (most recent)
+  focusHistory.unshift(address);
+  
+  // Limit history size to 50 windows
+  if (focusHistory.length > 50) {
+    focusHistory = focusHistory.slice(0, 50);
+  }
+  
+  console.log(`Focus history updated: [${focusHistory.slice(0, 5).join(", ")}...]`);
 }
 
 // Get currently active window address
@@ -816,16 +883,30 @@ function onNext() {
     if (windows.length === 0) return;
     if (windows.length === 1) return;
 
+    // Update focus history with currently active window before switching
     const activeAddress = getActiveWindowAddress();
-    let index = windows.findIndex((w) => w.address === activeAddress);
-
-    // If current window not found, start from first
-    if (index === -1) {
-      index = 0;
+    if (activeAddress) {
+      updateFocusHistory(activeAddress);
     }
 
-    // Cycle to next
-    index = (index + 1) % windows.length;
+    let index: number;
+    
+    if (sortMode === SortMode.RECENCY) {
+      // In recency mode, start at index 1 (second most recent window)
+      // This gives Windows-like Alt+Tab behavior
+      index = 1;
+    } else {
+      // In alphabetical mode, find current window and cycle to next
+      index = windows.findIndex((w) => w.address === activeAddress);
+      
+      // If current window not found, start from first
+      if (index === -1) {
+        index = 0;
+      }
+      
+      // Cycle to next
+      index = (index + 1) % windows.length;
+    }
 
     enterActiveState(windows, index);
   } else if (state === SwitcherState.ACTIVE) {
@@ -847,16 +928,30 @@ function onPrev() {
     if (windows.length === 0) return;
     if (windows.length === 1) return;
 
+    // Update focus history with currently active window before switching
     const activeAddress = getActiveWindowAddress();
-    let index = windows.findIndex((w) => w.address === activeAddress);
-
-    // If current window not found, start from last
-    if (index === -1) {
-      index = windows.length - 1;
+    if (activeAddress) {
+      updateFocusHistory(activeAddress);
     }
 
-    // Cycle to previous
-    index = (index - 1 + windows.length) % windows.length;
+    let index: number;
+    
+    if (sortMode === SortMode.RECENCY) {
+      // In recency mode, Shift+Tab should go to second most recent (same as Tab)
+      // This matches Windows behavior where first Shift+Tab goes to same place as Tab
+      index = 1;
+    } else {
+      // In alphabetical mode, find current window and cycle to previous
+      index = windows.findIndex((w) => w.address === activeAddress);
+      
+      // If current window not found, start from last
+      if (index === -1) {
+        index = windows.length - 1;
+      }
+      
+      // Cycle to previous
+      index = (index - 1 + windows.length) % windows.length;
+    }
 
     enterActiveState(windows, index);
   } else if (state === SwitcherState.ACTIVE) {
@@ -892,6 +987,9 @@ function onCommit() {
     GLib.spawn_command_line_async(
       `hyprctl dispatch focuswindow address:${targetWindow.address}`,
     );
+    
+    // Update focus history when committing a switch
+    updateFocusHistory(targetWindow.address);
   } catch (e) {
     console.error("Error focusing window:", e);
   }
@@ -1205,6 +1303,29 @@ function handleToggleMode() {
   rebuildUIIfActive();
 }
 
+function handleSetSortMode(mode: string | undefined): string {
+  const normalizedMode = mode?.toUpperCase();
+
+  if (normalizedMode !== "ALPHABETICAL" && normalizedMode !== "RECENCY") {
+    return "invalid sort mode, use 'alphabetical' or 'recency'";
+  }
+
+  sortMode =
+    normalizedMode === "ALPHABETICAL" ? SortMode.ALPHABETICAL : SortMode.RECENCY;
+  
+  // If active, refresh window list with new sort order
+  if (state === SwitcherState.ACTIVE) {
+    const windows = getWindows();
+    currentWindows = windows;
+    currentIndex = 0; // Reset to first window with new sort
+    previousWindowAddresses = [];
+    windowButtons.clear();
+    updateSwitcher();
+  }
+
+  return `sort mode set to ${normalizedMode}`;
+}
+
 function rebuildUIIfActive() {
   if (state === SwitcherState.ACTIVE) {
     // Force rebuild by clearing previous addresses
@@ -1272,6 +1393,17 @@ function handleWindowSwitcherRequest(argv: string[], res: (response: string) => 
     if (action === "toggle-mode") {
       handleToggleMode();
       res(`mode toggled to ${displayMode}`);
+      return;
+    }
+
+    if (action === "set-sort-mode") {
+      const response = handleSetSortMode(data.mode);
+      res(response);
+      return;
+    }
+
+    if (action === "get-sort-mode") {
+      res(`current sort mode: ${sortMode}`);
       return;
     }
 
