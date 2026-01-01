@@ -557,16 +557,25 @@ function WallhavenSearchContent() {
 		);
 	};
 
-	const { data: userSettings } = useQuery({
+	const { data: rawUserSettings } = useQuery({
 		queryKey: ["userSettings", preferences.apiKey],
 		queryFn: () => {
 			if (!preferences.apiKey) throw new Error("API key required");
 			return fetchUserSettings(preferences.apiKey);
 		},
 		enabled: Boolean(preferences.apiKey && preferences.useUserSettings),
-		initialData: () => getCachedUserSettings() || undefined,
+		initialData: () => {
+			// Only use cached data if we're actually using user settings
+			if (preferences.apiKey && preferences.useUserSettings) {
+				return getCachedUserSettings() || undefined;
+			}
+			return undefined;
+		},
 		staleTime: 60 * 60 * 1000, // Cache for 1 hour
 	});
+
+	// Only use user settings if the feature is enabled AND we have an API key
+	const userSettings = (preferences.useUserSettings && preferences.apiKey) ? rawUserSettings : undefined;
 
 	const effectivePurity =
 		preferences.useUserSettings && userSettings

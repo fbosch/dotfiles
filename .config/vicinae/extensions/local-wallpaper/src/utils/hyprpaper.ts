@@ -167,17 +167,19 @@ export async function updateHyprpaperConfig(
 			}
 		}
 
-		// Add new wallpaper to preload set
-		preloadPaths.add(wallpaperPath);
+	// Add new wallpaper to preload set
+	preloadPaths.add(wallpaperPath);
 
-		// Update or add wallpaper for specified monitor
-		if (monitor) {
-			// Set for specific monitor
-			monitorWallpapers.set(monitor, { path: wallpaperPath, fillMode });
-		} else {
-			// Set for all monitors
-			monitorWallpapers.set("__all__", { path: wallpaperPath, fillMode });
-		}
+	// Update or add wallpaper for specified monitor
+	if (monitor) {
+		// Set for specific monitor - remove "all monitors" entry if it exists
+		monitorWallpapers.delete("__all__");
+		monitorWallpapers.set(monitor, { path: wallpaperPath, fillMode });
+	} else {
+		// Set for all monitors - clear individual monitor entries
+		monitorWallpapers.clear();
+		monitorWallpapers.set("__all__", { path: wallpaperPath, fillMode });
+	}
 
 		// Build new config using appropriate syntax based on hyprpaper version
 		const updatedLines: string[] = [];
