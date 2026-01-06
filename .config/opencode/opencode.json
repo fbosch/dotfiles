@@ -1,11 +1,7 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "theme": "zenwritten-dark",
-  "instructions": [
-    "AGENTS.md",
-    "docs/*.md",
-    ".cursor/rules/*.md*"
-  ],
+  "instructions": ["AGENTS.md", "docs/*.md", ".cursor/rules/*.md*"],
   "provider": {
     "github-copilot": {
       "npm": "@opeoginni/github-copilot-openai-compatible",
@@ -26,38 +22,27 @@
     },
     "vitest": {
       "type": "local",
-      "command": [
-        "bunx",
-        "@djankies/vitest-mcp"
-      ]
+      "command": ["bunx", "@djankies/vitest-mcp"]
     },
     "playwright": {
       "type": "local",
-      "command": [
-        "bunx",
-        "@playwright/mcp@latest"
-      ]
+      "command": ["bunx", "@playwright/mcp@latest"]
     },
     "eslint": {
       "type": "local",
-      "command": [
-        "bunx",
-        "@eslint/mcp@latest"
-      ]
+      "command": ["bunx", "@eslint/mcp@latest"]
     },
     "sequential-thinking": {
       "type": "local",
-      "command": [
-        "bunx",
-        "@modelcontextprotocol/server-sequential-thinking"
-      ]
+      "command": ["bunx", "@modelcontextprotocol/server-sequential-thinking"]
     },
     "nixos": {
       "type": "local",
-      "command": [
-        "uvx",
-        "mcp-nixos"
-      ]
+      "command": ["uvx", "mcp-nixos"]
+    },
+    "chrome-devtools": {
+      "type": "local",
+      "command": ["npx", "-y", "chrome-devtools-mcp@latest"]
     },
     "context-portal": {
       "type": "local",
