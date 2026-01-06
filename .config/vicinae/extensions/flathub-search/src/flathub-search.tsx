@@ -11,6 +11,7 @@ import {
 	Clipboard,
 	closeMainWindow,
 	Icon,
+	LaunchProps,
 	List,
 	showToast,
 	Toast,
@@ -248,8 +249,8 @@ function AppDetail({ app }: { app: FlathubApp }) {
 	);
 }
 
-function FlathubSearchContent() {
-	const [searchText, setSearchText] = useState("");
+function FlathubSearchContent({ fallbackText }: { fallbackText?: string }) {
+	const [searchText, setSearchText] = useState(fallbackText || "");
 	const [showingDetail, setShowingDetail] = useState(false);
 	const debouncedSearch = useDebounce(searchText, SEARCH_DEBOUNCE_MS);
 
@@ -292,6 +293,7 @@ function FlathubSearchContent() {
 			isShowingDetail={showingDetail}
 			searchBarPlaceholder="Search Flathub applications..."
 			onSearchTextChange={setSearchText}
+			searchText={searchText}
 		>
 			{displayed.length === 0 && showingSearch && !isLoading ? (
 				<List.EmptyView
@@ -366,10 +368,10 @@ function FlathubSearchContent() {
 	);
 }
 
-export default function FlathubSearch() {
+export default function FlathubSearch(props: LaunchProps) {
 	return (
 		<QueryClientProvider client={queryClient}>
-			<FlathubSearchContent />
+			<FlathubSearchContent fallbackText={props.fallbackText} />
 		</QueryClientProvider>
 	);
 }

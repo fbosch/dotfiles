@@ -36,6 +36,12 @@
       "applications:chromium-protonmail",
       "applications:app.zen_browser.zen"
    ],
+   "fallbacks": [
+      "@knoopx/store.vicinae.nix:packages",
+      "@fbosch/flathub-search:flathub-search",
+      "@fbosch/kagi-search:kagi-search",
+      "files:search"
+   ],
    "providers": {
       "@fbosch/wallhaven": {
          "preferences": {
@@ -47,7 +53,40 @@
             "launchPrefix": "uwsm app --"
          },
          "entrypoints": {
+            "btop": {
+               "enabled": false
+            },
+            "gvim": {
+               "enabled": false
+            },
+            "htop": {
+               "enabled": false
+            },
             "hyprprop": {
+               "enabled": false
+            },
+            "io.github.Foldex.AdwSteamGtk": {
+               "enabled": false
+            },
+            "nvidia-settings": {
+               "enabled": true
+            },
+            "nvim": {
+               "enabled": false
+            },
+            "org.gtk.Demo4": {
+               "enabled": false
+            },
+            "org.gtk.WidgetFactory4": {
+               "enabled": false
+            },
+            "org.gtk.gtk4.NodeEditor": {
+               "enabled": false
+            },
+            "selectdefaultapplication": {
+               "enabled": false
+            },
+            "tectonic": {
                "enabled": false
             }
          }

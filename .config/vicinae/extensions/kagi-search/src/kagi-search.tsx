@@ -10,6 +10,7 @@ import {
 	closeMainWindow,
 	getPreferenceValues,
 	Icon,
+	LaunchProps,
 	List,
 	showToast,
 	Toast,
@@ -115,8 +116,8 @@ function ResultListItem({ result }: { result: KagiSearchResult }) {
 	);
 }
 
-function KagiSearchContent() {
-	const [searchText, setSearchText] = useState("");
+function KagiSearchContent({ fallbackText }: { fallbackText?: string }) {
+	const [searchText, setSearchText] = useState(fallbackText || "");
 	const debouncedSearch = useDebounce(searchText, SEARCH_DEBOUNCE_MS);
 	const preferences = getPreferenceValues<Preferences>();
 
@@ -248,10 +249,10 @@ function KagiSearchContent() {
 	);
 }
 
-export default function KagiSearch() {
+export default function KagiSearch(props: LaunchProps) {
 	return (
 		<QueryClientProvider client={queryClient}>
-			<KagiSearchContent />
+			<KagiSearchContent fallbackText={props.fallbackText} />
 		</QueryClientProvider>
 	);
 }
