@@ -1,0 +1,91 @@
+# Zenwritten Dark theme for btop
+# A zenbones variant with zero hue and saturation
+# Based on https://github.com/zenbones-theme/zenbones.nvim
+# by Michael Chris Lopez
+
+# Colors should be in 6 or 2 character hexadecimal or single spaced rgb decimal: "#RRGGBB", "#BW" or "0-255 0-255 0-255"
+# example for white: "#ffffff", "#ff" or "255 255 255".
+
+# All graphs and meters can be gradients
+# For single color graphs leave "mid" and "end" variable empty.
+# Use "start" and "end" variables for two color gradient
+# Use "start", "mid" and "end" for three color gradient
+
+# Main background, empty for terminal default, need to be empty if you want transparent background
+theme[main_bg]="#191919"
+
+# Main text color
+theme[main_fg]="#BBBBBB"
+
+# Title color for boxes
+theme[title]="#66A5AD"
+
+# Highlight color for keyboard shortcuts
+theme[hi_fg]="#6099C0"
+
+# Background color of selected item in processes box
+theme[selected_bg]="#2C2C2C"
+
+# Foreground color of selected item in processes box
+theme[selected_fg]="#BBBBBB"
+
+# Color of inactive/disabled text
+theme[inactive_fg]="#686868"
+
+# Misc colors for processes box including mini cpu graphs, details memory graph and details status text
+theme[proc_misc]="#66A5AD"
+
+# Cpu box outline color
+theme[cpu_box]="#555555"
+
+# Memory/disks box outline color
+theme[mem_box]="#555555"
+
+# Net up/down box outline color
+theme[net_box]="#555555"
+
+# Processes box outline color
+theme[proc_box]="#555555"
+
+# Box divider line and small boxes line color
+theme[div_line]="#616161"
+
+# Temperature graph colors (cyan gradient)
+theme[temp_start]="#66A5AD"
+theme[temp_mid]="#6099C0"
+theme[temp_end]="#DE6E7C"
+
+# CPU graph colors (blue to cyan gradient)
+theme[cpu_start]="#6099C0"
+theme[cpu_mid]="#66A5AD"
+theme[cpu_end]="#BBBBBB"
+
+# Mem/Disk free meter (green gradient)
+theme[free_start]="#819B69"
+theme[free_mid]="#8BAE68"
+theme[free_end]="#BBBBBB"
+
+# Mem/Disk cached meter (blue gradient)
+theme[cached_start]="#6099C0"
+theme[cached_mid]="#66A5AD"
+theme[cached_end]="#8E8E8E"
+
+# Mem/Disk available meter (cyan gradient)
+theme[available_start]="#66A5AD"
+theme[available_mid]="#8E8E8E"
+theme[available_end]="#BBBBBB"
+
+# Mem/Disk used meter (purple to orange gradient)
+theme[used_start]="#B279A7"
+theme[used_mid]="#B77E64"
+theme[used_end]="#DE6E7C"
+
+# Download graph colors (green gradient)
+theme[download_start]="#819B69"
+theme[download_mid]="#8BAE68"
+theme[download_end]="#BBBBBB"
+
+# Upload graph colors (orange gradient)
+theme[upload_start]="#B77E64"
+theme[upload_mid]="#D68C67"
+theme[upload_end]="#BBBBBB"
