@@ -22,14 +22,12 @@ async function readHyprpaperConfig(configPath: string): Promise<string> {
 		try {
 			await fs.access(expandedPath);
 		} catch {
-			// File doesn't exist, create minimal config
+			// File doesn't exist, create minimal config with v0.8.1+ block syntax
 			const minimalConfig = `# Hyprpaper wallpaper configuration
 # Auto-managed by Vicinae wallpaper extensions
 
-preload = 
-wallpaper = ,
-
 splash = false
+ipc = true
 `;
 			await fs.writeFile(expandedPath, minimalConfig, "utf-8");
 			return minimalConfig;
@@ -61,6 +59,7 @@ async function writeHyprpaperConfig(
 
 /**
  * Updates the hyprpaper.conf with a new wallpaper
+ * Uses v0.8.1+ block syntax for all monitors
  */
 async function updateHyprpaperConfig(
 	configPath: string,
@@ -70,38 +69,57 @@ async function updateHyprpaperConfig(
 		const config = await readHyprpaperConfig(configPath);
 		const lines = config.split("\n");
 
-		// Find and update the preload and wallpaper lines
-		const updatedLines = lines.map((line) => {
+		// Build new config using v0.8.1+ block syntax
+		const updatedLines: string[] = [];
+
+		// Keep non-wallpaper config lines
+		let skipUntilEnd = false;
+		for (const line of lines) {
 			const trimmed = line.trim();
 
-			// Update preload line
-			if (trimmed.startsWith("preload =")) {
-				return `preload = ${wallpaperPath}`;
+			// Skip old format wallpaper lines and blocks
+			if (trimmed.startsWith("preload =") || trimmed.startsWith("wallpaper =")) {
+				continue;
 			}
-
-			// Update wallpaper line (maintain monitor specification)
-			if (trimmed.startsWith("wallpaper =")) {
-				const parts = trimmed.split(",");
-				if (parts.length >= 2) {
-					// Keep the monitor part, update the path
-					return `wallpaper = ${parts[0].split("=")[1].trim()},${wallpaperPath}`;
+			if (trimmed === "wallpaper {") {
+				skipUntilEnd = true;
+				continue;
+			}
+			if (skipUntilEnd) {
+				if (trimmed === "}") {
+					skipUntilEnd = false;
 				}
-				// If no monitor specified, set for all monitors
-				return `wallpaper = ,${wallpaperPath}`;
+				continue;
 			}
 
-			return line;
-		});
+			// Skip old comment headers we'll regenerate
+			if (trimmed === "# Preloaded wallpapers" || trimmed === "# Monitor wallpaper assignments" || trimmed.startsWith("# NOTE:")) {
+				continue;
+			}
 
-		// If no preload or wallpaper lines exist, add them
-		if (!updatedLines.some((l) => l.trim().startsWith("preload ="))) {
-			updatedLines.push(`preload = ${wallpaperPath}`);
-		}
-		if (!updatedLines.some((l) => l.trim().startsWith("wallpaper ="))) {
-			updatedLines.push(`wallpaper = ,${wallpaperPath}`);
+			// Keep other config lines
+			updatedLines.push(line);
 		}
 
-		const newConfig = updatedLines.join("\n");
+		// Ensure ipc is enabled
+		if (!updatedLines.some(l => l.trim().startsWith("ipc ="))) {
+			updatedLines.push("ipc = true");
+		}
+
+		// Add wallpaper assignment for all monitors using new block syntax
+		updatedLines.push("");
+		updatedLines.push("# Monitor wallpaper assignments");
+		updatedLines.push("");
+		updatedLines.push("wallpaper {");
+		// monitor MUST be the first key in the block (hyprpaper requirement)
+		// For all monitors, use empty monitor value
+		updatedLines.push("  monitor = ");
+		updatedLines.push(`  path = ${wallpaperPath}`);
+		updatedLines.push("  fit_mode = cover");
+		updatedLines.push("}");
+
+		// Ensure file ends with newline
+		const newConfig = `${updatedLines.join("\n")}\n`;
 		await writeHyprpaperConfig(configPath, newConfig);
 	} catch (error) {
 		console.error("Error updating hyprpaper config:", error);
@@ -116,18 +134,33 @@ async function reloadHyprpaper(): Promise<void> {
 	try {
 		// Kill existing hyprpaper process
 		try {
-			await execAsync("pkill hyprpaper");
-			// Wait a bit for the process to terminate
-			await new Promise((resolve) => setTimeout(resolve, 200));
+			await execAsync("pkill -9 hyprpaper");
+			// Wait longer for the process to fully terminate
+			await new Promise((resolve) => setTimeout(resolve, 500));
 		} catch (_error) {
 			// Process might not be running, which is fine
 			console.log("hyprpaper not running or already killed");
 		}
 
-		// Start hyprpaper in background (don't wait for it)
-		execAsync("hyprpaper > /dev/null 2>&1 &").catch(() => {
+		// Ensure the process is actually gone
+		try {
+			await execAsync("pgrep hyprpaper");
+			// If we get here, hyprpaper is still running, wait a bit more
+			await new Promise((resolve) => setTimeout(resolve, 500));
+			// Try killing again
+			await execAsync("pkill -9 hyprpaper");
+			await new Promise((resolve) => setTimeout(resolve, 300));
+		} catch (_error) {
+			// Process is gone, which is what we want
+		}
+
+		// Start hyprpaper in background using nohup for better daemonization
+		execAsync("nohup hyprpaper > /dev/null 2>&1 &").catch(() => {
 			// Ignore errors from background process
 		});
+		
+		// Give hyprpaper more time to start and load the config
+		await new Promise((resolve) => setTimeout(resolve, 1000));
 	} catch (error) {
 		console.error("Error reloading hyprpaper:", error);
 		throw new Error("Failed to reload hyprpaper");
