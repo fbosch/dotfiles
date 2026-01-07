@@ -17,14 +17,17 @@
       }
     },
     "design-system": {
+      "enabled": false,
       "type": "remote",
       "url": "http://localhost:6006/mcp"
     },
     "vitest": {
+      "enabled": false,
       "type": "local",
       "command": ["bunx", "@djankies/vitest-mcp"]
     },
     "playwright": {
+      "enabled": false,
       "type": "local",
       "command": ["bunx", "@playwright/mcp@latest"]
     },
@@ -37,14 +40,12 @@
       "command": ["bunx", "@modelcontextprotocol/server-sequential-thinking"]
     },
     "nixos": {
+      "enabled": false,
       "type": "local",
       "command": ["uvx", "mcp-nixos"]
     },
-    "chrome-devtools": {
-      "type": "local",
-      "command": ["npx", "-y", "chrome-devtools-mcp@latest"]
-    },
     "context-portal": {
+      "enabled": false,
       "type": "local",
       "command": [
         "uvx",
