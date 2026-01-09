@@ -129,12 +129,24 @@ fnm env --use-on-cd --log-level=quiet --shell fish | source
 # --- pnpm ---
 set -gx PNPM_HOME "$HOME/Library/pnpm"
 if not string match -q -- $PNPM_HOME $PATH
-    set -gx PATH $PNPM_HOME $PATH
+    fish_add_path --prepend $PNPM_HOME
 end
 
 # --- bun ---
 set -gx BUN_INSTALL "$HOME/.bun"
-set -gx PATH $BUN_INSTALL/bin $PATH
+fish_add_path --prepend $BUN_INSTALL/bin
+
+# --- Nix paths (ensure they come before Homebrew) ---
+if test -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+    # Source nix-daemon first (idempotent - only runs once)
+    source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+    
+    # Then explicitly move nix paths to the front to override Homebrew
+    fish_add_path --prepend --move /nix/var/nix/profiles/default/bin
+    fish_add_path --prepend --move ~/.nix-profile/bin
+    fish_add_path --prepend --move /etc/profiles/per-user/fbb/bin
+    fish_add_path --prepend --move /run/current-system/sw/bin
+end
 
 # --- Inshellisense ---
 if test -f ~/.inshellisense/key-bindings.fish
