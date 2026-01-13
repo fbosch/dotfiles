@@ -33,9 +33,6 @@ switch $OS_TYPE
         end
 end
 
-# Disabled coreutils to improve startup time (saves ~160ms)
-# Use uutils commands explicitly (ucp, umv, etc.) if needed
-# gum.fish is lazy-loaded via functions/gum.fish wrapper
 for file in aliases scripts profile private colors
     if test -f ~/.config/fish/$file.fish
         source ~/.config/fish/$file.fish
@@ -126,6 +123,10 @@ end
 # Load eagerly - lazy loading causes issues with git hooks, mprocs, etc.
 fnm env --use-on-cd --log-level=quiet --shell fish | source
 
+# --- npm global packages (managed by Nix) ---
+fish_add_path --prepend ~/.npm-packages/bin
+fish_add_path --prepend ~/.local/share/pnpm
+
 # --- pnpm ---
 set -gx PNPM_HOME "$HOME/Library/pnpm"
 if not string match -q -- $PNPM_HOME $PATH
@@ -140,7 +141,7 @@ fish_add_path --prepend $BUN_INSTALL/bin
 if test -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
     # Source nix-daemon first (idempotent - only runs once)
     source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
-    
+
     # Then explicitly move nix paths to the front to override Homebrew
     fish_add_path --prepend --move /nix/var/nix/profiles/default/bin
     fish_add_path --prepend --move ~/.nix-profile/bin
