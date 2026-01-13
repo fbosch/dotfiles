@@ -16,7 +16,7 @@ function first_login_of_the_day
         return
     end
 
-    # Check disk cache (fast - just file read)
+    # Check disk cache first (fast - just file read)
     if test -f "$cache_file" && read -l cached_time <"$cache_file"
         # Cache in memory for future calls in this session
         set -g __first_login_cache_date "$current_date"
@@ -28,19 +28,28 @@ function first_login_of_the_day
         return
     end
 
-    # NEW APPROACH: Check Dock process start time (starts at GUI login, never restarts)
-    # This is ~100x faster than log show (~20ms vs ~2300ms)
+    # Find first "Display is turned on" event today (most reliable wake/login indicator)
+    # This works even on systems that haven't rebooted in days
+    # pmset -g log is reasonably fast (~500ms) and works across sleep/wake cycles
     set -l time ""
-    set -l dock_pid (pgrep -u $USER -x Dock | head -n1)
+    set -l display_on_event (pmset -g log | awk "/$current_date/ && /Display is turned on/ {print; exit}")
     
-    if test -n "$dock_pid"
-        # Get process start time - lstart format: "Mon Dec  3 09:06:54 2025"
-        set -l lstart_output (ps -p $dock_pid -o lstart= 2>/dev/null)
-        # Extract HH:MM:SS time portion
-        set time (string match -r '\d{2}:\d{2}:\d{2}' "$lstart_output")
+    if test -n "$display_on_event"
+        # Extract time from event line (format: "2026-01-13 08:58:10 +0100 Notification ...")
+        set time (string match -r '\d{2}:\d{2}:\d{2}' "$display_on_event")
     end
     
-    # Fallback to log show if Dock approach fails (shouldn't happen in normal GUI session)
+    # Fallback: Check Dock process start time (works for actual reboots/logins)
+    # Note: Dock can be restarted (e.g., via Nix rebuild), making it less reliable
+    if test -z "$time"
+        set -l dock_pid (pgrep -u $USER -x Dock | head -n1)
+        if test -n "$dock_pid"
+            set -l lstart_output (ps -p $dock_pid -o lstart= 2>/dev/null)
+            set time (string match -r '\d{2}:\d{2}:\d{2}' "$lstart_output")
+        end
+    end
+    
+    # Final fallback: loginwindow logs (slowest but most authoritative for real logins)
     if test -z "$time"
         set -l login_item (log show --start (date '+%Y-%m-%d 07:30:00') --predicate 'process == "loginwindow"' | grep -i "success" | head -n1)
         set time (string match -r '\d{2}:\d{2}:\d{2}\b' "$login_item")
