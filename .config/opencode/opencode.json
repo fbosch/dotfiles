@@ -10,11 +10,6 @@
         "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
       }
     },
-    "design-system": {
-      "enabled": false,
-      "type": "remote",
-      "url": "http://localhost:6006/mcp"
-    },
     "vitest": {
       "enabled": false,
       "type": "local",
@@ -32,11 +27,6 @@
     "sequential-thinking": {
       "type": "local",
       "command": ["bunx", "@modelcontextprotocol/server-sequential-thinking"]
-    },
-    "nixos": {
-      "enabled": false,
-      "type": "local",
-      "command": ["uvx", "mcp-nixos"]
     },
     "context-portal": {
       "enabled": false,
