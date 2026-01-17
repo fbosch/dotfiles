@@ -83,3 +83,5 @@
 
 [gpg]
 	format = ssh
+[credential]
+	credentialStore = secretservice
