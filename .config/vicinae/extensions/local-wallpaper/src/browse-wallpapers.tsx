@@ -94,6 +94,95 @@ export default function BrowseWallpapers() {
 		}
 	};
 
+	const handleRotateWallpaper = async (
+		wallpaper: LocalWallpaper,
+		degrees: 90 | 180 | 270,
+	) => {
+		try {
+			const { exec } = await import("node:child_process");
+			const { promisify } = await import("node:util");
+			const execAsync = promisify(exec);
+
+			await showToast({
+				style: Toast.Style.Animated,
+				title: "Rotating wallpaper...",
+			});
+
+			// Use ImageMagick to rotate the image in place
+			await execAsync(
+				`magick "${wallpaper.absolutePath}" -rotate ${degrees} "${wallpaper.absolutePath}"`,
+			);
+
+			await showToast({
+				style: Toast.Style.Success,
+				title: "Wallpaper rotated",
+				message: `Rotated ${degrees}° clockwise`,
+			});
+
+			// Reload wallpapers to update preview
+			await loadWallpapers();
+		} catch (error) {
+			await showToast({
+				style: Toast.Style.Failure,
+				title: "Failed to rotate wallpaper",
+				message: error instanceof Error ? error.message : "Unknown error",
+			});
+		}
+	};
+
+	const handleDuplicateWallpaper = async (wallpaper: LocalWallpaper) => {
+		try {
+			const fs = await import("node:fs/promises");
+			const path = await import("node:path");
+
+			await showToast({
+				style: Toast.Style.Animated,
+				title: "Duplicating wallpaper...",
+			});
+
+			// Generate new filename with _copy suffix
+			const ext = path.extname(wallpaper.path);
+			const nameWithoutExt = path.basename(wallpaper.path, ext);
+			let copyNumber = 1;
+			let newPath: string;
+			let newAbsolutePath: string;
+
+			// Find unique filename
+			do {
+				const suffix = copyNumber === 1 ? "_copy" : `_copy${copyNumber}`;
+				newPath = `${nameWithoutExt}${suffix}${ext}`;
+				newAbsolutePath = path.join(
+					path.dirname(wallpaper.absolutePath),
+					newPath,
+				);
+				copyNumber++;
+			} while (
+				await fs
+					.access(newAbsolutePath)
+					.then(() => true)
+					.catch(() => false)
+			);
+
+			// Copy the file
+			await fs.copyFile(wallpaper.absolutePath, newAbsolutePath);
+
+			await showToast({
+				style: Toast.Style.Success,
+				title: "Wallpaper duplicated",
+				message: newPath,
+			});
+
+			// Reload wallpapers list
+			await loadWallpapers();
+		} catch (error) {
+			await showToast({
+				style: Toast.Style.Failure,
+				title: "Failed to duplicate wallpaper",
+				message: error instanceof Error ? error.message : "Unknown error",
+			});
+		}
+	};
+
 	const handleDeleteWallpaper = async (wallpaper: LocalWallpaper) => {
 		const confirmed = await confirmAlert({
 			title: "Delete Wallpaper",
@@ -310,6 +399,31 @@ export default function BrowseWallpapers() {
 									onAction={() => handleOpenInViewer(wallpaper)}
 									shortcut={{ modifiers: ["cmd"], key: "o" }}
 								/>
+								<ActionPanel.Section title="Image Operations">
+									<ActionPanel.Submenu
+										title="Rotate Wallpaper"
+										icon={Icon.RotateClockwise}
+									>
+										<Action
+											title="Rotate 90° Clockwise"
+											onAction={() => handleRotateWallpaper(wallpaper, 90)}
+										/>
+										<Action
+											title="Rotate 180°"
+											onAction={() => handleRotateWallpaper(wallpaper, 180)}
+										/>
+										<Action
+											title="Rotate 270° Clockwise (90° CCW)"
+											onAction={() => handleRotateWallpaper(wallpaper, 270)}
+										/>
+									</ActionPanel.Submenu>
+									<Action
+										title="Duplicate Wallpaper"
+										icon={Icon.Duplicate}
+										onAction={() => handleDuplicateWallpaper(wallpaper)}
+										shortcut={{ modifiers: ["cmd"], key: "d" }}
+									/>
+								</ActionPanel.Section>
 								<ActionPanel.Section>
 									<Action.CopyToClipboard
 										title="Copy File Path"

@@ -1,0 +1,89 @@
+{
+  "$schema": "https://raw.githubusercontent.com/vicinaehq/vicinae/refs/heads/main/extra/schemas/extension.json",
+  "name": "clamav-scanner",
+  "title": "ClamAV Scanner",
+  "description": "Manually scan files and directories for viruses using ClamAV",
+  "categories": [
+    "System",
+    "Security"
+  ],
+  "license": "MIT",
+  "author": "fbosch",
+  "contributors": [],
+  "pastContributors": [],
+  "icon": "extension_icon.png",
+  "commands": [
+    {
+      "name": "scan-directory",
+      "title": "Scan Directory",
+      "subtitle": "Scan a directory for viruses",
+      "description": "Scan files and directories for viruses using ClamAV",
+      "mode": "view"
+    },
+    {
+      "name": "scan-home",
+      "title": "Quick Scan Home",
+      "subtitle": "Scan home directory",
+      "description": "Quick scan of your home directory",
+      "mode": "no-view"
+    },
+    {
+      "name": "update-database",
+      "title": "Update Virus Database",
+      "subtitle": "Run freshclam to update definitions",
+      "description": "Update ClamAV virus definitions using freshclam",
+      "mode": "no-view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "recursiveScan",
+      "type": "checkbox",
+      "required": false,
+      "title": "Recursive Scanning",
+      "label": "Scan subdirectories recursively",
+      "description": "Enable recursive scanning of subdirectories",
+      "default": true
+    },
+    {
+      "name": "showInfectedOnly",
+      "type": "checkbox",
+      "required": false,
+      "title": "Show Infected Files Only",
+      "label": "Only display infected files in results",
+      "description": "Hide clean files from scan results",
+      "default": false
+    },
+    {
+      "name": "removeInfected",
+      "type": "checkbox",
+      "required": false,
+      "title": "Auto-Remove Infected Files",
+      "label": "Automatically remove infected files (DANGEROUS)",
+      "description": "WARNING: This will permanently delete infected files without confirmation",
+      "default": false
+    },
+    {
+      "name": "excludePatterns",
+      "type": "textfield",
+      "required": false,
+      "title": "Exclude Patterns",
+      "description": "Comma-separated regex patterns to exclude (e.g., .*\\.log,.*\\.tmp)",
+      "default": "",
+      "placeholder": ".*\\.log,.*\\.tmp"
+    }
+  ],
+  "scripts": {
+    "build": "vici build",
+    "dev": "vici develop",
+    "format": "biome format --write src",
+    "lint": "vici lint"
+  },
+  "dependencies": {
+    "@vicinae/api": "^0.18.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.11",
+    "typescript": "^5.9.3"
+  }
+}

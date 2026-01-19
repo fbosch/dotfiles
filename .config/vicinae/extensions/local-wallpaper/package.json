@@ -47,8 +47,8 @@
       "required": false,
       "title": "File Extensions",
       "description": "Comma-separated list of image extensions to include",
-      "default": "png,jpg,jpeg,webp",
-      "placeholder": "png,jpg,jpeg,webp"
+      "default": "png,jpg,jpeg,webp,jxl",
+      "placeholder": "png,jpg,jpeg,webp,jxl"
     },
     {
       "name": "sortBy",
