@@ -7,7 +7,7 @@ function M.load_highlights(group)
 end
 
 function M.set_usrcmd(cmd, callback, opts_or_desc)
-	opts = opts or {}
+	local opts = opts or {}
 	vim.api.nvim_create_user_command(
 		cmd,
 		callback,
