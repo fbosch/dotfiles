@@ -89,51 +89,34 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
         set section_testing "## Test"
         set section_breaking "## Breaking Changes"
     end
+    set skill_file "$HOME/.config/opencode/skills/ai-pr/SKILL.md"
+    if not test -f "$skill_file"
+        gum style --foreground 1 " Skill not found: $skill_file"
+        rm -f "$temp_diff" "$actual_diff_file"
+        return 1
+    end
+    set skill_body (sed '1,/^---$/d' "$skill_file" | sed '1,/^---$/d')
     set prompt "Generate PR description in $language_name (markdown) for branch '$branch_name' vs '$main_branch'.
 
-CRITICAL - OMIT TRIVIAL CHANGES:
-- If diff shows ONLY: trailing whitespace removal, commented code deletion, whitespace-only, formatting-only, empty lines, import reordering (non-functional), style-only → OMIT file entirely from PR description
-- Do NOT list these as changes. Skip files that only have trivial changes.
+Section headings:
+- Summary: $section_summary
+- Changes: $section_changes
+- Testing: $section_testing
+- Breaking: $section_breaking
 
-INCLUDE ONLY:
-- Functional code changes, bug fixes that change behavior, new features, API/config changes, tests, significant docs
-
-RULES:
-- Plain technical language (no marketing: avoid "enhanced", "optimized", "robust", etc.)
-- Lexical level = CEFR B1: short, common words; max 12 words per sentence
-- Prefer simple verbs: added/removed/changed/fixed/updated
-- Describe only what the diff or commits explicitly show; never guess intent or motivation
-- For fixes: mention what was broken only if visible, plus how diff fixes it
-- For other changes: state what changed from/to; include reasons only when explicitly stated in code comments or commits
-- Prefer lists, use backticks for `files`/`functions`/`APIs`, blank lines between sections
-- Keep each bullet under 12 words for readability
-
-STRUCTURE:
-# TITLE LINE FORMAT: [commitizen_type](#ticket): brief description
-Write the PR title as the first line using this format:
-  $commitizen_type(#$ticket_number): Brief description (max 60 chars after colon, present tense)
-Example: feat(#12345): Add user authentication flow
-
-$section_summary
-Max 2 short sentences describing the overall change.
-
-$section_changes
-Bullet list (max 5 items). Only substantive changes from diff. Skip trivial files.
-
-$section_testing
-Bullet list. Mention commands or "- Not stated" if absent.
-
-$section_breaking
-Include ONLY when the diff obviously breaks behavior. Omit section otherwise.
+Title format:
+$commitizen_type(#$ticket_number): Brief description (max 60 chars after colon, present tense)
 
 Branch: $branch_name | Base: $main_branch | Files: "(string join ', ' $changed_files)"
 Commits: "(string join ' | ' $commit_messages)"
+
+$skill_body
 
 Diff below. Describe ONLY visible substantive changes. Skip trivial changes entirely."
     if test -n "$branch_hint"
         set prompt "$prompt\nBranch type: $branch_hint"
     end
-     set prompt "$prompt\n\nOutput: First line = PR title in format: $commitizen_type(#$ticket_number): description (max 72 chars total). Blank line. Then markdown PR description in $language_name. All text in $language_name. No explanations."
+    set prompt "$prompt\n\nOutput: First line = PR title in format: $commitizen_type(#$ticket_number): description (max 72 chars total). Blank line. Then markdown PR description in $language_name. All text in $language_name. No explanations."
     set temp_prompt (mktemp -t opencode_prompt.XXXXXX)
     set temp_output (mktemp -t opencode_output.XXXXXX)
     echo "$prompt" >$temp_prompt

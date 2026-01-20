@@ -48,28 +48,18 @@ Branch: $branch_name" >$temp_prompt
     if test -n "$branch_hint"
         echo "Branch type: $branch_hint" >>$temp_prompt
     end
-    
-    echo "
-RULES:
-- Types: feat|fix|docs|style|refactor|perf|test|build|ci|chore
-- Imperative mood (e.g., 'add', 'fix', 'update', not 'added', 'fixes')
-- <72 chars total
-- Describe THIS commit's changes, not entire branch or feature
-- Be specific and atomic (like a changelog entry, not a summary)
-- Focus on WHAT changed in this diff, not branch name or previous work" >>$temp_prompt
-    
     if test -n "$ticket_number"
-        echo "- Scope MUST be: AB#$ticket_number" >>$temp_prompt
+        echo "Ticket: $ticket_number" >>$temp_prompt
     end
-    
+    set skill_file "$HOME/.config/opencode/skills/ai-commit/SKILL.md"
+    if not test -f "$skill_file"
+        gum style --foreground 1 " Skill not found: $skill_file"
+        rm -f $temp_prompt $temp_diff
+        return 1
+    end
+    set skill_body (sed '1,/^---$/d' "$skill_file" | sed '1,/^---$/d')
     echo "
-EXAMPLES (atomic, specific commits):
-- fix(AB#50147): prevent null pointer in user validation
-- feat(AB#50147): add email field to registration form
-- refactor(AB#50147): extract validation logic to helper function
-- test(AB#50147): add edge case tests for empty input
-
-OUTPUT: commit message only, no markdown/explanations
+$skill_body
 
 STAGED DIFF (focus on THIS change):
 " >>$temp_prompt
