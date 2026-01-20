@@ -15,7 +15,7 @@ return {
 					snacks = {
 						win = {
 							position = "left",
-							width = 80,
+							width = 100,
 						},
 						terminal = {
 							enabled = true,

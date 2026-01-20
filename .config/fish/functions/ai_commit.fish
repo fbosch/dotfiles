@@ -89,9 +89,9 @@ STAGED DIFF (focus on THIS change):
         return 1
     end
     
-    set commit_msg (string split \n $raw_output | string match -r '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?: .+' | head -n 1)
+    set commit_msg (string split -- "\n" -- "$raw_output" | string match -r -- '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?: .+' | head -n 1)
     if test -z "$commit_msg"
-        set commit_msg (string split \n $raw_output | string match -r '\S+' | head -n 1)
+        set commit_msg (string split -- "\n" -- "$raw_output" | string match -r -- '\S+' | head -n 1)
     end
     if test -z "$commit_msg"
         gum style " Failed to extract valid commit message"
