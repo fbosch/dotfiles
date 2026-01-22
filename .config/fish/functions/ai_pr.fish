@@ -116,7 +116,7 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     if test -n "$branch_hint"
         set prompt "$prompt\nBranch type: $branch_hint"
     end
-    set prompt "$prompt\n\nOutput: First line = PR title in format: $commitizen_type(#$ticket_number): description (max 72 chars total). Blank line. Then markdown PR description in $language_name. All text in $language_name. No explanations."
+    set prompt "$prompt\n\nCRITICAL: Your entire response must be ONLY the PR content. The first character you output must be the first character of the PR title. Do not output any thoughts, explanations, or analysis.\n\nFormat:\nLine 1: $commitizen_type(#$ticket_number): description (max 72 chars)\nLine 2: blank\nLine 3+: Markdown PR body in $language_name"
     set temp_prompt (mktemp -t opencode_prompt.XXXXXX)
     set temp_output (mktemp -t opencode_output.XXXXXX)
     echo "$prompt" >$temp_prompt
