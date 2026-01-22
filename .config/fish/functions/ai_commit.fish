@@ -51,13 +51,20 @@ Branch: $branch_name" >$temp_prompt
     if test -n "$ticket_number"
         echo "Ticket: $ticket_number" >>$temp_prompt
     end
-    set skill_file "$HOME/.config/opencode/skills/ai-commit/SKILL.md"
+    set -l skill_dir "$HOME/.config/opencode/skills/ai-commit"
+    set -l skill_file "$skill_dir/SKILL.md"
     if not test -f "$skill_file"
-        gum style --foreground 1 " Skill not found: $skill_file"
+        set skill_file "$skill_dir/skill.md"
+    end
+    if not test -f "$skill_file"
+        gum style --foreground 1 " Skill not found: $skill_dir/SKILL.md"
         rm -f $temp_prompt $temp_diff
         return 1
     end
-    set skill_body (sed '1,/^---$/d' "$skill_file" | sed '1,/^---$/d')
+    set -l skill_body (sed '1,/^---$/d' "$skill_file" | sed '1,/^---$/d')
+    if test -z "$skill_body"
+        set skill_body (cat "$skill_file")
+    end
     echo "
 $skill_body
 

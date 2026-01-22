@@ -25,7 +25,9 @@ description: Generate concise PR descriptions from git diffs and commit context.
 - Breaking Changes section: include only when diff obviously breaks behavior.
 
 ## Output
+**CRITICAL: Your response must contain ONLY the PR content below. Do not include ANY explanatory text, thoughts, analysis, or meta-commentary before or after the PR content.**
+
 - First line is the PR title only.
 - Blank line after title.
 - Then markdown PR description using the provided section headings.
-- Output only the final content, no explanations.
+- Do not output anything else.
