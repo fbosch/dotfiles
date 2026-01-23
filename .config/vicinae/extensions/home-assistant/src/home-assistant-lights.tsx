@@ -63,9 +63,6 @@ function friendlyName(light: LightState): string {
 	return light.attributes.friendly_name || light.entity_id;
 }
 
-function wait(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function getLightAccessories(light: LightState): { text: string }[] {
 	const accessories: { text: string }[] = [{ text: light.state }];
@@ -148,6 +145,8 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 		queryFn: () => fetchLights(preferences),
 		enabled: hasPreferences,
 		placeholderData: keepPreviousData,
+		refetchInterval: 1000,
+		refetchIntervalInBackground: true,
 	});
 
 	const { data: favoriteLights = [] } = useQuery({
@@ -220,29 +219,34 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 		label: string,
 	): Promise<void> {
 		try {
-			const expectedState =
-				service === "turn_on"
-					? "on"
-					: service === "turn_off"
-						? "off"
-						: light.state === "on"
-							? "off"
-							: "on";
 			await callLightService(service, light.entity_id, preferences);
+			queryClient.setQueryData<LightState[]>(
+				["home-assistant", "lights"],
+				(existing) => {
+					if (!existing) return existing;
+					return existing.map((item) => {
+						if (item.entity_id !== light.entity_id) return item;
+						const nextState =
+							service === "turn_on"
+								? "on"
+								: service === "turn_off"
+									? "off"
+									: item.state === "on"
+										? "off"
+										: "on";
+						return {
+							...item,
+							state: nextState,
+							last_updated: new Date().toISOString(),
+						};
+					});
+				},
+			);
 			await showToast({
 				style: Toast.Style.Success,
 				title: label,
 				message: friendlyName(light),
 			});
-			for (const delay of [0, 200, 500, 900]) {
-				if (delay > 0) await wait(delay);
-				const updated = await fetchLights(preferences);
-				queryClient.setQueryData(["home-assistant", "lights"], updated);
-				const matched = updated.find(
-					(item) => item.entity_id === light.entity_id,
-				);
-				if (matched?.state === expectedState) break;
-			}
 		} catch (requestError) {
 			await showToast({
 				style: Toast.Style.Failure,
