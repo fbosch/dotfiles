@@ -11,6 +11,7 @@ import {
 	Color,
 	getPreferenceValues,
 	Icon,
+	LocalStorage,
 	LaunchProps,
 	List,
 	showToast,
@@ -35,6 +36,23 @@ type PreferencesState = {
 	accessToken: string;
 };
 
+const FAVORITE_LIGHTS_KEY = "homeAssistantFavoriteLights";
+
+async function loadFavoriteLights(): Promise<string[]> {
+	const stored = await LocalStorage.getItem<string>(FAVORITE_LIGHTS_KEY);
+	if (!stored) return [];
+
+	try {
+		return JSON.parse(stored) as string[];
+	} catch {
+		return [];
+	}
+}
+
+async function saveFavoriteLights(favorites: string[]): Promise<void> {
+	await LocalStorage.setItem(FAVORITE_LIGHTS_KEY, JSON.stringify(favorites));
+}
+
 function formatBrightness(brightness?: number): string | null {
 	if (brightness === undefined || Number.isNaN(brightness)) return null;
 	const percent = Math.round((brightness / 255) * 100);
@@ -43,6 +61,10 @@ function formatBrightness(brightness?: number): string | null {
 
 function friendlyName(light: LightState): string {
 	return light.attributes.friendly_name || light.entity_id;
+}
+
+function wait(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function getLightAccessories(light: LightState): { text: string }[] {
@@ -128,6 +150,17 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 		placeholderData: keepPreviousData,
 	});
 
+	const { data: favoriteLights = [] } = useQuery({
+		queryKey: ["home-assistant", "lights", "favorites"],
+		queryFn: loadFavoriteLights,
+		staleTime: Infinity,
+	});
+
+	const favoriteSet = useMemo(
+		() => new Set(favoriteLights),
+		[favoriteLights],
+	);
+
 	useEffect(() => {
 		if (isError && error) {
 			const message =
@@ -147,12 +180,39 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 		const sorted = [...lights].sort((a, b) =>
 			friendlyName(a).localeCompare(friendlyName(b)),
 		);
-		if (!query) return sorted;
+		if (!query) {
+			return sorted.sort((a, b) => {
+				const aFavorite = favoriteSet.has(a.entity_id);
+				const bFavorite = favoriteSet.has(b.entity_id);
+				if (aFavorite === bFavorite) {
+					return friendlyName(a).localeCompare(friendlyName(b));
+				}
+				return aFavorite ? -1 : 1;
+			});
+		}
 		return sorted.filter((light) => {
 			const name = friendlyName(light).toLowerCase();
 			return name.includes(query) || light.entity_id.toLowerCase().includes(query);
 		});
-	}, [lights, searchText]);
+	}, [lights, searchText, favoriteSet]);
+
+	async function toggleFavorite(light: LightState): Promise<void> {
+		const isFavorite = favoriteSet.has(light.entity_id);
+		const updated = isFavorite
+			? favoriteLights.filter((entityId) => entityId !== light.entity_id)
+			: [light.entity_id, ...favoriteLights];
+
+		await saveFavoriteLights(updated);
+		queryClient.setQueryData(
+			["home-assistant", "lights", "favorites"],
+			updated,
+		);
+		await showToast({
+			style: Toast.Style.Success,
+			title: isFavorite ? "Removed from favorites" : "Added to favorites",
+			message: friendlyName(light),
+		});
+	}
 
 	async function handleLightAction(
 		light: LightState,
@@ -160,15 +220,29 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 		label: string,
 	): Promise<void> {
 		try {
+			const expectedState =
+				service === "turn_on"
+					? "on"
+					: service === "turn_off"
+						? "off"
+						: light.state === "on"
+							? "off"
+							: "on";
 			await callLightService(service, light.entity_id, preferences);
 			await showToast({
 				style: Toast.Style.Success,
 				title: label,
 				message: friendlyName(light),
 			});
-			await queryClient.invalidateQueries({
-				queryKey: ["home-assistant", "lights"],
-			});
+			for (const delay of [0, 200, 500, 900]) {
+				if (delay > 0) await wait(delay);
+				const updated = await fetchLights(preferences);
+				queryClient.setQueryData(["home-assistant", "lights"], updated);
+				const matched = updated.find(
+					(item) => item.entity_id === light.entity_id,
+				);
+				if (matched?.state === expectedState) break;
+			}
 		} catch (requestError) {
 			await showToast({
 				style: Toast.Style.Failure,
@@ -218,15 +292,24 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 						icon={getLightIcon(light)}
 						accessories={getLightAccessories(light)}
 						detail={<LightDetail light={light} />}
-						actions={
-							<ActionPanel>
-								<Action
-									title="Toggle Light"
-									icon={Icon.Switch}
-									onAction={() =>
-										handleLightAction(light, "toggle", "Light toggled")
-									}
-								/>
+							actions={
+								<ActionPanel>
+									<Action
+										title="Toggle Light"
+										icon={Icon.Switch}
+										onAction={() =>
+											handleLightAction(light, "toggle", "Light toggled")
+										}
+									/>
+									<Action
+										title={
+											favoriteSet.has(light.entity_id)
+												? "Remove from Favorites"
+												: "Add to Favorites"
+										}
+										icon={Icon.Pin}
+										onAction={() => toggleFavorite(light)}
+									/>
 								<ActionPanel.Section>
 									<Action
 										title="Turn On"

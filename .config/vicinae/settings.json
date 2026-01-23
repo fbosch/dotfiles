@@ -27,6 +27,7 @@
       "opacity": 0.88
    },
    "favorites": [
+      "@fbosch/home-assistant:home-assistant-lights",
       "applications:com.discordapp.Discord",
       "@aurelleb/store.vicinae.mullvad:connect",
       "@aurelleb/store.vicinae.mullvad:disconnect",

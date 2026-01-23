@@ -15,7 +15,7 @@
   "commands": [
     {
       "name": "home-assistant-lights",
-      "title": "Home Assistant Lights",
+      "title": "Lights",
       "subtitle": "Control Home Assistant lights",
       "description": "List and control Home Assistant lights",
       "mode": "view"
