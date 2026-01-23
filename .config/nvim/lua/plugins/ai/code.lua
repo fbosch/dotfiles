@@ -2,7 +2,7 @@ return {
 	{
 		"supermaven-inc/supermaven-nvim",
 		event = "InsertEnter",
-		enabled = true,
+		enabled = false,
 		opts = {
 			ignore_filetypes = { markdown = true },
 			keymaps = {
