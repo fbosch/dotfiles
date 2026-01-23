@@ -2,6 +2,7 @@ packages:
   - 'color-tools'
   - 'favorite-directories'
   - 'flathub-search'
+  - 'home-assistant'
   - 'hyprprop'
   - 'kagi-search'
   - 'local-wallpaper'

@@ -44,6 +44,11 @@
       "files:search"
    ],
    "providers": {
+      "@fbosch/home-assistant": {
+         "preferences": {
+            "baseUrl": "https://ha.corvus-corax.synology.me"
+         }
+      },
       "@fbosch/wallhaven": {
          "preferences": {
             "useUserSettings": true
