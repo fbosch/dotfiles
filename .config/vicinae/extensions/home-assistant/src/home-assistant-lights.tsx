@@ -36,6 +36,12 @@ type PreferencesState = {
 	accessToken: string;
 };
 
+type LightSettingsUpdate = {
+	brightnessPercent?: number;
+	hue?: number;
+	saturation?: number;
+};
+
 const FAVORITE_LIGHTS_KEY = "homeAssistantFavoriteLights";
 
 async function loadFavoriteLights(): Promise<string[]> {
@@ -59,6 +65,15 @@ function formatBrightness(brightness?: number): string | null {
 	return `${percent}%`;
 }
 
+function formatBrightnessPercent(brightness?: number): number | null {
+	if (brightness === undefined || Number.isNaN(brightness)) return null;
+	return Math.round((brightness / 255) * 100);
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+	return Math.min(max, Math.max(min, value));
+}
+
 function friendlyName(light: LightState): string {
 	return light.attributes.friendly_name || light.entity_id;
 }
@@ -74,6 +89,191 @@ function getLightAccessories(light: LightState): { text: string }[] {
 function getLightIcon(light: LightState) {
 	const tintColor = light.state === "on" ? Color.Yellow : Color.SecondaryText;
 	return { source: Icon.LightBulb, tintColor };
+}
+
+function LightSettingsList({
+	light,
+	preferences,
+	hasPreferences,
+	onUpdate,
+}: {
+	light: LightState;
+	preferences: PreferencesState;
+	hasPreferences: boolean;
+	onUpdate: (update: LightSettingsUpdate) => void;
+}) {
+	const { data: lights = [] } = useQuery({
+		queryKey: ["home-assistant", "lights"],
+		queryFn: () => fetchLights(preferences),
+		enabled: hasPreferences,
+		placeholderData: keepPreviousData,
+		refetchInterval: 1000,
+		refetchIntervalInBackground: true,
+	});
+
+	const currentLight =
+		lights.find((item) => item.entity_id === light.entity_id) ?? light;
+	const brightnessPercent =
+		formatBrightnessPercent(currentLight.attributes.brightness) ?? 50;
+	const hue = currentLight.attributes.hs_color?.[0] ?? 0;
+	const saturation = currentLight.attributes.hs_color?.[1] ?? 100;
+
+	const brightnessLabel = `${Math.round(brightnessPercent)}%`;
+	const hueLabel = `${Math.round(hue)}°`;
+	const saturationLabel = `${Math.round(saturation)}%`;
+
+	const brightnessPresets = [0, 25, 50, 75, 100];
+	const huePresets = [0, 30, 60, 120, 180, 240, 300];
+	const huePresetLabels = [
+		"Red",
+		"Orange",
+		"Yellow",
+		"Green",
+		"Cyan",
+		"Blue",
+		"Purple",
+	];
+
+	return (
+		<List navigationTitle={`${friendlyName(currentLight)} Settings`}>
+			<List.Section title="Brightness">
+				<List.Item
+					title="Brightness"
+					subtitle={brightnessLabel}
+					icon={Icon.LightBulb}
+					actions={
+						<ActionPanel>
+							<ActionPanel.Section>
+								<Action
+									title="Increase Brightness"
+									icon={Icon.Plus}
+									onAction={() =>
+										onUpdate({
+											brightnessPercent: clampNumber(
+												brightnessPercent + 10,
+												0,
+												100,
+											),
+										})
+									}
+								/>
+								<Action
+									title="Decrease Brightness"
+									icon={Icon.Minus}
+									onAction={() =>
+										onUpdate({
+											brightnessPercent: clampNumber(
+												brightnessPercent - 10,
+												0,
+												100,
+											),
+										})
+									}
+								/>
+							</ActionPanel.Section>
+							<ActionPanel.Section title="Presets">
+								{brightnessPresets.map((preset) => (
+									<Action
+										key={preset}
+										title={`Set ${preset}%`}
+										onAction={() =>
+											onUpdate({ brightnessPercent: preset })
+										}
+									/>
+								))}
+							</ActionPanel.Section>
+						</ActionPanel>
+					}
+				/>
+			</List.Section>
+			<List.Section title="Color">
+				<List.Item
+					title="Hue"
+					subtitle={hueLabel}
+					icon={Icon.Palette}
+					actions={
+						<ActionPanel>
+							<ActionPanel.Section>
+								<Action
+									title="Increase Hue"
+									icon={Icon.Plus}
+									onAction={() =>
+										onUpdate({
+											hue: clampNumber(hue + 15, 0, 360),
+										})
+									}
+								/>
+								<Action
+									title="Decrease Hue"
+									icon={Icon.Minus}
+									onAction={() =>
+										onUpdate({
+											hue: clampNumber(hue - 15, 0, 360),
+										})
+									}
+								/>
+							</ActionPanel.Section>
+							<ActionPanel.Section title="Presets">
+								{huePresets.map((preset, index) => (
+									<Action
+										key={preset}
+										title={`Set ${huePresetLabels[index]}`}
+										onAction={() => onUpdate({ hue: preset })}
+									/>
+								))}
+							</ActionPanel.Section>
+						</ActionPanel>
+					}
+				/>
+				<List.Item
+					title="Saturation"
+					subtitle={saturationLabel}
+					icon={Icon.Droplets}
+					actions={
+						<ActionPanel>
+							<ActionPanel.Section>
+								<Action
+									title="Increase Saturation"
+									icon={Icon.Plus}
+									onAction={() =>
+										onUpdate({
+											saturation: clampNumber(
+												saturation + 10,
+												0,
+												100,
+											),
+										})
+									}
+								/>
+								<Action
+									title="Decrease Saturation"
+									icon={Icon.Minus}
+									onAction={() =>
+										onUpdate({
+											saturation: clampNumber(
+												saturation - 10,
+												0,
+												100,
+											),
+										})
+									}
+								/>
+							</ActionPanel.Section>
+							<ActionPanel.Section title="Presets">
+								{[0, 25, 50, 75, 100].map((preset) => (
+									<Action
+										key={preset}
+										title={`Set ${preset}%`}
+										onAction={() => onUpdate({ saturation: preset })}
+									/>
+								))}
+							</ActionPanel.Section>
+						</ActionPanel>
+					}
+				/>
+			</List.Section>
+		</List>
+	);
 }
 
 function LightDetail({ light }: { light: LightState }) {
@@ -213,6 +413,92 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 		});
 	}
 
+	async function handleLightSettings(
+		light: LightState,
+		update: LightSettingsUpdate,
+	): Promise<void> {
+		const cachedLights = queryClient.getQueryData<LightState[]>([
+			"home-assistant",
+			"lights",
+		]);
+		const currentLight =
+			cachedLights?.find((item) => item.entity_id === light.entity_id) ??
+			light;
+
+		const payload: Record<string, unknown> = {};
+		const brightnessPercent = update.brightnessPercent;
+		const currentHue = currentLight.attributes.hs_color?.[0] ?? 0;
+		const currentSaturation = currentLight.attributes.hs_color?.[1] ?? 100;
+
+		let brightnessPayload: number | null = null;
+		let hsColorPayload: [number, number] | null = null;
+
+		if (brightnessPercent !== undefined) {
+			const clamped = clampNumber(brightnessPercent, 0, 100);
+			brightnessPayload = Math.round((clamped / 100) * 255);
+			payload.brightness = brightnessPayload;
+		}
+
+		if (update.hue !== undefined || update.saturation !== undefined) {
+			const hue = clampNumber(update.hue ?? currentHue, 0, 360);
+			const saturation = clampNumber(
+				update.saturation ?? currentSaturation,
+				0,
+				100,
+			);
+			hsColorPayload = [hue, saturation];
+			payload.hs_color = hsColorPayload;
+		}
+
+		if (Object.keys(payload).length === 0) {
+			await showToast({
+				style: Toast.Style.Failure,
+				title: "No settings provided",
+				message: "Choose brightness or color settings",
+			});
+			return;
+		}
+
+		try {
+			await callLightService("turn_on", light.entity_id, preferences, payload);
+			queryClient.setQueryData<LightState[]>(
+				["home-assistant", "lights"],
+				(existing) => {
+					if (!existing) return existing;
+					return existing.map((item) => {
+						if (item.entity_id !== light.entity_id) return item;
+						return {
+							...item,
+							state: "on",
+							attributes: {
+								...item.attributes,
+								...(brightnessPayload !== null && {
+									brightness: brightnessPayload,
+								}),
+								...(hsColorPayload && { hs_color: hsColorPayload }),
+							},
+							last_updated: new Date().toISOString(),
+						};
+					});
+				},
+			);
+			await showToast({
+				style: Toast.Style.Success,
+				title: "Light updated",
+				message: friendlyName(light),
+			});
+		} catch (requestError) {
+			await showToast({
+				style: Toast.Style.Failure,
+				title: "Update failed",
+				message:
+					requestError instanceof Error
+						? requestError.message
+						: "Unknown error",
+			});
+		}
+	}
+
 	async function handleLightAction(
 		light: LightState,
 		service: "turn_on" | "turn_off" | "toggle",
@@ -303,6 +589,22 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 										icon={Icon.Switch}
 										onAction={() =>
 											handleLightAction(light, "toggle", "Light toggled")
+										}
+									/>
+									<Action.Push
+										title="Adjust Brightness/Color"
+										icon={Icon.EyeDropper}
+										target={
+											<QueryClientProvider client={queryClient}>
+												<LightSettingsList
+													light={light}
+													preferences={preferences}
+													hasPreferences={hasPreferences}
+													onUpdate={(values) =>
+													handleLightSettings(light, values)
+												}
+												/>
+											</QueryClientProvider>
 										}
 									/>
 									<Action
