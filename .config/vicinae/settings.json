@@ -27,6 +27,7 @@
       "opacity": 0.88
    },
    "favorites": [
+      "@fbosch/home-assistant:home-assistant-lights",
       "applications:com.discordapp.Discord",
       "@aurelleb/store.vicinae.mullvad:connect",
       "@aurelleb/store.vicinae.mullvad:disconnect",
@@ -44,6 +45,11 @@
       "files:search"
    ],
    "providers": {
+      "@fbosch/home-assistant": {
+         "preferences": {
+            "baseUrl": "https://ha.corvus-corax.synology.me"
+         }
+      },
       "@fbosch/wallhaven": {
          "preferences": {
             "useUserSettings": true

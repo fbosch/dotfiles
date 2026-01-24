@@ -1,0 +1,56 @@
+{
+  "$schema": "https://raw.githubusercontent.com/vicinaehq/vicinae/refs/heads/main/extra/schemas/extension.json",
+  "name": "home-assistant",
+  "title": "Home Assistant",
+  "description": "Control Home Assistant",
+  "categories": [
+    "System",
+    "Productivity"
+  ],
+  "license": "MIT",
+  "author": "fbosch",
+  "contributors": [],
+  "pastContributors": [],
+  "icon": "extension_icon.png",
+  "commands": [
+    {
+      "name": "home-assistant-lights",
+      "title": "Lights",
+      "subtitle": "Control Home Assistant lights",
+      "description": "List and control Home Assistant lights",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "baseUrl",
+      "type": "textfield",
+      "required": true,
+      "title": "Home Assistant URL",
+      "description": "Base URL for your Home Assistant instance",
+      "placeholder": "https://ha.example.com"
+    },
+    {
+      "name": "accessToken",
+      "type": "password",
+      "required": true,
+      "title": "Long-Lived Access Token",
+      "description": "Create a token in Home Assistant user profile",
+      "placeholder": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+    }
+  ],
+  "scripts": {
+    "build": "vici build",
+    "dev": "vici develop",
+    "format": "biome format --write src",
+    "lint": "vici lint"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.17",
+    "@vicinae/api": "^0.18.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.11",
+    "typescript": "^5.9.3"
+  }
+}
