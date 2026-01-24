@@ -56,9 +56,10 @@ export async function callLightService(
 	service: "turn_on" | "turn_off" | "toggle",
 	entityId: string,
 	options: FetchOptions,
+	data?: Record<string, unknown>,
 ): Promise<void> {
 	await request(`/api/services/light/${service}`, options, {
 		method: "POST",
-		body: JSON.stringify({ entity_id: entityId }),
+		body: JSON.stringify({ entity_id: entityId, ...(data ?? {}) }),
 	});
 }
