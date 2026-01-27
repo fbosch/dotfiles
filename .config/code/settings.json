@@ -165,13 +165,13 @@
   "periscope.endFolderDisplayDepth": 2,
   "explorer.excludeGitIgnore": false,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "extensions.experimental.affinity": {
-    "asvetliakov.vscode-neovim": 1
-  },
   "clock.dateFormat": "HH:MM",
   "git.openRepositoryInParentFolders": "never",
   "typescript.inlayHints.parameterTypes.enabled": true,
   "eslint.codeActionsOnSave.mode": "problems",
   "git.enableSmartCommit": true,
-  "git.confirmSync": false
+  "git.confirmSync": false,
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  }
 }

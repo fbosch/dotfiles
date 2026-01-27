@@ -1,5 +1,5 @@
 # Neovim
-alias nvim-minimal 'nvim -n -i NONE --noplugin'
+alias nvim 'nvim -i NONE --noplugin'
 alias snvim 'sudo -E -s nvim'
 alias vimdiff 'nvim -d'
 abbr n nvim

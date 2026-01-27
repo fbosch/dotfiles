@@ -28,6 +28,13 @@
       "type": "local",
       "command": ["bunx", "@modelcontextprotocol/server-sequential-thinking"]
     },
+    "neovim": {
+      "type": "local",
+      "command": ["npx", "-y", "mcp-neovim-server"],
+      "environment": {
+        "NVIM_SOCKET_PATH": "/tmp/nvim"
+      }
+    },
     "context-portal": {
       "enabled": false,
       "type": "local",
