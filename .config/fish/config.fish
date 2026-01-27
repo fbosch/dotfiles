@@ -103,8 +103,9 @@ end
 if test $OS_TYPE = Linux
     # Check if we're in TTY1 (console) vs terminal emulator
     # TTY1 typically doesn't have DISPLAY/WAYLAND_DISPLAY and tty shows /dev/tty1
+    # Exclude SSH sessions (SSH_TTY or SSH_CONNECTION will be set)
     set -l tty_device (tty 2>/dev/null)
-    if test -z "$DISPLAY" -a -z "$WAYLAND_DISPLAY" -a -n "$tty_device" -a (string match -q "/dev/tty*" "$tty_device")
+    if test -z "$SSH_TTY" -a -z "$SSH_CONNECTION" -a -z "$DISPLAY" -a -z "$WAYLAND_DISPLAY" -a -n "$tty_device" -a (string match -q "/dev/tty*" "$tty_device")
         set -gx STARSHIP_CONFIG "$HOME/.config/starship-tty.toml"
     else
         set -gx STARSHIP_CONFIG "$HOME/.config/starship.toml"
