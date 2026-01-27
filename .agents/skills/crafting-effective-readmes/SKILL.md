@@ -1,67 +1,75 @@
 ---
 name: crafting-effective-readmes
-description: Use when writing or improving README files. Not all READMEs are the same — provides templates and guidance matched to your audience and project type.
+description: Use when writing or improving README files. Not all READMEs are the same — provides templates and guidance matched to your audience and project type. Use when user asks to create README, add README section, update README, review README documentation, improve project documentation, or write README.md.
 ---
 
 # Crafting Effective READMEs
 
-## Overview
+## Core Principles
 
-READMEs answer questions your audience will have. Different audiences need different information - a contributor to an OSS project needs different context than future-you opening a config folder.
+**Concise over comprehensive.** READMEs should answer key questions quickly, not document everything. Write the minimum needed for your audience to succeed.
+
+**Audience-first.** Different audiences need different information - a contributor to an OSS project needs different context than future-you opening a config folder.
 
 **Always ask:** Who will read this, and what do they need to know?
+
+## NEVER Do in READMEs
+
+- NEVER write "Introduction" or "Overview" as first heading (redundant - the README itself is the introduction)
+- NEVER include outdated installation instructions or stale content
+- NEVER copy-paste generic templates without customization for the specific project
+- NEVER write walls of text - use headers, lists, code blocks for scanability
+- NEVER assume obvious setup - include basic install/usage steps
+- NEVER write for the wrong audience (OSS style for personal projects, or vice versa)
+- NEVER use emojis unless explicitly requested (see style-guide.md for reasoning)
+- NEVER forget to update README when project capabilities change
+- NEVER exceed what's necessary - if a section doesn't answer a real user question, delete it
 
 ## Process
 
 ### Step 1: Identify the Task
 
-**Ask:** "What README task are you working on?"
+| Task | When | What to Do |
+|------|------|------------|
+| **Creating** | New project, no README yet | Ask: (1) Project type? (2) Problem solved in one sentence? (3) Quickest path to "it works"? |
+| **Adding** | Need to document something new | Ask: (1) What needs documenting? (2) Where in structure? (3) Who needs this? |
+| **Updating** | Capabilities changed, content is stale | Read current README, identify stale sections, propose specific edits |
+| **Reviewing** | Checking if README is accurate | Check against project state, flag outdated sections, trim unnecessary content |
 
-| Task | When |
-|------|------|
-| **Creating** | New project, no README yet |
-| **Adding** | Need to document something new |
-| **Updating** | Capabilities changed, content is stale |
-| **Reviewing** | Checking if README is still accurate |
+### Step 2: Load Appropriate Template
 
-### Step 2: Task-Specific Questions
+**MANDATORY - Based on project type, read the corresponding template:**
 
-**Creating initial README:**
-1. What type of project? (see Project Types below)
-2. What problem does this solve in one sentence?
-3. What's the quickest path to "it works"?
-4. Anything notable to highlight?
+- **Open Source project** → Read `templates/oss.md` completely
+- **Personal project** → Read `templates/personal.md` completely  
+- **Internal/team project** → Read `templates/internal.md` completely
+- **Config directory** → Read `templates/xdg-config.md` completely
 
-**Adding a section:**
-1. What needs documenting?
-2. Where should it go in the existing structure?
-3. Who needs this info most?
+**Then read** `section-checklist.md` to verify all necessary sections are included.
 
-**Updating existing content:**
-1. What changed?
-2. Read current README, identify stale sections
-3. Propose specific edits
+**If user mentions style concerns or asks for review** → Read `style-guide.md`
 
-**Reviewing/refreshing:**
-1. Read current README
-2. Check against actual project state (package.json, main files, etc.)
-3. Flag outdated sections
-4. Update "Last reviewed" date if present
+**Do NOT load** reference materials from `references/` directory unless user specifically asks for deeper context on README best practices.
 
-### Step 3: Always Ask
+### Step 3: Write Concisely
 
-After drafting, ask: **"Anything else to highlight or include that I might have missed?"**
+Before adding each section, ask:
+- **Does my audience need this?** If they can succeed without it, delete it.
+- **Is this the shortest way to say this?** Cut unnecessary words.
+- **Can I show instead of tell?** Use code examples over explanations.
+
+After drafting, ask: **"Anything else to highlight that I missed?"** - but resist adding fluff.
 
 ## Project Types
 
-| Type | Audience | Key Sections | Template |
-|------|----------|--------------|----------|
-| **Open Source** | Contributors, users worldwide | Install, Usage, Contributing, License | `templates/oss.md` |
-| **Personal** | Future you, portfolio viewers | What it does, Tech stack, Learnings | `templates/personal.md` |
-| **Internal** | Teammates, new hires | Setup, Architecture, Runbooks | `templates/internal.md` |
-| **Config** | Future you (confused) | What's here, Why, How to extend, Gotchas | `templates/xdg-config.md` |
+| Type | Audience | Focus |
+|------|----------|-------|
+| **Open Source** | Contributors, users worldwide | Install, Usage, Contributing, License |
+| **Personal** | Future you, portfolio viewers | What it does, Tech stack, Learnings |
+| **Internal** | Teammates, new hires | Setup, Architecture, Runbooks |
+| **Config** | Future you (confused) | What's here, Why, How to extend, Gotchas |
 
-**Ask the user** if unclear. Don't assume OSS defaults for everything.
+**Ask the user** if project type is unclear. Don't assume OSS defaults for everything.
 
 ## Essential Sections (All Types)
 
@@ -69,10 +77,4 @@ Every README needs at minimum:
 
 1. **Name** - Self-explanatory title
 2. **Description** - What + why in 1-2 sentences  
-3. **Usage** - How to use it (examples help)
-
-## References
-
-- `section-checklist.md` - Which sections to include by project type
-- `style-guide.md` - Common README mistakes and prose guidance
-- `using-references.md` - Guide to deeper reference materials
+3. **Usage** - How to use it (concise examples)
