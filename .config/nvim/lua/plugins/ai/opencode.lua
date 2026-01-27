@@ -9,8 +9,8 @@ return {
 			-- Set global options before plugin loads
 			vim.g.opencode_opts = {
 				auto_reload = true,
+				command = "opencode",
 				provider = {
-					cmd = "opencode",
 					enabled = "snacks",
 					snacks = {
 						win = {
@@ -29,6 +29,24 @@ return {
 			vim.o.autoread = true
 		end,
 		config = function()
+			local function focus_opencode_window()
+				vim.schedule(function()
+					for _, win in ipairs(vim.api.nvim_list_wins()) do
+						local bufnr = vim.api.nvim_win_get_buf(win)
+						local filetype = vim.bo[bufnr].filetype
+						if filetype == "opencode" or filetype == "opencode_terminal" then
+							vim.api.nvim_set_current_win(win)
+							return
+						end
+					end
+				end)
+			end
+
+			local function send_opencode(method, prompt, opts)
+				require("opencode")[method](prompt, opts)
+				focus_opencode_window()
+			end
+
 			-- Set up opencode terminal-specific keymaps
 			vim.api.nvim_create_autocmd("FileType", {
 				pattern = "opencode_terminal",
@@ -56,7 +74,7 @@ return {
 
 			-- Core keymaps
 			vim.keymap.set({ "n", "x" }, "<leader>ac", function()
-				require("opencode").ask("@this: ", { submit = true })
+				send_opencode("ask", "@this: ", { submit = true })
 			end, { desc = "Ask opencode" })
 
 			vim.keymap.set({ "n", "x" }, "<leader>as", function()
@@ -64,7 +82,7 @@ return {
 			end, { desc = "opencode actions" })
 
 			vim.keymap.set({ "n", "x" }, "ga", function()
-				require("opencode").prompt("@this")
+				send_opencode("prompt", "@this")
 			end, { desc = "Add to opencode" })
 
 			vim.keymap.set({ "n", "t" }, "<A-a>", function()
@@ -96,7 +114,7 @@ return {
 					vim.bo.filetype,
 					code_block
 				)
-				require("opencode").prompt(formatted_text)
+				send_opencode("prompt", formatted_text)
 
 				vim.notify(
 					string.format(
@@ -136,51 +154,51 @@ return {
 
 				-- Send all visible files to opencode
 				local formatted_text = table.concat(visible_files, " ")
-				require("opencode").prompt(formatted_text)
+				send_opencode("prompt", formatted_text)
 
 				vim.notify(string.format("Sent %d visible buffers to opencode", #visible_files), vim.log.levels.INFO)
 			end, { desc = "Send visible buffers to opencode" })
 
 			-- Code actions with prompts (replacing ChatGPT commands)
 			vim.keymap.set({ "n", "v" }, "<leader>ae", function()
-				require("opencode").prompt("explain")
+				send_opencode("prompt", "explain")
 			end, { desc = "Explain code" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>ao", function()
-				require("opencode").prompt("optimize")
+				send_opencode("prompt", "optimize")
 			end, { desc = "Optimize code" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>ad", function()
-				require("opencode").prompt("document")
+				send_opencode("prompt", "document")
 			end, { desc = "Add documentation" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>aa", function()
-				require("opencode").prompt("test")
+				send_opencode("prompt", "test")
 			end, { desc = "Add tests" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>ar", function()
-				require("opencode").prompt("review")
+				send_opencode("prompt", "review")
 			end, { desc = "Review code" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>af", function()
-				require("opencode").prompt("fix")
+				send_opencode("prompt", "fix")
 			end, { desc = "Fix diagnostics" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>ax", function()
-				require("opencode").prompt("diagnostics")
+				send_opencode("prompt", "diagnostics")
 			end, { desc = "Explain diagnostics" })
 
 			-- Custom prompts for grammar and translate (replacing ChatGPT functionality)
 			vim.keymap.set({ "n", "v" }, "<leader>ag", function()
-				require("opencode").ask("Fix grammar and improve writing: @this", { submit = true })
+				send_opencode("ask", "Fix grammar and improve writing: @this", { submit = true })
 			end, { desc = "Grammar correction" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>ak", function()
-				require("opencode").ask("Extract keywords from: @this", { submit = true })
+				send_opencode("ask", "Extract keywords from: @this", { submit = true })
 			end, { desc = "Extract keywords" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>al", function()
-				require("opencode").ask("Analyze code readability: @this", { submit = true })
+				send_opencode("ask", "Analyze code readability: @this", { submit = true })
 			end, { desc = "Code readability" })
 
 			-- Listen for opencode events
