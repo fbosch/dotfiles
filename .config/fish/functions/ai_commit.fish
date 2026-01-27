@@ -1,6 +1,6 @@
 function ai_commit --description 'Generate AI-powered Commitizen commit message from branch context'
-    set -l ai_model opencode/grok-code
-    set -l fallback_model github-copilot/grok-code-fast-1
+    set -l ai_model github-copilot/grok-code-fast-1
+    set -l fallback_model github-copilot/gpt-4o-mini
     
     if not git rev-parse --git-dir >/dev/null 2>&1
         gum style " Not in a git repository"
@@ -36,7 +36,15 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     
     # Build the prompt focusing on atomic changes
     set temp_prompt (mktemp -t opencode_prompt.XXXXXX)
-    echo "Generate Commitizen commit message for STAGED changes only.
+    echo "🚨 CRITICAL: OUTPUT MUST BE EXACTLY ≤50 CHARACTERS TOTAL 🚨
+
+Generate a Commitizen commit message for staged changes.
+
+ABSOLUTE REQUIREMENTS:
+1. Maximum 50 characters TOTAL (count: type + scope + colon + space + subject)
+2. Format: <type>(<scope>): <subject>
+3. Output ONLY the commit message - NO explanations, NO markdown, NO thinking
+4. If >50 chars, you MUST abbreviate until ≤50
 
 CONTEXT:
 Branch: $branch_name" >$temp_prompt
@@ -78,34 +86,86 @@ STAGED DIFF (focus on THIS change):
     # Sessions will accumulate and need manual cleanup via 'opencode session list' in TUI
     set temp_output (mktemp -t opencode_output.XXXXXX)
     set current_model $ai_model
-    gum spin --spinner pulse --title "󰚩 Analyzing changes with $current_model..." -- sh -c "cat $temp_prompt | opencode run -m $current_model --format json > $temp_output 2>&1"
+    gum spin --spinner pulse --title "󰚩 Analyzing changes with $current_model..." -- sh -c "cat $temp_prompt | opencode run -m $current_model --format json 2>/dev/null > $temp_output"
     
-    set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | string trim)
+    # Extract output - get ONLY the final text message (skip thinking/intermediate outputs)
+    # The JSON output is newline-delimited, with each line being a separate event
+    # We want only "text" type events, and we'll take the LAST one as the final answer
+    set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
+    
+    # If jq parsing failed, try plain text extraction
+    if test -z "$raw_output"
+        set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | string collect | string trim)
+    end
     
     # Try fallback model if primary failed
     if test -z "$raw_output"
         set current_model $fallback_model
-        gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- sh -c "cat $temp_prompt | opencode run -m $current_model --format json > $temp_output 2>&1"
-        set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | string trim)
+        gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- sh -c "cat $temp_prompt | opencode run -m $current_model --format json 2>/dev/null > $temp_output"
+        
+        # Extract with same logic - last text message only
+        set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
+        
+        # Try plain text extraction for fallback too
+        if test -z "$raw_output"
+            set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | string collect | string trim)
+        end
+    end
+    
+    if test -z "$raw_output"
+        gum style " Failed to generate commit message"
+        rm -f $temp_prompt $temp_output $temp_diff
+        return 1
+    end
+    
+    # Debug: show what we got
+    if set -q DEBUG_AI_COMMIT
+        gum style --foreground 6 "=== DEBUG: Raw AI Output ==="
+        echo "$raw_output"
+        gum style --foreground 6 "=== END DEBUG ==="
     end
     
     rm -f $temp_prompt $temp_output $temp_diff
     
-    if test -z "$raw_output"
-        gum style " Failed to generate commit message"
-        return 1
+    # Extract valid commit message (first line matching conventional commit format)
+    # Remove any markdown formatting, code blocks, or extra text
+    set cleaned_output (echo "$raw_output" | sed 's/```[a-z]*//g' | sed 's/^[[:space:]]*//g' | string collect)
+    
+    # Try to extract just the commit message line
+    set commit_msg ""
+    for line in (echo "$cleaned_output" | string split "\n")
+        # Skip empty lines
+        if test -z "$line"
+            continue
+        end
+        # Look for conventional commit format
+        if string match -qr '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?: ' -- "$line"
+            set commit_msg "$line"
+            break
+        end
     end
     
-    set commit_msg (string split -- "\n" -- "$raw_output" | string match -r -- '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?: .+' | head -n 1)
+    # Fallback: take first non-empty line
     if test -z "$commit_msg"
-        set commit_msg (string split -- "\n" -- "$raw_output" | string match -r -- '\S+' | head -n 1)
+        set commit_msg (echo "$cleaned_output" | string split "\n" | string match -r '^\S.*' | head -n 1)
     end
+    
     if test -z "$commit_msg"
         gum style " Failed to extract valid commit message"
+        gum style --foreground 3 "Raw output:"
+        echo "$raw_output"
         return 1
     end
     
-    set edited_msg (gum input --value "$commit_msg" --width 100 --prompt "󰏫 " --placeholder "Edit commit message or press Enter to accept...")
+    # Validate length (max 50 chars for subject line)
+    set msg_length (string length -- "$commit_msg")
+    if test -n "$msg_length" -a "$msg_length" -gt 50
+        gum style --foreground 3 "⚠ Generated message too long ($msg_length chars, max 50)"
+        # Try to truncate intelligently at word boundary
+        set commit_msg (string sub -l 47 -- "$commit_msg")"..."
+    end
+    
+    set edited_msg (gum input --value="$commit_msg" --width 100 --prompt "󰏫 " --placeholder "Edit commit message or press Enter to accept...")
     if test $status -ne 0
         gum style --foreground 1 "󰜺 Commit cancelled"
         return 1
