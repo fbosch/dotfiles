@@ -27,6 +27,9 @@ storybook-static
 .config/codex/config.toml
 .config/gtk-4.0/**/*
 .config/gtk-3.0/**/*
+.codex/**
+!.codex/skills/**/*
+.agents/skills/.system
 
 # window state rules (auto-generated)
 .config/hypr/window-state-rules.conf
@@ -63,6 +66,7 @@ checkhealth.log
 *.swo
 *~
 *.bak
+*.backup
 
 # Ignore log files
 *.log

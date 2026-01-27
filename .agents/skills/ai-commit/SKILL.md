@@ -1,22 +1,107 @@
 ---
 name: ai-commit
-description: Generate atomic Commitizen messages from staged diffs.
+description: Generate atomic Commitizen-style commit messages from staged git diffs. Use when the user asks to create a commit message, write a commit, or needs help with git commit messages. Automatically analyzes staged changes and produces properly formatted conventional commit messages with appropriate type, scope, and description.
 ---
 
-## Rules
-- Types: feat|fix|docs|style|refactor|perf|test|build|ci|chore.
-- Imperative mood ("add", "fix", "update", not "added", "fixes").
-- <72 chars total.
-- Describe this commit's staged changes only.
-- Be specific and atomic, like a changelog entry.
-- Focus on what changed in the diff, not branch name or prior work.
-- If a ticket number is provided in context, scope must be AB#<ticket>.
+# AI Commit Message Generator
+
+Generate atomic, well-structured commit messages following Conventional Commits and Commitizen conventions.
+
+## Commit Message Format
+
+**Structure:**
+```
+<type>(<scope>): <subject>
+
+[optional body]
+```
+
+**Rules:**
+- Total length < 72 characters for subject line
+- Use imperative mood ("add", "fix", "update" - not "added", "fixes", "updating")
+- Be specific and atomic - describe exactly what this commit changes
+- Focus on the staged diff content, not branch names or prior work
+- Scope is optional but recommended for clarity
+
+**Types:**
+- `feat`: New feature or functionality
+- `fix`: Bug fix
+- `docs`: Documentation changes only
+- `style`: Code style/formatting (no logic changes)
+- `refactor`: Code restructuring (no behavior change)
+- `perf`: Performance improvement
+- `test`: Adding or updating tests
+- `build`: Build system or dependencies
+- `ci`: CI/CD configuration changes
+- `chore`: Maintenance tasks
+
+## Scope Guidelines
+
+**When ticket numbers are provided:**
+- Use format: `AB#<ticket-number>`
+- Example: `fix(AB#50147): prevent null pointer in validation`
+
+**When no ticket number:**
+- Use module/feature name
+- Examples: `feat(auth): add password reset`, `fix(api): handle timeout errors`
+
+**When changes span multiple areas:**
+- Use broader scope or omit scope
+- Example: `refactor: standardize error handling across services`
 
 ## Examples
-- fix(AB#50147): prevent null pointer in user validation
-- feat(AB#50147): add email field to registration form
-- refactor(AB#50147): extract validation logic to helper function
-- test(AB#50147): add edge case tests for empty input
+
+**Feature addition:**
+```
+feat(AB#50147): add email field to registration form
+
+Include validation for email format and uniqueness check
+```
+
+**Bug fix:**
+```
+fix(AB#50147): prevent null pointer in user validation
+
+Add null check before accessing user.profile object
+```
+
+**Refactoring:**
+```
+refactor(AB#50147): extract validation logic to helper
+
+Move validation functions to utils/validators.ts for reuse
+```
+
+**Test addition:**
+```
+test(AB#50147): add edge case tests for empty input
+
+Cover null, undefined, and empty string scenarios
+```
+
+**Documentation:**
+```
+docs(api): update authentication endpoint examples
+
+Add JWT token format and refresh token flow details
+```
+
+**Simple change:**
+```
+fix(AB#50271): correct timezone offset calculation
+```
+
+## Process
+
+1. **Analyze the staged diff** - Review what files changed and how
+2. **Determine the type** - Based on what changed (feat/fix/refactor/etc)
+3. **Identify the scope** - Use ticket number if available, otherwise module name
+4. **Write subject line** - Imperative, specific, < 50 chars
+5. **Add body if needed** - For complex changes, explain why or how (optional)
+6. **Verify format** - Check length, mood, and conventional commit structure
 
 ## Output
-- Commit message only; no markdown or explanations.
+
+Provide ONLY the commit message text. No markdown formatting, no explanations, no preamble.
+
+If the commit is simple, output just the subject line. If more context is needed, include a blank line and body.
