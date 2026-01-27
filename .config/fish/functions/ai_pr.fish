@@ -107,6 +107,22 @@ Section headings:
 Title format:
 $commitizen_type(#$ticket_number): Brief description (max 60 chars after colon, present tense)
 
+Hard limits:
+- Summary: 1 sentence, max 14 words
+- Changes: 2-5 bullets, max 10 words each
+- Testing: 1 bullet, command or \"Not stated\"
+- Breaking: 1 bullet, \"None\" unless obvious in diff
+- Total output: 26 lines max
+
+Length calibration:
+- Small PR (<=3 files and <=2 commits): 2 bullets
+- Medium PR (4-10 files or 3-6 commits): 3-4 bullets
+- Large PR (>10 files or >6 commits): 4-5 bullets
+
+Minimum content:
+- Always include Summary and Changes
+- Changes must include at least 2 bullets
+
 Branch: $branch_name | Base: $main_branch | Files: "(string join ', ' $changed_files)"
 Commits: "(string join ' | ' $commit_messages)"
 
@@ -116,7 +132,7 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     if test -n "$branch_hint"
         set prompt "$prompt\nBranch type: $branch_hint"
     end
-    set prompt "$prompt\n\nCRITICAL: Your entire response must be ONLY the PR content. The first character you output must be the first character of the PR title. Do not output any thoughts, explanations, or analysis.\n\nFormat:\nLine 1: $commitizen_type(#$ticket_number): description (max 72 chars)\nLine 2: blank\nLine 3+: Markdown PR body in $language_name"
+    set prompt "$prompt\n\nCRITICAL: Your entire response must be ONLY the PR content. The first character you output must be the first character of the PR title. Do not output any thoughts, explanations, analysis, or intent. Do not add any preface such as 'Intent:' or 'Here is'.\n\nFormat:\nLine 1: $commitizen_type(#$ticket_number): description (max 72 chars)\nLine 2: blank\nLine 3+: Markdown PR body in $language_name\n\nIf you cannot meet limits, shorten further."
     set temp_prompt (mktemp -t opencode_prompt.XXXXXX)
     set temp_output (mktemp -t opencode_output.XXXXXX)
     echo "$prompt" >$temp_prompt
