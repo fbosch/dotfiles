@@ -3,6 +3,7 @@ command_timeout = 2000
 continuation_prompt = "[ᛃ︁ ](dimmed white)"
 
 format = """$character\
+$hostname
 $sudo"""
 
 right_format = """
@@ -15,8 +16,8 @@ $cmd_duration
 """
 
 [character]
-success_symbol = "[ ᚠᛒᛒ ](#9e9e9e)[᛫](cyan)"
-error_symbol = "[ ᚾᚨᚢᚦ ](bold red)[᛬](red)"
+success_symbol = "[ ᚠᛒᛒ](#9e9e9e)[᛫](cyan)"
+error_symbol = "[ ᚾᚨᚢᚦ](bold red)[᛫](red)"
 
 # Disabled sudo - was taking 17ms for no output
 # Re-enable if you frequently use sudo
@@ -25,6 +26,13 @@ format = "[$symbol]($style)"
 style = "bold italic bright-red"
 symbol = "ᛊ "
 disabled = true
+
+[hostname]
+ssh_only = true
+format = '[$hostname: ](cyan)'
+trim_at = "."
+disabled = false
+aliases = { "rvn-srv" = "srv", "rvn-pc" = "pc" }
 
 [python]
 disabled = true

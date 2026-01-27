@@ -2,6 +2,7 @@ command_timeout = 2000
 continuation_prompt = "[> ](dimmed white)"
 
 format = """$character\
+$hostname
 $sudo"""
 
 right_format = """
