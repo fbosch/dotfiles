@@ -1,0 +1,35 @@
+{
+  "version": 3,
+  "skills": {
+    "crafting-effective-readmes": {
+      "source": "softaworks/agent-toolkit",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/softaworks/agent-toolkit.git",
+      "skillPath": "skills/crafting-effective-readmes/SKILL.md",
+      "skillFolderHash": "72e2a4d89c5a14b762cfc58e3bbd7fd63e9642b0",
+      "installedAt": "2026-01-27T08:51:04.588Z",
+      "updatedAt": "2026-01-27T08:51:04.588Z"
+    },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/vercel-labs/skills.git",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "skillFolderHash": "c2f31172b6f256272305a5e6e7228b258446899f",
+      "installedAt": "2026-01-27T08:51:09.674Z",
+      "updatedAt": "2026-01-27T08:51:09.674Z"
+    },
+    "skill-creator": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/anthropics/skills.git",
+      "skillPath": "skills/skill-creator/SKILL.md",
+      "skillFolderHash": "7bd8fc459f09f0e14dcc2adbb4a5a58e60ea755c",
+      "installedAt": "2026-01-27T08:58:11.501Z",
+      "updatedAt": "2026-01-27T08:58:11.501Z"
+    }
+  },
+  "dismissed": {
+    "findSkillsPrompt": true
+  }
+}
