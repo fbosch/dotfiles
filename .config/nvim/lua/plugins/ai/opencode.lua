@@ -44,7 +44,9 @@ return {
 
 			local function send_opencode(method, prompt, opts)
 				require("opencode")[method](prompt, opts)
-				focus_opencode_window()
+				if opts and opts.submit then
+					focus_opencode_window()
+				end
 			end
 
 			-- Set up opencode terminal-specific keymaps
