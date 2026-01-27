@@ -29,7 +29,7 @@ disabled = true
 
 [hostname]
 ssh_only = true
-format = '[$hostname: ](cyan)'
+format = '[$hostname: ](yellow)'
 trim_at = "."
 disabled = false
 aliases = { "rvn-srv" = "srv", "rvn-pc" = "pc" }
