@@ -15,6 +15,7 @@ design-system
 lazy-lock\.json
 Brewfile\.lock\.json
 ./opencode.json
+\.luarc\.json
 
 # Example files should not be stowed, only used as templates
 \.example$
