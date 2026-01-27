@@ -25,6 +25,19 @@ Generate clear, concise PR descriptions from git diffs and commit messages.
 - State what changed from/to
 - Include reasons only when explicitly stated in commits
 
+## NEVER Do in PR Descriptions
+
+- NEVER use marketing language ("enhanced", "optimized", "robust", "improved", "powerful")
+- NEVER include "this PR" or "this change" (redundant in PR context)
+- NEVER explain HOW the code works - describe WHAT behavior changed
+- NEVER add emojis or visual flair
+- NEVER write in first person ("I added", "We fixed") - use imperative
+- NEVER include aspirational features not yet implemented
+- NEVER list trivial changes (formatting, whitespace, import reordering)
+- NEVER exceed 5 bullets in Changes section (be selective)
+- NEVER write full paragraphs - use concise bullets
+- NEVER guess at breaking changes - only include if obviously visible in diff
+
 ## PR Structure
 
 ```markdown

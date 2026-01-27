@@ -23,6 +23,28 @@ Generate atomic, well-structured commit messages following Conventional Commits 
 - Focus on the staged diff content, not branch names or prior work
 - Scope is optional but recommended for clarity
 
+## NEVER Do in Commit Messages
+
+- NEVER use past tense ("added", "fixed", "updated") - use imperative mood
+- NEVER reference branch names in commit message ("merge feature-branch", "from develop")
+- NEVER write vague subjects like "fix bug", "update code", "changes"
+- NEVER exceed 72 characters on subject line
+- NEVER describe HOW the code works - describe WHAT changed
+- NEVER include multiple unrelated changes in one commit (suggest splitting)
+- NEVER write commit messages in future tense ("will add", "will fix")
+- NEVER capitalize the first letter of subject after the scope (lowercase only)
+
+## NEVER Do in Commit Messages
+
+- NEVER use past tense ("added", "fixed", "updated") - use imperative mood
+- NEVER reference branch names in commit message ("merge feature-branch", "from develop")
+- NEVER write vague subjects like "fix bug", "update code", "changes"
+- NEVER exceed 72 characters on subject line
+- NEVER describe HOW the code works - describe WHAT changed
+- NEVER include multiple unrelated changes in one commit (suggest splitting)
+- NEVER write commit messages in future tense ("will add", "will fix")
+- NEVER capitalize the first letter of subject after the scope (lowercase only)
+
 **Types:**
 - `feat`: New feature or functionality
 - `fix`: Bug fix
