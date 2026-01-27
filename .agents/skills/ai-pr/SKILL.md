@@ -9,6 +9,11 @@ Generate clear, concise PR descriptions from git diffs and commit messages.
 
 ## Core Principles
 
+**Short and scannable beats comprehensive:**
+- PRs are scanned in 30 seconds - every word must earn its place
+- Reviewers should understand the change without reading code
+- Less is more - cut ruthlessly
+
 **Focus on functional changes:**
 - Include code behavior changes, bug fixes, new features, API changes, tests
 - Omit trivial changes: formatting, whitespace, comment-only edits, import reordering
@@ -27,6 +32,7 @@ Generate clear, concise PR descriptions from git diffs and commit messages.
 
 ## NEVER Do in PR Descriptions
 
+- NEVER write more than necessary - if you can say it in 5 words instead of 10, do it
 - NEVER use marketing language ("enhanced", "optimized", "robust", "improved", "powerful")
 - NEVER include "this PR" or "this change" (redundant in PR context)
 - NEVER explain HOW the code works - describe WHAT behavior changed
@@ -34,8 +40,10 @@ Generate clear, concise PR descriptions from git diffs and commit messages.
 - NEVER write in first person ("I added", "We fixed") - use imperative
 - NEVER include aspirational features not yet implemented
 - NEVER list trivial changes (formatting, whitespace, import reordering)
-- NEVER exceed 5 bullets in Changes section (be selective)
+- NEVER exceed 5 bullets in Changes section (be selective - 3 is better)
 - NEVER write full paragraphs - use concise bullets
+- NEVER write introductory phrases ("This section describes..." - just describe it)
+- NEVER repeat information between Summary and Changes sections
 - NEVER guess at breaking changes - only include if obviously visible in diff
 
 ## PR Structure
@@ -74,26 +82,87 @@ If no ticket number:
 
 ## Writing Guidelines
 
+**Before writing, ask:**
+1. Can I say this in fewer words?
+2. Does this bullet add information or just take space?
+3. Would a reviewer understand this in 5 seconds?
+
 **Summary section:**
-- Max 2 short sentences
+- Max 2 short sentences (1 is better if sufficient)
 - Describe the overall goal or problem solved
 - Present tense, active voice
+- Cut unnecessary words ruthlessly
 
 **Changes section:**
-- Max 5 bullets
-- Each bullet under 12 words
+- **Target 3-4 bullets** (5 is maximum, not goal)
+- Each bullet under 10 words (12 is absolute max)
 - List only substantive functional changes
 - Order by importance/impact
+- If you have >5 changes, the PR is probably too large - focus on the most important
 
 **Testing section:**
-- List test commands run or test files added
-- Mention testing approach if stated in commits
+- Be brief: `npm test` beats "Run the test suite using npm test"
+- List test commands or file names, nothing more
 - Use "- Not stated" if no testing info available
 
 **Breaking Changes section:**
 - Include only when diff obviously breaks existing behavior
-- Describe what breaks and how
+- One line per breaking change - no elaboration unless critical
 - Use "- None" if no breaking changes
+
+## Good vs Bad Examples
+
+**Good (concise, scannable):**
+```
+feat(auth): add password reset
+
+## Summary
+Add password reset flow with email verification.
+
+## Changes
+- Add `POST /auth/reset` endpoint
+- Send reset email via SendGrid
+- Add `ResetPassword` UI component
+
+## Testing
+- `npm test`
+- Manual test with test@example.com
+
+## Breaking Changes
+- None
+```
+
+**Bad (verbose, hard to scan):**
+```
+feat(auth): enhance authentication system with password reset functionality
+
+## Summary
+This PR implements a comprehensive password reset feature that will allow 
+users to reset their passwords when they forget them. The implementation 
+includes both backend API endpoints and frontend UI components, and it has 
+been thoroughly tested to ensure reliability.
+
+## Changes
+- This change implements a new POST endpoint at /auth/reset which handles 
+  password reset requests from users who have forgotten their passwords
+- We have integrated with the SendGrid email service to send password reset 
+  emails to users, which includes a secure token
+- A new ResetPassword component has been created in the frontend to provide 
+  users with an intuitive interface for resetting their passwords
+- Updated the authentication flow to support the new password reset feature
+- Added comprehensive error handling for edge cases
+
+## Testing
+- Ran the full test suite using the command `npm test` and verified that all 
+  tests pass successfully
+- Performed extensive manual testing with the test account test@example.com 
+  to ensure the feature works correctly in real-world scenarios
+
+## Breaking Changes
+- None at this time
+```
+
+The good example takes 10 seconds to read. The bad example takes 45+ seconds and adds no extra information.
 
 ## Examples
 
@@ -102,17 +171,16 @@ If no ticket number:
 feat(AB#50147): add email validation to registration
 
 ## Summary
-Add email format validation and uniqueness check to registration form.
+Add email format validation and uniqueness check.
 
 ## Changes
-- Add `validateEmail` function to `utils/validators.ts`
-- Update `RegistrationForm` to check email format
-- Add unique email constraint to database schema
-- Display error message for invalid or duplicate emails
+- Add `validateEmail` to `utils/validators.ts`
+- Check email format in `RegistrationForm`
+- Add unique email constraint to schema
 
 ## Testing
-- Run `npm test` for unit tests
-- Manual testing with valid/invalid email formats
+- `npm test`
+- Manual test with invalid emails
 
 ## Breaking Changes
 - None
@@ -123,16 +191,15 @@ Add email format validation and uniqueness check to registration form.
 fix(AB#50271): prevent null pointer in user profile
 
 ## Summary
-Fix crash when accessing user profile with missing data.
+Fix crash when profile data is missing.
 
 ## Changes
-- Add null check before accessing `user.profile.avatar`
-- Set default avatar when profile image is missing
-- Update `ProfileCard` component error handling
+- Add null check for `user.profile.avatar`
+- Set default avatar when missing
 
 ## Testing
-- Add test case for users without profile data
-- Verify no crash with null profile
+- Add test for null profile
+- Verify no crash
 
 ## Breaking Changes
 - None
@@ -143,17 +210,15 @@ Fix crash when accessing user profile with missing data.
 refactor(AB#50198): extract validation to shared module
 
 ## Summary
-Move validation functions to shared module for reuse across forms.
+Move validation functions to shared module.
 
 ## Changes
-- Create `utils/validators.ts` with shared functions
-- Update `LoginForm` to use shared validators
-- Update `RegistrationForm` to use shared validators
-- Remove duplicate validation code
+- Create `utils/validators.ts`
+- Update `LoginForm` and `RegistrationForm`
+- Remove duplicate code
 
 ## Testing
-- Existing tests pass with refactored code
-- No behavior changes
+- Existing tests pass
 
 ## Breaking Changes
 - None
@@ -164,21 +229,19 @@ Move validation functions to shared module for reuse across forms.
 feat(AB#50299): migrate to new authentication API
 
 ## Summary
-Update authentication to use v2 API endpoints.
+Update to v2 API endpoints.
 
 ## Changes
-- Replace `/auth/login` with `/v2/auth/token` endpoint
-- Update auth response parsing for new format
+- Replace `/auth/login` with `/v2/auth/token`
+- Update response parsing for new format
 - Add token refresh flow
-- Update tests for new API
 
 ## Testing
 - Integration tests with v2 API
-- Manual testing of login and token refresh
 
 ## Breaking Changes
-- Old `/auth/login` endpoint no longer supported
-- Auth tokens now require refresh after 1 hour
+- Old `/auth/login` endpoint removed
+- Tokens require refresh after 1 hour
 ```
 
 ## Process
