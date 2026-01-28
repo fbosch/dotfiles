@@ -25,15 +25,19 @@ return {
 				timeout = 1000,
 				lsp_format = "fallback",
 			},
-			format_on_save = {
-				quiet = true,
+		format_on_save = {
+			quiet = true,
+		},
+		formatters = {
+			biome = {
+				-- Ensure biome uses the project's config by setting cwd to the file's directory
+				cwd = require("conform.util").root_file({ "biome.json", "biome.jsonc" }),
 			},
-			formatters = {
-				["cargo fmt"] = {
-					command = "cargo",
-					args = { "fmt", "--", "--force" },
-				},
+			["cargo fmt"] = {
+				command = "cargo",
+				args = { "fmt", "--", "--force" },
 			},
+		},
 			formatters_by_ft = {
 				html = web_formatters,
 				css = web_formatters,
