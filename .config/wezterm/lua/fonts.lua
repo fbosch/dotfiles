@@ -10,7 +10,7 @@ return function(config)
 		{
 			family = "JetBrains Mono",
 			harfbuzz_features = { "calt=0", "clig=0", "liga=0" },
-			weight = 300,
+			weight = 400,
 		},
 		{ family = "Symbols Nerd Font Mono", scale = 0.75 },
 		{ family = "BabelStone Runic Elder Futhark", scale = 0.9 },

@@ -31,5 +31,7 @@
   },
   "dismissed": {
     "findSkillsPrompt": true
-  }
+  },
+  "lastSelectedAgents": ["codex"]
 }
+

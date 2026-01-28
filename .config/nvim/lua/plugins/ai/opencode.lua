@@ -9,8 +9,8 @@ return {
 			-- Set global options before plugin loads
 			vim.g.opencode_opts = {
 				auto_reload = true,
-				command = "opencode",
 				provider = {
+					cmd = "opencode --continue --port",
 					enabled = "snacks",
 					snacks = {
 						win = {

@@ -14,12 +14,12 @@ return {
 		"fish",
 		"rust",
 		"mdx",
-    "nix"
+		"nix",
 	},
 	config = function()
 		local group = vim.api.nvim_create_augroup("Conform", {})
 		local conform = require("conform")
-		local web_formatters = { "prettierd", "prettier", "biome", stop_after_first = true }
+		local web_formatters = { "biome", "prettierd", "prettier", stop_after_first = true }
 		conform.setup({
 			default_format_options = {
 				timeout = 1000,
@@ -29,6 +29,12 @@ return {
 				quiet = true,
 			},
 			formatters = {
+				biome = {
+					-- Dynamically find project root with biome config
+					cwd = require("conform.util").root_file({ "biome.json", "biome.jsonc" }),
+					-- Ensure biome respects project config and doesn't use defaults
+					require_cwd = true,
+				},
 				["cargo fmt"] = {
 					command = "cargo",
 					args = { "fmt", "--", "--force" },

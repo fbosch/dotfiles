@@ -27,6 +27,8 @@ storybook-static
 .config/codex/config.toml
 .config/gtk-4.0/**/*
 .config/gtk-3.0/**/*
+
+# agent skills, codex ignored as selected for default skills.sh, symlinking is handled manually 
 .codex/**
 !.codex/skills/**/*
 .agents/skills/.system
