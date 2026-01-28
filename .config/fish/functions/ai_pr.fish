@@ -139,6 +139,9 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     cat $actual_diff_file >>$temp_prompt
     set temp_pr_desc (mktemp).md
     
+    # Capture existing sessions before running (for cleanup)
+    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null)
+    
     # Run opencode by piping the prompt instead of command substitution
     set opencode_exit_code 0
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "cat $temp_prompt | opencode run -m $ai_model --format json > $temp_output 2>&1"
@@ -232,6 +235,18 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     else
         gum style --foreground 3 "󰦨 Clipboard command not found, displaying content:"
         cat "$temp_pr_desc"
+    end
+    
+    # Cleanup OpenCode sessions created during PR generation
+    set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null)
+    for session in $sessions_after
+        if not contains $session $sessions_before
+            # Delete session directory
+            set -l project_id (opencode session list --format json -n 100 2>/dev/null | jq -r ".[] | select(.id == \"$session\") | .projectId" 2>/dev/null)
+            if test -n "$project_id"
+                rm -rf "$HOME/.local/share/opencode/storage/session/$project_id/$session" 2>/dev/null
+            end
+        end
     end
     
     # Cleanup temp file
