@@ -2,6 +2,8 @@
 
 Hyprland window manager configuration with custom keybinds, rules, and support scripts.
 
+**Project:** [Hyprland](https://github.com/hyprwm/Hyprland)
+
 **Configuration files:**
 - `hyprland.conf` - Main config (sources other files)
 - `keybinds.conf` - Keyboard shortcuts

@@ -2,6 +2,8 @@
 
 Wezterm terminal configuration with modular Lua setup for theming, keybinds, and UI customization.
 
+**Project:** [Wezterm](https://wezfurlong.org/wezterm/)
+
 **Configuration modules (wezterm.lua imports all):**
 - `lua/base.lua` - Core settings (WebGPU, performance, status updates, shell processes)
 - `lua/colors.lua` - Color scheme (zenwritten_dark) and tab bar colors

@@ -2,6 +2,8 @@
 
 Comprehensive Neovim config with Lazy.nvim plugin manager, modular Lua setup, and VSCode-mode support.
 
+**Project:** [Neovim](https://neovim.io/) | Plugin Manager: [Lazy.nvim](https://github.com/folke/lazy.nvim)
+
 **Entry point:**
 - `init.lua` - Sets leader key, requires config module
 - `lua/config/init.lua` - Main config that sources all modules

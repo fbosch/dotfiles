@@ -2,6 +2,8 @@
 
 Fish shell configuration with extensive functions, aliases, and environment setup.
 
+**Project:** [Fish Shell](https://fishshell.com/)
+
 **Root configuration files (sourced by config.fish):**
 
 - `config.fish` - Main entry point (OS detection, Hyprland launcher, function autoloading)
