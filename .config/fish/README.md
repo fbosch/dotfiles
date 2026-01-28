@@ -13,7 +13,7 @@ Fish shell configuration with extensive functions, aliases, and environment setu
 - `colors.fish` - Color theme and utilities
 - `private.fish` - Local/private settings (not in repo)
 
-**Functions (47 total, autoloaded):**
+**Functions (autoloaded):
 
 _AI/OpenCode integration:_
 

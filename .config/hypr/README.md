@@ -15,7 +15,7 @@ Hyprland window manager configuration with custom keybinds, rules, and support s
 - `hyprexpo.conf` - Workspace overview
 - `monitors.conf.example` / `hyprpaper.conf.example` - Templates for local setup
 
-**Scripts (22 utilities):**
+**Scripts:**
 - Window management: `cycle-windows.sh`, `window-switcher-wrapper.sh`, `window-state.sh`, `window-switcher-ags.sh`
 - System confirmations: `confirm-exit.sh`, `confirm-restart.sh`, `confirm-shutdown.sh`, `confirm-suspend.sh`
 - System utilities: `screenshot.sh`, `toggle-hypridle.sh`, `toggle-night-light.sh`, `toggle-performance-mode.sh`, `launch-browser.sh`
