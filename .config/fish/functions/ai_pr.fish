@@ -1,5 +1,9 @@
 function ai_pr --description 'Generate AI-powered PR description comparing current branch against main'
-    set -l ai_model github-copilot/claude-haiku-4.5
+    # Parse arguments
+    argparse 'm/model=' -- $argv
+    or return 1
+    
+    set -l ai_model (set -q _flag_model; and echo $_flag_model; or echo github-copilot/claude-haiku-4.5)
     set -l language "en"
     if set -q argv[1]
         set language $argv[1]

@@ -1,4 +1,4 @@
-function ai_commit_benchmark --description 'Benchmark AI models for commit message generation'
+function __ai_commit_benchmark --description 'Benchmark AI models for commit message generation'
     # Parse arguments for custom model list
     argparse 'a/all' -- $argv
     
@@ -201,7 +201,8 @@ STAGED DIFF (focus on THIS change):
     echo ""
     
     # Display formatted table using tab delimiter
-    column -t -s $'\t' < $results_file
+    # Fish doesn't support $'\t', so we use printf to create a tab character
+    column -t -s (printf '\t') < $results_file
     
     echo ""
     
