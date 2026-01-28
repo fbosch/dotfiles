@@ -19,8 +19,8 @@ sleep 0.2
 # Relaunch the desktop helpers.
 uwsm app -- waybar &
 uwsm app -- hyprpaper &
-uwsm app -- swaync-client -R &
-uwsm app -- swaync-client -rs &
+swaync-client -R &
+swaync-client -rs &
 
 # Launch AGS daemons via start-daemons script
 uwsm app -- bash ~/.config/ags/start-daemons.sh &
