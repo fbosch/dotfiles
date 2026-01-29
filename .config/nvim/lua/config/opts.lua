@@ -81,7 +81,6 @@ end
 
 vim.opt.hidden = true
 vim.opt.mouse = "a"
-vim.opt.clipboard:append("unnamedplus")
 vim.opt.errorbells = false
 
 -- paths

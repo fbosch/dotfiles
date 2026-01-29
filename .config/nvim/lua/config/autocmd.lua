@@ -10,11 +10,19 @@ local function set_osc52_clipboard()
 		return vim.split(content, "\n")
 	end
 
+	local osc52_copy = require("vim.ui.clipboard.osc52").copy
+	local function debug_copy(register)
+		return function(lines, regtype)
+			vim.notify("OSC 52 copy triggered for register " .. register, vim.log.levels.INFO)
+			return osc52_copy(register)(lines, regtype)
+		end
+	end
+
 	vim.g.clipboard = {
 		name = "OSC 52",
 		copy = {
-			["+"] = require("vim.ui.clipboard.osc52").copy("+"),
-			["*"] = require("vim.ui.clipboard.osc52").copy("*"),
+			["+"] = debug_copy("+"),
+			["*"] = debug_copy("*"),
 		},
 		paste = {
 			["+"] = my_paste,
@@ -38,13 +46,25 @@ end
 vim.schedule(function()
 	vim.opt.clipboard:append("unnamedplus")
 
+	-- Debug: Check environment variables
+	local ssh_client = vim.uv.os_getenv("SSH_CLIENT")
+	local ssh_tty = vim.uv.os_getenv("SSH_TTY")
+	vim.notify(
+		string.format("SSH_CLIENT: %s, SSH_TTY: %s", tostring(ssh_client), tostring(ssh_tty)),
+		vim.log.levels.INFO
+	)
+
 	-- Standard SSH session handling
-	if vim.uv.os_getenv("SSH_CLIENT") ~= nil or vim.uv.os_getenv("SSH_TTY") ~= nil then
+	if ssh_client ~= nil or ssh_tty ~= nil then
+		vim.notify("Setting OSC 52 clipboard", vim.log.levels.INFO)
 		set_osc52_clipboard()
 	else
 		check_wezterm_remote_clipboard(function(is_remote_wezterm)
 			if is_remote_wezterm then
+				vim.notify("Setting OSC 52 clipboard (WezTerm remote)", vim.log.levels.INFO)
 				set_osc52_clipboard()
+			else
+				vim.notify("Using default clipboard", vim.log.levels.INFO)
 			end
 		end)
 	end
