@@ -51,6 +51,7 @@ return {
 					"regex",
 					"vim",
 					"vimdoc",
+					"nixpkgs-fmt",
 				},
 			})
 		end,

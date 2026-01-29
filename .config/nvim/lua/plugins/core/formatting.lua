@@ -56,7 +56,7 @@ return {
 				json = { "jq", "biome" },
 				rust = { "cargo fmt" },
 				yaml = { "prettierd", "prettier", stop_after_first = true },
-				nix = { "nixfmt" },
+				nix = { "nixpkgs_fmt" },
 			},
 		})
 
