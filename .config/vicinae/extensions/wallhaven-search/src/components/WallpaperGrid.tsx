@@ -1,4 +1,5 @@
-import { QueryClientProvider, useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import {
 	Action,
 	ActionPanel,
@@ -10,9 +11,9 @@ import {
 } from "@vicinae/api";
 import { useState } from "react";
 import { convertUserSettingsToPurity, searchWallpapers } from "../api";
-import { getCachedDefaultWallpapers } from "../cache";
 import { DEFAULT_CATEGORIES, DEFAULT_DEBOUNCE_MS } from "../constants";
 import { useDebounce } from "../hooks";
+import { persister } from "../persist";
 import { queryClient } from "../queryClient";
 import type { Preferences, Wallpaper } from "../types";
 import { downloadWallpaper } from "../utils/download";
@@ -97,18 +98,6 @@ export function WallpaperGrid() {
 						? userSettings.ai_art_filter
 						: undefined,
 			}),
-		initialData: () => {
-			if (isDefaultSearch) {
-				const cached = getCachedDefaultWallpapers();
-				if (cached) {
-					return {
-						pages: [cached],
-						pageParams: [1],
-					};
-				}
-			}
-			return undefined;
-		},
 		staleTime: 12 * 60 * 60 * 1000,
 		gcTime: 12 * 60 * 60 * 1000,
 		getNextPageParam: (lastPage) => {
@@ -174,11 +163,14 @@ export function WallpaperGrid() {
 								<Action.Push
 									title="Show Preview"
 									target={
-										<QueryClientProvider client={queryClient}>
-											<WallpaperDetail wallpaper={wallpaper} />
-										</QueryClientProvider>
-									}
-								/>
+									<PersistQueryClientProvider
+										client={queryClient}
+										persistOptions={{ persister }}
+									>
+										<WallpaperDetail wallpaper={wallpaper} />
+									</PersistQueryClientProvider>
+								}
+							/>
 								<Action
 									title="Download Wallpaper"
 									icon={Icon.Download}
@@ -231,7 +223,6 @@ export function WallpaperGrid() {
 // Extracted user settings query to simplify main component
 import { useQuery } from "@tanstack/react-query";
 import { fetchUserSettings } from "../api";
-import { getCachedUserSettings } from "../cache";
 import type { UserSettings } from "../types";
 
 function useInfiniteUserSettings(preferences: Preferences) {
@@ -242,7 +233,6 @@ function useInfiniteUserSettings(preferences: Preferences) {
 			return fetchUserSettings(preferences.apiKey);
 		},
 		enabled: Boolean(preferences.apiKey && preferences.useUserSettings),
-		initialData: () => getCachedUserSettings() || undefined,
 		staleTime: 60 * 60 * 1000,
 	});
 	return { data: userSettings };

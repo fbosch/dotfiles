@@ -1,4 +1,3 @@
-import { setCachedDefaultWallpapers, setCachedUserSettings } from "./cache";
 import {
 	DEFAULT_CATEGORIES,
 	DEFAULT_SEARCH_FALLBACK,
@@ -23,9 +22,7 @@ export async function fetchUserSettings(
 			return null;
 		}
 		const data = await response.json();
-		const settings = data.data;
-		setCachedUserSettings(settings);
-		return settings;
+		return data.data;
 	} catch (error) {
 		console.error("Error fetching user settings:", error);
 		return null;
@@ -92,13 +89,6 @@ export async function searchWallpapers(
 	}
 	const data: WallhavenResponse = await response.json();
 
-	const isDefaultSearch =
-		params.query.trim() === "" &&
-		params.page === 1 &&
-		params.categories === DEFAULT_CATEGORIES;
-	if (isDefaultSearch) {
-		setCachedDefaultWallpapers(data);
-	}
 	return data;
 }
 
