@@ -247,11 +247,11 @@ function YrWeatherContent() {
   return (
     <List isLoading={isLoading} isShowingDetail={showingDetail}>
       {!data && !isLoading && !isError ? (
-        <List.EmptyView
-          title="Configure Location"
-          description="Set your latitude and longitude in extension preferences"
-          icon={Icon.Gear}
-        />
+			<List.EmptyView
+				title="Configure Location"
+				description="Set your latitude and longitude in extension preferences"
+				icon={Icon.Info}
+			/>
       ) : dailyForecasts.length === 0 && !isLoading ? (
         <List.EmptyView
           title="No weather data"
