@@ -14,7 +14,7 @@ Follow the repo’s established Vicinae extension patterns for structure, cachin
 1. Identify scope and complexity (single command vs multi-module extension).
 2. Choose structure from `references/extension-template.md`.
 3. Define manifest + preferences in `package.json` using the Vicinae schema.
-4. Implement data access with React Query and Vicinae Cache (see `references/cache-patterns.md`).
+4. Implement data access with React Query persistence using `persistQueryClient` (see `references/cache-patterns.md`).
 5. Implement ActionPanel ordering and shortcuts (see `references/action-ux-standards.md`).
 6. Add empty/loading/error states and toasts.
 7. Run `pnpm -C <extension> lint` and `pnpm -C <extension> build`.
@@ -40,15 +40,15 @@ Follow the repo’s established Vicinae extension patterns for structure, cachin
 ## Data and cache rules
 
 - Use React Query for fetches and local cache.
-- Use Vicinae Cache for persistence between sessions.
-- Keep TTLs in `constants.ts` and align Cache TTL with React Query `staleTime`.
+- Prefer `persistQueryClient` with a Vicinae Cache-backed persister for cross-session persistence.
+- Keep `gcTime` aligned with `persistQueryClient` `maxAge`.
 - Do not trigger toasts during render; use `useEffect` or query `onError`.
 
 ## Anti-patterns (never)
 
 - Never call `showToast` during render; it causes repeated toasts and jitter.
 - Never leave debug logging in production commands.
-- Never use unversioned cache keys; bump versions when payload shape changes.
+- Never mix manual Cache persistence with React Query persistence in the same command.
 - Never bind shortcuts for actions that are unavailable.
 - Never open external URLs without a success toast + `closeMainWindow()`.
 

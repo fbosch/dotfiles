@@ -7,6 +7,7 @@ Custom Vicinae extensions with consistent UX, keybindings, and build workflow.
 - Extensions must pass `vici lint` (use `pnpm exec vici lint`) and follow official guidelines.
 - Package manager: pnpm workspaces (use `pnpm` commands).
 - Build extensions individually; use bulk build script only for full refresh.
+- Prefer React Query persistence (`PersistQueryClientProvider`) with a Vicinae Cache-backed persister for cross-session query cache.
 
 ## More Guidance
 

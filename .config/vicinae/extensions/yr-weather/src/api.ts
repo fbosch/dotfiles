@@ -1,67 +1,7 @@
-import { Cache } from "@vicinae/api";
 import type { DailyForecast, TimeseriesEntry, WeatherData } from "./types";
 
 const USER_AGENT = "Vicinae YrWeather Extension/1.0 (https://github.com/fbosch/dotfiles)";
 const API_BASE_URL = "https://api.met.no/weatherapi/locationforecast/2.0";
-
-const WEATHER_CACHE_KEY_PREFIX = "yr-weather-v1";
-const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
-
-const cache = new Cache();
-
-type CachedWeatherData = {
-	weather: WeatherData;
-	cachedAt: number;
-};
-
-function getWeatherCacheKey(
-	latitude: string,
-	longitude: string,
-	altitude?: string,
-): string {
-	return `${WEATHER_CACHE_KEY_PREFIX}:${latitude}:${longitude}:${altitude || ""}`;
-}
-
-export function getCachedWeather(
-	latitude: string,
-	longitude: string,
-	altitude?: string,
-): CachedWeatherData | null {
-	const cached = cache.get(getWeatherCacheKey(latitude, longitude, altitude));
-	if (!cached) return null;
-
-	try {
-		const data: CachedWeatherData = JSON.parse(cached);
-		if (Date.now() - data.cachedAt < CACHE_DURATION) {
-			return data;
-		}
-		cache.remove(getWeatherCacheKey(latitude, longitude, altitude));
-		return null;
-	} catch {
-		cache.remove(getWeatherCacheKey(latitude, longitude, altitude));
-		return null;
-	}
-}
-
-export function setCachedWeather(
-	latitude: string,
-	longitude: string,
-	altitude: string | undefined,
-	weather: WeatherData,
-): void {
-	cache.set(
-		getWeatherCacheKey(latitude, longitude, altitude),
-		JSON.stringify({ weather, cachedAt: Date.now() } satisfies CachedWeatherData),
-	);
-}
-
-export function clearCachedWeather(
-	latitude: string,
-	longitude: string,
-	altitude?: string,
-): void {
-	cache.remove(getWeatherCacheKey(latitude, longitude, altitude));
-}
 
 export function buildForecastUrl(
 	latitude: string,
@@ -103,11 +43,6 @@ export async function fetchWeather(
 	longitude: string,
 	altitude?: string,
 ): Promise<WeatherData> {
-	const cached = getCachedWeather(latitude, longitude, altitude);
-	if (cached) {
-		return cached.weather;
-	}
-
 	const url = buildForecastUrl(latitude, longitude, altitude);
 
 	try {
@@ -129,9 +64,7 @@ export async function fetchWeather(
 			);
 		}
 
-		const data = (await response.json()) as WeatherData;
-		setCachedWeather(latitude, longitude, altitude, data);
-		return data;
+		return (await response.json()) as WeatherData;
 	} catch (error) {
 		console.error("[Yr Weather] Fetch error:", error);
 		if (error instanceof Error) {

@@ -1,8 +1,5 @@
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQuery,
-} from "@tanstack/react-query";
+import { QueryClient, useQuery } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import {
   Action,
   ActionPanel,
@@ -14,28 +11,35 @@ import {
 } from "@vicinae/api";
 import { useEffect, useState } from "react";
 import {
-  fetchWeather,
-  buildForecastUrl,
-  formatDate,
+	fetchWeather,
+	buildForecastUrl,
+	formatDate,
   formatHumidity,
   formatPrecipitation,
   formatPressure,
   formatTemperature,
   formatWindDirection,
-  formatWindSpeed,
-  getSymbolIcon,
-  groupByDay,
+	formatWindSpeed,
+	getSymbolIcon,
+	groupByDay,
 } from "./api";
+import {
+	yrWeatherPersister,
+	YR_WEATHER_PERSIST_MAX_AGE,
+} from "./persist";
 import type { DailyForecast, YrPreferences } from "./types";
 
+const QUERY_STALE_TIME = 30 * 60 * 1000; // 30 minutes - weather doesn't change that often
+
 const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30 * 60 * 1000, // 30 minutes - weather doesn't change that often
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
+	defaultOptions: {
+		queries: {
+			staleTime: QUERY_STALE_TIME,
+			gcTime: YR_WEATHER_PERSIST_MAX_AGE,
+			refetchOnWindowFocus: false,
+			retry: 1,
+		},
+	},
 });
 
 function DailyForecastItem({
@@ -250,7 +254,7 @@ function YrWeatherContent() {
 			<List.EmptyView
 				title="Configure Location"
 				description="Set your latitude and longitude in extension preferences"
-				icon={Icon.XMarkCircle}
+				icon={Icon.Warning}
 			/>
       ) : dailyForecasts.length === 0 && !isLoading ? (
         <List.EmptyView
@@ -275,9 +279,15 @@ function YrWeatherContent() {
 }
 
 export default function YrWeather() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <YrWeatherContent />
-    </QueryClientProvider>
-  );
+	return (
+		<PersistQueryClientProvider
+			client={queryClient}
+			persistOptions={{
+				persister: yrWeatherPersister,
+				maxAge: YR_WEATHER_PERSIST_MAX_AGE,
+			}}
+		>
+			<YrWeatherContent />
+		</PersistQueryClientProvider>
+	);
 }

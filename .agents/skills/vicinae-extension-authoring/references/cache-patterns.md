@@ -1,70 +1,67 @@
 # Cache Patterns
 
-Use Vicinae Cache for persistence across sessions. Align Cache TTL with React Query `staleTime`.
+Prefer React Query persistence for query data. Use a Vicinae Cache-backed persister for cross-session storage. Align `gcTime` with `persistQueryClient` `maxAge`.
 
 ## Key rules
 
-- Use versioned keys (`feature-name-v1`).
-- Store `{ data, cachedAt }` in JSON.
-- Remove cache on parse errors or expiration.
-- Keep TTLs in `constants.ts` and reuse in QueryClient.
+- Use versioned persist keys (`feature-name-query-v1`).
+- Persist only dehydrated query state via `persistQueryClient`.
+- Keep `gcTime` aligned with `maxAge` to avoid early garbage collection.
+- Remove persisted cache on parse errors.
 
-## Baseline helper
+## Vicinae Cache persister
 
 ```ts
 import { Cache } from "@vicinae/api";
+import type {
+  PersistedClient,
+  Persister,
+} from "@tanstack/react-query-persist-client";
 
 const cache = new Cache();
-const CACHE_KEY = "extension-data-v1";
-const CACHE_TTL = 12 * 60 * 60 * 1000; // 12h
+const PERSIST_KEY = "extension-query-v1";
+const MAX_AGE = 12 * 60 * 60 * 1000; // 12h
 
-type CachedData<T> = {
-  data: T;
-  cachedAt: number;
-};
-
-export function getCachedData<T>(): T | null {
-  const cached = cache.get(CACHE_KEY);
-  if (!cached) return null;
-  try {
-    const parsed: CachedData<T> = JSON.parse(cached);
-    if (Date.now() - parsed.cachedAt < CACHE_TTL) {
-      return parsed.data;
+export const persister = {
+  persistClient: async (client: PersistedClient) => {
+    cache.set(PERSIST_KEY, JSON.stringify(client));
+  },
+  restoreClient: async () => {
+    const cached = cache.get(PERSIST_KEY);
+    if (!cached) return undefined;
+    try {
+      return JSON.parse(cached) as PersistedClient;
+    } catch {
+      cache.remove(PERSIST_KEY);
+      return undefined;
     }
-    cache.remove(CACHE_KEY);
-    return null;
-  } catch {
-    cache.remove(CACHE_KEY);
-    return null;
-  }
-}
-
-export function setCachedData<T>(data: T): void {
-  cache.set(
-    CACHE_KEY,
-    JSON.stringify({ data, cachedAt: Date.now() } satisfies CachedData<T>),
-  );
-}
-
-export function clearCachedData(): void {
-  cache.remove(CACHE_KEY);
-}
+  },
+  removeClient: async () => {
+    cache.remove(PERSIST_KEY);
+  },
+} satisfies Persister;
 ```
 
 ## React Query integration
 
 ```ts
-const cached = getCachedData<YourType>();
-
-const query = useQuery({
-  queryKey: ["extension", "resource"],
-  queryFn: fetchResource,
-  initialData: cached ?? undefined,
-  initialDataUpdatedAt: cached ? cached.cachedAt : undefined,
-  staleTime: CACHE_TTL,
-  refetchOnWindowFocus: false,
-  retry: 1,
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: MAX_AGE,
+      gcTime: MAX_AGE,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
 });
+
+<PersistQueryClientProvider
+  client={queryClient}
+  persistOptions={{ persister, maxAge: MAX_AGE }}
+>
+  <App />
+</PersistQueryClientProvider>
 ```
 
-When refreshing, clear Vicinae cache and invalidate the query to force a network fetch.
+When refreshing, invalidate the query and let persistence resync on the next save.

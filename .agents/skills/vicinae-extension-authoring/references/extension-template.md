@@ -64,8 +64,8 @@ extension-name/
 ## Query + cache module split
 
 - `constants.ts`: keys + TTLs + shared defaults.
-- `cache.ts`: Vicinae Cache helpers (get/set/clear).
-- `queryClient.ts`: QueryClient with defaults.
+- `persist.ts`: Vicinae Cache persister for React Query persistence.
+- `queryClient.ts`: QueryClient with defaults (align `gcTime` with persist `maxAge`).
 - `api.ts`: network calls and response shaping.
 
-Use `constants.ts` to keep TTLs aligned across Cache and React Query.
+Use `constants.ts` to keep `staleTime`, `gcTime`, and persistence `maxAge` aligned.
