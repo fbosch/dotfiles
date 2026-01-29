@@ -1,8 +1,4 @@
-import {
-	QueryClient,
-	QueryClientProvider,
-	useQuery,
-} from "@tanstack/react-query";
+import { QueryClient, useQuery } from "@tanstack/react-query";
 import {
 	Action,
 	ActionPanel,
@@ -16,6 +12,11 @@ import {
 	Toast,
 } from "@vicinae/api";
 import { useEffect, useState } from "react";
+import {
+	PersistQueryClientProvider,
+	type PersistedClient,
+	type Persister,
+} from "@tanstack/react-query-persist-client";
 import type {
 	ProtonDBConfidence,
 	ProtonDBRating,
@@ -52,48 +53,35 @@ const FALLBACK_GAME_IDS = [
 
 // Query cache configuration
 const QUERY_STALE_TIME = 12 * 60 * 60 * 1000; // 12 hours
-const QUERY_GC_TIME = 12 * 60 * 60 * 1000; // 12 hours
+const PERSIST_MAX_AGE = 12 * 60 * 60 * 1000; // 12 hours
 
-// Vicinae Cache for featured games persistence between sessions
 const cache = new Cache();
-const FEATURED_GAMES_CACHE_KEY = "protondb-featured-games-v1";
-const FEATURED_CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours (match React Query)
+const PERSIST_KEY = "protondb-query-v1";
 
-type CachedFeaturedGames = {
-	games: SteamGame[];
-	cachedAt: number;
-};
-
-function getCachedFeaturedGames(): SteamGame[] | null {
-	const cached = cache.get(FEATURED_GAMES_CACHE_KEY);
-	if (!cached) return null;
-
-	try {
-		const data: CachedFeaturedGames = JSON.parse(cached);
-		if (Date.now() - data.cachedAt < FEATURED_CACHE_DURATION) {
-			return data.games;
+const persister = {
+	persistClient: async (client: PersistedClient) => {
+		cache.set(PERSIST_KEY, JSON.stringify(client));
+	},
+	restoreClient: async () => {
+		const cached = cache.get(PERSIST_KEY);
+		if (!cached) return undefined;
+		try {
+			return JSON.parse(cached) as PersistedClient;
+		} catch {
+			cache.remove(PERSIST_KEY);
+			return undefined;
 		}
-		cache.remove(FEATURED_GAMES_CACHE_KEY);
-		return null;
-	} catch {
-		cache.remove(FEATURED_GAMES_CACHE_KEY);
-		return null;
-	}
-}
-
-function setCachedFeaturedGames(games: SteamGame[]): void {
-	const data: CachedFeaturedGames = {
-		games,
-		cachedAt: Date.now(),
-	};
-	cache.set(FEATURED_GAMES_CACHE_KEY, JSON.stringify(data));
-}
+	},
+	removeClient: async () => {
+		cache.remove(PERSIST_KEY);
+	},
+} satisfies Persister;
 
 const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
 			staleTime: QUERY_STALE_TIME,
-			gcTime: QUERY_GC_TIME,
+			gcTime: PERSIST_MAX_AGE,
 			refetchOnWindowFocus: false,
 			retry: 1,
 		},
@@ -206,9 +194,7 @@ async function fetchFeaturedGames(): Promise<SteamGame[]> {
 			})
 			.slice(0, 10);
 
-		const games = await fetchGamesByIds(appIds);
-		setCachedFeaturedGames(games);
-		return games;
+		return await fetchGamesByIds(appIds);
 	} catch (error) {
 		console.error("Failed to fetch featured games:", error);
 		showToast({
@@ -660,9 +646,12 @@ function GameListItem({ game }: { game: SteamGame }) {
 						<Action.Push
 							title="Show Details"
 							target={
-								<QueryClientProvider client={queryClient}>
-									<GameDetail game={game} />
-								</QueryClientProvider>
+							<PersistQueryClientProvider
+								client={queryClient}
+								persistOptions={{ persister, maxAge: PERSIST_MAX_AGE }}
+							>
+								<GameDetail game={game} />
+							</PersistQueryClientProvider>
 							}
 							icon={Icon.Eye}
 							shortcut={{ modifiers: ["cmd"], key: "d" }}
@@ -682,7 +671,6 @@ function ProtonDBSearchContent() {
 	const { data: featuredGames = [], isLoading: loadingFeatured } = useQuery({
 		queryKey: ["featured-games"],
 		queryFn: fetchFeaturedGames,
-		initialData: () => getCachedFeaturedGames() || undefined,
 	});
 
 	// Search query
@@ -748,8 +736,11 @@ function ProtonDBSearchContent() {
 
 export default function ProtonDBSearch() {
 	return (
-		<QueryClientProvider client={queryClient}>
+		<PersistQueryClientProvider
+			client={queryClient}
+			persistOptions={{ persister, maxAge: PERSIST_MAX_AGE }}
+		>
 			<ProtonDBSearchContent />
-		</QueryClientProvider>
+		</PersistQueryClientProvider>
 	);
 }
