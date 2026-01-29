@@ -6,7 +6,6 @@ Personal dotfiles managed with GNU Stow for symlink management across macOS and 
 
 - Do not edit auto-generated files:
   - `lazy-lock.json` (Lazy.nvim lockfile)
-  - `Brewfile.lock.json` (Homebrew lockfile)
   - `.config/nvim/.sessions/`, `.config/nvim/.undo/`, `.config/nvim/.backup/` (Neovim state)
   - `.config/fish/{fish_variables,completions,conf.d,functions}/` (Fish shell state)
   - `.config/lazygit/state.yml` (Lazygit state)
@@ -14,11 +13,13 @@ Personal dotfiles managed with GNU Stow for symlink management across macOS and 
 
 ## Package manager
 
-Homebrew (`brew bundle install`)
+NixOS/Home Manager (managed in external repo)
+External repo: https://github.com/fbosch/nixos (usually at `~/nixos`)
 
 ## Commands
 
-- `brew bundle install`
+- `stow .`
+- `stow -n .`
 
 ## More Guidance
 
