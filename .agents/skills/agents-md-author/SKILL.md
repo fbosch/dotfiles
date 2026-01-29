@@ -1,9 +1,9 @@
 ---
-name: agents-md-creator
+name: agents-md-author
 description: Create, review, or refactor AGENTS.md files for repositories, including minimal root guidance, monorepo scoping, and progressive disclosure references. Use when asked to write or edit AGENTS.md, or when a repo needs its agent instructions audited for size, staleness, or clarity.
 ---
 
-# AGENTS.md Creator
+# AGENTS.md Author
 
 Create, review, or refactor AGENTS.md files so they stay minimal, stable, and useful. Favor a tiny root file that points to deeper docs when needed.
 
