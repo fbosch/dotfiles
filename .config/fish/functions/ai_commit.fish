@@ -87,7 +87,7 @@ STAGED DIFF (focus on THIS change):
     cat $temp_diff >>$temp_prompt
 
     # Capture existing sessions before running (for cleanup)
-    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null | string collect)
+    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null)
 
     # Run AI generation with fallback
     set temp_output (mktemp -t opencode_output.XXXXXX)
@@ -122,13 +122,18 @@ STAGED DIFF (focus on THIS change):
         gum style " Failed to generate commit message"
     rm -f $temp_prompt $temp_output $temp_diff
 
-    # Cleanup function for new sessions
+    # Cleanup function for new sessions - deletes session JSON files
     function cleanup_sessions
-        set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null | string collect)
-        for session in (echo $sessions_after | string split " ")
-            if test -n "$session"; and not string match -q "*$session*" "$sessions_before"
-                opencode session stop $session 2>/dev/null
-                or true # Ignore errors if session already stopped
+        set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
+        for session_path in $sessions_after
+            set -l session_id (basename $session_path)
+            # Check if this session existed before we started
+            if not contains $session_id $sessions_before
+                # Delete the session JSON file
+                set -l session_file "$HOME/.local/share/opencode/storage/session/$session_path.json"
+                if test -f "$session_file"
+                    rm -f "$session_file" 2>/dev/null
+                end
             end
         end
     end

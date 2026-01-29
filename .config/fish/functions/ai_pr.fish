@@ -144,7 +144,7 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     set temp_pr_desc (mktemp).md
     
     # Capture existing sessions before running (for cleanup)
-    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null | string collect)
+    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null)
     
     # Run opencode by piping the prompt instead of command substitution
     set opencode_exit_code 0
@@ -190,13 +190,18 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     
     rm -f $temp_prompt $temp_output $temp_diff "$temp_output.err"
 
-    # Cleanup function for new sessions
+    # Cleanup function for new sessions - deletes session JSON files
     function cleanup_sessions
-        set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null | string collect)
-        for session in (echo $sessions_after | string split " ")
-            if test -n "$session"; and not string match -q "*$session*" "$sessions_before"
-                opencode session stop $session 2>/dev/null
-                or true # Ignore errors if session already stopped
+        set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
+        for session_path in $sessions_after
+            set -l session_id (basename $session_path)
+            # Check if this session existed before we started
+            if not contains $session_id $sessions_before
+                # Delete the session JSON file
+                set -l session_file "$HOME/.local/share/opencode/storage/session/$session_path.json"
+                if test -f "$session_file"
+                    rm -f "$session_file" 2>/dev/null
+                end
             end
         end
     end
