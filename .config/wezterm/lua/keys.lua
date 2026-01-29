@@ -104,6 +104,11 @@ return function(config)
 			action = wezterm.action.CloseCurrentPane({ confirm = false }),
 		},
 		{
+			key = "w",
+			mods = "CMD|SHIFT",
+			action = wezterm.action.CloseCurrentPane({ confirm = true }),
+		},
+		{
 			key = "RightArrow",
 			mods = "CTRL",
 			action = wezterm.action.DisableDefaultAssignment,
