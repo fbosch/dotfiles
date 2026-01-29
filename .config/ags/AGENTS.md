@@ -8,6 +8,10 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI elements using bundled mod
 - Styling is inline via `app.start({ css: ... })` or `app.apply_css()`; avoid external CSS files.
 - Type definitions: `.config/ags/@girs/` is auto-generated; regenerate with `ags types` on new systems.
 
+## Commands
+
+- `ags types` (regenerate GObject typings)
+
 ## More Guidance
 
 - [Architecture and components](docs/agents/architecture.md)

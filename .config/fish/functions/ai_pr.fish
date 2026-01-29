@@ -144,7 +144,7 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     set temp_pr_desc (mktemp).md
     
     # Capture existing sessions before running (for cleanup)
-    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null)
+    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
     
     # Run opencode by piping the prompt instead of command substitution
     set opencode_exit_code 0
@@ -189,6 +189,19 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     end
     
     rm -f $temp_prompt $temp_output $temp_diff "$temp_output.err"
+
+    # Cleanup the session used for generation
+    set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
+    set -l used_session_path ""
+    for session_path in $sessions_after
+        if not contains $session_path $sessions_before
+            set used_session_path $session_path
+            break
+        end
+    end
+    if test -n "$used_session_path"
+        cleanup_opencode_session "$used_session_path"
+    end
     
     # Open in ephemeral Neovim instance for editing
     # -f: foreground (blocking)
@@ -209,7 +222,7 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
         gum style --foreground 1 "󰜺 PR description cancelled"
         return 1
     end
-    
+
     # Validate file has content (user didn't clear it completely)
     if not test -s "$temp_pr_desc"
         rm -f "$temp_pr_desc"
@@ -240,19 +253,7 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
         gum style --foreground 3 "󰦨 Clipboard command not found, displaying content:"
         cat "$temp_pr_desc"
     end
-    
-    # Cleanup OpenCode sessions created during PR generation
-    set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null)
-    for session in $sessions_after
-        if not contains $session $sessions_before
-            # Delete session directory
-            set -l project_id (opencode session list --format json -n 100 2>/dev/null | jq -r ".[] | select(.id == \"$session\") | .projectId" 2>/dev/null)
-            if test -n "$project_id"
-                rm -rf "$HOME/.local/share/opencode/storage/session/$project_id/$session" 2>/dev/null
-            end
-        end
-    end
-    
+
     # Cleanup temp file
     rm -f "$temp_pr_desc"
 end

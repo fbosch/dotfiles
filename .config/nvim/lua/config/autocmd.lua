@@ -2,6 +2,74 @@ local cmd = vim.api.nvim_create_autocmd
 local map = require("utils").set_keymap
 local group = vim.api.nvim_create_augroup("default", {})
 
+-- Sync clipboard between OS and Neovim.
+-- Function to set OSC 52 clipboard
+local function set_osc52_clipboard()
+	local function my_paste()
+		local content = vim.fn.getreg('"')
+		return vim.split(content, "\n")
+	end
+
+	local osc52_copy = require("vim.ui.clipboard.osc52").copy
+	local function debug_copy(register)
+		return function(lines, regtype)
+			vim.notify("OSC 52 copy triggered for register " .. register, vim.log.levels.INFO)
+			return osc52_copy(register)(lines, regtype)
+		end
+	end
+
+	vim.g.clipboard = {
+		name = "OSC 52",
+		copy = {
+			["+"] = debug_copy("+"),
+			["*"] = debug_copy("*"),
+		},
+		paste = {
+			["+"] = my_paste,
+			["*"] = my_paste,
+		},
+	}
+end
+
+-- Check if the current session is a remote WezTerm session based on the WezTerm executable
+local function check_wezterm_remote_clipboard(callback)
+	local wezterm_executable = vim.uv.os_getenv("WEZTERM_EXECUTABLE")
+
+	if wezterm_executable and wezterm_executable:find("wezterm-mux-server", 1, true) then
+		callback(true) -- Remote WezTerm session found
+	else
+		callback(false) -- No remote WezTerm session
+	end
+end
+
+-- Schedule the setting after `UiEnter` because it can increase startup-time.
+vim.schedule(function()
+	vim.opt.clipboard:append("unnamedplus")
+
+	-- Debug: Check environment variables
+	local ssh_client = vim.uv.os_getenv("SSH_CLIENT")
+	local ssh_tty = vim.uv.os_getenv("SSH_TTY")
+	vim.notify(
+		string.format("SSH_CLIENT: %s, SSH_TTY: %s", tostring(ssh_client), tostring(ssh_tty)),
+		vim.log.levels.INFO
+	)
+
+	-- Standard SSH session handling
+	if ssh_client ~= nil or ssh_tty ~= nil then
+		vim.notify("Setting OSC 52 clipboard", vim.log.levels.INFO)
+		set_osc52_clipboard()
+	else
+		check_wezterm_remote_clipboard(function(is_remote_wezterm)
+			if is_remote_wezterm then
+				vim.notify("Setting OSC 52 clipboard (WezTerm remote)", vim.log.levels.INFO)
+				set_osc52_clipboard()
+			else
+				vim.notify("Using default clipboard", vim.log.levels.INFO)
+			end
+		end)
+	end
+end)
+
 -- set json files to json5 filetype
 cmd({ "BufRead", "BufNewFile" }, {
 	pattern = { ".{eslint,babel,stylelint,prettier}rc" },
