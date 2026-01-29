@@ -7,6 +7,19 @@ Design system for a Windows 11-like desktop UI with macOS-level polish.
 - No custom CSS classes or files; use Tailwind utilities only (except base resets in `src/index.css`).
 - Tokens live in `tokens.json` and map through `tailwind.config.js`.
 
+## Package manager
+
+pnpm
+
+## Commands
+
+- `pnpm dev` (Vite dev server)
+- `pnpm build` (typecheck + build)
+- `pnpm storybook` (storybook dev)
+- `pnpm build-storybook`
+- `pnpm contrast` (token contrast validation)
+- `pnpm lint` / `pnpm format` (Biome)
+
 ## More Guidance
 
 - [Design goals and philosophy](docs/agents/goals.md)

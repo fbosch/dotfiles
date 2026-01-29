@@ -4,9 +4,16 @@ Hyprland compositor configuration managed via Home Manager/Nix.
 
 ## Essentials
 
-- Validate after every `.conf` change:
-  - `hyprctl configerrors`
-  - `hyprctl reload` (optional)
+- Validate after every `.conf` change.
+
+## Package manager
+
+Home Manager/Nix
+
+## Commands
+
+- `hyprctl configerrors`
+- `hyprctl reload` (optional)
 
 ## More Guidance
 

@@ -11,7 +11,14 @@ Personal dotfiles managed with GNU Stow for symlink management across macOS and 
   - `.config/fish/{fish_variables,completions,conf.d,functions}/` (Fish shell state)
   - `.config/lazygit/state.yml` (Lazygit state)
   - `.config/ags/@girs/` (AGS TypeScript type definitions; regenerate with `ags types`)
-- Package manager: Homebrew via `brew bundle install`.
+
+## Package manager
+
+Homebrew (`brew bundle install`)
+
+## Commands
+
+- `brew bundle install`
 
 ## More Guidance
 
