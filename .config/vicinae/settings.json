@@ -27,6 +27,7 @@
       "opacity": 0.88
    },
    "favorites": [
+      "@fbosch/yr-weather:yr-weather",
       "@fbosch/home-assistant:home-assistant-lights",
       "applications:com.discordapp.Discord",
       "@aurelleb/store.vicinae.mullvad:connect",
