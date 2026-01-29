@@ -144,7 +144,7 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     set temp_pr_desc (mktemp).md
     
     # Capture existing sessions before running (for cleanup)
-    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null)
+    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null | string collect)
     
     # Run opencode by piping the prompt instead of command substitution
     set opencode_exit_code 0
@@ -189,6 +189,17 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     end
     
     rm -f $temp_prompt $temp_output $temp_diff "$temp_output.err"
+
+    # Cleanup function for new sessions
+    function cleanup_sessions
+        set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null | string collect)
+        for session in (echo $sessions_after | string split " ")
+            if test -n "$session"; and not string match -q "*$session*" "$sessions_before"
+                opencode session stop $session 2>/dev/null
+                or true # Ignore errors if session already stopped
+            end
+        end
+    end
     
     # Open in ephemeral Neovim instance for editing
     # -f: foreground (blocking)
@@ -207,13 +218,15 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     # Check if file still exists (user might have deleted it or cancelled)
     if not test -f "$temp_pr_desc"
         gum style --foreground 1 "󰜺 PR description cancelled"
+        cleanup_sessions
         return 1
     end
-    
+
     # Validate file has content (user didn't clear it completely)
     if not test -s "$temp_pr_desc"
         rm -f "$temp_pr_desc"
         gum style --foreground 1 "󰜺 PR description cancelled (empty content)"
+        cleanup_sessions
         return 1
     end
     
@@ -240,19 +253,10 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
         gum style --foreground 3 "󰦨 Clipboard command not found, displaying content:"
         cat "$temp_pr_desc"
     end
-    
-    # Cleanup OpenCode sessions created during PR generation
-    set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null)
-    for session in $sessions_after
-        if not contains $session $sessions_before
-            # Delete session directory
-            set -l project_id (opencode session list --format json -n 100 2>/dev/null | jq -r ".[] | select(.id == \"$session\") | .projectId" 2>/dev/null)
-            if test -n "$project_id"
-                rm -rf "$HOME/.local/share/opencode/storage/session/$project_id/$session" 2>/dev/null
-            end
-        end
-    end
-    
+
+    # Cleanup OpenCode sessions
+    cleanup_sessions
+
     # Cleanup temp file
     rm -f "$temp_pr_desc"
 end

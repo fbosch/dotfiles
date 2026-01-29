@@ -49,7 +49,7 @@ return {
 				end
 			end
 
-			-- Set up opencode terminal-specific keymaps
+			-- Set up opencode terminal-specific keymaps and cleanup
 			vim.api.nvim_create_autocmd("FileType", {
 				pattern = "opencode_terminal",
 				callback = function(args)
@@ -71,6 +71,20 @@ return {
 					vim.keymap.set("n", "<C-j>", "<C-w>j", buf_opts)
 					vim.keymap.set("n", "<C-k>", "<C-w>k", buf_opts)
 					vim.keymap.set("n", "<C-l>", "<C-w>l", buf_opts)
+				end,
+			})
+
+			-- Clean up opencode instance when buffer is deleted/unloaded
+			vim.api.nvim_create_autocmd({ "BufDelete", "BufUnload" }, {
+				pattern = "*",
+				callback = function(args)
+					local filetype = vim.bo[args.buf].filetype
+					if filetype == "opencode_terminal" or filetype == "opencode" then
+						-- Stop the opencode session for this instance
+						pcall(function()
+							require("opencode").stop()
+						end)
+					end
 				end,
 			})
 

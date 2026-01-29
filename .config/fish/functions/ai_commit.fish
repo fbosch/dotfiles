@@ -87,7 +87,7 @@ STAGED DIFF (focus on THIS change):
     cat $temp_diff >>$temp_prompt
 
     # Capture existing sessions before running (for cleanup)
-    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null)
+    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null | string collect)
 
     # Run AI generation with fallback
     set temp_output (mktemp -t opencode_output.XXXXXX)
@@ -120,7 +120,18 @@ STAGED DIFF (focus on THIS change):
 
     if test -z "$raw_output"
         gum style " Failed to generate commit message"
-        rm -f $temp_prompt $temp_output $temp_diff
+    rm -f $temp_prompt $temp_output $temp_diff
+
+    # Cleanup function for new sessions
+    function cleanup_sessions
+        set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null | string collect)
+        for session in (echo $sessions_after | string split " ")
+            if test -n "$session"; and not string match -q "*$session*" "$sessions_before"
+                opencode session stop $session 2>/dev/null
+                or true # Ignore errors if session already stopped
+            end
+        end
+    end
         return 1
     end
 
@@ -187,19 +198,7 @@ STAGED DIFF (focus on THIS change):
         gum style --foreground 2 "  git commit -m \"$edited_msg\""
         gum style --foreground 6 "\nStaged files:"
         git diff --cached --name-only | sed 's/^/  /'
-
-        # Cleanup sessions
-        set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null)
-        for session in $sessions_after
-            if not contains $session $sessions_before
-                # Delete session directory
-                set -l project_id (opencode session list --format json -n 100 2>/dev/null | jq -r ".[] | select(.id == \"$session\") | .projectId" 2>/dev/null)
-                if test -n "$project_id"
-                    rm -rf "$HOME/.local/share/opencode/storage/session/$project_id/$session" 2>/dev/null
-                end
-            end
-        end
-
+        cleanup_sessions
         return 0
     end
 
@@ -207,20 +206,12 @@ STAGED DIFF (focus on THIS change):
     # This allows easy re-run if pre-commit hooks fail
     history add git\ commit\ -m\ "$edited_msg" >/dev/null 2>&1
     git commit -m "$edited_msg"
+    set -l commit_status $status
 
-    # Cleanup sessions before returning
-    set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null)
-    for session in $sessions_after
-        if not contains $session $sessions_before
-            # Delete session directory
-            set -l project_id (opencode session list --format json -n 100 2>/dev/null | jq -r ".[] | select(.id == \"$session\") | .projectId" 2>/dev/null)
-            if test -n "$project_id"
-                rm -rf "$HOME/.local/share/opencode/storage/session/$project_id/$session" 2>/dev/null
-            end
-        end
-    end
+    # Cleanup sessions
+    cleanup_sessions
 
-    if test $status -eq 0
+    if test $commit_status -eq 0
         gum style --foreground 2 "󰸞 Commit successful!"
         return 0
     else
