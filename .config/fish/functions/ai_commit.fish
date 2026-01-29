@@ -1,6 +1,6 @@
 function ai_commit --description 'Generate AI-powered Commitizen commit message from branch context'
     # Parse arguments
-    argparse d/dry 'm/model=' -- $argv
+    argparse d/dry v/verbose 'm/model=' -- $argv
     or return 1
 
     set -l dry_run (set -q _flag_dry; and echo true; or echo false)
@@ -86,8 +86,25 @@ STAGED DIFF (focus on THIS change):
 
     cat $temp_diff >>$temp_prompt
 
+    if set -q _flag_verbose
+        echo "Model: $ai_model"
+        echo "Fallback model: $fallback_model"
+        echo "Branch: $branch_name"
+        if test -n "$branch_hint"
+            echo "Branch type: $branch_hint"
+        end
+        if test -n "$ticket_number"
+            echo "Ticket: $ticket_number"
+        end
+        if test -n "$last_commit_msg"
+            echo "Previous commit: $last_commit_msg"
+        end
+        echo "Skill file: $skill_file"
+    end
+
     # Capture existing sessions before running (for cleanup)
-    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null)
+    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
+
 
     # Run AI generation with fallback
     set temp_output (mktemp -t opencode_output.XXXXXX)
@@ -120,23 +137,7 @@ STAGED DIFF (focus on THIS change):
 
     if test -z "$raw_output"
         gum style " Failed to generate commit message"
-    rm -f $temp_prompt $temp_output $temp_diff
-
-    # Cleanup function for new sessions - deletes session JSON files
-    function cleanup_sessions
-        set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
-        for session_path in $sessions_after
-            set -l session_id (basename $session_path)
-            # Check if this session existed before we started
-            if not contains $session_id $sessions_before
-                # Delete the session JSON file
-                set -l session_file "$HOME/.local/share/opencode/storage/session/$session_path.json"
-                if test -f "$session_file"
-                    rm -f "$session_file" 2>/dev/null
-                end
-            end
-        end
-    end
+        rm -f $temp_prompt $temp_output $temp_diff
         return 1
     end
 
@@ -187,6 +188,32 @@ STAGED DIFF (focus on THIS change):
         set commit_msg (string sub -l 47 -- "$commit_msg")"..."
     end
 
+    # Determine the new session created by this run
+    set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
+    set -l used_session_path ""
+    for session_path in $sessions_after
+        if not contains $session_path $sessions_before
+            set used_session_path $session_path
+            break
+        end
+    end
+
+    # Cleanup the session used for generation before prompting
+    if test -z "$used_session_path"
+        if set -q _flag_verbose
+            echo "Cleanup skipped: session id not found"
+        end
+    else
+        if set -q _flag_verbose
+            echo "Session path: $used_session_path"
+        end
+        if set -q _flag_verbose
+            cleanup_opencode_session --verbose "$used_session_path"
+        else
+            cleanup_opencode_session "$used_session_path"
+        end
+    end
+
     set edited_msg (gum input --value="$commit_msg" --width 100 --prompt "󰏫 " --placeholder "Edit commit message or press Enter to accept...")
     if test $status -ne 0
         gum style --foreground 1 "󰜺 Commit cancelled"
@@ -203,7 +230,6 @@ STAGED DIFF (focus on THIS change):
         gum style --foreground 2 "  git commit -m \"$edited_msg\""
         gum style --foreground 6 "\nStaged files:"
         git diff --cached --name-only | sed 's/^/  /'
-        cleanup_sessions
         return 0
     end
 
@@ -214,8 +240,6 @@ STAGED DIFF (focus on THIS change):
     set -l commit_status $status
 
     # Cleanup sessions
-    cleanup_sessions
-
     if test $commit_status -eq 0
         gum style --foreground 2 "󰸞 Commit successful!"
         return 0

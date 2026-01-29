@@ -144,7 +144,7 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     set temp_pr_desc (mktemp).md
     
     # Capture existing sessions before running (for cleanup)
-    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[].id' 2>/dev/null)
+    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
     
     # Run opencode by piping the prompt instead of command substitution
     set opencode_exit_code 0
@@ -190,20 +190,17 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     
     rm -f $temp_prompt $temp_output $temp_diff "$temp_output.err"
 
-    # Cleanup function for new sessions - deletes session JSON files
-    function cleanup_sessions
-        set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
-        for session_path in $sessions_after
-            set -l session_id (basename $session_path)
-            # Check if this session existed before we started
-            if not contains $session_id $sessions_before
-                # Delete the session JSON file
-                set -l session_file "$HOME/.local/share/opencode/storage/session/$session_path.json"
-                if test -f "$session_file"
-                    rm -f "$session_file" 2>/dev/null
-                end
-            end
+    # Cleanup the session used for generation
+    set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
+    set -l used_session_path ""
+    for session_path in $sessions_after
+        if not contains $session_path $sessions_before
+            set used_session_path $session_path
+            break
         end
+    end
+    if test -n "$used_session_path"
+        cleanup_opencode_session "$used_session_path"
     end
     
     # Open in ephemeral Neovim instance for editing
@@ -223,7 +220,6 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     # Check if file still exists (user might have deleted it or cancelled)
     if not test -f "$temp_pr_desc"
         gum style --foreground 1 "󰜺 PR description cancelled"
-        cleanup_sessions
         return 1
     end
 
@@ -231,7 +227,6 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     if not test -s "$temp_pr_desc"
         rm -f "$temp_pr_desc"
         gum style --foreground 1 "󰜺 PR description cancelled (empty content)"
-        cleanup_sessions
         return 1
     end
     
@@ -258,9 +253,6 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
         gum style --foreground 3 "󰦨 Clipboard command not found, displaying content:"
         cat "$temp_pr_desc"
     end
-
-    # Cleanup OpenCode sessions
-    cleanup_sessions
 
     # Cleanup temp file
     rm -f "$temp_pr_desc"
