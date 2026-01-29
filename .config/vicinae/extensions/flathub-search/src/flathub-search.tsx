@@ -1,9 +1,9 @@
+import { keepPreviousData, QueryClient, useQuery } from "@tanstack/react-query";
 import {
-	keepPreviousData,
-	QueryClient,
-	QueryClientProvider,
-	useQuery,
-} from "@tanstack/react-query";
+	PersistQueryClientProvider,
+	type PersistedClient,
+	type Persister,
+} from "@tanstack/react-query-persist-client";
 import {
 	Action,
 	ActionPanel,
@@ -52,45 +52,37 @@ export type FlathubSearchResponse = {
 
 const FLATHUB_SEARCH_URL = "https://flathub.org/api/v2/search";
 const FLATHUB_APP_DETAIL_URL = "https://flathub.org/api/v2/appstream";
-const POPULAR_APPS_CACHE_KEY = "popular-apps-v1";
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24h
+const PERSIST_KEY = "flathub-query-v1";
+const PERSIST_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
 const POPULAR_LIMIT = 20;
 const SEARCH_DEBOUNCE_MS = 500;
 
 const cache = new Cache();
 
-type CachedData = {
-	apps: FlathubApp[];
-	cachedAt: number;
-};
-
-function getCachedPopularApps(): FlathubApp[] | null {
-	const cached = cache.get(POPULAR_APPS_CACHE_KEY);
-	if (!cached) return null;
-	try {
-		const data: CachedData = JSON.parse(cached);
-		if (Date.now() - data.cachedAt < CACHE_DURATION) {
-			return data.apps;
+const persister = {
+	persistClient: async (client: PersistedClient) => {
+		cache.set(PERSIST_KEY, JSON.stringify(client));
+	},
+	restoreClient: async () => {
+		const cached = cache.get(PERSIST_KEY);
+		if (!cached) return undefined;
+		try {
+			return JSON.parse(cached) as PersistedClient;
+		} catch {
+			cache.remove(PERSIST_KEY);
+			return undefined;
 		}
-		cache.remove(POPULAR_APPS_CACHE_KEY);
-		return null;
-	} catch {
-		cache.remove(POPULAR_APPS_CACHE_KEY);
-		return null;
-	}
-}
-
-function setCachedPopularApps(apps: FlathubApp[]): void {
-	cache.set(
-		POPULAR_APPS_CACHE_KEY,
-		JSON.stringify({ apps, cachedAt: Date.now() } satisfies CachedData),
-	);
-}
+	},
+	removeClient: async () => {
+		cache.remove(PERSIST_KEY);
+	},
+} satisfies Persister;
 
 const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
 			staleTime: 5 * 60 * 1000,
+			gcTime: PERSIST_MAX_AGE,
 			refetchOnWindowFocus: false,
 			retry: 1,
 		},
@@ -143,7 +135,6 @@ async function fetchPopularApps(): Promise<FlathubApp[]> {
 	// Empty query returns overall list; we slice top POPULAR_LIMIT
 	const apps = await postFlathubSearch("");
 	const subset = apps.slice(0, POPULAR_LIMIT);
-	setCachedPopularApps(subset);
 	return subset;
 }
 
@@ -258,7 +249,6 @@ function FlathubSearchContent({ fallbackText }: { fallbackText?: string }) {
 	const { data: popularApps = [], isLoading: loadingPopular } = useQuery({
 		queryKey: ["flathub", "popular"],
 		queryFn: fetchPopularApps,
-		initialData: () => getCachedPopularApps() || undefined,
 		staleTime: 10 * 60 * 1000,
 	});
 
@@ -370,8 +360,11 @@ function FlathubSearchContent({ fallbackText }: { fallbackText?: string }) {
 
 export default function FlathubSearch(props: LaunchProps) {
 	return (
-		<QueryClientProvider client={queryClient}>
+		<PersistQueryClientProvider
+			client={queryClient}
+			persistOptions={{ persister, maxAge: PERSIST_MAX_AGE }}
+		>
 			<FlathubSearchContent fallbackText={props.fallbackText} />
-		</QueryClientProvider>
+		</PersistQueryClientProvider>
 	);
 }
