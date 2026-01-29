@@ -250,7 +250,7 @@ function YrWeatherContent() {
 			<List.EmptyView
 				title="Configure Location"
 				description="Set your latitude and longitude in extension preferences"
-				icon={Icon.Info}
+				icon={Icon.XMarkCircle}
 			/>
       ) : dailyForecasts.length === 0 && !isLoading ? (
         <List.EmptyView
