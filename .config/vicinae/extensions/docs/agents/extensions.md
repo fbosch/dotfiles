@@ -6,3 +6,4 @@
 - local-wallpaper: browse and manage local wallpapers
 - nerdfont-search: search and copy Nerd Font icons
 - favorite-directories: quick access to favorite directories
+- yr-weather: weather forecast from Yr.no (Norwegian Meteorological Institute)

@@ -55,6 +55,12 @@
             "useUserSettings": true
          }
       },
+      "@fbosch/yr-weather": {
+         "preferences": {
+            "latitude": "55.704819",
+            "longitude": "12.496380"
+         }
+      },
       "applications": {
          "preferences": {
             "launchPrefix": "uwsm app --",
