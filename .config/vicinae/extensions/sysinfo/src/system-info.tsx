@@ -1,8 +1,5 @@
-import {
-	QueryClient,
-	QueryClientProvider,
-	useQuery,
-} from "@tanstack/react-query";
+import { QueryClient, useQuery } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import {
 	Action,
 	ActionPanel,
@@ -16,14 +13,12 @@ import {
 } from "@vicinae/api";
 import { useMemo } from "react";
 import { getDynamicSystemInfo, getStaticSystemInfo } from "./aggregators";
-import {
-	getCachedStaticInfo,
-	STORAGE_CATEGORIES_CACHE_DURATION,
-} from "./cache";
+import { STORAGE_CATEGORIES_CACHE_DURATION } from "./cache";
 import { analyzeStorageCategories } from "./storage-analyzer";
 import { generateSystemInfoSVG, svgToDataUri } from "./svg-generator";
 import type { Preferences } from "./types";
 import { execAsync } from "./utils";
+import { PERSIST_MAX_AGE, persister } from "./persist";
 
 // Cache tool availability to avoid repeated "which" command execution
 const toolCache = new Map<string, boolean>();
@@ -50,6 +45,7 @@ const queryClient = new QueryClient({
 			// Prevent concurrent fetches - only one query at a time per key
 			refetchInterval: false, // Disable automatic refetch by default
 			staleTime: 5000, // Consider data fresh for 5 seconds
+			gcTime: PERSIST_MAX_AGE,
 		},
 	},
 });
@@ -62,12 +58,11 @@ function SystemInfoContent() {
 		[preferences.refreshInterval],
 	);
 
-	// Static system info - load from cache first, then refresh in background
+	// Static system info - persisted via React Query
 	const { data: staticInfo } = useQuery({
 		queryKey: ["system-info-static"],
 		queryFn: getStaticSystemInfo,
 		staleTime: 60 * 60 * 1000, // 1 hour in react-query cache
-		initialData: () => getCachedStaticInfo() || undefined, // Load from persistent cache immediately
 		throwOnError: (error) => {
 			showToast({
 				style: Toast.Style.Failure,
@@ -101,7 +96,10 @@ function SystemInfoContent() {
 	// Progressive enhancement: Load storage categories after initial data is loaded
 	// This query is throttled to prevent memory issues from running du commands
 	const { data: enrichedStorage } = useQuery({
-		queryKey: ["storage-categories", dynamicInfo?.storage],
+		queryKey: [
+			"storage-categories",
+			dynamicInfo?.storage?.map((device) => device.mountPoint).join(","),
+		],
 		queryFn: async () => {
 			if (!dynamicInfo?.storage) return undefined;
 
@@ -126,10 +124,10 @@ function SystemInfoContent() {
 			);
 		},
 		enabled: !!dynamicInfo?.storage && dynamicInfo.storage.length > 0,
+		refetchOnWindowFocus: false,
+		refetchOnMount: false,
+		refetchOnReconnect: false,
 		staleTime: STORAGE_CATEGORIES_CACHE_DURATION, // Use cache for 10 minutes
-		refetchOnMount: false, // Don't refetch on remount
-		refetchOnWindowFocus: false, // Don't refetch on window focus
-		refetchOnReconnect: false, // Don't refetch on reconnect
 	});
 
 	// Use enriched storage if available, fallback to basic storage
@@ -245,12 +243,22 @@ function SystemInfoContent() {
 			}
 			actions={
 				<ActionPanel>
-					<Action
-						title="Refresh"
-						icon={Icon.ArrowClockwise}
-						onAction={() => refetchDynamic()}
-						shortcut={{ modifiers: ["cmd"], key: "r" }}
-					/>
+				<Action
+					title="Refresh"
+					icon={Icon.ArrowClockwise}
+					onAction={async () => {
+						await Promise.allSettled([
+							queryClient.invalidateQueries({
+								queryKey: ["system-info-static"],
+							}),
+							queryClient.invalidateQueries({
+								queryKey: ["system-info-dynamic"],
+							}),
+						]);
+						await refetchDynamic();
+					}}
+					shortcut={{ modifiers: ["cmd"], key: "r" }}
+				/>
 					<ActionPanel.Section title="Launch">
 						<Action
 							title="Open System Monitor"
@@ -373,8 +381,11 @@ function SystemInfoContent() {
 
 export default function SystemInfoCommand() {
 	return (
-		<QueryClientProvider client={queryClient}>
+		<PersistQueryClientProvider
+			client={queryClient}
+			persistOptions={{ persister, maxAge: PERSIST_MAX_AGE }}
+		>
 			<SystemInfoContent />
-		</QueryClientProvider>
+		</PersistQueryClientProvider>
 	);
 }
