@@ -43,6 +43,8 @@ type LightSettingsUpdate = {
 
 type LightSettingsOptions = {
 	allowWhilePending?: boolean;
+	silent?: boolean;
+	debounce?: boolean;
 };
 
 const FAVORITE_LIGHTS_KEY = "homeAssistantFavoriteLights";
@@ -145,10 +147,10 @@ function LightSettingsList({
 												100,
 											),
 										},
-										{ allowWhilePending: true },
+										{ allowWhilePending: true, silent: true, debounce: true },
 									)
 								}
-								shortcut={{ modifiers: ["shift"], key: "arrowUp" }}
+								shortcut={{ modifiers: ["cmd"], key: "]" }}
 							/>
 							<Action
 								title="Decrease Brightness"
@@ -162,10 +164,10 @@ function LightSettingsList({
 												100,
 											),
 										},
-										{ allowWhilePending: true },
+										{ allowWhilePending: true, silent: true, debounce: true },
 									)
 								}
-								shortcut={{ modifiers: ["shift"], key: "arrowDown" }}
+								shortcut={{ modifiers: ["cmd"], key: "[" }}
 							/>
 							</ActionPanel.Section>
 							<ActionPanel.Section title="Presets">
@@ -320,9 +322,10 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 		() => new Set(),
 	);
 	const pendingEntitiesRef = useRef(new Set<string>());
-	const pendingTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+	const debounceTimersRef = useRef(new Map<string, NodeJS.Timeout>());
 	const transitionSeconds = 1.25;
 	const transitionMs = transitionSeconds * 1000;
+	const debounceMs = 500; // Wait 500ms after last keypress
 
 	const setPending = useCallback((entityId: string, pending: boolean) => {
 		if (pending) {
@@ -344,22 +347,32 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 		});
 	}, []);
 
-	const schedulePendingClear = useCallback((entityId: string) => {
-		const existingTimeout = pendingTimeoutsRef.current.get(entityId);
-		if (existingTimeout) {
-			clearTimeout(existingTimeout);
-		}
+	const refreshLights = useCallback(async () => {
+		const freshLights = await fetchLights(preferences);
+		queryClient.setQueryData(["home-assistant", "lights"], freshLights);
+		return freshLights;
+	}, [preferences]);
+
+	const refreshLightsAfterDelay = useCallback((delayMs: number) => {
 		const timeoutId = setTimeout(() => {
-			setPending(entityId, false);
-			pendingTimeoutsRef.current.delete(entityId);
-			queryClient.invalidateQueries({
-				queryKey: ["home-assistant", "lights"],
+			void refreshLights().catch((refreshError) => {
+				console.error("[Home Assistant] Failed to refresh lights:", refreshError);
 			});
-		}, transitionMs);
-		pendingTimeoutsRef.current.set(entityId, timeoutId);
-	}, [setPending, transitionMs]);
+		}, delayMs);
+		return timeoutId;
+	}, [refreshLights]);
 
 	const hasPreferences = Boolean(preferences.baseUrl && preferences.accessToken);
+
+	// Cleanup debounce timers on unmount
+	useEffect(() => {
+		return () => {
+			for (const timerId of debounceTimersRef.current.values()) {
+				clearTimeout(timerId);
+			}
+			debounceTimersRef.current.clear();
+		};
+	}, []);
 
 	useEffect(() => {
 		if (!preferences.baseUrl || !preferences.accessToken) {
@@ -404,11 +417,6 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 		if (!isSuccess) return;
 		for (const light of lights) {
 			setPending(light.entity_id, false);
-			const timeoutId = pendingTimeoutsRef.current.get(light.entity_id);
-			if (timeoutId) {
-				clearTimeout(timeoutId);
-				pendingTimeoutsRef.current.delete(light.entity_id);
-			}
 		}
 	}, [isSuccess, lights, setPending]);
 
@@ -514,30 +522,120 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 			return;
 		}
 
-		setPending(light.entity_id, true);
-		schedulePendingClear(light.entity_id);
+		// Always update cache optimistically for immediate UI feedback
+		queryClient.setQueryData<LightState[]>(
+			["home-assistant", "lights"],
+			(oldData) => {
+				if (!oldData) return oldData;
+				return oldData.map((l) => {
+					if (l.entity_id !== light.entity_id) return l;
+					const updatedAttributes = { ...l.attributes };
+					if (brightnessPayload !== null) {
+						updatedAttributes.brightness = brightnessPayload;
+					}
+					if (hsColorPayload !== null) {
+						updatedAttributes.hs_color = hsColorPayload;
+					}
+					return { ...l, attributes: updatedAttributes };
+				});
+			},
+		);
+
+		// Debounced mode: cancel previous timer and schedule new API call
+		if (options?.debounce) {
+			const timerId = debounceTimersRef.current.get(light.entity_id);
+			if (timerId) {
+				clearTimeout(timerId);
+			}
+			
+			const newTimerId = setTimeout(() => {
+				debounceTimersRef.current.delete(light.entity_id);
+				void (async () => {
+					try {
+						await callLightService("turn_on", light.entity_id, preferences, {
+							...payload,
+							transition: transitionSeconds,
+						});
+						refreshLightsAfterDelay(transitionMs);
+						if (!options?.silent) {
+							await showToast({
+								style: Toast.Style.Success,
+								title: "Light updated",
+								message: friendlyName(light),
+							});
+						}
+					} catch (requestError) {
+						if (!options?.silent) {
+							await showToast({
+								style: Toast.Style.Failure,
+								title: "Update failed",
+								message:
+									requestError instanceof Error
+										? requestError.message
+										: "Unknown error",
+							});
+						}
+					}
+				})();
+			}, debounceMs);
+			
+			debounceTimersRef.current.set(light.entity_id, newTimerId);
+			return;
+		}
+
+		// Non-debounced mode: immediate API call
+		if (!options?.allowWhilePending) {
+			setPending(light.entity_id, true);
+		}
 		try {
 			await callLightService("turn_on", light.entity_id, preferences, {
 				...payload,
 				transition: transitionSeconds,
 			});
-			await showToast({
-				style: Toast.Style.Success,
-				title: "Light updated",
-				message: friendlyName(light),
-			});
+			if (options?.allowWhilePending) {
+				refreshLightsAfterDelay(transitionMs);
+				if (!options?.silent) {
+					await showToast({
+						style: Toast.Style.Success,
+						title: "Light updated",
+						message: friendlyName(light),
+					});
+				}
+				return;
+			}
+			await new Promise((resolve) => setTimeout(resolve, transitionMs));
+			await refreshLights();
+			setPending(light.entity_id, false);
+			if (!options?.silent) {
+				await showToast({
+					style: Toast.Style.Success,
+					title: "Light updated",
+					message: friendlyName(light),
+				});
+			}
 		} catch (requestError) {
 			setPending(light.entity_id, false);
-			await showToast({
-				style: Toast.Style.Failure,
-				title: "Update failed",
-				message:
-					requestError instanceof Error
-						? requestError.message
-						: "Unknown error",
-			});
+			if (!options?.silent) {
+				await showToast({
+					style: Toast.Style.Failure,
+					title: "Update failed",
+					message:
+						requestError instanceof Error
+							? requestError.message
+							: "Unknown error",
+				});
+			}
 		}
-	}, [lightsById, preferences, schedulePendingClear, setPending, transitionSeconds]);
+	}, [
+		lightsById,
+		preferences,
+		refreshLights,
+		refreshLightsAfterDelay,
+		setPending,
+		transitionMs,
+		transitionSeconds,
+		debounceMs,
+	]);
 
 	const handleLightAction = useCallback(async (
 		light: LightState,
@@ -553,11 +651,13 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 			return;
 		}
 		setPending(light.entity_id, true);
-		schedulePendingClear(light.entity_id);
 		try {
 			await callLightService(service, light.entity_id, preferences, {
 				transition: transitionSeconds,
 			});
+			await new Promise((resolve) => setTimeout(resolve, transitionMs));
+			await refreshLights();
+			setPending(light.entity_id, false);
 			await showToast({
 				style: Toast.Style.Success,
 				title: label,
@@ -574,7 +674,13 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 						: "Unknown error",
 			});
 		}
-	}, [preferences, schedulePendingClear, setPending, transitionSeconds]);
+	}, [
+		preferences,
+		refreshLights,
+		setPending,
+		transitionMs,
+		transitionSeconds,
+	]);
 
 	return (
 		<List
@@ -605,16 +711,19 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 					icon={Icon.LightBulb}
 				/>
 			) : (
-				filteredLights.map((light) => (
-							<List.Item
-								key={light.entity_id}
-								title={friendlyName(light)}
-								subtitle={
-									light.attributes.friendly_name ? light.entity_id : undefined
-								}
-						icon={getLightIcon(light)}
-						accessories={getLightAccessories(light)}
-						detail={<LightDetail light={light} />}
+				filteredLights.map((light) => {
+					const brightnessPercent =
+						formatBrightnessPercent(light.attributes.brightness) ?? 50;
+					return (
+						<List.Item
+							key={light.entity_id}
+							title={friendlyName(light)}
+							subtitle={
+								light.attributes.friendly_name ? light.entity_id : undefined
+							}
+							icon={getLightIcon(light)}
+							accessories={getLightAccessories(light)}
+							detail={<LightDetail light={light} />}
 							actions={
 								<ActionPanel>
 									<Action
@@ -623,6 +732,42 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 										onAction={() =>
 											handleLightAction(light, "toggle", "Light toggled")
 										}
+									/>
+									<Action
+										title="Increase Brightness"
+										icon={Icon.Plus}
+										onAction={() =>
+											handleLightSettings(
+												light,
+												{
+													brightnessPercent: clampNumber(
+														brightnessPercent + 10,
+														0,
+														100,
+													),
+												},
+												{ allowWhilePending: true, silent: true, debounce: true },
+											)
+										}
+										shortcut={{ modifiers: ["cmd"], key: "]" }}
+									/>
+									<Action
+										title="Decrease Brightness"
+										icon={Icon.Minus}
+										onAction={() =>
+											handleLightSettings(
+												light,
+												{
+													brightnessPercent: clampNumber(
+														brightnessPercent - 10,
+														0,
+														100,
+													),
+												},
+												{ allowWhilePending: true, silent: true, debounce: true },
+											)
+										}
+										shortcut={{ modifiers: ["cmd"], key: "[" }}
 									/>
 									<Action.Push
 										title="Adjust Brightness/Color"
@@ -692,7 +837,8 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 							</ActionPanel>
 						}
 					/>
-				))
+					);
+				})
 			)}
 		</List>
 	);
