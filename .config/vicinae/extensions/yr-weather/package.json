@@ -1,0 +1,75 @@
+{
+  "$schema": "https://raw.githubusercontent.com/vicinaehq/vicinae/refs/heads/main/extra/schemas/extension.json",
+  "name": "yr-weather",
+  "title": "Yr Weather",
+  "description": "Weather forecast from Yr.no (Norwegian Meteorological Institute)",
+  "categories": [
+    "Productivity",
+    "Web"
+  ],
+  "license": "MIT",
+  "author": "fbosch",
+  "contributors": [],
+  "pastContributors": [],
+  "icon": "extension_icon.png",
+  "commands": [
+    {
+      "name": "yr-weather",
+      "title": "Weather Forecast",
+      "subtitle": "View weather forecast from Yr.no",
+      "description": "Get weather forecasts for any location using Yr.no",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "latitude",
+      "type": "textfield",
+      "required": true,
+      "title": "Latitude",
+      "description": "Latitude in decimal degrees (e.g., 59.9139 for Oslo)",
+      "placeholder": "59.9139"
+    },
+    {
+      "name": "longitude",
+      "type": "textfield",
+      "required": true,
+      "title": "Longitude",
+      "description": "Longitude in decimal degrees (e.g., 10.7522 for Oslo)",
+      "placeholder": "10.7522"
+    },
+    {
+      "name": "altitude",
+      "type": "textfield",
+      "required": false,
+      "title": "Altitude (optional)",
+      "description": "Ground surface height above sea level in meters (improves temperature accuracy)",
+      "placeholder": "90"
+    },
+    {
+      "name": "locationName",
+      "type": "textfield",
+      "required": false,
+      "title": "Location Name",
+      "description": "Custom name for the location (e.g., 'Home', 'Oslo')",
+      "placeholder": "My Location"
+    }
+  ],
+  "scripts": {
+    "build": "vici build",
+    "dev": "vici develop",
+    "format": "biome format --write src",
+    "lint": "vici lint"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.20",
+    "@tanstack/react-query-persist-client": "^5.90.20",
+    "@vicinae/api": "^0.18.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.11",
+    "@types/react": "^19.0.10",
+    "react": "^18.3.1",
+    "typescript": "^5.9.3"
+  }
+}

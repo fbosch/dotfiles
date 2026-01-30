@@ -27,6 +27,7 @@
       "opacity": 0.88
    },
    "favorites": [
+      "@fbosch/yr-weather:yr-weather",
       "@fbosch/home-assistant:home-assistant-lights",
       "applications:com.discordapp.Discord",
       "@aurelleb/store.vicinae.mullvad:connect",
@@ -53,6 +54,12 @@
       "@fbosch/wallhaven": {
          "preferences": {
             "useUserSettings": true
+         }
+      },
+      "@fbosch/yr-weather": {
+         "preferences": {
+            "latitude": "55.704819",
+            "longitude": "12.496380"
          }
       },
       "applications": {

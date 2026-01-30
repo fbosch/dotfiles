@@ -48,61 +48,66 @@ return function(config)
 			mods = "CTRL|SHIFT",
 			action = wezterm.action.ActivateTab(8),
 		},
-		{
-			key = "v",
-			mods = "CMD|SHIFT",
-			action = wezterm.action.SplitHorizontal({ domain = "CurrentPaneDomain" }),
-		},
+		-- Pane splits
+		-- {
+		-- 	key = "v",
+		-- 	mods = "CTRL|SHIFT",
+		-- 	action = wezterm.action.SplitHorizontal({ domain = "CurrentPaneDomain" }),
+		-- },
 		{
 			key = "s",
-			mods = "CMD|SHIFT",
+			mods = "CTRL|SHIFT",
 			action = wezterm.action.SplitVertical({ domain = "CurrentPaneDomain" }),
 		},
-		{
-			key = "l",
-			mods = "CMD|SHIFT",
-			action = wezterm.action.ActivatePaneDirection("Right"),
-		},
+		-- Pane navigation
 		{
 			key = "h",
-			mods = "CMD|SHIFT",
+			mods = "CTRL|SHIFT",
 			action = wezterm.action.ActivatePaneDirection("Left"),
 		},
 		{
 			key = "j",
-			mods = "CMD|SHIFT",
+			mods = "CTRL|SHIFT",
 			action = wezterm.action.ActivatePaneDirection("Down"),
 		},
 		{
 			key = "k",
-			mods = "CMD|SHIFT",
+			mods = "CTRL|SHIFT",
 			action = wezterm.action.ActivatePaneDirection("Up"),
 		},
 		{
+			key = "l",
+			mods = "CTRL|SHIFT",
+			action = wezterm.action.ActivatePaneDirection("Right"),
+		},
+		-- Pane resizing
+		{
 			key = "RightArrow",
-			mods = "CMD|SHIFT",
+			mods = "CTRL|SHIFT",
 			action = wezterm.action.AdjustPaneSize({ "Right", 5 }),
 		},
 		{
 			key = "LeftArrow",
-			mods = "CMD|SHIFT",
+			mods = "CTRL|SHIFT",
 			action = wezterm.action.AdjustPaneSize({ "Left", 5 }),
 		},
 		{
 			key = "UpArrow",
-			mods = "CMD|SHIFT",
+			mods = "CTRL|SHIFT",
 			action = wezterm.action.AdjustPaneSize({ "Up", 5 }),
 		},
 		{
 			key = "DownArrow",
-			mods = "CMD|SHIFT",
+			mods = "CTRL|SHIFT",
 			action = wezterm.action.AdjustPaneSize({ "Down", 5 }),
 		},
+		-- Close pane
 		{
 			key = "w",
-			mods = "CMD",
-			action = wezterm.action.CloseCurrentPane({ confirm = false }),
+			mods = "CTRL|SHIFT",
+			action = wezterm.action.CloseCurrentPane({ confirm = true }),
 		},
+		-- Disable default CTRL+arrow assignments
 		{
 			key = "RightArrow",
 			mods = "CTRL",

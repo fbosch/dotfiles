@@ -1,14 +1,8 @@
-import {
-	QueryClient,
-	QueryClientProvider,
-	useInfiniteQuery,
-	useQuery,
-	useQueryClient,
-} from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import {
 	Action,
 	ActionPanel,
-	Cache,
 	Color,
 	Detail,
 	Grid,
@@ -19,6 +13,9 @@ import {
 } from "@vicinae/api";
 import { useEffect, useState } from "react";
 import { downloadAndApplyWallpaper, downloadWallpaper } from "./utils/download";
+import { PERSIST_MAX_AGE } from "./constants";
+import { persister } from "./persist";
+import { queryClient } from "./queryClient";
 
 type Preferences = {
 	apiKey?: string;
@@ -80,89 +77,6 @@ type WallhavenResponse = {
 	};
 };
 
-const cache = new Cache();
-const USER_SETTINGS_CACHE_KEY = "wallhaven-user-settings-v1";
-const DEFAULT_WALLPAPERS_CACHE_KEY = "wallhaven-default-wallpapers-v1";
-const SETTINGS_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-const WALLPAPERS_CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
-
-type CachedUserSettings = {
-	settings: UserSettings;
-	cachedAt: number;
-};
-
-type CachedWallpapers = {
-	wallpapers: WallhavenResponse;
-	cachedAt: number;
-};
-
-function getCachedUserSettings(): UserSettings | null {
-	const cached = cache.get(USER_SETTINGS_CACHE_KEY);
-	if (!cached) return null;
-
-	try {
-		const data: CachedUserSettings = JSON.parse(cached);
-		const age = Date.now() - data.cachedAt;
-
-		if (age < SETTINGS_CACHE_DURATION) {
-			return data.settings;
-		}
-
-		cache.remove(USER_SETTINGS_CACHE_KEY);
-		return null;
-	} catch {
-		cache.remove(USER_SETTINGS_CACHE_KEY);
-		return null;
-	}
-}
-
-function setCachedUserSettings(settings: UserSettings): void {
-	const data: CachedUserSettings = {
-		settings,
-		cachedAt: Date.now(),
-	};
-	cache.set(USER_SETTINGS_CACHE_KEY, JSON.stringify(data));
-}
-
-function getCachedDefaultWallpapers(): WallhavenResponse | null {
-	const cached = cache.get(DEFAULT_WALLPAPERS_CACHE_KEY);
-	if (!cached) return null;
-
-	try {
-		const data: CachedWallpapers = JSON.parse(cached);
-		const age = Date.now() - data.cachedAt;
-
-		if (age < WALLPAPERS_CACHE_DURATION) {
-			return data.wallpapers;
-		}
-
-		cache.remove(DEFAULT_WALLPAPERS_CACHE_KEY);
-		return null;
-	} catch {
-		cache.remove(DEFAULT_WALLPAPERS_CACHE_KEY);
-		return null;
-	}
-}
-
-function setCachedDefaultWallpapers(wallpapers: WallhavenResponse): void {
-	const data: CachedWallpapers = {
-		wallpapers,
-		cachedAt: Date.now(),
-	};
-	cache.set(DEFAULT_WALLPAPERS_CACHE_KEY, JSON.stringify(data));
-}
-
-const queryClient = new QueryClient({
-	defaultOptions: {
-		queries: {
-			staleTime: 12 * 60 * 60 * 1000, // 12 hours - queries stay fresh for 12 hours
-			gcTime: 12 * 60 * 60 * 1000, // 12 hours - cache cleanup after 12 hours
-			refetchOnWindowFocus: false,
-			retry: 1,
-		},
-	},
-});
-
 type SearchParams = {
 	query: string;
 	categories: string;
@@ -189,11 +103,7 @@ async function fetchUserSettings(apiKey: string): Promise<UserSettings | null> {
 
 		const data = await response.json();
 		console.log("User Settings Fetched:", data.data);
-		const settings = data.data;
-
-		setCachedUserSettings(settings);
-
-		return settings;
+		return data.data;
 	} catch (error) {
 		console.error("Error fetching user settings:", error);
 		return null;
@@ -270,15 +180,6 @@ async function searchWallpapers(
 		page: data.meta.current_page,
 		total: data.meta.total,
 	});
-
-	const isDefaultSearch =
-		params.query.trim() === "" &&
-		params.page === 1 &&
-		params.categories === "111";
-
-	if (isDefaultSearch) {
-		setCachedDefaultWallpapers(data);
-	}
 
 	return data;
 }
@@ -566,11 +467,8 @@ function WallhavenSearchContent() {
 				title: "Refreshing settings...",
 			});
 
-			// Clear the cache
-			cache.remove(USER_SETTINGS_CACHE_KEY);
-			cache.remove(DEFAULT_WALLPAPERS_CACHE_KEY);
+			await persister.removeClient();
 
-			// Invalidate React Query cache
 			await queryClientInstance.invalidateQueries({
 				queryKey: ["userSettings"],
 			});
@@ -600,13 +498,6 @@ function WallhavenSearchContent() {
 			return fetchUserSettings(preferences.apiKey);
 		},
 		enabled: Boolean(preferences.apiKey && preferences.useUserSettings),
-		initialData: () => {
-			// Only use cached data if we're actually using user settings
-			if (preferences.apiKey && preferences.useUserSettings) {
-				return getCachedUserSettings() || undefined;
-			}
-			return undefined;
-		},
 		staleTime: 60 * 60 * 1000, // Cache for 1 hour
 	});
 
@@ -693,18 +584,6 @@ function WallhavenSearchContent() {
 						? userSettings.ai_art_filter
 						: undefined,
 			}),
-		initialData: () => {
-			if (isDefaultSearch) {
-				const cached = getCachedDefaultWallpapers();
-				if (cached) {
-					return {
-						pages: [cached],
-						pageParams: [1],
-					};
-				}
-			}
-			return undefined;
-		},
 		staleTime: 12 * 60 * 60 * 1000, // 12 hours - avoid refetching
 		gcTime: 12 * 60 * 60 * 1000, // 12 hours - keep in cache
 		getNextPageParam: (lastPage) => {
@@ -772,14 +651,17 @@ function WallhavenSearchContent() {
 						subtitle={`${wallpaper.resolution} · ★ ${wallpaper.favorites} · ${wallpaper.views} views`}
 						actions={
 							<ActionPanel>
-								<Action.Push
-									title="Show Preview"
-									target={
-										<QueryClientProvider client={queryClient}>
-											<WallpaperDetail wallpaper={wallpaper} />
-										</QueryClientProvider>
-									}
-								/>
+						<Action.Push
+							title="Show Preview"
+							target={
+								<PersistQueryClientProvider
+									client={queryClient}
+									persistOptions={{ persister, maxAge: PERSIST_MAX_AGE }}
+								>
+									<WallpaperDetail wallpaper={wallpaper} />
+								</PersistQueryClientProvider>
+							}
+						/>
 								<Action
 									title="Download Wallpaper"
 									icon={Icon.Download}
@@ -865,8 +747,11 @@ function WallhavenSearchContent() {
 
 export default function WallhavenSearch() {
 	return (
-		<QueryClientProvider client={queryClient}>
+		<PersistQueryClientProvider
+			client={queryClient}
+			persistOptions={{ persister, maxAge: PERSIST_MAX_AGE }}
+		>
 			<WallhavenSearchContent />
-		</QueryClientProvider>
+		</PersistQueryClientProvider>
 	);
 }

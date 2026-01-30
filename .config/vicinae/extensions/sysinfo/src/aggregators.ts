@@ -1,4 +1,3 @@
-import { setCachedStaticInfo } from "./cache";
 import {
   getCPUInfo,
   getDisplayInfo,
@@ -40,10 +39,7 @@ export async function getStaticSystemInfo(): Promise<StaticSystemInfo> {
     },
   };
 
-  // Cache static info for future opens
-  setCachedStaticInfo(info);
-
-  return info;
+	return info;
 }
 
 // Dynamic system info - things that change frequently
