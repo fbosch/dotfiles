@@ -297,6 +297,12 @@ return {
 					separate_diagnostic_server = true,
 					publish_diagnostic_on = "insert_leave",
 					complete_function_calls = false,
+					settings = {
+						tsserver_file_preferences = {
+							importModuleSpecifierPreference = "non-relative",
+							importModuleSpecifierEnding = "auto",
+						},
+					},
 					jsx_close_tag = {
 						enable = false,
 						filetypes = { "javascriptreact", "typescriptreact" },
