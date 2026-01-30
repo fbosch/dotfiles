@@ -16,14 +16,14 @@ type ExtensionPreferences = {
 declare type Preferences = ExtensionPreferences
 
 declare namespace Preferences {
-  /** Command: Home Assistant Lights */
+  /** Command: Lights */
 	export type HomeAssistantLights = ExtensionPreferences & {
 		
 	}
 }
 
 declare namespace Arguments {
-  /** Command: Home Assistant Lights */
+  /** Command: Lights */
 	export type HomeAssistantLights = {
 		
 	}

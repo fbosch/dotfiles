@@ -3,7 +3,6 @@ import {
 	QueryClient,
 	QueryClientProvider,
 	useQuery,
-	useQueryClient,
 } from "@tanstack/react-query";
 import {
 	Action,
@@ -17,7 +16,7 @@ import {
 	showToast,
 	Toast,
 } from "@vicinae/api";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { callLightService, fetchLights } from "./api";
 import type { LightState } from "./types";
 
@@ -40,6 +39,10 @@ type LightSettingsUpdate = {
 	brightnessPercent?: number;
 	hue?: number;
 	saturation?: number;
+};
+
+type LightSettingsOptions = {
+	allowWhilePending?: boolean;
 };
 
 const FAVORITE_LIGHTS_KEY = "homeAssistantFavoriteLights";
@@ -93,26 +96,12 @@ function getLightIcon(light: LightState) {
 
 function LightSettingsList({
 	light,
-	preferences,
-	hasPreferences,
 	onUpdate,
 }: {
 	light: LightState;
-	preferences: PreferencesState;
-	hasPreferences: boolean;
-	onUpdate: (update: LightSettingsUpdate) => void;
+	onUpdate: (update: LightSettingsUpdate, options?: LightSettingsOptions) => void;
 }) {
-	const { data: lights = [] } = useQuery({
-		queryKey: ["home-assistant", "lights"],
-		queryFn: () => fetchLights(preferences),
-		enabled: hasPreferences,
-		placeholderData: keepPreviousData,
-		refetchInterval: 1000,
-		refetchIntervalInBackground: true,
-	});
-
-	const currentLight =
-		lights.find((item) => item.entity_id === light.entity_id) ?? light;
+	const currentLight = light;
 	const brightnessPercent =
 		formatBrightnessPercent(currentLight.attributes.brightness) ?? 50;
 	const hue = currentLight.attributes.hs_color?.[0] ?? 0;
@@ -144,32 +133,40 @@ function LightSettingsList({
 					actions={
 						<ActionPanel>
 							<ActionPanel.Section>
-								<Action
-									title="Increase Brightness"
-									icon={Icon.Plus}
-									onAction={() =>
-										onUpdate({
+							<Action
+								title="Increase Brightness"
+								icon={Icon.Plus}
+								onAction={() =>
+									onUpdate(
+										{
 											brightnessPercent: clampNumber(
 												brightnessPercent + 10,
 												0,
 												100,
 											),
-										})
-									}
-								/>
-								<Action
-									title="Decrease Brightness"
-									icon={Icon.Minus}
-									onAction={() =>
-										onUpdate({
+										},
+										{ allowWhilePending: true },
+									)
+								}
+								shortcut={{ modifiers: ["shift"], key: "arrowUp" }}
+							/>
+							<Action
+								title="Decrease Brightness"
+								icon={Icon.Minus}
+								onAction={() =>
+									onUpdate(
+										{
 											brightnessPercent: clampNumber(
 												brightnessPercent - 10,
 												0,
 												100,
 											),
-										})
-									}
-								/>
+										},
+										{ allowWhilePending: true },
+									)
+								}
+								shortcut={{ modifiers: ["shift"], key: "arrowDown" }}
+							/>
 							</ActionPanel.Section>
 							<ActionPanel.Section title="Presets">
 								{brightnessPresets.map((preset) => (
@@ -319,14 +316,53 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 	const preferences = getPreferenceValues<PreferencesState>();
 	const [searchText, setSearchText] = useState(fallbackText || "");
 	const [showingDetail, setShowingDetail] = useState(false);
-	const [errorMessage, setErrorMessage] = useState<string | null>(null);
-	const queryClient = useQueryClient();
+	const [pendingEntities, setPendingEntities] = useState<Set<string>>(
+		() => new Set(),
+	);
+	const pendingEntitiesRef = useRef(new Set<string>());
+	const pendingTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+	const transitionSeconds = 1.25;
+	const transitionMs = transitionSeconds * 1000;
+
+	const setPending = useCallback((entityId: string, pending: boolean) => {
+		if (pending) {
+			pendingEntitiesRef.current.add(entityId);
+			setPendingEntities((current) => {
+				if (current.has(entityId)) return current;
+				const next = new Set(current);
+				next.add(entityId);
+				return next;
+			});
+			return;
+		}
+		pendingEntitiesRef.current.delete(entityId);
+		setPendingEntities((current) => {
+			if (!current.has(entityId)) return current;
+			const next = new Set(current);
+			next.delete(entityId);
+			return next;
+		});
+	}, []);
+
+	const schedulePendingClear = useCallback((entityId: string) => {
+		const existingTimeout = pendingTimeoutsRef.current.get(entityId);
+		if (existingTimeout) {
+			clearTimeout(existingTimeout);
+		}
+		const timeoutId = setTimeout(() => {
+			setPending(entityId, false);
+			pendingTimeoutsRef.current.delete(entityId);
+			queryClient.invalidateQueries({
+				queryKey: ["home-assistant", "lights"],
+			});
+		}, transitionMs);
+		pendingTimeoutsRef.current.set(entityId, timeoutId);
+	}, [setPending, transitionMs]);
 
 	const hasPreferences = Boolean(preferences.baseUrl && preferences.accessToken);
 
 	useEffect(() => {
 		if (!preferences.baseUrl || !preferences.accessToken) {
-			setErrorMessage(null);
 			showToast({
 				style: Toast.Style.Failure,
 				title: "Missing preferences",
@@ -338,6 +374,7 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 	const {
 		data: lights = [],
 		isLoading,
+		isSuccess,
 		isError,
 		error,
 	} = useQuery({
@@ -347,7 +384,33 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 		placeholderData: keepPreviousData,
 		refetchInterval: 1000,
 		refetchIntervalInBackground: true,
+		onError: (queryError) => {
+			const message =
+				queryError instanceof Error ? queryError.message : "Unknown error";
+			showToast({
+				style: Toast.Style.Failure,
+				title: "Failed to load lights",
+				message,
+			});
+			console.error("[Home Assistant] Failed to load lights:", queryError);
+		},
 	});
+
+	const lightsById = useMemo(() => {
+		return new Map(lights.map((light) => [light.entity_id, light]));
+	}, [lights]);
+
+	useEffect(() => {
+		if (!isSuccess) return;
+		for (const light of lights) {
+			setPending(light.entity_id, false);
+			const timeoutId = pendingTimeoutsRef.current.get(light.entity_id);
+			if (timeoutId) {
+				clearTimeout(timeoutId);
+				pendingTimeoutsRef.current.delete(light.entity_id);
+			}
+		}
+	}, [isSuccess, lights, setPending]);
 
 	const { data: favoriteLights = [] } = useQuery({
 		queryKey: ["home-assistant", "lights", "favorites"],
@@ -359,20 +422,6 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 		() => new Set(favoriteLights),
 		[favoriteLights],
 	);
-
-	useEffect(() => {
-		if (isError && error) {
-			const message =
-				error instanceof Error ? error.message : "Unknown error";
-			setErrorMessage(message);
-			showToast({
-				style: Toast.Style.Failure,
-				title: "Failed to load lights",
-				message,
-			});
-			console.error("[Home Assistant] Failed to load lights:", error);
-		}
-	}, [isError, error]);
 
 	const filteredLights = useMemo(() => {
 		const query = searchText.trim().toLowerCase();
@@ -395,7 +444,7 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 		});
 	}, [lights, searchText, favoriteSet]);
 
-	async function toggleFavorite(light: LightState): Promise<void> {
+	const toggleFavorite = useCallback(async (light: LightState): Promise<void> => {
 		const isFavorite = favoriteSet.has(light.entity_id);
 		const updated = isFavorite
 			? favoriteLights.filter((entityId) => entityId !== light.entity_id)
@@ -411,19 +460,25 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 			title: isFavorite ? "Removed from favorites" : "Added to favorites",
 			message: friendlyName(light),
 		});
-	}
+	}, [favoriteLights, favoriteSet]);
 
-	async function handleLightSettings(
+	const handleLightSettings = useCallback(async (
 		light: LightState,
 		update: LightSettingsUpdate,
-	): Promise<void> {
-		const cachedLights = queryClient.getQueryData<LightState[]>([
-			"home-assistant",
-			"lights",
-		]);
-		const currentLight =
-			cachedLights?.find((item) => item.entity_id === light.entity_id) ??
-			light;
+		options?: LightSettingsOptions,
+	): Promise<void> => {
+		if (
+			pendingEntitiesRef.current.has(light.entity_id) &&
+			!options?.allowWhilePending
+		) {
+			await showToast({
+				style: Toast.Style.Failure,
+				title: "Update in progress",
+				message: "Waiting for Home Assistant to refresh",
+			});
+			return;
+		}
+		const currentLight = lightsById.get(light.entity_id) ?? light;
 
 		const payload: Record<string, unknown> = {};
 		const brightnessPercent = update.brightnessPercent;
@@ -459,35 +514,20 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 			return;
 		}
 
+		setPending(light.entity_id, true);
+		schedulePendingClear(light.entity_id);
 		try {
-			await callLightService("turn_on", light.entity_id, preferences, payload);
-			queryClient.setQueryData<LightState[]>(
-				["home-assistant", "lights"],
-				(existing) => {
-					if (!existing) return existing;
-					return existing.map((item) => {
-						if (item.entity_id !== light.entity_id) return item;
-						return {
-							...item,
-							state: "on",
-							attributes: {
-								...item.attributes,
-								...(brightnessPayload !== null && {
-									brightness: brightnessPayload,
-								}),
-								...(hsColorPayload && { hs_color: hsColorPayload }),
-							},
-							last_updated: new Date().toISOString(),
-						};
-					});
-				},
-			);
+			await callLightService("turn_on", light.entity_id, preferences, {
+				...payload,
+				transition: transitionSeconds,
+			});
 			await showToast({
 				style: Toast.Style.Success,
 				title: "Light updated",
 				message: friendlyName(light),
 			});
 		} catch (requestError) {
+			setPending(light.entity_id, false);
 			await showToast({
 				style: Toast.Style.Failure,
 				title: "Update failed",
@@ -497,43 +537,34 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 						: "Unknown error",
 			});
 		}
-	}
+	}, [lightsById, preferences, schedulePendingClear, setPending, transitionSeconds]);
 
-	async function handleLightAction(
+	const handleLightAction = useCallback(async (
 		light: LightState,
 		service: "turn_on" | "turn_off" | "toggle",
 		label: string,
-	): Promise<void> {
+	): Promise<void> => {
+		if (pendingEntitiesRef.current.has(light.entity_id)) {
+			await showToast({
+				style: Toast.Style.Failure,
+				title: "Update in progress",
+				message: "Waiting for Home Assistant to refresh",
+			});
+			return;
+		}
+		setPending(light.entity_id, true);
+		schedulePendingClear(light.entity_id);
 		try {
-			await callLightService(service, light.entity_id, preferences);
-			queryClient.setQueryData<LightState[]>(
-				["home-assistant", "lights"],
-				(existing) => {
-					if (!existing) return existing;
-					return existing.map((item) => {
-						if (item.entity_id !== light.entity_id) return item;
-						const nextState =
-							service === "turn_on"
-								? "on"
-								: service === "turn_off"
-									? "off"
-									: item.state === "on"
-										? "off"
-										: "on";
-						return {
-							...item,
-							state: nextState,
-							last_updated: new Date().toISOString(),
-						};
-					});
-				},
-			);
+			await callLightService(service, light.entity_id, preferences, {
+				transition: transitionSeconds,
+			});
 			await showToast({
 				style: Toast.Style.Success,
 				title: label,
 				message: friendlyName(light),
 			});
 		} catch (requestError) {
+			setPending(light.entity_id, false);
 			await showToast({
 				style: Toast.Style.Failure,
 				title: "Action failed",
@@ -543,11 +574,11 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 						: "Unknown error",
 			});
 		}
-	}
+	}, [preferences, schedulePendingClear, setPending, transitionSeconds]);
 
 	return (
 		<List
-			isLoading={isLoading}
+			isLoading={isLoading || pendingEntities.size > 0}
 			isShowingDetail={showingDetail}
 			searchBarPlaceholder="Search lights..."
 			onSearchTextChange={setSearchText}
@@ -559,10 +590,12 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 					description="Set your Home Assistant URL and access token"
 					icon={Icon.Gear}
 				/>
-			) : errorMessage ? (
+			) : isError && error ? (
 				<List.EmptyView
 					title="Failed to load lights"
-					description={errorMessage}
+					description={
+						error instanceof Error ? error.message : "Unknown error"
+					}
 					icon={Icon.Warning}
 				/>
 			) : filteredLights.length === 0 && !isLoading ? (
@@ -573,12 +606,12 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 				/>
 			) : (
 				filteredLights.map((light) => (
-					<List.Item
-						key={light.entity_id}
-						title={friendlyName(light)}
-						subtitle={
-							light.attributes.friendly_name ? light.entity_id : undefined
-						}
+							<List.Item
+								key={light.entity_id}
+								title={friendlyName(light)}
+								subtitle={
+									light.attributes.friendly_name ? light.entity_id : undefined
+								}
 						icon={getLightIcon(light)}
 						accessories={getLightAccessories(light)}
 						detail={<LightDetail light={light} />}
@@ -595,16 +628,12 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 										title="Adjust Brightness/Color"
 										icon={Icon.EyeDropper}
 										target={
-											<QueryClientProvider client={queryClient}>
-												<LightSettingsList
-													light={light}
-													preferences={preferences}
-													hasPreferences={hasPreferences}
-													onUpdate={(values) =>
-													handleLightSettings(light, values)
+											<LightSettingsList
+												light={light}
+												onUpdate={(values, options) =>
+													handleLightSettings(light, values, options)
 												}
-												/>
-											</QueryClientProvider>
+											/>
 										}
 									/>
 									<Action

@@ -11,12 +11,93 @@ import {
 } from "@vicinae/api";
 import { useCallback, useEffect, useState } from "react";
 import { exec } from "node:child_process";
+import { promises as fs } from "node:fs";
+import os from "node:os";
 import { promisify } from "node:util";
 import type { HyprpropWindowInfo } from "./types";
 
 const execAsync = promisify(exec);
 
-function formatWindowInfo(info: HyprpropWindowInfo): string {
+function extractMatchClauses(rule: string): Array<{ key: string; value: string }> {
+  const clauses: Array<{ key: string; value: string }> = [];
+  const matchPattern = /match:(class|initial_class|title|initial_title)\s+([^,]+?)(?=,|$)/g;
+  let match = matchPattern.exec(rule);
+  while (match !== null) {
+    clauses.push({ key: match[1], value: match[2].trim() });
+    match = matchPattern.exec(rule);
+  }
+  return clauses;
+}
+
+function matchesWindow(info: HyprpropWindowInfo, rule: string): boolean {
+  const clauses = extractMatchClauses(rule);
+  if (clauses.length === 0) {
+    return false;
+  }
+  return clauses.every((clause) => {
+    const target = (() => {
+      switch (clause.key) {
+        case "class":
+          return info.class;
+        case "initial_class":
+          return info.initialClass;
+        case "title":
+          return info.title;
+        case "initial_title":
+          return info.initialTitle;
+        default:
+          return "";
+      }
+    })();
+
+    if (!target) {
+      return false;
+    }
+
+    try {
+      const regex = new RegExp(clause.value);
+      return regex.test(target);
+    } catch {
+      return target.includes(clause.value);
+    }
+  });
+}
+
+async function loadRulesMatches(info: HyprpropWindowInfo): Promise<string[]> {
+  const homeDir = os.homedir();
+  const files = [
+    { label: "rules.conf", path: `${homeDir}/.config/hypr/rules.conf` },
+    { label: "generated-rules.conf", path: `${homeDir}/.config/hypr/generated-rules.conf` },
+  ];
+  const matches: string[] = [];
+
+  for (const file of files) {
+    try {
+      const raw = await fs.readFile(file.path, "utf8");
+      const lines = raw.split(/\r?\n/);
+
+      for (let index = 0; index < lines.length; index += 1) {
+        const line = lines[index];
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) {
+          continue;
+        }
+        if (!trimmed.startsWith("windowrule")) {
+          continue;
+        }
+        if (matchesWindow(info, trimmed)) {
+          matches.push(`${file.label}:${index + 1} ${trimmed}`);
+        }
+      }
+    } catch (error) {
+      console.warn(`Failed to read ${file.label}`, error);
+    }
+  }
+
+  return matches;
+}
+
+function formatWindowInfo(info: HyprpropWindowInfo, rules: string[]): string {
   const sections: string[] = [];
 
   // Title
@@ -76,12 +157,25 @@ function formatWindowInfo(info: HyprpropWindowInfo): string {
   }
   sections.push("");
 
+  // Rules
+  sections.push("## Matching Rules");
+  sections.push("");
+  if (rules.length === 0) {
+    sections.push("No matching rules found in `~/.config/hypr/rules.conf` or `~/.config/hypr/generated-rules.conf`.");
+  } else {
+    sections.push("```text");
+    sections.push(...rules);
+    sections.push("```");
+  }
+  sections.push("");
+
   return sections.join("\n");
 }
 
 export default function Command() {
   const [windowInfo, setWindowInfo] = useState<HyprpropWindowInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [matchingRules, setMatchingRules] = useState<string[]>([]);
 
   const fetchWindowInfo = useCallback(async (): Promise<HyprpropWindowInfo | null> => {
     try {
@@ -129,6 +223,12 @@ export default function Command() {
     setIsLoading(true);
     const info = await fetchWindowInfo();
     setWindowInfo(info);
+    if (info) {
+      const rules = await loadRulesMatches(info);
+      setMatchingRules(rules);
+    } else {
+      setMatchingRules([]);
+    }
     setIsLoading(false);
   }, [fetchWindowInfo]);
 
@@ -172,7 +272,7 @@ Press **⌘R** to retry.`}
     );
   }
 
-  const markdown = formatWindowInfo(windowInfo);
+  const markdown = formatWindowInfo(windowInfo, matchingRules);
 
   return (
     <Detail
@@ -199,6 +299,12 @@ Press **⌘R** to retry.`}
             title="Monitor"
             text={String(windowInfo.monitor)}
             icon={Icon.Monitor}
+          />
+          <Detail.Metadata.Separator />
+          <Detail.Metadata.Label
+            title="Rules"
+            text={String(matchingRules.length)}
+            icon={Icon.List}
           />
           <Detail.Metadata.Separator />
           <Detail.Metadata.Label
