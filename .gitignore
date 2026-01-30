@@ -33,6 +33,7 @@ storybook-static
 !.codex/skills/**/*
 .agents/skills/.system
 __pycache__
+.ruff_cache
 
 # window state rules (auto-generated)
 .config/hypr/window-state-rules.conf

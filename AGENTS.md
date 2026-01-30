@@ -21,6 +21,11 @@ External repo: https://github.com/fbosch/nixos (usually at `~/nixos`)
 - `stow .`
 - `stow -n .`
 
+## Skills
+
+- Canonical skills live in `.agents/skills/`
+- `.agents/skills/` is symlinked to `.opencode/skill`, `.config/opencode/skills`, `.config/codex/skills`, `.config/github/skill`, and `.config/claude/skills`
+
 ## More Guidance
 
 - [Common operations](docs/agents/operations.md)

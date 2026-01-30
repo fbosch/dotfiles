@@ -2,6 +2,7 @@
 alias nvim 'nvim -i NONE --noplugin'
 alias snvim 'sudo -E -s nvim'
 alias vimdiff 'nvim -d'
+alias pip "uv pip" # python pip to uv
 abbr n nvim
 abbr nlup 'nvim --headless +"Lazy! sync" +qa' # lazy update neovim plugins
 abbr nwipe 'nvim --headless +"WipeAllSessions!" +qa'
