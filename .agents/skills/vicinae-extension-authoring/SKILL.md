@@ -54,6 +54,17 @@ Follow the repo’s established Vicinae extension patterns for structure, cachin
 
 ## References
 
+**Official Vicinae Documentation** (in `references/docs/src/app/extensions/`):
+- **Introduction & architecture**: `references/docs/src/app/extensions/introduction/page.mdx`
+- **Creating extensions**: `references/docs/src/app/extensions/create/page.mdx`
+- **File structure**: `references/docs/src/app/extensions/file-structure/page.mdx`
+- **Manifest format**: `references/docs/src/app/extensions/manifest/page.mdx`
+- **API reference**: `references/docs/src/app/extensions/api/page.mdx`
+- **View commands**: `references/docs/src/app/extensions/view-command/page.mdx`
+- **No-view commands**: `references/docs/src/app/extensions/no-view-command/page.mdx`
+- **Debugging**: `references/docs/src/app/extensions/debug-raycast/page.mdx`
+
+**Repo-specific patterns**:
 - If creating a new extension or adding modules, read `references/extension-template.md`.
 - If implementing persistence or caching, read `references/cache-patterns.md` before coding.
 - If adding or reordering actions/shortcuts, read `references/action-ux-standards.md`.
