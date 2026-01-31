@@ -1,0 +1,43 @@
+# Extensions
+
+This page explains how to install and run extensions. If you are looking to build your own extensions or learn more about the extension system, please refer to the [extension section](/extensions/introduction) of this documentation.
+
+## Install from Vicinae store
+
+Since version **0.16.0** vicinae now hosts its own extension store. You can access it directly from the main search. The source code for all the published extensions can be found on [GitHub](https://github.com/vicinaehq/extensions).
+
+![](/vicinae-store.png)
+
+## Install from source tree
+
+This assumes you have downloaded an extension's source code from somewhere on the Internet (e.g GitHub). 
+
+From the extension's source tree, simply run:
+
+```bash
+npm install
+npm run build
+```
+
+After it's built, you should be able to search for commands exported by this extension.
+No server restart is required.
+
+## Raycast Extensions
+
+You can install Raycast extensions published to the official Raycast store in one click from within Vicinae:
+
+Launch the [Raycast Store](vicinae://extensions/vicinae/raycast-compat/store) command, search for the extension you are looking for, click on details and then install.
+
+Vicinae will then download the extension from Raycast's servers and install it right away, making it immediately available from the root search.
+
+![](/raycast-store-list.webp)
+
+<Warning>
+Raycast extension support will vary a lot from one extension to another, due to some of them being specifically built for MacOS. We maintain a [list of all compatible extensions](https://docs.google.com/spreadsheets/d/1GAdVeSaKQxXCVJv2_M5zi-mA1IoHieW_Py-VXmPYpeg), as per our own testing.
+</Warning>
+
+## Uninstall extension
+
+You can uninstall an extension from the root search by searching for the "Uninstall Extension" action:
+
+![](/uninstall-extension.webp)

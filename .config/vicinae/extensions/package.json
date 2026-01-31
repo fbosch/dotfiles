@@ -16,5 +16,15 @@
     "@tanstack/react-query": "^5.90.17",
     "@vicinae/api": "^0.18.3",
     "typescript": "^5.9.3"
+  },
+  "docs-cache": {
+    "$schema": "https://raw.githubusercontent.com/fbosch/docs-cache/main/docs.config.schema.json",
+    "sources": [
+      {
+        "id": "vicinae-docs",
+        "repo": "https://github.com/vicinaehq/docs.git",
+        "targetDir": "./docs/agents/docs"
+      }
+    ]
   }
 }

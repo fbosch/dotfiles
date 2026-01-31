@@ -1,5 +1,6 @@
 # macOS system files
 **/.DS_Store
+.docs/**/*
 
 # lock files
 lazy-lock.json
