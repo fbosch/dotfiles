@@ -48,6 +48,9 @@ type LightSettingsOptions = {
 };
 
 const FAVORITE_LIGHTS_KEY = "homeAssistantFavoriteLights";
+const TRANSITION_SECONDS = 1.25;
+const TRANSITION_MS = TRANSITION_SECONDS * 1000;
+const DEBOUNCE_MS = 500;
 
 async function loadFavoriteLights(): Promise<string[]> {
 	const stored = await LocalStorage.getItem<string>(FAVORITE_LIGHTS_KEY);
@@ -323,9 +326,6 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 	);
 	const pendingEntitiesRef = useRef(new Set<string>());
 	const debounceTimersRef = useRef(new Map<string, NodeJS.Timeout>());
-	const transitionSeconds = 1.25;
-	const transitionMs = transitionSeconds * 1000;
-	const debounceMs = 500; // Wait 500ms after last keypress
 
 	const setPending = useCallback((entityId: string, pending: boolean) => {
 		if (pending) {
@@ -433,22 +433,23 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 
 	const filteredLights = useMemo(() => {
 		const query = searchText.trim().toLowerCase();
-		const sorted = [...lights].sort((a, b) =>
-			friendlyName(a).localeCompare(friendlyName(b)),
-		);
-		if (!query) {
-			return sorted.sort((a, b) => {
-				const aFavorite = favoriteSet.has(a.entity_id);
-				const bFavorite = favoriteSet.has(b.entity_id);
-				if (aFavorite === bFavorite) {
-					return friendlyName(a).localeCompare(friendlyName(b));
-				}
+		
+		// Filter first if there's a search query
+		const filtered = query
+			? lights.filter((light) => {
+					const name = friendlyName(light).toLowerCase();
+					return name.includes(query) || light.entity_id.toLowerCase().includes(query);
+			  })
+			: lights;
+		
+		// Sort once: favorites first, then alphabetically
+		return [...filtered].sort((a, b) => {
+			const aFavorite = favoriteSet.has(a.entity_id);
+			const bFavorite = favoriteSet.has(b.entity_id);
+			if (aFavorite !== bFavorite) {
 				return aFavorite ? -1 : 1;
-			});
-		}
-		return sorted.filter((light) => {
-			const name = friendlyName(light).toLowerCase();
-			return name.includes(query) || light.entity_id.toLowerCase().includes(query);
+			}
+			return friendlyName(a).localeCompare(friendlyName(b));
 		});
 	}, [lights, searchText, favoriteSet]);
 
@@ -522,6 +523,9 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 			return;
 		}
 
+		// Store previous state for rollback on error
+		const previousData = queryClient.getQueryData<LightState[]>(["home-assistant", "lights"]);
+
 		// Always update cache optimistically for immediate UI feedback
 		queryClient.setQueryData<LightState[]>(
 			["home-assistant", "lights"],
@@ -554,9 +558,9 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 					try {
 						await callLightService("turn_on", light.entity_id, preferences, {
 							...payload,
-							transition: transitionSeconds,
+							transition: TRANSITION_SECONDS,
 						});
-						refreshLightsAfterDelay(transitionMs);
+						refreshLightsAfterDelay(TRANSITION_MS);
 						if (!options?.silent) {
 							await showToast({
 								style: Toast.Style.Success,
@@ -565,6 +569,10 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 							});
 						}
 					} catch (requestError) {
+						// Rollback optimistic update on error
+						if (previousData) {
+							queryClient.setQueryData(["home-assistant", "lights"], previousData);
+						}
 						if (!options?.silent) {
 							await showToast({
 								style: Toast.Style.Failure,
@@ -575,9 +583,10 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 										: "Unknown error",
 							});
 						}
+						console.error("[Home Assistant] Light settings update failed:", requestError);
 					}
 				})();
-			}, debounceMs);
+			}, DEBOUNCE_MS);
 			
 			debounceTimersRef.current.set(light.entity_id, newTimerId);
 			return;
@@ -590,10 +599,10 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 		try {
 			await callLightService("turn_on", light.entity_id, preferences, {
 				...payload,
-				transition: transitionSeconds,
+				transition: TRANSITION_SECONDS,
 			});
 			if (options?.allowWhilePending) {
-				refreshLightsAfterDelay(transitionMs);
+				refreshLightsAfterDelay(TRANSITION_MS);
 				if (!options?.silent) {
 					await showToast({
 						style: Toast.Style.Success,
@@ -603,7 +612,7 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 				}
 				return;
 			}
-			await new Promise((resolve) => setTimeout(resolve, transitionMs));
+			await new Promise((resolve) => setTimeout(resolve, TRANSITION_MS));
 			await refreshLights();
 			setPending(light.entity_id, false);
 			if (!options?.silent) {
@@ -629,12 +638,10 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 	}, [
 		lightsById,
 		preferences,
+		queryClient,
 		refreshLights,
 		refreshLightsAfterDelay,
 		setPending,
-		transitionMs,
-		transitionSeconds,
-		debounceMs,
 	]);
 
 	const handleLightAction = useCallback(async (
@@ -653,9 +660,9 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 		setPending(light.entity_id, true);
 		try {
 			await callLightService(service, light.entity_id, preferences, {
-				transition: transitionSeconds,
+				transition: TRANSITION_SECONDS,
 			});
-			await new Promise((resolve) => setTimeout(resolve, transitionMs));
+			await new Promise((resolve) => setTimeout(resolve, TRANSITION_MS));
 			await refreshLights();
 			setPending(light.entity_id, false);
 			await showToast({
@@ -678,8 +685,6 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 		preferences,
 		refreshLights,
 		setPending,
-		transitionMs,
-		transitionSeconds,
 	]);
 
 	return (
@@ -726,116 +731,120 @@ function HomeAssistantLightsContent({ fallbackText }: { fallbackText?: string })
 							detail={<LightDetail light={light} />}
 							actions={
 								<ActionPanel>
-									<Action
-										title="Toggle Light"
-										icon={Icon.Switch}
-										onAction={() =>
-											handleLightAction(light, "toggle", "Light toggled")
-										}
-									/>
-									<Action
-										title="Increase Brightness"
-										icon={Icon.Plus}
-										onAction={() =>
-											handleLightSettings(
-												light,
-												{
-													brightnessPercent: clampNumber(
-														brightnessPercent + 10,
-														0,
-														100,
-													),
-												},
-												{ allowWhilePending: true, silent: true, debounce: true },
-											)
-										}
-										shortcut={{ modifiers: ["cmd"], key: "]" }}
-									/>
-									<Action
-										title="Decrease Brightness"
-										icon={Icon.Minus}
-										onAction={() =>
-											handleLightSettings(
-												light,
-												{
-													brightnessPercent: clampNumber(
-														brightnessPercent - 10,
-														0,
-														100,
-													),
-												},
-												{ allowWhilePending: true, silent: true, debounce: true },
-											)
-										}
-										shortcut={{ modifiers: ["cmd"], key: "[" }}
-									/>
-									<Action.Push
-										title="Adjust Brightness/Color"
-										icon={Icon.EyeDropper}
-										target={
-											<LightSettingsList
-												light={light}
-												onUpdate={(values, options) =>
-													handleLightSettings(light, values, options)
-												}
-											/>
-										}
-									/>
-									<Action
-										title={
-											favoriteSet.has(light.entity_id)
-												? "Remove from Favorites"
-												: "Add to Favorites"
-										}
-										icon={Icon.Pin}
-										onAction={() => toggleFavorite(light)}
-									/>
-								<ActionPanel.Section>
-									<Action
-										title="Turn On"
-										icon={Icon.LightBulb}
-										onAction={() =>
-											handleLightAction(light, "turn_on", "Light turned on")
-										}
-									/>
-									<Action
-										title="Turn Off"
-										icon={Icon.LightBulbOff}
-										onAction={() =>
-											handleLightAction(light, "turn_off", "Light turned off")
-										}
-									/>
-									<Action
-										title="Toggle Detail"
-										icon={Icon.AppWindowSidebarLeft}
-										onAction={() => setShowingDetail(!showingDetail)}
-										shortcut={{ modifiers: ["cmd"], key: "d" }}
-									/>
-								</ActionPanel.Section>
-								<ActionPanel.Section>
-									<Action.OpenInBrowser
-										title="Open Home Assistant"
-										url={preferences.baseUrl}
-										shortcut={{ modifiers: ["cmd"], key: "o" }}
-									/>
-									<Action.CopyToClipboard
-										title="Copy Entity ID"
-										content={light.entity_id}
-										shortcut={{ modifiers: ["cmd"], key: "c" }}
-									/>
-								</ActionPanel.Section>
-								<Action
-									title="Refresh"
-									icon={Icon.Repeat}
-									onAction={() =>
-										queryClient.invalidateQueries({
-											queryKey: ["home-assistant", "lights"],
-										})
-									}
-									shortcut={{ modifiers: ["cmd"], key: "r" }}
-								/>
-							</ActionPanel>
-						}
+									<ActionPanel.Section title="Primary Actions">
+										<Action
+											title="Toggle Light"
+											icon={Icon.Switch}
+											onAction={() =>
+												handleLightAction(light, "toggle", "Light toggled")
+											}
+										/>
+										<Action
+											title="Toggle Detail"
+											icon={Icon.AppWindowSidebarLeft}
+											onAction={() => setShowingDetail(!showingDetail)}
+											shortcut={{ modifiers: ["cmd"], key: "d" }}
+										/>
+										<Action
+											title="Increase Brightness"
+											icon={Icon.Plus}
+											onAction={() =>
+												handleLightSettings(
+													light,
+													{
+														brightnessPercent: clampNumber(
+															brightnessPercent + 10,
+															0,
+															100,
+														),
+													},
+													{ allowWhilePending: true, silent: true, debounce: true },
+												)
+											}
+											shortcut={{ modifiers: ["cmd"], key: "]" }}
+										/>
+										<Action
+											title="Decrease Brightness"
+											icon={Icon.Minus}
+											onAction={() =>
+												handleLightSettings(
+													light,
+													{
+														brightnessPercent: clampNumber(
+															brightnessPercent - 10,
+															0,
+															100,
+														),
+													},
+													{ allowWhilePending: true, silent: true, debounce: true },
+												)
+											}
+											shortcut={{ modifiers: ["cmd"], key: "[" }}
+										/>
+										<Action.Push
+											title="Adjust Brightness/Color"
+											icon={Icon.EyeDropper}
+											target={
+												<LightSettingsList
+													light={light}
+													onUpdate={(values, options) =>
+														handleLightSettings(light, values, options)
+													}
+												/>
+											}
+										/>
+									</ActionPanel.Section>
+									<ActionPanel.Section title="Light Control">
+										<Action
+											title="Turn On"
+											icon={Icon.LightBulb}
+											onAction={() =>
+												handleLightAction(light, "turn_on", "Light turned on")
+											}
+										/>
+										<Action
+											title="Turn Off"
+											icon={Icon.LightBulbOff}
+											onAction={() =>
+												handleLightAction(light, "turn_off", "Light turned off")
+											}
+										/>
+										<Action
+											title={
+												favoriteSet.has(light.entity_id)
+													? "Remove from Favorites"
+													: "Add to Favorites"
+											}
+											icon={Icon.Pin}
+											onAction={() => toggleFavorite(light)}
+										/>
+									</ActionPanel.Section>
+									<ActionPanel.Section title="External">
+										<Action.OpenInBrowser
+											title="Open Home Assistant"
+											url={preferences.baseUrl}
+											shortcut={{ modifiers: ["cmd"], key: "o" }}
+										/>
+										<Action.CopyToClipboard
+											title="Copy Entity ID"
+											content={light.entity_id}
+											shortcut={{ modifiers: ["cmd"], key: "c" }}
+										/>
+									</ActionPanel.Section>
+									<ActionPanel.Section title="Management">
+										<Action
+											title="Refresh"
+											icon={Icon.Repeat}
+											onAction={() =>
+												queryClient.invalidateQueries({
+													queryKey: ["home-assistant", "lights"],
+												})
+											}
+											shortcut={{ modifiers: ["cmd"], key: "r" }}
+										/>
+									</ActionPanel.Section>
+								</ActionPanel>
+							}
 					/>
 					);
 				})
