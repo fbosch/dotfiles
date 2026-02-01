@@ -45,14 +45,8 @@ end
 -- Schedule the setting after `UiEnter` because it can increase startup-time.
 vim.schedule(function()
 	vim.opt.clipboard:append("unnamedplus")
-
-	-- Debug: Check environment variables
 	local ssh_client = vim.uv.os_getenv("SSH_CLIENT")
 	local ssh_tty = vim.uv.os_getenv("SSH_TTY")
-	vim.notify(
-		string.format("SSH_CLIENT: %s, SSH_TTY: %s", tostring(ssh_client), tostring(ssh_tty)),
-		vim.log.levels.INFO
-	)
 
 	-- Standard SSH session handling
 	if ssh_client ~= nil or ssh_tty ~= nil then

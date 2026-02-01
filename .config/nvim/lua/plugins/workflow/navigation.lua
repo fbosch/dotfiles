@@ -82,15 +82,35 @@ return {
 		},
 		config = function()
 			local fzf = require("fzf-lua")
+			local colors = require("config.colors")
+			
+			-- Build FZF color scheme from zenwritten colors
+			local fzf_colors = string.format(
+				"fg:%s,bg:%s,hl:%s,fg+:%s,bg+:%s,hl+:%s,info:%s,prompt:%s,pointer:%s,marker:%s,spinner:%s,header:%s",
+				colors.lighter_gray,  -- Normal text
+				colors.background,    -- Background
+				colors.blue,          -- Highlighted matches
+				colors.white,         -- Selected line text
+				colors.dark_gray,     -- Selected line background
+				colors.cyan,          -- Selected line matches
+				colors.yellow,        -- Info text (counts, etc)
+				colors.orange,        -- Prompt
+				colors.purple,        -- Pointer (current selection)
+				colors.green,         -- Marker (multi-select)
+				colors.purple,        -- Spinner
+				colors.light_gray     -- Header
+			)
+			
 			fzf.setup({
 				-- Performance optimizations
 				fzf_opts = {
-					["--ansi"] = true, -- Keep ANSI colors (already using in custom commands)
-					["--info"] = "inline", -- Inline info for cleaner display
+					["--ansi"] = true,
+					["--info"] = "inline",
 					["--height"] = "100%",
 					["--layout"] = "reverse",
 					["--border"] = "none",
-					["--cycle"] = true, -- Cycle through results
+					["--cycle"] = true,
+					["--color"] = fzf_colors,
 				},
 				winopts = {
 					height = 0.8,
