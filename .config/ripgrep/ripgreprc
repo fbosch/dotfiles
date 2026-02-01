@@ -10,10 +10,13 @@
 # web:*.{html,css,js}*
 
 # Using glob patterns to include/exclude files or folders
---glob=!{.git,node_modules}/*
+--glob=!{.git,node_modules,dist,build,target,.next,.cache,coverage,__pycache__,.pytest_cache}/*
 
 # Search hidden files and directories
 --hidden
 
 --smart-case
-# --threads=16
+
+# Performance optimizations
+--threads=0           # Auto-detect optimal thread count
+--mmap                # Use memory maps for faster file reading
