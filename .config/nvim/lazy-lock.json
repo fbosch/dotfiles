@@ -1,7 +1,7 @@
 {
   "FTerm.nvim": { "branch": "master", "commit": "d1320892cc2ebab472935242d9d992a2c9570180" },
   "LuaSnip": { "branch": "master", "commit": "dae4f5aaa3574bd0c2b9dd20fb9542a02c10471c" },
-  "barbar.nvim": { "branch": "master", "commit": "3f01ba569978017fc7dd50c5e663c54778a8df01" },
+  "barbar.nvim": { "branch": "master", "commit": "d9c1f0f5ae6a1c333f620cfa81fbb0200fcb19cf" },
   "bufresize.nvim": { "branch": "master", "commit": "3b19527ab936d6910484dcc20fb59bdb12322d8b" },
   "ccc.nvim": { "branch": "main", "commit": "9d1a256e006decc574789dfc7d628ca11644d4c2" },
   "checkmate.nvim": { "branch": "main", "commit": "fc8edd6ecf8e4095ef878780e4bed83cc5c56c14" },

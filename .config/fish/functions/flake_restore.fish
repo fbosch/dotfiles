@@ -42,7 +42,7 @@ function flake_restore --description "Browse flake.lock history and restore a ve
     set -l dep_lines
     if type -q jq
         set -l tmp (mktemp)
-        if git -C $repo show "$hash:flake.lock" > "$tmp" 2>/dev/null
+        if git -C $repo show "$hash:flake.lock" >"$tmp" 2>/dev/null
             set -l dep_list (jq -r -s '
                 def depmap($x):
                     $x.nodes
@@ -89,7 +89,7 @@ function flake_restore --description "Browse flake.lock history and restore a ve
 
     if test "$dep_count" != "?"
         if test $dep_count -gt 0
-            set lines $lines "" "Deps:    $dep_count changed" ""
+            set lines $lines "" "Deps:    $dep_count changed" \n""
             set -l tab (printf '\t')
             set -l reset (set_color normal)
             set -l green (set_color green)
@@ -109,10 +109,10 @@ function flake_restore --description "Browse flake.lock history and restore a ve
                 set -l to $row[3]
                 set -l dir $row[4]
 
-                if test "$from" != "-"
+                if test "$from" != -
                     set from (string sub -s -7 -- $from)
                 end
-                if test "$to" != "-"
+                if test "$to" != -
                     set to (string sub -s -7 -- $to)
                 end
 
@@ -135,35 +135,35 @@ function flake_restore --description "Browse flake.lock history and restore a ve
             end
 
             if test (count $up_lines) -gt 0
-                set lines $lines "" "UPGRADED"
+                set lines $lines "" UPGRADED
                 for item in $up_lines
                     set lines $lines "$green$item$reset"
                 end
             end
 
             if test (count $down_lines) -gt 0
-                set lines $lines "" "DOWNGRADED"
+                set lines $lines "" DOWNGRADED
                 for item in $down_lines
                     set lines $lines "$red$item$reset"
                 end
             end
 
             if test (count $add_lines) -gt 0
-                set lines $lines "" "ADDED"
+                set lines $lines "" ADDED
                 for item in $add_lines
                     set lines $lines "$green$item$reset"
                 end
             end
 
             if test (count $remove_lines) -gt 0
-                set lines $lines "" "REMOVED"
+                set lines $lines "" REMOVED
                 for item in $remove_lines
                     set lines $lines "$red$item$reset"
                 end
             end
 
             if test (count $change_lines) -gt 0
-                set lines $lines "" "CHANGED"
+                set lines $lines "" CHANGED
                 for item in $change_lines
                     set lines $lines "$yellow$item$reset"
                 end
@@ -181,19 +181,19 @@ function flake_restore --description "Browse flake.lock history and restore a ve
 
     if type -q gum
         gum confirm "Restore flake.lock to this commit?"; or return 1
-        set confirm "y"
+        set confirm y
     else
         read -l -P "Restore flake.lock? [y/N] " confirm
     end
 
-    if test "$confirm" != "y"
+    if test "$confirm" != y
         return 0
     end
 
     if git -C $repo restore --source=$hash -- flake.lock 2>/dev/null
         echo "Restored flake.lock from $hash."
     else
-        git -C $repo show "$hash:flake.lock" > "$file"
+        git -C $repo show "$hash:flake.lock" >"$file"
         echo "Restored flake.lock from $hash (via git show)."
     end
 end
