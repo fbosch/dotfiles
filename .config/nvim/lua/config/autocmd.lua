@@ -56,15 +56,13 @@ vim.schedule(function()
 
 	-- Standard SSH session handling
 	if ssh_client ~= nil or ssh_tty ~= nil then
-		vim.notify("Setting OSC 52 clipboard", vim.log.levels.INFO)
+		-- vim.notify("Setting OSC 52 clipboard", vim.log.levels.INFO)
 		set_osc52_clipboard()
 	else
 		check_wezterm_remote_clipboard(function(is_remote_wezterm)
 			if is_remote_wezterm then
-				vim.notify("Setting OSC 52 clipboard (WezTerm remote)", vim.log.levels.INFO)
+				-- vim.notify("Setting OSC 52 clipboard (WezTerm remote)", vim.log.levels.INFO)
 				set_osc52_clipboard()
-			else
-				vim.notify("Using default clipboard", vim.log.levels.INFO)
 			end
 		end)
 	end

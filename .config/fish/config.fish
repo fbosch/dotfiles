@@ -33,7 +33,7 @@ switch $OS_TYPE
         end
 end
 
-for file in aliases scripts profile private colors
+for file in aliases scripts profile private colors fzf
     if test -f ~/.config/fish/$file.fish
         source ~/.config/fish/$file.fish
     end

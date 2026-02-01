@@ -83,11 +83,22 @@ return {
 		config = function()
 			local fzf = require("fzf-lua")
 			fzf.setup({
+				-- Performance optimizations
+				fzf_opts = {
+					["--ansi"] = true, -- Keep ANSI colors (already using in custom commands)
+					["--info"] = "inline", -- Inline info for cleaner display
+					["--height"] = "100%",
+					["--layout"] = "reverse",
+					["--border"] = "none",
+					["--cycle"] = true, -- Cycle through results
+				},
 				winopts = {
 					height = 0.8,
 					width = 0.9,
 					preview = {
-						default = { "bat_async", flip_columns = 200 },
+						-- Use bat_native for better performance than bat_async
+						default = "bat_native",
+						flip_columns = 200,
 					},
 				},
 				hls = {
@@ -104,14 +115,22 @@ return {
 						["ctrl-q"] = "select-all+accept",
 					},
 				},
+				-- Enable ripgrep glob parsing by default
+				grep = {
+					rg_glob = true,
+					glob_flag = "--iglob",
+					glob_separator = "%s%-%-",
+				},
 			})
 
 			local colors =
 				'--color=ansi --colors="match:bg:magenta" --colors="match:fg:black" --colors="line:fg:yellow" --colors="path:fg:white" '
 
 			local exclude_glob =
-				"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*,**/.pnpm-store/*,**/.backup/*,**/.sessions/*,**/.undo/*,**/.DS_Store}"
+				"!{**/node_modules/*,**/.git/*,**/.yarn/*,**/dist/*,**/.pnpm-store/*,**/.backup/*,**/.sessions/*,**/.undo/*,**/.DS_Store,**/__pycache__/*,**/.cache/*,**/coverage/*,**/build/*,**/target/*,**/.next/*,**/.pytest_cache/*}"
 
+			-- Performance optimized ripgrep options
+			-- Note: --threads and --mmap are read from RIPGREP_CONFIG_PATH automatically
 			local combined_options = "--with-filename --max-columns=200 --smart-case --vimgrep -g '"
 				.. exclude_glob
 				.. "' "
