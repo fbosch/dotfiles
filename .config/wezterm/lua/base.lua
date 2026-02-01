@@ -9,7 +9,8 @@ return function(config)
 	config.front_end = "WebGpu"
 	config.webgpu_power_preference = "HighPerformance"
 	config.webgpu_preferred_adapter = gpus[1]
-	config.max_fps = 120
+	config.max_fps = 60
+	config.animation_fps = 60
 	config.enable_wayland = true
 	config.audible_bell = "Disabled"
 	config.status_update_interval = 10000

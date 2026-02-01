@@ -1,3 +1,6 @@
+-- Cache HOME path at module level
+local scanlines_path = (os.getenv("HOME") or "") .. "/.config/wezterm/scanlines.png"
+
 return function(config)
 	config.color_scheme = "zenwritten_dark"
 	config.colors = {
@@ -25,7 +28,7 @@ return function(config)
 		},
 		{
 			source = {
-				File = os.getenv("HOME") .. "/.config/wezterm/scanlines.png",
+				File = scanlines_path,
 			},
 			width = "1px",
 			height = "1cell",

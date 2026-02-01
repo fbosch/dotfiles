@@ -107,6 +107,12 @@ return function(config)
 			mods = "CTRL|SHIFT",
 			action = wezterm.action.CloseCurrentPane({ confirm = true }),
 		},
+		-- Debug overlay for performance monitoring
+		{
+			key = "D",
+			mods = "CTRL|SHIFT",
+			action = wezterm.action.ShowDebugOverlay,
+		},
 		-- Disable default CTRL+arrow assignments
 		{
 			key = "RightArrow",
