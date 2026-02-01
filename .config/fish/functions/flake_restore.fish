@@ -82,7 +82,7 @@ function flake_restore --description "Browse flake.lock history and restore a ve
         echo "flake.lock has local changes. Restoring will overwrite them."
     end
 
-    set -l lines "flake.lock restore" "" "Commit:  $hash" "Date:    $date" "Subject: $subject"
+    set -l lines "" "Commit:  $hash" "Date:    $date" "Subject: $subject"
     if test -n "$commit_url"
         set lines $lines "Link:    $commit_url"
     end
