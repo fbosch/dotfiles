@@ -1,9 +1,6 @@
 return {
 	{
 		"nvim-tree/nvim-web-devicons",
-		dependencies = {
-			"rachartier/tiny-devicons-auto-colors.nvim",
-		},
 		event = "VeryLazy",
 		config = function()
 			local colors = require("config.colors")
@@ -48,6 +45,14 @@ return {
 					},
 				},
 			})
+		end,
+	},
+	{
+		"rachartier/tiny-devicons-auto-colors.nvim",
+		dependencies = { "nvim-tree/nvim-web-devicons" },
+		event = "VeryLazy",
+		config = function()
+			local colors = require("config.colors")
 			local colorValues = vim.list_extend({
 				colors.red,
 				colors.orange,

@@ -50,9 +50,12 @@ end
 
 return {
 	{
-		"romgrk/barbar.nvim",
+		"fbosch/barbar.nvim",
 		dependencies = { "nvim-tree/nvim-web-devicons" },
 		lazy = false,
+		init = function()
+			vim.g.barbar_auto_setup = false
+		end,
 		keys = vim.list_extend(buffer_index_keys(), {
 			{
 				mode = { "n" },
