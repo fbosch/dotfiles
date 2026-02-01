@@ -28,12 +28,10 @@ abbr prj 'cd ~/Projects'
 abbr pjr 'cd ~/Projects'
 abbr rpj 'cd ~/Projects'
 
-abbr cf 'cd ~/.config'
-abbr cnx 'cd /etc/nixos'
+abbr attp 'attic push nix-cache $(nix path-info /run/current-system/)'
 abbr nxe 'nvim ~/nixos'
 abbr nxu flake_update_interactive
 abbr nxud flake_updates_daemon
-
 abbr nxgc nix-collect-garbage
 
 # Helpers
