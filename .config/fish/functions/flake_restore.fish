@@ -135,35 +135,35 @@ function flake_restore --description "Browse flake.lock history and restore a ve
             end
 
             if test (count $up_lines) -gt 0
-                set lines $lines "" UPGRADED
+                set lines $lines "" UPGRADING
                 for item in $up_lines
                     set lines $lines "$green$item$reset"
                 end
             end
 
             if test (count $down_lines) -gt 0
-                set lines $lines "" DOWNGRADED
+                set lines $lines "" DOWNGRADING
                 for item in $down_lines
                     set lines $lines "$red$item$reset"
                 end
             end
 
             if test (count $add_lines) -gt 0
-                set lines $lines "" ADDED
+                set lines $lines "" ADDING
                 for item in $add_lines
                     set lines $lines "$green$item$reset"
                 end
             end
 
             if test (count $remove_lines) -gt 0
-                set lines $lines "" REMOVED
+                set lines $lines "" REMOVING
                 for item in $remove_lines
                     set lines $lines "$red$item$reset"
                 end
             end
 
             if test (count $change_lines) -gt 0
-                set lines $lines "" CHANGED
+                set lines $lines "" CHANGING
                 for item in $change_lines
                     set lines $lines "$yellow$item$reset"
                 end
