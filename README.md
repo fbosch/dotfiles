@@ -21,13 +21,8 @@ stow .
 
 ## 📦 Dependencies
 
-All system packages and dependencies (Neovim, Fish, WezTerm, CLI tools, etc.) are declaratively managed in my NixOS configuration:
+All system packages and dependencies are declaratively managed in my NixOS configuration:
 
 **→ [github.com/fbosch/nixos](https://github.com/fbosch/nixos)**
 
-This dotfiles repository contains only the application configuration files, while the NixOS repository handles:
-
-- System packages and versions
-- Service configurations
-- Home Manager setup
-- Declarative system state
+This dotfiles repository contains only the application configuration files.
