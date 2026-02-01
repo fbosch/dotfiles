@@ -1,11 +1,9 @@
 # macOS system files
 **/.DS_Store
+
+
+# ephemereal files
 **/.docs/**/*
-
-
-# lock files
-lazy-lock.json
-Brewfile.lock.json
 node_modules
 storybook-static
 
