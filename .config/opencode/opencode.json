@@ -3,7 +3,6 @@
   "theme": "zenwritten-dark",
   "instructions": [
     "AGENTS.md",
-    "docs/*.md",
     ".cursor/rules/*.md*"
   ],
   "mcp": {
@@ -45,6 +44,7 @@
       ]
     },
     "neovim": {
+      "enabled": false,
       "type": "local",
       "command": [
         "npx",

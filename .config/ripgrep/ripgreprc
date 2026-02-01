@@ -17,5 +17,3 @@
 
 --smart-case
 
-# Performance optimizations
---mmap                # Use memory maps for faster file reading
