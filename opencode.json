@@ -4,7 +4,8 @@
     "external_directory": {
       "/tmp": "allow",
       "~/nixos/**": "allow",
-      "~/dotfiles/**": "allow"
+      "~/dotfiles/**": "allow",
+      "~/.config/**": "allow"
     }
   },
   "watcher": {

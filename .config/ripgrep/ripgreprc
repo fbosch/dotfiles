@@ -18,5 +18,4 @@
 --smart-case
 
 # Performance optimizations
---threads=0           # Auto-detect optimal thread count
 --mmap                # Use memory maps for faster file reading
