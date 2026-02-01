@@ -1,7 +1,11 @@
 local wezterm = require("wezterm")
-local gpus = wezterm.gui.enumerate_gpus()
+local gpus -- Lazy load GPUs only once
 
 return function(config)
+	if not gpus then
+		gpus = wezterm.gui.enumerate_gpus()
+	end
+	
 	config.front_end = "WebGpu"
 	config.webgpu_power_preference = "HighPerformance"
 	config.webgpu_preferred_adapter = gpus[1]

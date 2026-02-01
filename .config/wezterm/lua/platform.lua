@@ -2,9 +2,17 @@ local wezterm = require("wezterm")
 local is_windows = package.config:sub(0, 1) == "\\"
 local is_linux = wezterm.target_triple:find("linux") ~= nil
 
--- Detect if running in VirtualBox
+-- Cached VirtualBox detection result
+local cached_is_vbox = nil
+
+-- Detect if running in VirtualBox (cached)
 local function is_virtualbox()
+	if cached_is_vbox ~= nil then
+		return cached_is_vbox
+	end
+	
 	if is_windows then
+		cached_is_vbox = false
 		return false
 	end
 	
@@ -14,6 +22,7 @@ local function is_virtualbox()
 		local product = f:read("*all")
 		f:close()
 		if product:match("VirtualBox") then
+			cached_is_vbox = true
 			return true
 		end
 	end
@@ -24,10 +33,12 @@ local function is_virtualbox()
 		local modules = f:read("*all")
 		f:close()
 		if modules:match("vboxguest") or modules:match("vboxvideo") then
+			cached_is_vbox = true
 			return true
 		end
 	end
 	
+	cached_is_vbox = false
 	return false
 end
 
