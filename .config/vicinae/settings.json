@@ -90,6 +90,9 @@
             "io.github.Foldex.AdwSteamGtk": {
                "enabled": false
             },
+            "mullvad-vpn": {
+               "enabled": false
+            },
             "net.lutris.battlenet-1": {
                "enabled": false
             },

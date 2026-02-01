@@ -5,6 +5,13 @@
       "~/nixos/**": "allow"
     }
   },
+  "watcher": {
+    "ignore": [
+      "node_modules/**",
+      "dist/**",
+      ".git/**"
+    ]
+  },
   "mcp": {
     "design-system": {
       "enabled": false,

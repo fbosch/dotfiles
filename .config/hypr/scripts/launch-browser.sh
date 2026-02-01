@@ -13,8 +13,8 @@ app_id="${desktop_file%.desktop}"
 
 # Check if it's a flatpak app
 if flatpak info "$app_id" &>/dev/null; then
-    exec uwsm app -- mullvad-exclude flatpak run "$app_id" "$@"
+    exec uwsm app -s s -- mullvad-exclude flatpak run "$app_id" "$@"
 else
     # Fallback to xdg-open for regular apps
-    exec uwsm app -- mullvad-exclude xdg-open "http://" "$@"
+    exec uwsm app -s s -- mullvad-exclude xdg-open "http://" "$@"
 fi

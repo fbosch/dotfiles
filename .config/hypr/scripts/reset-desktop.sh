@@ -17,19 +17,16 @@ pkill -f hyprpaper 2>/dev/null || true
 sleep 0.2
 
 # Relaunch the desktop helpers.
-uwsm app -- waybar &
-uwsm app -- hyprpaper &
+# High priority UI (-s s)
+uwsm app -s s -- waybar &
+uwsm app -s s -- ~/.config/ags/start-daemons.sh &
+uwsm app -s s -- ~/.config/hypr/scripts/waybar-edge-monitor.sh &
 swaync-client -R &
 swaync-client -rs &
 
-# Launch AGS daemons via start-daemons script
-uwsm app -- bash ~/.config/ags/start-daemons.sh &
-
-# Launch waybar auto-hide monitor
-~/.config/hypr/scripts/waybar-edge-monitor.sh &
-
-# Launch window capture daemon
-~/.config/hypr/scripts/window-capture-daemon.sh &
+# Background services (-s b)
+uwsm app -s b -- hyprpaper &
+uwsm app -s b -- ~/.config/hypr/scripts/window-capture-daemon.sh &
 
 # Wait for services to be ready before showing notification
 sleep 1
