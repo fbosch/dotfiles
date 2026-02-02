@@ -6,6 +6,7 @@ import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
+import { perf } from "./performance-monitor";
 
 // Configuration
 const ENABLE_ANIMATIONS = false; // Set to false for better performance on slower systems
@@ -363,6 +364,10 @@ function hideMenu() {
 }
 
 function showMenu() {
+  const mark = perf.start("start-menu", "showMenu");
+  let ok = true;
+  let error: string | undefined;
+  try {
   // Read updates from both caches
   const flakeCacheData = readFlakeUpdatesCache();
   const flatpakCacheData = readFlatpakUpdatesCache();
@@ -415,6 +420,13 @@ function showMenu() {
     } catch (e) {
       console.error("Failed to show waybar:", e);
     }
+  }
+  } catch (e) {
+    ok = false;
+    error = String(e);
+    throw e;
+  } finally {
+    mark.end(ok, error);
   }
 }
 
@@ -652,38 +664,48 @@ function executeMenuCommand(itemId: string) {
 }
 
 function updateMenuItems() {
-  if (!menuBox) return;
+  const mark = perf.start("start-menu", "updateMenuItems");
+  let ok = true;
+  let error: string | undefined;
+  try {
+    if (!menuBox) return;
+    // Type assertion to help TypeScript understand menuBox is non-null after guard
+    const box = menuBox as Gtk.Box;
 
-  // Type assertion to help TypeScript understand menuBox is non-null after guard
-  const box = menuBox as Gtk.Box;
+    // Build dynamic menu with Updates item if there are updates
+    const menuItems = buildMenuItemsList();
 
-  // Build dynamic menu with Updates item if there are updates
-  const menuItems = buildMenuItemsList();
-
-  // Clear existing items
-  let child = box.get_first_child();
-  while (child) {
-    box.remove(child);
-    child = box.get_first_child();
-  }
-
-  // Clear button references
-  menuItemButtons.clear();
-  flakeUpdateBadgeButton = null;
-  flatpakUpdateBadgeButton = null;
-
-  // Add user profile at the top
-  box.append(createUserProfile());
-  box.append(createDivider());
-
-  // Add menu items
-  menuItems.forEach((item) => {
-    if (item.id.startsWith("divider")) {
-      box.append(createDivider());
-    } else {
-      box.append(createMenuItem(item));
+    // Clear existing items
+    let child = box.get_first_child();
+    while (child) {
+      box.remove(child);
+      child = box.get_first_child();
     }
-  });
+
+    // Clear button references
+    menuItemButtons.clear();
+    flakeUpdateBadgeButton = null;
+    flatpakUpdateBadgeButton = null;
+
+    // Add user profile at the top
+    box.append(createUserProfile());
+    box.append(createDivider());
+
+    // Add menu items
+    menuItems.forEach((item) => {
+      if (item.id.startsWith("divider")) {
+        box.append(createDivider());
+      } else {
+        box.append(createMenuItem(item));
+      }
+    });
+  } catch (e) {
+    ok = false;
+    error = String(e);
+    throw e;
+  } finally {
+    mark.end(ok, error);
+  }
 }
 
 // Handle keyboard navigation in the menu
@@ -994,6 +1016,9 @@ function initStartMenu() {
 }
 
 function handleStartMenuRequest(argv: string[], res: (response: string) => void) {
+  const mark = perf.start("start-menu", "handleRequest");
+  let ok = true;
+  let error: string | undefined;
   try {
     const request = argv.join(" ");
 
@@ -1052,8 +1077,12 @@ function handleStartMenuRequest(argv: string[], res: (response: string) => void)
       res(`error: ${e}`);
     }
   } catch (e) {
+    ok = false;
+    error = String(e);
     console.error("Error in start-menu request handler:", e);
     res(`error: ${e}`);
+  } finally {
+    mark.end(ok, error);
   }
 }
 
