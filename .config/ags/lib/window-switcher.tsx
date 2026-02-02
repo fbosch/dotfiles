@@ -49,6 +49,7 @@ interface HyprlandClient {
   address: string;
   class: string;
   title: string;
+  focused?: boolean;
   workspace: {
     id: number;
     name: string;
@@ -428,6 +429,10 @@ function getWindows(): WindowInfo[] {
     const decoder = new TextDecoder("utf-8");
     const jsonStr = decoder.decode(stdout);
     const clients = JSON.parse(jsonStr) as HyprlandClient[];
+    const focusedClient = clients.find((client) => client.focused);
+    if (focusedClient?.address) {
+      activeWindowCache = { timestampMs: nowMs, address: focusedClient.address };
+    }
 
     // Filter out special workspaces
     const filteredClients = clients
