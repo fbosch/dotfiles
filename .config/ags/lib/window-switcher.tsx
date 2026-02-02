@@ -759,6 +759,10 @@ let previousPreviewMtimes: Map<string, number> = new Map();
 
 function getPreviewMtime(previewPath: string | null): number | null {
   if (!previewPath) return null;
+  const cached = previewDimensionsCache.get(previewPath);
+  if (cached) {
+    return cached.mtime;
+  }
   try {
     const file = Gio.File.new_for_path(previewPath);
     const fileInfo = file.query_info(
