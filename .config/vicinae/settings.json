@@ -75,7 +75,13 @@
             ]
          },
          "entrypoints": {
+            "Pokmon Infinite Fusion": {
+               "enabled": false
+            },
             "btop": {
+               "enabled": false
+            },
+            "chromium-realforce": {
                "enabled": false
             },
             "gvim": {
