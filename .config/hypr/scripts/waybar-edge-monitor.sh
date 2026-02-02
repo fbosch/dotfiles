@@ -2,6 +2,7 @@
 # Monitor mouse position and show/hide waybar based on screen edge proximity
 # Optimized for low resource usage with integer arithmetic
 
+# shellcheck disable=SC1091
 # Source shared library
 source "$(dirname "$0")/waybar-lib.sh"
 
@@ -22,7 +23,8 @@ readonly CACHE_REFRESH_S=5  # Refresh monitor cache every 5 seconds
 get_current_monitor_height() {
     local cursor_x=$1
     local cursor_y=$2
-    local current_time=$(date +%s)
+    local current_time
+    current_time=$(date +%s)
     
     # Refresh cache if needed
     if (( current_time - monitor_cache_time > CACHE_REFRESH_S )); then

@@ -26,6 +26,6 @@ fi
 
 # Generate SVG using printf (faster than cat heredoc)
 # Use proper viewBox (100x100) with centered text to avoid clipping
-printf '<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text x="50" y="50" font-family="JetBrainsMonoNL Nerd Font, JetBrainsMono Nerd Font, Symbols Nerd Font, monospace" font-size="80" fill="%s" text-anchor="middle" dominant-baseline="central">%s</text></svg>\n' "$COLOR" "$CHAR" > "$OUTPUT"
+printf '<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 100 100"><text x="50" y="50" font-family="JetBrainsMonoNL Nerd Font, JetBrainsMono Nerd Font, Symbols Nerd Font, monospace" font-size="80" fill="%s" text-anchor="middle" dominant-baseline="central">%s</text></svg>\n' "$SIZE" "$SIZE" "$COLOR" "$CHAR" > "$OUTPUT"
 
 echo "$OUTPUT"

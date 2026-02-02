@@ -167,7 +167,7 @@ is_state_empty() {
 adaptive_sleep() {
     # Read load average directly (pure bash, no awk)
     local load rest
-    read load rest < /proc/loadavg
+    read -r load rest < /proc/loadavg
     
     # Convert float to integer for comparison (e.g., "1.23" -> "123")
     local load_int="${load//./}"  # Remove decimal point
@@ -297,7 +297,8 @@ update_rules() {
     done < <(jq -r '.[] | "\(.class)|\(.matcher)|\(.pattern)|\(.x)|\(.y)|\(.width)|\(.height)"' <<< "$windows")
     
     # Write all rules (existing + updated) to new file
-    local temp_file=$(mktemp)
+    local temp_file
+    temp_file=$(mktemp)
     {
         printf '# Auto-generated window state persistence rules\n'
         printf '# Last updated: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')"

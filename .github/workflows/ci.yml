@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Run shellcheck
+        run: |
+          shellcheck \
+            scripts/*.sh \
+            .config/ags/*.sh \
+            .config/ags/scripts/*.sh \
+            .config/hypr/scripts/*.sh \
+            .config/rofi/launchers/type-3/launcher.sh \
+            .config/vicinae/extensions/*.sh
+
+  stow-dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Install stow
+        run: sudo apt-get update && sudo apt-get install -y stow
+      - name: Run stow dry-run
+        run: stow -n .
+
+  fishcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Install fish
+        run: sudo apt-get update && sudo apt-get install -y fish
+      - name: Run fish syntax check
+        run: |
+          shopt -s globstar nullglob
+          fish -n .config/fish/**/*.fish
+
+  design-system:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'pull_request' ||
+      contains(github.event.head_commit.message, '[ci design-system]')
+    defaults:
+      run:
+        working-directory: design-system
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10.19.0
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: design-system/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install
+      - name: Lint
+        run: pnpm lint
+      - name: Contrast
+        run: pnpm contrast

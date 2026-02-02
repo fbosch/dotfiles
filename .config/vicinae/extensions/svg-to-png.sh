@@ -70,7 +70,8 @@ convert_svg() {
 # Process a single extension
 process_extension() {
     local ext_dir="$1"
-    local ext_name="$(basename "$ext_dir")"
+    local ext_name
+    ext_name="$(basename "$ext_dir")"
     local svg_file="$ext_dir/assets/extension_icon.svg"
     local png_file="$ext_dir/assets/extension_icon.png"
     
@@ -94,7 +95,8 @@ process_extension() {
         
         # Verify the output
         if [[ -f "$png_file" ]]; then
-            local file_size=$(stat -c%s "$png_file" 2>/dev/null || stat -f%z "$png_file" 2>/dev/null)
+            local file_size
+            file_size=$(stat -c%s "$png_file" 2>/dev/null || stat -f%z "$png_file" 2>/dev/null)
             if [[ $file_size -gt 0 ]]; then
                 log_success "Successfully converted $ext_name (${file_size} bytes)"
             else
