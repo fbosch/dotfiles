@@ -5,7 +5,7 @@ import json
 import statistics
 import sys
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -14,6 +14,9 @@ def parse_args():
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--baseline", default="")
+    parser.add_argument("--extras", default="")
+    parser.add_argument("--print-top", type=int, default=5)
+    parser.add_argument("--print-component-top", type=int, default=3)
     return parser.parse_args()
 
 
@@ -56,6 +59,43 @@ def summarize(records):
     return metrics
 
 
+def summarize_components(records):
+    grouped = defaultdict(list)
+    for record in records:
+        grouped[record["component"]].append(record["duration_ms"])
+
+    summary = {}
+    for component, durations in grouped.items():
+        summary[component] = {
+            "count": len(durations),
+            "avg_ms": statistics.mean(durations),
+            "min_ms": min(durations),
+            "max_ms": max(durations),
+            "p95_ms": percentile(durations, 0.95),
+            "p99_ms": percentile(durations, 0.99),
+        }
+    return summary
+
+
+def top_metrics(metrics, count):
+    items = list(metrics.items())
+    items.sort(key=lambda item: item[1].get("avg_ms", 0.0), reverse=True)
+    return items[:count]
+
+
+def top_metrics_by_component(metrics, count):
+    grouped = defaultdict(list)
+    for key, stats in metrics.items():
+        component = key.split(".", 1)[0]
+        grouped[component].append((key, stats))
+    for component in grouped:
+        grouped[component].sort(
+            key=lambda item: item[1].get("avg_ms", 0.0), reverse=True
+        )
+        grouped[component] = grouped[component][:count]
+    return grouped
+
+
 def compare_to_baseline(current, baseline):
     comparisons = []
     for key, current_stats in current.items():
@@ -90,10 +130,18 @@ def main():
 
     records = load_jsonl(input_path)
     metrics = summarize(records)
+    component_metrics = summarize_components(records)
     summary = {
-        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "metrics": metrics,
+        "components": component_metrics,
     }
+
+    if args.extras:
+        extras_path = Path(args.extras)
+        if extras_path.exists():
+            with open(extras_path, "r", encoding="utf-8") as handle:
+                summary["extras"] = json.load(handle)
 
     baseline_path = Path(args.baseline) if args.baseline else None
     if baseline_path and baseline_path.exists():
@@ -107,6 +155,39 @@ def main():
         json.dump(summary, handle, indent=2)
 
     print(f"Summary written to {output_path}")
+    if args.print_top > 0:
+        print(f"Top {args.print_top} avg_ms metrics:")
+        for key, stats in top_metrics(metrics, args.print_top):
+            print(
+                f"- {key}: avg {stats['avg_ms']:.2f}ms "
+                f"p95 {stats['p95_ms']:.2f}ms count {stats['count']}"
+            )
+    if component_metrics:
+        print("Per-component summary:")
+        for component, stats in sorted(component_metrics.items()):
+            print(
+                f"- {component}: avg {stats['avg_ms']:.2f}ms "
+                f"p95 {stats['p95_ms']:.2f}ms count {stats['count']}"
+            )
+    if args.print_component_top > 0:
+        print(f"Top {args.print_component_top} per component:")
+        for component, items in sorted(
+            top_metrics_by_component(metrics, args.print_component_top).items()
+        ):
+            print(f"- {component}")
+            for key, stats in items:
+                print(
+                    f"  {key}: avg {stats['avg_ms']:.2f}ms "
+                    f"p95 {stats['p95_ms']:.2f}ms count {stats['count']}"
+                )
+    extras = summary.get("extras", {})
+    component_memory = extras.get("component_memory_delta_kb")
+    if component_memory:
+        print("Component memory delta (kb):")
+        for component, values in sorted(component_memory.items()):
+            rss = values.get("rss")
+            pss = values.get("pss")
+            print(f"- {component}: rss {rss} pss {pss}")
     if summary.get("comparisons"):
         print("Baseline comparison:")
         for item in summary["comparisons"]:
