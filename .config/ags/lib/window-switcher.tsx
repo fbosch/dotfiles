@@ -115,6 +115,14 @@ let iconTheme: Gtk.IconTheme | null = null;
 // Icon name cache to avoid repeated desktop file lookups
 const iconCache = new Map<string, string | null>();
 
+type PreviewDimensionsCacheEntry = {
+  mtime: number;
+  width: number;
+  height: number;
+};
+
+const previewDimensionsCache = new Map<string, PreviewDimensionsCacheEntry>();
+
 // Persistent focus history for recency-based sorting
 // Most recently focused window is at index 0
 let focusHistory: string[] = [];
@@ -318,17 +326,31 @@ function calculatePreviewDimensions(imagePath: string | null): {
   try {
     // Load the image via memory stream to bypass caching
     const file = Gio.File.new_for_path(imagePath);
+    const fileInfo = file.query_info(
+      "time::modified",
+      Gio.FileQueryInfoFlags.NONE,
+      null,
+    );
+    const mtime = fileInfo.get_modification_time().tv_sec;
+
+    const cached = previewDimensionsCache.get(imagePath);
+    if (cached && cached.mtime === mtime) {
+      const result = { width: cached.width, height: cached.height };
+      mark.end(true);
+      return result;
+    }
+
     const [success, contents] = file.load_contents(null);
-    
+
     if (!success || !contents) {
       const result = { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
       mark.end(true);
       return result;
     }
-    
+
     const stream = Gio.MemoryInputStream.new_from_bytes(new GLib.Bytes(contents));
     const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
-    
+
     if (!pixbuf) {
       const result = { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
       mark.end(true);
@@ -354,6 +376,8 @@ function calculatePreviewDimensions(imagePath: string | null): {
     width = Math.max(PREVIEW_MIN_WIDTH, width);
 
     console.log(`Preview dimensions for ${imagePath}: ${imageWidth}x${imageHeight} → ${width}x${height} (aspect: ${aspectRatio.toFixed(2)})`);
+
+    previewDimensionsCache.set(imagePath, { mtime, width, height });
 
     const result = { width, height };
     mark.end(true);
