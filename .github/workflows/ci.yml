@@ -32,6 +32,18 @@ jobs:
       - name: Run stow dry-run
         run: stow -n .
 
+  fishcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Install fish
+        run: sudo apt-get update && sudo apt-get install -y fish
+      - name: Run fish syntax check
+        run: |
+          shopt -s globstar nullglob
+          fish -n .config/fish/**/*.fish
+
   design-system:
     runs-on: ubuntu-latest
     if: |
