@@ -30,11 +30,16 @@ CAPTURE_DELAY_MS=100         # Wait after activewindow event (for animations)
                              # Increase if screenshots capture mid-animation (max: 1000-1500ms)
 WORKSPACE_DELAY_MS=300       # Wait after workspace change (longer for workspace animations)
 
-# Image quality
-SCALE_PERCENT=25             # Pre-calculated as integer for bash arithmetic
-JPEG_QUALITY=70              # JPEG compression quality (60-80 recommended)
+# Image format and quality
+IMAGE_FORMAT="jpeg"          # jpeg (best performance), webp, png
+JPEG_QUALITY=85              # JPEG quality setting (60-95 range)
+                             # 85 provides excellent quality for previews with good performance
                              # Lower = smaller files, faster processing, lower quality
                              # Higher = larger files, slower processing, better quality
+
+# Preview target dimensions (matches AGS window-switcher display size)
+PREVIEW_TARGET_HEIGHT=180    # Target height for preview display
+PREVIEW_TARGET_MAX_WIDTH=320 # Maximum width for preview display
 
 # Hyprland gaps (dynamically read from hyprctl)
 # Extract first value from "2 2 2 2" format (top gap, but they're usually uniform)
@@ -199,7 +204,7 @@ capture_screenshot() {
   local monitors_json
   monitors_json=$(hyprctl monitors -j 2>/dev/null)
   
-  # Capture each monitor separately and build a composite MPC
+  # Capture each monitor separately and keep at full resolution for cropping
   local monitor_index=0
   declare -A monitor_mpc_files
   declare -A monitor_offsets
@@ -207,7 +212,7 @@ capture_screenshot() {
   while read -r monitor_data; do
     IFS='|' read -r mon_name mon_x mon_y mon_width mon_height <<< "$monitor_data"
     
-    # Capture this monitor
+    # Capture this monitor at full resolution
     local temp_monitor_shot="$SCREENSHOT_DIR/.monitor_${monitor_index}_${timestamp}.jpg"
     grim -t jpeg -q "$JPEG_QUALITY" -o "$mon_name" "$temp_monitor_shot" 2>/dev/null || { monitor_index=$((monitor_index + 1)); continue; }
     
@@ -217,12 +222,10 @@ capture_screenshot() {
       continue
     fi
     
-    # Scale down and convert to MPC
+    # Convert to MPC cache (no scaling at this stage)
     local temp_monitor_mpc="$SCREENSHOT_DIR/.monitor_${monitor_index}_${timestamp}.mpc"
     convert "$temp_monitor_shot" \
-      -scale ${SCALE_PERCENT}% \
       -quality "$JPEG_QUALITY" \
-      -define jpeg:dct-method=fast \
       "$temp_monitor_mpc" 2>/dev/null || { rm -f "$temp_monitor_shot"; monitor_index=$((monitor_index + 1)); continue; }
     rm -f "$temp_monitor_shot"
     
@@ -274,13 +277,13 @@ capture_screenshot() {
     local relative_x=$(( x - mon_offset_x ))
     local relative_y=$(( y - mon_offset_y ))
     
-    # Scale and adjust for gaps
-    local scaled_x=$(( (relative_x + GAPS_IN) * SCALE_PERCENT / 100 ))
-    local scaled_y=$(( (relative_y + GAPS_IN) * SCALE_PERCENT / 100 ))
-    local scaled_width=$(( (width - 2 * GAPS_IN) * SCALE_PERCENT / 100 ))
-    local scaled_height=$(( (height - 2 * GAPS_IN) * SCALE_PERCENT / 100 ))
+    # Apply gap adjustments to crop dimensions (at full resolution)
+    local crop_x=$(( relative_x + GAPS_IN ))
+    local crop_y=$(( relative_y + GAPS_IN ))
+    local crop_width=$(( width - 2 * GAPS_IN ))
+    local crop_height=$(( height - 2 * GAPS_IN ))
     
-    if [[ "$scaled_width" -le 0 ]] || [[ "$scaled_height" -le 0 ]]; then
+    if [[ "$crop_width" -le 0 ]] || [[ "$crop_height" -le 0 ]]; then
       continue
     fi
     
@@ -306,12 +309,15 @@ capture_screenshot() {
         exit 0
       fi
       
+      # Crop at full resolution, then smart resize
+      # The ">" flag means only shrink if larger, never enlarge
+      # This prevents upscaling small windows and maintains quality
       convert "$target_monitor_mpc" \
-        -crop "${scaled_width}x${scaled_height}+${scaled_x}+${scaled_y}" \
+        -crop "${crop_width}x${crop_height}+${crop_x}+${crop_y}" \
         +repage \
+        -resize "${PREVIEW_TARGET_MAX_WIDTH}x${PREVIEW_TARGET_HEIGHT}>" \
         -quality "$JPEG_QUALITY" \
         -define jpeg:dct-method=fast \
-        -define jpeg:optimize-coding=false \
         "$temp_output" 2>/dev/null
       
       # Validate output exists and has content

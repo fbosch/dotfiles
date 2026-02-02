@@ -6,6 +6,7 @@ import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
+import { perf } from "./performance-monitor";
 
 /**
  * Performance Optimizations:
@@ -306,9 +307,12 @@ function calculatePreviewDimensions(imagePath: string | null): {
   width: number;
   height: number;
 } {
+  const mark = perf.start("window-switcher", "calculatePreviewDimensions");
   if (!imagePath) {
     // Fallback to minimum width with target height if no image
-    return { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
+    const result = { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
+    mark.end(true);
+    return result;
   }
 
   try {
@@ -317,14 +321,18 @@ function calculatePreviewDimensions(imagePath: string | null): {
     const [success, contents] = file.load_contents(null);
     
     if (!success || !contents) {
-      return { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
+      const result = { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
+      mark.end(true);
+      return result;
     }
     
     const stream = Gio.MemoryInputStream.new_from_bytes(new GLib.Bytes(contents));
     const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
     
     if (!pixbuf) {
-      return { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
+      const result = { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
+      mark.end(true);
+      return result;
     }
 
     // Get actual image dimensions
@@ -347,10 +355,14 @@ function calculatePreviewDimensions(imagePath: string | null): {
 
     console.log(`Preview dimensions for ${imagePath}: ${imageWidth}x${imageHeight} → ${width}x${height} (aspect: ${aspectRatio.toFixed(2)})`);
 
-    return { width, height };
+    const result = { width, height };
+    mark.end(true);
+    return result;
   } catch (e) {
     console.error("Failed to get image dimensions:", e);
-    return { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
+    const result = { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
+    mark.end(false, String(e));
+    return result;
   }
 }
 
@@ -470,186 +482,197 @@ function createAppButton(
   isSelected: boolean,
   index: number,
 ): Gtk.Button {
-  const iconName = getIconNameForClass(window.class || "");
+  const mark = perf.start("window-switcher", "createAppButton");
+  let ok = true;
+  let error: string | undefined;
+  try {
+    const iconName = getIconNameForClass(window.class || "");
 
-  console.log(`Creating button for ${window.class} in ${displayMode} mode`);
+    console.log(`Creating button for ${window.class} in ${displayMode} mode`);
 
-  // Determine content based on display mode
-  let content: JSX.Element;
+    // Determine content based on display mode
+    let content: JSX.Element;
 
-  if (displayMode === DisplayMode.PREVIEWS) {
-    // Preview mode: show aspect-ratio box with header
-    const previewPath = captureWindowPreview(window.address);
-    const dimensions = calculatePreviewDimensions(previewPath);
+    if (displayMode === DisplayMode.PREVIEWS) {
+      // Preview mode: show aspect-ratio box with header
+      const previewPath = captureWindowPreview(window.address);
+      const dimensions = calculatePreviewDimensions(previewPath);
 
-    content = (
-      <box
-        orientation={Gtk.Orientation.VERTICAL}
-        spacing={0}
-        halign={Gtk.Align.CENTER}
-        valign={Gtk.Align.CENTER}
-        class="preview-wrapper"
-      >
-        {/* Preview container with header and body */}
+      content = (
         <box
           orientation={Gtk.Orientation.VERTICAL}
           spacing={0}
-          class="window-preview"
-          css={`
-            max-width: ${dimensions.width}px;
-          `}
+          halign={Gtk.Align.CENTER}
+          valign={Gtk.Align.CENTER}
+          class="preview-wrapper"
         >
-          {/* Header with icon and title */}
+          {/* Preview container with header and body */}
+          <box
+            orientation={Gtk.Orientation.VERTICAL}
+            spacing={0}
+            class="window-preview"
+            css={`
+              max-width: ${dimensions.width}px;
+            `}
+          >
+            {/* Header with icon and title */}
+            <box
+              orientation={Gtk.Orientation.HORIZONTAL}
+              spacing={8}
+              class="preview-header"
+              halign={Gtk.Align.FILL}
+              widthRequest={dimensions.width}
+            >
+              {/* App icon */}
+              {iconName ? (
+                <image
+                  iconName={iconName}
+                  pixelSize={20}
+                  class="preview-header-icon"
+                />
+              ) : (
+                <box class="preview-header-icon-fallback">
+                  <label
+                    label={(window.class || "?").charAt(0).toUpperCase()}
+                    class="preview-header-letter"
+                  />
+                </box>
+              )}
+
+              {/* App title - truncated to fit available width */}
+              <label
+                label={truncateTitle(window.title, dimensions.width - 28 - 24)}
+                xalign={0}
+                class="preview-header-title"
+                wrap={false}
+              />
+            </box>
+
+            {/* Preview body with screenshot or gradient fallback */}
+            <box
+              class="preview-body"
+              halign={Gtk.Align.CENTER}
+              valign={Gtk.Align.CENTER}
+              css={`
+                min-width: ${dimensions.width}px;
+                min-height: ${dimensions.height}px;
+                max-width: ${dimensions.width}px;
+                max-height: ${dimensions.height}px;
+              `}
+              $={(self: Gtk.Box) => {
+                if (previewPath) {
+                  // Load and scale the image using GdkPixbuf
+                  // Read file contents directly to bypass GdkPixbuf file caching
+                  // Force fresh load by reading file every time UI rebuilds
+                  try {
+                    const file = Gio.File.new_for_path(previewPath);
+                    
+                    // Query file info to ensure we're getting the latest version
+                    const fileInfo = file.query_info(
+                      "standard::*,time::modified",
+                      Gio.FileQueryInfoFlags.NONE,
+                      null
+                    );
+                    const modTime = fileInfo.get_modification_time().tv_sec;
+                    
+                    const [success, contents] = file.load_contents(null);
+                    
+                    if (success && contents) {
+                      // Create a unique stream for each load to prevent caching
+                      const bytes = new GLib.Bytes(contents);
+                      const stream = Gio.MemoryInputStream.new_from_bytes(bytes);
+                      const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
+                      
+                      if (pixbuf) {
+                        const actualWidth = pixbuf.get_width();
+                        const actualHeight = pixbuf.get_height();
+                        console.log(`Rendering ${previewPath.split('/').pop()} (mtime: ${modTime}): image=${actualWidth}x${actualHeight}, target=${dimensions.width}x${dimensions.height}`);
+                        
+                        const scaledPixbuf = pixbuf.scale_simple(
+                          dimensions.width,
+                          dimensions.height,
+                          GdkPixbuf.InterpType.BILINEAR,
+                        );
+
+                        if (scaledPixbuf) {
+                          const texture = Gdk.Texture.new_for_pixbuf(scaledPixbuf);
+                          const picture = Gtk.Picture.new_for_paintable(texture);
+                          picture.set_halign(Gtk.Align.FILL);
+                          picture.set_valign(Gtk.Align.FILL);
+                          picture.set_can_shrink(false);
+                          picture.set_content_fit(Gtk.ContentFit.FILL);
+                          picture.add_css_class("preview-image");
+                          self.append(picture);
+                        }
+                      }
+                    }
+                  } catch (e) {
+                    console.error("Failed to load preview image:", e);
+                  }
+                }
+              }}
+            />
+          </box>
+        </box>
+      );
+    } else {
+      // Icon mode: original behavior
+      content = (
+        <box
+          orientation={Gtk.Orientation.VERTICAL}
+          spacing={0}
+          halign={Gtk.Align.CENTER}
+          valign={Gtk.Align.CENTER}
+        >
+          {/* Icon container with fixed size */}
           <box
             orientation={Gtk.Orientation.HORIZONTAL}
-            spacing={8}
-            class="preview-header"
-            halign={Gtk.Align.FILL}
-            widthRequest={dimensions.width}
+            halign={Gtk.Align.CENTER}
+            valign={Gtk.Align.CENTER}
+            class={`icon-container ${iconName ? "" : "letter-icon"}`}
           >
-            {/* App icon */}
             {iconName ? (
               <image
                 iconName={iconName}
-                pixelSize={20}
-                class="preview-header-icon"
+                pixelSize={ICON_SIZE}
+                class="app-icon-image"
               />
             ) : (
-              <box class="preview-header-icon-fallback">
+              <box class="app-icon-wrapper">
                 <label
                   label={(window.class || "?").charAt(0).toUpperCase()}
-                  class="preview-header-letter"
+                  halign={Gtk.Align.CENTER}
+                  valign={Gtk.Align.CENTER}
+                  class="app-icon-letter"
                 />
               </box>
             )}
-
-            {/* App title - truncated to fit available width */}
-            <label
-              label={truncateTitle(window.title, dimensions.width - 28 - 24)}
-              xalign={0}
-              class="preview-header-title"
-              wrap={false}
-            />
           </box>
-
-          {/* Preview body with screenshot or gradient fallback */}
-          <box
-            class="preview-body"
-            halign={Gtk.Align.CENTER}
-            valign={Gtk.Align.CENTER}
-            css={`
-              min-width: ${dimensions.width}px;
-              min-height: ${dimensions.height}px;
-              max-width: ${dimensions.width}px;
-              max-height: ${dimensions.height}px;
-            `}
-            $={(self: Gtk.Box) => {
-              if (previewPath) {
-                // Load and scale the image using GdkPixbuf
-                // Read file contents directly to bypass GdkPixbuf file caching
-                // Force fresh load by reading file every time UI rebuilds
-                try {
-                  const file = Gio.File.new_for_path(previewPath);
-                  
-                  // Query file info to ensure we're getting the latest version
-                  const fileInfo = file.query_info(
-                    "standard::*,time::modified",
-                    Gio.FileQueryInfoFlags.NONE,
-                    null
-                  );
-                  const modTime = fileInfo.get_modification_time().tv_sec;
-                  
-                  const [success, contents] = file.load_contents(null);
-                  
-                  if (success && contents) {
-                    // Create a unique stream for each load to prevent caching
-                    const bytes = new GLib.Bytes(contents);
-                    const stream = Gio.MemoryInputStream.new_from_bytes(bytes);
-                    const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
-                    
-                    if (pixbuf) {
-                      const actualWidth = pixbuf.get_width();
-                      const actualHeight = pixbuf.get_height();
-                      console.log(`Rendering ${previewPath.split('/').pop()} (mtime: ${modTime}): image=${actualWidth}x${actualHeight}, target=${dimensions.width}x${dimensions.height}`);
-                      
-                      const scaledPixbuf = pixbuf.scale_simple(
-                        dimensions.width,
-                        dimensions.height,
-                        GdkPixbuf.InterpType.BILINEAR,
-                      );
-
-                      if (scaledPixbuf) {
-                        const texture = Gdk.Texture.new_for_pixbuf(scaledPixbuf);
-                        const picture = Gtk.Picture.new_for_paintable(texture);
-                        picture.set_halign(Gtk.Align.FILL);
-                        picture.set_valign(Gtk.Align.FILL);
-                        picture.set_can_shrink(false);
-                        picture.set_content_fit(Gtk.ContentFit.FILL);
-                        picture.add_css_class("preview-image");
-                        self.append(picture);
-                      }
-                    }
-                  }
-                } catch (e) {
-                  console.error("Failed to load preview image:", e);
-                }
-              }
-            }}
-          />
         </box>
-      </box>
-    );
-  } else {
-    // Icon mode: original behavior
-    content = (
-      <box
-        orientation={Gtk.Orientation.VERTICAL}
-        spacing={0}
-        halign={Gtk.Align.CENTER}
-        valign={Gtk.Align.CENTER}
+      );
+    }
+
+    const button = (
+      <button
+        canFocus={false}
+        class={`app-button ${isSelected ? "selected" : ""}`}
+        onClicked={() => {
+          currentIndex = index;
+          commitSwitch();
+        }}
       >
-        {/* Icon container with fixed size */}
-        <box
-          orientation={Gtk.Orientation.HORIZONTAL}
-          halign={Gtk.Align.CENTER}
-          valign={Gtk.Align.CENTER}
-          class={`icon-container ${iconName ? "" : "letter-icon"}`}
-        >
-          {iconName ? (
-            <image
-              iconName={iconName}
-              pixelSize={ICON_SIZE}
-              class="app-icon-image"
-            />
-          ) : (
-            <box class="app-icon-wrapper">
-              <label
-                label={(window.class || "?").charAt(0).toUpperCase()}
-                halign={Gtk.Align.CENTER}
-                valign={Gtk.Align.CENTER}
-                class="app-icon-letter"
-              />
-            </box>
-          )}
-        </box>
-      </box>
-    );
+        {content}
+      </button>
+    ) as Gtk.Button;
+
+    return button;
+  } catch (e) {
+    ok = false;
+    error = String(e);
+    throw e;
+  } finally {
+    mark.end(ok, error);
   }
-
-  const button = (
-    <button
-      canFocus={false}
-      class={`app-button ${isSelected ? "selected" : ""}`}
-      onClicked={() => {
-        currentIndex = index;
-        commitSwitch();
-      }}
-    >
-      {content}
-    </button>
-  ) as Gtk.Button;
-
-  return button;
 }
 
 // Previous window list to detect changes
@@ -659,96 +682,121 @@ let previousDisplayMode: DisplayMode = displayMode;
 // Update the switcher display with new data
 function updateSwitcher() {
   if (!containerBox || !selectedNameLabel) return;
+  const mark = perf.start("window-switcher", "updateSwitcher");
+  let ok = true;
+  let error: string | undefined;
 
-  // Check if window list has changed
-  const currentAddresses = currentWindows.map((w) => w.address);
-  const windowListChanged =
-    previousWindowAddresses.length !== currentAddresses.length ||
-    previousWindowAddresses.some((addr, idx) => addr !== currentAddresses[idx]);
+  try {
+    // Check if window list has changed
+    const currentAddresses = currentWindows.map((w) => w.address);
+    const windowListChanged =
+      previousWindowAddresses.length !== currentAddresses.length ||
+      previousWindowAddresses.some((addr, idx) => addr !== currentAddresses[idx]);
 
-  // Check if display mode has changed
-  const modeChanged = previousDisplayMode !== displayMode;
+    // Check if display mode has changed
+    const modeChanged = previousDisplayMode !== displayMode;
 
-  // In preview mode, always rebuild UI to get fresh screenshots
-  // Also rebuild if mode changed or window list changed
-  const shouldRebuild = windowListChanged || modeChanged || displayMode === DisplayMode.PREVIEWS;
+    // In preview mode, always rebuild UI to get fresh screenshots
+    // Also rebuild if mode changed or window list changed
+    const shouldRebuild = windowListChanged || modeChanged || displayMode === DisplayMode.PREVIEWS;
 
-  if (shouldRebuild) {
-    // Clear existing UI
-    let child = containerBox.get_first_child();
-    while (child) {
-      containerBox.remove(child);
-      child = containerBox.get_first_child();
-    }
-    windowButtons.clear();
+    if (shouldRebuild) {
+      // Clear existing UI
+      let child = containerBox.get_first_child();
+      while (child) {
+        containerBox.remove(child);
+        child = containerBox.get_first_child();
+      }
+      windowButtons.clear();
 
-    // Calculate available width for buttons
-    const monitorWidth = getMonitorWidth();
-    // Use 75% of monitor width - conservative limit to prevent overflow
-    // GTK adds significant overhead (borders, focus rings, spacing) that's hard to calculate precisely
-    const maxWidth = Math.floor(monitorWidth * 0.75);
-    
-    // Calculate button widths
-    const buttonWidths = currentWindows.map(w => calculateButtonWidth(w));
-    
-    // Write debug info to file for inspection
-    const debugInfo = `[Window Switcher Debug - ${new Date().toISOString()}]
+      // Calculate available width for buttons
+      const monitorWidth = getMonitorWidth();
+      // Use 75% of monitor width - conservative limit to prevent overflow
+      // GTK adds significant overhead (borders, focus rings, spacing) that's hard to calculate precisely
+      const maxWidth = Math.floor(monitorWidth * 0.75);
+      
+      // Calculate button widths
+      const buttonWidths = currentWindows.map(w => calculateButtonWidth(w));
+      
+      // Write debug info to file for inspection
+      const debugInfo = `[Window Switcher Debug - ${new Date().toISOString()}]
 Monitor: ${monitorWidth}px
 Max width (75% of monitor): ${maxWidth}px
 Button widths: [${buttonWidths.join(', ')}]
 Total width needed: ${buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.length - 1) * BUTTON_SPACING}px
 Will wrap: ${(buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.length - 1) * BUTTON_SPACING) > maxWidth}
 `;
-    GLib.file_set_contents('/tmp/ags-window-switcher-debug.log', debugInfo);
-    
-    console.log(`[Window Switcher] Button widths: [${buttonWidths.join(', ')}]`);
-    
-    const totalWidth = buttonWidths.reduce((sum, w) => sum + w, 0) + 
-                      (currentWindows.length - 1) * BUTTON_SPACING;
-    
-    console.log(`[Window Switcher] Monitor: ${monitorWidth}px, Available (75%): ${maxWidth}px, Total needed: ${totalWidth}px, Will wrap: ${totalWidth > maxWidth}`);
-    
-    // Determine if we need to wrap
-    if (totalWidth > maxWidth) {
-      // Multi-row layout
-      console.log("Using multi-row layout");
+      GLib.file_set_contents('/tmp/ags-window-switcher-debug.log', debugInfo);
       
-      // Create rows and distribute windows
-      const rows: WindowInfo[][] = [];
-      let currentRow: WindowInfo[] = [];
-      let currentRowWidth = 0;
+      console.log(`[Window Switcher] Button widths: [${buttonWidths.join(', ')}]`);
       
-      currentWindows.forEach((window, idx) => {
-        const buttonWidth = buttonWidths[idx];
-        const widthWithSpacing = currentRowWidth > 0 ? buttonWidth + BUTTON_SPACING : buttonWidth;
+      const totalWidth = buttonWidths.reduce((sum, w) => sum + w, 0) + 
+                        (currentWindows.length - 1) * BUTTON_SPACING;
+      
+      console.log(`[Window Switcher] Monitor: ${monitorWidth}px, Available (75%): ${maxWidth}px, Total needed: ${totalWidth}px, Will wrap: ${totalWidth > maxWidth}`);
+      
+      // Determine if we need to wrap
+      if (totalWidth > maxWidth) {
+        // Multi-row layout
+        console.log("Using multi-row layout");
         
-        console.log(`[Window Switcher] Window ${idx} (${window.class}): width=${buttonWidth}px, currentRowWidth=${currentRowWidth}px, will add=${widthWithSpacing}px, fits=${currentRowWidth + widthWithSpacing <= maxWidth}`);
+        // Create rows and distribute windows
+        const rows: WindowInfo[][] = [];
+        let currentRow: WindowInfo[] = [];
+        let currentRowWidth = 0;
         
-        if (currentRowWidth + widthWithSpacing <= maxWidth) {
-          // Fits in current row
-          currentRow.push(window);
-          currentRowWidth += widthWithSpacing;
-        } else {
-          // Start new row
-          if (currentRow.length > 0) {
-            console.log(`[Window Switcher] Row ${rows.length} complete with ${currentRow.length} windows, total width: ${currentRowWidth}px`);
-            rows.push(currentRow);
+        currentWindows.forEach((window, idx) => {
+          const buttonWidth = buttonWidths[idx];
+          const widthWithSpacing = currentRowWidth > 0 ? buttonWidth + BUTTON_SPACING : buttonWidth;
+          
+          console.log(`[Window Switcher] Window ${idx} (${window.class}): width=${buttonWidth}px, currentRowWidth=${currentRowWidth}px, will add=${widthWithSpacing}px, fits=${currentRowWidth + widthWithSpacing <= maxWidth}`);
+          
+          if (currentRowWidth + widthWithSpacing <= maxWidth) {
+            // Fits in current row
+            currentRow.push(window);
+            currentRowWidth += widthWithSpacing;
+          } else {
+            // Start new row
+            if (currentRow.length > 0) {
+              console.log(`[Window Switcher] Row ${rows.length} complete with ${currentRow.length} windows, total width: ${currentRowWidth}px`);
+              rows.push(currentRow);
+            }
+            currentRow = [window];
+            currentRowWidth = buttonWidth;
           }
-          currentRow = [window];
-          currentRowWidth = buttonWidth;
+        });
+        
+        // Add last row
+        if (currentRow.length > 0) {
+          console.log(`[Window Switcher] Row ${rows.length} (final) complete with ${currentRow.length} windows, total width: ${currentRowWidth}px`);
+          rows.push(currentRow);
         }
-      });
-      
-      // Add last row
-      if (currentRow.length > 0) {
-        console.log(`[Window Switcher] Row ${rows.length} (final) complete with ${currentRow.length} windows, total width: ${currentRowWidth}px`);
-        rows.push(currentRow);
-      }
-      
-      console.log(`[Window Switcher] Created ${rows.length} rows, max allowed width per row: ${maxWidth}px`);
-      
-      // Build rows
-      rows.forEach(rowWindows => {
+        
+        console.log(`[Window Switcher] Created ${rows.length} rows, max allowed width per row: ${maxWidth}px`);
+        
+        // Build rows
+        rows.forEach(rowWindows => {
+          const rowBox = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            spacing: BUTTON_SPACING,
+            halign: Gtk.Align.CENTER,
+          });
+          rowBox.add_css_class("apps-row");
+          
+          rowWindows.forEach(window => {
+            const windowIndex = currentWindows.indexOf(window);
+            const isSelected = windowIndex === currentIndex;
+            const button = createAppButton(window, isSelected, windowIndex);
+            rowBox.append(button);
+            windowButtons.set(window.address, button);
+          });
+          
+          containerBox!.append(rowBox);
+        });
+      } else {
+        // Single-row layout (original behavior)
+        console.log("Using single-row layout");
+        
         const rowBox = new Gtk.Box({
           orientation: Gtk.Orientation.HORIZONTAL,
           spacing: BUTTON_SPACING,
@@ -756,61 +804,47 @@ Will wrap: ${(buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.leng
         });
         rowBox.add_css_class("apps-row");
         
-        rowWindows.forEach(window => {
-          const windowIndex = currentWindows.indexOf(window);
-          const isSelected = windowIndex === currentIndex;
-          const button = createAppButton(window, isSelected, windowIndex);
+        currentWindows.forEach((window, index) => {
+          const isSelected = index === currentIndex;
+          const button = createAppButton(window, isSelected, index);
           rowBox.append(button);
           windowButtons.set(window.address, button);
         });
         
         containerBox!.append(rowBox);
-      });
+      }
+
+      previousWindowAddresses = currentAddresses;
+      previousDisplayMode = displayMode;
     } else {
-      // Single-row layout (original behavior)
-      console.log("Using single-row layout");
-      
-      const rowBox = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: BUTTON_SPACING,
-        halign: Gtk.Align.CENTER,
-      });
-      rowBox.add_css_class("apps-row");
-      
+      // Just update selection classes (only in icon mode when window list unchanged)
       currentWindows.forEach((window, index) => {
+        const button = windowButtons.get(window.address);
+        if (!button) return;
+
         const isSelected = index === currentIndex;
-        const button = createAppButton(window, isSelected, index);
-        rowBox.append(button);
-        windowButtons.set(window.address, button);
+        const classes = button.get_css_classes();
+        const hasSelected = classes.includes("selected");
+
+        if (isSelected && !hasSelected) {
+          button.add_css_class("selected");
+        } else if (!isSelected && hasSelected) {
+          button.remove_css_class("selected");
+        }
       });
-      
-      containerBox!.append(rowBox);
     }
 
-    previousWindowAddresses = currentAddresses;
-    previousDisplayMode = displayMode;
-  } else {
-    // Just update selection classes (only in icon mode when window list unchanged)
-    currentWindows.forEach((window, index) => {
-      const button = windowButtons.get(window.address);
-      if (!button) return;
-
-      const isSelected = index === currentIndex;
-      const classes = button.get_css_classes();
-      const hasSelected = classes.includes("selected");
-
-      if (isSelected && !hasSelected) {
-        button.add_css_class("selected");
-      } else if (!isSelected && hasSelected) {
-        button.remove_css_class("selected");
-      }
-    });
-  }
-
-  // Update selected app name
-  const selectedWindow = currentWindows[currentIndex];
-  if (selectedWindow) {
-    selectedNameLabel.set_label(selectedWindow.title);
+    // Update selected app name
+    const selectedWindow = currentWindows[currentIndex];
+    if (selectedWindow) {
+      selectedNameLabel.set_label(selectedWindow.title);
+    }
+  } catch (e) {
+    ok = false;
+    error = String(e);
+    throw e;
+  } finally {
+    mark.end(ok, error);
   }
 }
 
@@ -1343,6 +1377,9 @@ function initWindowSwitcher() {
 }
 
 function handleWindowSwitcherRequest(argv: string[], res: (response: string) => void) {
+  const mark = perf.start("window-switcher", "handleRequest");
+  let ok = true;
+  let error: string | undefined;
   try {
     const request = argv.join(" ");
 
@@ -1419,8 +1456,12 @@ function handleWindowSwitcherRequest(argv: string[], res: (response: string) => 
 
     res("unknown action");
   } catch (e) {
+    ok = false;
+    error = String(e);
     console.error("Error handling window-switcher request:", e);
     res(`error: ${e}`);
+  } finally {
+    mark.end(ok, error);
   }
 }
 

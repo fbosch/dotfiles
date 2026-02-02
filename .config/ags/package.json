@@ -11,7 +11,8 @@
     "types": "ags types",
     "bundle": "ags bundle config-bundled.tsx",
     "inspect": "ags inspect",
-    "list": "ags list"
+    "list": "ags list",
+    "benchmark": "bash scripts/benchmark/run-benchmarks.sh"
   },
   "keywords": [
     "ags",
