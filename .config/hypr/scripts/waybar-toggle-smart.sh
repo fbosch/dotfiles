@@ -2,6 +2,7 @@
 # Smart waybar toggle that checks cursor position
 # Only hides waybar if cursor is NOT in the waybar area
 
+# shellcheck disable=SC1091
 # Source shared library
 source "$(dirname "$0")/waybar-lib.sh"
 

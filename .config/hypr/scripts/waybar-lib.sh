@@ -8,7 +8,8 @@ check_start_menu_visible() {
 
 # Check if SwayNC notification center is currently visible
 check_swaync_visible() {
-    local result=$(busctl --user call org.erikreider.swaync.cc /org/erikreider/swaync/cc org.erikreider.swaync.cc GetVisibility 2>/dev/null)
+    local result
+    result=$(busctl --user call org.erikreider.swaync.cc /org/erikreider/swaync/cc org.erikreider.swaync.cc GetVisibility 2>/dev/null)
     # Result format is "b true" or "b false", extract second word
     echo "${result#* }"
 }
@@ -27,8 +28,10 @@ should_waybar_stay_visible() {
     fi
     
     # Cursor is far - now check expensive menu states
-    local start_menu_visible=$(check_start_menu_visible)
-    local swaync_visible=$(check_swaync_visible)
+    local start_menu_visible
+    local swaync_visible
+    start_menu_visible=$(check_start_menu_visible)
+    swaync_visible=$(check_swaync_visible)
     
     # Export for callers who want to log
     export START_MENU_VISIBLE="$start_menu_visible"

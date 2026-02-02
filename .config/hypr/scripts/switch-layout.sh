@@ -18,10 +18,6 @@ IFS=',' read -ra layouts <<< "$(echo "$keyboard_info" | jq -r '.layout')"
 
 # Get current active layout info
 current_layout=$(echo "$keyboard_info" | jq -r '.active_keymap')
-current_index=$(echo "$keyboard_info" | jq -r '.active_layout_index')
-
-# Get the display code for current layout
-current_code="${LAYOUT_DISPLAY_CODES[${layouts[$current_index]}]}"
 
 # Switch to next layout using the actual keyboard name
 hyprctl switchxkblayout "$keyboard_name" next

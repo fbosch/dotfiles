@@ -31,7 +31,6 @@ CAPTURE_DELAY_MS=100         # Wait after activewindow event (for animations)
 WORKSPACE_DELAY_MS=300       # Wait after workspace change (longer for workspace animations)
 
 # Image quality
-SCALE_FACTOR=0.25            # Scale factor (0.25 = 25% of original size)
 SCALE_PERCENT=25             # Pre-calculated as integer for bash arithmetic
 JPEG_QUALITY=70              # JPEG compression quality (60-80 recommended)
                              # Lower = smaller files, faster processing, lower quality
@@ -40,12 +39,10 @@ JPEG_QUALITY=70              # JPEG compression quality (60-80 recommended)
 # Hyprland gaps (dynamically read from hyprctl)
 # Extract first value from "2 2 2 2" format (top gap, but they're usually uniform)
 GAPS_IN=$(hyprctl getoption general:gaps_in -j 2>/dev/null | jq -r '.custom' | awk '{print $1}')
-GAPS_OUT=$(hyprctl getoption general:gaps_out -j 2>/dev/null | jq -r '.custom' | awk '{print $1}')
 
 # AGS overlay detection
 # Using bundled AGS instance - check window-switcher component visibility
 AGS_BUNDLED_INSTANCE="ags-bundled"
-AGS_CHECK_WINDOW_MS=5000     # Time window for overlay detection (unused, kept for future)
 
 # ============================================================================
 
@@ -57,10 +54,11 @@ get_time_ms() {
 # Check if any AGS overlay is visible
 is_any_overlay_visible() {
   # Check window-switcher visibility in bundled AGS instance
-  local response=$(ags request -i "$AGS_BUNDLED_INSTANCE" window-switcher '{"action":"get-visibility"}' 2>/dev/null)
+  local response
+  response=$(ags request -i "$AGS_BUNDLED_INSTANCE" window-switcher '{"action":"get-visibility"}' 2>/dev/null)
   
   if [[ "$response" == "visible" ]]; then
-    echo "$(get_time_ms)" > "$LAST_OVERLAY_FILE"
+    get_time_ms > "$LAST_OVERLAY_FILE"
     return 0
   fi
   
@@ -73,8 +71,10 @@ is_in_overlay_cooldown() {
     return 1
   fi
   
-  local last_overlay_time=$(cat "$LAST_OVERLAY_FILE")
-  local current_time=$(get_time_ms)
+  local last_overlay_time
+  local current_time
+  last_overlay_time=$(cat "$LAST_OVERLAY_FILE")
+  current_time=$(get_time_ms)
   local elapsed=$((current_time - last_overlay_time))
   
   if [[ $elapsed -lt $OVERLAY_COOLDOWN_MS ]]; then
@@ -131,8 +131,10 @@ capture_screenshot() {
   
   # Check debounce
   if [[ -f "$LAST_SCREENSHOT_FILE" ]]; then
-    local last_time=$(cat "$LAST_SCREENSHOT_FILE")
-    local current_time=$(get_time_ms)
+    local last_time
+    local current_time
+    last_time=$(cat "$LAST_SCREENSHOT_FILE")
+    current_time=$(get_time_ms)
     local elapsed=$((current_time - last_time))
     
     if [[ $elapsed -lt $DEBOUNCE_MS ]]; then
@@ -166,7 +168,8 @@ capture_screenshot() {
     
     # If workspace changed, abort this capture (newer one will be triggered)
     if [[ -f "$WORKSPACE_CHANGE_FILE" ]]; then
-      local current_change_id=$(cat "$WORKSPACE_CHANGE_FILE")
+      local current_change_id
+      current_change_id=$(cat "$WORKSPACE_CHANGE_FILE")
       if [[ "$current_change_id" != "$capture_id" ]]; then
         # A newer workspace change happened, abort
         return 0
@@ -175,7 +178,8 @@ capture_screenshot() {
   done
   
   # Verify workspace is still correct after delay
-  local current_workspace=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
+  local current_workspace
+  current_workspace=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
   
   if [[ "$current_workspace" != "$target_workspace" ]]; then
     return 0
@@ -187,11 +191,13 @@ capture_screenshot() {
   fi
   
   # Update last screenshot time
-  local timestamp=$(get_time_ms)
+  local timestamp
+  timestamp=$(get_time_ms)
   echo "$timestamp" > "$LAST_SCREENSHOT_FILE"
   
   # Get all monitors and their geometries
-  local monitors_json=$(hyprctl monitors -j 2>/dev/null)
+  local monitors_json
+  monitors_json=$(hyprctl monitors -j 2>/dev/null)
   
   # Capture each monitor separately and build a composite MPC
   local monitor_index=0
@@ -316,7 +322,8 @@ capture_screenshot() {
       
       # Check if image is completely (or nearly) black
       # Get mean brightness as percentage (0-100)
-      local mean_brightness=$(convert "$temp_output" -colorspace Gray -format "%[fx:100*mean]" info: 2>/dev/null)
+      local mean_brightness
+      mean_brightness=$(convert "$temp_output" -colorspace Gray -format "%[fx:100*mean]" info: 2>/dev/null)
       
       # If brightness is very low (< 1%), image is essentially black - discard it
       # This catches minimized windows, off-screen windows, or capture errors
@@ -375,7 +382,8 @@ handle_event() {
   get_time_ms > "$CAPTURE_LOCK_FILE"
   
   # Record this event
-  local timestamp=$(get_time_ms)
+  local timestamp
+  timestamp=$(get_time_ms)
   echo "$timestamp" > "$LAST_EVENT_FILE"
   
   # Create unique capture ID for this event
@@ -383,7 +391,8 @@ handle_event() {
   echo "$capture_id" > "$WORKSPACE_CHANGE_FILE"
   
   # Get workspace and trigger screenshot
-  local workspace_at_event=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
+  local workspace_at_event
+  workspace_at_event=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
   
   # Start new screenshot process with event type and capture ID
   capture_screenshot "$workspace_at_event" "$event_type" "$capture_id" &
