@@ -702,6 +702,23 @@ function createAppButton(
 // Previous window list to detect changes
 let previousWindowAddresses: string[] = [];
 let previousDisplayMode: DisplayMode = displayMode;
+let previousPreviewMtimes: Map<string, number> = new Map();
+
+function getPreviewMtime(previewPath: string | null): number | null {
+  if (!previewPath) return null;
+  try {
+    const file = Gio.File.new_for_path(previewPath);
+    const fileInfo = file.query_info(
+      "time::modified",
+      Gio.FileQueryInfoFlags.NONE,
+      null,
+    );
+    return fileInfo.get_modification_time().tv_sec;
+  } catch (e) {
+    console.error("Failed to read preview mtime:", e);
+    return null;
+  }
+}
 
 // Update the switcher display with new data
 function updateSwitcher() {
@@ -720,9 +737,26 @@ function updateSwitcher() {
     // Check if display mode has changed
     const modeChanged = previousDisplayMode !== displayMode;
 
-    // In preview mode, always rebuild UI to get fresh screenshots
-    // Also rebuild if mode changed or window list changed
-    const shouldRebuild = windowListChanged || modeChanged || displayMode === DisplayMode.PREVIEWS;
+    let previewChanged = false;
+    let currentPreviewMtimes: Map<string, number> | null = null;
+    if (displayMode === DisplayMode.PREVIEWS && !windowListChanged && !modeChanged) {
+      currentPreviewMtimes = new Map();
+      for (const window of currentWindows) {
+        const previewPath = captureWindowPreview(window.address);
+        const mtime = getPreviewMtime(previewPath);
+        if (mtime !== null) {
+          currentPreviewMtimes.set(window.address, mtime);
+          const previous = previousPreviewMtimes.get(window.address);
+          if (previous === undefined || previous !== mtime) {
+            previewChanged = true;
+            break;
+          }
+        }
+      }
+    }
+
+    // In preview mode, rebuild only when previews changed, mode changed, or window list changed
+    const shouldRebuild = windowListChanged || modeChanged || previewChanged;
 
     if (shouldRebuild) {
       // Clear existing UI
@@ -840,6 +874,21 @@ Will wrap: ${(buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.leng
 
       previousWindowAddresses = currentAddresses;
       previousDisplayMode = displayMode;
+      if (displayMode === DisplayMode.PREVIEWS) {
+        if (!currentPreviewMtimes) {
+          currentPreviewMtimes = new Map();
+          for (const window of currentWindows) {
+            const previewPath = captureWindowPreview(window.address);
+            const mtime = getPreviewMtime(previewPath);
+            if (mtime !== null) {
+              currentPreviewMtimes.set(window.address, mtime);
+            }
+          }
+        }
+        previousPreviewMtimes = currentPreviewMtimes;
+      } else {
+        previousPreviewMtimes = new Map();
+      }
     } else {
       // Just update selection classes (only in icon mode when window list unchanged)
       currentWindows.forEach((window, index) => {
