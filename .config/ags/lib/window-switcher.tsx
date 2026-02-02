@@ -83,6 +83,8 @@ const SWITCHER_MARGIN = 48; // Margin from screen edges (total for both sides)
 const MONITOR_EDGE_MARGIN = 30; // Additional margin from monitor edges (per side)
 const BUTTON_SPACING = 8; // Spacing between buttons
 const BUTTON_PADDING = 8; // Padding inside each button
+const WINDOW_CACHE_TTL_MS = 150; // Cache window list briefly for request bursts
+const ACTIVE_WINDOW_CACHE_TTL_MS = 100; // Cache active window briefly
 
 // State
 let state: SwitcherState = SwitcherState.IDLE;
@@ -126,6 +128,23 @@ const previewDimensionsCache = new Map<string, PreviewDimensionsCacheEntry>();
 // Persistent focus history for recency-based sorting
 // Most recently focused window is at index 0
 let focusHistory: string[] = [];
+let focusHistoryVersion = 0;
+
+type WindowCacheEntry = {
+  timestampMs: number;
+  windows: WindowInfo[];
+  sortMode: SortMode;
+  focusVersion: number;
+};
+
+let windowCache: WindowCacheEntry | null = null;
+
+type ActiveWindowCacheEntry = {
+  timestampMs: number;
+  address: string | null;
+};
+
+let activeWindowCache: ActiveWindowCacheEntry | null = null;
 
 // Get current monitor width
 function getMonitorWidth(): number {
@@ -392,6 +411,16 @@ function calculatePreviewDimensions(imagePath: string | null): {
 
 // Get windows from hyprctl
 function getWindows(): WindowInfo[] {
+  const nowMs = GLib.get_monotonic_time() / 1000;
+  if (windowCache) {
+    const fresh = nowMs - windowCache.timestampMs < WINDOW_CACHE_TTL_MS;
+    const sameSortMode = windowCache.sortMode === sortMode;
+    const sameFocusVersion =
+      sortMode !== SortMode.RECENCY || windowCache.focusVersion === focusHistoryVersion;
+    if (fresh && sameSortMode && sameFocusVersion) {
+      return windowCache.windows;
+    }
+  }
   try {
     const [ok, stdout] = GLib.spawn_command_line_sync("hyprctl clients -j");
     if (!ok || !stdout) return [];
@@ -417,11 +446,12 @@ function getWindows(): WindowInfo[] {
       }));
 
     // Sort based on current sort mode
+    let result: WindowInfo[];
     if (sortMode === SortMode.RECENCY) {
       // Get focus history for recency-based sorting
       const focusHistory = getWindowFocusHistory();
       
-      return filteredClients.sort((a, b) => {
+      result = filteredClients.sort((a, b) => {
         const indexA = focusHistory.indexOf(a.address);
         const indexB = focusHistory.indexOf(b.address);
         
@@ -442,12 +472,19 @@ function getWindows(): WindowInfo[] {
       });
     } else {
       // ALPHABETICAL mode - original behavior
-      return filteredClients.sort((a, b) => {
+      result = filteredClients.sort((a, b) => {
         if (a.class !== b.class) return a.class.localeCompare(b.class);
         if (a.title !== b.title) return a.title.localeCompare(b.title);
         return a.address.localeCompare(b.address);
       });
     }
+    windowCache = {
+      timestampMs: nowMs,
+      windows: result,
+      sortMode,
+      focusVersion: focusHistoryVersion,
+    };
+    return result;
   } catch (e) {
     console.error("Error getting windows from hyprctl:", e);
     return [];
@@ -478,12 +515,21 @@ function updateFocusHistory(address: string) {
   if (focusHistory.length > 50) {
     focusHistory = focusHistory.slice(0, 50);
   }
+
+  focusHistoryVersion += 1;
   
   console.log(`Focus history updated: [${focusHistory.slice(0, 5).join(", ")}...]`);
 }
 
 // Get currently active window address
 function getActiveWindowAddress(): string | null {
+  const nowMs = GLib.get_monotonic_time() / 1000;
+  if (activeWindowCache) {
+    const fresh = nowMs - activeWindowCache.timestampMs < ACTIVE_WINDOW_CACHE_TTL_MS;
+    if (fresh) {
+      return activeWindowCache.address;
+    }
+  }
   try {
     const [ok, stdout] = GLib.spawn_command_line_sync(
       "hyprctl activewindow -j",
@@ -493,7 +539,9 @@ function getActiveWindowAddress(): string | null {
     const decoder = new TextDecoder("utf-8");
     const jsonStr = decoder.decode(stdout);
     const activeWindow = JSON.parse(jsonStr);
-    return activeWindow.address || null;
+    const address = activeWindow.address || null;
+    activeWindowCache = { timestampMs: nowMs, address };
+    return address;
   } catch (e) {
     console.error("Error getting active window:", e);
     return null;
