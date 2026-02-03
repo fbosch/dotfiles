@@ -3,5 +3,8 @@
   "skills": {},
   "dismissed": {
     "findSkillsPrompt": true
-  }
+  },
+  "lastSelectedAgents": [
+    "amp"
+  ]
 }

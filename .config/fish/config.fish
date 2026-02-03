@@ -136,6 +136,7 @@ end
 
 # --- bun ---
 set -gx BUN_INSTALL "$HOME/.bun"
+
 fish_add_path --prepend $BUN_INSTALL/bin
 
 # --- Nix paths (ensure they come before Homebrew) ---
