@@ -2,6 +2,7 @@ import { Astal } from "ags/gtk4";
 import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
+import { perf } from "./performance-monitor";
 
 // Size configuration matching design-system component
 const size = {
@@ -95,72 +96,82 @@ let lastSpeakerState: SpeakerState | null = null;
 let lastSegmentCount = -1;
 
 function update() {
-  if (!iconLabel || !volumeLabel || progressSquares.length === 0) return;
+  const mark = perf.start("volume-indicator", "update");
+  let ok = true;
+  let error: string | undefined;
+  try {
+    if (!iconLabel || !volumeLabel || progressSquares.length === 0) return;
+    const { volume, muted } = getVolumeInfo();
 
-  const { volume, muted } = getVolumeInfo();
+    if (volume === lastVolume && muted === lastMuted) return;
 
-  if (volume === lastVolume && muted === lastMuted) return;
+    const speakerState = getSpeakerState(volume, muted);
 
-  const speakerState = getSpeakerState(volume, muted);
+    if (speakerState !== lastSpeakerState) {
+      iconLabel.set_label(speakerIcons[speakerState]);
 
-  if (speakerState !== lastSpeakerState) {
-    iconLabel.set_label(speakerIcons[speakerState]);
-
-    const wasMuted = lastSpeakerState === "muted";
-    const isMuted = speakerState === "muted";
-    if (wasMuted !== isMuted) {
-      if (isMuted) {
-        iconLabel.add_css_class("muted");
-      } else {
-        iconLabel.remove_css_class("muted");
-      }
-    }
-    lastSpeakerState = speakerState;
-  }
-
-  if (volume !== lastVolume || muted !== lastMuted) {
-    volumeLabel.set_label(muted ? "Muted" : `${volume}%`);
-
-    const shouldBeMuted = muted || volume === 0;
-    const wasMutedLabel = lastMuted || lastVolume === 0;
-    if (shouldBeMuted !== wasMutedLabel) {
-      if (shouldBeMuted) {
-        volumeLabel.add_css_class("muted");
-      } else {
-        volumeLabel.remove_css_class("muted");
-      }
-    }
-  }
-
-  if (volume !== lastVolume || muted !== lastMuted) {
-    const filledCount = muted ? 0 : Math.round((volume / 100) * 20);
-    const lastFilledCount = lastMuted ? 0 : Math.round((lastVolume / 100) * 20);
-
-    if (filledCount !== lastFilledCount) {
-      const minChange = Math.min(filledCount, lastFilledCount);
-      const maxChange = Math.max(filledCount, lastFilledCount);
-
-      for (let i = minChange; i < maxChange; i++) {
-        if (!progressSquares[i]) continue; // Skip if element not initialized yet
-        
-        if (i < filledCount) {
-          progressSquares[i].add_css_class("filled");
-          progressSquares[i].remove_css_class("empty");
+      const wasMuted = lastSpeakerState === "muted";
+      const isMuted = speakerState === "muted";
+      if (wasMuted !== isMuted) {
+        if (isMuted) {
+          iconLabel.add_css_class("muted");
         } else {
-          progressSquares[i].remove_css_class("filled");
-          progressSquares[i].add_css_class("empty");
+          iconLabel.remove_css_class("muted");
         }
       }
-
-      if (filledCount !== lastSegmentCount && lastSegmentCount !== -1) {
-        playVolumeSound();
-      }
-      lastSegmentCount = filledCount;
+      lastSpeakerState = speakerState;
     }
-  }
 
-  lastVolume = volume;
-  lastMuted = muted;
+    if (volume !== lastVolume || muted !== lastMuted) {
+      volumeLabel.set_label(muted ? "Muted" : `${volume}%`);
+
+      const shouldBeMuted = muted || volume === 0;
+      const wasMutedLabel = lastMuted || lastVolume === 0;
+      if (shouldBeMuted !== wasMutedLabel) {
+        if (shouldBeMuted) {
+          volumeLabel.add_css_class("muted");
+        } else {
+          volumeLabel.remove_css_class("muted");
+        }
+      }
+    }
+
+    if (volume !== lastVolume || muted !== lastMuted) {
+      const filledCount = muted ? 0 : Math.round((volume / 100) * 20);
+      const lastFilledCount = lastMuted ? 0 : Math.round((lastVolume / 100) * 20);
+
+      if (filledCount !== lastFilledCount) {
+        const minChange = Math.min(filledCount, lastFilledCount);
+        const maxChange = Math.max(filledCount, lastFilledCount);
+
+        for (let i = minChange; i < maxChange; i++) {
+          if (!progressSquares[i]) continue; // Skip if element not initialized yet
+          
+          if (i < filledCount) {
+            progressSquares[i].add_css_class("filled");
+            progressSquares[i].remove_css_class("empty");
+          } else {
+            progressSquares[i].remove_css_class("filled");
+            progressSquares[i].add_css_class("empty");
+          }
+        }
+
+        if (filledCount !== lastSegmentCount && lastSegmentCount !== -1) {
+          playVolumeSound();
+        }
+        lastSegmentCount = filledCount;
+      }
+    }
+
+    lastVolume = volume;
+    lastMuted = muted;
+  } catch (e) {
+    ok = false;
+    error = String(e);
+    throw e;
+  } finally {
+    mark.end(ok, error);
+  }
 }
 
 function hideIndicator() {
@@ -203,34 +214,45 @@ function playVolumeSound() {
 }
 
 function showIndicator() {
-  if (!win) {
-    createWindow();
-  }
-  
-  if (!shadowWrapper) return;
+  const mark = perf.start("volume-indicator", "showIndicator");
+  let ok = true;
+  let error: string | undefined;
+  try {
+    if (!win) {
+      createWindow();
+    }
+    
+    if (!shadowWrapper) return;
 
-  update();
+    update();
 
-  if (!isVisible) {
-    win.set_visible(true);
-    isVisible = true;
+    if (!isVisible) {
+      win.set_visible(true);
+      isVisible = true;
 
-    shadowWrapper.remove_css_class("hiding");
-    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-      shadowWrapper?.add_css_class("visible");
+      shadowWrapper.remove_css_class("hiding");
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        shadowWrapper?.add_css_class("visible");
+        return false;
+      });
+    }
+
+    if (hideTimeout !== null) {
+      GLib.source_remove(hideTimeout);
+    }
+
+    hideTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
+      hideIndicator();
+      hideTimeout = null;
       return false;
     });
+  } catch (e) {
+    ok = false;
+    error = String(e);
+    throw e;
+  } finally {
+    mark.end(ok, error);
   }
-
-  if (hideTimeout !== null) {
-    GLib.source_remove(hideTimeout);
-  }
-
-  hideTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
-    hideIndicator();
-    hideTimeout = null;
-    return false;
-  });
 }
 
 function createWindow() {
@@ -404,6 +426,9 @@ function initVolumeIndicator() {
 }
 
 function handleVolumeIndicatorRequest(argv: string[], res: (response: string) => void) {
+  const mark = perf.start("volume-indicator", "handleRequest");
+  let ok = true;
+  let error: string | undefined;
   try {
     const request = argv.join(" ");
 
@@ -426,8 +451,12 @@ function handleVolumeIndicatorRequest(argv: string[], res: (response: string) =>
       res("unknown action");
     }
   } catch (e) {
+    ok = false;
+    error = String(e);
     console.error("Error handling volume-indicator request:", e);
     res(`error: ${e}`);
+  } finally {
+    mark.end(ok, error);
   }
 }
 

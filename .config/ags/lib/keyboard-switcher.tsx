@@ -3,6 +3,7 @@ import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
+import { perf } from "./performance-monitor";
 
 // Configuration interface
 interface LayoutSwitchConfig {
@@ -259,6 +260,10 @@ function hideSwitcher() {
 }
 
 function showSwitcher(config: LayoutSwitchConfig) {
+  const mark = perf.start("keyboard-switcher", "showSwitcher");
+  let ok = true;
+  let error: string | undefined;
+  try {
   const size = config.size || "sm";
   
   // Check if we need to recreate window (layouts changed or doesn't exist)
@@ -344,9 +349,20 @@ function showSwitcher(config: LayoutSwitchConfig) {
     hideTimeoutId = null;
     return false;
   });
+  } catch (e) {
+    ok = false;
+    error = String(e);
+    throw e;
+  } finally {
+    mark.end(ok, error);
+  }
 }
 
 function updateActiveState(activeLayout: string) {
+  const mark = perf.start("keyboard-switcher", "updateActiveState");
+  let ok = true;
+  let error: string | undefined;
+  try {
   if (!pill) return;
   
   // Skip update if layout hasn't changed
@@ -374,6 +390,13 @@ function updateActiveState(activeLayout: string) {
     } else if (!shouldBeActive && isActive) {
       label.remove_css_class("active");
     }
+  }
+  } catch (e) {
+    ok = false;
+    error = String(e);
+    throw e;
+  } finally {
+    mark.end(ok, error);
   }
 }
 
@@ -464,6 +487,9 @@ function initKeyboardSwitcher() {
 }
 
 function handleKeyboardSwitcherRequest(argv: string[], res: (response: string) => void) {
+  const mark = perf.start("keyboard-switcher", "handleRequest");
+  let ok = true;
+  let error: string | undefined;
   try {
     const request = argv.join(" ");
     const data = JSON.parse(request);
@@ -480,8 +506,12 @@ function handleKeyboardSwitcherRequest(argv: string[], res: (response: string) =
       res("unknown action");
     }
   } catch (e) {
+    ok = false;
+    error = String(e);
     console.error("Error handling keyboard-switcher request:", e);
     res(`error: ${e}`);
+  } finally {
+    mark.end(ok, error);
   }
 }
 

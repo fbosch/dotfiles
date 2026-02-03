@@ -3,6 +3,7 @@ import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import Gdk from "gi://Gdk?version=4.0";
+import { perf } from "./performance-monitor";
 
 // Clock configuration
 interface ClockConfig {
@@ -134,21 +135,32 @@ function getMonitor(): Gdk.Monitor | null {
 
 // Update clock display (only if changed)
 function updateClock() {
-  const timeString = formatTime();
-  
-  // Only update if time actually changed
-  if (timeLabel && timeString !== lastTimeString) {
-    timeLabel.set_label(timeString);
-    lastTimeString = timeString;
-  }
-  
-  // Only update date if shown and changed
-  if (dateLabel && config.showDate) {
-    const dateString = formatDate();
-    if (dateString !== lastDateString) {
-      dateLabel.set_label(dateString);
-      lastDateString = dateString;
+  const mark = perf.start("desktop-clock", "updateClock");
+  let ok = true;
+  let error: string | undefined;
+  try {
+    const timeString = formatTime();
+    
+    // Only update if time actually changed
+    if (timeLabel && timeString !== lastTimeString) {
+      timeLabel.set_label(timeString);
+      lastTimeString = timeString;
     }
+    
+    // Only update date if shown and changed
+    if (dateLabel && config.showDate) {
+      const dateString = formatDate();
+      if (dateString !== lastDateString) {
+        dateLabel.set_label(dateString);
+        lastDateString = dateString;
+      }
+    }
+  } catch (e) {
+    ok = false;
+    error = String(e);
+    throw e;
+  } finally {
+    mark.end(ok, error);
   }
 }
 
@@ -349,6 +361,9 @@ function initDesktopClock() {
 }
 
 function handleDesktopClockRequest(argv: string[], res: (response: string) => void) {
+  const mark = perf.start("desktop-clock", "handleRequest");
+  let ok = true;
+  let error: string | undefined;
   try {
     const request = argv.join(" ");
 
@@ -376,8 +391,12 @@ function handleDesktopClockRequest(argv: string[], res: (response: string) => vo
       res("unknown action");
     }
   } catch (e) {
+    ok = false;
+    error = String(e);
     console.error("Error handling desktop-clock request:", e);
     res(`error: ${e}`);
+  } finally {
+    mark.end(ok, error);
   }
 }
 
