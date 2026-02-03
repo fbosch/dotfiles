@@ -237,6 +237,37 @@ const getTerminal = (): string => {
 // Cache home directory for performance
 const homeDir = GLib.get_home_dir();
 
+const getXdgUserDir = (dirKey: string): string | null => {
+  try {
+    const configDir = GLib.getenv("XDG_CONFIG_HOME") || `${homeDir}/.config`;
+    const configPath = `${configDir}/user-dirs.dirs`;
+
+    if (!GLib.file_test(configPath, GLib.FileTest.EXISTS)) {
+      return null;
+    }
+
+    const [success, contents] = GLib.file_get_contents(configPath);
+    if (!success || !contents) {
+      return null;
+    }
+
+    const decoder = new TextDecoder("utf-8");
+    const configText = decoder.decode(contents);
+    const match = configText.match(new RegExp(`^${dirKey}=\"?(.+?)\"?$`, "m"));
+    if (!match) {
+      return null;
+    }
+
+    return match[1].replace(/\$HOME/g, homeDir);
+  } catch (e) {
+    console.error(`Failed to read ${dirKey} from XDG user dirs:`, e);
+    return null;
+  }
+};
+
+const getXdgUserDirOrDefault = (dirKey: string, fallback: string): string =>
+  getXdgUserDir(dirKey) || fallback;
+
 // Build terminal command with correct flags based on terminal
 const getSystemUpdatesCommand = (): string => {
   const terminal = getTerminal();
@@ -295,9 +326,9 @@ const menuCommands: Record<string, string> = {
   "system-info": "xdg-open 'vicinae://extensions/fbosch/sysinfo/system-info'",
   "lock-screen": "hyprlock",
   applications: "com.github.tchx84.Flatseal",
-  documents: "nemo --existing-window /mnt/nas/FrederikDocs",
-  pictures: `nemo --existing-window ${homeDir}/Pictures`,
-  downloads: `nemo --existing-window ${homeDir}/Downloads`,
+  documents: `nemo --existing-window "${getXdgUserDirOrDefault("XDG_DOCUMENTS_DIR", `${homeDir}/Documents`)}"`,
+  pictures: `nemo --existing-window "${getXdgUserDirOrDefault("XDG_PICTURES_DIR", `${homeDir}/Pictures`)}"`,
+  downloads: `nemo --existing-window "${getXdgUserDirOrDefault("XDG_DOWNLOAD_DIR", `${homeDir}/Downloads`)}"`,
   suspend: `${homeDir}/.config/hypr/scripts/confirm-suspend.sh`,
   restart: `${homeDir}/.config/hypr/scripts/confirm-restart.sh`,
   shutdown: `${homeDir}/.config/hypr/scripts/confirm-shutdown.sh`,
