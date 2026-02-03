@@ -25,3 +25,19 @@ if not set -q GPG_TTY
     set -gx GPG_TTY (tty 2>/dev/null || echo /dev/tty)
 end
 set -U nvm_default_version 20
+# podman docker compat
+if command -q podman
+    if test (uname) = Darwin
+        set -l sock (podman machine inspect podman-machine-default --format '{{.ConnectionInfo.PodmanSocket.Path}}' 2>/dev/null)
+        if test -n "$sock"
+            set -gx DOCKER_HOST "unix://"(string replace -r '^unix://' '' -- $sock)
+        end
+    else if test -S /tmp/podman.sock
+        set -gx DOCKER_HOST unix:///tmp/podman.sock
+    else
+        set -l sock (podman info --format '{{.Host.RemoteSocket.Path}}' 2>/dev/null)
+        if test -n "$sock"
+            set -gx DOCKER_HOST "unix://"(string replace -r '^unix://' '' -- $sock)
+        end
+    end
+end

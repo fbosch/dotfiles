@@ -21,10 +21,8 @@
       ]
     },
     "github": {
-      "command": "gh",
-      "args": [
-        "mcp"
-      ]
+      "type": "local",
+      "command": ["gh", "mcp"],
     },
     "vitest": {
       "enabled": false,
