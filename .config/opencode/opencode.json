@@ -5,14 +5,6 @@
     "AGENTS.md",
     ".cursor/rules/*.md*"
   ],
-  "permission": {
-    "external_directory": {
-      "/tmp": "allow",
-      "~/nixos/**": "read",
-      "~/dotfiles/**": "read",
-      "~/.config/**": "read"
-    }
-  },
   "mcp": {
     "context7": {
       "type": "remote",
@@ -20,6 +12,19 @@
       "headers": {
         "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
       }
+    },
+    "sequential-thinking": {
+      "type": "local",
+      "command": [
+        "bunx",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "github": {
+      "command": "gh",
+      "args": [
+        "mcp"
+      ]
     },
     "vitest": {
       "enabled": false,
@@ -29,52 +34,12 @@
         "@djankies/vitest-mcp"
       ]
     },
-    "playwright": {
-      "enabled": false,
-      "type": "local",
-      "command": [
-        "bunx",
-        "@playwright/mcp@latest"
-      ]
-    },
     "eslint": {
+      "enabled": false,
       "type": "local",
       "command": [
         "bunx",
         "@eslint/mcp@latest"
-      ]
-    },
-    "sequential-thinking": {
-      "type": "local",
-      "command": [
-        "bunx",
-        "@modelcontextprotocol/server-sequential-thinking"
-      ]
-    },
-    "neovim": {
-      "enabled": false,
-      "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "mcp-neovim-server"
-      ],
-      "environment": {
-        "NVIM_SOCKET_PATH": "/tmp/nvim"
-      }
-    },
-    "context-portal": {
-      "enabled": false,
-      "type": "local",
-      "command": [
-        "uvx",
-        "--from",
-        "context-portal-mcp",
-        "conport-mcp",
-        "--mode",
-        "stdio",
-        "--log-level",
-        "INFO"
       ]
     }
   }
