@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "generatedAt": "2026-02-04T17:24:53.423Z",
+  "toolVersion": "0.0.0",
+  "sources": {
+    "ags": {
+      "repo": "https://github.com/Aylur/ags.git",
+      "ref": "HEAD",
+      "resolvedCommit": "e169694390548dfd38ff40f1ef2163d6c3ffe3ea",
+      "bytes": 58879,
+      "fileCount": 12,
+      "manifestSha256": "bc5aa60ba05c0aca149a8f74e5f40bd1693b875bdc88a82076702efde50d26c4",
+      "rulesSha256": "4662b868d29102f62860320cae24ef05cb8f6fe71522b0b1928b1785577220f7",
+      "updatedAt": "2026-02-04T17:24:53.423Z"
+    },
+    "vicinae-docs": {
+      "repo": "https://github.com/vicinaehq/docs.git",
+      "ref": "HEAD",
+      "resolvedCommit": "e7a059dc10670e4515ae0c6ba30349db8523fb09",
+      "bytes": 122476,
+      "fileCount": 48,
+      "manifestSha256": "c770acedb735e07006d1eea8d94b6978c1b58cac0a53d46c72e83557f997ebca",
+      "rulesSha256": "1d072ec63b320f51064d6b569dbe30c4bf4b19fa19d73ea334ec346bb84d0ffa",
+      "updatedAt": "2026-02-04T17:24:53.423Z"
+    }
+  }
+}

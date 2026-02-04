@@ -1,9 +1,8 @@
 # macOS system files
 **/.DS_Store
 
-
 # ephemereal files
-**/.docs/**/*
+**/.docs
 node_modules
 storybook-static
 
