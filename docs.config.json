@@ -14,7 +14,7 @@
       "id": "ags",
       "repo": "https://github.com/Aylur/ags.git",
       "unwrapSingleRootDir": true,
-      "targetDir": "./.config/ags/docs/guide",
+      "targetDir": "./.config/ags/docs/agents/guide",
       "include": [
         "./docs/guide/**/*.md"
       ]

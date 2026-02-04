@@ -12,6 +12,13 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI elements using bundled mod
 
 - `ags types` (regenerate GObject typings)
 
+## Logs
+
+- `/tmp/ags-daemons.log` (start-daemons.sh startup log)
+- `/tmp/ags-window-switcher-debug.log` (only when `AGS_WINDOW_SWITCHER_DEBUG=1`)
+- `/tmp/monitor-debug.log` (only when `AGS_WINDOW_SWITCHER_DEBUG=1`)
+- Runtime stderr/stdout from `ags run` (launch from terminal to capture)
+
 ## More Guidance
 
 - [AGS guide (upstream docs)](docs/guide)

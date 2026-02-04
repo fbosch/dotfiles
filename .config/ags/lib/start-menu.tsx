@@ -1043,13 +1043,9 @@ function applyStaticCSS() {
   );
 }
 
-// Apply static CSS on module load
-applyStaticCSS();
-
-// IPC to receive show/hide commands via AGS messaging
-
 // Functions for bundled mode (using global namespace pattern)
 function initStartMenu() {
+  applyStaticCSS();
   // Generate circular avatar from .face file
   const scriptPath = `${GLib.get_home_dir()}/.config/ags/scripts/generate-circular-avatar.sh`;
   if (GLib.file_test(scriptPath, GLib.FileTest.EXISTS)) {

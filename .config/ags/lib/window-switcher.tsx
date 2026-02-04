@@ -6,6 +6,7 @@ import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
+import { execAsync } from "ags/process";
 import { perf } from "./performance-monitor";
 
 /**
@@ -437,7 +438,7 @@ function calculatePreviewDimensions(imagePath: string | null): {
 }
 
 // Get windows from hyprctl
-function getWindows(): WindowInfo[] {
+async function getWindows(): Promise<WindowInfo[]> {
   const nowMs = GLib.get_monotonic_time() / 1000;
   if (windowCache) {
     const fresh = nowMs - windowCache.timestampMs < WINDOW_CACHE_TTL_MS;
@@ -449,11 +450,7 @@ function getWindows(): WindowInfo[] {
     }
   }
   try {
-    const [ok, stdout] = GLib.spawn_command_line_sync("hyprctl clients -j");
-    if (!ok || !stdout) return [];
-
-    const decoder = new TextDecoder("utf-8");
-    const jsonStr = decoder.decode(stdout);
+    const jsonStr = await execAsync("hyprctl clients -j");
     const clients = JSON.parse(jsonStr) as HyprlandClient[];
     const focusedClient = clients.find((client) => client.focused);
     if (focusedClient?.address) {
@@ -553,7 +550,7 @@ function updateFocusHistory(address: string) {
 }
 
 // Get currently active window address
-function getActiveWindowAddress(): string | null {
+async function getActiveWindowAddress(): Promise<string | null> {
   const nowMs = GLib.get_monotonic_time() / 1000;
   if (activeWindowCache) {
     const fresh = nowMs - activeWindowCache.timestampMs < ACTIVE_WINDOW_CACHE_TTL_MS;
@@ -562,13 +559,7 @@ function getActiveWindowAddress(): string | null {
     }
   }
   try {
-    const [ok, stdout] = GLib.spawn_command_line_sync(
-      "hyprctl activewindow -j",
-    );
-    if (!ok || !stdout) return null;
-
-    const decoder = new TextDecoder("utf-8");
-    const jsonStr = decoder.decode(stdout);
+    const jsonStr = await execAsync("hyprctl activewindow -j");
     const activeWindow = JSON.parse(jsonStr);
     const address = activeWindow.address || null;
     activeWindowCache = { timestampMs: nowMs, address };
@@ -1031,16 +1022,16 @@ function enterIdleState() {
 // ============================================================================
 
 // Handle next window event
-function onNext() {
+async function onNext() {
   if (state === SwitcherState.IDLE) {
     // Fetch windows and initialize
-    const windows = getWindows();
+    const windows = await getWindows();
 
     if (windows.length === 0) return;
     if (windows.length === 1) return;
 
     // Update focus history with currently active window before switching
-    const activeAddress = getActiveWindowAddress();
+    const activeAddress = await getActiveWindowAddress();
     if (activeAddress) {
       updateFocusHistory(activeAddress);
     }
@@ -1076,16 +1067,16 @@ function onNext() {
 }
 
 // Handle previous window event
-function onPrev() {
+async function onPrev() {
   if (state === SwitcherState.IDLE) {
     // Fetch windows and initialize
-    const windows = getWindows();
+    const windows = await getWindows();
 
     if (windows.length === 0) return;
     if (windows.length === 1) return;
 
     // Update focus history with currently active window before switching
-    const activeAddress = getActiveWindowAddress();
+    const activeAddress = await getActiveWindowAddress();
     if (activeAddress) {
       updateFocusHistory(activeAddress);
     }
@@ -1277,8 +1268,9 @@ function createWindow() {
 }
 
 // Apply static CSS
-app.apply_css(
-  `
+function applyStaticCSS() {
+  app.apply_css(
+    `
   window.window-switcher {
     background-color: transparent;
     border: none;
@@ -1418,19 +1410,20 @@ app.apply_css(
     min-height: 100%;
     border-radius: 0 0 8px 8px;
   }
-  `,
-  false,
-);
+    `,
+    false,
+  );
+}
 
 // Helper functions for request handler
-function handleShowAction() {
+async function handleShowAction() {
   // Window is pre-created at init for Alt monitoring
-  const windows = getWindows();
+  const windows = await getWindows();
   if (windows.length <= 1) {
     return;
   }
 
-  const activeAddress = getActiveWindowAddress();
+  const activeAddress = await getActiveWindowAddress();
   let index = windows.findIndex((w) => w.address === activeAddress);
   index = index === -1 ? 0 : index;
 
@@ -1459,7 +1452,7 @@ function handleToggleMode() {
   rebuildUIIfActive();
 }
 
-function handleSetSortMode(mode: string | undefined): string {
+async function handleSetSortMode(mode: string | undefined): Promise<string> {
   const normalizedMode = mode?.toUpperCase();
 
   if (normalizedMode !== "ALPHABETICAL" && normalizedMode !== "RECENCY") {
@@ -1471,7 +1464,7 @@ function handleSetSortMode(mode: string | undefined): string {
   
   // If active, refresh window list with new sort order
   if (state === SwitcherState.ACTIVE) {
-    const windows = getWindows();
+    const windows = await getWindows();
     currentWindows = windows;
     currentIndex = 0; // Reset to first window with new sort
     previousWindowAddresses = [];
@@ -1495,6 +1488,7 @@ function rebuildUIIfActive() {
 function initWindowSwitcher() {
   // Window-switcher needs to be created immediately for Alt monitoring to work
   // This is the only component that can't be lazy-loaded due to its Alt key event handling
+  applyStaticCSS();
   createWindow();
 }
 
@@ -1502,6 +1496,7 @@ function handleWindowSwitcherRequest(argv: string[], res: (response: string) => 
   const mark = perf.start("window-switcher", "handleRequest");
   let ok = true;
   let error: string | undefined;
+  let asyncHandled = false;
   try {
     const request = argv.join(" ");
 
@@ -1514,20 +1509,50 @@ function handleWindowSwitcherRequest(argv: string[], res: (response: string) => 
     const action = data.action;
 
     if (action === "show") {
-      handleShowAction();
-      res("shown");
+      asyncHandled = true;
+      handleShowAction()
+        .then(() => {
+          res("shown");
+          mark.end(ok, error);
+        })
+        .catch((e) => {
+          ok = false;
+          error = String(e);
+          res(`error: ${e}`);
+          mark.end(ok, error);
+        });
       return;
     }
 
     if (action === "next") {
-      onNext();
-      res("cycled next");
+      asyncHandled = true;
+      onNext()
+        .then(() => {
+          res("cycled next");
+          mark.end(ok, error);
+        })
+        .catch((e) => {
+          ok = false;
+          error = String(e);
+          res(`error: ${e}`);
+          mark.end(ok, error);
+        });
       return;
     }
 
     if (action === "prev") {
-      onPrev();
-      res("cycled prev");
+      asyncHandled = true;
+      onPrev()
+        .then(() => {
+          res("cycled prev");
+          mark.end(ok, error);
+        })
+        .catch((e) => {
+          ok = false;
+          error = String(e);
+          res(`error: ${e}`);
+          mark.end(ok, error);
+        });
       return;
     }
 
@@ -1556,8 +1581,18 @@ function handleWindowSwitcherRequest(argv: string[], res: (response: string) => 
     }
 
     if (action === "set-sort-mode") {
-      const response = handleSetSortMode(data.mode);
-      res(response);
+      asyncHandled = true;
+      handleSetSortMode(data.mode)
+        .then((response) => {
+          res(response);
+          mark.end(ok, error);
+        })
+        .catch((e) => {
+          ok = false;
+          error = String(e);
+          res(`error: ${e}`);
+          mark.end(ok, error);
+        });
       return;
     }
 
@@ -1583,7 +1618,9 @@ function handleWindowSwitcherRequest(argv: string[], res: (response: string) => 
     console.error("Error handling window-switcher request:", e);
     res(`error: ${e}`);
   } finally {
-    mark.end(ok, error);
+    if (!asyncHandled) {
+      mark.end(ok, error);
+    }
   }
 }
 

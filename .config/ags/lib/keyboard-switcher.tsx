@@ -110,9 +110,6 @@ function precalculateDimensions() {
   }
 }
 
-// Pre-calculate on module load
-precalculateDimensions();
-
 // Apply static CSS once on module load
 function applyStaticCSS() {
   app.apply_css(
@@ -175,9 +172,6 @@ function applyStaticCSS() {
     false,
   );
 }
-
-// Apply static CSS on module load
-applyStaticCSS();
 
 let dynamicStyleElement: Gtk.CssProvider | null = null;
 
