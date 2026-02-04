@@ -5,6 +5,7 @@
 .docs/
 node_modules
 storybook-static
+./TODO.md
 
 # Vicinae extensions use pnpm workspace (ignore npm lock files)
 .config/vicinae/extensions/*/package-lock.json
