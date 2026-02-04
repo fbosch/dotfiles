@@ -10,6 +10,7 @@ Personal dotfiles managed with GNU Stow for symlink management across macOS and 
   - `.config/fish/{fish_variables,completions,conf.d,functions}/` (Fish shell state)
   - `.config/lazygit/state.yml` (Lazygit state)
   - `.config/ags/@girs/` (AGS TypeScript type definitions; regenerate with `ags types`)
+- When reading docs, check for symlinks and follow them to source material.
 
 ## Package manager
 
