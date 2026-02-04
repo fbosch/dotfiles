@@ -18,3 +18,5 @@ Check version:
 ```bash
 hyprctl version
 ```
+
+See `docs/agents/references/Using-hyprctl.md` for additional `hyprctl` commands and flags.

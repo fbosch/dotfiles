@@ -17,6 +17,7 @@ Home Manager/Nix
 
 ## More Guidance
 
+- [References](docs/agents/references/TOC.md)
 - [Version info](docs/agents/version.md)
 - [Layer rules](docs/agents/layer-rules.md)
 - [Configuration structure](docs/agents/structure.md)

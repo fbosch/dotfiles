@@ -4,20 +4,29 @@
     {
       "id": "vicinae-docs",
       "repo": "https://github.com/vicinaehq/docs.git",
-      "targetDir": "./.config/vicinae/extensions/docs/agents/references",
       "include": [
         "./src/app/extensions/**/*.mdx"
       ],
-      "unwrapSingleRootDir": true
+      "unwrapSingleRootDir": true,
+      "targetDir": "./.config/vicinae/extensions/docs/agents/references"
     },
     {
       "id": "ags",
       "repo": "https://github.com/Aylur/ags.git",
-      "unwrapSingleRootDir": true,
-      "targetDir": "./.config/ags/docs/agents/guide",
       "include": [
         "./docs/guide/**/*.md"
-      ]
+      ],
+      "unwrapSingleRootDir": true,
+      "targetDir": "./.config/ags/docs/agents/guide"
+    },
+    {
+      "id": "hyprland-wiki",
+      "repo": "https://github.com/hyprwm/hyprland-wiki.git",
+      "include": [
+        "./content/Configuring/**/*.md"
+      ],
+      "targetDir": "./.config/hypr/docs/agents/references",
+      "unwrapSingleRootDir": true
     }
   ]
 }
