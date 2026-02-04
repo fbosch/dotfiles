@@ -86,6 +86,22 @@ const BUTTON_SPACING = 8; // Spacing between buttons
 const BUTTON_PADDING = 8; // Padding inside each button
 const WINDOW_CACHE_TTL_MS = 150; // Cache window list briefly for request bursts
 const ACTIVE_WINDOW_CACHE_TTL_MS = 100; // Cache active window briefly
+const DEBUG = GLib.getenv("AGS_WINDOW_SWITCHER_DEBUG") === "1";
+
+function debugLog(message: string): void {
+  if (DEBUG) {
+    console.log(message);
+  }
+}
+
+function debugWriteFile(path: string, contents: string): void {
+  if (!DEBUG) return;
+  try {
+    GLib.file_set_contents(path, contents);
+  } catch (e) {
+    console.error(`Failed to write debug file ${path}:`, e);
+  }
+}
 
 // State
 let state: SwitcherState = SwitcherState.IDLE;
@@ -97,7 +113,7 @@ try {
   const perfModeFile = Gio.File.new_for_path("/tmp/hypr-performance-mode");
   if (perfModeFile.query_exists(null)) {
     displayMode = DisplayMode.ICONS;
-    console.log("Performance mode detected, starting in ICONS mode");
+    debugLog("Performance mode detected, starting in ICONS mode");
   }
 } catch (e) {
   // Ignore errors, default to PREVIEWS
@@ -118,13 +134,14 @@ let iconTheme: Gtk.IconTheme | null = null;
 // Icon name cache to avoid repeated desktop file lookups
 const iconCache = new Map<string, string | null>();
 
-type PreviewDimensionsCacheEntry = {
+type PreviewCacheEntry = {
   mtime: number;
   width: number;
   height: number;
+  texture?: Gdk.Texture;
 };
 
-const previewDimensionsCache = new Map<string, PreviewDimensionsCacheEntry>();
+const previewCache = new Map<string, PreviewCacheEntry>();
 
 // Persistent focus history for recency-based sorting
 // Most recently focused window is at index 0
@@ -152,20 +169,20 @@ function getMonitorWidth(): number {
   try {
     const display = Gdk.Display.get_default();
     if (!display) {
-      GLib.file_set_contents('/tmp/monitor-debug.log', 'No display found\n');
+      debugWriteFile("/tmp/monitor-debug.log", "No display found\n");
       return 1920; // Fallback
     }
     
     // Get the monitor containing the mouse pointer
     const seat = display.get_default_seat();
     if (!seat) {
-      GLib.file_set_contents('/tmp/monitor-debug.log', 'No seat found\n');
+      debugWriteFile("/tmp/monitor-debug.log", "No seat found\n");
       return 1920;
     }
     
     const pointer = seat.get_pointer();
     if (!pointer) {
-      GLib.file_set_contents('/tmp/monitor-debug.log', 'No pointer found\n');
+      debugWriteFile("/tmp/monitor-debug.log", "No pointer found\n");
       return 1920;
     }
     
@@ -173,7 +190,10 @@ function getMonitorWidth(): number {
     const monitor = display.get_monitor_at_point(x, y);
     
     if (!monitor) {
-      GLib.file_set_contents('/tmp/monitor-debug.log', `No monitor at point ${x},${y}\n`);
+      debugWriteFile(
+        "/tmp/monitor-debug.log",
+        `No monitor at point ${x},${y}\n`,
+      );
       return 1920;
     }
     
@@ -188,11 +208,11 @@ Scale factor: ${scaleFactor}
 Physical width: ${geometry.width * scaleFactor}
 Mouse position: ${x},${y}
 `;
-    GLib.file_set_contents('/tmp/monitor-debug.log', debugInfo);
+    debugWriteFile("/tmp/monitor-debug.log", debugInfo);
     
     return geometry.width;
   } catch (e) {
-    GLib.file_set_contents('/tmp/monitor-debug.log', `Error: ${e}\n`);
+    debugWriteFile("/tmp/monitor-debug.log", `Error: ${e}\n`);
     console.error("Failed to get monitor width:", e);
     return 1920; // Fallback to common resolution
   }
@@ -329,22 +349,21 @@ function truncateTitle(title: string, availableWidth: number): string {
   return title.substring(0, maxChars) + "…";
 }
 
-// Get preview dimensions directly from image file (source of truth)
+// Get preview dimensions and cached texture directly from image file
 // Uses PREVIEW_HEIGHT as the target, constrains width to PREVIEW_MAX_WIDTH
-function calculatePreviewDimensions(imagePath: string | null): {
-  width: number;
-  height: number;
-} {
-  const mark = perf.start("window-switcher", "calculatePreviewDimensions");
+function getPreviewInfo(imagePath: string | null): PreviewCacheEntry {
+  const mark = perf.start("window-switcher", "getPreviewInfo");
   if (!imagePath) {
-    // Fallback to minimum width with target height if no image
-    const result = { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
+    const result = {
+      mtime: 0,
+      width: PREVIEW_MIN_WIDTH,
+      height: PREVIEW_HEIGHT,
+    };
     mark.end(true);
     return result;
   }
 
   try {
-    // Load the image via memory stream to bypass caching
     const file = Gio.File.new_for_path(imagePath);
     const fileInfo = file.query_info(
       "time::modified",
@@ -353,61 +372,68 @@ function calculatePreviewDimensions(imagePath: string | null): {
     );
     const mtime = fileInfo.get_modification_time().tv_sec;
 
-    const cached = previewDimensionsCache.get(imagePath);
+    const cached = previewCache.get(imagePath);
     if (cached && cached.mtime === mtime) {
-      const result = { width: cached.width, height: cached.height };
       mark.end(true);
-      return result;
+      return cached;
     }
 
     const [success, contents] = file.load_contents(null);
-
     if (!success || !contents) {
-      const result = { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
+      const result = { mtime, width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
       mark.end(true);
       return result;
     }
 
     const stream = Gio.MemoryInputStream.new_from_bytes(new GLib.Bytes(contents));
     const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
-
     if (!pixbuf) {
-      const result = { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
+      const result = { mtime, width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
       mark.end(true);
       return result;
     }
 
-    // Get actual image dimensions
     const imageWidth = pixbuf.get_width();
     const imageHeight = pixbuf.get_height();
     const aspectRatio = imageWidth / imageHeight;
 
-    // Start with target height
     let height = PREVIEW_HEIGHT;
     let width = Math.round(height * aspectRatio);
-
-    // If width exceeds maximum, constrain by width instead
     if (width > PREVIEW_MAX_WIDTH) {
       width = PREVIEW_MAX_WIDTH;
       height = Math.round(width / aspectRatio);
     }
-
-    // Enforce minimum width
     width = Math.max(PREVIEW_MIN_WIDTH, width);
 
-    console.log(`Preview dimensions for ${imagePath}: ${imageWidth}x${imageHeight} → ${width}x${height} (aspect: ${aspectRatio.toFixed(2)})`);
+    const scaledPixbuf = pixbuf.scale_simple(
+      width,
+      height,
+      GdkPixbuf.InterpType.BILINEAR,
+    );
+    const texture = scaledPixbuf ? Gdk.Texture.new_for_pixbuf(scaledPixbuf) : undefined;
 
-    previewDimensionsCache.set(imagePath, { mtime, width, height });
+    const entry: PreviewCacheEntry = { mtime, width, height, texture };
+    previewCache.set(imagePath, entry);
+    if (previewCache.size > 100) {
+      previewCache.clear();
+    }
 
-    const result = { width, height };
     mark.end(true);
-    return result;
+    return entry;
   } catch (e) {
-    console.error("Failed to get image dimensions:", e);
-    const result = { width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
+    console.error("Failed to get preview info:", e);
+    const result = { mtime: 0, width: PREVIEW_MIN_WIDTH, height: PREVIEW_HEIGHT };
     mark.end(false, String(e));
     return result;
   }
+}
+
+function calculatePreviewDimensions(imagePath: string | null): {
+  width: number;
+  height: number;
+} {
+  const info = getPreviewInfo(imagePath);
+  return { width: info.width, height: info.height };
 }
 
 // Get windows from hyprctl
@@ -523,7 +549,7 @@ function updateFocusHistory(address: string) {
 
   focusHistoryVersion += 1;
   
-  console.log(`Focus history updated: [${focusHistory.slice(0, 5).join(", ")}...]`);
+  debugLog(`Focus history updated: [${focusHistory.slice(0, 5).join(", ")}...]`);
 }
 
 // Get currently active window address
@@ -565,7 +591,7 @@ function createAppButton(
   try {
     const iconName = getIconNameForClass(window.class || "");
 
-    console.log(`Creating button for ${window.class} in ${displayMode} mode`);
+    debugLog(`Creating button for ${window.class} in ${displayMode} mode`);
 
     // Determine content based on display mode
     let content: JSX.Element;
@@ -573,7 +599,8 @@ function createAppButton(
     if (displayMode === DisplayMode.PREVIEWS) {
       // Preview mode: show aspect-ratio box with header
       const previewPath = captureWindowPreview(window.address);
-      const dimensions = calculatePreviewDimensions(previewPath);
+      const previewInfo = getPreviewInfo(previewPath);
+      const dimensions = { width: previewInfo.width, height: previewInfo.height };
 
       content = (
         <box
@@ -637,55 +664,20 @@ function createAppButton(
                 max-height: ${dimensions.height}px;
               `}
               $={(self: Gtk.Box) => {
-                if (previewPath) {
-                  // Load and scale the image using GdkPixbuf
-                  // Read file contents directly to bypass GdkPixbuf file caching
-                  // Force fresh load by reading file every time UI rebuilds
-                  try {
-                    const file = Gio.File.new_for_path(previewPath);
-                    
-                    // Query file info to ensure we're getting the latest version
-                    const fileInfo = file.query_info(
-                      "standard::*,time::modified",
-                      Gio.FileQueryInfoFlags.NONE,
-                      null
-                    );
-                    const modTime = fileInfo.get_modification_time().tv_sec;
-                    
-                    const [success, contents] = file.load_contents(null);
-                    
-                    if (success && contents) {
-                      // Create a unique stream for each load to prevent caching
-                      const bytes = new GLib.Bytes(contents);
-                      const stream = Gio.MemoryInputStream.new_from_bytes(bytes);
-                      const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
-                      
-                      if (pixbuf) {
-                        const actualWidth = pixbuf.get_width();
-                        const actualHeight = pixbuf.get_height();
-                        console.log(`Rendering ${previewPath.split('/').pop()} (mtime: ${modTime}): image=${actualWidth}x${actualHeight}, target=${dimensions.width}x${dimensions.height}`);
-                        
-                        const scaledPixbuf = pixbuf.scale_simple(
-                          dimensions.width,
-                          dimensions.height,
-                          GdkPixbuf.InterpType.BILINEAR,
-                        );
-
-                        if (scaledPixbuf) {
-                          const texture = Gdk.Texture.new_for_pixbuf(scaledPixbuf);
-                          const picture = Gtk.Picture.new_for_paintable(texture);
-                          picture.set_halign(Gtk.Align.FILL);
-                          picture.set_valign(Gtk.Align.FILL);
-                          picture.set_can_shrink(false);
-                          picture.set_content_fit(Gtk.ContentFit.FILL);
-                          picture.add_css_class("preview-image");
-                          self.append(picture);
-                        }
-                      }
-                    }
-                  } catch (e) {
-                    console.error("Failed to load preview image:", e);
+                if (!previewPath) return;
+                try {
+                  const info = getPreviewInfo(previewPath);
+                  if (info.texture) {
+                    const picture = Gtk.Picture.new_for_paintable(info.texture);
+                    picture.set_halign(Gtk.Align.FILL);
+                    picture.set_valign(Gtk.Align.FILL);
+                    picture.set_can_shrink(false);
+                    picture.set_content_fit(Gtk.ContentFit.FILL);
+                    picture.add_css_class("preview-image");
+                    self.append(picture);
                   }
+                } catch (e) {
+                  console.error("Failed to load preview image:", e);
                 }
               }}
             />
@@ -759,7 +751,7 @@ let previousPreviewMtimes: Map<string, number> = new Map();
 
 function getPreviewMtime(previewPath: string | null): number | null {
   if (!previewPath) return null;
-  const cached = previewDimensionsCache.get(previewPath);
+  const cached = previewCache.get(previewPath);
   if (cached) {
     return cached.mtime;
   }
@@ -841,19 +833,19 @@ Button widths: [${buttonWidths.join(', ')}]
 Total width needed: ${buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.length - 1) * BUTTON_SPACING}px
 Will wrap: ${(buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.length - 1) * BUTTON_SPACING) > maxWidth}
 `;
-      GLib.file_set_contents('/tmp/ags-window-switcher-debug.log', debugInfo);
+      debugWriteFile("/tmp/ags-window-switcher-debug.log", debugInfo);
       
-      console.log(`[Window Switcher] Button widths: [${buttonWidths.join(', ')}]`);
+      debugLog(`[Window Switcher] Button widths: [${buttonWidths.join(', ')}]`);
       
       const totalWidth = buttonWidths.reduce((sum, w) => sum + w, 0) + 
                         (currentWindows.length - 1) * BUTTON_SPACING;
       
-      console.log(`[Window Switcher] Monitor: ${monitorWidth}px, Available (75%): ${maxWidth}px, Total needed: ${totalWidth}px, Will wrap: ${totalWidth > maxWidth}`);
+      debugLog(`[Window Switcher] Monitor: ${monitorWidth}px, Available (75%): ${maxWidth}px, Total needed: ${totalWidth}px, Will wrap: ${totalWidth > maxWidth}`);
       
       // Determine if we need to wrap
       if (totalWidth > maxWidth) {
         // Multi-row layout
-        console.log("Using multi-row layout");
+        debugLog("Using multi-row layout");
         
         // Create rows and distribute windows
         const rows: WindowInfo[][] = [];
@@ -864,7 +856,7 @@ Will wrap: ${(buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.leng
           const buttonWidth = buttonWidths[idx];
           const widthWithSpacing = currentRowWidth > 0 ? buttonWidth + BUTTON_SPACING : buttonWidth;
           
-          console.log(`[Window Switcher] Window ${idx} (${window.class}): width=${buttonWidth}px, currentRowWidth=${currentRowWidth}px, will add=${widthWithSpacing}px, fits=${currentRowWidth + widthWithSpacing <= maxWidth}`);
+          debugLog(`[Window Switcher] Window ${idx} (${window.class}): width=${buttonWidth}px, currentRowWidth=${currentRowWidth}px, will add=${widthWithSpacing}px, fits=${currentRowWidth + widthWithSpacing <= maxWidth}`);
           
           if (currentRowWidth + widthWithSpacing <= maxWidth) {
             // Fits in current row
@@ -873,7 +865,7 @@ Will wrap: ${(buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.leng
           } else {
             // Start new row
             if (currentRow.length > 0) {
-              console.log(`[Window Switcher] Row ${rows.length} complete with ${currentRow.length} windows, total width: ${currentRowWidth}px`);
+              debugLog(`[Window Switcher] Row ${rows.length} complete with ${currentRow.length} windows, total width: ${currentRowWidth}px`);
               rows.push(currentRow);
             }
             currentRow = [window];
@@ -883,11 +875,11 @@ Will wrap: ${(buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.leng
         
         // Add last row
         if (currentRow.length > 0) {
-          console.log(`[Window Switcher] Row ${rows.length} (final) complete with ${currentRow.length} windows, total width: ${currentRowWidth}px`);
+          debugLog(`[Window Switcher] Row ${rows.length} (final) complete with ${currentRow.length} windows, total width: ${currentRowWidth}px`);
           rows.push(currentRow);
         }
         
-        console.log(`[Window Switcher] Created ${rows.length} rows, max allowed width per row: ${maxWidth}px`);
+        debugLog(`[Window Switcher] Created ${rows.length} rows, max allowed width per row: ${maxWidth}px`);
         
         // Build rows
         rows.forEach(rowWindows => {
@@ -910,7 +902,7 @@ Will wrap: ${(buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.leng
         });
       } else {
         // Single-row layout (original behavior)
-        console.log("Using single-row layout");
+        debugLog("Using single-row layout");
         
         const rowBox = new Gtk.Box({
           orientation: Gtk.Orientation.HORIZONTAL,
@@ -999,7 +991,7 @@ function isAltPressed(): boolean {
 
 // Transition to ACTIVE state
 function enterActiveState(windows: WindowInfo[], index: number) {
-  console.log(
+  debugLog(
     `[State] IDLE -> ACTIVE (${windows.length} windows, index ${index})`,
   );
   state = SwitcherState.ACTIVE;
@@ -1015,7 +1007,7 @@ function enterActiveState(windows: WindowInfo[], index: number) {
     // commit immediately. This handles the "quick Alt+Tab" edge case.
     GLib.timeout_add(GLib.PRIORITY_HIGH, 33, () => {
       if (state === SwitcherState.ACTIVE && !isAltPressed()) {
-        console.log("Alt already released, committing immediately");
+        debugLog("Alt already released, committing immediately");
         onCommit();
       }
       return GLib.SOURCE_REMOVE;
@@ -1025,7 +1017,7 @@ function enterActiveState(windows: WindowInfo[], index: number) {
 
 // Transition to IDLE state
 function enterIdleState() {
-  console.log(`[State] ${state} -> IDLE`);
+  debugLog(`[State] ${state} -> IDLE`);
   state = SwitcherState.IDLE;
   isVisible = false;
 
@@ -1169,7 +1161,7 @@ function onHide() {
 // Handle Alt key release
 function onAltRelease() {
   if (state !== SwitcherState.ACTIVE) return;
-  console.log("Alt key released, committing switch");
+  debugLog("Alt key released, committing switch");
   onCommit();
 }
 
@@ -1207,7 +1199,7 @@ function setupAltMonitoring() {
       if (keyval === 65377) {
         try {
           GLib.spawn_command_line_async("bash ~/.config/hypr/scripts/screenshot.sh screen");
-          console.log("Screenshot triggered from window-switcher");
+          debugLog("Screenshot triggered from window-switcher");
         } catch (e) {
           console.error("Failed to trigger screenshot:", e);
         }

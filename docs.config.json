@@ -6,7 +6,7 @@
       "repo": "https://github.com/vicinaehq/docs.git",
       "targetDir": "./.agents/skills/vicinae-extension-authoring/references/docs",
       "include": [
-        "./src/app/**/*.mdx"
+        "./src/app/extensions/**/*.mdx"
       ],
       "unwrapSingleRootDir": true
     },

@@ -14,6 +14,10 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI elements using bundled mod
 
 ## More Guidance
 
+- [AGS guide (upstream docs)](docs/guide)
+
+Repo-specific notes:
+
 - [Architecture and components](docs/agents/architecture.md)
 - [Commands and setup](docs/agents/commands-setup.md)
 - [TSX/JSX conventions](docs/agents/tsx-jsx.md)
