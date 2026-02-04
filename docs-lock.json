@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-02-04T17:56:15.552Z",
+  "generatedAt": "2026-02-04T18:08:01.680Z",
   "toolVersion": "0.0.0",
   "sources": {
     "ags": {
@@ -11,7 +11,7 @@
       "fileCount": 12,
       "manifestSha256": "bc5aa60ba05c0aca149a8f74e5f40bd1693b875bdc88a82076702efde50d26c4",
       "rulesSha256": "4662b868d29102f62860320cae24ef05cb8f6fe71522b0b1928b1785577220f7",
-      "updatedAt": "2026-02-04T17:56:15.552Z"
+      "updatedAt": "2026-02-04T18:08:01.680Z"
     },
     "vicinae-docs": {
       "repo": "https://github.com/vicinaehq/docs.git",
@@ -21,7 +21,7 @@
       "fileCount": 8,
       "manifestSha256": "b5c6bf86eb46ec484c3db8bcf73cfaeeb1504d616a749374ff3da567250fef12",
       "rulesSha256": "8940444801f813760593e74e1914a049be8301b649ac51fc8b839b70d1eb2f84",
-      "updatedAt": "2026-02-04T17:56:15.552Z"
+      "updatedAt": "2026-02-04T18:08:01.680Z"
     }
   }
 }

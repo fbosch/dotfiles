@@ -4,7 +4,7 @@
     {
       "id": "vicinae-docs",
       "repo": "https://github.com/vicinaehq/docs.git",
-      "targetDir": "./.agents/skills/vicinae-extension-authoring/references/docs",
+      "targetDir": "./.config/vicinae/extensions/docs/agents/references",
       "include": [
         "./src/app/extensions/**/*.mdx"
       ],
