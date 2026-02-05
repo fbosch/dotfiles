@@ -14,13 +14,11 @@ design-system
 \.backup
 lazy-lock\.json
 Brewfile\.lock\.json
-\./opencode.json
 \.luarc\.json
 docs.config.json
 docs-lock.json
 \.docs
 mprocs.yaml
-opencode.json
 
 # Example files should not be stowed, only used as templates
 \.example$
