@@ -12,7 +12,7 @@
             - url: https://news.kagi.com/europe.xml
         - type: rss
           title: Tech & Security
-          limit: 15
+          limit: 10
           collapse-after: 3
           feeds:
             - url: https://news.kagi.com/tech.xml

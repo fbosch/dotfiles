@@ -8,27 +8,35 @@
     const response = await fetch("https://am.i.mullvad.net/json");
     const data = await response.json();
 
-    const statusEl = document.getElementById("mullvad-status");
-    const locationEl = document.getElementById("mullvad-location");
-    const dotEl = document.getElementById("mullvad-dot");
-
-    if (!statusEl || !locationEl || !dotEl) return;
+    const contentEl = widget.querySelector(".widget-content");
+    if (!contentEl) return;
 
     const connected = data.mullvad_exit_ip;
+    const statusClass = connected ? "color-positive" : "color-negative";
+    const statusText = connected ? "Connected" : "Not connected";
+    const location = data.city + ", " + data.country;
 
-    statusEl.textContent = connected ? "Connected" : "Not connected";
-    statusEl.className =
-      (connected ? "color-positive" : "color-negative") + " size-h4";
-
-    locationEl.textContent = data.city + ", " + data.country;
-    locationEl.className = "color-subdue margin-top-5";
-
-    dotEl.className = connected ? "color-positive" : "color-negative";
+    contentEl.innerHTML = `
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="${statusClass} size-h4">${statusText}</div>
+          <div class="color-subdue margin-top-5">${location}</div>
+        </div>
+        <div>
+          <span class="${statusClass}" style="font-size: 2rem;">●</span>
+        </div>
+      </div>
+    `;
   } catch (error) {
-    const statusEl = document.getElementById("mullvad-status");
-    if (statusEl) {
-      statusEl.textContent = "Error";
-      statusEl.className = "color-negative size-h4";
+    const contentEl = widget.querySelector(".widget-content");
+    if (contentEl) {
+      contentEl.innerHTML = `
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="color-negative size-h4">Error</div>
+          </div>
+        </div>
+      `;
     }
     console.error("Mullvad check error:", error);
   }
