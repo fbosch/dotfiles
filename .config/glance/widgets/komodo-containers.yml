@@ -1,5 +1,6 @@
 - type: custom-api
   title: Containers
+  title-url: https://komodo.corvus-corax.synology.me/containers
   method: POST
   cache: 5m
   allow-insecure: false

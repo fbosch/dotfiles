@@ -1,0 +1,9 @@
+- name: Status
+  columns:
+    - size: small
+      widgets:
+        - $include: ../widgets/synology-disk-station.yml
+    - size: full
+      widgets:
+        - $include: ../widgets/uptime-kuma.yml
+        - $include: ../widgets/komodo-containers.yml

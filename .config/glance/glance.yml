@@ -24,4 +24,4 @@ document:
 pages:
   - $include: pages/home.yml
   - $include: pages/news.yml
-  - $include: pages/services.yml
+  - $include: pages/status.yml

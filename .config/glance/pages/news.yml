@@ -3,32 +3,54 @@
   columns:
     - size: full
       widgets:
-        - type: rss
-          title: Denmark & Europe
-          limit: 15
-          collapse-after: 5
-          feeds:
-            - url: https://news.kagi.com/denmark.xml
-            - url: https://news.kagi.com/europe.xml
-        - type: rss
-          title: Tech & Security
-          limit: 10
-          collapse-after: 3
-          feeds:
-            - url: https://news.kagi.com/tech.xml
-            - url: https://news.kagi.com/cybersecurity.xml
-            - url: https://news.kagi.com/science.xml
-    - size: full
-      widgets:
-        - type: rss
-          title: World News
-          limit: 15
-          collapse-after: 5
-          feeds:
-            - url: https://news.kagi.com/world.xml
-        - type: rss
-          title: Gaming
-          limit: 10
-          collapse-after: 3
-          feeds:
-            - url: https://news.kagi.com/gaming.xml
+        - type: group
+          widgets:
+            - type: rss
+              title: Denmark
+              limit: 14
+              collapse-after: 7
+              cache: 30m
+              feeds:
+                - url: https://news.kagi.com/denmark.xml
+            - type: rss
+              title: Europe
+              limit: 14
+              collapse-after: 7
+              cache: 30m
+              feeds:
+                - url: https://news.kagi.com/europe.xml
+            - type: rss
+              title: World News
+              limit: 14
+              cache: 30m
+              collapse-after: 7
+              feeds:
+                - url: https://news.kagi.com/world.xml
+            - type: rss
+              title: Tech
+              limit: 14
+              cache: 1h
+              collapse-after: 7
+              feeds:
+                - url: https://news.kagi.com/tech.xml
+            - type: rss
+              title: Cybersecurity
+              limit: 14
+              cache: 1h
+              collapse-after: 7
+              feeds:
+                - url: https://news.kagi.com/cybersecurity.xml
+            - type: rss
+              title: Science
+              limit: 14
+              cache: 1h
+              collapse-after: 7
+              feeds:
+                - url: https://news.kagi.com/science.xml
+            - type: rss
+              title: Gaming
+              limit: 14
+              cache: 1h
+              collapse-after: 7
+              feeds:
+                - url: https://news.kagi.com/gaming.xml
