@@ -2,31 +2,36 @@
   "$schema": "https://raw.githubusercontent.com/fbosch/docs-cache/main/docs.config.schema.json",
   "sources": [
     {
-      "id": "vicinae-docs",
-      "repo": "https://github.com/vicinaehq/docs.git",
       "include": [
         "./src/app/extensions/**/*.mdx"
       ],
-      "unwrapSingleRootDir": true,
+      "id": "vicinae-docs",
+      "repo": "https://github.com/vicinaehq/docs.git",
       "targetDir": "./.config/vicinae/extensions/docs/agents/references"
     },
     {
-      "id": "ags",
-      "repo": "https://github.com/Aylur/ags.git",
       "include": [
         "./docs/guide/**/*.md"
       ],
-      "unwrapSingleRootDir": true,
+      "id": "ags",
+      "repo": "https://github.com/Aylur/ags.git",
       "targetDir": "./.config/ags/docs/agents/guide"
     },
     {
-      "id": "hyprland-wiki",
-      "repo": "https://github.com/hyprwm/hyprland-wiki.git",
       "include": [
         "./content/Configuring/**/*.md"
       ],
-      "targetDir": "./.config/hypr/docs/agents/references",
-      "unwrapSingleRootDir": true
+      "id": "hyprland-wiki",
+      "repo": "https://github.com/hyprwm/hyprland-wiki.git",
+      "targetDir": "./.config/hypr/docs/agents/references"
+    },
+    {
+      "include": [
+        "Configuration.md",
+        "Styling.md"
+      ],
+      "id": "waybar",
+      "repo": "https://github.com/Alexays/Waybar.wiki.git"
     }
   ]
 }
