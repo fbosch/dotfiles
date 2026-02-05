@@ -2,6 +2,7 @@ import { Astal } from "ags/gtk4";
 import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
+import { execAsync } from "ags/process";
 import { perf } from "./performance-monitor";
 
 // Size configuration matching design-system component
@@ -44,7 +45,7 @@ function getSpeakerState(volume: number, muted: boolean): SpeakerState {
 const volumeCache = { volume: 0, muted: false, timestamp: 0 };
 const CACHE_DURATION = 30;
 
-function getVolumeInfo(): { volume: number; muted: boolean } {
+async function getVolumeInfo(): Promise<{ volume: number; muted: boolean }> {
   const now = Date.now();
 
   if (now - volumeCache.timestamp < CACHE_DURATION) {
@@ -52,17 +53,7 @@ function getVolumeInfo(): { volume: number; muted: boolean } {
   }
 
   try {
-    const [ok, stdout, , exit_status] = GLib.spawn_command_line_sync(
-      "wpctl get-volume @DEFAULT_AUDIO_SINK@",
-    );
-
-    if (!ok || exit_status !== 0 || !stdout) {
-      return volumeCache.timestamp > 0
-        ? volumeCache
-        : { volume: 0, muted: false };
-    }
-
-    const volumeText = new TextDecoder().decode(stdout);
+    const volumeText = await execAsync("wpctl get-volume @DEFAULT_AUDIO_SINK@");
     const volumeMatch = volumeText.match(/Volume:\s+([\d.]+)/);
     const volume = volumeMatch
       ? Math.round(parseFloat(volumeMatch[1]) * 100)
@@ -94,14 +85,24 @@ let lastVolume = -1;
 let lastMuted = false;
 let lastSpeakerState: SpeakerState | null = null;
 let lastSegmentCount = -1;
+let volumeUpdateInFlight = false;
 
-function update() {
+async function update() {
   const mark = perf.start("volume-indicator", "update");
   let ok = true;
   let error: string | undefined;
   try {
-    if (!iconLabel || !volumeLabel || progressSquares.length === 0) return;
-    const { volume, muted } = getVolumeInfo();
+    if (volumeUpdateInFlight) {
+      mark.end(ok, error);
+      return;
+    }
+    volumeUpdateInFlight = true;
+    if (!iconLabel || !volumeLabel || progressSquares.length === 0) {
+      volumeUpdateInFlight = false;
+      mark.end(ok, error);
+      return;
+    }
+    const { volume, muted } = await getVolumeInfo();
 
     if (volume === lastVolume && muted === lastMuted) return;
 
@@ -157,7 +158,7 @@ function update() {
         }
 
         if (filledCount !== lastSegmentCount && lastSegmentCount !== -1) {
-          playVolumeSound();
+          playVolumeSound(muted);
         }
         lastSegmentCount = filledCount;
       }
@@ -170,6 +171,7 @@ function update() {
     error = String(e);
     throw e;
   } finally {
+    volumeUpdateInFlight = false;
     mark.end(ok, error);
   }
 }
@@ -199,9 +201,7 @@ function hideIndicator() {
   });
 }
 
-function playVolumeSound() {
-  const { muted } = getVolumeInfo();
-
+function playVolumeSound(muted: boolean) {
   if (!muted) {
     try {
       GLib.spawn_command_line_async(
@@ -224,7 +224,7 @@ function showIndicator() {
     
     if (!shadowWrapper) return;
 
-    update();
+    void update();
 
     if (!isVisible) {
       win.set_visible(true);
@@ -330,7 +330,7 @@ function createWindow() {
     </window>
   ) as Astal.Window;
 
-  update();
+  void update();
 }
 
 function applyCSS() {

@@ -4,17 +4,11 @@ Layer rules control how Wayland layer surfaces (waybar, notifications, overlays,
 
 ## Syntax
 
-```hyprlang
-layerrule = match:namespace <namespace>, <rule> [value]
-```
+Full syntax and rule list live in `docs/agents/references/Window-Rules.md` (Layer Rules section).
 
 ## Common Rules
 
-- `blur on/off` - Apply blur effect to layer
-- `ignore_alpha <value>` - Ignore alpha values below threshold (0.0-1.0)
-- `no_anim on/off` - Disable animations for layer
-- `order <number>` - Set rendering order (higher = on top, negative = below)
-- `animation <style> [params]` - Set animation style (e.g., `popin 90%`)
+See `docs/agents/references/Window-Rules.md` for the complete list and examples.
 
 ## Finding Layer Namespaces
 

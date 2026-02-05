@@ -11,6 +11,7 @@ Custom Vicinae extensions with consistent UX, keybindings, and build workflow.
 
 ## More Guidance
 
+- [References](docs/agents/references)
 - [Keybindings and actions](docs/agents/keybindings-actions.md)
 - [Action ordering and UX](docs/agents/ux-patterns.md)
 - [Extension catalog](docs/agents/extensions.md)

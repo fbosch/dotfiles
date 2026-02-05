@@ -336,20 +336,38 @@ const menuCommands: Record<string, string> = {
   "flatpak-updates": getSystemUpdatesCommand(), // Both updated during NixOS rebuild
 };
 
-// Periodic cache refresh every 5 minutes (300 seconds)
+// Cache monitoring (fallback to polling if file monitor fails)
+let cacheDirMonitor: Gio.FileMonitor | null = null;
 let cacheRefreshTimer: number | null = null;
 
 function startCacheRefreshTimer() {
-  // Clear any existing timer
   if (cacheRefreshTimer !== null) {
     GLib.source_remove(cacheRefreshTimer);
   }
 
-  // Set up timer to refresh cache every 5 minutes
   cacheRefreshTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300000, () => {
     refreshCacheData();
-    return GLib.SOURCE_CONTINUE; // Continue the timer
+    return GLib.SOURCE_CONTINUE;
   });
+}
+
+function startCacheMonitor() {
+  if (cacheDirMonitor) return;
+
+  try {
+    const cacheDir = GLib.get_user_cache_dir();
+    const dir = Gio.File.new_for_path(cacheDir);
+    cacheDirMonitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null);
+    cacheDirMonitor.connect("changed", (_monitor, file) => {
+      const name = file.get_basename();
+      if (name === "flake-updates.json" || name === "flatpak-updates.json") {
+        refreshCacheData();
+      }
+    });
+  } catch (e) {
+    console.error("Failed to monitor cache directory, falling back to polling:", e);
+    startCacheRefreshTimer();
+  }
 }
 
 function refreshCacheData() {
@@ -1025,13 +1043,9 @@ function applyStaticCSS() {
   );
 }
 
-// Apply static CSS on module load
-applyStaticCSS();
-
-// IPC to receive show/hide commands via AGS messaging
-
 // Functions for bundled mode (using global namespace pattern)
 function initStartMenu() {
+  applyStaticCSS();
   // Generate circular avatar from .face file
   const scriptPath = `${GLib.get_home_dir()}/.config/ags/scripts/generate-circular-avatar.sh`;
   if (GLib.file_test(scriptPath, GLib.FileTest.EXISTS)) {
@@ -1043,6 +1057,7 @@ function initStartMenu() {
   }
   
   // Window created lazily on first show (see showMenu line 393)
+  startCacheMonitor();
   refreshCacheData();
 }
 
