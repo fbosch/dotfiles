@@ -2,4 +2,4 @@
   columns:
     - size: full
       widgets:
-        - $include: widgets/komodo-containers.yml
+        - $include: ../widgets/komodo-containers.yml

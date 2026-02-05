@@ -4,7 +4,7 @@
     - size: full
       widgets:
         - type: rss
-          title: Denmark & Region
+          title: Denmark & Europe
           limit: 15
           collapse-after: 5
           feeds:
@@ -13,7 +13,7 @@
         - type: rss
           title: Tech & Security
           limit: 15
-          collapse-after: 5
+          collapse-after: 3
           feeds:
             - url: https://news.kagi.com/tech.xml
             - url: https://news.kagi.com/cybersecurity.xml
@@ -23,7 +23,7 @@
         - type: rss
           title: World News
           limit: 15
-          collapse-after: 3
+          collapse-after: 5
           feeds:
             - url: https://news.kagi.com/world.xml
         - type: rss

@@ -16,7 +16,12 @@ server:
 branding:
   hide-footer: true # Hide Glance version in bottom footer
 
+# Custom JavaScript for client-side widgets
+document:
+  head: |
+    <script src="/assets/mullvad-check.js"></script>
+
 pages:
-  - $include: home.yml
-  - $include: news.yml
-  - $include: services.yml
+  - $include: pages/home.yml
+  - $include: pages/news.yml
+  - $include: pages/services.yml

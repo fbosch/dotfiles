@@ -1,0 +1,17 @@
+- type: html
+  title: Mullvad VPN
+  source: |
+    <div class="widget" data-mullvad-check>
+      <div class="widget-header">VPN</div>
+      <div class="widget-content">
+        <div class="flex items-center justify-between" >
+          <div>
+            <div class="color-subdue size-h4" id="mullvad-status">Checking...</div>
+            <div class="color-subdue margin-top-5" id="mullvad-location"></div>
+          </div>
+          <div>
+            <span class="color-subdue" style="font-size: 2rem;" id="mullvad-dot">●</span>
+          </div>
+        </div>
+      </div>
+    </div>

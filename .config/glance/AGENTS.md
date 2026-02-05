@@ -25,6 +25,29 @@ Local documentation is available in `docs/agents/`:
 - [Glance GitHub](https://github.com/glanceapp/glance)
 - [Community Widgets](https://github.com/glanceapp/community-widgets)
 
+## Widget Organization
+
+- **All custom widgets** should be created as separate files in the `widgets/` directory
+- **Pages** should reference widgets using `$include: ../widgets/widget-name.yml`
+- **Widget files** should contain only the widget configuration (no list wrapper)
+- This keeps pages clean and widgets reusable across multiple pages
+
+Example widget file (`widgets/example.yml`):
+```yaml
+type: custom-api
+title: Example Widget
+# ... widget configuration
+```
+
+Example page usage:
+```yaml
+- name: Home
+  columns:
+    - size: small
+      widgets:
+        - $include: ../widgets/example.yml
+```
+
 ## Container Widget Setup
 
 The Services page uses a `docker-containers` widget configured to work with Podman. For this to function:

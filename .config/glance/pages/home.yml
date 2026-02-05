@@ -2,16 +2,19 @@
   columns:
     - size: small
       widgets:
+        - type: clock
+          hour-format: 24h
+          css-class: large-clock
+          hide-header: true
         - type: calendar
           title-url: https://calendar.proton.me
         - type: weather
           location: Copenhagen, Denmark
           units: metric
           title-url: https://www.yr.no/en/forecast/daily-table/2-2618425/Denmark/Capital%20Region/Copenhagen/Copenhagen
+        - $include: ../widgets/mullvad-vpn.yml
     - size: full
       widgets:
         - type: search
           search-engine: kagi
           autofocus: false
-
-

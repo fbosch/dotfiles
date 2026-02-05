@@ -16,7 +16,7 @@
     base-url: ${KOMODO_URL}
   template: |
     {{ $urlBase := .Options.StringOr "base-url" "" }}
-    
+
     <link rel="stylesheet" href="/assets/komodo-containers.css">
 
     {{ $containers := .JSON.Array "" }}
@@ -27,7 +27,7 @@
       {{ if eq (.String "state") "running" }}{{ $running = add $running 1 }}{{ end }}
     {{ end }}
 
-    <div style="display: flex; gap: 1rem; margin-bottom: 1rem; font-size: 0.875rem;">
+    <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
       <span><strong>{{ $running }}</strong>/{{ $total }} running</span>
     </div>
 
