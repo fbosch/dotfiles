@@ -224,6 +224,8 @@ STAGED DIFF (focus on THIS change):
         return 1
     end
 
+    gum style --foreground 208 "$edited_msg"
+
     # Dry run mode - just show what would be committed
     if test "$dry_run" = true
         gum style --foreground 6 "🔍 Dry run - would execute:"
