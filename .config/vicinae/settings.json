@@ -27,6 +27,7 @@
       "opacity": 0.88
    },
    "favorites": [
+      "applications:one.ablaze.floorp",
       "@fbosch/yr-weather:yr-weather",
       "@fbosch/home-assistant:home-assistant-lights",
       "applications:com.discordapp.Discord",
