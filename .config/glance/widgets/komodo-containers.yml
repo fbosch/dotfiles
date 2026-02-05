@@ -1,0 +1,57 @@
+- type: custom-api
+  title: Containers
+  method: POST
+  cache: 5m
+  allow-insecure: false
+  url: ${KOMODO_URL}/read
+  body-type: json
+  body:
+    type: ListAllDockerContainers
+    params: {}
+  headers:
+    Content-Type: application/json
+    X-Api-Key: ${KOMODO_API_KEY}
+    X-Api-Secret: ${KOMODO_API_SECRET}
+  options:
+    base-url: ${KOMODO_URL}
+  template: |
+    {{ $urlBase := .Options.StringOr "base-url" "" }}
+    
+    <link rel="stylesheet" href="/assets/komodo-containers.css">
+
+    {{ $containers := .JSON.Array "" }}
+    {{ $total := len $containers }}
+    {{ $running := 0 }}
+
+    {{ range $containers }}
+      {{ if eq (.String "state") "running" }}{{ $running = add $running 1 }}{{ end }}
+    {{ end }}
+
+    <div style="display: flex; gap: 1rem; margin-bottom: 1rem; font-size: 0.875rem;">
+      <span><strong>{{ $running }}</strong>/{{ $total }} running</span>
+    </div>
+
+    <div class="collapsible-container" data-collapse-after="10">
+      {{ range $containers }}
+        {{ $state := .String "state" }}
+        {{ $name := .String "name" }}
+        {{ $isRunning := eq $state "running" }}
+        
+        <div class="container-row">
+          <span class="container-status {{ if $isRunning }}status-running{{ else }}status-stopped{{ end }}"></span>
+          <div class="container-name">
+            <a class="color-highlight" href="{{ concat $urlBase "/containers/" (.String "id") }}" target="_blank">
+              {{ $name }}
+            </a>
+          </div>
+          {{ if $isRunning }}
+            <div class="container-stats">
+              {{ $cpuPerc := .String "stats.cpu_perc" }}
+              {{ $memPerc := .String "stats.mem_perc" }}
+              {{ if ne $cpuPerc "" }}<span>CPU: {{ $cpuPerc }}</span>{{ end }}
+              {{ if ne $memPerc "" }}<span>MEM: {{ $memPerc }}</span>{{ end }}
+            </div>
+          {{ end }}
+        </div>
+      {{ end }}
+    </div>

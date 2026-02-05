@@ -1,0 +1,34 @@
+- name: News
+  title-url: https://news.kagi.com
+  columns:
+    - size: full
+      widgets:
+        - type: rss
+          title: Denmark & Region
+          limit: 15
+          collapse-after: 5
+          feeds:
+            - url: https://news.kagi.com/denmark.xml
+            - url: https://news.kagi.com/europe.xml
+        - type: rss
+          title: Tech & Security
+          limit: 15
+          collapse-after: 5
+          feeds:
+            - url: https://news.kagi.com/tech.xml
+            - url: https://news.kagi.com/cybersecurity.xml
+            - url: https://news.kagi.com/science.xml
+    - size: full
+      widgets:
+        - type: rss
+          title: World News
+          limit: 15
+          collapse-after: 3
+          feeds:
+            - url: https://news.kagi.com/world.xml
+        - type: rss
+          title: Gaming
+          limit: 10
+          collapse-after: 3
+          feeds:
+            - url: https://news.kagi.com/gaming.xml

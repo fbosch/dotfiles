@@ -1,0 +1,137 @@
+/* Zenwritten Dark - Custom Font Configuration */
+
+/* Zenbones Brainy Font - Self-hosted */
+/* Font weights: 100-900 (Thin, ExtraLight, Light, Regular, Medium, SemiBold, Bold, ExtraBold, Heavy) */
+/* Styles: normal, italic, oblique */
+
+@font-face {
+  font-family: "Zenbones Brainy";
+  font-display: swap;
+  font-weight: 400;
+  font-style: normal;
+  src: url("fonts/WOFF2/Zenbones-Brainy-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Zenbones Brainy";
+  font-display: swap;
+  font-weight: 400;
+  font-style: italic;
+  src: url("fonts/WOFF2/Zenbones-Brainy-Italic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Zenbones Brainy";
+  font-display: swap;
+  font-weight: 500;
+  font-style: normal;
+  src: url("fonts/WOFF2/Zenbones-Brainy-Medium.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Zenbones Brainy";
+  font-display: swap;
+  font-weight: 500;
+  font-style: italic;
+  src: url("fonts/WOFF2/Zenbones-Brainy-MediumItalic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Zenbones Brainy";
+  font-display: swap;
+  font-weight: 600;
+  font-style: normal;
+  src: url("fonts/WOFF2/Zenbones-Brainy-SemiBold.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Zenbones Brainy";
+  font-display: swap;
+  font-weight: 600;
+  font-style: italic;
+  src: url("fonts/WOFF2/Zenbones-Brainy-SemiBoldItalic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Zenbones Brainy";
+  font-display: swap;
+  font-weight: 700;
+  font-style: normal;
+  src: url("fonts/WOFF2/Zenbones-Brainy-Bold.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Zenbones Brainy";
+  font-display: swap;
+  font-weight: 700;
+  font-style: italic;
+  src: url("fonts/WOFF2/Zenbones-Brainy-BoldItalic.woff2") format("woff2");
+}
+
+/* Apply Zenbones Brainy as the primary font */
+* {
+  font-family: "Zenbones Brainy", "Courier New", monospace !important;
+}
+
+/* Ensure headings use proper font weight */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 600;
+}
+
+/* Regular text weight */
+body,
+p,
+span,
+div {
+  font-weight: 400;
+}
+
+/* Maintain monospace for code */
+code,
+pre,
+kbd,
+samp {
+  font-family: "Zenbones Brainy", "Courier New", monospace;
+}
+
+/* Input fields */
+input,
+textarea,
+select,
+button {
+  font-family: "Zenbones Brainy", "Courier New", monospace;
+}
+
+/* /* Disable all animations */
+/* *, */
+/* *::before, */
+/* *::after { */
+/*   animation-duration: 0s !important; */
+/*   animation-delay: 0s !important; */
+/*   transition-duration: 0s !important; */
+/*   transition-delay: 0s !important; */
+/* } */
+
+/* Enable View Transitions API for smooth page navigation */
+@view-transition {
+  navigation: auto;
+}
+
+/* Prevent page transition flicker */
+body,
+html {
+  opacity: 1 !important;
+}
+
+/* Ensure immediate visibility on page changes */
+main,
+.page,
+[data-page] {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
