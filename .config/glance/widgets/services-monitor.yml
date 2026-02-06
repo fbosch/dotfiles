@@ -1,22 +1,23 @@
 - type: monitor
   cache: 1m
   title: Services
+  title-url: /status
   sites:
     - title: Vaultwarden
       url: https://vault.corvus-corax.synology.me
-      icon: auto-invert /assets/icons/vaultwarden.svg
+      icon: sh:vaultwarden-light
     - title: Komodo
       url: https://komodo.corvus-corax.synology.me
-      icon: di:komodo
-    - title: qBittorrent
-      url: https://yourdomain.com/
-      icon: si:qbittorrent
-    - title: Immich
-      url: https://yourdomain.com/
-      icon: si:immich
+      icon: sh:komodo-light
+    - title: Plex
+      url: https://plex.corvus-corax.synology.me/web/index.html#!/
+      icon: sh:plex-light
+    - title: Portainer
+      url: https://portainer.corvus-corax.synology.me/
+      icon: si:portainer
     - title: PiHole One
       url: https://pihole.corvus-corax.synology.me/admin
-      icon: di:pi-hole
+      icon: sh:pi-hole-light
     - title: PiHole Two
       url: https://pitwo.corvus-corax.synology.me/admin
-      icon: auto-invert /assets/icons/pihole-two.svg
+      icon: sh:pi-hole-light
