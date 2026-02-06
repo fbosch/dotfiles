@@ -1,8 +1,9 @@
 - type: html
   title: Mullvad VPN
+  title-url:
   source: |
     <div class="widget" data-mullvad-check>
-      <div class="widget-header">VPN</div>
+      <div class="widget-header"><a href="https://mullvad.net/en/check">VPN</a></div>
       <div class="widget-content">
         <div class="flex items-center justify-between" >
           <div>

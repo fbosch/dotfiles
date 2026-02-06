@@ -44,6 +44,21 @@
             <a class="color-highlight" href="{{ concat $urlBase "/containers/" (.String "id") }}" target="_blank">
               {{ $name }}
             </a>
+            {{ if .Exists "ports" }}
+              {{ $ports := .Array "ports" }}
+              {{ if gt (len $ports) 0 }}
+                <span style="font-size: 0.875em; opacity: 0.6; margin-left: 0.5rem;">
+                  {{ $first := true }}
+                  {{ range $ports }}
+                    {{ $publicPort := .Int "PublicPort" }}
+                    {{ if and (.Exists "PublicPort") (gt $publicPort 0) }}
+                      {{ if not $first }} • {{ end }}{{ $publicPort }}:{{ .Int "PrivatePort" }}
+                      {{ $first = false }}
+                    {{ end }}
+                  {{ end }}
+                </span>
+              {{ end }}
+            {{ end }}
           </div>
           {{ if $isRunning }}
             <div class="container-stats">
