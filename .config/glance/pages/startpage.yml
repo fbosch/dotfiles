@@ -15,7 +15,8 @@
         - type: search
           autofocus: true
           hide-header: true
+          placeholder: " "
           search-engine: kagi
 
-        - $include: ../widgets/services-monitor.yml
         - $include: ../widgets/bookmarks.yml
+        - $include: ../widgets/services-monitor.yml

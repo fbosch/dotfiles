@@ -1,26 +1,107 @@
-- type: bookmarks
-  groups:
-    - title: General
-      links:
-        - title: Gmail
-          url: https://mail.google.com/mail/u/0/
-        - title: Amazon
-          url: https://www.amazon.com/
-        - title: Github
-          url: https://github.com/
-    - title: Entertainment
-      links:
-        - title: YouTube
-          url: https://www.youtube.com/
-        - title: Prime Video
-          url: https://www.primevideo.com/
-        - title: Disney+
-          url: https://www.disneyplus.com/
-    - title: Social
-      links:
-        - title: Reddit
-          url: https://www.reddit.com/
-        - title: Twitter
-          url: https://twitter.com/
-        - title: Instagram
-          url: https://www.instagram.com/
+- type: custom-api
+  title: Bookmarks
+  cache: 1
+  title-url: https://linkwarden.corvus-corax.synology.me/dashboard
+  url: https://linkwarden.corvus-corax.synology.me/api/v2/dashboard
+  headers:
+    Authorization: Bearer ${LINKWARDEN_TOKEN}
+    Accept: application/json
+  template: |
+    {{ if .Response.StatusCode }}
+      {{ if eq .Response.StatusCode 200 }}
+        {{ $hasItems := false }}
+        {{ $allItems := .JSON.Array "data.links" }}
+        {{ if eq (len $allItems) 0 }}
+          {{ $allItems = .JSON.Array "response" }}
+        {{ end }}
+        {{ if eq (len $allItems) 0 }}
+          {{ $allItems = .JSON.Array "links" }}
+        {{ end }}
+        {{ if eq (len $allItems) 0 }}
+          {{ $allItems = .JSON.Array "pinnedLinks" }}
+        {{ end }}
+        
+        <!-- Square cards for Slot1-Slot5 tags -->
+        <div style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; margin-bottom: 20px;">
+          {{ $slots := "Slot1,Slot2,Slot3,Slot4,Slot5" }}
+          {{ range $allItems }}
+            {{ if .Array "pinnedBy" }}
+              {{ $itemSlot := "" }}
+              {{ range .Array "tags" }}
+                {{ $tagName := .String "name" }}
+                {{ if or (eq $tagName "Slot1") (eq $tagName "Slot2") (eq $tagName "Slot3") (eq $tagName "Slot4") (eq $tagName "Slot5") }}
+                  {{ $itemSlot = $tagName }}
+                {{ end }}
+              {{ end }}
+              {{ if $itemSlot }}
+                {{ $hasItems = true }}
+                {{ $url := .String "url" }}
+                <a href="{{ $url }}" 
+                   data-slot="{{ $itemSlot }}"
+                   style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 8px; background: rgba(255,255,255,0.05); text-decoration: none; transition: all 0.2s; order: {{ if eq $itemSlot "Slot1" }}1{{ else if eq $itemSlot "Slot2" }}2{{ else if eq $itemSlot "Slot3" }}3{{ else if eq $itemSlot "Slot4" }}4{{ else }}5{{ end }};"
+                   title="{{ .String "name" }}"
+                   onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.transform='scale(1.05)'"
+                   onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.transform='scale(1)'">
+                  {{ $domain := replaceMatches "^https?://([^/]+).*$" "$1" $url }}
+                  <img src="https://twenty-icons.com/{{ $domain }}" 
+                       alt="" 
+                       width="32" 
+                       height="32"{{ if eq $itemSlot "Slot3" }}
+                       style="filter: invert(1);"{{ end }} />
+                </a>
+              {{ end }}
+            {{ end }}
+          {{ end }}
+        </div>
+        
+        <!-- List for remaining pinned items without slot tags, grouped by collection -->
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.5rem 2rem;">
+        {{ $sortedItems := sortByString "collection.name" "asc" $allItems }}
+        {{ $lastCollection := "" }}
+        {{ $openCollection := false }}
+        {{ range $sortedItems }}
+          {{ if .Array "pinnedBy" }}
+            {{ $hasSlotTag := false }}
+            {{ range .Array "tags" }}
+              {{ if or (eq (.String "name") "Slot1") (eq (.String "name") "Slot2") (eq (.String "name") "Slot3") (eq (.String "name") "Slot4") (eq (.String "name") "Slot5") }}
+                {{ $hasSlotTag = true }}
+              {{ end }}
+            {{ end }}
+            {{ if not $hasSlotTag }}
+              {{ $hasItems = true }}
+              {{ $collection := .String "collection.name" }}
+              {{ if not $collection }}
+                {{ $collection = "Uncategorized" }}
+              {{ end }}
+              {{ if ne $collection $lastCollection }}
+                {{ if $openCollection }}
+                  </div>
+                {{ end }}
+                {{ $lastCollection = $collection }}
+                {{ $openCollection = true }}
+                <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                  <div class="size-h6" style="margin-bottom: 0.25rem; opacity: 0.7;">{{ $collection }}</div>
+              {{ end }}
+              {{ $url := .String "url" }}
+              {{ $name := .String "name" }}
+              {{ if not $name }}
+                {{ $name = .String "description" }}
+              {{ end }}
+              <a href="{{ $url }}" class="size-h4 color-highlight" title="{{ $name }}">{{ $name }}</a>
+            {{ end }}
+          {{ end }}
+        {{ end }}
+        {{ if $openCollection }}
+          </div>
+        {{ end }}
+        </div>
+        
+        {{ if not $hasItems }}
+          <p class="color-subdue">No pinned bookmarks found. Pin some links in Linkwarden to see them here!</p>
+        {{ end }}
+      {{ else }}
+        <p class="color-negative">⚠️ LINKWARDEN_TOKEN not configured. Add token to Glance environment.</p>
+      {{ end }}
+    {{ else }}
+      <p class="color-negative">⚠️ Failed to connect to Linkwarden. Check token configuration.</p>
+    {{ end }}

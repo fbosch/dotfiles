@@ -107,7 +107,8 @@ body {
 
   [data-time] {
     text-align: center;
-    font-size: 6rem;
+    font-size: clamp(1rem, -0.875rem + 8.333vw, 14rem);
+    font-weight: 800;
   }
 
   [data-local-time] {

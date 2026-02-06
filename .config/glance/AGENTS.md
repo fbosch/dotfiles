@@ -7,6 +7,7 @@ Configuration for Glance, a self-hosted dashboard tool displaying system informa
 - **Color scheme**: Zenwritten Dark
 - **Font**: Zenbones Brainy
 - **Custom CSS**: `assets/custom.css`
+- **Favicon provider**: `https://twenty-icons.com/<domain>` (Twenty favicon; optional size `/64`, `/128`; source: https://github.com/twentyhq/favicon)
 - **Server**: Running on `rvn-srv` at `http://192.168.1.46:8080`
 - **Container**: Podman-based with systemd service
 
@@ -185,6 +186,51 @@ icon: auto-invert sh:icon  # Auto-invert for dark theme
   max-columns: 3
   widgets: ...
 ```
+
+## Debugging & Troubleshooting
+
+### Checking for Configuration Errors
+
+After making changes to widget files or `glance.yml`, check the Glance service logs for errors:
+
+```bash
+# On rvn-srv, check systemd logs
+journalctl --user -u glance.service -f
+```
+
+**Look for:**
+- `Config file changed, reloading...` - Glance detected your changes
+- `Config has errors:` - Template syntax or configuration errors
+
+**Common errors:**
+
+1. **Template function errors:**
+   ```
+   Config has errors: custom-api widget: parsing template: template: :7: function "list" not defined
+   ```
+   - **Cause:** Using undefined Go template functions
+   - **Fix:** Go templates have limited functions. Use only built-in functions like `range`, `if`, `eq`, `add`, etc.
+
+2. **YAML syntax errors:**
+   ```
+   Config has errors: yaml: line X: mapping values are not allowed in this context
+   ```
+   - **Cause:** Incorrect YAML indentation or syntax
+   - **Fix:** Check indentation (use spaces, not tabs) and proper YAML structure
+
+3. **Environment variable not found:**
+   ```
+   Get "https://...": context deadline exceeded
+   ```
+   - **Cause:** Missing environment variable (e.g., `${LINKWARDEN_TOKEN}`)
+   - **Fix:** Add required environment variables to service configuration
+
+### Hot Reload
+
+Glance automatically reloads when config files change. No manual restart needed unless:
+- Adding new environment variables (requires service restart)
+- Changing systemd service configuration
+- Adding new asset files (may need browser cache clear)
 
 ## Special Configurations
 

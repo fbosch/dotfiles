@@ -3,6 +3,5 @@
   source: |
     <div style="display: flex; justify-content: center; gap: 2rem; padding: 1rem; font-size: 1.5rem;">
       <a href="/home">Home</a>
-      <a href="/news">News</a>
       <a href="/status">Status</a>
     </div>
