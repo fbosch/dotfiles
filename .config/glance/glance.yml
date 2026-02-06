@@ -6,7 +6,7 @@ theme:
   negative-color: 354 50 65 # #DE6E7C - muted red from zenwritten palette
   contrast-multiplier: 1.2 # Increased contrast for readability
   text-saturation-multiplier: 0.8 # Reduce saturation for more neutral text
-  custom-css-file: /assets/custom.css # JetBrains Mono font configuration
+  custom-css-file: /assets/css/custom.css # Custom CSS configuration
 
 # Server configuration for container
 server:
@@ -19,9 +19,11 @@ branding:
 # Custom JavaScript for client-side widgets
 document:
   head: |
-    <script src="/assets/mullvad-check.js"></script>
+    <script src="/assets/js/mullvad-check.js"></script>
+    <script src="/assets/js/sw-register.js"></script>
 
 pages:
+  - $include: pages/startpage.yml
   - $include: pages/home.yml
   - $include: pages/news.yml
   - $include: pages/status.yml

@@ -1,0 +1,21 @@
+- name: Startpage
+  width: slim
+  hide-desktop-navigation: true
+  center-vertically: true
+  columns:
+    - size: full
+      widgets:
+        - type: clock
+          hour-format: 24h
+          hide-header: true
+          css-class: huge-clock
+
+        - $include: ../widgets/page-navigation.yml
+
+        - type: search
+          autofocus: true
+          hide-header: true
+          search-engine: kagi
+
+        - $include: ../widgets/services-monitor.yml
+        - $include: ../widgets/bookmarks.yml

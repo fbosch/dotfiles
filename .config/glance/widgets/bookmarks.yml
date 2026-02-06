@@ -1,0 +1,26 @@
+- type: bookmarks
+  groups:
+    - title: General
+      links:
+        - title: Gmail
+          url: https://mail.google.com/mail/u/0/
+        - title: Amazon
+          url: https://www.amazon.com/
+        - title: Github
+          url: https://github.com/
+    - title: Entertainment
+      links:
+        - title: YouTube
+          url: https://www.youtube.com/
+        - title: Prime Video
+          url: https://www.primevideo.com/
+        - title: Disney+
+          url: https://www.disneyplus.com/
+    - title: Social
+      links:
+        - title: Reddit
+          url: https://www.reddit.com/
+        - title: Twitter
+          url: https://twitter.com/
+        - title: Instagram
+          url: https://www.instagram.com/

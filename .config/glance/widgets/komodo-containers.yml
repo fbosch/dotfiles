@@ -18,7 +18,7 @@
   template: |
     {{ $urlBase := .Options.StringOr "base-url" "" }}
 
-    <link rel="stylesheet" href="/assets/komodo-containers.css">
+    <link rel="stylesheet" href="/assets/css/komodo-containers.css">
 
     {{ $containers := .JSON.Array "" }}
     {{ $total := len $containers }}

@@ -1,0 +1,122 @@
+/* Zenwritten Dark - Custom Configuration */
+
+/* Use system default font */
+* {
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    sans-serif !important;
+}
+
+/* Maintain monospace for code */
+code,
+pre,
+kbd,
+samp {
+  font-family:
+    ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas,
+    "DejaVu Sans Mono", monospace;
+}
+
+/* Enable View Transitions API for smooth page navigation */
+@view-transition {
+  navigation: auto;
+}
+
+/* Configure view transition animations (these override the global disable) */
+::view-transition-group(root) {
+  animation-duration: 0.2s;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.25s;
+}
+
+/* Performance optimizations */
+/* Enable GPU acceleration for scrolling */
+.list-gap-8,
+.list-gap-10,
+.dynamic-columns,
+.collapsible-container {
+  transform: translateZ(0);
+  will-change: scroll-position;
+}
+
+/* Optimize animations */
+.container-row,
+.monitor-site-status-icon-compact {
+  will-change: transform, opacity;
+}
+
+/* Reduce repaints for frequently updating elements */
+[data-time],
+[data-date],
+.container-stats {
+  contain: layout style;
+}
+
+/* Enable hardware acceleration for widget transitions */
+.widget {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Optimize font rendering */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.widget-type-clock.large-clock {
+  [data-local-time] {
+    flex-direction: row-reverse;
+  }
+
+  [data-date] {
+    width: max-content;
+  }
+
+  [data-year] {
+    text-align: right;
+  }
+
+  [data-weekday],
+  [data-time] {
+    text-align: left;
+  }
+
+  [data-time] {
+    font-size: 3.2rem;
+  }
+}
+
+.widget-type-clock.huge-clock {
+  [data-year],
+  [data-weekday],
+  [data-date] {
+    display: none;
+  }
+
+  [data-time] {
+    text-align: center;
+    font-size: 6rem;
+  }
+
+  [data-local-time] {
+    justify-content: center;
+  }
+
+  .widget-content {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+  }
+}
