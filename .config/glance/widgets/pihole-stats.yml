@@ -1,0 +1,7 @@
+- type: dns-stats
+  service: pihole-v6
+  url: https://pihole.corvus-corax.synology.me
+  password: ${PIHOLE_PASSWORD}
+  # hide-graph: false
+  # hide-top-domains: false
+  hour-format: 24h

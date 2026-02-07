@@ -1,6 +1,5 @@
 - type: custom-api
   title: Bookmarks
-  hide-header: true
   title-url: https://linkwarden.corvus-corax.synology.me/dashboard
   url: https://linkwarden.corvus-corax.synology.me/api/v1/links?pinnedOnly=true&ass
   headers:

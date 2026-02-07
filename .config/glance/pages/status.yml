@@ -3,6 +3,7 @@
     - size: small
       widgets:
         - $include: ../widgets/synology-disk-station.yml
+        - $include: ../widgets/pihole-stats.yml
     - size: full
       widgets:
         - type: split-column
