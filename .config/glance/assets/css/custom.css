@@ -1,7 +1,7 @@
 /* Zenwritten Dark - Custom Configuration */
 
 body {
-  background-color: rgba(23, 23, 23, 0.8);
+  background-color: color-mix(in hsl, var(--color-background), transparent 20%);
 }
 
 /* Disable page load fade-in animation */
@@ -18,7 +18,7 @@ main,
 }
 
 .search-input {
-  font-size: 2rem !important;
+  font-size: 1.75rem !important;
 }
 
 .content-bounds-slim {
@@ -36,7 +36,7 @@ main,
     Oxygen,
     Ubuntu,
     Cantarell,
-    sans-serif !important;
+    sans-serif;
 }
 
 [class*="icon"] {
@@ -121,7 +121,6 @@ body {
   [data-time] {
     text-align: center;
     font-size: clamp(1rem, -0.875rem + 8.333vw, 14rem);
-    font-weight: 800;
   }
 
   [data-local-time] {
@@ -132,6 +131,20 @@ body {
     background-color: transparent;
     border: none;
     box-shadow: none;
+  }
+  .clock-time > span {
+    font-weight: 500;
+    font-family:
+      "SF Pro Rounded",
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      Roboto,
+      Oxygen,
+      Ubuntu,
+      Cantarell,
+      sans-serif;
   }
 }
 

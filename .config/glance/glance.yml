@@ -21,6 +21,22 @@ branding:
 # Custom JavaScript for client-side widgets
 document:
   head: |
+    <!-- DNS prefetch for slot link destinations -->
+    <link rel="dns-prefetch" href="//account.proton.me">
+    <link rel="dns-prefetch" href="//www.nordnet.dk">
+    <link rel="dns-prefetch" href="//github.com">
+    <link rel="dns-prefetch" href="//chatgpt.com">
+    <link rel="dns-prefetch" href="//music.youtube.com">
+    <link rel="dns-prefetch" href="//www.reddit.com">
+    <link rel="dns-prefetch" href="//www.youtube.com">
+    
+    <!-- Preconnect for critical icon/resource providers -->
+    <link rel="preconnect" href="https://twenty-icons.com">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    
+    <!-- DNS prefetch for Linkwarden API -->
+    <link rel="dns-prefetch" href="//linkwarden.corvus-corax.synology.me">
+    
     <script src="/assets/js/mullvad-check.js"></script>
     <script src="/assets/js/sw-register.js"></script>
 

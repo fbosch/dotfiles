@@ -1,11 +1,12 @@
 - type: custom-api
   title: Bookmarks
+  hide-header: true
+  cache: 3h
   title-url: https://linkwarden.corvus-corax.synology.me/dashboard
-  url: https://linkwarden.corvus-corax.synology.me/api/v1/links?pinnedOnly=true
+  url: https://linkwarden.corvus-corax.synology.me/api/v1/links?pinnedOnly=true&test23
   headers:
     Authorization: Bearer ${LINKWARDEN_TOKEN}
     Accept: application/json
-    Cache-Control: no-cache
   options:
     # Icon overrides - use full URL or domain as key, icon path as value
     # Full URL is checked first, then domain fallback

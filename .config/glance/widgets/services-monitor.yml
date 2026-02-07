@@ -1,5 +1,5 @@
 - type: monitor
-  cache: 1m
+  cache: 5m
   title: Services
   title-url: /status
   hide-header: true
