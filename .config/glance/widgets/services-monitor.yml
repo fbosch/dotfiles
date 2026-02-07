@@ -1,0 +1,36 @@
+- type: monitor
+  cache: 1m
+  title: Services
+  title-url: /status
+  hide-header: true
+  sites:
+    - title: Vaultwarden
+      url: https://vault.corvus-corax.synology.me
+      icon: sh:vaultwarden-light
+    - title: Linkwarden
+      url: https://linkwarden.corvus-corax.synology.me
+      icon: sh:linkwarden-light
+    - title: Komodo
+      url: https://komodo.corvus-corax.synology.me
+      icon: sh:komodo-light
+    - title: Portainer
+      url: https://portainer.corvus-corax.synology.me/
+      icon: si:portainer
+    - title: Termix
+      url: https://termix.corvus-corax.synology.me/
+      icon: sh:termix-light
+    - title: Wakapi
+      url: https://wakapi.corvus-corax.synology.me
+      icon: sh:wakapi-light
+    - title: Plex
+      url: https://plex.corvus-corax.synology.me/web/index.html#!/
+      icon: sh:plex-light
+    - title: Home Assistant
+      url: https://ha.corvus-corax.synology.me/
+      icon: sh:home-assistant-light
+    - title: PiHole One
+      url: https://pihole.corvus-corax.synology.me/admin
+      icon: sh:pi-hole-light
+    - title: PiHole Two
+      url: https://pitwo.corvus-corax.synology.me/admin
+      icon: sh:pi-hole-light

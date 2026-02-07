@@ -1,0 +1,38 @@
+.container-row {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--color-separator);
+}
+
+.container-row:last-child {
+  border-bottom: none;
+}
+
+.container-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.container-status {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+}
+
+.status-running {
+  background-color: var(--color-positive);
+}
+
+.status-stopped {
+  background-color: var(--color-negative);
+}
+
+.container-stats {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: var(--color-text-subdue);
+}

@@ -1,0 +1,17 @@
+- name: Status
+  columns:
+    - size: small
+      widgets:
+        - $include: ../widgets/server-stats.yml
+        - $include: ../widgets/synology-disk-station.yml
+        - $include: ../widgets/pihole-stats.yml
+    - size: full
+      widgets:
+        - type: split-column
+          widgets:
+            - type: group
+              widgets:
+                - $include: ../widgets/uptime-kuma.yml
+                - $include: ../widgets/komodo-containers.yml
+                - $include: ../widgets/tailscale-devices.yml
+            - $include: ../widgets/github-releases.yml

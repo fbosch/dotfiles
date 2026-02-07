@@ -1,0 +1,142 @@
+/* Zenwritten Dark - Custom Configuration */
+
+body {
+  background-color: rgba(23, 23, 23, 0.8);
+}
+
+/* Disable page load fade-in animation */
+body,
+main,
+.page {
+  animation: none !important;
+  opacity: 1 !important;
+}
+
+/* Disable specific page content entrance animation */
+.page.content-ready > .page-content {
+  animation: none !important;
+}
+
+.search-input {
+  font-size: 2rem !important;
+}
+
+.content-bounds-slim {
+  max-width: 900px;
+}
+
+/* Use system default font (but preserve icon fonts) */
+*:not([class*="icon"]) {
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    sans-serif !important;
+}
+
+[class*="icon"] {
+  font-family: "JetBrains Mono";
+}
+
+/* Maintain monospace for code */
+code,
+pre,
+kbd,
+samp {
+  font-family:
+    ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas,
+    "DejaVu Sans Mono", monospace;
+}
+
+/* Enable View Transitions API for smooth page navigation */
+@view-transition {
+  navigation: auto;
+}
+
+/* Configure view transition animations (these override the global disable) */
+::view-transition-group(root) {
+  animation-duration: 0.2s;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.25s;
+}
+
+/* Reduce repaints for frequently updating elements */
+[data-time],
+[data-date],
+.container-stats {
+  contain: layout style;
+}
+
+/* Enable hardware acceleration for widget transitions */
+.widget {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Optimize font rendering */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.widget-type-clock.large-clock {
+  [data-local-time] {
+    flex-direction: row-reverse;
+  }
+
+  [data-date] {
+    width: max-content;
+  }
+
+  [data-year] {
+    text-align: right;
+  }
+
+  [data-weekday],
+  [data-time] {
+    text-align: left;
+  }
+
+  [data-time] {
+    font-size: 3.2rem;
+  }
+}
+
+.widget-type-clock.huge-clock {
+  [data-year],
+  [data-weekday],
+  [data-date] {
+    display: none;
+  }
+
+  [data-time] {
+    text-align: center;
+    font-size: clamp(1rem, -0.875rem + 8.333vw, 14rem);
+    font-weight: 800;
+  }
+
+  [data-local-time] {
+    justify-content: center;
+  }
+
+  .widget-content {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+  }
+}
+
+.widget-type-search.start-search {
+  .widget-content-frame {
+    border-radius: 30px;
+  }
+}

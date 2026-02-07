@@ -1,0 +1,119 @@
+- type: custom-api
+  title: Tailnet
+  title-url: https://login.tailscale.com/admin/machines
+  url: https://api.tailscale.com/api/v2/tailnet/-/devices
+  headers:
+    Authorization: Bearer ${TAILSCALE_API_KEY}
+  cache: 10m
+  options:
+    collapseAfter: 10
+    # disableOfflineIndicator: true
+    # disableUpdateIndicator: true
+    # prioritiseTags: true
+  template: |
+    <style>
+      .device-info-container-tailscale {
+        position: relative;
+        overflow: hidden;
+        height: 1.5em;
+      }
+
+      .device-info-tailscale {
+        display: flex;
+        transition: transform 0.2s ease, opacity 0.2s ease;
+      }
+
+      .device-ip-tailscale {
+        position: absolute;
+        top: 0;
+        left: 0;
+        transform: translateY(-100%);
+        opacity: 0;
+        transition: transform 0.2s ease, opacity 0.2s ease;
+      }
+
+      .device-info-container-tailscale:hover .device-info-tailscale {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+
+      .device-info-container-tailscale:hover .device-ip-tailscale {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      .update-indicator-tailscale {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: var(--color-primary);
+        display: inline-block;
+        margin-left: 4px;
+        vertical-align: middle;
+      }
+
+      .offline-indicator-tailscale {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: var(--color-negative);
+        display: inline-block;
+        margin-left: 4px;
+        vertical-align: middle;
+      }
+
+      .device-name-container-tailscale {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .indicators-container-tailscale {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+    </style>
+    <ul class="list list-gap-10 collapsible-container" data-collapse-after="{{ .Options.IntOr "collapseAfter" 3 }}">
+      {{ range .JSON.Array "devices" }}
+      <li>
+        <div class="flex items-center gap-10">
+          <div class="device-name-container-tailscale grow">
+            <span class="size-h4 block text-truncate color-primary">
+              {{ findMatch "^([^.]+)" (.String "name") }}
+            </span>
+            <div class="indicators-container-tailscale">
+              {{ if and (not ($.Options.BoolOr "disableUpdateIndicator" false)) (.Bool "updateAvailable") }}
+              <span class="update-indicator-tailscale" data-popover-type="text" data-popover-text="Update Available"></span>
+              {{ end }}
+
+              {{ if not ($.Options.BoolOr "disableOfflineIndicator" false) }}
+              {{ $lastSeen := .String "lastSeen" | parseTime "rfc3339" }}
+              {{ if not ($lastSeen.After (offsetNow "-10s")) }}
+              {{ $lastSeenTimezoned := $lastSeen.In now.Location }}
+              <span class="offline-indicator-tailscale" data-popover-type="text"
+                data-popover-text="Offline - Last seen {{ $lastSeenTimezoned.Format " Jan 2 3:04pm" }}"></span>
+              {{ end }}
+              {{ end }}
+
+            </div>
+          </div>
+        </div>
+        <div class="device-info-container-tailscale">
+          <ul class="list-horizontal-text device-info-tailscale">
+            <li>{{ .String "os" }}</li>
+            <li>
+              {{ if and ($.Options.BoolOr "prioritiseTags" false) (.Exists "tags.0") }}
+                {{ trimPrefix "tag:" (.String "tags.0") }}
+              {{ else }}
+                {{ .String "user" }}
+              {{ end }}
+            </li>
+          </ul>
+          <div class="device-ip-tailscale">
+            {{ .String "addresses.0"}}
+          </div>
+        </div>
+      </li>
+      {{ end }}
+    </ul>

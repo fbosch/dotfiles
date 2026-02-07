@@ -1,0 +1,66 @@
+- name: Home
+  columns:
+    - size: small
+      widgets:
+        - type: clock
+          hour-format: 24h
+          css-class: large-clock
+          hide-header: true
+        - type: to-do
+        - type: calendar
+          title-url: https://calendar.proton.me
+        - type: weather
+          location: Copenhagen, Denmark
+          units: metric
+          title-url: https://www.yr.no/en/forecast/daily-table/2-618425/Denmark/Capital%20Region/Copenhagen/Copenhagen
+    - size: full
+      widgets:
+        - type: search
+          search-engine: kagi
+          hide-header: true
+          autofocus: false
+        - type: group
+          widgets:
+            - type: rss
+              title: Denmark & Europe
+              limit: 14
+              collapse-after: 7
+              cache: 30m
+              feeds:
+                - url: https://news.kagi.com/denmark.xml
+                - url: https://news.kagi.com/europe.xml
+            - type: rss
+              title: World News
+              limit: 14
+              cache: 30m
+              collapse-after: 7
+              feeds:
+                - url: https://news.kagi.com/world.xml
+            - type: rss
+              title: Tech
+              limit: 14
+              cache: 1h
+              collapse-after: 7
+              feeds:
+                - url: https://news.kagi.com/tech.xml
+            - type: rss
+              title: Cybersecurity
+              limit: 14
+              cache: 1h
+              collapse-after: 7
+              feeds:
+                - url: https://news.kagi.com/cybersecurity.xml
+            - type: rss
+              title: Science
+              limit: 14
+              cache: 1h
+              collapse-after: 7
+              feeds:
+                - url: https://news.kagi.com/science.xml
+            - type: rss
+              title: Gaming
+              limit: 14
+              cache: 1h
+              collapse-after: 7
+              feeds:
+                - url: https://news.kagi.com/gaming.xml

@@ -1,0 +1,23 @@
+- name: Start
+  width: slim
+  hide-desktop-navigation: true
+  center-vertically: true
+  columns:
+    - size: full
+      widgets:
+        - type: clock
+          hour-format: 24h
+          hide-header: true
+          css-class: huge-clock
+
+        - $include: ../widgets/page-navigation.yml
+
+        - type: search
+          autofocus: true
+          hide-header: true
+          placeholder: " "
+          search-engine: kagi
+          css-class: start-search
+
+        - $include: ../widgets/bookmarks.yml
+        - $include: ../widgets/services-monitor.yml

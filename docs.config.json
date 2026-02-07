@@ -3,7 +3,7 @@
   "sources": [
     {
       "include": [
-        "./src/app/extensions/**/*.mdx"
+        "src/app/extensions/**/*.mdx"
       ],
       "id": "vicinae-docs",
       "repo": "https://github.com/vicinaehq/docs.git",
@@ -11,7 +11,7 @@
     },
     {
       "include": [
-        "./docs/guide/**/*.md"
+        "docs/guide/**/*.md"
       ],
       "id": "ags",
       "repo": "https://github.com/Aylur/ags.git",
@@ -19,7 +19,7 @@
     },
     {
       "include": [
-        "./content/Configuring/**/*.md"
+        "content/Configuring/**/*.md"
       ],
       "id": "hyprland-wiki",
       "repo": "https://github.com/hyprwm/hyprland-wiki.git",
@@ -32,6 +32,14 @@
       ],
       "id": "waybar",
       "repo": "https://github.com/Alexays/Waybar.wiki.git"
+    },
+    {
+      "id": "glance",
+      "repo": "https://github.com/glanceapp/glance",
+      "targetDir": "./.config/glance/docs/agents",
+      "include": [
+        "docs/**/*.md"
+      ]
     }
   ]
 }
