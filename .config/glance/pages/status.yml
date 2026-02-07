@@ -13,4 +13,5 @@
               widgets:
                 - $include: ../widgets/uptime-kuma.yml
                 - $include: ../widgets/komodo-containers.yml
+                - $include: ../widgets/tailscale-devices.yml
             - $include: ../widgets/github-releases.yml

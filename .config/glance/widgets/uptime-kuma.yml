@@ -24,12 +24,12 @@
       
       <div class="size-h3 margin-block-end-12" style="font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; opacity: 0.7;">{{ $groupName }}</div>
       
-      <ul class="dynamic-columns list-gap-8 margin-block-end-10">
+      <ul class="dynamic-columns list-gap-8 margin-block-end-10" >
         {{ range $group.Array "monitorList" }}
         {{ $id := .String "id" }}
         {{ $hbArray := $hb.JSON.Array (print "heartbeatList." $id) }}
         <div class="flex items-center gap-12">
-          <a class="size-title-dynamic color-highlight text-truncate block grow" href="https://uptime.corvus-corax.synology.me/dashboard/{{ $id }}"
+          <a class="color-highlight text-truncate block grow" href="https://uptime.corvus-corax.synology.me/dashboard/{{ $id }}"
             target="_blank" rel="noreferrer">
             {{ .String "name" }} </a>
 
