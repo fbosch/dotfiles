@@ -90,7 +90,7 @@
             <div class="server-name color-highlight size-h3">rvn-nas</div>
             {{ if gt $uptime 0 }}
               <div>
-                <span data-dynamic-relative-time="{{ $uptime }}">{{ formatDuration $uptime }}</span> uptime
+                <span data-dynamic-relative-time="{{ $uptime }}"></span> uptime
               </div>
             {{ end }}
           </div>
@@ -103,8 +103,13 @@
                 <div class="color-highlight">{{ $firmware }}</div>
               {{ end }}
             </div>
-            <svg class="server-icon" stroke="var(--color-positive)" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 17.25v-.228a4.5 4.5 0 0 0-.12-1.03l-2.268-9.64a3.375 3.375 0 0 0-3.285-2.602H7.923a3.375 3.375 0 0 0-3.285 2.602l-2.268 9.64a4.5 4.5 0 0 0-.12 1.03v.228m19.5 0a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3m19.5 0a3 3 0 0 0-3-3H5.25a3 3 0 0 0-3 3m16.5 0h.008v.008h-.008v-.008Zm-3 0h.008v.008h-.008v-.008Z"></path>
+            <svg class="server-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--color-positive)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <!-- Outer case -->
+              <path d="M6.75 21.75H17.25C18.4926 21.75 19.5 20.7426 19.5 19.5V4.5C19.5 3.25736 18.4926 2.25 17.25 2.25H6.75C5.50736 2.25 4.5 3.25736 4.5 4.5V19.5C4.5 20.7426 5.50736 21.75 6.75 21.75Z"/>
+              <!-- Left drive bay (vertical lines) -->
+              <path d="M7.5 5.25V16.5M9 5.25V16.5M10.5 5.25V16.5"/>
+              <!-- Right drive bay (vertical lines) -->
+              <path d="M13.5 5.25V16.5M15 5.25V16.5M16.5 5.25V16.5"/>
             </svg>
           </div>
         </div>
