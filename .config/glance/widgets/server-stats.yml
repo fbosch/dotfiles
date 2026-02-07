@@ -1,5 +1,6 @@
 - type: server-stats
   title: Server
+  title-url: https://glances-srv.corvus-corax.synology.me/
   cache: 2m
   servers:
     - type: local
