@@ -1,4 +1,5 @@
 - type: server-stats
+  title: Server
   cache: 2m
   servers:
     - type: local
