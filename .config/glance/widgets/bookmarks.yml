@@ -1,7 +1,7 @@
 - type: custom-api
   title: Bookmarks
   title-url: https://linkwarden.corvus-corax.synology.me/dashboard
-  url: https://linkwarden.corvus-corax.synology.me/api/v1/links?pinnedOnly=true&ass
+  url: https://linkwarden.corvus-corax.synology.me/api/v1/links?pinnedOnly=true
   headers:
     Authorization: Bearer ${LINKWARDEN_TOKEN}
     Accept: application/json

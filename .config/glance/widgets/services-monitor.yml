@@ -13,18 +13,21 @@
     - title: Komodo
       url: https://komodo.corvus-corax.synology.me
       icon: sh:komodo-light
-    - title: Plex
-      url: https://plex.corvus-corax.synology.me/web/index.html#!/
-      icon: sh:plex-light
-    - title: Termix
-      url: https://termix.corvus-corax.synology.me/
-      icon: sh:termix-light
-    - title: Home Assistant
-      url: https://ha.corvus-corax.synology.me/
-      icon: sh:home-assistant-light
     - title: Portainer
       url: https://portainer.corvus-corax.synology.me/
       icon: si:portainer
+    - title: Termix
+      url: https://termix.corvus-corax.synology.me/
+      icon: sh:termix-light
+    - title: Wakapi
+      url: https://wakapi.corvus-corax.synology.me
+      icon: sh:wakapi-light
+    - title: Plex
+      url: https://plex.corvus-corax.synology.me/web/index.html#!/
+      icon: sh:plex-light
+    - title: Home Assistant
+      url: https://ha.corvus-corax.synology.me/
+      icon: sh:home-assistant-light
     - title: PiHole One
       url: https://pihole.corvus-corax.synology.me/admin
       icon: sh:pi-hole-light

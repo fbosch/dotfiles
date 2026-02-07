@@ -22,18 +22,12 @@
         - type: group
           widgets:
             - type: rss
-              title: Denmark
+              title: Denmark & Europe
               limit: 14
               collapse-after: 7
               cache: 30m
               feeds:
                 - url: https://news.kagi.com/denmark.xml
-            - type: rss
-              title: Europe
-              limit: 14
-              collapse-after: 7
-              cache: 30m
-              feeds:
                 - url: https://news.kagi.com/europe.xml
             - type: rss
               title: World News

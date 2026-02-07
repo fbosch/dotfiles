@@ -1,6 +1,7 @@
 - type: custom-api
   cache: 10m
   title: NAS
+  title-url: https://corvus-corax.synology.me/
   options:
     nas-url: ${SYNOLOGY_URL}
     username: ${SYNOLOGY_USERNAME}

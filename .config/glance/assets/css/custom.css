@@ -68,22 +68,6 @@ samp {
   animation-duration: 0.25s;
 }
 
-/* Performance optimizations */
-/* Enable GPU acceleration for scrolling */
-.list-gap-8,
-.list-gap-10,
-.dynamic-columns,
-.collapsible-container {
-  transform: translateZ(0);
-  will-change: scroll-position;
-}
-
-/* Optimize animations */
-.container-row,
-.monitor-site-status-icon-compact {
-  will-change: transform, opacity;
-}
-
 /* Reduce repaints for frequently updating elements */
 [data-time],
 [data-date],
@@ -148,5 +132,11 @@ body {
     background-color: transparent;
     border: none;
     box-shadow: none;
+  }
+}
+
+.widget-type-search.start-search {
+  .widget-content-frame {
+    border-radius: 30px;
   }
 }
