@@ -16,10 +16,9 @@ const CACHE_DURATION = {
 
 // Assets to precache on install
 const PRECACHE_ASSETS = [
-  '/',
-  '/assets/custom.css',
-  '/assets/komodo-containers.css',
-  '/assets/mullvad-check.js'
+  '/assets/css/custom.css',
+  '/assets/css/komodo-containers.css',
+  '/assets/js/mullvad-check.js'
 ];
 
 // Install event - precache static assets
@@ -65,7 +64,13 @@ self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
   
-  // Only handle requests to our domain
+  // Cache external favicons and images
+  if (isFaviconRequest(url) || isExternalImage(url)) {
+    event.respondWith(cacheFirst(request, STATIC_CACHE, CACHE_DURATION.static));
+    return;
+  }
+  
+  // Only handle requests to our domain for other types
   if (url.origin !== location.origin) {
     return;
   }
@@ -214,6 +219,23 @@ function isAPIRequest(url) {
   // API calls typically go through proxied endpoints or contain 'api' in path
   return url.pathname.includes('/api/') ||
          url.pathname.startsWith('/proxy/');
+}
+
+// Helper: Check if request is for a favicon
+function isFaviconRequest(url) {
+  // Match Twenty Icons, Google Favicon Service, or other favicon providers
+  return url.hostname === 'twenty-icons.com' ||
+         url.hostname === 'www.google.com' && url.pathname.includes('favicon') ||
+         url.hostname === 's2.googleusercontent.com' ||
+         url.pathname.endsWith('favicon.ico') ||
+         url.pathname.includes('/favicon');
+}
+
+// Helper: Check if request is for an external image
+function isExternalImage(url) {
+  // Cache external images (thumbnails, etc.)
+  return url.origin !== location.origin &&
+         url.pathname.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)$/);
 }
 
 // Message handler for cache clearing

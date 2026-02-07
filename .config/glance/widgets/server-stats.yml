@@ -1,0 +1,10 @@
+- type: server-stats
+  cache: 2m
+  servers:
+    - type: local
+      name: rvn-srv
+      hide-mountpoints-by-default: true
+      mountpoints:
+        "/":
+          name: Root
+          hide: false

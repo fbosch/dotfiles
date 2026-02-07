@@ -1,0 +1,37 @@
+- type: releases
+  show-source-icon: true
+  cache: 6h
+  limit: 20
+  collapse-after: 10
+  token: ${GITHUB_TOKEN}
+  repositories:
+    # Dashboard & Monitoring
+    - glanceapp/glance
+    - louislam/uptime-kuma
+    - amir20/dozzle
+    - moghtech/komodo
+    
+    # Self-hosted Apps
+    - linkwarden/linkwarden
+    - vicinaehq/vicinae
+    - lukegus/termix
+    - redlib-org/redlib
+    
+    # Desktop Environment (Hyprland)
+    - hyprwm/Hyprland
+    - hyprwm/hyprlock
+    - hyprwm/hypridle
+    - hyprwm/hyprpaper
+    - hyprwm/hyprsunset
+    
+    # Desktop Apps & Tools
+    - aylur/ags
+    
+    # Pi-hole DNS
+    - pi-hole/pi-hole
+    
+    # Containers & Infrastructure
+    - containers/podman
+    - dockerhub:postgres:16-alpine
+    - dockerhub:mongo:latest
+    - dockerhub:getmeili/meilisearch

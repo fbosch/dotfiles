@@ -6,6 +6,12 @@
     Authorization: Bearer ${LINKWARDEN_TOKEN}
     Accept: application/json
     Cache-Control: no-cache
+  options:
+    # Icon overrides - use full URL or domain as key, icon path as value
+    # Full URL is checked first, then domain fallback
+    "https://account.proton.me/mail": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/proton-mail.svg"
+    "https://account.proton.me/calendar": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/proton-calendar.svg"
+    "https://github.com/": "https://cdn.jsdelivr.net/gh/selfhst/icons/svg/github-light.svg"
   template: |
     {{ if .Response.StatusCode }}
       {{ if eq .Response.StatusCode 200 }}
@@ -35,18 +41,32 @@
               {{ if $itemSlot }}
                 {{ $hasItems = true }}
                 {{ $url := .String "url" }}
+                {{ $domain := replaceMatches "^https?://([^/]+).*$" "$1" $url }}
+                
+                <!-- Check for icon override - try full URL first, then domain -->
+                {{ $customIcon := $.Options.StringOr $url "" }}
+                {{ if not $customIcon }}
+                  {{ $customIcon = $.Options.StringOr $domain "" }}
+                {{ end }}
+                
                 <a href="{{ $url }}" 
                    data-slot="{{ $itemSlot }}"
                    style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 8px; background: rgba(255,255,255,0.05); text-decoration: none; transition: all 0.2s; order: {{ if eq $itemSlot "Slot1" }}1{{ else if eq $itemSlot "Slot2" }}2{{ else if eq $itemSlot "Slot3" }}3{{ else if eq $itemSlot "Slot4" }}4{{ else if eq $itemSlot "Slot5" }}5{{ else if eq $itemSlot "Slot6" }}6{{ else if eq $itemSlot "Slot7" }}7{{ else if eq $itemSlot "Slot8" }}8{{ else if eq $itemSlot "Slot9" }}9{{ else }}10{{ end }};"
                    title="{{ .String "name" }}"
                    onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.transform='scale(1.05)'"
                    onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.transform='scale(1)'">
-                  {{ $domain := replaceMatches "^https?://([^/]+).*$" "$1" $url }}
-                  <img src="https://twenty-icons.com/{{ $domain }}" 
-                       alt="" 
-                       width="32" 
-                       height="32"{{ if eq $itemSlot "Slot3" }}
-                       style="filter: invert(1);"{{ end }} />
+                   {{ if $customIcon }}
+                    <img src="{{ $customIcon }}" 
+                         alt="" 
+                         width="32" 
+                         height="32"
+                          />
+                  {{ else }}
+                    <img src="https://twenty-icons.com/{{ $domain }}" 
+                         alt="" 
+                         width="32" 
+                         height="32" />
+                  {{ end }}
                 </a>
               {{ end }}
           {{ end }}

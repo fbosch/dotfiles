@@ -4,8 +4,29 @@ body {
   background-color: rgba(23, 23, 23, 0.8);
 }
 
-/* Use system default font */
-* {
+/* Disable page load fade-in animation */
+body,
+main,
+.page {
+  animation: none !important;
+  opacity: 1 !important;
+}
+
+/* Disable specific page content entrance animation */
+.page.content-ready > .page-content {
+  animation: none !important;
+}
+
+.search-input {
+  font-size: 2rem !important;
+}
+
+.content-bounds-slim {
+  max-width: 900px;
+}
+
+/* Use system default font (but preserve icon fonts) */
+*:not([class*="icon"]) {
   font-family:
     system-ui,
     -apple-system,
@@ -16,6 +37,10 @@ body {
     Ubuntu,
     Cantarell,
     sans-serif !important;
+}
+
+[class*="icon"] {
+  font-family: "JetBrains Mono";
 }
 
 /* Maintain monospace for code */

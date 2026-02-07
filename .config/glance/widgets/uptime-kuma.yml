@@ -1,12 +1,11 @@
 - type: custom-api
   title: STATUS
-  hide-title: true
   title-url: https://uptime.corvus-corax.synology.me
   url: https://uptime.corvus-corax.synology.me/api/status-page/services
   subrequests:
     heartbeats:
       url: https://uptime.corvus-corax.synology.me/api/status-page/heartbeat/services
-  cache: 1m
+  cache: 3m
   template: |
     {{ $hb := .Subrequest "heartbeats" }}
 
