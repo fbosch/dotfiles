@@ -12,7 +12,6 @@
           location: Copenhagen, Denmark
           units: metric
           title-url: https://www.yr.no/en/forecast/daily-table/2-2618425/Denmark/Capital%20Region/Copenhagen/Copenhagen
-        - $include: ../widgets/mullvad-vpn.yml
     - size: full
       widgets:
         - type: search

@@ -2,16 +2,26 @@
   cache: 1m
   title: Services
   title-url: /status
+  hide-header: true
   sites:
     - title: Vaultwarden
       url: https://vault.corvus-corax.synology.me
       icon: sh:vaultwarden-light
+    - title: Linkwarden
+      url: https://linkwarden.corvus-corax.synology.me
+      icon: sh:linkwarden-light
     - title: Komodo
       url: https://komodo.corvus-corax.synology.me
       icon: sh:komodo-light
     - title: Plex
       url: https://plex.corvus-corax.synology.me/web/index.html#!/
       icon: sh:plex-light
+    - title: Termix
+      url: https://termix.corvus-corax.synology.me/
+      icon: sh:termix-light
+    - title: Home Assistant
+      url: https://ha.corvus-corax.synology.me/
+      icon: sh:home-assistant-light
     - title: Portainer
       url: https://portainer.corvus-corax.synology.me/
       icon: si:portainer

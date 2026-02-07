@@ -1,5 +1,9 @@
 /* Zenwritten Dark - Custom Configuration */
 
+body {
+  background-color: rgba(23, 23, 23, 0.8);
+}
+
 /* Use system default font */
 * {
   font-family:
