@@ -240,7 +240,13 @@ function M.statusline_component()
 		if secondary then
 			local percent = secondary_remaining or remaining_percent(secondary.usedPercent)
 			local filled_bar, empty_bar = generate_bar(percent, 9)
-			local color = color_for_percent(percent)
+			local color
+			-- If showing only the weekly bar and it's 0%, make it dim instead of red
+			if not show_primary and percent == 0 then
+				color = "%#Comment#"
+			else
+				color = color_for_percent(percent)
+			end
 			table.insert(parts, string.format("%s%s%%*%s%s%%* %s%d%%%%%%*", color, filled_bar, "%#Comment#", empty_bar, color, percent))
 		end
 
