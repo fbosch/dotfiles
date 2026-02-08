@@ -3,19 +3,13 @@
     - size: full
       widgets:
         - type: markets
-          title: My Portfolio
+          title: Stocks
           sort-by: absolute-change
           chart-link-template: https://www.tradingview.com/chart/?symbol={SYMBOL}
           symbol-link-template: https://finance.yahoo.com/quote/{SYMBOL}
           markets:
-            - symbol: DKIGI.CO
-              name: Danske Invest Global Indeks KL
-            - symbol: SPIDJB.CO
-              name: Sparindex INDEX DJ BinClWld KL
             - symbol: AAPL
               name: Apple
-            - symbol: FOBANK.CO
-              name: Føroya Banki
             - symbol: ABBV
               name: AbbVie
             - symbol: MSFT
@@ -26,21 +20,38 @@
               name: Digital Realty Trust
             - symbol: UL
               name: Unilever ADR
-            - symbol: SPIEUVKL.CO
-              name: Sparinvest INDEX Europa Value KL
-            - symbol: SPIEUGKL.CO
-              name: Sparinvest INDEX Europa Growth KL
             - symbol: TTE
               name: TotalEnergies ADR
             - symbol: GIS
               name: General Mills
             - symbol: BMY
               name: Bristol-Myers Squibb
-            - symbol: SPIUSVKL.CO
-              name: Sparinvest INDEX USA Value KL
             - symbol: PG
               name: Procter & Gamble
             - symbol: UPM.HE
               name: UPM-Kymmene
+            - symbol: FOBANK.CO
+              name: Føroya Banki
             - symbol: RIAS-B.CO
               name: RIAS A/S
+
+    - size: full
+      widgets:
+        - type: markets
+          title: Funds
+          sort-by: absolute-change
+          chart-link-template: https://www.tradingview.com/chart/?symbol={SYMBOL}
+          symbol-link-template: https://finance.yahoo.com/quote/{SYMBOL}
+          markets:
+            - symbol: IUSQ.DE
+              name: iShares MSCI ACWI UCITS ETF USD Acc
+            - symbol: DKIGI.CO
+              name: Danske Invest Global Indeks KL
+            - symbol: SPIDJB.CO
+              name: Sparindex INDEX DJ BinClWld KL
+            - symbol: SPIEUVKL.CO
+              name: Sparinvest INDEX Europa Value KL
+            - symbol: SPIEUGKL.CO
+              name: Sparinvest INDEX Europa Growth KL
+            - symbol: SPIUSVKL.CO
+              name: Sparinvest INDEX USA Value KL
