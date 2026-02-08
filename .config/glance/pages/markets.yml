@@ -10,30 +10,43 @@
           markets:
             - symbol: AAPL
               name: Apple
+              symbol-link: https://www.nordnet.dk/aktier/kurser/apple-aapl-xnas?accIds=1
             - symbol: ABBV
               name: AbbVie
+              symbol-link: https://www.nordnet.dk/aktier/kurser/abb-vie-abbv-xnas?accIds=1
             - symbol: MSFT
               name: Microsoft
+              symbol-link: https://www.nordnet.dk/aktier/kurser/microsoft-msft-xnas?accIds=1
             - symbol: JPM
               name: JPMorgan Chase
+              symbol-link: https://www.nordnet.dk/aktier/kurser/jp-morgan-chase-jpm-xnas?accIds=1
             - symbol: DLR
               name: Digital Realty Trust
+              symbol-link: https://www.nordnet.dk/aktier/kurser/digital-realty-trust-dlr-xnas?accIds=1
             - symbol: UL
               name: Unilever ADR
+              symbol-link: https://www.nordnet.dk/aktier/kurser/unilever-adr-ul-xnas?accIds=1
             - symbol: TTE
               name: TotalEnergies ADR
+              symbol-link: https://www.nordnet.dk/aktier/kurser/total-energies-se-tte-xpar?accIds=1
             - symbol: GIS
               name: General Mills
+              symbol-link: https://www.nordnet.dk/aktier/kurser/general-mills-gis-xnas?accIds=1
             - symbol: BMY
               name: Bristol-Myers Squibb
+              symbol-link: https://www.nordnet.dk/aktier/kurser/bristol-myers-squibb-bmy-xnas?accIds=1
             - symbol: PG
               name: Procter & Gamble
+              symbol-link: https://www.nordnet.dk/aktier/kurser/procter-gamble-pg-xnas?accIds=1
             - symbol: UPM.HE
               name: UPM-Kymmene
+              symbol-link: https://www.nordnet.dk/aktier/kurser/upm-kymmene-upm-xhel?accIds=1
             - symbol: FOBANK.CO
               name: Føroya Banki
+              symbol-link: https://www.nordnet.dk/aktier/kurser/foroya-banki-fobank-xcse?accIds=1
             - symbol: RIAS-B.CO
               name: RIAS A/S
+              symbol-link: https://www.nordnet.dk/aktier/kurser/rias-b-xcse?accIds=1
 
     - size: full
       widgets:
@@ -45,13 +58,19 @@
           markets:
             - symbol: IUSQ.DE
               name: iShares MSCI ACWI UCITS ETF USD Acc
+              symbol-link: https://www.nordnet.dk/etf/liste/i-shares-msci-acwi-ucits-iusq-xeta?accIds=3
             - symbol: DKIGI.CO
               name: Danske Invest Global Indeks KL
+              symbol-link: https://www.nordnet.dk/investeringsforeninger/liste/danske-inv-global-indeks-dkigi-xcse?accIds=1
             - symbol: SPIDJB.CO
               name: Sparindex INDEX DJ BinClWld KL
+              symbol-link: https://www.nordnet.dk/investeringsforeninger/liste/sparindex-index-dj-bin-cl-wld-spidjb-xcse?accIds=1
             - symbol: SPIEUVKL.CO
               name: Sparinvest INDEX Europa Value KL
+              symbol-link: https://www.nordnet.dk/investeringsforeninger/liste/sparindex-index-europa-value-spieuvkl-xcse?accIds=1
             - symbol: SPIEUGKL.CO
               name: Sparinvest INDEX Europa Growth KL
+              symbol-link: https://www.nordnet.dk/investeringsforeninger/liste/sparindex-index-europa-growth-spieugkl-xcse?accIds=1
             - symbol: SPIUSVKL.CO
               name: Sparinvest INDEX USA Value KL
+              symbol-link: https://www.nordnet.dk/investeringsforeninger/liste/sparindex-index-usa-value-spiusvkl-xcse?accIds=1
