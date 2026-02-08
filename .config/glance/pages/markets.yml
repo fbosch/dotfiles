@@ -3,6 +3,24 @@
     - size: full
       widgets:
         - type: markets
+          title: Market Indices
+          sort-by: absolute-change
+          chart-link-template: https://www.tradingview.com/chart/?symbol={SYMBOL}
+          symbol-link-template: https://finance.yahoo.com/quote/{SYMBOL}
+          markets:
+            - symbol: ^GSPC
+              name: S&P 500
+            - symbol: ^DJI
+              name: Dow Jones
+            - symbol: ^IXIC
+              name: NASDAQ
+            - symbol: ^OMXC25
+              name: OMX Copenhagen 25
+            - symbol: ^FTSE
+              name: FTSE 100
+            - symbol: ^GDAXI
+              name: DAX
+        - type: markets
           title: Stocks
           sort-by: absolute-change
           chart-link-template: https://www.tradingview.com/chart/?symbol={SYMBOL}
@@ -47,9 +65,6 @@
             - symbol: RIAS-B.CO
               name: RIAS A/S
               symbol-link: https://www.nordnet.dk/aktier/kurser/rias-b-xcse?accIds=1
-
-    - size: full
-      widgets:
         - type: markets
           title: Funds
           sort-by: absolute-change
@@ -79,3 +94,53 @@
               name: Sparinvest INDEX USA Value KL
               symbol-link: https://www.nordnet.dk/investeringsforeninger/liste/sparindex-index-usa-value-spiusvkl-xcse?accIds=1
               chart-link: https://www.tradingview.com/chart/?symbol=SPIUSVKL
+    - size: full
+      widgets:
+        - type: videos
+          title: Finance & Economics
+          style: horizontal-cards
+          limit: 25
+          collapse-after-rows: 2
+          channels:
+            - UCbta0n8i6Rljh0obO7HzG9A # Joseph Carlson Show
+            - UCNVr1q4r6hr_H98Th0t50rA # Tsg1987
+            - UC1LpsuAUaKoMzzJSEt5WImw # Asianometry
+            - UCFCEuCsyWP0YkP3CZ3Mr01Q # The Plain Bagel
+            - UCASM0cgfkJxQ1ICmRilfHLw # Patrick Boyle
+            - UCCKpicnIwBP3VPxBAZWDeNA # Money & Macro
+            - UCoUxsWakJucWg46KW5RsvPw # Financial Times
+            - UCZ4AMrDcNrfy3X6nsU8-rPg # Economics Explained
+        - type: bookmarks
+          groups:
+            - title: Portfolio & Trading
+              links:
+                - title: Nordnet
+                  url: https://www.nordnet.dk
+                  icon: https://twenty-icons.com/nordnet.dk
+                - title: SimplyWall.St
+                  url: https://simplywall.st
+                  icon: https://twenty-icons.com/simplywall.st
+                - title: Yahoo Finance
+                  url: https://finance.yahoo.com
+                - title: TradingView
+                  url: https://www.tradingview.com
+            - title: Research & Analysis
+              links:
+                - title: Seeking Alpha
+                  url: https://seekingalpha.com
+                - title: Morningstar
+                  url: https://www.morningstar.com
+                - title: Financial Times
+                  url: https://www.ft.com
+                - title: Bloomberg
+                  url: https://www.bloomberg.com
+        - type: rss
+          title: Market News
+          limit: 12
+          collapse-after: 7
+          cache: 30m
+          feeds:
+            - url: https://news.kagi.com/business.xml
+            - url: https://seekingalpha.com/market_currents.xml
+            - url: https://borsen.dk/rss/finans
+            - url: https://borsen.dk/rss/investor

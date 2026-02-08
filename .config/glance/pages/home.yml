@@ -46,20 +46,14 @@
               collapse-after: 6
               feeds:
                 - url: https://news.kagi.com/tech.xml
-            - type: rss
-              title: Cybersecurity
-              style: detailed-list
-              limit: 14
-              cache: 12h
-              collapse-after: 6
-              feeds:
+                - url: https://news.kagi.com/linux_oss.xml
                 - url: https://news.kagi.com/cybersecurity.xml
             - type: rss
               title: Science
               style: detailed-list
               limit: 14
               cache: 12h
-              collapse-after: 6
+              collapse-after: 8
               feeds:
                 - url: https://news.kagi.com/science.xml
             - type: rss
@@ -67,7 +61,7 @@
               style: detailed-list
               limit: 14
               cache: 12h
-              collapse-after: 6
+              collapse-after: 8
               feeds:
                 - url: https://news.kagi.com/gaming.xml
             - type: hacker-news
