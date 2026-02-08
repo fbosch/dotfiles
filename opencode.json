@@ -1,8 +1,5 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": [
-    "opencode-wakatime"
-  ],
   "permission": {
     "external_directory": {
       "~/tmp/**": "allow",

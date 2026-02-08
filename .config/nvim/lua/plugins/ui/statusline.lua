@@ -6,9 +6,13 @@ return {
 	event = "VeryLazy",
 	config = function()
 		local git = require("utils.git")
+		local codexbar = require("utils.codexbar")
 
 		local lualine_x = {
 			require("opencode").statusline,
+			{
+				codexbar.statusline_component,
+			},
 		}
 
 		-- Make git components conditional on current buffer being in a git repo
@@ -41,7 +45,8 @@ return {
 		require("lualine").setup({
 			options = {
 				theme = "zenwritten",
-				-- section_separators = { left = "", right = "" },
+				section_separators = { left = "", right = "" },
+				component_separators = { left = "", right = "" },
 				globalstatus = true,
 				always_divide_middle = false,
 			},
