@@ -71,7 +71,6 @@ checkhealth.log
 *~
 *.bak
 *.backup
-*.tmp
 
 # Ignore log files
 *.log

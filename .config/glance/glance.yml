@@ -1,46 +1,17 @@
-# Zenwritten Dark Theme - True grayscale aesthetic
-theme:
-  background-color: 0 0 10 # #191919 - dark gray background
-  primary-color: 0 0 73 # #BBBBBB - light gray for links/highlights
-  positive-color: 141 22 56 # #819B69 - muted green from zenwritten palette
-  negative-color: 354 50 65 # #DE6E7C - muted red from zenwritten palette
-  contrast-multiplier: 1.2 # Increased contrast for readability
-  text-saturation-multiplier: 0.8 # Reduce saturation for more neutral text
-  custom-css-file: /assets/css/custom.css # Custom CSS configuration
-
-# Server configuration for container
-server:
-  assets-path: /app/config/assets # Path inside the container
-
-# UI customization
-branding:
-  hide-footer: true # Hide Glance version in bottom footer
-  logo-url: /assets/icons/raven-20x20.png
-  favicon-url: /assets/icons/favicon.ico
-
-# Custom JavaScript for client-side widgets
-document:
-  head: |
-    <!-- DNS prefetch for slot link destinations -->
-    <link rel="dns-prefetch" href="//account.proton.me">
-    <link rel="dns-prefetch" href="//www.nordnet.dk">
-    <link rel="dns-prefetch" href="//github.com">
-    <link rel="dns-prefetch" href="//chatgpt.com">
-    <link rel="dns-prefetch" href="//music.youtube.com">
-    <link rel="dns-prefetch" href="//www.reddit.com">
-    <link rel="dns-prefetch" href="//www.youtube.com">
-    
-    <!-- Preconnect for critical icon/resource providers -->
-    <link rel="preconnect" href="https://twenty-icons.com">
-    <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    
-    <!-- DNS prefetch for Linkwarden API -->
-    <link rel="dns-prefetch" href="//linkwarden.corvus-corax.synology.me">
-    
-    <script src="/assets/js/mullvad-check.js"></script>
-    <script src="/assets/js/sw-register.js"></script>
-
 pages:
-  - $include: pages/startpage.yml
-  - $include: pages/home.yml
-  - $include: pages/status.yml
+  - name: Home
+    columns:
+      - size: small
+        widgets:
+          - type: calendar
+          - type: weather
+            location: London, United Kingdom
+            units: metric
+      - size: full
+        widgets:
+          - type: rss
+            title: Self-hosted
+            limit: 6
+            feeds:
+              - url: https://selfh.st/rss/
+              - url: https://www.reddit.com/r/selfhosted/.rss
