@@ -7,10 +7,15 @@ return {
 		},
 		init = function()
 			-- Set global options before plugin loads
+			local cmd = "opencode --continue --port"
+			if vim.fn.executable("mullvad-exclude") == 1 then
+				cmd = "mullvad-exclude " .. cmd
+			end
+			
 			vim.g.opencode_opts = {
 				auto_reload = true,
 				provider = {
-					cmd = "opencode --continue --port",
+					cmd = cmd,
 					enabled = "snacks",
 					snacks = {
 						win = {
