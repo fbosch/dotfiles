@@ -156,7 +156,7 @@ if ! grimblast save "${target}" "${file}"; then
 fi
 
 if command -v wl-copy >/dev/null 2>&1; then
-    printf '%s' "${file}" | wl-copy || true
+    wl-copy < "${file}" || true
 fi
 
 if command -v notify-send >/dev/null 2>&1; then
