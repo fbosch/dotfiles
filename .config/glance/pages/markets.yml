@@ -1,0 +1,53 @@
+- name: Markets
+  columns:
+    - size: full
+      widgets:
+        - type: markets
+          title: My Portfolio
+          sort-by: absolute-change
+          chart-link-template: https://www.tradingview.com/chart/?symbol={SYMBOL}
+          symbol-link-template: https://finance.yahoo.com/quote/{SYMBOL}
+          markets:
+            - symbol: AAPL
+              name: Apple
+            - symbol: ABBV
+              name: AbbVie
+            - symbol: MSFT
+              name: Microsoft
+            - symbol: JPM
+              name: JPMorgan Chase
+            - symbol: DLR
+              name: Digital Realty Trust
+            - symbol: UL
+              name: Unilever ADR
+            - symbol: GIS
+              name: General Mills
+            - symbol: BMY
+              name: Bristol-Myers Squibb
+            - symbol: PG
+              name: Procter & Gamble
+            - symbol: TTE
+              name: TotalEnergies ADR
+            - symbol: UPM.HE
+              name: UPM-Kymmene
+            - symbol: RIAS-B.CO
+              name: RIAS A/S
+
+    - size: full
+      widgets:
+        - type: bookmarks
+          title: Danish Mutual Funds
+          groups:
+            - links:
+                - title: Danske Invest Global Indeks KL
+                  url: https://www.nordnet.dk/investeringsforeninger/liste/danske-inv-global-indeks-dkigi-xcse
+                - title: Sparindex INDEX DJ BinCIWId KL
+                  url: https://www.nordnet.dk/investeringsforeninger
+                - title: Sparinvest INDEX Europa Value KL
+                  url: https://www.nordnet.dk/investeringsforeninger
+                - title: Sparinvest INDEX USA Growth KL
+                  url: https://www.nordnet.dk/investeringsforeninger
+                - title: Sparinvest INDEX Europa Growth KL
+                  url: https://www.nordnet.dk/investeringsforeninger
+                - title: Sparinvest INDEX USA Value KL
+                  url: https://www.nordnet.dk/investeringsforeninger
