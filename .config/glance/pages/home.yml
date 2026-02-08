@@ -25,42 +25,42 @@
               title: Denmark & Europe
               limit: 14
               collapse-after: 7
-              cache: 30m
+              cache: 12h
               feeds:
                 - url: https://news.kagi.com/denmark.xml
                 - url: https://news.kagi.com/europe.xml
             - type: rss
               title: World News
               limit: 14
-              cache: 30m
+              cache: 12h
               collapse-after: 7
               feeds:
                 - url: https://news.kagi.com/world.xml
             - type: rss
               title: Tech
               limit: 14
-              cache: 1h
+              cache: 12h
               collapse-after: 7
               feeds:
                 - url: https://news.kagi.com/tech.xml
             - type: rss
               title: Cybersecurity
               limit: 14
-              cache: 1h
+              cache: 12h
               collapse-after: 7
               feeds:
                 - url: https://news.kagi.com/cybersecurity.xml
             - type: rss
               title: Science
               limit: 14
-              cache: 1h
+              cache: 12h
               collapse-after: 7
               feeds:
                 - url: https://news.kagi.com/science.xml
             - type: rss
               title: Gaming
               limit: 14
-              cache: 1h
+              cache: 12h
               collapse-after: 7
               feeds:
                 - url: https://news.kagi.com/gaming.xml
