@@ -54,23 +54,28 @@
           title: Funds
           sort-by: absolute-change
           chart-link-template: https://www.tradingview.com/chart/?symbol={SYMBOL}
-          symbol-link-template: https://finance.yahoo.com/quote/{SYMBOL}
           markets:
             - symbol: IUSQ.DE
               name: iShares MSCI ACWI UCITS ETF USD Acc
               symbol-link: https://www.nordnet.dk/etf/liste/i-shares-msci-acwi-ucits-iusq-xeta?accIds=3
+              chart-link: https://www.tradingview.com/chart/?symbol=IUSQ
             - symbol: DKIGI.CO
               name: Danske Invest Global Indeks KL
               symbol-link: https://www.nordnet.dk/investeringsforeninger/liste/danske-inv-global-indeks-dkigi-xcse?accIds=1
+              chart-link: https://www.tradingview.com/chart/?symbol=DKIGI
             - symbol: SPIDJB.CO
               name: Sparindex INDEX DJ BinClWld KL
               symbol-link: https://www.nordnet.dk/investeringsforeninger/liste/sparindex-index-dj-bin-cl-wld-spidjb-xcse?accIds=1
+              chart-link: https://www.tradingview.com/chart/?symbol=SPIDJB
             - symbol: SPIEUVKL.CO
               name: Sparinvest INDEX Europa Value KL
               symbol-link: https://www.nordnet.dk/investeringsforeninger/liste/sparindex-index-europa-value-spieuvkl-xcse?accIds=1
+              chart-link: https://www.tradingview.com/chart/?symbol=SPIEUVKL
             - symbol: SPIEUGKL.CO
               name: Sparinvest INDEX Europa Growth KL
               symbol-link: https://www.nordnet.dk/investeringsforeninger/liste/sparindex-index-europa-growth-spieugkl-xcse?accIds=1
+              chart-link: https://www.tradingview.com/chart/?symbol=SPIEUGKL
             - symbol: SPIUSVKL.CO
               name: Sparinvest INDEX USA Value KL
               symbol-link: https://www.nordnet.dk/investeringsforeninger/liste/sparindex-index-usa-value-spiusvkl-xcse?accIds=1
+              chart-link: https://www.tradingview.com/chart/?symbol=SPIUSVKL
