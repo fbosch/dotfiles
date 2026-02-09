@@ -1,4 +1,4 @@
-- name: Status
+- name: Homelab
   columns:
     - size: small
       widgets:

@@ -4,25 +4,17 @@ body {
   background-color: color-mix(in hsl, var(--color-background), transparent 20%);
 }
 
-/* Disable page load fade-in animation */
-body,
-main,
-.page {
-  animation: none !important;
-  opacity: 1 !important;
-}
-
-/* Disable specific page content entrance animation */
-.page.content-ready > .page-content {
-  animation: none !important;
-}
-
 .search-input {
   font-size: 1.75rem !important;
 }
 
 .content-bounds-slim {
   max-width: 900px;
+}
+
+.sticky {
+  position: sticky;
+  top: 1rem;
 }
 
 /* Use system default font (but preserve icon fonts) */

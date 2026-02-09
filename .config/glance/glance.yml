@@ -37,11 +37,11 @@ document:
     <!-- DNS prefetch for Linkwarden API -->
     <link rel="dns-prefetch" href="//linkwarden.corvus-corax.synology.me">
     
-    <script src="/assets/js/mullvad-check.js"></script>
     <script src="/assets/js/sw-register.js"></script>
 
 pages:
   - $include: pages/startpage.yml
   - $include: pages/home.yml
+  - $include: pages/news.yml
   - $include: pages/markets.yml
-  - $include: pages/status.yml
+  - $include: pages/homelab.yml
