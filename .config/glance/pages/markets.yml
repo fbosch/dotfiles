@@ -144,5 +144,8 @@
           feeds:
             - url: https://news.kagi.com/business.xml
             - url: https://seekingalpha.com/market_currents.xml
+              limit: 4
             - url: https://borsen.dk/rss/finans
+              limit: 2
             - url: https://borsen.dk/rss/investor
+              limit: 2

@@ -19,13 +19,21 @@
           search-engine: kagi
           hide-header: true
           autofocus: false
-        - type: rss
-          title: News
-          title-url: /news
-          limit: 8
-          collapse-after: 4
-          cache: 2h
-          feeds:
-            - url: https://news.kagi.com/denmark.xml
-            - url: https://news.kagi.com/tech.xml
-            - url: https://news.kagi.com/world.xml
+        - type: group
+          widgets:
+            - type: reddit
+              title: Reddit
+              subreddit: denmark+dkfinance+ExperiencedDevs+copenhagen
+              show-thumbnails: true
+              limit: 10
+              collapse-after: 6
+            - type: rss
+              title: News
+              title-url: /news
+              limit: 8
+              collapse-after: 4
+              cache: 2h
+              feeds:
+                - url: https://news.kagi.com/denmark.xml
+                - url: https://news.kagi.com/tech.xml
+                - url: https://news.kagi.com/world.xml

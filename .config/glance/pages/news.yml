@@ -37,6 +37,8 @@
               collapse-after: 6
               feeds:
                 - url: https://news.kagi.com/world.xml
+                - url: https://www.reddit.com/r/anime_titties/.rss
+                  limit: 3
             - type: rss
               title: Finance
               title-url: /markets
@@ -47,8 +49,11 @@
               feeds:
                 - url: https://news.kagi.com/business.xml
                 - url: https://seekingalpha.com/market_currents.xml
+                  limit: 3
                 - url: https://borsen.dk/rss/finans
+                  limit: 4
                 - url: https://borsen.dk/rss/investor
+                  limit: 4
             - type: rss
               title: Tech
               style: detailed-list
