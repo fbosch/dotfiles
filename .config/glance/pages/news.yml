@@ -28,6 +28,10 @@
               cache: 2h
               feeds:
                 - url: https://news.kagi.com/denmark.xml
+                - url: https://www.dr.dk/nyheder/service/feeds/regionale/kbh
+                  limit: 2
+                - url: https://www.dr.dk/nyheder/service/feeds/indland
+                  limit: 2
                 - url: https://news.kagi.com/europe.xml
             - type: rss
               title: World News
@@ -56,6 +60,8 @@
                   limit: 4
                 - url: https://borsen.dk/rss/investor
                   title: "Børsen: Investor"
+                  limit: 4
+                - url: https://www.dr.dk/nyheder/service/feeds/penge
                   limit: 4
             - type: rss
               title: Tech

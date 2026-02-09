@@ -23,10 +23,12 @@
           widgets:
             - type: reddit
               title: Reddit
+              title-url: https://redlib.corvus-corax.synology.me/r/denmark+dkfinance+copenhagen
               subreddit: denmark+dkfinance+copenhagen
               show-thumbnails: true
               limit: 10
               collapse-after: 6
+              comments-url-template: https://redlib.corvus-corax.synology.me/{POST-PATH}
             - type: rss
               title: News
               title-url: /news

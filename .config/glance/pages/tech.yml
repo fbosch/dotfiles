@@ -63,31 +63,41 @@
               collapse-after: 10
             - type: reddit
               title: Developer
+              title-url: https://redlib.corvus-corax.synology.me/r/webdev+ExperiencedDevs+web_design
               subreddit: webdev+ExperiencedDevs+web_design
               show-thumbnails: true
               limit: 15
               collapse-after: 8
+              comments-url-template: https://redlib.corvus-corax.synology.me/{POST-PATH}
             - type: reddit
               title: Hardware
+              title-url: https://redlib.corvus-corax.synology.me/r/MechanicalKeyboards+battlestations
               subreddit: MechanicalKeyboards+battlestations
               show-thumbnails: true
               limit: 15
               collapse-after: 8
+              comments-url-template: https://redlib.corvus-corax.synology.me/{POST-PATH}
             - type: reddit
               title: Software
+              title-url: https://redlib.corvus-corax.synology.me/r/browsers+ProtonMail+mullvadvpn+zen_browser
               subreddit: browsers+ProtonMail+mullvadvpn+zen_browser
               show-thumbnails: true
               limit: 15
               collapse-after: 8
+              comments-url-template: https://redlib.corvus-corax.synology.me/{POST-PATH}
             - type: reddit
               title: Homelab
+              title-url: https://redlib.corvus-corax.synology.me/r/homelab+selfhosted+Synology+pihole+HomeNetworking
               subreddit: homelab+selfhosted+Synology+pihole+HomeNetworking
               show-thumbnails: true
               limit: 15
               collapse-after: 8
+              comments-url-template: https://redlib.corvus-corax.synology.me/{POST-PATH}
             - type: reddit
               title: Linux
+              title-url: https://redlib.corvus-corax.synology.me/r/linux+linuxmasterrace+unixporn+linux4noobs
               subreddit: linux+linuxmasterrace+unixporn+linux4noobs
               show-thumbnails: true
               limit: 15
               collapse-after: 8
+              comments-url-template: https://redlib.corvus-corax.synology.me/{POST-PATH}
