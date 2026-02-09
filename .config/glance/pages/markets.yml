@@ -100,6 +100,7 @@
           title: Finance & Economics
           style: horizontal-cards
           limit: 25
+          cache: 3h
           collapse-after-rows: 2
           channels:
             - UCbta0n8i6Rljh0obO7HzG9A # Joseph Carlson Show
@@ -136,8 +137,9 @@
                   url: https://www.bloomberg.com
         - type: rss
           title: Market News
+          title-url: /news
           limit: 12
-          collapse-after: 7
+          collapse-after: 6
           cache: 30m
           feeds:
             - url: https://news.kagi.com/business.xml

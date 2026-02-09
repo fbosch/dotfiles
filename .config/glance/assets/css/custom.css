@@ -25,6 +25,11 @@ main,
   max-width: 900px;
 }
 
+.sticky {
+  position: sticky;
+  top: 1rem;
+}
+
 /* Use system default font (but preserve icon fonts) */
 *:not([class*="icon"]) {
   font-family:
