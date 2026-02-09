@@ -67,10 +67,14 @@ samp {
   contain: layout style;
 }
 
-/* Enable hardware acceleration for widget transitions */
-.widget {
-  transform: translateZ(0);
-  backface-visibility: hidden;
+.mix-blend-lighten {
+  mix-blend-mode: lighten;
+}
+
+.list-horizontal-text li {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 /* Optimize font rendering */

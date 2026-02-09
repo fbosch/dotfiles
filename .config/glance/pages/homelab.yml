@@ -7,11 +7,12 @@
         - $include: ../widgets/pihole-stats.yml
     - size: full
       widgets:
-        - type: split-column
+        - type: group
           widgets:
-            - type: group
-              widgets:
-                - $include: ../widgets/uptime-kuma.yml
-                - $include: ../widgets/komodo-containers.yml
-                - $include: ../widgets/tailscale-devices.yml
-            - $include: ../widgets/github-releases.yml
+            - $include: ../widgets/uptime-kuma.yml
+            - $include: ../widgets/komodo-containers.yml
+            - $include: ../widgets/tailscale-devices.yml
+            - $include: ../widgets/dozzle-stats.yml
+    - size: small
+      widgets:
+        - $include: ../widgets/github-releases.yml
