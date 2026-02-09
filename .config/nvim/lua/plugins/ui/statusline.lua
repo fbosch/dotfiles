@@ -11,7 +11,13 @@ return {
 		local lualine_x = {
 			require("opencode").statusline,
 			{
-				codexbar.statusline_component,
+				function()
+					local ok, result = pcall(codexbar.statusline_component)
+					if not ok then
+						return nil
+					end
+					return result
+				end,
 			},
 		}
 
