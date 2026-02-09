@@ -1,24 +1,23 @@
 // Glance Dashboard Service Worker
-// Version: 1.0.0
+// Version: 1.1.2
 // Implements intelligent caching strategies for optimal offline performance
 
-const CACHE_VERSION = 'glance-v1.0.0';
+const CACHE_VERSION = 'glance-v1.1.2';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
-const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
+const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 
 // Cache duration in milliseconds
 const CACHE_DURATION = {
   static: 24 * 60 * 60 * 1000,  // 24 hours for static assets
-  page: 12 * 60 * 60 * 1000,     // 12 hours for pages
-  api: 5 * 60 * 1000             // 5 minutes for API calls
+  page: 30 * 60 * 1000,          // 30 minutes for pages (stale-while-revalidate)
+  api: 15 * 60 * 1000            // 15 minutes for API calls
 };
 
 // Assets to precache on install
 const PRECACHE_ASSETS = [
   '/assets/css/custom.css',
-  '/assets/css/komodo-containers.css',
-  '/assets/js/mullvad-check.js'
+  '/assets/css/komodo-containers.css'
 ];
 
 // Install event - precache static assets
@@ -70,8 +69,9 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  // Only handle requests to our domain for other types
+  // Pass through external requests (e.g., API calls to other services)
   if (url.origin !== location.origin) {
+    event.respondWith(fetch(request));
     return;
   }
   
@@ -82,9 +82,12 @@ self.addEventListener('fetch', event => {
   } else if (isAPIRequest(url)) {
     // Stale-While-Revalidate for API calls
     event.respondWith(staleWhileRevalidate(request, API_CACHE, CACHE_DURATION.api));
+  } else if (isHTMLPage(url, request)) {
+    // Stale-While-Revalidate for HTML pages (instant loads!)
+    event.respondWith(staleWhileRevalidate(request, PAGE_CACHE, CACHE_DURATION.page));
   } else {
-    // Network First for pages
-    event.respondWith(networkFirst(request, DYNAMIC_CACHE, CACHE_DURATION.page));
+    // Network only for unknown requests
+    event.respondWith(fetch(request));
   }
 });
 
@@ -94,13 +97,20 @@ async function cacheFirst(request, cacheName, maxAge) {
   const cached = await cache.match(request);
   
   if (cached) {
-    const cacheTime = new Date(cached.headers.get('sw-cache-time'));
-    const age = Date.now() - cacheTime.getTime();
+    const cacheTimeHeader = cached.headers.get('sw-cache-time');
     
-    // Return cached version if still fresh
-    if (age < maxAge) {
-      console.log('[SW] Cache hit (fresh):', request.url);
-      return cached;
+    // If cache has timestamp, check if still fresh
+    if (cacheTimeHeader) {
+      const cacheTime = new Date(cacheTimeHeader);
+      const age = Date.now() - cacheTime.getTime();
+      
+      if (age < maxAge) {
+        console.log('[SW] Cache hit (fresh):', request.url);
+        return cached;
+      }
+    } else {
+      // No timestamp, treat as stale and re-fetch
+      console.log('[SW] Cache has no timestamp, re-fetching:', request.url);
     }
   }
   
@@ -130,45 +140,7 @@ async function cacheFirst(request, cacheName, maxAge) {
   }
 }
 
-// Network First Strategy - ideal for pages
-async function networkFirst(request, cacheName, maxAge) {
-  const cache = await caches.open(cacheName);
-  
-  try {
-    const response = await fetch(request);
-    
-    if (response.ok) {
-      const responseToCache = response.clone();
-      const headers = new Headers(responseToCache.headers);
-      headers.append('sw-cache-time', new Date().toISOString());
-      
-      const cachedResponse = new Response(responseToCache.body, {
-        status: responseToCache.status,
-        statusText: responseToCache.statusText,
-        headers: headers
-      });
-      
-      cache.put(request, cachedResponse);
-      console.log('[SW] Fetched and cached:', request.url);
-    }
-    
-    return response;
-  } catch (error) {
-    console.log('[SW] Network failed, trying cache:', request.url);
-    const cached = await cache.match(request);
-    
-    if (cached) {
-      return cached;
-    }
-    
-    return new Response('Offline - page not cached', { 
-      status: 503,
-      headers: { 'Content-Type': 'text/plain' }
-    });
-  }
-}
-
-// Stale-While-Revalidate Strategy - ideal for API calls
+// Stale-While-Revalidate Strategy - ideal for pages and API calls
 async function staleWhileRevalidate(request, cacheName, maxAge) {
   const cache = await caches.open(cacheName);
   const cached = await cache.match(request);
@@ -205,7 +177,7 @@ async function staleWhileRevalidate(request, cacheName, maxAge) {
   
   // No cache available, wait for network
   console.log('[SW] No cache, waiting for network:', request.url);
-  return fetchPromise || new Response('Offline - API not cached', { status: 503 });
+  return fetchPromise || new Response('Offline - not cached', { status: 503 });
 }
 
 // Helper: Check if request is for static asset
@@ -219,6 +191,14 @@ function isAPIRequest(url) {
   // API calls typically go through proxied endpoints or contain 'api' in path
   return url.pathname.includes('/api/') ||
          url.pathname.startsWith('/proxy/');
+}
+
+// Helper: Check if request is for an HTML page
+function isHTMLPage(url, request) {
+  // Match Glance dashboard pages (root and page routes)
+  return url.pathname === '/' || 
+         url.pathname.startsWith('/pages/') ||
+         (request.method === 'GET' && request.headers.get('Accept')?.includes('text/html'));
 }
 
 // Helper: Check if request is for a favicon

@@ -1,11 +1,12 @@
 // Service Worker Registration for Glance Dashboard
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    // Try to register with full scope first (requires Service-Worker-Allowed: / header)
     navigator.serviceWorker.register('/assets/js/service-worker.js', {
       scope: '/'
     })
       .then(registration => {
-        console.log('[Glance] Service Worker registered with scope:', registration.scope);
+        console.log('[Glance] Service Worker registered with full scope:', registration.scope);
         
         // Check for updates every hour
         setInterval(() => {
@@ -13,7 +14,21 @@ if ('serviceWorker' in navigator) {
         }, 60 * 60 * 1000);
       })
       .catch(error => {
-        console.error('[Glance] Service Worker registration failed:', error);
+        console.warn('[Glance] Full scope registration failed, falling back to /assets/ scope:', error.message);
+        
+        // Fallback: register with limited scope (only caches /assets/* requests)
+        navigator.serviceWorker.register('/assets/js/service-worker.js')
+          .then(registration => {
+            console.log('[Glance] Service Worker registered with limited scope:', registration.scope);
+            
+            // Check for updates every hour
+            setInterval(() => {
+              registration.update();
+            }, 60 * 60 * 1000);
+          })
+          .catch(fallbackError => {
+            console.error('[Glance] Service Worker registration completely failed:', fallbackError);
+          });
       });
   });
 
