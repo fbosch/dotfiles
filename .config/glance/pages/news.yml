@@ -77,9 +77,9 @@
                 - url: https://news.kagi.com/gaming.xml
             - type: hacker-news
               limit: 20
-              cache: 15m
+              cache: 1h
               collapse-after: 15
             - type: lobsters
               limit: 20
-              cache: 15m
+              cache: 1h
               collapse-after: 15

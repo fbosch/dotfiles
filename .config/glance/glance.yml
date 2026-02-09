@@ -45,4 +45,4 @@ pages:
   - $include: pages/home.yml
   - $include: pages/news.yml
   - $include: pages/markets.yml
-  - $include: pages/status.yml
+  - $include: pages/homelab.yml
