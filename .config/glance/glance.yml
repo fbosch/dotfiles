@@ -29,15 +29,19 @@ document:
     <link rel="dns-prefetch" href="//music.youtube.com">
     <link rel="dns-prefetch" href="//www.reddit.com">
     <link rel="dns-prefetch" href="//www.youtube.com">
+    <link rel="dns-prefetch" href="//i.ytimg.com">
+    <link rel="dns-prefetch" href="//www.tradingview.com">
+    <link rel="dns-prefetch" href="//finance.yahoo.com">
     
     <!-- Preconnect for critical icon/resource providers -->
     <link rel="preconnect" href="https://twenty-icons.com">
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
     
-    <!-- Preconnect for self-hosted services -->
+    <!-- Preconnect for self-hosted services (iframes, client-side resources) -->
     <link rel="preconnect" href="https://linkwarden.corvus-corax.synology.me">
     <link rel="preconnect" href="https://redlib.corvus-corax.synology.me">
     <link rel="preconnect" href="https://dozzle.corvus-corax.synology.me">
+    <link rel="preconnect" href="https://uptime.corvus-corax.synology.me">
     
     <script src="/assets/js/sw-register.js"></script>
 
