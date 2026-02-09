@@ -49,7 +49,7 @@
               feeds:
                 - url: https://news.kagi.com/business.xml
                 - url: https://seekingalpha.com/market_currents.xml
-                  limit: 3
+                  limit: 2
                 - url: https://borsen.dk/rss/finans
                   limit: 4
                 - url: https://borsen.dk/rss/investor
@@ -80,11 +80,3 @@
               collapse-after: 6
               feeds:
                 - url: https://news.kagi.com/gaming.xml
-            - type: hacker-news
-              limit: 20
-              cache: 1h
-              collapse-after: 15
-            - type: lobsters
-              limit: 20
-              cache: 1h
-              collapse-after: 15

@@ -1,0 +1,100 @@
+- name: Tech
+  columns:
+    - size: full
+      widgets:
+        - type: group
+          widgets:
+            - type: videos
+              title: News & Reviews
+              style: horizontal-cards
+              cache: 3h
+              limit: 30
+              collapse-after-rows: 2
+              channels:
+                - UC0jggPELwQYKy-te2juJk-g # Apple Explained
+                - UCeeFfhMcJa1kjtfZAGskOCA # Techlinked
+                - UC5I2hjZYiW9gZPVkvzM8_Cw # Techmoan
+                - UCGkpFfEMF0eMJlh9xXj2lMw # ColdFusion
+                - UCRYOj4DmyxhBVrdvbsUwmAA # optimumtech
+            - type: videos
+              title: Development
+              style: horizontal-cards
+              cache: 3h
+              limit: 30
+              collapse-after-rows: 2
+              channels:
+                - UCsBjURrPoezykLs9EqgamOA # Fireship
+                - UCFbNIlppjAuEX4znoulh0Cw # Web Dev Simplified
+                - UC6biysICWOJ-C3P4Tyeggzg # LowLevelTV
+                - UCFVteOob_YXJHPaGTqlDV2Q # codehead01
+                - UC9-y-6csu5WGm29I7JiwpnA # Computerphile
+                - UCbRP3c757lWg9M-U7TyEkXA # t3dotgg
+                - UCEEVcDuBRDiwxfXAgQjLGug # dreamsofautonomy
+                - UC-0fWjosItIOD4ThhS6oyfA # DeveloperVoices
+                - UCNzszbnvQeFzObW0ghk0Ckw # DavesGarage
+                - UCTdw38Cw6jcm0atBPA39a0Q # NDC
+                - UCUMwY9iS8oMyWDYIe6_RmoA # NoBoilerplate
+            - type: videos
+              title: Linux
+              style: horizontal-cards
+              cache: 3h
+              limit: 30
+              collapse-after-rows: 2
+              channels:
+                - UCR-DXc1voovS8nhAvccRZhg # Jeff Geerling
+                - UC2eYFnH61tmytImy1mTYvhA # Luke Smith
+                - UCld68syR8Wi-GY_n4CaoJGA # Brodie Robertson
+                - UC7YOGHUfC1Tb6E4pudI9STA # Mental Outlaw
+                - UCs6KfncB4OV6Vug4o_bzijg # Techlore
+                - UCd4XwUn2Lure2NHHjukoCwA # LinuxForEveryone
+                - UC65_CVnMw6hvPET_DRDg3GA # tony-btw
+                - UCwHwDuNd9lCdA7chyyquDXw # BreadOnPenguins
+                - UC_zBdZ0_H_jn41FDRG7q4Tw # vimjoyer
+                - UC3yaWWA9FF9OBog5U9ml68A # SavvyNik
+        - type: group
+          widgets:
+            - type: rss
+              title: Homelab & Self-Hosted
+              style: detailed-list
+              limit: 14
+              collapse-after: 6
+              cache: 2h
+              feeds:
+                - url: https://selfh.st/rss/
+                  title: selfh.st
+            - type: rss
+              title: Linux & Open Source
+              style: detailed-list
+              limit: 14
+              collapse-after: 6
+              cache: 2h
+              feeds:
+                - url: https://news.kagi.com/linux_oss.xml
+                - url: https://www.phoronix.com/rss.php
+                  title: Phoronix
+            - type: hacker-news
+              limit: 20
+              cache: 1h
+              collapse-after: 15
+            - type: lobsters
+              limit: 20
+              cache: 1h
+              collapse-after: 15
+            - type: reddit
+              title: r/selfhosted
+              subreddit: selfhosted
+              show-thumbnails: true
+              limit: 15
+              collapse-after: 8
+            - type: reddit
+              title: r/homelab
+              subreddit: homelab
+              show-thumbnails: true
+              limit: 15
+              collapse-after: 8
+            - type: reddit
+              title: r/linux
+              subreddit: linux+linuxmasterrace+unixporn
+              show-thumbnails: true
+              limit: 15
+              collapse-after: 8
