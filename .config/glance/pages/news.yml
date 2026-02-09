@@ -38,6 +38,7 @@
               feeds:
                 - url: https://news.kagi.com/world.xml
                 - url: https://www.reddit.com/r/anime_titties/.rss
+                  title: World News
                   limit: 3
             - type: rss
               title: Finance
@@ -51,8 +52,10 @@
                 - url: https://seekingalpha.com/market_currents.xml
                   limit: 2
                 - url: https://borsen.dk/rss/finans
+                  title: "Børsen: Finans"
                   limit: 4
                 - url: https://borsen.dk/rss/investor
+                  title: "Børsen: Investor"
                   limit: 4
             - type: rss
               title: Tech

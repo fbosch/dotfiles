@@ -53,48 +53,41 @@
                 - UC3yaWWA9FF9OBog5U9ml68A # SavvyNik
         - type: group
           widgets:
-            - type: rss
-              title: Homelab & Self-Hosted
-              style: detailed-list
-              limit: 14
-              collapse-after: 6
-              cache: 2h
-              feeds:
-                - url: https://selfh.st/rss/
-                  title: selfh.st
-            - type: rss
-              title: Linux & Open Source
-              style: detailed-list
-              limit: 14
-              collapse-after: 6
-              cache: 2h
-              feeds:
-                - url: https://news.kagi.com/linux_oss.xml
-                - url: https://www.phoronix.com/rss.php
-                  title: Phoronix
             - type: hacker-news
               limit: 20
               cache: 1h
-              collapse-after: 15
+              collapse-after: 10
             - type: lobsters
               limit: 20
               cache: 1h
-              collapse-after: 15
+              collapse-after: 10
             - type: reddit
-              title: r/selfhosted
-              subreddit: selfhosted
+              title: Developer
+              subreddit: webdev+ExperiencedDevs+web_design
               show-thumbnails: true
               limit: 15
               collapse-after: 8
             - type: reddit
-              title: r/homelab
-              subreddit: homelab
+              title: Hardware
+              subreddit: MechanicalKeyboards+battlestations
               show-thumbnails: true
               limit: 15
               collapse-after: 8
             - type: reddit
-              title: r/linux
-              subreddit: linux+linuxmasterrace+unixporn
+              title: Software
+              subreddit: browsers+ProtonMail+mullvadvpn+zen_browser
+              show-thumbnails: true
+              limit: 15
+              collapse-after: 8
+            - type: reddit
+              title: Homelab
+              subreddit: homelab+selfhosted+Synology+pihole+HomeNetworking
+              show-thumbnails: true
+              limit: 15
+              collapse-after: 8
+            - type: reddit
+              title: Linux
+              subreddit: linux+linuxmasterrace+unixporn+linux4noobs
               show-thumbnails: true
               limit: 15
               collapse-after: 8
