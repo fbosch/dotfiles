@@ -2,5 +2,5 @@
   title: Logs
   title-url: https://dozzle.corvus-corax.synology.me
   source: https://dozzle.corvus-corax.synology.me/merged/3207490f748f,feac528f4121,c223d2d92007,018941b37deb,5949833b8660,01255454b63a,765f69f0fc8c,4fa5f21724e9,946cd7c568e9,689cce55ab0e,f816daf53dc9,483f5cde8cbb,8f9da51cfcc0,e5e79adea754,f696bb9ded60,eca5b83d0d42,a0bbd0098753
-  height: 800
-  css-class: mix-blend-lighten
+  height: 900
+  css-class: dozzle-widget

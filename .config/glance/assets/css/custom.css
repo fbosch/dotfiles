@@ -67,8 +67,16 @@ samp {
   contain: layout style;
 }
 
-.mix-blend-lighten {
-  mix-blend-mode: lighten;
+.dozzle-widget {
+  background: var(--color-widget-background);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--color-widget-content-border);
+  box-shadow: 0px 3px 0px 0px
+    hsl(var(--bghs), calc(var(--scheme) (var(--scheme) var(--bgl)) - 0.5%));
+
+  iframe {
+    mix-blend-mode: lighten;
+  }
 }
 
 .list-horizontal-text li {
