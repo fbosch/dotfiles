@@ -1,9 +1,11 @@
 // Service Worker Registration for Glance Dashboard
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/assets/js/service-worker.js')
+    navigator.serviceWorker.register('/assets/js/service-worker.js', {
+      scope: '/'
+    })
       .then(registration => {
-        console.log('[Glance] Service Worker registered:', registration.scope);
+        console.log('[Glance] Service Worker registered with scope:', registration.scope);
         
         // Check for updates every hour
         setInterval(() => {
