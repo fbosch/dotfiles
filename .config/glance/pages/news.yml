@@ -1,0 +1,67 @@
+- name: News
+  columns:
+    - size: full
+      widgets:
+        - type: videos
+          title: News & Tech
+          style: horizontal-cards
+          limit: 25
+          collapse-after-rows: 2
+          channels:
+            - UCPPfK7Nq_yQR84rn1wcTXBg # Anders Puck
+            - UCaI7XFGj8cSLD0OA8B9pcnQ # Baltic Defence Review
+            - UC-eegKVWEgBCa4OzjnK_PtA # TLDR EU
+            - UC-uhvujip5deVcEtLxnW8qg # TLDR Global
+        - type: group
+          widgets:
+            - type: rss
+              title: Denmark & Europe
+              style: detailed-list
+              limit: 14
+              collapse-after: 4
+              cache: 2h
+              feeds:
+                - url: https://news.kagi.com/denmark.xml
+                - url: https://news.kagi.com/europe.xml
+            - type: rss
+              title: World News
+              style: detailed-list
+              limit: 14
+              cache: 2h
+              collapse-after: 4
+              feeds:
+                - url: https://news.kagi.com/world.xml
+            - type: rss
+              title: Tech
+              style: detailed-list
+              limit: 14
+              cache: 12h
+              collapse-after: 4
+              feeds:
+                - url: https://news.kagi.com/tech.xml
+                - url: https://news.kagi.com/linux_oss.xml
+                - url: https://news.kagi.com/cybersecurity.xml
+            - type: rss
+              title: Science
+              style: detailed-list
+              limit: 14
+              cache: 12h
+              collapse-after: 4
+              feeds:
+                - url: https://news.kagi.com/science.xml
+            - type: rss
+              title: Gaming
+              style: detailed-list
+              limit: 14
+              cache: 12h
+              collapse-after: 4
+              feeds:
+                - url: https://news.kagi.com/gaming.xml
+            - type: hacker-news
+              limit: 15
+              cache: 15m
+              collapse-after: 9
+            - type: lobsters
+              limit: 15
+              cache: 15m
+              collapse-after: 9
