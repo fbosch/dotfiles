@@ -148,8 +148,6 @@ STAGED DIFF (focus on THIS change):
         gum style --foreground 6 "=== END DEBUG ==="
     end
 
-    rm -f $temp_prompt $temp_output $temp_diff
-
     # Extract valid commit message (first line matching conventional commit format)
     # Remove any markdown formatting, code blocks, or extra text
     set cleaned_output (echo "$raw_output" | sed 's/```[a-z]*//g' | sed 's/^[[:space:]]*//g' | string collect)
@@ -180,13 +178,41 @@ STAGED DIFF (focus on THIS change):
         return 1
     end
 
-    # Validate length (max 50 chars for subject line)
+    # Retry with fallback model if too long
     set msg_length (string length -- "$commit_msg")
+    if test -n "$msg_length" -a "$msg_length" -gt 50 -a "$current_model" != "$fallback_model"
+        set current_model $fallback_model
+        gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- sh -c "cat $temp_prompt | opencode run -m $current_model --format json 2>/dev/null > $temp_output"
+
+        set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
+        if test -z "$raw_output"
+            set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | string collect | string trim)
+        end
+        set cleaned_output (echo "$raw_output" | sed 's/```[a-z]*//g' | sed 's/^[[:space:]]*//g' | string collect)
+        set commit_msg ""
+        for line in (echo "$cleaned_output" | string split "\n")
+            if test -z "$line"
+                continue
+            end
+            if string match -qr '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?: ' -- "$line"
+                set commit_msg "$line"
+                break
+            end
+        end
+        if test -z "$commit_msg"
+            set commit_msg (echo "$cleaned_output" | string split "\n" | string match -r '^\S.*' | head -n 1)
+        end
+        set msg_length (string length -- "$commit_msg")
+    end
+
+    # Validate length (max 50 chars for subject line)
     if test -n "$msg_length" -a "$msg_length" -gt 50
         gum style --foreground 3 "⚠ Generated message too long ($msg_length chars, max 50)"
         # Try to truncate intelligently at word boundary
         set commit_msg (string sub -l 47 -- "$commit_msg")"..."
     end
+
+    rm -f $temp_prompt $temp_output $temp_diff
 
     # Determine the new session created by this run
     set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
@@ -225,6 +251,7 @@ STAGED DIFF (focus on THIS change):
     end
 
     gum style --foreground 208 "$edited_msg"
+    printf "%s" "$edited_msg" | pbcopy
 
     # Dry run mode - just show what would be committed
     if test "$dry_run" = true
