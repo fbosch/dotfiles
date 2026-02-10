@@ -238,7 +238,7 @@ function M.statusline_component()
 				table.insert(
 					parts,
 					string.format(
-						"%s%s%%*%s%s%%* %s%d%%%%%%* %%#NonText#󰕯%%*",
+						"%s%s%%*%s%s%%* %s%d%%%%%%* %%#NonText#D%%*",
 						color,
 						filled_bar,
 						"%#Comment#",
@@ -263,7 +263,7 @@ function M.statusline_component()
 			table.insert(
 				parts,
 				string.format(
-					"%s%s%%*%s%s%%* %s%d%%%%%%* %%#NonText#󰕶%%*",
+					"%s%s%%*%s%s%%* %s%d%%%%%%* %%#NonText#W%%*",
 					color,
 					filled_bar,
 					"%#Comment#",
@@ -279,7 +279,7 @@ function M.statusline_component()
 			if percent < 15 then
 				local countdown = format_countdown(weekly.resetsAt)
 				if countdown then
-					table.insert(parts, string.format("%%#NonText# 󰕶%s", countdown))
+					table.insert(parts, string.format("%%#NonText# W%s", countdown))
 				end
 			end
 		end
