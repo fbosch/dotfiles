@@ -43,6 +43,20 @@ document:
     <link rel="preconnect" href="https://dozzle.corvus-corax.synology.me">
     <link rel="preconnect" href="https://uptime.corvus-corax.synology.me">
 
+    <!-- Prefetch other pages to warm navigation -->
+    <link rel="prefetch" href="/home">
+    <link rel="prefetch" href="/news">
+    <link rel="prefetch" href="/markets">
+    <link rel="prefetch" href="/tech">
+    <link rel="prefetch" href="/homelab">
+
+    <!-- Prefetch page content API responses -->
+    <link rel="prefetch" href="/api/pages/home/content/" as="fetch">
+    <link rel="prefetch" href="/api/pages/news/content/" as="fetch">
+    <link rel="prefetch" href="/api/pages/markets/content/" as="fetch">
+    <link rel="prefetch" href="/api/pages/tech/content/" as="fetch">
+    <link rel="prefetch" href="/api/pages/homelab/content/" as="fetch">
+
 pages:
   - $include: pages/startpage.yml
   - $include: pages/home.yml
