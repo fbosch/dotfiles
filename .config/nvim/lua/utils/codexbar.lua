@@ -221,24 +221,25 @@ function M.statusline_component()
 		local provider = cache.data.provider or "codex"
 		table.insert(parts, string.format("%%#Comment#%s", provider))
 
-		local weekly = cache.data.usage.secondary
-		local weekly_remaining = weekly and remaining_percent(weekly.usedPercent) or nil
+		local secondary = cache.data.usage.secondary
+		local secondary_remaining = secondary and remaining_percent(secondary.usedPercent) or nil
 
-		local show_daily = true
-		if weekly_remaining == 0 then
-			show_daily = false
+		local show_primary = true
+		if secondary_remaining == 0 then
+			show_primary = false
 		end
 
-		if show_daily then
-			local daily = cache.data.usage.primary
-			if daily then
-				local percent = remaining_percent(daily.usedPercent)
+		if show_primary then
+			local primary = cache.data.usage.primary
+			if primary then
+				local percent = remaining_percent(primary.usedPercent)
 				local filled_bar, empty_bar = generate_bar(percent, 9)
 				local color = color_for_percent(percent)
+				local countdown = format_countdown(primary.resetsAt)
 				table.insert(
 					parts,
 					string.format(
-						"%s%s%%*%s%s%%* %s%d%%%%%%* %%#NonText#D%%*",
+						"%s%s%%*%s%s%%* %s%d%%%%%%*",
 						color,
 						filled_bar,
 						"%#Comment#",
@@ -247,40 +248,29 @@ function M.statusline_component()
 						percent
 					)
 				)
+				if countdown then
+					table.insert(parts, string.format("%%#NonText#%s", countdown))
+				end
 			end
 		end
 
-		if weekly then
-			local percent = weekly_remaining or remaining_percent(weekly.usedPercent)
+		if secondary then
+			local percent = secondary_remaining or remaining_percent(secondary.usedPercent)
 			local filled_bar, empty_bar = generate_bar(percent, 9)
 			local color
-			-- If showing only the weekly bar and it's 0%, make it dim instead of red
-			if not show_daily and percent == 0 then
+			-- If showing only the secondary bar and it's 0%, make it dim instead of red
+			if not show_primary and percent == 0 then
 				color = "%#Comment#"
 			else
 				color = color_for_percent(percent)
 			end
+			local countdown = format_countdown(secondary.resetsAt)
 			table.insert(
 				parts,
-				string.format(
-					"%s%s%%*%s%s%%* %s%d%%%%%%* %%#NonText#W%%*",
-					color,
-					filled_bar,
-					"%#Comment#",
-					empty_bar,
-					color,
-					percent
-				)
+				string.format("%s%s%%*%s%s%%* %s%d%%%%%%*", color, filled_bar, "%#Comment#", empty_bar, color, percent)
 			)
-		end
-
-		if weekly then
-			local percent = weekly_remaining or remaining_percent(weekly.usedPercent)
-			if percent < 15 then
-				local countdown = format_countdown(weekly.resetsAt)
-				if countdown then
-					table.insert(parts, string.format("%%#NonText# W%s", countdown))
-				end
+			if countdown then
+				table.insert(parts, string.format("%%#NonText#%s", countdown))
 			end
 		end
 
