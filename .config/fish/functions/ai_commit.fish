@@ -225,6 +225,7 @@ STAGED DIFF (focus on THIS change):
     end
 
     gum style --foreground 208 "$edited_msg"
+    printf "%s" "$edited_msg" | pbcopy
 
     # Dry run mode - just show what would be committed
     if test "$dry_run" = true
