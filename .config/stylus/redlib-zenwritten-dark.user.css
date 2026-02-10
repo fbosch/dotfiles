@@ -1,0 +1,220 @@
+/* ==UserStyle==
+@name         Redlib Zenwritten Dark
+@namespace    github.com/fbosch/dotfiles
+@version      0.1.0
+@description  Zenwritten Dark userstyle for Redlib (Stylus)
+@author       fbosch
+==/UserStyle== */
+
+@-moz-document domain("redlib.corvus-corax.synology.me") {
+  :root,
+  .dark,
+  .black,
+  .libredditDark,
+  .doomone,
+  .tokyoNight,
+  .nord,
+  .dracula,
+  .laserwave,
+  .violet,
+  .rosebox,
+  .midnightPurple,
+  .icebergDark,
+  .gruvboxdark {
+    --accent: #6099c0;
+    --green: #819b69;
+    --text: #bbbbbb;
+    --foreground: #242424;
+    --background: #191919;
+    --outside: #202020;
+    --post: #1e1e1e;
+    --panel-border: 1px solid #353535;
+    --highlighted: #2c2c2c;
+    --visited: #8f8f8f;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    --popup: #de6e7c;
+    --spoiler: #9f9f9f;
+    --nsfw: #de6e7c;
+    --admin: #de6e7c;
+
+    --popup-red: #de6e7c;
+    --popup-black: #101010;
+    --popup-text: #c7c7c7;
+    --popup-background-1: #141414;
+    --popup-background-2: #221c1d;
+    --popup-reddit-url: #de6e7c;
+    --popup-toreddit-background: #101010;
+    --popup-toreddit-text: #de6e7c;
+    --popup-goback-background: #2f2f2f;
+    --popup-goback-text: #c7c7c7;
+    --popup-border: 1px solid #4a3034;
+
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  div,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  ul,
+  ol,
+  dl,
+  li,
+  dt,
+  dd,
+  p,
+  blockquote,
+  pre,
+  form,
+  fieldset,
+  table,
+  th,
+  td,
+  select,
+  input,
+  button {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif !important;
+  }
+
+  body {
+    background: #191919 !important;
+    letter-spacing: 0.01em;
+  }
+
+  nav,
+  #feeds,
+  #feed_list,
+  #sort_options,
+  #listing_options,
+  #searchbox,
+  .post,
+  .panel,
+  .prefs,
+  #settings,
+  #subreddit,
+  #user,
+  #sidebar,
+  select,
+  #search,
+  .comment_score {
+    border-color: #353535 !important;
+    box-shadow: none !important;
+  }
+
+  nav {
+    border-bottom: 1px solid #303030;
+    background: #202020 !important;
+  }
+
+  #red,
+  #code > span,
+  a,
+  .md a,
+  #post_url,
+  #settings_note a,
+  #error a,
+  .listing_warn a,
+  #nsfw_landing a,
+  .deeper_replies {
+    color: #66a5ad !important;
+  }
+
+  #sort_options > a.selected,
+  #listing_options > a.selected,
+  #feed_list > .selected,
+  .subscribe,
+  .filter,
+  .copy,
+  .import {
+    color: #141414 !important;
+    background: #6099c0 !important;
+  }
+
+  .post {
+    background: #1e1e1e !important;
+  }
+
+  .post:hover,
+  #sort_options > a:not(.selected):hover,
+  #listing_options > a:not(.selected):hover,
+  #feed_list > a:not(.selected):hover,
+  .search_subreddit:hover {
+    background: #2b2b2b !important;
+  }
+
+  .post_score,
+  .comment_score,
+  .op {
+    color: #97bdde !important;
+  }
+
+  .moderator,
+  .stickied {
+    color: #819b69 !important;
+  }
+
+  .stickied {
+    border-color: #819b69 !important;
+  }
+
+  .admin,
+  .nsfw {
+    color: #de6e7c !important;
+    border-color: #de6e7c !important;
+  }
+
+  .post_flair,
+  .author_flair {
+    background: #2f2f2f !important;
+    color: #c4c4c4 !important;
+    border: 1px solid #464646;
+  }
+
+  .md code:not(.md pre > code),
+  .md pre,
+  .post_body pre,
+  #searchbox > *,
+  #search_sort > *,
+  .search_widget_divider_box > *,
+  .search_widget_divider_box > #sort_options,
+  .commentQuery,
+  .popup-inner,
+  .helper {
+    background: #202020 !important;
+  }
+
+  .line {
+    background: #3c3c3c !important;
+  }
+
+  .created,
+  .edited,
+  .dot,
+  #settings_note,
+  .search_subreddit_description {
+    opacity: 0.7 !important;
+  }
+
+  .post:not(.highlighted) .post_title a:visited {
+    color: #8f8f8f !important;
+  }
+
+  .popup-inner {
+    border-radius: 8px;
+  }
+
+  ::selection {
+    color: #101010;
+    background: #66a5ad;
+  }
+
+  :focus-visible {
+    outline: 2px solid #6099c0 !important;
+    outline-offset: 2px;
+  }
+}
