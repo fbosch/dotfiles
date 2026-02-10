@@ -186,10 +186,12 @@ local function format_countdown(resets_at)
 end
 
 local function color_for_percent(percent)
-	if percent >= 80 then
+	if percent >= 75 then
 		return "%#DiagnosticOk#"
 	elseif percent >= 50 then
 		return "%#DiagnosticWarn#"
+	elseif percent >= 25 then
+		return "%#WarningMsg#"
 	end
 	return "%#DiagnosticError#"
 end
