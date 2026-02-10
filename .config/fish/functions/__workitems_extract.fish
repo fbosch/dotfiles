@@ -44,14 +44,14 @@ function __workitems_extract --description 'Extract work items from git commits 
     # Get all branches
     set -l all_branches (git for-each-ref refs/heads/ --format='%(refname)')
     
-    # Get all commits for the date range with hash, date, and subject
-    set -l commits_data (git log --all --author="$git_user_email" --no-merges --since="$start_date 00:00:00" --until="$end_date 23:59:59" --pretty=format:"%H|%as|%s" 2>/dev/null)
+    # Get all commits for the date range with hash, date, and subject (including merges)
+    set -l commits_data (git log --all --author="$git_user_email" --since="$start_date 00:00:00" --until="$end_date 23:59:59" --pretty=format:"%H|%as|%s" 2>/dev/null)
     
     # Build a map of commit hash -> branch names
     set -l commit_branches
     for branch_ref in $all_branches
         set -l branch_name (string replace 'refs/heads/' '' $branch_ref)
-        set -l branch_commits (git log $branch_ref --author="$git_user_email" --no-merges --since="$start_date 00:00:00" --until="$end_date 23:59:59" --pretty=format:"%H" 2>/dev/null)
+        set -l branch_commits (git log $branch_ref --author="$git_user_email" --since="$start_date 00:00:00" --until="$end_date 23:59:59" --pretty=format:"%H" 2>/dev/null)
         for commit_hash in $branch_commits
             set -a commit_branches "$commit_hash:$branch_name"
         end
@@ -94,9 +94,10 @@ function __workitems_extract --description 'Extract work items from git commits 
             end
         end
         
-        # Also check commit message for AB# references
-        if string match -qr 'AB#(\d+)' $commit_subject
-            set -l commit_workitems (string match -ar 'AB#(\d+)' $commit_subject)
+        # Also check commit message for AB# or #number references
+        if string match -qr '(AB#|#)(\d+)' $commit_subject
+            # Match both AB#1234 and #1234 patterns
+            set -l commit_workitems (string match -ar '(?:AB#|#)(\d+)' $commit_subject)
             set -l idx 1
             for item in $commit_workitems
                 if test (math "$idx % 2") -eq 0

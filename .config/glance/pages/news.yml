@@ -1,0 +1,91 @@
+- name: News
+  columns:
+    - size: small
+      widgets:
+        - type: videos
+          title: News
+          style: vertical-list
+          css-class: sticky
+          cache: 1h
+          limit: 25
+          collapse-after: 16
+          channels:
+            - UCPPfK7Nq_yQR84rn1wcTXBg # Anders Puck
+            - UC8tSbn8Q4rnsSQPY-1kzXuw # P3 Essensen
+            - UCaI7XFGj8cSLD0OA8B9pcnQ # Baltic Defence Review
+            - UC-eegKVWEgBCa4OzjnK_PtA # TLDR EU
+            - UC-uhvujip5deVcEtLxnW8qg # TLDR Global
+            - UC8KFs307LrTkQCu-P1Fl6dw # EU Made Simple
+    - size: full
+      widgets:
+        - type: group
+          widgets:
+            - type: rss
+              title: Denmark & Europe
+              style: detailed-list
+              limit: 14
+              collapse-after: 6
+              cache: 2h
+              feeds:
+                - url: https://news.kagi.com/denmark.xml
+                - url: https://www.dr.dk/nyheder/service/feeds/regionale/kbh
+                  limit: 2
+                - url: https://www.dr.dk/nyheder/service/feeds/indland
+                  limit: 2
+                - url: https://news.kagi.com/europe.xml
+            - type: rss
+              title: World News
+              style: detailed-list
+              limit: 14
+              cache: 2h
+              collapse-after: 6
+              feeds:
+                - url: https://news.kagi.com/world.xml
+                - url: https://www.reddit.com/r/anime_titties/.rss
+                  title: World News
+                  limit: 3
+            - type: rss
+              title: Finance
+              title-url: /markets
+              style: detailed-list
+              limit: 14
+              collapse-after: 7
+              cache: 2h
+              feeds:
+                - url: https://news.kagi.com/business.xml
+                - url: https://seekingalpha.com/market_currents.xml
+                  limit: 2
+                - url: https://borsen.dk/rss/finans
+                  title: "Børsen: Finans"
+                  limit: 4
+                - url: https://borsen.dk/rss/investor
+                  title: "Børsen: Investor"
+                  limit: 4
+                - url: https://www.dr.dk/nyheder/service/feeds/penge
+                  limit: 4
+            - type: rss
+              title: Tech
+              style: detailed-list
+              limit: 14
+              cache: 12h
+              collapse-after: 6
+              feeds:
+                - url: https://news.kagi.com/tech.xml
+                - url: https://news.kagi.com/linux_oss.xml
+                - url: https://news.kagi.com/cybersecurity.xml
+            - type: rss
+              title: Science
+              style: detailed-list
+              limit: 14
+              cache: 12h
+              collapse-after: 6
+              feeds:
+                - url: https://news.kagi.com/science.xml
+            - type: rss
+              title: Gaming
+              style: detailed-list
+              limit: 14
+              cache: 12h
+              collapse-after: 6
+              feeds:
+                - url: https://news.kagi.com/gaming.xml

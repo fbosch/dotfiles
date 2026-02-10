@@ -3,5 +3,8 @@
   source: |
     <div style="display: flex; justify-content: center; gap: 2.5rem; padding: 1rem; font-size: 1.7rem; margin-bottom: 1rem;">
       <a href="/home">Home</a>
-      <a href="/status">Status</a>
+      <a href="/news">News</a>
+      <a href="/markets">Markets</a>
+      <a href="/tech">Tech</a>
+      <a href="/homelab">Homelab</a>
     </div>

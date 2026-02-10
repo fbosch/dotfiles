@@ -186,10 +186,12 @@ local function format_countdown(resets_at)
 end
 
 local function color_for_percent(percent)
-	if percent >= 80 then
+	if percent >= 75 then
 		return "%#DiagnosticOk#"
 	elseif percent >= 50 then
 		return "%#DiagnosticWarn#"
+	elseif percent >= 25 then
+		return "%#WarningMsg#"
 	end
 	return "%#DiagnosticError#"
 end
@@ -233,7 +235,22 @@ function M.statusline_component()
 				local percent = remaining_percent(primary.usedPercent)
 				local filled_bar, empty_bar = generate_bar(percent, 9)
 				local color = color_for_percent(percent)
-				table.insert(parts, string.format("%s%s%%*%s%s%%* %s%d%%%%%%*", color, filled_bar, "%#Comment#", empty_bar, color, percent))
+				local countdown = format_countdown(primary.resetsAt)
+				table.insert(
+					parts,
+					string.format(
+						"%s%s%%*%s%s%%* %s%d%%%%%%*",
+						color,
+						filled_bar,
+						"%#Comment#",
+						empty_bar,
+						color,
+						percent
+					)
+				)
+				if countdown then
+					table.insert(parts, string.format("%%#NonText#%s", countdown))
+				end
 			end
 		end
 
@@ -241,19 +258,19 @@ function M.statusline_component()
 			local percent = secondary_remaining or remaining_percent(secondary.usedPercent)
 			local filled_bar, empty_bar = generate_bar(percent, 9)
 			local color
-			-- If showing only the weekly bar and it's 0%, make it dim instead of red
+			-- If showing only the secondary bar and it's 0%, make it dim instead of red
 			if not show_primary and percent == 0 then
 				color = "%#Comment#"
 			else
 				color = color_for_percent(percent)
 			end
-			table.insert(parts, string.format("%s%s%%*%s%s%%* %s%d%%%%%%*", color, filled_bar, "%#Comment#", empty_bar, color, percent))
-		end
-
-		if secondary_remaining == 0 and secondary then
 			local countdown = format_countdown(secondary.resetsAt)
+			table.insert(
+				parts,
+				string.format("%s%s%%*%s%s%%* %s%d%%%%%%*", color, filled_bar, "%#Comment#", empty_bar, color, percent)
+			)
 			if countdown then
-				table.insert(parts, string.format("%%#Comment#%s", countdown))
+				table.insert(parts, string.format("%%#NonText#%s", countdown))
 			end
 		end
 
