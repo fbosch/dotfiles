@@ -32,6 +32,7 @@ document:
     <link rel="dns-prefetch" href="//i.ytimg.com">
     <link rel="dns-prefetch" href="//www.tradingview.com">
     <link rel="dns-prefetch" href="//finance.yahoo.com">
+    <link rel="dns-prefetch" href="//freshrss.corvus-corax.synology.me">
 
     <!-- Preconnect for critical icon/resource providers -->
     <link rel="preconnect" href="https://twenty-icons.com">
@@ -39,6 +40,7 @@ document:
 
     <!-- Preconnect for self-hosted services (iframes, client-side resources) -->
     <link rel="preconnect" href="https://linkwarden.corvus-corax.synology.me">
+    <link rel="preconnect" href="https://freshrss.corvus-corax.synology.me">
     <link rel="preconnect" href="https://redlib.corvus-corax.synology.me">
     <link rel="preconnect" href="https://dozzle.corvus-corax.synology.me">
     <link rel="preconnect" href="https://uptime.corvus-corax.synology.me">
