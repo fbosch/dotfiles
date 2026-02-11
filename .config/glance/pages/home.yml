@@ -37,9 +37,9 @@
               collapse-after: 4
               cache: 5m
               feeds:
-                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_2
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_2&nb=12
                   title: Kagi News - Denmark
-                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_14
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_14&nb=12
                   title: Kagi News - Linux OSS
-                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_13
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_13&nb=12
                   title: Kagi News - Tech

@@ -142,14 +142,14 @@
           collapse-after: 6
           cache: 5m
           feeds:
-            - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_8
+            - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_8&nb=12
               title: Kagi News - Business
-            - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_9
+            - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_9&nb=12
               title: SeekingAlpha
               limit: 4
-            - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_10
+            - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_10&nb=12
               title: "Børsen: Finans"
               limit: 2
-            - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_11
+            - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_11&nb=12
               title: "Børsen: Investor"
               limit: 2
