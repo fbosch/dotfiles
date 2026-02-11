@@ -25,7 +25,7 @@
               style: detailed-list
               limit: 14
               collapse-after: 6
-              cache: false
+              cache: 5m
               feeds:
                 - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_5
                   title: Kagi News - Europe
@@ -42,6 +42,7 @@
               style: detailed-list
               limit: 14
               collapse-after: 6
+              cache: 5m
               feeds:
                 - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_6
                   title: Kagi News - World
@@ -54,7 +55,7 @@
               style: detailed-list
               limit: 14
               collapse-after: 7
-              cache: 2h
+              cache: 5m
               feeds:
                 - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_8
                   title: Kagi News - Business
@@ -74,7 +75,7 @@
               title: Tech
               style: detailed-list
               limit: 14
-              cache: 12h
+              cache: 5m
               collapse-after: 6
               feeds:
                 - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_13
@@ -87,7 +88,7 @@
               title: Science
               style: detailed-list
               limit: 14
-              cache: 12h
+              cache: 5m
               collapse-after: 6
               feeds:
                 - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_16
@@ -96,7 +97,7 @@
               title: Gaming
               style: detailed-list
               limit: 14
-              cache: 12h
+              cache: 5m
               collapse-after: 6
               feeds:
                 - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_17

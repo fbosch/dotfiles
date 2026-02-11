@@ -140,7 +140,7 @@
           title-url: /news
           limit: 12
           collapse-after: 6
-          cache: 30m
+          cache: 5m
           feeds:
             - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_8
               title: Kagi News - Business
