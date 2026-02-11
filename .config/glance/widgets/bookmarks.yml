@@ -30,46 +30,165 @@
         
         <!-- Square cards for Slot1-Slot10 tags -->
         <div style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; margin-bottom: 20px;">
-          {{ $slots := "Slot1,Slot2,Slot3,Slot4,Slot5,Slot6,Slot7,Slot8,Slot9,Slot10" }}
           {{ range $allItems }}
-            {{ $itemSlot := "" }}
-              {{ range .Array "tags" }}
-                {{ $tagName := .String "name" }}
-                {{ if or (eq $tagName "Slot1") (eq $tagName "Slot2") (eq $tagName "Slot3") (eq $tagName "Slot4") (eq $tagName "Slot5") (eq $tagName "Slot6") (eq $tagName "Slot7") (eq $tagName "Slot8") (eq $tagName "Slot9") (eq $tagName "Slot10") }}
-                  {{ $itemSlot = $tagName }}
-                {{ end }}
-              {{ end }}
-              {{ if $itemSlot }}
-                {{ $hasItems = true }}
-                {{ $url := .String "url" }}
-                {{ $domain := replaceMatches "^https?://([^/]+).*$" "$1" $url }}
-                
-                <!-- Check for icon override - try full URL first, then domain -->
-                {{ $customIcon := $.Options.StringOr $url "" }}
-                {{ if not $customIcon }}
-                  {{ $customIcon = $.Options.StringOr $domain "" }}
-                {{ end }}
-                
-                <a href="{{ $url }}" 
-                   data-slot="{{ $itemSlot }}"
-                   style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 8px; background: rgba(255,255,255,0.05); text-decoration: none; transition: all 0.2s; order: {{ if eq $itemSlot "Slot1" }}1{{ else if eq $itemSlot "Slot2" }}2{{ else if eq $itemSlot "Slot3" }}3{{ else if eq $itemSlot "Slot4" }}4{{ else if eq $itemSlot "Slot5" }}5{{ else if eq $itemSlot "Slot6" }}6{{ else if eq $itemSlot "Slot7" }}7{{ else if eq $itemSlot "Slot8" }}8{{ else if eq $itemSlot "Slot9" }}9{{ else }}10{{ end }};"
-                   title="{{ .String "name" }}"
-                   onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.transform='scale(1.05)'"
-                   onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.transform='scale(1)'">
-                   {{ if $customIcon }}
-                    <img src="{{ $customIcon }}" 
-                         alt="" 
-                         width="32" 
-                         height="32"
-                          />
-                  {{ else }}
-                    <img src="https://twenty-icons.com/{{ $domain }}" 
-                         alt="" 
-                         width="32" 
-                         height="32" />
-                  {{ end }}
-                </a>
-              {{ end }}
+            {{ $isSlot := false }}
+            {{ range .Array "tags" }}
+              {{ if eq (.String "name") "Slot1" }}{{ $isSlot = true }}{{ end }}
+            {{ end }}
+            {{ if $isSlot }}
+              {{ $hasItems = true }}
+              {{ $url := .String "url" }}
+              {{ $domain := replaceMatches "^https?://([^/]+).*$" "$1" $url }}
+              {{ $customIcon := $.Options.StringOr $url "" }}
+              {{ if not $customIcon }}{{ $customIcon = $.Options.StringOr $domain "" }}{{ end }}
+              <a href="{{ $url }}" data-slot="Slot1" style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 8px; background: rgba(255,255,255,0.05); text-decoration: none; transition: all 0.2s;" title="{{ .String "name" }}" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.transform='scale(1.05)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.transform='scale(1)'">
+                {{ if $customIcon }}<img src="{{ $customIcon }}" alt="" width="32" height="32" />{{ else }}<img src="https://twenty-icons.com/{{ $domain }}" alt="" width="32" height="32" />{{ end }}
+              </a>
+            {{ end }}
+          {{ end }}
+          {{ range $allItems }}
+            {{ $isSlot := false }}
+            {{ range .Array "tags" }}
+              {{ if eq (.String "name") "Slot2" }}{{ $isSlot = true }}{{ end }}
+            {{ end }}
+            {{ if $isSlot }}
+              {{ $hasItems = true }}
+              {{ $url := .String "url" }}
+              {{ $domain := replaceMatches "^https?://([^/]+).*$" "$1" $url }}
+              {{ $customIcon := $.Options.StringOr $url "" }}
+              {{ if not $customIcon }}{{ $customIcon = $.Options.StringOr $domain "" }}{{ end }}
+              <a href="{{ $url }}" data-slot="Slot2" style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 8px; background: rgba(255,255,255,0.05); text-decoration: none; transition: all 0.2s;" title="{{ .String "name" }}" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.transform='scale(1.05)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.transform='scale(1)'">
+                {{ if $customIcon }}<img src="{{ $customIcon }}" alt="" width="32" height="32" />{{ else }}<img src="https://twenty-icons.com/{{ $domain }}" alt="" width="32" height="32" />{{ end }}
+              </a>
+            {{ end }}
+          {{ end }}
+          {{ range $allItems }}
+            {{ $isSlot := false }}
+            {{ range .Array "tags" }}
+              {{ if eq (.String "name") "Slot3" }}{{ $isSlot = true }}{{ end }}
+            {{ end }}
+            {{ if $isSlot }}
+              {{ $hasItems = true }}
+              {{ $url := .String "url" }}
+              {{ $domain := replaceMatches "^https?://([^/]+).*$" "$1" $url }}
+              {{ $customIcon := $.Options.StringOr $url "" }}
+              {{ if not $customIcon }}{{ $customIcon = $.Options.StringOr $domain "" }}{{ end }}
+              <a href="{{ $url }}" data-slot="Slot3" style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 8px; background: rgba(255,255,255,0.05); text-decoration: none; transition: all 0.2s;" title="{{ .String "name" }}" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.transform='scale(1.05)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.transform='scale(1)'">
+                {{ if $customIcon }}<img src="{{ $customIcon }}" alt="" width="32" height="32" />{{ else }}<img src="https://twenty-icons.com/{{ $domain }}" alt="" width="32" height="32" />{{ end }}
+              </a>
+            {{ end }}
+          {{ end }}
+          {{ range $allItems }}
+            {{ $isSlot := false }}
+            {{ range .Array "tags" }}
+              {{ if eq (.String "name") "Slot4" }}{{ $isSlot = true }}{{ end }}
+            {{ end }}
+            {{ if $isSlot }}
+              {{ $hasItems = true }}
+              {{ $url := .String "url" }}
+              {{ $domain := replaceMatches "^https?://([^/]+).*$" "$1" $url }}
+              {{ $customIcon := $.Options.StringOr $url "" }}
+              {{ if not $customIcon }}{{ $customIcon = $.Options.StringOr $domain "" }}{{ end }}
+              <a href="{{ $url }}" data-slot="Slot4" style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 8px; background: rgba(255,255,255,0.05); text-decoration: none; transition: all 0.2s;" title="{{ .String "name" }}" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.transform='scale(1.05)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.transform='scale(1)'">
+                {{ if $customIcon }}<img src="{{ $customIcon }}" alt="" width="32" height="32" />{{ else }}<img src="https://twenty-icons.com/{{ $domain }}" alt="" width="32" height="32" />{{ end }}
+              </a>
+            {{ end }}
+          {{ end }}
+          {{ range $allItems }}
+            {{ $isSlot := false }}
+            {{ range .Array "tags" }}
+              {{ if eq (.String "name") "Slot5" }}{{ $isSlot = true }}{{ end }}
+            {{ end }}
+            {{ if $isSlot }}
+              {{ $hasItems = true }}
+              {{ $url := .String "url" }}
+              {{ $domain := replaceMatches "^https?://([^/]+).*$" "$1" $url }}
+              {{ $customIcon := $.Options.StringOr $url "" }}
+              {{ if not $customIcon }}{{ $customIcon = $.Options.StringOr $domain "" }}{{ end }}
+              <a href="{{ $url }}" data-slot="Slot5" style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 8px; background: rgba(255,255,255,0.05); text-decoration: none; transition: all 0.2s;" title="{{ .String "name" }}" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.transform='scale(1.05)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.transform='scale(1)'">
+                {{ if $customIcon }}<img src="{{ $customIcon }}" alt="" width="32" height="32" />{{ else }}<img src="https://twenty-icons.com/{{ $domain }}" alt="" width="32" height="32" />{{ end }}
+              </a>
+            {{ end }}
+          {{ end }}
+          {{ range $allItems }}
+            {{ $isSlot := false }}
+            {{ range .Array "tags" }}
+              {{ if eq (.String "name") "Slot6" }}{{ $isSlot = true }}{{ end }}
+            {{ end }}
+            {{ if $isSlot }}
+              {{ $hasItems = true }}
+              {{ $url := .String "url" }}
+              {{ $domain := replaceMatches "^https?://([^/]+).*$" "$1" $url }}
+              {{ $customIcon := $.Options.StringOr $url "" }}
+              {{ if not $customIcon }}{{ $customIcon = $.Options.StringOr $domain "" }}{{ end }}
+              <a href="{{ $url }}" data-slot="Slot6" style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 8px; background: rgba(255,255,255,0.05); text-decoration: none; transition: all 0.2s;" title="{{ .String "name" }}" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.transform='scale(1.05)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.transform='scale(1)'">
+                {{ if $customIcon }}<img src="{{ $customIcon }}" alt="" width="32" height="32" />{{ else }}<img src="https://twenty-icons.com/{{ $domain }}" alt="" width="32" height="32" />{{ end }}
+              </a>
+            {{ end }}
+          {{ end }}
+          {{ range $allItems }}
+            {{ $isSlot := false }}
+            {{ range .Array "tags" }}
+              {{ if eq (.String "name") "Slot7" }}{{ $isSlot = true }}{{ end }}
+            {{ end }}
+            {{ if $isSlot }}
+              {{ $hasItems = true }}
+              {{ $url := .String "url" }}
+              {{ $domain := replaceMatches "^https?://([^/]+).*$" "$1" $url }}
+              {{ $customIcon := $.Options.StringOr $url "" }}
+              {{ if not $customIcon }}{{ $customIcon = $.Options.StringOr $domain "" }}{{ end }}
+              <a href="{{ $url }}" data-slot="Slot7" style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 8px; background: rgba(255,255,255,0.05); text-decoration: none; transition: all 0.2s;" title="{{ .String "name" }}" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.transform='scale(1.05)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.transform='scale(1)'">
+                {{ if $customIcon }}<img src="{{ $customIcon }}" alt="" width="32" height="32" />{{ else }}<img src="https://twenty-icons.com/{{ $domain }}" alt="" width="32" height="32" />{{ end }}
+              </a>
+            {{ end }}
+          {{ end }}
+          {{ range $allItems }}
+            {{ $isSlot := false }}
+            {{ range .Array "tags" }}
+              {{ if eq (.String "name") "Slot8" }}{{ $isSlot = true }}{{ end }}
+            {{ end }}
+            {{ if $isSlot }}
+              {{ $hasItems = true }}
+              {{ $url := .String "url" }}
+              {{ $domain := replaceMatches "^https?://([^/]+).*$" "$1" $url }}
+              {{ $customIcon := $.Options.StringOr $url "" }}
+              {{ if not $customIcon }}{{ $customIcon = $.Options.StringOr $domain "" }}{{ end }}
+              <a href="{{ $url }}" data-slot="Slot8" style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 8px; background: rgba(255,255,255,0.05); text-decoration: none; transition: all 0.2s;" title="{{ .String "name" }}" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.transform='scale(1.05)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.transform='scale(1)'">
+                {{ if $customIcon }}<img src="{{ $customIcon }}" alt="" width="32" height="32" />{{ else }}<img src="https://twenty-icons.com/{{ $domain }}" alt="" width="32" height="32" />{{ end }}
+              </a>
+            {{ end }}
+          {{ end }}
+          {{ range $allItems }}
+            {{ $isSlot := false }}
+            {{ range .Array "tags" }}
+              {{ if eq (.String "name") "Slot9" }}{{ $isSlot = true }}{{ end }}
+            {{ end }}
+            {{ if $isSlot }}
+              {{ $hasItems = true }}
+              {{ $url := .String "url" }}
+              {{ $domain := replaceMatches "^https?://([^/]+).*$" "$1" $url }}
+              {{ $customIcon := $.Options.StringOr $url "" }}
+              {{ if not $customIcon }}{{ $customIcon = $.Options.StringOr $domain "" }}{{ end }}
+              <a href="{{ $url }}" data-slot="Slot9" style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 8px; background: rgba(255,255,255,0.05); text-decoration: none; transition: all 0.2s;" title="{{ .String "name" }}" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.transform='scale(1.05)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.transform='scale(1)'">
+                {{ if $customIcon }}<img src="{{ $customIcon }}" alt="" width="32" height="32" />{{ else }}<img src="https://twenty-icons.com/{{ $domain }}" alt="" width="32" height="32" />{{ end }}
+              </a>
+            {{ end }}
+          {{ end }}
+          {{ range $allItems }}
+            {{ $isSlot := false }}
+            {{ range .Array "tags" }}
+              {{ if eq (.String "name") "Slot10" }}{{ $isSlot = true }}{{ end }}
+            {{ end }}
+            {{ if $isSlot }}
+              {{ $hasItems = true }}
+              {{ $url := .String "url" }}
+              {{ $domain := replaceMatches "^https?://([^/]+).*$" "$1" $url }}
+              {{ $customIcon := $.Options.StringOr $url "" }}
+              {{ if not $customIcon }}{{ $customIcon = $.Options.StringOr $domain "" }}{{ end }}
+              <a href="{{ $url }}" data-slot="Slot10" style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 8px; background: rgba(255,255,255,0.05); text-decoration: none; transition: all 0.2s;" title="{{ .String "name" }}" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.transform='scale(1.05)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.transform='scale(1)'">
+                {{ if $customIcon }}<img src="{{ $customIcon }}" alt="" width="32" height="32" />{{ else }}<img src="https://twenty-icons.com/{{ $domain }}" alt="" width="32" height="32" />{{ end }}
+              </a>
+            {{ end }}
           {{ end }}
         </div>
         
