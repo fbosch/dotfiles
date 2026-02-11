@@ -33,6 +33,8 @@ document:
     <link rel="dns-prefetch" href="//www.tradingview.com">
     <link rel="dns-prefetch" href="//finance.yahoo.com">
     <link rel="dns-prefetch" href="//freshrss.corvus-corax.synology.me">
+    <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
+    <link rel="dns-prefetch" href="//kagiproxy.com">
 
     <!-- Preconnect for critical icon/resource providers -->
     <link rel="preconnect" href="https://twenty-icons.com">
@@ -58,9 +60,12 @@ document:
     <link rel="prefetch" href="/api/pages/markets/content/" as="fetch">
     <link rel="prefetch" href="/api/pages/tech/content/" as="fetch">
     <link rel="prefetch" href="/api/pages/homelab/content/" as="fetch">
+    <link rel="prefetch" href="https://cdn.jsdelivr.net/npm/quicklink@2.3.0/dist/quicklink.umd.js" as="script" crossorigin>
 
-    <!-- FreshRSS actualize prefetch -->
-    <link rel="prefetch" href="https://freshrss.corvus-corax.synology.me/i/?c=feed&amp;a=actualize&amp;ajax=1&amp;maxFeeds=30" as="fetch">
+    <!-- Quicklink script + prefetch bootstrap -->
+    <script src="https://cdn.jsdelivr.net/npm/quicklink@2.3.0/dist/quicklink.umd.js" defer></script>
+    <script src="/assets/js/quicklink-init.js" defer></script>
+    <script src="/assets/js/freshrss-actualize.js" defer></script>
 
 pages:
   - $include: pages/startpage.yml
