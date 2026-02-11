@@ -56,16 +56,19 @@
               collapse-after: 7
               cache: 2h
               feeds:
-                - url: https://news.kagi.com/business.xml
-                - url: https://seekingalpha.com/market_currents.xml
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_8
+                  title: Kagi News - Business
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_9
+                  title: SeekingAlpha
                   limit: 2
-                - url: https://borsen.dk/rss/finans
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_10
                   title: "Børsen: Finans"
                   limit: 4
-                - url: https://borsen.dk/rss/investor
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_11
                   title: "Børsen: Investor"
                   limit: 4
-                - url: https://www.dr.dk/nyheder/service/feeds/penge
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_12
+                  title: DR Penge
                   limit: 4
             - type: rss
               title: Tech
@@ -74,9 +77,12 @@
               cache: 12h
               collapse-after: 6
               feeds:
-                - url: https://news.kagi.com/tech.xml
-                - url: https://news.kagi.com/linux_oss.xml
-                - url: https://news.kagi.com/cybersecurity.xml
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_13
+                  title: Kagi News - Tech
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_14
+                  title: Kagi News - Linux OSS
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_15
+                  title: Kagi News - Cybersecurity
             - type: rss
               title: Science
               style: detailed-list
@@ -84,7 +90,8 @@
               cache: 12h
               collapse-after: 6
               feeds:
-                - url: https://news.kagi.com/science.xml
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_16
+                  title: Kagi News - Science
             - type: rss
               title: Gaming
               style: detailed-list
@@ -92,4 +99,5 @@
               cache: 12h
               collapse-after: 6
               feeds:
-                - url: https://news.kagi.com/gaming.xml
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_17
+                  title: Kagi News - Gaming
