@@ -25,23 +25,27 @@
               style: detailed-list
               limit: 14
               collapse-after: 6
-              cache: 2h
+              cache: false
               feeds:
-                - url: https://news.kagi.com/denmark.xml
-                - url: https://www.dr.dk/nyheder/service/feeds/regionale/kbh
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_5
+                  title: Kagi News - Europe
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_2
+                  title: Kagi News - Denmark
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_3
+                  title: DR København
                   limit: 2
-                - url: https://www.dr.dk/nyheder/service/feeds/indland
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_4
+                  title: DR Indland
                   limit: 2
-                - url: https://news.kagi.com/europe.xml
             - type: rss
               title: World News
               style: detailed-list
               limit: 14
-              cache: 2h
               collapse-after: 6
               feeds:
-                - url: https://news.kagi.com/world.xml
-                - url: https://www.reddit.com/r/anime_titties/.rss
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_6
+                  title: Kagi News - World
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_7
                   title: World News
                   limit: 3
             - type: rss

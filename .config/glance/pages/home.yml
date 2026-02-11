@@ -23,6 +23,7 @@
           widgets:
             - type: reddit
               title: Reddit
+              cache: 1h
               title-url: https://redlib.corvus-corax.synology.me/r/denmark+dkfinance+copenhagen
               subreddit: denmark+dkfinance+copenhagen
               show-thumbnails: true
@@ -34,8 +35,11 @@
               title-url: /news
               limit: 8
               collapse-after: 4
-              cache: 2h
+              cache: 1h
               feeds:
-                - url: https://news.kagi.com/denmark.xml
-                - url: https://news.kagi.com/tech.xml
-                - url: https://news.kagi.com/world.xml
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_2
+                  title: Kagi News - Denmark
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=normal&get=f_14
+                  title: Kagi News - Linux OSS
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=normal&get=f_13
+                  title: Kagi News - Tech

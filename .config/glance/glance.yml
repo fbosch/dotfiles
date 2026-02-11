@@ -57,6 +57,9 @@ document:
     <link rel="prefetch" href="/api/pages/tech/content/" as="fetch">
     <link rel="prefetch" href="/api/pages/homelab/content/" as="fetch">
 
+    <!-- Trigger FreshRSS refresh periodically while using Glance -->
+    <script src="/assets/js/freshrss-actualize.js"></script>
+
 pages:
   - $include: pages/startpage.yml
   - $include: pages/home.yml
