@@ -1,5 +1,6 @@
 set -gx TERM xterm-256color
 set -gx PROJECT_PATHS ~/Projects
+set -gx COPILOT_BILLING_ORG charlietango
 set -gx XDG_CONFIG_HOME "$HOME/.config"
 set -gx ZDOTDIR "$HOME/.config/zsh"
 set -gx ARCHPREFERENCE arm64

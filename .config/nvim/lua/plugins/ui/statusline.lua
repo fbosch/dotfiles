@@ -7,12 +7,22 @@ return {
 	config = function()
 		local git = require("utils.git")
 		local codexbar = require("utils.codexbar")
+		local copilot_usage = require("utils.copilot_usage")
 
 		local lualine_x = {
 			require("opencode").statusline,
 			{
 				function()
 					local ok, result = pcall(codexbar.statusline_component)
+					if not ok then
+						return nil
+					end
+					return result
+				end,
+			},
+			{
+				function()
+					local ok, result = pcall(copilot_usage.statusline_component)
 					if not ok then
 						return nil
 					end
