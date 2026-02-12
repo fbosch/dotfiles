@@ -251,7 +251,22 @@ STAGED DIFF (focus on THIS change):
     end
 
     gum style --foreground 208 "$edited_msg"
-    printf "%s" "$edited_msg" | pbcopy
+    
+    # Cross-platform clipboard copy
+    set clipboard_cmd pbcopy
+    if test (uname) != Darwin
+        if command -v wl-copy >/dev/null 2>&1
+            set clipboard_cmd wl-copy
+        else if command -v xclip >/dev/null 2>&1
+            set clipboard_cmd "xclip -selection clipboard"
+        else
+            set clipboard_cmd ""
+        end
+    end
+    
+    if test -n "$clipboard_cmd"
+        printf "%s" "$edited_msg" | eval $clipboard_cmd
+    end
 
     # Dry run mode - just show what would be committed
     if test "$dry_run" = true
