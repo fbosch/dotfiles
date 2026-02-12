@@ -213,7 +213,7 @@ function M.statusline_component()
 
 	local cap = tonumber(vim.g.opencode_zen_monthly_cap) or 40
 	local color = color_for_cost(cache.data.cost, cap)
-	return string.format("%%#Comment#zen %s$%.2f%%*", color, cache.data.cost)
+	return string.format("%%#Comment#zen %s~$%.0f%%*", color, cache.data.cost)
 end
 
 vim.defer_fn(function()

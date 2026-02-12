@@ -298,17 +298,12 @@ function M.statusline_component()
 
 	if not cache.data then
 		if cache.error then
-			return "%#Comment# n/a"
+			return "%#Comment#copilot n/a"
 		end
 		return ""
 	end
 
-	local icon = ""
-	if cache.data.percent and cache.data.percent > 100 then
-		icon = ""
-	end
-
-	local parts = { "%#Comment#" .. icon }
+	local parts = { "%#Comment#copilot" }
 
 	if cache.data.percent then
 		local color = color_for_percent(cache.data.percent)
