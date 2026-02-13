@@ -265,7 +265,7 @@ STAGED DIFF (focus on THIS change):
     end
     
     if test -n "$clipboard_cmd"
-        printf "%s" "$edited_msg" | eval $clipboard_cmd
+        printf "git commit -m \"%s\"" "$edited_msg" | eval $clipboard_cmd
     end
 
     # Dry run mode - just show what would be committed

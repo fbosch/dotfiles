@@ -84,8 +84,13 @@ Extract actionable feedback from a GitHub PR review and present it with file pat
     ```
 - Example informational-only bullet:
   - `src/app.ts:12` Informational: This change looks good; no action needed.
-- End with a single question that presents explicit options:
-  - "Choose one: (1) create a todo list in the agent, (2) write a reference file."
+- End with a single machine-readable question block using the exact `Question:` prefix, followed by explicit options on separate lines:
+  - `Question: What should I do with this feedback?`
+  - `1) Apply fixes now`
+  - `2) Create a todo list here`
+  - `3) Write a markdown checklist file`
+  - `4) Keep as-is (no follow-up action)`
+  - Keep these options stable so downstream tooling can reliably detect them.
   - If there are conflicting requests, add a heads-up sentence before the final question.
   - If writing a reference file, write a Markdown file with checkbox list items so progress can be tracked.
   - Example reference file format:
