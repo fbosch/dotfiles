@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-02-12T13:01:13.819Z",
+  "generatedAt": "2026-02-12T17:48:59.248Z",
   "toolVersion": "0.0.0",
   "sources": {
     "ags": {
@@ -11,17 +11,17 @@
       "fileCount": 12,
       "manifestSha256": "bc5aa60ba05c0aca149a8f74e5f40bd1693b875bdc88a82076702efde50d26c4",
       "rulesSha256": "d0dc18979f534e18311f4e49bdd6739e3be9e5c7e97d623c9825ad7cff190a45",
-      "updatedAt": "2026-02-12T13:01:13.819Z"
+      "updatedAt": "2026-02-12T17:48:59.248Z"
     },
     "vicinae-docs": {
       "repo": "https://github.com/vicinaehq/docs.git",
       "ref": "HEAD",
-      "resolvedCommit": "7af9157904d16ce48f59beeec5c3f6cb43cb0a25",
+      "resolvedCommit": "7b2acde7087a5d9c6bbf22efff71457757f42baa",
       "bytes": 19926,
       "fileCount": 8,
       "manifestSha256": "b5c6bf86eb46ec484c3db8bcf73cfaeeb1504d616a749374ff3da567250fef12",
       "rulesSha256": "9eeb141726160fa429a21b24d6220b5dce6ffb4c44a06d54a0fc3cb492318f4a",
-      "updatedAt": "2026-02-12T13:01:13.819Z"
+      "updatedAt": "2026-02-12T17:48:59.248Z"
     },
     "hyprland-wiki": {
       "repo": "https://github.com/hyprwm/hyprland-wiki.git",
@@ -31,7 +31,7 @@
       "fileCount": 23,
       "manifestSha256": "506102513bf6df18ce74dc2badecc79848447bd354e64dcb5800e729aa25bf1e",
       "rulesSha256": "9711428153e452825f0368860d30401cea3ed5f5e90d569d70558c392fe0dc83",
-      "updatedAt": "2026-02-12T13:01:13.819Z"
+      "updatedAt": "2026-02-12T17:48:59.248Z"
     },
     "Waybar.wiki": {
       "repo": "https://github.com/Alexays/Waybar.wiki.git",
@@ -51,7 +51,7 @@
       "fileCount": 2,
       "manifestSha256": "6ce880bf38b379777e79aa3ba0909f4351f89b3a6c39df253a3c357948d2d865",
       "rulesSha256": "b081a738d08a508e04d08ab700ae515252de04000d5108b2ae3cbcf211ac1a8c",
-      "updatedAt": "2026-02-12T13:01:13.819Z"
+      "updatedAt": "2026-02-12T17:48:59.248Z"
     }
   }
 }
