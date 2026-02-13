@@ -25,7 +25,6 @@
               style: detailed-list
               limit: 14
               collapse-after: 6
-              cache: 5m
               feeds:
                 - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_5&nb=12
                   title: Kagi News - Europe
