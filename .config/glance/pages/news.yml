@@ -8,7 +8,7 @@
           css-class: sticky
           cache: 1h
           limit: 25
-          collapse-after: 16
+          collapse-after: 8
           channels:
             - UCPPfK7Nq_yQR84rn1wcTXBg # Anders Puck
             - UC8tSbn8Q4rnsSQPY-1kzXuw # P3 Essensen
@@ -25,7 +25,6 @@
               style: detailed-list
               limit: 14
               collapse-after: 6
-              cache: 5m
               feeds:
                 - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_5&nb=12
                   title: Kagi News - Europe
@@ -55,7 +54,7 @@
               style: detailed-list
               limit: 14
               collapse-after: 7
-              cache: 5m
+              cache: 10m
               feeds:
                 - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_8&nb=12
                   title: Kagi News - Business

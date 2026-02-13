@@ -12,7 +12,7 @@
         - type: weather
           location: Copenhagen, Denmark
           units: metric
-          title-url: https://www.yr.no/en/forecast/daily-table/2-618425/Denmark/Capital%20Region/Copenhagen/Copenhagen
+          title-url: https://www.yr.no/en/forecast/daily-table/2-2618425/Denmark/Capital%20Region/Copenhagen%20municipality/Copenhagen
     - size: full
       widgets:
         - type: search
@@ -43,3 +43,20 @@
                   title: Kagi News - Linux OSS
                 - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_13&nb=12
                   title: Kagi News - Tech
+    - size: small
+      widgets:
+        - type: markets
+          title: Markets
+          title-url: /markets
+          sort-by: absolute-change
+          chart-link-template: https://www.tradingview.com/chart/?symbol={SYMBOL}
+          symbol-link-template: https://finance.yahoo.com/quote/{SYMBOL}
+          markets:
+            - symbol: ^OMXC25
+              name: OMX Copenhagen 25
+            - symbol: ^GSPC
+              name: S&P 500
+            - symbol: IUSQ.DE
+              name: iShares MSCI ACWI
+              symbol-link: https://www.nordnet.dk/etf/liste/i-shares-msci-acwi-ucits-iusq-xeta?accIds=3
+              chart-link: https://www.tradingview.com/chart/?symbol=IUSQ
