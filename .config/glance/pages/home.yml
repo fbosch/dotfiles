@@ -6,7 +6,6 @@
           hour-format: 24h
           css-class: large-clock
           hide-header: true
-        - type: to-do
         - type: calendar
           title-url: https://calendar.proton.me
         - type: weather
@@ -19,6 +18,7 @@
           search-engine: kagi
           hide-header: true
           autofocus: false
+        - type: to-do
         - type: group
           widgets:
             - type: reddit
