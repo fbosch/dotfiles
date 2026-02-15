@@ -4,10 +4,7 @@
       widgets:
         - $include: ../widgets/server-stats.yml
         - $include: ../widgets/synology-disk-station.yml
-        - $include: ../widgets/gluetun-vpn-status.yml
-        - $include: ../widgets/pihole-stats.yml
-        - $include: ../widgets/nextdns-stats.yml
-        - $include: ../widgets/speedtest-tracker.yml
+        - $include: ../widgets/nixos-repo.yml
     - size: full
       widgets:
         - type: group
@@ -16,7 +13,10 @@
             - $include: ../widgets/komodo-containers.yml
             - $include: ../widgets/tailscale-devices.yml
             - $include: ../widgets/dozzle-stats.yml
+            - $include: ../widgets/github-releases.yml
     - size: small
       widgets:
-        - $include: ../widgets/nixos-repo.yml
-        - $include: ../widgets/github-releases.yml
+        - $include: ../widgets/gluetun-vpn-status.yml
+        - $include: ../widgets/pihole-stats.yml
+        - $include: ../widgets/nextdns-stats.yml
+        - $include: ../widgets/speedtest-tracker.yml

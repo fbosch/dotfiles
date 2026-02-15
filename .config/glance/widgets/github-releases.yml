@@ -2,7 +2,7 @@
   show-source-icon: true
   cache: 6h
   limit: 20
-  collapse-after: 4
+  collapse-after: 8
   token: ${GITHUB_TOKEN}
   repositories:
     # Dashboard & Monitoring
