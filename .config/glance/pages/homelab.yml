@@ -4,6 +4,7 @@
       widgets:
         - $include: ../widgets/server-stats.yml
         - $include: ../widgets/synology-disk-station.yml
+        - $include: ../widgets/gluetun-vpn-status.yml
         - $include: ../widgets/pihole-stats.yml
     - size: full
       widgets:
@@ -15,4 +16,5 @@
             - $include: ../widgets/dozzle-stats.yml
     - size: small
       widgets:
+        - $include: ../widgets/nixos-repo.yml
         - $include: ../widgets/github-releases.yml

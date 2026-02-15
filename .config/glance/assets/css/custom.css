@@ -85,6 +85,19 @@ samp {
   overflow: hidden;
 }
 
+/* Fix repository widget text spacing */
+.widget-type-repository {
+  .text-compact {
+    white-space: normal !important;
+    word-spacing: normal !important;
+    letter-spacing: normal !important;
+  }
+  
+  .list-item-link {
+    display: inline !important;
+  }
+}
+
 /* Optimize font rendering */
 body {
   -webkit-font-smoothing: antialiased;
