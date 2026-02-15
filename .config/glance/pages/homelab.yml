@@ -6,6 +6,7 @@
         - $include: ../widgets/synology-disk-station.yml
         - $include: ../widgets/gluetun-vpn-status.yml
         - $include: ../widgets/pihole-stats.yml
+        - $include: ../widgets/nextdns-stats.yml
     - size: full
       widgets:
         - type: group

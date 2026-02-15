@@ -7,6 +7,7 @@ theme:
   contrast-multiplier: 1.2 # Increased contrast for readability
   text-saturation-multiplier: 0.8 # Reduce saturation for more neutral text
   custom-css-file: /assets/css/custom.css # Custom CSS configuration
+  disable-picker: true # Disable theme switcher in header
 
 # Server configuration for container
 server:
