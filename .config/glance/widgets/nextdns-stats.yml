@@ -1,5 +1,5 @@
 - type: custom-api
-  title: NextDNS Analytics
+  title: NextDNS
   title-url: https://my.nextdns.io
   cache: 1h
   url: https://api.nextdns.io/profiles/${NEXTDNS_PROFILE_ID}/analytics/status
@@ -7,30 +7,30 @@
     X-Api-Key: ${NEXTDNS_API_KEY}
   template: |
     {{ if eq .Response.StatusCode 200 }}
-      <div style="display: flex; justify-content: space-between;">
-        {{ $total := 0.0 }}
-        {{ $blocked := 0.0 }}
-        {{ range .JSON.Array "data" }}
-          {{ $total = add $total (.Int "queries" | toFloat) }}
-          {{ if eq (.String "status") "blocked" }}
-            {{ $blocked = add $blocked (.Int "queries" | toFloat) }}
-          {{ end }}
+      {{ $total := 0.0 }}
+      {{ $blocked := 0.0 }}
+      {{ range .JSON.Array "data" }}
+        {{ $total = add $total (.Int "queries" | toFloat) }}
+        {{ if eq (.String "status") "blocked" }}
+          {{ $blocked = add $blocked (.Int "queries" | toFloat) }}
         {{ end }}
-        <div style="flex: 1; text-align: center;">
-          <p>Queries</p>
-          <p>{{ printf "%.0f" $total }}</p>
+      {{ end }}
+      <div class="flex text-center justify-between">
+        <div>
+          <div class="color-highlight size-h3">{{ $total | toInt | formatNumber }}</div>
+          <div class="size-h6">QUERIES</div>
         </div>
-        <div style="flex: 1; text-align: center; color: var(--color-negative);">
-          <p>Blocked</p>
-          <p>{{ printf "%.0f" $blocked }}</p>
-        </div>
-        <div style="flex: 1; text-align: center;">
-          <p>Block Rate</p>
+        <div>
           {{ if gt $total 0.0 }}
-            <p>{{ div (mul $blocked 100) $total | printf "%.2f" }}%</p>
+            <div class="color-highlight size-h3">{{ div (mul $blocked 100) $total | toInt }}%</div>
           {{ else }}
-            <p>0.00%</p>
+            <div class="color-highlight size-h3">0%</div>
           {{ end }}
+          <div class="size-h6">BLOCKED</div>
+        </div>
+        <div>
+          <div class="color-highlight size-h3">{{ $blocked | toInt | formatNumber }}</div>
+          <div class="size-h6">DOMAINS</div>
         </div>
       </div>
     {{ else }}
