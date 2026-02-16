@@ -42,5 +42,13 @@
                 - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_20
                   title: /r/WoW
                   limit: 2
+            - type: reddit
+              title: Pokemon
+              cache: 1h
+              subreddit: pokemon+pokemongo+TheSilphRoad+PokemonInfiniteFusion
+              show-thumbnails: true
+              limit: 14
+              collapse-after: 10
+              comments-url-template: https://redlib.corvus-corax.synology.me/{POST-PATH}
     - size: small
       widgets: []
