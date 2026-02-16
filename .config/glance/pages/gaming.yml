@@ -1,0 +1,46 @@
+- name: Gaming
+  columns:
+    - size: small
+      widgets: []
+    - size: full
+      widgets:
+        - type: videos
+          title: Videos
+          hide-header: true
+          style: horizontal-cards
+          cache: 3h
+          limit: 30
+          collapse-after-rows: 2
+          channels:
+            - UCt2pDeWgqr7LM8cOOLt-EeQ # gameranxTV
+            - UCsvn_Po0SmunchJYOWpOxMg # videogamedunkey
+            - UCD6VugMZKRhSyzWEWA9W2fg # SsethTzeentach
+            - UCB43KPFqsYYlbrpkyzgvyyA # SmallAntClips
+            - UCaU_wCkiwjScE0-uDn8A2mw # Warcraft
+            - UClN-MDXmXBmCGwve2I4Rf4g # MrGM
+            - UCr_1FPJjbTVPZbJBzrmwbpA # kweebec
+            - UCGIY_O-8vW4rfX98KlMkvRg # NintendoAmerica
+            - UChs5fg_hUFAfc2mPsGy4kRA # madseasonshow
+            - UCdXS4lB7Y0VtAbqTKmZ-L6Q # PolybiusLivy
+            - UCHsM94f-8Z3bYro3SWFt3vg # Hazelnuttygames
+        - type: group
+          widgets:
+            - $include: ../widgets/gaming-rss.yml
+            - type: rss
+              title: World of Warcraft
+              style: detailed-list
+              limit: 14
+              cache: 5m
+              collapse-after: 6
+              feeds:
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_18
+                  limit: 4
+                  title: MMO-Champion
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_19
+                  limit: 3
+                  title: Wowhead
+                - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_20
+                  title: /r/WoW
+                  limit: 2
+    - size: small
+      widgets: []
