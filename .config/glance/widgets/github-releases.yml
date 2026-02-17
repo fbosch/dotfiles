@@ -2,7 +2,7 @@
   show-source-icon: true
   cache: 6h
   limit: 20
-  collapse-after: 10
+  collapse-after: 8
   token: ${GITHUB_TOKEN}
   repositories:
     # Dashboard & Monitoring
@@ -10,26 +10,28 @@
     - louislam/uptime-kuma
     - amir20/dozzle
     - moghtech/komodo
-    
+
     # Self-hosted Apps
     - linkwarden/linkwarden
     - vicinaehq/vicinae
     - lukegus/termix
     - redlib-org/redlib
-    
+    - rogerfar/rdt-client
+    - surge-downloader/surge
+
     # Desktop Environment (Hyprland)
     - hyprwm/Hyprland
     - hyprwm/hyprlock
     - hyprwm/hypridle
     - hyprwm/hyprpaper
     - hyprwm/hyprsunset
-    
+
     # Desktop Apps & Tools
     - aylur/ags
-    
+
     # Pi-hole DNS
     - pi-hole/pi-hole
-    
+
     # Containers & Infrastructure
     - containers/podman
     - dockerhub:postgres:16-alpine

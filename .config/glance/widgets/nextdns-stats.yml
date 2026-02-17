@@ -1,0 +1,40 @@
+- type: custom-api
+  title: NextDNS
+  title-url: https://my.nextdns.io
+  cache: 1h
+  url: https://api.nextdns.io/profiles/${NEXTDNS_PROFILE_ID}/analytics/status
+  headers:
+    X-Api-Key: ${NEXTDNS_API_KEY}
+  template: |
+    {{ if eq .Response.StatusCode 200 }}
+      {{ $total := 0.0 }}
+      {{ $blocked := 0.0 }}
+      {{ range .JSON.Array "data" }}
+        {{ $total = add $total (.Int "queries" | toFloat) }}
+        {{ if eq (.String "status") "blocked" }}
+          {{ $blocked = add $blocked (.Int "queries" | toFloat) }}
+        {{ end }}
+      {{ end }}
+      <div class="flex text-center justify-between">
+        <div>
+          <div class="color-highlight size-h3">{{ $total | toInt | formatNumber }}</div>
+          <div class="size-h6">QUERIES</div>
+        </div>
+        <div>
+          {{ if gt $total 0.0 }}
+            <div class="color-highlight size-h3">{{ div (mul $blocked 100) $total | toInt }}%</div>
+          {{ else }}
+            <div class="color-highlight size-h3">0%</div>
+          {{ end }}
+          <div class="size-h6">BLOCKED</div>
+        </div>
+        <div>
+          <div class="color-highlight size-h3">{{ $blocked | toInt | formatNumber }}</div>
+          <div class="size-h6">DOMAINS</div>
+        </div>
+      </div>
+    {{ else }}
+      <div style="text-align: center; color: var(--color-negative);">
+        Error: {{ .Response.StatusCode }} - {{ .Response.Status }}
+      </div>
+    {{ end }}

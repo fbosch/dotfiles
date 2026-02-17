@@ -1,0 +1,8 @@
+- type: repository
+  title: Nix
+  cache: 5m
+  repository: fbosch/nixos
+  token: ${GITHUB_TOKEN}
+  pull-requests-limit: 7
+  issues-limit: 2
+  commits-limit: 0

@@ -7,6 +7,7 @@ theme:
   contrast-multiplier: 1.2 # Increased contrast for readability
   text-saturation-multiplier: 0.8 # Reduce saturation for more neutral text
   custom-css-file: /assets/css/custom.css # Custom CSS configuration
+  disable-picker: true # Disable theme switcher in header
 
 # Server configuration for container
 server:
@@ -15,7 +16,7 @@ server:
 # UI customization
 branding:
   hide-footer: true # Hide Glance version in bottom footer
-  logo-url: /assets/icons/raven-20x20.png
+  logo-url: /assets/icons/politoed.png
   favicon-url: /assets/icons/favicon.ico
 
 # Custom JavaScript for client-side widgets
@@ -53,6 +54,7 @@ document:
     <link rel="prefetch" href="/markets">
     <link rel="prefetch" href="/tech">
     <link rel="prefetch" href="/homelab">
+    <link rel="prefetch" href="/gaming">
 
     <!-- Prefetch page content API responses -->
     <link rel="prefetch" href="/api/pages/home/content/" as="fetch">
@@ -60,6 +62,7 @@ document:
     <link rel="prefetch" href="/api/pages/markets/content/" as="fetch">
     <link rel="prefetch" href="/api/pages/tech/content/" as="fetch">
     <link rel="prefetch" href="/api/pages/homelab/content/" as="fetch">
+    <link rel="prefetch" href="/api/pages/gaming/content/" as="fetch">
     <link rel="prefetch" href="https://cdn.jsdelivr.net/npm/quicklink@2.3.0/dist/quicklink.umd.js" as="script" crossorigin>
 
     <!-- Quicklink script + prefetch bootstrap -->
@@ -72,5 +75,6 @@ pages:
   - $include: pages/home.yml
   - $include: pages/news.yml
   - $include: pages/markets.yml
+  - $include: pages/gaming.yml
   - $include: pages/tech.yml
   - $include: pages/homelab.yml

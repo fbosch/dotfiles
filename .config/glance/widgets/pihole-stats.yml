@@ -1,7 +1,7 @@
 - type: dns-stats
   service: pihole-v6
   cache: 1h
-  title: DNS
+  title: PiHole
   url: https://pihole.corvus-corax.synology.me
   password: ${PIHOLE_PASSWORD}
   # hide-graph: false

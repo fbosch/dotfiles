@@ -1,0 +1,9 @@
+- type: rss
+  title: Gaming News
+  style: detailed-list
+  limit: 14
+  cache: 5m
+  collapse-after: 6
+  feeds:
+    - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=f_17&nb=12
+      title: Kagi News - Gaming

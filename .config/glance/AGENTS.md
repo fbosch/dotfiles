@@ -275,5 +275,13 @@ SYNOLOGY_URL=https://corvus-corax.synology.me
 SYNOLOGY_USERNAME=glance-api
 SYNOLOGY_PASSWORD=<password>
 
+# NextDNS Analytics Widget
+NEXTDNS_PROFILE_ID=<your-profile-id>
+NEXTDNS_API_KEY=<your-api-key>
+
+# Speedtest Tracker Widget
+SPEEDTEST_URL=<speedtest-tracker-url>
+SPEEDTEST_TRACKER_API_TOKEN=<your-api-token>
+
 # Add to Podman/systemd service or docker-compose
 ```

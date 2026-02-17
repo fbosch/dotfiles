@@ -4,6 +4,22 @@ body {
   background-color: color-mix(in hsl, var(--color-background), transparent 20%);
 }
 
+.logo img {
+  max-height: unset;
+  image-rendering: pixelated;
+  width: 24px;
+  height: 33px;
+}
+
+.summary {
+  word-spacing: unset;
+}
+
+.text-compact,
+.text-very-compact {
+  word-spacing: unset;
+}
+
 .search-input {
   font-size: 1.75rem !important;
 }
@@ -83,6 +99,19 @@ samp {
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
+}
+
+/* Fix repository widget text spacing */
+.widget-type-repository {
+  .text-compact {
+    white-space: normal !important;
+    word-spacing: normal !important;
+    letter-spacing: normal !important;
+  }
+
+  .list-item-link {
+    display: inline !important;
+  }
 }
 
 /* Optimize font rendering */
