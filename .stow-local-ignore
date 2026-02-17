@@ -4,6 +4,8 @@
 \.stow-local-ignore
 ^/README.*
 ^/LICENSE.*
+^/AGENTS.md
+^/opencode.json
 ^/COPYING
 .DS_Store
 ^/.*\.md$
