@@ -27,6 +27,7 @@
       <div class="flex items-center justify-between gap-10" style="flex-wrap: wrap;">
         <div class="flex items-center gap-10">
           <span class="size-h3 {{ if eq $fstate "home" }}color-positive{{ else if eq $fstate "not_home" }}color-negative{{ else }}color-primary{{ end }}">●</span>
+          <img src="/assets/icons/fbb.jpg" alt="Frederik" style="width: 24px; height: 24px; border-radius: 999px; object-fit: cover;" />
           <div class="size-h4" style="text-transform: capitalize;">
             {{ if and (ne $flat 0.0) (ne $flon 0.0) }}
               <a class="color-highlight" href="https://maps.kagi.com/?q={{ $flat }},{{ $flon }}" target="_blank" rel="noreferrer">{{ if eq $fname "" }}Frederik{{ else }}{{ $fname }}{{ end }}</a>
@@ -39,6 +40,7 @@
 
         <div class="flex items-center gap-10">
           <span class="size-h3 {{ if eq $jstate "home" }}color-positive{{ else if eq $jstate "not_home" }}color-negative{{ else }}color-primary{{ end }}">●</span>
+          <img src="/assets/icons/jpb.jpg" alt="Julie" style="width: 24px; height: 24px; border-radius: 999px; object-fit: cover;" />
           <div class="size-h4" style="text-transform: capitalize;">
             {{ if and (ne $jlat 0.0) (ne $jlon 0.0) }}
               <a class="color-highlight" href="https://maps.kagi.com/?q={{ $jlat }},{{ $jlon }}" target="_blank" rel="noreferrer">{{ if eq $jname "" }}Julie{{ else }}{{ $jname }}{{ end }}</a>
