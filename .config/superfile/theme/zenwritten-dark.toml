@@ -11,7 +11,7 @@
 #                           Code Syntax Highlighting                          #
 ###############################################################################
 
-code_syntax_highlight = "zenburn"
+code_syntax_highlight = "native"
 
 ###############################################################################
 #                                 Base Colors                                 #
