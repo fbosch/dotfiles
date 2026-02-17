@@ -7,6 +7,17 @@ body {
 .logo img {
   max-height: unset;
   image-rendering: pixelated;
+  width: 24px;
+  height: 33px;
+}
+
+.summary {
+  word-spacing: unset;
+}
+
+.text-compact,
+.text-very-compact {
+  word-spacing: unset;
 }
 
 .search-input {
