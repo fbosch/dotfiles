@@ -7,6 +7,9 @@ local servers = {
 	tailwindcss = {
 		cmd = { "tailwindcss-language-server", "--stdio" },
 	},
+	biome = {
+		cmd = { "biome", "lsp-proxy" },
+	},
 	astro = {},
 	cssls = {
 		settings = {
@@ -143,6 +146,7 @@ end
 local function get_ensure_installed()
 	local ensure = {
 		"eslint",
+		"biome",
 		"html",
 		"marksman",
 		"rust_analyzer",
@@ -206,7 +210,7 @@ local function mason_handlers(capabilities, on_attach)
 				capabilities = capabilities,
 				settings = settings,
 				cmd = server.cmd,
-				root_dir = config.util.root_pattern("biome.json"),
+				root_dir = config.util.root_pattern("biome.json", "biome.jsonc", ".git"),
 			})
 			return
 		end

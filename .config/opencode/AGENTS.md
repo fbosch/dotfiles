@@ -11,6 +11,7 @@
 - Prefer small, purpose-built interfaces/types/props; avoid "god" interfaces.
 - Keep core logic independent of frameworks/external services; inject dependencies and wrap external APIs behind adapters when it improves testability/coupling.
 - Add comments only for non-obvious intent; prefer self-explanatory code.
+- Avoid typecasting if it can be avoided.
 
 ## Safety and git
 
