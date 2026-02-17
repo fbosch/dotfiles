@@ -33,7 +33,7 @@ disabled = true
 
 [username]
 show_always = true
-format = "[$user](bright white) "
+format = " [$user](bright white) "
 
 [hostname]
 ssh_only = true

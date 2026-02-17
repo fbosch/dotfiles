@@ -1,0 +1,71 @@
+##############################################
+#                                            #
+#            Zenwritten Dark Theme           #
+#                                            #
+##############################################
+
+# Custom theme for superfile.
+# Palette source: https://github.com/zenbones-theme/zenbones.nvim
+
+###############################################################################
+#                           Code Syntax Highlighting                          #
+###############################################################################
+
+code_syntax_highlight = "zenburn"
+
+###############################################################################
+#                                 Base Colors                                 #
+###############################################################################
+
+#-- Full Screen
+full_screen_fg = "#BBBBBB"
+full_screen_bg = "#191919"
+
+#-- Gradient
+gradient_color = ["#6099C0", "#B279A7"]
+
+#-- File Panel
+file_panel_fg = "#BBBBBB"
+file_panel_bg = "#191919"
+file_panel_border = "#3D3839"
+file_panel_border_active = "#8E8E8E"
+file_panel_top_directory_icon = "#819B69"
+file_panel_top_path = "#6099C0"
+file_panel_item_selected_fg = "#61ABDA"
+file_panel_item_selected_bg = "#191919"
+
+#-- Footer
+footer_fg = "#BBBBBB"
+footer_bg = "#191919"
+footer_border = "#3D3839"
+footer_border_active = "#819B69"
+
+#-- Sidebar
+sidebar_fg = "#BBBBBB"
+sidebar_bg = "#191919"
+sidebar_title = "#66A5AD"
+sidebar_border = "#191919"
+sidebar_border_active = "#DE6E7C"
+sidebar_item_selected_fg = "#61ABDA"
+sidebar_item_selected_bg = "#191919"
+sidebar_divider = "#8E8E8E"
+
+#-- Modals
+modal_fg = "#C9C9C9"
+modal_bg = "#191919"
+modal_border_active = "#8E8E8E"
+modal_cancel_fg = "#191919"
+modal_cancel_bg = "#DE6E7C"
+modal_confirm_fg = "#191919"
+modal_confirm_bg = "#819B69"
+
+#-- Help Menu
+help_menu_hotkey = "#61ABDA"
+help_menu_title = "#66A5AD"
+
+#-- Special
+cursor = "#D68C67"
+correct = "#819B69"
+error = "#DE6E7C"
+hint = "#6099C0"
+cancel = "#DE6E7C"
