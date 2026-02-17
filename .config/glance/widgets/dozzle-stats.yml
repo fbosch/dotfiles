@@ -1,6 +1,6 @@
 - type: iframe
   title: Logs
   title-url: https://dozzle.corvus-corax.synology.me
-  source: https://dozzle.corvus-corax.synology.me/merged/e8757d2b0988,d1781383ea40,dbab4f403beb,14d4e9155e95,a9feb97bc7f2,a4fc473ae4db,3fa0533d3e06,f8f073725a2f,910e132e0ab4,9025f5425c18,a53e36299784,1834bb443062,253bd5f84624,e24fa118a9dd,cda72c6322dc,05cb43e11693,79f2750c1b10
+  source: https://dozzle.corvus-corax.synology.me/
   height: 900
   css-class: dozzle-widget
