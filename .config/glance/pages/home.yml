@@ -6,6 +6,7 @@
           hour-format: 24h
           css-class: large-clock
           hide-header: true
+        - $include: ../widgets/home-assistant-icloud-location.yml
         - type: calendar
           title-url: https://calendar.proton.me
         - type: weather

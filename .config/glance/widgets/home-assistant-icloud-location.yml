@@ -1,0 +1,56 @@
+- type: custom-api
+  title: Location
+  hide-header: true
+  cache: 2m
+  url: ${HASS_URL}/api/states/device_tracker.frederiks_iphone_2
+  headers:
+    Authorization: "Bearer ${HASS_API_KEY}"
+    Content-Type: "application/json"
+  subrequests:
+    julie:
+      url: ${HASS_URL}/api/states/device_tracker.jul_iphone
+      headers:
+        Authorization: "Bearer ${HASS_API_KEY}"
+        Content-Type: "application/json"
+  template: |
+    {{ if eq .Response.StatusCode 200 }}
+      {{ $fstate := .JSON.String "state" }}
+      {{ $flat := .JSON.Float "attributes.latitude" }}
+      {{ $flon := .JSON.Float "attributes.longitude" }}
+      {{ $fname := "Frederik" }}
+      {{ $julie := .Subrequest "julie" }}
+      {{ $jstate := $julie.JSON.String "state" }}
+      {{ $jlat := $julie.JSON.Float "attributes.latitude" }}
+      {{ $jlon := $julie.JSON.Float "attributes.longitude" }}
+      {{ $jname := "Julie" }}
+
+      <div class="flex items-center justify-between gap-10" style="flex-wrap: wrap;">
+        <div class="flex items-center gap-10">
+          <span class="size-h3 {{ if eq $fstate "home" }}color-positive{{ else if eq $fstate "not_home" }}color-negative{{ else }}color-primary{{ end }}">●</span>
+          <div class="size-h4" style="text-transform: capitalize;">
+            {{ if and (ne $flat 0.0) (ne $flon 0.0) }}
+              <a class="color-highlight" href="https://maps.kagi.com/?q={{ $flat }},{{ $flon }}" target="_blank" rel="noreferrer">{{ if eq $fname "" }}Frederik{{ else }}{{ $fname }}{{ end }}</a>
+            {{ else }}
+              {{ if eq $fname "" }}Frederik{{ else }}{{ $fname }}{{ end }}
+            {{ end }}
+            <span class="size-h6 color-subdue">{{ if eq $fstate "home" }}Home <span aria-hidden="true" style="display: inline-block; width: 0.9em; height: 0.9em; vertical-align: -0.1em; background-color: currentColor; -webkit-mask: url('https://cdn.jsdelivr.net/npm/@mdi/svg/svg/home.svg') no-repeat center / contain; mask: url('https://cdn.jsdelivr.net/npm/@mdi/svg/svg/home.svg') no-repeat center / contain;"></span>{{ else if eq $fstate "not_home" }}Away{{ else }}{{ $fstate }}{{ end }}</span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-10">
+          <span class="size-h3 {{ if eq $jstate "home" }}color-positive{{ else if eq $jstate "not_home" }}color-negative{{ else }}color-primary{{ end }}">●</span>
+          <div class="size-h4" style="text-transform: capitalize;">
+            {{ if and (ne $jlat 0.0) (ne $jlon 0.0) }}
+              <a class="color-highlight" href="https://maps.kagi.com/?q={{ $jlat }},{{ $jlon }}" target="_blank" rel="noreferrer">{{ if eq $jname "" }}Julie{{ else }}{{ $jname }}{{ end }}</a>
+            {{ else }}
+              {{ if eq $jname "" }}Julie{{ else }}{{ $jname }}{{ end }}
+            {{ end }}
+            <span class="size-h6 color-subdue">{{ if eq $jstate "home" }}Home <span aria-hidden="true" style="display: inline-block; width: 0.9em; height: 0.9em; vertical-align: -0.1em; background-color: currentColor; -webkit-mask: url('https://cdn.jsdelivr.net/npm/@mdi/svg/svg/home.svg') no-repeat center / contain; mask: url('https://cdn.jsdelivr.net/npm/@mdi/svg/svg/home.svg') no-repeat center / contain;"></span>{{ else if eq $jstate "not_home" }}Away{{ else }}{{ $jstate }}{{ end }}</span>
+          </div>
+        </div>
+      </div>
+    {{ else }}
+      <div style="text-align: center;" class="color-negative size-h4">
+        Error: {{ .Response.StatusCode }} - {{ .Response.Status }}
+      </div>
+    {{ end }}
