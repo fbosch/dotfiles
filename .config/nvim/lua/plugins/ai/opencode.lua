@@ -11,7 +11,7 @@ return {
 			if vim.fn.executable("mullvad-exclude") == 1 then
 				cmd = "mullvad-exclude " .. cmd
 			end
-			
+
 			vim.g.opencode_opts = {
 				auto_reload = true,
 				provider = {
@@ -34,6 +34,46 @@ return {
 			vim.o.autoread = true
 		end,
 		config = function()
+			local function find_opencode_pids_for_cwd(cwd)
+				local pids = vim.fn.systemlist("pgrep -f '[o]pencode'")
+				if vim.v.shell_error ~= 0 then
+					return {}
+				end
+
+				local target_cwd = vim.fs.normalize(cwd)
+				local matches = {}
+				for _, pid in ipairs(pids) do
+					local trimmed_pid = vim.trim(pid)
+					if trimmed_pid:match("^%d+$") then
+						local cwd_info = vim.fn.systemlist("lsof -a -d cwd -p " .. trimmed_pid .. " -Fn 2>/dev/null")
+						if vim.v.shell_error == 0 then
+							for _, line in ipairs(cwd_info) do
+								if vim.startswith(line, "n") then
+									local proc_cwd = vim.fs.normalize(line:sub(2))
+									if proc_cwd == target_cwd then
+										table.insert(matches, trimmed_pid)
+									end
+									break
+								end
+							end
+						end
+					end
+				end
+
+				return matches
+			end
+
+			local function stop_and_cleanup_opencode_for_cwd()
+				pcall(function()
+					require("opencode").stop()
+				end)
+
+				local cwd = vim.fn.getcwd()
+				for _, pid in ipairs(find_opencode_pids_for_cwd(cwd)) do
+					vim.fn.system("kill -TERM " .. pid)
+				end
+			end
+
 			local function focus_opencode_window()
 				vim.schedule(function()
 					for _, win in ipairs(vim.api.nvim_list_wins()) do
@@ -85,10 +125,7 @@ return {
 				callback = function(args)
 					local filetype = vim.bo[args.buf].filetype
 					if filetype == "opencode_terminal" or filetype == "opencode" then
-						-- Stop the opencode session for this instance
-						pcall(function()
-							require("opencode").stop()
-						end)
+						stop_and_cleanup_opencode_for_cwd()
 					end
 				end,
 			})
@@ -226,7 +263,10 @@ return {
 			vim.api.nvim_create_autocmd("User", {
 				pattern = "OpencodeEvent",
 				callback = function(args)
-					if args.data.event.type == "session.idle" then
+					local event = args.data and args.data.event or {}
+					if event.type == "closeCalled" or event.type == "close.called" then
+						stop_and_cleanup_opencode_for_cwd()
+					elseif event.type == "session.idle" then
 						-- Session is idle, can trigger notifications or other actions
 						vim.notify("opencode session idle", vim.log.levels.DEBUG)
 					end
