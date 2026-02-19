@@ -45,12 +45,16 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     end
 
     set -l temp_output (mktemp -t opencode_output.XXXXXX)
+    set -l session_id ""
 
     # Run with primary model
     set -l current_model $ai_model
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $current_model..." -- \
         sh -c "opencode run --command commit-msg -m $current_model --format json '$cmd_args' 2>/dev/null > $temp_output"
 
+    # Extract session ID for cleanup
+    set session_id (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "sessionStart") | .sessionId' 2>/dev/null | head -n 1)
+    
     set -l raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
 
     # Fallback if empty
@@ -65,6 +69,7 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
 
     if test -z "$raw_output"
         gum style " Failed to generate commit message"
+        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
         return 1
     end
 
@@ -87,6 +92,7 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         gum style " Failed to extract valid commit message"
         gum style --foreground 3 "Raw output:"
         echo "$raw_output"
+        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
         return 1
     end
 
@@ -123,10 +129,12 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     set -l edited_msg (gum input --value="$commit_msg" --width 100 --prompt "󰏫 " --placeholder "Edit commit message or press Enter to accept...")
     if test $status -ne 0
         gum style --foreground 1 "󰜺 Commit cancelled"
+        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
         return 1
     end
     if test -z "$edited_msg"
         gum style --foreground 1 "󰜺 Commit cancelled (empty message)"
+        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
         return 1
     end
 
@@ -152,12 +160,18 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         gum style --foreground 2 "  git commit -m \"$edited_msg\""
         gum style --foreground 6 "\nStaged files:"
         git diff --cached --name-only | sed 's/^/  /'
+        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
         return 0
     end
 
     history add git\ commit\ -m\ "$edited_msg" >/dev/null 2>&1
     git commit -m "$edited_msg"
-    if test $status -eq 0
+    set -l commit_status $status
+    
+    # Cleanup session
+    test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
+    
+    if test $commit_status -eq 0
         gum style --foreground 2 "󰸞 Commit successful!"
     else
         gum style --foreground 1 "󱎘 Commit failed"

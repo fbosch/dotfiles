@@ -50,12 +50,16 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
 
     set -l temp_pr_desc (mktemp).md
     set -l temp_output (mktemp -t opencode_output.XXXXXX)
+    set -l session_id ""
     
     # Run opencode with diff file passed as argument content
     set -l diff_content (cat $actual_diff_file)
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- \
         sh -c "opencode run --command pr-desc -m $ai_model --format json '$diff_content' > $temp_output 2>&1"
     set -l opencode_exit_code $status
+    
+    # Extract session ID for cleanup
+    set session_id (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "sessionStart") | .sessionId' 2>/dev/null | head -n 1)
     
     rm -f $actual_diff_file
     
@@ -66,12 +70,14 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
             cat $temp_output
         end
         rm -f "$temp_pr_desc" $temp_output
+        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
         return 1
     end
     
     if not test -s "$temp_output"
         gum style --foreground 1 " OpenCode produced no output"
         rm -f "$temp_pr_desc" $temp_output
+        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
         return 1
     end
     
@@ -82,6 +88,7 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
         gum style --foreground 1 " No valid PR description generated. Raw output:"
         cat $temp_output | head -n 50
         rm -f "$temp_pr_desc" $temp_output
+        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
         return 1
     end
     
@@ -98,12 +105,14 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
     
     if not test -f "$temp_pr_desc"
         gum style --foreground 1 "󰜺 PR description cancelled"
+        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
         return 1
     end
 
     if not test -s "$temp_pr_desc"
         rm -f "$temp_pr_desc"
         gum style --foreground 1 "󰜺 PR description cancelled (empty content)"
+        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
         return 1
     end
     
@@ -132,4 +141,7 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
     end
 
     rm -f "$temp_pr_desc"
+    
+    # Cleanup session
+    test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
 end
