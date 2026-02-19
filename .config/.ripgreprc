@@ -1,6 +1,5 @@
 --max-columns=150
 --max-columns-preview
---threads=8
 
 --line-number
 --no-heading

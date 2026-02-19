@@ -237,10 +237,7 @@ function M.statusline_component()
 		if primary_remaining == 0 then
 			if primary then
 				local filled_bar, empty_bar = generate_bar(0, 9)
-				table.insert(
-					parts,
-					string.format("%%#Comment#%s 0%%%%%%*", empty_bar)
-				)
+				table.insert(parts, string.format("%%#Comment#%s 0%%%%%%*", empty_bar))
 			end
 			return table.concat(parts, " ")
 		end
@@ -258,15 +255,7 @@ function M.statusline_component()
 			local countdown = format_countdown(primary.resetsAt)
 			table.insert(
 				parts,
-				string.format(
-					"%s%s%%*%s%s%%* %s%d%%%%%%*",
-					color,
-					filled_bar,
-					"%#Comment#",
-					empty_bar,
-					color,
-					percent
-				)
+				string.format("%s%s%%*%s%s%%* %s%d%%%%%%*", color, filled_bar, "%#Comment#", empty_bar, color, percent)
 			)
 			if countdown then
 				table.insert(parts, string.format("%%#NonText#%s", countdown))
