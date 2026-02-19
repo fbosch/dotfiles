@@ -105,6 +105,19 @@ STAGED DIFF (focus on THIS change):
     # Capture existing sessions before running (for cleanup)
     set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
 
+    # Set up cleanup on interrupt (SIGINT/SIGTERM)
+    # Note: SIGKILL (kill -9) cannot be trapped by any process
+    function __ai_commit_cleanup --on-signal SIGINT --on-signal SIGTERM
+        set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
+        for session_path in $sessions_after
+            if not contains $session_path $sessions_before
+                cleanup_opencode_session "$session_path" 2>/dev/null
+                break
+            end
+        end
+        functions -e __ai_commit_cleanup
+        exit 130
+    end
 
     # Run AI generation with fallback
     set temp_output (mktemp -t opencode_output.XXXXXX)
@@ -282,6 +295,9 @@ STAGED DIFF (focus on THIS change):
     history add git\ commit\ -m\ "$edited_msg" >/dev/null 2>&1
     git commit -m "$edited_msg"
     set -l commit_status $status
+
+    # Remove signal handler
+    functions -e __ai_commit_cleanup 2>/dev/null
 
     # Cleanup sessions
     if test $commit_status -eq 0

@@ -146,6 +146,21 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     # Capture existing sessions before running (for cleanup)
     set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
     
+    # Set up cleanup on interrupt (SIGINT/SIGTERM)
+    # Note: SIGKILL (kill -9) cannot be trapped by any process
+    function __ai_pr_cleanup --on-signal SIGINT --on-signal SIGTERM
+        set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
+        for session_path in $sessions_after
+            if not contains $session_path $sessions_before
+                cleanup_opencode_session "$session_path" 2>/dev/null
+                break
+            end
+        end
+        rm -f "$temp_pr_desc" $temp_prompt $temp_output $temp_diff "$temp_output.err" 2>/dev/null
+        functions -e __ai_pr_cleanup
+        exit 130
+    end
+    
     # Run opencode by piping the prompt instead of command substitution
     set opencode_exit_code 0
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- sh -c "cat $temp_prompt | opencode run -m $ai_model --format json > $temp_output 2>&1"
@@ -202,6 +217,9 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
     if test -n "$used_session_path"
         cleanup_opencode_session "$used_session_path"
     end
+
+    # Remove signal handler (cleanup done)
+    functions -e __ai_pr_cleanup 2>/dev/null
     
     # Open in ephemeral Neovim instance for editing
     # -f: foreground (blocking)
@@ -256,4 +274,7 @@ Diff below. Describe ONLY visible substantive changes. Skip trivial changes enti
 
     # Cleanup temp file
     rm -f "$temp_pr_desc"
+
+    # Final cleanup of signal handler if still present
+    functions -e __ai_pr_cleanup 2>/dev/null
 end
