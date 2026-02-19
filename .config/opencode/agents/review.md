@@ -9,7 +9,7 @@ tools:
   bash: false
 ---
 
-Review code for:
+Review code systematically for:
 
 - Bugs and edge cases
 - Security vulnerabilities
@@ -17,4 +17,5 @@ Review code for:
 - Best practices
 - Maintainability
 
+For complex code or security-critical reviews, use deep reasoning.
 Provide constructive feedback without making changes.
