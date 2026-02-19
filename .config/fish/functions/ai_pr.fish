@@ -54,7 +54,7 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
     # Run opencode with diff file passed as argument content
     set -l diff_content (cat $actual_diff_file)
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- \
-        sh -c "opencode run --command ai-pr -m $ai_model --format json '$diff_content' > $temp_output 2>&1"
+        sh -c "opencode run --command pr-desc -m $ai_model --format json '$diff_content' > $temp_output 2>&1"
     set -l opencode_exit_code $status
     
     rm -f $actual_diff_file

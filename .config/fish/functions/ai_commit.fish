@@ -10,7 +10,8 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         gum style " Not in a git repository"
         return 1
     end
-    if test -z (git diff --cached --name-only)
+    set -l staged_files (git diff --cached --name-only)
+    if test -z "$staged_files"
         gum style " No staged changes to commit"
         return 1
     end
@@ -48,7 +49,7 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     # Run with primary model
     set -l current_model $ai_model
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $current_model..." -- \
-        sh -c "opencode run --command ai-commit -m $current_model --format json '$cmd_args' > $temp_output 2>/dev/null"
+        sh -c "opencode run --command commit-msg -m $current_model --format json '$cmd_args' > $temp_output 2>/dev/null"
 
     set -l raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
 
@@ -56,7 +57,7 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     if test -z "$raw_output"
         set current_model $fallback_model
         gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- \
-            sh -c "opencode run --command ai-commit -m $current_model --format json '$cmd_args' > $temp_output 2>/dev/null"
+            sh -c "opencode run --command commit-msg -m $current_model --format json '$cmd_args' > $temp_output 2>/dev/null"
         set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
     end
 
@@ -95,7 +96,7 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         set current_model $fallback_model
         set -l temp_output2 (mktemp -t opencode_output.XXXXXX)
         gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- \
-            sh -c "opencode run --command ai-commit -m $current_model --format json '$cmd_args' > $temp_output2 2>/dev/null"
+            sh -c "opencode run --command commit-msg -m $current_model --format json '$cmd_args' > $temp_output2 2>/dev/null"
         set -l raw2 (cat $temp_output2 | sed 's/\x1b\[[0-9;]*m//g' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
         rm -f $temp_output2
         if test -n "$raw2"
