@@ -44,16 +44,28 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         set cmd_args "$cmd_args type:$branch_hint"
     end
 
+    # Capture existing sessions before running (for cleanup)
+    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
+
+    # Set up cleanup on interrupt (SIGINT/SIGTERM)
+    # Note: SIGKILL (kill -9) cannot be trapped by any process
+    function __ai_commit_cleanup --on-signal SIGINT --on-signal SIGTERM
+        set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
+        for session_path in $sessions_after
+            if not contains $session_path $sessions_before
+                cleanup_opencode_session "$session_path" 2>/dev/null
+                break
+            end
+        end
+        functions -e __ai_commit_cleanup
+    end
+
     set -l temp_output (mktemp -t opencode_output.XXXXXX)
-    set -l session_id ""
 
     # Run with primary model
     set -l current_model $ai_model
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $current_model..." -- \
         sh -c "opencode run --command commit-msg -m $current_model --format json '$cmd_args' 2>/dev/null > $temp_output"
-
-    # Extract session ID for cleanup
-    set session_id (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "sessionStart") | .sessionId' 2>/dev/null | head -n 1)
     
     set -l raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
 
@@ -67,9 +79,28 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
 
     rm -f $temp_output
 
+    # Determine the new session created by this run
+    set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
+    set -l used_session_path ""
+    for session_path in $sessions_after
+        if not contains $session_path $sessions_before
+            set used_session_path $session_path
+            break
+        end
+    end
+
+    # Cleanup the session before proceeding
+    if test -n "$used_session_path"
+        if set -q _flag_verbose
+            cleanup_opencode_session --verbose "$used_session_path"
+        else
+            cleanup_opencode_session "$used_session_path" 2>/dev/null
+        end
+    end
+
     if test -z "$raw_output"
         gum style " Failed to generate commit message"
-        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
+        functions -e __ai_commit_cleanup 2>/dev/null
         return 1
     end
 
@@ -92,7 +123,7 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         gum style " Failed to extract valid commit message"
         gum style --foreground 3 "Raw output:"
         echo "$raw_output"
-        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
+        functions -e __ai_commit_cleanup 2>/dev/null
         return 1
     end
 
@@ -129,12 +160,12 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     set -l edited_msg (gum input --value="$commit_msg" --width 100 --prompt "󰏫 " --placeholder "Edit commit message or press Enter to accept...")
     if test $status -ne 0
         gum style --foreground 1 "󰜺 Commit cancelled"
-        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
+        functions -e __ai_commit_cleanup 2>/dev/null
         return 1
     end
     if test -z "$edited_msg"
         gum style --foreground 1 "󰜺 Commit cancelled (empty message)"
-        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
+        functions -e __ai_commit_cleanup 2>/dev/null
         return 1
     end
 
@@ -160,7 +191,7 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         gum style --foreground 2 "  git commit -m \"$edited_msg\""
         gum style --foreground 6 "\nStaged files:"
         git diff --cached --name-only | sed 's/^/  /'
-        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
+        functions -e __ai_commit_cleanup 2>/dev/null
         return 0
     end
 
@@ -168,8 +199,8 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     git commit -m "$edited_msg"
     set -l commit_status $status
     
-    # Cleanup session
-    test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
+    # Remove signal handler
+    functions -e __ai_commit_cleanup 2>/dev/null
     
     if test $commit_status -eq 0
         gum style --foreground 2 "󰸞 Commit successful!"

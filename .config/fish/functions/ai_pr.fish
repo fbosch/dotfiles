@@ -50,16 +50,30 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
 
     set -l temp_pr_desc (mktemp).md
     set -l temp_output (mktemp -t opencode_output.XXXXXX)
-    set -l session_id ""
+    
+    # Capture existing sessions before running (for cleanup)
+    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
+    
+    # Set up cleanup on interrupt (SIGINT/SIGTERM)
+    # Note: SIGKILL (kill -9) cannot be trapped by any process
+    function __ai_pr_cleanup --on-signal SIGINT --on-signal SIGTERM
+        set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
+        for session_path in $sessions_after
+            if not contains $session_path $sessions_before
+                cleanup_opencode_session "$session_path" 2>/dev/null
+                break
+            end
+        end
+        rm -f "$temp_pr_desc" $temp_output $actual_diff_file 2>/dev/null
+        functions -e __ai_pr_cleanup
+        exit 130
+    end
     
     # Run opencode with diff file passed as argument content
     set -l diff_content (cat $actual_diff_file)
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- \
         sh -c "opencode run --command pr-desc -m $ai_model --format json '$diff_content' > $temp_output 2>&1"
     set -l opencode_exit_code $status
-    
-    # Extract session ID for cleanup
-    set session_id (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "sessionStart") | .sessionId' 2>/dev/null | head -n 1)
     
     rm -f $actual_diff_file
     
@@ -70,14 +84,14 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
             cat $temp_output
         end
         rm -f "$temp_pr_desc" $temp_output
-        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
+        functions -e __ai_pr_cleanup 2>/dev/null
         return 1
     end
     
     if not test -s "$temp_output"
         gum style --foreground 1 " OpenCode produced no output"
         rm -f "$temp_pr_desc" $temp_output
-        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
+        functions -e __ai_pr_cleanup 2>/dev/null
         return 1
     end
     
@@ -88,11 +102,24 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
         gum style --foreground 1 " No valid PR description generated. Raw output:"
         cat $temp_output | head -n 50
         rm -f "$temp_pr_desc" $temp_output
-        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
+        functions -e __ai_pr_cleanup 2>/dev/null
         return 1
     end
     
     rm -f $temp_output
+
+    # Cleanup the session used for generation
+    set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
+    set -l used_session_path ""
+    for session_path in $sessions_after
+        if not contains $session_path $sessions_before
+            set used_session_path $session_path
+            break
+        end
+    end
+    if test -n "$used_session_path"
+        cleanup_opencode_session "$used_session_path" 2>/dev/null
+    end
 
     # Open in Neovim for editing
     nvim -f \
@@ -105,14 +132,14 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
     
     if not test -f "$temp_pr_desc"
         gum style --foreground 1 "󰜺 PR description cancelled"
-        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
+        functions -e __ai_pr_cleanup 2>/dev/null
         return 1
     end
 
     if not test -s "$temp_pr_desc"
         rm -f "$temp_pr_desc"
         gum style --foreground 1 "󰜺 PR description cancelled (empty content)"
-        test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
+        functions -e __ai_pr_cleanup 2>/dev/null
         return 1
     end
     
@@ -142,6 +169,6 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
 
     rm -f "$temp_pr_desc"
     
-    # Cleanup session
-    test -n "$session_id"; and cleanup_opencode_session "$session_id" >/dev/null 2>&1
+    # Remove signal handler
+    functions -e __ai_pr_cleanup 2>/dev/null
 end
