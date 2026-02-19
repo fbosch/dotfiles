@@ -6,9 +6,10 @@ return {
 	event = "VeryLazy",
 	config = function()
 		local git = require("utils.git")
-		local codexbar = require("utils.codexbar")
-		local opencode_zen_stats = require("utils.opencode_zen_stats")
-		local copilot_usage = require("utils.copilot_usage")
+		local codexbar = require("utils.usage.codex")
+		local copilot_usage = require("utils.usage.copilot")
+		local opencode_zen_stats = require("utils.usage.opencode")
+		local anthropic_usage = require("utils.usage.anthropic")
 
 		local lualine_x = {
 			require("opencode").statusline,
@@ -33,6 +34,15 @@ return {
 			{
 				function()
 					local ok, result = pcall(opencode_zen_stats.statusline_component)
+					if not ok then
+						return nil
+					end
+					return result
+				end,
+			},
+			{
+				function()
+					local ok, result = pcall(anthropic_usage.statusline_component)
 					if not ok then
 						return nil
 					end

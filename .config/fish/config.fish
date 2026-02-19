@@ -151,6 +151,11 @@ if test -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
     fish_add_path --prepend --move /run/current-system/sw/bin
 end
 
+# --- Homebrew paths (ensure they're present for child processes like Neovim) ---
+if test $OS_TYPE = Darwin
+    fish_add_path /opt/homebrew/bin /opt/homebrew/sbin
+end
+
 # --- Inshellisense ---
 if test -f ~/.inshellisense/key-bindings.fish
     source ~/.inshellisense/key-bindings.fish
