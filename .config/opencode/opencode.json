@@ -32,7 +32,7 @@
       "temperature": 0.1
     },
     "compaction": {
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "github-copilot/claude-sonnet-4.5",
       "temperature": 0.0
     }
   },
