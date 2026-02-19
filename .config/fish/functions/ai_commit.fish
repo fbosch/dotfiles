@@ -49,7 +49,7 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     # Run with primary model
     set -l current_model $ai_model
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $current_model..." -- \
-        sh -c "opencode run --command commit-msg -m $current_model --format json '$cmd_args' > $temp_output 2>/dev/null"
+        sh -c "opencode run --command commit-msg -m $current_model --format json '$cmd_args' > $temp_output 2>&1 | grep -v '^[^{]' >> $temp_output"
 
     set -l raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
 
@@ -57,7 +57,7 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     if test -z "$raw_output"
         set current_model $fallback_model
         gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- \
-            sh -c "opencode run --command commit-msg -m $current_model --format json '$cmd_args' > $temp_output 2>/dev/null"
+            sh -c "opencode run --command commit-msg -m $current_model --format json '$cmd_args' > $temp_output 2>&1 | grep -v '^[^{]' >> $temp_output"
         set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
     end
 

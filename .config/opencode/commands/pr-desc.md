@@ -19,11 +19,15 @@ Line 3+: Markdown PR body
 **Sections (use exactly these headings):**
 
 ## Summary
+
 ## Changes
+
 ## Testing
+
 ## Breaking Changes
 
 **Hard limits:**
+
 - Summary: 1 sentence, max 14 words
 - Changes: 2–5 bullets, max 10 words each
 - Testing: 1 bullet — command or "Not stated"
@@ -31,11 +35,13 @@ Line 3+: Markdown PR body
 - Total output: 26 lines max
 
 **Length calibration:**
+
 - Small PR (≤3 files, ≤2 commits): 2 bullets
 - Medium PR (4–10 files or 3–6 commits): 3–4 bullets
 - Large PR (>10 files or >6 commits): 4–5 bullets
 
 **Rules:**
+
 - Plain verbs: add, remove, change, fix, update
 - No marketing language, no filler, no paragraphs
 - No first person, no "this PR"

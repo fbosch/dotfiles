@@ -11,6 +11,7 @@ Previous commit: !`git log -1 --pretty=format:"%s" 2>/dev/null`
 Arguments (branch hint / ticket if provided): $ARGUMENTS
 
 **ABSOLUTE REQUIREMENTS:**
+
 1. Subject line MUST be ≤50 characters TOTAL (type + scope + colon + space + subject)
 2. Format: `<type>(<scope>): <subject>`
 3. Output ONLY the subject line — no explanations, no markdown, no body text
@@ -21,6 +22,7 @@ Arguments (branch hint / ticket if provided): $ARGUMENTS
 **Scope:** Use ticket number as `AB#<n>` if present in branch name or arguments, otherwise use module/feature name.
 
 **Rules:**
+
 - Imperative mood: "add", "fix", "update" — not "added", "fixes"
 - Specific and atomic — describe exactly what this commit changes
 - No past tense, no future tense, no periods at end
@@ -28,6 +30,7 @@ Arguments (branch hint / ticket if provided): $ARGUMENTS
 - Lowercase first letter of subject after scope
 
 **Character counting is mandatory:**
+
 - Count: type + ( + scope + ) + : + space + subject
 - If your count shows >50, STOP and make it shorter
 - Abbreviation strategies: remove articles, use shorter verbs ("implement"→"add", "initialize"→"init"), compress scope ("authentication"→"auth")
