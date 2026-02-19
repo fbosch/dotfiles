@@ -196,6 +196,13 @@ local function color_for_percent(percent)
 	return "%#DiagnosticError#"
 end
 
+local function nilify(value)
+	if value == vim.NIL then
+		return nil
+	end
+	return value
+end
+
 local function generate_bar(percent, width)
 	width = width or 9
 	local filled = math.floor((percent / 100) * width)
@@ -221,7 +228,7 @@ function M.statusline_component()
 		local provider = cache.data.provider or "codex"
 		table.insert(parts, string.format("%%#Comment#%s", provider))
 
-		local secondary = cache.data.usage.secondary
+		local secondary = nilify(cache.data.usage.secondary)
 		local secondary_remaining = secondary and remaining_percent(secondary.usedPercent) or nil
 
 		local show_primary = true
@@ -285,6 +292,18 @@ function M.statusline_component()
 end
 
 load_cache_from_disk()
+
+function M.clear_cache()
+	cache.data = nil
+	cache.last_update = 0
+	cache.fetching = false
+
+	if file_cache_enabled then
+		pcall(vim.fn.delete, cache_file)
+	end
+
+	M.fetch_data_async()
+end
 
 vim.defer_fn(function()
 	M.fetch_data_async()

@@ -196,6 +196,13 @@ local function color_for_percent(percent)
 	return "%#DiagnosticError#"
 end
 
+local function nilify(value)
+	if value == vim.NIL then
+		return nil
+	end
+	return value
+end
+
 local function generate_bar(percent, width)
 	width = width or 9
 	local filled = math.floor((percent / 100) * width)
@@ -220,36 +227,49 @@ function M.statusline_component()
 		local parts = {}
 		table.insert(parts, "%#Comment#claude")
 
-		local secondary = cache.data.usage.secondary
+		local primary = nilify(cache.data.usage.primary)
+		local primary_remaining = primary and remaining_percent(primary.usedPercent) or nil
+
+		local secondary = nilify(cache.data.usage.secondary)
 		local secondary_remaining = secondary and remaining_percent(secondary.usedPercent) or nil
 
+		-- If session (primary) is at 0%, show it grayed out and hide weekly (secondary)
+		if primary_remaining == 0 then
+			if primary then
+				local filled_bar, empty_bar = generate_bar(0, 9)
+				table.insert(
+					parts,
+					string.format("%%#Comment#%s 0%%%%%%*", empty_bar)
+				)
+			end
+			return table.concat(parts, " ")
+		end
+
+		-- Show primary (session) if weekly isn't depleted
 		local show_primary = true
 		if secondary_remaining == 0 then
 			show_primary = false
 		end
 
-		if show_primary then
-			local primary = cache.data.usage.primary
-			if primary then
-				local percent = remaining_percent(primary.usedPercent)
-				local filled_bar, empty_bar = generate_bar(percent, 9)
-				local color = color_for_percent(percent)
-				local countdown = format_countdown(primary.resetsAt)
-				table.insert(
-					parts,
-					string.format(
-						"%s%s%%*%s%s%%* %s%d%%%%%%*",
-						color,
-						filled_bar,
-						"%#Comment#",
-						empty_bar,
-						color,
-						percent
-					)
+		if show_primary and primary then
+			local percent = primary_remaining or remaining_percent(primary.usedPercent)
+			local filled_bar, empty_bar = generate_bar(percent, 9)
+			local color = color_for_percent(percent)
+			local countdown = format_countdown(primary.resetsAt)
+			table.insert(
+				parts,
+				string.format(
+					"%s%s%%*%s%s%%* %s%d%%%%%%*",
+					color,
+					filled_bar,
+					"%#Comment#",
+					empty_bar,
+					color,
+					percent
 				)
-				if countdown then
-					table.insert(parts, string.format("%%#NonText#%s", countdown))
-				end
+			)
+			if countdown then
+				table.insert(parts, string.format("%%#NonText#%s", countdown))
 			end
 		end
 
@@ -283,6 +303,18 @@ function M.statusline_component()
 end
 
 load_cache_from_disk()
+
+function M.clear_cache()
+	cache.data = nil
+	cache.last_update = 0
+	cache.fetching = false
+
+	if file_cache_enabled then
+		pcall(vim.fn.delete, cache_file)
+	end
+
+	M.fetch_data_async()
+end
 
 vim.defer_fn(function()
 	M.fetch_data_async()

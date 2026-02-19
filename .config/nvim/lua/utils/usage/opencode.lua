@@ -216,6 +216,19 @@ function M.statusline_component()
 	return string.format("%%#Comment#zen %s~$%.0f%%*", color, cache.data.cost)
 end
 
+function M.clear_cache()
+	cache.data = nil
+	cache.error = nil
+	cache.last_update = 0
+	cache.fetching = false
+
+	if file_cache_enabled then
+		pcall(vim.fn.delete, cache_file)
+	end
+
+	M.fetch_data_async()
+end
+
 vim.defer_fn(function()
 	M.fetch_data_async()
 end, 100)
