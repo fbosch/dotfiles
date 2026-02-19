@@ -1,12 +1,11 @@
 ---
-description: Investigates issues using bash and file inspection
+description: Investigates and diagnoses bugs, errors, and unexpected behavior using bash and file inspection. Use when a bug needs root cause analysis, when logs need examination, or when system state needs to be inspected.
 mode: subagent
 model: github-copilot/claude-sonnet-4.5
 temperature: 0.1
 tools:
   write: false
   edit: false
-  bash: true
 ---
 
 You investigate and diagnose issues systematically.
