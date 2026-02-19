@@ -24,7 +24,7 @@
       "temperature": 0.3
     },
     "title": {
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "github-copilot/grok-code-fast-1",
       "temperature": 0.0
     },
     "summary": {

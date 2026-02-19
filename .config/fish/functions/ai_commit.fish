@@ -1,5 +1,4 @@
 function ai_commit --description 'Generate AI-powered Commitizen commit message from branch context'
-    # Parse arguments
     argparse d/dry v/verbose 'm/model=' -- $argv
     or return 1
 
@@ -11,177 +10,76 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         gum style " Not in a git repository"
         return 1
     end
-    set -l staged_files (git diff --cached --name-only)
-    if test -z "$staged_files"
+    if test -z (git diff --cached --name-only)
         gum style " No staged changes to commit"
         return 1
     end
 
-    # Get branch context
-    set branch_name (git rev-parse --abbrev-ref HEAD)
-    set ticket_number ""
-    if string match -qr '(\d+)' $branch_name
+    # Extract branch context to pass as command arguments
+    set -l branch_name (git rev-parse --abbrev-ref HEAD)
+    set -l ticket_number ""
+    if string match -qr '\d+' $branch_name
         set ticket_number (string match -r '\d+' $branch_name)
     end
-    set branch_hint ""
+    set -l branch_hint ""
     if string match -qr '^([a-z]+)/' $branch_name
-        set branch_hint (string match -r '^([a-z]+)/' $branch_name | string split '/')[1]
+        set branch_hint (string match -r '^[a-z]+' $branch_name)
     end
-
-    # Get recent commit for context (helps AI understand the narrative)
-    set -l last_commit_msg ""
-    set -l commit_count (git rev-list --count HEAD 2>/dev/null)
-    if test "$commit_count" -gt 0
-        set last_commit_msg (git log -1 --pretty=format:"%s" 2>/dev/null)
-    end
-
-    # Generate the diff - focus on staged changes against HEAD
-    set temp_diff (mktemp -t commit_diff.XXXXXX)
-    git diff --cached >$temp_diff
-
-    # Build the prompt focusing on atomic changes
-    set temp_prompt (mktemp -t opencode_prompt.XXXXXX)
-    echo "🚨 CRITICAL: OUTPUT MUST BE EXACTLY ≤50 CHARACTERS TOTAL 🚨
-
-Generate a Commitizen commit message for staged changes.
-
-ABSOLUTE REQUIREMENTS:
-1. Maximum 50 characters TOTAL (count: type + scope + colon + space + subject)
-2. Format: <type>(<scope>): <subject>
-3. Output ONLY the commit message - NO explanations, NO markdown, NO thinking
-4. If >50 chars, you MUST abbreviate until ≤50
-
-CONTEXT:
-Branch: $branch_name" >$temp_prompt
-
-    if test -n "$last_commit_msg"
-        echo "Previous commit: $last_commit_msg" >>$temp_prompt
-    end
-
-    if test -n "$branch_hint"
-        echo "Branch type: $branch_hint" >>$temp_prompt
-    end
-    if test -n "$ticket_number"
-        echo "Ticket: $ticket_number" >>$temp_prompt
-    end
-    set -l skill_dir "$HOME/.config/opencode/skills/ai-commit"
-    set -l skill_file "$skill_dir/SKILL.md"
-    if not test -f "$skill_file"
-        set skill_file "$skill_dir/skill.md"
-    end
-    if not test -f "$skill_file"
-        gum style --foreground 1 " Skill not found: $skill_dir/SKILL.md"
-        rm -f $temp_prompt $temp_diff
-        return 1
-    end
-    set -l skill_body (sed '1,/^---$/d' "$skill_file" | sed '1,/^---$/d')
-    if test -z "$skill_body"
-        set skill_body (cat "$skill_file")
-    end
-    echo "
-$skill_body
-
-STAGED DIFF (focus on THIS change):
-" >>$temp_prompt
-
-    cat $temp_diff >>$temp_prompt
 
     if set -q _flag_verbose
         echo "Model: $ai_model"
-        echo "Fallback model: $fallback_model"
+        echo "Fallback: $fallback_model"
         echo "Branch: $branch_name"
-        if test -n "$branch_hint"
-            echo "Branch type: $branch_hint"
-        end
-        if test -n "$ticket_number"
-            echo "Ticket: $ticket_number"
-        end
-        if test -n "$last_commit_msg"
-            echo "Previous commit: $last_commit_msg"
-        end
-        echo "Skill file: $skill_file"
+        test -n "$branch_hint"; and echo "Branch type: $branch_hint"
+        test -n "$ticket_number"; and echo "Ticket: $ticket_number"
     end
 
-    # Capture existing sessions before running (for cleanup)
-    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
-
-    # Set up cleanup on interrupt (SIGINT/SIGTERM)
-    # Note: SIGKILL (kill -9) cannot be trapped by any process
-    function __ai_commit_cleanup --on-signal SIGINT --on-signal SIGTERM
-        set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
-        for session_path in $sessions_after
-            if not contains $session_path $sessions_before
-                cleanup_opencode_session "$session_path" 2>/dev/null
-                break
-            end
-        end
-        functions -e __ai_commit_cleanup
-        exit 130
+    # Build args string: branch name + ticket if found
+    set -l cmd_args "$branch_name"
+    if test -n "$ticket_number"
+        set cmd_args "$cmd_args ticket:$ticket_number"
+    end
+    if test -n "$branch_hint"
+        set cmd_args "$cmd_args type:$branch_hint"
     end
 
-    # Run AI generation with fallback
-    set temp_output (mktemp -t opencode_output.XXXXXX)
-    set current_model $ai_model
-    gum spin --spinner pulse --title "󰚩 Analyzing changes with $current_model..." -- sh -c "cat $temp_prompt | opencode run -m $current_model --format json 2>/dev/null > $temp_output"
+    set -l temp_output (mktemp -t opencode_output.XXXXXX)
 
-    # Extract output - get ONLY the final text message (skip thinking/intermediate outputs)
-    # The JSON output is newline-delimited, with each line being a separate event
-    # We want only "text" type events, and we'll take the LAST one as the final answer
-    set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
+    # Run with primary model
+    set -l current_model $ai_model
+    gum spin --spinner pulse --title "󰚩 Analyzing changes with $current_model..." -- \
+        sh -c "opencode run --command ai-commit -m $current_model --format json '$cmd_args' > $temp_output 2>/dev/null"
 
-    # If jq parsing failed, try plain text extraction
-    if test -z "$raw_output"
-        set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | string collect | string trim)
-    end
+    set -l raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
 
-    # Try fallback model if primary failed
+    # Fallback if empty
     if test -z "$raw_output"
         set current_model $fallback_model
-        gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- sh -c "cat $temp_prompt | opencode run -m $current_model --format json 2>/dev/null > $temp_output"
-
-        # Extract with same logic - last text message only
+        gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- \
+            sh -c "opencode run --command ai-commit -m $current_model --format json '$cmd_args' > $temp_output 2>/dev/null"
         set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
-
-        # Try plain text extraction for fallback too
-        if test -z "$raw_output"
-            set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | string collect | string trim)
-        end
     end
+
+    rm -f $temp_output
 
     if test -z "$raw_output"
         gum style " Failed to generate commit message"
-        rm -f $temp_prompt $temp_output $temp_diff
         return 1
     end
 
-    # Debug: show what we got
-    if set -q DEBUG_AI_COMMIT
-        gum style --foreground 6 "=== DEBUG: Raw AI Output ==="
-        echo "$raw_output"
-        gum style --foreground 6 "=== END DEBUG ==="
-    end
-
-    # Extract valid commit message (first line matching conventional commit format)
-    # Remove any markdown formatting, code blocks, or extra text
-    set cleaned_output (echo "$raw_output" | sed 's/```[a-z]*//g' | sed 's/^[[:space:]]*//g' | string collect)
-
-    # Try to extract just the commit message line
-    set commit_msg ""
-    for line in (echo "$cleaned_output" | string split "\n")
-        # Skip empty lines
-        if test -z "$line"
-            continue
-        end
-        # Look for conventional commit format
+    # Extract conventional commit line
+    set -l commit_msg ""
+    set -l cleaned (echo "$raw_output" | sed 's/```[a-z]*//g' | string trim)
+    for line in (echo "$cleaned" | string split "\n")
+        test -z "$line"; and continue
         if string match -qr '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?: ' -- "$line"
             set commit_msg "$line"
             break
         end
     end
-
-    # Fallback: take first non-empty line
+    # Fallback: first non-empty line
     if test -z "$commit_msg"
-        set commit_msg (echo "$cleaned_output" | string split "\n" | string match -r '^\S.*' | head -n 1)
+        set commit_msg (echo "$cleaned" | string split "\n" | string match -r '^\S.*' | head -n 1)
     end
 
     if test -z "$commit_msg"
@@ -191,69 +89,37 @@ STAGED DIFF (focus on THIS change):
         return 1
     end
 
-    # Retry with fallback model if too long
-    set msg_length (string length -- "$commit_msg")
-    if test -n "$msg_length" -a "$msg_length" -gt 50 -a "$current_model" != "$fallback_model"
+    # Retry with fallback if too long and haven't already
+    set -l msg_length (string length -- "$commit_msg")
+    if test "$msg_length" -gt 50 -a "$current_model" != "$fallback_model"
         set current_model $fallback_model
-        gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- sh -c "cat $temp_prompt | opencode run -m $current_model --format json 2>/dev/null > $temp_output"
-
-        set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
-        if test -z "$raw_output"
-            set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | string collect | string trim)
-        end
-        set cleaned_output (echo "$raw_output" | sed 's/```[a-z]*//g' | sed 's/^[[:space:]]*//g' | string collect)
-        set commit_msg ""
-        for line in (echo "$cleaned_output" | string split "\n")
-            if test -z "$line"
-                continue
+        set -l temp_output2 (mktemp -t opencode_output.XXXXXX)
+        gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- \
+            sh -c "opencode run --command ai-commit -m $current_model --format json '$cmd_args' > $temp_output2 2>/dev/null"
+        set -l raw2 (cat $temp_output2 | sed 's/\x1b\[[0-9;]*m//g' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
+        rm -f $temp_output2
+        if test -n "$raw2"
+            set cleaned (echo "$raw2" | sed 's/```[a-z]*//g' | string trim)
+            set commit_msg ""
+            for line in (echo "$cleaned" | string split "\n")
+                test -z "$line"; and continue
+                if string match -qr '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?: ' -- "$line"
+                    set commit_msg "$line"
+                    break
+                end
             end
-            if string match -qr '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?: ' -- "$line"
-                set commit_msg "$line"
-                break
-            end
+            test -z "$commit_msg"
+                and set commit_msg (echo "$cleaned" | string split "\n" | string match -r '^\S.*' | head -n 1)
+            set msg_length (string length -- "$commit_msg")
         end
-        if test -z "$commit_msg"
-            set commit_msg (echo "$cleaned_output" | string split "\n" | string match -r '^\S.*' | head -n 1)
-        end
-        set msg_length (string length -- "$commit_msg")
     end
 
-    # Validate length (max 50 chars for subject line)
-    if test -n "$msg_length" -a "$msg_length" -gt 50
+    if test "$msg_length" -gt 50
         gum style --foreground 3 "⚠ Generated message too long ($msg_length chars, max 50)"
-        # Try to truncate intelligently at word boundary
         set commit_msg (string sub -l 47 -- "$commit_msg")"..."
     end
 
-    rm -f $temp_prompt $temp_output $temp_diff
-
-    # Determine the new session created by this run
-    set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
-    set -l used_session_path ""
-    for session_path in $sessions_after
-        if not contains $session_path $sessions_before
-            set used_session_path $session_path
-            break
-        end
-    end
-
-    # Cleanup the session used for generation before prompting
-    if test -z "$used_session_path"
-        if set -q _flag_verbose
-            echo "Cleanup skipped: session id not found"
-        end
-    else
-        if set -q _flag_verbose
-            echo "Session path: $used_session_path"
-        end
-        if set -q _flag_verbose
-            cleanup_opencode_session --verbose "$used_session_path"
-        else
-            cleanup_opencode_session "$used_session_path"
-        end
-    end
-
-    set edited_msg (gum input --value="$commit_msg" --width 100 --prompt "󰏫 " --placeholder "Edit commit message or press Enter to accept...")
+    set -l edited_msg (gum input --value="$commit_msg" --width 100 --prompt "󰏫 " --placeholder "Edit commit message or press Enter to accept...")
     if test $status -ne 0
         gum style --foreground 1 "󰜺 Commit cancelled"
         return 1
@@ -264,9 +130,9 @@ STAGED DIFF (focus on THIS change):
     end
 
     gum style --foreground 208 "$edited_msg"
-    
+
     # Cross-platform clipboard copy
-    set clipboard_cmd pbcopy
+    set -l clipboard_cmd pbcopy
     if test (uname) != Darwin
         if command -v wl-copy >/dev/null 2>&1
             set clipboard_cmd wl-copy
@@ -276,12 +142,10 @@ STAGED DIFF (focus on THIS change):
             set clipboard_cmd ""
         end
     end
-    
     if test -n "$clipboard_cmd"
         printf "git commit -m \"%s\"" "$edited_msg" | eval $clipboard_cmd
     end
 
-    # Dry run mode - just show what would be committed
     if test "$dry_run" = true
         gum style --foreground 6 "🔍 Dry run - would execute:"
         gum style --foreground 2 "  git commit -m \"$edited_msg\""
@@ -290,19 +154,10 @@ STAGED DIFF (focus on THIS change):
         return 0
     end
 
-    # Add the commit command to shell history before executing
-    # This allows easy re-run if pre-commit hooks fail
     history add git\ commit\ -m\ "$edited_msg" >/dev/null 2>&1
     git commit -m "$edited_msg"
-    set -l commit_status $status
-
-    # Remove signal handler
-    functions -e __ai_commit_cleanup 2>/dev/null
-
-    # Cleanup sessions
-    if test $commit_status -eq 0
+    if test $status -eq 0
         gum style --foreground 2 "󰸞 Commit successful!"
-        return 0
     else
         gum style --foreground 1 "󱎘 Commit failed"
         return 1
