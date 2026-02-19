@@ -32,27 +32,13 @@ return {
 				},
 			}
 			vim.o.autoread = true
-
-			-- Ensure cleanup happens before Neovim exits
-			vim.api.nvim_create_autocmd("VimLeavePre", {
-				callback = function()
-					-- Stop the plugin gracefully
-					pcall(function()
-						require("opencode").stop()
-					end)
-
-					-- Kill only the opencode processes associated with buffers in this instance
-					for buf, pid in pairs(opencode_buf_pids) do
-						if pid and pid > 0 then
-							vim.fn.system("kill -TERM " .. pid)
-						end
-					end
-				end,
-			})
 		end,
 		config = function()
-			-- Track opencode process ID per buffer
-			local opencode_buf_pids = {}
+			-- Track opencode process ID per buffer (store in plugin namespace to persist)
+			if not vim.g.opencode_buf_pids then
+				vim.g.opencode_buf_pids = {}
+			end
+			local opencode_buf_pids = vim.g.opencode_buf_pids
 
 			local function stop_and_cleanup_opencode_for_buf(buf)
 				pcall(function()
@@ -138,6 +124,23 @@ return {
 					local filetype = vim.bo[args.buf].filetype
 					if filetype == "opencode_terminal" or filetype == "opencode" then
 						stop_and_cleanup_opencode_for_buf(args.buf)
+					end
+				end,
+			})
+
+			-- Ensure cleanup happens before Neovim exits
+			vim.api.nvim_create_autocmd("VimLeavePre", {
+				callback = function()
+					-- Stop the plugin gracefully
+					pcall(function()
+						require("opencode").stop()
+					end)
+
+					-- Kill only the opencode processes associated with buffers in this instance
+					for buf, pid in pairs(opencode_buf_pids) do
+						if pid and pid > 0 then
+							vim.fn.system("kill -TERM " .. pid)
+						end
 					end
 				end,
 			})
