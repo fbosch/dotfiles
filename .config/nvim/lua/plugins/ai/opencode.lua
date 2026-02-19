@@ -32,6 +32,28 @@ return {
 				},
 			}
 			vim.o.autoread = true
+
+			-- Ensure cleanup happens before Neovim exits
+			vim.api.nvim_create_autocmd("VimLeavePre", {
+				callback = function()
+					-- Stop the plugin gracefully
+					pcall(function()
+						require("opencode").stop()
+					end)
+
+					-- Async cleanup: spawn kill script in background without waiting
+					local cwd = vim.fn.getcwd()
+					local target_cwd = vim.fs.normalize(cwd)
+					
+					-- Build a single shell command to find and kill matching processes
+					local cleanup_cmd = string.format(
+						[[sh -c 'for pid in $(pgrep -f "[o]pencode" 2>/dev/null); do lsof -a -d cwd -p "$pid" -Fn 2>/dev/null | grep -q "^n%s$" && kill -TERM "$pid" 2>/dev/null; done' &]],
+						target_cwd:gsub("'", "'\\''") -- escape single quotes
+					)
+					
+					vim.fn.jobstart(cleanup_cmd, { detach = true })
+				end,
+			})
 		end,
 		config = function()
 			local function find_opencode_pids_for_cwd(cwd)
