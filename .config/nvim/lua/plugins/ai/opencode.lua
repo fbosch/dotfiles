@@ -41,58 +41,29 @@ return {
 						require("opencode").stop()
 					end)
 
-					-- Async cleanup: spawn kill script in background without waiting
-					local cwd = vim.fn.getcwd()
-					local target_cwd = vim.fs.normalize(cwd)
-					
-					-- Build a single shell command to find and kill matching processes
-					local cleanup_cmd = string.format(
-						[[sh -c 'for pid in $(pgrep -f "[o]pencode" 2>/dev/null); do lsof -a -d cwd -p "$pid" -Fn 2>/dev/null | grep -q "^n%s$" && kill -TERM "$pid" 2>/dev/null; done' &]],
-						target_cwd:gsub("'", "'\\''") -- escape single quotes
-					)
-					
-					vim.fn.jobstart(cleanup_cmd, { detach = true })
+					-- Kill only the opencode processes associated with buffers in this instance
+					for buf, pid in pairs(opencode_buf_pids) do
+						if pid and pid > 0 then
+							vim.fn.system("kill -TERM " .. pid)
+						end
+					end
 				end,
 			})
 		end,
 		config = function()
-			local function find_opencode_pids_for_cwd(cwd)
-				local pids = vim.fn.systemlist("pgrep -f '[o]pencode'")
-				if vim.v.shell_error ~= 0 then
-					return {}
-				end
+			-- Track opencode process ID per buffer
+			local opencode_buf_pids = {}
 
-				local target_cwd = vim.fs.normalize(cwd)
-				local matches = {}
-				for _, pid in ipairs(pids) do
-					local trimmed_pid = vim.trim(pid)
-					if trimmed_pid:match("^%d+$") then
-						local cwd_info = vim.fn.systemlist("lsof -a -d cwd -p " .. trimmed_pid .. " -Fn 2>/dev/null")
-						if vim.v.shell_error == 0 then
-							for _, line in ipairs(cwd_info) do
-								if vim.startswith(line, "n") then
-									local proc_cwd = vim.fs.normalize(line:sub(2))
-									if proc_cwd == target_cwd then
-										table.insert(matches, trimmed_pid)
-									end
-									break
-								end
-							end
-						end
-					end
-				end
-
-				return matches
-			end
-
-			local function stop_and_cleanup_opencode_for_cwd()
+			local function stop_and_cleanup_opencode_for_buf(buf)
 				pcall(function()
 					require("opencode").stop()
 				end)
 
-				local cwd = vim.fn.getcwd()
-				for _, pid in ipairs(find_opencode_pids_for_cwd(cwd)) do
+				-- Kill only the specific process associated with this buffer
+				local pid = opencode_buf_pids[buf]
+				if pid then
 					vim.fn.system("kill -TERM " .. pid)
+					opencode_buf_pids[buf] = nil
 				end
 			end
 
@@ -122,6 +93,25 @@ return {
 				callback = function(args)
 					local buf_opts = { buffer = args.buf, silent = true }
 
+					-- Extract and store the process ID from the terminal buffer
+					-- The terminal job ID can be retrieved via the terminal's job
+					vim.schedule(function()
+						local chan = vim.bo[args.buf].channel
+						if chan and chan > 0 then
+							-- Get the process ID associated with this terminal channel
+							local info = vim.fn.getpid()  -- This gets neovim's PID; we need the child process
+							-- For terminal buffers, Neovim tracks job info; we'll use jobpid if available
+							local job_id = vim.bo[args.buf].channel
+							if job_id then
+								-- Try to get the child process ID
+								local pid = vim.fn.jobpid(job_id)
+								if pid and pid > 0 then
+									opencode_buf_pids[args.buf] = pid
+								end
+							end
+						end
+					end)
+
 					-- Exit terminal with Ctrl-Esc (from terminal mode)
 					vim.keymap.set("t", "<C-Esc>", function()
 						vim.cmd("stopinsert")
@@ -147,7 +137,7 @@ return {
 				callback = function(args)
 					local filetype = vim.bo[args.buf].filetype
 					if filetype == "opencode_terminal" or filetype == "opencode" then
-						stop_and_cleanup_opencode_for_cwd()
+						stop_and_cleanup_opencode_for_buf(args.buf)
 					end
 				end,
 			})
@@ -287,7 +277,13 @@ return {
 				callback = function(args)
 					local event = args.data and args.data.event or {}
 					if event.type == "closeCalled" or event.type == "close.called" then
-						stop_and_cleanup_opencode_for_cwd()
+						-- Find and cleanup the opencode terminal buffer for this instance
+						for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+							if vim.bo[buf].filetype == "opencode_terminal" then
+								stop_and_cleanup_opencode_for_buf(buf)
+								break
+							end
+						end
 					elseif event.type == "session.idle" then
 						-- Session is idle, can trigger notifications or other actions
 						vim.notify("opencode session idle", vim.log.levels.DEBUG)
