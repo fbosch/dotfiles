@@ -2,11 +2,40 @@
   "$schema": "https://opencode.ai/config.json",
   "theme": "zenwritten-dark",
   "model": "github-copilot/claude-sonnet-4.5",
-  "small_model": "github-copilot/claude-sonnet-4.5",
+  "small_model": "github-copilot/claude-haiku-4.5",
   "instructions": [
     "AGENTS.md",
     ".cursor/rules/*.md*"
   ],
+  "agent": {
+    "build": {
+      "temperature": 0.3
+    },
+    "plan": {
+      "temperature": 0.3
+    },
+    "explore": {
+      "model": "github-copilot/claude-haiku-4.5",
+      "temperature": 0.0
+    },
+    "general": {
+      "model": "github-copilot/claude-haiku-4.5",
+      "steps": 15,
+      "temperature": 0.3
+    },
+    "title": {
+      "model": "github-copilot/claude-haiku-4.5",
+      "temperature": 0.0
+    },
+    "summary": {
+      "model": "github-copilot/claude-haiku-4.5",
+      "temperature": 0.1
+    },
+    "compaction": {
+      "model": "github-copilot/claude-haiku-4.5",
+      "temperature": 0.0
+    }
+  },
   "mcp": {
     "context7": {
       "type": "remote",
@@ -24,7 +53,10 @@
     },
     "github": {
       "type": "local",
-      "command": ["gh", "mcp"]
+      "command": [
+        "gh",
+        "mcp"
+      ]
     },
     "vitest": {
       "enabled": false,
