@@ -2,6 +2,11 @@
 description: Generate a Commitizen commit message for staged changes
 model: github-copilot/grok-code-fast-1
 subtask: true
+allowedTools:
+  - read
+  - glob
+  - grep
+  - bash
 ---
 
 Generate a Commitizen commit message for the staged changes below.

@@ -2,6 +2,11 @@
 description: Generate a PR description comparing current branch against main/master
 model: github-copilot/claude-haiku-4.5
 subtask: true
+allowedTools:
+  - read
+  - glob
+  - grep
+  - bash
 ---
 
 Generate a PR description in English (markdown) for the branch below.
