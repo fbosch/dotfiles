@@ -1,26 +1,15 @@
 ---
 description: Generate a Commitizen commit message for staged changes
-model: github-copilot/grok-code-fast-1
-subtask: true
+model: github-copilot/claude-haiku-4.5
 allowedTools:
   - read
-  - glob
-  - grep
-  - bash
 ---
 
-Generate a Commitizen commit message for the staged changes below.
+Output a single-line Commitizen commit message (≤50 chars) for these staged changes. Format: `<type>(<scope>): <subject>`
 
 Branch: !`git rev-parse --abbrev-ref HEAD`
 Previous commit: !`git log -1 --pretty=format:"%s" 2>/dev/null`
-Arguments (branch hint / ticket if provided): $ARGUMENTS
-
-**ABSOLUTE REQUIREMENTS:**
-
-1. Subject line MUST be ≤50 characters TOTAL (type + scope + colon + space + subject)
-2. Format: `<type>(<scope>): <subject>`
-3. Output ONLY the subject line — no explanations, no markdown, no body text
-4. If >50 chars, abbreviate until ≤50
+Arguments: $ARGUMENTS
 
 **Types:** feat, fix, docs, style, refactor, perf, test, build, ci, chore
 
@@ -34,13 +23,20 @@ Arguments (branch hint / ticket if provided): $ARGUMENTS
 - No vague subjects like "fix bug" or "update code"
 - Lowercase first letter of subject after scope
 
-**Character counting is mandatory:**
+**LENGTH ENFORCEMENT — NON-NEGOTIABLE:**
 
-- Count: type + ( + scope + ) + : + space + subject
-- If your count shows >50, STOP and make it shorter
-- Abbreviation strategies: remove articles, use shorter verbs ("implement"→"add", "initialize"→"init"), compress scope ("authentication"→"auth")
+Before outputting, COUNT your commit message characters. If >50:
+1. Shorten scope: "authentication"→"auth", "database"→"db"
+2. Compress verbs: "implement"→"add", "initialize"→"init", "configure"→"config"
+3. Remove articles: "the", "a", "an"
+4. Use abbreviations: "function"→"fn", "parameter"→"param"
 
-**Output:** ONLY the subject line. First character must be the commit type. No preamble, no explanation.
+Examples (with char counts):
+- `feat(auth): add user login flow` (31 chars) ✓
+- `feat(authentication): implement user authentication system` (59 chars) ✗
+- `feat(auth): add user auth system` (34 chars) ✓
+
+**Output:** ONLY the commit message. First character must be the commit type. No markdown blocks, no explanations, no questions.
 
 STAGED DIFF:
 !`git diff --cached`

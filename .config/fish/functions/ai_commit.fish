@@ -153,8 +153,10 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     end
 
     if test "$msg_length" -gt 50
-        gum style --foreground 3 "⚠ Generated message too long ($msg_length chars, max 50)"
-        set commit_msg (string sub -l 47 -- "$commit_msg")"..."
+        gum style --foreground 1 " Model failed to respect 50-char limit ($msg_length chars)"
+        gum style --foreground 3 "Generated: $commit_msg"
+        functions -e __ai_commit_cleanup 2>/dev/null
+        return 1
     end
 
     set -l edited_msg (gum input --value="$commit_msg" --width 100 --prompt "󰏫 " --placeholder "Edit commit message or press Enter to accept...")
