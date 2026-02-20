@@ -242,13 +242,7 @@ function M.statusline_component()
 			return table.concat(parts, " ")
 		end
 
-		-- Show primary (session) if weekly isn't depleted
-		local show_primary = true
-		if secondary_remaining == 0 then
-			show_primary = false
-		end
-
-		if show_primary and primary then
+		if primary then
 			local percent = primary_remaining or remaining_percent(primary.usedPercent)
 			local filled_bar, empty_bar = generate_bar(percent, 9)
 			local color = color_for_percent(percent)
@@ -265,12 +259,7 @@ function M.statusline_component()
 		if secondary then
 			local percent = secondary_remaining or remaining_percent(secondary.usedPercent)
 			local filled_bar, empty_bar = generate_bar(percent, 9)
-			local color
-			if not show_primary and percent == 0 then
-				color = "%#Comment#"
-			else
-				color = color_for_percent(percent)
-			end
+			local color = color_for_percent(percent)
 			local countdown = format_countdown(secondary.resetsAt)
 			table.insert(
 				parts,

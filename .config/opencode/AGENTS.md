@@ -26,6 +26,7 @@ Focus on substance over praise. Engage critically with my ideas, questioning ass
 - Keep core logic independent of frameworks/external services; inject dependencies and wrap external APIs behind adapters when it improves testability/coupling.
 - Add comments only for non-obvious intent; prefer self-explanatory code.
 - Avoid typecasting if it can be avoided.
+- Avoid single-use wrapper functions and trivial helper functions.
 
 ## Safety and git
 

@@ -25,34 +25,19 @@ MATCHERS_JSON=""  # Cached JSON representation of MATCHER_PATTERNS (invalidated 
 declare -A RULES_CACHE  # Cache for existing rules (class -> rules mapping)
 declare -a MATCHER_PATTERNS=()  # Array of matcher:pattern pairs
 
-# Load window patterns from config (new format: "matcher pattern")
-load_patterns() {
-    [[ ! -f "$CONFIG_FILE" ]] && return 1
-    # Use grep for small files (faster than rg due to lower startup overhead)
-    grep -Ev '^[[:space:]]*(#|$)' "$CONFIG_FILE"
-}
-
-
 # Parse config and build matcher array
 parse_matchers() {
     MATCHER_PATTERNS=()
     MATCHERS_JSON=""  # invalidate cached JSON
-    
+
+    [[ ! -f "$CONFIG_FILE" ]] && return
+
     while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
-        
         # Parse "matcher pattern" format (e.g., "match:class Mullvad VPN")
         if [[ "$line" =~ ^(match:[a-zA-Z_]+)[[:space:]]+(.+)$ ]]; then
-            local matcher="${BASH_REMATCH[1]}"
-            local pattern="${BASH_REMATCH[2]}"
-            MATCHER_PATTERNS+=("$matcher|$pattern")
+            MATCHER_PATTERNS+=("${BASH_REMATCH[1]}|${BASH_REMATCH[2]}")
         fi
-    done < <(load_patterns)
-}
-
-# Reload matchers (called when config changes)
-reload_pattern_cache() {
-    parse_matchers
+    done < <(grep -Ev '^[[:space:]]*(#|$)' "$CONFIG_FILE")
 }
 
 # Initialize rules file if needed
@@ -109,42 +94,25 @@ get_window_states() {
     clients=$(printf 'j/clients'  | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null) || { printf 'ERROR: clients query failed\n' >&2; echo "[]"; return 1; }
     
     jq -c --argjson matchers "$matchers_json" --argjson monitors "$monitors" '
-        ($monitors | map({id: .id, name: .name, x: .x, y: .y, width: .width, height: .height}) | INDEX(.id)) as $mon_map |
+        def field_of(w; m): w | if   m.field == "class"        then .class
+                                 elif m.field == "title"        then .title
+                                 elif m.field == "initialClass" then .initialClass
+                                 elif m.field == "initialTitle" then .initialTitle
+                                 else empty end;
+        ($monitors | map({id, name, x, y}) | INDEX(.id)) as $mon_map |
         [.[] | select(.floating) |
-        . as $window |
-        select(
-            ($matchers | map(
-                . as $m | 
-                $window |
-                if $m.field == "class" then .class
-                elif $m.field == "title" then .title
-                elif $m.field == "initialClass" then .initialClass
-                elif $m.field == "initialTitle" then .initialTitle
-                else empty
-                end | test($m.pattern)
-            ) | any)
-        ) |
-        ($mon_map[.monitor | tostring] // {x: 0, y: 0}) as $mon |
-        ($matchers | map(
-            . as $m |
-            $window |
-            (if $m.field == "class" then .class
-            elif $m.field == "title" then .title
-            elif $m.field == "initialClass" then .initialClass
-            elif $m.field == "initialTitle" then .initialTitle
-            else empty
-            end | test($m.pattern)) |
-            if . then $m else empty end
-        ) | first) as $matched |
+        . as $w |
+        first($matchers[] | select(field_of($w; .) | test(.pattern))) as $matched |
+        ($mon_map[$w.monitor | tostring] // {name: "", x: 0, y: 0}) as $mon |
         {
-            class: .class,
+            class: $w.class,
             matcher: $matched.matcher,
             pattern: $matched.pattern,
-            monitor: ($mon.name // ""),
-            x: (.at[0] - $mon.x),
-            y: (.at[1] - $mon.y),
-            width: .size[0],
-            height: .size[1]
+            monitor: $mon.name,
+            x: ($w.at[0] - $mon.x),
+            y: ($w.at[1] - $mon.y),
+            width: $w.size[0],
+            height: $w.size[1]
         }] | sort_by(.class)
     ' <<< "$clients"
 }
@@ -420,7 +388,7 @@ handle_event() {
             ;;
         configreloaded*)
             # Config reloaded - reload caches and recheck what we're tracking
-            reload_pattern_cache
+            parse_matchers
             load_rules_cache
             
             local state
