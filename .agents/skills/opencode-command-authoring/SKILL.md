@@ -59,8 +59,10 @@ Current config:
 1. **Define scope:** Global command (universal workflow) or per-project (domain-specific)?
 2. **Choose agent & model:** See decision guide below.
 3. **Design output format:** Strict single-line? Structured report? Free-form analysis?
+   → If unsure which pattern fits, read `references/command-patterns.md` before writing.
+   → If you already know the pattern (commit message, PR desc, etc.), skip it.
 4. **Write prompt with shell context:** Use `` !`...` `` to inject project state instead of asking LLM to infer it.
-5. **Test in TUI:** Invoke as `/command-name` and verify output format and tone.
+5. **Test in TUI:** Invoke as `/command-name` and verify output format, model indicator, and edge cases (empty diff, no args).
 
 ## Decision Guide
 
@@ -85,14 +87,22 @@ Current config:
   - Output varies widely based on context
   - Quality justifies latency
 
-### subtask: true
+### subtask: true — What Gets Isolated
 
-Use when:
-- Command should run in isolation without polluting conversation history
-- Long-running analysis that shouldn't block main session
-- Produces structured artifact; result returned to main conversation
+The subagent runs in a **fresh session**. It has:
+- No conversation history from the parent
+- No files the parent opened or read
+- No awareness of what the user was working on
+- Its own tool permissions (inherits agent config, not parent session state)
 
-Example: analysis that takes 30 seconds and produces a JSON report.
+It **does** receive:
+- The rendered prompt (after `!` injection and `$ARGUMENTS` substitution)
+- Full access to the project filesystem
+- All configured MCP tools
+
+**Use when:** The command is self-contained — it derives all needed context from the filesystem or shell output, and its output (a report, JSON artifact, analysis) should be returned to the main session without polluting it.
+
+**Do NOT use when:** The command needs to reference what the user was discussing, files already open in context, or decisions made earlier in the session. The subagent has none of that.
 
 ### Scope Decision
 
@@ -133,34 +143,40 @@ Document what the command does and when to use it. Avoid overlap with built-ins.
 
 ## Anti-Patterns
 
-❌ **Don't include Claude Code fields:**
-```yaml
-allowedTools: [bash, read]  # Silently ignored; don't clutter config
-disable-model-invocation: true  # Ignored
-```
-
-❌ **Don't override built-in commands accidentally:**
-```
-Don't name: /init, /undo, /redo, /share, /help, /review
-```
-
-❌ **Don't assume LLM knows project state:**
+❌ **`!` shell injection runs at invocation, not at LLM time — empty output is silent**
+If `git diff --cached` returns nothing (nothing staged), the LLM receives a blank diff
+and generates a generic or hallucinated commit message with no error. Guard against it:
 ```markdown
-# Bad: "Tell me the current branch"
-# Good: "Current branch: !`git rev-parse --abbrev-ref HEAD`"
+STAGED DIFF:
+!`git diff --cached || echo "(nothing staged — run git add first)"`
 ```
 
-❌ **Don't use $ARGUMENTS when structure would help:**
+❌ **`$ARGUMENTS` is silently empty when user invokes with no args**
+The LLM receives a blank substitution with no warning. If the command requires args,
+enforce it explicitly in the prompt body:
 ```markdown
-# Bad: $ARGUMENTS (user guesses format)
-# Better: $1 (type) and $2 (scope) with clear docs
+If $ARGUMENTS is empty, respond only: "Usage: /command-name <description>"
 ```
 
-❌ **Don't omit model override for strict-output:**
+❌ **`agent: plan` does NOT restrict bash tool use**
+`plan` prevents file writes but the agent can still run bash commands. If you need
+to restrict tool access, define a custom agent with `permission: { bash: deny }`.
+
+❌ **`subtask: true` inherits NO parent context — pass everything explicitly**
+The subagent starts cold: no conversation history, no files the parent opened, no
+awareness of what the user was working on. Everything it needs must come from
+shell injection or `@file` includes in the prompt body.
+
+❌ **Model IDs are not validated at parse time — typos silently fall back**
+A misspelled `model:` value falls back to the default model with no warning or error.
+Verify by checking the model indicator in the TUI after the first invocation.
+
+❌ **Don't include Claude Code fields — they are silently stripped, not errors**
 ```yaml
-# Bad: ask claude-opus to generate a commit message (overkill)
-# Good: model: github-copilot/claude-haiku-4.5 (cheap, fast, deterministic)
+allowedTools: [bash, read]       # Parsed then discarded; no effect
+disable-model-invocation: true   # Same
 ```
+The OpenCode `Command` Zod schema only parses: `description`, `model`, `agent`, `subtask`.
 
 ## Reference Patterns
 
