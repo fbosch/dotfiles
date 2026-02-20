@@ -20,8 +20,8 @@ POLL_INTERVAL_BUSY=0.5    # Poll interval when system load is high
 POLL_PID=""  # Track polling subprocess
 MAIN_PID=$$  # PID of main process (for subprocess signalling)
 CPU_COUNT=$(nproc)  # Number of CPU cores for load calculation
-CURRENT_HASH=""  # Memory cache for state hash
-PATTERN_CACHE=""  # Cache for compiled regex pattern
+CURRENT_HASH=""   # Last seen state string (for change detection)
+MATCHERS_JSON=""  # Cached JSON representation of MATCHER_PATTERNS (invalidated by parse_matchers)
 declare -A RULES_CACHE  # Cache for existing rules (class -> rules mapping)
 declare -a MATCHER_PATTERNS=()  # Array of matcher:pattern pairs
 
@@ -36,6 +36,7 @@ load_patterns() {
 # Parse config and build matcher array
 parse_matchers() {
     MATCHER_PATTERNS=()
+    MATCHERS_JSON=""  # invalidate cached JSON
     
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
@@ -49,12 +50,8 @@ parse_matchers() {
     done < <(load_patterns)
 }
 
-# Reload pattern cache (called when config changes)
+# Reload matchers (called when config changes)
 reload_pattern_cache() {
-    local patterns
-    mapfile -t patterns < <(load_patterns)
-    local IFS='|'
-    PATTERN_CACHE="${patterns[*]}"
     parse_matchers
 }
 
@@ -80,30 +77,31 @@ get_window_states() {
     
     [[ ${#MATCHER_PATTERNS[@]} -eq 0 ]] && echo "[]" && return
     
-    # Build matcher array for jq in a single call using $ARGS.positional
-    # Each entry is encoded as "matcher|pattern|field" and decoded inside jq
-    local -a jq_args=()
-    for entry in "${MATCHER_PATTERNS[@]}"; do
-        local matcher="${entry%%|*}"
-        local pattern="${entry#*|}"
+    # Build matcher JSON once and cache it (invalidated by parse_matchers)
+    if [[ -z "$MATCHERS_JSON" ]]; then
+        local -a jq_args=()
+        for entry in "${MATCHER_PATTERNS[@]}"; do
+            local matcher="${entry%%|*}"
+            local pattern="${entry#*|}"
+            
+            # Map matcher to JSON field
+            local field=""
+            case "$matcher" in
+                match:class) field="class" ;;
+                match:title) field="title" ;;
+                match:initialClass|match:initial_class) field="initialClass" ;;
+                match:initialTitle|match:initial_title) field="initialTitle" ;;
+                *) continue ;;
+            esac
+            
+            jq_args+=("${matcher}|${pattern}|${field}")
+        done
         
-        # Map matcher to JSON field
-        local field=""
-        case "$matcher" in
-            match:class) field="class" ;;
-            match:title) field="title" ;;
-            match:initialClass|match:initial_class) field="initialClass" ;;
-            match:initialTitle|match:initial_title) field="initialTitle" ;;
-            *) continue ;;
-        esac
-        
-        jq_args+=("${matcher}|${pattern}|${field}")
-    done
-    
-    local matchers_json
-    matchers_json=$(jq -nc '$ARGS.positional | map(
-        split("|") | {matcher: .[0], pattern: .[1], field: .[2]}
-    )' --args "${jq_args[@]}")
+        MATCHERS_JSON=$(jq -nc '$ARGS.positional | map(
+            split("|") | {matcher: .[0], pattern: .[1], field: .[2]}
+        )' --args "${jq_args[@]}")
+    fi
+    local matchers_json="$MATCHERS_JSON"
     
     # Get monitors info and clients, then combine with jq
     local monitors clients
@@ -216,19 +214,13 @@ stop_polling() {
     fi
 }
 
-# Check if window states changed (using cksum for speed)
+# Check if window states changed (direct string comparison)
 states_changed() {
     local new_state="$1"
-    local new_hash
     
-    # Generate hash using md5sum (slightly faster than cksum in practice)
-    local hash_out
-    hash_out=$(md5sum <<< "$new_state")
-    new_hash="${hash_out%% *}"
-    
-    # Compare with cached hash (in memory)
-    if [[ "$new_hash" != "$CURRENT_HASH" ]]; then
-        CURRENT_HASH="$new_hash"
+    # Compare state string directly - faster than md5sum subprocess for small payloads
+    if [[ "$new_state" != "$CURRENT_HASH" ]]; then
+        CURRENT_HASH="$new_state"
         return 0
     fi
     
@@ -360,12 +352,6 @@ check_and_save_with_state() {
     fi
 }
 
-# Legacy wrapper for backwards compatibility
-check_and_save() {
-    local current_state
-    current_state=$(get_window_states)
-    check_and_save_with_state "$current_state"
-}
 
 # Immediate save (bypass debounce) - used for critical events like window close
 immediate_save() {
@@ -379,19 +365,11 @@ immediate_save() {
     printf '%s - Immediate save triggered (window close)\n' "$(printf '%(%H:%M:%S)T' -1)"
     update_rules "$current_state"
     
-    # Update hash to match saved state (use md5sum to match states_changed())
-    local hash_out
-    hash_out=$(md5sum <<< "$current_state")
-    CURRENT_HASH="${hash_out%% *}"
+    # Sync hash so states_changed() doesn't re-trigger after immediate save
+    CURRENT_HASH="$current_state"
     rm -f "$DEBOUNCE_FILE"
 }
 
-# Helper to check if tracked windows exist (fetches state)
-has_tracked_windows() {
-    local state
-    state=$(get_window_states)
-    ! is_state_empty "$state"
-}
 
 # Event handler for socket2
 handle_event() {
@@ -476,11 +454,12 @@ echo ""
 init_rules_file
 parse_matchers  # Parse matchers on startup
 
-# Check if we need to start polling immediately
-if has_tracked_windows; then
+# Check if we need to start polling immediately (single fetch, reused below)
+initial_state=$(get_window_states)
+if ! is_state_empty "$initial_state"; then
     echo "$(printf '%(%H:%M:%S)T' -1) - Tracked windows detected, starting poll"
     start_polling
-    check_and_save
+    check_and_save_with_state "$initial_state"
 else
     echo "$(printf '%(%H:%M:%S)T' -1) - No tracked windows, idle (waiting for events)"
 fi
