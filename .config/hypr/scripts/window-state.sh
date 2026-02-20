@@ -109,7 +109,7 @@ get_window_states() {
     clients=$(printf 'j/clients'  | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null) || { printf 'ERROR: clients query failed\n' >&2; echo "[]"; return 1; }
     
     jq -c --argjson matchers "$matchers_json" --argjson monitors "$monitors" '
-        ($monitors | map({id: .id, x: .x, y: .y, width: .width, height: .height}) | INDEX(.id)) as $mon_map |
+        ($monitors | map({id: .id, name: .name, x: .x, y: .y, width: .width, height: .height}) | INDEX(.id)) as $mon_map |
         [.[] | select(.floating) |
         . as $window |
         select(
@@ -140,6 +140,7 @@ get_window_states() {
             class: .class,
             matcher: $matched.matcher,
             pattern: $matched.pattern,
+            monitor: ($mon.name // ""),
             x: (.at[0] - $mon.x),
             y: (.at[1] - $mon.y),
             width: .size[0],
@@ -261,7 +262,7 @@ update_rules() {
     fi
     
     # Update rules for currently open windows
-    while IFS='|' read -r class matcher pattern x y width height; do
+    while IFS='|' read -r class matcher pattern monitor x y width height; do
         [[ -z "$class" ]] && continue
         
         # Create unique key for this matcher+pattern combo
@@ -277,12 +278,17 @@ update_rules() {
             escaped_pattern="^${pattern}$"
         fi
         
-        # Update rules for this matcher (using absolute coordinates)
-        RULES_CACHE[$key]=$(printf 'windowrule = size %s %s, %s (%s)\nwindowrule = move %s %s, %s (%s)' \
+        # Update rules for this matcher (monitor rule first, then size/move)
+        local rules
+        rules=$(printf 'windowrule = size %s %s, %s (%s)\nwindowrule = move %s %s, %s (%s)' \
             "$width" "$height" "$matcher" "$escaped_pattern" "$x" "$y" "$matcher" "$escaped_pattern")
+        if [[ -n "$monitor" ]]; then
+            rules=$(printf 'windowrule = monitor %s, %s (%s)\n%s' "$monitor" "$matcher" "$escaped_pattern" "$rules")
+        fi
+        RULES_CACHE[$key]="$rules"
         
-        printf '%s - Updated %s "%s": %sx%s at (%s,%s)\n' "$(printf '%(%H:%M:%S)T' -1)" "$matcher" "$pattern" "$width" "$height" "$x" "$y"
-    done < <(jq -r '.[] | "\(.class)|\(.matcher)|\(.pattern)|\(.x)|\(.y)|\(.width)|\(.height)"' <<< "$windows")
+        printf '%s - Updated %s "%s": %sx%s at (%s,%s) on %s\n' "$(printf '%(%H:%M:%S)T' -1)" "$matcher" "$pattern" "$width" "$height" "$x" "$y" "${monitor:-unknown}"
+    done < <(jq -r '.[] | "\(.class)|\(.matcher)|\(.pattern)|\(.monitor)|\(.x)|\(.y)|\(.width)|\(.height)"' <<< "$windows")
     
     # Write all rules (existing + updated) to new file
     local temp_file
