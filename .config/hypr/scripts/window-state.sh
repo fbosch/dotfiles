@@ -15,8 +15,8 @@ RULES_FILE="$HOME/.config/hypr/window-state-rules.conf"
 STATE_FILE="${XDG_RUNTIME_DIR}/hypr-window-state.cache"
 DEBOUNCE_FILE="${XDG_RUNTIME_DIR}/hypr-window-state-debounce"
 DEBOUNCE_DELAY=1      # Wait 1 second after last change before saving
-POLL_INTERVAL_IDLE=0.25   # Poll interval when system is idle
-POLL_INTERVAL_BUSY=0.5    # Poll interval when system load is high
+POLL_INTERVAL_IDLE=0.05   # Poll interval when system is idle
+POLL_INTERVAL_BUSY=0.15   # Poll interval when system load is high
 POLL_PID=""  # Track polling subprocess
 MAIN_PID=$$  # PID of main process (for subprocess signalling)
 CPU_COUNT=$(nproc)  # Number of CPU cores for load calculation
@@ -105,8 +105,8 @@ get_window_states() {
     
     # Get monitors info and clients, then combine with jq
     local monitors clients
-    monitors=$(hyprctl monitors -j 2>/dev/null) || { printf 'ERROR: hyprctl monitors failed\n' >&2; echo "[]"; return 1; }
-    clients=$(hyprctl clients -j 2>/dev/null) || { printf 'ERROR: hyprctl clients failed\n' >&2; echo "[]"; return 1; }
+    monitors=$(printf 'j/monitors' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null) || { printf 'ERROR: monitors query failed\n' >&2; echo "[]"; return 1; }
+    clients=$(printf 'j/clients'  | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null) || { printf 'ERROR: clients query failed\n' >&2; echo "[]"; return 1; }
     
     jq -c --argjson matchers "$matchers_json" --argjson monitors "$monitors" '
         ($monitors | map({id: .id, x: .x, y: .y, width: .width, height: .height}) | INDEX(.id)) as $mon_map |
@@ -438,8 +438,13 @@ if [[ -z "$HYPRLAND_INSTANCE_SIGNATURE" ]]; then
     exit 1
 fi
 HYPR_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+HYPR_QUERY_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock"
 if [[ ! -S "$HYPR_SOCKET" ]]; then
-    printf 'ERROR: Hyprland socket not found: %s\n' "$HYPR_SOCKET" >&2
+    printf 'ERROR: Hyprland event socket not found: %s\n' "$HYPR_SOCKET" >&2
+    exit 1
+fi
+if [[ ! -S "$HYPR_QUERY_SOCKET" ]]; then
+    printf 'ERROR: Hyprland query socket not found: %s\n' "$HYPR_QUERY_SOCKET" >&2
     exit 1
 fi
 
@@ -448,7 +453,7 @@ echo "Config: $CONFIG_FILE"
 echo "Rules: $RULES_FILE"
 echo "Debounce delay: ${DEBOUNCE_DELAY}s"
 echo "Scheduling: SCHED_IDLE (runs only when CPU is idle)"
-echo "Poll rate: Adaptive based on system load (0.25s-0.5s)"
+echo "Poll rate: Adaptive based on system load (0.05s-0.15s)"
 echo ""
 
 init_rules_file
