@@ -283,7 +283,7 @@ update_rules() {
         rules=$(printf 'windowrule = size %s %s, %s (%s)\nwindowrule = move %s %s, %s (%s)' \
             "$width" "$height" "$matcher" "$escaped_pattern" "$x" "$y" "$matcher" "$escaped_pattern")
         if [[ -n "$monitor" ]]; then
-            rules=$(printf 'windowrule = monitor %s, %s (%s)\n%s' "$monitor" "$matcher" "$escaped_pattern" "$rules")
+            rules=$(printf 'windowrule = %s (%s), monitor %s\n%s' "$matcher" "$escaped_pattern" "$monitor" "$rules")
         fi
         RULES_CACHE[$key]="$rules"
         
