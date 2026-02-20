@@ -22,6 +22,7 @@ MAIN_PID=$$  # PID of main process (for subprocess signalling)
 CPU_COUNT=$(nproc)  # Number of CPU cores for load calculation
 CURRENT_HASH=""   # Last seen state string (for change detection)
 MATCHERS_JSON=""  # Cached JSON representation of MATCHER_PATTERNS (invalidated by parse_matchers)
+MONITORS_JSON=""  # Cached monitor layout (invalidated by monitoradded/monitorremoved events)
 declare -A RULES_CACHE  # Cache for existing rules (class -> rules mapping)
 declare -a MATCHER_PATTERNS=()  # Array of matcher:pattern pairs
 
@@ -51,6 +52,14 @@ init_rules_file() {
             echo ""
         } > "$RULES_FILE"
     fi
+}
+
+# Fetch and cache monitor layout (cheap — called once at startup and on monitor change)
+fetch_monitors() {
+    MONITORS_JSON=$(printf 'j/monitors' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null) || {
+        printf 'ERROR: monitors query failed\n' >&2
+        return 1
+    }
 }
 
 # Get current window states as JSON (with monitor-relative coordinates)
@@ -88,12 +97,11 @@ get_window_states() {
     fi
     local matchers_json="$MATCHERS_JSON"
     
-    # Get monitors info and clients, then combine with jq
-    local monitors clients
-    monitors=$(printf 'j/monitors' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null) || { printf 'ERROR: monitors query failed\n' >&2; echo "[]"; return 1; }
-    clients=$(printf 'j/clients'  | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null) || { printf 'ERROR: clients query failed\n' >&2; echo "[]"; return 1; }
-    
-    jq -c --argjson matchers "$matchers_json" --argjson monitors "$monitors" '
+    # Get clients; monitors come from cache (invalidated by monitoradded/monitorremoved)
+    local clients
+    clients=$(printf 'j/clients' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null) || { printf 'ERROR: clients query failed\n' >&2; echo "[]"; return 1; }
+
+    jq -c --argjson matchers "$matchers_json" --argjson monitors "$MONITORS_JSON" '
         def field_of(w; m): w | if   m.field == "class"        then .class
                                  elif m.field == "title"        then .title
                                  elif m.field == "initialClass" then .initialClass
@@ -328,10 +336,13 @@ check_and_save_with_state() {
 
 
 # Immediate save (bypass debounce) - used for critical events like window close
+# Prints the fetched state to stdout so callers can reuse it without re-fetching
 immediate_save() {
     local current_state
     current_state=$(get_window_states)
     
+    printf '%s\n' "$current_state"
+
     is_state_empty "$current_state" && return
     
     # Always save immediately on close events - don't check if state changed
@@ -362,23 +373,9 @@ handle_event() {
             fi
             ;;
         closewindow*)
-            # Window closed - save immediately to capture last position
-            immediate_save
-            
-            # Re-fetch post-close state to decide whether to keep polling
+            # Window closed - save immediately; reuse the fetched state
             local state
-            state=$(get_window_states)
-            
-            if ! is_state_empty "$state"; then
-                check_and_save_with_state "$state"
-            else
-                stop_polling
-            fi
-            ;;
-        movewindowv2*)
-            # Window moved to different workspace - might need to update or stop tracking
-            local state
-            state=$(get_window_states)
+            state=$(immediate_save)
             
             if ! is_state_empty "$state"; then
                 check_and_save_with_state "$state"
@@ -400,6 +397,10 @@ handle_event() {
             else
                 stop_polling
             fi
+            ;;
+        monitoradded*|monitorremoved*)
+            # Monitor topology changed - refresh cached monitor layout
+            fetch_monitors
             ;;
     esac
 }
@@ -432,6 +433,7 @@ echo ""
 
 init_rules_file
 parse_matchers  # Parse matchers on startup
+fetch_monitors  # Cache monitor layout
 
 # Check if we need to start polling immediately (single fetch, reused below)
 initial_state=$(get_window_states)
