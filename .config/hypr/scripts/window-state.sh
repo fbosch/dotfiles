@@ -12,9 +12,13 @@ fi
 
 CONFIG_FILE="$HOME/.config/hypr/window-state.conf"
 RULES_FILE="$HOME/.config/hypr/window-state-rules.conf"
-STATE_FILE="/tmp/hypr-window-state.cache"
-DEBOUNCE_DELAY=1  # Wait 1 second after last change before saving
+STATE_FILE="${XDG_RUNTIME_DIR}/hypr-window-state.cache"
+DEBOUNCE_FILE="${XDG_RUNTIME_DIR}/hypr-window-state-debounce"
+DEBOUNCE_DELAY=1      # Wait 1 second after last change before saving
+POLL_INTERVAL_IDLE=0.25   # Poll interval when system is idle
+POLL_INTERVAL_BUSY=0.5    # Poll interval when system load is high
 POLL_PID=""  # Track polling subprocess
+MAIN_PID=$$  # PID of main process (for subprocess signalling)
 CPU_COUNT=$(nproc)  # Number of CPU cores for load calculation
 CURRENT_HASH=""  # Memory cache for state hash
 PATTERN_CACHE=""  # Cache for compiled regex pattern
@@ -25,23 +29,9 @@ declare -a MATCHER_PATTERNS=()  # Array of matcher:pattern pairs
 load_patterns() {
     [[ ! -f "$CONFIG_FILE" ]] && return 1
     # Use grep for small files (faster than rg due to lower startup overhead)
-    grep -v '^#' "$CONFIG_FILE" | grep -v '^[[:space:]]*$'
+    grep -Ev '^[[:space:]]*(#|$)' "$CONFIG_FILE"
 }
 
-# Build regex pattern for matching (cached)
-build_pattern() {
-    # Return cached pattern if available
-    [[ -n "$PATTERN_CACHE" ]] && echo "$PATTERN_CACHE" && return
-    
-    # Build and cache pattern (pure bash, no paste)
-    local patterns
-    mapfile -t patterns < <(load_patterns)
-    
-    # Join with pipe separator
-    local IFS='|'
-    PATTERN_CACHE="${patterns[*]}"
-    echo "$PATTERN_CACHE"
-}
 
 # Parse config and build matcher array
 parse_matchers() {
@@ -90,8 +80,9 @@ get_window_states() {
     
     [[ ${#MATCHER_PATTERNS[@]} -eq 0 ]] && echo "[]" && return
     
-    # Build matcher array for jq using jq itself to ensure proper JSON encoding
-    local matchers_json="[]"
+    # Build matcher array for jq in a single call using $ARGS.positional
+    # Each entry is encoded as "matcher|pattern|field" and decoded inside jq
+    local -a jq_args=()
     for entry in "${MATCHER_PATTERNS[@]}"; do
         local matcher="${entry%%|*}"
         local pattern="${entry#*|}"
@@ -106,16 +97,18 @@ get_window_states() {
             *) continue ;;
         esac
         
-        # Use jq to build properly escaped JSON
-        matchers_json=$(jq -nc --arg field "$field" --arg pattern "$pattern" --arg matcher "$matcher" \
-            --argjson existing "$matchers_json" \
-            '$existing + [{field: $field, pattern: $pattern, matcher: $matcher}]')
+        jq_args+=("${matcher}|${pattern}|${field}")
     done
+    
+    local matchers_json
+    matchers_json=$(jq -nc '$ARGS.positional | map(
+        split("|") | {matcher: .[0], pattern: .[1], field: .[2]}
+    )' --args "${jq_args[@]}")
     
     # Get monitors info and clients, then combine with jq
     local monitors clients
-    monitors=$(hyprctl monitors -j)
-    clients=$(hyprctl clients -j)
+    monitors=$(hyprctl monitors -j 2>/dev/null) || { printf 'ERROR: hyprctl monitors failed\n' >&2; echo "[]"; return 1; }
+    clients=$(hyprctl clients -j 2>/dev/null) || { printf 'ERROR: hyprctl clients failed\n' >&2; echo "[]"; return 1; }
     
     jq -c --argjson matchers "$matchers_json" --argjson monitors "$monitors" '
         ($monitors | map({id: .id, x: .x, y: .y, width: .width, height: .height}) | INDEX(.id)) as $mon_map |
@@ -177,9 +170,9 @@ adaptive_sleep() {
     load_int=$((10#$load_int))
     
     if ((load_int > threshold)); then
-        sleep 0.5  # System busy - poll slower but still responsive
+        sleep "$POLL_INTERVAL_BUSY"
     else
-        sleep 0.25  # System idle - poll very fast to catch quick window closes
+        sleep "$POLL_INTERVAL_IDLE"
     fi
 }
 
@@ -197,6 +190,7 @@ start_polling() {
             # Check if we should stop (no tracked windows)
             if is_state_empty "$current_state"; then
                 printf '%s - No tracked windows, stopping poll\n' "$(printf '%(%H:%M:%S)T' -1)"
+                kill -USR1 "$MAIN_PID" 2>/dev/null
                 exit 0
             fi
             
@@ -215,6 +209,7 @@ stop_polling() {
     if [[ -n "$POLL_PID" ]]; then
         if kill -0 "$POLL_PID" 2>/dev/null; then
             kill "$POLL_PID" 2>/dev/null
+            wait "$POLL_PID" 2>/dev/null
             printf '%s - Stopped polling (PID: %s)\n' "$(printf '%(%H:%M:%S)T' -1)" "$POLL_PID"
         fi
         POLL_PID=""
@@ -227,7 +222,9 @@ states_changed() {
     local new_hash
     
     # Generate hash using md5sum (slightly faster than cksum in practice)
-    new_hash=$(md5sum <<< "$new_state" | cut -d' ' -f1)
+    local hash_out
+    hash_out=$(md5sum <<< "$new_state")
+    new_hash="${hash_out%% *}"
     
     # Compare with cached hash (in memory)
     if [[ "$new_hash" != "$CURRENT_HASH" ]]; then
@@ -247,7 +244,7 @@ load_rules_cache() {
     local current_key=""
     while IFS= read -r line; do
         # Match class comments like "# match:class org.gnome.TextEditor"
-        if [[ "$line" =~ ^#\ (match:[a-zA-Z]+)\ (.+)$ ]]; then
+        if [[ "$line" =~ ^#\ (match:[a-zA-Z_]+)\ (.+)$ ]]; then
             current_key="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
         elif [[ -n "$current_key" ]] && [[ -n "$line" ]]; then
             # Store rules for this key (skip empty lines)
@@ -278,14 +275,13 @@ update_rules() {
         # Create unique key for this matcher+pattern combo
         local key="$matcher $pattern"
         
-        # Escape pattern for regex (simple escape for common cases)
-        local escaped_pattern="$pattern"
-        # Only escape if pattern contains regex special chars (except spaces)
-        if [[ "$pattern" =~ [\.\[\]()*+?] ]]; then
-            # Pattern contains regex - use as-is
+        # Build windowrule pattern: plain text gets anchored, regex used as-is
+        local escaped_pattern
+        if [[ "$pattern" =~ [\.\[\]()*+?^$] ]]; then
+            # Already contains regex syntax - use as-is
             escaped_pattern="$pattern"
         else
-            # Plain text - just add anchors, don't escape dots in spaces
+            # Plain text - anchor to prevent partial matches
             escaped_pattern="^${pattern}$"
         fi
         
@@ -298,7 +294,7 @@ update_rules() {
     
     # Write all rules (existing + updated) to new file
     local temp_file
-    temp_file=$(mktemp)
+    temp_file=$(mktemp) || { printf 'ERROR: Failed to create temp file\n' >&2; return 1; }
     {
         printf '# Auto-generated window state persistence rules\n'
         printf '# Last updated: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
@@ -321,7 +317,11 @@ update_rules() {
     done
     
     # Atomically replace rules file
-    mv "$temp_file" "$RULES_FILE"
+    if ! mv "$temp_file" "$RULES_FILE"; then
+        printf 'ERROR: Failed to update rules file\n' >&2
+        rm -f "$temp_file"
+        return 1
+    fi
     
     # Save state cache
     printf '%s\n' "$windows" > "$STATE_FILE"
@@ -331,10 +331,6 @@ update_rules() {
     printf '%s - Config reloaded\n' "$(printf '%(%H:%M:%S)T' -1)"
 }
 
-# Legacy wrapper - redirect to update_rules
-save_rules() {
-    update_rules "$@"
-}
 
 # Debounced check and save (accepts pre-fetched state)
 check_and_save_with_state() {
@@ -342,26 +338,24 @@ check_and_save_with_state() {
     
     is_state_empty "$current_state" && return
     
-    # Always update cache file so immediate_save() has latest position
-    printf '%s\n' "$current_state" > "$STATE_FILE"
-    
     if states_changed "$current_state"; then
-        # State changed - reset debounce timer
-        printf '%s\n' "$EPOCHSECONDS" > /tmp/hypr-window-state-debounce
+        # State changed - update cache file and reset debounce timer
+        printf '%s\n' "$current_state" > "$STATE_FILE"
+        printf '%s\n' "$EPOCHSECONDS" > "$DEBOUNCE_FILE"
         printf '%s - State changed, starting %ss debounce\n' "$(printf '%(%H:%M:%S)T' -1)" "$DEBOUNCE_DELAY"
         return
     fi
     
     # No change - check if debounce period has elapsed
-    if [[ -f /tmp/hypr-window-state-debounce ]]; then
+    if [[ -f "$DEBOUNCE_FILE" ]]; then
         local last_change
-        last_change=$(< /tmp/hypr-window-state-debounce)
+        last_change=$(< "$DEBOUNCE_FILE")
         local elapsed=$((EPOCHSECONDS - last_change))
         
         if ((elapsed >= DEBOUNCE_DELAY)); then
             printf '%s - Debounce period elapsed, saving rules\n' "$(printf '%(%H:%M:%S)T' -1)"
-            save_rules "$current_state"
-            rm -f /tmp/hypr-window-state-debounce
+            update_rules "$current_state"
+            rm -f "$DEBOUNCE_FILE"
         fi
     fi
 }
@@ -378,22 +372,18 @@ immediate_save() {
     local current_state
     current_state=$(get_window_states)
     
-    # If no windows remain, we still want to save the state before they all closed
-    # So we use the cached state if current is empty
-    if is_state_empty "$current_state" && [[ -f "$STATE_FILE" ]]; then
-        current_state=$(< "$STATE_FILE")
-    fi
-    
     is_state_empty "$current_state" && return
     
     # Always save immediately on close events - don't check if state changed
     # The window may have been moved just before closing
     printf '%s - Immediate save triggered (window close)\n' "$(printf '%(%H:%M:%S)T' -1)"
-    save_rules "$current_state"
+    update_rules "$current_state"
     
     # Update hash to match saved state (use md5sum to match states_changed())
-    CURRENT_HASH=$(md5sum <<< "$current_state" | cut -d' ' -f1)
-    rm -f /tmp/hypr-window-state-debounce
+    local hash_out
+    hash_out=$(md5sum <<< "$current_state")
+    CURRENT_HASH="${hash_out%% *}"
+    rm -f "$DEBOUNCE_FILE"
 }
 
 # Helper to check if tracked windows exist (fetches state)
@@ -423,7 +413,7 @@ handle_event() {
             # Window closed - save immediately to capture last position
             immediate_save
             
-            # Check if we should stop polling (reuse state from after close)
+            # Re-fetch post-close state to decide whether to keep polling
             local state
             state=$(get_window_states)
             
@@ -463,6 +453,18 @@ handle_event() {
 }
 
 # Main
+
+# Validate Hyprland environment
+if [[ -z "$HYPRLAND_INSTANCE_SIGNATURE" ]]; then
+    printf 'ERROR: HYPRLAND_INSTANCE_SIGNATURE is not set (not running under Hyprland?)\n' >&2
+    exit 1
+fi
+HYPR_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+if [[ ! -S "$HYPR_SOCKET" ]]; then
+    printf 'ERROR: Hyprland socket not found: %s\n' "$HYPR_SOCKET" >&2
+    exit 1
+fi
+
 echo "Window state persistence started (event-driven + adaptive polling)"
 echo "Config: $CONFIG_FILE"
 echo "Rules: $RULES_FILE"
@@ -491,9 +493,10 @@ cleanup() {
 }
 
 trap cleanup SIGINT SIGTERM EXIT
+trap 'wait "$POLL_PID" 2>/dev/null; POLL_PID=""' USR1
 
 # Listen to Hyprland events
-socat -U - "UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock" | \
+socat -U - "UNIX-CONNECT:$HYPR_SOCKET" | \
 while IFS= read -r line; do
     handle_event "$line"
 done
