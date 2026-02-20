@@ -28,8 +28,5 @@ Keep ≤50 chars. If over: shorten scope (authentication→auth), compress verbs
 
 **Output:** ONLY the commit message. First character must be the commit type. No markdown blocks, no explanations, no questions.
 
-STAGED DIFF SUMMARY:
-!`git diff --cached --stat`
-
-STAGED DIFF (top 3 files by change size, whitespace ignored):
-!`git diff --cached --ignore-all-space -- $(git diff --cached --numstat | sort -rn | head -3 | awk '{print $3}')`
+STAGED DIFF:
+!`git diff --cached --ignore-all-space`
