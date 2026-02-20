@@ -1,8 +1,6 @@
 ---
 description: Generate a Commitizen commit message for staged changes
 model: github-copilot/claude-haiku-4.5
-allowedTools:
-  - read
 ---
 
 Output a single-line Commitizen commit message (≤50 chars) for these staged changes. Format: `<type>(<scope>): <subject>`
