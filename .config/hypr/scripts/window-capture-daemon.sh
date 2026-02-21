@@ -30,7 +30,6 @@ CAPTURE_DELAY_MS=100          # Wait after activewindow event (for animations)
 WORKSPACE_DELAY_MS=150       # Wait after workspace change (reduced for faster updates)
 
 # Image format and quality
-IMAGE_FORMAT="jpeg"          # jpeg (best performance), webp, png
 JPEG_QUALITY=85              # JPEG quality setting (60-95 range)
                              # 85 provides excellent quality for previews with good performance
                              # Lower = smaller files, faster processing, lower quality
@@ -40,9 +39,11 @@ JPEG_QUALITY=85              # JPEG quality setting (60-95 range)
 PREVIEW_TARGET_HEIGHT=180    # Target height for preview display
 PREVIEW_TARGET_MAX_WIDTH=320 # Maximum width for preview display
 
-# Hyprland gaps (dynamically read from hyprctl)
-# Extract first value from "2 2 2 2" format (top gap, but they're usually uniform)
-GAPS_IN=$(hyprctl getoption general:gaps_in -j 2>/dev/null | jq -r '.custom' | awk '{print $1}')
+# Hyprland query socket (faster than hyprctl - no process spawn)
+HYPR_QUERY_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock"
+
+# Hyprland gaps (read via socket - faster than hyprctl, no awk needed)
+GAPS_IN=$(printf 'j/getoption general:gaps_in' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null | jq -r '.custom | split(" ")[0]')
 
 # AGS overlay detection
 # Using bundled AGS instance - check window-switcher component visibility
@@ -57,7 +58,7 @@ is_any_overlay_visible() {
   response=$(ags request -i "$AGS_BUNDLED_INSTANCE" window-switcher '{"action":"get-visibility"}' 2>/dev/null)
   
   if [[ "$response" == "visible" ]]; then
-    local t="${EPOCHREALTIME/./}"; echo "${t:0:13}" > "$LAST_OVERLAY_FILE"
+    local t="${EPOCHREALTIME//[.,]/}"; echo "${t:0:13}" > "$LAST_OVERLAY_FILE"
     return 0
   fi
   
@@ -72,7 +73,7 @@ is_in_overlay_cooldown() {
   
   local last_overlay_time
   last_overlay_time=$(< "$LAST_OVERLAY_FILE")
-  local t="${EPOCHREALTIME/./}"; local current_time="${t:0:13}"
+  local t="${EPOCHREALTIME//[.,]/}"; local current_time="${t:0:13}"
   local elapsed=$((current_time - last_overlay_time))
   
   if [[ $elapsed -lt $OVERLAY_COOLDOWN_MS ]]; then
@@ -132,7 +133,7 @@ capture_screenshot() {
   if [[ -f "$LAST_SCREENSHOT_FILE" ]]; then
     local last_time
     last_time=$(< "$LAST_SCREENSHOT_FILE")
-    local t="${EPOCHREALTIME/./}"; local current_time="${t:0:13}"
+    local t="${EPOCHREALTIME//[.,]/}"; local current_time="${t:0:13}"
     local elapsed=$((current_time - last_time))
     
     if [[ $elapsed -lt $DEBOUNCE_MS ]]; then
@@ -177,7 +178,7 @@ capture_screenshot() {
   
   # Verify workspace is still correct after delay
   local current_workspace
-  current_workspace=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
+  current_workspace=$(printf 'j/activeworkspace' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null | jq -r '.id')
   
   if [[ "$current_workspace" != "$target_workspace" ]]; then
     return 0
@@ -189,12 +190,12 @@ capture_screenshot() {
   fi
   
   # Update last screenshot time
-  local t="${EPOCHREALTIME/./}"; local timestamp="${t:0:13}"
+  local t="${EPOCHREALTIME//[.,]/}"; local timestamp="${t:0:13}"
   echo "$timestamp" > "$LAST_SCREENSHOT_FILE"
   
   # Get all monitors and their geometries
   local monitors_json
-  monitors_json=$(hyprctl monitors -j 2>/dev/null)
+  monitors_json=$(printf 'j/monitors' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
   
   # Capture each monitor separately and keep at full resolution for cropping
   local monitor_index=0
@@ -226,11 +227,11 @@ capture_screenshot() {
     monitor_offsets[$monitor_index]="${mon_x}|${mon_y}|${mon_width}|${mon_height}"
     
     monitor_index=$((monitor_index + 1))
-  done < <(echo "$monitors_json" | jq -r '.[] | [.name, .x, .y, .width, .height] | join("|")')
+  done < <(jq -r '.[] | [.name, .x, .y, .width, .height] | join("|")' <<< "$monitors_json")
   
   # Fetch all clients once - reused by the window loop and is_window_obscured
   local all_clients_json
-  all_clients_json=$(hyprctl clients -j 2>/dev/null)
+  all_clients_json=$(printf 'j/clients' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
 
   # Process each window (fields pre-joined by jq - no per-window fork)
   while IFS='|' read -r address mapped floating x y width height; do
@@ -370,7 +371,7 @@ handle_event() {
   if [[ -f "$CAPTURE_LOCK_FILE" ]]; then
     # Check if lock is stale (older than 10 seconds)
     local lock_ts; lock_ts=$(< "$CAPTURE_LOCK_FILE" 2>/dev/null) || lock_ts=0
-    local t="${EPOCHREALTIME/./}"; local now="${t:0:13}"
+    local t="${EPOCHREALTIME//[.,]/}"; local now="${t:0:13}"
     local lock_age=$(( now - lock_ts ))
     if [[ $lock_age -lt 10000 ]]; then
       # Fresh lock, skip this event
@@ -381,7 +382,7 @@ handle_event() {
   fi
 
   # Create lock with current timestamp
-  local t="${EPOCHREALTIME/./}"; local timestamp="${t:0:13}"
+  local t="${EPOCHREALTIME//[.,]/}"; local timestamp="${t:0:13}"
   echo "$timestamp" > "$CAPTURE_LOCK_FILE"
 
   # Record this event
@@ -393,14 +394,15 @@ handle_event() {
   
   # Get workspace and trigger screenshot
   local workspace_at_event
-  workspace_at_event=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
+  workspace_at_event=$(printf 'j/activeworkspace' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null | jq -r '.id')
   
   # Start new screenshot process with event type and capture ID
   capture_screenshot "$workspace_at_event" "$event_type" "$capture_id" &
 }
 
 # Connect to Hyprland socket and process events
+# Use 'true' to prevent set -e from killing the loop if handle_event returns non-zero
 socat -U - "UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock" \
   | while read -r line; do
-      handle_event "$line"
+      handle_event "$line" || true
     done
