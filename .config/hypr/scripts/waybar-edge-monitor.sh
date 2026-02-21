@@ -117,8 +117,8 @@ while true; do
             check_interval_ms=$(( DISTANCE_FROM_BOTTOM <= HIDE_THRESHOLD + 50 ? FAST_CHECK_MS : SLOW_CHECK_MS ))
         fi
     else
-        # Waybar visible - check if cursor moved away
-        check_interval_ms=$FAST_CHECK_MS
+        # Waybar visible - fast poll near edge or when hide is imminent, slow otherwise
+        check_interval_ms=$(( DISTANCE_FROM_BOTTOM <= HIDE_THRESHOLD || hide_timer_ms > 0 ? FAST_CHECK_MS : SLOW_CHECK_MS ))
 
         if (( DISTANCE_FROM_BOTTOM > HIDE_THRESHOLD )); then
             # Cursor is away - increment timer
