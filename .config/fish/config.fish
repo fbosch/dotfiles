@@ -90,17 +90,39 @@ bind \cP fzfcd
 
 function fish_user_keybindings
     fish_vi_key_bindings
+    bind \cg _navi_smart_replace
+    bind --mode insert \cg _navi_smart_replace
 end
 
 # --- Third-party Tools ---
 # Atuin shell history
 if command -v atuin >/dev/null 2>&1
-    atuin init fish --disable-up-arrow | source
+    set -l atuin_cache ~/.cache/fish/atuin-init.fish
+    if not test -f $atuin_cache
+        mkdir -p (dirname $atuin_cache)
+        atuin init fish --disable-up-arrow > $atuin_cache
+    end
+    source $atuin_cache
 end
 
 # Zoxide initialization
 if command -v zoxide >/dev/null 2>&1
-    zoxide init fish | source
+    set -l zoxide_cache ~/.cache/fish/zoxide-init.fish
+    if not test -f $zoxide_cache
+        mkdir -p (dirname $zoxide_cache)
+        zoxide init fish > $zoxide_cache
+    end
+    source $zoxide_cache
+end
+
+# Navi widget (Ctrl+G)
+if command -v navi >/dev/null 2>&1
+    set -l navi_cache ~/.cache/fish/navi-widget.fish
+    if not test -f $navi_cache
+        mkdir -p (dirname $navi_cache)
+        navi widget fish > $navi_cache
+    end
+    source $navi_cache
 end
 
 # --- Starship Configuration ---
