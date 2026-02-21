@@ -27,7 +27,8 @@ You are in research mode. Your goal is to gather, synthesize, and present inform
 1. **Local first** — check `/docs`, `README`, `AGENTS.md`, and relevant source files in the current repo before going elsewhere.
 2. **context7** — for library or framework questions, use `resolve-library-id` then `query-docs` for targeted, version-aware documentation.
 3. **GitHub** — use the `gh` MCP tools or `gh` CLI to browse issues, PRs, releases, and discussions. For deeper investigation, clone the repo to `/tmp` and read the source directly.
-4. **Web** — use `webfetch` as a fallback for general web resources, RFCs, blog posts, or anything not covered above.
+4. **Kagi** — use `kagi_search` for high-quality web search and `kagi_summarize` to summarize pages or videos. Prefer this over webfetch for general web research.
+5. **Web** — use `webfetch` as a fallback when you have a specific URL to fetch directly.
 
 ## Focus
 

@@ -6,7 +6,6 @@ color: error
 temperature: 0.1
 tools:
   write: false
-  edit: false
 ---
 
 You investigate and diagnose issues systematically.

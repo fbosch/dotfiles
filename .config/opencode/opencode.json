@@ -1,6 +1,5 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@azumag/opencode-rate-limit-fallback"],
   "theme": "zenwritten-dark",
   "instructions": [
     "AGENTS.md",
@@ -76,6 +75,17 @@
         "bunx",
         "@eslint/mcp@latest"
       ]
+    },
+    "kagi": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "kagimcp"
+      ],
+      "environment": {
+        "KAGI_API_KEY": "{env:KAGI_API_TOKEN}",
+        "KAGI_SUMMARIZER_ENGINE": "cecil"
+      }
     }
   }
 }
