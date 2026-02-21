@@ -50,9 +50,10 @@ AGS_BUNDLED_INSTANCE="ags-bundled"
 
 # ============================================================================
 
-# Get current time in milliseconds
+# Get current time in milliseconds (no subprocess - uses bash 5+ EPOCHREALTIME)
 get_time_ms() {
-  date +%s%3N
+  local t="${EPOCHREALTIME/./}"
+  echo "${t:0:13}"
 }
 
 # Check if any AGS overlay is visible
@@ -62,7 +63,7 @@ is_any_overlay_visible() {
   response=$(ags request -i "$AGS_BUNDLED_INSTANCE" window-switcher '{"action":"get-visibility"}' 2>/dev/null)
   
   if [[ "$response" == "visible" ]]; then
-    get_time_ms > "$LAST_OVERLAY_FILE"
+    local t="${EPOCHREALTIME/./}"; echo "${t:0:13}" > "$LAST_OVERLAY_FILE"
     return 0
   fi
   
@@ -76,9 +77,8 @@ is_in_overlay_cooldown() {
   fi
   
   local last_overlay_time
-  local current_time
-  last_overlay_time=$(cat "$LAST_OVERLAY_FILE")
-  current_time=$(get_time_ms)
+  last_overlay_time=$(< "$LAST_OVERLAY_FILE")
+  local t="${EPOCHREALTIME/./}"; local current_time="${t:0:13}"
   local elapsed=$((current_time - last_overlay_time))
   
   if [[ $elapsed -lt $OVERLAY_COOLDOWN_MS ]]; then
@@ -89,7 +89,7 @@ is_in_overlay_cooldown() {
 }
 
 # Check if a window is obscured by any floating windows
-# Arguments: window_x window_y window_width window_height workspace_id
+# Arguments: window_x window_y window_width window_height workspace_id clients_json
 # Returns: 0 if obscured, 1 if not obscured
 is_window_obscured() {
   local win_x=$1
@@ -97,8 +97,9 @@ is_window_obscured() {
   local win_width=$3
   local win_height=$4
   local workspace=$5
-  
-  # Get all floating windows in the same workspace
+  local clients_json=$6
+
+  # Get all floating windows in the same workspace from pre-fetched clients JSON
   while read -r floating_data; do
     [[ -z "$floating_data" ]] && continue
     
@@ -118,7 +119,7 @@ is_window_obscured() {
       # Overlap detected - window is obscured
       return 0
     fi
-  done < <(hyprctl clients -j 2>/dev/null | jq -r --arg ws "$workspace" '.[] | select(.workspace.id == ($ws | tonumber) and .floating == true) | [.at[0], .at[1], .size[0], .size[1]] | join("|")' 2>/dev/null)
+  done < <(jq -r --arg ws "$workspace" '.[] | select(.workspace.id == ($ws | tonumber) and .floating == true) | [.at[0], .at[1], .size[0], .size[1]] | join("|")' <<< "$clients_json" 2>/dev/null)
   
   # No overlap found
   return 1
@@ -136,9 +137,8 @@ capture_screenshot() {
   # Check debounce
   if [[ -f "$LAST_SCREENSHOT_FILE" ]]; then
     local last_time
-    local current_time
-    last_time=$(cat "$LAST_SCREENSHOT_FILE")
-    current_time=$(get_time_ms)
+    last_time=$(< "$LAST_SCREENSHOT_FILE")
+    local t="${EPOCHREALTIME/./}"; local current_time="${t:0:13}"
     local elapsed=$((current_time - last_time))
     
     if [[ $elapsed -lt $DEBOUNCE_MS ]]; then
@@ -173,7 +173,7 @@ capture_screenshot() {
     # If workspace changed, abort this capture (newer one will be triggered)
     if [[ -f "$WORKSPACE_CHANGE_FILE" ]]; then
       local current_change_id
-      current_change_id=$(cat "$WORKSPACE_CHANGE_FILE")
+      current_change_id=$(< "$WORKSPACE_CHANGE_FILE")
       if [[ "$current_change_id" != "$capture_id" ]]; then
         # A newer workspace change happened, abort
         return 0
@@ -195,8 +195,7 @@ capture_screenshot() {
   fi
   
   # Update last screenshot time
-  local timestamp
-  timestamp=$(get_time_ms)
+  local t="${EPOCHREALTIME/./}"; local timestamp="${t:0:13}"
   echo "$timestamp" > "$LAST_SCREENSHOT_FILE"
   
   # Get all monitors and their geometries
@@ -235,6 +234,10 @@ capture_screenshot() {
     monitor_index=$((monitor_index + 1))
   done < <(echo "$monitors_json" | jq -r '.[] | [.name, .x, .y, .width, .height] | join("|")')
   
+  # Fetch all clients once - reused by the window loop and is_window_obscured
+  local all_clients_json
+  all_clients_json=$(hyprctl clients -j 2>/dev/null)
+
   # Process each window
   while read -r window_json; do
     IFS='|' read -r address mapped floating x y width height <<< "$(echo "$window_json" | jq -r '[.address, (.mapped // true), .floating, .at[0], .at[1], .size[0], .size[1]] | join("|")')"
@@ -294,7 +297,7 @@ capture_screenshot() {
     
     # Check if window is obscured by a floating window (unless it's floating itself)
     local is_obscured=false
-    if [[ "$floating" == "false" ]] && is_window_obscured "$x" "$y" "$width" "$height" "$current_workspace"; then
+    if [[ "$floating" == "false" ]] && is_window_obscured "$x" "$y" "$width" "$height" "$current_workspace" "$all_clients_json"; then
       is_obscured=true
     fi
     
@@ -340,7 +343,7 @@ capture_screenshot() {
       # Only overwrite if validation passed
       mv "$temp_output" "$output_path"
     ) &
-  done < <(hyprctl clients -j 2>/dev/null | jq -c --arg ws "$current_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | {address, at, size, mapped, floating}' 2>/dev/null)
+  done < <(jq -c --arg ws "$current_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | {address, at, size, mapped, floating}' <<< "$all_clients_json" 2>/dev/null)
   
   # Wait for all parallel crops to complete
   wait
@@ -374,7 +377,9 @@ handle_event() {
   # Check if a capture is already in progress
   if [[ -f "$CAPTURE_LOCK_FILE" ]]; then
     # Check if lock is stale (older than 10 seconds)
-    local lock_age=$(( $(get_time_ms) - $(cat "$CAPTURE_LOCK_FILE" 2>/dev/null || echo 0) ))
+    local lock_ts; lock_ts=$(< "$CAPTURE_LOCK_FILE" 2>/dev/null) || lock_ts=0
+    local t="${EPOCHREALTIME/./}"; local now="${t:0:13}"
+    local lock_age=$(( now - lock_ts ))
     if [[ $lock_age -lt 10000 ]]; then
       # Fresh lock, skip this event
       return 0
@@ -382,13 +387,12 @@ handle_event() {
     # Stale lock, remove it and continue
     rm -f "$CAPTURE_LOCK_FILE"
   fi
-  
+
   # Create lock with current timestamp
-  get_time_ms > "$CAPTURE_LOCK_FILE"
-  
+  local t="${EPOCHREALTIME/./}"; local timestamp="${t:0:13}"
+  echo "$timestamp" > "$CAPTURE_LOCK_FILE"
+
   # Record this event
-  local timestamp
-  timestamp=$(get_time_ms)
   echo "$timestamp" > "$LAST_EVENT_FILE"
   
   # Create unique capture ID for this event
