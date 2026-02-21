@@ -110,7 +110,7 @@ get_window_states() {
         ($monitors | map({id, name, x, y}) | INDEX(.id)) as $mon_map |
         [.[] | select(.floating) |
         . as $w |
-        first($matchers[] | select(field_of($w; .) | test(.pattern))) as $matched |
+        first($matchers[] | . as $m | select(field_of($w; $m) | test($m.pattern))) as $matched |
         ($mon_map[$w.monitor | tostring] // {name: "", x: 0, y: 0}) as $mon |
         {
             class: $w.class,
