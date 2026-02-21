@@ -93,6 +93,11 @@ function fish_user_keybindings
 end
 
 # --- Third-party Tools ---
+# Atuin shell history
+if command -v atuin >/dev/null 2>&1
+    atuin init fish --disable-up-arrow | source
+end
+
 # Zoxide initialization
 if command -v zoxide >/dev/null 2>&1
     zoxide init fish | source
