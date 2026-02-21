@@ -5,23 +5,22 @@
     "AGENTS.md",
     ".cursor/rules/*.md*"
   ],
-  "model": "openai/gpt-5.2-codex",
+  "model": "openai/gpt-5.3-codex",
   "small_model": "github-copilot/claude-haiku-4.5",
   "agent": {
     "build": {
       "temperature": 0.3
     },
     "plan": {
-      "model": "openai/gpt-5.2-codex",
-      "reasoningEffort": "high",
-      "textVerbosity": "medium"
+      "model": "openai/gpt-5.3-codex",
+      "reasoningEffort": "high"
     },
     "explore": {
       "model": "github-copilot/claude-haiku-4.5",
       "temperature": 0.0
     },
     "general": {
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "github-copilot/claude-sonnet-4.5",
       "steps": 15,
       "temperature": 0.3
     },
