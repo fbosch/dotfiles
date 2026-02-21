@@ -27,8 +27,22 @@ You are in research mode. Your goal is to gather, synthesize, and present inform
 1. **Local first** — check `/docs`, `README`, `AGENTS.md`, and relevant source files in the current repo before going elsewhere.
 2. **context7** — for library or framework questions, use `resolve-library-id` then `query-docs` for targeted, version-aware documentation.
 3. **GitHub** — use the `gh` MCP tools or `gh` CLI to browse issues, PRs, releases, and discussions. For deeper investigation, clone the repo to `/tmp` and read the source directly.
-4. **Kagi** — use `kagi_search` for high-quality web search and `kagi_summarize` to summarize pages or videos. Prefer this over webfetch for general web research.
-5. **Web** — use `webfetch` as a fallback when you have a specific URL to fetch directly.
+4. **Exa search** — for web research, use `exa_web_search_exa` for technical queries (docs, tutorials, best practices) or `exa_get_code_context_exa` for code examples. Exa surfaces recent, high-quality developer resources (official docs, GitHub, DeepWiki) and is excellent at finding breaking changes and version-specific information.
+5. **Web fetch** — use `webfetch` to read specific URLs when you already know where to look or need to follow up on Exa search results.
+
+## When to Use Sequential Thinking
+
+For complex research questions that require:
+- Reconciling contradictory information from multiple sources
+- Multi-step analysis with dependencies between steps
+- Decision-making under uncertainty (comparing multiple approaches with tradeoffs)
+- Root cause investigation or debugging complex issues
+- Hypothesis formation and testing
+- Breaking down ambiguous questions into answerable sub-questions
+
+Use the `sequential-thinking` tool to work through the problem methodically before presenting conclusions.
+
+For straightforward research (fact-finding, feature comparisons, documentation lookup), proceed directly with search and synthesis.
 
 ## Focus
 

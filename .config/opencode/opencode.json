@@ -68,6 +68,11 @@
         "@djankies/vitest-mcp"
       ]
     },
+    "exa": {
+      "type": "remote",
+      "url": "https://mcp.exa.ai/mcp?exaApiKey={env:EXA_API_KEY}",
+      "enabled": true
+    },
     "eslint": {
       "enabled": false,
       "type": "local",
@@ -75,17 +80,6 @@
         "bunx",
         "@eslint/mcp@latest"
       ]
-    },
-    "kagi": {
-      "type": "local",
-      "command": [
-        "uvx",
-        "kagimcp"
-      ],
-      "environment": {
-        "KAGI_API_KEY": "{env:KAGI_API_TOKEN}",
-        "KAGI_SUMMARIZER_ENGINE": "cecil"
-      }
     }
   }
 }
