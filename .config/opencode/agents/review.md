@@ -1,6 +1,7 @@
 ---
 description: Reviews code for quality, security vulnerabilities, and best practices. Use after code changes, before merging PRs, or when auditing existing code.
 mode: subagent
+color: info
 model: github-copilot/claude-sonnet-4.5
 temperature: 0.1
 tools:
