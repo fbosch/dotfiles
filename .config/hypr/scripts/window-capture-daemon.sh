@@ -11,6 +11,12 @@ else
 fi
 mkdir -p "$SCREENSHOT_DIR"
 
+# Clean up any orphaned temp files from previous daemon runs (crash/kill leaves these behind)
+rm -f "$SCREENSHOT_DIR"/.monitor_*.mpc \
+      "$SCREENSHOT_DIR"/.monitor_*.cache \
+      "$SCREENSHOT_DIR"/.monitor_*.jpg \
+      "$SCREENSHOT_DIR"/.temp_*.jpg
+
 # Tracking files
 LAST_SCREENSHOT_FILE="$SCREENSHOT_DIR/.last_screenshot"
 LAST_EVENT_FILE="$SCREENSHOT_DIR/.last_event"
@@ -27,7 +33,7 @@ DEBOUNCE_MS=100               # Minimum time between screenshots (~20 fps max)
 OVERLAY_COOLDOWN_MS=5        # Wait after overlay disappears before capturing
 CAPTURE_DELAY_MS=100          # Wait after activewindow event (for animations)
                              # Reduced for faster captures while still avoiding mid-animation
-WORKSPACE_DELAY_MS=150       # Wait after workspace change (reduced for faster updates)
+WORKSPACE_DELAY_MS=200       # Wait after workspace change (must be a multiple of 100ms)
 
 # Image format and quality
 JPEG_QUALITY=85              # JPEG quality setting (60-95 range)
@@ -217,7 +223,7 @@ capture_screenshot() {
     
     # Convert to MPC cache (no scaling at this stage)
     local temp_monitor_mpc="$SCREENSHOT_DIR/.monitor_${monitor_index}_${timestamp}.mpc"
-    convert "$temp_monitor_shot" \
+    magick "$temp_monitor_shot" \
       -quality "$JPEG_QUALITY" \
       "$temp_monitor_mpc" 2>/dev/null || { rm -f "$temp_monitor_shot"; monitor_index=$((monitor_index + 1)); continue; }
     rm -f "$temp_monitor_shot"
@@ -304,27 +310,26 @@ capture_screenshot() {
         exit 0
       fi
       
-      # Crop at full resolution, then smart resize
-      # The ">" flag means only shrink if larger, never enlarge
-      # This prevents upscaling small windows and maintains quality
-      convert "$target_monitor_mpc" \
+      # Crop at full resolution, then smart resize; simultaneously check brightness.
+      # -write saves the JPEG while the pipeline continues to the Gray+info: stage.
+      # The ">" flag means only shrink if larger, never enlarge.
+      # This prevents upscaling small windows and maintains quality.
+      local mean_brightness
+      mean_brightness=$(magick "$target_monitor_mpc" \
         -crop "${crop_width}x${crop_height}+${crop_x}+${crop_y}" \
         +repage \
         -resize "${PREVIEW_TARGET_MAX_WIDTH}x${PREVIEW_TARGET_HEIGHT}>" \
         -quality "$JPEG_QUALITY" \
         -define jpeg:dct-method=fast \
-        "$temp_output" 2>/dev/null
-      
+        -write "$temp_output" \
+        -colorspace Gray \
+        -format "%[fx:floor(mean*1000)]" info: 2>/dev/null)
+
       # Validate output exists and has content
       if [[ ! -s "$temp_output" ]]; then
         rm -f "$temp_output"
         exit 0
       fi
-      
-      # Check if image is completely (or nearly) black
-      # %[fx:mean] returns 0.0-1.0; multiply by 1000 and compare as integer (no bc/awk needed)
-      local mean_brightness
-      mean_brightness=$(convert "$temp_output" -colorspace Gray -format "%[fx:floor(mean*1000)]" info: 2>/dev/null)
 
       # If brightness is very low (< 1% = <10 in 0-1000 scale), image is essentially black - discard it
       # This catches minimized windows, off-screen windows, or capture errors
@@ -361,6 +366,12 @@ handle_event() {
       ;;
     workspace\>\>*|workspace,*)
       event_type="workspace"
+      ;;
+    closewindow\>\>*|closewindow,*)
+      # Delete stale thumbnail for the closed window
+      local closed_address="${1#*>>}"; closed_address="${closed_address#*,}"
+      rm -f "$SCREENSHOT_DIR/${closed_address}.jpg"
+      return 0
       ;;
     *)
       return 0
