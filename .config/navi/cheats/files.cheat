@@ -1,0 +1,153 @@
+% fd
+
+# Find files by name
+fd <pattern>
+
+# Find files by extension
+fd -e <ext>
+
+# Find only directories
+fd -t d <pattern>
+
+# Find only files
+fd -t f <pattern>
+
+# Find excluding a directory
+fd <pattern> --exclude <dir>
+
+# Find and execute a command on results
+fd <pattern> -x <cmd>
+
+# Find and execute in parallel
+fd <pattern> -X <cmd>
+
+# Find hidden files too
+fd -H <pattern>
+
+# Find files modified in the last N days
+fd --changed-within <n>d
+
+% ripgrep, rg
+
+# Search for a pattern in current directory
+rg <pattern>
+
+# Search in a specific file type
+rg -t <type> <pattern>
+
+# Search case-insensitively
+rg -i <pattern>
+
+# Search for fixed string (no regex)
+rg -F "<string>"
+
+# Show only filenames with matches
+rg -l <pattern>
+
+# Show count of matches per file
+rg -c <pattern>
+
+# Search with context lines
+rg -C <n> <pattern>
+
+# Search and replace (print only, no write)
+rg <pattern> --replace "<replacement>"
+
+# Search hidden and ignored files
+rg --hidden --no-ignore <pattern>
+
+# Search multiline patterns
+rg -U <pattern>
+
+# Search in a specific directory
+rg <pattern> <dir>
+
+% jq
+
+# Pretty-print JSON
+jq '.' <file>
+
+# Get a field value
+jq '.<field>' <file>
+
+# Get nested field
+jq '.<field>.<nested>' <file>
+
+# Filter array elements by condition
+jq '.[] | select(.<field> == "<value>")' <file>
+
+# Map over array
+jq '[.[] | .<field>]' <file>
+
+# Get all keys of an object
+jq 'keys' <file>
+
+# Convert object to key-value pairs
+jq 'to_entries' <file>
+
+# Format string interpolation
+jq '.[] | "\(.<field1>) \(.<field2>)"' <file>
+
+# Filter and output as CSV
+jq -r '.[] | [.<f1>, .<f2>] | @csv' <file>
+
+# Filter and output as TSV
+jq -r '.[] | [.<f1>, .<f2>] | @tsv' <file>
+
+# Recursive descent (find all values for a key)
+jq '.. | .<field>? // empty' <file>
+
+# Count array elements
+jq 'length' <file>
+
+# Sort array by field
+jq 'sort_by(.<field>)' <file>
+
+# Group array by field
+jq 'group_by(.<field>)' <file>
+
+# Compact output (no pretty-print)
+jq -c '.' <file>
+
+# Raw string output (no quotes)
+jq -r '.<field>' <file>
+
+# Slurp multiple JSON objects into array
+jq -s '.' <file>
+
+% eza, ls
+
+# List with icons (long format)
+eza --icons -lh
+
+# List all including hidden
+eza --icons -A
+
+# Tree view (2 levels)
+eza --tree --level=2 --ignore-glob="node_modules"
+
+# Tree view with git status
+eza --tree --git --level=2
+
+# Sort by date modified
+eza -l --sort=date --time-style=relative
+
+# List only directories
+eza -D
+
+% disk, files
+
+# Show disk usage of current directory (human readable, sorted)
+du -sh * | sort -h
+
+# Interactive disk usage browser
+ncdu
+
+# Show filesystem disk usage
+df -h
+
+# Find largest files in current directory
+du -ah . | sort -rh | head -20
+
+# Show size of a specific directory
+du -sh <dir>

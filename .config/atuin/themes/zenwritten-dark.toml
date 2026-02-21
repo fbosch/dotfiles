@@ -1,0 +1,13 @@
+[theme]
+name = "zenwritten-dark"
+
+[colors]
+Base = "#bbbbbb"
+Guidance = "#8a8a8a"
+Muted = "#666666"
+Important = "#de6e7c"
+Annotation = "#6099c0"
+AlertInfo = "#6099c0"
+AlertWarn = "#b77e64"
+AlertError = "#de6e7c"
+Title = "#819b69"

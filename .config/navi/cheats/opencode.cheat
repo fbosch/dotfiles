@@ -1,0 +1,79 @@
+% opencode
+
+# Start opencode TUI in current directory
+opencode
+
+# Start opencode TUI in a specific directory
+opencode <path>
+
+# Run a one-shot message
+opencode run "<message>"
+
+# Run a message with a specific model
+opencode run -m <provider>/<model> "<message>"
+
+# Run a slash command
+opencode run --command <command>
+
+# Run a slash command with arguments
+opencode run --command <command> "<args>"
+
+# Run a slash command with a specific model
+opencode run --command <command> -m <provider>/<model> "<args>"
+
+# Continue the last session
+opencode run -c "<message>"
+
+# Continue a specific session
+opencode run -s <session-id> "<message>"
+
+# Fork a session before continuing
+opencode run -c --fork "<message>"
+
+# Attach a file to a message
+opencode run -f <file> "<message>"
+
+# Run and output raw JSON events
+opencode run --format json "<message>"
+
+# Start web interface
+opencode web
+
+# Start headless server
+opencode serve
+
+# Attach to a running server
+opencode attach <url>
+
+% opencode, sessions
+
+# List all sessions
+opencode session list
+
+# List sessions (JSON output)
+opencode session list --format json
+
+# Export a session as JSON
+opencode export <session-id>
+
+# Import a session from file
+opencode import <file>
+
+% opencode, models
+
+# List all available models
+opencode models
+
+# List models for a specific provider
+opencode models <provider>
+
+# Show token usage and cost statistics
+opencode stats
+
+% opencode, auth
+
+# Login to a provider
+opencode auth login
+
+# Manage MCP servers
+opencode mcp

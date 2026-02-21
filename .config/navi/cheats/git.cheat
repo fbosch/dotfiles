@@ -1,0 +1,137 @@
+% git
+
+# Undo last commit (keep changes staged)
+git reset --soft HEAD~1
+
+# Undo last commit (unstage changes)
+git reset HEAD~1
+
+# Show diff of staged changes
+git diff --staged
+
+# Show log as graph
+git log --oneline --graph --decorate --all
+
+# Search commits by message
+git log --oneline --all --grep="<query>"
+
+# Show history of a specific file
+git log --oneline --follow -- <file>
+
+# Show what changed in a specific commit
+git show <commit>
+
+# Amend last commit message
+git commit --amend --only -m "<message>"
+
+# Amend last commit without changing message
+git commit --amend --no-edit
+
+# Create a fixup commit for a specific commit
+git commit --fixup <commit>
+
+# Interactive rebase last N commits
+git rebase -i HEAD~<n>
+
+# Abort an in-progress rebase
+git rebase --abort
+
+# Continue rebase after resolving conflicts
+git rebase --continue
+
+% git, stash
+
+# Stash with a message
+git stash push -m "<message>"
+
+# Stash including untracked files
+git stash push -u -m "<message>"
+
+# List all stashes
+git stash list
+
+# Apply stash by index
+git stash apply stash@{<index>}
+
+# Pop most recent stash
+git stash pop
+
+# Drop stash by index
+git stash drop stash@{<index>}
+
+# Show diff of a stash
+git stash show -p stash@{<index>}
+
+% git, branches
+
+# List all branches with last commit date
+git branch -v --sort=-committerdate
+
+# List all remote branches
+git branch -r --sort=-committerdate
+
+# Delete merged branches (keep main/master)
+git branch --merged | grep -v '\*\|main\|master' | xargs git branch -d
+
+# Force-delete a branch
+git branch -D <branch>
+
+# Prune stale remote-tracking branches
+git fetch --prune
+
+# Rename current branch
+git branch -m <new-name>
+
+# Push new branch and set upstream
+git push -u origin <branch>
+
+% git, worktrees
+
+# Add a worktree for a branch
+git worktree add ../<dir> <branch>
+
+# Add a worktree with a new branch
+git worktree add -b <branch> ../<dir>
+
+# List all worktrees
+git worktree list
+
+# Remove a worktree
+git worktree remove <dir>
+
+# Prune stale worktree metadata
+git worktree prune
+
+% git, bisect
+
+# Start bisect session
+git bisect start
+
+# Mark current commit as bad
+git bisect bad
+
+# Mark current commit as good
+git bisect good <commit>
+
+# Skip current commit
+git bisect skip
+
+# Reset bisect session
+git bisect reset
+
+# Automate bisect with a test script
+git bisect run <script>
+
+% git, cleanup
+
+# Remove untracked files and directories
+git clean -fd
+
+# Dry-run clean (preview what would be removed)
+git clean -nfd
+
+# Remove untracked files including ignored
+git clean -fdx
+
+# Delete all local branches except main/master/develop
+git branch | grep -Ev "(master|main|develop|\*)" | xargs git branch -D

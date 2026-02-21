@@ -1,0 +1,125 @@
+% nix
+
+# Search for a package
+nix search nixpkgs <package>
+
+# Run a package without installing
+nix run nixpkgs#<package>
+
+# Open a dev shell with packages
+nix shell nixpkgs#<package>
+
+# Open a nix-shell with packages (legacy)
+nix-shell -p <package>
+
+# Enter a flake dev shell
+nix develop
+
+# Enter a flake dev shell for a specific output
+nix develop .#<devShell>
+
+# Update all flake inputs
+nix flake update
+
+# Update a specific flake input
+nix flake update <input>
+
+# Show flake outputs
+nix flake show
+
+# Check flake for errors
+nix flake check
+
+# Show store path of current system
+nix path-info /run/current-system
+
+# Show closure size of a store path
+nix path-info -S <store-path>
+
+# Run nix store garbage collection
+nix store gc
+
+# Optimise nix store (dedup)
+nix store optimise
+
+% nh, nix
+
+# Switch to new NixOS configuration (from NH_FLAKE)
+nh os switch
+
+# Switch to new NixOS configuration (explicit flake)
+nh os switch ~/nixos
+
+# Switch with a specific hostname
+nh os switch ~/nixos -H <hostname>
+
+# Dry-run switch (preview only)
+nh os switch -n
+
+# Build NixOS configuration without activating
+nh os build
+
+# Test new configuration (activate but don't set boot default)
+nh os test
+
+# Set new configuration as boot default without activating
+nh os boot
+
+# List NixOS generations
+nh os info
+
+# Rollback to previous generation
+nh os rollback
+
+# Rollback to a specific generation number
+nh os rollback --to <generation>
+
+# Build a NixOS VM image
+nh os build-vm
+
+# Load system in a Nix REPL
+nh os repl
+
+# Switch home-manager configuration
+nh home switch
+
+# Build home-manager configuration
+nh home build
+
+# Search for a package on search.nixos.org
+nh search <package>
+
+# Search with a result limit
+nh search --limit <n> <package>
+
+# Search on a specific channel
+nh search --channel nixos-unstable <package>
+
+# Search and output as JSON
+nh search --json <package>
+
+% nh, nix, clean
+
+# Clean all profiles (keep 1 generation)
+nh clean all
+
+# Clean all profiles, keep N generations
+nh clean all --keep <n>
+
+# Clean all profiles, keep last N days/hours
+nh clean all --keep-since <duration>
+
+# Clean all profiles and optimise store
+nh clean all --optimise
+
+# Dry-run clean (preview what would be removed)
+nh clean all -n
+
+# Clean current user profiles only
+nh clean user
+
+# Clean current user profiles, keep N generations
+nh clean user --keep <n>
+
+# Clean a specific profile
+nh clean profile <profile-path>

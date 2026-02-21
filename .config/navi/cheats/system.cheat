@@ -1,0 +1,145 @@
+% system, disk
+
+# Show disk usage (human readable, sorted)
+du -sh * | sort -h
+
+# Show filesystem disk usage
+df -h
+
+% system, network
+
+# Show open listening ports
+ss -tlnp
+
+# Show all open sockets
+ss -anp
+
+# Show IP addresses
+ip addr
+
+# Ping a host
+ping -c 4 <host>
+
+# Trace route to host
+traceroute <host>
+
+# Make an HTTP request
+curl -s <url>
+
+# Make an HTTP request with headers
+curl -sI <url>
+
+# Make a POST request with JSON
+curl -s -X POST -H "Content-Type: application/json" -d '<json>' <url>
+
+% system, processes
+
+# Find process by name
+pgrep -a <name>
+
+# Kill process by name
+pkill <name>
+
+# Force kill process by name
+pkill -9 <name>
+
+# Kill process by PID
+kill <pid>
+
+# Force kill process by PID
+kill -9 <pid>
+
+# Show all running processes
+ps aux
+
+# Show process tree
+ps auxf
+
+# Interactive process viewer
+btop
+
+% system, systemd
+
+# Show service status
+systemctl status <service>
+
+# Start a service
+systemctl start <service>
+
+# Stop a service
+systemctl stop <service>
+
+# Restart a service
+systemctl restart <service>
+
+# Reload service config without restart
+systemctl reload <service>
+
+# Enable service at boot
+systemctl enable <service>
+
+# Disable service at boot
+systemctl disable <service>
+
+# Mask a service (prevent starting)
+systemctl mask <service>
+
+# List all running services
+systemctl list-units --type=service --state=running
+
+# List failed units
+systemctl list-units --failed
+
+% system, journald
+
+# Follow logs for a service
+journalctl -fu <service>
+
+# Show logs since last boot
+journalctl -b
+
+# Show logs since a time
+journalctl --since "<time>"
+
+# Show logs between two times
+journalctl --since "<start>" --until "<end>"
+
+# Show logs for a specific unit
+journalctl -u <unit>
+
+# Show only errors and above
+journalctl -p err
+
+# Show kernel messages
+journalctl -k
+
+% tmux
+
+# Create a new named session
+tmux new -s <name>
+
+# Attach to a session
+tmux attach-session -t <name>
+
+# List all sessions
+tmux ls
+
+# Kill a session
+tmux kill-session -t <name>
+
+# Kill all tmux sessions
+pkill -f tmux
+
+% fish
+
+# Reload fish config
+source ~/.config/fish/config.fish
+
+# List all defined functions
+functions
+
+# Show where a function is defined
+functions --details <function>
+
+# Show all abbreviations
+abbr

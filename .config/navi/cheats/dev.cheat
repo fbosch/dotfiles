@@ -1,0 +1,133 @@
+% pnpm
+
+# Install dependencies
+pnpm install
+
+# Run dev server
+pnpm dev
+
+# Build project
+pnpm build
+
+# Run tests
+pnpm test
+
+# Add a dependency
+pnpm add <package>
+
+# Add a dev dependency
+pnpm add -D <package>
+
+# Remove a dependency
+pnpm remove <package>
+
+# Update dependencies interactively (latest)
+pnpm upgrade --interactive --latest --recursive
+
+# Update dependencies interactively (within range)
+pnpm update --interactive --recursive
+
+# Run a script in a specific workspace
+pnpm --filter <workspace> <script>
+
+# List all workspaces
+pnpm -r list
+
+# Run script in all workspaces
+pnpm -r run <script>
+
+# Execute a package binary without installing
+pnpm dlx <package>
+
+% cargo, rust
+
+# Create a new binary project
+cargo new <name>
+
+# Create a new library project
+cargo new --lib <name>
+
+# Initialise in current directory
+cargo init
+
+# Check for errors without building
+cargo check
+
+# Build (debug)
+cargo build
+
+# Build (release)
+cargo build --release
+
+# Run the project
+cargo run
+
+# Run with arguments
+cargo run -- <args>
+
+# Run tests
+cargo test
+
+# Run a specific test
+cargo test <test-name>
+
+# Run benchmarks
+cargo bench
+
+# Generate and open documentation
+cargo doc --open
+
+# Add a dependency
+cargo add <crate>
+
+# Add a dev dependency
+cargo add --dev <crate>
+
+# Remove a dependency
+cargo remove <crate>
+
+# Update dependencies
+cargo update
+
+# Search crates.io
+cargo search <query>
+
+# Clean build artifacts
+cargo clean
+
+% uv, python
+
+# Install packages into current environment
+uv pip install <package>
+
+# Install from requirements file
+uv pip install -r requirements.txt
+
+# Sync environment to requirements
+uv pip sync requirements.txt
+
+# Create a virtual environment
+uv venv
+
+# Create a virtual environment with specific Python
+uv venv --python <version>
+
+# Run a script in isolated environment
+uv run <script>
+
+# Run a tool without installing
+uvx <tool>
+
+% node
+
+# Run with inspector (for debugging)
+node --inspect <file>
+
+# Run with inspector, break on start
+node --inspect-brk <file>
+
+# Check Node.js version
+node --version
+
+# Run a one-liner
+node -e "<expression>"
