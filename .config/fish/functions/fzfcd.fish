@@ -1,12 +1,15 @@
 function fzfcd
-    if test -d .git -a -f .git/HEAD
+    set -l tmp (mktemp)
+    if test -f .git
         # if current directory is a .bare git repository, search for child directories contains .git folders only
-        set selected_dir (fd -tf --max-depth=4 --color=never '.git$' -H | rev | cut -c 6- | rev | fzf --preview "lt {}" --preview-window "25%")
+        fd -tf --max-depth=4 --color=never '.git$' -H | rev | cut -c 6- | rev | fzf --preview "lt {}" --preview-window "25%" > $tmp < /dev/tty
     else
-        set selected_dir (fd -td --max-depth=4 --color=never | fzf --preview "lt {}" --preview-window "25%")
+        fd -td --max-depth=4 --color=never --hidden | fzf --preview "lt {}" --preview-window "25%" > $tmp < /dev/tty
     end
+    set -l selected_dir (cat $tmp)
+    rm -f $tmp
     if test -n "$selected_dir"
-        z "$selected_dir" # Change directory if selection is not empty
+        z "$selected_dir"
         commandline --function repaint
     end
 end

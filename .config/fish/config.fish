@@ -92,6 +92,7 @@ function fish_user_keybindings
     fish_vi_key_bindings
     bind \cg _navi_smart_replace
     bind --mode insert \cg _navi_smart_replace
+    bind --mode insert \cP fzfcd
 end
 
 # --- Third-party Tools ---
