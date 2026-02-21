@@ -50,12 +50,6 @@ AGS_BUNDLED_INSTANCE="ags-bundled"
 
 # ============================================================================
 
-# Get current time in milliseconds (no subprocess - uses bash 5+ EPOCHREALTIME)
-get_time_ms() {
-  local t="${EPOCHREALTIME/./}"
-  echo "${t:0:13}"
-}
-
 # Check if any AGS overlay is visible
 is_any_overlay_visible() {
   # Check window-switcher visibility in bundled AGS instance
@@ -238,10 +232,8 @@ capture_screenshot() {
   local all_clients_json
   all_clients_json=$(hyprctl clients -j 2>/dev/null)
 
-  # Process each window
-  while read -r window_json; do
-    IFS='|' read -r address mapped floating x y width height <<< "$(echo "$window_json" | jq -r '[.address, (.mapped // true), .floating, .at[0], .at[1], .size[0], .size[1]] | join("|")')"
-    
+  # Process each window (fields pre-joined by jq - no per-window fork)
+  while IFS='|' read -r address mapped floating x y width height; do
     [[ "$mapped" == "false" ]] && continue
     
     if [[ "$width" -le 0 ]] || [[ "$height" -le 0 ]]; then
@@ -329,13 +321,13 @@ capture_screenshot() {
       fi
       
       # Check if image is completely (or nearly) black
-      # Get mean brightness as percentage (0-100)
+      # %[fx:mean] returns 0.0-1.0; multiply by 1000 and compare as integer (no bc/awk needed)
       local mean_brightness
-      mean_brightness=$(convert "$temp_output" -colorspace Gray -format "%[fx:100*mean]" info: 2>/dev/null)
-      
-      # If brightness is very low (< 1%), image is essentially black - discard it
+      mean_brightness=$(convert "$temp_output" -colorspace Gray -format "%[fx:floor(mean*1000)]" info: 2>/dev/null)
+
+      # If brightness is very low (< 1% = <10 in 0-1000 scale), image is essentially black - discard it
       # This catches minimized windows, off-screen windows, or capture errors
-      if (( $(echo "$mean_brightness < 1.0" | bc -l 2>/dev/null || echo 0) )); then
+      if [[ -n "$mean_brightness" ]] && (( mean_brightness < 10 )); then
         rm -f "$temp_output"
         exit 0
       fi
@@ -343,7 +335,7 @@ capture_screenshot() {
       # Only overwrite if validation passed
       mv "$temp_output" "$output_path"
     ) &
-  done < <(jq -c --arg ws "$current_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | {address, at, size, mapped, floating}' <<< "$all_clients_json" 2>/dev/null)
+  done < <(jq -r --arg ws "$current_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | [.address, (.mapped // true), .floating, .at[0], .at[1], .size[0], .size[1]] | join("|")' <<< "$all_clients_json" 2>/dev/null)
   
   # Wait for all parallel crops to complete
   wait
