@@ -11,8 +11,11 @@ readonly SHOW_THRESHOLD=20     # Distance from bottom to trigger show (pixels)
 readonly HIDE_THRESHOLD=60      # Distance from bottom before hiding (pixels)
 readonly SHOW_DELAY_MS=200      # Milliseconds to wait before showing (prevents quick hovers)
 readonly HIDE_DELAY_MS=300      # Milliseconds to wait before hiding (linger time)
-readonly FAST_CHECK_MS=50       # Fast polling interval (50ms)
+readonly FAST_CHECK_MS=25       # Fast polling interval (25ms)
 readonly SLOW_CHECK_MS=300      # Slow polling interval (300ms)
+
+# Hyprland query socket (faster than hyprctl)
+HYPR_QUERY_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock"
 
 # Cache monitor info (updated periodically)
 declare -A MONITOR_CACHE
@@ -23,11 +26,8 @@ readonly CACHE_REFRESH_S=5  # Refresh monitor cache every 5 seconds
 get_current_monitor_height() {
     local cursor_x=$1
     local cursor_y=$2
-    local current_time
-    current_time=$(date +%s)
-    
     # Refresh cache if needed
-    if (( current_time - monitor_cache_time > CACHE_REFRESH_S )); then
+    if (( EPOCHSECONDS - monitor_cache_time > CACHE_REFRESH_S )); then
         MONITOR_CACHE=()
         while IFS='|' read -r name x y width height transform; do
             # Account for monitor rotation (transforms 1 and 3 swap width/height)
@@ -37,8 +37,8 @@ get_current_monitor_height() {
             else
                 MONITOR_CACHE["$name"]="$x|$y|$width|$height"
             fi
-        done < <(hyprctl monitors -j 2>/dev/null | jq -r '.[] | "\(.name)|\(.x)|\(.y)|\(.width)|\(.height)|\(.transform)"')
-        monitor_cache_time=$current_time
+        done < <(printf 'j/monitors' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null | jq -r '.[] | "\(.name)|\(.x)|\(.y)|\(.width)|\(.height)|\(.transform)"')
+        monitor_cache_time=$EPOCHSECONDS
     fi
     
     # Find which monitor contains the cursor
@@ -103,7 +103,7 @@ echo "$(date): Script started" > /tmp/edge-debug.log
 
 while true; do
     # Get cursor position (single read, minimal processing)
-    IFS=',' read -r cursor_x cursor_y <<< "$(hyprctl cursorpos 2>/dev/null)"
+    IFS=',' read -r cursor_x cursor_y <<< "$(printf 'cursorpos' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)"
     cursor_x=${cursor_x## }  # Trim leading spaces (bash built-in)
     cursor_y=${cursor_y## }  # Trim leading spaces (bash built-in)
     
@@ -168,9 +168,9 @@ while true; do
     fi
     
     # Sleep with calculated interval (convert ms to seconds)
-    # 50ms = 0.05s, 300ms = 0.3s
+    # 25ms = 0.025s, 300ms = 0.3s
     if (( check_interval_ms == FAST_CHECK_MS )); then
-        sleep 0.05
+        sleep 0.025
     else
         sleep 0.3
     fi
