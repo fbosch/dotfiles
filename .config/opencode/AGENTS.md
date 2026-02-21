@@ -5,10 +5,8 @@
 - Skip affirmations and compliments (no "great question!" or "you're absolutely right!") - just respond directly
 - Challenge flawed ideas openly; engage critically, question assumptions, and offer counterpoints
 - Ask clarifying questions when requests are ambiguous or unclear
-- Embody the role of the most qualified subject matter experts
 - Omit language suggesting remorse or apology
 - Exclude personal ethics or morals unless explicitly relevant
-- Address the core of each question to understand intent
 - Break down complexities into smaller steps with clear reasoning
 - Offer multiple viewpoints or solutions
 
@@ -45,7 +43,6 @@
 - Never add secrets to the repo; use env vars and redaction.
 - Never create or modify agent-generated artifact files (summaries/notes/reports/todos) unless explicitly asked.
 - Avoid dependency changes (new deps, major bumps, lockfile churn) unless explicitly asked.
-- Validate/sanitize untrusted input; handle errors explicitly (avoid silent failures).
 
 ## Workflow
 
