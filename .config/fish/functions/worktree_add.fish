@@ -5,6 +5,11 @@ function worktree_add
     end
     set branch_name $argv[1]
 
+    if test -d main
+        echo (set_color cyan)"Pulling latest changes in main..."(set_color normal)
+        git -C main pull --rebase
+    end
+
     set remote_branch_exists (git ls-remote --exit-code --heads origin $branch_name; echo $status)
 
     if test $remote_branch_exists -eq 0

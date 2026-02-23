@@ -69,11 +69,14 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
         exit 130
     end
     
-    # Run opencode with diff file passed as argument content
-    set -l diff_content (cat $actual_diff_file)
+    # Pass diff file path via env var; use `command cat | string collect` to bypass bat alias
+    # and preserve the diff as a single argument (fish command substitution splits on newlines)
+    set -x OPENCODE_PR_DIFF_FILE $actual_diff_file
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- \
-        sh -c "opencode run --command pr-desc -m $ai_model --format json '$diff_content' > $temp_output 2>&1"
+        fish -c 'opencode run --command pr-desc -m $argv[1] --format json (command cat $OPENCODE_PR_DIFF_FILE | string collect) > $argv[2] 2>&1' \
+        -- $ai_model $temp_output
     set -l opencode_exit_code $status
+    set -e OPENCODE_PR_DIFF_FILE
     
     rm -f $actual_diff_file
     
@@ -96,7 +99,7 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
     end
     
     # Extract text from JSON response, write to file
-    cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' >$temp_pr_desc 2>/dev/null
+    command cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' >$temp_pr_desc 2>/dev/null
     
     if not test -s "$temp_pr_desc"
         gum style --foreground 1 " No valid PR description generated. Raw output:"
