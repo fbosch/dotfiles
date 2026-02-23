@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-02-17T07:20:48.988Z",
+  "generatedAt": "2026-02-23T13:11:04.820Z",
   "toolVersion": "0.0.0",
   "sources": {
     "ags": {
@@ -11,47 +11,37 @@
       "fileCount": 12,
       "manifestSha256": "bc5aa60ba05c0aca149a8f74e5f40bd1693b875bdc88a82076702efde50d26c4",
       "rulesSha256": "d0dc18979f534e18311f4e49bdd6739e3be9e5c7e97d623c9825ad7cff190a45",
-      "updatedAt": "2026-02-17T07:20:48.988Z"
+      "updatedAt": "2026-02-23T13:11:04.820Z"
     },
     "vicinae-docs": {
       "repo": "https://github.com/vicinaehq/docs.git",
       "ref": "HEAD",
-      "resolvedCommit": "2d7e0f9188f6346dee75f0045cc7196ed7720596",
+      "resolvedCommit": "cb9713e06d6e9880d2517691fd2f1bf1ead88ade",
       "bytes": 19926,
       "fileCount": 8,
       "manifestSha256": "b5c6bf86eb46ec484c3db8bcf73cfaeeb1504d616a749374ff3da567250fef12",
       "rulesSha256": "9eeb141726160fa429a21b24d6220b5dce6ffb4c44a06d54a0fc3cb492318f4a",
-      "updatedAt": "2026-02-17T07:20:48.988Z"
+      "updatedAt": "2026-02-23T13:11:04.820Z"
     },
     "hyprland-wiki": {
       "repo": "https://github.com/hyprwm/hyprland-wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "836882975e3d240570cb53604949339d87fe8b7f",
-      "bytes": 174687,
-      "fileCount": 23,
-      "manifestSha256": "506102513bf6df18ce74dc2badecc79848447bd354e64dcb5800e729aa25bf1e",
+      "resolvedCommit": "1f7aa4639cd6f149ebf6ee151be168172b794cf0",
+      "bytes": 178040,
+      "fileCount": 25,
+      "manifestSha256": "1a2f94995a921dade943d85263c1c8fd0a225778e65e1b61fbc12dfab28bcd5a",
       "rulesSha256": "9711428153e452825f0368860d30401cea3ed5f5e90d569d70558c392fe0dc83",
-      "updatedAt": "2026-02-17T07:20:48.988Z"
-    },
-    "Waybar.wiki": {
-      "repo": "https://github.com/Alexays/Waybar.wiki.git",
-      "ref": "HEAD",
-      "resolvedCommit": "740a0063418d472cd0d64381160bbed1905b9f5b",
-      "bytes": 300192,
-      "fileCount": 78,
-      "manifestSha256": "9d525c4b21a541c6f5e5ef2fa88c4f5dc8ca2bb91aefb3b86d2853171201fa79",
-      "rulesSha256": "e27ef21aeab2353bc2d6ff94726ec517237ebf8598d863f22e23c437ccda1479",
-      "updatedAt": "2026-02-04T19:02:57.146Z"
+      "updatedAt": "2026-02-23T13:11:04.820Z"
     },
     "waybar": {
       "repo": "https://github.com/Alexays/Waybar.wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "d6a1caee011580c285787456055a5294b1a5dc9b",
+      "resolvedCommit": "c4ad4f0bd2d9156623953372f0a52a4464449b65",
       "bytes": 22789,
       "fileCount": 2,
       "manifestSha256": "6ce880bf38b379777e79aa3ba0909f4351f89b3a6c39df253a3c357948d2d865",
       "rulesSha256": "b081a738d08a508e04d08ab700ae515252de04000d5108b2ae3cbcf211ac1a8c",
-      "updatedAt": "2026-02-17T07:20:48.988Z"
+      "updatedAt": "2026-02-23T13:11:04.820Z"
     }
   }
 }

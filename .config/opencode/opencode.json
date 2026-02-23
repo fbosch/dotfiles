@@ -28,11 +28,11 @@
       "temperature": 0.0
     },
     "summary": {
-      "model": "opencode/glm-5-free",
+      "model": "github-copilot/claude-sonnet-4.5",
       "temperature": 0.1
     },
     "compaction": {
-      "model": "opencode/glm-5-free",
+      "model": "github-copilot/claude-sonnet-4.5",
       "temperature": 0.0
     }
   },
