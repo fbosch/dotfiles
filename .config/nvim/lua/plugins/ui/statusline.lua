@@ -15,38 +15,42 @@ return {
 			require("opencode").statusline,
 			{
 				function()
+					local _, result = pcall(codexbar.statusline_component)
+					return result .. " %#Comment#│%*"
+				end,
+				cond = function()
 					local ok, result = pcall(codexbar.statusline_component)
-					if not ok or not result or result == "" then
-						return nil
-					end
-					return result .. " %#Comment#│%*"
+					return ok and result ~= nil and result ~= ""
 				end,
 			},
 			{
 				function()
+					local _, result = pcall(anthropic_usage.statusline_component)
+					return result .. " %#Comment#│%*"
+				end,
+				cond = function()
 					local ok, result = pcall(anthropic_usage.statusline_component)
-					if not ok or not result or result == "" then
-						return nil
-					end
-					return result .. " %#Comment#│%*"
+					return ok and result ~= nil and result ~= ""
 				end,
 			},
 			{
 				function()
+					local _, result = pcall(copilot_usage.statusline_component)
+					return result .. " %#Comment#│%*"
+				end,
+				cond = function()
 					local ok, result = pcall(copilot_usage.statusline_component)
-					if not ok or not result or result == "" then
-						return nil
-					end
-					return result .. " %#Comment#│%*"
+					return ok and result ~= nil and result ~= ""
 				end,
 			},
 			{
 				function()
-					local ok, result = pcall(opencode_zen_stats.statusline_component)
-					if not ok then
-						return nil
-					end
+					local _, result = pcall(opencode_zen_stats.statusline_component)
 					return result
+				end,
+				cond = function()
+					local ok, result = pcall(opencode_zen_stats.statusline_component)
+					return ok and result ~= nil and result ~= ""
 				end,
 			},
 		}
