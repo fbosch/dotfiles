@@ -15,7 +15,7 @@
       "reasoningEffort": "high"
     },
     "explore": {
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "github-copilot/grok-code-fast-1",
       "temperature": 0.0
     },
     "general": {
@@ -28,11 +28,11 @@
       "temperature": 0.0
     },
     "summary": {
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "opencode/glm-5-free",
       "temperature": 0.1
     },
     "compaction": {
-      "model": "github-copilot/claude-sonnet-4.5",
+      "model": "opencode/glm-5-free",
       "temperature": 0.0
     }
   },
