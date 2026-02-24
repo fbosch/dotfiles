@@ -3,6 +3,10 @@
   "theme": "zenwritten-dark",
   "model": "openai/gpt-5.3-codex",
   "small_model": "anthropic/claude-haiku-4-5",
+  "plugin": [
+    "@happycastle/opencode-openmemory@latest",
+    "opencode-wakatime"
+  ],
   "agent": {
     "build": {
       "temperature": 0.3
@@ -76,8 +80,5 @@
         "@eslint/mcp@latest"
       ]
     }
-  },
-  "plugin": [
-    "@happycastle/opencode-openmemory@latest"
-  ]
+  }
 }
