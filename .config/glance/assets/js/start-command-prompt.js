@@ -7,6 +7,11 @@
   const FALLBACK_SEARCH_URL = "https://kagi.com/search?q={QUERY}";
   const MAX_SUGGESTIONS = 8;
   const SUGGESTION_DEBOUNCE_MS = 50;
+  const AUTO_SELECT_MIN_QUERY = 3;
+  const AUTO_SELECT_MIN_SCORE_POSITIVE = 0.35;
+  const AUTO_SELECT_MIN_GAP_POSITIVE = 0.08;
+  const AUTO_SELECT_MIN_SCORE = -1800;
+  const AUTO_SELECT_MIN_GAP = 120;
   const CUSTOM_BANGS = {
     g: "https://www.google.com/search?q={{{s}}}",
     gh: "https://github.com/search?q={{{s}}}",
@@ -646,6 +651,10 @@
   }
 
   function findMatches(query, entries) {
+    if (query.length < 2) {
+      return fallbackMatches(query, entries);
+    }
+
     if (window.fuzzysort && typeof window.fuzzysort.go === "function") {
       const results = window.fuzzysort.go(query, entries, {
         keys: ["title", "url", "collection", "description", "tags"],
@@ -1221,6 +1230,48 @@
         event.stopPropagation();
         hideDropdown(state);
         openUrl(selected.entry.url, openInNewTab);
+        return;
+      }
+    }
+
+    if (state && state.matches.length > 0 && state.selectedIndex < 0) {
+      const q = normalizeSpaces(query).toLowerCase();
+      const top = state.matches[0];
+      const second = state.matches[1] || null;
+      const topScore = top && typeof top.score === "number" ? top.score : Number.NEGATIVE_INFINITY;
+      const secondScore =
+        second && typeof second.score === "number" ? second.score : Number.NEGATIVE_INFINITY;
+      const title = (top && top.entry && top.entry.title ? top.entry.title : "").toLowerCase();
+      const url = (top && top.entry && top.entry.url ? top.entry.url : "").toLowerCase();
+      const containsQuery = title.indexOf(q) !== -1 || url.indexOf(q) !== -1;
+      const usesFuzzyScores =
+        window.fuzzysort &&
+        typeof window.fuzzysort.go === "function" &&
+        Number.isFinite(topScore);
+      const usesPositiveScoreScale = topScore > 0;
+      const isStrong = usesPositiveScoreScale
+        ? topScore >= AUTO_SELECT_MIN_SCORE_POSITIVE
+        : topScore >= AUTO_SELECT_MIN_SCORE;
+      const hasGap = usesPositiveScoreScale
+        ? Number.isFinite(secondScore) === false || topScore - secondScore >= AUTO_SELECT_MIN_GAP_POSITIVE
+        : Number.isFinite(secondScore) === false || topScore - secondScore >= AUTO_SELECT_MIN_GAP;
+      const queryWords = q.split(/\s+/).filter(Boolean);
+      const titleStartsWithWord = queryWords.some(function (word) {
+        return title.indexOf(word) === 0 || title.indexOf(" " + word) !== -1;
+      });
+      const closeTextMatch = containsQuery || titleStartsWithWord;
+
+      if (
+        q.length >= AUTO_SELECT_MIN_QUERY &&
+        closeTextMatch &&
+        usesFuzzyScores &&
+        isStrong &&
+        hasGap
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        hideDropdown(state);
+        openUrl(top.entry.url, openInNewTab);
         return;
       }
     }

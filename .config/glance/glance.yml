@@ -76,7 +76,7 @@ document:
     <script src="https://cdn.jsdelivr.net/npm/fuzzysort@3.1.0/fuzzysort.min.js" defer></script>
     <script src="/assets/js/quicklink-init.js" defer></script>
     <script src="/assets/js/freshrss-actualize.js" defer></script>
-    <script src="/assets/js/start-command-prompt.js" defer></script>
+    <script src="/assets/js/start-command-prompt.js?v=20260224-3" defer></script>
 
 pages:
   - $include: pages/startpage.yml
