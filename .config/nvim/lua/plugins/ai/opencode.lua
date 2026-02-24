@@ -13,22 +13,16 @@ return {
 			end
 
 			vim.g.opencode_opts = {
-				auto_reload = true,
-				provider = {
-					cmd = cmd,
-					enabled = "snacks",
-					snacks = {
-						win = {
-							position = "left",
-							width = 100,
-						},
-						terminal = {
-							enabled = true,
-						},
-						env = {
-							SHELL = "/bin/fish",
-						},
-					},
+				server = {
+					start = function()
+						require("opencode.terminal").start(cmd, { split = "left", width = 100 })
+					end,
+					stop = function()
+						require("opencode.terminal").stop()
+					end,
+					toggle = function()
+						require("opencode.terminal").toggle(cmd, { split = "left", width = 100 })
+					end,
 				},
 			}
 			vim.o.autoread = true
@@ -72,6 +66,24 @@ return {
 					focus_opencode_window()
 				end
 			end
+
+			-- Keep opencode UI buffers out of bufferline
+			vim.api.nvim_create_autocmd("FileType", {
+				pattern = { "opencode", "opencode_terminal" },
+				callback = function(args)
+					vim.bo[args.buf].buflisted = false
+				end,
+			})
+
+			vim.api.nvim_create_autocmd("TermOpen", {
+				pattern = "*",
+				callback = function(args)
+					local name = vim.api.nvim_buf_get_name(args.buf)
+					if name:find("term://", 1, true) and name:find("opencode", 1, true) then
+						vim.bo[args.buf].buflisted = false
+					end
+				end,
+			})
 
 			-- Set up opencode terminal-specific keymaps and cleanup
 			vim.api.nvim_create_autocmd("FileType", {

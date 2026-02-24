@@ -5,7 +5,6 @@
   
   // REST API settings (only used when backend is "openmemory-rest")
   "apiUrl": "https://memory.corvus-corax.synology.me",
-  // Uses OPENMEMORY_API_KEY from environment
   
   // Search settings
   "similarityThreshold": 0.6,
