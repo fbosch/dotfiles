@@ -2,7 +2,7 @@
 description: Runs performance benchmarks, profiles code, and compares before/after results. Use when measuring performance, identifying bottlenecks, or validating optimizations.
 mode: subagent
 color: warning
-model: github-copilot/claude-haiku-4-5
+model: github-copilot/claude-haiku-4.5
 temperature: 0.1
 tools:
   write: false
