@@ -245,6 +245,14 @@ body {
   background: color-mix(in hsl, var(--color-widget-content-border), transparent 20%);
 }
 
+.start-linkwarden-dropdown-icon-wrap.has-icon {
+  background: transparent;
+}
+
+.start-linkwarden-dropdown-icon-wrap.has-icon .start-linkwarden-dropdown-icon-fallback {
+  display: none;
+}
+
 .start-linkwarden-dropdown-icon-fallback {
   font-size: 0.78rem;
   font-weight: 600;
@@ -258,6 +266,11 @@ body {
   position: absolute;
   inset: 0;
   display: block;
+}
+
+.start-linkwarden-dropdown-icon[data-host="github.com"],
+.start-linkwarden-dropdown-icon[data-host="www.github.com"] {
+  filter: invert(1) brightness(1.15);
 }
 
 .start-linkwarden-dropdown-item.is-selected {

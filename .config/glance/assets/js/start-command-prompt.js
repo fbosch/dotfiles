@@ -3,7 +3,6 @@
   const CACHE_TTL_MS = 15 * 60 * 1000;
   const FAVICON_CACHE_KEY = "glance.start.favicon.sources.v1";
   const FAVICON_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-  const SCORE_THRESHOLD = 0.56;
   const FALLBACK_SEARCH_URL = "https://kagi.com/search?q={QUERY}";
   const MAX_SUGGESTIONS = 8;
   const CUSTOM_BANGS = {
@@ -854,6 +853,11 @@
       });
 
       icon.addEventListener("load", function () {
+        const wrapper = icon.parentElement;
+        if (wrapper) {
+          wrapper.classList.add("has-icon");
+        }
+
         if (host) {
           setCachedFaviconSource(host, icon.currentSrc || icon.src);
         }
@@ -930,16 +934,6 @@
       event.preventDefault();
       event.stopPropagation();
       openUrl(normalizeUrl(query), openInNewTab);
-      return;
-    }
-
-    const matches = findMatches(query, getEntries());
-    const best = matches[0];
-
-    if (best && best.score >= SCORE_THRESHOLD) {
-      event.preventDefault();
-      event.stopPropagation();
-      openUrl(best.entry.url, openInNewTab);
       return;
     }
 
