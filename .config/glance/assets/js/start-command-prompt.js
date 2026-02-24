@@ -6,6 +6,7 @@
   const FAVICON_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
   const FALLBACK_SEARCH_URL = "https://kagi.com/search?q={QUERY}";
   const MAX_SUGGESTIONS = 8;
+  const SUGGESTION_DEBOUNCE_MS = 50;
   const CUSTOM_BANGS = {
     g: "https://www.google.com/search?q={{{s}}}",
     gh: "https://github.com/search?q={{{s}}}",
@@ -60,6 +61,52 @@
     ).toLowerCase();
   }
 
+  function ensureSearchable(entry) {
+    if (!entry || typeof entry !== "object") {
+      return null;
+    }
+
+    const normalized = {
+      title: normalizeSpaces(entry.title || ""),
+      url: normalizeText(entry.url || ""),
+      collection: normalizeSpaces(entry.collection || ""),
+      description: normalizeSpaces(entry.description || ""),
+      tags: normalizeSpaces(entry.tags || ""),
+    };
+
+    if (normalized.url === "") {
+      return null;
+    }
+
+    normalized.searchable = toSearchable(normalized);
+    return normalized;
+  }
+
+  function toCacheEntry(entry) {
+    return {
+      title: entry.title,
+      url: entry.url,
+      collection: entry.collection,
+      description: entry.description,
+      tags: entry.tags,
+    };
+  }
+
+  function hydrateEntries(entries) {
+    const hydrated = [];
+
+    for (let index = 0; index < entries.length; index += 1) {
+      const candidate = ensureSearchable(entries[index]);
+      if (!candidate) {
+        continue;
+      }
+
+      hydrated.push(candidate);
+    }
+
+    return hydrated;
+  }
+
   function parseEntriesFromDom() {
     const nodes = document.querySelectorAll("[data-start-linkwarden-options] li");
     const entries = [];
@@ -80,8 +127,12 @@
         tags: normalizeSpaces(node.getAttribute("data-tags") || ""),
       };
 
-      entry.searchable = toSearchable(entry);
-      entries.push(entry);
+      const hydrated = ensureSearchable(entry);
+      if (!hydrated) {
+        continue;
+      }
+
+      entries.push(hydrated);
     }
 
     return entries;
@@ -135,16 +186,19 @@
           continue;
         }
 
-        const entry = {
-          title: normalizeSpaces(title),
+        const hydrated = ensureSearchable({
+          title,
           url,
-          collection: normalizeSpaces(collection),
-          description: normalizeSpaces(description),
-          tags: normalizeSpaces(tags),
-        };
+          collection,
+          description,
+          tags,
+        });
 
-        entry.searchable = toSearchable(entry);
-        entries.push(entry);
+        if (!hydrated) {
+          continue;
+        }
+
+        entries.push(hydrated);
       }
 
       return entries;
@@ -177,8 +231,12 @@
         entry.title = url.replace(/^https?:\/\/(www\.)?/i, "");
       }
 
-      entry.searchable = toSearchable(entry);
-      entries.push(entry);
+      const hydrated = ensureSearchable(entry);
+      if (!hydrated) {
+        continue;
+      }
+
+      entries.push(hydrated);
     }
 
     return entries;
@@ -206,8 +264,12 @@
         tags: "",
       };
 
-      entry.searchable = toSearchable(entry);
-      entries.push(entry);
+      const hydrated = ensureSearchable(entry);
+      if (!hydrated) {
+        continue;
+      }
+
+      entries.push(hydrated);
     }
 
     return entries;
@@ -436,7 +498,7 @@
         return [];
       }
 
-      return parsed.entries;
+      return hydrateEntries(parsed.entries);
     } catch (_error) {
       return [];
     }
@@ -453,7 +515,7 @@
         CACHE_KEY,
         JSON.stringify({
           ts: Date.now(),
-          entries,
+          entries: entries.map(toCacheEntry),
         })
       );
       lastPersistedEntriesSignature = signature;
@@ -647,6 +709,7 @@
       matches: [],
       selectedIndex: -1,
       lastPrefetchedUrl: "",
+      suggestionTimer: 0,
     };
 
     inputState.set(input, state);
@@ -890,6 +953,12 @@
     state.matches = [];
     state.selectedIndex = -1;
     state.lastPrefetchedUrl = "";
+
+    if (state.suggestionTimer) {
+      clearTimeout(state.suggestionTimer);
+      state.suggestionTimer = 0;
+    }
+
     state.dropdown.hidden = true;
     state.dropdown.innerHTML = "";
   }
@@ -1084,6 +1153,40 @@
     renderDropdown(input, state);
   }
 
+  function scheduleSuggestions(input) {
+    const state = getOrCreateState(input);
+    if (!state) {
+      return;
+    }
+
+    if (state.suggestionTimer) {
+      clearTimeout(state.suggestionTimer);
+      state.suggestionTimer = 0;
+    }
+
+    const query = normalizeSpaces(input.value);
+    if (query === "" || isProbablyUrl(query) || parseBang(query)) {
+      hideDropdown(state);
+      return;
+    }
+
+    state.suggestionTimer = window.setTimeout(function () {
+      state.suggestionTimer = 0;
+      updateSuggestions(input);
+    }, SUGGESTION_DEBOUNCE_MS);
+  }
+
+  function flushSuggestions(input) {
+    const state = getOrCreateState(input);
+    if (!state || state.suggestionTimer === 0) {
+      return;
+    }
+
+    clearTimeout(state.suggestionTimer);
+    state.suggestionTimer = 0;
+    updateSuggestions(input);
+  }
+
   function openUrl(url, openInNewTab) {
     if (openInNewTab === false) {
       window.location.assign(url);
@@ -1167,7 +1270,7 @@
 
         configureInputForManagers(target);
 
-        updateSuggestions(target);
+        scheduleSuggestions(target);
       },
       true
     );
@@ -1181,6 +1284,10 @@
         }
 
         configureInputForManagers(target);
+
+        if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Enter") {
+          flushSuggestions(target);
+        }
 
         if (event.key === "ArrowDown") {
           event.preventDefault();
