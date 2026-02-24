@@ -1,6 +1,7 @@
 (function () {
   const CACHE_KEY = "glance.start.linkwarden.entries.v1";
   const CACHE_TTL_MS = 15 * 60 * 1000;
+  const INDEX_MEMORY_TTL_MS = 60 * 1000;
   const FAVICON_CACHE_KEY = "glance.start.favicon.sources.v1";
   const FAVICON_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
   const FALLBACK_SEARCH_URL = "https://kagi.com/search?q={QUERY}";
@@ -24,6 +25,12 @@
   };
   const inputState = new WeakMap();
   const faviconSourceCache = readFaviconSourceCache();
+  const entryIndexState = {
+    entries: [],
+    signature: "",
+    ts: 0,
+  };
+  let lastPersistedEntriesSignature = "";
 
   function normalizeText(value) {
     if (typeof value !== "string") {
@@ -225,6 +232,36 @@
     return Array.from(byUrl.values());
   }
 
+  function getEntriesSignature(entries) {
+    if (!entries || entries.length === 0) {
+      return "0";
+    }
+
+    const first = entries[0] && entries[0].url ? entries[0].url : "";
+    const lastIndex = entries.length - 1;
+    const last = entries[lastIndex] && entries[lastIndex].url ? entries[lastIndex].url : "";
+
+    return entries.length + "|" + first + "|" + last;
+  }
+
+  function canUseMemoryIndex() {
+    if (entryIndexState.entries.length === 0) {
+      return false;
+    }
+
+    if (Date.now() - entryIndexState.ts > INDEX_MEMORY_TTL_MS) {
+      return false;
+    }
+
+    return true;
+  }
+
+  function setMemoryIndex(entries) {
+    entryIndexState.entries = entries;
+    entryIndexState.signature = getEntriesSignature(entries);
+    entryIndexState.ts = Date.now();
+  }
+
   function readCache() {
     return readCacheWithMode(false);
   }
@@ -337,6 +374,11 @@
   }
 
   function writeCache(entries) {
+    const signature = getEntriesSignature(entries);
+    if (signature === lastPersistedEntriesSignature) {
+      return;
+    }
+
     try {
       localStorage.setItem(
         CACHE_KEY,
@@ -345,12 +387,17 @@
           entries,
         })
       );
+      lastPersistedEntriesSignature = signature;
     } catch (_error) {
       // Ignore cache write failures.
     }
   }
 
   function getEntries() {
+    if (canUseMemoryIndex()) {
+      return entryIndexState.entries;
+    }
+
     let entries = parseEntriesFromJson();
     if (entries.length === 0) {
       entries = parseEntriesFromDom();
@@ -368,16 +415,22 @@
     }
 
     if (entries.length > 0) {
+      setMemoryIndex(entries);
       writeCache(entries);
       return entries;
     }
 
     entries = readCache();
     if (entries.length > 0) {
+      setMemoryIndex(entries);
       return entries;
     }
 
     entries = readStaleCache();
+    if (entries.length > 0) {
+      setMemoryIndex(entries);
+    }
+
     return entries;
   }
 
