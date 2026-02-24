@@ -657,6 +657,8 @@
 
     const lowered = query.toLowerCase();
     const prefiltered = [];
+    const broadMatchThreshold = Math.max(25, Math.floor(entries.length * 0.8));
+    let isBroadMatch = false;
 
     for (let index = 0; index < entries.length; index += 1) {
       const entry = entries[index];
@@ -668,9 +670,17 @@
       if (prefiltered.length >= 250) {
         break;
       }
+
+      if (prefiltered.length >= broadMatchThreshold) {
+        isBroadMatch = true;
+        break;
+      }
     }
 
-    const matchSet = prefiltered.length > 0 ? prefiltered : entries;
+    const matchSet =
+      prefiltered.length > 0 && isBroadMatch === false && prefiltered.length < entries.length
+        ? prefiltered
+        : entries;
 
     if (window.fuzzysort && typeof window.fuzzysort.go === "function") {
       const results = window.fuzzysort.go(query, matchSet, {
