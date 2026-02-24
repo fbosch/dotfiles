@@ -67,6 +67,24 @@ return {
 				end
 			end
 
+			-- Keep opencode UI buffers out of bufferline
+			vim.api.nvim_create_autocmd("FileType", {
+				pattern = { "opencode", "opencode_terminal" },
+				callback = function(args)
+					vim.bo[args.buf].buflisted = false
+				end,
+			})
+
+			vim.api.nvim_create_autocmd("TermOpen", {
+				pattern = "*",
+				callback = function(args)
+					local name = vim.api.nvim_buf_get_name(args.buf)
+					if name:find("term://", 1, true) and name:find("opencode", 1, true) then
+						vim.bo[args.buf].buflisted = false
+					end
+				end,
+			})
+
 			-- Set up opencode terminal-specific keymaps and cleanup
 			vim.api.nvim_create_autocmd("FileType", {
 				pattern = "opencode_terminal",
