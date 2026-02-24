@@ -19,5 +19,7 @@
           search-engine: kagi
           css-class: start-search
 
+        - $include: ../widgets/start-command-prompt.yml
+
         - $include: ../widgets/bookmarks.yml
         - $include: ../widgets/services-monitor.yml

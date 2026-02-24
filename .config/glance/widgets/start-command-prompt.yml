@@ -1,0 +1,48 @@
+- type: custom-api
+  hide-header: true
+  frameless: true
+  cache: 15m
+  css-class: start-linkwarden-index
+  url: https://linkwarden.corvus-corax.synology.me/api/v1/links?take=5000
+  headers:
+    Authorization: Bearer ${LINKWARDEN_TOKEN}
+    Accept: application/json
+  template: |
+    {{ if and .Response.StatusCode (eq .Response.StatusCode 200) }}
+      {{ $links := .JSON.Array "response" }}
+      {{ if eq (len $links) 0 }}
+        {{ $links = .JSON.Array "data.links" }}
+      {{ end }}
+      {{ if eq (len $links) 0 }}
+        {{ $links = .JSON.Array "links" }}
+      {{ end }}
+
+      <ul data-start-linkwarden-options hidden>
+        {{ range $links }}
+          {{ $url := trimSpace (.String "url") }}
+          {{ if $url }}
+            {{ $title := trimSpace (.String "name") }}
+            {{ if not $title }}
+              {{ $title = trimSpace (.String "description") }}
+            {{ end }}
+            {{ if not $title }}
+              {{ $title = replaceMatches "^https?://(www\\.)?" "" $url }}
+            {{ end }}
+            {{ $collection := trimSpace (.String "collection.name") }}
+            {{ $description := trimSpace (.String "description") }}
+            {{ $tags := "" }}
+            {{ range .Array "tags" }}
+              {{ $tags = concat $tags " " (trimSpace (.String "name")) }}
+            {{ end }}
+
+            <li
+              data-title="{{ $title }}"
+              data-url="{{ $url }}"
+              data-collection="{{ $collection }}"
+              data-description="{{ $description }}"
+              data-tags="{{ trimSpace $tags }}"
+            ></li>
+          {{ end }}
+        {{ end }}
+      </ul>
+    {{ end }}
