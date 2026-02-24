@@ -97,7 +97,7 @@ return {
 						local chan = vim.bo[args.buf].channel
 						if chan and chan > 0 then
 							-- Get the process ID associated with this terminal channel
-							local info = vim.fn.getpid()  -- This gets neovim's PID; we need the child process
+							local info = vim.fn.getpid() -- This gets neovim's PID; we need the child process
 							-- For terminal buffers, Neovim tracks job info; we'll use jobpid if available
 							local job_id = vim.bo[args.buf].channel
 							if job_id then
