@@ -2,7 +2,7 @@
 description: Writes and maintains tests including unit, integration, and edge case coverage. Use when adding new features, fixing bugs, or improving test coverage.
 mode: subagent
 color: success
-model: github-copilot/claude-sonnet-4.5
+model: anthropic/claude-sonnet-4.6
 temperature: 0.2
 permission:
   bash:
@@ -17,6 +17,7 @@ permission:
 You write comprehensive tests.
 
 Focus on:
+
 - Edge cases
 - Error conditions
 - Clear test names
