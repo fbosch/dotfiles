@@ -13,22 +13,16 @@ return {
 			end
 
 			vim.g.opencode_opts = {
-				auto_reload = true,
-				provider = {
-					cmd = cmd,
-					enabled = "snacks",
-					snacks = {
-						win = {
-							position = "left",
-							width = 100,
-						},
-						terminal = {
-							enabled = true,
-						},
-						env = {
-							SHELL = "/bin/fish",
-						},
-					},
+				server = {
+					start = function()
+						require("opencode.terminal").start(cmd, { split = "left", width = 100 })
+					end,
+					stop = function()
+						require("opencode.terminal").stop()
+					end,
+					toggle = function()
+						require("opencode.terminal").toggle(cmd, { split = "left", width = 100 })
+					end,
 				},
 			}
 			vim.o.autoread = true
