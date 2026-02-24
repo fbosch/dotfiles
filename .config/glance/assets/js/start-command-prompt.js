@@ -6,6 +6,23 @@
   const SCORE_THRESHOLD = 0.56;
   const FALLBACK_SEARCH_URL = "https://kagi.com/search?q={QUERY}";
   const MAX_SUGGESTIONS = 8;
+  const CUSTOM_BANGS = {
+    g: "https://www.google.com/search?q={{{s}}}",
+    gh: "https://github.com/search?q={{{s}}}",
+    yt: "https://www.youtube.com/results?search_query={{{s}}}",
+    reddit: "https://www.reddit.com/search?q={{{s}}}",
+    wikipedia: "https://wikipedia.org/w/index.php?search={{{s}}}",
+    gmap: "https://maps.google.com/maps?q={{{s}}}",
+    gma: "https://mail.google.com/mail/u/0/#search/{{{s}}}",
+    imdb: "https://www.imdb.com/find?s=all&q={{{s}}}",
+    ov: "https://stackoverflow.com/search?q={{{s}}}",
+  };
+  const BANG_ALIASES = {
+    w: "wikipedia",
+    rd: "reddit",
+    so: "ov",
+    maps: "gmap",
+  };
   const inputState = new WeakMap();
   const faviconSourceCache = readFaviconSourceCache();
 
@@ -325,6 +342,33 @@
     return FALLBACK_SEARCH_URL.replace("{QUERY}", encodeURIComponent(query));
   }
 
+  function parseBang(query) {
+    const trimmed = normalizeSpaces(query);
+    const match = trimmed.match(/^!([^\s]+)(?:\s+(.*))?$/);
+
+    if (!match) {
+      return null;
+    }
+
+    const key = normalizeText(match[1]).toLowerCase();
+    const canonical = BANG_ALIASES[key] || key;
+    const template = CUSTOM_BANGS[canonical];
+
+    if (!template) {
+      return null;
+    }
+
+    return {
+      key: canonical,
+      query: normalizeText(match[2] || ""),
+      template,
+    };
+  }
+
+  function buildBangUrl(bang) {
+    return bang.template.replace("{{{s}}}", encodeURIComponent(bang.query));
+  }
+
   function fallbackMatches(query, entries) {
     const lowered = query.toLowerCase();
     const matches = [];
@@ -410,7 +454,7 @@
     const state = {
       dropdown,
       matches: [],
-      selectedIndex: 0,
+      selectedIndex: -1,
       lastPrefetchedUrl: "",
     };
 
@@ -653,7 +697,7 @@
 
   function hideDropdown(state) {
     state.matches = [];
-    state.selectedIndex = 0;
+    state.selectedIndex = -1;
     state.lastPrefetchedUrl = "";
     state.dropdown.hidden = true;
     state.dropdown.innerHTML = "";
@@ -661,6 +705,10 @@
 
   function prefetchSelectedMatch(state) {
     if (!state || state.matches.length === 0) {
+      return;
+    }
+
+    if (state.selectedIndex < 0) {
       return;
     }
 
@@ -827,11 +875,16 @@
       return;
     }
 
+    if (parseBang(query)) {
+      hideDropdown(state);
+      return;
+    }
+
     const entries = getEntries();
     const matches = findMatches(query, entries);
 
     state.matches = matches;
-    state.selectedIndex = 0;
+    state.selectedIndex = -1;
     renderDropdown(input, state);
   }
 
@@ -853,7 +906,16 @@
     const state = getOrCreateState(input);
     const openInNewTab = event.ctrlKey || event.metaKey;
 
-    if (state && state.matches.length > 0) {
+    const bang = parseBang(query);
+    if (bang) {
+      event.preventDefault();
+      event.stopPropagation();
+      hideDropdown(state);
+      openUrl(buildBangUrl(bang), openInNewTab);
+      return;
+    }
+
+    if (state && state.matches.length > 0 && state.selectedIndex >= 0) {
       const selected = state.matches[state.selectedIndex] || state.matches[0];
       if (selected) {
         event.preventDefault();
@@ -893,7 +955,9 @@
     }
 
     const next = state.selectedIndex + direction;
-    if (next < 0) {
+    if (state.selectedIndex < 0) {
+      state.selectedIndex = direction > 0 ? 0 : state.matches.length - 1;
+    } else if (next < 0) {
       state.selectedIndex = state.matches.length - 1;
     } else if (next >= state.matches.length) {
       state.selectedIndex = 0;
@@ -970,6 +1034,18 @@
 
           event.preventDefault();
           event.stopPropagation();
+
+          if (state.selectedIndex >= 0) {
+            state.selectedIndex = -1;
+            state.lastPrefetchedUrl = "";
+            updateSelection(state);
+            return;
+          }
+
+          if (normalizeSpaces(target.value) !== "") {
+            target.value = "";
+          }
+
           hideDropdown(state);
           return;
         }
@@ -998,6 +1074,25 @@
 
           hideDropdown(state);
         }
+      },
+      true
+    );
+
+    document.addEventListener(
+      "focusout",
+      function (event) {
+        const target = event.target;
+        if (isStartSearchInput(target) === false) {
+          return;
+        }
+
+        const state = getOrCreateState(target);
+        if (!state) {
+          return;
+        }
+
+        target.value = "";
+        hideDropdown(state);
       },
       true
     );

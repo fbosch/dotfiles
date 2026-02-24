@@ -31,6 +31,12 @@ document:
     <link rel="dns-prefetch" href="//www.reddit.com">
     <link rel="dns-prefetch" href="//www.youtube.com">
     <link rel="dns-prefetch" href="//i.ytimg.com">
+    <link rel="dns-prefetch" href="//www.google.com">
+    <link rel="dns-prefetch" href="//maps.google.com">
+    <link rel="dns-prefetch" href="//mail.google.com">
+    <link rel="dns-prefetch" href="//wikipedia.org">
+    <link rel="dns-prefetch" href="//stackoverflow.com">
+    <link rel="dns-prefetch" href="//www.imdb.com">
     <link rel="dns-prefetch" href="//www.tradingview.com">
     <link rel="dns-prefetch" href="//finance.yahoo.com">
     <link rel="dns-prefetch" href="//freshrss.corvus-corax.synology.me">
