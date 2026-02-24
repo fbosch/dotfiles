@@ -78,6 +78,72 @@
     return entries;
   }
 
+  function parseEntriesFromJson() {
+    const node = document.querySelector("[data-start-linkwarden-json]");
+    if (!node) {
+      return [];
+    }
+
+    const raw = normalizeText(node.textContent || "");
+    if (raw === "") {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+
+      const entries = [];
+
+      for (let index = 0; index < parsed.length; index += 1) {
+        const item = parsed[index];
+        let title = "";
+        let url = "";
+        let collection = "";
+        let description = "";
+        let tags = "";
+
+        if (Array.isArray(item)) {
+          title = item[0] || "";
+          url = item[1] || "";
+          collection = item[2] || "";
+          description = item[3] || "";
+          tags = item[4] || "";
+        } else if (item && typeof item === "object") {
+          title = item.title || "";
+          url = item.url || "";
+          collection = item.collection || "";
+          description = item.description || "";
+          tags = item.tags || "";
+        } else {
+          continue;
+        }
+
+        url = normalizeText(url);
+        if (url === "") {
+          continue;
+        }
+
+        const entry = {
+          title: normalizeSpaces(title),
+          url,
+          collection: normalizeSpaces(collection),
+          description: normalizeSpaces(description),
+          tags: normalizeSpaces(tags),
+        };
+
+        entry.searchable = toSearchable(entry);
+        entries.push(entry);
+      }
+
+      return entries;
+    } catch (_error) {
+      return [];
+    }
+  }
+
   function parseSlotEntriesFromDom() {
     const nodes = document.querySelectorAll("a[data-slot][href]");
     const entries = [];
@@ -285,7 +351,11 @@
   }
 
   function getEntries() {
-    let entries = parseEntriesFromDom();
+    let entries = parseEntriesFromJson();
+    if (entries.length === 0) {
+      entries = parseEntriesFromDom();
+    }
+
     const slotEntries = parseSlotEntriesFromDom();
     const quicklinkEntries = parseQuicklinkEntriesFromDom();
 
