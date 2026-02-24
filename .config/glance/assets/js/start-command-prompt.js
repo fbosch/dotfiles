@@ -655,8 +655,25 @@
       return fallbackMatches(query, entries);
     }
 
+    const lowered = query.toLowerCase();
+    const prefiltered = [];
+
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index];
+      if (entry.searchable.indexOf(lowered) === -1) {
+        continue;
+      }
+
+      prefiltered.push(entry);
+      if (prefiltered.length >= 250) {
+        break;
+      }
+    }
+
+    const matchSet = prefiltered.length > 0 ? prefiltered : entries;
+
     if (window.fuzzysort && typeof window.fuzzysort.go === "function") {
-      const results = window.fuzzysort.go(query, entries, {
+      const results = window.fuzzysort.go(query, matchSet, {
         keys: ["title", "url", "collection", "description", "tags"],
         limit: MAX_SUGGESTIONS,
       });
