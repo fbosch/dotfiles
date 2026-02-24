@@ -1,10 +1,13 @@
 (function () {
   const CACHE_KEY = "glance.start.linkwarden.entries.v1";
   const CACHE_TTL_MS = 15 * 60 * 1000;
+  const FAVICON_CACHE_KEY = "glance.start.favicon.sources.v1";
+  const FAVICON_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
   const SCORE_THRESHOLD = 0.56;
   const FALLBACK_SEARCH_URL = "https://kagi.com/search?q={QUERY}";
   const MAX_SUGGESTIONS = 8;
   const inputState = new WeakMap();
+  const faviconSourceCache = readFaviconSourceCache();
 
   function normalizeText(value) {
     if (typeof value !== "string") {
@@ -59,8 +62,170 @@
     return entries;
   }
 
+  function parseSlotEntriesFromDom() {
+    const nodes = document.querySelectorAll("a[data-slot][href]");
+    const entries = [];
+
+    for (let index = 0; index < nodes.length; index += 1) {
+      const node = nodes[index];
+      const url = normalizeText(node.getAttribute("href"));
+
+      if (url === "") {
+        continue;
+      }
+
+      const entry = {
+        title: normalizeSpaces(node.getAttribute("title") || ""),
+        url,
+        collection: "Pinned",
+        description: "",
+        tags: normalizeSpaces(node.getAttribute("data-slot") || ""),
+      };
+
+      if (entry.title === "") {
+        entry.title = url.replace(/^https?:\/\/(www\.)?/i, "");
+      }
+
+      entry.searchable = toSearchable(entry);
+      entries.push(entry);
+    }
+
+    return entries;
+  }
+
+  function parseQuicklinkEntriesFromDom() {
+    const nodes = document.querySelectorAll("a.size-h4.color-highlight[href]");
+    const entries = [];
+
+    for (let index = 0; index < nodes.length; index += 1) {
+      const node = nodes[index];
+      const url = normalizeText(node.getAttribute("href"));
+
+      if (url === "") {
+        continue;
+      }
+
+      const title = normalizeSpaces(node.getAttribute("title") || node.textContent || "");
+
+      const entry = {
+        title: title || url.replace(/^https?:\/\/(www\.)?/i, ""),
+        url,
+        collection: "Quicklinks",
+        description: "",
+        tags: "",
+      };
+
+      entry.searchable = toSearchable(entry);
+      entries.push(entry);
+    }
+
+    return entries;
+  }
+
+  function mergeEntries(primaryEntries, secondaryEntries) {
+    const byUrl = new Map();
+
+    for (let index = 0; index < primaryEntries.length; index += 1) {
+      const entry = primaryEntries[index];
+      byUrl.set(entry.url, entry);
+    }
+
+    for (let index = 0; index < secondaryEntries.length; index += 1) {
+      const entry = secondaryEntries[index];
+
+      if (byUrl.has(entry.url)) {
+        continue;
+      }
+
+      byUrl.set(entry.url, entry);
+    }
+
+    return Array.from(byUrl.values());
+  }
+
   function readCache() {
     return readCacheWithMode(false);
+  }
+
+  function readFaviconSourceCache() {
+    try {
+      const raw = localStorage.getItem(FAVICON_CACHE_KEY);
+      if (!raw) {
+        return {};
+      }
+
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") {
+        return {};
+      }
+
+      const now = Date.now();
+      const cache = {};
+      const hosts = Object.keys(parsed);
+
+      for (let index = 0; index < hosts.length; index += 1) {
+        const host = hosts[index];
+        const entry = parsed[host];
+
+        if (!entry || typeof entry.src !== "string" || typeof entry.ts !== "number") {
+          continue;
+        }
+
+        if (now - entry.ts > FAVICON_CACHE_TTL_MS) {
+          continue;
+        }
+
+        cache[host] = entry;
+      }
+
+      return cache;
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  function writeFaviconSourceCache() {
+    try {
+      localStorage.setItem(FAVICON_CACHE_KEY, JSON.stringify(faviconSourceCache));
+    } catch (_error) {
+      // Ignore cache write failures.
+    }
+  }
+
+  function getCachedFaviconSource(hostname) {
+    const host = normalizeText(hostname).toLowerCase();
+    if (host === "") {
+      return "";
+    }
+
+    const cached = faviconSourceCache[host];
+    if (!cached || typeof cached.src !== "string" || typeof cached.ts !== "number") {
+      return "";
+    }
+
+    if (Date.now() - cached.ts > FAVICON_CACHE_TTL_MS) {
+      delete faviconSourceCache[host];
+      writeFaviconSourceCache();
+      return "";
+    }
+
+    return cached.src;
+  }
+
+  function setCachedFaviconSource(hostname, src) {
+    const host = normalizeText(hostname).toLowerCase();
+    const value = normalizeText(src);
+
+    if (host === "" || value === "") {
+      return;
+    }
+
+    faviconSourceCache[host] = {
+      src: value,
+      ts: Date.now(),
+    };
+
+    writeFaviconSourceCache();
   }
 
   function readStaleCache() {
@@ -105,6 +270,16 @@
 
   function getEntries() {
     let entries = parseEntriesFromDom();
+    const slotEntries = parseSlotEntriesFromDom();
+    const quicklinkEntries = parseQuicklinkEntriesFromDom();
+
+    if (slotEntries.length > 0) {
+      entries = mergeEntries(entries, slotEntries);
+    }
+
+    if (quicklinkEntries.length > 0) {
+      entries = mergeEntries(entries, quicklinkEntries);
+    }
 
     if (entries.length > 0) {
       writeCache(entries);
@@ -203,6 +378,16 @@
     return input.closest(".start-search") !== null;
   }
 
+  function configureInputForManagers(input) {
+    input.setAttribute("autocomplete", "off");
+    input.setAttribute("autocapitalize", "off");
+    input.setAttribute("autocorrect", "off");
+    input.setAttribute("spellcheck", "false");
+    input.setAttribute("data-bwignore", "true");
+    input.setAttribute("data-1p-ignore", "true");
+    input.setAttribute("data-lpignore", "true");
+  }
+
   function getOrCreateState(input) {
     const existing = inputState.get(input);
     if (existing) {
@@ -233,10 +418,18 @@
   }
 
   function hostnameFromUrl(value) {
+    const raw = normalizeText(value).toLowerCase();
+    if (raw === "") {
+      return "";
+    }
+
     try {
-      return new URL(value).hostname;
+      return new URL(raw).hostname;
     } catch (_error) {
-      return value;
+      const withoutProtocol = raw.replace(/^https?:\/\//, "");
+      const firstSegment = withoutProtocol.split("/")[0] || "";
+      const withoutPort = firstSegment.split(":")[0] || "";
+      return withoutPort;
     }
   }
 
@@ -254,7 +447,207 @@
       return "";
     }
 
-    return "https://twenty-icons.com/" + encodeURIComponent(hostname);
+    return "https://twenty-icons.com/" + hostname + "/64";
+  }
+
+  function fallbackFaviconUrl(hostname) {
+    if (!hostname) {
+      return "";
+    }
+
+    return "https://www.google.com/s2/favicons?domain=" + encodeURIComponent(hostname) + "&sz=64";
+  }
+
+  function uniqueNonEmpty(values) {
+    const seen = new Set();
+    const output = [];
+
+    for (let index = 0; index < values.length; index += 1) {
+      const value = normalizeText(values[index]);
+      if (value === "" || seen.has(value)) {
+        continue;
+      }
+
+      seen.add(value);
+      output.push(value);
+    }
+
+    return output;
+  }
+
+  function rootDomain(hostname) {
+    if (!hostname || hostname.indexOf(".") === -1) {
+      return hostname;
+    }
+
+    if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)) {
+      return hostname;
+    }
+
+    const parts = hostname.split(".").filter(Boolean);
+    if (parts.length < 2) {
+      return hostname;
+    }
+
+    return parts.slice(-2).join(".");
+  }
+
+  function urlInfo(value) {
+    const raw = normalizeText(value);
+    if (raw === "") {
+      return {
+        hostname: "",
+        origin: "",
+      };
+    }
+
+    try {
+      const parsed = new URL(raw);
+      return {
+        hostname: parsed.hostname.toLowerCase(),
+        origin: parsed.origin,
+      };
+    } catch (_error) {
+      const normalized = /^https?:\/\//i.test(raw) ? raw : "https://" + raw;
+
+      try {
+        const parsed = new URL(normalized);
+        return {
+          hostname: parsed.hostname.toLowerCase(),
+          origin: parsed.origin,
+        };
+      } catch (_secondError) {
+        return {
+          hostname: hostnameFromUrl(raw),
+          origin: "",
+        };
+      }
+    }
+  }
+
+  function isPrivateIp(hostname) {
+    const parts = hostname.split(".").map(Number);
+    if (parts.length !== 4 || parts.some(Number.isNaN)) {
+      return false;
+    }
+
+    if (parts[0] === 10) {
+      return true;
+    }
+
+    if (parts[0] === 127) {
+      return true;
+    }
+
+    if (parts[0] === 192 && parts[1] === 168) {
+      return true;
+    }
+
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function isLocalServiceHost(hostname) {
+    if (!hostname) {
+      return false;
+    }
+
+    if (hostname === "localhost") {
+      return true;
+    }
+
+    if (hostname.endsWith(".local")) {
+      return true;
+    }
+
+    if (hostname.indexOf("corvus-corax") !== -1) {
+      return true;
+    }
+
+    if (isPrivateIp(hostname)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function localFaviconCandidates(host, origin) {
+    const candidates = [];
+
+    if (!origin) {
+      return candidates;
+    }
+
+    if (host.indexOf("glance") !== -1) {
+      candidates.push(origin + "/assets/icons/favicon.ico");
+    }
+
+    if (host.indexOf("wakapi") !== -1) {
+      candidates.push(origin + "/assets/images/icon-192x192.png");
+      candidates.push(origin + "/assets/images/icon-512x512.png");
+      candidates.push(origin + "/assets/images/icon.svg");
+    }
+
+    if (host.indexOf("onwatch") !== -1) {
+      candidates.push(origin + "/static/favicon.svg");
+      candidates.push(origin + "/static/favicon-32x32.png");
+      candidates.push(origin + "/static/favicon-16x16.png");
+    }
+
+    if (
+      host.indexOf("lidarr") !== -1 ||
+      host.indexOf("radarr") !== -1 ||
+      host.indexOf("sonarr") !== -1 ||
+      host.indexOf("prowlarr") !== -1 ||
+      host.indexOf("readarr") !== -1 ||
+      host.indexOf("bazarr") !== -1
+    ) {
+      candidates.push(origin + "/Content/Images/Icons/favicon-32x32.png");
+      candidates.push(origin + "/Content/Images/Icons/favicon-16x16.png");
+      candidates.push(origin + "/Content/Images/Icons/apple-touch-icon.png");
+      candidates.push(origin + "/favicon.ico");
+    }
+
+    candidates.push(origin + "/static/favicon.svg");
+    candidates.push(origin + "/static/favicon-32x32.png");
+    candidates.push(origin + "/static/favicon-16x16.png");
+
+    candidates.push(origin + "/favicon.ico");
+    candidates.push(origin + "/favicon.png");
+    candidates.push(origin + "/apple-touch-icon.png");
+    candidates.push(origin + "/apple-touch-icon-precomposed.png");
+
+    return uniqueNonEmpty(candidates);
+  }
+
+  function iconSourcesForUrl(url) {
+    const info = urlInfo(url);
+    const host = info.hostname;
+    const baseDomain = rootDomain(host);
+
+    if (isLocalServiceHost(host) && info.origin) {
+      const locals = localFaviconCandidates(host, info.origin);
+
+      return {
+        host,
+        icon: locals[0] || "",
+        fallbackSources: uniqueNonEmpty(
+          locals.slice(1).concat([faviconUrl(baseDomain), faviconUrl(host), fallbackFaviconUrl(host)])
+        ),
+      };
+    }
+
+    return {
+      host,
+      icon: faviconUrl(baseDomain),
+      fallbackSources: uniqueNonEmpty([
+        host !== baseDomain ? faviconUrl(host) : "",
+        fallbackFaviconUrl(host),
+      ]),
+    };
   }
 
   function hideDropdown(state) {
@@ -264,6 +657,18 @@
     state.dropdown.innerHTML = "";
   }
 
+  function updateSelection(state) {
+    const listItems = state.dropdown.querySelectorAll("[data-match-index]");
+
+    for (let index = 0; index < listItems.length; index += 1) {
+      const item = listItems[index];
+      const isSelected = index === state.selectedIndex;
+
+      item.classList.toggle("is-selected", isSelected);
+      item.setAttribute("aria-selected", isSelected ? "true" : "false");
+    }
+  }
+
   function renderDropdown(input, state) {
     const items = [];
 
@@ -271,8 +676,18 @@
       const isSelected = index === state.selectedIndex;
       const match = state.matches[index];
       const title = match.entry.title || match.entry.url;
-      const host = hostnameFromUrl(match.entry.url);
-      const icon = faviconUrl(host);
+      const iconSources = iconSourcesForUrl(match.entry.url);
+      const host = iconSources.host;
+      let icon = iconSources.icon;
+      let fallbackSources = iconSources.fallbackSources || [];
+      const cachedIcon = getCachedFaviconSource(host);
+
+      if (cachedIcon) {
+        fallbackSources = uniqueNonEmpty([icon].concat(fallbackSources));
+        icon = cachedIcon;
+      }
+
+      const fallback = host ? host.charAt(0).toUpperCase() : "?";
 
       items.push(
         '<li class="start-linkwarden-dropdown-item' +
@@ -283,15 +698,25 @@
           (isSelected ? "true" : "false") +
           '">' +
           '<span class="start-linkwarden-dropdown-main">' +
+          '<span class="start-linkwarden-dropdown-icon-wrap" aria-hidden="true">' +
+          '<span class="start-linkwarden-dropdown-icon-fallback">' +
+          escapeHtml(fallback) +
+          "</span>" +
           '<img class="start-linkwarden-dropdown-icon" src="' +
           escapeHtml(icon) +
-          '" alt="" loading="lazy" decoding="async" />' +
+          '" data-host="' +
+          escapeHtml(host) +
+          '" data-fallback-srcs="' +
+          escapeHtml(fallbackSources.join("|")) +
+          '" alt="" decoding="async" />' +
+          "</span>" +
           '<span class="start-linkwarden-dropdown-title">' +
           escapeHtml(title) +
           "</span>" +
           "</span>" +
           '<span class="start-linkwarden-dropdown-host">' +
           escapeHtml(host) +
+          '<kbd class="start-linkwarden-dropdown-enter">Enter</kbd>' +
           "</span>" +
           "</li>"
       );
@@ -326,6 +751,38 @@
         window.location.assign(selected.entry.url);
       });
     }
+
+    const icons = state.dropdown.querySelectorAll(".start-linkwarden-dropdown-icon");
+    for (let index = 0; index < icons.length; index += 1) {
+      const icon = icons[index];
+      const host = normalizeText(icon.getAttribute("data-host"));
+      const fallbackAttr = icon.getAttribute("data-fallback-srcs") || "";
+      const fallbackQueue = fallbackAttr
+        .split("|")
+        .map(function (value) {
+          return normalizeText(value);
+        })
+        .filter(Boolean);
+
+      icon.addEventListener("error", function () {
+        const nextSrc = fallbackQueue.shift();
+
+        if (nextSrc) {
+          icon.src = nextSrc;
+          return;
+        }
+
+        icon.remove();
+      });
+
+      icon.addEventListener("load", function () {
+        if (host) {
+          setCachedFaviconSource(host, icon.currentSrc || icon.src);
+        }
+      });
+    }
+
+    updateSelection(state);
   }
 
   function updateSuggestions(input) {
@@ -414,7 +871,7 @@
       state.selectedIndex = next;
     }
 
-    renderDropdown(input, state);
+    updateSelection(state);
   }
 
   function initialize() {
@@ -425,6 +882,8 @@
         if (isStartSearchInput(target) === false) {
           return;
         }
+
+        configureInputForManagers(target);
 
         updateSuggestions(target);
       },
@@ -439,6 +898,8 @@
           return;
         }
 
+        configureInputForManagers(target);
+
         if (event.key === "ArrowDown") {
           event.preventDefault();
           event.stopPropagation();
@@ -451,6 +912,24 @@
           event.stopPropagation();
           moveSelection(target, -1);
           return;
+        }
+
+        if (event.ctrlKey && event.metaKey === false && event.altKey === false) {
+          const loweredKey = event.key.toLowerCase();
+
+          if (loweredKey === "j") {
+            event.preventDefault();
+            event.stopPropagation();
+            moveSelection(target, 1);
+            return;
+          }
+
+          if (loweredKey === "k") {
+            event.preventDefault();
+            event.stopPropagation();
+            moveSelection(target, -1);
+            return;
+          }
         }
 
         if (event.key === "Escape") {
