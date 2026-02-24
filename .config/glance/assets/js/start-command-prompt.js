@@ -411,6 +411,7 @@
       dropdown,
       matches: [],
       selectedIndex: 0,
+      lastPrefetchedUrl: "",
     };
 
     inputState.set(input, state);
@@ -653,8 +654,35 @@
   function hideDropdown(state) {
     state.matches = [];
     state.selectedIndex = 0;
+    state.lastPrefetchedUrl = "";
     state.dropdown.hidden = true;
     state.dropdown.innerHTML = "";
+  }
+
+  function prefetchSelectedMatch(state) {
+    if (!state || state.matches.length === 0) {
+      return;
+    }
+
+    const selected = state.matches[state.selectedIndex] || state.matches[0];
+    if (!selected || !selected.entry || !selected.entry.url) {
+      return;
+    }
+
+    const url = selected.entry.url;
+    if (state.lastPrefetchedUrl === url) {
+      return;
+    }
+
+    state.lastPrefetchedUrl = url;
+
+    if (!window.quicklink || typeof window.quicklink.prefetch !== "function") {
+      return;
+    }
+
+    Promise.resolve(window.quicklink.prefetch(url)).catch(function () {
+      // Ignore prefetch failures.
+    });
   }
 
   function updateSelection(state) {
@@ -667,6 +695,8 @@
       item.classList.toggle("is-selected", isSelected);
       item.setAttribute("aria-selected", isSelected ? "true" : "false");
     }
+
+    prefetchSelectedMatch(state);
   }
 
   function renderDropdown(input, state) {
