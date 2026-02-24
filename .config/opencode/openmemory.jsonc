@@ -1,0 +1,26 @@
+{
+  // OpenMemory Backend Configuration
+  // Options: "openmemory" (MCP - default), "openmemory-rest" (REST API)
+  "backend": "openmemory-rest",
+  
+  // REST API settings (only used when backend is "openmemory-rest")
+  "apiUrl": "https://memory.corvus-corax.synology.me",
+  // "apiKey": "your-api-key-if-needed",
+  
+  // Search settings
+  "similarityThreshold": 0.6,
+  "maxMemories": 5,
+  "maxProjectMemories": 10,
+  "maxProfileItems": 5,
+  "minSalience": 0.3,
+  
+  // Context injection
+  "injectProfile": true,
+  
+  // Scope prefix for organizing memories
+  "scopePrefix": "opencode",
+  
+  // Default sector for storing memories
+  // Options: "episodic", "semantic", "procedural", "emotional", "reflective"
+  "defaultSector": "semantic"
+}
