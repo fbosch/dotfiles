@@ -31,6 +31,8 @@
     ts: 0,
   };
   let lastPersistedEntriesSignature = "";
+  const ENTRY_INDEX_SELECTOR =
+    "[data-start-linkwarden-json], [data-start-linkwarden-options], a[data-slot][href], a.size-h4.color-highlight[href]";
 
   function normalizeText(value) {
     if (typeof value !== "string") {
@@ -256,10 +258,77 @@
     return true;
   }
 
+  function invalidateEntryIndex() {
+    entryIndexState.entries = [];
+    entryIndexState.signature = "";
+    entryIndexState.ts = 0;
+  }
+
   function setMemoryIndex(entries) {
     entryIndexState.entries = entries;
     entryIndexState.signature = getEntriesSignature(entries);
     entryIndexState.ts = Date.now();
+  }
+
+  function nodeTouchesEntryIndex(node) {
+    if (!(node instanceof Element)) {
+      return false;
+    }
+
+    if (node.matches(ENTRY_INDEX_SELECTOR)) {
+      return true;
+    }
+
+    return node.querySelector(ENTRY_INDEX_SELECTOR) !== null;
+  }
+
+  function mutationTouchesEntryIndex(mutation) {
+    if (!(mutation.target instanceof Element)) {
+      return false;
+    }
+
+    if (nodeTouchesEntryIndex(mutation.target)) {
+      return true;
+    }
+
+    for (let index = 0; index < mutation.addedNodes.length; index += 1) {
+      if (nodeTouchesEntryIndex(mutation.addedNodes[index])) {
+        return true;
+      }
+    }
+
+    for (let index = 0; index < mutation.removedNodes.length; index += 1) {
+      if (nodeTouchesEntryIndex(mutation.removedNodes[index])) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function observeEntryIndexSources() {
+    if (typeof MutationObserver !== "function") {
+      return;
+    }
+
+    const root = document.getElementById("page-content") || document.body;
+    if (!root) {
+      return;
+    }
+
+    const observer = new MutationObserver(function (mutations) {
+      for (let index = 0; index < mutations.length; index += 1) {
+        if (mutationTouchesEntryIndex(mutations[index])) {
+          invalidateEntryIndex();
+          return;
+        }
+      }
+    });
+
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+    });
   }
 
   function readCache() {
@@ -1086,6 +1155,8 @@
   }
 
   function initialize() {
+    observeEntryIndexSources();
+
     document.addEventListener(
       "input",
       function (event) {
