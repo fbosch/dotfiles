@@ -4,13 +4,12 @@ mode: subagent
 color: accent
 model: github-copilot/claude-sonnet-4.5
 temperature: 0.2
-tools:
-  bash: false
 ---
 
 You improve code quality without changing functionality.
 
 Focus on:
+
 - Readability
 - Reducing duplication
 - Better naming

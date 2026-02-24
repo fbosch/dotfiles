@@ -7,18 +7,6 @@ temperature: 0.1
 tools:
   write: false
   edit: false
-permission:
-  bash:
-    "*": ask
-    "hyperfine*": allow
-    "time *": allow
-    "perf *": allow
-    "cargo bench*": allow
-    "go test -bench*": allow
-    "pytest --benchmark*": allow
-    "node --prof*": allow
-    "npm run bench*": allow
-    "npm run benchmark*": allow
 ---
 
 Profile and benchmark code systematically.
