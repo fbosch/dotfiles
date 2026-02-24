@@ -652,7 +652,10 @@
 
   function findMatches(query, entries) {
     if (query.length < 2) {
-      return fallbackMatches(query, entries);
+      return {
+        matches: fallbackMatches(query, entries),
+        narrowedEntries: entries,
+      };
     }
 
     const lowered = query.toLowerCase();
@@ -688,15 +691,21 @@
         limit: MAX_SUGGESTIONS,
       });
 
-      return results.map(function (result) {
-        return {
-          entry: result.obj,
-          score: result.score,
-        };
-      });
+      return {
+        matches: results.map(function (result) {
+          return {
+            entry: result.obj,
+            score: result.score,
+          };
+        }),
+        narrowedEntries: matchSet,
+      };
     }
 
-    return fallbackMatches(query, entries);
+    return {
+      matches: fallbackMatches(query, matchSet),
+      narrowedEntries: matchSet,
+    };
   }
 
   function isStartSearchInput(input) {
@@ -746,6 +755,8 @@
       selectedIndex: -1,
       lastPrefetchedUrl: "",
       suggestionTimer: 0,
+      lastQuery: "",
+      lastFilteredEntries: [],
     };
 
     inputState.set(input, state);
@@ -989,6 +1000,8 @@
     state.matches = [];
     state.selectedIndex = -1;
     state.lastPrefetchedUrl = "";
+    state.lastQuery = "";
+    state.lastFilteredEntries = [];
 
     if (state.suggestionTimer) {
       clearTimeout(state.suggestionTimer);
@@ -1182,10 +1195,28 @@
     }
 
     const entries = getEntries();
-    const matches = findMatches(query, entries);
+    let sourceEntries = entries;
 
-    state.matches = matches;
+    if (
+      state.lastQuery &&
+      query.indexOf(state.lastQuery) === 0 &&
+      state.lastFilteredEntries.length > 0
+    ) {
+      sourceEntries = state.lastFilteredEntries;
+    }
+
+    let result = findMatches(query, sourceEntries);
+
+    if (sourceEntries !== entries && result.matches.length === 0) {
+      result = findMatches(query, entries);
+      sourceEntries = entries;
+    }
+
+    state.matches = result.matches;
     state.selectedIndex = -1;
+    state.lastQuery = query;
+    state.lastFilteredEntries =
+      result.narrowedEntries.length > 0 ? result.narrowedEntries : sourceEntries;
     renderDropdown(input, state);
   }
 
