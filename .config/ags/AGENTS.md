@@ -1,30 +1,20 @@
-# AGS Configuration - Agent Guide
+# AGENTS
 
-AGS (Aylur's GTK Shell) configuration for Hyprland UI elements using bundled mode architecture.
+AGS (Aylur's GTK Shell) configuration for Hyprland UI, using bundled mode.
 
 ## Essentials
 
-- Bundled mode only: all components run as a single process via `config-bundled.tsx` and `start-daemons.sh`.
-- Styling is inline via `app.start({ css: ... })` or `app.apply_css()`; avoid external CSS files.
-- Type definitions: `.config/ags/@girs/` is auto-generated; regenerate with `ags types` on new systems.
+- Bundled mode only; keep entrypoint wiring consistent with `config-bundled.tsx` and `start-daemons.sh`.
+- Keep styling inline through AGS CSS APIs (`app.start({ css: ... })` / `app.apply_css()`), not external theme files.
+- Do not edit `.config/ags/@girs/` manually; regenerate typings when needed.
 
 ## Commands
 
-- `ags types` (regenerate GObject typings)
+- `ags types`
 
-## Logs
-
-- `/tmp/ags-daemons.log` (start-daemons.sh startup log)
-- `/tmp/ags-window-switcher-debug.log` (only when `AGS_WINDOW_SWITCHER_DEBUG=1`)
-- `/tmp/monitor-debug.log` (only when `AGS_WINDOW_SWITCHER_DEBUG=1`)
-- Runtime stderr/stdout from `ags run` (launch from terminal to capture)
-
-## More Guidance
+## References
 
 - [AGS guide (upstream docs)](docs/guide/TOC.md)
-
-Repo-specific notes:
-
 - [Architecture and components](docs/agents/architecture.md)
 - [Commands and setup](docs/agents/commands-setup.md)
 - [TSX/JSX conventions](docs/agents/tsx-jsx.md)
@@ -33,5 +23,3 @@ Repo-specific notes:
 - [GJS/GLib integration](docs/agents/gjs-glib.md)
 - [Daemon lifecycle](docs/agents/daemon.md)
 - [Troubleshooting](docs/agents/troubleshooting.md)
-- [Best practices](docs/agents/best-practices.md)
-- [Resources](docs/agents/resources.md)

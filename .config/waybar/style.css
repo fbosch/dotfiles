@@ -68,14 +68,16 @@ window#waybar {
 
 /* System monitors - shared styles */
 #cpu,
-#memory {
+#memory,
+#custom-cpu_temp,
+#custom-gpu_temp {
   font-weight: 700;
   margin-left: 0.75rem;
   font-size: 0.8rem;
   letter-spacing: 0.05em;
 }
 
-#cpu {
+#custom-gpu_temp {
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   padding-right: 0.75rem;
 }
@@ -95,6 +97,18 @@ window#waybar {
 }
 
 #cpu.critical {
+  color: #e35245;
+  opacity: 1;
+}
+
+#custom-cpu_temp.warning,
+#custom-gpu_temp.warning {
+  color: #dea721;
+  opacity: 1;
+}
+
+#custom-cpu_temp.critical,
+#custom-gpu_temp.critical {
   color: #e35245;
   opacity: 1;
 }

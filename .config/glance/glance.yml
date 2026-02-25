@@ -31,6 +31,12 @@ document:
     <link rel="dns-prefetch" href="//www.reddit.com">
     <link rel="dns-prefetch" href="//www.youtube.com">
     <link rel="dns-prefetch" href="//i.ytimg.com">
+    <link rel="dns-prefetch" href="//www.google.com">
+    <link rel="dns-prefetch" href="//maps.google.com">
+    <link rel="dns-prefetch" href="//mail.google.com">
+    <link rel="dns-prefetch" href="//wikipedia.org">
+    <link rel="dns-prefetch" href="//stackoverflow.com">
+    <link rel="dns-prefetch" href="//www.imdb.com">
     <link rel="dns-prefetch" href="//www.tradingview.com">
     <link rel="dns-prefetch" href="//finance.yahoo.com">
     <link rel="dns-prefetch" href="//freshrss.corvus-corax.synology.me">
@@ -67,8 +73,10 @@ document:
 
     <!-- Quicklink script + prefetch bootstrap -->
     <script src="https://cdn.jsdelivr.net/npm/quicklink@2.3.0/dist/quicklink.umd.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuzzysort@3.1.0/fuzzysort.min.js" defer></script>
     <script src="/assets/js/quicklink-init.js" defer></script>
     <script src="/assets/js/freshrss-actualize.js" defer></script>
+    <script src="/assets/js/start-command-prompt.js?v=20260224-3" defer></script>
 
 pages:
   - $include: pages/startpage.yml

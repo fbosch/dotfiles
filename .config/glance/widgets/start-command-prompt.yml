@@ -1,0 +1,21 @@
+- type: custom-api
+  hide-header: true
+  frameless: true
+  cache: 15m
+  css-class: start-linkwarden-index
+  url: https://linkwarden.corvus-corax.synology.me/api/v1/links?take=5000
+  headers:
+    Authorization: Bearer ${LINKWARDEN_TOKEN}
+    Accept: application/json
+  template: |
+    {{ if and .Response.StatusCode (eq .Response.StatusCode 200) }}
+      {{ $links := .JSON.Array "response" }}
+      {{ if eq (len $links) 0 }}
+        {{ $links = .JSON.Array "data.links" }}
+      {{ end }}
+      {{ if eq (len $links) 0 }}
+        {{ $links = .JSON.Array "links" }}
+      {{ end }}
+
+      <script type="application/json" data-start-linkwarden-json>[{{- $emitted := 0 -}}{{- range $links -}}{{- $url := trimSpace (.String "url") -}}{{- if $url -}}{{- $title := trimSpace (.String "name") -}}{{- if not $title -}}{{- $title = trimSpace (.String "description") -}}{{- end -}}{{- if not $title -}}{{- $title = replaceMatches "^https?://(www\\.)?" "" $url -}}{{- end -}}{{- $collection := trimSpace (.String "collection.name") -}}{{- $description := trimSpace (.String "description") -}}{{- $tags := "" -}}{{- range .Array "tags" -}}{{- $tags = concat $tags " " (trimSpace (.String "name")) -}}{{- end -}}{{- $title = replaceAll "\\" "\\\\" $title -}}{{- $title = replaceAll "\"" "\\\"" $title -}}{{- $title = replaceAll "\n" "\\n" $title -}}{{- $title = replaceAll "\r" "\\r" $title -}}{{- $url = replaceAll "\\" "\\\\" $url -}}{{- $url = replaceAll "\"" "\\\"" $url -}}{{- $url = replaceAll "\n" "\\n" $url -}}{{- $url = replaceAll "\r" "\\r" $url -}}{{- $collection = replaceAll "\\" "\\\\" $collection -}}{{- $collection = replaceAll "\"" "\\\"" $collection -}}{{- $collection = replaceAll "\n" "\\n" $collection -}}{{- $collection = replaceAll "\r" "\\r" $collection -}}{{- $description = replaceAll "\\" "\\\\" $description -}}{{- $description = replaceAll "\"" "\\\"" $description -}}{{- $description = replaceAll "\n" "\\n" $description -}}{{- $description = replaceAll "\r" "\\r" $description -}}{{- $tags = trimSpace $tags -}}{{- $tags = replaceAll "\\" "\\\\" $tags -}}{{- $tags = replaceAll "\"" "\\\"" $tags -}}{{- $tags = replaceAll "\n" "\\n" $tags -}}{{- $tags = replaceAll "\r" "\\r" $tags -}}{{- if gt $emitted 0 -}},{{- end -}}["{{ $title }}","{{ $url }}","{{ $collection }}","{{ $description }}","{{ $tags }}"]{{- $emitted = add $emitted 1 -}}{{- end -}}{{- end -}}]</script>
+    {{ end }}

@@ -1,28 +1,19 @@
-# Dotfiles Repository - Agent Guide
+# AGENTS
 
-Personal dotfiles managed with GNU Stow for symlink management across macOS and Linux.
+Personal dotfiles managed with GNU Stow across macOS and Linux.
 
 ## Essentials
 
-- Do not edit auto-generated files:
-  - `lazy-lock.json` (Lazy.nvim lockfile)
-  - `.config/nvim/.sessions/`, `.config/nvim/.undo/`, `.config/nvim/.backup/` (Neovim state)
-  - `.config/fish/{fish_variables,completions,conf.d,functions}/` (Fish shell state)
-  - `.config/lazygit/state.yml` (Lazygit state)
-  - `.config/ags/@girs/` (AGS TypeScript type definitions; regenerate with `ags types`)
-- When reading docs, check for symlinks and follow them to source material.
+- Do not edit generated state/lock files: `lazy-lock.json`, `.config/nvim/.{sessions,undo,backup}/`, `.config/fish/{fish_variables,completions,conf.d,functions}/`, `.config/lazygit/state.yml`, `.config/ags/@girs/`.
+- Follow symlinks when reading docs.
+- Canonical skills live in `.agents/skills/` and are mirrored under `.config/{opencode,codex,github,claude}/skills`.
 
 ## Commands
 
 - `stow .`
 - `stow -n .`
 
-## Skills
-
-- Canonical skills live in `.agents/skills/`
-- `.agents/skills/` is symlinked to `.opencode/skill`, `.config/opencode/skills`, `.config/codex/skills`, `.config/github/skill`, and `.config/claude/skills`
-
-## More Guidance
+## References
 
 - [Common operations](docs/agents/operations.md)
 - [Neovim Lua style](docs/agents/nvim-lua.md)
