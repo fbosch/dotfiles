@@ -12,11 +12,6 @@ Personal dotfiles managed with GNU Stow for symlink management across macOS and 
   - `.config/ags/@girs/` (AGS TypeScript type definitions; regenerate with `ags types`)
 - When reading docs, check for symlinks and follow them to source material.
 
-## Package manager
-
-NixOS/Home Manager (managed in external repo)
-External repo: https://github.com/fbosch/nixos (usually at `~/nixos`)
-
 ## Commands
 
 - `stow .`

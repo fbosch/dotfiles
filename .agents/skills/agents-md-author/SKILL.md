@@ -1,6 +1,6 @@
 ---
 name: agents-md-author
-description: Create, review, or refactor AGENTS.md files for repositories, including minimal root guidance, monorepo scoping, and progressive disclosure references. Use when asked to write or edit AGENTS.md, or when a repo needs its agent instructions audited for size, staleness, or clarity.
+description: Create, review, or refactor AGENTS.md files so they stay minimal and high-signal. Use when asked to write/edit AGENTS.md, trim bloated agent context files, fix stale instructions, reduce token bloat, or audit instruction clarity. Handles minimal root guidance, monorepo scoping, and progressive-disclosure references.
 ---
 
 # AGENTS.md Author
@@ -16,21 +16,32 @@ Create, review, or refactor AGENTS.md files so they stay minimal, stable, and us
 5. Add references to deeper docs for any detailed rules or workflows.
 6. If the user asks for wording, templates, or examples, read `references/agents-md-guide.md` before drafting.
 7. Validate for staleness and token budget:
-   - Remove brittle paths, long lists, or duplicated guidance.
-   - Keep instructions high-level and stable.
-   - Ensure the file explains what the project is and how to build or validate.
+   - Apply the filters in **Core Keep/Cut Filters** below.
 
 ## Mindset Checks (Before Editing)
 
 - Will this change improve activation or execution safety, or just add noise?
 - Is the guidance stable for 6+ months, or will it drift?
 - Is this better as a reference doc instead of in the root file?
+- Can the agent discover this directly from code or standard tooling?
+
+## Core Keep/Cut Filters
+
+Apply these filters once per section and avoid re-litigating the same rule elsewhere:
+
+- Remove brittle paths, long lists, or duplicated guidance.
+- Remove facts agents can derive from code, config, or standard tooling.
+- Keep instructions high-level and stable.
+- Keep build/validation notes only when they are non-standard or easy to miss.
+- Remove guidance once the underlying friction is fixed.
 
 ## Audit Mode (Existing AGENTS.md)
 
 Use this checklist to review and edit existing files:
 
 - Token bloat: remove long lists, verbose explanations, or duplicated guidance.
+- Discoverable content: cut facts the agent can infer from codebase/tooling.
+- Stack overviews: remove language/framework summaries unless they are actionable constraints.
 - Stale details: remove paths, file trees, or commands that drift.
 - Missing triggers: ensure the file explains WHEN to use referenced docs.
 - Clarity: keep instructions short, stable, and action-oriented.
@@ -61,7 +72,7 @@ Use this minimal format unless the repo already uses another convention:
 <One-sentence project description.>
 
 ## Package manager
-<Only if not npm. Example: pnpm workspaces.>
+<Only when non-standard or not reliably discoverable from repo tooling.>
 
 ## Commands
 - <Non-standard build or typecheck commands>
@@ -92,6 +103,7 @@ Do NOT load reference docs for routine edits that only trim or reorder content.
 
 - Never copy README content into AGENTS.md; it bloats context and dilutes activation.
 - Never include deep file trees or path lists; they rot quickly and poison context.
+- Never include codebase structure or tech stack overviews that code already reveals.
 - Never add broad, absolute rules unless they are critical and stable.
 - Never auto-generate AGENTS.md; manual intent keeps it concise and accurate.
 - Never include setup steps that already live in standard tooling docs.
@@ -101,6 +113,7 @@ Do NOT load reference docs for routine edits that only trim or reorder content.
 - If AGENTS.md exceeds one page, cut to essentials and move detail into references.
 - If two rules conflict, keep the more stable and delete the more brittle one.
 - If a rule depends on file layout, replace it with a capability-level description.
+- Treat AGENTS.md as an active hazard register; delete entries once fixed.
 
 ## Output Expectations
 

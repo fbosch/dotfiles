@@ -7,6 +7,8 @@ This guide distills best practices for authoring AGENTS.md files.
 - Keep it tiny. Every token loads on every request.
 - Prefer stable, high-level guidance over brittle details.
 - Use references for depth. Root should point outward.
+- If the agent can discover it from code or standard tooling, leave it out.
+- Treat AGENTS.md as a living hazard register: add when it trips, delete when fixed.
 
 ## Minimal root structure
 
@@ -44,6 +46,7 @@ Include only what is necessary to orient the agent:
 
 - Do not over-explain basics the model already knows.
 - Do not hardcode brittle paths or detailed file trees.
+- Do not include codebase structure or tech stack overviews.
 - Do not auto-generate AGENTS.md files.
 - Do not let the file grow into a general README.
 
