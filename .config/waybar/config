@@ -11,7 +11,7 @@
 
   "modules-left": ["custom/startbutton", "hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],
-  "modules-right": [ "memory", "cpu", "tray", "pulseaudio", "hyprland/language", "clock", "custom/swaync"],
+  "modules-right": ["memory", "cpu", "custom/cpu_temp", "custom/gpu_temp", "tray", "pulseaudio", "hyprland/language", "clock", "custom/swaync"],
 
   "tray": {
     "spacing": 8,
@@ -42,6 +42,24 @@
     "format": "{icon} {percentage}%",
     "tooltip-format": "{used:0.1f} GiB / {avail} GiB \n({swapPercentage}% Swap)",
     "format-icons": [""],
+    "on-click": "sh -c 'if pgrep -f \"^missioncenter\" > /dev/null; then pkill -f \"^missioncenter\"; else missioncenter & disown; fi'"
+  },
+
+  "custom/cpu_temp": {
+    "exec": "~/.config/waybar/scripts/temperatures cpu",
+    "interval": 5,
+    "return-type": "json",
+    "format": "  {}",
+    "tooltip": true,
+    "on-click": "sh -c 'if pgrep -f \"^missioncenter\" > /dev/null; then pkill -f \"^missioncenter\"; else missioncenter & disown; fi'"
+  },
+
+  "custom/gpu_temp": {
+    "exec": "~/.config/waybar/scripts/temperatures gpu",
+    "interval": 5,
+    "return-type": "json",
+    "format": "󰢮  {}",
+    "tooltip": true,
     "on-click": "sh -c 'if pgrep -f \"^missioncenter\" > /dev/null; then pkill -f \"^missioncenter\"; else missioncenter & disown; fi'"
   },
 

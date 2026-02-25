@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+kind="${1:-cpu}"
+
+get_cpu_temp() {
+  if command -v sensors >/dev/null 2>&1; then
+    local sensors_temp
+    sensors_temp="$({ sensors 2>/dev/null || true; } | awk '
+      /Package id [0-9]+:/ {
+        if (match($0, /\+([0-9]+(\.[0-9]+)?)/, temp)) {
+          print temp[1]
+          exit
+        }
+      }
+      /Tctl:/ {
+        if (match($0, /\+([0-9]+(\.[0-9]+)?)/, temp)) {
+          print temp[1]
+          exit
+        }
+      }
+      /Tdie:/ {
+        if (match($0, /\+([0-9]+(\.[0-9]+)?)/, temp)) {
+          print temp[1]
+          exit
+        }
+      }
+      /CPU Temperature:/ {
+        if (match($0, /\+([0-9]+(\.[0-9]+)?)/, temp)) {
+          print temp[1]
+          exit
+        }
+      }
+    ')"
+    if [[ -n "$sensors_temp" ]]; then
+      printf '%s\n' "$sensors_temp"
+      return 0
+    fi
+  fi
+
+  local fallback=""
+  local zone
+  for zone in /sys/class/thermal/thermal_zone*; do
+    [[ -r "$zone/type" && -r "$zone/temp" ]] || continue
+    local zone_type
+    zone_type="$(<"$zone/type")"
+    case "$zone_type" in
+      x86_pkg_temp|cpu-thermal|k10temp|coretemp)
+        fallback="$(awk '{ printf "%.1f", $1 / 1000 }' "$zone/temp" 2>/dev/null || true)"
+        ;;
+      *)
+        continue
+        ;;
+    esac
+    if [[ -n "$fallback" ]]; then
+      printf '%s\n' "$fallback"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+get_gpu_temp() {
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    local nvidia_temp
+    nvidia_temp="$(nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null | awk 'NR == 1 { print $1; exit }')"
+    if [[ -n "$nvidia_temp" && "$nvidia_temp" != "N/A" ]]; then
+      printf '%s\n' "$nvidia_temp"
+      return 0
+    fi
+  fi
+
+  if command -v sensors >/dev/null 2>&1; then
+    local sensors_gpu_temp
+    sensors_gpu_temp="$({ sensors 2>/dev/null || true; } | awk '
+      /edge:/ {
+        if (match($0, /\+([0-9]+(\.[0-9]+)?)/, temp)) {
+          print temp[1]
+          exit
+        }
+      }
+      /junction:/ {
+        if (match($0, /\+([0-9]+(\.[0-9]+)?)/, temp)) {
+          print temp[1]
+          exit
+        }
+      }
+      /GPU Temperature:/ {
+        if (match($0, /\+([0-9]+(\.[0-9]+)?)/, temp)) {
+          print temp[1]
+          exit
+        }
+      }
+      /temp1:/ {
+        if (match($0, /\+([0-9]+(\.[0-9]+)?)/, temp)) {
+          print temp[1]
+          exit
+        }
+      }
+    ')"
+    if [[ -n "$sensors_gpu_temp" ]]; then
+      printf '%s\n' "$sensors_gpu_temp"
+      return 0
+    fi
+  fi
+
+  local card
+  for card in /sys/class/drm/card*/device/hwmon/hwmon*/temp1_input; do
+    [[ -r "$card" ]] || continue
+    awk '{ printf "%.1f\n", $1 / 1000 }' "$card"
+    return 0
+  done
+
+  return 1
+}
+
+format_output() {
+  local label="$1"
+  local temp="$2"
+  local warning="$3"
+  local critical="$4"
+
+  local temp_int
+  temp_int="${temp%.*}"
+
+  local class_name="normal"
+  if (( temp_int >= critical )); then
+    class_name="critical"
+  elif (( temp_int >= warning )); then
+    class_name="warning"
+  fi
+
+  printf '{"text":"%s°C","tooltip":"%s temperature: %s°C","class":"%s"}\n' "$temp_int" "$label" "$temp_int" "$class_name"
+}
+
+format_unavailable() {
+  local label="$1"
+  printf '{"text":"N/A","tooltip":"%s temperature unavailable","class":"idle"}\n' "$label"
+}
+
+case "$kind" in
+  cpu)
+    if cpu_temp="$(get_cpu_temp)"; then
+      format_output "CPU" "$cpu_temp" 75 90
+    else
+      format_unavailable "CPU"
+    fi
+    ;;
+  gpu)
+    if gpu_temp="$(get_gpu_temp)"; then
+      format_output "GPU" "$gpu_temp" 80 90
+    else
+      format_unavailable "GPU"
+    fi
+    ;;
+  *)
+    printf '{"text":"N/A","tooltip":"Invalid sensor type","class":"critical"}\n'
+    exit 1
+    ;;
+esac
