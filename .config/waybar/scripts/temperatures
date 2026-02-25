@@ -116,11 +116,40 @@ get_gpu_temp() {
   return 1
 }
 
+get_cpu_core_temps() {
+  command -v sensors >/dev/null 2>&1 || return 1
+
+  local core_lines
+  core_lines="$({ sensors 2>/dev/null || true; } | awk '
+    match($0, /^[[:space:]]*(Core [0-9]+|Tccd[0-9]+):[[:space:]]*\+([0-9]+(\.[0-9]+)?)/, temp) {
+      printf "%s: %d°C\n", temp[1], temp[2]
+      found = 1
+    }
+    END {
+      if (found != 1) {
+        exit 1
+      }
+    }
+  ')"
+
+  [[ -n "$core_lines" ]] || return 1
+  printf '%s\n' "$core_lines"
+}
+
+json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  printf '%s' "$value"
+}
+
 format_output() {
   local label="$1"
   local temp="$2"
   local warning="$3"
   local critical="$4"
+  local details="${5:-}"
 
   local temp_int
   temp_int="${temp%.*}"
@@ -132,7 +161,14 @@ format_output() {
     class_name="warning"
   fi
 
-  printf '{"text":"%s°C","tooltip":"%s temperature: %s°C","class":"%s"}\n' "$temp_int" "$label" "$temp_int" "$class_name"
+  local tooltip
+  tooltip="$label temperature: $temp_int°C"
+  if [[ -n "$details" ]]; then
+    tooltip="$tooltip
+$details"
+  fi
+
+  printf '{"text":"%s°C","tooltip":"%s","class":"%s"}\n' "$temp_int" "$(json_escape "$tooltip")" "$class_name"
 }
 
 format_unavailable() {
@@ -143,7 +179,8 @@ format_unavailable() {
 case "$kind" in
   cpu)
     if cpu_temp="$(get_cpu_temp)"; then
-      format_output "CPU" "$cpu_temp" 75 90
+      cpu_core_details="$(get_cpu_core_temps || true)"
+      format_output "CPU" "$cpu_temp" 75 90 "$cpu_core_details"
     else
       format_unavailable "CPU"
     fi
