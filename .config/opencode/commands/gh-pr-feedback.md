@@ -1,6 +1,6 @@
 ---
 description: Extract actionable feedback from GitHub PR reviews with line references
-model: github-copilot/claude-sonnet-4.5
+model: anthropic/claude-sonnet-4-6
 agent: general
 subtask: true
 ---

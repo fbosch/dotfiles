@@ -1,6 +1,6 @@
 ---
 description: Fetch Azure DevOps test case and format for agent context
-model: github-copilot/claude-haiku-4.5
+model: anthropic/claude-haiku-4-5
 ---
 
 Fetch and structure Azure DevOps test case data for agent context.
@@ -18,6 +18,7 @@ Test Case ID: $ARGUMENTS
 # Test Case #<ID>: <Title>
 
 ## Details
+
 - **State:** <state>
 - **Assigned To:** <assignee>
 - **Area Path:** <area>
@@ -26,18 +27,21 @@ Test Case ID: $ARGUMENTS
 ## Test Steps
 
 ### Step 1
+
 <action>
 
 **Expected:**  
 <expected>
 
 ### Step 2
+
 <action>
 
 **Expected:**  
 <expected>
 
 ### Step 3
+
 <action>
 
 **Expected:**  

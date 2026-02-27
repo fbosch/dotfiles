@@ -1,5 +1,6 @@
 ---
 description: Remove AI-generated code slop from current branch
+model: github-copilot/grok-code-fast-1
 ---
 
 Check the diff against the main branch and remove all AI-generated slop introduced in this branch.

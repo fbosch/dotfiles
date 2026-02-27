@@ -1,11 +1,13 @@
 ---
 description: Analyze and resolve git merge conflicts with context-aware suggestions
+model: anthropic/claude-sonnet-4-6
 agent: build
 ---
 
 Analyze the merge conflicts below and provide resolution recommendations.
 
 **Merge context:**
+
 - Current branch: !`git rev-parse --abbrev-ref HEAD`
 - Merging from: !`git log -1 MERGE_HEAD --pretty=format:"%h %s" 2>/dev/null || echo "Unknown (not in merge state)"`
 - Conflicted files: !`git diff --name-only --diff-filter=U | wc -l` files
@@ -13,6 +15,7 @@ Analyze the merge conflicts below and provide resolution recommendations.
 **Mode:** $ARGUMENTS
 
 **Available modes:**
+
 - (no args) — Analysis + recommendations only (default, safe)
 - `auto` — Apply resolutions automatically after showing preview
 - `keep-ours` — Bias toward current branch when ambiguous
@@ -29,6 +32,7 @@ Stop here.
 **For each conflicted file:**
 
 1. **Show conflict location:**
+
    ```
    File: path/to/file.ext
    Lines: 42-58
