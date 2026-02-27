@@ -32,7 +32,7 @@
       "temperature": 0
     },
     "general": {
-      "model": "anthropic/claude-sonnet-4.6",
+      "model": "anthropic/claude-sonnet-4-6",
       "steps": 15,
       "temperature": 0.3
     },
@@ -41,11 +41,11 @@
       "temperature": 0
     },
     "summary": {
-      "model": "anthropic/claude-sonnet-4.6",
+      "model": "anthropic/claude-sonnet-4-6",
       "temperature": 0.1
     },
     "compaction": {
-      "model": "anthropic/claude-sonnet-4.6",
+      "model": "anthropic/claude-sonnet-4-6",
       "temperature": 0
     }
   },

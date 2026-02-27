@@ -55,3 +55,16 @@
 - When changing behavior, update/add tests and handle important edge cases.
 - Keep edits cohesive per file (avoid scattered drive-by tweaks).
 - Run the smallest reasonable validation (tests/build/typecheck) when making code changes.
+
+## Sub-agents
+
+- `adversarial`
+- `benchmark`
+- `debug`
+- `docs`
+- `quick`
+- `refactor`
+- `research`
+- `review`
+- `spec`
+- `test`
