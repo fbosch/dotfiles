@@ -1,6 +1,6 @@
 ---
 description: Turns an ambiguous request into an explicit contract — scope, interfaces, invariants, and failure behavior. Use before implementing any new feature, API, CLI command, or config format.
-mode: all
+mode: subagent
 color: accent
 model: openai/gpt-5.3-codex
 temperature: 0.2
