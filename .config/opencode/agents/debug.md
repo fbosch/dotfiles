@@ -27,13 +27,6 @@ You investigate and diagnose issues systematically.
 
 Use bash to inspect state, read logs, and search for patterns.
 
-For web UI issues, use `agent-browser` to interact with the browser directly:
-
-- `agent-browser open <url>` — navigate to the page
-- `agent-browser snapshot -i` — get interactive elements with refs (@e1, @e2, ...)
-- `agent-browser click @e1` / `agent-browser fill @e2 "text"` — interact using refs
-- `agent-browser console` / `agent-browser errors` — inspect JS logs and exceptions
-- `agent-browser screenshot [path]` — capture visual state
-- Re-snapshot after page changes to get updated refs
+For web UI issues, load the `agent-browser` skill for full browser automation guidance and command reference.
 
 Explain findings clearly.
