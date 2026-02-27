@@ -10,15 +10,24 @@ tools:
   patch: false
 permission:
   bash:
-    "*": ask
     "gh *": allow
     "git clone *": allow
     "git log *": allow
     "git diff *": allow
+    "git show *": allow
+    "git status *": allow
+    "git blame *": allow
+    "git branch *": allow
     "grep *": allow
+    "rg *": allow
     "cat *": allow
     "ls *": allow
     "find *": allow
+    "head *": allow
+    "tail *": allow
+    "wc *": allow
+    "jq *": allow
+    "*": ask
 ---
 
 You are in research mode. Your goal is to gather, synthesize, and present information clearly — without making any changes to files.

@@ -8,7 +8,21 @@ steps: 6
 tools:
   write: false
   edit: false
-  bash: false
+permission:
+  bash:
+    "git diff *": allow
+    "git log *": allow
+    "git show *": allow
+    "git blame *": allow
+    "git status *": allow
+    "rg *": allow
+    "grep *": allow
+    "ls *": allow
+    "cat *": allow
+    "head *": allow
+    "tail *": allow
+    "wc *": allow
+    "*": ask
 ---
 
 Review code systematically for:

@@ -5,8 +5,6 @@ color: warning
 model: github-copilot/claude-haiku-4.5
 temperature: 0.0
 steps: 3
-tools:
-  bash: false
 permission:
   bash:
     "*": deny

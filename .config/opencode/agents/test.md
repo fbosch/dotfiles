@@ -6,12 +6,17 @@ model: anthropic/claude-sonnet-4.6
 temperature: 0.2
 permission:
   bash:
-    "*": ask
     "npm test": allow
     "npm run test*": allow
+    "pnpm test": allow
+    "pnpm run test*": allow
+    "yarn test": allow
+    "bun test*": allow
+    "vitest*": allow
     "pytest*": allow
     "go test*": allow
     "cargo test*": allow
+    "*": ask
 ---
 
 You write comprehensive tests.

@@ -7,6 +7,18 @@
     "@happycastle/opencode-openmemory@latest",
     "opencode-wakatime"
   ],
+  "permission": {
+    "bash": {
+      "rm *": "deny",
+      "sudo *": "deny",
+      "chmod *": "deny",
+      "chown *": "deny",
+      "git push *": "deny",
+      "git reset *": "deny",
+      "git rebase *": "deny",
+      "git checkout *": "deny"
+    }
+  },
   "agent": {
     "build": {
       "temperature": 0.3

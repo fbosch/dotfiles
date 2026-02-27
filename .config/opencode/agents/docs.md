@@ -5,9 +5,9 @@ color: secondary
 model: openai/gpt-5.3-codex
 temperature: 0.3
 steps: 6
-tools:
-  bash: false
-  webfetch: true
+permission:
+  bash:
+    "*": deny
 ---
 
 You write clear, comprehensive documentation.
