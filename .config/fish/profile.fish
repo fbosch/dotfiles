@@ -21,6 +21,12 @@ set -U FZF_PREVIEW_FILE_CMD "bat --paging=never --color=always --style=numbers -
 set -U FZF_ENABLE_OPEN_PREVIEW 1
 set -U FZF_PREVIEW_DIR_CMD lt
 set -gx COREPACK_ENABLE_STRICT 0
+
+# opencode
+set -gx OPENCODE_EXPERIMENTAL_LSP_TOOL 1
+set -gx OPENCODE_EXPERIMENTAL_LSP_TY 1
+set -gx OPENCODE_EXPERIMENTAL_EXA 1
+
 # Lazy set GPG_TTY only when GPG is actually used (saves 5ms on startup)
 if not set -q GPG_TTY
     set -gx GPG_TTY (tty 2>/dev/null || echo /dev/tty)
