@@ -14,6 +14,7 @@
             - $include: ../widgets/media/mdblist-top-movies.yml
             - $include: ../widgets/media/mdblist-tv-shows.yml
             - $include: ../widgets/media/mdblist-popular-shows.yml
+            - $include: ../widgets/media/mdblist-anime.yml
     - size: small
       widgets:
         - $include: ../widgets/media/prowlarr-indexers.yml
