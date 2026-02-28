@@ -30,15 +30,20 @@
           <ul class="plex-added-list list-unstyled">
             {{ range $items }}
               {{ $itemType := .String "type" }}
-              {{ $label := "Item" }}
+              {{ $typeClass := "item" }}
+              {{ $typeTitle := "Item" }}
               {{ if eq $itemType "movie" }}
-                {{ $label = "Movie" }}
+                {{ $typeClass = "movie" }}
+                {{ $typeTitle = "Movie" }}
               {{ else if eq $itemType "episode" }}
-                {{ $label = "Episode" }}
+                {{ $typeClass = "episode" }}
+                {{ $typeTitle = "Episode" }}
               {{ else if eq $itemType "season" }}
-                {{ $label = "Season" }}
+                {{ $typeClass = "season" }}
+                {{ $typeTitle = "Season" }}
               {{ else if eq $itemType "show" }}
-                {{ $label = "Show" }}
+                {{ $typeClass = "show" }}
+                {{ $typeTitle = "Show" }}
               {{ end }}
 
               {{ $title := .String "title" }}
@@ -64,7 +69,7 @@
                 <div class="plex-added-body">
                   <div class="plex-added-head">
                     <div class="text-truncate color-highlight">{{ $title }}</div>
-                    <span class="plex-added-type">{{ $label }}</span>
+                    <span class="plex-added-kind plex-added-kind-{{ $typeClass }}" title="{{ $typeTitle }}" aria-label="{{ $typeTitle }}"></span>
                   </div>
                   <div class="size-h6 color-paragraph">
                     {{ if gt (.Int "year") 0 }}{{ .Int "year" }} · {{ end }}
