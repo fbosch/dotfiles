@@ -1,0 +1,184 @@
+/* Start Command Prompt Widget - Linkwarden Search Integration */
+
+/* Hide the data source widget (custom-api that provides JSON) */
+.widget-type-custom-api.start-linkwarden-index {
+  display: none;
+}
+
+/* Search widget styling */
+.widget-type-search.start-search .widget-content-frame {
+  border-radius: 30px;
+}
+
+/* Dropdown container */
+.start-search-with-suggestions {
+  position: relative;
+}
+
+.start-linkwarden-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + var(--widget-gap));
+  z-index: 30;
+  margin: 0;
+  padding: 0.5rem;
+  list-style: none;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--color-widget-content-border);
+  background: var(--color-widget-background);
+  box-shadow: 0 3px 0 0 var(--color-widget-content-border);
+}
+
+/* Dropdown item */
+.start-linkwarden-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-radius: calc(var(--border-radius) - 4px);
+  padding: 0.75rem 0.9rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+  min-height: 56px;
+}
+
+.start-linkwarden-dropdown-item:hover {
+  background: var(--color-widget-background-highlight);
+}
+
+/* Item content layout */
+.start-linkwarden-dropdown-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+/* Favicon container */
+.start-linkwarden-dropdown-icon-wrap {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: color-mix(in hsl, var(--color-widget-content-border), transparent 20%);
+}
+
+.start-linkwarden-dropdown-icon-wrap.has-icon {
+  background: transparent;
+}
+
+.start-linkwarden-dropdown-icon-wrap.has-icon .start-linkwarden-dropdown-icon-fallback {
+  display: none;
+}
+
+/* Favicon fallback (first letter) */
+.start-linkwarden-dropdown-icon-fallback {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-subdue);
+}
+
+/* Favicon image */
+.start-linkwarden-dropdown-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+/* GitHub icon needs inversion in dark mode */
+.start-linkwarden-dropdown-icon[data-host="github.com"],
+.start-linkwarden-dropdown-icon[data-host="www.github.com"] {
+  filter: invert(1) brightness(1.15);
+}
+
+/* Selected state */
+.start-linkwarden-dropdown-item.is-selected {
+  background: var(--color-widget-background-highlight);
+  border-color: var(--color-widget-content-border);
+  box-shadow: inset 2px 0 0 0 var(--color-primary);
+}
+
+.start-linkwarden-dropdown-item.is-selected .start-linkwarden-dropdown-title {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.start-linkwarden-dropdown-item.is-selected .start-linkwarden-dropdown-host {
+  color: color-mix(in hsl, var(--color-primary), var(--color-text-subdue) 45%);
+}
+
+.start-linkwarden-dropdown-item.is-selected .start-linkwarden-dropdown-icon-wrap {
+  outline: 1px solid color-mix(in hsl, var(--color-primary), transparent 60%);
+}
+
+/* Title text */
+.start-linkwarden-dropdown-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-h4);
+  color: var(--color-text-base);
+}
+
+/* Host/domain text */
+.start-linkwarden-dropdown-host {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--color-text-subdue);
+  font-size: var(--font-size-h5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 46%;
+}
+
+/* Enter key indicator */
+.start-linkwarden-dropdown-enter {
+  display: none;
+  color: var(--color-text-base);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.3rem 0.55rem;
+  border-radius: 0.35rem;
+  border: 1px solid var(--color-widget-content-border);
+  background: var(--color-widget-background-highlight);
+  box-shadow: 0 1px 0 0 var(--color-widget-content-border);
+  opacity: 1;
+}
+
+.start-linkwarden-dropdown-item.is-selected .start-linkwarden-dropdown-enter {
+  display: inline-flex;
+  color: var(--color-primary);
+  border-color: color-mix(in hsl, var(--color-primary), var(--color-widget-content-border) 45%);
+}
+
+/* Responsive: narrow containers */
+@container widget (max-width: 599px) {
+  .start-linkwarden-dropdown-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.65rem 0.8rem;
+    min-height: auto;
+  }
+
+  .start-linkwarden-dropdown-host {
+    max-width: 100%;
+    font-size: var(--font-size-h6);
+  }
+
+  .start-linkwarden-dropdown-enter {
+    align-self: flex-end;
+  }
+}

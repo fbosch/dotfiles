@@ -86,6 +86,7 @@ document:
     <script src="/assets/js/real-debrid-live.js" defer></script>
     
     <!-- Widget-specific CSS -->
+    <link rel="stylesheet" href="/assets/css/start-command-prompt.css">
     <link rel="stylesheet" href="/assets/css/real-debrid.css">
     <link rel="stylesheet" href="/assets/css/plex.css">
 
