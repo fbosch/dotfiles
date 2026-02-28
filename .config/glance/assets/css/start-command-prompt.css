@@ -163,13 +163,39 @@
   outline: 1px solid color-mix(in hsl, var(--color-primary), transparent 60%);
 }
 
+/* Title wrapper */
+.start-linkwarden-dropdown-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  overflow: hidden;
+  min-width: 0;
+}
+
 /* Title text */
 .start-linkwarden-dropdown-title {
+  font-size: var(--font-size-h4);
+  color: var(--color-text-base);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--font-size-h4);
-  color: var(--color-text-base);
+  flex-shrink: 0;
+}
+
+/* Description text (dimmed, next to title) */
+.start-linkwarden-dropdown-description {
+  color: var(--color-text-subdue);
+  font-size: var(--font-size-h5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.start-linkwarden-dropdown-description::before {
+  content: "· ";
+  margin-right: 0.2rem;
 }
 
 /* Host/domain text */
@@ -227,5 +253,9 @@
 
   .start-linkwarden-dropdown-enter {
     align-self: flex-end;
+  }
+
+  .start-linkwarden-dropdown-description {
+    display: none;
   }
 }

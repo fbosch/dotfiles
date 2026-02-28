@@ -1063,6 +1063,12 @@
     prefetchSelectedMatch(state);
   }
 
+  function html(strings, ...values) {
+    return strings.reduce(function (result, str, index) {
+      return result + str + (values[index] || "");
+    }, "");
+  }
+
   function renderDropdown(input, state) {
     const items = [];
 
@@ -1070,6 +1076,7 @@
       const isSelected = index === state.selectedIndex;
       const match = state.matches[index];
       const title = match.entry.title || match.entry.url;
+      const description = normalizeSpaces(match.entry.description || "");
       const iconSources = iconSourcesForUrl(match.entry.url);
       const host = iconSources.host;
       let icon = iconSources.icon;
@@ -1083,37 +1090,36 @@
 
       const fallback = host ? host.charAt(0).toUpperCase() : "?";
 
-      items.push(
-        '<li class="start-linkwarden-dropdown-item' +
-          (isSelected ? " is-selected" : "") +
-          '" data-match-index="' +
-          index +
-          '" role="option" aria-selected="' +
-          (isSelected ? "true" : "false") +
-          '">' +
-          '<span class="start-linkwarden-dropdown-main">' +
-          '<span class="start-linkwarden-dropdown-icon-wrap" aria-hidden="true">' +
-          '<span class="start-linkwarden-dropdown-icon-fallback">' +
-          escapeHtml(fallback) +
-          "</span>" +
-          '<img class="start-linkwarden-dropdown-icon" src="' +
-          escapeHtml(icon) +
-          '" data-host="' +
-          escapeHtml(host) +
-          '" data-fallback-srcs="' +
-          escapeHtml(fallbackSources.join("|")) +
-          '" alt="" decoding="async" />' +
-          "</span>" +
-          '<span class="start-linkwarden-dropdown-title">' +
-          escapeHtml(title) +
-          "</span>" +
-          "</span>" +
-          '<span class="start-linkwarden-dropdown-host">' +
-          escapeHtml(host) +
-          '<kbd class="start-linkwarden-dropdown-enter">Enter</kbd>' +
-          "</span>" +
-          "</li>"
-      );
+      items.push(html`
+        <li class="start-linkwarden-dropdown-item${isSelected ? " is-selected" : ""}"
+            data-match-index="${index}"
+            role="option"
+            aria-selected="${isSelected ? "true" : "false"}">
+          <span class="start-linkwarden-dropdown-main">
+            <span class="start-linkwarden-dropdown-icon-wrap" aria-hidden="true">
+              <span class="start-linkwarden-dropdown-icon-fallback">
+                ${escapeHtml(fallback)}
+              </span>
+              <img class="start-linkwarden-dropdown-icon"
+                   src="${escapeHtml(icon)}"
+                   data-host="${escapeHtml(host)}"
+                   data-fallback-srcs="${escapeHtml(fallbackSources.join("|"))}"
+                   alt=""
+                   decoding="async" />
+            </span>
+            <span class="start-linkwarden-dropdown-title-wrap">
+              <span class="start-linkwarden-dropdown-title">
+                ${escapeHtml(title)}
+              </span>
+              ${description ? html`<span class="start-linkwarden-dropdown-description">${escapeHtml(description)}</span>` : ""}
+            </span>
+          </span>
+          <span class="start-linkwarden-dropdown-host">
+            ${escapeHtml(host)}
+            <kbd class="start-linkwarden-dropdown-enter">Enter</kbd>
+          </span>
+        </li>
+      `);
     }
 
     state.dropdown.innerHTML = items.join("");

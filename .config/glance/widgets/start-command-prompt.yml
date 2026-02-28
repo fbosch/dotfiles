@@ -3,7 +3,7 @@
   frameless: true
   cache: 15m
   css-class: start-linkwarden-index
-  url: https://linkwarden.corvus-corax.synology.me/api/v1/links?take=5000
+  url: https://linkwarden.corvus-corax.synology.me/api/v1/links?take=5000&weee
   headers:
     Authorization: Bearer ${LINKWARDEN_TOKEN}
     Accept: application/json
