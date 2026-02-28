@@ -1,5 +1,6 @@
 - type: custom-api
   title: Popular Shows
+  title-url: https://mdblist.com/lists/snoak/imdb-most-popular-shows
   cache: 30m
   options:
     api-key: ${MDB_LIST_API_KEY}

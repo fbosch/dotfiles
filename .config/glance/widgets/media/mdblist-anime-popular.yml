@@ -1,5 +1,6 @@
 - type: custom-api
   title: Popular Anime
+  title-url: https://mdblist.com/lists/breon64/popular-anime
   cache: 30m
   options:
     api-key: ${MDB_LIST_API_KEY}

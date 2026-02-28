@@ -1,5 +1,6 @@
 - type: custom-api
   title: Trending
+  title-url: https://mdblist.com/lists/garycrawfordgc/top-movies-of-the-week
   cache: 30m
   options:
     api-key: ${MDB_LIST_API_KEY}

@@ -1,5 +1,6 @@
 - type: custom-api
   title: Latest Anime
+  title-url: https://mdblist.com/lists/iamscallywag/latest-anime
   cache: 30m
   options:
     api-key: ${MDB_LIST_API_KEY}

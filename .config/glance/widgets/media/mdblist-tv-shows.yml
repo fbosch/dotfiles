@@ -1,5 +1,6 @@
 - type: custom-api
   title: Trending Shows
+  title-url: https://mdblist.com/lists/snoak/trakt-s-trending-shows
   cache: 30m
   options:
     api-key: ${MDB_LIST_API_KEY}
