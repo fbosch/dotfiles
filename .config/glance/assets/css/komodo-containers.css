@@ -1,7 +1,7 @@
 .container-row {
   display: flex;
   align-items: center;
-  padding: 0.5rem 0;
+  padding: 0.2rem 0;
   border-bottom: 1px solid var(--color-separator);
 }
 
@@ -19,7 +19,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  margin-right: 0.5rem;
+  margin-right: var(--widget-gap);
 }
 
 .status-running {
@@ -28,11 +28,4 @@
 
 .status-stopped {
   background-color: var(--color-negative);
-}
-
-.container-stats {
-  display: flex;
-  gap: 1rem;
-  font-size: 0.75rem;
-  color: var(--color-text-subdue);
 }
