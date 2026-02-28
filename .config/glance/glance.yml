@@ -89,6 +89,7 @@ document:
     <link rel="stylesheet" href="/assets/css/start-command-prompt.css">
     <link rel="stylesheet" href="/assets/css/real-debrid.css">
     <link rel="stylesheet" href="/assets/css/plex.css">
+    <link rel="stylesheet" href="/assets/css/komodo-containers.css">
 
 pages:
   - $include: pages/startpage.yml

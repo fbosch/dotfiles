@@ -18,8 +18,6 @@
   template: |
     {{ $urlBase := .Options.StringOr "base-url" "" }}
 
-    <link rel="stylesheet" href="/assets/css/komodo-containers.css">
-
     {{ $containers := .JSON.Array "" }}
     {{ $total := len $containers }}
     {{ $running := 0 }}
@@ -28,7 +26,7 @@
       {{ if eq (.String "state") "running" }}{{ $running = add $running 1 }}{{ end }}
     {{ end }}
 
-    <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+    <div class="flex gap-10 margin-bottom-10">
       <span><strong>{{ $running }}</strong>/{{ $total }} running</span>
     </div>
 
@@ -40,14 +38,35 @@
         
         <div class="container-row">
           <span class="container-status {{ if $isRunning }}status-running{{ else }}status-stopped{{ end }}"></span>
-          <div class="container-name">
-            <a class="color-highlight" href="{{ concat $urlBase "/containers/" (.String "id") }}" target="_blank">
-              {{ $name }}
-            </a>
+          <div class="container-name min-width-0">
+            {{ $cpuPerc := .String "stats.cpu_perc" }}
+            {{ $memPerc := .String "stats.mem_perc" }}
+            {{ $hasStats := and (.Exists "stats") (ne $cpuPerc "") (ne $cpuPerc "--") }}
+            {{ if $hasStats }}
+              <div data-popover-type="html" data-popover-position="above">
+                <div data-popover-html>
+                  <div class="flex">
+                    <div class="size-h5">CPU</div>
+                    <div class="value-separator"></div>
+                    <div class="color-highlight text-very-compact">{{ $cpuPerc }}</div>
+                  </div>
+                  {{ if and (ne $memPerc "") (ne $memPerc "--") }}
+                  <div class="flex">
+                    <div class="size-h5">MEM</div>
+                    <div class="value-separator"></div>
+                    <div class="color-highlight text-very-compact">{{ $memPerc }}</div>
+                  </div>
+                  {{ end }}
+                </div>
+                <a class="color-highlight text-truncate" href="{{ concat $urlBase "/servers/" (.String "server_id") "/container/" $name }}" target="_blank" rel="noreferrer">{{ $name }}</a>
+              </div>
+            {{ else }}
+              <a class="color-highlight text-truncate" href="{{ concat $urlBase "/servers/" (.String "server_id") "/container/" $name }}" target="_blank" rel="noreferrer">{{ $name }}</a>
+            {{ end }}
             {{ if .Exists "ports" }}
               {{ $ports := .Array "ports" }}
               {{ if gt (len $ports) 0 }}
-                <span style="font-size: 0.875em; opacity: 0.6; margin-left: 0.5rem;">
+                <span class="size-h5 color-subdue margin-left-5">
                   {{ $first := true }}
                   {{ range $ports }}
                     {{ $publicPort := .Int "PublicPort" }}
@@ -60,14 +79,6 @@
               {{ end }}
             {{ end }}
           </div>
-          {{ if $isRunning }}
-            <div class="container-stats">
-              {{ $cpuPerc := .String "stats.cpu_perc" }}
-              {{ $memPerc := .String "stats.mem_perc" }}
-              {{ if ne $cpuPerc "" }}<span>CPU: {{ $cpuPerc }}</span>{{ end }}
-              {{ if ne $memPerc "" }}<span>MEM: {{ $memPerc }}</span>{{ end }}
-            </div>
-          {{ end }}
         </div>
       {{ end }}
     </div>
