@@ -32,6 +32,14 @@
       ],
       "id": "waybar",
       "repo": "https://github.com/Alexays/Waybar.wiki.git"
+    },
+    {
+      "id": "glance",
+      "repo": "https://github.com/glanceapp/glance",
+      "include": [
+        "docs/**/*.md"
+      ],
+      "targetDir": "./.config/glance/docs/agents/references"
     }
   ]
 }
