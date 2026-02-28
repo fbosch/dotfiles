@@ -7,7 +7,18 @@ temperature: 0.0
 steps: 3
 permission:
   bash:
-    "*": deny
+    "git commit *": deny
+    "git merge *": deny
+    "git switch *": deny
+    "git stash *": deny
+    "git tag *": deny
+    "git rm *": deny
+    "git add *": deny
+    "mv *": deny
+    "npm install *": deny
+    "npm ci *": deny
+    "pip install *": deny
+    "*": allow
 ---
 
 You make fast, focused edits for simple, well-defined changes.

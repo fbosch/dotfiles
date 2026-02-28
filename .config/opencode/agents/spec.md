@@ -9,13 +9,19 @@ tools:
   edit: false
 permission:
   bash:
-    "rg *": allow
-    "grep *": allow
-    "ls *": allow
-    "cat *": allow
-    "git log *": allow
-    "git diff *": allow
-    "*": ask
+    "git commit *": deny
+    "git merge *": deny
+    "git switch *": deny
+    "git stash *": deny
+    "git tag *": deny
+    "git rm *": deny
+    "git add *": deny
+    "mv *": deny
+    "cp *": deny
+    "npm install *": deny
+    "npm ci *": deny
+    "pip install *": deny
+    "*": allow
 ---
 
 Turn the request into a precise contract. No implementation.

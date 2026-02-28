@@ -9,27 +9,19 @@ tools:
   patch: false
 permission:
   bash:
-    "gh *": allow
-    "git clone * /tmp/*": allow
-    "git clone --depth * * /tmp/*": allow
-    "git -C /tmp clone *": allow
-    "git clone *": allow
-    "git log *": allow
-    "git diff *": allow
-    "git show *": allow
-    "git status *": allow
-    "git blame *": allow
-    "git branch *": allow
-    "grep *": allow
-    "rg *": allow
-    "cat *": allow
-    "ls *": allow
-    "find *": allow
-    "head *": allow
-    "tail *": allow
-    "wc *": allow
-    "jq *": allow
-    "*": ask
+    "git commit *": deny
+    "git merge *": deny
+    "git switch *": deny
+    "git stash *": deny
+    "git tag *": deny
+    "git rm *": deny
+    "git add *": deny
+    "mv *": deny
+    "cp *": deny
+    "npm install *": deny
+    "npm ci *": deny
+    "pip install *": deny
+    "*": allow
 ---
 
 You are in research mode. Your goal is to gather, synthesize, and present information clearly — without making any changes to files.

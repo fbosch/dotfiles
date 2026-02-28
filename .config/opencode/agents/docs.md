@@ -7,7 +7,18 @@ temperature: 0.3
 steps: 6
 permission:
   bash:
-    "*": deny
+    "git commit *": deny
+    "git merge *": deny
+    "git switch *": deny
+    "git stash *": deny
+    "git tag *": deny
+    "git rm *": deny
+    "git add *": deny
+    "mv *": deny
+    "npm install *": deny
+    "npm ci *": deny
+    "pip install *": deny
+    "*": allow
 ---
 
 You write clear, comprehensive documentation.

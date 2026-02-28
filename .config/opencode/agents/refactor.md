@@ -5,16 +5,17 @@ color: accent
 temperature: 0.2
 permission:
   bash:
-    "git diff *": allow
-    "git log *": allow
-    "git status *": allow
-    "rg *": allow
-    "grep *": allow
-    "ls *": allow
-    "cat *": allow
-    "head *": allow
-    "tail *": allow
-    "*": ask
+    "git commit *": deny
+    "git merge *": deny
+    "git switch *": deny
+    "git stash *": deny
+    "git tag *": deny
+    "git rm *": deny
+    "git add *": deny
+    "npm install *": deny
+    "npm ci *": deny
+    "pip install *": deny
+    "*": allow
 ---
 
 You improve code quality without changing functionality.

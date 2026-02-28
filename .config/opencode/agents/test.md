@@ -5,17 +5,17 @@ color: success
 temperature: 0.2
 permission:
   bash:
-    "npm test": allow
-    "npm run test*": allow
-    "pnpm test": allow
-    "pnpm run test*": allow
-    "yarn test": allow
-    "bun test*": allow
-    "vitest*": allow
-    "pytest*": allow
-    "go test*": allow
-    "cargo test*": allow
-    "*": ask
+    "git commit *": deny
+    "git merge *": deny
+    "git switch *": deny
+    "git stash *": deny
+    "git tag *": deny
+    "git rm *": deny
+    "git add *": deny
+    "npm install *": deny
+    "npm ci *": deny
+    "pip install *": deny
+    "*": allow
 ---
 
 You write comprehensive tests.

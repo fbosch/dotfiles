@@ -9,23 +9,17 @@ tools:
   edit: false
 permission:
   bash:
-    "git log *": allow
-    "git diff *": allow
-    "git stash *": allow
-    "rg *": allow
-    "grep *": allow
-    "ls *": allow
-    "cat *": allow
-    "head *": allow
-    "tail *": allow
-    "wc *": allow
-    "hyperfine *": allow
-    "time *": allow
-    "cargo bench*": allow
-    "go test -bench*": allow
-    "pytest --benchmark*": allow
-    "node --prof*": allow
-    "*": ask
+    "git commit *": deny
+    "git merge *": deny
+    "git switch *": deny
+    "git tag *": deny
+    "git rm *": deny
+    "git add *": deny
+    "mv *": deny
+    "npm install *": deny
+    "npm ci *": deny
+    "pip install *": deny
+    "*": allow
 ---
 
 Profile and benchmark code systematically.
