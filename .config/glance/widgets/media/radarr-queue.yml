@@ -21,17 +21,9 @@
 
       {{ if eq $call.Response.StatusCode 200 }}
         {{ $records := $call.JSON.Array "records" }}
-        {{ $activeCount := 0 }}
-        {{ range $records }}
-          {{ $status := .String "status" }}
-          {{ $eta := .String "timeleft" }}
-          {{ if and (or (eq $status "downloading") (eq $status "queued")) (ne $eta "00:00:00") (ne $eta "") }}
-            {{ $activeCount = add $activeCount 1 }}
-          {{ end }}
-        {{ end }}
         
-        {{ if eq $activeCount 0 }}
-          <p>No active downloads.</p>
+        {{ if eq (len $records) 0 }}
+          <p>No items in queue.</p>
         {{ else }}
           <ul class="list-unstyled">
             {{ range $records }}
@@ -39,17 +31,18 @@
               {{ $status := .String "status" }}
               {{ $eta := .String "timeleft" }}
               {{ $downloadClient := .String "downloadClient" }}
+              {{ $trackedDownloadStatus := .String "trackedDownloadStatus" }}
+              {{ $trackedDownloadState := .String "trackedDownloadState" }}
 
-              {{ if and (or (eq $status "downloading") (eq $status "queued")) (ne $eta "00:00:00") (ne $eta "") }}
-                <li class="margin-block-10">
-                  <div class="size-h5">{{ $title }}</div>
-                  <div class="size-h6 color-paragraph margin-top-5">
-                    {{ $status }}
-                    {{ if ne $downloadClient "" }} · {{ $downloadClient }}{{ end }}
-                    {{ if ne $eta "" }} · ETA: {{ $eta }}{{ end }}
-                  </div>
-                </li>
-              {{ end }}
+              <li class="margin-block-10">
+                <div class="size-h5">{{ $title }}</div>
+                <div class="size-h6 color-paragraph margin-top-5">
+                  {{ $status }}
+                  {{ if ne $trackedDownloadState "" }} · {{ $trackedDownloadState }}{{ end }}
+                  {{ if ne $downloadClient "" }} · {{ $downloadClient }}{{ end }}
+                  {{ if and (ne $eta "") (ne $eta "00:00:00") }} · ETA: {{ $eta }}{{ end }}
+                </div>
+              </li>
             {{ end }}
           </ul>
         {{ end }}

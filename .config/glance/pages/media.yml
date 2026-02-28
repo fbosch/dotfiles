@@ -10,10 +10,6 @@
         - $include: ../widgets/media/real-debrid.yml
         - type: group
           widgets:
-            - $include: ../widgets/media/radarr-queue.yml
-            - $include: ../widgets/media/sonarr-queue.yml
-        - type: group
-          widgets:
             - $include: ../widgets/media/mdblist-movies.yml
             - $include: ../widgets/media/mdblist-weekly-movies.yml
             - $include: ../widgets/media/mdblist-top-movies.yml
