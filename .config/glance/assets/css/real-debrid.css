@@ -66,3 +66,24 @@
 .rd-state-dead .rd-state-dot {
   background: var(--color-negative);
 }
+
+/* Progress bar colors based on download state */
+.rd-item .progress-value {
+  background: var(--color-positive); /* Green for active downloads */
+}
+
+.rd-state-pending ~ .progress-bar .progress-value,
+.rd-state-magnet ~ .progress-bar .progress-value,
+.rd-state-waiting ~ .progress-bar .progress-value,
+.rd-state-compressing ~ .progress-bar .progress-value {
+  background: var(--color-primary); /* Blue for pending/processing */
+}
+
+.rd-state-done ~ .progress-bar .progress-value {
+  background: var(--color-text-base); /* Base color for completed */
+}
+
+.rd-state-error ~ .progress-bar .progress-value,
+.rd-state-dead ~ .progress-bar .progress-value {
+  background: var(--color-negative); /* Red for errors */
+}
