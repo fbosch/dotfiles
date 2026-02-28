@@ -4,6 +4,7 @@
   cache: 30s
   options:
     mock: "true"
+    rd-api-key: ${RD_API_KEY}
   url: https://api.real-debrid.com/rest/1.0/user
   headers:
     Authorization: Bearer ${RD_API_KEY}
@@ -146,8 +147,13 @@
       }
     </style>
 
+    {{ $rdApiKey := "" }}
+    {{ if not $mock }}
+      {{ $rdApiKey = .Options.StringOr "rd-api-key" "" }}
+    {{ end }}
+
     {{ if $mock }}
-    <div data-rd-live data-rd-api-key="${RD_API_KEY}" data-rd-has-active="true">
+    <div data-rd-live data-rd-api-key="{{ $rdApiKey }}" data-rd-has-active="true">
       <div class="rd-summary">
         <div class="rd-stat">
           <div class="rd-stat-label">Active</div>
@@ -202,7 +208,7 @@
       {{ $hours := div (mod $premiumSeconds 86400) 3600 }}
       {{ $activeList := $active.JSON.Array "" }}
       {{ $hasActive := gt (len $activeList) 0 }}
-    <div data-rd-live data-rd-api-key="${RD_API_KEY}" data-rd-has-active="{{ $hasActive }}">
+    <div data-rd-live data-rd-api-key="{{ $rdApiKey }}" data-rd-has-active="{{ $hasActive }}">
       <div class="rd-summary">
         <div class="rd-stat">
           <div class="rd-stat-label">Active</div>
@@ -273,7 +279,7 @@
         </ul>
       {{ end }}
     {{ else }}
-    <div data-rd-live data-rd-api-key="${RD_API_KEY}" data-rd-has-active="false">
+    <div data-rd-live data-rd-api-key="{{ $rdApiKey }}" data-rd-has-active="false">
       {{ if or (eq .Response.StatusCode 401) (eq .Response.StatusCode 403) (eq $active.Response.StatusCode 401) (eq $active.Response.StatusCode 403) }}
         <p class="color-negative">Real-Debrid auth failed. Check RD_API_KEY.</p>
       {{ else if or (eq .Response.StatusCode 429) (eq $active.Response.StatusCode 429) }}
@@ -281,5 +287,5 @@
       {{ else }}
         <p class="color-negative">Failed to fetch Real-Debrid data.</p>
       {{ end }}
-    {{ end }}
     </div>
+    {{ end }}
