@@ -17,4 +17,5 @@
             - $include: ../widgets/media/mdblist-anime.yml
     - size: small
       widgets:
+        - $include: ../widgets/gluetun-vpn-status.yml
         - $include: ../widgets/media/prowlarr-indexers.yml
