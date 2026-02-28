@@ -10,8 +10,10 @@
         - type: group
           widgets:
             - $include: ../widgets/media/mdblist-movies.yml
+            - $include: ../widgets/media/mdblist-weekly-movies.yml
             - $include: ../widgets/media/mdblist-top-movies.yml
             - $include: ../widgets/media/mdblist-tv-shows.yml
+            - $include: ../widgets/media/mdblist-popular-shows.yml
     - size: small
       widgets:
         - $include: ../widgets/media/prowlarr-indexers.yml

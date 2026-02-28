@@ -1,6 +1,5 @@
 - $include: mdblist-movies-base.yml
-  title: Random Picks
+  title: Trending
   options:
     list-user: "garycrawfordgc"
-    list-name: "top-movies"
-    sort: "random"
+    list-name: "top-movies-of-the-week"

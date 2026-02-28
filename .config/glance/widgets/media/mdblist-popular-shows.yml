@@ -1,0 +1,6 @@
+- $include: mdblist-shows-base.yml
+  title: Popular Shows
+  options:
+    list-user: "snoak"
+    list-name: "imdb-most-popular-shows"
+    sort: "random"
