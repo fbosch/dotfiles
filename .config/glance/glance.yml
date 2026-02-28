@@ -87,6 +87,7 @@ document:
     
     <!-- Widget-specific CSS -->
     <link rel="stylesheet" href="/assets/css/real-debrid.css">
+    <link rel="stylesheet" href="/assets/css/plex.css">
 
 pages:
   - $include: pages/startpage.yml

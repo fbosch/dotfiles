@@ -1,6 +1,7 @@
 - type: custom-api
-  title: Plex Recently Added
-  cache: 10m
+  title: Recently Added
+  title-url: https://plex.corvus-corax.synology.me
+  cache: 5m
   options:
     base-url: "https://plex.corvus-corax.synology.me"
     api-key: ${PLEX_TOKEN}
@@ -19,8 +20,6 @@
     {{ if or (eq $baseURL "") (eq $apiKey "") (eq $machineId "") }}
       <p class="color-negative">Set Plex base URL, API token, and machine ID in this widget options block.</p>
     {{ else }}
-      <link rel="stylesheet" href="/assets/css/plex.css">
-
       {{ $call := newRequest (concat $baseURL "/library/recentlyAdded")
         | withHeader "Accept" "application/json"
         | withHeader "X-Plex-Token" $apiKey
@@ -41,13 +40,6 @@
               <div class="cards-horizontal carousel-items-container" style="--cards-per-row: 6;">
                 {{ range $items }}
                   {{ $itemType := .String "type" }}
-                  {{ $typeClass := "item" }}
-                  {{ if eq $itemType "movie" }}{{ $typeClass = "movie" }}
-                  {{ else if eq $itemType "episode" }}{{ $typeClass = "episode" }}
-                  {{ else if eq $itemType "season" }}{{ $typeClass = "season" }}
-                  {{ else if eq $itemType "show" }}{{ $typeClass = "show" }}
-                  {{ end }}
-
                   {{ $title := .String "title" }}
                   {{ if eq $itemType "episode" }}
                     {{ $title = concat (.String "grandparentTitle") " — " (.String "title") }}
@@ -84,17 +76,9 @@
 
           {{ else }}
 
-            <ul class="plex-added-list list-unstyled">
+            <ul class="list list-gap-14">
               {{ range $items }}
                 {{ $itemType := .String "type" }}
-                {{ $typeClass := "item" }}
-                {{ $typeTitle := "Item" }}
-                {{ if eq $itemType "movie" }}{{ $typeClass = "movie" }}{{ $typeTitle = "Movie" }}
-                {{ else if eq $itemType "episode" }}{{ $typeClass = "episode" }}{{ $typeTitle = "Episode" }}
-                {{ else if eq $itemType "season" }}{{ $typeClass = "season" }}{{ $typeTitle = "Season" }}
-                {{ else if eq $itemType "show" }}{{ $typeClass = "show" }}{{ $typeTitle = "Show" }}
-                {{ end }}
-
                 {{ $title := .String "title" }}
                 {{ if eq $itemType "episode" }}
                   {{ $title = concat (.String "grandparentTitle") " — " (.String "title") }}
@@ -112,18 +96,20 @@
 
                 {{ $addedAt := .String "addedAt" | parseRelativeTime "unix" }}
 
-                <li class="plex-added-item">
-                  {{ if ne $thumbURL "" }}
-                    <img class="plex-added-poster" src="{{ $thumbURL | safeURL }}" alt="{{ $title }} poster" loading="lazy" />
-                  {{ end }}
-                  <div class="plex-added-body">
-                    <div class="plex-added-head">
-                      <a href="{{ $itemURL | safeURL }}" target="_blank" rel="noreferrer" class="text-truncate color-primary-if-not-visited">{{ $title }}</a>
+                <li>
+                  <a href="{{ $itemURL | safeURL }}" target="_blank" rel="noreferrer" class="plex-added-item">
+                    {{ if ne $thumbURL "" }}
+                      <img class="plex-added-poster" src="{{ $thumbURL | safeURL }}" alt="{{ $title }} poster" loading="lazy" />
+                    {{ end }}
+                    <div class="plex-added-body">
+                      <div class="plex-added-head">
+                        <span class="text-truncate color-primary-if-not-visited">{{ $title }}</span>
+                      </div>
+                      <div class="size-h6 color-paragraph">
+                        {{ if gt (.Int "year") 0 }}{{ .Int "year" }} · {{ end }}<span {{ $addedAt }}></span> ago
+                      </div>
                     </div>
-                    <div class="size-h6 color-paragraph">
-                      {{ if gt (.Int "year") 0 }}{{ .Int "year" }} · {{ end }}<span {{ $addedAt }}></span> ago
-                    </div>
-                  </div>
+                  </a>
                 </li>
               {{ end }}
             </ul>
