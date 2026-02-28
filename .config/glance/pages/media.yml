@@ -12,8 +12,14 @@
             - $include: ../widgets/media/mdblist-movies.yml
             - $include: ../widgets/media/mdblist-weekly-movies.yml
             - $include: ../widgets/media/mdblist-top-movies.yml
+        - type: group
+          widgets:
             - $include: ../widgets/media/mdblist-tv-shows.yml
             - $include: ../widgets/media/mdblist-popular-shows.yml
+        - type: group
+          widgets:
+            - $include: ../widgets/media/mdblist-anime-latest.yml
+            - $include: ../widgets/media/mdblist-anime-popular.yml
             - $include: ../widgets/media/mdblist-anime.yml
     - size: small
       widgets:
