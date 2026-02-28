@@ -2,7 +2,6 @@
 description: Gathers information from docs, web, and codebases without making changes
 mode: all
 color: primary
-model: openai/gpt-5.3-codex
 temperature: 0.2
 tools:
   write: false

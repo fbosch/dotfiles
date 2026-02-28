@@ -104,20 +104,7 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         return 1
     end
 
-    # Extract conventional commit line
-    set -l commit_msg ""
-    set -l cleaned (echo "$raw_output" | sed 's/```[a-z]*//g' | string trim)
-    for line in (echo "$cleaned" | string split "\n")
-        test -z "$line"; and continue
-        if string match -qr '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?: ' -- "$line"
-            set commit_msg "$line"
-            break
-        end
-    end
-    # Fallback: first non-empty line
-    if test -z "$commit_msg"
-        set commit_msg (echo "$cleaned" | string split "\n" | string match -r '^\S.*' | head -n 1)
-    end
+    set -l commit_msg (__extract_commit_msg "$raw_output")
 
     if test -z "$commit_msg"
         gum style " Failed to extract valid commit message"

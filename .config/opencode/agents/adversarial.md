@@ -2,7 +2,6 @@
 description: Actively tries to break a proposed design or implementation — failure modes, malicious inputs, stress cases. Use after spec.md, before merging risky changes, or for parsers, CLIs, config loaders, auth, and infra.
 mode: subagent
 color: error
-model: openai/gpt-5.3-codex
 temperature: 0.3
 tools:
   write: false
