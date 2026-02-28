@@ -37,3 +37,6 @@
     - dockerhub:postgres:16-alpine
     - dockerhub:mongo:latest
     - dockerhub:getmeili/meilisearch
+
+    # AI
+    - anomalyco/opencode
