@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-02-28T11:41:50.274Z",
+  "generatedAt": "2026-02-28T11:44:29.876Z",
   "toolVersion": "0.0.0",
   "sources": {
     "ags": {
@@ -11,7 +11,7 @@
       "fileCount": 12,
       "manifestSha256": "bc5aa60ba05c0aca149a8f74e5f40bd1693b875bdc88a82076702efde50d26c4",
       "rulesSha256": "d0dc18979f534e18311f4e49bdd6739e3be9e5c7e97d623c9825ad7cff190a45",
-      "updatedAt": "2026-02-28T11:41:50.274Z"
+      "updatedAt": "2026-02-28T11:44:29.876Z"
     },
     "vicinae-docs": {
       "repo": "https://github.com/vicinaehq/docs.git",
@@ -21,7 +21,7 @@
       "fileCount": 8,
       "manifestSha256": "b5c6bf86eb46ec484c3db8bcf73cfaeeb1504d616a749374ff3da567250fef12",
       "rulesSha256": "9eeb141726160fa429a21b24d6220b5dce6ffb4c44a06d54a0fc3cb492318f4a",
-      "updatedAt": "2026-02-28T11:41:50.274Z"
+      "updatedAt": "2026-02-28T11:44:29.876Z"
     },
     "hyprland-wiki": {
       "repo": "https://github.com/hyprwm/hyprland-wiki.git",
@@ -31,7 +31,7 @@
       "fileCount": 25,
       "manifestSha256": "efff98e06713ca80465a4daf4a1b5399aaa29ae819574721c4948fe78b2e60d7",
       "rulesSha256": "9711428153e452825f0368860d30401cea3ed5f5e90d569d70558c392fe0dc83",
-      "updatedAt": "2026-02-28T11:41:50.274Z"
+      "updatedAt": "2026-02-28T11:44:29.876Z"
     },
     "waybar": {
       "repo": "https://github.com/Alexays/Waybar.wiki.git",
@@ -41,7 +41,7 @@
       "fileCount": 2,
       "manifestSha256": "6ce880bf38b379777e79aa3ba0909f4351f89b3a6c39df253a3c357948d2d865",
       "rulesSha256": "b081a738d08a508e04d08ab700ae515252de04000d5108b2ae3cbcf211ac1a8c",
-      "updatedAt": "2026-02-28T11:41:50.274Z"
+      "updatedAt": "2026-02-28T11:44:29.876Z"
     },
     "glance": {
       "repo": "https://github.com/glanceapp/glance",
@@ -51,7 +51,7 @@
       "fileCount": 6,
       "manifestSha256": "e7d88341a5b021a859a819329fcedd6117cbecd0c9778e318530762d806a7aad",
       "rulesSha256": "292a912375f27e4d0426baae461ae7a8c300a1f84c557d8cf7421743fb8b1fde",
-      "updatedAt": "2026-02-28T11:41:50.274Z"
+      "updatedAt": "2026-02-28T11:44:29.876Z"
     }
   }
 }

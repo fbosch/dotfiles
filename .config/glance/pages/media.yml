@@ -5,8 +5,8 @@
         - $include: ../widgets/media-services-monitor.yml
     - size: full
       widgets:
+        - $include: ../widgets/media-plex-recently-added.yml
         - $include: ../widgets/media-real-debrid.yml
     - size: small
       widgets:
         - $include: ../widgets/media-prowlarr-indexers.yml
-        - $include: ../widgets/media-plex-recently-added.yml
