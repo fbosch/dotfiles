@@ -3,10 +3,15 @@
     - size: small
       widgets:
         - $include: ../widgets/media/services-monitor.yml
+        - $include: ../widgets/gluetun-vpn-status.yml
+        - $include: ../widgets/media/prowlarr-indexers.yml
     - size: full
       widgets:
-        - $include: ../widgets/media/plex-recently-added.yml
         - $include: ../widgets/media/real-debrid.yml
+        - type: group
+          widgets:
+            - $include: ../widgets/media/radarr-queue.yml
+            - $include: ../widgets/media/sonarr-queue.yml
         - type: group
           widgets:
             - $include: ../widgets/media/mdblist-movies.yml
@@ -23,5 +28,4 @@
             - $include: ../widgets/media/mdblist-anime.yml
     - size: small
       widgets:
-        - $include: ../widgets/gluetun-vpn-status.yml
-        - $include: ../widgets/media/prowlarr-indexers.yml
+        - $include: ../widgets/media/plex-recently-added.yml

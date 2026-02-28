@@ -5,8 +5,8 @@
     base-url: "https://plex.corvus-corax.synology.me"
     api-key: ${PLEX_TOKEN}
     machine-id: "527fd9cb40e644876667e21682d049ec24466835"
-    limit: 6
-    layout: horizontal
+    limit: 10
+    layout: vertical
   template: |
     {{ $baseURL := .Options.StringOr "base-url" "" }}
     {{ $apiKey := .Options.StringOr "api-key" "" }}

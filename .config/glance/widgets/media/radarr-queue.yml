@@ -1,0 +1,61 @@
+- type: custom-api
+  title: Radarr Queue
+  cache: 1m
+  options:
+    base-url: "https://radarr.corvus-corax.synology.me"
+    api-key: ${RADARR_API_KEY}
+  template: |
+    {{ $baseURL := .Options.StringOr "base-url" "" }}
+    {{ $apiKey := .Options.StringOr "api-key" "" }}
+
+    {{ if or (eq $baseURL "") (eq $apiKey "") }}
+      <p class="color-negative">Set Radarr base URL and API key in widget options.</p>
+    {{ else }}
+      {{ $call := newRequest (concat $baseURL "/api/v3/queue")
+        | withHeader "Accept" "application/json"
+        | withHeader "X-Api-Key" $apiKey
+        | withParameter "page" "1"
+        | withParameter "pageSize" "50"
+        | withParameter "includeUnknownMovieItems" "false"
+        | getResponse }}
+
+      {{ if eq $call.Response.StatusCode 200 }}
+        {{ $records := $call.JSON.Array "records" }}
+        {{ $activeCount := 0 }}
+        {{ range $records }}
+          {{ $status := .String "status" }}
+          {{ $eta := .String "timeleft" }}
+          {{ if and (or (eq $status "downloading") (eq $status "queued")) (ne $eta "00:00:00") (ne $eta "") }}
+            {{ $activeCount = add $activeCount 1 }}
+          {{ end }}
+        {{ end }}
+        
+        {{ if eq $activeCount 0 }}
+          <p>No active downloads.</p>
+        {{ else }}
+          <ul class="list-unstyled">
+            {{ range $records }}
+              {{ $title := .String "title" }}
+              {{ $status := .String "status" }}
+              {{ $eta := .String "timeleft" }}
+              {{ $downloadClient := .String "downloadClient" }}
+
+              {{ if and (or (eq $status "downloading") (eq $status "queued")) (ne $eta "00:00:00") (ne $eta "") }}
+                <li class="margin-block-10">
+                  <div class="size-h5">{{ $title }}</div>
+                  <div class="size-h6 color-paragraph margin-top-5">
+                    {{ $status }}
+                    {{ if ne $downloadClient "" }} · {{ $downloadClient }}{{ end }}
+                    {{ if ne $eta "" }} · ETA: {{ $eta }}{{ end }}
+                  </div>
+                </li>
+              {{ end }}
+            {{ end }}
+          </ul>
+        {{ end }}
+      {{ else if or (eq $call.Response.StatusCode 401) (eq $call.Response.StatusCode 403) }}
+        <p class="color-negative">Radarr auth failed. Check API key.</p>
+      {{ else }}
+        <p class="color-negative">Failed to fetch queue from Radarr.</p>
+      {{ end }}
+    {{ end }}
