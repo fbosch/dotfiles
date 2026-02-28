@@ -58,6 +58,7 @@ document:
     <link rel="prefetch" href="/home">
     <link rel="prefetch" href="/news">
     <link rel="prefetch" href="/markets">
+    <link rel="prefetch" href="/media">
     <link rel="prefetch" href="/tech">
     <link rel="prefetch" href="/homelab">
     <link rel="prefetch" href="/gaming">
@@ -66,6 +67,7 @@ document:
     <link rel="prefetch" href="/api/pages/home/content/" as="fetch">
     <link rel="prefetch" href="/api/pages/news/content/" as="fetch">
     <link rel="prefetch" href="/api/pages/markets/content/" as="fetch">
+    <link rel="prefetch" href="/api/pages/media/content/" as="fetch">
     <link rel="prefetch" href="/api/pages/tech/content/" as="fetch">
     <link rel="prefetch" href="/api/pages/homelab/content/" as="fetch">
     <link rel="prefetch" href="/api/pages/gaming/content/" as="fetch">
@@ -83,6 +85,7 @@ pages:
   - $include: pages/home.yml
   - $include: pages/news.yml
   - $include: pages/markets.yml
+  - $include: pages/media.yml
   - $include: pages/gaming.yml
   - $include: pages/tech.yml
   - $include: pages/homelab.yml

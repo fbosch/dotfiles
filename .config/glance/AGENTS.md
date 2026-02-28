@@ -16,3 +16,4 @@ Configuration for Glance dashboard pages, widgets, and assets.
 - `widgets/`
 - `assets/README.md`
 - `scripts/`
+- `docs/agents/TOC.md`

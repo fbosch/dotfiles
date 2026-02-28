@@ -11,17 +11,17 @@
           cache: 3h
           limit: 30
           collapse-after-rows: 2
-          channels:
-            - UCt2pDeWgqr7LM8cOOLt-EeQ # gameranxTV
-            - UCsvn_Po0SmunchJYOWpOxMg # videogamedunkey
-            - UCD6VugMZKRhSyzWEWA9W2fg # SsethTzeentach
-            - UCB43KPFqsYYlbrpkyzgvyyA # SmallAntClips
-            - UCaU_wCkiwjScE0-uDn8A2mw # Warcraft
-            - UClN-MDXmXBmCGwve2I4Rf4g # MrGM
-            - UCr_1FPJjbTVPZbJBzrmwbpA # kweebec
-            - UChs5fg_hUFAfc2mPsGy4kRA # madseasonshow
-            - UCdXS4lB7Y0VtAbqTKmZ-L6Q # PolybiusLivy
-            - UCHsM94f-8Z3bYro3SWFt3vg # Hazelnuttygames
+          playlists:
+            - UUt2pDeWgqr7LM8cOOLt-EeQ # gameranxTV
+            - UUsvn_Po0SmunchJYOWpOxMg # videogamedunkey
+            - UUD6VugMZKRhSyzWEWA9W2fg # SsethTzeentach
+            - UUB43KPFqsYYlbrpkyzgvyyA # SmallAntClips
+            - UUaU_wCkiwjScE0-uDn8A2mw # Warcraft
+            - UUlN-MDXmXBmCGwve2I4Rf4g # MrGM
+            - UUr_1FPJjbTVPZbJBzrmwbpA # kweebec
+            - UUhs5fg_hUFAfc2mPsGy4kRA # madseasonshow
+            - UUdXS4lB7Y0VtAbqTKmZ-L6Q # PolybiusLivy
+            - UUHsM94f-8Z3bYro3SWFt3vg # Hazelnuttygames
         - type: group
           widgets:
             - $include: ../widgets/gaming-rss.yml

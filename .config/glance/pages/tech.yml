@@ -10,49 +10,49 @@
               cache: 3h
               limit: 30
               collapse-after-rows: 2
-              channels:
-                - UCeeFfhMcJa1kjtfZAGskOCA # Techlinked
-                - UC5I2hjZYiW9gZPVkvzM8_Cw # Techmoan
-                - UCGkpFfEMF0eMJlh9xXj2lMw # ColdFusion
-                - UCRYOj4DmyxhBVrdvbsUwmAA # optimumtech
-                - UC9NvvQt2EvId9ZqnVUol5zA # AltRepo
+              playlists:
+                - UUeeFfhMcJa1kjtfZAGskOCA # Techlinked
+                - UU5I2hjZYiW9gZPVkvzM8_Cw # Techmoan
+                - UUGkpFfEMF0eMJlh9xXj2lMw # ColdFusion
+                - UURYOj4DmyxhBVrdvbsUwmAA # optimumtech
+                - UU9NvvQt2EvId9ZqnVUol5zA # AltRepo
             - type: videos
               title: Development
               style: horizontal-cards
               cache: 3h
               limit: 30
               collapse-after-rows: 2
-              channels:
-                - UCsBjURrPoezykLs9EqgamOA # Fireship
-                - UCFbNIlppjAuEX4znoulh0Cw # Web Dev Simplified
-                - UC6biysICWOJ-C3P4Tyeggzg # LowLevelTV
-                - UCFVteOob_YXJHPaGTqlDV2Q # codehead01
-                - UC9-y-6csu5WGm29I7JiwpnA # Computerphile
-                - UCbRP3c757lWg9M-U7TyEkXA # t3dotgg
-                - UCEEVcDuBRDiwxfXAgQjLGug # dreamsofautonomy
-                - UC-0fWjosItIOD4ThhS6oyfA # DeveloperVoices
-                - UCNzszbnvQeFzObW0ghk0Ckw # DavesGarage
-                - UCTdw38Cw6jcm0atBPA39a0Q # NDC
-                - UCUMwY9iS8oMyWDYIe6_RmoA # NoBoilerplate
-                - UCfJRkBBiPtKZyZn_3PxWaiQ # Internet of Bugs
-                - UCVeW9qkBjo3zosnqUbG7CFw # John Hammond
+              playlists:
+                - UUsBjURrPoezykLs9EqgamOA # Fireship
+                - UUFbNIlppjAuEX4znoulh0Cw # Web Dev Simplified
+                - UU6biysICWOJ-C3P4Tyeggzg # LowLevelTV
+                - UUFVteOob_YXJHPaGTqlDV2Q # codehead01
+                - UU9-y-6csu5WGm29I7JiwpnA # Computerphile
+                - UUbRP3c757lWg9M-U7TyEkXA # t3dotgg
+                - UUEEVcDuBRDiwxfXAgQjLGug # dreamsofautonomy
+                - UU-0fWjosItIOD4ThhS6oyfA # DeveloperVoices
+                - UUNzszbnvQeFzObW0ghk0Ckw # DavesGarage
+                - UUTdw38Cw6jcm0atBPA39a0Q # NDC
+                - UUUMwY9iS8oMyWDYIe6_RmoA # NoBoilerplate
+                - UUfJRkBBiPtKZyZn_3PxWaiQ # Internet of Bugs
+                - UUVeW9qkBjo3zosnqUbG7CFw # John Hammond
             - type: videos
               title: Linux
               style: horizontal-cards
               cache: 3h
               limit: 30
               collapse-after-rows: 2
-              channels:
-                - UCR-DXc1voovS8nhAvccRZhg # Jeff Geerling
-                - UC2eYFnH61tmytImy1mTYvhA # Luke Smith
-                - UCld68syR8Wi-GY_n4CaoJGA # Brodie Robertson
-                - UC7YOGHUfC1Tb6E4pudI9STA # Mental Outlaw
-                - UCs6KfncB4OV6Vug4o_bzijg # Techlore
-                - UCd4XwUn2Lure2NHHjukoCwA # LinuxForEveryone
-                - UC65_CVnMw6hvPET_DRDg3GA # tony-btw
-                - UCwHwDuNd9lCdA7chyyquDXw # BreadOnPenguins
-                - UC_zBdZ0_H_jn41FDRG7q4Tw # vimjoyer
-                - UC3yaWWA9FF9OBog5U9ml68A # SavvyNik
+              playlists:
+                - UUR-DXc1voovS8nhAvccRZhg # Jeff Geerling
+                - UU2eYFnH61tmytImy1mTYvhA # Luke Smith
+                - UUld68syR8Wi-GY_n4CaoJGA # Brodie Robertson
+                - UU7YOGHUfC1Tb6E4pudI9STA # Mental Outlaw
+                - UUs6KfncB4OV6Vug4o_bzijg # Techlore
+                - UUd4XwUn2Lure2NHHjukoCwA # LinuxForEveryone
+                - UU65_CVnMw6hvPET_DRDg3GA # tony-btw
+                - UUwHwDuNd9lCdA7chyyquDXw # BreadOnPenguins
+                - UU_zBdZ0_H_jn41FDRG7q4Tw # vimjoyer
+                - UU3yaWWA9FF9OBog5U9ml68A # SavvyNik
         - type: split-column
           widgets:
             - type: group
