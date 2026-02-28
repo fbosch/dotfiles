@@ -1,5 +1,6 @@
 - type: custom-api
   title: Real-Debrid
+  title-url: https://real-debrid.com/torrents
   cache: 30s
   options:
     mock: "true"
