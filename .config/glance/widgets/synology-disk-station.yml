@@ -3,7 +3,7 @@
   title: NAS
   title-url: https://corvus-corax.synology.me/
   options:
-    nas-url: ${SYNOLOGY_URL}
+    nas-url: https://corvus-corax.synology.me
     username: ${SYNOLOGY_USERNAME}
     password: ${SYNOLOGY_PASSWORD}
   template: |

@@ -102,15 +102,15 @@
           limit: 25
           cache: 3h
           collapse-after-rows: 2
-          channels:
-            - UCbta0n8i6Rljh0obO7HzG9A # Joseph Carlson Show
-            - UCNVr1q4r6hr_H98Th0t50rA # Tsg1987
-            - UC1LpsuAUaKoMzzJSEt5WImw # Asianometry
-            - UCFCEuCsyWP0YkP3CZ3Mr01Q # The Plain Bagel
-            - UCASM0cgfkJxQ1ICmRilfHLw # Patrick Boyle
-            - UCCKpicnIwBP3VPxBAZWDeNA # Money & Macro
-            - UCoUxsWakJucWg46KW5RsvPw # Financial Times
-            - UCZ4AMrDcNrfy3X6nsU8-rPg # Economics Explained
+          playlists:
+            - UUbta0n8i6Rljh0obO7HzG9A # Joseph Carlson Show
+            - UUNVr1q4r6hr_H98Th0t50rA # Tsg1987
+            - UU1LpsuAUaKoMzzJSEt5WImw # Asianometry
+            - UUFCEuCsyWP0YkP3CZ3Mr01Q # The Plain Bagel
+            - UUASM0cgfkJxQ1ICmRilfHLw # Patrick Boyle
+            - UUCKpicnIwBP3VPxBAZWDeNA # Money & Macro
+            - UUoUxsWakJucWg46KW5RsvPw # Financial Times
+            - UUZ4AMrDcNrfy3X6nsU8-rPg # Economics Explained
         - type: bookmarks
           groups:
             - title: Portfolio & Trading

@@ -43,16 +43,6 @@ return {
 					return ok and result ~= nil and result ~= ""
 				end,
 			},
-			{
-				function()
-					local _, result = pcall(opencode_zen_stats.statusline_component)
-					return result
-				end,
-				cond = function()
-					local ok, result = pcall(opencode_zen_stats.statusline_component)
-					return ok and result ~= nil and result ~= ""
-				end,
-			},
 		}
 
 		-- Make git components conditional on current buffer being in a git repo

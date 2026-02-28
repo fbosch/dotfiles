@@ -1,0 +1,59 @@
+.plex-added-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.plex-added-item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  border: 1px solid var(--color-widget-content-border);
+  border-radius: var(--border-radius);
+  padding: 0.6rem;
+}
+
+.plex-added-poster {
+  width: 44px;
+  aspect-ratio: 2/3;
+  object-fit: cover;
+  border-radius: calc(var(--border-radius) - 2px);
+  flex-shrink: 0;
+}
+
+.plex-added-body {
+  min-width: 0;
+  flex-grow: 1;
+  text-align: left;
+  margin-left: 0.4rem;
+}
+
+.plex-added-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.plex-added-kind {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+  margin-top: 0.35rem;
+  background: var(--color-text-tertiary);
+}
+
+.plex-added-kind-movie {
+  background: var(--color-primary);
+}
+
+.plex-added-kind-episode,
+.plex-added-kind-show {
+  background: var(--color-positive);
+}
+
+.plex-added-kind-season {
+  background: color-mix(in srgb, var(--color-primary) 60%, var(--color-negative));
+}

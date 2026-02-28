@@ -1,0 +1,25 @@
+- type: monitor
+  cache: 1m
+  title: Media Services
+  sites:
+    - title: Radarr
+      url: https://radarr.corvus-corax.synology.me
+      icon: sh:radarr-light
+    - title: Sonarr
+      url: https://sonarr.corvus-corax.synology.me
+      icon: sh:sonarr-light
+    - title: Prowlarr
+      url: https://prowlarr.corvus-corax.synology.me
+      icon: sh:prowlarr-light
+    - title: Bazarr
+      url: https://bazarr.corvus-corax.synology.me
+      icon: sh:bazarr-light
+    - title: Lidarr
+      url: https://lidarr.corvus-corax.synology.me
+      icon: sh:lidarr-light
+    - title: rdtclient
+      url: https://rdtclient.corvus-corax.synology.me
+      icon: si:docker
+    - title: Plex
+      url: https://plex.corvus-corax.synology.me/web/index.html#!/
+      icon: sh:plex-light

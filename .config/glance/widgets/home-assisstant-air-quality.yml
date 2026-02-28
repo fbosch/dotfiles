@@ -1,7 +1,7 @@
 - type: custom-api
   title: Indoor Air Quality
   cache: 10m
-  url: ${HASS_URL}/api/states
+  url: https://ha.corvus-corax.synology.me/api/states
   headers:
     Authorization: "Bearer ${HASS_API_KEY}"
     Content-Type: "application/json"

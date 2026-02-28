@@ -2,13 +2,13 @@
   title: Location
   hide-header: true
   cache: 2m
-  url: ${HASS_URL}/api/states/device_tracker.frederiks_iphone_2
+  url: https://ha.corvus-corax.synology.me/api/states/device_tracker.frederiks_iphone_2
   headers:
     Authorization: "Bearer ${HASS_API_KEY}"
     Content-Type: "application/json"
   subrequests:
     julie:
-      url: ${HASS_URL}/api/states/device_tracker.jul_iphone
+      url: https://ha.corvus-corax.synology.me/api/states/device_tracker.jul_iphone
       headers:
         Authorization: "Bearer ${HASS_API_KEY}"
         Content-Type: "application/json"

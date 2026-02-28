@@ -9,13 +9,13 @@
           cache: 1h
           limit: 25
           collapse-after: 8
-          channels:
-            - UCPPfK7Nq_yQR84rn1wcTXBg # Anders Puck
-            - UC8tSbn8Q4rnsSQPY-1kzXuw # P3 Essensen
-            - UCaI7XFGj8cSLD0OA8B9pcnQ # Baltic Defence Review
-            - UC-eegKVWEgBCa4OzjnK_PtA # TLDR EU
-            - UC-uhvujip5deVcEtLxnW8qg # TLDR Global
-            - UC8KFs307LrTkQCu-P1Fl6dw # EU Made Simple
+          playlists:
+            - UUPPfK7Nq_yQR84rn1wcTXBg # Anders Puck
+            - UU8tSbn8Q4rnsSQPY-1kzXuw # P3 Essensen
+            - UUaI7XFGj8cSLD0OA8B9pcnQ # Baltic Defence Review
+            - UU-eegKVWEgBCa4OzjnK_PtA # TLDR EU
+            - UU-uhvujip5deVcEtLxnW8qg # TLDR Global
+            - UU8KFs307LrTkQCu-P1Fl6dw # EU Made Simple
     - size: full
       widgets:
         - type: group
