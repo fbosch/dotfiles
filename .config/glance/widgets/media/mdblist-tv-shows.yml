@@ -37,9 +37,9 @@
                 {{ $year := .Int "release_year" }}
                 {{ $imdbId := .String "imdb_id" }}
                 {{ $poster := .String "poster" }}
-                {{ $imdbUrl := printf "https://www.imdb.com/title/%s/" $imdbId }}
+                {{ $sonarrUrl := printf "https://sonarr.corvus-corax.synology.me/add/new?term=%s" $title }}
                 
-                <a href="{{ $imdbUrl | safeURL }}" target="_blank" rel="noreferrer" class="card plex-card widget-content-frame">
+                <a href="{{ $sonarrUrl | safeURL }}" target="_blank" rel="noreferrer" class="card plex-card widget-content-frame">
                   {{ if ne $poster "" }}
                     <img class="plex-card-image" src="{{ $poster | safeURL }}" alt="{{ $title }} poster" loading="lazy" />
                   {{ end }}
