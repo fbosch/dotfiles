@@ -743,6 +743,11 @@
 
     searchContainer.classList.add("start-search-with-suggestions");
 
+    const backdrop = document.createElement("div");
+    backdrop.className = "start-linkwarden-backdrop";
+    backdrop.hidden = true;
+    document.body.appendChild(backdrop);
+
     const dropdown = document.createElement("ul");
     dropdown.className = "start-linkwarden-dropdown";
     dropdown.hidden = true;
@@ -750,6 +755,7 @@
     searchContainer.appendChild(dropdown);
 
     const state = {
+      backdrop,
       dropdown,
       matches: [],
       selectedIndex: -1,
@@ -1008,6 +1014,7 @@
       state.suggestionTimer = 0;
     }
 
+    state.backdrop.hidden = true;
     state.dropdown.hidden = true;
     state.dropdown.innerHTML = "";
   }
@@ -1111,6 +1118,7 @@
 
     state.dropdown.innerHTML = items.join("");
     state.dropdown.hidden = state.matches.length === 0;
+    state.backdrop.hidden = state.matches.length === 0;
 
     if (state.matches.length === 0) {
       return;
@@ -1465,6 +1473,20 @@
       "click",
       function (event) {
         const target = event.target;
+        
+        if (target instanceof Element && target.classList.contains("start-linkwarden-backdrop")) {
+          const inputs = document.querySelectorAll(".start-search .search-input");
+          for (let index = 0; index < inputs.length; index += 1) {
+            const state = getOrCreateState(inputs[index]);
+            if (!state) {
+              continue;
+            }
+
+            hideDropdown(state);
+          }
+          return;
+        }
+        
         if (target instanceof Element && target.closest(".start-search") !== null) {
           return;
         }
