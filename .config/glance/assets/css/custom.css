@@ -120,6 +120,17 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Improve text wrapping for headings and titles */
+h1, h2, h3,
+.size-h1, .size-h2, .size-h3 {
+  text-wrap: balance;
+}
+
+/* Better wrapping for body text and descriptions */
+p, .size-base {
+  text-wrap: pretty;
+}
+
 .widget-type-clock.large-clock {
   [data-local-time] {
     flex-direction: row-reverse;
@@ -178,156 +189,4 @@ body {
       Cantarell,
       sans-serif;
   }
-}
-
-.widget-type-search.start-search {
-  .widget-content-frame {
-    border-radius: 30px;
-  }
-}
-
-.widget-type-custom-api.start-linkwarden-index {
-  display: none;
-}
-
-.start-search-with-suggestions {
-  position: relative;
-}
-
-.start-linkwarden-dropdown {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 0.45rem);
-  z-index: 30;
-  margin: 0;
-  padding: 0.5rem;
-  list-style: none;
-  border-radius: var(--border-radius);
-  border: 1px solid var(--color-widget-content-border);
-  background: var(--color-widget-background);
-  box-shadow: 0 3px 0 0 var(--color-widget-content-border);
-}
-
-.start-linkwarden-dropdown-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border-radius: calc(var(--border-radius) - 4px);
-  padding: 0.75rem 0.9rem;
-  cursor: pointer;
-  border: 1px solid transparent;
-  min-height: 56px;
-}
-
-.start-linkwarden-dropdown-item:hover {
-  background: var(--color-widget-background-highlight);
-}
-
-.start-linkwarden-dropdown-main {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.8rem;
-  min-width: 0;
-}
-
-.start-linkwarden-dropdown-icon-wrap {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  overflow: hidden;
-  flex-shrink: 0;
-  background: color-mix(in hsl, var(--color-widget-content-border), transparent 20%);
-}
-
-.start-linkwarden-dropdown-icon-wrap.has-icon {
-  background: transparent;
-}
-
-.start-linkwarden-dropdown-icon-wrap.has-icon .start-linkwarden-dropdown-icon-fallback {
-  display: none;
-}
-
-.start-linkwarden-dropdown-icon-fallback {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--color-text-subdue);
-}
-
-.start-linkwarden-dropdown-icon {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  position: absolute;
-  inset: 0;
-  display: block;
-}
-
-.start-linkwarden-dropdown-icon[data-host="github.com"],
-.start-linkwarden-dropdown-icon[data-host="www.github.com"] {
-  filter: invert(1) brightness(1.15);
-}
-
-.start-linkwarden-dropdown-item.is-selected {
-  background: var(--color-widget-background-highlight);
-  border-color: var(--color-widget-content-border);
-  box-shadow: inset 2px 0 0 0 var(--color-primary);
-}
-
-.start-linkwarden-dropdown-item.is-selected .start-linkwarden-dropdown-title {
-  color: var(--color-primary);
-  font-weight: 600;
-}
-
-.start-linkwarden-dropdown-item.is-selected .start-linkwarden-dropdown-host {
-  color: color-mix(in hsl, var(--color-primary), var(--color-text-subdue) 45%);
-}
-
-.start-linkwarden-dropdown-item.is-selected .start-linkwarden-dropdown-icon-wrap {
-  outline: 1px solid color-mix(in hsl, var(--color-primary), transparent 60%);
-}
-
-.start-linkwarden-dropdown-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 1.2rem;
-  color: var(--color-text-base);
-}
-
-.start-linkwarden-dropdown-host {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  color: var(--color-text-subdue);
-  font-size: 1.06rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 46%;
-}
-
-.start-linkwarden-dropdown-enter {
-  display: none;
-  color: var(--color-text-base);
-  font-size: 0.95rem;
-  font-weight: 600;
-  line-height: 1;
-  padding: 0.3rem 0.55rem;
-  border-radius: 0.35rem;
-  border: 1px solid var(--color-widget-content-border);
-  background: var(--color-widget-background-highlight);
-  box-shadow: 0 1px 0 0 var(--color-widget-content-border);
-  opacity: 1;
-}
-
-.start-linkwarden-dropdown-item.is-selected .start-linkwarden-dropdown-enter {
-  display: inline-flex;
-  color: var(--color-primary);
-  border-color: color-mix(in hsl, var(--color-primary), var(--color-widget-content-border) 45%);
 }

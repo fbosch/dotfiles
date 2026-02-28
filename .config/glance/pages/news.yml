@@ -7,7 +7,7 @@
           style: vertical-list
           css-class: sticky
           cache: 1h
-          limit: 25
+          limit: 12
           collapse-after: 8
           playlists:
             - UUPPfK7Nq_yQR84rn1wcTXBg # Anders Puck

@@ -1,7 +1,64 @@
-.plex-added-list {
-  display: grid;
-  gap: 0.75rem;
+/* horizontal-cards-2 style: poster fills card, gradient overlay, text pinned to bottom */
+.plex-card {
+  position: relative;
+  aspect-ratio: 2/3;
+  overflow: hidden;
 }
+
+.plex-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    0deg,
+    var(--color-widget-background),
+    hsla(var(--color-widget-background-hsl-values), 0.8) 6rem, transparent 14rem
+  );
+  z-index: 2;
+}
+
+.plex-card-image {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: calc(var(--border-radius) + 1px);
+  opacity: 0.9;
+  z-index: 1;
+}
+
+.plex-card-content {
+  position: absolute;
+  inset-inline: 0;
+  bottom: var(--widget-content-vertical-padding);
+  z-index: 3;
+}
+
+.plex-card-content > .color-highlight {
+  text-wrap: balance; /* Balance title text across lines */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plex-card-kind {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 0.3rem;
+  background: var(--color-text-subdue);
+}
+
+.plex-card-kind-movie  { background: var(--color-primary); }
+.plex-card-kind-episode,
+.plex-card-kind-show   { background: var(--color-positive); }
+.plex-card-kind-season { background: color-mix(in srgb, var(--color-primary) 60%, var(--color-negative)); }
 
 .plex-added-item {
   display: flex;
@@ -10,6 +67,12 @@
   border: 1px solid var(--color-widget-content-border);
   border-radius: var(--border-radius);
   padding: 0.6rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.plex-added-item:hover {
+  border-color: var(--color-primary);
 }
 
 .plex-added-poster {
@@ -36,13 +99,23 @@
   margin-bottom: 0.35rem;
 }
 
+.plex-added-head > .text-truncate {
+  text-wrap: balance; /* Balance title text in list items */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal; /* Override text-truncate's nowrap */
+}
+
 .plex-added-kind {
   width: 0.55rem;
   height: 0.55rem;
   border-radius: 999px;
   flex-shrink: 0;
   margin-top: 0.35rem;
-  background: var(--color-text-tertiary);
+  background: var(--color-text-subdue);
 }
 
 .plex-added-kind-movie {

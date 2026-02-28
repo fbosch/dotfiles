@@ -145,24 +145,7 @@ STAGED DIFF (focus on THIS change):
         
         # Extract commit message
         set -l commit_msg (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
-        
-        # Clean up and extract valid message
-        set -l cleaned_msg (echo "$commit_msg" | sed 's/```[a-z]*//g' | sed 's/^[[:space:]]*//g' | string collect)
-        set -l final_msg ""
-        
-        for line in (echo "$cleaned_msg" | string split "\n")
-            if test -z "$line"
-                continue
-            end
-            if string match -qr '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?: ' -- "$line"
-                set final_msg "$line"
-                break
-            end
-        end
-        
-        if test -z "$final_msg"
-            set final_msg (echo "$cleaned_msg" | string split "\n" | string match -r '^\S.*' | head -n 1)
-        end
+        set -l final_msg (__extract_commit_msg "$commit_msg")
         
         # Calculate metrics
         set -l msg_length (string length -- "$final_msg")

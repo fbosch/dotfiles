@@ -1,0 +1,68 @@
+- type: custom-api
+  title: Most Watched
+  title-url: https://mdblist.com/lists/linaspurinis/top-watched-movies-of-the-week
+  cache: 30m
+  options:
+    api-key: ${MDB_LIST_API_KEY}
+    list-user: "linaspurinis"
+    list-name: "top-watched-movies-of-the-week"
+  template: |
+    {{ $apiKey := .Options.StringOr "api-key" "" }}
+    {{ $listUser := .Options.StringOr "list-user" "" }}
+    {{ $listName := .Options.StringOr "list-name" "" }}
+    {{ $limit := .Options.IntOr "limit" 10 }}
+    {{ $sort := .Options.StringOr "sort" "" }}
+
+    {{ if or (eq $apiKey "") (eq $listUser "") (eq $listName "") }}
+      <p class="color-negative">Set MDBList API key, list-user, and list-name in widget options.</p>
+    {{ else }}
+      <link rel="stylesheet" href="/assets/css/plex.css">
+
+      {{ $listUrl := printf "https://api.mdblist.com/lists/%s/%s/items" $listUser $listName }}
+      {{ $request := newRequest $listUrl 
+        | withHeader "Accept" "application/json"
+        | withParameter "apikey" $apiKey
+        | withParameter "limit" (printf "%d" $limit)
+        | withParameter "append_to_response" "poster" }}
+      
+      {{ if ne $sort "" }}
+        {{ $request = $request | withParameter "sort" $sort }}
+      {{ end }}
+      
+      {{ $response := $request | getResponse }}
+      
+      {{ if eq $response.Response.StatusCode 200 }}
+        {{ $movies := $response.JSON.Array "movies" }}
+        {{ if eq (len $movies) 0 }}
+          <p>No items found in list.</p>
+        {{ else }}
+          <div class="carousel-container">
+            <div class="cards-horizontal carousel-items-container" style="--cards-per-row: 6;">
+              {{ range $movies }}
+                {{ $title := .String "title" }}
+                {{ $year := .Int "release_year" }}
+                {{ $poster := .String "poster" }}
+                {{ $radarrUrl := printf "https://radarr.corvus-corax.synology.me/add/new?term=%s" $title }}
+                
+                <a href="{{ $radarrUrl | safeURL }}" target="_blank" rel="noreferrer" class="card plex-card widget-content-frame">
+                  {{ if ne $poster "" }}
+                    <img class="plex-card-image" src="{{ $poster | safeURL }}" alt="{{ $title }} poster" loading="lazy" />
+                  {{ end }}
+                  <div class="plex-card-content padding-inline-widget">
+                    <div class="color-highlight size-h5">{{ $title }}</div>
+                    {{ if gt $year 0 }}
+                      <div class="size-h6 color-paragraph margin-top-5">{{ $year }}</div>
+                    {{ end }}
+                  </div>
+                </a>
+              {{ end }}
+            </div>
+          </div>
+        {{ end }}
+      {{ else if eq $response.Response.StatusCode 401 }}
+        <p class="color-negative">Authentication failed. Check your MDBList API key.</p>
+      {{ else }}
+        <p class="color-negative">Failed to fetch MDBList data (Status: {{ $response.Response.StatusCode }}).</p>
+      {{ end }}
+    {{ end }}
+

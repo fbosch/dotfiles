@@ -124,17 +124,7 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         set -l raw2 (cat $temp_output2 | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
         rm -f $temp_output2
         if test -n "$raw2"
-            set cleaned (echo "$raw2" | sed 's/```[a-z]*//g' | string trim)
-            set commit_msg ""
-            for line in (echo "$cleaned" | string split "\n")
-                test -z "$line"; and continue
-                if string match -qr '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?: ' -- "$line"
-                    set commit_msg "$line"
-                    break
-                end
-            end
-            test -z "$commit_msg"
-                and set commit_msg (echo "$cleaned" | string split "\n" | string match -r '^\S.*' | head -n 1)
+            set commit_msg (__extract_commit_msg "$raw2")
             set msg_length (string length -- "$commit_msg")
         end
     end

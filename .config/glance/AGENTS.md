@@ -11,6 +11,8 @@ Configuration for Glance dashboard pages, widgets, and assets.
 - Keep secrets out of committed YAML; use runtime environment variables.
 - API keys and tokens must always be read from environment variables.
 - Prefer local files and scripts in this directory over external docs.
+- After major config changes, verify with: `journalctl -u glance.service --no-pager -n 200`
+- For favicons/site icons, use Twenty Icons API: `https://twenty-icons.com/{{ $domain }}` (pass domain only, without protocol)
 
 ## References
 

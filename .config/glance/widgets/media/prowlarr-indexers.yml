@@ -1,0 +1,38 @@
+- type: custom-api
+  title: Indexers
+  title-url: https://prowlarr.corvus-corax.synology.me/
+  cache: 1m
+  options:
+    base-url: "https://prowlarr.corvus-corax.synology.me"
+    api-key: ${PROWLARR_API_KEY}
+    collapse-after: 5
+  template: |
+    {{ $baseUrl := .Options.StringOr "base-url" "" }}
+    {{ $key := .Options.StringOr "api-key" "" }}
+    {{ $collapseAfter := .Options.IntOr "collapse-after" 5 }}
+    {{ if or (eq $baseUrl "") (eq $key "") }}
+      <p class="color-negative">Set the Prowlarr base URL and API key in this widget options block.</p>
+    {{ else }}
+      {{ $indexData := newRequest (printf "%s/api/v1/indexer" $baseUrl) | withHeader "Accept" "application/json" | withHeader "X-Api-Key" $key | getResponse }}
+      {{ if eq $indexData.Response.StatusCode 200 }}
+        <ul class="list list-gap-10 collapsible-container" data-collapse-after="{{ $collapseAfter }}">
+          {{ range $indexData.JSON.Array "" }}
+            {{ $indexerDomain := "" }}
+            {{ $indexerUrls := .Array "indexerUrls" }}
+            {{ if gt (len $indexerUrls) 0 }}
+              {{ $fullUrl := (index $indexerUrls 0).String "" }}
+              {{ $indexerDomain = replaceMatches "^https?://([^/]+).*$" "$1" $fullUrl }}
+            {{ end }}
+            <li class="flex items-center gap-10">
+              {{ if ne $indexerDomain "" }}
+                <img src="https://twenty-icons.com/{{ $indexerDomain }}" alt="" class="ui-icon shrink-0" loading="lazy" />
+              {{ end }}
+              <a href="{{ $baseUrl }}" target="_blank" rel="noreferrer" class="size-title-dynamic color-primary-if-not-visited text-truncate block grow min-width-0">{{ .String "name" }}</a>
+              <span class="size-h6 shrink-0">{{ .String "privacy" }}</span>
+            </li>
+          {{ end }}
+        </ul>
+      {{ else }}
+        <p class="color-negative">Failed to fetch Prowlarr indexers.</p>
+      {{ end }}
+    {{ end }}

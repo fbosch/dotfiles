@@ -1,0 +1,124 @@
+- type: custom-api
+  title: Recently Added
+  title-url: https://plex.corvus-corax.synology.me
+  cache: 5m
+  options:
+    base-url: "https://plex.corvus-corax.synology.me"
+    api-key: ${PLEX_TOKEN}
+    machine-id: "527fd9cb40e644876667e21682d049ec24466835"
+    limit: 10
+    layout: vertical
+  template: |
+    {{ $baseURL := .Options.StringOr "base-url" "" }}
+    {{ $apiKey := .Options.StringOr "api-key" "" }}
+    {{ $machineId := .Options.StringOr "machine-id" "" }}
+    {{ $layout := .Options.StringOr "layout" "vertical" }}
+    {{ $defaultLimit := 6 }}
+    {{ if eq $layout "horizontal" }}{{ $defaultLimit = 10 }}{{ end }}
+    {{ $limit := .Options.IntOr "limit" $defaultLimit }}
+
+    {{ if or (eq $baseURL "") (eq $apiKey "") (eq $machineId "") }}
+      <p class="color-negative">Set Plex base URL, API token, and machine ID in this widget options block.</p>
+    {{ else }}
+      {{ $call := newRequest (concat $baseURL "/library/recentlyAdded")
+        | withHeader "Accept" "application/json"
+        | withHeader "X-Plex-Token" $apiKey
+        | withParameter "X-Plex-Container-Start" "0"
+        | withParameter "X-Plex-Container-Size" (printf "%d" $limit)
+        | getResponse }}
+
+      {{ if eq $call.Response.StatusCode 200 }}
+        {{ $items := $call.JSON.Array "MediaContainer.Metadata" }}
+        {{ if eq (len $items) 0 }}
+          <p>No recent additions.</p>
+        {{ else }}
+
+          {{/* shared type-resolution helper */}}
+          {{ if eq $layout "horizontal" }}
+
+            <div class="carousel-container">
+              <div class="cards-horizontal carousel-items-container" style="--cards-per-row: 6;">
+                {{ range $items }}
+                  {{ $itemType := .String "type" }}
+                  {{ $title := .String "title" }}
+                  {{ if eq $itemType "episode" }}
+                    {{ $title = concat (.String "grandparentTitle") " — " (.String "title") }}
+                  {{ end }}
+
+                  {{ $thumbPath := .String "thumb" }}
+                  {{ if eq $itemType "episode" }}{{ $thumbPath = .String "grandparentThumb" }}{{ end }}
+                  {{ $thumbURL := "" }}
+                  {{ if ne $thumbPath "" }}
+                    {{ $thumbURL = concat $baseURL $thumbPath "?X-Plex-Token=" $apiKey }}
+                  {{ end }}
+
+                  {{ $itemKey := .String "key" }}
+                  {{ $itemURL := concat $baseURL "/web/index.html#!/server/" $machineId "/details?key=" $itemKey }}
+
+                  {{ $addedAt := .String "addedAt" | parseRelativeTime "unix" }}
+
+                  <a href="{{ $itemURL | safeURL }}" target="_blank" rel="noreferrer" class="card plex-card widget-content-frame">
+                    {{ if ne $thumbURL "" }}
+                      <img class="plex-card-image" src="{{ $thumbURL | safeURL }}" alt="{{ $title }} poster" loading="lazy" />
+                    {{ end }}
+                    <div class="plex-card-content padding-inline-widget">
+                      <div class="color-highlight size-h5">
+                        {{ $title }}
+                      </div>
+                      <div class="size-h6 color-paragraph margin-top-5">
+                        {{ if gt (.Int "year") 0 }}{{ .Int "year" }} · {{ end }}<span {{ $addedAt }}></span> ago
+                      </div>
+                    </div>
+                  </a>
+                {{ end }}
+              </div>
+            </div>
+
+          {{ else }}
+
+            <ul class="list list-gap-14">
+              {{ range $items }}
+                {{ $itemType := .String "type" }}
+                {{ $title := .String "title" }}
+                {{ if eq $itemType "episode" }}
+                  {{ $title = concat (.String "grandparentTitle") " — " (.String "title") }}
+                {{ end }}
+
+                {{ $thumbPath := .String "thumb" }}
+                {{ if eq $itemType "episode" }}{{ $thumbPath = .String "grandparentThumb" }}{{ end }}
+                {{ $thumbURL := "" }}
+                {{ if ne $thumbPath "" }}
+                  {{ $thumbURL = concat $baseURL $thumbPath "?X-Plex-Token=" $apiKey }}
+                {{ end }}
+
+                {{ $itemKey := .String "key" }}
+                {{ $itemURL := concat $baseURL "/web/index.html#!/server/" $machineId "/details?key=" $itemKey }}
+
+                {{ $addedAt := .String "addedAt" | parseRelativeTime "unix" }}
+
+                <li>
+                  <a href="{{ $itemURL | safeURL }}" target="_blank" rel="noreferrer" class="plex-added-item">
+                    {{ if ne $thumbURL "" }}
+                      <img class="plex-added-poster" src="{{ $thumbURL | safeURL }}" alt="{{ $title }} poster" loading="lazy" />
+                    {{ end }}
+                    <div class="plex-added-body">
+                      <div class="plex-added-head">
+                        <span class="text-truncate color-primary-if-not-visited">{{ $title }}</span>
+                      </div>
+                      <div class="size-h6 color-paragraph">
+                        {{ if gt (.Int "year") 0 }}{{ .Int "year" }} · {{ end }}<span {{ $addedAt }}></span> ago
+                      </div>
+                    </div>
+                  </a>
+                </li>
+              {{ end }}
+            </ul>
+
+          {{ end }}
+        {{ end }}
+      {{ else if or (eq $call.Response.StatusCode 401) (eq $call.Response.StatusCode 403) }}
+        <p class="color-negative">Plex auth failed. Check API token.</p>
+      {{ else }}
+        <p class="color-negative">Failed to fetch recently added from Plex.</p>
+      {{ end }}
+    {{ end }}
