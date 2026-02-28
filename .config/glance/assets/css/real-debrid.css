@@ -1,0 +1,68 @@
+/* Real-Debrid widget styles */
+
+.rd-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.rd-stat {
+  border: 1px solid var(--color-widget-content-border);
+  border-radius: var(--border-radius);
+  padding: 0.65rem 0.75rem;
+  background: color-mix(in srgb, var(--color-background) 92%, transparent);
+}
+
+.rd-item {
+  border: 1px solid var(--color-widget-content-border);
+  border-radius: var(--border-radius);
+  padding: 0.55rem 0.65rem;
+}
+
+.rd-pill {
+  border: 1px solid var(--color-widget-content-border);
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  font-size: var(--font-size-h6);
+  text-transform: uppercase;
+}
+
+.rd-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--color-widget-content-border);
+  border-radius: 999px;
+  padding: 0.12rem 0.5rem;
+  font-size: var(--font-size-h6);
+  text-transform: uppercase;
+}
+
+.rd-state-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--color-text-subdue);
+}
+
+.rd-state-active .rd-state-dot,
+.rd-state-uploading .rd-state-dot {
+  background: var(--color-positive);
+}
+
+.rd-state-pending .rd-state-dot,
+.rd-state-magnet .rd-state-dot,
+.rd-state-waiting .rd-state-dot,
+.rd-state-compressing .rd-state-dot {
+  background: var(--color-primary);
+}
+
+.rd-state-done .rd-state-dot {
+  background: var(--color-text-base);
+}
+
+.rd-state-error .rd-state-dot,
+.rd-state-dead .rd-state-dot {
+  background: var(--color-negative);
+}

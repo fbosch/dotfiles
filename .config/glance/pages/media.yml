@@ -5,6 +5,9 @@
         - $include: ../widgets/media/services-monitor.yml
         - $include: ../widgets/gluetun-vpn-status.yml
         - $include: ../widgets/media/prowlarr-indexers.yml
+    - size: small
+      widgets:
+        - $include: ../widgets/media/plex-recently-added.yml
     - size: full
       widgets:
         - $include: ../widgets/media/real-debrid.yml
@@ -22,6 +25,3 @@
             - $include: ../widgets/media/mdblist-anime-latest.yml
             - $include: ../widgets/media/mdblist-anime-popular.yml
             - $include: ../widgets/media/mdblist-anime.yml
-    - size: small
-      widgets:
-        - $include: ../widgets/media/plex-recently-added.yml

@@ -21,132 +21,6 @@
   template: |
     {{ $mock := eq (.Options.StringOr "mock" "false") "false" }}
     {{ $active := .Subrequest "active" }}
-
-    <style>
-      .rd-summary {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.75rem;
-        margin-bottom: 1rem;
-      }
-
-      .rd-stat {
-        border: 1px solid var(--color-widget-content-border);
-        border-radius: var(--border-radius);
-        padding: 0.65rem 0.75rem;
-        background: color-mix(in srgb, var(--color-background) 92%, transparent);
-      }
-
-      .rd-stat-label {
-        font-size: var(--font-size-h6);
-        color: var(--color-text-tertiary);
-        margin-bottom: 0.2rem;
-      }
-
-      .rd-stat-value {
-        font-size: var(--font-size-h3);
-        color: var(--color-primary);
-        line-height: 1.1;
-      }
-
-      .rd-list {
-        display: grid;
-        gap: 0.75rem;
-      }
-
-      .rd-item {
-        border: 1px solid var(--color-widget-content-border);
-        border-radius: var(--border-radius);
-        padding: 0.55rem 0.65rem;
-      }
-
-      .rd-row-top,
-      .rd-row-bottom {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 0.5rem;
-      }
-
-      .rd-row-top {
-        margin-bottom: 0.45rem;
-      }
-
-      .rd-name {
-        color: var(--color-primary);
-        font-size: var(--font-size-title-dynamic);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .rd-pill {
-        border: 1px solid var(--color-widget-content-border);
-        border-radius: 999px;
-        padding: 0.1rem 0.45rem;
-        font-size: var(--font-size-h6);
-        text-transform: uppercase;
-      }
-
-      .rd-state {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        border: 1px solid var(--color-widget-content-border);
-        border-radius: 999px;
-        padding: 0.12rem 0.5rem;
-        font-size: var(--font-size-h6);
-        text-transform: uppercase;
-      }
-
-      .rd-state-dot {
-        width: 0.45rem;
-        height: 0.45rem;
-        border-radius: 999px;
-        background: var(--color-text-tertiary);
-      }
-
-      .rd-state-active .rd-state-dot,
-      .rd-state-uploading .rd-state-dot {
-        background: var(--color-positive);
-      }
-
-      .rd-state-pending .rd-state-dot,
-      .rd-state-magnet .rd-state-dot,
-      .rd-state-waiting .rd-state-dot,
-      .rd-state-compressing .rd-state-dot {
-        background: var(--color-primary);
-      }
-
-      .rd-state-done .rd-state-dot {
-        background: var(--color-text-base);
-      }
-
-      .rd-state-error .rd-state-dot,
-      .rd-state-dead .rd-state-dot {
-        background: var(--color-negative);
-      }
-
-      .rd-progress-track {
-        background: color-mix(in srgb, var(--color-text-base) 18%, transparent);
-        border-radius: 999px;
-        height: 7px;
-        overflow: hidden;
-        margin-bottom: 0.45rem;
-      }
-
-      .rd-progress-fill {
-        background: var(--color-positive);
-        height: 100%;
-        border-radius: 999px;
-      }
-
-      .rd-meta {
-        color: var(--color-text-tertiary);
-        font-size: var(--font-size-h6);
-      }
-    </style>
-
     {{ $rdApiKey := "" }}
     {{ if not $mock }}
       {{ $rdApiKey = .Options.StringOr "rd-api-key" "" }}
@@ -156,52 +30,68 @@
     <div data-rd-live data-rd-api-key="{{ $rdApiKey }}" data-rd-has-active="true">
       <div class="rd-summary">
         <div class="rd-stat">
-          <div class="rd-stat-label">Active</div>
-          <div class="rd-stat-value">4</div>
+          <div class="size-h5 color-subdue margin-bottom-3">Active</div>
+          <div class="size-h3 color-highlight">4</div>
         </div>
         <div class="rd-stat">
-          <div class="rd-stat-label">Premium Left</div>
-          <div class="rd-stat-value">68d 4h</div>
+          <div class="size-h5 color-subdue margin-bottom-3">Premium Left</div>
+          <div class="size-h3 color-highlight">68d 4h</div>
         </div>
       </div>
 
-      <div class="rd-list">
-        <div class="rd-item">
-          <div class="rd-row-top">
-            <div class="rd-name">Silo.S02E03.2160p.WEB-DL.mkv</div>
-            <span class="rd-state rd-state-active"><span class="rd-state-dot"></span><span>Downloading</span></span>
+      <ul class="list list-gap-14">
+        <li class="rd-item">
+          <div class="flex justify-between items-center gap-10 margin-bottom-7">
+            <div class="size-title-dynamic color-primary text-truncate min-width-0">Silo.S02E03.2160p.WEB-DL.mkv</div>
+            <span class="rd-state rd-state-active shrink-0"><span class="rd-state-dot"></span><span>Downloading</span></span>
           </div>
-          <div class="rd-progress-track"><div class="rd-progress-fill" style="width: 82%;"></div></div>
-          <div class="rd-row-bottom rd-meta"><span>82%</span><span>6.2 MB/s</span></div>
-        </div>
+          <div class="progress-bar margin-bottom-7">
+            <div class="progress-value" style="--percent: 82"></div>
+          </div>
+          <div class="flex justify-between items-center gap-10 size-h6 color-subdue">
+            <span>82%</span><span>6.2 MB/s</span>
+          </div>
+        </li>
 
-        <div class="rd-item">
-          <div class="rd-row-top">
-            <div class="rd-name">Dune.Part.Two.2024.1080p.BluRay.x265</div>
-            <span class="rd-state rd-state-pending"><span class="rd-state-dot"></span><span>Queued</span></span>
+        <li class="rd-item">
+          <div class="flex justify-between items-center gap-10 margin-bottom-7">
+            <div class="size-title-dynamic color-primary text-truncate min-width-0">Dune.Part.Two.2024.1080p.BluRay.x265</div>
+            <span class="rd-state rd-state-pending shrink-0"><span class="rd-state-dot"></span><span>Queued</span></span>
           </div>
-          <div class="rd-progress-track"><div class="rd-progress-fill" style="width: 34%;"></div></div>
-          <div class="rd-row-bottom rd-meta"><span>34%</span><span>--</span></div>
-        </div>
+          <div class="progress-bar margin-bottom-7">
+            <div class="progress-value" style="--percent: 34"></div>
+          </div>
+          <div class="flex justify-between items-center gap-10 size-h6 color-subdue">
+            <span>34%</span><span>--</span>
+          </div>
+        </li>
 
-        <div class="rd-item">
-          <div class="rd-row-top">
-            <div class="rd-name">Severance.S01.COMPLETE.1080p</div>
-            <span class="rd-state rd-state-active"><span class="rd-state-dot"></span><span>Downloading</span></span>
+        <li class="rd-item">
+          <div class="flex justify-between items-center gap-10 margin-bottom-7">
+            <div class="size-title-dynamic color-primary text-truncate min-width-0">Severance.S01.COMPLETE.1080p</div>
+            <span class="rd-state rd-state-active shrink-0"><span class="rd-state-dot"></span><span>Downloading</span></span>
           </div>
-          <div class="rd-progress-track"><div class="rd-progress-fill" style="width: 61%;"></div></div>
-          <div class="rd-row-bottom rd-meta"><span>61%</span><span>2.8 MB/s</span></div>
-        </div>
+          <div class="progress-bar margin-bottom-7">
+            <div class="progress-value" style="--percent: 61"></div>
+          </div>
+          <div class="flex justify-between items-center gap-10 size-h6 color-subdue">
+            <span>61%</span><span>2.8 MB/s</span>
+          </div>
+        </li>
 
-        <div class="rd-item">
-          <div class="rd-row-top">
-            <div class="rd-name">The.Last.of.Us.S02E01.4K</div>
-            <span class="rd-state rd-state-magnet"><span class="rd-state-dot"></span><span>Magnet</span></span>
+        <li class="rd-item">
+          <div class="flex justify-between items-center gap-10 margin-bottom-7">
+            <div class="size-title-dynamic color-primary text-truncate min-width-0">The.Last.of.Us.S02E01.4K</div>
+            <span class="rd-state rd-state-magnet shrink-0"><span class="rd-state-dot"></span><span>Magnet</span></span>
           </div>
-          <div class="rd-progress-track"><div class="rd-progress-fill" style="width: 9%;"></div></div>
-          <div class="rd-row-bottom rd-meta"><span>9%</span><span>--</span></div>
-        </div>
-      </div>
+          <div class="progress-bar margin-bottom-7">
+            <div class="progress-value" style="--percent: 9"></div>
+          </div>
+          <div class="flex justify-between items-center gap-10 size-h6 color-subdue">
+            <span>9%</span><span>--</span>
+          </div>
+        </li>
+      </ul>
     {{ else if and (eq .Response.StatusCode 200) (eq $active.Response.StatusCode 200) }}
       {{ $premiumSeconds := .JSON.Int "premium" }}
       {{ $days := div $premiumSeconds 86400 }}
@@ -211,19 +101,19 @@
     <div data-rd-live data-rd-api-key="{{ $rdApiKey }}" data-rd-has-active="{{ $hasActive }}">
       <div class="rd-summary">
         <div class="rd-stat">
-          <div class="rd-stat-label">Active</div>
-          <div class="rd-stat-value">{{ len $activeList }}</div>
+          <div class="size-h5 color-subdue margin-bottom-3">Active</div>
+          <div class="size-h3 color-highlight">{{ len $activeList }}</div>
         </div>
         <div class="rd-stat">
-          <div class="rd-stat-label">Premium Left</div>
-          <div class="rd-stat-value">{{ $days }}d {{ $hours }}h</div>
+          <div class="size-h5 color-subdue margin-bottom-3">Premium Left</div>
+          <div class="size-h3 color-highlight">{{ $days }}d {{ $hours }}h</div>
         </div>
       </div>
 
       {{ if eq (len $activeList) 0 }}
         <p>No active downloads.</p>
       {{ else }}
-        <ul class="rd-list list-unstyled">
+        <ul class="list list-gap-14">
           {{ range $activeList }}
             {{ $progress := .Int "progress" }}
             {{ $statusRaw := .String "status" }}
@@ -258,14 +148,14 @@
               {{ $statusClass = "dead" }}
             {{ end }}
             <li class="rd-item">
-              <div class="rd-row-top">
-                <div class="rd-name">{{ .String "filename" }}</div>
-                <span class="rd-state rd-state-{{ $statusClass }}"><span class="rd-state-dot"></span><span>{{ $statusText }}</span></span>
+              <div class="flex justify-between items-center gap-10 margin-bottom-7">
+                <div class="size-title-dynamic color-primary text-truncate min-width-0">{{ .String "filename" }}</div>
+                <span class="rd-state rd-state-{{ $statusClass }} shrink-0"><span class="rd-state-dot"></span><span>{{ $statusText }}</span></span>
               </div>
-              <div class="rd-progress-track">
-                <div class="rd-progress-fill" style="width: {{ $progress }}%;"></div>
+              <div class="progress-bar margin-bottom-7">
+                <div class="progress-value" style="--percent: {{ $progress }}"></div>
               </div>
-              <div class="rd-row-bottom rd-meta">
+              <div class="flex justify-between items-center gap-10 size-h6 color-subdue">
                 <span>{{ $progress }}%</span>
                 {{ $speed := .Int "speed" }}
                 {{ if gt $speed 0 }}

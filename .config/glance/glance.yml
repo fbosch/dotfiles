@@ -84,6 +84,9 @@ document:
     <script src="/assets/js/freshrss-actualize.js" defer></script>
     <script src="/assets/js/start-command-prompt.js?v=20260224-3" defer></script>
     <script src="/assets/js/real-debrid-live.js" defer></script>
+    
+    <!-- Widget-specific CSS -->
+    <link rel="stylesheet" href="/assets/css/real-debrid.css">
 
 pages:
   - $include: pages/startpage.yml
