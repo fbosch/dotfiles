@@ -17,9 +17,9 @@
     - title: Lidarr
       url: https://lidarr.corvus-corax.synology.me
       icon: sh:lidarr-light
-    - title: rdtclient
+    - title: Rdtclient
       url: https://rdtclient.corvus-corax.synology.me
-      icon: si:docker
+      icon: sh:real-debrid-light
     - title: Plex
       url: https://plex.corvus-corax.synology.me/web/index.html#!/
       icon: sh:plex-light
