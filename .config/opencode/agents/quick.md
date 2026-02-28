@@ -28,3 +28,8 @@ You make fast, focused edits for simple, well-defined changes.
 - Focus on the specific change requested - no refactoring, no "improvements" beyond what's asked
 - Use Edit tool for surgical changes
 - Keep changes minimal and scoped to what was requested
+
+## Done when
+
+- The requested small change is fully applied
+- No unrelated edits were introduced

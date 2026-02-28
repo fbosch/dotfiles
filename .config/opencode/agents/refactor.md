@@ -26,3 +26,19 @@ Focus on:
 - Reducing duplication
 - Better naming
 - Simpler logic
+
+## Constraints
+
+- Preserve behavior; do not change public contracts unless explicitly requested
+- Keep edits minimal and local to the requested scope
+
+## Validation
+
+- Run the smallest relevant checks to verify behavior is unchanged
+- If full verification is not possible, state what remains unverified
+
+## Done when
+
+- Readability and structure are improved without feature changes
+- Relevant checks pass, or gaps are explicitly reported
+- Refactor summary explains what changed and why

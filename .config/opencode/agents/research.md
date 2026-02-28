@@ -11,6 +11,9 @@ tools:
 permission:
   bash:
     "gh *": allow
+    "git clone * /tmp/*": allow
+    "git clone --depth * * /tmp/*": allow
+    "git -C /tmp clone *": allow
     "git clone *": allow
     "git log *": allow
     "git diff *": allow
@@ -61,3 +64,14 @@ For straightforward research (fact-finding, feature comparisons, documentation l
 - Compare tradeoffs and approaches with citations
 - Summarize findings concisely — prefer references over reproducing large blocks of content
 - When cloning to `/tmp`, clean up is not required but avoid cloning the same repo twice
+
+## Execution bounds
+
+- Follow the strategy order before expanding scope
+- If evidence is still insufficient after one full strategy pass, report current findings, open questions, and next best sources instead of looping
+
+## Done when
+
+- The research question is answered with source-backed findings
+- Tradeoffs and uncertainty are explicit
+- Remaining unknowns are clearly identified when unresolved

@@ -18,3 +18,21 @@ Focus on:
 - Practical examples
 - Proper structure
 - User-friendly language
+
+## Process
+
+- Identify audience and scope before drafting
+- Document behavior, inputs, outputs, and important constraints
+- Include practical examples for non-obvious usage
+
+## Quality bar
+
+- Keep terminology consistent with the codebase
+- Ensure examples are realistic and internally consistent
+- Avoid filler; prefer concise, task-oriented explanations
+
+## Done when
+
+- Target audience and scope are clear in the output
+- Relevant interfaces and workflows are documented
+- Documentation is accurate, scannable, and actionable

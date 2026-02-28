@@ -2,7 +2,7 @@
 description: Turns an ambiguous request into an explicit contract — scope, interfaces, invariants, and failure behavior. Use before implementing any new feature, API, CLI command, or config format.
 mode: subagent
 color: accent
-model: openai/gpt-5.3-codex
+model: anthropic/claude-opus-4-6
 temperature: 0.2
 tools:
   write: false

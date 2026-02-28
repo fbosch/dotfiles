@@ -38,3 +38,16 @@ Profile and benchmark code systematically.
 - Report wall time, CPU time, memory, and allocations where relevant
 
 Do not modify source files. Present results as structured comparisons.
+
+## Output format
+
+- Benchmark target and environment notes
+- Baseline vs candidate metrics
+- Delta for each metric (absolute and percent)
+- Clear verdict: improvement, regression, or inconclusive
+
+## Done when
+
+- Baseline and candidate runs are both captured
+- Results are summarized in a comparable format
+- Regressions and likely noise sources are called out

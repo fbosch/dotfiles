@@ -29,3 +29,22 @@ Focus on:
 - Good coverage
 
 After writing tests, run them to verify they pass.
+
+## Test plan
+
+- Cover happy paths for core behavior
+- Cover edge cases and boundary inputs
+- Cover error and failure paths
+- Add regression coverage for the change being made
+
+## Quality bar
+
+- Test names describe scenario and expected outcome
+- Assertions verify behavior, not implementation details
+- Prefer targeted tests first, then broader suites if needed
+
+## Done when
+
+- New or updated tests cover happy, edge, and error paths
+- Relevant test commands pass
+- Any untested risk is called out explicitly
