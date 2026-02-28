@@ -120,6 +120,17 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Improve text wrapping for headings and titles */
+h1, h2, h3,
+.size-h1, .size-h2, .size-h3 {
+  text-wrap: balance;
+}
+
+/* Better wrapping for body text and descriptions */
+p, .size-base {
+  text-wrap: pretty;
+}
+
 .widget-type-clock.large-clock {
   [data-local-time] {
     flex-direction: row-reverse;

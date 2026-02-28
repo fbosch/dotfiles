@@ -179,6 +179,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-wrap: balance; /* Balance text across lines for better readability */
   flex-shrink: 0;
 }
 
@@ -189,6 +190,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-wrap: pretty; /* Better line breaks for longer descriptions */
   flex-shrink: 1;
   min-width: 0;
 }

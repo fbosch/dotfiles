@@ -35,6 +35,15 @@
   z-index: 3;
 }
 
+.plex-card-content > .color-highlight {
+  text-wrap: balance; /* Balance title text across lines */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .plex-card-kind {
   width: 0.55rem;
   height: 0.55rem;
@@ -88,6 +97,16 @@
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.35rem;
+}
+
+.plex-added-head > .text-truncate {
+  text-wrap: balance; /* Balance title text in list items */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal; /* Override text-truncate's nowrap */
 }
 
 .plex-added-kind {
