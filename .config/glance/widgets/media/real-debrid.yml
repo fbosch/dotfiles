@@ -92,6 +92,7 @@
           </div>
         </li>
       </ul>
+    </div>
     {{ else if and (eq .Response.StatusCode 200) (eq $active.Response.StatusCode 200) }}
       {{ $premiumSeconds := .JSON.Int "premium" }}
       {{ $days := div $premiumSeconds 86400 }}
@@ -168,6 +169,7 @@
           {{ end }}
         </ul>
       {{ end }}
+    </div>
     {{ else }}
     <div data-rd-live data-rd-api-key="{{ $rdApiKey }}" data-rd-has-active="false">
       {{ if or (eq .Response.StatusCode 401) (eq .Response.StatusCode 403) (eq $active.Response.StatusCode 401) (eq $active.Response.StatusCode 403) }}
