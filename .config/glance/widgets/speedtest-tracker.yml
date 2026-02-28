@@ -1,14 +1,14 @@
 - type: custom-api
   cache: 1h
   title: Internet Speed
-  title-url: ${SPEEDTEST_URL}
-  url: ${SPEEDTEST_URL}/api/v1/results/latest
+  title-url: https://speedtest-tracker.corvus-corax.synology.me
+  url: https://speedtest-tracker.corvus-corax.synology.me/api/v1/results/latest
   headers:
     Authorization: Bearer ${SPEEDTEST_TRACKER_API_TOKEN}
     Accept: application/json
   subrequests:
     stats:
-      url: ${SPEEDTEST_URL}/api/v1/stats
+      url: https://speedtest-tracker.corvus-corax.synology.me/api/v1/stats
       headers:
         Authorization: Bearer ${SPEEDTEST_TRACKER_API_TOKEN}
         Accept: application/json

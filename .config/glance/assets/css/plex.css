@@ -1,0 +1,46 @@
+.plex-added-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.plex-added-item {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  border: 1px solid var(--color-widget-content-border);
+  border-radius: var(--border-radius);
+  padding: 0.45rem;
+}
+
+.plex-added-poster {
+  width: 44px;
+  aspect-ratio: 2/3;
+  object-fit: cover;
+  border-radius: calc(var(--border-radius) - 2px);
+  flex-shrink: 0;
+}
+
+.plex-added-body {
+  min-width: 0;
+  flex-grow: 1;
+  text-align: left;
+}
+
+.plex-added-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+
+.plex-added-type {
+  border: 1px solid var(--color-widget-content-border);
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  font-size: var(--font-size-h6);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  white-space: nowrap;
+}

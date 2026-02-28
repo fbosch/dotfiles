@@ -1,0 +1,30 @@
+- type: custom-api
+  title: Prowlarr Indexers
+  cache: 1m
+  options:
+    url: "https://prowlarr.corvus-corax.synology.me"
+    base-url: "https://prowlarr.corvus-corax.synology.me"
+    api-key: ${PROWLARR_API_KEY}
+    collapse-after: 5
+  template: |
+    {{ $apiBaseUrl := .Options.StringOr "base-url" "" }}
+    {{ $key := .Options.StringOr "api-key" "" }}
+    {{ $url := .Options.StringOr "url" "" }}
+    {{ $collapseAfter := .Options.IntOr "collapse-after" 5 }}
+    {{ if or (eq $apiBaseUrl "") (eq $key "") (eq $url "") }}
+      <p class="color-negative">Set the Prowlarr API key in this widget options block.</p>
+    {{ else }}
+      {{ $indexData := newRequest (printf "%s/api/v1/indexer" $apiBaseUrl) | withHeader "Accept" "application/json" | withHeader "X-Api-Key" $key | getResponse }}
+      {{ if eq $indexData.Response.StatusCode 200 }}
+        <ul class="list list-gap-10 collapsible-container" data-collapse-after="{{ $collapseAfter }}">
+          {{ range $indexData.JSON.Array "" }}
+            <li class="flex items-center gap-10">
+              <a href="{{ $url }}" target="_blank" class="size-title-dynamic color-highlight text-truncate block grow">{{ .String "name" }}</a>
+              <span class="size-h6">{{ .String "privacy" }}</span>
+            </li>
+          {{ end }}
+        </ul>
+      {{ else }}
+        <p class="color-negative">Failed to fetch Prowlarr indexers.</p>
+      {{ end }}
+    {{ end }}
