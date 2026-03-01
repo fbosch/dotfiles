@@ -1,7 +1,7 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "theme": "zenwritten-dark",
-  "model": "github-copilot/gpt-5.2-codex",
+  "model": "anthropic/claude-sonnet-4-6",
   "small_model": "anthropic/claude-haiku-4-5",
   "plugin": [
     "@tarquinen/opencode-dcp@latest",
@@ -36,7 +36,7 @@
       "temperature": 0
     },
     "general": {
-      "model": "anthropic/claude-sonnet-4-5",
+      "model": "anthropic/claude-sonnet-4-6",
       "steps": 15,
       "temperature": 0.3
     },
@@ -45,27 +45,27 @@
       "temperature": 0
     },
     "summary": {
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "anthropic/claude-haiku-4-5",
       "temperature": 0.1
     },
     "compaction": {
-      "model": "anthropic/claude-sonnet-4-5",
+      "model": "anthropic/claude-sonnet-4-6",
       "temperature": 0
     },
     "test": {
       "model": "anthropic/claude-sonnet-4-6"
     },
     "review": {
-      "model": "anthropic/claude-opus-4-6"
+      "model": "anthropic/claude-sonnet-4-6"
     },
     "docs": {
       "model": "anthropic/claude-opus-4-6"
     },
     "quick": {
-      "model": "github-copilot/claude-haiku-4.5"
+      "model": "anthropic/claude-haiku-4-5"
     },
     "benchmark": {
-      "model": "github-copilot/claude-haiku-4.5"
+      "model": "anthropic/claude-haiku-4-5"
     },
     "spec": {
       "model": "anthropic/claude-opus-4-6"
