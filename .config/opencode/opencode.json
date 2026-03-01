@@ -3,7 +3,11 @@
   "theme": "zenwritten-dark",
   "model": "github-copilot/gpt-5.2-codex",
   "small_model": "anthropic/claude-haiku-4-5",
+  "instructions": [
+    "~/.config/opencode/instructions/shell-strategy.md"
+  ],
   "plugin": [
+    "@tarquinen/opencode-dcp@latest",
     "@happycastle/opencode-openmemory@latest",
     "opencode-wakatime"
   ],
