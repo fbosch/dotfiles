@@ -40,22 +40,31 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
 
     set -l temp_output (mktemp -t opencode_output.XXXXXX)
 
+    function __ai_commit_extract -S
+        cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' \
+            | jq -r 'select(.type == "text") | .part.text' 2>/dev/null \
+            | tail -n 1 | string trim
+    end
+
     # Run with primary model
     set -l current_model $ai_model
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $current_model..." -- \
-        sh -c "OPENCODE_DISABLE_PROJECT_CONFIG=1 OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1 opencode run --command commit-msg -m $current_model --format json 2>/dev/null > $temp_output"
+        sh -c 'OPENCODE_DISABLE_PROJECT_CONFIG=1 OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1 opencode run --command commit-msg -m "$1" --format json 2>/dev/null > "$2"' \
+        -- "$current_model" "$temp_output"
 
-    set -l raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
+    set -l raw_output (__ai_commit_extract)
 
     # Fallback if empty
     if test -z "$raw_output"
         set current_model $fallback_model
         gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- \
-            sh -c "OPENCODE_DISABLE_PROJECT_CONFIG=1 OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1 opencode run --command commit-msg -m $current_model --format json 2>/dev/null > $temp_output"
-        set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
+            sh -c 'OPENCODE_DISABLE_PROJECT_CONFIG=1 OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1 opencode run --command commit-msg -m "$1" --format json 2>/dev/null > "$2"' \
+            -- "$current_model" "$temp_output"
+        set raw_output (__ai_commit_extract)
     end
 
     rm -f $temp_output
+    functions -e __ai_commit_extract
 
     # Determine the new session created by this run
     set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
@@ -98,8 +107,11 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         set current_model $fallback_model
         set -l temp_output2 (mktemp -t opencode_output.XXXXXX)
         gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- \
-            sh -c "OPENCODE_DISABLE_PROJECT_CONFIG=1 OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1 opencode run --command commit-msg -m $current_model --format json 2>/dev/null > $temp_output2"
-        set -l raw2 (cat $temp_output2 | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
+            sh -c 'OPENCODE_DISABLE_PROJECT_CONFIG=1 OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1 opencode run --command commit-msg -m "$1" --format json 2>/dev/null > "$2"' \
+            -- "$current_model" "$temp_output2"
+        set -l raw2 (cat $temp_output2 | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' \
+            | jq -r 'select(.type == "text") | .part.text' 2>/dev/null \
+            | tail -n 1 | string trim)
         rm -f $temp_output2
         if test -n "$raw2"
             set commit_msg (__extract_commit_msg "$raw2")
