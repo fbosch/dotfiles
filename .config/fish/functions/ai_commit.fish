@@ -4,7 +4,7 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
 
     set -l dry_run (set -q _flag_dry; and echo true; or echo false)
     set -l ai_model (set -q _flag_model; and echo $_flag_model; or echo github-copilot/grok-code-fast-1)
-    set -l fallback_model github-copilot/claude-haiku-4.5
+    set -l fallback_model anthropic/claude-haiku-4-5
 
     if not git rev-parse --git-dir >/dev/null 2>&1
         gum style " Not in a git repository"
@@ -157,10 +157,10 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     history add git\ commit\ -m\ "$edited_msg" >/dev/null 2>&1
     git commit -m "$edited_msg"
     set -l commit_status $status
-    
+
     # Remove signal handler
     functions -e __ai_commit_cleanup 2>/dev/null
-    
+
     if test $commit_status -eq 0
         gum style --foreground 2 "󰸞 Commit successful!"
     else
