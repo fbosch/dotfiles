@@ -2,7 +2,6 @@
 description: Fast, focused edits like typos, renames, and formatting. No deep analysis.
 mode: subagent
 color: warning
-model: github-copilot/claude-haiku-4.5
 temperature: 0.0
 steps: 3
 permission:

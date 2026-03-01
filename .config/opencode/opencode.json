@@ -47,6 +47,24 @@
     "compaction": {
       "model": "anthropic/claude-sonnet-4-5",
       "temperature": 0
+    },
+    "test": {
+      "model": "anthropic/claude-sonnet-4-6"
+    },
+    "review": {
+      "model": "anthropic/claude-opus-4-6"
+    },
+    "docs": {
+      "model": "anthropic/claude-opus-4-6"
+    },
+    "quick": {
+      "model": "github-copilot/claude-haiku-4.5"
+    },
+    "benchmark": {
+      "model": "github-copilot/claude-haiku-4.5"
+    },
+    "spec": {
+      "model": "anthropic/claude-opus-4-6"
     }
   },
   "mcp": {
