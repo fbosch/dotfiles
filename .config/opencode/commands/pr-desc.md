@@ -21,17 +21,14 @@ Line 3+: Markdown PR body
 
 ## Changes
 
-## Testing
-
-## Breaking Changes
+## Notes
 
 **Hard limits:**
 
 - Summary: 1 sentence, max 14 words
 - Changes: 2–5 bullets, max 10 words each
-- Testing: 1 bullet — command or "Not stated"
-- Breaking Changes: 1 bullet — "None" unless obvious in diff
-- Total output: 26 lines max
+- Notes: 2-5 bullets, related to changes, max 10 words each
+- Total output: 30 lines max
 
 **Length calibration:**
 
