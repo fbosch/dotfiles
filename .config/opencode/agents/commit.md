@@ -1,5 +1,6 @@
 ---
 description: Minimal agent for commit message generation — no provider system prompt, no tools
+mode: subagent
 model: github-copilot/grok-code-fast-1
 prompt: ""
 permission: deny
