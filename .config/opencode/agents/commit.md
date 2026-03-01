@@ -1,5 +1,6 @@
 ---
 description: Minimal agent for commit message generation — no provider system prompt, no tools
+model: github-copilot/grok-code-fast-1
 prompt: |
   Output ONLY a single-line Commitizen commit message (≤50 chars). No explanation, no preamble, no markdown. Format: `<type>(<scope>): <subject>`
 

@@ -1,6 +1,5 @@
 ---
 description: Generate a Commitizen commit message for staged changes
-model: github-copilot/grok-code-fast-1
 agent: commit
 ---
 
