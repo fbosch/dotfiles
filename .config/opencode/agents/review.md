@@ -2,6 +2,7 @@
 description: Reviews code for quality, security vulnerabilities, and best practices. Use after code changes, before merging PRs, or when auditing existing code.
 mode: subagent
 color: info
+model: anthropic/claude-opus-4-6
 temperature: 0.1
 steps: 6
 tools:
