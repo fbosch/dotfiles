@@ -73,17 +73,25 @@
   },
   "mcp": {
     "context7": {
-      "type": "remote",
-      "url": "https://mcp.context7.com/mcp",
-      "headers": {
-        "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
-      }
+      "type": "local",
+      "command": [
+        "podman",
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "MCP_TRANSPORT=stdio",
+        "mcp/context7"
+      ]
     },
     "sequential-thinking": {
       "type": "local",
       "command": [
-        "bunx",
-        "@modelcontextprotocol/server-sequential-thinking"
+        "podman",
+        "run",
+        "-i",
+        "--rm",
+        "mcp/sequentialthinking"
       ]
     },
     "github": {
@@ -93,38 +101,17 @@
         "mcp"
       ]
     },
-    "vitest": {
-      "enabled": false,
-      "type": "local",
-      "command": [
-        "bunx",
-        "@djankies/vitest-mcp"
-      ]
-    },
     "exa": {
-      "type": "remote",
-      "url": "https://mcp.exa.ai/mcp?exaApiKey={env:EXA_API_KEY}",
-      "enabled": true
-    },
-    "eslint": {
-      "enabled": false,
       "type": "local",
       "command": [
-        "bunx",
-        "@eslint/mcp@latest"
+        "podman",
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "EXA_API_KEY={env:EXA_API_KEY}",
+        "mcp/exa"
       ]
-    },
-    "morph-mcp": {
-      "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "@morphllm/morphmcp"
-      ],
-      "environment": {
-        "MORPH_API_KEY": "{env:MORPH_API_KEY}",
-        "ENABLED_TOOLS": "edit_file,warpgrep_codebase_search"
-      }
     }
   }
 }
