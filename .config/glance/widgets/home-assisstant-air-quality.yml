@@ -136,34 +136,7 @@
         {{ $idealLower = 35.0 }}
         {{ $idealUpper = 55.0 }}
       {{ end }}
-      {{ if and $hasHumidity $hasOutdoorHumidity $hasIndoorTemp $hasOutdoorTemp }}
-        {{ $isTooDry := lt $humidityValue $idealLower }}
-        {{ $isTooHumid := gt $humidityValue $idealUpper }}
-        {{ $indoorLogArg := div $humidityValue 100.0 }}
-        {{ if and (gt $indoorLogArg 0.0) (le $indoorLogArg 1.0) }}
-          {{ $indoorAlpha := add (div (mul 17.27 $indoorTemp) (add 237.7 $indoorTemp)) (log $indoorLogArg) }}
-          {{ $indoorDewPoint := div (mul 237.7 $indoorAlpha) (sub 17.27 $indoorAlpha) }}
-          {{ $effectiveOutdoorDewPoint := 0.0 }}
-          {{ $hasEffectiveOutdoorDewPoint := $hasOutdoorDewPoint }}
-          {{ if $hasOutdoorDewPoint }}
-            {{ $effectiveOutdoorDewPoint = $outdoorDewPoint }}
-          {{ else }}
-            {{ $outdoorLogArg := div $outdoorHumidity 100.0 }}
-            {{ if and (gt $outdoorLogArg 0.0) (le $outdoorLogArg 1.0) }}
-              {{ $outdoorAlpha := add (div (mul 17.27 $outdoorTemp) (add 237.7 $outdoorTemp)) (log $outdoorLogArg) }}
-              {{ $effectiveOutdoorDewPoint = div (mul 237.7 $outdoorAlpha) (sub 17.27 $outdoorAlpha) }}
-              {{ $hasEffectiveOutdoorDewPoint = true }}
-            {{ end }}
-          {{ end }}
-          {{ if $hasEffectiveOutdoorDewPoint }}
-            {{ if and $isTooHumid (le $effectiveOutdoorDewPoint (sub $indoorDewPoint 1.0)) }}
-              {{ $shouldVentilate = true }}
-            {{ else if and $isTooDry (ge $effectiveOutdoorDewPoint (add $indoorDewPoint 1.0)) }}
-              {{ $shouldVentilate = true }}
-            {{ end }}
-          {{ end }}
-        {{ end }}
-      {{ end }}
+
       {{ if and $hasHumidity (or (lt $humidityValue $idealLower) (gt $humidityValue $idealUpper)) }}
         <div class="color-subdue size-h6" style="margin-top: 6px; text-align: center;">
           Outdoor humidity: {{ if $hasOutdoorHumidity }}{{ printf "%.0f" $outdoorHumidity }}%{{ else }}--%{{ end }}
