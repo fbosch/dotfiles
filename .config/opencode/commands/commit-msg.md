@@ -1,6 +1,7 @@
 ---
 description: Generate a Commitizen commit message for staged changes
 model: github-copilot/grok-code-fast-1
+agent: commit
 ---
 
 Output ONLY a single-line Commitizen commit message (≤50 chars). Stop immediately after. No explanation, no preamble, no markdown. Format: `<type>(<scope>): <subject>`
