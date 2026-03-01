@@ -26,16 +26,32 @@
         .aq-red { color: var(--color-negative); }
       </style>
       {{ $shouldVentilate := false }}
+      {{ $humidityValue := 0.0 }}
+      {{ $humidityClass := "" }}
+      {{ $hasHumidity := false }}
+      {{ $indoorTemp := 0.0 }}
+      {{ $hasIndoorTemp := false }}
+      {{ $outdoorHumidity := 0.0 }}
+      {{ $outdoorTemp := 0.0 }}
+      {{ $outdoorDewPoint := 0.0 }}
+      {{ $hasOutdoorHumidity := false }}
+      {{ $hasOutdoorTemp := false }}
+      {{ $hasOutdoorDewPoint := false }}
+      {{ $idealLower := 40.0 }}
+      {{ $idealUpper := 60.0 }}
       <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
         {{ range .JSON.Array "" }}
           {{ $id := .String "entity_id" }}
           {{ $state := .String "state" }}
           {{ $friendly := replaceMatches "^Air Quality Monitor\\s+" "" (.String "attributes.friendly_name") }}
+          {{ $display := true }}
           {{ if and (or
                         (eq $id "sensor.air_quality_monitor_carbon_dioxide")
                         (eq $id "sensor.air_quality_monitor_volatile_organic_compounds")
                         (eq $id "sensor.air_quality_monitor_formaldehyde")
                         (eq $id "sensor.air_quality_monitor_humidity")
+                        (eq $id "sensor.air_quality_monitor_temperature")
+                        (eq $id "weather.forecast_home")
                     )
                     (ne $state "unavailable")
                     (ne $state "unknown")
@@ -62,6 +78,23 @@
               {{ else }}
                 {{ $valueClass = "aq-red" }}
               {{ end }}
+              {{ $humidityValue = $value }}
+              {{ $humidityClass = $valueClass }}
+              {{ $hasHumidity = true }}
+            {{ else if eq $id "sensor.air_quality_monitor_temperature" }}
+              {{ $indoorTemp = $value }}
+              {{ $hasIndoorTemp = true }}
+              {{ $display = false }}
+            {{ else if eq $id "weather.forecast_home" }}
+              {{ $outdoorHumidity = .Float "attributes.humidity" }}
+              {{ $outdoorTemp = .Float "attributes.temperature" }}
+              {{ $outdoorDewPoint = .Float "attributes.dew_point" }}
+              {{ $hasOutdoorHumidity = true }}
+              {{ $hasOutdoorTemp = true }}
+              {{ if .Exists "attributes.dew_point" }}
+                {{ $hasOutdoorDewPoint = true }}
+              {{ end }}
+              {{ $display = false }}
             {{ else if eq $id "sensor.air_quality_monitor_volatile_organic_compounds" }}
               {{ if lt $value 0.3 }}
                 {{ $valueClass = "aq-good" }}
@@ -83,22 +116,65 @@
                 {{ $valueClass = "aq-red" }}
               {{ end }}
             {{ end }}
-            {{ if or (eq $valueClass "aq-orange") (eq $valueClass "aq-red") }}
-              {{ $shouldVentilate = true }}
+            {{ if $display }}
+              {{ if and (or (eq $valueClass "aq-orange") (eq $valueClass "aq-red")) (ne $id "sensor.air_quality_monitor_humidity") }}
+                {{ $shouldVentilate = true }}
+              {{ end }}
+              <div class="background-faint radius-8" style="padding: 6px 10px; text-align: center;">
+                <div class="size-h3 {{ $valueClass }}" style="line-height: 1.2;">
+                  {{ $state }}{{ .String "attributes.unit_of_measurement" }}
+                </div>
+                <div class="size-h6 color-subdue" style="line-height: 1.2;">
+                  {{ $friendly }}
+                </div>
+              </div>
             {{ end }}
-            <div class="background-faint radius-8" style="padding: 6px 10px; text-align: center;">
-              <div class="size-h3 {{ $valueClass }}" style="line-height: 1.2;">
-                {{ $state }}{{ .String "attributes.unit_of_measurement" }}
-              </div>
-              <div class="size-h6 color-subdue" style="line-height: 1.2;">
-                {{ $friendly }}
-              </div>
-            </div>
           {{ end }}
         {{ end }}
       </div>
+      {{ if and $hasOutdoorTemp (le $outdoorTemp 5.0) }}
+        {{ $idealLower = 35.0 }}
+        {{ $idealUpper = 55.0 }}
+      {{ end }}
+      {{ if and $hasHumidity $hasOutdoorHumidity $hasIndoorTemp $hasOutdoorTemp }}
+        {{ $isTooDry := lt $humidityValue $idealLower }}
+        {{ $isTooHumid := gt $humidityValue $idealUpper }}
+        {{ $indoorLogArg := div $humidityValue 100.0 }}
+        {{ if and (gt $indoorLogArg 0.0) (le $indoorLogArg 1.0) }}
+          {{ $indoorAlpha := add (div (mul 17.27 $indoorTemp) (add 237.7 $indoorTemp)) (log $indoorLogArg) }}
+          {{ $indoorDewPoint := div (mul 237.7 $indoorAlpha) (sub 17.27 $indoorAlpha) }}
+          {{ $effectiveOutdoorDewPoint := 0.0 }}
+          {{ $hasEffectiveOutdoorDewPoint := $hasOutdoorDewPoint }}
+          {{ if $hasOutdoorDewPoint }}
+            {{ $effectiveOutdoorDewPoint = $outdoorDewPoint }}
+          {{ else }}
+            {{ $outdoorLogArg := div $outdoorHumidity 100.0 }}
+            {{ if and (gt $outdoorLogArg 0.0) (le $outdoorLogArg 1.0) }}
+              {{ $outdoorAlpha := add (div (mul 17.27 $outdoorTemp) (add 237.7 $outdoorTemp)) (log $outdoorLogArg) }}
+              {{ $effectiveOutdoorDewPoint = div (mul 237.7 $outdoorAlpha) (sub 17.27 $outdoorAlpha) }}
+              {{ $hasEffectiveOutdoorDewPoint = true }}
+            {{ end }}
+          {{ end }}
+          {{ if $hasEffectiveOutdoorDewPoint }}
+            {{ if and $isTooHumid (le $effectiveOutdoorDewPoint (sub $indoorDewPoint 1.0)) }}
+              {{ $shouldVentilate = true }}
+            {{ else if and $isTooDry (ge $effectiveOutdoorDewPoint (add $indoorDewPoint 1.0)) }}
+              {{ $shouldVentilate = true }}
+            {{ end }}
+          {{ end }}
+        {{ end }}
+      {{ end }}
+      {{ if and $hasHumidity (or (lt $humidityValue $idealLower) (gt $humidityValue $idealUpper)) }}
+        <div class="color-subdue size-h6" style="margin-top: 6px; text-align: center;">
+          Outdoor humidity: {{ if $hasOutdoorHumidity }}{{ printf "%.0f" $outdoorHumidity }}%{{ else }}--%{{ end }}
+        </div>
+      {{ end }}
       {{ if $shouldVentilate }}
-        <div class="color-negative size-h5" style="margin-top: 8px; text-align: center;">
+        <div data-ventilate-message class="color-negative size-h5" style="margin-top: 8px; text-align: center;">
+          You should ventilate
+        </div>
+      {{ else }}
+        <div data-ventilate-message class="color-negative size-h5" style="margin-top: 8px; text-align: center; display: none;">
           You should ventilate
         </div>
       {{ end }}

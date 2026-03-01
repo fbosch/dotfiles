@@ -3,7 +3,7 @@
   title-url: https://real-debrid.com/torrents
   cache: 30s
   options:
-    mock: "true"
+    mock: "false"
     rd-api-key: ${RD_API_KEY}
   url: https://api.real-debrid.com/rest/1.0/user
   headers:
@@ -19,7 +19,7 @@
         filter: active
         limit: 10
   template: |
-    {{ $mock := eq (.Options.StringOr "mock" "false") "false" }}
+    {{ $mock := eq (.Options.StringOr "mock" "false") "true" }}
     {{ $active := .Subrequest "active" }}
     {{ $rdApiKey := "" }}
     {{ if not $mock }}
@@ -31,7 +31,7 @@
       <div class="rd-summary">
         <div class="rd-stat">
           <div class="size-h5 color-subdue margin-bottom-3">Active</div>
-          <div class="size-h3 color-highlight">4</div>
+          <div class="size-h3 color-highlight rd-stat-value">4</div>
         </div>
         <div class="rd-stat">
           <div class="size-h5 color-subdue margin-bottom-3">Premium Left</div>
@@ -103,7 +103,7 @@
       <div class="rd-summary">
         <div class="rd-stat">
           <div class="size-h5 color-subdue margin-bottom-3">Active</div>
-          <div class="size-h3 color-highlight">{{ len $activeList }}</div>
+          <div class="size-h3 color-highlight rd-stat-value">{{ len $activeList }}</div>
         </div>
         <div class="rd-stat">
           <div class="size-h5 color-subdue margin-bottom-3">Premium Left</div>
