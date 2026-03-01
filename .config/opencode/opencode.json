@@ -3,13 +3,13 @@
   "theme": "zenwritten-dark",
   "model": "github-copilot/gpt-5.2-codex",
   "small_model": "anthropic/claude-haiku-4-5",
-  "instructions": [
-    "~/.config/opencode/instructions/shell-strategy.md"
-  ],
   "plugin": [
     "@tarquinen/opencode-dcp@latest",
     "@happycastle/opencode-openmemory@latest",
     "opencode-wakatime"
+  ],
+  "instructions": [
+    "~/.config/opencode/instructions/shell-strategy.md"
   ],
   "permission": {
     "bash": {
@@ -113,6 +113,18 @@
         "bunx",
         "@eslint/mcp@latest"
       ]
+    },
+    "morph-mcp": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@morphllm/morphmcp"
+      ],
+      "environment": {
+        "MORPH_API_KEY": "{env:MORPH_API_KEY}",
+        "ENABLED_TOOLS": "edit_file,warpgrep_codebase_search"
+      }
     }
   }
 }

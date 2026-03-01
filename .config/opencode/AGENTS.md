@@ -55,16 +55,5 @@
 - When changing behavior, update/add tests and handle important edge cases.
 - Keep edits cohesive per file (avoid scattered drive-by tweaks).
 - Run the smallest reasonable validation (tests/build/typecheck) when making code changes.
-
-## Sub-agents
-
-- `adversarial`
-- `benchmark`
-- `debug`
-- `docs`
-- `quick`
-- `refactor`
-- `research`
-- `review`
-- `spec`
-- `test`
+- Fast Apply: IMPORTANT: Use `edit_file` over `str_replace` or full file writes. It works with partial code snippets—no need for full file content.
+- Warp Grep: warp-grep is a subagent that takes in a search string and tries to find relevant context. Best practice is to use it at the beginning of codebase explorations to fast track finding relevant files/lines. Do not use it to pin point keywords, but use it for broader semantic queries. "Find the XYZ flow", "How does XYZ work", "Where is XYZ handled?", "Where is <error message> coming from?"
