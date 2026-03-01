@@ -4,6 +4,8 @@ model: github-copilot/grok-code-fast-1
 prompt: |
   Output ONLY a single-line Commitizen commit message (≤50 chars). No explanation, no preamble, no markdown. Format: `<type>(<scope>): <subject>`
 
+  Example: `feat(auth): add JWT refresh token support`
+
   Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
   Scope: Use AB#<n> if ticket in branch/args, else module/feature name.
 

@@ -16,32 +16,10 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         return 1
     end
 
-    # Extract branch context to pass as command arguments
-    set -l branch_name (git rev-parse --abbrev-ref HEAD)
-    set -l ticket_number ""
-    if string match -qr '\d+' $branch_name
-        set ticket_number (string match -r '\d+' $branch_name)
-    end
-    set -l branch_hint ""
-    if string match -qr '^([a-z]+)/' $branch_name
-        set branch_hint (string match -r '^[a-z]+' $branch_name)
-    end
-
     if set -q _flag_verbose
         echo "Model: $ai_model"
         echo "Fallback: $fallback_model"
-        echo "Branch: $branch_name"
-        test -n "$branch_hint"; and echo "Branch type: $branch_hint"
-        test -n "$ticket_number"; and echo "Ticket: $ticket_number"
-    end
-
-    # Build args string: branch name + ticket if found
-    set -l cmd_args "$branch_name"
-    if test -n "$ticket_number"
-        set cmd_args "$cmd_args ticket:$ticket_number"
-    end
-    if test -n "$branch_hint"
-        set cmd_args "$cmd_args type:$branch_hint"
+        echo "Branch: "(git rev-parse --abbrev-ref HEAD)
     end
 
     # Capture existing sessions before running (for cleanup)
@@ -65,15 +43,15 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     # Run with primary model
     set -l current_model $ai_model
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $current_model..." -- \
-        sh -c "OPENCODE_DISABLE_PROJECT_CONFIG=1 OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1 opencode run --command commit-msg -m $current_model --format json '$cmd_args' 2>/dev/null > $temp_output"
-    
+        sh -c "OPENCODE_DISABLE_PROJECT_CONFIG=1 OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1 opencode run --command commit-msg -m $current_model --format json 2>/dev/null > $temp_output"
+
     set -l raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
 
     # Fallback if empty
     if test -z "$raw_output"
         set current_model $fallback_model
         gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- \
-            sh -c "OPENCODE_DISABLE_PROJECT_CONFIG=1 OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1 opencode run --command commit-msg -m $current_model --format json '$cmd_args' 2>/dev/null > $temp_output"
+            sh -c "OPENCODE_DISABLE_PROJECT_CONFIG=1 OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1 opencode run --command commit-msg -m $current_model --format json 2>/dev/null > $temp_output"
         set raw_output (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
     end
 
@@ -89,12 +67,12 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         end
     end
 
-    # Cleanup the session before proceeding
+    # Cleanup the session in background to avoid blocking
     if test -n "$used_session_path"
         if set -q _flag_verbose
-            cleanup_opencode_session --verbose "$used_session_path"
+            cleanup_opencode_session --verbose "$used_session_path" &
         else
-            cleanup_opencode_session "$used_session_path" 2>/dev/null
+            cleanup_opencode_session "$used_session_path" 2>/dev/null &
         end
     end
 
@@ -120,7 +98,7 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         set current_model $fallback_model
         set -l temp_output2 (mktemp -t opencode_output.XXXXXX)
         gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- \
-            sh -c "OPENCODE_DISABLE_PROJECT_CONFIG=1 OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1 opencode run --command commit-msg -m $current_model --format json '$cmd_args' 2>/dev/null > $temp_output2"
+            sh -c "OPENCODE_DISABLE_PROJECT_CONFIG=1 OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1 opencode run --command commit-msg -m $current_model --format json 2>/dev/null > $temp_output2"
         set -l raw2 (cat $temp_output2 | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' 2>/dev/null | tail -n 1 | string trim)
         rm -f $temp_output2
         if test -n "$raw2"
