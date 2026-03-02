@@ -56,6 +56,26 @@
         "spec": "github-copilot/claude-opus-4.6"
       }
     },
+    "opencode-zen": {
+      "description": "Preferred mixed routing via OpenCode Zen",
+      "model": "opencode/gpt-5.3-codex",
+      "small_model": "opencode/claude-haiku-4-5",
+      "agents": {
+        "plan": "opencode/claude-opus-4-6",
+        "explore": "github-copilot/grok-code-fast-1",
+        "general": "opencode/claude-sonnet-4-6",
+        "title": "opencode/big-pickle",
+        "summary": "opencode/big-pickle",
+        "compaction": "opencode/gpt-5.3-codex",
+        "test": "opencode/claude-sonnet-4-6",
+        "review": "opencode/claude-sonnet-4-6",
+        "docs": "opencode/claude-opus-4-6",
+        "research": "opencode/claude-sonnet-4-6",
+        "quick": "opencode/claude-haiku-4-5",
+        "benchmark": "opencode/claude-haiku-4-5",
+        "spec": "opencode/claude-opus-4-6"
+      }
+    },
     "anthropic": {
       "description": "Anthropic routing",
       "model": "anthropic/claude-sonnet-4-6",
