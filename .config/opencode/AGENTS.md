@@ -48,6 +48,8 @@
 ## Workflow
 
 - Verify uncertain details before stating as fact; don't guess.
+- Determine current machine context before host-specific guidance: run `hostname -s` and use that as source of truth.
+- Before suggesting or running `ssh`, compare target host to `hostname -s`; if they match, do not suggest or run SSH.
 - Don't invent scope: change only what's requested and preserve unrelated behavior.
 - Remove temporary debug logs/prints before finishing.
 - Prefer offering to run helpful commands rather than instructing the user to run them.
