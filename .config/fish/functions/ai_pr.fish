@@ -51,19 +51,7 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
     set -l temp_pr_desc (mktemp).md
     set -l temp_output (mktemp -t opencode_output.XXXXXX)
 
-    # Capture existing sessions before running (for cleanup)
-    set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
-
-    # Set up cleanup on interrupt (SIGINT/SIGTERM)
-    # Note: SIGKILL (kill -9) cannot be trapped by any process
     function __ai_pr_cleanup --on-signal SIGINT --on-signal SIGTERM
-        set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
-        for session_path in $sessions_after
-            if not contains $session_path $sessions_before
-                cleanup_opencode_session "$session_path" 2>/dev/null
-                break
-            end
-        end
         rm -f "$temp_pr_desc" $temp_output $actual_diff_file 2>/dev/null
         functions -e __ai_pr_cleanup
         exit 130
@@ -73,7 +61,7 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
     # and preserve the diff as a single argument (fish command substitution splits on newlines)
     set -x OPENCODE_PR_DIFF_FILE $actual_diff_file
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $ai_model..." -- \
-        fish -c 'opencode run --command pr-desc -m $argv[1] --format json (command cat $OPENCODE_PR_DIFF_FILE | string collect) > $argv[2] 2>&1' \
+        fish -c 'opencode_transient_run run --command pr-desc -m $argv[1] --format json (command cat $OPENCODE_PR_DIFF_FILE | string collect) > $argv[2] 2>&1' \
         -- $ai_model $temp_output
     set -l opencode_exit_code $status
     set -e OPENCODE_PR_DIFF_FILE
@@ -110,19 +98,6 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
     end
 
     rm -f $temp_output
-
-    # Cleanup the session used for generation
-    set -l sessions_after (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
-    set -l used_session_path ""
-    for session_path in $sessions_after
-        if not contains $session_path $sessions_before
-            set used_session_path $session_path
-            break
-        end
-    end
-    if test -n "$used_session_path"
-        cleanup_opencode_session "$used_session_path" 2>/dev/null
-    end
 
     # Open in Neovim for editing
     nvim -f \

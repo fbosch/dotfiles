@@ -74,9 +74,6 @@ function __ai_commit_benchmark --description 'Benchmark AI models for commit mes
     
     echo ""
     
-    # Capture sessions before benchmarking
-    set -l sessions_before (opencode session list --format json -n 500 2>/dev/null | jq -r '.[].id' 2>/dev/null)
-    
     # Results storage
     set -l results_file (mktemp -t ai_commit_benchmark.XXXXXX)
     printf "Model\tTime(s)\tMessage\tLength\tValid\n" > $results_file
@@ -136,7 +133,7 @@ STAGED DIFF (focus on THIS change):
         cat $temp_diff >> $temp_prompt
         
         # Run OpenCode with timing
-        cat $temp_prompt | opencode run -m $model --format json 2>/dev/null > $temp_output
+        cat $temp_prompt | opencode_transient_run run -m $model --format json 2>/dev/null > $temp_output
         
         set -l end_time (date +%s%N)
         set -l elapsed_ns (math "$end_time - $start_time")
@@ -198,25 +195,6 @@ STAGED DIFF (focus on THIS change):
     
     # Cleanup
     rm -f $results_file
-    
-    # Cleanup OpenCode sessions created during benchmark
-    gum style --foreground 8 "\n🧹 Cleaning up sessions..."
-    set -l sessions_after (opencode session list --format json -n 500 2>/dev/null | jq -r '.[].id' 2>/dev/null)
-    set -l deleted_count 0
-    for session in $sessions_after
-        if not contains $session $sessions_before
-            # Delete session directory
-            set -l project_id (opencode session list --format json -n 500 2>/dev/null | jq -r ".[] | select(.id == \"$session\") | .projectId" 2>/dev/null)
-            if test -n "$project_id"
-                rm -rf "$HOME/.local/share/opencode/storage/session/$project_id/$session" 2>/dev/null
-                set deleted_count (math $deleted_count + 1)
-            end
-        end
-    end
-    
-    if test $deleted_count -gt 0
-        gum style --foreground 2 "✓ Deleted $deleted_count benchmark session(s)"
-    end
     
     # Clean up test file if created
     if test "$cleanup_needed" = true
