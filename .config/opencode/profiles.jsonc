@@ -1,4 +1,20 @@
 {
+  // Context windows and GitHub Copilot premium request multipliers:
+  //
+  // Model                Context  Input    Multiplier (https://docs.github.com/en/copilot/concepts/billing/copilot-requests#model-multipliers)
+  // ─────────────────────────────────────────────────
+  // Claude Haiku 4.5     200K     —        0.33x
+  // Claude Sonnet 4.6    200K     —        1x
+  // Claude Opus 4.6      200K     —        3x
+  // GPT-5.3 Codex        400K     272K     1x
+  // GPT-5.1 Codex Max    400K     272K     1x
+  // GPT-5.1 Codex Mini   400K     272K     0.33x
+  // GPT-5.2 Codex        272K     —        1x
+  // GPT-5 Mini           128K     —        0x
+  // Grok Code Fast 1     128K     —        0.25x
+  // Big Pickle           200K     —        —
+  // ─────────────────────────────────────────────────
+  //
   "profiles": {
     "default": {
       "description": "Preferred mixed routing",
