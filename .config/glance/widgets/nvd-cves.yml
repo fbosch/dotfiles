@@ -1,0 +1,9 @@
+- type: rss
+  title: CVEs
+  style: list
+  limit: 14
+  cache: 30m
+  collapse-after: 4
+  feeds:
+    - url: https://freshrss.corvus-corax.synology.me/i/?a=rss&get=c_9
+      title: "NVD"

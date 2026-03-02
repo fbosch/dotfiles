@@ -1,5 +1,5 @@
 - type: repository
-  title: Nix
+  title: NixOS Repo
   cache: 5m
   repository: fbosch/nixos
   token: ${GITHUB_TOKEN}
