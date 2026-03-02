@@ -3,8 +3,8 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     or return 1
 
     set -l dry_run (set -q _flag_dry; and echo true; or echo false)
-    set -l ai_model (set -q _flag_model; and echo $_flag_model; or echo github-copilot/grok-code-fast-1)
-    set -l fallback_model anthropic/claude-haiku-4-5
+    set -l ai_model (set -q _flag_model; and echo $_flag_model; or echo opencode/big-pickle)
+    set -l fallback_model github-copilot/grok-code-fast-1 # anthropic/claude-haiku-4-5
 
     if not git rev-parse --git-dir >/dev/null 2>&1
         gum style " Not in a git repository"

@@ -1,8 +1,8 @@
 function ai_pr --description 'Generate AI-powered PR description comparing current branch against main'
     argparse 'm/model=' -- $argv
     or return 1
-    
-    set -l ai_model (set -q _flag_model; and echo $_flag_model; or echo github-copilot/claude-haiku-4.5)
+
+    set -l ai_model (set -q _flag_model; and echo $_flag_model; or echo opencode/big-pickle)
 
     if not git rev-parse --git-dir >/dev/null 2>&1
         gum style " Not in a git repository"
@@ -35,7 +35,7 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
     set -l temp_diff (mktemp -t pr_diff.XXXXXX)
     git diff $main_branch..HEAD >$temp_diff
     set -l diff_line_count (wc -l <$temp_diff | string trim)
-    
+
     set -l actual_diff_file $temp_diff
     if test $diff_line_count -gt 2000
         set actual_diff_file (mktemp -t pr_diff_summary.XXXXXX)
@@ -50,10 +50,10 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
 
     set -l temp_pr_desc (mktemp).md
     set -l temp_output (mktemp -t opencode_output.XXXXXX)
-    
+
     # Capture existing sessions before running (for cleanup)
     set -l sessions_before (opencode session list --format json -n 100 2>/dev/null | jq -r '.[] | "\(.projectId)/\(.id)"' 2>/dev/null)
-    
+
     # Set up cleanup on interrupt (SIGINT/SIGTERM)
     # Note: SIGKILL (kill -9) cannot be trapped by any process
     function __ai_pr_cleanup --on-signal SIGINT --on-signal SIGTERM
@@ -68,7 +68,7 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
         functions -e __ai_pr_cleanup
         exit 130
     end
-    
+
     # Pass diff file path via env var; use `command cat | string collect` to bypass bat alias
     # and preserve the diff as a single argument (fish command substitution splits on newlines)
     set -x OPENCODE_PR_DIFF_FILE $actual_diff_file
@@ -77,9 +77,9 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
         -- $ai_model $temp_output
     set -l opencode_exit_code $status
     set -e OPENCODE_PR_DIFF_FILE
-    
+
     rm -f $actual_diff_file
-    
+
     if test $opencode_exit_code -ne 0
         gum style --foreground 1 " OpenCode command failed (exit $opencode_exit_code)"
         if test -s "$temp_output"
@@ -90,17 +90,17 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
         functions -e __ai_pr_cleanup 2>/dev/null
         return 1
     end
-    
+
     if not test -s "$temp_output"
         gum style --foreground 1 " OpenCode produced no output"
         rm -f "$temp_pr_desc" $temp_output
         functions -e __ai_pr_cleanup 2>/dev/null
         return 1
     end
-    
+
     # Extract text from JSON response, write to file
     command cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' | jq -r 'select(.type == "text") | .part.text' >$temp_pr_desc 2>/dev/null
-    
+
     if not test -s "$temp_pr_desc"
         gum style --foreground 1 " No valid PR description generated. Raw output:"
         cat $temp_output | head -n 50
@@ -108,7 +108,7 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
         functions -e __ai_pr_cleanup 2>/dev/null
         return 1
     end
-    
+
     rm -f $temp_output
 
     # Cleanup the session used for generation
@@ -132,7 +132,7 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
         -c "autocmd VimLeavePre * silent! write" \
         -c "set statusline=%f\ %=[PR\ Description\ -\ exit\ to\ copy\ to\ clipboard] | normal! gg" \
         "$temp_pr_desc"
-    
+
     if not test -f "$temp_pr_desc"
         gum style --foreground 1 "󰜺 PR description cancelled"
         functions -e __ai_pr_cleanup 2>/dev/null
@@ -145,7 +145,7 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
         functions -e __ai_pr_cleanup 2>/dev/null
         return 1
     end
-    
+
     # Copy to clipboard
     set -l clipboard_cmd ""
     if test (uname) = Darwin
@@ -171,7 +171,7 @@ function ai_pr --description 'Generate AI-powered PR description comparing curre
     end
 
     rm -f "$temp_pr_desc"
-    
+
     # Remove signal handler
     functions -e __ai_pr_cleanup 2>/dev/null
 end
