@@ -1,5 +1,7 @@
 function opencode_auth_switch --description 'Switch active OpenCode provider with generated profile names'
     set -l auth_file "$HOME/.local/share/opencode/auth.json"
+    set -l codex_auth_file "$HOME/.codex/auth.json"
+    set -l codex_profiles_file "$HOME/.codex/auth-profiles.json"
     set -l alias_map \
         "openai|indigo-harbor-ddce|fbb" \
         "openai|atlas-thicket-3afa|jpb"
@@ -176,6 +178,8 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         set selected_label "$target_key"
     end
 
+    set -l selected_account_id (jq -r --arg key "$target_key" '.[$key].accountId // ""' "$auth_file")
+
     set -l inactive_key "$target_key"
     if not string match -rq -- "^$provider"'_[0-9]+$' "$inactive_key"
         set -l inactive_index 1
@@ -220,5 +224,50 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
     end
 
     mv "$tmp_file" "$auth_file"
+
+    set -l codex_status "codex unchanged"
+    if test -n "$selected_account_id"; and test -f "$codex_auth_file"
+        set -l codex_current_account_id (jq -r '.tokens.account_id // ""' "$codex_auth_file" 2>/dev/null)
+        if test $status -eq 0
+            if not test -f "$codex_profiles_file"
+                printf '{"profiles":{}}\n' >"$codex_profiles_file"
+                chmod 600 "$codex_profiles_file" 2>/dev/null
+            end
+
+            if jq -e '.profiles | type == "object"' "$codex_profiles_file" >/dev/null 2>&1
+                if test -n "$codex_current_account_id"
+                    set -l codex_profiles_tmp (mktemp)
+                    jq --arg id "$codex_current_account_id" --slurpfile auth "$codex_auth_file" '.profiles[$id] = $auth[0]' "$codex_profiles_file" >"$codex_profiles_tmp"
+                    if test $status -eq 0
+                        mv "$codex_profiles_tmp" "$codex_profiles_file"
+                        chmod 600 "$codex_profiles_file" 2>/dev/null
+                    else
+                        rm -f "$codex_profiles_tmp"
+                    end
+                end
+
+                if jq -e --arg id "$selected_account_id" '.profiles[$id]' "$codex_profiles_file" >/dev/null 2>&1
+                    set -l codex_auth_tmp (mktemp)
+                    jq --arg id "$selected_account_id" '.profiles[$id]' "$codex_profiles_file" >"$codex_auth_tmp"
+                    if test $status -eq 0
+                        mv "$codex_auth_tmp" "$codex_auth_file"
+                        chmod 600 "$codex_auth_file" 2>/dev/null
+                        set codex_status "codex switched: $selected_account_id"
+                    else
+                        rm -f "$codex_auth_tmp"
+                        set codex_status "codex update failed"
+                    end
+                else
+                    set codex_status "codex profile missing for: $selected_account_id (run codex login once)"
+                end
+            else
+                set codex_status "codex profiles file invalid: $codex_profiles_file"
+            end
+        else
+            set codex_status "codex auth parse failed: $codex_auth_file"
+        end
+    end
+
     echo "active provider switched: $provider <= $selected_label"
+    echo "$codex_status"
 end
