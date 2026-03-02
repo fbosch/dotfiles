@@ -1,0 +1,104 @@
+{
+  "profiles": {
+    "default": {
+      "description": "Preferred mixed routing",
+      "model": "openai/gpt-5.3-codex",
+      "small_model": "anthropic/claude-haiku-4-5",
+      "agents": {
+        "plan": "anthropic/claude-opus-4-6",
+        "explore": "github-copilot/grok-code-fast-1",
+        "general": "anthropic/claude-sonnet-4-6",
+        "title": "opencode/big-pickle",
+        "summary": "opencode/big-pickle",
+        "compaction": "openai/gpt-5.3-codex",
+        "test": "anthropic/claude-sonnet-4-6",
+        "review": "anthropic/claude-sonnet-4-6",
+        "docs": "anthropic/claude-opus-4-6",
+        "research": "anthropic/claude-sonnet-4-6",
+        "quick": "anthropic/claude-haiku-4-5",
+        "benchmark": "anthropic/claude-haiku-4-5",
+        "spec": "anthropic/claude-opus-4-6"
+      }
+    },
+    "github-copilot": {
+      "description": "Preferred mixed routing with GitHub Copilot",
+      "model": "github-copilot/gpt-5.2-codex",
+      "small_model": "github-copilot/claude-haiku-4.5",
+      "agents": {
+        "plan": "github-copilot/claude-opus-4.6",
+        "explore": "github-copilot/grok-code-fast-1",
+        "general": "github-copilot/claude-sonnet-4.6",
+        "title": "github-copilot/gpt-5-mini",
+        "summary": "github-copilot/gpt-5-mini",
+        "compaction": "github-copilot/gpt-5-mini",
+        "test": "github-copilot/claude-sonnet-4.6",
+        "review": "github-copilot/claude-sonnet-4.6",
+        "docs": "github-copilot/claude-opus-4.6",
+        "research": "github-copilot/claude-sonnet-4.6",
+        "quick": "github-copilot/claude-haiku-4.5",
+        "benchmark": "github-copilot/claude-haiku-4.5",
+        "spec": "github-copilot/claude-opus-4.6"
+      }
+    },
+    "anthropic": {
+      "description": "Anthropic routing",
+      "model": "anthropic/claude-sonnet-4-6",
+      "small_model": "anthropic/claude-haiku-4-5",
+      "agents": {
+        "plan": "anthropic/claude-opus-4-6",
+        "explore": "anthropic/claude-haiku-4-5",
+        "general": "anthropic/claude-sonnet-4-6",
+        "title": "opencode/big-pickle",
+        "summary": "opencode/big-pickle",
+        "compaction": "opencode/big-pickle",
+        "test": "anthropic/claude-sonnet-4-6",
+        "review": "anthropic/claude-sonnet-4-6",
+        "docs": "anthropic/claude-opus-4-6",
+        "research": "anthropic/claude-sonnet-4-6",
+        "quick": "anthropic/claude-haiku-4-5",
+        "benchmark": "anthropic/claude-haiku-4-5",
+        "spec": "anthropic/claude-opus-4-6"
+      }
+    },
+    "openai": {
+      "description": "OpenAI routing",
+      "model": "openai/gpt-5.3-codex",
+      "small_model": "openai/gpt-5.1-codex-mini",
+      "agents": {
+        "plan": "openai/gpt-5.1-codex-max",
+        "explore": "openai/gpt-5.1-codex-mini",
+        "general": "openai/gpt-5.3-codex",
+        "title": "openai/gpt-5.1-codex-mini",
+        "summary": "openai/gpt-5.1-codex-mini",
+        "compaction": "openai/gpt-5.1-codex-mini",
+        "test": "openai/gpt-5.3-codex",
+        "review": "openai/gpt-5.1-codex-max",
+        "docs": "openai/gpt-5.1-codex-max",
+        "research": "openai/gpt-5.3-codex",
+        "quick": "openai/gpt-5.1-codex-mini",
+        "benchmark": "openai/gpt-5.1-codex-mini",
+        "spec": "openai/gpt-5.1-codex-max"
+      }
+    },
+    "economy": {
+      "description": "Low-cost routing",
+      "model": "anthropic/claude-haiku-4-5",
+      "small_model": "anthropic/claude-haiku-4-5",
+      "agents": {
+        "plan": "anthropic/claude-sonnet-4-6",
+        "explore": "anthropic/claude-haiku-4-5",
+        "general": "anthropic/claude-haiku-4-5",
+        "title": "opencode/big-pickle",
+        "summary": "opencode/big-pickle",
+        "compaction": "opencode/big-pickle",
+        "test": "anthropic/claude-haiku-4-5",
+        "review": "anthropic/claude-sonnet-4-6",
+        "docs": "anthropic/claude-sonnet-4-6",
+        "research": "anthropic/claude-sonnet-4-6",
+        "quick": "anthropic/claude-haiku-4-5",
+        "benchmark": "anthropic/claude-haiku-4-5",
+        "spec": "anthropic/claude-sonnet-4-6"
+      }
+    }
+  }
+}
