@@ -23,6 +23,13 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     end
 
     set -l temp_output (mktemp -t opencode_output.XXXXXX)
+    set -l git_dir (git rev-parse --absolute-git-dir)
+    set -l git_work_tree (git rev-parse --show-toplevel)
+    # Only set GIT_WORK_TREE for linked worktrees; regular repos error if GIT_WORK_TREE is set
+    set -l git_work_tree_arg ""
+    if not string match -q "$git_work_tree*" "$git_dir"
+        set git_work_tree_arg $git_work_tree
+    end
 
     function __ai_commit_extract -S
         cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' \
@@ -33,8 +40,8 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     # Run with primary model
     set -l current_model $ai_model
     gum spin --spinner pulse --title "󰚩 Analyzing changes with $current_model..." -- \
-        fish -c 'opencode_transient_run run --command commit-msg -m $argv[1] --format json > $argv[2] 2>/dev/null' \
-        -- "$current_model" "$temp_output"
+        fish -c 'set -x GIT_DIR $argv[3]; test -n "$argv[4]"; and set -x GIT_WORK_TREE $argv[4]; opencode_transient_run run --command commit-msg -m $argv[1] --format json > $argv[2] 2>/dev/null' \
+        -- "$current_model" "$temp_output" "$git_dir" "$git_work_tree_arg"
 
     set -l raw_output (__ai_commit_extract)
 
@@ -42,8 +49,8 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     if test -z "$raw_output"
         set current_model $fallback_model
         gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- \
-            fish -c 'opencode_transient_run run --command commit-msg -m $argv[1] --format json > $argv[2] 2>/dev/null' \
-            -- "$current_model" "$temp_output"
+            fish -c 'set -x GIT_DIR $argv[3]; test -n "$argv[4]"; and set -x GIT_WORK_TREE $argv[4]; opencode_transient_run run --command commit-msg -m $argv[1] --format json > $argv[2] 2>/dev/null' \
+            -- "$current_model" "$temp_output" "$git_dir" "$git_work_tree_arg"
         set raw_output (__ai_commit_extract)
     end
 
@@ -81,8 +88,8 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
                 set current_model $fallback_model
                 set -l temp_output2 (mktemp -t opencode_output.XXXXXX)
                 gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- \
-                    fish -c 'opencode_transient_run run --command commit-msg -m $argv[1] --format json > $argv[2] 2>/dev/null' \
-                    -- "$current_model" "$temp_output2"
+                    fish -c 'set -x GIT_DIR $argv[3]; test -n "$argv[4]"; and set -x GIT_WORK_TREE $argv[4]; opencode_transient_run run --command commit-msg -m $argv[1] --format json > $argv[2] 2>/dev/null' \
+                    -- "$current_model" "$temp_output2" "$git_dir" "$git_work_tree_arg"
                 set -l raw2 (cat $temp_output2 | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' \
                     | jq -r 'select(.type == "text") | .part.text' 2>/dev/null \
                     | tail -n 1 | string trim)
