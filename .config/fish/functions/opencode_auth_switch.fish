@@ -2,6 +2,7 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
     set -l auth_file "$HOME/.local/share/opencode/auth.json"
     set -l codex_auth_file "$HOME/.codex/auth.json"
     set -l codex_profiles_file "$HOME/.codex/auth-profiles.json"
+    set -l codexbar_cache_file "$HOME/.cache/nvim/codexbar/data.json"
     set -l alias_map \
         "openai|indigo-harbor-ddce|fbb" \
         "openai|atlas-thicket-3afa|jpb"
@@ -270,4 +271,5 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
 
     echo "active provider switched: $provider <= $selected_label"
     echo "$codex_status"
+    rm -f "$codexbar_cache_file"
 end

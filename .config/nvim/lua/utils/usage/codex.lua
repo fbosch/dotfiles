@@ -90,11 +90,12 @@ function M.fetch_data_async()
 	end
 
 	cache.fetching = true
+	local args = { "usage", "--source", "oauth", "--provider", "codex", "--json" }
 
 	local stdout = vim.loop.new_pipe(false)
 	local handle
 	handle = vim.loop.spawn("codexbar", {
-		args = { "--source", "cli", "--provider", "codex", "--json" },
+		args = args,
 		stdio = { nil, stdout, nil },
 	}, function()
 		if stdout and not stdout:is_closing() then
