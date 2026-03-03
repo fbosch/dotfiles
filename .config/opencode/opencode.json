@@ -100,6 +100,7 @@
         "--replace",
         "--name",
         "mcp-sequential-thinking",
+        "--network=none",
         "mcp/sequentialthinking"
       ]
     },
