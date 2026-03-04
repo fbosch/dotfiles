@@ -6,7 +6,9 @@
   "plugin": [
     "@tarquinen/opencode-dcp@latest",
     "@happycastle/opencode-openmemory@latest",
-    "opencode-wakatime"
+    "opencode-wakatime",
+    "opencode-handoff",
+    "./plugins/machine-context/index.ts"
   ],
   "instructions": [
     "~/.config/opencode/instructions/shell-strategy.md"
