@@ -1,10 +1,8 @@
 function ai_commit --description 'Generate AI-powered Commitizen commit message from branch context'
-    argparse d/dry v/verbose 'm/model=' -- $argv
+    argparse d/dry v/verbose -- $argv
     or return 1
 
     set -l dry_run (set -q _flag_dry; and echo true; or echo false)
-    set -l ai_model (set -q _flag_model; and echo $_flag_model; or echo opencode/big-pickle)
-    set -l fallback_model github-copilot/grok-code-fast-1 # anthropic/claude-haiku-4-5
 
     if not git rev-parse --git-dir >/dev/null 2>&1
         gum style " Not in a git repository"
@@ -17,41 +15,58 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     end
 
     if set -q _flag_verbose
-        echo "Model: $ai_model"
-        echo "Fallback: $fallback_model"
         echo "Branch: "(git rev-parse --abbrev-ref HEAD)
     end
 
-    set -l temp_output (mktemp -t opencode_output.XXXXXX)
+    function __ai_commit_run -S
+        set -l temp_output (mktemp -t opencode_output.XXXXXX)
+        set -l temp_label (mktemp -t opencode_label.XXXXXX)
+        echo "Analyzing..." >$temp_label
 
-    function __ai_commit_extract -S
-        cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' \
+        # Spinner loop in background: reads label file and animates
+        fish -c '
+            set frames ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏
+            set i 1
+            while true
+                set label (cat $argv[1] 2>/dev/null)
+                printf "\r\033[K󰚩 %s %s" $frames[$i] $label >/dev/tty
+                set i (math "$i % "(count $frames)" + 1")
+                sleep 0.08
+            end
+        ' -- "$temp_label" &
+        set -l spin_pid $last_pid
+
+        set -l branch (git rev-parse --abbrev-ref HEAD 2>/dev/null)
+        set -l prev_commit (git log -1 --pretty=format:"%s" 2>/dev/null)
+        set -l staged_diff (git diff --cached --ignore-all-space -- ':!*-lock.*' ':!*.lock' 2>/dev/null)
+        set -l prompt "Branch: $branch\nPrevious commit: $prev_commit\n\nSTAGED DIFF:\n$staged_diff"
+        opencode_transient_run run --agent commit --format json "$prompt" 2>/dev/null \
+            | tee $temp_output \
+            | while read -l line
+            set -l typ (echo $line | jq -r '.type // empty' 2>/dev/null)
+            if test "$typ" = reasoning
+                set -l text (echo $line | jq -r '.part.text // empty' 2>/dev/null | string trim | string split "\n")[1]
+                test -n "$text"; and echo (string sub -l 72 -- $text) >$temp_label
+            end
+        end
+
+        kill $spin_pid 2>/dev/null
+        printf '\r\033[K' >/dev/tty
+        rm -f $temp_label
+
+        cp $temp_output /tmp/opencode_last.jsonl 2>/dev/null
+        set -l result (cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' \
             | jq -r 'select(.type == "text") | .part.text' 2>/dev/null \
-            | tail -n 1 | string trim
+            | tail -n 1 | string trim)
+        rm -f $temp_output
+        echo $result
     end
 
-    # Run with primary model
-    set -l current_model $ai_model
-    gum spin --spinner pulse --title "󰚩 Analyzing changes with $current_model..." -- \
-        fish -c 'opencode_transient_run run --command commit-msg -m $argv[1] --format json > $argv[2] 2>/dev/null' \
-        -- "$current_model" "$temp_output"
-
-    set -l raw_output (__ai_commit_extract)
-
-    # Fallback if empty
-    if test -z "$raw_output"
-        set current_model $fallback_model
-        gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- \
-            fish -c 'opencode_transient_run run --command commit-msg -m $argv[1] --format json > $argv[2] 2>/dev/null' \
-            -- "$current_model" "$temp_output"
-        set raw_output (__ai_commit_extract)
-    end
-
-    rm -f $temp_output
-    functions -e __ai_commit_extract
+    set -l raw_output (__ai_commit_run)
 
     if test -z "$raw_output"
-        gum style " Failed to generate commit message"
+        gum style --foreground 1 " Failed to generate commit message"
+        functions -e __ai_commit_run
         return 1
     end
 
@@ -61,56 +76,50 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         gum style " Failed to extract valid commit message"
         gum style --foreground 3 "Raw output:"
         echo "$raw_output"
+        functions -e __ai_commit_run
         return 1
     end
 
     set -l msg_length (string length -- "$commit_msg")
     if test "$msg_length" -gt 50
+        printf '\033[s' # save cursor position
         gum style --foreground 3 " Message is $msg_length chars (over 50)"
         gum style --foreground 6 "Generated message:"
         gum style --foreground 208 "  $commit_msg"
-        if test "$current_model" != "$fallback_model"
-            set -l retry_label "Retry with $fallback_model"
-            set -l length_action (gum choose --header "Pick an action" "Edit current message" "$retry_label" "Cancel")
-            if test $status -ne 0
-                gum style --foreground 1 "󰜺 Commit cancelled"
+        set -l length_action (gum choose --header "Pick an action" "Edit current message" "Retry" "Cancel")
+        set -l choose_status $status
+        printf '\033[u\033[J' # restore cursor, clear to end of screen
+        if test $choose_status -ne 0
+            gum style --foreground 1 "󰜺 Commit cancelled"
+            functions -e __ai_commit_run
+            return 1
+        end
+
+        if test "$length_action" = Retry
+            set raw_output (__ai_commit_run)
+            if test -z "$raw_output"
+                gum style --foreground 1 " Failed to generate commit message"
+                functions -e __ai_commit_run
                 return 1
             end
-
-            if test "$length_action" = "$retry_label"
-                set current_model $fallback_model
-                set -l temp_output2 (mktemp -t opencode_output.XXXXXX)
-                gum spin --spinner pulse --title "󰚩 Retrying with $current_model..." -- \
-                    fish -c 'opencode_transient_run run --command commit-msg -m $argv[1] --format json > $argv[2] 2>/dev/null' \
-                    -- "$current_model" "$temp_output2"
-                set -l raw2 (cat $temp_output2 | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' \
-                    | jq -r 'select(.type == "text") | .part.text' 2>/dev/null \
-                    | tail -n 1 | string trim)
-                rm -f $temp_output2
-
-                if test -z "$raw2"
-                    gum style --foreground 1 " Failed to generate commit message with $current_model"
-                    return 1
-                end
-
-                set commit_msg (__extract_commit_msg "$raw2")
-                if test -z "$commit_msg"
-                    gum style --foreground 1 " Failed to extract valid commit message from $current_model"
-                    return 1
-                end
-
-                set msg_length (string length -- "$commit_msg")
-                if test "$msg_length" -gt 50
-                    gum style --foreground 3 " Message is $msg_length chars (over 50) — edit before committing"
-                end
-            else if test "$length_action" = "Cancel"
-                gum style --foreground 1 "󰜺 Commit cancelled"
+            set commit_msg (__extract_commit_msg "$raw_output")
+            if test -z "$commit_msg"
+                gum style --foreground 1 " Failed to extract valid commit message"
+                functions -e __ai_commit_run
                 return 1
             end
-        else
-            gum style --foreground 3 " Edit before committing"
+            set msg_length (string length -- "$commit_msg")
+            if test "$msg_length" -gt 50
+                gum style --foreground 3 " Message is $msg_length chars (over 50) — edit before committing"
+            end
+        else if test "$length_action" = Cancel
+            gum style --foreground 1 "󰜺 Commit cancelled"
+            functions -e __ai_commit_run
+            return 1
         end
     end
+
+    functions -e __ai_commit_run
 
     set -l edited_msg (gum input --value="$commit_msg" --width 100 --prompt "󰏫 " --placeholder "Edit commit message or press Enter to accept...")
     if test $status -ne 0
@@ -152,9 +161,9 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     set -l commit_status $status
 
     if test $commit_status -eq 0
-        gum style --foreground 2 "󰸞 Commit successful!"
+        gum style --foreground 2 "󱚣 Commit successful!"
     else
-        gum style --foreground 1 "󱎘 Commit failed"
+        gum style --foreground 1 "󱚡 Commit failed"
         return 1
     end
 end

@@ -2,8 +2,8 @@ function __extract_commit_msg --description 'Extract and sanitize a conventional
     # Accepts raw AI text as $argv[1] (already ANSI-stripped, from jq extraction)
     set -l raw $argv[1]
 
-    # Strip backtick code fences and trim
-    set -l cleaned (echo "$raw" | sed 's/```[a-z]*//g' | string trim)
+    # Strip backtick code fences (with or without language tag) and inline backticks, then trim
+    set -l cleaned (echo "$raw" | sed 's/```[a-z]*//g; s/`//g' | string trim)
 
     set -l commit_msg ""
     for line in (echo "$cleaned" | string split "\n")

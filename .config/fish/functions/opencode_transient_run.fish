@@ -29,26 +29,27 @@ function opencode_transient_run --description 'Run opencode with transient local
     set -l git_dir (git rev-parse --absolute-git-dir 2>/dev/null)
     set -l git_work_tree (git rev-parse --show-toplevel 2>/dev/null)
 
-    # Run from temp_root to prevent opencode scanning up to a project .opencode/ dir
-    set -l git_env
+    set -l git_dir_env ""
+    set -l git_work_tree_env ""
     if test -n "$git_dir"
-        set git_env GIT_DIR=$git_dir
+        set git_dir_env "GIT_DIR=$git_dir"
     end
     if test -n "$git_work_tree"
-        # Only set GIT_WORK_TREE for linked worktrees (git-dir is outside work tree)
         if not string match -q "$git_work_tree*" "$git_dir"
-            set git_env $git_env GIT_WORK_TREE=$git_work_tree
+            set git_work_tree_env "GIT_WORK_TREE=$git_work_tree"
         end
     end
 
-    cd "$temp_root"
-    env \
-        XDG_DATA_HOME="$temp_root" \
-        XDG_STATE_HOME="$temp_root/state" \
-        OPENCODE_DISABLE_PROJECT_CONFIG=1 \
-        OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1 \
-        $git_env \
-        opencode $argv
+    fish -c '
+        cd $argv[1]
+        set -x XDG_DATA_HOME $argv[1]
+        set -x XDG_STATE_HOME $argv[1]/state
+        set -x OPENCODE_DISABLE_PROJECT_CONFIG 1
+        set -x OPENCODE_DISABLE_CLAUDE_CODE_PROMPT 1
+        test -n "$argv[2]"; and set -x (string split -m1 = $argv[2])
+        test -n "$argv[3]"; and set -x (string split -m1 = $argv[3])
+        opencode $argv[4..]
+    ' -- "$temp_root" "$git_dir_env" "$git_work_tree_env" $argv
     set -l exit_code $status
 
     rm -rf "$temp_root" 2>/dev/null
