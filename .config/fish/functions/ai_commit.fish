@@ -40,32 +40,14 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         set -l prev_commit (git log -1 --pretty=format:"%s" 2>/dev/null)
         set -l staged_diff (git diff --cached --ignore-all-space -- ':!*-lock.*' ':!*.lock' 2>/dev/null)
         set -l prompt "Branch: $branch\nPrevious commit: $prev_commit\n\nSTAGED DIFF:\n$staged_diff"
-        opencode_transient_run run --agent commit --format json "$prompt" 2>/dev/null \
+        set -l model_prompt "You write git conventional commit messages.\nReturn exactly one line in this format: type(scope): subject\nRules: use one of feat|fix|docs|style|refactor|perf|test|build|ci|chore, imperative mood, no trailing period, keep under 50 characters when possible, no markdown, no quotes, no explanations, no questions.\n\n$prompt"
+        opencode_transient_run run -m opencode/gpt-5-nano --format json "$model_prompt" 2>/dev/null \
             | tee $temp_output \
             | while read -l line
             set -l typ (echo $line | jq -r '.type // empty' 2>/dev/null)
             if test "$typ" = reasoning
                 set -l text (echo $line | jq -r '.part.text // empty' 2>/dev/null | string trim | string split "\n")[1]
                 test -n "$text"; and echo (string sub -l 72 -- $text) >$temp_label
-            end
-        end
-        set -l opencode_status $pipestatus[1]
-
-        set -l opencode_error (command cat $temp_output | sed 's/\x1b\[[0-9;]*m//g' | grep '^{' \
-            | jq -r 'select(.type == "error") | (.error.data.message // .error.message // empty)' 2>/dev/null \
-            | tail -n 1 | string trim)
-
-        if test $opencode_status -ne 0; or test -n "$opencode_error"
-            set -l fallback_prompt "You write git conventional commit messages.\nReturn exactly one line in this format: type(scope): subject\nRules: use one of feat|fix|docs|style|refactor|perf|test|build|ci|chore, imperative mood, no trailing period, keep under 50 characters when possible, no markdown, no quotes, no explanations, no questions.\n\n$prompt"
-            echo "Retrying with fallback model..." >$temp_label
-            opencode_transient_run run -m opencode/gpt-5-nano --format json "$fallback_prompt" 2>/dev/null \
-                | tee $temp_output \
-                | while read -l line
-                set -l typ (echo $line | jq -r '.type // empty' 2>/dev/null)
-                if test "$typ" = reasoning
-                    set -l text (echo $line | jq -r '.part.text // empty' 2>/dev/null | string trim | string split "\n")[1]
-                    test -n "$text"; and echo (string sub -l 72 -- $text) >$temp_label
-                end
             end
         end
 
