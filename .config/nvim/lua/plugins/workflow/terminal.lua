@@ -32,6 +32,7 @@ return {
 			"FTermToggle",
 			"FtermMProcs",
 			"FTermLazyGit",
+			"FTermScooter",
 		},
 		keys = term_keymaps({
 			{ "<A-t>", "FTermToggle", "toggle floating terminal" },
@@ -39,6 +40,7 @@ return {
 			{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
 			{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
 			{ "<A-c>", "FTermCheckmate", "toggle floating terminal with checkmate in neovim instance" },
+			{ "<A-s>", "FTermScooter", "toggle floating terminal with scooter" },
 		}),
 		config = function()
 			local usrcmd = vim.api.nvim_create_user_command
@@ -55,8 +57,8 @@ return {
 				border = "rounded",
 				env = env,
 				dimensions = dimensions,
-        shell = "fish",
-        cmd = "fish"
+				shell = "fish",
+				cmd = "fish",
 			})
 
 			usrcmd("FTermOpen", fterm.open, { bang = true })
@@ -108,6 +110,21 @@ return {
 				btop_instance:toggle()
 			end, { bang = true })
 
+			local scooter_instance = nil
+			usrcmd("FTermScooter", function()
+				if not scooter_instance then
+					scooter_instance = fterm:new({
+						ft = "fterm_scooter",
+						env = env,
+						shell = "dash",
+						cmd = "scooter",
+						dimensions = dimensions,
+					})
+				end
+
+				scooter_instance:toggle()
+			end, { bang = true })
+
 			local checkmate_instance = nil
 			usrcmd("FTermCheckmate", function()
 				local todo_file =
@@ -122,7 +139,7 @@ return {
 					checkmate_instance = fterm:new({
 						ft = "fterm_checkmate",
 						env = env,
-            shell = "dash",
+						shell = "dash",
 						cmd = string.format("nvim %s", todo_file),
 						dimensions = {
 							height = 0.65,
