@@ -84,6 +84,8 @@
 
 [maintenance]
 	repo = /Users/fbb/Projects/KommuneKredit.Frontend/main
+	repo = /home/fbb/nixos
+	repo = /home/fbb/Projects/docs-cache
 
 [gpg]
 	format = ssh
