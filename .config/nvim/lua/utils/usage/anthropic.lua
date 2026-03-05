@@ -94,7 +94,7 @@ function M.fetch_data_async()
 	local stdout = vim.loop.new_pipe(false)
 	local handle
 	handle = vim.loop.spawn("codexbar", {
-		args = { "--source", "cli", "--provider", "claude", "--json" },
+		args = { "usage", "--source", "cli", "--provider", "claude", "--json" },
 		stdio = { nil, stdout, nil },
 	}, function()
 		if stdout and not stdout:is_closing() then
@@ -131,7 +131,19 @@ function M.fetch_data_async()
 end
 
 local function safe_percent(value)
-	local num = tonumber(value) or 0
+	local num = tonumber(value)
+	if not num and type(value) == "string" then
+		num = tonumber(value:gsub("%%", ""))
+	end
+
+	if not num then
+		return 0
+	end
+
+	if num > 0 and num < 1 then
+		num = num * 100
+	end
+
 	if num < 0 then
 		return 0
 	end
@@ -227,20 +239,18 @@ function M.statusline_component()
 		local parts = {}
 		table.insert(parts, "%#Comment#claude")
 
-		local primary = nilify(cache.data.usage.primary)
+		local usage = cache.data.usage
+		local primary = nilify(usage.primary)
 		local primary_remaining = primary and remaining_percent(primary.usedPercent) or nil
 
-		local secondary = nilify(cache.data.usage.secondary)
-		local secondary_remaining = secondary and remaining_percent(secondary.usedPercent) or nil
+		local secondary = nilify(usage.secondary)
+		local tertiary = nilify(usage.tertiary)
 
-		-- If session (primary) is at 0%, show it grayed out and hide weekly (secondary)
-		if primary_remaining == 0 then
-			if primary then
-				local filled_bar, empty_bar = generate_bar(0, 9)
-				table.insert(parts, string.format("%%#Comment#%s 0%%%%%%*", empty_bar))
-			end
-			return table.concat(parts, " ")
+		if secondary == nil then
+			secondary = tertiary
 		end
+
+		local secondary_remaining = secondary and remaining_percent(secondary.usedPercent) or nil
 
 		if primary then
 			local percent = primary_remaining or remaining_percent(primary.usedPercent)
