@@ -18,14 +18,16 @@ function __extract_commit_msg --description 'Extract and sanitize a conventional
         end
     end
 
-    # Fallback: first non-empty line after label stripping
+    # Fallback: accept any conventional-commit-like type token
     if test -z "$commit_msg"
         for line in (echo "$cleaned" | string split "\n")
             set line (string replace -r '^\*{0,2}(Commit [Mm]essage|COMMIT MESSAGE):\*{0,2}\s*' '' -- "$line")
             set line (string trim -- "$line")
             test -z "$line"; and continue
-            set commit_msg "$line"
-            break
+            if string match -qr '^[a-z]+(\([^)]+\))?!?: \S' -- "$line"
+                set commit_msg "$line"
+                break
+            end
         end
     end
 
