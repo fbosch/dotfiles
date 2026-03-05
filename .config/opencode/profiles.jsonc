@@ -22,7 +22,7 @@
       "small_model": "anthropic/claude-haiku-4-5",
       "agents": {
         "plan": "anthropic/claude-opus-4-6",
-        "explore": "anthropic/claude-haiku-4-5",
+        "explore": "openai/gpt-5.3-codex-spark",
         "general": "anthropic/claude-sonnet-4-6",
         "title": "opencode/big-pickle",
         "summary": "opencode/big-pickle",
