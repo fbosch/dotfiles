@@ -2,7 +2,7 @@
 description: Minimal agent for commit message generation — no provider system prompt, no tools
 mode: primary
 hidden: true
-model: anthropic/claude-haiku-4-5 # opencode/big-pickle
+model: openai/gpt-5.3-codex-spark
 prompt: ""
 permission: deny
 tools:
