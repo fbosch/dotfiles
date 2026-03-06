@@ -1,1 +1,1 @@
-worktree-path = "{{ branch }}"
+worktree-path = "../{{ branch }}"
