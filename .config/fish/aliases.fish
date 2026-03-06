@@ -111,7 +111,8 @@ abbr cu 'cargo update'
 
 # worktree scripts
 abbr wta worktree_add
-abbr wtc worktrees_clean
+# abbr wtclean worktrees_clean
+abbr wtc worktree_clone
 
 # Azure DevOps
 abbr atc ado_test_case
