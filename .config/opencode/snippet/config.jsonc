@@ -1,0 +1,30 @@
+{
+  // JSON Schema for editor autocompletion
+  "$schema": "https://raw.githubusercontent.com/JosXa/opencode-snippets/main/schema/config.schema.json",
+
+  // Logging settings
+  "logging": {
+    // Enable debug logging to file
+    // Logs are written to ~/.config/opencode/logs/snippets/daily/
+    // Values: true, false, "enabled", "disabled"
+    // Default: false
+    "debug": false
+  },
+
+  // Experimental features (may change or be removed)
+  "experimental": {
+    // Enable skill rendering with <skill>name</skill> or <skill name="name" /> syntax
+    // When enabled, skill tags are replaced with the skill's content body
+    // Skills are loaded from OpenCode's standard skill directories
+    // Values: true, false, "enabled", "disabled"
+    // Default: false
+    "skillRendering": false
+  },
+
+  // Hide shell command in snippet output
+  // When false (default), shell commands show as "$ command\n--> output"
+  // When true, only the output is shown (matching OpenCode's slash command behavior)
+  // Values: true, false, "enabled", "disabled"
+  // Default: false
+  "hideCommandInOutput": false
+}

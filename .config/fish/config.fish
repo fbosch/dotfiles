@@ -126,6 +126,10 @@ if command -v navi >/dev/null 2>&1
     source $navi_cache
 end
 
+if command -v just >/dev/null 2>&1
+    just --completions fish | source
+end
+
 # --- Starship Configuration ---
 # Use TTY-safe config for console (TTY1), unicode config for terminal emulators
 if test $OS_TYPE = Linux
