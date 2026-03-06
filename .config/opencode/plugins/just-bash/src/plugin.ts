@@ -7,9 +7,14 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
   }
 
   const overlay = new OverlayFs({ root: input.directory });
+  const mountPoint = overlay.getMountPoint();
   const bashEnv = new Bash({
     fs: overlay,
-    cwd: overlay.getMountPoint(),
+    cwd: mountPoint,
+    env: {
+      HOME: mountPoint,
+      PROJECT_ROOT: mountPoint,
+    },
   });
 
   return {
@@ -24,23 +29,43 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
           timeout: tool.schema
             .number()
             .optional()
-            .describe("Timeout in milliseconds (accepted for compatibility)"),
+            .describe("Timeout in milliseconds"),
           workdir: tool.schema
             .string()
             .optional()
             .describe("Working directory for this command"),
         },
         async execute(args) {
+          const controller =
+            args.timeout !== undefined ? new AbortController() : undefined;
+          const timeoutHandle =
+            args.timeout !== undefined
+              ? setTimeout(() => controller?.abort(), args.timeout)
+              : undefined;
+
           try {
             const result = await bashEnv.exec(
               args.command,
-              args.workdir ? { cwd: args.workdir } : undefined,
+              {
+                ...(args.workdir !== undefined ? { cwd: args.workdir } : {}),
+                ...(controller !== undefined ? { signal: controller.signal } : {}),
+              },
             );
-            return `${result.stdout}${result.stderr}`;
+            const output = `${result.stdout}${result.stderr}`;
+
+            if (result.exitCode === 0) {
+              return output;
+            }
+
+            return `Exit ${result.exitCode}\n${output}`;
           } catch (error) {
             const message =
               error instanceof Error ? error.message : "Unknown execution error";
             return `just-bash execution failed: ${message}`;
+          } finally {
+            if (timeoutHandle !== undefined) {
+              clearTimeout(timeoutHandle);
+            }
           }
         },
       }),
