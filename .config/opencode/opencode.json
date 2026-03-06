@@ -6,6 +6,7 @@
   "plugin": [
     "@tarquinen/opencode-dcp@latest",
     "@happycastle/opencode-openmemory@latest",
+    "opencode-snippets",
     "opencode-wakatime",
     "opencode-handoff",
     "./plugins/machine-context/index.ts"
