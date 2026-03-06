@@ -110,7 +110,7 @@ abbr ct 'cargo test'
 abbr cu 'cargo update'
 
 # worktree scripts
-abbr wta worktree_add
+abbr wta 'wt switch --create'
 # abbr wtclean worktrees_clean
 abbr wtc worktree_clone
 

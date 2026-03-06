@@ -15,14 +15,6 @@
   "instructions": [
     "~/.config/opencode/instructions/shell-strategy.md"
   ],
-  "keybinds": {
-    "input_move_up": "up,ctrl+p,alt+k",
-    "input_move_down": "down,ctrl+n,alt+j",
-    "history_previous": "up,ctrl+p,alt+k",
-    "history_next": "down,ctrl+n,alt+j",
-    "input_delete_to_line_end": "ctrl+shift+k",
-    "input_newline": "shift+return,ctrl+return,alt+return"
-  },
   "permission": {
     "bash": {
       "rm *": "deny",

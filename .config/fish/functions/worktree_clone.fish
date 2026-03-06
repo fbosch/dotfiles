@@ -1,57 +1,107 @@
-function worktree_clone --description 'Bare-clone a repo and open first worktree with worktrunk'
-    if not command -v git >/dev/null
-        echo (set_color red)"git is required but not found."(set_color normal)
+function worktree_clone --description 'Bare-clone a repo and open the first worktree'
+    if not command -v git >/dev/null 2>&1
+        echo (set_color red)"git is required but not found."(set_color normal) >&2
         return 1
     end
 
-    if not command -v wt >/dev/null
-        echo (set_color red)"worktrunk (wt) is required but not found."(set_color normal)
+    if not command -v wt >/dev/null 2>&1
+        echo (set_color red)"worktrunk (wt) is required but not found."(set_color normal) >&2
         return 1
     end
 
     if test (count $argv) -lt 1
-        echo (set_color yellow)"Usage: worktree_clone <url> [directory]"(set_color normal)
+        echo (set_color yellow)"Usage: worktree_clone <url> [directory]"(set_color normal) >&2
         return 1
     end
 
+    set -l orig_dir (pwd)
     set -l url "$argv[1]"
     set -l name
 
     if test (count $argv) -ge 2
         set name "$argv[2]"
     else
-        set name (basename "$url" .git)
+        set -l normalized_url (string trim --right --chars=/ -- "$url")
+        set -l path_tail (string split -r -m1 / -- "$normalized_url")[-1]
+        set name (string split -r -m1 : -- "$path_tail")[-1]
+        set name (string replace -r '\.git$' '' -- "$name")
     end
 
     if test -z "$name"
-        echo (set_color red)"Could not infer target directory name."(set_color normal)
+        echo (set_color red)"Could not infer target directory name from '$url'."(set_color normal) >&2
         return 1
     end
 
     if test -e "$name"
-        echo (set_color yellow)"Directory '$name' already exists. Aborting!"(set_color normal)
+        echo (set_color yellow)"Directory '$name' already exists. Aborting!"(set_color normal) >&2
         return 1
     end
 
-    echo (set_color cyan)"Cloning bare repository into $name/.git..."(set_color normal)
-    git clone --bare "$url" "$name/.git"
+    mkdir -p "$name"
     or return 1
 
-    git -C "$name/.git" config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-    git -C "$name/.git" fetch origin
+    git clone --bare "$url" "$name/.bare"
+    or begin
+        rm -rf "$name"
+        return 1
+    end
 
-    set -l default_branch (git -C "$name/.git" symbolic-ref HEAD 2>/dev/null | string replace 'refs/heads/' '')
+    ln -s .bare "$name/.git"
+    or begin
+        rm -rf "$name"
+        return 1
+    end
+
+    git -C "$name/.bare" config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+    or begin
+        rm -rf "$name"
+        return 1
+    end
+
+    git -C "$name/.bare" fetch origin
+    or echo (set_color yellow)"Warning: failed to fetch origin; continuing with cloned refs."(set_color normal) >&2
+
+    set -l default_branch (git -C "$name/.bare" symbolic-ref HEAD 2>/dev/null | string replace 'refs/heads/' '')
     if test -z "$default_branch"
+        set default_branch (git -C "$name/.bare" ls-remote --symref origin HEAD 2>/dev/null | string match -r --groups-only 'ref: refs/heads/([^[:space:]]+)')
+    end
+    if test -z "$default_branch"
+        echo (set_color yellow)"Warning: could not detect the default branch; assuming 'main'."(set_color normal) >&2
         set default_branch main
     end
 
     echo (set_color cyan)"Default branch: $default_branch"(set_color normal)
-    echo (set_color cyan)"Creating first worktree..."(set_color normal)
+    echo (set_color cyan)"Creating first worktree with wt..."(set_color normal)
 
     cd "$name"
-    wt switch "$default_branch"
-    or wt switch --create "$default_branch"
-    or return 1
+    or begin
+        cd "$orig_dir"
+        rm -rf "$name"
+        return 1
+    end
 
-    echo (set_color green)"Ready. Use 'wt switch -c <branch>' for new worktrees."(set_color normal)
+    set -lx WORKTRUNK_WORKTREE_PATH "../{{ branch }}"
+
+    command wt switch "$default_branch"
+    or begin
+        cd "$orig_dir"
+        rm -rf "$name"
+        return 1
+    end
+
+    if test -d "$default_branch"
+        cd "$default_branch"
+        or begin
+            cd "$orig_dir"
+            rm -rf "$name"
+            return 1
+        end
+    else
+        cd "$orig_dir"
+        rm -rf "$name"
+        echo (set_color red)"wt did not create expected worktree directory '$name/$default_branch'."(set_color normal) >&2
+        return 1
+    end
+
+    echo (set_color green)"Ready."(set_color normal)
 end
