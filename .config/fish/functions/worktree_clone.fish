@@ -4,11 +4,6 @@ function worktree_clone --description 'Bare-clone a repo and open the first work
         return 1
     end
 
-    if not command -v wt >/dev/null 2>&1
-        echo (set_color red)"worktrunk (wt) is required but not found."(set_color normal) >&2
-        return 1
-    end
-
     if test (count $argv) -lt 1
         echo (set_color yellow)"Usage: worktree_clone <url> [directory]"(set_color normal) >&2
         return 1
@@ -71,26 +66,25 @@ function worktree_clone --description 'Bare-clone a repo and open the first work
     end
 
     echo (set_color cyan)"Default branch: $default_branch"(set_color normal)
-    echo (set_color cyan)"Creating first worktree with wt..."(set_color normal)
+    echo (set_color cyan)"Creating first worktree..."(set_color normal)
 
-    cd "$name"
+    set -l target_ref "$default_branch"
+    git -C "$name/.bare" show-ref --verify --quiet "refs/heads/$default_branch"
+    if test $status -ne 0
+        set target_ref "origin/$default_branch"
+    end
+
+    set -l worktree_dir "$orig_dir/$name/$default_branch"
+
+    git -C "$name/.bare" worktree add "$worktree_dir" "$target_ref"
     or begin
         cd "$orig_dir"
         rm -rf "$name"
         return 1
     end
 
-    set -lx WORKTRUNK_WORKTREE_PATH "../{{ branch }}"
-
-    command wt switch "$default_branch"
-    or begin
-        cd "$orig_dir"
-        rm -rf "$name"
-        return 1
-    end
-
-    if test -d "$default_branch"
-        cd "$default_branch"
+    if test -d "$worktree_dir"
+        cd "$worktree_dir"
         or begin
             cd "$orig_dir"
             rm -rf "$name"
@@ -99,7 +93,7 @@ function worktree_clone --description 'Bare-clone a repo and open the first work
     else
         cd "$orig_dir"
         rm -rf "$name"
-        echo (set_color red)"wt did not create expected worktree directory '$name/$default_branch'."(set_color normal) >&2
+        echo (set_color red)"git did not create expected worktree directory '$worktree_dir'."(set_color normal) >&2
         return 1
     end
 

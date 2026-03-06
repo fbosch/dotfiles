@@ -12,7 +12,7 @@ set -gx LS_COLORS "(vivid generate ~/.config/vivid/themes/zenwritten-dark.yml)"
 set -x RIPGREP_CONFIG_PATH "$HOME/.config/ripgrep/ripgreprc"
 set -gx PATH $HOME/.cargo/bin $PATH
 set -U FZF_DEFAULT_COMMAND fd --threads 16
-set -U SKIM_DEFAULT_COMMAND fd --type f --threads 16 || git ls-tree -r --name-only HEAD || rg --files || find .
+set -U SKIM_DEFAULT_COMMAND fd --type f --threads 16 || git ls-tree -r --name-only HEAD 2>/dev/null || rg --files || find .
 # set -U FZF_CTRL_T_COMMAND "$FZF_DEFAULT_COMMAND"
 # set -U FZF_OPEN_COMMAND "$FZF_DEFAULT_COMMAND"
 set -U FZF_DEFAULT_OPTS "--ansi --type f --strip-cwd-prefix --follow --threads 16"
