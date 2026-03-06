@@ -28,23 +28,78 @@ return {
 			vim.o.autoread = true
 		end,
 		config = function()
-			-- Track opencode process ID per buffer (store in plugin namespace to persist)
-			if not vim.g.opencode_buf_pids then
-				vim.g.opencode_buf_pids = {}
+			-- Track opencode terminal job and process per buffer
+			if not vim.g.opencode_buf_jobs then
+				vim.g.opencode_buf_jobs = {}
 			end
-			local opencode_buf_pids = vim.g.opencode_buf_pids
+			local opencode_buf_jobs = vim.g.opencode_buf_jobs
+			local debug_shutdown = vim.g.opencode_debug_shutdown == true
 
-			local function stop_and_cleanup_opencode_for_buf(buf)
-				pcall(function()
-					require("opencode").stop()
-				end)
+			local uv = vim.uv or vim.loop
 
-				-- Kill only the specific process associated with this buffer
-				local pid = opencode_buf_pids[buf]
-				if pid then
-					vim.fn.system("kill -TERM " .. pid)
-					opencode_buf_pids[buf] = nil
+			local function debug_notify(msg)
+				if not debug_shutdown then
+					return
 				end
+
+				vim.schedule(function()
+					vim.notify("[opencode shutdown] " .. msg, vim.log.levels.DEBUG)
+				end)
+			end
+
+			local function pid_is_alive(pid)
+				if not pid or pid <= 0 then
+					return false
+				end
+
+				if not uv or not uv.kill then
+					return true
+				end
+
+				return pcall(uv.kill, pid, 0)
+			end
+
+			local function signal_pid_and_group(pid, signal)
+				if not pid or pid <= 0 then
+					return
+				end
+
+				pcall(vim.fn.system, { "kill", "-" .. signal, "-" .. tostring(pid) })
+				pcall(vim.fn.system, { "kill", "-" .. signal, tostring(pid) })
+			end
+
+			local function stop_and_cleanup_opencode_for_buf(buf, skip_plugin_stop)
+				if not skip_plugin_stop then
+					pcall(function()
+						require("opencode").stop()
+					end)
+					debug_notify(string.format("stop requested for buf=%d", buf))
+				end
+
+				local job = opencode_buf_jobs[buf]
+				if not job then
+					debug_notify(string.format("no tracked job for buf=%d", buf))
+					return
+				end
+
+				if job.job_id and job.job_id > 0 then
+					pcall(vim.fn.jobstop, job.job_id)
+					debug_notify(string.format("jobstop sent for buf=%d job=%d", buf, job.job_id))
+				end
+
+				if job.pid and job.pid > 0 then
+					signal_pid_and_group(job.pid, "TERM")
+					debug_notify(string.format("TERM sent for buf=%d pid=%d", buf, job.pid))
+					vim.defer_fn(function()
+						if pid_is_alive(job.pid) then
+							signal_pid_and_group(job.pid, "KILL")
+							debug_notify(string.format("KILL sent for buf=%d pid=%d", buf, job.pid))
+						end
+					end, 1500)
+				end
+
+				opencode_buf_jobs[buf] = nil
+				debug_notify(string.format("cleanup complete for buf=%d", buf))
 			end
 
 			local function focus_opencode_window()
@@ -54,6 +109,9 @@ return {
 						local filetype = vim.bo[bufnr].filetype
 						if filetype == "opencode" or filetype == "opencode_terminal" then
 							vim.api.nvim_set_current_win(win)
+							if filetype == "opencode_terminal" then
+								pcall(vim.cmd, "startinsert")
+							end
 							return
 						end
 					end
@@ -81,6 +139,16 @@ return {
 					local name = vim.api.nvim_buf_get_name(args.buf)
 					if name:find("term://", 1, true) and name:find("opencode", 1, true) then
 						vim.bo[args.buf].buflisted = false
+						pcall(vim.cmd, "startinsert")
+					end
+				end,
+			})
+
+			vim.api.nvim_create_autocmd("WinEnter", {
+				pattern = "*",
+				callback = function(args)
+					if vim.bo[args.buf].filetype == "opencode_terminal" then
+						pcall(vim.cmd, "startinsert")
 					end
 				end,
 			})
@@ -90,23 +158,18 @@ return {
 				pattern = "opencode_terminal",
 				callback = function(args)
 					local buf_opts = { buffer = args.buf, silent = true }
+					pcall(vim.cmd, "startinsert")
 
-					-- Extract and store the process ID from the terminal buffer
-					-- The terminal job ID can be retrieved via the terminal's job
+					-- Extract and store terminal job and process IDs
 					vim.schedule(function()
-						local chan = vim.bo[args.buf].channel
-						if chan and chan > 0 then
-							-- Get the process ID associated with this terminal channel
-							local info = vim.fn.getpid() -- This gets neovim's PID; we need the child process
-							-- For terminal buffers, Neovim tracks job info; we'll use jobpid if available
-							local job_id = vim.bo[args.buf].channel
-							if job_id then
-								-- Try to get the child process ID
-								local pid = vim.fn.jobpid(job_id)
-								if pid and pid > 0 then
-									opencode_buf_pids[args.buf] = pid
-								end
-							end
+						local ok, job_id = pcall(vim.api.nvim_buf_get_var, args.buf, "terminal_job_id")
+						if ok and job_id and job_id > 0 then
+							local pid = vim.fn.jobpid(job_id)
+							opencode_buf_jobs[args.buf] = {
+								job_id = job_id,
+								pid = (pid and pid > 0) and pid or nil,
+							}
+							debug_notify(string.format("tracked buf=%d job=%d pid=%s", args.buf, job_id, tostring(pid)))
 						end
 					end)
 
@@ -129,12 +192,22 @@ return {
 				end,
 			})
 
+			vim.api.nvim_create_autocmd("TermClose", {
+				pattern = "*",
+				callback = function(args)
+					if opencode_buf_jobs[args.buf] then
+						debug_notify(string.format("term closed for buf=%d", args.buf))
+					end
+					opencode_buf_jobs[args.buf] = nil
+				end,
+			})
+
 			-- Clean up opencode instance when buffer is deleted/unloaded
 			vim.api.nvim_create_autocmd({ "BufDelete", "BufUnload" }, {
 				pattern = "*",
 				callback = function(args)
 					local filetype = vim.bo[args.buf].filetype
-					if filetype == "opencode_terminal" or filetype == "opencode" then
+					if filetype == "opencode_terminal" or filetype == "opencode" or opencode_buf_jobs[args.buf] then
 						stop_and_cleanup_opencode_for_buf(args.buf)
 					end
 				end,
@@ -147,12 +220,11 @@ return {
 					pcall(function()
 						require("opencode").stop()
 					end)
+					debug_notify("VimLeavePre: draining tracked jobs")
 
-					-- Kill only the opencode processes associated with buffers in this instance
-					for buf, pid in pairs(opencode_buf_pids) do
-						if pid and pid > 0 then
-							vim.fn.system("kill -TERM " .. pid)
-						end
+					-- Ensure all tracked opencode jobs for this instance are stopped
+					for buf, _ in pairs(opencode_buf_jobs) do
+						stop_and_cleanup_opencode_for_buf(buf, true)
 					end
 				end,
 			})
