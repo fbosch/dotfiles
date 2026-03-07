@@ -2,17 +2,19 @@
 
 import process from "node:process";
 import pc from "picocolors";
+import { match } from "ts-pattern";
 
 import {
   commit,
   getBranchName,
+  type GitError,
   getPreviousCommitSubject,
   getStagedDiff,
   getStagedFiles,
   hasOnlyLockfiles,
   isInGitRepo,
 } from "./src/git";
-import { generateCommit } from "./src/generate";
+import { generateCommit, type GenerateError } from "./src/generate";
 import {
   choose,
   copyCommitCommandToClipboard,
@@ -69,6 +71,29 @@ function getModelRef(cliValue?: string): string {
   return DEFAULT_MODEL;
 }
 
+function formatGitError(error: GitError): string {
+  const detail = error.stderr.length > 0 ? error.stderr : "git command failed";
+  return `${error.command}: ${detail}`;
+}
+
+function formatGenerateError(error: GenerateError): string {
+  return match(error)
+    .with({ kind: "connection" }, ({ message }) => `Connection error: ${message}`)
+    .with({ kind: "timeout" }, ({ message }) => `Timeout: ${message}`)
+    .with({ kind: "session" }, ({ message }) => `Session error: ${message}`)
+    .with({ kind: "sdk" }, ({ message }) => `SDK error: ${message}`)
+    .with({ kind: "parse" }, ({ message }) => `Parse error: ${message}`)
+    .exhaustive();
+}
+
+function reportGenerateError(error: GenerateError): never {
+  style(` Failed to generate commit message: ${formatGenerateError(error)}`, 1);
+  if (error.kind === "parse" && typeof error.debug === "string" && error.debug.length > 0) {
+    style(` Debug: ${error.debug}`, 3);
+  }
+  process.exit(1);
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
 
@@ -77,14 +102,31 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const stagedFiles = getStagedFiles();
+  const stagedFilesResult = getStagedFiles();
+  if (stagedFilesResult.isErr()) {
+    style(" Failed to read staged files", 1);
+    style(` ${formatGitError(stagedFilesResult.error)}`, 1);
+    process.exit(1);
+  }
+
+  const stagedFiles = stagedFilesResult.value;
   if (stagedFiles.length === 0) {
     style(" No staged changes to commit", 1);
     process.exit(1);
   }
 
-  const branch = getBranchName();
-  const previousCommit = getPreviousCommitSubject();
+  const branchResult = getBranchName();
+  if (args.verbose && branchResult.isErr()) {
+    style(` Could not read branch: ${formatGitError(branchResult.error)}`, 3);
+  }
+  const branch = branchResult.unwrapOr("");
+
+  const previousCommitResult = getPreviousCommitSubject();
+  if (args.verbose && previousCommitResult.isErr()) {
+    style(` Could not read previous commit subject: ${formatGitError(previousCommitResult.error)}`, 3);
+  }
+  const previousCommit = previousCommitResult.unwrapOr("");
+
   const modelRef = getModelRef(args.modelRef);
 
   if (args.verbose) {
@@ -97,7 +139,14 @@ async function main(): Promise<void> {
   if (hasOnlyLockfiles(stagedFiles)) {
     commitMsg = "chore(deps): update lock file";
   } else {
-    const stagedDiff = getStagedDiff();
+    const stagedDiffResult = getStagedDiff();
+    if (stagedDiffResult.isErr()) {
+      style(" Failed to read staged diff", 1);
+      style(` ${formatGitError(stagedDiffResult.error)}`, 1);
+      process.exit(1);
+    }
+
+    const stagedDiff = stagedDiffResult.value;
     if (stagedDiff.length === 0) {
       style(" Empty staged diff after lockfile filters", 3);
       process.exit(1);
@@ -110,9 +159,18 @@ async function main(): Promise<void> {
     };
 
     while (true) {
-      const generated = await withSpinner("Analyzing staged diff...", () =>
-        generateCommit(context, modelRef, { debug: args.debug }),
+      const generatedAttempt = await withSpinner("Analyzing staged diff...", () =>
+        generateCommit(context, modelRef, { debug: args.debug }).match(
+          (value) => ({ ok: true as const, value }),
+          (error) => ({ ok: false as const, error }),
+        ),
       );
+
+      if (generatedAttempt.ok === false) {
+        reportGenerateError(generatedAttempt.error);
+      }
+
+      const generated = generatedAttempt.value;
 
       commitMsg = generated.message;
       if (generated.overLimit === false) {
@@ -163,12 +221,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  const result = commit(finalMessage);
-  if (result.status !== 0) {
+  const commitResult = commit(finalMessage);
+  if (commitResult.isErr()) {
     style(" Commit failed", 1);
-    if (result.stderr.length > 0) {
-      style(result.stderr, 1);
-    }
+    style(` ${formatGitError(commitResult.error)}`, 1);
     process.exit(1);
   }
 
@@ -176,7 +232,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  const message = error instanceof Error ? error.message : "Unknown error";
-  style(` Failed to generate commit message: ${message}`, 1);
+  const message = error instanceof Error ? error.message : String(error);
+  style(` Failed with unexpected error: ${message}`, 1);
   process.exit(1);
 });

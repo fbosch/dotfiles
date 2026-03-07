@@ -6,6 +6,8 @@
   "dependencies": {
     "@clack/prompts": "^0.11.0",
     "@opencode-ai/sdk": "latest",
-    "picocolors": "^1.1.1"
+    "neverthrow": "^8.2.0",
+    "picocolors": "^1.1.1",
+    "ts-pattern": "^5.9.0"
   }
 }

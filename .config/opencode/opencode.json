@@ -10,7 +10,6 @@
     "opencode-wakatime",
     "opencode-handoff",
     "./plugins/machine-context/index.ts",
-    "./plugins/just-bash/index.ts"
   ],
   "instructions": [
     "~/.config/opencode/instructions/shell-strategy.md"

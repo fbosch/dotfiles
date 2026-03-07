@@ -1,7 +1,8 @@
 import { createOpencode, createOpencodeClient } from "@opencode-ai/sdk";
+import { err, ok, ResultAsync, type Result } from "neverthrow";
+import { P, match } from "ts-pattern";
 
 const DEFAULT_SERVER_URL = "http://127.0.0.1:4096";
-const CONNECT_TIMEOUT_MS = 2000;
 const START_TIMEOUT_MS = 12000;
 const SESSION_TIMEOUT_MS = 5000;
 const DEFAULT_COMMAND_TIMEOUT_MS = 60000;
@@ -19,7 +20,11 @@ const COMMIT_TYPES = [
   "chore",
 ] as const;
 
+const GENERATE_ERROR_KINDS = ["connection", "timeout", "session", "parse", "sdk"] as const;
+
 type CommitType = (typeof COMMIT_TYPES)[number];
+type GenerateErrorKind = (typeof GENERATE_ERROR_KINDS)[number];
+type NonTimeoutGenerateErrorKind = Exclude<GenerateErrorKind, "timeout" | "parse">;
 
 export type GitContext = {
   branch: string;
@@ -35,6 +40,13 @@ export type GeneratedCommit = {
   overLimit: boolean;
 };
 
+export type GenerateError =
+  | { kind: "connection"; message: string }
+  | { kind: "timeout"; message: string }
+  | { kind: "session"; message: string }
+  | { kind: "parse"; message: string; debug?: string }
+  | { kind: "sdk"; message: string };
+
 type GenerateOptions = {
   debug?: boolean;
 };
@@ -43,6 +55,7 @@ type SessionClient = {
   session: {
     create: (input?: unknown) => Promise<unknown>;
     command: (input: unknown) => Promise<unknown>;
+    prompt?: (input: unknown) => Promise<unknown>;
     delete?: (input: unknown) => Promise<unknown>;
   };
 };
@@ -52,8 +65,57 @@ type ConnectedClient = {
   cleanup?: () => Promise<void>;
 };
 
+type PromptModelRef = {
+  providerID: string;
+  modelID: string;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isGenerateErrorKind(value: unknown): value is GenerateErrorKind {
+  return typeof value === "string" && (GENERATE_ERROR_KINDS as readonly string[]).includes(value);
+}
+
+function toErrorMessage(error: unknown, fallback: string): string {
+  return match(error)
+    .with(P.nullish, () => fallback)
+    .with(P.instanceOf(Error), (value) => value.message)
+    .with(P.string, (value) => value)
+    .otherwise((value) => {
+      try {
+        const serialized = JSON.stringify(value);
+        return typeof serialized === "string" ? serialized : fallback;
+      } catch {
+        return fallback;
+      }
+    });
+}
+
+function normalizeUnknownError(
+  error: unknown,
+  fallbackKind: NonTimeoutGenerateErrorKind,
+  fallbackMessage: string,
+): GenerateError {
+  const message = toErrorMessage(error, fallbackMessage);
+  if (message.includes("timed out")) {
+    return { kind: "timeout", message };
+  }
+  return { kind: fallbackKind, message };
+}
+
+function toGenerateError(error: unknown): GenerateError {
+  return match(error)
+    .with({ kind: P.when(isGenerateErrorKind), message: P.string }, (value) => {
+      const record = value as Record<string, unknown>;
+      const debug = typeof record.debug === "string" ? record.debug : undefined;
+      if (value.kind === "parse" && typeof debug === "string") {
+        return { kind: "parse", message: value.message, debug };
+      }
+      return { kind: value.kind, message: value.message } as GenerateError;
+    })
+    .otherwise((value) => normalizeUnknownError(value, "sdk", "Unknown error"));
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -89,63 +151,73 @@ function getCommandTimeoutMs(): number {
   return parsed;
 }
 
-function unwrapFieldsResponse(result: unknown): unknown {
-  if (!isRecord(result)) {
-    return result;
-  }
+function unwrapFieldsResponse(result: unknown): Result<unknown, GenerateError> {
+  return match(result)
+    .with({ error: P.when((value) => value !== undefined && value !== null) }, ({ error }) => {
+      const message = match(error)
+        .with({ errors: P.array(P._) }, (value) => {
+          const first = value.errors[0];
+          const detail = toErrorMessage(first, "");
+          return detail.length > 0 ? `OpenCode command request failed: ${detail}` : "OpenCode command request failed";
+        })
+        .with({ data: P.when((value) => value !== undefined) }, (value) => {
+          const detail = toErrorMessage(value.data, "");
+          return detail.length > 0 ? `OpenCode command request failed: ${detail}` : "OpenCode command request failed";
+        })
+        .with({ data: { message: P.string } }, (value) => value.data.message)
+        .with({ message: P.string }, (value) => value.message)
+        .with({ name: P.string, data: { message: P.string } }, (value) => {
+          if (value.data.message.length > 0) {
+            return `${value.name}: ${value.data.message}`;
+          }
+          return value.name;
+        })
+        .with({ name: P.string }, (value) => value.name)
+        .otherwise((value) => {
+          const detail = toErrorMessage(value, "");
+          return detail.length > 0 ? `OpenCode command request failed: ${detail}` : "OpenCode command request failed";
+        });
 
-  const hasData = Object.prototype.hasOwnProperty.call(result, "data");
-  const hasError = Object.prototype.hasOwnProperty.call(result, "error");
-
-  if (hasData || hasError) {
-    const errorValue = (result as { error?: unknown }).error;
-    if (errorValue !== undefined && errorValue !== null) {
-      let message = "OpenCode command request failed";
-      if (isRecord(errorValue) && typeof errorValue.name === "string") {
-        message = errorValue.name;
-        const data = (errorValue as { data?: unknown }).data;
-        if (isRecord(data) && typeof data.message === "string" && data.message.length > 0) {
-          message += `: ${data.message}`;
-        }
-      }
-      throw new Error(message);
-    }
-
-    return (result as { data?: unknown }).data;
-  }
-
-  return result;
+      return err({ kind: "sdk", message });
+    })
+    .with({ data: P._ }, ({ data }) => ok(data))
+    .otherwise(() => ok(result));
 }
 
 function hasSessionClient(value: unknown): value is SessionClient {
-  if (!isRecord(value) || !isRecord(value.session)) {
-    return false;
-  }
-
-  return (
-    typeof value.session.create === "function" &&
-    typeof value.session.command === "function"
-  );
+  return match(value)
+    .with(
+      {
+        session: {
+          create: P.when((input) => typeof input === "function"),
+          command: P.when((input) => typeof input === "function"),
+        },
+      },
+      () => true,
+    )
+    .otherwise(() => false);
 }
 
 function extractSessionId(value: unknown): string | null {
-  if (!isRecord(value)) {
-    return null;
-  }
+  const sessionId = match(value)
+    .with({ data: { id: P.string } }, ({ data }) => data.id)
+    .with({ id: P.string }, ({ id }) => id)
+    .otherwise(() => "")
+    .trim();
 
-  const data = value.data;
-  if (isRecord(data) && typeof data.id === "string" && data.id.length > 0) {
-    return data.id;
-  }
-
-  if (typeof value.id === "string" && value.id.length > 0) {
-    return value.id;
-  }
-
-  return null;
+  return sessionId.length > 0 ? sessionId : null;
 }
 
-function parseModelRef(modelRef: string): { providerID: string; modelID: string } | null {
+function toCommitType(value: string): CommitType | null {
+  return (COMMIT_TYPES as readonly string[]).includes(value) ? (value as CommitType) : null;
+}
+
+function normalizeModelRef(modelRef: string): string | null {
+  const trimmed = modelRef.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function parsePromptModelRef(modelRef: string): PromptModelRef | null {
   const trimmed = modelRef.trim();
   if (trimmed.length === 0) {
     return null;
@@ -158,22 +230,11 @@ function parseModelRef(modelRef: string): { providerID: string; modelID: string 
 
   const providerID = trimmed.slice(0, slash).trim();
   const modelID = trimmed.slice(slash + 1).trim();
-
   if (providerID.length === 0 || modelID.length === 0) {
     return null;
   }
 
   return { providerID, modelID };
-}
-
-function toCommitType(value: string): CommitType | null {
-  for (const commitType of COMMIT_TYPES) {
-    if (commitType === value) {
-      return commitType;
-    }
-  }
-
-  return null;
 }
 
 function cleanSubject(value: string): string {
@@ -216,19 +277,12 @@ function tryParseJsonCommit(text: string): GeneratedCommit | null {
 
   const parseCandidate = (candidate: string): GeneratedCommit | null => {
     const parsed: unknown = JSON.parse(candidate);
-    if (!isRecord(parsed)) {
-      return null;
-    }
 
-    if (
-      typeof parsed.type === "string" &&
-      typeof parsed.scope === "string" &&
-      typeof parsed.subject === "string"
-    ) {
-      return normalizeCommit(parsed.type, parsed.scope, parsed.subject);
-    }
-
-    return null;
+    return match(parsed)
+      .with({ type: P.string, scope: P.string, subject: P.string }, (value) =>
+        normalizeCommit(value.type, value.scope, value.subject)
+      )
+      .otherwise(() => null);
   };
 
   try {
@@ -253,62 +307,46 @@ function tryParseJsonCommit(text: string): GeneratedCommit | null {
 }
 
 function extractTextParts(value: unknown): string[] {
-  if (!isRecord(value)) {
-    return [];
-  }
+  const parts = match(value)
+    .with({ data: { parts: P.array(P._) } }, ({ data }) => data.parts as unknown[])
+    .with({ parts: P.array(P._) }, ({ parts }) => parts as unknown[])
+    .otherwise((): unknown[] => []);
 
-  const data = isRecord(value.data) ? value.data : null;
-  const parts = Array.isArray(data?.parts) ? data.parts : Array.isArray(value.parts) ? value.parts : [];
   const texts: string[] = [];
-
   for (const part of parts) {
-    if (!isRecord(part)) {
-      continue;
-    }
-
-    if (typeof part.text === "string") {
-      texts.push(part.text);
-      continue;
-    }
-
-    const nestedPart = part.part;
-    if (isRecord(nestedPart) && typeof nestedPart.text === "string") {
-      texts.push(nestedPart.text);
-    }
+    match(part)
+      .with({ text: P.string }, ({ text }) => {
+        texts.push(text);
+      })
+      .with({ part: { text: P.string } }, ({ part: nestedPart }) => {
+        texts.push(nestedPart.text);
+      })
+      .otherwise(() => undefined);
   }
 
   return texts;
 }
 
+function extractStructuredOutput(value: unknown): unknown | null {
+  return match(value)
+    .with({ data: { info: { structured_output: P._ } } }, ({ data }) => data.info.structured_output)
+    .with({ data: { info: { structuredOutput: P._ } } }, ({ data }) => data.info.structuredOutput)
+    .with({ info: { structured_output: P._ } }, ({ info }) => info.structured_output)
+    .with({ info: { structuredOutput: P._ } }, ({ info }) => info.structuredOutput)
+    .otherwise(() => null);
+}
+
 function extractStructuredCommit(value: unknown): GeneratedCommit | null {
-  if (!isRecord(value)) {
+  const output = extractStructuredOutput(value);
+  if (output === null) {
     return null;
   }
 
-  const data = isRecord(value.data) ? value.data : null;
-  const info = isRecord(data?.info) ? data.info : isRecord(value.info) ? value.info : null;
-  if (!isRecord(info)) {
-    return null;
-  }
-
-  const output = isRecord(info.structured_output)
-    ? info.structured_output
-    : isRecord(info.structuredOutput)
-      ? info.structuredOutput
-      : null;
-  if (!isRecord(output)) {
-    return null;
-  }
-
-  if (
-    typeof output.type !== "string" ||
-    typeof output.scope !== "string" ||
-    typeof output.subject !== "string"
-  ) {
-    return null;
-  }
-
-  return normalizeCommit(output.type, output.scope, output.subject);
+  return match(output)
+    .with({ type: P.string, scope: P.string, subject: P.string }, (candidate) =>
+      normalizeCommit(candidate.type, candidate.scope, candidate.subject)
+    )
+    .otherwise(() => null);
 }
 
 function extractCommitFromJsonText(value: unknown): GeneratedCommit | null {
@@ -323,14 +361,13 @@ function extractCommitFromJsonText(value: unknown): GeneratedCommit | null {
 }
 
 function extractErrorDetail(value: unknown): string {
-  if (!isRecord(value)) {
-    return "";
-  }
+  const message = match(value)
+    .with({ data: { info: { error: { message: P.string } } } }, ({ data }) => data.info.error.message.trim())
+    .with({ info: { error: { message: P.string } } }, ({ info }) => info.error.message.trim())
+    .otherwise(() => "");
 
-  const data = isRecord(value.data) ? value.data : null;
-  const info = isRecord(data?.info) ? data.info : isRecord(value.info) ? value.info : null;
-  if (isRecord(info) && isRecord(info.error) && typeof info.error.message === "string") {
-    return info.error.message.trim();
+  if (message.length > 0) {
+    return message;
   }
 
   const firstText = extractTextParts(value)[0];
@@ -339,18 +376,20 @@ function extractErrorDetail(value: unknown): string {
 
 function debugSummary(value: unknown): string {
   if (!isRecord(value)) {
-    const t = typeof value;
     if (value === null) {
       return "result is null";
     }
     if (value === undefined) {
       return "result is undefined";
     }
-    if (t === "string") {
-      const s = value as string;
-      return `result is string (len=${s.length}): ${JSON.stringify(s.slice(0, 200))}`;
-    }
-    return `result is ${t}: ${JSON.stringify(value).slice(0, 200)}`;
+
+    return match(value)
+      .with(P.string, (text) => `result is string (len=${text.length}): ${JSON.stringify(text.slice(0, 200))}`)
+      .otherwise((input) => {
+        const serialized = JSON.stringify(input);
+        const preview = typeof serialized === "string" ? serialized.slice(0, 200) : String(serialized);
+        return `result is ${typeof input}: ${preview}`;
+      });
   }
 
   const rootKeys = Object.keys(value).slice(0, 12);
@@ -367,12 +406,72 @@ function debugSummary(value: unknown): string {
   ].join("; ");
 }
 
+function createParseError(result: unknown, options: GenerateOptions, detail?: string): GenerateError {
+  const debug = options.debug === true
+    ? (() => {
+        let preview = "";
+        try {
+          const serialized = JSON.stringify(result);
+          preview = typeof serialized === "string" ? serialized.slice(0, 300) : String(serialized);
+        } catch {
+          preview = String(result).slice(0, 300);
+        }
+        return `${debugSummary(result)}; typeof=${typeof result}; preview=${preview}`;
+      })()
+    : undefined;
+
+  if (typeof detail === "string" && detail.length > 0) {
+    return {
+      kind: "parse",
+      message: `OpenCode did not return a parseable commit (${detail})`,
+      debug,
+    };
+  }
+
+  return {
+    kind: "parse",
+    message: "OpenCode did not return a parseable commit",
+    debug,
+  };
+}
+
+function parseGeneratedCommit(
+  result: unknown,
+  options: GenerateOptions,
+): Result<GeneratedCommit, GenerateError> {
+  const parsedFromString = match(result)
+    .with(P.string, (text) => tryParseJsonCommit(text))
+    .otherwise(() => null);
+  if (parsedFromString !== null) {
+    return ok(parsedFromString);
+  }
+
+  const parsed = match(result)
+    .with(P.string, () => null)
+    .otherwise((value) => extractStructuredCommit(value) ?? extractCommitFromJsonText(value));
+  if (parsed !== null) {
+    return ok(parsed);
+  }
+
+  const detail = match(result)
+    .with(P.string, (value) => value.replace(/\s+/gu, " ").trim().slice(0, 180))
+    .otherwise((value) => extractErrorDetail(value));
+
+  return err(createParseError(result, options, detail));
+}
+
 async function createSession(client: SessionClient): Promise<string> {
-  const result = await withTimeout(client.session.create(), SESSION_TIMEOUT_MS, "session.create");
+  const result = await withTimeout(client.session.create(), SESSION_TIMEOUT_MS, "session.create").catch(
+    (error) => {
+      throw normalizeUnknownError(error, "session", "Failed to create OpenCode session");
+    },
+  );
+
   const sessionId = extractSessionId(result);
   if (sessionId === null) {
-    throw new Error("Failed to create OpenCode session");
+    throw { kind: "session", message: "Failed to create OpenCode session" } as GenerateError;
   }
+
   return sessionId;
 }
 
@@ -388,25 +487,16 @@ async function deleteSession(client: SessionClient, sessionId: string): Promise<
   ).catch(() => undefined);
 }
 
-async function canUseClient(client: SessionClient): Promise<boolean> {
-  try {
-    const sessionId = await withTimeout(createSession(client), CONNECT_TIMEOUT_MS, "server probe");
-    await deleteSession(client, sessionId);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function connectClient(): Promise<ConnectedClient> {
-  const useExisting = process.env.AI_COMMIT_USE_EXISTING_SERVER === "1";
+  const useExisting = process.env.AI_COMMIT_USE_EXISTING_SERVER !== "0";
 
   if (useExisting) {
     const existing = createOpencodeClient({
       baseUrl: DEFAULT_SERVER_URL,
+      responseStyle: "data",
     });
 
-    if (hasSessionClient(existing) && (await canUseClient(existing))) {
+    if (hasSessionClient(existing)) {
       return { client: existing };
     }
   }
@@ -415,29 +505,49 @@ async function connectClient(): Promise<ConnectedClient> {
     createOpencode({ timeout: START_TIMEOUT_MS, port: 0 }),
     START_TIMEOUT_MS + 1000,
     "createOpencode",
-  );
+  ).catch((error) => {
+    throw normalizeUnknownError(error, "connection", "Failed to start OpenCode SDK");
+  });
 
-  if (hasSessionClient(started)) {
-    return { client: started };
-  }
+  return match(started)
+    .with(
+      {
+        session: {
+          create: P.when((input) => typeof input === "function"),
+          command: P.when((input) => typeof input === "function"),
+        },
+      },
+      (client) => ({ client: client as SessionClient }),
+    )
+    .with(
+      {
+        client: {
+          session: {
+            create: P.when((input) => typeof input === "function"),
+            command: P.when((input) => typeof input === "function"),
+          },
+        },
+      },
+      (value) => {
+        const cleanup = async (): Promise<void> => {
+          const root = value as Record<string, unknown>;
+          const server = root.server;
+          if (!isRecord(server)) {
+            return;
+          }
 
-  if (isRecord(started) && hasSessionClient(started.client)) {
-    const maybeCleanup = started.server;
-    const cleanup = async (): Promise<void> => {
-      if (!isRecord(maybeCleanup)) {
-        return;
-      }
+          const stop = server.stop;
+          if (typeof stop === "function") {
+            await stop.call(server);
+          }
+        };
 
-      const stop = maybeCleanup.stop;
-      if (typeof stop === "function") {
-        await stop.call(maybeCleanup);
-      }
-    };
-
-    return { client: started.client, cleanup };
-  }
-
-  throw new Error("Failed to connect to OpenCode SDK");
+        return { client: value.client as SessionClient, cleanup };
+      },
+    )
+    .otherwise(() => {
+      throw { kind: "connection", message: "Failed to connect to OpenCode SDK" } as GenerateError;
+    });
 }
 
 function buildCommandArgs(context: GitContext): string {
@@ -459,39 +569,64 @@ async function runCommitCommand(
   model: string | null,
   timeoutMs: number,
 ): Promise<unknown> {
-  const body: Record<string, unknown> = {
-    command: "commit-msg",
-    arguments: args,
-    agent: "commit",
+  if (typeof client.session.prompt !== "function") {
+    throw {
+      kind: "sdk",
+      message: "OpenCode client does not support session.prompt",
+    } satisfies GenerateError;
+  }
+
+  const promptBody: Record<string, unknown> = {
+    parts: [{ type: "text", text: args }],
   };
-  if (model !== null) body.model = model;
 
-  const result = await withTimeout(
-    client.session.command({ path: { id: sessionId }, body, responseStyle: "fields" }),
-    timeoutMs,
-    "session.command",
-  );
-
-  const unwrapped = unwrapFieldsResponse(result);
-
-  if (typeof unwrapped === "string") {
-    const parsed = tryParseJsonCommit(unwrapped);
-    if (parsed !== null) {
-      return { data: { info: { structured_output: parsed } }, parts: [{ text: unwrapped }] };
+  if (model !== null) {
+    const parsedModel = parsePromptModelRef(model);
+    if (parsedModel !== null && parsedModel.providerID !== "opencode") {
+      promptBody.model = parsedModel;
     }
   }
 
-  return unwrapped;
+  const result = await withTimeout(
+    client.session.prompt({ path: { id: sessionId }, body: promptBody, responseStyle: "data" }),
+    timeoutMs,
+    "session.prompt",
+  ).catch((error) => {
+    throw normalizeUnknownError(error, "sdk", "Failed to execute session prompt");
+  });
+
+  const unwrapped = unwrapFieldsResponse(result);
+  if (unwrapped.isErr()) {
+    throw unwrapped.error;
+  }
+
+  return match(unwrapped.value)
+    .with(P.string, (text) => {
+      const parsed = tryParseJsonCommit(text);
+      if (parsed !== null) {
+        return {
+          data: {
+            info: {
+              structured_output: parsed,
+            },
+          },
+          parts: [{ text }],
+        };
+      }
+
+      return text;
+    })
+    .otherwise((value) => value);
 }
 
-export async function generateCommit(
+async function generateCommitValue(
   context: GitContext,
   modelRef: string,
-  options: GenerateOptions = {},
+  options: GenerateOptions,
 ): Promise<GeneratedCommit> {
   const connected = await connectClient();
   const commandTimeoutMs = getCommandTimeoutMs();
-  const model = modelRef.trim().length > 0 ? modelRef.trim() : null;
+  const model = normalizeModelRef(modelRef);
   const commandArgs = buildCommandArgs(context);
 
   const sessionId = await createSession(connected.client);
@@ -505,39 +640,24 @@ export async function generateCommit(
       commandTimeoutMs,
     );
 
-    if (typeof result === "string") {
-      const parsed = tryParseJsonCommit(result);
-      if (parsed !== null) {
-        return parsed;
-      }
+    const parsed = parseGeneratedCommit(result, options);
+    if (parsed.isErr()) {
+      throw parsed.error;
     }
 
-    const commit = extractStructuredCommit(result) ?? extractCommitFromJsonText(result);
-    if (commit !== null) {
-      return commit;
-    }
-
-    const detail = extractErrorDetail(result);
-    const debug = options.debug === true
-      ? (() => {
-          let preview = "";
-          try {
-            preview = JSON.stringify(result).slice(0, 300);
-          } catch {
-            preview = String(result).slice(0, 300);
-          }
-          return ` [${debugSummary(result)}; typeof=${typeof result}; preview=${preview}]`;
-        })()
-      : "";
-    if (detail.length > 0) {
-      throw new Error(`OpenCode did not return a parseable commit (${detail})${debug}`);
-    }
-    throw new Error(`OpenCode did not return a parseable commit${debug}`);
+    return parsed.value;
   } finally {
     await deleteSession(connected.client, sessionId);
-
     if (typeof connected.cleanup === "function") {
       await connected.cleanup().catch(() => undefined);
     }
   }
+}
+
+export function generateCommit(
+  context: GitContext,
+  modelRef: string,
+  options: GenerateOptions = {},
+): ResultAsync<GeneratedCommit, GenerateError> {
+  return ResultAsync.fromPromise(generateCommitValue(context, modelRef, options), toGenerateError);
 }

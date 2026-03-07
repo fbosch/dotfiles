@@ -1,8 +1,15 @@
 import { spawnSync } from "node:child_process";
+import { err, ok, type Result } from "neverthrow";
 
 type CmdResult = {
   status: number;
   stdout: string;
+  stderr: string;
+};
+
+export type GitError = {
+  kind: "git";
+  command: string;
   stderr: string;
 };
 
@@ -18,53 +25,61 @@ function runGit(args: string[]): CmdResult {
   };
 }
 
+function gitResult(args: string[]): Result<string, GitError> {
+  const result = runGit(args);
+  if (result.status === 0) {
+    return ok(result.stdout);
+  }
+
+  return err({
+    kind: "git",
+    command: `git ${args.join(" ")}`,
+    stderr: result.stderr,
+  });
+}
+
 export function isInGitRepo(): boolean {
   return runGit(["rev-parse", "--git-dir"]).status === 0;
 }
 
-export function getBranchName(): string {
-  const result = runGit(["rev-parse", "--abbrev-ref", "HEAD"]);
-  return result.status === 0 ? result.stdout : "";
+export function getBranchName(): Result<string, GitError> {
+  return gitResult(["rev-parse", "--abbrev-ref", "HEAD"]);
 }
 
-export function getPreviousCommitSubject(): string {
-  const result = runGit(["log", "-1", '--pretty=format:%s']);
-  return result.status === 0 ? result.stdout : "";
+export function getPreviousCommitSubject(): Result<string, GitError> {
+  return gitResult(["log", "-1", "--pretty=format:%s"]);
 }
 
-export function getStagedFiles(): string[] {
-  const result = runGit(["diff", "--cached", "--name-only"]);
-  if (result.status !== 0 || result.stdout.length === 0) {
-    return [];
-  }
+export function getStagedFiles(): Result<string[], GitError> {
+  return gitResult(["diff", "--cached", "--name-only"]).map((stdout) => {
+    if (stdout.length === 0) {
+      return [];
+    }
 
-  return result.stdout
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+    return stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  });
 }
 
-export function getStagedDiff(maxChars = 12000): string {
-  const result = runGit([
+export function getStagedDiff(maxChars = 12000): Result<string, GitError> {
+  return gitResult([
     "diff",
     "--cached",
     "--ignore-all-space",
     "--",
     ":!*-lock.*",
     ":!*.lock",
-  ]);
+  ]).map((stdout) => {
+    if (stdout.length <= maxChars) {
+      return stdout;
+    }
 
-  if (result.status !== 0) {
-    return "";
-  }
-
-  if (result.stdout.length <= maxChars) {
-    return result.stdout;
-  }
-
-  const marker = "\n\n[Diff truncated]\n";
-  const headRoom = Math.max(0, maxChars - marker.length);
-  return `${result.stdout.slice(0, headRoom)}${marker}`;
+    const marker = "\n\n[Diff truncated]\n";
+    const headRoom = Math.max(0, maxChars - marker.length);
+    return `${stdout.slice(0, headRoom)}${marker}`;
+  });
 }
 
 export function isLockfile(path: string): boolean {
@@ -91,6 +106,6 @@ export function hasOnlyLockfiles(paths: string[]): boolean {
   return paths.every(isLockfile);
 }
 
-export function commit(message: string): CmdResult {
-  return runGit(["commit", "-m", message]);
+export function commit(message: string): Result<string, GitError> {
+  return gitResult(["commit", "-m", message]);
 }
