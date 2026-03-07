@@ -1,0 +1,15 @@
+{
+  "name": "opencode-just-bash",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "just-bash": "^2.12.2"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.1.65"
+  }
+}

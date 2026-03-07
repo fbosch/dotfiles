@@ -1,0 +1,5 @@
+{
+  "name": "opencode-plugins-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.17.0"
+}

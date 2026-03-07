@@ -1,0 +1,10 @@
+{
+  "name": "opencode-ai-commit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@clack/prompts": "^0.11.0",
+    "@opencode-ai/sdk": "latest"
+  }
+}
