@@ -3,6 +3,8 @@ description: Generate a Commitizen commit message for staged changes
 agent: commit
 ---
 
+$ARGUMENTS
+
 Branch: !`git rev-parse --abbrev-ref HEAD`
 Previous commit: !`git log -1 --pretty=format:"%s" 2>/dev/null`
 

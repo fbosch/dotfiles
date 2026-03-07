@@ -4,9 +4,7 @@ const DEFAULT_SERVER_URL = "http://127.0.0.1:4096";
 const CONNECT_TIMEOUT_MS = 2000;
 const START_TIMEOUT_MS = 12000;
 const SESSION_TIMEOUT_MS = 5000;
-const DEFAULT_PROMPT_TIMEOUT_MS = 60000;
-const JSON_OUTPUT_CONTRACT =
-  'Return ONLY valid JSON: {"type":"<type>","scope":"<scope>","subject":"<subject>"}. No prose, no markdown, no code fences.';
+const DEFAULT_COMMAND_TIMEOUT_MS = 60000;
 
 const COMMIT_TYPES = [
   "feat",
@@ -44,7 +42,7 @@ type GenerateOptions = {
 type SessionClient = {
   session: {
     create: (input?: unknown) => Promise<unknown>;
-    prompt: (input: unknown) => Promise<unknown>;
+    command: (input: unknown) => Promise<unknown>;
     delete?: (input: unknown) => Promise<unknown>;
   };
 };
@@ -56,20 +54,6 @@ type ConnectedClient = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function getPromptTimeoutMs(): number {
-  const raw = process.env.AI_COMMIT_TIMEOUT_MS;
-  if (typeof raw !== "string") {
-    return DEFAULT_PROMPT_TIMEOUT_MS;
-  }
-
-  const parsed = Number.parseInt(raw, 10);
-  if (Number.isNaN(parsed) || parsed < 5000) {
-    return DEFAULT_PROMPT_TIMEOUT_MS;
-  }
-
-  return parsed;
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -91,6 +75,48 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
   });
 }
 
+function getCommandTimeoutMs(): number {
+  const raw = process.env.AI_COMMIT_TIMEOUT_MS;
+  if (typeof raw !== "string") {
+    return DEFAULT_COMMAND_TIMEOUT_MS;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isNaN(parsed) || parsed < 5000) {
+    return DEFAULT_COMMAND_TIMEOUT_MS;
+  }
+
+  return parsed;
+}
+
+function unwrapFieldsResponse(result: unknown): unknown {
+  if (!isRecord(result)) {
+    return result;
+  }
+
+  const hasData = Object.prototype.hasOwnProperty.call(result, "data");
+  const hasError = Object.prototype.hasOwnProperty.call(result, "error");
+
+  if (hasData || hasError) {
+    const errorValue = (result as { error?: unknown }).error;
+    if (errorValue !== undefined && errorValue !== null) {
+      let message = "OpenCode command request failed";
+      if (isRecord(errorValue) && typeof errorValue.name === "string") {
+        message = errorValue.name;
+        const data = (errorValue as { data?: unknown }).data;
+        if (isRecord(data) && typeof data.message === "string" && data.message.length > 0) {
+          message += `: ${data.message}`;
+        }
+      }
+      throw new Error(message);
+    }
+
+    return (result as { data?: unknown }).data;
+  }
+
+  return result;
+}
+
 function hasSessionClient(value: unknown): value is SessionClient {
   if (!isRecord(value) || !isRecord(value.session)) {
     return false;
@@ -98,7 +124,7 @@ function hasSessionClient(value: unknown): value is SessionClient {
 
   return (
     typeof value.session.create === "function" &&
-    typeof value.session.prompt === "function"
+    typeof value.session.command === "function"
   );
 }
 
@@ -166,13 +192,11 @@ function normalizeCommit(type: string, scope: string, subject: string): Generate
 
   const normalizedScope = scope.trim();
   const normalizedSubject = cleanSubject(subject.trim().toLowerCase());
-
   if (normalizedScope.length === 0 || normalizedSubject.length === 0) {
     return null;
   }
 
   const message = `${normalizedType}(${normalizedScope}): ${normalizedSubject}`;
-
   return {
     type: normalizedType,
     scope: normalizedScope,
@@ -180,37 +204,6 @@ function normalizeCommit(type: string, scope: string, subject: string): Generate
     message,
     overLimit: message.length > 50,
   };
-}
-
-function extractStructuredCommit(value: unknown): GeneratedCommit | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const data = isRecord(value.data) ? value.data : null;
-  const info = isRecord(data?.info) ? data.info : isRecord(value.info) ? value.info : null;
-  if (!isRecord(info)) {
-    return null;
-  }
-
-  const output = isRecord(info.structured_output)
-    ? info.structured_output
-    : isRecord(info.structuredOutput)
-      ? info.structuredOutput
-      : null;
-  if (!isRecord(output)) {
-    return null;
-  }
-
-  const type = output.type;
-  const scope = output.scope;
-  const subject = output.subject;
-
-  if (typeof type !== "string" || typeof scope !== "string" || typeof subject !== "string") {
-    return null;
-  }
-
-  return normalizeCommit(type, scope, subject);
 }
 
 function stripCodeFence(text: string): string {
@@ -221,7 +214,7 @@ function stripCodeFence(text: string): string {
 function tryParseJsonCommit(text: string): GeneratedCommit | null {
   const cleaned = stripCodeFence(text);
 
-  const tryParse = (candidate: string): GeneratedCommit | null => {
+  const parseCandidate = (candidate: string): GeneratedCommit | null => {
     const parsed: unknown = JSON.parse(candidate);
     if (!isRecord(parsed)) {
       return null;
@@ -239,7 +232,7 @@ function tryParseJsonCommit(text: string): GeneratedCommit | null {
   };
 
   try {
-    const direct = tryParse(cleaned);
+    const direct = parseCandidate(cleaned);
     if (direct !== null) {
       return direct;
     }
@@ -247,14 +240,12 @@ function tryParseJsonCommit(text: string): GeneratedCommit | null {
     const open = cleaned.indexOf("{");
     const close = cleaned.lastIndexOf("}");
     if (open >= 0 && close > open) {
-      const candidate = cleaned.slice(open, close + 1);
       try {
-        return tryParse(candidate);
+        return parseCandidate(cleaned.slice(open, close + 1));
       } catch {
         return null;
       }
     }
-
     return null;
   }
 
@@ -289,11 +280,42 @@ function extractTextParts(value: unknown): string[] {
   return texts;
 }
 
+function extractStructuredCommit(value: unknown): GeneratedCommit | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const data = isRecord(value.data) ? value.data : null;
+  const info = isRecord(data?.info) ? data.info : isRecord(value.info) ? value.info : null;
+  if (!isRecord(info)) {
+    return null;
+  }
+
+  const output = isRecord(info.structured_output)
+    ? info.structured_output
+    : isRecord(info.structuredOutput)
+      ? info.structuredOutput
+      : null;
+  if (!isRecord(output)) {
+    return null;
+  }
+
+  if (
+    typeof output.type !== "string" ||
+    typeof output.scope !== "string" ||
+    typeof output.subject !== "string"
+  ) {
+    return null;
+  }
+
+  return normalizeCommit(output.type, output.scope, output.subject);
+}
+
 function extractCommitFromJsonText(value: unknown): GeneratedCommit | null {
   for (const text of extractTextParts(value)) {
-    const fromJson = tryParseJsonCommit(text);
-    if (fromJson !== null) {
-      return fromJson;
+    const parsed = tryParseJsonCommit(text);
+    if (parsed !== null) {
+      return parsed;
     }
   }
 
@@ -307,26 +329,28 @@ function extractErrorDetail(value: unknown): string {
 
   const data = isRecord(value.data) ? value.data : null;
   const info = isRecord(data?.info) ? data.info : isRecord(value.info) ? value.info : null;
-
-  if (isRecord(info) && isRecord(info.error)) {
-    const message = info.error.message;
-    if (typeof message === "string" && message.trim().length > 0) {
-      return message.trim();
-    }
+  if (isRecord(info) && isRecord(info.error) && typeof info.error.message === "string") {
+    return info.error.message.trim();
   }
 
   const firstText = extractTextParts(value)[0];
-  if (typeof firstText === "string" && firstText.trim().length > 0) {
-    const normalized = firstText.replace(/\s+/gu, " ").trim();
-    return normalized.slice(0, 160);
-  }
-
-  return "";
+  return typeof firstText === "string" ? firstText.replace(/\s+/gu, " ").trim().slice(0, 180) : "";
 }
 
 function debugSummary(value: unknown): string {
   if (!isRecord(value)) {
-    return "result is not an object";
+    const t = typeof value;
+    if (value === null) {
+      return "result is null";
+    }
+    if (value === undefined) {
+      return "result is undefined";
+    }
+    if (t === "string") {
+      const s = value as string;
+      return `result is string (len=${s.length}): ${JSON.stringify(s.slice(0, 200))}`;
+    }
+    return `result is ${t}: ${JSON.stringify(value).slice(0, 200)}`;
   }
 
   const rootKeys = Object.keys(value).slice(0, 12);
@@ -334,36 +358,13 @@ function debugSummary(value: unknown): string {
   const dataKeys = data ? Object.keys(data).slice(0, 12) : [];
   const info = isRecord(data?.info) ? data.info : isRecord(value.info) ? value.info : null;
   const infoKeys = info ? Object.keys(info).slice(0, 12) : [];
-  const parts = extractTextParts(value);
 
   return [
     `rootKeys=${rootKeys.join(",") || "(none)"}`,
     `dataKeys=${dataKeys.join(",") || "(none)"}`,
     `infoKeys=${infoKeys.join(",") || "(none)"}`,
-    `textParts=${parts.length}`,
+    `textParts=${extractTextParts(value).length}`,
   ].join("; ");
-}
-
-function buildPrompt(context: GitContext): string {
-  return [
-    "You generate conventional commit metadata from staged git changes.",
-    "",
-    "Output must match this intent:",
-    "- type: one of feat|fix|docs|style|refactor|perf|test|build|ci|chore",
-    "- scope: AB#<n> if a ticket appears in branch name, else module/feature name",
-    "- subject: imperative mood, lowercase, no trailing period, describe substance not style",
-    "- keep the final message under 50 chars whenever possible",
-    "- abbreviate aggressively: authentication->auth, implement->add, function->fn",
-    "",
-    "If only lock/generated files are staged, output:",
-    "type=chore, scope=deps, subject=update lock file",
-    "",
-    `Branch: ${context.branch}`,
-    `Previous commit: ${context.previousCommit}`,
-    "",
-    "STAGED DIFF:",
-    context.stagedDiff,
-  ].join("\n");
 }
 
 async function createSession(client: SessionClient): Promise<string> {
@@ -375,18 +376,22 @@ async function createSession(client: SessionClient): Promise<string> {
   return sessionId;
 }
 
+async function deleteSession(client: SessionClient, sessionId: string): Promise<void> {
+  if (typeof client.session.delete !== "function") {
+    return;
+  }
+
+  await withTimeout(
+    client.session.delete({ path: { id: sessionId } }),
+    SESSION_TIMEOUT_MS,
+    "session.delete",
+  ).catch(() => undefined);
+}
+
 async function canUseClient(client: SessionClient): Promise<boolean> {
   try {
     const sessionId = await withTimeout(createSession(client), CONNECT_TIMEOUT_MS, "server probe");
-
-    if (typeof client.session.delete === "function") {
-      await withTimeout(
-        client.session.delete({ path: { id: sessionId } }),
-        CONNECT_TIMEOUT_MS,
-        "session.delete",
-      );
-    }
-
+    await deleteSession(client, sessionId);
     return true;
   } catch {
     return false;
@@ -394,17 +399,20 @@ async function canUseClient(client: SessionClient): Promise<boolean> {
 }
 
 async function connectClient(): Promise<ConnectedClient> {
-  const existing = createOpencodeClient({
-    baseUrl: DEFAULT_SERVER_URL,
-    responseStyle: "data",
-  });
+  const useExisting = process.env.AI_COMMIT_USE_EXISTING_SERVER === "1";
 
-  if (hasSessionClient(existing) && (await canUseClient(existing))) {
-    return { client: existing };
+  if (useExisting) {
+    const existing = createOpencodeClient({
+      baseUrl: DEFAULT_SERVER_URL,
+    });
+
+    if (hasSessionClient(existing) && (await canUseClient(existing))) {
+      return { client: existing };
+    }
   }
 
   const started = await withTimeout(
-    createOpencode({ timeout: START_TIMEOUT_MS }),
+    createOpencode({ timeout: START_TIMEOUT_MS, port: 0 }),
     START_TIMEOUT_MS + 1000,
     "createOpencode",
   );
@@ -426,106 +434,54 @@ async function connectClient(): Promise<ConnectedClient> {
       }
     };
 
-    return {
-      client: started.client,
-      cleanup,
-    };
+    return { client: started.client, cleanup };
   }
 
   throw new Error("Failed to connect to OpenCode SDK");
 }
 
-async function deleteSession(client: SessionClient, sessionId: string): Promise<void> {
-  if (typeof client.session.delete !== "function") {
-    return;
-  }
-
-  await withTimeout(
-    client.session.delete({ path: { id: sessionId } }),
-    SESSION_TIMEOUT_MS,
-    "session.delete",
-  ).catch(() => undefined);
+function buildCommandArgs(context: GitContext): string {
+  return [
+    "Return ONLY valid JSON with keys type, scope, subject.",
+    "No prose, no markdown, no code fences.",
+    `Branch: ${context.branch}`,
+    `Previous commit: ${context.previousCommit}`,
+    "",
+    "STAGED DIFF:",
+    context.stagedDiff,
+  ].join("\n");
 }
 
-async function runPromptWithBody(
+async function runCommitCommand(
   client: SessionClient,
-  body: Record<string, unknown>,
+  sessionId: string,
+  args: string,
+  model: string | null,
   timeoutMs: number,
 ): Promise<unknown> {
-  const sessionId = await createSession(client);
-
-  try {
-    return await withTimeout(
-      client.session.prompt({
-        path: { id: sessionId },
-        body,
-      }),
-      timeoutMs,
-      "session.prompt",
-    );
-  } finally {
-    await deleteSession(client, sessionId);
-  }
-}
-
-function buildStructuredBody(prompt: string, model: { providerID: string; modelID: string } | null) {
   const body: Record<string, unknown> = {
-    parts: [{ type: "text", text: `${JSON_OUTPUT_CONTRACT}\n\n${prompt}` }],
+    command: "commit-msg",
+    arguments: args,
     agent: "commit",
-    system: `${JSON_OUTPUT_CONTRACT} Ignore any prior context not present in the current message.`,
-    format: {
-      type: "json_schema",
-      schema: {
-        type: "object",
-        properties: {
-          type: {
-            type: "string",
-            enum: [...COMMIT_TYPES],
-          },
-          scope: {
-            type: "string",
-            description: "AB#<n> if ticket in branch, else module/feature",
-          },
-          subject: {
-            type: "string",
-            description:
-              "Imperative lowercase subject; no period; concise and specific; short enough for total message length <= 50",
-          },
-        },
-        required: ["type", "scope", "subject"],
-      },
-      retryCount: 2,
-    },
-    outputFormat: {
-      type: "json_schema",
-      schema: {
-        type: "object",
-        properties: {
-          type: {
-            type: "string",
-            enum: [...COMMIT_TYPES],
-          },
-          scope: {
-            type: "string",
-            description: "AB#<n> if ticket in branch, else module/feature",
-          },
-          subject: {
-            type: "string",
-            description:
-              "Imperative lowercase subject; no period; concise and specific; short enough for total message length <= 50",
-          },
-        },
-        required: ["type", "scope", "subject"],
-      },
-      retryCount: 2,
-    },
   };
+  if (model !== null) body.model = model;
 
-  if (model !== null) {
-    body.model = model;
+  const result = await withTimeout(
+    client.session.command({ path: { id: sessionId }, body, responseStyle: "fields" }),
+    timeoutMs,
+    "session.command",
+  );
+
+  const unwrapped = unwrapFieldsResponse(result);
+
+  if (typeof unwrapped === "string") {
+    const parsed = tryParseJsonCommit(unwrapped);
+    if (parsed !== null) {
+      return { data: { info: { structured_output: parsed } }, parts: [{ text: unwrapped }] };
+    }
   }
 
-  return body;
+  return unwrapped;
 }
 
 export async function generateCommit(
@@ -534,30 +490,52 @@ export async function generateCommit(
   options: GenerateOptions = {},
 ): Promise<GeneratedCommit> {
   const connected = await connectClient();
-  const promptTimeoutMs = getPromptTimeoutMs();
+  const commandTimeoutMs = getCommandTimeoutMs();
+  const model = modelRef.trim().length > 0 ? modelRef.trim() : null;
+  const commandArgs = buildCommandArgs(context);
+
+  const sessionId = await createSession(connected.client);
 
   try {
-    const prompt = buildPrompt(context);
-    const model = parseModelRef(modelRef);
-
-    const structuredResult = await runPromptWithBody(
+    const result = await runCommitCommand(
       connected.client,
-      buildStructuredBody(prompt, model),
-      promptTimeoutMs,
+      sessionId,
+      commandArgs,
+      model,
+      commandTimeoutMs,
     );
 
-    const commit = extractStructuredCommit(structuredResult) ?? extractCommitFromJsonText(structuredResult);
+    if (typeof result === "string") {
+      const parsed = tryParseJsonCommit(result);
+      if (parsed !== null) {
+        return parsed;
+      }
+    }
+
+    const commit = extractStructuredCommit(result) ?? extractCommitFromJsonText(result);
     if (commit !== null) {
       return commit;
     }
 
-    const detail = extractErrorDetail(structuredResult);
-    const debug = options.debug === true ? ` [${debugSummary(structuredResult)}]` : "";
+    const detail = extractErrorDetail(result);
+    const debug = options.debug === true
+      ? (() => {
+          let preview = "";
+          try {
+            preview = JSON.stringify(result).slice(0, 300);
+          } catch {
+            preview = String(result).slice(0, 300);
+          }
+          return ` [${debugSummary(result)}; typeof=${typeof result}; preview=${preview}]`;
+        })()
+      : "";
     if (detail.length > 0) {
       throw new Error(`OpenCode did not return a parseable commit (${detail})${debug}`);
     }
     throw new Error(`OpenCode did not return a parseable commit${debug}`);
   } finally {
+    await deleteSession(connected.client, sessionId);
+
     if (typeof connected.cleanup === "function") {
       await connected.cleanup().catch(() => undefined);
     }

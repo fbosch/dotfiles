@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import process from "node:process";
+import pc from "picocolors";
 
 import {
   commit,
@@ -138,7 +139,7 @@ async function main(): Promise<void> {
 
   const edited = await input(
     commitMsg,
-    "Edit commit message or press Enter to accept:",
+    pc.dim("Edit commit message or press Enter to accept:"),
   );
   if (edited === null) {
     exitCancelled("Commit cancelled");

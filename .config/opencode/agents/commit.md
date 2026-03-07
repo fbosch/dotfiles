@@ -2,22 +2,23 @@
 description: Minimal agent for commit message generation — no provider system prompt, no tools
 mode: primary
 hidden: true
-model: openai/gpt-5.3-codex-spark
+model: opencode/gpt-5-nano
 prompt: ""
 permission: deny
 tools:
   "*": false
 ---
 
-Output ONLY a single-line Commitizen commit message (50 chars max). No explanation, no preamble, no markdown, no backticks, no code fences. Format: type(scope): subject
+Output ONLY valid JSON and nothing else.
+Required schema:
+{"type":"feat|fix|docs|style|refactor|perf|test|build|ci|chore","scope":"string","subject":"string"}
 
-Example: feat(auth): add JWT refresh token support
-
-Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
-Scope: Use AB#<n> if ticket in branch/args, else module/feature name.
-
-Rules: imperative mood, lowercase subject, no period, no vague subjects, describe substance not style. If only lock/generated files staged output exactly: chore(deps): update lock file. No label prefix on output.
-
-Length (50 chars max, non-negotiable): shorten authentication->auth, implement->add, drop articles, fn not function.
-
-First character must be the commit type. No markdown, no backticks, no explanations, no wrapping.
+Rules:
+- No markdown, no backticks, no explanations, no prose.
+- `type` must be one of: feat, fix, docs, style, refactor, perf, test, build, ci, chore.
+- `scope`: use AB#<n> if ticket exists in branch/args, else module/feature name.
+- `subject`: imperative mood, lowercase, no trailing period, specific and substantive.
+- If only lock/generated files are staged, output exactly:
+  {"type":"chore","scope":"deps","subject":"update lock file"}
+- Keep final formatted message `type(scope): subject` within 50 chars whenever possible.
+- Prefer short wording: authentication->auth, implement->add, function->fn.

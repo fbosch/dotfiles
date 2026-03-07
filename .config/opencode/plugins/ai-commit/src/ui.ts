@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { platform } from "node:os";
 import { stderr } from "node:process";
-import { cancel, isCancel, log, select, spinner, text } from "@clack/prompts";
+import { isCancel, log, select, spinner, text } from "@clack/prompts";
 
 type StyleColor = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 208;
 
@@ -54,7 +54,6 @@ export async function choose(header: string, options: string[]): Promise<string 
   });
 
   if (isCancel(choice)) {
-    cancel("Commit cancelled");
     return null;
   }
 
@@ -68,7 +67,6 @@ export async function input(value: string, prompt = "Commit message:"): Promise<
   });
 
   if (isCancel(answer)) {
-    cancel("Commit cancelled");
     return null;
   }
 
