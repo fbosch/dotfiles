@@ -19,7 +19,7 @@
   //
   // The tool is only registered when the final merged allowlist is non-empty.
   "hostExec": {
-    "allowlist": ["gh", "git", "jq", "systemctl", "journalctl", "opencode"],
+    "allowlist": ["gh", "git", "jq", "systemctl", "journalctl", "opencode", "pnpm"],
     "timeout": 30000
   }
 }
