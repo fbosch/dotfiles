@@ -1,0 +1,27 @@
+// Configuration for the just-bash OpenCode plugin.
+{
+  // Sandbox environment (just-bash) settings.
+  // "env": extra environment variables for the sandbox shell.
+  // "maxCallDepth": limit nested command/function call depth (default: unlimited).
+  "sandbox": {
+    "python": true
+  },
+
+  // Host execution tool — runs real commands on the host system.
+  //
+  // Command allowlist is built by merging:
+  //   1. "allow" rules from permission.bash in opencode.json (project + global)
+  //   2. "allowlist" below (additional commands)
+  // Then removing:
+  //   1. "deny" rules from permission.bash in opencode.json
+  //   2. "denylist" below (additional denials)
+  //
+  // Working directory is validated against the project root and any
+  // "allow" rules from permission.external_directory in opencode.json.
+  //
+  // The tool is only registered when the final merged allowlist is non-empty.
+  "hostExec": {
+    "allowlist": ["gh", "git", "jq"],
+    "timeout": 30000
+  }
+}
