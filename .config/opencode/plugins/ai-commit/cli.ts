@@ -208,7 +208,6 @@ async function main(): Promise<void> {
     exitCancelled("Commit cancelled (empty message)");
   }
 
-  style(finalMessage, 208);
   copyCommitCommandToClipboard(finalMessage);
 
   if (args.dryRun) {
