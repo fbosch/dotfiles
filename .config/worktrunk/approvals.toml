@@ -1,0 +1,4 @@
+[projects."kommunekredit@vs-ssh.visualstudio.com:v3/kommunekredit/KK%20Laaneportal/KommuneKredit.Frontend"]
+approved-commands = [
+    "pnpm install --frozen-lockfile --reporter=silent",
+]
