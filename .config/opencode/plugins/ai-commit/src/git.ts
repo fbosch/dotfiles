@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncOptionsWithStringEncoding } from "node:child_process";
 import { err, ok, type Result } from "neverthrow";
 
 type CmdResult = {
@@ -26,9 +26,13 @@ export type GitError = {
   stderr: string;
 };
 
-function runGit(args: string[]): CmdResult {
+function runGit(
+  args: string[],
+  options?: SpawnSyncOptionsWithStringEncoding,
+): CmdResult {
   const result = spawnSync("git", args, {
     encoding: "utf8",
+    ...options,
   });
 
   return {
@@ -293,5 +297,17 @@ export function hasOnlyLockfiles(paths: string[]): boolean {
 }
 
 export function commit(message: string): Result<string, GitError> {
-  return gitResult(["commit", "-m", message]);
+  const result = runGit(["commit", "-m", message], {
+    stdio: "inherit",
+  });
+
+  if (result.status === 0) {
+    return ok("");
+  }
+
+  return err({
+    kind: "git",
+    command: `git commit -m ${JSON.stringify(message)}`,
+    stderr: "git commit failed",
+  });
 }
