@@ -8,6 +8,25 @@ const START_TIMEOUT_MS = 12000;
 const SESSION_TIMEOUT_MS = 5000;
 const DEFAULT_COMMAND_TIMEOUT_MS = 60000;
 const FILE_SUMMARY_MAX_FILES = 8;
+const MAX_COMMIT_MESSAGE_LENGTH = 50;
+const SUBJECT_FILLER_WORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "for",
+  "of",
+  "to",
+  "current",
+  "existing",
+  "staged",
+]);
+const SUBJECT_COMPRESSION_RULES: ReadonlyArray<readonly [string, string]> = [
+  ["commit message", "message"],
+  ["commit messages", "messages"],
+  ["debug timings", "timings"],
+  [" by file and hunk", " by file/hunk"],
+  [" by file and hunks", " by file/hunks"],
+];
 
 const COMMIT_TYPES = [
   "feat",
@@ -113,17 +132,21 @@ function normalizeUnknownError(
   return { kind: fallbackKind, message };
 }
 
+function sdkError(message: string): GenerateError {
+  return { kind: "sdk", message };
+}
+
 function toGenerateError(error: unknown): GenerateError {
-  return match(error)
-    .with({ kind: P.when(isGenerateErrorKind), message: P.string }, (value) => {
-      const record = value as Record<string, unknown>;
-      const debug = typeof record.debug === "string" ? record.debug : undefined;
-      if (value.kind === "parse" && typeof debug === "string") {
-        return { kind: "parse", message: value.message, debug };
-      }
-      return { kind: value.kind, message: value.message } as GenerateError;
-    })
-    .otherwise((value) => normalizeUnknownError(value, "sdk", "Unknown error"));
+  if (isRecord(error) && isGenerateErrorKind(error.kind) && typeof error.message === "string") {
+    const debug = typeof error.debug === "string" ? error.debug : undefined;
+    if (error.kind === "parse" && typeof debug === "string") {
+      return { kind: "parse", message: error.message, debug };
+    }
+
+    return { kind: error.kind, message: error.message };
+  }
+
+  return normalizeUnknownError(error, "sdk", "Unknown error");
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -199,7 +222,7 @@ function unwrapFieldsResponse(result: unknown): Result<unknown, GenerateError> {
           return detail.length > 0 ? `OpenCode command request failed: ${detail}` : "OpenCode command request failed";
         });
 
-      return err({ kind: "sdk", message });
+      return err(sdkError(message));
     })
     .with({ data: P._ }, ({ data }) => ok(data))
     .otherwise(() => ok(result));
@@ -266,6 +289,43 @@ function cleanSubject(value: string): string {
   return trimmed;
 }
 
+function shortenSubject(subject: string, maxChars: number): string {
+  if (subject.length <= maxChars) {
+    return subject;
+  }
+
+  let shortened = subject;
+  for (const [from, to] of SUBJECT_COMPRESSION_RULES) {
+    if (shortened.length <= maxChars) {
+      break;
+    }
+
+    shortened = shortened.replaceAll(from, to);
+  }
+
+  if (shortened.length > maxChars) {
+    const words = shortened.split(/\s+/u);
+    const compactWords = words.filter((word) => SUBJECT_FILLER_WORDS.has(word) === false);
+    const compact = compactWords.join(" ").trim();
+    if (compact.length > 0) {
+      shortened = compact;
+    }
+  }
+
+  if (shortened.length > maxChars) {
+    shortened = shortened.replaceAll(" and ", " & ");
+  }
+
+  if (shortened.length <= maxChars) {
+    return cleanSubject(shortened);
+  }
+
+  const slice = shortened.slice(0, maxChars + 1);
+  const boundary = slice.lastIndexOf(" ");
+  const truncated = boundary > 0 ? slice.slice(0, boundary) : shortened.slice(0, maxChars);
+  return cleanSubject(truncated.replace(/[\s/&:-]+$/u, ""));
+}
+
 function diagnoseCommitFields(type: string, scope: string, subject: string): string | null {
   if (toCommitType(type.trim().toLowerCase()) === null) {
     return `invalid type "${type.trim()}" (valid: ${COMMIT_TYPES.join(", ")})`;
@@ -286,8 +346,18 @@ function normalizeCommit(type: string, scope: string, subject: string): Generate
   }
 
   const normalizedScope = scope.trim();
-  const normalizedSubject = cleanSubject(subject.trim().toLowerCase());
-  if (normalizedScope.length === 0 || normalizedSubject.length === 0) {
+  if (normalizedScope.length === 0) {
+    return null;
+  }
+
+  const rawSubject = cleanSubject(subject.trim().toLowerCase());
+  const maxSubjectChars = MAX_COMMIT_MESSAGE_LENGTH - `${normalizedType}(${normalizedScope}): `.length;
+  if (maxSubjectChars <= 0) {
+    return null;
+  }
+
+  const normalizedSubject = shortenSubject(rawSubject, maxSubjectChars);
+  if (normalizedSubject.length === 0) {
     return null;
   }
 
@@ -297,7 +367,7 @@ function normalizeCommit(type: string, scope: string, subject: string): Generate
     scope: normalizedScope,
     subject: normalizedSubject,
     message,
-    overLimit: message.length > 50,
+    overLimit: message.length > MAX_COMMIT_MESSAGE_LENGTH,
   };
 }
 
@@ -605,45 +675,27 @@ async function connectClient(): Promise<ConnectedClient> {
     throw normalizeUnknownError(error, "connection", "Failed to start OpenCode SDK");
   });
 
-  return match(started)
-    .with(
-      {
-        session: {
-          create: P.when((input) => typeof input === "function"),
-          command: P.when((input) => typeof input === "function"),
-        },
-      },
-      (client) => ({ client: client as SessionClient }),
-    )
-    .with(
-      {
-        client: {
-          session: {
-            create: P.when((input) => typeof input === "function"),
-            command: P.when((input) => typeof input === "function"),
-          },
-        },
-      },
-      (value) => {
-        const cleanup = async (): Promise<void> => {
-          const root = value as Record<string, unknown>;
-          const server = root.server;
-          if (!isRecord(server)) {
-            return;
-          }
+  if (hasSessionClient(started)) {
+    return { client: started };
+  }
 
-          const stop = server.stop;
-          if (typeof stop === "function") {
-            await stop.call(server);
-          }
-        };
+  if (isRecord(started) && hasSessionClient(started.client)) {
+    const cleanup = async (): Promise<void> => {
+      const server = started.server;
+      if (isRecord(server) === false) {
+        return;
+      }
 
-        return { client: value.client as SessionClient, cleanup };
-      },
-    )
-    .otherwise(() => {
-      throw { kind: "connection", message: "Failed to connect to OpenCode SDK" } as GenerateError;
-    });
+      const close = server.close;
+      if (typeof close === "function") {
+        await close.call(server);
+      }
+    };
+
+    return { client: started.client, cleanup };
+  }
+
+  throw { kind: "connection", message: "Failed to connect to OpenCode SDK" } as GenerateError;
 }
 
 function buildCommandArgs(context: GitContext): string {
@@ -662,7 +714,8 @@ function buildCommandArgs(context: GitContext): string {
     "",
     `Valid types: ${COMMIT_TYPES.join(", ")}`,
     "scope: short module/area name (e.g. auth, cli, config)",
-    "subject: imperative, lowercase, no period, max 50 chars",
+    "Keep the full commit line <= 50 chars including type(scope): prefix.",
+    "subject: imperative, lowercase, no period, usually 20-32 chars",
     "",
     ...details,
     details.length > 0 ? "" : null,

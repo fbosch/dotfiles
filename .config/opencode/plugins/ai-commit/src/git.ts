@@ -7,8 +7,18 @@ type CmdResult = {
   stderr: string;
 };
 
+type DiffFileBlock = {
+  header: string;
+  hunks: string[];
+};
+
+type CompressedDiffFileBlock = {
+  parts: string[];
+};
+
 export const DEFAULT_STAGED_DIFF_MAX_CHARS = 6000;
 export const DIFF_TRUNCATED_MARKER = "\n\n[Diff truncated]\n";
+const DIFF_FILE_HEADER_PREFIX = "diff --git ";
 
 export type GitError = {
   kind: "git";
@@ -80,9 +90,182 @@ export function getStagedDiff(maxChars = DEFAULT_STAGED_DIFF_MAX_CHARS): Result<
       return stdout;
     }
 
-    const headRoom = Math.max(0, maxChars - DIFF_TRUNCATED_MARKER.length);
-    return `${stdout.slice(0, headRoom)}${DIFF_TRUNCATED_MARKER}`;
+    return compressDiff(stdout, maxChars);
   });
+}
+
+function compressDiff(diff: string, maxChars: number): string {
+  const blocks = splitDiffIntoFileBlocks(diff);
+  if (blocks.length === 0) {
+    return truncateDiff(diff, maxChars);
+  }
+
+  const maxBodyChars = Math.max(0, maxChars - DIFF_TRUNCATED_MARKER.length);
+  const compressed = buildCompressedDiff(blocks, maxBodyChars);
+  if (compressed.length === 0) {
+    return truncateDiff(diff, maxChars);
+  }
+
+  return `${compressed}${DIFF_TRUNCATED_MARKER}`;
+}
+
+function buildCompressedDiff(blocks: DiffFileBlock[], maxChars: number): string {
+  const includedBlocks: CompressedDiffFileBlock[] = [];
+  let currentLength = 0;
+
+  for (const block of blocks) {
+    const additionalLength = getAdditionalLength(currentLength, block.header);
+    if (currentLength + additionalLength > maxChars) {
+      break;
+    }
+
+    includedBlocks.push({
+      parts: [block.header],
+    });
+    currentLength += additionalLength;
+  }
+
+  let appendedAnyHunk = false;
+
+  let hunkIndex = 0;
+  while (true) {
+    let appendedHunk = false;
+    let truncatedBlockIndex: number | null = null;
+    let truncatedHunk: string | null = null;
+
+    for (const [index, compressedBlock] of includedBlocks.entries()) {
+      const hunk = blocks[index]?.hunks[hunkIndex];
+      if (hunk === undefined) {
+        continue;
+      }
+
+      const additionalLength = getAdditionalLength(currentLength, hunk, compressedBlock.parts);
+      if (currentLength + additionalLength <= maxChars) {
+        compressedBlock.parts.push(hunk);
+        currentLength += additionalLength;
+        appendedHunk = true;
+        appendedAnyHunk = true;
+        continue;
+      }
+
+      if (appendedAnyHunk === false && truncatedHunk === null) {
+        const remainingChars = maxChars - currentLength;
+        truncatedHunk = truncateSegment(hunk, remainingChars, compressedBlock.parts);
+        truncatedBlockIndex = truncatedHunk === null ? null : index;
+      }
+    }
+
+    if (appendedHunk === false && appendedAnyHunk === false && truncatedBlockIndex !== null && truncatedHunk !== null) {
+      includedBlocks[truncatedBlockIndex]?.parts.push(truncatedHunk);
+      currentLength = maxChars;
+      appendedHunk = true;
+      appendedAnyHunk = true;
+    }
+
+    if (appendedHunk === false) {
+      break;
+    }
+
+    hunkIndex += 1;
+  }
+
+  return includedBlocks
+    .flatMap((block) => block.parts)
+    .join("\n");
+}
+
+function splitDiffIntoFileBlocks(diff: string): DiffFileBlock[] {
+  const lines = diff.split("\n");
+  const rawBlocks: string[] = [];
+  let currentLines: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith(DIFF_FILE_HEADER_PREFIX)) {
+      if (currentLines.length > 0) {
+        rawBlocks.push(currentLines.join("\n"));
+      }
+
+      currentLines = [line];
+      continue;
+    }
+
+    if (currentLines.length === 0) {
+      continue;
+    }
+
+    currentLines.push(line);
+  }
+
+  if (currentLines.length > 0) {
+    rawBlocks.push(currentLines.join("\n"));
+  }
+
+  return rawBlocks.map(splitFileBlock).filter((block) => block.header.length > 0);
+}
+
+function splitFileBlock(block: string): DiffFileBlock {
+  const lines = block.split("\n");
+  const headerLines: string[] = [];
+  const hunks: string[] = [];
+  let currentHunk: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith("@@")) {
+      if (currentHunk.length > 0) {
+        hunks.push(currentHunk.join("\n"));
+      }
+
+      currentHunk = [line];
+      continue;
+    }
+
+    if (currentHunk.length === 0) {
+      headerLines.push(line);
+      continue;
+    }
+
+    currentHunk.push(line);
+  }
+
+  if (currentHunk.length > 0) {
+    hunks.push(currentHunk.join("\n"));
+  }
+
+  return {
+    header: headerLines.join("\n"),
+    hunks,
+  };
+}
+
+function getAdditionalLength(
+  currentLength: number,
+  nextPart: string,
+  blockParts: string[] = [],
+): number {
+  if (nextPart.length === 0) {
+    return 0;
+  }
+
+  if (blockParts.length > 0) {
+    return 1 + nextPart.length;
+  }
+
+  return currentLength === 0 ? nextPart.length : nextPart.length + 1;
+}
+
+function truncateSegment(segment: string, maxChars: number, blockParts: string[]): string | null {
+  const additionalLength = blockParts.length > 0 ? 1 : 0;
+  const availableChars = maxChars - additionalLength;
+  if (availableChars <= 0) {
+    return null;
+  }
+
+  return segment.slice(0, availableChars);
+}
+
+function truncateDiff(diff: string, maxChars: number): string {
+  const headRoom = Math.max(0, maxChars - DIFF_TRUNCATED_MARKER.length);
+  return `${diff.slice(0, headRoom)}${DIFF_TRUNCATED_MARKER}`;
 }
 
 export function isLockfile(path: string): boolean {
