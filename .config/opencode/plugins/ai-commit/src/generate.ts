@@ -1,11 +1,13 @@
 import { createOpencode, createOpencodeClient } from "@opencode-ai/sdk";
 import { err, ok, ResultAsync, type Result } from "neverthrow";
 import { P, match } from "ts-pattern";
+import { DIFF_TRUNCATED_MARKER } from "./git";
 
 const DEFAULT_SERVER_URL = "http://127.0.0.1:4096";
 const START_TIMEOUT_MS = 12000;
 const SESSION_TIMEOUT_MS = 5000;
 const DEFAULT_COMMAND_TIMEOUT_MS = 60000;
+const FILE_SUMMARY_MAX_FILES = 8;
 
 const COMMIT_TYPES = [
   "feat",
@@ -29,6 +31,7 @@ type NonTimeoutGenerateErrorKind = Exclude<GenerateErrorKind, "timeout" | "parse
 export type GitContext = {
   branch: string;
   previousCommit: string;
+  stagedFiles: string[];
   stagedDiff: string;
 };
 
@@ -72,6 +75,11 @@ type PromptModelRef = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function getEnvVar(name: string): string | undefined {
+  const globalObject = globalThis as { process?: { env?: Record<string, string | undefined> } };
+  return globalObject.process?.env?.[name];
 }
 
 function isGenerateErrorKind(value: unknown): value is GenerateErrorKind {
@@ -137,8 +145,21 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
   });
 }
 
+function startDebugTimer(options: GenerateOptions): number | null {
+  return options.debug === true ? performance.now() : null;
+}
+
+function writeDebugTiming(label: string, startTime: number | null): void {
+  if (startTime === null) {
+    return;
+  }
+
+  const elapsedMs = performance.now() - startTime;
+  console.error(`[ai-commit] ${label}: ${elapsedMs.toFixed(1)}ms`);
+}
+
 function getCommandTimeoutMs(): number {
-  const raw = process.env.AI_COMMIT_TIMEOUT_MS;
+  const raw = getEnvVar("AI_COMMIT_TIMEOUT_MS");
   if (typeof raw !== "string") {
     return DEFAULT_COMMAND_TIMEOUT_MS;
   }
@@ -563,7 +584,7 @@ async function deleteSession(client: SessionClient, sessionId: string): Promise<
 }
 
 async function connectClient(): Promise<ConnectedClient> {
-  const useExisting = process.env.AI_COMMIT_USE_EXISTING_SERVER !== "0";
+  const useExisting = getEnvVar("AI_COMMIT_USE_EXISTING_SERVER") !== "0";
 
   if (useExisting) {
     const existing = createOpencodeClient({
@@ -626,6 +647,14 @@ async function connectClient(): Promise<ConnectedClient> {
 }
 
 function buildCommandArgs(context: GitContext): string {
+  const details = [
+    context.branch.length > 0 ? `Branch: ${context.branch}` : null,
+    context.previousCommit.length > 0 ? `Previous commit: ${context.previousCommit}` : null,
+  ].filter((value): value is string => value !== null);
+
+  const isTruncated = context.stagedDiff.endsWith(DIFF_TRUNCATED_MARKER);
+  const fileSummary = isTruncated ? summarizeStagedFiles(context.stagedFiles) : null;
+
   return [
     "You are a conventional commit message generator.",
     "Return ONLY a single valid JSON object with keys: type, scope, subject.",
@@ -635,12 +664,27 @@ function buildCommandArgs(context: GitContext): string {
     "scope: short module/area name (e.g. auth, cli, config)",
     "subject: imperative, lowercase, no period, max 50 chars",
     "",
-    `Branch: ${context.branch}`,
-    `Previous commit: ${context.previousCommit}`,
-    "",
+    ...details,
+    details.length > 0 ? "" : null,
+    fileSummary,
+    fileSummary === null ? null : "",
     "STAGED DIFF:",
     context.stagedDiff,
-  ].join("\n");
+  ]
+    .filter((value): value is string => value !== null)
+    .join("\n");
+}
+
+function summarizeStagedFiles(stagedFiles: string[]): string | null {
+  if (stagedFiles.length === 0) {
+    return null;
+  }
+
+  const visibleFiles = stagedFiles.slice(0, FILE_SUMMARY_MAX_FILES);
+  const hiddenCount = stagedFiles.length - visibleFiles.length;
+  const suffix = hiddenCount > 0 ? `, +${hiddenCount} more` : "";
+
+  return `Files changed: ${visibleFiles.join(", ")}${suffix}`;
 }
 
 async function runCommitCommand(
@@ -705,14 +749,24 @@ async function generateCommitValue(
   modelRef: string,
   options: GenerateOptions,
 ): Promise<GeneratedCommit> {
-  const connected = await connectClient();
-  const commandTimeoutMs = getCommandTimeoutMs();
-  const model = normalizeModelRef(modelRef);
-  const commandArgs = buildCommandArgs(context);
-
-  const sessionId = await createSession(connected.client);
+  const totalStart = startDebugTimer(options);
+  let connected: ConnectedClient | null = null;
+  let sessionId: string | null = null;
 
   try {
+    const connectStart = startDebugTimer(options);
+    connected = await connectClient();
+    writeDebugTiming("connectClient", connectStart);
+
+    const commandTimeoutMs = getCommandTimeoutMs();
+    const model = normalizeModelRef(modelRef);
+    const commandArgs = buildCommandArgs(context);
+
+    const createSessionStart = startDebugTimer(options);
+    sessionId = await createSession(connected.client);
+    writeDebugTiming("session.create", createSessionStart);
+
+    const promptStart = startDebugTimer(options);
     const result = await runCommitCommand(
       connected.client,
       sessionId,
@@ -720,18 +774,28 @@ async function generateCommitValue(
       model,
       commandTimeoutMs,
     );
+    writeDebugTiming("session.prompt", promptStart);
 
+    const parseStart = startDebugTimer(options);
     const parsed = parseGeneratedCommit(result, options);
+    writeDebugTiming("parseGeneratedCommit", parseStart);
     if (parsed.isErr()) {
       throw parsed.error;
     }
 
     return parsed.value;
   } finally {
-    await deleteSession(connected.client, sessionId);
-    if (typeof connected.cleanup === "function") {
+    if (connected !== null && sessionId !== null) {
+      const deleteSessionStart = startDebugTimer(options);
+      await deleteSession(connected.client, sessionId);
+      writeDebugTiming("session.delete", deleteSessionStart);
+    }
+
+    if (connected !== null && typeof connected.cleanup === "function") {
       await connected.cleanup().catch(() => undefined);
     }
+
+    writeDebugTiming("total", totalStart);
   }
 }
 

@@ -155,6 +155,7 @@ async function main(): Promise<void> {
     const context = {
       branch,
       previousCommit,
+      stagedFiles,
       stagedDiff,
     };
 

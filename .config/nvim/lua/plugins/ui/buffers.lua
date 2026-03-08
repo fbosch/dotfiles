@@ -114,8 +114,6 @@ return {
 				},
 				exclude_name = {
 					"startup-log.txt",
-					"opencode --continue --port",
-					"mullvad-exclude opencode --continue --port",
 				},
 				exclude_ft = {
 					"opencode",

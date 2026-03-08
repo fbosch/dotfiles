@@ -7,6 +7,9 @@ type CmdResult = {
   stderr: string;
 };
 
+export const DEFAULT_STAGED_DIFF_MAX_CHARS = 6000;
+export const DIFF_TRUNCATED_MARKER = "\n\n[Diff truncated]\n";
+
 export type GitError = {
   kind: "git";
   command: string;
@@ -63,11 +66,12 @@ export function getStagedFiles(): Result<string[], GitError> {
   });
 }
 
-export function getStagedDiff(maxChars = 12000): Result<string, GitError> {
+export function getStagedDiff(maxChars = DEFAULT_STAGED_DIFF_MAX_CHARS): Result<string, GitError> {
   return gitResult([
     "diff",
     "--cached",
     "--ignore-all-space",
+    "-U1",
     "--",
     ":!*-lock.*",
     ":!*.lock",
@@ -76,9 +80,8 @@ export function getStagedDiff(maxChars = 12000): Result<string, GitError> {
       return stdout;
     }
 
-    const marker = "\n\n[Diff truncated]\n";
-    const headRoom = Math.max(0, maxChars - marker.length);
-    return `${stdout.slice(0, headRoom)}${marker}`;
+    const headRoom = Math.max(0, maxChars - DIFF_TRUNCATED_MARKER.length);
+    return `${stdout.slice(0, headRoom)}${DIFF_TRUNCATED_MARKER}`;
   });
 }
 

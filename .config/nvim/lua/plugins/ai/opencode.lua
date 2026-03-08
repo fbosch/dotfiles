@@ -7,21 +7,91 @@ return {
 		},
 		init = function()
 			-- Set global options before plugin loads
-			local cmd = "opencode --continue --port"
-			if vim.fn.executable("mullvad-exclude") == 1 then
-				cmd = "mullvad-exclude " .. cmd
+			local function shell_join(argv)
+				local escaped = {}
+				for _, arg in ipairs(argv) do
+					escaped[#escaped + 1] = vim.fn.shellescape(arg)
+				end
+				return table.concat(escaped, " ")
+			end
+
+			local function opencode_base_cmd()
+				if vim.fn.executable("mullvad-exclude") == 1 then
+					return { "mullvad-exclude", "opencode" }
+				end
+
+				return { "opencode" }
+			end
+
+			local function resolve_worktree_dir()
+				local buffer_name = vim.api.nvim_buf_get_name(0)
+				local start_path = buffer_name ~= "" and vim.fs.dirname(buffer_name) or vim.fn.getcwd()
+				local git_marker = vim.fs.find(".git", { path = start_path, upward = true })[1]
+
+				if git_marker then
+					return vim.fs.dirname(git_marker)
+				end
+
+				return vim.fn.getcwd()
+			end
+
+			local function find_worktree_session_id(worktree_dir)
+				local list_cmd = opencode_base_cmd()
+				list_cmd[#list_cmd + 1] = "session"
+				list_cmd[#list_cmd + 1] = "list"
+				list_cmd[#list_cmd + 1] = "--format"
+				list_cmd[#list_cmd + 1] = "json"
+
+				local result = vim.system(list_cmd, { cwd = worktree_dir, text = true }):wait()
+				if result.code ~= 0 or result.stdout == "" then
+					return nil
+				end
+
+				local ok, sessions = pcall(vim.json.decode, result.stdout)
+				if ok == false or type(sessions) ~= "table" then
+					return nil
+				end
+
+				local best_id = nil
+				local best_updated = ""
+
+				for _, session in ipairs(sessions) do
+					if session.directory == worktree_dir then
+						local updated = type(session.updated) == "string" and session.updated or ""
+						if best_id == nil or updated > best_updated then
+							best_id = session.id
+							best_updated = updated
+						end
+					end
+				end
+
+				return best_id
+			end
+
+			local function build_opencode_cmd()
+				local worktree_dir = resolve_worktree_dir()
+				local session_id = find_worktree_session_id(worktree_dir)
+				local cmd = opencode_base_cmd()
+
+				cmd[#cmd + 1] = "--port"
+				if session_id then
+					cmd[#cmd + 1] = "--session"
+					cmd[#cmd + 1] = session_id
+				end
+
+				return "cd " .. vim.fn.shellescape(worktree_dir) .. " && " .. shell_join(cmd)
 			end
 
 			vim.g.opencode_opts = {
 				server = {
 					start = function()
-						require("opencode.terminal").start(cmd, { split = "left", width = 100 })
+						require("opencode.terminal").start(build_opencode_cmd(), { split = "left", width = 100 })
 					end,
 					stop = function()
 						require("opencode.terminal").stop()
 					end,
 					toggle = function()
-						require("opencode.terminal").toggle(cmd, { split = "left", width = 100 })
+						require("opencode.terminal").toggle(build_opencode_cmd(), { split = "left", width = 100 })
 					end,
 				},
 			}
