@@ -74,9 +74,11 @@ function worktree_clone --description 'Bare-clone a repo and open the first work
         set target_ref "origin/$default_branch"
     end
 
-    set -l worktree_dir "$orig_dir/$name/$default_branch"
+    set -l repo_dir "$orig_dir/$name"
+    set -l bare_dir "$repo_dir/.bare"
+    set -l worktree_dir "$repo_dir/$default_branch"
 
-    git -C "$name/.bare" worktree add "$worktree_dir" "$target_ref"
+    git -C "$bare_dir" worktree add "$worktree_dir" "$target_ref"
     or begin
         cd "$orig_dir"
         rm -rf "$name"
@@ -97,9 +99,28 @@ function worktree_clone --description 'Bare-clone a repo and open the first work
         return 1
     end
 
+    set -l wt_config_dir "$repo_dir/.config"
+    set -l wt_config_link "$wt_config_dir/wt.toml"
+    set -l wt_config_source "$repo_dir/$default_branch/.config/wt.toml"
+
+    if test -f "$wt_config_source" -o -L "$wt_config_source"
+        mkdir -p "$wt_config_dir"
+        or echo (set_color yellow)"Warning: failed to create '$wt_config_dir'; wt.toml symlink not created."(set_color normal) >&2
+
+        if test -d "$wt_config_dir"
+            if test -e "$wt_config_link" -o -L "$wt_config_link"
+                rm -f "$wt_config_link"
+                or echo (set_color yellow)"Warning: failed to remove existing '$wt_config_link'."(set_color normal) >&2
+            end
+
+            ln -s "$wt_config_source" "$wt_config_link"
+            or echo (set_color yellow)"Warning: failed to create '$wt_config_link' symlink."(set_color normal) >&2
+        end
+    end
+
     set -l head_branch (git -C "$worktree_dir" symbolic-ref --quiet --short HEAD 2>/dev/null)
     if test -n "$head_branch"
-        git -C "$name/.bare" show-ref --verify --quiet "refs/remotes/origin/$head_branch"
+        git -C "$bare_dir" show-ref --verify --quiet "refs/remotes/origin/$head_branch"
         if test $status -eq 0
             git -C "$worktree_dir" branch --set-upstream-to="origin/$head_branch" "$head_branch" >/dev/null 2>&1
             or echo (set_color yellow)"Warning: failed to set upstream for '$head_branch' to 'origin/$head_branch'."(set_color normal) >&2
@@ -108,6 +129,17 @@ function worktree_clone --description 'Bare-clone a repo and open the first work
         end
     else
         echo (set_color yellow)"Warning: HEAD is detached; upstream not set."(set_color normal) >&2
+    end
+
+    if command -v wt >/dev/null 2>&1
+        if test -f "$wt_config_link" -o -L "$wt_config_link"
+            read -l -P (set_color cyan)"Approve and run wt post-create hooks now? [y/N] "(set_color normal) run_wt_approvals
+            if string match -rq '^(y|yes)$' -- (string lower -- "$run_wt_approvals")
+                wt hook approvals add
+                and wt hook post-create
+                or echo (set_color yellow)"Warning: wt hook approval and/or post-create hook run failed."(set_color normal) >&2
+            end
+        end
     end
 
     echo (set_color green)"Ready."(set_color normal)
