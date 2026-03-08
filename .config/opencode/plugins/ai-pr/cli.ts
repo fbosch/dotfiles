@@ -1,10 +1,17 @@
 #!/usr/bin/env bun
 
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
+import { spinner } from "@clack/prompts";
 
 const DEFAULT_MODEL = "opencode/big-pickle";
 const DEFAULT_SERVER_URL = "http://127.0.0.1:4096";
@@ -15,9 +22,6 @@ const MAX_DIFF_LINES = 2000;
 const TRUNCATED_DIFF_LINES = 500;
 const ANSI_ESCAPE_REGEX = new RegExp("\\u001b\\[[0-9;]*m", "g");
 const SERVER_READY_PATTERN = /on\s+(https?:\/\/[^\s]+)/;
-const SPINNER_COLOR = "\x1b[35m";
-const SPINNER_RESET = "\x1b[39m";
-
 type CliArgs = {
   debug?: boolean;
   modelRef?: string;
@@ -36,14 +40,10 @@ type ConnectedServer = {
   cleanup?: () => Promise<void>;
 };
 
-type SpinnerState = {
-  frames: string[];
-  index: number;
-  timer: ReturnType<typeof setInterval>;
-  title: string;
+type ComparisonRange = {
+  mergeBase: string;
+  commitSubjects: string[];
 };
-
-let spinnerState: SpinnerState | null = null;
 
 function parseArgs(argv: string[]): CliArgs {
   let debug = false;
@@ -112,33 +112,18 @@ function startDebugTimer(debug: boolean): number | null {
   return debug ? performance.now() : null;
 }
 
-function writeDebugTiming(debug: boolean, label: string, startTime: number | null): void {
+function writeDebugTiming(
+  debug: boolean,
+  label: string,
+  startTime: number | null,
+): void {
   if (debug === false || startTime === null) {
     return;
   }
 
   const elapsedMs = performance.now() - startTime;
-  clearSpinnerLine();
+  process.stderr.write("\x1b[2K\r");
   console.error(`[ai-pr] ${label}: ${elapsedMs.toFixed(1)}ms`);
-  renderSpinner();
-}
-
-function clearSpinnerLine(): void {
-  if (spinnerState === null || process.stderr.isTTY === false) {
-    return;
-  }
-
-  process.stderr.write("\r\x1b[2K");
-}
-
-function renderSpinner(): void {
-  if (spinnerState === null || process.stderr.isTTY === false) {
-    return;
-  }
-
-  process.stderr.write(
-    `\r${SPINNER_COLOR}${spinnerState.frames[spinnerState.index]}${SPINNER_RESET}  ${spinnerState.title}`,
-  );
 }
 
 function commandExists(command: string): boolean {
@@ -172,11 +157,17 @@ function isInGitRepo(): boolean {
 }
 
 function getMainBranch(): string {
-  if (runCommand("git", ["show-ref", "--verify", "--quiet", "refs/heads/main"]).status === 0) {
+  if (
+    runCommand("git", ["show-ref", "--verify", "--quiet", "refs/heads/main"])
+      .status === 0
+  ) {
     return "main";
   }
 
-  if (runCommand("git", ["show-ref", "--verify", "--quiet", "refs/heads/master"]).status === 0) {
+  if (
+    runCommand("git", ["show-ref", "--verify", "--quiet", "refs/heads/master"])
+      .status === 0
+  ) {
     return "master";
   }
 
@@ -184,7 +175,12 @@ function getMainBranch(): string {
 }
 
 function getUpstreamBranch(): string | null {
-  const result = runCommand("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]);
+  const result = runCommand("git", [
+    "rev-parse",
+    "--abbrev-ref",
+    "--symbolic-full-name",
+    "@{upstream}",
+  ]);
   if (result.status !== 0) {
     return null;
   }
@@ -193,11 +189,66 @@ function getUpstreamBranch(): string | null {
   return upstream.length > 0 ? upstream : null;
 }
 
+function getComparisonRange(baseRef: string): ComparisonRange {
+  const mergeBaseResult = runCommand("git", ["merge-base", "HEAD", baseRef]);
+  if (mergeBaseResult.status !== 0) {
+    fail(`Failed to determine merge base for ${baseRef}`);
+  }
+
+  const mergeBase = mergeBaseResult.stdout.trim();
+  if (mergeBase.length === 0) {
+    fail(`Failed to determine merge base for ${baseRef}`);
+  }
+
+  const commitsResult = runCommand("git", [
+    "log",
+    `${mergeBase}..HEAD`,
+    "--pretty=format:%s",
+    "--no-merges",
+  ]);
+  if (commitsResult.status !== 0) {
+    fail("Failed to read commit messages");
+  }
+
+  return {
+    mergeBase,
+    commitSubjects: commitsResult.stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0),
+  };
+}
+
+function buildPromptInput(
+  branchName: string,
+  baseRef: string,
+  commitSubjects: string[],
+  diff: string,
+): string {
+  const sections = [
+    `Branch: ${branchName}`,
+    `Base: ${baseRef}`,
+    "Commits:",
+    commitSubjects.length > 0
+      ? commitSubjects.map((subject) => `- ${subject}`).join("\n")
+      : "(none)",
+    "",
+    "DIFF:",
+    diff,
+  ];
+
+  return sections.join("\n");
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error(`${label} timed out after ${timeoutMs}ms`));
@@ -231,7 +282,11 @@ function getCommandTimeoutMs(): number {
 }
 
 function extractSessionId(value: unknown): string | null {
-  if (isRecord(value) && isRecord(value.data) && typeof value.data.id === "string") {
+  if (
+    isRecord(value) &&
+    isRecord(value.data) &&
+    typeof value.data.id === "string"
+  ) {
     return value.data.id;
   }
 
@@ -243,11 +298,12 @@ function extractSessionId(value: unknown): string | null {
 }
 
 function extractTextParts(value: unknown): string[] {
-  const parts = isRecord(value) && isRecord(value.data) && Array.isArray(value.data.parts)
-    ? value.data.parts
-    : isRecord(value) && Array.isArray(value.parts)
-      ? value.parts
-      : [];
+  const parts =
+    isRecord(value) && isRecord(value.data) && Array.isArray(value.data.parts)
+      ? value.data.parts
+      : isRecord(value) && Array.isArray(value.parts)
+        ? value.parts
+        : [];
 
   const textParts: string[] = [];
   for (const part of parts) {
@@ -268,38 +324,24 @@ function extractTextParts(value: unknown): string[] {
   return textParts;
 }
 
-async function withSpinner<T>(debug: boolean, title: string, fn: () => Promise<T>): Promise<T> {
+async function withSpinner<T>(
+  debug: boolean,
+  title: string,
+  fn: () => Promise<T>,
+): Promise<T> {
   if (process.stderr.isTTY === false) {
     return await fn();
   }
 
-  const frames = ["◐", "◓", "◑", "◒"];
-  spinnerState = {
-    frames,
-    index: 0,
-    timer: setInterval(() => {
-      if (spinnerState === null) {
-        return;
-      }
-
-      spinnerState.index = (spinnerState.index + 1) % spinnerState.frames.length;
-      renderSpinner();
-    }, 80),
-    title,
-  };
-  const activeSpinner = spinnerState;
-  renderSpinner();
+  const activeSpinner = spinner();
+  activeSpinner.start(title);
 
   try {
     const result = await fn();
-    clearInterval(activeSpinner.timer);
-    spinnerState = null;
-    process.stderr.write("\r◇  Done\n");
+    activeSpinner.stop("Done");
     return result;
   } catch (error) {
-    clearInterval(activeSpinner.timer);
-    spinnerState = null;
-    process.stderr.write("\r▲  Failed\n");
+    activeSpinner.stop("Failed");
     throw error;
   }
 }
@@ -350,7 +392,12 @@ async function requestOpencode(
 
 async function canUseServer(baseUrl: string): Promise<boolean> {
   try {
-    await requestOpencode(baseUrl, "/session/status", "GET", SESSION_TIMEOUT_MS);
+    await requestOpencode(
+      baseUrl,
+      "/session/status",
+      "GET",
+      SESSION_TIMEOUT_MS,
+    );
     return true;
   } catch {
     return false;
@@ -369,9 +416,13 @@ async function connectOpenCode(): Promise<ConnectedServer> {
 async function startOpenCodeServer(): Promise<ConnectedServer> {
   return await withTimeout(
     new Promise<ConnectedServer>((resolve, reject) => {
-      const child = spawn("opencode", ["serve", "--hostname=127.0.0.1", "--port=0"], {
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+      const child = spawn(
+        "opencode",
+        ["serve", "--hostname=127.0.0.1", "--port=0"],
+        {
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
 
       let settled = false;
       let stdoutBuffer = "";
@@ -412,9 +463,17 @@ async function startOpenCodeServer(): Promise<ConnectedServer> {
           return;
         }
 
-        const suffix = signal ? ` (${signal})` : typeof code === "number" ? ` (${code})` : "";
+        const suffix = signal
+          ? ` (${signal})`
+          : typeof code === "number"
+            ? ` (${code})`
+            : "";
         const detail = stderrBuffer.trim();
-        finishError(detail.length > 0 ? `OpenCode server exited before startup${suffix}: ${detail}` : `OpenCode server exited before startup${suffix}`);
+        finishError(
+          detail.length > 0
+            ? `OpenCode server exited before startup${suffix}: ${detail}`
+            : `OpenCode server exited before startup${suffix}`,
+        );
       });
 
       child.stdout.setEncoding("utf8");
@@ -452,15 +511,28 @@ async function createSession(baseUrl: string): Promise<string> {
   return sessionId;
 }
 
-async function deleteSession(baseUrl: string, sessionId: string): Promise<void> {
+async function deleteSession(
+  baseUrl: string,
+  sessionId: string,
+): Promise<void> {
   try {
-    await requestOpencode(baseUrl, `/session/${encodeURIComponent(sessionId)}`, "DELETE", SESSION_TIMEOUT_MS);
+    await requestOpencode(
+      baseUrl,
+      `/session/${encodeURIComponent(sessionId)}`,
+      "DELETE",
+      SESSION_TIMEOUT_MS,
+    );
   } catch {
     return;
   }
 }
 
-async function runPrDescCommand(baseUrl: string, sessionId: string, modelRef: string, diff: string): Promise<string> {
+async function runPrDescCommand(
+  baseUrl: string,
+  sessionId: string,
+  modelRef: string,
+  diff: string,
+): Promise<string> {
   const response = await requestOpencode(
     baseUrl,
     `/session/${encodeURIComponent(sessionId)}/command`,
@@ -476,9 +548,7 @@ async function runPrDescCommand(baseUrl: string, sessionId: string, modelRef: st
   return extractTextParts(response).join("\n").trim();
 }
 
-function getClipboardCommand():
-  | { command: string; args: string[] }
-  | null {
+function getClipboardCommand(): { command: string; args: string[] } | null {
   if (process.platform === "darwin") {
     if (commandExists("pbcopy")) {
       return { command: "pbcopy", args: [] };
@@ -532,15 +602,25 @@ async function main(): Promise<void> {
     writeDebugTiming(debug, "getUpstreamBranch", upstreamStart);
 
     if (upstreamBranch === null) {
-      fail(`Current branch is ${mainBranch} and has no upstream branch to compare against`);
+      fail(
+        `Current branch is ${mainBranch} and has no upstream branch to compare against`,
+      );
     }
 
     comparisonRef = upstreamBranch;
     comparisonLabel = `upstream ${upstreamBranch}`;
   }
 
+  const commitSubjectsStart = startDebugTimer(debug);
+  const comparisonRange = getComparisonRange(comparisonRef);
+  writeDebugTiming(debug, "gitCommits", commitSubjectsStart);
+
   const diffStatStart = startDebugTimer(debug);
-  const diffStatResult = runCommand("git", ["diff", `${comparisonRef}..HEAD`, "--stat"]);
+  const diffStatResult = runCommand("git", [
+    "diff",
+    `${comparisonRange.mergeBase}..HEAD`,
+    "--stat",
+  ]);
   writeDebugTiming(debug, "gitDiffStat", diffStatStart);
   if (diffStatResult.status !== 0) {
     fail("Failed to read branch diff");
@@ -577,7 +657,10 @@ async function main(): Promise<void> {
   process.on("SIGTERM", exitWithCleanup);
 
   const fullDiffStart = startDebugTimer(debug);
-  const fullDiff = runCommand("git", ["diff", `${comparisonRef}..HEAD`]);
+  const fullDiff = runCommand("git", [
+    "diff",
+    `${comparisonRange.mergeBase}..HEAD`,
+  ]);
   writeDebugTiming(debug, "gitDiff", fullDiffStart);
   if (fullDiff.status !== 0) {
     cleanup();
@@ -588,7 +671,8 @@ async function main(): Promise<void> {
   const diffLines = fullDiff.stdout.split(/\r?\n/);
   const diffLineCount = diffLines.length;
 
-  const actualDiffFile = diffLineCount > MAX_DIFF_LINES ? tempDiffSummary : tempDiff;
+  const actualDiffFile =
+    diffLineCount > MAX_DIFF_LINES ? tempDiffSummary : tempDiff;
 
   if (diffLineCount > MAX_DIFF_LINES) {
     const truncatedLines = diffLines.slice(0, TRUNCATED_DIFF_LINES).join("\n");
@@ -605,7 +689,12 @@ async function main(): Promise<void> {
     writeFileSync(tempDiffSummary, summary);
   }
 
-  const diffInput = readFileSync(actualDiffFile, "utf8");
+  const diffInput = buildPromptInput(
+    branchName,
+    comparisonRef,
+    comparisonRange.commitSubjects,
+    readFileSync(actualDiffFile, "utf8"),
+  );
   const opencodeStart = startDebugTimer(debug);
   const opencodeState: {
     connected: ConnectedServer | null;
@@ -617,37 +706,49 @@ async function main(): Promise<void> {
   let parsed = "";
 
   try {
-    parsed = await withSpinner(debug, `Analyzing commits with ${modelRef}...`, async () => {
-      const connectStart = startDebugTimer(debug);
-      opencodeState.connected = await connectOpenCode();
-      cleanupServer = opencodeState.connected.cleanup ?? null;
-      writeDebugTiming(debug, "connectClient", connectStart);
+    parsed = await withSpinner(
+      debug,
+      `Analyzing commits with ${modelRef}...`,
+      async () => {
+        const connectStart = startDebugTimer(debug);
+        opencodeState.connected = await connectOpenCode();
+        cleanupServer = opencodeState.connected.cleanup ?? null;
+        writeDebugTiming(debug, "connectClient", connectStart);
 
-      const createSessionStart = startDebugTimer(debug);
-      opencodeState.sessionId = await createSession(opencodeState.connected.baseUrl);
-      writeDebugTiming(debug, "session.create", createSessionStart);
+        const createSessionStart = startDebugTimer(debug);
+        opencodeState.sessionId = await createSession(
+          opencodeState.connected.baseUrl,
+        );
+        writeDebugTiming(debug, "session.create", createSessionStart);
 
-      const commandStart = startDebugTimer(debug);
-      const result = await runPrDescCommand(
-        opencodeState.connected.baseUrl,
-        opencodeState.sessionId,
-        modelRef,
-        diffInput,
-      );
-      writeDebugTiming(debug, "session.command", commandStart);
-      return result;
-    });
+        const commandStart = startDebugTimer(debug);
+        const result = await runPrDescCommand(
+          opencodeState.connected.baseUrl,
+          opencodeState.sessionId,
+          modelRef,
+          diffInput,
+        );
+        writeDebugTiming(debug, "session.command", commandStart);
+        return result;
+      },
+    );
   } catch (error) {
     cleanup();
     throw error;
   } finally {
     if (opencodeState.connected !== null && opencodeState.sessionId !== null) {
       const deleteSessionStart = startDebugTimer(debug);
-      await deleteSession(opencodeState.connected.baseUrl, opencodeState.sessionId);
+      await deleteSession(
+        opencodeState.connected.baseUrl,
+        opencodeState.sessionId,
+      );
       writeDebugTiming(debug, "session.delete", deleteSessionStart);
     }
 
-    if (opencodeState.connected !== null && typeof opencodeState.connected.cleanup === "function") {
+    if (
+      opencodeState.connected !== null &&
+      typeof opencodeState.connected.cleanup === "function"
+    ) {
       await opencodeState.connected.cleanup().catch(() => undefined);
       cleanupServer = null;
     }

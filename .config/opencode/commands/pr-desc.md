@@ -5,9 +5,7 @@ model: anthropic/claude-haiku-4-5
 
 Write a PR description in English. Output markdown only.
 
-Branch: !`git rev-parse --abbrev-ref HEAD`
-Base: !`branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ "$branch" = main ] || [ "$branch" = master ]; then git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || printf '%s\n' "$branch"; elif git show-ref --verify --quiet refs/heads/main; then printf 'main\n'; else printf 'master\n'; fi`
-Commits: !`branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ "$branch" = main ] || [ "$branch" = master ]; then base=$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || printf '%s\n' "$branch"); else base=$(git show-ref --verify --quiet refs/heads/main && printf 'main\n' || printf 'master\n'); fi; git log $(git merge-base HEAD "$base" 2>/dev/null)..HEAD --pretty=format:"%s" --no-merges 2>/dev/null`
+Use the Branch, Base, and Commits context provided below.
 
 **Output format:**
 
@@ -60,5 +58,5 @@ Use upstream comparison when generating PR descriptions from master.
 
 **Strict output:** Output ONLY the PR content. First character must be the PR title. No preface, no "Here is", no "Intent:", no extra headings.
 
-DIFF (may be truncated for large PRs — focus on branch, base, commits, and diff):
+CONTEXT AND DIFF (may be truncated for large PRs — focus on branch, base, commits, and diff):
 $ARGUMENTS

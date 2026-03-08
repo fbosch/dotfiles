@@ -24,7 +24,10 @@ export function style(text: string, color?: StyleColor): void {
   log.message(text);
 }
 
-export async function withSpinner<T>(label: string, fn: () => Promise<T>): Promise<T> {
+export async function withSpinner<T>(
+  label: string,
+  fn: () => Promise<T>,
+): Promise<T> {
   if (stderr.isTTY === false) {
     return fn();
   }
@@ -42,7 +45,10 @@ export async function withSpinner<T>(label: string, fn: () => Promise<T>): Promi
   }
 }
 
-export async function choose(header: string, options: string[]): Promise<string | null> {
+export async function choose(
+  header: string,
+  options: string[],
+): Promise<string | null> {
   if (options.length === 0) {
     return null;
   }
@@ -60,7 +66,10 @@ export async function choose(header: string, options: string[]): Promise<string 
   return choice;
 }
 
-export async function input(value: string, prompt = "Commit message:"): Promise<string | null> {
+export async function input(
+  value: string,
+  prompt = "Commit message:",
+): Promise<string | null> {
   const answer = await text({
     message: prompt,
     initialValue: value,
@@ -100,6 +109,9 @@ export function copyCommitCommandToClipboard(message: string): void {
     stdio: "ignore",
   });
   if ((xclip.status ?? 1) === 0) {
-    spawnSync("xclip", ["-selection", "clipboard"], { input: cmd, encoding: "utf8" });
+    spawnSync("xclip", ["-selection", "clipboard"], {
+      input: cmd,
+      encoding: "utf8",
+    });
   }
 }
