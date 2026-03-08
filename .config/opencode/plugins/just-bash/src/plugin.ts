@@ -1,8 +1,9 @@
 import { tool, type Plugin, type PluginInput } from "@opencode-ai/plugin";
 import { Bash, OverlayFs } from "just-bash";
-import { join, resolve } from "node:path";
+import { join, resolve, relative, isAbsolute } from "node:path";
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import stripJsonComments from "strip-json-comments";
 
 interface HostExecConfig {
   allowlist?: string[];
@@ -22,10 +23,11 @@ interface PluginConfig {
 }
 
 const SHELL_OPERATORS = /\s*(?:&&|\|\||[;|])\s*/;
+const UNSAFE_PATTERNS = /[\n\r]|\$\(|`|<\(|>\(/;
+const ENV_VAR_PREFIX = /^\w+=\S*/;
 
 function extractCommands(command: string): string[] {
-  const subshellPattern = /\$\(|`/;
-  if (subshellPattern.test(command)) {
+  if (UNSAFE_PATTERNS.test(command)) {
     return [];
   }
 
@@ -34,8 +36,10 @@ function extractCommands(command: string): string[] {
     .map((segment) => segment.trim())
     .filter((segment) => segment.length > 0)
     .map((segment) => {
-      const withoutEnvVars = segment.replace(/^(?:\w+=\S*\s+)+/, "");
-      return withoutEnvVars.split(/\s+/)[0];
+      if (ENV_VAR_PREFIX.test(segment)) {
+        return "";
+      }
+      return segment.split(/\s+/)[0];
     });
 }
 
@@ -43,15 +47,18 @@ function validateCommand(command: string, allowlist: string[]): string | undefin
   const commands = extractCommands(command);
 
   if (commands.length === 0) {
-    return "Command contains subshells ($() or backticks) which are not allowed";
+    return "Command contains unsafe shell constructs (newlines, subshells, backticks, or process substitution)";
   }
 
   const denied = commands.filter(
-    (cmd) => allowlist.includes(cmd) === false,
+    (cmd) => cmd === "" || allowlist.includes(cmd) === false,
   );
 
   if (denied.length > 0) {
-    return `Command(s) not in allowlist: ${denied.join(", ")}. Allowed: ${allowlist.join(", ")}`;
+    const reasons = denied.map((cmd) =>
+      cmd === "" ? "env-var prefixes not allowed" : cmd,
+    );
+    return `Denied: ${reasons.join(", ")}. Allowed commands: ${allowlist.join(", ")}`;
   }
 
   return undefined;
@@ -72,11 +79,15 @@ function execHost(
     let stderr = "";
     let timedOut = false;
 
+    const SIGKILL_DELAY = 5000;
+    let killHandle: ReturnType<typeof setTimeout> | undefined;
+
     const timeoutHandle =
       options.timeout !== undefined
         ? setTimeout(() => {
             timedOut = true;
             proc.kill("SIGTERM");
+            killHandle = setTimeout(() => proc.kill("SIGKILL"), SIGKILL_DELAY);
           }, options.timeout)
         : undefined;
 
@@ -89,11 +100,13 @@ function execHost(
 
     proc.on("error", (err) => {
       if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+      if (killHandle !== undefined) clearTimeout(killHandle);
       reject(err);
     });
 
     proc.on("close", (code) => {
       if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+      if (killHandle !== undefined) clearTimeout(killHandle);
       if (timedOut) {
         resolve({ stdout, stderr: `${stderr}\nProcess timed out`, exitCode: 124 });
         return;
@@ -103,15 +116,13 @@ function execHost(
   });
 }
 
-function stripJsoncComments(text: string): string {
-  return text.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
-}
+
 
 async function loadConfig(configDir: string): Promise<PluginConfig> {
   for (const filename of ["just-bash.jsonc", "just-bash.json"]) {
     try {
       const raw = await readFile(join(configDir, filename), "utf-8");
-      return JSON.parse(stripJsoncComments(raw));
+      return JSON.parse(stripJsonComments(raw));
     } catch {
       continue;
     }
@@ -122,10 +133,15 @@ async function loadConfig(configDir: string): Promise<PluginConfig> {
 async function loadJsonFile(path: string): Promise<Record<string, unknown>> {
   try {
     const raw = await readFile(path, "utf-8");
-    return JSON.parse(stripJsoncComments(raw));
+    return JSON.parse(stripJsonComments(raw));
   } catch {
     return {};
   }
+}
+
+function isUnderDir(child: string, parent: string): boolean {
+  const rel = relative(parent, child);
+  return rel === "" || (rel.startsWith("..") === false && isAbsolute(rel) === false);
 }
 
 function expandHome(pattern: string): string {
@@ -142,7 +158,7 @@ interface OpencodePermissions {
 }
 
 function extractCommandName(pattern: string): string | undefined {
-  const match = pattern.match(/^(\w[\w-]*)(?:\s+\*)?$/);
+  const match = pattern.match(/^(?:.*\/)?(\w[\w-]*)(?:\s+\*)?$/);
   return match ? match[1] : undefined;
 }
 
@@ -278,15 +294,12 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
   if (hostExec) {
     const permissions = await loadOpencodePermissions(input.worktree, configDir);
 
-    const inherited = permissions.allowedCommands.filter(
-      (cmd) => permissions.deniedCommands.includes(cmd) === false,
-    );
     const explicit = hostExec.allowlist ?? [];
     const denied = new Set([
       ...permissions.deniedCommands,
       ...(hostExec.denylist ?? []),
     ]);
-    const allowlist = [...new Set([...inherited, ...explicit])].filter(
+    const allowlist = [...new Set([...permissions.allowedCommands, ...explicit])].filter(
       (cmd) => denied.has(cmd) === false,
     );
 
@@ -323,10 +336,10 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
         const cwd = resolve(args.workdir ?? context.worktree);
         const projectRoot = resolve(context.worktree);
 
-        if (cwd.startsWith(projectRoot) === false) {
+        if (isUnderDir(cwd, projectRoot) === false) {
           const isAllowed = allowedDirPatterns.some((pattern) => {
             const base = pattern.replace(/\/\*\*$/, "").replace(/\/\*$/, "");
-            return cwd.startsWith(base);
+            return isUnderDir(cwd, base);
           });
 
           if (isAllowed === false) {

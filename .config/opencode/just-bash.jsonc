@@ -3,9 +3,7 @@
   // Sandbox environment (just-bash) settings.
   // "env": extra environment variables for the sandbox shell.
   // "maxCallDepth": limit nested command/function call depth (default: unlimited).
-  "sandbox": {
-    "python": true
-  },
+  "sandbox": {},
 
   // Host execution tool — runs real commands on the host system.
   //

@@ -245,6 +245,19 @@ function cleanSubject(value: string): string {
   return trimmed;
 }
 
+function diagnoseCommitFields(type: string, scope: string, subject: string): string | null {
+  if (toCommitType(type.trim().toLowerCase()) === null) {
+    return `invalid type "${type.trim()}" (valid: ${COMMIT_TYPES.join(", ")})`;
+  }
+  if (scope.trim().length === 0) {
+    return "empty scope";
+  }
+  if (cleanSubject(subject.trim().toLowerCase()).length === 0) {
+    return "empty subject";
+  }
+  return null;
+}
+
 function normalizeCommit(type: string, scope: string, subject: string): GeneratedCommit | null {
   const normalizedType = toCommitType(type.trim().toLowerCase());
   if (normalizedType === null) {
@@ -552,8 +565,14 @@ async function connectClient(): Promise<ConnectedClient> {
 
 function buildCommandArgs(context: GitContext): string {
   return [
-    "Return ONLY valid JSON with keys type, scope, subject.",
-    "No prose, no markdown, no code fences.",
+    "You are a conventional commit message generator.",
+    "Return ONLY a single valid JSON object with keys: type, scope, subject.",
+    "No prose, no explanation, no markdown, no code fences, no tool calls.",
+    "",
+    `Valid types: ${COMMIT_TYPES.join(", ")}`,
+    "scope: short module/area name (e.g. auth, cli, config)",
+    "subject: imperative, lowercase, no period, max 50 chars",
+    "",
     `Branch: ${context.branch}`,
     `Previous commit: ${context.previousCommit}`,
     "",
