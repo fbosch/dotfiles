@@ -34,6 +34,11 @@ abbr nxu flake_update_interactive
 abbr nxud flake_updates_daemon
 abbr nxgc nix-collect-garbage
 
+# OpenCode
+abbr oc opencode
+abbr ocps opencode_profile_switch
+abbr ocas opencode_auth_switch
+
 # Helpers
 abbr x exit
 abbr src 'source ~/.config/fish/config.fish'
