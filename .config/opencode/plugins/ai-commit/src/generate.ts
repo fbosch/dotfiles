@@ -245,6 +245,19 @@ function cleanSubject(value: string): string {
   return trimmed;
 }
 
+function diagnoseCommitFields(type: string, scope: string, subject: string): string | null {
+  if (toCommitType(type.trim().toLowerCase()) === null) {
+    return `invalid type "${type.trim()}" (valid: ${COMMIT_TYPES.join(", ")})`;
+  }
+  if (scope.trim().length === 0) {
+    return "empty scope";
+  }
+  if (cleanSubject(subject.trim().toLowerCase()).length === 0) {
+    return "empty subject";
+  }
+  return null;
+}
+
 function normalizeCommit(type: string, scope: string, subject: string): GeneratedCommit | null {
   const normalizedType = toCommitType(type.trim().toLowerCase());
   if (normalizedType === null) {
@@ -435,6 +448,63 @@ function createParseError(result: unknown, options: GenerateOptions, detail?: st
   };
 }
 
+function diagnoseRawFields(value: unknown): string | null {
+  const candidate = match(value)
+    .with({ type: P.string, scope: P.string, subject: P.string }, (v) => v)
+    .otherwise(() => null);
+
+  if (candidate === null) {
+    return null;
+  }
+
+  return diagnoseCommitFields(candidate.type, candidate.scope, candidate.subject);
+}
+
+function diagnoseFromText(text: string): string | null {
+  const cleaned = stripCodeFence(text);
+  try {
+    const parsed: unknown = JSON.parse(cleaned);
+    return diagnoseRawFields(parsed);
+  } catch {
+    const open = cleaned.indexOf("{");
+    const close = cleaned.lastIndexOf("}");
+    if (open >= 0 && close > open) {
+      try {
+        const parsed: unknown = JSON.parse(cleaned.slice(open, close + 1));
+        return diagnoseRawFields(parsed);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+function diagnoseResult(result: unknown): string | null {
+  const fromString = match(result)
+    .with(P.string, (text) => diagnoseFromText(text))
+    .otherwise(() => null);
+  if (fromString !== null) {
+    return fromString;
+  }
+
+  const fromStructured = match(extractStructuredOutput(result))
+    .with(P.nullish, () => null)
+    .otherwise((output) => diagnoseRawFields(output));
+  if (fromStructured !== null) {
+    return fromStructured;
+  }
+
+  for (const text of extractTextParts(result)) {
+    const diagnosis = diagnoseFromText(text);
+    if (diagnosis !== null) {
+      return diagnosis;
+    }
+  }
+
+  return null;
+}
+
 function parseGeneratedCommit(
   result: unknown,
   options: GenerateOptions,
@@ -451,6 +521,11 @@ function parseGeneratedCommit(
     .otherwise((value) => extractStructuredCommit(value) ?? extractCommitFromJsonText(value));
   if (parsed !== null) {
     return ok(parsed);
+  }
+
+  const diagnosis = diagnoseResult(result);
+  if (diagnosis !== null) {
+    return err(createParseError(result, options, diagnosis));
   }
 
   const detail = match(result)
@@ -552,8 +627,14 @@ async function connectClient(): Promise<ConnectedClient> {
 
 function buildCommandArgs(context: GitContext): string {
   return [
-    "Return ONLY valid JSON with keys type, scope, subject.",
-    "No prose, no markdown, no code fences.",
+    "You are a conventional commit message generator.",
+    "Return ONLY a single valid JSON object with keys: type, scope, subject.",
+    "No prose, no explanation, no markdown, no code fences, no tool calls.",
+    "",
+    `Valid types: ${COMMIT_TYPES.join(", ")}`,
+    "scope: short module/area name (e.g. auth, cli, config)",
+    "subject: imperative, lowercase, no period, max 50 chars",
+    "",
     `Branch: ${context.branch}`,
     `Previous commit: ${context.previousCommit}`,
     "",

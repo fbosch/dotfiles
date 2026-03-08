@@ -7,7 +7,8 @@
     "test": "bun test"
   },
   "dependencies": {
-    "just-bash": "^2.12.2"
+    "just-bash": "^2.12.2",
+    "strip-json-comments": "^5.0.1"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "1.1.65"
