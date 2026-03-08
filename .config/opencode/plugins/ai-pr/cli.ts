@@ -1,15 +1,20 @@
 #!/usr/bin/env bun
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
 
 const DEFAULT_MODEL = "opencode/big-pickle";
+const DEFAULT_SERVER_URL = "http://127.0.0.1:4096";
+const START_TIMEOUT_MS = 12000;
+const SESSION_TIMEOUT_MS = 5000;
+const DEFAULT_COMMAND_TIMEOUT_MS = 120000;
 const MAX_DIFF_LINES = 2000;
 const TRUNCATED_DIFF_LINES = 500;
 const ANSI_ESCAPE_REGEX = new RegExp("\\u001b\\[[0-9;]*m", "g");
+const SERVER_READY_PATTERN = /on\s+(https?:\/\/[^\s]+)/;
 
 type CliArgs = {
   debug?: boolean;
@@ -24,11 +29,9 @@ type CommandResult = {
 
 type CommandEnv = Record<string, string | undefined>;
 
-type JsonTextEvent = {
-  type?: string;
-  part?: {
-    text?: string;
-  };
+type ConnectedServer = {
+  baseUrl: string;
+  cleanup?: () => Promise<void>;
 };
 
 function parseArgs(argv: string[]): CliArgs {
@@ -108,7 +111,7 @@ function writeDebugTiming(debug: boolean, label: string, startTime: number | nul
 }
 
 function commandExists(command: string): boolean {
-  const result = runCommand("sh", ["-c", `command -v ${command} >/dev/null 2>&1`]);
+  const result = runCommand("which", [command]);
   return result.status === 0;
 }
 
@@ -159,41 +162,276 @@ function getUpstreamBranch(): string | null {
   return upstream.length > 0 ? upstream : null;
 }
 
-function readOutputEvents(output: string): string {
-  const withoutAnsi = output.replace(ANSI_ESCAPE_REGEX, "");
-  const lines = withoutAnsi.split(/\r?\n/);
-  const textParts: string[] = [];
-
-  for (const line of lines) {
-    if (line.startsWith("{") === false) {
-      continue;
-    }
-
-    try {
-      const parsed = JSON.parse(line) as JsonTextEvent;
-      if (parsed.type === "text" && typeof parsed.part?.text === "string") {
-        textParts.push(parsed.part.text);
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return textParts.join("\n").trim();
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
-function runWithSpinner(title: string, command: string, args: string[], env: CommandEnv): number {
-  if (commandExists("gum") === false) {
-    const fallback = runCommand(command, args, { env, inheritIO: true });
-    return fallback.status;
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function getCommandTimeoutMs(): number {
+  const raw = process.env.AI_PR_TIMEOUT_MS;
+  if (typeof raw !== "string") {
+    return DEFAULT_COMMAND_TIMEOUT_MS;
   }
 
-  const result = runCommand(
-    "gum",
-    ["spin", "--spinner", "pulse", "--title", title, "--", command, ...args],
-    { env, inheritIO: true },
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isFinite(parsed) === false || parsed < 5000) {
+    return DEFAULT_COMMAND_TIMEOUT_MS;
+  }
+
+  return parsed;
+}
+
+function extractSessionId(value: unknown): string | null {
+  if (isRecord(value) && isRecord(value.data) && typeof value.data.id === "string") {
+    return value.data.id;
+  }
+
+  if (isRecord(value) && typeof value.id === "string") {
+    return value.id;
+  }
+
+  return null;
+}
+
+function extractTextParts(value: unknown): string[] {
+  const parts = isRecord(value) && isRecord(value.data) && Array.isArray(value.data.parts)
+    ? value.data.parts
+    : isRecord(value) && Array.isArray(value.parts)
+      ? value.parts
+      : [];
+
+  const textParts: string[] = [];
+  for (const part of parts) {
+    if (isRecord(part) === false) {
+      continue;
+    }
+
+    if (typeof part.text === "string") {
+      textParts.push(part.text);
+      continue;
+    }
+
+    if (isRecord(part.part) && typeof part.part.text === "string") {
+      textParts.push(part.part.text);
+    }
+  }
+
+  return textParts;
+}
+
+async function withSpinner<T>(debug: boolean, title: string, fn: () => Promise<T>): Promise<T> {
+  if (debug || process.stderr.isTTY === false) {
+    return await fn();
+  }
+
+  const frames = ["◐", "◓", "◑", "◒"];
+  let index = 0;
+  process.stderr.write(`${frames[index]}  ${title}`);
+  const timer = setInterval(() => {
+    index = (index + 1) % frames.length;
+    process.stderr.write(`\r${frames[index]}  ${title}`);
+  }, 80);
+
+  try {
+    const result = await fn();
+    clearInterval(timer);
+    process.stderr.write("\r◇  Done\n");
+    return result;
+  } catch (error) {
+    clearInterval(timer);
+    process.stderr.write("\r▲  Failed\n");
+    throw error;
+  }
+}
+
+async function requestOpencode(
+  baseUrl: string,
+  path: string,
+  method: "GET" | "POST" | "DELETE",
+  timeoutMs: number,
+  body?: unknown,
+): Promise<unknown> {
+  const url = new URL(path, baseUrl);
+  url.searchParams.set("directory", process.cwd());
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "x-opencode-directory": process.cwd(),
+  };
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  const response = await withTimeout(
+    fetch(url, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
+    timeoutMs,
+    `${method} ${path}`,
   );
-  return result.status;
+
+  const text = await response.text();
+  if (response.ok === false) {
+    const detail = text.trim();
+    throw new Error(
+      detail.length > 0
+        ? `OpenCode ${method} ${path} failed (${response.status}): ${detail}`
+        : `OpenCode ${method} ${path} failed (${response.status})`,
+    );
+  }
+
+  if (text.trim().length === 0) {
+    return {};
+  }
+
+  return JSON.parse(text) as unknown;
+}
+
+async function canUseServer(baseUrl: string): Promise<boolean> {
+  try {
+    await requestOpencode(baseUrl, "/session/status", "GET", SESSION_TIMEOUT_MS);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function connectOpenCode(): Promise<ConnectedServer> {
+  const useExisting = process.env.AI_PR_USE_EXISTING_SERVER !== "0";
+  if (useExisting && (await canUseServer(DEFAULT_SERVER_URL))) {
+    return { baseUrl: DEFAULT_SERVER_URL };
+  }
+
+  return await startOpenCodeServer();
+}
+
+async function startOpenCodeServer(): Promise<ConnectedServer> {
+  return await withTimeout(
+    new Promise<ConnectedServer>((resolve, reject) => {
+      const child = spawn("opencode", ["serve", "--hostname=127.0.0.1", "--port=0"], {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      let settled = false;
+      let stdoutBuffer = "";
+      let stderrBuffer = "";
+
+      const finishError = (message: string): void => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        child.kill();
+        reject(new Error(message));
+      };
+
+      const finishSuccess = (baseUrl: string): void => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        resolve({
+          baseUrl,
+          cleanup: async () => {
+            if (child.killed === false) {
+              child.kill();
+            }
+          },
+        });
+      };
+
+      child.once("error", (error) => {
+        finishError(`Failed to start OpenCode server: ${error.message}`);
+      });
+
+      child.once("exit", (code, signal) => {
+        if (settled) {
+          return;
+        }
+
+        const suffix = signal ? ` (${signal})` : typeof code === "number" ? ` (${code})` : "";
+        const detail = stderrBuffer.trim();
+        finishError(detail.length > 0 ? `OpenCode server exited before startup${suffix}: ${detail}` : `OpenCode server exited before startup${suffix}`);
+      });
+
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => {
+        stdoutBuffer += chunk;
+        const match = SERVER_READY_PATTERN.exec(stdoutBuffer);
+        if (match?.[1]) {
+          finishSuccess(match[1]);
+        }
+      });
+
+      child.stderr.setEncoding("utf8");
+      child.stderr.on("data", (chunk: string) => {
+        stderrBuffer += chunk;
+      });
+    }),
+    START_TIMEOUT_MS,
+    "OpenCode server startup",
+  );
+}
+
+async function createSession(baseUrl: string): Promise<string> {
+  const response = await requestOpencode(
+    baseUrl,
+    "/session",
+    "POST",
+    SESSION_TIMEOUT_MS,
+    { title: "ai-pr" },
+  );
+  const sessionId = extractSessionId(response);
+  if (sessionId === null) {
+    throw new Error("Failed to create OpenCode session");
+  }
+
+  return sessionId;
+}
+
+async function deleteSession(baseUrl: string, sessionId: string): Promise<void> {
+  try {
+    await requestOpencode(baseUrl, `/session/${encodeURIComponent(sessionId)}`, "DELETE", SESSION_TIMEOUT_MS);
+  } catch {
+    return;
+  }
+}
+
+async function runPrDescCommand(baseUrl: string, sessionId: string, modelRef: string, diff: string): Promise<string> {
+  const response = await requestOpencode(
+    baseUrl,
+    `/session/${encodeURIComponent(sessionId)}/command`,
+    "POST",
+    getCommandTimeoutMs(),
+    {
+      arguments: diff,
+      command: "pr-desc",
+      model: modelRef,
+    },
+  );
+
+  return extractTextParts(response).join("\n").trim();
 }
 
 function getClipboardCommand():
@@ -272,22 +510,29 @@ async function main(): Promise<void> {
   const tempRoot = mkdtempSync(join(tmpdir(), "ai-pr."));
   const tempDiff = join(tempRoot, "pr_diff.patch");
   const tempDiffSummary = join(tempRoot, "pr_diff_summary.patch");
-  const tempOutput = join(tempRoot, "opencode_output.log");
   const tempPrDesc = join(tempRoot, "pr_description.md");
+  let cleanupServer: (() => Promise<void>) | null = null;
 
   const cleanup = (): void => {
     rmSync(tempRoot, { recursive: true, force: true });
   };
 
-  process.on("SIGINT", () => {
+  const exitWithCleanup = (): void => {
     cleanup();
-    process.exit(130);
-  });
+    const stopServer = cleanupServer;
+    if (stopServer === null) {
+      process.exit(130);
+      throw new Error("Signal exit");
+    }
 
-  process.on("SIGTERM", () => {
-    cleanup();
-    process.exit(130);
-  });
+    void stopServer().finally(() => {
+      process.exit(130);
+    });
+  };
+
+  process.on("SIGINT", exitWithCleanup);
+
+  process.on("SIGTERM", exitWithCleanup);
 
   const fullDiffStart = startDebugTimer(debug);
   const fullDiff = runCommand("git", ["diff", `${comparisonRef}..HEAD`]);
@@ -298,12 +543,13 @@ async function main(): Promise<void> {
   }
 
   writeFileSync(tempDiff, fullDiff.stdout);
-  const diffLineCount = fullDiff.stdout.split(/\r?\n/).length;
+  const diffLines = fullDiff.stdout.split(/\r?\n/);
+  const diffLineCount = diffLines.length;
 
   const actualDiffFile = diffLineCount > MAX_DIFF_LINES ? tempDiffSummary : tempDiff;
 
   if (diffLineCount > MAX_DIFF_LINES) {
-    const truncatedLines = fullDiff.stdout.split(/\r?\n/).slice(0, TRUNCATED_DIFF_LINES).join("\n");
+    const truncatedLines = diffLines.slice(0, TRUNCATED_DIFF_LINES).join("\n");
     const summary = [
       diffStatResult.stdout.trimEnd(),
       "",
@@ -317,59 +563,61 @@ async function main(): Promise<void> {
     writeFileSync(tempDiffSummary, summary);
   }
 
+  const diffInput = readFileSync(actualDiffFile, "utf8");
   const opencodeStart = startDebugTimer(debug);
-  const opencodeStatus = runWithSpinner(
-    `Analyzing changes with ${modelRef}...`,
-    "fish",
-    [
-      "-c",
-      "opencode run --command pr-desc -m $argv[1] --format json (command cat $argv[2] | string collect) > $argv[3] 2>&1",
-      "--",
-      modelRef,
-      actualDiffFile,
-      tempOutput,
-    ],
-    {
-      ...process.env,
-      OPENCODE_DISABLE_PROJECT_CONFIG: "1",
-      OPENCODE_DISABLE_CLAUDE_CODE_PROMPT: "1",
-    },
-  );
-  writeDebugTiming(debug, "opencode", opencodeStart);
+  const opencodeState: {
+    connected: ConnectedServer | null;
+    sessionId: string | null;
+  } = {
+    connected: null,
+    sessionId: null,
+  };
+  let parsed = "";
 
-  if (opencodeStatus !== 0) {
-    style(` OpenCode command failed (exit ${opencodeStatus})`, 1);
-    let output = "";
-    try {
-      output = readFileSync(tempOutput, "utf8");
-    } catch {
-      output = "";
-    }
-    if (output.trim().length > 0) {
-      console.log("Output:");
-      console.log(output);
-    }
+  try {
+    parsed = await withSpinner(debug, `Analyzing changes with ${modelRef}...`, async () => {
+      const connectStart = startDebugTimer(debug);
+      opencodeState.connected = await connectOpenCode();
+      cleanupServer = opencodeState.connected.cleanup ?? null;
+      writeDebugTiming(debug, "connectClient", connectStart);
+
+      const createSessionStart = startDebugTimer(debug);
+      opencodeState.sessionId = await createSession(opencodeState.connected.baseUrl);
+      writeDebugTiming(debug, "session.create", createSessionStart);
+
+      const commandStart = startDebugTimer(debug);
+      const result = await runPrDescCommand(
+        opencodeState.connected.baseUrl,
+        opencodeState.sessionId,
+        modelRef,
+        diffInput,
+      );
+      writeDebugTiming(debug, "session.command", commandStart);
+      return result;
+    });
+  } catch (error) {
     cleanup();
-    process.exit(1);
+    throw error;
+  } finally {
+    if (opencodeState.connected !== null && opencodeState.sessionId !== null) {
+      const deleteSessionStart = startDebugTimer(debug);
+      await deleteSession(opencodeState.connected.baseUrl, opencodeState.sessionId);
+      writeDebugTiming(debug, "session.delete", deleteSessionStart);
+    }
+
+    if (opencodeState.connected !== null && typeof opencodeState.connected.cleanup === "function") {
+      await opencodeState.connected.cleanup().catch(() => undefined);
+      cleanupServer = null;
+    }
+
+    writeDebugTiming(debug, "opencode", opencodeStart);
   }
 
-  const outputReadStart = startDebugTimer(debug);
-  const output = readFileSync(tempOutput, "utf8");
-  writeDebugTiming(debug, "readOutput", outputReadStart);
-  if (output.trim().length === 0) {
-    style(" OpenCode produced no output", 1);
-    cleanup();
-    process.exit(1);
-  }
-
-  const parseOutputStart = startDebugTimer(debug);
-  const parsed = readOutputEvents(output);
-  writeDebugTiming(debug, "parseOutput", parseOutputStart);
   writeFileSync(tempPrDesc, parsed);
 
   if (parsed.length === 0) {
-    style(" No valid PR description generated. Raw output:", 1);
-    console.log(output.split(/\r?\n/).slice(0, 50).join("\n"));
+    style(" No valid PR description generated", 1);
+    writeDebugTiming(debug, "total", totalStart);
     cleanup();
     process.exit(1);
   }

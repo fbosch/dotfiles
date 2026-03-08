@@ -1,13 +1,13 @@
 ---
-description: Generate a PR description comparing current branch against main/master
+description: Generate a PR description comparing current branch against its base branch
 model: anthropic/claude-haiku-4-5
 ---
 
 Generate a PR description in English (markdown) for the branch below.
 
 Branch: !`git rev-parse --abbrev-ref HEAD`
-Base: !`git show-ref --verify --quiet refs/heads/main && echo main || echo master`
-Commits: !`git log $(git merge-base HEAD $(git show-ref --verify --quiet refs/heads/main && echo main || echo master) 2>/dev/null)..HEAD --pretty=format:"%s" --no-merges 2>/dev/null`
+Base: !`branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ "$branch" = main ] || [ "$branch" = master ]; then git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || printf '%s\n' "$branch"; elif git show-ref --verify --quiet refs/heads/main; then printf 'main\n'; else printf 'master\n'; fi`
+Commits: !`branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ "$branch" = main ] || [ "$branch" = master ]; then base=$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || printf '%s\n' "$branch"); else base=$(git show-ref --verify --quiet refs/heads/main && printf 'main\n' || printf 'master\n'); fi; git log $(git merge-base HEAD "$base" 2>/dev/null)..HEAD --pretty=format:"%s" --no-merges 2>/dev/null`
 
 **Output format:**
 
