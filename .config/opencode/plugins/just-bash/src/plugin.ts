@@ -3,7 +3,19 @@ import { Bash, OverlayFs } from "just-bash";
 import { join, resolve, relative, isAbsolute } from "node:path";
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { performance } from "node:perf_hooks";
 import stripJsonComments from "strip-json-comments";
+
+const STARTUP_TIMING_ENABLED = process.env.OPENCODE_STARTUP_TIMING === "1";
+
+function logStartupTiming(scope: string, start: number) {
+  if (STARTUP_TIMING_ENABLED === false) {
+    return;
+  }
+
+  const elapsed = (performance.now() - start).toFixed(1);
+  process.stderr.write(`[opencode startup] ${scope}: ${elapsed}ms\n`);
+}
 
 interface HostExecConfig {
   allowlist?: string[];
@@ -213,29 +225,66 @@ async function loadOpencodePermissions(
 }
 
 export const JustBashPlugin: Plugin = async (input: PluginInput) => {
+  const start = performance.now();
+
   if (typeof input.directory !== "string" || input.directory.length === 0) {
     throw new Error("just-bash plugin requires a session directory");
   }
 
   const configDir = join(process.env.HOME ?? "", ".config", "opencode");
+  const configStart = performance.now();
   const config = await loadConfig(configDir);
+  logStartupTiming("just-bash.load-config", configStart);
 
   const sandbox = config.sandbox;
+  let bashEnvPromise: Promise<Bash> | undefined;
 
-  const overlay = new OverlayFs({ root: input.directory });
-  const mountPoint = overlay.getMountPoint();
-  const bashEnv = new Bash({
-    fs: overlay,
-    cwd: mountPoint,
-    env: {
-      HOME: mountPoint,
-      PROJECT_ROOT: mountPoint,
-      ...sandbox?.env,
-    },
-    ...(sandbox?.maxCallDepth !== undefined
-      ? { executionLimits: { maxCallDepth: sandbox.maxCallDepth } }
-      : {}),
-  });
+  function getBashEnv() {
+    if (bashEnvPromise !== undefined) {
+      return bashEnvPromise;
+    }
+
+    bashEnvPromise = (async () => {
+      const sandboxStart = performance.now();
+      const overlay = new OverlayFs({ root: input.directory });
+      const mountPoint = overlay.getMountPoint();
+      const bashEnv = new Bash({
+        fs: overlay,
+        cwd: mountPoint,
+        env: {
+          HOME: mountPoint,
+          PROJECT_ROOT: mountPoint,
+          ...sandbox?.env,
+        },
+        ...(sandbox?.maxCallDepth !== undefined
+          ? { executionLimits: { maxCallDepth: sandbox.maxCallDepth } }
+          : {}),
+      });
+
+      logStartupTiming("just-bash.create-sandbox", sandboxStart);
+      return bashEnv;
+    })();
+
+    return bashEnvPromise;
+  }
+
+  const hostExec = config.hostExec;
+  let permissionsPromise: Promise<OpencodePermissions> | undefined;
+
+  function getPermissions() {
+    if (permissionsPromise !== undefined) {
+      return permissionsPromise;
+    }
+
+    permissionsPromise = (async () => {
+      const permissionsStart = performance.now();
+      const permissions = await loadOpencodePermissions(input.worktree, configDir);
+      logStartupTiming("just-bash.load-permissions", permissionsStart);
+      return permissions;
+    })();
+
+    return permissionsPromise;
+  }
 
   const tools: Record<string, ReturnType<typeof tool>> = {
     bash: tool({
@@ -255,6 +304,7 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
           .describe("Working directory for this command"),
       },
       async execute(args) {
+        const bashEnv = await getBashEnv();
         const controller =
           args.timeout !== undefined ? new AbortController() : undefined;
         const timeoutHandle =
@@ -290,29 +340,12 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
     }),
   };
 
-  const hostExec = config.hostExec;
   if (hostExec) {
-    const permissions = await loadOpencodePermissions(input.worktree, configDir);
-
-    const explicit = hostExec.allowlist ?? [];
-    const denied = new Set([
-      ...permissions.deniedCommands,
-      ...(hostExec.denylist ?? []),
-    ]);
-    const allowlist = [...new Set([...permissions.allowedCommands, ...explicit])].filter(
-      (cmd) => denied.has(cmd) === false,
-    );
-
-    if (allowlist.length === 0) {
-      return { tool: tools };
-    }
-
     const defaultTimeout = hostExec.timeout;
     const extraEnv = hostExec.env;
-    const allowedDirPatterns = permissions.allowedDirectories;
 
     tools.host_exec = tool({
-      description: `Execute commands on the host system. Allowed commands: ${allowlist.join(", ")}. Use this for commands that need real system access (e.g., git, gh, curl). Working directory must be within the project or an allowed external directory.`,
+      description: "Execute commands on the host system. Use this for commands that need real system access (e.g., git, gh, curl). Working directory must be within the project or an allowed external directory.",
       args: {
         command: tool.schema.string().describe("The command to execute"),
         description: tool.schema
@@ -328,6 +361,20 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
           .describe("Working directory for this command"),
       },
       async execute(args, context) {
+        const permissions = await getPermissions();
+        const explicit = hostExec.allowlist ?? [];
+        const denied = new Set([
+          ...permissions.deniedCommands,
+          ...(hostExec.denylist ?? []),
+        ]);
+        const allowlist = [...new Set([...permissions.allowedCommands, ...explicit])].filter(
+          (cmd) => denied.has(cmd) === false,
+        );
+
+        if (allowlist.length === 0) {
+          return "No host commands are allowed by the current just-bash configuration.";
+        }
+
         const violation = validateCommand(args.command, allowlist);
         if (violation !== undefined) {
           return violation;
@@ -337,13 +384,13 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
         const projectRoot = resolve(context.worktree);
 
         if (isUnderDir(cwd, projectRoot) === false) {
-          const isAllowed = allowedDirPatterns.some((pattern) => {
+          const isAllowed = permissions.allowedDirectories.some((pattern) => {
             const base = pattern.replace(/\/\*\*$/, "").replace(/\/\*$/, "");
             return isUnderDir(cwd, base);
           });
 
           if (isAllowed === false) {
-            return `Working directory "${cwd}" is outside the project and not in any allowed external directory. Allowed: ${projectRoot}, ${allowedDirPatterns.join(", ") || "(none)"}`;
+            return `Working directory "${cwd}" is outside the project and not in any allowed external directory. Allowed: ${projectRoot}, ${permissions.allowedDirectories.join(", ") || "(none)"}`;
           }
         }
 
@@ -369,5 +416,6 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
     });
   }
 
+  logStartupTiming("just-bash.total", start);
   return { tool: tools };
 };

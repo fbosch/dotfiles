@@ -2,6 +2,18 @@ import type { Hooks, Plugin, PluginInput } from "@opencode-ai/plugin";
 import JustBashPlugin from "opencode-just-bash";
 import MachineContextPlugin from "opencode-machine-context";
 import RtkPlugin from "opencode-rtk";
+import { performance } from "node:perf_hooks";
+
+const STARTUP_TIMING_ENABLED = process.env.OPENCODE_STARTUP_TIMING === "1";
+
+function logStartupTiming(scope: string, start: number) {
+  if (STARTUP_TIMING_ENABLED === false) {
+    return;
+  }
+
+  const elapsed = (performance.now() - start).toFixed(1);
+  process.stderr.write(`[opencode startup] ${scope}: ${elapsed}ms\n`);
+}
 
 function assertKeys(name: string, hooks: Hooks, expected: string[]) {
   const unexpected = Object.keys(hooks).filter((key) => expected.includes(key) === false);
@@ -13,10 +25,38 @@ function assertKeys(name: string, hooks: Hooks, expected: string[]) {
 }
 
 export const ComposerPlugin: Plugin = async (input: PluginInput) => {
+  const start = performance.now();
+  const machineContextTask = (async () => {
+    const taskStart = performance.now();
+
+    try {
+      return await MachineContextPlugin(input);
+    } finally {
+      logStartupTiming("composer.machine-context", taskStart);
+    }
+  })();
+  const justBashTask = (async () => {
+    const taskStart = performance.now();
+
+    try {
+      return await JustBashPlugin(input);
+    } finally {
+      logStartupTiming("composer.just-bash", taskStart);
+    }
+  })();
+  const rtkTask = (async () => {
+    const taskStart = performance.now();
+
+    try {
+      return await RtkPlugin(input);
+    } finally {
+      logStartupTiming("composer.rtk", taskStart);
+    }
+  })();
   const [machineContext, justBash, rtk] = await Promise.all([
-    MachineContextPlugin(input),
-    JustBashPlugin(input),
-    RtkPlugin(input),
+    machineContextTask,
+    justBashTask,
+    rtkTask,
   ]);
 
   assertKeys("machine-context", machineContext, ["experimental.chat.messages.transform"]);
@@ -38,5 +78,6 @@ export const ComposerPlugin: Plugin = async (input: PluginInput) => {
     hooks["tool.execute.before"] = rtk["tool.execute.before"];
   }
 
+  logStartupTiming("composer.total", start);
   return hooks;
 };

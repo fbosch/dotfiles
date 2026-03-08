@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import type { Plugin, PluginInput } from "@opencode-ai/plugin";
 import {
   collectDynamicMetadata,
@@ -6,6 +7,17 @@ import {
   formatMachineContext,
   marker,
 } from "./metadata";
+
+const STARTUP_TIMING_ENABLED = process.env.OPENCODE_STARTUP_TIMING === "1";
+
+function logStartupTiming(scope: string, start: number) {
+  if (STARTUP_TIMING_ENABLED === false) {
+    return;
+  }
+
+  const elapsed = (performance.now() - start).toFixed(1);
+  process.stderr.write(`[opencode startup] ${scope}: ${elapsed}ms\n`);
+}
 
 type Part = {
   type?: string;
@@ -32,9 +44,15 @@ class MachineContextService {
       const messages = output.messages;
       if (!messages?.length) return;
 
-      const lastUser = messages.findLast(
-        (message) => message.info?.role === "user",
-      );
+      let lastUser: Message | undefined;
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const message = messages[index];
+        if (message.info?.role === "user") {
+          lastUser = message;
+          break;
+        }
+      }
+
       if (!lastUser) return;
 
       if (
@@ -63,7 +81,10 @@ class MachineContextService {
 }
 
 export const MachineContextPlugin: Plugin = async (_input: PluginInput) => {
+  const start = performance.now();
   const service = new MachineContextService();
+
+  logStartupTiming("machine-context.total", start);
   return {
     "experimental.chat.messages.transform": service.transform.bind(service),
   };
