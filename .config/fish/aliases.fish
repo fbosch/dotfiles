@@ -111,7 +111,7 @@ abbr cu 'cargo update'
 
 # worktree scripts
 abbr wta 'wt switch --create'
-# abbr wtclean worktrees_clean
+abbr wtclean 'wt step prune --min-age=7d --foreground -y'
 abbr wtc worktree_clone
 
 # Azure DevOps
