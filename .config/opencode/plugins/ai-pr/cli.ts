@@ -15,6 +15,8 @@ const MAX_DIFF_LINES = 2000;
 const TRUNCATED_DIFF_LINES = 500;
 const ANSI_ESCAPE_REGEX = new RegExp("\\u001b\\[[0-9;]*m", "g");
 const SERVER_READY_PATTERN = /on\s+(https?:\/\/[^\s]+)/;
+const SPINNER_COLOR = "\x1b[35m";
+const SPINNER_RESET = "\x1b[39m";
 
 type CliArgs = {
   debug?: boolean;
@@ -134,7 +136,9 @@ function renderSpinner(): void {
     return;
   }
 
-  process.stderr.write(`\r${spinnerState.frames[spinnerState.index]}  ${spinnerState.title}`);
+  process.stderr.write(
+    `\r${SPINNER_COLOR}${spinnerState.frames[spinnerState.index]}${SPINNER_RESET}  ${spinnerState.title}`,
+  );
 }
 
 function commandExists(command: string): boolean {
