@@ -276,7 +276,7 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
 
   const hostExec = config.hostExec;
   if (hostExec) {
-    const permissions = await loadOpencodePermissions(input.directory, configDir);
+    const permissions = await loadOpencodePermissions(input.worktree, configDir);
 
     const inherited = permissions.allowedCommands.filter(
       (cmd) => permissions.deniedCommands.includes(cmd) === false,
@@ -321,7 +321,7 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
         }
 
         const cwd = resolve(args.workdir ?? context.worktree);
-        const projectRoot = resolve(input.directory);
+        const projectRoot = resolve(context.worktree);
 
         if (cwd.startsWith(projectRoot) === false) {
           const isAllowed = allowedDirPatterns.some((pattern) => {
