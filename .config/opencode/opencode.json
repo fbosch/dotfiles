@@ -46,11 +46,11 @@
       "temperature": 0.3
     },
     "title": {
-      "model": "opencode/big-pickle",
+      "model": "openai/gpt-5.3-codex-spark",
       "temperature": 0
     },
     "summary": {
-      "model": "opencode/big-pickle",
+      "model": "openai/gpt-5.3-codex-spark",
       "temperature": 0.1
     },
     "compaction": {
