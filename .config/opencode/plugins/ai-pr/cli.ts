@@ -34,6 +34,15 @@ type ConnectedServer = {
   cleanup?: () => Promise<void>;
 };
 
+type SpinnerState = {
+  frames: string[];
+  index: number;
+  timer: ReturnType<typeof setInterval>;
+  title: string;
+};
+
+let spinnerState: SpinnerState | null = null;
+
 function parseArgs(argv: string[]): CliArgs {
   let debug = false;
   let modelRef: string | undefined;
@@ -107,7 +116,25 @@ function writeDebugTiming(debug: boolean, label: string, startTime: number | nul
   }
 
   const elapsedMs = performance.now() - startTime;
+  clearSpinnerLine();
   console.error(`[ai-pr] ${label}: ${elapsedMs.toFixed(1)}ms`);
+  renderSpinner();
+}
+
+function clearSpinnerLine(): void {
+  if (spinnerState === null || process.stderr.isTTY === false) {
+    return;
+  }
+
+  process.stderr.write("\r\x1b[2K");
+}
+
+function renderSpinner(): void {
+  if (spinnerState === null || process.stderr.isTTY === false) {
+    return;
+  }
+
+  process.stderr.write(`\r${spinnerState.frames[spinnerState.index]}  ${spinnerState.title}`);
 }
 
 function commandExists(command: string): boolean {
@@ -238,25 +265,36 @@ function extractTextParts(value: unknown): string[] {
 }
 
 async function withSpinner<T>(debug: boolean, title: string, fn: () => Promise<T>): Promise<T> {
-  if (debug || process.stderr.isTTY === false) {
+  if (process.stderr.isTTY === false) {
     return await fn();
   }
 
   const frames = ["◐", "◓", "◑", "◒"];
-  let index = 0;
-  process.stderr.write(`${frames[index]}  ${title}`);
-  const timer = setInterval(() => {
-    index = (index + 1) % frames.length;
-    process.stderr.write(`\r${frames[index]}  ${title}`);
-  }, 80);
+  spinnerState = {
+    frames,
+    index: 0,
+    timer: setInterval(() => {
+      if (spinnerState === null) {
+        return;
+      }
+
+      spinnerState.index = (spinnerState.index + 1) % spinnerState.frames.length;
+      renderSpinner();
+    }, 80),
+    title,
+  };
+  const activeSpinner = spinnerState;
+  renderSpinner();
 
   try {
     const result = await fn();
-    clearInterval(timer);
+    clearInterval(activeSpinner.timer);
+    spinnerState = null;
     process.stderr.write("\r◇  Done\n");
     return result;
   } catch (error) {
-    clearInterval(timer);
+    clearInterval(activeSpinner.timer);
+    spinnerState = null;
     process.stderr.write("\r▲  Failed\n");
     throw error;
   }
@@ -575,7 +613,7 @@ async function main(): Promise<void> {
   let parsed = "";
 
   try {
-    parsed = await withSpinner(debug, `Analyzing changes with ${modelRef}...`, async () => {
+    parsed = await withSpinner(debug, `Analyzing commits with ${modelRef}...`, async () => {
       const connectStart = startDebugTimer(debug);
       opencodeState.connected = await connectOpenCode();
       cleanupServer = opencodeState.connected.cleanup ?? null;
