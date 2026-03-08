@@ -97,5 +97,18 @@ function worktree_clone --description 'Bare-clone a repo and open the first work
         return 1
     end
 
+    set -l head_branch (git -C "$worktree_dir" symbolic-ref --quiet --short HEAD 2>/dev/null)
+    if test -n "$head_branch"
+        git -C "$name/.bare" show-ref --verify --quiet "refs/remotes/origin/$head_branch"
+        if test $status -eq 0
+            git -C "$worktree_dir" branch --set-upstream-to="origin/$head_branch" "$head_branch" >/dev/null 2>&1
+            or echo (set_color yellow)"Warning: failed to set upstream for '$head_branch' to 'origin/$head_branch'."(set_color normal) >&2
+        else
+            echo (set_color yellow)"Warning: origin/$head_branch not found; upstream not set."(set_color normal) >&2
+        end
+    else
+        echo (set_color yellow)"Warning: HEAD is detached; upstream not set."(set_color normal) >&2
+    end
+
     echo (set_color green)"Ready."(set_color normal)
 end
