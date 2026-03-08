@@ -12,6 +12,7 @@ const TRUNCATED_DIFF_LINES = 500;
 const ANSI_ESCAPE_REGEX = new RegExp("\\u001b\\[[0-9;]*m", "g");
 
 type CliArgs = {
+  debug?: boolean;
   modelRef?: string;
 };
 
@@ -21,6 +22,8 @@ type CommandResult = {
   stderr: string;
 };
 
+type CommandEnv = Record<string, string | undefined>;
+
 type JsonTextEvent = {
   type?: string;
   part?: {
@@ -29,10 +32,16 @@ type JsonTextEvent = {
 };
 
 function parseArgs(argv: string[]): CliArgs {
+  let debug = false;
   let modelRef: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
+    if (value === "--debug") {
+      debug = true;
+      continue;
+    }
+
     if (value === "-m" || value === "--model") {
       const next = argv[index + 1];
       if (typeof next !== "string" || next.trim().length === 0) {
@@ -55,7 +64,7 @@ function parseArgs(argv: string[]): CliArgs {
     fail(`Unknown argument: ${value}`);
   }
 
-  return { modelRef };
+  return { debug, modelRef };
 }
 
 function runCommand(
@@ -63,7 +72,7 @@ function runCommand(
   args: string[],
   options?: {
     stdin?: string;
-    env?: NodeJS.ProcessEnv;
+    env?: CommandEnv;
     inheritIO?: boolean;
   },
 ): CommandResult {
@@ -83,6 +92,19 @@ function runCommand(
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
   };
+}
+
+function startDebugTimer(debug: boolean): number | null {
+  return debug ? performance.now() : null;
+}
+
+function writeDebugTiming(debug: boolean, label: string, startTime: number | null): void {
+  if (debug === false || startTime === null) {
+    return;
+  }
+
+  const elapsedMs = performance.now() - startTime;
+  console.error(`[ai-pr] ${label}: ${elapsedMs.toFixed(1)}ms`);
 }
 
 function commandExists(command: string): boolean {
@@ -108,6 +130,7 @@ function style(message: string, color?: 1 | 2 | 3): void {
 function fail(message: string): never {
   style(` ${message}`, 1);
   process.exit(1);
+  throw new Error(message);
 }
 
 function isInGitRepo(): boolean {
@@ -123,7 +146,7 @@ function getMainBranch(): string {
     return "master";
   }
 
-  fail("Could not find main or master branch");
+  return fail("Could not find main or master branch");
 }
 
 function readOutputEvents(output: string): string {
@@ -149,7 +172,7 @@ function readOutputEvents(output: string): string {
   return textParts.join("\n").trim();
 }
 
-function runWithSpinner(title: string, command: string, args: string[], env: NodeJS.ProcessEnv): number {
+function runWithSpinner(title: string, command: string, args: string[], env: CommandEnv): number {
   if (commandExists("gum") === false) {
     const fallback = runCommand(command, args, { env, inheritIO: true });
     return fallback.status;
@@ -188,24 +211,35 @@ function getClipboardCommand():
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  const debug = args.debug === true;
   const modelRef = args.modelRef ?? DEFAULT_MODEL;
+  const totalStart = startDebugTimer(debug);
 
-  if (isInGitRepo() === false) {
+  const repoCheckStart = startDebugTimer(debug);
+  const inGitRepo = isInGitRepo();
+  writeDebugTiming(debug, "isInGitRepo", repoCheckStart);
+  if (inGitRepo === false) {
     fail("Not in a git repository");
   }
 
+  const branchStart = startDebugTimer(debug);
   const branchResult = runCommand("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
+  writeDebugTiming(debug, "getCurrentBranch", branchStart);
   if (branchResult.status !== 0) {
     fail("Failed to read current branch");
   }
   const branchName = branchResult.stdout.trim();
 
+  const mainBranchStart = startDebugTimer(debug);
   const mainBranch = getMainBranch();
+  writeDebugTiming(debug, "getMainBranch", mainBranchStart);
   if (branchName === mainBranch) {
     fail(`Current branch is ${mainBranch}, cannot compare against itself`);
   }
 
+  const diffStatStart = startDebugTimer(debug);
   const diffStatResult = runCommand("git", ["diff", `${mainBranch}..HEAD`, "--stat"]);
+  writeDebugTiming(debug, "gitDiffStat", diffStatStart);
   if (diffStatResult.status !== 0) {
     fail("Failed to read branch diff");
   }
@@ -233,7 +267,9 @@ async function main(): Promise<void> {
     process.exit(130);
   });
 
+  const fullDiffStart = startDebugTimer(debug);
   const fullDiff = runCommand("git", ["diff", `${mainBranch}..HEAD`]);
+  writeDebugTiming(debug, "gitDiff", fullDiffStart);
   if (fullDiff.status !== 0) {
     cleanup();
     fail("Failed to generate diff");
@@ -259,6 +295,7 @@ async function main(): Promise<void> {
     writeFileSync(tempDiffSummary, summary);
   }
 
+  const opencodeStart = startDebugTimer(debug);
   const opencodeStatus = runWithSpinner(
     `Analyzing changes with ${modelRef}...`,
     "fish",
@@ -274,6 +311,7 @@ async function main(): Promise<void> {
       OPENCODE_PR_DIFF_FILE: actualDiffFile,
     },
   );
+  writeDebugTiming(debug, "opencode", opencodeStart);
 
   if (opencodeStatus !== 0) {
     style(` OpenCode command failed (exit ${opencodeStatus})`, 1);
@@ -291,14 +329,18 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const outputReadStart = startDebugTimer(debug);
   const output = readFileSync(tempOutput, "utf8");
+  writeDebugTiming(debug, "readOutput", outputReadStart);
   if (output.trim().length === 0) {
     style(" OpenCode produced no output", 1);
     cleanup();
     process.exit(1);
   }
 
+  const parseOutputStart = startDebugTimer(debug);
   const parsed = readOutputEvents(output);
+  writeDebugTiming(debug, "parseOutput", parseOutputStart);
   writeFileSync(tempPrDesc, parsed);
 
   if (parsed.length === 0) {
@@ -308,6 +350,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const editorStart = startDebugTimer(debug);
   runCommand(
     "nvim",
     [
@@ -326,6 +369,7 @@ async function main(): Promise<void> {
     ],
     { inheritIO: true },
   );
+  writeDebugTiming(debug, "editor", editorStart);
 
   try {
     statSync(tempPrDesc);
@@ -346,13 +390,16 @@ async function main(): Promise<void> {
   if (clipboard === null) {
     style(" Clipboard command not found, displaying content:", 3);
     console.log(finalContent);
+    writeDebugTiming(debug, "total", totalStart);
     cleanup();
     return;
   }
 
+  const clipboardStart = startDebugTimer(debug);
   const clipboardResult = runCommand(clipboard.command, clipboard.args, {
     stdin: finalContent.replace(ANSI_ESCAPE_REGEX, ""),
   });
+  writeDebugTiming(debug, "clipboard", clipboardStart);
 
   if (clipboardResult.status === 0) {
     style(" PR description copied to clipboard!", 2);
@@ -360,6 +407,7 @@ async function main(): Promise<void> {
     style(" Failed to copy to clipboard", 1);
   }
 
+  writeDebugTiming(debug, "total", totalStart);
   cleanup();
 }
 
