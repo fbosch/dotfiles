@@ -123,15 +123,15 @@ abbr wi workitems_on_date
 abbr wid workitems_on_date
 abbr wiw workitems_week
 
-# Package manager shortcuts (swpm wrappers)
-alias dev 'swpm dev'
-alias t 'swpm test'
-alias pr 'swpm remove'
-alias sb 'swpm storybook'
-alias sblg 'swpm cross-env NODE_OPTIONS=--openssl-legacy-provider start-storybook -p 9000'
-alias lint 'swpm lint'
-alias pw 'swpm workspace'
-alias pup 'swpm update-interactive'
+# Package manager shortcuts
+alias dev 'pnpm dev'
+alias t 'pnpm test'
+alias pr 'pnpm remove'
+alias sb 'pnpm storybook'
+alias sblg 'pnpm exec cross-env NODE_OPTIONS=--openssl-legacy-provider start-storybook -p 9000'
+alias lint 'pnpm lint'
+alias pw 'pnpm -r'
+alias pup 'pnpm update --interactive'
 
 # Weather
 alias wtr 'curl "wttr.in/Copenhagen?format=%n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"'

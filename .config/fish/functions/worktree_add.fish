@@ -19,7 +19,7 @@ function worktree_add
     end
 
     cd $branch_name
-    swpm install --prefer-offline
+    pnpm install --prefer-offline
     git reset --hard HEAD
     echo (pwd) >>/tmp/.recent-worktrees
     echo (set_color green)"Worktree created and dependencies installed ✅"(set_color normal)
