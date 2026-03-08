@@ -26,6 +26,22 @@ importers:
         specifier: ^5.9.0
         version: 5.9.0
 
+  composer:
+    dependencies:
+      opencode-just-bash:
+        specifier: workspace:*
+        version: link:../just-bash
+      opencode-machine-context:
+        specifier: workspace:*
+        version: link:../machine-context
+      opencode-rtk:
+        specifier: workspace:*
+        version: link:../rtk
+    devDependencies:
+      '@opencode-ai/plugin':
+        specifier: 1.1.65
+        version: 1.1.65
+
   just-bash:
     dependencies:
       just-bash:

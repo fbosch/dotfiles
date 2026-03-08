@@ -98,14 +98,41 @@ return {
 			vim.o.autoread = true
 		end,
 		config = function()
+			local function is_opencode_terminal(buf)
+				if vim.bo[buf].buftype ~= "terminal" then
+					return false
+				end
+
+				local name = vim.api.nvim_buf_get_name(buf)
+				return name:find("term://", 1, true) ~= nil and name:find("opencode", 1, true) ~= nil
+			end
+
+			local function set_opencode_terminal_keymaps(buf)
+				local buf_opts = { buffer = buf, silent = true }
+
+				vim.keymap.set("t", "<C-Esc>", function()
+					vim.cmd("stopinsert")
+					vim.cmd("wincmd p")
+				end, vim.tbl_extend("force", buf_opts, { desc = "Exit opencode terminal" }))
+
+				vim.keymap.set("n", "q", function()
+					vim.cmd("wincmd p")
+				end, vim.tbl_extend("force", buf_opts, { desc = "Exit opencode terminal" }))
+
+				vim.keymap.set("n", "<C-h>", "<C-w>h", buf_opts)
+				vim.keymap.set("n", "<C-j>", "<C-w>j", buf_opts)
+				vim.keymap.set("n", "<C-k>", "<C-w>k", buf_opts)
+				vim.keymap.set("n", "<C-l>", "<C-w>l", buf_opts)
+			end
+
 			local function focus_opencode_window()
 				vim.schedule(function()
 					for _, win in ipairs(vim.api.nvim_list_wins()) do
 						local bufnr = vim.api.nvim_win_get_buf(win)
 						local filetype = vim.bo[bufnr].filetype
-						if filetype == "opencode" or filetype == "opencode_terminal" then
+						if filetype == "opencode" or is_opencode_terminal(bufnr) then
 							vim.api.nvim_set_current_win(win)
-							if filetype == "opencode_terminal" then
+							if is_opencode_terminal(bufnr) then
 								pcall(vim.cmd, "startinsert")
 							end
 							return
@@ -132,9 +159,9 @@ return {
 			vim.api.nvim_create_autocmd("TermOpen", {
 				pattern = "*",
 				callback = function(args)
-					local name = vim.api.nvim_buf_get_name(args.buf)
-					if name:find("term://", 1, true) and name:find("opencode", 1, true) then
+					if is_opencode_terminal(args.buf) then
 						vim.bo[args.buf].buflisted = false
+						set_opencode_terminal_keymaps(args.buf)
 						pcall(vim.cmd, "startinsert")
 					end
 				end,
@@ -143,35 +170,9 @@ return {
 			vim.api.nvim_create_autocmd("WinEnter", {
 				pattern = "*",
 				callback = function(args)
-					if vim.bo[args.buf].filetype == "opencode_terminal" then
+					if is_opencode_terminal(args.buf) then
 						pcall(vim.cmd, "startinsert")
 					end
-				end,
-			})
-
-			-- Set up opencode terminal-specific keymaps
-			vim.api.nvim_create_autocmd("FileType", {
-				pattern = "opencode_terminal",
-				callback = function(args)
-					local buf_opts = { buffer = args.buf, silent = true }
-					pcall(vim.cmd, "startinsert")
-
-					-- Exit terminal with Ctrl-Esc (from terminal mode)
-					vim.keymap.set("t", "<C-Esc>", function()
-						vim.cmd("stopinsert")
-						vim.cmd("wincmd p")
-					end, vim.tbl_extend("force", buf_opts, { desc = "Exit opencode terminal" }))
-
-					-- Exit with q (from normal mode only)
-					vim.keymap.set("n", "q", function()
-						vim.cmd("wincmd p")
-					end, vim.tbl_extend("force", buf_opts, { desc = "Exit opencode terminal" }))
-
-					-- Navigate splits in normal mode only (avoid terminal mode conflicts)
-					vim.keymap.set("n", "<C-h>", "<C-w>h", buf_opts)
-					vim.keymap.set("n", "<C-j>", "<C-w>j", buf_opts)
-					vim.keymap.set("n", "<C-k>", "<C-w>k", buf_opts)
-					vim.keymap.set("n", "<C-l>", "<C-w>l", buf_opts)
 				end,
 			})
 

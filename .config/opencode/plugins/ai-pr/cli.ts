@@ -323,14 +323,16 @@ async function main(): Promise<void> {
     "fish",
     [
       "-c",
-      "opencode_transient_run run --command pr-desc -m $argv[1] --format json (command cat $OPENCODE_PR_DIFF_FILE | string collect) > $argv[2] 2>&1",
+      "opencode run --command pr-desc -m $argv[1] --format json (command cat $argv[2] | string collect) > $argv[3] 2>&1",
       "--",
       modelRef,
+      actualDiffFile,
       tempOutput,
     ],
     {
       ...process.env,
-      OPENCODE_PR_DIFF_FILE: actualDiffFile,
+      OPENCODE_DISABLE_PROJECT_CONFIG: "1",
+      OPENCODE_DISABLE_CLAUDE_CODE_PROMPT: "1",
     },
   );
   writeDebugTiming(debug, "opencode", opencodeStart);

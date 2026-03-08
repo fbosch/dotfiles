@@ -217,11 +217,6 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
     throw new Error("just-bash plugin requires a session directory");
   }
 
-  console.warn("[just-bash] init", {
-    directory: input.directory,
-    worktree: input.worktree,
-  });
-
   const configDir = join(process.env.HOME ?? "", ".config", "opencode");
   const config = await loadConfig(configDir);
 
@@ -308,18 +303,7 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
       (cmd) => denied.has(cmd) === false,
     );
 
-    console.warn("[just-bash] host_exec config", {
-      explicitAllowlist: explicit,
-      permissionAllowlist: permissions.allowedCommands,
-      permissionDenylist: permissions.deniedCommands,
-      resolvedAllowlist: allowlist,
-      allowedDirectories: permissions.allowedDirectories,
-    });
-
     if (allowlist.length === 0) {
-      console.warn("[just-bash] host_exec disabled", {
-        reason: "empty allowlist",
-      });
       return { tool: tools };
     }
 
@@ -384,10 +368,6 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
       },
     });
   }
-
-  console.warn("[just-bash] ready", {
-    tools: Object.keys(tools),
-  });
 
   return { tool: tools };
 };

@@ -9,9 +9,7 @@
     "opencode-snippets",
     "opencode-wakatime",
     "opencode-handoff",
-    "./plugins/machine-context/index.ts",
-    "./plugins/just-bash/index.ts",
-    "./plugins/rtk/index.ts"
+    "./plugins/composer/index.ts"
   ],
   "instructions": [
     "~/.config/opencode/instructions/shell-strategy.md"
