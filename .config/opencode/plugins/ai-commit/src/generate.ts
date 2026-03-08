@@ -448,6 +448,63 @@ function createParseError(result: unknown, options: GenerateOptions, detail?: st
   };
 }
 
+function diagnoseRawFields(value: unknown): string | null {
+  const candidate = match(value)
+    .with({ type: P.string, scope: P.string, subject: P.string }, (v) => v)
+    .otherwise(() => null);
+
+  if (candidate === null) {
+    return null;
+  }
+
+  return diagnoseCommitFields(candidate.type, candidate.scope, candidate.subject);
+}
+
+function diagnoseFromText(text: string): string | null {
+  const cleaned = stripCodeFence(text);
+  try {
+    const parsed: unknown = JSON.parse(cleaned);
+    return diagnoseRawFields(parsed);
+  } catch {
+    const open = cleaned.indexOf("{");
+    const close = cleaned.lastIndexOf("}");
+    if (open >= 0 && close > open) {
+      try {
+        const parsed: unknown = JSON.parse(cleaned.slice(open, close + 1));
+        return diagnoseRawFields(parsed);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+function diagnoseResult(result: unknown): string | null {
+  const fromString = match(result)
+    .with(P.string, (text) => diagnoseFromText(text))
+    .otherwise(() => null);
+  if (fromString !== null) {
+    return fromString;
+  }
+
+  const fromStructured = match(extractStructuredOutput(result))
+    .with(P.nullish, () => null)
+    .otherwise((output) => diagnoseRawFields(output));
+  if (fromStructured !== null) {
+    return fromStructured;
+  }
+
+  for (const text of extractTextParts(result)) {
+    const diagnosis = diagnoseFromText(text);
+    if (diagnosis !== null) {
+      return diagnosis;
+    }
+  }
+
+  return null;
+}
+
 function parseGeneratedCommit(
   result: unknown,
   options: GenerateOptions,
@@ -464,6 +521,11 @@ function parseGeneratedCommit(
     .otherwise((value) => extractStructuredCommit(value) ?? extractCommitFromJsonText(value));
   if (parsed !== null) {
     return ok(parsed);
+  }
+
+  const diagnosis = diagnoseResult(result);
+  if (diagnosis !== null) {
+    return err(createParseError(result, options, diagnosis));
   }
 
   const detail = match(result)
