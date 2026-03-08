@@ -70,6 +70,7 @@ abbr gp 'git push'
 abbr gpn 'git push --no-verify'
 abbr gpl 'git pull'
 abbr gplr 'git pull --rebase'
+abbr gplsys git_pull_system_repos
 abbr gf 'git fetch'
 abbr gw 'git worktree'
 abbr gwa 'git worktree add'
