@@ -149,6 +149,16 @@ function getMainBranch(): string {
   return fail("Could not find main or master branch");
 }
 
+function getUpstreamBranch(): string | null {
+  const result = runCommand("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]);
+  if (result.status !== 0) {
+    return null;
+  }
+
+  const upstream = result.stdout.trim();
+  return upstream.length > 0 ? upstream : null;
+}
+
 function readOutputEvents(output: string): string {
   const withoutAnsi = output.replace(ANSI_ESCAPE_REGEX, "");
   const lines = withoutAnsi.split(/\r?\n/);
@@ -233,18 +243,30 @@ async function main(): Promise<void> {
   const mainBranchStart = startDebugTimer(debug);
   const mainBranch = getMainBranch();
   writeDebugTiming(debug, "getMainBranch", mainBranchStart);
+  let comparisonRef = mainBranch;
+  let comparisonLabel = mainBranch;
+
   if (branchName === mainBranch) {
-    fail(`Current branch is ${mainBranch}, cannot compare against itself`);
+    const upstreamStart = startDebugTimer(debug);
+    const upstreamBranch = getUpstreamBranch();
+    writeDebugTiming(debug, "getUpstreamBranch", upstreamStart);
+
+    if (upstreamBranch === null) {
+      fail(`Current branch is ${mainBranch} and has no upstream branch to compare against`);
+    }
+
+    comparisonRef = upstreamBranch;
+    comparisonLabel = `upstream ${upstreamBranch}`;
   }
 
   const diffStatStart = startDebugTimer(debug);
-  const diffStatResult = runCommand("git", ["diff", `${mainBranch}..HEAD`, "--stat"]);
+  const diffStatResult = runCommand("git", ["diff", `${comparisonRef}..HEAD`, "--stat"]);
   writeDebugTiming(debug, "gitDiffStat", diffStatStart);
   if (diffStatResult.status !== 0) {
     fail("Failed to read branch diff");
   }
   if (diffStatResult.stdout.trim().length === 0) {
-    fail(`No differences found between ${branchName} and ${mainBranch}`);
+    fail(`No differences found between ${branchName} and ${comparisonLabel}`);
   }
 
   const tempRoot = mkdtempSync(join(tmpdir(), "ai-pr."));
@@ -268,7 +290,7 @@ async function main(): Promise<void> {
   });
 
   const fullDiffStart = startDebugTimer(debug);
-  const fullDiff = runCommand("git", ["diff", `${mainBranch}..HEAD`]);
+  const fullDiff = runCommand("git", ["diff", `${comparisonRef}..HEAD`]);
   writeDebugTiming(debug, "gitDiff", fullDiffStart);
   if (fullDiff.status !== 0) {
     cleanup();
