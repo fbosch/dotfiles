@@ -132,14 +132,9 @@ function worktree_clone --description 'Bare-clone a repo and open the first work
     end
 
     if command -v wt >/dev/null 2>&1
-        if test -f "$wt_config_link" -o -L "$wt_config_link"
-            read -l -P (set_color cyan)"Approve and run wt post-create hooks now? [y/N] "(set_color normal) run_wt_approvals
-            if string match -rq '^(y|yes)$' -- (string lower -- "$run_wt_approvals")
-                wt hook approvals add
-                and wt hook post-create
-                or echo (set_color yellow)"Warning: wt hook approval and/or post-create hook run failed."(set_color normal) >&2
-            end
-        end
+        wt hook approvals add
+        and wt hook post-create
+        or echo (set_color yellow)"Warning: wt hook approval and/or post-create hook run failed."(set_color normal) >&2
     end
 
     echo (set_color green)"Ready."(set_color normal)
