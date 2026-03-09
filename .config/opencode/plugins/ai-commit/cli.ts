@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { createConnection } from "node:net";
 import process from "node:process";
 import pc from "picocolors";
@@ -26,10 +27,22 @@ import {
 } from "./src/ui";
 
 const DEFAULT_MODEL = "opencode/gpt-5-nano";
+const COMMIT_AGENT_PATH = new URL("../../agents/commit.md", import.meta.url).pathname;
+const AGENT_FRONTMATTER_PATTERN = /^---\n([\s\S]*?)\n---/;
+const AGENT_MODEL_PATTERN = /^model:\s*(\S+)/m;
+const FALLBACK_MODELS: ReadonlyArray<{ label: string; ref: string }> = [
+  { label: "claude-haiku-4-5  (anthropic)", ref: "anthropic/claude-haiku-4-5" },
+  { label: "gpt-5.3-codex-spark  (openai)", ref: "openai/gpt-5.3-codex-spark" },
+  {
+    label: "grok-code-fast-1  (github-copilot)",
+    ref: "github-copilot/grok-code-fast-1",
+  },
+];
 const OPENCODE_SERVER_HOST = "127.0.0.1";
 const OPENCODE_SERVER_PORT = 4096;
 const SERVER_RETRY_TIMEOUT_MS = 5000;
 const SERVER_RETRY_INTERVAL_MS = 200;
+const SERVER_STOP_TIMEOUT_MS = 3000;
 
 type Args = {
   dryRun: boolean;
@@ -84,7 +97,10 @@ function formatGitError(error: GitError): string {
 
 function formatGenerateError(error: GenerateError): string {
   return match(error)
-    .with({ kind: "connection" }, ({ message }) => `Connection error: ${message}`)
+    .with(
+      { kind: "connection" },
+      ({ message }) => `Connection error: ${message}`,
+    )
     .with({ kind: "timeout" }, ({ message }) => `Timeout: ${message}`)
     .with({ kind: "session" }, ({ message }) => `Session error: ${message}`)
     .with({ kind: "sdk" }, ({ message }) => `SDK error: ${message}`)
@@ -94,7 +110,11 @@ function formatGenerateError(error: GenerateError): string {
 
 function reportGenerateError(error: GenerateError): never {
   style(` Failed to generate commit message: ${formatGenerateError(error)}`, 1);
-  if (error.kind === "parse" && typeof error.debug === "string" && error.debug.length > 0) {
+  if (
+    error.kind === "parse" &&
+    typeof error.debug === "string" &&
+    error.debug.length > 0
+  ) {
     style(` Debug: ${error.debug}`, 3);
   }
   process.exit(1);
@@ -112,14 +132,17 @@ function shouldStartServer(error: GenerateError): boolean {
   }
 
   const message = error.message.toLowerCase();
-  return ["unable to connect", "econnrefused", "fetch failed", "connect"].some((value) =>
-    message.includes(value),
+  return ["unable to connect", "econnrefused", "fetch failed", "connect"].some(
+    (value) => message.includes(value),
   );
 }
 
 function isServerReachable(): Promise<boolean> {
   return new Promise((resolve) => {
-    const socket = createConnection({ host: OPENCODE_SERVER_HOST, port: OPENCODE_SERVER_PORT });
+    const socket = createConnection({
+      host: OPENCODE_SERVER_HOST,
+      port: OPENCODE_SERVER_PORT,
+    });
 
     const finish = (reachable: boolean): void => {
       socket.removeAllListeners();
@@ -148,14 +171,34 @@ async function waitForServer(): Promise<boolean> {
   return false;
 }
 
-async function startServer(): Promise<void> {
-  if (await isServerReachable()) {
+async function waitForServerToStop(): Promise<boolean> {
+  const deadline = Date.now() + SERVER_STOP_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    if ((await isServerReachable()) === false) {
+      return true;
+    }
+
+    await sleep(SERVER_RETRY_INTERVAL_MS);
+  }
+
+  return false;
+}
+
+async function startServer(forceStart = false): Promise<void> {
+  if (forceStart === false && (await isServerReachable())) {
     return;
   }
 
   const child = spawn(
     "opencode",
-    ["serve", "--hostname", OPENCODE_SERVER_HOST, "--port", String(OPENCODE_SERVER_PORT)],
+    [
+      "serve",
+      "--hostname",
+      OPENCODE_SERVER_HOST,
+      "--port",
+      String(OPENCODE_SERVER_PORT),
+    ],
     {
       detached: true,
       stdio: "ignore",
@@ -174,7 +217,9 @@ async function startServer(): Promise<void> {
           return;
         }
 
-        reject(new Error(`opencode serve exited with code ${code ?? "unknown"}`));
+        reject(
+          new Error(`opencode serve exited with code ${code ?? "unknown"}`),
+        );
       });
     }),
   ]);
@@ -186,6 +231,28 @@ async function startServer(): Promise<void> {
   throw new Error(
     `Timed out waiting for opencode server on http://${OPENCODE_SERVER_HOST}:${String(OPENCODE_SERVER_PORT)}`,
   );
+}
+
+async function restartServer(): Promise<void> {
+  const killResult = spawnSync(
+    "pkill",
+    [
+      "-f",
+      `opencode serve --hostname ${OPENCODE_SERVER_HOST} --port ${String(OPENCODE_SERVER_PORT)}`,
+    ],
+    {
+      stdio: "ignore",
+    },
+  );
+
+  if (killResult.error) {
+    throw new Error(
+      `Failed to restart opencode server: ${killResult.error.message}`,
+    );
+  }
+
+  await waitForServerToStop();
+  await startServer(true);
 }
 
 async function main(): Promise<void> {
@@ -217,11 +284,14 @@ async function main(): Promise<void> {
 
   const previousCommitResult = getPreviousCommitSubject();
   if (args.verbose && previousCommitResult.isErr()) {
-    style(` Could not read previous commit subject: ${formatGitError(previousCommitResult.error)}`, 3);
+    style(
+      ` Could not read previous commit subject: ${formatGitError(previousCommitResult.error)}`,
+      3,
+    );
   }
   const previousCommit = previousCommitResult.unwrapOr("");
 
-  const modelRef = getModelRef(args.modelRef);
+  let modelRef = getModelRef(args.modelRef);
 
   if (args.verbose) {
     style(` Branch: ${branch}`);
@@ -264,11 +334,13 @@ async function main(): Promise<void> {
     }
 
     while (true) {
-      const generatedAttempt = await withSpinner("Analyzing staged diff...", () =>
-        generateCommit(context, modelRef, { debug: args.debug }).match(
-          (value) => ({ ok: true as const, value }),
-          (error) => ({ ok: false as const, error }),
-        ),
+      const generatedAttempt = await withSpinner(
+        "Analyzing staged diff...",
+        () =>
+          generateCommit(context, modelRef, { debug: args.debug }).match(
+            (value) => ({ ok: true as const, value }),
+            (error) => ({ ok: false as const, error }),
+          ),
       );
 
       if (generatedAttempt.ok === false) {
@@ -277,6 +349,7 @@ async function main(): Promise<void> {
 
           const action = await choose("Timed out", [
             "Retry",
+            "Retry with another model",
             "Cancel",
           ]);
 
@@ -284,14 +357,43 @@ async function main(): Promise<void> {
             exitCancelled("Commit cancelled");
           }
 
+          if (action === "Retry with another model") {
+            const selected = await choose(
+              "Select a model",
+              FALLBACK_MODELS.map((m) => m.label),
+            );
+
+            if (selected === null) {
+              exitCancelled("Commit cancelled");
+            }
+
+            const found = FALLBACK_MODELS.find((m) => m.label === selected);
+            if (found !== undefined) {
+              modelRef = found.ref;
+            }
+          }
+
+          try {
+            await restartServer();
+            hasStartedServer = true;
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            reportGenerateError({ kind: "connection", message });
+          }
+
           continue;
         }
 
-        if (hasStartedServer === false && shouldStartServer(generatedAttempt.error)) {
+        if (
+          hasStartedServer === false &&
+          shouldStartServer(generatedAttempt.error)
+        ) {
           try {
             await startServer();
           } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message =
+              error instanceof Error ? error.message : String(error);
             reportGenerateError({ kind: "connection", message });
           }
 
