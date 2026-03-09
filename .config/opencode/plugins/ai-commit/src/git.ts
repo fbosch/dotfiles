@@ -297,17 +297,16 @@ export function hasOnlyLockfiles(paths: string[]): boolean {
 }
 
 export function commit(message: string): Result<string, GitError> {
-  const result = runGit(["commit", "-m", message], {
-    stdio: "inherit",
-  });
+  const result = runGit(["commit", "-m", message]);
+  const output = [result.stderr, result.stdout].filter((part) => part.length > 0).join("\n");
 
   if (result.status === 0) {
-    return ok("");
+    return ok(output);
   }
 
   return err({
     kind: "git",
     command: `git commit -m ${JSON.stringify(message)}`,
-    stderr: "git commit failed",
+    stderr: output.length > 0 ? output : "git commit failed",
   });
 }

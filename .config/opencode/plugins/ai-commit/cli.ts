@@ -20,6 +20,7 @@ import {
   copyCommitCommandToClipboard,
   input,
   style,
+  styleBlock,
   withSpinner,
 } from "./src/ui";
 
@@ -227,6 +228,8 @@ async function main(): Promise<void> {
     style(` ${formatGitError(commitResult.error)}`, 1);
     process.exit(1);
   }
+
+  styleBlock(commitResult.value);
 
   style(" Commit successful!", 2);
 }
