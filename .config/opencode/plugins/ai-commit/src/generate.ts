@@ -4,6 +4,7 @@ import { P, match } from "ts-pattern";
 import { DIFF_TRUNCATED_MARKER } from "./git";
 
 const DEFAULT_SERVER_URL = "http://127.0.0.1:4096";
+const COMMIT_AGENT_NAME = "commit";
 const START_TIMEOUT_MS = 12000;
 const SESSION_TIMEOUT_MS = 5000;
 const DEFAULT_COMMAND_TIMEOUT_MS = 60000;
@@ -234,6 +235,15 @@ function hasSessionClient(value: unknown): value is SessionClient {
       {
         session: {
           create: P.when((input) => typeof input === "function"),
+          prompt: P.when((input) => typeof input === "function"),
+        },
+      },
+      () => true,
+    )
+    .with(
+      {
+        session: {
+          create: P.when((input) => typeof input === "function"),
           command: P.when((input) => typeof input === "function"),
         },
       },
@@ -413,6 +423,8 @@ function tryParseJsonCommit(text: string): GeneratedCommit | null {
 function extractTextParts(value: unknown): string[] {
   const parts = match(value)
     .with({ data: { parts: P.array(P._) } }, ({ data }) => data.parts as unknown[])
+    .with({ data: { message: { parts: P.array(P._) } } }, ({ data }) => data.message.parts as unknown[])
+    .with({ message: { parts: P.array(P._) } }, ({ message }) => message.parts as unknown[])
     .with({ parts: P.array(P._) }, ({ parts }) => parts as unknown[])
     .otherwise((): unknown[] => []);
 
@@ -425,6 +437,12 @@ function extractTextParts(value: unknown): string[] {
       .with({ part: { text: P.string } }, ({ part: nestedPart }) => {
         texts.push(nestedPart.text);
       })
+      .with({ state: { output: P.string } }, ({ state }) => {
+        texts.push(state.output);
+      })
+      .with({ state: { output: { text: P.string } } }, ({ state }) => {
+        texts.push(state.output.text);
+      })
       .otherwise(() => undefined);
   }
 
@@ -435,8 +453,12 @@ function extractStructuredOutput(value: unknown): unknown | null {
   return match(value)
     .with({ data: { info: { structured_output: P._ } } }, ({ data }) => data.info.structured_output)
     .with({ data: { info: { structuredOutput: P._ } } }, ({ data }) => data.info.structuredOutput)
+    .with({ data: { info: { structured: P._ } } }, ({ data }) => data.info.structured)
+    .with({ data: { structured: P._ } }, ({ data }) => data.structured)
     .with({ info: { structured_output: P._ } }, ({ info }) => info.structured_output)
     .with({ info: { structuredOutput: P._ } }, ({ info }) => info.structuredOutput)
+    .with({ info: { structured: P._ } }, ({ info }) => info.structured)
+    .with({ structured: P._ }, ({ structured }) => structured)
     .otherwise(() => null);
 }
 
@@ -465,6 +487,11 @@ function extractCommitFromJsonText(value: unknown): GeneratedCommit | null {
 }
 
 function extractErrorDetail(value: unknown): string {
+  const responseError = extractResponseError(value);
+  if (responseError !== null) {
+    return responseError;
+  }
+
   const message = match(value)
     .with({ data: { info: { error: { message: P.string } } } }, ({ data }) => data.info.error.message.trim())
     .with({ info: { error: { message: P.string } } }, ({ info }) => info.error.message.trim())
@@ -476,6 +503,18 @@ function extractErrorDetail(value: unknown): string {
 
   const firstText = extractTextParts(value)[0];
   return typeof firstText === "string" ? firstText.replace(/\s+/gu, " ").trim().slice(0, 180) : "";
+}
+
+function extractResponseError(value: unknown): string | null {
+  const message = match(value)
+    .with({ data: { info: { error: { data: { message: P.string } } } } }, ({ data }) => data.info.error.data.message)
+    .with({ info: { error: { data: { message: P.string } } } }, ({ info }) => info.error.data.message)
+    .with({ data: { info: { error: { message: P.string } } } }, ({ data }) => data.info.error.message)
+    .with({ info: { error: { message: P.string } } }, ({ info }) => info.error.message)
+    .otherwise(() => "")
+    .trim();
+
+  return message.length > 0 ? message : null;
 }
 
 function debugSummary(value: unknown): string {
@@ -755,6 +794,7 @@ async function runCommitCommand(
   }
 
   const promptBody: Record<string, unknown> = {
+    agent: COMMIT_AGENT_NAME,
     parts: [{ type: "text", text: args }],
   };
 
@@ -776,6 +816,11 @@ async function runCommitCommand(
   const unwrapped = unwrapFieldsResponse(result);
   if (unwrapped.isErr()) {
     throw unwrapped.error;
+  }
+
+  const responseError = extractResponseError(unwrapped.value);
+  if (responseError !== null) {
+    throw sdkError(responseError);
   }
 
   return match(unwrapped.value)

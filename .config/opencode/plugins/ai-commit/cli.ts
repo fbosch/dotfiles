@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 
 import { spawn, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { createConnection } from "node:net";
 import process from "node:process";
 import pc from "picocolors";
@@ -26,10 +25,7 @@ import {
   withSpinner,
 } from "./src/ui";
 
-const DEFAULT_MODEL = "opencode/gpt-5-nano";
-const COMMIT_AGENT_PATH = new URL("../../agents/commit.md", import.meta.url).pathname;
-const AGENT_FRONTMATTER_PATTERN = /^---\n([\s\S]*?)\n---/;
-const AGENT_MODEL_PATTERN = /^model:\s*(\S+)/m;
+const DEFAULT_MODEL = "opencode/agent-default";
 const FALLBACK_MODELS: ReadonlyArray<{ label: string; ref: string }> = [
   { label: "claude-haiku-4-5  (anthropic)", ref: "anthropic/claude-haiku-4-5" },
   { label: "gpt-5.3-codex-spark  (openai)", ref: "openai/gpt-5.3-codex-spark" },
@@ -135,6 +131,34 @@ function shouldStartServer(error: GenerateError): boolean {
   return ["unable to connect", "econnrefused", "fetch failed", "connect"].some(
     (value) => message.includes(value),
   );
+}
+
+function shouldSuggestAnotherModel(error: GenerateError): boolean {
+  if (error.kind !== "sdk") {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return [
+    "model is not supported",
+    "not supported when using codex with a chatgpt account",
+    "unsupported model",
+  ].some((value) => message.includes(value));
+}
+
+async function selectFallbackModel(currentModelRef: string): Promise<string | null> {
+  const options = FALLBACK_MODELS.filter((model) => model.ref !== currentModelRef);
+  if (options.length === 0) {
+    return null;
+  }
+
+  const selected = await choose("Select a model", options.map((model) => model.label));
+  if (selected === null) {
+    return null;
+  }
+
+  const found = options.find((model) => model.label === selected);
+  return found?.ref ?? null;
 }
 
 function isServerReachable(): Promise<boolean> {
@@ -358,19 +382,12 @@ async function main(): Promise<void> {
           }
 
           if (action === "Retry with another model") {
-            const selected = await choose(
-              "Select a model",
-              FALLBACK_MODELS.map((m) => m.label),
-            );
-
-            if (selected === null) {
+            const selectedModel = await selectFallbackModel(modelRef);
+            if (selectedModel === null) {
               exitCancelled("Commit cancelled");
             }
 
-            const found = FALLBACK_MODELS.find((m) => m.label === selected);
-            if (found !== undefined) {
-              modelRef = found.ref;
-            }
+            modelRef = selectedModel;
           }
 
           try {
@@ -380,6 +397,32 @@ async function main(): Promise<void> {
             const message =
               error instanceof Error ? error.message : String(error);
             reportGenerateError({ kind: "connection", message });
+          }
+
+          continue;
+        }
+
+        if (shouldSuggestAnotherModel(generatedAttempt.error)) {
+          style(` Model failed: ${generatedAttempt.error.message}`, 3);
+
+          const action = await choose("Try another model?", [
+            "Retry with another model",
+            "Cancel",
+          ]);
+
+          if (action === null || action === "Cancel") {
+            exitCancelled("Commit cancelled");
+          }
+
+          const selectedModel = await selectFallbackModel(modelRef);
+          if (selectedModel === null) {
+            exitCancelled("Commit cancelled");
+          }
+
+          modelRef = selectedModel;
+
+          if (args.verbose) {
+            style(` Model: ${modelRef}`);
           }
 
           continue;
