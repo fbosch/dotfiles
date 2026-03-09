@@ -1,15 +1,10 @@
 # OpenCode Plugins
 
-This config loads `./plugins/composer/index.ts`, which composes the local plugin packages under `~/.config/opencode/plugins/`.
+Three local plugins are registered directly in `opencode.json`:
 
-## Plugin entry point
-
-- `composer` is the only directly registered plugin.
-- `composer` wires together:
-  - `machine-context` for chat context injection
-  - `just-bash` for shell tool registration
-  - `rtk` for pre-execution command rewriting
-- Treat the composed behavior as the default execution model for this OpenCode config.
+- `machine-context` for chat context injection
+- `just-bash` for shell tool registration
+- `rtk` for pre-execution command rewriting
 
 ## `just-bash`
 

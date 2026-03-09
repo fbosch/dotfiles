@@ -1,7 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin";
 import { performance } from "node:perf_hooks";
 
-const REWRITABLE_TOOLS = new Set(["bash", "host_exec"]);
+const REWRITABLE_TOOLS = new Set(["bash"]);
 const STARTUP_TIMING_ENABLED = process.env.OPENCODE_STARTUP_TIMING === "1";
 
 function logStartupTiming(scope: string, start: number) {

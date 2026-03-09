@@ -8,7 +8,9 @@
     "@happycastle/opencode-openmemory@latest",
     "opencode-wakatime",
     "opencode-handoff",
-    "./plugins/composer/index.ts",
+    "./plugins/machine-context/index.ts",
+    "./plugins/just-bash/index.ts",
+    "./plugins/rtk/index.ts",
     "opencode-snippets"
   ],
   "instructions": [
