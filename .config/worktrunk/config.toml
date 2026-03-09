@@ -1,1 +1,4 @@
 worktree-path = "../{{ branch }}"
+
+[post-create]
+recent-worktree = "printf '%s\n' {{ worktree_path }} >> /tmp/.recent-worktrees"
