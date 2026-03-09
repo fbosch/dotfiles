@@ -28,7 +28,7 @@ import {
 const DEFAULT_MODEL = "opencode/gpt-5-nano";
 const OPENCODE_SERVER_HOST = "127.0.0.1";
 const OPENCODE_SERVER_PORT = 4096;
-const SERVER_RETRY_TIMEOUT_MS = 8000;
+const SERVER_RETRY_TIMEOUT_MS = 5000;
 const SERVER_RETRY_INTERVAL_MS = 200;
 
 type Args = {
@@ -254,6 +254,15 @@ async function main(): Promise<void> {
     };
     let hasStartedServer = false;
 
+    if ((await isServerReachable()) === false) {
+      try {
+        await startServer();
+        hasStartedServer = true;
+      } catch {
+        // Let the normal generate path surface the real error if startup fails.
+      }
+    }
+
     while (true) {
       const generatedAttempt = await withSpinner("Analyzing staged diff...", () =>
         generateCommit(context, modelRef, { debug: args.debug }).match(
@@ -264,18 +273,11 @@ async function main(): Promise<void> {
 
       if (generatedAttempt.ok === false) {
         if (hasStartedServer === false && shouldStartServer(generatedAttempt.error)) {
-          const startedServer = await withSpinner("Starting OpenCode server...", async () => {
-            try {
-              await startServer();
-              return { ok: true as const };
-            } catch (error) {
-              const message = error instanceof Error ? error.message : String(error);
-              return { ok: false as const, error: { kind: "connection", message } satisfies GenerateError };
-            }
-          });
-
-          if (startedServer.ok === false) {
-            reportGenerateError(startedServer.error);
+          try {
+            await startServer();
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            reportGenerateError({ kind: "connection", message });
           }
 
           hasStartedServer = true;
