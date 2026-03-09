@@ -2,7 +2,8 @@
 description: Minimal agent for commit message generation — no provider system prompt, no tools
 mode: primary
 hidden: true
-model: opencode/gpt-5-nano
+# model: opencode/gpt-5-nano
+model: opencode/big-pickle
 prompt: ""
 permission: deny
 tools:

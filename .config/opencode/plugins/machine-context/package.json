@@ -3,12 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": "./index.ts",
+  "exports": "./machine-context.ts",
   "scripts": {
     "test": "bun test"
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "1.1.65",
     "@types/node": "^22.13.9"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "*"
   }
 }

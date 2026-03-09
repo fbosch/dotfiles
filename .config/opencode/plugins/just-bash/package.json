@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": "./index.ts",
+  "exports": "./just-bash.ts",
   "scripts": {
     "test": "bun test"
   },
@@ -12,7 +12,9 @@
     "strip-json-comments": "^5.0.1"
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "1.1.65",
     "@types/node": "^22.13.9"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "*"
   }
 }

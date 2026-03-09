@@ -13,6 +13,13 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 - `stow .`
 - `stow -n .`
 
+## OpenCode Plugins
+
+- Local plugins live in `.config/opencode/plugins/` and are registered in `opencode.json`.
+- Each plugin entry file **must have a unique filename** (not `index.ts`). OpenCode deduplicates plugins by filename only, so multiple `index.ts` files collapse to one.
+- `@opencode-ai/plugin` must be a `peerDependency`, not `devDependency` — the published package ships empty `dist/`; opencode provides it at runtime.
+- The `rtk` plugin only rewrites `bash` tool commands. `host_exec` is excluded because its strict allowlist rejects the `rtk` prefix.
+
 ## References
 
 - [Common operations](docs/agents/operations.md)
