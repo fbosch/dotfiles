@@ -272,6 +272,21 @@ async function main(): Promise<void> {
       );
 
       if (generatedAttempt.ok === false) {
+        if (generatedAttempt.error.kind === "timeout") {
+          style(" Timed out generating commit message", 1);
+
+          const action = await choose("Timed out", [
+            "Retry",
+            "Cancel",
+          ]);
+
+          if (action === null || action === "Cancel") {
+            exitCancelled("Commit cancelled");
+          }
+
+          continue;
+        }
+
         if (hasStartedServer === false && shouldStartServer(generatedAttempt.error)) {
           try {
             await startServer();
