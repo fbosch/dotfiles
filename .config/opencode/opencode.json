@@ -6,10 +6,10 @@
   "plugin": [
     "@tarquinen/opencode-dcp@latest",
     "@happycastle/opencode-openmemory@latest",
-    "opencode-snippets",
     "opencode-wakatime",
     "opencode-handoff",
-    "./plugins/composer/index.ts"
+    "./plugins/composer/index.ts",
+    "opencode-snippets"
   ],
   "instructions": [
     "~/.config/opencode/instructions/shell-strategy.md",

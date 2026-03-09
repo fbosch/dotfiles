@@ -2,7 +2,7 @@
 description: Minimal agent for commit message generation — no provider system prompt, no tools
 mode: primary
 hidden: true
-model: opencode/gpt-5-nano
+model: anthropic/claude-haiku-4-5
 prompt: ""
 permission: deny
 tools:
@@ -14,6 +14,7 @@ Required schema:
 {"type":"feat|fix|docs|style|refactor|perf|test|build|ci|chore","scope":"string","subject":"string"}
 
 Rules:
+
 - No markdown, no backticks, no explanations, no prose.
 - `type` must be one of: feat, fix, docs, style, refactor, perf, test, build, ci, chore.
 - `scope`: use AB#<n> if ticket exists in branch/args, else module/feature name.
