@@ -23,7 +23,6 @@
     "gemini-cli",
     "github-copilot",
     "kimi-cli",
-    "opencode",
-    "antigravity"
+    "opencode"
   ]
 }

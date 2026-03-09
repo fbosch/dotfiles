@@ -5,7 +5,8 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
     set -l codexbar_cache_file "$HOME/.cache/nvim/codexbar/data.json"
     set -l alias_map \
         "openai|indigo-harbor-ddce|fbb" \
-        "openai|atlas-thicket-3afa|jpb"
+        "openai|atlas-thicket-3afa|jpb" \
+        "openai|aurora-auroraforge-efd2|work"
     set -l adjectives ember cobalt amber jade coral indigo silver scarlet atlas lotus cedar pine aurora frost orbit dune maple zenith
     set -l nouns falcon otter comet harbor meadow emberfox lynx kestrel glacier thicket river moss canyon beacon auroraforge wave ridge
     set -l palette_dark 39 45 51 75 81 87 111 117 123 159 195 214 220 226
