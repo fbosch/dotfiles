@@ -24,29 +24,6 @@ export function style(text: string, color?: StyleColor): void {
   log.message(text);
 }
 
-export function styleBlock(text: string): void {
-  const lines = text
-    .split("\n")
-    .map((line) => line.trimEnd());
-
-  while (lines.length > 0 && lines[0] === "") {
-    lines.shift();
-  }
-
-  while (lines.length > 0 && lines.at(-1) === "") {
-    lines.pop();
-  }
-
-  if (lines.length === 0) {
-    return;
-  }
-
-  stderr.write("\n");
-  for (const line of lines) {
-    style(` ${line}`);
-  }
-}
-
 export async function withSpinner<T>(
   label: string,
   fn: () => Promise<T>,
