@@ -1,5 +1,5 @@
-# Timeout for git commands - increased for repos with many files
-command_timeout = 2000
+# Timeout for git commands (ms) - increased for large/slow repos
+command_timeout = 10000
 continuation_prompt = "[ᛃ︁ ](dimmed white)"
 
 format = """$username\
@@ -86,5 +86,4 @@ time_format = '%R'
 [cmd_duration]
 min_time = 1000
 format = 'took [$duration]($style) '
-
 

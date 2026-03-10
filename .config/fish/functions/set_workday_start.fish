@@ -9,7 +9,11 @@ function set_workday_start
     end
 
     set -l current_date (date "+%y-%m-%d")
-    set -l cache_file "/tmp/.first_login/$current_date"
+    set -l cache_base "$XDG_CACHE_HOME"
+    if test -z "$cache_base"
+        set cache_base "$HOME/.cache"
+    end
+    set -l cache_file "$cache_base/first_login/$current_date"
 
     # Validate input: must match 24-hour HH:MM
     if string match -rq '^(0?[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$' -- $time_input

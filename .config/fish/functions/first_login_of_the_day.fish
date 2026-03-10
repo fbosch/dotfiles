@@ -6,7 +6,11 @@ function first_login_of_the_day
 
     set -l current_date (date "+%y-%m-%d")
     set -l current_date_iso (date "+%Y-%m-%d")
-    set -l cache_file "/tmp/.first_login/$current_date"
+    set -l cache_base "$XDG_CACHE_HOME"
+    if test -z "$cache_base"
+        set cache_base "$HOME/.cache"
+    end
+    set -l cache_file "$cache_base/first_login/$current_date"
 
     # Check in-memory cache first (fastest - no disk I/O or external processes)
     # This caches the value for the current shell session
@@ -37,18 +41,18 @@ function first_login_of_the_day
         set time (string match -r '\d{2}:\d{2}:\d{2}' "$lstart_output")
     end
 
-    # Fallback: pmset logs (covers display wake events across sleep/wake cycles)
+    # Fallback: loginwindow logs (slowest but authoritative for real logins)
     if test -z "$time"
-        set -l display_on_event (pmset -g log | awk "/$current_date_iso/ && /Display/ && /(turned on|is on)/ {print; exit}")
+        set -l login_item (log show --start "$current_date_iso 00:00:00" --predicate 'process == "loginwindow"' | grep -i "success" | tail -n1)
+        set time (string match -r '\d{2}:\d{2}:\d{2}\b' "$login_item")
+    end
+
+    # Final fallback: first display-on event of the day (approximation only)
+    if test -z "$time"
+        set -l display_on_event (pmset -g log | awk "/$current_date_iso/ && /Display/ && /(turned on|is on)/ {print}" | tail -n1)
         if test -n "$display_on_event"
             set time (string match -r '\d{2}:\d{2}:\d{2}' "$display_on_event")
         end
-    end
-    
-    # Final fallback: loginwindow logs (slowest but most authoritative for real logins)
-    if test -z "$time"
-        set -l login_item (log show --start (date '+%Y-%m-%d 07:30:00') --predicate 'process == "loginwindow"' | grep -i "success" | head -n1)
-        set time (string match -r '\d{2}:\d{2}:\d{2}\b' "$login_item")
     end
 
     if test -n "$time"
