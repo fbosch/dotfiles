@@ -2,37 +2,28 @@
 
 set -euo pipefail
 
-STATE_FILE="/tmp/hypr-night-light"
 START_HOUR=21
 END_HOUR=7
 CHECK_INTERVAL_SECONDS=60
 TEMPERATURE=4000
 
 night_light_is_enabled() {
-  if pgrep -x hyprsunset >/dev/null; then
-    return 0
-  fi
-
-  [[ -f "$STATE_FILE" ]]
+  pgrep -x hyprsunset >/dev/null
 }
 
 ensure_night_light_on() {
-  if pgrep -x hyprsunset >/dev/null; then
-    [[ -f "$STATE_FILE" ]] || touch "$STATE_FILE"
+  if night_light_is_enabled; then
     return 0
   fi
 
   pkill -9 hyprsunset 2>/dev/null || true
   hyprsunset -t "$TEMPERATURE" >/dev/null 2>&1 &
-  touch "$STATE_FILE"
 }
 
 ensure_night_light_off() {
   if night_light_is_enabled; then
     pkill -9 hyprsunset 2>/dev/null || true
   fi
-
-  rm -f "$STATE_FILE"
 }
 
 night_light_should_be_enabled() {
