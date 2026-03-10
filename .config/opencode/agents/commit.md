@@ -20,9 +20,12 @@ Rules:
 
 - No markdown, no backticks, no explanations, no prose.
 - `type` must be one of: feat, fix, docs, style, refactor, perf, test, build, ci, chore.
-- `scope`: use AB#<n> if ticket exists in branch/args, else module/feature name.
+- `scope`: if any ticket/reference number exists in branch/args, MUST be exactly `AB#<n>`.
+  - Detect ticket numbers from patterns like: `AB#12345`, `#12345`, `fix/12345-...`, `feature/12345_...`, `bugfix/12345...`, or any standalone 4+ digit work-item number.
+  - Never use module/feature scope when a ticket/reference number is present.
+  - Only use module/feature scope when no ticket/reference number exists at all.
 - `subject`: imperative mood, lowercase, no trailing period, specific and substantive.
 - If only lock/generated files are staged, output exactly:
   {"type":"chore","scope":"deps","subject":"update lock file"}
-- Keep final formatted message `type(scope): subject` within 50 chars whenever possible.
+- Keep final formatted message `type(scope): subject` within 50 chars whenever possible, but ticket inclusion in `scope` takes priority.
 - Prefer short wording: authentication->auth, implement->add, function->fn.

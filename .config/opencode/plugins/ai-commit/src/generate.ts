@@ -10,6 +10,7 @@ const SESSION_TIMEOUT_MS = 5000;
 const DEFAULT_COMMAND_TIMEOUT_MS = 60000;
 const FILE_SUMMARY_MAX_FILES = 8;
 const MAX_COMMIT_MESSAGE_LENGTH = 50;
+const WORK_ITEM_PATTERNS = [/\bAB#(\d+)\b/iu, /\b#(\d+)\b/u, /(?:^|[\/_-])(\d{4,})(?=$|[\/_-])/u, /\b(\d{4,})\b/u];
 const SUBJECT_FILLER_WORDS = new Set([
   "a",
   "an",
@@ -381,6 +382,60 @@ function normalizeCommit(type: string, scope: string, subject: string): Generate
   };
 }
 
+function extractWorkItemId(text: string): string | null {
+  const input = text.trim();
+  if (input.length === 0) {
+    return null;
+  }
+
+  for (const pattern of WORK_ITEM_PATTERNS) {
+    const matchResult = pattern.exec(input);
+    const workItem = matchResult?.[1];
+    if (typeof workItem === "string" && workItem.length > 0) {
+      return workItem;
+    }
+  }
+
+  return null;
+}
+
+function detectWorkItemScope(context: GitContext): string | null {
+  const branchWorkItem = extractWorkItemId(context.branch);
+  if (branchWorkItem !== null) {
+    return `AB#${branchWorkItem}`;
+  }
+
+  const commitWorkItem = extractWorkItemId(context.previousCommit);
+  if (commitWorkItem !== null) {
+    return `AB#${commitWorkItem}`;
+  }
+
+  return null;
+}
+
+function enforceWorkItemScope(commit: GeneratedCommit, context: GitContext): GeneratedCommit {
+  const detectedScope = detectWorkItemScope(context);
+  if (detectedScope === null || commit.scope === detectedScope) {
+    return commit;
+  }
+
+  const maxSubjectChars = MAX_COMMIT_MESSAGE_LENGTH - `${commit.type}(${detectedScope}): `.length;
+  if (maxSubjectChars <= 0) {
+    return commit;
+  }
+
+  const scopedSubject = shortenSubject(cleanSubject(commit.subject), maxSubjectChars);
+  const message = `${commit.type}(${detectedScope}): ${scopedSubject}`;
+
+  return {
+    ...commit,
+    scope: detectedScope,
+    subject: scopedSubject,
+    message,
+    overLimit: message.length > MAX_COMMIT_MESSAGE_LENGTH,
+  };
+}
+
 function stripCodeFence(text: string): string {
   const trimmed = text.trim();
   return trimmed.replace(/^```[a-zA-Z0-9_-]*\s*/u, "").replace(/\s*```$/u, "").trim();
@@ -738,6 +793,7 @@ async function connectClient(): Promise<ConnectedClient> {
 }
 
 function buildCommandArgs(context: GitContext): string {
+  const detectedScope = detectWorkItemScope(context);
   const details = [
     context.branch.length > 0 ? `Branch: ${context.branch}` : null,
     context.previousCommit.length > 0 ? `Previous commit: ${context.previousCommit}` : null,
@@ -752,7 +808,10 @@ function buildCommandArgs(context: GitContext): string {
     "No prose, no explanation, no markdown, no code fences, no tool calls.",
     "",
     `Valid types: ${COMMIT_TYPES.join(", ")}`,
-    "scope: short module/area name (e.g. auth, cli, config)",
+    detectedScope === null
+      ? "scope: short module/area name (e.g. auth, cli, config), unless a ticket/reference number is present in branch/args"
+      : `scope: MUST be exactly ${detectedScope} (ticket detected in branch/args)`,
+    "If a ticket/reference number exists in branch/args (AB#1234, #1234, fix/1234-...), never use module/feature scope.",
     "Keep the full commit line <= 50 chars including type(scope): prefix.",
     "subject: imperative, lowercase, no period, usually 20-32 chars",
     "",
@@ -881,7 +940,7 @@ async function generateCommitValue(
       throw parsed.error;
     }
 
-    return parsed.value;
+    return enforceWorkItemScope(parsed.value, context);
   } finally {
     if (connected !== null && sessionId !== null) {
       const deleteSessionStart = startDebugTimer(options);
