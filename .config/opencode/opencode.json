@@ -10,8 +10,7 @@
     "opencode-handoff",
     "opencode-snippets",
     "./plugins/machine-context/machine-context.ts",
-    "./plugins/just-bash/just-bash.ts",
-    "./plugins/rtk/rtk.ts"
+    "./plugins/just-bash/just-bash.ts"
   ],
   "instructions": [
     "~/.config/opencode/instructions/shell-strategy.md",
@@ -47,7 +46,7 @@
       "temperature": 0.3
     },
     "title": {
-      "model": "openai/gpt-5.3-codex-spark",
+      "model": "anthropic/claude-haiku-4-5",
       "temperature": 0
     },
     "summary": {
