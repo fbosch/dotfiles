@@ -30,12 +30,14 @@ local function is_virtualbox()
 	-- Check for VirtualBox kernel modules
 	f = io.open("/proc/modules", "r")
 	if f then
-		local modules = f:read("*all")
-		f:close()
-		if modules:match("vboxguest") or modules:match("vboxvideo") then
-			cached_is_vbox = true
-			return true
+		for line in f:lines() do
+			if line:match("^vboxguest ") or line:match("^vboxvideo ") then
+				f:close()
+				cached_is_vbox = true
+				return true
+			end
 		end
+		f:close()
 	end
 
 	cached_is_vbox = false

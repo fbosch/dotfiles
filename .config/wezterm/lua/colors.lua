@@ -1,5 +1,5 @@
--- Cache HOME path at module level
-local scanlines_path = (os.getenv("HOME") or "") .. "/.config/wezterm/scanlines.png"
+local wezterm = require("wezterm")
+local scanlines_path = wezterm.config_dir .. "/scanlines.png"
 
 return function(config)
 	config.color_scheme = "zenwritten_dark"
