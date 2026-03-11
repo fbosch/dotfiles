@@ -10,7 +10,7 @@ import {
   commit,
   getBranchName,
   type GitError,
-  getPreviousCommitSubject,
+  getPreviousCommitInfo,
   getStagedDiff,
   getStagedFiles,
   hasOnlyLockfiles,
@@ -306,14 +306,20 @@ async function main(): Promise<void> {
   }
   const branch = branchResult.unwrapOr("");
 
-  const previousCommitResult = getPreviousCommitSubject();
+  const previousCommitResult = getPreviousCommitInfo();
   if (args.verbose && previousCommitResult.isErr()) {
     style(
       ` Could not read previous commit subject: ${formatGitError(previousCommitResult.error)}`,
       3,
     );
   }
-  const previousCommit = previousCommitResult.unwrapOr("");
+  const previousCommit = previousCommitResult
+    .map((value) => (value.isMerge ? "" : value.subject))
+    .unwrapOr("");
+
+  if (args.verbose && previousCommitResult.isOk() && previousCommitResult.value.isMerge) {
+    style(" Previous commit is a merge commit; skipping subject context", 3);
+  }
 
   let modelRef = getModelRef(args.modelRef);
 
