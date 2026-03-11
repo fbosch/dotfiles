@@ -35,17 +35,25 @@ Review code systematically for:
 For complex code or security-critical reviews, use deep reasoning.
 Provide constructive feedback without making changes.
 
+## Review stance
+
+- Separate confirmed defects from speculative risks.
+- State review coverage explicitly so conclusions are scoped to what was actually checked.
+- Prefer evidence from the changed code, surrounding context, tests, and interfaces over generic best-practice advice.
+
 ## Output format
 
+- Review coverage
 - Overall verdict (ship, ship with fixes, or do not ship)
 - Findings sorted by severity (critical, high, medium, low)
-- For each finding: `file:line`, issue, evidence, suggested fix, confidence
+- For each finding: `file:line`, issue, evidence, suggested fix, confidence, status (`confirmed` or `speculative`)
 
 ## Quality bar
 
 - No vague findings; every issue must include concrete evidence
 - Check security, correctness, edge cases, and maintainability before concluding no issues
 - Keep recommendations actionable and scoped to the observed risk
+- If no issues are found, state what was reviewed and what was not reviewed
 
 ## Done when
 
