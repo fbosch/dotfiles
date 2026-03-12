@@ -1,5 +1,5 @@
 import { encode } from "@toon-format/toon";
-import type { Plugin } from "@opencode-ai/plugin";
+import type { Plugin } fromj "@opencode-ai/plugin";
 
 const ELIGIBLE_TOOLS = new Set(["bash", "host_exec"]);
 const MIN_JSON_OUTPUT_LENGTH = 256;

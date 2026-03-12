@@ -14,10 +14,13 @@
   color: #fff;
 }
 
-window#waybar {
+#waybar {
   all: unset;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   background-color: rgba(44, 44, 44, 0.85);
+  border-radius: 8px;
+  padding: 0 0.35rem;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
   transition-property: background-color;
   transition-duration: 500ms;
   text-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
@@ -26,11 +29,11 @@ window#waybar {
 
 /* Module containers */
 .modules-right {
-  padding: 0.25rem;
+  padding: 0.2rem 0.3rem 0.2rem 0.2rem;
 }
 
 .modules-left {
-  margin-left: 0.2rem;
+  margin-left: 0.3rem;
 }
 
 .modules-left button:nth-child(1):only-child {
@@ -156,10 +159,8 @@ window#waybar {
 
 /* Taskbar buttons */
 #taskbar button {
-  border-radius: 0;
   border: 1px solid transparent;
   text-shadow: 1px 1px rgba(0, 0, 0, 0.5);
-  transition-duration: 150ms;
   margin: 0.3rem;
   padding: 0 0.5rem;
   border-radius: 0.25rem;

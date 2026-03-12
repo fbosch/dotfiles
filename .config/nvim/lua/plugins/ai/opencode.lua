@@ -7,6 +7,31 @@ return {
 		},
 		init = function()
 			-- Set global options before plugin loads
+			local opencode_cmd_cache = {}
+			local opencode_cmd_preload_inflight = {}
+			local opencode_cmd_cache_ttl_ms = 30 * 60 * 1000
+
+			local function get_cached_opencode_cmd(worktree_dir)
+				local entry = opencode_cmd_cache[worktree_dir]
+				if entry == nil then
+					return nil
+				end
+
+				if vim.uv.now() > entry.expires_at then
+					opencode_cmd_cache[worktree_dir] = nil
+					return nil
+				end
+
+				return entry.cmd
+			end
+
+			local function set_cached_opencode_cmd(worktree_dir, opencode_cmd)
+				opencode_cmd_cache[worktree_dir] = {
+					cmd = opencode_cmd,
+					expires_at = vim.uv.now() + opencode_cmd_cache_ttl_ms,
+				}
+			end
+
 			local function shell_join(argv)
 				local escaped = {}
 				for _, arg in ipairs(argv) do
@@ -35,6 +60,23 @@ return {
 				return vim.fn.getcwd()
 			end
 
+			local function select_latest_session_id_for_worktree(sessions, worktree_dir)
+				local best_id = nil
+				local best_updated = ""
+
+				for _, session in ipairs(sessions) do
+					if session.directory == worktree_dir then
+						local updated = type(session.updated) == "string" and session.updated or ""
+						if best_id == nil or updated > best_updated then
+							best_id = session.id
+							best_updated = updated
+						end
+					end
+				end
+
+				return best_id
+			end
+
 			local function find_worktree_session_id(worktree_dir)
 				local list_cmd = opencode_base_cmd()
 				list_cmd[#list_cmd + 1] = "session"
@@ -52,25 +94,10 @@ return {
 					return nil
 				end
 
-				local best_id = nil
-				local best_updated = ""
-
-				for _, session in ipairs(sessions) do
-					if session.directory == worktree_dir then
-						local updated = type(session.updated) == "string" and session.updated or ""
-						if best_id == nil or updated > best_updated then
-							best_id = session.id
-							best_updated = updated
-						end
-					end
-				end
-
-				return best_id
+				return select_latest_session_id_for_worktree(sessions, worktree_dir)
 			end
 
-			local function build_opencode_cmd()
-				local worktree_dir = resolve_worktree_dir()
-				local session_id = find_worktree_session_id(worktree_dir)
+			local function build_opencode_cmd(worktree_dir, session_id)
 				local cmd = opencode_base_cmd()
 
 				cmd[#cmd + 1] = "--port"
@@ -82,19 +109,65 @@ return {
 				return "cd " .. vim.fn.shellescape(worktree_dir) .. " && " .. shell_join(cmd)
 			end
 
+			local function ensure_opencode_cmd()
+				local worktree_dir = resolve_worktree_dir()
+				local cached_opencode_cmd = get_cached_opencode_cmd(worktree_dir)
+				if cached_opencode_cmd ~= nil then
+					return cached_opencode_cmd
+				end
+
+				local session_id = find_worktree_session_id(worktree_dir)
+				local opencode_cmd = build_opencode_cmd(worktree_dir, session_id)
+				set_cached_opencode_cmd(worktree_dir, opencode_cmd)
+				return opencode_cmd
+			end
+
+			local function preload_opencode_cmd()
+				local worktree_dir = resolve_worktree_dir()
+				if get_cached_opencode_cmd(worktree_dir) ~= nil or opencode_cmd_preload_inflight[worktree_dir] == true then
+					return
+				end
+
+				opencode_cmd_preload_inflight[worktree_dir] = true
+
+				local list_cmd = opencode_base_cmd()
+				list_cmd[#list_cmd + 1] = "session"
+				list_cmd[#list_cmd + 1] = "list"
+				list_cmd[#list_cmd + 1] = "--format"
+				list_cmd[#list_cmd + 1] = "json"
+
+				vim.system(list_cmd, { cwd = worktree_dir, text = true }, function(result)
+					local session_id = nil
+					if result.code == 0 and result.stdout ~= "" then
+						local ok, sessions = pcall(vim.json.decode, result.stdout)
+						if ok and type(sessions) == "table" then
+							session_id = select_latest_session_id_for_worktree(sessions, worktree_dir)
+						end
+					end
+
+					vim.schedule(function()
+						local opencode_cmd = build_opencode_cmd(worktree_dir, session_id)
+						set_cached_opencode_cmd(worktree_dir, opencode_cmd)
+						opencode_cmd_preload_inflight[worktree_dir] = nil
+					end)
+				end)
+			end
+
 			vim.g.opencode_opts = {
 				server = {
 					start = function()
-						require("opencode.terminal").start(build_opencode_cmd(), { split = "left", width = 100 })
+						require("opencode.terminal").start(ensure_opencode_cmd(), { split = "left", width = 100 })
 					end,
 					stop = function()
 						require("opencode.terminal").stop()
 					end,
 					toggle = function()
-						require("opencode.terminal").toggle(build_opencode_cmd(), { split = "left", width = 100 })
+						require("opencode.terminal").toggle(ensure_opencode_cmd(), { split = "left", width = 100 })
 					end,
 				},
 			}
+
+			vim.schedule(preload_opencode_cmd)
 			vim.o.autoread = true
 		end,
 		config = function()
