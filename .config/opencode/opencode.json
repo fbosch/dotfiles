@@ -16,6 +16,7 @@
   ],
   "instructions": [
     "~/.config/opencode/instructions/shell-strategy.md",
+    "~/.config/opencode/instructions/worktrunk.md",
     "~/.config/opencode/plugins/INSTRUCTIONS.md"
   ],
   "permission": {
