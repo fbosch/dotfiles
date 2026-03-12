@@ -10,7 +10,8 @@
     "opencode-handoff",
     "opencode-snippets",
     "./plugins/just-bash/just-bash.ts",
-    "./plugins/toon/toon-format.ts"
+    "./plugins/toon/toon-format.ts",
+    "./plugins/rtk.ts"
   ],
   "instructions": [
     "~/.config/opencode/instructions/shell-strategy.md",
