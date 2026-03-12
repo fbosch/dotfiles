@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SHELL_PATTERNS=(
+  "scripts/*.sh"
+  ".config/ags/*.sh"
+  ".config/ags/scripts/*.sh"
+  ".config/hypr/scripts/*.sh"
+  ".config/rofi/launchers/type-3/launcher.sh"
+  ".config/vicinae/extensions/*.sh"
+)
+
+RIPSECRETS_EXCLUDE=(
+  ".agents/"
+  ".opencode/skills/"
+  ".github/skills/"
+)
+
+run_shellcheck() {
+  if command -v shellcheck &>/dev/null; then
+    shellcheck "$@"
+  elif command -v nix-shell &>/dev/null; then
+    nix-shell -p shellcheck --run "shellcheck $(printf '%q ' "$@")"
+  else
+    echo "pre-commit: shellcheck not found, skipping" >&2
+    return 0
+  fi
+}
+
+run_ripsecrets() {
+  if command -v ripsecrets &>/dev/null; then
+    ripsecrets "$@"
+  elif command -v nix-shell &>/dev/null; then
+    nix-shell -p ripsecrets --run "ripsecrets $(printf '%q ' "$@")"
+  else
+    echo "pre-commit: ripsecrets not found, skipping" >&2
+    return 0
+  fi
+}
+
+staged_files=()
+while IFS= read -r file; do
+  staged_files+=("$file")
+done < <(git diff --cached --name-only --diff-filter=ACM)
+
+[[ ${#staged_files[@]} -eq 0 ]] && exit 0
+
+# ripsecrets: scan all staged files except excluded paths
+ripsecrets_files=()
+for file in "${staged_files[@]}"; do
+  excluded=false
+  for prefix in "${RIPSECRETS_EXCLUDE[@]}"; do
+    [[ "$file" == "$prefix"* ]] && excluded=true && break
+  done
+  [[ $excluded == false ]] && ripsecrets_files+=("$file")
+done
+
+if [[ ${#ripsecrets_files[@]} -gt 0 ]]; then
+  echo "pre-commit: ripsecrets ${ripsecrets_files[*]}"
+  run_ripsecrets "${ripsecrets_files[@]}"
+fi
+
+# shellcheck: scan staged files matching CI shell patterns
+staged_scripts=()
+for file in "${staged_files[@]}"; do
+  for pattern in "${SHELL_PATTERNS[@]}"; do
+    # shellcheck disable=SC2254
+    case "$file" in
+      $pattern) staged_scripts+=("$file"); break ;;
+    esac
+  done
+done
+
+if [[ ${#staged_scripts[@]} -gt 0 ]]; then
+  echo "pre-commit: shellcheck ${staged_scripts[*]}"
+  run_shellcheck "${staged_scripts[@]}"
+fi
