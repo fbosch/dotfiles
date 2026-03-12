@@ -49,7 +49,7 @@ function first_login_of_the_day
 
     # Final fallback: first display-on event of the day (approximation only)
     if test -z "$time"
-        set -l display_on_event (pmset -g log | awk "/$current_date_iso/ && /Display/ && /(turned on|is on)/ {print}" | tail -n1)
+        set -l display_on_event (pmset -g log | awk "/$current_date_iso/ && /Display/ && /(turned on|is on)/ {print; exit}")
         if test -n "$display_on_event"
             set time (string match -r '\d{2}:\d{2}:\d{2}' "$display_on_event")
         end

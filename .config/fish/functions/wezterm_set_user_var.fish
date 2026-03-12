@@ -7,5 +7,8 @@ function wezterm_set_user_var
             printf "\033Ptmux;\033\033]1337;SetUserVar=%s=%s\007\033\\" "$argv[1]" (echo -n "$argv[2]" | base64)
         end
     end
-    commandline --function repaint
+
+    if status is-interactive
+        commandline --function repaint
+    end
 end
