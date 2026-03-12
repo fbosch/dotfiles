@@ -18,7 +18,7 @@ export const RtkOpenCodePlugin: Plugin = async ({ $ }) => {
   return {
     "tool.execute.before": async (input, output) => {
       const tool = String(input?.tool ?? "").toLowerCase();
-      if (tool !== "bash" && tool !== "shell") return;
+      if (tool !== "bash" && tool !== "shell" && tool !== "host_exec") return;
       const args = output?.args;
       if (!args || typeof args !== "object") return;
 
@@ -33,6 +33,38 @@ export const RtkOpenCodePlugin: Plugin = async ({ $ }) => {
         }
       } catch {
         // rtk rewrite failed — pass through unchanged
+      }
+    },
+    "tool.execute.after": async (input, output) => {
+      const tool = String(input?.tool ?? "").toLowerCase();
+      if (tool !== "bash" && tool !== "shell") return;
+      if (!output || typeof output !== "object") return;
+
+      const result = output as Record<string, unknown>;
+      const rawOutput = result.output;
+      if (typeof rawOutput !== "string" || rawOutput.length === 0) return;
+
+      const temp = await $`mktemp`.quiet().nothrow();
+      const file = String(temp.stdout).trim();
+      if (temp.exitCode !== 0 || file.length === 0) return;
+
+      try {
+        const written = await $`sh -c 'printf %s "$1" > "$2"' sh ${rawOutput} ${file}`
+          .quiet()
+          .nothrow();
+        if (written.exitCode !== 0) return;
+
+        const summarized = await $`rtk summary cat ${file}`.quiet().nothrow();
+        if (summarized.exitCode !== 0) return;
+
+        const nextOutput = String(summarized.stdout).trim();
+        if (nextOutput.length === 0 || nextOutput === rawOutput) return;
+
+        result.output = nextOutput;
+      } catch {
+        return;
+      } finally {
+        await $`rm -f ${file}`.quiet().nothrow();
       }
     },
   };

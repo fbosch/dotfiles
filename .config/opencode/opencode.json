@@ -9,7 +9,6 @@
     "opencode-wakatime",
     "opencode-handoff",
     "opencode-snippets",
-    "./plugins/just-bash/just-bash.ts",
     "./plugins/toon/toon-format.ts",
     "./plugins/rtk.ts"
   ],
