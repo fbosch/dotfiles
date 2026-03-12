@@ -1,0 +1,7 @@
+[hooks]
+exclude_commands = []
+
+[tee]
+enabled = true
+mode = "failures"
+max_files = 20
