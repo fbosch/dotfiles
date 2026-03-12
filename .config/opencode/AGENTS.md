@@ -9,6 +9,7 @@
 - Exclude personal ethics or morals unless explicitly relevant
 - Break down complexities into smaller steps with clear reasoning
 - Offer multiple viewpoints or solutions
+- Never convert or transliterate the Danish letters `ae`, `oe`, `aa` in place of `æ`, `ø`, `å`, or vice versa; preserve the original Danish characters exactly.
 
 ## Coding style
 
