@@ -39,6 +39,7 @@ function runGit(
 ): CmdResult {
   const result = spawnSync("git", args, {
     encoding: "utf8",
+    cwd: process.env.PWD,
     ...options,
   });
 
