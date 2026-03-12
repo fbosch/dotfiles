@@ -1,10 +1,9 @@
 # OpenCode Plugins
 
-Three local plugins are registered directly in `opencode.json`:
+OpenCode loads local plugins from `~/.config/opencode/plugins/` automatically and also loads npm plugins from `opencode.json`:
 
-- `machine-context` for chat context injection
 - `just-bash` for shell tool registration
-- `rtk` for pre-execution command rewriting
+- `rtk.ts` for pre-execution command rewriting via RTK's official OpenCode hook
 
 ## `just-bash`
 
@@ -25,10 +24,12 @@ Three local plugins are registered directly in `opencode.json`:
 ## `rtk`
 
 - `rtk` means Rust Token Killer.
-- When the `rtk` binary is available on the host, the plugin rewrites recognized `bash` and `host_exec` commands through `rtk rewrite` before execution.
+- RTK's OpenCode hook lives at `.config/opencode/plugins/rtk.ts` and follows the upstream thin-plugin pattern.
+- When the `rtk` binary is available on the host, the plugin rewrites recognized `bash` and `shell` commands through `rtk rewrite` before execution.
 - Do not manually prefix commands with `rtk`; write the normal command and let the plugin rewrite it.
 - Rewritten command output may be compressed or filtered compared with raw CLI output. Treat that as expected unless you specifically need verbatim output.
 - If `rtk` is not installed, the plugin becomes a no-op and commands run normally.
+- OpenCode does not currently apply this hook to subagent tool calls.
 
 ## Agent expectations
 
@@ -36,4 +37,5 @@ Three local plugins are registered directly in `opencode.json`:
 - Prefer file tools over shell writes because `bash` writes are ephemeral.
 - Prefer `host_exec` only for the small set of host-level commands that need the real system.
 - Assume `rtk` may change the presentation of command output while preserving the useful signal.
+- Do not route `host_exec` through RTK; its allowlist rejects the `rtk` prefix.
 - Do not modify plugin code or plugin config files unless the task is explicitly about those plugins.
