@@ -11,6 +11,7 @@
     "opencode-snippets",
     "./plugins/machine-context/machine-context.ts",
     "./plugins/just-bash/just-bash.ts",
+    "./plugins/worktrunk/worktrunk-plugin.ts",
     "./plugins/toon/toon-format.ts"
   ],
   "instructions": [
