@@ -128,6 +128,21 @@ function execHost(
   });
 }
 
+async function normalizeSandboxCommand(
+  command: string,
+): Promise<string> {
+  if (command === "rtk" || command.startsWith("rtk ") === false) {
+    return command;
+  }
+
+  const wrapped = command.slice(4).trim();
+  if (wrapped.length === 0) {
+    return command;
+  }
+
+  return wrapped;
+}
+
 
 
 async function loadConfig(configDir: string): Promise<PluginConfig> {
@@ -305,6 +320,7 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
       },
       async execute(args) {
         const bashEnv = await getBashEnv();
+        const command = await normalizeSandboxCommand(args.command);
         const controller =
           args.timeout !== undefined ? new AbortController() : undefined;
         const timeoutHandle =
@@ -314,7 +330,7 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
 
         try {
           const result = await bashEnv.exec(
-            args.command,
+            command,
             {
               ...(args.workdir !== undefined ? { cwd: args.workdir } : {}),
               ...(controller !== undefined ? { signal: controller.signal } : {}),
