@@ -1,5 +1,5 @@
 import { tool, type Plugin, type PluginInput } from "@opencode-ai/plugin";
-import { Bash, OverlayFs } from "just-bash";
+import { Bash, OverlayFs, defineCommand } from "just-bash";
 import { join, resolve, relative, isAbsolute } from "node:path";
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
@@ -128,19 +128,22 @@ function execHost(
   });
 }
 
-async function normalizeSandboxCommand(
-  command: string,
-): Promise<string> {
-  if (command === "rtk" || command.startsWith("rtk ") === false) {
-    return command;
+function mapSandboxCwdToHost(
+  sandboxCwd: string | undefined,
+  mountPoint: string,
+  worktree: string,
+): string {
+  if (typeof sandboxCwd !== "string" || sandboxCwd.length === 0) {
+    return worktree;
   }
 
-  const wrapped = command.slice(4).trim();
-  if (wrapped.length === 0) {
-    return command;
+  const resolvedSandboxCwd = resolve(sandboxCwd);
+  if (isUnderDir(resolvedSandboxCwd, mountPoint) === false) {
+    return worktree;
   }
 
-  return wrapped;
+  const rel = relative(mountPoint, resolvedSandboxCwd);
+  return resolve(worktree, rel);
 }
 
 
@@ -263,6 +266,50 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
       const sandboxStart = performance.now();
       const overlay = new OverlayFs({ root: input.directory });
       const mountPoint = overlay.getMountPoint();
+
+      const permissions = await getPermissions();
+      const explicitAllowlist = hostExec?.allowlist ?? [];
+      const mergedAllowlist = Array.from(
+        new Set([...permissions.allowedCommands, ...explicitAllowlist]),
+      ).filter((commandName) =>
+        permissions.deniedCommands.includes(commandName) === false,
+      );
+      const shouldEnableGitProxy = mergedAllowlist.includes("git");
+      const shouldEnableRtkProxy = mergedAllowlist.includes("rtk");
+      const customCommands = [];
+
+      if (shouldEnableGitProxy) {
+        customCommands.push(
+          defineCommand("git", async (args, ctx) => {
+            const quotedArgs = args.map((arg) => JSON.stringify(arg)).join(" ");
+            const hostCommand = quotedArgs.length > 0 ? `git ${quotedArgs}` : "git";
+            const cwd = mapSandboxCwdToHost(ctx.cwd, mountPoint, input.worktree);
+            const result = await execHost(hostCommand, { cwd });
+            return {
+              stdout: result.stdout,
+              stderr: result.stderr,
+              exitCode: result.exitCode,
+            };
+          }),
+        );
+      }
+
+      if (shouldEnableRtkProxy) {
+        customCommands.push(
+          defineCommand("rtk", async (args, ctx) => {
+            const quotedArgs = args.map((arg) => JSON.stringify(arg)).join(" ");
+            const hostCommand = quotedArgs.length > 0 ? `rtk ${quotedArgs}` : "rtk";
+            const cwd = mapSandboxCwdToHost(ctx.cwd, mountPoint, input.worktree);
+            const result = await execHost(hostCommand, { cwd });
+            return {
+              stdout: result.stdout,
+              stderr: result.stderr,
+              exitCode: result.exitCode,
+            };
+          }),
+        );
+      }
+
       const bashEnv = new Bash({
         fs: overlay,
         cwd: mountPoint,
@@ -271,6 +318,7 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
           PROJECT_ROOT: mountPoint,
           ...sandbox?.env,
         },
+        ...(customCommands.length > 0 ? { customCommands } : {}),
         ...(sandbox?.maxCallDepth !== undefined
           ? { executionLimits: { maxCallDepth: sandbox.maxCallDepth } }
           : {}),
@@ -320,7 +368,6 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
       },
       async execute(args) {
         const bashEnv = await getBashEnv();
-        const command = await normalizeSandboxCommand(args.command);
         const controller =
           args.timeout !== undefined ? new AbortController() : undefined;
         const timeoutHandle =
@@ -330,7 +377,7 @@ export const JustBashPlugin: Plugin = async (input: PluginInput) => {
 
         try {
           const result = await bashEnv.exec(
-            command,
+            args.command,
             {
               ...(args.workdir !== undefined ? { cwd: args.workdir } : {}),
               ...(controller !== undefined ? { signal: controller.signal } : {}),

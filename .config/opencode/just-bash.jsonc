@@ -19,7 +19,7 @@
   //
   // The tool is only registered when the final merged allowlist is non-empty.
   "hostExec": {
-    "allowlist": ["gh", "git", "jq", "systemctl", "journalctl", "opencode", "pnpm", "worktrunk-create", "worktrunk-status-update", "worktrunk-status", "worktrunk-switch", "worktrunk-list", "worktrunk-remove", "worktrunk-default-branch"],
+    "allowlist": ["gh", "git", "jq", "systemctl", "journalctl", "opencode", "pnpm", "rtk", "worktrunk-create", "worktrunk-status-update", "worktrunk-status", "worktrunk-switch", "worktrunk-list", "worktrunk-remove", "worktrunk-default-branch"],
     "timeout": 30000
   }
 }
