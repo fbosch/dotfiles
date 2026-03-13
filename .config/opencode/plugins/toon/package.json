@@ -1,0 +1,19 @@
+{
+  "name": "opencode-toon-format",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./toon-format.ts",
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@toon-format/toon": "^2.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "*"
+  }
+}
