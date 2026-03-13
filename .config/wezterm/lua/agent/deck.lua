@@ -5,6 +5,7 @@ local M = {}
 local agent_deck
 local initialized = false
 local pane_states = {}
+local init_notice
 
 local nf = wezterm.nerdfonts or {}
 local theme = require("lua.theme")
@@ -219,6 +220,7 @@ function M.apply(config)
 
 	local success, plugin = pcall(wezterm.plugin.require, "https://github.com/Eric162/wezterm-agent-deck")
 	if success == false then
+		init_notice = "Agent deck plugin unavailable; status icons are disabled"
 		wezterm.log_warn("[wezterm] failed to load agent deck plugin: " .. tostring(plugin))
 		initialized = true
 		return nil
@@ -253,13 +255,21 @@ function M.apply(config)
 	local ok_apply, apply_err = pcall(agent_deck.apply_to_config, config, plugin_config)
 	if ok_apply == false then
 		agent_deck = nil
+		init_notice = "Agent deck failed to initialize; status icons are disabled"
 		wezterm.log_warn("[wezterm] agent deck apply_to_config failed: " .. tostring(apply_err))
 		initialized = true
 		return nil
 	end
 
+	init_notice = nil
 	initialized = true
 	return agent_deck
+end
+
+function M.consume_init_notice()
+	local notice = init_notice
+	init_notice = nil
+	return notice
 end
 
 function M.get()

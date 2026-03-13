@@ -14,6 +14,10 @@ local status = {}
 
 local function update_right_status(window)
 	local waiting_count = 0
+	local init_notice = agent_deck.consume_init_notice and agent_deck.consume_init_notice() or nil
+	if init_notice then
+		window:toast_notification("WezTerm", init_notice, nil, 4000)
+	end
 
 	if agent_deck then
 		for _, tab in ipairs(window:mux_window():tabs()) do
