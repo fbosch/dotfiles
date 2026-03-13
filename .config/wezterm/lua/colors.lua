@@ -1,26 +1,27 @@
 local wezterm = require("wezterm")
 local scanlines_path = wezterm.config_dir .. "/scanlines.png"
+local theme = require("lua.theme")
 
 return function(config)
 	config.color_scheme = "zenwritten_dark"
 	config.colors = {
 		tab_bar = {
-			background = "#191919",
+			background = theme.tab_bar.background,
 			active_tab = {
-				bg_color = "#262626",
-				fg_color = "#b7b7b7",
+				bg_color = theme.tab_bar.active_bg,
+				fg_color = theme.tab_bar.active_fg,
 				intensity = "Normal",
 			},
 			inactive_tab = {
-				bg_color = "#191918",
-				fg_color = "#636363",
+				bg_color = theme.tab_bar.inactive_bg,
+				fg_color = theme.tab_bar.inactive_fg,
 			},
 		},
 	}
 	config.background = {
 		{
 			source = {
-				Color = "#191919",
+				Color = theme.base.bg,
 			},
 			width = "100%",
 			height = "100%",

@@ -1,21 +1,40 @@
 local is_windows = package.config:sub(0, 1) == "\\"
 local wezterm = require("wezterm")
+local agent_deck = require("lua.agent_deck")
+local theme = require("lua.theme")
 
 -- Pre-allocate color tables to reduce allocations
-local color_gray = { Color = "#7c7c7c" }
-local color_separator = { Color = "#515151" }
-local color_white = { Color = "#bbbbbb" }
+local color_gray = { Color = theme.base.fg_muted }
+local color_separator = { Color = theme.base.separator }
+local color_white = { Color = theme.base.fg }
+local color_waiting = { Color = theme.agent.waiting }
 
 -- Reusable status table structure
 local status = {}
 
 local function update_right_status(window)
+	local waiting_count = 0
+
+	if agent_deck then
+		for _, tab in ipairs(window:mux_window():tabs()) do
+			for _, pane in ipairs(tab:panes()) do
+				agent_deck.update_pane(pane)
+			end
+		end
+
+		waiting_count = agent_deck.count_waiting()
+	end
+
 	local date = wezterm.strftime("(%Y-%m-%d) %a %b %-d ")
 	local time = wezterm.strftime("%H:%M")
 	local week_number = os.date("%V")
 
 	-- Reset and reuse the status table
 	status = {
+		{ Foreground = color_waiting },
+		{ Text = waiting_count > 0 and ("◔ " .. waiting_count .. " ") or "" },
+		{ Foreground = color_separator },
+		{ Text = waiting_count > 0 and "▏" or "" },
 		{ Foreground = color_gray },
 		{ Text = date },
 		{ Foreground = color_separator },

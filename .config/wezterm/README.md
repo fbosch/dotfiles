@@ -7,6 +7,8 @@ Wezterm terminal configuration with modular Lua setup for theming, keybinds, and
 **Configuration modules (wezterm.lua imports all):**
 - `lua/base.lua` - Core settings (WebGPU, performance, status updates, shell processes)
 - `lua/colors.lua` - Color scheme (zenwritten_dark) and tab bar colors
+- `lua/agent_deck.lua` - AI agent status integration via wezterm-agent-deck plugin
+- `lua/theme.lua` - Shared theme palette used by WezTerm modules
 - `lua/fonts.lua` - Font stack with fallbacks (Zenbones Brainy, JetBrains Mono, Nerd Fonts)
 - `lua/keys.lua` - Keyboard keybindings (raw key codes for layout independence)
 - `lua/layout.lua` - Window decorations, padding, and startup behavior
@@ -24,6 +26,10 @@ Wezterm terminal configuration with modular Lua setup for theming, keybinds, and
 **Notes:**
 - Modular architecture: each concern is isolated in its own file
 - Status bar includes work hours calculation based on `first_login` user variable
+- Tab titles show wezterm-agent-deck activity icons for detected agent panes
+- Includes fallback detection from pane text so OpenCode in Neovim terminal panes still shows state
+- Agent deck icons use Nerd Font glyphs (with Unicode fallback)
+- Tab icons are colorized by agent state (working/waiting/idle/inactive)
 - Tab bar positioned at bottom with custom formatting
 - Uses raw key codes for keybinds (keyboard layout independent)
 - WebGPU frontend with 120fps max, Wayland enabled on Linux
