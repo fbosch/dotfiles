@@ -7,7 +7,7 @@ Wezterm terminal configuration with modular Lua setup for theming, keybinds, and
 **Configuration modules (wezterm.lua imports all):**
 - `lua/base.lua` - Core settings (WebGPU, performance, status updates, shell processes)
 - `lua/colors.lua` - Color scheme (zenwritten_dark) and tab bar colors
-- `lua/agent_deck.lua` - AI agent status integration via wezterm-agent-deck plugin
+- `lua/agent/deck.lua` - AI agent status integration via wezterm-agent-deck plugin
 - `lua/theme.lua` - Shared theme palette used by WezTerm modules
 - `lua/fonts.lua` - Font stack with fallbacks (Zenbones Brainy, JetBrains Mono, Nerd Fonts)
 - `lua/keys.lua` - Keyboard keybindings (raw key codes for layout independence)

@@ -8,9 +8,27 @@ local pane_states = {}
 
 local nf = wezterm.nerdfonts or {}
 local theme = require("lua.theme")
+local detection = require("lua.agent.detection")
 
 local detection_cache_ttl_ms = 5000
-local overlay_state_ttl_ms = 8000
+local overlay_state_ttl_ms = 5000
+local pane_refresh_cooldown_ms_active = 250
+local pane_refresh_cooldown_ms_idle = 1000
+
+local allowed_agents = {
+	opencode = true,
+	claude = true,
+	gemini = true,
+	codex = true,
+	aider = true,
+}
+
+local allowed_statuses = {
+	working = true,
+	waiting = true,
+	idle = true,
+	inactive = true,
+}
 
 local fallback_icons = {
 	working = nf.fa_circle or "●",
@@ -35,62 +53,22 @@ local agent_patterns = {
 	"opencode-win",
 }
 
-local waiting_patterns = {
-	"type your own answer",
-	"yes, allow once",
-	"yes, allow always",
-	"allow once",
-	"allow always",
-	"enter confirm",
-	"esc dismiss",
-	"do you trust",
-	"run this command",
-	"(y/n)",
-	"[y/n]",
-}
-
-local working_patterns = {
-	"esc interrupt",
-	"thinking",
-	"running commands",
-	"making edits",
-	"searching the codebase",
-	"searching the web",
-}
-
-local opencode_screen_markers = {
-	"type your own answer",
-	"enter confirm",
-	"esc dismiss",
-}
-
 local detection_cache = {}
+local pane_refresh_timestamps = {}
 
 local function now_ms()
-	return os.time() * 1000
-end
+	local ok, now = pcall(function()
+		return wezterm.time.now()
+	end)
 
-local function strip_ansi(text)
-	if text == nil then
-		return ""
-	end
-
-	return text:gsub("\27%[[%d;]*[A-Za-z]", "")
-end
-
-local function matches_any_pattern(text, patterns)
-	if text == nil or text == "" then
-		return false
-	end
-
-	local lower = text:lower()
-	for _, pattern in ipairs(patterns) do
-		if lower:find(pattern, 1, true) then
-			return true
+	if ok and now then
+		local as_number = tonumber(now:format("%s.%f"))
+		if as_number then
+			return math.floor(as_number * 1000)
 		end
 	end
 
-	return false
+	return os.time() * 1000
 end
 
 local function process_is_opencode(process_info)
@@ -98,16 +76,16 @@ local function process_is_opencode(process_info)
 		return false
 	end
 
-	if matches_any_pattern(process_info.name or "", agent_patterns) then
+	if detection.matches_any_pattern(process_info.name or "", agent_patterns) then
 		return true
 	end
 
-	if matches_any_pattern(process_info.executable or "", agent_patterns) then
+	if detection.matches_any_pattern(process_info.executable or "", agent_patterns) then
 		return true
 	end
 
 	local argv = process_info.argv or {}
-	if #argv > 0 and matches_any_pattern(table.concat(argv, " "), agent_patterns) then
+	if #argv > 0 and detection.matches_any_pattern(table.concat(argv, " "), agent_patterns) then
 		return true
 	end
 
@@ -144,7 +122,7 @@ local function pane_has_opencode_process(pane)
 			return pane:get_title()
 		end)
 		if title_ok and title then
-			is_opencode = matches_any_pattern(title, agent_patterns)
+			is_opencode = detection.matches_any_pattern(title, agent_patterns)
 		end
 	end
 
@@ -156,53 +134,7 @@ local function pane_has_opencode_process(pane)
 	return is_opencode
 end
 
-local function get_last_lines(text, count)
-	if text == nil or text == "" then
-		return ""
-	end
-
-	local lines = {}
-	for line in text:gmatch("[^\n]+") do
-		lines[#lines + 1] = line
-	end
-
-	if #lines == 0 then
-		return ""
-	end
-
-	local start_index = math.max(1, #lines - count + 1)
-	local result = {}
-	for i = start_index, #lines do
-		result[#result + 1] = lines[i]
-	end
-
-	return strip_ansi(table.concat(result, "\n")):lower()
-end
-
-local function detect_status_from_text(recent_120)
-	if recent_120 == "" then
-		return nil
-	end
-
-	local idle_recent = get_last_lines(recent_120, 8)
-	if idle_recent:find("\n>%s") or idle_recent:find("\n>$") then
-		return "idle"
-	end
-
-	local waiting_recent = get_last_lines(recent_120, 30)
-	if matches_any_pattern(waiting_recent, waiting_patterns) then
-		return "waiting"
-	end
-
-	local working_recent = get_last_lines(recent_120, 10)
-	if matches_any_pattern(working_recent, working_patterns) then
-		return "working"
-	end
-
-	return nil
-end
-
-local function detect_overlay_state(pane, previous_state, has_opencode_process)
+local function detect_overlay_state(pane, has_opencode_process)
 	local ok, text = pcall(function()
 		return pane:get_lines_as_text(120)
 	end)
@@ -210,32 +142,74 @@ local function detect_overlay_state(pane, previous_state, has_opencode_process)
 		return nil
 	end
 
-	local recent_120 = get_last_lines(text, 120)
-	if recent_120 == "" then
+	return detection.detect_overlay_state_from_text({
+		text = text,
+		has_opencode_process = has_opencode_process,
+	})
+end
+
+local function normalize_state(state, source)
+	if state == nil then
 		return nil
 	end
 
-	local looks_like_opencode = has_opencode_process
-	if looks_like_opencode == false and matches_any_pattern(recent_120, opencode_screen_markers) then
-		looks_like_opencode = true
-	end
-	if looks_like_opencode == false and previous_state and previous_state.agent_type == "opencode" then
-		looks_like_opencode = true
-	end
-
-	if looks_like_opencode == false then
+	if type(state) ~= "table" then
 		return nil
 	end
 
-	local status = detect_status_from_text(recent_120)
-	if status == nil then
-		status = "idle"
+	if type(state.agent_type) ~= "string" then
+		return nil
 	end
 
-	return {
-		agent_type = "opencode",
-		status = status,
-	}
+	if type(state.status) ~= "string" then
+		return nil
+	end
+
+	if allowed_statuses[state.status] == nil then
+		return nil
+	end
+
+	if source and state.source == nil then
+		state.source = source
+	end
+
+	return state
+end
+
+local function get_refresh_cooldown_ms(state)
+	if state and (state.status == "working" or state.status == "waiting") then
+		return pane_refresh_cooldown_ms_active
+	end
+
+	return pane_refresh_cooldown_ms_idle
+end
+
+function M.should_render_state(state)
+	if state == nil then
+		return false
+	end
+
+	if type(state) ~= "table" then
+		return false
+	end
+
+	if type(state.agent_type) ~= "string" then
+		return false
+	end
+
+	if allowed_agents[state.agent_type] == nil then
+		return false
+	end
+
+	if type(state.status) ~= "string" then
+		return false
+	end
+
+	if allowed_statuses[state.status] == nil then
+		return false
+	end
+
+	return true
 end
 
 function M.apply(config)
@@ -251,7 +225,7 @@ function M.apply(config)
 	end
 
 	agent_deck = plugin
-	agent_deck.apply_to_config(config, {
+	local plugin_config = {
 		update_interval = 1000,
 		colors = {
 			working = fallback_colors.working,
@@ -274,7 +248,15 @@ function M.apply(config)
 			enabled = true,
 			on_waiting = true,
 		},
-	})
+	}
+
+	local ok_apply, apply_err = pcall(agent_deck.apply_to_config, config, plugin_config)
+	if ok_apply == false then
+		agent_deck = nil
+		wezterm.log_warn("[wezterm] agent deck apply_to_config failed: " .. tostring(apply_err))
+		initialized = true
+		return nil
+	end
 
 	initialized = true
 	return agent_deck
@@ -288,24 +270,37 @@ function M.update_pane(pane)
 	local now = now_ms()
 	local pane_id = pane:pane_id()
 	local previous_state = pane_states[pane_id]
-	local has_opencode_process = pane_has_opencode_process(pane)
+	local plugin_state = nil
+	local last_refresh_ms = pane_refresh_timestamps[pane_id] or 0
+	local refresh_cooldown_ms = get_refresh_cooldown_ms(previous_state)
+
+	if (now - last_refresh_ms) < refresh_cooldown_ms then
+		return normalize_state(previous_state)
+	end
+
+	pane_refresh_timestamps[pane_id] = now
 
 	if agent_deck then
 		agent_deck.update_pane(pane)
+		plugin_state = normalize_state(agent_deck.get_agent_state(pane_id), "plugin")
 	end
 
-	local state = agent_deck and agent_deck.get_agent_state(pane_id) or nil
-	if state == nil then
-		state = detect_overlay_state(pane, previous_state, has_opencode_process)
+	if plugin_state then
+		plugin_state.last_seen_ms = now
+		pane_states[pane_id] = plugin_state
+		return plugin_state
 	end
 
-	if state then
-		state.last_seen_ms = now
-		pane_states[pane_id] = state
-		return state
+	local has_opencode_process = pane_has_opencode_process(pane)
+	local overlay_state = normalize_state(detect_overlay_state(pane, has_opencode_process), "overlay")
+
+	if overlay_state then
+		overlay_state.last_seen_ms = now
+		pane_states[pane_id] = overlay_state
+		return overlay_state
 	end
 
-	if previous_state and previous_state.agent_type == "opencode" then
+	if previous_state and previous_state.source == "overlay" and previous_state.confidence == "confirmed" then
 		if (now - (previous_state.last_seen_ms or now)) <= overlay_state_ttl_ms then
 			pane_states[pane_id] = previous_state
 			return previous_state
@@ -313,18 +308,19 @@ function M.update_pane(pane)
 	end
 
 	pane_states[pane_id] = nil
+	pane_refresh_timestamps[pane_id] = now
 	return nil
 end
 
 function M.get_agent_state(pane_id)
 	if agent_deck then
-		local state = agent_deck.get_agent_state(pane_id)
+		local state = normalize_state(agent_deck.get_agent_state(pane_id), "plugin")
 		if state then
 			return state
 		end
 	end
 
-	return pane_states[pane_id]
+	return normalize_state(pane_states[pane_id])
 end
 
 function M.get_status_icon(status)
@@ -336,17 +332,9 @@ function M.get_status_icon(status)
 end
 
 function M.count_waiting()
-	if agent_deck then
-		local counts = agent_deck.count_agents_by_status()
-		local waiting = counts and counts.waiting or 0
-		if waiting > 0 then
-			return waiting
-		end
-	end
-
 	local waiting = 0
 	for _, state in pairs(pane_states) do
-		if state and state.status == "waiting" then
+		if M.should_render_state(state) and state.status == "waiting" then
 			waiting = waiting + 1
 		end
 	end

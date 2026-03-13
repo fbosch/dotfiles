@@ -46,7 +46,7 @@
 }
 
 #custom-startbutton {
-  margin: 0.33rem;
+  margin: 0.33rem 0;
   font-size: 1.4rem;
   border-radius: 0.25rem;
   padding: 0 1.1rem 0 0.6rem;

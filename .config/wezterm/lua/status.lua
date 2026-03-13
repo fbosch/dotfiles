@@ -1,6 +1,6 @@
 local is_windows = package.config:sub(0, 1) == "\\"
 local wezterm = require("wezterm")
-local agent_deck = require("lua.agent_deck")
+local agent_deck = require("lua.agent")
 local theme = require("lua.theme")
 
 -- Pre-allocate color tables to reduce allocations

@@ -80,6 +80,7 @@ type SessionClient = {
     create: (input?: unknown) => Promise<unknown>;
     command: (input: unknown) => Promise<unknown>;
     prompt?: (input: unknown) => Promise<unknown>;
+    promptAsync?: (input: unknown) => Promise<unknown>;
     delete?: (input: unknown) => Promise<unknown>;
   };
 };
@@ -136,6 +137,10 @@ function normalizeUnknownError(
 
 function sdkError(message: string): GenerateError {
   return { kind: "sdk", message };
+}
+
+function isEmptyObject(value: unknown): value is Record<string, never> {
+  return isRecord(value) && Object.keys(value).length === 0;
 }
 
 function toGenerateError(error: unknown): GenerateError {
@@ -872,9 +877,37 @@ async function runCommitCommand(
     throw normalizeUnknownError(error, "sdk", "Failed to execute session prompt");
   });
 
-  const unwrapped = unwrapFieldsResponse(result);
+  let unwrapped = unwrapFieldsResponse(result);
+  if (
+    unwrapped.isOk() &&
+    isEmptyObject(unwrapped.value) &&
+    typeof client.session.promptAsync === "function"
+  ) {
+    await withTimeout(
+      client.session.promptAsync({ path: { id: sessionId }, body: promptBody }),
+      timeoutMs,
+      "session.promptAsync",
+    ).catch((error) => {
+      throw normalizeUnknownError(error, "sdk", "Failed to execute session prompt_async");
+    });
+
+    const retried = await withTimeout(
+      client.session.prompt({ path: { id: sessionId }, body: promptBody, responseStyle: "data" }),
+      timeoutMs,
+      "session.prompt.retry",
+    ).catch((error) => {
+      throw normalizeUnknownError(error, "sdk", "Failed to execute session prompt retry");
+    });
+
+    unwrapped = unwrapFieldsResponse(retried);
+  }
+
   if (unwrapped.isErr()) {
     throw unwrapped.error;
+  }
+
+  if (isEmptyObject(unwrapped.value)) {
+    throw sdkError("OpenCode returned an empty response for session.prompt");
   }
 
   const responseError = extractResponseError(unwrapped.value);

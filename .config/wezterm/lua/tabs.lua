@@ -1,6 +1,6 @@
 local is_windows = package.config:sub(0, 1) == "\\"
 local wezterm = require("wezterm")
-local agent_deck = require("lua.agent_deck")
+local agent_deck = require("lua.agent")
 local theme = require("lua.theme")
 
 -- Initialize GLOBAL.cols with a safe default
@@ -66,7 +66,7 @@ local function format_tab_title(tab, tabs, panes, config, hover, max_width)
 				pane_state = agent_deck.get_agent_state(pane_info.pane_id)
 			end
 
-			if pane_state then
+			if agent_deck.should_render_state(pane_state) then
 				table.insert(icon_items, {
 					icon = agent_deck.get_status_icon(pane_state.status),
 					color = agent_deck.get_status_color(pane_state.status),
