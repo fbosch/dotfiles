@@ -1,6 +1,5 @@
 ---
 description: Fetch Azure DevOps test case and format for agent context
-model: anthropic/claude-haiku-4-5
 ---
 
 Fetch and structure Azure DevOps test case data for agent context.
