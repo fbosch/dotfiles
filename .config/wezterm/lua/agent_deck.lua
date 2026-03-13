@@ -5,10 +5,12 @@ local M = {}
 local agent_deck
 local initialized = false
 local pane_states = {}
-local fallback_state_ttl_ms = 30000
 
 local nf = wezterm.nerdfonts or {}
 local theme = require("lua.theme")
+
+local detection_cache_ttl_ms = 5000
+local overlay_state_ttl_ms = 8000
 
 local fallback_icons = {
 	working = nf.fa_circle or "●",
@@ -24,70 +26,216 @@ local fallback_colors = {
 	inactive = theme.agent.inactive,
 }
 
+local agent_patterns = {
+	"opencode",
+	"@opencode-ai/",
+	"/.opencode/bin/opencode",
+	"opencode-darwin",
+	"opencode-linux",
+	"opencode-win",
+}
+
+local waiting_patterns = {
+	"type your own answer",
+	"yes, allow once",
+	"yes, allow always",
+	"allow once",
+	"allow always",
+	"enter confirm",
+	"esc dismiss",
+	"do you trust",
+	"run this command",
+	"(y/n)",
+	"[y/n]",
+}
+
+local working_patterns = {
+	"esc interrupt",
+	"thinking",
+	"running commands",
+	"making edits",
+	"searching the codebase",
+	"searching the web",
+}
+
+local opencode_screen_markers = {
+	"type your own answer",
+	"enter confirm",
+	"esc dismiss",
+}
+
+local detection_cache = {}
+
+local function now_ms()
+	return os.time() * 1000
+end
+
+local function strip_ansi(text)
+	if text == nil then
+		return ""
+	end
+
+	return text:gsub("\27%[[%d;]*[A-Za-z]", "")
+end
+
+local function matches_any_pattern(text, patterns)
+	if text == nil or text == "" then
+		return false
+	end
+
+	local lower = text:lower()
+	for _, pattern in ipairs(patterns) do
+		if lower:find(pattern, 1, true) then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function process_is_opencode(process_info)
+	if process_info == nil then
+		return false
+	end
+
+	if matches_any_pattern(process_info.name or "", agent_patterns) then
+		return true
+	end
+
+	if matches_any_pattern(process_info.executable or "", agent_patterns) then
+		return true
+	end
+
+	local argv = process_info.argv or {}
+	if #argv > 0 and matches_any_pattern(table.concat(argv, " "), agent_patterns) then
+		return true
+	end
+
+	local children = process_info.children or {}
+	for _, child in pairs(children) do
+		if process_is_opencode(child) then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function pane_has_opencode_process(pane)
+	local pane_id = pane:pane_id()
+	local cache = detection_cache[pane_id]
+	local now = now_ms()
+
+	if cache and (now - cache.checked_at_ms) < detection_cache_ttl_ms then
+		return cache.is_opencode
+	end
+
+	local ok, process_info = pcall(function()
+		return pane:get_foreground_process_info()
+	end)
+
+	local is_opencode = false
+	if ok and process_info then
+		is_opencode = process_is_opencode(process_info)
+	end
+
+	if is_opencode == false then
+		local title_ok, title = pcall(function()
+			return pane:get_title()
+		end)
+		if title_ok and title then
+			is_opencode = matches_any_pattern(title, agent_patterns)
+		end
+	end
+
+	detection_cache[pane_id] = {
+		is_opencode = is_opencode,
+		checked_at_ms = now,
+	}
+
+	return is_opencode
+end
+
 local function get_last_lines(text, count)
-	if not text or text == "" then
+	if text == nil or text == "" then
 		return ""
 	end
 
 	local lines = {}
 	for line in text:gmatch("[^\n]+") do
-		table.insert(lines, line)
+		lines[#lines + 1] = line
+	end
+
+	if #lines == 0 then
+		return ""
 	end
 
 	local start_index = math.max(1, #lines - count + 1)
 	local result = {}
 	for i = start_index, #lines do
-		table.insert(result, lines[i])
+		result[#result + 1] = lines[i]
 	end
 
-	return table.concat(result, "\n"):lower()
+	return strip_ansi(table.concat(result, "\n")):lower()
 end
 
-local function detect_fallback_state(pane, previous_state)
-	local success, text = pcall(function()
+local function detect_status_from_text(recent_120)
+	if recent_120 == "" then
+		return nil
+	end
+
+	local idle_recent = get_last_lines(recent_120, 8)
+	if idle_recent:find("\n>%s") or idle_recent:find("\n>$") then
+		return "idle"
+	end
+
+	local waiting_recent = get_last_lines(recent_120, 30)
+	if matches_any_pattern(waiting_recent, waiting_patterns) then
+		return "waiting"
+	end
+
+	local working_recent = get_last_lines(recent_120, 10)
+	if matches_any_pattern(working_recent, working_patterns) then
+		return "working"
+	end
+
+	return nil
+end
+
+local function detect_overlay_state(pane, previous_state, has_opencode_process)
+	local ok, text = pcall(function()
 		return pane:get_lines_as_text(120)
 	end)
-	if success == false or text == nil or text == "" then
+	if ok == false or text == nil or text == "" then
 		return nil
 	end
 
-	local recent = get_last_lines(text, 80)
-	if recent == "" then
+	local recent_120 = get_last_lines(text, 120)
+	if recent_120 == "" then
 		return nil
 	end
 
-	local looks_like_opencode = recent:find("opencode", 1, true)
-		or recent:find("type your own answer", 1, true)
-		or recent:find("enter confirm", 1, true)
-		or recent:find("esc dismiss", 1, true)
-		or (previous_state and previous_state.agent_type == "opencode")
+	local looks_like_opencode = has_opencode_process
+	if looks_like_opencode == false and matches_any_pattern(recent_120, opencode_screen_markers) then
+		looks_like_opencode = true
+	end
+	if looks_like_opencode == false and previous_state and previous_state.agent_type == "opencode" then
+		looks_like_opencode = true
+	end
 
-	if looks_like_opencode == nil then
+	if looks_like_opencode == false then
 		return nil
 	end
 
-	local waiting = recent:find("type your own answer", 1, true)
-		or recent:find("yes, allow once", 1, true)
-		or recent:find("yes, allow always", 1, true)
-		or recent:find("enter confirm", 1, true)
-		or recent:find("(y/n)", 1, true)
-	if waiting then
-		return { agent_type = "opencode", status = "waiting" }
+	local status = detect_status_from_text(recent_120)
+	if status == nil then
+		status = "idle"
 	end
 
-	local working = recent:find("esc to interrupt", 1, true)
-		or recent:find("thinking", 1, true)
-		or recent:find("running commands", 1, true)
-		or recent:find("making edits", 1, true)
-	if working then
-		return { agent_type = "opencode", status = "working" }
-	end
-
-	if recent:find("\n>%s") or recent:find("\n>$") then
-		return { agent_type = "opencode", status = "idle" }
-	end
-
-	return { agent_type = "opencode", status = "idle" }
+	return {
+		agent_type = "opencode",
+		status = status,
+	}
 end
 
 function M.apply(config)
@@ -137,9 +285,10 @@ function M.get()
 end
 
 function M.update_pane(pane)
-	local now = os.time() * 1000
+	local now = now_ms()
 	local pane_id = pane:pane_id()
 	local previous_state = pane_states[pane_id]
+	local has_opencode_process = pane_has_opencode_process(pane)
 
 	if agent_deck then
 		agent_deck.update_pane(pane)
@@ -147,7 +296,7 @@ function M.update_pane(pane)
 
 	local state = agent_deck and agent_deck.get_agent_state(pane_id) or nil
 	if state == nil then
-		state = detect_fallback_state(pane, previous_state)
+		state = detect_overlay_state(pane, previous_state, has_opencode_process)
 	end
 
 	if state then
@@ -157,8 +306,7 @@ function M.update_pane(pane)
 	end
 
 	if previous_state and previous_state.agent_type == "opencode" then
-		if (now - (previous_state.last_seen_ms or now)) <= fallback_state_ttl_ms then
-			previous_state.status = "idle"
+		if (now - (previous_state.last_seen_ms or now)) <= overlay_state_ttl_ms then
 			pane_states[pane_id] = previous_state
 			return previous_state
 		end
