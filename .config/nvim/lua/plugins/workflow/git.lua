@@ -165,6 +165,12 @@ return {
 				":Gitsigns blame<CR>",
 				desc = "git blame",
 			},
+			{
+				mode = { "n", "v" },
+				"<leader>gh",
+				":Gitsigns select_hunk<CR>",
+				desc = "git select hunk",
+			},
 		},
 	},
 	{
