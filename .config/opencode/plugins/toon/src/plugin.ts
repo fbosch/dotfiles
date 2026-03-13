@@ -1,7 +1,7 @@
 import { encode } from "@toon-format/toon";
 import type { Plugin } from "@opencode-ai/plugin";
 
-const ELIGIBLE_TOOLS = new Set(["bash", "host_exec"]);
+const ELIGIBLE_TOOLS = new Set(["bash", "rtk"]);
 const MIN_JSON_OUTPUT_LENGTH = 256;
 
 type ToonEncoder = (value: unknown) => string;
@@ -24,7 +24,10 @@ function parseJsonCandidate(text: string): unknown | undefined {
   }
 }
 
-export function tryConvertJsonToToon(text: string, toToon: ToonEncoder = encode): string | undefined {
+export function tryConvertJsonToToon(
+  text: string,
+  toToon: ToonEncoder = encode,
+): string | undefined {
   const parsed = parseJsonCandidate(text);
   if (parsed === undefined) {
     return undefined;
