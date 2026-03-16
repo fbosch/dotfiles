@@ -1,4 +1,7 @@
 worktree-path = "../{{ branch }}"
 
+[pre-create]
+pull-latest = "git pull --ff-only"
+
 [post-create]
 recent-worktree = "printf '%s\n' {{ worktree_path }} >> /tmp/.recent-worktrees"
