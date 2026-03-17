@@ -7,7 +7,7 @@ description: Create or update Vicinae extensions in this repo. Use when implemen
 
 ## Overview
 
-Follow the repo’s established Vicinae extension patterns for structure, caching, actions, and build workflow. Prefer the same defaults and shortcuts used across existing extensions.
+Follow the repo’s established Vicinae extension patterns for structure, caching, actions, and build workflow. Prefer the same defaults and shortcut semantics used across existing extensions.
 
 ## Workflow
 
@@ -15,7 +15,7 @@ Follow the repo’s established Vicinae extension patterns for structure, cachin
 2. Choose structure from `references/extension-template.md`.
 3. Define manifest + preferences in `package.json` using the Vicinae schema.
 4. Implement data access with React Query persistence using `persistQueryClient` (see `references/cache-patterns.md`).
-5. Implement ActionPanel ordering and shortcuts (see `references/action-ux-standards.md`).
+5. Implement ActionPanel ordering and shortcuts (see `references/action-ux-standards.md`), preferring `Keyboard.Shortcut.Common.*` values before hardcoded key combos.
 6. Add empty/loading/error states and toasts.
 7. Run `pnpm -C <extension> lint` and `pnpm -C <extension> build`.
 8. For dev sessions, run `pnpm -C <extension> dev`.
@@ -42,27 +42,36 @@ Follow the repo’s established Vicinae extension patterns for structure, cachin
 - Use React Query for fetches and local cache.
 - Prefer `persistQueryClient` with a Vicinae Cache-backed persister for cross-session persistence.
 - Keep `gcTime` aligned with `persistQueryClient` `maxAge`.
-- Do not trigger toasts during render; use `useEffect` or query `onError`.
+- Do not trigger toasts during render; trigger them from explicit actions, async handlers, or query `onError`.
+
+## Shortcut rules
+
+- Prefer `Keyboard.Shortcut.Common.*` for standard actions so user-customized keybindings are respected.
+- Use explicit `{ modifiers, key }` shortcuts only when there is no matching common shortcut (for example: Toggle Detail).
+- Use valid common keys only (`Copy`, `CopyName`, `CopyPath`, `CopyDeeplink`, `Open`, `OpenWith`, `Refresh`, `Save`, `New`, `Edit`, `Duplicate`, `MoveUp`, `MoveDown`, `Pin`, `Remove`, `RemoveAll`).
+- Only bind shortcuts for actions that are currently available.
+- Prefer `Action.*` wrappers (`Action.OpenInBrowser`, `Action.CopyToClipboard`, `Action.RunInTerminal`) before custom `Action` when behavior matches.
 
 ## Anti-patterns (never)
 
 - Never call `showToast` during render; it causes repeated toasts and jitter.
 - Never leave debug logging in production commands.
 - Never mix manual Cache persistence with React Query persistence in the same command.
+- Never hardcode a shortcut when an equivalent `Keyboard.Shortcut.Common.*` value exists.
 - Never bind shortcuts for actions that are unavailable.
 - Never open external URLs without a success toast + `closeMainWindow()`.
 
 ## References
 
-**Official Vicinae Documentation** (in `references/docs/src/app/extensions/`):
-- **Introduction & architecture**: `references/docs/src/app/extensions/introduction/page.mdx`
-- **Creating extensions**: `references/docs/src/app/extensions/create/page.mdx`
-- **File structure**: `references/docs/src/app/extensions/file-structure/page.mdx`
-- **Manifest format**: `references/docs/src/app/extensions/manifest/page.mdx`
-- **API reference**: `references/docs/src/app/extensions/api/page.mdx`
-- **View commands**: `references/docs/src/app/extensions/view-command/page.mdx`
-- **No-view commands**: `references/docs/src/app/extensions/no-view-command/page.mdx`
-- **Debugging**: `references/docs/src/app/extensions/debug-raycast/page.mdx`
+**Official Vicinae Documentation**:
+- **Introduction & architecture**: `https://docs.vicinae.com/extensions/introduction`
+- **Creating extensions**: `https://docs.vicinae.com/extensions/create`
+- **File structure**: `https://docs.vicinae.com/extensions/file-structure`
+- **Manifest format**: `https://docs.vicinae.com/extensions/manifest`
+- **View commands**: `https://docs.vicinae.com/extensions/view-command`
+- **No-view commands**: `https://docs.vicinae.com/extensions/no-view-command`
+- **Debugging Raycast extensions**: `https://docs.vicinae.com/extensions/debug-raycast`
+- **API reference (TypeDoc)**: `https://api-reference.vicinae.com/modules.html`
 
 **Repo-specific patterns**:
 - If creating a new extension or adding modules, read `references/extension-template.md`.

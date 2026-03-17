@@ -10,15 +10,10 @@
 
 ## Standard shortcuts
 
-- `cmd+d`: toggle detail view
-- `cmd+o`: open in browser
-- `cmd+c`: copy primary identifier
-- `cmd+shift+c`: copy alternate info
-- `cmd+r`: refresh/reload
-- `cmd+s`: save/apply
-- `cmd+p`: open on platform
-- `cmd+e`: reveal in parent directory
-- `cmd+t`: open in terminal
+- Prefer `Keyboard.Shortcut.Common.*` first so user-customized keybindings are respected.
+- Use only valid common keys: `Copy`, `CopyName`, `CopyPath`, `CopyDeeplink`, `Open`, `OpenWith`, `Refresh`, `Save`, `New`, `Edit`, `Duplicate`, `MoveUp`, `MoveDown`, `Pin`, `Remove`, `RemoveAll`.
+- Use explicit `{ modifiers, key }` only when there is no matching common key (for example: Toggle Detail).
+- For open/copy/run actions, prefer `Action.OpenInBrowser`, `Action.CopyToClipboard`, and `Action.RunInTerminal` wrappers before custom actions.
 
 Only attach shortcuts when the action is available.
 
@@ -26,7 +21,7 @@ Only attach shortcuts when the action is available.
 
 - For external URLs: show success toast + `closeMainWindow()`.
 - For errors: use failure toast with `error.message` fallback.
-- Do not trigger toasts during render; use `useEffect` or `onError` callbacks.
+- Do not trigger toasts during render; use explicit action handlers or `onError` callbacks.
 
 ## Empty and loading states
 
