@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { stripJsoncComments } from "./services/jsonc.js";
+import stripJsonComments from "strip-json-comments";
 
 const CONFIG_DIR = join(homedir(), ".config", "opencode");
 const CONFIG_FILES = [
@@ -41,7 +41,7 @@ function loadConfig(): OpenMemoryConfig {
     if (existsSync(path)) {
       try {
         const content = readFileSync(path, "utf-8");
-        const json = stripJsoncComments(content);
+        const json = stripJsonComments(content);
         return JSON.parse(json) as OpenMemoryConfig;
       } catch {
         // Invalid config, use defaults
@@ -69,5 +69,5 @@ export const CONFIG = {
 };
 
 export function isConfigured(): boolean {
-  return true;
+  return Boolean(fileConfig.apiUrl || process.env.OPENMEMORY_API_URL);
 }

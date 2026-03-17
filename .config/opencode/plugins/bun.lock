@@ -49,6 +49,9 @@
     "openmemory": {
       "name": "opencode-openmemory",
       "version": "0.0.3",
+      "dependencies": {
+        "strip-json-comments": "^5.0.1",
+      },
       "devDependencies": {
         "@types/node": "^22.0.0",
       },

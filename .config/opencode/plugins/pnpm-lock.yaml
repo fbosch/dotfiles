@@ -60,6 +60,19 @@ importers:
         specifier: ^22.13.9
         version: 22.19.15
 
+  openmemory:
+    dependencies:
+      '@opencode-ai/plugin':
+        specifier: '*'
+        version: 1.1.65
+      strip-json-comments:
+        specifier: ^5.0.1
+        version: 5.0.3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.15
+
   toon:
     dependencies:
       '@opencode-ai/plugin':
