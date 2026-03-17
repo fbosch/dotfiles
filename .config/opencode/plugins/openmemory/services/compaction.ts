@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { openMemoryClient } from "./client.js";
@@ -12,6 +13,7 @@ const PART_STORAGE = join(homedir(), ".opencode", "parts");
 const DEFAULT_THRESHOLD = 0.80;
 const MIN_TOKENS_FOR_COMPACTION = 50_000;
 const COMPACTION_COOLDOWN_MS = 30_000;
+const COMPACTION_TIMEOUT_MS = 120_000;
 const CLAUDE_DEFAULT_CONTEXT_LIMIT = 200_000;
 const CLAUDE_MODEL_PATTERN = /claude-(opus|sonnet|haiku)/i;
 
@@ -103,13 +105,14 @@ function isSupportedModel(modelID: string): boolean {
   return CLAUDE_MODEL_PATTERN.test(modelID);
 }
 
-function getMessageDir(sessionID: string): string | null {
+async function getMessageDir(sessionID: string): Promise<string | null> {
   if (!existsSync(MESSAGE_STORAGE)) return null;
 
   const directPath = join(MESSAGE_STORAGE, sessionID);
   if (existsSync(directPath)) return directPath;
 
-  for (const dir of readdirSync(MESSAGE_STORAGE)) {
+  const dirs = await readdir(MESSAGE_STORAGE);
+  for (const dir of dirs) {
     const sessionPath = join(MESSAGE_STORAGE, dir, sessionID);
     if (existsSync(sessionPath)) return sessionPath;
   }
@@ -117,33 +120,35 @@ function getMessageDir(sessionID: string): string | null {
   return null;
 }
 
-function getOrCreateMessageDir(sessionID: string): string {
+async function getOrCreateMessageDir(sessionID: string): Promise<string> {
   if (!existsSync(MESSAGE_STORAGE)) {
-    mkdirSync(MESSAGE_STORAGE, { recursive: true });
+    await mkdir(MESSAGE_STORAGE, { recursive: true });
   }
 
   const directPath = join(MESSAGE_STORAGE, sessionID);
   if (existsSync(directPath)) return directPath;
 
-  for (const dir of readdirSync(MESSAGE_STORAGE)) {
+  const dirs = await readdir(MESSAGE_STORAGE);
+  for (const dir of dirs) {
     const sessionPath = join(MESSAGE_STORAGE, dir, sessionID);
     if (existsSync(sessionPath)) return sessionPath;
   }
 
-  mkdirSync(directPath, { recursive: true });
+  await mkdir(directPath, { recursive: true });
   return directPath;
 }
 
-function findNearestMessageWithFields(messageDir: string): StoredMessage | null {
+async function findNearestMessageWithFields(messageDir: string): Promise<StoredMessage | null> {
   try {
-    const files = readdirSync(messageDir)
+    const allFiles = await readdir(messageDir);
+    const files = allFiles
       .filter((f) => f.endsWith(".json"))
       .sort()
       .reverse();
 
     for (const file of files) {
       try {
-        const content = readFileSync(join(messageDir, file), "utf-8");
+        const content = await readFile(join(messageDir, file), "utf-8");
         const msg = JSON.parse(content) as StoredMessage;
         if (msg.agent && msg.model?.providerID && msg.model?.modelID) {
           return msg;
@@ -170,7 +175,7 @@ function generatePartId(): string {
   return `prt_${timestamp}${random}`;
 }
 
-function injectHookMessage(
+async function injectHookMessage(
   sessionID: string,
   hookContent: string,
   originalMessage: {
@@ -178,14 +183,14 @@ function injectHookMessage(
     model?: { providerID?: string; modelID?: string };
     path?: { cwd?: string; root?: string };
   }
-): boolean {
+): Promise<boolean> {
   if (!hookContent || hookContent.trim().length === 0) {
     log("[compaction] attempted to inject empty content, skipping");
     return false;
   }
 
-  const messageDir = getOrCreateMessageDir(sessionID);
-  const fallback = findNearestMessageWithFields(messageDir);
+  const messageDir = await getOrCreateMessageDir(sessionID);
+  const fallback = await findNearestMessageWithFields(messageDir);
 
   const now = Date.now();
   const messageID = generateMessageId();
@@ -222,13 +227,13 @@ function injectHookMessage(
   };
 
   try {
-    writeFileSync(join(messageDir, `${messageID}.json`), JSON.stringify(messageMeta, null, 2));
+    await writeFile(join(messageDir, `${messageID}.json`), JSON.stringify(messageMeta, null, 2));
 
     const partDir = join(PART_STORAGE, messageID);
     if (!existsSync(partDir)) {
-      mkdirSync(partDir, { recursive: true });
+      await mkdir(partDir, { recursive: true });
     }
-    writeFileSync(join(partDir, `${partID}.json`), JSON.stringify(textPart, null, 2));
+    await writeFile(join(partDir, `${partID}.json`), JSON.stringify(textPart, null, 2));
 
     log("[compaction] hook message injected", { sessionID, messageID });
     return true;
@@ -254,7 +259,6 @@ export interface CompactionContext {
 
 export function createCompactionHook(
   ctx: CompactionContext,
-  tags: { user: string; project: string },
   scopes: { user: MemoryScopeContext; project: MemoryScopeContext },
   options?: CompactionOptions
 ) {
@@ -284,7 +288,7 @@ export function createCompactionHook(
     const projectMemories = await fetchProjectMemoriesForCompaction();
     const prompt = createCompactionPrompt(projectMemories);
 
-    const success = injectHookMessage(summarizeCtx.sessionID, prompt, {
+    const success = await injectHookMessage(summarizeCtx.sessionID, prompt, {
       agent: summarizeCtx.agent,
       model: { providerID: summarizeCtx.providerID, modelID: summarizeCtx.modelID },
       path: { cwd: summarizeCtx.directory },
@@ -337,8 +341,8 @@ export function createCompactionHook(
     let agent: string | undefined;
 
     // Fallback: find model/agent from stored messages if not available
-    const messageDir = getMessageDir(sessionID);
-    const storedMessage = messageDir ? findNearestMessageWithFields(messageDir) : null;
+    const messageDir = await getMessageDir(sessionID);
+    const storedMessage = messageDir ? await findNearestMessageWithFields(messageDir) : null;
     
     if (!providerID || !modelID) {
       if (storedMessage?.model?.providerID) providerID = storedMessage.model.providerID;
@@ -372,7 +376,16 @@ export function createCompactionHook(
     state.compactionInProgress.add(sessionID);
     state.lastCompactionTime.set(sessionID, Date.now());
 
+    // Safety timeout to prevent compactionInProgress from leaking
+    const safetyTimer = setTimeout(() => {
+      if (state.compactionInProgress.has(sessionID)) {
+        log("[compaction] timeout - clearing stuck compaction", { sessionID });
+        state.compactionInProgress.delete(sessionID);
+      }
+    }, COMPACTION_TIMEOUT_MS);
+
     if (!providerID || !modelID) {
+      clearTimeout(safetyTimer);
       state.compactionInProgress.delete(sessionID);
       return;
     }
@@ -415,17 +428,18 @@ export function createCompactionHook(
         },
       }).catch(() => {});
 
+      clearTimeout(safetyTimer);
       state.compactionInProgress.delete(sessionID);
 
       setTimeout(async () => {
         try {
-          const messageDir = getMessageDir(sessionID);
-          const storedMessage = messageDir ? findNearestMessageWithFields(messageDir) : null;
+          const msgDir = await getMessageDir(sessionID);
+          const stored = msgDir ? await findNearestMessageWithFields(msgDir) : null;
 
           await ctx.client.session.promptAsync({
             path: { id: sessionID },
             body: {
-              agent: storedMessage?.agent,
+              agent: stored?.agent,
               parts: [{ type: "text", text: "Continue" }],
             },
             query: { directory: ctx.directory },
@@ -433,6 +447,7 @@ export function createCompactionHook(
         } catch {}
       }, 500);
     } catch (err) {
+      clearTimeout(safetyTimer);
       log("[compaction] compaction failed", { sessionID, error: String(err) });
       state.compactionInProgress.delete(sessionID);
     }
@@ -536,16 +551,24 @@ export function createCompactionHook(
           const lastAssistant = assistants[assistants.length - 1]!;
 
           if (!lastAssistant.providerID || !lastAssistant.modelID) {
-            const messageDir = getMessageDir(sessionID);
-            const storedMessage = messageDir ? findNearestMessageWithFields(messageDir) : null;
-            if (storedMessage?.model?.providerID && storedMessage?.model?.modelID) {
-              lastAssistant.providerID = storedMessage.model.providerID;
-              lastAssistant.modelID = storedMessage.model.modelID;
+            const msgDir = await getMessageDir(sessionID);
+            const stored = msgDir ? await findNearestMessageWithFields(msgDir) : null;
+            if (stored?.model?.providerID && stored?.model?.modelID) {
+              // Copy with fallback values instead of mutating the API response object
+              const patched = {
+                ...lastAssistant,
+                providerID: lastAssistant.providerID || stored.model.providerID,
+                modelID: lastAssistant.modelID || stored.model.modelID,
+              };
+              await checkAndTriggerCompaction(sessionID, patched);
+              return;
             }
           }
 
           await checkAndTriggerCompaction(sessionID, lastAssistant);
-        } catch {}
+        } catch (err) {
+          log("[compaction] session.idle check failed", { sessionID, error: String(err) });
+        }
       }
     },
   };

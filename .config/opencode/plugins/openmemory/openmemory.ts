@@ -4,7 +4,7 @@ import { tool } from "@opencode-ai/plugin";
 
 import { openMemoryClient, getMemoryClient } from "./services/client.js";
 import { formatContextForPrompt } from "./services/context.js";
-import { getScopes, getTags } from "./services/tags.js";
+import { getScopes } from "./services/tags.js";
 import { stripPrivateContent, isFullyPrivate } from "./services/privacy.js";
 import { createCompactionHook, type CompactionContext } from "./services/compaction.js";
 
@@ -40,7 +40,6 @@ function detectMemoryKeyword(text: string): boolean {
 export const OpenMemoryPlugin: Plugin = async (ctx: PluginInput) => {
   const { directory } = ctx;
   const scopes = await getScopes(directory);
-  const tags = await getTags(directory);
   const injectedSessions = new Set<string>();
   log("Plugin init", { directory, scopes, configured: isConfigured() });
 
@@ -49,7 +48,7 @@ export const OpenMemoryPlugin: Plugin = async (ctx: PluginInput) => {
   }
 
   const compactionHook = isConfigured() && ctx.client
-    ? createCompactionHook(ctx as CompactionContext, tags, scopes)
+    ? createCompactionHook(ctx as CompactionContext, scopes)
     : null;
 
   return {
@@ -476,13 +475,6 @@ export const OpenMemoryPlugin: Plugin = async (ctx: PluginInput) => {
                 }
 
                 const client = getMemoryClient();
-                if (!client.reinforceMemory) {
-                  return JSON.stringify({
-                    success: false,
-                    error: "Reinforce not supported by current backend",
-                  });
-                }
-
                 const result = await client.reinforceMemory(
                   args.memoryId,
                   args.boost || 0.1
@@ -518,6 +510,14 @@ export const OpenMemoryPlugin: Plugin = async (ctx: PluginInput) => {
     },
 
     event: async (input: { event: { type: string; properties?: unknown } }) => {
+      if (input.event.type === "session.deleted") {
+        const props = input.event.properties as Record<string, unknown> | undefined;
+        const sessionInfo = props?.info as { id?: string } | undefined;
+        if (sessionInfo?.id) {
+          injectedSessions.delete(sessionInfo.id);
+        }
+      }
+
       if (compactionHook) {
         await compactionHook.event(input);
       }

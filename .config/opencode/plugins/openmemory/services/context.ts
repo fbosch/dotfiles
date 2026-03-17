@@ -56,14 +56,14 @@ export function formatContextForPrompt(
       const score = mem.score ? Math.round(mem.score * 100) : null;
       const salience = mem.salience ? Math.round(mem.salience * 100) : null;
       const content = mem.content || "";
-      const sector = mem.sector ? `[${mem.sector}]` : "";
+      const sector = mem.sector ? `[${mem.sector}] ` : "";
       
       if (score !== null) {
         parts.push(`- ${sector}[${score}%] ${content}`);
       } else if (salience !== null) {
         parts.push(`- ${sector}[sal:${salience}%] ${content}`);
       } else {
-        parts.push(`- ${sector} ${content}`);
+        parts.push(`- ${sector}${content}`);
       }
     });
   }
