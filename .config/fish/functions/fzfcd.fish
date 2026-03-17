@@ -9,7 +9,7 @@ function fzfcd
     set -l selected_dir (cat $tmp)
     rm -f $tmp
     if test -n "$selected_dir"
-        z "$selected_dir"
+        cd "$selected_dir"
         commandline --function repaint
     end
 end
