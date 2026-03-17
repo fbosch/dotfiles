@@ -39,8 +39,8 @@ function detectMemoryKeyword(text: string): boolean {
 
 export const OpenMemoryPlugin: Plugin = async (ctx: PluginInput) => {
   const { directory } = ctx;
-  const scopes = getScopes(directory);
-  const tags = getTags(directory);
+  const scopes = await getScopes(directory);
+  const tags = await getTags(directory);
   const injectedSessions = new Set<string>();
   log("Plugin init", { directory, scopes, configured: isConfigured() });
 
