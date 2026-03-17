@@ -1,2 +1,2 @@
 install-opencode-plugins:
-	pnpm --dir .config/opencode/plugins install
+	bun install --cwd .config/opencode/plugins

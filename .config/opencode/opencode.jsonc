@@ -5,7 +5,7 @@
   "small_model": "anthropic/claude-haiku-4-5",
   "plugin": [
     "@tarquinen/opencode-dcp@latest",
-    // "@happycastle/opencode-openmemory",
+    "git+https://github.com/fbosch/opencode-openmemory.git#fix/zod-part-schema-adherence",
     "opencode-wakatime",
     "opencode-handoff",
     "opencode-snippets",
