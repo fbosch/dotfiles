@@ -1,7 +1,7 @@
 ---
 description: Fast, focused edits like typos, renames, and formatting. No deep analysis.
 mode: subagent
-color: warning
+color: "#f59e0b"
 temperature: 0.0
 steps: 3
 permission:
