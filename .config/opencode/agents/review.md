@@ -1,7 +1,7 @@
 ---
 description: Reviews code for quality, security vulnerabilities, and best practices. Use after code changes, before merging PRs, or when auditing existing code.
 mode: subagent
-color: "#3b82f6"
+color: "#a8d0e6"
 temperature: 0.1
 steps: 6
 tools:

@@ -1,7 +1,7 @@
 ---
 description: Actively tries to break a proposed design or implementation — failure modes, malicious inputs, stress cases. Use after spec.md, before merging risky changes, or for parsers, CLIs, config loaders, auth, and infra.
 mode: subagent
-color: "#ef4444"
+color: "#e9b3aa"
 temperature: 0.3
 tools:
   write: false

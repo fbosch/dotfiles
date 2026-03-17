@@ -1,7 +1,7 @@
 ---
 description: Writes and maintains tests including unit, integration, and edge case coverage. Use when adding new features, fixing bugs, or improving test coverage.
 mode: subagent
-color: "#22c55e"
+color: "#96b492"
 temperature: 0.2
 permission:
   bash:

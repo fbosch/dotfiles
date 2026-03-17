@@ -1,7 +1,7 @@
 ---
 description: Turns an ambiguous request into an explicit contract — scope, interfaces, invariants, and failure behavior. Use before implementing any new feature, API, CLI command, or config format.
 mode: subagent
-color: "#f59e0b"
+color: "#e5d8b6"
 temperature: 0.2
 tools:
   write: false

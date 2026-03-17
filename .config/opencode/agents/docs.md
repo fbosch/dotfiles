@@ -1,7 +1,7 @@
 ---
 description: Writes and maintains documentation including READMEs, API docs, and inline comments. Use when creating new docs, updating existing documentation, or improving the clarity of existing content.
 mode: subagent
-color: "#64748b"
+color: "#a4c0c9"
 temperature: 0.3
 steps: 6
 permission:

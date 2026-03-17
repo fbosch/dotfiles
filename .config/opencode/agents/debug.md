@@ -1,7 +1,7 @@
 ---
 description: Investigates and diagnoses bugs, errors, and unexpected behavior using bash and file inspection. Use when a bug needs root cause analysis, when logs need examination, or when system state needs to be inspected.
 mode: all
-color: "#ef4444"
+color: "#c69eb6"
 temperature: 0.1
 permission:
   bash:

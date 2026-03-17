@@ -1,7 +1,7 @@
 ---
 description: Finds existing implementations, usage examples, and conventions in the codebase. Use when you need concrete examples to model new work after or to understand how a pattern is currently applied.
 mode: subagent
-color: "#8b5cf6"
+color: "#9f97ab"
 temperature: 0.2
 tools:
   write: false

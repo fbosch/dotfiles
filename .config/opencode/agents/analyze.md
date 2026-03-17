@@ -1,7 +1,7 @@
 ---
 description: Traces how specific code works - data flow, call chains, state transitions, and component interactions. Use when you need precise file:line documentation of an existing implementation before making changes.
 mode: subagent
-color: "#3b82f6"
+color: "#80a9c8"
 temperature: 0.1
 tools:
   write: false
