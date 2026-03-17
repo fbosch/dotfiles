@@ -45,6 +45,20 @@ return {
 				return table.concat(escaped, " ")
 			end
 
+			local function merge_path(entries)
+				local merged = {}
+				local seen = {}
+
+				for _, entry in ipairs(entries) do
+					if entry ~= nil and entry ~= "" and seen[entry] ~= true then
+						seen[entry] = true
+						merged[#merged + 1] = entry
+					end
+				end
+
+				return table.concat(merged, ":")
+			end
+
 			local function opencode_base_cmd()
 				if vim.fn.executable("mullvad-exclude") == 1 then
 					return { "mullvad-exclude", "opencode" }
@@ -104,6 +118,15 @@ return {
 
 			local function build_opencode_cmd(worktree_dir, session_id)
 				local cmd = opencode_base_cmd()
+				local path = merge_path({
+					vim.fn.expand("~/.local/bin"),
+					vim.fn.expand("~/.local/share/pnpm"),
+					vim.fn.expand("~/Library/pnpm"),
+					"/opt/homebrew/bin",
+					"/opt/homebrew/sbin",
+					"/usr/local/bin",
+					vim.env.PATH,
+				})
 
 				cmd[#cmd + 1] = "--port"
 				if session_id then
@@ -111,7 +134,14 @@ return {
 					cmd[#cmd + 1] = session_id
 				end
 
-				return "cd " .. vim.fn.shellescape(worktree_dir) .. " && " .. shell_join(cmd)
+				return "cd "
+					.. vim.fn.shellescape(worktree_dir)
+					.. " && env SHELL="
+					.. vim.fn.shellescape(vim.o.shell)
+					.. " PATH="
+					.. vim.fn.shellescape(path)
+					.. " "
+					.. shell_join(cmd)
 			end
 
 			local function remember_session_id(session_id)
