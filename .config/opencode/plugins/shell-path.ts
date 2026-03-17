@@ -28,7 +28,7 @@ function mergePath(pathValue: string | undefined) {
 export default async function ShellPathPlugin() {
   return {
     "shell.env": async (_input, output) => {
-      output.env.PATH = mergePath(output.env.PATH);
+      output.env.PATH = mergePath(output.env.PATH || process.env.PATH);
       output.env.SHELL = fishShell();
     },
   };
