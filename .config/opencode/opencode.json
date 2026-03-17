@@ -17,14 +17,15 @@
   ],
   "permission": {
     "bash": {
-      "rm *": "deny",
+      "rm *": "ask",
       "sudo *": "deny",
-      "chmod *": "deny",
-      "chown *": "deny",
+      "chmod *": "ask",
+      "chown *": "ask",
       "git push *": "deny",
       "git reset *": "deny",
       "git rebase *": "deny",
-      "git checkout *": "deny"
+      "git checkout *": "ask",
+      "git commit *": "deny"
     }
   },
   "agent": {
