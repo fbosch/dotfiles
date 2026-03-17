@@ -1,6 +1,6 @@
 worktree-path = "../{{ branch }}"
 
-[pre-create]
+[pre-switch]
 pull-latest = "git pull --ff-only"
 
 [post-create]

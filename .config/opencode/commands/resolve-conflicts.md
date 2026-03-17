@@ -1,6 +1,5 @@
 ---
 description: Analyze and resolve git merge conflicts with context-aware suggestions
-model: anthropic/claude-sonnet-4-6
 agent: build
 ---
 
