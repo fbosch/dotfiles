@@ -258,6 +258,30 @@ return {
 				end,
 			})
 
+			vim.api.nvim_create_autocmd("User", {
+				pattern = "OpencodeEvent:session.*",
+				callback = function(args)
+					local data = args.data
+					if not data or not data.event or not data.event.properties then
+						return
+					end
+
+					local props = data.event.properties
+					local new_id = props.sessionId or props.sessionID
+					if type(new_id) ~= "string" or new_id == "" then
+						return
+					end
+
+					local current_id = session.read_opencode_id()
+					if new_id == current_id then
+						return
+					end
+
+					remember_session_id(new_id)
+					opencode_cmd_cache = {}
+				end,
+			})
+
 			vim.schedule(preload_opencode_cmd)
 			vim.o.autoread = true
 		end,
