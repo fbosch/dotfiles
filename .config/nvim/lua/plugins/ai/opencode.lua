@@ -120,8 +120,9 @@ return {
 				local cmd = opencode_base_cmd()
 				local path = merge_path({
 					vim.fn.expand("~/.local/bin"),
-					vim.fn.expand("~/.local/share/pnpm"),
+					vim.env.PNPM_HOME,
 					vim.fn.expand("~/Library/pnpm"),
+					vim.fn.expand("~/.local/share/pnpm"),
 					"/opt/homebrew/bin",
 					"/opt/homebrew/sbin",
 					"/usr/local/bin",
