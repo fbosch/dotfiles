@@ -1,0 +1,20 @@
+{
+  "name": "opencode-openmemory",
+  "version": "0.0.3",
+  "private": true,
+  "type": "module",
+  "exports": "./openmemory.ts",
+  "opencode": {
+    "type": "plugin",
+    "hooks": [
+      "chat.message",
+      "event"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "*"
+  }
+}

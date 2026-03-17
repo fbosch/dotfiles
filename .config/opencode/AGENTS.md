@@ -50,6 +50,7 @@
 
 - Verify uncertain details before stating as fact; don't guess.
 - Determine current machine context before host-specific guidance: run `hostname -s` and use that as source of truth.
+- Do not infer OpenCode plugin availability from the current shell tool `PATH` alone; plugin startup environment and tool runtime environment can differ, especially for Homebrew-installed binaries like `rtk`.
 - Before suggesting or running `ssh`, compare target host to `hostname -s`; if they match, do not suggest or run SSH.
 - Don't invent scope: change only what's requested and preserve unrelated behavior.
 - Remove temporary debug logs/prints before finishing.

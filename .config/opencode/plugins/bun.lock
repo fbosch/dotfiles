@@ -46,6 +46,16 @@
         "@opencode-ai/plugin": "*",
       },
     },
+    "openmemory": {
+      "name": "opencode-openmemory",
+      "version": "0.0.3",
+      "devDependencies": {
+        "@types/node": "^22.0.0",
+      },
+      "peerDependencies": {
+        "@opencode-ai/plugin": "*",
+      },
+    },
     "toon": {
       "name": "opencode-toon-format",
       "version": "0.1.0",
@@ -178,6 +188,8 @@
     "opencode-just-bash": ["opencode-just-bash@workspace:just-bash"],
 
     "opencode-machine-context": ["opencode-machine-context@workspace:machine-context"],
+
+    "opencode-openmemory": ["opencode-openmemory@workspace:openmemory"],
 
     "opencode-toon-format": ["opencode-toon-format@workspace:toon"],
 
