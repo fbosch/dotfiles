@@ -1,5 +1,33 @@
 local M = {}
 
+local function read_first_line(path)
+	local lines = vim.fn.readfile(path, "", 1)
+	local first_line = lines[1]
+	if type(first_line) ~= "string" or first_line == "" then
+		return nil
+	end
+
+	return first_line
+end
+
+local function wipe_opencode_sessions(session_root)
+	local opencode_files = vim.fn.glob(session_root .. "/*.opencode", false, true)
+	if type(opencode_files) ~= "table" or vim.tbl_isempty(opencode_files) then
+		return
+	end
+
+	local storage_root = vim.fn.expand("~/.local/share/opencode/storage/session")
+	for _, opencode_file in ipairs(opencode_files) do
+		local session_id = read_first_line(opencode_file)
+		if session_id ~= nil then
+			local matches = vim.fn.glob(storage_root .. "/**/" .. session_id .. ".json", false, true)
+			for _, match in ipairs(matches) do
+				vim.fn.delete(match)
+			end
+		end
+	end
+end
+
 function M.load_highlights(group)
 	for hl, color in pairs(group) do
 		vim.api.nvim_set_hl(0, hl, color)
@@ -33,11 +61,12 @@ end
 function M.wipe_all_sessions()
 	local root_dir = vim.fn.expand("~/.config/nvim/.sessions")
 	local ok, err = pcall(function()
-		-- Recursively delete the directory
+		wipe_opencode_sessions(root_dir)
 		vim.fn.delete(root_dir, "rf")
 	end)
 
 	if ok then
+		vim.api.nvim_exec_autocmds("User", { pattern = "SessionWipePost" })
 		vim.notify("Wiped all sessions", vim.log.levels.INFO, {
 			title = "AutoSession",
 		})

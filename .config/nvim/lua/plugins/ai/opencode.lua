@@ -249,6 +249,14 @@ return {
 				},
 			}
 
+			vim.api.nvim_create_autocmd("User", {
+				pattern = "SessionWipePost",
+				callback = function()
+					opencode_cmd_cache = {}
+					opencode_cmd_preload_inflight = {}
+				end,
+			})
+
 			vim.schedule(preload_opencode_cmd)
 			vim.o.autoread = true
 		end,
