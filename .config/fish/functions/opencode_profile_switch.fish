@@ -6,6 +6,9 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
 
     set -l profiles_file "$config_root/profiles.jsonc"
     set -l opencode_file "$config_root/opencode.json"
+    if test -f "$config_root/opencode.jsonc"
+        set opencode_file "$config_root/opencode.jsonc"
+    end
 
     if not test -f "$profiles_file"
         echo "profiles file not found: $profiles_file"
@@ -37,9 +40,18 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
         return 1
     end
 
-    jq -e '.' "$opencode_file" >/dev/null 2>&1
+    set -l opencode_parse_file "$opencode_file"
+    if string match -q '*.jsonc' "$opencode_file"
+        set opencode_parse_file (mktemp)
+        sed -E 's@[[:space:]]*//.*$@@' "$opencode_file" >"$opencode_parse_file"
+    end
+
+    jq -e '.' "$opencode_parse_file" >/dev/null 2>&1
     if test $status -ne 0
         rm -f "$profiles_tmp"
+        if test "$opencode_parse_file" != "$opencode_file"
+            rm -f "$opencode_parse_file"
+        end
         echo "failed to parse config: $opencode_file"
         return 1
     end
@@ -51,7 +63,7 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
         return 1
     end
 
-    set -l current_snapshot (jq -c '{ model: (.model // null), small_model: (.small_model // null), agents: ((.agent // {}) | with_entries(.value = (.value.model // null))) }' "$opencode_file")
+    set -l current_snapshot (jq -c '{ model: (.model // null), small_model: (.small_model // null), agents: ((.agent // {}) | with_entries(.value = (.value.model // null))) }' "$opencode_parse_file")
     set -l active_profile ""
     for profile in $profile_names
         set -l is_match (jq -r --arg profile "$profile" --argjson current "$current_snapshot" '
@@ -143,10 +155,13 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
                 end
               )
           end
-    ' "$opencode_file" >"$opencode_tmp"
+    ' "$opencode_parse_file" >"$opencode_tmp"
 
     if test $status -ne 0
         rm -f "$profiles_tmp" "$opencode_tmp"
+        if test "$opencode_parse_file" != "$opencode_file"
+            rm -f "$opencode_parse_file"
+        end
         echo "failed to apply profile: $selected_profile"
         return 1
     end
@@ -154,6 +169,9 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
     mv "$opencode_tmp" "$opencode_file"
     set -l description (jq -r --arg profile "$selected_profile" '.profiles[$profile].description // ""' "$profiles_tmp")
     rm -f "$profiles_tmp"
+    if test "$opencode_parse_file" != "$opencode_file"
+        rm -f "$opencode_parse_file"
+    end
 
     if test -n "$description"
         echo "opencode profile switched: $selected_profile - $description"
