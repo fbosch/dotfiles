@@ -7,26 +7,31 @@ return {
 		},
 		init = function()
 			-- Set global options before plugin loads
+			local session = require("utils.session")
 			local opencode_cmd_cache = {}
 			local opencode_cmd_preload_inflight = {}
 			local opencode_cmd_cache_ttl_ms = 30 * 60 * 1000
 
-			local function get_cached_opencode_cmd(worktree_dir)
-				local entry = opencode_cmd_cache[worktree_dir]
+			local function get_cache_key(worktree_dir)
+				return string.format("%s::%s", session.get_name(), worktree_dir)
+			end
+
+			local function get_cached_opencode_cmd(cache_key)
+				local entry = opencode_cmd_cache[cache_key]
 				if entry == nil then
 					return nil
 				end
 
 				if vim.uv.now() > entry.expires_at then
-					opencode_cmd_cache[worktree_dir] = nil
+					opencode_cmd_cache[cache_key] = nil
 					return nil
 				end
 
 				return entry.cmd
 			end
 
-			local function set_cached_opencode_cmd(worktree_dir, opencode_cmd)
-				opencode_cmd_cache[worktree_dir] = {
+			local function set_cached_opencode_cmd(cache_key, opencode_cmd)
+				opencode_cmd_cache[cache_key] = {
 					cmd = opencode_cmd,
 					expires_at = vim.uv.now() + opencode_cmd_cache_ttl_ms,
 				}
@@ -109,26 +114,72 @@ return {
 				return "cd " .. vim.fn.shellescape(worktree_dir) .. " && " .. shell_join(cmd)
 			end
 
+			local function remember_session_id(session_id)
+				if session_id then
+					session.write_opencode_id(session_id)
+				end
+			end
+
+			local function resolve_session_id(worktree_dir)
+				local session_id = session.read_opencode_id()
+				if session_id ~= nil then
+					return session_id
+				end
+
+				session_id = find_worktree_session_id(worktree_dir)
+				remember_session_id(session_id)
+				return session_id
+			end
+
+			local function sync_session_id(worktree_dir)
+				local session_id = find_worktree_session_id(worktree_dir)
+				if session_id == nil then
+					return
+				end
+
+				remember_session_id(session_id)
+				set_cached_opencode_cmd(get_cache_key(worktree_dir), build_opencode_cmd(worktree_dir, session_id))
+			end
+
+			local function schedule_session_id_sync(worktree_dir)
+				if session.read_opencode_id() ~= nil then
+					return
+				end
+
+				vim.defer_fn(function()
+					sync_session_id(worktree_dir)
+				end, 1000)
+			end
+
 			local function ensure_opencode_cmd()
 				local worktree_dir = resolve_worktree_dir()
-				local cached_opencode_cmd = get_cached_opencode_cmd(worktree_dir)
+				local cache_key = get_cache_key(worktree_dir)
+				local cached_opencode_cmd = get_cached_opencode_cmd(cache_key)
 				if cached_opencode_cmd ~= nil then
 					return cached_opencode_cmd
 				end
 
-				local session_id = find_worktree_session_id(worktree_dir)
+				local session_id = resolve_session_id(worktree_dir)
 				local opencode_cmd = build_opencode_cmd(worktree_dir, session_id)
-				set_cached_opencode_cmd(worktree_dir, opencode_cmd)
+				set_cached_opencode_cmd(cache_key, opencode_cmd)
+				schedule_session_id_sync(worktree_dir)
 				return opencode_cmd
 			end
 
 			local function preload_opencode_cmd()
 				local worktree_dir = resolve_worktree_dir()
-				if get_cached_opencode_cmd(worktree_dir) ~= nil or opencode_cmd_preload_inflight[worktree_dir] == true then
+				local cache_key = get_cache_key(worktree_dir)
+				if get_cached_opencode_cmd(cache_key) ~= nil or opencode_cmd_preload_inflight[cache_key] == true then
 					return
 				end
 
-				opencode_cmd_preload_inflight[worktree_dir] = true
+				local session_id = session.read_opencode_id()
+				if session_id ~= nil then
+					set_cached_opencode_cmd(cache_key, build_opencode_cmd(worktree_dir, session_id))
+					return
+				end
+
+				opencode_cmd_preload_inflight[cache_key] = true
 
 				local list_cmd = opencode_base_cmd()
 				list_cmd[#list_cmd + 1] = "session"
@@ -147,8 +198,9 @@ return {
 
 					vim.schedule(function()
 						local opencode_cmd = build_opencode_cmd(worktree_dir, session_id)
-						set_cached_opencode_cmd(worktree_dir, opencode_cmd)
-						opencode_cmd_preload_inflight[worktree_dir] = nil
+						remember_session_id(session_id)
+						set_cached_opencode_cmd(cache_key, opencode_cmd)
+						opencode_cmd_preload_inflight[cache_key] = nil
 					end)
 				end)
 			end

@@ -1,12 +1,9 @@
 local git = require("utils.git")
-local cwd = vim.v.cwd or vim.fn.getcwd(0)
-local function get_cwd_as_name()
-	return cwd:gsub("[^A-Za-z0-9]", "_")
-end
-local root_dir = vim.fn.expand("~/.config") .. "/nvim/.sessions//"
+local session = require("utils.session")
 
-local session_file = get_cwd_as_name()
-local path = root_dir .. session_file
+local root_dir = session.get_root_dir()
+local session_file = session.get_name()
+local path = session.get_path()
 
 local should_persist_session = not (
 	git.is_git_message_buffer() -- opened git message buffer
@@ -41,29 +38,27 @@ return {
 					write = false,
 					delete = false,
 				},
-		})
+			})
 
-		vim.api.nvim_create_autocmd({ "VimEnter" }, {
-			callback = function()
-				local existing_session = vim.loop.fs_stat(path)
-				if existing_session and existing_session.type == "file" then
-					-- Defer session read to avoid conflicts with plugin initialization
-					vim.defer_fn(function()
-						sessions.read(session_file)
-					end, 50)
-				end
-			end,
-		})
+			vim.api.nvim_create_autocmd({ "VimEnter" }, {
+				callback = function()
+					local existing_session = vim.loop.fs_stat(path)
+					if existing_session and existing_session.type == "file" then
+						vim.defer_fn(function()
+							sessions.read(session_file)
+						end, 50)
+					end
+				end,
+			})
 
-		vim.api.nvim_create_autocmd({ "VimLeavePre" }, {
-			callback = function()
-				-- Check if session directory still exists before writing
-				local dir_exists = vim.loop.fs_stat(root_dir)
-				if dir_exists and dir_exists.type == "directory" then
-					sessions.write(session_file)
-				end
-			end,
-		})
-	end,
+			vim.api.nvim_create_autocmd({ "VimLeavePre" }, {
+				callback = function()
+					local dir_exists = vim.loop.fs_stat(root_dir)
+					if dir_exists and dir_exists.type == "directory" then
+						sessions.write(session_file)
+					end
+				end,
+			})
+		end,
 	},
 }
