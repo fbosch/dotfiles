@@ -4,10 +4,8 @@ Neovim config with Lazy.nvim, Lua-first modules, and VSCode-mode support.
 
 ## Essentials
 
-- Lazy.nvim plugin system is bootstrapped in `lua/config/lazy.lua`.
-- Plugin specs live under `lua/plugins/` and are imported via `lua/plugins/init.lua`.
 - VSCode mode (`vim.g.vscode`) loads `lua/config/vscode.lua` and disables most UI plugins.
-- Neovim state lives in `.config/nvim/.undo`, `.backup`, `.sessions`, `.swp` (do not edit directly).
+- Neovim state dirs (`.undo`, `.backup`, `.sessions`, `.swp`) are generated — do not edit directly.
 
 ## More Guidance
 

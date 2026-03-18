@@ -4,7 +4,7 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 
 ## Essentials
 
-- Do not edit generated state/lock files: `lazy-lock.json`, `.config/nvim/.{sessions,undo,backup}/`, `.config/fish/{fish_variables,completions,conf.d,functions}/`, `.config/lazygit/state.yml`, `.config/ags/@girs/`.
+- Do not edit generated state/lock files (e.g. `lazy-lock.json`, AGS GIR typings, Fish auto-generated dirs).
 - Follow symlinks when reading docs.
 - Canonical skills live in `.agents/skills/` and are mirrored under `.config/{opencode,codex,github,claude}/skills`.
 

@@ -13,12 +13,7 @@ pnpm
 
 ## Commands
 
-- `pnpm dev` (Vite dev server)
-- `pnpm build` (typecheck + build)
-- `pnpm storybook` (storybook dev)
-- `pnpm build-storybook`
 - `pnpm contrast` (token contrast validation)
-- `pnpm lint` / `pnpm format` (Biome)
 
 ## More Guidance
 
