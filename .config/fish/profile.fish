@@ -27,6 +27,8 @@ set -gx OPENCODE_EXPERIMENTAL_LSP_TOOL 1
 set -gx OPENCODE_EXPERIMENTAL_LSP_TY 1
 set -gx OPENCODE_EXPERIMENTAL_EXA 1
 
+set -gx OPENCODE_TOON_PLUGIN_TOOLS "bash,rtk,python3"
+
 # Lazy set GPG_TTY only when GPG is actually used (saves 5ms on startup)
 if not set -q GPG_TTY
     set -gx GPG_TTY (tty 2>/dev/null || echo /dev/tty)

@@ -59,19 +59,6 @@
         "@opencode-ai/plugin": "*",
       },
     },
-    "toon": {
-      "name": "opencode-toon-format",
-      "version": "0.1.0",
-      "dependencies": {
-        "@toon-format/toon": "^2.1.0",
-      },
-      "devDependencies": {
-        "@types/node": "^22.13.9",
-      },
-      "peerDependencies": {
-        "@opencode-ai/plugin": "*",
-      },
-    },
     "worktrunk": {
       "name": "opencode-worktrunk",
       "version": "0.1.0",
@@ -103,8 +90,6 @@
     "@tokenizer/inflate": ["@tokenizer/inflate@0.4.1", "", { "dependencies": { "debug": "4.4.3", "token-types": "6.1.2" } }, "sha512-2mAv+8pkG6GIZiF1kNg1jAjh27IDxEPKwdGul3snfztFerfPGI1LjDezZp3i7BElXompqEtPmoPx6c2wgtWsOA=="],
 
     "@tokenizer/token": ["@tokenizer/token@0.3.0", "", {}, "sha512-OvjF+z51L3ov0OyAU0duzsYuvO01PH7x4t6DJx+guahgTnBHkhJdG7soQeTSFLWN3efnHyibZ4Z8l2EuWwJN3A=="],
-
-    "@toon-format/toon": ["@toon-format/toon@2.1.0", "", {}, "sha512-JwWptdF5eOA0HaQxbKAzkpQtR4wSWTEfDlEy/y3/4okmOAX1qwnpLZMmtEWr+ncAhTTY1raCKH0kteHhSXnQqg=="],
 
     "@types/node": ["@types/node@22.19.15", "", { "dependencies": { "undici-types": "6.21.0" } }, "sha512-F0R/h2+dsy5wJAUe3tAU6oqa2qbWY5TpNfL/RGmo1y38hiyO1w3x2jPtt76wmuaJI4DQnOBu21cNXQ2STIUUWg=="],
 
@@ -193,8 +178,6 @@
     "opencode-machine-context": ["opencode-machine-context@workspace:machine-context"],
 
     "opencode-openmemory": ["opencode-openmemory@workspace:openmemory"],
-
-    "opencode-toon-format": ["opencode-toon-format@workspace:toon"],
 
     "opencode-worktrunk": ["opencode-worktrunk@workspace:worktrunk"],
 
