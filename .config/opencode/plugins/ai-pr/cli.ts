@@ -706,32 +706,28 @@ async function main(): Promise<void> {
   let parsed = "";
 
   try {
-    parsed = await withSpinner(
-      debug,
-      `Analyzing commits with ${modelRef}...`,
-      async () => {
-        const connectStart = startDebugTimer(debug);
-        opencodeState.connected = await connectOpenCode();
-        cleanupServer = opencodeState.connected.cleanup ?? null;
-        writeDebugTiming(debug, "connectClient", connectStart);
+    parsed = await withSpinner(debug, `Analyzing commits ...`, async () => {
+      const connectStart = startDebugTimer(debug);
+      opencodeState.connected = await connectOpenCode();
+      cleanupServer = opencodeState.connected.cleanup ?? null;
+      writeDebugTiming(debug, "connectClient", connectStart);
 
-        const createSessionStart = startDebugTimer(debug);
-        opencodeState.sessionId = await createSession(
-          opencodeState.connected.baseUrl,
-        );
-        writeDebugTiming(debug, "session.create", createSessionStart);
+      const createSessionStart = startDebugTimer(debug);
+      opencodeState.sessionId = await createSession(
+        opencodeState.connected.baseUrl,
+      );
+      writeDebugTiming(debug, "session.create", createSessionStart);
 
-        const commandStart = startDebugTimer(debug);
-        const result = await runPrDescCommand(
-          opencodeState.connected.baseUrl,
-          opencodeState.sessionId,
-          modelRef,
-          diffInput,
-        );
-        writeDebugTiming(debug, "session.command", commandStart);
-        return result;
-      },
-    );
+      const commandStart = startDebugTimer(debug);
+      const result = await runPrDescCommand(
+        opencodeState.connected.baseUrl,
+        opencodeState.sessionId,
+        modelRef,
+        diffInput,
+      );
+      writeDebugTiming(debug, "session.command", commandStart);
+      return result;
+    });
   } catch (error) {
     cleanup();
     throw error;

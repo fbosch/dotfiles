@@ -936,7 +936,7 @@ async function runCommitCommand(
 
 async function generateCommitValue(
   context: GitContext,
-  modelRef: string,
+  modelRef: string | null,
   options: GenerateOptions,
 ): Promise<GeneratedCommit> {
   const totalStart = startDebugTimer(options);
@@ -949,7 +949,7 @@ async function generateCommitValue(
     writeDebugTiming("connectClient", connectStart);
 
     const commandTimeoutMs = getCommandTimeoutMs();
-    const model = normalizeModelRef(modelRef);
+    const model = modelRef !== null ? normalizeModelRef(modelRef) : null;
     const commandArgs = buildCommandArgs(context);
 
     const createSessionStart = startDebugTimer(options);
@@ -991,7 +991,7 @@ async function generateCommitValue(
 
 export function generateCommit(
   context: GitContext,
-  modelRef: string,
+  modelRef: string | null,
   options: GenerateOptions = {},
 ): ResultAsync<GeneratedCommit, GenerateError> {
   return ResultAsync.fromPromise(generateCommitValue(context, modelRef, options), toGenerateError);

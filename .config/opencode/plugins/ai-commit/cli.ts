@@ -25,7 +25,6 @@ import {
   withSpinner,
 } from "./src/ui";
 
-const DEFAULT_MODEL = "opencode/agent-default";
 const FALLBACK_MODELS: ReadonlyArray<{ label: string; ref: string }> = [
   { label: "claude-haiku-4-5  (anthropic)", ref: "anthropic/claude-haiku-4-5" },
   { label: "gpt-5.3-codex-spark  (openai)", ref: "openai/gpt-5.3-codex-spark" },
@@ -74,7 +73,7 @@ function exitCancelled(message: string): never {
   process.exit(2);
 }
 
-function getModelRef(cliValue?: string): string {
+function getModelRef(cliValue?: string): string | null {
   if (typeof cliValue === "string" && cliValue.trim().length > 0) {
     return cliValue.trim();
   }
@@ -83,7 +82,7 @@ function getModelRef(cliValue?: string): string {
   if (typeof value === "string" && value.trim().length > 0) {
     return value.trim();
   }
-  return DEFAULT_MODEL;
+  return null;
 }
 
 function formatGitError(error: GitError): string {
@@ -146,7 +145,7 @@ function shouldSuggestAnotherModel(error: GenerateError): boolean {
   ].some((value) => message.includes(value));
 }
 
-async function selectFallbackModel(currentModelRef: string): Promise<string | null> {
+async function selectFallbackModel(currentModelRef: string | null): Promise<string | null> {
   const options = FALLBACK_MODELS.filter((model) => model.ref !== currentModelRef);
   if (options.length === 0) {
     return null;
@@ -325,7 +324,7 @@ async function main(): Promise<void> {
 
   if (args.verbose) {
     style(` Branch: ${branch}`);
-    style(` Model: ${modelRef}`);
+    style(` Model: ${modelRef ?? "commit agent default"}`);
   }
 
   let commitMsg = "";
@@ -365,7 +364,7 @@ async function main(): Promise<void> {
 
     while (true) {
       const generatedAttempt = await withSpinner(
-        "Analyzing staged diff...",
+        `Analyzing staged diff with ${modelRef ?? "commit agent"}...`,
         () =>
           generateCommit(context, modelRef, { debug: args.debug }).match(
             (value) => ({ ok: true as const, value }),
