@@ -1,7 +1,7 @@
 worktree-path = "../{{ branch }}"
 
 [pre-switch]
-pull-latest = "git pull --ff-only"
+pull-latest = "git -C \"$(dirname \"$(git rev-parse --show-toplevel)\")/$(basename \"$(git symbolic-ref refs/remotes/origin/HEAD)\")\" pull --ff-only"
 
 [post-create]
 recent-worktree = "printf '%s\n' {{ worktree_path }} >> /tmp/.recent-worktrees"
