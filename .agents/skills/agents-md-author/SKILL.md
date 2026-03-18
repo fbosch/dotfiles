@@ -23,17 +23,36 @@ Create, review, or refactor AGENTS.md files so they stay minimal, stable, and us
 - Will this change improve activation or execution safety, or just add noise?
 - Is the guidance stable for 6+ months, or will it drift?
 - Is this better as a reference doc instead of in the root file?
-- Can the agent discover this directly from code or standard tooling?
+- Can the agent discover this directly from code or standard tooling? If yes, leave it out.
+- Does mentioning this anchor the agent toward a deprecated or wrong pattern? Every line competes for attention and biases behavior — even passive mentions.
+- Will this line become redundant as the underlying friction gets fixed or as models improve?
 
 ## Core Keep/Cut Filters
 
 Apply these filters once per section and avoid re-litigating the same rule elsewhere:
 
+- **Discoverability (primary gate):** Remove anything the agent can find by reading code, config, READMEs, or running standard commands. Tech stack descriptions, architecture overviews, directory structures, and framework conventions are all discoverable — cut them.
+- **Anchoring:** Remove passive mentions of tools, patterns, or modules that could bias the agent toward deprecated or wrong approaches. If you mention it, the agent treats it as current and relevant.
 - Remove brittle paths, long lists, or duplicated guidance.
-- Remove facts agents can derive from code, config, or standard tooling.
 - Keep instructions high-level and stable.
 - Keep build/validation notes only when they are non-standard or easy to miss.
 - Remove guidance once the underlying friction is fixed.
+
+## What Earns a Line
+
+A line belongs in AGENTS.md only if it passes the discoverability gate: the agent cannot infer it from the codebase, and it is operationally significant. Concrete examples:
+
+- Non-standard package manager: `uv` instead of `pip`, `pnpm` instead of `npm`
+- Commands with non-obvious required flags: `--no-cache` to avoid false positives from fixture setup
+- Landmines: code that looks safe to refactor but isn't (custom middleware that must not be replaced, deprecated modules still imported by production code)
+- Non-standard file placement or naming that contradicts framework defaults
+
+Does NOT earn a line:
+
+- Tech stack, language, or framework (discoverable from package.json, imports, config)
+- Directory structure or module layout (discoverable from ls)
+- Architecture overviews or design patterns (discoverable from code)
+- Standard commands the agent already knows (`npm test`, `git commit`)
 
 ## Audit Mode (Existing AGENTS.md)
 
@@ -105,7 +124,7 @@ Do NOT load reference docs for routine edits that only trim or reorder content.
 - Never include deep file trees or path lists; they rot quickly and poison context.
 - Never include codebase structure or tech stack overviews that code already reveals.
 - Never add broad, absolute rules unless they are critical and stable.
-- Never auto-generate AGENTS.md; manual intent keeps it concise and accurate.
+- Never auto-generate AGENTS.md. Auto-generated output duplicates what agents already discover from the repo, adds ~20% cost overhead, and can reduce task success — because the agent reads the file, then re-discovers the same facts from code, and must reconcile two sources of truth.
 - Never include setup steps that already live in standard tooling docs.
 
 ## Expert Heuristics
@@ -113,7 +132,8 @@ Do NOT load reference docs for routine edits that only trim or reorder content.
 - If AGENTS.md exceeds one page, cut to essentials and move detail into references.
 - If two rules conflict, keep the more stable and delete the more brittle one.
 - If a rule depends on file layout, replace it with a capability-level description.
-- Treat AGENTS.md as an active hazard register; delete entries once fixed.
+- **Hazard register lifecycle:** When an agent trips on something, add a line. Then investigate the root cause — is the code confusing, the structure unclear, the linter missing a rule? Fix the underlying problem. Once fixed, delete the line. The file should shrink as the codebase improves.
+- **Temporal decay:** AGENTS.md should shrink over time, not grow. Instructions that were essential months ago may be redundant now as models improve at codebase navigation. Audit for lines that no longer earn their place.
 
 ## Output Expectations
 
