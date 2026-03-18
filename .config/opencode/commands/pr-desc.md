@@ -5,7 +5,7 @@ model: anthropic/claude-haiku-4-5
 
 Write a PR description in English. Output markdown only.
 
-Use the Branch, Base, and Commits context provided below.
+Use the auto-generated git context below.
 
 **Output format:**
 
@@ -38,6 +38,8 @@ Use one of these title types: feat, fix, refactor, chore, docs, test
 - Start each bullet with a plain verb: add, remove, change, fix, update
 - No adjectives, no adverbs, no filler, no paragraphs
 - No first person, no "this PR"
+- Ignore merge commits in the Commits context
+- Ignore changes that appear only because of merges
 - Describe what changed in the code
 - Ignore formatting, whitespace, and import reordering
 - Do not repeat Summary content in Changes
@@ -49,14 +51,71 @@ Use one of these title types: feat, fix, refactor, chore, docs, test
 fix: handle base branch comparison for ai-pr
 
 ## Summary
+
 Use upstream comparison when generating PR descriptions from master.
 
 ## Changes
+
 - Detect upstream branch for main and master
 - Compare diffs against upstream instead of local branch
 - Keep failure message for missing upstream
 
 **Strict output:** Output ONLY the PR content. First character must be the PR title. No preface, no "Here is", no "Intent:", no extra headings.
 
-CONTEXT AND DIFF (may be truncated for large PRs — focus on branch, base, commits, and diff):
+AUTO-GENERATED GIT CONTEXT:
+!`sh -c '
+branch=$(git rev-parse --abbrev-ref HEAD)
+base=""
+
+if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
+  base=$(git rev-parse --abbrev-ref --symbolic-full-name "@{upstream}" 2>/dev/null || true)
+fi
+
+if [ -z "$base" ]; then
+  for ref in origin/main origin/master main master; do
+    if git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null; then
+      base=$ref
+      break
+    fi
+  done
+fi
+
+echo "Branch: $branch"
+
+if [ -z "$base" ]; then
+  echo "Base: (not found)"
+  echo "Commits:"
+  echo "(failed to determine base branch)"
+  echo
+  echo "DIFF:"
+  git diff --ignore-all-space -- ':!*-lock.*' ':!*.lock'
+  exit 0
+fi
+
+merge_base=$(git merge-base HEAD "$base" 2>/dev/null || true)
+
+echo "Base: $base"
+echo "Commits:"
+
+if [ -z "$merge_base" ]; then
+  echo "(failed to determine merge base)"
+  echo
+  echo "DIFF:"
+  git diff --ignore-all-space -- ':!*-lock.*' ':!*.lock'
+  exit 0
+fi
+
+commits=$(git log --no-merges --pretty=format:"- %s" "$merge_base..HEAD")
+if [ -n "$commits" ]; then
+  printf "%s\n" "$commits"
+else
+  echo "(none)"
+fi
+
+echo
+echo "DIFF:"
+git diff --ignore-all-space "$merge_base..HEAD" -- ':!*-lock.*' ':!*.lock'
+'`
+
+ADDITIONAL CONTEXT (optional):
 $ARGUMENTS
