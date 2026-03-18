@@ -31,7 +31,7 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
     end
 
     set -l profiles_tmp (mktemp)
-    sed -E 's@[[:space:]]*//.*$@@' "$profiles_file" >"$profiles_tmp"
+    sed -E 's@[[:space:]]*//[^"]*$@@' "$profiles_file" >"$profiles_tmp"
 
     jq -e '.profiles | type == "object"' "$profiles_tmp" >/dev/null 2>&1
     if test $status -ne 0
@@ -43,7 +43,7 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
     set -l opencode_parse_file "$opencode_file"
     if string match -q '*.jsonc' "$opencode_file"
         set opencode_parse_file (mktemp)
-        sed -E 's@[[:space:]]*//.*$@@' "$opencode_file" >"$opencode_parse_file"
+        sed -E 's@[[:space:]]*//[^"]*$@@' "$opencode_file" >"$opencode_parse_file"
     end
 
     jq -e '.' "$opencode_parse_file" >/dev/null 2>&1

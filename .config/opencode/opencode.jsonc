@@ -9,7 +9,7 @@
     "opencode-wakatime",
     "opencode-handoff",
     "opencode-snippets",
-    "opencode-toon-plugin",
+    "opencode-toon-plugin@latest",
     "./plugins/rtk.ts"
   ],
   "instructions": [
