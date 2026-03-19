@@ -1,7 +1,24 @@
+local highlighter_filetypes = {
+	"css",
+	"scss",
+	"less",
+	"sass",
+	"html",
+	"typescriptreact",
+	"javascriptreact",
+	"markdown",
+	"lua",
+	"ron",
+	"xml",
+}
+
 return {
 	{
+
+		-- dir = "~/Projects/ccc.nvim",
+		-- "fbosch/ccc.nvim",
 		"uga-rosa/ccc.nvim",
-		ft = { "css", "scss", "less", "sass", "html", "typescriptreact", "javascriptreact" },
+		ft = highlighter_filetypes,
 		cmd = { "CccPick", "CccHighlighterToggle", "CccConvert" },
 		keys = {
 			{
@@ -14,12 +31,12 @@ return {
 		},
 		opts = {
 			highlight_mode = "virtual",
-			virtual_symbol = " ",
+			virtual_symbol = " ",
 			virtual_pos = "inline-left",
 			highlighter = {
 				auto_enable = true,
 				lsp = true,
-				filetypes = { "css", "typescriptreact", "javascriptreact", "html", "lua", "ron", "xml" },
+				filetypes = highlighter_filetypes,
 				update_insert = false,
 			},
 		},
@@ -40,6 +57,10 @@ return {
 						end
 					end
 				end
+			end
+
+			if opts.highlighter and opts.highlighter.auto_enable then
+				require("ccc.highlighter"):enable(0)
 			end
 		end,
 	},
