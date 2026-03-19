@@ -21,30 +21,28 @@ function first_login_of_the_day
         return
     end
 
+    set -l time ""
+
     # Check disk cache first (fast - just file read)
     if test -f "$cache_file" && read -l cached_time <"$cache_file" && test -n "$cached_time"
-        # Cache in memory for future calls in this session
-        set -g __first_login_cache_date "$current_date"
-        set -g __first_login_cache_time "$cached_time"
-        wezterm_set_user_var first_login "$cached_time"
-        if test $silent -eq 0
-            echo "$cached_time"
-        end
-        return
+        set time "$cached_time"
     end
 
-    # Fast path: Dock start time (typically starts with GUI login)
-    set -l time ""
-    set -l dock_pid (pgrep -u (id -u) -x Dock | head -n1)
-    if test -n "$dock_pid"
-        set -l lstart_output (ps -p $dock_pid -o lstart= 2>/dev/null)
-        set time (string match -r '\d{2}:\d{2}:\d{2}' "$lstart_output")
+    # Prefer the earliest loginwindow transition to the desktop for today.
+    # This survives Dock restarts, which can otherwise skew the inferred start time.
+    set -l login_item (/usr/bin/log show --style compact --start "$current_date_iso 00:00:00" --predicate 'process == "loginwindow"' 2>/dev/null | grep 'systemSetSessionState success, new state: Desktop showing' | head -n1)
+    set -l loginwindow_time (string match -r '\d{2}:\d{2}:\d{2}' "$login_item")
+    if test -n "$loginwindow_time"
+        set time "$loginwindow_time"
     end
 
-    # Fallback: loginwindow logs (slowest but authoritative for real logins)
+    # Fallback: Dock start time (typically starts with GUI login)
     if test -z "$time"
-        set -l login_item (log show --start "$current_date_iso 00:00:00" --predicate 'process == "loginwindow"' | grep -i "success" | tail -n1)
-        set time (string match -r '\d{2}:\d{2}:\d{2}\b' "$login_item")
+        set -l dock_pid (pgrep -u (id -u) -x Dock | head -n1)
+        if test -n "$dock_pid"
+            set -l lstart_output (ps -p $dock_pid -o lstart= 2>/dev/null)
+            set time (string match -r '\d{2}:\d{2}:\d{2}' "$lstart_output")
+        end
     end
 
     # Final fallback: first display-on event of the day (approximation only)
