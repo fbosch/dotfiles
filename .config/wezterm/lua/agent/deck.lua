@@ -33,9 +33,9 @@ local allowed_statuses = {
 
 local fallback_icons = {
 	working = nf.fa_circle or "●",
-	waiting = nf.fa_adjust or "◔",
+	waiting = nf.fa_circle_half_stroke or nf.fa_adjust or "◔",
 	idle = nf.fa_circle_o or "○",
-	inactive = nf.cod_circle_outline or "◌",
+	inactive = nf.cod_circle or "◌",
 }
 
 local fallback_colors = {
@@ -237,12 +237,7 @@ function M.apply(config)
 		},
 		icons = {
 			style = "nerd",
-			nerd = {
-				working = nf.fa_circle or "●",
-				waiting = nf.fa_adjust or "◔",
-				idle = nf.fa_circle_o or "○",
-				inactive = nf.cod_circle_outline or "◌",
-			},
+			nerd = fallback_icons,
 		},
 		tab_title = { enabled = false },
 		right_status = { enabled = false },

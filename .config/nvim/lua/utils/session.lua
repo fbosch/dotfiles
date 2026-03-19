@@ -15,12 +15,16 @@ function M.get_path()
 	return root_dir .. M.get_name()
 end
 
-function M.get_opencode_path()
+function M.get_opencode_sidecar_path()
 	return M.get_path() .. ".opencode"
 end
 
+function M.get_opencode_path()
+	return M.get_opencode_sidecar_path()
+end
+
 function M.read_opencode_id()
-	local path = M.get_opencode_path()
+	local path = M.get_opencode_sidecar_path()
 	local stat = vim.uv.fs_stat(path)
 	if not stat or stat.type ~= "file" then
 		return nil
@@ -45,7 +49,17 @@ function M.write_opencode_id(session_id)
 		return false
 	end
 
-	return pcall(vim.fn.writefile, { session_id }, M.get_opencode_path())
+	return pcall(vim.fn.writefile, { session_id }, M.get_opencode_sidecar_path())
+end
+
+function M.clear_opencode_id()
+	local path = M.get_opencode_sidecar_path()
+	local stat = vim.uv.fs_stat(path)
+	if not stat then
+		return true
+	end
+
+	return vim.fn.delete(path) == 0
 end
 
 return M
