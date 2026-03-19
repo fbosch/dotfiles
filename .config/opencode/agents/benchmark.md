@@ -1,7 +1,7 @@
 ---
 description: Runs performance benchmarks, profiles code, and compares before/after results. Use when measuring performance, identifying bottlenecks, or validating optimizations.
 mode: subagent
-color: "#dfd096"
+color: "#f2d066"
 temperature: 0.1
 tools:
   write: false

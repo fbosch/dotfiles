@@ -1,7 +1,7 @@
 ---
 description: Gathers information from docs, web, and codebases without making changes
 mode: all
-color: "#b3a2c7"
+color: "#ae87ed"
 temperature: 0.2
 tools:
   write: false
