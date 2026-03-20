@@ -9,6 +9,7 @@
     "opencode-wakatime",
     "opencode-handoff",
     "opencode-snippets",
+    "opencode-claude-auth",
     "opencode-toon-plugin@latest",
     "./plugins/rtk.ts"
   ],
