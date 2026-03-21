@@ -7,6 +7,19 @@ local sync_request_id = 0
 local restore_request_id = 0
 local default_sync_delays = { 500, 2000 }
 local default_restore_delays = { 100, 400, 1200, 2500 }
+local last_restore_state = {
+	status = "idle",
+	detail = "not started",
+	at = nil,
+}
+
+local function set_last_restore_state(status, detail)
+	last_restore_state = {
+		status = status,
+		detail = detail,
+		at = os.time(),
+	}
+end
 
 local function is_empty(value)
 	return value == nil or value == vim.NIL or value == ""
@@ -187,6 +200,10 @@ function M.get_current_session_id()
 	return current_session_id
 end
 
+function M.get_last_restore_state()
+	return vim.deepcopy(last_restore_state)
+end
+
 function M.set_current_session_id(session_id)
 	if type(session_id) ~= "string" or session_id == "" then
 		return false
@@ -219,52 +236,67 @@ function M.select_session_on_connected_server(session_id)
 	end
 
 	if type(target_session_id) ~= "string" or target_session_id == "" then
+		set_last_restore_state("skipped", "no session id")
 		return false
 	end
 
 	local ok_events, opencode_events = pcall(require, "opencode.events")
 	if not ok_events then
+		set_last_restore_state("skipped", "events unavailable")
 		return false
 	end
 
 	local server = opencode_events.connected_server
 	if type(server) ~= "table" or type(server.port) ~= "number" then
+		set_last_restore_state("skipped", "no connected server")
 		return false
 	end
 
 	local ok_client, opencode_client = pcall(require, "opencode.cli.client")
 	if not ok_client or type(opencode_client.select_session) ~= "function" then
+		set_last_restore_state("skipped", "client unavailable")
 		return false
 	end
 
 	opencode_client.select_session(server.port, target_session_id)
+	set_last_restore_state("selected", "session " .. target_session_id)
 	return true
 end
 
 function M.connect_server_noninteractive()
 	local ok_events, opencode_events = pcall(require, "opencode.events")
 	if not ok_events then
+		set_last_restore_state("skipped", "events unavailable")
 		return false
 	end
 
 	if type(opencode_events.connected_server) == "table" then
+		set_last_restore_state("connected", "server already connected")
 		return true
 	end
 
 	local ok_server, opencode_server = pcall(require, "opencode.cli.server")
 	if not ok_server or type(opencode_server.get_all) ~= "function" then
+		set_last_restore_state("skipped", "server discovery unavailable")
 		return false
 	end
 
+	set_last_restore_state("connecting", "discovering servers")
 	opencode_server
 		.get_all()
 		:next(function(servers)
 			local server = pick_server_for_cwd(servers, vim.fn.getcwd())
 			if server then
 				opencode_events.connect(server)
+				set_last_restore_state("connecting", "connecting to port " .. tostring(server.port))
+				return
 			end
+
+			set_last_restore_state("skipped", "no non-interactive server match")
 		end)
-		:catch(function() end)
+		:catch(function()
+			set_last_restore_state("skipped", "server discovery failed")
+		end)
 
 	return true
 end
@@ -274,6 +306,7 @@ function M.request_restore_on_connected_server(opts)
 	local delays = opts.delays or default_restore_delays
 	restore_request_id = restore_request_id + 1
 	local request_id = restore_request_id
+	set_last_restore_state("scheduled", "restore retries enqueued")
 
 	for _, delay in ipairs(delays) do
 		vim.defer_fn(function()
@@ -292,13 +325,17 @@ end
 function M.select_and_persist()
 	local ok_select, select_session = pcall(require, "opencode.ui.select_session")
 	if not ok_select or type(select_session.select_session) ~= "function" then
+		set_last_restore_state("skipped", "session picker unavailable")
 		return false
 	end
+
+	set_last_restore_state("selecting", "awaiting session selection")
 
 	return select_session
 		.select_session()
 		:next(function(result)
 			if type(result) ~= "table" then
+				set_last_restore_state("skipped", "no selection result")
 				return
 			end
 
@@ -309,12 +346,14 @@ function M.select_and_persist()
 				or type(selected_session.id) ~= "string"
 				or selected_session.id == ""
 			then
+				set_last_restore_state("skipped", "invalid selected session")
 				return
 			end
 
 			sync_request_id = sync_request_id + 1
 			restore_request_id = restore_request_id + 1
 			M.set_current_session_id(selected_session.id)
+			set_last_restore_state("selected", "session " .. selected_session.id)
 
 			local ok_client, opencode_client = pcall(require, "opencode.cli.client")
 			if
@@ -322,15 +361,21 @@ function M.select_and_persist()
 				or type(opencode_client.select_session) ~= "function"
 				or type(selected_port) ~= "number"
 			then
+				set_last_restore_state("selected", "persisted only (client unavailable)")
 				return
 			end
 
 			opencode_client.select_session(selected_port, selected_session.id)
+			set_last_restore_state("selected", "persisted and selected on port " .. tostring(selected_port))
 		end)
 		:catch(function(err)
 			if err then
+				set_last_restore_state("error", tostring(err))
 				vim.notify(err, vim.log.levels.ERROR, { title = "opencode" })
+				return
 			end
+
+			set_last_restore_state("cancelled", "selection cancelled")
 		end)
 end
 

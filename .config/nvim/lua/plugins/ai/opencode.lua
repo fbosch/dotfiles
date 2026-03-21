@@ -164,9 +164,15 @@ return {
 				local connected_server = require("opencode.events").connected_server
 				local status = require("opencode.status").status
 				local current_session_id = opencode_session.get_current_session_id()
+				local restore_state = opencode_session.get_last_restore_state()
 				local sidecar_path = session.get_opencode_sidecar_path()
 				local sidecar_stat = vim.uv.fs_stat(sidecar_path)
 				local terminal_bufnr = nil
+				local restore_at = "never"
+
+				if type(restore_state) == "table" and type(restore_state.at) == "number" then
+					restore_at = os.date("%Y-%m-%d %H:%M:%S", restore_state.at)
+				end
 
 				for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
 					if is_opencode_terminal(bufnr) then
@@ -190,6 +196,12 @@ return {
 					),
 					string.format("Status: %s", status or "unknown"),
 					string.format("Session ID: %s", current_session_id or "<none>"),
+					string.format(
+						"Restore: %s (%s)",
+						type(restore_state) == "table" and restore_state.status or "unknown",
+						type(restore_state) == "table" and restore_state.detail or "no details"
+					),
+					string.format("Restore at: %s", restore_at),
 					string.format("Sidecar: %s", sidecar_path),
 					string.format("Sidecar exists: %s", sidecar_stat and "yes" or "no"),
 					string.format("Terminal: %s", terminal_bufnr and ("alive (buf " .. terminal_bufnr .. ")") or "not found"),
