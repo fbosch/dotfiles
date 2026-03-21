@@ -226,6 +226,23 @@ load_rules_cache() {
     done < "$RULES_FILE"
 }
 
+# Remove cached rules whose matcher+pattern no longer exists in config
+prune_stale_rules_cache() {
+    local -A valid_keys=()
+
+    for entry in "${MATCHER_PATTERNS[@]}"; do
+        local matcher="${entry%%|*}"
+        local pattern="${entry#*|}"
+        valid_keys["$matcher $pattern"]=1
+    done
+
+    for key in "${!RULES_CACHE[@]}"; do
+        if [[ -z "${valid_keys[$key]}" ]]; then
+            unset 'RULES_CACHE[$key]'
+        fi
+    done
+}
+
 # Update or add rules for specific window classes (preserves existing rules)
 update_rules() {
     local windows="$1"
@@ -236,6 +253,8 @@ update_rules() {
     if ((${#RULES_CACHE[@]} == 0)); then
         load_rules_cache
     fi
+
+    prune_stale_rules_cache
     
     # Update rules for currently open windows
     while IFS='|' read -r class matcher pattern monitor x y width height; do

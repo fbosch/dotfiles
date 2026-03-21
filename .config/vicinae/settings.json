@@ -95,7 +95,7 @@
                "enabled": false
             },
             "io.github.Foldex.AdwSteamGtk": {
-               "enabled": false
+               "enabled": true
             },
             "mullvad-vpn": {
                "enabled": false
