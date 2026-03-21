@@ -1,7 +1,7 @@
 worktree-path = "../{{ branch }}"
 
 [pre-switch]
-pull-latest = ".config/worktrunk/hooks/pull-latest.sh"
+pull-latest = "$HOME/.config/worktrunk/hooks/pull-latest.sh"
 
 [post-create]
 recent-worktree = "printf '%s\n' {{ worktree_path }} >> /tmp/.recent-worktrees"
