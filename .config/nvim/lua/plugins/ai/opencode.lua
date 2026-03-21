@@ -28,6 +28,7 @@ return {
 		config = function()
 			local opencode_session = require("utils.opencode_session")
 			local session = require("utils.session")
+			local opencode_terminal_var = "is_opencode_terminal"
 
 			local function is_empty(value)
 				return value == nil or value == vim.NIL or value == ""
@@ -92,12 +93,20 @@ return {
 			end
 
 			local function is_opencode_terminal(buf)
+				if vim.b[buf][opencode_terminal_var] == true then
+					return true
+				end
+
 				if vim.bo[buf].buftype ~= "terminal" then
 					return false
 				end
 
 				local name = vim.api.nvim_buf_get_name(buf)
 				return name:find("term://", 1, true) ~= nil and name:find("opencode --port", 1, true) ~= nil
+			end
+
+			local function mark_opencode_terminal(buf)
+				vim.b[buf][opencode_terminal_var] = true
 			end
 
 			local function set_opencode_terminal_keymaps(buf)
@@ -195,6 +204,9 @@ return {
 				pattern = { "opencode", "opencode_terminal" },
 				callback = function(args)
 					vim.bo[args.buf].buflisted = false
+					if args.match == "opencode_terminal" then
+						mark_opencode_terminal(args.buf)
+					end
 				end,
 			})
 
@@ -202,8 +214,11 @@ return {
 				pattern = "*",
 				callback = function(args)
 					if is_opencode_terminal(args.buf) then
+						mark_opencode_terminal(args.buf)
 						vim.bo[args.buf].buflisted = false
 						set_opencode_terminal_keymaps(args.buf)
+						opencode_session.restore_saved_session_id()
+						opencode_session.request_restore_on_connected_server()
 						pcall(vim.cmd, "startinsert")
 					end
 				end,
@@ -221,6 +236,8 @@ return {
 			vim.api.nvim_create_autocmd("User", {
 				pattern = "OpencodeEvent:server.connected",
 				callback = function()
+					opencode_session.restore_saved_session_id()
+					opencode_session.select_session_on_connected_server()
 					opencode_session.request_sync({ delays = { 200, 1000 } })
 				end,
 			})
