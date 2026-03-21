@@ -11,7 +11,7 @@ ags request -i ags-bundled confirm-dialog '{
     "message": "This will end your Wayland session",
     "confirmLabel": "Exit",
     "cancelLabel": "Cancel",
-    "confirmCommand": "uwsm stop",
+    "confirmCommand": "/run/current-system/sw/bin/uwsm stop",
     "variant": "danger",
     "audioFile": "/home/fbb/.config/hypr/assets/warn.ogg",
     "showDelay": 180

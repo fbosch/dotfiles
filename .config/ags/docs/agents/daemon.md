@@ -26,7 +26,7 @@ Features:
 Usage:
 
 ```bash
-exec-once = uwsm app -- ~/.config/ags/start-daemons.sh
+exec-once = uwsm-app -- ~/.config/ags/start-daemons.sh
 ~/.config/ags/start-daemons.sh
 cat /tmp/ags-daemons.log
 ags list
@@ -49,7 +49,7 @@ Component side (TypeScript in `lib/` files):
 globalThis.myComponent = {
   show: () => myWindow.show(),
   hide: () => myWindow.hide(),
-  toggle: () => myWindow.visible ? myWindow.hide() : myWindow.show(),
+  toggle: () => (myWindow.visible ? myWindow.hide() : myWindow.show()),
 };
 
 const myWindow = (
