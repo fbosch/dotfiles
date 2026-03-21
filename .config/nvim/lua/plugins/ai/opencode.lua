@@ -27,6 +27,69 @@ return {
 		end,
 		config = function()
 			local opencode_session = require("utils.opencode_session")
+			local session = require("utils.session")
+
+			local function is_empty(value)
+				return value == nil or value == vim.NIL or value == ""
+			end
+
+			local function paths_overlap(path_a, path_b)
+				if type(path_a) ~= "string" or path_a == "" then
+					return false
+				end
+
+				if type(path_b) ~= "string" or path_b == "" then
+					return false
+				end
+
+				local normalized_a = vim.fs.normalize(path_a)
+				local normalized_b = vim.fs.normalize(path_b)
+				return normalized_a:find(normalized_b, 1, true) == 1 or normalized_b:find(normalized_a, 1, true) == 1
+			end
+
+			local function is_root_session(info)
+				return is_empty(info.parentID) and is_empty(info.parentId) and is_empty(info.parent_id)
+			end
+
+			local function sync_session_from_event(args)
+				local event = args.data and args.data.event
+				if type(event) ~= "table" then
+					return
+				end
+
+				local properties = event.properties
+				if type(properties) ~= "table" then
+					return
+				end
+
+				if event.type == "session.status" then
+					local status = properties.status
+					if type(status) ~= "table" or status.type ~= "idle" then
+						return
+					end
+				end
+
+				if event.type == "session.created" then
+					local info = properties.info
+					if type(info) ~= "table" or is_root_session(info) == false then
+						return
+					end
+
+					local cwd = vim.fn.getcwd()
+					local directory = info.directory or info.worktree
+					if paths_overlap(directory, cwd) == false then
+						return
+					end
+				end
+
+				local session_id = properties.sessionID
+				if type(session_id) ~= "string" or session_id == "" then
+					local info = properties.info
+					session_id = type(info) == "table" and info.id or nil
+				end
+
+				opencode_session.sync_from_event(session_id)
+			end
 
 			local function is_opencode_terminal(buf)
 				if vim.bo[buf].buftype ~= "terminal" then
@@ -83,12 +146,48 @@ return {
 
 			local function send_opencode(method, prompt, opts)
 				require("opencode")[method](prompt, opts)
-				if opts and opts.submit then
-					opencode_session.request_sync()
-				end
 				if not (opts and opts.submit) then
 					focus_opencode_window()
 				end
+			end
+
+			local function show_opencode_health()
+				local connected_server = require("opencode.events").connected_server
+				local status = require("opencode.status").status
+				local current_session_id = opencode_session.get_current_session_id()
+				local sidecar_path = session.get_opencode_sidecar_path()
+				local sidecar_stat = vim.uv.fs_stat(sidecar_path)
+				local terminal_bufnr = nil
+
+				for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+					if is_opencode_terminal(bufnr) then
+						terminal_bufnr = bufnr
+						break
+					end
+				end
+
+				local lines = {
+					"opencode health",
+					"--------------",
+					string.format(
+						"Server: %s",
+						type(connected_server) == "table"
+								and string.format(
+									"connected (port %s, cwd %s)",
+									tostring(connected_server.port),
+									tostring(connected_server.cwd)
+								)
+								or "disconnected"
+					),
+					string.format("Status: %s", status or "unknown"),
+					string.format("Session ID: %s", current_session_id or "<none>"),
+					string.format("Sidecar: %s", sidecar_path),
+					string.format("Sidecar exists: %s", sidecar_stat and "yes" or "no"),
+					string.format("Terminal: %s", terminal_bufnr and ("alive (buf " .. terminal_bufnr .. ")") or "not found"),
+					string.format("Nvim CWD: %s", vim.fn.getcwd()),
+				}
+
+				vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "OpencodeHealth" })
 			end
 
 			-- Keep opencode UI buffers out of bufferline
@@ -106,8 +205,24 @@ return {
 						vim.bo[args.buf].buflisted = false
 						set_opencode_terminal_keymaps(args.buf)
 						pcall(vim.cmd, "startinsert")
-						opencode_session.request_sync({ delays = { 500, 1500, 3000 } })
+						opencode_session.request_sync()
 					end
+				end,
+			})
+
+			vim.api.nvim_create_autocmd("User", {
+				pattern = {
+					"OpencodeEvent:session.idle",
+					"OpencodeEvent:session.status",
+					"OpencodeEvent:session.created",
+				},
+				callback = sync_session_from_event,
+			})
+
+			vim.api.nvim_create_autocmd("User", {
+				pattern = "OpencodeEvent:server.connected",
+				callback = function()
+					opencode_session.request_sync({ delays = { 200, 1000 } })
 				end,
 			})
 
@@ -129,6 +244,10 @@ return {
 						opencode_session.restore_saved_session_id()
 					end
 				end,
+			})
+
+			vim.api.nvim_create_user_command("OpencodeHealth", show_opencode_health, {
+				desc = "Show opencode integration health",
 			})
 
 			-- Core keymaps

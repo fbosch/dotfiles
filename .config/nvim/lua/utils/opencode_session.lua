@@ -4,7 +4,7 @@ local M = {}
 
 local current_session_id = session.read_opencode_id()
 local sync_request_id = 0
-local default_sync_delays = { 100, 400, 1000, 2500 }
+local default_sync_delays = { 500, 2000 }
 
 local function is_empty(value)
 	return value == nil or value == vim.NIL or value == ""
@@ -148,6 +148,14 @@ function M.set_current_session_id(session_id)
 	end
 
 	return ok
+end
+
+function M.sync_from_event(session_id)
+	if type(session_id) ~= "string" or session_id == "" then
+		return false
+	end
+
+	return M.set_current_session_id(session_id)
 end
 
 function M.clear_current_session_id()
