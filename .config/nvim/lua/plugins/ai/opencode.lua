@@ -205,7 +205,6 @@ return {
 						vim.bo[args.buf].buflisted = false
 						set_opencode_terminal_keymaps(args.buf)
 						pcall(vim.cmd, "startinsert")
-						opencode_session.request_sync()
 					end
 				end,
 			})

@@ -87,50 +87,42 @@ local function select_session_id(sessions)
 end
 
 local function sync_from_server(request_id)
-	local ok, opencode_server = pcall(require, "opencode.cli.server")
-	if not ok then
-		ok, opencode_server = pcall(require, "opencode.server")
-	end
-
-	if not ok then
+	local ok_events, opencode_events = pcall(require, "opencode.events")
+	if not ok_events then
 		return
 	end
 
-	opencode_server
-		.get(false)
-		:next(function(server)
-			if type(server) ~= "table" then
-				return
-			end
+	local server = opencode_events.connected_server
+	if type(server) ~= "table" then
+		return
+	end
 
-			local function on_sessions(sessions)
-				if type(sessions) ~= "table" then
-					return
-				end
+	local function on_sessions(sessions)
+		if type(sessions) ~= "table" then
+			return
+		end
 
-				if request_id ~= sync_request_id then
-					return
-				end
+		if request_id ~= sync_request_id then
+			return
+		end
 
-				local session_id = select_session_id(sessions)
-				if session_id then
-					M.set_current_session_id(session_id)
-				end
-			end
+		local session_id = select_session_id(sessions)
+		if session_id then
+			M.set_current_session_id(session_id)
+		end
+	end
 
-			if type(server.get_sessions) == "function" then
-				server:get_sessions(on_sessions)
-				return
-			end
+	if type(server.get_sessions) == "function" then
+		server:get_sessions(on_sessions)
+		return
+	end
 
-			local ok_client, opencode_client = pcall(require, "opencode.cli.client")
-			if not ok_client or type(opencode_client.get_sessions) ~= "function" or type(server.port) ~= "number" then
-				return
-			end
+	local ok_client, opencode_client = pcall(require, "opencode.cli.client")
+	if not ok_client or type(opencode_client.get_sessions) ~= "function" or type(server.port) ~= "number" then
+		return
+	end
 
-			opencode_client.get_sessions(server.port, on_sessions)
-		end)
-		:catch(function() end)
+	opencode_client.get_sessions(server.port, on_sessions)
 end
 
 function M.get_current_session_id()
