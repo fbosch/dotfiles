@@ -107,6 +107,39 @@ local function pick_server_for_cwd(servers, cwd)
 	return best_server
 end
 
+local function sessions_include_id(sessions, session_id)
+	if type(session_id) ~= "string" or session_id == "" then
+		return false
+	end
+
+	for _, item in ipairs(sessions) do
+		if type(item) == "table" and item.id == session_id then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function get_server_sessions(server, on_sessions)
+	if type(on_sessions) ~= "function" then
+		return false
+	end
+
+	if type(server.get_sessions) == "function" then
+		server:get_sessions(on_sessions)
+		return true
+	end
+
+	local ok_client, opencode_client = pcall(require, "opencode.cli.client")
+	if not ok_client or type(opencode_client.get_sessions) ~= "function" or type(server.port) ~= "number" then
+		return false
+	end
+
+	opencode_client.get_sessions(server.port, on_sessions)
+	return true
+end
+
 local function is_root_session(item)
 	return is_empty(item.parentID) and is_empty(item.parentId) and is_empty(item.parent_id)
 end
@@ -258,8 +291,40 @@ function M.select_session_on_connected_server(session_id)
 		return false
 	end
 
-	opencode_client.select_session(server.port, target_session_id)
-	set_last_restore_state("selected", "session " .. target_session_id)
+	local ok_sessions = get_server_sessions(server, function(sessions)
+		if type(sessions) ~= "table" then
+			set_last_restore_state("skipped", "session list unavailable")
+			return
+		end
+
+		local selected_session_id = target_session_id
+		if sessions_include_id(sessions, target_session_id) == false then
+			selected_session_id = select_session_id(sessions)
+			if type(selected_session_id) ~= "string" or selected_session_id == "" then
+				set_last_restore_state("skipped", "saved session stale; no fallback")
+				return
+			end
+
+			M.set_current_session_id(selected_session_id)
+			set_last_restore_state("recovered", "stale session replaced with " .. selected_session_id)
+		else
+			M.set_current_session_id(selected_session_id)
+		end
+
+		opencode_client.select_session(server.port, selected_session_id)
+		if sessions_include_id(sessions, target_session_id) then
+			set_last_restore_state("selected", "session " .. selected_session_id)
+		else
+			set_last_restore_state("recovered", "selected fallback on port " .. tostring(server.port))
+		end
+	end)
+
+	if ok_sessions == false then
+		set_last_restore_state("skipped", "session listing unavailable")
+		return false
+	end
+
+	set_last_restore_state("restoring", "validating session " .. target_session_id)
 	return true
 end
 
