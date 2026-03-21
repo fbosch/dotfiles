@@ -275,6 +275,10 @@ return {
 				require("opencode").select()
 			end, { desc = "opencode actions" })
 
+			vim.keymap.set("n", "<leader>aS", function()
+				opencode_session.select_and_persist()
+			end, { desc = "Select opencode session" })
+
 			vim.keymap.set({ "n", "x" }, "ga", function()
 				send_opencode("prompt", "@this")
 			end, { desc = "Add to opencode" })

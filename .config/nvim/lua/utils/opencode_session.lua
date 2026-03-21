@@ -4,6 +4,7 @@ local M = {}
 
 local current_session_id = session.read_opencode_id()
 local sync_request_id = 0
+local restore_request_id = 0
 local default_sync_delays = { 500, 2000 }
 local default_restore_delays = { 100, 400, 1200, 2500 }
 
@@ -271,15 +272,66 @@ end
 function M.request_restore_on_connected_server(opts)
 	opts = opts or {}
 	local delays = opts.delays or default_restore_delays
+	restore_request_id = restore_request_id + 1
+	local request_id = restore_request_id
 
 	for _, delay in ipairs(delays) do
 		vim.defer_fn(function()
+			if request_id ~= restore_request_id then
+				return
+			end
+
 			M.connect_server_noninteractive()
 			M.select_session_on_connected_server()
 		end, delay)
 	end
 
 	return true
+end
+
+function M.select_and_persist()
+	local ok_select, select_session = pcall(require, "opencode.ui.select_session")
+	if not ok_select or type(select_session.select_session) ~= "function" then
+		return false
+	end
+
+	return select_session
+		.select_session()
+		:next(function(result)
+			if type(result) ~= "table" then
+				return
+			end
+
+			local selected_session = result.session
+			local selected_port = result.port
+			if
+				type(selected_session) ~= "table"
+				or type(selected_session.id) ~= "string"
+				or selected_session.id == ""
+			then
+				return
+			end
+
+			sync_request_id = sync_request_id + 1
+			restore_request_id = restore_request_id + 1
+			M.set_current_session_id(selected_session.id)
+
+			local ok_client, opencode_client = pcall(require, "opencode.cli.client")
+			if
+				not ok_client
+				or type(opencode_client.select_session) ~= "function"
+				or type(selected_port) ~= "number"
+			then
+				return
+			end
+
+			opencode_client.select_session(selected_port, selected_session.id)
+		end)
+		:catch(function(err)
+			if err then
+				vim.notify(err, vim.log.levels.ERROR, { title = "opencode" })
+			end
+		end)
 end
 
 function M.clear_current_session_id()
