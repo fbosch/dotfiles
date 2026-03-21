@@ -48,17 +48,36 @@ local function select_session_id(sessions)
 	local cwd = vim.fn.getcwd()
 	local candidates = {}
 	local root_candidates = {}
+	local all_candidates = {}
+	local all_root_candidates = {}
 
 	for _, item in ipairs(sessions) do
-		if type(item) == "table" and type(item.id) == "string" and item.id ~= "" and session_matches_cwd(item, cwd) then
-			table.insert(candidates, item)
+		if type(item) == "table" and type(item.id) == "string" and item.id ~= "" then
+			table.insert(all_candidates, item)
 			if is_root_session(item) then
-				table.insert(root_candidates, item)
+				table.insert(all_root_candidates, item)
+			end
+
+			if session_matches_cwd(item, cwd) then
+				table.insert(candidates, item)
+				if is_root_session(item) then
+					table.insert(root_candidates, item)
+				end
 			end
 		end
 	end
 
-	local matches = #root_candidates > 0 and root_candidates or candidates
+	local matches = root_candidates
+	if vim.tbl_isempty(matches) then
+		matches = candidates
+	end
+	if vim.tbl_isempty(matches) then
+		matches = all_root_candidates
+	end
+	if vim.tbl_isempty(matches) then
+		matches = all_candidates
+	end
+
 	if vim.tbl_isempty(matches) then
 		return nil
 	end
@@ -68,7 +87,11 @@ local function select_session_id(sessions)
 end
 
 local function sync_from_server(request_id)
-	local ok, opencode_server = pcall(require, "opencode.server")
+	local ok, opencode_server = pcall(require, "opencode.cli.server")
+	if not ok then
+		ok, opencode_server = pcall(require, "opencode.server")
+	end
+
 	if not ok then
 		return
 	end
@@ -76,7 +99,15 @@ local function sync_from_server(request_id)
 	opencode_server
 		.get(false)
 		:next(function(server)
-			server:get_sessions(function(sessions)
+			if type(server) ~= "table" then
+				return
+			end
+
+			local function on_sessions(sessions)
+				if type(sessions) ~= "table" then
+					return
+				end
+
 				if request_id ~= sync_request_id then
 					return
 				end
@@ -85,7 +116,19 @@ local function sync_from_server(request_id)
 				if session_id then
 					M.set_current_session_id(session_id)
 				end
-			end)
+			end
+
+			if type(server.get_sessions) == "function" then
+				server:get_sessions(on_sessions)
+				return
+			end
+
+			local ok_client, opencode_client = pcall(require, "opencode.cli.client")
+			if not ok_client or type(opencode_client.get_sessions) ~= "function" or type(server.port) ~= "number" then
+				return
+			end
+
+			opencode_client.get_sessions(server.port, on_sessions)
 		end)
 		:catch(function() end)
 end
