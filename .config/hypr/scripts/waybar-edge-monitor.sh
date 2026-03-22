@@ -21,6 +21,7 @@ HYPR_QUERY_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.so
 declare -A MONITOR_CACHE
 monitor_cache_time=0
 readonly CACHE_REFRESH_S=5  # Refresh monitor cache every 5 seconds
+last_monitor_name=""
 
 # Sets global DISTANCE_FROM_BOTTOM to pixels from bottom of current monitor.
 # Returns 1 (and sets DISTANCE_FROM_BOTTOM=-1) if monitor cannot be determined.
@@ -40,9 +41,21 @@ update_distance_from_bottom() {
         monitor_cache_time=$EPOCHSECONDS
     fi
 
+    if [[ -n "$last_monitor_name" && -n "${MONITOR_CACHE[$last_monitor_name]:-}" ]]; then
+        local last_x last_y last_width last_height
+        IFS='|' read -r last_x last_y last_width last_height <<< "${MONITOR_CACHE[$last_monitor_name]}"
+
+        if (( cursor_x >= last_x && cursor_x < last_x + last_width &&
+              cursor_y >= last_y && cursor_y < last_y + last_height )); then
+            DISTANCE_FROM_BOTTOM=$(( last_height - (cursor_y - last_y) ))
+            return 0
+        fi
+    fi
+
     # Single pass: exact match first, fallback to nearest within margin
     local margin=50
     local best_distance=999999 best_set=0
+    local best_monitor_name=""
     local mon_x mon_y mon_width mon_height
 
     for monitor_name in "${!MONITOR_CACHE[@]}"; do
@@ -51,6 +64,7 @@ update_distance_from_bottom() {
         if (( cursor_x >= mon_x && cursor_x < mon_x + mon_width &&
               cursor_y >= mon_y && cursor_y < mon_y + mon_height )); then
             # Exact match — use immediately
+            last_monitor_name="$monitor_name"
             DISTANCE_FROM_BOTTOM=$(( mon_height - (cursor_y - mon_y) ))
             return 0
         fi
@@ -65,11 +79,13 @@ update_distance_from_bottom() {
             if (( dist < best_distance )); then
                 best_distance=$dist
                 best_set=1
+                best_monitor_name="$monitor_name"
             fi
         fi
     done
 
     if (( best_set )); then
+        last_monitor_name="$best_monitor_name"
         DISTANCE_FROM_BOTTOM=$best_distance
         return 0
     fi
