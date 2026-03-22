@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+class_name="wiremix_terminal"
+terminal="${TERMINAL:-}"
+
+close_existing_window() {
+  if command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    local address
+    address="$(hyprctl clients -j 2>/dev/null | jq -r --arg class "$class_name" 'first(.[] | select(.class == $class) | .address) // empty')"
+
+    if [[ -n "$address" ]]; then
+      hyprctl dispatch closewindow "address:$address" >/dev/null 2>&1 || true
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+resolve_terminal() {
+  if [[ -n "$terminal" ]]; then
+    return
+  fi
+
+  for candidate in foot kitty wezterm alacritty gnome-terminal xterm; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      terminal="$candidate"
+      return
+    fi
+  done
+
+  terminal="xterm"
+}
+
+launch_wiremix() {
+  case "$terminal" in
+    foot)
+      foot --app-id="$class_name" wiremix >/dev/null 2>&1 &
+      ;;
+    kitty)
+      kitty --class "$class_name" -e wiremix >/dev/null 2>&1 &
+      ;;
+    alacritty)
+      alacritty --class "$class_name" -e wiremix >/dev/null 2>&1 &
+      ;;
+    wezterm)
+      WEZTERM_PROFILE=wiremix wezterm start --class "$class_name" -- wiremix >/dev/null 2>&1 &
+      ;;
+    gnome-terminal)
+      gnome-terminal -- wiremix >/dev/null 2>&1 &
+      ;;
+    *)
+      "$terminal" -e wiremix >/dev/null 2>&1 &
+      ;;
+  esac
+}
+
+if close_existing_window; then
+  exit 0
+fi
+
+resolve_terminal
+launch_wiremix

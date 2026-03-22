@@ -75,7 +75,7 @@
       "headphone": "",
       "default": ["",  "", "", "", "", ""]
     },
-    "on-click": "sh -c 'if pgrep -f \"^pavucontrol\" > /dev/null; then pkill -f \"^pavucontrol\"; else pavucontrol & disown; fi'",
+    "on-click": "~/.config/waybar/scripts/wiremix-terminal",
     "on-click-middle": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
     "tooltip": true
   },

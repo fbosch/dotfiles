@@ -10,5 +10,6 @@ require("lua.agent").apply(config)
 require("lua.tabs")(config)
 require("lua.status")(config)
 require("lua.platform")(config)
+require("lua.profiles")(config)
 
 return config
