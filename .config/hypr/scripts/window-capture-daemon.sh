@@ -219,8 +219,10 @@ capture_screenshot() {
     local current_time
     current_time=$(now_ms)
     local elapsed=$((current_time - last_time))
-    
-    if [[ $elapsed -lt $DEBOUNCE_MS ]]; then
+
+    if [[ $elapsed -lt 0 ]]; then
+      rm -f "$LAST_SCREENSHOT_FILE"
+    elif [[ $elapsed -lt $DEBOUNCE_MS ]]; then
       return 0
     fi
   fi
@@ -458,12 +460,15 @@ handle_event() {
     local now
     now=$(now_ms)
     local lock_age=$(( now - lock_ts ))
-    if [[ $lock_age -lt $LOCK_STALE_MS ]]; then
+    if [[ $lock_age -lt 0 ]]; then
+      rm -f "$CAPTURE_LOCK_FILE"
+    elif [[ $lock_age -lt $LOCK_STALE_MS ]]; then
       # Fresh lock, skip this event
       return 0
+    else
+      # Stale lock, remove it and continue
+      rm -f "$CAPTURE_LOCK_FILE"
     fi
-    # Stale lock, remove it and continue
-    rm -f "$CAPTURE_LOCK_FILE"
   fi
 
   # Create lock with current timestamp
