@@ -4,29 +4,55 @@ set -euo pipefail
 
 class_name="wiremix_terminal"
 lock_file="/tmp/wiremix-terminal.lock"
+special_workspace="tool_popups"
 
 exec 9>"$lock_file"
 if command -v flock >/dev/null 2>&1; then
   flock -n 9 || exit 0
 fi
 
-find_existing_window_address() {
+find_existing_window() {
   if command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-    hyprctl clients -j 2>/dev/null | jq -r --arg class "$class_name" 'first(.[] | select(.class == $class) | .address) // empty'
+    hyprctl clients -j 2>/dev/null | jq -r --arg class "$class_name" 'first(.[] | select(.class == $class) | "\(.address)|\(.workspace.name)") // empty'
     return
   fi
 
   printf '%s' ""
 }
 
-launch_wiremix() {
-  WEZTERM_PROFILE=floating_tool wezterm start --always-new-process --class "$class_name" -- wiremix >/dev/null 2>&1 &
+toggle_or_focus_existing_window() {
+  local existing_window address workspace_name active_address active_workspace_name
+  existing_window="$(find_existing_window)"
+
+  if [[ -z "$existing_window" ]]; then
+    return 1
+  fi
+
+  IFS='|' read -r address workspace_name <<< "$existing_window"
+  active_address="$(hyprctl activewindow -j 2>/dev/null | jq -r '.address // empty')"
+
+  if [[ "$active_address" == "$address" ]]; then
+    hyprctl dispatch movetoworkspacesilent "special:${special_workspace},address:${address}" >/dev/null 2>&1 || true
+    return 0
+  fi
+
+  if [[ "$workspace_name" == special:* ]]; then
+    active_workspace_name="$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.name // empty')"
+    if [[ -n "$active_workspace_name" ]]; then
+      hyprctl dispatch movetoworkspacesilent "${active_workspace_name},address:${address}" >/dev/null 2>&1 || true
+    fi
+  fi
+
+  hyprctl dispatch focuswindow "address:${address}" >/dev/null 2>&1 || true
+  return 0
 }
 
-if command -v wiremix >/dev/null 2>&1 && command -v wezterm >/dev/null 2>&1; then
-  address="$(find_existing_window_address)"
-  if [[ -n "$address" ]]; then
-    hyprctl dispatch focuswindow "address:$address" >/dev/null 2>&1 || true
+launch_wiremix() {
+  footclient -a "$class_name" wiremix >/dev/null 2>&1 &
+}
+
+if command -v wiremix >/dev/null 2>&1 && command -v footclient >/dev/null 2>&1; then
+  if toggle_or_focus_existing_window; then
     exit 0
   fi
 
