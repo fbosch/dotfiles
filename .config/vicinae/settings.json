@@ -75,7 +75,7 @@
                "/etc/profiles/per-user/fbb/share/applications",
                "/run/current-system/sw/share/applications"
             ],
-            "defaultAction": "focus"
+            "defaultAction": "launch"
          },
          "entrypoints": {
             "Pokmon Infinite Fusion": {

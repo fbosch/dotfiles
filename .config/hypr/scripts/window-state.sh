@@ -278,6 +278,11 @@ write_rules_cache_file() {
         } >> "$temp_file"
     done
 
+    if [[ -f "$RULES_FILE" ]] && cmp -s "$temp_file" "$RULES_FILE"; then
+        rm -f "$temp_file"
+        return 0
+    fi
+
     if ! mv "$temp_file" "$RULES_FILE"; then
         printf 'ERROR: Failed to update rules file\n' >&2
         rm -f "$temp_file"
