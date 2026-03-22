@@ -13,7 +13,6 @@ Wezterm terminal configuration with modular Lua setup for theming, keybinds, and
 - `lua/keys.lua` - Keyboard keybindings (raw key codes for layout independence)
 - `lua/layout.lua` - Window decorations, padding, and startup behavior
 - `lua/mux.lua` - Multiplexer domain configuration
-- `lua/profiles.lua` - One-off launch profiles selected by `WEZTERM_PROFILE`
 - `lua/platform.lua` - Platform-specific settings
 - `lua/status.lua` - Status bar with date/time, week number, and work hours tracking
 - `lua/tabs.lua` - Tab bar configuration (bottom position, custom formatting)

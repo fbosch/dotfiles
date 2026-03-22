@@ -48,7 +48,11 @@ toggle_or_focus_existing_window() {
 }
 
 launch_wiremix() {
-  footclient -a "$class_name" wiremix >/dev/null 2>&1 &
+  if footclient -N -a "$class_name" wiremix >/dev/null 2>&1; then
+    return
+  fi
+
+  foot -a "$class_name" wiremix >/dev/null 2>&1 &
 }
 
 if command -v wiremix >/dev/null 2>&1 && command -v footclient >/dev/null 2>&1; then

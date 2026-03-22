@@ -20,10 +20,14 @@ find_existing_window_address() {
 }
 
 launch_update_terminal() {
-  WEZTERM_PROFILE=floating_tool wezterm start --always-new-process --class "$class_name" -- fish -c 'flake_update_interactive --rebuild --cache --header --notify' >/dev/null 2>&1 &
+  if footclient -N -a "$class_name" fish -c 'flake_update_interactive --rebuild --cache --header --notify' >/dev/null 2>&1; then
+    return
+  fi
+
+  foot -a "$class_name" fish -c 'flake_update_interactive --rebuild --cache --header --notify' >/dev/null 2>&1 &
 }
 
-if command -v wezterm >/dev/null 2>&1 && command -v fish >/dev/null 2>&1; then
+if command -v footclient >/dev/null 2>&1 && command -v fish >/dev/null 2>&1; then
   address="$(find_existing_window_address)"
   if [[ -n "$address" ]]; then
     hyprctl dispatch focuswindow "address:$address" >/dev/null 2>&1 || true
