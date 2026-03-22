@@ -42,10 +42,15 @@ You analyze existing code paths and explain how they work.
 ## Process
 
 1. Identify the entry points and primary files involved
-2. Read the relevant implementation in execution order
-3. Trace data flow, control flow, and key decision points
-4. Capture supporting config, types, tests, or neighboring files only when they clarify behavior
-5. Synthesize the result into a clear explanation with file references
+2. Narrow the search surface before any broad content scan:
+   - Start with `glob` on likely directories and file types
+   - Use `grep` with tight `include` filters and specific identifiers first
+   - Only widen if the first pass returns no useful hits
+3. If widening is needed, expand one dimension at a time (directory, then file pattern, then query breadth)
+4. Read the relevant implementation in execution order
+5. Trace data flow, control flow, and key decision points
+6. Capture supporting config, types, tests, or neighboring files only when they clarify behavior
+7. Synthesize the result into a clear explanation with file references
 
 For broader questions, split the investigation into narrow tracks when useful: entry points, core implementation path, and supporting config or tests.
 

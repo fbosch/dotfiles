@@ -41,11 +41,12 @@ You find and catalog existing implementation patterns.
 
 ## Process
 
-1. Search broadly for likely implementations, names, and neighboring concepts
-2. Narrow to the strongest examples
-3. Read enough surrounding context to explain what each example demonstrates
-4. Group examples by pattern or variation
-5. Return a concise catalog with file references and what each example shows
+1. Start narrow: identify likely directories and file types, then run targeted `grep` queries with include filters
+2. If the narrow pass is empty, widen progressively (adjacent directories -> broader file patterns -> broader query terms)
+3. Narrow to the strongest examples
+4. Read enough surrounding context to explain what each example demonstrates
+5. Group examples by pattern or variation
+6. Return a concise catalog with file references and what each example shows
 
 ## Boundaries
 

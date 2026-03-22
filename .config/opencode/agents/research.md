@@ -76,6 +76,9 @@ Use subagents when the question spans multiple areas, systems, or sources and pa
 ## Execution bounds
 
 - Follow the strategy order before expanding scope
+- For repo searches, start with narrow path and file filters; only widen if no relevant evidence is found
+- Widen search progressively one dimension at a time (path, then file type, then query breadth)
+- Avoid full-repo grep as a first pass unless the research question explicitly requires repo-wide coverage
 - If evidence is still insufficient after one full strategy pass, report current findings, open questions, and next best sources instead of looping
 - Do not drift from research into implementation planning unless the user asks for that transition
 

@@ -40,6 +40,8 @@ Provide constructive feedback without making changes.
 - Separate confirmed defects from speculative risks.
 - State review coverage explicitly so conclusions are scoped to what was actually checked.
 - Prefer evidence from the changed code, surrounding context, tests, and interfaces over generic best-practice advice.
+- For code discovery, start with narrow searches around changed files and related modules; widen only when needed.
+- Expand search scope progressively (path -> file pattern -> query breadth) instead of starting with repo-wide grep.
 
 ## Output format
 
