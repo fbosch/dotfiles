@@ -68,13 +68,14 @@
       },
       "applications": {
          "preferences": {
-            "launchPrefix": "uwsm-app --",
+            "launchPrefix": " uwsm-app -s s --",
             "paths": [
                "/home/fbb/.local/share/applications",
                "/home/fbb/.local/share/flatpak/exports/share/applications",
                "/etc/profiles/per-user/fbb/share/applications",
                "/run/current-system/sw/share/applications"
-            ]
+            ],
+            "defaultAction": "focus"
          },
          "entrypoints": {
             "Pokmon Infinite Fusion": {
