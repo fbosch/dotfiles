@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+mode="${1:-cpu}"
+special_workspace="tool_popups"
+
+case "$mode" in
+  cpu)
+    class_name="btop_cpu_terminal"
+    lock_file="/tmp/btop-cpu-terminal.lock"
+    preset_id="1"
+    config_file="$HOME/.config/btop/btop-cpu.conf"
+    ;;
+  mem)
+    class_name="btop_mem_terminal"
+    lock_file="/tmp/btop-mem-terminal.lock"
+    preset_id="2"
+    config_file="$HOME/.config/btop/btop-mem.conf"
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+
+exec 9>"$lock_file"
+if command -v flock >/dev/null 2>&1; then
+  flock -n 9 || exit 0
+fi
+
+find_existing_window() {
+  if command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    hyprctl clients -j 2>/dev/null | jq -r --arg class "$class_name" 'first(.[] | select(.class == $class) | "\(.address)|\(.workspace.name)") // empty'
+    return
+  fi
+
+  printf '%s' ""
+}
+
+toggle_or_focus_existing_window() {
+  local existing_window address workspace_name active_address active_workspace_name
+  existing_window="$(find_existing_window)"
+
+  if [[ -z "$existing_window" ]]; then
+    return 1
+  fi
+
+  IFS='|' read -r address workspace_name <<< "$existing_window"
+  active_address="$(hyprctl activewindow -j 2>/dev/null | jq -r '.address // empty')"
+
+  if [[ "$active_address" == "$address" ]]; then
+    hyprctl dispatch movetoworkspacesilent "special:${special_workspace},address:${address}" >/dev/null 2>&1 || true
+    return 0
+  fi
+
+  if [[ "$workspace_name" == special:* ]]; then
+    active_workspace_name="$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.name // empty')"
+    if [[ -n "$active_workspace_name" ]]; then
+      hyprctl dispatch movetoworkspacesilent "${active_workspace_name},address:${address}" >/dev/null 2>&1 || true
+    fi
+  fi
+
+  hyprctl dispatch focuswindow "address:${address}" >/dev/null 2>&1 || true
+  return 0
+}
+
+launch_btop() {
+  if footclient -N -a "$class_name" btop --config "$config_file" --preset "$preset_id" >/dev/null 2>&1; then
+    return
+  fi
+
+  foot -a "$class_name" btop --config "$config_file" --preset "$preset_id" >/dev/null 2>&1 &
+}
+
+if command -v btop >/dev/null 2>&1 && command -v footclient >/dev/null 2>&1; then
+  if toggle_or_focus_existing_window; then
+    exit 0
+  fi
+
+  launch_btop
+  exit 0
+fi
+
+exit 1
