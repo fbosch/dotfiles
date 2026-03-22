@@ -2,6 +2,16 @@
 
 set -euo pipefail
 
+DAEMON_LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/hypr-window-capture-daemon.lock"
+exec 9>"$DAEMON_LOCK_FILE"
+if command -v flock >/dev/null 2>&1; then
+  if flock -n 9; then
+    :
+  else
+    exit 0
+  fi
+fi
+
 # Window capture directory - using /dev/shm (tmpfs) for faster I/O
 # Falls back to /tmp if /dev/shm is not available
 if [[ -d "/dev/shm" ]]; then
@@ -23,6 +33,7 @@ LAST_EVENT_FILE="$SCREENSHOT_DIR/.last_event"
 LAST_OVERLAY_FILE="$SCREENSHOT_DIR/.last_overlay"
 CAPTURE_LOCK_FILE="$SCREENSHOT_DIR/.capture_lock"
 WORKSPACE_CHANGE_FILE="$SCREENSHOT_DIR/.workspace_change"
+LAST_HEALTHCHECK_FILE="$SCREENSHOT_DIR/.last_healthcheck"
 
 # ============================================================================
 # CONFIGURATION - Tune these values for performance/quality tradeoff
@@ -34,6 +45,13 @@ OVERLAY_COOLDOWN_MS=5        # Wait after overlay disappears before capturing
 CAPTURE_DELAY_MS=100          # Wait after activewindow event (for animations)
                              # Reduced for faster captures while still avoiding mid-animation
 WORKSPACE_DELAY_MS=200       # Wait after workspace change (must be a multiple of 100ms)
+LOCK_STALE_MS=10000          # Lock file considered stale after 10s
+HEALTHCHECK_INTERVAL_MS=5000 # Run stale file cleanup every 5s
+TEMP_FILE_MAX_AGE_S=30       # Remove stale intermediate files older than 30s
+
+# External command timeouts
+GRIM_TIMEOUT_S=2
+MAGICK_TIMEOUT_S=3
 
 # Image format and quality
 JPEG_QUALITY=85              # JPEG quality setting (60-95 range)
@@ -59,6 +77,62 @@ AGS_BUNDLED_INSTANCE="ags-bundled"
 
 # ============================================================================
 
+now_ms() {
+  local t="${EPOCHREALTIME//[.,]/}"
+  printf '%s\n' "${t:0:13}"
+}
+
+run_with_timeout() {
+  local timeout_s="$1"
+  shift
+
+  if command -v timeout >/dev/null 2>&1; then
+    timeout --kill-after=1 "${timeout_s}s" "$@"
+    return $?
+  fi
+
+  "$@"
+}
+
+cleanup_stale_temp_files() {
+  local now_s="$EPOCHSECONDS"
+  local file
+  local mtime
+  local age
+
+  for file in \
+    "$SCREENSHOT_DIR"/.monitor_*.jpg \
+    "$SCREENSHOT_DIR"/.monitor_*.mpc \
+    "$SCREENSHOT_DIR"/.monitor_*.cache \
+    "$SCREENSHOT_DIR"/.temp_*.jpg; do
+    [[ -e "$file" ]] || continue
+
+    mtime=$(stat -c %Y "$file" 2>/dev/null || printf '0')
+    age=$((now_s - mtime))
+
+    if [[ $age -gt $TEMP_FILE_MAX_AGE_S ]]; then
+      rm -f "$file"
+    fi
+  done
+}
+
+maybe_run_healthcheck() {
+  local now
+  now=$(now_ms)
+
+  if [[ -f "$LAST_HEALTHCHECK_FILE" ]]; then
+    local last
+    last=$(< "$LAST_HEALTHCHECK_FILE")
+    local elapsed=$((now - last))
+    if [[ $elapsed -lt $HEALTHCHECK_INTERVAL_MS ]]; then
+      return 0
+    fi
+  fi
+
+  cleanup_stale_temp_files
+  printf '%s\n' "$now" > "$LAST_HEALTHCHECK_FILE"
+}
+
 # Check if any AGS overlay is visible
 is_any_overlay_visible() {
   # Check window-switcher visibility in bundled AGS instance
@@ -66,7 +140,7 @@ is_any_overlay_visible() {
   response=$(ags request -i "$AGS_BUNDLED_INSTANCE" window-switcher '{"action":"get-visibility"}' 2>/dev/null)
   
   if [[ "$response" == "visible" ]]; then
-    local t="${EPOCHREALTIME//[.,]/}"; echo "${t:0:13}" > "$LAST_OVERLAY_FILE"
+    now_ms > "$LAST_OVERLAY_FILE"
     return 0
   fi
   
@@ -81,7 +155,8 @@ is_in_overlay_cooldown() {
   
   local last_overlay_time
   last_overlay_time=$(< "$LAST_OVERLAY_FILE")
-  local t="${EPOCHREALTIME//[.,]/}"; local current_time="${t:0:13}"
+  local current_time
+  current_time=$(now_ms)
   local elapsed=$((current_time - last_overlay_time))
   
   if [[ $elapsed -lt $OVERLAY_COOLDOWN_MS ]]; then
@@ -141,7 +216,8 @@ capture_screenshot() {
   if [[ -f "$LAST_SCREENSHOT_FILE" ]]; then
     local last_time
     last_time=$(< "$LAST_SCREENSHOT_FILE")
-    local t="${EPOCHREALTIME//[.,]/}"; local current_time="${t:0:13}"
+    local current_time
+    current_time=$(now_ms)
     local elapsed=$((current_time - last_time))
     
     if [[ $elapsed -lt $DEBOUNCE_MS ]]; then
@@ -198,8 +274,9 @@ capture_screenshot() {
   fi
   
   # Update last screenshot time
-  local t="${EPOCHREALTIME//[.,]/}"; local timestamp="${t:0:13}"
-  echo "$timestamp" > "$LAST_SCREENSHOT_FILE"
+  local timestamp
+  timestamp=$(now_ms)
+  printf '%s\n' "$timestamp" > "$LAST_SCREENSHOT_FILE"
   
   # Get all monitors and their geometries
   local monitors_json
@@ -215,7 +292,7 @@ capture_screenshot() {
     
     # Capture this monitor at full resolution
     local temp_monitor_shot="$SCREENSHOT_DIR/.monitor_${monitor_index}_${timestamp}.jpg"
-    grim -t jpeg -q "$JPEG_QUALITY" -o "$mon_name" "$temp_monitor_shot" 2>/dev/null || { monitor_index=$((monitor_index + 1)); continue; }
+    run_with_timeout "$GRIM_TIMEOUT_S" grim -t jpeg -q "$JPEG_QUALITY" -o "$mon_name" "$temp_monitor_shot" 2>/dev/null || { monitor_index=$((monitor_index + 1)); continue; }
     
     if [[ ! -s "$temp_monitor_shot" ]]; then
       rm -f "$temp_monitor_shot"
@@ -225,7 +302,7 @@ capture_screenshot() {
     
     # Convert to MPC cache (no scaling at this stage)
     local temp_monitor_mpc="$SCREENSHOT_DIR/.monitor_${monitor_index}_${timestamp}.mpc"
-    magick "$temp_monitor_shot" \
+    run_with_timeout "$MAGICK_TIMEOUT_S" magick "$temp_monitor_shot" \
       -quality "$JPEG_QUALITY" \
       "$temp_monitor_mpc" 2>/dev/null || { rm -f "$temp_monitor_shot"; monitor_index=$((monitor_index + 1)); continue; }
     rm -f "$temp_monitor_shot"
@@ -302,51 +379,43 @@ capture_screenshot() {
       is_obscured=true
     fi
     
-    # Crop from the appropriate monitor's MPC in parallel
-    (
-      # Only save if window is not obscured
-      # This prevents capturing previews of windows hidden behind floating windows
-      if [[ "$is_obscured" == "true" ]]; then
-        # Window is obscured - don't save the cropped image
-        # The old preview (if any) will remain, or no preview will exist
-        exit 0
-      fi
-      
-      # Crop at full resolution, then smart resize; simultaneously check brightness.
-      # -write saves the JPEG while the pipeline continues to the Gray+info: stage.
-      # The ">" flag means only shrink if larger, never enlarge.
-      # This prevents upscaling small windows and maintains quality.
-      local mean_brightness
-      mean_brightness=$(magick "$target_monitor_mpc" \
-        -crop "${crop_width}x${crop_height}+${crop_x}+${crop_y}" \
-        +repage \
-        -resize "${PREVIEW_TARGET_MAX_WIDTH}x${PREVIEW_TARGET_HEIGHT}>" \
-        -quality "$JPEG_QUALITY" \
-        -define jpeg:dct-method=fast \
-        -write "$temp_output" \
-        -colorspace Gray \
-        -format "%[fx:floor(mean*1000)]" info: 2>/dev/null)
+    # Only save if window is not obscured
+    # This prevents capturing previews of windows hidden behind floating windows
+    if [[ "$is_obscured" == "true" ]]; then
+      continue
+    fi
 
-      # Validate output exists and has content
-      if [[ ! -s "$temp_output" ]]; then
-        rm -f "$temp_output"
-        exit 0
-      fi
+    # Crop at full resolution, then smart resize; simultaneously check brightness.
+    # -write saves the JPEG while the pipeline continues to the Gray+info: stage.
+    # The ">" flag means only shrink if larger, never enlarge.
+    # This prevents upscaling small windows and maintains quality.
+    local mean_brightness
+    mean_brightness=$(run_with_timeout "$MAGICK_TIMEOUT_S" magick "$target_monitor_mpc" \
+      -crop "${crop_width}x${crop_height}+${crop_x}+${crop_y}" \
+      +repage \
+      -resize "${PREVIEW_TARGET_MAX_WIDTH}x${PREVIEW_TARGET_HEIGHT}>" \
+      -quality "$JPEG_QUALITY" \
+      -define jpeg:dct-method=fast \
+      -write "$temp_output" \
+      -colorspace Gray \
+      -format "%[fx:floor(mean*1000)]" info: 2>/dev/null || printf '')
 
-      # If brightness is very low (< 1% = <10 in 0-1000 scale), image is essentially black - discard it
-      # This catches minimized windows, off-screen windows, or capture errors
-      if [[ -n "$mean_brightness" ]] && (( mean_brightness < 10 )); then
-        rm -f "$temp_output"
-        exit 0
-      fi
-      
-      # Only overwrite if validation passed
-      mv "$temp_output" "$output_path"
-    ) &
+    # Validate output exists and has content
+    if [[ ! -s "$temp_output" ]]; then
+      rm -f "$temp_output"
+      continue
+    fi
+
+    # If brightness is very low (< 1% = <10 in 0-1000 scale), image is essentially black - discard it
+    # This catches minimized windows, off-screen windows, or capture errors
+    if [[ -n "$mean_brightness" ]] && (( mean_brightness < 10 )); then
+      rm -f "$temp_output"
+      continue
+    fi
+
+    # Only overwrite if validation passed
+    mv "$temp_output" "$output_path"
   done < <(jq -r --arg ws "$current_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | [.address, (.mapped // true), .floating, .at[0], .at[1], .size[0], .size[1]] | join("|")' <<< "$all_clients_json" 2>/dev/null)
-  
-  # Wait for all parallel crops to complete
-  wait
   
   # Cleanup all monitor MPC cache files
   for idx in "${!monitor_mpc_files[@]}"; do
@@ -361,6 +430,8 @@ capture_screenshot() {
 # Handle Hyprland IPC events
 handle_event() {
   local event_type=""
+
+  maybe_run_healthcheck
   
   case $1 in
     activewindow\>\>*|activewindow,*)
@@ -384,9 +455,10 @@ handle_event() {
   if [[ -f "$CAPTURE_LOCK_FILE" ]]; then
     # Check if lock is stale (older than 10 seconds)
     local lock_ts; lock_ts=$(< "$CAPTURE_LOCK_FILE" 2>/dev/null) || lock_ts=0
-    local t="${EPOCHREALTIME//[.,]/}"; local now="${t:0:13}"
+    local now
+    now=$(now_ms)
     local lock_age=$(( now - lock_ts ))
-    if [[ $lock_age -lt 10000 ]]; then
+    if [[ $lock_age -lt $LOCK_STALE_MS ]]; then
       # Fresh lock, skip this event
       return 0
     fi
@@ -395,22 +467,23 @@ handle_event() {
   fi
 
   # Create lock with current timestamp
-  local t="${EPOCHREALTIME//[.,]/}"; local timestamp="${t:0:13}"
-  echo "$timestamp" > "$CAPTURE_LOCK_FILE"
+  local timestamp
+  timestamp=$(now_ms)
+  printf '%s\n' "$timestamp" > "$CAPTURE_LOCK_FILE"
 
   # Record this event
-  echo "$timestamp" > "$LAST_EVENT_FILE"
+  printf '%s\n' "$timestamp" > "$LAST_EVENT_FILE"
   
   # Create unique capture ID for this event
   local capture_id="${timestamp}_${event_type}"
-  echo "$capture_id" > "$WORKSPACE_CHANGE_FILE"
+  printf '%s\n' "$capture_id" > "$WORKSPACE_CHANGE_FILE"
   
   # Get workspace and trigger screenshot
   local workspace_at_event
   workspace_at_event=$(printf 'j/activeworkspace' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null | jq -r '.id')
   
-  # Start new screenshot process with event type and capture ID
-  capture_screenshot "$workspace_at_event" "$event_type" "$capture_id" &
+  # Run capture inline to avoid accumulating background shells over long sessions
+  capture_screenshot "$workspace_at_event" "$event_type" "$capture_id"
 }
 
 # Connect to Hyprland socket and process events
