@@ -3,6 +3,12 @@
 set -euo pipefail
 
 class_name="wiremix_terminal"
+lock_file="/tmp/wiremix-terminal.lock"
+
+exec 9>"$lock_file"
+if command -v flock >/dev/null 2>&1; then
+  flock -n 9 || exit 0
+fi
 
 find_existing_window_address() {
   if command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
