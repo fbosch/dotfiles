@@ -1,10 +1,11 @@
 function flake_update_interactive --description 'Interactively update nix flake inputs using nix commands and gum (pnpm-style)'
     # Parse arguments
     # -r/--rebuild: Prompt to rebuild NixOS after successful update
-    # -c/--cache: Read available updates from cache file instead of checking
+    # -c/--cache: Prefer cache even after normal TTL (compatibility flag)
+    # -f/--force: Bypass cache and always re-check updates
     # -h/--header: Show decorative ASCII header with flake info
     # -n/--notify: Send desktop notification after successful rebuild
-    argparse r/rebuild c/cache h/header n/notify -- $argv
+    argparse r/rebuild c/cache f/force h/header n/notify -- $argv
     or return
 
     # Default to ~/nixos if no path provided
@@ -59,50 +60,72 @@ function flake_update_interactive --description 'Interactively update nix flake 
         return 1
     end
 
-    # If --cache flag is set, try to read from cache file
-    set input_options
+    # Cache updates for a short period keyed by flake.lock hash
+    set cache_ttl_seconds 600
     if set -q _flag_cache
-        set cache_file "$XDG_CACHE_HOME/flake-updates.json"
-        if test -z "$XDG_CACHE_HOME"
-            set cache_file ~/.cache/flake-updates.json
-        end
+        # Backward-compatible escape hatch for older workflows
+        set cache_ttl_seconds 315360000
+    end
 
-        if test -f "$cache_file"
-            # Read cache and parse updates
-            set update_count (jq -r '.count // 0' $cache_file 2>/dev/null)
+    set cache_file "$XDG_CACHE_HOME/flake-updates.json"
+    if test -z "$XDG_CACHE_HOME"
+        set cache_file ~/.cache/flake-updates.json
+    end
 
-            # Ensure update_count is a valid number
-            if test -z "$update_count"
-                set update_count 0
-            end
+    set lock_hash ""
+    if command -q sha256sum
+        set lock_hash (sha256sum "$flake_path/flake.lock" | string split " ")[1]
+    else if command -q shasum
+        set lock_hash (shasum -a 256 "$flake_path/flake.lock" | string split " ")[1]
+    end
 
-            if test "$update_count" -gt 0
-                # Extract updates from cache into input_options format
-                for update in (jq -r '.updates[] | @json' $cache_file 2>/dev/null)
-                    set name (echo $update | jq -r '.name' 2>/dev/null)
-                    set current_short (echo $update | jq -r '.currentShort' 2>/dev/null)
-                    set new_short (echo $update | jq -r '.newShort' 2>/dev/null)
+    # Try to read from cache first unless --force is provided
+    set input_options
+    if set -q _flag_force
+        gum style --foreground 3 "Bypassing cache (--force), checking updates manually..."
+    else if test -f "$cache_file"
+        set cached_hash (jq -r '.lockHash // ""' $cache_file 2>/dev/null)
+        set cached_epoch (jq -r '.checkedAtEpoch // 0' $cache_file 2>/dev/null)
+        set now_epoch (date +%s)
 
-                    if test -n "$name" -a -n "$current_short" -a -n "$new_short"
-                        set formatted_option "$name: $current_short → $new_short"
-                        set input_options $input_options $formatted_option
+        if test -n "$lock_hash" -a "$cached_hash" = "$lock_hash"
+            if string match -rq '^[0-9]+$' -- "$cached_epoch"
+                set cache_age (math "$now_epoch - $cached_epoch" 2>/dev/null)
+
+                if test $cache_age -ge 0 -a $cache_age -lt $cache_ttl_seconds
+                    # Read cache and parse updates
+                    set update_count (jq -r '.count // 0' $cache_file 2>/dev/null)
+
+                    if test -z "$update_count"
+                        set update_count 0
+                    end
+
+                    if test "$update_count" -gt 0
+                        # Extract updates from cache into input_options format
+                        for update in (jq -r '.updates[] | @json' $cache_file 2>/dev/null)
+                            set name (echo $update | jq -r '.name' 2>/dev/null)
+                            set current_short (echo $update | jq -r '.currentShort' 2>/dev/null)
+                            set new_short (echo $update | jq -r '.newShort' 2>/dev/null)
+
+                            if test -n "$name" -a -n "$current_short" -a -n "$new_short"
+                                set formatted_option "$name: $current_short → $new_short"
+                                set input_options $input_options $formatted_option
+                            end
+                        end
+
+                        # Show cache timestamp
+                        set timestamp (jq -r '.timestamp // ""' $cache_file 2>/dev/null)
+                        if test -n "$timestamp"
+                            gum style --foreground 6 "Using cached updates (checked: $timestamp)"
+                        else
+                            gum style --foreground 6 "Using cached updates"
+                        end
+                    else
+                        gum style --foreground 2 "Cache shows all flake inputs are up to date!"
+                        return 0
                     end
                 end
-
-                # Show cache timestamp
-                set timestamp (jq -r '.timestamp // ""' $cache_file 2>/dev/null)
-                if test -n "$timestamp"
-                    gum style --foreground 6 "Using cached updates (checked: $timestamp)"
-                else
-                    gum style --foreground 6 "Using cached updates"
-                end
-            else
-                gum style --foreground 2 "Cache shows all flake inputs are up to date!"
-                return 0
             end
-        else
-            gum style --foreground 3 "No cache file found, checking updates manually..."
-            # Fall through to manual check
         end
     end
 
@@ -197,6 +220,7 @@ function flake_update_interactive --description 'Interactively update nix flake 
         # Build JSON cache data
         set update_count (count $input_options)
         set timestamp (date -Iseconds)
+        set checked_at_epoch (date +%s)
         
         if test $update_count -gt 0
             # Build updates array
@@ -221,10 +245,10 @@ function flake_update_interactive --description 'Interactively update nix flake 
             set updates_json "$updates_json]"
             
             # Write complete JSON to cache
-            echo "{\"timestamp\":\"$timestamp\",\"count\":$update_count,\"updates\":$updates_json}" >$cache_file
+            echo "{\"timestamp\":\"$timestamp\",\"checkedAtEpoch\":$checked_at_epoch,\"lockHash\":\"$lock_hash\",\"count\":$update_count,\"updates\":$updates_json}" >$cache_file
         else
             # No updates available
-            echo "{\"timestamp\":\"$timestamp\",\"count\":0,\"updates\":[]}" >$cache_file
+            echo "{\"timestamp\":\"$timestamp\",\"checkedAtEpoch\":$checked_at_epoch,\"lockHash\":\"$lock_hash\",\"count\":0,\"updates\":[]}" >$cache_file
         end
     end # End of manual update check
 
