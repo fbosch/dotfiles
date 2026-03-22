@@ -445,6 +445,7 @@ handle_event() {
     closewindow\>\>*|closewindow,*)
       # Delete stale thumbnail for the closed window
       local closed_address="${1#*>>}"; closed_address="${closed_address#*,}"
+      closed_address="${closed_address#0x}"
       rm -f "$SCREENSHOT_DIR/${closed_address}.jpg"
       return 0
       ;;
