@@ -266,23 +266,19 @@ function SystemInfoContent() {
 							onAction={async () => {
 								try {
 									// Check all available tools in parallel (cached)
-									const [hasMissionCenter, hasBtop, hasHtop] =
-										await Promise.all([
-											checkToolAvailability("missioncenter"),
-											checkToolAvailability("btop"),
-											checkToolAvailability("htop"),
-										]);
+									const [hasBtop, hasHtop] = await Promise.all([
+										checkToolAvailability("btop"),
+										checkToolAvailability("htop"),
+									]);
 
 									// Launch the first available tool
-									if (hasMissionCenter) {
-										await execAsync("missioncenter &");
-									} else if (hasBtop) {
+									if (hasBtop) {
 										await execAsync("foot btop &");
 									} else if (hasHtop) {
 										await execAsync("foot htop &");
 									} else {
 										throw new Error(
-											"No system monitor found (tried missioncenter, btop, htop)",
+											"No system monitor found (tried btop, htop)",
 										);
 									}
 
@@ -342,7 +338,6 @@ function SystemInfoContent() {
 					<ActionPanel.Section title="Copy">
 						<Action
 							title="Copy Hostname"
-							icon={Icon.Clipboard}
 							onAction={async () => {
 								await Clipboard.copy(staticInfo.hostname);
 								await showToast({
@@ -355,7 +350,6 @@ function SystemInfoContent() {
 						/>
 						<Action
 							title="Copy OS Info"
-							icon={Icon.Clipboard}
 							onAction={async () => {
 								const text = `${staticInfo.os.name} ${staticInfo.os.version} (${staticInfo.os.kernel})`;
 								await Clipboard.copy(text);
