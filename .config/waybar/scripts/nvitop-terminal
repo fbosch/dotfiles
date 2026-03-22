@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-class_name="flake_update_terminal"
-lock_file="/tmp/flake-update-terminal.lock"
+class_name="nvitop_terminal"
+lock_file="/tmp/nvitop-terminal.lock"
 
 exec 9>"$lock_file"
 if command -v flock >/dev/null 2>&1; then
@@ -19,18 +19,18 @@ find_existing_window_address() {
   printf '%s' ""
 }
 
-launch_update_terminal() {
-  WEZTERM_PROFILE=floating_tool wezterm start --always-new-process --class "$class_name" -- fish -c 'flake_update_interactive --rebuild --cache --header --notify' >/dev/null 2>&1 &
+launch_nvitop() {
+  WEZTERM_PROFILE=floating_tool wezterm start --always-new-process --class "$class_name" -- nvitop >/dev/null 2>&1 &
 }
 
-if command -v wezterm >/dev/null 2>&1 && command -v fish >/dev/null 2>&1; then
+if command -v nvitop >/dev/null 2>&1 && command -v wezterm >/dev/null 2>&1; then
   address="$(find_existing_window_address)"
   if [[ -n "$address" ]]; then
     hyprctl dispatch focuswindow "address:$address" >/dev/null 2>&1 || true
     exit 0
   fi
 
-  launch_update_terminal
+  launch_nvitop
   exit 0
 fi
 

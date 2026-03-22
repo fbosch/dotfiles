@@ -63,7 +63,7 @@
     "return-type": "json",
     "format": "󰢮  {}",
     "tooltip": true,
-    "on-click": "sh -c 'if pgrep -f \"^missioncenter\" > /dev/null; then pkill -f \"^missioncenter\"; else missioncenter & disown; fi'"
+    "on-click": "~/.config/waybar/scripts/nvitop-terminal"
   },
 
   "pulseaudio": {

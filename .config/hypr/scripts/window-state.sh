@@ -10,6 +10,17 @@ if [[ -z "${WINDOW_STATE_IDLE_SCHED}" ]]; then
     fi
 fi
 
+LOCK_FILE="${XDG_RUNTIME_DIR}/hypr-window-state.lock"
+exec 9>"$LOCK_FILE"
+if command -v flock &>/dev/null; then
+    if flock -n 9; then
+        :
+    else
+        printf 'Window state persistence already running, exiting\n' >&2
+        exit 0
+    fi
+fi
+
 CONFIG_FILE="$HOME/.config/hypr/window-state.conf"
 RULES_FILE="$HOME/.config/hypr/window-state-rules.conf"
 STATE_FILE="${XDG_RUNTIME_DIR}/hypr-window-state.cache"
@@ -243,6 +254,37 @@ prune_stale_rules_cache() {
     done
 }
 
+# Write current RULES_CACHE to file without triggering reload
+write_rules_cache_file() {
+    local temp_file
+    temp_file=$(mktemp) || { printf 'ERROR: Failed to create temp file\n' >&2; return 1; }
+
+    {
+        printf '# Auto-generated window state persistence rules\n'
+        printf '# Last updated: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
+        printf '# Config: %s\n' "$CONFIG_FILE"
+        printf '# DO NOT EDIT MANUALLY - This file is managed by window-state.sh\n'
+        printf '\n'
+    } > "$temp_file"
+
+    local -a sorted_keys
+    IFS=$'\n' read -r -d '' -a sorted_keys < <(printf '%s\n' "${!RULES_CACHE[@]}" | sort && printf '\0')
+
+    for key in "${sorted_keys[@]}"; do
+        {
+            printf '# %s\n' "$key"
+            printf '%s\n' "${RULES_CACHE[$key]}"
+            printf '\n'
+        } >> "$temp_file"
+    done
+
+    if ! mv "$temp_file" "$RULES_FILE"; then
+        printf 'ERROR: Failed to update rules file\n' >&2
+        rm -f "$temp_file"
+        return 1
+    fi
+}
+
 # Update or add rules for specific window classes (preserves existing rules)
 update_rules() {
     local windows="$1"
@@ -285,36 +327,8 @@ update_rules() {
         printf '%s - Updated %s "%s": %sx%s at (%s,%s) on %s\n' "$(printf '%(%H:%M:%S)T' -1)" "$matcher" "$pattern" "$width" "$height" "$x" "$y" "${monitor:-unknown}"
     done < <(jq -r '.[] | "\(.class)|\(.matcher)|\(.pattern)|\(.monitor)|\(.x)|\(.y)|\(.width)|\(.height)"' <<< "$windows")
     
-    # Write all rules (existing + updated) to new file
-    local temp_file
-    temp_file=$(mktemp) || { printf 'ERROR: Failed to create temp file\n' >&2; return 1; }
-    {
-        printf '# Auto-generated window state persistence rules\n'
-        printf '# Last updated: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
-        printf '# Config: %s\n' "$CONFIG_FILE"
-        printf '# DO NOT EDIT MANUALLY - This file is managed by window-state.sh\n'
-        printf '\n'
-    } > "$temp_file"
-    
-    # Write rules for all keys (sorted)
-    # First, create a sorted array of keys to avoid word-splitting issues
-    local -a sorted_keys
-    IFS=$'\n' read -r -d '' -a sorted_keys < <(printf '%s\n' "${!RULES_CACHE[@]}" | sort && printf '\0')
-    
-    for key in "${sorted_keys[@]}"; do
-        {
-            printf '# %s\n' "$key"
-            printf '%s\n' "${RULES_CACHE[$key]}"
-            printf '\n'
-        } >> "$temp_file"
-    done
-    
-    # Atomically replace rules file
-    if ! mv "$temp_file" "$RULES_FILE"; then
-        printf 'ERROR: Failed to update rules file\n' >&2
-        rm -f "$temp_file"
-        return 1
-    fi
+    # Write all rules (existing + updated) to file
+    write_rules_cache_file || return 1
     
     # Save state cache
     printf '%s\n' "$windows" > "$STATE_FILE"
@@ -406,6 +420,8 @@ handle_event() {
             # Config reloaded - reload caches and recheck what we're tracking
             parse_matchers
             load_rules_cache
+            prune_stale_rules_cache
+            write_rules_cache_file
             
             local state
             state=$(get_window_states)

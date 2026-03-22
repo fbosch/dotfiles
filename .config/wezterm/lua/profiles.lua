@@ -14,7 +14,7 @@ return function(config)
 		}
 	end
 
-	if profile_name == "wiremix" or profile_name == "floating_tool" then
+	if profile_name == "floating_tool" then
 		apply_floating_tool_profile()
 	end
 end

@@ -20,7 +20,7 @@ find_existing_window_address() {
 }
 
 launch_wiremix() {
-  WEZTERM_PROFILE=floating_tool wezterm start --class "$class_name" -- wiremix >/dev/null 2>&1 &
+  WEZTERM_PROFILE=floating_tool wezterm start --always-new-process --class "$class_name" -- wiremix >/dev/null 2>&1 &
 }
 
 if command -v wiremix >/dev/null 2>&1 && command -v wezterm >/dev/null 2>&1; then
