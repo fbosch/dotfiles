@@ -270,34 +270,7 @@ const getXdgUserDirOrDefault = (dirKey: string, fallback: string): string =>
 
 // Build terminal command with correct flags based on terminal
 const getSystemUpdatesCommand = (): string => {
-  const terminal = getTerminal();
-
-  // flake_update_interactive is a Fish function, so we need to invoke it through Fish
-  // Add --rebuild flag to prompt for system rebuild after updates
-  // Add --cache flag to use cached update data (instant startup)
-  // Add --header flag to show decorative ASCII header with flake info
-  // Add --notify flag to send desktop notification after successful rebuild
-  // IMPORTANT: Put the entire Fish command in quotes so flags are passed to the function
-  const fishCommand =
-    'fish -c "flake_update_interactive --rebuild --cache --header --notify"';
-
-  // Different terminals use different flags for setting window class/app-id
-  switch (terminal) {
-    case "foot":
-      return `${terminal} --app-id=flake_update_terminal ${fishCommand}`;
-    case "kitty":
-      return `${terminal} --class flake_update_terminal -e ${fishCommand}`;
-    case "alacritty":
-      return `${terminal} --class flake_update_terminal -e ${fishCommand}`;
-    case "wezterm":
-      // WezTerm doesn't support --class flag, use start subcommand
-      return `${terminal} start ${fishCommand}`;
-    case "gnome-terminal":
-      return `${terminal} -- ${fishCommand}`;
-    default:
-      // Fallback for xterm and others
-      return `${terminal} -e ${fishCommand}`;
-  }
+  return `${homeDir}/.config/ags/scripts/flake-update-terminal.sh`;
 };
 
 const menuCommands: Record<string, string> = {

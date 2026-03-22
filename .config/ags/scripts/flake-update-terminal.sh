@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-class_name="wiremix_terminal"
-lock_file="/tmp/wiremix-terminal.lock"
+class_name="flake_update_terminal"
+lock_file="/tmp/flake-update-terminal.lock"
 
 exec 9>"$lock_file"
 if command -v flock >/dev/null 2>&1; then
@@ -19,18 +19,18 @@ find_existing_window_address() {
   printf '%s' ""
 }
 
-launch_wiremix() {
-  WEZTERM_PROFILE=floating_tool wezterm start --class "$class_name" -- wiremix >/dev/null 2>&1 &
+launch_update_terminal() {
+  WEZTERM_PROFILE=floating_tool wezterm start --class "$class_name" -- fish -c 'flake_update_interactive --rebuild --cache --header --notify' >/dev/null 2>&1 &
 }
 
-if command -v wiremix >/dev/null 2>&1 && command -v wezterm >/dev/null 2>&1; then
+if command -v wezterm >/dev/null 2>&1 && command -v fish >/dev/null 2>&1; then
   address="$(find_existing_window_address)"
   if [[ -n "$address" ]]; then
     hyprctl dispatch focuswindow "address:$address" >/dev/null 2>&1 || true
     exit 0
   fi
 
-  launch_wiremix
+  launch_update_terminal
   exit 0
 fi
 
