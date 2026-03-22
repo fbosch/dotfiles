@@ -48,8 +48,10 @@ PREVIEW_TARGET_MAX_WIDTH=320 # Maximum width for preview display
 # Hyprland query socket (faster than hyprctl - no process spawn)
 HYPR_QUERY_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock"
 
-# Hyprland gaps (read via socket - faster than hyprctl, no awk needed)
-GAPS_IN=$(printf 'j/getoption general:gaps_in' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null | jq -r '.custom | split(" ")[0]')
+# Keep in sync with `general.gaps_in` from hyprland.conf.
+# Avoid querying `getoption` during early compositor startup because it can crash
+# Hyprland v0.54.0 before config manager is fully initialized.
+GAPS_IN=2
 
 # AGS overlay detection
 # Using bundled AGS instance - check window-switcher component visibility
