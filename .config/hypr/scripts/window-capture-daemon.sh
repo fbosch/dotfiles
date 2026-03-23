@@ -288,33 +288,30 @@ capture_screenshot() {
   local monitor_index=0
   declare -A monitor_mpc_files
   declare -A monitor_offsets
-  
+
   while read -r monitor_data; do
-    IFS='|' read -r mon_name mon_x mon_y mon_width mon_height <<< "$monitor_data"
-    
-    # Capture this monitor at full resolution
+    IFS='|' read -r mon_name mon_x mon_y mon_width mon_height mon_transform <<< "$monitor_data"
+
     local temp_monitor_shot="$SCREENSHOT_DIR/.monitor_${monitor_index}_${timestamp}.jpg"
     run_with_timeout "$GRIM_TIMEOUT_S" grim -t jpeg -q "$JPEG_QUALITY" -o "$mon_name" "$temp_monitor_shot" 2>/dev/null || { monitor_index=$((monitor_index + 1)); continue; }
-    
+
     if [[ ! -s "$temp_monitor_shot" ]]; then
       rm -f "$temp_monitor_shot"
       monitor_index=$((monitor_index + 1))
       continue
     fi
-    
-    # Convert to MPC cache (no scaling at this stage)
+
     local temp_monitor_mpc="$SCREENSHOT_DIR/.monitor_${monitor_index}_${timestamp}.mpc"
     run_with_timeout "$MAGICK_TIMEOUT_S" magick "$temp_monitor_shot" \
       -quality "$JPEG_QUALITY" \
       "$temp_monitor_mpc" 2>/dev/null || { rm -f "$temp_monitor_shot"; monitor_index=$((monitor_index + 1)); continue; }
     rm -f "$temp_monitor_shot"
-    
-    # Store MPC file and offset for this monitor
+
     monitor_mpc_files[$monitor_index]="$temp_monitor_mpc"
-    monitor_offsets[$monitor_index]="${mon_x}|${mon_y}|${mon_width}|${mon_height}"
-    
+    monitor_offsets[$monitor_index]="${mon_x}|${mon_y}|${mon_width}|${mon_height}|${mon_transform}"
+
     monitor_index=$((monitor_index + 1))
-  done < <(jq -r '.[] | [.name, .x, .y, .width, .height] | join("|")' <<< "$monitors_json")
+  done < <(jq -r '.[] | [.name, .x, .y, .width, .height, .transform] | join("|")' <<< "$monitors_json")
   
   # Fetch all clients once - reused by the window loop and is_window_obscured
   local all_clients_json
@@ -335,11 +332,10 @@ capture_screenshot() {
     local target_monitor_mpc=""
     local mon_offset_x=0
     local mon_offset_y=0
-    
-    # Find the monitor containing the window's center point
+
     for idx in "${!monitor_offsets[@]}"; do
-      IFS='|' read -r mon_x mon_y mon_w mon_h <<< "${monitor_offsets[$idx]}"
-      
+      IFS='|' read -r mon_x mon_y mon_w mon_h _ <<< "${monitor_offsets[$idx]}"
+
       if [[ $window_center_x -ge $mon_x ]] && [[ $window_center_x -lt $(( mon_x + mon_w )) ]] && \
          [[ $window_center_y -ge $mon_y ]] && [[ $window_center_y -lt $(( mon_y + mon_h )) ]]; then
         target_monitor_index=$idx
@@ -349,12 +345,11 @@ capture_screenshot() {
         break
       fi
     done
-    
-    # Skip if no monitor found (shouldn't happen, but be safe)
+
     if [[ $target_monitor_index -eq -1 ]] || [[ -z "$target_monitor_mpc" ]]; then
       continue
     fi
-    
+
     # Adjust coordinates relative to monitor origin
     local relative_x=$(( x - mon_offset_x ))
     local relative_y=$(( y - mon_offset_y ))
@@ -419,7 +414,6 @@ capture_screenshot() {
     mv "$temp_output" "$output_path"
   done < <(jq -r --arg ws "$current_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | [.address, (.mapped // true), .floating, .at[0], .at[1], .size[0], .size[1]] | join("|")' <<< "$all_clients_json" 2>/dev/null)
   
-  # Cleanup all monitor MPC cache files
   for idx in "${!monitor_mpc_files[@]}"; do
     local mpc_file="${monitor_mpc_files[$idx]}"
     rm -f "$mpc_file" "${mpc_file%.mpc}.cache"

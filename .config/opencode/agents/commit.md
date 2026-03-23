@@ -28,4 +28,5 @@ Rules:
 - If only lock/generated files are staged, output exactly:
   {"type":"chore","scope":"deps","subject":"update lock file"}
 - Keep final formatted message `type(scope): subject` within 50 chars whenever possible, but ticket inclusion in `scope` takes priority.
+- Never truncate or cut off `subject` to fit a character limit. If shortening is needed, rewrite to a shorter complete phrase; if that is not possible, exceed 50 chars.
 - Prefer short wording: authentication->auth, implement->add, function->fn.
