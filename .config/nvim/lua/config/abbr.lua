@@ -134,6 +134,7 @@ M.typos = {
 	"sensetive sensitive",
 	"craete create",
 	"visble visible",
+	"sandwhich sandwich", -- 🥪
 }
 
 function M.autofix_typos()
