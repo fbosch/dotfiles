@@ -24,6 +24,7 @@
 - Prefer small, purpose-built interfaces/types/props; avoid "god" interfaces.
 - Keep core logic independent of frameworks/external services; inject dependencies and wrap external APIs behind adapters when it improves testability/coupling.
 - Avoid single-use wrapper functions and trivial helper functions.
+- Avoid IIFEs (immediately invoked function expressions); prefer named functions, top-level statements, or module-level initialization instead.
 - Prefer `=== false` over `!` for negating boolean expressions, especially multi-line ones — `!` at the start of a long expression is easy to miss and forces mental inversion; `=== false` makes the intent explicit at the end where the eye lands
 
 ### Avoid Slop
