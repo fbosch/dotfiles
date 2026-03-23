@@ -143,69 +143,7 @@ local function get_capabilities()
 	return capabilities
 end
 
-local function setup_codebook(capabilities, on_attach)
-	if vim.fn.executable("codebook-lsp") == 0 then
-		return
-	end
-
-	local codebook_config = {
-		cmd = { "codebook-lsp", "serve" },
-		filetypes = {
-			"c",
-			"css",
-			"gitcommit",
-			"go",
-			"haskell",
-			"html",
-			"java",
-			"javascript",
-			"javascriptreact",
-			"lua",
-			"markdown",
-			"php",
-			"python",
-			"ruby",
-			"rust",
-			"swift",
-			"text",
-			"toml",
-			"typescript",
-			"typescriptreact",
-			"zig",
-		},
-		root_markers = { ".git", "codebook.toml", ".codebook.toml" },
-		capabilities = capabilities,
-		on_attach = on_attach,
-	}
-
-	if vim.lsp.config ~= nil and vim.lsp.enable ~= nil then
-		vim.lsp.config("codebook", codebook_config)
-		vim.lsp.enable("codebook")
-		return
-	end
-
-	local ok_configs, configs = pcall(require, "lspconfig.configs")
-	local ok_lspconfig, lspconfig = pcall(require, "lspconfig")
-	if ok_configs == false or ok_lspconfig == false then
-		return
-	end
-
-	if configs.codebook == nil then
-		configs.codebook = {
-			default_config = {
-				cmd = codebook_config.cmd,
-				filetypes = codebook_config.filetypes,
-				root_dir = lspconfig.util.root_pattern(".git", "codebook.toml", ".codebook.toml"),
-				single_file_support = true,
-			},
-		}
-	end
-
-	lspconfig.codebook.setup({
-		capabilities = capabilities,
-		on_attach = on_attach,
-	})
-end
+local function setup_codebook(_capabilities, _on_attach) end
 
 local function get_ensure_installed()
 	local ensure = {
