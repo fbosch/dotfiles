@@ -24,15 +24,15 @@
 - Prefer small, purpose-built interfaces/types/props; avoid "god" interfaces.
 - Keep core logic independent of frameworks/external services; inject dependencies and wrap external APIs behind adapters when it improves testability/coupling.
 - Avoid single-use wrapper functions and trivial helper functions.
+- Avoid IIFEs (immediately invoked function expressions); prefer named functions, top-level statements, or module-level initialization instead.
 - Prefer `=== false` over `!` for negating boolean expressions, especially multi-line ones — `!` at the start of a long expression is easy to miss and forces mental inversion; `=== false` makes the intent explicit at the end where the eye lands
 
 ### Avoid Slop
 
 - No redundant type annotations where inference works (`const x: string = "foo"` → `const x = "foo"`)
-- No overly defensive null checks where types already guarantee non-null
 - No type casts to `any` to bypass type issues; fix the types properly
 - No explanatory comments for obvious code (`// Loop through users` before `users.forEach(...)`)
-- No console.log statements in production code
+- No console.log or debug prints in committed code; remove temporary debug logs before finishing
 - No commented-out code blocks; delete or use git history
 - Variable names should match existing codebase verbosity (don't write `isUserAuthenticatedSuccessfully` if repo uses `isAuthed`)
 - Trust the type system; don't add runtime checks it already prevents
@@ -50,12 +50,8 @@
 
 - Verify uncertain details before stating as fact; don't guess.
 - Determine current machine context before host-specific guidance: run `hostname -s` and use that as source of truth.
-- Do not infer OpenCode plugin availability from the current shell tool `PATH` alone; plugin startup environment and tool runtime environment can differ, especially for Homebrew-installed binaries like `rtk`.
 - Before suggesting or running `ssh`, compare target host to `hostname -s`; if they match, do not suggest or run SSH.
-- Don't invent scope: change only what's requested and preserve unrelated behavior.
-- Remove temporary debug logs/prints before finishing.
 - Prefer offering to run helpful commands rather than instructing the user to run them.
 - If a command is likely long-running or expensive, call it out and offer to run it.
 - When changing behavior, update/add tests and handle important edge cases.
-- Keep edits cohesive per file (avoid scattered drive-by tweaks).
 - Run the smallest reasonable validation (tests/build/typecheck) when making code changes.

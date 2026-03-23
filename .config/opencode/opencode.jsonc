@@ -76,6 +76,27 @@
     },
     "spec": {
       "model": "openai/gpt-5.4"
+    },
+    "analyze": {
+      "model": "anthropic/claude-sonnet-4-6"
+    },
+    "debug": {
+      "model": "anthropic/claude-sonnet-4-6"
+    },
+    "ideate": {
+      "model": "anthropic/claude-opus-4-6"
+    },
+    "patterns": {
+      "model": "anthropic/claude-haiku-4-5"
+    },
+    "adversarial": {
+      "model": "anthropic/claude-sonnet-4-6"
+    },
+    "refactor": {
+      "model": "anthropic/claude-sonnet-4-6"
+    },
+    "commit": {
+      "model": "anthropic/claude-haiku-4-5"
     }
   },
   "mcp": {
