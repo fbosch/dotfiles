@@ -51,7 +51,6 @@
 - Verify uncertain details before stating as fact; don't guess.
 - Determine current machine context before host-specific guidance: run `hostname -s` and use that as source of truth.
 - Before suggesting or running `ssh`, compare target host to `hostname -s`; if they match, do not suggest or run SSH.
-- Don't invent scope: change only what's requested and preserve unrelated behavior.
 - Prefer offering to run helpful commands rather than instructing the user to run them.
 - If a command is likely long-running or expensive, call it out and offer to run it.
 - When changing behavior, update/add tests and handle important edge cases.
