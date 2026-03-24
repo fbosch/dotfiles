@@ -49,16 +49,16 @@ return function(config)
 			action = wezterm.action.ActivateTab(8),
 		},
 		-- Pane splits
-		-- {
-		-- 	key = "v",
-		-- 	mods = "CTRL|SHIFT",
-		-- 	action = wezterm.action.SplitVertical({ domain = "CurrentPaneDomain" }),
-		-- },
-		-- {
-		-- 	key = "s",
-		-- 	mods = "CTRL|SHIFT",
-		-- 	action = wezterm.action.SplitHorizontal({ domain = "CurrentPaneDomain" }),
-		-- },
+		{
+			key = "v",
+			mods = "CTRL|ALT",
+			action = wezterm.action.SplitVertical({ domain = "CurrentPaneDomain" }),
+		},
+		{
+			key = "h",
+			mods = "CTRL|ALT",
+			action = wezterm.action.SplitHorizontal({ domain = "CurrentPaneDomain" }),
+		},
 		-- Pane navigation
 		{
 			key = "h",
