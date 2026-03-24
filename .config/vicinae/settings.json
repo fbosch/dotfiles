@@ -27,7 +27,10 @@
       }
    },
    "launcher_window": {
-      "opacity": 0.95
+      "opacity": 0.95,
+      "layer_shell": {
+         "keyboard_interactivity": "on_demand"
+      }
    },
    "favorites": [
       "applications:one.ablaze.floorp",
