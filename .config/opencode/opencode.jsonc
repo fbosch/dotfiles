@@ -61,7 +61,9 @@
     "test": {
       "model": "anthropic/claude-sonnet-4-6"
     },
-    "review": {},
+    "review": {
+      "model": "anthropic/claude-sonnet-4-6"
+    },
     "docs": {
       "model": "anthropic/claude-opus-4-6"
     },
@@ -90,7 +92,7 @@
       "model": "anthropic/claude-haiku-4-5"
     },
     "adversarial": {
-      "model": "anthropic/claude-sonnet-4-6"
+      "model": "anthropic/claude-opus-4-6"
     },
     "refactor": {
       "model": "anthropic/claude-sonnet-4-6"
