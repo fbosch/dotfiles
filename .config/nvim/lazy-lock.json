@@ -54,7 +54,7 @@
   "nvim-coverage": { "branch": "main", "commit": "a939e425e363319d952a6c35fb3f38b34041ded2" },
   "nvim-jqx": { "branch": "master", "commit": "07393e80fa8097e82f9038fec05e948fe8a60fd1" },
   "nvim-lsp-file-operations": { "branch": "master", "commit": "b9c795d3973e8eec22706af14959bc60c579e771" },
-  "nvim-lspconfig": { "branch": "master", "commit": "841c6d4139aedb8a3f2baf30cef5327371385b93" },
+  "nvim-lspconfig": { "branch": "master", "commit": "4daa1436595dbce4c6151f75c38a0d855796c554" },
   "nvim-nio": { "branch": "master", "commit": "21f5324bfac14e22ba26553caf69ec76ae8a7662" },
   "nvim-notify": { "branch": "master", "commit": "8701bece920b38ea289b457f902e2ad184131a5d" },
   "nvim-recorder": { "branch": "main", "commit": "cf2e07d1d60f225943b2f2457ecd8e2b3e4ee2d5" },
