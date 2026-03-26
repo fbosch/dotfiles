@@ -32,8 +32,8 @@ worktree_path="$({
   '
 })"
 
-git fetch --prune origin "$branch"
+git fetch --prune --quiet origin "$branch"
 
 if [ -n "$worktree_path" ] && [ -d "$worktree_path" ]; then
-  git -C "$worktree_path" merge --ff-only "origin/$branch"
+  git -C "$worktree_path" merge --ff-only --quiet "origin/$branch"
 fi

@@ -5,13 +5,22 @@ function workitems_week --description 'Display calendar view of work items touch
     end
     
     # Get the current week's date range (Monday to Sunday)
+    set -l is_darwin 0
+    if test (uname) = Darwin
+        set is_darwin 1
+    end
+    set -l has_gdate 0
+    if command -v gdate >/dev/null 2>&1
+        set has_gdate 1
+    end
+
     set -l current_weekday (command date +%u)
     set -l days_since_monday (math "$current_weekday - 1")
     
     # Calculate Monday of current week
     set -l monday
-    if test (uname) = Darwin
-        if command -v gdate >/dev/null 2>&1
+    if test $is_darwin -eq 1
+        if test $has_gdate -eq 1
             set monday (gdate -d "$days_since_monday days ago" +%Y-%m-%d)
         else
             if test $days_since_monday -eq 0
@@ -31,18 +40,14 @@ function workitems_week --description 'Display calendar view of work items touch
     
     # Generate dates for the week (Monday-Friday only)
     for i in (seq 0 4)
-        if test (uname) = Darwin
-            if command -v gdate >/dev/null 2>&1
+        if test $is_darwin -eq 1
+            if test $has_gdate -eq 1
                 set -a dates (gdate -d "$monday +$i days" +%Y-%m-%d)
             else
                 if test $i -eq 0
                     set -a dates $monday
                 else
-                    # Parse monday date and add days
-                    set -l year (string split '-' $monday)[1]
-                    set -l month (string split '-' $monday)[2]
-                    set -l day (string split '-' $monday)[3]
-                    set -a dates (command date -j -v+"$i"d -f "%Y-%m-%d" "$year-$month-$day" +%Y-%m-%d)
+                    set -a dates (command date -j -v+"$i"d -f "%Y-%m-%d" "$monday" +%Y-%m-%d)
                 end
             end
         else
@@ -53,26 +58,45 @@ function workitems_week --description 'Display calendar view of work items touch
     # Get today's date for highlighting
     set -l today (command date +%Y-%m-%d)
     
-    # Extract work items for each day (uses cache when available)
+    # Cache past weekdays individually, then only compute the remaining span once.
+    set -l extracted_items
+    set -l remaining_start_idx 0
+
+    for day_idx in (seq 1 5)
+        set -l target_date $dates[$day_idx]
+
+        if test "$target_date" = "$today"
+            set remaining_start_idx $day_idx
+            break
+        end
+
+        set -l sorted_dates (printf "%s\n%s\n" "$target_date" "$today" | sort)
+        if test "$sorted_dates[1]" = "$target_date"
+            set -a extracted_items (__workitems_extract $target_date $target_date)
+        else
+            set remaining_start_idx $day_idx
+            break
+        end
+    end
+
+    if test $remaining_start_idx -gt 0
+        set -a extracted_items (__workitems_extract $dates[$remaining_start_idx] $dates[5])
+    end
+
     for day_idx in (seq 1 5)
         set -l target_date $dates[$day_idx]
         set -l day_workitems
-        
-        # Extract work items for this single day (automatically cached if past date)
-        set -l extracted_items (__workitems_extract $target_date $target_date)
-        
-        # Collect unique work items for this day
+
         for item in $extracted_items
             set -l parts (string split '|' $item)
-            set -l workitem $parts[2]
-            
-            # Add unique work items
-            if not contains $workitem $day_workitems
-                set -a day_workitems $workitem
+            if test "$parts[1]" = "$target_date"
+                set -l workitem $parts[2]
+                if not contains $workitem $day_workitems
+                    set -a day_workitems $workitem
+                end
             end
         end
-        
-        # Store the work items for this day (comma-separated or empty)
+
         if test (count $day_workitems) -gt 0
             set -a workitems_by_day (string join ', ' $day_workitems)
         else
