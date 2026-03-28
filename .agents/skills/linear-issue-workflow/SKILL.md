@@ -14,6 +14,7 @@ Reuse existing `linear` and `worktrunk` skills for tool details; this skill defi
 - Read `references/ship-failures.md` when any phase fails, when ship permissions are denied, or when worktree state is inconsistent.
 - Read `references/pr-linear-mapping.md` when preparing PR title/body, linking PR to Linear, or updating Linear state.
 - Read `references/linear-prompt-parsing.md` when the user provides a pasted Linear prompt block (for example `Work on Linear issue INF-45` plus `<issue ...>` XML).
+- Use `pr-description` skill for PR body composition during PR creation; keep title format/type rules in the active PR command.
 - Do not load references during intake if issue context is complete and no failure branch is active.
 
 ## Required Inputs
@@ -86,13 +87,14 @@ If validation fails, fix and rerun only failed checks before shipping.
 Use this matrix; do not improvise shipping outcomes.
 
 1. `commit:allowed` + `push:allowed`
-   - Prepare commit tied to issue id.
-   - Push branch.
-   - Open PR and return URL.
+    - Prepare commit tied to issue id.
+    - Push branch.
+    - Compose PR body using `pr-description` skill policy (title remains command-owned).
+    - Open PR and return URL.
 2. `commit:denied` + `push:denied`
-   - Stop at ship gate.
-   - Provide exact blocked steps and exact user-runnable commands.
-   - Still provide PR title/body draft.
+    - Stop at ship gate.
+    - Provide exact blocked steps and exact user-runnable commands.
+    - Still provide PR title/body draft; draft body should follow `pr-description` skill policy.
 3. `commit:allowed` + `push:denied`
    - Create commit.
    - Report push as blocked and provide next command.
