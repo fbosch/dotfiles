@@ -137,6 +137,10 @@
         "mcp"
       ]
     },
+    "linear": {
+      "type": "remote",
+      "url": "https://mcp.linear.app/mcp"
+    },
     "exa": {
       "type": "local",
       "command": [
