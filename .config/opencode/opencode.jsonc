@@ -15,7 +15,7 @@
     "./plugins/rtk.ts"
   ],
   "instructions": [
-    "~/.config/opencode/instructions/shell-strategy.md"
+    "~/.config/opencode/instructions/worktrunk.md"
   ],
   "permission": {
     "bash": {

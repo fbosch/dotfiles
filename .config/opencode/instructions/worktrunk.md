@@ -1,9 +1,10 @@
 # Worktrunk Workflow
 
-Use Worktrunk tools for this repo's worktree workflow.
+Use Worktrunk plugin tools for this repo's worktree workflow when available.
 
 ## Preferred tools
 
+- If Worktrunk plugin tools are available in this environment, prefer them over shell `wt`/`git worktree` commands.
 - Use `worktrunk-list` to inspect branches/worktrees.
 - Use `worktrunk-status` to check the current branch/worktree state.
 - Use `worktrunk-create` to create and switch to a new branch/worktree.
