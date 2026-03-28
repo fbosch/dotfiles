@@ -5,6 +5,11 @@
       "source": "openai/skills",
       "sourceType": "github",
       "computedHash": "702e1b8bb122bb981d276fbdcaa2fde1435b8c548910e1b365f088735b7a5365"
+    },
+    "worktrunk": {
+      "source": "max-sixty/worktrunk",
+      "sourceType": "github",
+      "computedHash": "83052030007e712956a7b2cec586e4e6f7aae2972b28eea4b521e1d4415bd80c"
     }
   }
 }
