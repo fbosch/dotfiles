@@ -7,7 +7,7 @@ function __workitems_extract --description 'Extract work items from git commits 
     
     # Cache directory for work items
     set -l cache_dir ~/.cache/fish/workitems
-    mkdir -p $cache_dir
+    command mkdir -p $cache_dir
     
     # Get git repo root for cache key uniqueness
     set -l git_root (git rev-parse --show-toplevel 2>/dev/null)
@@ -31,31 +31,23 @@ function __workitems_extract --description 'Extract work items from git commits 
         set can_cache 1
     end
     
+    # Include local branch state so caches invalidate when refs change.
+    set -l cache_version v2
+    set -l refs_state (git for-each-ref refs/heads/ --format='%(refname):%(objectname)' 2>/dev/null)
+    set -l refs_hash (printf "%s\n" $refs_state | md5sum | cut -d' ' -f1 2>/dev/null; or printf "%s\n" $refs_state | md5 2>/dev/null)
+
     # Generate cache file name
-    set -l cache_key "$repo_hash-$start_date-$end_date"
+    set -l cache_key "$cache_version-$repo_hash-$refs_hash-$git_user_email-$start_date-$end_date"
     set -l cache_file "$cache_dir/$cache_key"
     
     # Return cached results if available and query is for past dates
     if test $can_cache -eq 1 -a -f "$cache_file"
-        cat "$cache_file"
+        command cat "$cache_file"
         return 0
     end
     
-    # Get all branches
-    set -l all_branches (git for-each-ref refs/heads/ --format='%(refname)')
-    
     # Get all commits for the date range with hash, date, and subject (including merges)
     set -l commits_data (git log --all --author="$git_user_email" --since="$start_date 00:00:00" --until="$end_date 23:59:59" --pretty=format:"%H|%as|%s" 2>/dev/null)
-    
-    # Build a map of commit hash -> branch names
-    set -l commit_branches
-    for branch_ref in $all_branches
-        set -l branch_name (string replace 'refs/heads/' '' $branch_ref)
-        set -l branch_commits (git log $branch_ref --author="$git_user_email" --since="$start_date 00:00:00" --until="$end_date 23:59:59" --pretty=format:"%H" 2>/dev/null)
-        for commit_hash in $branch_commits
-            set -a commit_branches "$commit_hash:$branch_name"
-        end
-    end
     
     # Track which date|workitem|branch combos we've already output
     set -l output_items
@@ -66,30 +58,27 @@ function __workitems_extract --description 'Extract work items from git commits 
         set -l commit_hash $parts[1]
         set -l commit_date $parts[2]
         set -l commit_subject $parts[3]
+        set -l branch_names (git for-each-ref --contains="$commit_hash" refs/heads/ --format='%(refname:short)' 2>/dev/null)
         
         # Find which branch(es) this commit belongs to
-        for mapping in $commit_branches
-            if string match -q "$commit_hash:*" $mapping
-                set -l branch_name (string split ':' $mapping)[2]
-                
-                # Extract work item from branch name
-                set -l workitem ""
-                if string match -qr 'AB#(\d+)' $branch_name
-                    set workitem (string match -r 'AB#(\d+)' $branch_name | tail -n 1)
-                else if string match -qr '(\d+)' $branch_name
-                    set workitem (string match -r '\d+' $branch_name | head -n 1)
-                    # Skip if it looks like a date format (8 digits)
-                    if test (string length $workitem) -eq 8
-                        set workitem ""
-                    end
+        for branch_name in $branch_names
+            # Extract work item from branch name
+            set -l workitem ""
+            if string match -qr 'AB#(\d+)' $branch_name
+                set workitem (string match -r 'AB#(\d+)' $branch_name | tail -n 1)
+            else if string match -qr '(\d+)' $branch_name
+                set workitem (string match -r '\d+' $branch_name | head -n 1)
+                # Skip if it looks like a date format (8 digits)
+                if test (string length $workitem) -eq 8
+                    set workitem ""
                 end
-                
-                # Collect work item from branch name if found
-                if test -n "$workitem"
-                    set -l item_key "$commit_date|$workitem|$branch_name"
-                    if not contains $item_key $output_items
-                        set -a output_items $item_key
-                    end
+            end
+
+            # Collect work item from branch name if found
+            if test -n "$workitem"
+                set -l item_key "$commit_date|$workitem|$branch_name"
+                if not contains $item_key $output_items
+                    set -a output_items $item_key
                 end
             end
         end
@@ -104,15 +93,12 @@ function __workitems_extract --description 'Extract work items from git commits 
                     # Skip if it looks like a date format (8 digits)
                     if test (string length $item) -ne 8
                         # Find the branch for this commit
-                        for mapping in $commit_branches
-                            if string match -q "$commit_hash:*" $mapping
-                                set -l branch_name (string split ':' $mapping)[2]
-                                set -l item_key "$commit_date|$item|$branch_name"
-                                if not contains $item_key $output_items
-                                    set -a output_items $item_key
-                                end
-                                break
+                        for branch_name in $branch_names
+                            set -l item_key "$commit_date|$item|$branch_name"
+                            if not contains $item_key $output_items
+                                set -a output_items $item_key
                             end
+                            break
                         end
                     end
                 end
@@ -128,7 +114,7 @@ function __workitems_extract --description 'Extract work items from git commits 
             echo $item
         end > "$cache_file"
         # Output from cache to avoid duplicate loop
-        cat "$cache_file"
+        command cat "$cache_file"
     else
         # Just output (don't cache today's data as it may change)
         for item in $output_items

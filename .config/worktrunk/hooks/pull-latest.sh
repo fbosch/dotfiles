@@ -36,4 +36,6 @@ git fetch --prune --quiet origin "$branch"
 
 if [ -n "$worktree_path" ] && [ -d "$worktree_path" ]; then
   git -C "$worktree_path" merge --ff-only --quiet "origin/$branch"
+else
+  git update-ref "refs/heads/$branch" "refs/remotes/origin/$branch"
 fi
