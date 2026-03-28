@@ -48,15 +48,16 @@ If acceptance criteria are still unclear after comments, stop and ask for clarif
 
 Branch naming precedence:
 
-1. Prefer `gitBranchName` from Linear.
-2. Else build `feature/<issue-id>-<slug>` where `<slug>` is lowercase kebab-case from title, only `[a-z0-9-]`, repeated `-` collapsed, and slug length around 48 chars.
+1. Start from `gitBranchName` from Linear when available; otherwise build `feature/<issue-id>-<slug>`.
+2. Enforce issue-id inclusion for every branch used with WorkTrunk. If the candidate branch does not contain the lowercase issue id token (for example `inf-45`), prefix it as `<issue-id>/...` or `feature/<issue-id>-...`.
+3. Slug rules: lowercase kebab-case from title, only `[a-z0-9-]`, repeated `-` collapsed, and slug length around 48 chars.
 
 Worktree rules:
 
 1. Ask once whether to create/switch a WorkTrunk worktree now.
 2. If yes and branch has no worktree, call `worktrunk-create`.
 3. If worktree already exists, call `worktrunk-switch`.
-4. If branch name fails validation, sanitize and report the exact transformation before proceeding.
+4. If branch name fails validation, sanitize while preserving issue-id inclusion and report the exact transformation before proceeding.
 5. If issue title is empty and `gitBranchName` is missing, use `feature/<issue-id>-work-item`.
 
 ### Phase 3: Implementation loop
