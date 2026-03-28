@@ -11,6 +11,7 @@
     "opencode-snippets",
     "opencode-claude-auth",
     "opencode-toon-plugin@latest",
+    "./plugins/worktrunk.ts",
     "./plugins/rtk.ts"
   ],
   "instructions": [
