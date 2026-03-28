@@ -13,11 +13,12 @@ Reuse existing `linear` and `worktrunk` skills for tool details; this skill defi
 
 - Read `references/ship-failures.md` when any phase fails, when ship permissions are denied, or when worktree state is inconsistent.
 - Read `references/pr-linear-mapping.md` when preparing PR title/body, linking PR to Linear, or updating Linear state.
+- Read `references/linear-prompt-parsing.md` when the user provides a pasted Linear prompt block (for example `Work on Linear issue INF-45` plus `<issue ...>` XML).
 - Do not load references during intake if issue context is complete and no failure branch is active.
 
 ## Required Inputs
 
-- Linear issue id (`ENG-123`) or issue URL.
+- Linear issue id (`ENG-123`), issue URL, or a pasted Linear issue block in prompt XML format.
 - Optional shipping target (for example draft PR vs ready PR).
 
 If no issue id exists, stop and request one.
@@ -28,10 +29,14 @@ Follow these phases in order.
 
 ### Phase 1: Intake and scope gate
 
-1. Fetch issue with `linear_get_issue`.
-2. Extract: identifier, title, description, priority, labels, assignee, `gitBranchName`, and current state.
-3. If description is thin or ambiguous, fetch comments with `linear_list_comments`.
-4. Before coding, restate all of these:
+1. Detect input source in this order:
+   - Prompt-embedded issue block (`<issue identifier="..."> ... </issue>`)
+   - Explicit issue id/URL
+2. If prompt-embedded issue exists, parse it first and treat it as authoritative task intent.
+3. If required fields are missing (for example `gitBranchName`, state, assignee), fetch `linear_get_issue` to enrich metadata.
+4. Extract: identifier, title, description, priority, labels, assignee, `gitBranchName`, team, project, and current state.
+5. If description is thin or ambiguous, fetch comments with `linear_list_comments`.
+6. Before coding, restate all of these:
    - Problem to solve
    - Non-goals
    - Acceptance criteria
