@@ -1,12 +1,9 @@
 [projects."github.com/fbosch/infinite-fusion-nuzlocke"]
 approved-commands = [
     "pnpm install --frozen-lockfile --prefer-offline && sh ./.config/ensure-vercel-link.sh",
+    "pnpm install --frozen-lockfile --prefer-offline",
     "pnpm type-check",
     "pnpm test:run",
-]
-[projects."github.com/fbosch/infinite-fusion-nuzlocke"]
-approved-commands = [
-    "pnpm install --frozen-lockfile --prefer-offline",
 ]
 [projects."kommunekredit@vs-ssh.visualstudio.com:v3/kommunekredit/KK%20Laaneportal/KommuneKredit.Frontend"]
 approved-commands = [
