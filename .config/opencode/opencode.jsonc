@@ -26,7 +26,9 @@
       "git push *": "deny",
       "git reset *": "deny",
       "git rebase *": "deny",
+      "git worktree *": "deny",
       "git checkout *": "ask",
+      "git switch *": "ask",
       "git commit *": "deny"
     }
   },
