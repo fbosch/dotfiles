@@ -49,17 +49,19 @@ If acceptance criteria are still unclear after comments, stop and ask for clarif
 
 Branch naming precedence:
 
-1. Start from `gitBranchName` from Linear when available; otherwise build `feature/<issue-id>-<slug>`.
-2. Enforce issue-id inclusion for every branch used with WorkTrunk. If the candidate branch does not contain the lowercase issue id token (for example `inf-45`), prefix it as `<issue-id>/...` or `feature/<issue-id>-...`.
-3. Slug rules: lowercase kebab-case from title, only `[a-z0-9-]`, repeated `-` collapsed, and slug length around 48 chars.
+1. Use `gitBranchName` from Linear as the primary branch name whenever it is present.
+2. Only build `feature/<issue-id>-<slug>` when `gitBranchName` is missing.
+3. Enforce issue-id inclusion for every branch used with WorkTrunk. If the candidate branch does not contain the lowercase issue id token (for example `inf-45`), prefix it as `<issue-id>/...` or `feature/<issue-id>-...`.
+4. Slug rules: lowercase kebab-case from title, only `[a-z0-9-]`, repeated `-` collapsed, and slug length around 48 chars.
 
 Worktree rules:
 
-1. Ask once whether to create/switch a WorkTrunk worktree now.
-2. If yes and branch has no worktree, call `worktrunk-create`.
-3. If worktree already exists, call `worktrunk-switch`.
-4. If branch name fails validation, sanitize while preserving issue-id inclusion and report the exact transformation before proceeding.
-5. If issue title is empty and `gitBranchName` is missing, use `feature/<issue-id>-work-item`.
+1. Always use WorkTrunk for task execution. Do not run implementation work directly on the current checkout without switching/creating the issue branch worktree first.
+2. Resolve the target branch from Linear metadata first (`gitBranchName` when available).
+3. If branch has no worktree, call `worktrunk-create` with that branch.
+4. If worktree already exists, call `worktrunk-switch` to that branch.
+5. If branch name fails validation, sanitize while preserving issue-id inclusion and report the exact transformation before proceeding.
+6. If issue title is empty and `gitBranchName` is missing, use `feature/<issue-id>-work-item`.
 
 ### Phase 3: Implementation loop
 
@@ -127,6 +129,8 @@ Common failure branches:
 - NEVER hide permission-denied steps; show exact blocked command and next action.
 - NEVER run heavyweight full-suite checks when a targeted check is enough.
 - NEVER open a second PR for the same branch when one already exists.
+- NEVER use ad-hoc branch names when Linear provides `gitBranchName`, unless sanitization is required.
+- NEVER bypass WorkTrunk for branch/worktree setup in this workflow.
 
 ## Output Contract
 

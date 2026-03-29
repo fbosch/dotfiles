@@ -59,16 +59,6 @@
         "@opencode-ai/plugin": "*",
       },
     },
-    "worktrunk": {
-      "name": "opencode-worktrunk",
-      "version": "0.1.0",
-      "devDependencies": {
-        "@types/node": "^22.13.9",
-      },
-      "peerDependencies": {
-        "@opencode-ai/plugin": "*",
-      },
-    },
   },
   "packages": {
     "@borewit/text-codec": ["@borewit/text-codec@0.2.1", "", {}, "sha512-k7vvKPbf7J2fZ5klGRD9AeKfUvojuZIQ3BT5u7Jfv+puwXkUBUT5PVyMDfJZpy30CBDXGMgw7fguK/lpOMBvgw=="],
@@ -178,8 +168,6 @@
     "opencode-machine-context": ["opencode-machine-context@workspace:machine-context"],
 
     "opencode-openmemory": ["opencode-openmemory@workspace:openmemory"],
-
-    "opencode-worktrunk": ["opencode-worktrunk@workspace:worktrunk"],
 
     "papaparse": ["papaparse@5.5.3", "", {}, "sha512-5QvjGxYVjxO59MGU2lHVYpRWBBtKHnlIAcSe1uNFCkkptUh63NFRj0FJQm7nR67puEruUci/ZkjmEFrjCAyP4A=="],
 
