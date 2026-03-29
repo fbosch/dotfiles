@@ -53,6 +53,30 @@ def parse_org_and_project(value):
     return None, None
 
 
+def detect_org_from_git_remote():
+    process = subprocess.run(
+        ["git", "config", "--get", "remote.origin.url"],
+        capture_output=True,
+        text=True,
+    )
+    if process.returncode != 0:
+        return None
+
+    remote = process.stdout.strip()
+    if not remote:
+        return None
+
+    dev_azure_match = re.search(r"dev\.azure\.com/([^/]+)/", remote)
+    if dev_azure_match:
+        return f"https://dev.azure.com/{dev_azure_match.group(1)}"
+
+    visualstudio_match = re.search(r"https://([^.]+)\.visualstudio\.com", remote)
+    if visualstudio_match:
+        return f"https://{visualstudio_match.group(1)}.visualstudio.com"
+
+    return None
+
+
 def run_az_work_item_show(item_id, org, project):
     command = ["az", "boards", "work-item", "show", "--id", item_id, "--output", "json"]
     if org:
@@ -105,10 +129,41 @@ def collect_wiki_links(relations, source):
     return links
 
 
+def get_current_branch():
+    process = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if process.returncode != 0:
+        return ""
+    return process.stdout.strip()
+
+
+def infer_id_from_branch(branch_name):
+    if not branch_name:
+        return None
+
+    patterns = [
+        r"AB#(\d+)",
+        r"(?:^|[/-])(?:pbi|wi|workitem|work-item)[-_]?(\d+)(?:$|[/-])",
+        r"(?<!\d)(\d{4,})(?!\d)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, branch_name, flags=re.IGNORECASE)
+        if match:
+            return match.group(1)
+    return None
+
+
 raw_input = sys.argv[1] if len(sys.argv) > 1 else ""
 if not raw_input.strip():
-    print("ERROR: Usage: /ado-pbi <pbi-id-or-work-item-url>")
-    raise SystemExit(0)
+    branch = get_current_branch()
+    inferred_id = infer_id_from_branch(branch)
+    if inferred_id is None:
+        print("ERROR: Usage: /ado-pbi <pbi-id-or-work-item-url> (or use a branch containing AB#12345 or 12345)")
+        raise SystemExit(0)
+    raw_input = inferred_id
 
 work_item_id = extract_id(raw_input)
 if work_item_id is None:
@@ -116,6 +171,8 @@ if work_item_id is None:
     raise SystemExit(0)
 
 org, project = parse_org_and_project(raw_input)
+if org is None:
+    org = detect_org_from_git_remote()
 
 try:
     pbi = run_az_work_item_show(work_item_id, org, project)

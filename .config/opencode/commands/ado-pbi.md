@@ -8,10 +8,10 @@ Fetch and structure Azure DevOps Product Backlog Item data for agent context.
 
 PBI input: $ARGUMENTS
 
-**If $ARGUMENTS is empty:** Respond only with: "Usage: /ado-pbi <pbi-id-or-work-item-url>"
+If `$ARGUMENTS` is empty, infer PBI ID from current branch name (for example `AB#54032`, `pbi-54032`, or `feature/54032-something`).
 
 **Fetched data:**
-!`./.config/opencode/scripts/fetch-ado-pbi.sh "$ARGUMENTS"`
+!`~/.config/opencode/scripts/fetch-ado-pbi.sh "$ARGUMENTS"`
 
 **Output format:**
 
