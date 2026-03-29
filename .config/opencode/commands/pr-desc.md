@@ -7,6 +7,14 @@ Write a PR description in English. Output markdown only.
 
 Use the auto-generated git context below.
 
+PR BODY POLICY (authoritative for body content only):
+@.agents/skills/pr-description/SKILL.md
+
+Follow this precedence order:
+1. Title format and title types from this command
+2. PR body structure and content rules from `pr-description` skill
+3. If there is a conflict, command hard limits win
+
 **Output format:**
 
 Line 1: `<type>: <description>` — max 72 chars, present tense
@@ -15,36 +23,19 @@ Line 3+: Markdown PR body
 
 Use one of these title types: feat, fix, refactor, chore, docs, test
 
-**Sections (use exactly these headings):**
-
-## Summary
-
-## Changes
-
 **Hard limits:**
 
-- Summary: 1 sentence, 8-14 words
-- Changes: 2–5 bullets, max 10 words each
-- Total output: 24 lines max
-
-**Length calibration:**
-
-- Small PR (≤3 files, ≤2 commits): 2 bullets
-- Medium PR (4–10 files or 3–6 commits): 3–4 bullets
-- Large PR (>10 files or >6 commits): 4–5 bullets
+- Changes: 2-5 bullets
+- Total output: 36 lines max
 
 **Rules:**
 
-- Start each bullet with a plain verb: add, remove, change, fix, update
-- No adjectives, no adverbs, no filler, no paragraphs
-- No first person, no "this PR"
+- Apply all PR body structure, section, and writing rules from the skill
 - Ignore merge commits in the Commits context
 - Ignore changes that appear only because of merges
-- Describe what changed in the code
 - Ignore formatting, whitespace, and import reordering
-- Do not repeat Summary content in Changes
 - Do not explain your reasoning
-- Do not add commentary after the last bullet
+- Do not add commentary after the last section
 
 **Example output:**
 

@@ -11,10 +11,11 @@
     "opencode-snippets",
     "opencode-claude-auth",
     "opencode-toon-plugin@latest",
+    "./plugins/worktrunk.ts",
     "./plugins/rtk.ts"
   ],
   "instructions": [
-    "~/.config/opencode/instructions/shell-strategy.md"
+    "~/.config/opencode/instructions/worktrunk.md"
   ],
   "permission": {
     "bash": {
@@ -25,7 +26,9 @@
       "git push *": "deny",
       "git reset *": "deny",
       "git rebase *": "deny",
+      "git worktree *": "deny",
       "git checkout *": "ask",
+      "git switch *": "ask",
       "git commit *": "deny"
     }
   },
@@ -136,6 +139,10 @@
         "gh",
         "mcp"
       ]
+    },
+    "linear": {
+      "type": "remote",
+      "url": "https://mcp.linear.app/mcp"
     },
     "exa": {
       "type": "local",
