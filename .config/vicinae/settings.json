@@ -33,6 +33,7 @@
       }
    },
    "favorites": [
+      "applications:nix.bwrapper.helium_browser",
       "applications:one.ablaze.floorp",
       "@fbosch/yr-weather:yr-weather",
       "@fbosch/home-assistant:home-assistant-lights",
