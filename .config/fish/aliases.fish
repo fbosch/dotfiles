@@ -37,6 +37,7 @@ abbr nxgc nix-collect-garbage
 abbr oc opencode
 abbr ocps opencode_profile_switch
 abbr ocas opencode_auth_switch
+abbr oci linear_issue_workflow
 
 # Helpers
 abbr x exit
