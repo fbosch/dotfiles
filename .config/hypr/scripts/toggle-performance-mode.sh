@@ -4,6 +4,12 @@ set -euo pipefail
 
 # State file to track performance mode
 STATE_FILE="/tmp/hypr-performance-mode"
+LOCK_FILE="/tmp/toggle-performance-mode.lock"
+
+exec 9>"$LOCK_FILE"
+if command -v flock >/dev/null 2>&1; then
+  flock -n 9 || exit 0
+fi
 
 # Check if performance mode is currently enabled
 if [[ -f "$STATE_FILE" ]]; then
@@ -17,10 +23,8 @@ if [[ -f "$STATE_FILE" ]]; then
   # Set window switcher to previews mode
   ags request --instance ags-bundled window-switcher '{"action": "set-mode", "mode": "previews"}' 2>/dev/null || true
   
-  # Re-enable animations and shadows, restore blur to 4 passes
-  hyprctl keyword animations:enabled 1 >/dev/null
-  hyprctl keyword decoration:blur:passes 4 >/dev/null
-  hyprctl keyword decoration:shadow:enabled 1 >/dev/null
+  # Re-enable animations and shadows, restore blur to normal passes
+  hyprctl --batch "keyword animations:enabled 1 ; keyword decoration:blur:passes 2 ; keyword decoration:shadow:enabled 1" >/dev/null
   
   # Remove state file
   rm -f "$STATE_FILE"
@@ -49,9 +53,7 @@ else
   ags request --instance ags-bundled window-switcher '{"action": "set-mode", "mode": "icons"}' 2>/dev/null || true
   
   # Disable animations and shadows, reduce blur to 1 pass for performance
-  hyprctl keyword animations:enabled 0 >/dev/null
-  hyprctl keyword decoration:blur:passes 1 >/dev/null
-  hyprctl keyword decoration:shadow:enabled 0 >/dev/null
+  hyprctl --batch "keyword animations:enabled 0 ; keyword decoration:blur:passes 1 ; keyword decoration:shadow:enabled 0" >/dev/null
   
   # Create state file
   touch "$STATE_FILE"

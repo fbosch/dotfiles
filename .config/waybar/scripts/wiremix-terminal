@@ -48,11 +48,69 @@ toggle_or_focus_existing_window() {
 }
 
 launch_wiremix() {
+  local target_workspace existing_window address
+  target_workspace="$(workspace_under_cursor)"
+
   if footclient -N -a "$class_name" wiremix >/dev/null 2>&1; then
+    :
+  else
+    foot -a "$class_name" wiremix >/dev/null 2>&1 &
+  fi
+
+  if [[ -z "$target_workspace" ]]; then
     return
   fi
 
-  foot -a "$class_name" wiremix >/dev/null 2>&1 &
+  existing_window="$(wait_for_window)"
+  if [[ -z "$existing_window" ]]; then
+    return
+  fi
+
+  IFS='|' read -r address _ <<< "$existing_window"
+  hyprctl dispatch movetoworkspacesilent "${target_workspace},address:${address}" >/dev/null 2>&1 || true
+  hyprctl dispatch focuswindow "address:${address}" >/dev/null 2>&1 || true
+}
+
+workspace_under_cursor() {
+  local cursor_x cursor_y cursor_pos
+
+  cursor_pos="$(hyprctl cursorpos 2>/dev/null | tr -d ' ')"
+  if [[ -z "$cursor_pos" ]]; then
+    hyprctl activeworkspace -j 2>/dev/null | jq -r '.name // empty'
+    return
+  fi
+
+  IFS=',' read -r cursor_x cursor_y <<< "$cursor_pos"
+  if [[ -z "$cursor_x" || -z "$cursor_y" ]]; then
+    hyprctl activeworkspace -j 2>/dev/null | jq -r '.name // empty'
+    return
+  fi
+
+  hyprctl monitors -j 2>/dev/null | jq -r --arg x "$cursor_x" --arg y "$cursor_y" '
+    ($x | tonumber) as $cx
+    | ($y | tonumber) as $cy
+    | first(
+        .[]
+        | select($cx >= .x and $cx < (.x + .width) and $cy >= .y and $cy < (.y + .height))
+        | .activeWorkspace.name
+      ) // empty
+  '
+}
+
+wait_for_window() {
+  local existing_window=""
+
+  for _ in {1..20}; do
+    existing_window="$(find_existing_window)"
+    if [[ -n "$existing_window" ]]; then
+      printf '%s' "$existing_window"
+      return
+    fi
+
+    sleep 0.05
+  done
+
+  printf '%s' ""
 }
 
 if command -v wiremix >/dev/null 2>&1 && command -v footclient >/dev/null 2>&1; then
