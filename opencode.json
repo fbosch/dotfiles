@@ -15,14 +15,6 @@
     ]
   },
   "mcp": {
-    "nvim": {
-      "type": "local",
-      "command": [
-        "sh",
-        "-c",
-        "exec nvim-mcp --connect \"${NVIM_MCP_SOCKET:-auto}\""
-      ]
-    },
     "design-system": {
       "enabled": false,
       "type": "remote",
