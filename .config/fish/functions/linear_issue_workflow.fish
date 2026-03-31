@@ -4,12 +4,12 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
 
     set -l icon_state_triage "󰎔"
     set -l icon_state_backlog "󱥸 "
-    set -l icon_state_started "󱞩"
+    set -l icon_state_started "󰪡 "
     set -l icon_state_unstarted "󰄱"
     set -l icon_state_in_review "󰪣 "
     set -l icon_state_completed " "
-    set -l icon_state_canceled "󰜺"
-    set -l icon_state_default "󰘍"
+    set -l icon_state_canceled " "
+    set -l icon_state_default "󱞩 "
 
     set -l icon_priority_1 "󰀧"
     set -l icon_priority_2 "󰢾"
@@ -20,7 +20,7 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
     set -l color_state_triage_hex "#FFAB54"
     set -l color_state_backlog_hex "#959DA5"
     set -l color_state_unstarted_hex "#959DA5"
-    set -l color_state_started_hex "#54A0FF"
+    set -l color_state_started_hex "#ecd21a"
     set -l color_state_in_review_hex "#2dd473"
     set -l color_state_completed_hex "#7D70FF"
     set -l color_state_canceled_hex "#7B828C"
@@ -50,7 +50,7 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
     if test (count $argv) -gt 0
         set issue_id (string upper -- $argv[1])
     else
-        set -l list_output (env NO_COLOR=1 linear issue list --state triage --state backlog --state unstarted --state started --sort priority --no-pager --limit 100 2>&1)
+        set -l list_output (env NO_COLOR=1 linear issue list --state triage --state backlog --state unstarted --state started --all-assignees --sort priority --no-pager --limit 0 2>&1)
         set -l list_status $status
 
         if test $list_status -ne 0
@@ -108,7 +108,7 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
                     set team_key (string split -f 1 $tab -- "$selected_team")
                 end
 
-                set list_output (env NO_COLOR=1 linear issue list --state triage --state backlog --state unstarted --state started --sort priority --no-pager --limit 100 --team "$team_key" 2>&1)
+                set list_output (env NO_COLOR=1 linear issue list --state triage --state backlog --state unstarted --state started --all-assignees --sort priority --no-pager --limit 0 --team "$team_key" 2>&1)
                 set list_status $status
             end
         end
