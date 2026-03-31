@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "0eafe0971692cf8fcecb75f955595821452a835791d315db738f89ee49063a34"
     },
+    "github-actions-docs": {
+      "source": "xixu-me/skills",
+      "sourceType": "github",
+      "computedHash": "e7babb077d50cd88fb8c0e168373c8a560d056b540f364cb4892191bf524f5ee"
+    },
     "linear": {
       "source": "openai/skills",
       "sourceType": "github",
