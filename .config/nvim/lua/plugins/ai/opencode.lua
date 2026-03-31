@@ -3,6 +3,7 @@ return {
 		"NickvanDyke/opencode.nvim",
 		lazy = false,
 		dependencies = {
+			"linw1995/nvim-mcp",
 			"folke/snacks.nvim",
 		},
 		init = function()
@@ -167,8 +168,14 @@ return {
 				local restore_state = opencode_session.get_last_restore_state()
 				local sidecar_path = session.get_opencode_sidecar_path()
 				local sidecar_stat = vim.uv.fs_stat(sidecar_path)
+				local nvim_mcp_socket = vim.env.NVIM_MCP_SOCKET
+				local nvim_mcp_socket_stat = nil
 				local terminal_bufnr = nil
 				local restore_at = "never"
+
+				if type(nvim_mcp_socket) == "string" and nvim_mcp_socket ~= "" then
+					nvim_mcp_socket_stat = vim.uv.fs_stat(nvim_mcp_socket)
+				end
 
 				if type(restore_state) == "table" and type(restore_state.at) == "number" then
 					restore_at = os.date("%Y-%m-%d %H:%M:%S", restore_state.at)
@@ -204,6 +211,8 @@ return {
 					string.format("Restore at: %s", restore_at),
 					string.format("Sidecar: %s", sidecar_path),
 					string.format("Sidecar exists: %s", sidecar_stat and "yes" or "no"),
+					string.format("nvim-mcp socket: %s", nvim_mcp_socket or "<unset>"),
+					string.format("nvim-mcp socket exists: %s", nvim_mcp_socket_stat and "yes" or "no"),
 					string.format("Terminal: %s", terminal_bufnr and ("alive (buf " .. terminal_bufnr .. ")") or "not found"),
 					string.format("Nvim CWD: %s", vim.fn.getcwd()),
 				}

@@ -37,7 +37,8 @@ abbr nxgc nix-collect-garbage
 abbr oc opencode
 abbr ocps opencode_profile_switch
 abbr ocas opencode_auth_switch
-abbr oci linear_issue_workflow
+
+abbr liw linear_issue_workflow
 alias wsc 'wt switch --create --execute=opencode'
 
 # Helpers
