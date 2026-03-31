@@ -86,13 +86,13 @@ end
 # --- Keybindings ---
 bind -M insert \cc kill-whole-line
 bind -M insert \cc repaint
-bind \cP fzfcd
+bind \cP ctrl_p_picker
 
 function fish_user_keybindings
     fish_vi_key_bindings
     bind \cg _navi_smart_replace
     bind --mode insert \cg _navi_smart_replace
-    bind --mode insert \cP fzfcd
+    bind --mode insert \cP ctrl_p_picker
 end
 
 # --- Third-party Tools ---

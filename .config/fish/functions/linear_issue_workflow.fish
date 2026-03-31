@@ -194,10 +194,15 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
     end
 
     if test $branch_exists -eq 1
-        wt -C "$repo_root" switch "$branch" --yes -x opencode -- "--prompt" "$prompt"
+        wt -C "$repo_root" switch "$branch" --yes --execute=opencode -- "--prompt" "$prompt"
         return $status
     end
 
-    wt -C "$repo_root" switch --create "$branch" --yes -x opencode -- "--prompt" "$prompt"
+    if functions -q wsc
+        wsc "$branch" -- "--prompt" "$prompt"
+        return $status
+    end
+
+    wt -C "$repo_root" switch --create "$branch" --yes --execute=opencode -- "--prompt" "$prompt"
     return $status
 end
