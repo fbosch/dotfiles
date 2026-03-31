@@ -143,8 +143,6 @@ local function get_capabilities()
 	return capabilities
 end
 
-local function setup_codebook(_capabilities, _on_attach) end
-
 local function get_ensure_installed()
 	local ensure = {
 		"eslint",
@@ -327,7 +325,6 @@ return {
 			automatic_installation = false,
 			handlers = { mason_handlers(capabilities, on_attach) },
 		})
-		setup_codebook(capabilities, on_attach)
 		require("lazydev").setup({ capabilities = capabilities, on_attach = on_attach })
 		require("lsp-file-operations").setup()
 		setup_diagnostics()
