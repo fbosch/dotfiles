@@ -37,8 +37,34 @@ find_existing_window() {
   printf '%s' ""
 }
 
+workspace_under_cursor() {
+  local cursor_x cursor_y cursor_pos
+
+  cursor_pos="$(hyprctl cursorpos 2>/dev/null | tr -d ' ')"
+  if [[ -z "$cursor_pos" ]]; then
+    hyprctl activeworkspace -j 2>/dev/null | jq -r '.name // empty'
+    return
+  fi
+
+  IFS=',' read -r cursor_x cursor_y <<< "$cursor_pos"
+  if [[ -z "$cursor_x" || -z "$cursor_y" ]]; then
+    hyprctl activeworkspace -j 2>/dev/null | jq -r '.name // empty'
+    return
+  fi
+
+  hyprctl monitors -j 2>/dev/null | jq -r --arg x "$cursor_x" --arg y "$cursor_y" '
+    ($x | tonumber) as $cx
+    | ($y | tonumber) as $cy
+    | first(
+        .[]
+        | select($cx >= .x and $cx < (.x + .width) and $cy >= .y and $cy < (.y + .height))
+        | .activeWorkspace.name
+      ) // empty
+  '
+}
+
 toggle_or_focus_existing_window() {
-  local existing_window address workspace_name active_address active_workspace_name
+  local existing_window address workspace_name active_address target_workspace
   existing_window="$(find_existing_window)"
 
   if [[ -z "$existing_window" ]]; then
@@ -54,9 +80,9 @@ toggle_or_focus_existing_window() {
   fi
 
   if [[ "$workspace_name" == special:* ]]; then
-    active_workspace_name="$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.name // empty')"
-    if [[ -n "$active_workspace_name" ]]; then
-      hyprctl dispatch movetoworkspacesilent "${active_workspace_name},address:${address}" >/dev/null 2>&1 || true
+    target_workspace="$(workspace_under_cursor)"
+    if [[ -n "$target_workspace" ]]; then
+      hyprctl dispatch movetoworkspacesilent "${target_workspace},address:${address}" >/dev/null 2>&1 || true
     fi
   fi
 
