@@ -50,7 +50,7 @@
 
   "custom/cpu_temp": {
     "exec": "~/.config/waybar/scripts/temperatures cpu",
-    "interval": 5,
+    "interval": 30,
     "return-type": "json",
     "format": "  {}",
     "tooltip": true,
@@ -59,7 +59,7 @@
 
   "custom/gpu_temp": {
     "exec": "~/.config/waybar/scripts/temperatures gpu",
-    "interval": 5,
+    "interval": 30,
     "return-type": "json",
     "format": "󰢮  {}",
     "tooltip": true,
