@@ -7,7 +7,12 @@ lock_file="/tmp/s-tui-terminal.lock"
 special_workspace="tool_popups"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-# shellcheck source=/dev/null
+# Check dependencies first (before sourcing lib)
+if ! hash s-tui footclient 2>/dev/null; then
+  exit 1
+fi
+
+# Only source lib if dependencies are available
 source "$script_dir/hypr-popup-terminal-lib.sh"
 
 exec 9>"$lock_file"
@@ -23,13 +28,9 @@ launch_s_tui() {
   foot -a "$class_name" s-tui >/dev/null 2>&1 &
 }
 
-if command -v s-tui >/dev/null 2>&1 && command -v footclient >/dev/null 2>&1; then
-  if hypr_popup_toggle_or_focus_existing_window "$class_name" "$special_workspace"; then
-    exit 0
-  fi
-
-  launch_s_tui
+if hypr_popup_toggle_or_focus_existing_window "$class_name" "$special_workspace"; then
   exit 0
 fi
 
-exit 1
+launch_s_tui
+exit 0
