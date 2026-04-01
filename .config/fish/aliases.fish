@@ -17,7 +17,7 @@ abbr bup 'brew upgrade'
 abbr ff freshfetch
 abbr mrs5 mullvad_random_socks5
 
-alias cdwow 'cd "/home/fbb/.steam/steam/steamapps/compatdata/3598746258/pfx/drive_c/Program Files (x86)/World of Warcraft"'
+alias cdwow 'cd "/home/fbb/Faugus/battlenet/drive_c/Program Files (x86)/World of Warcraft"'
 
 alias uge get_week_dates
 alias rw remaining_work_hours

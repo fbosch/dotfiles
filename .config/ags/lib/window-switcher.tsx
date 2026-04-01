@@ -48,6 +48,7 @@ enum SortMode {
 // Hyprland client interface
 interface HyprlandClient {
   address: string;
+  stableId?: string;
   class: string;
   title: string;
   focused?: boolean;
@@ -62,6 +63,7 @@ interface HyprlandClient {
 // Window info for display
 interface WindowInfo {
   address: string;
+  stableId?: string;
   class: string;
   title: string;
   workspace: string;
@@ -227,7 +229,7 @@ function calculateButtonWidth(window: WindowInfo): number {
     return ICON_SIZE + (BUTTON_PADDING * 2) + 4 + 12;
   } else {
     // Preview mode: calculate from preview dimensions
-    const previewPath = captureWindowPreview(window.address);
+    const previewPath = captureWindowPreview(window);
     const dimensions = calculatePreviewDimensions(previewPath);
     // Button width = preview content width + button padding + border + GTK layout overhead
     // Preview content includes: preview-header padding (12*2) already in dimensions.width
@@ -243,20 +245,28 @@ const PREVIEW_CACHE_DIR = GLib.file_test("/dev/shm", GLib.FileTest.IS_DIR)
   : `${GLib.get_tmp_dir()}/hypr-window-captures`;
 
 // Get window preview path if it exists (screenshots managed by window-capture-daemon.sh)
-// Screenshots are named {address}.jpg (fixed filename, no timestamp)
-function captureWindowPreview(windowAddress: string): string | null {
-  if (!windowAddress) return null;
+// Screenshots are named {stableId}.jpg, with {address}.jpg as a legacy fallback.
+function captureWindowPreview(window: WindowInfo): string | null {
+  const idCandidates: string[] = [];
 
-  const addressClean = windowAddress.replace(/^0x/, "");
-  const previewPath = `${PREVIEW_CACHE_DIR}/${addressClean}.jpg`;
+  if (window.stableId && window.stableId !== "") {
+    idCandidates.push(window.stableId);
+  }
 
-  try {
-    const file = Gio.File.new_for_path(previewPath);
-    if (file.query_exists(null)) {
-      return previewPath;
+  if (window.address) {
+    idCandidates.push(window.address.replace(/^0x/, ""));
+  }
+
+  for (const id of idCandidates) {
+    const previewPath = `${PREVIEW_CACHE_DIR}/${id}.jpg`;
+    try {
+      const file = Gio.File.new_for_path(previewPath);
+      if (file.query_exists(null)) {
+        return previewPath;
+      }
+    } catch (e) {
+      console.error(`Failed to find preview for ${id}:`, e);
     }
-  } catch (e) {
-    console.error(`Failed to find preview for ${windowAddress}:`, e);
   }
 
   return null;
@@ -462,6 +472,7 @@ async function getWindows(): Promise<WindowInfo[]> {
       .filter((c) => c.workspace.id !== -1)
       .map((c) => ({
         address: c.address,
+        stableId: c.stableId,
         class: c.class || "",
         title: c.title || "",
         workspace: c.workspace.name || c.workspace.id.toString(),
@@ -589,7 +600,7 @@ function createAppButton(
 
     if (displayMode === DisplayMode.PREVIEWS) {
       // Preview mode: show aspect-ratio box with header
-      const previewPath = captureWindowPreview(window.address);
+      const previewPath = captureWindowPreview(window);
       const previewInfo = getPreviewInfo(previewPath);
       const dimensions = { width: previewInfo.width, height: previewInfo.height };
 
@@ -782,7 +793,7 @@ function updateSwitcher() {
     if (displayMode === DisplayMode.PREVIEWS && !windowListChanged && !modeChanged) {
       currentPreviewMtimes = new Map();
       for (const window of currentWindows) {
-        const previewPath = captureWindowPreview(window.address);
+        const previewPath = captureWindowPreview(window);
         const mtime = getPreviewMtime(previewPath);
         if (mtime !== null) {
           currentPreviewMtimes.set(window.address, mtime);
@@ -918,7 +929,7 @@ Will wrap: ${(buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.leng
         if (!currentPreviewMtimes) {
           currentPreviewMtimes = new Map();
           for (const window of currentWindows) {
-            const previewPath = captureWindowPreview(window.address);
+            const previewPath = captureWindowPreview(window);
             const mtime = getPreviewMtime(previewPath);
             if (mtime !== null) {
               currentPreviewMtimes.set(window.address, mtime);

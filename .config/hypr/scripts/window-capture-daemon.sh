@@ -22,10 +22,7 @@ fi
 mkdir -p "$SCREENSHOT_DIR"
 
 # Clean up any orphaned temp files from previous daemon runs (crash/kill leaves these behind)
-rm -f "$SCREENSHOT_DIR"/.monitor_*.mpc \
-      "$SCREENSHOT_DIR"/.monitor_*.cache \
-      "$SCREENSHOT_DIR"/.monitor_*.jpg \
-      "$SCREENSHOT_DIR"/.temp_*.jpg
+rm -f "$SCREENSHOT_DIR"/.temp_*.jpg
 
 # Tracking files
 LAST_SCREENSHOT_FILE="$SCREENSHOT_DIR/.last_screenshot"
@@ -51,7 +48,12 @@ TEMP_FILE_MAX_AGE_S=30       # Remove stale intermediate files older than 30s
 
 # External command timeouts
 GRIM_TIMEOUT_S=2
-MAGICK_TIMEOUT_S=3
+
+# Capture parallelism
+MAX_PARALLEL_CAPTURES=4
+
+# Black-frame guard (0-1000 scale). 10 ~= 1% mean brightness.
+BLACK_FRAME_MEAN_THRESHOLD=10
 
 # Image format and quality
 JPEG_QUALITY=85              # JPEG quality setting (60-95 range)
@@ -65,11 +67,6 @@ PREVIEW_TARGET_MAX_WIDTH=320 # Maximum width for preview display
 
 # Hyprland query socket (faster than hyprctl - no process spawn)
 HYPR_QUERY_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock"
-
-# Keep in sync with `general.gaps_in` from hyprland.conf.
-# Avoid querying `getoption` during early compositor startup because it can crash
-# Hyprland v0.54.0 before config manager is fully initialized.
-GAPS_IN=2
 
 # AGS overlay detection
 # Using bundled AGS instance - check window-switcher component visibility
@@ -100,11 +97,7 @@ cleanup_stale_temp_files() {
   local mtime
   local age
 
-  for file in \
-    "$SCREENSHOT_DIR"/.monitor_*.jpg \
-    "$SCREENSHOT_DIR"/.monitor_*.mpc \
-    "$SCREENSHOT_DIR"/.monitor_*.cache \
-    "$SCREENSHOT_DIR"/.temp_*.jpg; do
+  for file in "$SCREENSHOT_DIR"/.temp_*.jpg; do
     [[ -e "$file" ]] || continue
 
     mtime=$(stat -c %Y "$file" 2>/dev/null || printf '0')
@@ -113,6 +106,132 @@ cleanup_stale_temp_files() {
     if [[ $age -gt $TEMP_FILE_MAX_AGE_S ]]; then
       rm -f "$file"
     fi
+  done
+}
+
+cleanup_stale_preview_files() {
+  local all_clients_json
+  all_clients_json=$(printf 'j/clients' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
+  [[ -n "$all_clients_json" ]] || return 0
+
+  declare -A live_preview_ids=()
+  local live_id
+
+  while read -r live_id; do
+    [[ -n "$live_id" ]] || continue
+    live_preview_ids["$live_id"]=1
+  done < <(jq -r '.[] | [(.stableId // ""), ((.address // "") | sub("^0x"; ""))] | .[] | select(length > 0)' <<< "$all_clients_json" 2>/dev/null)
+
+  local preview_path
+  local preview_filename
+  local preview_id
+  for preview_path in "$SCREENSHOT_DIR"/*.jpg; do
+    [[ -e "$preview_path" ]] || continue
+    preview_filename="${preview_path##*/}"
+    preview_id="${preview_filename%.jpg}"
+
+    if [[ -n "${live_preview_ids[$preview_id]:-}" ]]; then
+      continue
+    fi
+
+    rm -f "$preview_path"
+  done
+}
+
+calculate_capture_scale() {
+  local width="$1"
+  local height="$2"
+
+  awk -v w="$width" \
+      -v h="$height" \
+      -v max_w="$PREVIEW_TARGET_MAX_WIDTH" \
+      -v max_h="$PREVIEW_TARGET_HEIGHT" \
+      'BEGIN {
+        if (w <= 0 || h <= 0) {
+          printf "1.0\n"
+          exit
+        }
+
+        scale_w = max_w / w
+        scale_h = max_h / h
+        scale = (scale_w < scale_h) ? scale_w : scale_h
+
+        if (scale > 1.0) {
+          scale = 1.0
+        }
+
+        if (scale <= 0.0) {
+          scale = 1.0
+        }
+
+        printf "%.4f\n", scale
+      }'
+}
+
+is_frame_too_dark() {
+  local image_path="$1"
+
+  if command -v magick >/dev/null 2>&1; then
+    local mean_brightness
+    mean_brightness=$(run_with_timeout 1 magick "$image_path" -colorspace Gray -format "%[fx:floor(mean*1000)]" info: 2>/dev/null || printf '')
+    if [[ -n "$mean_brightness" ]] && (( mean_brightness < BLACK_FRAME_MEAN_THRESHOLD )); then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+capture_window_preview() {
+  local stable_id="$1"
+  local width="$2"
+  local height="$3"
+
+  if [[ -z "$stable_id" ]]; then
+    return 0
+  fi
+
+  if [[ "$width" -le 0 ]] || [[ "$height" -le 0 ]]; then
+    return 0
+  fi
+
+  local scale_factor
+  scale_factor=$(calculate_capture_scale "$width" "$height")
+  if [[ -z "$scale_factor" ]]; then
+    return 0
+  fi
+
+  local filename="${stable_id}.jpg"
+  local temp_output="$SCREENSHOT_DIR/.temp_${filename}"
+  local output_path="$SCREENSHOT_DIR/$filename"
+
+  run_with_timeout "$GRIM_TIMEOUT_S" grim \
+    -t jpeg \
+    -q "$JPEG_QUALITY" \
+    -s "$scale_factor" \
+    -T "$stable_id" \
+    "$temp_output" 2>/dev/null || {
+      rm -f "$temp_output"
+      return 0
+    }
+
+  if [[ ! -s "$temp_output" ]]; then
+    rm -f "$temp_output"
+    return 0
+  fi
+
+  if is_frame_too_dark "$temp_output"; then
+    rm -f "$temp_output"
+    return 0
+  fi
+
+  mv "$temp_output" "$output_path"
+}
+
+wait_for_capture_batch() {
+  local pid
+  for pid in "$@"; do
+    wait "$pid" || true
   done
 }
 
@@ -130,6 +249,7 @@ maybe_run_healthcheck() {
   fi
 
   cleanup_stale_temp_files
+  cleanup_stale_preview_files
   printf '%s\n' "$now" > "$LAST_HEALTHCHECK_FILE"
 }
 
@@ -166,44 +286,7 @@ is_in_overlay_cooldown() {
   return 1
 }
 
-# Check if a window is obscured by any floating windows
-# Arguments: window_x window_y window_width window_height workspace_id clients_json
-# Returns: 0 if obscured, 1 if not obscured
-is_window_obscured() {
-  local win_x=$1
-  local win_y=$2
-  local win_width=$3
-  local win_height=$4
-  local workspace=$5
-  local clients_json=$6
-
-  # Get all floating windows in the same workspace from pre-fetched clients JSON
-  while read -r floating_data; do
-    [[ -z "$floating_data" ]] && continue
-    
-    IFS='|' read -r float_x float_y float_width float_height <<< "$floating_data"
-    
-    # Check if the floating window overlaps with our target window
-    # Two rectangles overlap if:
-    # - float_x < win_x + win_width (floating window's left edge is before target's right edge)
-    # - float_x + float_width > win_x (floating window's right edge is after target's left edge)
-    # - float_y < win_y + win_height (floating window's top edge is before target's bottom edge)
-    # - float_y + float_height > win_y (floating window's bottom edge is after target's top edge)
-    
-    if [[ $float_x -lt $(( win_x + win_width )) ]] && \
-       [[ $(( float_x + float_width )) -gt $win_x ]] && \
-       [[ $float_y -lt $(( win_y + win_height )) ]] && \
-       [[ $(( float_y + float_height )) -gt $win_y ]]; then
-      # Overlap detected - window is obscured
-      return 0
-    fi
-  done < <(jq -r --arg ws "$workspace" '.[] | select(.workspace.id == ($ws | tonumber) and .floating == true) | [.at[0], .at[1], .size[0], .size[1]] | join("|")' <<< "$clients_json" 2>/dev/null)
-  
-  # No overlap found
-  return 1
-}
-
-# Capture all visible windows from a single fullscreen screenshot
+# Capture all windows in the active workspace using Hyprland toplevel export.
 capture_screenshot() {
   local target_workspace="$1"
   local event_type="${2:-activewindow}"  # Default to activewindow if not specified
@@ -280,144 +363,29 @@ capture_screenshot() {
   timestamp=$(now_ms)
   printf '%s\n' "$timestamp" > "$LAST_SCREENSHOT_FILE"
   
-  # Get all monitors and their geometries
-  local monitors_json
-  monitors_json=$(printf 'j/monitors' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
-  
-  # Capture each monitor separately and keep at full resolution for cropping
-  local monitor_index=0
-  declare -A monitor_mpc_files
-  declare -A monitor_offsets
-
-  while read -r monitor_data; do
-    IFS='|' read -r mon_name mon_x mon_y mon_width mon_height mon_transform <<< "$monitor_data"
-
-    local temp_monitor_shot="$SCREENSHOT_DIR/.monitor_${monitor_index}_${timestamp}.jpg"
-    run_with_timeout "$GRIM_TIMEOUT_S" grim -t jpeg -q "$JPEG_QUALITY" -o "$mon_name" "$temp_monitor_shot" 2>/dev/null || { monitor_index=$((monitor_index + 1)); continue; }
-
-    if [[ ! -s "$temp_monitor_shot" ]]; then
-      rm -f "$temp_monitor_shot"
-      monitor_index=$((monitor_index + 1))
-      continue
-    fi
-
-    local temp_monitor_mpc="$SCREENSHOT_DIR/.monitor_${monitor_index}_${timestamp}.mpc"
-    run_with_timeout "$MAGICK_TIMEOUT_S" magick "$temp_monitor_shot" \
-      -quality "$JPEG_QUALITY" \
-      "$temp_monitor_mpc" 2>/dev/null || { rm -f "$temp_monitor_shot"; monitor_index=$((monitor_index + 1)); continue; }
-    rm -f "$temp_monitor_shot"
-
-    monitor_mpc_files[$monitor_index]="$temp_monitor_mpc"
-    monitor_offsets[$monitor_index]="${mon_x}|${mon_y}|${mon_width}|${mon_height}|${mon_transform}"
-
-    monitor_index=$((monitor_index + 1))
-  done < <(jq -r '.[] | [.name, .x, .y, .width, .height, .transform] | join("|")' <<< "$monitors_json")
-  
-  # Fetch all clients once - reused by the window loop and is_window_obscured
+  # Fetch all clients once for this capture pass.
   local all_clients_json
   all_clients_json=$(printf 'j/clients' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
+  [[ -n "$all_clients_json" ]] || return 0
 
-  # Process each window (fields pre-joined by jq - no per-window fork)
-  while IFS='|' read -r address mapped floating x y width height; do
+  # Process each window in the target workspace.
+  local -a capture_pids=()
+  while IFS=$'\t' read -r stable_id mapped width height; do
     [[ "$mapped" == "false" ]] && continue
-    
-    if [[ "$width" -le 0 ]] || [[ "$height" -le 0 ]]; then
-      continue
+    capture_window_preview "$stable_id" "$width" "$height" &
+    capture_pids+=("$!")
+
+    if [[ ${#capture_pids[@]} -ge $MAX_PARALLEL_CAPTURES ]]; then
+      wait_for_capture_batch "${capture_pids[@]}"
+      capture_pids=()
     fi
-    
-    # Determine which monitor this window belongs to
-    local window_center_x=$(( x + width / 2 ))
-    local window_center_y=$(( y + height / 2 ))
-    local target_monitor_index=-1
-    local target_monitor_mpc=""
-    local mon_offset_x=0
-    local mon_offset_y=0
+  done < <(jq -r --arg ws "$current_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | [(.stableId // ""), (.mapped // true), (.size[0] // 0), (.size[1] // 0)] | @tsv' <<< "$all_clients_json" 2>/dev/null)
 
-    for idx in "${!monitor_offsets[@]}"; do
-      IFS='|' read -r mon_x mon_y mon_w mon_h _ <<< "${monitor_offsets[$idx]}"
+  if [[ ${#capture_pids[@]} -gt 0 ]]; then
+    wait_for_capture_batch "${capture_pids[@]}"
+  fi
 
-      if [[ $window_center_x -ge $mon_x ]] && [[ $window_center_x -lt $(( mon_x + mon_w )) ]] && \
-         [[ $window_center_y -ge $mon_y ]] && [[ $window_center_y -lt $(( mon_y + mon_h )) ]]; then
-        target_monitor_index=$idx
-        target_monitor_mpc="${monitor_mpc_files[$idx]}"
-        mon_offset_x=$mon_x
-        mon_offset_y=$mon_y
-        break
-      fi
-    done
-
-    if [[ $target_monitor_index -eq -1 ]] || [[ -z "$target_monitor_mpc" ]]; then
-      continue
-    fi
-
-    # Adjust coordinates relative to monitor origin
-    local relative_x=$(( x - mon_offset_x ))
-    local relative_y=$(( y - mon_offset_y ))
-    
-    # Apply gap adjustments to crop dimensions (at full resolution)
-    local crop_x=$(( relative_x + GAPS_IN ))
-    local crop_y=$(( relative_y + GAPS_IN ))
-    local crop_width=$(( width - 2 * GAPS_IN ))
-    local crop_height=$(( height - 2 * GAPS_IN ))
-    
-    if [[ "$crop_width" -le 0 ]] || [[ "$crop_height" -le 0 ]]; then
-      continue
-    fi
-    
-    # Use fixed filename without timestamp
-    local address_clean="${address#0x}"
-    local filename="${address_clean}.jpg"
-    local temp_output="$SCREENSHOT_DIR/.temp_${filename}"
-    local output_path="$SCREENSHOT_DIR/$filename"
-    
-    # Check if window is obscured by a floating window (unless it's floating itself)
-    local is_obscured=false
-    if [[ "$floating" == "false" ]] && is_window_obscured "$x" "$y" "$width" "$height" "$current_workspace" "$all_clients_json"; then
-      is_obscured=true
-    fi
-    
-    # Only save if window is not obscured
-    # This prevents capturing previews of windows hidden behind floating windows
-    if [[ "$is_obscured" == "true" ]]; then
-      continue
-    fi
-
-    # Crop at full resolution, then smart resize; simultaneously check brightness.
-    # -write saves the JPEG while the pipeline continues to the Gray+info: stage.
-    # The ">" flag means only shrink if larger, never enlarge.
-    # This prevents upscaling small windows and maintains quality.
-    local mean_brightness
-    mean_brightness=$(run_with_timeout "$MAGICK_TIMEOUT_S" magick "$target_monitor_mpc" \
-      -crop "${crop_width}x${crop_height}+${crop_x}+${crop_y}" \
-      +repage \
-      -resize "${PREVIEW_TARGET_MAX_WIDTH}x${PREVIEW_TARGET_HEIGHT}>" \
-      -quality "$JPEG_QUALITY" \
-      -define jpeg:dct-method=fast \
-      -write "$temp_output" \
-      -colorspace Gray \
-      -format "%[fx:floor(mean*1000)]" info: 2>/dev/null || printf '')
-
-    # Validate output exists and has content
-    if [[ ! -s "$temp_output" ]]; then
-      rm -f "$temp_output"
-      continue
-    fi
-
-    # If brightness is very low (< 1% = <10 in 0-1000 scale), image is essentially black - discard it
-    # This catches minimized windows, off-screen windows, or capture errors
-    if [[ -n "$mean_brightness" ]] && (( mean_brightness < 10 )); then
-      rm -f "$temp_output"
-      continue
-    fi
-
-    # Only overwrite if validation passed
-    mv "$temp_output" "$output_path"
-  done < <(jq -r --arg ws "$current_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | [.address, (.mapped // true), .floating, .at[0], .at[1], .size[0], .size[1]] | join("|")' <<< "$all_clients_json" 2>/dev/null)
-  
-  for idx in "${!monitor_mpc_files[@]}"; do
-    local mpc_file="${monitor_mpc_files[$idx]}"
-    rm -f "$mpc_file" "${mpc_file%.mpc}.cache"
-  done
+  cleanup_stale_preview_files
   
   # Release lock
   rm -f "$CAPTURE_LOCK_FILE"
@@ -436,11 +404,21 @@ handle_event() {
     workspace\>\>*|workspace,*)
       event_type="workspace"
       ;;
+    openwindow\>\>*|openwindow,*|openwindowv2\>\>*|openwindowv2,*)
+      event_type="windowupdate"
+      ;;
+    movewindow\>\>*|movewindow,*|movewindowv2\>\>*|movewindowv2,*)
+      event_type="windowupdate"
+      ;;
+    changefloatingmode\>\>*|changefloatingmode,*)
+      event_type="windowupdate"
+      ;;
+    fullscreen\>\>*|fullscreen,*|fullscreenv2\>\>*|fullscreenv2,*)
+      event_type="windowupdate"
+      ;;
     closewindow\>\>*|closewindow,*)
-      # Delete stale thumbnail for the closed window
-      local closed_address="${1#*>>}"; closed_address="${closed_address#*,}"
-      closed_address="${closed_address#0x}"
-      rm -f "$SCREENSHOT_DIR/${closed_address}.jpg"
+      # Close event only includes address; refresh preview set from live clients.
+      cleanup_stale_preview_files
       return 0
       ;;
     *)
