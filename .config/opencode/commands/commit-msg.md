@@ -13,6 +13,7 @@ Rules:
 - Maximum length: 50 characters.
 - If adding (<scope>) would push the message over 50 chars, omit the scope and use: <type>: <subject>
 - Keep the subject concise and imperative.
+- Never truncate or cut off words/sentences to hit the limit; rewrite to a shorter complete subject instead.
 
 Branch: !`git rev-parse --abbrev-ref HEAD`
 Previous commit: !`git log -1 --pretty=format:"%s" 2>/dev/null`
