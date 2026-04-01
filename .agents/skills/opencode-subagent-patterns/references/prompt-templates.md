@@ -256,6 +256,44 @@ For each agent, report:
 Working directory: /Users/username/project
 ```
 
+## Structured Analysis Scaffolds
+
+For multi-step or high-risk tasks, add a short analysis scaffold before action steps.
+
+### Review Analysis
+
+```markdown
+<review_analysis>
+- Scope: [files/modules in scope]
+- Risks: [top 3 risks]
+- Validation plan: [tests/checks to run]
+</review_analysis>
+```
+
+### Migration Analysis
+
+```markdown
+<migration_analysis>
+- Source format assumptions
+- Target format contract
+- Backward-compatibility risks
+- Rollback/fallback approach
+</migration_analysis>
+```
+
+### Delegation Plan
+
+```markdown
+<delegation_plan>
+- Work batches
+- Which batch can run in parallel
+- Shared-file conflict risks
+- Final synthesis format
+</delegation_plan>
+```
+
+Use these scaffolds to force explicit planning before edits. Keep them concise and actionable.
+
 ## Template Customization
 
 ### Making Templates Specific
@@ -316,3 +354,13 @@ For each item, report:
 ```
 
 This makes it easy to scan results and identify problems.
+
+### Result Contract Clarity
+
+Always state who consumes the output and what should be excluded.
+
+```markdown
+Output audience: parent orchestrator
+Return: concise findings + files modified + blockers
+Exclude: raw command logs and speculative commentary
+```

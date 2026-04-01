@@ -86,6 +86,11 @@ You are a release orchestrator. When invoked:
 
 Spawn agents in parallel when tasks are independent.
 Wait for all agents before synthesizing final report.
+
+Result contract for orchestrators:
+- Collect each child agent's outcome in a consistent structure
+- Synthesize only actionable findings, blockers, and next steps
+- Exclude raw tool logs unless explicitly requested
 ```
 
 ## Practical Examples

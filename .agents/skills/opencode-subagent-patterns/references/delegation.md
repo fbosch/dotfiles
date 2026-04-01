@@ -27,6 +27,15 @@ For each [item]:
 3. Check [authoritative source]
 4. Evaluate/score
 5. FIX issues found ← Critical: gives agent authority to act
+
+Add an explicit output contract after the steps:
+
+```markdown
+Output:
+- One section per item
+- Include status, files touched, and unresolved blockers
+- No raw tool logs unless requested
+```
 ```
 
 **Key elements:**
@@ -135,7 +144,7 @@ EOF
 ### When Agent Makes Wrong Change
 
 1. `git diff [file]` to see what changed
-2. `git checkout -- [file]` to revert
+2. Revert safely using non-destructive file restore methods appropriate for your workflow
 3. Re-run with more specific instructions
 
 ### When Agents Conflict
@@ -144,6 +153,14 @@ Rare (agents work on different items), but if it happens:
 
 1. Check which agent's change is correct
 2. Manually resolve or re-run one agent
+
+### When Not to Parallelize
+
+Prefer sequential delegation when batches touch shared files or cross-dependent logic.
+
+- Parallelize independent items
+- Sequence dependent migrations and refactors
+- If unsure, split by directory ownership and run smaller waves
 
 ## Context Considerations
 

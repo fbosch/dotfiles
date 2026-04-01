@@ -113,6 +113,14 @@ It **does** receive:
 
 ## Design Principles
 
+### 0. Commands Are Runbooks
+Treat command prompts as operational runbooks, not generic task descriptions.
+
+- State prerequisites before work starts
+- Tell the model which tools/patterns to prefer
+- Define failure behavior when required context is missing
+- Define exact output contract
+
 ### 1. Output Discipline
 For strict-output commands (commit messages, PR titles, etc.):
 ```markdown
@@ -140,6 +148,30 @@ PR title (≤72 chars): concise, future-tense verb
 
 ### 5. Scope Clarity
 Document what the command does and when to use it. Avoid overlap with built-ins.
+
+### 6. Routing Over Guessing
+If a command can be executed with specialized tools or direct file context, say so explicitly.
+
+```markdown
+Use repository context from shell injection and @file includes.
+Do not infer branch state, staged files, or changed paths without injected evidence.
+```
+
+### 7. Pre-flight Checks for Multi-step Commands
+For commands that trigger multi-step workflows (review, migration, publish prep), include a short pre-flight section:
+
+```markdown
+Pre-flight:
+1. Confirm required input is present
+2. Confirm target scope/path
+3. Stop with a short corrective message if prerequisites are missing
+```
+
+### 8. Snapshot Awareness
+Shell injection is evaluated at invocation time. Treat injected git status, branch names, and diffs as snapshots.
+
+### 9. Visible Output Rule
+If the user already sees command output in the UI, avoid re-narrating it unless asked.
 
 ## Anti-Patterns
 
@@ -177,6 +209,9 @@ allowedTools: [bash, read]       # Parsed then discarded; no effect
 disable-model-invocation: true   # Same
 ```
 The OpenCode `Command` Zod schema only parses: `description`, `model`, `agent`, `subtask`.
+
+❌ **Don't rely on implicit session context in command prompts**
+Commands should include or inject everything needed to complete the task. If a command depends on prior chat decisions, encode those as explicit arguments or file inputs.
 
 ## Reference Patterns
 

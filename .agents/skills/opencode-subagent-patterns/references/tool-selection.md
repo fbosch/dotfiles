@@ -26,6 +26,25 @@ Core tools that can be assigned to agents:
 
 Each unnecessary tool increases complexity and potential for approval spam.
 
+## Tool Routing Rules
+
+Tool selection should be explicit in prompts, not left implicit.
+
+1. Prefer specialized file/search tools (`glob`, `grep`, `read`) for discovery and inspection.
+2. Prefer `write`/`edit` for file modification over shell-based file writes.
+3. Use `bash` only for command execution that cannot be done with specialized tools.
+4. If `bash` is enabled, specify what it is allowed for in the prompt body.
+5. Avoid contradictory guidance (for example: prompt says "use write" but examples use `cat <<EOF`).
+
+### Prompt Snippet: Route Explicitly
+
+```markdown
+Tool routing:
+- Use glob/grep/read for locating and inspecting code
+- Use write/edit for file changes
+- Use bash only for test/build/git status commands
+```
+
 ### Recommended Tool Sets by Agent Type
 
 | Agent Type | Recommended Tools | Notes |

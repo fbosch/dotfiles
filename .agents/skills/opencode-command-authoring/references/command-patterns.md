@@ -196,6 +196,101 @@ Return ONLY the JSON. No markdown wrapper, no explanations.
 
 ---
 
+## Pattern 5: Guarded Multi-Step Workflow
+
+**Use case:** Commands that run audits, migrations, or release-readiness checks where missing prerequisites should stop execution early.
+
+**Key traits:**
+- Explicit pre-flight section before the main workflow
+- Clear stop behavior when required inputs are missing
+- Routing guidance (what to use, what to avoid)
+- Tight output contract for scanable results
+
+**Template:**
+```markdown
+---
+description: Run guarded release readiness workflow
+agent: build
+---
+
+Run a release readiness workflow for the current branch.
+
+Pre-flight:
+1. Verify branch name and base branch are available
+2. Verify git working tree state is available
+3. If either is missing, output only: "Cannot run: missing repository state"
+
+Context:
+- Branch: !`git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "(missing)"`
+- Base: !`git show-ref --verify --quiet refs/heads/main && echo main || echo master`
+- Status: !`git status --short 2>/dev/null || echo "(missing)"`
+
+Workflow:
+1. Summarize current risk areas from status
+2. Identify validation steps required before release
+3. Produce actionable checklist
+
+Output format:
+- **Verdict**: READY|NOT_READY
+- **Blockers**: bullet list
+- **Next Actions**: numbered list
+
+Do not include preamble or conversational filler.
+```
+
+**Why this works:**
+- Prevents hallucinated workflow execution when context is missing
+- Gives deterministic fallback behavior
+- Keeps output concise and operational
+
+---
+
+## Good vs Bad Prompting Patterns
+
+### Shell State
+
+**Good**
+```markdown
+Branch: !`git rev-parse --abbrev-ref HEAD`
+Staged diff: !`git diff --cached || echo "(nothing staged)"`
+```
+
+**Bad**
+```markdown
+Figure out what branch I'm on and what changed, then write a commit message.
+```
+
+### Strict Output
+
+**Good**
+```markdown
+Output ONLY the commit message. No markdown, no explanation, no quotes.
+```
+
+**Bad**
+```markdown
+Write a nice commit message and explain your reasoning.
+```
+
+### Subtask Isolation
+
+**Good**
+```markdown
+subtask: true
+Read only these files:
+@src/a.ts
+@src/b.ts
+Return JSON only.
+```
+
+**Bad**
+```markdown
+subtask: true
+Use the context from our prior discussion and continue where we left off.
+```
+
+---
+
 ## Comparison Matrix
 
 | Pattern | Agent | Model | Output | Use Case |
@@ -215,5 +310,8 @@ Return ONLY the JSON. No markdown wrapper, no explanations.
 - [ ] Is output format explicit (single-line? sections? JSON?)?
 - [ ] For strict-output commands: is model overridden to cheap/fast?
 - [ ] For commands with arguments: is format documented?
+- [ ] For multi-step commands: are pre-flight checks and stop conditions explicit?
+- [ ] Does prompt rely on injected/file context instead of implicit chat context?
+- [ ] Does it avoid narrating output the user can already see?
 - [ ] Have you tested it in the TUI with `/command-name`?
 - [ ] Does description match what the command actually does?

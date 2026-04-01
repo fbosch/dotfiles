@@ -9,6 +9,46 @@ description: Design and implement effective subagent patterns in OpenCode. Use w
 
 Sub-agents are specialized AI assistants that primary agents can delegate tasks to. Each sub-agent has its own context window, configurable tools, and custom system prompt. This skill provides patterns and best practices for creating effective sub-agent workflows in OpenCode.
 
+## Subagent Prompt Anatomy
+
+For reliable behavior, structure subagent prompts in this order:
+
+1. **Role** - what specialist this agent is
+2. **Scope** - what it owns for this task
+3. **Hard boundaries** - what it must not do
+4. **Tool routing rules** - which tools to prefer and avoid
+5. **Workflow** - ordered execution steps
+6. **Output contract** - exact format and constraints
+7. **Done-when** - completion criteria and stop conditions
+
+### Minimal Skeleton
+
+```markdown
+You are a [role].
+
+Scope:
+- [owned area]
+
+Boundaries:
+- NEVER [forbidden action]
+- If task requires [out-of-scope area], STOP and report "Requires [specialist]"
+
+Tool routing:
+- Prefer [tool set] for [job]
+- Use bash only for [specific reason]
+
+Workflow:
+1. [step]
+2. [step]
+3. [step]
+
+Output:
+- [format contract]
+
+Done when:
+- [acceptance condition]
+```
+
 ## Why Use Subagents: Context Hygiene
 
 The primary value of subagents isn't just specialization—it's **keeping your main context clean**.
@@ -290,6 +330,26 @@ Choosing appropriate models for different agent types:
 - Cost optimization strategies
 - Best practices
 
+## Boundary-First Prompting
+
+For specialized agents, define boundaries before workflow details.
+
+- State what the agent owns and what it must not touch
+- Specify stop-and-report behavior for out-of-scope work
+- Avoid mixed-domain prompts that cause drift into adjacent systems
+
+Boundary-first prompts are more reliable than long capability lists.
+
+## Result Contract Design
+
+Every subagent prompt should answer three questions:
+
+1. What should the agent return (summary, JSON, checklist, diff notes)?
+2. Who consumes it (user directly or parent orchestrator)?
+3. What must be omitted (tool logs, speculative filler, irrelevant narration)?
+
+If this is undefined, multi-agent workflows become noisy and hard to merge.
+
 ## Quick Reference
 
 ```text
@@ -439,6 +499,9 @@ Focus on clarity, structure, code examples, and user-friendly language.
 8. **Use task permissions**: Prevent unintended orchestration with allowlists
 9. **Keep orchestration shallow**: 2 levels max for agent nesting
 10. **Agents don't commit**: Review changes before committing
+11. **Define hard boundaries early**: Put scope and "must not" rules before workflow steps
+12. **Define result contracts**: Make output format and audience explicit
+13. **Prefer specialized tool routing**: Search/read tools for discovery, bash only when execution is required
 
 ## Performance Considerations
 
