@@ -12,6 +12,13 @@ Extract and act on GitHub PR review feedback.
 - Resolve mode: if the first argument is `resolve`, treat the rest of `$ARGUMENTS` as optional PR context and resolve candidates based on prior session context about what the agent already fixed.
 - Resolve mode must use the current session context; do not ignore earlier messages that describe applied fixes.
 
+## Pre-flight
+
+1. Determine mode (`default` or `resolve`) before any fetches.
+2. Resolve PR identity first (owner/repo/number). If not resolvable after inference attempts, stop and ask only for missing identifier(s).
+3. Prefer GitHub MCP tools for read operations; use `gh` fallback only when MCP data is unavailable or incomplete.
+4. Treat fetched review data as the source of truth; do not infer missing thread metadata.
+
 ## Workflow
 
 1. **Parse mode first**
@@ -41,9 +48,7 @@ Extract and act on GitHub PR review feedback.
      - For each thread, read the full discussion before extracting feedback.
      - Preserve thread identity for later follow-up whenever available: `threadId`, root `commentId`, `path`, `line`, `startLine`, `isResolved`, `isOutdated`.
      - Fetch general PR comments only when user explicitly asks for them or when no inline review comment covers the same issue: `github_pull_request_read` with `get_comments` or `gh api repos/<owner>/<repo>/issues/<number>/comments --paginate` as fallback.
-     - If a parser script is provided (for example in an opencode tool-output path), run it first and use its output to populate thread groups and comment fields.
-     - For opencode tool-output JSON, use `scripts/parse-review-comments.py` to normalize thread groups before summarizing.
-       - Example: `python scripts/parse-review-comments.py /path/to/tool-output.json`
+      - If a parser script output is provided in user input, treat that parsed output as the primary source for thread grouping and fields.
    - **Summarize actionable feedback**
      - For each comment, capture:
        - `path` and `line` or `start_line`/`line` if present.
@@ -170,10 +175,6 @@ Extract and act on GitHub PR review feedback.
 - In resolve mode, use `gh api` only when the user explicitly asked for that fallback
 - Keep summaries verbatim; do not modify or condense the feedback content
 - If any context is missing (owner/repo), ask for it only after trying to infer from current git remote
-- Helper scripts:
-  - `scripts/inspect-review-json.py` prints structure and key fields
-  - `scripts/parse-review-comments.py` outputs thread-grouped JSON
-  - `scripts/list-review-comments.py` prints comments with key fields
 - GitHub MCP tool mapping:
   - Identify PR / metadata: `github_pull_request_read` (method: `get`)
   - Review metadata: `github_pull_request_read` (method: `get_reviews`)

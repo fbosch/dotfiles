@@ -7,8 +7,15 @@ Write a PR description in English. Output markdown only.
 
 Use the auto-generated git context below.
 
+Pre-flight:
+1. Use only the injected context from `AUTO-GENERATED GIT CONTEXT` and `ADDITIONAL CONTEXT`.
+2. If base branch detection failed (`Base: (not found)`), respond only:
+`Cannot generate PR description: unable to determine base branch.`
+3. If merge-base detection failed (`(failed to determine merge base)`), respond only:
+`Cannot generate PR description: unable to determine merge base.`
+
 PR BODY POLICY (authoritative for body content only):
-@.agents/skills/pr-description/SKILL.md
+@~/.config/opencode/skills/pr-description/SKILL.md
 
 Follow this precedence order:
 1. Title format and title types from this command
@@ -31,6 +38,7 @@ Use one of these title types: feat, fix, refactor, chore, docs, test
 **Rules:**
 
 - Apply all PR body structure, section, and writing rules from the skill
+- Treat injected git context as an invocation-time snapshot; do not infer missing repo state
 - Ignore merge commits in the Commits context
 - Ignore changes that appear only because of merges
 - Ignore formatting, whitespace, and import reordering
