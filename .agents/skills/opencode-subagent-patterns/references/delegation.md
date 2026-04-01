@@ -27,6 +27,7 @@ For each [item]:
 3. Check [authoritative source]
 4. Evaluate/score
 5. FIX issues found ← Critical: gives agent authority to act
+```
 
 Add an explicit output contract after the steps:
 
@@ -35,7 +36,6 @@ Output:
 - One section per item
 - Include status, files touched, and unresolved blockers
 - No raw tool logs unless requested
-```
 ```
 
 **Key elements:**

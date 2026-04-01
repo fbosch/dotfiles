@@ -215,11 +215,12 @@ Commands should include or inject everything needed to complete the task. If a c
 
 ## Reference Patterns
 
-See `references/command-patterns.md` for four annotated archetypes:
+See `references/command-patterns.md` for five annotated archetypes:
 1. **Strict output** — single-line, cheap model, heavy shell injection
 2. **Structured report** — multi-section, shell metadata, output limits
 3. **Workflow trigger** — build agent, test/lint integration
 4. **Isolated subtask** — clean context, returns artifact
+5. **Guarded workflow** — pre-flight checks, stop conditions, concise operational output
 
 ---
 

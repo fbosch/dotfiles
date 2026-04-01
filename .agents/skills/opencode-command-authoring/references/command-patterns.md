@@ -204,7 +204,7 @@ Return ONLY the JSON. No markdown wrapper, no explanations.
 - Explicit pre-flight section before the main workflow
 - Clear stop behavior when required inputs are missing
 - Routing guidance (what to use, what to avoid)
-- Tight output contract for scanable results
+- Tight output contract for scannable results
 
 **Template:**
 ```markdown
@@ -299,6 +299,7 @@ Use the context from our prior discussion and continue where we left off.
 | **Report** | (any) | Cheap | Multi-section, markdown | PR descriptions, reviews, docs |
 | **Workflow** | build | (default) | Integration/changes | Code generation, tests, deploy |
 | **Subtask** | (any) | (default) | Structured artifact | Analysis, reports, planning |
+| **Guarded** | build | (default) | Operational checklist | Migrations, release readiness, gated workflows |
 
 ---
 

@@ -12,13 +12,14 @@ Next number: !`printf "%04d" $(( $(ls docs/decisions/*.md 2>/dev/null | wc -l) +
 
 ---
 
-If Topic is empty, respond only: "Usage: /decision <short topic description>"
+If Topic is empty, respond only: "Usage: /decision <short decision statement>"
 
 Create a decision record for the given topic using the information above.
 
 1. Create the `docs/decisions/` directory if it does not exist.
-2. Derive a kebab-case filename slug from the topic (lowercase, hyphens, no special chars).
-3. Write the file to `docs/decisions/<Next number>-<slug>.md` using this template:
+2. First, write a one-line decision statement from the topic in the form `<verb> <object>` that makes the outcome explicit (for example: `use official RTK plugin`, `standardize on fish shell`); avoid vague slugs like `plugin-choice` or `shell-decision`.
+3. Derive a kebab-case filename slug from that decision statement (lowercase, hyphens, no special chars).
+4. Write the file to `docs/decisions/<Next number>-<slug>.md` using this template:
 
 ```
 # <Title>
