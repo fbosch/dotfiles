@@ -15,6 +15,11 @@ local detection_cache_ttl_ms = 5000
 local overlay_state_ttl_ms = 5000
 local pane_refresh_cooldown_ms_active = 250
 local pane_refresh_cooldown_ms_idle = 1000
+local attention_notification_timeout_ms = 4000
+
+local target_triple = wezterm.target_triple or ""
+local is_linux = target_triple:find("linux") ~= nil
+local is_macos = target_triple:find("apple%-darwin") ~= nil
 
 local allowed_agents = {
 	opencode = true,
@@ -56,6 +61,96 @@ local agent_patterns = {
 
 local detection_cache = {}
 local pane_refresh_timestamps = {}
+
+local function get_agent_display_name(agent_type)
+	local names = {
+		opencode = "OpenCode",
+		claude = "Claude",
+		gemini = "Gemini",
+		codex = "Codex",
+		aider = "Aider",
+	}
+
+	return names[agent_type] or (agent_type or "Agent")
+end
+
+local function send_attention_toast(pane, title, message)
+	local tab_ok, tab = pcall(function()
+		return pane:tab()
+	end)
+	if tab_ok == false or tab == nil then
+		return false
+	end
+
+	local mux_ok, mux_window = pcall(function()
+		return tab:window()
+	end)
+	if mux_ok == false or mux_window == nil then
+		return false
+	end
+
+	local gui_ok, gui_window = pcall(function()
+		return mux_window:gui_window()
+	end)
+	if gui_ok == false or gui_window == nil then
+		return false
+	end
+
+	gui_window:toast_notification(title, message, nil, attention_notification_timeout_ms)
+	return true
+end
+
+local function notify_attention(pane, agent_type)
+	local subtitle = string.format("%s - Attention Needed", get_agent_display_name(agent_type))
+	local message = "Needs your input"
+
+	if is_linux then
+		local ok = pcall(function()
+			wezterm.background_child_process({
+				"notify-send",
+				"--urgency=normal",
+				"--app-name=WezTerm",
+				"--expire-time=" .. tostring(attention_notification_timeout_ms),
+				subtitle,
+				message,
+			})
+		end)
+		if ok then
+			return
+		end
+	end
+
+	if is_macos then
+		local ok = pcall(function()
+			wezterm.background_child_process({
+				"terminal-notifier",
+				"-title",
+				"WezTerm Agent Deck",
+				"-subtitle",
+				subtitle,
+				"-message",
+				message,
+				"-group",
+				"wezterm-agent-deck-" .. tostring(agent_type or "unknown"),
+				"-activate",
+				"com.github.wez.wezterm",
+			})
+		end)
+		if ok then
+			return
+		end
+	end
+
+	send_attention_toast(pane, subtitle, message)
+end
+
+local function on_attention_needed(_, pane, agent_type, reason)
+	if reason ~= "waiting_for_input" then
+		return
+	end
+
+	notify_attention(pane, agent_type)
+end
 
 local function now_ms()
 	local ok, now = pcall(function()
@@ -256,6 +351,7 @@ function M.apply(config)
 	end
 
 	init_notice = nil
+	wezterm.on("agent_deck.attention_needed", on_attention_needed)
 	initialized = true
 	return agent_deck
 end
