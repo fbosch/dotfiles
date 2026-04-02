@@ -22,6 +22,7 @@ Hyprland window manager configuration with custom keybinds, rules, and support s
 - System confirmations: `confirm-exit.sh`, `confirm-restart.sh`, `confirm-shutdown.sh`, `confirm-suspend.sh`
 - System utilities: `screenshot.sh`, `toggle-hypridle.sh`, `toggle-night-light.sh`, `toggle-performance-mode.sh`, `launch-browser.sh`
 - Waybar integration: `waybar-lib.sh`, `waybar-toggle-smart.sh`, `waybar-edge-monitor.sh`
+- Profiles: `profilectl.sh`, `gamescope-profile-watchdog.sh`
 - Monitoring/setup: `wait-for-monitors.sh`, `reset-desktop.sh`, `nerd-icon-gen.sh`, `window-capture-daemon.sh`, `switch-layout.sh`
 
 **Docs:**

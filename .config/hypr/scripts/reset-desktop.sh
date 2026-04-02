@@ -4,9 +4,6 @@ set -euo pipefail
 
 hyprctl reload
 
-# Clear performance mode flag since hyprctl reload resets Hyprland state
-rm -f /tmp/hypr-performance-mode
-
 # Gracefully stop relevant background services if they are running.
 pkill waybar 2>/dev/null || true
 pkill gjs 2>/dev/null || true  # Kill AGS instances
@@ -30,6 +27,10 @@ uwsm-app -s b -- ~/.config/hypr/scripts/window-capture-daemon.sh &
 
 # Wait for services to be ready before showing notification
 sleep 1
+
+# Re-apply active runtime profiles after services come back.
+~/.config/hypr/scripts/profilectl.sh reconcile || true
+
 HYPR_ICON=""
 ICON=$(~/.config/hypr/scripts/nerd-icon-gen.sh "$HYPR_ICON" 64 "#58e1ff")
 notify-send -a "Hyprland" -h string:x-canonical-private-synchronous:hyprland-reset "Config Reloaded" -i "$ICON"
