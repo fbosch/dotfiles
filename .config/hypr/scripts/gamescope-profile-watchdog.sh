@@ -21,13 +21,22 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 get_gaming_count() {
-  if command -v gamemoded >/dev/null 2>&1; then
-    if gamemoded -s >/dev/null 2>&1; then
-      printf '1\n'
-      return
-    fi
+  if command -v busctl >/dev/null 2>&1; then
+    local gamemode_live_count=0
+    local gamemode_pid
 
-    printf '0\n'
+    while read -r gamemode_pid; do
+      if [[ "$gamemode_pid" =~ ^[0-9]+$ ]] && [[ -d "/proc/$gamemode_pid" ]]; then
+        gamemode_live_count=$((gamemode_live_count + 1))
+      fi
+    done < <(busctl --user tree com.feralinteractive.GameMode 2>/dev/null \
+      | awk 'match($0, /\/Games\/[0-9]+/) { segment = substr($0, RSTART, RLENGTH); sub(".*/", "", segment); print segment }')
+
+    if [[ "$gamemode_live_count" -gt 0 ]]; then
+      printf '1\n'
+    else
+      printf '0\n'
+    fi
     return
   fi
 
