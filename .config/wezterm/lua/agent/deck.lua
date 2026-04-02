@@ -220,7 +220,7 @@ function M.apply(config)
 
 	local success, plugin = pcall(wezterm.plugin.require, "https://github.com/Eric162/wezterm-agent-deck")
 	if success == false then
-		init_notice = "Agent deck plugin unavailable; status icons are disabled"
+		init_notice = "Agent deck plugin unavailable; using fallback detection"
 		wezterm.log_warn("[wezterm] failed to load agent deck plugin: " .. tostring(plugin))
 		initialized = true
 		return nil
@@ -242,15 +242,14 @@ function M.apply(config)
 		tab_title = { enabled = false },
 		right_status = { enabled = false },
 		notifications = {
-			enabled = true,
-			on_waiting = true,
+			enabled = false,
 		},
 	}
 
 	local ok_apply, apply_err = pcall(agent_deck.apply_to_config, config, plugin_config)
 	if ok_apply == false then
 		agent_deck = nil
-		init_notice = "Agent deck failed to initialize; status icons are disabled"
+		init_notice = "Agent deck failed to initialize; using fallback detection"
 		wezterm.log_warn("[wezterm] agent deck apply_to_config failed: " .. tostring(apply_err))
 		initialized = true
 		return nil

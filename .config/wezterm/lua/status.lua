@@ -17,6 +17,46 @@ local color_workhours_over = { Color = "#d79999" }
 
 -- Reusable status table structure
 local status = {}
+local waiting_notification_last_count = 0
+local waiting_notification_last_sent_ms = 0
+local waiting_notification_cooldown_ms = 10000
+
+local function now_ms()
+	local ok, now = pcall(function()
+		return wezterm.time.now()
+	end)
+
+	if ok and now then
+		local as_number = tonumber(now:format("%s.%f"))
+		if as_number then
+			return math.floor(as_number * 1000)
+		end
+	end
+
+	return os.time() * 1000
+end
+
+local function notify_waiting_agents(window, waiting_count)
+	if waiting_count <= waiting_notification_last_count then
+		waiting_notification_last_count = waiting_count
+		return
+	end
+
+	local now = now_ms()
+	if (now - waiting_notification_last_sent_ms) < waiting_notification_cooldown_ms then
+		waiting_notification_last_count = waiting_count
+		return
+	end
+
+	local message = "Agent waiting for input"
+	if waiting_count > 1 then
+		message = string.format("%d agents waiting for input", waiting_count)
+	end
+
+	window:toast_notification("Agent Deck", message, nil, 2500)
+	waiting_notification_last_sent_ms = now
+	waiting_notification_last_count = waiting_count
+end
 
 local function get_workhours_display(window)
 	local wday = os.date("*t").wday
@@ -64,7 +104,7 @@ local function update_right_status(window)
 	local waiting_count = 0
 	local init_notice = agent_deck.consume_init_notice and agent_deck.consume_init_notice() or nil
 	if init_notice then
-		window:toast_notification("WezTerm", init_notice, nil, 4000)
+		window:toast_notification("Agent Deck", init_notice, nil, 2500)
 	end
 
 	if agent_deck then
@@ -76,6 +116,8 @@ local function update_right_status(window)
 
 		waiting_count = agent_deck.count_waiting()
 	end
+
+	notify_waiting_agents(window, waiting_count)
 
 	local date = wezterm.strftime("(%Y-%m-%d) %a %b %-d ")
 	local time = wezterm.strftime("%H:%M")
