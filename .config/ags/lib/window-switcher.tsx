@@ -50,7 +50,9 @@ interface HyprlandClient {
   address: string;
   stableId?: string;
   class: string;
+  initialClass?: string;
   title: string;
+  initialTitle?: string;
   focused?: boolean;
   workspace: {
     id: number;
@@ -65,7 +67,9 @@ interface WindowInfo {
   address: string;
   stableId?: string;
   class: string;
+  initialClass?: string;
   title: string;
+  initialTitle?: string;
   workspace: string;
   size?: {
     width: number;
@@ -136,6 +140,17 @@ let iconTheme: Gtk.IconTheme | null = null;
 
 // Icon name cache to avoid repeated desktop file lookups
 const iconCache = new Map<string, string | null>();
+
+const GENERIC_WRAPPER_CLASSES = [
+  "gamescope",
+  "steam",
+  "wine",
+  "lutris",
+  "heroic",
+  "bottles",
+  "umu",
+  "proton",
+];
 
 type PreviewCacheEntry = {
   mtime: number;
@@ -337,6 +352,94 @@ function getIconNameForClass(appClass: string): string | null {
   return iconName;
 }
 
+function isGenericWrapperClass(appClass: string): boolean {
+  if (!appClass) return false;
+
+  const normalizedClass = appClass.toLowerCase();
+  if (normalizedClass.startsWith("steam_app_")) return true;
+
+  return GENERIC_WRAPPER_CLASSES.some(
+    (wrapperClass) => normalizedClass === wrapperClass,
+  );
+}
+
+function buildTitleCandidates(title: string): string[] {
+  if (!title) return [];
+
+  const normalizedTitle = title.replace(/\s*\(grabbed\)\s*$/i, "").trim();
+  if (!normalizedTitle) return [];
+
+  const parts = [
+    normalizedTitle,
+    normalizedTitle.split(" - ")[0]?.trim() ?? "",
+    normalizedTitle.split(" — ")[0]?.trim() ?? "",
+    normalizedTitle.split(":")[0]?.trim() ?? "",
+  ].filter((part) => part !== "");
+
+  const candidates: string[] = [];
+  for (const part of parts) {
+    const lowered = part.toLowerCase();
+    const dashSeparated = lowered.replace(/\s+/g, "-");
+    const underscored = lowered.replace(/\s+/g, "_");
+    const compact = lowered.replace(/[^a-z0-9]+/g, "");
+
+    candidates.push(part, lowered, dashSeparated, underscored, compact);
+  }
+
+  return Array.from(new Set(candidates.filter((candidate) => candidate !== "")));
+}
+
+function getIconNameForWindow(window: WindowInfo): string | null {
+  const classCandidates = [window.class, window.initialClass].filter(
+    (candidate): candidate is string => candidate !== undefined && candidate !== "",
+  );
+
+  for (const candidate of classCandidates) {
+    const iconName = getIconNameForClass(candidate);
+    if (iconName) {
+      return iconName;
+    }
+  }
+
+  const shouldTryTitleLookup =
+    classCandidates.some((candidate) => isGenericWrapperClass(candidate)) ||
+    window.title.toLowerCase().includes("(grabbed)") ||
+    (window.initialTitle?.toLowerCase().includes("(grabbed)") ?? false);
+
+  if (shouldTryTitleLookup === false) {
+    return null;
+  }
+
+  const titleCandidates = [
+    ...buildTitleCandidates(window.title),
+    ...buildTitleCandidates(window.initialTitle ?? ""),
+  ];
+
+  for (const candidate of titleCandidates) {
+    const iconName = getIconNameForClass(candidate);
+    if (iconName) {
+      return iconName;
+    }
+  }
+
+  return null;
+}
+
+function getFallbackLetter(window: WindowInfo): string {
+  const primaryClass = window.class || window.initialClass || "";
+  const useTitleFallback =
+    isGenericWrapperClass(primaryClass) ||
+    window.title.toLowerCase().includes("(grabbed)") ||
+    primaryClass === "";
+
+  const fallbackSource = useTitleFallback ? window.title : primaryClass;
+  const normalizedSource = fallbackSource.replace(/\s*\(grabbed\)\s*$/i, "").trim();
+  if (!normalizedSource) return "?";
+
+  const firstAlphanumeric = normalizedSource.match(/[a-z0-9]/i)?.[0];
+  return firstAlphanumeric ? firstAlphanumeric.toUpperCase() : "?";
+}
+
 /**
  * Truncate title to fit within available width
  * Font: 13px at 500 weight (medium)
@@ -474,7 +577,9 @@ async function getWindows(): Promise<WindowInfo[]> {
         address: c.address,
         stableId: c.stableId,
         class: c.class || "",
+        initialClass: c.initialClass || undefined,
         title: c.title || "",
+        initialTitle: c.initialTitle || undefined,
         workspace: c.workspace.name || c.workspace.id.toString(),
         size: (c as any).size
           ? { width: (c as any).size[0], height: (c as any).size[1] }
@@ -591,7 +696,8 @@ function createAppButton(
   let ok = true;
   let error: string | undefined;
   try {
-    const iconName = getIconNameForClass(window.class || "");
+    const iconName = getIconNameForWindow(window);
+    const fallbackLetter = getFallbackLetter(window);
 
     debugLog(`Creating button for ${window.class} in ${displayMode} mode`);
 
@@ -639,7 +745,7 @@ function createAppButton(
               ) : (
                 <box class="preview-header-icon-fallback">
                   <label
-                    label={(window.class || "?").charAt(0).toUpperCase()}
+                    label={fallbackLetter}
                     class="preview-header-letter"
                   />
                 </box>
@@ -711,7 +817,7 @@ function createAppButton(
             ) : (
               <box class="app-icon-wrapper">
                 <label
-                  label={(window.class || "?").charAt(0).toUpperCase()}
+                  label={fallbackLetter}
                   halign={Gtk.Align.CENTER}
                   valign={Gtk.Align.CENTER}
                   class="app-icon-letter"
