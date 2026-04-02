@@ -183,11 +183,11 @@ is_frame_too_dark() {
 }
 
 capture_window_preview() {
-  local stable_id="$1"
+  local preview_id="$1"
   local width="$2"
   local height="$3"
 
-  if [[ -z "$stable_id" ]]; then
+  if [[ -z "$preview_id" ]]; then
     return 0
   fi
 
@@ -201,7 +201,7 @@ capture_window_preview() {
     return 0
   fi
 
-  local filename="${stable_id}.jpg"
+  local filename="${preview_id}.jpg"
   local temp_output="$SCREENSHOT_DIR/.temp_${filename}"
   local output_path="$SCREENSHOT_DIR/$filename"
 
@@ -209,7 +209,7 @@ capture_window_preview() {
     -t jpeg \
     -q "$JPEG_QUALITY" \
     -s "$scale_factor" \
-    -T "$stable_id" \
+    -T "$preview_id" \
     "$temp_output" 2>/dev/null || {
       rm -f "$temp_output"
       return 0
@@ -370,16 +370,17 @@ capture_screenshot() {
 
   # Process each window in the target workspace.
   local -a capture_pids=()
-  while IFS=$'\t' read -r stable_id mapped width height; do
+  while IFS=$'\t' read -r preview_id mapped width height; do
     [[ "$mapped" == "false" ]] && continue
-    capture_window_preview "$stable_id" "$width" "$height" &
+    [[ -n "$preview_id" ]] || continue
+    capture_window_preview "$preview_id" "$width" "$height" &
     capture_pids+=("$!")
 
     if [[ ${#capture_pids[@]} -ge $MAX_PARALLEL_CAPTURES ]]; then
       wait_for_capture_batch "${capture_pids[@]}"
       capture_pids=()
     fi
-  done < <(jq -r --arg ws "$current_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | [(.stableId // ""), (.mapped // true), (.size[0] // 0), (.size[1] // 0)] | @tsv' <<< "$all_clients_json" 2>/dev/null)
+  done < <(jq -r --arg ws "$current_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | [((.stableId // "") | if length > 0 then . else ((.address // "") | sub("^0x"; "")) end), (.mapped // true), (.size[0] // 0), (.size[1] // 0)] | @tsv' <<< "$all_clients_json" 2>/dev/null)
 
   if [[ ${#capture_pids[@]} -gt 0 ]]; then
     wait_for_capture_batch "${capture_pids[@]}"
