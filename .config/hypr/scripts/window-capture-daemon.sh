@@ -399,10 +399,10 @@ handle_event() {
   maybe_run_healthcheck
   
   case $1 in
-    activewindow\>\>*|activewindow,*)
+    activewindow\>\>*|activewindow,*|activewindowv2\>\>*|activewindowv2,*)
       event_type="activewindow"
       ;;
-    workspace\>\>*|workspace,*)
+    workspace\>\>*|workspace,*|workspacev2\>\>*|workspacev2,*)
       event_type="workspace"
       ;;
     openwindow\>\>*|openwindow,*|openwindowv2\>\>*|openwindowv2,*)
