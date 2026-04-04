@@ -87,6 +87,9 @@
             "defaultAction": "launch"
          },
          "entrypoints": {
+            "Battle.net": {
+               "enabled": true
+            },
             "Pokmon Infinite Fusion": {
                "enabled": false
             },
