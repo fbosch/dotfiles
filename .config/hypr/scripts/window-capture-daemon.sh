@@ -228,6 +228,17 @@ capture_window_preview() {
   mv "$temp_output" "$output_path"
 }
 
+get_visible_workspace_ids_json() {
+  local monitors_json
+  monitors_json=$(printf 'j/monitors' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
+  [[ -n "$monitors_json" ]] || {
+    printf '[]\n'
+    return 0
+  }
+
+  jq -c '[.[].activeWorkspace.id | numbers] | unique' <<< "$monitors_json" 2>/dev/null || printf '[]\n'
+}
+
 wait_for_capture_batch() {
   local pid
   for pid in "$@"; do
@@ -286,11 +297,10 @@ is_in_overlay_cooldown() {
   return 1
 }
 
-# Capture all windows in the active workspace using Hyprland toplevel export.
+# Capture windows in all monitor-visible workspaces via Hyprland toplevel export.
 capture_screenshot() {
-  local target_workspace="$1"
-  local event_type="${2:-activewindow}"  # Default to activewindow if not specified
-  local capture_id="$3"  # Unique ID for this capture attempt
+  local event_type="${1:-activewindow}"  # Default to activewindow if not specified
+  local capture_id="$2"  # Unique ID for this capture attempt
   
   # Ensure lock is always released
   trap 'rm -f "$CAPTURE_LOCK_FILE"' RETURN
@@ -345,14 +355,6 @@ capture_screenshot() {
     fi
   done
   
-  # Verify workspace is still correct after delay
-  local current_workspace
-  current_workspace=$(printf 'j/activeworkspace' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null | jq -r '.id')
-  
-  if [[ "$current_workspace" != "$target_workspace" ]]; then
-    return 0
-  fi
-  
   # Double-check overlays after delay (catches overlays that opened during the wait)
   if is_any_overlay_visible; then
     return 0
@@ -368,7 +370,12 @@ capture_screenshot() {
   all_clients_json=$(printf 'j/clients' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
   [[ -n "$all_clients_json" ]] || return 0
 
-  # Process each window in the target workspace.
+  # Capture windows across all workspaces currently visible on monitors.
+  local visible_workspaces_json
+  visible_workspaces_json=$(get_visible_workspace_ids_json)
+  [[ -n "$visible_workspaces_json" ]] || visible_workspaces_json='[]'
+
+  # Process each window in all visible workspaces.
   local -a capture_pids=()
   while IFS=$'\t' read -r preview_id mapped width height; do
     [[ "$mapped" == "false" ]] && continue
@@ -380,7 +387,7 @@ capture_screenshot() {
       wait_for_capture_batch "${capture_pids[@]}"
       capture_pids=()
     fi
-  done < <(jq -r --arg ws "$current_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | [((.stableId // "") | if length > 0 then . else ((.address // "") | sub("^0x"; "")) end), (.mapped // true), (.size[0] // 0), (.size[1] // 0)] | @tsv' <<< "$all_clients_json" 2>/dev/null)
+  done < <(jq -r --argjson visible_ws "$visible_workspaces_json" '.[] | select(((.workspace.id // -1) as $ws | ($visible_ws | index($ws))) != null) | [((.stableId // "") | if length > 0 then . else ((.address // "") | sub("^0x"; "")) end), (.mapped // true), (.size[0] // 0), (.size[1] // 0)] | @tsv' <<< "$all_clients_json" 2>/dev/null)
 
   if [[ ${#capture_pids[@]} -gt 0 ]]; then
     wait_for_capture_batch "${capture_pids[@]}"
@@ -457,12 +464,8 @@ handle_event() {
   local capture_id="${timestamp}_${event_type}"
   printf '%s\n' "$capture_id" > "$WORKSPACE_CHANGE_FILE"
   
-  # Get workspace and trigger screenshot
-  local workspace_at_event
-  workspace_at_event=$(printf 'j/activeworkspace' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null | jq -r '.id')
-  
   # Run capture inline to avoid accumulating background shells over long sessions
-  capture_screenshot "$workspace_at_event" "$event_type" "$capture_id"
+  capture_screenshot "$event_type" "$capture_id"
 }
 
 # Connect to Hyprland socket and process events
