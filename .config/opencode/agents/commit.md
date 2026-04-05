@@ -2,9 +2,9 @@
 description: Minimal agent for commit message generation — no provider system prompt, no tools
 mode: primary
 hidden: true
-# model: openai/gpt-5.3-codex-spark
+model: openai/gpt-5.3-codex-spark
 # model: anthropic/claude-haiku-4-5
-model: openai/gpt-5.1-codex-mini
+# model: openai/gpt-5.1-codex-mini
 # model: opencode/big-pickle
 prompt: ""
 permission: deny

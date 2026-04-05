@@ -69,6 +69,13 @@
             "topRange": "1y"
          }
       },
+      "@fbosch/wowhead": {
+         "entrypoints": {
+            "wowhead": {
+               "alias": "wh"
+            }
+         }
+      },
       "@fbosch/yr-weather": {
          "preferences": {
             "latitude": "55.704819",
