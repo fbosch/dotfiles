@@ -2,6 +2,10 @@
 
 Personal dotfiles managed with GNU Stow across macOS and Linux.
 
+## Preferences
+
+- Prefer event-based systems over polling when both are viable.
+
 ## Essentials
 
 - Do not edit generated state/lock files (e.g. `lazy-lock.json`, AGS GIR typings, Fish auto-generated dirs).
