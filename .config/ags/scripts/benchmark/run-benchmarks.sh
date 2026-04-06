@@ -76,7 +76,7 @@ function json_number_or_null() {
 STARTED_INSTANCE=0
 AGS_PID=""
 
-if ([[ "$BENCH_COLD" == "1" ]] || [[ "$BENCH_RESTART" == "1" ]]) && is_running; then
+if { [[ "$BENCH_COLD" == "1" ]] || [[ "$BENCH_RESTART" == "1" ]]; } && is_running; then
   ags quit "$INSTANCE" >/dev/null 2>&1 || true
   sleep 1
 fi

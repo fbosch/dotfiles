@@ -9,10 +9,19 @@ declare -A LAYOUT_DISPLAY_CODES=(
 
 sync_gamescope_xwayland_layout() {
   local target_layout="$1"
+  local setxkbmap_bin=""
 
-  if command -v setxkbmap >/dev/null 2>&1; then
+  if setxkbmap_bin="$(command -v setxkbmap 2>/dev/null)"; then
     :
-  else
+  elif [[ -x "/run/current-system/sw/bin/setxkbmap" ]]; then
+    setxkbmap_bin="/run/current-system/sw/bin/setxkbmap"
+  elif [[ -x "$HOME/.nix-profile/bin/setxkbmap" ]]; then
+    setxkbmap_bin="$HOME/.nix-profile/bin/setxkbmap"
+  elif [[ -x "/etc/profiles/per-user/$USER/bin/setxkbmap" ]]; then
+    setxkbmap_bin="/etc/profiles/per-user/$USER/bin/setxkbmap"
+  fi
+
+  if [[ -z "$setxkbmap_bin" ]]; then
     echo "setxkbmap not found; skipping Gamescope Xwayland layout sync" >> /tmp/hyprland-layout.log
     return 0
   fi
@@ -23,10 +32,10 @@ sync_gamescope_xwayland_layout() {
       displays[":${BASH_REMATCH[1]}"]=1
       line="${line#*:"${BASH_REMATCH[1]}"}"
     done
-  done < <(pgrep -af 'Xwayland.*gamescope' || true)
+  done < <(pgrep -af 'Xwayland' || true)
 
   for display in "${!displays[@]}"; do
-    DISPLAY="$display" setxkbmap -layout "$target_layout" >/dev/null 2>&1 || true
+    DISPLAY="$display" "$setxkbmap_bin" -layout "$target_layout" -option '' >/dev/null 2>&1 || true
   done
 }
 
