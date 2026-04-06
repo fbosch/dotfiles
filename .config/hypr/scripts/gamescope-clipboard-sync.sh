@@ -5,6 +5,7 @@ set -euo pipefail
 LOCK_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-clipboard/gamescope-clipboard-sync.lockdir"
 LOG_FILE="/tmp/hyprland-clipboard.log"
 POLL_SECONDS=0.4
+DISPLAY_REFRESH_SECONDS=3
 
 mkdir -p "$(dirname "$LOCK_DIR")"
 if mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -43,6 +44,8 @@ echo "gamescope clipboard sync started (pid=$$, wayland=${WAYLAND_DISPLAY:-unset
 
 declare -A last_written_to_display=()
 last_wayland_value=""
+last_display_refresh_epoch=0
+cached_displays=()
 
 list_xwayland_displays() {
   declare -A displays=()
@@ -65,6 +68,23 @@ list_xwayland_displays() {
   fi
 
   printf '%s\n' "${!displays[@]}"
+}
+
+refresh_xwayland_displays() {
+  local now
+  now=$(date +%s)
+
+  if (( now - last_display_refresh_epoch < DISPLAY_REFRESH_SECONDS )) && [[ ${#cached_displays[@]} -gt 0 ]]; then
+    return
+  fi
+
+  mapfile -t cached_displays < <(list_xwayland_displays)
+  last_display_refresh_epoch=$now
+}
+
+force_refresh_xwayland_displays() {
+  mapfile -t cached_displays < <(list_xwayland_displays)
+  last_display_refresh_epoch=$(date +%s)
 }
 
 read_wayland_clipboard() {
@@ -92,19 +112,24 @@ write_x11_clipboard() {
 }
 
 while true; do
+  refresh_xwayland_displays
   wayland_value="$(read_wayland_clipboard)"
 
   if [[ -n "$wayland_value" ]] && [[ "$wayland_value" != "$last_wayland_value" ]]; then
-    while IFS= read -r display; do
+    if [[ ${#cached_displays[@]} -eq 0 ]]; then
+      force_refresh_xwayland_displays
+    fi
+
+    for display in "${cached_displays[@]}"; do
       [[ -n "$display" ]] || continue
       write_x11_clipboard "$display" "$wayland_value"
       last_written_to_display["$display"]="$wayland_value"
-    done < <(list_xwayland_displays)
+    done
 
     last_wayland_value="$wayland_value"
   fi
 
-  while IFS= read -r display; do
+  for display in "${cached_displays[@]}"; do
     [[ -n "$display" ]] || continue
 
     x11_value="$(read_x11_clipboard "$display")"
@@ -123,12 +148,12 @@ while true; do
     write_wayland_clipboard "$x11_value"
     last_wayland_value="$x11_value"
 
-    while IFS= read -r other_display; do
+    for other_display in "${cached_displays[@]}"; do
       [[ -n "$other_display" ]] || continue
       write_x11_clipboard "$other_display" "$x11_value"
       last_written_to_display["$other_display"]="$x11_value"
-    done < <(list_xwayland_displays)
-  done < <(list_xwayland_displays)
+    done
+  done
 
   sleep "$POLL_SECONDS"
 done
