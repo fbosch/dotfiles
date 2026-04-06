@@ -2,12 +2,26 @@
 
 set -euo pipefail
 
+SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
+
+if [[ "${1:-}" == "--emit-wayland-event" ]]; then
+  fifo_path="${2:-}"
+  if [[ -z "$fifo_path" ]]; then
+    exit 1
+  fi
+
+  value="$(cat)"
+  payload="$(printf '%s' "$value" | base64 -w0)"
+  printf 'wayland\t%s\n' "$payload" > "$fifo_path"
+  exit 0
+fi
+
 LOCK_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-clipboard/gamescope-clipboard-sync.lockdir"
 LOG_FILE="/tmp/hyprland-clipboard.log"
-POLL_SECONDS=0.4
-DISPLAY_REFRESH_SECONDS=3
+RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-clipboard"
+EVENT_FIFO="$RUNTIME_DIR/gamescope-clipboard-sync.events"
 
-mkdir -p "$(dirname "$LOCK_DIR")"
+mkdir -p "$RUNTIME_DIR"
 if mkdir "$LOCK_DIR" 2>/dev/null; then
   :
 else
@@ -15,6 +29,11 @@ else
 fi
 
 cleanup() {
+  if [[ -n "${watch_pid:-}" ]]; then
+    kill "$watch_pid" 2>/dev/null || true
+  fi
+
+  rm -f "$EVENT_FIFO"
   rm -rf "$LOCK_DIR"
 }
 trap cleanup EXIT INT TERM
@@ -42,11 +61,6 @@ fi
 
 echo "gamescope clipboard sync started (pid=$$, wayland=${WAYLAND_DISPLAY:-unset}, x11=${DISPLAY:-unset})" >> "$LOG_FILE"
 
-declare -A last_written_to_display=()
-last_wayland_value=""
-last_display_refresh_epoch=0
-cached_displays=()
-
 list_xwayland_displays() {
   declare -A displays=()
   local line
@@ -68,23 +82,6 @@ list_xwayland_displays() {
   fi
 
   printf '%s\n' "${!displays[@]}"
-}
-
-refresh_xwayland_displays() {
-  local now
-  now=$(date +%s)
-
-  if (( now - last_display_refresh_epoch < DISPLAY_REFRESH_SECONDS )) && [[ ${#cached_displays[@]} -gt 0 ]]; then
-    return
-  fi
-
-  mapfile -t cached_displays < <(list_xwayland_displays)
-  last_display_refresh_epoch=$now
-}
-
-force_refresh_xwayland_displays() {
-  mapfile -t cached_displays < <(list_xwayland_displays)
-  last_display_refresh_epoch=$(date +%s)
 }
 
 read_wayland_clipboard() {
@@ -111,49 +108,33 @@ write_x11_clipboard() {
   printf '%s' "$value" | DISPLAY="$display" xclip -selection primary -in >/dev/null 2>&1 || true
 }
 
-while true; do
-  refresh_xwayland_displays
-  wayland_value="$(read_wayland_clipboard)"
+sync_wayland_value_to_x11() {
+  local value="$1"
 
-  if [[ -n "$wayland_value" ]] && [[ "$wayland_value" != "$last_wayland_value" ]]; then
-    if [[ ${#cached_displays[@]} -eq 0 ]]; then
-      force_refresh_xwayland_displays
-    fi
-
-    for display in "${cached_displays[@]}"; do
-      [[ -n "$display" ]] || continue
-      write_x11_clipboard "$display" "$wayland_value"
-      last_written_to_display["$display"]="$wayland_value"
-    done
-
-    last_wayland_value="$wayland_value"
+  if [[ -z "$value" ]]; then
+    return
   fi
 
-  for display in "${cached_displays[@]}"; do
+  while IFS= read -r display; do
     [[ -n "$display" ]] || continue
+    write_x11_clipboard "$display" "$value"
+  done < <(list_xwayland_displays)
+}
 
-    x11_value="$(read_x11_clipboard "$display")"
-    if [[ -z "$x11_value" ]]; then
-      continue
-    fi
+rm -f "$EVENT_FIFO"
+mkfifo "$EVENT_FIFO"
 
-    if [[ "${last_written_to_display[$display]:-}" == "$x11_value" ]]; then
-      continue
-    fi
+initial_wayland_value="$(read_wayland_clipboard)"
+sync_wayland_value_to_x11 "$initial_wayland_value"
 
-    if [[ "$x11_value" == "$last_wayland_value" ]]; then
-      continue
-    fi
+wl-paste --type text/plain --watch "$SCRIPT_PATH" --emit-wayland-event "$EVENT_FIFO" >/dev/null 2>&1 &
+watch_pid=$!
 
-    write_wayland_clipboard "$x11_value"
-    last_wayland_value="$x11_value"
+while IFS=$'\t' read -r source payload; do
+  if [[ "$source" != "wayland" ]]; then
+    continue
+  fi
 
-    for other_display in "${cached_displays[@]}"; do
-      [[ -n "$other_display" ]] || continue
-      write_x11_clipboard "$other_display" "$x11_value"
-      last_written_to_display["$other_display"]="$x11_value"
-    done
-  done
-
-  sleep "$POLL_SECONDS"
-done
+  value="$(printf '%s' "$payload" | base64 -d 2>/dev/null || true)"
+  sync_wayland_value_to_x11 "$value"
+done < "$EVENT_FIFO"
