@@ -1,52 +1,59 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Configuration: Map layout codes to display codes for UI
-# Add entries here for each keyboard layout you use
+set -euo pipefail
+
 declare -A LAYOUT_DISPLAY_CODES=(
-    ["us"]="ENG"
-    ["dk"]="DAN"
+  ["us"]="ENG"
+  ["dk"]="DAN"
 )
 
-# Get keyboard info from hyprctl
-keyboard_info=$(hyprctl devices -j | jq -r '.keyboards[] | select(.main == true)')
+sync_gamescope_xwayland_layout() {
+  local target_layout="$1"
 
-# Get the keyboard name for switching
-keyboard_name=$(echo "$keyboard_info" | jq -r '.name')
+  if command -v setxkbmap >/dev/null 2>&1; then
+    :
+  else
+    echo "setxkbmap not found; skipping Gamescope Xwayland layout sync" >> /tmp/hyprland-layout.log
+    return 0
+  fi
 
-# Extract configured layouts
-IFS=',' read -ra layouts <<< "$(echo "$keyboard_info" | jq -r '.layout')"
+  declare -A displays=()
+  while IFS= read -r line; do
+    while [[ "$line" =~ :([0-9]+) ]]; do
+      displays[":${BASH_REMATCH[1]}"]=1
+      line="${line#*:"${BASH_REMATCH[1]}"}"
+    done
+  done < <(pgrep -af 'Xwayland.*gamescope' || true)
 
-# Get current active layout info
-current_layout=$(echo "$keyboard_info" | jq -r '.active_keymap')
+  for display in "${!displays[@]}"; do
+    DISPLAY="$display" setxkbmap -layout "$target_layout" >/dev/null 2>&1 || true
+  done
+}
 
-# Switch to next layout using the actual keyboard name
-hyprctl switchxkblayout "$keyboard_name" next
+keyboard_info="$(hyprctl devices -j | jq -rc '.keyboards[] | select(.main == true)')"
+keyboard_name="$(jq -r '.name' <<< "$keyboard_info")"
+current_layout="$(jq -r '.active_keymap' <<< "$keyboard_info")"
 
-# Wait a moment for the layout to change
+IFS=',' read -ra layouts <<< "$(jq -r '.layout' <<< "$keyboard_info")"
+
+hyprctl switchxkblayout "$keyboard_name" next >/dev/null
 sleep 0.1
 
-# Get updated keyboard info after switch
-keyboard_info=$(hyprctl devices -j | jq -r '.keyboards[] | select(.main == true)')
-new_layout=$(echo "$keyboard_info" | jq -r '.active_keymap')
-new_index=$(echo "$keyboard_info" | jq -r '.active_layout_index')
+keyboard_info="$(hyprctl devices -j | jq -rc '.keyboards[] | select(.main == true)')"
+new_layout="$(jq -r '.active_keymap' <<< "$keyboard_info")"
+new_index="$(jq -r '.active_layout_index' <<< "$keyboard_info")"
+active_layout="${layouts[$new_index]}"
+active_code="${LAYOUT_DISPLAY_CODES[$active_layout]:-$active_layout}"
 
-# Get the display code for the new active layout
-active_code="${LAYOUT_DISPLAY_CODES[${layouts[$new_index]}]}"
-
-# Show the AGS keyboard layout switcher overlay
-# (Daemon is pre-started at boot by start-daemons.sh)
-
-# Build layouts array with display codes for AGS
 layout_codes_array=()
 for layout in "${layouts[@]}"; do
-    layout_codes_array+=("${LAYOUT_DISPLAY_CODES[$layout]}")
+  layout_codes_array+=("${LAYOUT_DISPLAY_CODES[$layout]:-$layout}")
 done
 
-# Convert bash array to JSON array for AGS
-layouts_json=$(printf '%s\n' "${layout_codes_array[@]}" | jq -R . | jq -s .)
+layouts_json="$(printf '%s\n' "${layout_codes_array[@]}" | jq -R . | jq -s .)"
 
-# Send to AGS bundled daemon with the active layout indicated
+sync_gamescope_xwayland_layout "$active_layout"
+
 ags request -i ags-bundled keyboard-switcher "{\"action\":\"show\",\"config\":{\"layouts\":$layouts_json,\"activeLayout\":\"$active_code\",\"size\":\"sm\"}}"
 
-# Log to hyprland log for debugging
-echo "Keyboard layout switched from $current_layout to $new_layout (code: $active_code)" >> /tmp/hyprland-layout.log
+echo "Keyboard layout switched from $current_layout to $new_layout (layout: $active_layout, code: $active_code)" >> /tmp/hyprland-layout.log

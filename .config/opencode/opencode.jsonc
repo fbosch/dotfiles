@@ -101,7 +101,7 @@
       "model": "anthropic/claude-sonnet-4-6"
     },
     "commit": {
-      "model": "anthropic/claude-haiku-4-5"
+      "model": "small_model"
     }
   },
   "mcp": {
