@@ -1,0 +1,59 @@
+{
+  "$schema": "https://unpkg.com/opencode-toolbox@latest/toolbox.schema.json",
+  "mcp": {
+    "context7": {
+      "type": "local",
+      "command": [
+        "podman",
+        "run",
+        "-i",
+        "--rm",
+        "--replace",
+        "--name",
+        "mcp-context7",
+        "-e",
+        "MCP_TRANSPORT=stdio",
+        "mcp/context7"
+      ]
+    },
+    "sequential-thinking": {
+      "type": "local",
+      "command": [
+        "podman",
+        "run",
+        "-i",
+        "--rm",
+        "--replace",
+        "--name",
+        "mcp-sequential-thinking",
+        "mcp/sequentialthinking"
+      ]
+    },
+    "github": {
+      "type": "local",
+      "command": [
+        "gh",
+        "mcp"
+      ]
+    },
+    "exa": {
+      "type": "local",
+      "command": [
+        "podman",
+        "run",
+        "-i",
+        "--rm",
+        "--replace",
+        "--name",
+        "mcp-exa",
+        "-e",
+        "EXA_API_KEY={env:EXA_API_KEY}",
+        "mcp/exa"
+      ]
+    }
+  },
+  "settings": {
+    "defaultLimit": 5,
+    "initMode": "eager"
+  }
+}

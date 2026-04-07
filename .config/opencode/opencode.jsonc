@@ -5,10 +5,11 @@
   "small_model": "anthropic/claude-haiku-4-5",
   "plugin": [
     "@tarquinen/opencode-dcp@latest",
+    "opencode-toolbox",
     "./plugins/openmemory/openmemory.ts",
     "opencode-wakatime",
     "opencode-handoff",
-    "opencode-snippets",
+    // "opencode-snippets",
     "opencode-claude-auth",
     "opencode-toon-plugin@latest",
     "./plugins/worktrunk.ts",
@@ -102,63 +103,6 @@
     },
     "commit": {
       "model": "anthropic/claude-haiku-4-5"
-    }
-  },
-  "mcp": {
-    "context7": {
-      "type": "local",
-      "command": [
-        "podman",
-        "run",
-        "-i",
-        "--rm",
-        "--replace",
-        "--name",
-        "mcp-context7",
-        "-e",
-        "MCP_TRANSPORT=stdio",
-        "mcp/context7"
-      ]
-    },
-    "sequential-thinking": {
-      "type": "local",
-      "command": [
-        "podman",
-        "run",
-        "-i",
-        "--rm",
-        "--replace",
-        "--name",
-        "mcp-sequential-thinking",
-        "mcp/sequentialthinking"
-      ]
-    },
-    "github": {
-      "type": "local",
-      "command": [
-        "gh",
-        "mcp"
-      ]
-    },
-    "linear": {
-      "type": "remote",
-      "url": "https://mcp.linear.app/mcp",
-      "enabled": false
-    },
-    "exa": {
-      "type": "local",
-      "command": [
-        "podman",
-        "run",
-        "-i",
-        "--rm",
-        "--replace",
-        "--name",
-        "mcp-exa",
-        "-e",
-        "EXA_API_KEY={env:EXA_API_KEY}",
-        "mcp/exa"
-      ]
     }
   }
 }

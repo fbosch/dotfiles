@@ -5,8 +5,10 @@ approved-commands = [
     "pnpm type-check",
     "pnpm test:run",
 ]
+
 [projects."kommunekredit@vs-ssh.visualstudio.com:v3/kommunekredit/KK%20Laaneportal/KommuneKredit.Frontend"]
 approved-commands = [
     "pnpm install --frozen-lockfile --reporter=silent",
     "pnpm install --prefer-offline --frozen-lockfile --reporter=silent",
+    "ln -sfn {{ primary_worktree_path }}/node_modules node_modules",
 ]
