@@ -297,12 +297,26 @@ function getIconNameForClass(appClass: string): string | null {
   }
 
   // Try to find desktop file for this app class
-  // Try exact class name first, then lowercase
-  const attempts = [`${appClass}.desktop`, `${appClass.toLowerCase()}.desktop`];
+  const normalizedClass = appClass.trim();
+  const lowerClass = normalizedClass.toLowerCase();
+  const classWithoutSeparators = lowerClass.replace(/[-_\s]+/g, "");
+  const kebabFromCamel = normalizedClass
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .toLowerCase();
+
+  const desktopIdAttempts = Array.from(
+    new Set([
+      normalizedClass,
+      lowerClass,
+      classWithoutSeparators,
+      kebabFromCamel,
+      kebabFromCamel.replace(/-/g, ""),
+    ]),
+  ).map((candidate) => `${candidate}.desktop`);
 
   let iconName: string | null = null;
 
-  for (const desktopId of attempts) {
+  for (const desktopId of desktopIdAttempts) {
     try {
       // @ts-ignore - DesktopAppInfo exists in Gio but may not be in type definitions
       const appInfo = Gio.DesktopAppInfo.new(desktopId);
@@ -333,11 +347,15 @@ function getIconNameForClass(appClass: string): string | null {
   // If no desktop file found, try checking icon theme directly
   // This handles apps that install icons but not desktop files
   if (!iconName && iconTheme) {
-    const iconAttempts = [
-      appClass,
-      appClass.toLowerCase(),
-      appClass.toLowerCase().replace(/\s+/g, "-"),
-    ];
+    const iconAttempts = Array.from(
+      new Set([
+        normalizedClass,
+        lowerClass,
+        lowerClass.replace(/\s+/g, "-"),
+        kebabFromCamel,
+        classWithoutSeparators,
+      ]),
+    );
 
     for (const name of iconAttempts) {
       if (iconTheme.has_icon(name)) {

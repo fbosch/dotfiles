@@ -101,6 +101,7 @@
     "on-click-middle": "close",
     "ignore-list": ["vicinae", "Vicinae Launcher"],
     "app_ids-mapping": {
+      "WowUpCf": "wowup-cf",
       "chrome-chat.openai.com__-ChatGPTProfile": "ChatGPT",
       "chrome-music.youtube.com__-YoutubeMusicProfile": "YouTube Music",
       "chrome-www.notion.so__-NotionProfile": "Notion",

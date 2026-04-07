@@ -75,24 +75,34 @@
       "show-per-app": true
     },
     "buttons-grid": {
+      "buttons-per-row": 2,
       "actions": [
         {
-          "label": "󱤅",
+          "label": "󱤅 Perf",
           "command": "bash ~/.config/hypr/scripts/toggle-performance-mode.sh",
+          "type": "toggle",
           "tooltip": "Toggle Performance Mode"
         },
         {
-          "label": "󰖔",
+          "label": "󰺵 Game",
+          "command": "bash ~/.config/hypr/scripts/profilectl.sh toggle gaming",
+          "type": "toggle",
+          "tooltip": "Toggle Game Mode"
+        },
+        {
+          "label": "󰖔 Night",
           "command": "bash ~/.config/hypr/scripts/toggle-night-light.sh",
+          "type": "toggle",
           "tooltip": "Toggle Night Light"
         },
         {
-          "label": "󰅶",
+          "label": "󰅶 Caffeine",
           "command": "bash ~/.config/hypr/scripts/toggle-hypridle.sh",
+          "type": "toggle",
           "tooltip": "Toggle Caffeine Mode"
         },
         {
-          "label": "󰑓",
+          "label": "󰑓 Reset",
           "command": "bash ~/.config/hypr/scripts/reset-desktop.sh",
           "tooltip": "Reset Desktop"
         }

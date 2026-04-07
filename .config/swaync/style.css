@@ -670,8 +670,8 @@
 /* Buttons Grid Widget */
 .widget-buttons-grid {
   background: transparent;
-  padding: 12px 16px;
-  margin: 0 0 6px 0;
+  padding: 12px 16px 8px 16px;
+  margin: 0 0 12px 0;
   border: none;
   border-top: 1px solid var(--border-color);
   border-radius: 0;
@@ -684,7 +684,7 @@
 
 .widget-buttons-grid > flowbox > flowboxchild {
   padding: 0;
-  margin: 0 6px 0 0;
+  margin: 0 6px 6px 0;
 }
 
 .widget-buttons-grid > flowbox > flowboxchild:last-child {
@@ -717,6 +717,17 @@
 .widget-buttons-grid > flowbox > flowboxchild > button:active {
   background: var(--surface-active);
   transform: scale(0.98);
+}
+
+.widget-buttons-grid > flowbox > flowboxchild > button.active,
+.widget-buttons-grid > flowbox > flowboxchild > button:checked,
+.widget-buttons-grid > flowbox > flowboxchild > button.toggle:checked,
+.widget-buttons > flowbox > flowboxchild > button.active,
+.widget-buttons > flowbox > flowboxchild > button:checked,
+.widget-buttons > flowbox > flowboxchild > button.toggle:checked {
+  background: rgba(0, 103, 192, 0.35);
+  border-color: rgba(16, 110, 190, 0.9);
+  color: #ffffff;
 }
 
 /* MPRIS Widget (Media Controls) */
