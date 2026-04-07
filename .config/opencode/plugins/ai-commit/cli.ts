@@ -44,6 +44,7 @@ type Args = {
   verbose: boolean;
   modelRef?: string;
   debug: boolean;
+  restartServer: boolean;
 };
 
 function parseArgs(argv: string[]): Args {
@@ -65,6 +66,11 @@ function parseArgs(argv: string[]): Args {
     verbose: argv.includes("--verbose") || argv.includes("-v"),
     modelRef: modelRef && modelRef.length > 0 ? modelRef : undefined,
     debug: argv.includes("--debug"),
+    restartServer:
+      argv.includes("--restart-server") ||
+      argv.includes("--restart") ||
+      argv[0] === "restart-server" ||
+      argv[0] === "restart",
   };
 }
 
@@ -280,6 +286,22 @@ async function restartServer(): Promise<void> {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+
+  if (args.restartServer) {
+    try {
+      await withSpinner("Restarting commit server...", () => restartServer());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      style(` Failed to restart commit server: ${message}`, 1);
+      process.exit(1);
+    }
+
+    style(
+      ` Commit server ready at http://${OPENCODE_SERVER_HOST}:${String(OPENCODE_SERVER_PORT)}`,
+      2,
+    );
+    return;
+  }
 
   if (!isInGitRepo()) {
     style(" Not in a git repository", 1);

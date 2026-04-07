@@ -12,6 +12,16 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     end
 
     if test -f "$script"
+        if test (count $argv) -gt 0
+            switch $argv[1]
+                case restart-server restart
+                    bun run "$script" --restart-server
+                    set -l run_status $status
+                    functions -e __ai_commit_err
+                    return $run_status
+            end
+        end
+
         bun run "$script" $argv
         set -l run_status $status
         functions -e __ai_commit_err

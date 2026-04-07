@@ -2,7 +2,6 @@
 description: Minimal agent for commit message generation — no provider system prompt, no tools
 mode: primary
 hidden: true
-model: small_model
 prompt: ""
 permission: deny
 tools:
