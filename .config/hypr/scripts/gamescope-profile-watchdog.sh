@@ -6,6 +6,7 @@ LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/hypr-profiles/gamescope-watchdog.lock"
 PROFILECTL="$HOME/.config/hypr/scripts/profilectl.sh"
 ACTIVE_POLL_SECONDS=2
 IDLE_POLL_SECONDS=5
+EVENT_SANITY_RECHECK_SECONDS=900
 MONITOR_FD=""
 MONITOR_PID=""
 
@@ -39,30 +40,59 @@ start_event_monitor() {
   fi
 }
 
-wait_for_next_check() {
-  local wait_seconds="$1"
-
-  if [[ -n "$MONITOR_FD" ]]; then
-    read -r -t "$wait_seconds" -u "$MONITOR_FD" _ || true
+ensure_event_monitor() {
+  if [[ -z "$MONITOR_PID" ]] || [[ -z "$MONITOR_FD" ]]; then
+    MONITOR_FD=""
+    MONITOR_PID=""
+    start_event_monitor
     return
   fi
 
-  sleep "$wait_seconds"
+  if kill -0 "$MONITOR_PID" >/dev/null 2>&1; then
+    return
+  fi
+
+  MONITOR_FD=""
+  MONITOR_PID=""
+  start_event_monitor
+}
+
+wait_for_gamemode_event() {
+  local wait_seconds="$1"
+  local line
+
+  if [[ -z "$MONITOR_FD" ]]; then
+    return 1
+  fi
+
+  while true; do
+    if [[ "$wait_seconds" -gt 0 ]]; then
+      if read -r -t "$wait_seconds" -u "$MONITOR_FD" line; then
+        :
+      else
+        return 1
+      fi
+    else
+      if read -r -u "$MONITOR_FD" line; then
+        :
+      else
+        return 1
+      fi
+    fi
+
+    if [[ "$line" == *"GameRegistered"* ]] || [[ "$line" == *"GameUnregistered"* ]] || [[ "$line" == *"ClientCount"* ]] || [[ "$line" == *"PropertiesChanged"* ]]; then
+      return 0
+    fi
+  done
 }
 
 get_gaming_count() {
   if command -v busctl >/dev/null 2>&1; then
-    local gamemode_live_count=0
-    local gamemode_pid
+    local client_count=0
 
-    while read -r gamemode_pid; do
-      if [[ "$gamemode_pid" =~ ^[0-9]+$ ]] && [[ -d "/proc/$gamemode_pid" ]]; then
-        gamemode_live_count=$((gamemode_live_count + 1))
-      fi
-    done < <(busctl --user call com.feralinteractive.GameMode /com/feralinteractive/GameMode com.feralinteractive.GameMode ListGames 2>/dev/null \
-      | awk '{ for (i = 3; i <= NF; i += 2) if ($i ~ /^[0-9]+$/) print $i }')
+    client_count="$(busctl --user get-property com.feralinteractive.GameMode /com/feralinteractive/GameMode com.feralinteractive.GameMode ClientCount 2>/dev/null | awk '{print $2}')"
 
-    if [[ "$gamemode_live_count" -gt 0 ]]; then
+    if [[ "$client_count" =~ ^[0-9]+$ ]] && [[ "$client_count" -gt 0 ]]; then
       printf '1\n'
     else
       printf '0\n'
@@ -76,7 +106,10 @@ get_gaming_count() {
 start_event_monitor
 
 last_count=""
+count=0
 while true; do
+  ensure_event_monitor
+
   count="$(get_gaming_count)"
 
   if [[ "$count" =~ ^[0-9]+$ ]]; then
@@ -90,9 +123,15 @@ while true; do
     last_count="$count"
   fi
 
-  if [[ "$count" -gt 0 ]]; then
-    wait_for_next_check "$ACTIVE_POLL_SECONDS"
+  if [[ -n "$MONITOR_FD" ]]; then
+    if wait_for_gamemode_event "$EVENT_SANITY_RECHECK_SECONDS"; then
+      :
+    else
+      ensure_event_monitor
+    fi
+  elif [[ "$count" -gt 0 ]]; then
+    sleep "$ACTIVE_POLL_SECONDS"
   else
-    wait_for_next_check "$IDLE_POLL_SECONDS"
+    sleep "$IDLE_POLL_SECONDS"
   fi
 done
