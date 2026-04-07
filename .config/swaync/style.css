@@ -705,7 +705,9 @@
 }
 
 .widget-buttons-grid > flowbox > flowboxchild > button label {
+  font-family: "SF Pro Rounded", system-ui, sans-serif;
   font-size: 16px;
+  font-weight: 600;
 }
 
 .widget-buttons-grid > flowbox > flowboxchild > button:hover {
