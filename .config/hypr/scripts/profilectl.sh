@@ -52,6 +52,10 @@ apply_hypr_performance_overlay() {
   hyprctl --batch "keyword animations:enabled 0 ; keyword decoration:blur:passes 1 ; keyword decoration:shadow:enabled 0" >/dev/null
 }
 
+apply_hypr_gaming_overlay() {
+  hyprctl --batch "keyword animations:enabled 0 ; keyword decoration:shadow:enabled 0 ; keyword decoration:blur:enabled 0 ; keyword decoration:inactive_opacity 1.0 ; keyword misc:vrr 2 ; keyword general:allow_tearing true" >/dev/null
+}
+
 restore_hypr_defaults() {
   hyprctl reload >/dev/null
 }
@@ -75,39 +79,73 @@ set_switcher_mode_previews() {
 }
 
 overlay_active_file="$STATE_DIR/performance-overlay.active"
+overlay_mode_file="$STATE_DIR/performance-overlay.mode"
 
-apply_effective_state() {
+get_desired_overlay_mode() {
   local performance_count
   local gaming_count
-  local should_enable_overlay
 
   performance_count="$(get_count "$PERFORMANCE_PROFILE")"
   gaming_count="$(get_count "$GAMING_PROFILE")"
 
-  should_enable_overlay=0
-  if [[ "$performance_count" -gt 0 || "$gaming_count" -gt 0 ]]; then
-    should_enable_overlay=1
-  fi
-
-  if [[ "$should_enable_overlay" -eq 1 && ! -f "$overlay_active_file" ]]; then
-    pause_background_helpers
-    set_switcher_mode_icons
-    apply_hypr_performance_overlay
-    touch "$overlay_active_file"
+  if [[ "$gaming_count" -gt 0 ]]; then
+    printf "gaming"
     return
   fi
 
-  if [[ "$should_enable_overlay" -eq 0 && -f "$overlay_active_file" ]]; then
+  if [[ "$performance_count" -gt 0 ]]; then
+    printf "performance"
+    return
+  fi
+
+  printf "none"
+}
+
+apply_effective_state() {
+  local desired_mode
+  local current_mode="none"
+
+  desired_mode="$(get_desired_overlay_mode)"
+
+  if [[ -f "$overlay_mode_file" ]]; then
+    current_mode="$(< "$overlay_mode_file")"
+  fi
+
+  if [[ "$desired_mode" == "none" && -f "$overlay_active_file" ]]; then
     resume_background_helpers
     set_switcher_mode_previews
     restore_hypr_defaults
-    rm -f "$overlay_active_file"
+    rm -f "$overlay_active_file" "$overlay_mode_file"
     return
   fi
 
-  if [[ "$should_enable_overlay" -eq 1 && -f "$overlay_active_file" ]]; then
+  if [[ "$desired_mode" == "none" ]]; then
+    rm -f "$overlay_mode_file"
+    return
+  fi
+
+  if [[ "$current_mode" != "$desired_mode" ]]; then
+    if [[ -f "$overlay_active_file" ]]; then
+      restore_hypr_defaults
+    fi
+
     pause_background_helpers
     set_switcher_mode_icons
+    if [[ "$desired_mode" == "gaming" ]]; then
+      apply_hypr_gaming_overlay
+    else
+      apply_hypr_performance_overlay
+    fi
+    touch "$overlay_active_file"
+    printf "%s" "$desired_mode" > "$overlay_mode_file"
+    return
+  fi
+
+  pause_background_helpers
+  set_switcher_mode_icons
+  if [[ "$desired_mode" == "gaming" ]]; then
+    apply_hypr_gaming_overlay
+  else
     apply_hypr_performance_overlay
   fi
 }
