@@ -70,6 +70,14 @@ resume_background_helpers() {
   pkill -CONT -f waybar-edge-monitor 2>/dev/null || true
 }
 
+refresh_window_captures() {
+  local capture_daemon_script="$HOME/.config/hypr/scripts/window-capture-daemon.sh"
+
+  if [[ -x "$capture_daemon_script" ]]; then
+    ( sleep 0.3; "$capture_daemon_script" refresh-once >/dev/null 2>&1 ) &
+  fi
+}
+
 set_switcher_mode_icons() {
   ags request --instance ags-bundled window-switcher '{"action": "set-mode", "mode": "icons"}' 2>/dev/null || true
 }
@@ -115,6 +123,7 @@ apply_effective_state() {
     resume_background_helpers
     set_switcher_mode_previews
     restore_hypr_defaults
+    refresh_window_captures
     rm -f "$overlay_active_file" "$overlay_mode_file"
     return
   fi

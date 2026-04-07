@@ -3,13 +3,22 @@
 set -euo pipefail
 
 DAEMON_LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/hypr-window-capture-daemon.lock"
-exec 9>"$DAEMON_LOCK_FILE"
-if command -v flock >/dev/null 2>&1; then
-  if flock -n 9; then
-    :
-  else
-    exit 0
+MODE="${1:-daemon}"
+
+if [[ "$MODE" == "daemon" ]]; then
+  exec 9>"$DAEMON_LOCK_FILE"
+  if command -v flock >/dev/null 2>&1; then
+    if flock -n 9; then
+      :
+    else
+      exit 0
+    fi
   fi
+elif [[ "$MODE" == "refresh-once" ]]; then
+  :
+else
+  printf 'usage: %s [refresh-once]\n' "$0" >&2
+  exit 1
 fi
 
 # Window capture directory - using /dev/shm (tmpfs) for faster I/O
@@ -467,6 +476,12 @@ handle_event() {
   # Run capture inline to avoid accumulating background shells over long sessions
   capture_screenshot "$event_type" "$capture_id"
 }
+
+if [[ "$MODE" == "refresh-once" ]]; then
+  rm -f "$LAST_OVERLAY_FILE" "$LAST_SCREENSHOT_FILE"
+  handle_event "activewindow>>refresh-once"
+  exit 0
+fi
 
 # Connect to Hyprland socket and process events
 # Use 'true' to prevent set -e from killing the loop if handle_event returns non-zero
