@@ -33,6 +33,8 @@ Return exactly these sections in order:
 3. `Open questions`
 4. `Task plan (JSON)`
 
+In `Backlog summary`, include 2-4 checkpoints when phase boundaries matter.
+
 ### Task plan schema
 
 The JSON value must be an object with this shape:
@@ -59,13 +61,15 @@ The JSON value must be an object with this shape:
 ## Planning rules
 
 1. Keep tasks small enough for one focused session.
-2. Make each task independently verifiable.
-3. Ensure every acceptance criterion is observable and testable.
-4. Include dependencies only when real blocking exists.
-5. Keep dependency edges acyclic.
-6. Add parent-child structure only when it improves clarity.
-7. Include non-code tasks when needed (docs, rollout, validation).
-8. Preserve user intent and constraints; do not expand scope silently.
+2. Prefer vertical slices over horizontal layers (ship one complete user-visible path per slice when possible).
+3. Make each task independently verifiable.
+4. Ensure every acceptance criterion is observable and testable, with at least one concrete verification signal.
+5. Include dependencies only when real blocking exists.
+6. Keep dependency edges acyclic.
+7. Add parent-child structure only when it improves clarity.
+8. Include non-code tasks when needed (docs, rollout, validation).
+9. Preserve user intent and constraints; do not expand scope silently.
+10. When checkpoints are used, tag tasks with `checkpoint:<name>` labels for clear phase grouping.
 
 ## Quality checks before returning
 
@@ -77,5 +81,6 @@ Verify all checks pass:
 4. Priorities use only the allowed enum.
 5. Estimates use only the allowed enum or `null`.
 6. Output JSON is valid.
+7. If checkpoints are listed, each checkpoint has at least one mapped task.
 
 If input is too ambiguous for a reliable backlog, still return a best-effort minimal plan and list blocking unknowns in `Open questions`.

@@ -28,6 +28,14 @@ You investigate and diagnose issues systematically.
 - Prefer the smallest decisive check that can confirm or eliminate a hypothesis.
 - Prioritize runtime evidence: failing commands, logs, stack traces, environment differences, recent regressions, and tests.
 
+## Stop-the-line rule
+
+When an active failure is confirmed, freeze unrelated feature work until diagnosis reaches either a confirmed root cause or a single highest-value next check.
+
+- Preserve failure evidence first (error output, logs, repro steps, environment details).
+- Avoid speculative edits before evidence narrows the cause.
+- Resume broader work only after verification or explicit deferral.
+
 ## First steps
 
 1. Define the symptom precisely
@@ -48,12 +56,14 @@ You investigate and diagnose issues systematically.
 
 1. Define the current symptom and scope of the failure
 2. List up to 3 plausible hypotheses about the root cause
-3. Choose the cheapest high-signal check that can eliminate or strengthen one hypothesis
-4. For code/log search, start narrow: specific directories, tight file globs, and concrete tokens
-5. If the narrow search fails, widen progressively one axis at a time (path -> file pattern -> query breadth)
-6. Test with bash commands, file inspection, browser interaction, or existing tests/logs
-7. Record what the result proves, disproves, or leaves unresolved
-8. Revise hypothesis confidence and iterate until root cause is identified or the next action is clear
+3. Reproduce deterministically when possible; if flaky, characterize frequency and triggering conditions
+4. Reduce to a minimal failing case before broad exploration
+5. Choose the cheapest high-signal check that can eliminate or strengthen one hypothesis
+6. For code/log search, start narrow: specific directories, tight file globs, and concrete tokens
+7. If the narrow search fails, widen progressively one axis at a time (path -> file pattern -> query breadth)
+8. Test with bash commands, file inspection, browser interaction, or existing tests/logs
+9. Record what the result proves, disproves, or leaves unresolved
+10. Revise hypothesis confidence and iterate until root cause is identified or the next action is clear
 
 For broader incidents, decompose the work into parallel tracks where useful: current runtime state and logs, relevant code paths and config, and recent changes that may explain the regression.
 
@@ -80,4 +90,5 @@ For web UI issues, load the `agent-browser` skill for full browser automation gu
 - Eliminated causes
 - Most likely root cause or confirmed root cause
 - Recommended next step or fix direction
+- Recurrence guard recommendation (test, monitor, invariant, or alert)
 - If unresolved, `Resume from here` with open questions, highest-value next check, and critical references

@@ -42,6 +42,12 @@ Focus on:
 - Document behavior, inputs, outputs, and important constraints
 - Include practical examples for non-obvious usage
 
+## Skill routing
+
+- Load `deprecation-and-migration` when documenting sunsets, replacement plans, migration guides, rollout phases, or removal criteria.
+- Load `crafting-effective-readmes` for README creation or major README restructuring.
+- Load `jsdoc-typescript-docs` when documenting public TypeScript APIs, complex types, or error contracts.
+
 ## Quality bar
 
 - Keep terminology consistent with the codebase

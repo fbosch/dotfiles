@@ -36,6 +36,11 @@ After writing tests, run them to verify they pass.
 - Cover error and failure paths
 - Add regression coverage for the change being made
 
+## Skill routing
+
+- Load `api-and-interface-design` when tests need to lock API or interface contracts (payload shape, error semantics, pagination, backward compatibility).
+- Load `security-and-hardening` when adding tests for security boundaries (validation failures, authz bypass attempts, secret leakage, injection resistance).
+
 ## Quality bar
 
 - Test names describe scenario and expected outcome

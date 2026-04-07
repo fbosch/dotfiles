@@ -41,3 +41,8 @@ Assume the design is wrong until proven resilient. Every issue must have a concr
 - At least one "weird but realistic" OS/filesystem/config case
 - Covers upgrade, downgrade, and backwards-compatibility stress
 - Every problem has a mitigation
+
+## Skill routing
+
+- When findings involve application security controls (input validation, authn/authz, secret handling, transport/storage safety), load `security-and-hardening` and map each top risk to concrete hardening actions.
+- Keep this agent focused on break scenarios and reproducers; use the security skill to refine mitigation specifics.
