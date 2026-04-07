@@ -1,6 +1,6 @@
 ---
 name: deprecation-and-migration
-description: Plan and execute safe deprecations and migrations. Use when replacing or removing APIs, config formats, commands, or behavior that existing consumers may rely on.
+description: Staged deprecation and migration planning for contract changes. Use when replacing or removing APIs, config formats, CLI flags, commands, data schemas, or defaults that existing consumers may rely on.
 ---
 
 # Deprecation and Migration
@@ -13,6 +13,18 @@ Handle contract changes with staged rollout, compatibility windows, and explicit
 - Renaming or removing config keys, CLI flags, or commands
 - Changing defaults that alter behavior for existing users
 - Migrating data shape, storage, or protocol semantics
+
+## Strategy selector
+
+- `Many unknown consumers` -> dual support + extended warning window + conservative removal gate.
+- `Internal consumers, strong coordination` -> shorter phases with explicit owner sign-off.
+- `Data migration required` -> reversible backfill + idempotent migration step + rollback rehearsal.
+
+## Observability branch
+
+- `High observability` (adoption telemetry + error budget + owner mapping): gate by measured readiness.
+- `Low observability`: add active discovery (logs, dependency scans, owner outreach) before default flip.
+- `No reliable telemetry`: do not remove on date alone; require explicit consumer attestations.
 
 ## Workflow
 
@@ -35,6 +47,21 @@ Handle contract changes with staged rollout, compatibility windows, and explicit
 - Emit clear deprecation warnings with actionable next steps.
 - Define cutoff criteria before removal (adoption %, error budget, date).
 - Provide rollback path for each rollout phase.
+
+## Removal-gate examples
+
+- Adoption: >= 95% of requests use new contract for 14 consecutive days.
+- Stability: migration-related error rate <= 0.2% and no sev1/sev2 incidents during gate window.
+- Coverage: all known top consumers validated in staging or production canary.
+- Operability: rollback path tested successfully within agreed recovery time.
+
+## NEVER do this
+
+- Never remove legacy behavior only because a calendar date arrived.
+- Never flip defaults and remove fallback in the same release.
+- Never emit deprecation warnings without replacement instructions and timeline.
+- Never run one-way data migrations without verified backup/restore and rollback strategy.
+- Never treat "no complaints" as adoption evidence when telemetry is weak.
 
 ## Output contract
 
