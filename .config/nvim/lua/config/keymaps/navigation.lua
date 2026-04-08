@@ -4,7 +4,7 @@ local map = require("utils").set_keymap
 map("n", "<leader>in", function()
 	vim.diagnostic.jump({
 		count = 1,
-		severity_limit = vim.diagnostic.severity.ERROR,
+		severity = vim.diagnostic.severity.ERROR,
 	})
 	vim.cmd("normal! zz")
 end, "Navigate to the next issue in the current buffer")
@@ -13,7 +13,7 @@ end, "Navigate to the next issue in the current buffer")
 map("n", "<leader>iN", function()
 	vim.diagnostic.jump({
 		count = -1,
-		severity_limit = vim.diagnostic.severity.ERROR,
+		severity = vim.diagnostic.severity.ERROR,
 	})
 	vim.cmd("normal! zz")
 end, "Navigate to the previous issue in the current buffer")
