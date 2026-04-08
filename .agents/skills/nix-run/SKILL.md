@@ -10,8 +10,11 @@ description: |
 
 1. Resolve the required executable from the task.
 2. Check whether it already exists with `command -v <exe>`.
-3. If missing, run it with `nix run nixpkgs#<pkg> -- <args>`.
-4. Keep execution non-interactive and task-scoped.
+3. If missing, resolve package name with this order:
+   - use `nixos_nix` (action=`search`, source=`nixos`, type=`packages`) when available in the current toolbox session
+   - otherwise use `nix search nixpkgs <term>`
+4. Run with `nix run nixpkgs#<pkg> -- <args>`.
+5. Keep execution non-interactive and task-scoped.
 
 ## Strict invocation policy
 
@@ -39,7 +42,7 @@ nix run nixpkgs#ffmpeg -- -version
 ## Failure fallback rules
 
 1. If package lookup fails (`attribute ... not found`), try one correction pass:
-   - confirm package name with `nix search nixpkgs <term>`
+   - confirm package name using `nixos_nix` when available, otherwise `nix search nixpkgs <term>`
    - retry with the corrected package name
 2. If execution fails due to runtime/tool arguments, surface the exact stderr cause and propose the smallest argument fix.
 
@@ -47,7 +50,7 @@ nix run nixpkgs#ffmpeg -- -version
 
 | Symptom | Likely cause | Next action |
 |---|---|---|
-| `attribute 'X' not found` | wrong package attribute | run `nix search nixpkgs <term>`, pick closest exact attr, retry once |
+| `attribute 'X' not found` | wrong package attribute | use `nixos_nix` package lookup when available, otherwise `nix search nixpkgs <term>`; pick closest exact attr and retry once |
 | `command not found` after `nix run` | package entrypoint differs from package name | rerun with explicit command if needed: `nix run nixpkgs#<pkg> -- <actual-binary> ...` |
 | immediate argument parse failure | wrong argument shape for wrapped tool | keep package, minimally adjust args only, retry once |
 | interactive prompt blocks execution | command expects TTY/user input | rerun with non-interactive flags or stop and request explicit user input intent |

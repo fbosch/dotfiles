@@ -64,6 +64,7 @@
   },
   "settings": {
     "defaultLimit": 5,
-    "initMode": "eager"
+    "initMode": "eager",
+    "connectionTimeout": 15000
   }
 }
