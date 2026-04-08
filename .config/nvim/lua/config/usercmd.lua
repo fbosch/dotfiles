@@ -29,7 +29,7 @@ end, "Compare Active File with Clipboard")
 usrcmd("WipeAllSessions", utils.wipe_all_sessions, { bang = true, desc = "Wipe all sessions" })
 
 usrcmd("RefreshUsage", function()
-	local modules = { "anthropic", "codex", "copilot", "opencode" }
+	local modules = { "codex", "copilot", "opencode" }
 	for _, mod in ipairs(modules) do
 		local ok, module = pcall(require, "utils.usage." .. mod)
 		if ok and module.clear_cache then

@@ -9,7 +9,7 @@ return {
 		local codexbar = require("utils.usage.codex")
 		local copilot_usage = require("utils.usage.copilot")
 		local opencode_zen_stats = require("utils.usage.opencode")
-		local anthropic_usage = require("utils.usage.anthropic")
+		-- local anthropic_usage = require("utils.usage.anthropic")
 
 		local lualine_x = {
 			require("opencode").statusline,
@@ -23,16 +23,16 @@ return {
 					return ok and result ~= nil and result ~= ""
 				end,
 			},
-			{
-				function()
-					local _, result = pcall(anthropic_usage.statusline_component)
-					return result .. " %#Comment#│%*"
-				end,
-				cond = function()
-					local ok, result = pcall(anthropic_usage.statusline_component)
-					return ok and result ~= nil and result ~= ""
-				end,
-			},
+			-- {
+			-- 	function()
+			-- 		local _, result = pcall(anthropic_usage.statusline_component)
+			-- 		return result .. " %#Comment#│%*"
+			-- 	end,
+			-- 	cond = function()
+			-- 		local ok, result = pcall(anthropic_usage.statusline_component)
+			-- 		return ok and result ~= nil and result ~= ""
+			-- 	end,
+			-- },
 			{
 				function()
 					local _, result = pcall(copilot_usage.statusline_component)
