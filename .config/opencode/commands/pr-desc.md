@@ -1,6 +1,6 @@
 ---
 description: Generate a PR description comparing current branch against its base branch
-model: anthropic/claude-haiku-4-5
+agent: quick
 ---
 
 Write a PR description in English. Output markdown only.
