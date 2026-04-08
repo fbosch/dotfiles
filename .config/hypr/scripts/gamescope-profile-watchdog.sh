@@ -59,7 +59,7 @@ handle_event() {
   local event="$1"
 
   case "$event" in
-    openwindow*|openwindowv2*|closewindow*|closewindowv2*|movewindow*|movewindowv2*|workspace*|workspacev2*|activewindow*|activewindowv2*|fullscreen*|fullscreenv2*)
+    openwindow*|closewindow*|movewindow*|workspace*|activewindow*|fullscreen*)
       return 0
       ;;
     *)
