@@ -9,7 +9,6 @@
     "./plugins/openmemory/openmemory.ts",
     "opencode-wakatime",
     "opencode-handoff",
-    // "opencode-claude-auth",
     "opencode-toon-plugin@latest",
     "./plugins/worktrunk.ts",
     "./plugins/rtk.ts"
@@ -74,7 +73,7 @@
       "model": "openai/gpt-5.3-codex"
     },
     "quick": {
-      "model": "github-models/openai/gpt-4.1-nano"
+      "model": "openai/gpt-5.1-codex-mini"
     },
     "benchmark": {
       "model": "openai/gpt-5.1-codex-mini"
