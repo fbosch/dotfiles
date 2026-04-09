@@ -1,16 +1,6 @@
 {
   "$schema": "https://unpkg.com/opencode-toolbox@latest/toolbox.schema.json",
   "mcp": {
-    "nixos": {
-      "type": "local",
-      "command": [
-        "podman",
-        "run",
-        "--rm",
-        "-i",
-        "ghcr.io/utensils/mcp-nixos"
-      ]
-    },
     "context7": {
       "type": "local",
       "command": [
@@ -64,7 +54,6 @@
   },
   "settings": {
     "defaultLimit": 5,
-    "initMode": "eager",
-    "connectionTimeout": 15000
+    "initMode": "eager"
   }
 }

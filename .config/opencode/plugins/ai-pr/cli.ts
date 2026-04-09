@@ -13,7 +13,6 @@ import { join } from "node:path";
 import process from "node:process";
 import { spinner } from "@clack/prompts";
 
-const DEFAULT_MODEL = "opencode/big-pickle";
 const DEFAULT_SERVER_URL = "http://127.0.0.1:4096";
 const START_TIMEOUT_MS = 12000;
 const SESSION_TIMEOUT_MS = 5000;
@@ -43,6 +42,12 @@ type ConnectedServer = {
 type ComparisonRange = {
   mergeBase: string;
   commitSubjects: string[];
+};
+
+type PrDescResult = {
+  description: string;
+  responseSummary: string;
+  responseError: string;
 };
 
 function parseArgs(argv: string[]): CliArgs {
@@ -298,12 +303,23 @@ function extractSessionId(value: unknown): string | null {
 }
 
 function extractTextParts(value: unknown): string[] {
+  if (typeof value === "string") {
+    return [value];
+  }
+
   const parts =
-    isRecord(value) && isRecord(value.data) && Array.isArray(value.data.parts)
-      ? value.data.parts
-      : isRecord(value) && Array.isArray(value.parts)
-        ? value.parts
-        : [];
+    isRecord(value) &&
+    isRecord(value.data) &&
+    isRecord(value.data.message) &&
+    Array.isArray(value.data.message.parts)
+      ? value.data.message.parts
+      : isRecord(value) && isRecord(value.data) && Array.isArray(value.data.parts)
+        ? value.data.parts
+        : isRecord(value) && isRecord(value.message) && Array.isArray(value.message.parts)
+          ? value.message.parts
+          : isRecord(value) && Array.isArray(value.parts)
+            ? value.parts
+            : [];
 
   const textParts: string[] = [];
   for (const part of parts) {
@@ -318,10 +334,152 @@ function extractTextParts(value: unknown): string[] {
 
     if (isRecord(part.part) && typeof part.part.text === "string") {
       textParts.push(part.part.text);
+      continue;
+    }
+
+    if (isRecord(part.state) && typeof part.state.output === "string") {
+      textParts.push(part.state.output);
+      continue;
+    }
+
+    if (
+      isRecord(part.state) &&
+      isRecord(part.state.output) &&
+      typeof part.state.output.text === "string"
+    ) {
+      textParts.push(part.state.output.text);
     }
   }
 
   return textParts;
+}
+
+function extractStructuredOutput(value: unknown): unknown | null {
+  if (
+    isRecord(value) &&
+    isRecord(value.data) &&
+    isRecord(value.data.info) &&
+    value.data.info.structured_output !== undefined
+  ) {
+    return value.data.info.structured_output;
+  }
+
+  if (
+    isRecord(value) &&
+    isRecord(value.data) &&
+    isRecord(value.data.info) &&
+    value.data.info.structuredOutput !== undefined
+  ) {
+    return value.data.info.structuredOutput;
+  }
+
+  if (
+    isRecord(value) &&
+    isRecord(value.info) &&
+    value.info.structured_output !== undefined
+  ) {
+    return value.info.structured_output;
+  }
+
+  if (
+    isRecord(value) &&
+    isRecord(value.info) &&
+    value.info.structuredOutput !== undefined
+  ) {
+    return value.info.structuredOutput;
+  }
+
+  return null;
+}
+
+function extractPrDescription(value: unknown): string {
+  const text = extractTextParts(value).join("\n").trim();
+  if (text.length > 0) {
+    return text;
+  }
+
+  const structured = extractStructuredOutput(value);
+  if (typeof structured === "string") {
+    return structured.trim();
+  }
+
+  if (isRecord(structured) && typeof structured.text === "string") {
+    return structured.text.trim();
+  }
+
+  if (isRecord(structured) && typeof structured.markdown === "string") {
+    return structured.markdown.trim();
+  }
+
+  return "";
+}
+
+function summarizeResponseShape(value: unknown): string {
+  if (isRecord(value) === false) {
+    return `response type: ${typeof value}`;
+  }
+
+  const rootKeys = Object.keys(value).slice(0, 10).join(",") || "(none)";
+  const dataKeys =
+    isRecord(value.data) ? Object.keys(value.data).slice(0, 10).join(",") || "(none)" : "(none)";
+  const infoKeys =
+    isRecord(value.data) && isRecord(value.data.info)
+      ? Object.keys(value.data.info).slice(0, 10).join(",") || "(none)"
+      : isRecord(value.info)
+        ? Object.keys(value.info).slice(0, 10).join(",") || "(none)"
+        : "(none)";
+
+  return [
+    `rootKeys=${rootKeys}`,
+    `dataKeys=${dataKeys}`,
+    `infoKeys=${infoKeys}`,
+    `textParts=${extractTextParts(value).length}`,
+    `hasStructured=${extractStructuredOutput(value) !== null}`,
+  ].join("; ");
+}
+
+function extractResponseError(value: unknown): string {
+  if (
+    isRecord(value) &&
+    isRecord(value.data) &&
+    isRecord(value.data.info) &&
+    isRecord(value.data.info.error) &&
+    isRecord(value.data.info.error.data) &&
+    typeof value.data.info.error.data.message === "string"
+  ) {
+    return value.data.info.error.data.message.trim();
+  }
+
+  if (
+    isRecord(value) &&
+    isRecord(value.data) &&
+    isRecord(value.data.info) &&
+    isRecord(value.data.info.error) &&
+    typeof value.data.info.error.message === "string"
+  ) {
+    return value.data.info.error.message.trim();
+  }
+
+  if (
+    isRecord(value) &&
+    isRecord(value.info) &&
+    isRecord(value.info.error) &&
+    isRecord(value.info.error.data) &&
+    typeof value.info.error.data.message === "string"
+  ) {
+    return value.info.error.data.message.trim();
+  }
+
+  if (
+    isRecord(value) &&
+    isRecord(value.info) &&
+    isRecord(value.info.error) &&
+    typeof value.info.error.message === "string"
+  ) {
+    return value.info.error.message.trim();
+  }
+
+  return "";
 }
 
 async function withSpinner<T>(
@@ -530,22 +688,38 @@ async function deleteSession(
 async function runPrDescCommand(
   baseUrl: string,
   sessionId: string,
-  modelRef: string,
+  modelRef: string | undefined,
   diff: string,
-): Promise<string> {
+): Promise<PrDescResult> {
+  const body: {
+    arguments: string;
+    command: string;
+    model?: string;
+  } = {
+    arguments: diff,
+    command: "pr-desc",
+  };
+
+  if (typeof modelRef === "string" && modelRef.trim().length > 0) {
+    body.model = modelRef;
+  }
+
   const response = await requestOpencode(
     baseUrl,
     `/session/${encodeURIComponent(sessionId)}/command`,
     "POST",
     getCommandTimeoutMs(),
-    {
-      arguments: diff,
-      command: "pr-desc",
-      model: modelRef,
-    },
+    body,
   );
 
-  return extractTextParts(response).join("\n").trim();
+  const description = extractPrDescription(response);
+  const responseError = extractResponseError(response);
+
+  return {
+    description,
+    responseSummary: summarizeResponseShape(response),
+    responseError,
+  };
 }
 
 function getClipboardCommand(): { command: string; args: string[] } | null {
@@ -572,7 +746,7 @@ function getClipboardCommand(): { command: string; args: string[] } | null {
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const debug = args.debug === true;
-  const modelRef = args.modelRef ?? DEFAULT_MODEL;
+  const modelRef = args.modelRef;
   const totalStart = startDebugTimer(debug);
 
   const repoCheckStart = startDebugTimer(debug);
@@ -704,6 +878,8 @@ async function main(): Promise<void> {
     sessionId: null,
   };
   let parsed = "";
+  let responseSummary = "";
+  let responseError = "";
 
   try {
     parsed = await withSpinner(debug, `Analyzing commits ...`, async () => {
@@ -726,7 +902,9 @@ async function main(): Promise<void> {
         diffInput,
       );
       writeDebugTiming(debug, "session.command", commandStart);
-      return result;
+      responseSummary = result.responseSummary;
+      responseError = result.responseError;
+      return result.description;
     });
   } catch (error) {
     cleanup();
@@ -756,6 +934,12 @@ async function main(): Promise<void> {
 
   if (parsed.length === 0) {
     style(" No valid PR description generated", 1);
+    if (responseError.length > 0) {
+      style(` OpenCode error: ${responseError}`, 1);
+    }
+    if (debug) {
+      style(` ai-pr debug: ${responseSummary}`, 3);
+    }
     writeDebugTiming(debug, "total", totalStart);
     cleanup();
     process.exit(1);

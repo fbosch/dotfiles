@@ -5,7 +5,7 @@
     "ags": {
       "repo": "https://github.com/Aylur/ags.git",
       "ref": "HEAD",
-      "resolvedCommit": "e169694390548dfd38ff40f1ef2163d6c3ffe3ea",
+      "resolvedCommit": "bbee2f18939f1ec7ff720e717cf305e73635628f",
       "bytes": 58879,
       "fileCount": 12,
       "manifestSha256": "bc5aa60ba05c0aca149a8f74e5f40bd1693b875bdc88a82076702efde50d26c4",

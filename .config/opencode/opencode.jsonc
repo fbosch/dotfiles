@@ -9,7 +9,6 @@
     "./plugins/openmemory/openmemory.ts",
     "opencode-wakatime",
     "opencode-handoff",
-    // "opencode-claude-auth",
     "opencode-toon-plugin@latest",
     "./plugins/worktrunk.ts",
     "./plugins/rtk.ts"

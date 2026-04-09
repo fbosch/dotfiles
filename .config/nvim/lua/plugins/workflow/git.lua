@@ -61,37 +61,37 @@ return {
 			{
 				mode = { "n" },
 				"<leader>gco",
-				"<cmd>GitConflictChooseOurs<CR>",
+				"<Plug>(git-conflict-ours)",
 				desc = "git conflict choose ours",
 			},
 			{
 				mode = { "n" },
 				"<leader>gct",
-				"<cmd>GitConflictChooseTheirs<CR>",
+				"<Plug>(git-conflict-theirs)",
 				desc = "git conflict choose theirs",
 			},
 			{
 				mode = { "n" },
 				"<leader>gcb",
-				"<cmd>GitConflictChooseBoth<CR>",
+				"<Plug>(git-conflict-both)",
 				desc = "git conflict choose both",
 			},
 			{
 				mode = { "n" },
 				"<leader>gc0",
-				"<cmd>GitConflictChooseNone<CR>",
+				"<Plug>(git-conflict-none)",
 				desc = "git conflict choose none",
 			},
 			{
 				mode = { "n" },
 				"<leader>gcn",
-				"<cmd>GitConflictNextConflict<CR>",
+				"<Plug>(git-conflict-next-conflict)",
 				desc = "git conflict next",
 			},
 			{
 				mode = { "n" },
 				"<leader>gcp",
-				"<cmd>GitConflictPrevConflict<CR>",
+				"<Plug>(git-conflict-prev-conflict)",
 				desc = "git conflict previous",
 			},
 			{
