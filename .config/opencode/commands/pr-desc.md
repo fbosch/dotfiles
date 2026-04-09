@@ -115,7 +115,7 @@ fi
 
 echo
 echo "DIFF:"
-git diff --ignore-all-space "$merge_base..HEAD" -- ':!_-lock._' ':!\*.lock'
+git diff --ignore-all-space "$merge*base..HEAD" -- ':!*-lock.\_' ':!\*.lock'
 '`
 
 ADDITIONAL CONTEXT (optional):
