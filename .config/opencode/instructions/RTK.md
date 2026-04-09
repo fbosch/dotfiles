@@ -2,18 +2,35 @@
 
 # RTK (Rust Token Killer) - Token-Optimized Commands
 
-## Golden Rule
+## Execution Model
 
-**Always prefix commands with `rtk`**. If RTK has a dedicated filter, it uses it. If not, it passes through unchanged. This means RTK is always safe to use.
+OpenCode rewrites `bash`/`shell` commands through RTK automatically via the RTK plugin.
 
-**Important**: Even in command chains with `&&`, use `rtk`:
+- Write normal commands. Do not manually add `rtk` prefixes unless you need explicit `rtk` subcommands.
+- The plugin rewrites eligible commands before execution.
+- RTK output may be summarized; treat known summaries as authoritative command results.
 
 ```bash
-# ❌ Wrong
+# You write
 git add . && git commit -m "msg" && git push
 
-# ✅ Correct
+# Plugin rewrites before execution
 rtk git add . && rtk git commit -m "msg" && rtk git push
+```
+
+## Reading Rewritten Output
+
+When output is rewritten by RTK, interpret it by meaning, not by exact byte-for-byte parity with raw tool output.
+
+- `ok` means the command succeeded and RTK intentionally emitted a compact confirmation.
+- For `git status --short` (and porcelain-style status checks), `ok` means clean working tree (equivalent to no output in raw `--short`).
+- For `git status --short`, non-`ok` lines are status entries and should be treated as changes present.
+- Do not retry the same status command only to confirm `ok`; treat it as final unless another action changed repo state.
+
+Use raw output only when exact machine-readable formatting is required:
+
+```bash
+rtk proxy git status --short
 ```
 
 ## RTK Commands by Workflow
