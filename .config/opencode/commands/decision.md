@@ -19,12 +19,16 @@ Create a decision record for the given topic using the information above.
 1. Create the `docs/decisions/` directory if it does not exist.
 2. First, write a one-line decision statement from the topic in the form `<verb> <object>` that makes the outcome explicit (for example: `use official RTK plugin`, `standardize on fish shell`); avoid vague slugs like `plugin-choice` or `shell-decision`.
 3. Derive a kebab-case filename slug from that decision statement (lowercase, hyphens, no special chars).
-4. Write the file to `docs/decisions/<Next number>-<slug>.md` using this template:
+4. Determine status before writing:
+   - Use `accepted` when the decision is already implemented/adopted (for example: "we switched", "now uses", "already migrated", "after the change").
+   - Use `proposed` only when this is a future/intended change that is not yet adopted.
+   - If uncertain, default to `accepted`.
+5. Write the file to `docs/decisions/<Next number>-<slug>.md` using this template:
 
 ```
 # <Title>
 
-**Status:** proposed
+**Status:** <accepted|proposed>
 **Date:** <Date>
 
 ## Context
@@ -45,5 +49,7 @@ Create a decision record for the given topic using the information above.
 ```
 
 Fill each section based on the topic and any context available from the current session. Keep sections concise — prefer 2–4 sentences each unless complexity demands more.
+
+Status must reflect adoption state inferred in step 4, not a fixed default.
 
 After writing the file, output only: the relative path to the created file.

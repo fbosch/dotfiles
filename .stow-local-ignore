@@ -6,6 +6,7 @@
 ^/LICENSE.*
 ^/AGENTS.md
 ^/opencode.json
+^/\.opencode
 ^/COPYING
 .DS_Store
 ^/.*\.md$

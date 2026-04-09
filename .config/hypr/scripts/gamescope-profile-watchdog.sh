@@ -4,10 +4,7 @@ set -euo pipefail
 
 LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/hypr-profiles/gamescope-watchdog.lock"
 PROFILECTL="$HOME/.config/hypr/scripts/profilectl.sh"
-ACTIVE_POLL_SECONDS=2
-IDLE_POLL_SECONDS=5
-MONITOR_FD=""
-MONITOR_PID=""
+RECONNECT_DELAY_SECONDS=1
 
 mkdir -p "$(dirname "$LOCK_FILE")"
 exec 9>"$LOCK_FILE"
@@ -18,67 +15,31 @@ else
 fi
 
 cleanup() {
-  if [[ -n "$MONITOR_PID" ]]; then
-    kill "$MONITOR_PID" >/dev/null 2>&1 || true
-  fi
-
   "$PROFILECTL" sync gaming 0 >/dev/null 2>&1 || true
 }
 
 trap cleanup EXIT INT TERM
 
-start_event_monitor() {
-  if command -v busctl >/dev/null 2>&1; then
-    coproc GAME_MODE_MONITOR { busctl --user monitor com.feralinteractive.GameMode 2>/dev/null; }
-    if [[ -n "${GAME_MODE_MONITOR_PID:-}" ]]; then
-      MONITOR_PID="$GAME_MODE_MONITOR_PID"
-    fi
-    if [[ -n "${GAME_MODE_MONITOR[0]:-}" ]]; then
-      MONITOR_FD="${GAME_MODE_MONITOR[0]}"
-    fi
-  fi
-}
+get_gamescope_count() {
+  local client_count=0
+  local clients_json
 
-wait_for_next_check() {
-  local wait_seconds="$1"
+  clients_json="$(hyprctl clients -j 2>/dev/null || true)"
+  client_count="$(jq -r '[.[] | select((((.class // "") | ascii_downcase) == "gamescope") or (((.initialClass // "") | ascii_downcase) == "gamescope"))] | length' <<< "$clients_json" 2>/dev/null || printf '0')"
 
-  if [[ -n "$MONITOR_FD" ]]; then
-    read -r -t "$wait_seconds" -u "$MONITOR_FD" _ || true
+  if [[ "$client_count" =~ ^[0-9]+$ ]] && [[ "$client_count" -gt 0 ]]; then
+    printf '%s\n' "$client_count"
     return
   fi
 
-  sleep "$wait_seconds"
+  printf '0\n'
 }
 
-get_gaming_count() {
-  if command -v busctl >/dev/null 2>&1; then
-    local gamemode_live_count=0
-    local gamemode_pid
+sync_gaming_state() {
+  local count
+  local last_count="$1"
 
-    while read -r gamemode_pid; do
-      if [[ "$gamemode_pid" =~ ^[0-9]+$ ]] && [[ -d "/proc/$gamemode_pid" ]]; then
-        gamemode_live_count=$((gamemode_live_count + 1))
-      fi
-    done < <(busctl --user call com.feralinteractive.GameMode /com/feralinteractive/GameMode com.feralinteractive.GameMode ListGames 2>/dev/null \
-      | awk '{ for (i = 3; i <= NF; i += 2) if ($i ~ /^[0-9]+$/) print $i }')
-
-    if [[ "$gamemode_live_count" -gt 0 ]]; then
-      printf '1\n'
-    else
-      printf '0\n'
-    fi
-    return
-  fi
-
-  pgrep -fc "(^|/)gamescope( |$)" 2>/dev/null || true
-}
-
-start_event_monitor
-
-last_count=""
-while true; do
-  count="$(get_gaming_count)"
-
+  count="$(get_gamescope_count)"
   if [[ "$count" =~ ^[0-9]+$ ]]; then
     :
   else
@@ -87,12 +48,64 @@ while true; do
 
   if [[ "$count" != "$last_count" ]]; then
     "$PROFILECTL" sync gaming "$count"
-    last_count="$count"
+    printf '%s\n' "$count"
+    return
   fi
 
-  if [[ "$count" -gt 0 ]]; then
-    wait_for_next_check "$ACTIVE_POLL_SECONDS"
-  else
-    wait_for_next_check "$IDLE_POLL_SECONDS"
-  fi
+  printf '%s\n' "$last_count"
+}
+
+handle_event() {
+  local event="$1"
+
+  case "$event" in
+    openwindow*|closewindow*|movewindow*|workspace*|activewindow*|fullscreen*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+if command -v hyprctl >/dev/null 2>&1; then
+  :
+else
+  "$PROFILECTL" sync gaming 0 >/dev/null 2>&1 || true
+  exit 0
+fi
+
+if command -v jq >/dev/null 2>&1; then
+  :
+else
+  "$PROFILECTL" sync gaming 0 >/dev/null 2>&1 || true
+  exit 0
+fi
+
+if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+  :
+else
+  "$PROFILECTL" sync gaming 0 >/dev/null 2>&1 || true
+  exit 0
+fi
+
+HYPR_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+if [[ -S "$HYPR_SOCKET" ]]; then
+  :
+else
+  "$PROFILECTL" sync gaming 0 >/dev/null 2>&1 || true
+  exit 0
+fi
+
+last_count=""
+last_count="$(sync_gaming_state "$last_count")"
+
+while true; do
+  while IFS= read -r line; do
+    if handle_event "$line"; then
+      last_count="$(sync_gaming_state "$last_count")"
+    fi
+  done < <(socat -U - "UNIX-CONNECT:$HYPR_SOCKET")
+
+  sleep "$RECONNECT_DELAY_SECONDS"
 done

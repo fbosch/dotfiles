@@ -2,58 +2,60 @@
 
 set -euo pipefail
 
-list_gamescope_display() {
+have() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+using_wl_clipboard_wrapper() {
+  xclip -version 2>&1 | grep -qi 'wl-clipboard-x11'
+}
+
+list_gamescope_displays() {
+  declare -A displays=()
   local line
-  local best_display=""
-  local best_number=-1
 
   while IFS= read -r line; do
     while [[ "$line" =~ :([0-9]+) ]]; do
-      local number="${BASH_REMATCH[1]}"
-      if (( number > best_number )); then
-        best_number=$number
-        best_display=":$number"
-      fi
-      line="${line#*:"$number"}"
+      displays[":${BASH_REMATCH[1]}"]=1
+      line="${line#*:"${BASH_REMATCH[1]}"}"
     done
-  done < <(pgrep -af 'Xwayland' || true)
+  done < <(pgrep -af 'Xwayland.*-terminate.*-force-xrandr-emulation' || true)
 
-  if [[ -n "$best_display" ]]; then
-    printf '%s\n' "$best_display"
-    return 0
+  if [[ ${#displays[@]} -eq 0 ]]; then
+    while IFS= read -r line; do
+      while [[ "$line" =~ :([0-9]+) ]]; do
+        displays[":${BASH_REMATCH[1]}"]=1
+        line="${line#*:"${BASH_REMATCH[1]}"}"
+      done
+    done < <(pgrep -af 'Xwayland' || true)
   fi
 
-  return 1
+  if [[ ${#displays[@]} -eq 0 ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "${!displays[@]}"
 }
 
-if command -v wl-paste >/dev/null 2>&1; then
-  :
-else
-  exit 0
-fi
+sync_text_to_gamescope_clipboards() {
+  local text="$1"
+  local display
 
-if command -v xclip >/dev/null 2>&1; then
-  :
-else
-  exit 0
-fi
+  while IFS= read -r display; do
+    [[ -n "$display" ]] || continue
+    printf '%s' "$text" | DISPLAY="$display" xclip -selection clipboard -in >/dev/null 2>&1 || true
+    printf '%s' "$text" | DISPLAY="$display" xclip -selection primary -in >/dev/null 2>&1 || true
+  done < <(list_gamescope_displays)
+}
+
+have wl-paste || exit 0
+have xclip || exit 0
+using_wl_clipboard_wrapper && exit 1
 
 clipboard_text="$(wl-paste --no-newline --type text/plain 2>/dev/null || true)"
-
 if [[ -z "$clipboard_text" ]]; then
-  exit 0
+  clipboard_text="$(wl-paste --no-newline --type text 2>/dev/null || true)"
 fi
+[[ -n "$clipboard_text" ]] || exit 0
 
-gamescope_display="$(list_gamescope_display || true)"
-
-if [[ -z "$gamescope_display" ]]; then
-  exit 0
-fi
-
-if command -v xdotool >/dev/null 2>&1; then
-  DISPLAY="$gamescope_display" xdotool type --clearmodifiers --delay 2 -- "$clipboard_text" >/dev/null 2>&1 || true
-  exit 0
-fi
-
-printf '%s' "$clipboard_text" | DISPLAY="$gamescope_display" xclip -selection clipboard -in >/dev/null 2>&1
-printf '%s' "$clipboard_text" | DISPLAY="$gamescope_display" xclip -selection primary -in >/dev/null 2>&1
+sync_text_to_gamescope_clipboards "$clipboard_text"

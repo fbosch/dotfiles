@@ -4,24 +4,51 @@ set -euo pipefail
 
 SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 
-if [[ "${1:-}" == "--emit-wayland-event" ]]; then
-  fifo_path="${2:-}"
-  if [[ -z "$fifo_path" ]]; then
-    exit 1
+if [[ "${1:-}" == "--sync-wayland-value" ]]; then
+  LOG_FILE="/tmp/hyprland-clipboard.log"
+  RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-clipboard"
+  LAST_VALUE_FILE="$RUNTIME_DIR/gamescope-wayland-last.txt"
+
+  mkdir -p "$RUNTIME_DIR"
+  value="$(cat)"
+  [[ -n "$value" ]] || exit 0
+
+  previous_value="$(cat "$LAST_VALUE_FILE" 2>/dev/null || true)"
+  if [[ "$value" == "$previous_value" ]]; then
+    exit 0
+  fi
+  printf '%s' "$value" > "$LAST_VALUE_FILE"
+
+  declare -A displays=()
+  while IFS= read -r line; do
+    while [[ "$line" =~ :([0-9]+) ]]; do
+      displays[":${BASH_REMATCH[1]}"]=1
+      line="${line#*:"${BASH_REMATCH[1]}"}"
+    done
+  done < <(pgrep -af 'Xwayland.*-terminate.*-force-xrandr-emulation' || true)
+
+  if [[ ${#displays[@]} -eq 0 ]]; then
+    while IFS= read -r line; do
+      while [[ "$line" =~ :([0-9]+) ]]; do
+        displays[":${BASH_REMATCH[1]}"]=1
+        line="${line#*:"${BASH_REMATCH[1]}"}"
+      done
+    done < <(pgrep -af 'Xwayland' || true)
   fi
 
-  value="$(cat)"
-  payload="$(printf '%s' "$value" | base64 -w0)"
-  printf 'wayland\t%s\n' "$payload" > "$fifo_path"
+  for display in "${!displays[@]}"; do
+    printf '%s' "$value" | DISPLAY="$display" xclip -selection clipboard -in >/dev/null 2>&1 || true
+    printf '%s' "$value" | DISPLAY="$display" xclip -selection primary -in >/dev/null 2>&1 || true
+  done
+
+  echo "watch event synced bytes=${#value} displays=${#displays[@]}" >> "$LOG_FILE"
+
   exit 0
 fi
 
 LOCK_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-clipboard/gamescope-clipboard-sync.lockdir"
 LOG_FILE="/tmp/hyprland-clipboard.log"
-RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-clipboard"
-EVENT_FIFO="$RUNTIME_DIR/gamescope-clipboard-sync.events"
 
-mkdir -p "$RUNTIME_DIR"
 if mkdir "$LOCK_DIR" 2>/dev/null; then
   :
 else
@@ -33,7 +60,6 @@ cleanup() {
     kill "$watch_pid" 2>/dev/null || true
   fi
 
-  rm -f "$EVENT_FIFO"
   rm -rf "$LOCK_DIR"
 }
 trap cleanup EXIT INT TERM
@@ -85,19 +111,7 @@ list_xwayland_displays() {
 }
 
 read_wayland_clipboard() {
-  wl-paste --no-newline --type text/plain 2>/dev/null || true
-}
-
-write_wayland_clipboard() {
-  local value="$1"
-
-  printf '%s' "$value" | wl-copy >/dev/null 2>&1 || true
-  printf '%s' "$value" | wl-copy --primary >/dev/null 2>&1 || true
-}
-
-read_x11_clipboard() {
-  local display="$1"
-  DISPLAY="$display" xclip -selection clipboard -o 2>/dev/null || true
+  wl-paste --no-newline --type text 2>/dev/null || true
 }
 
 write_x11_clipboard() {
@@ -110,6 +124,7 @@ write_x11_clipboard() {
 
 sync_wayland_value_to_x11() {
   local value="$1"
+  local wrote=0
 
   if [[ -z "$value" ]]; then
     return
@@ -118,23 +133,19 @@ sync_wayland_value_to_x11() {
   while IFS= read -r display; do
     [[ -n "$display" ]] || continue
     write_x11_clipboard "$display" "$value"
+    wrote=1
   done < <(list_xwayland_displays)
-}
 
-rm -f "$EVENT_FIFO"
-mkfifo "$EVENT_FIFO"
+  if [[ $wrote -eq 1 ]]; then
+    echo "sync wayland->x11 bytes=${#value}" >> "$LOG_FILE"
+  else
+    echo "sync skipped: no xwayland displays" >> "$LOG_FILE"
+  fi
+}
 
 initial_wayland_value="$(read_wayland_clipboard)"
 sync_wayland_value_to_x11 "$initial_wayland_value"
 
-wl-paste --type text/plain --watch "$SCRIPT_PATH" --emit-wayland-event "$EVENT_FIFO" >/dev/null 2>&1 &
+wl-paste --type text --watch bash "$SCRIPT_PATH" --sync-wayland-value >/dev/null 2>&1 &
 watch_pid=$!
-
-while IFS=$'\t' read -r source payload; do
-  if [[ "$source" != "wayland" ]]; then
-    continue
-  fi
-
-  value="$(printf '%s' "$payload" | base64 -d 2>/dev/null || true)"
-  sync_wayland_value_to_x11 "$value"
-done < "$EVENT_FIFO"
+wait "$watch_pid"

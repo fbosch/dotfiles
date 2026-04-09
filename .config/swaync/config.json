@@ -79,16 +79,29 @@
         {
           "label": "󱤅",
           "command": "bash ~/.config/hypr/scripts/toggle-performance-mode.sh",
+          "type": "toggle",
+          "update-command": "sh -c '~/.config/hypr/scripts/profilectl.sh is-active performance && echo true || echo false'",
           "tooltip": "Toggle Performance Mode"
+        },
+        {
+          "label": "󰺵",
+          "command": "bash ~/.config/hypr/scripts/toggle-gaming-mode.sh",
+          "type": "toggle",
+          "update-command": "sh -c '~/.config/hypr/scripts/profilectl.sh is-active gaming && echo true || echo false'",
+          "tooltip": "Toggle Game Mode"
         },
         {
           "label": "󰖔",
           "command": "bash ~/.config/hypr/scripts/toggle-night-light.sh",
+          "type": "toggle",
+          "update-command": "sh -c 'pgrep -x hyprsunset >/dev/null && echo true || echo false'",
           "tooltip": "Toggle Night Light"
         },
         {
           "label": "󰅶",
           "command": "bash ~/.config/hypr/scripts/toggle-hypridle.sh",
+          "type": "toggle",
+          "update-command": "sh -c '[[ -f /tmp/hypr-caffeine-mode ]] && echo true || echo false'",
           "tooltip": "Toggle Caffeine Mode"
         },
         {

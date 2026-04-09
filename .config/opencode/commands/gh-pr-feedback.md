@@ -1,7 +1,6 @@
 ---
 description: Extract actionable feedback from GitHub PR reviews with line references
-model: anthropic/claude-sonnet-4-6
-agent: general
+agent: quick
 ---
 
 Extract and act on GitHub PR review feedback.

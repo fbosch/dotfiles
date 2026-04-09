@@ -93,7 +93,24 @@ const BUTTON_SPACING = 8; // Spacing between buttons
 const BUTTON_PADDING = 8; // Padding inside each button
 const WINDOW_CACHE_TTL_MS = 150; // Cache window list briefly for request bursts
 const ACTIVE_WINDOW_CACHE_TTL_MS = 100; // Cache active window briefly
+const PERFORMANCE_OVERLAY_STATE_DIR = `${GLib.getenv("XDG_RUNTIME_DIR") || "/tmp"}/hypr-profiles`;
+const PERFORMANCE_OVERLAY_ACTIVE_PATH = `${PERFORMANCE_OVERLAY_STATE_DIR}/performance-overlay.active`;
 const DEBUG = GLib.getenv("AGS_WINDOW_SWITCHER_DEBUG") === "1";
+
+function isPerformanceOverlayActive(): boolean {
+  try {
+    const overlayActiveFile = Gio.File.new_for_path(PERFORMANCE_OVERLAY_ACTIVE_PATH);
+    if (overlayActiveFile.query_exists(null)) {
+      return true;
+    }
+
+    // Backward-compatible fallback for older toggle script implementations
+    const legacyPerfModeFile = Gio.File.new_for_path("/tmp/hypr-performance-mode");
+    return legacyPerfModeFile.query_exists(null);
+  } catch {
+    return false;
+  }
+}
 
 function debugLog(message: string): void {
   if (DEBUG) {
@@ -297,12 +314,26 @@ function getIconNameForClass(appClass: string): string | null {
   }
 
   // Try to find desktop file for this app class
-  // Try exact class name first, then lowercase
-  const attempts = [`${appClass}.desktop`, `${appClass.toLowerCase()}.desktop`];
+  const normalizedClass = appClass.trim();
+  const lowerClass = normalizedClass.toLowerCase();
+  const classWithoutSeparators = lowerClass.replace(/[-_\s]+/g, "");
+  const kebabFromCamel = normalizedClass
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .toLowerCase();
+
+  const desktopIdAttempts = Array.from(
+    new Set([
+      normalizedClass,
+      lowerClass,
+      classWithoutSeparators,
+      kebabFromCamel,
+      kebabFromCamel.replace(/-/g, ""),
+    ]),
+  ).map((candidate) => `${candidate}.desktop`);
 
   let iconName: string | null = null;
 
-  for (const desktopId of attempts) {
+  for (const desktopId of desktopIdAttempts) {
     try {
       // @ts-ignore - DesktopAppInfo exists in Gio but may not be in type definitions
       const appInfo = Gio.DesktopAppInfo.new(desktopId);
@@ -333,11 +364,15 @@ function getIconNameForClass(appClass: string): string | null {
   // If no desktop file found, try checking icon theme directly
   // This handles apps that install icons but not desktop files
   if (!iconName && iconTheme) {
-    const iconAttempts = [
-      appClass,
-      appClass.toLowerCase(),
-      appClass.toLowerCase().replace(/\s+/g, "-"),
-    ];
+    const iconAttempts = Array.from(
+      new Set([
+        normalizedClass,
+        lowerClass,
+        lowerClass.replace(/\s+/g, "-"),
+        kebabFromCamel,
+        classWithoutSeparators,
+      ]),
+    );
 
     for (const name of iconAttempts) {
       if (iconTheme.has_icon(name)) {
@@ -1108,6 +1143,7 @@ function enterActiveState(windows: WindowInfo[], index: number) {
   isVisible = true;
 
   if (win) {
+    applyStaticCSS();
     updateSwitcher();
     win.set_visible(true);
 
@@ -1386,6 +1422,25 @@ function createWindow() {
 
 // Apply static CSS
 function applyStaticCSS() {
+  const transparencyDisabled = isPerformanceOverlayActive();
+
+  const switcherBackground = transparencyDisabled
+    ? "rgb(25, 25, 25)"
+    : "rgba(25, 25, 25, 0.5)";
+  const switcherBorder = transparencyDisabled
+    ? "1px solid rgb(52, 52, 52)"
+    : "1px solid rgba(255, 255, 255, 0.12)";
+  const switcherBackdrop = transparencyDisabled ? "none" : "blur(20px)";
+  const previewBackground = transparencyDisabled
+    ? "rgb(30, 30, 30)"
+    : "rgba(30, 30, 30, 0.95)";
+  const previewHeaderBackground = transparencyDisabled
+    ? "rgb(40, 40, 40)"
+    : "rgba(40, 40, 40, 0.95)";
+  const previewBodyBackground = transparencyDisabled
+    ? "rgb(25, 25, 25)"
+    : "linear-gradient(135deg, rgba(40, 40, 40, 0.9) 0%, rgba(25, 25, 25, 0.9) 100%)";
+
   app.apply_css(
     `
   window.window-switcher {
@@ -1394,10 +1449,10 @@ function applyStaticCSS() {
   }
   
   window.window-switcher box.switcher-container {
-    background-color: rgba(25, 25, 25, 0.5);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background-color: ${switcherBackground};
+    backdrop-filter: ${switcherBackdrop};
+    -webkit-backdrop-filter: ${switcherBackdrop};
+    border: ${switcherBorder};
     border-radius: 18px;
     padding: 24px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2),
@@ -1472,7 +1527,7 @@ function applyStaticCSS() {
   
   /* Preview mode styles */
   window.window-switcher box.window-preview {
-    background-color: rgba(30, 30, 30, 0.95);
+    background-color: ${previewBackground};
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     overflow: hidden;
@@ -1481,7 +1536,7 @@ function applyStaticCSS() {
   }
   
   window.window-switcher box.preview-header {
-    background-color: rgba(40, 40, 40, 0.95);
+    background-color: ${previewHeaderBackground};
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px 8px 0 0;
     padding: 8px 12px;
@@ -1518,7 +1573,7 @@ function applyStaticCSS() {
   }
   
   window.window-switcher box.preview-body {
-    background: linear-gradient(135deg, rgba(40, 40, 40, 0.9) 0%, rgba(25, 25, 25, 0.9) 100%);
+    background: ${previewBodyBackground};
     overflow: hidden;
   }
   
