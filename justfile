@@ -3,3 +3,6 @@ install-opencode-plugins:
 
 restart-daemons:
 	bash .config/hypr/scripts/restart-daemons.sh
+
+update-docs:
+  pnpx docs-cache@latest sync
