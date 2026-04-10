@@ -16,6 +16,8 @@ local overlay_state_ttl_ms = 5000
 local pane_refresh_cooldown_ms_active = 250
 local pane_refresh_cooldown_ms_idle = 1000
 local attention_notification_timeout_ms = 4000
+local attention_notification_cooldown_ms = 5000
+local notification_debug = false
 
 local target_triple = wezterm.target_triple or ""
 local is_linux = target_triple:find("linux") ~= nil
@@ -61,6 +63,14 @@ local agent_patterns = {
 
 local detection_cache = {}
 local pane_refresh_timestamps = {}
+local attention_notification_timestamps = {}
+local now_ms
+
+local function log_notification_debug(message)
+	if notification_debug then
+		wezterm.log_info("[wezterm] agent deck notification: " .. tostring(message))
+	end
+end
 
 local function get_agent_display_name(agent_type)
 	local names = {
@@ -74,30 +84,39 @@ local function get_agent_display_name(agent_type)
 	return names[agent_type] or (agent_type or "Agent")
 end
 
-local function send_attention_toast(pane, title, message)
+local function resolve_gui_window_from_pane(pane)
 	local tab_ok, tab = pcall(function()
 		return pane:tab()
 	end)
 	if tab_ok == false or tab == nil then
-		return false
+		return nil, "pane has no tab"
 	end
 
 	local mux_ok, mux_window = pcall(function()
 		return tab:window()
 	end)
 	if mux_ok == false or mux_window == nil then
-		return false
+		return nil, "tab has no mux window"
 	end
 
 	local gui_ok, gui_window = pcall(function()
 		return mux_window:gui_window()
 	end)
 	if gui_ok == false or gui_window == nil then
-		return false
+		return nil, "mux window has no gui window"
+	end
+
+	return gui_window, nil
+end
+
+local function send_attention_toast(pane, title, message)
+	local gui_window, err = resolve_gui_window_from_pane(pane)
+	if gui_window == nil then
+		return false, err
 	end
 
 	gui_window:toast_notification(title, message, nil, attention_notification_timeout_ms)
-	return true
+	return true, nil
 end
 
 local function try_background_child_process(argv)
@@ -108,9 +127,35 @@ local function try_background_child_process(argv)
 	return ok
 end
 
+local function should_throttle_attention(pane, agent_type)
+	local pane_id = pane and pane:pane_id() or "unknown"
+	local key = tostring(pane_id) .. ":" .. tostring(agent_type or "unknown")
+	local now = now_ms()
+	local last_sent_ms = attention_notification_timestamps[key] or 0
+	if (now - last_sent_ms) < attention_notification_cooldown_ms then
+		return true, key
+	end
+
+	attention_notification_timestamps[key] = now
+	return false, key
+end
+
 local function notify_attention(pane, agent_type)
 	local subtitle = string.format("%s - Attention Needed", get_agent_display_name(agent_type))
 	local message = "Needs your input"
+	local throttled, throttle_key = should_throttle_attention(pane, agent_type)
+	if throttled then
+		log_notification_debug("throttled for key=" .. tostring(throttle_key))
+		return
+	end
+
+	local toast_ok, toast_err = send_attention_toast(pane, subtitle, message)
+	if toast_ok then
+		log_notification_debug("delivered via wezterm toast")
+		return
+	end
+
+	log_notification_debug("toast unavailable: " .. tostring(toast_err))
 
 	if is_linux then
 		local ok = try_background_child_process({
@@ -122,8 +167,10 @@ local function notify_attention(pane, agent_type)
 			message,
 		})
 		if ok then
+			log_notification_debug("spawned linux notify-send fallback")
 			return
 		end
+		log_notification_debug("linux notify-send fallback failed")
 	end
 
 	if is_macos then
@@ -149,18 +196,22 @@ local function notify_attention(pane, agent_type)
 				"com.github.wez.wezterm",
 			})
 			if ok then
+				log_notification_debug("spawned macOS terminal-notifier fallback: " .. notifier_path)
 				return
 			end
+			log_notification_debug("macOS terminal-notifier path failed: " .. notifier_path)
 		end
 
 		local script =
 			string.format("display notification %q with title %q subtitle %q", message, "WezTerm Agent Deck", subtitle)
 		if try_background_child_process({ "osascript", "-e", script }) then
+			log_notification_debug("spawned macOS osascript fallback")
 			return
 		end
+		log_notification_debug("macOS osascript fallback failed")
 	end
 
-	send_attention_toast(pane, subtitle, message)
+	log_notification_debug("all notification paths exhausted")
 end
 
 local function on_attention_needed(_, pane, agent_type, reason)
@@ -171,7 +222,7 @@ local function on_attention_needed(_, pane, agent_type, reason)
 	notify_attention(pane, agent_type)
 end
 
-local function now_ms()
+now_ms = function()
 	local ok, now = pcall(function()
 		return wezterm.time.now()
 	end)
