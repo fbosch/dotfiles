@@ -9,6 +9,8 @@ OpenCode rewrites `bash`/`shell` commands through RTK automatically via the RTK 
 - Write normal commands. Do not manually add `rtk` prefixes unless you need explicit `rtk` subcommands.
 - The plugin rewrites eligible commands before execution.
 - RTK output may be summarized; treat known summaries as authoritative command results.
+- Displayed command text may show the rewritten RTK form (for example `rtk lint`) even when you issued a raw command (`pnpm lint`); this is expected.
+- Do not treat rewrite visibility as a command mismatch and do not re-run solely to "use the real command".
 
 ```bash
 # You write
@@ -26,6 +28,8 @@ When output is rewritten by RTK, interpret it by meaning, not by exact byte-for-
 - For `git status --short` (and porcelain-style status checks), `ok` means clean working tree (equivalent to no output in raw `--short`).
 - For `git status --short`, non-`ok` lines are status entries and should be treated as changes present.
 - Do not retry the same status command only to confirm `ok`; treat it as final unless another action changed repo state.
+- If RTK emits a parser/adapter warning (for example `JSON parse failed`) for a command, do one fallback run with `rtk proxy <original-command>` to get raw output.
+- Never loop retries of the same failing summarized command; run once, then fallback once, then proceed from the fallback result.
 
 Use raw output only when exact machine-readable formatting is required:
 
