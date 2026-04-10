@@ -100,30 +100,43 @@ local function send_attention_toast(pane, title, message)
 	return true
 end
 
+local function try_background_child_process(argv)
+	local ok = pcall(function()
+		wezterm.background_child_process(argv)
+	end)
+
+	return ok
+end
+
 local function notify_attention(pane, agent_type)
 	local subtitle = string.format("%s - Attention Needed", get_agent_display_name(agent_type))
 	local message = "Needs your input"
 
 	if is_linux then
-		local ok = pcall(function()
-			wezterm.background_child_process({
-				"notify-send",
-				"--urgency=normal",
-				"--app-name=WezTerm",
-				"--expire-time=" .. tostring(attention_notification_timeout_ms),
-				subtitle,
-				message,
-			})
-		end)
+		local ok = try_background_child_process({
+			"notify-send",
+			"--urgency=normal",
+			"--app-name=WezTerm",
+			"--expire-time=" .. tostring(attention_notification_timeout_ms),
+			subtitle,
+			message,
+		})
 		if ok then
 			return
 		end
 	end
 
 	if is_macos then
-		local ok = pcall(function()
-			wezterm.background_child_process({
-				"terminal-notifier",
+		local notifier_group = "wezterm-agent-deck-" .. tostring(agent_type or "unknown")
+		local terminal_notifier_paths = {
+			"terminal-notifier",
+			"/opt/homebrew/bin/terminal-notifier",
+			"/usr/local/bin/terminal-notifier",
+		}
+
+		for _, notifier_path in ipairs(terminal_notifier_paths) do
+			local ok = try_background_child_process({
+				notifier_path,
 				"-title",
 				"WezTerm Agent Deck",
 				"-subtitle",
@@ -131,12 +144,18 @@ local function notify_attention(pane, agent_type)
 				"-message",
 				message,
 				"-group",
-				"wezterm-agent-deck-" .. tostring(agent_type or "unknown"),
+				notifier_group,
 				"-activate",
 				"com.github.wez.wezterm",
 			})
-		end)
-		if ok then
+			if ok then
+				return
+			end
+		end
+
+		local script =
+			string.format("display notification %q with title %q subtitle %q", message, "WezTerm Agent Deck", subtitle)
+		if try_background_child_process({ "osascript", "-e", script }) then
 			return
 		end
 	end
