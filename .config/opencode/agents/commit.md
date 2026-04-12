@@ -8,6 +8,10 @@ tools:
   "*": false
 ---
 
+Load the `caveman-commit` skill first and apply its style guidance in addition to the rules below.
+
+When rules conflict, this file takes precedence over skill defaults.
+
 Output ONLY valid JSON and nothing else.
 Required schema:
 {"type":"feat|fix|docs|style|refactor|perf|test|build|ci|chore","scope":"string","subject":"string"}
