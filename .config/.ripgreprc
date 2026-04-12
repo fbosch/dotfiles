@@ -3,17 +3,25 @@
 
 --line-number
 --no-heading
---sort-files
 
 --smart-case
---colors=always
+--color=auto
+--no-messages
+--threads=4
+--max-filesize=2M
 
 --type-add=web:*.{html,css,js}
-,
-# Improved glob exclusion pattern (use --glob=!<pattern> for each exclusion)
+# Exclude common heavy or generated trees.
 --glob=!.git/**
 --glob=!node_modules/**
+--glob=!dist/**
+--glob=!build/**
+--glob=!target/**
+--glob=!.next/**
+--glob=!.cache/**
+--glob=!coverage/**
+--glob=!__pycache__/**
+--glob=!.pytest_cache/**
 --glob=!.backup/**
 --glob=!.Trash/**
 --glob=!.pnpm-store/**
---silent=true

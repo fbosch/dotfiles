@@ -35,7 +35,7 @@ function M.setup(client, bufnr)
 	nmap("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
 	nmap("<leader>fi", "<cmd>TSToolsAddMissingImports<CR>", "[F]ix [I]mports")
 	nmap("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
-	nmap("<leader>lsp", "<cmd>:LspRestart<CR>", "restart langauge server")
+	nmap("<leader>lsp", "<cmd>lsp restart<CR>", "restart langauge server")
 end
 
 return M
