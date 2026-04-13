@@ -228,6 +228,7 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
     mv "$tmp_file" "$auth_file"
 
     set -l codex_status "codex unchanged"
+    set -l usage_status ""
     if test -n "$selected_account_id"; and test -f "$codex_auth_file"
         set -l codex_current_account_id (jq -r '.tokens.account_id // ""' "$codex_auth_file" 2>/dev/null)
         if test $status -eq 0
@@ -255,6 +256,55 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
                         mv "$codex_auth_tmp" "$codex_auth_file"
                         chmod 600 "$codex_auth_file" 2>/dev/null
                         set codex_status "codex switched: $selected_account_id"
+
+                        if command -q codexbar
+                            set -l usage_line (codexbar usage --source oauth --provider codex --json 2>/dev/null | jq -r '
+                                def rem($p):
+                                    (100 - (($p // 0) | tonumber | floor))
+                                    | if . < 0 then 0 elif . > 100 then 100 else . end;
+
+                                .[0] as $root
+                                | ($root.usage.primary // null) as $primary
+                                | ($root.usage.secondary // null) as $secondary
+                                | "usage (" + ($root.provider // "codex") + "): "
+                                + (
+                                    if $primary then
+                                        "primary " + (rem($primary.usedPercent) | tostring) + "% left"
+                                        + (
+                                            if ($primary.resetDescription // $primary.resetsAt // "") != "" then
+                                                " until " + ($primary.resetDescription // $primary.resetsAt)
+                                            else
+                                                ""
+                                            end
+                                        )
+                                    else
+                                        "primary n/a"
+                                    end
+                                )
+                                + (
+                                    if $secondary then
+                                        " | secondary " + (rem($secondary.usedPercent) | tostring) + "% left"
+                                        + (
+                                            if ($secondary.resetDescription // $secondary.resetsAt // "") != "" then
+                                                " until " + ($secondary.resetDescription // $secondary.resetsAt)
+                                            else
+                                                ""
+                                            end
+                                        )
+                                    else
+                                        ""
+                                    end
+                                )
+                            ' 2>/dev/null)
+
+                            if test $status -eq 0; and test -n "$usage_line"
+                                set usage_status "$usage_line"
+                            else
+                                set usage_status "usage unavailable (codexbar parse failed)"
+                            end
+                        else
+                            set usage_status "usage unavailable (codexbar not installed)"
+                        end
                     else
                         rm -f "$codex_auth_tmp"
                         set codex_status "codex update failed"
@@ -272,5 +322,8 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
 
     echo "active provider switched: $provider <= $selected_label"
     echo "$codex_status"
+    if test -n "$usage_status"
+        echo "$usage_status"
+    end
     rm -f "$codexbar_cache_file"
 end

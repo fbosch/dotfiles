@@ -9,6 +9,11 @@ Use this skill as orchestration glue across Linear, WorkTrunk, local validation,
 
 Reuse existing `linear` and `worktrunk` skills for tool details; this skill defines execution order, decision points, and failure handling.
 
+OpenSpec role in this workflow:
+- Linear is intake, prioritization, ownership, and status.
+- OpenSpec is the implementation contract when work requires spec discipline.
+- Do not duplicate full OpenSpec artifacts into Linear; link to artifact paths when available.
+
 ## Reference Loading Rules
 
 - Read `references/ship-failures.md` when any phase fails, when ship permissions are denied, or when worktree state is inconsistent.
@@ -43,6 +48,25 @@ Follow these phases in order.
    - Acceptance criteria
    - Unknowns or blockers
 
+7. Detect whether the Linear issue is OpenSpec-like and classify `specSignal`:
+   - `strong`: issue/comment content includes multiple OpenSpec-structured sections (for example `## Requirements`, `## Non-goals`, `## Design`, `## Tasks`), requirement keywords (`MUST`/`SHALL`), and task checklist numbering (`- [ ] 1.1 ...`).
+   - `partial`: issue has some structured requirements/tasks but lacks enough completeness for direct implementation.
+   - `none`: issue is standard ticket prose without OpenSpec-like structure.
+
+8. Determine `specDecision` before implementation:
+   - `required` when work implies net-new behavior, contract/config/schema changes, migrations, cross-cutting refactors, or ambiguous acceptance criteria.
+   - `not_required` for narrow, low-risk, local fixes with clear acceptance criteria.
+   - if classification is ambiguous, default to `required` and list ambiguity in unknowns/blockers.
+
+9. If `specSignal` is `strong` or `partial`, attempt OpenSpec context detection in repo (read-only):
+   - `openspec list --json`
+   - if change candidate exists, `openspec status --change "<name>" --json`
+
+10. Routing rules:
+   - `specDecision=not_required`: continue standard implementation flow.
+   - `specDecision=required` and matching OpenSpec change exists: treat OpenSpec artifacts as source of truth and continue.
+   - `specDecision=required` and no matching OpenSpec change exists: stop before coding and return precise next action to create/approve the change.
+
 If acceptance criteria are still unclear after comments, stop and ask for clarification before implementation.
 
 ### Phase 2: Branch and worktree decision
@@ -66,8 +90,9 @@ Worktree rules:
 ### Phase 3: Implementation loop
 
 1. Implement only what is required by acceptance criteria.
-2. Keep changes narrow and avoid drive-by refactors.
-3. After each meaningful edit, re-check criteria and stop when all are true:
+2. If an OpenSpec change is present, implement against `tasks.md` plus `proposal/spec/design` context; do not treat Linear prose as canonical.
+3. Keep changes narrow and avoid drive-by refactors.
+4. After each meaningful edit, re-check criteria and stop when all are true:
    - Every acceptance criterion maps to a concrete code change or explicit no-change note.
    - No unresolved blocker remains.
    - Current diff is validation-ready.
@@ -117,6 +142,7 @@ Common failure branches:
 
 - Linear issue not found or inaccessible -> confirm identifier/workspace access and stop.
 - Linear URL malformed -> extract identifier or ask for explicit id.
+- `specDecision=required` but OpenSpec change missing -> stop before coding and return exact create/approve next step.
 - Worktree create conflict -> switch to existing worktree or choose a sanitized alternate branch.
 - Detached HEAD or unexpected branch -> switch to intended branch before validation/shipping.
 - Validation command missing -> fallback to available checks and report gap.
@@ -125,6 +151,7 @@ Common failure branches:
 ## NEVER
 
 - NEVER start coding before restating acceptance criteria; this prevents scope drift.
+- NEVER start coding when `specDecision=required` and no approved OpenSpec change is available.
 - NEVER claim shipping is complete without a PR URL.
 - NEVER hide permission-denied steps; show exact blocked command and next action.
 - NEVER run heavyweight full-suite checks when a targeted check is enough.
@@ -134,10 +161,11 @@ Common failure branches:
 
 ## Output Contract
 
-Always return these five blocks:
+Always return these six blocks:
 
 1. Issue summary (problem, non-goals, acceptance criteria)
-2. Branch/worktree outcome (name, create vs switch, sanitization if applied)
-3. Change summary (files and intent)
-4. Validation results (what ran, pass/fail, skipped with reason)
-5. Shipping status (committed/pushed/PR URL or blocked with exact next step)
+2. Spec status (`specSignal`, `specDecision`, canonical source, OpenSpec change match/mismatch)
+3. Branch/worktree outcome (name, create vs switch, sanitization if applied)
+4. Change summary (files and intent)
+5. Validation results (what ran, pass/fail, skipped with reason)
+6. Shipping status (committed/pushed/PR URL or blocked with exact next step)
