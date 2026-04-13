@@ -43,6 +43,146 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         return 1
     end
 
+    set -l usage_query 'def rem($p): (100 - (($p // 0) | tonumber | floor)) | if . < 0 then 0 elif . > 100 then 100 else . end; .[0] as $root | ($root.usage.primary // null) as $primary | ($root.usage.secondary // null) as $secondary | [($root.provider // "codex"), (if $primary then (rem($primary.usedPercent) | tostring) else "" end), ($primary.resetsAt // ""), (if $secondary then (rem($secondary.usedPercent) | tostring) else "" end), ($secondary.resetsAt // "")] | @tsv'
+    set -l usage_bar_width 16
+
+    function __opencode_fetch_usage_tsv --argument-names query
+        if not command -q codexbar
+            return 127
+        end
+
+        codexbar usage --source oauth --provider codex --json 2>/dev/null | jq -r "$query" 2>/dev/null
+    end
+
+    function __opencode_usage_color --argument-names remaining
+        if test "$remaining" -ge 75
+            echo 42
+        else if test "$remaining" -ge 50
+            echo 220
+        else if test "$remaining" -ge 25
+            echo 208
+        else
+            echo 196
+        end
+    end
+
+    function __opencode_format_countdown --argument-names resets_at
+        if test -z "$resets_at"
+            return 1
+        end
+
+        set -l reset_epoch (date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$resets_at" "+%s" 2>/dev/null)
+        if test -z "$reset_epoch"
+            set reset_epoch (date -u -d "$resets_at" "+%s" 2>/dev/null)
+        end
+        if not string match -rq '^[0-9]+$' -- "$reset_epoch"
+            return 1
+        end
+
+        set -l now_epoch (date -u +%s)
+        if not string match -rq '^[0-9]+$' -- "$now_epoch"
+            return 1
+        end
+
+        set -l diff (math "$reset_epoch - $now_epoch")
+        if test "$diff" -le 0
+            echo "now"
+            return 0
+        end
+
+        set -l hours (math "floor($diff / 3600)")
+        if test "$hours" -lt 1
+            set -l mins (math "floor($diff / 60)")
+            if test "$mins" -lt 1
+                set mins 1
+            end
+            echo "~"$mins"m"
+            return 0
+        end
+
+        if test "$hours" -lt 24
+            echo "~"$hours"h"
+            return 0
+        end
+
+        set -l days (math "floor($hours / 24)")
+        echo "~"$days"d"
+    end
+
+    function __opencode_render_usage --argument-names title usage_tsv bar_width
+        set -l usage_parts (string split \t -- "$usage_tsv")
+        if test (count $usage_parts) -lt 5
+            gum style --foreground 196 "$title usage unavailable (unexpected response)"
+            return 1
+        end
+
+        set -l usage_provider "$usage_parts[1]"
+        set -l primary_remaining "$usage_parts[2]"
+        set -l primary_resets_at "$usage_parts[3]"
+        set -l secondary_remaining "$usage_parts[4]"
+        set -l secondary_resets_at "$usage_parts[5]"
+
+        gum style --foreground 111 --bold "$title usage ($usage_provider)"
+
+        if test -n "$primary_remaining"
+            set -l primary_color (__opencode_usage_color "$primary_remaining")
+            set -l primary_filled (math "floor(($primary_remaining * $bar_width) / 100)")
+            if test "$primary_filled" -lt 1; and test "$primary_remaining" -gt 0
+                set primary_filled 1
+            end
+            if test "$primary_filled" -gt $bar_width
+                set primary_filled $bar_width
+            end
+            set -l primary_empty (math "$bar_width - $primary_filled")
+            set -l primary_bar_filled (gum style --foreground "$primary_color" (string repeat -n $primary_filled -- "█"))
+            set -l primary_bar_empty (gum style --foreground 240 (string repeat -n $primary_empty -- "░"))
+            set -l primary_percent (gum style --foreground "$primary_color" --bold "$primary_remaining%")
+            printf '  %-9s [%s%s] %s left\n' "primary" "$primary_bar_filled" "$primary_bar_empty" "$primary_percent"
+            if test -n "$primary_resets_at"
+                set -l primary_countdown (__opencode_format_countdown "$primary_resets_at")
+                if test -n "$primary_countdown"
+                    gum style --foreground 244 "            resets: $primary_countdown"
+                end
+            end
+        else
+            gum style --foreground 244 "  primary   n/a"
+        end
+
+        if test -n "$secondary_remaining"
+            set -l secondary_color (__opencode_usage_color "$secondary_remaining")
+            set -l secondary_filled (math "floor(($secondary_remaining * $bar_width) / 100)")
+            if test "$secondary_filled" -lt 1; and test "$secondary_remaining" -gt 0
+                set secondary_filled 1
+            end
+            if test "$secondary_filled" -gt $bar_width
+                set secondary_filled $bar_width
+            end
+            set -l secondary_empty (math "$bar_width - $secondary_filled")
+            set -l secondary_bar_filled (gum style --foreground "$secondary_color" (string repeat -n $secondary_filled -- "█"))
+            set -l secondary_bar_empty (gum style --foreground 240 (string repeat -n $secondary_empty -- "░"))
+            set -l secondary_percent (gum style --foreground "$secondary_color" --bold "$secondary_remaining%")
+            printf '  %-9s [%s%s] %s left\n' "secondary" "$secondary_bar_filled" "$secondary_bar_empty" "$secondary_percent"
+            if test -n "$secondary_resets_at"
+                set -l secondary_countdown (__opencode_format_countdown "$secondary_resets_at")
+                if test -n "$secondary_countdown"
+                    gum style --foreground 244 "            resets: $secondary_countdown"
+                end
+            end
+        end
+    end
+
+    set -l current_usage_tsv (__opencode_fetch_usage_tsv "$usage_query")
+    set -l current_usage_status $status
+    if test $current_usage_status -eq 0; and test -n "$current_usage_tsv"
+        __opencode_render_usage "current" "$current_usage_tsv" "$usage_bar_width"
+    else if test $current_usage_status -eq 127
+        gum style --foreground 196 "current usage unavailable (codexbar not installed)"
+    else
+        gum style --foreground 196 "current usage unavailable (codexbar parse failed)"
+    end
+
+    echo ""
+
     set -l providers (jq -r 'keys[]' "$auth_file" 2>/dev/null)
     set -l mapped_providers
     for key in $providers
@@ -228,7 +368,8 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
     mv "$tmp_file" "$auth_file"
 
     set -l codex_status "codex unchanged"
-    set -l usage_status ""
+    set -l switched_usage_tsv ""
+    set -l switched_usage_error ""
     if test -n "$selected_account_id"; and test -f "$codex_auth_file"
         set -l codex_current_account_id (jq -r '.tokens.account_id // ""' "$codex_auth_file" 2>/dev/null)
         if test $status -eq 0
@@ -257,53 +398,16 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
                         chmod 600 "$codex_auth_file" 2>/dev/null
                         set codex_status "codex switched: $selected_account_id"
 
-                        if command -q codexbar
-                            set -l usage_line (codexbar usage --source oauth --provider codex --json 2>/dev/null | jq -r '
-                                def rem($p):
-                                    (100 - (($p // 0) | tonumber | floor))
-                                    | if . < 0 then 0 elif . > 100 then 100 else . end;
-
-                                .[0] as $root
-                                | ($root.usage.primary // null) as $primary
-                                | ($root.usage.secondary // null) as $secondary
-                                | "usage (" + ($root.provider // "codex") + "): "
-                                + (
-                                    if $primary then
-                                        "primary " + (rem($primary.usedPercent) | tostring) + "% left"
-                                        + (
-                                            if ($primary.resetDescription // $primary.resetsAt // "") != "" then
-                                                " until " + ($primary.resetDescription // $primary.resetsAt)
-                                            else
-                                                ""
-                                            end
-                                        )
-                                    else
-                                        "primary n/a"
-                                    end
-                                )
-                                + (
-                                    if $secondary then
-                                        " | secondary " + (rem($secondary.usedPercent) | tostring) + "% left"
-                                        + (
-                                            if ($secondary.resetDescription // $secondary.resetsAt // "") != "" then
-                                                " until " + ($secondary.resetDescription // $secondary.resetsAt)
-                                            else
-                                                ""
-                                            end
-                                        )
-                                    else
-                                        ""
-                                    end
-                                )
-                            ' 2>/dev/null)
-
-                            if test $status -eq 0; and test -n "$usage_line"
-                                set usage_status "$usage_line"
-                            else
-                                set usage_status "usage unavailable (codexbar parse failed)"
-                            end
+                        set switched_usage_tsv (__opencode_fetch_usage_tsv "$usage_query")
+                        set -l switched_usage_fetch_status $status
+                        if test $switched_usage_fetch_status -eq 0; and test -n "$switched_usage_tsv"
+                            set switched_usage_error ""
+                        else if test $switched_usage_fetch_status -eq 127
+                            set switched_usage_error "switched usage unavailable (codexbar not installed)"
+                            set switched_usage_tsv ""
                         else
-                            set usage_status "usage unavailable (codexbar not installed)"
+                            set switched_usage_error "switched usage unavailable (codexbar parse failed)"
+                            set switched_usage_tsv ""
                         end
                     else
                         rm -f "$codex_auth_tmp"
@@ -322,8 +426,12 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
 
     echo "active provider switched: $provider <= $selected_label"
     echo "$codex_status"
-    if test -n "$usage_status"
-        echo "$usage_status"
+    if test -n "$switched_usage_tsv"
+        echo ""
+        __opencode_render_usage "switched" "$switched_usage_tsv" "$usage_bar_width"
+    else if test -n "$switched_usage_error"
+        echo ""
+        gum style --foreground 196 "$switched_usage_error"
     end
     rm -f "$codexbar_cache_file"
 end
