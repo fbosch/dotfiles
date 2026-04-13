@@ -17,7 +17,7 @@ local pane_refresh_cooldown_ms_active = 250
 local pane_refresh_cooldown_ms_idle = 1000
 local attention_notification_timeout_ms = 4000
 local attention_notification_cooldown_ms = 5000
-local notification_debug = false
+local notification_debug = os.getenv("WEZTERM_AGENT_DECK_NOTIFY_DEBUG") == "1"
 
 local target_triple = wezterm.target_triple or ""
 local is_linux = target_triple:find("linux") ~= nil
@@ -109,22 +109,65 @@ local function resolve_gui_window_from_pane(pane)
 	return gui_window, nil
 end
 
-local function send_attention_toast(pane, title, message)
-	local gui_window, err = resolve_gui_window_from_pane(pane)
+local function resolve_notification_window(window, pane)
+	if window ~= nil then
+		return window, nil
+	end
+
+	return resolve_gui_window_from_pane(pane)
+end
+
+local function send_attention_toast(window, pane, title, message)
+	local gui_window, err = resolve_notification_window(window, pane)
 	if gui_window == nil then
 		return false, err
 	end
 
-	gui_window:toast_notification(title, message, nil, attention_notification_timeout_ms)
+	local ok, toast_err = pcall(function()
+		gui_window:toast_notification(title, message, nil, attention_notification_timeout_ms)
+	end)
+	if ok == false then
+		return false, toast_err
+	end
+
 	return true, nil
 end
 
 local function try_background_child_process(argv)
-	local ok = pcall(function()
+	local ok, err = pcall(function()
 		wezterm.background_child_process(argv)
 	end)
 
-	return ok
+	return ok, err
+end
+
+local function file_exists(path)
+	if type(path) ~= "string" or path == "" then
+		return false
+	end
+
+	local handle = io.open(path, "r")
+	if handle == nil then
+		return false
+	end
+
+	handle:close()
+	return true
+end
+
+local function is_attention_reason(reason)
+	if reason == nil then
+		return true
+	end
+
+	local allowed_reasons = {
+		waiting_for_input = true,
+		waiting = true,
+		input_required = true,
+		needs_input = true,
+	}
+
+	return allowed_reasons[reason] == true
 end
 
 local function should_throttle_attention(pane, agent_type)
@@ -140,7 +183,7 @@ local function should_throttle_attention(pane, agent_type)
 	return false, key
 end
 
-local function notify_attention(pane, agent_type)
+local function notify_attention(window, pane, agent_type, reason)
 	local subtitle = string.format("%s - Attention Needed", get_agent_display_name(agent_type))
 	local message = "Needs your input"
 	local throttled, throttle_key = should_throttle_attention(pane, agent_type)
@@ -149,23 +192,23 @@ local function notify_attention(pane, agent_type)
 		return
 	end
 
-	local toast_ok, toast_err = send_attention_toast(pane, subtitle, message)
+	local toast_ok, toast_err = send_attention_toast(window, pane, subtitle, message)
 	if toast_ok then
 		log_notification_debug("delivered via wezterm toast")
 		return
 	end
 
-	log_notification_debug("toast unavailable: " .. tostring(toast_err))
+	log_notification_debug("toast unavailable: " .. tostring(toast_err) .. ", reason=" .. tostring(reason))
 
 	if is_linux then
-		local ok = try_background_child_process({
+		local ok = select(1, try_background_child_process({
 			"notify-send",
 			"--urgency=normal",
 			"--app-name=WezTerm",
 			"--expire-time=" .. tostring(attention_notification_timeout_ms),
 			subtitle,
 			message,
-		})
+		}))
 		if ok then
 			log_notification_debug("spawned linux notify-send fallback")
 			return
@@ -176,37 +219,55 @@ local function notify_attention(pane, agent_type)
 	if is_macos then
 		local notifier_group = "wezterm-agent-deck-" .. tostring(agent_type or "unknown")
 		local terminal_notifier_paths = {
-			"terminal-notifier",
 			"/opt/homebrew/bin/terminal-notifier",
 			"/usr/local/bin/terminal-notifier",
+			"terminal-notifier",
 		}
 
 		for _, notifier_path in ipairs(terminal_notifier_paths) do
-			local ok = try_background_child_process({
-				notifier_path,
-				"-title",
-				"WezTerm Agent Deck",
-				"-subtitle",
-				subtitle,
-				"-message",
-				message,
-				"-group",
-				notifier_group,
-				"-activate",
-				"com.github.wez.wezterm",
-			})
-			if ok then
-				log_notification_debug("spawned macOS terminal-notifier fallback: " .. notifier_path)
-				return
+			if notifier_path:sub(1, 1) == "/" and file_exists(notifier_path) == false then
+				log_notification_debug("macOS terminal-notifier missing: " .. notifier_path)
+			else
+				local ok, notifier_err = try_background_child_process({
+					notifier_path,
+					"-title",
+					"WezTerm Agent Deck",
+					"-subtitle",
+					subtitle,
+					"-message",
+					message,
+					"-group",
+					notifier_group,
+				})
+				if ok then
+					log_notification_debug("spawned macOS terminal-notifier fallback: " .. notifier_path)
+					return
+				end
+				log_notification_debug(
+					"macOS terminal-notifier path failed: " .. notifier_path .. ", err=" .. tostring(notifier_err)
+				)
 			end
-			log_notification_debug("macOS terminal-notifier path failed: " .. notifier_path)
 		end
 
 		local script =
 			string.format("display notification %q with title %q subtitle %q", message, "WezTerm Agent Deck", subtitle)
-		if try_background_child_process({ "osascript", "-e", script }) then
-			log_notification_debug("spawned macOS osascript fallback")
-			return
+		local osascript_paths = {
+			"/usr/bin/osascript",
+			"osascript",
+		}
+		for _, osascript_path in ipairs(osascript_paths) do
+			if osascript_path:sub(1, 1) == "/" and file_exists(osascript_path) == false then
+				log_notification_debug("macOS osascript missing: " .. osascript_path)
+			else
+				local ok, osascript_err = try_background_child_process({ osascript_path, "-e", script })
+				if ok then
+					log_notification_debug("spawned macOS osascript fallback: " .. osascript_path)
+					return
+				end
+				log_notification_debug(
+					"macOS osascript path failed: " .. osascript_path .. ", err=" .. tostring(osascript_err)
+				)
+			end
 		end
 		log_notification_debug("macOS osascript fallback failed")
 	end
@@ -214,12 +275,13 @@ local function notify_attention(pane, agent_type)
 	log_notification_debug("all notification paths exhausted")
 end
 
-local function on_attention_needed(_, pane, agent_type, reason)
-	if reason ~= "waiting_for_input" then
+local function on_attention_needed(window, pane, agent_type, reason)
+	if is_attention_reason(reason) == false then
+		log_notification_debug("ignored attention reason=" .. tostring(reason))
 		return
 	end
 
-	notify_attention(pane, agent_type)
+	notify_attention(window, pane, agent_type, reason)
 end
 
 now_ms = function()
