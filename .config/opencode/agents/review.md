@@ -3,7 +3,6 @@ description: Reviews code for quality, security vulnerabilities, and best practi
 mode: subagent
 color: "#a8d0e6"
 temperature: 0.1
-steps: 6
 tools:
   write: false
   edit: false
