@@ -134,8 +134,14 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
                 set primary_filled $bar_width
             end
             set -l primary_empty (math "$bar_width - $primary_filled")
-            set -l primary_bar_filled (gum style --foreground "$primary_color" (string repeat -n $primary_filled -- "█"))
-            set -l primary_bar_empty (gum style --foreground 240 (string repeat -n $primary_empty -- "░"))
+            set -l primary_bar_filled ""
+            if test "$primary_filled" -gt 0
+                set primary_bar_filled (gum style --foreground "$primary_color" (string repeat -n $primary_filled -- "█"))
+            end
+            set -l primary_bar_empty ""
+            if test "$primary_empty" -gt 0
+                set primary_bar_empty (gum style --foreground 240 (string repeat -n $primary_empty -- "░"))
+            end
             set -l primary_percent (gum style --foreground "$primary_color" --bold "$primary_remaining%")
             printf '  %-9s [%s%s] %s left\n' "primary" "$primary_bar_filled" "$primary_bar_empty" "$primary_percent"
             if test -n "$primary_resets_at"
@@ -158,8 +164,14 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
                 set secondary_filled $bar_width
             end
             set -l secondary_empty (math "$bar_width - $secondary_filled")
-            set -l secondary_bar_filled (gum style --foreground "$secondary_color" (string repeat -n $secondary_filled -- "█"))
-            set -l secondary_bar_empty (gum style --foreground 240 (string repeat -n $secondary_empty -- "░"))
+            set -l secondary_bar_filled ""
+            if test "$secondary_filled" -gt 0
+                set secondary_bar_filled (gum style --foreground "$secondary_color" (string repeat -n $secondary_filled -- "█"))
+            end
+            set -l secondary_bar_empty ""
+            if test "$secondary_empty" -gt 0
+                set secondary_bar_empty (gum style --foreground 240 (string repeat -n $secondary_empty -- "░"))
+            end
             set -l secondary_percent (gum style --foreground "$secondary_color" --bold "$secondary_remaining%")
             printf '  %-9s [%s%s] %s left\n' "secondary" "$secondary_bar_filled" "$secondary_bar_empty" "$secondary_percent"
             if test -n "$secondary_resets_at"
