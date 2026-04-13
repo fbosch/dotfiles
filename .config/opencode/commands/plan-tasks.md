@@ -21,10 +21,12 @@ Execution rules:
    - `Backlog summary`
    - `Assumptions`
    - `Open questions`
-   - `Task plan (JSON)`
+   - `Task plan (OpenSpec tasks.md draft)`
 
 Output requirements:
 
-1. `Task plan (JSON)` must be valid JSON.
-2. Use stable task IDs (`T1`, `T2`, ...).
-3. Keep titles action-oriented and concise.
+1. `Task plan (OpenSpec tasks.md draft)` must use OpenSpec-compatible markdown:
+   - numbered `##` task groups
+   - checkbox tasks in `- [ ] X.Y ...` format
+2. Keep task descriptions action-oriented and concise.
+3. Order tasks by true dependency/blocking sequence.
