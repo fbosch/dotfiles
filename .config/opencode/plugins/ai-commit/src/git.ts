@@ -71,6 +71,14 @@ export function getBranchName(): Result<string, GitError> {
   return gitResult(["rev-parse", "--abbrev-ref", "HEAD"]);
 }
 
+export function getRepoRoot(): Result<string, GitError> {
+  return gitResult(["rev-parse", "--show-toplevel"]);
+}
+
+export function getRemoteOriginUrl(): Result<string, GitError> {
+  return gitResult(["config", "--get", "remote.origin.url"]);
+}
+
 export function getPreviousCommitSubject(): Result<string, GitError> {
   return gitResult(["log", "-1", "--pretty=format:%s"]);
 }

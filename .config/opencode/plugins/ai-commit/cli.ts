@@ -2,6 +2,7 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { createConnection } from "node:net";
+import { basename } from "node:path";
 import process from "node:process";
 import pc from "picocolors";
 import { match } from "ts-pattern";
@@ -10,7 +11,8 @@ import {
   commit,
   getBranchName,
   type GitError,
-  getPreviousCommitInfo,
+  getRepoRoot,
+  getRemoteOriginUrl,
   getStagedDiff,
   getStagedFiles,
   hasOnlyLockfiles,
@@ -327,27 +329,34 @@ async function main(): Promise<void> {
   }
   const branch = branchResult.unwrapOr("");
 
-  const previousCommitResult = getPreviousCommitInfo();
-  if (args.verbose && previousCommitResult.isErr()) {
+  const repoRootResult = getRepoRoot();
+  if (repoRootResult.isErr()) {
+    style(" Failed to read repository root", 1);
+    style(` ${formatGitError(repoRootResult.error)}`, 1);
+    process.exit(1);
+  }
+  const repoRoot = repoRootResult.value;
+  const repoName = basename(repoRoot);
+
+  const remoteOriginResult = getRemoteOriginUrl();
+  if (args.verbose && remoteOriginResult.isErr()) {
     style(
-      ` Could not read previous commit subject: ${formatGitError(previousCommitResult.error)}`,
+      ` Could not read remote.origin.url: ${formatGitError(remoteOriginResult.error)}`,
       3,
     );
   }
-  const previousCommit = previousCommitResult
-    .map((value) => (value.isMerge ? "" : value.subject))
-    .unwrapOr("");
-
-  if (args.verbose && previousCommitResult.isOk() && previousCommitResult.value.isMerge) {
-    style(" Previous commit is a merge commit; skipping subject context", 3);
-  }
+  const remoteOrigin = remoteOriginResult.unwrapOr("");
 
   let modelRef = getModelRef(args.modelRef);
 
-  if (args.verbose) {
-    style(` Branch: ${branch}`);
-    style(` Model: ${modelRef ?? "commit agent default"}`);
-  }
+    if (args.verbose) {
+      style(` Repo: ${repoName} (${repoRoot})`);
+      if (remoteOrigin.length > 0) {
+        style(` Remote: ${remoteOrigin}`);
+      }
+      style(` Branch: ${branch}`);
+      style(` Model: ${modelRef ?? "commit agent default"}`);
+    }
 
   let commitMsg = "";
 
@@ -368,8 +377,10 @@ async function main(): Promise<void> {
     }
 
     const context = {
+      repoRoot,
+      repoName,
+      remoteOrigin,
       branch,
-      previousCommit,
       stagedFiles,
       stagedDiff,
     };

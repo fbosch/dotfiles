@@ -11,6 +11,7 @@ const DEFAULT_COMMAND_TIMEOUT_MS = 60000;
 const FILE_SUMMARY_MAX_FILES = 8;
 const MAX_COMMIT_MESSAGE_LENGTH = 50;
 const WORK_ITEM_PATTERNS = [/\bAB#(\d+)\b/iu, /\b#(\d+)\b/u, /(?:^|[\/_-])(\d{4,})(?=$|[\/_-])/u, /\b(\d{4,})\b/u];
+const WORK_ITEM_SCOPE_PATTERN = /^AB#\d+$/u;
 const SUBJECT_FILLER_WORDS = new Set([
   "a",
   "an",
@@ -50,8 +51,10 @@ type GenerateErrorKind = (typeof GENERATE_ERROR_KINDS)[number];
 type NonTimeoutGenerateErrorKind = Exclude<GenerateErrorKind, "timeout" | "parse">;
 
 export type GitContext = {
+  repoRoot: string;
+  repoName: string;
+  remoteOrigin: string;
   branch: string;
-  previousCommit: string;
   stagedFiles: string[];
   stagedDiff: string;
 };
@@ -409,36 +412,31 @@ function detectWorkItemScope(context: GitContext): string | null {
   if (branchWorkItem !== null) {
     return `AB#${branchWorkItem}`;
   }
-
-  const commitWorkItem = extractWorkItemId(context.previousCommit);
-  if (commitWorkItem !== null) {
-    return `AB#${commitWorkItem}`;
-  }
-
   return null;
 }
 
-function enforceWorkItemScope(commit: GeneratedCommit, context: GitContext): GeneratedCommit {
+function validateGeneratedScope(
+  commit: GeneratedCommit,
+  context: GitContext,
+): Result<GeneratedCommit, GenerateError> {
   const detectedScope = detectWorkItemScope(context);
-  if (detectedScope === null || commit.scope === detectedScope) {
-    return commit;
+  const normalizedScope = commit.scope.trim();
+
+  if (detectedScope !== null && normalizedScope !== detectedScope) {
+    return err({
+      kind: "parse",
+      message: `Generated scope \"${normalizedScope}\" does not match branch ticket ${detectedScope}`,
+    });
   }
 
-  const maxSubjectChars = MAX_COMMIT_MESSAGE_LENGTH - `${commit.type}(${detectedScope}): `.length;
-  if (maxSubjectChars <= 0) {
-    return commit;
+  if (detectedScope === null && WORK_ITEM_SCOPE_PATTERN.test(normalizedScope)) {
+    return err({
+      kind: "parse",
+      message: `Generated ticket scope \"${normalizedScope}\" but current branch has no ticket`,
+    });
   }
 
-  const scopedSubject = shortenSubject(cleanSubject(commit.subject), maxSubjectChars);
-  const message = `${commit.type}(${detectedScope}): ${scopedSubject}`;
-
-  return {
-    ...commit,
-    scope: detectedScope,
-    subject: scopedSubject,
-    message,
-    overLimit: message.length > MAX_COMMIT_MESSAGE_LENGTH,
-  };
+  return ok(commit);
 }
 
 function stripCodeFence(text: string): string {
@@ -752,13 +750,14 @@ async function deleteSession(client: SessionClient, sessionId: string): Promise<
   ).catch(() => undefined);
 }
 
-async function connectClient(): Promise<ConnectedClient> {
+async function connectClient(directory: string): Promise<ConnectedClient> {
   const useExisting = getEnvVar("AI_COMMIT_USE_EXISTING_SERVER") !== "0";
 
   if (useExisting) {
     const existing = createOpencodeClient({
       baseUrl: DEFAULT_SERVER_URL,
       responseStyle: "data",
+      directory,
     });
 
     if (hasSessionClient(existing)) {
@@ -800,8 +799,12 @@ async function connectClient(): Promise<ConnectedClient> {
 function buildCommandArgs(context: GitContext): string {
   const detectedScope = detectWorkItemScope(context);
   const details = [
+    context.repoRoot.length > 0 ? `Repository root: ${context.repoRoot}` : null,
+    context.repoName.length > 0 ? `Repository name: ${context.repoName}` : null,
+    context.remoteOrigin.length > 0
+      ? `Remote origin: ${context.remoteOrigin}`
+      : null,
     context.branch.length > 0 ? `Branch: ${context.branch}` : null,
-    context.previousCommit.length > 0 ? `Previous commit: ${context.previousCommit}` : null,
   ].filter((value): value is string => value !== null);
 
   const isTruncated = context.stagedDiff.endsWith(DIFF_TRUNCATED_MARKER);
@@ -811,12 +814,15 @@ function buildCommandArgs(context: GitContext): string {
     "You are a conventional commit message generator.",
     "Return ONLY a single valid JSON object with keys: type, scope, subject.",
     "No prose, no explanation, no markdown, no code fences, no tool calls.",
+    "Use only the current repository context shown below.",
+    "Ignore memory from prior sessions, repositories, or server history.",
     "",
     `Valid types: ${COMMIT_TYPES.join(", ")}`,
     detectedScope === null
-      ? "scope: short module/area name (e.g. auth, cli, config), unless a ticket/reference number is present in branch/args"
-      : `scope: MUST be exactly ${detectedScope} (ticket detected in branch/args)`,
-    "If a ticket/reference number exists in branch/args (AB#1234, #1234, fix/1234-...), never use module/feature scope.",
+      ? "scope: short module/area name (e.g. auth, cli, config)."
+      : `scope: MUST be exactly ${detectedScope} (ticket detected in current branch).`,
+    "Only infer ticket scope from current branch.",
+    "If current branch has no ticket, do not output AB# scope.",
     "Keep the full commit line <= 50 chars including type(scope): prefix.",
     "subject: imperative, lowercase, no period, usually 20-32 chars",
     "",
@@ -945,7 +951,7 @@ async function generateCommitValue(
 
   try {
     const connectStart = startDebugTimer(options);
-    connected = await connectClient();
+    connected = await connectClient(context.repoRoot);
     writeDebugTiming("connectClient", connectStart);
 
     const commandTimeoutMs = getCommandTimeoutMs();
@@ -973,7 +979,12 @@ async function generateCommitValue(
       throw parsed.error;
     }
 
-    return enforceWorkItemScope(parsed.value, context);
+    const validatedScope = validateGeneratedScope(parsed.value, context);
+    if (validatedScope.isErr()) {
+      throw validatedScope.error;
+    }
+
+    return validatedScope.value;
   } finally {
     if (connected !== null && sessionId !== null) {
       const deleteSessionStart = startDebugTimer(options);
