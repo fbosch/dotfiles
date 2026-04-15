@@ -1,5 +1,12 @@
 function ai_commit --description 'Generate AI-powered Commitizen commit message from staged changes'
     set -l script "$HOME/.config/opencode/plugins/ai-commit/cli.ts"
+    if set -q AI_COMMIT_MODEL; and test "$AI_COMMIT_MODEL" = "openai/gpt-5.1-codex-mini"
+        set -lx AI_COMMIT_MODEL openai/gpt-5.4-mini-fast
+    else if set -q AI_COMMIT_MODEL; and test "$AI_COMMIT_MODEL" = "openai/codex-mini-latest"
+        set -lx AI_COMMIT_MODEL openai/gpt-5.4-mini-fast
+    else if not set -q AI_COMMIT_MODEL
+        set -lx AI_COMMIT_MODEL openai/gpt-5.4-mini-fast
+    end
 
     function __ai_commit_err -a message
         echo "$message"
