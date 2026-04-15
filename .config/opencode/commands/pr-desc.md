@@ -5,6 +5,8 @@ agent: quick
 
 Write a PR description in English. Output markdown only.
 
+This command is report-only. Never output process notes, tool chatter, thinking, recaps, or meta commentary.
+
 Use the auto-generated git context below.
 
 Pre-flight:
@@ -46,6 +48,8 @@ Use one of these title types: feat, fix, refactor, chore, docs, test
 - Ignore formatting, whitespace, and import reordering
 - Do not explain your reasoning
 - Do not add commentary after the last section
+- Forbidden text patterns anywhere in output: `Task output recap`, `Intent:`, `Main edits`, `Continued task result`, `ready to use`, `I can now`, `next step`
+- If your draft includes any forbidden text, rewrite once and output only the rewritten PR content
 
 **Example output:**
 
@@ -61,7 +65,14 @@ Use upstream comparison when generating PR descriptions from master.
 - Compare diffs against upstream instead of local branch
 - Keep failure message for missing upstream
 
-**Strict output:** Output ONLY the PR content. First character must be the PR title. No preface, no "Here is", no "Intent:", no extra headings.
+**Strict output:** Output ONLY the PR content. First character must be the PR title. No preface, no "Here is", no "Intent:", no extra headings, no fences.
+
+Final self-check before returning:
+
+1. Output begins with `<type>: <description>`
+2. Output contains exactly one blank line after title
+3. Output contains no forbidden text patterns
+4. Output ends at the last markdown section, with no trailing notes
 
 AUTO-GENERATED GIT CONTEXT:
 !`sh -c '
@@ -89,7 +100,7 @@ echo "Commits:"
 echo "(failed to determine base branch)"
 echo
 echo "DIFF:"
-git diff --ignore-all-space -- ':!_-lock._' ':!\*.lock'
+git diff --ignore-all-space -- ':!*lock.*' ':!pnpm-lock.yaml'
 exit 0
 fi
 
@@ -102,7 +113,7 @@ if [ -z "$merge_base" ]; then
 echo "(failed to determine merge base)"
 echo
 echo "DIFF:"
-git diff --ignore-all-space -- ':!_-lock._' ':!\*.lock'
+git diff --ignore-all-space -- ':!*lock.*' ':!pnpm-lock.yaml'
 exit 0
 fi
 
@@ -115,7 +126,7 @@ fi
 
 echo
 echo "DIFF:"
-git diff --ignore-all-space "$merge*base..HEAD" -- ':!*-lock.\_' ':!\*.lock'
+git diff --ignore-all-space "$merge_base..HEAD" -- ':!*lock.*' ':!pnpm-lock.yaml'
 '`
 
 ADDITIONAL CONTEXT (optional):

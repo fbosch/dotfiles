@@ -392,23 +392,39 @@ function extractStructuredOutput(value: unknown): unknown | null {
   return null;
 }
 
-function extractPrDescription(value: unknown): string {
-  const text = extractTextParts(value).join("\n").trim();
-  if (text.length > 0) {
-    return text;
+const PR_TITLE_PATTERN = /^(feat|fix|refactor|chore|docs|test):\s.+$/m;
+
+function normalizePrDescription(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return "";
   }
 
+  const titleMatch = PR_TITLE_PATTERN.exec(trimmed);
+  if (titleMatch === null || typeof titleMatch.index !== "number") {
+    return trimmed;
+  }
+
+  return trimmed.slice(titleMatch.index).trim();
+}
+
+function extractPrDescription(value: unknown): string {
   const structured = extractStructuredOutput(value);
   if (typeof structured === "string") {
-    return structured.trim();
+    return normalizePrDescription(structured);
   }
 
   if (isRecord(structured) && typeof structured.text === "string") {
-    return structured.text.trim();
+    return normalizePrDescription(structured.text);
   }
 
   if (isRecord(structured) && typeof structured.markdown === "string") {
-    return structured.markdown.trim();
+    return normalizePrDescription(structured.markdown);
+  }
+
+  const text = extractTextParts(value).join("\n").trim();
+  if (text.length > 0) {
+    return normalizePrDescription(text);
   }
 
   return "";
