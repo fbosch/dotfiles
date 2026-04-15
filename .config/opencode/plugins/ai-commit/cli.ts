@@ -28,11 +28,12 @@ import {
 } from "./src/ui";
 
 const FALLBACK_MODELS: ReadonlyArray<{ label: string; ref: string }> = [
+  { label: "gpt-5.2-codex  (openai)", ref: "openai/gpt-5.2-codex" },
+  { label: "gpt-5.3-codex  (openai)", ref: "openai/gpt-5.3-codex" },
   {
     label: "claude-haiku-4.5  (github-copilot)",
     ref: "github-copilot/claude-haiku-4.5",
   },
-  { label: "gpt-5.3-codex-spark  (openai)", ref: "openai/gpt-5.3-codex-spark" },
   {
     label: "grok-code-fast-1  (github-copilot)",
     ref: "github-copilot/grok-code-fast-1",

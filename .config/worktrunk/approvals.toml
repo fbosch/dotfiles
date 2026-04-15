@@ -11,4 +11,5 @@ approved-commands = [
     "pnpm install --frozen-lockfile --reporter=silent",
     "pnpm install --prefer-offline --frozen-lockfile --reporter=silent",
     "ln -sfn {{ primary_worktree_path }}/node_modules node_modules",
+    "CI=true pnpm install --prefer-offline --frozen-lockfile --reporter=silent",
 ]
