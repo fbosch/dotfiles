@@ -17,6 +17,7 @@ path=(
 
 export PNPM_HOME="$HOME/Library/pnpm"
 export BUN_INSTALL="$HOME/.bun"
+export AGENT_BROWSER_ENGINE="lightpanda"
 
 if [[ -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]]; then
   . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
