@@ -9,6 +9,7 @@
 --no-messages
 --threads=4
 --max-filesize=2M
+--follow
 
 --type-add=web:*.{html,css,js}
 # Exclude common heavy or generated trees.
