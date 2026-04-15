@@ -96,6 +96,7 @@ abbr co copy_output
 abbr gca 'git commit --amend'
 abbr gaic ai_commit # AI-powered Commitizen commit
 abbr gmt 'git mergetool'
+abbr grhu git_reset_to_upstream
 abbr grhh 'git reset --hard HEAD'
 abbr gcfd 'git clean -fd'
 abbr gbda 'git branch | egrep -v "(master|main|develop|\*)" | xargs git branch -D'
