@@ -11,8 +11,8 @@ readonly SHOW_THRESHOLD=20     # Distance from bottom to trigger show (pixels)
 readonly HIDE_THRESHOLD=60      # Distance from bottom before hiding (pixels)
 readonly SHOW_DELAY_MS=200      # Milliseconds to wait before showing (prevents quick hovers)
 readonly HIDE_DELAY_MS=300      # Milliseconds to wait before hiding (linger time)
-readonly FAST_CHECK_MS=25       # Fast polling interval (25ms)
-readonly SLOW_CHECK_MS=300      # Slow polling interval (300ms)
+readonly FAST_CHECK_MS=40       # Fast polling interval (40ms)
+readonly SLOW_CHECK_MS=500      # Slow polling interval (500ms)
 
 # Hyprland query socket (faster than hyprctl)
 HYPR_QUERY_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock"
@@ -20,7 +20,7 @@ HYPR_QUERY_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.so
 # Cache monitor info (updated periodically)
 declare -A MONITOR_CACHE
 monitor_cache_time=0
-readonly CACHE_REFRESH_S=5  # Refresh monitor cache every 5 seconds
+readonly CACHE_REFRESH_S=10  # Refresh monitor cache every 10 seconds
 last_monitor_name=""
 
 # Sets global DISTANCE_FROM_BOTTOM to pixels from bottom of current monitor.
@@ -155,10 +155,10 @@ while true; do
     fi
     
     # Sleep with calculated interval (convert ms to seconds)
-    # 25ms = 0.025s, 300ms = 0.3s
+    # 40ms = 0.04s, 500ms = 0.5s
     if (( check_interval_ms == FAST_CHECK_MS )); then
-        sleep 0.025
+        sleep 0.04
     else
-        sleep 0.3
+        sleep 0.5
     fi
 done

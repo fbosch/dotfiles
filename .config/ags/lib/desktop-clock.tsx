@@ -8,7 +8,7 @@ import { perf } from "./performance-monitor";
 // Clock configuration
 interface ClockConfig {
   format24h?: boolean; // Use 24-hour format (default: true)
-  showSeconds?: boolean; // Show seconds (default: true)
+  showSeconds?: boolean; // Show seconds (default: false)
   showDate?: boolean; // Show date below time (default: false)
   monitor?: number | string; // Monitor ID (number) or name (string, e.g., "HDMI-A-2")
 }
@@ -19,7 +19,7 @@ let dateLabel: Gtk.Label | null = null;
 let updateIntervalId: number | null = null;
 let config: ClockConfig = {
   format24h: true,
-  showSeconds: true,
+  showSeconds: false,
   showDate: false,
   monitor: "HDMI-A-2", // Default to HDMI display
 };
@@ -240,7 +240,7 @@ function applyCSS() {
       font-weight: 700;
       color: rgba(255, 255, 255, 0.95);
       text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
-      min-width: 280px;
+      min-width: 190px;
     }
     
     window.desktop-clock label.date-label {

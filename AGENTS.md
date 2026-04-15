@@ -10,6 +10,7 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 
 - Do not edit generated state/lock files (e.g. `lazy-lock.json`, AGS GIR typings, Fish auto-generated dirs).
 - Follow symlinks when reading docs.
+- Dotfiles repo root is `~/dotfiles`.
 - Canonical skills live in `.agents/skills/` and are mirrored under `.config/{opencode,codex,github,claude}/skills`.
 
 ## Commands
