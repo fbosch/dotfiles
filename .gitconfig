@@ -85,6 +85,7 @@
 [maintenance]
 	repo = /Users/fbb/Projects/KommuneKredit.Frontend/main
 	repo = /home/fbb/nixos
+	repo = /home/fbb/dotfiles
 	repo = /home/fbb/Projects/docs-cache
 
 [gpg]

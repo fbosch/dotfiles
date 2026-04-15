@@ -10,7 +10,7 @@ set -gx NVIM_INIT $HOME/.config/nvim/init.lua
 set -gx OPENCODE_CONFIG_DIR $HOME/.config/opencode
 set -gx AGENT_BROWSER_ENGINE lightpanda
 set -gx LS_COLORS "(vivid generate ~/.config/vivid/themes/zenwritten-dark.yml)"
-set -x RIPGREP_CONFIG_PATH "$HOME/.config/ripgrep/ripgreprc"
+set -x RIPGREP_CONFIG_PATH "$HOME/.config/.ripgreprc"
 set -gx PATH $HOME/.cargo/bin $PATH
 set -U FZF_DEFAULT_COMMAND fd --threads 16
 set -U SKIM_DEFAULT_COMMAND fd --type f --threads 16 || git ls-tree -r --name-only HEAD 2>/dev/null || rg --files || find .
