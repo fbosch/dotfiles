@@ -8,8 +8,6 @@
     "opencode-toolbox",
     "./plugins/openmemory/openmemory.ts",
     "opencode-wakatime",
-    "opencode-handoff",
-    "opencode-toon-plugin@latest",
     "./plugins/worktrunk.ts",
     "./plugins/rtk.ts"
   ],
