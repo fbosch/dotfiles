@@ -47,8 +47,8 @@ When "Use User Settings" is enabled, your Wallhaven account settings override th
 
 ## Usage
 
-1. Install dependencies: `npm install`
-2. Run in dev mode: `npm run dev`
+1. Install dependencies: `pnpm install`
+2. Run in dev mode: `pnpm run dev`
 3. Search for wallpapers using the search bar
 4. Use the category dropdown to filter by General, Anime, or People
 5. Browse results in a 3-column grid (24 wallpapers per page)
@@ -60,11 +60,11 @@ When "Use User Settings" is enabled, your Wallhaven account settings override th
 
 ### On Wallpapers
 - **Enter**: Show full-size preview
-- **Cmd+D**: Download wallpaper directly to your configured download directory
+- **Save**: Download wallpaper directly to your configured download directory
 - **Cmd+S**: Download and apply wallpaper (downloads to directory and sets as desktop background via hyprpaper)
-- **Cmd+O**: Open wallpaper page in browser
-- **Cmd+C**: Copy image URL
-- **Cmd+Shift+C**: Copy page URL
+- **Open**: Open wallpaper page in browser
+- **Copy**: Copy image URL
+- **Copy Deeplink**: Copy page URL
 - **Cmd+Shift+S**: Open Wallhaven settings page
 
 ### On "Load More" Item
@@ -84,7 +84,7 @@ The extension implements smart caching and debouncing to respect Wallhaven's 45 
 - Only searches after you stop typing for 800ms
 
 **Caching:**
-- All queries are cached in localStorage for 12 hours
+- All queries are cached in Vicinae cache storage for 12 hours
 - Identical searches return instant results (no API call)
 - Cache persists across extension restarts
 - Cached data automatically expires after 12 hours
@@ -113,13 +113,13 @@ The extension now supports direct wallpaper downloads to your local filesystem:
 2. Press **Cmd+D** on any wallpaper to download it directly
 3. Files are saved with descriptive names: `wallhaven-{id}-{resolution}.{ext}`
 4. Download progress is shown with toast notifications
-5. If direct download isn't available in your environment, use the "Download in Browser" fallback action
+5. Downloads require filesystem write access to the configured directory
 
 ### Download Behavior
 
 - **Success**: Toast shows "Wallpaper downloaded!" with the file path
 - **Failure**: Toast shows error message with details
-- **Fallback**: If filesystem access is unavailable, the extension attempts browser-based download
+- **Filesystem errors**: If filesystem access fails, the extension returns a clear disk/permission error
 - **Directory creation**: The download directory is created automatically if it doesn't exist
 
 ## Build
@@ -127,5 +127,5 @@ The extension now supports direct wallpaper downloads to your local filesystem:
 To build for production:
 
 ```bash
-npm run build
+pnpm run build
 ```

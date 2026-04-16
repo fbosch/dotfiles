@@ -8,190 +8,24 @@ import {
 	Grid,
 	getPreferenceValues,
 	Icon,
+	Keyboard,
 	showToast,
 	Toast,
 } from "@vicinae/api";
 import { useEffect, useState } from "react";
+import {
+	convertUserSettingsToCategories,
+	convertUserSettingsToPurity,
+	fetchUserSettings,
+	fetchWallpaperDetails,
+	searchWallpapers,
+} from "./api";
+import { DEFAULT_CATEGORIES, DEFAULT_DEBOUNCE_MS, PERSIST_MAX_AGE } from "./constants";
+import { useDebounce } from "./hooks";
+import type { Preferences, SearchParams, UserSettings, Wallpaper, WallhavenResponse } from "./types";
 import { downloadAndApplyWallpaper, downloadWallpaper } from "./utils/download";
-import { PERSIST_MAX_AGE } from "./constants";
 import { persister } from "./persist";
 import { queryClient } from "./queryClient";
-
-type Preferences = {
-	apiKey?: string;
-	useUserSettings: boolean;
-	purity: string;
-	sorting: string;
-	topRange: string;
-	downloadDirectory: string;
-};
-
-type UserSettings = {
-	purity: string[];
-	categories: string[];
-	toplist_range: string;
-	resolutions: string[];
-	aspect_ratios: string[];
-	ai_art_filter: number;
-};
-
-type Wallpaper = {
-	id: string;
-	url: string;
-	short_url: string;
-	views: number;
-	favorites: number;
-	resolution: string;
-	colors: string[];
-	path: string;
-	category: string;
-	purity: string;
-	file_size: number;
-	file_type?: string;
-	created_at?: string;
-	ratio?: string;
-	source?: string;
-	uploader?: {
-		username: string;
-		group: string;
-	};
-	tags: Array<{
-		id: number;
-		name: string;
-		category?: string;
-		purity?: string;
-	}>;
-	thumbs: {
-		large: string;
-		original: string;
-		small: string;
-	};
-};
-
-type WallhavenResponse = {
-	data: Wallpaper[];
-	meta: {
-		current_page: number;
-		last_page: number;
-		total: number;
-	};
-};
-
-type SearchParams = {
-	query: string;
-	categories: string;
-	purity: string;
-	sorting: string;
-	topRange?: string;
-	page: number;
-	apiKey?: string;
-	resolutions?: string[];
-	aspectRatios?: string[];
-	aiArtFilter?: number;
-};
-
-async function fetchUserSettings(apiKey: string): Promise<UserSettings | null> {
-	try {
-		const response = await fetch(
-			`https://wallhaven.cc/api/v1/settings?apikey=${apiKey.trim()}`,
-		);
-
-		if (!response.ok) {
-			return null;
-		}
-
-		const data = await response.json();
-		return data.data;
-	} catch {
-		return null;
-	}
-}
-
-function convertUserSettingsToPurity(purityArray: string[]): string {
-	const sfw = purityArray.includes("sfw") ? "1" : "0";
-	const sketchy = purityArray.includes("sketchy") ? "1" : "0";
-	const nsfw = purityArray.includes("nsfw") ? "1" : "0";
-	return `${sfw}${sketchy}${nsfw}`;
-}
-
-function convertUserSettingsToCategories(categoriesArray: string[]): string {
-	const general = categoriesArray.includes("general") ? "1" : "0";
-	const anime = categoriesArray.includes("anime") ? "1" : "0";
-	const people = categoriesArray.includes("people") ? "1" : "0";
-	return `${general}${anime}${people}`;
-}
-
-async function searchWallpapers(
-	params: SearchParams,
-): Promise<WallhavenResponse> {
-	const searchQuery = params.query.trim() || "nature";
-
-	const urlParams = new URLSearchParams({
-		q: searchQuery,
-		categories: params.categories,
-		purity: params.purity,
-		sorting: params.sorting,
-		page: params.page.toString(),
-	});
-
-	if (params.sorting === "toplist" && params.topRange) {
-		urlParams.append("topRange", params.topRange);
-	}
-
-	if (params.apiKey) {
-		urlParams.append("apikey", params.apiKey.trim());
-	}
-
-	if (
-		params.resolutions &&
-		params.resolutions.length > 0 &&
-		params.resolutions[0] !== ""
-	) {
-		urlParams.append("resolutions", params.resolutions.join(","));
-	}
-
-	if (
-		params.aspectRatios &&
-		params.aspectRatios.length > 0 &&
-		params.aspectRatios[0] !== ""
-	) {
-		urlParams.append("ratios", params.aspectRatios.join(","));
-	}
-
-	if (params.aiArtFilter !== undefined) {
-		urlParams.append("ai_art_filter", params.aiArtFilter.toString());
-	}
-
-	const url = `https://wallhaven.cc/api/v1/search?${urlParams.toString()}`;
-
-	const response = await fetch(url);
-
-	if (!response.ok) {
-		throw new Error(`HTTP ${response.status}`);
-	}
-
-	const data: WallhavenResponse = await response.json();
-
-	return data;
-}
-
-async function fetchWallpaperDetails(
-	id: string,
-	apiKey?: string,
-): Promise<Wallpaper> {
-	const url = apiKey
-		? `https://wallhaven.cc/api/v1/w/${id}?apikey=${apiKey.trim()}`
-		: `https://wallhaven.cc/api/v1/w/${id}`;
-
-	const response = await fetch(url);
-
-	if (!response.ok) {
-		throw new Error(`Failed to fetch wallpaper details: ${response.status}`);
-	}
-
-	const data = await response.json();
-	return data.data;
-}
 
 function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 	const preferences = getPreferenceValues<Preferences>();
@@ -301,7 +135,7 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 							title="Download Wallpaper"
 							icon={Icon.Download}
 							onAction={handleDownload}
-							shortcut={{ modifiers: ["cmd"], key: "d" }}
+							shortcut={Keyboard.Shortcut.Common.Save}
 						/>
 						<Action
 							title="Download and Apply"
@@ -378,7 +212,7 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 						title="Download Wallpaper"
 						icon={Icon.Download}
 						onAction={handleDownload}
-						shortcut={{ modifiers: ["cmd"], key: "d" }}
+						shortcut={Keyboard.Shortcut.Common.Save}
 					/>
 					<Action
 						title="Download and Apply"
@@ -402,27 +236,11 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 	);
 }
 
-function useDebounce<T>(value: T, delay: number): T {
-	const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-	useEffect(() => {
-		const handler = setTimeout(() => {
-			setDebouncedValue(value);
-		}, delay);
-
-		return () => {
-			clearTimeout(handler);
-		};
-	}, [value, delay]);
-
-	return debouncedValue;
-}
-
 function WallhavenSearchContent() {
 	const preferences = getPreferenceValues<Preferences>();
 	const [searchText, setSearchText] = useState("");
-	const [categories, setCategories] = useState("111");
-	const debouncedSearchText = useDebounce(searchText, 400);
+	const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+	const debouncedSearchText = useDebounce(searchText, DEFAULT_DEBOUNCE_MS);
 	const queryClientInstance = useQueryClient();
 
 	const handleDownload = async (wallpaper: Wallpaper) => {
@@ -570,13 +388,17 @@ function WallhavenSearchContent() {
 	const meta = data?.pages[data.pages.length - 1]?.meta;
 	const currentPage = meta?.current_page ?? 1;
 
-	if (isError && error) {
-		showToast({
+	useEffect(() => {
+		if (isError === false || error === null) {
+			return;
+		}
+
+		void showToast({
 			style: Toast.Style.Failure,
 			title: "Search failed",
 			message: error instanceof Error ? error.message : "Unknown error",
 		});
-	}
+	}, [isError, error]);
 
 	return (
 		<Grid
@@ -637,7 +459,7 @@ function WallhavenSearchContent() {
 									title="Download Wallpaper"
 									icon={Icon.Download}
 									onAction={() => handleDownload(wallpaper)}
-									shortcut={{ modifiers: ["cmd"], key: "d" }}
+									shortcut={Keyboard.Shortcut.Common.Save}
 								/>
 								<Action
 									title="Download and Apply"
@@ -649,15 +471,17 @@ function WallhavenSearchContent() {
 									<Action.OpenInBrowser
 										title="Open in Browser"
 										url={wallpaper.short_url}
+										shortcut={Keyboard.Shortcut.Common.Open}
 									/>
 									<Action.CopyToClipboard
 										title="Copy Image URL"
 										content={wallpaper.path}
+										shortcut={Keyboard.Shortcut.Common.Copy}
 									/>
 									<Action.CopyToClipboard
 										title="Copy Page URL"
 										content={wallpaper.short_url}
-										shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
+										shortcut={Keyboard.Shortcut.Common.CopyDeeplink}
 									/>
 									<Action.OpenInBrowser
 										title="Open Wallhaven Settings"
@@ -670,7 +494,7 @@ function WallhavenSearchContent() {
 										title="Refresh Settings & Cache"
 										icon={Icon.ArrowClockwise}
 										onAction={handleRefreshSettings}
-										shortcut={{ modifiers: ["cmd", "shift"], key: "r" }}
+										shortcut={Keyboard.Shortcut.Common.Refresh}
 									/>
 								</ActionPanel.Section>
 							</ActionPanel>
@@ -704,7 +528,7 @@ function WallhavenSearchContent() {
 										title="Refresh Settings & Cache"
 										icon={Icon.ArrowClockwise}
 										onAction={handleRefreshSettings}
-										shortcut={{ modifiers: ["cmd", "shift"], key: "r" }}
+										shortcut={Keyboard.Shortcut.Common.Refresh}
 									/>
 								</ActionPanel.Section>
 							</ActionPanel>
