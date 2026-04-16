@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/vicinaehq/vicinae/refs/heads/main/extra/schemas/extension.json",
-  "name": "wallhaven-search",
+  "name": "wallhaven",
   "title": "Wallhaven",
   "description": "search for wallpapers",
   "categories": [

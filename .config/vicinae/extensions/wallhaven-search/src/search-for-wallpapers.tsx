@@ -29,7 +29,6 @@ import { queryClient } from "./queryClient";
 
 function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 	const preferences = getPreferenceValues<Preferences>();
-	const [showMetadata, setShowMetadata] = useState(false);
 
 	// Fetch full wallpaper details to get tags
 	const { data: fullWallpaper, isLoading } = useQuery({
@@ -116,7 +115,7 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 			<Detail
 				isLoading={true}
 				markdown={markdown}
-				metadata={showMetadata ? (
+				metadata={
 					<Detail.Metadata>
 						<Detail.Metadata.Label
 							title="Resolution"
@@ -127,24 +126,19 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 							text={formatBytes(wallpaper.file_size)}
 						/>
 					</Detail.Metadata>
-				) : undefined}
+				}
 				actions={
 					<ActionPanel>
-						<Action
-							title={showMetadata ? "Hide Metadata" : "Show Metadata"}
-							icon={Icon.AppWindowSidebarLeft}
-							onAction={() => setShowMetadata((value) => !value)}
-						/>
-						<Action.OpenInBrowser
-							title="Open Full Image"
-							url={wallpaper.path}
-							icon={Icon.Image}
-						/>
 						<Action
 							title="Download Wallpaper"
 							icon={Icon.Download}
 							onAction={handleDownload}
 							shortcut={Keyboard.Shortcut.Common.Save}
+						/>
+						<Action.OpenInBrowser
+							title="Open Full Image"
+							url={wallpaper.path}
+							icon={Icon.Image}
 						/>
 						<Action
 							title="Download and Apply"
@@ -161,7 +155,7 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 	return (
 		<Detail
 			markdown={markdown}
-			metadata={showMetadata ? (
+			metadata={
 				<Detail.Metadata>
 					<Detail.Metadata.Label
 						title="Resolution"
@@ -214,24 +208,19 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 						/>
 					)}
 				</Detail.Metadata>
-			) : undefined}
+			}
 			actions={
 				<ActionPanel>
-					<Action
-						title={showMetadata ? "Hide Metadata" : "Show Metadata"}
-						icon={Icon.AppWindowSidebarLeft}
-						onAction={() => setShowMetadata((value) => !value)}
-					/>
-					<Action.OpenInBrowser
-						title="Open Full Image"
-						url={displayWallpaper.path}
-						icon={Icon.Image}
-					/>
 					<Action
 						title="Download Wallpaper"
 						icon={Icon.Download}
 						onAction={handleDownload}
 						shortcut={Keyboard.Shortcut.Common.Save}
+					/>
+					<Action.OpenInBrowser
+						title="Open Full Image"
+						url={displayWallpaper.path}
+						icon={Icon.Image}
 					/>
 					<Action
 						title="Download and Apply"
@@ -526,7 +515,7 @@ function WallhavenSearchContent() {
 						id={`wallpaper-${wallpapers.length}`}
 						content={{
 							value:
-								"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' preserveAspectRatio='xMidYMid meet' fill='none' stroke='%23888888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 13v10M22 19l-6 6-6-6'/%3E%3C/svg%3E",
+								"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' preserveAspectRatio='xMidYMid meet' fill='none' stroke='%23888888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 9v14M9 16l7 7 7-7'/%3E%3C/svg%3E",
 						}}
 						title={isFetchingNextPage ? "Loading..." : "Load More"}
 						subtitle={

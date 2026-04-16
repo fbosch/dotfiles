@@ -61,7 +61,7 @@
       },
       "@fbosch/wallhaven": {
          "preferences": {
-            "useUserSettings": false,
+            "useUserSettings": true,
             "downloadDirectory": "~/Pictures/Wallpapers",
             "hyprpaperConfigPath": "~/.config/hypr/hyprpaper.conf",
             "purity": "111",
