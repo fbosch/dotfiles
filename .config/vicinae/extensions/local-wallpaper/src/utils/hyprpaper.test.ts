@@ -3,7 +3,7 @@ import test from "node:test";
 import {
 	buildHyprpaperConfig,
 	parseWallpaperAssignments,
-} from "./hyprpaper.ts";
+} from "./hyprpaper-config.ts";
 
 test("parseWallpaperAssignments reads legacy and block syntax", () => {
 	const config = `
