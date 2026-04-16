@@ -507,7 +507,7 @@ function WallhavenSearchContent() {
 						id={`wallpaper-${wallpapers.length}`}
 						content={{
 							value:
-								"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' preserveAspectRatio='xMidYMid meet' fill='none' stroke='%23888888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 5v14M23 12l-7 7-7-7'/%3E%3C/svg%3E",
+								"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' preserveAspectRatio='xMidYMid meet' fill='none' stroke='%23888888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 13v10M22 19l-6 6-6-6'/%3E%3C/svg%3E",
 						}}
 						title={isFetchingNextPage ? "Loading..." : "Load More"}
 						subtitle={
