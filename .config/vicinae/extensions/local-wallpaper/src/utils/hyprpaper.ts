@@ -6,29 +6,46 @@ import type { FillMode } from "../types";
 
 const execAsync = promisify(exec);
 
-/**
- * Detects the hyprpaper version
- * @returns Version string (e.g., "0.8.1") or null if unable to detect
- */
-export async function getHyprpaperVersion(): Promise<string | null> {
-	try {
-		const { stdout } = await execAsync("hyprpaper --version");
-		// Parse version from output like "Hyprpaper v0.8.1"
-		const match = stdout.match(/v?(\d+\.\d+\.\d+)/);
-		return match ? match[1] : "0.8.1";
-	} catch {
-		// Assume v0.8.1+ if version detection fails
-		return "0.8.1";
+type HyprpaperSyntax = "block" | "legacy";
+
+function parseVersion(version: string): [number, number, number] | null {
+	const match = version.match(/(\d+)\.(\d+)\.(\d+)/);
+	if (match === null) {
+		return null;
 	}
+
+	return [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
-/**
- * Checks if hyprpaper version supports new block syntax with fit_mode
- * @returns true - hyprpaper v0.8.1+ uses block syntax
- */
-export async function supportsBlockSyntax(): Promise<boolean> {
-	// hyprpaper v0.8.1+ supports block syntax with monitor, path, and fit_mode
+function isAtLeastVersion(
+	version: [number, number, number],
+	minimum: [number, number, number],
+): boolean {
+	for (let index = 0; index < 3; index += 1) {
+		if (version[index] > minimum[index]) {
+			return true;
+		}
+
+		if (version[index] < minimum[index]) {
+			return false;
+		}
+	}
+
 	return true;
+}
+
+async function detectHyprpaperSyntax(): Promise<HyprpaperSyntax> {
+	try {
+		const { stdout } = await execAsync("hyprpaper --version");
+		const parsedVersion = parseVersion(stdout);
+		if (parsedVersion === null) {
+			return "legacy";
+		}
+
+		return isAtLeastVersion(parsedVersion, [0, 8, 0]) ? "block" : "legacy";
+	} catch {
+		return "legacy";
+	}
 }
 
 /**
@@ -95,9 +112,6 @@ export async function updateHyprpaperConfig(
 		const config = await readHyprpaperConfig(configPath);
 		const lines = config.split("\n");
 
-		// Check if we should use new block syntax
-		const useBlockSyntax = await supportsBlockSyntax();
-
 		// Parse existing config - support both old and new formats
 		
 		// Store wallpaper configurations: monitor -> {path, fillMode}
@@ -156,91 +170,113 @@ export async function updateHyprpaperConfig(
 			}
 		}
 
-	// Update or add wallpaper for specified monitor
-	if (monitor) {
-		// Set for specific monitor - keep other monitors' wallpapers
-		// Only remove "all monitors" entry if it exists
-		if (monitorWallpapers.has("__all__")) {
-			const allMonitorsWallpaper = monitorWallpapers.get("__all__")!;
-			monitorWallpapers.delete("__all__");
-			// Get all connected monitors and set them to the "all monitors" wallpaper
-			// so we don't lose wallpapers on other monitors
-			try {
-				const { getConnectedMonitors } = await import("./monitors");
-				const monitors = await getConnectedMonitors();
-				for (const m of monitors) {
-					if (m.name !== monitor && !monitorWallpapers.has(m.name)) {
-						monitorWallpapers.set(m.name, allMonitorsWallpaper);
+		// Update or add wallpaper for specified monitor
+		if (monitor) {
+			// Set for specific monitor - keep other monitors' wallpapers
+			// Only remove "all monitors" entry if it exists
+			if (monitorWallpapers.has("__all__")) {
+				const allMonitorsWallpaper = monitorWallpapers.get("__all__")!;
+				monitorWallpapers.delete("__all__");
+				// Get all connected monitors and set them to the "all monitors" wallpaper
+				// so we don't lose wallpapers on other monitors
+				try {
+					const { getConnectedMonitors } = await import("./monitors");
+					const monitors = await getConnectedMonitors();
+					for (const m of monitors) {
+						if (m.name !== monitor && !monitorWallpapers.has(m.name)) {
+							monitorWallpapers.set(m.name, allMonitorsWallpaper);
+						}
 					}
+				} catch {
+					// Keep known monitor map if monitor query fails
 				}
-			} catch (error) {
-				console.warn("Could not get connected monitors:", error);
+			}
+			monitorWallpapers.set(monitor, { path: wallpaperPath, fillMode });
+		} else {
+			// Set for all monitors - clear individual monitor entries
+			monitorWallpapers.clear();
+			monitorWallpapers.set("__all__", { path: wallpaperPath, fillMode });
+		}
+
+		const syntax = await detectHyprpaperSyntax();
+
+		const updatedLines: string[] = [];
+
+		// Keep non-wallpaper config lines
+		let skipUntilEnd = false;
+		for (const line of lines) {
+			const trimmed = line.trim();
+
+			// Skip old format wallpaper lines and blocks
+			if (trimmed.startsWith("preload =") || trimmed.startsWith("wallpaper =")) {
+				continue;
+			}
+			if (trimmed === "wallpaper {") {
+				skipUntilEnd = true;
+				continue;
+			}
+			if (skipUntilEnd) {
+				if (trimmed === "}") {
+					skipUntilEnd = false;
+				}
+				continue;
+			}
+
+			// Skip old comment headers we'll regenerate
+			if (
+				trimmed === "# Preloaded wallpapers" ||
+				trimmed === "# Monitor wallpaper assignments" ||
+				trimmed.startsWith("# NOTE:")
+			) {
+				continue;
+			}
+
+			// Keep other config lines (skip empty lines to prevent accumulation)
+			if (trimmed) {
+				updatedLines.push(line);
 			}
 		}
-		monitorWallpapers.set(monitor, { path: wallpaperPath, fillMode });
-	} else {
-		// Set for all monitors - clear individual monitor entries
-		monitorWallpapers.clear();
-		monitorWallpapers.set("__all__", { path: wallpaperPath, fillMode });
-	}
 
-	// Build new config using v0.8.1+ block syntax
-	const updatedLines: string[] = [];
-
-	// Keep non-wallpaper config lines
-	let skipUntilEnd = false;
-	for (const line of lines) {
-		const trimmed = line.trim();
-
-		// Skip old format wallpaper lines and blocks
-		if (trimmed.startsWith("preload =") || trimmed.startsWith("wallpaper =")) {
-			continue;
-		}
-		if (trimmed === "wallpaper {") {
-			skipUntilEnd = true;
-			continue;
-		}
-		if (skipUntilEnd) {
-			if (trimmed === "}") {
-				skipUntilEnd = false;
-			}
-			continue;
+		// Ensure ipc is enabled for dynamic wallpaper changes
+		if (!updatedLines.some((line) => line.trim().startsWith("ipc ="))) {
+			updatedLines.push("ipc = true");
 		}
 
-		// Skip old comment headers we'll regenerate
-		if (trimmed === "# Preloaded wallpapers" || trimmed === "# Monitor wallpaper assignments" || trimmed.startsWith("# NOTE:")) {
-			continue;
+		const uniquePaths = new Set<string>();
+		for (const wallpaperConfig of monitorWallpapers.values()) {
+			uniquePaths.add(wallpaperConfig.path);
 		}
 
-		// Keep other config lines (skip empty lines to prevent accumulation)
-		if (trimmed) {
-			updatedLines.push(line);
-		}
-	}
-
-	// Ensure ipc is enabled for dynamic wallpaper changes
-	if (!updatedLines.some(l => l.trim().startsWith("ipc ="))) {
-		updatedLines.push("ipc = true");
-	}
-
-	// Add wallpaper assignments using new block syntax (v0.8.1+)
-	updatedLines.push("");
-	updatedLines.push("# Monitor wallpaper assignments");
-	for (const [mon, config] of monitorWallpapers.entries()) {
 		updatedLines.push("");
-		updatedLines.push("wallpaper {");
-		// monitor MUST be the first key in the block (hyprpaper requirement)
-		// For all monitors, use empty monitor value
-		const monitorValue = mon === "__all__" ? "" : mon;
-		updatedLines.push(`  monitor = ${monitorValue}`);
-		updatedLines.push(`  path = ${config.path}`);
-		updatedLines.push(`  fit_mode = ${config.fillMode}`);
-		updatedLines.push("}");
-	}
+		updatedLines.push("# Preloaded wallpapers");
+		for (const path of uniquePaths) {
+			updatedLines.push(`preload = ${path}`);
+		}
 
-	// Ensure file ends with newline
-	const newConfig = `${updatedLines.join("\n")}\n`;
-	await writeHyprpaperConfig(configPath, newConfig);
+		updatedLines.push("");
+		updatedLines.push("# Monitor wallpaper assignments");
+
+		for (const [mon, wallpaperConfig] of monitorWallpapers.entries()) {
+			if (syntax === "legacy") {
+				const monitorValue = mon === "__all__" ? "" : mon;
+				updatedLines.push(
+					`wallpaper = ${monitorValue},${wallpaperConfig.path}`,
+				);
+				continue;
+			}
+
+			updatedLines.push("");
+			updatedLines.push("wallpaper {");
+			const monitorValue = mon === "__all__" ? "" : mon;
+			updatedLines.push(`  monitor = ${monitorValue}`);
+			updatedLines.push(`  path = ${wallpaperConfig.path}`);
+			updatedLines.push(`  fit_mode = ${wallpaperConfig.fillMode}`);
+			updatedLines.push("}");
+		}
+
+		// Ensure file ends with newline
+		const newConfig = `${updatedLines.join("\n")}\n`;
+		await writeHyprpaperConfig(configPath, newConfig);
 	} catch (error) {
 		console.error("Error updating hyprpaper config:", error);
 		throw error;

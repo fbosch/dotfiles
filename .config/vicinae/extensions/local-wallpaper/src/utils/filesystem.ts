@@ -29,29 +29,47 @@ export async function scanWallpapers(
 		}
 
 		// Read directory
-		const files = await fs.readdir(expandedDir, { withFileTypes: true });
-
-		// Filter and map to LocalWallpaper objects
 		const wallpapers: LocalWallpaper[] = [];
+		const directories = [expandedDir];
 
-		for (const file of files) {
-			if (!file.isFile()) continue;
+		while (directories.length > 0) {
+			const currentDirectory = directories.pop();
+			if (currentDirectory === undefined) {
+				continue;
+			}
 
-			const ext = path.extname(file.name).toLowerCase().slice(1);
-			if (!extensions.includes(ext)) continue;
+			const entries = await fs.readdir(currentDirectory, { withFileTypes: true });
 
-			const filePath = path.join(expandedDir, file.name);
-			const stats = await fs.stat(filePath);
+			for (const entry of entries) {
+				const absolutePath = path.join(currentDirectory, entry.name);
 
-			wallpapers.push({
-				id: file.name,
-				name: path.basename(file.name, path.extname(file.name)),
-				path: file.name,
-				absolutePath: filePath,
-				size: stats.size,
-				modified: stats.mtime,
-				extension: ext,
-			});
+				if (entry.isDirectory()) {
+					directories.push(absolutePath);
+					continue;
+				}
+
+				if (entry.isFile() === false) {
+					continue;
+				}
+
+				const extension = path.extname(entry.name).toLowerCase().slice(1);
+				if (extensions.includes(extension) === false) {
+					continue;
+				}
+
+				const stats = await fs.stat(absolutePath);
+				const relativePath = path.relative(expandedDir, absolutePath);
+
+				wallpapers.push({
+					id: relativePath,
+					name: path.basename(entry.name, path.extname(entry.name)),
+					path: relativePath,
+					absolutePath,
+					size: stats.size,
+					modified: stats.mtime,
+					extension,
+				});
+			}
 		}
 
 		// Sort wallpapers

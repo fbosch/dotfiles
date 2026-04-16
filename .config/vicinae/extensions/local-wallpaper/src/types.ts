@@ -4,7 +4,7 @@ export type Preferences = {
 	wallpapersDirectory: string;
 	hyprpaperConfigPath: string;
 	fileExtensions: string;
-	sortBy: string;
+	sortBy: SortOption;
 };
 
 export type LocalWallpaper = {

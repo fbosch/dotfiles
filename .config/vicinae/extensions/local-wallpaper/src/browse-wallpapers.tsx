@@ -11,7 +11,13 @@ import {
 	Toast,
 } from "@vicinae/api";
 import { useEffect, useState } from "react";
-import type { LocalWallpaper, Monitor, Preferences, FillMode } from "./types";
+import type {
+	FillMode,
+	LocalWallpaper,
+	Monitor,
+	Preferences,
+	SortOption,
+} from "./types";
 import { expandPath, formatFileSize, scanWallpapers } from "./utils/filesystem";
 import { setWallpaper } from "./utils/hyprpaper";
 import {
@@ -20,11 +26,25 @@ import {
 } from "./utils/monitors";
 
 export default function BrowseWallpapers() {
+	const SORT_OPTIONS: SortOption[] = [
+		"name",
+		"modified-desc",
+		"modified-asc",
+		"size-desc",
+		"size-asc",
+	];
+
+	const isSortOption = (value: string): value is SortOption => {
+		return SORT_OPTIONS.includes(value as SortOption);
+	};
+
 	const preferences = getPreferenceValues<Preferences>();
 	const [wallpapers, setWallpapers] = useState<LocalWallpaper[]>([]);
 	const [monitors, setMonitors] = useState<Monitor[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [searchText, setSearchText] = useState("");
+	const defaultMonitorName =
+		monitors.find((monitor) => monitor.focused)?.name ?? monitors[0]?.name;
 
 	// Load wallpapers and monitors on mount
 	useEffect(() => {
@@ -53,7 +73,7 @@ export default function BrowseWallpapers() {
 			const scanned = await scanWallpapers(
 				preferences.wallpapersDirectory,
 				extensions,
-				preferences.sortBy as any,
+				preferences.sortBy,
 			);
 
 			setWallpapers(scanned);
@@ -99,9 +119,9 @@ export default function BrowseWallpapers() {
 		degrees: 90 | 180 | 270,
 	) => {
 		try {
-			const { exec } = await import("node:child_process");
+			const { execFile } = await import("node:child_process");
 			const { promisify } = await import("node:util");
-			const execAsync = promisify(exec);
+			const execFileAsync = promisify(execFile);
 
 			await showToast({
 				style: Toast.Style.Animated,
@@ -109,9 +129,12 @@ export default function BrowseWallpapers() {
 			});
 
 			// Use ImageMagick to rotate the image in place
-			await execAsync(
-				`magick "${wallpaper.absolutePath}" -rotate ${degrees} "${wallpaper.absolutePath}"`,
-			);
+			await execFileAsync("magick", [
+				wallpaper.absolutePath,
+				"-rotate",
+				String(degrees),
+				wallpaper.absolutePath,
+			]);
 
 			await showToast({
 				style: Toast.Style.Success,
@@ -236,6 +259,15 @@ export default function BrowseWallpapers() {
 					tooltip="Sort By"
 					storeValue
 					onChange={async (newValue) => {
+						if (isSortOption(newValue) === false) {
+							await showToast({
+								style: Toast.Style.Failure,
+								title: "Invalid sort option",
+								message: newValue,
+							});
+							return;
+						}
+
 						setIsLoading(true);
 						try {
 							const extensions = preferences.fileExtensions
@@ -245,7 +277,7 @@ export default function BrowseWallpapers() {
 							const scanned = await scanWallpapers(
 								preferences.wallpapersDirectory,
 								extensions,
-								newValue as any,
+								newValue,
 							);
 
 							setWallpapers(scanned);
@@ -289,11 +321,22 @@ export default function BrowseWallpapers() {
 						subtitle={`${formatFileSize(wallpaper.size)} · ${wallpaper.extension.toUpperCase()}`}
 						actions={
 							<ActionPanel>
+								<Action
+									title={
+										defaultMonitorName
+											? `Set as Wallpaper (${defaultMonitorName})`
+											: "Set as Wallpaper"
+									}
+									icon={Icon.Desktop}
+									onAction={() =>
+										handleSetWallpaper(wallpaper, defaultMonitorName, "cover")
+									}
+									shortcut={{ modifiers: ["cmd"], key: "s" }}
+								/>
 								{monitors.length > 1 ? (
 									<ActionPanel.Submenu
-										title="Set as Wallpaper"
+										title="Set as Wallpaper Options"
 										icon={Icon.Desktop}
-										shortcut={{ modifiers: ["cmd"], key: "s" }}
 									>
 										<ActionPanel.Submenu
 											title="All Monitors"
@@ -369,27 +412,32 @@ export default function BrowseWallpapers() {
 									</ActionPanel.Submenu>
 								) : (
 									<ActionPanel.Submenu
-										title="Set as Wallpaper"
+										title="Set as Wallpaper Options"
 										icon={Icon.Desktop}
-										shortcut={{ modifiers: ["cmd"], key: "s" }}
 									>
 										<Action
 											title="Cover (default)"
-											onAction={() => handleSetWallpaper(wallpaper, undefined, "cover")}
+											onAction={() =>
+												handleSetWallpaper(wallpaper, defaultMonitorName, "cover")
+											}
 										/>
 										<Action
 											title="Contain"
 											onAction={() =>
-												handleSetWallpaper(wallpaper, undefined, "contain")
+												handleSetWallpaper(wallpaper, defaultMonitorName, "contain")
 											}
 										/>
 										<Action
 											title="Tile"
-											onAction={() => handleSetWallpaper(wallpaper, undefined, "tile")}
+											onAction={() =>
+												handleSetWallpaper(wallpaper, defaultMonitorName, "tile")
+											}
 										/>
 										<Action
 											title="Fill"
-											onAction={() => handleSetWallpaper(wallpaper, undefined, "fill")}
+											onAction={() =>
+												handleSetWallpaper(wallpaper, defaultMonitorName, "fill")
+											}
 										/>
 									</ActionPanel.Submenu>
 								)}
