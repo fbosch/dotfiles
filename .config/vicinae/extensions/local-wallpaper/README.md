@@ -8,18 +8,21 @@ Browse and apply wallpapers from your local collection directly in Vicinae. Seam
 - 🎨 Grid view with image previews (edge-to-edge display)
 - 🔍 Search wallpapers by name
 - 📊 Multiple sorting options (name, date modified, size)
+- ⭐ Favorites with persistent pinning
+- 🗂️ Wallpaper layout snapshots (collections)
 - 🖥️ **Multi-monitor support** - set wallpapers per monitor or all at once
 - 🎯 **Fill mode selection** - choose how wallpapers fit the screen (cover, contain, tile, fill)
 - 🎯 One-click wallpaper application via hyprpaper
+- 🔄 Auto-refresh on filesystem changes (event-driven)
 - 👁️ Full-size preview with detailed metadata
 - 📋 Copy file paths to clipboard
-- 🔄 Refresh wallpaper list on demand
+- 🔄 Manual refresh wallpaper list on demand
 - 📁 Show in file manager
 
 ## Requirements
 
 - **Hyprland** with **hyprpaper** installed
-  - **Per-monitor fit modes** require hyprpaper v0.8+ (unreleased as of Dec 2024)
+  - **Per-monitor fit modes** require hyprpaper v0.8+
   - hyprpaper v0.7.x supports setting wallpapers per monitor, but not custom fit modes per monitor
 - Node.js filesystem access (works in desktop Vicinae)
 - Wallpapers directory with image files
@@ -35,29 +38,26 @@ Configure the extension in Vicinae preferences:
 
 ## Usage
 
-1. Install dependencies: `npm install`
-2. Build or run in dev mode: `npm run dev`
+1. Install dependencies: `pnpm install`
+2. Build or run in dev mode: `pnpm run dev`
 3. Browse your wallpaper collection in the grid view
 4. Use the search bar to filter by name
 5. Change sorting via the dropdown menu
 6. Press **Enter** on any wallpaper to see full preview
 7. Press **Cmd+S** to set as wallpaper
+8. Press **Cmd+P** to toggle favorite
 
 ## Actions
 
 ### On Wallpapers
-- **Enter** or **Cmd+S**: Set as wallpaper with fill mode selection
-  - **Single monitor**: Opens submenu to choose fill mode
-  - **Multiple monitors**: Opens submenu to choose monitor, then fill mode for each
-  - Fill modes available:
-    - **Cover (default)**: Fill screen, crop edges if needed (maintains aspect ratio)
-    - **Contain**: Fit entire image within screen (may show bars)
-    - **Tile**: Repeat image to fill screen
-    - **Fill**: Stretch to fill screen (may distort image)
+- **Enter** or **Cmd+S**: Set wallpaper on focused monitor (or first monitor) with `cover`
+- **Set as Wallpaper Options**: Choose all monitors, per monitor, and fill mode
 - **Cmd+O**: Open in default image viewer
 - **Cmd+C**: Copy file path to clipboard
+- **Cmd+P**: Add/remove favorite
 - **Cmd+R**: Refresh wallpaper list
-- **Ctrl+X**: Delete wallpaper (with confirmation)
+- **Ctrl+X**: Move wallpaper to trash
+- **Delete Wallpaper Permanently**: Hard delete with explicit confirmation
 
 ## Multi-Monitor Support
 
@@ -214,13 +214,10 @@ Configure additional formats in preferences by adding extensions to the comma-se
 - Reload extension after connecting/disconnecting monitors
 
 ### Fill mode not working
-- The extension currently uses hyprpaper v0.7.x compatible syntax
-- Per-monitor fit modes require hyprpaper v0.8+ (unreleased)
-- With v0.7.x:
-  - Fill modes work when setting wallpaper for **all monitors**
-  - Individual monitor wallpapers use the default fit mode (cover)
 - Check your hyprpaper version: `hyprpaper --version`
-- When v0.8+ is released, the extension will automatically support per-monitor fit modes
+- v0.8+ uses block syntax with per-monitor `fit_mode`
+- v0.7.x uses legacy syntax and defaults per-monitor fit mode to `cover`
+- The extension auto-detects syntax and writes compatible config format
 
 ### Images not displaying in grid
 - Ensure Vicinae has filesystem access permissions
@@ -229,20 +226,20 @@ Configure additional formats in preferences by adding extensions to the comma-se
 
 ## Future Enhancements
 
-- **Version Detection**: Automatically detect hyprpaper version and switch to v0.8+ block syntax when available
-- **Wallpaper Collections**: Save and load wallpaper sets for different moods/themes
-- **Dynamic Wallpapers**: Support for time-based wallpaper rotation
+- **Named collections**: Rename/edit layout snapshots (current snapshots are timestamped)
+- **Dynamic wallpapers**: Time-based wallpaper rotation profiles
+- **IPC-first reload controls**: More granular apply/reload behavior for all syntax variants
 
 ## Build
 
 To build for production:
 
 ```bash
-npm run build
+pnpm run build
 ```
 
 ## Development
 
 ```bash
-npm run dev
+pnpm run dev
 ```

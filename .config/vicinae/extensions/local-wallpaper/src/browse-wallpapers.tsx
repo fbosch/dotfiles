@@ -7,6 +7,7 @@ import {
 	Grid,
 	getPreferenceValues,
 	Icon,
+	Keyboard,
 	showToast,
 	Toast,
 } from "@vicinae/api";
@@ -18,12 +19,29 @@ import type {
 	Preferences,
 	SortOption,
 } from "./types";
-import { expandPath, formatFileSize, scanWallpapers } from "./utils/filesystem";
-import { setWallpaper } from "./utils/hyprpaper";
+import {
+	expandPath,
+	formatFileSize,
+	moveFileToTrash,
+	scanWallpapers,
+	watchWallpapersDirectory,
+} from "./utils/filesystem";
+import {
+	applyWallpaperCollection,
+	getCurrentWallpaperAssignments,
+	setWallpaper,
+} from "./utils/hyprpaper";
 import {
 	getConnectedMonitors,
 	formatMonitorName,
 } from "./utils/monitors";
+import {
+	deleteCollection,
+	listCollections,
+	listFavorites,
+	saveCollection,
+	toggleFavorite,
+} from "./utils/wallpaper-state";
 
 export default function BrowseWallpapers() {
 	const SORT_OPTIONS: SortOption[] = [
@@ -43,14 +61,47 @@ export default function BrowseWallpapers() {
 	const [monitors, setMonitors] = useState<Monitor[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [searchText, setSearchText] = useState("");
+	const [favoritePaths, setFavoritePaths] = useState<Set<string>>(new Set());
+	const [collections, setCollections] = useState(listCollections());
 	const defaultMonitorName =
 		monitors.find((monitor) => monitor.focused)?.name ?? monitors[0]?.name;
 
+	const refreshSavedState = () => {
+		setFavoritePaths(new Set(listFavorites()));
+		setCollections(listCollections());
+	};
+
 	// Load wallpapers and monitors on mount
 	useEffect(() => {
+		refreshSavedState();
 		loadWallpapers();
 		loadMonitors();
 	}, []);
+
+	useEffect(() => {
+		let stopWatching: (() => void) | undefined;
+
+		const startWatching = async () => {
+			try {
+				stopWatching = await watchWallpapersDirectory(
+					preferences.wallpapersDirectory,
+					() => {
+						void loadWallpapers();
+					},
+				);
+			} catch {
+				// Directory may not exist yet.
+			}
+		};
+
+		void startWatching();
+
+		return () => {
+			if (stopWatching !== undefined) {
+				stopWatching();
+			}
+		};
+	}, [preferences.wallpapersDirectory]);
 
 	const loadMonitors = async () => {
 		try {
@@ -99,6 +150,103 @@ export default function BrowseWallpapers() {
 			monitor,
 			fillMode,
 		);
+	};
+
+	const handleToggleFavorite = async (wallpaper: LocalWallpaper) => {
+		const isFavorite = toggleFavorite(wallpaper.absolutePath);
+		refreshSavedState();
+
+		await showToast({
+			style: Toast.Style.Success,
+			title: isFavorite ? "Added to favorites" : "Removed from favorites",
+			message: wallpaper.path,
+		});
+	};
+
+	const handleSaveCurrentLayout = async () => {
+		try {
+			const assignments = await getCurrentWallpaperAssignments(
+				preferences.hyprpaperConfigPath,
+			);
+			if (assignments.size === 0) {
+				await showToast({
+					style: Toast.Style.Failure,
+					title: "No active wallpaper layout",
+					message: "Apply a wallpaper first",
+				});
+				return;
+			}
+
+			const snapshotName = `Snapshot ${new Date().toLocaleString()}`;
+			saveCollection(snapshotName, assignments);
+			refreshSavedState();
+
+			await showToast({
+				style: Toast.Style.Success,
+				title: "Collection saved",
+				message: snapshotName,
+			});
+		} catch (error) {
+			await showToast({
+				style: Toast.Style.Failure,
+				title: "Failed to save collection",
+				message: error instanceof Error ? error.message : "Unknown error",
+			});
+		}
+	};
+
+	const handleApplyCollection = async (collectionId: string) => {
+		const collection = collections.find((item) => item.id === collectionId);
+		if (collection === undefined) {
+			return;
+		}
+
+		try {
+			await applyWallpaperCollection(
+				preferences.hyprpaperConfigPath,
+				collection.entries,
+			);
+
+			await showToast({
+				style: Toast.Style.Success,
+				title: "Collection applied",
+				message: collection.name,
+			});
+		} catch (error) {
+			await showToast({
+				style: Toast.Style.Failure,
+				title: "Failed to apply collection",
+				message: error instanceof Error ? error.message : "Unknown error",
+			});
+		}
+	};
+
+	const handleDeleteCollection = async (collectionId: string) => {
+		const collection = collections.find((item) => item.id === collectionId);
+		if (collection === undefined) {
+			return;
+		}
+
+		const confirmed = await confirmAlert({
+			title: "Delete Collection",
+			message: `Delete collection "${collection.name}"?`,
+			primaryAction: {
+				title: "Delete",
+				style: Alert.ActionStyle.Destructive,
+			},
+		});
+
+		if (confirmed === false) {
+			return;
+		}
+
+		deleteCollection(collectionId);
+		refreshSavedState();
+		await showToast({
+			style: Toast.Style.Success,
+			title: "Collection deleted",
+			message: collection.name,
+		});
 	};
 
 	const handleOpenInViewer = async (wallpaper: LocalWallpaper) => {
@@ -205,17 +353,49 @@ export default function BrowseWallpapers() {
 		}
 	};
 
-	const handleDeleteWallpaper = async (wallpaper: LocalWallpaper) => {
+	const handleMoveWallpaperToTrash = async (wallpaper: LocalWallpaper) => {
 		const confirmed = await confirmAlert({
-			title: "Delete Wallpaper",
-			message: `Are you sure you want to delete "${wallpaper.path}"? This action cannot be undone.`,
+			title: "Move Wallpaper to Trash",
+			message: `Move "${wallpaper.path}" to trash?`,
 			primaryAction: {
-				title: "Delete",
+				title: "Move to Trash",
+			},
+		});
+
+		if (confirmed === false) {
+			return;
+		}
+
+		try {
+			await moveFileToTrash(wallpaper.absolutePath);
+
+			await showToast({
+				style: Toast.Style.Success,
+				title: "Moved to trash",
+				message: wallpaper.path,
+			});
+
+			await loadWallpapers();
+		} catch (error) {
+			await showToast({
+				style: Toast.Style.Failure,
+				title: "Failed to move wallpaper to trash",
+				message: error instanceof Error ? error.message : "Unknown error",
+			});
+		}
+	};
+
+	const handleDeleteWallpaperPermanently = async (wallpaper: LocalWallpaper) => {
+		const confirmed = await confirmAlert({
+			title: "Delete Wallpaper Permanently",
+			message: `Delete "${wallpaper.path}" permanently? This cannot be undone.`,
+			primaryAction: {
+				title: "Delete Permanently",
 				style: Alert.ActionStyle.Destructive,
 			},
 		});
 
-		if (!confirmed) {
+		if (confirmed === false) {
 			return;
 		}
 
@@ -225,11 +405,10 @@ export default function BrowseWallpapers() {
 
 			await showToast({
 				style: Toast.Style.Success,
-				title: "Wallpaper deleted",
+				title: "Wallpaper deleted permanently",
 				message: wallpaper.path,
 			});
 
-			// Reload wallpapers list
 			await loadWallpapers();
 		} catch (error) {
 			await showToast({
@@ -241,9 +420,20 @@ export default function BrowseWallpapers() {
 	};
 
 	// Filter wallpapers based on search text
-	const filteredWallpapers = wallpapers.filter((wallpaper) =>
-		wallpaper.name.toLowerCase().includes(searchText.toLowerCase()),
-	);
+	const filteredWallpapers = wallpapers
+		.filter((wallpaper) =>
+			wallpaper.name.toLowerCase().includes(searchText.toLowerCase()),
+		)
+		.sort((first, second) => {
+			const firstFavorite = favoritePaths.has(first.absolutePath);
+			const secondFavorite = favoritePaths.has(second.absolutePath);
+
+			if (firstFavorite === secondFavorite) {
+				return first.name.localeCompare(second.name);
+			}
+
+			return firstFavorite ? -1 : 1;
+		});
 
 	return (
 		<Grid
@@ -316,7 +506,7 @@ export default function BrowseWallpapers() {
 						key={wallpaper.id}
 						id={`wallpaper-${index}`}
 						content={`file://${wallpaper.absolutePath}`}
-						title={wallpaper.name}
+						title={`${favoritePaths.has(wallpaper.absolutePath) ? "★ " : ""}${wallpaper.name}`}
 						subtitle={`${formatFileSize(wallpaper.size)} · ${wallpaper.extension.toUpperCase()}`}
 						actions={
 							<ActionPanel>
@@ -441,6 +631,18 @@ export default function BrowseWallpapers() {
 									</ActionPanel.Submenu>
 								)}
 								<Action
+									title={
+										favoritePaths.has(wallpaper.absolutePath)
+											? "Remove Favorite"
+											: "Add to Favorites"
+									}
+									icon={
+										Icon.Star
+									}
+									onAction={() => handleToggleFavorite(wallpaper)}
+									shortcut={Keyboard.Shortcut.Common.Pin}
+								/>
+								<Action
 									title="Open in Image Viewer"
 									icon={Icon.Eye}
 									onAction={() => handleOpenInViewer(wallpaper)}
@@ -485,11 +687,53 @@ export default function BrowseWallpapers() {
 								</ActionPanel.Section>
 								<ActionPanel.Section>
 									<Action
-										title="Delete Wallpaper"
+										title="Save Current Layout Snapshot"
+										icon={Icon.Bookmark}
+										onAction={handleSaveCurrentLayout}
+									/>
+									{collections.length > 0 ? (
+										<ActionPanel.Submenu
+											title="Apply Collection"
+											icon={Icon.List}
+										>
+											{collections.map((collection) => (
+												<Action
+													key={collection.id}
+													title={collection.name}
+													onAction={() => handleApplyCollection(collection.id)}
+												/>
+											))}
+										</ActionPanel.Submenu>
+									) : null}
+									{collections.length > 0 ? (
+										<ActionPanel.Submenu
+											title="Delete Collection"
+											icon={Icon.Trash}
+										>
+											{collections.map((collection) => (
+												<Action
+													key={`delete-${collection.id}`}
+													title={collection.name}
+													style={Action.Style.Destructive}
+													onAction={() => handleDeleteCollection(collection.id)}
+												/>
+											))}
+										</ActionPanel.Submenu>
+									) : null}
+								</ActionPanel.Section>
+								<ActionPanel.Section>
+									<Action
+										title="Move Wallpaper to Trash"
 										icon={Icon.Trash}
 										style={Action.Style.Destructive}
-										onAction={() => handleDeleteWallpaper(wallpaper)}
+										onAction={() => handleMoveWallpaperToTrash(wallpaper)}
 										shortcut={{ modifiers: ["ctrl"], key: "x" }}
+									/>
+									<Action
+										title="Delete Wallpaper Permanently"
+										icon={Icon.Trash}
+										style={Action.Style.Destructive}
+										onAction={() => handleDeleteWallpaperPermanently(wallpaper)}
 									/>
 								</ActionPanel.Section>
 							</ActionPanel>

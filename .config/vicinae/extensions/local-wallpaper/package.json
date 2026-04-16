@@ -85,7 +85,8 @@
     "build": "vici build",
     "dev": "vici develop",
     "format": "biome format --write src",
-    "lint": "vici lint"
+    "lint": "vici lint",
+    "test": "node --experimental-strip-types --test src/**/*.test.ts"
   },
   "dependencies": {
     "@vicinae/api": "^0.20.13"

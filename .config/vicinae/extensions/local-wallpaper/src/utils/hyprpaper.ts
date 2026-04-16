@@ -1,12 +1,17 @@
-import { exec } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { showToast, Toast } from "@vicinae/api";
-import { expandPath } from "./filesystem";
 import type { FillMode } from "../types";
+import { expandPath } from "./filesystem";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 type HyprpaperSyntax = "block" | "legacy";
+
+export type WallpaperConfig = {
+	path: string;
+	fillMode: FillMode;
+};
 
 function parseVersion(version: string): [number, number, number] | null {
 	const match = version.match(/(\d+)\.(\d+)\.(\d+)/);
@@ -34,9 +39,17 @@ function isAtLeastVersion(
 	return true;
 }
 
+function parseFillMode(value: string): FillMode {
+	if (value === "cover") return "cover";
+	if (value === "contain") return "contain";
+	if (value === "tile") return "tile";
+	if (value === "fill") return "fill";
+	return "cover";
+}
+
 async function detectHyprpaperSyntax(): Promise<HyprpaperSyntax> {
 	try {
-		const { stdout } = await execAsync("hyprpaper --version");
+		const { stdout } = await execFileAsync("hyprpaper", ["--version"]);
 		const parsedVersion = parseVersion(stdout);
 		if (parsedVersion === null) {
 			return "legacy";
@@ -48,6 +61,194 @@ async function detectHyprpaperSyntax(): Promise<HyprpaperSyntax> {
 	}
 }
 
+function parseWallpaperLine(line: string): [string, WallpaperConfig] | null {
+	if (line.startsWith("wallpaper =") === false) {
+		return null;
+	}
+
+	const value = line.substring("wallpaper =".length).trim();
+	const parts = value.split(",");
+	if (parts.length < 2) {
+		return null;
+	}
+
+	const monitorName = parts[0].trim();
+	const monitorKey = monitorName === "" ? "__all__" : monitorName;
+	const path = parts.slice(1).join(",").trim();
+
+	return [monitorKey, { path, fillMode: "cover" }];
+}
+
+export function parseWallpaperAssignments(
+	configContent: string,
+): Map<string, WallpaperConfig> {
+	const lines = configContent.split("\n");
+	const monitorWallpapers = new Map<string, WallpaperConfig>();
+	let inWallpaperBlock = false;
+	let currentBlock: { monitor?: string; path?: string; fillMode?: FillMode } = {};
+
+	for (const line of lines) {
+		const trimmed = line.trim();
+
+		const parsedLine = parseWallpaperLine(trimmed);
+		if (parsedLine !== null) {
+			const [monitorKey, config] = parsedLine;
+			const existing = monitorWallpapers.get(monitorKey);
+			monitorWallpapers.set(monitorKey, {
+				path: config.path,
+				fillMode: existing?.fillMode ?? "cover",
+			});
+			continue;
+		}
+
+		if (trimmed === "wallpaper {") {
+			inWallpaperBlock = true;
+			currentBlock = {};
+			continue;
+		}
+
+		if (trimmed === "}") {
+			if (inWallpaperBlock && currentBlock.path !== undefined) {
+				const monitorKey = currentBlock.monitor ?? "__all__";
+				monitorWallpapers.set(monitorKey, {
+					path: currentBlock.path,
+					fillMode: currentBlock.fillMode ?? "cover",
+				});
+			}
+
+			inWallpaperBlock = false;
+			currentBlock = {};
+			continue;
+		}
+
+		if (inWallpaperBlock === false) {
+			continue;
+		}
+
+		if (trimmed.startsWith("monitor =")) {
+			const monitorValue = trimmed.substring("monitor =".length).trim();
+			currentBlock.monitor = monitorValue === "" ? undefined : monitorValue;
+			continue;
+		}
+
+		if (trimmed.startsWith("path =")) {
+			currentBlock.path = trimmed.substring("path =".length).trim();
+			continue;
+		}
+
+		if (trimmed.startsWith("fit_mode =")) {
+			const mode = trimmed.substring("fit_mode =".length).trim();
+			currentBlock.fillMode = parseFillMode(mode);
+		}
+	}
+
+	return monitorWallpapers;
+}
+
+function stripWallpaperSections(configContent: string): string[] {
+	const lines = configContent.split("\n");
+	const keptLines: string[] = [];
+	let skipWallpaperBlock = false;
+
+	for (const line of lines) {
+		const trimmed = line.trim();
+
+		if (trimmed.startsWith("preload =") || trimmed.startsWith("wallpaper =")) {
+			continue;
+		}
+
+		if (trimmed === "wallpaper {") {
+			skipWallpaperBlock = true;
+			continue;
+		}
+
+		if (skipWallpaperBlock) {
+			if (trimmed === "}") {
+				skipWallpaperBlock = false;
+			}
+			continue;
+		}
+
+		if (
+			trimmed === "# Preloaded wallpapers" ||
+			trimmed === "# Monitor wallpaper assignments" ||
+			trimmed.startsWith("# NOTE:")
+		) {
+			continue;
+		}
+
+		if (trimmed.length > 0) {
+			keptLines.push(line);
+		}
+	}
+
+	return keptLines;
+}
+
+export function buildHyprpaperConfig(
+	baseConfig: string,
+	monitorWallpapers: Map<string, WallpaperConfig>,
+	syntax: HyprpaperSyntax,
+): string {
+	const updatedLines = stripWallpaperSections(baseConfig);
+
+	if (updatedLines.some((line) => line.trim().startsWith("ipc =")) === false) {
+		updatedLines.push("ipc = true");
+	}
+
+	const uniquePaths = new Set<string>();
+	for (const wallpaperConfig of monitorWallpapers.values()) {
+		uniquePaths.add(wallpaperConfig.path);
+	}
+
+	updatedLines.push("");
+	updatedLines.push("# Preloaded wallpapers");
+	for (const path of uniquePaths) {
+		updatedLines.push(`preload = ${path}`);
+	}
+
+	updatedLines.push("");
+	updatedLines.push("# Monitor wallpaper assignments");
+
+	for (const [monitorName, wallpaperConfig] of monitorWallpapers.entries()) {
+		if (syntax === "legacy") {
+			const monitorValue = monitorName === "__all__" ? "" : monitorName;
+			updatedLines.push(`wallpaper = ${monitorValue},${wallpaperConfig.path}`);
+			continue;
+		}
+
+		updatedLines.push("");
+		updatedLines.push("wallpaper {");
+		if (monitorName !== "__all__") {
+			updatedLines.push(`  monitor = ${monitorName}`);
+		}
+		updatedLines.push(`  path = ${wallpaperConfig.path}`);
+		updatedLines.push(`  fit_mode = ${wallpaperConfig.fillMode}`);
+		updatedLines.push("}");
+	}
+
+	return `${updatedLines.join("\n")}\n`;
+}
+
+async function tryApplyWallpaperViaIpc(
+	wallpaperPath: string,
+	monitor?: string,
+): Promise<boolean> {
+	try {
+		await execFileAsync("hyprctl", ["hyprpaper", "listloaded"]);
+		await execFileAsync("hyprctl", ["hyprpaper", "preload", wallpaperPath]);
+		const monitorValue = monitor ?? "";
+		await execFileAsync("hyprctl", [
+			"hyprpaper",
+			"wallpaper",
+			`${monitorValue},${wallpaperPath}`,
+		]);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 /**
  * Reads the current hyprpaper.conf file
  */
@@ -55,14 +256,12 @@ export async function readHyprpaperConfig(configPath: string): Promise<string> {
 	try {
 		const fs = await import("node:fs/promises");
 		const expandedPath = expandPath(configPath);
-		
-		// Check if file exists, if not create a minimal config
+
 		try {
 			await fs.access(expandedPath);
 		} catch {
-			// File doesn't exist, create minimal config with v0.8.1+ block syntax
 			const minimalConfig = `# Hyprpaper wallpaper configuration
-# Auto-managed by Vicinae wallpaper extensions
+# Auto-managed by Vicinae wallpaper extension
 
 splash = false
 ipc = true
@@ -70,10 +269,10 @@ ipc = true
 			await fs.writeFile(expandedPath, minimalConfig, "utf-8");
 			return minimalConfig;
 		}
-		
+
 		return await fs.readFile(expandedPath, "utf-8");
-	} catch {
-		throw new Error("Failed to read hyprpaper config");
+	} catch (error) {
+		throw new Error("Failed to read hyprpaper config", { cause: error });
 	}
 }
 
@@ -88,17 +287,30 @@ export async function writeHyprpaperConfig(
 		const fs = await import("node:fs/promises");
 		const expandedPath = expandPath(configPath);
 		await fs.writeFile(expandedPath, content, "utf-8");
-	} catch {
-		throw new Error("Failed to write hyprpaper config");
+	} catch (error) {
+		throw new Error("Failed to write hyprpaper config", { cause: error });
 	}
+}
+
+export async function getCurrentWallpaperAssignments(
+	configPath: string,
+): Promise<Map<string, WallpaperConfig>> {
+	const config = await readHyprpaperConfig(configPath);
+	return parseWallpaperAssignments(config);
+}
+
+async function writeWallpaperAssignments(
+	configPath: string,
+	monitorWallpapers: Map<string, WallpaperConfig>,
+): Promise<void> {
+	const config = await readHyprpaperConfig(configPath);
+	const syntax = await detectHyprpaperSyntax();
+	const nextConfig = buildHyprpaperConfig(config, monitorWallpapers, syntax);
+	await writeHyprpaperConfig(configPath, nextConfig);
 }
 
 /**
  * Updates the hyprpaper.conf with a new wallpaper
- * @param configPath Path to hyprpaper.conf
- * @param wallpaperPath Path to the wallpaper image
- * @param monitor Optional monitor name. If undefined, applies to all monitors
- * @param fillMode Optional fill mode for wallpaper display (default: "cover")
  */
 export async function updateHyprpaperConfig(
 	configPath: string,
@@ -107,224 +319,107 @@ export async function updateHyprpaperConfig(
 	fillMode: FillMode = "cover",
 ): Promise<void> {
 	try {
-		const config = await readHyprpaperConfig(configPath);
-		const lines = config.split("\n");
+		const monitorWallpapers = await getCurrentWallpaperAssignments(configPath);
 
-		// Parse existing config - support both old and new formats
-		
-		// Store wallpaper configurations: monitor -> {path, fillMode}
-		type WallpaperConfig = { path: string; fillMode: FillMode };
-		const monitorWallpapers = new Map<string, WallpaperConfig>();
-
-		// Track if we're inside a wallpaper block
-		let inWallpaperBlock = false;
-		let currentBlock: { monitor?: string; path?: string; fillMode?: FillMode } = {};
-
-		for (const line of lines) {
-			const trimmed = line.trim();
-			
-			// Parse old-style wallpaper statements (for backward compatibility)
-			if (trimmed.startsWith("wallpaper =")) {
-				const value = trimmed.substring("wallpaper =".length).trim();
-				const parts = value.split(",");
-				if (parts.length >= 2) {
-					const monitorName = parts[0].trim();
-					const path = parts.slice(1).join(",").trim();
-					const key = monitorName || "__all__";
-					// Preserve existing or use default
-					monitorWallpapers.set(key, { 
-						path, 
-						fillMode: monitorWallpapers.get(key)?.fillMode || "cover" 
-					});
-				}
-			}
-			// Parse new wallpaper block syntax
-			else if (trimmed === "wallpaper {") {
-				inWallpaperBlock = true;
-				currentBlock = {};
-			} 
-			else if (trimmed === "}") {
-				if (inWallpaperBlock && currentBlock.path) {
-					const key = currentBlock.monitor || "__all__";
-					monitorWallpapers.set(key, {
-						path: currentBlock.path,
-						fillMode: currentBlock.fillMode || "cover",
-					});
-				}
-				inWallpaperBlock = false;
-				currentBlock = {};
-			}
-			else if (inWallpaperBlock) {
-				if (trimmed.startsWith("monitor =")) {
-					const monitorValue = trimmed.substring("monitor =".length).trim();
-					// Empty monitor value means apply to all monitors
-					currentBlock.monitor = monitorValue || undefined;
-				} else if (trimmed.startsWith("path =")) {
-					currentBlock.path = trimmed.substring("path =".length).trim();
-				} else if (trimmed.startsWith("fit_mode =")) {
-					const mode = trimmed.substring("fit_mode =".length).trim() as FillMode;
-					currentBlock.fillMode = mode;
-				}
-			}
-		}
-
-		// Update or add wallpaper for specified monitor
-		if (monitor) {
-			// Set for specific monitor - keep other monitors' wallpapers
-			// Only remove "all monitors" entry if it exists
+		if (monitor !== undefined) {
 			if (monitorWallpapers.has("__all__")) {
-				const allMonitorsWallpaper = monitorWallpapers.get("__all__")!;
+				const allMonitorsWallpaper = monitorWallpapers.get("__all__");
 				monitorWallpapers.delete("__all__");
-				// Get all connected monitors and set them to the "all monitors" wallpaper
-				// so we don't lose wallpapers on other monitors
-				try {
-					const { getConnectedMonitors } = await import("./monitors");
-					const monitors = await getConnectedMonitors();
-					for (const m of monitors) {
-						if (m.name !== monitor && !monitorWallpapers.has(m.name)) {
-							monitorWallpapers.set(m.name, allMonitorsWallpaper);
+
+				if (allMonitorsWallpaper !== undefined) {
+					try {
+						const { getConnectedMonitors } = await import("./monitors");
+						const connectedMonitors = await getConnectedMonitors();
+						for (const connectedMonitor of connectedMonitors) {
+							if (
+								connectedMonitor.name !== monitor &&
+								monitorWallpapers.has(connectedMonitor.name) === false
+							) {
+								monitorWallpapers.set(
+									connectedMonitor.name,
+									allMonitorsWallpaper,
+								);
+							}
 						}
+					} catch {
+						// Keep current monitor map when monitor detection fails.
 					}
-				} catch {
-					// Keep known monitor map if monitor query fails
 				}
 			}
-			monitorWallpapers.set(monitor, { path: wallpaperPath, fillMode });
+
+			monitorWallpapers.set(monitor, {
+				path: wallpaperPath,
+				fillMode,
+			});
 		} else {
-			// Set for all monitors - clear individual monitor entries
 			monitorWallpapers.clear();
-			monitorWallpapers.set("__all__", { path: wallpaperPath, fillMode });
+			monitorWallpapers.set("__all__", {
+				path: wallpaperPath,
+				fillMode,
+			});
 		}
 
-		const syntax = await detectHyprpaperSyntax();
-
-		const updatedLines: string[] = [];
-
-		// Keep non-wallpaper config lines
-		let skipUntilEnd = false;
-		for (const line of lines) {
-			const trimmed = line.trim();
-
-			// Skip old format wallpaper lines and blocks
-			if (trimmed.startsWith("preload =") || trimmed.startsWith("wallpaper =")) {
-				continue;
-			}
-			if (trimmed === "wallpaper {") {
-				skipUntilEnd = true;
-				continue;
-			}
-			if (skipUntilEnd) {
-				if (trimmed === "}") {
-					skipUntilEnd = false;
-				}
-				continue;
-			}
-
-			// Skip old comment headers we'll regenerate
-			if (
-				trimmed === "# Preloaded wallpapers" ||
-				trimmed === "# Monitor wallpaper assignments" ||
-				trimmed.startsWith("# NOTE:")
-			) {
-				continue;
-			}
-
-			// Keep other config lines (skip empty lines to prevent accumulation)
-			if (trimmed) {
-				updatedLines.push(line);
-			}
-		}
-
-		// Ensure ipc is enabled for dynamic wallpaper changes
-		if (!updatedLines.some((line) => line.trim().startsWith("ipc ="))) {
-			updatedLines.push("ipc = true");
-		}
-
-		const uniquePaths = new Set<string>();
-		for (const wallpaperConfig of monitorWallpapers.values()) {
-			uniquePaths.add(wallpaperConfig.path);
-		}
-
-		updatedLines.push("");
-		updatedLines.push("# Preloaded wallpapers");
-		for (const path of uniquePaths) {
-			updatedLines.push(`preload = ${path}`);
-		}
-
-		updatedLines.push("");
-		updatedLines.push("# Monitor wallpaper assignments");
-
-		for (const [mon, wallpaperConfig] of monitorWallpapers.entries()) {
-			if (syntax === "legacy") {
-				const monitorValue = mon === "__all__" ? "" : mon;
-				updatedLines.push(
-					`wallpaper = ${monitorValue},${wallpaperConfig.path}`,
-				);
-				continue;
-			}
-
-			updatedLines.push("");
-			updatedLines.push("wallpaper {");
-			if (mon !== "__all__") {
-				updatedLines.push(`  monitor = ${mon}`);
-			}
-			updatedLines.push(`  path = ${wallpaperConfig.path}`);
-			updatedLines.push(`  fit_mode = ${wallpaperConfig.fillMode}`);
-			updatedLines.push("}");
-		}
-
-		// Ensure file ends with newline
-		const newConfig = `${updatedLines.join("\n")}\n`;
-		await writeHyprpaperConfig(configPath, newConfig);
+		await writeWallpaperAssignments(configPath, monitorWallpapers);
 	} catch (error) {
-		throw error;
+		throw new Error("Failed to update hyprpaper config", { cause: error });
 	}
 }
 
+export async function applyWallpaperCollection(
+	configPath: string,
+	collectionEntries: Array<{ monitor: string; path: string; fillMode: FillMode }>,
+): Promise<void> {
+	const monitorWallpapers = new Map<string, WallpaperConfig>();
+	for (const entry of collectionEntries) {
+		monitorWallpapers.set(entry.monitor, {
+			path: entry.path,
+			fillMode: entry.fillMode,
+		});
+	}
+
+	if (monitorWallpapers.size === 0) {
+		throw new Error("Collection has no wallpaper entries");
+	}
+
+	await writeWallpaperAssignments(configPath, monitorWallpapers);
+	await reloadHyprpaper();
+}
+
 /**
- * Reloads hyprpaper to apply the new wallpaper
+ * Reloads hyprpaper to apply updated config
  */
 export async function reloadHyprpaper(): Promise<void> {
 	try {
-		// Kill existing hyprpaper process
 		try {
-			await execAsync("pkill -9 hyprpaper");
-			// Wait longer for the process to fully terminate
-			await new Promise((resolve) => setTimeout(resolve, 500));
-		} catch (_error) {
-			// Process might not be running, which is fine
+			await execFileAsync("pkill", ["-9", "hyprpaper"]);
+		} catch {
+			// hyprpaper may not be running.
 		}
 
-		// Ensure the process is actually gone
+		await new Promise((resolve) => setTimeout(resolve, 500));
+
 		try {
-			await execAsync("pgrep hyprpaper");
-			// If we get here, hyprpaper is still running, wait a bit more
-			await new Promise((resolve) => setTimeout(resolve, 500));
-			// Try killing again
-			await execAsync("pkill -9 hyprpaper");
+			await execFileAsync("pgrep", ["hyprpaper"]);
+			await execFileAsync("pkill", ["-9", "hyprpaper"]);
 			await new Promise((resolve) => setTimeout(resolve, 300));
-		} catch (_error) {
-			// Process is gone, which is what we want
+		} catch {
+			// Process is not running.
 		}
 
-		// Start hyprpaper in background using nohup for better daemonization
-		execAsync("nohup hyprpaper > /dev/null 2>&1 &").catch(() => {
-			// Ignore errors from background process
+		const child = spawn("hyprpaper", [], {
+			detached: true,
+			stdio: "ignore",
 		});
-		
-		// Give hyprpaper more time to start and load the config
+		child.unref();
+
 		await new Promise((resolve) => setTimeout(resolve, 1000));
-	} catch {
-		throw new Error("Failed to reload hyprpaper");
+	} catch (error) {
+		throw new Error("Failed to reload hyprpaper", { cause: error });
 	}
 }
 
 /**
  * Sets a wallpaper as the current desktop background
- * @param wallpaperPath Path to the wallpaper image
- * @param configPath Path to hyprpaper.conf
- * @param monitor Optional monitor name. If undefined, applies to all monitors
- * @param fillMode Optional fill mode for wallpaper display (default: "cover")
  */
 export async function setWallpaper(
 	wallpaperPath: string,
@@ -332,8 +427,8 @@ export async function setWallpaper(
 	monitor?: string,
 	fillMode: FillMode = "cover",
 ): Promise<void> {
-	const monitorDisplay = monitor ? ` on ${monitor}` : " on all monitors";
-	
+	const monitorDisplay = monitor !== undefined ? ` on ${monitor}` : " on all monitors";
+
 	const toast = await showToast({
 		style: Toast.Style.Animated,
 		title: "Setting wallpaper...",
@@ -341,15 +436,16 @@ export async function setWallpaper(
 	});
 
 	try {
-		// Update config
 		await updateHyprpaperConfig(configPath, wallpaperPath, monitor, fillMode);
 
-		// Reload hyprpaper
-		await reloadHyprpaper();
+		const didApplyViaIpc = await tryApplyWallpaperViaIpc(wallpaperPath, monitor);
+		if (didApplyViaIpc === false) {
+			await reloadHyprpaper();
+		}
 
 		toast.style = Toast.Style.Success;
-		toast.title = "Wallpaper applied!";
-		toast.message = `Set ${monitor || "all monitors"} to ${wallpaperPath}`;
+		toast.title = "Wallpaper applied";
+		toast.message = `Set ${monitor ?? "all monitors"} to ${wallpaperPath}`;
 		await toast.show();
 	} catch (error) {
 		toast.style = Toast.Style.Failure;
