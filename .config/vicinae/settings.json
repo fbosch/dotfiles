@@ -64,7 +64,7 @@
             "useUserSettings": true,
             "downloadDirectory": "~/Pictures/Wallpapers",
             "hyprpaperConfigPath": "~/.config/hypr/hyprpaper.conf",
-            "purity": "110",
+            "purity": "111",
             "sorting": "relevance",
             "topRange": "1y"
          }
