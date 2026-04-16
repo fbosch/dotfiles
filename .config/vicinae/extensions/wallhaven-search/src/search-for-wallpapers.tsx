@@ -29,6 +29,7 @@ import { queryClient } from "./queryClient";
 
 function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 	const preferences = getPreferenceValues<Preferences>();
+	const [showMetadata, setShowMetadata] = useState(false);
 
 	// Fetch full wallpaper details to get tags
 	const { data: fullWallpaper, isLoading } = useQuery({
@@ -107,9 +108,7 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 
 	const displayWallpaper = fullWallpaper || wallpaper;
 
-	const markdown = `
-<img src="${wallpaper.thumbs.large}" alt="Wallpaper" style="max-width: 100%; height: auto; object-fit: contain;" />
-`;
+	const markdown = `![Wallpaper](${displayWallpaper.path})`;
 
 	// Show minimal metadata while loading to avoid layout shift
 	if (isLoading) {
@@ -117,7 +116,7 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 			<Detail
 				isLoading={true}
 				markdown={markdown}
-				metadata={
+				metadata={showMetadata ? (
 					<Detail.Metadata>
 						<Detail.Metadata.Label
 							title="Resolution"
@@ -128,9 +127,19 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 							text={formatBytes(wallpaper.file_size)}
 						/>
 					</Detail.Metadata>
-				}
+				) : undefined}
 				actions={
 					<ActionPanel>
+						<Action
+							title={showMetadata ? "Hide Metadata" : "Show Metadata"}
+							icon={Icon.AppWindowSidebarLeft}
+							onAction={() => setShowMetadata((value) => !value)}
+						/>
+						<Action.OpenInBrowser
+							title="Open Full Image"
+							url={wallpaper.path}
+							icon={Icon.Image}
+						/>
 						<Action
 							title="Download Wallpaper"
 							icon={Icon.Download}
@@ -152,7 +161,7 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 	return (
 		<Detail
 			markdown={markdown}
-			metadata={
+			metadata={showMetadata ? (
 				<Detail.Metadata>
 					<Detail.Metadata.Label
 						title="Resolution"
@@ -205,9 +214,19 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 						/>
 					)}
 				</Detail.Metadata>
-			}
+			) : undefined}
 			actions={
 				<ActionPanel>
+					<Action
+						title={showMetadata ? "Hide Metadata" : "Show Metadata"}
+						icon={Icon.AppWindowSidebarLeft}
+						onAction={() => setShowMetadata((value) => !value)}
+					/>
+					<Action.OpenInBrowser
+						title="Open Full Image"
+						url={displayWallpaper.path}
+						icon={Icon.Image}
+					/>
 					<Action
 						title="Download Wallpaper"
 						icon={Icon.Download}
