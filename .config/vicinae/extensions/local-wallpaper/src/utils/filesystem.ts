@@ -75,7 +75,6 @@ export async function scanWallpapers(
 		// Sort wallpapers
 		return sortWallpapers(wallpapers, sortBy);
 	} catch (error) {
-		console.error("Error scanning wallpapers:", error);
 		throw error;
 	}
 }
@@ -122,7 +121,6 @@ export async function getImageDimensions(
 		// You could add image-size as a dependency if needed
 		return null;
 	} catch (error) {
-		console.error("Error getting image dimensions:", error);
 		return null;
 	}
 }

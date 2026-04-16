@@ -72,8 +72,7 @@ ipc = true
 		}
 		
 		return await fs.readFile(expandedPath, "utf-8");
-	} catch (error) {
-		console.error("Error reading hyprpaper config:", error);
+	} catch {
 		throw new Error("Failed to read hyprpaper config");
 	}
 }
@@ -89,8 +88,7 @@ export async function writeHyprpaperConfig(
 		const fs = await import("node:fs/promises");
 		const expandedPath = expandPath(configPath);
 		await fs.writeFile(expandedPath, content, "utf-8");
-	} catch (error) {
-		console.error("Error writing hyprpaper config:", error);
+	} catch {
 		throw new Error("Failed to write hyprpaper config");
 	}
 }
@@ -267,8 +265,9 @@ export async function updateHyprpaperConfig(
 
 			updatedLines.push("");
 			updatedLines.push("wallpaper {");
-			const monitorValue = mon === "__all__" ? "" : mon;
-			updatedLines.push(`  monitor = ${monitorValue}`);
+			if (mon !== "__all__") {
+				updatedLines.push(`  monitor = ${mon}`);
+			}
 			updatedLines.push(`  path = ${wallpaperConfig.path}`);
 			updatedLines.push(`  fit_mode = ${wallpaperConfig.fillMode}`);
 			updatedLines.push("}");
@@ -278,7 +277,6 @@ export async function updateHyprpaperConfig(
 		const newConfig = `${updatedLines.join("\n")}\n`;
 		await writeHyprpaperConfig(configPath, newConfig);
 	} catch (error) {
-		console.error("Error updating hyprpaper config:", error);
 		throw error;
 	}
 }
@@ -295,7 +293,6 @@ export async function reloadHyprpaper(): Promise<void> {
 			await new Promise((resolve) => setTimeout(resolve, 500));
 		} catch (_error) {
 			// Process might not be running, which is fine
-			console.log("hyprpaper not running or already killed");
 		}
 
 		// Ensure the process is actually gone
@@ -317,8 +314,7 @@ export async function reloadHyprpaper(): Promise<void> {
 		
 		// Give hyprpaper more time to start and load the config
 		await new Promise((resolve) => setTimeout(resolve, 1000));
-	} catch (error) {
-		console.error("Error reloading hyprpaper:", error);
+	} catch {
 		throw new Error("Failed to reload hyprpaper");
 	}
 }

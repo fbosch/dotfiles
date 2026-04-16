@@ -1,25 +1,8 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import type { Monitor } from "../types";
 
 const execAsync = promisify(exec);
-
-export type Monitor = {
-	id: number;
-	name: string;
-	width: number;
-	height: number;
-	x: number;
-	y: number;
-	scale: number;
-	refreshRate: number;
-	activeWorkspace: {
-		id: number;
-		name: string;
-	};
-	focused: boolean;
-	dpmsStatus: boolean;
-	transform: number;
-};
 
 /**
  * Gets the list of connected monitors from Hyprland
@@ -29,8 +12,7 @@ export async function getConnectedMonitors(): Promise<Monitor[]> {
 		const { stdout } = await execAsync("hyprctl monitors -j");
 		const monitors = JSON.parse(stdout) as Monitor[];
 		return monitors;
-	} catch (error) {
-		console.error("Error getting monitors:", error);
+	} catch {
 		// Return empty array if hyprctl is not available or fails
 		return [];
 	}

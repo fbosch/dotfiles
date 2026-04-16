@@ -56,8 +56,7 @@ export default function BrowseWallpapers() {
 		try {
 			const connectedMonitors = await getConnectedMonitors();
 			setMonitors(connectedMonitors);
-		} catch (error) {
-			console.error("Failed to load monitors:", error);
+		} catch {
 			// Continue without monitor info
 			setMonitors([]);
 		}
