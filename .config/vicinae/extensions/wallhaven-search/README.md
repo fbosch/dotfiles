@@ -23,7 +23,8 @@ Configure default search settings in the extension preferences:
 
 - **API Key**: Optional Wallhaven API key for accessing additional features (get yours at https://wallhaven.cc/settings/account)
 - **Use User Settings**: When enabled with an API key, automatically uses your Wallhaven account settings (purity, top range) instead of extension settings
-- **Content Purity**: SFW Only or SFW + Sketchy (overridden when "Use User Settings" is enabled)
+- **Content Purity**: SFW Only, SFW + Sketchy, SFW + NSFW, or SFW + Sketchy + NSFW (overridden when "Use User Settings" is enabled)
+- **NSFW note**: NSFW results require a valid Wallhaven API key
 - **Default Sorting**: Top List, Most Recent, Most Views, Most Favorites, Relevance, or Random
 - **Top Range**: Time range for top list sorting (Last Day to Last Year) (overridden when "Use User Settings" is enabled)
 - **Download Directory**: Directory where wallpapers will be saved (default: `~/Pictures/Wallpapers`, supports `~` for home directory)

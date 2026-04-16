@@ -18,13 +18,11 @@ export async function fetchUserSettings(
 			`${WALLHAVEN_BASE_URL}/settings?apikey=${apiKey.trim()}`,
 		);
 		if (!response.ok) {
-			console.error("Failed to fetch user settings:", response.status);
 			return null;
 		}
 		const data = await response.json();
 		return data.data;
-	} catch (error) {
-		console.error("Error fetching user settings:", error);
+	} catch {
 		return null;
 	}
 }

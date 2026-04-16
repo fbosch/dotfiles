@@ -97,15 +97,12 @@ async function fetchUserSettings(apiKey: string): Promise<UserSettings | null> {
 		);
 
 		if (!response.ok) {
-			console.error("Failed to fetch user settings:", response.status);
 			return null;
 		}
 
 		const data = await response.json();
-		console.log("User Settings Fetched:", data.data);
 		return data.data;
-	} catch (error) {
-		console.error("Error fetching user settings:", error);
+	} catch {
 		return null;
 	}
 }
@@ -166,7 +163,6 @@ async function searchWallpapers(
 	}
 
 	const url = `https://wallhaven.cc/api/v1/search?${urlParams.toString()}`;
-	console.log("Wallhaven API Request:", url);
 
 	const response = await fetch(url);
 
@@ -175,11 +171,6 @@ async function searchWallpapers(
 	}
 
 	const data: WallhavenResponse = await response.json();
-	console.log("Wallhaven API Response:", {
-		resultsCount: data.data.length,
-		page: data.meta.current_page,
-		total: data.meta.total,
-	});
 
 	return data;
 }
@@ -210,13 +201,6 @@ function WallpaperDetail({ wallpaper }: { wallpaper: Wallpaper }) {
 		queryKey: ["wallpaper-detail", wallpaper.id],
 		queryFn: () => fetchWallpaperDetails(wallpaper.id, preferences.apiKey),
 		staleTime: 12 * 60 * 60 * 1000, // 12 hours
-	});
-
-	console.log("WallpaperDetail - fullWallpaper:", {
-		id: fullWallpaper?.id,
-		hasTags: Boolean(fullWallpaper?.tags),
-		tagsLength: fullWallpaper?.tags?.length,
-		tags: fullWallpaper?.tags,
 	});
 
 	const getTagColor = (category?: string): Color => {
@@ -519,19 +503,6 @@ function WallhavenSearchContent() {
 			? convertUserSettingsToCategories(userSettings.categories)
 			: categories;
 
-	console.log("Settings:", {
-		useUserSettings: preferences.useUserSettings,
-		hasUserSettings: Boolean(userSettings),
-		userSettingsPurity: userSettings?.purity,
-		effectivePurity,
-		preferencePurity: preferences.purity,
-		userSettingsCategories: userSettings?.categories,
-		effectiveCategories,
-		categoryDropdown: categories,
-		effectiveTopRange,
-		sorting: preferences.sorting,
-	});
-
 	const isDefaultSearch =
 		debouncedSearchText.trim() === "" && effectiveCategories === "111";
 
@@ -712,7 +683,7 @@ function WallhavenSearchContent() {
 						id={`wallpaper-${wallpapers.length}`}
 						content={{
 							value:
-								"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23888888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14M19 12l-7 7-7-7'/%3E%3C/svg%3E",
+								"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' preserveAspectRatio='xMidYMid meet' fill='none' stroke='%23888888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 5v14M23 12l-7 7-7-7'/%3E%3C/svg%3E",
 						}}
 						title={isFetchingNextPage ? "Loading..." : "Load More"}
 						subtitle={

@@ -54,6 +54,14 @@
         {
           "title": "SFW + Sketchy",
           "value": "110"
+        },
+        {
+          "title": "SFW + NSFW",
+          "value": "101"
+        },
+        {
+          "title": "SFW + Sketchy + NSFW",
+          "value": "111"
         }
       ]
     },

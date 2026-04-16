@@ -47,25 +47,6 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  flathub-search:
-    dependencies:
-      '@tanstack/react-query':
-        specifier: ^5.90.20
-        version: 5.90.20(react@19.0.0)
-      '@tanstack/react-query-persist-client':
-        specifier: 5.90.20
-        version: 5.90.20(@tanstack/react-query@5.90.20(react@19.0.0))(react@19.0.0)
-      '@vicinae/api':
-        specifier: ^0.18.3
-        version: 0.18.3(@types/node@25.0.3)(@types/react@19.0.10)(typescript@5.9.3)
-    devDependencies:
-      '@biomejs/biome':
-        specifier: ^2.3.11
-        version: 2.3.11
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
   home-assistant:
     dependencies:
       '@tanstack/react-query':
@@ -129,44 +110,6 @@ importers:
       typescript:
         specifier: ^6.0.2
         version: 6.0.2
-
-  nerdfont-search:
-    dependencies:
-      '@tanstack/react-query':
-        specifier: ^5.90.17
-        version: 5.90.17(react@19.0.0)
-      '@vicinae/api':
-        specifier: ^0.18.3
-        version: 0.18.3(@types/node@25.0.3)(@types/react@19.0.10)(typescript@5.9.3)
-      fuse.js:
-        specifier: ^7.1.0
-        version: 7.1.0
-    devDependencies:
-      '@biomejs/biome':
-        specifier: ^2.3.11
-        version: 2.3.11
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  protondb-search:
-    dependencies:
-      '@tanstack/react-query':
-        specifier: ^5.90.20
-        version: 5.90.20(react@19.0.0)
-      '@tanstack/react-query-persist-client':
-        specifier: 5.90.20
-        version: 5.90.20(@tanstack/react-query@5.90.20(react@19.0.0))(react@19.0.0)
-      '@vicinae/api':
-        specifier: ^0.18.3
-        version: 0.18.3(@types/node@25.0.3)(@types/react@19.0.10)(typescript@5.9.3)
-    devDependencies:
-      '@biomejs/biome':
-        specifier: ^2.3.11
-        version: 2.3.11
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   sysinfo:
     dependencies:
@@ -708,10 +651,6 @@ packages:
 
   filelist@1.0.4:
     resolution: {integrity: sha512-w1cEuf3S+DrLCQL7ET6kz+gmlJdbq9J7yXCSjK/OZCPA+qEN1WyF4ZAf0YYJa4/shHJra2t/d/r8SV4Ji+x+8Q==}
-
-  fuse.js@7.1.0:
-    resolution: {integrity: sha512-trLf4SzuuUxfusZADLINj+dE8clK1frKdmqiJNb1Es75fmI5oY6X2mxLVUciLLjxqw/xr72Dhy+lER6dGd02FQ==}
-    engines: {node: '>=10'}
 
   get-package-type@0.1.0:
     resolution: {integrity: sha512-pjzuKtY64GYfWizNAJ0fr9VqttZkNiK2iS430LtIHzjBEr6bX8Am2zm4sW4Ro5wjWW5cAlRL1qAMTcXbjNAO2Q==}
@@ -1572,8 +1511,6 @@ snapshots:
   filelist@1.0.4:
     dependencies:
       minimatch: 5.1.6
-
-  fuse.js@7.1.0: {}
 
   get-package-type@0.1.0: {}
 

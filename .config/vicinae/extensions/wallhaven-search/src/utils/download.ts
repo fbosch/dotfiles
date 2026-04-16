@@ -80,8 +80,8 @@ export async function downloadWallpaper(
 				onAction: async () => {
 					try {
 						await Application.open(filePath);
-					} catch (err) {
-						console.error("Failed to open file:", err);
+					} catch {
+						// File is downloaded even if opening fails.
 					}
 				},
 			};
@@ -90,8 +90,7 @@ export async function downloadWallpaper(
 			// Automatically open the downloaded image in default viewer
 			try {
 				await Application.open(filePath);
-			} catch (err) {
-				console.error("Failed to auto-open file:", err);
+			} catch {
 				// Don't fail the download if we can't open the file
 			}
 
@@ -99,44 +98,10 @@ export async function downloadWallpaper(
 				success: true,
 				filePath,
 			};
-		} catch (fsError) {
-			// fs module not available or write failed
-			console.error("Filesystem access failed:", fsError);
-
-			// Try alternative: create blob URL and trigger download via browser
-			// This won't work in all environments but worth trying
-			try {
-				const blob = new Blob([buffer], {
-					type: response.headers.get("content-type") || "image/jpeg",
-				});
-				const blobUrl = URL.createObjectURL(blob);
-
-				// Create temporary download link
-				const link = document.createElement("a");
-				link.href = blobUrl;
-				link.download = filename;
-				document.body.appendChild(link);
-				link.click();
-				document.body.removeChild(link);
-
-				// Clean up blob URL
-				setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
-
-				toast.style = Toast.Style.Success;
-				toast.title = "Download started";
-				toast.message = `Check your Downloads folder for ${filename}`;
-				await toast.show();
-
-				return {
-					success: true,
-					filePath: `Downloads/${filename}`,
-				};
-			} catch (blobError) {
-				console.error("Blob download failed:", blobError);
-				throw new Error(
-					"Direct download not supported. Please use 'Download in Browser' instead.",
-				);
-			}
+		} catch {
+			throw new Error(
+				"Failed to save wallpaper to disk. Check directory permissions and path.",
+			);
 		}
 	} catch (error) {
 		const errorMessage =
@@ -152,20 +117,6 @@ export async function downloadWallpaper(
 			success: false,
 			error: errorMessage,
 		};
-	}
-}
-
-/**
- * Gets the file extension from a URL
- */
-function _getFileExtension(url: string): string {
-	try {
-		const urlObj = new URL(url);
-		const pathname = urlObj.pathname;
-		const match = pathname.match(/\.([^.]+)$/);
-		return match ? match[1] : "jpg";
-	} catch {
-		return "jpg";
 	}
 }
 
@@ -206,8 +157,6 @@ export async function downloadAndApplyWallpaper(
 
 		const filePath = `${expandedDir}/${filename}`;
 
-		console.log("Downloading wallpaper:", { url, filePath });
-
 		// Fetch the image
 		const response = await fetch(url);
 
@@ -219,8 +168,6 @@ export async function downloadAndApplyWallpaper(
 		const arrayBuffer = await response.arrayBuffer();
 		const buffer = Buffer.from(arrayBuffer);
 
-		console.log("Downloaded, writing to file:", filePath);
-
 		// Write file
 		const fs = await import("node:fs/promises");
 		const path = await import("node:path");
@@ -228,18 +175,11 @@ export async function downloadAndApplyWallpaper(
 		await fs.mkdir(path.dirname(filePath), { recursive: true });
 		await fs.writeFile(filePath, buffer);
 
-		console.log("File written, applying wallpaper:", {
-			filePath,
-			hyprpaperConfigPath,
-		});
-
 		toast.title = "Applying wallpaper...";
 		await toast.show();
 
 		// Apply the wallpaper
 		await applyWallpaper(filePath, hyprpaperConfigPath);
-
-		console.log("Wallpaper applied successfully");
 
 		toast.style = Toast.Style.Success;
 		toast.title = "Wallpaper downloaded and applied!";
@@ -251,17 +191,13 @@ export async function downloadAndApplyWallpaper(
 			filePath,
 		};
 	} catch (error) {
-		console.error("Error in downloadAndApplyWallpaper:", error);
 		const errorMessage =
 			error instanceof Error ? error.message : "Unknown error";
-		const errorStack = error instanceof Error ? error.stack : "";
 
 		toast.style = Toast.Style.Failure;
 		toast.title = "Failed to download and apply";
 		toast.message = errorMessage;
 		await toast.show();
-
-		console.error("Full error details:", { errorMessage, errorStack });
 
 		return {
 			success: false,

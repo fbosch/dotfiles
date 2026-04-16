@@ -1,13 +1,66 @@
-import { exec } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+type HyprpaperSyntax = "block" | "legacy";
 
 /**
  * Expands ~ to home directory in a path
  */
 function expandPath(path: string): string {
 	return path.replace(/^~/, process.env.HOME || process.env.USERPROFILE || "");
+}
+
+function parseVersion(versionOutput: string): [number, number, number] | null {
+	const match = versionOutput.match(/(\d+)\.(\d+)\.(\d+)/);
+	if (match === null) {
+		return null;
+	}
+
+	return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function isAtLeastVersion(
+	version: [number, number, number],
+	minimum: [number, number, number],
+): boolean {
+	for (let index = 0; index < 3; index += 1) {
+		if (version[index] > minimum[index]) {
+			return true;
+		}
+
+		if (version[index] < minimum[index]) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+async function detectHyprpaperSyntax(): Promise<HyprpaperSyntax> {
+	try {
+		const { stdout } = await execFileAsync("hyprpaper", ["--version"]);
+		const parsedVersion = parseVersion(stdout);
+		if (parsedVersion === null) {
+			return "legacy";
+		}
+
+		return isAtLeastVersion(parsedVersion, [0, 8, 0]) ? "block" : "legacy";
+	} catch {
+		return "legacy";
+	}
+}
+
+async function tryApplyWallpaperViaIpc(wallpaperPath: string): Promise<boolean> {
+	try {
+		await execFileAsync("hyprctl", ["hyprpaper", "listloaded"]);
+		await execFileAsync("hyprctl", ["hyprpaper", "preload", wallpaperPath]);
+		await execFileAsync("hyprctl", ["hyprpaper", "wallpaper", `,${wallpaperPath}`]);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 /**
@@ -35,8 +88,7 @@ ipc = true
 		
 		return await fs.readFile(expandedPath, "utf-8");
 	} catch (error) {
-		console.error("Error reading hyprpaper config:", error);
-		throw new Error("Failed to read hyprpaper config");
+		throw new Error("Failed to read hyprpaper config", { cause: error });
 	}
 }
 
@@ -52,8 +104,7 @@ async function writeHyprpaperConfig(
 		const expandedPath = expandPath(configPath);
 		await fs.writeFile(expandedPath, content, "utf-8");
 	} catch (error) {
-		console.error("Error writing hyprpaper config:", error);
-		throw new Error("Failed to write hyprpaper config");
+		throw new Error("Failed to write hyprpaper config", { cause: error });
 	}
 }
 
@@ -69,7 +120,8 @@ async function updateHyprpaperConfig(
 		const config = await readHyprpaperConfig(configPath);
 		const lines = config.split("\n");
 
-		// Build new config using v0.8.1+ block syntax
+		const syntax = await detectHyprpaperSyntax();
+
 		const updatedLines: string[] = [];
 
 		// Keep non-wallpaper config lines
@@ -92,38 +144,45 @@ async function updateHyprpaperConfig(
 				continue;
 			}
 
-			// Skip old comment headers we'll regenerate
-			if (trimmed === "# Preloaded wallpapers" || trimmed === "# Monitor wallpaper assignments" || trimmed.startsWith("# NOTE:")) {
+			if (
+				trimmed === "# Preloaded wallpapers" ||
+				trimmed === "# Monitor wallpaper assignments" ||
+				trimmed.startsWith("# NOTE:")
+			) {
 				continue;
 			}
 
-			// Keep other config lines
-			updatedLines.push(line);
+			if (trimmed.length > 0) {
+				updatedLines.push(line);
+			}
 		}
 
-		// Ensure ipc is enabled
-		if (!updatedLines.some(l => l.trim().startsWith("ipc ="))) {
+		if (updatedLines.some((line) => line.trim().startsWith("ipc =")) === false) {
 			updatedLines.push("ipc = true");
 		}
 
-		// Add wallpaper assignment for all monitors using new block syntax
+		updatedLines.push("");
+		updatedLines.push("# Preloaded wallpapers");
+		updatedLines.push(`preload = ${wallpaperPath}`);
+
 		updatedLines.push("");
 		updatedLines.push("# Monitor wallpaper assignments");
-		updatedLines.push("");
-		updatedLines.push("wallpaper {");
-		// monitor MUST be the first key in the block (hyprpaper requirement)
-		// For all monitors, use empty monitor value
-		updatedLines.push("  monitor = ");
-		updatedLines.push(`  path = ${wallpaperPath}`);
-		updatedLines.push("  fit_mode = cover");
-		updatedLines.push("}");
+
+		if (syntax === "legacy") {
+			updatedLines.push(`wallpaper = ,${wallpaperPath}`);
+		} else {
+			updatedLines.push("");
+			updatedLines.push("wallpaper {");
+			updatedLines.push(`  path = ${wallpaperPath}`);
+			updatedLines.push("  fit_mode = cover");
+			updatedLines.push("}");
+		}
 
 		// Ensure file ends with newline
 		const newConfig = `${updatedLines.join("\n")}\n`;
 		await writeHyprpaperConfig(configPath, newConfig);
 	} catch (error) {
-		console.error("Error updating hyprpaper config:", error);
-		throw error;
+		throw new Error("Failed to update hyprpaper config", { cause: error });
 	}
 }
 
@@ -132,38 +191,31 @@ async function updateHyprpaperConfig(
  */
 async function reloadHyprpaper(): Promise<void> {
 	try {
-		// Kill existing hyprpaper process
 		try {
-			await execAsync("pkill -9 hyprpaper");
-			// Wait longer for the process to fully terminate
-			await new Promise((resolve) => setTimeout(resolve, 500));
-		} catch (_error) {
-			// Process might not be running, which is fine
-			console.log("hyprpaper not running or already killed");
+			await execFileAsync("pkill", ["-9", "hyprpaper"]);
+		} catch {
+			// hyprpaper may not be running.
 		}
 
-		// Ensure the process is actually gone
+		await new Promise((resolve) => setTimeout(resolve, 500));
+
 		try {
-			await execAsync("pgrep hyprpaper");
-			// If we get here, hyprpaper is still running, wait a bit more
-			await new Promise((resolve) => setTimeout(resolve, 500));
-			// Try killing again
-			await execAsync("pkill -9 hyprpaper");
+			await execFileAsync("pgrep", ["hyprpaper"]);
+			await execFileAsync("pkill", ["-9", "hyprpaper"]);
 			await new Promise((resolve) => setTimeout(resolve, 300));
-		} catch (_error) {
-			// Process is gone, which is what we want
+		} catch {
+			// Process is not running.
 		}
 
-		// Start hyprpaper in background using nohup for better daemonization
-		execAsync("nohup hyprpaper > /dev/null 2>&1 &").catch(() => {
-			// Ignore errors from background process
+		const child = spawn("hyprpaper", [], {
+			detached: true,
+			stdio: "ignore",
 		});
-		
-		// Give hyprpaper more time to start and load the config
+		child.unref();
+
 		await new Promise((resolve) => setTimeout(resolve, 1000));
 	} catch (error) {
-		console.error("Error reloading hyprpaper:", error);
-		throw new Error("Failed to reload hyprpaper");
+		throw new Error("Failed to reload hyprpaper", { cause: error });
 	}
 }
 
@@ -175,13 +227,12 @@ export async function applyWallpaper(
 	configPath: string,
 ): Promise<void> {
 	try {
-		// Update config
 		await updateHyprpaperConfig(configPath, wallpaperPath);
-
-		// Reload hyprpaper
-		await reloadHyprpaper();
+		const didApplyViaIpc = await tryApplyWallpaperViaIpc(wallpaperPath);
+		if (didApplyViaIpc === false) {
+			await reloadHyprpaper();
+		}
 	} catch (error) {
-		console.error("Error applying wallpaper:", error);
 		throw error;
 	}
 }

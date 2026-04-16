@@ -13,7 +13,7 @@ type ExtensionPreferences = {
 	"useUserSettings": boolean;
 
 	/** Content Purity - Filter by content rating */
-	"purity": "100" | "110";
+	"purity": "100" | "110" | "101" | "111";
 
 	/** Default Sorting - How to sort wallpapers */
 	"sorting": "relevance" | "toplist" | "date_added" | "views" | "favorites" | "random";
