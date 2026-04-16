@@ -4,7 +4,7 @@
     "agent-browser": {
       "source": "vercel-labs/agent-browser",
       "sourceType": "github",
-      "computedHash": "0eafe0971692cf8fcecb75f955595821452a835791d315db738f89ee49063a34"
+      "computedHash": "91782f423f6fad0fe4e2159350f2eb8c3cf66cfa4d2387b2c8d927d443c9a603"
     },
     "caveman": {
       "source": "JuliusBrussee/caveman",
@@ -19,7 +19,7 @@
     "caveman-compress": {
       "source": "JuliusBrussee/caveman",
       "sourceType": "github",
-      "computedHash": "ed0f21f26011a8e8faa64cb49ac43b6533c64e0ec626b07cce4d4eca6c40a428"
+      "computedHash": "300fb8578258161e1752a2a4142a7e9ff178c960bcb83b84422e2987421f33bf"
     },
     "caveman-help": {
       "source": "JuliusBrussee/caveman",
@@ -34,7 +34,7 @@
     "github-actions-docs": {
       "source": "xixu-me/skills",
       "sourceType": "github",
-      "computedHash": "e7babb077d50cd88fb8c0e168373c8a560d056b540f364cb4892191bf524f5ee"
+      "computedHash": "e9ac24e79715ef3060bd4ae376052f8d863b830604e69cb513b39764bf47ee53"
     },
     "linear": {
       "source": "openai/skills",
@@ -44,7 +44,7 @@
     "worktrunk": {
       "source": "max-sixty/worktrunk",
       "sourceType": "github",
-      "computedHash": "83052030007e712956a7b2cec586e4e6f7aae2972b28eea4b521e1d4415bd80c"
+      "computedHash": "cc6b89b96db42f14f49a4376285f34a63e14650c36afcef28294b41989f34f54"
     }
   }
 }
