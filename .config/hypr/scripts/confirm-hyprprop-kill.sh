@@ -36,7 +36,7 @@ fi
 
 payload="$(jq -nc \
   --arg message "Kill process: $display_name [PID: $pid]?" \
-  --arg command "bash ~/.config/hypr/scripts/kill-pid-with-fallback.sh $pid" \
+  --arg command "$HOME/.config/hypr/scripts/kill-pid-with-fallback.sh $pid" \
   '{
     action: "show",
     config: {

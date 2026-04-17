@@ -14,16 +14,10 @@ else
 fi
 
 if kill "$pid" 2>/dev/null; then
-  if command -v notify-send >/dev/null 2>&1; then
-    notify-send -a Hyprland "Killed process" "PID: $pid"
-  fi
   exit 0
 fi
 
 if kill -9 "$pid" 2>/dev/null; then
-  if command -v notify-send >/dev/null 2>&1; then
-    notify-send -a Hyprland "Force killed process" "PID: $pid"
-  fi
   exit 0
 fi
 
