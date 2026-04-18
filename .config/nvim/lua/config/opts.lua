@@ -52,10 +52,10 @@ vim.opt.autoread = true
 vim.opt.foldcolumn = "1"
 vim.o.foldenable = true
 vim.opt.foldlevelstart = 0
-vim.opt.foldmethod = "marker"
+vim.opt.foldmethod = "expr"
 vim.opt.backspace = "indent,eol,start"
 vim.wo.foldtext = ""
-vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
+vim.opt.foldexpr = "v:lua.vim.treesitter.foldexpr()"
 
 -- spellchecking (deferred to text filetypes for faster startup)
 -- Spell settings add ~29ms at startup, so we defer to FileType autocmd

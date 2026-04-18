@@ -2,56 +2,27 @@ return {
 	{
 		"nvim-treesitter/nvim-treesitter",
 		build = ":TSUpdate",
-		event = { "BufReadPre", "BufNewFile" },
+		lazy = false,
 		dependencies = {
 			{ "andymass/vim-matchup", enabled = false },
 			{ "nvim-treesitter/nvim-treesitter-context", enabled = false },
 			"windwp/nvim-ts-autotag",
 		},
 		config = function()
-			local ok, configs = pcall(require, "nvim-treesitter.configs")
+			local ok, treesitter = pcall(require, "nvim-treesitter")
 			if not ok then
-				-- Try the new API
-				ok, configs = pcall(require, "nvim-treesitter")
-				if not ok then
-					vim.notify("nvim-treesitter not found", vim.log.levels.ERROR)
-					return
-				end
+				vim.notify("nvim-treesitter not found", vim.log.levels.ERROR)
+				return
 			end
 
-			configs.setup({
-				modules = {},
-				ignore_install = {},
-				context = { enable = true },
-				matchup = { enable = false },
-				sync_install = true,
-				auto_install = true,
-				additional_vim_regex_highlighting = false,
-				autopairs = { enable = true },
-				autotag = { enable = true },
-				highlight = { enable = true },
-				indent = { enable = true },
-				incremental_selection = {
-					enable = true,
-					keymaps = {
-						node_incremental = "v",
-						node_decremental = "V",
-					},
-				},
-				ensure_installed = {
-					"rust",
-					"javascript",
-					"jsdoc",
-					"typescript",
-					"tsx",
-					"html",
-					"css",
-					"markdown",
-					"yaml",
-					"regex",
-					"vim",
-					"vimdoc",
-				},
+			treesitter.setup({})
+
+			local group = vim.api.nvim_create_augroup("TreesitterStart", { clear = true })
+			vim.api.nvim_create_autocmd("FileType", {
+				group = group,
+				callback = function(args)
+					pcall(vim.treesitter.start, args.buf)
+				end,
 			})
 		end,
 	},
