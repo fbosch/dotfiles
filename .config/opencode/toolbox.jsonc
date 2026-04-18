@@ -54,6 +54,6 @@
   },
   "settings": {
     "defaultLimit": 5,
-    "initMode": "eager"
+    "initMode": "lazy"
   }
 }

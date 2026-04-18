@@ -12,7 +12,6 @@ import { type Plugin, tool } from "@opencode-ai/plugin"
 const plugin: Plugin = async ({ project, client, $, directory, worktree }) => {
   let currentBranch: string | null = null
   let statusTimer: ReturnType<typeof setTimeout> | null = null
-  let branchCheckInterval: ReturnType<typeof setInterval> | null = null
   let lastKnownBranch: string | null = null
 
   // Performance optimization: Cache WorkTrunk installation check
@@ -116,25 +115,6 @@ const plugin: Plugin = async ({ project, client, $, directory, worktree }) => {
     }, 200) // Debounce by 200ms for better responsiveness
   }
 
-  // Check for branch changes that occur outside the plugin
-  const checkBranchChange = async () => {
-    // Force refresh to detect external changes
-    const newBranch = await getCurrentBranch(true)
-    if (newBranch !== lastKnownBranch && newBranch !== null) {
-      // Branch changed externally - update tracking and invalidate cache
-      currentBranch = newBranch
-      lastKnownBranch = newBranch
-      branchCache = null // Invalidate cache on branch change
-      await client.app.log({
-        body: {
-          service: "opencode-worktrunk",
-          level: "info",
-          message: `Detected branch change: ${newBranch}`,
-        },
-      })
-    }
-  }
-
   // Initialize lazily - don't block startup with git/wt commands
   // Branch detection will happen on first status update
   
@@ -143,16 +123,6 @@ const plugin: Plugin = async ({ project, client, $, directory, worktree }) => {
     try {
       currentBranch = await getCurrentBranch()
       lastKnownBranch = currentBranch
-
-      // Set up periodic branch checking to detect external changes
-      // Check every 2 seconds for branch changes (e.g., manual git checkout)
-      if (currentBranch) {
-        branchCheckInterval = setInterval(() => {
-          checkBranchChange().catch(() => {
-            // Silently handle errors in background check
-          })
-        }, 2000)
-      }
 
       await client.app.log({
         body: {
