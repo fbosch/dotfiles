@@ -107,32 +107,61 @@ return {
 		},
 	},
 	{
-		"tzachar/local-highlight.nvim",
-		event = { "CursorMoved" },
-		dependencies = {
-			{
-				"folke/snacks.nvim",
-				lazy = false,
-				priority = 1000,
-				opts = {
-					animate = {},
-					util = {},
-					input = {
-						enabled = true,
-					},
-					picker = {
-						enabled = true,
-					},
-				},
-				config = function(_, opts)
-					local snacks = require("snacks")
-					snacks.setup(opts)
-					-- Set vim.ui overrides
-					vim.ui.input = snacks.input.input
-					vim.ui.select = snacks.picker.select
-				end,
+		"folke/snacks.nvim",
+		event = "VeryLazy",
+		priority = 1000,
+		opts = {
+			animate = {},
+			util = {},
+			input = {
+				enabled = true,
+			},
+			picker = {
+				enabled = true,
 			},
 		},
+		init = function()
+			local builtin_input = vim.ui.input
+			local builtin_select = vim.ui.select
+
+			vim.ui.input = function(opts, on_confirm)
+				opts = opts or {}
+				local ok, snacks = pcall(require, "snacks")
+				if ok then
+					return snacks.input.input(opts, on_confirm)
+				end
+
+				if builtin_input ~= nil then
+					return builtin_input(opts, on_confirm)
+				end
+
+				if on_confirm ~= nil then
+					on_confirm(vim.fn.input(opts.prompt or ""))
+				end
+			end
+
+			vim.ui.select = function(items, opts, on_choice)
+				local ok, snacks = pcall(require, "snacks")
+				if ok then
+					return snacks.picker.select(items, opts, on_choice)
+				end
+
+				if builtin_select ~= nil then
+					return builtin_select(items, opts, on_choice)
+				end
+
+				if on_choice ~= nil then
+					on_choice(nil, nil)
+				end
+			end
+		end,
+		config = function(_, opts)
+			require("snacks").setup(opts)
+		end,
+	},
+	{
+		"tzachar/local-highlight.nvim",
+		event = { "CursorMoved" },
 		config = function()
 			require("local-highlight").setup({
 				hlgroup = "LocalHighlight",
