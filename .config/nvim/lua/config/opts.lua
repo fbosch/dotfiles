@@ -51,7 +51,7 @@ vim.opt.autoread = true
 -- fold
 vim.opt.foldcolumn = "1"
 vim.o.foldenable = true
-vim.opt.foldlevelstart = 0
+vim.opt.foldlevelstart = 99
 vim.opt.foldmethod = "expr"
 vim.opt.backspace = "indent,eol,start"
 vim.wo.foldtext = ""

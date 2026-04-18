@@ -70,6 +70,25 @@ local function setup_formatters(client, bufnr)
 end
 
 function setup_diagnostics()
+	local diagnostic_close_events = {
+		"BufLeave",
+		"CursorMoved",
+		"InsertEnter",
+		"FocusLost",
+	}
+
+	local function open_diagnostic_float(bufnr, scope)
+		vim.diagnostic.open_float(bufnr, {
+			focusable = false,
+			close_events = diagnostic_close_events,
+			source = "if_many",
+			scope = scope,
+			border = "rounded",
+			max_width = 100,
+			max_height = 10,
+		})
+	end
+
 	vim.diagnostic.config({
 		signs = {
 			text = {
@@ -87,6 +106,15 @@ function setup_diagnostics()
 			linehl = {},
 		},
 		virtual_text = false,
+		jump = {
+			on_jump = function(diagnostic, bufnr)
+				if diagnostic == nil then
+					return
+				end
+
+				open_diagnostic_float(bufnr, "cursor")
+			end,
+		},
 		float = {
 			show_header = true,
 			source = "if_many",
@@ -94,12 +122,7 @@ function setup_diagnostics()
 			focusable = false,
 			max_width = 100,
 			max_height = 10,
-			close_events = {
-				"BufLeave",
-				"CursorMoved",
-				"InsertEnter",
-				"FocusLost",
-			},
+			close_events = diagnostic_close_events,
 		},
 		underline = {
 			severity = { min = vim.diagnostic.severity.WARN },
@@ -114,17 +137,7 @@ function setup_diagnostics()
 	vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
 		group = diagnostics_group,
 		callback = function()
-			vim.diagnostic.open_float(nil, {
-				focusable = false,
-				close_events = {
-					"BufLeave",
-					"CursorMoved",
-					"InsertEnter",
-					"FocusLost",
-				},
-				source = "if_many",
-				scope = "line",
-			})
+			open_diagnostic_float(nil, "line")
 		end,
 	})
 end

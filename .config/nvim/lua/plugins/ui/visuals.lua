@@ -267,19 +267,18 @@ return {
 						return labels
 					end
 					local function get_diagnostic_label()
-						local icons = { error = " ", warn = " ", info = " ", hint = " " }
+						local levels = {
+							{ severity = vim.diagnostic.severity.ERROR, icon = " ", group = "DiagnosticError" },
+							{ severity = vim.diagnostic.severity.WARN, icon = " ", group = "DiagnosticWarn" },
+							{ severity = vim.diagnostic.severity.INFO, icon = " ", group = "DiagnosticInfo" },
+							{ severity = vim.diagnostic.severity.HINT, icon = " ", group = "DiagnosticHint" },
+						}
 						local label = {}
 
-						for severity, icon in pairs(icons) do
-							local n = #vim.diagnostic.get(
-								props.buf,
-								{ severity = vim.diagnostic.severity[string.upper(severity)] }
-							)
+						for _, level in ipairs(levels) do
+							local n = #vim.diagnostic.get(props.buf, { severity = level.severity })
 							if n > 0 then
-								table.insert(
-									label,
-									{ icon .. n .. " ", group = "DiagnosticSign" .. severity, bold = true }
-								)
+								table.insert(label, { level.icon .. n .. " ", group = level.group, bold = true })
 							end
 						end
 						if #label > 0 then
