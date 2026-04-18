@@ -4,6 +4,15 @@ local servers = {
 	typescript = {
 		enabled = false, -- use typescript-tools.nvim instead
 	},
+	ts_ls = {
+		enabled = false, -- use typescript-tools.nvim instead
+	},
+	vtsls = {
+		enabled = false, -- use typescript-tools.nvim instead
+	},
+	tsserver = {
+		enabled = false, -- use typescript-tools.nvim instead
+	},
 	tailwindcss = {
 		cmd = { "tailwindcss-language-server", "--stdio" },
 	},
@@ -121,13 +130,28 @@ function setup_diagnostics()
 end
 
 local lsp_keymaps = require("config.keymaps.lsp")
+local attached_buffers = {}
 
-local on_attach = function(client, bufnr)
+local function attach_once(client, bufnr)
+	if client == nil then
+		return
+	end
+
+	attached_buffers[client.id] = attached_buffers[client.id] or {}
+	if attached_buffers[client.id][bufnr] == true then
+		return
+	end
+
+	attached_buffers[client.id][bufnr] = true
 	setup_formatters(client, bufnr)
 	-- Use vim.schedule to ensure keymaps are set after buffer is ready
 	vim.schedule(function()
 		lsp_keymaps.setup(client, bufnr)
 	end)
+end
+
+local on_attach = function(client, bufnr)
+	attach_once(client, bufnr)
 end
 
 local function get_capabilities()
@@ -165,64 +189,75 @@ local function get_ensure_installed()
 		end
 	end
 
-	if not platform.is_nixos() then
-		table.insert(ensure, "lua_ls")
-	end
-
 	return ensure
 end
 
--- Special handling for specific servers
+local function root_dir_from_markers(markers)
+	return function(bufnr)
+		local path = vim.api.nvim_buf_get_name(bufnr)
+		if path == "" then
+			path = vim.loop.cwd()
+		end
+		return vim.fs.root(path, markers)
+	end
+end
+
+local function resolve_root(server_name, server)
+	if server_name == "eslint" then
+		return root_dir_from_markers({
+			"eslint.config.js",
+			"eslint.config.cjs",
+			"eslint.config.mjs",
+			".eslintrc.js",
+			".eslintrc.json",
+			".eslintrc",
+			".eslintrc.yml",
+			".eslintrc.yaml",
+		})
+	end
+
+	if server_name == "biome" then
+		return root_dir_from_markers({ "biome.json", "biome.jsonc", ".git" })
+	end
+
+	if type(server.root_dir) == "function" then
+		return server.root_dir
+	end
+
+	if type(server.root_files) == "table" and #server.root_files > 0 then
+		return root_dir_from_markers(server.root_files)
+	end
+end
+
+local function server_config(server_name, capabilities, on_attach)
+	local server = servers[server_name] or {}
+	local settings = server.settings or {}
+
+	if server_name == "eslint" then
+		settings = vim.tbl_deep_extend("force", settings, {
+			experimental = { useFlatConfig = true },
+		})
+	end
+
+	return {
+		capabilities = vim.tbl_deep_extend("force", {}, capabilities, server.capabilities or {}),
+		on_attach = on_attach,
+		settings = settings,
+		cmd = server.cmd,
+		root_dir = resolve_root(server_name, server),
+	}
+end
+
 local function mason_handlers(capabilities, on_attach)
 	return function(server_name)
 		local server = servers[server_name] or {}
 		if server.enabled == false then
-			return
-		end
-		local config = require("lspconfig")
-		local settings = server.settings or {}
-
-		print("LSP: " .. server_name)
-
-		if server_name == "eslint" then
-			settings.experimental = { useFlatConfig = true }
-			config.eslint.setup({
-				on_attach = on_attach,
-				capabilities = capabilities,
-				settings = settings,
-				root_dir = config.util.root_pattern(
-					"eslint.config.js",
-					"eslint.config.cjs",
-					"eslint.config.mjs",
-					".eslintrc.js",
-					".eslintrc.json",
-					".eslintrc",
-					".eslintrc.yml",
-					".eslintrc.yaml"
-				),
-			})
+			pcall(vim.lsp.enable, server_name, false)
 			return
 		end
 
-		if server_name == "biome" then
-			config.biome.setup({
-				on_attach = on_attach,
-				capabilities = capabilities,
-				settings = settings,
-				cmd = server.cmd,
-				root_dir = config.util.root_pattern("biome.json", "biome.jsonc", ".git"),
-			})
-			return
-		end
-
-		-- default lsp setup
-		config[server_name].setup({
-			capabilities = vim.tbl_deep_extend("force", {}, capabilities, server.capabilities or {}),
-			on_attach = on_attach,
-			settings = settings,
-			cmd = server.cmd,
-			root_dir = server.root_dir or config.util.root_pattern(server.root_files or {}),
-		})
+		vim.lsp.config(server_name, server_config(server_name, capabilities, on_attach))
+		vim.lsp.enable(server_name)
 	end
 end
 
@@ -243,6 +278,8 @@ local trigger_filetypes = {
 	"typescriptreact",
 	"yaml",
 }
+
+local disabled_ts_servers = { "typescript", "ts_ls", "tsserver", "vtsls" }
 
 return {
 	"neovim/nvim-lspconfig",
@@ -318,6 +355,9 @@ return {
 	config = function()
 		local capabilities = get_capabilities()
 		local ensure_installed = get_ensure_installed()
+		for _, server_name in ipairs(disabled_ts_servers) do
+			pcall(vim.lsp.enable, server_name, false)
+		end
 		require("mason-tool-installer").setup({ ensure_installed = ensure_installed })
 		require("mason").setup()
 		require("mason-lspconfig").setup({
@@ -325,6 +365,9 @@ return {
 			automatic_installation = false,
 			handlers = { mason_handlers(capabilities, on_attach) },
 		})
+		for _, server_name in ipairs(disabled_ts_servers) do
+			pcall(vim.lsp.enable, server_name, false)
+		end
 		require("lazydev").setup({ capabilities = capabilities, on_attach = on_attach })
 		require("lsp-file-operations").setup()
 		setup_diagnostics()
@@ -336,10 +379,7 @@ return {
 				local bufnr = args.buf
 				local client = vim.lsp.get_client_by_id(args.data.client_id)
 				if client then
-					-- Use vim.schedule to ensure this runs after other plugins
-					vim.schedule(function()
-						on_attach(client, bufnr)
-					end)
+					on_attach(client, bufnr)
 				end
 			end,
 		})
