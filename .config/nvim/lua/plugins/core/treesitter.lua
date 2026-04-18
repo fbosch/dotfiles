@@ -17,6 +17,19 @@ return {
 
 			treesitter.setup({})
 
+			local required_languages = { "typescript", "tsx", "javascript", "jsdoc" }
+			local missing_languages = {}
+			for _, lang in ipairs(required_languages) do
+				local has_parser = pcall(vim.treesitter.language.add, lang)
+				if has_parser == false then
+					table.insert(missing_languages, lang)
+				end
+			end
+
+			if #missing_languages > 0 then
+				treesitter.install(missing_languages)
+			end
+
 			local group = vim.api.nvim_create_augroup("TreesitterStart", { clear = true })
 			vim.api.nvim_create_autocmd("FileType", {
 				group = group,
@@ -56,6 +69,20 @@ return {
 				"<cmd>Treewalker Down<CR>",
 				mode = { "n", "x" },
 				desc = "Treewalker down",
+				silent = true,
+			},
+			{
+				"<C-h>",
+				"<cmd>Treewalker Left<CR>",
+				mode = { "n", "x" },
+				desc = "Treewalker left",
+				silent = true,
+			},
+			{
+				"<C-l>",
+				"<cmd>Treewalker Right<CR>",
+				mode = { "n", "x" },
+				desc = "Treewalker right",
 				silent = true,
 			},
 			{
