@@ -13,7 +13,6 @@ pkill flake-check-updates 2>/dev/null || true
 pkill -f "vicinae server" 2>/dev/null || true
 pkill -f "atuin daemon" 2>/dev/null || true
 pkill -f "foot --server" 2>/dev/null || true
-pkill -f "night-light-scheduler.sh" 2>/dev/null || true
 pkill -f "window-state.sh" 2>/dev/null || true
 pkill -f "window-capture-daemon.sh" 2>/dev/null || true
 pkill -f "gamescope-profile-watchdog.sh" 2>/dev/null || true
@@ -28,7 +27,6 @@ uwsm-app -s s -- atuin daemon &
 uwsm-app -s b -- foot --server &
 uwsm-app -s b -- flake-check-updates &
 uwsm-app -s b -- swayosd-server &
-uwsm-app -s b -- ~/.config/hypr/scripts/night-light-scheduler.sh &
 uwsm-app -s b -- ~/.config/hypr/scripts/window-state.sh &
 uwsm-app -s b -- ~/.config/hypr/scripts/window-capture-daemon.sh &
 uwsm-app -s b -- ~/.config/hypr/scripts/gamescope-profile-watchdog.sh &
