@@ -64,5 +64,14 @@
 - Before suggesting or running `ssh`, compare target host to `hostname -s`; if they match, do not suggest or run SSH.
 - Prefer offering to run helpful commands rather than instructing the user to run them.
 - If a command is likely long-running or expensive, call it out and offer to run it.
+
+### Ambiguity and execution loop
+
+- Before coding, state key assumptions; if any assumption is high-impact, ask one targeted question.
+- If a request has multiple valid interpretations, list options with tradeoffs; do not pick silently.
+- Prefer the simpler approach when it satisfies the request; push back on over-complex directions.
+- For non-trivial tasks, define success criteria first (tests/checks/observable outcome), then implement until criteria pass.
+- If unrelated dead code or issues are noticed, mention them; do not modify unless requested.
+
 - When changing behavior, update/add tests and handle important edge cases.
 - Run the smallest reasonable validation (tests/build/typecheck) when making code changes.
