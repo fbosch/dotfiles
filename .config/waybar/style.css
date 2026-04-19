@@ -86,8 +86,8 @@
 }
 
 #custom-mullvad {
-  margin: 0 0.6rem 0 0.45rem;
-  font-size: 1.05rem;
+  margin: 0 0.45rem 0 0.65rem;
+  font-size: 1.1rem;
 }
 
 #custom-mullvad.connected {
