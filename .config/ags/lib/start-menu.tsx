@@ -101,6 +101,12 @@ const defaultMenuItems: MenuItem[] = [
     variant: "suspend",
   },
   {
+    id: "sign-out",
+    label: "Sign-out",
+    icon: "\uE8AB", // SwitchUser
+    variant: "warning",
+  },
+  {
     id: "restart",
     label: "Restart",
     icon: "\uE777", // UpdateRestore
@@ -303,6 +309,7 @@ const menuCommands: Record<string, string> = {
   pictures: `nemo --existing-window "${getXdgUserDirOrDefault("XDG_PICTURES_DIR", `${homeDir}/Pictures`)}"`,
   downloads: `nemo --existing-window "${getXdgUserDirOrDefault("XDG_DOWNLOAD_DIR", `${homeDir}/Downloads`)}"`,
   suspend: `${homeDir}/.config/hypr/scripts/confirm-suspend.sh`,
+  "sign-out": `${homeDir}/.config/hypr/scripts/confirm-exit.sh`,
   restart: `${homeDir}/.config/hypr/scripts/confirm-restart.sh`,
   shutdown: `${homeDir}/.config/hypr/scripts/confirm-shutdown.sh`,
   "nixos-updates": getSystemUpdatesCommand(),
