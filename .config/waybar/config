@@ -14,7 +14,7 @@
 
   "modules-left": ["custom/startbutton", "hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],
-  "modules-right": ["memory", "cpu", "custom/cpu_temp", "custom/gpu_temp", "tray", "pulseaudio", "hyprland/language", "clock", "custom/swaync"],
+  "modules-right": ["memory", "cpu", "custom/cpu_temp", "custom/gpu_temp", "tray", "custom/mullvad", "pulseaudio", "hyprland/language", "clock", "custom/swaync"],
 
   "tray": {
     "spacing": 8,
@@ -64,6 +64,16 @@
     "format": "󰢮  {}",
     "tooltip": true,
     "on-click": "~/.config/waybar/scripts/nvitop-terminal"
+  },
+
+  "custom/mullvad": {
+    "exec": "~/.config/waybar/scripts/mullvad-status",
+    "interval": 5,
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": true,
+    "on-click": "uwsm-app -s b -- mullvad connect",
+    "on-click-right": "uwsm-app -s b -- mullvad disconnect"
   },
 
   "pulseaudio": {

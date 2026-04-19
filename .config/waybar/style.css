@@ -85,6 +85,23 @@
   padding-right: 0.75rem;
 }
 
+#custom-mullvad {
+  margin: 0 0.6rem 0 0.45rem;
+  font-size: 1.05rem;
+}
+
+#custom-mullvad.connected {
+  color: #73bc6f;
+}
+
+#custom-mullvad.disconnected {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+#custom-mullvad.error {
+  color: #dea721;
+}
+
 /* CPU states */
 #cpu.idle {
   color: #73bc6f;

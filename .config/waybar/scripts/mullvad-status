@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  printf '%s' "$value"
+}
+
+if command -v mullvad >/dev/null 2>&1; then
+  status_text="$(mullvad status 2>/dev/null || true)"
+  if [[ "$status_text" == Connected* ]]; then
+    visible_location="$(printf '%s\n' "$status_text" | awk '/Visible location:/ {sub(/^[[:space:]]*Visible location:[[:space:]]*/, "", $0); print; exit}')"
+    relay="$(printf '%s\n' "$status_text" | awk '/Relay:/ {sub(/^[[:space:]]*Relay:[[:space:]]*/, "", $0); print; exit}')"
+    tooltip="Mullvad connected"
+    if [[ -n "$visible_location" ]]; then
+      tooltip+=$'\n'"$visible_location"
+    fi
+    if [[ -n "$relay" ]]; then
+      tooltip+=$'\n'"Relay: $relay"
+    fi
+    printf '{"text":"󰖂","tooltip":"%s","class":"connected"}\n' "$(json_escape "$tooltip")"
+    exit 0
+  fi
+
+  if [[ "$status_text" == Disconnected* ]]; then
+    printf '{"text":"󰖂","tooltip":"Mullvad disconnected","class":"disconnected"}\n'
+    exit 0
+  fi
+
+  printf '{"text":"󰖂","tooltip":"%s","class":"error"}\n' "$(json_escape "$status_text")"
+  exit 0
+fi
+
+printf '{"text":"󰖂","tooltip":"Mullvad CLI not found","class":"error"}\n'
