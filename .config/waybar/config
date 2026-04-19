@@ -67,8 +67,8 @@
   },
 
   "custom/mullvad": {
-    "exec": "~/.config/waybar/scripts/mullvad-status",
-    "interval": 5,
+    "exec": "~/.config/waybar/scripts/mullvad-status --listen",
+    "restart-interval": 2,
     "return-type": "json",
     "format": "{}",
     "tooltip": true,

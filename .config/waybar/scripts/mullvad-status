@@ -10,11 +10,17 @@ json_escape() {
   printf '%s' "$value"
 }
 
-if command -v mullvad >/dev/null 2>&1; then
-  status_text="$(mullvad status 2>/dev/null || true)"
+emit_status() {
+  local status_text="$1"
+
   if [[ "$status_text" == Connected* ]]; then
+    local visible_location
+    local relay
+    local tooltip
+
     visible_location="$(printf '%s\n' "$status_text" | awk '/Visible location:/ {sub(/^[[:space:]]*Visible location:[[:space:]]*/, "", $0); print; exit}')"
     relay="$(printf '%s\n' "$status_text" | awk '/Relay:/ {sub(/^[[:space:]]*Relay:[[:space:]]*/, "", $0); print; exit}')"
+
     tooltip="Mullvad connected"
     if [[ -n "$visible_location" ]]; then
       tooltip+=$'\n'"$visible_location"
@@ -22,17 +28,57 @@ if command -v mullvad >/dev/null 2>&1; then
     if [[ -n "$relay" ]]; then
       tooltip+=$'\n'"Relay: $relay"
     fi
+
     printf '{"text":"󰖂","tooltip":"%s","class":"connected"}\n' "$(json_escape "$tooltip")"
-    exit 0
+    return 0
   fi
 
   if [[ "$status_text" == Disconnected* ]]; then
     printf '{"text":"󰖂","tooltip":"Mullvad disconnected","class":"disconnected"}\n'
-    exit 0
+    return 0
   fi
 
   printf '{"text":"󰖂","tooltip":"%s","class":"error"}\n' "$(json_escape "$status_text")"
-  exit 0
-fi
+}
 
-printf '{"text":"󰖂","tooltip":"Mullvad CLI not found","class":"error"}\n'
+print_cli_missing() {
+  printf '{"text":"󰖂","tooltip":"Mullvad CLI not found","class":"error"}\n'
+}
+
+listen_status() {
+  local line
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    case "$line" in
+      Connected*|Disconnected*)
+        emit_status "$(mullvad status 2>/dev/null || true)"
+        ;;
+    esac
+  done
+
+  if [[ "${line:-}" != "" ]]; then
+    emit_status "$(mullvad status 2>/dev/null || true)"
+  fi
+}
+
+main() {
+  local mode="${1:-once}"
+
+  if command -v mullvad >/dev/null 2>&1; then
+    if [[ "$mode" == "--listen" ]]; then
+      emit_status "$(mullvad status 2>/dev/null || true)"
+      if command -v stdbuf >/dev/null 2>&1; then
+        stdbuf -oL mullvad status listen 2>/dev/null | listen_status
+      else
+        mullvad status listen 2>/dev/null | listen_status
+      fi
+      return 0
+    fi
+
+    emit_status "$(mullvad status 2>/dev/null || true)"
+    return 0
+  fi
+
+  print_cli_missing
+}
+
+main "$@"
