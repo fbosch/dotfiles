@@ -102,6 +102,26 @@
   color: #dea721;
 }
 
+#custom-minimized {
+  margin: 0 0.45rem 0 0.65rem;
+  font-size: 0.85rem;
+  padding: 0 0.35rem;
+  border-radius: 0.25rem;
+}
+
+#custom-minimized.empty {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+#custom-minimized.active {
+  color: #dea721;
+  background-color: rgba(222, 167, 33, 0.15);
+}
+
+#custom-minimized.error {
+  color: #e35245;
+}
+
 /* CPU states */
 #cpu.idle {
   color: #73bc6f;
