@@ -6,8 +6,8 @@ return function(config)
 		gpus = wezterm.gui.enumerate_gpus()
 	end
 
-	config.front_end = "WebGpu"
-	-- config.front_end = "OpenGL"
+	-- config.front_end = "WebGpu"
+	config.front_end = "OpenGL"
 	config.webgpu_power_preference = "HighPerformance"
 	-- config.webgpu_preferred_adapter = gpus[1]
 	config.max_fps = 120

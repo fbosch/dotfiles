@@ -113,6 +113,13 @@ If validation fails, fix and rerun only failed checks before shipping.
 
 Use this matrix; do not improvise shipping outcomes.
 
+OpenSpec task sync rule (when applicable):
+
+1. If this issue is linked to an OpenSpec change and `<change>/tasks.md` exists, update that checklist before ship completion.
+2. Tick only tasks that were actually completed in this delivery.
+3. Leave incomplete or deferred tasks unchecked; do not infer completion from intent alone.
+4. If task mapping is ambiguous, stop and report the ambiguity instead of mass-checking items.
+
 1. `commit:allowed` + `push:allowed`
     - Prepare commit tied to issue id.
     - Push branch.
@@ -147,6 +154,8 @@ Common failure branches:
 - Detached HEAD or unexpected branch -> switch to intended branch before validation/shipping.
 - Validation command missing -> fallback to available checks and report gap.
 - PR creation API failure -> provide ready-to-run PR metadata and recovery step.
+- OpenSpec tasks file missing for a matched change -> continue shipping, but report that task sync was skipped.
+- OpenSpec task mapping unclear -> report exact ambiguous items and request clarification before checking boxes.
 
 ## NEVER
 
@@ -169,3 +178,5 @@ Always return these six blocks:
 4. Change summary (files and intent)
 5. Validation results (what ran, pass/fail, skipped with reason)
 6. Shipping status (committed/pushed/PR URL or blocked with exact next step)
+
+When OpenSpec applies, include task-sync status in block 6 (`updated`, `skipped`, or `blocked`) with path and reason.
