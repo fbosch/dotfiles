@@ -25,6 +25,7 @@
 - Avoid single-use wrapper functions and trivial helper functions.
 - Avoid IIFEs (immediately invoked function expressions); prefer named functions, top-level statements, or module-level initialization instead.
 - Prefer `=== false` over `!` for negating boolean expressions, especially multi-line ones — `!` at the start of a long expression is easy to miss and forces mental inversion; `=== false` makes the intent explicit at the end where the eye lands
+- Prefer event-driven listeners over polling loops whenever both are viable.
 
 ### Compatibility scope
 

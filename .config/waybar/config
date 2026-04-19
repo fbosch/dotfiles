@@ -13,7 +13,7 @@
   "mode": "dock",
 
   "modules-left": ["custom/startbutton", "hyprland/workspaces"],
-  "modules-center": ["custom/minimized", "wlr/taskbar"],
+  "modules-center": ["wlr/taskbar"],
   "modules-right": ["memory", "cpu", "custom/cpu_temp", "custom/gpu_temp", "tray", "custom/mullvad", "pulseaudio", "hyprland/language", "clock", "custom/swaync"],
 
   "tray": {
@@ -74,15 +74,6 @@
     "tooltip": true,
     "on-click": "uwsm-app -s b -- mullvad connect",
     "on-click-right": "uwsm-app -s b -- mullvad disconnect"
-  },
-
-  "custom/minimized": {
-    "exec": "~/.config/waybar/scripts/hypr-minimized-indicator",
-    "restart-interval": 2,
-    "return-type": "json",
-    "format": "{}",
-    "on-click": "hyprctl dispatch togglespecialworkspace minimized",
-    "tooltip": true
   },
 
   "pulseaudio": {
