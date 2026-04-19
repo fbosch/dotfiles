@@ -607,7 +607,7 @@ async function getWindows(): Promise<WindowInfo[]> {
 
     // Filter out special workspaces
     const filteredClients = clients
-      .filter((c) => c.workspace.id !== -1)
+      .filter((c) => (c.workspace.name || "").startsWith("special:") === false)
       .map((c) => ({
         address: c.address,
         stableId: c.stableId,
@@ -1284,9 +1284,15 @@ function onCommit() {
   }
 
   try {
-    GLib.spawn_command_line_async(
-      `hyprctl dispatch focuswindow address:${targetWindow.address}`,
-    );
+    if (targetWindow.workspace === "special:minimized") {
+      GLib.spawn_command_line_async(
+        `bash -lc '~/.config/hypr/scripts/toggle-minimized-workspace.sh ${targetWindow.address} && hyprctl dispatch focuswindow address:${targetWindow.address}'`,
+      );
+    } else {
+      GLib.spawn_command_line_async(
+        `hyprctl dispatch focuswindow address:${targetWindow.address}`,
+      );
+    }
     
     // Update focus history when committing a switch
     updateFocusHistory(targetWindow.address);

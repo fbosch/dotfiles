@@ -3,6 +3,17 @@
 set -euo pipefail
 
 direction="${1:-next}"
+readonly MINIMIZED_WORKSPACE="special:minimized"
+
+show_minimized_workspace_for_window() {
+    local address="$1"
+
+    if [[ -z "$address" ]]; then
+        return
+    fi
+
+    bash ~/.config/hypr/scripts/toggle-minimized-workspace.sh "$address"
+}
 
 # Grab the address of the currently focused window (may be null on empty workspace).
 current_address="$(hyprctl activewindow -j | jq -r '.address // empty')"
@@ -18,7 +29,7 @@ while IFS=$'\t' read -r address workspace_ref title; do
     workspace_refs+=("$workspace_ref")
     titles+=("$title")
 done < <(hyprctl clients -j | jq -r '
-    map(select(.workspace.id != -1)) |
+    map(select((.workspace.name | startswith("special:")) == false)) |
     sort_by([.class, (.title // ""), .address]) |
     .[] |
     "\(.address)\t" +
@@ -67,15 +78,8 @@ fi
 target_workspace_ref="${workspace_refs[$next_index]}"
 
 if [[ -n "${target_workspace_ref}" ]]; then
-    current_workspace_ref="$(hyprctl activeworkspace -j | jq -r '
-        if (.name // "") != "" then (.name // "")
-        elif (.id != null) then (.id | tostring)
-        else ""
-        end
-    ')"
-
-    if [[ "${target_workspace_ref}" != "${current_workspace_ref}" ]]; then
-        hyprctl dispatch workspace "${target_workspace_ref}"
+    if [[ "${target_workspace_ref}" == "${MINIMIZED_WORKSPACE}" ]]; then
+        show_minimized_workspace_for_window "${addresses[$next_index]}"
     fi
 fi
 

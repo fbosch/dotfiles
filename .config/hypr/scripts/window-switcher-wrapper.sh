@@ -3,11 +3,22 @@
 # Usage: window-switcher-wrapper.sh [next|prev|commit|hide]
 
 action="${1:-next}"
+readonly MINIMIZED_WORKSPACE="special:minimized"
+
+show_minimized_workspace_for_window() {
+  local address="$1"
+
+  if [[ -z "$address" ]]; then
+    return
+  fi
+
+  bash ~/.config/hypr/scripts/toggle-minimized-workspace.sh "$address"
+}
 
 single_window_record=""
 if [[ "$action" == "next" || "$action" == "prev" ]]; then
   single_window_record="$(hyprctl clients -j | jq -r '
-    map(select(.workspace.id != -1)) |
+    map(select((.workspace.name | startswith("special:")) == false)) |
     if length == 1 then
       .[0] |
       "\(.address)\t" +
@@ -27,15 +38,8 @@ if [[ -n "$single_window_record" ]]; then
   IFS=$'\t' read -r single_window_address single_window_workspace <<< "$single_window_record"
 
   if [[ -n "$single_window_workspace" ]]; then
-    current_workspace_ref="$(hyprctl activeworkspace -j | jq -r '
-      if (.name // "") != "" then (.name // "")
-      elif (.id != null) then (.id | tostring)
-      else ""
-      end
-    ')"
-
-    if [[ "$single_window_workspace" != "$current_workspace_ref" ]]; then
-      hyprctl dispatch workspace "$single_window_workspace"
+    if [[ "$single_window_workspace" == "$MINIMIZED_WORKSPACE" ]]; then
+      show_minimized_workspace_for_window "$single_window_address"
     fi
   fi
 
