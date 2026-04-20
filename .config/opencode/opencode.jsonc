@@ -12,6 +12,7 @@
     "./plugins/rtk.ts"
   ],
   "instructions": [
+    "~/.config/opencode/instructions/RTK.md",
     "~/.config/opencode/instructions/caveman.md",
     "~/.config/opencode/instructions/worktrunk.md"
   ],

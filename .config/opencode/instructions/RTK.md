@@ -29,7 +29,31 @@ When output is rewritten by RTK, interpret it by meaning, not by exact byte-for-
 - For `git status --short`, non-`ok` lines are status entries and should be treated as changes present.
 - Do not retry the same status command only to confirm `ok`; treat it as final unless another action changed repo state.
 - If RTK emits a parser/adapter warning (for example `JSON parse failed`) for a command, do one fallback run with `rtk proxy <original-command>` to get raw output.
-- Never loop retries of the same failing summarized command; run once, then fallback once, then proceed from the fallback result.
+- Never loop retries of the same failing summarized command; run once, then fallback once, then stop retries and report result.
+
+## Loop Guard (Critical)
+
+If a summarized command fails with parser/adapter output, use this exact flow:
+
+1. Run summarized command once.
+2. If parser/adapter warning appears, run exactly one fallback: `rtk proxy <original-command>`.
+3. Use fallback output as source of truth.
+4. Do not run the summarized form again unless inputs changed (files, flags, env, cwd).
+5. If fallback fails too, stop and report failure; include log path if RTK printed one.
+
+Important: running the raw command text (for example `pnpm lint`) may still be auto-rewritten by the plugin. To bypass rewriting, fallback must be explicit `rtk proxy ...`.
+
+Example (`lint` parser warning):
+
+```bash
+# 1) summarized attempt
+rtk lint
+
+# 2) one fallback attempt (raw output)
+rtk proxy pnpm lint
+
+# 3) stop retries; act on fallback result
+```
 
 Use raw output only when exact machine-readable formatting is required:
 
