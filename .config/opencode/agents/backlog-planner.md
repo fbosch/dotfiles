@@ -93,6 +93,7 @@ If OpenSpec is not initialized or no change is provided, output a best-effort `s
 5. Keep dependency relationships acyclic.
 6. Include non-code tasks when needed (docs, rollout, validation).
 7. Preserve user intent and constraints; do not expand scope silently.
+8. For each major task group, include likely implementation touchpoints and any required coordinated updates (tests/docs/config) as explicit tasks where applicable.
 
 ## Quality checks before returning
 

@@ -66,5 +66,6 @@
 - Prefer the simpler approach when it satisfies the request; push back on over-complex directions.
 - For non-trivial tasks, define success criteria first (tests/checks/observable outcome), then implement until criteria pass.
 - If unrelated dead code or issues are noticed, mention them; do not modify unless requested.
+- Scope lint/typecheck diagnostics to files you touched first; widen only if needed, since workspace-wide diagnostics may include pre-existing issues.
 - If a scoped `AGENTS.md` or referenced workflow doc names validation checks, run them after changes and before finishing.
 - Run the smallest reasonable validation (tests/build/typecheck) when making code changes.

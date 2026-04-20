@@ -62,4 +62,5 @@ Do not advance to planning or implementation guidance when contract-shaping ambi
 - Precedence rules are total — no ties or undefined ordering
 - All failure modes are enumerated and deterministic
 - Major interface and behavior choices include at least one explicit tradeoff
+- Before marking `READY`, identify likely implementation touchpoints (components/modules/interfaces) and related references that will likely need coordinated updates (tests/docs/config) at a high level.
 - If an open question can materially change contracts or behavior, readiness must be `NOT READY`
