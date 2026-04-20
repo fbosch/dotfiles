@@ -605,9 +605,16 @@ async function getWindows(): Promise<WindowInfo[]> {
       activeWindowCache = { timestampMs: nowMs, address: focusedClient.address };
     }
 
-    // Filter out special workspaces
+    // Keep minimized windows visible in switcher, but exclude other special workspaces
     const filteredClients = clients
-      .filter((c) => (c.workspace.name || "").startsWith("special:") === false)
+      .filter((c) => {
+        const workspaceName = c.workspace.name || "";
+        if (workspaceName === "special:minimized") {
+          return true;
+        }
+
+        return workspaceName.startsWith("special:") === false;
+      })
       .map((c) => ({
         address: c.address,
         stableId: c.stableId,
