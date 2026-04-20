@@ -11,16 +11,38 @@ return {
 		local opencode_zen_stats = require("utils.usage.opencode")
 		-- local anthropic_usage = require("utils.usage.anthropic")
 
+		local function is_valid_status(result)
+			return type(result) == "string"
+				and result ~= ""
+				and result:match("^%s*$") == nil
+				and result:match("%f[%a]unknown%f[%A]") == nil
+		end
+
 		local lualine_x = {
-			require("opencode").statusline,
 			{
 				function()
-					local _, result = pcall(codexbar.statusline_component)
+					local ok, result = pcall(require("opencode").statusline)
+					if not ok or not is_valid_status(result) then
+						return ""
+					end
+					return result
+				end,
+				cond = function()
+					local ok, result = pcall(require("opencode").statusline)
+					return ok and is_valid_status(result)
+				end,
+			},
+			{
+				function()
+					local ok, result = pcall(codexbar.statusline_component)
+					if not ok or not is_valid_status(result) then
+						return ""
+					end
 					return result .. " %#Comment#│%*"
 				end,
 				cond = function()
 					local ok, result = pcall(codexbar.statusline_component)
-					return ok and result ~= nil and result ~= ""
+					return ok and is_valid_status(result)
 				end,
 			},
 			-- {
@@ -35,12 +57,15 @@ return {
 			-- },
 			{
 				function()
-					local _, result = pcall(copilot_usage.statusline_component)
+					local ok, result = pcall(copilot_usage.statusline_component)
+					if not ok or not is_valid_status(result) then
+						return ""
+					end
 					return result .. " %#Comment#│%*"
 				end,
 				cond = function()
 					local ok, result = pcall(copilot_usage.statusline_component)
-					return ok and result ~= nil and result ~= ""
+					return ok and is_valid_status(result)
 				end,
 			},
 		}
