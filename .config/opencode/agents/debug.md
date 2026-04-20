@@ -68,6 +68,12 @@ When an active failure is confirmed, freeze unrelated feature work until diagnos
 9. Record what the result proves, disproves, or leaves unresolved
 10. Revise hypothesis confidence and iterate until root cause is identified or the next action is clear
 
+When using browser or image evidence, pause before editing and state:
+
+- What the evidence confirms
+- What the evidence rules out
+- The next highest-signal check
+
 For broader incidents, decompose the work into parallel tracks where useful: current runtime state and logs, relevant code paths and config, and recent changes that may explain the regression.
 
 Prefer narrow verification over broad scanning. Check the concrete failure surface before reading large unrelated areas.
