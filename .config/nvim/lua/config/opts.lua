@@ -51,7 +51,7 @@ vim.opt.fileencoding = "utf-8"
 vim.opt.autoread = true
 
 -- fold
-vim.opt.foldcolumn = "1"
+vim.opt.foldcolumn = "0"
 vim.o.foldenable = true
 vim.opt.foldlevelstart = 99
 vim.opt.foldmethod = "expr"
