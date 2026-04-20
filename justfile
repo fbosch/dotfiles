@@ -18,6 +18,9 @@ fish-syntax:
 shellcheck:
 	shellcheck scripts/*.sh .config/ags/*.sh .config/ags/scripts/*.sh .config/hypr/scripts/*.sh .config/rofi/launchers/type-3/launcher.sh .config/vicinae/extensions/*.sh
 
+symlink-check:
+	python3 scripts/check-symlink-targets.py
+
 vicinae-build:
 	bash ./scripts/vicinae-build-extensions.sh
 
