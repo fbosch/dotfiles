@@ -1,7 +1,7 @@
-function wtfzf --description 'Pick a worktree from wt list with fzf'
+function wtfzf --description 'Pick git worktree quickly via git porcelain'
     set -l cmd_name wtfzf
 
-    for cmd in wt jq fzf git
+    for cmd in git fzf
         if not command -v $cmd >/dev/null 2>&1
             echo "$cmd_name: '$cmd' is required" >&2
             return 127
@@ -14,46 +14,64 @@ function wtfzf --description 'Pick a worktree from wt list with fzf'
     end
 
     set -l tab (printf '\t')
-    set -l worktree_rows (
-        wt list --format=json $argv \
-        | jq -r '
-            def clean: gsub("[\t\r\n]"; " ");
-            def short(n): if length > n then .[:(n - 3)] + "..." else . end;
-            def short_path:
-                if . == null then "-"
-                else
-                    split("/")
-                    | map(select(length > 0))
-                    | if length <= 3 then join("/") else .[-3:] | join("/") end
-                end;
-
-            .[]
-            | select(.branch != null)
-            | [
-                .branch,
-                ([
-                    (if .is_current then "*" elif .is_previous then "-" else " " end),
-                    ((.branch // "-") | short(36)),
-                    ((.symbols // "") | short(4)),
-                    ((.path // null) | short_path | short(34)),
-                    ((.commit.short_sha // "-") | short(8)),
-                    ((.commit.message // "") | clean | short(72))
-                ] | join("  ")),
-                (.path // "-"),
-                (if .is_current then "1" else "0" end)
-            ]
-            | @tsv
-        '
-    )
+    set -l current_path (pwd -P)
+    set -l porcelain (git worktree list --porcelain 2>/dev/null)
     set -l list_exit_code $status
 
     if test $list_exit_code -ne 0
-        echo "$cmd_name: failed to list worktrees" >&2
         return $list_exit_code
     end
 
-    if test -z "$worktree_rows"
-        echo "$cmd_name: no worktrees found" >&2
+    if test -z "$porcelain"
+        return 1
+    end
+
+    set -l worktree_rows
+    set -l path ''
+    set -l branch ''
+
+    function __wtfzf_flush --no-scope-shadowing
+        if test -z "$path"
+            return
+        end
+
+        set -l marker ' '
+        if test "$path" = "$current_path"
+            set marker '*'
+        end
+
+        set -l branch_name "$branch"
+        if test -z "$branch_name"
+            set branch_name '(detached)'
+        end
+
+        set -a worktree_rows "$path$tab$marker  $branch_name  $path"
+    end
+
+    for line in $porcelain
+        if string match -q 'worktree *' -- "$line"
+            __wtfzf_flush
+            set path (string replace -r '^worktree ' '' -- "$line")
+            set branch ''
+            continue
+        end
+
+        if string match -q 'branch refs/heads/*' -- "$line"
+            set branch (string replace -r '^branch refs/heads/' '' -- "$line")
+            continue
+        end
+
+        if test -z "$line"
+            __wtfzf_flush
+            set path ''
+            set branch ''
+        end
+    end
+    __wtfzf_flush
+    functions -e __wtfzf_flush
+
+    set -l count_rows (count $worktree_rows)
+    if test $count_rows -le 1
         return 1
     end
 
@@ -67,9 +85,7 @@ function wtfzf --description 'Pick a worktree from wt list with fzf'
             --layout=reverse \
             --border=rounded \
             --info=inline-right \
-            --header='enter: switch worktree' \
-            --preview='if [ -z "{3}" ] || [ "{3}" = "-" ] || [ ! -d "{3}" ]; then printf "branch: %s\npath: %s\n\nworktree path unavailable\n" "{1}" "{3}"; exit 0; fi; printf "branch: %s\npath: %s\n\n" "{1}" "{3}"; git -C "{3}" status --short --branch 2>/dev/null; printf "\n"; git -C "{3}" log -1 --pretty=format:"%h %s" 2>/dev/null' \
-            --preview-window='down,45%,border-top,wrap' \
+            --header='enter: cd into worktree' \
             < /dev/tty
     )
     set -l exit_code $status
@@ -78,12 +94,15 @@ function wtfzf --description 'Pick a worktree from wt list with fzf'
         return $exit_code
     end
 
-    set -l branch (string split -f 1 $tab -- "$selected")
-    set -l is_current (string split -f 4 $tab -- "$selected")
+    set -l selected_path (string split -f 1 $tab -- "$selected")
+    if test -z "$selected_path" -o ! -d "$selected_path"
+        return 1
+    end
 
-    if test "$is_current" = "1"
+    if test "$selected_path" = "$current_path"
         return 0
     end
 
-    wt switch "$branch"
+    cd "$selected_path"
+    commandline --function repaint
 end
