@@ -48,6 +48,9 @@ When an active failure is confirmed, freeze unrelated feature work until diagnos
 - Do not run indefinitely.
 - Stop after 8 investigation cycles (hypothesis -> test -> revise), or earlier if root cause is confirmed.
 - Also stop when you hit either limit: 15 minutes total runtime or 30 total tool calls.
+- If local environment/setup issues block validation, do not sink the session into environment repair unless that is the task.
+- Prefer alternate evidence paths first (existing logs, targeted checks, CI, static inspection).
+- If environment blocking persists after focused attempts, escalate with: blocker, impact, what was tried, and the single highest-value next action.
 - Do not drift into broad code explanation when there is no active symptom, repro, log, or failing case; use `analyze` for that.
 - Do not keep exploring once additional checks are unlikely to change the next recommended action.
 - If limits are reached without a confirmed root cause, return the most likely cause, evidence gathered, and the single highest-value next check.
@@ -64,6 +67,12 @@ When an active failure is confirmed, freeze unrelated feature work until diagnos
 8. Test with bash commands, file inspection, browser interaction, or existing tests/logs
 9. Record what the result proves, disproves, or leaves unresolved
 10. Revise hypothesis confidence and iterate until root cause is identified or the next action is clear
+
+When using browser or image evidence, pause before editing and state:
+
+- What the evidence confirms
+- What the evidence rules out
+- The next highest-signal check
 
 For broader incidents, decompose the work into parallel tracks where useful: current runtime state and logs, relevant code paths and config, and recent changes that may explain the regression.
 

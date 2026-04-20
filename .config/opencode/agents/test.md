@@ -47,6 +47,12 @@ After writing tests, run them to verify they pass.
 - Assertions verify behavior, not implementation details
 - Prefer targeted tests first, then broader suites if needed
 
+## Failure handling
+
+- If tests fail, investigate product code first; do not modify tests unless explicitly requested or clear evidence shows test expectations are incorrect.
+- When CI or project validation checks exist, treat relevant passing checks as part of done unless the user explicitly relaxes that bar.
+- If the same validation loop fails repeatedly, stop after 3 focused attempts and report blocker, evidence, and highest-value next step.
+
 ## Done when
 
 - New or updated tests cover happy, edge, and error paths

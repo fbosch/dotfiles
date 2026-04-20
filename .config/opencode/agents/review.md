@@ -48,6 +48,7 @@ Provide constructive feedback without making changes.
 2. Review tests first to infer intended behavior and coverage.
 3. Evaluate changes across five axes: correctness, readability, architecture, security, performance.
 4. Deepen checks where risk is highest (security-sensitive paths, state transitions, boundary handling, perf hotspots).
+5. For UI/browser/image evidence, explicitly state what is confirmed, what is ruled out, and what remains uncertain before recommending fixes.
 
 ## Skill routing
 

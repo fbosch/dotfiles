@@ -18,6 +18,14 @@ Create, review, or refactor AGENTS.md files so they stay minimal, stable, and us
 7. Validate for staleness and token budget:
    - Apply the filters in **Core Keep/Cut Filters** below.
 
+## Scope and Precedence
+
+- An `AGENTS.md` file applies to the directory tree rooted at the folder that contains it.
+- For any file you touch, follow every `AGENTS.md` whose scope includes that file.
+- More deeply nested `AGENTS.md` files override broader ones when they conflict.
+- Direct system, developer, and user instructions override `AGENTS.md`.
+- If a scoped `AGENTS.md` or referenced workflow doc specifies validation steps, run them after making changes and before finishing.
+
 ## Mindset Checks (Before Editing)
 
 - Will this change improve activation or execution safety, or just add noise?

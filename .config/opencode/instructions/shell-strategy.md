@@ -164,6 +164,11 @@ timeout 30 ./potentially_hanging_script.sh || echo "Timed out"
 4. **Prefer OpenCode tools** over shell commands for file operations
 5. **Set timeout** for any command that might unexpectedly prompt
 
+## 6.1 Completion Rules
+
+1. Do not finish while a command you started is still running unless you intentionally terminated it.
+2. Before finishing, account for each command result and the next action it implies.
+
 ---
 
 ## 7. Advanced Instruction Patterns (Cognitive Optimization)

@@ -1,4 +1,7 @@
-function workitems_week --description 'Display calendar view of work items touched during the current week'
+function workitems_week --description 'Display calendar view of work items touched during the current or previous week'
+    argparse -n workitems_week p/previous r/refresh -- $argv
+    or return
+
     if not git rev-parse --git-dir >/dev/null 2>&1
         gum style " Not in a git repository"
         return 1
@@ -16,6 +19,9 @@ function workitems_week --description 'Display calendar view of work items touch
 
     set -l current_weekday (command date +%u)
     set -l days_since_monday (math "$current_weekday - 1")
+    if set -q _flag_previous
+        set days_since_monday (math "$days_since_monday + 7")
+    end
     
     # Calculate Monday of current week
     set -l monday
@@ -57,30 +63,39 @@ function workitems_week --description 'Display calendar view of work items touch
     
     # Get today's date for highlighting
     set -l today (command date +%Y-%m-%d)
-    
-    # Cache past weekdays individually, then only compute the remaining span once.
-    set -l extracted_items
-    set -l remaining_start_idx 0
 
-    for day_idx in (seq 1 5)
-        set -l target_date $dates[$day_idx]
-
-        if test "$target_date" = "$today"
-            set remaining_start_idx $day_idx
-            break
-        end
-
-        set -l sorted_dates (printf "%s\n%s\n" "$target_date" "$today" | sort)
-        if test "$sorted_dates[1]" = "$target_date"
-            set -a extracted_items (__workitems_extract $target_date $target_date)
-        else
-            set remaining_start_idx $day_idx
-            break
-        end
+    set -l use_refresh 0
+    if set -q _flag_refresh
+        set use_refresh 1
     end
+    
+    set -l extracted_items
+    if set -q _flag_previous
+        set -a extracted_items (__workitems_extract $dates[1] $dates[5] merged_main $use_refresh)
+    else
+        # Cache past weekdays individually, then only compute the remaining span once.
+        set -l remaining_start_idx 0
 
-    if test $remaining_start_idx -gt 0
-        set -a extracted_items (__workitems_extract $dates[$remaining_start_idx] $dates[5])
+        for day_idx in (seq 1 5)
+            set -l target_date $dates[$day_idx]
+
+            if test "$target_date" = "$today"
+                set remaining_start_idx $day_idx
+                break
+            end
+
+            set -l sorted_dates (printf "%s\n%s\n" "$target_date" "$today" | sort)
+            if test "$sorted_dates[1]" = "$target_date"
+                set -a extracted_items (__workitems_extract $target_date $target_date merged_main $use_refresh)
+            else
+                set remaining_start_idx $day_idx
+                break
+            end
+        end
+
+        if test $remaining_start_idx -gt 0
+            set -a extracted_items (__workitems_extract $dates[$remaining_start_idx] $dates[5] merged_main $use_refresh)
+        end
     end
 
     for day_idx in (seq 1 5)
@@ -106,7 +121,11 @@ function workitems_week --description 'Display calendar view of work items touch
     
     # Display the table header
     echo ""
-    gum style --foreground 2 --bold "Work Items - Week of "(format_date_display $monday)
+    set -l title_prefix "Work Items"
+    if set -q _flag_previous
+        set title_prefix "Work Items (Previous)"
+    end
+    gum style --foreground 2 --bold "$title_prefix - Week of "(format_date_display $monday)
     echo ""
     
     # Print table header
