@@ -42,8 +42,15 @@ Focus on:
 - Document behavior, inputs, outputs, and important constraints
 - Include practical examples for non-obvious usage
 
+## Deliverable handling
+
+- If the user asks for a real deliverable file (doc/report/guide/template), produce the actual file output rather than only inline chat content.
+- Keep pure explanation, Q&A, and lightweight summaries conversational unless the user asks for a file deliverable.
+- When sharing a completed file, keep the handoff concise: link or path first, short outcome summary second.
+
 ## Skill routing
 
+- For substantial file deliverables, load the most relevant documentation skill(s) before drafting.
 - Load `deprecation-and-migration` when documenting sunsets, replacement plans, migration guides, rollout phases, or removal criteria.
 - Load `crafting-effective-readmes` for README creation or major README restructuring.
 - Load `jsdoc-typescript-docs` when documenting public TypeScript APIs, complex types, or error contracts.
@@ -59,4 +66,5 @@ Focus on:
 - Target audience and scope are clear in the output
 - Relevant interfaces and workflows are documented
 - Documentation is accurate, scannable, and actionable
+- Requested deliverable format is satisfied (file output when requested, conversational output when not)
 - If gaps remain, include a short `Resume from here` note with unresolved questions and missing source material
