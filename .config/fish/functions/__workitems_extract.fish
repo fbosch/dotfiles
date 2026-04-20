@@ -1,9 +1,20 @@
 function __workitems_extract --description 'Extract work items from git commits for given date range (internal helper)'
-    # Arguments: start_date end_date
+    # Arguments: start_date end_date [mode] [refresh]
+    # Modes:
+    #   authored_branches (default): commits authored by current git user across refs
+    #   merged_main: commits on main/master first-parent history (merged/squashed PRs)
     # Returns: Lines of "date|workitem|branch" for each unique work item found
     
     set -l start_date $argv[1]
     set -l end_date $argv[2]
+    set -l mode $argv[3]
+    set -l refresh $argv[4]
+    if test -z "$mode"
+        set mode authored_branches
+    end
+    if test -z "$refresh"
+        set refresh 0
+    end
     
     # Cache directory for work items
     set -l cache_dir ~/.cache/fish/workitems
@@ -31,23 +42,56 @@ function __workitems_extract --description 'Extract work items from git commits 
         set can_cache 1
     end
     
-    # Include local branch state so caches invalidate when refs change.
-    set -l cache_version v2
-    set -l refs_state (git for-each-ref refs/heads/ --format='%(refname):%(objectname)' 2>/dev/null)
+    # Include relevant ref state so caches invalidate when refs change.
+    set -l cache_version v3
+    set -l refs_state ""
+    set -l main_ref ""
+
+    if test "$mode" = merged_main
+        set -l origin_head (git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)
+        if test -n "$origin_head"
+            set main_ref $origin_head
+        else if git show-ref --verify --quiet refs/remotes/origin/main
+            set main_ref origin/main
+        else if git show-ref --verify --quiet refs/remotes/origin/master
+            set main_ref origin/master
+        else if git show-ref --verify --quiet refs/heads/main
+            set main_ref main
+        else if git show-ref --verify --quiet refs/heads/master
+            set main_ref master
+        end
+
+        if test -n "$main_ref"
+            set refs_state (git rev-parse "$main_ref" 2>/dev/null)
+        else
+            set refs_state no-main-ref
+        end
+    else
+        set refs_state (git for-each-ref refs/heads/ --format='%(refname):%(objectname)' 2>/dev/null)
+    end
+
     set -l refs_hash (printf "%s\n" $refs_state | md5sum | cut -d' ' -f1 2>/dev/null; or printf "%s\n" $refs_state | md5 2>/dev/null)
 
     # Generate cache file name
-    set -l cache_key "$cache_version-$repo_hash-$refs_hash-$git_user_email-$start_date-$end_date"
+    set -l cache_key "$cache_version-$repo_hash-$refs_hash-$git_user_email-$mode-$start_date-$end_date"
     set -l cache_file "$cache_dir/$cache_key"
     
     # Return cached results if available and query is for past dates
-    if test $can_cache -eq 1 -a -f "$cache_file"
+    if test $refresh -eq 0 -a $can_cache -eq 1 -a -f "$cache_file"
         command cat "$cache_file"
         return 0
     end
     
-    # Get all commits for the date range with hash, date, and subject (including merges)
-    set -l commits_data (git log --all --author="$git_user_email" --since="$start_date 00:00:00" --until="$end_date 23:59:59" --pretty=format:"%H|%as|%s" 2>/dev/null)
+    # Get commits for the date range with hash, date, and subject (including merges)
+    set -l commits_data ""
+    if test "$mode" = merged_main
+        if test -z "$main_ref"
+            return 0
+        end
+        set commits_data (git log $main_ref --first-parent --since="$start_date 00:00:00" --until="$end_date 23:59:59" --pretty=format:"%H|%as|%s" 2>/dev/null)
+    else
+        set commits_data (git log --all --author="$git_user_email" --since="$start_date 00:00:00" --until="$end_date 23:59:59" --pretty=format:"%H|%as|%s" 2>/dev/null)
+    end
     
     # Track which date|workitem|branch combos we've already output
     set -l output_items
@@ -55,54 +99,72 @@ function __workitems_extract --description 'Extract work items from git commits 
     # Process commits
     for commit_line in $commits_data
         set -l parts (string split '|' $commit_line)
-        set -l commit_hash $parts[1]
         set -l commit_date $parts[2]
         set -l commit_subject $parts[3]
-        set -l branch_names (git for-each-ref --contains="$commit_hash" refs/heads/ --format='%(refname:short)' 2>/dev/null)
-        
-        # Find which branch(es) this commit belongs to
-        for branch_name in $branch_names
-            # Extract work item from branch name
-            set -l workitem ""
-            if string match -qr 'AB#(\d+)' $branch_name
-                set workitem (string match -r 'AB#(\d+)' $branch_name | tail -n 1)
-            else if string match -qr '(\d+)' $branch_name
-                set workitem (string match -r '\d+' $branch_name | head -n 1)
-                # Skip if it looks like a date format (8 digits)
-                if test (string length $workitem) -eq 8
-                    set workitem ""
-                end
-            end
-
-            # Collect work item from branch name if found
-            if test -n "$workitem"
-                set -l item_key "$commit_date|$workitem|$branch_name"
-                if not contains $item_key $output_items
-                    set -a output_items $item_key
-                end
-            end
-        end
-        
-        # Also check commit message for AB# or #number references
-        if string match -qr '(AB#|#)(\d+)' $commit_subject
-            # Match both AB#1234 and #1234 patterns
-            set -l commit_workitems (string match -ar '(?:AB#|#)(\d+)' $commit_subject)
-            set -l idx 1
-            for item in $commit_workitems
-                if test (math "$idx % 2") -eq 0
-                    # Skip if it looks like a date format (8 digits)
-                    if test (string length $item) -ne 8
-                        # Find the branch for this commit
-                        for branch_name in $branch_names
-                            set -l item_key "$commit_date|$item|$branch_name"
+        if test "$mode" = merged_main
+            if string match -qr '(AB#|#)(\d+)' $commit_subject
+                set -l commit_workitems (string match -ar '(?:AB#|#)(\d+)' $commit_subject)
+                set -l idx 1
+                for item in $commit_workitems
+                    if test (math "$idx % 2") -eq 0
+                        if test (string length $item) -ne 8
+                            set -l item_key "$commit_date|$item|$main_ref"
                             if not contains $item_key $output_items
                                 set -a output_items $item_key
                             end
-                            break
                         end
                     end
+                    set idx (math $idx + 1)
                 end
-                set idx (math $idx + 1)
+            end
+        else
+            set -l commit_hash $parts[1]
+            set -l branch_names (git for-each-ref --contains="$commit_hash" refs/heads/ --format='%(refname:short)' 2>/dev/null)
+
+            # Find which branch(es) this commit belongs to
+            for branch_name in $branch_names
+                # Extract work item from branch name
+                set -l workitem ""
+                if string match -qr 'AB#(\d+)' $branch_name
+                    set workitem (string match -r 'AB#(\d+)' $branch_name | tail -n 1)
+                else if string match -qr '(\d+)' $branch_name
+                    set workitem (string match -r '\d+' $branch_name | head -n 1)
+                    # Skip if it looks like a date format (8 digits)
+                    if test (string length $workitem) -eq 8
+                        set workitem ""
+                    end
+                end
+
+                # Collect work item from branch name if found
+                if test -n "$workitem"
+                    set -l item_key "$commit_date|$workitem|$branch_name"
+                    if not contains $item_key $output_items
+                        set -a output_items $item_key
+                    end
+                end
+            end
+
+            # Also check commit message for AB# or #number references
+            if string match -qr '(AB#|#)(\d+)' $commit_subject
+                # Match both AB#1234 and #1234 patterns
+                set -l commit_workitems (string match -ar '(?:AB#|#)(\d+)' $commit_subject)
+                set -l idx 1
+                for item in $commit_workitems
+                    if test (math "$idx % 2") -eq 0
+                        # Skip if it looks like a date format (8 digits)
+                        if test (string length $item) -ne 8
+                            # Find the branch for this commit
+                            for branch_name in $branch_names
+                                set -l item_key "$commit_date|$item|$branch_name"
+                                if not contains $item_key $output_items
+                                    set -a output_items $item_key
+                                end
+                                break
+                            end
+                        end
+                    end
+                    set idx (math $idx + 1)
+                end
             end
         end
     end

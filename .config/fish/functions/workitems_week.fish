@@ -1,5 +1,5 @@
 function workitems_week --description 'Display calendar view of work items touched during the current or previous week'
-    argparse -n workitems_week p/previous -- $argv
+    argparse -n workitems_week p/previous r/refresh -- $argv
     or return
 
     if not git rev-parse --git-dir >/dev/null 2>&1
@@ -63,10 +63,15 @@ function workitems_week --description 'Display calendar view of work items touch
     
     # Get today's date for highlighting
     set -l today (command date +%Y-%m-%d)
+
+    set -l use_refresh 0
+    if set -q _flag_refresh
+        set use_refresh 1
+    end
     
     set -l extracted_items
     if set -q _flag_previous
-        set -a extracted_items (__workitems_extract $dates[1] $dates[5])
+        set -a extracted_items (__workitems_extract $dates[1] $dates[5] merged_main $use_refresh)
     else
         # Cache past weekdays individually, then only compute the remaining span once.
         set -l remaining_start_idx 0
@@ -81,7 +86,7 @@ function workitems_week --description 'Display calendar view of work items touch
 
             set -l sorted_dates (printf "%s\n%s\n" "$target_date" "$today" | sort)
             if test "$sorted_dates[1]" = "$target_date"
-                set -a extracted_items (__workitems_extract $target_date $target_date)
+                set -a extracted_items (__workitems_extract $target_date $target_date merged_main $use_refresh)
             else
                 set remaining_start_idx $day_idx
                 break
@@ -89,7 +94,7 @@ function workitems_week --description 'Display calendar view of work items touch
         end
 
         if test $remaining_start_idx -gt 0
-            set -a extracted_items (__workitems_extract $dates[$remaining_start_idx] $dates[5])
+            set -a extracted_items (__workitems_extract $dates[$remaining_start_idx] $dates[5] merged_main $use_refresh)
         end
     end
 
