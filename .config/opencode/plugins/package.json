@@ -1,11 +1,7 @@
 {
   "name": "opencode-plugins-workspace",
   "private": true,
-  "packageManager": "pnpm@10.17.0",
   "dependencies": {
     "@clack/prompts": "^0.11.0"
-  },
-  "workspaces": [
-    "./*"
-  ]
+  }
 }
