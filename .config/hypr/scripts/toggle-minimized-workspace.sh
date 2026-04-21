@@ -3,6 +3,8 @@
 set -euo pipefail
 
 readonly MINIMIZED_WORKSPACE_PREFIX="special:minimized"
+readonly GAMING_WORKSPACE="10"
+readonly GAMING_OVERLAY_WORKSPACE="special:gaming-overlay"
 readonly STATE_FILE="${XDG_RUNTIME_DIR}/hypr-minimized-state.json"
 target_address="${1:-}"
 
@@ -157,6 +159,14 @@ focused_monitor_json="$(hyprctl monitors -j 2>/dev/null | jq -c 'first(.[] | sel
 init_state_file
 current_monitor="$(jq -r '.name // empty' <<< "$focused_monitor_json")"
 current_workspace="$(jq -r '.activeWorkspace.name // empty' <<< "$focused_monitor_json")"
+
+if [[ -z "$target_address" ]]; then
+  if [[ "$current_workspace" == "$GAMING_WORKSPACE" || "$current_workspace" == "$GAMING_OVERLAY_WORKSPACE" ]]; then
+    toggle_special_workspace_on_monitor "$current_monitor" "$GAMING_OVERLAY_WORKSPACE"
+    exit 0
+  fi
+fi
+
 current_bucket=""
 desired_special_workspace=""
 desired_monitor=""

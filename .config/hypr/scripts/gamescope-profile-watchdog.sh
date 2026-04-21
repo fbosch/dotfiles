@@ -5,6 +5,8 @@ set -euo pipefail
 LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/hypr-profiles/gamescope-watchdog.lock"
 PROFILECTL="$HOME/.config/hypr/scripts/profilectl.sh"
 RECONNECT_DELAY_SECONDS=1
+GAMING_WORKSPACE="10"
+GAMING_OVERLAY_WORKSPACE="special:gaming-overlay"
 
 mkdir -p "$(dirname "$LOCK_FILE")"
 exec 9>"$LOCK_FILE"
@@ -55,6 +57,33 @@ sync_gaming_state() {
   printf '%s\n' "$last_count"
 }
 
+overlay_window_count() {
+  hyprctl clients -j 2>/dev/null | jq -r --arg overlay "$GAMING_OVERLAY_WORKSPACE" '[.[] | select(.workspace.name == $overlay)] | length'
+}
+
+maybe_show_gaming_overlay() {
+  local current_count="$1"
+  local last_count="$2"
+  local target_monitor
+  local overlay_visible
+
+  if (( current_count <= last_count )); then
+    return
+  fi
+
+  target_monitor="$(hyprctl monitors -j 2>/dev/null | jq -r --arg ws "$GAMING_WORKSPACE" 'first(.[] | select(.activeWorkspace.name == $ws) | .name) // empty')"
+  if [[ -z "$target_monitor" ]]; then
+    return
+  fi
+
+  overlay_visible="$(hyprctl monitors -j 2>/dev/null | jq -r --arg monitor "$target_monitor" --arg overlay "$GAMING_OVERLAY_WORKSPACE" 'first(.[] | select(.name == $monitor) | .specialWorkspace.name == $overlay) // false')"
+  if [[ "$overlay_visible" == "true" ]]; then
+    return
+  fi
+
+  hyprctl --batch "dispatch focusmonitor $target_monitor ; dispatch togglespecialworkspace ${GAMING_OVERLAY_WORKSPACE#special:}" >/dev/null 2>&1 || true
+}
+
 handle_event() {
   local event="$1"
 
@@ -99,10 +128,27 @@ fi
 
 last_count=""
 last_count="$(sync_gaming_state "$last_count")"
+last_overlay_count="$(overlay_window_count)"
+
+if [[ "$last_overlay_count" =~ ^[0-9]+$ ]]; then
+  :
+else
+  last_overlay_count=0
+fi
 
 while true; do
   while IFS= read -r line; do
     if handle_event "$line"; then
+      current_overlay_count="$(overlay_window_count)"
+      if [[ "$current_overlay_count" =~ ^[0-9]+$ ]]; then
+        :
+      else
+        current_overlay_count="$last_overlay_count"
+      fi
+
+      maybe_show_gaming_overlay "$current_overlay_count" "$last_overlay_count"
+      last_overlay_count="$current_overlay_count"
+
       last_count="$(sync_gaming_state "$last_count")"
     fi
   done < <(socat -U - "UNIX-CONNECT:$HYPR_SOCKET")
