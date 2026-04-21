@@ -14,6 +14,8 @@
 ## Coding style
 
 - Prefer early returns/guard clauses; avoid deep nesting.
+- Prefer early returns over `else` branches when flow can stay clear without them.
+- Avoid deeply nested ternary operators; prefer clearer control flow (if/else or extracted helpers) when branching gets complex.
 - Keep changes minimal and local; avoid drive-by refactors and formatting.
 - Favor small, focused functions/modules and clear names over cleverness.
 - Prefer existing repo conventions/patterns over introducing new ones.
