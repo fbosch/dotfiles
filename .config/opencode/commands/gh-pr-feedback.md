@@ -14,6 +14,11 @@ Pre-flight:
 2. If context starts with `ERROR:`, output only that error and stop.
 3. Do not infer missing metadata that is not present in context.
 
+Tool routing:
+1. For the final user-choice prompt, call the built-in `question` tool directly.
+2. Do not run tool-discovery/reconciliation steps (`toolbox_search_*`, `toolbox_status`, `sequential-thinking`) for this command.
+3. If `question` call fails once, stop retrying and output the same choices in plain text.
+
 SCRIPT-GENERATED REVIEW CONTEXT:
 !`sh -c 'bun "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/scripts/gh-pr-feedback-context.ts" all "$1" 2>/dev/null || bun "$HOME/dotfiles/.config/opencode/scripts/gh-pr-feedback-context.ts" all "$1" 2>/dev/null || echo "ERROR: Missing gh-pr-feedback-context.ts"' -- "$ARGUMENTS"`
 
@@ -49,7 +54,7 @@ Output format:
 
 Resolve policy:
 - Do not resolve anything automatically.
-- End by calling the `question` tool (not plain text) with:
+- End by calling the built-in `question` tool (not plain text) with exactly:
   - Header: `PR feedback next step`
   - Question: `What should I do with this feedback?`
   - Options (stable labels):
