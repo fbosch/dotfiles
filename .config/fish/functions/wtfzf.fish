@@ -30,6 +30,29 @@ function wtfzf --description 'Pick git worktree quickly via git porcelain'
     set -l path ''
     set -l branch ''
 
+    function __wtfzf_mtime
+        set -l target "$argv[1]"
+
+        if test -z "$target"
+            echo 0
+            return 0
+        end
+
+        set -l mtime (stat -f '%m' -- "$target" 2>/dev/null)
+        if test $status -eq 0 -a -n "$mtime"
+            echo "$mtime"
+            return 0
+        end
+
+        set mtime (stat -c '%Y' -- "$target" 2>/dev/null)
+        if test $status -eq 0 -a -n "$mtime"
+            echo "$mtime"
+            return 0
+        end
+
+        echo 0
+    end
+
     function __wtfzf_flush --no-scope-shadowing
         if test -z "$path"
             return
@@ -45,7 +68,8 @@ function wtfzf --description 'Pick git worktree quickly via git porcelain'
             set branch_name '(detached)'
         end
 
-        set -a worktree_rows "$path$tab$marker  $branch_name  $path"
+        set -l modified_at (__wtfzf_mtime "$path")
+        set -a worktree_rows "$modified_at$tab$path$tab$marker  $branch_name  $path"
     end
 
     for line in $porcelain
@@ -69,6 +93,7 @@ function wtfzf --description 'Pick git worktree quickly via git porcelain'
     end
     __wtfzf_flush
     functions -e __wtfzf_flush
+    functions -e __wtfzf_mtime
 
     set -l count_rows (count $worktree_rows)
     if test $count_rows -le 1
@@ -77,9 +102,10 @@ function wtfzf --description 'Pick git worktree quickly via git porcelain'
 
     set -l selected (
         printf "%s\n" $worktree_rows \
+        | sort -t "$tab" -k1,1nr \
         | fzf \
             --delimiter="$tab" \
-            --with-nth=2 \
+            --with-nth=3 \
             --prompt='wt> ' \
             --height='85%' \
             --layout=reverse \
@@ -94,7 +120,7 @@ function wtfzf --description 'Pick git worktree quickly via git porcelain'
         return $exit_code
     end
 
-    set -l selected_path (string split -f 1 $tab -- "$selected")
+    set -l selected_path (string split -f 2 $tab -- "$selected")
     if test -z "$selected_path" -o ! -d "$selected_path"
         return 1
     end
