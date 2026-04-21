@@ -58,6 +58,7 @@
 - Never run destructive/irreversible commands (e.g., `git reset --hard`, force-push) unless explicitly asked.
 - Never add secrets to the repo; use env vars and redaction.
 - Never create or modify agent-generated artifact files (summaries/notes/reports/todos) unless explicitly asked.
+- Never create or update `README.md` unless explicitly asked first.
 - Avoid dependency changes (new deps, major bumps, lockfile churn) unless explicitly asked.
 
 ### Ambiguity and execution loop
