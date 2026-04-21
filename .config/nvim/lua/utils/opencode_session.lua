@@ -5,8 +5,6 @@ local M = {}
 local current_session_id = session.read_opencode_id()
 local sync_request_id = 0
 local restore_request_id = 0
-local default_sync_delays = { 500, 2000 }
-local default_restore_delays = { 100, 400, 1200, 2500 }
 local last_restore_state = {
 	status = "idle",
 	detail = "not started",
@@ -42,13 +40,35 @@ local function session_directory(item)
 	return item.directory or item.worktree
 end
 
+local function normalize_path(path)
+	if type(path) ~= "string" or path == "" then
+		return nil
+	end
+
+	local normalized = vim.fs.normalize(path)
+	if normalized:sub(-1) == "/" and #normalized > 1 then
+		normalized = normalized:gsub("/+$", "")
+	end
+
+	return normalized
+end
+
+local function is_parent_or_same(path, parent)
+	if path == parent then
+		return true
+	end
+
+	return path:find(parent .. "/", 1, true) == 1
+end
+
 local function session_matches_cwd(item, cwd)
-	local directory = session_directory(item)
-	if type(directory) ~= "string" or directory == "" then
+	local directory = normalize_path(session_directory(item))
+	local normalized_cwd = normalize_path(cwd)
+	if directory == nil or normalized_cwd == nil then
 		return false
 	end
 
-	return directory:find(cwd, 1, true) == 1 or cwd:find(directory, 1, true) == 1
+	return is_parent_or_same(directory, normalized_cwd) or is_parent_or_same(normalized_cwd, directory)
 end
 
 local function common_prefix_score(path_a, path_b)
@@ -83,9 +103,34 @@ local function pick_server_for_cwd(servers, cwd)
 		return servers[1]
 	end
 
+	local normalized_cwd = normalize_path(cwd)
+	if normalized_cwd ~= nil then
+		local exact_matches = {}
+		for _, server in ipairs(servers) do
+			if type(server) == "table" then
+				local server_cwd = normalize_path(server.cwd)
+				if server_cwd ~= nil and server_cwd == normalized_cwd then
+					table.insert(exact_matches, server)
+				end
+			end
+		end
+
+		if #exact_matches == 1 then
+			return exact_matches[1]
+		end
+
+		if #exact_matches > 1 then
+			table.sort(exact_matches, function(a, b)
+				local port_a = type(a.port) == "number" and a.port or 0
+				local port_b = type(b.port) == "number" and b.port or 0
+				return port_a > port_b
+			end)
+			return exact_matches[1]
+		end
+	end
+
 	local best_server = nil
 	local best_score = -1
-	local tie = false
 
 	for _, server in ipairs(servers) do
 		if type(server) == "table" and type(server.cwd) == "string" and server.cwd ~= "" then
@@ -93,14 +138,19 @@ local function pick_server_for_cwd(servers, cwd)
 			if score > best_score then
 				best_server = server
 				best_score = score
-				tie = false
+			elseif score == best_score and best_server ~= nil then
+				local current_best_port = type(best_server.port) == "number" and best_server.port or 0
+				local server_port = type(server.port) == "number" and server.port or 0
+				if server_port > current_best_port then
+					best_server = server
+				end
 			elseif score == best_score then
-				tie = true
+				best_server = server
 			end
 		end
 	end
 
-	if best_score <= 0 or tie then
+	if best_score <= 0 then
 		return nil
 	end
 
@@ -126,17 +176,11 @@ local function get_server_sessions(server, on_sessions)
 		return false
 	end
 
-	if type(server.get_sessions) == "function" then
-		server:get_sessions(on_sessions)
-		return true
-	end
-
-	local ok_client, opencode_client = pcall(require, "opencode.cli.client")
-	if not ok_client or type(opencode_client.get_sessions) ~= "function" or type(server.port) ~= "number" then
+	if type(server) ~= "table" or type(server.get_sessions) ~= "function" then
 		return false
 	end
 
-	opencode_client.get_sessions(server.port, on_sessions)
+	server:get_sessions(on_sessions)
 	return true
 end
 
@@ -148,8 +192,12 @@ local function sort_sessions_by_recent(a, b)
 	return session_updated_at(a) > session_updated_at(b)
 end
 
-local function select_session_id(sessions)
-	local cwd = vim.fn.getcwd()
+local function select_session_id(sessions, cwd)
+	local target_cwd = cwd
+	if type(target_cwd) ~= "string" or target_cwd == "" then
+		target_cwd = vim.fn.getcwd()
+	end
+
 	local candidates = {}
 	local root_candidates = {}
 	local all_candidates = {}
@@ -162,7 +210,7 @@ local function select_session_id(sessions)
 				table.insert(all_root_candidates, item)
 			end
 
-			if session_matches_cwd(item, cwd) then
+			if session_matches_cwd(item, target_cwd) then
 				table.insert(candidates, item)
 				if is_root_session(item) then
 					table.insert(root_candidates, item)
@@ -201,32 +249,41 @@ local function sync_from_server(request_id)
 		return
 	end
 
-	local function on_sessions(sessions)
-		if type(sessions) ~= "table" then
-			return
+	local target_cwd = type(server.cwd) == "string" and server.cwd or vim.fn.getcwd()
+
+	local function set_synced_session_id(session_id)
+		if type(session_id) ~= "string" or session_id == "" then
+			return false
 		end
 
+		M.set_current_session_id(session_id, target_cwd)
+		return true
+	end
+
+	local function sync_using_sessions()
 		if request_id ~= sync_request_id then
 			return
 		end
 
-		local session_id = select_session_id(sessions)
-		if session_id then
-			M.set_current_session_id(session_id)
+		if type(server.get_sessions) ~= "function" then
+			return
 		end
+
+		server:get_sessions(function(sessions)
+			if type(sessions) ~= "table" then
+				return
+			end
+
+			if request_id ~= sync_request_id then
+				return
+			end
+
+			local session_id = select_session_id(sessions, target_cwd)
+			set_synced_session_id(session_id)
+		end)
 	end
 
-	if type(server.get_sessions) == "function" then
-		server:get_sessions(on_sessions)
-		return
-	end
-
-	local ok_client, opencode_client = pcall(require, "opencode.cli.client")
-	if not ok_client or type(opencode_client.get_sessions) ~= "function" or type(server.port) ~= "number" then
-		return
-	end
-
-	opencode_client.get_sessions(server.port, on_sessions)
+	sync_using_sessions()
 end
 
 function M.get_current_session_id()
@@ -237,40 +294,41 @@ function M.get_last_restore_state()
 	return vim.deepcopy(last_restore_state)
 end
 
-function M.set_current_session_id(session_id)
+function M.set_current_session_id(session_id, cwd)
 	if type(session_id) ~= "string" or session_id == "" then
 		return false
 	end
 
-	local ok = session.write_opencode_id(session_id)
+	local ok = session.write_opencode_id(session_id, cwd)
 	if ok then
 		current_session_id = session_id
+	else
+		vim.notify("Failed to persist opencode session id", vim.log.levels.WARN, { title = "opencode" })
 	end
 
 	return ok
 end
 
-function M.sync_from_event(session_id)
+function M.sync_from_event(session_id, opts)
 	if type(session_id) ~= "string" or session_id == "" then
 		return false
 	end
 
-	return M.set_current_session_id(session_id)
+	opts = opts or {}
+	local cwd = opts.cwd
+
+	return M.set_current_session_id(session_id, cwd)
 end
 
-function M.select_session_on_connected_server(session_id)
+function M.select_session_on_connected_server(session_id, opts)
+	opts = opts or {}
 	local target_session_id = session_id
 	if type(target_session_id) ~= "string" or target_session_id == "" then
 		target_session_id = current_session_id
 	end
 
 	if type(target_session_id) ~= "string" or target_session_id == "" then
-		target_session_id = M.restore_saved_session_id()
-	end
-
-	if type(target_session_id) ~= "string" or target_session_id == "" then
-		set_last_restore_state("skipped", "no session id")
-		return false
+		target_session_id = M.restore_saved_session_id(opts.cwd)
 	end
 
 	local ok_events, opencode_events = pcall(require, "opencode.events")
@@ -279,52 +337,56 @@ function M.select_session_on_connected_server(session_id)
 		return false
 	end
 
-	local server = opencode_events.connected_server
-	if type(server) ~= "table" or type(server.port) ~= "number" then
+	local server = opts.server
+	if type(server) ~= "table" then
+		server = opencode_events.connected_server
+	end
+
+	if type(server) ~= "table" then
 		set_last_restore_state("skipped", "no connected server")
 		return false
 	end
 
-	local ok_client, opencode_client = pcall(require, "opencode.cli.client")
-	if not ok_client or type(opencode_client.select_session) ~= "function" then
-		set_last_restore_state("skipped", "client unavailable")
+	local target_cwd = opts.cwd
+	if type(target_cwd) ~= "string" or target_cwd == "" then
+		target_cwd = type(server.cwd) == "string" and server.cwd or vim.fn.getcwd()
+	end
+
+	if type(server.select_session) ~= "function" then
+		set_last_restore_state("skipped", "session selection unavailable")
 		return false
 	end
 
-	local ok_sessions = get_server_sessions(server, function(sessions)
-		if type(sessions) ~= "table" then
-			set_last_restore_state("skipped", "session list unavailable")
-			return
-		end
-
-		local selected_session_id = target_session_id
-		if sessions_include_id(sessions, target_session_id) == false then
-			selected_session_id = select_session_id(sessions)
-			if type(selected_session_id) ~= "string" or selected_session_id == "" then
-				set_last_restore_state("skipped", "saved session stale; no fallback")
+	if type(target_session_id) ~= "string" or target_session_id == "" then
+		local ok_sessions = get_server_sessions(server, function(sessions)
+			if type(sessions) ~= "table" then
+				set_last_restore_state("skipped", "session list unavailable")
 				return
 			end
 
-			M.set_current_session_id(selected_session_id)
-			set_last_restore_state("recovered", "stale session replaced with " .. selected_session_id)
-		else
-			M.set_current_session_id(selected_session_id)
+			local selected_session_id = select_session_id(sessions, target_cwd)
+			if type(selected_session_id) ~= "string" or selected_session_id == "" then
+				set_last_restore_state("skipped", "no session to restore")
+				return
+			end
+
+			M.set_current_session_id(selected_session_id, target_cwd)
+			server:select_session(selected_session_id)
+			set_last_restore_state("recovered", "selected fallback session " .. selected_session_id)
+		end)
+
+		if ok_sessions == false then
+			set_last_restore_state("skipped", "session listing unavailable")
+			return false
 		end
 
-		opencode_client.select_session(server.port, selected_session_id)
-		if sessions_include_id(sessions, target_session_id) then
-			set_last_restore_state("selected", "session " .. selected_session_id)
-		else
-			set_last_restore_state("recovered", "selected fallback on port " .. tostring(server.port))
-		end
-	end)
-
-	if ok_sessions == false then
-		set_last_restore_state("skipped", "session listing unavailable")
-		return false
+		set_last_restore_state("restoring", "finding session for " .. target_cwd)
+		return true
 	end
 
-	set_last_restore_state("restoring", "validating session " .. target_session_id)
+	M.set_current_session_id(target_session_id, target_cwd)
+	server:select_session(target_session_id)
+	set_last_restore_state("selected", "session " .. target_session_id)
 	return true
 end
 
@@ -340,7 +402,7 @@ function M.connect_server_noninteractive()
 		return true
 	end
 
-	local ok_server, opencode_server = pcall(require, "opencode.cli.server")
+	local ok_server, opencode_server = pcall(require, "opencode.server")
 	if not ok_server or type(opencode_server.get_all) ~= "function" then
 		set_last_restore_state("skipped", "server discovery unavailable")
 		return false
@@ -350,9 +412,11 @@ function M.connect_server_noninteractive()
 	opencode_server
 		.get_all()
 		:next(function(servers)
-			local server = pick_server_for_cwd(servers, vim.fn.getcwd())
+			local cwd = vim.fn.getcwd()
+			local server = pick_server_for_cwd(servers, cwd)
 			if server then
 				opencode_events.connect(server)
+				M.select_session_on_connected_server(nil, { cwd = cwd, server = server })
 				set_last_restore_state("connecting", "connecting to port " .. tostring(server.port))
 				return
 			end
@@ -368,21 +432,19 @@ end
 
 function M.request_restore_on_connected_server(opts)
 	opts = opts or {}
-	local delays = opts.delays or default_restore_delays
 	restore_request_id = restore_request_id + 1
 	local request_id = restore_request_id
-	set_last_restore_state("scheduled", "restore retries enqueued")
+	set_last_restore_state("scheduled", "restore requested")
 
-	for _, delay in ipairs(delays) do
-		vim.defer_fn(function()
-			if request_id ~= restore_request_id then
-				return
-			end
-
-			M.connect_server_noninteractive()
-			M.select_session_on_connected_server()
-		end, delay)
+	if opts.connect ~= false then
+		M.connect_server_noninteractive()
 	end
+
+	if request_id ~= restore_request_id then
+		return false
+	end
+
+	M.select_session_on_connected_server()
 
 	return true
 end
@@ -405,7 +467,7 @@ function M.select_and_persist()
 			end
 
 			local selected_session = result.session
-			local selected_port = result.port
+			local selected_server = result.server
 			if
 				type(selected_session) ~= "table"
 				or type(selected_session.id) ~= "string"
@@ -420,18 +482,13 @@ function M.select_and_persist()
 			M.set_current_session_id(selected_session.id)
 			set_last_restore_state("selected", "session " .. selected_session.id)
 
-			local ok_client, opencode_client = pcall(require, "opencode.cli.client")
-			if
-				not ok_client
-				or type(opencode_client.select_session) ~= "function"
-				or type(selected_port) ~= "number"
-			then
-				set_last_restore_state("selected", "persisted only (client unavailable)")
+			if type(selected_server) ~= "table" or type(selected_server.select_session) ~= "function" then
+				set_last_restore_state("selected", "persisted only (server unavailable)")
 				return
 			end
 
-			opencode_client.select_session(selected_port, selected_session.id)
-			set_last_restore_state("selected", "persisted and selected on port " .. tostring(selected_port))
+			selected_server:select_session(selected_session.id)
+			set_last_restore_state("selected", "persisted and selected session " .. selected_session.id)
 		end)
 		:catch(function(err)
 			if err then
@@ -449,16 +506,16 @@ function M.clear_current_session_id()
 	return session.clear_opencode_id()
 end
 
-function M.persist_current_session_id()
+function M.persist_current_session_id(cwd)
 	if type(current_session_id) ~= "string" or current_session_id == "" then
 		return false
 	end
 
-	return session.write_opencode_id(current_session_id)
+	return session.write_opencode_id(current_session_id, cwd)
 end
 
-function M.restore_saved_session_id()
-	current_session_id = session.read_opencode_id()
+function M.restore_saved_session_id(cwd)
+	current_session_id = session.read_opencode_id(cwd)
 	return current_session_id
 end
 
@@ -479,21 +536,33 @@ function M.request_sync(opts)
 	opts = opts or {}
 	sync_request_id = sync_request_id + 1
 	local request_id = sync_request_id
-	local delays = opts.delays or default_sync_delays
-
-	for _, delay in ipairs(delays) do
+	local delay_ms = opts.delay_ms
+	if type(delay_ms) == "number" and delay_ms > 0 then
 		vim.defer_fn(function()
-			if request_id == sync_request_id then
-				sync_from_server(request_id)
+			if request_id ~= sync_request_id then
+				return
 			end
-		end, delay)
+
+			sync_from_server(request_id)
+		end, delay_ms)
+	else
+		sync_from_server(request_id)
 	end
 
 	return request_id
 end
 
 function M.sync_now()
-	return M.request_sync({ delays = { 0 } })
+	return M.request_sync()
+end
+
+function M.sync_debounced(delay_ms)
+	local effective_delay = type(delay_ms) == "number" and delay_ms or 150
+	if effective_delay < 0 then
+		effective_delay = 0
+	end
+
+	return M.request_sync({ delay_ms = effective_delay })
 end
 
 return M

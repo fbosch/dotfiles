@@ -23,6 +23,9 @@ return {
 						require("opencode.terminal").toggle(opencode_command(), { split = "left", width = 100 })
 					end,
 				},
+				events = {
+					enabled = true,
+				},
 			}
 		end,
 		config = function()
@@ -30,26 +33,34 @@ return {
 			local session = require("utils.session")
 			local opencode_terminal_var = "is_opencode_terminal"
 
-			local function is_empty(value)
-				return value == nil or value == vim.NIL or value == ""
-			end
-
-			local function paths_overlap(path_a, path_b)
-				if type(path_a) ~= "string" or path_a == "" then
-					return false
+			local function extract_session_id(value)
+				if type(value) ~= "table" then
+					return nil
 				end
 
-				if type(path_b) ~= "string" or path_b == "" then
-					return false
+				local direct_id = value.sessionID or value.sessionId or value.session_id
+				if type(direct_id) == "string" and direct_id ~= "" then
+					return direct_id
 				end
 
-				local normalized_a = vim.fs.normalize(path_a)
-				local normalized_b = vim.fs.normalize(path_b)
-				return normalized_a:find(normalized_b, 1, true) == 1 or normalized_b:find(normalized_a, 1, true) == 1
-			end
+				if type(value.info) == "table" and type(value.info.id) == "string" and value.info.id ~= "" then
+					return value.info.id
+				end
 
-			local function is_root_session(info)
-				return is_empty(info.parentID) and is_empty(info.parentId) and is_empty(info.parent_id)
+				if type(value.id) == "string" and value.id:find("^ses_") == 1 then
+					return value.id
+				end
+
+				for _, child in pairs(value) do
+					if type(child) == "table" then
+						local nested = extract_session_id(child)
+						if type(nested) == "string" and nested ~= "" then
+							return nested
+						end
+					end
+				end
+
+				return nil
 			end
 
 			local function sync_session_from_event(args)
@@ -63,33 +74,35 @@ return {
 					return
 				end
 
-				if event.type == "session.status" then
-					local status = properties.status
-					if type(status) ~= "table" or status.type ~= "idle" then
-						return
-					end
-				end
-
-				if event.type == "session.created" then
-					local info = properties.info
-					if type(info) ~= "table" or is_root_session(info) == false then
-						return
-					end
-
-					local cwd = vim.fn.getcwd()
-					local directory = info.directory or info.worktree
-					if paths_overlap(directory, cwd) == false then
-						return
-					end
-				end
-
-				local session_id = properties.sessionID
+				local session_id = extract_session_id(properties)
 				if type(session_id) ~= "string" or session_id == "" then
-					local info = properties.info
-					session_id = type(info) == "table" and info.id or nil
+					session_id = extract_session_id(event)
 				end
 
-				opencode_session.sync_from_event(session_id)
+				if type(session_id) ~= "string" or session_id == "" then
+					if
+						event.type == "session.status"
+						or event.type == "session.idle"
+						or event.type == "session.created"
+						or event.type == "server.connected"
+					then
+						opencode_session.sync_now()
+					end
+					return
+				end
+
+				local event_cwd = nil
+				local info = properties.info
+				if type(info) == "table" then
+					event_cwd = info.directory or info.worktree
+				end
+
+				if type(event_cwd) ~= "string" or event_cwd == "" then
+					local connected_server = require("opencode.events").connected_server
+					event_cwd = type(connected_server) == "table" and connected_server.cwd or nil
+				end
+
+				opencode_session.sync_from_event(session_id, { cwd = event_cwd })
 			end
 
 			local function is_opencode_terminal(buf)
@@ -133,7 +146,7 @@ return {
 					else
 						vim.api.nvim_feedkeys(vim.keycode("<CR>"), "t", false)
 					end
-					opencode_session.request_sync()
+					opencode_session.sync_now()
 				end, vim.tbl_extend("force", buf_opts, { desc = "Submit in opencode terminal" }))
 			end
 
@@ -164,6 +177,7 @@ return {
 				local connected_server = require("opencode.events").connected_server
 				local status = require("opencode.status").status
 				local current_session_id = opencode_session.get_current_session_id()
+				local saved_session_id = session.read_opencode_id()
 				local restore_state = opencode_session.get_last_restore_state()
 				local sidecar_path = session.get_opencode_sidecar_path()
 				local sidecar_stat = vim.uv.fs_stat(sidecar_path)
@@ -196,6 +210,7 @@ return {
 					),
 					string.format("Status: %s", status or "unknown"),
 					string.format("Session ID: %s", current_session_id or "<none>"),
+					string.format("Saved Session ID: %s", saved_session_id or "<none>"),
 					string.format(
 						"Restore: %s (%s)",
 						type(restore_state) == "table" and restore_state.status or "unknown",
@@ -229,28 +244,42 @@ return {
 						mark_opencode_terminal(args.buf)
 						vim.bo[args.buf].buflisted = false
 						set_opencode_terminal_keymaps(args.buf)
-						opencode_session.restore_saved_session_id()
-						opencode_session.request_restore_on_connected_server()
+						local cwd = vim.fn.getcwd()
+						opencode_session.restore_saved_session_id(cwd)
+						opencode_session.connect_server_noninteractive()
+						vim.defer_fn(function()
+							opencode_session.select_session_on_connected_server(nil, { cwd = cwd })
+							opencode_session.sync_debounced(200)
+						end, 300)
 						pcall(vim.cmd, "startinsert")
 					end
 				end,
 			})
 
 			vim.api.nvim_create_autocmd("User", {
-				pattern = {
-					"OpencodeEvent:session.idle",
-					"OpencodeEvent:session.status",
-					"OpencodeEvent:session.created",
-				},
+				pattern = "OpencodeEvent:*",
 				callback = sync_session_from_event,
 			})
 
 			vim.api.nvim_create_autocmd("User", {
 				pattern = "OpencodeEvent:server.connected",
 				callback = function()
-					opencode_session.restore_saved_session_id()
-					opencode_session.select_session_on_connected_server()
-					opencode_session.request_sync({ delays = { 200, 1000 } })
+					local connected_server = require("opencode.events").connected_server
+					local server_cwd = type(connected_server) == "table" and connected_server.cwd or nil
+					opencode_session.restore_saved_session_id(server_cwd)
+					opencode_session.select_session_on_connected_server(nil, { cwd = server_cwd })
+					opencode_session.sync_debounced(200)
+				end,
+			})
+
+			vim.api.nvim_create_autocmd("DirChanged", {
+				pattern = "*",
+				callback = function()
+					local event_data = vim.v.event
+					local cwd = type(event_data) == "table" and event_data.cwd or vim.fn.getcwd()
+					opencode_session.restore_saved_session_id(cwd)
+					opencode_session.connect_server_noninteractive()
+					opencode_session.select_session_on_connected_server(nil, { cwd = cwd })
 				end,
 			})
 
@@ -260,6 +289,17 @@ return {
 					if is_opencode_terminal(args.buf) then
 						pcall(vim.cmd, "startinsert")
 					end
+				end,
+			})
+
+			vim.api.nvim_create_autocmd("TextChangedT", {
+				pattern = "*",
+				callback = function(args)
+					if is_opencode_terminal(args.buf) == false then
+						return
+					end
+
+					opencode_session.sync_debounced(150)
 				end,
 			})
 
