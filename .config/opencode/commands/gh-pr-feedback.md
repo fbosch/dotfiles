@@ -15,7 +15,7 @@ Pre-flight:
 3. Do not infer missing metadata that is not present in context.
 
 SCRIPT-GENERATED REVIEW CONTEXT:
-!`bun "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/scripts/gh-pr-feedback-context.ts" all "$ARGUMENTS"`
+!`sh -c 'bun "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/scripts/gh-pr-feedback-context.ts" all "$1" 2>/dev/null || bun "$HOME/dotfiles/.config/opencode/scripts/gh-pr-feedback-context.ts" all "$1" 2>/dev/null || echo "ERROR: Missing gh-pr-feedback-context.ts"' -- "$ARGUMENTS"`
 
 Workflow:
 1. Parse `SCRIPT-GENERATED REVIEW CONTEXT` JSON.
