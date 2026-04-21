@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ACTION="${1:-}"
+WAIT_TIMEOUT_SECONDS=8
+ASYNC_WAIT_TIMEOUT_SECONDS=60
+VPN_ICON_GLYPH="󰖂"
+VPN_CONNECTED_COLOR="#73bc6f"
+VPN_DISCONNECTED_COLOR="rgba(255, 255, 255, 0.45)"
+VPN_ERROR_COLOR="#dea721"
+
+vpn_icon_for_color() {
+  local color="$1"
+  ~/.config/hypr/scripts/nerd-icon-gen.sh "$VPN_ICON_GLYPH" 64 "$color" 2>/dev/null || true
+}
+
+notify_vpn() {
+  local color="$1"
+  shift
+  local vpn_icon
+
+  vpn_icon="$(vpn_icon_for_color "$color")"
+
+  if [[ -n "$vpn_icon" && -f "$vpn_icon" ]]; then
+    notify-send --transient -a "Waybar" -h string:x-canonical-private-synchronous:mullvad-vpn -i "$vpn_icon" "$@"
+    return
+  fi
+
+  notify-send --transient -a "Waybar" -h string:x-canonical-private-synchronous:mullvad-vpn "$@"
+}
+
+notify_connected() {
+  local status="$1"
+  local visible_location
+
+  visible_location="$(printf '%s\n' "$status" | awk '/Visible location:/ {sub(/^[[:space:]]*Visible location:[[:space:]]*/, "", $0); print; exit}')"
+
+  if [[ -n "$visible_location" ]]; then
+    notify_vpn "$VPN_CONNECTED_COLOR" "VPN connected" "$visible_location"
+    return
+  fi
+
+  notify_vpn "$VPN_CONNECTED_COLOR" "VPN connected"
+}
+
+if [[ "$ACTION" != "connect" && "$ACTION" != "disconnect" ]]; then
+  printf 'Usage: %s <connect|disconnect>\n' "${0##*/}" >&2
+  exit 2
+fi
+
+if command -v mullvad >/dev/null 2>&1; then
+  status_before="$(mullvad status 2>/dev/null || true)"
+else
+  notify_vpn "$VPN_ERROR_COLOR" "Mullvad error" "Mullvad CLI not found"
+  exit 1
+fi
+
+if [[ "$ACTION" == "connect" && "$status_before" == Connected* ]]; then
+  exit 0
+fi
+
+if [[ "$ACTION" == "disconnect" && "$status_before" == Disconnected* ]]; then
+  exit 0
+fi
+
+mullvad "$ACTION"
+
+status_text="$(mullvad status 2>/dev/null || true)"
+
+wait_for_status_event() {
+  local expected_prefix="$1"
+  local timeout_seconds="${2:-$WAIT_TIMEOUT_SECONDS}"
+
+  if [[ "$status_text" == "$expected_prefix"* ]]; then
+    return 0
+  fi
+
+  timeout "${timeout_seconds}s" mullvad status listen 2>/dev/null |
+    awk -v expected="$expected_prefix" '$0 ~ ("^" expected) { found=1; exit } END { exit found ? 0 : 1 }'
+}
+
+wait_for_status_state() {
+  local expected_prefix="$1"
+  local timeout_seconds="$2"
+  local started_at now elapsed remaining
+
+  started_at="$(date +%s)"
+
+  while true; do
+    status_text="$(mullvad status 2>/dev/null || true)"
+    if [[ "$status_text" == "$expected_prefix"* ]]; then
+      return 0
+    fi
+
+    now="$(date +%s)"
+    elapsed=$((now - started_at))
+    remaining=$((timeout_seconds - elapsed))
+    if (( remaining <= 0 )); then
+      return 1
+    fi
+
+    if wait_for_status_event "$expected_prefix" "$remaining"; then
+      status_text="$(mullvad status 2>/dev/null || true)"
+      if [[ "$status_text" == "$expected_prefix"* ]]; then
+        return 0
+      fi
+    fi
+
+    sleep 1
+  done
+}
+
+if [[ "$ACTION" == "connect" ]]; then
+  if wait_for_status_state "Connected" "$ASYNC_WAIT_TIMEOUT_SECONDS"; then
+    notify_connected "$status_text"
+    exit 0
+  fi
+
+  exit 1
+fi
+
+if wait_for_status_state "Disconnected" "$ASYNC_WAIT_TIMEOUT_SECONDS"; then
+  notify_vpn "$VPN_DISCONNECTED_COLOR" "VPN disconnected"
+  exit 0
+fi
+
+exit 1

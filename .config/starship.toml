@@ -2,7 +2,7 @@
 command_timeout = 10000
 continuation_prompt = "[ᛃ︁ ](dimmed white)"
 
-format = """$os\
+format = """ $os\
 $hostname\
 $character\
 $sudo"""
@@ -27,7 +27,7 @@ error_symbol = "[ ](bold red)"
 [sudo]
 format = "[$symbol]($style)"
 style = "bold italic bright-red"
-symbol = "ᛊ "
+symbol = " 󰈷 "
 disabled = true
 
 [username]

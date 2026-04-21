@@ -72,8 +72,8 @@
     "return-type": "json",
     "format": "{}",
     "tooltip": true,
-    "on-click": "uwsm-app -s b -- mullvad connect",
-    "on-click-right": "uwsm-app -s b -- mullvad disconnect"
+    "on-click": "~/.config/waybar/scripts/mullvad-toggle connect",
+    "on-click-right": "~/.config/waybar/scripts/mullvad-toggle disconnect"
   },
 
   "pulseaudio": {
