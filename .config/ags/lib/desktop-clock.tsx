@@ -235,8 +235,8 @@ function applyCSS() {
     }
     
     window.desktop-clock label.time-label {
-      font-family: "SF Mono", monospace;
-      font-size: 56px;
+      font-family: "SF Pro Rounded", "SF Pro Display", system-ui, sans-serif;
+      font-size: 80px;
       font-weight: 700;
       color: rgba(255, 255, 255, 0.95);
       text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
