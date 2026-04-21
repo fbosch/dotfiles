@@ -3,7 +3,7 @@
 set -euo pipefail
 
 direction="${1:-next}"
-readonly MINIMIZED_WORKSPACE="special:minimized"
+readonly MINIMIZED_WORKSPACE_PREFIX="special:minimized"
 
 show_minimized_workspace_for_window() {
     local address="$1"
@@ -78,7 +78,7 @@ fi
 target_workspace_ref="${workspace_refs[$next_index]}"
 
 if [[ -n "${target_workspace_ref}" ]]; then
-    if [[ "${target_workspace_ref}" == "${MINIMIZED_WORKSPACE}" ]]; then
+    if [[ "${target_workspace_ref}" == ${MINIMIZED_WORKSPACE_PREFIX}* ]]; then
         show_minimized_workspace_for_window "${addresses[$next_index]}"
     fi
 fi

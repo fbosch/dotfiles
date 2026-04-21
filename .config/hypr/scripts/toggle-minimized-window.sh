@@ -32,7 +32,9 @@ special_workspace_for_bucket() {
 
 init_state_file() {
   if [[ -f "$STATE_FILE" ]]; then
-    return
+    if jq -e 'type == "object"' "$STATE_FILE" >/dev/null 2>&1; then
+      return
+    fi
   fi
 
   printf '{}\n' > "$STATE_FILE"

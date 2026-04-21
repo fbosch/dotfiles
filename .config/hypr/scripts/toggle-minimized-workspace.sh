@@ -6,6 +6,16 @@ readonly MINIMIZED_WORKSPACE_PREFIX="special:minimized"
 readonly STATE_FILE="${XDG_RUNTIME_DIR}/hypr-minimized-state.json"
 target_address="${1:-}"
 
+init_state_file() {
+  if [[ -f "$STATE_FILE" ]]; then
+    if jq -e 'type == "object"' "$STATE_FILE" >/dev/null 2>&1; then
+      return
+    fi
+  fi
+
+  printf '{}\n' > "$STATE_FILE"
+}
+
 bucket_key_for() {
   local monitor_name="$1"
   local workspace_name="$2"
@@ -43,21 +53,47 @@ state_value_for_address() {
 
 bucket_has_windows() {
   local bucket_key="$1"
-  local special_workspace="$2"
 
   if [[ -z "$bucket_key" || ! -f "$STATE_FILE" ]]; then
     printf '0\n'
     return
   fi
 
-  jq -r --arg bucket "$bucket_key" --arg special "$special_workspace" '
+  jq -r --arg bucket "$bucket_key" '
     [
       to_entries[]
       | select(.value.bucket == $bucket)
-      | select((.value.special // $special) == $special)
     ]
     | length
   ' "$STATE_FILE" 2>/dev/null || printf '0\n'
+}
+
+special_workspace_for_bucket_from_state() {
+  local bucket_key="$1"
+
+  if [[ -z "$bucket_key" || ! -f "$STATE_FILE" ]]; then
+    return
+  fi
+
+  jq -r --arg bucket "$bucket_key" '
+    first([
+      to_entries[]
+      | select(.value.bucket == $bucket)
+      | .value.special
+      | select(. != null and . != "")
+    ]) // empty
+  ' "$STATE_FILE" 2>/dev/null || true
+}
+
+live_windows_in_special() {
+  local special_workspace="$1"
+
+  if [[ -z "$special_workspace" ]]; then
+    printf '0\n'
+    return
+  fi
+
+  hyprctl clients -j 2>/dev/null | jq -r --arg ws "$special_workspace" '[.[] | select(.workspace.name == $ws)] | length'
 }
 
 monitor_for_special_workspace() {
@@ -118,6 +154,7 @@ toggle_special_workspace_on_monitor() {
 }
 
 focused_monitor_json="$(hyprctl monitors -j 2>/dev/null | jq -c 'first(.[] | select(.focused == true)) // empty')"
+init_state_file
 current_monitor="$(jq -r '.name // empty' <<< "$focused_monitor_json")"
 current_workspace="$(jq -r '.activeWorkspace.name // empty' <<< "$focused_monitor_json")"
 current_bucket=""
@@ -159,8 +196,9 @@ if [[ -n "$visible_special" ]]; then
       exit 0
     fi
 
-    current_bucket_count="$(bucket_has_windows "$current_bucket" "$desired_special_workspace")"
-    if [[ "$current_bucket_count" != "0" ]]; then
+    current_bucket_count="$(bucket_has_windows "$current_bucket")"
+    desired_live_count="$(live_windows_in_special "$desired_special_workspace")"
+    if [[ "$current_bucket_count" != "0" || "$desired_live_count" != "0" ]]; then
       toggle_special_workspace_on_monitor "$visible_monitor" "$visible_special"
       toggle_special_workspace_on_monitor "$desired_monitor" "$desired_special_workspace"
       exit 0
@@ -182,7 +220,8 @@ if [[ -z "$current_bucket" || -z "$desired_special_workspace" ]]; then
   exit 0
 fi
 
-current_bucket_count="$(bucket_has_windows "$current_bucket" "$desired_special_workspace")"
-if [[ "$current_bucket_count" != "0" ]]; then
+current_bucket_count="$(bucket_has_windows "$current_bucket")"
+desired_live_count="$(live_windows_in_special "$desired_special_workspace")"
+if [[ "$current_bucket_count" != "0" || "$desired_live_count" != "0" ]]; then
   toggle_special_workspace_on_monitor "$desired_monitor" "$desired_special_workspace"
 fi

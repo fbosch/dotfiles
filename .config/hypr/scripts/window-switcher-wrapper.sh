@@ -3,7 +3,7 @@
 # Usage: window-switcher-wrapper.sh [next|prev|commit|hide]
 
 action="${1:-next}"
-readonly MINIMIZED_WORKSPACE="special:minimized"
+readonly MINIMIZED_WORKSPACE_PREFIX="special:minimized"
 
 show_minimized_workspace_for_window() {
   local address="$1"
@@ -38,7 +38,7 @@ if [[ -n "$single_window_record" ]]; then
   IFS=$'\t' read -r single_window_address single_window_workspace <<< "$single_window_record"
 
   if [[ -n "$single_window_workspace" ]]; then
-    if [[ "$single_window_workspace" == "$MINIMIZED_WORKSPACE" ]]; then
+    if [[ "$single_window_workspace" == ${MINIMIZED_WORKSPACE_PREFIX}* ]]; then
       show_minimized_workspace_for_window "$single_window_address"
     fi
   fi

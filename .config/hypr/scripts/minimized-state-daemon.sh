@@ -38,7 +38,9 @@ fi
 
 init_state_file() {
   if [[ -f "$STATE_FILE" ]]; then
-    return
+    if jq -e 'type == "object"' "$STATE_FILE" >/dev/null 2>&1; then
+      return
+    fi
   fi
 
   printf '{}\n' > "$STATE_FILE"
@@ -85,6 +87,8 @@ init_state_file
 prune_state_file
 
 while true; do
+  init_state_file
+
   while IFS= read -r line; do
     handle_event "$line"
   done < <(socat -U - "UNIX-CONNECT:$HYPR_SOCKET")
