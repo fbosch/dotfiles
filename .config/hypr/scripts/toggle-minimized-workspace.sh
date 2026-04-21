@@ -7,6 +7,50 @@ readonly MINIMIZED_NAME="minimized"
 readonly STATE_FILE="${XDG_RUNTIME_DIR}/hypr-minimized-state.json"
 target_address="${1:-}"
 
+current_bucket_key=""
+
+bucket_key_for() {
+  local monitor_name="$1"
+  local workspace_name="$2"
+
+  if [[ -z "$monitor_name" || -z "$workspace_name" ]]; then
+    return
+  fi
+
+  printf '%s__%s' "$monitor_name" "$workspace_name"
+}
+
+init_current_bucket() {
+  local monitor_name workspace_name
+
+  monitor_name="$(hyprctl monitors -j 2>/dev/null | jq -r 'first(.[] | select(.focused == true) | .name) // empty')"
+  workspace_name="$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.name // empty')"
+  current_bucket_key="$(bucket_key_for "$monitor_name" "$workspace_name")"
+}
+
+bucket_entry_count() {
+  local bucket_key="$1"
+
+  if [[ -z "$bucket_key" || ! -f "$STATE_FILE" ]]; then
+    printf '0\n'
+    return
+  fi
+
+  jq -r --arg bucket "$bucket_key" '[to_entries[] | select(.value.bucket == $bucket)] | length' "$STATE_FILE" 2>/dev/null || printf '0\n'
+}
+
+monitor_for_bucket() {
+  local bucket_key="$1"
+
+  if [[ -z "$bucket_key" || ! -f "$STATE_FILE" ]]; then
+    return
+  fi
+
+  jq -r --arg bucket "$bucket_key" '
+    first([to_entries[] | select(.value.bucket == $bucket) | .value.monitor] | map(select(. != ""))) // empty
+  ' "$STATE_FILE" 2>/dev/null || true
+}
+
 monitor_from_state() {
   local address="$1"
 
@@ -61,6 +105,8 @@ visible_monitor="$(
   '
 )"
 
+init_current_bucket
+
 target_monitor="$(monitor_from_state "$target_address")"
 if [[ -z "$target_monitor" ]]; then
   target_monitor="$(monitor_from_client_position "$target_address")"
@@ -81,6 +127,16 @@ fi
 if [[ -n "$visible_monitor" ]]; then
   show_on_monitor "$visible_monitor"
   exit 0
+fi
+
+current_bucket_count="$(bucket_entry_count "$current_bucket_key")"
+if [[ "$current_bucket_count" != "0" ]]; then
+  target_monitor="$(monitor_for_bucket "$current_bucket_key")"
+
+  if [[ -n "$target_monitor" ]]; then
+    show_on_monitor "$target_monitor"
+    exit 0
+  fi
 fi
 
 clients_json="$(hyprctl clients -j 2>/dev/null || printf '[]\n')"

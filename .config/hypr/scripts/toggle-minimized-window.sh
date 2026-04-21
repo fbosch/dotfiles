@@ -6,6 +6,17 @@ readonly MINIMIZED_WORKSPACE="special:minimized"
 readonly STATE_FILE="${XDG_RUNTIME_DIR}/hypr-minimized-state.json"
 readonly DAEMON_SCRIPT="$HOME/.config/hypr/scripts/minimized-state-daemon.sh"
 
+bucket_key_for() {
+  local monitor_name="$1"
+  local workspace_name="$2"
+
+  if [[ -z "$monitor_name" || -z "$workspace_name" ]]; then
+    return
+  fi
+
+  printf '%s__%s' "$monitor_name" "$workspace_name"
+}
+
 init_state_file() {
   if [[ -f "$STATE_FILE" ]]; then
     return
@@ -29,7 +40,7 @@ ensure_daemon_running() {
 
 save_window_state() {
   local window_json="$1"
-  local address workspace_name monitor_id floating x y width height monitor_name
+  local address workspace_name monitor_id floating x y width height monitor_name bucket
   local temp_file
 
   address="$(jq -r '.address // empty' <<< "$window_json")"
@@ -41,6 +52,7 @@ save_window_state() {
   width="$(jq -r '.size[0] // 0' <<< "$window_json")"
   height="$(jq -r '.size[1] // 0' <<< "$window_json")"
   monitor_name="$(hyprctl monitors -j 2>/dev/null | jq -r --argjson id "$monitor_id" 'first(.[] | select(.id == $id) | .name) // empty')"
+  bucket="$(bucket_key_for "$monitor_name" "$workspace_name")"
 
   if [[ -z "$address" || -z "$workspace_name" ]]; then
     return
@@ -51,6 +63,7 @@ save_window_state() {
     --arg address "$address" \
     --arg workspace "$workspace_name" \
     --arg monitor "$monitor_name" \
+    --arg bucket "$bucket" \
     --argjson floating "$floating" \
     --argjson x "$x" \
     --argjson y "$y" \
@@ -59,6 +72,7 @@ save_window_state() {
     '.[$address] = {
       workspace: $workspace,
       monitor: $monitor,
+      bucket: $bucket,
       floating: $floating,
       x: $x,
       y: $y,
