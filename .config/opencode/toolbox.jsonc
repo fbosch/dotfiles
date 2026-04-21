@@ -50,6 +50,21 @@
         "EXA_API_KEY={env:EXA_API_KEY}",
         "mcp/exa"
       ]
+    },
+    "just-mcp": {
+      "type": "local",
+      "command": [
+        "docker",
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        ".:/workspace",
+        "-w",
+        "/workspace",
+        "ghcr.io/promptexecution/just-mcp:latest",
+        "--stdio"
+      ]
     }
   },
   "settings": {

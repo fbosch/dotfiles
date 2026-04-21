@@ -9,12 +9,9 @@ Hyprland window manager configuration with custom keybinds, rules, and support s
 - `keybinds.conf` - Keyboard shortcuts
 - `rules.conf` / `generated-rules.conf` - Window rules and behaviors
 - `animations.conf` - Animation settings
-- `workspaces.conf` - Workspace layout
 - `window-state.conf` - Window state management
-- `hyprbars.conf` - Title bar plugin
 - `hyprlock.conf` - Screen lock
 - `hypridle.conf` - Idle behavior
-- `hyprexpo.conf` - Workspace overview
 - `monitors.conf.example` / `hyprpaper.conf.example` - Templates for local setup
 
 **Scripts:**
