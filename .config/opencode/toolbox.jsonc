@@ -54,10 +54,13 @@
     "just-mcp": {
       "type": "local",
       "command": [
-        "docker",
+        "podman",
         "run",
         "-i",
         "--rm",
+        "--replace",
+        "--name",
+        "mcp-just-mcp",
         "-v",
         ".:/workspace",
         "-w",
