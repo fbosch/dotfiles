@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-readonly MINIMIZED_WORKSPACE="special:minimized"
+readonly MINIMIZED_WORKSPACE_PREFIX="special:minimized"
 readonly STATE_FILE="${XDG_RUNTIME_DIR}/hypr-minimized-state.json"
 readonly DAEMON_SCRIPT="$HOME/.config/hypr/scripts/minimized-state-daemon.sh"
 
@@ -15,6 +15,19 @@ bucket_key_for() {
   fi
 
   printf '%s__%s' "$monitor_name" "$workspace_name"
+}
+
+special_workspace_for_bucket() {
+  local bucket_key="$1"
+  local bucket_hash
+
+  if [[ -z "$bucket_key" ]]; then
+    printf '%s\n' "${MINIMIZED_WORKSPACE_PREFIX}"
+    return
+  fi
+
+  bucket_hash="$(printf '%s' "$bucket_key" | sha1sum | cut -c1-12)"
+  printf '%s\n' "${MINIMIZED_WORKSPACE_PREFIX}-${bucket_hash}"
 }
 
 init_state_file() {
@@ -40,7 +53,7 @@ ensure_daemon_running() {
 
 save_window_state() {
   local window_json="$1"
-  local address workspace_name monitor_id floating x y width height monitor_name bucket
+  local address workspace_name monitor_id floating x y width height monitor_name bucket special_workspace
   local temp_file
 
   address="$(jq -r '.address // empty' <<< "$window_json")"
@@ -52,7 +65,13 @@ save_window_state() {
   width="$(jq -r '.size[0] // 0' <<< "$window_json")"
   height="$(jq -r '.size[1] // 0' <<< "$window_json")"
   monitor_name="$(hyprctl monitors -j 2>/dev/null | jq -r --argjson id "$monitor_id" 'first(.[] | select(.id == $id) | .name) // empty')"
+
+  if [[ -z "$monitor_name" && -n "$monitor_id" ]]; then
+    monitor_name="monitor-${monitor_id}"
+  fi
+
   bucket="$(bucket_key_for "$monitor_name" "$workspace_name")"
+  special_workspace="$(special_workspace_for_bucket "$bucket")"
 
   if [[ -z "$address" || -z "$workspace_name" ]]; then
     return
@@ -64,6 +83,7 @@ save_window_state() {
     --arg workspace "$workspace_name" \
     --arg monitor "$monitor_name" \
     --arg bucket "$bucket" \
+    --arg special "$special_workspace" \
     --argjson floating "$floating" \
     --argjson x "$x" \
     --argjson y "$y" \
@@ -73,6 +93,7 @@ save_window_state() {
       workspace: $workspace,
       monitor: $monitor,
       bucket: $bucket,
+      special: $special,
       floating: $floating,
       x: $x,
       y: $y,
@@ -144,10 +165,16 @@ fi
 init_state_file
 ensure_daemon_running
 
-if [[ "$active_workspace" == "$MINIMIZED_WORKSPACE" ]]; then
+if [[ "$active_workspace" == ${MINIMIZED_WORKSPACE_PREFIX}* ]]; then
   restore_window_state "$active_address"
   exit 0
 fi
 
 save_window_state "$active_window_json"
-hyprctl dispatch movetoworkspacesilent "$MINIMIZED_WORKSPACE" >/dev/null
+target_special_workspace="$(jq -r --arg address "$active_address" '.[$address].special // empty' "$STATE_FILE" 2>/dev/null || true)"
+
+if [[ -z "$target_special_workspace" ]]; then
+  target_special_workspace="${MINIMIZED_WORKSPACE_PREFIX}"
+fi
+
+hyprctl dispatch movetoworkspacesilent "$target_special_workspace" >/dev/null

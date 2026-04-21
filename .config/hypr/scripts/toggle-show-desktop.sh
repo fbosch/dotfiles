@@ -28,7 +28,13 @@ fi
 state_file="${STATE_DIR}/${focused_monitor_name}__${current_workspace}"
 
 if [[ -s "$state_file" ]]; then
-  mapfile -t addresses < "$state_file"
+  target_workspace="$(jq -r '.workspace // empty' "$state_file" 2>/dev/null || true)"
+
+  if [[ -z "$target_workspace" ]]; then
+    target_workspace="$current_workspace"
+  fi
+
+  mapfile -t addresses < <(jq -r '.windows[]?.address // empty' "$state_file" 2>/dev/null || true)
   commands=""
 
   for address in "${addresses[@]}"; do
@@ -36,28 +42,57 @@ if [[ -s "$state_file" ]]; then
       continue
     fi
 
-    commands+="dispatch movetoworkspacesilent name:${current_workspace},address:${address};"
+    commands+="dispatch movetoworkspacesilent name:${target_workspace},address:${address};"
   done
 
   if [[ -n "$commands" ]]; then
     hyprctl --batch "$commands" >/dev/null
   fi
 
+  while IFS=$'\t' read -r address x y width height; do
+    if [[ -z "$address" ]]; then
+      continue
+    fi
+
+    hyprctl dispatch focuswindow "address:${address}" >/dev/null 2>&1 || continue
+    hyprctl dispatch resizewindowpixel "exact ${width} ${height},address:${address}" >/dev/null 2>&1 || true
+    hyprctl dispatch movewindowpixel "exact ${x} ${y},address:${address}" >/dev/null 2>&1 || true
+  done < <(
+    jq -r '.windows[]? | select(.floating == true) | "\(.address)\t\(.x)\t\(.y)\t\(.width)\t\(.height)"' "$state_file" 2>/dev/null || true
+  )
+
   rm -f "$state_file"
   exit 0
 fi
 
-mapfile -t addresses < <(
-  hyprctl clients -j | jq -r --arg ws "$current_workspace" --argjson monitor "$focused_monitor_id" '
-    .[]
-    | select(.workspace.name == $ws and .monitor == $monitor)
-    | .address
+windows_json="$({
+  hyprctl clients -j | jq -c --arg ws "$current_workspace" --argjson monitor "$focused_monitor_id" '
+    [
+      .[]
+      | select(.workspace.name == $ws and .monitor == $monitor)
+      | {
+          address: .address,
+          floating: (.floating // false),
+          x: (.at[0] // 0),
+          y: (.at[1] // 0),
+          width: (.size[0] // 0),
+          height: (.size[1] // 0)
+        }
+    ]
   '
-)
+} 2>/dev/null || printf '[]\n')"
+
+mapfile -t addresses < <(jq -r '.[]?.address // empty' <<< "$windows_json")
 
 if [[ ${#addresses[@]} -eq 0 ]]; then
   exit 0
 fi
+
+jq -n \
+  --arg monitor "$focused_monitor_name" \
+  --arg workspace "$current_workspace" \
+  --argjson windows "$windows_json" \
+  '{monitor: $monitor, workspace: $workspace, windows: $windows}' > "$state_file"
 
 commands=""
 
@@ -72,5 +107,3 @@ done
 if [[ -n "$commands" ]]; then
   hyprctl --batch "$commands" >/dev/null
 fi
-
-printf '%s\n' "${addresses[@]}" > "$state_file"
