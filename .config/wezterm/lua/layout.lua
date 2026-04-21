@@ -1,5 +1,7 @@
 local wezterm = require("wezterm")
 local mux = wezterm.mux
+local is_macos = wezterm.target_triple:find("darwin") ~= nil
+
 return function(config)
 	config.window_decorations = "RESIZE|MACOS_FORCE_DISABLE_SHADOW"
 	config.window_padding = {
@@ -8,9 +10,11 @@ return function(config)
 		top = -1,
 		bottom = 0,
 	}
-	-- maximize first window
-	wezterm.on("gui-startup", function(cmd)
-		local _, _, window = mux.spawn_window(cmd or {})
-		window:gui_window():maximize()
-	end)
+	if is_macos then
+		-- maximize first window
+		wezterm.on("gui-startup", function(cmd)
+			local _, _, window = mux.spawn_window(cmd or {})
+			window:gui_window():maximize()
+		end)
+	end
 end
