@@ -199,6 +199,25 @@ function setIfPresentInteger(
     return ok(undefined);
 }
 
+function runAll(operations: Array<() => AppResult<void>>): AppResult<void> {
+    for (const operation of operations) {
+        const result = operation();
+        if (result.isErr()) {
+            return err(result.error);
+        }
+    }
+
+    return ok(undefined);
+}
+
+function unwrapOrThrow<T>(result: AppResult<T>): T {
+    if (result.isErr()) {
+        throw new Error(result.error);
+    }
+
+    return result.value;
+}
+
 function reloadHeardProcess(): void {
     const uidResult = run("id", ["-u"]);
     if (uidResult.isErr()) {
@@ -247,183 +266,94 @@ function setSound(targetInput: string): AppResult<string> {
     const archiveXml = join(tempDir, "selected.xml");
 
     try {
-        const exportResult = run("defaults", ["export", DOMAIN, domainPlist]);
-        if (exportResult.isErr()) {
-            return err(exportResult.error);
-        }
+        unwrapOrThrow(run("defaults", ["export", DOMAIN, domainPlist]));
 
-        const selectedBase64Result = readRawPlistValue(domainPlist, "ComfortSoundsSelectedSound");
-        if (selectedBase64Result.isErr()) {
-            return err(selectedBase64Result.error);
-        }
-
-        const selectedBase64 = selectedBase64Result.value;
+        const selectedBase64 = unwrapOrThrow(readRawPlistValue(domainPlist, "ComfortSoundsSelectedSound"));
         if (!selectedBase64) {
             return err("ComfortSoundsSelectedSound not initialized; set one sound in System Settings first");
         }
 
         writeFileSync(archiveBin, Buffer.from(selectedBase64, "base64"));
-        const convertToXmlResult = run("plutil", ["-convert", "xml1", "-o", archiveXml, archiveBin]);
-        if (convertToXmlResult.isErr()) {
-            return err(convertToXmlResult.error);
+        unwrapOrThrow(run("plutil", ["-convert", "xml1", "-o", archiveXml, archiveBin]));
+
+        const nameIdx = unwrapOrThrow(extractUidAtPath(archiveXml, "$objects.1.HUComfortSoundNameKey"));
+        const pathObjectIdx = unwrapOrThrow(extractUidAtPath(archiveXml, "$objects.1.HUComfortSoundPathKey"));
+        const pathValueIdx = unwrapOrThrow(extractUidAtPath(archiveXml, `$objects.${pathObjectIdx}.NS\\.relative`));
+        const assetObjectIdx = unwrapOrThrow(extractUidAtPath(archiveXml, "$objects.1.HUComfortSoundAssetKey"));
+        const assetIdIdx = unwrapOrThrow(extractUidAtPath(archiveXml, `$objects.${assetObjectIdx}.assetId`));
+        const propertiesIdx = unwrapOrThrow(extractUidAtPath(archiveXml, `$objects.${assetObjectIdx}.properties`));
+
+        const replacementResult = runAll([
+            () => replaceString(archiveXml, `$objects.${nameIdx}`, target.name),
+            () =>
+                replaceString(
+                    archiveXml,
+                    `$objects.${pathValueIdx}`,
+                    `file://${BASE}/${target.assetId}.asset/AssetData/`,
+                ),
+            () => replaceString(archiveXml, `$objects.${assetIdIdx}`, target.assetId),
+            () => replaceInteger(archiveXml, "$objects.1.HUComfortSoundGroupKey", target.soundGroup),
+            () => replaceInteger(archiveXml, `$objects.${assetObjectIdx}.formatVersion`, target.formatVersion),
+            () =>
+                replaceInteger(
+                    archiveXml,
+                    `$objects.${assetObjectIdx}.compatibilityVersion`,
+                    target.compatibilityVersion,
+                ),
+        ]);
+        if (replacementResult.isErr()) {
+            return err(replacementResult.error);
         }
 
-        const nameIdxResult = extractUidAtPath(archiveXml, "$objects.1.HUComfortSoundNameKey");
-        if (nameIdxResult.isErr()) {
-            return err(nameIdxResult.error);
-        }
-
-        const pathObjectIdxResult = extractUidAtPath(archiveXml, "$objects.1.HUComfortSoundPathKey");
-        if (pathObjectIdxResult.isErr()) {
-            return err(pathObjectIdxResult.error);
-        }
-
-        const pathValueIdxResult = extractUidAtPath(archiveXml, `$objects.${pathObjectIdxResult.value}.NS\\.relative`);
-        if (pathValueIdxResult.isErr()) {
-            return err(pathValueIdxResult.error);
-        }
-
-        const assetObjectIdxResult = extractUidAtPath(archiveXml, "$objects.1.HUComfortSoundAssetKey");
-        if (assetObjectIdxResult.isErr()) {
-            return err(assetObjectIdxResult.error);
-        }
-
-        const assetIdIdxResult = extractUidAtPath(archiveXml, `$objects.${assetObjectIdxResult.value}.assetId`);
-        if (assetIdIdxResult.isErr()) {
-            return err(assetIdIdxResult.error);
-        }
-
-        const propertiesIdxResult = extractUidAtPath(archiveXml, `$objects.${assetObjectIdxResult.value}.properties`);
-        if (propertiesIdxResult.isErr()) {
-            return err(propertiesIdxResult.error);
-        }
-
-        const replaceNameResult = replaceString(archiveXml, `$objects.${nameIdxResult.value}`, target.name);
-        if (replaceNameResult.isErr()) {
-            return err(replaceNameResult.error);
-        }
-
-        const replacePathResult = replaceString(
-            archiveXml,
-            `$objects.${pathValueIdxResult.value}`,
-            `file://${BASE}/${target.assetId}.asset/AssetData/`,
-        );
-        if (replacePathResult.isErr()) {
-            return err(replacePathResult.error);
-        }
-
-        const replaceAssetResult = replaceString(archiveXml, `$objects.${assetIdIdxResult.value}`, target.assetId);
-        if (replaceAssetResult.isErr()) {
-            return err(replaceAssetResult.error);
-        }
-
-        const replaceGroupResult = replaceInteger(archiveXml, "$objects.1.HUComfortSoundGroupKey", target.soundGroup);
-        if (replaceGroupResult.isErr()) {
-            return err(replaceGroupResult.error);
-        }
-
-        const replaceFormatResult = replaceInteger(
-            archiveXml,
-            `$objects.${assetObjectIdxResult.value}.formatVersion`,
-            target.formatVersion,
-        );
-        if (replaceFormatResult.isErr()) {
-            return err(replaceFormatResult.error);
-        }
-
-        const replaceCompatibilityResult = replaceInteger(
-            archiveXml,
-            `$objects.${assetObjectIdxResult.value}.compatibilityVersion`,
-            target.compatibilityVersion,
-        );
-        if (replaceCompatibilityResult.isErr()) {
-            return err(replaceCompatibilityResult.error);
-        }
-
-        const keyIdxListResult = extractUidArray(archiveXml, `$objects.${propertiesIdxResult.value}.NS\\.keys`);
-        if (keyIdxListResult.isErr()) {
-            return err(keyIdxListResult.error);
-        }
-
-        const valueIdxListResult = extractUidArray(archiveXml, `$objects.${propertiesIdxResult.value}.NS\\.objects`);
-        if (valueIdxListResult.isErr()) {
-            return err(valueIdxListResult.error);
-        }
-
-        const keyIdxList = keyIdxListResult.value;
-        const valueIdxList = valueIdxListResult.value;
+        const keyIdxList = unwrapOrThrow(extractUidArray(archiveXml, `$objects.${propertiesIdx}.NS\\.keys`));
+        const valueIdxList = unwrapOrThrow(extractUidArray(archiveXml, `$objects.${propertiesIdx}.NS\\.objects`));
         const valueIdxByKey = new Map<string, number>();
 
         const pairCount = Math.min(keyIdxList.length, valueIdxList.length);
         for (let i = 0; i < pairCount; i += 1) {
-            const keyNameResult = readRawPlistValue(archiveXml, `$objects.${keyIdxList[i]}`);
-            if (keyNameResult.isErr()) {
-                return err(keyNameResult.error);
-            }
-
-            valueIdxByKey.set(keyNameResult.value, valueIdxList[i]);
+            valueIdxByKey.set(
+                unwrapOrThrow(readRawPlistValue(archiveXml, `$objects.${keyIdxList[i]}`)),
+                valueIdxList[i],
+            );
         }
 
-        const setNameResult = setIfPresentString(archiveXml, valueIdxByKey, "SoundName", target.name);
-        if (setNameResult.isErr()) {
-            return err(setNameResult.error);
+        const metadataResult = runAll([
+            () => setIfPresentString(archiveXml, valueIdxByKey, "SoundName", target.name),
+            () => setIfPresentInteger(archiveXml, valueIdxByKey, "SoundGroup", target.soundGroup),
+            () => setIfPresentInteger(archiveXml, valueIdxByKey, "FormatVersion", target.formatVersion),
+            () => setIfPresentInteger(archiveXml, valueIdxByKey, "CompatibilityVersion", target.compatibilityVersion),
+        ]);
+        if (metadataResult.isErr()) {
+            return err(metadataResult.error);
         }
 
-        const setGroupResult = setIfPresentInteger(archiveXml, valueIdxByKey, "SoundGroup", target.soundGroup);
-        if (setGroupResult.isErr()) {
-            return err(setGroupResult.error);
-        }
-
-        const setFormatResult = setIfPresentInteger(archiveXml, valueIdxByKey, "FormatVersion", target.formatVersion);
-        if (setFormatResult.isErr()) {
-            return err(setFormatResult.error);
-        }
-
-        const setCompatibilityResult = setIfPresentInteger(
-            archiveXml,
-            valueIdxByKey,
-            "CompatibilityVersion",
-            target.compatibilityVersion,
-        );
-        if (setCompatibilityResult.isErr()) {
-            return err(setCompatibilityResult.error);
-        }
-
-        const convertToBinaryResult = run("plutil", ["-convert", "binary1", "-o", archiveBin, archiveXml]);
-        if (convertToBinaryResult.isErr()) {
-            return err(convertToBinaryResult.error);
-        }
+        unwrapOrThrow(run("plutil", ["-convert", "binary1", "-o", archiveBin, archiveXml]));
 
         const archiveHex = readFileSync(archiveBin).toString("hex");
 
-        const writeSelectedResult = run("defaults", [
-            "write",
-            DOMAIN,
-            "ComfortSoundsSelectedSound",
-            "-data",
-            archiveHex,
+        const writeResult = runAll([
+            () =>
+                run("defaults", ["write", DOMAIN, "ComfortSoundsSelectedSound", "-data", archiveHex]).map(
+                    () => undefined,
+                ),
+            () => run("defaults", ["write", DOMAIN, "comfortSoundsEnabled", "-bool", "YES"]).map(() => undefined),
+            () =>
+                run("defaults", [
+                    "write",
+                    DOMAIN,
+                    "lastEnablementTimestamp",
+                    String(Math.floor(Date.now() / 1000)),
+                ]).map(() => undefined),
         ]);
-        if (writeSelectedResult.isErr()) {
-            return err(writeSelectedResult.error);
-        }
-
-        const enableResult = run("defaults", ["write", DOMAIN, "comfortSoundsEnabled", "-bool", "YES"]);
-        if (enableResult.isErr()) {
-            return err(enableResult.error);
-        }
-
-        const timestampResult = run("defaults", [
-            "write",
-            DOMAIN,
-            "lastEnablementTimestamp",
-            String(Math.floor(Date.now() / 1000)),
-        ]);
-        if (timestampResult.isErr()) {
-            return err(timestampResult.error);
+        if (writeResult.isErr()) {
+            return err(writeResult.error);
         }
 
         reloadHeardProcess();
         return ok(target.name);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return err(message);
     } finally {
         rmSync(tempDir, { recursive: true, force: true });
     }

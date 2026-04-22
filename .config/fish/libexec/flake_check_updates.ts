@@ -3,6 +3,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { err, ok, type Result } from "neverthrow";
 
 type FlakeLock = {
     nodes?: Record<string, { locked?: { rev?: string }; inputs?: Record<string, string> }>;
@@ -21,30 +22,80 @@ type UpdateResult = {
     updates: UpdateInfo[];
 };
 
+type AppResult<T> = Result<T, string>;
+
 const EMPTY_RESULT: UpdateResult = { count: 0, updates: [] };
+const DEFAULT_MAX_INPUTS = 20;
+const DEFAULT_UPDATE_TIMEOUT_MS = 20_000;
+const DEFAULT_TOTAL_BUDGET_MS = 180_000;
 
 function usage(): void {
     console.log("Usage: flake_check_updates.ts [FLAKE_PATH]");
+    console.log("Env overrides:");
+    console.log("  FLAKE_CHECK_MAX_INPUTS       default 20");
+    console.log("  FLAKE_CHECK_TIMEOUT_MS       default 20000");
+    console.log("  FLAKE_CHECK_TOTAL_BUDGET_MS  default 180000");
 }
 
 function emitResult(result: UpdateResult): void {
     console.log(JSON.stringify(result));
 }
 
-function loadLock(lockPath: string): FlakeLock | null {
+function parsePositiveIntEnv(name: string, fallback: number): number {
+    const raw = process.env[name];
+    if (!raw) {
+        return fallback;
+    }
+
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isNaN(parsed) || parsed <= 0) {
+        return fallback;
+    }
+
+    return parsed;
+}
+
+function loadLock(lockPath: string): AppResult<FlakeLock> {
     try {
         const raw = readFileSync(lockPath, "utf8");
-        return JSON.parse(raw) as FlakeLock;
-    } catch {
-        return null;
+        return ok(JSON.parse(raw) as FlakeLock);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return err(message);
     }
 }
 
-function runNixUpdate(flakePath: string, input: string): void {
-    spawnSync("nix", ["flake", "update", "--update-input", input], {
+function restoreOriginalLock(lockPath: string, originalLockRaw: string): AppResult<void> {
+    try {
+        writeFileSync(lockPath, originalLockRaw, "utf8");
+        return ok(undefined);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return err(message);
+    }
+}
+
+function runNixUpdate(flakePath: string, input: string, timeoutMs: number): AppResult<void> {
+    const result = spawnSync("nix", ["flake", "update", "--update-input", input], {
         cwd: flakePath,
         stdio: "ignore",
+        timeout: timeoutMs,
     });
+
+    if (result.error) {
+        const message = result.error.message || `failed update for input ${input}`;
+        return err(message);
+    }
+
+    if (result.signal === "SIGTERM") {
+        return err(`timeout after ${timeoutMs}ms for input ${input}`);
+    }
+
+    if (result.status !== 0) {
+        return err(`update failed for input ${input} (exit ${result.status ?? "unknown"})`);
+    }
+
+    return ok(undefined);
 }
 
 function shortRev(rev: string): string {
@@ -63,26 +114,53 @@ function main(): number {
     const flakePath = rawPath.startsWith("~/") && process.env.HOME ? join(process.env.HOME, rawPath.slice(2)) : rawPath;
     const resolvedFlakePath = resolve(flakePath);
     const lockPath = join(resolvedFlakePath, "flake.lock");
+    const maxInputs = parsePositiveIntEnv("FLAKE_CHECK_MAX_INPUTS", DEFAULT_MAX_INPUTS);
+    const updateTimeoutMs = parsePositiveIntEnv("FLAKE_CHECK_TIMEOUT_MS", DEFAULT_UPDATE_TIMEOUT_MS);
+    const totalBudgetMs = parsePositiveIntEnv("FLAKE_CHECK_TOTAL_BUDGET_MS", DEFAULT_TOTAL_BUDGET_MS);
 
     if (!existsSync(lockPath)) {
         emitResult(EMPTY_RESULT);
         return 1;
     }
 
-    const initialLock = loadLock(lockPath);
-    if (!initialLock?.nodes?.root?.inputs) {
+    const initialLockResult = loadLock(lockPath);
+    if (initialLockResult.isErr()) {
+        console.error(`flake_check_updates: failed to read lock file: ${initialLockResult.error}`);
+        emitResult(EMPTY_RESULT);
+        return 1;
+    }
+
+    const initialLock = initialLockResult.value;
+    if (!initialLock.nodes?.root?.inputs) {
         emitResult(EMPTY_RESULT);
         return 1;
     }
 
     const rootInputs = initialLock.nodes.root.inputs;
-    const inputList = Object.keys(rootInputs);
+    const allInputs = Object.keys(rootInputs).sort();
+    const inputList = allInputs.slice(0, maxInputs);
     const originalLockRaw = readFileSync(lockPath, "utf8");
     const updates: UpdateInfo[] = [];
+    const warnings: string[] = [];
+    const startedAt = Date.now();
+
+    if (allInputs.length > maxInputs) {
+        warnings.push(`input scan capped at ${maxInputs}/${allInputs.length}`);
+    }
 
     try {
         for (const input of inputList) {
-            writeFileSync(lockPath, originalLockRaw, "utf8");
+            if (Date.now() - startedAt > totalBudgetMs) {
+                warnings.push(`time budget reached (${totalBudgetMs}ms)`);
+                break;
+            }
+
+            const restoreResult = restoreOriginalLock(lockPath, originalLockRaw);
+            if (restoreResult.isErr()) {
+                console.error(`flake_check_updates: failed to restore lock file: ${restoreResult.error}`);
+                emitResult(EMPTY_RESULT);
+                return 1;
+            }
 
             const nodeName = rootInputs[input];
             if (!nodeName) {
@@ -95,10 +173,19 @@ function main(): number {
                 continue;
             }
 
-            runNixUpdate(resolvedFlakePath, input);
+            const updateResult = runNixUpdate(resolvedFlakePath, input, updateTimeoutMs);
+            if (updateResult.isErr()) {
+                warnings.push(`${input}: ${updateResult.error}`);
+                continue;
+            }
 
-            const updatedLock = loadLock(lockPath);
-            const updatedNode = updatedLock?.nodes?.[nodeName];
+            const updatedLockResult = loadLock(lockPath);
+            if (updatedLockResult.isErr()) {
+                warnings.push(`${input}: failed to read updated lock (${updatedLockResult.error})`);
+                continue;
+            }
+
+            const updatedNode = updatedLockResult.value.nodes?.[nodeName];
             const newRev = updatedNode?.locked?.rev;
 
             if (!newRev || newRev === currentRev) {
@@ -114,13 +201,23 @@ function main(): number {
             });
         }
     } catch (error) {
-        writeFileSync(lockPath, originalLockRaw, "utf8");
+        restoreOriginalLock(lockPath, originalLockRaw);
         console.error(`flake_check_updates: ${error instanceof Error ? error.message : String(error)}`);
         emitResult(EMPTY_RESULT);
         return 1;
     }
 
-    writeFileSync(lockPath, originalLockRaw, "utf8");
+    const finalRestoreResult = restoreOriginalLock(lockPath, originalLockRaw);
+    if (finalRestoreResult.isErr()) {
+        console.error(`flake_check_updates: failed final lock restore: ${finalRestoreResult.error}`);
+        emitResult(EMPTY_RESULT);
+        return 1;
+    }
+
+    for (const warning of warnings) {
+        console.error(`flake_check_updates: ${warning}`);
+    }
+
     emitResult({ count: updates.length, updates });
     return 0;
 }
