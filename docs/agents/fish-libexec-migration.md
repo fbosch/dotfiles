@@ -21,12 +21,12 @@ Keep Fish functions user-facing and move dense parsing/transformation logic into
 
 ### 2) `__workitems_extract.fish` -> `workitems_extract.ts`
 
-- [ ] Extract commit/branch/workitem parsing and dedupe from `.config/fish/functions/__workitems_extract.fish`.
-- [ ] Keep cache key strategy and cache semantics equivalent.
+- [x] Extract commit/branch/workitem parsing and dedupe from `.config/fish/functions/__workitems_extract.fish`.
+- [x] Keep cache key strategy and cache semantics equivalent.
 - [ ] Acceptance criteria:
-  - [ ] Output records match existing callers (`workitems_on_date`, `workitems_week`).
-  - [ ] Cache hit/miss behavior remains compatible.
-  - [ ] Invalid date/range inputs fail with non-zero exit and useful stderr.
+  - [x] Output records match existing callers (`workitems_on_date`, `workitems_week`).
+  - [x] Cache hit/miss behavior remains compatible.
+  - [x] Invalid date/range inputs fail with non-zero exit and useful stderr.
 
 ### 3) `ado_test_case.fish` -> `ado_test_case_helper.ts`
 

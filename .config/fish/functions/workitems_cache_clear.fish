@@ -1,5 +1,8 @@
 function workitems_cache_clear --description 'Clear the work items cache'
-    set -l cache_dir ~/.cache/fish/workitems
+    set -l cache_dir "$XDG_CACHE_HOME/fish/workitems"
+    if test -z "$XDG_CACHE_HOME"
+        set cache_dir ~/.cache/fish/workitems
+    end
     
     if test -d "$cache_dir"
         set -l file_count (find "$cache_dir" -type f | wc -l | string trim)

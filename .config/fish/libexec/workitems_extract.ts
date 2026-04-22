@@ -52,12 +52,43 @@ function run(command: string, args: string[]): AppResult<string> {
 }
 
 function parseIsoDate(value: string): AppResult<Date> {
+    const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!isoMatch) {
+        return err(`invalid date: ${value}`);
+    }
+
+    const [, yearRaw, monthRaw, dayRaw] = isoMatch;
+    const year = Number.parseInt(yearRaw, 10);
+    const month = Number.parseInt(monthRaw, 10);
+    const day = Number.parseInt(dayRaw, 10);
     const parsed = new Date(`${value}T00:00:00`);
     if (Number.isNaN(parsed.getTime())) {
         return err(`invalid date: ${value}`);
     }
 
+    if (parsed.getFullYear() !== year || parsed.getMonth() + 1 !== month || parsed.getDate() !== day) {
+        return err(`invalid date: ${value}`);
+    }
+
     return ok(parsed);
+}
+
+function validateDateRange(startDate: string, endDate: string): AppResult<void> {
+    const parsedStart = parseIsoDate(startDate);
+    if (parsedStart.isErr()) {
+        return err(parsedStart.error);
+    }
+
+    const parsedEnd = parseIsoDate(endDate);
+    if (parsedEnd.isErr()) {
+        return err(parsedEnd.error);
+    }
+
+    if (parsedStart.value.getTime() > parsedEnd.value.getTime()) {
+        return err(`invalid date range: ${startDate} is after ${endDate}`);
+    }
+
+    return ok(undefined);
 }
 
 function isPastDateRange(endDate: string): AppResult<boolean> {
@@ -322,6 +353,11 @@ function extractWorkitemsForRange(
     mode: Mode,
     refresh: boolean,
 ): AppResult<string[]> {
+    const dateRangeResult = validateDateRange(startDate, endDate);
+    if (dateRangeResult.isErr()) {
+        return err(dateRangeResult.error);
+    }
+
     const cacheableResult = isPastDateRange(endDate);
     if (cacheableResult.isErr()) {
         return err(cacheableResult.error);
