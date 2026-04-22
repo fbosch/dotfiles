@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { err, ok, type Result } from "neverthrow";
+import { z } from "zod";
 
 type FlakeLock = {
     nodes?: Record<string, { locked?: { rev?: string }; inputs?: Record<string, string> }>;
@@ -24,16 +25,59 @@ type UpdateResult = {
 };
 
 type AppResult<T> = Result<T, string>;
-
-const EMPTY_RESULT: UpdateResult = { count: 0, updates: [] };
 const DEFAULT_BATCH_SIZE = 3;
 const DEFAULT_UPDATE_TIMEOUT_MS = 8_000;
+
+const NodeSchema = z
+    .object({
+        locked: z
+            .object({
+                rev: z.string().min(1).optional(),
+            })
+            .optional(),
+        inputs: z.record(z.string(), z.string()).optional(),
+    })
+    .passthrough();
+
+const FlakeLockSchema = z
+    .object({
+        nodes: z.record(z.string(), NodeSchema),
+    })
+    .passthrough();
+
+const EnvSchema = z.object({
+    FLAKE_CHECK_BATCH_SIZE: z.coerce.number().int().min(1).max(25).default(DEFAULT_BATCH_SIZE),
+    FLAKE_CHECK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60_000).default(DEFAULT_UPDATE_TIMEOUT_MS),
+    FLAKE_CHECK_CURSOR: z
+        .preprocess((value) => {
+            if (value === undefined) {
+                return undefined;
+            }
+            if (typeof value !== "string") {
+                return value;
+            }
+
+            const normalized = value.trim().toLowerCase();
+            if (["1", "true", "yes", "on"].includes(normalized)) {
+                return true;
+            }
+            if (["0", "false", "no", "off"].includes(normalized)) {
+                return false;
+            }
+
+            return value;
+        }, z.boolean())
+        .default(true),
+    FLAKE_CHECK_CURSOR_FILE: z.string().min(1).optional(),
+});
+
+const EMPTY_RESULT: UpdateResult = { count: 0, updates: [] };
 
 function usage(): void {
     console.log("Usage: flake_check_updates.ts [FLAKE_PATH]");
     console.log("Env overrides:");
-    console.log("  FLAKE_CHECK_BATCH_SIZE       default 3");
-    console.log("  FLAKE_CHECK_TIMEOUT_MS       default 8000");
+    console.log(`  FLAKE_CHECK_BATCH_SIZE       default ${DEFAULT_BATCH_SIZE}`);
+    console.log(`  FLAKE_CHECK_TIMEOUT_MS       default ${DEFAULT_UPDATE_TIMEOUT_MS}`);
     console.log("  FLAKE_CHECK_CURSOR           default 1 (set 0 to disable rotating batches)");
     console.log("  FLAKE_CHECK_CURSOR_FILE      optional explicit cursor file path");
 }
@@ -41,46 +85,9 @@ function usage(): void {
 function emitResult(result: UpdateResult): void {
     console.log(JSON.stringify(result));
 }
-
-function parsePositiveIntEnv(name: string, fallback: number): number {
-    const raw = process.env[name];
-    if (!raw) {
-        return fallback;
-    }
-
-    const parsed = Number.parseInt(raw, 10);
-    if (Number.isNaN(parsed) || parsed <= 0) {
-        return fallback;
-    }
-
-    return parsed;
-}
-
-function parseBoundedPositiveIntEnv(name: string, fallback: number, maxValue: number): number {
-    const parsed = parsePositiveIntEnv(name, fallback);
-    return Math.min(parsed, maxValue);
-}
-
-function parseBooleanEnv(name: string, fallback: boolean): boolean {
-    const raw = process.env[name];
-    if (!raw) {
-        return fallback;
-    }
-
-    const normalized = raw.trim().toLowerCase();
-    if (["1", "true", "yes", "on"].includes(normalized)) {
-        return true;
-    }
-    if (["0", "false", "no", "off"].includes(normalized)) {
-        return false;
-    }
-
-    return fallback;
-}
-
-function cursorFileForFlake(resolvedFlakePath: string): string {
-    if (process.env.FLAKE_CHECK_CURSOR_FILE) {
-        return resolve(process.env.FLAKE_CHECK_CURSOR_FILE);
+function cursorFileForFlake(resolvedFlakePath: string, cursorFileOverride?: string): string {
+    if (cursorFileOverride) {
+        return resolve(cursorFileOverride);
     }
 
     const cacheRoot = process.env.XDG_CACHE_HOME || (process.env.HOME ? join(process.env.HOME, ".cache") : "/tmp");
@@ -140,7 +147,16 @@ function buildBatch(allInputs: string[], start: number, batchSize: number): stri
 function loadLock(lockPath: string): AppResult<FlakeLock> {
     try {
         const raw = readFileSync(lockPath, "utf8");
-        return ok(JSON.parse(raw) as FlakeLock);
+        const parsed = JSON.parse(raw);
+        const validated = FlakeLockSchema.safeParse(parsed);
+        if (!validated.success) {
+            const summary = validated.error.issues
+                .map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`)
+                .join("; ");
+            return err(`invalid flake.lock shape (${summary})`);
+        }
+
+        return ok(validated.data as FlakeLock);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return err(message);
@@ -195,9 +211,19 @@ function main(): number {
     const flakePath = rawPath.startsWith("~/") && process.env.HOME ? join(process.env.HOME, rawPath.slice(2)) : rawPath;
     const resolvedFlakePath = resolve(flakePath);
     const lockPath = join(resolvedFlakePath, "flake.lock");
-    const batchSize = parseBoundedPositiveIntEnv("FLAKE_CHECK_BATCH_SIZE", DEFAULT_BATCH_SIZE, 25);
-    const updateTimeoutMs = parseBoundedPositiveIntEnv("FLAKE_CHECK_TIMEOUT_MS", DEFAULT_UPDATE_TIMEOUT_MS, 60_000);
-    const useCursor = parseBooleanEnv("FLAKE_CHECK_CURSOR", true);
+    const envParsed = EnvSchema.safeParse(process.env);
+    if (!envParsed.success) {
+        const summary = envParsed.error.issues
+            .map((issue) => `${issue.path.join(".") || "env"}: ${issue.message}`)
+            .join("; ");
+        console.error(`flake_check_updates: invalid env settings (${summary})`);
+        emitResult(EMPTY_RESULT);
+        return 1;
+    }
+
+    const batchSize = envParsed.data.FLAKE_CHECK_BATCH_SIZE;
+    const updateTimeoutMs = envParsed.data.FLAKE_CHECK_TIMEOUT_MS;
+    const useCursor = envParsed.data.FLAKE_CHECK_CURSOR;
 
     if (!existsSync(lockPath)) {
         emitResult(EMPTY_RESULT);
@@ -219,7 +245,7 @@ function main(): number {
 
     const rootInputs = initialLock.nodes.root.inputs;
     const allInputs = Object.keys(rootInputs).sort();
-    const cursorFile = cursorFileForFlake(resolvedFlakePath);
+    const cursorFile = cursorFileForFlake(resolvedFlakePath, envParsed.data.FLAKE_CHECK_CURSOR_FILE);
     const cursor = useCursor ? loadCursor(cursorFile) : 0;
     const start = allInputs.length > 0 ? cursor % allInputs.length : 0;
     const inputList = buildBatch(allInputs, start, batchSize);
