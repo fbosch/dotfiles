@@ -70,12 +70,12 @@ Keep Fish functions user-facing and move dense parsing/transformation logic into
 
 ### 7) `linear_issue_workflow.fish` -> `linear_issue_workflow_helper.ts`
 
-- [ ] Extract issue parse/enrich/cache/branch-name derivation from `.config/fish/functions/linear_issue_workflow.fish`.
-- [ ] Keep selection UX and worktree switching/creation in fish.
+- [x] Extract issue parse/enrich/cache/branch-name derivation from `.config/fish/functions/linear_issue_workflow.fish`.
+- [x] Keep selection UX and worktree switching/creation in fish.
 - [ ] Acceptance criteria:
-  - [ ] Issue list quality (state/priority labels, identifiers) remains intact.
-  - [ ] Branch name slugging deterministic and stable for same issue input.
-  - [ ] Fallback behavior when issue metadata missing remains safe.
+  - [x] Issue list quality (state/priority labels, identifiers) remains intact.
+  - [x] Branch name slugging deterministic and stable for same issue input.
+  - [x] Fallback behavior when issue metadata missing remains safe.
 
 ### 8) `opencode_auth_switch.fish` -> `opencode_auth_switch_helper.ts`
 

@@ -32,11 +32,20 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
     set -l color_priority_4_hex "#959DA5"
     set -l color_priority_default_hex "#7B828C"
 
-    for cmd in linear jq fzf wt opencode git
+    for cmd in linear fzf wt opencode git bun
         if not command -v $cmd >/dev/null 2>&1
             echo "$cmd_name: '$cmd' is required" >&2
             return 127
         end
+    end
+
+    set -l helper_dir (path dirname (status filename))
+    set -l fish_root (path resolve "$helper_dir/..")
+    set -l libexec_dir "$fish_root/libexec"
+    set -l helper "$libexec_dir/linear_issue_workflow_helper.ts"
+    if not test -f "$helper"
+        echo "$cmd_name: helper not found: $helper" >&2
+        return 1
     end
 
     set -l repo_root (git rev-parse --show-toplevel 2>/dev/null)
@@ -123,11 +132,7 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
             return 1
         end
 
-        set -l list_text (string join \n -- $list_output)
         set -l issue_lines
-        set -l seen_ids
-        set -l enrich_limit 40
-        set -l enrich_fetch_count 0
         set -l state_col_width 10
         set -l priority_col_width 2
         set -l color_reset (set_color normal)
@@ -144,128 +149,28 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
         set -l color_priority_3 (set_color (string sub -s 2 -- "$color_priority_3_hex"))
         set -l color_priority_4 (set_color (string sub -s 2 -- "$color_priority_4_hex"))
         set -l color_priority_default (set_color (string sub -s 2 -- "$color_priority_default_hex"))
-        set -l cache_ttl_seconds 300
-        set -l cache_dir "$HOME/.cache/linear_issue_workflow"
-        set -l cache_file "$cache_dir/issue_meta.tsv"
-        set -l cache_now (date +%s 2>/dev/null)
-        if test -z "$cache_now"
-            set cache_now 0
+
+        set -l helper_rows (printf "%s\n" $list_output | bun --smol --cwd "$libexec_dir" --install=auto "$helper" build-list)
+        set -l helper_status $status
+        if test $helper_status -ne 0 -o -z "$helper_rows"
+            echo "$cmd_name: failed to build issue list rows" >&2
+            echo "$cmd_name: raw output from linear issue list:" >&2
+            printf "%s\n" $list_output >&2
+            return 1
         end
 
-        set -l cache_ids
-        set -l cache_timestamps
-        set -l cache_state_names
-        set -l cache_state_types
-        set -l cache_priorities
-        set -l cache_titles
-        set -l cache_dirty 0
-
-        if test -f "$cache_file"
-            while read -l cache_line
-                if test -z "$cache_line"
-                    continue
-                end
-
-                set -l cache_parts (string split $tab -- "$cache_line")
-                if test (count $cache_parts) -lt 6
-                    continue
-                end
-
-                set -a cache_ids "$cache_parts[1]"
-                set -a cache_timestamps "$cache_parts[2]"
-                set -a cache_state_names "$cache_parts[3]"
-                set -a cache_state_types "$cache_parts[4]"
-                set -a cache_priorities "$cache_parts[5]"
-                set -a cache_titles "$cache_parts[6]"
-            end <"$cache_file"
-        end
-
-        for line in (string split \n -- $list_text)
-            set -l plain_line (string replace -ar '\x1b\[[0-9;]*m' '' -- "$line")
-            set -l id (string match -r -g '([A-Z][A-Z0-9]+-[0-9]+)' -- "$plain_line")
-            if test -z "$id"
+        for row in $helper_rows
+            set -l parts (string split $tab -- "$row")
+            if test (count $parts) -lt 6
                 continue
             end
 
-            if contains -- "$id" $seen_ids
-                continue
-            end
-
-            set -l detail (string replace -r '^[^A-Z0-9]*[A-Z][A-Z0-9]+-[0-9]+\s+' '' -- "$plain_line")
-            set detail (string trim -- "$detail")
-
-            set -l title "$detail"
-            set -l state_name ""
-            set -l state_type ""
-            set -l priority_value ""
-
-            set -l cache_index (contains -i -- "$id" $cache_ids)
-            if test -n "$cache_index"
-                set -l cached_timestamp "$cache_timestamps[$cache_index]"
-                if string match -qr '^[0-9]+$' -- "$cached_timestamp"
-                    set -l cache_age (math "$cache_now - $cached_timestamp")
-                    if test $cache_age -le $cache_ttl_seconds
-                        set state_name "$cache_state_names[$cache_index]"
-                        set state_type "$cache_state_types[$cache_index]"
-                        set priority_value "$cache_priorities[$cache_index]"
-                        set -l cached_title "$cache_titles[$cache_index]"
-                        if test -n "$cached_title"
-                            set title "$cached_title"
-                        end
-                    end
-                end
-            end
-
-            if test -z "$state_name" -a $enrich_fetch_count -lt $enrich_limit
-                set enrich_fetch_count (math "$enrich_fetch_count + 1")
-                set -l issue_json_line (linear issue view "$id" --json --no-comments 2>/dev/null)
-                if test -n "$issue_json_line"
-                    set -l json_title (printf "%s\n" "$issue_json_line" | jq -r '.title // empty')
-                    if test -n "$json_title"
-                        set title "$json_title"
-                    end
-                    set state_name (printf "%s\n" "$issue_json_line" | jq -r '.state.name // empty')
-                    set state_type (printf "%s\n" "$issue_json_line" | jq -r '.state.type // empty')
-                    set priority_value (printf "%s\n" "$issue_json_line" | jq -r '.priority // empty')
-
-                    set -l clean_title (string replace -a $tab ' ' -- "$title")
-                    set -l clean_state_name (string replace -a $tab ' ' -- "$state_name")
-                    set -l clean_state_type (string replace -a $tab ' ' -- "$state_type")
-
-                    if test -n "$cache_index"
-                        set cache_timestamps[$cache_index] "$cache_now"
-                        set cache_state_names[$cache_index] "$clean_state_name"
-                        set cache_state_types[$cache_index] "$clean_state_type"
-                        set cache_priorities[$cache_index] "$priority_value"
-                        set cache_titles[$cache_index] "$clean_title"
-                    else
-                        set -a cache_ids "$id"
-                        set -a cache_timestamps "$cache_now"
-                        set -a cache_state_names "$clean_state_name"
-                        set -a cache_state_types "$clean_state_type"
-                        set -a cache_priorities "$priority_value"
-                        set -a cache_titles "$clean_title"
-                    end
-                    set cache_dirty 1
-                end
-            end
-
-            if test -z "$state_name"
-                set state_name (string match -r -g ' - ([^-]+?)\s+[^ ]+\s+[^ ]+\s+ago$' -- "$detail")
-            end
-
-            if test -z "$state_name"
-                set state_name (string match -r -g ' - ([^-]+?)\s+(yesterday|today|just now)$' -- "$detail")
-            end
-
-            if test -z "$state_name"
-                set state_name "No State"
-            end
-
-            set -l state_key (string lower -- "$state_type")
-            if test -z "$state_key"
-                set state_key (string lower -- "$state_name")
-            end
+            set -l id "$parts[1]"
+            set -l state_name "$parts[2]"
+            set -l state_key "$parts[3]"
+            set -l priority_value "$parts[4]"
+            set -l title "$parts[5]"
+            set -l detail "$parts[6]"
 
             set -l state_icon "$icon_state_default"
             set -l state_color "$color_state_default"
@@ -308,22 +213,6 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
                 case 4
                     set priority_icon "$icon_priority_4"
                     set priority_color "$color_priority_4"
-                case '*'
-                    set -l priority_raw (string match -r -g '^\s*([^[:space:]]+)\s+[A-Z][A-Z0-9]+-[0-9]+' -- "$plain_line")
-                    switch "$priority_raw"
-                        case '⚠⚠⚠'
-                            set priority_icon "$icon_priority_1"
-                            set priority_color "$color_priority_1"
-                        case '▄▆█'
-                            set priority_icon "$icon_priority_2"
-                            set priority_color "$color_priority_2"
-                        case '▄▆'
-                            set priority_icon "$icon_priority_3"
-                            set priority_color "$color_priority_3"
-                        case '▄'
-                            set priority_icon "$icon_priority_4"
-                            set priority_color "$color_priority_4"
-                    end
             end
 
             set -l padded_state_name (string pad --width $state_col_width -- "$state_name")
@@ -331,18 +220,7 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
             set -l colored_state_icon "$state_color$state_icon$color_reset"
             set -l colored_priority_icon "$priority_color$padded_priority_icon$color_reset"
             set -l display "$colored_state_icon $padded_state_name  $colored_priority_icon  $title"
-
-            set -a seen_ids "$id"
             set -a issue_lines "$id$tab$display$tab$detail"
-        end
-
-        if test $cache_dirty -eq 1
-            command mkdir -p "$cache_dir" 2>/dev/null
-            set -l cache_lines
-            for idx in (seq (count $cache_ids))
-                set -a cache_lines "$cache_ids[$idx]$tab$cache_timestamps[$idx]$tab$cache_state_names[$idx]$tab$cache_state_types[$idx]$tab$cache_priorities[$idx]$tab$cache_titles[$idx]"
-            end
-            printf "%s\n" $cache_lines >"$cache_file"
         end
 
         if test (count $issue_lines) -eq 0
@@ -394,25 +272,10 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
         return 1
     end
 
-    set -l issue_json (linear issue view "$issue_id" --json --no-comments 2>/dev/null)
-    if test -z "$issue_json"
-        echo "$cmd_name: failed to fetch issue metadata for $issue_id" >&2
+    set -l branch (bun --smol --cwd "$libexec_dir" --install=auto "$helper" issue-branch "$issue_id")
+    if test $status -ne 0 -o -z "$branch"
+        echo "$cmd_name: failed to derive branch for $issue_id" >&2
         return 1
-    end
-
-    set -l branch (printf "%s\n" "$issue_json" | jq -r '.branchName // empty')
-    if test -z "$branch"
-        set -l title (printf "%s\n" "$issue_json" | jq -r '.title // "work-item"')
-        set -l slug (string lower -- "$title")
-        set slug (string replace -ar '[^a-z0-9]+' '-' -- "$slug")
-        set slug (string replace -ar '-+' '-' -- "$slug")
-        set slug (string trim -c '-' -- "$slug")
-
-        if test -z "$slug"
-            set slug work-item
-        end
-
-        set branch "feature/"(string lower -- "$issue_id")"-"(string sub -s 1 -l 48 -- "$slug")
     end
 
     set -l prompt "/linear-issue $issue_id"
