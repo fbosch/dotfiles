@@ -20,7 +20,8 @@ function comfort_sound --description 'Set macOS Comfort Sound (gum picker or dir
     end
 
     set -l helper_dir (path dirname (status filename))
-    set -l helper "$helper_dir/comfort_sound_helper.ts"
+    set -l fish_root (path resolve "$helper_dir/..")
+    set -l helper "$fish_root/libexec/comfort_sound_helper.ts"
     if not test -f "$helper"
         echo "comfort_sound: helper not found: $helper" >&2
         return 1

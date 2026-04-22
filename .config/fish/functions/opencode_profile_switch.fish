@@ -36,7 +36,8 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
     end
 
     set -l helper_dir (path dirname (status filename))
-    set -l jsonc_helper "$helper_dir/opencode_profile_switch_jsonc.ts"
+    set -l fish_root (path resolve "$helper_dir/..")
+    set -l jsonc_helper "$fish_root/libexec/opencode_profile_switch_jsonc.ts"
     if not test -f "$jsonc_helper"
         echo "jsonc helper not found: $jsonc_helper"
         return 1

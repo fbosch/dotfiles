@@ -161,7 +161,7 @@ function setSound(targetInput: string): string {
     const target = byNormalizedName.get(normalize(targetInput));
     if (!target) {
         const names = assets.map((asset) => asset.name).join(", ");
-        throw new Error(`unknown sound \"${targetInput}\"\navailable: ${names}`);
+        throw new Error(`unknown sound "${targetInput}"\navailable: ${names}`);
     }
 
     const tempDir = mkdtempSync(join(tmpdir(), "comfort-sound-"));

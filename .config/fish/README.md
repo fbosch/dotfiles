@@ -73,6 +73,8 @@ _General utilities:_
 **Notes:**
 
 - Functions are autoloaded from `functions/` directory
+- Internal helper scripts live in `libexec/` and are invoked by Fish wrappers
+- Biome config for helper scripts: `libexec/biome.json` (`biome check .config/fish/libexec`)
 - Managed via Nix/Home Manager as part of dotfiles
 - Uses gum for interactive prompts and colored output
 - FZF configured for fd-based file finding with threading
