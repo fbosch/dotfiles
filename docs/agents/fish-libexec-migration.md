@@ -79,12 +79,12 @@ Keep Fish functions user-facing and move dense parsing/transformation logic into
 
 ### 8) `opencode_auth_switch.fish` -> `opencode_auth_switch_helper.ts`
 
-- [ ] Extract provider/profile model build, label mapping, and auth swap transform from `.config/fish/functions/opencode_auth_switch.fish`.
-- [ ] Keep confirmation UI and presentation in fish.
+- [x] Extract provider/profile model build, label mapping, and auth swap transform from `.config/fish/functions/opencode_auth_switch.fish`.
+- [x] Keep confirmation UI and presentation in fish.
 - [ ] Acceptance criteria:
-  - [ ] Correct provider/key activation after switch.
-  - [ ] Codex profile synchronization logic preserved.
-  - [ ] Countdown/usage signals still render correctly via fish wrapper.
+  - [x] Correct provider/key activation after switch.
+  - [x] Codex profile synchronization logic preserved.
+  - [x] Countdown/usage signals still render correctly via fish wrapper.
 
 ## Do Not Migrate (For Now)
 

@@ -3,14 +3,8 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
     set -l codex_auth_file "$HOME/.codex/auth.json"
     set -l codex_profiles_file "$HOME/.codex/auth-profiles.json"
     set -l codexbar_cache_file "$HOME/.cache/nvim/codexbar/data.json"
-    set -l alias_map \
-        "openai|indigo-harbor-ddce|fbb" \
-        "openai|atlas-thicket-3afa|jpb" \
-        "openai|aurora-auroraforge-efd2|work"
-    set -l adjectives ember cobalt amber jade coral indigo silver scarlet atlas lotus cedar pine aurora frost orbit dune maple zenith
-    set -l nouns falcon otter comet harbor meadow emberfox lynx kestrel glacier thicket river moss canyon beacon auroraforge wave ridge
-    set -l palette_dark 39 45 51 75 81 87 111 117 123 159 195 214 220 226
-    set -l palette_light 18 19 20 22 23 24 52 53 54 88 89 90 94 124
+    set -l usage_query 'def rem($p): (100 - (($p // 0) | tonumber | floor)) | if . < 0 then 0 elif . > 100 then 100 else . end; .[0] as $root | ($root.usage.primary // null) as $primary | ($root.usage.secondary // null) as $secondary | [($root.provider // "codex"), (if $primary then (rem($primary.usedPercent) | tostring) else "" end), ($primary.resetsAt // ""), (if $secondary then (rem($secondary.usedPercent) | tostring) else "" end), ($secondary.resetsAt // "")] | @tsv'
+    set -l usage_bar_width 16
     set -l bg_mode dark
 
     if set -q COLORFGBG
@@ -27,14 +21,11 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         return 1
     end
 
-    if not command -q jq
-        echo "jq is required"
-        return 1
-    end
-
-    if not command -q gum
-        echo "gum is required"
-        return 1
+    for cmd in jq gum bun
+        if not command -q $cmd
+            echo "$cmd is required"
+            return 1
+        end
     end
 
     jq -e '.' "$auth_file" >/dev/null 2>&1
@@ -42,9 +33,6 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         echo "failed to parse: $auth_file"
         return 1
     end
-
-    set -l usage_query 'def rem($p): (100 - (($p // 0) | tonumber | floor)) | if . < 0 then 0 elif . > 100 then 100 else . end; .[0] as $root | ($root.usage.primary // null) as $primary | ($root.usage.secondary // null) as $secondary | [($root.provider // "codex"), (if $primary then (rem($primary.usedPercent) | tostring) else "" end), ($primary.resetsAt // ""), (if $secondary then (rem($secondary.usedPercent) | tostring) else "" end), ($secondary.resetsAt // "")] | @tsv'
-    set -l usage_bar_width 16
 
     function __opencode_fetch_usage_tsv --argument-names query
         if not command -q codexbar
@@ -183,6 +171,15 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         end
     end
 
+    set -l helper_dir (path dirname (status filename))
+    set -l fish_root (path resolve "$helper_dir/..")
+    set -l libexec_dir "$fish_root/libexec"
+    set -l helper "$libexec_dir/opencode_auth_switch_helper.ts"
+    if not test -f "$helper"
+        echo "helper not found: $helper"
+        return 1
+    end
+
     set -l current_usage_tsv (__opencode_fetch_usage_tsv "$usage_query")
     set -l current_usage_status $status
     if test $current_usage_status -eq 0; and test -n "$current_usage_tsv"
@@ -195,107 +192,44 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
 
     echo ""
 
-    set -l providers (jq -r 'keys[]' "$auth_file" 2>/dev/null)
-    set -l mapped_providers
-    for key in $providers
-        if string match -rq _ -- "$key"
-            continue
-        end
-
-        set -l provider "$key"
-        if contains -- "$provider" $mapped_providers
-            continue
-        end
-
-        set -l provider_re (string escape --style=regex -- "$provider")
-        set -l provider_pattern "^$provider_re"'_.+$'
-        set -l suffixed_matches (string match -r -- "$provider_pattern" $providers)
-        if test (count $suffixed_matches) -gt 0
-            set mapped_providers $mapped_providers "$provider"
-        end
+    set -l list_json (bun --smol --cwd "$libexec_dir" --install=auto "$helper" list "$auth_file" "$bg_mode")
+    if test $status -ne 0
+        echo "failed to load providers"
+        return 1
     end
 
-    if test (count $mapped_providers) -eq 0
+    set -l provider_count (printf '%s' "$list_json" | jq '.providers | length')
+    if test $status -ne 0 -o "$provider_count" = 0
         echo "no providers with switchable variants found"
         return 1
     end
 
-    set -l provider $mapped_providers[1]
-    if test (count $mapped_providers) -gt 1
-        set provider (printf "%s\n" $mapped_providers | gum choose --header="Select provider")
+    set -l provider_names (printf '%s' "$list_json" | jq -r '.providers[].name')
+    set -l provider "$provider_names[1]"
+    if test (count $provider_names) -gt 1
+        set provider (printf "%s\n" $provider_names | gum choose --header="Select provider")
         if test -z "$provider"
             return 0
         end
     end
 
-    if not jq -e --arg provider "$provider" 'has($provider)' "$auth_file" >/dev/null
-        echo "active provider key not found: $provider"
+    set -l profile_count (printf '%s' "$list_json" | jq -r --arg provider "$provider" '.providers[] | select(.name == $provider) | .profiles | length')
+    if test $status -ne 0 -o "$profile_count" = 0
+        echo "no suffixed duplicate profiles found for provider: $provider"
         return 1
     end
 
     set -l profile_labels
     set -l profile_plain_labels
     set -l profile_keys
-    set -l provider_pattern "^$provider"'_.+$'
-    set profile_keys (string match -r -- "$provider_pattern" $providers)
-
-    for key in $profile_keys
-        set -l account_id (jq -r --arg key "$key" '.[$key].accountId // ""' "$auth_file")
-        if test -z "$account_id"
-            set account_id "$key"
-        end
-
-        set -l seed_hex (string replace -ra '[^0-9a-fA-F]' '' -- "$account_id")
-        if test -z "$seed_hex"
-            set seed_hex 00
-        end
-
-        set -l a_hex (string sub -s 1 -l 2 -- "$seed_hex")
-        set -l n_hex (string sub -s 3 -l 2 -- "$seed_hex")
-        set -l c_hex (string sub -s 5 -l 2 -- "$seed_hex")
-        if test -z "$a_hex"
-            set a_hex 00
-        end
-        if test -z "$n_hex"
-            set n_hex 00
-        end
-        if test -z "$c_hex"
-            set c_hex 00
-        end
-
-        set -l a_index (math "(0x$a_hex % "(count $adjectives)") + 1")
-        set -l n_index (math "(0x$n_hex % "(count $nouns)") + 1")
-        set -l palette $palette_dark
-        if test "$bg_mode" = light
-            set palette $palette_light
-        end
-
-        set -l color_index (math "(0x$c_hex % "(count $palette)") + 1")
-        set -l color $palette[$color_index]
-        set -l id_tail (string sub -s (math "max(1, "(string length -- "$account_id")" - 3)") -l 4 -- "$account_id")
-
-        set -l generated_label "$adjectives[$a_index]-$nouns[$n_index]-$id_tail"
-        set -l label "$generated_label"
-        for alias_entry in $alias_map
-            set -l alias_parts (string split '|' -- "$alias_entry")
-            if test (count $alias_parts) -ne 3
-                continue
-            end
-
-            if test "$alias_parts[1]" = "$provider"; and test "$alias_parts[2]" = "$generated_label"
-                set label "$label ($alias_parts[3])"
-                break
-            end
-        end
-
-        set -l color_label (printf '\e[1;38;5;%sm%s\e[0m' "$color" "$label")
-        set profile_labels $profile_labels "$color_label"
-        set profile_plain_labels $profile_plain_labels "$label"
-    end
-
-    if test (count $profile_labels) -eq 0
-        echo "no suffixed duplicate profiles found for provider: $provider"
-        return 1
+    for encoded in (printf '%s' "$list_json" | jq -r --arg provider "$provider" '.providers[] | select(.name == $provider) | .profiles[] | @base64')
+        set -l entry_json (printf '%s' "$encoded" | base64 --decode)
+        set -l key (printf '%s' "$entry_json" | jq -r '.key')
+        set -l label (printf '%s' "$entry_json" | jq -r '.label')
+        set -l color (printf '%s' "$entry_json" | jq -r '.color')
+        set -a profile_keys "$key"
+        set -a profile_plain_labels "$label"
+        set -a profile_labels (printf '\e[1;38;5;%sm%s\e[0m' "$color" "$label")
     end
 
     set -l choices
@@ -321,118 +255,32 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         return 1
     end
 
-    set -l selected_label ""
-    for i in (seq (count $profile_keys))
-        if test "$profile_keys[$i]" = "$target_key"
-            set selected_label "$profile_plain_labels[$i]"
-            break
-        end
-    end
+    set -l selected_label "$profile_plain_labels[$selected_index]"
     if test -z "$selected_label"
         set selected_label "$target_key"
     end
 
-    set -l selected_account_id (jq -r --arg key "$target_key" '.[$key].accountId // ""' "$auth_file")
-
-    set -l inactive_key "$target_key"
-    if not string match -rq -- "^$provider"'_[0-9]+$' "$inactive_key"
-        set -l inactive_index 1
-        while true
-            set -l candidate "$provider"_"$inactive_index"
-            if test "$candidate" = "$target_key"
-                set inactive_key "$candidate"
-                break
-            end
-
-            if jq -e --arg key "$candidate" 'has($key)' "$auth_file" >/dev/null
-                set inactive_index (math "$inactive_index + 1")
-                continue
-            end
-
-            set inactive_key "$candidate"
-            break
-        end
-    end
-
-    set -l tmp_file (mktemp)
-
-    jq --arg active "$provider" --arg selected "$target_key" --arg inactive "$inactive_key" '
-        if (has($active) | not) or (has($selected) | not) then
-            error("missing provider key")
-        elif ($inactive != $selected) and has($inactive) then
-            error("inactive key already exists")
-        else
-            . as $root
-            | ($root[$active]) as $active_value
-            | ($root[$selected]) as $selected_value
-            | del(.[$active], .[$selected])
-            | .[$active] = $selected_value
-            | .[$inactive] = $active_value
-        end
-    ' "$auth_file" >"$tmp_file"
-
+    set -l apply_json (bun --smol --cwd "$libexec_dir" --install=auto "$helper" apply "$auth_file" "$codex_auth_file" "$codex_profiles_file" "$provider" "$target_key")
     if test $status -ne 0
-        rm -f "$tmp_file"
-        echo "failed to update auth file"
+        echo "failed to apply auth switch"
         return 1
     end
 
-    mv "$tmp_file" "$auth_file"
-
-    set -l codex_status "codex unchanged"
+    set -l codex_status (printf '%s' "$apply_json" | jq -r '.codexStatus // "codex unchanged"')
     set -l switched_usage_tsv ""
     set -l switched_usage_error ""
-    if test -n "$selected_account_id"; and test -f "$codex_auth_file"
-        set -l codex_current_account_id (jq -r '.tokens.account_id // ""' "$codex_auth_file" 2>/dev/null)
-        if test $status -eq 0
-            if not test -f "$codex_profiles_file"
-                printf '{"profiles":{}}\n' >"$codex_profiles_file"
-                chmod 600 "$codex_profiles_file" 2>/dev/null
-            end
 
-            if jq -e '.profiles | type == "object"' "$codex_profiles_file" >/dev/null 2>&1
-                if test -n "$codex_current_account_id"
-                    set -l codex_profiles_tmp (mktemp)
-                    jq --arg id "$codex_current_account_id" --slurpfile auth "$codex_auth_file" '.profiles[$id] = $auth[0]' "$codex_profiles_file" >"$codex_profiles_tmp"
-                    if test $status -eq 0
-                        mv "$codex_profiles_tmp" "$codex_profiles_file"
-                        chmod 600 "$codex_profiles_file" 2>/dev/null
-                    else
-                        rm -f "$codex_profiles_tmp"
-                    end
-                end
-
-                if jq -e --arg id "$selected_account_id" '.profiles[$id]' "$codex_profiles_file" >/dev/null 2>&1
-                    set -l codex_auth_tmp (mktemp)
-                    jq --arg id "$selected_account_id" '.profiles[$id]' "$codex_profiles_file" >"$codex_auth_tmp"
-                    if test $status -eq 0
-                        mv "$codex_auth_tmp" "$codex_auth_file"
-                        chmod 600 "$codex_auth_file" 2>/dev/null
-                        set codex_status "codex switched: $selected_account_id"
-
-                        set switched_usage_tsv (__opencode_fetch_usage_tsv "$usage_query")
-                        set -l switched_usage_fetch_status $status
-                        if test $switched_usage_fetch_status -eq 0; and test -n "$switched_usage_tsv"
-                            set switched_usage_error ""
-                        else if test $switched_usage_fetch_status -eq 127
-                            set switched_usage_error "switched usage unavailable (codexbar not installed)"
-                            set switched_usage_tsv ""
-                        else
-                            set switched_usage_error "switched usage unavailable (codexbar parse failed)"
-                            set switched_usage_tsv ""
-                        end
-                    else
-                        rm -f "$codex_auth_tmp"
-                        set codex_status "codex update failed"
-                    end
-                else
-                    set codex_status "codex profile missing for: $selected_account_id (run codex login once)"
-                end
-            else
-                set codex_status "codex profiles file invalid: $codex_profiles_file"
-            end
+    if string match -q 'codex switched:*' -- "$codex_status"
+        set switched_usage_tsv (__opencode_fetch_usage_tsv "$usage_query")
+        set -l switched_usage_fetch_status $status
+        if test $switched_usage_fetch_status -eq 0; and test -n "$switched_usage_tsv"
+            set switched_usage_error ""
+        else if test $switched_usage_fetch_status -eq 127
+            set switched_usage_error "switched usage unavailable (codexbar not installed)"
+            set switched_usage_tsv ""
         else
-            set codex_status "codex auth parse failed: $codex_auth_file"
+            set switched_usage_error "switched usage unavailable (codexbar parse failed)"
+            set switched_usage_tsv ""
         end
     end
 
@@ -445,5 +293,6 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         echo ""
         gum style --foreground 196 "$switched_usage_error"
     end
+
     rm -f "$codexbar_cache_file"
 end
