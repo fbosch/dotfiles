@@ -38,7 +38,7 @@ function comfort_sound --description 'Set macOS Comfort Sound (gum picker or dir
             return 1
         end
 
-        set -l available_sounds (bun --cwd "$libexec_dir" --install=auto "$helper" list)
+        set -l available_sounds (bun --smol --cwd "$libexec_dir" --install=auto "$helper" list)
         if test $status -ne 0
             return 1
         end
@@ -90,7 +90,7 @@ function comfort_sound --description 'Set macOS Comfort Sound (gum picker or dir
         end
     end
 
-    set -l selected (bun --cwd "$libexec_dir" --install=auto "$helper" set "$sound_name")
+    set -l selected (bun --smol --cwd "$libexec_dir" --install=auto "$helper" set "$sound_name")
     if test $status -ne 0
         return 1
     end
