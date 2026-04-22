@@ -41,12 +41,12 @@ Keep Fish functions user-facing and move dense parsing/transformation logic into
 
 ### 4) `opencode_profile_switch.fish` -> `opencode_profile_switch_apply.ts`
 
-- [ ] Extract profile comparison and config patch generation from `.config/fish/functions/opencode_profile_switch.fish`.
-- [ ] Keep `gum choose` flow and final status messages in fish.
+- [x] Extract profile comparison and config patch generation from `.config/fish/functions/opencode_profile_switch.fish`.
+- [x] Keep `gum choose` flow and final status messages in fish.
 - [ ] Acceptance criteria:
-  - [ ] Active profile detection result matches current behavior.
-  - [ ] Applying profile updates same keys (`model`, `small_model`, `agent.*.model`) as current jq logic.
-  - [ ] Unknown/missing profile returns non-zero and clear stderr.
+  - [x] Active profile detection result matches current behavior.
+  - [x] Applying profile updates same keys (`model`, `small_model`, `agent.*.model`) as current jq logic.
+  - [x] Unknown/missing profile returns non-zero and clear stderr.
 
 ### 5) `flake_restore.fish` -> `flake_restore_diff.ts`
 

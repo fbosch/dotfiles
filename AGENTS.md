@@ -29,6 +29,7 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 ## References
 
 - [Common operations](docs/agents/operations.md)
+- [Decisions](docs/decisions/)
 - [Neovim Lua style](docs/agents/nvim-lua.md)
 - [Fish shell style](docs/agents/fish-shell.md)
 - [File organization](docs/agents/file-organization.md)

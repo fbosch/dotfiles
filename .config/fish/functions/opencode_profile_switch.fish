@@ -20,11 +20,6 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
         return 1
     end
 
-    if not command -q jq
-        echo "jq is required"
-        return 1
-    end
-
     if not command -q gum
         echo "gum is required"
         return 1
@@ -38,91 +33,38 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
     set -l helper_dir (path dirname (status filename))
     set -l fish_root (path resolve "$helper_dir/..")
     set -l libexec_dir "$fish_root/libexec"
-    set -l jsonc_helper "opencode_profile_switch_jsonc.ts"
-    if not test -f "$libexec_dir/$jsonc_helper"
-        echo "jsonc helper not found: $libexec_dir/$jsonc_helper"
+    set -l helper "opencode_profile_switch_helper.ts"
+    if not test -f "$libexec_dir/$helper"
+        echo "profile helper not found: $libexec_dir/$helper"
         return 1
     end
 
-    set -l profiles_tmp (mktemp)
-    bun --cwd "$libexec_dir" --install=auto "$jsonc_helper" "$profiles_file" "$profiles_tmp"
-
+    set -l list_json (bun --cwd "$libexec_dir" --install=auto "$helper" list "$profiles_file" "$opencode_file")
     if test $status -ne 0
-        rm -f "$profiles_tmp"
-        echo "failed to parse profiles: $profiles_file"
+        echo "failed to load profiles"
         return 1
     end
 
-    jq -e '.profiles | type == "object"' "$profiles_tmp" >/dev/null 2>&1
-    if test $status -ne 0
-        rm -f "$profiles_tmp"
-        echo "failed to parse profiles: $profiles_file"
-        return 1
-    end
-
-    set -l opencode_parse_file "$opencode_file"
-    if string match -q '*.jsonc' "$opencode_file"
-        set opencode_parse_file (mktemp)
-        bun --cwd "$libexec_dir" --install=auto "$jsonc_helper" "$opencode_file" "$opencode_parse_file"
-
-        if test $status -ne 0
-            rm -f "$profiles_tmp"
-            rm -f "$opencode_parse_file"
-            echo "failed to parse config: $opencode_file"
-            return 1
-        end
-    end
-
-    jq -e '.' "$opencode_parse_file" >/dev/null 2>&1
-    if test $status -ne 0
-        rm -f "$profiles_tmp"
-        if test "$opencode_parse_file" != "$opencode_file"
-            rm -f "$opencode_parse_file"
-        end
-        echo "failed to parse config: $opencode_file"
-        return 1
-    end
-
-    set -l profile_names (jq -r '.profiles | keys[]' "$profiles_tmp")
-    if test (count $profile_names) -eq 0
-        rm -f "$profiles_tmp"
+    set -l profile_count (printf '%s' "$list_json" | jq '.profiles | length')
+    if test $status -ne 0 -o "$profile_count" = 0
         echo "no profiles found in: $profiles_file"
         return 1
     end
 
-    set -l current_snapshot (jq -c '{ model: (.model // null), small_model: (.small_model // null), agents: ((.agent // {}) | with_entries(.value = (.value.model // null))) }' "$opencode_parse_file")
-    set -l active_profile ""
-    for profile in $profile_names
-        set -l is_match (jq -r --arg profile "$profile" --argjson current "$current_snapshot" '
-            .profiles[$profile] as $p
-            | {
-                model: ($p.model // null),
-                small_model: ($p.small_model // null),
-                agents: ($current.agents | with_entries(.value = ($p.agents[.key] // null)))
-              }
-            | (. == $current)
-            | tostring
-        ' "$profiles_tmp")
-
-        if test "$is_match" = true
-            set active_profile "$profile"
-            break
-        end
-    end
-
+    set -l active_profile (printf '%s' "$list_json" | jq -r '.profiles[] | select(.active == true) | .name' | head -n 1)
     set -l choice_labels
     set -l choice_to_profile
-    for profile in $profile_names
-        set -l description (jq -r --arg profile "$profile" '.profiles[$profile].description // ""' "$profiles_tmp")
+
+    for profile in (printf '%s' "$list_json" | jq -r '.profiles[].name')
+        set -l description (printf '%s' "$list_json" | jq -r --arg profile "$profile" '.profiles[] | select(.name == $profile) | .description // ""')
+        set -l is_active (printf '%s' "$list_json" | jq -r --arg profile "$profile" '.profiles[] | select(.name == $profile) | .active | tostring')
         set -l label "$profile"
         if test -n "$description"
             set label "$profile - $description"
         end
-
-        if test -n "$active_profile"; and test "$active_profile" = "$profile"
+        if test "$is_active" = true
             set label "* $label"
         end
-
         set choice_labels $choice_labels "$label"
         set choice_to_profile $choice_to_profile "$profile"
     end
@@ -134,7 +76,6 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
 
     set -l selected_label (printf "%s\n" $choice_labels | gum choose --header="$chooser_header")
     if test -z "$selected_label"
-        rm -f "$profiles_tmp"
         return 0
     end
 
@@ -147,59 +88,17 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
     end
 
     if test -z "$selected_profile"
-        rm -f "$profiles_tmp"
         echo "failed to resolve selected profile"
         return 1
     end
 
-    set -l opencode_tmp (mktemp)
-    jq --arg profile "$selected_profile" --slurpfile profiles "$profiles_tmp" '
-        $profiles[0].profiles[$profile] as $p
-        | if $p == null then
-            error("missing profile")
-          else
-            .model = ($p.model // .model)
-            | .small_model = ($p.small_model // .small_model)
-            | .agent = (
-                (.agent // {})
-                | with_entries(
-                    .value = (
-                      (.value // {}) as $agent
-                      | ($p.agents[.key] // null) as $m
-                      | if $m == null then
-                          ($agent | del(.model))
-                        else
-                          ($agent + { model: $m })
-                        end
-                    )
-                  )
-              )
-            | reduce ($p.agents // {} | keys[]) as $k (.;
-                if (.agent | has($k)) then
-                    .
-                else
-                    .agent[$k] = { model: $p.agents[$k] }
-                end
-              )
-          end
-    ' "$opencode_parse_file" >"$opencode_tmp"
-
+    set -l apply_json (bun --cwd "$libexec_dir" --install=auto "$helper" apply "$profiles_file" "$opencode_file" "$selected_profile")
     if test $status -ne 0
-        rm -f "$profiles_tmp" "$opencode_tmp"
-        if test "$opencode_parse_file" != "$opencode_file"
-            rm -f "$opencode_parse_file"
-        end
         echo "failed to apply profile: $selected_profile"
         return 1
     end
 
-    mv "$opencode_tmp" "$opencode_file"
-    set -l description (jq -r --arg profile "$selected_profile" '.profiles[$profile].description // ""' "$profiles_tmp")
-    rm -f "$profiles_tmp"
-    if test "$opencode_parse_file" != "$opencode_file"
-        rm -f "$opencode_parse_file"
-    end
-
+    set -l description (printf '%s' "$apply_json" | jq -r '.description // ""')
     if test -n "$description"
         echo "opencode profile switched: $selected_profile - $description"
     else
