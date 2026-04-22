@@ -15,7 +15,30 @@ readonly FAST_CHECK_MS=40       # Fast polling interval (40ms)
 readonly SLOW_CHECK_MS=500      # Slow polling interval (500ms)
 
 # Hyprland query socket (faster than hyprctl)
-HYPR_QUERY_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock"
+HYPR_QUERY_SOCKET=""
+
+refresh_hypr_query_socket() {
+    HYPR_QUERY_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock"
+}
+
+# Query Hyprland IPC socket with a short timeout.
+# Prints response to stdout and returns non-zero on failure.
+hypr_query() {
+    local request=$1
+
+    refresh_hypr_query_socket
+
+    if command -v timeout >/dev/null 2>&1; then
+        printf '%s' "$request" | timeout 0.2 nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null
+        return $?
+    fi
+
+    printf '%s' "$request" | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null
+}
+
+now_ms() {
+    printf '%.0f\n' "${EPOCHREALTIME//[.,]/}e-3"
+}
 
 # Cache monitor info (updated periodically)
 declare -A MONITOR_CACHE
@@ -30,15 +53,30 @@ update_distance_from_bottom() {
 
     # Refresh monitor cache if stale
     if (( EPOCHSECONDS - monitor_cache_time > CACHE_REFRESH_S )); then
-        MONITOR_CACHE=()
+        local -A new_cache
+        local monitor_data=""
+
+        monitor_data=$(hypr_query 'j/monitors')
+        if [[ -n "$monitor_data" ]]; then
         while IFS='|' read -r name x y width height transform; do
             if [[ "$transform" == "1" || "$transform" == "3" ]]; then
-                MONITOR_CACHE["$name"]="$x|$y|$height|$width"
+                new_cache["$name"]="$x|$y|$height|$width"
             else
-                MONITOR_CACHE["$name"]="$x|$y|$width|$height"
+                new_cache["$name"]="$x|$y|$width|$height"
             fi
-        done < <(printf 'j/monitors' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null | jq -r '.[] | "\(.name)|\(.x)|\(.y)|\(.width)|\(.height)|\(.transform)"')
-        monitor_cache_time=$EPOCHSECONDS
+        done < <(jq -r '.[] | "\(.name)|\(.x)|\(.y)|\(.width)|\(.height)|\(.transform)"' <<< "$monitor_data" 2>/dev/null)
+        fi
+
+        if (( ${#new_cache[@]} > 0 )); then
+            MONITOR_CACHE=()
+            for monitor_name in "${!new_cache[@]}"; do
+                MONITOR_CACHE["$monitor_name"]="${new_cache[$monitor_name]}"
+            done
+            monitor_cache_time=$EPOCHSECONDS
+        elif (( ${#MONITOR_CACHE[@]} == 0 )); then
+            DISTANCE_FROM_BOTTOM=-1
+            return 1
+        fi
     fi
 
     if [[ -n "$last_monitor_name" && -n "${MONITOR_CACHE[$last_monitor_name]:-}" ]]; then
@@ -96,12 +134,16 @@ update_distance_from_bottom() {
 
 # State variables
 waybar_visible=0  # 0 = hidden, 1 = visible
-show_timer_ms=0
-hide_timer_ms=0
+show_started_ms=0
+hide_started_ms=0
+
+if pgrep -x waybar >/dev/null 2>&1; then
+    waybar_visible=1
+fi
 
 while true; do
     # Get cursor position (single read, minimal processing)
-    IFS=',' read -r cursor_x cursor_y <<< "$(printf 'cursorpos' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)"
+    IFS=',' read -r cursor_x cursor_y <<< "$(hypr_query 'cursorpos')"
     cursor_x=${cursor_x## }  # Trim leading spaces (bash built-in)
     cursor_y=${cursor_y## }  # Trim leading spaces (bash built-in)
     
@@ -115,42 +157,51 @@ while true; do
     if (( waybar_visible == 0 )); then
         # Waybar hidden - check if cursor is near bottom
         if (( DISTANCE_FROM_BOTTOM <= SHOW_THRESHOLD )); then
-            # Cursor is near bottom - increment show timer
-            show_timer_ms=$((show_timer_ms + FAST_CHECK_MS))
+            now=$(now_ms)
+            if (( show_started_ms == 0 )); then
+                show_started_ms=$now
+            fi
+
             check_interval_ms=$FAST_CHECK_MS
 
             # Show after delay (prevents quick hovers)
-            if (( show_timer_ms >= SHOW_DELAY_MS )); then
-                pkill -SIGUSR1 waybar
-                waybar_visible=1
-                show_timer_ms=0
-                hide_timer_ms=0
+            if (( now - show_started_ms >= SHOW_DELAY_MS )); then
+                if pkill -SIGUSR1 waybar; then
+                    waybar_visible=1
+                fi
+                show_started_ms=0
+                hide_started_ms=0
             fi
         else
             # Cursor moved away - reset show timer
-            show_timer_ms=0
+            show_started_ms=0
             # Adaptive polling when hidden
             check_interval_ms=$(( DISTANCE_FROM_BOTTOM <= HIDE_THRESHOLD + 50 ? FAST_CHECK_MS : SLOW_CHECK_MS ))
         fi
     else
         # Waybar visible - fast poll near edge or when hide is imminent, slow otherwise
-        check_interval_ms=$(( DISTANCE_FROM_BOTTOM <= HIDE_THRESHOLD || hide_timer_ms > 0 ? FAST_CHECK_MS : SLOW_CHECK_MS ))
+        check_interval_ms=$(( DISTANCE_FROM_BOTTOM <= HIDE_THRESHOLD || hide_started_ms > 0 ? FAST_CHECK_MS : SLOW_CHECK_MS ))
 
         if (( DISTANCE_FROM_BOTTOM > HIDE_THRESHOLD )); then
-            # Cursor is away - increment timer
-            hide_timer_ms=$((hide_timer_ms + check_interval_ms))
+            now=$(now_ms)
+            if (( hide_started_ms == 0 )); then
+                hide_started_ms=$now
+            fi
 
             # Check if waybar should stay visible (using shared logic)
-            if (( hide_timer_ms >= HIDE_DELAY_MS )); then
-                if ! should_waybar_stay_visible "$DISTANCE_FROM_BOTTOM" "$HIDE_THRESHOLD"; then
-                    pkill -SIGUSR2 waybar
-                    waybar_visible=0
+            if (( now - hide_started_ms >= HIDE_DELAY_MS )); then
+                if should_waybar_stay_visible "$DISTANCE_FROM_BOTTOM" "$HIDE_THRESHOLD"; then
+                    :
+                else
+                    if pkill -SIGUSR2 waybar; then
+                        waybar_visible=0
+                    fi
                 fi
-                hide_timer_ms=0
+                hide_started_ms=0
             fi
         else
             # Cursor came back - reset timer
-            hide_timer_ms=0
+            hide_started_ms=0
         fi
     fi
     
