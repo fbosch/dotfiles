@@ -26,15 +26,11 @@ type AppResult<T> = Result<T, string>;
 
 const EMPTY_RESULT: UpdateResult = { count: 0, updates: [] };
 const DEFAULT_MAX_INPUTS = 20;
-const DEFAULT_UPDATE_TIMEOUT_MS = 20_000;
-const DEFAULT_TOTAL_BUDGET_MS = 180_000;
 
 function usage(): void {
     console.log("Usage: flake_check_updates.ts [FLAKE_PATH]");
     console.log("Env overrides:");
     console.log("  FLAKE_CHECK_MAX_INPUTS       default 20");
-    console.log("  FLAKE_CHECK_TIMEOUT_MS       default 20000");
-    console.log("  FLAKE_CHECK_TOTAL_BUDGET_MS  default 180000");
 }
 
 function emitResult(result: UpdateResult): void {
@@ -75,20 +71,15 @@ function restoreOriginalLock(lockPath: string, originalLockRaw: string): AppResu
     }
 }
 
-function runNixUpdate(flakePath: string, input: string, timeoutMs: number): AppResult<void> {
+function runNixUpdate(flakePath: string, input: string): AppResult<void> {
     const result = spawnSync("nix", ["flake", "update", "--update-input", input], {
         cwd: flakePath,
         stdio: "ignore",
-        timeout: timeoutMs,
     });
 
     if (result.error) {
         const message = result.error.message || `failed update for input ${input}`;
         return err(message);
-    }
-
-    if (result.signal === "SIGTERM") {
-        return err(`timeout after ${timeoutMs}ms for input ${input}`);
     }
 
     if (result.status !== 0) {
@@ -115,8 +106,6 @@ function main(): number {
     const resolvedFlakePath = resolve(flakePath);
     const lockPath = join(resolvedFlakePath, "flake.lock");
     const maxInputs = parsePositiveIntEnv("FLAKE_CHECK_MAX_INPUTS", DEFAULT_MAX_INPUTS);
-    const updateTimeoutMs = parsePositiveIntEnv("FLAKE_CHECK_TIMEOUT_MS", DEFAULT_UPDATE_TIMEOUT_MS);
-    const totalBudgetMs = parsePositiveIntEnv("FLAKE_CHECK_TOTAL_BUDGET_MS", DEFAULT_TOTAL_BUDGET_MS);
 
     if (!existsSync(lockPath)) {
         emitResult(EMPTY_RESULT);
@@ -142,7 +131,6 @@ function main(): number {
     const originalLockRaw = readFileSync(lockPath, "utf8");
     const updates: UpdateInfo[] = [];
     const warnings: string[] = [];
-    const startedAt = Date.now();
 
     if (allInputs.length > maxInputs) {
         warnings.push(`input scan capped at ${maxInputs}/${allInputs.length}`);
@@ -150,11 +138,6 @@ function main(): number {
 
     try {
         for (const input of inputList) {
-            if (Date.now() - startedAt > totalBudgetMs) {
-                warnings.push(`time budget reached (${totalBudgetMs}ms)`);
-                break;
-            }
-
             const restoreResult = restoreOriginalLock(lockPath, originalLockRaw);
             if (restoreResult.isErr()) {
                 console.error(`flake_check_updates: failed to restore lock file: ${restoreResult.error}`);
@@ -173,7 +156,7 @@ function main(): number {
                 continue;
             }
 
-            const updateResult = runNixUpdate(resolvedFlakePath, input, updateTimeoutMs);
+            const updateResult = runNixUpdate(resolvedFlakePath, input);
             if (updateResult.isErr()) {
                 warnings.push(`${input}: ${updateResult.error}`);
                 continue;

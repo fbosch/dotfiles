@@ -1,4 +1,18 @@
 function flake_check_updates --description 'Check for available flake updates and return JSON with details'
+    set -l options h/help
+    argparse -n flake_check_updates $options -- $argv
+    or begin
+        echo '{"count": 0, "updates": []}'
+        return 1
+    end
+
+    if set -q _flag_help
+        echo "Usage: flake_check_updates [FLAKE_PATH]"
+        echo "Env overrides:"
+        echo "  FLAKE_CHECK_MAX_INPUTS      (default wrapper value: 10)"
+        return 0
+    end
+
     if not command -q bun
         echo "flake_check_updates: bun not found" >&2
         echo '{"count": 0, "updates": []}'
@@ -21,7 +35,13 @@ function flake_check_updates --description 'Check for available flake updates an
         set flake_path ~/nixos
     end
 
-    set -l result (bun --cwd "$libexec_dir" --install=auto "$helper" "$flake_path")
+    set -l max_inputs 10
+
+    if set -q FLAKE_CHECK_MAX_INPUTS
+        set max_inputs "$FLAKE_CHECK_MAX_INPUTS"
+    end
+
+    set -l result (FLAKE_CHECK_MAX_INPUTS="$max_inputs" bun --smol --cwd "$libexec_dir" --install=auto "$helper" "$flake_path")
     set -l code $status
 
     if test -z "$result"
