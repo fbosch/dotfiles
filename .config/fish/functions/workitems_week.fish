@@ -70,8 +70,9 @@ function workitems_week --description 'Display calendar view of work items touch
     end
     
     set -l extracted_items
+    set -l extract_mode authored_branches
     if set -q _flag_previous
-        set -a extracted_items (__workitems_extract $dates[1] $dates[5] merged_main $use_refresh)
+        set -a extracted_items (__workitems_extract $dates[1] $dates[5] $extract_mode $use_refresh)
     else
         # Cache past weekdays individually, then only compute the remaining span once.
         set -l remaining_start_idx 0
@@ -86,7 +87,7 @@ function workitems_week --description 'Display calendar view of work items touch
 
             set -l sorted_dates (printf "%s\n%s\n" "$target_date" "$today" | sort)
             if test "$sorted_dates[1]" = "$target_date"
-                set -a extracted_items (__workitems_extract $target_date $target_date merged_main $use_refresh)
+                set -a extracted_items (__workitems_extract $target_date $target_date $extract_mode $use_refresh)
             else
                 set remaining_start_idx $day_idx
                 break
@@ -94,7 +95,7 @@ function workitems_week --description 'Display calendar view of work items touch
         end
 
         if test $remaining_start_idx -gt 0
-            set -a extracted_items (__workitems_extract $dates[$remaining_start_idx] $dates[5] merged_main $use_refresh)
+            set -a extracted_items (__workitems_extract $dates[$remaining_start_idx] $dates[5] $extract_mode $use_refresh)
         end
     end
 
