@@ -1,23 +1,14 @@
 function flake_update_interactive --description 'Interactively update nix flake inputs using nix commands and gum (pnpm-style)'
-    # Parse arguments
-    # -r/--rebuild: Prompt to rebuild NixOS after successful update
-    # -c/--cache: Prefer cache even after normal TTL (compatibility flag)
-    # -f/--force: Bypass cache and always re-check updates
-    # -h/--header: Show decorative ASCII header with flake info
-    # -n/--notify: Send desktop notification after successful rebuild
     argparse r/rebuild c/cache f/force h/header n/notify -- $argv
     or return
 
-    # Default to ~/nixos if no path provided
-    set flake_path $argv[1]
+    set -l flake_path $argv[1]
     if test -z "$flake_path"
         set flake_path ~/nixos
     end
 
-    # Show ASCII header if requested
     if set -q _flag_header
-        # Get hostname for display
-        set host_name (hostname)
+        set -l host_name (hostname)
 
         gum style --foreground 6 --bold '
   ╔═════════════════════╗
@@ -27,20 +18,17 @@ function flake_update_interactive --description 'Interactively update nix flake 
         gum style --foreground 8 "  Path: $flake_path"
         gum style --foreground 8 "  Host: $host_name"
 
-        # Show current NixOS generation and last rebuild time
         set system_profile /nix/var/nix/profiles/system
         if test -L "$system_profile"
-            # Get generation number from symlink name (format: system-123-link)
             set generation (basename (readlink $system_profile) | string replace 'system-' '' | string replace -- '-link' '')
-            
-            # Get timestamp of last rebuild (stat format differs by OS)
+
             set timestamp ""
             if test (uname) = Linux
                 set timestamp (stat -c %Y $system_profile 2>/dev/null)
             else if test (uname) = Darwin
                 set timestamp (stat -f %m $system_profile 2>/dev/null)
             end
-            
+
             if test -n "$timestamp" -a -n "$generation"
                 set time_ago (__time_ago_from_timestamp "$timestamp")
                 if test -n "$time_ago"
@@ -54,227 +42,105 @@ function flake_update_interactive --description 'Interactively update nix flake 
         echo ""
     end
 
-    # Check if flake.lock exists
     if not test -f "$flake_path/flake.lock"
         gum style --foreground 1 "No flake.lock found in $flake_path"
         return 1
     end
 
-    # Cache updates for a short period keyed by flake.lock hash
-    set cache_ttl_seconds 600
+    if not command -q bun
+        gum style --foreground 1 "bun is required"
+        return 1
+    end
+
+    set -l helper_dir (path dirname (status filename))
+    set -l fish_root (path resolve "$helper_dir/..")
+    set -l libexec_dir "$fish_root/libexec"
+    set -l helper "flake_update_engine.ts"
+    if not test -f "$libexec_dir/$helper"
+        gum style --foreground 1 "flake_update_interactive: helper not found: $libexec_dir/$helper"
+        return 1
+    end
+
+    set -l cache_ttl_seconds 600
     if set -q _flag_cache
-        # Backward-compatible escape hatch for older workflows
         set cache_ttl_seconds 315360000
     end
 
-    set cache_file "$XDG_CACHE_HOME/flake-updates.json"
-    if test -z "$XDG_CACHE_HOME"
-        set cache_file ~/.cache/flake-updates.json
-    end
-
-    set lock_hash ""
-    if command -q sha256sum
-        set lock_hash (sha256sum "$flake_path/flake.lock" | string split " ")[1]
-    else if command -q shasum
-        set lock_hash (shasum -a 256 "$flake_path/flake.lock" | string split " ")[1]
-    end
-
-    # Try to read from cache first unless --force is provided
-    set input_options
+    set -l force 0
     if set -q _flag_force
+        set force 1
         gum style --foreground 3 "Bypassing cache (--force), checking updates manually..."
-    else if test -f "$cache_file"
-        set cached_hash (jq -r '.lockHash // ""' $cache_file 2>/dev/null)
-        set cached_epoch (jq -r '.checkedAtEpoch // 0' $cache_file 2>/dev/null)
-        set now_epoch (date +%s)
+    end
 
-        if test -n "$lock_hash" -a "$cached_hash" = "$lock_hash"
-            if string match -rq '^[0-9]+$' -- "$cached_epoch"
-                set cache_age (math "$now_epoch - $cached_epoch" 2>/dev/null)
+    set -l scan_json (FLAKE_UPDATE_CACHE_TTL_SECONDS="$cache_ttl_seconds" FLAKE_UPDATE_BATCH_SIZE="3" FLAKE_UPDATE_TIMEOUT_MS="8000" FLAKE_UPDATE_FORCE="$force" bun --smol --cwd "$libexec_dir" --install=auto "$helper" scan "$flake_path")
+    if test $status -ne 0
+        gum style --foreground 1 "Failed to check flake updates"
+        return 1
+    end
 
-                if test $cache_age -ge 0 -a $cache_age -lt $cache_ttl_seconds
-                    # Read cache and parse updates
-                    set update_count (jq -r '.count // 0' $cache_file 2>/dev/null)
+    set -l update_count (printf '%s' "$scan_json" | jq -r '.count // 0')
+    if test $status -ne 0
+        gum style --foreground 1 "Failed to parse update results"
+        return 1
+    end
 
-                    if test -z "$update_count"
-                        set update_count 0
-                    end
+    set -l partial_scan (printf '%s' "$scan_json" | jq -r '.partial // false')
+    if test $status -ne 0
+        gum style --foreground 1 "Failed to parse scan mode"
+        return 1
+    end
 
-                    if test "$update_count" -gt 0
-                        # Extract updates from cache into input_options format
-                        for update in (jq -r '.updates[] | @json' $cache_file 2>/dev/null)
-                            set name (echo $update | jq -r '.name' 2>/dev/null)
-                            set current_short (echo $update | jq -r '.currentShort' 2>/dev/null)
-                            set new_short (echo $update | jq -r '.newShort' 2>/dev/null)
+    if test "$update_count" -eq 0 -a "$partial_scan" = true
+        set -l scanned_count (printf '%s' "$scan_json" | jq -r '.scannedCount // 0')
+        set -l total_inputs (printf '%s' "$scan_json" | jq -r '.totalInputs // 0')
+        gum style --foreground 6 "No updates found in this batch ($scanned_count/$total_inputs inputs scanned)"
+        gum style --foreground 8 "Run again to scan the next batch, or use --force after cache expiry for a full refresh cycle."
+        return 0
+    end
 
-                            if test -n "$name" -a -n "$current_short" -a -n "$new_short"
-                                set formatted_option "$name: $current_short → $new_short"
-                                set input_options $input_options $formatted_option
-                            end
-                        end
+    if test "$update_count" -eq 0
+        if test (printf '%s' "$scan_json" | jq -r '.source // "live"') = cache
+            gum style --foreground 2 "Cache shows all flake inputs are up to date!"
+        else
+            gum style --foreground 2 "All flake inputs are up to date!"
+        end
+        return 0
+    end
 
-                        # Show cache timestamp
-                        set timestamp (jq -r '.timestamp // ""' $cache_file 2>/dev/null)
-                        if test -n "$timestamp"
-                            gum style --foreground 6 "Using cached updates (checked: $timestamp)"
-                        else
-                            gum style --foreground 6 "Using cached updates"
-                        end
-                    else
-                        gum style --foreground 2 "Cache shows all flake inputs are up to date!"
-                        return 0
-                    end
-                end
-            end
+    set -l source (printf '%s' "$scan_json" | jq -r '.source // "live"')
+    set -l timestamp (printf '%s' "$scan_json" | jq -r '.timestamp // ""')
+    if test "$source" = cache
+        if test -n "$timestamp"
+            gum style --foreground 6 "Using cached updates (checked: $timestamp)"
+        else
+            gum style --foreground 6 "Using cached updates"
         end
     end
 
-    # Only check for updates if we didn't get them from cache
-    if test (count $input_options) -eq 0
-
-        # Change to flake directory
-        pushd $flake_path
-
-        # Get all inputs from flake metadata
-        set flake_data (jq '.' flake.lock 2>/dev/null)
-        set root_inputs (echo $flake_data | jq -r '.nodes.root.inputs' 2>/dev/null)
-
-        if test $status -ne 0 || test -z "$root_inputs"
-            gum style --foreground 1 "Failed to get flake inputs"
-            popd
-            return 1
-        end
-
-        set input_list (echo $root_inputs | jq -r 'keys[]' 2>/dev/null)
-
-        if test $status -ne 0
-            gum style --foreground 1 "Failed to parse flake inputs"
-            popd
-            return 1
-        end
-
-        # Check each input for available updates by actually trying to update it
-        # We'll backup and restore the lock file for each check
-        set total (count $input_list)
-        set lock_backup (mktemp)
-        cp flake.lock $lock_backup
-
-        # Show message and run the check loop
-        gum style --foreground 4 "Checking for outdated inputs..."
-
-        for input in $input_list
-            # Restore original lock file before each check
-            cp $lock_backup flake.lock
-
-            # Get current revision from lock file
-            set node_name (echo $root_inputs | jq -r ".[\"$input\"]" 2>/dev/null)
-            if test $status -ne 0 -o -z "$node_name" -o "$node_name" = null
-                continue
-            end
-
-            set node_data (echo $flake_data | jq ".nodes.\"$node_name\"" 2>/dev/null)
-            if test $status -ne 0 -o -z "$node_data" -o "$node_data" = null
-                continue
-            end
-
-            set current_rev (echo $node_data | jq -r '.locked.rev // empty' 2>/dev/null)
-            if test -z "$current_rev" -o "$current_rev" = null
-                continue
-            end
-
-            # Try to update this input (suppress output to keep it clean)
-            nix flake update --update-input $input >/dev/null 2>&1
-
-            # Check if the lock file changed by comparing the revision
-            set updated_flake_data (jq '.' flake.lock 2>/dev/null)
-            set updated_node_data (echo $updated_flake_data | jq ".nodes.\"$node_name\"" 2>/dev/null)
-            if test $status -eq 0 -a -n "$updated_node_data" -a "$updated_node_data" != null
-                set new_rev (echo $updated_node_data | jq -r '.locked.rev // empty' 2>/dev/null)
-
-                if test -n "$new_rev" -a "$new_rev" != null -a "$new_rev" != "$current_rev"
-                    set current_short (string sub -l 7 $current_rev)
-                    set new_short (string sub -l 7 $new_rev)
-
-                    # Simple format: "input-name: current → new"
-                    set formatted_option "$input: $current_short → $new_short"
-                    set input_options $input_options $formatted_option
-                end
-            end
-        end
-
-        # Restore original lock file
-        cp $lock_backup flake.lock
-        rm -f $lock_backup
-
-        popd
-
-        # Write results to cache file for future --cache invocations
-        set cache_file "$XDG_CACHE_HOME/flake-updates.json"
-        if test -z "$XDG_CACHE_HOME"
-            set cache_file ~/.cache/flake-updates.json
-        end
-
-        # Ensure cache directory exists
-        mkdir -p (dirname $cache_file)
-
-        # Build JSON cache data
-        set update_count (count $input_options)
-        set timestamp (date -Iseconds)
-        set checked_at_epoch (date +%s)
-        
-        if test $update_count -gt 0
-            # Build updates array
-            set updates_json "["
-            set first true
-            for option in $input_options
-                # Parse: "name: current → new"
-                set parts (string split ": " $option)
-                set name $parts[1]
-                set versions (string split " → " $parts[2])
-                set current_short $versions[1]
-                set new_short $versions[2]
-                
-                if test "$first" = true
-                    set first false
-                else
-                    set updates_json "$updates_json,"
-                end
-                
-                set updates_json "$updates_json{\"name\":\"$name\",\"currentShort\":\"$current_short\",\"newShort\":\"$new_short\"}"
-            end
-            set updates_json "$updates_json]"
-            
-            # Write complete JSON to cache
-            echo "{\"timestamp\":\"$timestamp\",\"checkedAtEpoch\":$checked_at_epoch,\"lockHash\":\"$lock_hash\",\"count\":$update_count,\"updates\":$updates_json}" >$cache_file
-        else
-            # No updates available
-            echo "{\"timestamp\":\"$timestamp\",\"checkedAtEpoch\":$checked_at_epoch,\"lockHash\":\"$lock_hash\",\"count\":0,\"updates\":[]}" >$cache_file
-        end
-    end # End of manual update check
+    set -l input_options
+    for update in (printf '%s' "$scan_json" | jq -r '.updates[] | @json')
+        set -l name (printf '%s' "$update" | jq -r '.name')
+        set -l current_short (printf '%s' "$update" | jq -r '.currentShort')
+        set -l new_short (printf '%s' "$update" | jq -r '.newShort')
+        set input_options $input_options "$name: $current_short → $new_short"
+    end
 
     if test -z "$input_options"
         gum style --foreground 2 "All flake inputs are up to date!"
         return 0
     end
 
-    # Show interactive selection (pnpm-style)
-    # Join all options with newlines to ensure they're all ready before passing to gum
-    set options_text (string join \n $input_options)
-
-    # Pass all options at once to gum to avoid pop-in effect
-    set selected_options (printf "%s\n" $options_text | gum choose --no-limit --header="Select flake inputs to update (Space to select, Enter to confirm)")
+    set -l options_text (string join \n $input_options)
+    set -l selected_options (printf "%s\n" $options_text | gum choose --no-limit --header="Select flake inputs to update (Space to select, Enter to confirm)")
 
     if test -z "$selected_options"
         gum style --foreground 3 "No inputs selected for update"
         return 0
     end
 
-    # Extract input names from selected options
-    # Format: "input-name: current → new"
-    set selected_inputs
+    set -l selected_inputs
     for option in $selected_options
-        # Extract input name - everything before the colon
-        set input_name (string split -m 1 ":" $option)[1]
+        set -l input_name (string split -m 1 ":" $option)[1]
         if string length -q "$input_name"
             set selected_inputs $selected_inputs $input_name
         end
@@ -285,10 +151,8 @@ function flake_update_interactive --description 'Interactively update nix flake 
         return 0
     end
 
-    # Show summary of what will be updated (build all at once to avoid pop-in)
-    set summary_lines
+    set -l summary_lines
     for input in $selected_inputs
-        # Get the formatted option for this input to show the full update info
         for option in $input_options
             if string match -q "$input:*" $option
                 set summary_lines $summary_lines "  $option"
@@ -297,23 +161,19 @@ function flake_update_interactive --description 'Interactively update nix flake 
         end
     end
 
-    # Display header and all items at once
     gum style --foreground 4 "Selected inputs to update:"
     printf "%s\n" $summary_lines
 
-    # Confirm update
     if not gum confirm "Update selected flake inputs?"
         gum style --foreground 3 "Update cancelled"
         return 0
     end
 
-    # Update selected inputs
     pushd $flake_path
-    
-    # Backup flake.lock before updating in case rebuild fails
-    set flake_lock_backup (mktemp)
+
+    set -l flake_lock_backup (mktemp)
     cp flake.lock $flake_lock_backup
-    
+
     gum spin --spinner pulse --title "Updating flake inputs..." -- nix flake update $selected_inputs
     set update_status $status
     popd
@@ -321,9 +181,8 @@ function flake_update_interactive --description 'Interactively update nix flake 
     if test $update_status -eq 0
         gum style --foreground 2 "✓ Flake inputs updated successfully!"
 
-        # Prompt for rebuild if --rebuild flag was passed
         if set -q _flag_rebuild
-            echo "" # Blank line for spacing
+            echo ""
             if gum confirm "Rebuild NixOS configuration now?"
                 gum style --foreground 4 "Starting system rebuild..."
                 if command -q nh
@@ -336,40 +195,27 @@ function flake_update_interactive --description 'Interactively update nix flake 
 
                 if test $rebuild_status -eq 0
                     gum style --foreground 2 "✓ System rebuilt successfully!"
-                    
-                    # Clean up backup since rebuild succeeded
                     rm -f $flake_lock_backup
 
-                    # Regenerate update cache and trigger start-menu refresh
                     if type -q flake_updates_daemon
                         gum spin --spinner pulse --title "Refreshing update cache..." -- flake_updates_daemon refresh
                     else if command -q flake-check-updates
-                        # Fallback to direct call if daemon function not available
                         gum spin --spinner pulse --title "Refreshing update cache..." -- flake-check-updates ~/nixos
                     end
 
-                    # Send desktop notification if --notify flag was passed
                     if set -q _flag_notify
-                        # Generate custom icon using nerd-icon-gen.sh
-                        set icon_path (mktemp --suffix=.svg)
+                        set -l icon_path (mktemp --suffix=.svg)
                         ~/.config/hypr/scripts/nerd-icon-gen.sh "󰗡" 64 "#4ade80" "$icon_path" >/dev/null 2>&1
 
                         if command -q notify-send
-                            notify-send \
-                                --app-name="NixOS Update" \
-                                --icon="$icon_path" \
-                                --urgency=normal \
-                                "NixOS Update Complete" \
-                                "System has been successfully rebuilt and switched. A restart may be required for some changes."
+                            notify-send --app-name="NixOS Update" --icon="$icon_path" --urgency=normal "NixOS Update Complete" "System has been successfully rebuilt and switched. A restart may be required for some changes."
                         end
 
-                        # Clean up temp icon file after a short delay
                         fish -c "sleep 5; rm -f '$icon_path'" &
                     end
                 else
                     gum style --foreground 1 "✗ System rebuild failed"
-                    
-                    # Restore flake.lock to pre-update state
+
                     if test -f "$flake_lock_backup"
                         pushd $flake_path
                         cp $flake_lock_backup flake.lock
@@ -378,29 +224,16 @@ function flake_update_interactive --description 'Interactively update nix flake 
                         gum style --foreground 3 "ℹ Restored flake.lock to pre-update state"
                     end
 
-                    # Send failure notification if --notify flag was passed
                     if set -q _flag_notify
-                        # Generate custom icon using nerd-icon-gen.sh (red for error)
-                        set icon_path (mktemp --suffix=.svg)
+                        set -l icon_path (mktemp --suffix=.svg)
                         ~/.config/hypr/scripts/nerd-icon-gen.sh "" 64 "#ef4444" "$icon_path" >/dev/null 2>&1
 
                         if command -q notify-send
-                            notify-send \
-                                --app-name="NixOS Update" \
-                                --icon="$icon_path" \
-                                --urgency=critical \
-                                "NixOS Update Failed" \
-                                "The system update encountered an error. Please check the terminal output for details."
+                            notify-send --app-name="NixOS Update" --icon="$icon_path" --urgency=critical "NixOS Update Failed" "The system update encountered an error. Please check the terminal output for details."
                         else if command -q dunstify
-                            dunstify \
-                                --appname="NixOS Update" \
-                                --icon="$icon_path" \
-                                --urgency=critical \
-                                "NixOS Update Failed" \
-                                "The system update encountered an error. Please check the terminal output for details."
+                            dunstify --appname="NixOS Update" --icon="$icon_path" --urgency=critical "NixOS Update Failed" "The system update encountered an error. Please check the terminal output for details."
                         end
 
-                        # Clean up temp icon file after a short delay
                         fish -c "sleep 5; rm -f '$icon_path'" &
                     end
 
@@ -408,16 +241,13 @@ function flake_update_interactive --description 'Interactively update nix flake 
                 end
             else
                 gum style --foreground 3 "Rebuild skipped. Run 'nxrb' when ready."
-                # Clean up backup since user chose not to rebuild
                 rm -f $flake_lock_backup
             end
         else
-            # No --rebuild flag, clean up backup
             rm -f $flake_lock_backup
         end
     else
         gum style --foreground 1 "✗ Failed to update some flake inputs"
-        # Clean up backup
         rm -f $flake_lock_backup
         return 1
     end

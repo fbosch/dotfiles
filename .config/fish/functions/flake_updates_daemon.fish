@@ -19,7 +19,10 @@ function flake_updates_daemon --description 'Manage the flake updates checker sy
             systemctl --user status flake-update-checker.service --no-pager
             
             # Show update info from JSON cache
-            set cache_file "$HOME/.cache/flake-updates.json"
+            set cache_file "$XDG_CACHE_HOME/flake-updates.json"
+            if test -z "$XDG_CACHE_HOME"
+                set cache_file ~/.cache/flake-updates.json
+            end
             if test -f $cache_file
                 echo ""
                 echo "=== Cache Contents ==="

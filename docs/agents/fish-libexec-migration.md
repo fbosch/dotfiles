@@ -59,12 +59,12 @@ Keep Fish functions user-facing and move dense parsing/transformation logic into
 
 ### 6) `flake_update_interactive.fish` -> `flake_update_engine.ts`
 
-- [ ] Extract cache + scan/update candidate model from `.config/fish/functions/flake_update_interactive.fish`.
-- [ ] Keep multi-select, confirmation, and rebuild prompts in fish.
+- [x] Extract cache + scan/update candidate model from `.config/fish/functions/flake_update_interactive.fish`.
+- [x] Keep multi-select, confirmation, and rebuild prompts in fish.
 - [ ] Acceptance criteria:
-  - [ ] Cache TTL and invalidation behavior stays equivalent.
-  - [ ] Selected updates map to same flake inputs as before.
-  - [ ] Rebuild fallback flow remains unchanged.
+  - [x] Cache TTL and invalidation behavior stays equivalent.
+  - [x] Selected updates map to same flake inputs as before.
+  - [x] Rebuild fallback flow remains unchanged.
 
 ## Phase 3: High Coupling Workflows
 
