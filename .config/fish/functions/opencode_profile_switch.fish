@@ -30,20 +30,20 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
         return 1
     end
 
-    if not command -q python3
-        echo "python3 is required"
+    if not command -q bun
+        echo "bun is required"
         return 1
     end
 
     set -l helper_dir (path dirname (status filename))
-    set -l jsonc_helper "$helper_dir/opencode_profile_switch_jsonc.py"
+    set -l jsonc_helper "$helper_dir/opencode_profile_switch_jsonc.ts"
     if not test -f "$jsonc_helper"
         echo "jsonc helper not found: $jsonc_helper"
         return 1
     end
 
     set -l profiles_tmp (mktemp)
-    python3 "$jsonc_helper" "$profiles_file" "$profiles_tmp"
+    bun "$jsonc_helper" "$profiles_file" "$profiles_tmp"
 
     if test $status -ne 0
         rm -f "$profiles_tmp"
@@ -61,7 +61,7 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
     set -l opencode_parse_file "$opencode_file"
     if string match -q '*.jsonc' "$opencode_file"
         set opencode_parse_file (mktemp)
-        python3 "$jsonc_helper" "$opencode_file" "$opencode_parse_file"
+        bun "$jsonc_helper" "$opencode_file" "$opencode_parse_file"
 
         if test $status -ne 0
             rm -f "$profiles_tmp"
