@@ -1,11 +1,10 @@
 #!/usr/bin/env bun
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { err, ok, type Result } from "neverthrow";
+import { existsSync } from "node:fs";
+import { err, ok } from "neverthrow";
 import { z } from "zod";
+import { type AppResult, existingMode, readJsonFile, writeJsonAtomic } from "./shared/fs.js";
 
-type AppResult<T> = Result<T, string>;
 type JsonObject = Record<string, unknown>;
 
 type ProviderProfile = {
@@ -14,11 +13,6 @@ type ProviderProfile = {
     generatedLabel: string;
     label: string;
     color: number;
-};
-
-type ProviderListing = {
-    name: string;
-    profiles: ProviderProfile[];
 };
 
 const aliasMap = [
@@ -111,67 +105,6 @@ function usage(): void {
     console.log("  apply <auth_file> <codex_auth_file> <codex_profiles_file> <provider> <target_key>");
 }
 
-function readJsonFile<T>(filePath: string, schema: z.ZodType<T>): AppResult<T> {
-    try {
-        const raw = readFileSync(filePath, "utf8");
-        const parsed = JSON.parse(raw) as unknown;
-        const validated = schema.safeParse(parsed);
-        if (!validated.success) {
-            const summary = validated.error.issues
-                .map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`)
-                .join("; ");
-            return err(`invalid JSON in ${filePath} (${summary})`);
-        }
-
-        return ok(validated.data);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return err(message);
-    }
-}
-
-function ensureParentDir(filePath: string): AppResult<void> {
-    try {
-        mkdirSync(dirname(filePath), { recursive: true });
-        return ok(undefined);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return err(message);
-    }
-}
-
-function writeJsonAtomic(filePath: string, value: unknown, mode?: number): AppResult<void> {
-    const ensureResult = ensureParentDir(filePath);
-    if (ensureResult.isErr()) {
-        return err(ensureResult.error);
-    }
-
-    const tmpPath = join(
-        dirname(filePath),
-        `.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`,
-    );
-
-    try {
-        writeFileSync(tmpPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-        if (mode !== undefined) {
-            chmodSync(tmpPath, mode);
-        }
-        renameSync(tmpPath, filePath);
-        return ok(undefined);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return err(message);
-    }
-}
-
-function existingMode(filePath: string): number | undefined {
-    try {
-        return statSync(filePath).mode;
-    } catch {
-        return undefined;
-    }
-}
-
 function accountIdForEntry(key: string, entry: JsonObject): string {
     return typeof entry.accountId === "string" && entry.accountId.trim().length > 0 ? entry.accountId : key;
 }
@@ -218,22 +151,23 @@ function buildProfileLabel(
     };
 }
 
-function listProfiles(authFile: string, bgMode: "dark" | "light"): AppResult<{ providers: ProviderListing[] }> {
+function listProfiles(authFile: string, bgMode: "dark" | "light"): AppResult<string[]> {
     const authResult = readJsonFile(authFile, AuthFileSchema);
     if (authResult.isErr()) {
         return err(authResult.error);
     }
 
     const auth = authResult.value as Record<string, JsonObject>;
-    const providers = listProviderNames(auth).map((provider) => ({
-        name: provider,
-        profiles: profileKeysForProvider(auth, provider).map((key) => {
+    const lines: string[] = [];
+    for (const provider of listProviderNames(auth)) {
+        for (const key of profileKeysForProvider(auth, provider)) {
             const entry = auth[key] || {};
-            return buildProfileLabel(provider, key, accountIdForEntry(key, entry), bgMode);
-        }),
-    }));
+            const profile = buildProfileLabel(provider, key, accountIdForEntry(key, entry), bgMode);
+            lines.push([provider, profile.key, profile.label, String(profile.color)].join("\t"));
+        }
+    }
 
-    return ok({ providers: providers.filter((provider) => provider.profiles.length > 0) });
+    return ok(lines);
 }
 
 function deriveInactiveKey(auth: Record<string, JsonObject>, provider: string, targetKey: string): string {
@@ -409,7 +343,9 @@ function main(): number {
             return 1;
         }
 
-        console.log(JSON.stringify(listResult.value));
+        if (listResult.value.length > 0) {
+            console.log(listResult.value.join("\n"));
+        }
         return 0;
     }
 
@@ -442,7 +378,7 @@ function main(): number {
             return 1;
         }
 
-        console.log(JSON.stringify(applyResult.value));
+        console.log(applyResult.value.codexStatus);
         return 0;
     }
 

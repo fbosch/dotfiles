@@ -39,31 +39,39 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
         return 1
     end
 
-    set -l list_json (bun --cwd "$libexec_dir" --install=auto "$helper" list "$profiles_file" "$opencode_file")
+    set -l list_lines (bun --smol --cwd "$libexec_dir" --install=auto "$helper" list "$profiles_file" "$opencode_file")
     if test $status -ne 0
         echo "failed to load profiles"
         return 1
     end
 
-    set -l profile_count (printf '%s' "$list_json" | jq '.profiles | length')
-    if test $status -ne 0 -o "$profile_count" = 0
+    if test -z "$list_lines"
         echo "no profiles found in: $profiles_file"
         return 1
     end
 
-    set -l active_profile (printf '%s' "$list_json" | jq -r '.profiles[] | select(.active == true) | .name' | head -n 1)
+    set -l active_profile ""
     set -l choice_labels
     set -l choice_to_profile
 
-    for profile in (printf '%s' "$list_json" | jq -r '.profiles[].name')
-        set -l description (printf '%s' "$list_json" | jq -r --arg profile "$profile" '.profiles[] | select(.name == $profile) | .description // ""')
-        set -l is_active (printf '%s' "$list_json" | jq -r --arg profile "$profile" '.profiles[] | select(.name == $profile) | .active | tostring')
+    for row in $list_lines
+        set -l parts (string split 	 -- "$row")
+        if test (count $parts) -lt 3
+            continue
+        end
+
+        set -l profile "$parts[1]"
+        set -l description "$parts[2]"
+        set -l is_active "$parts[3]"
         set -l label "$profile"
         if test -n "$description"
             set label "$profile - $description"
         end
         if test "$is_active" = true
             set label "* $label"
+            if test -z "$active_profile"
+                set active_profile "$profile"
+            end
         end
         set choice_labels $choice_labels "$label"
         set choice_to_profile $choice_to_profile "$profile"
@@ -92,13 +100,12 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
         return 1
     end
 
-    set -l apply_json (bun --cwd "$libexec_dir" --install=auto "$helper" apply "$profiles_file" "$opencode_file" "$selected_profile")
+    set -l description (bun --smol --cwd "$libexec_dir" --install=auto "$helper" apply "$profiles_file" "$opencode_file" "$selected_profile")
     if test $status -ne 0
         echo "failed to apply profile: $selected_profile"
         return 1
     end
 
-    set -l description (printf '%s' "$apply_json" | jq -r '.description // ""')
     if test -n "$description"
         echo "opencode profile switched: $selected_profile - $description"
     else

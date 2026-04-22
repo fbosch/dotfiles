@@ -192,19 +192,29 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
 
     echo ""
 
-    set -l list_json (bun --smol --cwd "$libexec_dir" --install=auto "$helper" list "$auth_file" "$bg_mode")
+    set -l list_lines (bun --smol --cwd "$libexec_dir" --install=auto "$helper" list "$auth_file" "$bg_mode")
     if test $status -ne 0
         echo "failed to load providers"
         return 1
     end
 
-    set -l provider_count (printf '%s' "$list_json" | jq '.providers | length')
-    if test $status -ne 0 -o "$provider_count" = 0
+    if test -z "$list_lines"
         echo "no providers with switchable variants found"
         return 1
     end
 
-    set -l provider_names (printf '%s' "$list_json" | jq -r '.providers[].name')
+    set -l provider_names
+    for row in $list_lines
+        set -l parts (string split 	 -- "$row")
+        if test (count $parts) -lt 4
+            continue
+        end
+
+        if not contains -- "$parts[1]" $provider_names
+            set -a provider_names "$parts[1]"
+        end
+    end
+
     set -l provider "$provider_names[1]"
     if test (count $provider_names) -gt 1
         set provider (printf "%s\n" $provider_names | gum choose --header="Select provider")
@@ -213,23 +223,30 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         end
     end
 
-    set -l profile_count (printf '%s' "$list_json" | jq -r --arg provider "$provider" '.providers[] | select(.name == $provider) | .profiles | length')
-    if test $status -ne 0 -o "$profile_count" = 0
-        echo "no suffixed duplicate profiles found for provider: $provider"
-        return 1
-    end
-
     set -l profile_labels
     set -l profile_plain_labels
     set -l profile_keys
-    for encoded in (printf '%s' "$list_json" | jq -r --arg provider "$provider" '.providers[] | select(.name == $provider) | .profiles[] | @base64')
-        set -l entry_json (printf '%s' "$encoded" | base64 --decode)
-        set -l key (printf '%s' "$entry_json" | jq -r '.key')
-        set -l label (printf '%s' "$entry_json" | jq -r '.label')
-        set -l color (printf '%s' "$entry_json" | jq -r '.color')
+    for row in $list_lines
+        set -l parts (string split 	 -- "$row")
+        if test (count $parts) -lt 4
+            continue
+        end
+
+        if test "$parts[1]" != "$provider"
+            continue
+        end
+
+        set -l key "$parts[2]"
+        set -l label "$parts[3]"
+        set -l color "$parts[4]"
         set -a profile_keys "$key"
         set -a profile_plain_labels "$label"
         set -a profile_labels (printf '\e[1;38;5;%sm%s\e[0m' "$color" "$label")
+    end
+
+    if test (count $profile_keys) -eq 0
+        echo "no suffixed duplicate profiles found for provider: $provider"
+        return 1
     end
 
     set -l choices
@@ -260,13 +277,12 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         set selected_label "$target_key"
     end
 
-    set -l apply_json (bun --smol --cwd "$libexec_dir" --install=auto "$helper" apply "$auth_file" "$codex_auth_file" "$codex_profiles_file" "$provider" "$target_key")
+    set -l codex_status (bun --smol --cwd "$libexec_dir" --install=auto "$helper" apply "$auth_file" "$codex_auth_file" "$codex_profiles_file" "$provider" "$target_key")
     if test $status -ne 0
         echo "failed to apply auth switch"
         return 1
     end
 
-    set -l codex_status (printf '%s' "$apply_json" | jq -r '.codexStatus // "codex unchanged"')
     set -l switched_usage_tsv ""
     set -l switched_usage_error ""
 

@@ -5,7 +5,7 @@
     "enabled": false
   },
   "files": {
-    "includes": ["*.ts", "!*.d.ts"]
+    "includes": ["**/*.ts", "!**/*.d.ts"]
   },
   "formatter": {
     "enabled": true,

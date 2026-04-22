@@ -1,11 +1,12 @@
 #!/usr/bin/env bun
 
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { err, ok, type Result } from "neverthrow";
 import { match, P } from "ts-pattern";
 import { z } from "zod";
+import { cacheRoot, ensureDir } from "./shared/fs.js";
+import { runCommand } from "./shared/process.js";
 
 type AppResult<T> = Result<T, string>;
 
@@ -81,17 +82,7 @@ function usage(): void {
 }
 
 function run(command: string, args: string[]): AppResult<string> {
-    const result = spawnSync(command, args, {
-        encoding: "utf8",
-        stdio: "pipe",
-    });
-
-    if (result.status !== 0) {
-        const output = (result.stderr || result.stdout || `${command} failed`).trim();
-        return err(output);
-    }
-
-    return ok(result.stdout);
+    return runCommand(command, args);
 }
 
 function readStdin(): AppResult<string> {
@@ -104,8 +95,7 @@ function readStdin(): AppResult<string> {
 }
 
 function cacheDir(): string {
-    const root = process.env.XDG_CACHE_HOME || (process.env.HOME ? join(process.env.HOME, ".cache") : "/tmp");
-    return join(root, "linear_issue_workflow");
+    return join(cacheRoot(), "linear_issue_workflow");
 }
 
 function cacheFilePath(): string {
@@ -113,13 +103,7 @@ function cacheFilePath(): string {
 }
 
 function ensureCacheDir(): AppResult<void> {
-    try {
-        mkdirSync(cacheDir(), { recursive: true });
-        return ok(undefined);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return err(message);
-    }
+    return ensureDir(cacheDir());
 }
 
 function loadCache(): AppResult<Record<string, CachedIssueMeta>> {

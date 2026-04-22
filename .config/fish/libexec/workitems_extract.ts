@@ -1,13 +1,14 @@
 #!/usr/bin/env bun
 
-import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chunk, uniq } from "es-toolkit";
 import { err, ok, type Result } from "neverthrow";
 import { match } from "ts-pattern";
 import { z } from "zod";
+import { cacheRoot, ensureDir } from "./shared/fs.js";
+import { runCommand } from "./shared/process.js";
 
 type Mode = "authored_branches" | "merged_main";
 type AppResult<T> = Result<T, string>;
@@ -42,13 +43,7 @@ function usage(): void {
 }
 
 function run(command: string, args: string[]): AppResult<string> {
-    const result = spawnSync(command, args, { encoding: "utf8", stdio: "pipe" });
-    if (result.status !== 0) {
-        const output = (result.stderr || result.stdout || `${command} failed`).trim();
-        return err(output);
-    }
-
-    return ok(result.stdout);
+    return runCommand(command, args);
 }
 
 function parseIsoDate(value: string): AppResult<Date> {
@@ -103,19 +98,17 @@ function isPastDateRange(endDate: string): AppResult<boolean> {
 }
 
 function cacheDir(): string {
-    const root = process.env.XDG_CACHE_HOME || (process.env.HOME ? join(process.env.HOME, ".cache") : "/tmp");
-    return join(root, "fish", "workitems");
+    return join(cacheRoot(), "fish", "workitems");
 }
 
 function ensureCacheDir(): AppResult<string> {
     const dir = cacheDir();
-    try {
-        mkdirSync(dir, { recursive: true });
-        return ok(dir);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return err(message);
+    const ensureResult = ensureDir(dir);
+    if (ensureResult.isErr()) {
+        return err(ensureResult.error);
     }
+
+    return ok(dir);
 }
 
 function cacheHash(value: string): string {

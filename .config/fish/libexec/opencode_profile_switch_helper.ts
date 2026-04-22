@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
+import { writeJsonAtomic } from "./shared/fs.js";
 
 type AppResult<T> = Result<T, string>;
 
@@ -146,8 +147,8 @@ function stripTrailingCommas(text: string): string {
 
 function readJsonc<T>(filePath: string): AppResult<T> {
     try {
-        const raw = readFileSync(filePath, "utf8");
-        return ok(JSON.parse(stripTrailingCommas(stripComments(raw))) as T);
+        const text = readFileSync(filePath, "utf8");
+        return ok(JSON.parse(stripTrailingCommas(stripComments(text))) as T);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return err(message);
@@ -217,7 +218,7 @@ function listProfiles(profilesPath: string, configPath: string): AppResult<strin
         };
     });
 
-    return ok(JSON.stringify({ profiles: items }));
+    return ok(items.map((item) => [item.name, item.description, String(item.active)].join("\t")).join("\n"));
 }
 
 function applyProfile(profilesPath: string, configPath: string, profileName: string): AppResult<string> {
@@ -278,19 +279,12 @@ function applyProfile(profilesPath: string, configPath: string, profileName: str
 
     nextConfig.agent = updatedAgents;
 
-    try {
-        writeFileSync(configPath, `${JSON.stringify(nextConfig, null, 2)}\n`, "utf8");
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return err(message);
+    const writeResult = writeJsonAtomic(configPath, nextConfig);
+    if (writeResult.isErr()) {
+        return err(writeResult.error);
     }
 
-    return ok(
-        JSON.stringify({
-            profile: profileName,
-            description: profile.description,
-        }),
-    );
+    return ok(profile.description);
 }
 
 function usage(): void {
