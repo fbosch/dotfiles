@@ -30,12 +30,12 @@ Keep Fish functions user-facing and move dense parsing/transformation logic into
 
 ### 3) `ado_test_case.fish` -> `ado_test_case_helper.ts`
 
-- [ ] Extract Azure response parsing + XML steps markdown generation from `.config/fish/functions/ado_test_case.fish`.
-- [ ] Keep fish UX (`glow`, clipboard, user-facing prompts) intact.
+- [x] Extract Azure response parsing + XML steps markdown generation from `.config/fish/functions/ado_test_case.fish`.
+- [x] Keep fish UX (`glow`, clipboard, user-facing prompts) intact.
 - [ ] Acceptance criteria:
-  - [ ] Markdown output contains same sections/fields as current script.
-  - [ ] Missing fields degrade gracefully (no hard crash).
-  - [ ] `--refresh`/cache behavior preserved.
+  - [x] Markdown output contains same sections/fields as current script.
+  - [x] Missing fields degrade gracefully (no hard crash).
+  - [x] `--refresh`/cache behavior preserved.
 
 ## Phase 2: Stateful/Transform Heavy
 
