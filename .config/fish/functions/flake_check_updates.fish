@@ -9,7 +9,9 @@ function flake_check_updates --description 'Check for available flake updates an
     if set -q _flag_help
         echo "Usage: flake_check_updates [FLAKE_PATH]"
         echo "Env overrides:"
-        echo "  FLAKE_CHECK_MAX_INPUTS      (default wrapper value: 10)"
+        echo "  FLAKE_CHECK_BATCH_SIZE      (default wrapper value: 3)"
+        echo "  FLAKE_CHECK_TIMEOUT_MS      (default wrapper value: 8000)"
+        echo "  FLAKE_CHECK_CURSOR          (default wrapper value: 1; set 0 to disable rotation)"
         return 0
     end
 
@@ -35,13 +37,26 @@ function flake_check_updates --description 'Check for available flake updates an
         set flake_path ~/nixos
     end
 
-    set -l max_inputs 10
+    set -l batch_size 3
+    set -l timeout_ms 8000
+    set -l use_cursor 1
 
-    if set -q FLAKE_CHECK_MAX_INPUTS
-        set max_inputs "$FLAKE_CHECK_MAX_INPUTS"
+    if set -q FLAKE_CHECK_BATCH_SIZE
+        set batch_size "$FLAKE_CHECK_BATCH_SIZE"
+    else if set -q FLAKE_CHECK_MAX_INPUTS
+        # Backward compatibility for older env name.
+        set batch_size "$FLAKE_CHECK_MAX_INPUTS"
     end
 
-    set -l result (FLAKE_CHECK_MAX_INPUTS="$max_inputs" bun --smol --cwd "$libexec_dir" --install=auto "$helper" "$flake_path")
+    if set -q FLAKE_CHECK_TIMEOUT_MS
+        set timeout_ms "$FLAKE_CHECK_TIMEOUT_MS"
+    end
+
+    if set -q FLAKE_CHECK_CURSOR
+        set use_cursor "$FLAKE_CHECK_CURSOR"
+    end
+
+    set -l result (FLAKE_CHECK_BATCH_SIZE="$batch_size" FLAKE_CHECK_TIMEOUT_MS="$timeout_ms" FLAKE_CHECK_CURSOR="$use_cursor" bun --smol --cwd "$libexec_dir" --install=auto "$helper" "$flake_path")
     set -l code $status
 
     if test -z "$result"

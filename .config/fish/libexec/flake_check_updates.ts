@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { err, ok, type Result } from "neverthrow";
 
 type FlakeLock = {
@@ -25,12 +26,16 @@ type UpdateResult = {
 type AppResult<T> = Result<T, string>;
 
 const EMPTY_RESULT: UpdateResult = { count: 0, updates: [] };
-const DEFAULT_MAX_INPUTS = 20;
+const DEFAULT_BATCH_SIZE = 3;
+const DEFAULT_UPDATE_TIMEOUT_MS = 8_000;
 
 function usage(): void {
     console.log("Usage: flake_check_updates.ts [FLAKE_PATH]");
     console.log("Env overrides:");
-    console.log("  FLAKE_CHECK_MAX_INPUTS       default 20");
+    console.log("  FLAKE_CHECK_BATCH_SIZE       default 3");
+    console.log("  FLAKE_CHECK_TIMEOUT_MS       default 8000");
+    console.log("  FLAKE_CHECK_CURSOR           default 1 (set 0 to disable rotating batches)");
+    console.log("  FLAKE_CHECK_CURSOR_FILE      optional explicit cursor file path");
 }
 
 function emitResult(result: UpdateResult): void {
@@ -49,6 +54,87 @@ function parsePositiveIntEnv(name: string, fallback: number): number {
     }
 
     return parsed;
+}
+
+function parseBoundedPositiveIntEnv(name: string, fallback: number, maxValue: number): number {
+    const parsed = parsePositiveIntEnv(name, fallback);
+    return Math.min(parsed, maxValue);
+}
+
+function parseBooleanEnv(name: string, fallback: boolean): boolean {
+    const raw = process.env[name];
+    if (!raw) {
+        return fallback;
+    }
+
+    const normalized = raw.trim().toLowerCase();
+    if (["1", "true", "yes", "on"].includes(normalized)) {
+        return true;
+    }
+    if (["0", "false", "no", "off"].includes(normalized)) {
+        return false;
+    }
+
+    return fallback;
+}
+
+function cursorFileForFlake(resolvedFlakePath: string): string {
+    if (process.env.FLAKE_CHECK_CURSOR_FILE) {
+        return resolve(process.env.FLAKE_CHECK_CURSOR_FILE);
+    }
+
+    const cacheRoot = process.env.XDG_CACHE_HOME || (process.env.HOME ? join(process.env.HOME, ".cache") : "/tmp");
+    const key = createHash("sha1").update(resolvedFlakePath).digest("hex");
+    return join(cacheRoot, "flake_check_updates", `${key}.cursor`);
+}
+
+function loadCursor(cursorFile: string): number {
+    if (!existsSync(cursorFile)) {
+        return 0;
+    }
+
+    try {
+        const raw = readFileSync(cursorFile, "utf8").trim();
+        const parsed = Number.parseInt(raw, 10);
+        if (Number.isNaN(parsed) || parsed < 0) {
+            return 0;
+        }
+
+        return parsed;
+    } catch {
+        return 0;
+    }
+}
+
+function saveCursor(cursorFile: string, nextCursor: number): AppResult<void> {
+    try {
+        mkdirSync(dirname(cursorFile), { recursive: true });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return err(message);
+    }
+
+    try {
+        writeFileSync(cursorFile, `${nextCursor}\n`, "utf8");
+        return ok(undefined);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return err(message);
+    }
+}
+
+function buildBatch(allInputs: string[], start: number, batchSize: number): string[] {
+    if (allInputs.length <= batchSize) {
+        return allInputs;
+    }
+
+    const batch: string[] = [];
+    for (let i = 0; i < batchSize; i += 1) {
+        const idx = (start + i) % allInputs.length;
+        batch.push(allInputs[idx]);
+    }
+
+    return batch;
 }
 
 function loadLock(lockPath: string): AppResult<FlakeLock> {
@@ -71,10 +157,11 @@ function restoreOriginalLock(lockPath: string, originalLockRaw: string): AppResu
     }
 }
 
-function runNixUpdate(flakePath: string, input: string): AppResult<void> {
-    const result = spawnSync("nix", ["flake", "update", "--update-input", input], {
+function runNixUpdate(flakePath: string, input: string, timeoutMs: number): AppResult<void> {
+    const result = spawnSync("nice", ["-n", "15", "nix", "flake", "update", "--update-input", input], {
         cwd: flakePath,
         stdio: "ignore",
+        timeout: timeoutMs,
     });
 
     if (result.error) {
@@ -83,6 +170,9 @@ function runNixUpdate(flakePath: string, input: string): AppResult<void> {
     }
 
     if (result.status !== 0) {
+        if (result.signal === "SIGTERM") {
+            return err(`timeout after ${timeoutMs}ms for input ${input}`);
+        }
         return err(`update failed for input ${input} (exit ${result.status ?? "unknown"})`);
     }
 
@@ -105,7 +195,9 @@ function main(): number {
     const flakePath = rawPath.startsWith("~/") && process.env.HOME ? join(process.env.HOME, rawPath.slice(2)) : rawPath;
     const resolvedFlakePath = resolve(flakePath);
     const lockPath = join(resolvedFlakePath, "flake.lock");
-    const maxInputs = parsePositiveIntEnv("FLAKE_CHECK_MAX_INPUTS", DEFAULT_MAX_INPUTS);
+    const batchSize = parseBoundedPositiveIntEnv("FLAKE_CHECK_BATCH_SIZE", DEFAULT_BATCH_SIZE, 25);
+    const updateTimeoutMs = parseBoundedPositiveIntEnv("FLAKE_CHECK_TIMEOUT_MS", DEFAULT_UPDATE_TIMEOUT_MS, 60_000);
+    const useCursor = parseBooleanEnv("FLAKE_CHECK_CURSOR", true);
 
     if (!existsSync(lockPath)) {
         emitResult(EMPTY_RESULT);
@@ -127,13 +219,24 @@ function main(): number {
 
     const rootInputs = initialLock.nodes.root.inputs;
     const allInputs = Object.keys(rootInputs).sort();
-    const inputList = allInputs.slice(0, maxInputs);
+    const cursorFile = cursorFileForFlake(resolvedFlakePath);
+    const cursor = useCursor ? loadCursor(cursorFile) : 0;
+    const start = allInputs.length > 0 ? cursor % allInputs.length : 0;
+    const inputList = buildBatch(allInputs, start, batchSize);
     const originalLockRaw = readFileSync(lockPath, "utf8");
     const updates: UpdateInfo[] = [];
     const warnings: string[] = [];
 
-    if (allInputs.length > maxInputs) {
-        warnings.push(`input scan capped at ${maxInputs}/${allInputs.length}`);
+    if (allInputs.length > batchSize) {
+        warnings.push(`batch scan ${inputList.length}/${allInputs.length} starting at index ${start}`);
+    }
+
+    if (useCursor && allInputs.length > 0) {
+        const nextCursor = (start + inputList.length) % allInputs.length;
+        const saveResult = saveCursor(cursorFile, nextCursor);
+        if (saveResult.isErr()) {
+            warnings.push(`failed to save cursor: ${saveResult.error}`);
+        }
     }
 
     try {
@@ -156,7 +259,7 @@ function main(): number {
                 continue;
             }
 
-            const updateResult = runNixUpdate(resolvedFlakePath, input);
+            const updateResult = runNixUpdate(resolvedFlakePath, input, updateTimeoutMs);
             if (updateResult.isErr()) {
                 warnings.push(`${input}: ${updateResult.error}`);
                 continue;
