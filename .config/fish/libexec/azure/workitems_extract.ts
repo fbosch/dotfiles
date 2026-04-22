@@ -7,8 +7,8 @@ import { chunk, uniq } from "es-toolkit";
 import { err, ok, type Result } from "neverthrow";
 import { match } from "ts-pattern";
 import { z } from "zod";
-import { cacheRoot, ensureDir } from "./shared/fs.js";
-import { runCommand } from "./shared/process.js";
+import { cacheRoot, ensureDir } from "../shared/fs.js";
+import { runCommand } from "../shared/process.js";
 
 type Mode = "authored_branches" | "merged_main";
 type AppResult<T> = Result<T, string>;
@@ -37,7 +37,7 @@ const ArgsSchema = z.object({
 });
 
 function usage(): void {
-    console.log("Usage: workitems_extract.ts <start_date> <end_date> [mode] [refresh]");
+    console.log("Usage: azure/workitems_extract.ts <start_date> <end_date> [mode] [refresh]");
     console.log("Modes: authored_branches | merged_main");
     console.log("Outputs: date|workitem|branch per line");
 }

@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
-import { writeJsonAtomic } from "./shared/fs.js";
+import { writeJsonAtomic } from "../shared/fs.js";
 
 type AppResult<T> = Result<T, string>;
 
@@ -289,8 +289,8 @@ function applyProfile(profilesPath: string, configPath: string, profileName: str
 
 function usage(): void {
     console.log("Usage:");
-    console.log("  opencode_profile_switch_helper.ts list <profiles.jsonc> <opencode.json/jsonc>");
-    console.log("  opencode_profile_switch_helper.ts apply <profiles.jsonc> <opencode.json/jsonc> <profile>");
+    console.log("  opencode/profile_switch_helper.ts list <profiles.jsonc> <opencode.json/jsonc>");
+    console.log("  opencode/profile_switch_helper.ts apply <profiles.jsonc> <opencode.json/jsonc> <profile>");
 }
 
 function main(): number {

@@ -5,7 +5,16 @@ Internal Bun/TypeScript helpers for Fish functions.
 ## Purpose
 
 - Keep `.config/fish/functions/*.fish` as thin UX/orchestration wrappers.
-- Keep parsing, transforms, and data mutation logic in `.config/fish/libexec/*.ts`.
+- Keep parsing, transforms, and data mutation logic in `.config/fish/libexec/**/*.ts`.
+
+## Organization
+
+- Use one level of domain grouping when a helper area has 3+ related scripts.
+- Current subdirectories:
+  - `azure/` for Azure DevOps and workitem helpers
+  - `opencode/` for OpenCode and related workflow helpers
+  - `shared/` for cross-domain utilities
+  - `nix/` for flake and other Nix-related helpers
 
 ## Runtime and Dependencies
 

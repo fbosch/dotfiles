@@ -55,7 +55,7 @@ function flake_update_interactive --description 'Interactively update nix flake 
     set -l helper_dir (path dirname (status filename))
     set -l fish_root (path resolve "$helper_dir/..")
     set -l libexec_dir "$fish_root/libexec"
-    set -l helper "flake_update_engine.ts"
+    set -l helper "nix/update_engine.ts"
     if not test -f "$libexec_dir/$helper"
         gum style --foreground 1 "flake_update_interactive: helper not found: $libexec_dir/$helper"
         return 1
@@ -72,34 +72,48 @@ function flake_update_interactive --description 'Interactively update nix flake 
         gum style --foreground 3 "Bypassing cache (--force), checking updates manually..."
     end
 
-    set -l scan_json (FLAKE_UPDATE_CACHE_TTL_SECONDS="$cache_ttl_seconds" FLAKE_UPDATE_BATCH_SIZE="3" FLAKE_UPDATE_TIMEOUT_MS="8000" FLAKE_UPDATE_FORCE="$force" bun --smol --cwd "$libexec_dir" --install=auto "$helper" scan "$flake_path")
+    set -l scan_lines (FLAKE_UPDATE_CACHE_TTL_SECONDS="$cache_ttl_seconds" FLAKE_UPDATE_BATCH_SIZE="3" FLAKE_UPDATE_TIMEOUT_MS="8000" FLAKE_UPDATE_FORCE="$force" bun --smol --cwd "$libexec_dir" --install=auto "$helper" lines "$flake_path")
     if test $status -ne 0
         gum style --foreground 1 "Failed to check flake updates"
         return 1
     end
 
-    set -l update_count (printf '%s' "$scan_json" | jq -r '.count // 0')
-    if test $status -ne 0
-        gum style --foreground 1 "Failed to parse update results"
-        return 1
-    end
+    set -l update_count 0
+    set -l partial_scan false
+    set -l scanned_count 0
+    set -l total_inputs 0
+    set -l source live
+    set -l timestamp ""
+    set -l input_options
 
-    set -l partial_scan (printf '%s' "$scan_json" | jq -r '.partial // false')
-    if test $status -ne 0
-        gum style --foreground 1 "Failed to parse scan mode"
-        return 1
+    for row in $scan_lines
+        set -l parts (string split 	 -- "$row")
+        switch "$parts[1]"
+            case count
+                set update_count "$parts[2]"
+            case partial
+                set partial_scan "$parts[2]"
+            case scannedCount
+                set scanned_count "$parts[2]"
+            case totalInputs
+                set total_inputs "$parts[2]"
+            case source
+                set source "$parts[2]"
+            case timestamp
+                set timestamp "$parts[2]"
+            case update
+                set -a input_options "$parts[2]: $parts[3] → $parts[4]"
+        end
     end
 
     if test "$update_count" -eq 0 -a "$partial_scan" = true
-        set -l scanned_count (printf '%s' "$scan_json" | jq -r '.scannedCount // 0')
-        set -l total_inputs (printf '%s' "$scan_json" | jq -r '.totalInputs // 0')
         gum style --foreground 6 "No updates found in this batch ($scanned_count/$total_inputs inputs scanned)"
         gum style --foreground 8 "Run again to scan the next batch, or use --force after cache expiry for a full refresh cycle."
         return 0
     end
 
     if test "$update_count" -eq 0
-        if test (printf '%s' "$scan_json" | jq -r '.source // "live"') = cache
+        if test "$source" = cache
             gum style --foreground 2 "Cache shows all flake inputs are up to date!"
         else
             gum style --foreground 2 "All flake inputs are up to date!"
@@ -107,22 +121,12 @@ function flake_update_interactive --description 'Interactively update nix flake 
         return 0
     end
 
-    set -l source (printf '%s' "$scan_json" | jq -r '.source // "live"')
-    set -l timestamp (printf '%s' "$scan_json" | jq -r '.timestamp // ""')
     if test "$source" = cache
         if test -n "$timestamp"
             gum style --foreground 6 "Using cached updates (checked: $timestamp)"
         else
             gum style --foreground 6 "Using cached updates"
         end
-    end
-
-    set -l input_options
-    for update in (printf '%s' "$scan_json" | jq -r '.updates[] | @json')
-        set -l name (printf '%s' "$update" | jq -r '.name')
-        set -l current_short (printf '%s' "$update" | jq -r '.currentShort')
-        set -l new_short (printf '%s' "$update" | jq -r '.newShort')
-        set input_options $input_options "$name: $current_short → $new_short"
     end
 
     if test -z "$input_options"

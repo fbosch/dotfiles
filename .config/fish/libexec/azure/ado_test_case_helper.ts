@@ -54,7 +54,7 @@ const AssignedToSchema = z
     .passthrough();
 
 function usage(): void {
-    console.log("Usage: ado_test_case_helper.ts <ID>");
+    console.log("Usage: azure/ado_test_case_helper.ts <ID>");
     console.log("Env overrides:");
     console.log("  ADO_TEST_CASE_ORG_URL");
     console.log("  ADO_TEST_CASE_CACHE_DIR      default /tmp/azure-devops-cache");

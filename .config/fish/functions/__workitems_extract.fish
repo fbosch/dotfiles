@@ -20,7 +20,7 @@ function __workitems_extract --description 'Extract work items from git commits 
     set -l helper_dir (path dirname (status filename))
     set -l fish_root (path resolve "$helper_dir/..")
     set -l libexec_dir "$fish_root/libexec"
-    set -l helper "workitems_extract.ts"
+    set -l helper "azure/workitems_extract.ts"
 
     if not test -f "$libexec_dir/$helper"
         echo "__workitems_extract: helper not found: $libexec_dir/$helper" >&2

@@ -24,7 +24,7 @@ function flake_restore --description "Browse flake.lock history and restore a ve
     set -l helper_dir (path dirname (status filename))
     set -l fish_root (path resolve "$helper_dir/..")
     set -l libexec_dir "$fish_root/libexec"
-    set -l helper "flake_restore_diff.ts"
+    set -l helper "nix/restore_diff.ts"
     if not test -f "$libexec_dir/$helper"
         echo "flake_restore: helper not found: $libexec_dir/$helper"
         return 1
@@ -53,17 +53,15 @@ function flake_restore --description "Browse flake.lock history and restore a ve
     end
 
     set -l dep_count "?"
-    set -l dep_json ""
-    if type -q jq
-        set -l tmp (mktemp)
-        if git -C $repo show "$hash:flake.lock" >"$tmp" 2>/dev/null
-            set dep_json (bun --cwd "$libexec_dir" --install=auto "$helper" "$file" "$tmp")
-            if test $status -eq 0
-                set dep_count (printf '%s' "$dep_json" | jq '.count')
-            end
+    set -l dep_lines
+    set -l tmp (mktemp)
+    if git -C $repo show "$hash:flake.lock" >"$tmp" 2>/dev/null
+        set dep_lines (bun --smol --cwd "$libexec_dir" --install=auto "$helper" lines "$file" "$tmp")
+        if test $status -eq 0; and test -n "$dep_lines"
+            set dep_count (string split 	 -- "$dep_lines[1]")[2]
         end
-        rm -f "$tmp"
     end
+    rm -f "$tmp"
 
     set -l dirty (git -C $repo status --porcelain -- flake.lock)
     if test -n "$dirty"
@@ -88,7 +86,7 @@ function flake_restore --description "Browse flake.lock history and restore a ve
             set -l remove_lines
             set -l change_lines
 
-            for dep in (printf '%s' "$dep_json" | jq -r '.changes[] | [.name, .from, .to, .direction] | @tsv')
+            for dep in $dep_lines[2..]
                 set -l row (string split \t -- $dep)
                 set -l name $row[1]
                 set -l from $row[2]

@@ -174,7 +174,7 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
     set -l helper_dir (path dirname (status filename))
     set -l fish_root (path resolve "$helper_dir/..")
     set -l libexec_dir "$fish_root/libexec"
-    set -l helper "$libexec_dir/opencode_auth_switch_helper.ts"
+    set -l helper "$libexec_dir/opencode/auth_switch_helper.ts"
     if not test -f "$helper"
         echo "helper not found: $helper"
         return 1

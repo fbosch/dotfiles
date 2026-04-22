@@ -19,15 +19,31 @@ function flake_updates_daemon --description 'Manage the flake updates checker sy
             systemctl --user status flake-update-checker.service --no-pager
             
             # Show update info from JSON cache
-            set cache_file "$XDG_CACHE_HOME/flake-updates.json"
-            if test -z "$XDG_CACHE_HOME"
-                set cache_file ~/.cache/flake-updates.json
+            set -l helper_dir (path dirname (status filename))
+            set -l fish_root (path resolve "$helper_dir/..")
+            set -l libexec_dir "$fish_root/libexec"
+            set -l helper "$libexec_dir/nix/cache_status.ts"
+            if test -f "$helper"
+                set -l cache_lines (bun --smol --cwd "$libexec_dir" --install=auto "$helper")
             end
-            if test -f $cache_file
+
+            if test $status -eq 0 -a -n "$cache_lines"
                 echo ""
                 echo "=== Cache Contents ==="
-                set count (jq -r '.count' $cache_file 2>/dev/null)
-                set timestamp (jq -r '.timestamp // "unknown"' $cache_file 2>/dev/null)
+                set -l count 0
+                set -l timestamp unknown
+                set -l updates
+                for row in $cache_lines
+                    set -l parts (string split 	 -- "$row")
+                    switch "$parts[1]"
+                        case count
+                            set count "$parts[2]"
+                        case timestamp
+                            set timestamp "$parts[2]"
+                        case update
+                            set -a updates "  • $parts[2]: $parts[3] → $parts[4]"
+                    end
+                end
                 
                 echo "Available updates: $count"
                 echo "Last checked: $timestamp"
@@ -35,7 +51,7 @@ function flake_updates_daemon --description 'Manage the flake updates checker sy
                 if test $count -gt 0
                     echo ""
                     echo "Updates available:"
-                    jq -r '.updates[] | "  • \(.name): \(.currentShort) → \(.newShort)"' $cache_file 2>/dev/null
+                    printf "%s\n" $updates
                 end
             else
                 echo ""

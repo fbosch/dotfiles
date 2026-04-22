@@ -10,7 +10,7 @@ Keep Fish functions user-facing and move dense parsing/transformation logic into
 
 ## Phase 1: Quick Wins (Low Risk)
 
-### 1) `flake_check_updates.fish` -> `flake_check_updates.ts`
+### 1) `flake_check_updates.fish` -> `nix/check_updates.ts`
 
 - [x] Extract lock/input scan and update JSON construction engine from `.config/fish/functions/flake_check_updates.fish`.
 - [x] Keep fish wrapper behavior/output unchanged.
@@ -19,7 +19,7 @@ Keep Fish functions user-facing and move dense parsing/transformation logic into
   - [x] Non-update path returns `{"count":0,"updates":[]}` (or current equivalent behavior).
   - [x] Helper exits non-zero on hard command failures.
 
-### 2) `__workitems_extract.fish` -> `workitems_extract.ts`
+### 2) `__workitems_extract.fish` -> `azure/workitems_extract.ts`
 
 - [x] Extract commit/branch/workitem parsing and dedupe from `.config/fish/functions/__workitems_extract.fish`.
 - [x] Keep cache key strategy and cache semantics equivalent.
@@ -28,7 +28,7 @@ Keep Fish functions user-facing and move dense parsing/transformation logic into
   - [x] Cache hit/miss behavior remains compatible.
   - [x] Invalid date/range inputs fail with non-zero exit and useful stderr.
 
-### 3) `ado_test_case.fish` -> `ado_test_case_helper.ts`
+### 3) `ado_test_case.fish` -> `azure/ado_test_case_helper.ts`
 
 - [x] Extract Azure response parsing + XML steps markdown generation from `.config/fish/functions/ado_test_case.fish`.
 - [x] Keep fish UX (`glow`, clipboard, user-facing prompts) intact.
@@ -48,7 +48,7 @@ Keep Fish functions user-facing and move dense parsing/transformation logic into
   - [x] Applying profile updates same keys (`model`, `small_model`, `agent.*.model`) as current jq logic.
   - [x] Unknown/missing profile returns non-zero and clear stderr.
 
-### 5) `flake_restore.fish` -> `flake_restore_diff.ts`
+### 5) `flake_restore.fish` -> `nix/restore_diff.ts`
 
 - [x] Extract dependency diff/classification engine from `.config/fish/functions/flake_restore.fish`.
 - [x] Keep commit picking/confirm UI in fish.
@@ -57,7 +57,7 @@ Keep Fish functions user-facing and move dense parsing/transformation logic into
   - [x] Counts and displayed package names align with pre-migration output.
   - [x] Empty/no-change case remains user-friendly.
 
-### 6) `flake_update_interactive.fish` -> `flake_update_engine.ts`
+### 6) `flake_update_interactive.fish` -> `nix/update_engine.ts`
 
 - [x] Extract cache + scan/update candidate model from `.config/fish/functions/flake_update_interactive.fish`.
 - [x] Keep multi-select, confirmation, and rebuild prompts in fish.
@@ -68,7 +68,7 @@ Keep Fish functions user-facing and move dense parsing/transformation logic into
 
 ## Phase 3: High Coupling Workflows
 
-### 7) `linear_issue_workflow.fish` -> `linear_issue_workflow_helper.ts`
+### 7) `linear_issue_workflow.fish` -> `opencode/linear_issue_workflow_helper.ts`
 
 - [x] Extract issue parse/enrich/cache/branch-name derivation from `.config/fish/functions/linear_issue_workflow.fish`.
 - [x] Keep selection UX and worktree switching/creation in fish.
@@ -77,7 +77,7 @@ Keep Fish functions user-facing and move dense parsing/transformation logic into
   - [x] Branch name slugging deterministic and stable for same issue input.
   - [x] Fallback behavior when issue metadata missing remains safe.
 
-### 8) `opencode_auth_switch.fish` -> `opencode_auth_switch_helper.ts`
+### 8) `opencode_auth_switch.fish` -> `opencode/auth_switch_helper.ts`
 
 - [x] Extract provider/profile model build, label mapping, and auth swap transform from `.config/fish/functions/opencode_auth_switch.fish`.
 - [x] Keep confirmation UI and presentation in fish.

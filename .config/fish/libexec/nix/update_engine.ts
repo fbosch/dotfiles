@@ -97,6 +97,7 @@ const EnvSchema = z.object({
 
 function usage(): void {
     console.log("Usage: flake_update_engine.ts scan <FLAKE_PATH>");
+    console.log("   or: flake_update_engine.ts lines <FLAKE_PATH>");
     console.log("Env overrides:");
     console.log("  FLAKE_UPDATE_CACHE_TTL_SECONDS default 600");
     console.log(`  FLAKE_UPDATE_BATCH_SIZE       default ${DEFAULT_BATCH_SIZE}`);
@@ -104,6 +105,18 @@ function usage(): void {
     console.log("  FLAKE_UPDATE_CURSOR_FILE      optional explicit cursor file path");
     console.log("  FLAKE_UPDATE_FORCE             default 0");
     console.log(`  FLAKE_UPDATE_TIMEOUT_MS        default ${DEFAULT_UPDATE_TIMEOUT_MS}`);
+}
+
+function emitLineMode(result: ScanResult): void {
+    console.log(`count\t${result.count}`);
+    console.log(`partial\t${result.partial}`);
+    console.log(`scannedCount\t${result.scannedCount}`);
+    console.log(`totalInputs\t${result.totalInputs}`);
+    console.log(`source\t${result.source}`);
+    console.log(`timestamp\t${result.timestamp}`);
+    for (const update of result.updates) {
+        console.log(["update", update.name, update.currentShort, update.newShort].join("\t"));
+    }
 }
 
 function cacheFilePath(): string {
@@ -445,7 +458,7 @@ function main(): number {
     }
 
     const parsedArgs = ArgsSchema.safeParse({
-        command,
+        command: command === "lines" ? "scan" : command,
         flakePath: flakePathArg,
     });
     if (!parsedArgs.success) {
@@ -477,7 +490,11 @@ function main(): number {
         return 1;
     }
 
-    console.log(JSON.stringify(result.value));
+    if (command === "lines") {
+        emitLineMode(result.value);
+    } else {
+        console.log(JSON.stringify(result.value));
+    }
     return 0;
 }
 

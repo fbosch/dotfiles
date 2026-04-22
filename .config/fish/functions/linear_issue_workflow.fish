@@ -42,7 +42,7 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
     set -l helper_dir (path dirname (status filename))
     set -l fish_root (path resolve "$helper_dir/..")
     set -l libexec_dir "$fish_root/libexec"
-    set -l helper "$libexec_dir/linear_issue_workflow_helper.ts"
+    set -l helper "$libexec_dir/opencode/linear_issue_workflow_helper.ts"
     if not test -f "$helper"
         echo "$cmd_name: helper not found: $helper" >&2
         return 1

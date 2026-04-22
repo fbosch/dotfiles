@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { err, ok, type Result } from "neverthrow";
 import { match, P } from "ts-pattern";
 import { z } from "zod";
-import { cacheRoot, ensureDir } from "./shared/fs.js";
-import { runCommand } from "./shared/process.js";
+import { cacheRoot, ensureDir } from "../shared/fs.js";
+import { runCommand } from "../shared/process.js";
 
 type AppResult<T> = Result<T, string>;
 
@@ -72,7 +72,7 @@ const CacheEntrySchema = z.object({
 const CacheSchema = z.record(z.string(), CacheEntrySchema);
 
 function usage(): void {
-    console.log("Usage: linear_issue_workflow_helper.ts <build-list|issue-branch> [args]");
+    console.log("Usage: opencode/linear_issue_workflow_helper.ts <build-list|issue-branch> [args]");
     console.log("Commands:");
     console.log("  build-list            read 'linear issue list' output on stdin and emit TSV rows");
     console.log("  issue-branch <ID>     emit derived branch for an issue");

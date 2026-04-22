@@ -42,6 +42,14 @@ const FlakeLockSchema = z
 
 function usage(): void {
     console.log("Usage: flake_restore_diff.ts <current-flake.lock> <selected-flake.lock>");
+    console.log("   or: flake_restore_diff.ts lines <current-flake.lock> <selected-flake.lock>");
+}
+
+function emitLines(result: DiffResult): void {
+    console.log(`count\t${result.count}`);
+    for (const change of result.changes) {
+        console.log([change.name, change.from, change.to, change.direction].join("\t"));
+    }
 }
 
 function readLock(filePath: string): AppResult<z.infer<typeof FlakeLockSchema>> {
@@ -147,10 +155,18 @@ function diffLocks(currentPath: string, selectedPath: string): AppResult<DiffRes
 }
 
 function main(): number {
-    const [, , currentPath, selectedPath] = process.argv;
-    if (!currentPath || !selectedPath || currentPath === "--help" || currentPath === "-h") {
+    const [, , maybeCommand, maybeCurrentPath, maybeSelectedPath] = process.argv;
+    if (!maybeCommand || maybeCommand === "--help" || maybeCommand === "-h") {
         usage();
-        return currentPath ? 0 : 1;
+        return maybeCommand ? 0 : 1;
+    }
+
+    const lineMode = maybeCommand === "lines";
+    const currentPath = lineMode ? maybeCurrentPath : maybeCommand;
+    const selectedPath = lineMode ? maybeSelectedPath : maybeCurrentPath;
+    if (!currentPath || !selectedPath) {
+        usage();
+        return 1;
     }
 
     const result = diffLocks(currentPath, selectedPath);
@@ -159,7 +175,11 @@ function main(): number {
         return 1;
     }
 
-    console.log(JSON.stringify(result.value));
+    if (lineMode) {
+        emitLines(result.value);
+    } else {
+        console.log(JSON.stringify(result.value));
+    }
     return 0;
 }
 

@@ -33,7 +33,7 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
     set -l helper_dir (path dirname (status filename))
     set -l fish_root (path resolve "$helper_dir/..")
     set -l libexec_dir "$fish_root/libexec"
-    set -l helper "opencode_profile_switch_helper.ts"
+    set -l helper "opencode/profile_switch_helper.ts"
     if not test -f "$libexec_dir/$helper"
         echo "profile helper not found: $libexec_dir/$helper"
         return 1

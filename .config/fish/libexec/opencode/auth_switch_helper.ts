@@ -3,7 +3,7 @@
 import { existsSync } from "node:fs";
 import { err, ok } from "neverthrow";
 import { z } from "zod";
-import { type AppResult, existingMode, readJsonFile, writeJsonAtomic } from "./shared/fs.js";
+import { type AppResult, existingMode, readJsonFile, writeJsonAtomic } from "../shared/fs.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -99,7 +99,7 @@ const CodexProfilesSchema = z
     .passthrough();
 
 function usage(): void {
-    console.log("Usage: opencode_auth_switch_helper.ts <list|apply> ...");
+    console.log("Usage: opencode/auth_switch_helper.ts <list|apply> ...");
     console.log("Commands:");
     console.log("  list <auth_file> [dark|light]");
     console.log("  apply <auth_file> <codex_auth_file> <codex_profiles_file> <provider> <target_key>");

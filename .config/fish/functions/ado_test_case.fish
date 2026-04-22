@@ -21,7 +21,7 @@ function ado_test_case --description 'Get Azure DevOps test case contents by ID,
     set -l helper_dir (path dirname (status filename))
     set -l fish_root (path resolve "$helper_dir/..")
     set -l libexec_dir "$fish_root/libexec"
-    set -l helper "ado_test_case_helper.ts"
+    set -l helper "azure/ado_test_case_helper.ts"
 
     if not test -f "$libexec_dir/$helper"
         gum style --foreground 1 " helper not found: $libexec_dir/$helper"

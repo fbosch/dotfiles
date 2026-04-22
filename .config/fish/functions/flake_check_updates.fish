@@ -24,7 +24,7 @@ function flake_check_updates --description 'Check for available flake updates an
     set -l helper_dir (path dirname (status filename))
     set -l fish_root (path resolve "$helper_dir/..")
     set -l libexec_dir "$fish_root/libexec"
-    set -l helper "flake_check_updates.ts"
+    set -l helper "nix/check_updates.ts"
 
     if not test -f "$libexec_dir/$helper"
         echo "flake_check_updates: helper not found: $libexec_dir/$helper" >&2
