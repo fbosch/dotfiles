@@ -37,14 +37,15 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
 
     set -l helper_dir (path dirname (status filename))
     set -l fish_root (path resolve "$helper_dir/..")
-    set -l jsonc_helper "$fish_root/libexec/opencode_profile_switch_jsonc.ts"
-    if not test -f "$jsonc_helper"
-        echo "jsonc helper not found: $jsonc_helper"
+    set -l libexec_dir "$fish_root/libexec"
+    set -l jsonc_helper "opencode_profile_switch_jsonc.ts"
+    if not test -f "$libexec_dir/$jsonc_helper"
+        echo "jsonc helper not found: $libexec_dir/$jsonc_helper"
         return 1
     end
 
     set -l profiles_tmp (mktemp)
-    bun "$jsonc_helper" "$profiles_file" "$profiles_tmp"
+    bun --cwd "$libexec_dir" --install=auto "$jsonc_helper" "$profiles_file" "$profiles_tmp"
 
     if test $status -ne 0
         rm -f "$profiles_tmp"
@@ -62,7 +63,7 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
     set -l opencode_parse_file "$opencode_file"
     if string match -q '*.jsonc' "$opencode_file"
         set opencode_parse_file (mktemp)
-        bun "$jsonc_helper" "$opencode_file" "$opencode_parse_file"
+        bun --cwd "$libexec_dir" --install=auto "$jsonc_helper" "$opencode_file" "$opencode_parse_file"
 
         if test $status -ne 0
             rm -f "$profiles_tmp"

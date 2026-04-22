@@ -74,6 +74,7 @@ _General utilities:_
 
 - Functions are autoloaded from `functions/` directory
 - Internal helper scripts live in `libexec/` and are invoked by Fish wrappers
+- Fish wrappers invoke Bun helpers with `--install=auto`; dependencies are pinned in `libexec/package.json` + `libexec/bun.lock`
 - Biome config for helper scripts: `libexec/biome.json` (`biome check .config/fish/libexec`)
 - Managed via Nix/Home Manager as part of dotfiles
 - Uses gum for interactive prompts and colored output

@@ -12,12 +12,12 @@ Keep Fish functions user-facing and move dense parsing/transformation logic into
 
 ### 1) `flake_check_updates.fish` -> `flake_check_updates.ts`
 
-- [ ] Extract lock/input scan and update JSON construction engine from `.config/fish/functions/flake_check_updates.fish`.
-- [ ] Keep fish wrapper behavior/output unchanged.
+- [x] Extract lock/input scan and update JSON construction engine from `.config/fish/functions/flake_check_updates.fish`.
+- [x] Keep fish wrapper behavior/output unchanged.
 - [ ] Acceptance criteria:
-  - [ ] `flake_check_updates` prints same JSON schema as before.
-  - [ ] Non-update path returns `{"count":0,"updates":[]}` (or current equivalent behavior).
-  - [ ] Helper exits non-zero on hard command failures.
+  - [x] `flake_check_updates` prints same JSON schema as before.
+  - [x] Non-update path returns `{"count":0,"updates":[]}` (or current equivalent behavior).
+  - [x] Helper exits non-zero on hard command failures.
 
 ### 2) `__workitems_extract.fish` -> `workitems_extract.ts`
 
