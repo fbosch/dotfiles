@@ -10,9 +10,23 @@ function flake_restore --description "Browse flake.lock history and restore a ve
         return 1
     end
 
+    if not command -q bun
+        echo "bun is required."
+        return 1
+    end
+
     set -l file "$repo/flake.lock"
     if not test -f "$file"
         echo "flake.lock not found at repo root."
+        return 1
+    end
+
+    set -l helper_dir (path dirname (status filename))
+    set -l fish_root (path resolve "$helper_dir/..")
+    set -l libexec_dir "$fish_root/libexec"
+    set -l helper "flake_restore_diff.ts"
+    if not test -f "$libexec_dir/$helper"
+        echo "flake_restore: helper not found: $libexec_dir/$helper"
         return 1
     end
 
@@ -39,39 +53,13 @@ function flake_restore --description "Browse flake.lock history and restore a ve
     end
 
     set -l dep_count "?"
-    set -l dep_lines
+    set -l dep_json ""
     if type -q jq
         set -l tmp (mktemp)
         if git -C $repo show "$hash:flake.lock" >"$tmp" 2>/dev/null
-            set -l dep_list (jq -r -s '
-                def depmap($x):
-                    $x.nodes
-                    | to_entries
-                    | map({key, value: (.value.locked // {})})
-                    | from_entries;
-                def get($m; $k):
-                    $m[$k] // {};
-                depmap(.[0]) as $a
-                | depmap(.[1]) as $b
-                | ($a + $b)
-                | keys[]
-                | . as $k
-                | (get($a; $k)) as $cur
-                | (get($b; $k)) as $sel
-                | select($cur != $sel)
-                | ($cur.lastModified // 0 | tonumber) as $clm
-                | ($sel.lastModified // 0 | tonumber) as $slm
-                | (if ($cur.rev // "") == "" then "added"
-                   elif ($sel.rev // "") == "" then "removed"
-                   elif $slm > $clm then "upgrade"
-                   elif $slm < $clm then "downgrade"
-                   else "changed" end) as $dir
-                | [$k, ($cur.rev // "-"), ($sel.rev // "-"), $dir]
-                | @tsv
-            ' "$file" "$tmp")
-            set dep_count (count $dep_list)
-            if test $dep_count -gt 0
-                set dep_lines $dep_list
+            set dep_json (bun --cwd "$libexec_dir" --install=auto "$helper" "$file" "$tmp")
+            if test $status -eq 0
+                set dep_count (printf '%s' "$dep_json" | jq '.count')
             end
         end
         rm -f "$tmp"
@@ -90,20 +78,18 @@ function flake_restore --description "Browse flake.lock history and restore a ve
     if test "$dep_count" != "?"
         if test $dep_count -gt 0
             set lines $lines "" "Deps:    $dep_count changed" \n""
-            set -l tab (printf '\t')
             set -l reset (set_color normal)
             set -l green (set_color green)
             set -l red (set_color red)
             set -l yellow (set_color yellow)
-
             set -l up_lines
             set -l down_lines
             set -l add_lines
             set -l remove_lines
             set -l change_lines
 
-            for dep in $dep_lines
-                set -l row (string split $tab -- $dep)
+            for dep in (printf '%s' "$dep_json" | jq -r '.changes[] | [.name, .from, .to, .direction] | @tsv')
+                set -l row (string split \t -- $dep)
                 set -l name $row[1]
                 set -l from $row[2]
                 set -l to $row[3]

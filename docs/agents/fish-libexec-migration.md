@@ -50,12 +50,12 @@ Keep Fish functions user-facing and move dense parsing/transformation logic into
 
 ### 5) `flake_restore.fish` -> `flake_restore_diff.ts`
 
-- [ ] Extract dependency diff/classification engine from `.config/fish/functions/flake_restore.fish`.
-- [ ] Keep commit picking/confirm UI in fish.
+- [x] Extract dependency diff/classification engine from `.config/fish/functions/flake_restore.fish`.
+- [x] Keep commit picking/confirm UI in fish.
 - [ ] Acceptance criteria:
-  - [ ] Grouping parity: upgrade/downgrade/add/remove/changed.
-  - [ ] Counts and displayed package names align with pre-migration output.
-  - [ ] Empty/no-change case remains user-friendly.
+  - [x] Grouping parity: upgrade/downgrade/add/remove/changed.
+  - [x] Counts and displayed package names align with pre-migration output.
+  - [x] Empty/no-change case remains user-friendly.
 
 ### 6) `flake_update_interactive.fish` -> `flake_update_engine.ts`
 
