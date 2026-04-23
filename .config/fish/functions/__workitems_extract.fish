@@ -27,5 +27,5 @@ function __workitems_extract --description 'Extract work items from git commits 
         return 1
     end
 
-    bun --smol --cwd "$libexec_dir" --install=auto "$helper" "$start_date" "$end_date" "$mode" "$refresh"
+    bun --cwd "$libexec_dir" --install=auto "$helper" "$start_date" "$end_date" "$mode" "$refresh"
 end
