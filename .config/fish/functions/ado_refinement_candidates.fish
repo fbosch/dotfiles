@@ -49,6 +49,8 @@ function ado_refinement_candidates --description 'Pick Azure DevOps refinement c
     set -l cache_file ""
     set -l summary ""
     set -l candidate_lines
+    set -l team_prompt ""
+    set -l team_choice_lines
 
     for line in $list_lines
         set -l parts (string split -m 1 \t -- "$line")
@@ -61,8 +63,94 @@ function ado_refinement_candidates --description 'Pick Azure DevOps refinement c
                 set cache_file "$parts[2]"
             case SUMMARY
                 set summary "$parts[2]"
+            case TEAM_PROMPT
+                set team_prompt "$parts[2]"
+            case TEAM_OPTION
+                set -a team_choice_lines "$line"
             case '*'
                 set -a candidate_lines "$line"
+        end
+    end
+
+    if test -z "$cache_file" -a (count $team_choice_lines) -gt 0
+        if not command -v gum >/dev/null 2>&1
+            echo "ado_refinement_candidates: 'gum' is required for team selection" >&2
+            return 127
+        end
+
+        set -l team_display_lines
+        set -l team_labels
+        for line in $team_choice_lines
+            set -l parts (string split \t -- "$line")
+            if test (count $parts) -lt 2
+                continue
+            end
+
+            set -l team_name "$parts[2]"
+            set -l team_description ""
+            if test (count $parts) -ge 3
+                set team_description "$parts[3]"
+            end
+
+            set -l display "$team_name"
+            if test -n "$team_description"
+                set display "$team_name | $team_description"
+            end
+
+            set -a team_labels "$display"
+            set -a team_display_lines "$team_name\t$display"
+        end
+
+        set -l chosen_label (printf "%s\n" $team_labels | gum choose --header "$team_prompt")
+        if test -z "$chosen_label"
+            return 0
+        end
+
+        for line in $team_display_lines
+            set -l parts (string split \t -- "$line")
+            if test (count $parts) -lt 2
+                continue
+            end
+
+            if test "$parts[2]" = "$chosen_label"
+                set team_arg "$parts[1]"
+                break
+            end
+        end
+
+        if test -z "$team_arg"
+            echo "ado_refinement_candidates: failed to map selected team label" >&2
+            return 1
+        end
+
+        set list_lines (FISH_LIBEXEC_CWD="$invocation_cwd" bun --cwd "$libexec_dir" "$helper" list "$context_arg" "$team_arg" "$refresh_flag")
+        if test (count $list_lines) -eq 0
+            echo "ado_refinement_candidates: helper returned no output" >&2
+            return 1
+        end
+
+        if string match -q 'ERROR:*' -- "$list_lines[1]"
+            echo "$list_lines[1]"
+            return 1
+        end
+
+        set cache_file ""
+        set summary ""
+        set candidate_lines
+        for line in $list_lines
+            set -l parts (string split -m 1 \t -- "$line")
+            if test (count $parts) -lt 2
+                continue
+            end
+
+            switch "$parts[1]"
+                case CACHE_FILE
+                    set cache_file "$parts[2]"
+                case SUMMARY
+                    set summary "$parts[2]"
+                case '*'
+                    set -a candidate_lines "$line"
+            end
         end
     end
 

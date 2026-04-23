@@ -9,6 +9,13 @@ import { runCommand } from "../shared/process.js";
 type AdoContext = {
     org: string | null;
     project: string | null;
+    repositoryName: string | null;
+};
+
+type TeamInfo = {
+    id: string | null;
+    name: string;
+    description: string | null;
 };
 
 type Iteration = {
@@ -17,6 +24,7 @@ type Iteration = {
     path: string;
     startDate: string | null;
     finishDate: string | null;
+    timeFrame: string | null;
 };
 
 type Candidate = {
@@ -47,9 +55,15 @@ type CachePayload = {
     candidates: Candidate[];
 };
 
+type BuildResult =
+    | { type: "payload"; payload: CachePayload }
+    | { type: "choose-team"; project: string; teams: TeamInfo[] }
+    | { type: "error"; error: string };
+
 type WorkItemRecord = Record<string, unknown>;
 
 const REFINEMENT_TAG_PATTERNS = [/refine/i, /refinement/i, /needs[- ]refinement/i, /discovery/i, /analysis/i];
+const CANDIDATE_STATES = new Set(["New", "Approved", "To Be Refined"]);
 
 main();
 
@@ -85,12 +99,20 @@ function listCandidates(contextInput: string, teamInput: string, refresh: boolea
     }
 
     const built = buildCachePayload(contextInput, teamInput);
-    if (typeof built === "string") {
-        console.log(`ERROR: ${built}`);
+    if (built.type === "error") {
+        console.log(`ERROR: ${built.error}`);
         return;
     }
 
-    payload = built;
+    if (built.type === "choose-team") {
+        console.log(`TEAM_PROMPT\tSelect Azure DevOps team for project ${built.project}`);
+        for (const team of built.teams) {
+            console.log(`TEAM_OPTION\t${team.name}\t${team.description ?? ""}`);
+        }
+        return;
+    }
+
+    payload = built.payload;
     const ensureResult = ensureDir(join(cacheRoot(), "fish", "ado-refinement-candidates"));
     if (ensureResult.isErr()) {
         console.log(`ERROR: ${ensureResult.error}`);
@@ -206,45 +228,64 @@ function renderPrompt(cacheFile: string, idInputs: string[]): void {
     console.log(lines.join("\n"));
 }
 
-function buildCachePayload(contextInput: string, teamInput: string): CachePayload | string {
+function buildCachePayload(contextInput: string, teamInput: string): BuildResult {
     const urlContext = parseOrgAndProject(contextInput);
     const remoteUrl = detectGitRemoteUrl();
     const remoteContext = detectContextFromGitRemote();
     const org = urlContext.org ?? remoteContext.org;
     let project = urlContext.project ?? remoteContext.project;
+    const repositoryName = urlContext.repositoryName ?? remoteContext.repositoryName;
 
     const explicitTeam = teamInput.trim();
     if (explicitTeam === "" && project === null) {
         if (remoteUrl !== null) {
-            return `Could not determine Azure DevOps project from git remote '${remoteUrl}'. Re-run with --context <ado-url> or --team <team>.`;
+            return {
+                type: "error",
+                error: `Could not determine Azure DevOps project from git remote '${remoteUrl}'. Re-run with --context <ado-url> or --team <team>.`,
+            };
         }
 
-        return "Could not determine Azure DevOps project from context. Re-run with --context <ado-url> or --team <team>.";
+        return {
+            type: "error",
+            error: "Could not determine Azure DevOps project from context. Re-run with --context <ado-url> or --team <team>.",
+        };
     }
 
-    const attemptedProjectTeam = explicitTeam === "";
-    const team = explicitTeam || project || "";
-    const iterationList = listTeamIterations(team, org, project);
-    if (typeof iterationList === "string") {
-        if (attemptedProjectTeam) {
-            return `Failed to resolve Azure DevOps team using project name '${team}'. Re-run with --team <team>.`;
+    let team = explicitTeam;
+    if (team === "") {
+        const resolvedTeam = resolveTeamFallback(org, project, repositoryName);
+        if (resolvedTeam.type === "error") {
+            return resolvedTeam;
         }
 
-        return iterationList;
+        if (resolvedTeam.type === "choose-team") {
+            return {
+                type: "choose-team",
+                project: project ?? "N/A",
+                teams: resolvedTeam.teams,
+            };
+        }
+
+        team = resolvedTeam.team;
+    }
+
+    const iterationList = listTeamIterations(team, org, project);
+    if (typeof iterationList === "string") {
+        return { type: "error", error: iterationList };
     }
 
     const nextIteration = selectNextIteration(iterationList);
     if (nextIteration === null) {
-        return `No future iteration found for team '${team}'.`;
+        return { type: "error", error: `No future iteration found for team '${team}'.` };
     }
 
     if (project === null || project === "") {
         project = projectFromIterationPath(nextIteration.path);
     }
 
-    const candidateIds = queryCandidateIds(org, project, nextIteration.path);
+    const candidateIds = queryCandidateIds(org, project, team, nextIteration.id);
     if (typeof candidateIds === "string") {
-        return candidateIds;
+        return { type: "error", error: candidateIds };
     }
 
     const candidates = candidateIds
@@ -253,11 +294,14 @@ function buildCachePayload(contextInput: string, teamInput: string): CachePayloa
         .sort(compareCandidates);
 
     return {
-        org,
-        project,
-        team,
-        iteration: nextIteration,
-        candidates,
+        type: "payload",
+        payload: {
+            org,
+            project,
+            team,
+            iteration: nextIteration,
+            candidates,
+        },
     };
 }
 
@@ -307,14 +351,14 @@ function helperCwd(): string | undefined {
 function parseOrgAndProject(value: string): AdoContext {
     const text = value.trim();
     if (text.startsWith("http") === false) {
-        return { org: null, project: null };
+        return { org: null, project: null, repositoryName: null };
     }
 
     let parsed: URL;
     try {
         parsed = new URL(text);
     } catch {
-        return { org: null, project: null };
+        return { org: null, project: null, repositoryName: null };
     }
 
     const host = parsed.hostname.toLowerCase();
@@ -325,12 +369,13 @@ function parseOrgAndProject(value: string): AdoContext {
 
     if (host.endsWith("dev.azure.com")) {
         if (segments.length < 2) {
-            return { org: null, project: null };
+            return { org: null, project: null, repositoryName: null };
         }
 
         return {
             org: `https://dev.azure.com/${segments[0]}`,
             project: segments[1],
+            repositoryName: segments[2] === "_git" ? (segments[3] ?? null) : null,
         };
     }
 
@@ -338,10 +383,11 @@ function parseOrgAndProject(value: string): AdoContext {
         return {
             org: `${parsed.protocol}//${parsed.host}`,
             project: segments[0] ?? null,
+            repositoryName: segments[1] === "_git" ? (segments[2] ?? null) : null,
         };
     }
 
-    return { org: null, project: null };
+    return { org: null, project: null, repositoryName: null };
 }
 
 function decodeSegment(value: string): string {
@@ -358,6 +404,7 @@ function parseRemoteUrl(remote: string): AdoContext {
         return {
             org: `https://dev.azure.com/${devHttpsMatch[1]}`,
             project: decodeSegment(devHttpsMatch[2]),
+            repositoryName: decodeSegment(devHttpsMatch[3] ?? ""),
         };
     }
 
@@ -366,6 +413,7 @@ function parseRemoteUrl(remote: string): AdoContext {
         return {
             org: `https://dev.azure.com/${devSshMatch[1]}`,
             project: decodeSegment(devSshMatch[2]),
+            repositoryName: decodeSegment(devSshMatch[3] ?? ""),
         };
     }
 
@@ -374,6 +422,7 @@ function parseRemoteUrl(remote: string): AdoContext {
         return {
             org: `https://${visualStudioMatch[1]}.visualstudio.com`,
             project: decodeSegment(visualStudioMatch[2]),
+            repositoryName: decodeSegment(visualStudioMatch[3] ?? ""),
         };
     }
 
@@ -382,10 +431,11 @@ function parseRemoteUrl(remote: string): AdoContext {
         return {
             org: `https://${visualStudioSshMatch[1]}.visualstudio.com`,
             project: decodeSegment(visualStudioSshMatch[2]),
+            repositoryName: decodeSegment(visualStudioSshMatch[3] ?? ""),
         };
     }
 
-    return { org: null, project: null };
+    return { org: null, project: null, repositoryName: null };
 }
 
 function detectGitRemoteUrl(): string | null {
@@ -401,10 +451,141 @@ function detectGitRemoteUrl(): string | null {
 function detectContextFromGitRemote(): AdoContext {
     const remote = detectGitRemoteUrl();
     if (remote === null) {
-        return { org: null, project: null };
+        return { org: null, project: null, repositoryName: null };
     }
 
     return parseRemoteUrl(remote);
+}
+
+function listProjectTeams(org: string | null, project: string | null): TeamInfo[] | string {
+    if (project === null || project === "") {
+        return "Could not determine Azure DevOps project from context. Re-run with --context <ado-url> or --team <team>.";
+    }
+
+    const args = ["devops", "team", "list", "--project", project, "--output", "json"];
+    if (org !== null) {
+        args.push("--org", org);
+    }
+
+    const result = runJson<unknown>(args);
+    if (typeof result === "string") {
+        return result;
+    }
+
+    if (Array.isArray(result) === false) {
+        return "Unexpected Azure DevOps team response";
+    }
+
+    return result
+        .map((value) => {
+            const record = asRecord(value);
+            const name = stringValue(record?.name);
+            if (name === null) {
+                return null;
+            }
+
+            return {
+                id: stringValue(record?.id),
+                name,
+                description: stringValue(record?.description),
+            } satisfies TeamInfo;
+        })
+        .filter((entry): entry is TeamInfo => entry !== null);
+}
+
+function resolveTeamFallback(
+    org: string | null,
+    project: string | null,
+    repositoryName: string | null,
+): { type: "resolved"; team: string } | { type: "choose-team"; teams: TeamInfo[] } | { type: "error"; error: string } {
+    if (project === null || project === "") {
+        return { type: "error", error: "Could not determine Azure DevOps project from context. Re-run with --context <ado-url> or --team <team>." };
+    }
+
+    const teams = listProjectTeams(org, project);
+    if (typeof teams === "string") {
+        return { type: "error", error: teams };
+    }
+
+    if (teams.length === 0) {
+        return { type: "error", error: `No Azure DevOps teams found for project '${project}'. Re-run with --team <team>.` };
+    }
+
+    if (teams.length === 1) {
+        return { type: "resolved", team: teams[0].name };
+    }
+
+    const rankedTeams = rankTeams(teams, project, repositoryName);
+    if (rankedTeams.length > 0 && rankedTeams[0].score > 0) {
+        const topScore = rankedTeams[0].score;
+        const topTeams = rankedTeams.filter((entry) => entry.score === topScore);
+        if (topTeams.length === 1) {
+            return { type: "resolved", team: topTeams[0].team.name };
+        }
+
+        return { type: "choose-team", teams: topTeams.map((entry) => entry.team) };
+    }
+
+    return { type: "choose-team", teams };
+}
+
+function rankTeams(teams: TeamInfo[], project: string, repositoryName: string | null): Array<{ team: TeamInfo; score: number }> {
+    const normalizedProject = normalizeToken(project);
+    const normalizedRepo = repositoryName ? normalizeToken(repositoryName) : "";
+    const projectTokens = tokenize(project);
+    const repoTokens = repositoryName ? tokenize(repositoryName) : [];
+
+    return teams
+        .map((team) => {
+            const normalizedTeam = normalizeToken(team.name);
+            let score = 0;
+
+            if (normalizedTeam === normalizedProject) {
+                score += 100;
+            }
+            if (normalizedRepo !== "" && normalizedTeam === normalizedRepo) {
+                score += 95;
+            }
+            score += tokenOverlapScore(normalizedTeam, projectTokens, 15);
+            score += tokenOverlapScore(normalizedTeam, repoTokens, 25);
+
+            if (/^team\b/i.test(team.name)) {
+                score += 10;
+            }
+            if (/^projekt\b/i.test(team.name) || /^project\b/i.test(team.name)) {
+                score -= 20;
+            }
+            if ((team.description ?? "").toLowerCase().includes("only project admin")) {
+                score -= 100;
+            }
+
+            return { team, score };
+        })
+        .sort((left, right) => right.score - left.score || left.team.name.localeCompare(right.team.name));
+}
+
+function tokenize(value: string): string[] {
+    return value
+        .split(/[._\-\s]+/)
+        .map(normalizeToken)
+        .filter((token) => token.length > 0);
+}
+
+function tokenOverlapScore(normalizedTeam: string, tokens: string[], pointsPerToken: number): number {
+    let score = 0;
+    for (const token of tokens) {
+        if (token.length < 3) {
+            continue;
+        }
+        if (normalizedTeam.includes(token)) {
+            score += pointsPerToken;
+        }
+    }
+    return score;
+}
+
+function normalizeToken(value: string): string {
+    return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 function azureEnv(): NodeJS.ProcessEnv {
@@ -468,12 +649,26 @@ function normalizeIteration(value: unknown): Iteration | null {
         path,
         startDate: stringValue(attributes.startDate) ?? stringValue(record.startDate),
         finishDate: stringValue(attributes.finishDate) ?? stringValue(record.finishDate),
+        timeFrame: stringValue(attributes.timeFrame) ?? stringValue(record.timeFrame),
     };
 }
 
 function selectNextIteration(iterations: Iteration[]): Iteration | null {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+
+    const futureWithDates = iterations.filter((iteration) => iteration.timeFrame === "future" && iteration.startDate !== null);
+    for (const iteration of futureWithDates) {
+        const startDate = new Date(iteration.startDate as string);
+        if (Number.isNaN(startDate.getTime()) === false) {
+            return iteration;
+        }
+    }
+
+    const futureWithoutDates = iterations.find((iteration) => iteration.timeFrame === "future");
+    if (futureWithoutDates !== undefined) {
+        return futureWithoutDates;
+    }
 
     for (const iteration of iterations) {
         if (iteration.startDate === null) {
@@ -498,19 +693,8 @@ function projectFromIterationPath(path: string): string | null {
     return project && project.length > 0 ? project : null;
 }
 
-function queryCandidateIds(org: string | null, project: string | null, iterationPath: string): number[] | string {
-    const clauses = [
-        `[System.WorkItemType] = 'Product Backlog Item'`,
-        `[System.State] IN ('New', 'Approved')`,
-        `[System.IterationPath] = '${escapeWiqlString(iterationPath)}'`,
-    ];
-
-    if (project !== null && project !== "") {
-        clauses.unshift(`[System.TeamProject] = '${escapeWiqlString(project)}'`);
-    }
-
-    const wiql = [`SELECT [System.Id] FROM WorkItems`, `WHERE ${clauses.join(" AND ")}`].join(" ");
-    const args = ["boards", "query", "--wiql", wiql, "--output", "json"];
+function queryCandidateIds(org: string | null, project: string | null, team: string, iterationId: string): number[] | string {
+    const args = ["boards", "iteration", "team", "list-work-items", "--id", iterationId, "--team", team, "--output", "json"];
     if (org !== null) {
         args.push("--org", org);
     }
@@ -524,19 +708,28 @@ function queryCandidateIds(org: string | null, project: string | null, iteration
     }
 
     const record = asRecord(result);
-    const workItems = Array.isArray(record?.workItems) ? record.workItems : [];
-    return workItems
-        .map((entry) => numberValue(asRecord(entry)?.id))
-        .filter((value): value is number => value !== null);
+    const relations = Array.isArray(record?.workItemRelations) ? record.workItemRelations : [];
+    const ids = new Set<number>();
+
+    for (const relation of relations) {
+        const relationRecord = asRecord(relation);
+        const sourceId = numberValue(asRecord(relationRecord?.source)?.id);
+        const targetId = numberValue(asRecord(relationRecord?.target)?.id);
+        if (sourceId !== null) {
+            ids.add(sourceId);
+        }
+        if (targetId !== null) {
+            ids.add(targetId);
+        }
+    }
+
+    return [...ids].sort((left, right) => left - right);
 }
 
 function fetchCandidate(id: number, org: string | null, project: string | null): Candidate | null {
     const args = ["boards", "work-item", "show", "--id", String(id), "--output", "json"];
     if (org !== null) {
         args.push("--org", org);
-    }
-    if (project !== null && project !== "") {
-        args.push("--project", project);
     }
 
     const result = runJson<unknown>(args);
@@ -550,6 +743,13 @@ function fetchCandidate(id: number, org: string | null, project: string | null):
 
     const title = stringValue(fields["System.Title"]) ?? `PBI #${String(id)}`;
     const state = stringValue(fields["System.State"]) ?? "N/A";
+    const workItemType = stringValue(fields["System.WorkItemType"]);
+    if (workItemType !== "Product Backlog Item") {
+        return null;
+    }
+    if (CANDIDATE_STATES.has(state) === false) {
+        return null;
+    }
     const assignedTo = displayName(fields["System.AssignedTo"]);
     const iterationPath = stringValue(fields["System.IterationPath"]) ?? "N/A";
     const teamProject = stringValue(fields["System.TeamProject"]) ?? (project ?? "N/A");
