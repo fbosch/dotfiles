@@ -19,6 +19,7 @@ Internal Bun/TypeScript helpers for OpenCode command and script workflows.
 - Runtime: `bun`.
 - Dependencies are pinned in `package.json` and `bun.lock`.
 - OpenCode script wrappers call helpers with `bun --install=auto --cwd .config/opencode/libexec`.
+- When implementing or changing Bun-based helpers, load the `Bun` skill for Bun-specific runtime, package-manager, and scripting guidance.
 
 ## Coding Conventions
 

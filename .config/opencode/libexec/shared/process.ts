@@ -1,18 +1,9 @@
 import { type SpawnSyncOptionsWithStringEncoding, spawnSync } from "node:child_process";
+import { err, ok, type Result } from "neverthrow";
 
-export type AppResult<T> =
-    | { ok: true; value: T }
-    | { ok: false; error: string };
+export type AppResult<T> = Result<T, string>;
 
 type RunOptions = Omit<SpawnSyncOptionsWithStringEncoding, "encoding" | "stdio">;
-
-export function ok<T>(value: T): AppResult<T> {
-    return { ok: true, value };
-}
-
-export function err<T = never>(error: string): AppResult<T> {
-    return { ok: false, error };
-}
 
 export function runCommand(command: string, args: string[], options: RunOptions = {}): AppResult<string> {
     const result = spawnSync(command, args, {
@@ -31,8 +22,8 @@ export function runCommand(command: string, args: string[], options: RunOptions 
 
 export function runJson<T>(command: string, args: string[], options: RunOptions = {}): AppResult<T> {
     const commandResult = runCommand(command, args, options);
-    if (commandResult.ok === false) {
-        return commandResult;
+    if (commandResult.isErr()) {
+        return err(commandResult.error);
     }
 
     try {

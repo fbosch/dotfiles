@@ -1,4 +1,5 @@
-import { err, ok, runCommand, type AppResult } from "../shared/process.js";
+import { err, ok } from "neverthrow";
+import { runCommand, type AppResult } from "../shared/process.js";
 
 type ParsedContext = {
     org: string | null;
@@ -55,7 +56,7 @@ export function parseOrgAndProject(value: string): ParsedContext {
 
 export function detectOrgFromGitRemote(): string | null {
     const remoteResult = runCommand("git", ["config", "--get", "remote.origin.url"]);
-    if (remoteResult.ok === false) {
+    if (remoteResult.isErr()) {
         return null;
     }
 
@@ -79,7 +80,7 @@ export function detectOrgFromGitRemote(): string | null {
 
 export function getCurrentBranch(): string {
     const branchResult = runCommand("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
-    if (branchResult.ok === false) {
+    if (branchResult.isErr()) {
         return "";
     }
 

@@ -6,7 +6,7 @@ import { runCommand } from "../shared/process.js";
 function main(): void {
     const rawId = process.argv[2] ?? "";
     const parsedId = requireNumericId(rawId, "test case");
-    if (parsedId.ok === false) {
+    if (parsedId.isErr()) {
         console.log(`ERROR: ${parsedId.error}`);
         process.exit(1);
         return;
@@ -20,7 +20,7 @@ function main(): void {
     }
 
     const result = runCommand("az", args, { env: azureEnv() });
-    if (result.ok === false) {
+    if (result.isErr()) {
         console.log(`ERROR: Failed to fetch test case #${testCaseId}. Ensure Azure CLI is authenticated and the test case exists.`);
         process.exit(1);
         return;

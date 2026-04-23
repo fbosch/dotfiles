@@ -45,7 +45,7 @@ function runWorkItemShow(itemId: string, org: string | null): unknown {
     }
 
     const result = runJson<unknown>("az", args, { env: azureEnv() });
-    if (result.ok === false) {
+    if (result.isErr()) {
         throw new Error(result.error);
     }
 
