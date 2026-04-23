@@ -5,6 +5,14 @@ set -euo pipefail
 readonly TARGET_MONITOR="DP-2"
 readonly EVENT_WAIT_SECONDS=15
 readonly EVENT_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+readonly BOOT_SOUND_FILE="$HOME/.config/hypr/assets/bootup.ogg"
+
+play_bootup_sound() {
+  [[ -f "$BOOT_SOUND_FILE" ]] || return 0
+
+  command -v pw-play >/dev/null 2>&1 || return 0
+  pw-play "$BOOT_SOUND_FILE" >/dev/null 2>&1 || true
+}
 
 monitor_exists() {
   local monitors_json
@@ -14,6 +22,11 @@ monitor_exists() {
 
 apply_startup_workspace_routing() {
   hyprctl --batch "dispatch workspace 10 ; dispatch moveworkspacetomonitor 10 $TARGET_MONITOR ; dispatch workspace 1 ; dispatch moveworkspacetomonitor 1 $TARGET_MONITOR ; dispatch focusmonitor $TARGET_MONITOR ; dispatch workspace 1" >/dev/null 2>&1 || true
+}
+
+run_startup_actions() {
+  apply_startup_workspace_routing
+  play_bootup_sound
 }
 
 wait_for_target_monitor_event() {
@@ -36,10 +49,10 @@ wait_for_target_monitor_event() {
 }
 
 if monitor_exists; then
-  apply_startup_workspace_routing
+  run_startup_actions
   exit 0
 fi
 
 if wait_for_target_monitor_event; then
-  apply_startup_workspace_routing
+  run_startup_actions
 fi
