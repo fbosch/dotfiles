@@ -39,7 +39,7 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
         return 1
     end
 
-    set -l list_lines (bun --smol --cwd "$libexec_dir" --install=auto "$helper" list "$profiles_file" "$opencode_file")
+    set -l list_lines (bun --cwd "$libexec_dir" "$helper" list "$profiles_file" "$opencode_file")
     if test $status -ne 0
         echo "failed to load profiles"
         return 1
@@ -100,7 +100,7 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
         return 1
     end
 
-    set -l description (bun --smol --cwd "$libexec_dir" --install=auto "$helper" apply "$profiles_file" "$opencode_file" "$selected_profile")
+    set -l description (bun --cwd "$libexec_dir" "$helper" apply "$profiles_file" "$opencode_file" "$selected_profile")
     if test $status -ne 0
         echo "failed to apply profile: $selected_profile"
         return 1

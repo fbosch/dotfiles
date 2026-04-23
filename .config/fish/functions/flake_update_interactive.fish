@@ -72,7 +72,7 @@ function flake_update_interactive --description 'Interactively update nix flake 
         gum style --foreground 3 "Bypassing cache (--force), checking updates manually..."
     end
 
-    set -l scan_lines (FLAKE_UPDATE_CACHE_TTL_SECONDS="$cache_ttl_seconds" FLAKE_UPDATE_BATCH_SIZE="3" FLAKE_UPDATE_TIMEOUT_MS="8000" FLAKE_UPDATE_FORCE="$force" bun --smol --cwd "$libexec_dir" --install=auto "$helper" lines "$flake_path")
+    set -l scan_lines (FLAKE_UPDATE_CACHE_TTL_SECONDS="$cache_ttl_seconds" FLAKE_UPDATE_BATCH_SIZE="3" FLAKE_UPDATE_TIMEOUT_MS="8000" FLAKE_UPDATE_FORCE="$force" bun --cwd "$libexec_dir" "$helper" lines "$flake_path")
     if test $status -ne 0
         gum style --foreground 1 "Failed to check flake updates"
         return 1

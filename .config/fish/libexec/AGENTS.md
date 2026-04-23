@@ -20,7 +20,8 @@ Internal Bun/TypeScript helpers for Fish functions.
 
 - Runtime: `bun`.
 - Dependencies are pinned in `package.json` and `bun.lock`.
-- Fish wrappers call helpers with `bun --install=auto --cwd .config/fish/libexec`.
+- Fish wrappers call helpers with `bun --cwd .config/fish/libexec`.
+- `bunfig.toml` is the source of truth for Bun install/runtime defaults for this helper runtime.
 - When implementing or changing Bun-based helpers, load the `Bun` skill for Bun-specific runtime, package-manager, and scripting guidance.
 
 ## Coding Conventions

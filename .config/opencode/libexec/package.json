@@ -1,6 +1,7 @@
 {
   "name": "opencode-libexec-helpers",
   "private": true,
+  "packageManager": "bun@1.3.11",
   "type": "module",
   "dependencies": {
     "c12": "^4.0.0-beta.4",

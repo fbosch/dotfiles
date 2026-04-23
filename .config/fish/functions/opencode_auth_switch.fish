@@ -192,7 +192,7 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
 
     echo ""
 
-    set -l list_lines (bun --smol --cwd "$libexec_dir" --install=auto "$helper" list "$auth_file" "$bg_mode")
+    set -l list_lines (bun --cwd "$libexec_dir" "$helper" list "$auth_file" "$bg_mode")
     if test $status -ne 0
         echo "failed to load providers"
         return 1
@@ -277,7 +277,7 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         set selected_label "$target_key"
     end
 
-    set -l codex_status (bun --smol --cwd "$libexec_dir" --install=auto "$helper" apply "$auth_file" "$codex_auth_file" "$codex_profiles_file" "$provider" "$target_key")
+    set -l codex_status (bun --cwd "$libexec_dir" "$helper" apply "$auth_file" "$codex_auth_file" "$codex_profiles_file" "$provider" "$target_key")
     if test $status -ne 0
         echo "failed to apply auth switch"
         return 1

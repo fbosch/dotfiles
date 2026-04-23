@@ -56,7 +56,7 @@ function flake_check_updates --description 'Check for available flake updates an
         set use_cursor "$FLAKE_CHECK_CURSOR"
     end
 
-    set -l result (FLAKE_CHECK_BATCH_SIZE="$batch_size" FLAKE_CHECK_TIMEOUT_MS="$timeout_ms" FLAKE_CHECK_CURSOR="$use_cursor" bun --smol --cwd "$libexec_dir" --install=auto "$helper" "$flake_path")
+    set -l result (FLAKE_CHECK_BATCH_SIZE="$batch_size" FLAKE_CHECK_TIMEOUT_MS="$timeout_ms" FLAKE_CHECK_CURSOR="$use_cursor" bun --cwd "$libexec_dir" "$helper" "$flake_path")
     set -l code $status
 
     if test -z "$result"

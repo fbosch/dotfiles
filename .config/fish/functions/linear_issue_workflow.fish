@@ -150,7 +150,7 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
         set -l color_priority_4 (set_color (string sub -s 2 -- "$color_priority_4_hex"))
         set -l color_priority_default (set_color (string sub -s 2 -- "$color_priority_default_hex"))
 
-        set -l helper_rows (printf "%s\n" $list_output | bun --smol --cwd "$libexec_dir" --install=auto "$helper" build-list)
+        set -l helper_rows (printf "%s\n" $list_output | bun --cwd "$libexec_dir" "$helper" build-list)
         set -l helper_status $status
         if test $helper_status -ne 0 -o -z "$helper_rows"
             echo "$cmd_name: failed to build issue list rows" >&2
@@ -272,7 +272,7 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
         return 1
     end
 
-    set -l branch (bun --smol --cwd "$libexec_dir" --install=auto "$helper" issue-branch "$issue_id")
+    set -l branch (bun --cwd "$libexec_dir" "$helper" issue-branch "$issue_id")
     if test $status -ne 0 -o -z "$branch"
         echo "$cmd_name: failed to derive branch for $issue_id" >&2
         return 1

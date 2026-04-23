@@ -56,7 +56,7 @@ function flake_restore --description "Browse flake.lock history and restore a ve
     set -l dep_lines
     set -l tmp (mktemp)
     if git -C $repo show "$hash:flake.lock" >"$tmp" 2>/dev/null
-        set dep_lines (bun --smol --cwd "$libexec_dir" --install=auto "$helper" lines "$file" "$tmp")
+        set dep_lines (bun --cwd "$libexec_dir" "$helper" lines "$file" "$tmp")
         if test $status -eq 0; and test -n "$dep_lines"
             set dep_count (string split 	 -- "$dep_lines[1]")[2]
         end

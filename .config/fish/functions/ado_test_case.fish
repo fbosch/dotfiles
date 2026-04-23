@@ -42,9 +42,9 @@ function ado_test_case --description 'Get Azure DevOps test case contents by ID,
     set -l markdown_output
 
     if test -n "$org_url"
-        set markdown_output (ADO_TEST_CASE_ORG_URL="$org_url" ADO_TEST_CASE_CACHE_DIR="$cache_dir" bun --cwd "$libexec_dir" --install=auto "$helper" "$test_case_id")
+        set markdown_output (ADO_TEST_CASE_ORG_URL="$org_url" ADO_TEST_CASE_CACHE_DIR="$cache_dir" bun --cwd "$libexec_dir" "$helper" "$test_case_id")
     else
-        set markdown_output (ADO_TEST_CASE_CACHE_DIR="$cache_dir" bun --cwd "$libexec_dir" --install=auto "$helper" "$test_case_id")
+        set markdown_output (ADO_TEST_CASE_CACHE_DIR="$cache_dir" bun --cwd "$libexec_dir" "$helper" "$test_case_id")
     end
 
     if test $status -ne 0

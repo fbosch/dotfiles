@@ -24,7 +24,7 @@ function flake_updates_daemon --description 'Manage the flake updates checker sy
             set -l libexec_dir "$fish_root/libexec"
             set -l helper "$libexec_dir/nix/cache_status.ts"
             if test -f "$helper"
-                set -l cache_lines (bun --smol --cwd "$libexec_dir" --install=auto "$helper")
+                set -l cache_lines (bun --cwd "$libexec_dir" "$helper")
             end
 
             if test $status -eq 0 -a -n "$cache_lines"
