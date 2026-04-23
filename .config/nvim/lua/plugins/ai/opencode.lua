@@ -6,17 +6,101 @@ return {
 			"folke/snacks.nvim",
 		},
 		init = function()
+			local infer_cache = {
+				cwd = nil,
+				session_id = nil,
+				at = 0,
+			}
+			local infer_cache_ttl_ms = 15000
+			local opencode_db_path = vim.fn.expand("~/.local/share/opencode/opencode.db")
+
+			local function normalize_path(path)
+				if type(path) ~= "string" or path == "" then
+					return nil
+				end
+
+				local normalized = vim.fs.normalize(path)
+				if normalized:sub(-1) == "/" and #normalized > 1 then
+					normalized = normalized:gsub("/+$", "")
+				end
+
+				return normalized
+			end
+
+			local function sql_string(value)
+				return "'" .. value:gsub("'", "''") .. "'"
+			end
+
+			local function infer_session_id_for_cwd(cwd)
+				local normalized_cwd = normalize_path(cwd)
+				if normalized_cwd == nil then
+					return nil
+				end
+
+				local now = vim.uv.now()
+				if infer_cache.cwd == normalized_cwd and (now - infer_cache.at) <= infer_cache_ttl_ms then
+					return infer_cache.session_id
+				end
+
+				local cwd_sql = sql_string(normalized_cwd)
+				local query = "select id from session where time_archived is null and parent_id is null"
+					.. " and (directory = "
+					.. cwd_sql
+					.. " or directory like "
+					.. cwd_sql
+					.. " || '/%' or "
+					.. cwd_sql
+					.. " like directory || '/%')"
+					.. " order by case when directory = "
+					.. cwd_sql
+					.. " then 0 else 1 end asc"
+					.. ", abs(length(directory) - length("
+					.. cwd_sql
+					.. ")) asc, time_updated desc limit 1"
+
+				local result = vim.system({ "sqlite3", opencode_db_path, "-json", query }, { text = true }):wait()
+				if result.code ~= 0 or type(result.stdout) ~= "string" then
+					result = vim.system({ "opencode", "db", query, "--format", "json" }, { text = true }):wait()
+				end
+
+				if result.code ~= 0 or type(result.stdout) ~= "string" or result.stdout == "" then
+					infer_cache = { cwd = normalized_cwd, session_id = nil, at = now }
+					return nil
+				end
+
+				local ok, rows = pcall(vim.json.decode, result.stdout)
+				if ok == false or type(rows) ~= "table" then
+					infer_cache = { cwd = normalized_cwd, session_id = nil, at = now }
+					return nil
+				end
+
+				local first = rows[1]
+				local session_id = type(first) == "table" and first.id or nil
+				if type(session_id) ~= "string" or session_id == "" then
+					session_id = nil
+				end
+
+				infer_cache = { cwd = normalized_cwd, session_id = session_id, at = now }
+				return session_id
+			end
+
 			local function opencode_command()
-				return "opencode --port"
+				local cwd = vim.fn.getcwd()
+				local session_id = infer_session_id_for_cwd(cwd)
+				if type(session_id) ~= "string" or session_id == "" then
+					return "opencode --port"
+				end
+
+				return "opencode --port --session " .. vim.fn.shellescape(session_id)
 			end
 
 			vim.g.opencode_opts = {
 				server = {
 					start = function()
-						require("opencode.terminal").start(opencode_command(), { split = "left", width = 100 })
+						require("opencode.terminal").open(opencode_command(), { split = "left", width = 100 })
 					end,
 					stop = function()
-						require("opencode.terminal").stop()
+						require("opencode.terminal").close()
 					end,
 					toggle = function()
 						require("opencode.terminal").toggle(opencode_command(), { split = "left", width = 100 })
@@ -90,6 +174,7 @@ return {
 				end)
 			end
 
+
 			local function send_opencode(method, prompt, opts)
 				require("opencode")[method](prompt, opts)
 				if not (opts and opts.submit) then
@@ -161,7 +246,6 @@ return {
 					end
 				end,
 			})
-
 
 			vim.api.nvim_create_user_command("OpencodeHealth", show_opencode_health, {
 				desc = "Show opencode integration health",
