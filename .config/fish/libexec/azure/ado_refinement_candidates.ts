@@ -208,11 +208,17 @@ function renderPrompt(cacheFile: string, idInputs: string[]): void {
 
 function buildCachePayload(contextInput: string, teamInput: string): CachePayload | string {
     const urlContext = parseOrgAndProject(contextInput);
-    const org = urlContext.org ?? detectOrgFromGitRemote();
-    let project = urlContext.project;
+    const remoteUrl = detectGitRemoteUrl();
+    const remoteContext = detectContextFromGitRemote();
+    const org = urlContext.org ?? remoteContext.org;
+    let project = urlContext.project ?? remoteContext.project;
 
     const explicitTeam = teamInput.trim();
     if (explicitTeam === "" && project === null) {
+        if (remoteUrl !== null) {
+            return `Could not determine Azure DevOps project from git remote '${remoteUrl}'. Re-run with --context <ado-url> or --team <team>.`;
+        }
+
         return "Could not determine Azure DevOps project from context. Re-run with --context <ado-url> or --team <team>.";
     }
 
@@ -342,28 +348,51 @@ function decodeSegment(value: string): string {
     }
 }
 
-function detectOrgFromGitRemote(): string | null {
+function parseRemoteUrl(remote: string): AdoContext {
+    const devHttpsMatch = remote.match(/(?:https:\/\/|https:\/\/[^@]+@)dev\.azure\.com\/([^/]+)\/([^/]+)\/_git\/([^/]+)/);
+    if (devHttpsMatch?.[1] && devHttpsMatch[2]) {
+        return {
+            org: `https://dev.azure.com/${devHttpsMatch[1]}`,
+            project: decodeSegment(devHttpsMatch[2]),
+        };
+    }
+
+    const devSshMatch = remote.match(/ssh\.dev\.azure\.com:v3\/([^/]+)\/([^/]+)\/([^/]+)/);
+    if (devSshMatch?.[1] && devSshMatch[2]) {
+        return {
+            org: `https://dev.azure.com/${devSshMatch[1]}`,
+            project: decodeSegment(devSshMatch[2]),
+        };
+    }
+
+    const visualStudioMatch = remote.match(/https:\/\/([^.]+)\.visualstudio\.com\/([^/]+)\/_git\/([^/]+)/);
+    if (visualStudioMatch?.[1] && visualStudioMatch[2]) {
+        return {
+            org: `https://${visualStudioMatch[1]}.visualstudio.com`,
+            project: decodeSegment(visualStudioMatch[2]),
+        };
+    }
+
+    return { org: null, project: null };
+}
+
+function detectGitRemoteUrl(): string | null {
     const remoteResult = runCommand("git", ["config", "--get", "remote.origin.url"]);
     if (remoteResult.isErr()) {
         return null;
     }
 
     const remote = remoteResult.value.trim();
-    if (remote === "") {
-        return null;
+    return remote === "" ? null : remote;
+}
+
+function detectContextFromGitRemote(): AdoContext {
+    const remote = detectGitRemoteUrl();
+    if (remote === null) {
+        return { org: null, project: null };
     }
 
-    const devAzureMatch = remote.match(/dev\.azure\.com\/([^/]+)\//);
-    if (devAzureMatch?.[1]) {
-        return `https://dev.azure.com/${devAzureMatch[1]}`;
-    }
-
-    const visualStudioMatch = remote.match(/https:\/\/([^.]+)\.visualstudio\.com/);
-    if (visualStudioMatch?.[1]) {
-        return `https://${visualStudioMatch[1]}.visualstudio.com`;
-    }
-
-    return null;
+    return parseRemoteUrl(remote);
 }
 
 function azureEnv(): NodeJS.ProcessEnv {

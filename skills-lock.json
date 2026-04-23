@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "91782f423f6fad0fe4e2159350f2eb8c3cf66cfa4d2387b2c8d927d443c9a603"
     },
+    "bun": {
+      "source": "bun.sh",
+      "sourceType": "well-known",
+      "computedHash": "e81aa6ae97fdbc21cbccdbee38e0f314171fe8d7a09c5fdda72b82095cf4b9fa"
+    },
     "caveman": {
       "source": "JuliusBrussee/caveman",
       "sourceType": "github",
