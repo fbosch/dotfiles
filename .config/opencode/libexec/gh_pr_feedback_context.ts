@@ -3,6 +3,11 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
+const callerCwd = process.env.OPENCODE_LIBEXEC_CWD;
+if (callerCwd) {
+  process.chdir(callerCwd);
+}
+
 type Source = "url" | "number" | "text-number" | "branch";
 
 type Identity = {

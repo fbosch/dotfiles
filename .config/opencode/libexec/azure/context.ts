@@ -1,5 +1,5 @@
-import { err, ok } from "neverthrow";
-import { runCommand, type AppResult } from "../shared/process.js";
+import { err, ok, type Result } from "neverthrow";
+import { runCommand } from "../shared/process.js";
 
 type ParsedContext = {
     org: string | null;
@@ -137,7 +137,7 @@ export function azureEnv(): NodeJS.ProcessEnv {
     };
 }
 
-export function requireNumericId(id: string, label: string): AppResult<string> {
+export function requireNumericId(id: string, label: string): Result<string, string> {
     if (/^\d+$/.test(id)) {
         return ok(id);
     }

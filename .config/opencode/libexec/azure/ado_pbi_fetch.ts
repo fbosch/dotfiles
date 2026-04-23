@@ -16,11 +16,6 @@ type AzureRelation = {
     attributes?: unknown;
 };
 
-type AzureWorkItem = {
-    relations?: unknown;
-    fields?: unknown;
-};
-
 function printError(message: string): never {
     console.log(`ERROR: ${message}`);
     process.exit(0);
@@ -44,12 +39,47 @@ function runWorkItemShow(itemId: string, org: string | null): unknown {
         args.push("--org", org);
     }
 
-    const result = runJson<unknown>("az", args, { env: azureEnv() });
-    if (result.isErr()) {
-        throw new Error(result.error);
+    return unwrapRunJsonOrThrow(runJson<unknown>("az", args, { env: azureEnv() }));
+}
+
+function unwrapRunJsonOrThrow(result: unknown): unknown {
+    if (isResultError(result)) {
+        throw new Error(readResultError(result));
     }
 
-    return result.value;
+    return readResultValue(result);
+}
+
+function isResultError(result: unknown): boolean {
+    if (typeof result !== "object" || result === null) {
+        return true;
+    }
+
+    if ("isErr" in result && typeof result.isErr === "function") {
+        return result.isErr();
+    }
+
+    if ("ok" in result) {
+        return result.ok === false;
+    }
+
+    return true;
+}
+
+function readResultError(result: unknown): string {
+    if (typeof result === "object" && result !== null && "error" in result && typeof result.error === "string") {
+        return result.error;
+    }
+
+    return "Unknown Azure CLI error";
+}
+
+function readResultValue(result: unknown): unknown {
+    if (typeof result === "object" && result !== null && "value" in result) {
+        return result.value;
+    }
+
+    return null;
 }
 
 function extractTaskIds(relations: AzureRelation[]): string[] {

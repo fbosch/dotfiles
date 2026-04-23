@@ -20,7 +20,7 @@ Tool routing:
 3. If `question` call fails once, stop retrying and output the same choices in plain text.
 
 SCRIPT-GENERATED REVIEW CONTEXT:
-!`sh -c 'bun "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/scripts/gh-pr-feedback-context.ts" all "$1" 2>/dev/null || bun "$HOME/dotfiles/.config/opencode/scripts/gh-pr-feedback-context.ts" all "$1" 2>/dev/null || echo "ERROR: Missing gh-pr-feedback-context.ts"' -- "$ARGUMENTS"`
+!`sh -c 'OPENCODE_LIBEXEC_CWD="$PWD" bun --cwd "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/libexec" "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/libexec/gh_pr_feedback_context.ts" all "$1" 2>/dev/null || OPENCODE_LIBEXEC_CWD="$PWD" bun --cwd "$HOME/dotfiles/.config/opencode/libexec" "$HOME/dotfiles/.config/opencode/libexec/gh_pr_feedback_context.ts" all "$1" 2>/dev/null || echo "ERROR: Missing gh_pr_feedback_context.ts"' -- "$ARGUMENTS"`
 
 Workflow:
 1. Parse `SCRIPT-GENERATED REVIEW CONTEXT` JSON.

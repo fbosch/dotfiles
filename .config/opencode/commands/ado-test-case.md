@@ -9,7 +9,7 @@ Test Case ID: $ARGUMENTS
 **If $ARGUMENTS is empty:** Respond only with: "Usage: /ado-test-case <test-case-id>"
 
 **Fetched data:**
-!`~/.config/opencode/scripts/fetch-ado-case.sh "$ARGUMENTS"`
+!`sh -c 'OPENCODE_LIBEXEC_CWD="$PWD" bun --cwd "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/libexec" "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/libexec/azure/ado_case_fetch.ts" "$1" 2>/dev/null || OPENCODE_LIBEXEC_CWD="$PWD" bun --cwd "$HOME/dotfiles/.config/opencode/libexec" "$HOME/dotfiles/.config/opencode/libexec/azure/ado_case_fetch.ts" "$1" 2>/dev/null || echo "ERROR: Missing ado_case_fetch.ts"' -- "$ARGUMENTS"`
 
 **Output format:**
 
