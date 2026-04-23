@@ -19,7 +19,6 @@ return {
 		cond = should_persist_session,
 		config = function()
 			local sessions = require("mini.sessions")
-			local opencode_session = require("utils.opencode_session")
 			sessions.setup({
 				directory = root_dir,
 				file = "",
@@ -57,7 +56,6 @@ return {
 				callback = function()
 					local dir_exists = vim.loop.fs_stat(root_dir)
 					if dir_exists and dir_exists.type == "directory" then
-						opencode_session.persist_current_session_id()
 						sessions.write(session_file)
 					end
 				end,

@@ -6,9 +6,8 @@ return {
 			"folke/snacks.nvim",
 		},
 		init = function()
-			local opencode_session = require("utils.opencode_session")
 			local function opencode_command()
-				return opencode_session.build_start_command("opencode --port")
+				return "opencode --port"
 			end
 
 			vim.g.opencode_opts = {
@@ -29,81 +28,7 @@ return {
 			}
 		end,
 		config = function()
-			local opencode_session = require("utils.opencode_session")
-			local session = require("utils.session")
 			local opencode_terminal_var = "is_opencode_terminal"
-
-			local function extract_session_id(value)
-				if type(value) ~= "table" then
-					return nil
-				end
-
-				local direct_id = value.sessionID or value.sessionId or value.session_id
-				if type(direct_id) == "string" and direct_id ~= "" then
-					return direct_id
-				end
-
-				if type(value.info) == "table" and type(value.info.id) == "string" and value.info.id ~= "" then
-					return value.info.id
-				end
-
-				if type(value.id) == "string" and value.id:find("^ses_") == 1 then
-					return value.id
-				end
-
-				for _, child in pairs(value) do
-					if type(child) == "table" then
-						local nested = extract_session_id(child)
-						if type(nested) == "string" and nested ~= "" then
-							return nested
-						end
-					end
-				end
-
-				return nil
-			end
-
-			local function sync_session_from_event(args)
-				local event = args.data and args.data.event
-				if type(event) ~= "table" then
-					return
-				end
-
-				local properties = event.properties
-				if type(properties) ~= "table" then
-					return
-				end
-
-				local session_id = extract_session_id(properties)
-				if type(session_id) ~= "string" or session_id == "" then
-					session_id = extract_session_id(event)
-				end
-
-				if type(session_id) ~= "string" or session_id == "" then
-					if
-						event.type == "session.status"
-						or event.type == "session.idle"
-						or event.type == "session.created"
-						or event.type == "server.connected"
-					then
-						opencode_session.sync_now()
-					end
-					return
-				end
-
-				local event_cwd = nil
-				local info = properties.info
-				if type(info) == "table" then
-					event_cwd = info.directory or info.worktree
-				end
-
-				if type(event_cwd) ~= "string" or event_cwd == "" then
-					local connected_server = require("opencode.events").connected_server
-					event_cwd = type(connected_server) == "table" and connected_server.cwd or nil
-				end
-
-				opencode_session.sync_from_event(session_id, { cwd = event_cwd })
-			end
 
 			local function is_opencode_terminal(buf)
 				if vim.b[buf][opencode_terminal_var] == true then
@@ -146,7 +71,6 @@ return {
 					else
 						vim.api.nvim_feedkeys(vim.keycode("<CR>"), "t", false)
 					end
-					opencode_session.sync_now()
 				end, vim.tbl_extend("force", buf_opts, { desc = "Submit in opencode terminal" }))
 			end
 
@@ -176,17 +100,7 @@ return {
 			local function show_opencode_health()
 				local connected_server = require("opencode.events").connected_server
 				local status = require("opencode.status").status
-				local current_session_id = opencode_session.get_current_session_id()
-				local saved_session_id = session.read_opencode_id()
-				local restore_state = opencode_session.get_last_restore_state()
-				local sidecar_path = session.get_opencode_sidecar_path()
-				local sidecar_stat = vim.uv.fs_stat(sidecar_path)
 				local terminal_bufnr = nil
-				local restore_at = "never"
-
-				if type(restore_state) == "table" and type(restore_state.at) == "number" then
-					restore_at = os.date("%Y-%m-%d %H:%M:%S", restore_state.at)
-				end
 
 				for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
 					if is_opencode_terminal(bufnr) then
@@ -209,16 +123,6 @@ return {
 								or "disconnected"
 					),
 					string.format("Status: %s", status or "unknown"),
-					string.format("Session ID: %s", current_session_id or "<none>"),
-					string.format("Saved Session ID: %s", saved_session_id or "<none>"),
-					string.format(
-						"Restore: %s (%s)",
-						type(restore_state) == "table" and restore_state.status or "unknown",
-						type(restore_state) == "table" and restore_state.detail or "no details"
-					),
-					string.format("Restore at: %s", restore_at),
-					string.format("Sidecar: %s", sidecar_path),
-					string.format("Sidecar exists: %s", sidecar_stat and "yes" or "no"),
 					string.format("Terminal: %s", terminal_bufnr and ("alive (buf " .. terminal_bufnr .. ")") or "not found"),
 					string.format("Nvim CWD: %s", vim.fn.getcwd()),
 				}
@@ -244,42 +148,8 @@ return {
 						mark_opencode_terminal(args.buf)
 						vim.bo[args.buf].buflisted = false
 						set_opencode_terminal_keymaps(args.buf)
-						local cwd = vim.fn.getcwd()
-						opencode_session.restore_saved_session_id(cwd)
-						opencode_session.connect_server_noninteractive()
-						vim.defer_fn(function()
-							opencode_session.select_session_on_connected_server(nil, { cwd = cwd })
-							opencode_session.sync_debounced(200)
-						end, 300)
 						pcall(vim.cmd, "startinsert")
 					end
-				end,
-			})
-
-			vim.api.nvim_create_autocmd("User", {
-				pattern = "OpencodeEvent:*",
-				callback = sync_session_from_event,
-			})
-
-			vim.api.nvim_create_autocmd("User", {
-				pattern = "OpencodeEvent:server.connected",
-				callback = function()
-					local connected_server = require("opencode.events").connected_server
-					local server_cwd = type(connected_server) == "table" and connected_server.cwd or nil
-					opencode_session.restore_saved_session_id(server_cwd)
-					opencode_session.select_session_on_connected_server(nil, { cwd = server_cwd })
-					opencode_session.sync_debounced(200)
-				end,
-			})
-
-			vim.api.nvim_create_autocmd("DirChanged", {
-				pattern = "*",
-				callback = function()
-					local event_data = vim.v.event
-					local cwd = type(event_data) == "table" and event_data.cwd or vim.fn.getcwd()
-					opencode_session.restore_saved_session_id(cwd)
-					opencode_session.connect_server_noninteractive()
-					opencode_session.select_session_on_connected_server(nil, { cwd = cwd })
 				end,
 			})
 
@@ -292,27 +162,6 @@ return {
 				end,
 			})
 
-			vim.api.nvim_create_autocmd("TextChangedT", {
-				pattern = "*",
-				callback = function(args)
-					if is_opencode_terminal(args.buf) == false then
-						return
-					end
-
-					opencode_session.sync_debounced(150)
-				end,
-			})
-
-			vim.api.nvim_create_autocmd("User", {
-				pattern = { "SessionSavePre", "SessionLoadPost" },
-				callback = function(args)
-					if args.match == "SessionSavePre" then
-						opencode_session.persist_current_session_id()
-					else
-						opencode_session.restore_saved_session_id()
-					end
-				end,
-			})
 
 			vim.api.nvim_create_user_command("OpencodeHealth", show_opencode_health, {
 				desc = "Show opencode integration health",
@@ -328,7 +177,7 @@ return {
 			end, { desc = "opencode actions" })
 
 			vim.keymap.set("n", "<leader>aS", function()
-				opencode_session.select_and_persist()
+				require("opencode").select_session()
 			end, { desc = "Select opencode session" })
 
 			vim.keymap.set({ "n", "x" }, "ga", function()
