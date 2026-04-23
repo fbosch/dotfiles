@@ -205,7 +205,7 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
 
     set -l provider_names
     for row in $list_lines
-        set -l parts (string split 	 -- "$row")
+        set -l parts (string split \t -- "$row")
         if test (count $parts) -lt 4
             continue
         end
@@ -227,7 +227,7 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
     set -l profile_plain_labels
     set -l profile_keys
     for row in $list_lines
-        set -l parts (string split 	 -- "$row")
+        set -l parts (string split \t -- "$row")
         if test (count $parts) -lt 4
             continue
         end
