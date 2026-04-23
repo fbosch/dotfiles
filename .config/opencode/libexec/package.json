@@ -1,0 +1,8 @@
+{
+  "name": "opencode-libexec-helpers",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "^24.7.2"
+  }
+}
