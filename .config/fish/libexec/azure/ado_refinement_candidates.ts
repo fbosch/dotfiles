@@ -377,6 +377,14 @@ function parseRemoteUrl(remote: string): AdoContext {
         };
     }
 
+    const visualStudioSshMatch = remote.match(/[^@]+@vs-ssh\.visualstudio\.com:v3\/([^/]+)\/([^/]+)\/[^/]+/);
+    if (visualStudioSshMatch?.[1] && visualStudioSshMatch[2]) {
+        return {
+            org: `https://${visualStudioSshMatch[1]}.visualstudio.com`,
+            project: decodeSegment(visualStudioSshMatch[2]),
+        };
+    }
+
     return { org: null, project: null };
 }
 

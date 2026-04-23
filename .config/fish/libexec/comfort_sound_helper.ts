@@ -8,9 +8,11 @@ import { err, ok, type Result } from "neverthrow";
 
 const BASE = "/System/Library/AssetsV2/com_apple_MobileAsset_ComfortSoundsAssets";
 const DOMAIN = "com.apple.ComfortSounds";
+const RESOURCES = "/System/Library/PrivateFrameworks/HearingUtilities.framework/Resources";
 
 type SoundAsset = {
     name: string;
+    resourcePath: string;
     assetId: string;
     soundGroup: number;
     formatVersion: number;
@@ -82,6 +84,7 @@ function listAssets(): AppResult<SoundAsset[]> {
 
         assets.push({
             name,
+            resourcePath: `file://${RESOURCES}/${name}.m4a`,
             assetId: entry.name.replace(/\.asset$/, ""),
             soundGroup,
             formatVersion,
@@ -111,10 +114,29 @@ function extractUidAtPath(plistPath: string, keyPath: string): AppResult<number>
     return extractUid(xmlResult.value);
 }
 
+function extractUidAtPathIfPresent(plistPath: string, keyPath: string): AppResult<number | null> {
+    const xmlResult = run("plutil", ["-extract", keyPath, "xml1", "-o", "-", plistPath]);
+    if (xmlResult.isErr()) {
+        return ok(null);
+    }
+
+    return extractUid(xmlResult.value).map((value) => value);
+}
+
 function extractUidArray(plistPath: string, keyPath: string): AppResult<number[]> {
     const xmlResult = run("plutil", ["-extract", keyPath, "xml1", "-o", "-", plistPath]);
     if (xmlResult.isErr()) {
         return err(xmlResult.error);
+    }
+
+    const matches = [...xmlResult.value.matchAll(/<key>CF\$UID<\/key>\s*<integer>(\d+)<\/integer>/g)];
+    return ok(matches.map((match) => Number.parseInt(match[1], 10)));
+}
+
+function extractUidArrayIfPresent(plistPath: string, keyPath: string): AppResult<number[] | null> {
+    const xmlResult = run("plutil", ["-extract", keyPath, "xml1", "-o", "-", plistPath]);
+    if (xmlResult.isErr()) {
+        return ok(null);
     }
 
     const matches = [...xmlResult.value.matchAll(/<key>CF\$UID<\/key>\s*<integer>(\d+)<\/integer>/g)];
@@ -279,52 +301,65 @@ function setSound(targetInput: string): AppResult<string> {
         const nameIdx = unwrapOrThrow(extractUidAtPath(archiveXml, "$objects.1.HUComfortSoundNameKey"));
         const pathObjectIdx = unwrapOrThrow(extractUidAtPath(archiveXml, "$objects.1.HUComfortSoundPathKey"));
         const pathValueIdx = unwrapOrThrow(extractUidAtPath(archiveXml, `$objects.${pathObjectIdx}.NS\\.relative`));
-        const assetObjectIdx = unwrapOrThrow(extractUidAtPath(archiveXml, "$objects.1.HUComfortSoundAssetKey"));
-        const assetIdIdx = unwrapOrThrow(extractUidAtPath(archiveXml, `$objects.${assetObjectIdx}.assetId`));
-        const propertiesIdx = unwrapOrThrow(extractUidAtPath(archiveXml, `$objects.${assetObjectIdx}.properties`));
+        const assetObjectIdx = unwrapOrThrow(extractUidAtPathIfPresent(archiveXml, "$objects.1.HUComfortSoundAssetKey"));
+        const assetIdIdx =
+            assetObjectIdx !== null && assetObjectIdx > 0
+                ? unwrapOrThrow(extractUidAtPathIfPresent(archiveXml, `$objects.${assetObjectIdx}.assetId`))
+                : null;
+        const propertiesIdx =
+            assetObjectIdx !== null && assetObjectIdx > 0
+                ? unwrapOrThrow(extractUidAtPathIfPresent(archiveXml, `$objects.${assetObjectIdx}.properties`))
+                : null;
 
-        const replacementResult = runAll([
+        const replacementOperations: Array<() => AppResult<void>> = [
             () => replaceString(archiveXml, `$objects.${nameIdx}`, target.name),
-            () =>
-                replaceString(
-                    archiveXml,
-                    `$objects.${pathValueIdx}`,
-                    `file://${BASE}/${target.assetId}.asset/AssetData/`,
-                ),
-            () => replaceString(archiveXml, `$objects.${assetIdIdx}`, target.assetId),
+            () => replaceString(archiveXml, `$objects.${pathValueIdx}`, target.resourcePath),
             () => replaceInteger(archiveXml, "$objects.1.HUComfortSoundGroupKey", target.soundGroup),
-            () => replaceInteger(archiveXml, `$objects.${assetObjectIdx}.formatVersion`, target.formatVersion),
-            () =>
+        ];
+
+        if (assetIdIdx !== null) {
+            replacementOperations.push(() => replaceString(archiveXml, `$objects.${assetIdIdx}`, target.assetId));
+        }
+
+        if (assetObjectIdx !== null && assetObjectIdx > 0) {
+            replacementOperations.push(() => replaceInteger(archiveXml, `$objects.${assetObjectIdx}.formatVersion`, target.formatVersion));
+            replacementOperations.push(() =>
                 replaceInteger(
                     archiveXml,
                     `$objects.${assetObjectIdx}.compatibilityVersion`,
                     target.compatibilityVersion,
                 ),
-        ]);
+            );
+        }
+
+        const replacementResult = runAll(replacementOperations);
         if (replacementResult.isErr()) {
             return err(replacementResult.error);
         }
 
-        const keyIdxList = unwrapOrThrow(extractUidArray(archiveXml, `$objects.${propertiesIdx}.NS\\.keys`));
-        const valueIdxList = unwrapOrThrow(extractUidArray(archiveXml, `$objects.${propertiesIdx}.NS\\.objects`));
-        const valueIdxByKey = new Map<string, number>();
+        if (propertiesIdx !== null) {
+            const keyIdxList = unwrapOrThrow(extractUidArrayIfPresent(archiveXml, `$objects.${propertiesIdx}.NS\\.keys`)) ?? [];
+            const valueIdxList =
+                unwrapOrThrow(extractUidArrayIfPresent(archiveXml, `$objects.${propertiesIdx}.NS\\.objects`)) ?? [];
+            const valueIdxByKey = new Map<string, number>();
 
-        const pairCount = Math.min(keyIdxList.length, valueIdxList.length);
-        for (let i = 0; i < pairCount; i += 1) {
-            valueIdxByKey.set(
-                unwrapOrThrow(readRawPlistValue(archiveXml, `$objects.${keyIdxList[i]}`)),
-                valueIdxList[i],
-            );
-        }
+            const pairCount = Math.min(keyIdxList.length, valueIdxList.length);
+            for (let i = 0; i < pairCount; i += 1) {
+                valueIdxByKey.set(
+                    unwrapOrThrow(readRawPlistValue(archiveXml, `$objects.${keyIdxList[i]}`)),
+                    valueIdxList[i],
+                );
+            }
 
-        const metadataResult = runAll([
-            () => setIfPresentString(archiveXml, valueIdxByKey, "SoundName", target.name),
-            () => setIfPresentInteger(archiveXml, valueIdxByKey, "SoundGroup", target.soundGroup),
-            () => setIfPresentInteger(archiveXml, valueIdxByKey, "FormatVersion", target.formatVersion),
-            () => setIfPresentInteger(archiveXml, valueIdxByKey, "CompatibilityVersion", target.compatibilityVersion),
-        ]);
-        if (metadataResult.isErr()) {
-            return err(metadataResult.error);
+            const metadataResult = runAll([
+                () => setIfPresentString(archiveXml, valueIdxByKey, "SoundName", target.name),
+                () => setIfPresentInteger(archiveXml, valueIdxByKey, "SoundGroup", target.soundGroup),
+                () => setIfPresentInteger(archiveXml, valueIdxByKey, "FormatVersion", target.formatVersion),
+                () => setIfPresentInteger(archiveXml, valueIdxByKey, "CompatibilityVersion", target.compatibilityVersion),
+            ]);
+            if (metadataResult.isErr()) {
+                return err(metadataResult.error);
+            }
         }
 
         unwrapOrThrow(run("plutil", ["-convert", "binary1", "-o", archiveBin, archiveXml]));

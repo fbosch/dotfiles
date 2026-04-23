@@ -75,6 +75,11 @@ export function detectOrgFromGitRemote(): string | null {
         return `https://${visualStudioMatch[1]}.visualstudio.com`;
     }
 
+    const visualStudioSshMatch = remote.match(/[^@]+@vs-ssh\.visualstudio\.com:v3\/([^/]+)\/([^/]+)\/[^/]+/);
+    if (visualStudioSshMatch?.[1]) {
+        return `https://${visualStudioSshMatch[1]}.visualstudio.com`;
+    }
+
     return null;
 }
 
