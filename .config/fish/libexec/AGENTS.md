@@ -22,6 +22,7 @@ Internal Bun/TypeScript helpers for Fish functions.
 - Dependencies are pinned in `package.json` and `bun.lock`.
 - Fish wrappers call helpers with `bun --cwd .config/fish/libexec`.
 - `bunfig.toml` is the source of truth for Bun install/runtime defaults for this helper runtime.
+- When a helper needs repo-sensitive context (for example `git`, nearest `.git`, branch, remote, or Azure project detection), do not switch Bun's cwd to the helper runtime permanently; pass the caller's original `$PWD` into the helper via an env var and use that cwd for repo inspection inside the helper.
 - When implementing or changing Bun-based helpers, load the `Bun` skill for Bun-specific runtime, package-manager, and scripting guidance.
 
 ## Coding Conventions

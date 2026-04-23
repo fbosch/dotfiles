@@ -300,6 +300,10 @@ function cacheFilePath(contextInput: string, teamInput: string): string {
     return join(cacheRoot(), "fish", "ado-refinement-candidates", `${hash}.json`);
 }
 
+function helperCwd(): string | undefined {
+    return process.env.FISH_LIBEXEC_CWD || undefined;
+}
+
 function parseOrgAndProject(value: string): AdoContext {
     const text = value.trim();
     if (text.startsWith("http") === false) {
@@ -377,7 +381,7 @@ function parseRemoteUrl(remote: string): AdoContext {
 }
 
 function detectGitRemoteUrl(): string | null {
-    const remoteResult = runCommand("git", ["config", "--get", "remote.origin.url"]);
+    const remoteResult = runCommand("git", ["config", "--get", "remote.origin.url"], { cwd: helperCwd() });
     if (remoteResult.isErr()) {
         return null;
     }
@@ -403,7 +407,7 @@ function azureEnv(): NodeJS.ProcessEnv {
 }
 
 function runJson<T>(args: string[]): T | string {
-    const result = runCommand("az", args, { env: azureEnv() });
+    const result = runCommand("az", args, { cwd: helperCwd(), env: azureEnv() });
     if (result.isErr()) {
         return result.error;
     }

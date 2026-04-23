@@ -43,7 +43,12 @@ function usage(): void {
 }
 
 function run(command: string, args: string[]): AppResult<string> {
-    return runCommand(command, args);
+    return runCommand(command, args, helperCwdOptions());
+}
+
+function helperCwdOptions(): { cwd?: string } {
+    const cwd = process.env.FISH_LIBEXEC_CWD;
+    return cwd ? { cwd } : {};
 }
 
 function parseIsoDate(value: string): AppResult<Date> {

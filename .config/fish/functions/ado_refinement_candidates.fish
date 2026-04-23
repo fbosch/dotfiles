@@ -33,7 +33,9 @@ function ado_refinement_candidates --description 'Pick Azure DevOps refinement c
         set refresh_flag 1
     end
 
-    set -l list_lines (bun --cwd "$libexec_dir" "$helper" list "$context_arg" "$team_arg" "$refresh_flag")
+    set -l invocation_cwd "$PWD"
+
+    set -l list_lines (FISH_LIBEXEC_CWD="$invocation_cwd" bun --cwd "$libexec_dir" "$helper" list "$context_arg" "$team_arg" "$refresh_flag")
     if test (count $list_lines) -eq 0
         echo "ado_refinement_candidates: helper returned no output" >&2
         return 1
@@ -82,7 +84,8 @@ function ado_refinement_candidates --description 'Pick Azure DevOps refinement c
     set -l escaped_libexec (string escape --style=script -- "$libexec_dir")
     set -l escaped_helper (string escape --style=script -- "$helper")
     set -l escaped_cache (string escape --style=script -- "$cache_file")
-    set -l preview_cmd "bun --cwd $escaped_libexec $escaped_helper preview $escaped_cache {1}"
+    set -l escaped_invocation_cwd (string escape --style=script -- "$invocation_cwd")
+    set -l preview_cmd "FISH_LIBEXEC_CWD=$escaped_invocation_cwd bun --cwd $escaped_libexec $escaped_helper preview $escaped_cache {1}"
 
     set -l selected (
         printf "%s\n" $candidate_lines \
@@ -110,7 +113,7 @@ function ado_refinement_candidates --description 'Pick Azure DevOps refinement c
         set -a selected_ids (string split -f 1 \t -- "$line")
     end
 
-    set -l prompt (bun --cwd "$libexec_dir" "$helper" prompt "$cache_file" $selected_ids)
+    set -l prompt (FISH_LIBEXEC_CWD="$invocation_cwd" bun --cwd "$libexec_dir" "$helper" prompt "$cache_file" $selected_ids)
     if test -z "$prompt"
         echo "ado_refinement_candidates: prompt generation returned no output" >&2
         return 1

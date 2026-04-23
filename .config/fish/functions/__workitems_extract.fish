@@ -27,5 +27,5 @@ function __workitems_extract --description 'Extract work items from git commits 
         return 1
     end
 
-    bun --cwd "$libexec_dir" "$helper" "$start_date" "$end_date" "$mode" "$refresh"
+    FISH_LIBEXEC_CWD="$PWD" bun --cwd "$libexec_dir" "$helper" "$start_date" "$end_date" "$mode" "$refresh"
 end

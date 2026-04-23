@@ -55,7 +55,7 @@ export function parseOrgAndProject(value: string): ParsedContext {
 }
 
 export function detectOrgFromGitRemote(): string | null {
-    const remoteResult = runCommand("git", ["config", "--get", "remote.origin.url"]);
+    const remoteResult = runCommand("git", ["config", "--get", "remote.origin.url"], helperCwdOptions());
     if (remoteResult.isErr()) {
         return null;
     }
@@ -79,7 +79,7 @@ export function detectOrgFromGitRemote(): string | null {
 }
 
 export function getCurrentBranch(): string {
-    const branchResult = runCommand("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
+    const branchResult = runCommand("git", ["rev-parse", "--abbrev-ref", "HEAD"], helperCwdOptions());
     if (branchResult.isErr()) {
         return "";
     }
@@ -138,4 +138,9 @@ export function requireNumericId(id: string, label: string): AppResult<string> {
     }
 
     return err(`Invalid ${label} ID. Must be numeric.`);
+}
+
+function helperCwdOptions(): { cwd?: string } {
+    const cwd = process.env.OPENCODE_LIBEXEC_CWD;
+    return cwd ? { cwd } : {};
 }

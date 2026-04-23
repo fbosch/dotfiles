@@ -5,4 +5,4 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 OPENCODE_DIR="$(dirname -- "$SCRIPT_DIR")"
 LIBEXEC_DIR="$OPENCODE_DIR/libexec"
 
-bun --cwd "$LIBEXEC_DIR" "$LIBEXEC_DIR/azure/ado_case_fetch.ts" "${1:-}"
+OPENCODE_LIBEXEC_CWD="$PWD" bun --cwd "$LIBEXEC_DIR" "$LIBEXEC_DIR/azure/ado_case_fetch.ts" "${1:-}"
