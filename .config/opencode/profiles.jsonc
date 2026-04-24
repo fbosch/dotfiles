@@ -129,7 +129,7 @@
       "model": "openai/gpt-5.3-codex",
       "small_model": "openai/gpt-5.4-mini-fast",
       "agents": {
-        "plan": "openai/gpt-5.4",
+        "plan": "openai/gpt-5.5",
         "explore": "openai/gpt-5.4-mini-fast",
         "general": "openai/gpt-5.3-codex",
         "analyze": "openai/gpt-5.3-codex",
