@@ -11,6 +11,7 @@
   "instructions": [
     "~/.config/opencode/instructions/RTK.md",
     "~/.config/opencode/instructions/caveman.md",
+    "~/.config/opencode/instructions/orchestration.md",
     "~/.config/opencode/instructions/worktrunk.md"
   ],
   "permission": {
