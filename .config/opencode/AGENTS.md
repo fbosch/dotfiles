@@ -1,5 +1,9 @@
 # Preferences
 
+## Decision priorities
+
+- Prioritize in this order: correctness, evidence, safety, minimal changes, consistency, performance.
+
 ## Communication style
 
 - Skip affirmations and compliments (no "great question!" or "you're absolutely right!") - just respond directly
@@ -61,6 +65,13 @@
 - Never create or update `README.md` unless explicitly asked first.
 - Avoid dependency changes (new deps, major bumps, lockfile churn) unless explicitly asked.
 
+### Evidence and verification
+
+- Never fabricate paths, APIs, config keys, env vars, capabilities, or test results; state uncertainty explicitly.
+- Never weaken assertions, narrow scope, reduce coverage, or skip checks to force a pass.
+- Gather evidence proportional to risk: trivial edits need local context; behavior/API/infra changes require tracing execution paths and regression surface before editing.
+- If validation fails after a change, make one targeted fix when root cause is clear; otherwise stop and report failure and validation gaps.
+
 ### Ambiguity and execution loop
 
 - Read the root `AGENTS.md` first; read deeper `AGENTS.md` files once the target files or subtree are known.
@@ -73,3 +84,7 @@
 - Scope lint/typecheck diagnostics to files you touched first; widen only if needed, since workspace-wide diagnostics may include pre-existing issues.
 - If a scoped `AGENTS.md` or referenced workflow doc names validation checks, run them after changes and before finishing.
 - Run the smallest reasonable validation (tests/build/typecheck) when making code changes.
+
+### Done criteria
+
+- Before declaring completion, confirm the requested problem is solved, relevant validation ran (or explicit gaps are listed), no known unintended side effects were introduced, and no secrets were added or exposed.
