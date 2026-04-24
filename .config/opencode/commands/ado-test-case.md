@@ -1,5 +1,6 @@
 ---
 description: Fetch Azure DevOps test case and format for agent context
+agent: quick
 ---
 
 Fetch and structure Azure DevOps test case data for agent context.

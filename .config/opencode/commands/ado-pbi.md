@@ -1,7 +1,6 @@
 ---
 description: Fetch Azure DevOps product backlog item with tasks and wiki links
-agent: build
-subtask: true
+agent: quick
 ---
 
 Fetch and structure Azure DevOps Product Backlog Item data for agent context.
