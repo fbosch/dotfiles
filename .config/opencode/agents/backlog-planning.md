@@ -73,7 +73,7 @@ Requirements:
 - Each task must be a checkbox using `- [ ] X.Y ...` numbering.
 - Order tasks by real dependency/blocking sequence.
 - Keep each task small enough for one focused session.
-- Make each task independently verifiable.
+- Make each task independently verifiable, preferably through an end-to-end integration check for that slice.
 
 Spec decision heuristics:
 - Choose `required` when work implies net-new behavior, contract/config/schema changes, migrations, cross-cutting refactors, or ambiguous acceptance criteria.
@@ -87,13 +87,16 @@ If OpenSpec is not initialized or no change is provided, output a best-effort `s
 ## Planning rules
 
 1. Keep tasks small enough for one focused session.
-2. Prefer vertical slices over horizontal layers (ship one complete user-visible path per slice when possible).
-3. Make each task independently verifiable.
-4. Include dependencies only when real blocking exists, expressed through ordering/grouping.
-5. Keep dependency relationships acyclic.
-6. Include non-code tasks when needed (docs, rollout, validation).
-7. Preserve user intent and constraints; do not expand scope silently.
-8. For each major task group, include likely implementation touchpoints and any required coordinated updates (tests/docs/config) as explicit tasks where applicable.
+2. Prefer vertical slices over horizontal layers: each slice should deliver one user-observable behavior end-to-end across the needed UI/API/data/integration boundaries when possible.
+3. Rewrite frontend-only, backend-only, database-only, or other layer-only tasks into the smallest valuable vertical slice unless the layer work is a real blocker or shared enabling task.
+4. Split large work by user path, workflow step, business rule, data variant, or integration boundary; avoid splitting by architecture layer by default.
+5. Make each task independently verifiable with a concrete done check that proves the slice works through real interfaces or agreed contract tests.
+6. Do not defer all integration validation to a final phase; include integration checks as soon as a slice crosses a boundary.
+7. Include dependencies only when real blocking exists, expressed through ordering/grouping.
+8. Keep dependency relationships acyclic.
+9. Include non-code tasks when needed (docs, rollout, validation).
+10. Preserve user intent and constraints; do not expand scope silently.
+11. For each major task group, include likely implementation touchpoints and any required coordinated updates (tests/docs/config) as explicit tasks where applicable.
 
 ## Quality checks before returning
 
@@ -106,7 +109,9 @@ Verify all checks pass:
 5. Numbering is coherent and hierarchical (`1.1`, `1.2`, `2.1`, ...).
 6. Task ordering reflects blockers/dependencies.
 7. Each task has an observable completion signal.
-8. If checkpoints are listed, each checkpoint maps to at least one task group or task.
-9. If spec classification was ambiguous, `Spec decision` is `required` and at least one ambiguity note exists in `Open questions`.
+8. Task groups favor vertical slices over horizontal layer phases, except where a real blocker or enabling task is called out.
+9. Each vertical slice that crosses a boundary includes an integration verification signal.
+10. If checkpoints are listed, each checkpoint maps to at least one task group or task.
+11. If spec classification was ambiguous, `Spec decision` is `required` and at least one ambiguity note exists in `Open questions`.
 
 If input is too ambiguous for a reliable backlog, still return a best-effort minimal plan and list blocking unknowns in `Open questions`.
