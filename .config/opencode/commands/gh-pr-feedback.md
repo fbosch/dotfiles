@@ -24,30 +24,43 @@ SCRIPT-GENERATED REVIEW CONTEXT:
 
 Workflow:
 1. Parse `SCRIPT-GENERATED REVIEW CONTEXT` JSON.
-2. Summarize unresolved actionable feedback from `threads`.
-3. Use current session context about already-applied fixes to refine proposals:
+2. Validate expected top-level keys exist: `pr`, `threads`, `proposedResolve`, `proposedIrrelevant`, `keepOpen`.
+   - If one is missing, output: `ERROR: Invalid review context payload` and stop.
+   - Do not attempt to reconstruct missing fields.
+3. Summarize unresolved actionable feedback from `threads`.
+4. Use current session context about already-applied fixes to refine proposals:
    - Keep proposals conservative.
    - Never propose `resolved` from same-file edits alone.
    - Prefer false negatives over false positives.
-4. Keep separate buckets:
+5. Keep separate buckets:
    - `Proposed resolve` for likely addressed items.
    - `Proposed resolve as irrelevant` for outdated/no-longer-relevant items.
    - `Keep open` for everything else.
-5. For every proposed item, include a short resolution comment text explaining how/why it was addressed or why it is irrelevant.
+6. Keep ordering deterministic within each bucket:
+   - Sort by severity (`request-changes`, `should-fix`, `nit`, `info`), then by `path`, then by first line number.
+7. For every proposed item, include a short resolution comment text explaining how/why it was addressed or why it is irrelevant.
+   - Prefer `resolutionNote` from context when present.
+8. Apply confidence gate for high-severity feedback:
+   - If `severity=request-changes` and confidence is not `high`, default that item to `Keep open`.
+   - Only move it to `Proposed resolve` after explicit user confirmation.
 
 Output format:
 - Start with PR context line:
   - `PR: <url> (<owner>/<repo>#<number>)`
-- Then include three flat bullet sections in this order:
+- Then include four flat bullet sections in this order:
   - `Actionable feedback`
   - `Proposed resolve`
   - `Proposed resolve as irrelevant`
   - `Keep open`
+- If a section has no entries, include `- None`.
 - Bullet format:
   - `` `path:line-range` <full feedback text> [threadId=... commentId=...] ``
+  - Append metadata when available: `[severity=...] [confidence=...] [corroboratedBy=...]`.
   - Append `(outdated)` when flagged.
   - Keep reviewer wording verbatim for direct fix requests.
   - Preserve markdown/code fences from feedback excerpts.
+  - If feedback text is very long, show a concise excerpt and append `[truncated]`.
+  - Keep full text in a `Full text (truncated items)` appendix at the end.
 - For each proposed resolve/irrelevant bullet, append:
   - `Reason: <why it appears addressed/irrelevant>`
   - `Resolution comment: <comment text to post before resolving>`
@@ -67,7 +80,10 @@ Resolve policy:
 
 When user selects `Resolve proposed threads`:
 1. Re-list the proposed thread IDs that will be resolved.
+   - Exclude any item where `threadId` is missing/null.
+   - Reclassify excluded items to `Keep open` with reason: `missing threadId; cannot resolve via API`.
 2. For each thread, post the paired `Resolution comment` first.
+   - Default to context `resolutionNote` when available.
 3. Resolve the thread only after the comment is posted successfully.
 4. Report per-thread status: `commented+resolved`, `comment failed`, `already resolved`, or `failed`.
 
