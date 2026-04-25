@@ -1,191 +1,36 @@
-<!-- rtk-instructions v2 -->
+<!-- rtk-instructions v3 (compact) -->
 
-# RTK (Rust Token Killer) - Token-Optimized Commands
+# RTK Rules (Compact)
 
-## Execution Model
+RTK plugin auto-rewrites `bash`/`shell` commands.
 
-OpenCode rewrites `bash`/`shell` commands through RTK automatically via the RTK plugin.
+- Write normal commands. Do not add `rtk` manually unless using explicit RTK subcommands.
+- Rewritten command display is expected (`pnpm lint` may display as `rtk lint`).
+- Treat RTK summaries as authoritative results.
 
-- Write normal commands. Do not manually add `rtk` prefixes unless you need explicit `rtk` subcommands.
-- The plugin rewrites eligible commands before execution.
-- RTK output may be summarized; treat known summaries as authoritative command results.
-- Displayed command text may show the rewritten RTK form (for example `rtk lint`) even when you issued a raw command (`pnpm lint`); this is expected.
-- Do not treat rewrite visibility as a command mismatch and do not re-run solely to "use the real command".
+## Result Semantics
 
-```bash
-# You write
-git add . && git commit -m "msg" && git push
+- `ok` = command succeeded.
+- For `git status --short`: `ok` = clean tree; non-`ok` lines = file changes.
+- Do not re-run same status command only to verify `ok`.
 
-# Plugin rewrites before execution
-rtk git add . && rtk git commit -m "msg" && rtk git push
-```
+## Loop Guard
 
-## Reading Rewritten Output
-
-When output is rewritten by RTK, interpret it by meaning, not by exact byte-for-byte parity with raw tool output.
-
-- `ok` means the command succeeded and RTK intentionally emitted a compact confirmation.
-- For `git status --short` (and porcelain-style status checks), `ok` means clean working tree (equivalent to no output in raw `--short`).
-- For `git status --short`, non-`ok` lines are status entries and should be treated as changes present.
-- Do not retry the same status command only to confirm `ok`; treat it as final unless another action changed repo state.
-- If RTK emits a parser/adapter warning (for example `JSON parse failed`) for a command, do one fallback run with `rtk proxy <original-command>` to get raw output.
-- Never loop retries of the same failing summarized command; run once, then fallback once, then stop retries and report result.
-
-## Loop Guard (Critical)
-
-If a summarized command fails with parser/adapter output, use this exact flow:
+If summarized command shows parser/adapter warning:
 
 1. Run summarized command once.
-2. If parser/adapter warning appears, run exactly one fallback: `rtk proxy <original-command>`.
-3. Use fallback output as source of truth.
-4. Do not run the summarized form again unless inputs changed (files, flags, env, cwd).
-5. If fallback fails too, stop and report failure; include log path if RTK printed one.
+2. Run one fallback: `rtk proxy <original-command>`.
+3. Treat proxy output as source of truth.
+4. Do not retry summarized form unless inputs changed (files/flags/env/cwd).
+5. If proxy fails, stop retries and report failure.
 
-Important: running the raw command text (for example `pnpm lint`) may still be auto-rewritten by the plugin. To bypass rewriting, fallback must be explicit `rtk proxy ...`.
+Use `rtk proxy ...` when exact raw/machine-readable output required.
 
-Example (`lint` parser warning):
+Example:
 
 ```bash
-# 1) summarized attempt
 rtk lint
-
-# 2) one fallback attempt (raw output)
 rtk proxy pnpm lint
-
-# 3) stop retries; act on fallback result
 ```
-
-Use raw output only when exact machine-readable formatting is required:
-
-```bash
-rtk proxy git status --short
-```
-
-## RTK Commands by Workflow
-
-### Build & Compile (80-90% savings)
-
-```bash
-rtk cargo build         # Cargo build output
-rtk cargo check         # Cargo check output
-rtk cargo clippy        # Clippy warnings grouped by file (80%)
-rtk tsc                 # TypeScript errors grouped by file/code (83%)
-rtk lint                # ESLint/Biome violations grouped (84%)
-rtk prettier --check    # Files needing format only (70%)
-rtk next build          # Next.js build with route metrics (87%)
-```
-
-### Test (90-99% savings)
-
-```bash
-rtk cargo test          # Cargo test failures only (90%)
-rtk vitest run          # Vitest failures only (99.5%)
-rtk playwright test     # Playwright failures only (94%)
-rtk test <cmd>          # Generic test wrapper - failures only
-```
-
-### Git (59-80% savings)
-
-```bash
-rtk git status          # Compact status
-rtk git log             # Compact log (works with all git flags)
-rtk git diff            # Compact diff (80%)
-rtk git show            # Compact show (80%)
-rtk git add             # Ultra-compact confirmations (59%)
-rtk git commit          # Ultra-compact confirmations (59%)
-rtk git push            # Ultra-compact confirmations
-rtk git pull            # Ultra-compact confirmations
-rtk git branch          # Compact branch list
-rtk git fetch           # Compact fetch
-rtk git stash           # Compact stash
-rtk git worktree        # Compact worktree
-```
-
-Note: Git passthrough works for ALL subcommands, even those not explicitly listed.
-
-### GitHub (26-87% savings)
-
-```bash
-rtk gh pr view <num>    # Compact PR view (87%)
-rtk gh pr checks        # Compact PR checks (79%)
-rtk gh run list         # Compact workflow runs (82%)
-rtk gh issue list       # Compact issue list (80%)
-rtk gh api              # Compact API responses (26%)
-```
-
-### JavaScript/TypeScript Tooling (70-90% savings)
-
-```bash
-rtk pnpm list           # Compact dependency tree (70%)
-rtk pnpm outdated       # Compact outdated packages (80%)
-rtk pnpm install        # Compact install output (90%)
-rtk npm run <script>    # Compact npm script output
-rtk npx <cmd>           # Compact npx command output
-rtk prisma              # Prisma without ASCII art (88%)
-```
-
-### Files & Search (60-75% savings)
-
-```bash
-rtk ls <path>           # Tree format, compact (65%)
-rtk read <file>         # Code reading with filtering (60%)
-rtk grep <pattern>      # Search grouped by file (75%)
-rtk find <pattern>      # Find grouped by directory (70%)
-```
-
-### Analysis & Debug (70-90% savings)
-
-```bash
-rtk err <cmd>           # Filter errors only from any command
-rtk log <file>          # Deduplicated logs with counts
-rtk json <file>         # JSON structure without values
-rtk deps                # Dependency overview
-rtk env                 # Environment variables compact
-rtk summary <cmd>       # Smart summary of command output
-rtk diff                # Ultra-compact diffs
-```
-
-### Infrastructure (85% savings)
-
-```bash
-rtk docker ps           # Compact container list
-rtk docker images       # Compact image list
-rtk docker logs <c>     # Deduplicated logs
-rtk kubectl get         # Compact resource list
-rtk kubectl logs        # Deduplicated pod logs
-```
-
-### Network (65-70% savings)
-
-```bash
-rtk curl <url>          # Compact HTTP responses (70%)
-rtk wget <url>          # Compact download output (65%)
-```
-
-### Meta Commands
-
-```bash
-rtk gain                # View token savings statistics
-rtk gain --history      # View command history with savings
-rtk discover            # Analyze Claude Code sessions for missed RTK usage
-rtk proxy <cmd>         # Run command without filtering (for debugging)
-rtk init                # Add RTK instructions to CLAUDE.md
-rtk init --global       # Add RTK to ~/.claude/CLAUDE.md
-```
-
-## Token Savings Overview
-
-| Category         | Commands                       | Typical Savings |
-| ---------------- | ------------------------------ | --------------- |
-| Tests            | vitest, playwright, cargo test | 90-99%          |
-| Build            | next, tsc, lint, prettier      | 70-87%          |
-| Git              | status, log, diff, add, commit | 59-80%          |
-| GitHub           | gh pr, gh run, gh issue        | 26-87%          |
-| Package Managers | pnpm, npm, npx                 | 70-90%          |
-| Files            | ls, read, grep, find           | 60-75%          |
-| Infrastructure   | docker, kubectl                | 85%             |
-| Network          | curl, wget                     | 65-70%          |
-
-Overall average: **60-90% token reduction** on common development operations.
 
 <!-- /rtk-instructions -->
