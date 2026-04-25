@@ -28,6 +28,7 @@ type AssistantTokens = {
 
 type AssistantMessage = {
   role: string
+  summary?: boolean
   cost?: number
   providerID?: string
   modelID?: string
@@ -80,10 +81,9 @@ const fullNumber = new Intl.NumberFormat("en-US")
 
 const defaultConfig: PluginConfig = {
   breakpoints: [
-    { metric: "percent", lte: 24, color: "success" },
-    { metric: "percent", lte: 49, color: "info" },
-    { metric: "percent", lte: 74, color: "warning" },
-    { metric: "percent", lte: Infinity, color: "error" },
+    { metric: "tokens", lte: 100000, color: "#98c379" },
+    { metric: "percent", lte: 74, color: "#e5c07b" },
+    { metric: "percent", lte: Infinity, color: "#e06c75" },
   ],
 }
 
@@ -193,13 +193,31 @@ function usageColor(
   return resolveColor(theme, config.breakpoints[config.breakpoints.length - 1]?.color ?? "textMuted", textMuted(theme))
 }
 
-function assistantMessages(api: TuiPluginApi, sessionID: string): AssistantMessage[] {
-  const messages = api.state.session.messages(sessionID)
-  if (Array.isArray(messages) === false) {
+function toAssistantMessage(row: unknown): AssistantMessage | undefined {
+  if (isRecord(row) === false) {
+    return undefined
+  }
+
+  if (row.role === "assistant") {
+    return row as AssistantMessage
+  }
+
+  if (isRecord(row.info) && row.info.role === "assistant") {
+    return row.info as AssistantMessage
+  }
+
+  return undefined
+}
+
+function assistantMessagesFromRows(rows: ReadonlyArray<unknown> | undefined): AssistantMessage[] {
+  if (Array.isArray(rows) === false) {
     return []
   }
 
-  return messages.filter((message): message is AssistantMessage => isRecord(message) && message.role === "assistant")
+  return rows.flatMap((row) => {
+    const message = toAssistantMessage(row)
+    return message ? [message] : []
+  })
 }
 
 function contextLimit(api: TuiPluginApi, message: AssistantMessage): number | undefined {
@@ -233,8 +251,7 @@ function lastAssistantWithUsage(messages: AssistantMessage[]): AssistantMessage 
   return undefined
 }
 
-function usageText(api: TuiPluginApi, sessionID: string) {
-  const assistants = assistantMessages(api, sessionID)
+function usageTextFromAssistants(api: TuiPluginApi, assistants: AssistantMessage[]) {
   const last = lastAssistantWithUsage(assistants)
 
   if (!last?.tokens) {
@@ -283,8 +300,23 @@ function eventSessionID(properties: Record<string, unknown>): string | undefined
 
 function useUsage(props: { api: TuiPluginApi; sessionID: string }) {
   const [refresh, setRefresh] = createSignal(0)
+  const [fetchedAssistants, setFetchedAssistants] = createSignal<AssistantMessage[]>([])
   let timer: ReturnType<typeof setTimeout> | undefined
   let bootstrapTimer: ReturnType<typeof setTimeout> | undefined
+
+  const fetchAssistants = async () => {
+    try {
+      const response = await props.api.client.session.messages({
+        path: { id: props.sessionID },
+        query: { directory: props.api.state.path.directory },
+      })
+      const rows = Array.isArray(response) ? response : Array.isArray(response.data) ? response.data : []
+      setFetchedAssistants(assistantMessagesFromRows(rows))
+      setRefresh((value) => value + 1)
+    } catch {
+      // Ignore initial fetch failures and fall back to synced state updates.
+    }
+  }
 
   const queueRefresh = (properties: Record<string, unknown>) => {
     const sessionID = eventSessionID(properties)
@@ -315,7 +347,12 @@ function useUsage(props: { api: TuiPluginApi; sessionID: string }) {
     bootstrapAttempts += 1
     setRefresh((value) => value + 1)
 
-    if (usageText(props.api, props.sessionID) || bootstrapAttempts >= maxBootstrapAttempts) {
+    const syncedAssistants = assistantMessagesFromRows(props.api.state.session.messages(props.sessionID))
+    if (syncedAssistants.length === 0 && fetchedAssistants().length === 0) {
+      void fetchAssistants()
+    }
+
+    if (usageTextFromAssistants(props.api, syncedAssistants) || usageTextFromAssistants(props.api, fetchedAssistants()) || bootstrapAttempts >= maxBootstrapAttempts) {
       return
     }
 
@@ -340,7 +377,13 @@ function useUsage(props: { api: TuiPluginApi; sessionID: string }) {
 
   return createMemo(() => {
     refresh()
-    return usageText(props.api, props.sessionID)
+    const syncedAssistants = assistantMessagesFromRows(props.api.state.session.messages(props.sessionID))
+    const syncedUsage = usageTextFromAssistants(props.api, syncedAssistants)
+    if (syncedUsage) {
+      return syncedUsage
+    }
+
+    return usageTextFromAssistants(props.api, fetchedAssistants())
   })
 }
 

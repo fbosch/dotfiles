@@ -32,6 +32,14 @@ declare module "@opentui/solid/jsx-runtime" {
 
 declare module "@opencode-ai/plugin/tui" {
   export interface TuiPluginApi {
+    client: {
+      session: {
+        messages(input: {
+          path: { id: string }
+          query?: { directory?: string }
+        }): Promise<{ data?: unknown[] } | unknown[]>
+      }
+    }
     theme: {
       current: Record<string, unknown>
     }
@@ -39,6 +47,9 @@ declare module "@opencode-ai/plugin/tui" {
       on(type: string, handler: (event: { properties: Record<string, unknown> }) => void): () => void
     }
     state: {
+      path: {
+        directory: string
+      }
       provider: unknown[]
       session: {
         messages(sessionID: string): unknown[]

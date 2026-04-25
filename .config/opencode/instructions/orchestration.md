@@ -16,3 +16,8 @@
 | `review`           | Findings are the main output: code review, PR review, risk audit                                                         |
 | `spec`             | Turning a request into an explicit contract before implementation                                                        |
 | `test`             | Writing or expanding tests                                                                                               |
+
+## Guardrails
+
+- Do not use `quick` for detailed specification work, documentation writing, or other deliverables where depth, nuance, or contract-shaping matters.
+- Prefer `spec` for specs, `docs` for documentation, and `research` or `analyze` when the task requires deeper investigation before writing.
