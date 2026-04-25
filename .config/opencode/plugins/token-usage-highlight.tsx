@@ -1,9 +1,10 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui"
+import { RGBA } from "@opentui/core"
 import type { JSX } from "solid-js"
-import { createMemo, createSignal, onCleanup } from "solid-js"
+import { createMemo, createSignal, onCleanup, Show } from "solid-js"
 
-type ThemeColor = string | import("@opentui/core").RGBA
+type ThemeColor = string | RGBA
 type ThemeMap = Record<string, unknown>
 
 type TokenBreakPoint = {
@@ -128,7 +129,11 @@ function parseConfig(options: unknown): PluginConfig {
 }
 
 function resolveColor(theme: ThemeMap, name: string, fallback: ThemeColor): ThemeColor {
-  if (/^(#|rgb\(|rgba\(|hsl\(|hsla\()/i.test(name)) {
+  if (/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(name)) {
+    return RGBA.fromHex(name)
+  }
+
+  if (/^(rgb\(|rgba\(|hsl\(|hsla\()/i.test(name)) {
     return name
   }
 
@@ -163,6 +168,14 @@ function text(theme: ThemeMap): ThemeColor {
 
 function textMuted(theme: ThemeMap): ThemeColor {
   return resolveColor(theme, "textMuted", "#808080")
+}
+
+function colorKey(color: ThemeColor): string {
+  if (typeof color === "string") {
+    return color
+  }
+
+  return `${color.r}:${color.g}:${color.b}:${color.a}`
 }
 
 function usageColor(
@@ -417,7 +430,12 @@ function TokenUsageOverlay(props: { api: TuiPluginApi; sessionID: string; config
   const muted = createMemo(() => textMuted(theme()))
   const info = createMemo(() => usage())
 
-  return info() ? (
+  return (
+    <Show when={info()} keyed>
+      {(current) => {
+        const color = foreground()
+        const key = colorKey(color)
+        return (
     <box
       position="absolute"
       right={PROMPT_COMMAND_HINT_WIDTH}
@@ -429,12 +447,17 @@ function TokenUsageOverlay(props: { api: TuiPluginApi; sessionID: string; config
       paddingRight={1}
       alignItems="center"
     >
-      <text fg={foreground()} wrapMode="none">
-        {info()!.contextCompact}
-        <span style={{ fg: muted() }}>{` · ${info()!.cost}`}</span>
-      </text>
+      <box flexDirection="row">
+        <text id={`token-usage-${key}`} fg={color} wrapMode="none">
+          {current.contextCompact}
+        </text>
+        <text fg={muted()} wrapMode="none">{` · ${current.cost}`}</text>
+      </box>
     </box>
-  ) : null
+        )
+      }}
+    </Show>
+  )
 }
 
 function SidebarContext(props: { api: TuiPluginApi; sessionID: string; config: PluginConfig }): JSX.Element {
@@ -459,7 +482,9 @@ function SidebarContext(props: { api: TuiPluginApi; sessionID: string; config: P
         <b>Context</b>
       </text>
       <text fg={tokenColor()}>{info()!.tokensFull}</text>
-      {info()!.usageFull ? <text fg={percentColor()}>{info()!.usageFull}</text> : null}
+      {info()!.usageFull ? (
+        <text fg={percentColor()}>{info()!.usageFull}</text>
+      ) : null}
       <text fg={textMuted(theme())}>{info()!.cost} spent</text>
     </box>
   ) : null

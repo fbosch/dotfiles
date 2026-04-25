@@ -13,14 +13,17 @@ declare module "solid-js" {
   export function createMemo<T>(fn: () => T): Accessor<T>
   export function createSignal<T>(value: T): [Accessor<T>, (next: T | ((prev: T) => T)) => T]
   export function onCleanup(fn: () => void): void
+  export function Show<T>(props: { when: T | undefined | null | false; keyed?: boolean; children: (value: T) => JSX.Element }): JSX.Element
 }
 
 declare module "@opentui/core" {
-  export interface RGBA {
+  export class RGBA {
     r: number
     g: number
     b: number
     a: number
+
+    static fromHex(hex: string): RGBA
   }
 }
 
