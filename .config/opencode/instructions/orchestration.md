@@ -8,6 +8,7 @@
 | `benchmark`        | Performance measurement, profiling, before/after comparisons                                                             |
 | `debug`            | Root-cause analysis, logs, failing commands, unexpected behavior                                                         |
 | `docs`             | Documentation is the main deliverable                                                                                    |
+| `explore`          | Broad codebase discovery, locating relevant files, or answering where/how something is implemented                       |
 | `ideate`           | Generating options, alternatives, and directions before converging                                                       |
 | `patterns`         | Finding existing examples, conventions, or prior implementations to copy from                                            |
 | `quick`            | Well-scoped, deterministic work: fetch-and-format tasks, small localized edits, focused cleanup, lightweight repo checks |
@@ -20,4 +21,11 @@
 ## Guardrails
 
 - Do not use `quick` for detailed specification work, documentation writing, or other deliverables where depth, nuance, or contract-shaping matters.
-- Prefer `spec` for specs, `docs` for documentation, and `research` or `analyze` when the task requires deeper investigation before writing.
+- Prefer `spec` for specs and `docs` for documentation.
+- Use subagents before doing primary-agent investigation when the user's request is mainly analysis, research, exploration, debugging, or review.
+- Use `research` for source-backed investigation across docs, web, GitHub, or codebases where no file changes are requested.
+- Use `analyze` for explaining existing code behavior with precise file and line references.
+- Use `explore` for broad codebase discovery, locating relevant files, or answering where/how something is implemented.
+- Use `patterns` for finding existing examples or conventions to copy.
+- Use `debug` for reproducing or diagnosing errors, failing commands, logs, or unexpected behavior.
+- The primary agent may do only narrow reads/searches needed to choose the right subagent. Do not continue the full investigation in the primary agent when a listed subagent matches.

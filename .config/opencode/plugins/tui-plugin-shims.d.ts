@@ -35,8 +35,8 @@ declare module "@opencode-ai/plugin/tui" {
     client: {
       session: {
         messages(input: {
-          path: { id: string }
-          query?: { directory?: string }
+          sessionID: string
+          limit?: number
         }): Promise<{ data?: unknown[] } | unknown[]>
       }
     }
@@ -44,7 +44,7 @@ declare module "@opencode-ai/plugin/tui" {
       current: Record<string, unknown>
     }
     event: {
-      on(type: string, handler: (event: { properties: Record<string, unknown> }) => void): () => void
+      on(type: string, handler: (event: { properties?: unknown }) => void): () => void
     }
     state: {
       path: {

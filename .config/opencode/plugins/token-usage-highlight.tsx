@@ -17,12 +17,12 @@ type PluginConfig = {
 }
 
 type AssistantTokens = {
-  input: number
-  output: number
-  reasoning: number
-  cache: {
-    read: number
-    write: number
+  input?: number
+  output?: number
+  reasoning?: number
+  cache?: {
+    read?: number
+    write?: number
   }
 }
 
@@ -233,7 +233,13 @@ function contextLimit(api: TuiPluginApi, message: AssistantMessage): number | un
 }
 
 function totalTokens(tokens: AssistantTokens): number {
-  return tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write
+  return (
+    (tokens.input ?? 0) +
+    (tokens.output ?? 0) +
+    (tokens.reasoning ?? 0) +
+    (tokens.cache?.read ?? 0) +
+    (tokens.cache?.write ?? 0)
+  )
 }
 
 function lastAssistantWithUsage(messages: AssistantMessage[]): AssistantMessage | undefined {
@@ -243,7 +249,7 @@ function lastAssistantWithUsage(messages: AssistantMessage[]): AssistantMessage 
       continue
     }
 
-    if (message.tokens.output > 0) {
+    if (totalTokens(message.tokens) > 0) {
       return message
     }
   }
@@ -282,6 +288,10 @@ function usageTextFromAssistants(api: TuiPluginApi, assistants: AssistantMessage
   }
 }
 
+function eventProperties(event: { properties?: unknown }): Record<string, unknown> {
+  return isRecord(event.properties) ? event.properties : {}
+}
+
 function eventSessionID(properties: Record<string, unknown>): string | undefined {
   if (typeof properties.sessionID === "string") {
     return properties.sessionID
@@ -295,6 +305,10 @@ function eventSessionID(properties: Record<string, unknown>): string | undefined
     return properties.part.sessionID
   }
 
+  if (isRecord(properties.message) && typeof properties.message.sessionID === "string") {
+    return properties.message.sessionID
+  }
+
   return undefined
 }
 
@@ -305,10 +319,14 @@ function useUsage(props: { api: TuiPluginApi; sessionID: string }) {
   let bootstrapTimer: ReturnType<typeof setTimeout> | undefined
 
   const fetchAssistants = async () => {
+    if (!props.sessionID) {
+      return
+    }
+
     try {
       const response = await props.api.client.session.messages({
-        path: { id: props.sessionID },
-        query: { directory: props.api.state.path.directory },
+        sessionID: props.sessionID,
+        limit: 100,
       })
       const rows = Array.isArray(response) ? response : Array.isArray(response.data) ? response.data : []
       setFetchedAssistants(assistantMessagesFromRows(rows))
@@ -318,7 +336,7 @@ function useUsage(props: { api: TuiPluginApi; sessionID: string }) {
     }
   }
 
-  const queueRefresh = (properties: Record<string, unknown>) => {
+  const queueRefresh = (properties: Record<string, unknown>, shouldFetch: boolean) => {
     const sessionID = eventSessionID(properties)
     if (sessionID && sessionID !== props.sessionID) {
       return
@@ -330,15 +348,19 @@ function useUsage(props: { api: TuiPluginApi; sessionID: string }) {
 
     timer = setTimeout(() => {
       setRefresh((value) => value + 1)
-    }, 40)
+      if (shouldFetch) {
+        void fetchAssistants()
+      }
+    }, 80)
   }
 
   const unsubscribers = [
-    props.api.event.on("message.updated", (event) => queueRefresh(event.properties)),
-    props.api.event.on("message.removed", (event) => queueRefresh(event.properties)),
-    props.api.event.on("message.part.updated", (event) => queueRefresh(event.properties)),
-    props.api.event.on("session.compacted", (event) => queueRefresh(event.properties)),
-    props.api.event.on("session.updated", (event) => queueRefresh(event.properties)),
+    props.api.event.on("message.updated", (event) => queueRefresh(eventProperties(event), true)),
+    props.api.event.on("message.removed", (event) => queueRefresh(eventProperties(event), true)),
+    props.api.event.on("message.part.updated", (event) => queueRefresh(eventProperties(event), false)),
+    props.api.event.on("session.compacted", (event) => queueRefresh(eventProperties(event), true)),
+    props.api.event.on("session.idle", (event) => queueRefresh(eventProperties(event), true)),
+    props.api.event.on("session.updated", (event) => queueRefresh(eventProperties(event), true)),
   ]
 
   let bootstrapAttempts = 0
