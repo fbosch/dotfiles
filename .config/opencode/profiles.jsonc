@@ -145,7 +145,7 @@
         "test": "openai/gpt-5.3-codex",
         "review": "openai/gpt-5.4",
         "docs": "openai/gpt-5.4",
-        "research": "openai/gpt-5.3-codex",
+        "research": "openai/gpt-5.5",
         "quick": "openai/gpt-5.4-mini-fast",
         "benchmark": "openai/gpt-5.4-mini-fast",
         "spec": "openai/gpt-5.1-codex-max"
