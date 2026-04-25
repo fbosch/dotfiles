@@ -23,6 +23,6 @@ Execution constraints for this command:
 
 1. Treat Linear MCP issue data as authoritative for operational metadata.
 2. Fetch `gitBranchName` from Linear before branch/worktree decisions when it is missing from prompt input.
-3. Use WorkTrunk for branch/worktree setup.
-4. Prefer specialized tools (Linear MCP + WorkTrunk plugin) over generic shell git workflows for issue/branch orchestration.
+3. Use the `wt` CLI for branch/worktree setup.
+4. Prefer specialized Linear MCP tools plus the `wt` CLI over generic shell git workflows for issue/branch orchestration.
 5. Return the exact six output blocks required by the skill.

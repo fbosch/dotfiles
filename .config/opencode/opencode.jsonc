@@ -5,7 +5,6 @@
     "opencode-toolbox",
     "./plugins/openmemory/openmemory.ts",
     "opencode-wakatime",
-    "./plugins/worktrunk.ts",
     "./plugins/rtk.ts",
     "./plugins/opencode-handoff/handoff.ts"
   ],
