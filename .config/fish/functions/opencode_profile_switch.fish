@@ -55,7 +55,7 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
     set -l choice_to_profile
 
     for row in $list_lines
-        set -l parts (string split 	 -- "$row")
+        set -l parts (string split \t -- "$row")
         if test (count $parts) -lt 3
             continue
         end
@@ -75,6 +75,11 @@ function opencode_profile_switch --description 'Switch OpenCode model profile'
         end
         set choice_labels $choice_labels "$label"
         set choice_to_profile $choice_to_profile "$profile"
+    end
+
+    if test (count $choice_labels) -eq 0
+        echo "no valid profiles found in: $profiles_file"
+        return 1
     end
 
     set -l chooser_header "Select OpenCode model profile"
