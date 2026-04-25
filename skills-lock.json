@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "91782f423f6fad0fe4e2159350f2eb8c3cf66cfa4d2387b2c8d927d443c9a603"
     },
+    "ascii-visualizer": {
+      "source": "yonatangross/orchestkit",
+      "sourceType": "github",
+      "computedHash": "789d0c57c7f27e0b0c6a41e37a1335255064e64882c96f4a9d3479852a252400"
+    },
     "bun": {
       "source": "bun.sh",
       "sourceType": "well-known",
