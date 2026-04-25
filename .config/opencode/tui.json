@@ -1,5 +1,32 @@
 {
   "$schema": "https://opencode.ai/tui.json",
+  "plugin": [
+    [
+      "./plugins/token-usage-highlight.tsx",
+      {
+        "breakpoints": [
+          {
+            "metric": "tokens",
+            "lte": 100000,
+            "color": "#98c379"
+          },
+          {
+            "metric": "percent",
+            "lte": 74,
+            "color": "#e5c07b"
+          },
+          {
+            "metric": "percent",
+            "lte": 100,
+            "color": "#e06c75"
+          }
+        ]
+      }
+    ]
+  ],
+  "plugin_enabled": {
+    "internal:sidebar-context": false
+  },
   "keybinds": {
     "input_move_up": "up,ctrl+p,ctrl+k,alt+k",
     "input_move_down": "down,ctrl+n,ctrl+j,alt+j",
