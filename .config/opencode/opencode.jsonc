@@ -6,7 +6,8 @@
     "./plugins/openmemory/openmemory.ts",
     "opencode-wakatime",
     "./plugins/worktrunk.ts",
-    "./plugins/rtk.ts"
+    "./plugins/rtk.ts",
+    "./plugins/opencode-handoff/handoff.ts"
   ],
   "instructions": [
     "~/.config/opencode/instructions/RTK.md",
