@@ -68,7 +68,6 @@
         "ghcr.io/promptexecution/just-mcp:latest",
         "--stdio"
       ]
-    }
   },
   "settings": {
     "defaultLimit": 5,

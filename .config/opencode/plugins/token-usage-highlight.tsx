@@ -65,13 +65,7 @@ type SlotComponent = (
 ) => JSX.Element | null
 
 const id = "token-usage-highlight"
-const SIDEBAR_ORDER = 100
 const PROMPT_COMMAND_HINT_WIDTH = 17
-
-const money = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-})
 
 const compactNumber = new Intl.NumberFormat("en-US", {
   notation: "compact",
@@ -152,18 +146,6 @@ function promptBackground(theme: ThemeMap): ThemeColor {
   }
 
   return resolveColor(theme, "backgroundPanel", "#111111")
-}
-
-function panelBackground(theme: ThemeMap): ThemeColor {
-  return resolveColor(theme, "backgroundPanel", "#111111")
-}
-
-function panelBorder(theme: ThemeMap): ThemeColor {
-  return resolveColor(theme, "border", "#333333")
-}
-
-function text(theme: ThemeMap): ThemeColor {
-  return resolveColor(theme, "text", "#ffffff")
 }
 
 function textMuted(theme: ThemeMap): ThemeColor {
@@ -284,19 +266,11 @@ function usageTextFromAssistants(api: TuiPluginApi, assistants: AssistantMessage
 
   const limit = contextLimit(api, last)
   const percent = limit && limit > 0 ? Math.round((used / limit) * 100) : undefined
-  const cost = assistants.reduce((sum, message) => {
-    const next = asFiniteNumber(message.cost)
-    if (next === undefined) return sum
-    return sum + next
-  }, 0)
-
   return {
     used,
     contextCompact: percent !== undefined ? `${compactNumber.format(used)} (${percent}%)` : compactNumber.format(used),
     tokensFull: `${fullNumber.format(used)} tokens`,
     usageFull: percent !== undefined ? `${percent}% used` : undefined,
-    cost: money.format(cost),
-    hasCost: cost > 0,
     percent,
   }
 }
@@ -427,7 +401,6 @@ function TokenUsageOverlay(props: { api: TuiPluginApi; sessionID: string; config
   const theme = createMemo(() => props.api.theme.current as ThemeMap)
   const background = createMemo(() => promptBackground(theme()))
   const foreground = createMemo(() => usageColor(theme(), props.config, usage()))
-  const muted = createMemo(() => textMuted(theme()))
   const info = createMemo(() => usage())
 
   return (
@@ -451,43 +424,12 @@ function TokenUsageOverlay(props: { api: TuiPluginApi; sessionID: string; config
         <text id={`token-usage-${key}`} fg={color} wrapMode="none">
           {current.contextCompact}
         </text>
-        <text fg={muted()} wrapMode="none">{` · ${current.cost}`}</text>
       </box>
     </box>
         )
       }}
     </Show>
   )
-}
-
-function SidebarContext(props: { api: TuiPluginApi; sessionID: string; config: PluginConfig }): JSX.Element {
-  const usage = useUsage(props)
-  const theme = createMemo(() => props.api.theme.current as ThemeMap)
-  const tokenColor = createMemo(() => usageColor(theme(), props.config, usage()))
-  const percentColor = createMemo(() => usageColor(theme(), props.config, usage()))
-  const info = createMemo(() => usage())
-
-  return info() ? (
-    <box
-      border
-      borderColor={panelBorder(theme())}
-      backgroundColor={panelBackground(theme())}
-      paddingTop={1}
-      paddingBottom={1}
-      paddingLeft={2}
-      paddingRight={2}
-      flexDirection="column"
-    >
-      <text fg={text(theme())}>
-        <b>Context</b>
-      </text>
-      <text fg={tokenColor()}>{info()!.tokensFull}</text>
-      {info()!.usageFull ? (
-        <text fg={percentColor()}>{info()!.usageFull}</text>
-      ) : null}
-      <text fg={textMuted(theme())}>{info()!.cost} spent</text>
-    </box>
-  ) : null
 }
 
 const tui: TuiPlugin = async (api: TuiPluginApi, options: unknown) => {
@@ -518,18 +460,6 @@ const tui: TuiPlugin = async (api: TuiPluginApi, options: unknown) => {
     },
   })
 
-  api.slots.register({
-    order: SIDEBAR_ORDER,
-    slots: {
-      sidebar_content(_ctx: unknown, props: Record<string, unknown>) {
-        if (typeof props.session_id !== "string") {
-          return null
-        }
-
-        return <SidebarContext api={api} sessionID={props.session_id} config={config} />
-      },
-    },
-  })
 }
 
 const plugin: TuiPluginModule & { id: string } = {
