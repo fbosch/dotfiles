@@ -3,13 +3,30 @@ local wezterm = require("wezterm")
 local agent_deck = require("lua.agent")
 local theme = require("lua.theme")
 
--- Initialize GLOBAL.cols with a safe default
-wezterm.GLOBAL.cols = wezterm.GLOBAL.cols or 100
+local window_cols = wezterm.GLOBAL.window_cols or {}
+wezterm.GLOBAL.window_cols = window_cols
+
+local function get_window_key(window)
+	local ok, window_id = pcall(function()
+		return window:window_id()
+	end)
+	if ok and window_id ~= nil then
+		return tostring(window_id)
+	end
+	return "default"
+end
+
+local function get_tab_window_key(tab)
+	if tab and tab.window_id ~= nil then
+		return tostring(tab.window_id)
+	end
+	return "default"
+end
 
 function get_max_cols(window)
 	local tab = window:active_tab()
 	if not tab then
-		return wezterm.GLOBAL.cols or 100
+		return 100
 	end
 	local cols = tab:get_size().cols
 	return cols
@@ -79,8 +96,8 @@ local function format_tab_title(tab, tabs, panes, config, hover, max_width)
 	local base_title = "[" .. tab.tab_index + 1 .. "] " .. title
 	local full_title_length = #base_title + icon_count + (icon_count > 0 and 1 or 0)
 	
-	-- Safely get cols with fallback to max_width
-	local available_cols = wezterm.GLOBAL.cols or max_width or 100
+	local window_key = get_tab_window_key(tab)
+	local available_cols = window_cols[window_key] or max_width or 100
 	local num_tabs = #tabs > 0 and #tabs or 1
 	
 	local pad_length = math.floor((available_cols / num_tabs - full_title_length) / 2)
@@ -121,11 +138,11 @@ return function(config)
 	end
 
 	wezterm.on("window-config-reloaded", function(window)
-		wezterm.GLOBAL.cols = get_max_cols(window) - status_bar_offset_cols
+		window_cols[get_window_key(window)] = get_max_cols(window) - status_bar_offset_cols
 	end)
 
 	wezterm.on("window-resized", function(window, pane)
-		wezterm.GLOBAL.cols = get_max_cols(window) - status_bar_offset_cols
+		window_cols[get_window_key(window)] = get_max_cols(window) - status_bar_offset_cols
 	end)
 
 	wezterm.on("format-tab-title", format_tab_title)
