@@ -1,4 +1,5 @@
 package.path = package.path
+	.. ";./.config/wezterm/?.lua"
 	.. ";./.config/wezterm/lua/?.lua"
 	.. ";./.config/wezterm/lua/?/init.lua"
 
@@ -109,5 +110,18 @@ os.date = original_os_date
 
 assert_eq(type(captured_status), "table", "status payload type")
 assert_eq(find_text(captured_status, "[end] 6.5 "), true, "workhours indicator rendered")
+
+captured_status = nil
+update_status({
+	mux_window = function()
+		return nil
+	end,
+	set_right_status = function(_, value)
+		captured_status = value
+	end,
+	toast_notification = function() end,
+})
+
+assert_eq(type(captured_status), "table", "status handles missing mux window")
 
 print("status_workhours_spec: ok")

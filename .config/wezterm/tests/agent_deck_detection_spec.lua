@@ -66,8 +66,10 @@ assert_eq(overlay_hinted and overlay_hinted.status, "waiting", "hinted overlay s
 assert_eq(overlay_hinted and overlay_hinted.confidence, "hinted", "hinted overlay confidence")
 
 local overlay_rejected = detection.detect_overlay_state_from_text({
-	text = "Type your own answer\n",
+	text = "OpenCode screen\n",
 	has_opencode_process = false,
+	screen_markers = { "OpenCode screen" },
+	waiting_patterns = { "Allow once" },
 })
 assert_eq(overlay_rejected, nil, "hinted overlay requires waiting pattern")
 

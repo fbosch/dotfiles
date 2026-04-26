@@ -4,15 +4,14 @@ Wezterm terminal configuration with modular Lua setup for theming, keybinds, and
 
 **Project:** [Wezterm](https://wezfurlong.org/wezterm/)
 
-**Configuration modules (wezterm.lua imports all):**
-- `lua/base.lua` - Core settings (WebGPU, performance, status updates, shell processes)
+**Configuration modules (wezterm.lua imports):**
+- `lua/base.lua` - Core settings (OpenGL frontend, performance, status updates, shell processes)
 - `lua/colors.lua` - Color scheme (zenwritten_dark) and tab bar colors
 - `lua/agent/deck.lua` - AI agent status integration via wezterm-agent-deck plugin
 - `lua/theme.lua` - Shared theme palette used by WezTerm modules
 - `lua/fonts.lua` - Font stack with fallbacks (Zenbones Brainy, JetBrains Mono, Nerd Fonts)
 - `lua/keys.lua` - Keyboard keybindings (raw key codes for layout independence)
 - `lua/layout.lua` - Window decorations, padding, and startup behavior
-- `lua/mux.lua` - Multiplexer domain configuration
 - `lua/platform.lua` - Platform-specific settings
 - `lua/status.lua` - Status bar with date/time, week number, and work hours tracking
 - `lua/tabs.lua` - Tab bar configuration (bottom position, custom formatting)
@@ -33,5 +32,5 @@ Wezterm terminal configuration with modular Lua setup for theming, keybinds, and
 - Tab icons are colorized by agent state (working/waiting/idle/inactive)
 - Tab bar positioned at bottom with custom formatting
 - Uses raw key codes for keybinds (keyboard layout independent)
-- WebGPU frontend with 120fps max, Wayland enabled on Linux
+- OpenGL frontend with 120fps max, Wayland enabled on Linux
 - Managed via Nix/Home Manager as part of dotfiles

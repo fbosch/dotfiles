@@ -66,6 +66,50 @@ local pane_refresh_timestamps = {}
 local attention_notification_timestamps = {}
 local now_ms
 
+local function prune_closed_panes()
+	if not (wezterm.mux and wezterm.mux.all_windows) then
+		return
+	end
+
+	local ok, mux_windows = pcall(wezterm.mux.all_windows)
+	if not ok or mux_windows == nil then
+		return
+	end
+
+	local live_panes = {}
+	for _, mux_window in ipairs(mux_windows) do
+		local tabs_ok, tabs = pcall(function()
+			return mux_window:tabs()
+		end)
+		if tabs_ok and tabs then
+			for _, tab in ipairs(tabs) do
+				local panes_ok, panes = pcall(function()
+					return tab:panes()
+				end)
+				if panes_ok and panes then
+					for _, pane in ipairs(panes) do
+						local pane_id_ok, pane_id = pcall(function()
+							return pane:pane_id()
+						end)
+						if pane_id_ok and pane_id ~= nil then
+							live_panes[pane_id] = true
+						end
+					end
+				end
+			end
+		end
+	end
+
+	for pane_id in pairs(pane_states) do
+		if not live_panes[pane_id] then
+			pane_states[pane_id] = nil
+			detection_cache[pane_id] = nil
+			pane_refresh_timestamps[pane_id] = nil
+			attention_notification_timestamps[pane_id] = nil
+		end
+	end
+end
+
 local function log_notification_debug(message)
 	if notification_debug then
 		wezterm.log_info("[wezterm] agent deck notification: " .. tostring(message))
@@ -564,6 +608,8 @@ function M.get_status_icon(status)
 end
 
 function M.count_waiting()
+	prune_closed_panes()
+
 	local waiting = 0
 	for _, state in pairs(pane_states) do
 		if M.should_render_state(state) and state.status == "waiting" then

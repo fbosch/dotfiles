@@ -68,9 +68,12 @@ local function update_right_status(window)
 	end
 
 	if agent_deck then
-		for _, tab in ipairs(window:mux_window():tabs()) do
-			for _, pane in ipairs(tab:panes()) do
-				agent_deck.update_pane(pane)
+		local mux_window = window:mux_window()
+		if mux_window then
+			for _, tab in ipairs(mux_window:tabs()) do
+				for _, pane in ipairs(tab:panes()) do
+					agent_deck.update_pane(pane)
+				end
 			end
 		end
 
