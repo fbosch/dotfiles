@@ -10,20 +10,21 @@ Input:
 - If empty, infer the PR from the current branch.
 
 Pre-flight:
-1. Use the script-generated context below as the source of truth.
+1. Call `gh_pr_feedback_context` with `input: "$ARGUMENTS"` and use its returned context as the source of truth.
 2. If context starts with `ERROR:`, output only that error and stop.
 3. Do not infer missing metadata that is not present in context.
 
 Tool routing:
-1. For the final user-choice prompt, call the built-in `question` tool directly.
-2. Do not run tool-discovery/reconciliation steps (`toolbox_search_*`, `toolbox_status`, `sequential-thinking`) for this command.
-3. If `question` call fails once, stop retrying and output the same choices in plain text.
+1. For PR feedback context, call the `gh_pr_feedback_context` tool directly.
+2. For the final user-choice prompt, call the built-in `question` tool directly.
+3. Do not run tool-discovery/reconciliation steps (`toolbox_search_*`, `toolbox_status`, `sequential-thinking`) for this command.
+4. If `question` call fails once, stop retrying and output the same choices in plain text.
 
-SCRIPT-GENERATED REVIEW CONTEXT:
-!`sh -c 'OPENCODE_LIBEXEC_CWD="$PWD" bun --cwd "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/libexec" "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/libexec/gh_pr_feedback_context.ts" all "$1" 2>/dev/null || OPENCODE_LIBEXEC_CWD="$PWD" bun --cwd "$HOME/dotfiles/.config/opencode/libexec" "$HOME/dotfiles/.config/opencode/libexec/gh_pr_feedback_context.ts" all "$1" 2>/dev/null || echo "ERROR: Missing gh_pr_feedback_context.ts"' -- "$ARGUMENTS"`
+TOOL-GENERATED REVIEW CONTEXT:
+Call `gh_pr_feedback_context` with `input: "$ARGUMENTS"`.
 
 Workflow:
-1. Parse `SCRIPT-GENERATED REVIEW CONTEXT` JSON.
+1. Parse `TOOL-GENERATED REVIEW CONTEXT` JSON.
 2. Validate expected top-level keys exist: `pr`, `threads`, `proposedResolve`, `proposedIrrelevant`, `keepOpen`.
    - If one is missing, output: `ERROR: Invalid review context payload` and stop.
    - Do not attempt to reconstruct missing fields.

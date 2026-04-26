@@ -84,7 +84,7 @@
     },
     "parakeet": {
       "model_dir": "models/parakeet/parakeet-tdt-0.6b-v3-onnx",
-      "prompt": "Transcribe as technical dictation with proper capitalization, acronyms, and technical terminology. Do not add commentary.",
+      "prompt": "Transcribe as clean dictated text for replying in a chat input. Infer punctuation and capitalization. Omit filler words such as uh and um, false starts, and repeated stutters. Preserve technical terms, commands, filenames, and code-like tokens exactly. Do not add commentary.",
     },
   },
 }
