@@ -13,6 +13,8 @@ local stub_counts = {
 	monitors = 0,
 	events = 0,
 	exec_commands = 0,
+	binds = 0,
+	submaps = 0,
 	workspace_rules = 0,
 	window_rules = 0,
 	layer_rules = 0,
@@ -25,6 +27,29 @@ local function stub_handle()
 			return true
 		end,
 	}
+end
+
+local function stub_dispatcher()
+	return function() end
+end
+
+local function stub_namespace()
+	local namespace = {}
+	setmetatable(namespace, {
+		__index = function(_, key)
+			local value = function()
+				return stub_dispatcher()
+			end
+
+			if key == "window" or key == "workspace" or key == "group" or key == "cursor" then
+				value = stub_namespace()
+			end
+
+			rawset(namespace, key, value)
+			return value
+		end,
+	})
+	return namespace
 end
 
 -- Hyprland provides `hl`; local Lua validation needs a small shim.
@@ -70,6 +95,15 @@ if hl == nil then
 		exec_cmd = function()
 			stub_counts.exec_commands = stub_counts.exec_commands + 1
 		end,
+		bind = function()
+			stub_counts.binds = stub_counts.binds + 1
+			return stub_handle()
+		end,
+		define_submap = function(_, callback)
+			stub_counts.submaps = stub_counts.submaps + 1
+			callback()
+		end,
+		dsp = stub_namespace(),
 	}
 end
 
@@ -79,6 +113,7 @@ dofile(home .. "/.config/hypr/lua/base.lua")
 local programs = dofile(home .. "/.config/hypr/lua/programs.lua")
 local monitors = dofile(home .. "/.config/hypr/lua/monitors.lua")
 dofile(home .. "/.config/hypr/lua/rules/workspace-base.lua")
+dofile(home .. "/.config/hypr/lua/keybinds.lua")
 dofile(home .. "/.config/hypr/lua/animations.lua")
 
 local generated = loader.apply_window_rules({
@@ -112,6 +147,8 @@ loader.log("loaded " .. tostring(stub_counts.devices) .. " device configs")
 loader.log("loaded " .. tostring(stub_counts.monitors) .. " monitor rules")
 loader.log("loaded " .. tostring(stub_counts.events) .. " event handlers")
 loader.log("loaded " .. tostring(stub_counts.exec_commands) .. " autostart commands")
+loader.log("loaded " .. tostring(stub_counts.binds) .. " keybinds")
+loader.log("loaded " .. tostring(stub_counts.submaps) .. " submaps")
 loader.log("applied " .. tostring(generated.applied) .. " generated rules")
 loader.log("loaded " .. tostring(stub_counts.workspace_rules) .. " static workspace rules")
 loader.log("loaded " .. tostring(static_window_rules) .. " static window rules")

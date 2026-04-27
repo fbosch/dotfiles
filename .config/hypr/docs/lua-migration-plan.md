@@ -20,6 +20,7 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
     programs.lua
     monitors.lua
     autostart.lua
+    keybinds.lua
     animations.lua
     environment.lua
     appearance.lua
@@ -168,6 +169,7 @@ Current staged modules:
 - `lua/programs.lua`
 - `lua/monitors.lua`
 - `lua/autostart.lua`
+- `lua/keybinds.lua`
 - `lua/rules/workspace-base.lua`
 - `lua/animations.lua`
 - `lua/environment.lua`
@@ -177,6 +179,8 @@ Current staged modules:
 - `lua/lib/system.lua`
 
 Known staged gap: namespace-specific layer animations from `animations.conf` are documented in `lua/animations.lua` until the exact Hyprland Lua API shape is confirmed.
+
+Known staged keybind gaps: mouse binds are represented in `lua/keybinds.lua`, but upstream Lua currently does not appear to wire `opts.mouse` into keybind objects, and `resizewindow 1` has no confirmed Lua equivalent. Treat those as live-test/upstream gaps, not proven parity.
 
 Machine-specific `monitors.conf` remains gitignored for the live `.conf` config, but staged Lua mirrors known host layouts in tracked `lua/monitors.lua`. Current host-specific profile: `rvn-pc`.
 

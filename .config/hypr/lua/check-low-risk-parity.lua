@@ -100,7 +100,7 @@ local function parse_config_file(path, skip_key)
       stack[#stack] = nil
     else
       local key, value = line:match("^([%w_%.]+)%s*=%s*(.*)$")
-      if key and key ~= skip_key and key ~= "gesture" and key ~= "source" and key ~= "monitor" and key ~= "workspace" then
+      if key and key ~= skip_key and key ~= "gesture" and key ~= "source" and key ~= "monitor" and key ~= "workspace" and not key:match("^bind") and key ~= "submap" then
         local parts = {}
         for _, item in ipairs(stack) do
           parts[#parts + 1] = item
@@ -195,6 +195,86 @@ local function parse_programs(path)
     end
   end
   return result
+end
+
+local function parse_variables(paths)
+  local result = {}
+  for _, path in ipairs(paths) do
+    for line in read_file(path):gmatch("[^\n]+") do
+      line = strip_comment(line)
+      local key, value = line:match("^%$([%w_]+)%s*=%s*(.+)$")
+      if key then
+        result[key] = trim(value)
+      end
+    end
+  end
+  return result
+end
+
+local function expand_vars(value, variables)
+  return (value:gsub("%$([%w_]+)", function(name)
+    return variables[name] or ("$" .. name)
+  end))
+end
+
+local function normalize_key(mods, name, variables)
+  mods = trim(expand_vars(mods or "", variables))
+  name = trim(name or "")
+
+  if mods == "" then
+    return name
+  end
+
+  local parts = {}
+  for part in mods:gmatch("[^%s%+]+") do
+    parts[#parts + 1] = part
+  end
+  return table.concat(parts, " + ") .. " + " .. name
+end
+
+local function dispatcher_key(dispatcher, argument)
+  argument = argument or ""
+  return dispatcher .. "|" .. argument
+end
+
+local function parse_keybinds(path, variables)
+  local result = {}
+  local gaps = {}
+
+  for line in read_file(path):gmatch("[^\n]+") do
+    line = strip_comment(line)
+    local kind, value = line:match("^(bind[%w]*)%s*=%s*(.+)$")
+    if kind then
+      local parts = split_csv_keep_empty(value)
+      local dispatcher = trim(parts[3] or "")
+      local argument = trim(table.concat(parts, ",", 4))
+
+      if argument == "" then
+        local name, rest = dispatcher:match("^(%S+)%s+(.+)$")
+        if name then
+          dispatcher = name
+          argument = rest
+        end
+      end
+
+      argument = expand_vars(argument, variables)
+
+      local entry = kind .. "|" .. normalize_key(parts[1], parts[2], variables) .. "|" .. dispatcher_key(dispatcher, argument)
+
+      if kind == "bindm" then
+        gaps[#gaps + 1] = entry
+      else
+        result[#result + 1] = entry
+      end
+    end
+
+    local submap = line:match("^submap%s*=%s*(.+)$")
+    if submap then
+      result[#result + 1] = "submap|" .. trim(submap)
+    end
+  end
+
+  return result, gaps
 end
 
 local function parse_monitors(path)
@@ -305,7 +385,129 @@ local captured = {
   monitors = {},
   workspace_rules = {},
   exec_commands = {},
+  keybinds = {},
+  keybind_gaps = {},
+  submaps = {},
 }
+
+local function direction_short(value)
+  return ({ left = "l", right = "r", up = "u", down = "d" })[value] or value
+end
+
+local function bind_kind(options)
+  options = options or {}
+
+  if options.mouse then
+    return "bindm"
+  end
+
+  if options.non_consuming and options.ignore_mods and options.transparent and options.locked then
+    return "bindnitl"
+  end
+
+  if options.ignore_mods and options.release then
+    return "bindir"
+  end
+
+  if options.repeating and options.locked then
+    return "bindel"
+  end
+
+  if options.repeating then
+    return "binde"
+  end
+
+  if options.locked then
+    return "bindl"
+  end
+
+  if options.release then
+    return "bindr"
+  end
+
+  if options.non_consuming then
+    return "bindn"
+  end
+
+  if options.long_press then
+    return "bindo"
+  end
+
+  return "bind"
+end
+
+local function dispatcher(value, argument)
+  return { dispatcher = value, argument = argument or "" }
+end
+
+local function dispatcher_value(value)
+  if type(value) ~= "table" or not value.dispatcher then
+    return "lua|function"
+  end
+
+  return dispatcher_key(value.dispatcher, value.argument)
+end
+
+local function make_dsp()
+  local dsp = {}
+
+  dsp.exec_cmd = function(command)
+    return dispatcher("exec", command)
+  end
+
+  dsp.pass = function(args)
+    return dispatcher("pass", args.window)
+  end
+
+  dsp.layout = function(message)
+    return dispatcher("layoutmsg", message)
+  end
+
+  dsp.submap = function(name)
+    return dispatcher("submap", name)
+  end
+
+  dsp.focus = function(args)
+    if args.direction then
+      return dispatcher("movefocus", direction_short(args.direction))
+    end
+    return dispatcher("workspace", tostring(args.workspace))
+  end
+
+  dsp.window = {
+    float = function()
+      return dispatcher("togglefloating")
+    end,
+    pseudo = function()
+      return dispatcher("pseudo")
+    end,
+    fullscreen = function(args)
+      return dispatcher("fullscreen", args and args.mode == "maximized" and "1" or "0")
+    end,
+    move = function(args)
+      if args.workspace then
+        return dispatcher(args.follow == false and "movetoworkspacesilent" or "movetoworkspace", tostring(args.workspace))
+      end
+
+      if args.direction then
+        return dispatcher("movewindow", direction_short(args.direction))
+      end
+
+      return dispatcher("movewindowpixel", tostring(args.x) .. " " .. tostring(args.y))
+    end,
+    drag = function()
+      return dispatcher("movewindow")
+    end,
+    resize = function(args)
+      if args then
+        return dispatcher("resizeactive", tostring(args.x) .. " " .. tostring(args.y))
+      end
+      return dispatcher("resizewindow")
+    end,
+  }
+
+  return dsp
+end
 
 hl = {
   env = function(name, value)
@@ -355,6 +557,21 @@ hl = {
   exec_cmd = function(command)
     captured.exec_commands[#captured.exec_commands + 1] = command
   end,
+  bind = function(key, callback, options)
+    local entry = bind_kind(options) .. "|" .. key .. "|" .. dispatcher_value(callback)
+    if bind_kind(options) == "bindm" then
+      captured.keybind_gaps[#captured.keybind_gaps + 1] = entry
+    else
+      captured.keybinds[#captured.keybinds + 1] = entry
+    end
+  end,
+  define_submap = function(name, callback)
+    captured.keybinds[#captured.keybinds + 1] = "submap|" .. name
+    captured.submaps[#captured.submaps + 1] = name
+    callback()
+    captured.keybinds[#captured.keybinds + 1] = "submap|reset"
+  end,
+  dsp = make_dsp(),
 }
 
 local programs = dofile(hypr .. "/lua/programs.lua")
@@ -367,8 +584,11 @@ dofile(hypr .. "/lua/rules/layer.lua")
 dofile(hypr .. "/lua/input.lua")
 dofile(hypr .. "/lua/animations.lua")
 dofile(hypr .. "/lua/autostart.lua")
+dofile(hypr .. "/lua/keybinds.lua")
 
 local expected_curves, expected_animations, skipped_animations = parse_curves_and_animations(hypr .. "/animations.conf")
+local variables = parse_variables({ hypr .. "/hyprland.conf", hypr .. "/keybinds.conf" })
+local expected_keybinds, expected_keybind_gaps = parse_keybinds(hypr .. "/keybinds.conf", variables)
 
 local expected = {
   env = parse_env(hypr .. "/environment.conf"),
@@ -382,6 +602,8 @@ local expected = {
   monitors = {},
   workspace_rules = parse_workspace_rules(hypr .. "/hyprland.conf"),
   exec_commands = parse_exec_once(hypr .. "/autostart.conf"),
+  keybinds = expected_keybinds,
+  keybind_gaps = expected_keybind_gaps,
 }
 
 for _, monitor in ipairs(parse_monitors(hypr .. "/monitors.conf")) do
@@ -404,6 +626,10 @@ for key, value in pairs(parse_config_file(hypr .. "/input.conf")) do
   if not key:match("^device%.") then
     expected.config[key] = value
   end
+end
+
+for key, value in pairs(parse_config_file(hypr .. "/keybinds.conf")) do
+  expected.config[key] = value
 end
 
 expected.config["animations.enabled"] = parse_config_file(hypr .. "/animations.conf")["animations.enabled"]
@@ -441,6 +667,24 @@ local function compare_lists(label, left, right)
   end
 end
 
+local function keybind_gap_key(entry)
+  local kind, key = entry:match("^([^|]+|[^|]+)|")
+  return kind or key or entry
+end
+
+local function compare_keybind_gaps(left, right)
+  if #left ~= #right then
+    add_failure("known keybind gaps count mismatch: conf=" .. #left .. " lua=" .. #right)
+  end
+
+  local count = math.max(#left, #right)
+  for index = 1, count do
+    if keybind_gap_key(left[index] or "") ~= keybind_gap_key(right[index] or "") then
+      add_failure("known keybind gap mismatch at " .. index .. ": conf=" .. tostring(left[index]) .. " lua=" .. tostring(right[index]))
+    end
+  end
+end
+
 compare_lists("env", expected.env, captured.env)
 compare_maps("config", expected.config, captured.config)
 compare_lists("curves", expected.curves, captured.curves)
@@ -457,6 +701,8 @@ compare_maps("programs", expected.programs, {
 compare_lists("monitors", expected.monitors, captured.monitors)
 compare_lists("workspace rules", expected.workspace_rules, captured.workspace_rules)
 compare_lists("exec-once", expected.exec_commands, captured.exec_commands)
+compare_lists("keybinds", expected.keybinds, captured.keybinds)
+compare_keybind_gaps(expected.keybind_gaps, captured.keybind_gaps)
 
 local known_skips = {
   "layersIn, ags-confirm, 1, 15, pop, popin 98%",
@@ -476,5 +722,6 @@ if #failures > 0 then
   os.exit(1)
 end
 
-print("low-risk Hypr Lua parity ok")
+print("staged Hypr Lua parity ok")
 print("known skipped layer animations: " .. tostring(#skipped_animations))
+print("known keybind gaps: " .. tostring(#expected.keybind_gaps))

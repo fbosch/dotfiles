@@ -199,6 +199,79 @@ Sources:
 - https://github.com/hyprwm/Hyprland/blob/main/example/hyprland.lua
 - https://github.com/hyprwm/Hyprland/blob/main/src/config/lua/bindings/LuaBindingsConfigRules.cpp
 
+## Keybinds
+
+Basic shape:
+
+```lua
+hl.bind("SUPER + Q", hl.dsp.exec_cmd("kitty"))
+hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), {
+  locked = true,
+  repeating = true,
+})
+```
+
+`hl.bind(keys, dispatcher_or_function, opts?)` takes a key string, a Lua function, and an optional options table. Dispatcher helpers under `hl.dsp` return functions and are the preferred migration target. There is no source-backed generic raw dispatcher-string bridge like `hl.dispatch("workspace 1")`; `hl.dispatch(...)` requires a dispatcher function.
+
+Relevant bind flag mappings for this repo:
+
+| Hyprlang keyword | Lua options |
+| --- | --- |
+| `bind` | none |
+| `bindo` | `{ long_press = true }` |
+| `bindir` | `{ ignore_mods = true, release = true }` |
+| `bindr` | `{ release = true }` |
+| `bindn` | `{ non_consuming = true }` |
+| `bindnitl` | `{ non_consuming = true, ignore_mods = true, transparent = true, locked = true }` |
+| `binde` | `{ repeating = true }` |
+| `bindel` | `{ repeating = true, locked = true }` |
+| `bindl` | `{ locked = true }` |
+| `bindm` | intended `{ mouse = true }`, but see risks below |
+
+Relevant dispatcher mappings for this repo:
+
+| Hyprlang dispatcher | Lua dispatcher helper |
+| --- | --- |
+| `exec, command` | `hl.dsp.exec_cmd("command")` |
+| `togglefloating` | `hl.dsp.window.float()` |
+| `pseudo` | `hl.dsp.window.pseudo()` |
+| `fullscreen, 1` | `hl.dsp.window.fullscreen({ mode = "maximized" })` |
+| `fullscreen, 0` | `hl.dsp.window.fullscreen({ mode = "fullscreen" })` |
+| `pass, class:^(xfreerdp)$` | `hl.dsp.pass({ window = "class:^(xfreerdp)$" })` |
+| `movetoworkspacesilent, +0` | `hl.dsp.window.move({ workspace = "+0", follow = false })` |
+| `movefocus, l/r/u/d` | `hl.dsp.focus({ direction = "left" })`, etc. |
+| `workspace, e+1` / `m+1` | `hl.dsp.focus({ workspace = "e+1" })`, etc. |
+| `movetoworkspace, 1` | `hl.dsp.window.move({ workspace = "1" })` |
+| `layoutmsg, setratio 0.6` | `hl.dsp.layout("setratio 0.6")` |
+| `movewindow` | `hl.dsp.window.drag()` |
+| `resizewindow` | `hl.dsp.window.resize()` |
+| `movewindowpixel, 32 0` | `hl.dsp.window.move({ x = 32, y = 0, relative = true })` |
+| `resizeactive, 32 0` | `hl.dsp.window.resize({ x = 32, y = 0, relative = true })` |
+| `submap, passthru` | `hl.dsp.submap("passthru")` |
+
+Submaps use `hl.define_submap(name, callback)` or `hl.define_submap(name, reset, callback)`. Binds declared inside the callback inherit that submap context, then Hyprland restores the previous submap after the callback returns.
+
+```lua
+hl.bind("SUPER + Escape", hl.dsp.submap("passthru"))
+
+hl.define_submap("passthru", function()
+  hl.bind("SUPER + Escape", hl.dsp.submap("reset"))
+end)
+```
+
+Keybind risks for staged migration:
+
+- Upstream example uses `{ mouse = true }` for mouse binds, but current source does not appear to read `opts.mouse` into the keybind object. Do not claim `bindm` parity until upstream fixes this or live testing proves behavior.
+- `resizewindow 1` has no confirmed Lua equivalent. `hl.dsp.window.resize()` maps the normal resize dispatcher only.
+- Pixel move/resize helpers call action APIs directly and are behavior-equivalent candidates for `movewindowpixel` and `resizeactive`, but should be live-tested before switching.
+- Workspace selector `+0` should route through Lua workspace selector resolution, but should be live-tested before switching.
+
+Sources:
+
+- https://github.com/hyprwm/Hyprland/blob/main/example/hyprland.lua
+- https://github.com/hyprwm/Hyprland/blob/main/src/config/lua/bindings/LuaBindingsToplevel.cpp
+- https://github.com/hyprwm/Hyprland/blob/main/src/config/lua/bindings/LuaBindingsDispatchers.cpp
+
 ## Generated Rules Guidance
 
 - Keep generators writing data tables, not direct `hl.window_rule(...)` calls.
