@@ -168,7 +168,13 @@ Keep the daemon architecture unchanged initially:
 - debounced writes
 - immediate save on close
 
-Only change the output format from `window-state-rules.conf` to `lua/rules/window-state.lua`.
+Keep `window-state.conf` as the writable selector source while Vicinae still appends to it. Mirror its selectors to `lua/rules/window-state-selectors.lua` as a simple Lua table.
+
+Dual-write generated rule outputs:
+
+- Keep `window-state-rules.conf` for the live hyprlang config.
+- Write `lua/rules/window-state.lua` for staged Lua config.
+- Keep both generated rule outputs ignored once Lua output is proven stable.
 
 Keep a temporary compatibility mode or backup writer for the old `.conf` format until the Lua config has proven stable.
 

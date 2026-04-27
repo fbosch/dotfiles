@@ -23,6 +23,8 @@ fi
 
 CONFIG_FILE="$HOME/.config/hypr/window-state.conf"
 RULES_FILE="$HOME/.config/hypr/window-state-rules.conf"
+SELECTORS_LUA_FILE="$HOME/.config/hypr/lua/rules/window-state-selectors.lua"
+RULES_LUA_FILE="$HOME/.config/hypr/lua/rules/window-state.lua"
 STATE_FILE="${XDG_RUNTIME_DIR}/hypr-window-state.cache"
 DEBOUNCE_FILE="${XDG_RUNTIME_DIR}/hypr-window-state-debounce"
 DEBOUNCE_DELAY=1      # Wait 1 second after last change before saving
@@ -50,6 +52,69 @@ parse_matchers() {
             MATCHER_PATTERNS+=("${BASH_REMATCH[1]}|${BASH_REMATCH[2]}")
         fi
     done < <(grep -Ev '^[[:space:]]*(#|$)' "$CONFIG_FILE")
+
+    write_matchers_lua_file
+}
+
+lua_quote() {
+    jq -Rn --arg value "$1" '$value | @json'
+}
+
+matcher_to_lua_key() {
+    case "$1" in
+        match:class) printf 'class' ;;
+        match:title) printf 'title' ;;
+        match:initialClass|match:initial_class) printf 'initial_class' ;;
+        match:initialTitle|match:initial_title) printf 'initial_title' ;;
+        *) return 1 ;;
+    esac
+}
+
+window_state_lua_id() {
+    printf 'window-state:%s:%s' "$1" "$2"
+}
+
+window_state_rule_pattern() {
+    local pattern="$1"
+
+    if [[ "$pattern" =~ [\.\[\]\(\)\*\+\?\^\$] ]]; then
+        printf '%s' "$pattern"
+    else
+        printf '^%s$' "$pattern"
+    fi
+}
+
+write_matchers_lua_file() {
+    mkdir -p "$(dirname "$SELECTORS_LUA_FILE")"
+
+    local temp_file
+    temp_file=$(mktemp) || { printf 'ERROR: Failed to create temp file\n' >&2; return 1; }
+
+    {
+        printf '%s\n' '-- Window state persistence selectors.'
+        printf '%s\n' '-- Auto-generated from window-state.conf by window-state.sh.'
+        printf '\nreturn {\n'
+
+        for entry in "${MATCHER_PATTERNS[@]}"; do
+            local matcher="${entry%%|*}"
+            local pattern="${entry#*|}"
+
+            printf '  { matcher = %s, pattern = %s },\n' "$(lua_quote "$matcher")" "$(lua_quote "$pattern")"
+        done
+
+        printf '}\n'
+    } > "$temp_file"
+
+    if [[ -f "$SELECTORS_LUA_FILE" ]] && cmp -s "$temp_file" "$SELECTORS_LUA_FILE"; then
+        rm -f "$temp_file"
+        return 0
+    fi
+
+    if ! mv "$temp_file" "$SELECTORS_LUA_FILE"; then
+        printf 'ERROR: Failed to update Lua window-state selector file\n' >&2
+        rm -f "$temp_file"
+        return 1
+    fi
 }
 
 # Initialize rules file if needed
@@ -280,11 +345,98 @@ write_rules_cache_file() {
 
     if [[ -f "$RULES_FILE" ]] && cmp -s "$temp_file" "$RULES_FILE"; then
         rm -f "$temp_file"
+        write_lua_rules_cache_file
         return 0
     fi
 
     if ! mv "$temp_file" "$RULES_FILE"; then
         printf 'ERROR: Failed to update rules file\n' >&2
+        rm -f "$temp_file"
+        return 1
+    fi
+
+    write_lua_rules_cache_file
+}
+
+write_lua_rules_cache_file() {
+    mkdir -p "$(dirname "$RULES_LUA_FILE")"
+
+    local temp_file
+    temp_file=$(mktemp) || { printf 'ERROR: Failed to create temp file\n' >&2; return 1; }
+
+    {
+        printf '%s\n' '-- Auto-generated Lua window state persistence rules'
+        printf '%s\n' "-- Last updated: $(date '+%Y-%m-%d %H:%M:%S')"
+        printf '%s\n' "-- Config: $CONFIG_FILE"
+        printf '%s\n' '-- DO NOT EDIT MANUALLY - This file is managed by window-state.sh'
+        printf '\nreturn {\n'
+    } > "$temp_file"
+
+    local -a sorted_keys
+    IFS=$'\n' read -r -d '' -a sorted_keys < <(printf '%s\n' "${!RULES_CACHE[@]}" | sort && printf '\0')
+
+    for key in "${sorted_keys[@]}"; do
+        local matcher="${key%% *}"
+        local pattern="${key#* }"
+        local lua_match_key
+
+        lua_match_key=$(matcher_to_lua_key "$matcher") || continue
+
+        local rule_pattern
+        rule_pattern=$(window_state_rule_pattern "$pattern")
+
+        local rules="${RULES_CACHE[$key]}"
+        local monitor=""
+        local width=""
+        local height=""
+        local x=""
+        local y=""
+
+        while IFS= read -r rule_line; do
+            if [[ "$rule_line" =~ monitor[[:space:]]+(.+)$ ]]; then
+                monitor="${BASH_REMATCH[1]}"
+            elif [[ "$rule_line" =~ size[[:space:]]+([0-9]+)[[:space:]]+([0-9]+), ]]; then
+                width="${BASH_REMATCH[1]}"
+                height="${BASH_REMATCH[2]}"
+            elif [[ "$rule_line" =~ move[[:space:]]+(-?[0-9]+)[[:space:]]+(-?[0-9]+), ]]; then
+                x="${BASH_REMATCH[1]}"
+                y="${BASH_REMATCH[2]}"
+            fi
+        done <<< "$rules"
+
+        {
+            printf '  -- %s\n' "$key"
+            printf '  {\n'
+            printf '    id = %s,\n' "$(lua_quote "$(window_state_lua_id "$matcher" "$pattern")")"
+            printf '    match = {\n'
+            printf '      %s = %s,\n' "$lua_match_key" "$(lua_quote "$rule_pattern")"
+            printf '    },\n'
+            printf '    effects = {\n'
+            if [[ -n "$monitor" ]]; then
+                printf '      monitor = %s,\n' "$(lua_quote "$monitor")"
+            fi
+            if [[ -n "$width" && -n "$height" ]]; then
+                printf '      size = { %s, %s },\n' "$width" "$height"
+            fi
+            if [[ -n "$x" && -n "$y" ]]; then
+                printf '      move = { %s, %s },\n' "$x" "$y"
+            fi
+            printf '    },\n'
+            printf '    source = "window-state",\n'
+            printf '    comment = %s,\n' "$(lua_quote "$key")"
+            printf '  },\n\n'
+        } >> "$temp_file"
+    done
+
+    printf '}\n' >> "$temp_file"
+
+    if [[ -f "$RULES_LUA_FILE" ]] && cmp -s "$temp_file" "$RULES_LUA_FILE"; then
+        rm -f "$temp_file"
+        return 0
+    fi
+
+    if ! mv "$temp_file" "$RULES_LUA_FILE"; then
+        printf 'ERROR: Failed to update Lua window-state rules file\n' >&2
         rm -f "$temp_file"
         return 1
     fi

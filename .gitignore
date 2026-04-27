@@ -37,6 +37,7 @@ __pycache__
 
 # window state rules (auto-generated)
 .config/hypr/window-state-rules.conf
+.config/hypr/lua/rules/window-state.lua
 
 # Neovim local data
 .config/nvim/.sessions/
