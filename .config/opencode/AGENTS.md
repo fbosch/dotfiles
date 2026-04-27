@@ -22,7 +22,9 @@
 
 ## Detailed references
 
-- Communication: `references/communication.md`
-- Coding style and anti-slop: `references/coding-style.md`
-- Compatibility policy: `references/compatibility.md`
-- Evidence, ambiguity loop, and done criteria: `references/validation.md`
+Load these files only when their topic is relevant. Paths are relative to `$HOME`. When loaded, treat them as binding guidance.
+
+- Communication: read `~/.config/opencode/references/communication.md` when drafting user-facing messages, reviews, PR text, docs, or long explanations.
+- Coding style and anti-slop: read `~/.config/opencode/references/coding-style.md` before non-trivial code edits, refactors, UI/frontend work, or style-sensitive changes.
+- Compatibility policy: read `~/.config/opencode/references/compatibility.md` before changing APIs, schemas, CLI flags, config formats, defaults, persisted data, or public behavior.
+- Evidence, ambiguity loop, and done criteria: read `~/.config/opencode/references/validation.md` when requirements are unclear, behavior changes, validation is non-obvious, or before claiming work is complete.
