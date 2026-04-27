@@ -161,6 +161,13 @@ Current staged modules:
 
 Known staged gap: namespace-specific layer animations from `animations.conf` are documented in `lua/animations.lua` until the exact Hyprland Lua API shape is confirmed.
 
+Validate this phase with:
+
+```bash
+lua .config/hypr/lua/check-low-risk-parity.lua /home/fbb/dotfiles
+lua .config/hypr/hyprland.staged.lua
+```
+
 ### 4. Convert `hypr-quickrule`
 
 Update `.config/vicinae/extensions/hypr-quickrule/src/hypr-quickrule.tsx` to dual-write the live `.conf` output and staged Lua data at `~/.config/hypr/lua/rules/generated.lua`.
