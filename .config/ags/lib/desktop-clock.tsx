@@ -40,6 +40,19 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 let lastTimeString: string = "";
 let lastDateString: string = "";
 
+function getClockUpdateDelay(): number {
+  const now = new Date();
+  return Math.max(1, 1000 - now.getMilliseconds());
+}
+
+function scheduleClockUpdate() {
+  updateIntervalId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, getClockUpdateDelay(), () => {
+    updateClock();
+    scheduleClockUpdate();
+    return false;
+  });
+}
+
 // Format time string
 function formatTime(): string {
   const now = new Date();
@@ -168,46 +181,12 @@ function updateClock() {
 function startClockUpdates() {
   if (updateIntervalId !== null) {
     GLib.source_remove(updateIntervalId);
+    updateIntervalId = null;
   }
-  
+
   // Update immediately
   updateClock();
-  
-  if (config.showSeconds) {
-    // For seconds mode: align to the next second boundary
-    const now = new Date();
-    const msUntilNextSecond = 1000 - now.getMilliseconds();
-    
-    // Schedule first update at next second boundary
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, msUntilNextSecond, () => {
-      updateClock();
-      
-      // Then start regular 1-second interval
-      updateIntervalId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
-        updateClock();
-        return true;
-      });
-      
-      return false; // Don't repeat this initial timeout
-    });
-  } else {
-    // For minute mode: align to the next minute boundary
-    const now = new Date();
-    const msUntilNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
-    
-    // Schedule first update at next minute boundary
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, msUntilNextMinute, () => {
-      updateClock();
-      
-      // Then start regular 1-minute interval
-      updateIntervalId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 60000, () => {
-        updateClock();
-        return true;
-      });
-      
-      return false; // Don't repeat this initial timeout
-    });
-  }
+  scheduleClockUpdate();
 }
 
 // Stop clock updates

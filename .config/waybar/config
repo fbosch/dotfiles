@@ -135,7 +135,7 @@
 
   "clock": {
     "format": "{:>%H:%M\n %d/%m/%Y}",
-    "interval": 30,
+    "interval": 1,
     "align": 1,
     "justify": "right",
     "on-click": "swaync-client -t",
