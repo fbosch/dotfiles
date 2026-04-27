@@ -66,7 +66,7 @@
             "hyprpaperConfigPath": "~/.config/hypr/hyprpaper.conf",
             "purity": "111",
             "sorting": "relevance",
-            "topRange": "1y"
+            "topRange": "3d"
          }
       },
       "@fbosch/wowhead": {
