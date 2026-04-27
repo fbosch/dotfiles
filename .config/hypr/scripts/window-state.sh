@@ -57,7 +57,11 @@ parse_matchers() {
 }
 
 lua_quote() {
-    jq -Rn --arg value "$1" '$value | @json'
+    jq -Rn --arg value "$1" '$value'
+}
+
+lua_long_string() {
+    printf '[=[%s]=]' "$1"
 }
 
 matcher_to_lua_key() {
@@ -99,7 +103,7 @@ write_matchers_lua_file() {
             local matcher="${entry%%|*}"
             local pattern="${entry#*|}"
 
-            printf '  { matcher = %s, pattern = %s },\n' "$(lua_quote "$matcher")" "$(lua_quote "$pattern")"
+            printf '  { matcher = %s, pattern = %s },\n' "$(lua_quote "$matcher")" "$(lua_long_string "$pattern")"
         done
 
         printf '}\n'
