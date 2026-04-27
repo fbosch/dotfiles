@@ -18,11 +18,11 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
   lua/
     rules.lua
     rules/
+      generated.lua
+      window-state.lua
       workspace.lua
       window.lua
     rule-loader.lua
-    generated-rules.lua
-    window-state-rules.lua
 ```
 
 `hyprland.lua` should require stable hand-written modules. Generated files should be loaded with `dofile`, not `require`, so reloads do not reuse stale cached modules. Generated writers should explicitly reload Hyprland once Lua config is live, because `dofile` paths are not source-backed as watched config paths.
@@ -129,10 +129,10 @@ Initial modules:
 
 - `lua/rule-loader.lua`
 - `lua/rules.lua`
+- `lua/rules/generated.lua`
+- `lua/rules/window-state.lua`
 - `lua/rules/workspace.lua`
 - `lua/rules/window.lua`
-- `lua/generated-rules.lua`
-- `lua/window-state-rules.lua`
 
 ### 3. Convert Static Rules
 
@@ -146,7 +146,7 @@ Current order to preserve:
 
 ### 4. Convert `hypr-quickrule`
 
-Update `.config/vicinae/extensions/hypr-quickrule/src/hypr-quickrule.tsx` to write `~/.config/hypr/lua/generated-rules.lua`.
+Update `.config/vicinae/extensions/hypr-quickrule/src/hypr-quickrule.tsx` to write `~/.config/hypr/lua/rules/generated.lua`.
 
 Requirements:
 
@@ -166,7 +166,7 @@ Keep the daemon architecture unchanged initially:
 - debounced writes
 - immediate save on close
 
-Only change the output format from `window-state-rules.conf` to `lua/window-state-rules.lua`.
+Only change the output format from `window-state-rules.conf` to `lua/rules/window-state.lua`.
 
 Keep a temporary compatibility mode or backup writer for the old `.conf` format until the Lua config has proven stable.
 

@@ -7,7 +7,7 @@ Local reference for migrating this repo from hyprlang `.conf` files to Hyprland 
 - Upstream basis: Hyprland `main` after Lua config PR #13817.
 - Local live config remains `.config/hypr/hyprland.conf` until Lua parity is ready.
 - Local staged entrypoint is `.config/hypr/hyprland.staged.lua`; do not rename it to `hyprland.lua` until ready to test a live Lua session.
-- Target static-rule migration excludes generated outputs: `.config/hypr/generated-rules.conf` and `.config/hypr/lua/window-state-rules.lua`.
+- Target static-rule migration excludes generated outputs: `.config/hypr/generated-rules.conf` and `.config/hypr/lua/rules/window-state.lua`.
 
 ## Entrypoint Behavior
 

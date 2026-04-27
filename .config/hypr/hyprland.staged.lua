@@ -37,13 +37,13 @@ if hl == nil then
 end
 
 local generated = loader.compile_rules({
-	os.getenv("HOME") .. "/.config/hypr/lua/generated-rules.lua",
+	os.getenv("HOME") .. "/.config/hypr/lua/rules/generated.lua",
 })
 
 dofile(os.getenv("HOME") .. "/.config/hypr/lua/rules.lua")
 
 local window_state = loader.compile_rules({
-	os.getenv("HOME") .. "/.config/hypr/lua/window-state-rules.lua",
+	os.getenv("HOME") .. "/.config/hypr/lua/rules/window-state.lua",
 })
 
 loader.report_warnings(generated.warnings)
