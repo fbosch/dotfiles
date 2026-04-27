@@ -11,6 +11,8 @@ local stub_counts = {
 	gestures = 0,
 	devices = 0,
 	monitors = 0,
+	events = 0,
+	exec_commands = 0,
 	workspace_rules = 0,
 	window_rules = 0,
 	layer_rules = 0,
@@ -61,6 +63,13 @@ if hl == nil then
 		monitor = function()
 			stub_counts.monitors = stub_counts.monitors + 1
 		end,
+		on = function(_, callback)
+			stub_counts.events = stub_counts.events + 1
+			callback()
+		end,
+		exec_cmd = function()
+			stub_counts.exec_commands = stub_counts.exec_commands + 1
+		end,
 	}
 end
 
@@ -88,6 +97,7 @@ dofile(home .. "/.config/hypr/lua/environment.lua")
 dofile(home .. "/.config/hypr/lua/appearance.lua")
 dofile(home .. "/.config/hypr/lua/rules/layer.lua")
 dofile(home .. "/.config/hypr/lua/input.lua")
+dofile(home .. "/.config/hypr/lua/autostart.lua")
 
 loader.report_warnings(generated.warnings)
 loader.report_warnings(window_state.warnings)
@@ -100,6 +110,8 @@ loader.log("loaded " .. tostring(stub_counts.animations) .. " animations")
 loader.log("loaded " .. tostring(stub_counts.gestures) .. " gestures")
 loader.log("loaded " .. tostring(stub_counts.devices) .. " device configs")
 loader.log("loaded " .. tostring(stub_counts.monitors) .. " monitor rules")
+loader.log("loaded " .. tostring(stub_counts.events) .. " event handlers")
+loader.log("loaded " .. tostring(stub_counts.exec_commands) .. " autostart commands")
 loader.log("applied " .. tostring(generated.applied) .. " generated rules")
 loader.log("loaded " .. tostring(stub_counts.workspace_rules) .. " static workspace rules")
 loader.log("loaded " .. tostring(static_window_rules) .. " static window rules")

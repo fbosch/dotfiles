@@ -19,6 +19,7 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
     base.lua
     programs.lua
     monitors.lua
+    autostart.lua
     animations.lua
     environment.lua
     appearance.lua
@@ -166,6 +167,7 @@ Current staged modules:
 - `lua/base.lua`
 - `lua/programs.lua`
 - `lua/monitors.lua`
+- `lua/autostart.lua`
 - `lua/rules/workspace-base.lua`
 - `lua/animations.lua`
 - `lua/environment.lua`

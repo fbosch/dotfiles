@@ -255,6 +255,18 @@ local function parse_workspace_rules(path)
   return result
 end
 
+local function parse_exec_once(path)
+  local result = {}
+  for line in read_file(path):gmatch("[^\n]+") do
+    line = strip_comment(line)
+    local command = line:match("^exec%-once%s*=%s*(.+)$")
+    if command then
+      result[#result + 1] = command
+    end
+  end
+  return result
+end
+
 local function parse_curves_and_animations(path)
   local curves = {}
   local animations = {}
@@ -292,6 +304,7 @@ local captured = {
   devices = {},
   monitors = {},
   workspace_rules = {},
+  exec_commands = {},
 }
 
 hl = {
@@ -334,6 +347,14 @@ hl = {
   workspace_rule = function(rule)
     captured.workspace_rules[#captured.workspace_rules + 1] = value_key(rule)
   end,
+  on = function(event, callback)
+    if event == "hyprland.start" then
+      callback()
+    end
+  end,
+  exec_cmd = function(command)
+    captured.exec_commands[#captured.exec_commands + 1] = command
+  end,
 }
 
 local programs = dofile(hypr .. "/lua/programs.lua")
@@ -345,6 +366,7 @@ dofile(hypr .. "/lua/appearance.lua")
 dofile(hypr .. "/lua/rules/layer.lua")
 dofile(hypr .. "/lua/input.lua")
 dofile(hypr .. "/lua/animations.lua")
+dofile(hypr .. "/lua/autostart.lua")
 
 local expected_curves, expected_animations, skipped_animations = parse_curves_and_animations(hypr .. "/animations.conf")
 
@@ -359,6 +381,7 @@ local expected = {
   programs = parse_programs(hypr .. "/hyprland.conf"),
   monitors = {},
   workspace_rules = parse_workspace_rules(hypr .. "/hyprland.conf"),
+  exec_commands = parse_exec_once(hypr .. "/autostart.conf"),
 }
 
 for _, monitor in ipairs(parse_monitors(hypr .. "/monitors.conf")) do
@@ -433,6 +456,7 @@ compare_maps("programs", expected.programs, {
 })
 compare_lists("monitors", expected.monitors, captured.monitors)
 compare_lists("workspace rules", expected.workspace_rules, captured.workspace_rules)
+compare_lists("exec-once", expected.exec_commands, captured.exec_commands)
 
 local known_skips = {
   "layersIn, ags-confirm, 1, 15, pop, popin 98%",
