@@ -20,6 +20,7 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
       init.lua
       generated.lua
       window-state.lua
+      layer.lua
       workspace.lua
       window.lua
     rule-loader.lua
@@ -132,6 +133,7 @@ Initial modules:
 - `lua/rules/init.lua`
 - `lua/rules/generated.lua`
 - `lua/rules/window-state.lua`
+- `lua/rules/layer.lua`
 - `lua/rules/workspace.lua`
 - `lua/rules/window.lua`
 
@@ -144,6 +146,20 @@ Current order to preserve:
 1. Quickrule generated rules from `generated-rules.conf`.
 2. Static rules from `rules.conf`.
 3. Window-state rules from `window-state-rules.conf`.
+
+Static layer rules from `appearance.conf` live in `lua/rules/layer.lua`, but should be loaded in the appearance phase rather than from `lua/rules/init.lua` so their relative order stays close to the live config.
+
+### 3.5. Convert Low-Risk Base Modules
+
+Current staged modules:
+
+- `lua/animations.lua`
+- `lua/environment.lua`
+- `lua/appearance.lua`
+- `lua/rules/layer.lua`
+- `lua/input.lua`
+
+Known staged gap: namespace-specific layer animations from `animations.conf` are documented in `lua/animations.lua` until the exact Hyprland Lua API shape is confirmed.
 
 ### 4. Convert `hypr-quickrule`
 

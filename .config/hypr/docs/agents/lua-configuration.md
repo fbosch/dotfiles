@@ -192,6 +192,7 @@ Relevant fields:
 
 - Match by `namespace`.
 - Common effects: `no_anim`, `blur`, `blur_popups`, `ignore_alpha`, `dim_around`, `xray`, `animation`, `order`, `above_lock`, `no_screen_share`.
+- Local static layer rules live in `lua/rules/layer.lua`. Load them in the same config phase as `appearance.conf` to avoid moving them ahead of window-state rules.
 
 Sources:
 
