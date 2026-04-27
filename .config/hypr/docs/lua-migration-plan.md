@@ -17,12 +17,15 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
   hyprland.lua
   lua/
     rules.lua
+    rules/
+      workspace.lua
+      window.lua
     rule-loader.lua
     generated-rules.lua
     window-state-rules.lua
 ```
 
-`hyprland.lua` should require or dofile stable modules. Generated files should be loaded with `dofile`, not `require`, so reloads do not reuse stale cached modules.
+`hyprland.lua` should require stable hand-written modules. Generated files should be loaded with `dofile`, not `require`, so reloads do not reuse stale cached modules. Generated writers should explicitly reload Hyprland once Lua config is live, because `dofile` paths are not source-backed as watched config paths.
 
 ## Generated Rule Schema
 
@@ -93,7 +96,7 @@ hl.window_rule({
 })
 ```
 
-Confirm exact `size` and `move` Lua API types against the current 0.55 docs/source before implementation. The normalized schema should keep dimensions as numeric arrays either way.
+Upstream source currently exposes `size` and `move` as Lua config strings. The normalized generated schema may keep dimensions as numeric arrays, but `lua/rule-loader.lua` must convert them to strings before calling `hl.window_rule(...)`.
 
 ## Effect Mapping
 
@@ -105,8 +108,8 @@ Confirm exact `size` and `move` Lua API types against the current 0.55 docs/sour
 | `fullscreen on` | `fullscreen = true` | `fullscreen = true` |
 | `center on` | `center = true` | `center = true` |
 | `monitor DP-2` | `monitor = "DP-2"` | `monitor = "DP-2"` |
-| `size 750 900` | `size = { 750, 900 }` | API-confirmed size form |
-| `move 1998 99` | `move = { 1998, 99 }` | API-confirmed move form |
+| `size 750 900` | `size = { 750, 900 }` | `size = "750 900"` |
+| `move 1998 99` | `move = { 1998, 99 }` | `move = "1998 99"` |
 | `opacity 1.0 override 1.0 override` | `opacity = "1.0 override 1.0 override"` | string passthrough |
 | `hyprbars:no_bar 1` | `hyprbars = { no_bar = 1 }` or passthrough | confirm plugin option mapping |
 
@@ -126,6 +129,8 @@ Initial modules:
 
 - `lua/rule-loader.lua`
 - `lua/rules.lua`
+- `lua/rules/workspace.lua`
+- `lua/rules/window.lua`
 - `lua/generated-rules.lua`
 - `lua/window-state-rules.lua`
 

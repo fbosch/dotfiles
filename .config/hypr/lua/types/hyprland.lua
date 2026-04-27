@@ -1,0 +1,183 @@
+---@meta hyprland
+
+---@class HyprlandApi
+---@field window_rule fun(rule: HyprWindowRule): HyprRuleHandle
+---@field workspace_rule fun(rule: HyprWorkspaceRule): HyprRuleHandle
+---@field layer_rule fun(rule: HyprLayerRule): HyprRuleHandle
+---@field config fun(config: table)
+---@field monitor fun(monitor: HyprMonitor)
+---@field env fun(name: string, value: string)
+---@field bind fun(bind: string, dispatcher: any, opts?: HyprBindOptions): HyprRuleHandle
+---@field gesture fun(gesture: HyprGesture)
+---@field device fun(device: HyprDevice)
+---@field curve fun(name: string, curve: HyprCurve)
+---@field animation fun(animation: HyprAnimation)
+---@field on fun(event: string, callback: fun(...))
+---@field exec_cmd fun(command: string)
+---@field get_windows fun(): HyprWindow[]
+---@field dsp table
+---@field [string] any
+
+---@class HyprRuleHandle
+---@field set_enabled fun(self: HyprRuleHandle, enabled: boolean)
+---@field is_enabled fun(self: HyprRuleHandle): boolean?
+
+---@class HyprWindowRule
+---@field name? string
+---@field enabled? boolean
+---@field match HyprWindowMatch
+---@field float? boolean
+---@field tile? boolean
+---@field fullscreen? boolean
+---@field center? boolean
+---@field pseudo? boolean
+---@field no_initial_focus? boolean
+---@field pin? boolean
+---@field persistent_size? boolean
+---@field allows_input? boolean
+---@field dim_around? boolean
+---@field decorate? boolean
+---@field focus_on_activate? boolean
+---@field keep_aspect_ratio? boolean
+---@field nearest_neighbor? boolean
+---@field no_anim? boolean
+---@field no_blur? boolean
+---@field no_dim? boolean
+---@field no_focus? boolean
+---@field no_follow_mouse? boolean
+---@field no_max_size? boolean
+---@field no_shadow? boolean
+---@field no_shortcuts_inhibit? boolean
+---@field opaque? boolean
+---@field force_rgbx? boolean
+---@field sync_fullscreen? boolean
+---@field immediate? boolean
+---@field xray? boolean
+---@field render_unfocused? boolean
+---@field no_screen_share? boolean
+---@field no_vrr? boolean
+---@field stay_focused? boolean
+---@field fullscreen_state? string
+---@field move? string
+---@field size? string
+---@field monitor? string
+---@field workspace? string
+---@field group? string
+---@field suppress_event? string
+---@field content? string
+---@field animation? string
+---@field idle_inhibit? string
+---@field opacity? string
+---@field tag? string
+---@field no_close_for? integer
+---@field rounding? integer
+---@field border_size? integer
+---@field scrolling_width? number
+---@field rounding_power? number
+---@field scroll_mouse? number
+---@field scroll_touchpad? number
+---@field max_size? string|number[]
+---@field min_size? string|number[]
+---@field border_color? string|table
+---@field [string] any Plugin-defined rule effects.
+
+---@class HyprWindowMatch
+---@field class? string
+---@field title? string
+---@field initial_class? string
+---@field initial_title? string
+---@field float? boolean
+---@field tag? string
+---@field xwayland? boolean
+---@field fullscreen? boolean
+---@field pin? boolean
+---@field focus? boolean
+---@field group? boolean
+---@field modal? boolean
+---@field fullscreen_state_internal? integer
+---@field fullscreen_state_client? integer
+---@field workspace? string
+---@field content? string
+---@field xdg_tag? string
+
+---@class HyprWorkspaceRule
+---@field workspace string
+---@field enabled? boolean
+---@field monitor? string
+---@field default? boolean
+---@field persistent? boolean
+---@field gaps_in? HyprCssGap
+---@field gaps_out? HyprCssGap
+---@field float_gaps? HyprCssGap
+---@field border_size? integer
+---@field no_border? boolean
+---@field no_rounding? boolean
+---@field decorate? boolean
+---@field no_shadow? boolean
+---@field on_created_empty? string
+---@field default_name? string
+---@field layout? string
+---@field animation? string
+---@field layout_opts? table<string, string|boolean|number>
+
+---@alias HyprCssGap integer|string|number[]
+
+---@class HyprLayerRule
+---@field name? string
+---@field enabled? boolean
+---@field match HyprLayerMatch
+---@field no_anim? boolean
+---@field blur? boolean
+---@field blur_popups? boolean
+---@field ignore_alpha? number
+---@field dim_around? boolean
+---@field xray? boolean
+---@field animation? string
+---@field order? integer
+---@field above_lock? integer
+---@field no_screen_share? boolean
+---@field [string] any Plugin-defined layer effects.
+
+---@class HyprLayerMatch
+---@field namespace string
+
+---@class HyprMonitor
+---@field output string
+---@field mode string
+---@field position string
+---@field scale string|number
+
+---@class HyprBindOptions
+---@field mouse? boolean
+---@field locked? boolean
+---@field repeating? boolean
+
+---@class HyprGesture
+---@field fingers integer
+---@field direction string
+---@field action string
+
+---@class HyprDevice
+---@field name string
+---@field sensitivity? number
+---@field [string] any
+
+---@class HyprCurve
+---@field type string
+---@field points table
+
+---@class HyprAnimation
+---@field leaf string
+---@field enabled boolean
+---@field speed number
+---@field bezier string
+---@field style? string
+
+---@class HyprWindow
+---@field title string
+---@field class string
+---@field size { x: integer, y: integer }
+---@field [string] any
+
+---@type HyprlandApi
+hl = hl

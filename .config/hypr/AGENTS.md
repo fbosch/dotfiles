@@ -19,6 +19,7 @@ Home Manager/Nix
 
 - [References](docs/agents/references/TOC.md)
 - [Version info](docs/agents/version.md)
+- [Lua configuration](docs/agents/lua-configuration.md)
 - [Layer rules](docs/agents/layer-rules.md)
 - [Configuration structure](docs/agents/structure.md)
 - [Debugging tips](docs/agents/debugging.md)
