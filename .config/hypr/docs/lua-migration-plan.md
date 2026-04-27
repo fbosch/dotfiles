@@ -21,6 +21,8 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
     monitors.lua
     autostart.lua
     keybinds.lua
+    audit-source-graph.lua
+    check-staged-parity.lua
     animations.lua
     environment.lua
     appearance.lua
@@ -187,9 +189,18 @@ Machine-specific `monitors.conf` remains gitignored for the live `.conf` config,
 Validate this phase with:
 
 ```bash
-lua .config/hypr/lua/check-low-risk-parity.lua /home/fbb/dotfiles
+lua .config/hypr/lua/check-staged-parity.lua /home/fbb/dotfiles
+lua .config/hypr/lua/audit-source-graph.lua /home/fbb/dotfiles
 lua .config/hypr/hyprland.staged.lua
 ```
+
+Current validation status:
+
+- Staged parity check passes with the known gaps above.
+- Source graph audit passes; no active hyprlang source lines are currently uncategorized by the staged migration.
+- Local Lua execution of `hyprland.staged.lua` passes.
+
+Do not create or rename to `.config/hypr/hyprland.lua` without explicit approval; that would make Hyprland select Lua config at startup.
 
 ### 4. Convert `hypr-quickrule`
 
