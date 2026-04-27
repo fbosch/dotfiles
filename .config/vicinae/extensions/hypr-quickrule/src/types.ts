@@ -1,36 +1,40 @@
 export type HyprpropWindowInfo = {
-  address: string;
-  mapped: boolean;
-  hidden: boolean;
-  at: [number, number];
-  size: [number, number];
-  workspace: {
-    id: number;
-    name: string;
-  };
-  floating: boolean;
-  monitor: number;
-  class: string;
-  title: string;
-  initialClass: string;
-  initialTitle: string;
-  pid: number;
-  xwayland: boolean;
-  pinned: boolean;
-  fullscreen: boolean;
-  fullscreenMode: number;
-  fakeFullscreen: boolean;
-  grouped: unknown[];
-  swallowing: string | null;
-  focusHistoryID: number;
+	address: string;
+	mapped: boolean;
+	hidden: boolean;
+	at: [number, number];
+	size: [number, number];
+	workspace: {
+		id: number;
+		name: string;
+	};
+	floating: boolean;
+	monitor: number;
+	class: string;
+	title: string;
+	initialClass: string;
+	initialTitle: string;
+	pid: number;
+	xwayland: boolean;
+	pinned: boolean;
+	fullscreen: boolean;
+	fullscreenMode: number;
+	fakeFullscreen: boolean;
+	grouped: unknown[];
+	swallowing: string | null;
+	focusHistoryID: number;
 };
 
 export type WindowRuleProfile = {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  rules: string[];
+	id: string;
+	name: string;
+	description: string;
+	icon: string;
+	rules: string[];
 };
 
-export type RuleSelector = "class" | "initial_class" | "title" | "initial_title";
+export type RuleSelector =
+	| "class"
+	| "initial_class"
+	| "title"
+	| "initial_title";

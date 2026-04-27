@@ -16,8 +16,8 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
 .config/hypr/
   hyprland.lua
   lua/
-    rules.lua
     rules/
+      init.lua
       generated.lua
       window-state.lua
       workspace.lua
@@ -129,7 +129,7 @@ Create Lua modules in a non-live path or use a clearly staged filename until rea
 Initial modules:
 
 - `lua/rule-loader.lua`
-- `lua/rules.lua`
+- `lua/rules/init.lua`
 - `lua/rules/generated.lua`
 - `lua/rules/window-state.lua`
 - `lua/rules/workspace.lua`
@@ -137,7 +137,7 @@ Initial modules:
 
 ### 3. Convert Static Rules
 
-Convert static `rules.conf` rules into `lua/rules.lua` first. Preserve current evaluation order.
+Convert static `rules.conf` rules into `lua/rules/init.lua`, `lua/rules/workspace.lua`, and `lua/rules/window.lua` first. Preserve current evaluation order.
 
 Current order to preserve:
 
@@ -147,12 +147,13 @@ Current order to preserve:
 
 ### 4. Convert `hypr-quickrule`
 
-Update `.config/vicinae/extensions/hypr-quickrule/src/hypr-quickrule.tsx` to write `~/.config/hypr/lua/rules/generated.lua`.
+Update `.config/vicinae/extensions/hypr-quickrule/src/hypr-quickrule.tsx` to dual-write the live `.conf` output and staged Lua data at `~/.config/hypr/lua/rules/generated.lua`.
 
 Requirements:
 
 - Write Lua data, not `hl.window_rule(...)` calls.
 - Replace existing entry with same `id`.
+- Preserve the existing `.conf` append path until Lua is live.
 - Keep profile effects normalized.
 - Keep `Save Window State` behavior appending matchers to `window-state.conf` for now.
 - Continue reloading Hyprland after writes once Lua config is live.

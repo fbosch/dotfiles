@@ -5,6 +5,11 @@ Hyprland compositor configuration managed via Home Manager/Nix.
 ## Essentials
 
 - Validate after every `.conf` change.
+- Keep Lua migration files non-live unless explicitly testing Lua startup; do not create `.config/hypr/hyprland.lua` casually.
+- Use directory modules with `init.lua` for grouped Lua config, e.g. `lua/rules/init.lua`, not sibling aggregators like `lua/rules.lua`.
+- Keep static Lua rules as direct `hl.workspace_rule(...)` and `hl.window_rule(...)` calls under `lua/rules/workspace.lua` and `lua/rules/window.lua`.
+- Keep generated/window-state Lua rule data under `lua/rules/generated.lua` and `lua/rules/window-state.lua`; generated files should return data tables, not call `hl.*` directly.
+- Preserve rule declaration order: generated rules, static rules, then window-state rules.
 
 ## Package manager
 

@@ -41,7 +41,7 @@ local generated = loader.apply_window_rules({
 })
 
 local before_static_window_rules = stub_counts.window_rules
-dofile(os.getenv("HOME") .. "/.config/hypr/lua/rules.lua")
+dofile(os.getenv("HOME") .. "/.config/hypr/lua/rules/init.lua")
 local static_window_rules = stub_counts.window_rules - before_static_window_rules
 
 local window_state = loader.apply_window_rules({
