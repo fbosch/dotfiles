@@ -625,6 +625,9 @@ echo ""
 
 init_rules_file
 parse_matchers  # Parse matchers on startup
+load_rules_cache
+prune_stale_rules_cache
+write_lua_rules_cache_file
 fetch_monitors  # Cache monitor layout
 
 # Check if we need to start polling immediately (single fetch, reused below)
