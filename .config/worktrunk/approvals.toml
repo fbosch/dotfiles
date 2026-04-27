@@ -1,3 +1,9 @@
+[projects."github.com/charlie-tango/umbraco-ai-form-flow-assistant"]
+approved-commands = [
+    "wt step copy-ignored --from {{ default_branch }} --to {{ branch }}",
+    "mkdir -p '{{ primary_worktree_path }}/apps/UmbracoHost/umbraco/Data/DataProtection-Keys' && mkdir -p 'apps/UmbracoHost/umbraco/Data' && if [ -L 'apps/UmbracoHost/umbraco/Data/DataProtection-Keys' ]; then unlink 'apps/UmbracoHost/umbraco/Data/DataProtection-Keys'; elif [ -e 'apps/UmbracoHost/umbraco/Data/DataProtection-Keys' ]; then rm -rf 'apps/UmbracoHost/umbraco/Data/DataProtection-Keys'; fi && ln -s '{{ primary_worktree_path }}/apps/UmbracoHost/umbraco/Data/DataProtection-Keys' 'apps/UmbracoHost/umbraco/Data/DataProtection-Keys'",
+]
+
 [projects."github.com/fbosch/infinite-fusion-nuzlocke"]
 approved-commands = [
     "pnpm install --frozen-lockfile --prefer-offline && sh ./.config/ensure-vercel-link.sh",

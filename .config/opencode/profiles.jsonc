@@ -126,7 +126,7 @@
     },
     "openai": {
       "description": "OpenAI routing",
-      "model": "openai/gpt-5.3-codex",
+      "model": "openai/gpt-5.5",
       "small_model": "openai/gpt-5.4-mini-fast",
       "agents": {
         "plan": "openai/gpt-5.5",
@@ -134,21 +134,21 @@
         "general": "openai/gpt-5.3-codex",
         "analyze": "openai/gpt-5.3-codex",
         "debug": "openai/gpt-5.3-codex",
-        "ideate": "openai/gpt-5.4",
+        "ideate": "openai/gpt-5.5",
         "patterns": "openai/gpt-5.4-mini-fast",
         "adversarial": "openai/gpt-5.4",
-        "refactor": "openai/gpt-5.3-codex",
+        "refactor": "openai/gpt-5.5",
         "commit": "openai/gpt-5.4-mini-fast",
         "title": "openai/gpt-5.4-mini-fast",
         "summary": "openai/gpt-5.4-mini-fast",
         "compaction": "openai/gpt-5.4-mini-fast",
         "test": "openai/gpt-5.3-codex",
-        "review": "openai/gpt-5.4",
+        "review": "openai/gpt-5.5",
         "docs": "openai/gpt-5.4",
         "research": "openai/gpt-5.5",
         "quick": "openai/gpt-5.4-mini-fast",
         "benchmark": "openai/gpt-5.4-mini-fast",
-        "spec": "openai/gpt-5.1-codex-max"
+        "spec": "openai/gpt-5.5"
       }
     },
     "economy": {
