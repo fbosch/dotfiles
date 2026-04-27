@@ -36,19 +36,21 @@ if hl == nil then
 	}
 end
 
-local generated = loader.compile_rules({
+local generated = loader.apply_window_rules({
 	os.getenv("HOME") .. "/.config/hypr/lua/rules/generated.lua",
 })
 
+local before_static_window_rules = stub_counts.window_rules
 dofile(os.getenv("HOME") .. "/.config/hypr/lua/rules.lua")
+local static_window_rules = stub_counts.window_rules - before_static_window_rules
 
-local window_state = loader.compile_rules({
+local window_state = loader.apply_window_rules({
 	os.getenv("HOME") .. "/.config/hypr/lua/rules/window-state.lua",
 })
 
 loader.report_warnings(generated.warnings)
 loader.report_warnings(window_state.warnings)
-loader.log("compiled " .. tostring(#generated.rules) .. " generated rules")
+loader.log("applied " .. tostring(generated.applied) .. " generated rules")
 loader.log("loaded " .. tostring(stub_counts.workspace_rules) .. " static workspace rules")
-loader.log("loaded " .. tostring(stub_counts.window_rules) .. " static window rules")
-loader.log("compiled " .. tostring(#window_state.rules) .. " window-state rules")
+loader.log("loaded " .. tostring(static_window_rules) .. " static window rules")
+loader.log("applied " .. tostring(window_state.applied) .. " window-state rules")

@@ -82,6 +82,7 @@ Responsibilities:
 - Safely load optional generated files.
 - Validate each entry has `id`, `match`, and `effects`.
 - Convert normalized effects to `hl.window_rule(...)` fields.
+- Apply generated/window-state data with `hl.window_rule(...)` when running under Hyprland.
 - Emit anonymous window rules initially to preserve current precedence.
 - Log or skip invalid generated entries without breaking the whole config, if the Lua API allows safe error handling.
 

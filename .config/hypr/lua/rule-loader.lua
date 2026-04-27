@@ -66,11 +66,23 @@ local function is_valid_rule(rule)
     and type(rule.effects) == "table"
 end
 
+local function is_pair(value)
+  return type(value) == "table" and value[1] ~= nil and value[2] ~= nil
+end
+
+local function normalize_effect(key, value)
+  if (key == "size" or key == "move") and is_pair(value) then
+    return tostring(value[1]) .. " " .. tostring(value[2])
+  end
+
+  return value
+end
+
 local function copy_rule(rule)
   local compiled = {}
 
   for key, value in pairs(rule.effects) do
-    compiled[key] = value
+    compiled[key] = normalize_effect(key, value)
   end
 
   compiled.match = rule.match
@@ -97,6 +109,17 @@ function M.compile_rules(paths)
     rules = compiled,
     warnings = warnings,
   }
+end
+
+function M.apply_window_rules(paths)
+  local result = M.compile_rules(paths)
+
+  for _, rule in ipairs(result.rules) do
+    hl.window_rule(rule)
+  end
+
+  result.applied = #result.rules
+  return result
 end
 
 function M.report_warnings(warnings)
