@@ -1,37 +1,8 @@
 local M = {}
-
-local function cache_home()
-  return os.getenv("XDG_CACHE_HOME") or (os.getenv("HOME") .. "/.cache")
-end
-
-local function log_path()
-  return cache_home() .. "/hypr/lua-migration.log"
-end
-
-local function shell_quote(value)
-  return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
-end
-
-local function timestamp()
-  return os.date("!%Y-%m-%dT%H:%M:%SZ")
-end
+local log = dofile(os.getenv("HOME") .. "/.config/hypr/lua/lib/log.lua")
 
 function M.log(message)
-  local path = log_path()
-  local dir = path:match("^(.+)/[^/]+$")
-
-  if dir then
-    os.execute("mkdir -p " .. shell_quote(dir))
-  end
-
-  local file = io.open(path, "a")
-  if not file then
-    return false
-  end
-
-  file:write(timestamp() .. " " .. tostring(message) .. "\n")
-  file:close()
-  return true
+  return log.write(message)
 end
 
 local function warn(warnings, message)

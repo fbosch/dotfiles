@@ -10,6 +10,7 @@ local stub_counts = {
 	animations = 0,
 	gestures = 0,
 	devices = 0,
+	monitors = 0,
 	workspace_rules = 0,
 	window_rules = 0,
 	layer_rules = 0,
@@ -57,11 +58,18 @@ if hl == nil then
 		device = function()
 			stub_counts.devices = stub_counts.devices + 1
 		end,
+		monitor = function()
+			stub_counts.monitors = stub_counts.monitors + 1
+		end,
 	}
 end
 
 local home = os.getenv("HOME")
 
+dofile(home .. "/.config/hypr/lua/base.lua")
+local programs = dofile(home .. "/.config/hypr/lua/programs.lua")
+local monitors = dofile(home .. "/.config/hypr/lua/monitors.lua")
+dofile(home .. "/.config/hypr/lua/rules/workspace-base.lua")
 dofile(home .. "/.config/hypr/lua/animations.lua")
 
 local generated = loader.apply_window_rules({
@@ -83,12 +91,15 @@ dofile(home .. "/.config/hypr/lua/input.lua")
 
 loader.report_warnings(generated.warnings)
 loader.report_warnings(window_state.warnings)
+loader.log("loaded monitor profile for host " .. tostring(monitors.host))
+loader.log("loaded " .. tostring(programs.terminal) .. " terminal command")
 loader.log("loaded " .. tostring(stub_counts.env_vars) .. " environment variables")
 loader.log("loaded " .. tostring(stub_counts.config_calls) .. " config blocks")
 loader.log("loaded " .. tostring(stub_counts.curves) .. " animation curves")
 loader.log("loaded " .. tostring(stub_counts.animations) .. " animations")
 loader.log("loaded " .. tostring(stub_counts.gestures) .. " gestures")
 loader.log("loaded " .. tostring(stub_counts.devices) .. " device configs")
+loader.log("loaded " .. tostring(stub_counts.monitors) .. " monitor rules")
 loader.log("applied " .. tostring(generated.applied) .. " generated rules")
 loader.log("loaded " .. tostring(stub_counts.workspace_rules) .. " static workspace rules")
 loader.log("loaded " .. tostring(static_window_rules) .. " static window rules")

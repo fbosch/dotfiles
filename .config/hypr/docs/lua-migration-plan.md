@@ -16,10 +16,20 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
 .config/hypr/
   hyprland.lua
   lua/
+    base.lua
+    programs.lua
+    monitors.lua
+    animations.lua
+    environment.lua
+    appearance.lua
+    input.lua
+    lib/
+      system.lua
     rules/
       init.lua
       generated.lua
       window-state.lua
+      workspace-base.lua
       layer.lua
       workspace.lua
       window.lua
@@ -153,13 +163,20 @@ Static layer rules from `appearance.conf` live in `lua/rules/layer.lua`, but sho
 
 Current staged modules:
 
+- `lua/base.lua`
+- `lua/programs.lua`
+- `lua/monitors.lua`
+- `lua/rules/workspace-base.lua`
 - `lua/animations.lua`
 - `lua/environment.lua`
 - `lua/appearance.lua`
 - `lua/rules/layer.lua`
 - `lua/input.lua`
+- `lua/lib/system.lua`
 
 Known staged gap: namespace-specific layer animations from `animations.conf` are documented in `lua/animations.lua` until the exact Hyprland Lua API shape is confirmed.
+
+Machine-specific `monitors.conf` remains gitignored for the live `.conf` config, but staged Lua mirrors known host layouts in tracked `lua/monitors.lua`. Current host-specific profile: `rvn-pc`.
 
 Validate this phase with:
 

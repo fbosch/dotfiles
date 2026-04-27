@@ -67,6 +67,14 @@ local function split_csv(value)
   return parts
 end
 
+local function split_csv_keep_empty(value)
+  local parts = {}
+  for part in (value .. ","):gmatch("(.-),") do
+    parts[#parts + 1] = trim(part)
+  end
+  return parts
+end
+
 local function flatten_config(target, prefix, config)
   for key, value in pairs(config) do
     local full_key = prefix == "" and key or (prefix .. "." .. key)
@@ -92,7 +100,7 @@ local function parse_config_file(path, skip_key)
       stack[#stack] = nil
     else
       local key, value = line:match("^([%w_%.]+)%s*=%s*(.*)$")
-      if key and key ~= skip_key and key ~= "gesture" then
+      if key and key ~= skip_key and key ~= "gesture" and key ~= "source" and key ~= "monitor" and key ~= "workspace" then
         local parts = {}
         for _, item in ipairs(stack) do
           parts[#parts + 1] = item
@@ -142,7 +150,7 @@ local function parse_gestures(path)
     line = strip_comment(line)
     local value = line:match("^gesture%s*=%s*(.+)$")
     if value then
-      local parts = split_csv(value)
+      local parts = split_csv_keep_empty(value)
       result[#result + 1] = parts[1] .. "|" .. parts[2] .. "|" .. parts[3]
     end
   end
@@ -173,6 +181,76 @@ local function parse_devices(path)
     local name = device.name
     device.name = nil
     result[#result + 1] = name .. "|" .. value_key(device)
+  end
+  return result
+end
+
+local function parse_programs(path)
+  local result = {}
+  for line in read_file(path):gmatch("[^\n]+") do
+    line = strip_comment(line)
+    local key, value = line:match("^%$([%w_]+)%s*=%s*(.+)$")
+    if key then
+      result[key] = trim(value)
+    end
+  end
+  return result
+end
+
+local function parse_monitors(path)
+  local result = {}
+  for line in read_file(path):gmatch("[^\n]+") do
+    line = strip_comment(line)
+    local value = line:match("^monitor%s*=%s*(.+)$")
+    if value then
+      local parts = split_csv_keep_empty(value)
+      local rule = {
+        output = parts[1] or "",
+      }
+
+      if parts[2] == "transform" then
+        rule.transform = parse_scalar(parts[3] or "")
+      else
+        rule.mode = parts[2] or ""
+        rule.position = parts[3] or ""
+        rule.scale = parse_scalar(parts[4] or "")
+
+        local index = 5
+        while index <= #parts do
+          local key = parts[index]
+          if key == "hdr" then
+            rule.cm = "hdr"
+          elseif key ~= "" then
+            rule[key] = parse_scalar(parts[index + 1] or "")
+          end
+          index = key == "hdr" and (index + 1) or (index + 2)
+        end
+      end
+
+      result[#result + 1] = value_key(rule)
+    end
+  end
+  return result
+end
+
+local function parse_workspace_rules(path)
+  local result = {}
+  for line in read_file(path):gmatch("[^\n]+") do
+    line = strip_comment(line)
+    local value = line:match("^workspace%s*=%s*(.+)$")
+    if value then
+      local parts = split_csv(value)
+      local rule = { workspace = parts[1] }
+      for index = 2, #parts do
+        local key, raw = parts[index]:match("^([^:]+):(.+)$")
+        if key == "monitor" then
+          rule.monitor = raw
+        elseif key == "default" then
+          rule.default = raw == "true"
+        end
+      end
+      result[#result + 1] = value_key(rule)
+    end
   end
   return result
 end
@@ -212,6 +290,8 @@ local captured = {
   layer_rules = {},
   gestures = {},
   devices = {},
+  monitors = {},
+  workspace_rules = {},
 }
 
 hl = {
@@ -248,8 +328,18 @@ hl = {
     end
     captured.devices[#captured.devices + 1] = device.name .. "|" .. value_key(copy)
   end,
+  monitor = function(monitor)
+    captured.monitors[#captured.monitors + 1] = value_key(monitor)
+  end,
+  workspace_rule = function(rule)
+    captured.workspace_rules[#captured.workspace_rules + 1] = value_key(rule)
+  end,
 }
 
+local programs = dofile(hypr .. "/lua/programs.lua")
+dofile(hypr .. "/lua/base.lua")
+dofile(hypr .. "/lua/monitors.lua")
+dofile(hypr .. "/lua/rules/workspace-base.lua")
 dofile(hypr .. "/lua/environment.lua")
 dofile(hypr .. "/lua/appearance.lua")
 dofile(hypr .. "/lua/rules/layer.lua")
@@ -266,7 +356,22 @@ local expected = {
   layer_rules = parse_layer_rules(hypr .. "/appearance.conf"),
   gestures = parse_gestures(hypr .. "/input.conf"),
   devices = parse_devices(hypr .. "/input.conf"),
+  programs = parse_programs(hypr .. "/hyprland.conf"),
+  monitors = {},
+  workspace_rules = parse_workspace_rules(hypr .. "/hyprland.conf"),
 }
+
+for _, monitor in ipairs(parse_monitors(hypr .. "/monitors.conf")) do
+  expected.monitors[#expected.monitors + 1] = monitor
+end
+
+for _, monitor in ipairs(parse_monitors(hypr .. "/hyprland.conf")) do
+  expected.monitors[#expected.monitors + 1] = monitor
+end
+
+for key, value in pairs(parse_config_file(hypr .. "/hyprland.conf")) do
+  expected.config[key] = value
+end
 
 for key, value in pairs(parse_config_file(hypr .. "/appearance.conf", "layerrule")) do
   expected.config[key] = value
@@ -320,6 +425,14 @@ compare_lists("animations", expected.animations, captured.animations)
 compare_lists("layer rules", expected.layer_rules, captured.layer_rules)
 compare_lists("gestures", expected.gestures, captured.gestures)
 compare_lists("devices", expected.devices, captured.devices)
+compare_maps("programs", expected.programs, {
+  terminal = programs.terminal,
+  fileManager = programs.file_manager,
+  browser = programs.browser,
+  menu = programs.menu,
+})
+compare_lists("monitors", expected.monitors, captured.monitors)
+compare_lists("workspace rules", expected.workspace_rules, captured.workspace_rules)
 
 local known_skips = {
   "layersIn, ags-confirm, 1, 15, pop, popin 98%",
