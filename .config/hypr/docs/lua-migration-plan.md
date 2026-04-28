@@ -170,16 +170,16 @@ Create Lua modules in a non-live path or use a clearly staged filename until rea
 Initial modules:
 
 - `lua/rule-loader.lua`
-- `lua/rules/init.lua`
-- `lua/rules/generated.lua`
-- `lua/rules/window-state.lua`
-- `lua/rules/layer.lua`
-- `lua/rules/workspace.lua`
-- `lua/rules/window.lua`
+- `rules/init.lua`
+- `rules/generated.lua`
+- `rules/window-state.lua`
+- `rules/layer.lua`
+- `rules/workspace.lua`
+- `rules/window.lua`
 
 ### 3. Convert Static Rules
 
-Convert static `rules.conf` rules into `lua/rules/init.lua`, `lua/rules/workspace.lua`, and `lua/rules/window.lua` first. Preserve current evaluation order.
+Convert static `rules.conf` rules into `rules/init.lua`, `rules/workspace.lua`, and `rules/window.lua` first. Preserve current evaluation order.
 
 Current order to preserve:
 
@@ -187,7 +187,7 @@ Current order to preserve:
 2. Static rules from `rules.conf`.
 3. Window-state rules from `window-state-rules.conf`.
 
-Static layer rules from `appearance.conf` live in `lua/rules/layer.lua`, but should be loaded in the appearance phase rather than from `lua/rules/init.lua` so their relative order stays close to the live config.
+Static layer rules from `appearance.conf` live in `rules/layer.lua`, but should be loaded in the appearance phase rather than from `rules/init.lua` so their relative order stays close to the live config.
 
 ### 3.5. Convert Low-Risk Base Modules
 
@@ -198,11 +198,11 @@ Current staged modules:
 - `lua/monitors.lua`
 - `lua/autostart.lua`
 - `lua/keybinds.lua`
-- `lua/rules/workspace-base.lua`
+- `rules/workspace-base.lua`
 - `lua/animations.lua`
 - `lua/environment.lua`
 - `lua/appearance.lua`
-- `lua/rules/layer.lua`
+- `rules/layer.lua`
 - `lua/input.lua`
 - `lua/lib/system.lua`
 
@@ -253,12 +253,12 @@ Keep the daemon architecture unchanged initially:
 - debounced writes
 - immediate save on close
 
-Keep `window-state.conf` as the writable selector source while Vicinae still appends to it. Mirror its selectors to `lua/rules/window-state-selectors.lua` as a simple Lua table.
+Keep `window-state.conf` as the writable selector source while Vicinae still appends to it. Mirror its selectors to `rules/window-state-selectors.lua` as a simple Lua table.
 
 Dual-write generated rule outputs:
 
 - Keep `window-state-rules.conf` for rollback to hyprlang config.
-- Write `lua/rules/window-state.lua` for Lua config.
+- Write `rules/window-state.lua` for Lua config.
 - Keep both generated rule outputs ignored once Lua output is proven stable.
 
 Keep a temporary compatibility mode or backup writer for the old `.conf` format until the Lua config has proven stable.

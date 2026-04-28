@@ -67,7 +67,7 @@ Autostart:
 Generated state:
 
 - `hypr-quickrule` still writes Lua generated rules and reloads when expected.
-- `window-state.sh` still writes `lua/rules/window-state.lua` and `.conf` compatibility output.
+- `window-state.sh` still writes `rules/window-state.lua` and selector data.
 
 ## Rollback
 
