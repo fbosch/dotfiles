@@ -302,6 +302,18 @@ local function parse_keybinds(path, variables)
         argument = "function"
       end
 
+      if dispatcher == "exec" and argument == "~/.config/hypr/scripts/toggle-show-desktop.sh" then
+        argument = "~/.config/hypr/lua/runtime/toggle-show-desktop.sh"
+      end
+
+      if dispatcher == "exec" and argument == "~/.config/hypr/scripts/toggle-minimized-window.sh" then
+        argument = "~/.config/hypr/lua/runtime/toggle-minimized-window.sh"
+      end
+
+      if dispatcher == "exec" and argument == "~/.config/hypr/scripts/toggle-minimized-workspace.sh" then
+        argument = "~/.config/hypr/lua/runtime/toggle-minimized-workspace.sh"
+      end
+
       if dispatcher == "exec" and argument:match("^bash ~/.config/hypr/scripts/window%-switcher%-wrapper%.sh ") then
         dispatcher = "lua"
         argument = "function"

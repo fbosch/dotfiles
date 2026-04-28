@@ -82,10 +82,10 @@ bind("bind", main_mod, "F", hl.dsp.window.fullscreen({ mode = "maximized" }))
 bind("bind", main_mod .. " + CTRL", "F", hl.dsp.window.fullscreen({ mode = "fullscreen" }))
 bind("bind", main_mod, "F", hl.dsp.pass({ window = "class:^(xfreerdp)$" }))
 bind("bind", main_mod, "W", close_active.close_active_selective)
-bind("bind", main_mod, "D", exec("~/.config/hypr/scripts/toggle-show-desktop.sh"))
+bind("bind", main_mod, "D", exec("~/.config/hypr/lua/runtime/toggle-show-desktop.sh"))
 
-bind("bind", main_mod, "Z", exec("~/.config/hypr/scripts/toggle-minimized-window.sh"))
-bind("bind", main_mod .. " + SHIFT", "Z", exec("~/.config/hypr/scripts/toggle-minimized-workspace.sh"))
+bind("bind", main_mod, "Z", exec("~/.config/hypr/lua/runtime/toggle-minimized-window.sh"))
+bind("bind", main_mod .. " + SHIFT", "Z", exec("~/.config/hypr/lua/runtime/toggle-minimized-workspace.sh"))
 bind("bind", main_mod, "X", hl.dsp.window.move({ workspace = "+0", follow = false }))
 
 bind("bind", main_mod, "H", hl.dsp.focus({ direction = direction("l") }))

@@ -17,7 +17,7 @@ local function confirm_payload()
 			message = "This will end your Wayland session",
 			confirmLabel = "Exit",
 			cancelLabel = "Cancel",
-			confirmCommand = paths.script("exit-session.sh"),
+			confirmCommand = paths.runtime_script("exit-session.sh"),
 			variant = "danger",
 			audioFile = paths.asset("warn.ogg"),
 			showDelay = 180,

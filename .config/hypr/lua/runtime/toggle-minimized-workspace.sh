@@ -42,10 +42,14 @@ special_workspace_for_bucket() {
   printf '%s\n' "${MINIMIZED_WORKSPACE_PREFIX}-${bucket_hash}"
 }
 
+lua_quote() {
+  jq -Rn --arg value "$1" '$value'
+}
+
 focus_monitor() {
   local monitor_name="$1"
 
-  hyprctl dispatch focusmonitor "$monitor_name" >/dev/null
+  hyprctl dispatch "hl.dsp.focus({ monitor = $(lua_quote "$monitor_name") })" >/dev/null
 }
 
 toggle_special_workspace() {
@@ -53,7 +57,7 @@ toggle_special_workspace() {
   local special_name
 
   special_name="${special_workspace#special:}"
-  hyprctl dispatch togglespecialworkspace "$special_name" >/dev/null
+  hyprctl dispatch "hl.dsp.workspace.toggle_special($(lua_quote "$special_name"))" >/dev/null
 }
 
 state_value_for_address() {
@@ -153,13 +157,10 @@ visible_special_monitor() {
 toggle_special_workspace_on_monitor() {
   local monitor_name="$1"
   local special_workspace="$2"
-  local special_name
 
   if [[ -z "$special_workspace" ]]; then
     return
   fi
-
-  special_name="${special_workspace#special:}"
 
   if [[ -z "$monitor_name" ]]; then
     toggle_special_workspace "$special_workspace"

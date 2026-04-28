@@ -30,23 +30,27 @@ special_workspace_for_bucket() {
   printf '%s\n' "${MINIMIZED_WORKSPACE_PREFIX}-${bucket_hash}"
 }
 
+lua_quote() {
+  jq -Rn --arg value "$1" '$value'
+}
+
 move_window_to_workspace() {
   local workspace="$1"
   local address="$2"
 
-  hyprctl dispatch movetoworkspacesilent "${workspace},address:${address}" >/dev/null
+  hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })" >/dev/null
 }
 
 focus_monitor() {
   local monitor_name="$1"
 
-  hyprctl dispatch focusmonitor "$monitor_name" >/dev/null
+  hyprctl dispatch "hl.dsp.focus({ monitor = $(lua_quote "$monitor_name") })" >/dev/null
 }
 
 focus_window() {
   local address="$1"
 
-  hyprctl dispatch focuswindow "address:${address}" >/dev/null
+  hyprctl dispatch "hl.dsp.focus({ window = $(lua_quote "address:${address}") })" >/dev/null
 }
 
 resize_window() {
@@ -54,7 +58,7 @@ resize_window() {
   local width="$2"
   local height="$3"
 
-  hyprctl dispatch resizewindowpixel "exact ${width} ${height},address:${address}" >/dev/null
+  hyprctl dispatch "hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })" >/dev/null
 }
 
 move_window() {
@@ -62,7 +66,7 @@ move_window() {
   local x="$2"
   local y="$3"
 
-  hyprctl dispatch movewindowpixel "exact ${x} ${y},address:${address}" >/dev/null
+  hyprctl dispatch "hl.dsp.window.move({ x = ${x}, y = ${y}, window = $(lua_quote "address:${address}") })" >/dev/null
 }
 
 init_state_file() {

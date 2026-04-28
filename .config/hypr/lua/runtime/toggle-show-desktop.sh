@@ -7,17 +7,21 @@ readonly STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-show-desktop"
 
 mkdir -p "$STATE_DIR"
 
+lua_quote() {
+  jq -Rn --arg value "$1" '$value'
+}
+
 move_window_to_workspace() {
   local workspace="$1"
   local address="$2"
 
-  hyprctl dispatch movetoworkspacesilent "${workspace},address:${address}" >/dev/null
+  hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })" >/dev/null
 }
 
 focus_window() {
   local address="$1"
 
-  hyprctl dispatch focuswindow "address:${address}" >/dev/null
+  hyprctl dispatch "hl.dsp.focus({ window = $(lua_quote "address:${address}") })" >/dev/null
 }
 
 resize_window() {
@@ -25,7 +29,7 @@ resize_window() {
   local width="$2"
   local height="$3"
 
-  hyprctl dispatch resizewindowpixel "exact ${width} ${height},address:${address}" >/dev/null
+  hyprctl dispatch "hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })" >/dev/null
 }
 
 move_window() {
@@ -33,7 +37,7 @@ move_window() {
   local x="$2"
   local y="$3"
 
-  hyprctl dispatch movewindowpixel "exact ${x} ${y},address:${address}" >/dev/null
+  hyprctl dispatch "hl.dsp.window.move({ x = ${x}, y = ${y}, window = $(lua_quote "address:${address}") })" >/dev/null
 }
 
 focused_monitor_json="$(hyprctl monitors -j | jq -c 'first(.[] | select(.focused == true)) // empty')"
