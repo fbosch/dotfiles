@@ -29,6 +29,12 @@ else
   exit 0
 fi
 
+active_class="$(hyprctl activewindow -j | jq -r '.class // .initialClass // empty' 2>/dev/null || true)"
+if [[ "$active_class" != "gamescope" ]]; then
+  hyprctl dispatch sendshortcut CTRL,V,activewindow >/dev/null 2>&1 || true
+  exit 0
+fi
+
 clipboard_text="$(wl-paste --no-newline --type text/plain 2>/dev/null || wl-paste --no-newline 2>/dev/null || true)"
 
 if [[ -z "$clipboard_text" ]]; then
@@ -39,10 +45,12 @@ echo "paste hotkey triggered" >> "$LOG_FILE"
 
 gamescope_display="$(list_gamescope_display || true)"
 if [[ -n "$gamescope_display" ]] && command -v xdotool >/dev/null 2>&1; then
-  DISPLAY="$gamescope_display" xdotool type --clearmodifiers --delay 0 -- "$clipboard_text" >/dev/null 2>&1 || true
-  echo "pasted via xdotool on $gamescope_display" >> "$LOG_FILE"
+  printf '%s' "$clipboard_text" | DISPLAY="$gamescope_display" xclip -selection clipboard -in >/dev/null 2>&1 || true
+  printf '%s' "$clipboard_text" | DISPLAY="$gamescope_display" xclip -selection primary -in >/dev/null 2>&1 || true
+  DISPLAY="$gamescope_display" xdotool key --clearmodifiers ctrl+v >/dev/null 2>&1 || true
+  echo "pasted via xclip+xdotool key on $gamescope_display" >> "$LOG_FILE"
   exit 0
 fi
 
-wtype --delay 0 "$clipboard_text"
-echo "pasted via wtype" >> "$LOG_FILE"
+hyprctl dispatch sendshortcut CTRL,V,activewindow >/dev/null 2>&1 || true
+echo "pasted via sendshortcut fallback" >> "$LOG_FILE"

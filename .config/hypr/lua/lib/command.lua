@@ -16,4 +16,15 @@ function M.output_line(command)
 	return output
 end
 
+function M.output(command)
+	local handle = io.popen(command)
+	if not handle then
+		return ""
+	end
+
+	local output = handle:read("*a") or ""
+	handle:close()
+	return output
+end
+
 return M
