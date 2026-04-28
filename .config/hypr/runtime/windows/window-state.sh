@@ -28,8 +28,10 @@ RULES_LUA_FILE="$HOME/.config/hypr/rules/window-state.lua"
 STATE_FILE="${XDG_RUNTIME_DIR}/hypr-window-state.cache"
 DEBOUNCE_FILE="${XDG_RUNTIME_DIR}/hypr-window-state-debounce"
 DEBOUNCE_DELAY=1      # Wait 1 second after last change before saving
-POLL_INTERVAL_IDLE=0.05   # Poll interval when system is idle
-POLL_INTERVAL_BUSY=0.15   # Poll interval when system load is high
+POLL_INTERVAL_ACTIVE_IDLE=0.05   # Poll interval while geometry is changing and CPU is idle
+POLL_INTERVAL_ACTIVE_BUSY=0.15   # Poll interval while geometry is changing and CPU is busy
+POLL_INTERVAL_STABLE_IDLE=1      # Poll interval after tracked windows are stable
+POLL_INTERVAL_STABLE_BUSY=1.5    # Poll interval after tracked windows are stable and CPU is busy
 POLL_PID=""  # Track polling subprocess
 MAIN_PID=$$  # PID of main process (for subprocess signalling)
 CPU_COUNT=$(nproc)  # Number of CPU cores for load calculation
@@ -211,8 +213,10 @@ is_state_empty() {
     [[ -z "$state" || "$state" == "[]" ]]
 }
 
-# Adaptive sleep based on system load
+# Adaptive sleep based on system load and recent window activity
 adaptive_sleep() {
+    local mode="${1:-active}"
+
     # Read load average directly (pure bash, no awk)
     local load rest
     read -r load rest < /proc/loadavg
@@ -224,10 +228,19 @@ adaptive_sleep() {
     # Handle leading zeros (e.g., "0.5" -> "05" -> "5")
     load_int=$((10#$load_int))
     
+    if [[ "$mode" == "stable" ]]; then
+        if ((load_int > threshold)); then
+            sleep "$POLL_INTERVAL_STABLE_BUSY"
+        else
+            sleep "$POLL_INTERVAL_STABLE_IDLE"
+        fi
+        return
+    fi
+
     if ((load_int > threshold)); then
-        sleep "$POLL_INTERVAL_BUSY"
+        sleep "$POLL_INTERVAL_ACTIVE_BUSY"
     else
-        sleep "$POLL_INTERVAL_IDLE"
+        sleep "$POLL_INTERVAL_ACTIVE_IDLE"
     fi
 }
 
@@ -239,7 +252,11 @@ start_polling() {
     {
         while true; do
             # Get window states once per iteration
-            local current_state
+            local current_state previous_hash had_debounce sleep_mode
+            previous_hash="$CURRENT_HASH"
+            had_debounce=0
+            [[ -f "$DEBOUNCE_FILE" ]] && had_debounce=1
+
             current_state=$(get_window_states)
             
             # Check if we should stop (no tracked windows)
@@ -251,7 +268,13 @@ start_polling() {
             
             # Pass state to avoid re-fetching
             check_and_save_with_state "$current_state"
-            adaptive_sleep
+
+            sleep_mode="stable"
+            if [[ "$current_state" != "$previous_hash" || $had_debounce -eq 1 || -f "$DEBOUNCE_FILE" ]]; then
+                sleep_mode="active"
+            fi
+
+            adaptive_sleep "$sleep_mode"
         done
     } &
     
@@ -555,8 +578,8 @@ handle_event() {
     local event="$1"
     
     case "$event" in
-        openwindow*|changefloatingmode*)
-            # Window opened or changed float mode - might need to start tracking
+        openwindow*|changefloatingmode*|movewindow*|resizewindow*)
+            # Window opened, moved/resized, or changed float mode - might need to start tracking
             # Call get_window_states once and reuse
             local state
             state=$(get_window_states)
@@ -624,7 +647,7 @@ echo "Config: $CONFIG_FILE"
 echo "Rules: $RULES_FILE"
 echo "Debounce delay: ${DEBOUNCE_DELAY}s"
 echo "Scheduling: SCHED_IDLE (runs only when CPU is idle)"
-echo "Poll rate: Adaptive based on system load (0.05s-0.15s)"
+echo "Poll rate: Adaptive based on activity/load (active 0.05s-0.15s, stable 1s-1.5s)"
 echo ""
 
 init_rules_file
