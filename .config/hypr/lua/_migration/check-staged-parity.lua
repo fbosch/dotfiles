@@ -283,8 +283,7 @@ local function parse_keybinds(path, variables)
       end
 
       if dispatcher == "exec" and argument == "bash ~/.config/hypr/scripts/confirm-hyprprop-kill.sh" then
-        dispatcher = "lua"
-        argument = "function"
+        argument = "~/.config/hypr/lua/runtime/windows/confirm-hyprprop-kill.sh"
       end
 
       if dispatcher == "exec" and argument == "bash ~/.config/hypr/scripts/paste-to-gamescope.sh" then
@@ -743,7 +742,6 @@ end
 
 local function expanded_startup_commands()
   return {
-    "sleep 2",
     "hyprctl --batch 'dispatch workspace 10 ; dispatch moveworkspacetomonitor 10 DP-2 ; dispatch workspace 1 ; dispatch moveworkspacetomonitor 1 DP-2 ; dispatch focusmonitor DP-2 ; dispatch workspace 1' >/dev/null 2>&1 || true",
     "uwsm-app -s s -- hyprpaper",
     "uwsm-app -s s -- waybar",
@@ -762,7 +760,9 @@ local function expand_exec_once(commands)
         result[#result + 1] = expanded
       end
     elseif command == "~/.config/hypr/lua/runtime/startup/startup-desktop-ready.sh" then
-      result[#result + 1] = "hyprctl --batch 'dispatch workspace 10 ; dispatch moveworkspacetomonitor 10 DP-2 ; dispatch workspace 1 ; dispatch moveworkspacetomonitor 1 DP-2 ; dispatch focusmonitor DP-2 ; dispatch workspace 1' >/dev/null 2>&1 || true"
+      for _, expanded in ipairs(expanded_startup_commands()) do
+        result[#result + 1] = expanded
+      end
     elseif command == "uwsm-app -s b -- ~/.config/hypr/lua/runtime/gamescope/gamescope-profile-watchdog.sh" then
       result[#result + 1] = "uwsm-app -s b -- ~/.config/hypr/scripts/gamescope-profile-watchdog.sh"
     else

@@ -378,7 +378,7 @@ export default function Command() {
 
 	const readLuaRuleBlocks = (content: string): Map<string, string> => {
 		const blocks = new Map<string, string>();
-		const blockPattern = /^  -- BEGIN ([^\n]+)\n([\s\S]*?)\n  -- END \1$/gm;
+		const blockPattern = /^[\t ]+-- BEGIN ([^\n]+)\n([\s\S]*?)\n[\t ]+-- END \1$/gm;
 
 		for (const match of content.matchAll(blockPattern)) {
 			blocks.set(match[1], match[0]);
@@ -482,6 +482,7 @@ export default function Command() {
 			// Append new matcher with comment
 			const newContent = existingConfig + `\n# ${matchValue}\n${matcherLine}\n`;
 			await fs.writeFile(windowStateConfigPath, newContent, "utf-8");
+			await execAsync("hyprctl reload config-only");
 
 			await showToast({
 				style: Toast.Style.Success,

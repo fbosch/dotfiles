@@ -1,6 +1,6 @@
 # Hyprland Lua Live Test Checklist
 
-Live config remains `.config/hypr/hyprland.conf`. Do not create `.config/hypr/hyprland.lua` except during an explicit live Lua test window.
+Lua testing now uses `.config/hypr/hyprland.lua`. Remove or rename it to roll back to `.config/hypr/hyprland.conf`.
 
 ## Before Switching
 
@@ -9,7 +9,7 @@ Run from repo root:
 ```bash
 lua .config/hypr/lua/_migration/check-staged-parity.lua /home/fbb/dotfiles
 lua .config/hypr/lua/_migration/audit-source-graph.lua /home/fbb/dotfiles
-lua .config/hypr/hyprland.staged.lua
+lua .config/hypr/hyprland.lua
 ```
 
 Expected output:
@@ -29,13 +29,7 @@ Known staged gaps:
 
 ## Activate Lua Temporarily
 
-Only when ready to restart Hyprland into Lua config:
-
-```bash
-cp ~/.config/hypr/hyprland.staged.lua ~/.config/hypr/hyprland.lua
-```
-
-Then restart Hyprland. Do not rely on reload to switch parser modes; config selection happens at startup.
+Restart Hyprland while `.config/hypr/hyprland.lua` exists. Do not rely on reload to switch parser modes; config selection happens at startup.
 
 ## Immediate Checks
 
@@ -90,4 +84,4 @@ rm ~/.config/hypr/hyprland.lua
 
 Hyprland will load `.config/hypr/hyprland.conf` again on next startup.
 
-Do not delete `.config/hypr/hyprland.staged.lua`; it is the staged migration source.
+Keep `.config/hypr/hyprland.lua` under version control while Lua remains the active test path.

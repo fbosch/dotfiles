@@ -5,8 +5,7 @@ Local reference for migrating this repo from hyprlang `.conf` files to Hyprland 
 ## Scope
 
 - Upstream basis: Hyprland `main` after Lua config PR #13817.
-- Local live config remains `.config/hypr/hyprland.conf` until Lua parity is ready.
-- Local staged entrypoint is `.config/hypr/hyprland.staged.lua`; do not rename it to `hyprland.lua` until ready to test a live Lua session.
+- Local Lua test entrypoint is `.config/hypr/hyprland.lua`; remove or rename it to roll back to `.config/hypr/hyprland.conf`.
 - Target static-rule migration excludes generated outputs: `.config/hypr/generated-rules.conf` and `.config/hypr/lua/rules/window-state.lua`.
 
 ## Entrypoint Behavior
@@ -30,7 +29,7 @@ Sources:
 - Hyprland sets Lua `package.path` to include the config directory as `?.lua` and `?/init.lua`.
 - Module names are rooted at `.config/hypr`: use `require("lua.programs")` for `lua/programs.lua`, `require("lua.rules")` for `lua/rules/init.lua`, and `require("lua.actions.close-active")` for `lua/actions/close-active.lua`.
 - Hyphenated filenames are valid in quoted module names, but future hand-written files should prefer underscores when there is no existing filename to preserve.
-- The staged entrypoint prepends the same config-root paths to `package.path` so plain `lua .config/hypr/hyprland.staged.lua` validates the same module layout.
+- The Lua entrypoint prepends the same config-root paths to `package.path` so plain `lua .config/hypr/hyprland.lua` validates the same module layout.
 - On reload, Hyprland clears non-stdlib `package.loaded` entries, so required user modules re-run.
 - Hyprland wraps `require` and tracks required module paths for config watching.
 - Use absolute path-loading in `lua/rule-loader.lua` for generated data files when cache avoidance matters.

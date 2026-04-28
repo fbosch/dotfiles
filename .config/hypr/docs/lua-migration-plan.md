@@ -57,6 +57,7 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
       startup/
         startup-desktop-ready.sh
       windows/
+        confirm-hyprprop-kill.sh
         toggle-show-desktop.sh
         toggle-minimized-window.sh
         toggle-minimized-workspace.sh
@@ -218,31 +219,31 @@ Validate this phase with:
 ```bash
 lua .config/hypr/lua/_migration/check-staged-parity.lua /home/fbb/dotfiles
 lua .config/hypr/lua/_migration/audit-source-graph.lua /home/fbb/dotfiles
-lua .config/hypr/hyprland.staged.lua
+lua .config/hypr/hyprland.lua
 ```
 
 Current validation status:
 
 - Staged parity check passes with the known gaps above.
 - Source graph audit passes; no active hyprlang source lines are currently uncategorized by the staged migration.
-- Local Lua execution of `hyprland.staged.lua` passes.
+- Local Lua execution of `hyprland.lua` passes.
 
-Do not create or rename to `.config/hypr/hyprland.lua` without explicit approval; that would make Hyprland select Lua config at startup.
+Keep `.config/hypr/hyprland.lua` as the live Lua test entrypoint. Remove or rename it to roll back to `.config/hypr/hyprland.conf`.
 
 Use `docs/lua-live-test-checklist.md` for the manual live Lua test and rollback procedure.
 
 ### 4. Convert `hypr-quickrule`
 
-Update `.config/vicinae/extensions/hypr-quickrule/src/hypr-quickrule.tsx` to dual-write the live `.conf` output and staged Lua data at `~/.config/hypr/lua/rules/generated.lua`.
+`.config/vicinae/extensions/hypr-quickrule/src/hypr-quickrule.tsx` dual-writes the live `.conf` output and Lua data at `~/.config/hypr/lua/rules/generated.lua`.
 
 Requirements:
 
 - Write Lua data, not `hl.window_rule(...)` calls.
-- Replace existing entry with same `id`.
-- Preserve the existing `.conf` append path until Lua is live.
+- Replace existing Lua entry with same `id`.
+- Preserve the existing `.conf` append path until rollback support is retired.
 - Keep profile effects normalized.
-- Keep `Save Window State` behavior appending matchers to `window-state.conf` for now.
-- Continue reloading Hyprland after writes once Lua config is live.
+- Keep `Save Window State` behavior appending matchers to `window-state.conf`; it triggers `hyprctl reload config-only` so `window-state.sh` refreshes selector/rule outputs.
+- Continue reloading Hyprland after writes while generated files are active.
 
 ### 5. Convert `window-state.sh`
 
@@ -258,8 +259,8 @@ Keep `window-state.conf` as the writable selector source while Vicinae still app
 
 Dual-write generated rule outputs:
 
-- Keep `window-state-rules.conf` for the live hyprlang config.
-- Write `lua/rules/window-state.lua` for staged Lua config.
+- Keep `window-state-rules.conf` for rollback to hyprlang config.
+- Write `lua/rules/window-state.lua` for Lua config.
 - Keep both generated rule outputs ignored once Lua output is proven stable.
 
 Keep a temporary compatibility mode or backup writer for the old `.conf` format until the Lua config has proven stable.
