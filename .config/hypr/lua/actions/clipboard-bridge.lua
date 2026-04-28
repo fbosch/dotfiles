@@ -1,4 +1,4 @@
--- Lua-native equivalent of scripts/paste-to-gamescope.sh for Lua keybinds.
+-- Lua-native clipboard bridge for Lua keybinds.
 -- Keep the Bash script for legacy hyprland.conf until Lua config is release-ready.
 
 local command = require("lua.lib.command")
@@ -75,7 +75,7 @@ local function active_is_gamescope()
 	return active.class == "gamescope" or active.initial_class == "gamescope"
 end
 
-function M.sync_now()
+function M.sync_wayland_to_xwayland_now()
 	if not have("wl-paste") or not have("xclip") or using_wl_clipboard_wrapper() then
 		return
 	end
@@ -91,7 +91,7 @@ function M.sync_now()
 	end
 end
 
-function M.paste_now()
+function M.paste_with_xwayland_clipboard_now()
 	if not have("wl-paste") then
 		return
 	end
@@ -120,7 +120,7 @@ local function schedule(action, delay)
 		"package.path=",
 		string.format("%q", config_root .. "/?.lua;" .. config_root .. "/?/init.lua;"),
 		"..package.path;require(",
-		string.format("%q", "lua.actions.paste-to-gamescope"),
+		string.format("%q", "lua.actions.clipboard-bridge"),
 		").",
 		action,
 		"()",
@@ -129,13 +129,13 @@ local function schedule(action, delay)
 	hl.exec_cmd("sh -c " .. system.shell_quote("sleep " .. delay .. "; lua -e " .. system.shell_quote(lua_code)))
 end
 
-function M.sync_to_gamescope()
-	schedule("sync_now", "0.05")
+function M.sync_wayland_to_xwayland()
+	schedule("sync_wayland_to_xwayland_now", "0.05")
 end
 
-function M.paste_to_gamescope()
+function M.paste_with_clipboard_bridge()
 	if active_is_gamescope() then
-		schedule("paste_now", "0.08")
+		schedule("paste_with_xwayland_clipboard_now", "0.08")
 		return
 	end
 
