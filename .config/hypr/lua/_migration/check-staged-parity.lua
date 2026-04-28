@@ -729,6 +729,49 @@ local function compare_lists(label, left, right)
   end
 end
 
+local function expanded_startup_commands()
+  return {
+    "sleep 2",
+    "hyprctl --batch 'dispatch workspace 10 ; dispatch moveworkspacetomonitor 10 DP-2 ; dispatch workspace 1 ; dispatch moveworkspacetomonitor 1 DP-2 ; dispatch focusmonitor DP-2 ; dispatch workspace 1' >/dev/null 2>&1 || true",
+    "uwsm-app -s s -- hyprpaper",
+    "uwsm-app -s s -- waybar",
+    "uwsm-app -s s -- swaync -c ~/.config/swaync/config.json -s ~/.config/swaync/style.css",
+    "uwsm-app -s s -- ~/.config/ags/start-daemons.sh",
+    "uwsm-app -s s -- ~/.config/hypr/scripts/waybar-edge-monitor.sh",
+    "sh -c 'if [ -f $HOME/.config/hypr/assets/bootup.ogg ] && command -v pw-play >/dev/null 2>&1; then sleep 1.2; pw-play $HOME/.config/hypr/assets/bootup.ogg >/dev/null 2>&1 || { sleep 0.6; pw-play $HOME/.config/hypr/assets/bootup.ogg >/dev/null 2>&1 || true; }; fi'",
+  }
+end
+
+local function expand_exec_once(commands)
+  local result = {}
+  for _, command in ipairs(commands) do
+    if command == "~/.config/hypr/scripts/startup-desktop-ready.sh" then
+      for _, expanded in ipairs(expanded_startup_commands()) do
+        result[#result + 1] = expanded
+      end
+    else
+      result[#result + 1] = command
+    end
+  end
+
+  return result
+end
+
+local function compare_exec_once(left, right)
+  local expanded_left = expand_exec_once(left)
+
+  if #expanded_left ~= #right then
+    add_failure("exec-once count mismatch: conf=" .. #expanded_left .. " lua=" .. #right)
+  end
+
+  local count = math.max(#expanded_left, #right)
+  for index = 1, count do
+    if expanded_left[index] ~= right[index] then
+      add_failure("exec-once mismatch at " .. index .. ": conf=" .. tostring(expanded_left[index]) .. " lua=" .. tostring(right[index]))
+    end
+  end
+end
+
 local function keybind_gap_key(entry)
   local kind, key = entry:match("^([^|]+|[^|]+)|")
   return kind or key or entry
@@ -785,7 +828,7 @@ compare_maps("programs", expected.programs, {
 })
 compare_monitors(expected.monitors, captured.monitors)
 compare_lists("workspace rules", expected.workspace_rules, captured.workspace_rules)
-compare_lists("exec-once", expected.exec_commands, captured.exec_commands)
+compare_exec_once(expected.exec_commands, captured.exec_commands)
 compare_lists("keybinds", expected.keybinds, captured.keybinds)
 compare_keybind_gaps(expected.keybind_gaps, captured.keybind_gaps)
 
