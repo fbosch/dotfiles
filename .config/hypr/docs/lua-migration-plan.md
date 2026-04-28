@@ -31,6 +31,7 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
       toggle-performance-mode.lua
       window-switcher.lua
     lib/
+      ags.lua
       command.lua
       fs.lua
       log.lua

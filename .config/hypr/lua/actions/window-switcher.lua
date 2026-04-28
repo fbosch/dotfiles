@@ -1,6 +1,7 @@
 -- Lua-native equivalent of scripts/window-switcher-wrapper.sh for Lua keybinds.
 -- Keep the AGS window-switcher as the primary multi-window implementation.
 
+local ags = require("lua.lib.ags")
 local paths = require("lua.lib.paths")
 local system = require("lua.lib.system")
 
@@ -55,8 +56,7 @@ local function focus_window(win)
 end
 
 local function send_ags_action(action)
-	local base = "ags request -i ags-bundled window-switcher"
-	exec(base .. " " .. system.shell_quote([[{"action":"]] .. action .. [["}]]))
+	ags.request("window-switcher", [[{"action":"]] .. action .. [["}]])
 end
 
 local function switch_window(action)
