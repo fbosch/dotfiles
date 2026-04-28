@@ -79,7 +79,7 @@ bind("bind", main_mod, "P", hl.dsp.window.pseudo())
 
 bind("bind", main_mod, "F", hl.dsp.window.fullscreen({ mode = "maximized" }))
 bind("bind", main_mod .. " + CTRL", "F", hl.dsp.window.fullscreen({ mode = "fullscreen" }))
-bind("bind", main_mod, "F", hl.dsp.pass({ window = "class:^(xfreerdp)$" }))
+bind("bind", main_mod .. " + CTRL + SHIFT", "F", hl.dsp.pass({ window = "class:^(xfreerdp)$" }))
 bind("bind", main_mod, "W", close_active.close_active_selective)
 bind("bind", main_mod, "D", exec("~/.config/hypr/runtime/windows/toggle-show-desktop.sh"))
 
