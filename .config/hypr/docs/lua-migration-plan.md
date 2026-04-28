@@ -49,12 +49,23 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
       layer.lua
       workspace.lua
       window.lua
+    runtime/
+      gamescope/
+        gamescope-profile-watchdog.sh
+      session/
+        exit-session.sh
+      startup/
+        startup-desktop-ready.sh
+      windows/
+        toggle-show-desktop.sh
+        toggle-minimized-window.sh
+        toggle-minimized-workspace.sh
     rule-loader.lua
 ```
 
 `hyprland.lua` should require stable hand-written modules with config-root module paths, for example `require("lua.programs")` and `require("lua.rules")`. The entrypoint should set `package.path` to `~/.config/hypr/?.lua;~/.config/hypr/?/init.lua` before requiring modules so plain `lua` validation matches Hyprland's module lookup. Generated data files should be loaded by absolute path through `lua/rule-loader.lua`, not `require`, so reloads do not reuse stale cached modules. Generated writers should explicitly reload Hyprland once Lua config is live, because generated data paths are not source-backed as watched config paths.
 
-TODO after Lua is live and legacy `.conf` migration helpers are retired: consider moving stable hand-written modules from `lua/` to config-root subdirectories so imports can become `require("programs")`, `require("rules")`, and `require("actions.close-active")`. Do not do this during the staged migration; keeping everything under `lua/` avoids mixing staged modules with the live config root.
+TODO after Lua is live and legacy `.conf` migration helpers are retired: consider moving stable hand-written modules and runtime helpers from `lua/` to config-root subdirectories so imports can become `require("programs")`, `require("rules")`, and `require("actions.close-active")`. Do not do this during the staged migration; keeping everything under `lua/` avoids mixing staged modules and Lua-specific runtime scripts with the legacy config root.
 
 ## Generated Rule Schema
 
@@ -255,15 +266,16 @@ Keep a temporary compatibility mode or backup writer for the old `.conf` format 
 
 ### 5.5. Retire Dispatcher Compatibility Fallbacks
 
-During the Lua live-test period, IPC-heavy Bash helpers may need dual-mode dispatcher wrappers: try Lua-style `hyprctl dispatch 'hl.dsp...'` first, then fall back to legacy `hyprctl dispatch <dispatcher> <args>` so rollback to `hyprland.conf` remains safe.
+During the Lua live-test period, IPC-heavy Bash helpers that need Lua-specific dispatcher syntax should live under `lua/runtime/` in shallow area directories. Keep legacy `.config/hypr/scripts/` helpers on hyprlang-compatible dispatcher syntax so rollback to `hyprland.conf` remains safe.
 
-Known temporary fallback users:
+Current Lua runtime helper areas:
 
-- `.config/hypr/scripts/toggle-show-desktop.sh`
-- `.config/hypr/scripts/toggle-minimized-window.sh`
-- `.config/hypr/scripts/toggle-minimized-workspace.sh`
+- `lua/runtime/gamescope/` for Gamescope-specific profile and overlay automation.
+- `lua/runtime/windows/` for show-desktop and minimize/restore workflows.
+- `lua/runtime/session/` for session exit helpers used by Lua actions.
+- `lua/runtime/startup/` for startup-only workspace routing that needs Lua-compatible dispatcher syntax.
 
-After `hyprland.conf` is fully retired and rollback no longer depends on it, remove these fallback branches and keep only the Lua-compatible dispatch path. Do this cleanup as a dedicated pass so behavior changes are easy to audit.
+Migrate one runtime helper at a time and verify each helper under `hyprland.lua` before moving the next. After `hyprland.conf` is fully retired and rollback no longer depends on it, promote or relocate these helpers out of `lua/`, remove old `.config/hypr/scripts/` copies that are no longer used, and delete the remaining hyprlang configs. Do this cleanup as a dedicated pass so behavior changes are easy to audit.
 
 ### 6. Validate Reload Behavior
 

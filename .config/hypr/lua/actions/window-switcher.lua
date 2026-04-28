@@ -9,7 +9,7 @@ local system = require("lua.lib.system")
 local M = {}
 
 local minimized_workspace_prefix = "special:minimized"
-local toggle_minimized_workspace = paths.runtime_script("toggle-minimized-workspace.sh")
+local toggle_minimized_workspace = paths.runtime_script("windows/toggle-minimized-workspace.sh")
 local action_payloads = {}
 
 local function exec(command)

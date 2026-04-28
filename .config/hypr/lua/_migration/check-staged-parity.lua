@@ -303,15 +303,15 @@ local function parse_keybinds(path, variables)
       end
 
       if dispatcher == "exec" and argument == "~/.config/hypr/scripts/toggle-show-desktop.sh" then
-        argument = "~/.config/hypr/lua/runtime/toggle-show-desktop.sh"
+        argument = "~/.config/hypr/lua/runtime/windows/toggle-show-desktop.sh"
       end
 
       if dispatcher == "exec" and argument == "~/.config/hypr/scripts/toggle-minimized-window.sh" then
-        argument = "~/.config/hypr/lua/runtime/toggle-minimized-window.sh"
+        argument = "~/.config/hypr/lua/runtime/windows/toggle-minimized-window.sh"
       end
 
       if dispatcher == "exec" and argument == "~/.config/hypr/scripts/toggle-minimized-workspace.sh" then
-        argument = "~/.config/hypr/lua/runtime/toggle-minimized-workspace.sh"
+        argument = "~/.config/hypr/lua/runtime/windows/toggle-minimized-workspace.sh"
       end
 
       if dispatcher == "exec" and argument:match("^bash ~/.config/hypr/scripts/window%-switcher%-wrapper%.sh ") then
@@ -761,6 +761,10 @@ local function expand_exec_once(commands)
       for _, expanded in ipairs(expanded_startup_commands()) do
         result[#result + 1] = expanded
       end
+    elseif command == "~/.config/hypr/lua/runtime/startup/startup-desktop-ready.sh" then
+      result[#result + 1] = "hyprctl --batch 'dispatch workspace 10 ; dispatch moveworkspacetomonitor 10 DP-2 ; dispatch workspace 1 ; dispatch moveworkspacetomonitor 1 DP-2 ; dispatch focusmonitor DP-2 ; dispatch workspace 1' >/dev/null 2>&1 || true"
+    elseif command == "uwsm-app -s b -- ~/.config/hypr/lua/runtime/gamescope/gamescope-profile-watchdog.sh" then
+      result[#result + 1] = "uwsm-app -s b -- ~/.config/hypr/scripts/gamescope-profile-watchdog.sh"
     else
       result[#result + 1] = command
     end
@@ -771,15 +775,16 @@ end
 
 local function compare_exec_once(left, right)
   local expanded_left = expand_exec_once(left)
+  local expanded_right = expand_exec_once(right)
 
-  if #expanded_left ~= #right then
-    add_failure("exec-once count mismatch: conf=" .. #expanded_left .. " lua=" .. #right)
+  if #expanded_left ~= #expanded_right then
+    add_failure("exec-once count mismatch: conf=" .. #expanded_left .. " lua=" .. #expanded_right)
   end
 
-  local count = math.max(#expanded_left, #right)
+  local count = math.max(#expanded_left, #expanded_right)
   for index = 1, count do
-    if expanded_left[index] ~= right[index] then
-      add_failure("exec-once mismatch at " .. index .. ": conf=" .. tostring(expanded_left[index]) .. " lua=" .. tostring(right[index]))
+    if expanded_left[index] ~= expanded_right[index] then
+      add_failure("exec-once mismatch at " .. index .. ": conf=" .. tostring(expanded_left[index]) .. " lua=" .. tostring(expanded_right[index]))
     end
   end
 end

@@ -10,7 +10,7 @@ local window = require("lua.lib.window")
 local M = {}
 
 local profilectl = paths.script("profilectl.sh")
-local minimize_script = paths.runtime_script("toggle-minimized-window.sh")
+local minimize_script = paths.runtime_script("windows/toggle-minimized-window.sh")
 
 local function is_gaming_active()
   return command.ok(system.shell_quote(profilectl) .. " is-active gaming >/dev/null 2>&1")
