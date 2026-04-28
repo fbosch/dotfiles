@@ -34,6 +34,7 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
       ags.lua
       command.lua
       fs.lua
+      json.lua
       log.lua
       notify.lua
       paths.lua

@@ -2,6 +2,7 @@
 -- Keep the AGS window-switcher as the primary multi-window implementation.
 
 local ags = require("lua.lib.ags")
+local json = require("lua.lib.json")
 local paths = require("lua.lib.paths")
 local system = require("lua.lib.system")
 
@@ -56,7 +57,7 @@ local function focus_window(win)
 end
 
 local function send_ags_action(action)
-	ags.request("window-switcher", [[{"action":"]] .. action .. [["}]])
+	ags.request("window-switcher", json.encode({ action = action }))
 end
 
 local function switch_window(action)
