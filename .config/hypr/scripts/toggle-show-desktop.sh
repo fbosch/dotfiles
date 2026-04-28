@@ -11,17 +11,28 @@ lua_quote() {
   jq -Rn --arg value "$1" '$value'
 }
 
+dispatch_lua_or_legacy() {
+  local lua_expr="$1"
+  shift
+
+  hyprctl dispatch "$lua_expr" >/dev/null 2>&1 || hyprctl dispatch "$@" >/dev/null
+}
+
 move_window_to_workspace() {
   local workspace="$1"
   local address="$2"
 
-  hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })" >/dev/null
+  dispatch_lua_or_legacy \
+    "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })" \
+    movetoworkspacesilent "${workspace},address:${address}"
 }
 
 focus_window() {
   local address="$1"
 
-  hyprctl dispatch "hl.dsp.focus({ window = $(lua_quote "address:${address}") })" >/dev/null
+  dispatch_lua_or_legacy \
+    "hl.dsp.focus({ window = $(lua_quote "address:${address}") })" \
+    focuswindow "address:${address}"
 }
 
 resize_window() {
@@ -29,7 +40,9 @@ resize_window() {
   local width="$2"
   local height="$3"
 
-  hyprctl dispatch "hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })" >/dev/null
+  dispatch_lua_or_legacy \
+    "hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })" \
+    resizewindowpixel "exact ${width} ${height},address:${address}"
 }
 
 move_window() {
@@ -37,7 +50,9 @@ move_window() {
   local x="$2"
   local y="$3"
 
-  hyprctl dispatch "hl.dsp.window.move({ x = ${x}, y = ${y}, window = $(lua_quote "address:${address}") })" >/dev/null
+  dispatch_lua_or_legacy \
+    "hl.dsp.window.move({ x = ${x}, y = ${y}, window = $(lua_quote "address:${address}") })" \
+    movewindowpixel "exact ${x} ${y},address:${address}"
 }
 
 focused_monitor_json="$(hyprctl monitors -j | jq -c 'first(.[] | select(.focused == true)) // empty')"

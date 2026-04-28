@@ -253,6 +253,18 @@ Dual-write generated rule outputs:
 
 Keep a temporary compatibility mode or backup writer for the old `.conf` format until the Lua config has proven stable.
 
+### 5.5. Retire Dispatcher Compatibility Fallbacks
+
+During the Lua live-test period, IPC-heavy Bash helpers may need dual-mode dispatcher wrappers: try Lua-style `hyprctl dispatch 'hl.dsp...'` first, then fall back to legacy `hyprctl dispatch <dispatcher> <args>` so rollback to `hyprland.conf` remains safe.
+
+Known temporary fallback users:
+
+- `.config/hypr/scripts/toggle-show-desktop.sh`
+- `.config/hypr/scripts/toggle-minimized-window.sh`
+- `.config/hypr/scripts/toggle-minimized-workspace.sh`
+
+After `hyprland.conf` is fully retired and rollback no longer depends on it, remove these fallback branches and keep only the Lua-compatible dispatch path. Do this cleanup as a dedicated pass so behavior changes are easy to audit.
+
 ### 6. Validate Reload Behavior
 
 Test generated file updates with:

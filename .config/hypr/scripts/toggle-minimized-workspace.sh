@@ -46,10 +46,19 @@ lua_quote() {
   jq -Rn --arg value "$1" '$value'
 }
 
+dispatch_lua_or_legacy() {
+  local lua_expr="$1"
+  shift
+
+  hyprctl dispatch "$lua_expr" >/dev/null 2>&1 || hyprctl dispatch "$@" >/dev/null
+}
+
 focus_monitor() {
   local monitor_name="$1"
 
-  hyprctl dispatch "hl.dsp.focus({ monitor = $(lua_quote "$monitor_name") })" >/dev/null
+  dispatch_lua_or_legacy \
+    "hl.dsp.focus({ monitor = $(lua_quote "$monitor_name") })" \
+    focusmonitor "$monitor_name"
 }
 
 toggle_special_workspace() {
@@ -57,7 +66,9 @@ toggle_special_workspace() {
   local special_name
 
   special_name="${special_workspace#special:}"
-  hyprctl dispatch "hl.dsp.workspace.toggle_special($(lua_quote "$special_name"))" >/dev/null
+  dispatch_lua_or_legacy \
+    "hl.dsp.workspace.toggle_special($(lua_quote "$special_name"))" \
+    togglespecialworkspace "$special_name"
 }
 
 state_value_for_address() {
