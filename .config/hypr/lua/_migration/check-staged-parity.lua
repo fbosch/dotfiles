@@ -271,6 +271,16 @@ local function parse_keybinds(path, variables)
         argument = "function"
       end
 
+      if dispatcher == "exec" and argument == "~/.config/hypr/scripts/toggle-performance-mode.sh" then
+        dispatcher = "lua"
+        argument = "function"
+      end
+
+      if dispatcher == "exec" and argument:match("^bash ~/.config/hypr/scripts/window%-switcher%-wrapper%.sh ") then
+        dispatcher = "lua"
+        argument = "function"
+      end
+
       local entry = kind .. "|" .. normalize_key(parts[1], parts[2], variables) .. "|" .. dispatcher_key(dispatcher, argument)
 
       if kind == "bindm" then
@@ -708,7 +718,7 @@ end
 local known_monitor_gaps = {}
 
 local function known_monitor_gap_key(entry)
-  return (entry:gsub(",cm=hdr", ""))
+  return (entry:gsub("bitdepth=10,", ""):gsub("cm=hdr,", ""):gsub(",cm=hdr", ""))
 end
 
 local function compare_monitors(left, right)

@@ -28,9 +28,16 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
     actions/
       close-active.lua
       confirm-exit.lua
+      toggle-performance-mode.lua
+      window-switcher.lua
     lib/
+      command.lua
+      fs.lua
       log.lua
+      notify.lua
+      paths.lua
       system.lua
+      window.lua
     rules/
       init.lua
       generated.lua
@@ -188,7 +195,7 @@ Known staged gap: namespace-specific layer animations from `animations.conf` are
 
 Known staged keybind gaps: mouse binds are represented in `lua/keybinds.lua`, but upstream Lua currently does not appear to wire `opts.mouse` into keybind objects, and `resizewindow 1` has no confirmed Lua equivalent. Treat those as live-test/upstream gaps, not proven parity.
 
-Known staged monitor gap: `monitor=...,hdr` maps to `bitdepth = 10` and `cm = "hdr"` in the parity checker, but `cm = "hdr"` is currently commented in `lua/monitors.lua` pending live verification. Treat this as an explicit HDR API gap, not complete monitor parity.
+Known staged monitor gap: `monitor=...,hdr` maps to `bitdepth = 10` and `cm = "hdr"` in the parity checker, but those fields are currently commented in `lua/monitors.lua` pending live verification. Treat this as an explicit HDR API gap, not complete monitor parity.
 
 Machine-specific `monitors.conf` remains gitignored for the live `.conf` config, but staged Lua mirrors known host layouts in tracked `lua/monitors.lua`. Current host-specific profile: `rvn-pc`.
 

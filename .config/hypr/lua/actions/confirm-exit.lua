@@ -2,10 +2,9 @@
 -- Keep the Bash script for legacy hyprland.conf until Lua config is release-ready.
 
 local system = require("lua.lib.system")
+local paths = require("lua.lib.paths")
 
 local M = {}
-
-local home = os.getenv("HOME")
 
 local function confirm_payload()
 	return [[{
@@ -16,9 +15,9 @@ local function confirm_payload()
     "message": "This will end your Wayland session",
     "confirmLabel": "Exit",
     "cancelLabel": "Cancel",
-    "confirmCommand": "]] .. home .. [[/.config/hypr/scripts/exit-session.sh",
+    "confirmCommand": "]] .. paths.script("exit-session.sh") .. [[",
     "variant": "danger",
-    "audioFile": "]] .. home .. [[/.config/hypr/assets/warn.ogg",
+    "audioFile": "]] .. paths.asset("warn.ogg") .. [[",
     "showDelay": 180
   }
 }]]

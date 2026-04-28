@@ -3,6 +3,8 @@
 local programs = require("lua.programs")
 local close_active = require("lua.actions.close-active")
 local confirm_exit = require("lua.actions.confirm-exit")
+local performance_mode = require("lua.actions.toggle-performance-mode")
+local window_switcher = require("lua.actions.window-switcher")
 
 local main_mod = "SUPER"
 
@@ -50,13 +52,13 @@ bind("bind", main_mod .. " + SHIFT", "V", exec("bash ~/.config/hypr/scripts/past
 bind("bindn", "CTRL", "C", exec("bash ~/.config/hypr/scripts/paste-to-gamescope.sh"))
 bind("bindn", "CTRL", "X", exec("bash ~/.config/hypr/scripts/paste-to-gamescope.sh"))
 
-bind("bind", "ALT", "TAB", exec("bash ~/.config/hypr/scripts/window-switcher-wrapper.sh next"))
-bind("bind", "ALT + SHIFT", "TAB", exec("bash ~/.config/hypr/scripts/window-switcher-wrapper.sh prev"))
+bind("bind", "ALT", "TAB", window_switcher.next)
+bind("bind", "ALT + SHIFT", "TAB", window_switcher.prev)
 
 bind("bind", main_mod .. " + SHIFT", "C", exec("hyprpicker -a"))
 bind("bind", main_mod, "N", exec("swaync-client -t"))
 bind("bind", "CTRL + ALT", "L", exec("hyprlock"))
-bind("bind", main_mod .. " + SHIFT", "P", exec("~/.config/hypr/scripts/toggle-performance-mode.sh"))
+bind("bind", main_mod .. " + SHIFT", "P", performance_mode.toggle_performance_mode)
 
 bind("bind", "CTRL + SHIFT", "C", exec("bash ~/.config/hypr/scripts/screenshot.sh area"))
 bind("bindnitl", "", "PRINT", exec("bash ~/.config/hypr/scripts/screenshot.sh screen"))
