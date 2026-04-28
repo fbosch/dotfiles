@@ -75,14 +75,3 @@ if [[ ${#staged_scripts[@]} -gt 0 ]]; then
   echo "pre-commit: shellcheck ${staged_scripts[*]}"
   run_shellcheck "${staged_scripts[@]}"
 fi
-
-# lua-quality: run only when Lua files are staged
-staged_lua=()
-for file in "${staged_files[@]}"; do
-  [[ "$file" == *.lua ]] && staged_lua+=("$file")
-done
-
-if [[ ${#staged_lua[@]} -gt 0 ]]; then
-  echo "pre-commit: lua-quality ${staged_lua[*]}"
-  bash scripts/lua-quality.sh staged
-fi

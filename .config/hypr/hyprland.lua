@@ -1,8 +1,28 @@
 -- Staged Hyprland Lua entrypoint.
 -- Do not rename this file to hyprland.lua until the Lua config is ready to go live.
 
-local home = os.getenv("HOME")
-local config_dir = home .. "/.config/hypr"
+local function file_exists(path)
+	local file = io.open(path, "r")
+	if not file then
+		return false
+	end
+
+	file:close()
+	return true
+end
+
+local function entrypoint_dir()
+	local script = arg and arg[0] or ""
+	return script:match("^(.+)/[^/]+$")
+end
+
+local home_config_dir = os.getenv("HOME") .. "/.config/hypr"
+local config_dir = home_config_dir
+local local_config_dir = entrypoint_dir()
+
+if not file_exists(config_dir .. "/lua/rule-loader.lua") and local_config_dir then
+	config_dir = local_config_dir
+end
 
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
