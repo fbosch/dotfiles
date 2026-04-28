@@ -237,6 +237,23 @@ capture_window_preview() {
   mv "$temp_output" "$output_path"
 }
 
+capture_active_window_preview() {
+  local active_window_json
+  active_window_json=$(printf 'j/activewindow' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
+  [[ -n "$active_window_json" && "$active_window_json" != "{}" ]] || return 0
+
+  local active_fields
+  active_fields=$(jq -r '[((.stableId // "") | if length > 0 then . else ((.address // "") | sub("^0x"; "")) end), (.mapped // true), (.size[0] // 0), (.size[1] // 0)] | @tsv' <<< "$active_window_json" 2>/dev/null) || return 0
+
+  local preview_id mapped width height
+  IFS=$'\t' read -r preview_id mapped width height <<< "$active_fields"
+
+  [[ "$mapped" == "false" ]] && return 0
+  [[ -n "$preview_id" ]] || return 0
+
+  capture_window_preview "$preview_id" "$width" "$height"
+}
+
 get_visible_workspace_ids_json() {
   local monitors_json
   monitors_json=$(printf 'j/monitors' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
@@ -373,7 +390,13 @@ capture_screenshot() {
   local timestamp
   timestamp=$(now_ms)
   printf '%s\n' "$timestamp" > "$LAST_SCREENSHOT_FILE"
-  
+
+  if [[ "$event_type" == "activewindow" ]]; then
+    capture_active_window_preview
+    rm -f "$CAPTURE_LOCK_FILE"
+    return 0
+  fi
+
   # Fetch all clients once for this capture pass.
   local all_clients_json
   all_clients_json=$(printf 'j/clients' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
@@ -479,7 +502,7 @@ handle_event() {
 
 if [[ "$MODE" == "refresh-once" ]]; then
   rm -f "$LAST_OVERLAY_FILE" "$LAST_SCREENSHOT_FILE"
-  handle_event "activewindow>>refresh-once"
+  handle_event "workspace>>refresh-once"
   exit 0
 fi
 
