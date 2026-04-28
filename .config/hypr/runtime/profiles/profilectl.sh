@@ -49,11 +49,11 @@ set_count() {
 }
 
 apply_hypr_performance_overlay() {
-  hyprctl --batch "keyword animations:enabled 0 ; keyword decoration:blur:passes 1 ; keyword decoration:shadow:enabled 0 ; keyword decoration:active_opacity 1.0 ; keyword decoration:inactive_opacity 1.0 ; keyword decoration:fullscreen_opacity 1.0" >/dev/null
+  hyprctl dispatch '(function() hl.config({ animations = { enabled = false }, decoration = { blur = { passes = 1 }, shadow = { enabled = false }, active_opacity = 1.0, inactive_opacity = 1.0, fullscreen_opacity = 1.0 } }); return function() end end)()' >/dev/null
 }
 
 apply_hypr_gaming_overlay() {
-  hyprctl --batch "keyword animations:enabled 0 ; keyword decoration:shadow:enabled 0 ; keyword decoration:blur:enabled 0 ; keyword decoration:active_opacity 1.0 ; keyword decoration:inactive_opacity 1.0 ; keyword decoration:fullscreen_opacity 1.0 ; keyword misc:vrr 2 ; keyword general:allow_tearing true" >/dev/null
+  hyprctl dispatch '(function() hl.config({ animations = { enabled = false }, decoration = { blur = { enabled = false, passes = 1 }, shadow = { enabled = false }, active_opacity = 1.0, inactive_opacity = 1.0, fullscreen_opacity = 1.0 }, misc = { vrr = 2 }, general = { allow_tearing = true } }); return function() end end)()' >/dev/null
 }
 
 restore_hypr_defaults() {

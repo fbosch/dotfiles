@@ -28,11 +28,15 @@ cleanup() {
 trap cleanup EXIT
 trap 'cleanup; exit 0' INT TERM
 
-get_gamescope_count() {
-  local client_count=0
-  local clients_json
+get_clients_json() {
+  hyprctl clients -j 2>/dev/null || printf '[]\n'
+}
 
-  clients_json="$(hyprctl clients -j 2>/dev/null || true)"
+get_gamescope_count() {
+  local clients_json="${1:-}"
+  local client_count=0
+
+  [[ -n "$clients_json" ]] || clients_json="$(get_clients_json)"
   client_count="$(jq -r '[.[] | select((((.class // "") | ascii_downcase) == "gamescope") or (((.initialClass // "") | ascii_downcase) == "gamescope"))] | length' <<< "$clients_json" 2>/dev/null || printf '0')"
 
   if [[ "$client_count" =~ ^[0-9]+$ ]] && [[ "$client_count" -gt 0 ]]; then
@@ -46,15 +50,17 @@ get_gamescope_count() {
 sync_gaming_state() {
   local count
   local last_count="$1"
+  local clients_json="${2:-}"
+  local force="${3:-0}"
 
-  count="$(get_gamescope_count)"
+  count="$(get_gamescope_count "$clients_json")"
   if [[ "$count" =~ ^[0-9]+$ ]]; then
     :
   else
     count=0
   fi
 
-  if [[ "$count" != "$last_count" ]]; then
+  if [[ "$force" == "1" || "$count" != "$last_count" ]]; then
     "$PROFILECTL" sync gaming "$count"
     printf '%s\n' "$count"
     return
@@ -64,12 +70,16 @@ sync_gaming_state() {
 }
 
 overlay_window_count() {
-  hyprctl clients -j 2>/dev/null | jq -r --arg overlay "$GAMING_OVERLAY_WORKSPACE" '[.[] | select(.workspace.name == $overlay)] | length'
+  local clients_json="${1:-}"
+
+  [[ -n "$clients_json" ]] || clients_json="$(get_clients_json)"
+  jq -r --arg overlay "$GAMING_OVERLAY_WORKSPACE" '[.[] | select(.workspace.name == $overlay)] | length' <<< "$clients_json" 2>/dev/null || printf '0\n'
 }
 
 maybe_show_gaming_overlay() {
   local current_count="$1"
   local last_count="$2"
+  local monitors_json="${3:-}"
   local target_monitor
   local overlay_visible
 
@@ -77,12 +87,14 @@ maybe_show_gaming_overlay() {
     return
   fi
 
-  target_monitor="$(hyprctl monitors -j 2>/dev/null | jq -r --arg ws "$GAMING_WORKSPACE" 'first(.[] | select(.activeWorkspace.name == $ws) | .name) // empty')"
+  [[ -n "$monitors_json" ]] || monitors_json="$(hyprctl monitors -j 2>/dev/null || printf '[]\n')"
+
+  target_monitor="$(jq -r --arg ws "$GAMING_WORKSPACE" 'first(.[] | select(.activeWorkspace.name == $ws) | .name) // empty' <<< "$monitors_json" 2>/dev/null)"
   if [[ -z "$target_monitor" ]]; then
     return
   fi
 
-  overlay_visible="$(hyprctl monitors -j 2>/dev/null | jq -r --arg monitor "$target_monitor" --arg overlay "$GAMING_OVERLAY_WORKSPACE" 'first(.[] | select(.name == $monitor) | .specialWorkspace.name == $overlay) // false')"
+  overlay_visible="$(jq -r --arg monitor "$target_monitor" --arg overlay "$GAMING_OVERLAY_WORKSPACE" 'first(.[] | select(.name == $monitor) | .specialWorkspace.name == $overlay) // false' <<< "$monitors_json" 2>/dev/null)"
   if [[ "$overlay_visible" == "true" ]]; then
     return
   fi
@@ -95,7 +107,12 @@ handle_event() {
   local event="$1"
 
   case "$event" in
+    configreloaded*)
+      printf 'reload\n'
+      return 0
+      ;;
     openwindow*|closewindow*|movewindow*|workspace*|activewindow*|fullscreen*)
+      printf 'window\n'
       return 0
       ;;
     *)
@@ -134,8 +151,9 @@ else
 fi
 
 last_count=""
-last_count="$(sync_gaming_state "$last_count")"
-last_overlay_count="$(overlay_window_count)"
+initial_clients_json="$(get_clients_json)"
+last_count="$(sync_gaming_state "$last_count" "$initial_clients_json")"
+last_overlay_count="$(overlay_window_count "$initial_clients_json")"
 
 if [[ "$last_overlay_count" =~ ^[0-9]+$ ]]; then
   :
@@ -145,18 +163,27 @@ fi
 
 while true; do
   while IFS= read -r line; do
-    if handle_event "$line"; then
-      current_overlay_count="$(overlay_window_count)"
+    event_kind="$(handle_event "$line")" || continue
+    if [[ -n "$event_kind" ]]; then
+      clients_json="$(get_clients_json)"
+      current_overlay_count="$(overlay_window_count "$clients_json")"
       if [[ "$current_overlay_count" =~ ^[0-9]+$ ]]; then
         :
       else
         current_overlay_count="$last_overlay_count"
       fi
 
-      maybe_show_gaming_overlay "$current_overlay_count" "$last_overlay_count"
+      monitors_json=""
+      if (( current_overlay_count > last_overlay_count )); then
+        monitors_json="$(hyprctl monitors -j 2>/dev/null || printf '[]\n')"
+      fi
+
+      maybe_show_gaming_overlay "$current_overlay_count" "$last_overlay_count" "$monitors_json"
       last_overlay_count="$current_overlay_count"
 
-      last_count="$(sync_gaming_state "$last_count")"
+      force_sync=0
+      [[ "$event_kind" == "reload" ]] && force_sync=1
+      last_count="$(sync_gaming_state "$last_count" "$clients_json" "$force_sync")"
     fi
   done < <(socat -T "$EVENT_IDLE_TIMEOUT_SECONDS" -U - "UNIX-CONNECT:$HYPR_SOCKET")
 

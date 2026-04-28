@@ -2,8 +2,12 @@
 -- Preserve declaration order.
 
 -- Gamescope
-hl.window_rule({ match = { class = "^(gamescope)$" }, tile = true })
-hl.window_rule({ match = { class = "^(gamescope)$" }, fullscreen = true })
+hl.window_rule({
+  match = { class = "^(gamescope)$" },
+  workspace = "10 silent",
+  tile = true,
+  fullscreen = true,
+})
 
 -- Gaming overlay scratchpad
 hl.window_rule({

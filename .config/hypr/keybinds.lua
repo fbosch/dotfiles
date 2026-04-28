@@ -1,7 +1,6 @@
 -- Keybindings ported from keybinds.conf.
 
 local programs = require("programs")
-local close_active = require("actions.close-active")
 local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
 local performance_mode = require("actions.toggle-performance-mode")
@@ -68,7 +67,7 @@ bind("bind", "CTRL + SHIFT", "O", exec("bash ~/.config/hypr/runtime/capture/scre
 
 bind("bind", main_mod, "Q", exec(programs.terminal))
 bind("bind", main_mod, "B", exec(programs.browser))
-bind("bind", main_mod, "C", close_active.close_active_selective)
+bind("bind", main_mod, "C", exec("~/.config/hypr/runtime/windows/killactive-selective.sh"))
 bind("bind", main_mod .. " + CTRL", "C", exec("~/.config/hypr/runtime/windows/confirm-hyprprop-kill.sh"))
 bind("bind", main_mod, "M", confirm_exit.confirm_exit)
 bind("bind", main_mod .. " + SHIFT", "R", exec("~/.config/hypr/runtime/desktop/reset-desktop.sh"))
@@ -80,7 +79,7 @@ bind("bind", main_mod, "P", hl.dsp.window.pseudo())
 bind("bind", main_mod, "F", hl.dsp.window.fullscreen({ mode = "maximized" }))
 bind("bind", main_mod .. " + CTRL", "F", hl.dsp.window.fullscreen({ mode = "fullscreen" }))
 bind("bind", main_mod .. " + CTRL + SHIFT", "F", hl.dsp.pass({ window = "class:^(xfreerdp)$" }))
-bind("bind", main_mod, "W", close_active.close_active_selective)
+bind("bind", main_mod, "W", exec("~/.config/hypr/runtime/windows/killactive-selective.sh"))
 bind("bind", main_mod, "D", exec("~/.config/hypr/runtime/windows/toggle-show-desktop.sh"))
 
 bind("bind", main_mod, "Z", exec("~/.config/hypr/runtime/windows/toggle-minimized-window.sh"))
