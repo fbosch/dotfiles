@@ -20,7 +20,7 @@ Hyprland window manager configuration with custom keybinds, rules, and support s
 - System utilities: `screenshot.sh`, `toggle-hypridle.sh`, `toggle-night-light.sh`, `toggle-performance-mode.sh`, `launch-browser.sh`
 - Waybar integration: `waybar-lib.sh`, `waybar-toggle-smart.sh`, `waybar-edge-monitor.sh`
 - Profiles: `profilectl.sh`, `gamescope-profile-watchdog.sh`
-- Monitoring/setup: `wait-for-monitors.lua`, `reset-desktop.sh`, `nerd-icon-gen.sh`, `window-capture-daemon.sh`, `switch-layout.sh`
+- Monitoring/setup: `startup-desktop-ready.sh`, `reset-desktop.sh`, `nerd-icon-gen.sh`, `window-capture-daemon.sh`, `switch-layout.sh`
 
 **Docs:**
 - Agent guides: `structure.md`, `debugging.md`, `layer-rules.md`, `pitfalls.md`, `version.md`

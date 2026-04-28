@@ -5,6 +5,7 @@ set -euo pipefail
 LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/hypr-profiles/gamescope-watchdog.lock"
 PROFILECTL="$HOME/.config/hypr/scripts/profilectl.sh"
 RECONNECT_DELAY_SECONDS=1
+EVENT_IDLE_TIMEOUT_SECONDS=5
 GAMING_WORKSPACE="10"
 GAMING_OVERLAY_WORKSPACE="special:gaming-overlay"
 
@@ -20,7 +21,8 @@ cleanup() {
   "$PROFILECTL" sync gaming 0 >/dev/null 2>&1 || true
 }
 
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'cleanup; exit 0' INT TERM
 
 get_gamescope_count() {
   local client_count=0
@@ -151,7 +153,7 @@ while true; do
 
       last_count="$(sync_gaming_state "$last_count")"
     fi
-  done < <(socat -U - "UNIX-CONNECT:$HYPR_SOCKET")
+  done < <(socat -T "$EVENT_IDLE_TIMEOUT_SECONDS" -U - "UNIX-CONNECT:$HYPR_SOCKET")
 
   sleep "$RECONNECT_DELAY_SECONDS"
 done

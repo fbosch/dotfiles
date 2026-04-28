@@ -1,7 +1,5 @@
 -- Autostart commands ported from autostart.conf.
 
-local monitor_gate = require("lua.startup.monitor_gate")
-
 local commands = {
   "xrandr --output DP-2 --primary",
   "uwsm-app -s b -- hypridle",
@@ -19,8 +17,6 @@ local commands = {
 }
 
 hl.on("hyprland.start", function()
-  monitor_gate.wait()
-
   for _, command in ipairs(commands) do
     hl.exec_cmd(command)
   end
