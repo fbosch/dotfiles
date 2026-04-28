@@ -1,6 +1,7 @@
 local system = require("lua.lib.system")
 
 local M = {}
+local ensured_dir = nil
 
 local function log_path()
   return system.cache_home() .. "/hypr/lua-migration.log"
@@ -14,8 +15,9 @@ function M.write(message)
   local path = log_path()
   local dir = path:match("^(.+)/[^/]+$")
 
-  if dir then
+  if dir and dir ~= ensured_dir then
     os.execute("mkdir -p " .. system.shell_quote(dir))
+    ensured_dir = dir
   end
 
   local file = io.open(path, "a")

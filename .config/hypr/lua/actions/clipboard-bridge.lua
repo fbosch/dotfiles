@@ -7,6 +7,9 @@ local window = require("lua.lib.window")
 
 local M = {}
 local config_root = os.getenv("HOME") .. "/.config/hypr"
+local tool_cache = {}
+local clipboard_wrapper = nil
+local gamescope_displays = nil
 
 local function read_clipboard_text()
 	local clipboard_text = command.output("wl-paste --no-newline --type text/plain 2>/dev/null || true")
@@ -17,11 +20,19 @@ local function read_clipboard_text()
 end
 
 local function have(name)
-	return command.ok("command -v " .. system.shell_quote(name) .. " >/dev/null 2>&1")
+	if tool_cache[name] == nil then
+		tool_cache[name] = command.ok("command -v " .. system.shell_quote(name) .. " >/dev/null 2>&1")
+	end
+
+	return tool_cache[name]
 end
 
 local function using_wl_clipboard_wrapper()
-	return command.output("xclip -version 2>&1"):lower():find("wl%-clipboard%-x11") ~= nil
+	if clipboard_wrapper == nil then
+		clipboard_wrapper = command.output("xclip -version 2>&1"):lower():find("wl%-clipboard%-x11") ~= nil
+	end
+
+	return clipboard_wrapper
 end
 
 local function add_displays_from_processes(displays, process_pattern)
@@ -34,6 +45,10 @@ local function add_displays_from_processes(displays, process_pattern)
 end
 
 local function list_gamescope_displays()
+	if gamescope_displays then
+		return gamescope_displays
+	end
+
 	local displays = {}
 	add_displays_from_processes(displays, "Xwayland.*-terminate.*-force-xrandr-emulation")
 
@@ -46,11 +61,12 @@ local function list_gamescope_displays()
 		result[#result + 1] = display
 	end
 	table.sort(result)
+	gamescope_displays = result
 	return result
 end
 
-local function first_gamescope_display()
-	return list_gamescope_displays()[1]
+local function first_gamescope_display(displays)
+	return displays[1]
 end
 
 local function write_xclip(display, selection, text)
@@ -85,7 +101,8 @@ function M.sync_wayland_to_xwayland_now()
 		return
 	end
 
-	for _, display in ipairs(list_gamescope_displays()) do
+	local displays = list_gamescope_displays()
+	for _, display in ipairs(displays) do
 		write_xclip(display, "clipboard", clipboard_text)
 		write_xclip(display, "primary", clipboard_text)
 	end
@@ -101,12 +118,13 @@ function M.paste_with_xwayland_clipboard_now()
 		return
 	end
 
-	for _, display in ipairs(list_gamescope_displays()) do
+	local displays = list_gamescope_displays()
+	for _, display in ipairs(displays) do
 		write_xclip(display, "clipboard", clipboard_text)
 		write_xclip(display, "primary", clipboard_text)
 	end
 
-	local display = first_gamescope_display()
+	local display = first_gamescope_display(displays)
 	if display and have("xdotool") then
 		command.ok("DISPLAY=" .. system.shell_quote(display) .. " xdotool key --clearmodifiers ctrl+v >/dev/null 2>&1")
 		return

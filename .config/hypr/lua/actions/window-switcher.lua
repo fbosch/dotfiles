@@ -10,6 +10,7 @@ local M = {}
 
 local minimized_workspace_prefix = "special:minimized"
 local toggle_minimized_workspace = paths.script("toggle-minimized-workspace.sh")
+local action_payloads = {}
 
 local function exec(command)
 	hl.exec_cmd(command)
@@ -57,7 +58,8 @@ local function focus_window(win)
 end
 
 local function send_ags_action(action)
-	ags.request("window-switcher", json.encode({ action = action }))
+	action_payloads[action] = action_payloads[action] or json.encode({ action = action })
+	ags.request("window-switcher", action_payloads[action])
 end
 
 local function switch_window(action)

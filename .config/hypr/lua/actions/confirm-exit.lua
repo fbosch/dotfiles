@@ -6,6 +6,7 @@ local json = require("lua.lib.json")
 local paths = require("lua.lib.paths")
 
 local M = {}
+local payload = nil
 
 local function confirm_payload()
 	return json.encode({
@@ -25,7 +26,8 @@ local function confirm_payload()
 end
 
 function M.confirm_exit()
-	ags.request("confirm-dialog", confirm_payload())
+	payload = payload or confirm_payload()
+	ags.request("confirm-dialog", payload)
 end
 
 return M
