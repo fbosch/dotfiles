@@ -101,4 +101,4 @@ Return exactly these five items:
 ## Repo Notes
 
 - Hypr config is split; touch only the relevant sourced file under `.config/hypr/`.
-- Keep script references consistent with repo style (`~/.config/hypr/scripts/...`) and ensure executability when relevant.
+- Keep script references consistent with repo style (`~/.config/hypr/runtime/<area>/...`) and ensure executability when relevant.

@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly MINIMIZED_WORKSPACE_PREFIX="special:minimized"
+readonly STATE_FILE="${XDG_RUNTIME_DIR}/hypr-minimized-state.json"
+readonly DAEMON_SCRIPT="$HOME/.config/hypr/runtime/windows/minimized-state-daemon.sh"
+
+bucket_key_for() {
+  local monitor_name="$1"
+  local workspace_name="$2"
+
+  if [[ -z "$monitor_name" || -z "$workspace_name" ]]; then
+    return
+  fi
+
+  printf '%s__%s' "$monitor_name" "$workspace_name"
+}
+
+special_workspace_for_bucket() {
+  local bucket_key="$1"
+  local bucket_hash
+
+  if [[ -z "$bucket_key" ]]; then
+    printf '%s\n' "${MINIMIZED_WORKSPACE_PREFIX}"
+    return
+  fi
+
+  bucket_hash="$(printf '%s' "$bucket_key" | sha1sum | cut -c1-12)"
+  printf '%s\n' "${MINIMIZED_WORKSPACE_PREFIX}-${bucket_hash}"
+}
+
+lua_quote() {
+  jq -Rn --arg value "$1" '$value'
+}
+
+move_window_to_workspace() {
+  local workspace="$1"
+  local address="$2"
+
+  hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })" >/dev/null
+}
+
+focus_monitor() {
+  local monitor_name="$1"
+
+  hyprctl dispatch "hl.dsp.focus({ monitor = $(lua_quote "$monitor_name") })" >/dev/null
+}
+
+focus_window() {
+  local address="$1"
+
+  hyprctl dispatch "hl.dsp.focus({ window = $(lua_quote "address:${address}") })" >/dev/null
+}
+
+resize_window() {
+  local address="$1"
+  local width="$2"
+  local height="$3"
+
+  hyprctl dispatch "hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })" >/dev/null
+}
+
+move_window() {
+  local address="$1"
+  local x="$2"
+  local y="$3"
+
+  hyprctl dispatch "hl.dsp.window.move({ x = ${x}, y = ${y}, window = $(lua_quote "address:${address}") })" >/dev/null
+}
+
+init_state_file() {
+  if [[ -f "$STATE_FILE" ]]; then
+    if jq -e 'type == "object"' "$STATE_FILE" >/dev/null 2>&1; then
+      return
+    fi
+  fi
+
+  printf '{}\n' > "$STATE_FILE"
+}
+
+ensure_daemon_running() {
+  if pgrep -f "[m]inimized-state-daemon.sh" >/dev/null 2>&1; then
+    return
+  fi
+
+  if command -v uwsm-app >/dev/null 2>&1; then
+    uwsm-app -s b -- "$DAEMON_SCRIPT" >/dev/null 2>&1 &
+    return
+  fi
+
+  "$DAEMON_SCRIPT" >/dev/null 2>&1 &
+}
+
+save_window_state() {
+  local window_json="$1"
+  local address workspace_name monitor_id floating x y width height monitor_name bucket special_workspace
+  local temp_file
+
+  address="$(jq -r '.address // empty' <<< "$window_json")"
+  workspace_name="$(jq -r '.workspace.name // empty' <<< "$window_json")"
+  monitor_id="$(jq -r '.monitor // empty' <<< "$window_json")"
+  floating="$(jq -r '.floating // false' <<< "$window_json")"
+  x="$(jq -r '.at[0] // 0' <<< "$window_json")"
+  y="$(jq -r '.at[1] // 0' <<< "$window_json")"
+  width="$(jq -r '.size[0] // 0' <<< "$window_json")"
+  height="$(jq -r '.size[1] // 0' <<< "$window_json")"
+  monitor_name="$(hyprctl monitors -j 2>/dev/null | jq -r --argjson id "$monitor_id" 'first(.[] | select(.id == $id) | .name) // empty')"
+
+  if [[ -z "$monitor_name" && -n "$monitor_id" ]]; then
+    monitor_name="monitor-${monitor_id}"
+  fi
+
+  bucket="$(bucket_key_for "$monitor_name" "$workspace_name")"
+  special_workspace="$(special_workspace_for_bucket "$bucket")"
+
+  if [[ -z "$address" || -z "$workspace_name" ]]; then
+    return
+  fi
+
+  temp_file="$(mktemp)"
+  jq \
+    --arg address "$address" \
+    --arg workspace "$workspace_name" \
+    --arg monitor "$monitor_name" \
+    --arg bucket "$bucket" \
+    --arg special "$special_workspace" \
+    --argjson floating "$floating" \
+    --argjson x "$x" \
+    --argjson y "$y" \
+    --argjson width "$width" \
+    --argjson height "$height" \
+    '.[$address] = {
+      workspace: $workspace,
+      monitor: $monitor,
+      bucket: $bucket,
+      special: $special,
+      floating: $floating,
+      x: $x,
+      y: $y,
+      width: $width,
+      height: $height
+    }' "$STATE_FILE" > "$temp_file"
+  mv "$temp_file" "$STATE_FILE"
+}
+
+clear_window_state() {
+  local address="$1"
+  local temp_file
+
+  if [[ -z "$address" ]]; then
+    return
+  fi
+
+  temp_file="$(mktemp)"
+  jq --arg address "$address" 'del(.[$address])' "$STATE_FILE" > "$temp_file"
+  mv "$temp_file" "$STATE_FILE"
+}
+
+restore_window_state() {
+  local address="$1"
+  local state_json workspace_name monitor_name floating x y width height
+
+  state_json="$(jq -c --arg address "$address" '.[$address] // empty' "$STATE_FILE")"
+  if [[ -z "$state_json" ]]; then
+    move_window_to_workspace "+0" "$address"
+    return
+  fi
+
+  workspace_name="$(jq -r '.workspace // empty' <<< "$state_json")"
+  monitor_name="$(jq -r '.monitor // empty' <<< "$state_json")"
+  floating="$(jq -r '.floating // false' <<< "$state_json")"
+  x="$(jq -r '.x // 0' <<< "$state_json")"
+  y="$(jq -r '.y // 0' <<< "$state_json")"
+  width="$(jq -r '.width // 0' <<< "$state_json")"
+  height="$(jq -r '.height // 0' <<< "$state_json")"
+
+  if [[ -n "$workspace_name" ]]; then
+    move_window_to_workspace "$workspace_name" "$address"
+  else
+    move_window_to_workspace "+0" "$address"
+  fi
+
+  if [[ -n "$monitor_name" ]]; then
+    focus_monitor "$monitor_name"
+  fi
+
+  focus_window "$address"
+
+  if [[ "$floating" == "true" ]]; then
+    resize_window "$address" "$width" "$height"
+    move_window "$address" "$x" "$y"
+  fi
+
+  clear_window_state "$address"
+}
+
+active_window_json="$(hyprctl activewindow -j 2>/dev/null || true)"
+active_workspace="$(printf '%s' "$active_window_json" | jq -r '.workspace.name // empty' 2>/dev/null || true)"
+active_address="$(printf '%s' "$active_window_json" | jq -r '.address // empty' 2>/dev/null || true)"
+
+if [[ -z "$active_address" ]]; then
+  exit 0
+fi
+
+init_state_file
+ensure_daemon_running
+
+if [[ "$active_workspace" == ${MINIMIZED_WORKSPACE_PREFIX}* ]]; then
+  restore_window_state "$active_address"
+  exit 0
+fi
+
+save_window_state "$active_window_json"
+target_special_workspace="$(jq -r --arg address "$active_address" '.[$address].special // empty' "$STATE_FILE" 2>/dev/null || true)"
+
+if [[ -z "$target_special_workspace" ]]; then
+  target_special_workspace="${MINIMIZED_WORKSPACE_PREFIX}"
+fi
+
+move_window_to_workspace "$target_special_workspace" "$active_address"

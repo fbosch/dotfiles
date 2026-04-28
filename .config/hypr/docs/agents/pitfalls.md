@@ -11,6 +11,6 @@
    - Default order is 0
 
 3. Scripts not executing:
-   - Ensure scripts in `scripts/` are executable: `chmod +x scripts/*.sh`
-   - Scripts are referenced from config with full path: `~/.config/hypr/scripts/...`
+   - Ensure scripts in `runtime/` are executable.
+   - Scripts are referenced from config with full path: `~/.config/hypr/runtime/<area>/...`
    - For exec keyword behavior, see `docs/agents/references/Keywords.md`

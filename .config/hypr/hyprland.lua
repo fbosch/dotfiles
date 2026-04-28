@@ -1,5 +1,4 @@
--- Staged Hyprland Lua entrypoint.
--- Do not rename this file to hyprland.lua until the Lua config is ready to go live.
+-- Hyprland Lua entrypoint.
 
 local function file_exists(path)
 	local file = io.open(path, "r")
@@ -20,13 +19,13 @@ local home_config_dir = os.getenv("HOME") .. "/.config/hypr"
 local config_dir = home_config_dir
 local local_config_dir = entrypoint_dir()
 
-if not file_exists(config_dir .. "/lua/rule-loader.lua") and local_config_dir then
+if not file_exists(config_dir .. "/rule-loader.lua") and local_config_dir then
 	config_dir = local_config_dir
 end
 
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
-local loader = require("lua.rule-loader")
+local loader = require("rule-loader")
 
 local stub_counts = {
 	config_calls = 0,
@@ -133,30 +132,30 @@ if hl == nil then
 	}
 end
 
-require("lua.base")
-local programs = require("lua.programs")
-local monitors = require("lua.monitors")
-require("lua.rules.workspace-base")
-require("lua.keybinds")
-require("lua.animations")
+require("base")
+local programs = require("programs")
+local monitors = require("monitors")
+require("rules.workspace-base")
+require("keybinds")
+require("animations")
 
 local generated = loader.apply_window_rules({
-	config_dir .. "/lua/rules/generated.lua",
+	config_dir .. "/rules/generated.lua",
 })
 
 local before_static_window_rules = stub_counts.window_rules
-require("lua.rules")
+require("rules")
 local static_window_rules = stub_counts.window_rules - before_static_window_rules
 
 local window_state = loader.apply_window_rules({
-	config_dir .. "/lua/rules/window-state.lua",
+	config_dir .. "/rules/window-state.lua",
 })
 
-require("lua.environment")
-require("lua.appearance")
-require("lua.rules.layer")
-require("lua.input")
-require("lua.autostart")
+require("environment")
+require("appearance")
+require("rules.layer")
+require("input")
+require("autostart")
 
 loader.report_warnings(generated.warnings)
 loader.report_warnings(window_state.warnings)

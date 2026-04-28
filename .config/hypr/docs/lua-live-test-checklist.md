@@ -7,18 +7,13 @@ Lua testing now uses `.config/hypr/hyprland.lua`. Remove or rename it to roll ba
 Run from repo root:
 
 ```bash
-lua .config/hypr/lua/_migration/check-staged-parity.lua /home/fbb/dotfiles
-lua .config/hypr/lua/_migration/audit-source-graph.lua /home/fbb/dotfiles
 lua .config/hypr/hyprland.lua
 ```
 
 Expected output:
 
 ```text
-staged Hypr Lua parity ok
-known skipped layer animations: 6
-known keybind gaps: 3
-hypr source graph audit ok
+no output
 ```
 
 Known staged gaps:

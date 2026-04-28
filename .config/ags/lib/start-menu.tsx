@@ -308,10 +308,10 @@ const menuCommands: Record<string, string> = {
   documents: `nemo --existing-window "${getXdgUserDirOrDefault("XDG_DOCUMENTS_DIR", `${homeDir}/Documents`)}"`,
   pictures: `nemo --existing-window "${getXdgUserDirOrDefault("XDG_PICTURES_DIR", `${homeDir}/Pictures`)}"`,
   downloads: `nemo --existing-window "${getXdgUserDirOrDefault("XDG_DOWNLOAD_DIR", `${homeDir}/Downloads`)}"`,
-  suspend: `${homeDir}/.config/hypr/scripts/confirm-suspend.sh`,
-  "sign-out": `${homeDir}/.config/hypr/scripts/confirm-exit.sh`,
-  restart: `${homeDir}/.config/hypr/scripts/confirm-restart.sh`,
-  shutdown: `${homeDir}/.config/hypr/scripts/confirm-shutdown.sh`,
+  suspend: `${homeDir}/.config/hypr/runtime/session/confirm-suspend.sh`,
+  "sign-out": `${homeDir}/.config/hypr/runtime/session/confirm-exit.sh`,
+  restart: `${homeDir}/.config/hypr/runtime/session/confirm-restart.sh`,
+  shutdown: `${homeDir}/.config/hypr/runtime/session/confirm-shutdown.sh`,
   "nixos-updates": getSystemUpdatesCommand(),
   "flatpak-updates": getSystemUpdatesCommand(), // Both updated during NixOS rebuild
 };

@@ -1,26 +1,26 @@
 # Hyprland Config
 
-Hyprland window manager configuration with custom keybinds, rules, and support scripts.
+Hyprland window manager Lua configuration with custom keybinds, rules, and runtime helpers.
 
 **Project:** [Hyprland](https://github.com/hyprwm/Hyprland)
 
 **Configuration files:**
-- `hyprland.conf` - Main config (sources other files)
-- `keybinds.conf` - Keyboard shortcuts
-- `rules.conf` / `generated-rules.conf` - Window rules and behaviors
-- `animations.conf` - Animation settings
+- `hyprland.lua` - Main Lua config entrypoint
+- `keybinds.lua`, `autostart.lua`, `animations.lua`, `appearance.lua`, `input.lua`, `monitors.lua` - Core config modules
+- `rules/` - Static and generated Lua window/workspace/layer rules
 - `window-state.conf` - Window state management
 - `hyprlock.conf` - Screen lock
 - `hypridle.conf` - Idle behavior
-- `monitors.conf.example` / `hyprpaper.conf.example` - Templates for local setup
+- `legacy/hyprland-conf/` - Previous hyprlang setup retained for reference
 
-**Scripts:**
-- Window management: `cycle-windows.sh`, `window-switcher-wrapper.sh`, `window-state.sh`, `window-switcher-ags.sh`
-- System confirmations: `confirm-exit.sh`, `confirm-restart.sh`, `confirm-shutdown.sh`, `confirm-suspend.sh`
-- System utilities: `screenshot.sh`, `toggle-hypridle.sh`, `toggle-night-light.sh`, `toggle-performance-mode.sh`, `launch-browser.sh`
-- Waybar integration: `waybar-lib.sh`, `waybar-toggle-smart.sh`, `waybar-edge-monitor.sh`
-- Profiles: `profilectl.sh`, `gamescope-profile-watchdog.sh`
-- Monitoring/setup: `startup-desktop-ready.sh`, `reset-desktop.sh`, `nerd-icon-gen.sh`, `window-capture-daemon.sh`, `switch-layout.sh`
+**Runtime helpers:**
+- `runtime/windows/` - Window state, minimize/restore, capture daemon, force-kill helpers
+- `runtime/session/` - Session confirmation and exit helpers
+- `runtime/profiles/` - Performance and gaming profile controls
+- `runtime/gamescope/` - Gamescope profile and clipboard helpers
+- `runtime/desktop/` - Desktop reset, Waybar, browser, layout, Hypridle, and icon helpers
+- `runtime/capture/` - Screenshot and OCR helpers
+- `runtime/startup/` - Startup workspace routing and UI launch helper
 
 **Docs:**
 - Agent guides: `structure.md`, `debugging.md`, `layer-rules.md`, `pitfalls.md`, `version.md`
@@ -29,8 +29,7 @@ Hyprland window manager configuration with custom keybinds, rules, and support s
 - Audio feedback: `bootup.ogg`, `warn.mp3`, `warn.ogg`
 
 **Setup notes:**
-- Create `monitors.conf` from `monitors.conf.example` for your display setup
 - Create `hyprpaper.conf` from `hyprpaper.conf.example` for wallpaper config
-- `generated-rules.conf` is auto-generated; don't edit directly
+- `rules/generated.lua` and `rules/window-state.lua` are auto-generated; don't edit directly
 - Validate changes: `hyprctl reload` and `hyprctl configerrors`
 - Managed via Nix/Home Manager as part of dotfiles

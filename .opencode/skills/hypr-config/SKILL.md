@@ -116,5 +116,5 @@ Return these five items:
 
 ## Repo Notes
 
-- Scripts referenced by config should use full path style consistent with this repo (`~/.config/hypr/scripts/...`).
+- Scripts referenced by config should use full path style consistent with this repo (`~/.config/hypr/runtime/<area>/...`).
 - If scripts are introduced or moved, keep executable bit correct.

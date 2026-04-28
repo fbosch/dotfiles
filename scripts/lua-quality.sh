@@ -83,8 +83,6 @@ run_lua_tests() {
   run_tool lua lua5_2 .config/wezterm/tests/status_workhours_spec.lua
   run_tool lua lua5_2 .config/wezterm/tests/agent_deck_detection_spec.lua
   run_tool lua lua5_2 .config/hypr/hyprland.lua
-  run_tool lua lua5_2 .config/hypr/lua/_migration/audit-source-graph.lua "$ROOT"
-  run_tool lua lua5_2 .config/hypr/lua/_migration/check-staged-parity.lua "$ROOT"
 }
 
 run_baseline() {
@@ -112,7 +110,7 @@ case "$mode" in
     run_stylua_check "${lua_files[@]}"
     ;;
   style-all)
-    run_stylua_check .config/wezterm .config/nvim/lua .config/hypr/lua
+    run_stylua_check .config/wezterm .config/nvim/lua .config/hypr
     ;;
   *)
     echo "usage: $0 [baseline|staged|changed|ci|style-staged|style-changed|style-all]" >&2

@@ -64,9 +64,9 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
     rule-loader.lua
 ```
 
-`hyprland.lua` should require stable hand-written modules with config-root module paths, for example `require("lua.programs")` and `require("lua.rules")`. The entrypoint should set `package.path` to `~/.config/hypr/?.lua;~/.config/hypr/?/init.lua` before requiring modules so plain `lua` validation matches Hyprland's module lookup. Generated data files should be loaded by absolute path through `lua/rule-loader.lua`, not `require`, so reloads do not reuse stale cached modules. Generated writers should explicitly reload Hyprland once Lua config is live, because generated data paths are not source-backed as watched config paths.
+`hyprland.lua` requires stable hand-written modules with config-root module paths, for example `require("programs")` and `require("rules")`. The entrypoint sets `package.path` to `~/.config/hypr/?.lua;~/.config/hypr/?/init.lua` before requiring modules so plain `lua` validation matches Hyprland's module lookup. Generated data files are loaded by absolute path through `rule-loader.lua`, not `require`, so reloads do not reuse stale cached modules. Generated writers should explicitly reload Hyprland once Lua config is live, because generated data paths are not source-backed as watched config paths.
 
-TODO after Lua is live and legacy `.conf` migration helpers are retired: consider moving stable hand-written modules and runtime helpers from `lua/` to config-root subdirectories so imports can become `require("programs")`, `require("rules")`, and `require("actions.close-active")`. Do not do this during the staged migration; keeping everything under `lua/` avoids mixing staged modules and Lua-specific runtime scripts with the legacy config root.
+Legacy `.conf` migration helpers are retained under `legacy/`; stable hand-written modules and runtime helpers now live at config root.
 
 ## Generated Rule Schema
 
@@ -116,7 +116,7 @@ Keep IDs as plain strings. Slugging is only needed later if IDs become Hyprland 
 
 ## Loader Responsibilities
 
-`lua/rule-loader.lua` should own all Hyprland API mapping.
+`rule-loader.lua` should own all Hyprland API mapping.
 
 Responsibilities:
 
@@ -138,7 +138,7 @@ hl.window_rule({
 })
 ```
 
-Upstream source currently exposes `size` and `move` as Lua config strings. The normalized generated schema may keep dimensions as numeric arrays, but `lua/rule-loader.lua` must convert them to strings before calling `hl.window_rule(...)`.
+Upstream source currently exposes `size` and `move` as Lua config strings. The normalized generated schema may keep dimensions as numeric arrays, but `rule-loader.lua` must convert them to strings before calling `hl.window_rule(...)`.
 
 ## Effect Mapping
 
@@ -217,8 +217,6 @@ Machine-specific `monitors.conf` remains gitignored for the live `.conf` config,
 Validate this phase with:
 
 ```bash
-lua .config/hypr/lua/_migration/check-staged-parity.lua /home/fbb/dotfiles
-lua .config/hypr/lua/_migration/audit-source-graph.lua /home/fbb/dotfiles
 lua .config/hypr/hyprland.lua
 ```
 
@@ -234,7 +232,7 @@ Use `docs/lua-live-test-checklist.md` for the manual live Lua test and rollback 
 
 ### 4. Convert `hypr-quickrule`
 
-`.config/vicinae/extensions/hypr-quickrule/src/hypr-quickrule.tsx` dual-writes the live `.conf` output and Lua data at `~/.config/hypr/lua/rules/generated.lua`.
+`.config/vicinae/extensions/hypr-quickrule/src/hypr-quickrule.tsx` writes Lua data at `~/.config/hypr/rules/generated.lua` and keeps a legacy `.conf` copy under `~/.config/hypr/legacy/hyprland-conf/generated-rules.conf`.
 
 Requirements:
 
@@ -267,7 +265,7 @@ Keep a temporary compatibility mode or backup writer for the old `.conf` format 
 
 ### 5.5. Retire Dispatcher Compatibility Fallbacks
 
-During the Lua live-test period, IPC-heavy Bash helpers that need Lua-specific dispatcher syntax should live under `lua/runtime/` in shallow area directories. Keep legacy `.config/hypr/scripts/` helpers on hyprlang-compatible dispatcher syntax so rollback to `hyprland.conf` remains safe.
+IPC-heavy Bash helpers that need Lua-specific dispatcher syntax live under categorized `runtime/` area directories. Legacy `.config/hypr/scripts/` helpers are retained only under `legacy/` for reference.
 
 Current Lua runtime helper areas:
 
@@ -276,7 +274,7 @@ Current Lua runtime helper areas:
 - `lua/runtime/session/` for session exit helpers used by Lua actions.
 - `lua/runtime/startup/` for startup-only workspace routing that needs Lua-compatible dispatcher syntax.
 
-Migrate one runtime helper at a time and verify each helper under `hyprland.lua` before moving the next. After `hyprland.conf` is fully retired and rollback no longer depends on it, promote or relocate these helpers out of `lua/`, remove old `.config/hypr/scripts/` copies that are no longer used, and delete the remaining hyprlang configs. Do this cleanup as a dedicated pass so behavior changes are easy to audit.
+Runtime helpers are categorized by behavior area under `runtime/`. Old hyprlang configs and migration helpers live under `legacy/` for reference while Lua remains primary.
 
 ### 6. Validate Reload Behavior
 

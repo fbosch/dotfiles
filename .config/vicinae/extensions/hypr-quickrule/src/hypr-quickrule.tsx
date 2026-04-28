@@ -418,7 +418,7 @@ export default function Command() {
 	};
 
 	const writeLuaRuleEntry = async (entry: LuaRuleEntry) => {
-		const luaRulesDir = join(homedir(), ".config/hypr/lua/rules");
+		const luaRulesDir = join(homedir(), ".config/hypr/rules");
 		const luaRulesPath = join(luaRulesDir, "generated.lua");
 
 		await fs.mkdir(luaRulesDir, { recursive: true });
@@ -514,7 +514,7 @@ export default function Command() {
 		try {
 			const hyprConfigPath = join(
 				homedir(),
-				".config/hypr/generated-rules.conf",
+				".config/hypr/legacy/hyprland-conf/generated-rules.conf",
 			);
 			const ruleLine = generateRuleLine(profile, info, sel);
 			const luaRuleEntry = generateLuaRuleEntry(profile, info, sel);

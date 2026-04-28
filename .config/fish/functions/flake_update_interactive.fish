@@ -209,7 +209,7 @@ function flake_update_interactive --description 'Interactively update nix flake 
 
                     if set -q _flag_notify
                         set -l icon_path (mktemp --suffix=.svg)
-                        ~/.config/hypr/scripts/nerd-icon-gen.sh "󰗡" 64 "#4ade80" "$icon_path" >/dev/null 2>&1
+                        ~/.config/hypr/runtime/desktop/nerd-icon-gen.sh "󰗡" 64 "#4ade80" "$icon_path" >/dev/null 2>&1
 
                         if command -q notify-send
                             notify-send --app-name="NixOS Update" --icon="$icon_path" --urgency=normal "NixOS Update Complete" "System has been successfully rebuilt and switched. A restart may be required for some changes."
@@ -230,7 +230,7 @@ function flake_update_interactive --description 'Interactively update nix flake 
 
                     if set -q _flag_notify
                         set -l icon_path (mktemp --suffix=.svg)
-                        ~/.config/hypr/scripts/nerd-icon-gen.sh "" 64 "#ef4444" "$icon_path" >/dev/null 2>&1
+                        ~/.config/hypr/runtime/desktop/nerd-icon-gen.sh "" 64 "#ef4444" "$icon_path" >/dev/null 2>&1
 
                         if command -q notify-send
                             notify-send --app-name="NixOS Update" --icon="$icon_path" --urgency=critical "NixOS Update Failed" "The system update encountered an error. Please check the terminal output for details."

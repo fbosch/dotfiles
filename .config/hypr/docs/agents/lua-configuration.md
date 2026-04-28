@@ -6,7 +6,7 @@ Local reference for migrating this repo from hyprlang `.conf` files to Hyprland 
 
 - Upstream basis: Hyprland `main` after Lua config PR #13817.
 - Local Lua test entrypoint is `.config/hypr/hyprland.lua`; remove or rename it to roll back to `.config/hypr/hyprland.conf`.
-- Target static-rule migration excludes generated outputs: `.config/hypr/generated-rules.conf` and `.config/hypr/lua/rules/window-state.lua`.
+- Generated outputs are data files under `.config/hypr/rules/generated.lua` and `.config/hypr/rules/window-state.lua`.
 
 ## Entrypoint Behavior
 
@@ -27,12 +27,12 @@ Sources:
 
 - Use `require` for stable hand-written modules.
 - Hyprland sets Lua `package.path` to include the config directory as `?.lua` and `?/init.lua`.
-- Module names are rooted at `.config/hypr`: use `require("lua.programs")` for `lua/programs.lua`, `require("lua.rules")` for `lua/rules/init.lua`, and `require("lua.actions.close-active")` for `lua/actions/close-active.lua`.
+- Module names are rooted at `.config/hypr`: use `require("programs")` for `programs.lua`, `require("rules")` for `rules/init.lua`, and `require("actions.close-active")` for `actions/close-active.lua`.
 - Hyphenated filenames are valid in quoted module names, but future hand-written files should prefer underscores when there is no existing filename to preserve.
 - The Lua entrypoint prepends the same config-root paths to `package.path` so plain `lua .config/hypr/hyprland.lua` validates the same module layout.
 - On reload, Hyprland clears non-stdlib `package.loaded` entries, so required user modules re-run.
 - Hyprland wraps `require` and tracks required module paths for config watching.
-- Use absolute path-loading in `lua/rule-loader.lua` for generated data files when cache avoidance matters.
+- Use absolute path-loading in `rule-loader.lua` for generated data files when cache avoidance matters.
 - Generated data paths are not source-backed as watched config paths, so generated writers should explicitly trigger reload when Lua config is live.
 
 Sources:

@@ -9,6 +9,6 @@
   "Lua.workspace.library": [
     "$VIMRUNTIME",
     "./.config/nvim",
-    "./.config/hypr/lua/types"
+    "./.config/hypr/types"
   ]
 }

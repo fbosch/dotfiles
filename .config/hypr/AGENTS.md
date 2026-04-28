@@ -5,12 +5,12 @@ Hyprland compositor configuration managed via Home Manager/Nix.
 ## Essentials
 
 - Validate after every `.conf` change.
-- Keep Lua migration files non-live unless explicitly testing Lua startup; do not create `.config/hypr/hyprland.lua` casually.
-- Use directory modules with `init.lua` for grouped Lua config, e.g. `lua/rules/init.lua`, not sibling aggregators like `lua/rules.lua`.
-- Keep static Lua rules as direct `hl.workspace_rule(...)` and `hl.window_rule(...)` calls under `lua/rules/workspace.lua` and `lua/rules/window.lua`.
-- Keep static layer rules under `lua/rules/layer.lua`; load them from the staged entrypoint where live `.conf` order places them, not from `lua/rules/init.lua` if that would move them before window-state rules.
-- Keep generated/window-state Lua rule data under `lua/rules/generated.lua` and `lua/rules/window-state.lua`; generated files should return data tables, not call `hl.*` directly.
-- Keep `window-state.conf` as the writable selector source during migration; mirror it to `lua/rules/window-state-selectors.lua` for Lua-side data.
+- `hyprland.lua` is the primary compositor config; old hyprlang files live under `legacy/hyprland-conf/` for reference.
+- Use directory modules with `init.lua` for grouped Lua config, e.g. `rules/init.lua`, not sibling aggregators like `rules.lua`.
+- Keep static Lua rules as direct `hl.workspace_rule(...)` and `hl.window_rule(...)` calls under `rules/workspace.lua` and `rules/window.lua`.
+- Keep static layer rules under `rules/layer.lua`; load them from the entrypoint where live config order places them, not from `rules/init.lua` if that would move them before window-state rules.
+- Keep generated/window-state Lua rule data under `rules/generated.lua` and `rules/window-state.lua`; generated files should return data tables, not call `hl.*` directly.
+- Keep `window-state.conf` as the writable selector source; mirror it to `rules/window-state-selectors.lua` for Lua-side data.
 - Preserve rule declaration order: generated rules, static rules, then window-state rules.
 
 ## Package manager

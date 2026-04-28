@@ -95,7 +95,7 @@ const WINDOW_CACHE_TTL_MS = 150; // Cache window list briefly for request bursts
 const ACTIVE_WINDOW_CACHE_TTL_MS = 100; // Cache active window briefly
 const PERFORMANCE_OVERLAY_STATE_DIR = `${GLib.getenv("XDG_RUNTIME_DIR") || "/tmp"}/hypr-profiles`;
 const PERFORMANCE_OVERLAY_ACTIVE_PATH = `${PERFORMANCE_OVERLAY_STATE_DIR}/performance-overlay.active`;
-const TOGGLE_MINIMIZED_WORKSPACE_SCRIPT = "~/.config/hypr/scripts/toggle-minimized-workspace.sh";
+const TOGGLE_MINIMIZED_WORKSPACE_SCRIPT = "~/.config/hypr/runtime/windows/toggle-minimized-workspace.sh";
 const DEBUG = GLib.getenv("AGS_WINDOW_SWITCHER_DEBUG") === "1";
 
 function isPerformanceOverlayActive(): boolean {
@@ -1366,7 +1366,7 @@ function setupAltMonitoring() {
       // Handle Print key for screenshots (Print = 0xff61 = 65377)
       if (keyval === 65377) {
         try {
-          GLib.spawn_command_line_async("bash ~/.config/hypr/scripts/screenshot.sh screen");
+          GLib.spawn_command_line_async("bash ~/.config/hypr/runtime/capture/screenshot.sh screen");
           debugLog("Screenshot triggered from window-switcher");
         } catch (e) {
           console.error("Failed to trigger screenshot:", e);
