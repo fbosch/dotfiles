@@ -129,8 +129,6 @@ function M.paste_with_xwayland_clipboard_now()
 		command.ok("DISPLAY=" .. system.shell_quote(display) .. " xdotool key --clearmodifiers ctrl+v >/dev/null 2>&1")
 		return
 	end
-
-	command.ok("hyprctl dispatch sendshortcut CTRL,V,activewindow >/dev/null 2>&1")
 end
 
 local function schedule(action, delay)
@@ -156,8 +154,6 @@ function M.paste_with_clipboard_bridge()
 		schedule("paste_with_xwayland_clipboard_now", "0.08")
 		return
 	end
-
-	hl.exec_cmd("hyprctl dispatch sendshortcut CTRL,V,activewindow >/dev/null 2>&1")
 end
 
 return M

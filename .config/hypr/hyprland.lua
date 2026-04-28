@@ -117,6 +117,7 @@ if hl == nil then
 			stub_counts.events = stub_counts.events + 1
 			callback()
 		end,
+		__stub = true,
 		exec_cmd = function()
 			stub_counts.exec_commands = stub_counts.exec_commands + 1
 		end,

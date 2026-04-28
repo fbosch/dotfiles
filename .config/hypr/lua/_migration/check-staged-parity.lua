@@ -608,6 +608,7 @@ hl = {
       callback()
     end
   end,
+  __stub = true,
   exec_cmd = function(command)
     captured.exec_commands[#captured.exec_commands + 1] = command
   end,

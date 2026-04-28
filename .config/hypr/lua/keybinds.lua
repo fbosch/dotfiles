@@ -53,7 +53,7 @@ bind("bind", main_mod, "SPACE", exec("bash ~/.config/hypr/scripts/switch-layout.
 bind("bind", main_mod .. " + SHIFT", "V", clipboard_bridge.paste_with_clipboard_bridge)
 bind("bindn", "CTRL", "C", clipboard_bridge.sync_wayland_to_xwayland)
 bind("bindn", "CTRL", "X", clipboard_bridge.sync_wayland_to_xwayland)
-bind("bind", "CTRL", "V", clipboard_bridge.paste_with_clipboard_bridge)
+bind("bindn", "CTRL", "V", clipboard_bridge.paste_with_clipboard_bridge)
 
 bind("bind", "ALT", "TAB", window_switcher.next)
 bind("bind", "ALT + SHIFT", "TAB", window_switcher.prev)
