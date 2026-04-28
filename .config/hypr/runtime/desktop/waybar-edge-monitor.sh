@@ -11,8 +11,8 @@ readonly SHOW_THRESHOLD=20     # Distance from bottom to trigger show (pixels)
 readonly HIDE_THRESHOLD=60      # Distance from bottom before hiding (pixels)
 readonly SHOW_DELAY_MS=200      # Milliseconds to wait before showing (prevents quick hovers)
 readonly HIDE_DELAY_MS=300      # Milliseconds to wait before hiding (linger time)
-readonly FAST_CHECK_MS=40       # Fast polling interval (40ms)
-readonly SLOW_CHECK_MS=500      # Slow polling interval (500ms)
+readonly FAST_CHECK_MS=80       # Fast polling interval near the edge (80ms)
+readonly SLOW_CHECK_MS=1000     # Slow polling interval away from the edge (1000ms)
 
 # Hyprland query socket (faster than hyprctl)
 HYPR_QUERY_SOCKET=""
@@ -21,17 +21,12 @@ refresh_hypr_query_socket() {
     HYPR_QUERY_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock"
 }
 
-# Query Hyprland IPC socket with a short timeout.
+# Query Hyprland IPC socket.
 # Prints response to stdout and returns non-zero on failure.
 hypr_query() {
     local request=$1
 
     refresh_hypr_query_socket
-
-    if command -v timeout >/dev/null 2>&1; then
-        printf '%s' "$request" | timeout 0.2 nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null
-        return $?
-    fi
 
     printf '%s' "$request" | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null
 }
@@ -206,10 +201,10 @@ while true; do
     fi
     
     # Sleep with calculated interval (convert ms to seconds)
-    # 40ms = 0.04s, 500ms = 0.5s
+    # 80ms = 0.08s, 1000ms = 1s
     if (( check_interval_ms == FAST_CHECK_MS )); then
-        sleep 0.04
+        sleep 0.08
     else
-        sleep 0.5
+        sleep 1
     fi
 done
