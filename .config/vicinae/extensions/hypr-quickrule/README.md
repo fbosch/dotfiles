@@ -8,7 +8,7 @@ Quick apply window rules to Hyprland windows using common profiles.
 - Choose from predefined rule profiles based on common use cases
 - Automatically generates and applies window rules
 - Choose which selector to match on (class, initial_class, title, initial_title)
-- Rules are written to `~/.config/hypr/generated-rules.conf`
+- Rules are written to `~/.config/hypr/rules/generated.lua`
 
 ## Requirements
 
@@ -65,11 +65,7 @@ Quick apply window rules to Hyprland windows using common profiles.
 
 ### Generated Rules
 
-Generated rules are written to `~/.config/hypr/generated-rules.conf`. Make sure your `~/.config/hypr/rules.conf` includes this file:
-
-```
-source = ~/.config/hypr/generated-rules.conf
-```
+Generated rules are written to `~/.config/hypr/rules/generated.lua`.
 
 ### Window State Persistence
 

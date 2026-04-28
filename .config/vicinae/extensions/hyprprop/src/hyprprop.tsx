@@ -18,22 +18,27 @@ import type { HyprpropWindowInfo } from "./types";
 
 const execAsync = promisify(exec);
 
-function extractMatchClauses(rule: string): Array<{ key: string; value: string }> {
+function unescapeLuaString(value: string): string {
+  return value.replace(/\\([\\"])/g, "$1");
+}
+
+function extractLuaMatchClauses(matchBlock: string): Array<{ key: string; value: string }> {
   const clauses: Array<{ key: string; value: string }> = [];
-  const matchPattern = /match:(class|initial_class|title|initial_title)\s+([^,]+?)(?=,|$)/g;
-  let match = matchPattern.exec(rule);
+  const matchPattern = /\b(class|initial_class|title|initial_title)\s*=\s*"((?:\\.|[^"])*)"/g;
+  let match = matchPattern.exec(matchBlock);
   while (match !== null) {
-    clauses.push({ key: match[1], value: match[2].trim() });
-    match = matchPattern.exec(rule);
+    clauses.push({ key: match[1], value: unescapeLuaString(match[2]) });
+    match = matchPattern.exec(matchBlock);
   }
   return clauses;
 }
 
-function matchesWindow(info: HyprpropWindowInfo, rule: string): boolean {
-  const clauses = extractMatchClauses(rule);
+function matchesLuaMatchBlock(info: HyprpropWindowInfo, matchBlock: string): boolean {
+  const clauses = extractLuaMatchClauses(matchBlock);
   if (clauses.length === 0) {
     return false;
   }
+
   return clauses.every((clause) => {
     const target = (() => {
       switch (clause.key) {
@@ -55,39 +60,36 @@ function matchesWindow(info: HyprpropWindowInfo, rule: string): boolean {
     }
 
     try {
-      const regex = new RegExp(clause.value);
-      return regex.test(target);
+      return new RegExp(clause.value).test(target);
     } catch {
       return target.includes(clause.value);
     }
   });
 }
 
+function lineNumberAt(content: string, index: number): number {
+  return content.slice(0, index).split(/\r?\n/).length;
+}
+
 async function loadRulesMatches(info: HyprpropWindowInfo): Promise<string[]> {
   const homeDir = os.homedir();
   const files = [
-    { label: "rules.conf", path: `${homeDir}/.config/hypr/rules.conf` },
-    { label: "generated-rules.conf", path: `${homeDir}/.config/hypr/generated-rules.conf` },
+    { label: "rules/window.lua", path: `${homeDir}/.config/hypr/rules/window.lua` },
+    { label: "rules/generated.lua", path: `${homeDir}/.config/hypr/rules/generated.lua` },
+    { label: "rules/window-state.lua", path: `${homeDir}/.config/hypr/rules/window-state.lua` },
   ];
   const matches: string[] = [];
 
   for (const file of files) {
     try {
       const raw = await fs.readFile(file.path, "utf8");
-      const lines = raw.split(/\r?\n/);
-
-      for (let index = 0; index < lines.length; index += 1) {
-        const line = lines[index];
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith("#")) {
-          continue;
+      const matchPattern = /match\s*=\s*{([^}]+)}/g;
+      let match = matchPattern.exec(raw);
+      while (match !== null) {
+        if (matchesLuaMatchBlock(info, match[1])) {
+          matches.push(`${file.label}:${lineNumberAt(raw, match.index)} match = {${match[1].trim()} }`);
         }
-        if (!trimmed.startsWith("windowrule")) {
-          continue;
-        }
-        if (matchesWindow(info, trimmed)) {
-          matches.push(`${file.label}:${index + 1} ${trimmed}`);
-        }
+        match = matchPattern.exec(raw);
       }
     } catch (error) {
       console.warn(`Failed to read ${file.label}`, error);
@@ -161,7 +163,7 @@ function formatWindowInfo(info: HyprpropWindowInfo, rules: string[]): string {
   sections.push("## Matching Rules");
   sections.push("");
   if (rules.length === 0) {
-    sections.push("No matching rules found in `~/.config/hypr/rules.conf` or `~/.config/hypr/generated-rules.conf`.");
+    sections.push("No matching rules found in `~/.config/hypr/rules/*.lua`.");
   } else {
     sections.push("```text");
     sections.push(...rules);
@@ -304,7 +306,7 @@ Press **⌘R** to retry.`}
           <Detail.Metadata.Label
             title="Rules"
             text={String(matchingRules.length)}
-            icon={Icon.List}
+            icon={Icon.Code}
           />
           <Detail.Metadata.Separator />
           <Detail.Metadata.Label
@@ -353,7 +355,7 @@ Press **⌘R** to retry.`}
           <ActionPanel.Section>
             <Action
               title="Copy Window Class"
-              icon={Icon.Clipboard}
+              icon={Icon.CopyClipboard}
               onAction={async () => {
                 await Clipboard.copy(windowInfo.class);
                 await showToast({
@@ -366,7 +368,7 @@ Press **⌘R** to retry.`}
             />
             <Action
               title="Copy Window Address"
-              icon={Icon.Clipboard}
+              icon={Icon.CopyClipboard}
               onAction={async () => {
                 await Clipboard.copy(windowInfo.address);
                 await showToast({

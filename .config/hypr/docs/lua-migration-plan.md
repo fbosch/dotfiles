@@ -228,11 +228,9 @@ Current validation status:
 
 Keep `.config/hypr/hyprland.lua` as the live Lua test entrypoint. Remove or rename it to roll back to `.config/hypr/hyprland.conf`.
 
-Use `docs/lua-live-test-checklist.md` for the manual live Lua test and rollback procedure.
-
 ### 4. Convert `hypr-quickrule`
 
-`.config/vicinae/extensions/hypr-quickrule/src/hypr-quickrule.tsx` writes Lua data at `~/.config/hypr/rules/generated.lua` and keeps a legacy `.conf` copy under `~/.config/hypr/legacy/hyprland-conf/generated-rules.conf`.
+`.config/vicinae/extensions/hypr-quickrule/src/hypr-quickrule.tsx` writes Lua data at `~/.config/hypr/rules/generated.lua`.
 
 Requirements:
 
