@@ -7,6 +7,39 @@ readonly STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-show-desktop"
 
 mkdir -p "$STATE_DIR"
 
+lua_quote() {
+  jq -Rn --arg value "$1" '$value'
+}
+
+move_window_to_workspace() {
+  local workspace="$1"
+  local address="$2"
+
+  hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })" >/dev/null
+}
+
+focus_window() {
+  local address="$1"
+
+  hyprctl dispatch "hl.dsp.focus({ window = $(lua_quote "address:${address}") })" >/dev/null
+}
+
+resize_window() {
+  local address="$1"
+  local width="$2"
+  local height="$3"
+
+  hyprctl dispatch "hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })" >/dev/null
+}
+
+move_window() {
+  local address="$1"
+  local x="$2"
+  local y="$3"
+
+  hyprctl dispatch "hl.dsp.window.move({ x = ${x}, y = ${y}, window = $(lua_quote "address:${address}") })" >/dev/null
+}
+
 focused_monitor_json="$(hyprctl monitors -j | jq -c 'first(.[] | select(.focused == true)) // empty')"
 
 if [[ -z "$focused_monitor_json" ]]; then
@@ -35,28 +68,22 @@ if [[ -s "$state_file" ]]; then
   fi
 
   mapfile -t addresses < <(jq -r '.windows[]?.address // empty' "$state_file" 2>/dev/null || true)
-  commands=""
-
   for address in "${addresses[@]}"; do
     if [[ -z "$address" ]]; then
       continue
     fi
 
-    commands+="dispatch movetoworkspacesilent name:${target_workspace},address:${address};"
+    move_window_to_workspace "name:${target_workspace}" "$address"
   done
-
-  if [[ -n "$commands" ]]; then
-    hyprctl --batch "$commands" >/dev/null
-  fi
 
   while IFS=$'\t' read -r address x y width height; do
     if [[ -z "$address" ]]; then
       continue
     fi
 
-    hyprctl dispatch focuswindow "address:${address}" >/dev/null 2>&1 || continue
-    hyprctl dispatch resizewindowpixel "exact ${width} ${height},address:${address}" >/dev/null 2>&1 || true
-    hyprctl dispatch movewindowpixel "exact ${x} ${y},address:${address}" >/dev/null 2>&1 || true
+    focus_window "$address" 2>/dev/null || continue
+    resize_window "$address" "$width" "$height" 2>/dev/null || true
+    move_window "$address" "$x" "$y" 2>/dev/null || true
   done < <(
     jq -r '.windows[]? | select(.floating == true) | "\(.address)\t\(.x)\t\(.y)\t\(.width)\t\(.height)"' "$state_file" 2>/dev/null || true
   )
@@ -94,16 +121,10 @@ jq -n \
   --argjson windows "$windows_json" \
   '{monitor: $monitor, workspace: $workspace, windows: $windows}' > "$state_file"
 
-commands=""
-
 for address in "${addresses[@]}"; do
   if [[ -z "$address" ]]; then
     continue
   fi
 
-  commands+="dispatch movetoworkspacesilent ${SPECIAL_WORKSPACE},address:${address};"
+  move_window_to_workspace "$SPECIAL_WORKSPACE" "$address"
 done
-
-if [[ -n "$commands" ]]; then
-  hyprctl --batch "$commands" >/dev/null
-fi

@@ -30,6 +30,45 @@ special_workspace_for_bucket() {
   printf '%s\n' "${MINIMIZED_WORKSPACE_PREFIX}-${bucket_hash}"
 }
 
+lua_quote() {
+  jq -Rn --arg value "$1" '$value'
+}
+
+move_window_to_workspace() {
+  local workspace="$1"
+  local address="$2"
+
+  hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })" >/dev/null
+}
+
+focus_monitor() {
+  local monitor_name="$1"
+
+  hyprctl dispatch "hl.dsp.focus({ monitor = $(lua_quote "$monitor_name") })" >/dev/null
+}
+
+focus_window() {
+  local address="$1"
+
+  hyprctl dispatch "hl.dsp.focus({ window = $(lua_quote "address:${address}") })" >/dev/null
+}
+
+resize_window() {
+  local address="$1"
+  local width="$2"
+  local height="$3"
+
+  hyprctl dispatch "hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })" >/dev/null
+}
+
+move_window() {
+  local address="$1"
+  local x="$2"
+  local y="$3"
+
+  hyprctl dispatch "hl.dsp.window.move({ x = ${x}, y = ${y}, window = $(lua_quote "address:${address}") })" >/dev/null
+}
+
 init_state_file() {
   if [[ -f "$STATE_FILE" ]]; then
     if jq -e 'type == "object"' "$STATE_FILE" >/dev/null 2>&1; then
@@ -124,7 +163,7 @@ restore_window_state() {
 
   state_json="$(jq -c --arg address "$address" '.[$address] // empty' "$STATE_FILE")"
   if [[ -z "$state_json" ]]; then
-    hyprctl dispatch movetoworkspacesilent +0
+    move_window_to_workspace "+0" "$address"
     return
   fi
 
@@ -137,20 +176,20 @@ restore_window_state() {
   height="$(jq -r '.height // 0' <<< "$state_json")"
 
   if [[ -n "$workspace_name" ]]; then
-    hyprctl dispatch movetoworkspacesilent "$workspace_name" >/dev/null
+    move_window_to_workspace "$workspace_name" "$address"
   else
-    hyprctl dispatch movetoworkspacesilent +0 >/dev/null
+    move_window_to_workspace "+0" "$address"
   fi
 
   if [[ -n "$monitor_name" ]]; then
-    hyprctl dispatch focusmonitor "$monitor_name" >/dev/null
+    focus_monitor "$monitor_name"
   fi
 
-  hyprctl dispatch focuswindow "address:$address" >/dev/null
+  focus_window "$address"
 
   if [[ "$floating" == "true" ]]; then
-    hyprctl dispatch resizewindowpixel "exact $width $height,address:$address" >/dev/null
-    hyprctl dispatch movewindowpixel "exact $x $y,address:$address" >/dev/null
+    resize_window "$address" "$width" "$height"
+    move_window "$address" "$x" "$y"
   fi
 
   clear_window_state "$address"
@@ -179,4 +218,4 @@ if [[ -z "$target_special_workspace" ]]; then
   target_special_workspace="${MINIMIZED_WORKSPACE_PREFIX}"
 fi
 
-hyprctl dispatch movetoworkspacesilent "$target_special_workspace" >/dev/null
+move_window_to_workspace "$target_special_workspace" "$active_address"
