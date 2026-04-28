@@ -25,6 +25,7 @@ local window_state = loader.apply_window_rules({
 
 require("environment")
 require("appearance")
+require("profiles").apply_current()
 require("rules.layer")
 require("input")
 require("autostart")

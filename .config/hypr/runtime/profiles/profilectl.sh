@@ -49,11 +49,11 @@ set_count() {
 }
 
 apply_hypr_performance_overlay() {
-  hyprctl dispatch '(function() hl.config({ animations = { enabled = false }, decoration = { blur = { passes = 1 }, shadow = { enabled = false }, active_opacity = 1.0, inactive_opacity = 1.0, fullscreen_opacity = 1.0 } }); return function() end end)()' >/dev/null
+  hyprctl eval 'require("profiles").apply("performance")' >/dev/null
 }
 
 apply_hypr_gaming_overlay() {
-  hyprctl dispatch '(function() hl.config({ animations = { enabled = false }, decoration = { blur = { enabled = false, passes = 1 }, shadow = { enabled = false }, active_opacity = 1.0, inactive_opacity = 1.0, fullscreen_opacity = 1.0 }, misc = { vrr = 2 }, general = { allow_tearing = true } }); return function() end end)()' >/dev/null
+  hyprctl eval 'require("profiles").apply("gaming")' >/dev/null
 }
 
 restore_hypr_defaults() {
@@ -119,12 +119,12 @@ apply_effective_state() {
     current_mode="$(< "$overlay_mode_file")"
   fi
 
-  if [[ "$desired_mode" == "none" && -f "$overlay_active_file" ]]; then
+  if [[ "$desired_mode" == "none" && ( -f "$overlay_active_file" || -f "$overlay_mode_file" ) ]]; then
     resume_background_helpers
     set_switcher_mode_previews
+    rm -f "$overlay_active_file" "$overlay_mode_file"
     restore_hypr_defaults
     refresh_window_captures
-    rm -f "$overlay_active_file" "$overlay_mode_file"
     return
   fi
 
