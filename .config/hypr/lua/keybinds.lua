@@ -1,6 +1,7 @@
 -- Keybindings ported from keybinds.conf.
 
-local programs = dofile(os.getenv("HOME") .. "/.config/hypr/lua/programs.lua")
+local programs = require("lua.programs")
+local close_active = require("lua.actions.close-active")
 
 local main_mod = "SUPER"
 
@@ -62,7 +63,7 @@ bind("bind", "CTRL + SHIFT", "O", exec("bash ~/.config/hypr/scripts/screenshot.s
 
 bind("bind", main_mod, "Q", exec(programs.terminal))
 bind("bind", main_mod, "B", exec(programs.browser))
-bind("bind", main_mod, "C", exec("bash ~/.config/hypr/scripts/killactive-selective.sh"))
+bind("bind", main_mod, "C", close_active.close_active_selective)
 bind("bind", main_mod .. " + CTRL", "C", exec("bash ~/.config/hypr/scripts/confirm-hyprprop-kill.sh"))
 bind("bind", main_mod, "M", exec("bash ~/.config/hypr/scripts/confirm-exit.sh"))
 bind("bind", main_mod .. " + SHIFT", "R", exec("~/.config/hypr/scripts/reset-desktop.sh"))
@@ -74,7 +75,7 @@ bind("bind", main_mod, "P", hl.dsp.window.pseudo())
 bind("bind", main_mod, "F", hl.dsp.window.fullscreen({ mode = "maximized" }))
 bind("bind", main_mod .. " + CTRL", "F", hl.dsp.window.fullscreen({ mode = "fullscreen" }))
 bind("bind", main_mod, "F", hl.dsp.pass({ window = "class:^(xfreerdp)$" }))
-bind("bind", main_mod, "W", exec("bash ~/.config/hypr/scripts/killactive-selective.sh"))
+bind("bind", main_mod, "W", close_active.close_active_selective)
 bind("bind", main_mod, "D", exec("~/.config/hypr/scripts/toggle-show-desktop.sh"))
 
 bind("bind", main_mod, "Z", exec("~/.config/hypr/scripts/toggle-minimized-window.sh"))

@@ -21,13 +21,14 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
     monitors.lua
     autostart.lua
     keybinds.lua
-    audit-source-graph.lua
-    check-staged-parity.lua
     animations.lua
     environment.lua
     appearance.lua
     input.lua
+    actions/
+      close-active.lua
     lib/
+      log.lua
       system.lua
     rules/
       init.lua
@@ -40,7 +41,9 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
     rule-loader.lua
 ```
 
-`hyprland.lua` should require stable hand-written modules. Generated files should be loaded with `dofile`, not `require`, so reloads do not reuse stale cached modules. Generated writers should explicitly reload Hyprland once Lua config is live, because `dofile` paths are not source-backed as watched config paths.
+`hyprland.lua` should require stable hand-written modules with config-root module paths, for example `require("lua.programs")` and `require("lua.rules")`. The entrypoint should set `package.path` to `~/.config/hypr/?.lua;~/.config/hypr/?/init.lua` before requiring modules so plain `lua` validation matches Hyprland's module lookup. Generated data files should be loaded by absolute path through `lua/rule-loader.lua`, not `require`, so reloads do not reuse stale cached modules. Generated writers should explicitly reload Hyprland once Lua config is live, because generated data paths are not source-backed as watched config paths.
+
+TODO after Lua is live and legacy `.conf` migration helpers are retired: consider moving stable hand-written modules from `lua/` to config-root subdirectories so imports can become `require("programs")`, `require("rules")`, and `require("actions.close-active")`. Do not do this during the staged migration; keeping everything under `lua/` avoids mixing staged modules with the live config root.
 
 ## Generated Rule Schema
 
@@ -184,13 +187,15 @@ Known staged gap: namespace-specific layer animations from `animations.conf` are
 
 Known staged keybind gaps: mouse binds are represented in `lua/keybinds.lua`, but upstream Lua currently does not appear to wire `opts.mouse` into keybind objects, and `resizewindow 1` has no confirmed Lua equivalent. Treat those as live-test/upstream gaps, not proven parity.
 
+Known staged monitor gap: `monitor=...,hdr` maps to `bitdepth = 10` and `cm = "hdr"` in the parity checker, but `cm = "hdr"` is currently commented in `lua/monitors.lua` pending live verification. Treat this as an explicit HDR API gap, not complete monitor parity.
+
 Machine-specific `monitors.conf` remains gitignored for the live `.conf` config, but staged Lua mirrors known host layouts in tracked `lua/monitors.lua`. Current host-specific profile: `rvn-pc`.
 
 Validate this phase with:
 
 ```bash
-lua .config/hypr/lua/check-staged-parity.lua /home/fbb/dotfiles
-lua .config/hypr/lua/audit-source-graph.lua /home/fbb/dotfiles
+lua .config/hypr/lua/_migration/check-staged-parity.lua /home/fbb/dotfiles
+lua .config/hypr/lua/_migration/audit-source-graph.lua /home/fbb/dotfiles
 lua .config/hypr/hyprland.staged.lua
 ```
 
@@ -201,6 +206,8 @@ Current validation status:
 - Local Lua execution of `hyprland.staged.lua` passes.
 
 Do not create or rename to `.config/hypr/hyprland.lua` without explicit approval; that would make Hyprland select Lua config at startup.
+
+Use `docs/lua-live-test-checklist.md` for the manual live Lua test and rollback procedure.
 
 ### 4. Convert `hypr-quickrule`
 
@@ -246,7 +253,7 @@ Test generated file updates with:
 - `hyprctl configerrors`
 - verify generated files are re-read
 
-If `dofile` reload behavior is still stale, inspect whether Hyprland's Lua config manager caches chunks. Avoid `require` for generated files unless cache invalidation is explicit.
+If generated file reload behavior is stale, inspect whether the generated writer actually triggered a Hyprland reload and whether `lua/rule-loader.lua` is path-loading the generated data. Avoid `require` for generated files unless cache invalidation is explicit.
 
 ### 7. Consider Named Rules Later
 

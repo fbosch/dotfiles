@@ -28,10 +28,13 @@ Sources:
 
 - Use `require` for stable hand-written modules.
 - Hyprland sets Lua `package.path` to include the config directory as `?.lua` and `?/init.lua`.
+- Module names are rooted at `.config/hypr`: use `require("lua.programs")` for `lua/programs.lua`, `require("lua.rules")` for `lua/rules/init.lua`, and `require("lua.actions.close-active")` for `lua/actions/close-active.lua`.
+- Hyphenated filenames are valid in quoted module names, but future hand-written files should prefer underscores when there is no existing filename to preserve.
+- The staged entrypoint prepends the same config-root paths to `package.path` so plain `lua .config/hypr/hyprland.staged.lua` validates the same module layout.
 - On reload, Hyprland clears non-stdlib `package.loaded` entries, so required user modules re-run.
 - Hyprland wraps `require` and tracks required module paths for config watching.
-- Use `dofile` for generated data files when cache avoidance matters.
-- `dofile` paths are not source-backed as watched config paths, so generated writers should explicitly trigger reload when Lua config is live.
+- Use absolute path-loading in `lua/rule-loader.lua` for generated data files when cache avoidance matters.
+- Generated data paths are not source-backed as watched config paths, so generated writers should explicitly trigger reload when Lua config is live.
 
 Sources:
 

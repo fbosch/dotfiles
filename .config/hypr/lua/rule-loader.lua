@@ -1,5 +1,5 @@
 local M = {}
-local log = dofile(os.getenv("HOME") .. "/.config/hypr/lua/lib/log.lua")
+local log = require("lua.lib.log")
 
 function M.log(message)
   return log.write(message)

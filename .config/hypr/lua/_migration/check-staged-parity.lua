@@ -1,6 +1,8 @@
 local root = arg[1] or (os.getenv("HOME") .. "/dotfiles")
 local hypr = root .. "/.config/hypr"
 
+package.path = hypr .. "/?.lua;" .. hypr .. "/?/init.lua;" .. package.path
+
 local function read_file(path)
   local file = assert(io.open(path, "r"))
   local content = file:read("*a")
@@ -259,6 +261,11 @@ local function parse_keybinds(path, variables)
 
       argument = expand_vars(argument, variables)
 
+      if dispatcher == "exec" and argument == "bash ~/.config/hypr/scripts/killactive-selective.sh" then
+        dispatcher = "lua"
+        argument = "function"
+      end
+
       local entry = kind .. "|" .. normalize_key(parts[1], parts[2], variables) .. "|" .. dispatcher_key(dispatcher, argument)
 
       if kind == "bindm" then
@@ -300,6 +307,7 @@ local function parse_monitors(path)
           local key = parts[index]
           if key == "hdr" then
             rule.cm = "hdr"
+            rule.bitdepth = 10
           elseif key ~= "" then
             rule[key] = parse_scalar(parts[index + 1] or "")
           end
@@ -557,6 +565,13 @@ hl = {
   exec_cmd = function(command)
     captured.exec_commands[#captured.exec_commands + 1] = command
   end,
+  get_active_window = function()
+    return nil
+  end,
+  get_windows = function()
+    return {}
+  end,
+  dispatch = function() end,
   bind = function(key, callback, options)
     local entry = bind_kind(options) .. "|" .. key .. "|" .. dispatcher_value(callback)
     if bind_kind(options) == "bindm" then
@@ -574,17 +589,17 @@ hl = {
   dsp = make_dsp(),
 }
 
-local programs = dofile(hypr .. "/lua/programs.lua")
-dofile(hypr .. "/lua/base.lua")
-dofile(hypr .. "/lua/monitors.lua")
-dofile(hypr .. "/lua/rules/workspace-base.lua")
-dofile(hypr .. "/lua/environment.lua")
-dofile(hypr .. "/lua/appearance.lua")
-dofile(hypr .. "/lua/rules/layer.lua")
-dofile(hypr .. "/lua/input.lua")
-dofile(hypr .. "/lua/animations.lua")
-dofile(hypr .. "/lua/autostart.lua")
-dofile(hypr .. "/lua/keybinds.lua")
+local programs = require("lua.programs")
+require("lua.base")
+require("lua.monitors")
+require("lua.rules.workspace-base")
+require("lua.environment")
+require("lua.appearance")
+require("lua.rules.layer")
+require("lua.input")
+require("lua.animations")
+require("lua.autostart")
+require("lua.keybinds")
 
 local expected_curves, expected_animations, skipped_animations = parse_curves_and_animations(hypr .. "/animations.conf")
 local variables = parse_variables({ hypr .. "/hyprland.conf", hypr .. "/keybinds.conf" })
@@ -685,6 +700,29 @@ local function compare_keybind_gaps(left, right)
   end
 end
 
+local known_monitor_gaps = {}
+
+local function known_monitor_gap_key(entry)
+  return (entry:gsub(",cm=hdr", ""))
+end
+
+local function compare_monitors(left, right)
+  if #left ~= #right then
+    add_failure("monitors count mismatch: conf=" .. #left .. " lua=" .. #right)
+  end
+
+  local count = math.max(#left, #right)
+  for index = 1, count do
+    if left[index] ~= right[index] then
+      if known_monitor_gap_key(left[index] or "") == known_monitor_gap_key(right[index] or "") then
+        known_monitor_gaps[#known_monitor_gaps + 1] = left[index]
+      else
+        add_failure("monitors mismatch at " .. index .. ": conf=" .. tostring(left[index]) .. " lua=" .. tostring(right[index]))
+      end
+    end
+  end
+end
+
 compare_lists("env", expected.env, captured.env)
 compare_maps("config", expected.config, captured.config)
 compare_lists("curves", expected.curves, captured.curves)
@@ -698,7 +736,7 @@ compare_maps("programs", expected.programs, {
   browser = programs.browser,
   menu = programs.menu,
 })
-compare_lists("monitors", expected.monitors, captured.monitors)
+compare_monitors(expected.monitors, captured.monitors)
 compare_lists("workspace rules", expected.workspace_rules, captured.workspace_rules)
 compare_lists("exec-once", expected.exec_commands, captured.exec_commands)
 compare_lists("keybinds", expected.keybinds, captured.keybinds)
@@ -723,5 +761,6 @@ if #failures > 0 then
 end
 
 print("staged Hypr Lua parity ok")
+print("known monitor HDR gaps: " .. tostring(#known_monitor_gaps))
 print("known skipped layer animations: " .. tostring(#skipped_animations))
 print("known keybind gaps: " .. tostring(#expected.keybind_gaps))

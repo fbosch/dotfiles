@@ -10,6 +10,11 @@ readonly ACTION_BLOCK="block"
 readonly ACTION_MINIMIZE="minimize"
 
 dispatch_killactive() {
+  if [[ -e "$HOME/.config/hypr/hyprland.lua" ]]; then
+    hyprctl dispatch 'hl.dsp.window.close()' >/dev/null
+    return
+  fi
+
   hyprctl dispatch killactive >/dev/null
 }
 

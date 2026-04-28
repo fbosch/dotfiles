@@ -1,4 +1,4 @@
-local system = dofile(os.getenv("HOME") .. "/.config/hypr/lua/lib/system.lua")
+local system = require("lua.lib.system")
 
 local M = {}
 
