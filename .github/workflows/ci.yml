@@ -55,7 +55,7 @@ jobs:
         uses: cachix/install-nix-action@v31
       - name: Run Lua quality checks
         run: |
-          nix-shell -p lua-language-server stylua lua5_2 --run 'REQUIRE_LUA_TOOLS=1 bash scripts/lua-quality.sh ci'
+          REQUIRE_LUA_TOOLS=1 nix shell nixpkgs#lua-language-server nixpkgs#stylua nixpkgs#lua5_2 -c bash scripts/lua-quality.sh ci
 
   design-system:
     runs-on: ubuntu-latest
