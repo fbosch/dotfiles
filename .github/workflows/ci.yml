@@ -44,6 +44,19 @@ jobs:
           shopt -s globstar nullglob
           fish -n .config/fish/**/*.fish
 
+  lua-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+      - name: Run Lua quality checks
+        run: |
+          nix-shell -p lua-language-server stylua lua5_2 --run 'REQUIRE_LUA_TOOLS=1 bash scripts/lua-quality.sh ci'
+
   design-system:
     runs-on: ubuntu-latest
     if: |

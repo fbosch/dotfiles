@@ -20,6 +20,14 @@ validate-core:
 	fish -c "source ~/.config/fish/config.fish"
 	nvim --headless +checkhealth +qa
 
+# Run Lua diagnostics and config tests. Mode: baseline, changed, staged, ci.
+lua-quality mode="baseline":
+	bash scripts/lua-quality.sh {{mode}}
+
+# Report Lua formatting drift without writing files. Scope: changed, staged, all.
+lua-style scope="changed":
+	bash scripts/lua-quality.sh style-{{scope}}
+
 # Check Fish scripts for syntax errors.
 fish-syntax:
 	bash -lc 'shopt -s globstar nullglob; fish -n .config/fish/**/*.fish'

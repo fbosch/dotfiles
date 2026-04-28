@@ -3,6 +3,7 @@
 local programs = require("lua.programs")
 local close_active = require("lua.actions.close-active")
 local confirm_exit = require("lua.actions.confirm-exit")
+local confirm_hyprprop_kill = require("lua.actions.confirm-hyprprop-kill")
 local performance_mode = require("lua.actions.toggle-performance-mode")
 local window_switcher = require("lua.actions.window-switcher")
 
@@ -67,7 +68,7 @@ bind("bind", "CTRL + SHIFT", "O", exec("bash ~/.config/hypr/scripts/screenshot.s
 bind("bind", main_mod, "Q", exec(programs.terminal))
 bind("bind", main_mod, "B", exec(programs.browser))
 bind("bind", main_mod, "C", close_active.close_active_selective)
-bind("bind", main_mod .. " + CTRL", "C", exec("bash ~/.config/hypr/scripts/confirm-hyprprop-kill.sh"))
+bind("bind", main_mod .. " + CTRL", "C", confirm_hyprprop_kill.confirm_hyprprop_kill)
 bind("bind", main_mod, "M", confirm_exit.confirm_exit)
 bind("bind", main_mod .. " + SHIFT", "R", exec("~/.config/hypr/scripts/reset-desktop.sh"))
 bind("bind", main_mod, "E", exec(programs.file_manager))

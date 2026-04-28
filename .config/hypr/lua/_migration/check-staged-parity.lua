@@ -271,6 +271,11 @@ local function parse_keybinds(path, variables)
         argument = "function"
       end
 
+      if dispatcher == "exec" and argument == "bash ~/.config/hypr/scripts/confirm-hyprprop-kill.sh" then
+        dispatcher = "lua"
+        argument = "function"
+      end
+
       if dispatcher == "exec" and argument == "~/.config/hypr/scripts/toggle-performance-mode.sh" then
         dispatcher = "lua"
         argument = "function"
