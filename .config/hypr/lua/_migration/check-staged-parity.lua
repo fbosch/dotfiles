@@ -10,6 +10,17 @@ local function read_file(path)
   return content
 end
 
+local function read_optional_file(path)
+  local file = io.open(path, "r")
+  if not file then
+    return nil
+  end
+
+  local content = file:read("*a")
+  file:close()
+  return content
+end
+
 local function trim(value)
   return value:match("^%s*(.-)%s*$")
 end
@@ -306,7 +317,12 @@ end
 
 local function parse_monitors(path)
   local result = {}
-  for line in read_file(path):gmatch("[^\n]+") do
+  local content = read_optional_file(path)
+  if not content then
+    return result
+  end
+
+  for line in content:gmatch("[^\n]+") do
     line = strip_comment(line)
     local value = line:match("^monitor%s*=%s*(.+)$")
     if value then
