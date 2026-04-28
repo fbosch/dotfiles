@@ -27,6 +27,7 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
     input.lua
     actions/
       close-active.lua
+      confirm-exit.lua
     lib/
       log.lua
       system.lua

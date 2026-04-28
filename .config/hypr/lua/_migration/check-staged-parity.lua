@@ -266,6 +266,11 @@ local function parse_keybinds(path, variables)
         argument = "function"
       end
 
+      if dispatcher == "exec" and argument == "bash ~/.config/hypr/scripts/confirm-exit.sh" then
+        dispatcher = "lua"
+        argument = "function"
+      end
+
       local entry = kind .. "|" .. normalize_key(parts[1], parts[2], variables) .. "|" .. dispatcher_key(dispatcher, argument)
 
       if kind == "bindm" then
