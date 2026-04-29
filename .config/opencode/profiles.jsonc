@@ -166,11 +166,11 @@
     },
     "openai": {
       "description": "OpenAI routing",
-      "model": "opencode/gpt-5.5",
+      "model": "openai/gpt-5.5",
       "small_model": "openai/gpt-5.4-mini-fast",
       "agents": {
         "plan": {
-          "model": "opencode/gpt-5.5",
+          "model": "openai/gpt-5.5",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
@@ -180,22 +180,22 @@
           "textVerbosity": "low"
         },
         "general": {
-          "model": "opencode/gpt-5.5",
+          "model": "openai/gpt-5.5",
           "reasoningEffort": "low",
           "textVerbosity": "medium"
         },
         "analyze": {
-          "model": "opencode/gpt-5.3-codex",
+          "model": "openai/gpt-5.3-codex",
           "reasoningEffort": "low",
           "textVerbosity": "medium"
         },
         "debug": {
-          "model": "opencode/gpt-5.3-codex",
+          "model": "openai/gpt-5.3-codex",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
         "ideate": {
-          "model": "opencode/gpt-5.5",
+          "model": "openai/gpt-5.5",
           "reasoningEffort": "medium",
           "textVerbosity": "medium"
         },
@@ -205,12 +205,12 @@
           "textVerbosity": "low"
         },
         "adversarial": {
-          "model": "opencode/gpt-5.5",
+          "model": "openai/gpt-5.5",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
         "refactor": {
-          "model": "opencode/gpt-5.5",
+          "model": "openai/gpt-5.5",
           "reasoningEffort": "low",
           "textVerbosity": "medium"
         },
@@ -235,22 +235,22 @@
           "textVerbosity": "medium"
         },
         "test": {
-          "model": "opencode/gpt-5.5",
+          "model": "openai/gpt-5.5",
           "reasoningEffort": "low",
           "textVerbosity": "medium"
         },
         "review": {
-          "model": "opencode/gpt-5.5",
+          "model": "openai/gpt-5.5",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
         "docs": {
-          "model": "opencode/gpt-5.5",
+          "model": "openai/gpt-5.5",
           "reasoningEffort": "medium",
           "textVerbosity": "medium"
         },
         "research": {
-          "model": "opencode/gpt-5.5",
+          "model": "openai/gpt-5.5",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
@@ -265,7 +265,7 @@
           "textVerbosity": "low"
         },
         "spec": {
-          "model": "opencode/gpt-5.5",
+          "model": "openai/gpt-5.5",
           "reasoningEffort": "xhigh",
           "textVerbosity": "medium"
         }
