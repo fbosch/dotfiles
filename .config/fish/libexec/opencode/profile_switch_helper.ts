@@ -7,7 +7,11 @@ import { writeJsonAtomic } from "../shared/fs.js";
 
 type AppResult<T> = Result<T, string>;
 
-type AgentMap = Record<string, string | null>;
+type AgentOptions = {
+    model?: string | null;
+    [key: string]: unknown;
+};
+type AgentMap = Record<string, AgentOptions | null>;
 type ProfileSpec = {
     description: string;
     model: string | null;
@@ -18,9 +22,29 @@ type ProfileSpec = {
 type ConfigShape = {
     model?: string;
     small_model?: string;
-    agent?: Record<string, { model?: string } | undefined>;
+    agent?: Record<string, { model?: string; [key: string]: unknown } | undefined>;
     [key: string]: unknown;
 };
+
+const profileManagedAgentKeys = [
+    "model",
+    "reasoningEffort",
+    "textVerbosity",
+    "reasoningSummary",
+    "include",
+    "thinking",
+];
+
+const AgentOptionsSchema = z
+    .object({
+        model: z.string().nullable().optional(),
+        reasoningEffort: z.enum(["minimal", "low", "medium", "high", "xhigh"]).optional(),
+        textVerbosity: z.enum(["low", "medium", "high"]).optional(),
+        reasoningSummary: z.enum(["auto", "detailed", "none"]).optional(),
+    })
+    .catchall(z.unknown());
+
+const ProfileAgentSchema = z.union([z.string(), z.null(), AgentOptionsSchema]);
 
 const ProfilesSchema = z.object({
     profiles: z.record(
@@ -29,7 +53,7 @@ const ProfilesSchema = z.object({
             description: z.string().optional(),
             model: z.string().nullable().optional(),
             small_model: z.string().nullable().optional(),
-            agents: z.record(z.string(), z.string()).optional(),
+            agents: z.record(z.string(), ProfileAgentSchema).optional(),
         }),
     ),
 });
@@ -38,7 +62,7 @@ const ConfigSchema = z
     .object({
         model: z.string().optional(),
         small_model: z.string().optional(),
-        agent: z.record(z.string(), z.object({ model: z.string().optional() }).passthrough()).optional(),
+        agent: z.record(z.string(), z.object({ model: z.string().optional() }).catchall(z.unknown())).optional(),
     })
     .passthrough();
 
@@ -155,17 +179,94 @@ function readJsonc<T>(filePath: string): AppResult<T> {
     }
 }
 
+function normalizeProfileAgent(value: z.infer<typeof ProfileAgentSchema>): AgentOptions | null {
+    if (value === null) {
+        return null;
+    }
+    if (typeof value === "string") {
+        return { model: value };
+    }
+    return value;
+}
+
 function profileSpecFromParsed(value: z.infer<typeof ProfilesSchema>["profiles"][string]): ProfileSpec {
     return {
         description: value.description || "",
         model: value.model ?? null,
         small_model: value.small_model ?? null,
-        agents: value.agents || {},
+        agents: Object.fromEntries(
+            Object.entries(value.agents || {}).map(([agentName, agentValue]) => [
+                agentName,
+                normalizeProfileAgent(agentValue),
+            ]),
+        ),
     };
 }
 
+function managedAgentSnapshot(agent: { [key: string]: unknown } | undefined): AgentOptions | null {
+    if (!agent) {
+        return null;
+    }
+
+    const entries = profileManagedAgentKeys
+        .filter((key) => agent[key] !== undefined)
+        .map((key) => [key, agent[key]] as const);
+    if (entries.length === 0) {
+        return null;
+    }
+
+    return Object.fromEntries(entries);
+}
+
+function clearManagedAgentOptions(agent: { model?: string; [key: string]: unknown }): {
+    model?: string;
+    [key: string]: unknown;
+} {
+    const nextAgent = { ...agent };
+    for (const key of profileManagedAgentKeys) {
+        delete nextAgent[key];
+    }
+    return nextAgent;
+}
+
+function applyAgentOptions(
+    agent: { model?: string; [key: string]: unknown },
+    options: AgentOptions | null | undefined,
+): { model?: string; [key: string]: unknown } {
+    const nextAgent = clearManagedAgentOptions(agent);
+    if (!options) {
+        return nextAgent;
+    }
+
+    for (const [key, value] of Object.entries(options)) {
+        if (value !== undefined && value !== null) {
+            nextAgent[key] = value;
+        }
+    }
+
+    return nextAgent;
+}
+
+function agentOptionsEqual(left: AgentOptions | null | undefined, right: AgentOptions | null | undefined): boolean {
+    const leftEntries = Object.entries(left || {}).filter(([, value]) => value !== undefined);
+    const rightEntries = Object.entries(right || {}).filter(([, value]) => value !== undefined);
+    if (leftEntries.length !== rightEntries.length) {
+        return false;
+    }
+
+    for (const [key, leftValue] of leftEntries) {
+        if (JSON.stringify(leftValue) !== JSON.stringify(right?.[key])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 function currentSnapshot(config: ConfigShape): { model: string | null; small_model: string | null; agents: AgentMap } {
-    const agentEntries = Object.entries(config.agent || {}).map(([name, spec]) => [name, spec?.model ?? null] as const);
+    const agentEntries = Object.entries(config.agent || {}).map(
+        ([name, spec]) => [name, managedAgentSnapshot(spec)] as const,
+    );
     return {
         model: config.model ?? null,
         small_model: config.small_model ?? null,
@@ -178,9 +279,9 @@ function profileMatches(snapshot: ReturnType<typeof currentSnapshot>, profile: P
         return false;
     }
 
-    for (const [agentName, currentModel] of Object.entries(snapshot.agents)) {
-        const profileModel = profile.agents[agentName] ?? null;
-        if (currentModel !== profileModel) {
+    const agentNames = new Set([...Object.keys(snapshot.agents), ...Object.keys(profile.agents)]);
+    for (const agentName of agentNames) {
+        if (!agentOptionsEqual(snapshot.agents[agentName], profile.agents[agentName])) {
             return false;
         }
     }
@@ -256,24 +357,15 @@ function applyProfile(profilesPath: string, configPath: string, profileName: str
     }
 
     const existingAgents = nextConfig.agent || {};
-    const updatedAgents: Record<string, { model?: string }> = {};
+    const updatedAgents: Record<string, { model?: string; [key: string]: unknown }> = {};
 
     for (const [agentName, agentValue] of Object.entries(existingAgents)) {
-        const nextModel = profile.agents[agentName];
-        const currentAgent = { ...(agentValue || {}) };
-        if (nextModel === undefined) {
-            delete currentAgent.model;
-        } else if (nextModel === null) {
-            delete currentAgent.model;
-        } else {
-            currentAgent.model = nextModel;
-        }
-        updatedAgents[agentName] = currentAgent;
+        updatedAgents[agentName] = applyAgentOptions({ ...(agentValue || {}) }, profile.agents[agentName]);
     }
 
-    for (const [agentName, agentModel] of Object.entries(profile.agents)) {
-        if (!(agentName in updatedAgents) && agentModel !== null) {
-            updatedAgents[agentName] = { model: agentModel };
+    for (const [agentName, agentOptions] of Object.entries(profile.agents)) {
+        if (!(agentName in updatedAgents) && agentOptions !== null) {
+            updatedAgents[agentName] = applyAgentOptions({}, agentOptions);
         }
     }
 
