@@ -30,8 +30,8 @@ Scope:
 - [owned area]
 
 Boundaries:
-- NEVER [forbidden action]
-- If task requires [out-of-scope area], STOP and report "Requires [specialist]"
+- Do not [forbidden action]; instead [safe fallback]
+- If task requires [out-of-scope area], stop and report "Requires [specialist]"
 
 Tool routing:
 - Prefer [tool set] for [job]
@@ -52,6 +52,8 @@ Done when:
 ## Why Use Subagents: Context Hygiene
 
 The primary value of subagents isn't just specialization—it's **keeping your main context clean**.
+
+Do not delegate by default. Use subagents when isolated context, broad discovery, specialized judgment, or parallel work improves the result. Work directly for small direct answers, single-file inspections, obvious edits, or tasks where the primary context already contains enough evidence.
 
 **Without subagent** (context bloat):
 
@@ -189,7 +191,7 @@ The markdown file name becomes the agent name. For example, `review.md` creates 
 
 ### Required Fields
 
-- **description**: What the agent does and when to use it. Include "use PROACTIVELY" or "MUST BE USED" for automatic invocation.
+- **description**: What the agent does and when to use it. Use normal trigger wording by default; reserve "MUST BE USED" for mandatory gates.
 - **mode**: Set to `"subagent"` for sub-agents, `"primary"` for primary agents, or `"all"` for both.
 
 ### Optional Fields
@@ -240,7 +242,7 @@ Primary agents proactively delegate based on:
 - `description` field in subagent config
 - Current context and available tools
 
-**Tip**: Include "use PROACTIVELY" or "MUST BE USED" in description for more automatic invocation.
+Use normal trigger wording such as "Use when..." by default. Reserve "use PROACTIVELY" or "MUST BE USED" for cases where underuse is materially worse than overuse, such as security review gates or mandatory validation workflows.
 
 ### Explicit Invocation
 
@@ -494,7 +496,7 @@ Focus on clarity, structure, code examples, and user-friendly language.
 3. **Put tool instructions first**: Critical usage rules go at top of prompts
 4. **Be consistent**: Don't show bash examples if you want write tool usage
 5. **Default to standard tier models**: Quality matters more than cost savings
-6. **Include "use PROACTIVELY" in descriptions**: For automatic invocation
+6. **Calibrate activation wording**: Use normal "Use when..." descriptions by default; reserve "MUST BE USED" for mandatory gates
 7. **Test before deploying**: Run agent with sample tasks to verify behavior
 8. **Use task permissions**: Prevent unintended orchestration with allowlists
 9. **Keep orchestration shallow**: 2 levels max for agent nesting

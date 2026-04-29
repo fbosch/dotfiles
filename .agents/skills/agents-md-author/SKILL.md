@@ -41,6 +41,7 @@ Apply these filters once per section and avoid re-litigating the same rule elsew
 
 - **Discoverability (primary gate):** Remove anything the agent can find by reading code, config, READMEs, or running standard commands. Tech stack descriptions, architecture overviews, directory structures, and framework conventions are all discoverable — cut them.
 - **Anchoring:** Remove passive mentions of tools, patterns, or modules that could bias the agent toward deprecated or wrong approaches. If you mention it, the agent treats it as current and relevant.
+- **Surface fit:** Keep always-on safety and stable repo preferences in AGENTS.md. Put mode-specific behavior in agent prompts, and domain/tool/workflow expertise in skills. Do not create generic style/preference skills.
 - Remove brittle paths, long lists, or duplicated guidance.
 - Keep instructions high-level and stable.
 - Keep build/validation notes only when they are non-standard or easy to miss.
@@ -50,6 +51,8 @@ Apply these filters once per section and avoid re-litigating the same rule elsew
 
 A line belongs in AGENTS.md only if it passes the discoverability gate: the agent cannot infer it from the codebase, and it is operationally significant. Concrete examples:
 
+- Always-on safety boundaries: git publishing, destructive commands, secrets, fabricated evidence
+- Stable user/repo preferences that apply across task modes
 - Non-standard package manager: `uv` instead of `pip`, `pnpm` instead of `npm`
 - Commands with non-obvious required flags: `--no-cache` to avoid false positives from fixture setup
 - Landmines: code that looks safe to refactor but isn't (custom middleware that must not be replaced, deprecated modules still imported by production code)
@@ -61,6 +64,7 @@ Does NOT earn a line:
 - Directory structure or module layout (discoverable from ls)
 - Architecture overviews or design patterns (discoverable from code)
 - Standard commands the agent already knows (`npm test`, `git commit`)
+- Generic coding style, communication style, or validation checklists better owned by a specific agent prompt
 
 ## Audit Mode (Existing AGENTS.md)
 
