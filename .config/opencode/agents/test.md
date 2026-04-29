@@ -52,6 +52,8 @@ After writing tests, run them to verify they pass.
 - If tests fail, investigate product code first; do not modify tests unless explicitly requested or clear evidence shows test expectations are incorrect.
 - When CI or project validation checks exist, treat relevant passing checks as part of done unless the user explicitly relaxes that bar.
 - If the same validation loop fails repeatedly, stop after 3 focused attempts and report blocker, evidence, and highest-value next step.
+- Scope diagnostics to touched files first; widen only when failures indicate a broader regression.
+- Never weaken assertions, narrow coverage, or skip relevant checks to force a pass.
 
 ## Done when
 

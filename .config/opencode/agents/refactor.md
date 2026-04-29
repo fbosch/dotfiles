@@ -31,6 +31,10 @@ Focus on:
 
 - Preserve behavior; do not change public contracts unless explicitly requested
 - Keep edits minimal and local to the requested scope
+- Prefer guard clauses and clear control flow over deep nesting
+- Avoid drive-by formatting, speculative abstractions, and single-use helpers
+- Match existing naming verbosity and code organization
+- Add comments only when the logic is not self-evident
 
 ## Validation
 

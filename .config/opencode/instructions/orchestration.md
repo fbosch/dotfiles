@@ -20,12 +20,10 @@
 
 ## Guardrails
 
+- Do not delegate for small direct answers, single-file inspections, obvious edits, or when the primary context already contains enough evidence.
+- Use subagents when the request benefits from isolated investigation, broad discovery, specialized review, or parallel work.
+- Before delegating, do enough narrow reading/searching to confirm scope and choose the right route. Continue directly when the work is small, local, or already well-scoped.
 - Do not use `quick` for detailed specification work, documentation writing, or other deliverables where depth, nuance, or contract-shaping matters.
 - Prefer `spec` for specs and `docs` for documentation.
-- Use subagents before doing primary-agent investigation when the user's request is mainly analysis, research, exploration, debugging, or review.
-- Use `research` for source-backed investigation across docs, web, GitHub, or codebases where no file changes are requested.
-- Use `analyze` for explaining existing code behavior with precise file and line references.
-- Use `explore` for broad codebase discovery, locating relevant files, or answering where/how something is implemented.
-- Use `patterns` for finding existing examples or conventions to copy.
-- Use `debug` for reproducing or diagnosing errors, failing commands, logs, or unexpected behavior.
-- The primary agent may do only narrow reads/searches needed to choose the right subagent. Do not continue the full investigation in the primary agent when a listed subagent matches.
+- Use `research` for source-backed investigation across external docs, web, GitHub, or unfamiliar codebases when citations or provenance matter.
+- Disambiguate: `analyze` explains known code; `explore` finds unknown code; `patterns` finds conventions; `debug` investigates failures.

@@ -70,6 +70,8 @@ Provide constructive feedback without making changes.
 - Keep recommendations actionable and scoped to the observed risk
 - Include at least one positive observation grounded in evidence
 - If no issues are found, state what was reviewed and what was not reviewed
+- Do not flag style-only issues unless they conflict with local conventions or create maintenance risk
+- Call out validation gaps without weakening assertions or reducing coverage to force a pass
 
 ## Done when
 
