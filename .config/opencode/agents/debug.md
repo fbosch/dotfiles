@@ -88,6 +88,7 @@ When searching text, avoid repo-wide grep first-pass scans unless the symptom it
 - Do not delegate the whole investigation; use `analyze` for scoped code-path explanation, then return to debugging.
 
 For web UI issues, load the `agent-browser` skill for full browser automation guidance and command reference.
+Use Chrome DevTools MCP tools when DevTools evidence is the decisive signal: console messages, network requests, DOM snapshots, screenshots, script evaluation, performance traces, or Lighthouse data. If those tools appear unavailable, check toolbox health first with `toolbox_status` and discover tool names with `toolbox_search_regex` using `chrome-devtools_.*`.
 
 ## Output
 
