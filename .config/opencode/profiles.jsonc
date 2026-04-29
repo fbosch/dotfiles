@@ -37,7 +37,7 @@
         "commit": "anthropic/claude-haiku-4-5",
         "title": {
           "model": "opencode/gpt-5.3-codex",
-          "reasoningEffort": "minimal",
+          "reasoningEffort": "low",
           "textVerbosity": "low"
         },
         "summary": {
@@ -84,7 +84,7 @@
         "commit": "github-copilot/claude-haiku-4.5",
         "title": {
           "model": "github-copilot/gpt-5-mini",
-          "reasoningEffort": "minimal",
+          "reasoningEffort": "low",
           "textVerbosity": "low"
         },
         "summary": {
@@ -216,12 +216,12 @@
         },
         "commit": {
           "model": "openai/gpt-5.4-mini-fast",
-          "reasoningEffort": "minimal",
+          "reasoningEffort": "low",
           "textVerbosity": "low"
         },
         "title": {
           "model": "openai/gpt-5.4-mini-fast",
-          "reasoningEffort": "minimal",
+          "reasoningEffort": "low",
           "textVerbosity": "low"
         },
         "summary": {
@@ -256,7 +256,7 @@
         },
         "quick": {
           "model": "openai/gpt-5.4-mini-fast",
-          "reasoningEffort": "minimal",
+          "reasoningEffort": "low",
           "textVerbosity": "low"
         },
         "benchmark": {
