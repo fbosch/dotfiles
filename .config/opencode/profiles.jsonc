@@ -167,7 +167,7 @@
     "openai": {
       "description": "OpenAI routing",
       "model": "opencode/gpt-5.5",
-      "small_model": "openai/gpt-5.1-codex-mini",
+      "small_model": "openai/gpt-5.4-mini-fast",
       "agents": {
         "plan": {
           "model": "opencode/gpt-5.5",
@@ -175,18 +175,18 @@
           "textVerbosity": "medium"
         },
         "explore": {
-          "model": "openai/gpt-5.1-codex-mini",
+          "model": "openai/gpt-5.4-mini-fast",
           "reasoningEffort": "low",
           "textVerbosity": "low"
         },
         "general": {
-          "model": "opencode/gpt-5.3-codex",
-          "reasoningEffort": "medium",
+          "model": "opencode/gpt-5.5",
+          "reasoningEffort": "low",
           "textVerbosity": "medium"
         },
         "analyze": {
           "model": "opencode/gpt-5.3-codex",
-          "reasoningEffort": "medium",
+          "reasoningEffort": "low",
           "textVerbosity": "medium"
         },
         "debug": {
@@ -200,7 +200,7 @@
           "textVerbosity": "medium"
         },
         "patterns": {
-          "model": "openai/gpt-5.1-codex-mini",
+          "model": "openai/gpt-5.4-mini-fast",
           "reasoningEffort": "low",
           "textVerbosity": "low"
         },
@@ -211,32 +211,32 @@
         },
         "refactor": {
           "model": "opencode/gpt-5.5",
-          "reasoningEffort": "medium",
+          "reasoningEffort": "low",
           "textVerbosity": "medium"
         },
         "commit": {
-          "model": "openai/gpt-5.1-codex-mini",
+          "model": "openai/gpt-5.4-mini-fast",
           "reasoningEffort": "minimal",
           "textVerbosity": "low"
         },
         "title": {
-          "model": "openai/gpt-5.1-codex-mini",
+          "model": "openai/gpt-5.4-mini-fast",
           "reasoningEffort": "minimal",
           "textVerbosity": "low"
         },
         "summary": {
-          "model": "openai/gpt-5.1-codex-mini",
+          "model": "openai/gpt-5.4-mini-fast",
           "reasoningEffort": "low",
           "textVerbosity": "medium"
         },
         "compaction": {
-          "model": "openai/gpt-5.1-codex-mini",
+          "model": "openai/gpt-5.4-mini-fast",
           "reasoningEffort": "medium",
           "textVerbosity": "medium"
         },
         "test": {
-          "model": "opencode/gpt-5.3-codex",
-          "reasoningEffort": "medium",
+          "model": "opencode/gpt-5.5",
+          "reasoningEffort": "low",
           "textVerbosity": "medium"
         },
         "review": {
@@ -255,18 +255,18 @@
           "textVerbosity": "medium"
         },
         "quick": {
-          "model": "openai/gpt-5.1-codex-mini",
+          "model": "openai/gpt-5.4-mini-fast",
           "reasoningEffort": "minimal",
           "textVerbosity": "low"
         },
         "benchmark": {
-          "model": "openai/gpt-5.1-codex-mini",
+          "model": "openai/gpt-5.4-mini-fast",
           "reasoningEffort": "low",
           "textVerbosity": "low"
         },
         "spec": {
           "model": "opencode/gpt-5.5",
-          "reasoningEffort": "high",
+          "reasoningEffort": "xhigh",
           "textVerbosity": "medium"
         }
       }
