@@ -2,7 +2,7 @@
 command_timeout = 10000
 continuation_prompt = "[ᛃ︁ ](dimmed white)"
 
-format = """ $os\
+format = """$os\
 $hostname\
 $character\
 $sudo"""
