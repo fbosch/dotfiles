@@ -15,6 +15,7 @@
     "newline": "\n",
     "Hyperland": "hyprland",
     "hyperland": "hyprland",
+    "Umbargo": "Umbraco"
   },
   "audio_feedback": true,
   "start_sound_volume": 0.1,
@@ -29,8 +30,8 @@
       "foot",
       "kitty",
       "org.wezfurlong.wezterm",
-      "wezterm",
-    ],
+      "wezterm"
+    ]
   },
   "audio_device": null,
   "fast_vad": {
@@ -42,7 +43,7 @@
     "post_roll_ms": 150,
     "volatility_window": 24,
     "volatility_increase_threshold": 0.35,
-    "volatility_decrease_threshold": 0.12,
+    "volatility_decrease_threshold": 0.12
   },
   "transcription": {
     "provider": "parakeet",
@@ -57,7 +58,7 @@
       "no_speech_threshold": 0.6,
       "models_dirs": [
         "~/.local/share/hyprwhspr-rs/models",
-        "~/.local/share/whisper.cpp/models",
+        "~/.local/share/whisper.cpp/models"
       ],
       "vad": {
         "enabled": false,
@@ -67,24 +68,24 @@
         "min_silence_ms": 120,
         "max_speech_s": 15.0,
         "speech_pad_ms": 80,
-        "samples_overlap": 0.1,
-      },
+        "samples_overlap": 0.1
+      }
     },
     "groq": {
       "model": "whisper-large-v3-turbo",
       "endpoint": "https://api.groq.com/openai/v1/audio/transcriptions",
-      "prompt": "Transcribe as technical dictation with proper capitalization, acronyms, and technical terminology. Do not add commentary.",
+      "prompt": "Transcribe as technical dictation with proper capitalization, acronyms, and technical terminology. Do not add commentary."
     },
     "gemini": {
       "model": "gemini-2.5-flash-preview-09-2025",
       "endpoint": "https://generativelanguage.googleapis.com/v1beta/models",
       "temperature": 0.0,
       "max_output_tokens": 1024,
-      "prompt": "Transcribe as technical dictation with proper capitalization, acronyms, and technical terminology. Do not add commentary.",
+      "prompt": "Transcribe as technical dictation with proper capitalization, acronyms, and technical terminology. Do not add commentary."
     },
     "parakeet": {
       "model_dir": "models/parakeet/parakeet-tdt-0.6b-v3-onnx",
-      "prompt": "Transcribe as clean dictated text for replying in a chat input. Infer punctuation and capitalization. Omit filler words such as uh and um, false starts, and repeated stutters. Preserve technical terms, commands, filenames, and code-like tokens exactly. Do not add commentary.",
-    },
-  },
+      "prompt": "Transcribe as clean dictated text for replying in a chat input. Infer punctuation and capitalization. Omit filler words such as uh and um, false starts, and repeated stutters. Preserve technical terms, commands, filenames, and code-like tokens exactly. Do not add commentary."
+    }
+  }
 }

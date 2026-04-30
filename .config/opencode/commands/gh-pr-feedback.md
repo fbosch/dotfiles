@@ -10,7 +10,7 @@ Input:
 - If empty, infer the PR from the current branch.
 
 Pre-flight:
-1. Call `gh_pr_feedback_context` with `input: "$ARGUMENTS"` and use its returned context as the source of truth.
+1. Call `gh_pr_feedback_context` with `input: "$ARGUMENTS"` and use its returned context as the source of truth for PR/review metadata only.
 2. If context starts with `ERROR:`, output only that error and stop.
 3. Do not infer missing metadata that is not present in context.
 
@@ -19,6 +19,11 @@ Tool routing:
 2. For the final user-choice prompt, call the built-in `question` tool directly.
 3. Do not run tool-discovery/reconciliation steps (`toolbox_search_*`, `toolbox_status`, `sequential-thinking`) for this command.
 4. If `question` call fails once, stop retrying and output the same choices in plain text.
+5. During evidence validation, delegate when it materially improves confidence:
+   - Use the `analyze` subagent for feedback that requires tracing existing code behavior, data flow, call chains, state transitions, or interactions across files.
+   - Use the `research` subagent for feedback that depends on external documentation, GitHub/project history, third-party API behavior, platform behavior, or current best practices.
+   - Do not delegate for simple single-file checks or obvious local facts; inspect those directly.
+   - Subagents must validate claims and return evidence only; they must not edit files or resolve threads.
 
 TOOL-GENERATED REVIEW CONTEXT:
 Call `gh_pr_feedback_context` with `input: "$ARGUMENTS"`.
@@ -28,20 +33,30 @@ Workflow:
 2. Validate expected top-level keys exist: `pr`, `threads`, `proposedResolve`, `proposedIrrelevant`, `keepOpen`.
    - If one is missing, output: `ERROR: Invalid review context payload` and stop.
    - Do not attempt to reconstruct missing fields.
-3. Summarize unresolved actionable feedback from `threads`.
-4. Use current session context about already-applied fixes to refine proposals:
+3. Treat each feedback item as an unverified claim, not as fact.
+4. Summarize unresolved actionable feedback from `threads`.
+5. Run an evidence gate before proposing code changes or resolution:
+   - Validate doubtful or non-obvious claims up front by inspecting referenced code, current diff, relevant tests/docs, or running the smallest targeted check.
+   - Validation is required when feedback asserts runtime behavior, correctness, security, performance, missing coverage, stale code paths, or when confidence is not `high`.
+   - Prefer `analyze` for multi-file code-behavior validation and `research` for external-source validation when those apply.
+   - Do not edit files during the evidence gate.
+   - Record what was checked as `Evidence` for every proposed resolve/irrelevant item.
+   - If a claim is disproven, propose `resolve as irrelevant` with a comment explaining why the feedback does not apply.
+   - If a claim cannot be validated with available context, keep it open and state what validation is missing.
+6. Use current session context about already-applied fixes to refine proposals:
    - Keep proposals conservative.
    - Never propose `resolved` from same-file edits alone.
    - Prefer false negatives over false positives.
-5. Keep separate buckets:
+7. Keep separate buckets:
    - `Proposed resolve` for likely addressed items.
-   - `Proposed resolve as irrelevant` for outdated/no-longer-relevant items.
+   - `Proposed resolve as irrelevant` for outdated, disproven, or no-longer-relevant items.
    - `Keep open` for everything else.
-6. Keep ordering deterministic within each bucket:
+8. Keep ordering deterministic within each bucket:
    - Sort by severity (`request-changes`, `should-fix`, `nit`, `info`), then by `path`, then by first line number.
-7. For every proposed item, include a short resolution comment text explaining how/why it was addressed or why it is irrelevant.
-   - Prefer `resolutionNote` from context when present.
-8. Apply confidence gate for high-severity feedback:
+9. For every proposed item, include a short resolution comment text explaining how/why it was addressed or why it is irrelevant.
+   - Prefer `resolutionNote` from context when present and consistent with validated evidence.
+   - For irrelevant items, the comment must cite the validating evidence, not merely say the feedback is irrelevant.
+10. Apply confidence gate for high-severity feedback:
    - If `severity=request-changes` and confidence is not `high`, default that item to `Keep open`.
    - Only move it to `Proposed resolve` after explicit user confirmation.
 
@@ -63,8 +78,9 @@ Output format:
   - If feedback text is very long, show a concise excerpt and append `[truncated]`.
   - Keep full text in a `Full text (truncated items)` appendix at the end.
 - For each proposed resolve/irrelevant bullet, append:
-  - `Reason: <why it appears addressed/irrelevant>`
-  - `Resolution comment: <comment text to post before resolving>`
+   - `Reason: <why it appears addressed/irrelevant>`
+   - `Evidence: <what was checked before proposing this>`
+   - `Resolution comment: <comment text to post before resolving>`
 
 Resolve policy:
 - Do not resolve anything automatically.
@@ -80,16 +96,24 @@ Resolve policy:
   - Use single-select (`multiple: false`) with custom input allowed.
 
 When user selects `Resolve proposed threads`:
-1. Re-list the proposed thread IDs that will be resolved.
+1. Re-list the proposed thread IDs from `Proposed resolve` and `Proposed resolve as irrelevant` that will be resolved.
    - Exclude any item where `threadId` is missing/null.
    - Reclassify excluded items to `Keep open` with reason: `missing threadId; cannot resolve via API`.
 2. For each thread, post the paired `Resolution comment` first.
-   - Default to context `resolutionNote` when available.
+   - Default to context `resolutionNote` only when it is consistent with validated evidence.
+   - For irrelevant items, do not post a resolution comment unless it cites why the feedback does not apply.
 3. Resolve the thread only after the comment is posted successfully.
 4. Report per-thread status: `commented+resolved`, `comment failed`, `already resolved`, or `failed`.
+
+When user selects `Apply fixes now`:
+1. Re-run the evidence gate for any selected item without recorded `Evidence`.
+2. Only edit code for feedback whose claimed issue is confirmed and relevant.
+3. If validation disproves a claim, do not edit for it; move it to `Proposed resolve as irrelevant` with an evidence-backed resolution comment.
+4. If validation is inconclusive, do not guess; keep it open and report the missing validation.
 
 Never:
 - Never include resolved threads in actionable output.
 - Never include agent/tool logs in feedback bullets.
 - Never merge unrelated comments into one bullet.
 - Never resolve any thread without a preceding explanatory comment.
+- Never treat reviewer wording as proof that the claim is true.
