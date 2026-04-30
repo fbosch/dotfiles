@@ -19,10 +19,11 @@ Pre-flight:
 Tool routing:
 
 1. For PR feedback context, call the `gh_pr_feedback_context` tool directly.
-2. For user-choice prompts, call the built-in `question` tool directly.
-3. Do not run tool-discovery/reconciliation steps (`toolbox_search_*`, `toolbox_status`, `sequential-thinking`) for this command.
-4. If `question` call fails once, stop retrying and output the same choices in plain text.
-5. During evidence validation, delegate when it materially improves confidence:
+2. For commenting on and resolving PR review threads, call the `gh_pr_feedback_resolve_threads` tool directly.
+3. For user-choice prompts, call the built-in `question` tool directly.
+4. Do not run tool-discovery/reconciliation steps (`toolbox_search_*`, `toolbox_status`, `sequential-thinking`) for this command.
+5. If `question` call fails once, stop retrying and output the same choices in plain text.
+6. During evidence validation, delegate when it materially improves confidence:
    - Use the `analyze` subagent for feedback that requires tracing existing code behavior, data flow, call chains, state transitions, or interactions across files.
    - Use the `research` subagent for feedback that depends on external documentation, GitHub/project history, third-party API behavior, platform behavior, or current best practices.
    - Do not delegate for simple single-file checks or obvious local facts; inspect those directly.
@@ -126,11 +127,12 @@ When user selects `Resolve proposed threads`:
 1. Re-list the proposed thread IDs from `Proposed resolve` and `Proposed resolve as irrelevant` that will be resolved.
    - Exclude any item where `threadId` is missing/null.
    - Reclassify excluded items to `Keep open` with reason: `missing threadId; cannot resolve via API`.
-2. For each thread, post the paired `Resolution comment` first.
+2. Call `gh_pr_feedback_resolve_threads` with one `{ threadId, body }` item per thread.
+   - Use the paired `Resolution comment` as `body`.
    - Default to context `resolutionNote` only when it is consistent with validated evidence.
-   - For irrelevant items, do not post a resolution comment unless it cites why the feedback does not apply.
-3. Resolve the thread only after the comment is posted successfully.
-4. Report per-thread status: `commented+resolved`, `comment failed`, `already resolved`, or `failed`.
+   - For irrelevant items, do not include a thread unless the body cites why the feedback does not apply.
+3. Treat the tool result as authoritative; it posts the comment first and resolves only after the comment succeeds.
+4. Report per-thread status from the tool: `commented+resolved`, `comment failed`, `already resolved`, or `failed`.
 
 When user selects `Apply fixes now`:
 
@@ -144,17 +146,18 @@ When user selects `Resolve relevant threads` after fixes:
 1. Re-list the relevant proposed thread IDs that will be resolved.
    - Exclude any item where `threadId` is missing/null.
    - Reclassify excluded items to `Keep open` with reason: `missing threadId; cannot resolve via API`.
-2. For each thread, post a resolution comment before resolving.
-   - The comment must explain what changed and how it addressed the feedback.
+2. Call `gh_pr_feedback_resolve_threads` with one `{ threadId, body }` item per thread.
+   - The `body` must explain what changed and how it addressed the feedback.
    - Default to context `resolutionNote` when available, but update it if applied fixes changed the exact resolution.
-3. Resolve the thread only after the comment is posted successfully.
-4. Report per-thread status: `commented+resolved`, `comment failed`, `already resolved`, or `failed`.
+3. Treat the tool result as authoritative; it posts the comment first and resolves only after the comment succeeds.
+4. Report per-thread status from the tool: `commented+resolved`, `comment failed`, `already resolved`, or `failed`.
 
 Never:
 
 - Never include resolved threads in actionable output.
 - Never include agent/tool logs in feedback bullets.
 - Never merge unrelated comments into one bullet.
-- Never resolve any thread without a preceding explanatory comment.
+- Never resolve any thread outside `gh_pr_feedback_resolve_threads`.
+- Never call `gh_pr_feedback_resolve_threads` with an empty or generic comment body.
 - Never treat reviewer wording as proof that the claim is true.
 - Never commit or push after applying fixes without explicit user selection from the post-fix question.

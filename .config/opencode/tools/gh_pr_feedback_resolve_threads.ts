@@ -13,14 +13,14 @@ type CommandResult = {
 const configHome = process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config")
 const configLibexec = join(configHome, "opencode", "libexec")
 const dotfilesLibexec = join(homedir(), "dotfiles", ".config", "opencode", "libexec")
-const libexec = existsSync(join(configLibexec, "gh_pr_feedback_context.ts")) ? configLibexec : dotfilesLibexec
+const libexec = existsSync(join(configLibexec, "gh_pr_feedback_resolve_threads.ts")) ? configLibexec : dotfilesLibexec
 
-function runCommand(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<CommandResult> {
+function runCommand(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv, input: string): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
       env,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
     })
 
     let stdout = ""
@@ -38,38 +38,45 @@ function runCommand(command: string, args: string[], cwd: string, env: NodeJS.Pr
     child.on("close", (exitCode) => {
       resolve({ stdout, stderr, exitCode })
     })
+
+    child.stdin.end(input)
   })
 }
 
 export default tool({
-  description: "Fetch GitHub PR review feedback context with unresolved actionable threads",
+  description: "Comment on and resolve GitHub PR review threads",
   args: {
-    input: tool.schema
-      .string()
-      .optional()
-      .describe("PR URL, PR number, review/discussion URL, or empty to infer from current branch"),
+    threads: tool.schema
+      .array(
+        tool.schema.object({
+          threadId: tool.schema.string().describe("GitHub PullRequestReviewThread node ID"),
+          body: tool.schema.string().describe("Resolution comment to post before resolving the thread"),
+        }),
+      )
+      .describe("Review threads to comment on and resolve"),
   },
   async execute(args, context) {
-    const script = join(libexec, "gh_pr_feedback_context.ts")
+    const script = join(libexec, "gh_pr_feedback_resolve_threads.ts")
     if (existsSync(script) === false) {
-      return "ERROR: Missing gh_pr_feedback_context.ts"
+      return "ERROR: Missing gh_pr_feedback_resolve_threads.ts"
     }
 
     const result = await runCommand(
       "bun",
-      ["--cwd", libexec, script, "all", args.input ?? ""],
+      ["--cwd", libexec, script],
       libexec,
       {
         ...process.env,
         OPENCODE_LIBEXEC_CWD: context.directory,
       },
+      JSON.stringify({ threads: args.threads }),
     )
 
     if (result.exitCode === 0) {
       return result.stdout.trimEnd()
     }
 
-    const output = result.stderr.trim() || result.stdout.trim() || `gh_pr_feedback_context failed with exit ${result.exitCode ?? "unknown"}`
+    const output = result.stderr.trim() || result.stdout.trim() || `gh_pr_feedback_resolve_threads failed with exit ${result.exitCode ?? "unknown"}`
     return output.startsWith("ERROR:") ? output : `ERROR: ${output}`
   },
 })
