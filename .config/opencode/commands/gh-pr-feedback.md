@@ -16,9 +16,9 @@ Pre-flight:
 
 Tool routing:
 1. For PR feedback context, call the `gh_pr_feedback_context` tool directly.
-2. For the final user-choice prompt, call the built-in `question` tool directly.
+2. For user-choice prompts, call the built-in `question` tool directly.
 3. Do not run tool-discovery/reconciliation steps (`toolbox_search_*`, `toolbox_status`, `sequential-thinking`) for this command.
-4. If `question` call fails once, stop retrying and output the same choices in plain text.
+4. If a `question` call fails once, stop retrying and output the same choices in plain text.
 
 TOOL-GENERATED REVIEW CONTEXT:
 Call `gh_pr_feedback_context` with `input: "$ARGUMENTS"`.
@@ -77,7 +77,25 @@ Resolve policy:
     - `Create a todo list here`
     - `Write a markdown checklist file`
     - `Keep as-is (no follow-up action)`
-  - Use single-select (`multiple: false`) with custom input allowed.
+   - Use single-select (`multiple: false`) with custom input allowed.
+
+Post-fix policy:
+- After applying PR feedback fixes, do not commit, push, or resolve threads automatically.
+- Re-run the feedback classification using the current session context and applied changes.
+- Ask the user what follow-up actions to take by calling the built-in `question` tool with exactly:
+  - Header: `PR feedback follow-up`
+  - Question: `Fixes are applied. What follow-up actions should I take?`
+  - Options (stable labels):
+    - `Commit changes`
+    - `Push branch`
+    - `Resolve relevant threads`
+    - `No follow-up action`
+  - Use multi-select (`multiple: true`) with custom input allowed.
+- If the user selects `Commit changes`, inspect git status/diff first, then commit only relevant changes.
+- If the user selects `Push branch`, push only after confirming there are commits to push or an already-committed local branch state.
+- If the user selects `Resolve relevant threads`, follow `When user selects Resolve relevant threads after fixes` below.
+- If both `Commit changes` and `Push branch` are selected, commit first, then push.
+- If `No follow-up action` is selected with other actions, treat `No follow-up action` as ignored and perform the selected concrete actions.
 
 When user selects `Resolve proposed threads`:
 1. Re-list the proposed thread IDs that will be resolved.
@@ -88,8 +106,19 @@ When user selects `Resolve proposed threads`:
 3. Resolve the thread only after the comment is posted successfully.
 4. Report per-thread status: `commented+resolved`, `comment failed`, `already resolved`, or `failed`.
 
+When user selects `Resolve relevant threads` after fixes:
+1. Re-list the relevant proposed thread IDs that will be resolved.
+   - Exclude any item where `threadId` is missing/null.
+   - Reclassify excluded items to `Keep open` with reason: `missing threadId; cannot resolve via API`.
+2. For each thread, post a resolution comment before resolving.
+   - The comment must explain what changed and how it addressed the feedback.
+   - Default to context `resolutionNote` when available, but update it if applied fixes changed the exact resolution.
+3. Resolve the thread only after the comment is posted successfully.
+4. Report per-thread status: `commented+resolved`, `comment failed`, `already resolved`, or `failed`.
+
 Never:
 - Never include resolved threads in actionable output.
 - Never include agent/tool logs in feedback bullets.
 - Never merge unrelated comments into one bullet.
 - Never resolve any thread without a preceding explanatory comment.
+- Never commit or push after applying fixes without explicit user selection from the post-fix question.
