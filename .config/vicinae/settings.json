@@ -153,6 +153,18 @@
                "preferences": {
                   "customProgram": "hyprlock"
                }
+            },
+            "power-off": {
+               "preferences": {
+                  "confirm": false,
+                  "customProgram": "/home/fbb/.config/hypr/runtime/session/confirm-shutdown.sh"
+               }
+            },
+            "reboot": {
+               "preferences": {
+                  "confirm": false,
+                  "customProgram": "/home/fbb/.config/hypr/runtime/session/confirm-restart.sh"
+               }
             }
          }
       }
