@@ -11,7 +11,7 @@ ags request -i ags-bundled confirm-dialog '{
     "message": "This will power off your system",
     "confirmLabel": "Shutdown",
     "cancelLabel": "Cancel",
-    "confirmCommand": "hyprshutdown --no-exit -t \"Shutting down...\" --post-cmd \"systemctl poweroff\"",
+    "confirmCommand": "/home/fbb/.config/hypr/runtime/session/hyprshutdown-session.sh --no-exit -t \"Shutting down...\" --post-cmd \"systemctl poweroff\"",
     "variant": "danger",
     "audioFile": "/home/fbb/.config/hypr/assets/warn.ogg",
     "showDelay": 180
