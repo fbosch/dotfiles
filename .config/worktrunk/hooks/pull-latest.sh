@@ -24,9 +24,9 @@ worktree_path="$({
         }
       }
 
-      if (current_branch == "refs/heads/" branch && is_prunable == 0) {
+      if (!found && current_branch == "refs/heads/" branch && is_prunable == 0) {
         print current_worktree
-        exit
+        found = 1
       }
     }
   '

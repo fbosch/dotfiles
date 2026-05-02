@@ -3,6 +3,7 @@ approved-commands = [
     "wt step copy-ignored --from {{ default_branch }} --to {{ branch }}",
     "mkdir -p '{{ primary_worktree_path }}/apps/UmbracoHost/umbraco/Data/DataProtection-Keys' && mkdir -p 'apps/UmbracoHost/umbraco/Data' && if [ -L 'apps/UmbracoHost/umbraco/Data/DataProtection-Keys' ]; then unlink 'apps/UmbracoHost/umbraco/Data/DataProtection-Keys'; elif [ -e 'apps/UmbracoHost/umbraco/Data/DataProtection-Keys' ]; then rm -rf 'apps/UmbracoHost/umbraco/Data/DataProtection-Keys'; fi && ln -s '{{ primary_worktree_path }}/apps/UmbracoHost/umbraco/Data/DataProtection-Keys' 'apps/UmbracoHost/umbraco/Data/DataProtection-Keys'",
     "git -C '{{ primary_worktree_path }}' fetch {{ remote }} {{ default_branch }} && git -C '{{ primary_worktree_path }}' merge --ff-only {{ remote }}/{{ default_branch }}",
+    "mkdir -p 'apps/UmbracoHost/umbraco/Data' && if [ ! -f 'apps/UmbracoHost/umbraco/Data/Umbraco.sqlite.db' ] && [ -f '{{ primary_worktree_path }}/apps/UmbracoHost/umbraco/Data/Umbraco.sqlite.db' ]; then cp '{{ primary_worktree_path }}/apps/UmbracoHost/umbraco/Data/Umbraco.sqlite.db' 'apps/UmbracoHost/umbraco/Data/Umbraco.sqlite.db'; fi",
 ]
 
 [projects."github.com/fbosch/infinite-fusion-nuzlocke"]
