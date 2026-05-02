@@ -55,17 +55,12 @@ apply_startup_workspace_routing() {
   hyprctl dispatch 'hl.dsp.focus({ workspace = "1" })' >/dev/null 2>&1 || true
 }
 
-run_startup_actions() {
+run_startup_ready_actions() {
   log_startup "startup_actions_begin"
   apply_startup_workspace_routing
   log_startup "workspace_routing_applied"
-  uwsm-app -s s -- hyprpaper >/dev/null 2>&1 || true &
-  uwsm-app -s s -- waybar >/dev/null 2>&1 || true &
-  uwsm-app -s s -- swaync -c ~/.config/swaync/config.json -s ~/.config/swaync/style.css >/dev/null 2>&1 || true &
-  uwsm-app -s s -- ~/.config/ags/start-daemons.sh >/dev/null 2>&1 || true &
-  uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-edge-monitor.sh >/dev/null 2>&1 || true &
   play_bootup_sound
   log_startup "startup_actions_done"
 }
 
-run_startup_actions
+run_startup_ready_actions
