@@ -156,14 +156,14 @@
             },
             "power-off": {
                "preferences": {
-                  "confirm": false,
-                  "customProgram": "/home/fbb/.config/hypr/runtime/session/confirm-shutdown.sh"
+                  "confirm": true,
+                  "customProgram": ""
                }
             },
             "reboot": {
                "preferences": {
-                  "confirm": false,
-                  "customProgram": "/home/fbb/.config/hypr/runtime/session/confirm-restart.sh"
+                  "confirm": true,
+                  "customProgram": ""
                }
             }
          }
