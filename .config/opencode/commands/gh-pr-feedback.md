@@ -111,15 +111,18 @@ Post-fix policy:
   - Header: `PR feedback follow-up`
   - Question: `Fixes are applied. What follow-up actions should I take?`
   - Options (stable labels):
+    - `Commit, push, and resolve relevant threads`
     - `Commit changes`
     - `Push branch`
     - `Resolve relevant threads`
     - `No follow-up action`
   - Use multi-select (`multiple: true`) with custom input allowed.
+- If the user selects `Commit, push, and resolve relevant threads`, perform those three actions in order: commit first, then push, then resolve relevant threads.
 - If the user selects `Commit changes`, inspect git status/diff first, then commit only relevant changes.
 - If the user selects `Push branch`, push only after confirming there are commits to push or an already-committed local branch state.
 - If the user selects `Resolve relevant threads`, follow `When user selects Resolve relevant threads after fixes` below.
 - If both `Commit changes` and `Push branch` are selected, commit first, then push.
+- If `Commit, push, and resolve relevant threads` is selected with individual actions, de-duplicate actions and preserve the same order: commit, push, resolve.
 - If `No follow-up action` is selected with other actions, treat `No follow-up action` as ignored and perform the selected concrete actions.
 
 When user selects `Resolve proposed threads`:
