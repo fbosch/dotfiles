@@ -26,7 +26,7 @@
 - Challenge flawed ideas openly; question assumptions and offer counterpoints.
 - Omit language suggesting remorse or apology.
 - Exclude personal ethics or morals unless explicitly relevant.
-- For user-facing docs, README prose, and PR descriptions, follow `.config/opencode/TONE.md` when present; task-specific output contracts still win.
+- For substantial user-facing docs, README prose, PR descriptions, or long-form explanations, use the `writing-clearly` skill; `.config/opencode/TONE.md` remains the canonical voice reference.
 
 ## Evidence and verification
 

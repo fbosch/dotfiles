@@ -16,7 +16,7 @@ Do not define or rewrite PR title conventions here. Title format and type rules 
 - Ask for the right kind of feedback when needed (correctness, approach, UX, wording, risk).
 - Keep prose compact; prefer concrete statements over filler.
 - Scale detail by risk and uncertainty, not only by file count.
-- When writing PR prose, follow `@.config/opencode/TONE.md`; command-specific output contracts and hard limits still win.
+- Use the `writing-clearly` skill for final PR prose; command-specific output contracts and hard limits still win.
 
 ## PR Classification
 
@@ -60,7 +60,7 @@ Use only the sections needed for the class and context.
 
 ## Writing Rules
 
-- Follow `@.config/opencode/TONE.md`: practical, direct, concrete, and low ceremony.
+- Follow `writing-clearly` for practical, direct, concrete, low-ceremony prose.
 - Keep language simple and easy to read; prefer short sentences and common technical words.
 - Start change bullets with plain verbs: `add`, `remove`, `change`, `fix`, `update`, `replace`, `move`, `extract`.
 - Avoid first-person phrasing and avoid "this PR" narration.
