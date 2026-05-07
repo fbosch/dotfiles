@@ -20,11 +20,15 @@ Pre-flight:
 PR BODY POLICY (authoritative for body content only):
 @~/.config/opencode/skills/pr-description/SKILL.md
 
+TONE POLICY (authoritative for voice and phrasing only):
+@.config/opencode/TONE.md
+
 Follow this precedence order:
 
 1. Title format and title types from this command
 2. PR body structure and content rules from `pr-description` skill
-3. If there is a conflict, command hard limits win
+3. Voice and phrasing from `TONE.md`
+4. If there is a conflict, command hard limits win
 
 **Output format:**
 
@@ -42,6 +46,7 @@ Use one of these title types: feat, fix, refactor, chore, docs, test
 **Rules:**
 
 - Apply all PR body structure, section, and writing rules from the skill
+- Apply the voice and phrasing guidance from `TONE.md`
 - Treat injected git context as an invocation-time snapshot; do not infer missing repo state
 - Ignore merge commits in the Commits context
 - Ignore changes that appear only because of merges
