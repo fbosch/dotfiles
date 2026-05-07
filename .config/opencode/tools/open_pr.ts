@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 type Provider = "github" | "azure-devops"
+type ProviderArg = Provider | "gh" | "az"
 
 type CommandResult = {
   stdout: string
@@ -168,7 +169,7 @@ function stripGitSuffix(value: string): string {
   return value.endsWith(".git") ? value.slice(0, -4) : value
 }
 
-async function detectBaseBranch(branch: string, cwd: string): Promise<string | null> {
+async function detectBaseBranch(branch: string, remote: string, cwd: string): Promise<string | null> {
   if (branch === "main" || branch === "master") {
     const upstream = await git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], cwd)
     if (upstream !== null) {
@@ -176,7 +177,28 @@ async function detectBaseBranch(branch: string, cwd: string): Promise<string | n
     }
   }
 
-  for (const ref of ["origin/main", "origin/master", "main", "master"]) {
+  const remoteHead = await git(["symbolic-ref", "--quiet", "--short", `refs/remotes/${remote}/HEAD`], cwd)
+  if (remoteHead !== null) {
+    return remoteHead
+  }
+
+  for (const ref of [
+    `${remote}/main`,
+    `${remote}/master`,
+    `${remote}/develop`,
+    `${remote}/dev`,
+    `${remote}/trunk`,
+    "origin/main",
+    "origin/master",
+    "origin/develop",
+    "origin/dev",
+    "origin/trunk",
+    "main",
+    "master",
+    "develop",
+    "dev",
+    "trunk",
+  ]) {
     const result = await runCommand("git", ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], cwd)
     if (result.exitCode === 0) {
       return ref
@@ -211,7 +233,15 @@ async function getRemotes(cwd: string): Promise<RemoteContext[]> {
   return remotes
 }
 
-async function selectRemote(remotes: RemoteContext[], cwd: string): Promise<RemoteContext | null> {
+function normalizeProvider(value: ProviderArg): Provider {
+  return value === "gh" ? "github" : value === "az" ? "azure-devops" : value
+}
+
+async function selectRemote(remotes: RemoteContext[], cwd: string, provider?: Provider): Promise<RemoteContext | null> {
+  if (provider !== undefined) {
+    return remotes.find((remote) => remote.provider === provider) ?? null
+  }
+
   const trackedRemote = (await git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], cwd))?.split("/")[0]
 
   return (
@@ -222,7 +252,7 @@ async function selectRemote(remotes: RemoteContext[], cwd: string): Promise<Remo
   )
 }
 
-async function detectContext(cwd: string): Promise<{ context?: PrContext; error?: string }> {
+async function detectContext(cwd: string, providerArg?: ProviderArg): Promise<{ context?: PrContext; error?: string }> {
   const insideWorkTree = await git(["rev-parse", "--is-inside-work-tree"], cwd)
   if (insideWorkTree !== "true") {
     return { error: "ERROR: Not inside a git worktree." }
@@ -234,12 +264,17 @@ async function detectContext(cwd: string): Promise<{ context?: PrContext; error?
   }
 
   const remotes = await getRemotes(cwd)
-  const remote = await selectRemote(remotes, cwd)
+  const provider = providerArg === undefined ? undefined : normalizeProvider(providerArg)
+  const remote = await selectRemote(remotes, cwd, provider)
   if (remote === null || remote.provider === null) {
+    if (provider !== undefined) {
+      return { error: `ERROR: Could not detect ${provider} from git remotes.` }
+    }
+
     return { error: "ERROR: Could not detect GitHub or Azure DevOps from git remotes." }
   }
 
-  const base = await detectBaseBranch(branch, cwd)
+  const base = await detectBaseBranch(branch, remote.name, cwd)
   if (base === null) {
     return { error: "ERROR: Cannot open PR: unable to determine base branch." }
   }
@@ -400,9 +435,21 @@ export default tool({
   args: {
     title: tool.schema.string().optional().describe("PR title. If omitted, return detected PR context only."),
     body: tool.schema.string().optional().describe("Markdown PR body. Required when title is provided."),
+    provider: tool.schema.string().optional().describe("Optional provider override: gh, github, az, or azure-devops."),
   },
   async execute(args, context) {
-    const detected = await detectContext(context.directory)
+    const provider = args.provider as string | undefined
+    if (
+      provider !== undefined &&
+      provider !== "gh" &&
+      provider !== "github" &&
+      provider !== "az" &&
+      provider !== "azure-devops"
+    ) {
+      return "ERROR: provider must be one of: gh, github, az, azure-devops."
+    }
+
+    const detected = await detectContext(context.directory, provider as ProviderArg | undefined)
     if (detected.error !== undefined) {
       return detected.error
     }
