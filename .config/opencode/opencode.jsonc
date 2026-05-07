@@ -5,6 +5,7 @@
     "opencode-toolbox",
     "./plugins/openmemory/openmemory.ts",
     "opencode-wakatime",
+    "opencode-toon-plugin",
     "./plugins/rtk.ts",
     "./plugins/opencode-handoff/handoff.ts"
   ],
