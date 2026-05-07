@@ -25,10 +25,10 @@ Classify first, then choose sections.
 | Class | Typical Signals | Required Sections | Common Optional Sections |
 |---|---|---|---|
 | Tiny | Rename, typo, narrow refactor | Summary, Changes | none |
-| Normal | Typical feature or fix | Summary, Motivation, Changes | Testing |
-| Risky | Migration, infra, security, breaking behavior | Summary, Motivation, Changes, Risk, Testing | Rollback, Deployment Notes |
-| OSS-facing | External maintainers, less shared context | Summary, Motivation, Changes, Testing | Reviewer Focus, Linked Issues |
-| WIP/Spike | Exploring approach or partial implementation | Summary, Motivation, Changes | Feedback Wanted, Readiness |
+| Normal | Typical feature or fix | Summary, Changes | Motivation, Testing |
+| Risky | Migration, infra, security, breaking behavior | Summary, Changes, Risk | Motivation, Testing, Rollback, Deployment Notes |
+| OSS-facing | External maintainers, less shared context | Summary, Changes | Motivation, Testing, Reviewer Focus, Linked Issues |
+| WIP/Spike | Exploring approach or partial implementation | Summary, Changes | Motivation, Feedback Wanted, Readiness |
 
 ## Section Selection Rules
 
@@ -40,6 +40,8 @@ Use only the sections needed for the class and context.
 - `## Motivation`
   - Why this work exists now.
   - Link issue/ticket/design doc when available.
+  - Omit when `Summary` already gives enough context or the rationale is obvious.
+  - Include when the reason, timing, tradeoff, or linked context materially changes review.
 - `## Changes`
   - Verb-led bullets describing concrete code changes.
   - Keep bullets short and non-redundant.
@@ -47,6 +49,8 @@ Use only the sections needed for the class and context.
   - What can fail, where blast radius exists, and conditions that increase risk.
 - `## Testing`
   - How the change was validated (automated, manual, environment).
+  - Omit when validation is redundant or obvious from the change context.
+  - Include when validation materially affects reviewer confidence, risk assessment, release readiness, or reproducibility.
 - `## Rollback` (risky only)
   - Fast reversal path and decision trigger.
 - `## Feedback Wanted` (optional)
@@ -56,6 +60,8 @@ Use only the sections needed for the class and context.
 
 ## Writing Rules
 
+- Follow `@.config/opencode/TONE.md`: practical, direct, concrete, and low ceremony.
+- Keep language simple and easy to read; prefer short sentences and common technical words.
 - Start change bullets with plain verbs: `add`, `remove`, `change`, `fix`, `update`, `replace`, `move`, `extract`.
 - Avoid first-person phrasing and avoid "this PR" narration.
 - Avoid generic claims like "improves maintainability" unless you specify the concrete effect.
@@ -76,18 +82,18 @@ Use only the sections needed for the class and context.
 
 ## Anti-Patterns
 
-- Missing motivation section for non-trivial work.
+- Redundant motivation section that repeats `Summary` or states the obvious.
 - Wall of text with no headings.
 - File-by-file diff narration instead of behavior-level changes.
 - Vague summary: "misc updates" or "small fixes".
-- Checklist theater with no actionable detail.
+- Checklist theater with no actionable detail, including redundant `Testing` sections that only restate obvious checks.
 
 ## Procedure
 
 1. Classify the PR (`Tiny`, `Normal`, `Risky`, `OSS-facing`, `WIP/Spike`).
 2. Select only required sections for that class.
-3. Draft `Summary` and `Motivation` before `Changes`.
-4. Add risk and validation details only where they materially affect review.
+3. Draft `Summary` before `Changes`; add `Motivation` only when explicitly relevant.
+4. Add risk and validation details only where they materially affect review; omit `Testing` when it would be redundant or obvious.
 5. Add `Feedback Wanted` or `Readiness` for early-review or partial work.
 6. Trim filler and duplicate statements.
 

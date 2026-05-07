@@ -213,6 +213,10 @@ function normalizeBaseForProvider(base: string): string {
   return slashIndex === -1 ? base : base.slice(slashIndex + 1)
 }
 
+function toHeadRef(branch: string): string {
+  return branch.startsWith("refs/heads/") ? branch : `refs/heads/${branch}`
+}
+
 async function getRemotes(cwd: string): Promise<RemoteContext[]> {
   const names = await git(["remote"], cwd)
   if (names === null) {
@@ -357,9 +361,9 @@ async function openPullRequest(context: PrContext, title: string, body: string, 
         "--repository",
         context.remote.repo ?? "",
         "--source-branch",
-        context.branch,
+        toHeadRef(context.branch),
         "--target-branch",
-        context.targetBranch,
+        toHeadRef(context.targetBranch),
         "--title",
         title,
         "--description",
@@ -378,20 +382,29 @@ async function openPullRequest(context: PrContext, title: string, body: string, 
       return formatCommandError("az repos pr create", result)
     }
 
-    return extractAzureUrl(result.stdout) ?? result.stdout.trimEnd()
+    return extractAzureUrl(result.stdout, context) ?? result.stdout.trimEnd()
   } finally {
     await rm(tempDir, { force: true, recursive: true })
   }
 }
 
-function extractAzureUrl(value: string): string | null {
+function pathSegment(value: string): string {
+  return encodeURIComponent(value).replace(/%20/g, "%20")
+}
+
+function extractAzureUrl(value: string, context: PrContext): string | null {
   try {
-    const parsed = JSON.parse(value) as { url?: unknown; remoteUrl?: unknown }
-    if (typeof parsed.url === "string") {
-      return parsed.url
+    const parsed = JSON.parse(value) as { pullRequestId?: unknown; url?: unknown; remoteUrl?: unknown }
+    if (typeof parsed.pullRequestId === "number" && context.remote.org !== null && context.remote.project !== null && context.remote.repo !== null) {
+      return `${context.remote.org}/${pathSegment(context.remote.project)}/_git/${pathSegment(context.remote.repo)}/pullrequest/${parsed.pullRequestId}`
     }
-    if (typeof parsed.remoteUrl === "string") {
+
+    if (typeof parsed.remoteUrl === "string" && parsed.remoteUrl.includes("/_git/") && !parsed.remoteUrl.includes("/_apis/")) {
       return parsed.remoteUrl
+    }
+
+    if (typeof parsed.url === "string" && !parsed.url.includes("/_apis/")) {
+      return parsed.url
     }
   } catch {
     return null
