@@ -37,6 +37,7 @@ Use only the sections needed for the class and context.
 - `## Summary`
   - 1-2 sentences.
   - State the outcome, not implementation trivia.
+  - Use `writing-clearly` for the final wording: concrete, direct, and free of generic claims.
 - `## Motivation`
   - Why this work exists now.
   - Link issue/ticket/design doc when available.

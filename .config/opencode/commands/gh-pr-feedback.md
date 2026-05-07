@@ -21,9 +21,10 @@ Tool routing:
 1. For PR feedback context, call the `gh_pr_feedback_context` tool directly.
 2. For commenting on and resolving PR review threads, call the `gh_pr_feedback_resolve_threads` tool directly.
 3. For user-choice prompts, call the built-in `question` tool directly.
-4. Do not run tool-discovery/reconciliation steps (`toolbox_search_*`, `toolbox_status`, `sequential-thinking`) for this command.
-5. If `question` call fails once, stop retrying and output the same choices in plain text.
-6. During evidence validation, delegate when it materially improves confidence:
+4. Use the `writing-clearly` skill when drafting resolution comments or user-visible summaries in this command.
+5. Do not run tool-discovery/reconciliation steps (`toolbox_search_*`, `toolbox_status`, `sequential-thinking`) for this command.
+6. If `question` call fails once, stop retrying and output the same choices in plain text.
+7. During evidence validation, delegate when it materially improves confidence:
    - Use the `analyze` subagent for feedback that requires tracing existing code behavior, data flow, call chains, state transitions, or interactions across files.
    - Use the `research` subagent for feedback that depends on external documentation, GitHub/project history, third-party API behavior, platform behavior, or current best practices.
    - Do not delegate for simple single-file checks or obvious local facts; inspect those directly.
@@ -59,8 +60,10 @@ Workflow:
 8. Keep ordering deterministic within each bucket:
    - Sort by severity (`request-changes`, `should-fix`, `nit`, `info`), then by `path`, then by first line number.
 9. For every proposed item, include a short resolution comment text explaining how/why it was addressed or why it is irrelevant.
-   - Prefer `resolutionNote` from context when present and consistent with validated evidence.
-   - For irrelevant items, the comment must cite the validating evidence, not merely say the feedback is irrelevant.
+    - Prefer `resolutionNote` from context when present and consistent with validated evidence.
+    - For irrelevant items, the comment must cite the validating evidence, not merely say the feedback is irrelevant.
+    - Draft comments using `writing-clearly`: direct, evidence-backed, concise, and specific about what changed or why the feedback no longer applies.
+    - Do not use praise-padding, generic acknowledgements, or vague claims like "addressed in latest changes" without naming the concrete evidence.
 10. Apply confidence gate for high-severity feedback:
 
 - If `severity=request-changes` and confidence is not `high`, default that item to `Keep open`.
@@ -131,9 +134,10 @@ When user selects `Resolve proposed threads`:
    - Exclude any item where `threadId` is missing/null.
    - Reclassify excluded items to `Keep open` with reason: `missing threadId; cannot resolve via API`.
 2. Call `gh_pr_feedback_resolve_threads` with one `{ threadId, body }` item per thread.
-   - Use the paired `Resolution comment` as `body`.
-   - Default to context `resolutionNote` only when it is consistent with validated evidence.
-   - For irrelevant items, do not include a thread unless the body cites why the feedback does not apply.
+    - Use the paired `Resolution comment` as `body`.
+    - Default to context `resolutionNote` only when it is consistent with validated evidence.
+    - For irrelevant items, do not include a thread unless the body cites why the feedback does not apply.
+    - Keep each body aligned with `writing-clearly`: short, factual, and specific enough that the reviewer can verify it.
 3. Treat the tool result as authoritative; it posts the comment first and resolves only after the comment succeeds.
 4. Report per-thread status from the tool: `commented+resolved`, `comment failed`, `already resolved`, or `failed`.
 
@@ -150,8 +154,9 @@ When user selects `Resolve relevant threads` after fixes:
    - Exclude any item where `threadId` is missing/null.
    - Reclassify excluded items to `Keep open` with reason: `missing threadId; cannot resolve via API`.
 2. Call `gh_pr_feedback_resolve_threads` with one `{ threadId, body }` item per thread.
-   - The `body` must explain what changed and how it addressed the feedback.
-   - Default to context `resolutionNote` when available, but update it if applied fixes changed the exact resolution.
+    - The `body` must explain what changed and how it addressed the feedback.
+    - Default to context `resolutionNote` when available, but update it if applied fixes changed the exact resolution.
+    - Keep each body aligned with `writing-clearly`: short, factual, and specific enough that the reviewer can verify it.
 3. Treat the tool result as authoritative; it posts the comment first and resolves only after the comment succeeds.
 4. Report per-thread status from the tool: `commented+resolved`, `comment failed`, `already resolved`, or `failed`.
 
