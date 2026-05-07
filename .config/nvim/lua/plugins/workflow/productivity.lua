@@ -2,6 +2,10 @@ return {
 	{
 		"wakatime/vim-wakatime",
 		lazy = false,
+		config = function()
+			require("wakatime").setup()
+			vim.api.nvim_clear_autocmds({ group = "WakaTime", event = "QuitPre" })
+		end,
 	},
 	{
 		"bngarren/checkmate.nvim",
