@@ -11,6 +11,8 @@ description: Use when writing or improving README files. Not all READMEs are the
 
 **Audience-first.** Different audiences need different information - a contributor to an OSS project needs different context than future-you opening a config folder.
 
+**Tone-aware.** When writing user-facing prose, follow `@.config/opencode/TONE.md`; README templates, explicit user requirements, and factual accuracy still win.
+
 **Always ask:** Who will read this, and what do they need to know?
 
 ## NEVER Do in READMEs

@@ -16,6 +16,7 @@ Do not define or rewrite PR title conventions here. Title format and type rules 
 - Ask for the right kind of feedback when needed (correctness, approach, UX, wording, risk).
 - Keep prose compact; prefer concrete statements over filler.
 - Scale detail by risk and uncertainty, not only by file count.
+- When writing PR prose, follow `@.config/opencode/TONE.md`; command-specific output contracts and hard limits still win.
 
 ## PR Classification
 
