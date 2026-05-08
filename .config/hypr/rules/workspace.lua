@@ -14,13 +14,6 @@ hl.workspace_rule({
 })
 
 hl.workspace_rule({
-	workspace = "2",
-	monitor = "HDMI-A-2",
-	layout = "master",
-	layout_opts = { orientation = "bottom", new_on_top = true },
-})
-
-hl.workspace_rule({
 	workspace = "10",
 	layout = "scrolling",
 })
