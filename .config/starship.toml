@@ -70,12 +70,18 @@ deleted_style = '#DE6E7C'    # Zenwritten red
 [directory]
 home_symbol = "~"
 truncation_length = 6
-truncate_to_repo = false
+truncate_to_repo = true
 truncation_symbol = "…/"
 before_repo_root_style = "dimmed white"
 repo_root_style = "bold bright-cyan"
 repo_root_format = "[$before_root_path]($before_repo_root_style)[$repo_root]($repo_root_style)[$path]($style)[$read_only]($read_only_style) "
 read_only = "  "
+
+[git_branch]
+format = '[$branch]($style) '
+style = 'dimmed purple'
+truncation_length = 24
+truncation_symbol = '…'
 
 [nodejs]
 format = '[󰎙](bold fg:#84ba64)  [$version](fg:#84ba64) '
