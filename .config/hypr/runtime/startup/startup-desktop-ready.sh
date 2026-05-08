@@ -49,10 +49,7 @@ play_bootup_sound() {
 apply_startup_workspace_routing() {
   hyprctl dispatch 'hl.dsp.focus({ workspace = "10" })' >/dev/null 2>&1 || true
   hyprctl dispatch "hl.dsp.workspace.move({ id = \"10\", monitor = $(lua_quote "$TARGET_MONITOR") })" >/dev/null 2>&1 || true
-  hyprctl dispatch 'hl.dsp.focus({ workspace = "1" })' >/dev/null 2>&1 || true
-  hyprctl dispatch "hl.dsp.workspace.move({ id = \"1\", monitor = $(lua_quote "$TARGET_MONITOR") })" >/dev/null 2>&1 || true
   hyprctl dispatch "hl.dsp.focus({ monitor = $(lua_quote "$TARGET_MONITOR") })" >/dev/null 2>&1 || true
-  hyprctl dispatch 'hl.dsp.focus({ workspace = "1" })' >/dev/null 2>&1 || true
 }
 
 run_startup_ready_actions() {
