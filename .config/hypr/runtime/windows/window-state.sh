@@ -21,7 +21,6 @@ if command -v flock &>/dev/null; then
     fi
 fi
 
-CONFIG_FILE="$HOME/.config/hypr/window-state.conf"
 RULES_FILE="${XDG_RUNTIME_DIR}/hypr-window-state-rules.conf"
 SELECTORS_LUA_FILE="$HOME/.config/hypr/rules/window-state-selectors.lua"
 RULES_LUA_FILE="$HOME/.config/hypr/rules/window-state.lua"
@@ -36,34 +35,28 @@ POLL_PID=""  # Track polling subprocess
 MAIN_PID=$$  # PID of main process (for subprocess signalling)
 CPU_COUNT=$(nproc)  # Number of CPU cores for load calculation
 CURRENT_HASH=""   # Last seen state string (for change detection)
-MATCHERS_JSON=""  # Cached JSON representation of MATCHER_PATTERNS (invalidated by parse_matchers)
+MATCHERS_JSON=""  # Cached JSON representation of MATCHER_PATTERNS (invalidated by parse_selectors)
 MONITORS_JSON=""  # Cached monitor layout (invalidated by monitoradded/monitorremoved events)
 declare -A RULES_CACHE  # Cache for existing rules (class -> rules mapping)
 declare -a MATCHER_PATTERNS=()  # Array of matcher:pattern pairs
 
-# Parse config and build matcher array
-parse_matchers() {
+# Parse Lua selector source and build matcher array.
+parse_selectors() {
     MATCHER_PATTERNS=()
     MATCHERS_JSON=""  # invalidate cached JSON
+    local selector_re='matcher[[:space:]]*=[[:space:]]*"(match:[a-zA-Z_]+)"[[:space:]]*,[[:space:]]*pattern[[:space:]]*=[[:space:]]*\[=\[(.*)\]=\]'
 
-    [[ ! -f "$CONFIG_FILE" ]] && return
+    [[ ! -f "$SELECTORS_LUA_FILE" ]] && return
 
     while IFS= read -r line; do
-        # Parse "matcher pattern" format (e.g., "match:class Mullvad VPN")
-        if [[ "$line" =~ ^(match:[a-zA-Z_]+)[[:space:]]+(.+)$ ]]; then
+        if [[ "$line" =~ $selector_re ]]; then
             MATCHER_PATTERNS+=("${BASH_REMATCH[1]}|${BASH_REMATCH[2]}")
         fi
-    done < <(grep -Ev '^[[:space:]]*(#|$)' "$CONFIG_FILE")
-
-    write_matchers_lua_file
+    done < "$SELECTORS_LUA_FILE"
 }
 
 lua_quote() {
     jq -Rn --arg value "$1" '$value'
-}
-
-lua_long_string() {
-    printf '[=[%s]=]' "$1"
 }
 
 matcher_to_lua_key() {
@@ -80,46 +73,28 @@ window_state_lua_id() {
     printf 'window-state:%s:%s' "$1" "$2"
 }
 
+pattern_is_regex() {
+    local pattern="$1"
+
+    [[ "$pattern" == *"."* \
+        || "$pattern" == *"["* \
+        || "$pattern" == *"]"* \
+        || "$pattern" == *"("* \
+        || "$pattern" == *")"* \
+        || "$pattern" == *"*"* \
+        || "$pattern" == *"+"* \
+        || "$pattern" == *"?"* \
+        || "$pattern" == *"^"* \
+        || "$pattern" == *'$'* ]]
+}
+
 window_state_rule_pattern() {
     local pattern="$1"
 
-    if [[ "$pattern" =~ [\.\[\]\(\)\*\+\?\^\$] ]]; then
+    if pattern_is_regex "$pattern"; then
         printf '%s' "$pattern"
     else
         printf '^%s$' "$pattern"
-    fi
-}
-
-write_matchers_lua_file() {
-    mkdir -p "$(dirname "$SELECTORS_LUA_FILE")"
-
-    local temp_file
-    temp_file=$(mktemp) || { printf 'ERROR: Failed to create temp file\n' >&2; return 1; }
-
-    {
-        printf '%s\n' '-- Window state persistence selectors.'
-        printf '%s\n' '-- Auto-generated from window-state.conf by window-state.sh.'
-        printf '\nreturn {\n'
-
-        for entry in "${MATCHER_PATTERNS[@]}"; do
-            local matcher="${entry%%|*}"
-            local pattern="${entry#*|}"
-
-            printf '  { matcher = %s, pattern = %s },\n' "$(lua_quote "$matcher")" "$(lua_long_string "$pattern")"
-        done
-
-        printf '}\n'
-    } > "$temp_file"
-
-    if [[ -f "$SELECTORS_LUA_FILE" ]] && cmp -s "$temp_file" "$SELECTORS_LUA_FILE"; then
-        rm -f "$temp_file"
-        return 0
-    fi
-
-    if ! mv "$temp_file" "$SELECTORS_LUA_FILE"; then
-        printf 'ERROR: Failed to update Lua window-state selector file\n' >&2
-        rm -f "$temp_file"
-        return 1
     fi
 }
 
@@ -129,7 +104,7 @@ init_rules_file() {
         {
             echo "# Auto-generated window state persistence rules"
             echo "# Last updated: $(date '+%Y-%m-%d %H:%M:%S')"
-            echo "# Config: $CONFIG_FILE"
+            echo "# Selectors: $SELECTORS_LUA_FILE"
             echo "# DO NOT EDIT MANUALLY - This file is managed by window-state.sh"
             echo ""
         } > "$RULES_FILE"
@@ -146,14 +121,14 @@ fetch_monitors() {
 
 # Get current window states as JSON (with monitor-relative coordinates)
 get_window_states() {
-    # Parse matchers if not already done
+    # Parse selectors if not already done
     if ((${#MATCHER_PATTERNS[@]} == 0)); then
-        parse_matchers
+        parse_selectors
     fi
     
     [[ ${#MATCHER_PATTERNS[@]} -eq 0 ]] && echo "[]" && return
     
-    # Build matcher JSON once and cache it (invalidated by parse_matchers)
+    # Build matcher JSON once and cache it (invalidated by parse_selectors)
     if [[ -z "$MATCHERS_JSON" ]]; then
         local -a jq_args=()
         for entry in "${MATCHER_PATTERNS[@]}"; do
@@ -276,7 +251,7 @@ start_polling() {
 
             adaptive_sleep "$sleep_mode"
         done
-    } &
+    } 9>&- &
     
     POLL_PID=$!
     printf '%s - Started polling (PID: %s)\n' "$(printf '%(%H:%M:%S)T' -1)" "$POLL_PID"
@@ -354,7 +329,7 @@ write_rules_cache_file() {
     {
         printf '# Auto-generated window state persistence rules\n'
         printf '# Last updated: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
-        printf '# Config: %s\n' "$CONFIG_FILE"
+        printf '# Selectors: %s\n' "$SELECTORS_LUA_FILE"
         printf '# DO NOT EDIT MANUALLY - This file is managed by window-state.sh\n'
         printf '\n'
     } > "$temp_file"
@@ -394,7 +369,7 @@ write_lua_rules_cache_file() {
     {
         printf '%s\n' '-- Auto-generated Lua window state persistence rules'
         printf '%s\n' "-- Last updated: $(date '+%Y-%m-%d %H:%M:%S')"
-        printf '%s\n' "-- Config: $CONFIG_FILE"
+        printf '%s\n' "-- Selectors: $SELECTORS_LUA_FILE"
         printf '%s\n' '-- DO NOT EDIT MANUALLY - This file is managed by window-state.sh'
         printf '\nreturn {\n'
     } > "$temp_file"
@@ -491,7 +466,7 @@ update_rules() {
         
         # Build windowrule pattern: plain text gets anchored, regex used as-is
         local escaped_pattern
-        if [[ "$pattern" =~ [\.\[\]()*+?^$] ]]; then
+        if pattern_is_regex "$pattern"; then
             # Already contains regex syntax - use as-is
             escaped_pattern="$pattern"
         else
@@ -602,7 +577,7 @@ handle_event() {
             ;;
         configreloaded*)
             # Config reloaded - reload caches and recheck what we're tracking
-            parse_matchers
+            parse_selectors
             load_rules_cache
             prune_stale_rules_cache
             write_rules_cache_file
@@ -643,7 +618,7 @@ if [[ ! -S "$HYPR_QUERY_SOCKET" ]]; then
 fi
 
 echo "Window state persistence started (event-driven + adaptive polling)"
-echo "Config: $CONFIG_FILE"
+echo "Selectors: $SELECTORS_LUA_FILE"
 echo "Rules: $RULES_FILE"
 echo "Debounce delay: ${DEBOUNCE_DELAY}s"
 echo "Scheduling: SCHED_IDLE (runs only when CPU is idle)"
@@ -651,7 +626,7 @@ echo "Poll rate: Adaptive based on activity/load (active 0.05s-0.15s, stable 1s-
 echo ""
 
 init_rules_file
-parse_matchers  # Parse matchers on startup
+parse_selectors  # Parse selectors on startup
 load_rules_cache
 prune_stale_rules_cache
 write_lua_rules_cache_file
@@ -678,7 +653,7 @@ trap cleanup SIGINT SIGTERM EXIT
 trap 'wait "$POLL_PID" 2>/dev/null; POLL_PID=""' USR1
 
 # Listen to Hyprland events
-socat -U - "UNIX-CONNECT:$HYPR_SOCKET" | \
+socat -U - "UNIX-CONNECT:$HYPR_SOCKET" 9>&- | \
 while IFS= read -r line; do
     handle_event "$line"
-done
+done 9>&-

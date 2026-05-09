@@ -10,7 +10,7 @@ Hyprland compositor configuration managed via Home Manager/Nix.
 - Keep static Lua rules as direct `hl.workspace_rule(...)` and `hl.window_rule(...)` calls under `rules/workspace.lua` and `rules/window.lua`.
 - Keep static layer rules under `rules/layer.lua`; load them from the entrypoint where live config order places them, not from `rules/init.lua` if that would move them before window-state rules.
 - Keep generated/window-state Lua rule data under `rules/generated.lua` and `rules/window-state.lua`; generated files should return data tables, not call `hl.*` directly.
-- Keep `window-state.conf` as the writable selector source; mirror it to `rules/window-state-selectors.lua` for Lua-side data.
+- Keep `rules/window-state-selectors.lua` as the writable selector source; `window-state.conf` is legacy-only rollback reference.
 - Preserve rule declaration order: generated rules, static rules, then window-state rules.
 
 ## Package manager

@@ -53,7 +53,7 @@ Quick apply window rules to Hyprland windows using common profiles.
 - **File Manager** - Float with no animations (like Nemo)
 
 ### Persistence
-- **Save Window State** - Remember window size and position over time (saves to window-state.conf)
+- **Save Window State** - Remember window size and position over time (saves to window-state-selectors.lua)
 
 ## Keybindings
 
@@ -69,7 +69,7 @@ Generated rules are written to `~/.config/hypr/rules/generated.lua`.
 
 ### Window State Persistence
 
-When using the "Save Window State" profile, the window matcher is appended to `~/.config/hypr/window-state.conf`. This file is used by window state persistence scripts to remember window size and position across restarts.
+When using the "Save Window State" profile, the window matcher is appended to `~/.config/hypr/rules/window-state-selectors.lua`. This file is used by window state persistence scripts to remember window size and position across restarts.
 
 The extension checks for duplicates before adding entries to prevent cluttering the file.
 

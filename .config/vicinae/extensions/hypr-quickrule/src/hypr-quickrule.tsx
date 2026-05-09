@@ -37,6 +37,11 @@ const QUICKRULE_LUA_HEADER = `-- Auto-generated Lua window rules by hypr-quickru
 
 `;
 
+const WINDOW_STATE_SELECTORS_LUA_HEADER = `-- Window state persistence selectors.
+-- Source selector list read by runtime/windows/window-state.sh.
+
+`;
+
 const BOOLEAN_RULE_EFFECTS: Record<string, string> = {
 	"float on": "float",
 	"pin on": "pin",
@@ -195,7 +200,7 @@ const RULE_PROFILES: WindowRuleProfile[] = [
 		id: "save-state",
 		name: "Save Window State",
 		description:
-			"Remember window size and position (saves to window-state.conf)",
+			"Remember window size and position (saves to window-state-selectors.lua)",
 		icon: Icon.SaveDocument,
 		rules: [], // Special profile - doesn't write rules
 	},
@@ -310,6 +315,7 @@ export default function Command() {
 	};
 
 	const luaString = (value: string): string => JSON.stringify(value);
+	const luaLongString = (value: string): string => `[=[${value}]=]`;
 
 	const luaKey = (key: string): string => {
 		return /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ? key : `[${luaString(key)}]`;
@@ -374,6 +380,41 @@ export default function Command() {
 		return `${QUICKRULE_LUA_HEADER}return {\n${entries.length > 0 ? `${entries.join("\n\n")}\n` : ""}}\n`;
 	};
 
+	const renderWindowStateSelectorFile = (entry: string): string => {
+		return `${WINDOW_STATE_SELECTORS_LUA_HEADER}return {\n${entry}\n}\n`;
+	};
+
+	const serializeWindowStateSelectorEntry = (
+		matcher: string,
+		pattern: string,
+	): string => {
+		return `  { matcher = ${luaString(matcher)}, pattern = ${luaLongString(pattern)} },`;
+	};
+
+	const hasWindowStateSelector = (
+		content: string,
+		matcher: string,
+		pattern: string,
+	): boolean => {
+		const matcherValue = escapeRegex(luaString(matcher));
+		const patternValue = escapeRegex(luaLongString(pattern));
+		return new RegExp(
+			`matcher\\s*=\\s*${matcherValue}\\s*,\\s*pattern\\s*=\\s*${patternValue}`,
+		).test(content);
+	};
+
+	const appendWindowStateSelector = (
+		content: string,
+		entry: string,
+	): string => {
+		const trimmed = content.trimEnd();
+		if (/}\s*$/.test(trimmed)) {
+			return `${trimmed.replace(/}\s*$/, entry)}\n}\n`;
+		}
+
+		return renderWindowStateSelectorFile(entry);
+	};
+
 	const generateLuaRuleEntry = (
 		profile: WindowRuleProfile,
 		info: HyprpropWindowInfo,
@@ -420,56 +461,49 @@ export default function Command() {
 
 	const saveWindowState = async (info: HyprpropWindowInfo) => {
 		try {
-			const windowStateConfigPath = join(
+			const windowStateSelectorsPath = join(
 				homedir(),
-				".config/hypr/window-state.conf",
+				".config/hypr/rules/window-state-selectors.lua",
 			);
-			const matchValue = info.class;
+			const matcher = "match:class";
+			const matchValue = `^${escapeRegex(info.class)}$`;
 
-			// Read existing window state config
-			let existingConfig = "";
+			let existingSelectors = "";
 			try {
-				existingConfig = await fs.readFile(windowStateConfigPath, "utf-8");
+				existingSelectors = await fs.readFile(
+					windowStateSelectorsPath,
+					"utf-8",
+				);
 			} catch {
-				// File doesn't exist, create with header
-				existingConfig = `# Window State Persistence Configuration
-# Format: <matcher> <pattern>
-# Supported matchers: match:class, match:title, match:initialClass, match:initialTitle
-# Examples:
-#   match:class xdg-desktop-portal-gtk
-#   match:class org\\.gnome\\..*
-#   match:initialTitle ^Bitwarden
-#   match:class Mullvad VPN
-
-`;
+				// Missing or legacy-shaped content is normalized when appending below.
+				existingSelectors = renderWindowStateSelectorFile("");
 			}
 
-			// Check if this matcher already exists
-			const matcherLine = `match:class ${escapeRegex(matchValue)}`;
-			const matcherLinePattern = new RegExp(
-				`^match:class\\s+${escapeRegex(matchValue).replace(/\\\\/g, "\\\\\\\\")}\\s*$`,
-				"m",
-			);
+			if (!existingSelectors.includes("return {")) {
+				existingSelectors = renderWindowStateSelectorFile("");
+			}
 
-			if (matcherLinePattern.test(existingConfig)) {
+			if (hasWindowStateSelector(existingSelectors, matcher, matchValue)) {
 				await showToast({
 					style: Toast.Style.Success,
 					title: "Window State Already Saved",
-					message: `${matchValue} is already in window-state.conf`,
+					message: `${info.class} is already in window-state-selectors.lua`,
 				});
 				await closeMainWindow();
 				return;
 			}
 
-			// Append new matcher with comment
-			const newContent = existingConfig + `\n# ${matchValue}\n${matcherLine}\n`;
-			await fs.writeFile(windowStateConfigPath, newContent, "utf-8");
+			const newContent = appendWindowStateSelector(
+				existingSelectors,
+				serializeWindowStateSelectorEntry(matcher, matchValue),
+			);
+			await fs.writeFile(windowStateSelectorsPath, newContent, "utf-8");
 			await execAsync("hyprctl reload config-only");
 
 			await showToast({
 				style: Toast.Style.Success,
 				title: "Window State Saved",
-				message: `Added ${matchValue} to window-state.conf`,
+				message: `Added ${info.class} to window-state-selectors.lua`,
 			});
 
 			await closeMainWindow();

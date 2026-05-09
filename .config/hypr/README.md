@@ -8,7 +8,7 @@ Hyprland window manager Lua configuration with custom keybinds, rules, and runti
 - `hyprland.lua` - Main Lua config entrypoint
 - `keybinds.lua`, `autostart.lua`, `animations.lua`, `appearance.lua`, `input.lua`, `monitors.lua` - Core config modules
 - `rules/` - Static and generated Lua window/workspace/layer rules
-- `window-state.conf` - Window state management
+- `rules/window-state-selectors.lua` - Window state persistence selectors
 - `hyprlock.conf` - Screen lock
 - `hypridle.conf` - Idle behavior
 - `legacy/hyprland-conf/` - Previous hyprlang setup retained for reference
@@ -31,5 +31,6 @@ Hyprland window manager Lua configuration with custom keybinds, rules, and runti
 **Setup notes:**
 - Create `hyprpaper.conf` from `hyprpaper.conf.example` for wallpaper config
 - `rules/generated.lua` and `rules/window-state.lua` are auto-generated; don't edit directly
+- `legacy/hyprland-conf/window-state.conf` is retained only for legacy rollback reference
 - Validate changes: `hyprctl reload` and `hyprctl configerrors`
 - Managed via Nix/Home Manager as part of dotfiles

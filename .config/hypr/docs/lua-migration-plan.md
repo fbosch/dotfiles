@@ -238,7 +238,7 @@ Requirements:
 - Replace existing Lua entry with same `id`.
 - Preserve the existing `.conf` append path until rollback support is retired.
 - Keep profile effects normalized.
-- Keep `Save Window State` behavior appending matchers to `window-state.conf`; it triggers `hyprctl reload config-only` so `window-state.sh` refreshes selector/rule outputs.
+- Keep `Save Window State` behavior appending matchers to `rules/window-state-selectors.lua`; it triggers `hyprctl reload config-only` so `window-state.sh` refreshes rule outputs.
 - Continue reloading Hyprland after writes while generated files are active.
 
 ### 5. Convert `window-state.sh`
@@ -251,7 +251,7 @@ Keep the daemon architecture unchanged initially:
 - debounced writes
 - immediate save on close
 
-Keep `window-state.conf` as the writable selector source while Vicinae still appends to it. Mirror its selectors to `rules/window-state-selectors.lua` as a simple Lua table.
+Keep `rules/window-state-selectors.lua` as the writable selector source. Keep `window-state.conf` under `legacy/hyprland-conf/` until HyprLua is the default and only config language.
 
 Dual-write generated rule outputs:
 
