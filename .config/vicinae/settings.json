@@ -104,6 +104,12 @@
             "btop": {
                "enabled": false
             },
+            "chrome-ndcljijdejihfgkgocfgkbffacaljofo-Default": {
+               "enabled": false
+            },
+            "chrome-paeimkinmcfdlknnebjfgiebgemdbegd-Default": {
+               "enabled": false
+            },
             "chromium-realforce": {
                "enabled": false
             },
