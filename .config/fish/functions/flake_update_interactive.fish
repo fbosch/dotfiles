@@ -87,7 +87,7 @@ function flake_update_interactive --description 'Interactively update nix flake 
     set -l input_options
 
     for row in $scan_lines
-        set -l parts (string split 	 -- "$row")
+        set -l parts (string split "\t" -- "$row")
         switch "$parts[1]"
             case count
                 set update_count "$parts[2]"
