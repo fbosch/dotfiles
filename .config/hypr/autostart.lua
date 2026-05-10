@@ -1,6 +1,8 @@
 -- Autostart commands ported from autostart.conf.
 
-local commands = {
+local M = {}
+
+M.commands = {
 	"xrandr --output DP-2 --primary",
 	-- "uwsm-app -s b -- hypridle",
 	"uwsm-app -s s -- vicinae server",
@@ -21,15 +23,15 @@ local commands = {
 	"~/.config/hypr/runtime/startup/startup-desktop-ready.sh",
 }
 
-local function autostart_marker_path()
+function M.marker_path()
 	local runtime_dir = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
 	local instance = os.getenv("HYPRLAND_INSTANCE_SIGNATURE") or "unknown"
 
 	return runtime_dir .. "/hypr-autostart-" .. instance .. ".done"
 end
 
-local function autostart_has_run()
-	local file = io.open(autostart_marker_path(), "r")
+function M.has_run()
+	local file = io.open(M.marker_path(), "r")
 	if file then
 		file:close()
 		return true
@@ -38,24 +40,35 @@ local function autostart_has_run()
 	return false
 end
 
-local function mark_autostart_run()
-	local file = io.open(autostart_marker_path(), "w")
+function M.mark_run()
+	local file = io.open(M.marker_path(), "w")
 	if file then
 		file:write("1\n")
 		file:close()
 	end
 end
 
-hl.on("hyprland.start", function()
-	if autostart_has_run() then
-		return
+function M.run_once(execute)
+	if M.has_run() then
+		return false
 	end
 
-	mark_autostart_run()
+	M.mark_run()
+	execute = execute or hl.exec_cmd
 
-	for _, command in ipairs(commands) do
-		hl.exec_cmd(command)
+	for _, command in ipairs(M.commands) do
+		execute(command)
 	end
-end)
 
-return commands
+	return true
+end
+
+function M.install()
+	hl.on("hyprland.start", function()
+		M.run_once()
+	end)
+end
+
+M.install()
+
+return M
