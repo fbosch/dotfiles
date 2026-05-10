@@ -2,11 +2,6 @@ local function workspace_key(workspace)
 	return workspace and (workspace.name or (workspace.id and tostring(workspace.id))) or ""
 end
 
-local function active_workspace_key()
-	local window = hl.get_active_window and hl.get_active_window() or nil
-	return window and workspace_key(window.workspace) or ""
-end
-
 local function tiled_count(workspace)
 	local count = 0
 	for _, window in ipairs(workspace:get_windows()) do
@@ -28,7 +23,7 @@ local function apply_dp2_master(workspace)
 		return
 	end
 
-	if workspace.tiled_layout ~= "master" or workspace_key(workspace) ~= active_workspace_key() or active_monitor_name() ~= "DP-2" then
+	if workspace.tiled_layout ~= "master" or active_monitor_name() ~= "DP-2" then
 		return
 	end
 
