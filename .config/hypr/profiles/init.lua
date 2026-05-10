@@ -56,6 +56,15 @@ function M.activate(mode)
   return command.ok(profilectl_command("apply", mode))
 end
 
+function M.activate_async(mode)
+  if not valid_mode(mode) then
+    return false
+  end
+
+  hl.exec_cmd(profilectl_command("apply", mode))
+  return true
+end
+
 function M.remove(mode)
   if not valid_mode(mode) then
     return false

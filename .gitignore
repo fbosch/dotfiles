@@ -55,6 +55,7 @@ __pycache__
 # Hyprland machine-specific configs (use .example files as templates)
 .config/hypr/monitors.conf
 .config/hypr/hyprpaper.conf
+.config/hypr/benchmarks/results/
 
 # AGS generated types (regenerate with: ags types)
 .config/ags/@girs/

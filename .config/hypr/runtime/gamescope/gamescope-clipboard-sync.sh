@@ -28,12 +28,8 @@ if [[ "${1:-}" == "--sync-wayland-value" ]]; then
   done < <(pgrep -af 'Xwayland.*-terminate.*-force-xrandr-emulation' || true)
 
   if [[ ${#displays[@]} -eq 0 ]]; then
-    while IFS= read -r line; do
-      while [[ "$line" =~ :([0-9]+) ]]; do
-        displays[":${BASH_REMATCH[1]}"]=1
-        line="${line#*:"${BASH_REMATCH[1]}"}"
-      done
-    done < <(pgrep -af 'Xwayland' || true)
+    echo "watch event skipped: no gamescope xwayland displays" >> "$LOG_FILE"
+    exit 0
   fi
 
   for display in "${!displays[@]}"; do
@@ -48,6 +44,7 @@ fi
 
 LOCK_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-clipboard/gamescope-clipboard-sync.lockdir"
 LOG_FILE="/tmp/hyprland-clipboard.log"
+DISPLAY_CHECK_INTERVAL=5
 
 if mkdir "$LOCK_DIR" 2>/dev/null; then
   :
@@ -98,16 +95,11 @@ list_xwayland_displays() {
     done
   done < <(pgrep -af 'Xwayland.*-terminate.*-force-xrandr-emulation' || true)
 
-  if [[ ${#displays[@]} -eq 0 ]]; then
-    while IFS= read -r line; do
-      while [[ "$line" =~ :([0-9]+) ]]; do
-        displays[":${BASH_REMATCH[1]}"]=1
-        line="${line#*:"${BASH_REMATCH[1]}"}"
-      done
-    done < <(pgrep -af 'Xwayland' || true)
-  fi
-
   printf '%s\n' "${!displays[@]}"
+}
+
+has_xwayland_displays() {
+  [[ -n "$(list_xwayland_displays)" ]]
 }
 
 read_wayland_clipboard() {
@@ -143,9 +135,28 @@ sync_wayland_value_to_x11() {
   fi
 }
 
-initial_wayland_value="$(read_wayland_clipboard)"
-sync_wayland_value_to_x11 "$initial_wayland_value"
+while true; do
+  if ! has_xwayland_displays; then
+    sleep "$DISPLAY_CHECK_INTERVAL"
+    continue
+  fi
 
-wl-paste --type text --watch bash "$SCRIPT_PATH" --sync-wayland-value >/dev/null 2>&1 &
-watch_pid=$!
-wait "$watch_pid"
+  echo "gamescope clipboard sync active" >> "$LOG_FILE"
+  initial_wayland_value="$(read_wayland_clipboard)"
+  sync_wayland_value_to_x11 "$initial_wayland_value"
+
+  wl-paste --type text --watch bash "$SCRIPT_PATH" --sync-wayland-value >/dev/null 2>&1 &
+  watch_pid=$!
+
+  while kill -0 "$watch_pid" 2>/dev/null; do
+    if ! has_xwayland_displays; then
+      echo "gamescope clipboard sync paused: no xwayland displays" >> "$LOG_FILE"
+      kill "$watch_pid" 2>/dev/null || true
+      wait "$watch_pid" 2>/dev/null || true
+      watch_pid=""
+      break
+    fi
+
+    sleep "$DISPLAY_CHECK_INTERVAL"
+  done
+done

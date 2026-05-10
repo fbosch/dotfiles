@@ -39,7 +39,7 @@ local function exec(command)
 end
 
 local function send_to_gaming_workspace()
-	profiles.activate("gaming")
+	profiles.activate_async("gaming")
 
 	hl.dispatch(hl.dsp.window.move({ workspace = "10" }))
 	hl.dispatch(hl.dsp.window.fullscreen({ mode = "fullscreen", action = "set" }))
