@@ -139,7 +139,7 @@
     "align": 1,
     "justify": "right",
     "on-click": "swaync-client -t",
-    "menu": "on-click-right",
+    "on-click-right": "gnome-calendar",
     "tooltip": false,
     "menu-file": "~/.config/waybar/power_menu.xml",
     "menu-actions": {

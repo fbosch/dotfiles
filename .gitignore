@@ -25,6 +25,7 @@ storybook-static
 .cursor/.agent-tools
 .config/codex/**/*(!config.toml)
 .config/codex/config.toml
+.config/gtk-4.0/gtk.css
 .config/gtk-4.0/**/*
 .config/gtk-3.0/**/*
 

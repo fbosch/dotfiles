@@ -235,6 +235,43 @@ local function bench_profiles(iterations)
 	end)
 end
 
+local function bench_window_motion(iterations)
+	clear_modules()
+	local window = require("lib.window")
+	local move_right = window.move("right")
+	local move_up = window.move("up")
+	local resize_right = window.adjust("resize", "right")
+	local normal_window = make_window(1, { workspace = make_workspace(1), active = true })
+	normal_window.monitor = { name = "DP-2" }
+	local portrait_window = make_window(2, { workspace = make_workspace(1), active = true })
+	portrait_window.monitor = { name = "HDMI-A-2" }
+
+	hl.get_active_window = function()
+		return normal_window
+	end
+	run_case("window.move/right-normal", iterations, move_right)
+
+	hl.get_active_window = function()
+		return portrait_window
+	end
+	run_case("window.move/right-special", iterations, move_right)
+	run_case("window.move/up-special", iterations, move_up)
+	run_case("window.adjust/resize", iterations, function()
+		hl.dispatch(resize_right)
+	end)
+
+	local fallback_windows = {}
+	for index = 1, 50 do
+		fallback_windows[index] = make_window(index, { active = index == 50 })
+		fallback_windows[index].monitor = { name = "DP-2" }
+	end
+	current_windows = fallback_windows
+	hl.get_active_window = nil
+	run_case("window.active/fallback-50", iterations, function()
+		window.active()
+	end)
+end
+
 local cases = {
 	dp2_master = bench_dp2_master,
 	portrait = bench_portrait_dwindle,
@@ -242,18 +279,19 @@ local cases = {
 	clipboard = bench_clipboard_bridge,
 	rule_loader = bench_rule_loader,
 	profiles = bench_profiles,
+	window_motion = bench_window_motion,
 }
 
 local selected = arg[1] or "all"
 local iterations = tonumber(arg[2]) or default_iterations
 
 if selected == "all" then
-	for _, name in ipairs({ "dp2_master", "portrait", "window_switcher", "clipboard", "rule_loader", "profiles" }) do
+	for _, name in ipairs({ "dp2_master", "portrait", "window_switcher", "clipboard", "rule_loader", "profiles", "window_motion" }) do
 		cases[name](iterations)
 	end
 elseif cases[selected] then
 	cases[selected](iterations)
 else
-	print("usage: lua " .. script_path .. " [all|dp2_master|portrait|window_switcher|clipboard|rule_loader|profiles] [iterations]")
+	print("usage: lua " .. script_path .. " [all|dp2_master|portrait|window_switcher|clipboard|rule_loader|profiles|window_motion] [iterations]")
 	os.exit(2)
 end

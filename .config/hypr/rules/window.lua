@@ -24,6 +24,7 @@ hl.window_rule({ match = { class = "^(Bitwarden)$" }, float = true, size = "900 
 -- GNOME Applications (general)
 hl.window_rule({ match = { class = "^(org\\.gnome\\.Calculator)$" }, float = true })
 hl.window_rule({ match = { class = "^(org\\.gnome\\.TextEditor)$" }, float = true })
+hl.window_rule({ match = { class = "^(org\\.gnome\\.Calendar)$" }, float = true })
 hl.window_rule({ match = { class = "^(org\\.gnome\\.Loupe)$" }, float = true })
 
 -- Plexamp

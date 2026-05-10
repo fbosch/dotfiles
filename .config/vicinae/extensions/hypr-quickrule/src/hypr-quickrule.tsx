@@ -725,10 +725,12 @@ export default function Command() {
 			}
 
 			if (hasWindowStateSelector(existingSelectors, matcher, matchValue)) {
+				await execAsync("hyprctl reload config-only");
+
 				await showToast({
 					style: Toast.Style.Success,
 					title: "Window State Already Saved",
-					message: `${info.class} is already in window-state-selectors.lua`,
+					message: `${info.class} is already tracked; reloaded window-state rules`,
 				});
 				await closeMainWindow();
 				return;
