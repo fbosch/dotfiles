@@ -5,7 +5,7 @@ local system = require("lib.system")
 local host = system.hostname()
 
 if host == "rvn-pc" then
-		hl.monitor({
+	hl.monitor({
 		output = "DP-2",
 		mode = "3440x1440@164.9",
 		position = "1440x500",
@@ -17,14 +17,13 @@ if host == "rvn-pc" then
 		mode = "2560x1440@59.95",
 		position = "0x0",
 		scale = 1.0,
-	})
-
-	hl.monitor({
-		output = "HDMI-A-2",
 		transform = 3,
 	})
+else
+	hl.monitor({
+		output = "",
+		mode = "preferred",
+		position = "auto",
+		scale = 1.0,
+	})
 end
-
-return {
-	host = host,
-}
