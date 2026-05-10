@@ -72,6 +72,24 @@ any_open() {
     ' >/dev/null
 }
 
+park_other_visible_apps() {
+  local current_id="$1"
+
+  hyprctl clients -j 2>/dev/null \
+    | jq -r --argjson apps "$(taskbar_apps_json)" --arg current_id "$current_id" '
+      .[] as $window |
+      $apps[] |
+      select(.id != $current_id) |
+      select(.class_name == $window.class and $window.pinned == true and $window.workspace.name != .workspace) |
+      "\($window.address)|\(.workspace)"
+    ' \
+    | while IFS='|' read -r address target_workspace; do
+      [[ -z "$address" || -z "$target_workspace" ]] && continue
+      hyprctl dispatch "hl.dsp.window.pin({ window = $(jq -Rn --arg value "address:${address}" '$value') })" >/dev/null 2>&1 || true
+      hyprctl dispatch "hl.dsp.window.move({ workspace = $(jq -Rn --arg value "$target_workspace" '$value'), window = $(jq -Rn --arg value "address:${address}" '$value'), follow = false })" >/dev/null 2>&1 || true
+    done
+}
+
 park_active() {
   local active class_name address workspace pinned
 
@@ -328,6 +346,7 @@ if [[ -n "$address" ]]; then
   else
     current_workspace="$(client_workspace "$address")"
     if [[ "$current_workspace" == "$workspace" ]]; then
+      park_other_visible_apps "$app_id"
       target_workspace="$(target_workspace)"
       [[ -z "$target_workspace" || "$target_workspace" == special:* ]] && target_workspace="+0"
       apply_saved_size "$address"
@@ -354,6 +373,7 @@ if [[ "$mode" == "prewarm" ]]; then
   set_pinned "$address" false
   move_window_to_workspace "$address" "$workspace"
 else
+  park_other_visible_apps "$app_id"
   target_workspace="$(target_workspace)"
   [[ -z "$target_workspace" || "$target_workspace" == special:* ]] && target_workspace="+0"
   apply_saved_size "$address"
