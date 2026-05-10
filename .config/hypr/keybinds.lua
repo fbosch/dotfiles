@@ -1,14 +1,16 @@
 -- Keybindings ported from keybinds.conf.
 
 local programs = require("programs")
+local command = require("lib.command")
+local paths = require("lib.paths")
+local system = require("lib.system")
 local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
 local performance_mode = require("actions.toggle-performance-mode")
 local window_switcher = require("actions.window-switcher")
-local portrait_dwindle = require("layouts.portrait_dwindle")
-local dp2_master = require("layouts.dp2_master")
 
 local main_mod = "SUPER"
+local profilectl = paths.script("profilectl.sh")
 
 local opts = {
   bindo = { long_press = true },
@@ -42,6 +44,37 @@ local function direction(value)
   return ({ l = "left", r = "right", u = "up", d = "down" })[value] or value
 end
 
+local function send_to_gaming_workspace()
+	local quoted_profilectl = system.shell_quote(profilectl)
+
+	if not command.ok(quoted_profilectl .. " is-active gaming >/dev/null 2>&1") then
+		hl.exec_cmd(quoted_profilectl .. " apply gaming")
+	end
+
+	hl.dispatch(hl.dsp.window.move({ workspace = "10" }))
+	hl.dispatch(hl.dsp.window.fullscreen({ mode = "fullscreen", action = "set" }))
+end
+
+local function move_window_horizontal(value)
+	local window = hl.get_active_window and hl.get_active_window() or nil
+	if value == "r" and window and window.monitor and window.monitor.name == "HDMI-A-2" then
+		hl.dispatch(hl.dsp.window.move({ monitor = "DP-2" }))
+		return
+	end
+
+	hl.dispatch(hl.dsp.window.move({ direction = direction(value) }))
+end
+
+local function move_window_vertical(value)
+	local window = hl.get_active_window and hl.get_active_window() or nil
+	if window and window.monitor and window.monitor.name == "HDMI-A-2" then
+		hl.dispatch(hl.dsp.window.swap({ direction = direction(value) }))
+		return
+	end
+
+	hl.dispatch(hl.dsp.window.move({ direction = direction(value) }))
+end
+
 bind("bindo", "", "SUPER_L", exec("pkill -SIGUSR1 waybar"))
 bind("bindir", "", "SUPER_L", exec("sleep 0.5 && ~/.config/hypr/runtime/desktop/waybar-toggle-smart.sh"))
 
@@ -62,6 +95,7 @@ bind("bind", main_mod .. " + SHIFT", "C", exec("hyprpicker -a"))
 bind("bind", main_mod, "N", exec("swaync-client -t"))
 bind("bind", "CTRL + ALT", "L", exec("hyprlock"))
 bind("bind", main_mod .. " + SHIFT", "P", performance_mode.toggle_performance_mode)
+bind("bind", main_mod .. " + SHIFT", "G", send_to_gaming_workspace)
 
 bind("bind", "CTRL + SHIFT", "C", exec("bash ~/.config/hypr/runtime/capture/screenshot.sh area"))
 bind("bindnitl", "", "PRINT", exec("bash ~/.config/hypr/runtime/capture/screenshot.sh screen"))
@@ -87,9 +121,7 @@ bind("bind", main_mod, "D", exec("~/.config/hypr/runtime/windows/toggle-show-des
 bind("bind", main_mod, "Z", exec("~/.config/hypr/runtime/windows/toggle-minimized-window.sh"))
 bind("bind", main_mod .. " + SHIFT", "Z", exec("~/.config/hypr/runtime/windows/toggle-minimized-workspace.sh"))
 bind("bind", main_mod, "X", function()
-  hl.dispatch(hl.dsp.window.move({ workspace = "+0", follow = false }))
-  portrait_dwindle.apply_all()
-  dp2_master.apply_all()
+	hl.dispatch(hl.dsp.window.move({ workspace = "+0", follow = false }))
 end)
 
 bind("bind", main_mod, "H", hl.dsp.focus({ direction = direction("l") }))
@@ -125,18 +157,18 @@ bind("bindm", main_mod, "mouse:272", hl.dsp.window.drag())
 bind("bindm", main_mod, "mouse:273", hl.dsp.window.resize())
 bind("bindm", main_mod .. " + SHIFT", "mouse:273", hl.dsp.window.resize())
 
-local function move_window_direction(value)
-  return function()
-    hl.dispatch(hl.dsp.window.move({ direction = direction(value) }))
-    portrait_dwindle.apply_all()
-    dp2_master.apply_all()
-  end
-end
-
-bind("bind", main_mod .. " + SHIFT", "H", move_window_direction("l"))
-bind("bind", main_mod .. " + SHIFT", "L", move_window_direction("r"))
-bind("bind", main_mod .. " + SHIFT", "J", move_window_direction("u"))
-bind("bind", main_mod .. " + SHIFT", "K", move_window_direction("d"))
+bind("bind", main_mod .. " + SHIFT", "H", function()
+	move_window_horizontal("l")
+end)
+bind("bind", main_mod .. " + SHIFT", "L", function()
+	move_window_horizontal("r")
+end)
+bind("bind", main_mod .. " + SHIFT", "J", function()
+	move_window_vertical("u")
+end)
+bind("bind", main_mod .. " + SHIFT", "K", function()
+	move_window_vertical("d")
+end)
 
 bind("binde", main_mod, "right", hl.dsp.window.move({ x = 32, y = 0, relative = true }))
 bind("binde", main_mod, "left", hl.dsp.window.move({ x = -32, y = 0, relative = true }))

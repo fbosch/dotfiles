@@ -84,12 +84,6 @@ hl.on("workspace.move_to_monitor", function(workspace)
 	apply_portrait_split(workspace)
 end)
 
-hl.on("window.active", function(window, active)
-	if active == 1 then
-		apply_portrait_split(window.workspace)
-	end
-end)
-
 M.apply_all()
 
 return M
