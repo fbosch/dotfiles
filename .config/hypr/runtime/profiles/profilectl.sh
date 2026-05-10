@@ -4,6 +4,7 @@ set -euo pipefail
 
 STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-profiles"
 LOCK_FILE="$STATE_DIR/lock"
+TASKBAR_APP_SCRIPT="$HOME/.config/hypr/runtime/desktop/taskbar-app.sh"
 
 PERFORMANCE_PROFILE="performance"
 GAMING_PROFILE="gaming"
@@ -78,6 +79,12 @@ refresh_window_captures() {
   fi
 }
 
+terminate_taskbar_apps() {
+  if [[ -x "$TASKBAR_APP_SCRIPT" ]]; then
+    "$TASKBAR_APP_SCRIPT" --kill-all >/dev/null 2>&1 || true
+  fi
+}
+
 set_switcher_mode_icons() {
   ags request --instance ags-bundled window-switcher '{"action": "set-mode", "mode": "icons"}' 2>/dev/null || true
 }
@@ -139,6 +146,7 @@ apply_effective_state() {
     fi
 
     pause_background_helpers
+    terminate_taskbar_apps
     set_switcher_mode_icons
     if [[ "$desired_mode" == "gaming" ]]; then
       apply_hypr_gaming_overlay
@@ -151,6 +159,7 @@ apply_effective_state() {
   fi
 
   pause_background_helpers
+  terminate_taskbar_apps
   set_switcher_mode_icons
   if [[ "$desired_mode" == "gaming" ]]; then
     apply_hypr_gaming_overlay

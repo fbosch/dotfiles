@@ -76,6 +76,23 @@ any_open() {
     ' >/dev/null
 }
 
+kill_all() {
+  hyprctl clients -j 2>/dev/null \
+    | jq -r --argjson apps "$(taskbar_apps_json)" '
+      def app_matches($window; $app):
+        if $app.tag then (($window.tags // []) | index($app.tag)) != null else $app.class_name == $window.class end;
+      .[] as $window |
+      $apps[] |
+      select(app_matches($window; .)) |
+      $window.address
+    ' \
+    | sort -u \
+    | while IFS= read -r address; do
+      [[ -z "$address" ]] && continue
+      hyprctl dispatch "hl.dsp.window.close($(jq -Rn --arg value "address:${address}" '$value'))" >/dev/null 2>&1 || true
+    done
+}
+
 park_other_visible_apps() {
   local current_id="$1"
 
@@ -125,6 +142,11 @@ fi
 if [[ "$app_id" == "--park-active" ]]; then
   park_active
   exit $?
+fi
+
+if [[ "$app_id" == "--kill-all" ]]; then
+  kill_all
+  exit 0
 fi
 
 case "$app_id" in
@@ -218,12 +240,6 @@ client_address() {
     hyprctl clients -j 2>/dev/null \
       | jq -r --arg class_name "$class_name" 'first(.[] | select(.class == $class_name) | .address) // empty'
   fi
-}
-
-focus_window() {
-  local address="$1"
-
-  hyprctl dispatch "hl.dsp.focus({ window = $(lua_quote "address:${address}") })" >/dev/null 2>&1 || true
 }
 
 move_window_to_workspace() {
@@ -390,7 +406,6 @@ if [[ -n "$address" ]]; then
       position_bottom_right "$address"
       move_window_to_workspace "$address" "$target_workspace"
       set_pinned "$address" true
-      focus_window "$address"
     else
       set_pinned "$address" false
       move_window_to_workspace "$address" "$workspace"
@@ -417,5 +432,4 @@ else
   position_bottom_right "$address"
   move_window_to_workspace "$address" "$target_workspace"
   set_pinned "$address" true
-  focus_window "$address"
 fi
