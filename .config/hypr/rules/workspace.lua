@@ -24,7 +24,7 @@ hl.workspace_rule({
 hl.workspace_rule({
 	workspace = "r[1-9] m[DP-2] w[tv3]",
 	layout = "master",
-	layout_opts = { orientation = "center", mfact = 0.2 },
+	layout_opts = { orientation = "center", mfact = 0.4 },
 })
 
 hl.workspace_rule({

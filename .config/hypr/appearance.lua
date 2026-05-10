@@ -51,6 +51,9 @@ hl.config({
     mfact = 0.67,
     new_status = "master",
     new_on_top = true,
+    orientation = "left",
+    center_master_fallback = "left",
+    slave_count_for_center_master = 2,
   },
   scrolling = {
     column_width = 1.0,
