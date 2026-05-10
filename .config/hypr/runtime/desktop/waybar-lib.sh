@@ -14,6 +14,11 @@ check_swaync_visible() {
     echo "${result#* }"
 }
 
+# Check if a taskbar-adjacent app is currently shown from its parking workspace.
+check_taskbar_app_open() {
+    "$HOME/.config/hypr/runtime/desktop/taskbar-app.sh" --any-open >/dev/null 2>&1
+}
+
 # Check if waybar should stay visible (returns 0 if should stay visible, 1 if can hide)
 # Usage: should_waybar_stay_visible distance_from_bottom [threshold]
 should_waybar_stay_visible() {
@@ -30,15 +35,20 @@ should_waybar_stay_visible() {
     # Cursor is far - now check expensive menu states
     local start_menu_visible
     local swaync_visible
+    local taskbar_app_open=false
     start_menu_visible=$(check_start_menu_visible)
     swaync_visible=$(check_swaync_visible)
+    if check_taskbar_app_open; then
+        taskbar_app_open=true
+    fi
     
     # Export for callers who want to log
     export START_MENU_VISIBLE="$start_menu_visible"
     export SWAYNC_VISIBLE="$swaync_visible"
+    export TASKBAR_APP_OPEN="$taskbar_app_open"
     
     # Stay visible if start menu or SwayNC is open
-    if [ "$start_menu_visible" = "true" ] || [ "$swaync_visible" = "true" ]; then
+    if [ "$start_menu_visible" = "true" ] || [ "$swaync_visible" = "true" ] || [ "$taskbar_app_open" = "true" ]; then
         return 0  # Should stay visible
     else
         return 1  # Can hide

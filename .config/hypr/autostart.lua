@@ -1,6 +1,7 @@
 -- Autostart commands ported from autostart.conf.
 
 local M = {}
+local taskbar_apps = require("taskbar-apps")
 
 M.commands = {
 	"xrandr --output DP-2 --primary",
@@ -22,6 +23,10 @@ M.commands = {
 	"uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-edge-monitor.sh",
 	"~/.config/hypr/runtime/startup/startup-desktop-ready.sh",
 }
+
+for _, command in ipairs(taskbar_apps.autostart_commands()) do
+	M.commands[#M.commands + 1] = command
+end
 
 function M.marker_path()
 	local runtime_dir = os.getenv("XDG_RUNTIME_DIR") or "/tmp"

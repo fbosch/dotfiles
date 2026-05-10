@@ -1,6 +1,8 @@
 -- Static window rules ported from rules.conf.
 -- Preserve declaration order.
 
+local taskbar_apps = require("taskbar-apps")
+
 -- Gamescope
 hl.window_rule({
   match = { class = "^(gamescope)$" },
@@ -24,8 +26,8 @@ hl.window_rule({ match = { class = "^(Bitwarden)$" }, float = true, size = "900 
 -- GNOME Applications (general)
 hl.window_rule({ match = { class = "^(org\\.gnome\\.Calculator)$" }, float = true })
 hl.window_rule({ match = { class = "^(org\\.gnome\\.TextEditor)$" }, float = true })
-hl.window_rule({ match = { class = "^(org\\.gnome\\.Calendar)$" }, float = true })
 hl.window_rule({ match = { class = "^(org\\.gnome\\.Loupe)$" }, float = true })
+taskbar_apps.apply_rules()
 
 -- Plexamp
 hl.window_rule({ match = { class = "Plexamp" }, float = true, size = "360 620" })
@@ -38,56 +40,6 @@ hl.window_rule({ match = { class = "^(org\\.gnome\\.font-viewer)$" }, float = tr
 
 -- Flake Update Terminal
 hl.window_rule({ match = { class = "^(flake_update_terminal)$" }, float = true, pin = true })
-
--- Wiremix Terminal
-hl.window_rule({
-  match = { class = "^(wiremix_terminal)$" },
-  float = true,
-  pin = true,
-  no_anim = true,
-  size = "725 500",
-  move = "(monitor_w-window_w-45) (monitor_h-window_h-50)",
-})
-
--- Nvitop Terminal
-hl.window_rule({
-  match = { class = "^(nvitop_terminal)$" },
-  float = true,
-  pin = true,
-  no_anim = true,
-  size = "900 655",
-  move = "(monitor_w-window_w-220) (monitor_h-window_h-205)",
-})
-
--- S-TUI Terminal
-hl.window_rule({
-  match = { class = "^(s_tui_terminal)$" },
-  float = true,
-  pin = true,
-  no_anim = true,
-  size = "1200 760",
-  move = "(monitor_w-window_w-520) (monitor_h-window_h-325)",
-})
-
--- BTOP CPU Terminal
-hl.window_rule({
-  match = { class = "^(btop_cpu_terminal)$" },
-  float = true,
-  pin = true,
-  no_anim = true,
-  size = "920 620",
-  move = "(monitor_w-window_w-230) (monitor_h-window_h-170)",
-})
-
--- BTOP Mem Terminal
-hl.window_rule({
-  match = { class = "^(btop_mem_terminal)$" },
-  float = true,
-  pin = true,
-  no_anim = true,
-  size = "920 620",
-  move = "(monitor_w-window_w-230) (monitor_h-window_h-170)",
-})
 
 -- GCR Prompter
 hl.window_rule({ match = { class = "^(gcr-prompter)$" }, pin = true })

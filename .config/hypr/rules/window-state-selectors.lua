@@ -17,5 +17,4 @@ return {
   { matcher = "match:class", pattern = [=[^GParted$]=] },
   { matcher = "match:class", pattern = [=[^net\.davidotek\.pupgui2$]=] },
   { matcher = "match:class", pattern = [=[^io\.github\.efogdev\.mpris-timer$]=] },
-  { matcher = "match:class", pattern = [=[^org\.gnome\.Calendar$]=] },
 }

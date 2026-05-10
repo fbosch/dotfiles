@@ -16,11 +16,11 @@ distance_from_bottom=$((monitor_height - cursor_y))
 # Check if waybar should stay visible
 if should_waybar_stay_visible "$distance_from_bottom" 60; then
     # Debug: log the decision
-    echo "$(date): distance=$distance_from_bottom, menu_visible=$START_MENU_VISIBLE, swaync_visible=$SWAYNC_VISIBLE, will_hide=no" >> /tmp/waybar-debug.log
+    echo "$(date): distance=$distance_from_bottom, menu_visible=$START_MENU_VISIBLE, swaync_visible=$SWAYNC_VISIBLE, taskbar_app_open=$TASKBAR_APP_OPEN, will_hide=no" >> /tmp/waybar-debug.log
     exit 0
 else
     # Cursor is away from waybar and both menus are closed - toggle it (hide)
-    echo "$(date): distance=$distance_from_bottom, menu_visible=$START_MENU_VISIBLE, swaync_visible=$SWAYNC_VISIBLE, will_hide=yes" >> /tmp/waybar-debug.log
+    echo "$(date): distance=$distance_from_bottom, menu_visible=$START_MENU_VISIBLE, swaync_visible=$SWAYNC_VISIBLE, taskbar_app_open=$TASKBAR_APP_OPEN, will_hide=yes" >> /tmp/waybar-debug.log
     echo "$(date): HIDING WAYBAR" >> /tmp/waybar-debug.log
     pkill -SIGUSR2 waybar
 fi

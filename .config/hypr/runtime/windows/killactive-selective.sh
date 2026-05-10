@@ -4,6 +4,7 @@ set -euo pipefail
 
 PROFILECTL="$HOME/.config/hypr/runtime/profiles/profilectl.sh"
 MINIMIZE_SCRIPT="$HOME/.config/hypr/runtime/windows/toggle-minimized-window.sh"
+TASKBAR_APP_SCRIPT="$HOME/.config/hypr/runtime/desktop/taskbar-app.sh"
 
 readonly ACTION_KILL="kill"
 readonly ACTION_BLOCK="block"
@@ -93,6 +94,11 @@ run_close_action() {
 active_window_json="$(hyprctl activewindow -j 2>/dev/null || printf '{}')"
 app_class="$(jq -r 'if (.class // "") != "" then .class else (.initialClass // "") end' <<< "$active_window_json")"
 title="$(jq -r '.title // ""' <<< "$active_window_json")"
+
+if "$TASKBAR_APP_SCRIPT" --park-active; then
+  exit 0
+fi
+
 action="$(resolve_close_action "$app_class")"
 
 run_close_action "$action" "$title"

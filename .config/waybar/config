@@ -38,14 +38,14 @@
       "warning": 70,
       "critical": 90
     },
-    "on-click": "~/.config/waybar/scripts/btop-terminal cpu"
+    "on-click": "~/.config/hypr/runtime/desktop/taskbar-app.sh missioncenter"
   },
 
   "memory": {
     "format": "{icon} {percentage}%",
     "tooltip-format": "{used:0.1f} GiB / {avail} GiB \n({swapPercentage}% Swap)",
     "format-icons": [""],
-    "on-click": "~/.config/waybar/scripts/btop-terminal mem"
+    "on-click": "~/.config/hypr/runtime/desktop/taskbar-app.sh missioncenter"
   },
 
   "custom/cpu_temp": {
@@ -54,7 +54,7 @@
     "return-type": "json",
     "format": "  {}",
     "tooltip": true,
-    "on-click": "~/.config/waybar/scripts/s-tui-terminal"
+    "on-click": "~/.config/hypr/runtime/desktop/taskbar-app.sh s-tui"
   },
 
   "custom/gpu_temp": {
@@ -63,7 +63,7 @@
     "return-type": "json",
     "format": "󰢮  {}",
     "tooltip": true,
-    "on-click": "~/.config/waybar/scripts/nvitop-terminal"
+    "on-click": "~/.config/hypr/runtime/desktop/taskbar-app.sh nvitop"
   },
 
   "custom/mullvad": {
@@ -85,7 +85,7 @@
       "headphone": "",
       "default": ["",  "", "", "", "", ""]
     },
-    "on-click": "~/.config/waybar/scripts/wiremix-terminal",
+    "on-click": "~/.config/hypr/runtime/desktop/taskbar-app.sh wiremix",
     "on-click-middle": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
     "tooltip": true
   },
@@ -109,7 +109,17 @@
     "sort-by-app-id": true,
     "on-click": "activate",
     "on-click-middle": "close",
-    "ignore-list": ["vicinae", "Vicinae Launcher"],
+    "ignore-list": [
+      "vicinae",
+      "Vicinae Launcher",
+      "org.gnome.Calendar",
+      "io.missioncenter.MissionCenter",
+      "btop_cpu_terminal",
+      "btop_mem_terminal",
+      "nvitop_terminal",
+      "s_tui_terminal",
+      "wiremix_terminal"
+    ],
     "app_ids-mapping": {
       "WowUp-CF": "wowup-cf",
       "WowUpCf": "wowup-cf",
@@ -139,7 +149,7 @@
     "align": 1,
     "justify": "right",
     "on-click": "swaync-client -t",
-    "on-click-right": "gnome-calendar",
+    "on-click-right": "~/.config/hypr/runtime/desktop/taskbar-app.sh calendar",
     "tooltip": false,
     "menu-file": "~/.config/waybar/power_menu.xml",
     "menu-actions": {
