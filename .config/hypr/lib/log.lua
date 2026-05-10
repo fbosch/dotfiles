@@ -1,3 +1,4 @@
+local command = require("lib.command")
 local system = require("lib.system")
 
 local M = {}
@@ -16,7 +17,7 @@ function M.write(message)
   local dir = path:match("^(.+)/[^/]+$")
 
   if dir and dir ~= ensured_dir then
-    os.execute("mkdir -p " .. system.shell_quote(dir))
+    os.execute("mkdir -p " .. command.arg(dir))
     ensured_dir = dir
   end
 

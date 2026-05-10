@@ -4,10 +4,6 @@ function M.cache_home()
   return os.getenv("XDG_CACHE_HOME") or (os.getenv("HOME") .. "/.cache")
 end
 
-function M.shell_quote(value)
-  return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
-end
-
 function M.hostname()
   if os.getenv("HOSTNAME") and os.getenv("HOSTNAME") ~= "" then
     return os.getenv("HOSTNAME")

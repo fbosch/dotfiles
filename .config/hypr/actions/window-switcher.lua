@@ -2,9 +2,9 @@
 -- Keep the AGS window-switcher as the primary multi-window implementation.
 
 local ags = require("lib.ags")
+local command = require("lib.command")
 local json = require("lib.json")
 local paths = require("lib.paths")
-local system = require("lib.system")
 
 local M = {}
 
@@ -50,7 +50,7 @@ local function focus_window(win)
 	end
 
 	if workspace_name(win):match("^" .. minimized_workspace_prefix) then
-		exec(system.shell_quote(toggle_minimized_workspace) .. " " .. system.shell_quote(address(win)))
+		exec(command.line(toggle_minimized_workspace, address(win)))
 	end
 
 	hl.dispatch(hl.dsp.focus({ window = "address:" .. address(win) }))

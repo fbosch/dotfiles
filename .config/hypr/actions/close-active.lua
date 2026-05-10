@@ -1,7 +1,6 @@
 -- Lua-native equivalent of scripts/killactive-selective.sh for Lua keybinds.
 -- Keep the Bash script for legacy hyprland.conf until Lua config is release-ready.
 
-local system = require("lib.system")
 local command = require("lib.command")
 local notify = require("lib.notify")
 local paths = require("lib.paths")
@@ -13,7 +12,7 @@ local profilectl = paths.script("profilectl.sh")
 local minimize_script = paths.runtime_script("windows/toggle-minimized-window.sh")
 
 local function is_gaming_active()
-  return command.ok(system.shell_quote(profilectl) .. " is-active gaming >/dev/null 2>&1")
+  return command.ok(command.line(profilectl, "is-active", "gaming") .. " >/dev/null 2>&1")
 end
 
 local function is_gaming_protected_window(app_class)
@@ -35,7 +34,7 @@ function M.close_active_selective()
   end
 
   if is_steam_window(app_class) then
-    hl.exec_cmd(system.shell_quote(minimize_script))
+    hl.exec_cmd(command.arg(minimize_script))
     return
   end
 

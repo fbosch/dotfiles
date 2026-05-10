@@ -2,7 +2,6 @@
 -- Keep the Bash script for legacy hyprland.conf until Lua config is release-ready.
 
 local command = require("lib.command")
-local system = require("lib.system")
 local window = require("lib.window")
 
 local M = {}
@@ -21,7 +20,7 @@ end
 
 local function have(name)
 	if tool_cache[name] == nil then
-		tool_cache[name] = command.ok("command -v " .. system.shell_quote(name) .. " >/dev/null 2>&1")
+		tool_cache[name] = command.ok("command -v " .. command.arg(name) .. " >/dev/null 2>&1")
 	end
 
 	return tool_cache[name]
@@ -36,7 +35,7 @@ local function using_wl_clipboard_wrapper()
 end
 
 local function add_displays_from_processes(displays, process_pattern)
-	local output = command.output("pgrep -af " .. system.shell_quote(process_pattern) .. " 2>/dev/null || true")
+	local output = command.output("pgrep -af " .. command.arg(process_pattern) .. " 2>/dev/null || true")
 	for line in output:gmatch("[^\n]+") do
 		for display in line:gmatch(":%d+") do
 			displays[display] = true
@@ -71,7 +70,7 @@ end
 
 local function write_xclip(display, selection, text)
 	local handle = io.popen(
-		"DISPLAY=" .. system.shell_quote(display) .. " xclip -selection " .. selection .. " -in >/dev/null 2>&1",
+		"DISPLAY=" .. command.arg(display) .. " xclip -selection " .. command.arg(selection) .. " -in >/dev/null 2>&1",
 		"w"
 	)
 	if not handle then
@@ -126,7 +125,7 @@ function M.paste_with_xwayland_clipboard_now()
 
 	local display = first_gamescope_display(displays)
 	if display and have("xdotool") then
-		command.ok("DISPLAY=" .. system.shell_quote(display) .. " xdotool key --clearmodifiers ctrl+v >/dev/null 2>&1")
+		command.ok("DISPLAY=" .. command.arg(display) .. " xdotool key --clearmodifiers ctrl+v >/dev/null 2>&1")
 		return
 	end
 end
@@ -142,7 +141,7 @@ local function schedule(action, delay)
 		"()",
 	})
 
-	hl.exec_cmd("sh -c " .. system.shell_quote("sleep " .. delay .. "; lua -e " .. system.shell_quote(lua_code)))
+	hl.exec_cmd("sh -c " .. command.arg("sleep " .. delay .. "; lua -e " .. command.arg(lua_code)))
 end
 
 function M.sync_wayland_to_xwayland()

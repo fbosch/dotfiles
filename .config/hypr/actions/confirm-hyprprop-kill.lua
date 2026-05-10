@@ -6,12 +6,11 @@ local command = require("lib.command")
 local json = require("lib.json")
 local notify = require("lib.notify")
 local paths = require("lib.paths")
-local system = require("lib.system")
 
 local M = {}
 
 local function field(expression)
-	return command.output_line("hyprprop --raw 2>/dev/null | jq -r " .. system.shell_quote(expression) .. " 2>/dev/null")
+	return command.output_line("hyprprop --raw 2>/dev/null | jq -r " .. command.arg(expression) .. " 2>/dev/null")
 end
 
 local function numeric_pid(value)

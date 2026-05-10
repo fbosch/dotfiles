@@ -1,9 +1,9 @@
-local system = require("lib.system")
+local command_lib = require("lib.command")
 
 local M = {}
 
 local function hint_arg(hint)
-	return "-h " .. system.shell_quote(hint)
+	return "-h " .. command_lib.arg(hint)
 end
 
 function M.send(options)
@@ -13,14 +13,14 @@ function M.send(options)
 		command = command .. " " .. hint_arg(hint)
 	end
 
-	command = command .. " " .. system.shell_quote(options.summary or "")
+	command = command .. " " .. command_lib.arg(options.summary or "")
 
 	if options.body then
-		command = command .. " " .. system.shell_quote(options.body)
+		command = command .. " " .. command_lib.arg(options.body)
 	end
 
 	if options.icon then
-		command = command .. " -i " .. system.shell_quote(options.icon)
+		command = command .. " -i " .. command_lib.arg(options.icon)
 	end
 
 	hl.exec_cmd(command)

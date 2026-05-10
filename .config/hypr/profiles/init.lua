@@ -1,7 +1,6 @@
 local M = {}
 local command = require("lib.command")
 local paths = require("lib.paths")
-local system = require("lib.system")
 
 local profiles = {
   performance = require("profiles.performance"),
@@ -30,7 +29,7 @@ local function read_file(path)
 end
 
 local function profilectl_command(action, mode)
-  return system.shell_quote(profilectl) .. " " .. action .. " " .. system.shell_quote(mode)
+  return command.line(profilectl, action, mode)
 end
 
 local function valid_mode(mode)

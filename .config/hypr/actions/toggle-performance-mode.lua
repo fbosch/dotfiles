@@ -1,7 +1,6 @@
 -- Lua-native equivalent of scripts/toggle-performance-mode.sh for Lua keybinds.
 -- Keep the Bash script for legacy hyprland.conf until Lua config is release-ready.
 
-local system = require("lib.system")
 local command = require("lib.command")
 local fs = require("lib.fs")
 local notify = require("lib.notify")
@@ -15,7 +14,7 @@ local in_progress = false
 
 local function icon_path(icon, color)
 	local path = command.output_line(
-		system.shell_quote(icon_gen) .. " " .. system.shell_quote(icon) .. " 64 " .. system.shell_quote(color) .. " 2>/dev/null"
+		command.line(icon_gen, icon, 64, color) .. " 2>/dev/null"
 	)
 
 	if path ~= "" and fs.exists(path) then
