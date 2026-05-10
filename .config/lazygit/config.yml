@@ -2,3 +2,11 @@
 #   paging:
 #     colorArg: always
 #     useConfig: true
+
+customCommands:
+  - key: '<c-a>'
+    context: 'files'
+    description: 'AI commit staged changes'
+    command: 'fish -lc "source ~/.config/fish/functions/ai_commit.fish; ai_commit"'
+    output: terminal
+    loadingText: 'Generating AI commit message'

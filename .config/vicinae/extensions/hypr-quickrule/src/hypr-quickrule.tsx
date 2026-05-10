@@ -187,7 +187,8 @@ const RULE_PROFILES: WindowRuleProfile[] = [
 	{
 		id: "dialog",
 		name: "Dialog Window",
-		description: "Float, pin, no animations, no decorations (like system dialogs)",
+		description:
+			"Float, pin, no animations, no decorations (like system dialogs)",
 		icon: Icon.Message,
 		rules: ["float on", "pin on", "no_anim on", "decorate off"],
 	},
@@ -407,7 +408,8 @@ export default function Command() {
 
 	const readLuaRuleBlocks = (content: string): Map<string, string> => {
 		const blocks = new Map<string, string>();
-		const blockPattern = /^[\t ]+-- BEGIN ([^\n]+)\n([\s\S]*?)\n[\t ]+-- END \1$/gm;
+		const blockPattern =
+			/^[\t ]+-- BEGIN ([^\n]+)\n([\s\S]*?)\n[\t ]+-- END \1$/gm;
 
 		for (const match of content.matchAll(blockPattern)) {
 			blocks.set(match[1], match[0]);
@@ -458,6 +460,10 @@ export default function Command() {
 		}
 	};
 
+	const isStateProfile = (profile: WindowRuleProfile): boolean => {
+		return profile.id === "save-state" || profile.id === "snapshot-state";
+	};
+
 	const appendWindowStateSelector = (
 		content: string,
 		entry: string,
@@ -481,12 +487,12 @@ export default function Command() {
 
 		if (idIndex !== -1) {
 			let startIndex = idIndex;
-			while (startIndex > 0 && lines[startIndex].trim() !== "{") {
+			while (startIndex > 0 && !/^  \{$/.test(lines[startIndex])) {
 				startIndex -= 1;
 			}
 
 			let endIndex = idIndex;
-			while (endIndex < lines.length - 1 && lines[endIndex].trim() !== "},") {
+			while (endIndex < lines.length - 1 && !/^  },$/.test(lines[endIndex])) {
 				endIndex += 1;
 			}
 
@@ -496,6 +502,10 @@ export default function Command() {
 				...serializedEntry.split("\n"),
 			);
 			return `${lines.join("\n")}\n`;
+		}
+
+		if (/return\s*{\s*}\s*$/.test(content.trimEnd())) {
+			return renderWindowStateRuleFile(serializedEntry);
 		}
 
 		if (/}\s*$/.test(content.trimEnd())) {
@@ -942,14 +952,13 @@ export default function Command() {
 						subtitle={profile.description}
 						icon={{
 							source: profile.icon,
-							tintColor: profile.id === "save-state" ? Color.Blue : Color.Green,
+							tintColor: isStateProfile(profile) ? Color.Blue : Color.Green,
 						}}
 						accessories={[
 							{
-								text:
-									profile.id === "save-state"
-										? "Persistence"
-										: `${profile.rules.length} rules`,
+								text: isStateProfile(profile)
+									? "Persistence"
+									: `${profile.rules.length} rules`,
 							},
 						]}
 						actions={
@@ -958,16 +967,18 @@ export default function Command() {
 									title={
 										profile.id === "save-state"
 											? "Save Window State"
-											: "Apply Rule"
+											: profile.id === "snapshot-state"
+												? "Snapshot Window State"
+												: "Apply Rule"
 									}
 									icon={
-										profile.id === "save-state"
+										isStateProfile(profile)
 											? Icon.SaveDocument
 											: Icon.CheckCircle
 									}
 									onAction={() => applyRule(profile, windowInfo, selector)}
 								/>
-								{profile.id !== "save-state" && (
+								{!isStateProfile(profile) && (
 									<Action
 										title="Preview Rules"
 										icon={Icon.Eye}
@@ -988,7 +999,7 @@ export default function Command() {
 					/>
 				))}
 			</List.Section>
-			{selectedProfile && selectedProfile.id !== "save-state" && (
+			{selectedProfile && !isStateProfile(selectedProfile) && (
 				<List.Section title={`Preview: ${selectedProfile.name}`}>
 					{selectedProfile.rules.map((rule, index) => (
 						<List.Item
