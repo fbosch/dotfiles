@@ -57,7 +57,7 @@ function M.activate(mode)
 end
 
 function M.activate_async(mode)
-  if not valid_mode(mode) then
+  if not valid_mode(mode) or M.is_active(mode) then
     return false
   end
 

@@ -37,11 +37,51 @@ local function exec(command)
   return hl.dsp.exec_cmd(command)
 end
 
+local pending_gaming_window = nil
+
+local function window_address(active)
+	return active and active.address and "address:" .. active.address or nil
+end
+
+local function workspace_key(workspace)
+	return workspace and (workspace.name or (workspace.id and tostring(workspace.id))) or ""
+end
+
+local function set_fullscreen(target, action)
+	hl.dispatch(hl.dsp.window.fullscreen({ mode = "fullscreen", action = action, window = target }))
+end
+
+hl.on("window.move_to_workspace", function(moved_window, workspace)
+	if workspace_key(workspace) ~= "10" then
+		return
+	end
+
+	local target = window_address(moved_window)
+	if not target or target ~= pending_gaming_window then
+		return
+	end
+
+	pending_gaming_window = nil
+	set_fullscreen(target, "set")
+end)
+
 local function send_to_gaming_workspace()
+	local active = window.active()
+	local target = window_address(active)
+	if not target then
+		return
+	end
+
 	profiles.activate_async("gaming")
+	pending_gaming_window = target
+	set_fullscreen(target, "unset")
 
 	hl.dispatch(hl.dsp.window.move({ workspace = "10" }))
-	hl.dispatch(hl.dsp.window.fullscreen({ mode = "fullscreen", action = "set" }))
+
+	if workspace_key(active.workspace) == "10" then
+		pending_gaming_window = nil
+		set_fullscreen(target, "set")
+	end
 end
 
 bind("bindo", "", "SUPER_L", exec("pkill -SIGUSR1 waybar"))
