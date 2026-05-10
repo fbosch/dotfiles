@@ -83,7 +83,7 @@ kill_all() {
         if $app.tag then (($window.tags // []) | index($app.tag)) != null else $app.class_name == $window.class end;
       .[] as $window |
       $apps[] |
-      select(app_matches($window; .)) |
+      select(app_matches($window; .) and $window.workspace.name == .workspace) |
       $window.address
     ' \
     | sort -u \
