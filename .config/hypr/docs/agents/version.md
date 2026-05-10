@@ -1,10 +1,10 @@
 # Hyprland Version
 
-Installed version last checked locally: Hyprland 0.54.0 (v0.54.0)
+Installed version last checked locally: Hyprland 0.55.0 (v0.55.0)
 
 Reference baseline: Hyprland 0.55.0 release notes and Lua-first wiki pages.
 
-- Commit: `74d4c537022fca41ccd653be14cdffbcf270fab6`
+- Commit: `ee58a513f77fa93d0b7e29ac9ad6e59554266711`
 - Date: 2026-05-09
 - Build: Nix (managed via Home Manager on NixOS)
 - Platform: Linux only (NixOS)

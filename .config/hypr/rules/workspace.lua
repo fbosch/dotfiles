@@ -1,5 +1,7 @@
 -- Static workspace rules ported from rules.conf.
 -- Preserve declaration order.
+-- Use built-in master presets here rather than custom Lua layouts; custom layouts
+-- would need to reimplement master focus, resize, and layout message behavior.
 
 hl.workspace_rule({
 	workspace = "r[1-9] m[DP-2] w[tv2]",
