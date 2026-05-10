@@ -10,12 +10,14 @@ taskbar_apps_json() {
     {
       id: "calendar",
       class_name: "org.gnome.Calendar",
+      tag: "taskbar_calendar*",
       workspace: "special:taskbar-calendar",
       command: ["gnome-calendar"]
     },
     {
       id: "missioncenter",
       class_name: "io.missioncenter.MissionCenter",
+      tag: "taskbar_missioncenter*",
       workspace: "special:taskbar-missioncenter",
       command: ["missioncenter"],
       size: [754, 759]
@@ -66,8 +68,10 @@ taskbar_apps_json() {
 any_open() {
   hyprctl clients -j 2>/dev/null \
     | jq -e --argjson apps "$(taskbar_apps_json)" '
+      def app_matches($window; $app):
+        if $app.tag then (($window.tags // []) | index($app.tag)) != null else $app.class_name == $window.class end;
       any(.[]; . as $window |
-        any($apps[]; .class_name == $window.class and $window.pinned == true and $window.workspace.name != .workspace)
+        any($apps[]; app_matches($window; .) and $window.pinned == true and $window.workspace.name != .workspace)
       )
     ' >/dev/null
 }
@@ -77,10 +81,12 @@ park_other_visible_apps() {
 
   hyprctl clients -j 2>/dev/null \
     | jq -r --argjson apps "$(taskbar_apps_json)" --arg current_id "$current_id" '
+      def app_matches($window; $app):
+        if $app.tag then (($window.tags // []) | index($app.tag)) != null else $app.class_name == $window.class end;
       .[] as $window |
       $apps[] |
       select(.id != $current_id) |
-      select(.class_name == $window.class and $window.pinned == true and $window.workspace.name != .workspace) |
+      select(app_matches($window; .) and $window.pinned == true and $window.workspace.name != .workspace) |
       "\($window.address)|\(.workspace)"
     ' \
     | while IFS='|' read -r address target_workspace; do
@@ -91,12 +97,15 @@ park_other_visible_apps() {
 }
 
 park_active() {
-  local active class_name address workspace pinned
+  local active address workspace pinned
 
   active="$(hyprctl activewindow -j 2>/dev/null || printf '{}')"
-  class_name="$(jq -r '.class // empty' <<< "$active")"
   address="$(jq -r '.address // empty' <<< "$active")"
-  workspace="$(taskbar_apps_json | jq -r --arg class_name "$class_name" 'first(.[] | select(.class_name == $class_name) | .workspace) // empty')"
+  workspace="$(taskbar_apps_json | jq -r --argjson active "$active" '
+    def app_matches($window; $app):
+      if $app.tag then (($window.tags // []) | index($app.tag)) != null else $app.class_name == $window.class end;
+    first(.[] | select(app_matches($active; .)) | .workspace) // empty
+  ')"
 
   [[ -z "$address" || -z "$workspace" ]] && return 1
 
@@ -121,6 +130,7 @@ fi
 case "$app_id" in
   calendar)
     class_name="org.gnome.Calendar"
+    tag="taskbar_calendar"
     workspace="special:taskbar-calendar"
     width=""
     height=""
@@ -128,6 +138,7 @@ case "$app_id" in
     ;;
   missioncenter)
     class_name="io.missioncenter.MissionCenter"
+    tag="taskbar_missioncenter"
     workspace="special:taskbar-missioncenter"
     width="754"
     height="759"
@@ -182,9 +193,31 @@ lua_quote() {
   jq -Rn --arg value "$1" '$value'
 }
 
+shell_quote() {
+  printf "'%s'" "${1//\'/\'\\\'\'}"
+}
+
+command_line() {
+  local part line=""
+
+  for part in "$@"; do
+    if [[ -n "$line" ]]; then
+      line+=" "
+    fi
+    line+="$(shell_quote "$part")"
+  done
+
+  printf '%s\n' "$line"
+}
+
 client_address() {
-  hyprctl clients -j 2>/dev/null \
-    | jq -r --arg class_name "$class_name" 'first(.[] | select(.class == $class_name) | .address) // empty'
+  if [[ -n "${tag:-}" ]]; then
+    hyprctl clients -j 2>/dev/null \
+      | jq -r --arg tag "${tag}*" 'first(.[] | select((.tags // []) | index($tag)) | .address) // empty'
+  else
+    hyprctl clients -j 2>/dev/null \
+      | jq -r --arg class_name "$class_name" 'first(.[] | select(.class == $class_name) | .address) // empty'
+  fi
 }
 
 focus_window() {
@@ -311,7 +344,11 @@ position_bottom_right() {
 
 launch_app() {
   if ! declare -p fallback_command >/dev/null 2>&1; then
-    "${command[@]}" >/dev/null 2>&1 &
+    if [[ -n "${tag:-}" ]]; then
+      hyprctl dispatch "hl.dsp.exec_cmd($(lua_quote "$(command_line "${command[@]}")"), { tag = $(lua_quote "+${tag}"), float = true, no_anim = true, no_initial_focus = true, workspace = $(lua_quote "${workspace} silent") })" >/dev/null 2>&1
+    else
+      "${command[@]}" >/dev/null 2>&1 &
+    fi
     return
   fi
 

@@ -9,6 +9,7 @@ M.apps = {
 		class = "org.gnome.Calendar",
 		class_pattern = "^(org\\.gnome\\.Calendar)$",
 		command = "gnome-calendar",
+		tag = "taskbar_calendar",
 		workspace = "special:taskbar-calendar",
 		prewarm = true,
 	},
@@ -18,6 +19,7 @@ M.apps = {
 		class_pattern = "^(io\\.missioncenter\\.MissionCenter)$",
 		command = "missioncenter",
 		size = "754 759",
+		tag = "taskbar_missioncenter",
 		workspace = "special:taskbar-missioncenter",
 		prewarm = false,
 	},
@@ -88,12 +90,17 @@ end
 function M.apply_rules()
 	for _, app in ipairs(M.apps) do
 		local rule = {
-			match = { class = app.class_pattern },
 			float = true,
 			no_anim = true,
 			no_initial_focus = true,
 			workspace = app.workspace .. " silent",
 		}
+
+		if app.tag then
+			rule.match = { tag = app.tag .. "*" }
+		else
+			rule.match = { class = app.class_pattern }
+		end
 
 		if app.size then
 			rule.size = app.size
