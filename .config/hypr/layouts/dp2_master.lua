@@ -18,12 +18,17 @@ local function tiled_count(workspace)
 	return count
 end
 
+local function active_monitor_name()
+	local monitor = hl.get_active_monitor and hl.get_active_monitor() or nil
+	return monitor and monitor.name or ""
+end
+
 local function apply_dp2_master(workspace)
 	if not workspace or not workspace.monitor or workspace.monitor.name ~= "DP-2" or not workspace.active then
 		return
 	end
 
-	if workspace.tiled_layout ~= "master" or workspace_key(workspace) ~= active_workspace_key() then
+	if workspace.tiled_layout ~= "master" or workspace_key(workspace) ~= active_workspace_key() or active_monitor_name() ~= "DP-2" then
 		return
 	end
 

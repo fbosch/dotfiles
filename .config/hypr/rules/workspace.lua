@@ -7,7 +7,7 @@
 hl.workspace_rule({
 	workspace = "r[1-9] m[DP-2]",
 	layout = "master",
-	layout_opts = { orientation = "left", mfact = 0.7 },
+	layout_opts = { orientation = "left", mfact = 0.67 },
 })
 
 hl.workspace_rule({
@@ -18,7 +18,7 @@ hl.workspace_rule({
 hl.workspace_rule({
 	workspace = "r[1-9] m[DP-2] w[tv2]",
 	layout = "master",
-	layout_opts = { orientation = "left", mfact = 0.7 },
+	layout_opts = { orientation = "left", mfact = 0.67 },
 })
 
 hl.workspace_rule({
