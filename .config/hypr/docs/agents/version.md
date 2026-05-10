@@ -1,17 +1,27 @@
 # Hyprland Version
 
-Current version: Hyprland 0.52.0 (v0.52.0)
+Installed version last checked locally: Hyprland 0.54.0 (v0.54.0)
 
-- Commit: `6e09eb2e6cc1744687f158f2a576de844be59f4e`
-- Date: 2025-12-15
+Reference baseline: Hyprland 0.55.0 release notes and Lua-first wiki pages.
+
+- Commit: `74d4c537022fca41ccd653be14cdffbcf270fab6`
+- Date: 2026-05-09
 - Build: Nix (managed via Home Manager on NixOS)
 - Platform: Linux only (NixOS)
 - Libraries:
-  - Aquamarine: 0.10.0
-  - Hyprutils: 0.11.0
-  - Hyprgraphics: 0.4.0
+  - Aquamarine: 0.11.0
+  - Hyprutils: 0.13.1
+  - Hyprgraphics: 0.5.1
   - Hyprcursor: 0.1.13
-  - Hyprlang: 0.6.7
+  - Hyprlang: 0.6.8
+
+0.55 reference notes:
+
+- Lua config is the primary upstream documentation path. Hyprlang remains deprecated but still supported for a few releases.
+- Removed options: `dwindle:pseudotile`, `decoration:shadow:ignore_window`, `render:cm_fs_passthrough`.
+- `misc:vfr` moved to `debug:vfr` and should be treated as a debug-only setting.
+- New config areas relevant to this repo: per-output `icc`, bind `auto_consuming`, device tags, `confine_pointer` window rules, scrolling layout consume/expel/wrapping, `scroll_move` gesture action, `rotatesplit` dwindle layout message, and glow decoration.
+- Retest layer-shell input issues on 0.55 before carrying local workarounds; 0.55 includes input/layer focus changes.
 
 Check version:
 

@@ -1,6 +1,6 @@
 ---
 name: hypr-config
-description: Configure and troubleshoot Hyprland safely in this dotfiles repo. Use when adding or changing monitor, bind, input, workspace, window rule, layer rule, layout, animation, env, startup, or runtime behavior in `.config/hypr/*.conf`, and when diagnosing config errors, layer-shell stacking/input issues, or post-reload regressions for Hyprland v0.52.0.
+description: Configure and troubleshoot Hyprland safely in this dotfiles repo. Use when adding or changing monitor, bind, input, workspace, window rule, layer rule, layout, animation, env, startup, or runtime behavior in `.config/hypr/*.conf`, and when diagnosing config errors, layer-shell stacking/input issues, or post-reload regressions for Hyprland 0.55 docs / locally recorded runtime.
 ---
 
 # Hypr Config
@@ -8,7 +8,7 @@ description: Configure and troubleshoot Hyprland safely in this dotfiles repo. U
 ## Scope
 
 Treat `.config/hypr/docs/agents/` as the canonical local reference for this repo.
-Target Hyprland version: `0.52.0`.
+Reference baseline: Hyprland `0.55.0` docs. Confirm locally installed runtime with `.config/hypr/docs/agents/version.md` / `hyprctl version` before relying on new options.
 
 Edit only the smallest relevant config file. Keep the repo's split-config layout.
 

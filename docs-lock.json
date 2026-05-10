@@ -14,7 +14,7 @@
     "vicinae-docs": {
       "repo": "https://github.com/vicinaehq/docs.git",
       "ref": "HEAD",
-      "resolvedCommit": "e158bbe3dda109c2242e8253ec6bc15fe0f63a3a",
+      "resolvedCommit": "b4fddd4197d9709158ac59a670448629b4faf1f6",
       "bytes": 19925,
       "fileCount": 8,
       "manifestSha256": "94de3153754655c26d3fd6acf9671ddc37a81fd30b889f4a45520100bf7ad872",
@@ -23,16 +23,16 @@
     "hyprland-wiki": {
       "repo": "https://github.com/hyprwm/hyprland-wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "ecc06f3b6605e453c0ad533d979fccbefff788ef",
-      "bytes": 182137,
-      "fileCount": 25,
-      "manifestSha256": "e39ada88153c740d32b5d380020ae0b61cde9178cdf9314a386f5182fce2f3c4",
+      "resolvedCommit": "4184950a50688cfb37b88960b9656308d8008acd",
+      "bytes": 182471,
+      "fileCount": 30,
+      "manifestSha256": "13d4433f3dee5869bdab08e6edbaa9adbecf85ec4eb943ca295f32672c2e68a3",
       "rulesSha256": "9711428153e452825f0368860d30401cea3ed5f5e90d569d70558c392fe0dc83"
     },
     "waybar": {
       "repo": "https://github.com/Alexays/Waybar.wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "2d1715e50044fedfd9a443b8e2514119d22f73f1",
+      "resolvedCommit": "48077918b5530a2b23f7054c4cff0925688c30b8",
       "bytes": 22789,
       "fileCount": 2,
       "manifestSha256": "6ce880bf38b379777e79aa3ba0909f4351f89b3a6c39df253a3c357948d2d865",

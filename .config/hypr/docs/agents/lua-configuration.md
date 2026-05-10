@@ -4,7 +4,7 @@ Local reference for migrating this repo from hyprlang `.conf` files to Hyprland 
 
 ## Scope
 
-- Upstream basis: Hyprland `main` after Lua config PR #13817.
+- Upstream basis: Hyprland 0.55.0 Lua-first config docs and Lua config PR #13817.
 - Local Lua test entrypoint is `.config/hypr/hyprland.lua`; remove or rename it to roll back to `.config/hypr/hyprland.conf`.
 - Generated outputs are data files under `.config/hypr/rules/generated.lua` and `.config/hypr/rules/window-state.lua`.
 
@@ -15,6 +15,12 @@ Local reference for migrating this repo from hyprlang `.conf` files to Hyprland 
 - Explicit config paths are selected by extension: `.lua` uses the Lua config manager, other extensions use the legacy hyprlang manager.
 - No source-backed Lua API was found for sourcing existing hyprlang `.conf` files from Lua. Treat live Lua migration as replacing the active config graph, not mixing both parsers.
 - Under Lua config, `hyprctl keyword` is legacy-only; use Lua `eval` support where available.
+
+0.55 status:
+
+- Upstream now documents Lua as the primary config format.
+- Hyprlang configs still work for a few releases, but should be treated as legacy rollback material in this repo.
+- Keep generated config data in Lua tables; do not add new live hyprlang sources unless explicitly rolling back.
 
 Sources:
 
@@ -228,7 +234,8 @@ Relevant bind flag mappings for this repo:
 | `binde` | `{ repeating = true }` |
 | `bindel` | `{ repeating = true, locked = true }` |
 | `bindl` | `{ locked = true }` |
-| `bindm` | intended `{ mouse = true }`, but see risks below |
+| `bindm` | `{ mouse = true }` |
+| no legacy keyword equivalent | `{ auto_consuming = true }` |
 
 Relevant dispatcher mappings for this repo:
 
@@ -261,9 +268,10 @@ hl.define_submap("passthru", function()
 end)
 ```
 
-Keybind risks for staged migration:
+Keybind notes:
 
-- Upstream example uses `{ mouse = true }` for mouse binds, but current source does not appear to read `opts.mouse` into the keybind object. Do not claim `bindm` parity until upstream fixes this or live testing proves behavior.
+- 0.55 documents `{ mouse = true }` for mouse binds.
+- 0.55 adds `{ auto_consuming = true }`, which passes key/mouse events to the active window if the dispatcher fails.
 - `resizewindow 1` has no confirmed Lua equivalent. `hl.dsp.window.resize()` maps the normal resize dispatcher only.
 - Pixel move/resize helpers call action APIs directly and are behavior-equivalent candidates for `movewindowpixel` and `resizeactive`, but should be live-tested before switching.
 - Workspace selector `+0` should route through Lua workspace selector resolution, but should be live-tested before switching.
@@ -284,7 +292,7 @@ Sources:
 
 ## Known Risks
 
-- Lua config API is new and can change before this repo moves to a Hyprland release containing it.
+- Lua config API is still young and can change across Hyprland releases.
 - No mixed hyprlang source bridge is source-backed.
 - `dofile` reload watching is not source-backed; generated writers need explicit reloads.
 - Plugin namespaced effects are uncertain. If needed, exact keys likely require bracket syntax, for example `['hyprbars:no_bar'] = '1'`, but plugin registration must be confirmed first.
