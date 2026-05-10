@@ -6,19 +6,22 @@ local function address(window)
 	return window and window.address and "address:" .. window.address or nil
 end
 
-local function tiled_windows(workspace)
-	local windows = {}
+local function tiled_summary(workspace)
+	local count = 0
+	local third = nil
+	local first = nil
 	for _, window in ipairs(workspace:get_windows()) do
 		if window.visible and not window.floating then
-			table.insert(windows, window)
+			count = count + 1
+			if count == 1 then
+				first = window
+			elseif count == 3 then
+				third = window
+			end
 		end
 	end
 
-	return windows
-end
-
-local function tiled_count(workspace)
-	return #tiled_windows(workspace)
+	return count, first, third
 end
 
 local function dispatch_on_window(window, dispatcher)
@@ -37,12 +40,12 @@ local function dispatch_on_window(window, dispatcher)
 end
 
 local function dispatch_on_workspace(workspace, dispatcher)
-	local windows = tiled_windows(workspace)
-	if not windows[1] then
+	local _, first = tiled_summary(workspace)
+	if not first then
 		return
 	end
 
-	dispatch_on_window(windows[1], dispatcher)
+	dispatch_on_window(first, dispatcher)
 end
 
 local function apply_portrait_split(workspace, changed_window)
@@ -54,11 +57,11 @@ local function apply_portrait_split(workspace, changed_window)
 		return
 	end
 
-	local count = tiled_count(workspace)
+	local count, first, third = tiled_summary(workspace)
 	if count == 2 then
-		dispatch_on_workspace(workspace, hl.dsp.layout("splitratio 0.67 exact"))
+		dispatch_on_window(first, hl.dsp.layout("splitratio 0.67 exact"))
 	elseif count == 3 then
-		dispatch_on_window(changed_window or tiled_windows(workspace)[3], hl.dsp.layout("splitratio 1.0 exact"))
+		dispatch_on_window(changed_window or third, hl.dsp.layout("splitratio 1.0 exact"))
 	end
 end
 

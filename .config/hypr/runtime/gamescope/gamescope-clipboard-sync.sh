@@ -44,7 +44,9 @@ fi
 
 LOCK_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-clipboard/gamescope-clipboard-sync.lockdir"
 LOG_FILE="/tmp/hyprland-clipboard.log"
-DISPLAY_CHECK_INTERVAL=5
+DISPLAY_CHECK_INTERVAL="${DISPLAY_CHECK_INTERVAL:-5}"
+
+mkdir -p "$(dirname "$LOCK_DIR")"
 
 if mkdir "$LOCK_DIR" 2>/dev/null; then
   :
