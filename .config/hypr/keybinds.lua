@@ -5,6 +5,8 @@ local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
 local performance_mode = require("actions.toggle-performance-mode")
 local window_switcher = require("actions.window-switcher")
+local portrait_dwindle = require("layouts.portrait_dwindle")
+local dp2_master = require("layouts.dp2_master")
 
 local main_mod = "SUPER"
 
@@ -84,7 +86,11 @@ bind("bind", main_mod, "D", exec("~/.config/hypr/runtime/windows/toggle-show-des
 
 bind("bind", main_mod, "Z", exec("~/.config/hypr/runtime/windows/toggle-minimized-window.sh"))
 bind("bind", main_mod .. " + SHIFT", "Z", exec("~/.config/hypr/runtime/windows/toggle-minimized-workspace.sh"))
-bind("bind", main_mod, "X", hl.dsp.window.move({ workspace = "+0", follow = false }))
+bind("bind", main_mod, "X", function()
+  hl.dispatch(hl.dsp.window.move({ workspace = "+0", follow = false }))
+  portrait_dwindle.apply_all()
+  dp2_master.apply_all()
+end)
 
 bind("bind", main_mod, "H", hl.dsp.focus({ direction = direction("l") }))
 bind("bind", main_mod, "L", hl.dsp.focus({ direction = direction("r") }))
@@ -119,10 +125,18 @@ bind("bindm", main_mod, "mouse:272", hl.dsp.window.drag())
 bind("bindm", main_mod, "mouse:273", hl.dsp.window.resize())
 bind("bindm", main_mod .. " + SHIFT", "mouse:273", hl.dsp.window.resize())
 
-bind("bind", main_mod .. " + SHIFT", "H", hl.dsp.window.move({ direction = direction("l") }))
-bind("bind", main_mod .. " + SHIFT", "L", hl.dsp.window.move({ direction = direction("r") }))
-bind("bind", main_mod .. " + SHIFT", "J", hl.dsp.window.move({ direction = direction("u") }))
-bind("bind", main_mod .. " + SHIFT", "K", hl.dsp.window.move({ direction = direction("d") }))
+local function move_window_direction(value)
+  return function()
+    hl.dispatch(hl.dsp.window.move({ direction = direction(value) }))
+    portrait_dwindle.apply_all()
+    dp2_master.apply_all()
+  end
+end
+
+bind("bind", main_mod .. " + SHIFT", "H", move_window_direction("l"))
+bind("bind", main_mod .. " + SHIFT", "L", move_window_direction("r"))
+bind("bind", main_mod .. " + SHIFT", "J", move_window_direction("u"))
+bind("bind", main_mod .. " + SHIFT", "K", move_window_direction("d"))
 
 bind("binde", main_mod, "right", hl.dsp.window.move({ x = 32, y = 0, relative = true }))
 bind("binde", main_mod, "left", hl.dsp.window.move({ x = -32, y = 0, relative = true }))
