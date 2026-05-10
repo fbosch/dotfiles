@@ -45,11 +45,12 @@ hl.config({
   dwindle = {
     force_split = 2,
     preserve_split = true,
-    default_split_ratio = 0.67,
+    default_split_ratio = 1.0,
   },
   master = {
     mfact = 0.67,
     new_status = "master",
+    new_on_top = true,
   },
   scrolling = {
     column_width = 1.0,
