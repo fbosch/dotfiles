@@ -2,6 +2,19 @@
 -- Preserve declaration order.
 -- Use built-in master presets here rather than custom Lua layouts; custom layouts
 -- would need to reimplement master focus, resize, and layout message behavior.
+-- Count-based selectors only match existing windows, so keep a broad baseline
+-- before the count-specific overrides for deterministic startup behavior.
+
+hl.workspace_rule({
+	workspace = "r[1-9] m[DP-2]",
+	layout = "master",
+	layout_opts = { orientation = "left", mfact = 0.7 },
+})
+
+hl.workspace_rule({
+	workspace = "r[1-9] m[HDMI-A-2]",
+	layout = "lua:portrait_stack",
+})
 
 hl.workspace_rule({
 	workspace = "r[1-9] m[DP-2] w[tv2]",
