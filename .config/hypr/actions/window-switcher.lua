@@ -25,6 +25,20 @@ local function workspace_name(win)
 	return tostring(workspace or "")
 end
 
+local function regular_window(win)
+	local workspace = win.workspace
+	if type(workspace) == "table" then
+		local name = workspace.name
+		if name then
+			return not name:match("^special:")
+		end
+
+		return true
+	end
+
+	return not tostring(workspace or ""):match("^special:")
+end
+
 local function address(win)
 	return win.address or ""
 end
@@ -32,7 +46,7 @@ end
 local function single_regular_window()
 	local found = nil
 	for _, win in ipairs(hl.get_windows()) do
-		if not workspace_name(win):match("^special:") then
+		if regular_window(win) then
 			if found then
 				return nil
 			end
