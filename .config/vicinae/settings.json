@@ -101,6 +101,9 @@
             "Pokmon Infinite Fusion": {
                "enabled": false
             },
+            "app.zen_browser.zen": {
+               "alias": "z"
+            },
             "btop": {
                "enabled": false
             },
@@ -131,6 +134,9 @@
             "net.lutris.battlenet-1": {
                "enabled": false
             },
+            "nix.bwrapper.helium_browser": {
+               "alias": "h"
+            },
             "nvidia-settings": {
                "enabled": true
             },
@@ -146,11 +152,17 @@
             "org.gtk.gtk4.NodeEditor": {
                "enabled": false
             },
+            "org.signal.Signal": {
+               "alias": "s"
+            },
             "selectdefaultapplication": {
                "enabled": false
             },
             "tectonic": {
                "enabled": false
+            },
+            "zen-twilight": {
+               "alias": "zt"
             }
          }
       },
