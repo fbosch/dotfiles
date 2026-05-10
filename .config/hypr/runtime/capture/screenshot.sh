@@ -170,6 +170,7 @@ if command -v notify-send >/dev/null 2>&1; then
         action=$(notify-send \
             --wait \
             --app-name="Screenshot" \
+            --hint=boolean:SWAYNC_BYPASS_DND:true \
             --hint=string:desktop-entry:org.gnome.Loupe \
             --icon="${ICON}" \
             --action="default=Open Screenshot" \
@@ -199,5 +200,5 @@ if command -v notify-send >/dev/null 2>&1; then
                 # notify-send --app-name="Screenshot" --transient "Screenshot Deleted" "Screenshot has been removed"
                 ;;
         esac
-    ) &
+    ) >/dev/null 2>&1 < /dev/null &
 fi

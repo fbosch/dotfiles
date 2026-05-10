@@ -1,7 +1,6 @@
 -- Static workspace rules ported from rules.conf.
 -- Preserve declaration order.
--- Use built-in master presets here rather than custom Lua layouts; custom layouts
--- would need to reimplement master focus, resize, and layout message behavior.
+-- Use built-in layouts here for native mouse resize and cross-monitor moves.
 -- Count-based selectors only match existing windows, so keep a broad baseline
 -- before the count-specific overrides for deterministic startup behavior.
 
@@ -13,7 +12,7 @@ hl.workspace_rule({
 
 hl.workspace_rule({
 	workspace = "r[1-9] m[HDMI-A-2]",
-	layout = "lua:portrait_stack",
+	layout = "dwindle",
 })
 
 hl.workspace_rule({
@@ -25,7 +24,7 @@ hl.workspace_rule({
 hl.workspace_rule({
 	workspace = "r[1-9] m[DP-2] w[tv3]",
 	layout = "master",
-	layout_opts = { orientation = "center", mfact = 0.25 },
+	layout_opts = { orientation = "center", mfact = 0.35 },
 })
 
 hl.workspace_rule({
