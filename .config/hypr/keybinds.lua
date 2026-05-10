@@ -5,7 +5,6 @@ local window = require("lib.window")
 local profiles = require("profiles")
 local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
-local performance_mode = require("actions.toggle-performance-mode")
 local window_switcher = require("actions.window-switcher")
 
 local main_mod = "SUPER"
@@ -64,7 +63,7 @@ bind("bind", "ALT + SHIFT", "TAB", window_switcher.prev)
 bind("bind", main_mod .. " + SHIFT", "C", exec("hyprpicker -a"))
 bind("bind", main_mod, "N", exec("swaync-client -t"))
 bind("bind", "CTRL + ALT", "L", exec("hyprlock"))
-bind("bind", main_mod .. " + SHIFT", "P", performance_mode.toggle_performance_mode)
+bind("bind", main_mod .. " + SHIFT", "P", exec("~/.config/hypr/runtime/profiles/toggle-performance-mode.sh"))
 bind("bind", main_mod .. " + SHIFT", "G", send_to_gaming_workspace)
 
 bind("bind", "CTRL + SHIFT", "C", exec("bash ~/.config/hypr/runtime/capture/screenshot.sh area"))

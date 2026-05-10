@@ -55,13 +55,15 @@ local function normalize_effect(key, value)
 end
 
 local function copy_rule(rule)
-  local compiled = {}
+  local effects = rule.effects
+  local compiled = {
+    match = rule.match,
+  }
 
-  for key, value in pairs(rule.effects) do
+  for key, value in pairs(effects) do
     compiled[key] = normalize_effect(key, value)
   end
 
-  compiled.match = rule.match
   return compiled
 end
 
