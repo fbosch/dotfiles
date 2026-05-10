@@ -1,6 +1,11 @@
 local M = {}
 local log = require("lib.log")
 
+local window_rule_phases = {
+  generated = "rules/generated.lua",
+  window_state = "rules/window-state.lua",
+}
+
 function M.log(message)
   return log.write(message)
 end
@@ -93,11 +98,30 @@ function M.apply_window_rules(paths)
   return result
 end
 
+function M.apply_window_rule_phase(config_dir, phase)
+  local relative_path = window_rule_phases[phase]
+  if not relative_path then
+    error("unknown window rule phase: " .. tostring(phase))
+  end
+
+  local result = M.apply_window_rules({
+    config_dir .. "/" .. relative_path,
+  })
+  result.phase = phase
+  return result
+end
+
 function M.report_warnings(warnings)
   for _, message in ipairs(warnings) do
     local line = "hypr lua migration warning: " .. message
     print(line)
     M.log(line)
+  end
+end
+
+function M.report_results(results)
+  for _, result in ipairs(results) do
+    M.report_warnings(result.warnings)
   end
 end
 

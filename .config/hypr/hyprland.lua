@@ -14,15 +14,11 @@ require("rules.workspace-base")
 require("keybinds")
 require("animations")
 
-local generated = loader.apply_window_rules({
-	config_dir .. "/rules/generated.lua",
-})
+local generated = loader.apply_window_rule_phase(config_dir, "generated")
 
 require("rules")
 
-local window_state = loader.apply_window_rules({
-	config_dir .. "/rules/window-state.lua",
-})
+local window_state = loader.apply_window_rule_phase(config_dir, "window_state")
 
 require("environment")
 require("appearance")
@@ -31,5 +27,4 @@ require("rules.layer")
 require("input")
 require("autostart")
 
-loader.report_warnings(generated.warnings)
-loader.report_warnings(window_state.warnings)
+loader.report_results({ generated, window_state })
