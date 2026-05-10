@@ -39,17 +39,17 @@ Quick apply window rules to Hyprland windows using common profiles.
 - **Picture-in-Picture** - Float, pin, with slide animation (like browser PiP)
 
 ### Appearance
-- **No Title Bar** - Hide hyprbars title bar
-- **No Bar + Float** - Hide title bar and float window
+- **No Decorations** - Disable Hyprland window decorations
+- **No Decorations + Float** - Disable decorations and float window
 - **No Animations** - Disable animations (useful for games)
 - **Borderless Window** - Remove borders and rounding
 - **No Shadow** - Disable window shadow
 - **Force Opaque** - Override opacity to 100% (disable transparency)
 
 ### Special Profiles
-- **Gaming Profile** - No animations, no bar, no borders, fullscreen (like Steam games)
+- **Gaming Profile** - No animations, no decorations, no borders, fullscreen (like Steam games)
 - **Utility Window** - Float, pin, no animations, positioned at corner (like system tools)
-- **Dialog Window** - Float, pin, no animations, no bar (like system dialogs)
+- **Dialog Window** - Float, pin, no animations, no decorations (like system dialogs)
 - **File Manager** - Float with no animations (like Nemo)
 
 ### Persistence

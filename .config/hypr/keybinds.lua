@@ -1,17 +1,14 @@
 -- Keybindings ported from keybinds.conf.
 
 local programs = require("programs")
-local command = require("lib.command")
-local paths = require("lib.paths")
-local system = require("lib.system")
 local window = require("lib.window")
+local profiles = require("profiles")
 local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
 local performance_mode = require("actions.toggle-performance-mode")
 local window_switcher = require("actions.window-switcher")
 
 local main_mod = "SUPER"
-local profilectl = paths.script("profilectl.sh")
 
 local opts = {
   bindo = { long_press = true },
@@ -42,11 +39,7 @@ local function exec(command)
 end
 
 local function send_to_gaming_workspace()
-	local quoted_profilectl = system.shell_quote(profilectl)
-
-	if not command.ok(quoted_profilectl .. " is-active gaming >/dev/null 2>&1") then
-		hl.exec_cmd(quoted_profilectl .. " apply gaming")
-	end
+	profiles.activate("gaming")
 
 	hl.dispatch(hl.dsp.window.move({ workspace = "10" }))
 	hl.dispatch(hl.dsp.window.fullscreen({ mode = "fullscreen", action = "set" }))

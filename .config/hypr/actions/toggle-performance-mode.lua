@@ -6,10 +6,10 @@ local command = require("lib.command")
 local fs = require("lib.fs")
 local notify = require("lib.notify")
 local paths = require("lib.paths")
+local profiles = require("profiles")
 
 local M = {}
 
-local profilectl = paths.script("profilectl.sh")
 local icon_gen = paths.script("nerd-icon-gen.sh")
 local in_progress = false
 
@@ -32,8 +32,8 @@ function M.toggle_performance_mode()
 
 	in_progress = true
 
-	if command.ok(system.shell_quote(profilectl) .. " is-active performance >/dev/null 2>&1") then
-		command.ok(system.shell_quote(profilectl) .. " remove performance")
+	if profiles.is_active("performance") then
+		profiles.remove("performance")
 		notify.send({
 			summary = "Performance Mode Disabled",
 			icon = icon_path("󰠠", "#dea721"),
@@ -43,7 +43,7 @@ function M.toggle_performance_mode()
 		return
 	end
 
-	command.ok(system.shell_quote(profilectl) .. " apply performance")
+	profiles.activate("performance")
 	notify.send({
 		summary = "Performance Mode Enabled",
 		icon = icon_path("󱤅", "#73bc6f"),

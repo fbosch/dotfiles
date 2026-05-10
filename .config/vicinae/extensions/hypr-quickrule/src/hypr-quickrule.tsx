@@ -15,6 +15,7 @@ import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type {
+	HyprMonitorInfo,
 	HyprpropWindowInfo,
 	WindowRuleProfile,
 	RuleSelector,
@@ -28,8 +29,14 @@ type LuaRuleEntry = {
 	id: string;
 	match: Record<string, string>;
 	effects: Record<string, LuaValue>;
-	source: "quickrule";
+	source: "quickrule" | "window-state";
 	comment: string;
+};
+
+type WindowStateSnapshot = {
+	monitor: string;
+	size: [number, number];
+	move: [number, number];
 };
 
 const QUICKRULE_LUA_HEADER = `-- Auto-generated Lua window rules by hypr-quickrule
@@ -42,6 +49,11 @@ const WINDOW_STATE_SELECTORS_LUA_HEADER = `-- Window state persistence selectors
 
 `;
 
+const WINDOW_STATE_RULES_LUA_HEADER = `-- Auto-generated Lua window state persistence rules
+-- Managed by hypr-quickrule and runtime/windows/window-state.sh
+
+`;
+
 const BOOLEAN_RULE_EFFECTS: Record<string, string> = {
 	"float on": "float",
 	"pin on": "pin",
@@ -50,6 +62,17 @@ const BOOLEAN_RULE_EFFECTS: Record<string, string> = {
 	"center on": "center",
 	"no_shadow on": "no_shadow",
 };
+
+const BOOLEAN_FALSE_RULE_EFFECTS: Record<string, string> = {
+	"decorate off": "decorate",
+};
+
+const RULE_SELECTORS: RuleSelector[] = [
+	"class",
+	"initial_class",
+	"title",
+	"initial_title",
+];
 
 // Common window rule profiles based on existing Hyprland rules.
 const RULE_PROFILES: WindowRuleProfile[] = [
@@ -111,27 +134,27 @@ const RULE_PROFILES: WindowRuleProfile[] = [
 	},
 	{
 		id: "no-bar",
-		name: "No Title Bar",
-		description: "Hide hyprbars title bar",
+		name: "No Decorations",
+		description: "Disable Hyprland window decorations",
 		icon: Icon.Minus,
-		rules: ["hyprbars:no_bar 1"],
+		rules: ["decorate off"],
 	},
 	{
 		id: "no-bar-float",
-		name: "No Bar + Float",
-		description: "Hide title bar and float window",
+		name: "No Decorations + Float",
+		description: "Disable decorations and float window",
 		icon: Icon.AppWindowSidebarRight,
-		rules: ["hyprbars:no_bar 1", "float on"],
+		rules: ["decorate off", "float on"],
 	},
 	{
 		id: "gaming",
 		name: "Gaming Profile",
 		description:
-			"No animations, no bar, no borders, fullscreen (like Steam games)",
+			"No animations, no decorations, no borders, fullscreen (like Steam games)",
 		icon: Icon.GameController,
 		rules: [
 			"no_anim on",
-			"hyprbars:no_bar 1",
+			"decorate off",
 			"border_size 0",
 			"rounding 0",
 			"no_shadow on",
@@ -152,21 +175,21 @@ const RULE_PROFILES: WindowRuleProfile[] = [
 		name: "Clean Fullscreen",
 		description: "Fullscreen with no decorations (like remote desktop)",
 		icon: Icon.Monitor,
-		rules: ["hyprbars:no_bar 1", "fullscreen on"],
+		rules: ["decorate off", "fullscreen on"],
 	},
 	{
 		id: "picture-in-picture",
 		name: "Picture-in-Picture",
 		description: "Float, pin, with slide animation (like browser PiP)",
 		icon: Icon.Video,
-		rules: ["float on", "pin on", "hyprbars:no_bar 1", "animation slide right"],
+		rules: ["float on", "pin on", "decorate off", "animation slide right"],
 	},
 	{
 		id: "dialog",
 		name: "Dialog Window",
-		description: "Float, pin, no animations, no bar (like system dialogs)",
+		description: "Float, pin, no animations, no decorations (like system dialogs)",
 		icon: Icon.Message,
-		rules: ["float on", "pin on", "no_anim on", "hyprbars:no_bar 1"],
+		rules: ["float on", "pin on", "no_anim on", "decorate off"],
 	},
 	{
 		id: "file-manager",
@@ -203,6 +226,13 @@ const RULE_PROFILES: WindowRuleProfile[] = [
 			"Remember window size and position (saves to window-state-selectors.lua)",
 		icon: Icon.SaveDocument,
 		rules: [], // Special profile - doesn't write rules
+	},
+	{
+		id: "snapshot-state",
+		name: "Snapshot Window State",
+		description: "Save the selected window's current size and position now",
+		icon: Icon.SaveDocument,
+		rules: [], // Special profile - writes current geometry immediately
 	},
 ];
 
@@ -293,6 +323,11 @@ export default function Command() {
 			return [booleanEffect, true];
 		}
 
+		const booleanFalseEffect = BOOLEAN_FALSE_RULE_EFFECTS[rule];
+		if (booleanFalseEffect) {
+			return [booleanFalseEffect, false];
+		}
+
 		const [effect, ...args] = rule.split(" ");
 		const value = args.join(" ");
 
@@ -349,6 +384,13 @@ export default function Command() {
 	const serializeLuaRuleEntry = (entry: LuaRuleEntry): string => {
 		return [
 			`  -- BEGIN ${entry.id}`,
+			serializeLuaTableRuleEntry(entry),
+			`  -- END ${entry.id}`,
+		].join("\n");
+	};
+
+	const serializeLuaTableRuleEntry = (entry: LuaRuleEntry): string => {
+		return [
 			"  {",
 			`    id = ${luaString(entry.id)},`,
 			"    match = {",
@@ -360,7 +402,6 @@ export default function Command() {
 			`    source = ${luaString(entry.source)},`,
 			`    comment = ${luaString(entry.comment)},`,
 			"  },",
-			`  -- END ${entry.id}`,
 		].join("\n");
 	};
 
@@ -384,6 +425,10 @@ export default function Command() {
 		return `${WINDOW_STATE_SELECTORS_LUA_HEADER}return {\n${entry}\n}\n`;
 	};
 
+	const renderWindowStateRuleFile = (entry: string): string => {
+		return `${WINDOW_STATE_RULES_LUA_HEADER}return {\n${entry}\n}\n`;
+	};
+
 	const serializeWindowStateSelectorEntry = (
 		matcher: string,
 		pattern: string,
@@ -403,6 +448,16 @@ export default function Command() {
 		).test(content);
 	};
 
+	const isRuleSelector = (value: string): value is RuleSelector => {
+		return RULE_SELECTORS.some((selectorValue) => selectorValue === value);
+	};
+
+	const setRuleSelector = (value: string) => {
+		if (isRuleSelector(value)) {
+			setSelector(value);
+		}
+	};
+
 	const appendWindowStateSelector = (
 		content: string,
 		entry: string,
@@ -413,6 +468,81 @@ export default function Command() {
 		}
 
 		return renderWindowStateSelectorFile(entry);
+	};
+
+	const upsertLuaTableRuleEntry = (
+		content: string,
+		entry: LuaRuleEntry,
+	): string => {
+		const serializedEntry = serializeLuaTableRuleEntry(entry);
+		const lines = content.trimEnd().split("\n");
+		const idLine = `id = ${luaString(entry.id)},`;
+		const idIndex = lines.findIndex((line) => line.includes(idLine));
+
+		if (idIndex !== -1) {
+			let startIndex = idIndex;
+			while (startIndex > 0 && lines[startIndex].trim() !== "{") {
+				startIndex -= 1;
+			}
+
+			let endIndex = idIndex;
+			while (endIndex < lines.length - 1 && lines[endIndex].trim() !== "},") {
+				endIndex += 1;
+			}
+
+			lines.splice(
+				startIndex,
+				endIndex - startIndex + 1,
+				...serializedEntry.split("\n"),
+			);
+			return `${lines.join("\n")}\n`;
+		}
+
+		if (/}\s*$/.test(content.trimEnd())) {
+			return `${content.trimEnd().replace(/}\s*$/, serializedEntry)}\n}\n`;
+		}
+
+		return renderWindowStateRuleFile(serializedEntry);
+	};
+
+	const renderRuntimeWindowStateRulesFile = (entry: string): string => {
+		return `# Auto-generated window state persistence rules\n# Selectors: $HOME/.config/hypr/rules/window-state-selectors.lua\n# Managed by hypr-quickrule and runtime/windows/window-state.sh\n\n${entry}\n`;
+	};
+
+	const renderRuntimeWindowStateRuleEntry = (
+		matcher: string,
+		pattern: string,
+		snapshot: WindowStateSnapshot,
+	): string => {
+		return [
+			`# ${matcher} ${pattern}`,
+			`windowrule = ${matcher} (${pattern}), monitor ${snapshot.monitor}`,
+			`windowrule = size ${snapshot.size[0]} ${snapshot.size[1]}, ${matcher} (${pattern})`,
+			`windowrule = move ${snapshot.move[0]} ${snapshot.move[1]}, ${matcher} (${pattern})`,
+		].join("\n");
+	};
+
+	const upsertRuntimeWindowStateRuleEntry = (
+		content: string,
+		matcher: string,
+		pattern: string,
+		entry: string,
+	): string => {
+		const lines = content.trimEnd().split("\n");
+		const marker = `# ${matcher} ${pattern}`;
+		const markerIndex = lines.findIndex((line) => line === marker);
+
+		if (markerIndex === -1) {
+			return `${content.trimEnd()}\n\n${entry}\n`;
+		}
+
+		let endIndex = markerIndex + 1;
+		while (endIndex < lines.length && lines[endIndex].trim() !== "") {
+			endIndex += 1;
+		}
+
+		lines.splice(markerIndex, endIndex - markerIndex, ...entry.split("\n"));
+		return `${lines.join("\n")}\n`;
 	};
 
 	const generateLuaRuleEntry = (
@@ -440,6 +570,60 @@ export default function Command() {
 		};
 	};
 
+	const matcherForSelector = (sel: RuleSelector): string => {
+		return `match:${sel}`;
+	};
+
+	const patternForSelector = (
+		info: HyprpropWindowInfo,
+		sel: RuleSelector,
+	): string => {
+		return `^${escapeRegex(getRuleSelectorValue(info, sel))}$`;
+	};
+
+	const fetchMonitors = async (): Promise<HyprMonitorInfo[]> => {
+		const { stdout } = await execAsync("hyprctl monitors -j");
+		return JSON.parse(stdout);
+	};
+
+	const getSnapshot = async (
+		info: HyprpropWindowInfo,
+	): Promise<WindowStateSnapshot> => {
+		const monitors = await fetchMonitors();
+		const monitor = monitors.find((candidate) => candidate.id === info.monitor);
+		const monitorX = monitor?.x ?? 0;
+		const monitorY = monitor?.y ?? 0;
+
+		return {
+			monitor: monitor?.name ?? String(info.monitor),
+			size: info.size,
+			move: [info.at[0] - monitorX, info.at[1] - monitorY],
+		};
+	};
+
+	const generateWindowStateRuleEntry = (
+		info: HyprpropWindowInfo,
+		sel: RuleSelector,
+		snapshot: WindowStateSnapshot,
+	): LuaRuleEntry => {
+		const matcher = matcherForSelector(sel);
+		const pattern = patternForSelector(info, sel);
+
+		return {
+			id: `window-state:${matcher}:${pattern}`,
+			match: {
+				[sel]: pattern,
+			},
+			effects: {
+				monitor: snapshot.monitor,
+				size: snapshot.size,
+				move: snapshot.move,
+			},
+			source: "window-state",
+			comment: `${matcher} ${pattern}`,
+		};
+	};
+
 	const writeLuaRuleEntry = async (entry: LuaRuleEntry) => {
 		const luaRulesDir = join(homedir(), ".config/hypr/rules");
 		const luaRulesPath = join(luaRulesDir, "generated.lua");
@@ -457,6 +641,53 @@ export default function Command() {
 		blocks.set(entry.id, serializeLuaRuleEntry(entry));
 
 		await fs.writeFile(luaRulesPath, renderLuaRuleFile(blocks), "utf-8");
+	};
+
+	const writeWindowStateLuaRuleEntry = async (entry: LuaRuleEntry) => {
+		const luaRulesDir = join(homedir(), ".config/hypr/rules");
+		const luaRulesPath = join(luaRulesDir, "window-state.lua");
+
+		await fs.mkdir(luaRulesDir, { recursive: true });
+
+		let existingRules = "";
+		try {
+			existingRules = await fs.readFile(luaRulesPath, "utf-8");
+		} catch {
+			existingRules = `${WINDOW_STATE_RULES_LUA_HEADER}return {}\n`;
+		}
+
+		await fs.writeFile(
+			luaRulesPath,
+			upsertLuaTableRuleEntry(existingRules, entry),
+			"utf-8",
+		);
+	};
+
+	const writeRuntimeWindowStateRuleEntry = async (
+		matcher: string,
+		pattern: string,
+		snapshot: WindowStateSnapshot,
+	) => {
+		const runtimeDir = process.env.XDG_RUNTIME_DIR;
+		if (!runtimeDir) {
+			return;
+		}
+
+		const runtimeRulesPath = join(runtimeDir, "hypr-window-state-rules.conf");
+		const entry = renderRuntimeWindowStateRuleEntry(matcher, pattern, snapshot);
+
+		let existingRules = "";
+		try {
+			existingRules = await fs.readFile(runtimeRulesPath, "utf-8");
+		} catch {
+			existingRules = renderRuntimeWindowStateRulesFile(entry);
+		}
+
+		await fs.writeFile(
+			runtimeRulesPath,
+			upsertRuntimeWindowStateRuleEntry(existingRules, matcher, pattern, entry),
+			"utf-8",
+		);
 	};
 
 	const saveWindowState = async (info: HyprpropWindowInfo) => {
@@ -516,6 +747,62 @@ export default function Command() {
 		}
 	};
 
+	const snapshotWindowState = async (
+		info: HyprpropWindowInfo,
+		sel: RuleSelector,
+	) => {
+		try {
+			const windowStateSelectorsPath = join(
+				homedir(),
+				".config/hypr/rules/window-state-selectors.lua",
+			);
+			const matcher = matcherForSelector(sel);
+			const pattern = patternForSelector(info, sel);
+			const snapshot = await getSnapshot(info);
+
+			let existingSelectors = "";
+			try {
+				existingSelectors = await fs.readFile(
+					windowStateSelectorsPath,
+					"utf-8",
+				);
+			} catch {
+				existingSelectors = renderWindowStateSelectorFile("");
+			}
+
+			if (!existingSelectors.includes("return {")) {
+				existingSelectors = renderWindowStateSelectorFile("");
+			}
+
+			if (!hasWindowStateSelector(existingSelectors, matcher, pattern)) {
+				const newSelectors = appendWindowStateSelector(
+					existingSelectors,
+					serializeWindowStateSelectorEntry(matcher, pattern),
+				);
+				await fs.writeFile(windowStateSelectorsPath, newSelectors, "utf-8");
+			}
+
+			const luaRuleEntry = generateWindowStateRuleEntry(info, sel, snapshot);
+			await writeWindowStateLuaRuleEntry(luaRuleEntry);
+			await writeRuntimeWindowStateRuleEntry(matcher, pattern, snapshot);
+			await execAsync("hyprctl reload config-only");
+
+			await showToast({
+				style: Toast.Style.Success,
+				title: "Window State Snapshotted",
+				message: `${getRuleSelectorValue(info, sel)} saved at ${snapshot.size[0]}x${snapshot.size[1]}`,
+			});
+
+			await closeMainWindow();
+		} catch (error) {
+			await showToast({
+				style: Toast.Style.Failure,
+				title: "Failed to snapshot window state",
+				message: error instanceof Error ? error.message : "Unknown error",
+			});
+		}
+	};
+
 	const applyRule = async (
 		profile: WindowRuleProfile,
 		info: HyprpropWindowInfo,
@@ -524,6 +811,11 @@ export default function Command() {
 		// Special handling for save-state profile
 		if (profile.id === "save-state") {
 			await saveWindowState(info);
+			return;
+		}
+
+		if (profile.id === "snapshot-state") {
+			await snapshotWindowState(info, sel);
 			return;
 		}
 
@@ -606,7 +898,7 @@ export default function Command() {
 				<List.Dropdown
 					tooltip="Match By"
 					value={selector}
-					onChange={(newValue) => setSelector(newValue as RuleSelector)}
+					onChange={setRuleSelector}
 				>
 					<List.Dropdown.Item
 						title={`Class (${windowInfo.class})`}

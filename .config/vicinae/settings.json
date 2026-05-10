@@ -104,6 +104,9 @@
             "app.zen_browser.zen": {
                "alias": "z"
             },
+            "battlenet": {
+               "alias": "b"
+            },
             "btop": {
                "enabled": false
             },
@@ -130,6 +133,9 @@
             },
             "mullvad-vpn": {
                "enabled": false
+            },
+            "nemo": {
+               "alias": "f"
             },
             "net.lutris.battlenet-1": {
                "enabled": false
