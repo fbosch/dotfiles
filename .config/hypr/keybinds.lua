@@ -4,6 +4,7 @@ local programs = require("programs")
 local command = require("lib.command")
 local paths = require("lib.paths")
 local system = require("lib.system")
+local window = require("lib.window")
 local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
 local performance_mode = require("actions.toggle-performance-mode")
@@ -40,10 +41,6 @@ local function exec(command)
   return hl.dsp.exec_cmd(command)
 end
 
-local function direction(value)
-  return ({ l = "left", r = "right", u = "up", d = "down" })[value] or value
-end
-
 local function send_to_gaming_workspace()
 	local quoted_profilectl = system.shell_quote(profilectl)
 
@@ -53,26 +50,6 @@ local function send_to_gaming_workspace()
 
 	hl.dispatch(hl.dsp.window.move({ workspace = "10" }))
 	hl.dispatch(hl.dsp.window.fullscreen({ mode = "fullscreen", action = "set" }))
-end
-
-local function move_window_horizontal(value)
-	local window = hl.get_active_window and hl.get_active_window() or nil
-	if value == "r" and window and window.monitor and window.monitor.name == "HDMI-A-2" then
-		hl.dispatch(hl.dsp.window.move({ monitor = "DP-2" }))
-		return
-	end
-
-	hl.dispatch(hl.dsp.window.move({ direction = direction(value) }))
-end
-
-local function move_window_vertical(value)
-	local window = hl.get_active_window and hl.get_active_window() or nil
-	if window and window.monitor and window.monitor.name == "HDMI-A-2" then
-		hl.dispatch(hl.dsp.window.swap({ direction = direction(value) }))
-		return
-	end
-
-	hl.dispatch(hl.dsp.window.move({ direction = direction(value) }))
 end
 
 bind("bindo", "", "SUPER_L", exec("pkill -SIGUSR1 waybar"))
@@ -124,10 +101,10 @@ bind("bind", main_mod, "X", function()
 	hl.dispatch(hl.dsp.window.move({ workspace = "+0", follow = false }))
 end)
 
-bind("bind", main_mod, "H", hl.dsp.focus({ direction = direction("l") }))
-bind("bind", main_mod, "L", hl.dsp.focus({ direction = direction("r") }))
-bind("bind", main_mod, "J", hl.dsp.focus({ direction = direction("u") }))
-bind("bind", main_mod, "K", hl.dsp.focus({ direction = direction("d") }))
+bind("bind", main_mod, "H", window.focus("left"))
+bind("bind", main_mod, "L", window.focus("right"))
+bind("bind", main_mod, "J", window.focus("up"))
+bind("bind", main_mod, "K", window.focus("down"))
 
 bind("bind", main_mod .. " + SHIFT", "d", hl.dsp.layout("setratio 0.6"))
 
@@ -157,28 +134,20 @@ bind("bindm", main_mod, "mouse:272", hl.dsp.window.drag())
 bind("bindm", main_mod, "mouse:273", hl.dsp.window.resize())
 bind("bindm", main_mod .. " + SHIFT", "mouse:273", hl.dsp.window.resize())
 
-bind("bind", main_mod .. " + SHIFT", "H", function()
-	move_window_horizontal("l")
-end)
-bind("bind", main_mod .. " + SHIFT", "L", function()
-	move_window_horizontal("r")
-end)
-bind("bind", main_mod .. " + SHIFT", "J", function()
-	move_window_vertical("d")
-end)
-bind("bind", main_mod .. " + SHIFT", "K", function()
-	move_window_vertical("u")
-end)
+bind("bind", main_mod .. " + SHIFT", "H", window.move("left"))
+bind("bind", main_mod .. " + SHIFT", "L", window.move("right"))
+bind("bind", main_mod .. " + SHIFT", "J", window.move("down"))
+bind("bind", main_mod .. " + SHIFT", "K", window.move("up"))
 
-bind("binde", main_mod, "right", hl.dsp.window.move({ x = 32, y = 0, relative = true }))
-bind("binde", main_mod, "left", hl.dsp.window.move({ x = -32, y = 0, relative = true }))
-bind("binde", main_mod, "up", hl.dsp.window.move({ x = 0, y = -32, relative = true }))
-bind("binde", main_mod, "down", hl.dsp.window.move({ x = 0, y = 32, relative = true }))
+bind("binde", main_mod, "right", window.adjust("nudge", "right"))
+bind("binde", main_mod, "left", window.adjust("nudge", "left"))
+bind("binde", main_mod, "up", window.adjust("nudge", "up"))
+bind("binde", main_mod, "down", window.adjust("nudge", "down"))
 
-bind("binde", main_mod .. " + SHIFT", "right", hl.dsp.window.resize({ x = 32, y = 0, relative = true }))
-bind("binde", main_mod .. " + SHIFT", "left", hl.dsp.window.resize({ x = -32, y = 0, relative = true }))
-bind("binde", main_mod .. " + SHIFT", "up", hl.dsp.window.resize({ x = 0, y = -32, relative = true }))
-bind("binde", main_mod .. " + SHIFT", "down", hl.dsp.window.resize({ x = 0, y = 32, relative = true }))
+bind("binde", main_mod .. " + SHIFT", "right", window.adjust("resize", "right"))
+bind("binde", main_mod .. " + SHIFT", "left", window.adjust("resize", "left"))
+bind("binde", main_mod .. " + SHIFT", "up", window.adjust("resize", "up"))
+bind("binde", main_mod .. " + SHIFT", "down", window.adjust("resize", "down"))
 
 bind("bindel", "", "XF86AudioRaiseVolume", exec([[wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ && ags request -i ags-bundled volume-indicator '{"action":"show"}']]))
 bind("bindel", "", "XF86AudioLowerVolume", exec([[wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && ags request -i ags-bundled volume-indicator '{"action":"show"}']]))
