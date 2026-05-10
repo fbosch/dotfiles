@@ -21,7 +21,6 @@ if command -v flock &>/dev/null; then
     fi
 fi
 
-RULES_FILE="${XDG_RUNTIME_DIR}/hypr-window-state-rules.conf"
 SELECTORS_LUA_FILE="$HOME/.config/hypr/rules/window-state-selectors.lua"
 RULES_LUA_FILE="$HOME/.config/hypr/rules/window-state.lua"
 STATE_FILE="${XDG_RUNTIME_DIR}/hypr-window-state.cache"
@@ -95,19 +94,6 @@ window_state_rule_pattern() {
         printf '%s' "$pattern"
     else
         printf '^%s$' "$pattern"
-    fi
-}
-
-# Initialize rules file if needed
-init_rules_file() {
-    if [[ ! -f "$RULES_FILE" ]] || [[ ! -s "$RULES_FILE" ]] || ! grep -q "^# Auto-generated window state persistence rules" "$RULES_FILE"; then
-        {
-            echo "# Auto-generated window state persistence rules"
-            echo "# Last updated: $(date '+%Y-%m-%d %H:%M:%S')"
-            echo "# Selectors: $SELECTORS_LUA_FILE"
-            echo "# DO NOT EDIT MANUALLY - This file is managed by window-state.sh"
-            echo ""
-        } > "$RULES_FILE"
     fi
 }
 
@@ -282,26 +268,71 @@ states_changed() {
     return 1
 }
 
-# Load existing rules into cache
+rules_for_window_state() {
+    local matcher="$1"
+    local pattern="$2"
+    local monitor="$3"
+    local x="$4"
+    local y="$5"
+    local width="$6"
+    local height="$7"
+
+    local rule_pattern
+    rule_pattern=$(window_state_rule_pattern "$pattern")
+
+    local rules
+    rules=$(printf 'windowrule = size %s %s, %s (%s)\nwindowrule = move %s %s, %s (%s)' \
+        "$width" "$height" "$matcher" "$rule_pattern" "$x" "$y" "$matcher" "$rule_pattern")
+    if [[ -n "$monitor" ]]; then
+        rules=$(printf 'windowrule = %s (%s), monitor %s\n%s' "$matcher" "$rule_pattern" "$monitor" "$rules")
+    fi
+
+    printf '%s\n' "$rules"
+}
+
+# Load existing generated Lua rules into cache so closed windows survive restarts.
 load_rules_cache() {
-    RULES_CACHE=()  # Clear cache
-    
-    [[ ! -f "$RULES_FILE" || ! -s "$RULES_FILE" ]] && return
-    
+    RULES_CACHE=()
+
+    [[ ! -f "$RULES_LUA_FILE" || ! -s "$RULES_LUA_FILE" ]] && return
+
     local current_key=""
+    local monitor=""
+    local width=""
+    local height=""
+    local x=""
+    local y=""
+
+    flush_lua_rule_cache_entry() {
+        [[ -z "$current_key" || -z "$width" || -z "$height" || -z "$x" || -z "$y" ]] && return
+
+        local matcher="${current_key%% *}"
+        local pattern="${current_key#* }"
+        RULES_CACHE[$current_key]=$(rules_for_window_state "$matcher" "$pattern" "$monitor" "$x" "$y" "$width" "$height")
+    }
+
     while IFS= read -r line; do
-        # Match class comments like "# match:class org.gnome.TextEditor"
-        if [[ "$line" =~ ^#\ (match:[a-zA-Z_]+)\ (.+)$ ]]; then
+        if [[ "$line" =~ ^[[:space:]]*--[[:space:]](match:[a-zA-Z_]+)[[:space:]](.+)$ ]]; then
+            flush_lua_rule_cache_entry
             current_key="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
-        elif [[ -n "$current_key" ]] && [[ -n "$line" ]]; then
-            # Store rules for this key (skip empty lines)
-            if [[ -z "${RULES_CACHE[$current_key]}" ]]; then
-                RULES_CACHE[$current_key]="$line"
-            else
-                RULES_CACHE[$current_key]+=$'\n'"$line"
-            fi
+            monitor=""
+            width=""
+            height=""
+            x=""
+            y=""
+        elif [[ "$line" =~ monitor[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
+            monitor="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ size[[:space:]]*=[[:space:]]*\{[[:space:]]*([0-9]+)[[:space:]]*,[[:space:]]*([0-9]+)[[:space:]]*\} ]]; then
+            width="${BASH_REMATCH[1]}"
+            height="${BASH_REMATCH[2]}"
+        elif [[ "$line" =~ move[[:space:]]*=[[:space:]]*\{[[:space:]]*(-?[0-9]+)[[:space:]]*,[[:space:]]*(-?[0-9]+)[[:space:]]*\} ]]; then
+            x="${BASH_REMATCH[1]}"
+            y="${BASH_REMATCH[2]}"
         fi
-    done < "$RULES_FILE"
+    done < "$RULES_LUA_FILE"
+
+    flush_lua_rule_cache_entry
+    unset -f flush_lua_rule_cache_entry
 }
 
 # Remove cached rules whose matcher+pattern no longer exists in config
@@ -319,45 +350,6 @@ prune_stale_rules_cache() {
             unset 'RULES_CACHE[$key]'
         fi
     done
-}
-
-# Write current RULES_CACHE to file without triggering reload
-write_rules_cache_file() {
-    local temp_file
-    temp_file=$(mktemp) || { printf 'ERROR: Failed to create temp file\n' >&2; return 1; }
-
-    {
-        printf '# Auto-generated window state persistence rules\n'
-        printf '# Last updated: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
-        printf '# Selectors: %s\n' "$SELECTORS_LUA_FILE"
-        printf '# DO NOT EDIT MANUALLY - This file is managed by window-state.sh\n'
-        printf '\n'
-    } > "$temp_file"
-
-    local -a sorted_keys
-    IFS=$'\n' read -r -d '' -a sorted_keys < <(printf '%s\n' "${!RULES_CACHE[@]}" | sort && printf '\0')
-
-    for key in "${sorted_keys[@]}"; do
-        {
-            printf '# %s\n' "$key"
-            printf '%s\n' "${RULES_CACHE[$key]}"
-            printf '\n'
-        } >> "$temp_file"
-    done
-
-    if [[ -f "$RULES_FILE" ]] && cmp -s "$temp_file" "$RULES_FILE"; then
-        rm -f "$temp_file"
-        write_lua_rules_cache_file
-        return 0
-    fi
-
-    if ! mv "$temp_file" "$RULES_FILE"; then
-        printf 'ERROR: Failed to update rules file\n' >&2
-        rm -f "$temp_file"
-        return 1
-    fi
-
-    write_lua_rules_cache_file
 }
 
 write_lua_rules_cache_file() {
@@ -464,30 +456,13 @@ update_rules() {
         # Create unique key for this matcher+pattern combo
         local key="$matcher $pattern"
         
-        # Build windowrule pattern: plain text gets anchored, regex used as-is
-        local escaped_pattern
-        if pattern_is_regex "$pattern"; then
-            # Already contains regex syntax - use as-is
-            escaped_pattern="$pattern"
-        else
-            # Plain text - anchor to prevent partial matches
-            escaped_pattern="^${pattern}$"
-        fi
-        
-        # Update rules for this matcher (monitor rule first, then size/move)
-        local rules
-        rules=$(printf 'windowrule = size %s %s, %s (%s)\nwindowrule = move %s %s, %s (%s)' \
-            "$width" "$height" "$matcher" "$escaped_pattern" "$x" "$y" "$matcher" "$escaped_pattern")
-        if [[ -n "$monitor" ]]; then
-            rules=$(printf 'windowrule = %s (%s), monitor %s\n%s' "$matcher" "$escaped_pattern" "$monitor" "$rules")
-        fi
-        RULES_CACHE[$key]="$rules"
+        RULES_CACHE[$key]=$(rules_for_window_state "$matcher" "$pattern" "$monitor" "$x" "$y" "$width" "$height")
         
         printf '%s - Updated %s "%s": %sx%s at (%s,%s) on %s\n' "$(printf '%(%H:%M:%S)T' -1)" "$matcher" "$pattern" "$width" "$height" "$x" "$y" "${monitor:-unknown}"
     done < <(jq -r '.[] | "\(.class)|\(.matcher)|\(.pattern)|\(.monitor)|\(.x)|\(.y)|\(.width)|\(.height)"' <<< "$windows")
     
-    # Write all rules (existing + updated) to file
-    write_rules_cache_file || return 1
+    # Write all rules (existing + updated) to Lua data file
+    write_lua_rules_cache_file || return 1
     
     # Save state cache
     printf '%s\n' "$windows" > "$STATE_FILE"
@@ -580,7 +555,7 @@ handle_event() {
             parse_selectors
             load_rules_cache
             prune_stale_rules_cache
-            write_rules_cache_file
+            write_lua_rules_cache_file
             
             local state
             state=$(get_window_states)
@@ -619,13 +594,12 @@ fi
 
 echo "Window state persistence started (event-driven + adaptive polling)"
 echo "Selectors: $SELECTORS_LUA_FILE"
-echo "Rules: $RULES_FILE"
+echo "Rules: $RULES_LUA_FILE"
 echo "Debounce delay: ${DEBOUNCE_DELAY}s"
 echo "Scheduling: SCHED_IDLE (runs only when CPU is idle)"
 echo "Poll rate: Adaptive based on activity/load (active 0.05s-0.15s, stable 1s-1.5s)"
 echo ""
 
-init_rules_file
 parse_selectors  # Parse selectors on startup
 load_rules_cache
 prune_stale_rules_cache
