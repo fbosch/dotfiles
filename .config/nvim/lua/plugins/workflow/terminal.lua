@@ -32,12 +32,14 @@ return {
 			"FTermToggle",
 			"FtermMProcs",
 			"FTermLazyGit",
+			"FTermDiffnav",
 			"FTermScooter",
 		},
 		keys = term_keymaps({
 			{ "<A-t>", "FTermToggle", "toggle floating terminal" },
 			{ "<A-m>", "FTermMProcs", "toggle floating terminal with mprocs" },
 			{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
+			{ "<A-d>", "FTermDiffnav", "toggle floating terminal with diffnav" },
 			{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
 			{ "<A-c>", "FTermCheckmate", "toggle floating terminal with checkmate in neovim instance" },
 			{ "<A-s>", "FTermScooter", "toggle floating terminal with scooter" },
@@ -93,6 +95,21 @@ return {
 					})
 				end
 				lazygit_instance:toggle()
+			end, { bang = true })
+
+			local diffnav_instance = nil
+			usrcmd("FTermDiffnav", function()
+				if not diffnav_instance then
+					diffnav_instance = fterm:new({
+						ft = "fterm_diffnav",
+						env = env,
+						shell = "dash",
+						cmd = "diffnav",
+						dimensions = dimensions,
+					})
+				end
+
+				diffnav_instance:toggle()
 			end, { bang = true })
 
 			local btop_instance = nil
