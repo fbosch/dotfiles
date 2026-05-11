@@ -5,9 +5,27 @@ set -euo pipefail
 app_id="${1:-}"
 mode="${2:-open}"
 taskbar_apps_file="${TASKBAR_APPS_FILE:-${HOME}/.config/hypr/taskbar/apps.json}"
+hypr_query_socket="${XDG_RUNTIME_DIR:-}/hypr/${HYPRLAND_INSTANCE_SIGNATURE:-}/.socket.sock"
+
+hypr_query() {
+  local command="$1"
+
+  if [[ -S "$hypr_query_socket" ]] && command -v nc >/dev/null 2>&1; then
+    printf '%s' "$command" | nc -U "$hypr_query_socket" 2>/dev/null
+    return
+  fi
+
+  case "$command" in
+    j/clients) hyprctl clients -j 2>/dev/null ;;
+    j/monitors) hyprctl monitors -j 2>/dev/null ;;
+    j/activeworkspace) hyprctl activeworkspace -j 2>/dev/null ;;
+    j/activewindow) hyprctl activewindow -j 2>/dev/null ;;
+    *) return 1 ;;
+  esac
+}
 
 if [[ "$app_id" == "--any-open" ]]; then
-  hyprctl clients -j 2>/dev/null \
+  hypr_query j/clients \
     | jq -e --slurpfile apps "$taskbar_apps_file" '
       def app_matches($window; $app):
         if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
@@ -20,7 +38,7 @@ if [[ "$app_id" == "--any-open" ]]; then
 fi
 
 kill_all() {
-  hyprctl clients -j 2>/dev/null \
+  hypr_query j/clients \
     | jq -r --slurpfile apps "$taskbar_apps_file" '
       def app_matches($window; $app):
         if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
@@ -39,7 +57,7 @@ kill_all() {
 park_other_visible_apps() {
   local current_id="$1"
 
-  hyprctl clients -j 2>/dev/null \
+  hypr_query j/clients \
     | jq -r --slurpfile apps "$taskbar_apps_file" --arg current_id "$current_id" '
       def app_matches($window; $app):
         if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
@@ -59,7 +77,7 @@ park_other_visible_apps() {
 park_active() {
   local active address workspace pinned
 
-  active="$(hyprctl activewindow -j 2>/dev/null || printf '{}')"
+  active="$(hypr_query j/activewindow || printf '{}')"
   address="$(jq -r '.address // empty' <<< "$active")"
   workspace="$(jq -r --argjson active "$active" '
     def app_matches($window; $app):
@@ -137,10 +155,10 @@ command_line() {
 
 client_address() {
   if [[ -n "${tag:-}" ]]; then
-    hyprctl clients -j 2>/dev/null \
+    hypr_query j/clients \
       | jq -r --arg tag "${tag}*" 'first(.[] | select((.tags // []) | index($tag)) | .address) // empty'
   else
-    hyprctl clients -j 2>/dev/null \
+    hypr_query j/clients \
       | jq -r --arg class_name "$class_name" 'first(.[] | select(.class == $class_name) | .address) // empty'
   fi
 }
@@ -159,7 +177,7 @@ pin_window() {
 }
 
 active_workspace() {
-  hyprctl activeworkspace -j 2>/dev/null | jq -r '.name // empty'
+  hypr_query j/activeworkspace | jq -r '.name // empty'
 }
 
 current_monitor() {
@@ -168,7 +186,7 @@ current_monitor() {
   IFS=',' read -r cursor_x cursor_y <<< "$(hyprctl cursorpos 2>/dev/null || true)"
   cursor_x="${cursor_x## }"
   cursor_y="${cursor_y## }"
-  monitors="$(hyprctl monitors -j 2>/dev/null)"
+  monitors="$(hypr_query j/monitors)"
 
   if [[ -n "$cursor_x" && -n "$cursor_y" ]]; then
     jq -c --argjson cursor_x "$cursor_x" --argjson cursor_y "$cursor_y" '
@@ -183,7 +201,7 @@ current_monitor() {
   fi
 
   local active_monitor_name
-  active_monitor_name="$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.monitor // empty')"
+  active_monitor_name="$(hypr_query j/activeworkspace | jq -r '.monitor // empty')"
   jq -c --arg name "$active_monitor_name" 'first(.[] | select(.name == $name)) // empty' <<< "$monitors"
 }
 
@@ -205,14 +223,14 @@ target_workspace() {
 client_workspace() {
   local address="$1"
 
-  hyprctl clients -j 2>/dev/null \
+  hypr_query j/clients \
     | jq -r --arg address "$address" 'first(.[] | select(.address == $address) | .workspace.name) // empty'
 }
 
 client_pinned() {
   local address="$1"
 
-  hyprctl clients -j 2>/dev/null \
+  hypr_query j/clients \
     | jq -r --arg address "$address" 'first(.[] | select(.address == $address) | .pinned) // false'
 }
 
@@ -245,7 +263,7 @@ position_bottom_right() {
 
   IFS=$'\t' read -r x y width height transform < <(jq -r '[.x, .y, .width, .height, .transform] | @tsv' <<< "$monitor")
   IFS=$'\t' read -r win_width win_height < <(
-    hyprctl clients -j 2>/dev/null \
+    hypr_query j/clients \
       | jq -r --arg address "$address" 'first(.[] | select(.address == $address) | .size | @tsv) // empty'
   )
 
