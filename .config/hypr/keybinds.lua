@@ -47,8 +47,8 @@ bind("bindo", "", "SUPER_L", exec("pkill -SIGUSR1 waybar"))
 bind("bindir", "", "SUPER_L", exec("sleep 0.5 && ~/.config/hypr/runtime/desktop/waybar-toggle-smart.sh"))
 
 bind("bind", "ALT", "SPACE", exec(programs.menu))
-bind("bind", "ALT", "grave", exec("hyprwhspr-rs record start"))
-bind("bindr", "ALT", "grave", exec("hyprwhspr-rs record stop"))
+bind("bind", "ALT", "grave", exec("~/.config/hypr/runtime/capture/hyprwhspr-record.sh start"))
+bind("bindr", "ALT", "grave", exec("~/.config/hypr/runtime/capture/hyprwhspr-record.sh stop"))
 
 bind("bind", main_mod, "SPACE", exec("bash ~/.config/hypr/runtime/desktop/switch-layout.sh"))
 bind("bind", main_mod .. " + SHIFT", "V", clipboard_bridge.paste_with_clipboard_bridge)

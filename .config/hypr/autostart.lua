@@ -5,7 +5,7 @@ local taskbar_apps = require("taskbar")
 
 M.commands = {
 	"xrandr --output DP-2 --primary",
-	"uwsm-app -s b -- hypridle",
+	-- "uwsm-app -s b -- hypridle",
 	"uwsm-app -s s -- vicinae server",
 	"uwsm-app -s s -- atuin daemon start",
 	"uwsm-app -s b -- foot --server",

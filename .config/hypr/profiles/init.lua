@@ -79,7 +79,11 @@ function M.apply(mode)
     return false
   end
 
-  hl.config(profile)
+  if profile.on_apply then
+    profile.on_apply()
+  end
+
+  hl.config(profile.config)
   return true
 end
 
