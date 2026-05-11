@@ -38,14 +38,14 @@
       "warning": 70,
       "critical": 90
     },
-    "on-click": "~/.config/hypr/runtime/desktop/taskbar-app.sh missioncenter"
+    "on-click": "~/.config/hypr/taskbar/actions.sh missioncenter"
   },
 
   "memory": {
     "format": "{icon} {percentage}%",
     "tooltip-format": "{used:0.1f} GiB / {avail} GiB \n({swapPercentage}% Swap)",
     "format-icons": [""],
-    "on-click": "~/.config/hypr/runtime/desktop/taskbar-app.sh missioncenter"
+    "on-click": "~/.config/hypr/taskbar/actions.sh missioncenter"
   },
 
   "custom/cpu_temp": {
@@ -54,7 +54,7 @@
     "return-type": "json",
     "format": "  {}",
     "tooltip": true,
-    "on-click": "~/.config/hypr/runtime/desktop/taskbar-app.sh s-tui"
+    "on-click": "~/.config/hypr/taskbar/actions.sh s-tui"
   },
 
   "custom/gpu_temp": {
@@ -63,7 +63,7 @@
     "return-type": "json",
     "format": "󰢮  {}",
     "tooltip": true,
-    "on-click": "~/.config/hypr/runtime/desktop/taskbar-app.sh nvitop"
+    "on-click": "~/.config/hypr/taskbar/actions.sh nvitop"
   },
 
   "custom/mullvad": {
@@ -85,7 +85,7 @@
       "headphone": "",
       "default": ["",  "", "", "", "", ""]
     },
-    "on-click": "~/.config/hypr/runtime/desktop/taskbar-app.sh wiremix",
+    "on-click": "~/.config/hypr/taskbar/actions.sh wiremix",
     "on-click-middle": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
     "tooltip": true
   },
@@ -149,7 +149,7 @@
     "align": 1,
     "justify": "right",
     "on-click": "swaync-client -t",
-    "on-click-right": "~/.config/hypr/runtime/desktop/taskbar-app.sh calendar",
+    "on-click-right": "~/.config/hypr/taskbar/actions.sh calendar",
     "tooltip": false,
     "menu-file": "~/.config/waybar/power_menu.xml",
     "menu-actions": {
