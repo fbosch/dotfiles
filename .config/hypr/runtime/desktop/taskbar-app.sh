@@ -352,8 +352,8 @@ position_bottom_right() {
     width="$rotated_width"
   fi
 
-  target_x=$((x + width - win_width - 16))
-  target_y=$((y + height - win_height - 64))
+  target_x=$((x + width - win_width - 7))
+  target_y=$((y + height - win_height - 56))
 
   hyprctl dispatch "hl.dsp.window.move({ x = ${target_x}, y = ${target_y}, window = $(lua_quote "address:${address}") })" >/dev/null 2>&1 || true
 }
