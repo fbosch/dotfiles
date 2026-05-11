@@ -1,6 +1,7 @@
 local layout_util = require("layouts.util")
 
 local M = {}
+local should_apply_count = layout_util.count_gate()
 
 local function is_portrait_workspace(workspace)
 	return workspace
@@ -18,9 +19,17 @@ local function apply_portrait_split(workspace, changed_window)
 
 	local count, first, second, third = layout_util.tiled_summary(workspace)
 	if count == 2 then
+		if not should_apply_count(workspace, count) then
+			return
+		end
+
 		layout_util.dispatch_on_window(first, hl.dsp.layout("splitratio 0.67 exact"))
 		layout_util.dispatch_on_window(second, hl.dsp.layout("preselect d"))
 	elseif count == 3 then
+		if not should_apply_count(workspace, count) then
+			return
+		end
+
 		layout_util.dispatch_on_window(first, hl.dsp.layout("splitratio 0.67 exact"))
 		layout_util.dispatch_on_window(changed_window or third, hl.dsp.layout("splitratio 1.0 exact"))
 	end
@@ -30,7 +39,7 @@ function M.apply_all()
 	local seen = {}
 	for _, window in ipairs(hl.get_windows()) do
 		local workspace = window.workspace
-		local key = workspace and (workspace.id or workspace.name)
+		local key = layout_util.workspace_key(workspace)
 		if key and not seen[key] then
 			seen[key] = true
 			apply_portrait_split(workspace)
@@ -57,7 +66,5 @@ hl.on("window.move_to_workspace", function(window)
 		end)
 	end
 end)
-
-M.apply_all()
 
 return M

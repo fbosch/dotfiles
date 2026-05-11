@@ -34,6 +34,24 @@ function M.tiled_summary(workspace)
 	return count, first, second, third
 end
 
+function M.workspace_key(workspace)
+	return workspace and (workspace.id or workspace.name) or nil
+end
+
+function M.count_gate()
+	local applied_counts = {}
+
+	return function(workspace, count)
+		local key = M.workspace_key(workspace)
+		if not key or applied_counts[key] == count then
+			return false
+		end
+
+		applied_counts[key] = count
+		return true
+	end
+end
+
 function M.dispatch_on_window(window_handle, dispatcher)
 	local target = window_handle and window_handle.address and "address:" .. window_handle.address or nil
 	if not target then
