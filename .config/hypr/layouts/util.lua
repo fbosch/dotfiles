@@ -13,6 +13,7 @@ end
 function M.tiled_summary(workspace)
 	local count = 0
 	local first = nil
+	local second = nil
 	local third = nil
 
 	for _, window_handle in ipairs(workspace:get_windows()) do
@@ -20,13 +21,15 @@ function M.tiled_summary(workspace)
 			count = count + 1
 			if count == 1 then
 				first = window_handle
+			elseif count == 2 then
+				second = window_handle
 			elseif count == 3 then
 				third = window_handle
 			end
 		end
 	end
 
-	return count, first, third
+	return count, first, second, third
 end
 
 function M.dispatch_on_window(window_handle, dispatcher)

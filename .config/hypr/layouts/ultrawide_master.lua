@@ -5,7 +5,7 @@ local function active_monitor_name()
 	return monitor and monitor.name or ""
 end
 
-local function apply_dp2_master(workspace)
+local function apply_ultrawide_master(workspace)
 	if not workspace or not workspace.monitor or workspace.monitor.name ~= "DP-2" or not workspace.active then
 		return
 	end
@@ -26,23 +26,17 @@ end
 
 hl.on("window.open", function(window)
 	if layout_util.is_tiled(window) then
-		apply_dp2_master(window.workspace)
+		apply_ultrawide_master(window.workspace)
 	end
 end)
 
 hl.on("window.close", function(window)
 	if layout_util.is_tiled(window) then
-		apply_dp2_master(window.workspace)
-	end
-end)
-
-hl.on("window.move_to_workspace", function(window, workspace)
-	if layout_util.is_tiled(window) then
-		apply_dp2_master(workspace)
+		apply_ultrawide_master(window.workspace)
 	end
 end)
 
 local active_window = hl.get_active_window and hl.get_active_window() or nil
 if active_window then
-	apply_dp2_master(active_window.workspace)
+	apply_ultrawide_master(active_window.workspace)
 end

@@ -142,7 +142,7 @@ local function callbacks(name)
 	return events[name] or {}
 end
 
-local function bench_dp2_master(iterations)
+local function bench_ultrawide_master(iterations)
 	clear_modules()
 	reset_events()
 	local workspace = make_workspace(3, { monitor = "DP-2", layout = "master", name = "1" })
@@ -150,9 +150,9 @@ local function bench_dp2_master(iterations)
 	current_windows = workspace.windows
 	active_window = current_windows[1]
 	active_monitor = { name = "DP-2" }
-	require("layouts.dp2_master")
+	require("layouts.ultrawide_master")
 	local callback = callbacks("window.open")[1]
-	run_case("layouts.dp2_master/window.open", iterations, function()
+	run_case("layouts.ultrawide_master/window.open", iterations, function()
 		callback(current_windows[1])
 	end)
 end
@@ -273,7 +273,7 @@ local function bench_window_motion(iterations)
 end
 
 local cases = {
-	dp2_master = bench_dp2_master,
+	ultrawide_master = bench_ultrawide_master,
 	portrait = bench_portrait_dwindle,
 	window_switcher = bench_window_switcher,
 	clipboard = bench_clipboard_bridge,
@@ -286,12 +286,12 @@ local selected = arg[1] or "all"
 local iterations = tonumber(arg[2]) or default_iterations
 
 if selected == "all" then
-	for _, name in ipairs({ "dp2_master", "portrait", "window_switcher", "clipboard", "rule_loader", "profiles", "window_motion" }) do
+	for _, name in ipairs({ "ultrawide_master", "portrait", "window_switcher", "clipboard", "rule_loader", "profiles", "window_motion" }) do
 		cases[name](iterations)
 	end
 elseif cases[selected] then
 	cases[selected](iterations)
 else
-	print("usage: lua " .. script_path .. " [all|dp2_master|portrait|window_switcher|clipboard|rule_loader|profiles|window_motion] [iterations]")
+	print("usage: lua " .. script_path .. " [all|ultrawide_master|portrait|window_switcher|clipboard|rule_loader|profiles|window_motion] [iterations]")
 	os.exit(2)
 end
