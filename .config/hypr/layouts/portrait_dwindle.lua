@@ -16,6 +16,7 @@ local function apply_portrait_split(workspace, changed_window)
 	if count == 2 then
 		layout_util.dispatch_on_window(first, hl.dsp.layout("splitratio 0.67 exact"))
 	elseif count == 3 then
+		layout_util.dispatch_on_window(first, hl.dsp.layout("splitratio 0.67 exact"))
 		layout_util.dispatch_on_window(changed_window or third, hl.dsp.layout("splitratio 1.0 exact"))
 	end
 end
