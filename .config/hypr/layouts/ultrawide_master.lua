@@ -1,5 +1,7 @@
 local layout_util = require("layouts.util")
 
+local applied_counts = {}
+
 local function active_monitor_name()
 	local monitor = hl.get_active_monitor and hl.get_active_monitor() or nil
 	return monitor and monitor.name or ""
@@ -15,12 +17,19 @@ local function apply_ultrawide_master(workspace)
 	end
 
 	local count = layout_util.tiled_summary(workspace)
+	local key = workspace.id or workspace.name
+	if not key or applied_counts[key] == count then
+		return
+	end
+
 	if count == 2 then
 		hl.dispatch(hl.dsp.layout("orientationleft"))
 		hl.dispatch(hl.dsp.layout("mfact exact 0.7"))
+		applied_counts[key] = count
 	elseif count == 3 then
 		hl.dispatch(hl.dsp.layout("orientationcenter"))
 		hl.dispatch(hl.dsp.layout("mfact exact 0.4"))
+		applied_counts[key] = count
 	end
 end
 
@@ -44,7 +53,6 @@ hl.on("window.move_to_workspace", function(window)
 	end
 end)
 
-local active_window = hl.get_active_window and hl.get_active_window() or nil
-if active_window then
-	apply_ultrawide_master(active_window.workspace)
-end
+return {
+	apply = apply_ultrawide_master,
+}
