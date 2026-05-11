@@ -47,4 +47,13 @@ function M.dispatch_on_window(window_handle, dispatcher)
 	end
 end
 
+function M.defer(callback, timeout)
+	if hl.timer then
+		hl.timer(callback, { timeout = timeout or 100, type = "oneshot" })
+		return
+	end
+
+	callback()
+end
+
 return M

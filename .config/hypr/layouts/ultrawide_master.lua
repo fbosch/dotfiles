@@ -36,6 +36,14 @@ hl.on("window.close", function(window)
 	end
 end)
 
+hl.on("window.move_to_workspace", function(window)
+	if layout_util.is_tiled(window) then
+		layout_util.defer(function()
+			apply_ultrawide_master(window.workspace)
+		end)
+	end
+end)
+
 local active_window = hl.get_active_window and hl.get_active_window() or nil
 if active_window then
 	apply_ultrawide_master(active_window.workspace)

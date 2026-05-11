@@ -44,6 +44,14 @@ hl.on("window.close", function(window)
 	end
 end)
 
+hl.on("window.move_to_workspace", function(window)
+	if layout_util.is_tiled(window) then
+		layout_util.defer(function()
+			apply_portrait_split(window.workspace, window)
+		end)
+	end
+end)
+
 M.apply_all()
 
 return M
