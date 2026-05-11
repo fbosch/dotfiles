@@ -27,8 +27,14 @@ local function apply_portrait_split(workspace, changed_window)
 end
 
 function M.apply_all()
+	local seen = {}
 	for _, window in ipairs(hl.get_windows()) do
-		apply_portrait_split(window.workspace)
+		local workspace = window.workspace
+		local key = workspace and (workspace.id or workspace.name)
+		if key and not seen[key] then
+			seen[key] = true
+			apply_portrait_split(workspace)
+		end
 	end
 end
 
