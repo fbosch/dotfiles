@@ -6,27 +6,24 @@ app_id="${1:-}"
 mode="${2:-open}"
 taskbar_apps_file="${TASKBAR_APPS_FILE:-${HOME}/.config/hypr/taskbar/apps.json}"
 
-TASKBAR_APPS_JSON="$(<"$taskbar_apps_file")"
-readonly TASKBAR_APPS_JSON
-
 any_open() {
   hyprctl clients -j 2>/dev/null \
-    | jq -e --argjson apps "$TASKBAR_APPS_JSON" '
+    | jq -e --slurpfile apps "$taskbar_apps_file" '
       def app_matches($window; $app):
         if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
       any(.[]; . as $window |
-        any($apps[]; app_matches($window; .) and $window.pinned == true and $window.workspace.name != .workspace)
+        any($apps[0][]; app_matches($window; .) and $window.pinned == true and $window.workspace.name != .workspace)
       )
     ' >/dev/null
 }
 
 kill_all() {
   hyprctl clients -j 2>/dev/null \
-    | jq -r --argjson apps "$TASKBAR_APPS_JSON" '
+    | jq -r --slurpfile apps "$taskbar_apps_file" '
       def app_matches($window; $app):
         if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
       .[] as $window |
-      $apps[] |
+      $apps[0][] |
       select(app_matches($window; .) and $window.workspace.name == .workspace) |
       $window.address
     ' \
@@ -41,11 +38,11 @@ park_other_visible_apps() {
   local current_id="$1"
 
   hyprctl clients -j 2>/dev/null \
-    | jq -r --argjson apps "$TASKBAR_APPS_JSON" --arg current_id "$current_id" '
+    | jq -r --slurpfile apps "$taskbar_apps_file" --arg current_id "$current_id" '
       def app_matches($window; $app):
         if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
       .[] as $window |
-      $apps[] |
+      $apps[0][] |
       select(.id != $current_id) |
       select(app_matches($window; .) and $window.pinned == true and $window.workspace.name != .workspace) |
       "\($window.address)|\(.workspace)"
@@ -66,7 +63,7 @@ park_active() {
     def app_matches($window; $app):
       if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
     first(.[] | select(app_matches($active; .)) | .workspace) // empty
-  ' <<< "$TASKBAR_APPS_JSON")"
+  ' "$taskbar_apps_file")"
 
   [[ -z "$address" || -z "$workspace" ]] && return 1
 
@@ -109,7 +106,7 @@ load_app() {
   fi
 }
 
-app_json="$(jq -c --arg id "$app_id" 'first(.[] | select(.id == $id)) // empty' <<< "$TASKBAR_APPS_JSON")"
+app_json="$(jq -c --arg id "$app_id" 'first(.[] | select(.id == $id)) // empty' "$taskbar_apps_file")"
 [[ -z "$app_json" ]] && exit 1
 load_app "$app_json"
 
