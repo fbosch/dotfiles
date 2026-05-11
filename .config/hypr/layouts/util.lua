@@ -25,6 +25,8 @@ function M.tiled_summary(workspace)
 				second = window_handle
 			elseif count == 3 then
 				third = window_handle
+			elseif count > 3 then
+				return count, first, second, third
 			end
 		end
 	end
@@ -33,16 +35,21 @@ function M.tiled_summary(workspace)
 end
 
 function M.dispatch_on_window(window_handle, dispatcher)
-	local target = M.address(window_handle)
+	local target = window_handle and window_handle.address and "address:" .. window_handle.address or nil
 	if not target then
 		return
 	end
 
 	local previous = M.address(window.active())
+	if previous == target then
+		hl.dispatch(dispatcher)
+		return
+	end
+
 	hl.dispatch(hl.dsp.focus({ window = target }))
 	hl.dispatch(dispatcher)
 
-	if previous and previous ~= target then
+	if previous then
 		hl.dispatch(hl.dsp.focus({ window = previous }))
 	end
 end
