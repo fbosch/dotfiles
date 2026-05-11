@@ -6,7 +6,7 @@ app_id="${1:-}"
 mode="${2:-open}"
 taskbar_apps_file="${TASKBAR_APPS_FILE:-${HOME}/.config/hypr/taskbar/apps.json}"
 
-any_open() {
+if [[ "$app_id" == "--any-open" ]]; then
   hyprctl clients -j 2>/dev/null \
     | jq -e --slurpfile apps "$taskbar_apps_file" '
       def app_matches($window; $app):
@@ -15,7 +15,9 @@ any_open() {
         any($apps[0][]; app_matches($window; .) and $window.pinned == true and $window.workspace.name != .workspace)
       )
     ' >/dev/null
-}
+
+  exit $?
+fi
 
 kill_all() {
   hyprctl clients -j 2>/dev/null \
@@ -74,11 +76,6 @@ park_active() {
 
   hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })" >/dev/null 2>&1 || true
 }
-
-if [[ "$app_id" == "--any-open" ]]; then
-  any_open
-  exit $?
-fi
 
 if [[ "$app_id" == "--park-active" ]]; then
   park_active
