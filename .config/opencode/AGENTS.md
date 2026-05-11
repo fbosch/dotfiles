@@ -18,6 +18,7 @@
 - Keep changes minimal and local; prefer existing patterns.
 - Default to current schema/contract; add compatibility layers only when explicitly required.
 - Run the smallest reasonable validation for changed behavior.
+- When asked to check dotfiles, inspect the `~/dotfiles` repository.
 
 ## Communication style
 

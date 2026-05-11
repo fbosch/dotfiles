@@ -5,69 +5,67 @@ set -euo pipefail
 app_id="${1:-}"
 mode="${2:-open}"
 
-taskbar_apps_json() {
-  jq -nc '[
+readonly TASKBAR_APPS_JSON='[
     {
-      id: "calendar",
-      class_name: "org.gnome.Calendar",
-      tag: "taskbar_calendar*",
-      workspace: "special:taskbar-calendar",
-      command: ["gnome-calendar"]
+      "id": "calendar",
+      "class_name": "org.gnome.Calendar",
+      "tag": "taskbar_calendar*",
+      "workspace": "special:taskbar-calendar",
+      "command": ["gnome-calendar"]
     },
     {
-      id: "missioncenter",
-      class_name: "io.missioncenter.MissionCenter",
-      tag: "taskbar_missioncenter*",
-      workspace: "special:taskbar-missioncenter",
-      command: ["missioncenter"],
-      size: [754, 759]
+      "id": "missioncenter",
+      "class_name": "io.missioncenter.MissionCenter",
+      "tag": "taskbar_missioncenter*",
+      "workspace": "special:taskbar-missioncenter",
+      "command": ["missioncenter"],
+      "size": [754, 759]
     },
     {
-      id: "btop-cpu",
-      class_name: "btop_cpu_terminal",
-      workspace: "special:taskbar-btop-cpu",
-      command: ["footclient", "-N", "-a", "btop_cpu_terminal", "btop", "--config", "__HOME__/.config/btop/btop-cpu.conf", "--preset", "1"],
-      fallback_command: ["foot", "-a", "btop_cpu_terminal", "btop", "--config", "__HOME__/.config/btop/btop-cpu.conf", "--preset", "1"],
-      size: [920, 620]
+      "id": "btop-cpu",
+      "class_name": "btop_cpu_terminal",
+      "workspace": "special:taskbar-btop-cpu",
+      "command": ["footclient", "-N", "-a", "btop_cpu_terminal", "btop", "--config", "__HOME__/.config/btop/btop-cpu.conf", "--preset", "1"],
+      "fallback_command": ["foot", "-a", "btop_cpu_terminal", "btop", "--config", "__HOME__/.config/btop/btop-cpu.conf", "--preset", "1"],
+      "size": [920, 620]
     },
     {
-      id: "btop-mem",
-      class_name: "btop_mem_terminal",
-      workspace: "special:taskbar-btop-mem",
-      command: ["footclient", "-N", "-a", "btop_mem_terminal", "btop", "--config", "__HOME__/.config/btop/btop-mem.conf", "--preset", "2"],
-      fallback_command: ["foot", "-a", "btop_mem_terminal", "btop", "--config", "__HOME__/.config/btop/btop-mem.conf", "--preset", "2"],
-      size: [920, 620]
+      "id": "btop-mem",
+      "class_name": "btop_mem_terminal",
+      "workspace": "special:taskbar-btop-mem",
+      "command": ["footclient", "-N", "-a", "btop_mem_terminal", "btop", "--config", "__HOME__/.config/btop/btop-mem.conf", "--preset", "2"],
+      "fallback_command": ["foot", "-a", "btop_mem_terminal", "btop", "--config", "__HOME__/.config/btop/btop-mem.conf", "--preset", "2"],
+      "size": [920, 620]
     },
     {
-      id: "nvitop",
-      class_name: "nvitop_terminal",
-      workspace: "special:taskbar-nvitop",
-      command: ["footclient", "-N", "-a", "nvitop_terminal", "nvitop"],
-      fallback_command: ["foot", "-a", "nvitop_terminal", "nvitop"],
-      size: [900, 655]
+      "id": "nvitop",
+      "class_name": "nvitop_terminal",
+      "workspace": "special:taskbar-nvitop",
+      "command": ["footclient", "-N", "-a", "nvitop_terminal", "nvitop"],
+      "fallback_command": ["foot", "-a", "nvitop_terminal", "nvitop"],
+      "size": [900, 655]
     },
     {
-      id: "s-tui",
-      class_name: "s_tui_terminal",
-      workspace: "special:taskbar-s-tui",
-      command: ["footclient", "-N", "-a", "s_tui_terminal", "s-tui"],
-      fallback_command: ["foot", "-a", "s_tui_terminal", "s-tui"],
-      size: [1200, 760]
+      "id": "s-tui",
+      "class_name": "s_tui_terminal",
+      "workspace": "special:taskbar-s-tui",
+      "command": ["footclient", "-N", "-a", "s_tui_terminal", "s-tui"],
+      "fallback_command": ["foot", "-a", "s_tui_terminal", "s-tui"],
+      "size": [1200, 760]
     },
     {
-      id: "wiremix",
-      class_name: "wiremix_terminal",
-      workspace: "special:taskbar-wiremix",
-      command: ["footclient", "-N", "-a", "wiremix_terminal", "wiremix"],
-      fallback_command: ["foot", "-a", "wiremix_terminal", "wiremix"],
-      size: [725, 500]
+      "id": "wiremix",
+      "class_name": "wiremix_terminal",
+      "workspace": "special:taskbar-wiremix",
+      "command": ["footclient", "-N", "-a", "wiremix_terminal", "wiremix"],
+      "fallback_command": ["foot", "-a", "wiremix_terminal", "wiremix"],
+      "size": [725, 500]
     }
   ]'
-}
 
 any_open() {
   hyprctl clients -j 2>/dev/null \
-    | jq -e --argjson apps "$(taskbar_apps_json)" '
+    | jq -e --argjson apps "$TASKBAR_APPS_JSON" '
       def app_matches($window; $app):
         if $app.tag then (($window.tags // []) | index($app.tag)) != null else $app.class_name == $window.class end;
       any(.[]; . as $window |
@@ -78,7 +76,7 @@ any_open() {
 
 kill_all() {
   hyprctl clients -j 2>/dev/null \
-    | jq -r --argjson apps "$(taskbar_apps_json)" '
+    | jq -r --argjson apps "$TASKBAR_APPS_JSON" '
       def app_matches($window; $app):
         if $app.tag then (($window.tags // []) | index($app.tag)) != null else $app.class_name == $window.class end;
       .[] as $window |
@@ -97,7 +95,7 @@ park_other_visible_apps() {
   local current_id="$1"
 
   hyprctl clients -j 2>/dev/null \
-    | jq -r --argjson apps "$(taskbar_apps_json)" --arg current_id "$current_id" '
+    | jq -r --argjson apps "$TASKBAR_APPS_JSON" --arg current_id "$current_id" '
       def app_matches($window; $app):
         if $app.tag then (($window.tags // []) | index($app.tag)) != null else $app.class_name == $window.class end;
       .[] as $window |
@@ -118,11 +116,11 @@ park_active() {
 
   active="$(hyprctl activewindow -j 2>/dev/null || printf '{}')"
   address="$(jq -r '.address // empty' <<< "$active")"
-  workspace="$(taskbar_apps_json | jq -r --argjson active "$active" '
+  workspace="$(jq -r --argjson active "$active" '
     def app_matches($window; $app):
       if $app.tag then (($window.tags // []) | index($app.tag)) != null else $app.class_name == $window.class end;
     first(.[] | select(app_matches($active; .)) | .workspace) // empty
-  ')"
+  ' <<< "$TASKBAR_APPS_JSON")"
 
   [[ -z "$address" || -z "$workspace" ]] && return 1
 
@@ -285,9 +283,12 @@ current_monitor() {
 }
 
 target_workspace() {
-  local monitor
+  local monitor="${1:-}"
 
-  monitor="$(current_monitor)"
+  if (( $# == 0 )); then
+    monitor="$(current_monitor)"
+  fi
+
   if [[ -n "$monitor" ]]; then
     jq -r '.activeWorkspace.name // empty' <<< "$monitor"
     return
@@ -331,18 +332,17 @@ apply_saved_size() {
 
 position_bottom_right() {
   local address="$1"
-  local monitor x y width height transform win_width win_height target_x target_y
+  local monitor="${2:-}"
+  local x y width height transform win_width win_height target_x target_y
 
-  monitor="$(current_monitor)"
+  [[ -z "$monitor" ]] && monitor="$(current_monitor)"
   [[ -z "$monitor" ]] && return
 
-  x="$(jq -r '.x' <<< "$monitor")"
-  y="$(jq -r '.y' <<< "$monitor")"
-  width="$(jq -r '.width' <<< "$monitor")"
-  height="$(jq -r '.height' <<< "$monitor")"
-  transform="$(jq -r '.transform' <<< "$monitor")"
-  win_width="$(hyprctl clients -j 2>/dev/null | jq -r --arg address "$address" 'first(.[] | select(.address == $address) | .size[0]) // empty')"
-  win_height="$(hyprctl clients -j 2>/dev/null | jq -r --arg address "$address" 'first(.[] | select(.address == $address) | .size[1]) // empty')"
+  IFS=$'\t' read -r x y width height transform < <(jq -r '[.x, .y, .width, .height, .transform] | @tsv' <<< "$monitor")
+  IFS=$'\t' read -r win_width win_height < <(
+    hyprctl clients -j 2>/dev/null \
+      | jq -r --arg address "$address" 'first(.[] | select(.address == $address) | .size | @tsv) // empty'
+  )
 
   [[ -z "$win_width" || -z "$win_height" ]] && return
 
@@ -400,10 +400,11 @@ if [[ -n "$address" ]]; then
     current_workspace="$(client_workspace "$address")"
     if [[ "$current_workspace" == "$workspace" ]]; then
       park_other_visible_apps "$app_id"
-      target_workspace="$(target_workspace)"
+      monitor="$(current_monitor)"
+      target_workspace="$(target_workspace "$monitor")"
       [[ -z "$target_workspace" || "$target_workspace" == special:* ]] && target_workspace="+0"
       apply_saved_size "$address"
-      position_bottom_right "$address"
+      position_bottom_right "$address" "$monitor"
       move_window_to_workspace "$address" "$target_workspace"
       set_pinned "$address" true
     else
@@ -426,10 +427,11 @@ if [[ "$mode" == "prewarm" ]]; then
   move_window_to_workspace "$address" "$workspace"
 else
   park_other_visible_apps "$app_id"
-  target_workspace="$(target_workspace)"
+  monitor="$(current_monitor)"
+  target_workspace="$(target_workspace "$monitor")"
   [[ -z "$target_workspace" || "$target_workspace" == special:* ]] && target_workspace="+0"
   apply_saved_size "$address"
-  position_bottom_right "$address"
+  position_bottom_right "$address" "$monitor"
   move_window_to_workspace "$address" "$target_workspace"
   set_pinned "$address" true
 fi
