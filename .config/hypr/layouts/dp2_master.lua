@@ -13,6 +13,10 @@ local function tiled_count(workspace)
 	return count
 end
 
+local function is_tiled(window)
+	return window and not window.floating
+end
+
 local function active_monitor_name()
 	local monitor = hl.get_active_monitor and hl.get_active_monitor() or nil
 	return monitor and monitor.name or ""
@@ -38,15 +42,21 @@ local function apply_dp2_master(workspace)
 end
 
 hl.on("window.open", function(window)
-	apply_dp2_master(window.workspace)
+	if is_tiled(window) then
+		apply_dp2_master(window.workspace)
+	end
 end)
 
 hl.on("window.close", function(window)
-	apply_dp2_master(window.workspace)
+	if is_tiled(window) then
+		apply_dp2_master(window.workspace)
+	end
 end)
 
-hl.on("window.move_to_workspace", function(_, workspace)
-	apply_dp2_master(workspace)
+hl.on("window.move_to_workspace", function(window, workspace)
+	if is_tiled(window) then
+		apply_dp2_master(workspace)
+	end
 end)
 
 local active_window = hl.get_active_window and hl.get_active_window() or nil

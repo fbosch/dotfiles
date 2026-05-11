@@ -30,7 +30,7 @@ kill_all() {
     | sort -u \
     | while IFS= read -r address; do
       [[ -z "$address" ]] && continue
-      hyprctl dispatch "hl.dsp.window.close($(jq -Rn --arg value "address:${address}" '$value'))" >/dev/null 2>&1 || true
+      hyprctl dispatch "hl.dsp.window.close($(lua_quote "address:${address}"))" >/dev/null 2>&1 || true
     done
 }
 
@@ -49,8 +49,8 @@ park_other_visible_apps() {
     ' \
     | while IFS='|' read -r address target_workspace; do
       [[ -z "$address" || -z "$target_workspace" ]] && continue
-      hyprctl dispatch "hl.dsp.window.pin({ window = $(jq -Rn --arg value "address:${address}" '$value') })" >/dev/null 2>&1 || true
-      hyprctl dispatch "hl.dsp.window.move({ workspace = $(jq -Rn --arg value "$target_workspace" '$value'), window = $(jq -Rn --arg value "address:${address}" '$value'), follow = false })" >/dev/null 2>&1 || true
+      hyprctl dispatch "hl.dsp.window.pin({ window = $(lua_quote "address:${address}") })" >/dev/null 2>&1 || true
+      hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_quote "$target_workspace"), window = $(lua_quote "address:${address}"), follow = false })" >/dev/null 2>&1 || true
     done
 }
 
@@ -69,10 +69,10 @@ park_active() {
 
   pinned="$(jq -r '.pinned // false' <<< "$active")"
   if [[ "$pinned" == "true" ]]; then
-    hyprctl dispatch "hl.dsp.window.pin({ window = $(jq -Rn --arg value "address:${address}" '$value') })" >/dev/null 2>&1 || true
+    hyprctl dispatch "hl.dsp.window.pin({ window = $(lua_quote "address:${address}") })" >/dev/null 2>&1 || true
   fi
 
-  hyprctl dispatch "hl.dsp.window.move({ workspace = $(jq -Rn --arg value "$workspace" '$value'), window = $(jq -Rn --arg value "address:${address}" '$value'), follow = false })" >/dev/null 2>&1 || true
+  hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })" >/dev/null 2>&1 || true
 }
 
 if [[ "$app_id" == "--any-open" ]]; then
@@ -111,7 +111,14 @@ app_json="$(jq -c --arg id "$app_id" 'first(.[] | select(.id == $id)) // empty' 
 load_app "$app_json"
 
 lua_quote() {
-  jq -Rn --arg value "$1" '$value'
+  local value="$1"
+
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  printf '"%s"' "$value"
 }
 
 shell_quote() {
