@@ -1,7 +1,7 @@
 -- Autostart commands ported from autostart.conf.
 
 local M = {}
-local taskbar_apps = require("taskbar-apps")
+local taskbar_apps = require("taskbar")
 
 M.commands = {
 	"xrandr --output DP-2 --primary",

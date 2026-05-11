@@ -4,7 +4,7 @@ set -euo pipefail
 
 PROFILECTL="$HOME/.config/hypr/runtime/profiles/profilectl.sh"
 MINIMIZE_SCRIPT="$HOME/.config/hypr/runtime/windows/toggle-minimized-window.sh"
-TASKBAR_APP_SCRIPT="$HOME/.config/hypr/runtime/desktop/taskbar-app.sh"
+TASKBAR_APP_SCRIPT="$HOME/.config/hypr/taskbar/actions.sh"
 
 readonly ACTION_KILL="kill"
 readonly ACTION_BLOCK="block"

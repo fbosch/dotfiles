@@ -16,7 +16,7 @@ check_swaync_visible() {
 
 # Check if a taskbar-adjacent app is currently shown from its parking workspace.
 check_taskbar_app_open() {
-    "$HOME/.config/hypr/runtime/desktop/taskbar-app.sh" --any-open >/dev/null 2>&1
+    "$HOME/.config/hypr/taskbar/actions.sh" --any-open >/dev/null 2>&1
 }
 
 # Check if waybar should stay visible (returns 0 if should stay visible, 1 if can hide)

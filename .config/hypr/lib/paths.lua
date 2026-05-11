@@ -27,7 +27,6 @@ local scripts = {
 	["reset-desktop.sh"] = "desktop/reset-desktop.sh",
 	["restart-daemons.sh"] = "desktop/restart-daemons.sh",
 	["switch-layout.sh"] = "desktop/switch-layout.sh",
-	["taskbar-app.sh"] = "desktop/taskbar-app.sh",
 	["toggle-hypridle.sh"] = "desktop/toggle-hypridle.sh",
 	["toggle-night-light.sh"] = "desktop/toggle-night-light.sh",
 	["waybar-edge-monitor.sh"] = "desktop/waybar-edge-monitor.sh",

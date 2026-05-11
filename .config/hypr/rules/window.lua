@@ -1,7 +1,7 @@
 -- Static window rules ported from rules.conf.
 -- Preserve declaration order.
 
-local taskbar_apps = require("taskbar-apps")
+local taskbar_apps = require("taskbar")
 
 -- Gamescope
 hl.window_rule({

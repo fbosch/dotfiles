@@ -4,70 +4,16 @@ set -euo pipefail
 
 app_id="${1:-}"
 mode="${2:-open}"
+taskbar_apps_file="${TASKBAR_APPS_FILE:-${HOME}/.config/hypr/taskbar/apps.json}"
 
-readonly TASKBAR_APPS_JSON='[
-    {
-      "id": "calendar",
-      "class_name": "org.gnome.Calendar",
-      "tag": "taskbar_calendar*",
-      "workspace": "special:taskbar-calendar",
-      "command": ["gnome-calendar"]
-    },
-    {
-      "id": "missioncenter",
-      "class_name": "io.missioncenter.MissionCenter",
-      "tag": "taskbar_missioncenter*",
-      "workspace": "special:taskbar-missioncenter",
-      "command": ["missioncenter"],
-      "size": [754, 759]
-    },
-    {
-      "id": "btop-cpu",
-      "class_name": "btop_cpu_terminal",
-      "workspace": "special:taskbar-btop-cpu",
-      "command": ["footclient", "-N", "-a", "btop_cpu_terminal", "btop", "--config", "__HOME__/.config/btop/btop-cpu.conf", "--preset", "1"],
-      "fallback_command": ["foot", "-a", "btop_cpu_terminal", "btop", "--config", "__HOME__/.config/btop/btop-cpu.conf", "--preset", "1"],
-      "size": [920, 620]
-    },
-    {
-      "id": "btop-mem",
-      "class_name": "btop_mem_terminal",
-      "workspace": "special:taskbar-btop-mem",
-      "command": ["footclient", "-N", "-a", "btop_mem_terminal", "btop", "--config", "__HOME__/.config/btop/btop-mem.conf", "--preset", "2"],
-      "fallback_command": ["foot", "-a", "btop_mem_terminal", "btop", "--config", "__HOME__/.config/btop/btop-mem.conf", "--preset", "2"],
-      "size": [920, 620]
-    },
-    {
-      "id": "nvitop",
-      "class_name": "nvitop_terminal",
-      "workspace": "special:taskbar-nvitop",
-      "command": ["footclient", "-N", "-a", "nvitop_terminal", "nvitop"],
-      "fallback_command": ["foot", "-a", "nvitop_terminal", "nvitop"],
-      "size": [900, 655]
-    },
-    {
-      "id": "s-tui",
-      "class_name": "s_tui_terminal",
-      "workspace": "special:taskbar-s-tui",
-      "command": ["footclient", "-N", "-a", "s_tui_terminal", "s-tui"],
-      "fallback_command": ["foot", "-a", "s_tui_terminal", "s-tui"],
-      "size": [1200, 760]
-    },
-    {
-      "id": "wiremix",
-      "class_name": "wiremix_terminal",
-      "workspace": "special:taskbar-wiremix",
-      "command": ["footclient", "-N", "-a", "wiremix_terminal", "wiremix"],
-      "fallback_command": ["foot", "-a", "wiremix_terminal", "wiremix"],
-      "size": [725, 500]
-    }
-  ]'
+TASKBAR_APPS_JSON="$(<"$taskbar_apps_file")"
+readonly TASKBAR_APPS_JSON
 
 any_open() {
   hyprctl clients -j 2>/dev/null \
     | jq -e --argjson apps "$TASKBAR_APPS_JSON" '
       def app_matches($window; $app):
-        if $app.tag then (($window.tags // []) | index($app.tag)) != null else $app.class_name == $window.class end;
+        if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
       any(.[]; . as $window |
         any($apps[]; app_matches($window; .) and $window.pinned == true and $window.workspace.name != .workspace)
       )
@@ -78,7 +24,7 @@ kill_all() {
   hyprctl clients -j 2>/dev/null \
     | jq -r --argjson apps "$TASKBAR_APPS_JSON" '
       def app_matches($window; $app):
-        if $app.tag then (($window.tags // []) | index($app.tag)) != null else $app.class_name == $window.class end;
+        if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
       .[] as $window |
       $apps[] |
       select(app_matches($window; .) and $window.workspace.name == .workspace) |
@@ -97,7 +43,7 @@ park_other_visible_apps() {
   hyprctl clients -j 2>/dev/null \
     | jq -r --argjson apps "$TASKBAR_APPS_JSON" --arg current_id "$current_id" '
       def app_matches($window; $app):
-        if $app.tag then (($window.tags // []) | index($app.tag)) != null else $app.class_name == $window.class end;
+        if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
       .[] as $window |
       $apps[] |
       select(.id != $current_id) |
@@ -118,7 +64,7 @@ park_active() {
   address="$(jq -r '.address // empty' <<< "$active")"
   workspace="$(jq -r --argjson active "$active" '
     def app_matches($window; $app):
-      if $app.tag then (($window.tags // []) | index($app.tag)) != null else $app.class_name == $window.class end;
+      if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
     first(.[] | select(app_matches($active; .)) | .workspace) // empty
   ' <<< "$TASKBAR_APPS_JSON")"
 
@@ -147,67 +93,25 @@ if [[ "$app_id" == "--kill-all" ]]; then
   exit 0
 fi
 
-case "$app_id" in
-  calendar)
-    class_name="org.gnome.Calendar"
-    tag="taskbar_calendar"
-    workspace="special:taskbar-calendar"
-    width=""
-    height=""
-    command=(gnome-calendar)
-    ;;
-  missioncenter)
-    class_name="io.missioncenter.MissionCenter"
-    tag="taskbar_missioncenter"
-    workspace="special:taskbar-missioncenter"
-    width="754"
-    height="759"
-    command=(missioncenter)
-    ;;
-  btop-cpu)
-    class_name="btop_cpu_terminal"
-    workspace="special:taskbar-btop-cpu"
-    width="920"
-    height="620"
-    command=(footclient -N -a btop_cpu_terminal btop --config "$HOME/.config/btop/btop-cpu.conf" --preset 1)
-    fallback_command=(foot -a btop_cpu_terminal btop --config "$HOME/.config/btop/btop-cpu.conf" --preset 1)
-    ;;
-  btop-mem)
-    class_name="btop_mem_terminal"
-    workspace="special:taskbar-btop-mem"
-    width="920"
-    height="620"
-    command=(footclient -N -a btop_mem_terminal btop --config "$HOME/.config/btop/btop-mem.conf" --preset 2)
-    fallback_command=(foot -a btop_mem_terminal btop --config "$HOME/.config/btop/btop-mem.conf" --preset 2)
-    ;;
-  nvitop)
-    class_name="nvitop_terminal"
-    workspace="special:taskbar-nvitop"
-    width="900"
-    height="655"
-    command=(footclient -N -a nvitop_terminal nvitop)
-    fallback_command=(foot -a nvitop_terminal nvitop)
-    ;;
-  s-tui)
-    class_name="s_tui_terminal"
-    workspace="special:taskbar-s-tui"
-    width="1200"
-    height="760"
-    command=(footclient -N -a s_tui_terminal s-tui)
-    fallback_command=(foot -a s_tui_terminal s-tui)
-    ;;
-  wiremix)
-    class_name="wiremix_terminal"
-    workspace="special:taskbar-wiremix"
-    width="725"
-    height="500"
-    command=(footclient -N -a wiremix_terminal wiremix)
-    fallback_command=(foot -a wiremix_terminal wiremix)
-    ;;
-  *)
-    exit 1
-    ;;
-esac
+load_app() {
+  local app_json="$1"
+
+  class_name="$(jq -r '.class' <<< "$app_json")"
+  tag="$(jq -r '.tag // empty' <<< "$app_json")"
+  workspace="$(jq -r '.workspace' <<< "$app_json")"
+  width="$(jq -r '.saved_size[0] // empty' <<< "$app_json")"
+  height="$(jq -r '.saved_size[1] // empty' <<< "$app_json")"
+  mapfile -t command < <(jq -r --arg home "$HOME" '.command[] | gsub("__HOME__"; $home)' <<< "$app_json")
+
+  unset fallback_command
+  if jq -e '.fallback_command' <<< "$app_json" >/dev/null; then
+    mapfile -t fallback_command < <(jq -r --arg home "$HOME" '.fallback_command[] | gsub("__HOME__"; $home)' <<< "$app_json")
+  fi
+}
+
+app_json="$(jq -c --arg id "$app_id" 'first(.[] | select(.id == $id)) // empty' <<< "$TASKBAR_APPS_JSON")"
+[[ -z "$app_json" ]] && exit 1
+load_app "$app_json"
 
 lua_quote() {
   jq -Rn --arg value "$1" '$value'
