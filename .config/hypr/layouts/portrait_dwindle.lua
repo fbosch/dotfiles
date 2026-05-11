@@ -1,52 +1,7 @@
 local active_window = require("lib.window").active
+local layout_util = require("layouts.util")
 
 local M = {}
-
-local function address(window)
-	return window and window.address and "address:" .. window.address or nil
-end
-
-local function tiled_summary(workspace)
-	local count = 0
-	local third = nil
-	local first = nil
-	for _, window in ipairs(workspace:get_windows()) do
-		if window.visible and not window.floating then
-			count = count + 1
-			if count == 1 then
-				first = window
-			elseif count == 3 then
-				third = window
-			end
-		end
-	end
-
-	return count, first, third
-end
-
-local function dispatch_on_window(window, dispatcher)
-	local target = address(window)
-	if not target then
-		return
-	end
-
-	local previous = address(active_window())
-	hl.dispatch(hl.dsp.focus({ window = target }))
-	hl.dispatch(dispatcher)
-
-	if previous and previous ~= target then
-		hl.dispatch(hl.dsp.focus({ window = previous }))
-	end
-end
-
-local function dispatch_on_workspace(workspace, dispatcher)
-	local _, first = tiled_summary(workspace)
-	if not first then
-		return
-	end
-
-	dispatch_on_window(first, dispatcher)
-end
 
 local function apply_portrait_split(workspace, changed_window)
 	if not workspace or not workspace.monitor or workspace.monitor.name ~= "HDMI-A-2" or not workspace.active then
@@ -57,11 +12,11 @@ local function apply_portrait_split(workspace, changed_window)
 		return
 	end
 
-	local count, first, third = tiled_summary(workspace)
+	local count, first, third = layout_util.tiled_summary(workspace)
 	if count == 2 then
-		dispatch_on_window(first, hl.dsp.layout("splitratio 0.67 exact"))
+		layout_util.dispatch_on_window(first, hl.dsp.layout("splitratio 0.67 exact"))
 	elseif count == 3 then
-		dispatch_on_window(changed_window or third, hl.dsp.layout("splitratio 1.0 exact"))
+		layout_util.dispatch_on_window(changed_window or third, hl.dsp.layout("splitratio 1.0 exact"))
 	end
 end
 
@@ -72,15 +27,21 @@ function M.apply_all()
 end
 
 hl.on("window.open", function(window)
-	apply_portrait_split(window.workspace, window)
+	if layout_util.is_tiled(window) then
+		apply_portrait_split(window.workspace, window)
+	end
 end)
 
 hl.on("window.close", function(window)
-	apply_portrait_split(window.workspace)
+	if layout_util.is_tiled(window) then
+		apply_portrait_split(window.workspace)
+	end
 end)
 
-hl.on("window.move_to_workspace", function(_, workspace)
-	apply_portrait_split(workspace, active_window())
+hl.on("window.move_to_workspace", function(window, workspace)
+	if layout_util.is_tiled(window) then
+		apply_portrait_split(workspace, active_window())
+	end
 end)
 
 hl.on("workspace.move_to_monitor", function(workspace)

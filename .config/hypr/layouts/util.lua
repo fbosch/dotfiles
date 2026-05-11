@@ -1,0 +1,47 @@
+local window = require("lib.window")
+
+local M = {}
+
+function M.address(window_handle)
+	return window_handle and window_handle.address and "address:" .. window_handle.address or nil
+end
+
+function M.is_tiled(window_handle)
+	return window_handle and not window_handle.floating
+end
+
+function M.tiled_summary(workspace)
+	local count = 0
+	local first = nil
+	local third = nil
+
+	for _, window_handle in ipairs(workspace:get_windows()) do
+		if window_handle.visible and not window_handle.floating then
+			count = count + 1
+			if count == 1 then
+				first = window_handle
+			elseif count == 3 then
+				third = window_handle
+			end
+		end
+	end
+
+	return count, first, third
+end
+
+function M.dispatch_on_window(window_handle, dispatcher)
+	local target = M.address(window_handle)
+	if not target then
+		return
+	end
+
+	local previous = M.address(window.active())
+	hl.dispatch(hl.dsp.focus({ window = target }))
+	hl.dispatch(dispatcher)
+
+	if previous and previous ~= target then
+		hl.dispatch(hl.dsp.focus({ window = previous }))
+	end
+end
+
+return M
