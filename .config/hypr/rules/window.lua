@@ -5,16 +5,16 @@ local taskbar_apps = require("taskbar")
 
 -- Gamescope
 hl.window_rule({
-  match = { class = "^(gamescope)$" },
-  workspace = "10 silent",
-  tile = true,
-  fullscreen = true,
+	match = { class = "^(gamescope)$" },
+	workspace = "10 silent",
+	tile = true,
+	fullscreen = true,
 })
 
 -- Gaming overlay scratchpad
 hl.window_rule({
-  match = { workspace = "10", class = "negative:^(gamescope)$" },
-  workspace = "special:gaming-overlay silent",
+	match = { workspace = "10", class = "negative:^(gamescope)$" },
+	workspace = "special:gaming-overlay silent",
 })
 
 -- GTK Application
@@ -55,28 +55,31 @@ hl.window_rule({ match = { class = "^(org\\.gnome\\.FileRoller)$" }, float = tru
 
 -- Network Manager Connection Editor
 hl.window_rule({
-  match = { class = "^(nm-connection-editor)$" },
-  float = true,
-  pin = true,
-  no_anim = true,
-  move = "onscreen 100% 100%",
+	match = { class = "^(nm-connection-editor)$" },
+	float = true,
+	pin = true,
+	no_anim = true,
+	move = "onscreen 100% 100%",
 })
-hl.window_rule({ match = { class = "^(nm-connection-editor)$", initial_title = "^(Network Connections)$" }, size = "350 270" })
+hl.window_rule({
+	match = { class = "^(nm-connection-editor)$", initial_title = "^(Network Connections)$" },
+	size = "350 270",
+})
 
 -- Proton VPN
 hl.window_rule({ match = { class = "^(protonvpn-app)$" }, float = true, pin = true, move = "onscreen 100% 100%" })
 hl.window_rule({ match = { class = "^(protonvpn\\.app)$", title = "^(Proton VPN)$" }, float = true })
 
 -- Proton Mail
-hl.window_rule({ match = { class = "^(chrome-mail\\.proton\\.me__-ProtonmailProfile)$" }, workspace = "2" })
+hl.window_rule({ match = { class = "^(chrome-mail\\.proton\\.me__-ProtonmailProfile)$" }, workspace = "1" })
 
 -- Vicinae
 hl.window_rule({
-  match = { initial_title = "^(Vicinae (Launcher|Settings))$" },
-  no_anim = true,
-  border_size = 0,
-  rounding = 10,
-  no_shadow = false,
+	match = { initial_title = "^(Vicinae (Launcher|Settings))$" },
+	no_anim = true,
+	border_size = 0,
+	rounding = 10,
+	no_shadow = false,
 })
 
 -- Warehouse (Flattool)
@@ -97,7 +100,12 @@ hl.window_rule({ match = { class = "^(floorp)$" }, monitor = "HDMI-A-2" })
 -- Winboat
 hl.window_rule({ match = { class = "(winboat)" }, float = true })
 hl.window_rule({ match = { initial_class = "^(winboat-⚙️ Windows Explorer)$" }, float = true })
-hl.window_rule({ match = { initial_class = "^(winboat-Huetrofor Hue)$" }, float = true, size = "1460 880", move = "3255 779" })
+hl.window_rule({
+	match = { initial_class = "^(winboat-Huetrofor Hue)$" },
+	float = true,
+	size = "1460 880",
+	move = "3255 779",
+})
 
 -- xfreerdp (FreeRDP)
 hl.window_rule({ match = { initial_class = "^(xfreerdp)$" }, fullscreen = true })
@@ -114,12 +122,12 @@ hl.window_rule({ match = { initial_title = "^(Sign in to Steam)$" }, float = tru
 
 -- Steam games
 hl.window_rule({
-  match = { class = "^(steam_app_0)" },
-  no_anim = true,
-  border_size = 0,
-  rounding = 0,
-  no_shadow = true,
-  opacity = "1.0 override 1.0 override",
+	match = { class = "^(steam_app_0)" },
+	no_anim = true,
+	border_size = 0,
+	rounding = 0,
+	no_shadow = true,
+	opacity = "1.0 override 1.0 override",
 })
 
 -- SGDBoop
@@ -134,36 +142,42 @@ hl.window_rule({ match = { initial_title = "^(Battle.net Login)$" }, no_anim = t
 hl.window_rule({ match = { initial_title = "^(Battle\\.net)$" }, workspace = "10 silent" })
 hl.window_rule({ match = { initial_title = "^(Battle.net)$" }, no_anim = true, rounding = 0, border_size = 0 })
 hl.window_rule({ match = { initial_title = "^(Battle\\.net Settings)$" }, workspace = "10 silent" })
-hl.window_rule({ match = { initial_title = "^(Battle.net Settings)$" }, no_anim = true, rounding = 0, border_size = 0, pin = true })
+hl.window_rule({
+	match = { initial_title = "^(Battle.net Settings)$" },
+	no_anim = true,
+	rounding = 0,
+	border_size = 0,
+	pin = true,
+})
 
 -- World of Warcraft
 hl.window_rule({
-  match = { initial_title = "^(World of Warcraft)$" },
-  workspace = "10 silent",
-  no_anim = true,
-  border_size = 0,
-  rounding = 0,
-  no_shadow = true,
-  opacity = "1.0 override 1.0 override",
+	match = { initial_title = "^(World of Warcraft)$" },
+	workspace = "10 silent",
+	no_anim = true,
+	border_size = 0,
+	rounding = 0,
+	no_shadow = true,
+	opacity = "1.0 override 1.0 override",
 })
 hl.window_rule({
-  match = { title = "^(World of Warcraft)$" },
-  workspace = "10 silent",
-  no_anim = true,
-  border_size = 0,
-  rounding = 0,
-  no_shadow = true,
-  opacity = "1.0 override 1.0 override",
+	match = { title = "^(World of Warcraft)$" },
+	workspace = "10 silent",
+	no_anim = true,
+	border_size = 0,
+	rounding = 0,
+	no_shadow = true,
+	opacity = "1.0 override 1.0 override",
 })
 
 -- Zenity
 hl.window_rule({
-  match = { initial_class = "^(zenity)$" },
-  float = true,
-  border_size = 0,
-  rounding = 0,
-  no_shadow = true,
-  no_anim = true,
-  opacity = "1.0 override 1.0 override",
+	match = { initial_class = "^(zenity)$" },
+	float = true,
+	border_size = 0,
+	rounding = 0,
+	no_shadow = true,
+	no_anim = true,
+	opacity = "1.0 override 1.0 override",
 })
 hl.window_rule({ match = { class = "^(zenity)$" }, no_blur = true })
