@@ -43,6 +43,15 @@ local function send_to_gaming_workspace()
 	hl.dispatch(hl.dsp.window.move({ workspace = "10" }))
 end
 
+local function resize_keep_aspect_ratio()
+  hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "1" }))
+  hl.dispatch(hl.dsp.window.resize())
+end
+
+local function reset_keep_aspect_ratio()
+  hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "0" }))
+end
+
 bind("bindo", "", "SUPER_L", exec("pkill -SIGUSR1 waybar"))
 bind("bindir", "", "SUPER_L", exec("sleep 0.5 && ~/.config/hypr/runtime/desktop/waybar-toggle-smart.sh"))
 
@@ -119,11 +128,12 @@ hl.config({
 })
 
 -- Upstream Lua example uses `{ mouse = true }`, but current source does not wire
--- opts.mouse into keybinds. Also, `resizewindow 1` has no Lua equivalent yet.
--- Keep these staged for future live testing after the Lua API matures.
+-- opts.mouse into keybinds. Keep these staged for future live testing after the
+-- Lua API matures.
 bind("bindm", main_mod, "mouse:272", hl.dsp.window.drag())
 bind("bindm", main_mod, "mouse:273", hl.dsp.window.resize())
-bind("bindm", main_mod .. " + SHIFT", "mouse:273", hl.dsp.window.resize())
+bind("bindm", main_mod .. " + SHIFT", "mouse:273", resize_keep_aspect_ratio)
+bind("bindr", main_mod .. " + SHIFT", "mouse:273", reset_keep_aspect_ratio)
 
 bind("bind", main_mod .. " + SHIFT", "H", window.move("left"))
 bind("bind", main_mod .. " + SHIFT", "L", window.move("right"))
