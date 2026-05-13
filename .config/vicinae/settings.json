@@ -28,6 +28,9 @@
    },
    "launcher_window": {
       "opacity": 0.95,
+      "client_side_decorations": {
+         "enabled": true
+      },
       "layer_shell": {
          "keyboard_interactivity": "on_demand"
       }
