@@ -20,6 +20,7 @@ M.commands = {
 	"uwsm-app -s s -- waybar",
 	"uwsm-app -s s -- swaync -c ~/.config/swaync/config.json -s ~/.config/swaync/style.css",
 	"uwsm-app -s s -- ~/.config/ags/start-daemons.sh",
+	"uwsm-app -s b -- ~/.config/hypr/runtime/desktop/toggle-night-light.sh daemon",
 	"uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-edge-monitor.sh",
 	"~/.config/hypr/runtime/startup/startup-desktop-ready.sh",
 }
