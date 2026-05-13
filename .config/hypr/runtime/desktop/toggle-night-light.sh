@@ -2,40 +2,18 @@
 
 set -euo pipefail
 
-CONFIG_FILE="$HOME/.config/noctalia/settings.json"
 STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-night-light"
 OVERRIDE_FILE="$STATE_DIR/override"
 PID_FILE="$STATE_DIR/daemon.pid"
 
-DEFAULT_DAY_TEMP=6500
-DEFAULT_NIGHT_TEMP=4000
-DEFAULT_SUNRISE="06:30"
-DEFAULT_SUNSET="18:30"
+DAY_TEMP=6500
+NIGHT_TEMP=4000
+SUNRISE="06:30"
+SUNSET="18:30"
+AUTO_SCHEDULE=true
+ENABLED=false
 
 mkdir -p "$STATE_DIR"
-
-json_value() {
-  local key="$1"
-  local fallback="$2"
-
-  if [[ ! -f "$CONFIG_FILE" ]]; then
-    printf "%s" "$fallback"
-    return
-  fi
-
-  if command -v jq >/dev/null 2>&1; then
-    jq -er ".nightLight.$key // empty" "$CONFIG_FILE" 2>/dev/null || printf "%s" "$fallback"
-    return
-  fi
-
-  sed -n "/\"nightLight\"[[:space:]]*:/,/^[[:space:]]*}/s/.*\"$key\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\",}]*\)\"\{0,1\}.*/\1/p" "$CONFIG_FILE"
-}
-
-setting() {
-  local value
-  value="$(json_value "$1" "$2")"
-  printf "%s" "${value:-$2}"
-}
 
 time_to_minutes() {
   local value="$1"
@@ -53,8 +31,8 @@ current_minutes() {
 
 scheduled_active() {
   local sunrise sunset now
-  sunrise="$(time_to_minutes "$(setting manualSunrise "$DEFAULT_SUNRISE")")"
-  sunset="$(time_to_minutes "$(setting manualSunset "$DEFAULT_SUNSET")")"
+  sunrise="$(time_to_minutes "$SUNRISE")"
+  sunset="$(time_to_minutes "$SUNSET")"
   now="$(current_minutes)"
 
   if [[ "$sunset" -gt "$sunrise" ]]; then
@@ -66,7 +44,7 @@ scheduled_active() {
 }
 
 desired_active() {
-  local auto_schedule forced enabled override
+  local override
 
   if [[ -f "$OVERRIDE_FILE" ]]; then
     override="$(< "$OVERRIDE_FILE")"
@@ -74,12 +52,8 @@ desired_active() {
     return
   fi
 
-  auto_schedule="$(setting autoSchedule true)"
-  forced="$(setting forced false)"
-  enabled="$(setting enabled false)"
-
-  if [[ "$forced" == "true" || "$auto_schedule" != "true" ]]; then
-    [[ "$enabled" == "true" ]]
+  if [[ "$AUTO_SCHEDULE" != "true" ]]; then
+    [[ "$ENABLED" == "true" ]]
     return
   fi
 
@@ -101,11 +75,11 @@ set_temperature() {
 
 apply_state() {
   if desired_active; then
-    set_temperature "$(setting nightTemp "$DEFAULT_NIGHT_TEMP")"
+    set_temperature "$NIGHT_TEMP"
     return
   fi
 
-  set_temperature "$(setting dayTemp "$DEFAULT_DAY_TEMP")"
+  set_temperature "$DAY_TEMP"
 }
 
 notify_state() {
@@ -116,7 +90,7 @@ notify_state() {
     glyph="󰖔"
     color="#e67e22"
     title="Night Light Enabled"
-    body="Color temperature set to $(setting nightTemp "$DEFAULT_NIGHT_TEMP")K"
+    body="Color temperature set to ${NIGHT_TEMP}K"
   else
     glyph="󰖨"
     color="#dea721"
@@ -135,8 +109,8 @@ notify_state() {
 
 next_boundary_epoch() {
   local candidate next sunrise sunset now today_sunrise today_sunset tomorrow_sunrise tomorrow_sunset
-  sunrise="$(setting manualSunrise "$DEFAULT_SUNRISE")"
-  sunset="$(setting manualSunset "$DEFAULT_SUNSET")"
+  sunrise="$SUNRISE"
+  sunset="$SUNSET"
   now="$(date +%s)"
   today_sunrise="$(date -d "today $sunrise" +%s)"
   today_sunset="$(date -d "today $sunset" +%s)"
