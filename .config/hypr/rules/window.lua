@@ -125,7 +125,17 @@ hl.window_rule({ match = { initial_title = "^(Sign in to Steam)$" }, float = tru
 
 -- Steam games
 hl.window_rule({
-	match = { class = "^(steam_app_0)" },
+	match = { class = "^(steam_app_[0-9]+)$" },
+	workspace = "10 silent",
+	no_anim = true,
+	border_size = 0,
+	rounding = 0,
+	no_shadow = true,
+	opacity = "1.0 override 1.0 override",
+})
+hl.window_rule({
+	match = { initial_class = "^(steam_app_[0-9]+)$" },
+	workspace = "10 silent",
 	no_anim = true,
 	border_size = 0,
 	rounding = 0,

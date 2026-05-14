@@ -2,7 +2,6 @@
 
 local programs = require("programs")
 local window = require("lib.window")
-local profiles = require("profiles")
 local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
 local window_switcher = require("actions.window-switcher")
@@ -40,8 +39,6 @@ local function exec(command)
 end
 
 local function send_to_gaming_workspace()
-	profiles.activate_async("gaming")
-
 	hl.dispatch(hl.dsp.window.move({ workspace = "10" }))
 end
 

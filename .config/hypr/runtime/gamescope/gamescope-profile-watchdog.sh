@@ -32,12 +32,12 @@ get_clients_json() {
   hyprctl clients -j 2>/dev/null || printf '[]\n'
 }
 
-get_gamescope_count() {
+get_gaming_window_count() {
   local clients_json="${1:-}"
   local client_count=0
 
   [[ -n "$clients_json" ]] || clients_json="$(get_clients_json)"
-  client_count="$(jq -r '[.[] | select((((.class // "") | ascii_downcase) == "gamescope") or (((.initialClass // "") | ascii_downcase) == "gamescope"))] | length' <<< "$clients_json" 2>/dev/null || printf '0')"
+  client_count="$(jq -r '[.[] | select((((.class // "") | ascii_downcase) | test("^(gamescope|steam_app_[0-9]+)$")) or (((.initialClass // "") | ascii_downcase) | test("^(gamescope|steam_app_[0-9]+)$")))] | length' <<< "$clients_json" 2>/dev/null || printf '0')"
 
   if [[ "$client_count" =~ ^[0-9]+$ ]] && [[ "$client_count" -gt 0 ]]; then
     printf '%s\n' "$client_count"
@@ -53,7 +53,7 @@ sync_gaming_state() {
   local clients_json="${2:-}"
   local force="${3:-0}"
 
-  count="$(get_gamescope_count "$clients_json")"
+  count="$(get_gaming_window_count "$clients_json")"
   if [[ "$count" =~ ^[0-9]+$ ]]; then
     :
   else
