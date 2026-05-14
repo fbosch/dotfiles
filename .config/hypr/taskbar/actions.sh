@@ -24,6 +24,17 @@ hypr_query() {
   esac
 }
 
+lua_quote() {
+  local value="$1"
+
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  printf '"%s"' "$value"
+}
+
 if [[ "$app_id" == "--any-open" ]]; then
   hypr_query j/clients \
     | jq -e --slurpfile apps "$taskbar_apps_file" '
@@ -124,17 +135,6 @@ load_app() {
 app_json="$(jq -c --arg id "$app_id" 'first(.[] | select(.id == $id)) // empty' "$taskbar_apps_file")"
 [[ -z "$app_json" ]] && exit 1
 load_app "$app_json"
-
-lua_quote() {
-  local value="$1"
-
-  value="${value//\\/\\\\}"
-  value="${value//\"/\\\"}"
-  value="${value//$'\n'/\\n}"
-  value="${value//$'\r'/\\r}"
-  value="${value//$'\t'/\\t}"
-  printf '"%s"' "$value"
-}
 
 shell_quote() {
   printf "'%s'" "${1//\'/\'\\\'\'}"
