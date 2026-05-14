@@ -19,6 +19,8 @@ local opts = {
   bindel = { repeating = true, locked = true },
   bindl = { locked = true },
   bindm = { mouse = true },
+  bindmr = { mouse = true, release = true },
+  bindmn = { mouse = true, non_consuming = true },
 }
 
 local function key(mods, name)
@@ -50,6 +52,14 @@ end
 
 local function reset_keep_aspect_ratio()
   hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "0" }))
+end
+
+local function drag_openpets()
+  local active = hl.get_active_window()
+
+  if active and active.title == "OpenPets Default Pet" then
+    hl.dispatch(hl.dsp.window.drag())
+  end
 end
 
 bind("bindo", "", "SUPER_L", exec("pkill -SIGUSR1 waybar"))
@@ -133,7 +143,8 @@ hl.config({
 bind("bindm", main_mod, "mouse:272", hl.dsp.window.drag())
 bind("bindm", main_mod, "mouse:273", hl.dsp.window.resize())
 bind("bindm", main_mod .. " + SHIFT", "mouse:273", resize_keep_aspect_ratio)
-bind("bindr", main_mod .. " + SHIFT", "mouse:273", reset_keep_aspect_ratio)
+bind("bindmr", main_mod .. " + SHIFT", "mouse:273", reset_keep_aspect_ratio)
+bind("bindmn", "", "mouse:272", drag_openpets)
 
 bind("bind", main_mod .. " + SHIFT", "H", window.move("left"))
 bind("bind", main_mod .. " + SHIFT", "L", window.move("right"))

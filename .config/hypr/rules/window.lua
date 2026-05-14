@@ -32,6 +32,9 @@ taskbar_apps.apply_rules()
 -- Plexamp
 hl.window_rule({ match = { class = "Plexamp" }, float = true, size = "360 620" })
 
+-- OpenPets
+hl.window_rule({ match = { title = "^(OpenPets Default Pet)$" }, no_blur = true, no_shadow = true, border_size = 0 })
+
 -- Flatseal
 hl.window_rule({ match = { class = "^(com\\.github\\.tchx84\\.Flatseal)$" }, float = true })
 
