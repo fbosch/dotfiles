@@ -5,6 +5,8 @@ local theme = require("lua.theme")
 
 local window_cols = wezterm.GLOBAL.window_cols or {}
 wezterm.GLOBAL.window_cols = window_cols
+local right_status_cols = wezterm.GLOBAL.right_status_cols or {}
+wezterm.GLOBAL.right_status_cols = right_status_cols
 
 local function get_window_key(window)
 	local ok, window_id = pcall(function()
@@ -97,7 +99,8 @@ local function format_tab_title(tab, tabs, panes, config, hover, max_width)
 	local full_title_length = #base_title + icon_count + (icon_count > 0 and 1 or 0)
 	
 	local window_key = get_tab_window_key(tab)
-	local available_cols = window_cols[window_key] or max_width or 100
+	local status_bar_offset_cols = is_windows and 0 or (right_status_cols[window_key] or 44)
+	local available_cols = math.max(1, (window_cols[window_key] or max_width or 100) - status_bar_offset_cols)
 	local num_tabs = #tabs > 0 and #tabs or 1
 	
 	local pad_length = math.floor((available_cols / num_tabs - full_title_length) / 2)
@@ -132,17 +135,12 @@ return function(config)
 	config.show_new_tab_button_in_tab_bar = false
 	config.tab_max_width = 999
 
-	local status_bar_offset_cols = 44
-	if is_windows then
-		status_bar_offset_cols = 0
-	end
-
 	wezterm.on("window-config-reloaded", function(window)
-		window_cols[get_window_key(window)] = get_max_cols(window) - status_bar_offset_cols
+		window_cols[get_window_key(window)] = get_max_cols(window)
 	end)
 
 	wezterm.on("window-resized", function(window, pane)
-		window_cols[get_window_key(window)] = get_max_cols(window) - status_bar_offset_cols
+		window_cols[get_window_key(window)] = get_max_cols(window)
 	end)
 
 	wezterm.on("format-tab-title", format_tab_title)

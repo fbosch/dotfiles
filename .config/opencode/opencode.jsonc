@@ -7,8 +7,7 @@
     "opencode-wakatime",
     "opencode-toon-plugin",
     "./plugins/rtk.ts",
-    "./plugins/opencode-handoff/handoff.ts",
-    "@open-pets/opencode@2.0.6"
+    "./plugins/opencode-handoff/handoff.ts"
   ],
   "instructions": [
     "~/.config/opencode/instructions/RTK.md",

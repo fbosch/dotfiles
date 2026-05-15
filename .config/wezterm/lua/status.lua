@@ -15,8 +15,40 @@ local color_workhours_end = { Color = "#d2af0d" }
 local color_workhours_good = { Color = "#819B69" }
 local color_workhours_over = { Color = "#d79999" }
 
+local right_status_cols = wezterm.GLOBAL and wezterm.GLOBAL.right_status_cols or {}
+if wezterm.GLOBAL then
+	wezterm.GLOBAL.right_status_cols = right_status_cols
+end
+
 -- Reusable status table structure
 local status = {}
+
+local function get_window_key(window)
+	local ok, window_id = pcall(function()
+		return window:window_id()
+	end)
+	if ok and window_id ~= nil then
+		return tostring(window_id)
+	end
+	return "default"
+end
+
+local function text_width(text)
+	if wezterm.column_width then
+		return wezterm.column_width(text)
+	end
+	return #text
+end
+
+local function status_width(items)
+	local width = 0
+	for _, item in ipairs(items) do
+		if item.Text then
+			width = width + text_width(item.Text)
+		end
+	end
+	return width
+end
 
 local function get_workhours_display(window)
 	local wday = os.date("*t").wday
@@ -111,6 +143,7 @@ local function update_right_status(window)
 		table.insert(status, { Text = workhours_icon .. " " .. workhours_text .. " " })
 	end
 
+	right_status_cols[get_window_key(window)] = status_width(status)
 	window:set_right_status(wezterm.format(status))
 end
 
