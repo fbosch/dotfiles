@@ -10,7 +10,7 @@ require("base")
 require("programs")
 require("monitors")
 require("layouts.ultrawide_master")
-require("rules.workspace-base")
+require("rules.workspace")
 require("keybinds")
 require("animations")
 

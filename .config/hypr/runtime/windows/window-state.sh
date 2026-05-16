@@ -458,7 +458,7 @@ update_rules() {
         
         RULES_CACHE[$key]=$(rules_for_window_state "$matcher" "$pattern" "$monitor" "$x" "$y" "$width" "$height")
         
-        printf '%s - Updated %s "%s": %sx%s at (%s,%s) on %s\n' "$(printf '%(%H:%M:%S)T' -1)" "$matcher" "$pattern" "$width" "$height" "$x" "$y" "${monitor:-unknown}"
+        printf '%s - Updated %s "%s": %sx%s at (%s,%s) on %s\n' "$(printf '%(%H:%M:%S)T' -1)" "$matcher" "$pattern" "$width" "$height" "$x" "$y" "${monitor:-unknown}" >&2
     done < <(jq -r '.[] | "\(.class)|\(.matcher)|\(.pattern)|\(.monitor)|\(.x)|\(.y)|\(.width)|\(.height)"' <<< "$windows")
     
     # Write all rules (existing + updated) to Lua data file
@@ -469,7 +469,7 @@ update_rules() {
     
     # Reload config
     hyprctl reload config-only &>/dev/null
-    printf '%s - Config reloaded\n' "$(printf '%(%H:%M:%S)T' -1)"
+    printf '%s - Config reloaded\n' "$(printf '%(%H:%M:%S)T' -1)" >&2
 }
 
 
@@ -514,7 +514,7 @@ immediate_save() {
     
     # Always save immediately on close events - don't check if state changed
     # The window may have been moved just before closing
-    printf '%s - Immediate save triggered (window close)\n' "$(printf '%(%H:%M:%S)T' -1)"
+    printf '%s - Immediate save triggered (window close)\n' "$(printf '%(%H:%M:%S)T' -1)" >&2
     update_rules "$current_state"
     
     # Sync hash so states_changed() doesn't re-trigger after immediate save

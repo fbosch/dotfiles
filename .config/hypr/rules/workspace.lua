@@ -1,31 +1,52 @@
--- Static workspace rules ported from rules.conf.
+-- Static workspace rules ported from hyprland.conf and rules.conf.
 -- Preserve declaration order.
 -- Use built-in layouts here for native mouse resize and cross-monitor moves.
 -- Count-based selectors only match existing windows, so keep a broad baseline
 -- before the count-specific overrides for deterministic startup behavior.
 
-hl.workspace_rule({
-	workspace = "r[1-9] m[DP-2]",
-	layout = "master",
-	layout_opts = { orientation = "left", mfact = 0.67 },
-})
+local system = require("lib.system")
+local host = system.hostname()
 
-hl.workspace_rule({
-	workspace = "r[1-9] m[HDMI-A-2]",
-	layout = "dwindle",
-})
+if host == "rvn-pc" then
+	hl.workspace_rule({
+		workspace = "1",
+		monitor = "HDMI-A-2",
+	})
 
-hl.workspace_rule({
-	workspace = "r[1-9] m[DP-2] w[tv2]",
-	layout = "master",
-	layout_opts = { orientation = "left", mfact = 0.67 },
-})
+	hl.workspace_rule({
+		workspace = "10",
+		monitor = "DP-2",
+	})
 
-hl.workspace_rule({
-	workspace = "r[1-9] m[DP-2] w[tv3]",
-	layout = "master",
-	layout_opts = { orientation = "center", mfact = 0.4 },
-})
+	hl.workspace_rule({
+		workspace = "2",
+		monitor = "DP-2",
+		default = true,
+	})
+
+	hl.workspace_rule({
+		workspace = "r[1-9] m[DP-2]",
+		layout = "master",
+		layout_opts = { orientation = "left", mfact = 0.67 },
+	})
+
+	hl.workspace_rule({
+		workspace = "r[1-9] m[HDMI-A-2]",
+		layout = "dwindle",
+	})
+
+	hl.workspace_rule({
+		workspace = "r[1-9] m[DP-2] w[tv2]",
+		layout = "master",
+		layout_opts = { orientation = "left", mfact = 0.67 },
+	})
+
+	hl.workspace_rule({
+		workspace = "r[1-9] m[DP-2] w[tv3]",
+		layout = "master",
+		layout_opts = { orientation = "center", mfact = 0.4 },
+	})
+end
 
 hl.workspace_rule({
 	workspace = "10",

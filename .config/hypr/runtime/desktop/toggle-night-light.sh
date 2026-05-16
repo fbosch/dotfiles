@@ -68,7 +68,7 @@ set_temperature() {
   local temperature="$1"
 
   pkill -x hyprsunset 2>/dev/null || true
-  if [[ "$temperature" -lt "$DEFAULT_DAY_TEMP" ]]; then
+  if [[ "$temperature" -lt "$DAY_TEMP" ]]; then
     hyprsunset -t "$temperature" >/dev/null 2>&1 &
   fi
 }

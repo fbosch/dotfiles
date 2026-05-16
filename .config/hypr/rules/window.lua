@@ -9,6 +9,7 @@ hl.window_rule({
 	workspace = "10 silent",
 	tile = true,
 	fullscreen = true,
+	immediate = true,
 })
 
 -- Gaming overlay scratchpad
@@ -132,6 +133,7 @@ hl.window_rule({
 	rounding = 0,
 	no_shadow = true,
 	opacity = "1.0 override 1.0 override",
+	immediate = true,
 })
 hl.window_rule({
 	match = { initial_class = "^(steam_app_[0-9]+)$" },
@@ -141,6 +143,7 @@ hl.window_rule({
 	rounding = 0,
 	no_shadow = true,
 	opacity = "1.0 override 1.0 override",
+	immediate = true,
 })
 
 -- SGDBoop
@@ -172,6 +175,7 @@ hl.window_rule({
 	rounding = 0,
 	no_shadow = true,
 	opacity = "1.0 override 1.0 override",
+	immediate = true,
 })
 hl.window_rule({
 	match = { title = "^(World of Warcraft)$" },
@@ -181,6 +185,7 @@ hl.window_rule({
 	rounding = 0,
 	no_shadow = true,
 	opacity = "1.0 override 1.0 override",
+	immediate = true,
 })
 
 -- Zenity

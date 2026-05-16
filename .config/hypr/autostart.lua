@@ -1,10 +1,11 @@
 -- Autostart commands ported from autostart.conf.
 
 local M = {}
+local system = require("lib.system")
 local taskbar_apps = require("taskbar")
+local host = system.hostname()
 
 M.commands = {
-	"xrandr --output DP-2 --primary",
 	-- "uwsm-app -s b -- hypridle",
 	"uwsm-app -s s -- vicinae server",
 	"uwsm-app -s s -- atuin daemon start",
@@ -24,6 +25,10 @@ M.commands = {
 	"uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-edge-monitor.sh",
 	"~/.config/hypr/runtime/startup/startup-desktop-ready.sh",
 }
+
+if host == "rvn-pc" then
+	table.insert(M.commands, 1, "xrandr --output DP-2 --primary")
+end
 
 for _, command in ipairs(taskbar_apps.autostart_commands()) do
 	M.commands[#M.commands + 1] = command
