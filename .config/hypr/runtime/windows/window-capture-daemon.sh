@@ -254,6 +254,40 @@ capture_active_window_preview() {
   capture_window_preview "$preview_id" "$width" "$height"
 }
 
+capture_visible_workspace_previews() {
+  local missing_only="${1:-false}"
+
+  local all_clients_json
+  all_clients_json=$(printf 'j/clients' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
+  [[ -n "$all_clients_json" ]] || return 0
+
+  local visible_workspaces_json
+  visible_workspaces_json=$(get_visible_workspace_ids_json)
+  [[ -n "$visible_workspaces_json" ]] || visible_workspaces_json='[]'
+
+  local -a capture_pids=()
+  while IFS=$'\t' read -r preview_id mapped width height; do
+    [[ "$mapped" == "false" ]] && continue
+    [[ -n "$preview_id" ]] || continue
+
+    if [[ "$missing_only" == "true" && -s "$SCREENSHOT_DIR/$preview_id.jpg" ]]; then
+      continue
+    fi
+
+    capture_window_preview "$preview_id" "$width" "$height" &
+    capture_pids+=("$!")
+
+    if [[ ${#capture_pids[@]} -ge $MAX_PARALLEL_CAPTURES ]]; then
+      wait_for_capture_batch "${capture_pids[@]}"
+      capture_pids=()
+    fi
+  done < <(jq -r --argjson visible_ws "$visible_workspaces_json" '.[] | select(((.workspace.id // -1) as $ws | ($visible_ws | index($ws))) != null) | [((.stableId // "") | if length > 0 then . else ((.address // "") | sub("^0x"; "")) end), (.mapped // true), (.size[0] // 0), (.size[1] // 0)] | @tsv' <<< "$all_clients_json" 2>/dev/null)
+
+  if [[ ${#capture_pids[@]} -gt 0 ]]; then
+    wait_for_capture_batch "${capture_pids[@]}"
+  fi
+}
+
 get_visible_workspace_ids_json() {
   local monitors_json
   monitors_json=$(printf 'j/monitors' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
@@ -393,37 +427,12 @@ capture_screenshot() {
 
   if [[ "$event_type" == "activewindow" ]]; then
     capture_active_window_preview
+    capture_visible_workspace_previews true
     rm -f "$CAPTURE_LOCK_FILE"
     return 0
   fi
 
-  # Fetch all clients once for this capture pass.
-  local all_clients_json
-  all_clients_json=$(printf 'j/clients' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
-  [[ -n "$all_clients_json" ]] || return 0
-
-  # Capture windows across all workspaces currently visible on monitors.
-  local visible_workspaces_json
-  visible_workspaces_json=$(get_visible_workspace_ids_json)
-  [[ -n "$visible_workspaces_json" ]] || visible_workspaces_json='[]'
-
-  # Process each window in all visible workspaces.
-  local -a capture_pids=()
-  while IFS=$'\t' read -r preview_id mapped width height; do
-    [[ "$mapped" == "false" ]] && continue
-    [[ -n "$preview_id" ]] || continue
-    capture_window_preview "$preview_id" "$width" "$height" &
-    capture_pids+=("$!")
-
-    if [[ ${#capture_pids[@]} -ge $MAX_PARALLEL_CAPTURES ]]; then
-      wait_for_capture_batch "${capture_pids[@]}"
-      capture_pids=()
-    fi
-  done < <(jq -r --argjson visible_ws "$visible_workspaces_json" '.[] | select(((.workspace.id // -1) as $ws | ($visible_ws | index($ws))) != null) | [((.stableId // "") | if length > 0 then . else ((.address // "") | sub("^0x"; "")) end), (.mapped // true), (.size[0] // 0), (.size[1] // 0)] | @tsv' <<< "$all_clients_json" 2>/dev/null)
-
-  if [[ ${#capture_pids[@]} -gt 0 ]]; then
-    wait_for_capture_batch "${capture_pids[@]}"
-  fi
+  capture_visible_workspace_previews false
 
   cleanup_stale_preview_files
   
