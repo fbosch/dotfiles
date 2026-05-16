@@ -1,6 +1,6 @@
-#!/usr/bin/env bash
+#!/usr/bin/env dash
 
-set -euo pipefail
+set -eu
 
 hyprctl reload
 
