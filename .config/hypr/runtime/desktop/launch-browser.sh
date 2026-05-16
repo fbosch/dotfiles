@@ -1,9 +1,9 @@
-#!/usr/bin/env bash
+#!/usr/bin/env dash
 # Launch the default browser from xdg-settings
 
 desktop_file=$(xdg-settings get default-web-browser)
 
-if [[ -z "$desktop_file" ]]; then
+if [ -z "$desktop_file" ]; then
     echo "No default browser set" >&2
     exit 1
 fi
@@ -12,7 +12,7 @@ fi
 app_id="${desktop_file%.desktop}"
 
 # Check if it's a flatpak app
-if flatpak info "$app_id" &>/dev/null; then
+if flatpak info "$app_id" >/dev/null 2>&1; then
     exec uwsm-app -s a -- mullvad-exclude flatpak run "$app_id" "$@"
 else
     # Fallback to xdg-open for regular apps
