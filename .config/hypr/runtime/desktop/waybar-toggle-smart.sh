@@ -1,14 +1,17 @@
-#!/usr/bin/env bash
+#!/usr/bin/env dash
 # Smart waybar toggle that checks cursor position
 # Only hides waybar if cursor is NOT in the waybar area
 
 # shellcheck disable=SC1091
 # Source shared library
-source "$(dirname "$0")/waybar-lib.sh"
+. "$(dirname "$0")/waybar-lib.sh"
 
 # Get monitor height and cursor position
 monitor_height=$(hyprctl monitors -j 2>/dev/null | jq -r '.[0].height')
-cursor_y=$(hyprctl cursorpos 2>/dev/null | cut -d',' -f2 | tr -d ' ')
+cursor_pos=$(hyprctl cursorpos 2>/dev/null)
+IFS=', ' read -r _ cursor_y <<EOF
+$cursor_pos
+EOF
 
 # Calculate distance from bottom
 distance_from_bottom=$((monitor_height - cursor_y))
