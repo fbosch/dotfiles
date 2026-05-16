@@ -1,20 +1,20 @@
-#!/usr/bin/env bash
+#!/usr/bin/env dash
 # Generate an SVG icon from a Nerd Font character
 # Usage: nerd-icon-gen.sh "󰣇" [size] [color] [output_path]
 
-set -euo pipefail
+set -eu
 
 CHAR="${1:-}"
 SIZE="${2:-64}"
 COLOR="${3:-white}"
 
-if [[ -z "$CHAR" ]]; then
+if [ -z "$CHAR" ]; then
   echo "Usage: $0 <character> [size=64] [color=white] [output_path]" >&2
   exit 1
 fi
 
 # If output path is provided, use it; otherwise generate unique path based on icon and color
-if [[ -n "${4:-}" ]]; then
+if [ -n "${4:-}" ]; then
   OUTPUT="$4"
 else
   # Generate unique filename based on character codepoint and color hash
