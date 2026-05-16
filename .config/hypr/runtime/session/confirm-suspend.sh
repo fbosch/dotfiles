@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env dash
 # Show AGS confirmation dialog before suspending system
 # Sends request directly to the AGS confirm-dialog daemon
 # Audio and duplicate prevention handled by AGS component

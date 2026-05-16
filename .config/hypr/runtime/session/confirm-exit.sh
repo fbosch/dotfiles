@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env dash
 # Show AGS confirmation dialog before exiting Hyprland
 # Sends request directly to the AGS confirm-dialog daemon
 # Audio and duplicate prevention handled by AGS component
