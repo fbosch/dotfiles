@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
+#!/usr/bin/env dash
 # Window switcher wrapper that detects Alt release via process monitoring
 
-set -euo pipefail
+set -eu
 
 action="$1"
 
@@ -18,13 +18,13 @@ case "$action" in
       # Poll every 50ms to check if we should commit
       # We'll commit after detecting inactivity or script termination
       count=0
-      while [[ $count -lt 40 ]]; do  # Max 2 seconds (40 * 50ms)
+      while [ "$count" -lt 40 ]; do  # Max 2 seconds (40 * 50ms)
         sleep 0.05
         count=$((count + 1))
         
         # Check if there's a new next/prev action - if so, exit this monitor
         # (another monitor will be spawned)
-        if [[ -f "/tmp/ags-switcher-active-$$" ]]; then
+        if [ -f "/tmp/ags-switcher-active-$$" ]; then
           rm -f "/tmp/ags-switcher-active-$$"
           exit 0
         fi
