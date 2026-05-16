@@ -1,17 +1,17 @@
-#!/usr/bin/env bash
+#!/usr/bin/env dash
 
-set -euo pipefail
+set -eu
 
 pid="${1:-}"
 
-if [[ "$pid" =~ ^[0-9]+$ ]] && [[ "$pid" -gt 0 ]]; then
-  :
-else
+case "$pid" in
+  ''|*[!0-9]*|0)
   if command -v notify-send >/dev/null 2>&1; then
     notify-send -a Hyprland "Kill failed" "Invalid PID: ${pid:-empty}"
   fi
   exit 1
-fi
+  ;;
+esac
 
 if kill "$pid" 2>/dev/null; then
   exit 0
