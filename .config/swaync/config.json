@@ -89,7 +89,7 @@
           "tooltip": "Toggle Performance Mode"
         },
         {
-          "label": "󰺵",
+          "label": "󰊴",
           "command": "sh -c 'setsid -f ~/.config/hypr/runtime/profiles/toggle-gaming-mode.sh >/dev/null 2>&1'",
           "type": "toggle",
           "update-command": "sh -c '~/.config/hypr/runtime/profiles/profilectl.sh is-active gaming && echo true || echo false'",

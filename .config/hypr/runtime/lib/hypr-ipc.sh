@@ -60,14 +60,20 @@ hypr_dispatch_lua() {
 hypr_dispatch_lua_batch() {
   if hypr_query_socket_available; then
     while [ "$#" -gt 0 ]; do
-      printf 'dispatch %s\n' "$1"
+      printf 'dispatch %s' "$1" | nc -U "$__hypr_ipc_socket_path" >/dev/null 2>&1 || return
       shift
-    done | nc -U "$__hypr_ipc_socket_path" >/dev/null 2>&1
+    done
     return
   fi
 
+  batch=""
   while [ "$#" -gt 0 ]; do
-    hyprctl dispatch "$1" >/dev/null || return
+    if [ -n "$batch" ]; then
+      batch="$batch; "
+    fi
+    batch="${batch}dispatch $1"
     shift
   done
+
+  [ -n "$batch" ] && hyprctl --batch "$batch" >/dev/null
 }
