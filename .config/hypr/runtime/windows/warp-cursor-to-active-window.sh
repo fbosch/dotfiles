@@ -1,7 +1,10 @@
 #!/usr/bin/env dash
 set -eu
 
-sleep 0.03
+delay="${1:-0}"
+if [ "$delay" != "0" ]; then
+  sleep "$delay"
+fi
 
 window_json="$(hyprctl activewindow -j 2>/dev/null || true)"
 if [ -z "$window_json" ]; then

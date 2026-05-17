@@ -31,8 +31,13 @@ local function dispatch(dispatcher)
 	hl.dispatch(dispatcher)
 end
 
-local function warp_cursor_to_active()
-	dispatch(hl.dsp.exec_cmd("~/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh"))
+local function warp_cursor_to_active(delay)
+	local command = "~/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh"
+	if delay then
+		command = command .. " " .. delay
+	end
+
+	dispatch(hl.dsp.exec_cmd(command))
 end
 
 local function refresh_portrait_dwindle()
@@ -70,7 +75,7 @@ function M.focus(value)
 
 	return function()
 		dispatch(hl.dsp.focus({ direction = normalized }))
-		warp_cursor_to_active()
+		warp_cursor_to_active("0.03")
 	end
 end
 

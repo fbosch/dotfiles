@@ -67,6 +67,9 @@ end
 
 hl = {
 	dsp = {
+		exec_cmd = function(command)
+			return { op = "exec_cmd", command = command }
+		end,
 		focus = function(args)
 			return { op = "focus", args = args }
 		end,
