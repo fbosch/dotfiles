@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091
+source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
+
 readonly STATE_FILE="${XDG_RUNTIME_DIR}/hypr-minimized-state.json"
 readonly RECONNECT_DELAY_SECONDS=1
 
@@ -59,7 +62,7 @@ prune_state_file() {
   local temp_file
 
   temp_file="$(mktemp)"
-  hyprctl clients -j 2>/dev/null | jq --slurpfile saved "$STATE_FILE" '
+  hypr_query 'j/clients' | jq --slurpfile saved "$STATE_FILE" '
     (.[].address) as $addresses
     | ($addresses | INDEX(.)) as $live
     | ($saved[0] // {})

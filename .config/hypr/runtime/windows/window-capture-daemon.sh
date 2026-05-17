@@ -74,8 +74,8 @@ JPEG_QUALITY=85              # JPEG quality setting (60-95 range)
 PREVIEW_TARGET_HEIGHT=180    # Target height for preview display
 PREVIEW_TARGET_MAX_WIDTH=320 # Maximum width for preview display
 
-# Hyprland query socket (faster than hyprctl - no process spawn)
-HYPR_QUERY_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock"
+# shellcheck disable=SC1091
+source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
 # AGS overlay detection
 # Using bundled AGS instance - check window-switcher component visibility
@@ -120,7 +120,7 @@ cleanup_stale_temp_files() {
 
 cleanup_stale_preview_files() {
   local all_clients_json
-  all_clients_json=$(printf 'j/clients' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
+  all_clients_json=$(hypr_query 'j/clients')
   [[ -n "$all_clients_json" ]] || return 0
 
   declare -A live_preview_ids=()
@@ -239,7 +239,7 @@ capture_window_preview() {
 
 capture_active_window_preview() {
   local active_window_json
-  active_window_json=$(printf 'j/activewindow' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
+  active_window_json=$(hypr_query 'j/activewindow')
   [[ -n "$active_window_json" && "$active_window_json" != "{}" ]] || return 0
 
   local active_fields
@@ -258,7 +258,7 @@ capture_visible_workspace_previews() {
   local missing_only="${1:-false}"
 
   local all_clients_json
-  all_clients_json=$(printf 'j/clients' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
+  all_clients_json=$(hypr_query 'j/clients')
   [[ -n "$all_clients_json" ]] || return 0
 
   local visible_workspaces_json
@@ -290,7 +290,7 @@ capture_visible_workspace_previews() {
 
 get_visible_workspace_ids_json() {
   local monitors_json
-  monitors_json=$(printf 'j/monitors' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null)
+  monitors_json=$(hypr_query 'j/monitors')
   [[ -n "$monitors_json" ]] || {
     printf '[]\n'
     return 0

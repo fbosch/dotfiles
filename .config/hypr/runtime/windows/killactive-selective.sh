@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091
+source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
+
 PROFILECTL="$HOME/.config/hypr/runtime/profiles/profilectl.sh"
 MINIMIZE_SCRIPT="$HOME/.config/hypr/runtime/windows/toggle-minimized-window.sh"
 TASKBAR_APP_SCRIPT="$HOME/.config/hypr/taskbar/actions.sh"
@@ -11,7 +14,7 @@ readonly ACTION_BLOCK="block"
 readonly ACTION_MINIMIZE="minimize"
 
 dispatch_killactive() {
-  hyprctl dispatch 'hl.dsp.window.close()' >/dev/null
+  hypr_dispatch_lua 'hl.dsp.window.close()'
 }
 
 notify_close_action() {
@@ -91,7 +94,7 @@ run_close_action() {
   dispatch_killactive
 }
 
-active_window_json="$(hyprctl activewindow -j 2>/dev/null || printf '{}')"
+active_window_json="$(hypr_query 'j/activewindow' || printf '{}')"
 app_class="$(jq -r 'if (.class // "") != "" then .class else (.initialClass // "") end' <<< "$active_window_json")"
 title="$(jq -r '.title // ""' <<< "$active_window_json")"
 

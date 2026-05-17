@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091
+source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
+
 readonly MINIMIZED_WORKSPACE_PREFIX="special:minimized"
 readonly GAMING_WORKSPACE="10"
 readonly GAMING_OVERLAY_WORKSPACE="special:gaming-overlay"
@@ -49,7 +52,7 @@ lua_quote() {
 focus_monitor() {
   local monitor_name="$1"
 
-  hyprctl dispatch "hl.dsp.focus({ monitor = $(lua_quote "$monitor_name") })" >/dev/null
+  hypr_dispatch_lua "hl.dsp.focus({ monitor = $(lua_quote "$monitor_name") })"
 }
 
 toggle_special_workspace() {
@@ -57,7 +60,7 @@ toggle_special_workspace() {
   local special_name
 
   special_name="${special_workspace#special:}"
-  hyprctl dispatch "hl.dsp.workspace.toggle_special($(lua_quote "$special_name"))" >/dev/null
+  hypr_dispatch_lua "hl.dsp.workspace.toggle_special($(lua_quote "$special_name"))"
 }
 
 state_value_for_address() {
@@ -113,7 +116,7 @@ live_windows_in_special() {
     return
   fi
 
-  hyprctl clients -j 2>/dev/null | jq -r --arg ws "$special_workspace" '[.[] | select(.workspace.name == $ws)] | length'
+  hypr_query 'j/clients' | jq -r --arg ws "$special_workspace" '[.[] | select(.workspace.name == $ws)] | length'
 }
 
 monitor_for_special_workspace() {
@@ -133,7 +136,7 @@ monitor_for_special_workspace() {
 }
 
 visible_special_workspace() {
-  hyprctl monitors -j 2>/dev/null | jq -r --arg prefix "$MINIMIZED_WORKSPACE_PREFIX" '
+  hypr_query 'j/monitors' | jq -r --arg prefix "$MINIMIZED_WORKSPACE_PREFIX" '
     first(
       .[]
       | .specialWorkspace.name
@@ -149,7 +152,7 @@ visible_special_monitor() {
     return
   fi
 
-  hyprctl monitors -j 2>/dev/null | jq -r --arg special "$special_workspace" '
+  hypr_query 'j/monitors' | jq -r --arg special "$special_workspace" '
     first(.[] | select(.specialWorkspace.name == $special) | .name) // empty
   '
 }
@@ -171,7 +174,7 @@ toggle_special_workspace_on_monitor() {
   toggle_special_workspace "$special_workspace"
 }
 
-focused_monitor_json="$(hyprctl monitors -j 2>/dev/null | jq -c 'first(.[] | select(.focused == true)) // empty')"
+focused_monitor_json="$(hypr_query 'j/monitors' | jq -c 'first(.[] | select(.focused == true)) // empty')"
 init_state_file
 current_monitor="$(jq -r '.name // empty' <<< "$focused_monitor_json")"
 current_workspace="$(jq -r '.activeWorkspace.name // empty' <<< "$focused_monitor_json")"
@@ -198,7 +201,7 @@ if [[ -n "$target_address" ]]; then
   desired_monitor="$(state_value_for_address "$target_address" "monitor")"
 
   if [[ -z "$desired_special_workspace" ]]; then
-    desired_special_workspace="$(hyprctl clients -j 2>/dev/null | jq -r --arg address "$target_address" --arg prefix "$MINIMIZED_WORKSPACE_PREFIX" 'first(.[] | select(.address == $address) | .workspace.name | select(startswith($prefix))) // empty')"
+    desired_special_workspace="$(hypr_query 'j/clients' | jq -r --arg address "$target_address" --arg prefix "$MINIMIZED_WORKSPACE_PREFIX" 'first(.[] | select(.address == $address) | .workspace.name | select(startswith($prefix))) // empty')"
   fi
 
   if [[ -z "$desired_special_workspace" ]]; then

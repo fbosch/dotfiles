@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091
+source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
+
 readonly MINIMIZED_WORKSPACE_PREFIX="special:minimized"
 readonly STATE_FILE="${XDG_RUNTIME_DIR}/hypr-minimized-state.json"
 readonly DAEMON_SCRIPT="$HOME/.config/hypr/runtime/windows/minimized-state-daemon.sh"
@@ -38,19 +41,19 @@ move_window_to_workspace() {
   local workspace="$1"
   local address="$2"
 
-  hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })" >/dev/null
+  hypr_dispatch_lua "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })"
 }
 
 focus_monitor() {
   local monitor_name="$1"
 
-  hyprctl dispatch "hl.dsp.focus({ monitor = $(lua_quote "$monitor_name") })" >/dev/null
+  hypr_dispatch_lua "hl.dsp.focus({ monitor = $(lua_quote "$monitor_name") })"
 }
 
 focus_window() {
   local address="$1"
 
-  hyprctl dispatch "hl.dsp.focus({ window = $(lua_quote "address:${address}") })" >/dev/null
+  hypr_dispatch_lua "hl.dsp.focus({ window = $(lua_quote "address:${address}") })"
 }
 
 resize_window() {
@@ -58,7 +61,7 @@ resize_window() {
   local width="$2"
   local height="$3"
 
-  hyprctl dispatch "hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })" >/dev/null
+  hypr_dispatch_lua "hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })"
 }
 
 move_window() {
@@ -66,7 +69,7 @@ move_window() {
   local x="$2"
   local y="$3"
 
-  hyprctl dispatch "hl.dsp.window.move({ x = ${x}, y = ${y}, window = $(lua_quote "address:${address}") })" >/dev/null
+  hypr_dispatch_lua "hl.dsp.window.move({ x = ${x}, y = ${y}, window = $(lua_quote "address:${address}") })"
 }
 
 init_state_file() {
@@ -105,7 +108,7 @@ save_window_state() {
   y="$(jq -r '.at[1] // 0' <<< "$window_json")"
   width="$(jq -r '.size[0] // 0' <<< "$window_json")"
   height="$(jq -r '.size[1] // 0' <<< "$window_json")"
-  monitor_name="$(hyprctl monitors -j 2>/dev/null | jq -r --argjson id "$monitor_id" 'first(.[] | select(.id == $id) | .name) // empty')"
+  monitor_name="$(hypr_query 'j/monitors' | jq -r --argjson id "$monitor_id" 'first(.[] | select(.id == $id) | .name) // empty')"
 
   if [[ -z "$monitor_name" && -n "$monitor_id" ]]; then
     monitor_name="monitor-${monitor_id}"
@@ -195,7 +198,7 @@ restore_window_state() {
   clear_window_state "$address"
 }
 
-active_window_json="$(hyprctl activewindow -j 2>/dev/null || true)"
+active_window_json="$(hypr_query 'j/activewindow' || true)"
 active_workspace="$(printf '%s' "$active_window_json" | jq -r '.workspace.name // empty' 2>/dev/null || true)"
 active_address="$(printf '%s' "$active_window_json" | jq -r '.address // empty' 2>/dev/null || true)"
 

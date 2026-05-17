@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091
+source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
+
 LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/hypr-profiles/gamescope-watchdog.lock"
 PROFILECTL="$HOME/.config/hypr/runtime/profiles/profilectl.sh"
 RECONNECT_DELAY_SECONDS=1
@@ -29,7 +32,7 @@ trap cleanup EXIT
 trap 'cleanup; exit 0' INT TERM
 
 get_clients_json() {
-  hyprctl clients -j 2>/dev/null || printf '[]\n'
+  hypr_query 'j/clients' || printf '[]\n'
 }
 
 get_gaming_window_count() {
@@ -87,7 +90,7 @@ maybe_show_gaming_overlay() {
     return
   fi
 
-  [[ -n "$monitors_json" ]] || monitors_json="$(hyprctl monitors -j 2>/dev/null || printf '[]\n')"
+  [[ -n "$monitors_json" ]] || monitors_json="$(hypr_query 'j/monitors' || printf '[]\n')"
 
   target_monitor="$(jq -r --arg ws "$GAMING_WORKSPACE" 'first(.[] | select(.activeWorkspace.name == $ws) | .name) // empty' <<< "$monitors_json" 2>/dev/null)"
   if [[ -z "$target_monitor" ]]; then
@@ -99,8 +102,8 @@ maybe_show_gaming_overlay() {
     return
   fi
 
-  hyprctl dispatch "hl.dsp.focus({ monitor = $(lua_quote "$target_monitor") })" >/dev/null 2>&1 || true
-  hyprctl dispatch "hl.dsp.workspace.toggle_special($(lua_quote "${GAMING_OVERLAY_WORKSPACE#special:}"))" >/dev/null 2>&1 || true
+  hypr_dispatch_lua "hl.dsp.focus({ monitor = $(lua_quote "$target_monitor") })" || true
+  hypr_dispatch_lua "hl.dsp.workspace.toggle_special($(lua_quote "${GAMING_OVERLAY_WORKSPACE#special:}"))" || true
 }
 
 handle_event() {
@@ -175,7 +178,7 @@ while true; do
 
       monitors_json=""
       if (( current_overlay_count > last_overlay_count )); then
-        monitors_json="$(hyprctl monitors -j 2>/dev/null || printf '[]\n')"
+        monitors_json="$(hypr_query 'j/monitors' || printf '[]\n')"
       fi
 
       maybe_show_gaming_overlay "$current_overlay_count" "$last_overlay_count" "$monitors_json"

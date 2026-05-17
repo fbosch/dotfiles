@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091
+source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
+
 readonly SPECIAL_WORKSPACE="special:desktop"
 readonly STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-show-desktop"
 
@@ -15,13 +18,13 @@ move_window_to_workspace() {
   local workspace="$1"
   local address="$2"
 
-  hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })" >/dev/null
+  hypr_dispatch_lua "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })"
 }
 
 focus_window() {
   local address="$1"
 
-  hyprctl dispatch "hl.dsp.focus({ window = $(lua_quote "address:${address}") })" >/dev/null
+  hypr_dispatch_lua "hl.dsp.focus({ window = $(lua_quote "address:${address}") })"
 }
 
 resize_window() {
@@ -29,7 +32,7 @@ resize_window() {
   local width="$2"
   local height="$3"
 
-  hyprctl dispatch "hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })" >/dev/null
+  hypr_dispatch_lua "hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })"
 }
 
 move_window() {
@@ -37,10 +40,10 @@ move_window() {
   local x="$2"
   local y="$3"
 
-  hyprctl dispatch "hl.dsp.window.move({ x = ${x}, y = ${y}, window = $(lua_quote "address:${address}") })" >/dev/null
+  hypr_dispatch_lua "hl.dsp.window.move({ x = ${x}, y = ${y}, window = $(lua_quote "address:${address}") })"
 }
 
-focused_monitor_json="$(hyprctl monitors -j | jq -c 'first(.[] | select(.focused == true)) // empty')"
+focused_monitor_json="$(hypr_query 'j/monitors' | jq -c 'first(.[] | select(.focused == true)) // empty')"
 
 if [[ -z "$focused_monitor_json" ]]; then
   exit 0
@@ -93,7 +96,7 @@ if [[ -s "$state_file" ]]; then
 fi
 
 windows_json="$({
-  hyprctl clients -j | jq -c --arg ws "$current_workspace" --argjson monitor "$focused_monitor_id" '
+  hypr_query 'j/clients' | jq -c --arg ws "$current_workspace" --argjson monitor "$focused_monitor_id" '
     [
       .[]
       | select(.workspace.name == $ws and .monitor == $monitor)

@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091
+source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
+
 readonly TARGET_MONITOR="DP-2"
 readonly BOOT_SOUND_FILE="$HOME/.config/hypr/assets/bootup.ogg"
 readonly BOOT_SOUND_DELAY_SECONDS=1.2
@@ -47,9 +50,9 @@ play_bootup_sound() {
 }
 
 apply_startup_workspace_routing() {
-	 hyprctl dispatch 'hl.dsp.focus({ workspace = "2" })' >/dev/null 2>&1 || true
-	 hyprctl dispatch "hl.dsp.workspace.move({ id = \"10\", monitor = $(lua_quote "$TARGET_MONITOR") })" >/dev/null 2>&1 || true
-	 hyprctl dispatch "hl.dsp.focus({ monitor = $(lua_quote "$TARGET_MONITOR") })" >/dev/null 2>&1 || true
+	 hypr_dispatch_lua 'hl.dsp.focus({ workspace = "2" })' || true
+	 hypr_dispatch_lua "hl.dsp.workspace.move({ id = \"10\", monitor = $(lua_quote "$TARGET_MONITOR") })" || true
+	 hypr_dispatch_lua "hl.dsp.focus({ monitor = $(lua_quote "$TARGET_MONITOR") })" || true
 }
 
 run_startup_ready_actions() {

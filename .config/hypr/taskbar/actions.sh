@@ -5,24 +5,9 @@ set -euo pipefail
 app_id="${1:-}"
 mode="${2:-open}"
 taskbar_apps_file="${TASKBAR_APPS_FILE:-${HOME}/.config/hypr/taskbar/apps.json}"
-hypr_query_socket="${XDG_RUNTIME_DIR:-}/hypr/${HYPRLAND_INSTANCE_SIGNATURE:-}/.socket.sock"
 
-hypr_query() {
-  local command="$1"
-
-  if [[ -S "$hypr_query_socket" ]] && command -v nc >/dev/null 2>&1; then
-    printf '%s' "$command" | nc -U "$hypr_query_socket" 2>/dev/null
-    return
-  fi
-
-  case "$command" in
-    j/clients) hyprctl clients -j 2>/dev/null ;;
-    j/monitors) hyprctl monitors -j 2>/dev/null ;;
-    j/activeworkspace) hyprctl activeworkspace -j 2>/dev/null ;;
-    j/activewindow) hyprctl activewindow -j 2>/dev/null ;;
-    *) return 1 ;;
-  esac
-}
+# shellcheck disable=SC1091
+source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
 lua_quote() {
   local value="$1"
@@ -61,7 +46,7 @@ kill_all() {
     | sort -u \
     | while IFS= read -r address; do
       [[ -z "$address" ]] && continue
-      hyprctl dispatch "hl.dsp.window.close($(lua_quote "address:${address}"))" >/dev/null 2>&1 || true
+      hypr_dispatch_lua "hl.dsp.window.close($(lua_quote "address:${address}"))" || true
     done
 }
 
@@ -80,8 +65,8 @@ park_other_visible_apps() {
     ' \
     | while IFS='|' read -r address target_workspace; do
       [[ -z "$address" || -z "$target_workspace" ]] && continue
-      hyprctl dispatch "hl.dsp.window.pin({ window = $(lua_quote "address:${address}") })" >/dev/null 2>&1 || true
-      hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_quote "$target_workspace"), window = $(lua_quote "address:${address}"), follow = false })" >/dev/null 2>&1 || true
+      hypr_dispatch_lua "hl.dsp.window.pin({ window = $(lua_quote "address:${address}") })" || true
+      hypr_dispatch_lua "hl.dsp.window.move({ workspace = $(lua_quote "$target_workspace"), window = $(lua_quote "address:${address}"), follow = false })" || true
     done
 }
 
@@ -100,10 +85,10 @@ park_active() {
 
   pinned="$(jq -r '.pinned // false' <<< "$active")"
   if [[ "$pinned" == "true" ]]; then
-    hyprctl dispatch "hl.dsp.window.pin({ window = $(lua_quote "address:${address}") })" >/dev/null 2>&1 || true
+    hypr_dispatch_lua "hl.dsp.window.pin({ window = $(lua_quote "address:${address}") })" || true
   fi
 
-  hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })" >/dev/null 2>&1 || true
+  hypr_dispatch_lua "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })" || true
 }
 
 if [[ "$app_id" == "--park-active" ]]; then
@@ -167,13 +152,13 @@ move_window_to_workspace() {
   local address="$1"
   local target_workspace="$2"
 
-  hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_quote "$target_workspace"), window = $(lua_quote "address:${address}"), follow = false })" >/dev/null 2>&1 || true
+  hypr_dispatch_lua "hl.dsp.window.move({ workspace = $(lua_quote "$target_workspace"), window = $(lua_quote "address:${address}"), follow = false })" || true
 }
 
 pin_window() {
   local address="$1"
 
-  hyprctl dispatch "hl.dsp.window.pin({ window = $(lua_quote "address:${address}") })" >/dev/null 2>&1 || true
+  hypr_dispatch_lua "hl.dsp.window.pin({ window = $(lua_quote "address:${address}") })" || true
 }
 
 active_workspace() {
@@ -250,7 +235,7 @@ apply_saved_size() {
 
   [[ -z "$width" || -z "$height" ]] && return
 
-  hyprctl dispatch "hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })" >/dev/null 2>&1 || true
+  hypr_dispatch_lua "hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })" || true
 }
 
 position_bottom_right() {
@@ -278,13 +263,13 @@ position_bottom_right() {
   target_x=$((x + width - win_width - 7))
   target_y=$((y + height - win_height - 56))
 
-  hyprctl dispatch "hl.dsp.window.move({ x = ${target_x}, y = ${target_y}, window = $(lua_quote "address:${address}") })" >/dev/null 2>&1 || true
+  hypr_dispatch_lua "hl.dsp.window.move({ x = ${target_x}, y = ${target_y}, window = $(lua_quote "address:${address}") })" || true
 }
 
 launch_app() {
   if ! declare -p fallback_command >/dev/null 2>&1; then
     if [[ -n "${tag:-}" ]]; then
-      hyprctl dispatch "hl.dsp.exec_cmd($(lua_quote "$(command_line "${command[@]}")"), { tag = $(lua_quote "+${tag}"), float = true, no_anim = true, no_initial_focus = true, workspace = $(lua_quote "${workspace} silent") })" >/dev/null 2>&1
+      hypr_dispatch_lua "hl.dsp.exec_cmd($(lua_quote "$(command_line "${command[@]}")"), { tag = $(lua_quote "+${tag}"), float = true, no_anim = true, no_initial_focus = true, workspace = $(lua_quote "${workspace} silent") })"
     else
       "${command[@]}" >/dev/null 2>&1 &
     fi

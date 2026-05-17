@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck disable=SC1091
+source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
+
 readonly TERM_WAIT_SECONDS=1
 readonly -a PRECLOSE_WINDOW_CLASSES=(
   "app.zen_browser.zen"
@@ -23,12 +26,12 @@ preclose_windows() {
       [[ -n "$address" ]] || continue
 
       if [[ $provider == lua ]]; then
-        hyprctl dispatch "hl.dsp.window.close({ window = \"address:$address\" })" >/dev/null 2>&1 || true
+        hypr_dispatch_lua "hl.dsp.window.close({ window = \"address:$address\" })" || true
       else
         hyprctl dispatch closewindow "address:$address" >/dev/null 2>&1 || true
       fi
     done < <(
-      hyprctl clients -j \
+      hypr_query 'j/clients' \
         | jq -r --arg class "$class" '.[] | select(.class == $class and .address != null) | .address' \
         || true
     )

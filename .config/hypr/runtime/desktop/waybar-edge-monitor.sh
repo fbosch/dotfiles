@@ -5,6 +5,8 @@
 # shellcheck disable=SC1091
 # Source shared library
 source "$(dirname "$0")/waybar-lib.sh"
+# shellcheck disable=SC1091
+source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
 # Configuration (all in milliseconds for integer math)
 readonly SHOW_THRESHOLD=20     # Distance from bottom to trigger show (pixels)
@@ -13,23 +15,6 @@ readonly SHOW_DELAY_MS=200      # Milliseconds to wait before showing (prevents 
 readonly HIDE_DELAY_MS=300      # Milliseconds to wait before hiding (linger time)
 readonly FAST_CHECK_MS=80       # Fast polling interval near the edge (80ms)
 readonly SLOW_CHECK_MS=1000     # Slow polling interval away from the edge (1000ms)
-
-# Hyprland query socket (faster than hyprctl)
-HYPR_QUERY_SOCKET=""
-
-refresh_hypr_query_socket() {
-    HYPR_QUERY_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock"
-}
-
-# Query Hyprland IPC socket.
-# Prints response to stdout and returns non-zero on failure.
-hypr_query() {
-    local request=$1
-
-    refresh_hypr_query_socket
-
-    printf '%s' "$request" | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null
-}
 
 now_ms() {
     printf '%.0f\n' "${EPOCHREALTIME//[.,]/}e-3"

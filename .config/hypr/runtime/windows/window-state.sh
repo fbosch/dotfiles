@@ -2,6 +2,9 @@
 # Window State Persistence for Hyprland
 # Uses hybrid approach: socket2 events + conditional polling (only when needed)
 
+# shellcheck disable=SC1091
+source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
+
 # Re-exec with SCHED_IDLE scheduling if not already running with it
 if [[ -z "${WINDOW_STATE_IDLE_SCHED}" ]]; then
     if command -v chrt &>/dev/null; then
@@ -99,7 +102,7 @@ window_state_rule_pattern() {
 
 # Fetch and cache monitor layout (cheap — called once at startup and on monitor change)
 fetch_monitors() {
-    MONITORS_JSON=$(printf 'j/monitors' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null) || {
+    MONITORS_JSON=$(hypr_query 'j/monitors') || {
         printf 'ERROR: monitors query failed\n' >&2
         return 1
     }
@@ -142,7 +145,7 @@ get_window_states() {
     
     # Get clients; monitors come from cache (invalidated by monitoradded/monitorremoved)
     local clients
-    clients=$(printf 'j/clients' | nc -U "$HYPR_QUERY_SOCKET" 2>/dev/null) || { printf 'ERROR: clients query failed\n' >&2; echo "[]"; return 1; }
+    clients=$(hypr_query 'j/clients') || { printf 'ERROR: clients query failed\n' >&2; echo "[]"; return 1; }
 
     jq -c --argjson matchers "$matchers_json" --argjson monitors "$MONITORS_JSON" '
         def field_of(w; m): w | if   m.field == "class"        then .class
@@ -582,13 +585,13 @@ if [[ -z "$HYPRLAND_INSTANCE_SIGNATURE" ]]; then
     exit 1
 fi
 HYPR_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
-HYPR_QUERY_SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock"
 if [[ ! -S "$HYPR_SOCKET" ]]; then
     printf 'ERROR: Hyprland event socket not found: %s\n' "$HYPR_SOCKET" >&2
     exit 1
 fi
-if [[ ! -S "$HYPR_QUERY_SOCKET" ]]; then
-    printf 'ERROR: Hyprland query socket not found: %s\n' "$HYPR_QUERY_SOCKET" >&2
+HYPR_QUERY_SOCKET="$(hypr_query_socket_path 2>/dev/null || true)"
+if [[ -z "$HYPR_QUERY_SOCKET" || ! -S "$HYPR_QUERY_SOCKET" ]]; then
+    printf 'ERROR: Hyprland query socket not found: %s\n' "${HYPR_QUERY_SOCKET:-<unset>}" >&2
     exit 1
 fi
 
