@@ -625,11 +625,11 @@ async function getWindows(): Promise<WindowInfo[]> {
         title: c.title || "",
         initialTitle: c.initialTitle || undefined,
         workspace: c.workspace.name || c.workspace.id.toString(),
-        size: (c as any).size
-          ? { width: (c as any).size[0], height: (c as any).size[1] }
+        size: c.size
+          ? { width: c.size[0], height: c.size[1] }
           : undefined,
-        position: (c as any).at
-          ? { x: (c as any).at[0], y: (c as any).at[1] }
+        position: c.at
+          ? { x: c.at[0], y: c.at[1] }
           : undefined,
       }));
 
@@ -733,6 +733,20 @@ async function getActiveWindowAddress(): Promise<string | null> {
 function hyprLuaFocusCommand(address: string): string {
   const expression = `hl.dsp.focus({ window = "address:${address}" })`;
   const command = `hyprctl dispatch ${GLib.shell_quote(expression)} && ${WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT}`;
+  return `dash -c ${GLib.shell_quote(command)}`;
+}
+
+function hyprLuaFocusAndCenterCommand(window: WindowInfo): string {
+  if (!window.position || !window.size) {
+    return hyprLuaFocusCommand(window.address);
+  }
+
+  const cursorX = Math.floor(window.position.x + window.size.width / 2);
+  const cursorY = Math.floor(window.position.y + window.size.height / 2);
+  const focusExpression = `hl.dsp.focus({ window = "address:${window.address}" })`;
+  const cursorExpression = `hl.dsp.cursor.move({ x = ${cursorX}, y = ${cursorY} })`;
+  const command = `hyprctl dispatch ${GLib.shell_quote(focusExpression)} && hyprctl dispatch ${GLib.shell_quote(cursorExpression)}`;
+
   return `dash -c ${GLib.shell_quote(command)}`;
 }
 
@@ -1310,7 +1324,7 @@ function onCommit() {
       );
     } else {
       GLib.spawn_command_line_async(
-        hyprLuaFocusCommand(targetWindow.address),
+        hyprLuaFocusAndCenterCommand(targetWindow),
       );
     }
     
