@@ -170,8 +170,9 @@ toggle_special_workspace_on_monitor() {
     return
   fi
 
-  focus_monitor "$monitor_name"
-  toggle_special_workspace "$special_workspace"
+  hypr_dispatch_lua_batch \
+    "hl.dsp.focus({ monitor = $(lua_quote "$monitor_name") })" \
+    "hl.dsp.workspace.toggle_special($(lua_quote "${special_workspace#special:}"))"
 }
 
 focused_monitor_json="$(hypr_query 'j/monitors' | jq -c 'first(.[] | select(.focused == true)) // empty')"

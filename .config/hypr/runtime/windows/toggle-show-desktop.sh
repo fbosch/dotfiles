@@ -84,9 +84,11 @@ if [[ -s "$state_file" ]]; then
       continue
     fi
 
-    focus_window "$address" 2>/dev/null || continue
-    resize_window "$address" "$width" "$height" 2>/dev/null || true
-    move_window "$address" "$x" "$y" 2>/dev/null || true
+    hypr_dispatch_lua_batch \
+      "hl.dsp.focus({ window = $(lua_quote "address:${address}") })" \
+      "hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })" \
+      "hl.dsp.window.move({ x = ${x}, y = ${y}, window = $(lua_quote "address:${address}") })" \
+      2>/dev/null || true
   done < <(
     jq -r '.windows[]? | select(.floating == true) | "\(.address)\t\(.x)\t\(.y)\t\(.width)\t\(.height)"' "$state_file" 2>/dev/null || true
   )

@@ -102,8 +102,10 @@ maybe_show_gaming_overlay() {
     return
   fi
 
-  hypr_dispatch_lua "hl.dsp.focus({ monitor = $(lua_quote "$target_monitor") })" || true
-  hypr_dispatch_lua "hl.dsp.workspace.toggle_special($(lua_quote "${GAMING_OVERLAY_WORKSPACE#special:}"))" || true
+  hypr_dispatch_lua_batch \
+    "hl.dsp.focus({ monitor = $(lua_quote "$target_monitor") })" \
+    "hl.dsp.workspace.toggle_special($(lua_quote "${GAMING_OVERLAY_WORKSPACE#special:}"))" \
+    || true
 }
 
 handle_event() {
