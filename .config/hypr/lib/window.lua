@@ -31,6 +31,10 @@ local function dispatch(dispatcher)
 	hl.dispatch(dispatcher)
 end
 
+local function warp_cursor_to_active()
+	dispatch(hl.dsp.exec_cmd("~/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh"))
+end
+
 local function refresh_portrait_dwindle()
 	local function apply()
 		local ok, portrait_dwindle = pcall(require, "layouts.portrait_dwindle")
@@ -62,7 +66,12 @@ function M.active()
 end
 
 function M.focus(value)
-	return hl.dsp.focus({ direction = direction(value) })
+	local normalized = direction(value)
+
+	return function()
+		dispatch(hl.dsp.focus({ direction = normalized }))
+		warp_cursor_to_active()
+	end
 end
 
 function M.move(value)
@@ -75,16 +84,19 @@ function M.move(value)
 		if normalized == "right" and monitor == "HDMI-A-2" then
 			dispatch(hl.dsp.window.move({ monitor = "DP-2" }))
 			refresh_portrait_dwindle()
+			warp_cursor_to_active()
 			return
 		end
 
 		if (normalized == "up" or normalized == "down") and monitor == "HDMI-A-2" then
 			dispatch(hl.dsp.window.swap({ direction = normalized }))
+			warp_cursor_to_active()
 			return
 		end
 
 		dispatch(hl.dsp.window.move({ direction = normalized }))
 		refresh_portrait_dwindle()
+		warp_cursor_to_active()
 	end
 end
 

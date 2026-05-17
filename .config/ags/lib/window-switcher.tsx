@@ -96,6 +96,7 @@ const ACTIVE_WINDOW_CACHE_TTL_MS = 100; // Cache active window briefly
 const PERFORMANCE_OVERLAY_STATE_DIR = `${GLib.getenv("XDG_RUNTIME_DIR") || "/tmp"}/hypr-profiles`;
 const PERFORMANCE_OVERLAY_ACTIVE_PATH = `${PERFORMANCE_OVERLAY_STATE_DIR}/performance-overlay.active`;
 const TOGGLE_MINIMIZED_WORKSPACE_SCRIPT = "~/.config/hypr/runtime/windows/toggle-minimized-workspace.sh";
+const WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT = "~/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh";
 const DEBUG = GLib.getenv("AGS_WINDOW_SWITCHER_DEBUG") === "1";
 
 function isPerformanceOverlayActive(): boolean {
@@ -731,12 +732,13 @@ async function getActiveWindowAddress(): Promise<string | null> {
 
 function hyprLuaFocusCommand(address: string): string {
   const expression = `hl.dsp.focus({ window = "address:${address}" })`;
-  return `hyprctl dispatch ${GLib.shell_quote(expression)}`;
+  const command = `hyprctl dispatch ${GLib.shell_quote(expression)} && ${WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT}`;
+  return `dash -c ${GLib.shell_quote(command)}`;
 }
 
 function restoreMinimizedAndFocusCommand(address: string): string {
   const command = `${TOGGLE_MINIMIZED_WORKSPACE_SCRIPT} ${GLib.shell_quote(address)} && ${hyprLuaFocusCommand(address)}`;
-  return `bash -lc ${GLib.shell_quote(command)}`;
+  return `dash -c ${GLib.shell_quote(command)}`;
 }
 
 // Create an app icon button
