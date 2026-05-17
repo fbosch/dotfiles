@@ -40,6 +40,7 @@ hypr_query() {
     j/activeworkspace) hyprctl activeworkspace -j 2>/dev/null ;;
     j/clients) hyprctl clients -j 2>/dev/null ;;
     j/monitors) hyprctl monitors -j 2>/dev/null ;;
+    activewindow) hyprctl activewindow 2>/dev/null ;;
     cursorpos) hyprctl cursorpos 2>/dev/null ;;
     *) return 1 ;;
   esac

@@ -8,22 +8,38 @@ if [ "$delay" != "0" ]; then
   sleep "$delay"
 fi
 
-window_json="$(hypr_query 'j/activewindow' || true)"
-if [ -z "$window_json" ]; then
+window_info="$(hypr_query 'activewindow' || true)"
+if [ -z "$window_info" ]; then
   exit 0
 fi
 
-geometry="$(printf '%s\n' "$window_json" | jq -r 'select(.mapped == true) | [.at[0], .at[1], .size[0], .size[1]] | @tsv')"
-set -- $geometry
+x=""
+y=""
+width=""
+height=""
 
-if [ "$#" -ne 4 ]; then
+while IFS= read -r line; do
+  case "$line" in
+    *at:* )
+      geometry="${line#at: }"
+      geometry="${geometry#*: }"
+      x="${geometry%%,*}"
+      y="${geometry#*,}"
+      ;;
+    *size:* )
+      geometry="${line#size: }"
+      geometry="${geometry#*: }"
+      width="${geometry%%,*}"
+      height="${geometry#*,}"
+      ;;
+  esac
+done <<EOF
+$window_info
+EOF
+
+if [ -z "$x" ] || [ -z "$y" ] || [ -z "$width" ] || [ -z "$height" ]; then
   exit 0
 fi
-
-x="$1"
-y="$2"
-width="$3"
-height="$4"
 
 cursor_x=$((x + width / 2))
 cursor_y=$((y + height / 2))
