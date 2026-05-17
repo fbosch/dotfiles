@@ -56,3 +56,18 @@ hypr_dispatch_lua() {
 
   hyprctl dispatch "$dispatcher" >/dev/null
 }
+
+hypr_dispatch_lua_batch() {
+  if hypr_query_socket_available; then
+    while [ "$#" -gt 0 ]; do
+      printf 'dispatch %s\n' "$1"
+      shift
+    done | nc -U "$__hypr_ipc_socket_path" >/dev/null 2>&1
+    return
+  fi
+
+  while [ "$#" -gt 0 ]; do
+    hyprctl dispatch "$1" >/dev/null || return
+    shift
+  done
+}

@@ -50,9 +50,11 @@ play_bootup_sound() {
 }
 
 apply_startup_workspace_routing() {
-	 hypr_dispatch_lua 'hl.dsp.focus({ workspace = "2" })' || true
-	 hypr_dispatch_lua "hl.dsp.workspace.move({ id = \"10\", monitor = $(lua_quote "$TARGET_MONITOR") })" || true
-	 hypr_dispatch_lua "hl.dsp.focus({ monitor = $(lua_quote "$TARGET_MONITOR") })" || true
+	 hypr_dispatch_lua_batch \
+		 'hl.dsp.focus({ workspace = "2" })' \
+		 "hl.dsp.workspace.move({ id = \"10\", monitor = $(lua_quote "$TARGET_MONITOR") })" \
+		 "hl.dsp.focus({ monitor = $(lua_quote "$TARGET_MONITOR") })" \
+		 || true
 }
 
 run_startup_ready_actions() {
