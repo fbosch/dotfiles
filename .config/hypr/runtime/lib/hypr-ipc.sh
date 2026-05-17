@@ -1,5 +1,8 @@
 #!/usr/bin/env dash
 
+__hypr_ipc_socket_ready=""
+__hypr_ipc_socket_path=""
+
 hypr_query_socket_path() {
   if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
     return 1
@@ -9,8 +12,19 @@ hypr_query_socket_path() {
 }
 
 hypr_query_socket_available() {
+  if [ -n "$__hypr_ipc_socket_ready" ]; then
+    [ "$__hypr_ipc_socket_ready" = "1" ]
+    return
+  fi
+
   __hypr_ipc_socket_path="$(hypr_query_socket_path 2>/dev/null || true)"
-  [ -n "$__hypr_ipc_socket_path" ] && [ -S "$__hypr_ipc_socket_path" ] && command -v nc >/dev/null 2>&1
+  if [ -n "$__hypr_ipc_socket_path" ] && [ -S "$__hypr_ipc_socket_path" ] && command -v nc >/dev/null 2>&1; then
+    __hypr_ipc_socket_ready="1"
+  else
+    __hypr_ipc_socket_ready="0"
+  fi
+
+  [ "$__hypr_ipc_socket_ready" = "1" ]
 }
 
 hypr_query() {
