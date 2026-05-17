@@ -5,6 +5,7 @@ set -euo pipefail
 app_id="${1:-}"
 mode="${2:-open}"
 taskbar_apps_file="${TASKBAR_APPS_FILE:-${HOME}/.config/hypr/taskbar/apps.json}"
+clients_json_cache=""
 
 # shellcheck disable=SC1091
 source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
@@ -20,8 +21,20 @@ lua_quote() {
   printf '"%s"' "$value"
 }
 
+clients_json() {
+  if [[ -z "$clients_json_cache" ]]; then
+    clients_json_cache="$(hypr_query j/clients)"
+  fi
+
+  printf '%s\n' "$clients_json_cache"
+}
+
+invalidate_clients_json() {
+  clients_json_cache=""
+}
+
 if [[ "$app_id" == "--any-open" ]]; then
-  hypr_query j/clients \
+  clients_json \
     | jq -e --slurpfile apps "$taskbar_apps_file" '
       def app_matches($window; $app):
         if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
@@ -34,7 +47,7 @@ if [[ "$app_id" == "--any-open" ]]; then
 fi
 
 kill_all() {
-  hypr_query j/clients \
+  clients_json \
     | jq -r --slurpfile apps "$taskbar_apps_file" '
       def app_matches($window; $app):
         if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
@@ -47,13 +60,14 @@ kill_all() {
     | while IFS= read -r address; do
       [[ -z "$address" ]] && continue
       hypr_dispatch_lua "hl.dsp.window.close($(lua_quote "address:${address}"))" || true
+      invalidate_clients_json
     done
 }
 
 park_other_visible_apps() {
   local current_id="$1"
 
-  hypr_query j/clients \
+  clients_json \
     | jq -r --slurpfile apps "$taskbar_apps_file" --arg current_id "$current_id" '
       def app_matches($window; $app):
         if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
@@ -67,6 +81,7 @@ park_other_visible_apps() {
       [[ -z "$address" || -z "$target_workspace" ]] && continue
       hypr_dispatch_lua "hl.dsp.window.pin({ window = $(lua_quote "address:${address}") })" || true
       hypr_dispatch_lua "hl.dsp.window.move({ workspace = $(lua_quote "$target_workspace"), window = $(lua_quote "address:${address}"), follow = false })" || true
+      invalidate_clients_json
     done
 }
 
@@ -140,10 +155,10 @@ command_line() {
 
 client_address() {
   if [[ -n "${tag:-}" ]]; then
-    hypr_query j/clients \
+    clients_json \
       | jq -r --arg tag "${tag}*" 'first(.[] | select((.tags // []) | index($tag)) | .address) // empty'
   else
-    hypr_query j/clients \
+    clients_json \
       | jq -r --arg class_name "$class_name" 'first(.[] | select(.class == $class_name) | .address) // empty'
   fi
 }
@@ -153,12 +168,14 @@ move_window_to_workspace() {
   local target_workspace="$2"
 
   hypr_dispatch_lua "hl.dsp.window.move({ workspace = $(lua_quote "$target_workspace"), window = $(lua_quote "address:${address}"), follow = false })" || true
+  invalidate_clients_json
 }
 
 pin_window() {
   local address="$1"
 
   hypr_dispatch_lua "hl.dsp.window.pin({ window = $(lua_quote "address:${address}") })" || true
+  invalidate_clients_json
 }
 
 active_workspace() {
@@ -208,14 +225,14 @@ target_workspace() {
 client_workspace() {
   local address="$1"
 
-  hypr_query j/clients \
+  clients_json \
     | jq -r --arg address "$address" 'first(.[] | select(.address == $address) | .workspace.name) // empty'
 }
 
 client_pinned() {
   local address="$1"
 
-  hypr_query j/clients \
+  clients_json \
     | jq -r --arg address "$address" 'first(.[] | select(.address == $address) | .pinned) // false'
 }
 
@@ -236,6 +253,7 @@ apply_saved_size() {
   [[ -z "$width" || -z "$height" ]] && return
 
   hypr_dispatch_lua "hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })" || true
+  invalidate_clients_json
 }
 
 position_bottom_right() {
@@ -248,7 +266,7 @@ position_bottom_right() {
 
   IFS=$'\t' read -r x y width height transform < <(jq -r '[.x, .y, .width, .height, .transform] | @tsv' <<< "$monitor")
   IFS=$'\t' read -r win_width win_height < <(
-    hypr_query j/clients \
+    clients_json \
       | jq -r --arg address "$address" 'first(.[] | select(.address == $address) | .size | @tsv) // empty'
   )
 
@@ -264,6 +282,7 @@ position_bottom_right() {
   target_y=$((y + height - win_height - 56))
 
   hypr_dispatch_lua "hl.dsp.window.move({ x = ${target_x}, y = ${target_y}, window = $(lua_quote "address:${address}") })" || true
+  invalidate_clients_json
 }
 
 launch_app() {
@@ -287,6 +306,7 @@ wait_for_address() {
   local address
 
   for _ in {1..50}; do
+    invalidate_clients_json
     address="$(client_address)"
     if [[ -n "$address" ]]; then
       printf '%s\n' "$address"
