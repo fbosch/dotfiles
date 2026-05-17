@@ -6,7 +6,14 @@ if [ "$delay" != "0" ]; then
   sleep "$delay"
 fi
 
-window_json="$(hyprctl activewindow -j 2>/dev/null || true)"
+socket_path="${XDG_RUNTIME_DIR:-}/hypr/${HYPRLAND_INSTANCE_SIGNATURE:-}/.socket.sock"
+
+if [ -S "$socket_path" ] && command -v nc >/dev/null 2>&1; then
+  window_json="$(printf 'j/activewindow' | nc -U "$socket_path" 2>/dev/null || true)"
+else
+  window_json="$(hyprctl activewindow -j 2>/dev/null || true)"
+fi
+
 if [ -z "$window_json" ]; then
   exit 0
 fi
