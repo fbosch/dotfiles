@@ -65,10 +65,8 @@ park_other_visible_apps() {
     ' \
     | while IFS='|' read -r address target_workspace; do
       [[ -z "$address" || -z "$target_workspace" ]] && continue
-      hypr_dispatch_lua_batch \
-        "hl.dsp.window.pin({ window = $(lua_quote "address:${address}") })" \
-        "hl.dsp.window.move({ workspace = $(lua_quote "$target_workspace"), window = $(lua_quote "address:${address}"), follow = false })" \
-        || true
+      hypr_dispatch_lua "hl.dsp.window.pin({ window = $(lua_quote "address:${address}") })" || true
+      hypr_dispatch_lua "hl.dsp.window.move({ workspace = $(lua_quote "$target_workspace"), window = $(lua_quote "address:${address}"), follow = false })" || true
     done
 }
 
@@ -87,11 +85,7 @@ park_active() {
 
   pinned="$(jq -r '.pinned // false' <<< "$active")"
   if [[ "$pinned" == "true" ]]; then
-    hypr_dispatch_lua_batch \
-      "hl.dsp.window.pin({ window = $(lua_quote "address:${address}") })" \
-      "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })" \
-      || true
-    return
+    hypr_dispatch_lua "hl.dsp.window.pin({ window = $(lua_quote "address:${address}") })" || true
   fi
 
   hypr_dispatch_lua "hl.dsp.window.move({ workspace = $(lua_quote "$workspace"), window = $(lua_quote "address:${address}"), follow = false })" || true

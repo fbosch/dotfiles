@@ -56,24 +56,3 @@ hypr_dispatch_lua() {
 
   hyprctl dispatch "$dispatcher" >/dev/null
 }
-
-hypr_dispatch_lua_batch() {
-  if hypr_query_socket_available; then
-    while [ "$#" -gt 0 ]; do
-      printf 'dispatch %s' "$1" | nc -U "$__hypr_ipc_socket_path" >/dev/null 2>&1 || return
-      shift
-    done
-    return
-  fi
-
-  batch=""
-  while [ "$#" -gt 0 ]; do
-    if [ -n "$batch" ]; then
-      batch="$batch; "
-    fi
-    batch="${batch}dispatch $1"
-    shift
-  done
-
-  [ -n "$batch" ] && hyprctl --batch "$batch" >/dev/null
-}

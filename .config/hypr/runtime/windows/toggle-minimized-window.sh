@@ -163,7 +163,6 @@ clear_window_state() {
 restore_window_state() {
   local address="$1"
   local state_json workspace_name monitor_name floating x y width height
-  local -a dispatches=()
 
   state_json="$(jq -c --arg address "$address" '.[$address] // empty' "$STATE_FILE")"
   if [[ -z "$state_json" ]]; then
@@ -180,23 +179,21 @@ restore_window_state() {
   height="$(jq -r '.height // 0' <<< "$state_json")"
 
   if [[ -n "$workspace_name" ]]; then
-    dispatches+=("hl.dsp.window.move({ workspace = $(lua_quote "$workspace_name"), window = $(lua_quote "address:${address}"), follow = false })")
+    move_window_to_workspace "$workspace_name" "$address"
   else
-    dispatches+=("hl.dsp.window.move({ workspace = $(lua_quote "+0"), window = $(lua_quote "address:${address}"), follow = false })")
+    move_window_to_workspace "+0" "$address"
   fi
 
   if [[ -n "$monitor_name" ]]; then
-    dispatches+=("hl.dsp.focus({ monitor = $(lua_quote "$monitor_name") })")
+    focus_monitor "$monitor_name"
   fi
 
-  dispatches+=("hl.dsp.focus({ window = $(lua_quote "address:${address}") })")
+  focus_window "$address"
 
   if [[ "$floating" == "true" ]]; then
-    dispatches+=("hl.dsp.window.resize({ x = ${width}, y = ${height}, window = $(lua_quote "address:${address}") })")
-    dispatches+=("hl.dsp.window.move({ x = ${x}, y = ${y}, window = $(lua_quote "address:${address}") })")
+    resize_window "$address" "$width" "$height"
+    move_window "$address" "$x" "$y"
   fi
-
-  hypr_dispatch_lua_batch "${dispatches[@]}"
 
   clear_window_state "$address"
 }
