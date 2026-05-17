@@ -41,6 +41,7 @@ hypr_query() {
     j/clients) hyprctl clients -j 2>/dev/null ;;
     j/monitors) hyprctl monitors -j 2>/dev/null ;;
     activewindow) hyprctl activewindow 2>/dev/null ;;
+    monitors) hyprctl monitors 2>/dev/null ;;
     cursorpos) hyprctl cursorpos 2>/dev/null ;;
     *) return 1 ;;
   esac
