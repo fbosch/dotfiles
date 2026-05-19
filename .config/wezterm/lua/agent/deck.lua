@@ -62,7 +62,6 @@ local agent_patterns = {
 }
 
 local detection_cache = {}
-local session_title_cache = {}
 local pane_refresh_timestamps = {}
 local attention_notification_timestamps = {}
 local now_ms
@@ -186,87 +185,7 @@ local function try_background_child_process(argv)
 	return ok, err
 end
 
-local file_exists
-
-local function shell_sql_string(value)
-	return "'" .. tostring(value):gsub("'", "''") .. "'"
-end
-
-local function trim_string(value)
-	if type(value) ~= "string" then
-		return nil
-	end
-
-	local trimmed = value:match("^%s*(.-)%s*$")
-	if trimmed == nil or trimmed == "" then
-		return nil
-	end
-
-	return trimmed
-end
-
-local function get_basename(path)
-	local trimmed = trim_string(path)
-	if trimmed == nil then
-		return nil
-	end
-
-	local without_trailing_slash = trimmed:gsub("/+$", "")
-	return trim_string(without_trailing_slash:match("([^/]+)$"))
-end
-
-local function get_opencode_db_path()
-	local home = os.getenv("HOME")
-	if home == nil or home == "" then
-		return nil
-	end
-
-	return home .. "/.local/share/opencode/opencode.db"
-end
-
-local function query_opencode_session_title(session_id)
-	if type(session_id) ~= "string" or session_id == "" then
-		return nil
-	end
-
-	local now = now_ms()
-	local cache = session_title_cache[session_id]
-	if cache and (now - cache.checked_at_ms) < detection_cache_ttl_ms then
-		return cache.title
-	end
-
-	local db_path = get_opencode_db_path()
-	if db_path == nil or file_exists(db_path) == false then
-		session_title_cache[session_id] = { title = nil, checked_at_ms = now }
-		return nil
-	end
-
-	local query = "select coalesce(nullif(title, ''), slug) || char(9) || coalesce(directory, '') from session where id = "
-		.. shell_sql_string(session_id)
-		.. " limit 1"
-	if type(wezterm.run_child_process) ~= "function" then
-		session_title_cache[session_id] = { title = nil, checked_at_ms = now }
-		return nil
-	end
-
-	local ok, success, stdout = pcall(function()
-		return wezterm.run_child_process({ "sqlite3", db_path, "-noheader", query })
-	end)
-	local title = nil
-	if ok and success then
-		local raw_title, raw_directory = tostring(stdout or ""):match("^([^\t]*)\t(.*)$")
-		title = trim_string(raw_title or stdout)
-		local directory_name = get_basename(raw_directory)
-		if title ~= nil and directory_name ~= nil then
-			title = title .. " (" .. directory_name .. ")"
-		end
-	end
-
-	session_title_cache[session_id] = { title = title, checked_at_ms = now }
-	return title
-end
-
-file_exists = function(path)
+local function file_exists(path)
 	if type(path) ~= "string" or path == "" then
 		return false
 	end
@@ -452,62 +371,6 @@ local function process_is_opencode(process_info)
 	return false
 end
 
-local function find_opencode_session_id(process_info)
-	if process_info == nil then
-		return nil
-	end
-
-	local argv = process_info.argv or {}
-	for index, arg in ipairs(argv) do
-		if type(arg) == "string" then
-			local inline_session_id = arg:match("^%-%-session=(.+)$")
-			if inline_session_id and inline_session_id ~= "" then
-				return inline_session_id
-			end
-
-			if arg == "--session" and type(argv[index + 1]) == "string" and argv[index + 1] ~= "" then
-				return argv[index + 1]
-			end
-		end
-	end
-
-	local children = process_info.children or {}
-	for _, child in pairs(children) do
-		local session_id = find_opencode_session_id(child)
-		if session_id then
-			return session_id
-		end
-	end
-
-	return nil
-end
-
-local function get_opencode_session_id(pane)
-	if pane == nil then
-		return nil
-	end
-
-	local pane_id = pane:pane_id()
-	local cache = detection_cache[pane_id]
-	if cache and type(cache.session_id) == "string" and cache.session_id ~= "" then
-		return cache.session_id
-	end
-
-	local ok, process_info = pcall(function()
-		return pane:get_foreground_process_info()
-	end)
-	if ok == false or process_info == nil then
-		return nil
-	end
-
-	local session_id = find_opencode_session_id(process_info)
-	if session_id and cache then
-		cache.session_id = session_id
-	end
-
-	return session_id
-end
-
 local function pane_has_opencode_process(pane)
 	local pane_id = pane:pane_id()
 	local cache = detection_cache[pane_id]
@@ -522,10 +385,8 @@ local function pane_has_opencode_process(pane)
 	end)
 
 	local is_opencode = false
-	local session_id = nil
 	if ok and process_info then
 		is_opencode = process_is_opencode(process_info)
-		session_id = find_opencode_session_id(process_info)
 	end
 
 	if is_opencode == false then
@@ -539,7 +400,6 @@ local function pane_has_opencode_process(pane)
 
 	detection_cache[pane_id] = {
 		is_opencode = is_opencode,
-		session_id = session_id,
 		checked_at_ms = now,
 	}
 
@@ -584,38 +444,6 @@ local function normalize_state(state, source)
 	if source and state.source == nil then
 		state.source = source
 	end
-
-	return state
-end
-
-local function get_pane_session_name(pane)
-	local session_title = query_opencode_session_title(get_opencode_session_id(pane))
-	if session_title ~= nil then
-		return session_title
-	end
-
-	local ok, title = pcall(function()
-		return pane:get_title()
-	end)
-	if ok == false or type(title) ~= "string" then
-		return nil
-	end
-
-	local trimmed = title:match("^%s*(.-)%s*$")
-	if trimmed == nil or trimmed == "" then
-		return nil
-	end
-
-	return trimmed
-end
-
-local function attach_session_name(state, pane)
-	if state == nil or pane == nil then
-		return state
-	end
-
-	local session_name = get_pane_session_name(pane)
-	state.session_name = session_name
 
 	return state
 end
@@ -723,7 +551,7 @@ function M.update_pane(pane)
 	local refresh_cooldown_ms = get_refresh_cooldown_ms(previous_state)
 
 	if (now - last_refresh_ms) < refresh_cooldown_ms then
-		return attach_session_name(normalize_state(previous_state), pane)
+		return normalize_state(previous_state)
 	end
 
 	pane_refresh_timestamps[pane_id] = now
@@ -734,7 +562,6 @@ function M.update_pane(pane)
 	end
 
 	if plugin_state then
-		attach_session_name(plugin_state, pane)
 		plugin_state.last_seen_ms = now
 		pane_states[pane_id] = plugin_state
 		return plugin_state
@@ -744,7 +571,6 @@ function M.update_pane(pane)
 	local overlay_state = normalize_state(detect_overlay_state(pane, has_opencode_process), "overlay")
 
 	if overlay_state then
-		attach_session_name(overlay_state, pane)
 		overlay_state.last_seen_ms = now
 		pane_states[pane_id] = overlay_state
 		return overlay_state

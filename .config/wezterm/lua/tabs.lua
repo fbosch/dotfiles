@@ -72,7 +72,6 @@ local function format_tab_title(tab, tabs, panes, config, hover, max_width)
 	local title = tab.active_pane.title
 	local icon_items = {}
 	local icon_count = 0
-	local active_pane_id = tab.active_pane and tab.active_pane.pane_id
 
 	if agent_deck then
 		for _, pane_info in ipairs(tab.panes or {}) do
@@ -92,11 +91,6 @@ local function format_tab_title(tab, tabs, panes, config, hover, max_width)
 					color = agent_deck.get_status_color(pane_state.status),
 				})
 				icon_count = icon_count + 1
-
-				local is_active_agent_pane = pane_info.pane_id == active_pane_id
-				if is_active_agent_pane and type(pane_state.session_name) == "string" and pane_state.session_name ~= "" then
-					title = pane_state.session_name
-				end
 			end
 		end
 	end
