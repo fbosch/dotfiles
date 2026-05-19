@@ -217,6 +217,30 @@ function toHeadRef(branch: string): string {
   return branch.startsWith("refs/heads/") ? branch : `refs/heads/${branch}`
 }
 
+function extractAzureWorkItemIds(value: string): string[] {
+  const ids = new Set<string>()
+  for (const match of value.matchAll(/\bAB#(\d+)\b/giu)) {
+    if (match[1] !== undefined) {
+      ids.add(match[1])
+    }
+  }
+
+  return [...ids]
+}
+
+async function detectAzureWorkItems(context: PrContext, title: string, body: string, cwd: string): Promise<string[]> {
+  const values = [context.branch, title, body]
+  const mergeBase = await git(["merge-base", "HEAD", context.base], cwd)
+  if (mergeBase !== null) {
+    const commitMessages = await git(["log", "--format=%B", `${mergeBase}..HEAD`], cwd)
+    if (commitMessages !== null) {
+      values.push(commitMessages)
+    }
+  }
+
+  return extractAzureWorkItemIds(values.join("\n"))
+}
+
 async function getRemotes(cwd: string): Promise<RemoteContext[]> {
   const names = await git(["remote"], cwd)
   if (names === null) {
@@ -348,29 +372,36 @@ async function openPullRequest(context: PrContext, title: string, body: string, 
       return result.exitCode === 0 ? result.stdout.trimEnd() : formatCommandError("gh pr create", result)
     }
 
+    const workItems = await detectAzureWorkItems(context, title, body, cwd)
+    const args = [
+      "repos",
+      "pr",
+      "create",
+      "--org",
+      context.remote.org ?? "",
+      "--project",
+      context.remote.project ?? "",
+      "--repository",
+      context.remote.repo ?? "",
+      "--source-branch",
+      toHeadRef(context.branch),
+      "--target-branch",
+      toHeadRef(context.targetBranch),
+      "--title",
+      title,
+      "--description",
+      `@${bodyFile}`,
+      "--output",
+      "json",
+    ]
+
+    if (workItems.length > 0) {
+      args.push("--work-items", ...workItems)
+    }
+
     const result = await runCommand(
       "az",
-      [
-        "repos",
-        "pr",
-        "create",
-        "--org",
-        context.remote.org ?? "",
-        "--project",
-        context.remote.project ?? "",
-        "--repository",
-        context.remote.repo ?? "",
-        "--source-branch",
-        toHeadRef(context.branch),
-        "--target-branch",
-        toHeadRef(context.targetBranch),
-        "--title",
-        title,
-        "--description",
-        `@${bodyFile}`,
-        "--output",
-        "json",
-      ],
+      args,
       cwd,
       {
         ...process.env,
