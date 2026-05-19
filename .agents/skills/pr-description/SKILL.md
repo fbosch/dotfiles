@@ -11,20 +11,34 @@ Do not define or rewrite PR title conventions here. Title format and type rules 
 
 ## Core Principles
 
+- Start with the smallest useful PR body; add detail only when complexity, risk, audience, or uncertainty justifies it.
 - Explain both `what changed` and `why it changed`; diffs already cover most of the what.
 - Write for mixed audiences: current reviewers and future readers with less context.
 - Ask for the right kind of feedback when needed (correctness, approach, UX, wording, risk).
-- Keep prose compact; prefer concrete statements over filler.
+- Put the review-relevant point first; do not make reviewers dig through setup prose.
+- Keep prose compact; prefer concrete consequences, examples, and limits over filler or broad claims.
 - Scale detail by risk and uncertainty, not only by file count.
-- Use the `writing-clearly` skill for final PR prose; command-specific output contracts and hard limits still win.
+- Use the `writing-clearly` skill for final PR prose; task-specific output contracts and hard limits still win.
+
+## Voice And Priority
+
+Before writing or editing final PR prose, read `.config/opencode/TONE.md` when it exists.
+
+Use this priority order when instructions conflict:
+
+1. Factual correctness and verified evidence.
+2. Explicit user constraints for this PR.
+3. Required output contract from a command, tool, template, or maintainer.
+4. `.config/opencode/TONE.md`.
+5. This skill's general PR-writing guidance.
 
 ## PR Classification
 
-Classify first, then choose sections.
+Classify first, then choose sections. Default to `Tiny` unless the change needs more context for review.
 
 | Class | Typical Signals | Required Sections | Common Optional Sections |
 |---|---|---|---|
-| Tiny | Rename, typo, narrow refactor | Summary, Changes | none |
+| Tiny | Rename, typo, narrow refactor, obvious local fix | Summary | Changes, Testing |
 | Normal | Typical feature or fix | Summary, Changes | Motivation, Testing |
 | Risky | Migration, infra, security, breaking behavior | Summary, Changes, Risk | Motivation, Testing, Rollback, Deployment Notes |
 | OSS-facing | External maintainers, less shared context | Summary, Changes | Motivation, Testing, Reviewer Focus, Linked Issues |
@@ -33,6 +47,8 @@ Classify first, then choose sections.
 ## Section Selection Rules
 
 Use only the sections needed for the class and context.
+
+Add a section only when it changes reviewer behavior, preserves non-obvious context, explains risk, or records validation that future readers would need.
 
 - `## Summary`
   - 1-2 sentences.
@@ -46,6 +62,7 @@ Use only the sections needed for the class and context.
 - `## Changes`
   - Verb-led bullets describing concrete code changes.
   - Keep bullets short and non-redundant.
+  - Omit for tiny PRs when `Summary` fully explains the change.
 - `## Risk`
   - What can fail, where blast radius exists, and conditions that increase risk.
 - `## Testing`
@@ -62,12 +79,15 @@ Use only the sections needed for the class and context.
 ## Writing Rules
 
 - Follow `writing-clearly` for practical, direct, concrete, low-ceremony prose.
-- Keep language simple and easy to read; prefer short sentences and common technical words.
+- Keep language simple and easy to read; prefer short sentences and specific technical nouns.
+- Prefer active voice unless passive voice keeps focus on the changed behavior or risk.
+- Prefer positive, direct statements over negated or hedged phrasing.
 - Start change bullets with plain verbs: `add`, `remove`, `change`, `fix`, `update`, `replace`, `move`, `extract`.
 - Avoid first-person phrasing and avoid "this PR" narration.
-- Avoid generic claims like "improves maintainability" unless you specify the concrete effect.
+- Avoid generic claims like "improves maintainability", "more robust", or "better DX" unless you specify the concrete effect or failure mode avoided.
 - Do not repeat `Summary` content in `Changes`.
 - Ignore merge-only noise, formatting-only changes, whitespace-only diffs, and import reordering.
+- Keep caveats proportional; include tradeoffs and limits only when they affect review, rollout, or future debugging.
 - Prefer explicit reviewer guidance over long explanation.
 
 ## Audience Adaptation
@@ -87,16 +107,20 @@ Use only the sections needed for the class and context.
 - Wall of text with no headings.
 - File-by-file diff narration instead of behavior-level changes.
 - Vague summary: "misc updates" or "small fixes".
+- Praise-padding before useful criticism, risk, or reviewer asks.
+- Marketing tone, consultant polish, generic enthusiasm, or long introductions before the point.
 - Checklist theater with no actionable detail, including redundant `Testing` sections that only restate obvious checks.
 
 ## Procedure
 
 1. Classify the PR (`Tiny`, `Normal`, `Risky`, `OSS-facing`, `WIP/Spike`).
-2. Select only required sections for that class.
+2. Start from `Summary` only, then add sections only when the change justifies them.
 3. Draft `Summary` before `Changes`; add `Motivation` only when explicitly relevant.
-4. Add risk and validation details only where they materially affect review; omit `Testing` when it would be redundant or obvious.
-5. Add `Feedback Wanted` or `Readiness` for early-review or partial work.
-6. Trim filler and duplicate statements.
+4. Replace broad claims with concrete consequences, examples, or limits.
+5. Add risk and validation details only where they materially affect review; omit `Testing` when it would be redundant or obvious.
+6. Add `Feedback Wanted` or `Readiness` for early-review or partial work.
+7. Trim filler, duplicate statements, and repeated caveats.
+8. Final-check that the first sentence states the purpose, each section has one job, and every claim is concrete enough to verify.
 
 ## Output Contract for Downstream Commands
 
