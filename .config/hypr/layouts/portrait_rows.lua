@@ -1,17 +1,7 @@
 local M = {}
 
-local function ordered_targets(ctx)
-	local ordered = {}
-
-	for _, target in ipairs(ctx.targets or {}) do
-		ordered[#ordered + 1] = target
-	end
-
-	return ordered
-end
-
 function M.recalculate(ctx)
-	local targets = ordered_targets(ctx)
+	local targets = ctx.targets or {}
 	local count = #targets
 
 	if count == 0 then
@@ -29,8 +19,8 @@ function M.recalculate(ctx)
 		return
 	end
 
-	for index, target in ipairs(targets) do
-		target:place(ctx:row(index, count))
+	for index = 1, count do
+		targets[index]:place(ctx:row(index, count))
 	end
 end
 
