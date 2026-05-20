@@ -19,7 +19,7 @@ local function make_target(index, active)
 		window = { active = active or false },
 		placed = nil,
 		place = function(self, box)
-			self.placed = box
+			self.placed = { x = box.x, y = box.y, w = box.w, h = box.h }
 		end,
 	}
 end
