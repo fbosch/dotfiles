@@ -110,8 +110,8 @@ end)
 
 bind("bind", main_mod, "H", window.focus("left"))
 bind("bind", main_mod, "L", window.focus("right"))
-bind("bind", main_mod, "J", window.focus("up"))
-bind("bind", main_mod, "K", window.focus("down"))
+bind("bind", main_mod, "J", window.focus("down"))
+bind("bind", main_mod, "K", window.focus("up"))
 
 bind("bind", main_mod .. " + SHIFT", "d", hl.dsp.layout("setratio 0.6"))
 

@@ -1,5 +1,6 @@
 local M = {}
 local one_third = 1 / 3
+local box = {}
 
 function M.recalculate(ctx)
 	local targets = ctx.targets
@@ -24,7 +25,10 @@ function M.recalculate(ctx)
 	local y = area.y
 	local width = area.w
 	local height = area.h
-	local box = { x = x, y = y, w = width, h = height }
+	box.x = x
+	box.y = y
+	box.w = width
+	box.h = height
 
 	if count == 2 then
 		local top_height = height * one_third
@@ -34,6 +38,19 @@ function M.recalculate(ctx)
 		box.y = y + top_height
 		box.h = height - top_height
 		targets[2]:place(box)
+		return
+	end
+
+	if count == 3 then
+		local row_height = height * one_third
+		box.h = row_height
+		targets[1]:place(box)
+
+		box.y = y + row_height
+		targets[2]:place(box)
+
+		box.y = y + row_height * 2
+		targets[3]:place(box)
 		return
 	end
 
