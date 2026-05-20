@@ -32,17 +32,6 @@ if host == "rvn-pc" then
 
 	hl.workspace_rule({
 		workspace = "r[1-9] m[HDMI-A-2]",
-		layout = "master",
-		layout_opts = { orientation = "top", mfact = 1 / 3 },
-	})
-
-	hl.workspace_rule({
-		workspace = "r[1-9] m[HDMI-A-2] w[tv2]",
-		layout = "lua:portrait_rows",
-	})
-
-	hl.workspace_rule({
-		workspace = "r[1-9] m[HDMI-A-2] w[tv3]",
 		layout = "lua:portrait_rows",
 	})
 
