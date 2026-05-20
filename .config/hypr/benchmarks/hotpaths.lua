@@ -11,6 +11,7 @@ local current_workspace = nil
 local active_window = nil
 local active_monitor = { name = "DP-2" }
 local events = {}
+local layout_providers = {}
 
 local function clear_modules()
 	for name in pairs(package.loaded) do
@@ -27,6 +28,7 @@ end
 
 local function reset_events()
 	events = {}
+	layout_providers = {}
 end
 
 local function make_window(index, opts)
@@ -110,6 +112,11 @@ hl = {
 		events[name] = events[name] or {}
 		table.insert(events[name], callback)
 	end,
+	layout = {
+		register = function(name, layout)
+			layout_providers[name] = layout
+		end,
+	},
 	window_rule = function()
 		dispatches = dispatches + 1
 	end,
@@ -160,7 +167,38 @@ local function bench_ultrawide_master(iterations)
 	end)
 end
 
-local function bench_portrait_dwindle(iterations)
+local function make_layout_context(windows)
+	local area = { x = 0, y = 0, w = 1440, h = 2560 }
+	local targets = {}
+
+	for index, window_handle in ipairs(windows) do
+		targets[index] = {
+			index = index,
+			window = window_handle,
+			place = function()
+			end,
+		}
+	end
+
+	return {
+		area = area,
+		targets = targets,
+		split = function(_, box, side, ratio)
+			if side == "top" then
+				return { x = box.x, y = box.y, w = box.w, h = box.h * ratio }
+			end
+
+			if side == "bottom" then
+				return { x = box.x, y = box.y + box.h * (1 - ratio), w = box.w, h = box.h * ratio }
+			end
+		end,
+		row = function(_, index, count)
+			return { x = area.x, y = area.y + area.h * (index - 1) / count, w = area.w, h = area.h / count }
+		end,
+	}
+end
+
+local function bench_portrait_rows(iterations)
 	clear_modules()
 	reset_events()
 	local workspace = make_workspace(3, { monitor = "HDMI-A-2", layout = "dwindle", name = "2" })
@@ -168,10 +206,11 @@ local function bench_portrait_dwindle(iterations)
 	current_windows = workspace.windows
 	active_window = current_windows[1]
 	active_monitor = { name = "HDMI-A-2" }
-	require("layouts.portrait_dwindle")
-	local callback = callbacks("window.open")[1]
-	run_case("layouts.portrait/window.open", iterations, function()
-		callback(current_windows[3])
+	require("layouts.portrait_rows")
+	local layout = layout_providers.portrait_rows
+	local context = make_layout_context(current_windows)
+	run_case("layouts.portrait/recalculate", iterations, function()
+		layout.recalculate(context)
 	end)
 end
 
@@ -277,7 +316,7 @@ end
 
 local cases = {
 	ultrawide_master = bench_ultrawide_master,
-	portrait = bench_portrait_dwindle,
+	portrait = bench_portrait_rows,
 	window_switcher = bench_window_switcher,
 	clipboard = bench_clipboard_bridge,
 	rule_loader = bench_rule_loader,

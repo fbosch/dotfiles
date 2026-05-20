@@ -40,22 +40,6 @@ local function warp_cursor_to_active(delay)
 	dispatch(hl.dsp.exec_cmd(command))
 end
 
-local function refresh_portrait_dwindle()
-	local function apply()
-		local ok, portrait_dwindle = pcall(require, "layouts.portrait_dwindle")
-		if ok and portrait_dwindle.apply_all then
-			portrait_dwindle.apply_all()
-		end
-	end
-
-	if hl.timer then
-		hl.timer(apply, { timeout = 100, type = "oneshot" })
-		return
-	end
-
-	apply()
-end
-
 function M.active()
 	if hl.get_active_window then
 		return hl.get_active_window()
@@ -88,7 +72,6 @@ function M.move(value)
 
 		if normalized == "right" and monitor == "HDMI-A-2" then
 			dispatch(hl.dsp.window.move({ monitor = "DP-2" }))
-			refresh_portrait_dwindle()
 			warp_cursor_to_active()
 			return
 		end
@@ -100,7 +83,6 @@ function M.move(value)
 		end
 
 		dispatch(hl.dsp.window.move({ direction = normalized }))
-		refresh_portrait_dwindle()
 		warp_cursor_to_active()
 	end
 end
