@@ -6,6 +6,21 @@ local orientation_center = hl.dsp.layout("orientationcenter")
 local mfact_two = hl.dsp.layout("mfact exact 0.7")
 local mfact_three = hl.dsp.layout("mfact exact 0.4")
 
+local function tiled_count(workspace)
+	local count = 0
+
+	for _, window in ipairs(workspace:get_windows()) do
+		if window.visible and not window.floating then
+			count = count + 1
+			if count > 3 then
+				return count
+			end
+		end
+	end
+
+	return count
+end
+
 local function apply_ultrawide_master(workspace)
 	if not workspace or not workspace.monitor or workspace.monitor.name ~= "DP-2" or not workspace.active then
 		return
@@ -15,7 +30,7 @@ local function apply_ultrawide_master(workspace)
 		return
 	end
 
-	local count = layout_util.tiled_summary(workspace)
+	local count = tiled_count(workspace)
 	if count == 2 then
 		if not should_apply_count(workspace, count) then
 			return
