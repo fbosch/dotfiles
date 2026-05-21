@@ -16,12 +16,18 @@ hl = {
 local function make_target(index, active)
 	return {
 		index = index,
-		window = { active = active or false },
+		window = { active = active or false, monitor = { name = "HDMI-A-2" } },
 		placed = nil,
 		place = function(self, box)
 			self.placed = { x = box.x, y = box.y, w = box.w, h = box.h }
 		end,
 	}
+end
+
+local function make_dp_target(index)
+	local target = make_target(index)
+	target.window.monitor.name = "DP-2"
+	return target
 end
 
 local function make_context(targets)
@@ -118,4 +124,13 @@ run("four windows degrade to equal vertical rows", function()
 
 	assert_box(targets[1].placed, { x = 10, y = 20, w = 120, h = 75 }, "first target")
 	assert_box(targets[4].placed, { x = 10, y = 245, w = 120, h = 75 }, "fourth target")
+end)
+
+run("dp monitor does not use portrait two-window ratio", function()
+	local first = make_dp_target(1)
+	local second = make_dp_target(2)
+	registered_layout.layout.recalculate(make_context({ first, second }))
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 150 }, "first dp target")
+	assert_box(second.placed, { x = 10, y = 170, w = 120, h = 150 }, "second dp target")
 end)
