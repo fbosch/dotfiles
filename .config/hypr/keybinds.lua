@@ -44,7 +44,7 @@ end
 
 local function focus_workspace(workspace)
 	if workspace == "1" then
-		hl.dispatch(hl.dsp.workspace.move({ workspace = "1", monitor = "HDMI-A-2" }))
+		hl.dispatch(hl.dsp.workspace.move({ id = "1", monitor = "HDMI-A-2" }))
 		hl.dispatch(hl.dsp.focus({ monitor = "HDMI-A-2" }))
 	end
 
@@ -53,7 +53,7 @@ end
 
 local function move_to_workspace(workspace)
 	if workspace == "1" then
-		hl.dispatch(hl.dsp.workspace.move({ workspace = "1", monitor = "HDMI-A-2" }))
+		hl.dispatch(hl.dsp.workspace.move({ id = "1", monitor = "HDMI-A-2" }))
 	end
 
 	hl.dispatch(hl.dsp.window.move({ workspace = workspace }))

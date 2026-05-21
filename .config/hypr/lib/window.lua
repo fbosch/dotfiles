@@ -74,9 +74,22 @@ end
 function M.move(value)
 	local normalized = direction(value)
 	local move_dispatcher = hl.dsp.window.move({ direction = normalized })
+	local move_to_workspace_one = hl.dsp.window.move({ workspace = "1" })
 	local move_to_portrait = hl.dsp.window.move({ monitor = "HDMI-A-2" })
 	local move_to_ultrawide = hl.dsp.window.move({ monitor = "DP-2" })
 	local swap_dispatcher = hl.dsp.window.swap({ direction = normalized })
+
+	if normalized == "left" then
+		return function()
+			local active = M.active()
+			if monitor_name(active) == "DP-2" then
+				dispatch(move_to_workspace_one)
+			else
+				dispatch(move_dispatcher)
+			end
+			warp_window(active)
+		end
+	end
 
 	if normalized == "right" then
 		return function()

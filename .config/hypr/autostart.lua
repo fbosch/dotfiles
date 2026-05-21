@@ -1,29 +1,42 @@
 -- Autostart commands ported from autostart.conf.
 
 local M = {}
+local paths = require("lib.paths")
 local system = require("lib.system")
 local taskbar_apps = require("taskbar")
 local host = system.hostname()
 
+local function uwsm(scope, command)
+	return "uwsm-app -s " .. scope .. " -- " .. command
+end
+
+local function session(command)
+	return uwsm("s", command)
+end
+
+local function background(command)
+	return uwsm("b", command)
+end
+
 M.commands = {
-	-- "uwsm-app -s b -- hypridle",
-	"uwsm-app -s s -- vicinae server",
-	"uwsm-app -s s -- atuin daemon start",
-	"uwsm-app -s b -- foot --server",
-	"uwsm-app -s b -- flake-check-updates",
-	"uwsm-app -s b -- swayosd-server",
-	"uwsm-app -s b -- ~/.config/hypr/runtime/windows/window-state.sh",
-	"uwsm-app -s b -- ~/.config/hypr/runtime/windows/minimized-state-daemon.sh",
-	"uwsm-app -s b -- ~/.config/hypr/runtime/windows/window-capture-daemon.sh",
-	"uwsm-app -s b -- ~/.config/hypr/runtime/gamescope/gamescope-profile-watchdog.sh",
-	"uwsm-app -s b -- ~/.config/hypr/runtime/gamescope/gamescope-clipboard-sync.sh",
-	"uwsm-app -s s -- hyprpaper",
-	"uwsm-app -s s -- waybar",
-	"uwsm-app -s s -- swaync -c ~/.config/swaync/config.json -s ~/.config/swaync/style.css",
-	"uwsm-app -s s -- ~/.config/ags/start-daemons.sh",
-	"uwsm-app -s b -- ~/.config/hypr/runtime/desktop/toggle-night-light.sh daemon",
-	"uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-edge-monitor.sh",
-	"~/.config/hypr/runtime/startup/startup-desktop-ready.sh",
+	-- background("hypridle"),
+	session("vicinae server"),
+	session("atuin daemon start"),
+	background("foot --server"),
+	background("flake-check-updates"),
+	background("swayosd-server"),
+	background(paths.runtime_script("windows/window-state.sh")),
+	background(paths.runtime_script("windows/minimized-state-daemon.sh")),
+	background(paths.runtime_script("windows/window-capture-daemon.sh")),
+	background(paths.runtime_script("gamescope/gamescope-profile-watchdog.sh")),
+	background(paths.runtime_script("gamescope/gamescope-clipboard-sync.sh")),
+	session("hyprpaper"),
+	session("waybar"),
+	session("swaync -c ~/.config/swaync/config.json -s ~/.config/swaync/style.css"),
+	session("~/.config/ags/start-daemons.sh"),
+	background(paths.runtime_script("desktop/toggle-night-light.sh") .. " daemon"),
+	session(paths.runtime_script("desktop/waybar-edge-monitor.sh")),
+	paths.runtime_script("startup/startup-desktop-ready.sh"),
 }
 
 if host == "rvn-pc" then
