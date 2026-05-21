@@ -32,18 +32,9 @@ local function direction(value)
 	return normalized
 end
 
-local function warp_cursor_to_active(delay)
-	if delay == "0.03" then
-		dispatch(warp_active_after_focus)
-		return
-	end
-
-	if not delay then
-		dispatch(warp_active)
-		return
-	end
-
-	dispatch(hl.dsp.exec_cmd(warp_command .. " " .. delay))
+local function active_monitor_name()
+	local active = M.active()
+	return active and active.monitor and active.monitor.name or nil
 end
 
 function M.active()
@@ -66,7 +57,7 @@ function M.focus(value)
 
 	return function()
 		dispatch(focus_dispatcher)
-		warp_cursor_to_active("0.03")
+		dispatch(warp_active_after_focus)
 	end
 end
 
@@ -77,30 +68,45 @@ function M.move(value)
 	local move_to_ultrawide = hl.dsp.window.move({ monitor = "DP-2" })
 	local swap_dispatcher = hl.dsp.window.swap({ direction = normalized })
 
+	if normalized == "right" then
+		return function()
+			if active_monitor_name() == "HDMI-A-2" then
+				dispatch(move_to_ultrawide)
+			else
+				dispatch(move_dispatcher)
+			end
+			dispatch(warp_active)
+		end
+	end
+
+	if normalized == "down" then
+		return function()
+			local monitor = active_monitor_name()
+			if monitor == "DP-2" then
+				dispatch(move_to_portrait)
+			elseif monitor == "HDMI-A-2" then
+				dispatch(swap_dispatcher)
+			else
+				dispatch(move_dispatcher)
+			end
+			dispatch(warp_active)
+		end
+	end
+
+	if normalized == "up" then
+		return function()
+			if active_monitor_name() == "HDMI-A-2" then
+				dispatch(swap_dispatcher)
+			else
+				dispatch(move_dispatcher)
+			end
+			dispatch(warp_active)
+		end
+	end
+
 	return function()
-		local active = M.active()
-		local monitor = active and active.monitor and active.monitor.name or nil
-
-		if normalized == "right" and monitor == "HDMI-A-2" then
-			dispatch(move_to_ultrawide)
-			warp_cursor_to_active()
-			return
-		end
-
-		if normalized == "down" and monitor == "DP-2" then
-			dispatch(move_to_portrait)
-			warp_cursor_to_active()
-			return
-		end
-
-		if (normalized == "up" or normalized == "down") and monitor == "HDMI-A-2" then
-			dispatch(swap_dispatcher)
-			warp_cursor_to_active()
-			return
-		end
-
 		dispatch(move_dispatcher)
-		warp_cursor_to_active()
+		dispatch(warp_active)
 	end
 end
 
