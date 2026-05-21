@@ -41,12 +41,14 @@ Use one of these title types: feat, fix, refactor, chore, docs, test
 **Hard limits:**
 
 - Changes: 2-5 bullets
+- Risk: include only for significant risk; omit for none, low, or medium risk
 - Total output: 36 lines max
 
 **Rules:**
 
 - Apply all PR body structure, section, and writing rules from the skill
 - Apply the voice and phrasing guidance from `TONE.md`
+- Include a `Risk` section only when the changes have significant risk; omit it for none, low, or medium risk
 - Treat injected git context as an invocation-time snapshot; do not infer missing repo state
 - Ignore merge commits in the Commits context
 - Ignore changes that appear only because of merges
