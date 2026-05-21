@@ -1,18 +1,17 @@
 local layout_util = require("layouts.util")
 
 local should_apply_count = layout_util.count_gate()
-
-local function active_monitor_name()
-	local monitor = hl.get_active_monitor and hl.get_active_monitor() or nil
-	return monitor and monitor.name or ""
-end
+local orientation_left = hl.dsp.layout("orientationleft")
+local orientation_center = hl.dsp.layout("orientationcenter")
+local mfact_two = hl.dsp.layout("mfact exact 0.7")
+local mfact_three = hl.dsp.layout("mfact exact 0.4")
 
 local function apply_ultrawide_master(workspace)
 	if not workspace or not workspace.monitor or workspace.monitor.name ~= "DP-2" or not workspace.active then
 		return
 	end
 
-	if workspace.tiled_layout ~= "master" or active_monitor_name() ~= "DP-2" then
+	if workspace.tiled_layout ~= "master" then
 		return
 	end
 
@@ -22,15 +21,15 @@ local function apply_ultrawide_master(workspace)
 			return
 		end
 
-		hl.dispatch(hl.dsp.layout("orientationleft"))
-		hl.dispatch(hl.dsp.layout("mfact exact 0.7"))
+		hl.dispatch(orientation_left)
+		hl.dispatch(mfact_two)
 	elseif count == 3 then
 		if not should_apply_count(workspace, count) then
 			return
 		end
 
-		hl.dispatch(hl.dsp.layout("orientationcenter"))
-		hl.dispatch(hl.dsp.layout("mfact exact 0.4"))
+		hl.dispatch(orientation_center)
+		hl.dispatch(mfact_three)
 	end
 end
 
