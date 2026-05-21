@@ -32,9 +32,19 @@ local function direction(value)
 	return normalized
 end
 
-local function active_monitor_name()
-	local active = M.active()
+local function monitor_name(active)
 	return active and active.monitor and active.monitor.name or nil
+end
+
+local function warp_window(active)
+	local at = active and active.at or nil
+	local size = active and active.size or nil
+	if not at or not size or not at.x or not at.y or not size.x or not size.y then
+		dispatch(warp_active)
+		return
+	end
+
+	dispatch(hl.dsp.cursor.move({ x = at.x + size.x / 2, y = at.y + size.y / 2 }))
 end
 
 function M.active()
@@ -70,18 +80,20 @@ function M.move(value)
 
 	if normalized == "right" then
 		return function()
-			if active_monitor_name() == "HDMI-A-2" then
+			local active = M.active()
+			if monitor_name(active) == "HDMI-A-2" then
 				dispatch(move_to_ultrawide)
 			else
 				dispatch(move_dispatcher)
 			end
-			dispatch(warp_active)
+			warp_window(active)
 		end
 	end
 
 	if normalized == "down" then
 		return function()
-			local monitor = active_monitor_name()
+			local active = M.active()
+			local monitor = monitor_name(active)
 			if monitor == "DP-2" then
 				dispatch(move_to_portrait)
 			elseif monitor == "HDMI-A-2" then
@@ -89,24 +101,26 @@ function M.move(value)
 			else
 				dispatch(move_dispatcher)
 			end
-			dispatch(warp_active)
+			warp_window(active)
 		end
 	end
 
 	if normalized == "up" then
 		return function()
-			if active_monitor_name() == "HDMI-A-2" then
+			local active = M.active()
+			if monitor_name(active) == "HDMI-A-2" then
 				dispatch(swap_dispatcher)
 			else
 				dispatch(move_dispatcher)
 			end
-			dispatch(warp_active)
+			warp_window(active)
 		end
 	end
 
 	return function()
+		local active = M.active()
 		dispatch(move_dispatcher)
-		dispatch(warp_active)
+		warp_window(active)
 	end
 end
 

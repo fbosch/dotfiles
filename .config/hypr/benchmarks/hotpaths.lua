@@ -72,6 +72,11 @@ hl = {
 		exec_cmd = function(command)
 			return { op = "exec_cmd", command = command }
 		end,
+		cursor = {
+			move = function(args)
+				return { op = "cursor.move", args = args }
+			end,
+		},
 		focus = function(args)
 			return { op = "focus", args = args }
 		end,
@@ -285,8 +290,12 @@ local function bench_window_motion(iterations)
 	local resize_right = window.adjust("resize", "right")
 	local normal_window = make_window(1, { workspace = make_workspace(1), active = true })
 	normal_window.monitor = { name = "DP-2" }
+	normal_window.at = { x = 1440, y = 500 }
+	normal_window.size = { x = 1720, y = 1440 }
 	local portrait_window = make_window(2, { workspace = make_workspace(1), active = true })
 	portrait_window.monitor = { name = "HDMI-A-2" }
+	portrait_window.at = { x = 0, y = 0 }
+	portrait_window.size = { x = 1440, y = 2560 }
 
 	hl.get_active_window = function()
 		return normal_window

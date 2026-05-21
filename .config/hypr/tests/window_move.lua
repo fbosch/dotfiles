@@ -9,6 +9,11 @@ hl = {
 		exec_cmd = function(command)
 			return { op = "exec_cmd", command = command }
 		end,
+		cursor = {
+			move = function(args)
+				return { op = "cursor.move", args = args }
+			end,
+		},
 		window = {
 			move = function(args)
 				return { op = "window.move", args = args }
@@ -30,7 +35,7 @@ local window = require("lib.window")
 
 local function reset(monitor)
 	dispatched = {}
-	active_window = { monitor = { name = monitor } }
+	active_window = { monitor = { name = monitor }, at = { x = 100, y = 200 }, size = { x = 300, y = 400 } }
 end
 
 local function assert_equal(actual, expected, message)
@@ -49,6 +54,9 @@ run("dp down moves window to portrait monitor", function()
 	window.move("down")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
+	assert_equal(dispatched[2].op, "cursor.move", "cursor dispatcher")
+	assert_equal(dispatched[2].args.x, 250, "cursor x")
+	assert_equal(dispatched[2].args.y, 400, "cursor y")
 end)
 
 run("hdmi right moves window to ultrawide monitor", function()
