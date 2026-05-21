@@ -42,6 +42,23 @@ local function send_to_gaming_workspace()
 	hl.dispatch(hl.dsp.window.move({ workspace = "10" }))
 end
 
+local function focus_workspace(workspace)
+	if workspace == "1" then
+		hl.dispatch(hl.dsp.workspace.move({ workspace = "1", monitor = "HDMI-A-2" }))
+		hl.dispatch(hl.dsp.focus({ monitor = "HDMI-A-2" }))
+	end
+
+	hl.dispatch(hl.dsp.focus({ workspace = workspace }))
+end
+
+local function move_to_workspace(workspace)
+	if workspace == "1" then
+		hl.dispatch(hl.dsp.workspace.move({ workspace = "1", monitor = "HDMI-A-2" }))
+	end
+
+	hl.dispatch(hl.dsp.window.move({ workspace = workspace }))
+end
+
 local function resize_keep_aspect_ratio()
   hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "1" }))
   hl.dispatch(hl.dsp.window.resize())
@@ -116,11 +133,15 @@ bind("bind", main_mod, "K", window.focus("up"))
 bind("bind", main_mod .. " + SHIFT", "d", hl.dsp.layout("setratio 0.6"))
 
 for workspace = 1, 10 do
-  bind("bind", main_mod, tostring(workspace % 10), hl.dsp.focus({ workspace = tostring(workspace) }))
+  bind("bind", main_mod, tostring(workspace % 10), function()
+    focus_workspace(tostring(workspace))
+  end)
 end
 
 for workspace = 1, 10 do
-  bind("bind", main_mod .. " + SHIFT", tostring(workspace % 10), hl.dsp.window.move({ workspace = tostring(workspace) }))
+  bind("bind", main_mod .. " + SHIFT", tostring(workspace % 10), function()
+    move_to_workspace(tostring(workspace))
+  end)
 end
 
 bind("bind", main_mod, "mouse_down", hl.dsp.focus({ workspace = "e+1" }))

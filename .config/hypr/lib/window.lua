@@ -76,6 +76,12 @@ function M.move(value)
 			return
 		end
 
+		if normalized == "left" and monitor == "DP-2" then
+			dispatch(hl.dsp.window.move({ monitor = "HDMI-A-2" }))
+			warp_cursor_to_active()
+			return
+		end
+
 		if (normalized == "up" or normalized == "down") and monitor == "HDMI-A-2" then
 			dispatch(hl.dsp.window.swap({ direction = normalized }))
 			warp_cursor_to_active()

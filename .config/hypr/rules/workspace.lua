@@ -11,6 +11,7 @@ if host == "rvn-pc" then
 	hl.workspace_rule({
 		workspace = "1",
 		monitor = "HDMI-A-2",
+		default = true,
 	})
 
 	hl.workspace_rule({
