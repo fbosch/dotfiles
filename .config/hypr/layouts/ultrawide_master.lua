@@ -1,15 +1,35 @@
-local layout_util = require("layouts.util")
-
-local should_apply_count = layout_util.count_gate()
+local dispatch = hl.dispatch
 local orientation_left = hl.dsp.layout("orientationleft")
 local orientation_center = hl.dsp.layout("orientationcenter")
 local mfact_two = hl.dsp.layout("mfact exact 0.7")
 local mfact_three = hl.dsp.layout("mfact exact 0.4")
+local applied_counts = {}
+
+local function should_apply_count(workspace, count)
+	local key = workspace and (workspace.id or workspace.name) or nil
+	if not key or applied_counts[key] == count then
+		return false
+	end
+
+	applied_counts[key] = count
+	return true
+end
+
+local function defer(callback)
+	if hl.timer then
+		hl.timer(callback, { timeout = 100, type = "oneshot" })
+		return
+	end
+
+	callback()
+end
 
 local function tiled_count(workspace)
 	local count = 0
+	local windows = workspace:get_windows()
 
-	for _, window in ipairs(workspace:get_windows()) do
+	for index = 1, #windows do
+		local window = windows[index]
 		if window.visible and not window.floating then
 			count = count + 1
 			if count > 3 then
@@ -36,33 +56,33 @@ local function apply_ultrawide_master(workspace)
 			return
 		end
 
-		hl.dispatch(orientation_left)
-		hl.dispatch(mfact_two)
+		dispatch(orientation_left)
+		dispatch(mfact_two)
 	elseif count == 3 then
 		if not should_apply_count(workspace, count) then
 			return
 		end
 
-		hl.dispatch(orientation_center)
-		hl.dispatch(mfact_three)
+		dispatch(orientation_center)
+		dispatch(mfact_three)
 	end
 end
 
 hl.on("window.open", function(window)
-	if layout_util.is_tiled(window) then
+	if window and not window.floating then
 		apply_ultrawide_master(window.workspace)
 	end
 end)
 
 hl.on("window.close", function(window)
-	if layout_util.is_tiled(window) then
+	if window and not window.floating then
 		apply_ultrawide_master(window.workspace)
 	end
 end)
 
 hl.on("window.move_to_workspace", function(window)
-	if layout_util.is_tiled(window) then
-		layout_util.defer(function()
+	if window and not window.floating then
+		defer(function()
 			apply_ultrawide_master(window.workspace)
 		end)
 	end
