@@ -30,7 +30,7 @@ local function confirm_payload(pid, display_name)
 			message = "Kill process: " .. display_name .. " [PID: " .. pid .. "]?",
 			confirmLabel = "Kill",
 			cancelLabel = "Cancel",
-			confirmCommand = paths.script("kill-pid-with-fallback.sh") .. " " .. pid,
+			confirmCommand = paths.runtime_script("windows/kill-pid-with-fallback.sh") .. " " .. pid,
 			variant = "danger",
 		},
 	})

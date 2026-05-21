@@ -9,7 +9,7 @@ local profiles = require("profiles")
 
 local M = {}
 
-local icon_gen = paths.script("nerd-icon-gen.sh")
+local icon_gen = paths.runtime_script("desktop/nerd-icon-gen.sh")
 local in_progress = false
 
 local function icon_path(icon, color)

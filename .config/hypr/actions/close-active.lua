@@ -8,7 +8,7 @@ local window = require("lib.window")
 
 local M = {}
 
-local profilectl = paths.script("profilectl.sh")
+local profilectl = paths.runtime_script("profiles/profilectl.sh")
 local minimize_script = paths.runtime_script("windows/toggle-minimized-window.sh")
 
 local function is_gaming_active()

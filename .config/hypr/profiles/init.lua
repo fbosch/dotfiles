@@ -7,7 +7,7 @@ local profiles = {
   gaming = require("profiles.gaming"),
 }
 
-local profilectl = paths.script("profilectl.sh")
+local profilectl = paths.runtime_script("profiles/profilectl.sh")
 
 local function state_dir()
   return os.getenv("XDG_RUNTIME_DIR") or "/tmp"
