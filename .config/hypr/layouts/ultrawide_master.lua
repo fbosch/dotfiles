@@ -15,15 +15,6 @@ local function should_apply_count(workspace, count)
 	return true
 end
 
-local function defer(callback)
-	if hl.timer then
-		hl.timer(callback, { timeout = 100, type = "oneshot" })
-		return
-	end
-
-	callback()
-end
-
 local function tiled_count(workspace)
 	local count = 0
 	local windows = workspace:get_windows()
@@ -82,9 +73,7 @@ end)
 
 hl.on("window.move_to_workspace", function(window)
 	if window and not window.floating then
-		defer(function()
-			apply_ultrawide_master(window.workspace)
-		end)
+		apply_ultrawide_master(window.workspace)
 	end
 end)
 

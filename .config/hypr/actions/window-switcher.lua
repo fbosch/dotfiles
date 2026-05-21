@@ -63,8 +63,18 @@ local function focus_window(win)
 		return false
 	end
 
-	if workspace_name(win):match("^" .. minimized_workspace_prefix) then
+	local minimized = workspace_name(win):match("^" .. minimized_workspace_prefix)
+	if minimized then
 		exec(command.line(toggle_minimized_workspace, address(win)))
+	end
+
+	if win.active and not minimized then
+		return true
+	end
+
+	local active = hl.get_active_window and hl.get_active_window()
+	if active and active.address == win.address and not minimized then
+		return true
 	end
 
 	hl.dispatch(hl.dsp.focus({ window = "address:" .. address(win) }))

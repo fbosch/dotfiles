@@ -18,6 +18,11 @@ local deltas = {
 	down = { x = 0, y = 32 },
 }
 
+local dispatch = hl.dispatch
+local warp_command = "~/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh"
+local warp_active = hl.dsp.exec_cmd(warp_command)
+local warp_active_after_focus = hl.dsp.exec_cmd(warp_command .. " 0.03")
+
 local function direction(value)
 	local normalized = directions[value]
 	if not normalized then
@@ -27,17 +32,18 @@ local function direction(value)
 	return normalized
 end
 
-local function dispatch(dispatcher)
-	hl.dispatch(dispatcher)
-end
-
 local function warp_cursor_to_active(delay)
-	local command = "~/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh"
-	if delay then
-		command = command .. " " .. delay
+	if delay == "0.03" then
+		dispatch(warp_active_after_focus)
+		return
 	end
 
-	dispatch(hl.dsp.exec_cmd(command))
+	if not delay then
+		dispatch(warp_active)
+		return
+	end
+
+	dispatch(hl.dsp.exec_cmd(warp_command .. " " .. delay))
 end
 
 function M.active()
@@ -56,33 +62,37 @@ end
 
 function M.focus(value)
 	local normalized = direction(value)
+	local focus_dispatcher = hl.dsp.focus({ direction = normalized })
 
 	return function()
-		dispatch(hl.dsp.focus({ direction = normalized }))
+		dispatch(focus_dispatcher)
 		warp_cursor_to_active("0.03")
 	end
 end
 
 function M.move(value)
 	local normalized = direction(value)
+	local move_dispatcher = hl.dsp.window.move({ direction = normalized })
+	local move_to_ultrawide = hl.dsp.window.move({ monitor = "DP-2" })
+	local swap_dispatcher = hl.dsp.window.swap({ direction = normalized })
 
 	return function()
 		local active = M.active()
 		local monitor = active and active.monitor and active.monitor.name or nil
 
 		if normalized == "right" and monitor == "HDMI-A-2" then
-			dispatch(hl.dsp.window.move({ monitor = "DP-2" }))
+			dispatch(move_to_ultrawide)
 			warp_cursor_to_active()
 			return
 		end
 
 		if (normalized == "up" or normalized == "down") and monitor == "HDMI-A-2" then
-			dispatch(hl.dsp.window.swap({ direction = normalized }))
+			dispatch(swap_dispatcher)
 			warp_cursor_to_active()
 			return
 		end
 
-		dispatch(hl.dsp.window.move({ direction = normalized }))
+		dispatch(move_dispatcher)
 		warp_cursor_to_active()
 	end
 end
