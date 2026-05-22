@@ -97,6 +97,11 @@ hl = {
 				return { op = "window.close" }
 			end,
 		},
+		workspace = {
+			move = function(args)
+				return { op = "workspace.move", args = args }
+			end,
+		},
 	},
 	dispatch = function()
 		dispatches = dispatches + 1

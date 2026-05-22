@@ -22,6 +22,11 @@ hl = {
 				return { op = "window.swap", args = args }
 			end,
 		},
+		workspace = {
+			move = function(args)
+				return { op = "workspace.move", args = args }
+			end,
+		},
 	},
 	dispatch = function(dispatcher)
 		dispatched[#dispatched + 1] = dispatcher
@@ -62,9 +67,12 @@ end)
 run("dp left moves only active window to workspace one", function()
 	reset("DP-2")
 	window.move("left")()
-	assert_equal(dispatched[1].op, "window.move", "dispatcher")
-	assert_equal(dispatched[1].args.workspace, "1", "target workspace")
-	assert_equal(dispatched[2].op, "cursor.move", "cursor dispatcher")
+	assert_equal(dispatched[1].op, "workspace.move", "workspace dispatcher")
+	assert_equal(dispatched[1].args.id, "1", "workspace id")
+	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "workspace monitor")
+	assert_equal(dispatched[2].op, "window.move", "window dispatcher")
+	assert_equal(dispatched[2].args.workspace, "1", "target workspace")
+	assert_equal(dispatched[3].op, "cursor.move", "cursor dispatcher")
 end)
 
 run("hdmi right moves window to ultrawide monitor", function()

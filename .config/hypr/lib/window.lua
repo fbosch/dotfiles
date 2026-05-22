@@ -47,6 +47,10 @@ local function warp_window(active)
 	dispatch(hl.dsp.cursor.move({ x = at.x + size.x / 2, y = at.y + size.y / 2 }))
 end
 
+local function pin_workspace_one()
+	dispatch(hl.dsp.workspace.move({ id = "1", monitor = "HDMI-A-2" }))
+end
+
 function M.active()
 	if hl.get_active_window then
 		return hl.get_active_window()
@@ -83,6 +87,7 @@ function M.move(value)
 		return function()
 			local active = M.active()
 			if monitor_name(active) == "DP-2" then
+				pin_workspace_one()
 				dispatch(move_to_workspace_one)
 			else
 				dispatch(move_dispatcher)
