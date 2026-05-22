@@ -47,10 +47,6 @@ local function warp_window(active)
 	dispatch(hl.dsp.cursor.move({ x = at.x + size.x / 2, y = at.y + size.y / 2 }))
 end
 
-local function pin_workspace_one()
-	dispatch(hl.dsp.workspace.move({ id = "1", monitor = "HDMI-A-2" }))
-end
-
 function M.active()
 	if hl.get_active_window then
 		return hl.get_active_window()
@@ -78,7 +74,6 @@ end
 function M.move(value)
 	local normalized = direction(value)
 	local move_dispatcher = hl.dsp.window.move({ direction = normalized })
-	local move_to_workspace_one = hl.dsp.window.move({ workspace = "1" })
 	local move_to_portrait = hl.dsp.window.move({ monitor = "HDMI-A-2" })
 	local move_to_ultrawide = hl.dsp.window.move({ monitor = "DP-2" })
 	local swap_dispatcher = hl.dsp.window.swap({ direction = normalized })
@@ -87,8 +82,7 @@ function M.move(value)
 		return function()
 			local active = M.active()
 			if monitor_name(active) == "DP-2" then
-				pin_workspace_one()
-				dispatch(move_to_workspace_one)
+				dispatch(move_to_portrait)
 			else
 				dispatch(move_dispatcher)
 			end
