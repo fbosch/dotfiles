@@ -3,7 +3,7 @@
     "id": "calendar",
     "class": "org.gnome.Calendar",
     "class_pattern": "^(org\\.gnome\\.Calendar)$",
-    "command": ["gnome-calendar"],
+    "command": ["env", "TZDIR=/etc/zoneinfo", "gnome-calendar"],
     "tag": "taskbar_calendar",
     "rule_size": [725, 600],
     "workspace": "special:taskbar-calendar",
