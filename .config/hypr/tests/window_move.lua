@@ -59,11 +59,11 @@ run("dp down moves window to portrait monitor", function()
 	assert_equal(dispatched[2].args.y, 400, "cursor y")
 end)
 
-run("dp left moves only active window to portrait monitor", function()
+run("dp left uses normal directional move", function()
 	reset("DP-2")
 	window.move("left")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
-	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
+	assert_equal(dispatched[1].args.direction, "left", "move direction")
 	assert_equal(dispatched[2].op, "cursor.move", "cursor dispatcher")
 end)
 
