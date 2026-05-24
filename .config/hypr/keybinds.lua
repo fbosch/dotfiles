@@ -43,7 +43,7 @@ local function send_to_gaming_workspace()
 end
 
 local function pin_workspace_one()
-	hl.dispatch(hl.dsp.workspace.move({ id = "1", monitor = "HDMI-A-2" }))
+	hl.dispatch(hl.dsp.workspace.move({ workspace = "1", monitor = "HDMI-A-2" }))
 end
 
 local function focus_workspace(workspace)

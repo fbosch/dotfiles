@@ -6,6 +6,7 @@ set -euo pipefail
 source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
 readonly TARGET_MONITOR="DP-2"
+readonly PORTRAIT_MONITOR="HDMI-A-2"
 readonly BOOT_SOUND_FILE="$HOME/.config/hypr/assets/bootup.ogg"
 readonly BOOT_SOUND_DELAY_SECONDS=1.2
 readonly STARTUP_LOG_FILE="${XDG_RUNTIME_DIR:-/tmp}/hypr-startup-desktop-ready.log"
@@ -16,6 +17,21 @@ lua_quote() {
 
 log_startup() {
   printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >>"$STARTUP_LOG_FILE" 2>/dev/null || true
+}
+
+move_cursor_to_monitor_center() {
+  local monitor x y width height target_x target_y
+
+  monitor="$(hypr_query j/monitors | jq -c --arg name "$TARGET_MONITOR" 'first(.[] | select(.name == $name)) // empty')"
+  [[ -z "$monitor" ]] && return 0
+
+  IFS=$'\t' read -r x y width height < <(jq -r '[.x, .y, .width, .height] | @tsv' <<< "$monitor")
+  [[ -z "$x" || -z "$y" || -z "$width" || -z "$height" ]] && return 0
+
+  target_x=$((x + width / 2))
+  target_y=$((y + height / 2))
+
+  hypr_dispatch_lua "hl.dsp.cursor.move({ x = ${target_x}, y = ${target_y} })" || true
 }
 
 play_bootup_sound() {
@@ -50,9 +66,12 @@ play_bootup_sound() {
 }
 
 apply_startup_workspace_routing() {
-	 hypr_dispatch_lua 'hl.dsp.focus({ workspace = "2" })' || true
-	 hypr_dispatch_lua "hl.dsp.workspace.move({ id = \"10\", monitor = $(lua_quote "$TARGET_MONITOR") })" || true
-	 hypr_dispatch_lua "hl.dsp.focus({ monitor = $(lua_quote "$TARGET_MONITOR") })" || true
+	hypr_dispatch_lua "hl.dsp.workspace.move({ workspace = \"1\", monitor = $(lua_quote "$PORTRAIT_MONITOR") })" || true
+	hypr_dispatch_lua "hl.dsp.workspace.move({ workspace = \"2\", monitor = $(lua_quote "$TARGET_MONITOR") })" || true
+	hypr_dispatch_lua "hl.dsp.workspace.move({ workspace = \"10\", monitor = $(lua_quote "$TARGET_MONITOR") })" || true
+	hypr_dispatch_lua 'hl.dsp.focus({ workspace = "2" })' || true
+	hypr_dispatch_lua "hl.dsp.focus({ monitor = $(lua_quote "$TARGET_MONITOR") })" || true
+	move_cursor_to_monitor_center
 }
 
 run_startup_ready_actions() {
