@@ -87,7 +87,7 @@
       },
       "applications": {
          "preferences": {
-            "launchPrefix": "setsid -f",
+            "launchPrefix": "uwsm-app -s a --",
             "paths": [
                "/home/fbb/.local/share/applications",
                "/home/fbb/.local/share/flatpak/exports/share/applications",
