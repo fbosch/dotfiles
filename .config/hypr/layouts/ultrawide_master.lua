@@ -1,13 +1,13 @@
 local dispatch = hl.dispatch
 local orientation_left = hl.dsp.layout("orientationleft")
 local orientation_center = hl.dsp.layout("orientationcenter")
-local mfact_two = hl.dsp.layout("mfact exact 0.7")
+local mfact_two = hl.dsp.layout("mfact exact 0.67")
 local mfact_three = hl.dsp.layout("mfact exact 0.4")
 local applied_counts = {}
 
-local function should_apply_count(workspace, count)
+local function should_apply_count(workspace, count, force)
 	local key = workspace and (workspace.id or workspace.name) or nil
-	if not key or applied_counts[key] == count then
+	if not key or (not force and applied_counts[key] == count) then
 		return false
 	end
 
@@ -32,7 +32,7 @@ local function tiled_count(workspace)
 	return count
 end
 
-local function apply_ultrawide_master(workspace)
+local function apply_ultrawide_master(workspace, force)
 	if not workspace or not workspace.monitor or workspace.monitor.name ~= "DP-2" or not workspace.active then
 		return
 	end
@@ -43,14 +43,14 @@ local function apply_ultrawide_master(workspace)
 
 	local count = tiled_count(workspace)
 	if count == 2 then
-		if not should_apply_count(workspace, count) then
+		if not should_apply_count(workspace, count, force) then
 			return
 		end
 
 		dispatch(orientation_left)
 		dispatch(mfact_two)
 	elseif count == 3 then
-		if not should_apply_count(workspace, count) then
+		if not should_apply_count(workspace, count, force) then
 			return
 		end
 

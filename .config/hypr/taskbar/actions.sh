@@ -36,8 +36,7 @@ invalidate_clients_json() {
 if [[ "$app_id" == "--any-open" ]]; then
   clients_json \
     | jq -e --slurpfile apps "$taskbar_apps_file" '
-      def app_matches($window; $app):
-        if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
+      def app_matches($window; $app): $app.class == $window.class;
       any(.[]; . as $window |
         any($apps[0][]; app_matches($window; .) and $window.pinned == true and $window.workspace.name != .workspace)
       )
@@ -49,8 +48,7 @@ fi
 kill_all() {
   clients_json \
     | jq -r --slurpfile apps "$taskbar_apps_file" '
-      def app_matches($window; $app):
-        if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
+      def app_matches($window; $app): $app.class == $window.class;
       .[] as $window |
       $apps[0][] |
       select(app_matches($window; .) and $window.workspace.name == .workspace) |
@@ -69,8 +67,7 @@ park_other_visible_apps() {
 
   clients_json \
     | jq -r --slurpfile apps "$taskbar_apps_file" --arg current_id "$current_id" '
-      def app_matches($window; $app):
-        if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
+      def app_matches($window; $app): $app.class == $window.class;
       .[] as $window |
       $apps[0][] |
       select(.id != $current_id) |
@@ -91,8 +88,7 @@ park_active() {
   active="$(hypr_query j/activewindow || printf '{}')"
   address="$(jq -r '.address // empty' <<< "$active")"
   workspace="$(jq -r --argjson active "$active" '
-    def app_matches($window; $app):
-      if $app.tag then (($window.tags // []) | index($app.tag + "*")) != null else $app.class == $window.class end;
+    def app_matches($window; $app): $app.class == $window.class;
     first(.[] | select(app_matches($active; .)) | .workspace) // empty
   ' "$taskbar_apps_file")"
 
@@ -122,8 +118,8 @@ load_app() {
   class_name="$(jq -r '.class' <<< "$app_json")"
   tag="$(jq -r '.tag // empty' <<< "$app_json")"
   workspace="$(jq -r '.workspace' <<< "$app_json")"
-  width="$(jq -r '.saved_size[0] // empty' <<< "$app_json")"
-  height="$(jq -r '.saved_size[1] // empty' <<< "$app_json")"
+  width="$(jq -r '.saved_size[0] // .rule_size[0] // empty' <<< "$app_json")"
+  height="$(jq -r '.saved_size[1] // .rule_size[1] // empty' <<< "$app_json")"
   mapfile -t command < <(jq -r --arg home "$HOME" '.command[] | gsub("__HOME__"; $home)' <<< "$app_json")
 
   unset fallback_command
@@ -154,13 +150,8 @@ command_line() {
 }
 
 client_address() {
-  if [[ -n "${tag:-}" ]]; then
-    clients_json \
-      | jq -r --arg tag "${tag}*" 'first(.[] | select((.tags // []) | index($tag)) | .address) // empty'
-  else
-    clients_json \
-      | jq -r --arg class_name "$class_name" 'first(.[] | select(.class == $class_name) | .address) // empty'
-  fi
+  clients_json \
+    | jq -r --arg class_name "$class_name" 'first(.[] | select(.class == $class_name) | .address) // empty'
 }
 
 move_window_to_workspace() {
@@ -175,6 +166,13 @@ pin_window() {
   local address="$1"
 
   hypr_dispatch_lua "hl.dsp.window.pin({ window = $(lua_quote "address:${address}") })" || true
+  invalidate_clients_json
+}
+
+float_window() {
+  local address="$1"
+
+  hypr_dispatch_lua "hl.dsp.window.float({ window = $(lua_quote "address:${address}") })" || true
   invalidate_clients_json
 }
 
@@ -236,6 +234,24 @@ client_pinned() {
     | jq -r --arg address "$address" 'first(.[] | select(.address == $address) | .pinned) // false'
 }
 
+client_floating() {
+  local address="$1"
+
+  clients_json \
+    | jq -r --arg address "$address" 'first(.[] | select(.address == $address) | .floating) // false'
+}
+
+set_floating() {
+  local address="$1"
+  local expected="$2"
+  local current
+
+  current="$(client_floating "$address")"
+  if [[ "$current" != "$expected" ]]; then
+    float_window "$address"
+  fi
+}
+
 set_pinned() {
   local address="$1"
   local expected="$2"
@@ -286,14 +302,10 @@ position_bottom_right() {
 }
 
 launch_app() {
-  if ! declare -p fallback_command >/dev/null 2>&1; then
-    if [[ -n "${tag:-}" ]]; then
-      hypr_dispatch_lua "hl.dsp.exec_cmd($(lua_quote "$(command_line "${command[@]}")"), { tag = $(lua_quote "+${tag}"), float = true, no_anim = true, no_initial_focus = true, workspace = $(lua_quote "${workspace} silent") })"
-    else
-      "${command[@]}" >/dev/null 2>&1 &
-    fi
-    return
-  fi
+	if ! declare -p fallback_command >/dev/null 2>&1; then
+		"${command[@]}" >/dev/null 2>&1 &
+		return
+	fi
 
   if "${command[@]}" >/dev/null 2>&1; then
     return
@@ -331,6 +343,7 @@ if [[ -n "$address" ]]; then
       monitor="$(current_monitor)"
       target_workspace="$(target_workspace "$monitor")"
       [[ -z "$target_workspace" || "$target_workspace" == special:* ]] && target_workspace="+0"
+      set_floating "$address" true
       apply_saved_size "$address"
       position_bottom_right "$address" "$monitor"
       move_window_to_workspace "$address" "$target_workspace"
@@ -358,6 +371,7 @@ else
   monitor="$(current_monitor)"
   target_workspace="$(target_workspace "$monitor")"
   [[ -z "$target_workspace" || "$target_workspace" == special:* ]] && target_workspace="+0"
+  set_floating "$address" true
   apply_saved_size "$address"
   position_bottom_right "$address" "$monitor"
   move_window_to_workspace "$address" "$target_workspace"

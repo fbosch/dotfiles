@@ -66,11 +66,7 @@ function M.apply_rules()
 			workspace = app.workspace .. " silent",
 		}
 
-		if app.tag then
-			rule.match = { tag = app.tag .. "*" }
-		else
-			rule.match = { class = app.class_pattern }
-		end
+		rule.match = { class = app.class_pattern }
 
 		if app.size then
 			rule.size = app.size

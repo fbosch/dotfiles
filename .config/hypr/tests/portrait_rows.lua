@@ -24,6 +24,12 @@ local function make_target(index, active)
 	}
 end
 
+local function make_workspace_target(index, workspace, active)
+	local target = make_target(index, active)
+	target.window.workspace = { name = workspace }
+	return target
+end
+
 local function make_dp_target(index)
 	local target = make_target(index)
 	target.window.monitor.name = "DP-2"
@@ -85,6 +91,7 @@ require("layouts.portrait_rows")
 run("registers lua portrait_rows layout", function()
 	assert_equal(registered_layout.name, "portrait_rows", "registered layout name")
 	assert_equal(type(registered_layout.layout.recalculate), "function", "registered recalculate")
+	assert_equal(type(registered_layout.layout.layout_msg), "function", "registered layout_msg")
 end)
 
 run("two windows use one-third top and two-thirds bottom", function()
@@ -133,4 +140,28 @@ run("dp monitor does not use portrait two-window ratio", function()
 
 	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 150 }, "first dp target")
 	assert_box(second.placed, { x = 10, y = 170, w = 120, h = 150 }, "second dp target")
+end)
+
+run("resize-down grows active row into next row", function()
+	local first = make_workspace_target(1, "resize-down", true)
+	local second = make_workspace_target(2, "resize-down")
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-down")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 115 }, "first resized target")
+	assert_box(second.placed, { x = 10, y = 135, w = 120, h = 185 }, "second resized target")
+end)
+
+run("resize-up grows active row into previous row", function()
+	local first = make_workspace_target(1, "resize-up")
+	local second = make_workspace_target(2, "resize-up", true)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-up")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 85 }, "first resized target")
+	assert_box(second.placed, { x = 10, y = 105, w = 120, h = 215 }, "second resized target")
 end)

@@ -37,7 +37,6 @@
    },
    "favorites": [
       "applications:org.signal.Signal",
-      "applications:nix.bwrapper.helium_browser",
       "applications:one.ablaze.floorp",
       "@fbosch/yr-weather:yr-weather",
       "@fbosch/home-assistant:home-assistant-lights",
@@ -88,7 +87,7 @@
       },
       "applications": {
          "preferences": {
-            "launchPrefix": " uwsm-app -s a --",
+            "launchPrefix": "uwsm-app -s a --",
             "paths": [
                "/home/fbb/.local/share/applications",
                "/home/fbb/.local/share/flatpak/exports/share/applications",
@@ -153,6 +152,9 @@
                "enabled": false
             },
             "org.gtk.Demo4": {
+               "enabled": false
+            },
+            "org.gtk.Shaper": {
                "enabled": false
             },
             "org.gtk.WidgetFactory4": {

@@ -22,6 +22,8 @@ local dispatch = hl.dispatch
 local warp_command = "~/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh"
 local warp_active = hl.dsp.exec_cmd(warp_command)
 local warp_active_after_focus = hl.dsp.exec_cmd(warp_command .. " 0.03")
+local portrait_resize_up = hl.dsp.layout("resize-up")
+local portrait_resize_down = hl.dsp.layout("resize-down")
 
 local function direction(value)
 	local normalized = directions[value]
@@ -78,18 +80,6 @@ function M.move(value)
 	local move_to_ultrawide = hl.dsp.window.move({ monitor = "DP-2" })
 	local swap_dispatcher = hl.dsp.window.swap({ direction = normalized })
 
-	if normalized == "left" then
-		return function()
-			local active = M.active()
-			if monitor_name(active) == "DP-2" then
-				dispatch(move_to_portrait)
-			else
-				dispatch(move_dispatcher)
-			end
-			warp_window(active)
-		end
-	end
-
 	if normalized == "right" then
 		return function()
 			local active = M.active()
@@ -143,6 +133,18 @@ function M.adjust(kind, value)
 	end
 
 	if kind == "resize" then
+		if delta.y ~= 0 then
+			return function()
+				local active = M.active()
+				if monitor_name(active) == "HDMI-A-2" then
+					dispatch(delta.y < 0 and portrait_resize_up or portrait_resize_down)
+					return
+				end
+
+				dispatch(hl.dsp.window.resize({ x = delta.x, y = delta.y, relative = true }))
+			end
+		end
+
 		return hl.dsp.window.resize({ x = delta.x, y = delta.y, relative = true })
 	end
 

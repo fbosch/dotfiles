@@ -22,6 +22,8 @@ if host == "rvn-pc" then
 	hl.workspace_rule({
 		workspace = "2",
 		monitor = "DP-2",
+		layout = "master",
+		layout_opts = { orientation = "left", mfact = 0.67 },
 		default = true,
 	})
 
