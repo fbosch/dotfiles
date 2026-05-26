@@ -6,9 +6,20 @@ Open a pull request for the current branch.
 
 Use the `open_pr` tool for provider routing, pushing, and PR creation.
 
-PR content policy:
+PR BODY POLICY (authoritative for body content only):
 
-Use the `pr-description` skill for PR body structure, reviewer focus, validation, and risk framing.
+@.agents/skills/pr-description/SKILL.md
+
+TONE POLICY (authoritative for voice and phrasing only):
+
+@.config/opencode/TONE.md
+
+Follow this precedence order:
+
+1. Tool invocation and provider routing rules from this command
+2. PR body structure and content rules from `pr-description` skill
+3. Voice and phrasing from `TONE.md`
+4. If there is a conflict, command hard limits win
 
 Additional context:
 $ARGUMENTS
