@@ -54,6 +54,7 @@ Provide constructive feedback without making changes.
 
 - Load `security-and-hardening` for auth/session changes, untrusted input handling, data protection paths, or third-party integration code.
 - Load `github-actions-docs` when reviewing CI/CD workflow files, Actions permissions, or deployment automation changes.
+- Load `thermo-nuclear-code-quality-review` for thermo-nuclear, thermonuclear, deep code quality, or especially harsh maintainability reviews focused on abstraction quality, giant files, or spaghetti-condition growth.
 
 ## Output format
 
