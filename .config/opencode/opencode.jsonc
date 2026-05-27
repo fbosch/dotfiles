@@ -16,6 +16,10 @@
     "~/.config/opencode/instructions/worktrunk.md"
   ],
   "permission": {
+    "external_directory": {
+      "~/.config/opencode/**": "allow",
+      "/Users/fbb/.config/opencode/**": "allow"
+    },
     "bash": {
       "rm *": "ask",
       "sudo *": "deny",
