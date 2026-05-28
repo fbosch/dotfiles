@@ -20,7 +20,6 @@ end
 
 M.commands = {
 	-- background("hypridle"),
-	session("vicinae server"),
 	session("atuin daemon start"),
 	background("foot --server"),
 	background("flake-check-updates"),
@@ -37,6 +36,7 @@ M.commands = {
 	background(paths.runtime_script("desktop/toggle-night-light.sh") .. " daemon"),
 	session(paths.runtime_script("desktop/waybar-edge-monitor.sh")),
 	paths.runtime_script("startup/startup-desktop-ready.sh"),
+	session("vicinae server"),
 }
 
 if host == "rvn-pc" then

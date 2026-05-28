@@ -57,6 +57,7 @@ end
 local function copy_rule(rule)
   local effects = rule.effects
   local compiled = {
+    name = rule.name or rule.id,
     match = rule.match,
   }
 
