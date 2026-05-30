@@ -6,6 +6,7 @@ local box = {}
 local ratios_by_workspace = {}
 local order_by_workspace = {}
 local targets_by_workspace = {}
+local target_maps_by_workspace = {}
 local skip_position_order_by_workspace = {}
 
 local function target_id(target)
@@ -76,17 +77,6 @@ local function active_id(targets)
 	return target and target_id(target) or nil
 end
 
-local function target_for_id(targets, id)
-	for index = 1, #targets do
-		local target = targets[index]
-		if target_id(target) == id then
-			return target
-		end
-	end
-
-	return nil
-end
-
 local function vertical_center(target)
 	local window = target and target.window
 	local at = window and window.at
@@ -102,7 +92,7 @@ end
 
 local function sync_order(key, targets)
 	if not key then
-		return nil
+		return nil, nil
 	end
 
 	local order = order_by_workspace[key]
@@ -110,11 +100,25 @@ local function sync_order(key, targets)
 		order = {}
 		order_by_workspace[key] = order
 	end
+	local targets_by_id = target_maps_by_workspace[key]
+	if not targets_by_id then
+		targets_by_id = {}
+		target_maps_by_workspace[key] = targets_by_id
+	else
+		for id in pairs(targets_by_id) do
+			targets_by_id[id] = nil
+		end
+	end
+
+	for index = 1, #targets do
+		local target = targets[index]
+		targets_by_id[target_id(target)] = target
+	end
 
 	local next_index = 1
 	for index = 1, #order do
 		local id = order[index]
-		if target_for_id(targets, id) then
+		if targets_by_id[id] then
 			order[next_index] = id
 			next_index = next_index + 1
 		end
@@ -130,10 +134,10 @@ local function sync_order(key, targets)
 		end
 	end
 
-	return order
+	return order, targets_by_id
 end
 
-local function targets_from_order(key, order, source_targets)
+local function targets_from_order(key, order, targets_by_id, source_targets)
 	if not order then
 		return source_targets
 	end
@@ -145,7 +149,7 @@ local function targets_from_order(key, order, source_targets)
 	end
 
 	for index = 1, #order do
-		targets[index] = target_for_id(source_targets, order[index])
+		targets[index] = targets_by_id[order[index]]
 	end
 	for index = #order + 1, #targets do
 		targets[index] = nil
@@ -313,13 +317,13 @@ function M.recalculate(ctx)
 	local skip_position_order = skip_position_order_by_workspace[key]
 	local ratios = ratios_for(workspace_key(targets), count)
 	local source_targets = targets
-	local order = sync_order(key, source_targets)
-	targets = targets_from_order(key, order, source_targets)
+	local order, targets_by_id = sync_order(key, source_targets)
+	targets = targets_from_order(key, order, targets_by_id, source_targets)
 	if skip_position_order then
 		skip_position_order_by_workspace[key] = nil
 	else
 		move_active_to_position(targets, key, ratios, y, height)
-		targets = targets_from_order(key, order, source_targets)
+		targets = targets_from_order(key, order, targets_by_id, source_targets)
 	end
 
 	box.x = x
@@ -345,8 +349,8 @@ function M.layout_msg(ctx, msg)
 	local command = msg:match("^(%S+)")
 	local key = order_key(targets)
 	local ratio_key = workspace_key(targets)
-	local order = sync_order(key, targets)
-	targets = targets_from_order(key, order, targets)
+	local order, targets_by_id = sync_order(key, targets)
+	targets = targets_from_order(key, order, targets_by_id, targets)
 	local ratios = ratios_for(ratio_key, count)
 	local index = active_index(targets)
 
