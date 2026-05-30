@@ -28,6 +28,7 @@ storybook-static
 .config/gtk-4.0/gtk.css
 .config/gtk-4.0/**/*
 .config/gtk-3.0/**/*
+.config/opencode/package-lock.json
 
 # agent skills, codex ignored as selected for default skills.sh, symlinking is handled manually 
 .codex/**
