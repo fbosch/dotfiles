@@ -23,14 +23,14 @@ if host == "rvn-pc" then
 		workspace = "2",
 		monitor = "DP-2",
 		layout = "master",
-		layout_opts = { orientation = "left", mfact = 0.67 },
+		layout_opts = { orientation = "left" },
 		default = true,
 	})
 
 	hl.workspace_rule({
 		workspace = "r[1-9] m[DP-2]",
 		layout = "master",
-		layout_opts = { orientation = "left", mfact = 0.67 },
+		layout_opts = { orientation = "left" },
 	})
 
 	hl.workspace_rule({
@@ -41,13 +41,13 @@ if host == "rvn-pc" then
 	hl.workspace_rule({
 		workspace = "r[1-9] m[DP-2] w[tv2]",
 		layout = "master",
-		layout_opts = { orientation = "left", mfact = 0.67 },
+		layout_opts = { orientation = "left" },
 	})
 
 	hl.workspace_rule({
 		workspace = "r[1-9] m[DP-2] w[tv3]",
 		layout = "master",
-		layout_opts = { orientation = "center", mfact = 0.4 },
+		layout_opts = { orientation = "center" },
 	})
 end
 

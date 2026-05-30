@@ -39,6 +39,7 @@ CPU_COUNT=$(nproc)  # Number of CPU cores for load calculation
 CURRENT_HASH=""   # Last seen state string (for change detection)
 MATCHERS_JSON=""  # Cached JSON representation of MATCHER_PATTERNS (invalidated by parse_selectors)
 MONITORS_JSON=""  # Cached monitor layout (invalidated by monitoradded/monitorremoved events)
+RULES_FILE_CHANGED=0  # Whether the last generated rules write changed the file
 declare -A RULES_CACHE  # Cache for existing rules (class -> rules mapping)
 declare -a MATCHER_PATTERNS=()  # Array of matcher:pattern pairs
 
@@ -357,13 +358,13 @@ prune_stale_rules_cache() {
 
 write_lua_rules_cache_file() {
     mkdir -p "$(dirname "$RULES_LUA_FILE")"
+    RULES_FILE_CHANGED=0
 
     local temp_file
     temp_file=$(mktemp) || { printf 'ERROR: Failed to create temp file\n' >&2; return 1; }
 
     {
         printf '%s\n' '-- Auto-generated Lua window state persistence rules'
-        printf '%s\n' "-- Last updated: $(date '+%Y-%m-%d %H:%M:%S')"
         printf '%s\n' "-- Selectors: $SELECTORS_LUA_FILE"
         printf '%s\n' '-- DO NOT EDIT MANUALLY - This file is managed by window-state.sh'
         printf '\nreturn {\n'
@@ -437,6 +438,17 @@ write_lua_rules_cache_file() {
         rm -f "$temp_file"
         return 1
     fi
+
+    RULES_FILE_CHANGED=1
+}
+
+apply_window_state_rules() {
+    local config_dir lua_config_dir lua_script
+    config_dir="$HOME/.config/hypr"
+    lua_config_dir=$(lua_quote "$config_dir") || return 1
+    lua_script=$(printf 'local config_dir = %s; package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path; require("rule-loader").apply_window_rule_phase(config_dir, "window_state")' "$lua_config_dir")
+
+    hyprctl eval "$lua_script" &>/dev/null
 }
 
 # Update or add rules for specific window classes (preserves existing rules)
@@ -470,9 +482,18 @@ update_rules() {
     # Save state cache
     printf '%s\n' "$windows" > "$STATE_FILE"
     
-    # Reload config
-    hyprctl reload config-only &>/dev/null
-    printf '%s - Config reloaded\n' "$(printf '%(%H:%M:%S)T' -1)" >&2
+    if ((RULES_FILE_CHANGED == 0)); then
+        printf '%s - Window-state rules unchanged\n' "$(printf '%(%H:%M:%S)T' -1)" >&2
+        return
+    fi
+
+    # Refresh only window-state rules. Full config reload reapplies workspace
+    # layout_opts and clobbers manually resized master splits.
+    if apply_window_state_rules; then
+        printf '%s - Window-state rules refreshed\n' "$(printf '%(%H:%M:%S)T' -1)" >&2
+    else
+        printf '%s - WARNING: Failed to refresh window-state rules\n' "$(printf '%(%H:%M:%S)T' -1)" >&2
+    fi
 }
 
 

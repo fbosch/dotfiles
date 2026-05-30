@@ -156,15 +156,14 @@ end
 # Load eagerly - lazy loading causes issues with git hooks, mprocs, etc.
 fnm env --use-on-cd --log-level=quiet --shell fish | source
 
-# --- npm global packages (managed by Nix) ---
-fish_add_path --prepend ~/.npm-packages/bin
-fish_add_path --prepend ~/.local/share/pnpm
-
-# --- pnpm ---
-set -gx PNPM_HOME "$HOME/Library/pnpm"
-if not string match -q -- $PNPM_HOME $PATH
-    fish_add_path --prepend $PNPM_HOME
+# --- pnpm globals (managed by Nix) ---
+switch (uname)
+    case Darwin
+        set -gx PNPM_HOME "$HOME/Library/pnpm"
+    case '*'
+        set -gx PNPM_HOME "$HOME/.local/share/pnpm"
 end
+fish_add_path --prepend "$PNPM_HOME/bin"
 
 # --- bun ---
 set -gx BUN_INSTALL "$HOME/.bun"
