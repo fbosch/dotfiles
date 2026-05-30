@@ -26,6 +26,10 @@ local portrait_resize_up = hl.dsp.layout("resize-up")
 local portrait_resize_down = hl.dsp.layout("resize-down")
 local portrait_swap_up = hl.dsp.layout("swapprev")
 local portrait_swap_down = hl.dsp.layout("swapnext")
+local ultrawide_swap_left = hl.dsp.layout("swapprev")
+local ultrawide_swap_right = hl.dsp.layout("swapnext")
+local ultrawide_x = 1440
+local edge_tolerance = 64
 
 local function direction(value)
 	local normalized = directions[value]
@@ -38,6 +42,21 @@ end
 
 local function monitor_name(active)
 	return active and active.monitor and active.monitor.name or nil
+end
+
+local function monitor_x(active)
+	local monitor = active and active.monitor
+	return monitor and (monitor.x or (monitor.at and monitor.at.x)) or nil
+end
+
+local function on_ultrawide_left_edge(active)
+	local at = active and active.at
+	local x = at and at.x
+	if not x then
+		return false
+	end
+
+	return x <= (monitor_x(active) or ultrawide_x) + edge_tolerance
 end
 
 local function warp_window(active)
@@ -84,8 +103,11 @@ function M.move(value)
 	if normalized == "right" then
 		return function()
 			local active = M.active()
-			if monitor_name(active) == "HDMI-A-2" then
+			local monitor = monitor_name(active)
+			if monitor == "HDMI-A-2" then
 				dispatch(move_to_ultrawide)
+			elseif monitor == "DP-2" then
+				dispatch(ultrawide_swap_right)
 			else
 				dispatch(move_dispatcher)
 			end
@@ -113,6 +135,18 @@ function M.move(value)
 			local active = M.active()
 			if monitor_name(active) == "HDMI-A-2" then
 				dispatch(portrait_swap_up)
+			else
+				dispatch(move_dispatcher)
+			end
+			warp_window(active)
+		end
+	end
+
+	if normalized == "left" then
+		return function()
+			local active = M.active()
+			if monitor_name(active) == "DP-2" then
+				dispatch(on_ultrawide_left_edge(active) and move_to_portrait or ultrawide_swap_left)
 			else
 				dispatch(move_dispatcher)
 			end

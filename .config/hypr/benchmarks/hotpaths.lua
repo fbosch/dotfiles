@@ -171,12 +171,29 @@ local function bench_ultrawide_master(iterations)
 	local workspace = make_workspace(3, { monitor = "DP-2", layout = "master", name = "1" })
 	current_workspace = workspace
 	current_windows = workspace.windows
+	for index, window in ipairs(current_windows) do
+		window.at = { x = (index - 1) * 500, y = 0 }
+		window.size = { x = 500, y = 1400 }
+		window.active = index == 1
+	end
 	active_window = current_windows[1]
 	active_monitor = { name = "DP-2" }
 	require("layouts.ultrawide_master")
-	local callback = callbacks("window.open")[1]
-	run_case("layouts.ultrawide_master/window.open", iterations, function()
-		callback(current_windows[1])
+	local layout = layout_providers.ultrawide_master
+	local context = { area = { x = 0, y = 0, w = 5120, h = 1440 }, targets = {} }
+	for index, window_handle in ipairs(current_windows) do
+		context.targets[index] = {
+			index = index,
+			window = window_handle,
+			place = function()
+			end,
+		}
+	end
+	run_case("layouts.ultrawide_master/recalculate-3", iterations, function()
+		layout.recalculate(context)
+	end)
+	run_case("layouts.ultrawide_master/swapnext-3", iterations, function()
+		layout.layout_msg(context, "swapnext")
 	end)
 end
 

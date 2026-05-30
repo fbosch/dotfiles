@@ -36,9 +36,9 @@ hl = {
 
 local window = require("lib.window")
 
-local function reset(monitor)
+local function reset(monitor, x)
 	dispatched = {}
-	active_window = { monitor = { name = monitor }, at = { x = 100, y = 200 }, size = { x = 300, y = 400 } }
+	active_window = { monitor = { name = monitor }, at = { x = x or 100, y = 200 }, size = { x = 300, y = 400 } }
 end
 
 local function assert_equal(actual, expected, message)
@@ -62,11 +62,27 @@ run("dp down moves window to portrait monitor", function()
 	assert_equal(dispatched[2].args.y, 400, "cursor y")
 end)
 
-run("dp left uses normal directional move", function()
-	reset("DP-2")
+run("dp left edge moves window to portrait monitor", function()
+	reset("DP-2", 1446)
 	window.move("left")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
-	assert_equal(dispatched[1].args.direction, "left", "move direction")
+	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
+	assert_equal(dispatched[2].op, "cursor.move", "cursor dispatcher")
+end)
+
+run("dp non-left edge swaps left", function()
+	reset("DP-2", 3000)
+	window.move("left")()
+	assert_equal(dispatched[1].op, "layout", "dispatcher")
+	assert_equal(dispatched[1].value, "swapprev", "layout message")
+	assert_equal(dispatched[2].op, "cursor.move", "cursor dispatcher")
+end)
+
+run("dp right uses ultrawide layout swap", function()
+	reset("DP-2")
+	window.move("right")()
+	assert_equal(dispatched[1].op, "layout", "dispatcher")
+	assert_equal(dispatched[1].value, "swapnext", "layout message")
 	assert_equal(dispatched[2].op, "cursor.move", "cursor dispatcher")
 end)
 
