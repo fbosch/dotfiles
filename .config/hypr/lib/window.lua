@@ -59,6 +59,30 @@ local function on_ultrawide_left_edge(active)
 	return x <= (monitor_x(active) or ultrawide_x) + edge_tolerance
 end
 
+local function tiled_count(workspace)
+	if not workspace or not workspace.get_windows then
+		return nil
+	end
+
+	local count = 0
+	local windows = workspace:get_windows()
+	for index = 1, #windows do
+		local window = windows[index]
+		if window.visible ~= false and not window.floating then
+			count = count + 1
+			if count > 1 then
+				return count
+			end
+		end
+	end
+
+	return count
+end
+
+local function is_only_tiled_window(active)
+	return tiled_count(active and active.workspace) == 1
+end
+
 local function warp_window(active)
 	local at = active and active.at or nil
 	local size = active and active.size or nil
@@ -146,7 +170,7 @@ function M.move(value)
 		return function()
 			local active = M.active()
 			if monitor_name(active) == "DP-2" then
-				dispatch(on_ultrawide_left_edge(active) and move_to_portrait or ultrawide_swap_left)
+				dispatch((is_only_tiled_window(active) or on_ultrawide_left_edge(active)) and move_to_portrait or ultrawide_swap_left)
 			else
 				dispatch(move_dispatcher)
 			end

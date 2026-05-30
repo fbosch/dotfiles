@@ -36,9 +36,20 @@ hl = {
 
 local window = require("lib.window")
 
-local function reset(monitor, x, monitor_x)
+local function reset(monitor, x, monitor_x, workspace_windows)
 	dispatched = {}
 	active_window = { monitor = { name = monitor, x = monitor_x }, at = { x = x or 100, y = 200 }, size = { x = 300, y = 400 } }
+	if workspace_windows then
+		local workspace = {}
+		function workspace:get_windows()
+			return workspace_windows
+		end
+
+		active_window.workspace = workspace
+		for index = 1, #workspace_windows do
+			workspace_windows[index].workspace = workspace
+		end
+	end
 end
 
 local function assert_equal(actual, expected, message)
@@ -87,6 +98,29 @@ end)
 
 run("dp outside monitor edge tolerance swaps left", function()
 	reset("DP-2", 2100, 2000)
+	window.move("left")()
+	assert_equal(dispatched[1].op, "layout", "dispatcher")
+	assert_equal(dispatched[1].value, "swapprev", "layout message")
+end)
+
+run("dp only tiled window moves left to portrait", function()
+	local only = { visible = true, floating = false }
+	reset("DP-2", 2100, 2000, { only })
+	active_window.visible = only.visible
+	active_window.floating = only.floating
+	active_window.workspace = only.workspace
+	window.move("left")()
+	assert_equal(dispatched[1].op, "window.move", "dispatcher")
+	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
+end)
+
+run("dp multiple tiled windows still swap left", function()
+	local first = { visible = true, floating = false }
+	local second = { visible = true, floating = false }
+	reset("DP-2", 2100, 2000, { first, second })
+	active_window.visible = first.visible
+	active_window.floating = first.floating
+	active_window.workspace = first.workspace
 	window.move("left")()
 	assert_equal(dispatched[1].op, "layout", "dispatcher")
 	assert_equal(dispatched[1].value, "swapprev", "layout message")
