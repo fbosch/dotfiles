@@ -5,12 +5,13 @@ local resize_step = 0.05
 local box = {}
 local ratios_by_workspace = {}
 local order_by_workspace = {}
+local targets_by_workspace = {}
 local skip_position_order_by_workspace = {}
 
 local function target_id(target)
 	local window = target and target.window
 	local id = window and window.stable_id or target and target.index
-	return id and tostring(id) or tostring(target)
+	return id or target
 end
 
 local function index_of(list, value)
@@ -75,6 +76,17 @@ local function active_id(targets)
 	return target and target_id(target) or nil
 end
 
+local function target_for_id(targets, id)
+	for index = 1, #targets do
+		local target = targets[index]
+		if target_id(target) == id then
+			return target
+		end
+	end
+
+	return nil
+end
+
 local function vertical_center(target)
 	local window = target and target.window
 	local at = window and window.at
@@ -88,84 +100,27 @@ local function vertical_center(target)
 	return y + height / 2
 end
 
-local function ordered_targets(targets)
-	local ordered = {}
-	local has_position = false
-
-	for index = 1, #targets do
-		local target = targets[index]
-		local center = vertical_center(target)
-		ordered[index] = { target = target, index = index, center = center }
-		if center then
-			has_position = true
-		end
-	end
-
-	if not has_position then
-		return targets
-	end
-
-	table.sort(ordered, function(left, right)
-		if left.center and right.center then
-			if left.center == right.center then
-				return left.index < right.index
-			end
-
-			return left.center < right.center
-		end
-
-		if left.center then
-			return true
-		end
-
-		if right.center then
-			return false
-		end
-
-		return left.index < right.index
-	end)
-
-	local result = {}
-	for index = 1, #ordered do
-		result[index] = ordered[index].target
-	end
-
-	return result
-end
-
-local function store_order(key, targets)
-	if not key then
-		return
-	end
-
-	local order = {}
-	for index = 1, #targets do
-		order[index] = target_id(targets[index])
-	end
-
-	order_by_workspace[key] = order
-end
-
 local function sync_order(key, targets)
-	local targets_by_id = {}
-	local present = {}
-
-	for index = 1, #targets do
-		local id = target_id(targets[index])
-		targets_by_id[id] = targets[index]
-		present[id] = true
+	if not key then
+		return nil
 	end
 
-	local previous = key and order_by_workspace[key] or nil
-	local order = {}
+	local order = order_by_workspace[key]
+	if not order then
+		order = {}
+		order_by_workspace[key] = order
+	end
 
-	if previous then
-		for index = 1, #previous do
-			local id = previous[index]
-			if present[id] then
-				order[#order + 1] = id
-			end
+	local next_index = 1
+	for index = 1, #order do
+		local id = order[index]
+		if target_for_id(targets, id) then
+			order[next_index] = id
+			next_index = next_index + 1
 		end
+	end
+	for index = next_index, #order do
+		order[index] = nil
 	end
 
 	for index = 1, #targets do
@@ -175,17 +130,25 @@ local function sync_order(key, targets)
 		end
 	end
 
-	if key then
-		order_by_workspace[key] = order
-	end
-
-	return order, targets_by_id
+	return order
 end
 
-local function targets_from_order(order, targets_by_id)
-	local targets = {}
+local function targets_from_order(key, order, source_targets)
+	if not order then
+		return source_targets
+	end
+
+	local targets = targets_by_workspace[key]
+	if not targets then
+		targets = {}
+		targets_by_workspace[key] = targets
+	end
+
 	for index = 1, #order do
-		targets[index] = targets_by_id[order[index]]
+		targets[index] = target_for_id(source_targets, order[index])
+	end
+	for index = #order + 1, #targets do
+		targets[index] = nil
 	end
 
 	return targets
@@ -204,6 +167,41 @@ local function move_active(targets, key, delta)
 	if key then
 		skip_position_order_by_workspace[key] = true
 	end
+end
+
+local function desired_index(center, ratios, area_y, area_height)
+	if not center then
+		return nil
+	end
+
+	local offset = center - area_y
+	local boundary = 0
+	for index = 1, #ratios do
+		boundary = boundary + area_height * ratios[index]
+		if offset < boundary then
+			return index
+		end
+	end
+
+	return #ratios
+end
+
+local function move_active_to_position(targets, key, ratios, area_y, area_height)
+	local active = active_index(targets)
+	local center = vertical_center(targets[active])
+	local target_index = desired_index(center, ratios, area_y, area_height)
+	if not target_index or target_index == active then
+		return
+	end
+
+	local order = order_by_workspace[key]
+	if not order then
+		return
+	end
+
+	local id = target_id(targets[active])
+	table.remove(order, active)
+	table.insert(order, target_index, id)
 end
 
 local function default_ratios(count)
@@ -313,13 +311,15 @@ function M.recalculate(ctx)
 	end
 
 	local skip_position_order = skip_position_order_by_workspace[key]
-	local order, targets_by_id = sync_order(key, targets)
-	targets = targets_from_order(order, targets_by_id)
+	local ratios = ratios_for(workspace_key(targets), count)
+	local source_targets = targets
+	local order = sync_order(key, source_targets)
+	targets = targets_from_order(key, order, source_targets)
 	if skip_position_order then
 		skip_position_order_by_workspace[key] = nil
 	else
-		targets = ordered_targets(targets)
-		store_order(key, targets)
+		move_active_to_position(targets, key, ratios, y, height)
+		targets = targets_from_order(key, order, source_targets)
 	end
 
 	box.x = x
@@ -328,7 +328,7 @@ function M.recalculate(ctx)
 	box.h = height
 
 	if count == 2 or count == 3 then
-		place_ratio_rows(targets, ratios_for(workspace_key(targets), count), x, y, width, height)
+		place_ratio_rows(targets, ratios, x, y, width, height)
 		return
 	end
 
@@ -345,8 +345,8 @@ function M.layout_msg(ctx, msg)
 	local command = msg:match("^(%S+)")
 	local key = order_key(targets)
 	local ratio_key = workspace_key(targets)
-	local order, targets_by_id = sync_order(key, targets)
-	targets = targets_from_order(order, targets_by_id)
+	local order = sync_order(key, targets)
+	targets = targets_from_order(key, order, targets)
 	local ratios = ratios_for(ratio_key, count)
 	local index = active_index(targets)
 
@@ -363,8 +363,8 @@ function M.layout_msg(ctx, msg)
 			adjust_boundary(ratios, index - 1, resize_step)
 		end
 	elseif command == "reset" then
-		if key then
-			ratios_by_workspace[key] = default_ratios(count)
+		if ratio_key then
+			ratios_by_workspace[ratio_key] = default_ratios(count)
 		end
 	elseif command == "swapprev" then
 		move_active(targets, key, -1)

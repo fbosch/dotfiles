@@ -132,9 +132,9 @@ run("active target does not override target order", function()
 end)
 
 run("vertical window position controls row order when available", function()
-	local first = set_geometry(make_target(1), 120)
-	local second = set_geometry(make_target(2), 20)
-	local third = set_geometry(make_target(3), 220)
+	local first = set_geometry(make_workspace_target(1, "position-order", true), 120)
+	local second = set_geometry(make_workspace_target(2, "position-order"), 20)
+	local third = set_geometry(make_workspace_target(3, "position-order"), 220)
 	registered_layout.layout.recalculate(make_context({ first, second, third }))
 
 	assert_box(second.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
