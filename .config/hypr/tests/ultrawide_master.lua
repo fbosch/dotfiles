@@ -4,6 +4,7 @@ local config_dir = script_path:match("^(.*)/tests/ultrawide_master%.lua$") or ".
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local registered_layout = nil
+local workspace_counter = 0
 
 hl = {
 	layout = {
@@ -31,6 +32,12 @@ local function set_geometry(target, x, width)
 end
 
 local function make_context(targets)
+	workspace_counter = workspace_counter + 1
+	local workspace = { name = "ultrawide-test-" .. tostring(workspace_counter) }
+	for index = 1, #targets do
+		targets[index].window.workspace = workspace
+	end
+
 	return { area = { x = 10, y = 20, w = 1000, h = 500 }, targets = targets }
 end
 
@@ -110,4 +117,34 @@ run("swapnext moves active column despite old geometry", function()
 
 	assert_box(second.placed, { x = 10, y = 20, w = 670, h = 500 }, "left target")
 	assert_box(first.placed, { x = 680, y = 20, w = 330, h = 500 }, "right target")
+end)
+
+run("swapprev moves middle active column left", function()
+	local first = set_geometry(make_target(1), 100)
+	local second = set_geometry(make_target(2, true), 400)
+	local third = set_geometry(make_target(3), 800)
+	local ctx = make_context({ first, second, third })
+
+	registered_layout.layout.recalculate(ctx)
+	registered_layout.layout.layout_msg(ctx, "swapprev")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(second.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
+	assert_box(first.placed, { x = 310, y = 20, w = 400, h = 500 }, "center target")
+	assert_box(third.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
+end)
+
+run("swapnext on rightmost active column is stable", function()
+	local first = set_geometry(make_target(1), 100)
+	local second = set_geometry(make_target(2), 400)
+	local third = set_geometry(make_target(3, true), 800)
+	local ctx = make_context({ first, second, third })
+
+	registered_layout.layout.recalculate(ctx)
+	registered_layout.layout.layout_msg(ctx, "swapnext")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
+	assert_box(second.placed, { x = 310, y = 20, w = 400, h = 500 }, "center target")
+	assert_box(third.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
 end)
