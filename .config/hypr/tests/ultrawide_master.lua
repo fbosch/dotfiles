@@ -148,3 +148,64 @@ run("swapnext on rightmost active column is stable", function()
 	assert_box(second.placed, { x = 310, y = 20, w = 400, h = 500 }, "center target")
 	assert_box(third.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
 end)
+
+run("resize-right grows active column into next column", function()
+	local first = set_geometry(make_target(1, true), 100)
+	local second = set_geometry(make_target(2), 800)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-right")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 720, h = 500 }, "left target")
+	assert_box(second.placed, { x = 730, y = 20, w = 280, h = 500 }, "right target")
+end)
+
+run("resize-left grows active column into previous column", function()
+	local first = set_geometry(make_target(1), 100)
+	local second = set_geometry(make_target(2, true), 800)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-left")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 620, h = 500 }, "left target")
+	assert_box(second.placed, { x = 630, y = 20, w = 380, h = 500 }, "right target")
+end)
+
+run("resize-right on right edge moves boundary right", function()
+	local first = set_geometry(make_target(1), 100)
+	local second = set_geometry(make_target(2, true), 800)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-right")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 720, h = 500 }, "left target")
+	assert_box(second.placed, { x = 730, y = 20, w = 280, h = 500 }, "right target")
+end)
+
+run("resize-left on left edge moves boundary left", function()
+	local first = set_geometry(make_target(1, true), 100)
+	local second = set_geometry(make_target(2), 800)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-left")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 620, h = 500 }, "left target")
+	assert_box(second.placed, { x = 630, y = 20, w = 380, h = 500 }, "right target")
+end)
+
+run("reset restores default column ratios", function()
+	local first = set_geometry(make_target(1, true), 100)
+	local second = set_geometry(make_target(2), 800)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-right")
+	registered_layout.layout.layout_msg(ctx, "reset")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 670, h = 500 }, "left target")
+	assert_box(second.placed, { x = 680, y = 20, w = 330, h = 500 }, "right target")
+end)

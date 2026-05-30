@@ -24,6 +24,9 @@ hl = {
 			swap = function(args)
 				return { op = "window.swap", args = args }
 			end,
+			resize = function(args)
+				return { op = "window.resize", args = args }
+			end,
 		},
 	},
 	dispatch = function(dispatcher)
@@ -153,4 +156,32 @@ run("hdmi up uses portrait layout swap", function()
 	window.move("up")()
 	assert_equal(dispatched[1].op, "layout", "dispatcher")
 	assert_equal(dispatched[1].value, "swapprev", "layout message")
+end)
+
+run("dp resize left uses ultrawide layout resize", function()
+	reset("DP-2")
+	window.adjust("resize", "left")()
+	assert_equal(dispatched[1].op, "layout", "dispatcher")
+	assert_equal(dispatched[1].value, "resize-left", "layout message")
+end)
+
+run("dp resize right uses ultrawide layout resize", function()
+	reset("DP-2")
+	window.adjust("resize", "right")()
+	assert_equal(dispatched[1].op, "layout", "dispatcher")
+	assert_equal(dispatched[1].value, "resize-right", "layout message")
+end)
+
+run("hdmi resize up uses portrait layout resize", function()
+	reset("HDMI-A-2")
+	window.adjust("resize", "up")()
+	assert_equal(dispatched[1].op, "layout", "dispatcher")
+	assert_equal(dispatched[1].value, "resize-up", "layout message")
+end)
+
+run("non-special resize uses window resize dispatcher", function()
+	reset("DP-1")
+	window.adjust("resize", "right")()
+	assert_equal(dispatched[1].op, "window.resize", "dispatcher")
+	assert_equal(dispatched[1].args.x, 32, "resize x")
 end)

@@ -2,9 +2,12 @@ local M = {}
 local order_state = require("layouts.order_state")
 local box = {}
 local state = order_state.new()
+local min_ratio = 0.15
+local resize_step = 0.05
 local ratios_two = { 0.67, 0.33 }
 local ratios_three = { 0.3, 0.4, 0.3 }
 local fallback_ratios = {}
+local ratios_by_workspace = {}
 
 local function monitor_name(targets)
 	for index = 1, #targets do
@@ -71,6 +74,55 @@ local function ratios_for(count)
 	end
 
 	return fallback_ratios
+end
+
+local function ratios_for_workspace(key, count)
+	local ratios = key and ratios_by_workspace[key] or nil
+	if not ratios or #ratios ~= count then
+		local defaults = ratios_for(count)
+		ratios = {}
+		for index = 1, count do
+			ratios[index] = defaults[index]
+		end
+		if key then
+			ratios_by_workspace[key] = ratios
+		end
+	end
+
+	return ratios
+end
+
+local function clamp_delta(first, second, delta)
+	if delta > 0 then
+		return math.min(delta, second - min_ratio)
+	end
+
+	return math.max(delta, min_ratio - first)
+end
+
+local function adjust_boundary(ratios, first_index, delta)
+	local second_index = first_index + 1
+	if not ratios[first_index] or not ratios[second_index] then
+		return
+	end
+
+	delta = clamp_delta(ratios[first_index], ratios[second_index], delta)
+	ratios[first_index] = ratios[first_index] + delta
+	ratios[second_index] = ratios[second_index] - delta
+end
+
+local function adjust_active(ratios, index, count, delta)
+	if delta > 0 then
+		if index < count then
+			adjust_boundary(ratios, index, delta)
+		else
+			adjust_boundary(ratios, index - 1, delta)
+		end
+	elseif index > 1 then
+		adjust_boundary(ratios, index - 1, delta)
+	else
+		adjust_boundary(ratios, index, delta)
+	end
 end
 
 local function desired_index(center, ratios, area_x, area_width)
@@ -142,7 +194,7 @@ function M.recalculate(ctx)
 	local y = area.y
 	local width = area.w
 	local height = area.h
-	local ratios = ratios_for(count)
+	local ratios = ratios_for_workspace(workspace_key(targets), count)
 
 	if monitor_name(targets) ~= "DP-2" then
 		place_columns(targets, ratios, x, y, width, height)
@@ -175,11 +227,21 @@ function M.layout_msg(ctx, msg)
 	local key = workspace_key(targets)
 	local order, targets_by_id = order_state.sync(state, key, targets)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, targets)
+	local ratios = ratios_for_workspace(key, count)
+	local index = active_index(targets)
 
 	if command == "swapprev" then
 		move_active(targets, key, -1)
 	elseif command == "swapnext" then
 		move_active(targets, key, 1)
+	elseif command == "resize-left" then
+		adjust_active(ratios, index, count, -resize_step)
+	elseif command == "resize-right" then
+		adjust_active(ratios, index, count, resize_step)
+	elseif command == "reset" then
+		if key then
+			ratios_by_workspace[key] = nil
+		end
 	else
 		return true
 	end

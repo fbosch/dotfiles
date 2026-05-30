@@ -28,6 +28,8 @@ local portrait_swap_up = hl.dsp.layout("swapprev")
 local portrait_swap_down = hl.dsp.layout("swapnext")
 local ultrawide_swap_left = hl.dsp.layout("swapprev")
 local ultrawide_swap_right = hl.dsp.layout("swapnext")
+local ultrawide_resize_left = hl.dsp.layout("resize-left")
+local ultrawide_resize_right = hl.dsp.layout("resize-right")
 local ultrawide_x = 1440
 local edge_tolerance = 64
 
@@ -192,6 +194,18 @@ function M.adjust(kind, value)
 	end
 
 	if kind == "resize" then
+		if delta.x ~= 0 then
+			return function()
+				local active = M.active()
+				if monitor_name(active) == "DP-2" then
+					dispatch(delta.x < 0 and ultrawide_resize_left or ultrawide_resize_right)
+					return
+				end
+
+				dispatch(hl.dsp.window.resize({ x = delta.x, y = delta.y, relative = true }))
+			end
+		end
+
 		if delta.y ~= 0 then
 			return function()
 				local active = M.active()
