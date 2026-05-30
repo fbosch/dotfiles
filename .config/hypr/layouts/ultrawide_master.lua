@@ -4,6 +4,9 @@ local order_by_workspace = {}
 local targets_by_workspace = {}
 local target_maps_by_workspace = {}
 local skip_position_order_by_workspace = {}
+local ratios_two = { 0.67, 0.33 }
+local ratios_three = { 0.3, 0.4, 0.3 }
+local fallback_ratios = {}
 
 local function target_id(target)
 	local window = target and target.window
@@ -71,19 +74,21 @@ end
 
 local function ratios_for(count)
 	if count == 2 then
-		return { 0.67, 0.33 }
+		return ratios_two
 	end
 
 	if count == 3 then
-		return { 0.3, 0.4, 0.3 }
+		return ratios_three
 	end
 
-	local ratios = {}
 	for index = 1, count do
-		ratios[index] = 1 / count
+		fallback_ratios[index] = 1 / count
+	end
+	for index = count + 1, #fallback_ratios do
+		fallback_ratios[index] = nil
 	end
 
-	return ratios
+	return fallback_ratios
 end
 
 local function sync_order(key, targets)
