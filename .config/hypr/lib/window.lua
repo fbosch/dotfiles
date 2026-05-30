@@ -24,6 +24,8 @@ local warp_active = hl.dsp.exec_cmd(warp_command)
 local warp_active_after_focus = hl.dsp.exec_cmd(warp_command .. " 0.03")
 local portrait_resize_up = hl.dsp.layout("resize-up")
 local portrait_resize_down = hl.dsp.layout("resize-down")
+local portrait_swap_up = hl.dsp.layout("swapprev")
+local portrait_swap_down = hl.dsp.layout("swapnext")
 
 local function direction(value)
 	local normalized = directions[value]
@@ -78,7 +80,6 @@ function M.move(value)
 	local move_dispatcher = hl.dsp.window.move({ direction = normalized })
 	local move_to_portrait = hl.dsp.window.move({ monitor = "HDMI-A-2" })
 	local move_to_ultrawide = hl.dsp.window.move({ monitor = "DP-2" })
-	local swap_dispatcher = hl.dsp.window.swap({ direction = normalized })
 
 	if normalized == "right" then
 		return function()
@@ -99,7 +100,7 @@ function M.move(value)
 			if monitor == "DP-2" then
 				dispatch(move_to_portrait)
 			elseif monitor == "HDMI-A-2" then
-				dispatch(swap_dispatcher)
+				dispatch(portrait_swap_down)
 			else
 				dispatch(move_dispatcher)
 			end
@@ -111,7 +112,7 @@ function M.move(value)
 		return function()
 			local active = M.active()
 			if monitor_name(active) == "HDMI-A-2" then
-				dispatch(swap_dispatcher)
+				dispatch(portrait_swap_up)
 			else
 				dispatch(move_dispatcher)
 			end

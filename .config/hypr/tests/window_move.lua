@@ -9,6 +9,9 @@ hl = {
 		exec_cmd = function(command)
 			return { op = "exec_cmd", command = command }
 		end,
+		layout = function(value)
+			return { op = "layout", value = value }
+		end,
 		cursor = {
 			move = function(args)
 				return { op = "cursor.move", args = args }
@@ -74,9 +77,16 @@ run("hdmi right moves window to ultrawide monitor", function()
 	assert_equal(dispatched[1].args.monitor, "DP-2", "target monitor")
 end)
 
-run("hdmi down swaps within portrait monitor", function()
+run("hdmi down uses portrait layout swap", function()
 	reset("HDMI-A-2")
 	window.move("down")()
-	assert_equal(dispatched[1].op, "window.swap", "dispatcher")
-	assert_equal(dispatched[1].args.direction, "down", "swap direction")
+	assert_equal(dispatched[1].op, "layout", "dispatcher")
+	assert_equal(dispatched[1].value, "swapnext", "layout message")
+end)
+
+run("hdmi up uses portrait layout swap", function()
+	reset("HDMI-A-2")
+	window.move("up")()
+	assert_equal(dispatched[1].op, "layout", "dispatcher")
+	assert_equal(dispatched[1].value, "swapprev", "layout message")
 end)
