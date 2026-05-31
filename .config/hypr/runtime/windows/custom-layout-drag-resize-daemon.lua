@@ -10,6 +10,7 @@ local pid_file = runtime_dir .. "/daemon.pid"
 local drag_numerator = 1
 local drag_denominator = 1
 local monitors_by_id = {}
+local drag_active = false
 
 local function socket_path()
 	local base = os.getenv("XDG_RUNTIME_DIR")
@@ -114,16 +115,6 @@ local function dispatch(command, edge, position)
 	request(string.format('dispatch hl.dsp.layout("%s %s %d")', command, edge, position))
 end
 
-local function file_exists(path)
-	local handle = io.open(path, "r")
-	if handle then
-		handle:close()
-		return true
-	end
-
-	return false
-end
-
 local function write_file(path, value)
 	local handle = assert(io.open(path, "w"))
 	handle:write(value)
@@ -148,6 +139,7 @@ local function scaled_position(initial, current)
 end
 
 local function stop_drag()
+	drag_active = false
 	os.remove(state_file)
 end
 
@@ -160,11 +152,12 @@ local function read_command(client)
 	return line
 end
 
-local function accept_command()
+local function accept_command(timeout)
 	if not command_server then
 		return nil
 	end
 
+	command_server:settimeout(timeout or 0)
 	local client = command_server:accept()
 	if not client then
 		return nil
@@ -207,16 +200,17 @@ local function start_drag()
 
 	local initial = cursor_axis(axis)
 	local edge = resize_edge(axis, initial, active.x, active.y, active.width, active.height)
+	drag_active = true
 	write_file(state_file, "active\n")
 
 	local last_sent = nil
 
 	for _ = 1, 1200 do
-		if handle_command(accept_command()) then
+		if handle_command(accept_command(0)) then
 			break
 		end
 
-		if not file_exists(state_file) then
+		if not drag_active then
 			break
 		end
 
@@ -252,7 +246,7 @@ local function run()
 	pcall(active_monitor_info)
 
 	while true do
-		local line = accept_command()
+		local line = accept_command(0.1)
 		if line == "start" then
 			pcall(start_drag)
 		elseif line == "ping" then
@@ -261,10 +255,6 @@ local function run()
 			stop_drag()
 		elseif line == "quit" then
 			break
-		end
-
-		if not line then
-			socket.sleep(0.01)
 		end
 	end
 
