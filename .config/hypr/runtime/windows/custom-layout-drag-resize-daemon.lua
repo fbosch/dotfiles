@@ -9,6 +9,7 @@ local state_file = runtime_dir .. "/state"
 local pid_file = runtime_dir .. "/daemon.pid"
 local drag_numerator = 1
 local drag_denominator = 1
+local monitors_by_id = {}
 
 local function socket_path()
 	local base = os.getenv("XDG_RUNTIME_DIR")
@@ -57,43 +58,46 @@ local function json_string(text, key)
 end
 
 local function active_monitor_info()
-	local active = request("j/activewindow")
-	local monitor_id = json_number(active, "monitor")
-	if not monitor_id then
-		return nil
-	end
-
+	monitors_by_id = {}
 	local monitors = request("j/monitors")
 	for object in monitors:gmatch("%b{}") do
-		if json_number(object, "id") == monitor_id then
+		local id = json_number(object, "id")
+		if id then
 			local name = json_string(object, "name")
 			local refresh = json_number(object, "refreshRate") or 60
-			local poll = math.max(0.003, math.min(0.010, 0.5 / refresh))
-			local dispatch = math.max(0.006, math.min(0.017, 1.0 / refresh))
-			return name, poll, dispatch
+			monitors_by_id[id] = {
+				name = name,
+				poll_interval = math.max(0.003, math.min(0.010, 0.5 / refresh)),
+			}
 		end
 	end
-
-	return nil
+	return monitors_by_id
 end
 
-local function active_geometry()
-	local active = request("activewindow")
-	local x, y, width, height
-
-	for line in active:gmatch("[^\n]+") do
-		if line:match("at:") then
-			x, y = line:match("(-?%d+),(-?%d+)")
-		elseif line:match("size:") then
-			width, height = line:match("(%d+),(%d+)")
-		end
+local function monitor_info(monitor_id)
+	if not monitors_by_id[monitor_id] then
+		active_monitor_info()
 	end
 
-	if not x or not y or not width or not height then
+	return monitors_by_id[monitor_id]
+end
+
+local function active_window_info()
+	local active = request("j/activewindow")
+	local monitor_id = json_number(active, "monitor")
+	local x, y = active:match('"at"%s*:%s*%[%s*(-?%d+)%s*,%s*(-?%d+)%s*%]')
+	local width, height = active:match('"size"%s*:%s*%[%s*(%d+)%s*,%s*(%d+)%s*%]')
+	if not monitor_id or not x or not y or not width or not height then
 		return nil
 	end
 
-	return tonumber(x), tonumber(y), tonumber(width), tonumber(height)
+	return {
+		monitor_id = monitor_id,
+		x = tonumber(x),
+		y = tonumber(y),
+		width = tonumber(width),
+		height = tonumber(height),
+	}
 end
 
 local function cursor_axis(axis)
@@ -181,7 +185,14 @@ end
 local function start_drag()
 	stop_drag()
 
-	local monitor_name, poll_interval = active_monitor_info()
+	local active = active_window_info()
+	if not active then
+		return
+	end
+
+	local monitor = monitor_info(active.monitor_id)
+	local monitor_name = monitor and monitor.name or nil
+	local poll_interval = monitor and monitor.poll_interval or 0.008
 	local axis, command
 	if monitor_name == "DP-2" then
 		axis = "x"
@@ -195,12 +206,7 @@ local function start_drag()
 	end
 
 	local initial = cursor_axis(axis)
-	local x, y, width, height = active_geometry()
-	if not x then
-		return
-	end
-
-	local edge = resize_edge(axis, initial, x, y, width, height)
+	local edge = resize_edge(axis, initial, active.x, active.y, active.width, active.height)
 	write_file(state_file, "active\n")
 
 	local last_sent = nil
@@ -243,6 +249,7 @@ end
 
 local function run()
 	ensure_command_socket()
+	pcall(active_monitor_info)
 
 	while true do
 		local line = accept_command()
