@@ -68,7 +68,7 @@ local function active_monitor_info()
 			local refresh = json_number(object, "refreshRate") or 60
 			monitors_by_id[id] = {
 				name = name,
-				poll_interval = math.max(0.003, math.min(0.010, 0.5 / refresh)),
+				poll_interval = math.max(0.003, math.min(0.010, 0.25 / refresh)),
 			}
 		end
 	end
@@ -232,7 +232,7 @@ local function start_drag()
 end
 
 local function ensure_command_socket()
-	os.execute(string.format('mkdir -p %q', runtime_dir))
+	os.execute(string.format("mkdir -p %q", runtime_dir))
 	os.remove(command_socket_path)
 	command_server = assert(unix())
 	assert(command_server:bind(command_socket_path))
