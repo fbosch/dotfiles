@@ -9,7 +9,7 @@ pid_file="$runtime_dir/pid"
 mode="${1:-start}"
 drag_numerator=1
 drag_denominator=1
-loop_helper="${HOME}/.config/hypr/runtime/windows/custom-layout-drag-resize-loop.py"
+lua_loop_helper="${HOME}/.config/hypr/runtime/windows/custom-layout-drag-resize-loop.lua"
 
 json_string_field() {
   field="$1"
@@ -30,8 +30,13 @@ active_monitor_info() {
       | select(.id == $id)
       | .name as $name
       | (.refreshRate // 60) as $refresh
-      | (0.5 / $refresh) as $sleep
-      | [$name, ($sleep | if . < 0.003 then 0.003 elif . > 0.010 then 0.010 else . end)]
+      | (0.5 / $refresh) as $poll
+      | (1.0 / $refresh) as $dispatch
+      | [
+          $name,
+          ($poll | if . < 0.003 then 0.003 elif . > 0.010 then 0.010 else . end),
+          ($dispatch | if . < 0.006 then 0.006 elif . > 0.017 then 0.017 else . end)
+        ]
       | @tsv
     ' | sed -n '1p'
     return
@@ -39,8 +44,8 @@ active_monitor_info() {
 
   active_monitor_id="$(hypr_query 'j/activewindow' | json_number_field 'monitor')"
   case "$active_monitor_id" in
-    0) printf 'HDMI-A-2\t0.008\n' ;;
-    1) printf 'DP-2\t0.003\n' ;;
+    0) printf 'HDMI-A-2\t0.008\t0.017\n' ;;
+    1) printf 'DP-2\t0.003\t0.006\n' ;;
     *) return 1 ;;
   esac
 }
@@ -103,8 +108,10 @@ resize_edge() {
 stop_drag() {
   if [ -f "$pid_file" ]; then
     pid="$(cat "$pid_file" 2>/dev/null || true)"
+    rm -f "$state_file"
+    sleep 0.03
     if [ -n "$pid" ]; then
-      kill "$pid" 2>/dev/null || true
+      kill -0 "$pid" 2>/dev/null && kill "$pid" 2>/dev/null || true
     fi
   fi
 
@@ -127,7 +134,8 @@ case "$mode" in
     monitor_info="$(active_monitor_info || true)"
     set -- $monitor_info
     monitor_name="${1:-}"
-    sleep_interval="${2:-0.008}"
+    poll_interval="${2:-0.008}"
+    dispatch_interval="${3:-0.017}"
     case "$monitor_name" in
       DP-2)
         axis="x"
@@ -156,7 +164,7 @@ case "$mode" in
     edge="$(resize_edge "$axis" "$previous" "$geometry")"
 
     : >"$state_file"
-    python3 "$loop_helper" "$axis" "$command" "$edge" "$previous" "$sleep_interval" "$drag_numerator" "$drag_denominator" "$state_file" "$pid_file" &
+    lua "$lua_loop_helper" "$axis" "$command" "$edge" "$previous" "$poll_interval" "$dispatch_interval" "$drag_numerator" "$drag_denominator" "$state_file" "$pid_file" &
     printf '%s\n' "$!" >"$pid_file"
     ;;
   *)
