@@ -1,30 +1,16 @@
 #!/usr/bin/env lua
 
 local socket = require("socket")
-local unix = require("socket.unix")
 
 local script = os.getenv("HOME") .. "/.config/hypr/runtime/windows/window-capture-daemon.sh"
-
-local function socket_path()
-	local runtime_dir = os.getenv("XDG_RUNTIME_DIR")
-	local signature = os.getenv("HYPRLAND_INSTANCE_SIGNATURE")
-	if not runtime_dir or not signature then
-		error("missing Hyprland socket environment")
-	end
-
-	return runtime_dir .. "/hypr/" .. signature .. "/.socket2.sock"
-end
+local hypr_ipc = dofile(os.getenv("HOME") .. "/.config/hypr/runtime/lib/hypr-ipc.lua")
 
 local function shell_quote(value)
 	return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
 end
 
 local function connect_events()
-	local client = assert(unix())
-	client:settimeout(0.5)
-	assert(client:connect(socket_path()))
-	client:settimeout(nil)
-	return client
+	return hypr_ipc.connect_event_socket()
 end
 
 local function handle_event(line)

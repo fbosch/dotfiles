@@ -1,12 +1,12 @@
 #!/usr/bin/env lua
 
 local socket = require("socket")
-local unix = require("socket.unix")
 
 local config_dir = os.getenv("HOME") .. "/.config/hypr"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local json = require("lib.json")
+local hypr_ipc = dofile(config_dir .. "/runtime/lib/hypr-ipc.lua")
 
 local selectors_lua_file = config_dir .. "/rules/window-state-selectors.lua"
 local rules_lua_file = config_dir .. "/rules/window-state.lua"
@@ -76,41 +76,11 @@ local function temp_path_in(directory, prefix)
 	return path
 end
 
-local function socket_path(kind)
-	local signature = os.getenv("HYPRLAND_INSTANCE_SIGNATURE")
-	if not signature then
-		error("HYPRLAND_INSTANCE_SIGNATURE is not set")
-	end
-
-	return runtime_dir .. "/hypr/" .. signature .. "/" .. kind
-end
-
-local query_socket_path = socket_path(".socket.sock")
-local event_socket_path = socket_path(".socket2.sock")
+local query_socket_path = hypr_ipc.socket_path(".socket.sock")
+local event_socket_path = hypr_ipc.socket_path(".socket2.sock")
 
 local function request(message)
-	local client = assert(unix())
-	client:settimeout(0.5)
-	assert(client:connect(query_socket_path))
-	assert(client:send(message))
-
-	local chunks = {}
-	while true do
-		local chunk, err, partial = client:receive(4096)
-		chunk = chunk or partial
-		if chunk and #chunk > 0 then
-			chunks[#chunks + 1] = chunk
-		end
-		if err == "closed" then
-			break
-		end
-		if err and err ~= "timeout" then
-			break
-		end
-	end
-
-	client:close()
-	return table.concat(chunks)
+	return hypr_ipc.request(message, { path = query_socket_path })
 end
 
 local function parse_selectors()
@@ -566,24 +536,12 @@ local function handle_event(event)
 end
 
 local function connect_events()
-	local client = assert(unix())
-	client:settimeout(0.5)
-	assert(client:connect(event_socket_path))
-	client:settimeout(0)
-	return client
-end
-
-local function assert_socket_connects(path)
-	local client = assert(unix())
-	client:settimeout(0.2)
-	local ok, err = client:connect(path)
-	client:close()
-	assert(ok, path .. ": " .. tostring(err))
+	return hypr_ipc.connect_event_socket({ path = event_socket_path, read_timeout = 0 })
 end
 
 local function startup()
-	assert_socket_connects(query_socket_path)
-	assert_socket_connects(event_socket_path)
+	hypr_ipc.assert_socket_connects(query_socket_path)
+	hypr_ipc.assert_socket_connects(event_socket_path)
 
 	print("Window state persistence started (LuaSocket events + adaptive polling)")
 	print("Selectors: " .. selectors_lua_file)

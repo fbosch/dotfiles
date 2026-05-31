@@ -2,6 +2,7 @@
 
 local socket = require("socket")
 local unix = require("socket.unix")
+local hypr_ipc = dofile(os.getenv("HOME") .. "/.config/hypr/runtime/lib/hypr-ipc.lua")
 
 local runtime_dir = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-custom-layout-drag-resize"
 local command_socket_path = runtime_dir .. "/command.sock"
@@ -12,41 +13,10 @@ local drag_denominator = 1
 local monitors_by_id = {}
 local drag_active = false
 
-local function socket_path()
-	local base = os.getenv("XDG_RUNTIME_DIR")
-	local signature = os.getenv("HYPRLAND_INSTANCE_SIGNATURE")
-	if not base or not signature then
-		error("missing Hyprland socket environment")
-	end
-
-	return base .. "/hypr/" .. signature .. "/.socket.sock"
-end
-
-local hypr_socket = socket_path()
+local hypr_socket = hypr_ipc.socket_path(".socket.sock")
 
 local function request(message)
-	local client = assert(unix())
-	client:settimeout(0.2)
-	assert(client:connect(hypr_socket))
-	assert(client:send(message))
-
-	local chunks = {}
-	while true do
-		local chunk, err, partial = client:receive(4096)
-		chunk = chunk or partial
-		if chunk and #chunk > 0 then
-			chunks[#chunks + 1] = chunk
-		end
-		if err == "closed" then
-			break
-		end
-		if err and err ~= "timeout" then
-			break
-		end
-	end
-
-	client:close()
-	return table.concat(chunks)
+	return hypr_ipc.request(message, { path = hypr_socket, timeout = 0.2 })
 end
 
 local function json_number(text, key)
