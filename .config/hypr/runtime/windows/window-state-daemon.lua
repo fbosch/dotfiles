@@ -225,20 +225,16 @@ local function get_window_states()
 		return "[]"
 	end
 
-	local clients_path = temp_path("hypr-window-state-clients")
-	write_file(clients_path, clients)
-
 	local command = table.concat({
-		"jq -c",
+		"printf %s " .. shell_quote(clients),
+		"| jq -c",
 		"--argjson matchers " .. shell_quote(matchers_json),
 		"--argjson monitors " .. shell_quote(monitors_json),
 		shell_quote(state_jq_filter),
-		shell_quote(clients_path),
 	}, " ")
 	local handle = io.popen(command, "r")
 	local output = handle and handle:read("*a") or ""
 	local ok = handle and handle:close()
-	os.remove(clients_path)
 
 	if not ok or output == "" then
 		log("ERROR: jq state extraction failed")
@@ -381,12 +377,10 @@ local function update_rules(windows)
 	end
 	prune_stale_rules_cache()
 
-	local windows_path = temp_path("hypr-window-state-windows")
-	write_file(windows_path, windows)
-	local command = "jq -r "
+	local command = "printf %s "
+		.. shell_quote(windows)
+		.. " | jq -r "
 		.. shell_quote([[.[] | "\(.class)|\(.matcher)|\(.pattern)|\(.monitor)|\(.x)|\(.y)|\(.width)|\(.height)"]])
-		.. " "
-		.. shell_quote(windows_path)
 	local handle = io.popen(command, "r")
 	for line in handle:lines() do
 		local class, matcher, pattern, monitor, x, y, width, height = line:match("^([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)$")
@@ -399,7 +393,6 @@ local function update_rules(windows)
 	if handle then
 		handle:close()
 	end
-	os.remove(windows_path)
 
 	local changed = write_lua_rules_cache_file()
 	write_file(state_file, windows .. "\n")
