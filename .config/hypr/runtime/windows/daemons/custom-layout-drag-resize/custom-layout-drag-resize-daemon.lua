@@ -83,8 +83,28 @@ local function cursor_axis(axis)
 	return value
 end
 
+local function cursor_position()
+	local response = request("j/cursorpos")
+	local x = json_number(response, "x")
+	local y = json_number(response, "y")
+	if not x or not y then
+		error("cursor response missing position")
+	end
+
+	return x, y
+end
+
 local function dispatch(command, edge, position)
 	request(string.format('dispatch hl.dsp.layout("%s %s %d")', command, edge, position))
+end
+
+local function dispatch_floating_resize(move_x, move_y, resize_x, resize_y)
+	if move_x ~= 0 or move_y ~= 0 then
+		request(string.format("dispatch hl.dsp.window.move({ x = %d, y = %d, relative = true })", move_x, move_y))
+	end
+	if resize_x ~= 0 or resize_y ~= 0 then
+		request(string.format("dispatch hl.dsp.window.resize({ x = %d, y = %d, relative = true })", resize_x, resize_y))
+	end
 end
 
 local function write_file(path, value)
@@ -110,6 +130,60 @@ local function scaled_position(initial, current)
 	return initial + math.ceil(delta)
 end
 
+local function scaled_delta(initial, current)
+	local delta = (current - initial) * drag_numerator / drag_denominator
+	if delta >= 0 then
+		return math.floor(delta)
+	end
+
+	return math.ceil(delta)
+end
+
+local accept_command
+local handle_command
+
+local function start_floating_drag(active, poll_interval)
+	local initial_x, initial_y = cursor_position()
+	local horizontal_edge = resize_edge("x", initial_x, active.x, active.y, active.width, active.height)
+	local vertical_edge = resize_edge("y", initial_y, active.x, active.y, active.width, active.height)
+	drag_active = true
+	write_file(state_file, "active\n")
+
+	local last_x = 0
+	local last_y = 0
+	for _ = 1, 1200 do
+		if handle_command(accept_command(0)) then
+			break
+		end
+		if not drag_active then
+			break
+		end
+
+		local ok, current_x, current_y = pcall(cursor_position)
+		if ok then
+			local total_x = scaled_delta(initial_x, current_x)
+			local total_y = scaled_delta(initial_y, current_y)
+			local delta_x = total_x - last_x
+			local delta_y = total_y - last_y
+			if delta_x ~= 0 or delta_y ~= 0 then
+				local move_x = horizontal_edge == "left" and delta_x or 0
+				local move_y = vertical_edge == "up" and delta_y or 0
+				local resize_x = horizontal_edge == "left" and -delta_x or delta_x
+				local resize_y = vertical_edge == "up" and -delta_y or delta_y
+				local dispatched = pcall(dispatch_floating_resize, move_x, move_y, resize_x, resize_y)
+				if dispatched then
+					last_x = total_x
+					last_y = total_y
+				end
+			end
+		end
+
+		socket.sleep(poll_interval)
+	end
+
+	stop_drag()
+end
+
 local function stop_drag()
 	drag_active = false
 	os.remove(state_file)
@@ -124,7 +198,7 @@ local function read_command(client)
 	return line
 end
 
-local function accept_command(timeout)
+accept_command = function(timeout)
 	if not command_server then
 		return nil
 	end
@@ -138,7 +212,7 @@ local function accept_command(timeout)
 	return read_command(client)
 end
 
-local function handle_command(command)
+handle_command = function(command)
 	if command == "stop" then
 		stop_drag()
 		return true
@@ -154,13 +228,15 @@ local function start_drag()
 	if not active then
 		return
 	end
-	if active.floating then
-		return
-	end
 
 	local monitor = monitor_info(active.monitor_id)
 	local monitor_name = monitor and monitor.name or nil
 	local poll_interval = monitor and monitor.poll_interval or 0.008
+	if active.floating then
+		start_floating_drag(active, poll_interval)
+		return
+	end
+
 	local axis, command
 	if monitor_name == "DP-2" then
 		axis = "x"
