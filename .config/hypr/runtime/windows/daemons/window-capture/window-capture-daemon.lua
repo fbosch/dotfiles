@@ -2,7 +2,7 @@
 
 local socket = require("socket")
 
-local script = os.getenv("HOME") .. "/.config/hypr/runtime/windows/window-capture-daemon.sh"
+local script = os.getenv("HOME") .. "/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.sh"
 local hypr_ipc = dofile(os.getenv("HOME") .. "/.config/hypr/runtime/lib/hypr-ipc.lua")
 
 local function shell_quote(value)

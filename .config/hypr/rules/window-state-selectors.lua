@@ -1,5 +1,5 @@
 -- Window state persistence selectors.
--- Source selector list read by runtime/windows/window-state.sh.
+-- Source selector list read by runtime/windows/daemons/window-state/window-state.sh.
 
 return {
   { matcher = "match:class", pattern = [=[^xdg-desktop-portal-gtk$]=] },

@@ -34,7 +34,7 @@ mkdir -p "$SCREENSHOT_DIR"
 rm -f "$SCREENSHOT_DIR"/.temp_*.jpg
 
 if [[ "$MODE" == "daemon" ]]; then
-  exec "${HOME}/.config/hypr/runtime/windows/window-capture-daemon.lua"
+  exec "${HOME}/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.lua"
 fi
 
 # Tracking files

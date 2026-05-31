@@ -73,7 +73,7 @@ local function reset_keep_aspect_ratio()
 end
 
 local function custom_or_native_resize(action)
-  return exec("~/.config/hypr/runtime/windows/custom-layout-drag-resize.sh " .. action)
+  return exec("~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh " .. action)
 end
 
 local function drag_openpets()

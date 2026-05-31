@@ -21,9 +21,9 @@ swaync-client -R &
 swaync-client -rs &
 
 uwsm-app -s b -- hyprpaper &
-uwsm-app -s b -- ~/.config/hypr/runtime/windows/window-state.sh &
-uwsm-app -s b -- ~/.config/hypr/runtime/windows/window-capture-daemon.sh &
-uwsm-app -s b -- ~/.config/hypr/runtime/windows/custom-layout-drag-resize.sh daemon &
+uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-state/window-state.sh &
+uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.sh &
+uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh daemon &
 
 sleep 1
 

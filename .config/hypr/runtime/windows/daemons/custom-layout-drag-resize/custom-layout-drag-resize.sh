@@ -7,7 +7,7 @@ runtime_dir="${XDG_RUNTIME_DIR:-/tmp}/hypr-custom-layout-drag-resize"
 command_socket="$runtime_dir/command.sock"
 lock_dir="$runtime_dir/daemon.lockdir"
 mode="${1:-start}"
-daemon="${HOME}/.config/hypr/runtime/windows/custom-layout-drag-resize-daemon.lua"
+daemon="${HOME}/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize-daemon.lua"
 
 ensure_daemon() {
   if [ -S "$command_socket" ]; then

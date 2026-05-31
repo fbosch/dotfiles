@@ -19,4 +19,4 @@ if command -v flock &>/dev/null; then
     fi
 fi
 
-exec "${HOME}/.config/hypr/runtime/windows/window-state-daemon.lua" "$@"
+exec "${HOME}/.config/hypr/runtime/windows/daemons/window-state/window-state-daemon.lua" "$@"
