@@ -68,7 +68,7 @@ local function active_monitor_info()
 			local refresh = json_number(object, "refreshRate") or 60
 			monitors_by_id[id] = {
 				name = name,
-				poll_interval = math.max(0.0015, math.min(0.006, 0.25 / refresh)),
+				poll_interval = math.max(0.003, math.min(0.010, 0.5 / refresh)),
 			}
 		end
 	end
