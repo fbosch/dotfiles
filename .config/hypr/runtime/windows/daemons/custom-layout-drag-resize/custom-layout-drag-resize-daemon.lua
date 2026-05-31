@@ -56,6 +56,7 @@ end
 local function active_window_info()
 	local active = request("j/activewindow")
 	local monitor_id = json_number(active, "monitor")
+	local floating = active:match('"floating"%s*:%s*true') ~= nil
 	local x, y = active:match('"at"%s*:%s*%[%s*(-?%d+)%s*,%s*(-?%d+)%s*%]')
 	local width, height = active:match('"size"%s*:%s*%[%s*(%d+)%s*,%s*(%d+)%s*%]')
 	if not monitor_id or not x or not y or not width or not height then
@@ -64,6 +65,7 @@ local function active_window_info()
 
 	return {
 		monitor_id = monitor_id,
+		floating = floating,
 		x = tonumber(x),
 		y = tonumber(y),
 		width = tonumber(width),
@@ -150,6 +152,9 @@ local function start_drag()
 
 	local active = active_window_info()
 	if not active then
+		return
+	end
+	if active.floating then
 		return
 	end
 
