@@ -23,6 +23,7 @@ local commands = {
 	background("flake-check-updates"),
 	background("swayosd-server"),
 	background(paths.runtime_script("windows/window-state.sh")),
+	background(paths.runtime_script("windows/custom-layout-drag-resize.sh") .. " daemon"),
 	background(paths.runtime_script("windows/minimized-state-daemon.sh")),
 	background(paths.runtime_script("windows/window-capture-daemon.sh")),
 	background(paths.runtime_script("gamescope/gamescope-profile-watchdog.sh")),

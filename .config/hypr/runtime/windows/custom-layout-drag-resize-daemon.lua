@@ -1,0 +1,294 @@
+#!/usr/bin/env lua
+
+local socket = require("socket")
+local unix = require("socket.unix")
+
+local runtime_dir = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-custom-layout-drag-resize"
+local command_socket_path = runtime_dir .. "/command.sock"
+local state_file = runtime_dir .. "/state"
+local pid_file = runtime_dir .. "/daemon.pid"
+local drag_numerator = 1
+local drag_denominator = 1
+
+local function socket_path()
+	local base = os.getenv("XDG_RUNTIME_DIR")
+	local signature = os.getenv("HYPRLAND_INSTANCE_SIGNATURE")
+	if not base or not signature then
+		error("missing Hyprland socket environment")
+	end
+
+	return base .. "/hypr/" .. signature .. "/.socket.sock"
+end
+
+local hypr_socket = socket_path()
+
+local function request(message)
+	local client = assert(unix())
+	client:settimeout(0.2)
+	assert(client:connect(hypr_socket))
+	assert(client:send(message))
+
+	local chunks = {}
+	while true do
+		local chunk, err, partial = client:receive(4096)
+		chunk = chunk or partial
+		if chunk and #chunk > 0 then
+			chunks[#chunks + 1] = chunk
+		end
+		if err == "closed" then
+			break
+		end
+		if err and err ~= "timeout" then
+			break
+		end
+	end
+
+	client:close()
+	return table.concat(chunks)
+end
+
+local function json_number(text, key)
+	local value = text:match('"' .. key .. '"%s*:%s*(-?%d+%.?%d*)')
+	return value and tonumber(value) or nil
+end
+
+local function json_string(text, key)
+	return text:match('"' .. key .. '"%s*:%s*"([^"]*)"')
+end
+
+local function active_monitor_info()
+	local active = request("j/activewindow")
+	local monitor_id = json_number(active, "monitor")
+	if not monitor_id then
+		return nil
+	end
+
+	local monitors = request("j/monitors")
+	for object in monitors:gmatch("%b{}") do
+		if json_number(object, "id") == monitor_id then
+			local name = json_string(object, "name")
+			local refresh = json_number(object, "refreshRate") or 60
+			local poll = math.max(0.003, math.min(0.010, 0.5 / refresh))
+			local dispatch = math.max(0.006, math.min(0.017, 1.0 / refresh))
+			return name, poll, dispatch
+		end
+	end
+
+	return nil
+end
+
+local function active_geometry()
+	local active = request("activewindow")
+	local x, y, width, height
+
+	for line in active:gmatch("[^\n]+") do
+		if line:match("at:") then
+			x, y = line:match("(-?%d+),(-?%d+)")
+		elseif line:match("size:") then
+			width, height = line:match("(%d+),(%d+)")
+		end
+	end
+
+	if not x or not y or not width or not height then
+		return nil
+	end
+
+	return tonumber(x), tonumber(y), tonumber(width), tonumber(height)
+end
+
+local function cursor_axis(axis)
+	local response = request("j/cursorpos")
+	local value = json_number(response, axis)
+	if not value then
+		error("cursor response missing " .. axis)
+	end
+
+	return value
+end
+
+local function dispatch(command, edge, position)
+	request(string.format('dispatch hl.dsp.layout("%s %s %d")', command, edge, position))
+end
+
+local function file_exists(path)
+	local handle = io.open(path, "r")
+	if handle then
+		handle:close()
+		return true
+	end
+
+	return false
+end
+
+local function write_file(path, value)
+	local handle = assert(io.open(path, "w"))
+	handle:write(value)
+	handle:close()
+end
+
+local function resize_edge(axis, cursor, x, y, width, height)
+	if axis == "x" then
+		return cursor < x + width / 2 and "left" or "right"
+	end
+
+	return cursor < y + height / 2 and "up" or "down"
+end
+
+local function scaled_position(initial, current)
+	local delta = (current - initial) * drag_numerator / drag_denominator
+	if delta >= 0 then
+		return initial + math.floor(delta)
+	end
+
+	return initial + math.ceil(delta)
+end
+
+local function flush_pending(command, edge, pending, last_sent, dispatch_interval)
+	if not pending or pending == last_sent then
+		return last_sent, nil, socket.gettime()
+	end
+
+	dispatch(command, edge, pending)
+	return pending, nil, socket.gettime() + dispatch_interval
+end
+
+local function stop_drag()
+	os.remove(state_file)
+end
+
+local command_server = nil
+
+local function read_command(client)
+	client:settimeout(0.01)
+	local line = client:receive("*l")
+	client:close()
+	return line
+end
+
+local function accept_command()
+	if not command_server then
+		return nil
+	end
+
+	local client = command_server:accept()
+	if not client then
+		return nil
+	end
+
+	return read_command(client)
+end
+
+local function handle_command(command)
+	if command == "stop" then
+		stop_drag()
+		return true
+	end
+
+	return command == "quit"
+end
+
+local function start_drag()
+	stop_drag()
+
+	local monitor_name, poll_interval, dispatch_interval = active_monitor_info()
+	local axis, command
+	if monitor_name == "DP-2" then
+		axis = "x"
+		command = "resize-x-at"
+	elseif monitor_name == "HDMI-A-2" then
+		axis = "y"
+		command = "resize-y-at"
+	else
+		request("dispatch hl.dsp.window.resize()")
+		return
+	end
+
+	local initial = cursor_axis(axis)
+	local x, y, width, height = active_geometry()
+	if not x then
+		return
+	end
+
+	local edge = resize_edge(axis, initial, x, y, width, height)
+	write_file(state_file, "active\n")
+
+	local last_sent = nil
+	local pending = nil
+	local next_dispatch = 0
+
+	for _ = 1, 1200 do
+		if handle_command(accept_command()) then
+			break
+		end
+
+		if not file_exists(state_file) then
+			break
+		end
+
+		local ok, current = pcall(cursor_axis, axis)
+		if ok then
+			local scaled = scaled_position(initial, current)
+			if scaled ~= last_sent then
+				pending = scaled
+			end
+
+			if pending and socket.gettime() >= next_dispatch then
+				local flush_ok, new_last, new_pending, new_next = pcall(
+					flush_pending,
+					command,
+					edge,
+					pending,
+					last_sent,
+					dispatch_interval
+				)
+				if flush_ok then
+					last_sent, pending, next_dispatch = new_last, new_pending, new_next
+				end
+			end
+		end
+
+		socket.sleep(poll_interval)
+	end
+
+	pcall(function()
+		flush_pending(command, edge, pending, last_sent, dispatch_interval)
+	end)
+	stop_drag()
+end
+
+local function ensure_command_socket()
+	os.execute(string.format('mkdir -p %q', runtime_dir))
+	os.remove(command_socket_path)
+	command_server = assert(unix())
+	assert(command_server:bind(command_socket_path))
+	assert(command_server:listen())
+	command_server:settimeout(0)
+	write_file(pid_file, tostring(os.getenv("HYPRLAND_INSTANCE_SIGNATURE") or "") .. "\n")
+end
+
+local function run()
+	ensure_command_socket()
+
+	while true do
+		local line = accept_command()
+		if line == "start" then
+			pcall(start_drag)
+		elseif line == "stop" then
+			stop_drag()
+		elseif line == "quit" then
+			break
+		end
+
+		if not line then
+			socket.sleep(0.01)
+		end
+	end
+
+	if command_server then
+		command_server:close()
+	end
+	os.remove(command_socket_path)
+	os.remove(pid_file)
+end
+
+run()

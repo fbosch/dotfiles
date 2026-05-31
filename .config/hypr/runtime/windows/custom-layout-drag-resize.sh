@@ -4,168 +4,42 @@ set -eu
 . "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
 runtime_dir="${XDG_RUNTIME_DIR:-/tmp}/hypr-custom-layout-drag-resize"
-state_file="$runtime_dir/state"
-pid_file="$runtime_dir/pid"
+command_socket="$runtime_dir/command.sock"
 mode="${1:-start}"
-drag_numerator=1
-drag_denominator=1
-lua_loop_helper="${HOME}/.config/hypr/runtime/windows/custom-layout-drag-resize-loop.lua"
+daemon="${HOME}/.config/hypr/runtime/windows/custom-layout-drag-resize-daemon.lua"
 
-json_string_field() {
-  field="$1"
-  sed -n "s/.*\"$field\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p"
-}
-
-json_number_field() {
-  field="$1"
-  sed -n "s/.*\"$field\"[[:space:]]*:[[:space:]]*\(-\{0,1\}[0-9][0-9]*\).*/\1/p"
-}
-
-active_monitor_info() {
-  if command -v jq >/dev/null 2>&1; then
-    monitor_id="$(hypr_query 'j/activewindow' | jq -r '.monitor // empty')"
-    [ -n "$monitor_id" ] || return 1
-    hypr_query 'j/monitors' | jq -r --argjson id "$monitor_id" '
-      .[]
-      | select(.id == $id)
-      | .name as $name
-      | (.refreshRate // 60) as $refresh
-      | (0.5 / $refresh) as $poll
-      | (1.0 / $refresh) as $dispatch
-      | [
-          $name,
-          ($poll | if . < 0.003 then 0.003 elif . > 0.010 then 0.010 else . end),
-          ($dispatch | if . < 0.006 then 0.006 elif . > 0.017 then 0.017 else . end)
-        ]
-      | @tsv
-    ' | sed -n '1p'
+ensure_daemon() {
+  if [ -S "$command_socket" ]; then
     return
   fi
 
-  active_monitor_id="$(hypr_query 'j/activewindow' | json_number_field 'monitor')"
-  case "$active_monitor_id" in
-    0) printf 'HDMI-A-2\t0.008\t0.017\n' ;;
-    1) printf 'DP-2\t0.003\t0.006\n' ;;
-    *) return 1 ;;
-  esac
+  mkdir -p "$runtime_dir"
+  rm -f "$command_socket"
+  lua "$daemon" >/dev/null 2>&1 &
+
+  tries=0
+  while [ ! -S "$command_socket" ] && [ "$tries" -lt 20 ]; do
+    tries=$((tries + 1))
+    sleep 0.005
+  done
 }
 
-cursor_axis() {
-  axis="$1"
-  hypr_query 'j/cursorpos' | json_number_field "$axis"
-}
-
-active_geometry() {
-  window_info="$(hypr_query 'activewindow' || true)"
-  x=""
-  y=""
-  width=""
-  height=""
-
-  while IFS= read -r line; do
-    case "$line" in
-      *at:* )
-        geometry="${line#at: }"
-        geometry="${geometry#*: }"
-        x="${geometry%%,*}"
-        y="${geometry#*,}"
-        ;;
-      *size:* )
-        geometry="${line#size: }"
-        geometry="${geometry#*: }"
-        width="${geometry%%,*}"
-        height="${geometry#*,}"
-        ;;
-    esac
-  done <<EOF
-$window_info
-EOF
-
-  [ -n "$x" ] && [ -n "$y" ] && [ -n "$width" ] && [ -n "$height" ] || return 1
-  printf '%s %s %s %s\n' "$x" "$y" "$width" "$height"
-}
-
-resize_edge() {
-  axis="$1"
-  cursor="$2"
-  geometry="$3"
-  set -- $geometry
-  x="$1"
-  y="$2"
-  width="$3"
-  height="$4"
-
-  if [ "$axis" = "x" ]; then
-    midpoint=$((x + width / 2))
-    [ "$cursor" -lt "$midpoint" ] && printf 'left\n' || printf 'right\n'
-    return
-  fi
-
-  midpoint=$((y + height / 2))
-  [ "$cursor" -lt "$midpoint" ] && printf 'up\n' || printf 'down\n'
-}
-
-stop_drag() {
-  if [ -f "$pid_file" ]; then
-    pid="$(cat "$pid_file" 2>/dev/null || true)"
-    rm -f "$state_file"
-    sleep 0.03
-    if [ -n "$pid" ]; then
-      kill -0 "$pid" 2>/dev/null && kill "$pid" 2>/dev/null || true
-    fi
-  fi
-
-  rm -f "$state_file" "$pid_file"
-}
-
-start_native_resize() {
-  hypr_dispatch_lua 'hl.dsp.window.resize()' || true
+send_command() {
+  ensure_daemon
+  [ -S "$command_socket" ] || exit 1
+  printf '%s\n' "$1" | nc -U "$command_socket"
 }
 
 case "$mode" in
   stop)
-    stop_drag
+    send_command stop
     exit 0
     ;;
   start)
-    mkdir -p "$runtime_dir"
-    stop_drag
-
-    monitor_info="$(active_monitor_info || true)"
-    set -- $monitor_info
-    monitor_name="${1:-}"
-    poll_interval="${2:-0.008}"
-    dispatch_interval="${3:-0.017}"
-    case "$monitor_name" in
-      DP-2)
-        axis="x"
-        command="resize-x-at"
-        ;;
-      HDMI-A-2)
-        axis="y"
-        command="resize-y-at"
-        ;;
-      *)
-        start_native_resize
-        exit 0
-        ;;
-    esac
-
-    previous="$(cursor_axis "$axis" || true)"
-    if [ -z "$previous" ]; then
-      exit 0
-    fi
-
-    geometry="$(active_geometry || true)"
-    if [ -z "$geometry" ]; then
-      exit 0
-    fi
-
-    edge="$(resize_edge "$axis" "$previous" "$geometry")"
-
-    : >"$state_file"
-    lua "$lua_loop_helper" "$axis" "$command" "$edge" "$previous" "$poll_interval" "$dispatch_interval" "$drag_numerator" "$drag_denominator" "$state_file" "$pid_file" &
-    printf '%s\n' "$!" >"$pid_file"
+    send_command start
+    ;;
+  daemon)
+    exec lua "$daemon"
     ;;
   *)
     printf 'usage: %s start|stop\n' "$0" >&2
