@@ -9,6 +9,7 @@ pid_file="$runtime_dir/pid"
 mode="${1:-start}"
 drag_numerator=1
 drag_denominator=1
+loop_helper="${HOME}/.config/hypr/runtime/windows/custom-layout-drag-resize-loop.py"
 
 json_string_field() {
   field="$1"
@@ -20,18 +21,26 @@ json_number_field() {
   sed -n "s/.*\"$field\"[[:space:]]*:[[:space:]]*\(-\{0,1\}[0-9][0-9]*\).*/\1/p"
 }
 
-active_monitor_name() {
+active_monitor_info() {
   if command -v jq >/dev/null 2>&1; then
     monitor_id="$(hypr_query 'j/activewindow' | jq -r '.monitor // empty')"
     [ -n "$monitor_id" ] || return 1
-    hypr_query 'j/monitors' | jq -r --argjson id "$monitor_id" '.[] | select(.id == $id) | .name' | sed -n '1p'
+    hypr_query 'j/monitors' | jq -r --argjson id "$monitor_id" '
+      .[]
+      | select(.id == $id)
+      | .name as $name
+      | (.refreshRate // 60) as $refresh
+      | (0.5 / $refresh) as $sleep
+      | [$name, ($sleep | if . < 0.003 then 0.003 elif . > 0.010 then 0.010 else . end)]
+      | @tsv
+    ' | sed -n '1p'
     return
   fi
 
   active_monitor_id="$(hypr_query 'j/activewindow' | json_number_field 'monitor')"
   case "$active_monitor_id" in
-    0) printf 'HDMI-A-2\n' ;;
-    1) printf 'DP-2\n' ;;
+    0) printf 'HDMI-A-2\t0.008\n' ;;
+    1) printf 'DP-2\t0.003\n' ;;
     *) return 1 ;;
   esac
 }
@@ -106,27 +115,6 @@ start_native_resize() {
   hypr_dispatch_lua 'hl.dsp.window.resize()' || true
 }
 
-drag_loop() {
-  axis="$1"
-  command="$2"
-  edge="$3"
-  initial="$4"
-  ticks=0
-
-  while [ -f "$state_file" ] && [ "$ticks" -lt 1200 ]; do
-    current="$(cursor_axis "$axis" || true)"
-    if [ -n "$current" ]; then
-      scaled=$((initial + (current - initial) * drag_numerator / drag_denominator))
-      hypr_dispatch_lua "hl.dsp.layout(\"$command $edge $scaled\")" || true
-    fi
-
-    ticks=$((ticks + 1))
-    sleep 0.016
-  done
-
-  stop_drag
-}
-
 case "$mode" in
   stop)
     stop_drag
@@ -136,7 +124,10 @@ case "$mode" in
     mkdir -p "$runtime_dir"
     stop_drag
 
-    monitor_name="$(active_monitor_name || true)"
+    monitor_info="$(active_monitor_info || true)"
+    set -- $monitor_info
+    monitor_name="${1:-}"
+    sleep_interval="${2:-0.008}"
     case "$monitor_name" in
       DP-2)
         axis="x"
@@ -165,7 +156,7 @@ case "$mode" in
     edge="$(resize_edge "$axis" "$previous" "$geometry")"
 
     : >"$state_file"
-    drag_loop "$axis" "$command" "$edge" "$previous" &
+    python3 "$loop_helper" "$axis" "$command" "$edge" "$previous" "$sleep_interval" "$drag_numerator" "$drag_denominator" "$state_file" "$pid_file" &
     printf '%s\n' "$!" >"$pid_file"
     ;;
   *)
