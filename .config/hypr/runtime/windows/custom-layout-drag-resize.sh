@@ -7,8 +7,8 @@ runtime_dir="${XDG_RUNTIME_DIR:-/tmp}/hypr-custom-layout-drag-resize"
 state_file="$runtime_dir/state"
 pid_file="$runtime_dir/pid"
 mode="${1:-start}"
-drag_numerator=2
-drag_denominator=3
+drag_numerator=1
+drag_denominator=1
 
 json_string_field() {
   field="$1"
