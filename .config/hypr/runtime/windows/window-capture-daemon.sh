@@ -14,10 +14,10 @@ if [[ "$MODE" == "daemon" ]]; then
       exit 0
     fi
   fi
-elif [[ "$MODE" == "refresh-once" ]]; then
+elif [[ "$MODE" == "refresh-once" || "$MODE" == "handle-event" ]]; then
   :
 else
-  printf 'usage: %s [refresh-once]\n' "$0" >&2
+  printf 'usage: %s [daemon|refresh-once|handle-event EVENT]\n' "$0" >&2
   exit 1
 fi
 
@@ -32,6 +32,10 @@ mkdir -p "$SCREENSHOT_DIR"
 
 # Clean up any orphaned temp files from previous daemon runs (crash/kill leaves these behind)
 rm -f "$SCREENSHOT_DIR"/.temp_*.jpg
+
+if [[ "$MODE" == "daemon" ]]; then
+  exec "${HOME}/.config/hypr/runtime/windows/window-capture-daemon.lua"
+fi
 
 # Tracking files
 LAST_SCREENSHOT_FILE="$SCREENSHOT_DIR/.last_screenshot"
@@ -512,6 +516,11 @@ handle_event() {
 if [[ "$MODE" == "refresh-once" ]]; then
   rm -f "$LAST_OVERLAY_FILE" "$LAST_SCREENSHOT_FILE"
   handle_event "workspace>>refresh-once"
+  exit 0
+fi
+
+if [[ "$MODE" == "handle-event" ]]; then
+  handle_event "${2:-}"
   exit 0
 fi
 

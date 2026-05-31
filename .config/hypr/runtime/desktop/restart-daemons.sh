@@ -15,7 +15,7 @@ pkill -f "atuin daemon" 2>/dev/null || true
 pkill -f "foot --server" 2>/dev/null || true
 pkill -f "window-state.sh" 2>/dev/null || true
 pkill -f "minimized-state-daemon.sh" 2>/dev/null || true
-pkill -f "window-capture-daemon.sh" 2>/dev/null || true
+pkill -f "window-capture-daemon" 2>/dev/null || true
 pkill -f "gamescope-profile-watchdog.sh" 2>/dev/null || true
 pkill -f "waybar-edge-monitor.sh" 2>/dev/null || true
 pkill -f "toggle-night-light.sh daemon" 2>/dev/null || true

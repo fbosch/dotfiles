@@ -14,6 +14,7 @@ readonly -a PRETERM_PROCESS_ARGS=(
   "$HOME/.config/hypr/runtime/desktop/waybar-edge-monitor.sh"
   "$HOME/.config/hypr/runtime/windows/window-state.sh"
   "$HOME/.config/hypr/runtime/windows/window-capture-daemon.sh"
+  "$HOME/.config/hypr/runtime/windows/window-capture-daemon.lua"
   "$HOME/.config/waybar/scripts/mullvad-status"
 )
 
