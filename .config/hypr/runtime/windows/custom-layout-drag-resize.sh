@@ -5,6 +5,7 @@ set -eu
 
 runtime_dir="${XDG_RUNTIME_DIR:-/tmp}/hypr-custom-layout-drag-resize"
 command_socket="$runtime_dir/command.sock"
+lock_dir="$runtime_dir/daemon.lockdir"
 mode="${1:-start}"
 daemon="${HOME}/.config/hypr/runtime/windows/custom-layout-drag-resize-daemon.lua"
 
@@ -30,6 +31,22 @@ send_command() {
   printf '%s\n' "$1" | nc -U "$command_socket"
 }
 
+run_daemon() {
+  mkdir -p "$runtime_dir"
+
+  if ! mkdir "$lock_dir" 2>/dev/null; then
+    if [ -S "$command_socket" ] && printf 'ping\n' | nc -U "$command_socket" >/dev/null 2>&1; then
+      exit 0
+    fi
+
+    rm -rf "$lock_dir" "$command_socket"
+    mkdir "$lock_dir" 2>/dev/null || exit 0
+  fi
+
+  trap 'rm -rf "$lock_dir" "$command_socket"' EXIT INT TERM
+  lua "$daemon"
+}
+
 case "$mode" in
   stop)
     send_command stop
@@ -39,7 +56,7 @@ case "$mode" in
     send_command start
     ;;
   daemon)
-    exec lua "$daemon"
+    run_daemon
     ;;
   *)
     printf 'usage: %s start|stop\n' "$0" >&2

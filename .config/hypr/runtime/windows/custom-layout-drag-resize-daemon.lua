@@ -143,15 +143,6 @@ local function scaled_position(initial, current)
 	return initial + math.ceil(delta)
 end
 
-local function flush_pending(command, edge, pending, last_sent, dispatch_interval)
-	if not pending or pending == last_sent then
-		return last_sent, nil, socket.gettime()
-	end
-
-	dispatch(command, edge, pending)
-	return pending, nil, socket.gettime() + dispatch_interval
-end
-
 local function stop_drag()
 	os.remove(state_file)
 end
@@ -190,7 +181,7 @@ end
 local function start_drag()
 	stop_drag()
 
-	local monitor_name, poll_interval, dispatch_interval = active_monitor_info()
+	local monitor_name, poll_interval = active_monitor_info()
 	local axis, command
 	if monitor_name == "DP-2" then
 		axis = "x"
@@ -213,8 +204,6 @@ local function start_drag()
 	write_file(state_file, "active\n")
 
 	local last_sent = nil
-	local pending = nil
-	local next_dispatch = 0
 
 	for _ = 1, 1200 do
 		if handle_command(accept_command()) then
@@ -229,20 +218,9 @@ local function start_drag()
 		if ok then
 			local scaled = scaled_position(initial, current)
 			if scaled ~= last_sent then
-				pending = scaled
-			end
-
-			if pending and socket.gettime() >= next_dispatch then
-				local flush_ok, new_last, new_pending, new_next = pcall(
-					flush_pending,
-					command,
-					edge,
-					pending,
-					last_sent,
-					dispatch_interval
-				)
-				if flush_ok then
-					last_sent, pending, next_dispatch = new_last, new_pending, new_next
+				local dispatched = pcall(dispatch, command, edge, scaled)
+				if dispatched then
+					last_sent = scaled
 				end
 			end
 		end
@@ -250,9 +228,6 @@ local function start_drag()
 		socket.sleep(poll_interval)
 	end
 
-	pcall(function()
-		flush_pending(command, edge, pending, last_sent, dispatch_interval)
-	end)
 	stop_drag()
 end
 
@@ -273,6 +248,8 @@ local function run()
 		local line = accept_command()
 		if line == "start" then
 			pcall(start_drag)
+		elseif line == "ping" then
+			-- Health check for the shell wrapper's singleton guard.
 		elseif line == "stop" then
 			stop_drag()
 		elseif line == "quit" then
