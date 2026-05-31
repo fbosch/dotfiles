@@ -98,6 +98,7 @@ run("registers lua portrait_rows layout", function()
 	assert_equal(registered_layout.name, "portrait_rows", "registered layout name")
 	assert_equal(type(registered_layout.layout.recalculate), "function", "registered recalculate")
 	assert_equal(type(registered_layout.layout.layout_msg), "function", "registered layout_msg")
+	assert_equal(type(registered_layout.layout.resize), "function", "registered resize")
 end)
 
 run("two windows use one-third top and two-thirds bottom", function()
@@ -181,6 +182,66 @@ run("resize-up grows active row into previous row", function()
 
 	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 85 }, "first resized target")
 	assert_box(second.placed, { x = 10, y = 105, w = 120, h = 215 }, "second resized target")
+end)
+
+run("future resize callback grows active row", function()
+	local first = make_workspace_target(1, "future-resize", true)
+	local second = make_workspace_target(2, "future-resize")
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.resize(ctx, first, { y = 0.05 }, nil)
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 115 }, "first resized target")
+	assert_box(second.placed, { x = 10, y = 135, w = 120, h = 185 }, "second resized target")
+end)
+
+run("pixel resize message scales by layout height", function()
+	local first = make_workspace_target(1, "pixel-resize", true)
+	local second = make_workspace_target(2, "pixel-resize")
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-y 15")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 115 }, "first resized target")
+	assert_box(second.placed, { x = 10, y = 135, w = 120, h = 185 }, "second resized target")
+end)
+
+run("absolute resize follows cursor boundary", function()
+	local first = make_workspace_target(1, "absolute-resize", true)
+	local second = make_workspace_target(2, "absolute-resize")
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-y-at down 155")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 135 }, "first resized target")
+	assert_box(second.placed, { x = 10, y = 155, w = 120, h = 165 }, "second resized target")
+end)
+
+run("absolute resize uses internal boundary on outer edge", function()
+	local first = make_workspace_target(1, "absolute-outer-resize")
+	local second = make_workspace_target(2, "absolute-outer-resize", true)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-y-at down 185")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 165 }, "first resized target")
+	assert_box(second.placed, { x = 10, y = 185, w = 120, h = 135 }, "second resized target")
+end)
+
+run("resize does not reorder by stale geometry", function()
+	local first = set_geometry(make_workspace_target(1, "resize-no-reorder", true), 220)
+	local second = set_geometry(make_workspace_target(2, "resize-no-reorder"), 20)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-y 15")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 115 }, "first resized target")
+	assert_box(second.placed, { x = 10, y = 135, w = 120, h = 185 }, "second resized target")
 end)
 
 run("swapnext moves active row despite old geometry", function()

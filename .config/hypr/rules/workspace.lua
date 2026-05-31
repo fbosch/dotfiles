@@ -11,6 +11,7 @@ if host == "rvn-pc" then
 	hl.workspace_rule({
 		workspace = "1",
 		monitor = "HDMI-A-2",
+		layout = "lua:portrait_rows",
 		default = true,
 	})
 

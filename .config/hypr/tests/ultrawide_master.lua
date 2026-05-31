@@ -31,6 +31,11 @@ local function set_geometry(target, x, width)
 	return target
 end
 
+local function set_monitor(target, monitor)
+	target.window.monitor.name = monitor
+	return target
+end
+
 local function make_context(targets)
 	workspace_counter = workspace_counter + 1
 	local workspace = { name = "ultrawide-test-" .. tostring(workspace_counter) }
@@ -74,6 +79,7 @@ run("registers lua ultrawide_master layout", function()
 	assert_equal(registered_layout.name, "ultrawide_master", "registered layout name")
 	assert_equal(type(registered_layout.layout.recalculate), "function", "registered recalculate")
 	assert_equal(type(registered_layout.layout.layout_msg), "function", "registered layout_msg")
+	assert_equal(type(registered_layout.layout.resize), "function", "registered resize")
 end)
 
 run("two windows lay out left to right", function()
@@ -94,6 +100,15 @@ run("three windows use left center right columns", function()
 	assert_box(left.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
 	assert_box(center.placed, { x = 310, y = 20, w = 400, h = 500 }, "center target")
 	assert_box(right.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
+end)
+
+run("hdmi fallback uses portrait rows", function()
+	local top = set_monitor(make_target(1, true), "HDMI-A-2")
+	local bottom = set_monitor(make_target(2), "HDMI-A-2")
+	registered_layout.layout.recalculate(make_context({ top, bottom }))
+
+	assert_box(top.placed, { x = 10, y = 20, w = 1000, h = 500 / 3 }, "top target")
+	assert_box(bottom.placed, { x = 10, y = 20 + 500 / 3, w = 1000, h = 1000 / 3 }, "bottom target")
 end)
 
 run("dragged active window moves to cursor column", function()
@@ -155,6 +170,78 @@ run("resize-right grows active column into next column", function()
 	local ctx = make_context({ first, second })
 
 	registered_layout.layout.layout_msg(ctx, "resize-right")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 720, h = 500 }, "left target")
+	assert_box(second.placed, { x = 730, y = 20, w = 280, h = 500 }, "right target")
+end)
+
+run("future resize callback grows active column", function()
+	local first = set_geometry(make_target(1, true), 100)
+	local second = set_geometry(make_target(2), 800)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.resize(ctx, first, { x = 0.05 }, nil)
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 720, h = 500 }, "left target")
+	assert_box(second.placed, { x = 730, y = 20, w = 280, h = 500 }, "right target")
+end)
+
+run("pixel resize message scales by layout width", function()
+	local first = set_geometry(make_target(1, true), 100)
+	local second = set_geometry(make_target(2), 800)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-x 50")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 720, h = 500 }, "left target")
+	assert_box(second.placed, { x = 730, y = 20, w = 280, h = 500 }, "right target")
+end)
+
+run("absolute resize follows cursor boundary", function()
+	local first = set_geometry(make_target(1, true), 100)
+	local second = set_geometry(make_target(2), 800)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-x-at right 760")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 750, h = 500 }, "left target")
+	assert_box(second.placed, { x = 760, y = 20, w = 250, h = 500 }, "right target")
+end)
+
+run("absolute resize uses internal boundary on outer edge", function()
+	local first = set_geometry(make_target(1), 100)
+	local second = set_geometry(make_target(2, true), 800)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-x-at right 600")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 590, h = 500 }, "left target")
+	assert_box(second.placed, { x = 600, y = 20, w = 410, h = 500 }, "right target")
+end)
+
+run("hdmi fallback supports vertical absolute resize", function()
+	local top = set_monitor(make_target(1, true), "HDMI-A-2")
+	local bottom = set_monitor(make_target(2), "HDMI-A-2")
+	local ctx = make_context({ top, bottom })
+
+	registered_layout.layout.layout_msg(ctx, "resize-y-at down 220")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(top.placed, { x = 10, y = 20, w = 1000, h = 200 }, "top target")
+	assert_box(bottom.placed, { x = 10, y = 220, w = 1000, h = 300 }, "bottom target")
+end)
+
+run("resize does not reorder by stale geometry", function()
+	local first = set_geometry(make_target(1, true), 850)
+	local second = set_geometry(make_target(2), 200)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-x 50")
 	registered_layout.layout.recalculate(ctx)
 
 	assert_box(first.placed, { x = 10, y = 20, w = 720, h = 500 }, "left target")

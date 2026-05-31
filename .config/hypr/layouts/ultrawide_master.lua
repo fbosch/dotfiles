@@ -1,5 +1,6 @@
 local M = {}
 local order_state = require("layouts.order_state")
+local resize_state = require("layouts.resize_state")
 local box = {}
 local state = order_state.new()
 local min_ratio = 0.15
@@ -8,6 +9,22 @@ local ratios_two = { 0.67, 0.33 }
 local ratios_three = { 0.3, 0.4, 0.3 }
 local fallback_ratios = {}
 local ratios_by_workspace = {}
+local row_ratios_by_workspace = {}
+
+local function default_row_ratios(count)
+	local ratios = {}
+	if count == 2 then
+		ratios[1] = 1 / 3
+		ratios[2] = 2 / 3
+		return ratios
+	end
+
+	for index = 1, count do
+		ratios[index] = 1 / count
+	end
+
+	return ratios
+end
 
 local function monitor_name(targets)
 	for index = 1, #targets do
@@ -92,37 +109,16 @@ local function ratios_for_workspace(key, count)
 	return ratios
 end
 
-local function clamp_delta(first, second, delta)
-	if delta > 0 then
-		return math.min(delta, second - min_ratio)
-	end
-
-	return math.max(delta, min_ratio - first)
-end
-
-local function adjust_boundary(ratios, first_index, delta)
-	local second_index = first_index + 1
-	if not ratios[first_index] or not ratios[second_index] then
-		return
-	end
-
-	delta = clamp_delta(ratios[first_index], ratios[second_index], delta)
-	ratios[first_index] = ratios[first_index] + delta
-	ratios[second_index] = ratios[second_index] - delta
-end
-
-local function adjust_active(ratios, index, count, delta)
-	if delta > 0 then
-		if index < count then
-			adjust_boundary(ratios, index, delta)
-		else
-			adjust_boundary(ratios, index - 1, delta)
+local function row_ratios_for_workspace(key, count)
+	local ratios = key and row_ratios_by_workspace[key] or nil
+	if not ratios or #ratios ~= count then
+		ratios = default_row_ratios(count)
+		if key then
+			row_ratios_by_workspace[key] = ratios
 		end
-	elseif index > 1 then
-		adjust_boundary(ratios, index - 1, delta)
-	else
-		adjust_boundary(ratios, index, delta)
 	end
+
+	return ratios
 end
 
 local function desired_index(center, ratios, area_x, area_width)
@@ -173,6 +169,23 @@ local function place_columns(targets, ratios, x, y, width, height)
 	end
 end
 
+local function place_rows(targets, ratios, x, y, width, height)
+	local next_y = y
+	box.x = x
+	box.w = width
+
+	for index = 1, #targets do
+		box.y = next_y
+		box.h = height * ratios[index]
+		if index == #targets then
+			box.h = y + height - next_y
+		end
+
+		targets[index]:place(box)
+		next_y = next_y + box.h
+	end
+end
+
 function M.recalculate(ctx)
 	local targets = ctx.targets
 	if not targets then
@@ -194,14 +207,18 @@ function M.recalculate(ctx)
 	local y = area.y
 	local width = area.w
 	local height = area.h
-	local ratios = ratios_for_workspace(workspace_key(targets), count)
+	local key = workspace_key(targets)
+	local monitor = monitor_name(targets)
+	local ratios = monitor == "HDMI-A-2" and row_ratios_for_workspace(key, count) or ratios_for_workspace(key, count)
 
-	if monitor_name(targets) ~= "DP-2" then
+	if monitor == "HDMI-A-2" then
+		place_rows(targets, ratios, x, y, width, height)
+		return
+	elseif monitor ~= "DP-2" then
 		place_columns(targets, ratios, x, y, width, height)
 		return
 	end
 
-	local key = workspace_key(targets)
 	local skip_position_order = state.skip_position_by_key[key]
 	local source_targets = targets
 	local order, targets_by_id = order_state.sync(state, key, source_targets)
@@ -216,6 +233,29 @@ function M.recalculate(ctx)
 	place_columns(targets, ratios, x, y, width, height)
 end
 
+function M.resize(ctx, target, delta, corner)
+	local targets = ctx.targets
+	local count = targets and #targets or 0
+	if count < 2 then
+		return true
+	end
+
+	local key = workspace_key(targets)
+	local order, targets_by_id = order_state.sync(state, key, targets)
+	targets = order_state.targets_from_order(state, key, order, targets_by_id, targets)
+
+	local area = ctx.area
+	local ratios = ratios_for_workspace(key, count)
+	local amount = resize_state.delta_ratio(delta, "x", area and area.w, resize_step)
+	local index = resize_state.target_index(targets, target, active_index)
+	resize_state.adjust_active(ratios, index, count, amount, min_ratio)
+	if key then
+		state.skip_position_by_key[key] = true
+	end
+
+	return true
+end
+
 function M.layout_msg(ctx, msg)
 	local targets = ctx.targets
 	local count = targets and #targets or 0
@@ -227,20 +267,41 @@ function M.layout_msg(ctx, msg)
 	local key = workspace_key(targets)
 	local order, targets_by_id = order_state.sync(state, key, targets)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, targets)
-	local ratios = ratios_for_workspace(key, count)
-	local index = active_index(targets)
 
 	if command == "swapprev" then
 		move_active(targets, key, -1)
 	elseif command == "swapnext" then
 		move_active(targets, key, 1)
 	elseif command == "resize-left" then
-		adjust_active(ratios, index, count, -resize_step)
+		M.resize(ctx, nil, { x = -resize_step }, nil)
 	elseif command == "resize-right" then
-		adjust_active(ratios, index, count, resize_step)
+		M.resize(ctx, nil, { x = resize_step }, nil)
+	elseif command == "resize-x" then
+		M.resize(ctx, nil, { x = tonumber(msg:match("^%S+%s+(-?%d+%.?%d*)")) or 0 }, nil)
+	elseif command == "resize-x-at" then
+		local edge, position = msg:match("^%S+%s+(%S+)%s+(-?%d+%.?%d*)")
+		local area = ctx.area
+		local ratios = ratios_for_workspace(key, count)
+		local index = active_index(targets)
+		local boundary = resize_state.boundary_for_edge(index, count, edge)
+		resize_state.set_boundary_at(ratios, boundary, tonumber(position), area and area.x, area and area.w, min_ratio)
+		if key then
+			state.skip_position_by_key[key] = true
+		end
+	elseif command == "resize-y-at" then
+		local edge, position = msg:match("^%S+%s+(%S+)%s+(-?%d+%.?%d*)")
+		local area = ctx.area
+		local ratios = row_ratios_for_workspace(key, count)
+		local index = active_index(targets)
+		local boundary = resize_state.boundary_for_edge(index, count, edge)
+		resize_state.set_boundary_at(ratios, boundary, tonumber(position), area and area.y, area and area.h, min_ratio)
+		if key then
+			state.skip_position_by_key[key] = true
+		end
 	elseif command == "reset" then
 		if key then
 			ratios_by_workspace[key] = nil
+			row_ratios_by_workspace[key] = nil
 		end
 	else
 		return true
@@ -252,6 +313,7 @@ end
 hl.layout.register("ultrawide_master", {
 	recalculate = M.recalculate,
 	layout_msg = M.layout_msg,
+	resize = M.resize,
 })
 
 return M
