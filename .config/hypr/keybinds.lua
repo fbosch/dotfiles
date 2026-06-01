@@ -72,6 +72,10 @@ local function reset_keep_aspect_ratio()
   hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "0" }))
 end
 
+local function custom_layout_resize(action)
+  return exec("~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh " .. action)
+end
+
 local function drag_openpets()
   local active = hl.get_active_window()
 
@@ -159,13 +163,14 @@ hl.config({
   },
 })
 
--- Upstream Lua example uses `{ mouse = true }`, but current source does not wire
--- opts.mouse into keybinds. Keep these staged for future live testing after the
--- Lua API matures.
-bind("bindm", main_mod, "mouse:272", hl.dsp.window.drag())
-bind("bindm", main_mod, "mouse:273", hl.dsp.window.resize())
-bind("bindm", main_mod .. " + SHIFT", "mouse:273", resize_keep_aspect_ratio)
-bind("bindmr", main_mod .. " + SHIFT", "mouse:273", reset_keep_aspect_ratio)
+-- Current Lua mouse binds do not become native bindm entries, so custom layout
+-- right-drag resize is bridged through a bounded IPC helper. Floating windows
+-- use native border resize instead.
+bind("bind", main_mod, "mouse:272", hl.dsp.window.drag())
+bind("bind", main_mod, "mouse:273", custom_layout_resize("start"))
+bind("bindr", main_mod, "mouse:273", custom_layout_resize("stop"))
+bind("bind", main_mod .. " + SHIFT", "mouse:273", resize_keep_aspect_ratio)
+bind("bindr", main_mod .. " + SHIFT", "mouse:273", reset_keep_aspect_ratio)
 bind("bindmn", "", "mouse:272", drag_openpets)
 
 bind("bind", main_mod .. " + SHIFT", "H", window.move("left"))

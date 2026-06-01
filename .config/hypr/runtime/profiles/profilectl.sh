@@ -71,7 +71,7 @@ resume_background_helpers() {
 }
 
 refresh_window_captures() {
-  local capture_daemon_script="$HOME/.config/hypr/runtime/windows/window-capture-daemon.sh"
+  local capture_daemon_script="$HOME/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.sh"
 
   if [[ -x "$capture_daemon_script" ]]; then
     ( sleep 0.3; "$capture_daemon_script" refresh-once >/dev/null 2>&1 ) &

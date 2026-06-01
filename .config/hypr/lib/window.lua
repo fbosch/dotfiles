@@ -24,6 +24,14 @@ local warp_active = hl.dsp.exec_cmd(warp_command)
 local warp_active_after_focus = hl.dsp.exec_cmd(warp_command .. " 0.03")
 local portrait_resize_up = hl.dsp.layout("resize-up")
 local portrait_resize_down = hl.dsp.layout("resize-down")
+local portrait_swap_up = hl.dsp.layout("swapprev")
+local portrait_swap_down = hl.dsp.layout("swapnext")
+local ultrawide_swap_left = hl.dsp.layout("swapprev")
+local ultrawide_swap_right = hl.dsp.layout("swapnext")
+local ultrawide_resize_left = hl.dsp.layout("resize-left")
+local ultrawide_resize_right = hl.dsp.layout("resize-right")
+local ultrawide_x = 1440
+local edge_tolerance = 64
 
 local function direction(value)
 	local normalized = directions[value]
@@ -36,6 +44,45 @@ end
 
 local function monitor_name(active)
 	return active and active.monitor and active.monitor.name or nil
+end
+
+local function monitor_x(active)
+	local monitor = active and active.monitor
+	return monitor and (monitor.x or (monitor.at and monitor.at.x)) or nil
+end
+
+local function on_ultrawide_left_edge(active)
+	local at = active and active.at
+	local x = at and at.x
+	if not x then
+		return false
+	end
+
+	return x <= (monitor_x(active) or ultrawide_x) + edge_tolerance
+end
+
+local function tiled_count(workspace)
+	if not workspace or not workspace.get_windows then
+		return nil
+	end
+
+	local count = 0
+	local windows = workspace:get_windows()
+	for index = 1, #windows do
+		local window = windows[index]
+		if window.visible ~= false and not window.floating then
+			count = count + 1
+			if count > 1 then
+				return count
+			end
+		end
+	end
+
+	return count
+end
+
+local function is_only_tiled_window(active)
+	return tiled_count(active and active.workspace) == 1
 end
 
 local function warp_window(active)
@@ -78,13 +125,15 @@ function M.move(value)
 	local move_dispatcher = hl.dsp.window.move({ direction = normalized })
 	local move_to_portrait = hl.dsp.window.move({ monitor = "HDMI-A-2" })
 	local move_to_ultrawide = hl.dsp.window.move({ monitor = "DP-2" })
-	local swap_dispatcher = hl.dsp.window.swap({ direction = normalized })
 
 	if normalized == "right" then
 		return function()
 			local active = M.active()
-			if monitor_name(active) == "HDMI-A-2" then
+			local monitor = monitor_name(active)
+			if monitor == "HDMI-A-2" then
 				dispatch(move_to_ultrawide)
+			elseif monitor == "DP-2" then
+				dispatch(ultrawide_swap_right)
 			else
 				dispatch(move_dispatcher)
 			end
@@ -99,7 +148,7 @@ function M.move(value)
 			if monitor == "DP-2" then
 				dispatch(move_to_portrait)
 			elseif monitor == "HDMI-A-2" then
-				dispatch(swap_dispatcher)
+				dispatch(portrait_swap_down)
 			else
 				dispatch(move_dispatcher)
 			end
@@ -111,7 +160,19 @@ function M.move(value)
 		return function()
 			local active = M.active()
 			if monitor_name(active) == "HDMI-A-2" then
-				dispatch(swap_dispatcher)
+				dispatch(portrait_swap_up)
+			else
+				dispatch(move_dispatcher)
+			end
+			warp_window(active)
+		end
+	end
+
+	if normalized == "left" then
+		return function()
+			local active = M.active()
+			if monitor_name(active) == "DP-2" then
+				dispatch((is_only_tiled_window(active) or on_ultrawide_left_edge(active)) and move_to_portrait or ultrawide_swap_left)
 			else
 				dispatch(move_dispatcher)
 			end
@@ -133,6 +194,18 @@ function M.adjust(kind, value)
 	end
 
 	if kind == "resize" then
+		if delta.x ~= 0 then
+			return function()
+				local active = M.active()
+				if monitor_name(active) == "DP-2" then
+					dispatch(delta.x < 0 and ultrawide_resize_left or ultrawide_resize_right)
+					return
+				end
+
+				dispatch(hl.dsp.window.resize({ x = delta.x, y = delta.y, relative = true }))
+			end
+		end
+
 		if delta.y ~= 0 then
 			return function()
 				local active = M.active()

@@ -39,6 +39,7 @@ hypr_query() {
     j/activewindow) hyprctl activewindow -j 2>/dev/null ;;
     j/activeworkspace) hyprctl activeworkspace -j 2>/dev/null ;;
     j/clients) hyprctl clients -j 2>/dev/null ;;
+    j/cursorpos) hyprctl cursorpos -j 2>/dev/null ;;
     j/monitors) hyprctl monitors -j 2>/dev/null ;;
     activewindow) hyprctl activewindow 2>/dev/null ;;
     monitors) hyprctl monitors 2>/dev/null ;;

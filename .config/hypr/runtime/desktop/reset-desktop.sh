@@ -5,7 +5,10 @@ set -eu
 pkill waybar 2>/dev/null || true
 pkill gjs 2>/dev/null || true
 pkill -f waybar-edge-monitor 2>/dev/null || true
+pkill -f window-state.sh 2>/dev/null || true
+pkill -f window-state-daemon.lua 2>/dev/null || true
 pkill -f window-capture-daemon 2>/dev/null || true
+pkill -f custom-layout-drag-resize-daemon.lua 2>/dev/null || true
 pkill -f hyprpaper 2>/dev/null || true
 
 sleep 0.2
@@ -18,7 +21,9 @@ swaync-client -R &
 swaync-client -rs &
 
 uwsm-app -s b -- hyprpaper &
-uwsm-app -s b -- ~/.config/hypr/runtime/windows/window-capture-daemon.sh &
+uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-state/window-state.sh &
+uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.sh &
+uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh daemon &
 
 sleep 1
 

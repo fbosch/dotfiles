@@ -7,7 +7,7 @@ source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
 readonly MINIMIZED_WORKSPACE_PREFIX="special:minimized"
 readonly STATE_FILE="${XDG_RUNTIME_DIR}/hypr-minimized-state.json"
-readonly DAEMON_SCRIPT="$HOME/.config/hypr/runtime/windows/minimized-state-daemon.sh"
+readonly DAEMON_SCRIPT="$HOME/.config/hypr/runtime/windows/daemons/minimized-state/minimized-state-daemon.sh"
 
 bucket_key_for() {
   local monitor_name="$1"

@@ -39,6 +39,10 @@ local function make_window(index, opts)
 		class = opts.class or "kitty",
 		initial_class = opts.initial_class or opts.class or "kitty",
 		floating = opts.floating or false,
+		monitor = opts.monitor,
+		stable_id = opts.stable_id or index,
+		at = opts.at,
+		size = opts.size,
 		visible = opts.visible ~= false,
 		workspace = opts.workspace,
 	}
@@ -56,7 +60,11 @@ local function make_workspace(count, opts)
 
 	local windows = {}
 	for index = 1, count do
-		windows[index] = make_window(index, { workspace = workspace, floating = opts.floating or false })
+		windows[index] = make_window(index, {
+			workspace = workspace,
+			floating = opts.floating or false,
+			monitor = workspace.monitor,
+		})
 	end
 
 	function workspace:get_windows()
@@ -163,12 +171,29 @@ local function bench_ultrawide_master(iterations)
 	local workspace = make_workspace(3, { monitor = "DP-2", layout = "master", name = "1" })
 	current_workspace = workspace
 	current_windows = workspace.windows
+	for index, window in ipairs(current_windows) do
+		window.at = { x = (index - 1) * 500, y = 0 }
+		window.size = { x = 500, y = 1400 }
+		window.active = index == 1
+	end
 	active_window = current_windows[1]
 	active_monitor = { name = "DP-2" }
 	require("layouts.ultrawide_master")
-	local callback = callbacks("window.open")[1]
-	run_case("layouts.ultrawide_master/window.open", iterations, function()
-		callback(current_windows[1])
+	local layout = layout_providers.ultrawide_master
+	local context = { area = { x = 0, y = 0, w = 5120, h = 1440 }, targets = {} }
+	for index, window_handle in ipairs(current_windows) do
+		context.targets[index] = {
+			index = index,
+			window = window_handle,
+			place = function()
+			end,
+		}
+	end
+	run_case("layouts.ultrawide_master/recalculate-3", iterations, function()
+		layout.recalculate(context)
+	end)
+	run_case("layouts.ultrawide_master/swapnext-3", iterations, function()
+		layout.layout_msg(context, "swapnext")
 	end)
 end
 
@@ -203,19 +228,55 @@ local function make_layout_context(windows)
 	}
 end
 
+local function set_portrait_geometry(windows)
+	for index, window in ipairs(windows) do
+		window.monitor = { name = "HDMI-A-2" }
+		window.stable_id = index
+		window.at = { x = 0, y = (index - 1) * 300 }
+		window.size = { x = 1440, y = 300 }
+	end
+end
+
+local function set_active(windows, active_index)
+	for index, window in ipairs(windows) do
+		window.active = index == active_index
+	end
+	active_window = windows[active_index]
+end
+
 local function bench_portrait_rows(iterations)
 	clear_modules()
 	reset_events()
-	local workspace = make_workspace(3, { monitor = "HDMI-A-2", layout = "dwindle", name = "2" })
+	local workspace = make_workspace(3, { monitor = "HDMI-A-2", layout = "dwindle", name = "portrait-3" })
 	current_workspace = workspace
 	current_windows = workspace.windows
-	active_window = current_windows[1]
+	set_portrait_geometry(current_windows)
+	set_active(current_windows, 1)
 	active_monitor = { name = "HDMI-A-2" }
 	require("layouts.portrait_rows")
 	local layout = layout_providers.portrait_rows
 	local context = make_layout_context(current_windows)
-	run_case("layouts.portrait/recalculate", iterations, function()
+	run_case("layouts.portrait/recalculate-3", iterations, function()
 		layout.recalculate(context)
+	end)
+	run_case("layouts.portrait/swapnext-3", iterations, function()
+		layout.layout_msg(context, "swapnext")
+	end)
+
+	local two_window_workspace = make_workspace(2, { monitor = "HDMI-A-2", layout = "dwindle", name = "portrait-2" })
+	current_workspace = two_window_workspace
+	current_windows = two_window_workspace.windows
+	set_portrait_geometry(current_windows)
+	set_active(current_windows, 1)
+	local two_window_context = make_layout_context(current_windows)
+	run_case("layouts.portrait/recalculate-2", iterations, function()
+		layout.recalculate(two_window_context)
+	end)
+
+	local dragged = current_windows[1]
+	run_case("layouts.portrait/drag-reorder-2", iterations, function()
+		dragged.at.y = dragged.at.y == 0 and 900 or 0
+		layout.recalculate(two_window_context)
 	end)
 end
 
