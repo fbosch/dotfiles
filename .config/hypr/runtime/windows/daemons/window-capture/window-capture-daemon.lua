@@ -22,12 +22,14 @@ local last_healthcheck_file = screenshot_dir .. "/.last_healthcheck"
 
 local debounce_ms = 100
 local overlay_cooldown_ms = 5
-local capture_delay_ms = 100
-local workspace_delay_ms = 200
+local capture_delay_ms = 50
+local window_settle_delay_ms = 150
+local workspace_delay_ms = 100
 local lock_stale_ms = 10000
 local healthcheck_interval_ms = 5000
 local temp_file_max_age_s = 30
 local grim_timeout_s = 2
+local max_parallel_captures = 4
 local black_frame_mean_threshold = 10
 local jpeg_quality = 85
 local preview_target_height = 180
@@ -73,6 +75,10 @@ local function command_exists(name)
 
 	command_cache[name] = command_ok("command -v " .. shell_quote(name) .. " >/dev/null 2>&1")
 	return command_cache[name]
+end
+
+local function process_is_running(pid)
+	return pid ~= "" and command_ok("kill -0 " .. shell_quote(pid) .. " 2>/dev/null")
 end
 
 local function run_with_timeout(timeout_s, command)
@@ -274,6 +280,78 @@ local function capture_window_preview(preview_id, width, height)
 	os.rename(temp_output, output_path)
 end
 
+local function capture_window_preview_command(preview_id, width, height)
+	local filename = preview_id .. ".jpg"
+	local temp_output = screenshot_dir .. "/.temp_" .. filename
+	local output_path = screenshot_dir .. "/" .. filename
+	local grim_command = table.concat({
+		"grim -t jpeg -q",
+		tostring(jpeg_quality),
+		"-s",
+		shell_quote(calculate_capture_scale(width, height)),
+		"-T",
+		shell_quote(preview_id),
+		shell_quote(temp_output),
+		"2>/dev/null",
+	}, " ")
+
+	if command_exists("timeout") then
+		grim_command = "timeout --kill-after=1 " .. shell_quote(tostring(grim_timeout_s) .. "s") .. " " .. grim_command
+	end
+
+	local parts = {
+		grim_command .. " || { rm -f " .. shell_quote(temp_output) .. "; exit 0; }",
+		"[ -s " .. shell_quote(temp_output) .. " ] || { rm -f " .. shell_quote(temp_output) .. "; exit 0; }",
+	}
+
+	if command_exists("magick") then
+		local magick_command = "magick "
+			.. shell_quote(temp_output)
+			.. " -colorspace Gray -format '%[fx:floor(mean*1000)]' info: 2>/dev/null"
+		if command_exists("timeout") then
+			magick_command = "timeout --kill-after=1 1s " .. magick_command
+		end
+
+		parts[#parts + 1] = "mean=$(" .. magick_command .. " || printf '')"
+		parts[#parts + 1] = "case $mean in ''|*[!0-9]*) ;; *) [ \"$mean\" -lt "
+			.. tostring(black_frame_mean_threshold)
+			.. " ] && { rm -f "
+			.. shell_quote(temp_output)
+			.. "; exit 0; } ;; esac"
+	end
+
+	parts[#parts + 1] = "mv " .. shell_quote(temp_output) .. " " .. shell_quote(output_path)
+	return table.concat(parts, "; ")
+end
+
+local function spawn_capture_window_preview(preview_id, width, height)
+	if preview_id == "" or width <= 0 or height <= 0 then
+		return nil
+	end
+
+	local command = capture_window_preview_command(preview_id, width, height)
+	local handle = io.popen("sh -c " .. shell_quote("( " .. command .. " ) & printf '%s\n' \"$!\""), "r")
+	if not handle then
+		return nil
+	end
+
+	local pid = handle:read("*l") or ""
+	handle:close()
+	return pid ~= "" and pid or nil
+end
+
+local function wait_for_capture(pid)
+	while process_is_running(pid) do
+		socket.sleep(0.02)
+	end
+end
+
+local function wait_for_capture_batch(pids)
+	for _, pid in ipairs(pids) do
+		wait_for_capture(pid)
+	end
+end
+
 local function capture_active_window_preview()
 	local active_window_json = query("j/activewindow")
 	if active_window_json == "" or active_window_json == "{}" then
@@ -324,13 +402,26 @@ local function capture_visible_workspace_previews(missing_only)
 			"--argjson visible_ws " .. shell_quote(visible_workspaces)
 		)
 
+		local capture_pids = {}
 		for line in output:gmatch("[^\n]+") do
 			local preview_id, mapped, width, height = line:match("([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\n]*)")
 			if preview_id and preview_id ~= "" and mapped ~= "false" then
 				if not missing_only or not file_is_nonempty(screenshot_dir .. "/" .. preview_id .. ".jpg") then
-					capture_window_preview(preview_id, tonumber(width) or 0, tonumber(height) or 0)
+					local pid = spawn_capture_window_preview(preview_id, tonumber(width) or 0, tonumber(height) or 0)
+					if pid then
+						capture_pids[#capture_pids + 1] = pid
+					end
+
+					if #capture_pids >= max_parallel_captures then
+						wait_for_capture_batch(capture_pids)
+						capture_pids = {}
+					end
 				end
 			end
+		end
+
+		if #capture_pids > 0 then
+			wait_for_capture_batch(capture_pids)
 		end
 	end)
 end
@@ -393,6 +484,8 @@ local function capture_screenshot(event_type, capture_id)
 	local delay_ms = capture_delay_ms
 	if event_type == "workspace" then
 		delay_ms = workspace_delay_ms
+	elseif event_type == "windowsettle" then
+		delay_ms = window_settle_delay_ms
 	end
 
 	local elapsed_sleep = 0
@@ -427,15 +520,15 @@ local function event_type_for(line)
 		return "activewindow"
 	elseif line:match("^workspace") or line:match("^workspacev2") then
 		return "workspace"
-	elseif line:match("^openwindow")
-		or line:match("^openwindowv2")
-		or line:match("^movewindow")
+	elseif line:match("^openwindow") or line:match("^openwindowv2") then
+		return "windowupdate"
+	elseif line:match("^movewindow")
 		or line:match("^movewindowv2")
 		or line:match("^changefloatingmode")
 		or line:match("^fullscreen")
 		or line:match("^fullscreenv2")
 	then
-		return "windowupdate"
+		return "windowsettle"
 	elseif line:match("^closewindow") then
 		return "closewindow", line:match("^[^>,]+>>(.+)$") or line:match("^[^,]+,(.+)$") or ""
 	end
@@ -487,11 +580,12 @@ local function handle_event(line)
 end
 
 local function current_pid()
-	return command_output_line("sh -c 'printf %s \"$PPID\"'")
+	local stat = read_file("/proc/self/stat") or ""
+	return stat:match("^(%d+)") or ""
 end
 
 local function pid_is_running(pid)
-	return pid ~= "" and command_ok("kill -0 " .. shell_quote(pid) .. " 2>/dev/null")
+	return process_is_running(pid)
 end
 
 local function acquire_daemon_lock()

@@ -18,7 +18,7 @@ Target shape: one daemon owner. Either the shell script handles the event socket
 - [x] Validate with `lua -e 'assert(loadfile(".config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.lua"))'`.
 - [x] Validate daemon startup does not spawn a shell process per Hyprland event.
 - [x] Benchmark daemon hot path against the old implementation; matching events are faster in the controlled harness.
-- [ ] Validate screenshots still refresh for active-window, workspace, open-window, move-window, fullscreen, and close-window events.
+- [x] Validate screenshots still refresh for active-window, workspace, open-window, move-window, fullscreen, and close-window events.
 
 ## Window State Daemon Decomposition
 
