@@ -10,7 +10,6 @@ pkill hyprpaper 2>/dev/null || true
 pkill hypridle 2>/dev/null || true
 pkill swayosd-server 2>/dev/null || true
 pkill flake-check-updates 2>/dev/null || true
-pkill -f "vicinae server" 2>/dev/null || true
 pkill -f "atuin daemon" 2>/dev/null || true
 pkill -f "foot --server" 2>/dev/null || true
 pkill -f "window-state.sh" 2>/dev/null || true
@@ -24,7 +23,6 @@ pkill gjs 2>/dev/null || true
 sleep 0.2
 
 uwsm-app -s b -- hypridle &
-uwsm-app -s s -- vicinae server &
 uwsm-app -s s -- atuin daemon &
 uwsm-app -s b -- foot --server &
 uwsm-app -s b -- flake-check-updates &

@@ -16,7 +16,6 @@ sleep 0.2
 uwsm-app -s s -- waybar &
 uwsm-app -s s -- ~/.config/ags/start-daemons.sh &
 uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-edge-monitor.sh &
-uwsm-app -s s -- vicinae server --replace &
 swaync-client -R &
 swaync-client -rs &
 

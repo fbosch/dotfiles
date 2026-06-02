@@ -37,7 +37,6 @@ local commands = {
 	background(paths.runtime_script("desktop/toggle-night-light.sh") .. " daemon"),
 	session(paths.runtime_script("desktop/waybar-edge-monitor.sh")),
 	paths.runtime_script("startup/startup-desktop-ready.sh"),
-	"vicinae server",
 }
 
 if host == "rvn-pc" then
