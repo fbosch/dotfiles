@@ -164,8 +164,7 @@ hl.config({
 })
 
 -- Current Lua mouse binds do not become native bindm entries, so custom layout
--- right-drag resize is bridged through a bounded IPC helper. Floating windows
--- use native border resize instead.
+-- right-drag resize is bridged through a bounded IPC helper.
 bind("bind", main_mod, "mouse:272", hl.dsp.window.drag())
 bind("bind", main_mod, "mouse:273", custom_layout_resize("start"))
 bind("bindr", main_mod, "mouse:273", custom_layout_resize("stop"))
