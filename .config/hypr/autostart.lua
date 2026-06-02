@@ -23,7 +23,9 @@ local commands = {
 	background("flake-check-updates"),
 	background("swayosd-server"),
 	background(paths.runtime_script("windows/daemons/window-state/window-state.sh")),
-	background(paths.runtime_script("windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh") .. " daemon"),
+	background(
+		paths.runtime_script("windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh") .. " daemon"
+	),
 	background(paths.runtime_script("windows/daemons/minimized-state/minimized-state-daemon.sh")),
 	background(paths.runtime_script("windows/daemons/window-capture/window-capture-daemon.sh")),
 	background(paths.runtime_script("gamescope/daemons/gamescope-profile-watchdog/gamescope-profile-watchdog.sh")),
@@ -35,7 +37,7 @@ local commands = {
 	background(paths.runtime_script("desktop/toggle-night-light.sh") .. " daemon"),
 	session(paths.runtime_script("desktop/waybar-edge-monitor.sh")),
 	paths.runtime_script("startup/startup-desktop-ready.sh"),
-	session("vicinae server"),
+	"vicinae server",
 }
 
 if host == "rvn-pc" then
