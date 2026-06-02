@@ -62,12 +62,19 @@ local escaped_table = {
 }
 
 local escaped_json = json.encode(escaped_table)
+local correctness_json = [[{"unicode":"\u00e6\u00f8\u00e5","emoji":"\ud83d\ude80","number":1.25e3,"nulls":[null]}]]
 
 local function assert_roundtrip()
 	local decoded = json.decode(window_state_json)
 	assert(#decoded == #window_state, "window-state decode count mismatch")
 	assert(decoded[1].class == window_state[1].class, "window-state decode class mismatch")
 	assert(json.decode(escaped_json).multiline == escaped_table.multiline, "escaped decode mismatch")
+	local correctness = json.decode(correctness_json)
+	assert(correctness.unicode == "æøå", "unicode decode mismatch")
+	assert(correctness.emoji == "🚀", "surrogate decode mismatch")
+	assert(correctness.number == 1250, "exponent decode mismatch")
+	assert(correctness.nulls[1] == json.null, "null decode mismatch")
+	assert(json.encode(json.null) == "null", "null encode mismatch")
 end
 
 assert_roundtrip()

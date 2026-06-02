@@ -1,4 +1,5 @@
 local M = {}
+M.null = {}
 
 local function escape_string(value)
 	return tostring(value):gsub('[%z\1-\31\\"]', function(char)
@@ -56,6 +57,64 @@ end
 
 local parse_value
 
+local function utf8_char(codepoint)
+	if codepoint <= 0x7f then
+		return string.char(codepoint)
+	elseif codepoint <= 0x7ff then
+		return string.char(
+			0xc0 + math.floor(codepoint / 0x40),
+			0x80 + (codepoint % 0x40)
+		)
+	elseif codepoint <= 0xffff then
+		return string.char(
+			0xe0 + math.floor(codepoint / 0x1000),
+			0x80 + (math.floor(codepoint / 0x40) % 0x40),
+			0x80 + (codepoint % 0x40)
+		)
+	elseif codepoint <= 0x10ffff then
+		return string.char(
+			0xf0 + math.floor(codepoint / 0x40000),
+			0x80 + (math.floor(codepoint / 0x1000) % 0x40),
+			0x80 + (math.floor(codepoint / 0x40) % 0x40),
+			0x80 + (codepoint % 0x40)
+		)
+	end
+
+	return nil
+end
+
+local function parse_unicode_escape(source, index)
+	local hex = source:sub(index + 2, index + 5)
+	local codepoint = tonumber(hex, 16)
+	if not codepoint or #hex ~= 4 then
+		decode_error(source, index, "invalid unicode escape")
+	end
+
+	local next_index = index + 6
+	if codepoint >= 0xd800 and codepoint <= 0xdbff then
+		if source:sub(next_index, next_index + 1) ~= "\\u" then
+			decode_error(source, index, "missing low surrogate")
+		end
+
+		local low = tonumber(source:sub(next_index + 2, next_index + 5), 16)
+		if not low or low < 0xdc00 or low > 0xdfff then
+			decode_error(source, next_index, "invalid low surrogate")
+		end
+
+		codepoint = 0x10000 + ((codepoint - 0xd800) * 0x400) + (low - 0xdc00)
+		next_index = next_index + 6
+	elseif codepoint >= 0xdc00 and codepoint <= 0xdfff then
+		decode_error(source, index, "unexpected low surrogate")
+	end
+
+	local encoded = utf8_char(codepoint)
+	if not encoded then
+		decode_error(source, index, "invalid unicode codepoint")
+	end
+
+	return encoded, next_index
+end
+
 local function parse_string(source, index)
 	if source:sub(index, index) ~= '"' then
 		decode_error(source, index, "expected string")
@@ -84,16 +143,18 @@ local function parse_string(source, index)
 
 			local escape = source:sub(next_special + 1, next_special + 1)
 			if escape == "u" then
-				decode_error(source, next_special, "unicode escapes are not supported")
-			end
+				local decoded
+				decoded, cursor = parse_unicode_escape(source, next_special)
+				parts[#parts + 1] = decoded
+			else
+				local decoded = decode_escapes[escape]
+				if decoded == nil then
+					decode_error(source, next_special, "invalid string escape")
+				end
 
-			local decoded = decode_escapes[escape]
-			if decoded == nil then
-				decode_error(source, next_special, "invalid string escape")
+				parts[#parts + 1] = decoded
+				cursor = next_special + 2
 			end
-
-			parts[#parts + 1] = decoded
-			cursor = next_special + 2
 			start = cursor
 		end
 	end
@@ -102,12 +163,17 @@ local function parse_string(source, index)
 end
 
 local function parse_number(source, index)
-	local start_index, end_index = source:find("^-?%d+%.?%d*", index)
+	local start_index, end_index = source:find("^-?%d+%.?%d*[eE]?[+-]?%d*", index)
 	if not start_index then
 		decode_error(source, index, "expected number")
 	end
 
-	return tonumber(source:sub(start_index, end_index)), end_index + 1
+	local number = tonumber(source:sub(start_index, end_index))
+	if not number then
+		decode_error(source, index, "invalid number")
+	end
+
+	return number, end_index + 1
 end
 
 local function parse_array(source, index)
@@ -180,7 +246,7 @@ function parse_value(source, index)
 	elseif char == "-" or char:match("%d") then
 		return parse_number(source, index)
 	elseif source:sub(index, index + 3) == "null" then
-		return nil, index + 4
+		return M.null, index + 4
 	elseif source:sub(index, index + 3) == "true" then
 		return true, index + 4
 	elseif source:sub(index, index + 4) == "false" then
@@ -193,7 +259,7 @@ end
 function M.encode(value)
 	local kind = type(value)
 
-	if kind == "nil" then
+	if kind == "nil" or value == M.null then
 		return "null"
 	end
 
