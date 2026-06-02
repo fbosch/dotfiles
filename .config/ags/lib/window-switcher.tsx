@@ -3,6 +3,7 @@ import { Astal } from "ags/gtk4";
 import Gdk from "gi://Gdk?version=4.0";
 import GdkPixbuf from "gi://GdkPixbuf?version=2.0";
 import Gio from "gi://Gio?version=2.0";
+import GioUnix from "gi://GioUnix?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
@@ -180,6 +181,19 @@ type PreviewCacheEntry = {
 
 const previewCache = new Map<string, PreviewCacheEntry>();
 
+function getThemedIconName(icon: Gio.Icon | null): string | null {
+  if (!icon) return null;
+
+  if (icon instanceof Gio.ThemedIcon) {
+    const names = icon.get_names();
+    if (names && names.length > 0) {
+      return names[0];
+    }
+  }
+
+  return null;
+}
+
 // Persistent focus history for recency-based sorting
 // Most recently focused window is at index 0
 let focusHistory: string[] = [];
@@ -342,29 +356,41 @@ function getIconNameForClass(appClass: string): string | null {
 
   for (const desktopId of desktopIdAttempts) {
     try {
-      // @ts-ignore - DesktopAppInfo exists in Gio but may not be in type definitions
-      const appInfo = Gio.DesktopAppInfo.new(desktopId);
+      const appInfo = GioUnix.DesktopAppInfo.new(desktopId);
       if (!appInfo) continue;
 
-      // Get the icon from the desktop file
-      const icon = appInfo.get_icon();
-      if (!icon) continue;
-
-      // If it's a themed icon, get the icon name
-      if (icon instanceof Gio.ThemedIcon) {
-        const names = icon.get_names();
-        if (names && names.length > 0) {
-          // Return the first icon name
-          iconName = names[0];
-          break;
-        }
+      iconName = getThemedIconName(appInfo.get_icon());
+      if (iconName) {
+        break;
       }
-
-      // If it's a file icon, we could get the path, but for now skip
-      // as we want themed icons for consistency
     } catch (e) {
       // Desktop file not found or error parsing, try next
       continue;
+    }
+  }
+
+  // If no exact desktop ID matched, search desktop entries by name/keywords.
+  // This handles wrapper windows such as gamescope whose title is the real app.
+  if (!iconName) {
+    for (const searchTerm of [normalizedClass, lowerClass, kebabFromCamel]) {
+      try {
+        const desktopSearchResults = GioUnix.DesktopAppInfo.search(searchTerm);
+        for (const desktopIds of desktopSearchResults) {
+          for (const desktopId of desktopIds) {
+            const appInfo = GioUnix.DesktopAppInfo.new(desktopId);
+            if (!appInfo) continue;
+
+            iconName = getThemedIconName(appInfo.get_icon());
+            if (iconName) break;
+          }
+
+          if (iconName) break;
+        }
+
+        if (iconName) break;
+      } catch (e) {
+        continue;
+      }
     }
   }
 
@@ -421,12 +447,19 @@ function buildTitleCandidates(title: string): string[] {
 
   const candidates: string[] = [];
   for (const part of parts) {
-    const lowered = part.toLowerCase();
-    const dashSeparated = lowered.replace(/\s+/g, "-");
-    const underscored = lowered.replace(/\s+/g, "_");
-    const compact = lowered.replace(/[^a-z0-9]+/g, "");
+    const withoutTrailingVersion = part.replace(/\s+\d+(?:\.\d+)+(?:\b.*)?$/, "").trim();
+    const partCandidates = withoutTrailingVersion && withoutTrailingVersion !== part
+      ? [part, withoutTrailingVersion]
+      : [part];
 
-    candidates.push(part, lowered, dashSeparated, underscored, compact);
+    for (const partCandidate of partCandidates) {
+      const lowered = partCandidate.toLowerCase();
+      const dashSeparated = lowered.replace(/\s+/g, "-");
+      const underscored = lowered.replace(/\s+/g, "_");
+      const compact = lowered.replace(/[^a-z0-9]+/g, "");
+
+      candidates.push(partCandidate, lowered, dashSeparated, underscored, compact);
+    }
   }
 
   return Array.from(new Set(candidates.filter((candidate) => candidate !== "")));
