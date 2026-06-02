@@ -84,13 +84,29 @@ local function cursor_axis(axis)
 	return value
 end
 
+local function cursor_position()
+	local response = request("j/cursorpos")
+	local x = json_number(response, "x")
+	local y = json_number(response, "y")
+	if not x or not y then
+		error("cursor response missing position")
+	end
+
+	return x, y
+end
+
 local function dispatch(command, edge, position)
 	request(string.format('dispatch hl.dsp.layout("%s %s %d")', command, edge, position))
 end
 
-local function dispatch_window_geometry(x, y, width, height)
-	request(string.format("dispatch hl.dsp.window.resize({ x = %d, y = %d })", width, height))
-	request(string.format("dispatch hl.dsp.window.move({ x = %d, y = %d })", x, y))
+local function dispatch_window_geometry(active, x, y, width, height)
+	if width ~= active.width or height ~= active.height then
+		request(string.format("dispatch hl.dsp.window.resize({ x = %d, y = %d })", width, height))
+	end
+
+	if x ~= active.x or y ~= active.y then
+		request(string.format("dispatch hl.dsp.window.move({ x = %d, y = %d })", x, y))
+	end
 end
 
 local function write_file(path, value)
@@ -134,8 +150,8 @@ local function stop_drag()
 end
 
 local function start_floating_drag(active, poll_interval)
-	local initial_x = cursor_axis("x")
-	local initial_y = cursor_axis("y")
+	poll_interval = math.max(poll_interval, 1 / 60)
+	local initial_x, initial_y = cursor_position()
 	local edge_x = resize_edge("x", initial_x, active.x, active.y, active.width, active.height)
 	local edge_y = resize_edge("y", initial_y, active.x, active.y, active.width, active.height)
 	drag_active = true
@@ -152,14 +168,13 @@ local function start_floating_drag(active, poll_interval)
 			break
 		end
 
-		local ok_x, current_x = pcall(cursor_axis, "x")
-		local ok_y, current_y = pcall(cursor_axis, "y")
-		if ok_x and ok_y then
+		local ok, current_x, current_y = pcall(cursor_position)
+		if ok then
 			local x, width = floating_axis(edge_x, active.x, active.width, current_x - initial_x)
 			local y, height = floating_axis(edge_y, active.y, active.height, current_y - initial_y)
 			local geometry = string.format("%d,%d,%d,%d", x, y, width, height)
 			if geometry ~= last_geometry then
-				local dispatched = pcall(dispatch_window_geometry, x, y, width, height)
+				local dispatched = pcall(dispatch_window_geometry, active, x, y, width, height)
 				if dispatched then
 					last_geometry = geometry
 				end
