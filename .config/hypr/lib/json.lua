@@ -45,8 +45,13 @@ local function decode_error(source, index, message)
 end
 
 local function skip_space(source, index)
-	local _, next_index = source:find("^%s*", index)
-	return next_index + 1
+	while true do
+		local byte = source:byte(index)
+		if byte ~= 32 and byte ~= 10 and byte ~= 13 and byte ~= 9 then
+			return index
+		end
+		index = index + 1
+	end
 end
 
 local parse_value
@@ -57,27 +62,39 @@ local function parse_string(source, index)
 	end
 
 	local cursor = index + 1
-	local parts = {}
-	while cursor <= #source do
-		local char = source:sub(cursor, cursor)
+	local start = cursor
+	local parts = nil
+	while true do
+		local next_special = source:find('[\\"]', cursor)
+		if not next_special then
+			break
+		end
+
+		local char = source:sub(next_special, next_special)
 		if char == '"' then
-			return table.concat(parts), cursor + 1
+			if not parts then
+				return source:sub(start, next_special - 1), next_special + 1
+			end
+
+			parts[#parts + 1] = source:sub(start, next_special - 1)
+			return table.concat(parts), next_special + 1
 		elseif char == "\\" then
-			local escape = source:sub(cursor + 1, cursor + 1)
+			parts = parts or {}
+			parts[#parts + 1] = source:sub(start, next_special - 1)
+
+			local escape = source:sub(next_special + 1, next_special + 1)
 			if escape == "u" then
-				decode_error(source, cursor, "unicode escapes are not supported")
+				decode_error(source, next_special, "unicode escapes are not supported")
 			end
 
 			local decoded = decode_escapes[escape]
 			if decoded == nil then
-				decode_error(source, cursor, "invalid string escape")
+				decode_error(source, next_special, "invalid string escape")
 			end
 
 			parts[#parts + 1] = decoded
-			cursor = cursor + 2
-		else
-			parts[#parts + 1] = char
-			cursor = cursor + 1
+			cursor = next_special + 2
+			start = cursor
 		end
 	end
 

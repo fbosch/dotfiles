@@ -3,7 +3,6 @@
 
 local ags = require("lib.ags")
 local command = require("lib.command")
-local json = require("lib.json")
 local notify = require("lib.notify")
 local paths = require("lib.paths")
 
@@ -22,7 +21,7 @@ local function notify_failed(body)
 end
 
 local function confirm_payload(pid, display_name)
-	return json.encode({
+	return {
 		action = "show",
 		config = {
 			icon = "󱂥",
@@ -33,7 +32,7 @@ local function confirm_payload(pid, display_name)
 			confirmCommand = paths.runtime_script("windows/kill-pid-with-fallback.sh") .. " " .. pid,
 			variant = "danger",
 		},
-	})
+	}
 end
 
 function M.confirm_hyprprop_kill()
