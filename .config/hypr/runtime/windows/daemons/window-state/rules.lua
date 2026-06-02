@@ -1,4 +1,5 @@
 local json = require("lib.json")
+local generated_rules = require("lib.generated_rules")
 
 local M = {}
 
@@ -131,17 +132,17 @@ function M.load_rules_cache(path)
 	for _, rule in ipairs(rules) do
 		if type(rule) == "table" and type(rule.effects) == "table" then
 			local matcher, pattern = rule_identity(rule)
-			local size = rule.effects.size
-			local move = rule.effects.move
-			if matcher and pattern and type(size) == "table" and type(move) == "table" then
+			local width, height = generated_rules.parse_pair(rule.effects.size)
+			local x, y = generated_rules.parse_pair(rule.effects.move)
+			if matcher and pattern and width and height and x and y then
 				cache[cache_key(matcher, pattern)] = cache_entry(
 					matcher,
 					pattern,
 					rule.effects.monitor or "",
-					move[1],
-					move[2],
-					size[1],
-					size[2]
+					x,
+					y,
+					width,
+					height
 				)
 			end
 		end
@@ -197,8 +198,8 @@ local function render_rules(cache, selectors_path)
 			if entry.monitor and entry.monitor ~= "" then
 				lines[#lines + 1] = "      monitor = " .. json.encode(entry.monitor) .. ","
 			end
-			lines[#lines + 1] = "      size = { " .. entry.width .. ", " .. entry.height .. " },"
-			lines[#lines + 1] = "      move = { " .. entry.x .. ", " .. entry.y .. " },"
+			lines[#lines + 1] = "      size = " .. json.encode(generated_rules.format_pair(entry.width, entry.height)) .. ","
+			lines[#lines + 1] = "      move = " .. json.encode(generated_rules.format_pair(entry.x, entry.y)) .. ","
 			lines[#lines + 1] = "    },"
 			lines[#lines + 1] = "    source = \"window-state\","
 			lines[#lines + 1] = "    comment = " .. json.encode(key) .. ","

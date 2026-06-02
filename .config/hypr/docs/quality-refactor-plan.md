@@ -44,16 +44,16 @@ Problem: generated rules and static rules use different shapes. Generated rules 
 
 Target shape: one clear generated-rule contract. Either generated files emit Hypr-native rule tables directly, or `rule-loader.lua` becomes the documented canonical boundary for all generated data and no longer carries incidental compatibility behavior.
 
-- [ ] Re-read `.config/hypr/docs/lua-migration-plan.md` before changing this, because it currently documents generated Lua data tables plus a central loader as the migration decision.
-- [ ] Decide whether the current loader decision still pays for itself now that Lua config is live.
-- [ ] If using Hypr-native generated rules, update quickrule and window-state writers to emit `{ name?, match, float, size, move, ... }` directly.
-- [ ] If keeping the loader, make the generated schema explicit in code and docs: required fields, optional fields, identity fields, and Hypr effect normalization.
-- [ ] Remove `comment` from any loader or cache identity path.
-- [ ] Move `size` and `move` normalization to the writers if the generated files stay as data, so the loader does not need pair-specific knowledge.
-- [ ] Keep rule phase order unchanged: generated rules, static window rules, window-state rules, then static layer rules.
-- [ ] Validate `rules/generated.lua` and `rules/window-state.lua` still return tables.
-- [ ] Validate `rule-loader.apply_window_rule_phase(config_dir, "generated")` and `rule-loader.apply_window_rule_phase(config_dir, "window_state")` still apply the expected number of rules.
-- [ ] Update `.config/hypr/docs/lua-migration-plan.md` if the generated-rule contract changes.
+- [x] Re-read `.config/hypr/docs/lua-migration-plan.md` before changing this, because it currently documents generated Lua data tables plus a central loader as the migration decision.
+- [x] Decide whether the current loader decision still pays for itself now that Lua config is live.
+- [x] Skip Hypr-native generated rule output; keep generated files as data tables behind the central loader.
+- [x] If keeping the loader, make the generated schema explicit in code and docs: required fields, optional fields, identity fields, and Hypr effect normalization.
+- [x] Remove `comment` from any loader or cache identity path.
+- [x] Move `size` and `move` normalization to the writers if the generated files stay as data, so the loader does not need pair-specific knowledge.
+- [x] Keep rule phase order unchanged: generated rules, static window rules, window-state rules, then static layer rules.
+- [x] Validate `rules/generated.lua` and `rules/window-state.lua` still return tables.
+- [x] Validate `rule-loader.apply_window_rule_phase(config_dir, "generated")` and `rule-loader.apply_window_rule_phase(config_dir, "window_state")` still apply the expected number of rules.
+- [x] Update `.config/hypr/docs/lua-migration-plan.md` if the generated-rule contract changes.
 
 ## Minimized Window State Ownership
 

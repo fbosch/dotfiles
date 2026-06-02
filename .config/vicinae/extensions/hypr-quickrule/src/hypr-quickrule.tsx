@@ -23,10 +23,12 @@ import type {
 
 const execAsync = promisify(exec);
 
-type LuaValue = string | number | boolean | [number, number];
+type LuaValue = string | number | boolean;
 
 type LuaRuleEntry = {
 	id: string;
+	matcher?: string;
+	pattern?: string;
 	match: Record<string, string>;
 	effects: Record<string, LuaValue>;
 	source: "quickrule" | "window-state";
@@ -332,14 +334,6 @@ export default function Command() {
 		const [effect, ...args] = rule.split(" ");
 		const value = args.join(" ");
 
-		if (effect === "size" && args.length === 2) {
-			const width = Number(args[0]);
-			const height = Number(args[1]);
-			if (Number.isFinite(width) && Number.isFinite(height)) {
-				return [effect, [width, height]];
-			}
-		}
-
 		if (effect === "border_size" || effect === "rounding") {
 			const numberValue = Number(value);
 			if (Number.isFinite(numberValue)) {
@@ -370,7 +364,7 @@ export default function Command() {
 			return value ? "true" : "false";
 		}
 
-		return `{ ${value[0]}, ${value[1]} }`;
+		return luaString(String(value));
 	};
 
 	const serializeLuaMap = (
@@ -391,9 +385,15 @@ export default function Command() {
 	};
 
 	const serializeLuaTableRuleEntry = (entry: LuaRuleEntry): string => {
+		const identityFields = [
+			...(entry.matcher ? [`    matcher = ${luaString(entry.matcher)},`] : []),
+			...(entry.pattern ? [`    pattern = ${luaString(entry.pattern)},`] : []),
+		];
+
 		return [
 			"  {",
 			`    id = ${luaString(entry.id)},`,
+			...identityFields,
 			"    match = {",
 			serializeLuaMap(entry.match, "      "),
 			"    },",
@@ -621,13 +621,15 @@ export default function Command() {
 
 		return {
 			id: `window-state:${matcher}:${pattern}`,
+			matcher,
+			pattern,
 			match: {
 				[sel]: pattern,
 			},
 			effects: {
 				monitor: snapshot.monitor,
-				size: snapshot.size,
-				move: snapshot.move,
+				size: `${snapshot.size[0]} ${snapshot.size[1]}`,
+				move: `${snapshot.move[0]} ${snapshot.move[1]}`,
 			},
 			source: "window-state",
 			comment: `${matcher} ${pattern}`,
