@@ -109,6 +109,154 @@ local function cache_entry(matcher, pattern, monitor, x, y, width, height)
 	}
 end
 
+local json_escapes = {
+	['"'] = '"',
+	["\\"] = "\\",
+	["/"] = "/",
+	b = "\b",
+	f = "\f",
+	n = "\n",
+	r = "\r",
+	t = "\t",
+}
+
+local function decode_json_string(value)
+	return value:gsub("\\(.)", function(escape)
+		return json_escapes[escape] or escape
+	end)
+end
+
+local function skip_space(source, index)
+	local _, next_index = source:find("^%s*", index)
+	return next_index + 1
+end
+
+local function parse_json_string(source, index)
+	if source:sub(index, index) ~= '"' then
+		return nil, index
+	end
+
+	local cursor = index + 1
+	local escaped = false
+	local parts = {}
+	while cursor <= #source do
+		local char = source:sub(cursor, cursor)
+		if escaped then
+			parts[#parts + 1] = "\\" .. char
+			escaped = false
+		elseif char == "\\" then
+			escaped = true
+		elseif char == '"' then
+			return decode_json_string(table.concat(parts)), cursor + 1
+		else
+			parts[#parts + 1] = char
+		end
+		cursor = cursor + 1
+	end
+
+	return nil, cursor
+end
+
+local function parse_json_number(source, index)
+	local start_index, end_index = source:find("^-?%d+%.?%d*", index)
+	if not start_index then
+		return nil, index
+	end
+
+	return tonumber(source:sub(start_index, end_index)), end_index + 1
+end
+
+local function parse_json_value(source, index)
+	index = skip_space(source, index)
+	local char = source:sub(index, index)
+	if char == '"' then
+		return parse_json_string(source, index)
+	end
+
+	if char == "-" or char:match("%d") then
+		return parse_json_number(source, index)
+	end
+
+	if source:sub(index, index + 3) == "null" then
+		return nil, index + 4
+	elseif source:sub(index, index + 3) == "true" then
+		return true, index + 4
+	elseif source:sub(index, index + 4) == "false" then
+		return false, index + 5
+	end
+
+	return nil, index
+end
+
+local function parse_state_object(source, index)
+	local object = {}
+	index = skip_space(source, index)
+	if source:sub(index, index) ~= "{" then
+		return nil, index
+	end
+	index = index + 1
+
+	while index <= #source do
+		index = skip_space(source, index)
+		if source:sub(index, index) == "}" then
+			return object, index + 1
+		end
+
+		local key
+		key, index = parse_json_string(source, index)
+		if not key then
+			return nil, index
+		end
+
+		index = skip_space(source, index)
+		if source:sub(index, index) ~= ":" then
+			return nil, index
+		end
+
+		local value
+		value, index = parse_json_value(source, index + 1)
+		object[key] = value
+
+		index = skip_space(source, index)
+		local separator = source:sub(index, index)
+		if separator == "," then
+			index = index + 1
+		elseif separator ~= "}" then
+			return nil, index
+		end
+	end
+
+	return nil, index
+end
+
+local function iter_state_objects(source)
+	local index = skip_space(source, 1)
+	if source:sub(index, index) ~= "[" then
+		return function() end
+	end
+	index = index + 1
+
+	return function()
+		index = skip_space(source, index)
+		if source:sub(index, index) == "]" or index > #source then
+			return nil
+		end
+
+		local object
+		object, index = parse_state_object(source, index)
+		if not object then
+			return nil
+		end
+
+		index = skip_space(source, index)
+		if source:sub(index, index) == "," then
+			index = index + 1
+		end
+
+		return object
+	end
+end
+
 local function rule_identity(rule)
 	if type(rule.matcher) == "string" and type(rule.pattern) == "string" then
 		return rule.matcher, rule.pattern
@@ -233,20 +381,28 @@ function M.write_rules_file(opts)
 end
 
 function M.update_cache_from_windows(cache, windows, log)
-	local command = "printf %s "
-		.. shell_quote(windows)
-		.. " | jq -r "
-		.. shell_quote([[.[] | "\(.class)|\(.matcher)|\(.pattern)|\(.monitor)|\(.x)|\(.y)|\(.width)|\(.height)"]])
-	local handle = io.popen(command, "r")
-	for line in handle:lines() do
-		local class, matcher, pattern, monitor, x, y, width, height = line:match("^([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)$")
-		if class and class ~= "" then
-			cache[cache_key(matcher, pattern)] = cache_entry(matcher, pattern, monitor, x, y, width, height)
-			log(string.format('Updated %s "%s": %sx%s at (%s,%s) on %s', matcher, pattern, width, height, x, y, monitor ~= "" and monitor or "unknown"))
+	for window in iter_state_objects(windows) do
+		if window.class and window.class ~= "" then
+			cache[cache_key(window.matcher, window.pattern)] = cache_entry(
+				window.matcher,
+				window.pattern,
+				window.monitor or "",
+				window.x,
+				window.y,
+				window.width,
+				window.height
+			)
+			log(string.format(
+				'Updated %s "%s": %sx%s at (%s,%s) on %s',
+				window.matcher,
+				window.pattern,
+				window.width,
+				window.height,
+				window.x,
+				window.y,
+				window.monitor ~= "" and window.monitor or "unknown"
+			))
 		end
-	end
-	if handle then
-		handle:close()
 	end
 end
 
