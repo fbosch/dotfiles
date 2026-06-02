@@ -8,7 +8,7 @@ hl.window_rule({
 	match = { class = "^(gamescope)$" },
 	workspace = "10 silent",
 	tile = true,
-	fullscreen = true,
+	fullscreen_state = "2 2",
 	immediate = true,
 })
 
@@ -133,6 +133,7 @@ hl.window_rule({
 	rounding = 0,
 	no_shadow = true,
 	opacity = "1.0 override 1.0 override",
+	fullscreen_state = "2 2",
 	immediate = true,
 })
 hl.window_rule({
@@ -143,6 +144,7 @@ hl.window_rule({
 	rounding = 0,
 	no_shadow = true,
 	opacity = "1.0 override 1.0 override",
+	fullscreen_state = "2 2",
 	immediate = true,
 })
 
@@ -175,6 +177,7 @@ hl.window_rule({
 	rounding = 0,
 	no_shadow = true,
 	opacity = "1.0 override 1.0 override",
+	fullscreen_state = "2 2",
 	immediate = true,
 })
 hl.window_rule({
@@ -185,6 +188,7 @@ hl.window_rule({
 	rounding = 0,
 	no_shadow = true,
 	opacity = "1.0 override 1.0 override",
+	fullscreen_state = "2 2",
 	immediate = true,
 })
 

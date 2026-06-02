@@ -322,6 +322,10 @@ function getIconNameForClass(appClass: string): string | null {
   const kebabFromCamel = normalizedClass
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
     .toLowerCase();
+  const kebabWithMergedBrand = kebabFromCamel.replace(
+    /^([^-]+)-([^-]+)-(.+)$/,
+    "$1$2-$3",
+  );
 
   const desktopIdAttempts = Array.from(
     new Set([
@@ -329,6 +333,7 @@ function getIconNameForClass(appClass: string): string | null {
       lowerClass,
       classWithoutSeparators,
       kebabFromCamel,
+      kebabWithMergedBrand,
       kebabFromCamel.replace(/-/g, ""),
     ]),
   ).map((candidate) => `${candidate}.desktop`);
@@ -372,6 +377,7 @@ function getIconNameForClass(appClass: string): string | null {
         lowerClass,
         lowerClass.replace(/\s+/g, "-"),
         kebabFromCamel,
+        kebabWithMergedBrand,
         classWithoutSeparators,
       ]),
     );

@@ -2,7 +2,7 @@
 -- Preserve declaration order.
 
 hl.layer_rule({ match = { namespace = "waybar" }, blur = true, ignore_alpha = 0.3 })
-hl.layer_rule({ match = { namespace = "vicinae" }, blur = true, no_anim = true, ignore_alpha = 0.3 })
+hl.layer_rule({ match = { namespace = "vicinae" }, blur = true, no_anim = true, ignore_alpha = 0 })
 hl.layer_rule({ match = { namespace = "rofi" }, blur = true })
 hl.layer_rule({ match = { namespace = "nemo" }, blur = true })
 hl.layer_rule({ match = { namespace = "rofi" }, ignore_alpha = 0 })
@@ -15,4 +15,10 @@ hl.layer_rule({ match = { namespace = "ags-volume-indicator" }, blur = true, no_
 hl.layer_rule({ match = { namespace = "ags-window-switcher" }, blur = true, no_anim = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "ags-start-menu" }, blur = true, no_anim = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "ags-desktop-clock" }, blur = true, ignore_alpha = 0.3, no_anim = true })
-hl.layer_rule({ match = { namespace = "hyprshutdown" }, blur = true, ignore_alpha = 0.2, dim_around = true, animation = "popin 96%" })
+hl.layer_rule({
+	match = { namespace = "hyprshutdown" },
+	blur = true,
+	ignore_alpha = 0.2,
+	dim_around = true,
+	animation = "popin 96%",
+})
