@@ -18,7 +18,7 @@ while preserving current screenshot, preview, picker, and screenshare workflows.
 
 Primary affected permission is `screencopy` (default `ASK` when enforcement is on). This touches:
 
-- `.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.sh` (`grim -T` window previews)
+- `.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.lua` (`grim -T` window previews)
 - `.config/hypr/runtime/capture/screenshot.sh` (`grimblast` workflows that call `grim`)
 - `.config/hypr/keybinds.conf` screenshot/OCR binds that call screenshot scripts
 - `hyprpicker -a` color picker bind in `.config/hypr/keybinds.conf`
@@ -88,7 +88,7 @@ Run in this order:
 3. Window preview capture:
 
    ```bash
-   ~/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.sh refresh-once
+   ~/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.lua refresh-once
    ```
 
    Verify preview images are generated and not black/empty.

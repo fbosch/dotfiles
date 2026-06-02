@@ -29,7 +29,7 @@ uwsm-app -s b -- flake-check-updates &
 uwsm-app -s b -- swayosd-server &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-state/window-state.sh &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/minimized-state/minimized-state-daemon.sh &
-uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.sh &
+uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.lua &
 uwsm-app -s b -- ~/.config/hypr/runtime/gamescope/daemons/gamescope-profile-watchdog/gamescope-profile-watchdog.sh &
 uwsm-app -s b -- ~/.config/hypr/runtime/desktop/toggle-night-light.sh daemon &
 uwsm-app -s s -- waybar &
