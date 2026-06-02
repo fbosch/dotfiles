@@ -26,17 +26,17 @@ Problem: `.config/hypr/runtime/windows/daemons/window-state/window-state-daemon.
 
 Target shape: the daemon only handles events and scheduling. A pure rule-state module owns selectors, cache entries, generated rule data, and file writes.
 
-- [ ] Capture the current inputs and outputs: selectors file, generated rules file, runtime cache file, debounce file, Hypr IPC clients, Hypr IPC monitors, and `hyprctl eval` refresh.
-- [ ] Extract matcher mapping into one table that covers Hypr client fields and Lua rule match keys.
-- [ ] Extract a pure `window-state/rules.lua` module that converts selector plus window geometry into `{ id, matcher, pattern, match, effects }` entries.
-- [ ] Stop parsing identity from `comment`; load identity from `id`, `matcher`, and `pattern` fields instead.
-- [ ] Keep comments as display-only metadata, or remove them from generated output if they duplicate `id`.
-- [ ] Extract generated-file writing into a small writer function that accepts normalized rule entries and returns whether content changed.
-- [ ] Keep debounce, polling, and socket reconnect logic in the daemon file after the rule-state logic moves out.
-- [ ] Add a CLI guard so unknown args fail and `--help` prints usage instead of starting the daemon.
-- [ ] Validate Lua parsing for the daemon and extracted modules with `lua -e 'assert(loadfile(...))'`.
-- [ ] Validate a forced state update rewrites `rules/window-state.lua` only when content changes.
-- [ ] Validate `hyprctl eval` refresh still applies the window-state phase without a full reload.
+- [x] Capture the current inputs and outputs: selectors file, generated rules file, runtime cache file, debounce file, Hypr IPC clients, Hypr IPC monitors, and `hyprctl eval` refresh.
+- [x] Extract matcher mapping into one table that covers Hypr client fields and Lua rule match keys.
+- [x] Extract a pure `window-state/rules.lua` module that converts selector plus window geometry into `{ id, matcher, pattern, match, effects }` entries.
+- [x] Stop parsing identity from `comment`; load identity from `id`, `matcher`, and `pattern` fields instead.
+- [x] Keep comments as display-only metadata, or remove them from generated output if they duplicate `id`.
+- [x] Extract generated-file writing into a small writer function that accepts normalized rule entries and returns whether content changed.
+- [x] Keep debounce, polling, and socket reconnect logic in the daemon file after the rule-state logic moves out.
+- [x] Add a CLI guard so unknown args fail and `--help` prints usage instead of starting the daemon.
+- [x] Validate Lua parsing for the daemon and extracted modules with `lua -e 'assert(loadfile(...))'`.
+- [x] Validate a forced state update rewrites `rules/window-state.lua` only when content changes.
+- [x] Validate `hyprctl eval` refresh still applies the window-state phase without a full reload.
 
 ## Generated Rule Contract
 
