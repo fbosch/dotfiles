@@ -86,6 +86,8 @@ test("reject malformed json", function()
 	assert_fails("\"unterminated", "unterminated string")
 	assert_fails("\"\\u12\"", "short unicode escape")
 	assert_fails("\"\\ud83d\"", "missing surrogate")
+	assert_fails("01", "leading zero")
+	assert_fails("1e", "missing exponent digit")
 	assert_fails("true false", "trailing content")
 end)
 

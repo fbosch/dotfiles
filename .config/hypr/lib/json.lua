@@ -2,7 +2,12 @@ local M = {}
 M.null = {}
 
 local function escape_string(value)
-	return tostring(value):gsub('[%z\1-\31\\"]', function(char)
+	value = tostring(value)
+	if not value:find('[%z\1-\31\\"]') then
+		return value
+	end
+
+	return value:gsub('[%z\1-\31\\"]', function(char)
 		local escapes = {
 			["\\"] = "\\\\",
 			['"'] = '\\"',
@@ -168,7 +173,16 @@ local function parse_number(source, index)
 		decode_error(source, index, "expected number")
 	end
 
-	local number = tonumber(source:sub(start_index, end_index))
+	local literal = source:sub(start_index, end_index)
+	if literal:match("^-?0%d") then
+		decode_error(source, index, "leading zero in number")
+	elseif literal:match("%.$") then
+		decode_error(source, index, "expected fractional digit")
+	elseif literal:match("[eE][+-]?$") then
+		decode_error(source, index, "expected exponent digit")
+	end
+
+	local number = tonumber(literal)
 	if not number then
 		decode_error(source, index, "invalid number")
 	end
@@ -235,6 +249,7 @@ end
 
 function parse_value(source, index)
 	index = skip_space(source, index)
+	local byte = source:byte(index)
 	local char = source:sub(index, index)
 
 	if char == '"' then
@@ -243,7 +258,7 @@ function parse_value(source, index)
 		return parse_object(source, index)
 	elseif char == "[" then
 		return parse_array(source, index)
-	elseif char == "-" or char:match("%d") then
+	elseif byte == 45 or (byte and byte >= 48 and byte <= 57) then
 		return parse_number(source, index)
 	elseif source:sub(index, index + 3) == "null" then
 		return M.null, index + 4
@@ -256,7 +271,9 @@ function parse_value(source, index)
 	decode_error(source, index, "unexpected JSON value")
 end
 
-function M.encode(value)
+local encode_value
+
+function encode_value(value)
 	local kind = type(value)
 
 	if kind == "nil" or value == M.null then
@@ -278,7 +295,7 @@ function M.encode(value)
 	local parts = {}
 	if is_array(value) then
 		for index, item in ipairs(value) do
-			parts[index] = M.encode(item)
+			parts[index] = encode_value(item)
 		end
 
 		return "[" .. table.concat(parts, ",") .. "]"
@@ -291,10 +308,14 @@ function M.encode(value)
 	table.sort(keys)
 
 	for _, key in ipairs(keys) do
-		parts[#parts + 1] = M.encode(key) .. ":" .. M.encode(value[key])
+		parts[#parts + 1] = encode_value(key) .. ":" .. encode_value(value[key])
 	end
 
 	return "{" .. table.concat(parts, ",") .. "}"
+end
+
+function M.encode(value)
+	return encode_value(value)
 end
 
 function M.decode(source)
