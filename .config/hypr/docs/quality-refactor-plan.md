@@ -61,15 +61,15 @@ Problem: minimized-window state is spread across `toggle-minimized-window.sh`, `
 
 Target shape: one minimized-state owner. Scripts should call a small command API or shared locked library instead of each mutating the same JSON state differently.
 
-- [ ] Map all state transitions: minimize active window, restore active minimized window, toggle minimized workspace, toggle target minimized workspace, show desktop, restore desktop, prune closed windows.
-- [ ] Define the state model once: address, source workspace, monitor, bucket, special workspace, floating flag, position, and size.
-- [ ] Add one lock path for all writes to `hypr-minimized-state.json`.
-- [ ] Create a shared state module or script API that owns `init`, `save`, `restore`, `delete`, `prune`, `bucket-for`, and `special-workspace-for`.
-- [ ] Move duplicated Lua dispatch string construction into one helper, or expose higher-level commands such as `move-window`, `focus-window`, `resize-window`, and `toggle-special`.
-- [ ] Update `toggle-minimized-window.sh` to call the shared owner instead of writing JSON directly.
-- [ ] Update `toggle-minimized-workspace.sh` to call the shared owner for bucket lookup and target special-workspace resolution.
-- [ ] Decide whether `toggle-show-desktop.sh` should use the same minimized-state model or remain separate; do not keep duplicated window geometry restore logic in both places without a reason.
-- [ ] Keep `minimized-state-daemon.lua` focused on close-window pruning, or fold pruning into the shared owner if the daemon becomes unnecessary.
-- [ ] Validate Bash syntax for all changed minimized/show-desktop scripts.
-- [ ] Validate concurrent minimize/restore calls cannot corrupt the JSON state file.
+- [x] Map all state transitions: minimize active window, restore active minimized window, toggle minimized workspace, toggle target minimized workspace, show desktop, restore desktop, prune closed windows.
+- [x] Define the state model once: address, source workspace, monitor, bucket, special workspace, floating flag, position, and size.
+- [x] Add one lock path for all writes to `hypr-minimized-state.json`.
+- [x] Create a shared state module or script API that owns `init`, `save`, `restore`, `delete`, `prune`, `bucket-for`, and `special-workspace-for`.
+- [x] Move duplicated Lua dispatch string construction into one helper, or expose higher-level commands such as `move-window`, `focus-window`, `resize-window`, and `toggle-special`.
+- [x] Update `toggle-minimized-window.sh` to call the shared owner instead of writing JSON directly.
+- [x] Update `toggle-minimized-workspace.sh` to call the shared owner for bucket lookup and target special-workspace resolution.
+- [x] Decide whether `toggle-show-desktop.sh` should use the same minimized-state model or remain separate; do not keep duplicated window geometry restore logic in both places without a reason.
+- [x] Keep `minimized-state-daemon.lua` focused on close-window pruning, or fold pruning into the shared owner if the daemon becomes unnecessary.
+- [x] Validate Bash syntax for all changed minimized/show-desktop scripts.
+- [x] Validate concurrent minimize/restore calls cannot corrupt the JSON state file.
 - [ ] Validate floating windows restore workspace, monitor, size, and position.
