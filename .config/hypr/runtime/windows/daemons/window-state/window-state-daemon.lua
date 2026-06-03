@@ -6,6 +6,7 @@ local config_dir = os.getenv("HOME") .. "/.config/hypr"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local json = require("lib.json")
+local state_rules = require("runtime.windows.daemons.window-state.rules")
 local hypr_ipc = dofile(config_dir .. "/runtime/lib/hypr-ipc.lua")
 
 local selectors_lua_file = config_dir .. "/rules/window-state-selectors.lua"
@@ -20,8 +21,10 @@ local poll_interval_stable_idle = 1
 local poll_interval_stable_busy = 1.5
 local cpu_count = tonumber((io.popen("nproc 2>/dev/null"):read("*l"))) or 1
 
-local matcher_patterns = {}
-local matchers_json = "[]"
+local selector_state = {
+	selectors = {},
+	matchers_json = "[]",
+}
 local monitors_json = "[]"
 local rules_cache = {}
 local current_hash = ""
@@ -58,24 +61,6 @@ local function shell_quote(value)
 	return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
 end
 
-local function temp_path(prefix)
-	local command = "mktemp " .. shell_quote(runtime_dir .. "/" .. prefix .. ".XXXXXX")
-	local handle = assert(io.popen(command, "r"))
-	local path = handle:read("*l")
-	handle:close()
-	assert(path and path ~= "", "failed to create temporary file")
-	return path
-end
-
-local function temp_path_in(directory, prefix)
-	local command = "mktemp " .. shell_quote(directory .. "/" .. prefix .. ".XXXXXX")
-	local handle = assert(io.popen(command, "r"))
-	local path = handle:read("*l")
-	handle:close()
-	assert(path and path ~= "", "failed to create temporary file")
-	return path
-end
-
 local query_socket_path = hypr_ipc.socket_path(".socket.sock")
 local event_socket_path = hypr_ipc.socket_path(".socket2.sock")
 
@@ -84,70 +69,7 @@ local function request(message)
 end
 
 local function parse_selectors()
-	local ok, selectors = pcall(dofile, selectors_lua_file)
-	matcher_patterns = {}
-
-	if not ok or type(selectors) ~= "table" then
-		matchers_json = "[]"
-		return
-	end
-
-	local matchers = {}
-	for _, selector in ipairs(selectors) do
-		if type(selector) == "table" and type(selector.matcher) == "string" and type(selector.pattern) == "string" then
-			local field = nil
-			if selector.matcher == "match:class" then
-				field = "class"
-			elseif selector.matcher == "match:title" then
-				field = "title"
-			elseif selector.matcher == "match:initialClass" or selector.matcher == "match:initial_class" then
-				field = "initialClass"
-			elseif selector.matcher == "match:initialTitle" or selector.matcher == "match:initial_title" then
-				field = "initialTitle"
-			end
-
-			if field then
-				matcher_patterns[#matcher_patterns + 1] = selector
-				matchers[#matchers + 1] = {
-					matcher = selector.matcher,
-					pattern = selector.pattern,
-					field = field,
-				}
-			end
-		end
-	end
-
-	matchers_json = json.encode(matchers)
-end
-
-local function pattern_is_regex(pattern)
-	return pattern:find("[%.%[%]%(%)%*%+%?%^%$]") ~= nil
-end
-
-local function window_state_rule_pattern(pattern)
-	if pattern_is_regex(pattern) then
-		return pattern
-	end
-
-	return "^" .. pattern .. "$"
-end
-
-local function matcher_to_lua_key(matcher)
-	if matcher == "match:class" then
-		return "class"
-	elseif matcher == "match:title" then
-		return "title"
-	elseif matcher == "match:initialClass" or matcher == "match:initial_class" then
-		return "initial_class"
-	elseif matcher == "match:initialTitle" or matcher == "match:initial_title" then
-		return "initial_title"
-	end
-
-	return nil
-end
-
-local function window_state_lua_id(matcher, pattern)
-	return "window-state:" .. matcher .. ":" .. pattern
+	selector_state = state_rules.load_selectors(selectors_lua_file)
 end
 
 local function fetch_monitors()
@@ -182,10 +104,10 @@ first($matchers[] | . as $m | select(field_of($w; $m) | test($m.pattern))) as $m
 ]]
 
 local function get_window_states()
-	if #matcher_patterns == 0 then
+	if #selector_state.selectors == 0 then
 		parse_selectors()
 	end
-	if #matcher_patterns == 0 then
+	if #selector_state.selectors == 0 then
 		return "[]"
 	end
 
@@ -198,7 +120,7 @@ local function get_window_states()
 	local command = table.concat({
 		"printf %s " .. shell_quote(clients),
 		"| jq -c",
-		"--argjson matchers " .. shell_quote(matchers_json),
+		"--argjson matchers " .. shell_quote(selector_state.matchers_json),
 		"--argjson monitors " .. shell_quote(monitors_json),
 		shell_quote(state_jq_filter),
 	}, " ")
@@ -218,115 +140,21 @@ local function is_state_empty(state)
 	return not state or state == "" or state == "[]"
 end
 
-local function rule_cache_entry(matcher, pattern, monitor, x, y, width, height)
-	return {
-		matcher = matcher,
-		pattern = pattern,
-		monitor = monitor,
-		x = tonumber(x),
-		y = tonumber(y),
-		width = tonumber(width),
-		height = tonumber(height),
-	}
-end
-
 local function load_rules_cache()
-	rules_cache = {}
-
-	local ok, rules = pcall(dofile, rules_lua_file)
-	if not ok or type(rules) ~= "table" then
-		return
-	end
-
-	for _, rule in ipairs(rules) do
-		if type(rule) == "table" and type(rule.comment) == "string" and type(rule.effects) == "table" then
-			local matcher, pattern = rule.comment:match("^(match:[^%s]+)%s+(.+)$")
-			local size = rule.effects.size
-			local move = rule.effects.move
-			if matcher and pattern and type(size) == "table" and type(move) == "table" then
-				local key = matcher .. " " .. pattern
-				rules_cache[key] = rule_cache_entry(
-					matcher,
-					pattern,
-					rule.effects.monitor or "",
-					move[1],
-					move[2],
-					size[1],
-					size[2]
-				)
-			end
-		end
-	end
+	rules_cache = state_rules.load_rules_cache(rules_lua_file)
 end
 
 local function prune_stale_rules_cache()
-	local valid = {}
-	for _, selector in ipairs(matcher_patterns) do
-		valid[selector.matcher .. " " .. selector.pattern] = true
-	end
-	for key in pairs(rules_cache) do
-		if not valid[key] then
-			rules_cache[key] = nil
-		end
-	end
-end
-
-local function sorted_cache_keys()
-	local keys = {}
-	for key in pairs(rules_cache) do
-		keys[#keys + 1] = key
-	end
-	table.sort(keys)
-	return keys
+	state_rules.prune_rules_cache(rules_cache, selector_state.selectors)
 end
 
 local function write_lua_rules_cache_file()
-	local rules_dir = config_dir .. "/rules"
-	os.execute("mkdir -p " .. shell_quote(rules_dir))
-	local temp = temp_path_in(rules_dir, ".window-state")
-	local handle = assert(io.open(temp, "w"))
-
-	handle:write("-- Auto-generated Lua window state persistence rules\n")
-	handle:write("-- Selectors: ", selectors_lua_file, "\n")
-	handle:write("-- DO NOT EDIT MANUALLY - This file is managed by window-state.sh\n\n")
-	handle:write("return {\n")
-
-	for _, key in ipairs(sorted_cache_keys()) do
-		local entry = rules_cache[key]
-		local lua_match_key = matcher_to_lua_key(entry.matcher)
-		if lua_match_key then
-			local rule_pattern = window_state_rule_pattern(entry.pattern)
-			handle:write("  -- ", key, "\n")
-			handle:write("  {\n")
-			handle:write("    id = ", json.encode(window_state_lua_id(entry.matcher, entry.pattern)), ",\n")
-			handle:write("    match = {\n")
-			handle:write("      ", lua_match_key, " = ", json.encode(rule_pattern), ",\n")
-			handle:write("    },\n")
-			handle:write("    effects = {\n")
-			if entry.monitor and entry.monitor ~= "" then
-				handle:write("      monitor = ", json.encode(entry.monitor), ",\n")
-			end
-			handle:write("      size = { ", entry.width, ", ", entry.height, " },\n")
-			handle:write("      move = { ", entry.x, ", ", entry.y, " },\n")
-			handle:write("    },\n")
-			handle:write("    source = \"window-state\",\n")
-			handle:write("    comment = ", json.encode(key), ",\n")
-			handle:write("  },\n\n")
-		end
-	end
-
-	handle:write("}\n")
-	handle:close()
-
-	local existing = read_file(rules_lua_file)
-	local next_content = read_file(temp)
-	if existing == next_content then
-		os.remove(temp)
-		return false
-	end
-
-	assert(os.rename(temp, rules_lua_file))
-	return true
+	return state_rules.write_rules_file({
+		cache = rules_cache,
+		config_dir = config_dir,
+		selectors_lua_file = selectors_lua_file,
+		rules_lua_file = rules_lua_file,
+	})
 end
 
 local function apply_window_state_rules()
@@ -347,22 +175,7 @@ local function update_rules(windows)
 	end
 	prune_stale_rules_cache()
 
-	local command = "printf %s "
-		.. shell_quote(windows)
-		.. " | jq -r "
-		.. shell_quote([[.[] | "\(.class)|\(.matcher)|\(.pattern)|\(.monitor)|\(.x)|\(.y)|\(.width)|\(.height)"]])
-	local handle = io.popen(command, "r")
-	for line in handle:lines() do
-		local class, matcher, pattern, monitor, x, y, width, height = line:match("^([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)$")
-		if class and class ~= "" then
-			local key = matcher .. " " .. pattern
-			rules_cache[key] = rule_cache_entry(matcher, pattern, monitor, x, y, width, height)
-			log(string.format('Updated %s "%s": %sx%s at (%s,%s) on %s', matcher, pattern, width, height, x, y, monitor ~= "" and monitor or "unknown"))
-		end
-	end
-	if handle then
-		handle:close()
-	end
+	state_rules.update_cache_from_windows(rules_cache, windows, log)
 
 	local changed = write_lua_rules_cache_file()
 	write_file(state_file, windows .. "\n")
@@ -614,6 +427,18 @@ local function run()
 			check_and_save_with_state(state)
 		end
 	end
+end
+
+local function usage(stream)
+	stream:write("usage: ", arg[0], " [--help]\n")
+end
+
+if arg[1] == "--help" or arg[1] == "help" then
+	usage(io.stdout)
+	os.exit(0)
+elseif arg[1] ~= nil then
+	usage(io.stderr)
+	os.exit(1)
 end
 
 local ok, err = pcall(run)

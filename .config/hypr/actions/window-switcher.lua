@@ -3,7 +3,6 @@
 
 local ags = require("lib.ags")
 local command = require("lib.command")
-local json = require("lib.json")
 local paths = require("lib.paths")
 
 local M = {}
@@ -82,7 +81,7 @@ local function focus_window(win)
 end
 
 local function send_ags_action(action)
-	action_payloads[action] = action_payloads[action] or json.encode({ action = action })
+	action_payloads[action] = action_payloads[action] or { action = action }
 	ags.request("window-switcher", action_payloads[action])
 end
 

@@ -6,6 +6,7 @@ Hyprland compositor configuration managed via Home Manager/Nix.
 
 - Validate after every `.conf` change.
 - `hyprland.lua` is the primary compositor config; old hyprlang files live under `legacy/hyprland-conf/` for reference.
+- Prefer Lua over Bash for Hyprland runtime helpers when practical; keep Bash for thin launchers, external command glue, or cases where shell is materially simpler.
 - Use directory modules with `init.lua` for grouped Lua config, e.g. `rules/init.lua`, not sibling aggregators like `rules.lua`.
 - Keep static Lua rules as direct `hl.workspace_rule(...)` and `hl.window_rule(...)` calls under `rules/workspace.lua` and `rules/window.lua`.
 - Keep static layer rules under `rules/layer.lua`; load them from the entrypoint where live config order places them, not from `rules/init.lua` if that would move them before window-state rules.

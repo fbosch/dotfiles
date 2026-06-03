@@ -2,14 +2,13 @@
 -- Keep the Bash script for legacy hyprland.conf until Lua config is release-ready.
 
 local ags = require("lib.ags")
-local json = require("lib.json")
 local paths = require("lib.paths")
 
 local M = {}
 local payload = nil
 
 local function confirm_payload()
-	return json.encode({
+	return {
 		action = "show",
 		config = {
 			icon = "󰿅",
@@ -22,7 +21,7 @@ local function confirm_payload()
 			audioFile = paths.asset("warn.ogg"),
 			showDelay = 180,
 		},
-	})
+	}
 end
 
 function M.confirm_exit()

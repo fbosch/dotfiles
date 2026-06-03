@@ -79,8 +79,8 @@ return {
     match = { class = "^Bitwarden$" },
     effects = {
       monitor = "DP-2",
-      size = { 999, 1113 },
-      move = { 1998, 99 },
+      size = "999 1113",
+      move = "1998 99",
     },
   },
 }
@@ -92,7 +92,7 @@ return {
 | --- | --- | --- |
 | `id` | yes | Stable generator identity for overwrite/dedupe. Not passed to Hyprland initially. |
 | `match` | yes | Window match table, e.g. `{ class = "^Bitwarden$" }`. |
-| `effects` | yes | Normalized rule effects. Loader converts these to Hyprland Lua API shape. |
+| `effects` | yes | Hyprland Lua rule fields, excluding `match`. |
 | `source` | no | Debug/source marker, e.g. `quickrule` or `window-state`. |
 | `comment` | no | Human-readable context. Not identity. |
 
@@ -122,7 +122,7 @@ Responsibilities:
 
 - Safely load optional generated files.
 - Validate each entry has `id`, `match`, and `effects`.
-- Convert normalized effects to `hl.window_rule(...)` fields.
+- Copy `effects` onto anonymous `hl.window_rule(...)` tables without generator-specific normalization.
 - Apply generated/window-state data with `hl.window_rule(...)` when running under Hyprland.
 - Emit anonymous window rules initially to preserve current precedence.
 - Log or skip invalid generated entries without breaking the whole config, if the Lua API allows safe error handling.
@@ -138,7 +138,7 @@ hl.window_rule({
 })
 ```
 
-Upstream source currently exposes `size` and `move` as Lua config strings. The normalized generated schema may keep dimensions as numeric arrays, but `rule-loader.lua` must convert them to strings before calling `hl.window_rule(...)`.
+Upstream source currently exposes `size` and `move` as Lua config strings. Generated writers must emit those fields as strings before `rule-loader.lua` sees them.
 
 ## Effect Mapping
 
@@ -150,8 +150,8 @@ Upstream source currently exposes `size` and `move` as Lua config strings. The n
 | `fullscreen on` | `fullscreen = true` | `fullscreen = true` |
 | `center on` | `center = true` | `center = true` |
 | `monitor DP-2` | `monitor = "DP-2"` | `monitor = "DP-2"` |
-| `size 750 900` | `size = { 750, 900 }` | `size = "750 900"` |
-| `move 1998 99` | `move = { 1998, 99 }` | `move = "1998 99"` |
+| `size 750 900` | `size = "750 900"` | `size = "750 900"` |
+| `move 1998 99` | `move = "1998 99"` | `move = "1998 99"` |
 | `opacity 1.0 override 1.0 override` | `opacity = "1.0 override 1.0 override"` | string passthrough |
 | `hyprbars:no_bar 1` | `hyprbars = { no_bar = 1 }` or passthrough | confirm plugin option mapping |
 

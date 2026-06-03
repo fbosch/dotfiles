@@ -1,4 +1,5 @@
 local M = {}
+local generated_rules = require("lib.generated_rules")
 local log = require("lib.log")
 
 local window_rule_phases = {
@@ -35,39 +36,6 @@ local function load_rule_file(path, warnings)
   return rules
 end
 
-local function is_valid_rule(rule)
-  return type(rule) == "table"
-    and type(rule.id) == "string"
-    and type(rule.match) == "table"
-    and type(rule.effects) == "table"
-end
-
-local function is_pair(value)
-  return type(value) == "table" and value[1] ~= nil and value[2] ~= nil
-end
-
-local function normalize_effect(key, value)
-  if (key == "size" or key == "move") and is_pair(value) then
-    return tostring(value[1]) .. " " .. tostring(value[2])
-  end
-
-  return value
-end
-
-local function copy_rule(rule)
-  local effects = rule.effects
-  local compiled = {
-    name = rule.name or rule.id,
-    match = rule.match,
-  }
-
-  for key, value in pairs(effects) do
-    compiled[key] = normalize_effect(key, value)
-  end
-
-  return compiled
-end
-
 function M.compile_rules(paths)
   local compiled = {}
   local warnings = {}
@@ -76,10 +44,11 @@ function M.compile_rules(paths)
     local rules = load_rule_file(path, warnings)
 
     for index, rule in ipairs(rules) do
-      if is_valid_rule(rule) then
-        compiled[#compiled + 1] = copy_rule(rule)
+      local validation_error = generated_rules.validate(rule)
+      if not validation_error then
+        compiled[#compiled + 1] = generated_rules.compile(rule)
       else
-        warn(warnings, path .. ": invalid rule at index " .. tostring(index))
+        warn(warnings, path .. ": invalid rule at index " .. tostring(index) .. ": " .. validation_error)
       end
     end
   end
