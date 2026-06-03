@@ -9,5 +9,5 @@
     "jsx": "react-jsx",
     "jsxImportSource": "@opentui/solid"
   },
-  "include": ["./*.ts", "./*.tsx", "./*.d.ts"]
+  "include": ["./*.ts", "./*.tsx", "./types/**/*.d.ts"]
 }
