@@ -112,13 +112,13 @@
       "textVerbosity": "medium"
     },
     "analyze": {
-      "model": "openai/gpt-5.3-codex",
+      "model": "openai/gpt-5.5",
       "reasoningEffort": "low",
       "textVerbosity": "medium"
     },
     "debug": {
-      "model": "openai/gpt-5.3-codex",
-      "reasoningEffort": "high",
+      "model": "openai/gpt-5.5",
+      "reasoningEffort": "medium",
       "textVerbosity": "medium"
     },
     "ideate": {
