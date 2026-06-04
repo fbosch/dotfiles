@@ -99,9 +99,9 @@ end
 
 function M.get_project_root()
 	local root_bare = vim.fs.root(vim.fn.getcwd(), { ".bare" }) -- support for worktrees
-	local root_other = vim.fs.root(vim.fn.getcwd(), { "package.json", ".git", "Cargo.toml" })
+	local root_other = vim.fs.root(vim.fn.getcwd(), { "package.json", ".git", "Cargo.toml", "justfile", "Justfile", ".justfile" })
 
-	return root_bare or root_other
+	return root_other or root_bare
 end
 
 function M.find_file_in_project_root(pattern)
@@ -120,9 +120,19 @@ end
 
 function M.resolve_mprocs_args()
 	local project_mprocs_yaml = M.find_file_in_project_root({ "mprocs.yaml", "mprocs.yml" })
+	local project_justfile = M.find_file_in_project_root({ "justfile", "Justfile", ".justfile" })
+	local args = {}
 
 	if project_mprocs_yaml then
-		return string.format("--config %s", project_mprocs_yaml)
+		table.insert(args, string.format("--config %s", vim.fn.shellescape(project_mprocs_yaml)))
+	end
+
+	if project_justfile then
+		table.insert(args, "--just")
+	end
+
+	if #args > 0 then
+		return table.concat(args, " ")
 	end
 
 	local project_types = M.get_project_types()
