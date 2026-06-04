@@ -67,14 +67,28 @@ return {
 			usrcmd("FTermToggle", fterm.toggle, { bang = true })
 
 			local mprocs_instance = nil
+			local mprocs_command = nil
 			usrcmd("FTermMProcs", function()
-				if not mprocs_instance then
-					local args = require("utils.project").resolve_mprocs_args()
+				local project = require("utils.project")
+				local args = project.resolve_mprocs_args()
+				local cmd = string.format("mprocs %s", args)
+				local root = project.get_project_root()
+
+				if root then
+					cmd = string.format("cd %s && %s", vim.fn.shellescape(root), cmd)
+				end
+
+				if not mprocs_instance or mprocs_command ~= cmd then
+					if mprocs_instance then
+						mprocs_instance:close(true)
+					end
+
+					mprocs_command = cmd
 					mprocs_instance = fterm:new({
 						ft = "fterm_mprocs",
 						env = env,
 						shell = "dash",
-						cmd = string.format("mprocs %s", args),
+						cmd = cmd,
 						dimensions = dimensions,
 					})
 				end
@@ -150,7 +164,6 @@ return {
 
 				checkmate_instance:toggle()
 			end, { bang = true })
-
 		end,
 	},
 	{
@@ -208,7 +221,13 @@ return {
 						end,
 						on_open = function(term)
 							vim.cmd("wincmd L")
-							vim.api.nvim_buf_set_keymap(term.bufnr, "n", "q", "<cmd>close<CR>", { noremap = true, silent = true })
+							vim.api.nvim_buf_set_keymap(
+								term.bufnr,
+								"n",
+								"q",
+								"<cmd>close<CR>",
+								{ noremap = true, silent = true }
+							)
 						end,
 					})
 				end
