@@ -202,4 +202,4 @@ hl.window_rule({
 	no_anim = true,
 	opacity = "1.0 override 1.0 override",
 })
-hl.window_rule({ match = { class = "^(zenity)$" }, no_blur = true })
+hl.window_rule({ match = { class = "^(zenity)$" }, no_anim = true, no_blur = true })
