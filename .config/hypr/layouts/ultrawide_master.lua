@@ -220,11 +220,14 @@ function M.recalculate(ctx)
 	end
 
 	local skip_position_order = state.skip_position_by_key[key]
+	local has_order = key and state.order_by_key[key]
 	local source_targets = targets
 	local order, targets_by_id = order_state.sync(state, key, source_targets)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	if skip_position_order then
 		state.skip_position_by_key[key] = nil
+	elseif not has_order then
+		-- Cold layout state can happen after reload; trust Hyprland target order first.
 	else
 		move_active_to_position(targets, key, ratios, x, width)
 		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)

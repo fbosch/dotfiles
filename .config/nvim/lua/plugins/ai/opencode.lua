@@ -13,6 +13,7 @@ return {
 			}
 			local infer_cache_ttl_ms = 15000
 			local opencode_db_path = vim.fn.expand("~/.local/share/opencode/opencode.db")
+			local opencode_terminal_opts = { win = { position = "left", width = 100 } }
 
 			local function normalize_path(path)
 				if type(path) ~= "string" or path == "" then
@@ -94,16 +95,26 @@ return {
 				return "opencode --port --session " .. vim.fn.shellescape(session_id)
 			end
 
+			local function opencode_terminal()
+				return require("snacks.terminal")
+			end
+
 			vim.g.opencode_opts = {
 				server = {
 					start = function()
-						require("opencode.terminal").open(opencode_command(), { split = "left", width = 100 })
+						opencode_terminal().open(opencode_command(), opencode_terminal_opts)
 					end,
 					stop = function()
-						require("opencode.terminal").close()
+						local terminal = opencode_terminal().get(
+							opencode_command(),
+							vim.tbl_extend("force", opencode_terminal_opts, { create = false })
+						)
+						if terminal then
+							terminal:close()
+						end
 					end,
 					toggle = function()
-						require("opencode.terminal").toggle(opencode_command(), { split = "left", width = 100 })
+						opencode_terminal().toggle(opencode_command(), opencode_terminal_opts)
 					end,
 				},
 				events = {
@@ -261,7 +272,7 @@ return {
 			end, { desc = "opencode actions" })
 
 			vim.keymap.set("n", "<leader>aS", function()
-				require("opencode").select_session()
+				require("opencode").command("session.select")
 			end, { desc = "Select opencode session" })
 
 			vim.keymap.set({ "n", "x" }, "ga", function()
@@ -269,7 +280,7 @@ return {
 			end, { desc = "Add to opencode" })
 
 			vim.keymap.set({ "n", "t" }, "<A-a>", function()
-				require("opencode").toggle()
+				require("opencode.config").opts.server.toggle()
 			end, { desc = "Toggle opencode" })
 
 			-- Send selection to opencode with Alt-x (visual mode)
