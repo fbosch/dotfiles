@@ -9,6 +9,9 @@ local reconnect_delay_seconds = 1
 local event_idle_timeout_seconds = 5
 local gaming_workspace = "10"
 local gaming_overlay_workspace = "special:gaming-overlay"
+local freeze_excluded_title_pattern = "^(World of Warcraft)$"
+local wl_freeze_checked = false
+local wl_freeze_available = false
 
 local function shell_quote(value)
 	return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
@@ -16,6 +19,11 @@ end
 
 local function profile_sync(count)
 	os.execute(shell_quote(profilectl) .. " sync gaming " .. shell_quote(count) .. " >/dev/null 2>&1")
+end
+
+local function command_ok(command)
+	local ok = os.execute(command .. " >/dev/null 2>&1")
+	return ok == true or ok == 0
 end
 
 local function jq(input, args, filter)
@@ -41,6 +49,64 @@ local function get_gaming_window_count(clients_json)
 [.[] | select((((.class // "") | ascii_downcase) | test("^(gamescope|steam_app_[0-9]+)$")) or (((.initialClass // "") | ascii_downcase) | test("^(gamescope|steam_app_[0-9]+)$")))] | length
 ]])
 	return tonumber(count) or 0
+end
+
+local function get_gaming_window_pid(clients_json)
+	return jq(clients_json or get_clients_json(), "--arg ws " .. shell_quote(gaming_workspace) .. " --arg exclude_title " .. shell_quote(freeze_excluded_title_pattern), [[
+(first(.[] | select(.workspace.name == $ws) | select((((.title // "") | test($exclude_title)) or (((.initialTitle // "") | test($exclude_title))) | not) | select((((.class // "") | ascii_downcase) == "gamescope") or (((.initialClass // "") | ascii_downcase) == "gamescope")) | .pid) //
+ first(.[] | select(.workspace.name == $ws) | select((((.title // "") | test($exclude_title)) or (((.initialTitle // "") | test($exclude_title))) | not) | select((((.class // "") | ascii_downcase) | test("^steam_app_[0-9]+$")) or (((.initialClass // "") | ascii_downcase) | test("^steam_app_[0-9]+$"))) | .pid) //
+ empty)
+]])
+end
+
+local function gaming_workspace_visible(monitors_json)
+	local visible = jq(monitors_json or hypr_ipc.request("j/monitors"), "--arg ws " .. shell_quote(gaming_workspace), [[
+any(.[]; .activeWorkspace.name == $ws)
+]])
+	return visible == "true"
+end
+
+local function process_state(pid)
+	if not pid or not pid:match("^[0-9]+$") then
+		return ""
+	end
+
+	local handle = io.popen("ps -p " .. pid .. " -o state= 2>/dev/null", "r")
+	local output = handle and handle:read("*a") or ""
+	if handle then
+		handle:close()
+	end
+	return (output:gsub("%s+", ""))
+end
+
+local function can_wl_freeze()
+	if not wl_freeze_checked then
+		wl_freeze_available = command_ok("command -v wl-freeze")
+		wl_freeze_checked = true
+	end
+	return wl_freeze_available
+end
+
+local function set_process_frozen(pid, should_freeze)
+	if not pid or pid == "" or not can_wl_freeze() then
+		return
+	end
+
+	local state = process_state(pid)
+	if state == "" then
+		return
+	end
+
+	local is_frozen = state:match("^T") ~= nil
+	if is_frozen == should_freeze then
+		return
+	end
+
+	os.execute("wl-freeze -p " .. pid .. " -s >/dev/null 2>&1")
+end
+
+local function sync_gaming_freeze_state(clients_json, monitors_json)
+	set_process_frozen(get_gaming_window_pid(clients_json), not gaming_workspace_visible(monitors_json))
 end
 
 local function sync_gaming_state(last_count, clients_json, force)
@@ -109,6 +175,7 @@ end
 local function run()
 	local last_count = sync_gaming_state(nil, get_clients_json(), true)
 	local last_overlay_count = overlay_window_count(get_clients_json())
+	sync_gaming_freeze_state(get_clients_json(), hypr_ipc.request("j/monitors"))
 
 	while true do
 		local ok, err = pcall(function()
@@ -121,11 +188,12 @@ local function run()
 					local clients_json = get_clients_json()
 					local current_overlay_count = overlay_window_count(clients_json)
 					local monitors_json = nil
-					if current_overlay_count > last_overlay_count then
+					if current_overlay_count > last_overlay_count or kind == "window" then
 						monitors_json = hypr_ipc.request("j/monitors")
 					end
 
 					maybe_show_gaming_overlay(current_overlay_count, last_overlay_count, monitors_json)
+					sync_gaming_freeze_state(clients_json, monitors_json)
 					last_overlay_count = current_overlay_count
 					last_count = sync_gaming_state(last_count, clients_json, kind == "reload")
 				end

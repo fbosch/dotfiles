@@ -107,6 +107,7 @@ bind("bind", "ALT + SHIFT", "TAB", window_switcher.prev)
 bind("bind", main_mod .. " + SHIFT", "C", exec("hyprpicker -a"))
 bind("bind", main_mod, "N", exec("swaync-client -t"))
 bind("bind", "CTRL + ALT", "L", exec("hyprlock"))
+bind("bind", "", "PAUSE", exec("wl-freeze -a"))
 bind("bind", main_mod .. " + SHIFT", "P", exec("~/.config/hypr/runtime/profiles/toggle-powersave-mode.sh"))
 bind("bind", main_mod .. " + SHIFT", "G", send_to_gaming_workspace)
 
