@@ -27,7 +27,9 @@ function M.remember_placed(state, key, target, box)
 		state.placed_by_key[key] = placed
 	end
 
-	placed[M.target_id(target)] = { x = box.x, y = box.y, w = box.w, h = box.h }
+	local window = target and target.window
+	local monitor = window and window.monitor
+	placed[M.target_id(target)] = { x = box.x, y = box.y, w = box.w, h = box.h, monitor = monitor and monitor.name }
 end
 
 function M.moved_since_placed(state, key, target, axis)
@@ -37,6 +39,10 @@ function M.moved_since_placed(state, key, target, axis)
 	local at = window and window.at
 	local size = window and window.size
 	if not previous or not at or not size then
+		return false
+	end
+	local monitor = window.monitor
+	if previous.monitor ~= (monitor and monitor.name) then
 		return false
 	end
 
