@@ -2,18 +2,12 @@
 -- Keep the AGS window-switcher as the primary multi-window implementation.
 
 local ags = require("lib.ags")
-local command = require("lib.command")
-local paths = require("lib.paths")
+local minimized_state = require("runtime.windows.minimized-state")
 
 local M = {}
 
 local minimized_workspace_prefix = "special:minimized"
-local toggle_minimized_workspace = paths.runtime_script("windows/toggle-minimized-workspace.sh")
 local action_payloads = {}
-
-local function exec(command)
-	hl.exec_cmd(command)
-end
 
 local function workspace_name(win)
 	local workspace = win.workspace
@@ -62,17 +56,17 @@ local function focus_window(win)
 		return false
 	end
 
-	local minimized = workspace_name(win):match("^" .. minimized_workspace_prefix)
-	if minimized then
-		exec(command.line(toggle_minimized_workspace, address(win)))
+	local is_minimized = workspace_name(win):match("^" .. minimized_workspace_prefix)
+	if is_minimized then
+		minimized_state.toggle_workspace(address(win))
 	end
 
-	if win.active and not minimized then
+	if win.active and not is_minimized then
 		return true
 	end
 
 	local active = hl.get_active_window and hl.get_active_window()
-	if active and active.address == win.address and not minimized then
+	if active and active.address == win.address and not is_minimized then
 		return true
 	end
 

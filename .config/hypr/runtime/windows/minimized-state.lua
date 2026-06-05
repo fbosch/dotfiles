@@ -5,7 +5,7 @@ local config_dir = home .. "/.config/hypr"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local json = require("lib.json")
-local hypr_ipc = dofile(config_dir .. "/runtime/lib/hypr-ipc.lua")
+local hypr_ipc = nil
 
 local minimized_workspace_prefix = "special:minimized"
 local desktop_workspace = "special:desktop"
@@ -133,7 +133,14 @@ local function ensure_state_file()
 end
 
 local function request(message)
-	local ok, response = pcall(hypr_ipc.request, message)
+	if not hypr_ipc then
+		local ok, ipc = pcall(dofile, config_dir .. "/runtime/lib/hypr-ipc.lua")
+		if ok then
+			hypr_ipc = ipc
+		end
+	end
+
+	local ok, response = hypr_ipc and pcall(hypr_ipc.request, message)
 	if ok and response and response ~= "" then
 		return response
 	end
@@ -165,7 +172,23 @@ local function lua_quote(value)
 end
 
 local function dispatch_lua(script)
-	local ok = pcall(hypr_ipc.request, "dispatch " .. script)
+	if type(hl) == "table" and hl.dispatch then
+		local chunk = load("return " .. script)
+		local ok, dispatcher = chunk and pcall(chunk)
+		if ok and dispatcher then
+			hl.dispatch(dispatcher)
+			return
+		end
+	end
+
+	if not hypr_ipc then
+		local load_ok, ipc = pcall(dofile, config_dir .. "/runtime/lib/hypr-ipc.lua")
+		if load_ok then
+			hypr_ipc = ipc
+		end
+	end
+
+	local ok = hypr_ipc and pcall(hypr_ipc.request, "dispatch " .. script)
 	if ok then
 		return
 	end
@@ -651,6 +674,18 @@ end
 
 math.randomseed(os.time())
 
+local M = {
+	toggle_window = toggle_window,
+	toggle_workspace = toggle_workspace,
+	toggle_show_desktop = toggle_show_desktop,
+	delete = remove_address,
+	prune = prune,
+	init = ensure_state_file,
+}
+
+if not (arg and arg[0] and arg[0]:match("minimized%-state%.lua$")) then
+	return M
+end
 local command = arg[1]
 if command == "--help" or command == "help" or command == nil then
 	usage(command == nil and io.stderr or io.stdout)

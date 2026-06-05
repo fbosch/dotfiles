@@ -2,6 +2,8 @@
 
 local programs = require("programs")
 local window = require("lib.window")
+local volume = require("actions.volume")
+local minimized = require("runtime.windows.minimized-state")
 local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
 local window_switcher = require("actions.window-switcher")
@@ -9,33 +11,33 @@ local window_switcher = require("actions.window-switcher")
 local main_mod = "SUPER"
 
 local opts = {
-  bindo = { long_press = true },
-  bindir = { ignore_mods = true, release = true },
-  bindr = { release = true },
-  bindn = { non_consuming = true },
-  bindnitl = { non_consuming = true, ignore_mods = true, transparent = true, locked = true },
-  binde = { repeating = true },
-  bindel = { repeating = true, locked = true },
-  bindl = { locked = true },
-  bindm = { mouse = true },
-  bindmr = { mouse = true, release = true },
-  bindmn = { mouse = true, non_consuming = true },
+	bindo = { long_press = true },
+	bindir = { ignore_mods = true, release = true },
+	bindr = { release = true },
+	bindn = { non_consuming = true },
+	bindnitl = { non_consuming = true, ignore_mods = true, transparent = true, locked = true },
+	binde = { repeating = true },
+	bindel = { repeating = true, locked = true },
+	bindl = { locked = true },
+	bindm = { mouse = true },
+	bindmr = { mouse = true, release = true },
+	bindmn = { mouse = true, non_consuming = true },
 }
 
 local function key(mods, name)
-  if mods == "" then
-    return name
-  end
+	if mods == "" then
+		return name
+	end
 
-  return mods .. " + " .. name
+	return mods .. " + " .. name
 end
 
 local function bind(kind, mods, name, dispatcher)
-  hl.bind(key(mods, name), dispatcher, opts[kind])
+	hl.bind(key(mods, name), dispatcher, opts[kind])
 end
 
 local function exec(command)
-  return hl.dsp.exec_cmd(command)
+	return hl.dsp.exec_cmd(command)
 end
 
 local function send_to_gaming_workspace()
@@ -64,24 +66,26 @@ local function move_to_workspace(workspace)
 end
 
 local function resize_keep_aspect_ratio()
-  hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "1" }))
-  hl.dispatch(hl.dsp.window.resize())
+	hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "1" }))
+	hl.dispatch(hl.dsp.window.resize())
 end
 
 local function reset_keep_aspect_ratio()
-  hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "0" }))
+	hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "0" }))
 end
 
 local function custom_layout_resize(action)
-  return exec("~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh " .. action)
+	return exec(
+		"~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh " .. action
+	)
 end
 
 local function drag_openpets()
-  local active = hl.get_active_window()
+	local active = hl.get_active_window()
 
-  if active and active.title == "OpenPets Default Pet" then
-    hl.dispatch(hl.dsp.window.drag())
-  end
+	if active and active.title == "OpenPets Default Pet" then
+		hl.dispatch(hl.dsp.window.drag())
+	end
 end
 
 bind("bindo", "", "SUPER_L", exec("pkill -SIGUSR1 waybar"))
@@ -127,8 +131,8 @@ bind("bind", main_mod .. " + CTRL + SHIFT", "F", hl.dsp.pass({ window = "class:^
 bind("bind", main_mod, "W", exec("~/.config/hypr/runtime/windows/killactive-selective.sh"))
 bind("bind", main_mod, "D", exec("~/.config/hypr/runtime/windows/toggle-show-desktop.sh"))
 
-bind("bind", main_mod, "Z", exec("~/.config/hypr/runtime/windows/toggle-minimized-window.sh"))
-bind("bind", main_mod .. " + SHIFT", "Z", exec("~/.config/hypr/runtime/windows/toggle-minimized-workspace.sh"))
+bind("bind", main_mod, "Z", minimized.toggle_window)
+bind("bind", main_mod .. " + SHIFT", "Z", minimized.toggle_workspace)
 bind("bind", main_mod, "X", function()
 	hl.dispatch(hl.dsp.window.move({ workspace = "+0", follow = false }))
 end)
@@ -141,15 +145,15 @@ bind("bind", main_mod, "K", window.focus("up"))
 bind("bind", main_mod .. " + SHIFT", "d", hl.dsp.layout("setratio 0.6"))
 
 for workspace = 1, 10 do
-  bind("bind", main_mod, tostring(workspace % 10), function()
-    focus_workspace(tostring(workspace))
-  end)
+	bind("bind", main_mod, tostring(workspace % 10), function()
+		focus_workspace(tostring(workspace))
+	end)
 end
 
 for workspace = 1, 10 do
-  bind("bind", main_mod .. " + SHIFT", tostring(workspace % 10), function()
-    move_to_workspace(tostring(workspace))
-  end)
+	bind("bind", main_mod .. " + SHIFT", tostring(workspace % 10), function()
+		move_to_workspace(tostring(workspace))
+	end)
 end
 
 bind("bind", main_mod, "mouse_down", hl.dsp.focus({ workspace = "e+1" }))
@@ -158,9 +162,9 @@ bind("bind", main_mod, "mouse_down", hl.dsp.focus({ workspace = "m+1" }))
 bind("bind", main_mod, "mouse_up", hl.dsp.focus({ workspace = "m-1" }))
 
 hl.config({
-  binds = {
-    drag_threshold = 0,
-  },
+	binds = {
+		drag_threshold = 0,
+	},
 })
 
 -- Current Lua mouse binds do not become native bindm entries, so custom layout
@@ -187,9 +191,9 @@ bind("binde", main_mod .. " + SHIFT", "left", window.adjust("resize", "left"))
 bind("binde", main_mod .. " + SHIFT", "up", window.adjust("resize", "up"))
 bind("binde", main_mod .. " + SHIFT", "down", window.adjust("resize", "down"))
 
-bind("bindel", "", "XF86AudioRaiseVolume", exec([[wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ && ags request -i ags-bundled volume-indicator '{"action":"show"}']]))
-bind("bindel", "", "XF86AudioLowerVolume", exec([[wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && ags request -i ags-bundled volume-indicator '{"action":"show"}']]))
-bind("bindel", "", "XF86AudioMute", exec([[wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle && ags request -i ags-bundled volume-indicator '{"action":"show"}']]))
+bind("bindel", "", "XF86AudioRaiseVolume", volume.raise)
+bind("bindel", "", "XF86AudioLowerVolume", volume.lower)
+bind("bindel", "", "XF86AudioMute", volume.mute)
 bind("bindel", "", "XF86AudioMicMute", exec("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"))
 bind("bindel", "", "XF86MonBrightnessUp", exec("brightnessctl -e4 -n2 set 5%+"))
 bind("bindel", "", "XF86MonBrightnessDown", exec("brightnessctl -e4 -n2 set 5%-"))
@@ -199,9 +203,9 @@ bind("bindl", "", "XF86AudioPause", exec("playerctl play-pause"))
 bind("bindl", "", "XF86AudioPlay", exec("playerctl play-pause"))
 bind("bindl", "", "XF86AudioPrev", exec("playerctl previous"))
 
-bind("bindel", main_mod .. " + CTRL", "up", exec([[wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ && ags request -i ags-bundled volume-indicator '{"action":"show"}']]))
-bind("bindel", main_mod .. " + CTRL", "down", exec([[wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && ags request -i ags-bundled volume-indicator '{"action":"show"}']]))
-bind("bindel", main_mod .. " + CTRL", "End", exec([[wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle && ags request -i ags-bundled volume-indicator '{"action":"show"}']]))
+bind("bindel", main_mod .. " + CTRL", "up", volume.raise)
+bind("bindel", main_mod .. " + CTRL", "down", volume.lower)
+bind("bindel", main_mod .. " + CTRL", "End", volume.mute)
 
 bind("bindl", main_mod .. " + CTRL", "left", exec("playerctl previous"))
 bind("bindl", main_mod .. " + CTRL", "right", exec("playerctl next"))
@@ -209,5 +213,5 @@ bind("bindl", main_mod .. " + CTRL", "space", exec("playerctl play-pause"))
 
 bind("bind", main_mod, "Escape", hl.dsp.submap("passthru"))
 hl.define_submap("passthru", function()
-  bind("bind", "SUPER", "Escape", hl.dsp.submap("reset"))
+	bind("bind", "SUPER", "Escape", hl.dsp.submap("reset"))
 end)

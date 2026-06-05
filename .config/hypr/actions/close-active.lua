@@ -2,6 +2,7 @@
 -- Keep the Bash script for legacy hyprland.conf until Lua config is release-ready.
 
 local command = require("lib.command")
+local minimized = require("runtime.windows.minimized-state")
 local notify = require("lib.notify")
 local paths = require("lib.paths")
 local window = require("lib.window")
@@ -9,7 +10,6 @@ local window = require("lib.window")
 local M = {}
 
 local profilectl = paths.runtime_script("profiles/profilectl.sh")
-local minimize_script = paths.runtime_script("windows/toggle-minimized-window.sh")
 
 local function is_gaming_active()
   return command.ok(command.line(profilectl, "is-active", "gaming") .. " >/dev/null 2>&1")
@@ -33,10 +33,10 @@ function M.close_active_selective()
     return
   end
 
-  if is_steam_window(app_class) then
-    hl.exec_cmd(command.arg(minimize_script))
-    return
-  end
+	if is_steam_window(app_class) then
+		minimized.toggle_window()
+		return
+	end
 
   hl.dispatch(hl.dsp.window.close())
 end
