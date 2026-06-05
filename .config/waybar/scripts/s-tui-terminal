@@ -3,7 +3,8 @@
 set -euo pipefail
 
 class_name="s_tui_terminal"
-lock_file="/tmp/s-tui-terminal.lock"
+runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
+lock_file="$runtime_dir/s-tui-terminal.lock"
 special_workspace="tool_popups"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 

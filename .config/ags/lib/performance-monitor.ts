@@ -1,8 +1,9 @@
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 
-const PERF_FLAG_PATH = "/tmp/ags-benchmark-mode";
-const PERF_LOG_PATH = "/tmp/ags-performance.jsonl";
+const RUNTIME_DIR = GLib.getenv("XDG_RUNTIME_DIR") || GLib.get_tmp_dir();
+const PERF_FLAG_PATH = `${RUNTIME_DIR}/ags-benchmark-mode`;
+const PERF_LOG_PATH = `${RUNTIME_DIR}/ags-performance.jsonl`;
 
 type PerfRecord = {
   component: string;

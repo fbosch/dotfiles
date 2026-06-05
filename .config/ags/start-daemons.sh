@@ -9,7 +9,8 @@
 # ============================================================================
 
 AGS_CONFIG_DIR="$HOME/.config/ags"
-LOG_FILE="/tmp/ags-daemons.log"
+RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
+LOG_FILE="$RUNTIME_DIR/ags-daemons.log"
 
 # Bundled mode settings
 # Using global namespace pattern to bundle all 6 components

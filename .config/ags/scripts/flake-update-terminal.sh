@@ -3,7 +3,8 @@
 set -euo pipefail
 
 class_name="flake_update_terminal"
-lock_file="/tmp/flake-update-terminal.lock"
+runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
+lock_file="$runtime_dir/flake-update-terminal.lock"
 
 exec 9>"$lock_file"
 if command -v flock >/dev/null 2>&1; then

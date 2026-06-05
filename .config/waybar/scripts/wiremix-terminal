@@ -3,7 +3,8 @@
 set -euo pipefail
 
 class_name="wiremix_terminal"
-lock_file="/tmp/wiremix-terminal.lock"
+runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
+lock_file="$runtime_dir/wiremix-terminal.lock"
 special_workspace="tool_popups"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 

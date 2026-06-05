@@ -94,8 +94,12 @@ const BUTTON_SPACING = 8; // Spacing between buttons
 const BUTTON_PADDING = 8; // Padding inside each button
 const WINDOW_CACHE_TTL_MS = 150; // Cache window list briefly for request bursts
 const ACTIVE_WINDOW_CACHE_TTL_MS = 100; // Cache active window briefly
-const PERFORMANCE_OVERLAY_STATE_DIR = `${GLib.getenv("XDG_RUNTIME_DIR") || "/tmp"}/hypr-profiles`;
+const RUNTIME_DIR = GLib.getenv("XDG_RUNTIME_DIR") || GLib.get_tmp_dir();
+const PERFORMANCE_OVERLAY_STATE_DIR = `${RUNTIME_DIR}/hypr-profiles`;
 const PERFORMANCE_OVERLAY_ACTIVE_PATH = `${PERFORMANCE_OVERLAY_STATE_DIR}/performance-overlay.active`;
+const PERFORMANCE_MODE_PATH = `${RUNTIME_DIR}/hypr-performance-mode`;
+const MONITOR_DEBUG_PATH = `${RUNTIME_DIR}/monitor-debug.log`;
+const WINDOW_SWITCHER_DEBUG_PATH = `${RUNTIME_DIR}/ags-window-switcher-debug.log`;
 const TOGGLE_MINIMIZED_WORKSPACE_SCRIPT = "~/.config/hypr/runtime/windows/toggle-minimized-workspace.sh";
 const WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT = "~/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh";
 const DEBUG = GLib.getenv("AGS_WINDOW_SWITCHER_DEBUG") === "1";
@@ -107,9 +111,8 @@ function isPerformanceOverlayActive(): boolean {
       return true;
     }
 
-    // Backward-compatible fallback for older toggle script implementations
-    const legacyPerfModeFile = Gio.File.new_for_path("/tmp/hypr-performance-mode");
-    return legacyPerfModeFile.query_exists(null);
+    const perfModeFile = Gio.File.new_for_path(PERFORMANCE_MODE_PATH);
+    return perfModeFile.query_exists(null);
   } catch {
     return false;
   }
@@ -137,7 +140,7 @@ let state: SwitcherState = SwitcherState.IDLE;
 let displayMode: DisplayMode = DisplayMode.PREVIEWS;
 let sortMode: SortMode = SortMode.RECENCY; // Default to recency like Windows 11
 try {
-  const perfModeFile = Gio.File.new_for_path("/tmp/hypr-performance-mode");
+  const perfModeFile = Gio.File.new_for_path(PERFORMANCE_MODE_PATH);
   if (perfModeFile.query_exists(null)) {
     displayMode = DisplayMode.ICONS;
     debugLog("Performance mode detected, starting in ICONS mode");
@@ -220,20 +223,20 @@ function getMonitorWidth(): number {
   try {
     const display = Gdk.Display.get_default();
     if (!display) {
-      debugWriteFile("/tmp/monitor-debug.log", "No display found\n");
+      debugWriteFile(MONITOR_DEBUG_PATH, "No display found\n");
       return 1920; // Fallback
     }
     
     // Get the monitor containing the mouse pointer
     const seat = display.get_default_seat();
     if (!seat) {
-      debugWriteFile("/tmp/monitor-debug.log", "No seat found\n");
+      debugWriteFile(MONITOR_DEBUG_PATH, "No seat found\n");
       return 1920;
     }
     
     const pointer = seat.get_pointer();
     if (!pointer) {
-      debugWriteFile("/tmp/monitor-debug.log", "No pointer found\n");
+      debugWriteFile(MONITOR_DEBUG_PATH, "No pointer found\n");
       return 1920;
     }
     
@@ -242,7 +245,7 @@ function getMonitorWidth(): number {
     
     if (!monitor) {
       debugWriteFile(
-        "/tmp/monitor-debug.log",
+        MONITOR_DEBUG_PATH,
         `No monitor at point ${x},${y}\n`,
       );
       return 1920;
@@ -259,11 +262,11 @@ Scale factor: ${scaleFactor}
 Physical width: ${geometry.width * scaleFactor}
 Mouse position: ${x},${y}
 `;
-    debugWriteFile("/tmp/monitor-debug.log", debugInfo);
+    debugWriteFile(MONITOR_DEBUG_PATH, debugInfo);
     
     return geometry.width;
   } catch (e) {
-    debugWriteFile("/tmp/monitor-debug.log", `Error: ${e}\n`);
+    debugWriteFile(MONITOR_DEBUG_PATH, `Error: ${e}\n`);
     console.error("Failed to get monitor width:", e);
     return 1920; // Fallback to common resolution
   }
@@ -1049,7 +1052,7 @@ Button widths: [${buttonWidths.join(', ')}]
 Total width needed: ${buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.length - 1) * BUTTON_SPACING}px
 Will wrap: ${(buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.length - 1) * BUTTON_SPACING) > maxWidth}
 `;
-      debugWriteFile("/tmp/ags-window-switcher-debug.log", debugInfo);
+      debugWriteFile(WINDOW_SWITCHER_DEBUG_PATH, debugInfo);
       
       debugLog(`[Window Switcher] Button widths: [${buttonWidths.join(', ')}]`);
       

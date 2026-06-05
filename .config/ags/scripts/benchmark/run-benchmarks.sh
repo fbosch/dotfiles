@@ -7,10 +7,12 @@ AGS_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 INSTANCE="ags-bundled"
 COMPONENT="window-switcher"
-PERF_FLAG="/tmp/ags-benchmark-mode"
-PERF_LOG="/tmp/ags-performance.jsonl"
-SUMMARY_OUT="/tmp/ags-benchmark-summary.json"
-EXTRAS_OUT="/tmp/ags-benchmark-extras.json"
+RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
+PERF_FLAG="$RUNTIME_DIR/ags-benchmark-mode"
+PERF_LOG="$RUNTIME_DIR/ags-performance.jsonl"
+SUMMARY_OUT="$RUNTIME_DIR/ags-benchmark-summary.json"
+EXTRAS_OUT="$RUNTIME_DIR/ags-benchmark-extras.json"
+RUN_LOG="$RUNTIME_DIR/ags-benchmark-run.log"
 BASELINE_PATH="${AGS_DIR}/benchmarks/baseline.json"
 
 BENCH_COLD="${BENCH_COLD:-0}"
@@ -82,7 +84,7 @@ if { [[ "$BENCH_COLD" == "1" ]] || [[ "$BENCH_RESTART" == "1" ]]; } && is_runnin
 fi
 
 if ! is_running; then
-  ags run "${AGS_DIR}/config-bundled.tsx" >/tmp/ags-benchmark-run.log 2>&1 &
+  ags run "${AGS_DIR}/config-bundled.tsx" >"$RUN_LOG" 2>&1 &
   AGS_PID="$!"
   STARTED_INSTANCE=1
 fi

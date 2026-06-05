@@ -5,17 +5,18 @@ set -euo pipefail
 mode="${1:-cpu}"
 special_workspace="tool_popups"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
 
 case "$mode" in
   cpu)
     class_name="btop_cpu_terminal"
-    lock_file="/tmp/btop-cpu-terminal.lock"
+    lock_file="$runtime_dir/btop-cpu-terminal.lock"
     preset_id="1"
     config_file="$HOME/.config/btop/btop-cpu.conf"
     ;;
   mem)
     class_name="btop_mem_terminal"
-    lock_file="/tmp/btop-mem-terminal.lock"
+    lock_file="$runtime_dir/btop-mem-terminal.lock"
     preset_id="2"
     config_file="$HOME/.config/btop/btop-mem.conf"
     ;;
