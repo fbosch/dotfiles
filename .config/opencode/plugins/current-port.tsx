@@ -73,14 +73,14 @@ function currentPortLabel(api: TuiPluginApi): string {
     configuredPort(api)
 
   if (port) {
-    return `port ${port}`
+    return `:${port}`
   }
 
   if (baseUrl?.includes("opencode.internal")) {
-    return "port internal"
+    return ":internal"
   }
 
-  return "port ?"
+  return ""
 }
 
 function themeColor(theme: ThemeMap, key: string, fallback: string): unknown {

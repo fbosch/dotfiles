@@ -9,5 +9,6 @@ end
 M.raise = with_indicator("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+")
 M.lower = with_indicator("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-")
 M.mute = with_indicator("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle")
+M.mute_mic = hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle")
 
 return M

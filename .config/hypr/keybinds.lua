@@ -194,7 +194,7 @@ bind("binde", main_mod .. " + SHIFT", "down", window.adjust("resize", "down"))
 bind("bindel", "", "XF86AudioRaiseVolume", volume.raise)
 bind("bindel", "", "XF86AudioLowerVolume", volume.lower)
 bind("bindel", "", "XF86AudioMute", volume.mute)
-bind("bindel", "", "XF86AudioMicMute", exec("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"))
+bind("bindel", "", "XF86AudioMicMute", volume.mute_mic)
 bind("bindel", "", "XF86MonBrightnessUp", exec("brightnessctl -e4 -n2 set 5%+"))
 bind("bindel", "", "XF86MonBrightnessDown", exec("brightnessctl -e4 -n2 set 5%-"))
 
