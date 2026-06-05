@@ -23,16 +23,16 @@
     "hyprland-wiki": {
       "repo": "https://github.com/hyprwm/hyprland-wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "1f402c8dbfb77def55150f8773789e71534a78e4",
-      "bytes": 199836,
+      "resolvedCommit": "1eb8472191cb7a9c2f2d6d66cca1a1bbd14569e1",
+      "bytes": 200599,
       "fileCount": 32,
-      "manifestSha256": "04015ad0303eb7cbb8fee3d0d64521d1743af013584da6141135ad8e104edb39",
+      "manifestSha256": "a34f2dbff87b13f39d85635ed1ee40ed4d7b51ed4c54c84b2703461eb766b765",
       "rulesSha256": "9711428153e452825f0368860d30401cea3ed5f5e90d569d70558c392fe0dc83"
     },
     "waybar": {
       "repo": "https://github.com/Alexays/Waybar.wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "b49d57174359cb87b24efcafb028a448e05e76f9",
+      "resolvedCommit": "819f7c6247f7439b7eb078ecf4ce8c90881cdf4f",
       "bytes": 22789,
       "fileCount": 2,
       "manifestSha256": "6ce880bf38b379777e79aa3ba0909f4351f89b3a6c39df253a3c357948d2d865",
@@ -41,7 +41,7 @@
     "glance": {
       "repo": "https://github.com/glanceapp/glance",
       "ref": "HEAD",
-      "resolvedCommit": "6c5b7a3f4cc409e31739b2914bb6636d08299126",
+      "resolvedCommit": "91324e8de762702e97b0ac5c8e36271d644d8642",
       "bytes": 122650,
       "fileCount": 6,
       "manifestSha256": "e7d88341a5b021a859a819329fcedd6117cbecd0c9778e318530762d806a7aad",

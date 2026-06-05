@@ -73,6 +73,11 @@ return {
 				local args = project.resolve_mprocs_args()
 				local cmd = string.format("mprocs %s", args)
 				local root = project.get_project_root()
+				local cwd = root or vim.fn.getcwd()
+
+				if project.has_file(cwd, "devenv.nix") then
+					cmd = string.format("devenv shell %s", cmd)
+				end
 
 				if root then
 					cmd = string.format("cd %s && %s", vim.fn.shellescape(root), cmd)
