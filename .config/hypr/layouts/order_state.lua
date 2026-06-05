@@ -3,6 +3,7 @@ local M = {}
 function M.new()
 	return {
 		order_by_key = {},
+		placed_by_key = {},
 		targets_by_key = {},
 		target_maps_by_key = {},
 		skip_position_by_key = {},
@@ -13,6 +14,39 @@ function M.target_id(target)
 	local window = target and target.window
 	local id = window and window.stable_id or target and target.index
 	return id or target
+end
+
+function M.remember_placed(state, key, target, box)
+	if not key then
+		return
+	end
+
+	local placed = state.placed_by_key[key]
+	if not placed then
+		placed = {}
+		state.placed_by_key[key] = placed
+	end
+
+	placed[M.target_id(target)] = { x = box.x, y = box.y, w = box.w, h = box.h }
+end
+
+function M.moved_since_placed(state, key, target, axis)
+	local placed = key and state.placed_by_key[key] or nil
+	local previous = placed and placed[M.target_id(target)] or nil
+	local window = target and target.window
+	local at = window and window.at
+	local size = window and window.size
+	if not previous or not at or not size then
+		return false
+	end
+
+	local position_key = axis == "y" and "y" or "x"
+	local size_key = axis == "y" and "h" or "w"
+	local current_size = axis == "y" and size.y or size.x
+	local tolerance = 1
+
+	return math.abs((at[position_key] or 0) - previous[position_key]) > tolerance
+		or math.abs((current_size or 0) - previous[size_key]) > tolerance
 end
 
 function M.index_of(list, value)
