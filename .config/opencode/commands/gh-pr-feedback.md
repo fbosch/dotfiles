@@ -97,6 +97,13 @@ Resolve policy:
 - Do not resolve anything automatically.
 - End by calling the built-in `question` tool (not plain text) with exactly:
   - Header: `PR feedback next step`
+  - Question: `Apply the proposed fixes now?`
+  - Options (stable labels):
+    - `Yes, apply fixes now`
+    - `No, choose manually`
+  - Use single-select (`multiple: false`) with custom input allowed.
+- If the user selects `No, choose manually`, call the built-in `question` tool with exactly:
+  - Header: `PR feedback next step`
   - Question: `What should I do with this feedback?`
   - Options (stable labels):
     - `Apply fixes now`
@@ -105,12 +112,20 @@ Resolve policy:
     - `Write a markdown checklist file`
     - `Keep as-is (no follow-up action)`
   - Use single-select (`multiple: false`) with custom input allowed.
+- Treat `Yes, apply fixes now` the same as `Apply fixes now`.
 
 Post-fix policy:
 
 - After applying PR feedback fixes, do not commit, push, or resolve threads automatically.
 - Re-run the feedback classification using the current session context and applied changes.
 - Ask the user what follow-up actions to take by calling the built-in `question` tool with exactly:
+  - Header: `PR feedback follow-up`
+  - Question: `Commit, push, and resolve relevant threads?`
+  - Options (stable labels):
+    - `Yes, commit/push/resolve`
+    - `No, choose manually`
+  - Use single-select (`multiple: false`) with custom input allowed.
+- If the user selects `No, choose manually`, call the built-in `question` tool with exactly:
   - Header: `PR feedback follow-up`
   - Question: `Fixes are applied. What follow-up actions should I take?`
   - Options (stable labels):
@@ -120,6 +135,7 @@ Post-fix policy:
     - `Resolve relevant threads`
     - `No follow-up action`
   - Use multi-select (`multiple: true`) with custom input allowed.
+- Treat `Yes, commit/push/resolve` the same as `Commit, push, and resolve relevant threads`.
 - If the user selects `Commit, push, and resolve relevant threads`, perform those three actions in order: commit first, then push, then resolve relevant threads.
 - If the user selects `Commit changes`, inspect git status/diff first, then commit only relevant changes.
 - If the user selects `Push branch`, push only after confirming there are commits to push or an already-committed local branch state.
