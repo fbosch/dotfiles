@@ -32,7 +32,12 @@ cat > "$bin_dir/pkill" <<'EOF'
 exit 0
 EOF
 
-chmod +x "$bin_dir/hyprctl" "$bin_dir/ags" "$bin_dir/pkill"
+cat > "$bin_dir/powerprofilesctl" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+
+chmod +x "$bin_dir/hyprctl" "$bin_dir/ags" "$bin_dir/pkill" "$bin_dir/powerprofilesctl"
 
 run_profilectl() {
   PATH="$bin_dir:$PATH" XDG_RUNTIME_DIR="$runtime_dir" "$profilectl" "$@" >/dev/null 2>&1
@@ -54,19 +59,19 @@ bench() {
   printf '%-28s %8d iters %8d us/call %8d ms total\n' "$name" "$iterations" "$per_call_us" "$elapsed_ms"
 }
 
-run_profilectl sync performance 0 || true
+run_profilectl sync powersave 0 || true
 run_profilectl sync gaming 0 || true
 
-bench "is-active inactive" is-active performance
+bench "is-active inactive" is-active powersave
 
-run_profilectl sync performance 1 || true
-bench "is-active active" is-active performance
+run_profilectl sync powersave 1 || true
+bench "is-active active" is-active powersave
 
-run_profilectl sync performance 0 || true
-bench "apply performance" apply performance
+run_profilectl sync powersave 0 || true
+bench "apply powersave" apply powersave
 
-run_profilectl sync performance 1 || true
-bench "remove performance" remove performance
+run_profilectl sync powersave 1 || true
+bench "remove powersave" remove powersave
 
 bench "sync gaming 0" sync gaming 0
 bench "sync gaming 1" sync gaming 1

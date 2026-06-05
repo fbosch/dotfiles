@@ -3,7 +3,7 @@ local command = require("lib.command")
 local paths = require("lib.paths")
 
 local profiles = {
-  performance = require("profiles.performance"),
+  powersave = require("profiles.powersave"),
   gaming = require("profiles.gaming"),
 }
 
@@ -14,7 +14,7 @@ local function state_dir()
 end
 
 local function mode_file()
-  return state_dir() .. "/hypr-profiles/performance-overlay.mode"
+	return state_dir() .. "/hypr-profiles/profile-overlay.mode"
 end
 
 local function read_file(path)

@@ -336,10 +336,10 @@ local function bench_profiles(iterations)
 	end
 	local profiles = require("profiles")
 	run_case("profiles/is_active-stubbed", iterations, function()
-		profiles.is_active("performance")
+		profiles.is_active("powersave")
 	end)
 	run_case("profiles/apply", iterations, function()
-		profiles.apply("performance")
+		profiles.apply("powersave")
 	end)
 end
 

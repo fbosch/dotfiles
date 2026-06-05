@@ -1,4 +1,4 @@
--- Lua-native equivalent of scripts/toggle-performance-mode.sh for Lua keybinds.
+-- Lua-native equivalent of scripts/toggle-powersave-mode.sh for Lua keybinds.
 -- Keep the Bash script for legacy hyprland.conf until Lua config is release-ready.
 
 local command = require("lib.command")
@@ -24,29 +24,29 @@ local function icon_path(icon, color)
 	return nil
 end
 
-function M.toggle_performance_mode()
+function M.toggle_powersave_mode()
 	if in_progress then
 		return
 	end
 
 	in_progress = true
 
-	if profiles.is_active("performance") then
-		profiles.remove("performance")
+	if profiles.is_active("powersave") then
+		profiles.remove("powersave")
 		notify.send({
-			summary = "Performance Mode Disabled",
+			summary = "Powersave Mode Disabled",
 			icon = icon_path("󰠠", "#dea721"),
-			hints = { "string:x-canonical-private-synchronous:perf-mode" },
+			hints = { "string:x-canonical-private-synchronous:powersave-mode" },
 		})
 		in_progress = false
 		return
 	end
 
-	profiles.activate("performance")
+	profiles.activate("powersave")
 	notify.send({
-		summary = "Performance Mode Enabled",
+		summary = "Powersave Mode Enabled",
 		icon = icon_path("󱤅", "#73bc6f"),
-		hints = { "string:x-canonical-private-synchronous:perf-mode" },
+		hints = { "string:x-canonical-private-synchronous:powersave-mode" },
 	})
 	in_progress = false
 end

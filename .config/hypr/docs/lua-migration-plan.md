@@ -29,7 +29,7 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
       close-active.lua
       confirm-exit.lua
       confirm-hyprprop-kill.lua
-      toggle-performance-mode.lua
+      toggle-powersave-mode.lua
       window-switcher.lua
     lib/
       ags.lua

@@ -2,7 +2,6 @@ local wezterm = require("wezterm")
 
 return function(config)
 	config.front_end = "OpenGL"
-	config.webgpu_power_preference = "HighPerformance"
 	config.max_fps = 120
 	config.animation_fps = 120
 	config.enable_wayland = true

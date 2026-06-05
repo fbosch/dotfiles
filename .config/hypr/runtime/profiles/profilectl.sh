@@ -5,7 +5,7 @@ set -euo pipefail
 STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-profiles"
 LOCK_FILE="$STATE_DIR/lock"
 
-PERFORMANCE_PROFILE="performance"
+POWERSAVE_PROFILE="powersave"
 GAMING_PROFILE="gaming"
 
 mkdir -p "$STATE_DIR"
@@ -19,7 +19,7 @@ count_file() {
 
 is_valid_profile() {
   local profile="$1"
-  [[ "$profile" == "$PERFORMANCE_PROFILE" || "$profile" == "$GAMING_PROFILE" ]]
+  [[ "$profile" == "$POWERSAVE_PROFILE" || "$profile" == "$GAMING_PROFILE" ]]
 }
 
 get_count() {
@@ -48,8 +48,8 @@ set_count() {
   printf "%s" "$value" > "$file"
 }
 
-apply_hypr_performance_overlay() {
-  hyprctl eval 'require("profiles").apply("performance")' >/dev/null
+apply_hypr_powersave_overlay() {
+  hyprctl eval 'require("profiles").apply("powersave")' >/dev/null
 }
 
 apply_hypr_gaming_overlay() {
@@ -58,6 +58,14 @@ apply_hypr_gaming_overlay() {
 
 restore_hypr_defaults() {
   hyprctl reload >/dev/null
+}
+
+set_power_profile() {
+	local profile="$1"
+
+	if command -v powerprofilesctl >/dev/null 2>&1; then
+		powerprofilesctl set "$profile" >/dev/null 2>&1 && return
+	fi
 }
 
 pause_background_helpers() {
@@ -86,14 +94,14 @@ set_switcher_mode_previews() {
   ags request --instance ags-bundled window-switcher '{"action": "set-mode", "mode": "previews"}' 2>/dev/null || true
 }
 
-overlay_active_file="$STATE_DIR/performance-overlay.active"
-overlay_mode_file="$STATE_DIR/performance-overlay.mode"
+overlay_active_file="$STATE_DIR/profile-overlay.active"
+overlay_mode_file="$STATE_DIR/profile-overlay.mode"
 
 get_desired_overlay_mode() {
-  local performance_count
+  local powersave_count
   local gaming_count
 
-  performance_count="$(get_count "$PERFORMANCE_PROFILE")"
+  powersave_count="$(get_count "$POWERSAVE_PROFILE")"
   gaming_count="$(get_count "$GAMING_PROFILE")"
 
   if [[ "$gaming_count" -gt 0 ]]; then
@@ -101,8 +109,8 @@ get_desired_overlay_mode() {
     return
   fi
 
-  if [[ "$performance_count" -gt 0 ]]; then
-    printf "performance"
+  if [[ "$powersave_count" -gt 0 ]]; then
+    printf "powersave"
     return
   fi
 
@@ -123,6 +131,7 @@ apply_effective_state() {
     resume_background_helpers
     set_switcher_mode_previews
     rm -f "$overlay_active_file" "$overlay_mode_file"
+		set_power_profile balanced
     restore_hypr_defaults
     refresh_window_captures
     return
@@ -139,24 +148,28 @@ apply_effective_state() {
     fi
 
     pause_background_helpers
-    set_switcher_mode_icons
-    if [[ "$desired_mode" == "gaming" ]]; then
-      apply_hypr_gaming_overlay
-    else
-      apply_hypr_performance_overlay
-    fi
+		set_switcher_mode_icons
+		if [[ "$desired_mode" == "gaming" ]]; then
+			set_power_profile performance
+			apply_hypr_gaming_overlay
+		else
+			set_power_profile power-saver
+			apply_hypr_powersave_overlay
+		fi
     touch "$overlay_active_file"
     printf "%s" "$desired_mode" > "$overlay_mode_file"
     return
   fi
 
   pause_background_helpers
-  set_switcher_mode_icons
-  if [[ "$desired_mode" == "gaming" ]]; then
-    apply_hypr_gaming_overlay
-  else
-    apply_hypr_performance_overlay
-  fi
+	set_switcher_mode_icons
+	if [[ "$desired_mode" == "gaming" ]]; then
+		set_power_profile performance
+		apply_hypr_gaming_overlay
+	else
+		set_power_profile power-saver
+		apply_hypr_powersave_overlay
+	fi
 }
 
 apply_profile() {
@@ -186,13 +199,13 @@ set_profile_count() {
 }
 
 print_status() {
-  local performance_count
+  local powersave_count
   local gaming_count
 
-  performance_count="$(get_count "$PERFORMANCE_PROFILE")"
+  powersave_count="$(get_count "$POWERSAVE_PROFILE")"
   gaming_count="$(get_count "$GAMING_PROFILE")"
 
-  printf "performance=%s\n" "$performance_count"
+  printf "powersave=%s\n" "$powersave_count"
   printf "gaming=%s\n" "$gaming_count"
 
   if [[ -f "$overlay_active_file" ]]; then
