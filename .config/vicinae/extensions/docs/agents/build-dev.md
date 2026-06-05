@@ -14,12 +14,10 @@ Bulk build (fresh setup or major updates):
 ./scripts/vicinae-build-extensions.sh
 ```
 
-## mprocs entry
+## Dev Server
 
-Add new extensions to `mprocs.yaml` for dev:
+Run an extension dev server from the repo root:
 
-```yaml
-vicinae-extension-name:
-  autostart: false
-  shell: "(cd .config/vicinae/extensions/extension-name && pnpm run dev)"
+```bash
+just vicinae-dev extension-name
 ```

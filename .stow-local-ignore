@@ -25,7 +25,6 @@ docs-lock.json
 ^/devenv\.yaml$
 ^/devenv\.lock$
 ^/\.devenv
-mprocs.yaml
 
 # Example files should not be stowed, only used as templates
 \.example$

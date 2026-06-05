@@ -15,6 +15,17 @@ devenv-shell:
 devenv-test:
 	devenv test
 
+# Run Storybook for the design system.
+storybook:
+	pnpm --dir design-system storybook
+
+# Build Storybook for the design system.
+storybook-build:
+	pnpm --dir design-system build-storybook
+
+# Build Storybook for the design system.
+build-storybook: storybook-build
+
 # Install dependencies for OpenCode plugins.
 install-opencode-plugins:
 	bun install --cwd .config/opencode/plugins
@@ -53,6 +64,58 @@ shellcheck:
 vicinae-build:
 	bash ./scripts/vicinae-build-extensions.sh
 
+# Run a Vicinae extension dev server.
+vicinae-dev extension:
+	pnpm --dir .config/vicinae/extensions/{{extension}} run dev
+
+# Run favorite-directories Vicinae extension dev server.
+vicinae-favorite-directories:
+	just vicinae-dev favorite-directories
+
+# Run flathub-search Vicinae extension dev server.
+vicinae-flathub-search:
+	just vicinae-dev flathub-search
+
+# Run local-wallpaper Vicinae extension dev server.
+vicinae-local-wallpaper:
+	just vicinae-dev local-wallpaper
+
+# Run nerdfont-search Vicinae extension dev server.
+vicinae-nerdfont-search:
+	just vicinae-dev nerdfont-search
+
+# Run protondb-search Vicinae extension dev server.
+vicinae-protondb-search:
+	just vicinae-dev protondb-search
+
+# Run wallhaven-search Vicinae extension dev server.
+vicinae-wallhaven-search:
+	just vicinae-dev wallhaven-search
+
+# Run hyprprop Vicinae extension dev server.
+vicinae-hyprprop:
+	just vicinae-dev hyprprop
+
+# Run kagi-search Vicinae extension dev server.
+vicinae-kagi-search:
+	just vicinae-dev kagi-search
+
+# Run sysinfo Vicinae extension dev server.
+vicinae-sysinfo:
+	just vicinae-dev sysinfo
+
+# Run color-tools Vicinae extension dev server.
+vicinae-color-tools:
+	just vicinae-dev color-tools
+
+# Run hypr-quickrule Vicinae extension dev server.
+vicinae-hypr-quickrule:
+	just vicinae-dev hypr-quickrule
+
+# Run clamav-scanner Vicinae extension dev server.
+vicinae-clamav-scanner:
+	just vicinae-dev clamav-scanner
+
 # Lint Vicinae extensions.
 vicinae-lint:
 	bash -lc 'cd .config/vicinae/extensions && pnpm exec vici lint'
@@ -68,3 +131,27 @@ ags-types:
 # Validate Glance YAML configuration.
 glance-validate:
 	bash .config/glance/scripts/validate-yaml.sh
+
+# Generate Fish shell caches.
+fish-cache:
+	bash ./scripts/fish-generate-caches.sh
+
+# Install Homebrew bundle dependencies.
+brew-install:
+	brew bundle install
+
+# Check Homebrew bundle dependencies.
+brew-check:
+	brew bundle check
+
+# Check stow operations without changing files.
+stow-check:
+	stow -n .
+
+# Apply stow operations.
+stow-apply:
+	stow .
+
+# Restow dotfiles.
+stow-restow:
+	stow -R .
