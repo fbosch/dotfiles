@@ -1,6 +1,19 @@
+set shell := ["bash", "-eu", "-o", "pipefail", "-c", "[ -n \"${DEVENV_ROOT:-}\" ] || exec devenv shell -- bash -eu -o pipefail -c \"$0\"; exec bash -eu -o pipefail -c \"$0\""]
+
+default:
+	@just --list
+
 # Install OpenCode dependencies.
 install-opencode:
 	pnpm install --dir .config/opencode
+
+# Enter the project devenv shell.
+devenv-shell:
+	devenv shell
+
+# Validate the project devenv environment.
+devenv-test:
+	devenv test
 
 # Install dependencies for OpenCode plugins.
 install-opencode-plugins:

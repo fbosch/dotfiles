@@ -21,6 +21,10 @@ Brewfile\.lock\.json
 docs.config.json
 docs-lock.json
 \.docs
+^/devenv\.nix$
+^/devenv\.yaml$
+^/devenv\.lock$
+^/\.devenv
 mprocs.yaml
 
 # Example files should not be stowed, only used as templates
