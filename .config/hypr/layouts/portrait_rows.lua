@@ -239,7 +239,7 @@ end
 function M.layout_msg(ctx, msg)
 	local targets = ctx.targets
 	local count = targets and #targets or 0
-	if count < 2 or count > 3 then
+	if count < 2 then
 		return true
 	end
 
@@ -249,7 +249,13 @@ function M.layout_msg(ctx, msg)
 	local order, targets_by_id = order_state.sync(state, key, targets)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, targets)
 
-	if command == "resize-up" then
+	if command == "swapprev" then
+		move_active(targets, key, -1)
+	elseif command == "swapnext" then
+		move_active(targets, key, 1)
+	elseif count > 3 then
+		return true
+	elseif command == "resize-up" then
 		M.resize(ctx, nil, { y = -resize_step }, nil)
 	elseif command == "resize-down" then
 		M.resize(ctx, nil, { y = resize_step }, nil)
@@ -269,10 +275,6 @@ function M.layout_msg(ctx, msg)
 		if ratio_key then
 			ratios_by_workspace[ratio_key] = default_ratios(count)
 		end
-	elseif command == "swapprev" then
-		move_active(targets, key, -1)
-	elseif command == "swapnext" then
-		move_active(targets, key, 1)
 	else
 		return true
 	end

@@ -257,6 +257,22 @@ run("swapnext moves active row despite old geometry", function()
 	assert_box(first.placed, { x = 10, y = 120, w = 120, h = 200 }, "bottom target")
 end)
 
+run("swapnext moves active row with four windows", function()
+	local first = make_workspace_target(1, "swapnext-four", true)
+	local second = make_workspace_target(2, "swapnext-four")
+	local third = make_workspace_target(3, "swapnext-four")
+	local fourth = make_workspace_target(4, "swapnext-four")
+	local ctx = make_context({ first, second, third, fourth })
+
+	registered_layout.layout.layout_msg(ctx, "swapnext")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(second.placed, { x = 10, y = 20, w = 120, h = 75 }, "top target")
+	assert_box(first.placed, { x = 10, y = 95, w = 120, h = 75 }, "moved target")
+	assert_box(third.placed, { x = 10, y = 170, w = 120, h = 75 }, "third target")
+	assert_box(fourth.placed, { x = 10, y = 245, w = 120, h = 75 }, "fourth target")
+end)
+
 run("ignores unrelated layout messages", function()
 	local first = make_workspace_target(1, "ignored-layout-msg")
 	local second = make_workspace_target(2, "ignored-layout-msg", true)
