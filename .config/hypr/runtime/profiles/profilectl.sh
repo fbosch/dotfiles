@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+export PATH="/etc/profiles/per-user/fbb/bin:/run/current-system/sw/bin:${PATH:-}"
+
 STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-profiles"
 LOCK_FILE="$STATE_DIR/lock"
 
