@@ -140,10 +140,6 @@ end
 
 local function move_active_to_position(targets, key, ratios, area_x, area_width)
 	local active = active_index(targets)
-	if not order_state.moved_since_placed(state, key, targets[active], "x") then
-		return
-	end
-
 	local target_index = desired_index(horizontal_center(targets[active]), ratios, area_x, area_width)
 	if not target_index or target_index == active then
 		return
@@ -156,7 +152,7 @@ local function move_active(targets, key, delta)
 	order_state.move_active(state, key, targets, active_index, delta)
 end
 
-local function place_columns(targets, key, ratios, x, y, width, height)
+local function place_columns(targets, ratios, x, y, width, height)
 	local next_x = x
 	box.y = y
 	box.h = height
@@ -169,12 +165,11 @@ local function place_columns(targets, key, ratios, x, y, width, height)
 		end
 
 		targets[index]:place(box)
-		order_state.remember_placed(state, key, targets[index], box)
 		next_x = next_x + box.w
 	end
 end
 
-local function place_rows(targets, key, ratios, x, y, width, height)
+local function place_rows(targets, ratios, x, y, width, height)
 	local next_y = y
 	box.x = x
 	box.w = width
@@ -187,7 +182,6 @@ local function place_rows(targets, key, ratios, x, y, width, height)
 		end
 
 		targets[index]:place(box)
-		order_state.remember_placed(state, key, targets[index], box)
 		next_y = next_y + box.h
 	end
 end
@@ -218,28 +212,25 @@ function M.recalculate(ctx)
 	local ratios = monitor == "HDMI-A-2" and row_ratios_for_workspace(key, count) or ratios_for_workspace(key, count)
 
 	if monitor == "HDMI-A-2" then
-		place_rows(targets, key, ratios, x, y, width, height)
+		place_rows(targets, ratios, x, y, width, height)
 		return
 	elseif monitor ~= "DP-2" then
-		place_columns(targets, key, ratios, x, y, width, height)
+		place_columns(targets, ratios, x, y, width, height)
 		return
 	end
 
 	local skip_position_order = state.skip_position_by_key[key]
-	local has_order = key and state.order_by_key[key]
 	local source_targets = targets
 	local order, targets_by_id = order_state.sync(state, key, source_targets)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	if skip_position_order then
 		state.skip_position_by_key[key] = nil
-	elseif not has_order then
-		-- Cold layout state can happen after reload; trust Hyprland target order first.
 	else
 		move_active_to_position(targets, key, ratios, x, width)
 		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	end
 
-	place_columns(targets, key, ratios, x, y, width, height)
+	place_columns(targets, ratios, x, y, width, height)
 end
 
 function M.resize(ctx, target, delta, corner)
