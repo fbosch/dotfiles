@@ -65,32 +65,65 @@ if [[ "${mode}" == "ocr" ]]; then
         exit 1
     fi
 
+    max_ocr_pixels=6000000
+    image_pixels=""
+    if command -v magick >/dev/null 2>&1; then
+        if dimensions="$(magick identify -format '%w %h' "${tmpfile}" 2>/dev/null)"; then
+            read -r image_width image_height <<< "${dimensions}"
+            if [[ "${image_width}" =~ ^[0-9]+$ && "${image_height}" =~ ^[0-9]+$ ]]; then
+                image_pixels=$((image_width * image_height))
+            fi
+        fi
+    elif command -v identify >/dev/null 2>&1; then
+        if dimensions="$(identify -format '%w %h' "${tmpfile}" 2>/dev/null)"; then
+            read -r image_width image_height <<< "${dimensions}"
+            if [[ "${image_width}" =~ ^[0-9]+$ && "${image_height}" =~ ^[0-9]+$ ]]; then
+                image_pixels=$((image_width * image_height))
+            fi
+        fi
+    fi
+
+    if [[ -n "${image_pixels}" && "${image_pixels}" -gt "${max_ocr_pixels}" ]]; then
+        notify-send \
+            --app-name="OCR" \
+            --icon="${ERROR_ICON}" \
+            --urgency=critical \
+            "Text extraction skipped" \
+            "Selection is too large for OCR. Select a smaller area."
+        exit 1
+    fi
+
     notification_id="$(notify-send --app-name="OCR" --print-id "Reading text..." "Extracting text from screenshot...")"
 
-    # Preprocess image for better OCR accuracy
+    # Keep preprocessing bounded; large OCR selections can otherwise spike memory.
     preprocessed="${tmpdir}/preprocessed.png"
-    if command -v magick >/dev/null 2>&1; then
+    max_preprocess_pixels=2000000
+    resize_args=()
+    if [[ -n "${image_pixels}" && "${image_pixels}" -le 1000000 ]]; then
+        resize_args=(-resize 150%)
+    fi
+
+    if [[ -n "${image_pixels}" && "${image_pixels}" -gt "${max_preprocess_pixels}" ]]; then
+        preprocessed="${tmpfile}"
+    elif command -v magick >/dev/null 2>&1; then
         # ImageMagick v7 preprocessing:
-        # - Upscale 2x (helps with small text)
+        # - Upscale small captures 1.5x (helps with small text)
         # - Convert to grayscale
         # - Increase contrast and brightness
         # - Sharpen text edges
-        # - Remove noise
-        magick "${tmpfile}" \
-            -resize 200% \
+        MAGICK_MEMORY_LIMIT=256MiB MAGICK_MAP_LIMIT=512MiB timeout 8s magick "${tmpfile}" \
+            "${resize_args[@]}" \
             -colorspace Gray \
             -brightness-contrast 10x30 \
             -sharpen 0x1 \
-            -despeckle \
             "${preprocessed}" 2>/dev/null || cp "${tmpfile}" "${preprocessed}"
     elif command -v convert >/dev/null 2>&1; then
         # ImageMagick v6 preprocessing
-        convert "${tmpfile}" \
-            -resize 200% \
+        MAGICK_MEMORY_LIMIT=256MiB MAGICK_MAP_LIMIT=512MiB timeout 8s convert "${tmpfile}" \
+            "${resize_args[@]}" \
             -colorspace Gray \
             -brightness-contrast 10x30 \
             -sharpen 0x1 \
-            -despeckle \
             "${preprocessed}" 2>/dev/null || cp "${tmpfile}" "${preprocessed}"
     else
         # Fallback: use original image if ImageMagick not available
@@ -100,7 +133,7 @@ if [[ "${mode}" == "ocr" ]]; then
     # PSM 3 = Auto page segmentation (works better with mixed layouts)
     # Add --dpi 300 to hint at higher resolution
     # Add -l eng for explicit English (change to your language if needed)
-    if ! raw_text="$(tesseract "${preprocessed}" stdout --psm 3 --oem 1 --dpi 300 -l eng 2>/dev/null)"; then
+    if ! raw_text="$(timeout 20s tesseract "${preprocessed}" stdout --psm 3 --oem 1 --dpi 300 -l eng 2>/dev/null)"; then
         notify-send \
             --app-name="OCR" \
             --replace-id="${notification_id}" \
