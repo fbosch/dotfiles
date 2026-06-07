@@ -1,108 +1,83 @@
+local function completion_enabled()
+	local ok, node = pcall(vim.treesitter.get_node)
+	if ok and node ~= nil then
+		local node_type = node:type()
+		if node_type == "comment" or node_type == "line_comment" or node_type == "block_comment" then
+			return false
+		end
+	end
+
+	return not vim.tbl_contains(
+		{ "Comment" },
+		vim.fn.synIDattr(vim.fn.synID(vim.fn.line("."), vim.fn.col("."), 1), "name")
+	)
+end
+
 return {
 	{
-		"hrsh7th/nvim-cmp",
+		"saghen/blink.cmp",
+		version = "1.*",
 		dependencies = {
 			"L3MON4D3/LuaSnip",
-			"saadparwaiz1/cmp_luasnip",
-			"hrsh7th/cmp-nvim-lsp",
-			"hrsh7th/cmp-path",
-			"hrsh7th/cmp-buffer",
-			"onsails/lspkind.nvim",
-			{ "f3fora/cmp-spell", ft = { "gitcommit", "markdown", "text" } },
-			{ "hrsh7th/cmp-nvim-lua", ft = { "lua" } },
-			{ "mtoohey31/cmp-fish", ft = { "fish" } },
-			{ "hrsh7th/cmp-omni", ft = { "tex", "plaintex" } },
 		},
 		event = "InsertEnter",
-		config = function()
-			local cmp = require("cmp")
-			local types = require("cmp.types")
-			local cmp_autopairs = require("nvim-autopairs.completion.cmp")
-			cmp.event:on("confirm_done", cmp_autopairs.on_confirm_done())
-			local lspkind = require("lspkind")
-
-			local base_sources = cmp.config.sources(
-				{
-					{ name = "nvim_lsp", max_item_count = 10 },
-					{ name = "luasnip", max_item_count = 5 },
+		opts = {
+			enabled = completion_enabled,
+			keymap = {
+				preset = "default",
+				["<C-d>"] = { "scroll_documentation_up", "fallback" },
+				["<C-f>"] = { "scroll_documentation_down", "fallback" },
+				["<C-j>"] = { "select_next", "fallback" },
+				["<C-k>"] = { "select_prev", "fallback" },
+				["<C-y>"] = { "select_and_accept", "fallback" },
+			},
+			appearance = {
+				nerd_font_variant = "mono",
+			},
+			completion = {
+				accept = {
+					auto_brackets = { enabled = true },
 				},
-				{
-					{ name = "path", max_item_count = 10 },
-					{ name = "buffer", max_item_count = 5, keyword_length = 3 },
-				}
-			)
-
-			cmp.setup({
-				enabled = function()
-					-- disable completion in comments
-					local context = require("cmp.config.context")
-					-- keep command mode completion enabled when cursor is in a comment
-					if vim.api.nvim_get_mode().mode == "c" then
-						return true
-					else
-						return not context.in_treesitter_capture("comment") and not context.in_syntax_group("Comment")
-					end
-				end,
-				completion = {
-					completeopt = "menu,menuone,noinsert",
+				list = {
+					selection = {
+						preselect = true,
+						auto_insert = false,
+					},
 				},
-				window = {
-					completion = cmp.config.window.bordered(),
-					documentation = cmp.config.window.bordered(),
+				menu = {
+					border = "rounded",
+					draw = {
+						columns = {
+							{ "label", "label_description", gap = 1 },
+							{ "kind_icon", "kind" },
+						},
+					},
 				},
-				snippet = {
-					expand = function(args)
-						require("luasnip").lsp_expand(args.body)
-					end,
+				documentation = {
+					auto_show = false,
+					window = { border = "rounded" },
 				},
-				formatting = {
-					expandable_indicator = false,
-					fields = { "abbr", "kind" },
-					format = lspkind.cmp_format({
-						mode = "symbol_text",
-						ellipsis_char = "",
-					}),
+			},
+			snippets = {
+				preset = "luasnip",
+			},
+			sources = {
+				default = { "lsp", "snippets", "path", "buffer" },
+				per_filetype = {
+					tex = { "omni" },
+					plaintex = { "omni" },
 				},
-				sources = base_sources,
-				mapping = cmp.mapping.preset.insert({
-					["<C-f>"] = cmp.mapping.scroll_docs(4),
-					["<C-d>"] = cmp.mapping.scroll_docs(-4),
-					["<C-e>"] = cmp.mapping.abort(),
-					["<C-y>"] = cmp.mapping.confirm({ behavior = types.cmp.ConfirmBehavior.Insert, select = true }),
-					["<C-j>"] = cmp.mapping.select_next_item({ behavior = types.cmp.SelectBehavior.Select }),
-					["<C-k>"] = cmp.mapping.select_prev_item({ behavior = types.cmp.SelectBehavior.Select }),
-				}),
-			})
-
-			cmp.setup.filetype({ "lua" }, {
-				sources = cmp.config.sources({ { name = "nvim_lua", max_item_count = 5 } }, base_sources),
-			})
-
-			cmp.setup.filetype({ "markdown", "text", "gitcommit" }, {
-				sources = cmp.config.sources({ { name = "spell", max_item_count = 5 } }, base_sources),
-			})
-
-			cmp.setup.filetype({ "tex", "plaintex" }, {
-				sources = cmp.config.sources({ { name = "omni", max_item_count = 5 } }, base_sources),
-			})
-
-			-- highlights
-			local colors = require("config.colors")
-
-			require("utils").load_highlights({
-				CmpItemAbbrDeprecated = { fg = colors.lighter_gray, strikethrough = true },
-				CmpItemAbbrMatch = { fg = colors.lighter_gray },
-				CmpItemAbbrMatchFuzzy = { fg = colors.lighter_gray },
-				CmpItemKindVariable = { fg = colors.blue },
-				CmpItemKindInterface = { fg = colors.blue },
-				CmpItemKindText = { fg = colors.blue },
-				CmpItemKindFunction = { fg = colors.purple },
-				CmpItemKindMethod = { fg = colors.purple },
-				CmpItemKindKeyword = { fg = colors.lighter_gray },
-				CmpItemKindProperty = { fg = colors.white },
-				CmpItemKindUnit = { fg = colors.white },
-				CmpItemKindSnippet = { fg = colors.orange },
-			})
-		end,
+				providers = {
+					lsp = { max_items = 10 },
+					snippets = { max_items = 5 },
+					path = { max_items = 10 },
+					buffer = { max_items = 5, min_keyword_length = 3 },
+				},
+			},
+			fuzzy = {
+				implementation = "prefer_rust",
+			},
+		},
+		opts_extend = { "sources.default" },
 	},
 }

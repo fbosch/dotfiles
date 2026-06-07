@@ -11,16 +11,6 @@ return {
 		},
 	},
 	{
-		"roobert/tailwindcss-colorizer-cmp.nvim",
-		ft = { "html", "css", "javascriptreact", "typescriptreact", "vue", "svelte" },
-		enabled = false,
-		config = function()
-			require("tailwindcss-colorizer-cmp").setup({
-				color_square_width = 2,
-			})
-		end,
-	},
-	{
 		"razak17/tailwind-fold.nvim",
 		ft = { "html", "css", "javascriptreact", "typescriptreact", "vue", "svelte" },
 		dependencies = { "nvim-treesitter/nvim-treesitter" },

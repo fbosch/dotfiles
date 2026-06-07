@@ -186,16 +186,10 @@ local on_attach = function(client, bufnr)
 end
 
 local function get_capabilities()
-	local capabilities = vim.tbl_deep_extend(
-		"force",
-		vim.lsp.protocol.make_client_capabilities(),
-		require("cmp_nvim_lsp").default_capabilities(),
-		{
-			workspace = { didChangeWatchedFiles = { dynamicRegistration = false } },
-			textDocument = { foldingRange = { dynamicRegistration = false, lineFoldingOnly = true } },
-		}
-	)
-	return capabilities
+	return require("blink.cmp").get_lsp_capabilities({
+		workspace = { didChangeWatchedFiles = { dynamicRegistration = false } },
+		textDocument = { foldingRange = { dynamicRegistration = false, lineFoldingOnly = true } },
+	})
 end
 
 local function root_dir_from_markers(markers)
@@ -281,6 +275,7 @@ return {
 	dependencies = {
 
 		"antosha417/nvim-lsp-file-operations",
+		"saghen/blink.cmp",
 		{
 			"folke/lazydev.nvim",
 			ft = { "lua" },
