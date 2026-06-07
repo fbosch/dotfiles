@@ -111,14 +111,17 @@ run("hdmi fallback uses portrait rows", function()
 	assert_box(bottom.placed, { x = 10, y = 20 + 500 / 3, w = 1000, h = 1000 / 3 }, "bottom target")
 end)
 
-run("active geometry does not reorder columns", function()
-	local first = set_geometry(make_target(1, true), 850)
-	local second = set_geometry(make_target(2), 200)
+run("known active geometry reorders columns", function()
+	local first = make_target(1, true)
+	local second = make_target(2)
 	local ctx = make_context({ first, second })
 	registered_layout.layout.recalculate(ctx)
+	set_geometry(first, 850)
+	set_geometry(second, 200)
+	registered_layout.layout.recalculate(ctx)
 
-	assert_box(first.placed, { x = 10, y = 20, w = 670, h = 500 }, "left target")
-	assert_box(second.placed, { x = 680, y = 20, w = 330, h = 500 }, "right target")
+	assert_box(second.placed, { x = 10, y = 20, w = 670, h = 500 }, "left target")
+	assert_box(first.placed, { x = 680, y = 20, w = 330, h = 500 }, "right target")
 end)
 
 run("spawned active window does not reorder existing columns", function()
@@ -130,14 +133,15 @@ run("spawned active window does not reorder existing columns", function()
 	first.window.active = false
 	local third = set_geometry(make_target(3, true), 10)
 	third.index = 2
-	third.window.stable_id = 2
+	third.window.address = nil
+	third.window.stable_id = nil
 	second.index = 3
 	second.window.stable_id = 3
 	registered_layout.layout.recalculate(make_context({ first, third, second }, workspace))
 
 	assert_box(first.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
-	assert_box(second.placed, { x = 310, y = 20, w = 400, h = 500 }, "center target")
-	assert_box(third.placed, { x = 710, y = 20, w = 300, h = 500 }, "spawned target")
+	assert_box(third.placed, { x = 310, y = 20, w = 400, h = 500 }, "spawned target")
+	assert_box(second.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
 end)
 
 run("swapnext moves active column despite old geometry", function()

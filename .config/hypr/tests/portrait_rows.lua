@@ -132,14 +132,19 @@ run("active target does not override target order", function()
 	assert_box(third.placed, { x = 10, y = 220, w = 120, h = 100 }, "active target")
 end)
 
-run("active geometry does not reorder rows", function()
-	local first = set_geometry(make_workspace_target(1, "position-order", true), 120)
-	local second = set_geometry(make_workspace_target(2, "position-order"), 20)
-	local third = set_geometry(make_workspace_target(3, "position-order"), 220)
-	registered_layout.layout.recalculate(make_context({ first, second, third }))
+run("known active geometry reorders rows", function()
+	local first = make_workspace_target(1, "position-order", true)
+	local second = make_workspace_target(2, "position-order")
+	local third = make_workspace_target(3, "position-order")
+	local ctx = make_context({ first, second, third })
+	registered_layout.layout.recalculate(ctx)
+	set_geometry(first, 120)
+	set_geometry(second, 20)
+	set_geometry(third, 220)
+	registered_layout.layout.recalculate(ctx)
 
-	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
-	assert_box(second.placed, { x = 10, y = 120, w = 120, h = 100 }, "middle target")
+	assert_box(second.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
+	assert_box(first.placed, { x = 10, y = 120, w = 120, h = 100 }, "middle target")
 	assert_box(third.placed, { x = 10, y = 220, w = 120, h = 100 }, "bottom target")
 end)
 
@@ -151,14 +156,15 @@ run("spawned active window does not reorder existing rows", function()
 	first.window.active = false
 	local third = set_geometry(make_workspace_target(3, "spawn-no-reorder", true), 20)
 	third.index = 2
-	third.window.stable_id = 2
+	third.window.address = nil
+	third.window.stable_id = nil
 	second.index = 3
 	second.window.stable_id = 3
 	registered_layout.layout.recalculate(make_context({ first, third, second }))
 
 	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
-	assert_box(second.placed, { x = 10, y = 120, w = 120, h = 100 }, "middle target")
-	assert_box(third.placed, { x = 10, y = 220, w = 120, h = 100 }, "spawned target")
+	assert_box(third.placed, { x = 10, y = 120, w = 120, h = 100 }, "spawned target")
+	assert_box(second.placed, { x = 10, y = 220, w = 120, h = 100 }, "bottom target")
 end)
 
 run("four windows degrade to equal vertical rows", function()

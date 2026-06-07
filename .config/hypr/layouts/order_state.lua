@@ -6,12 +6,17 @@ function M.new()
 		targets_by_key = {},
 		target_maps_by_key = {},
 		skip_position_by_key = {},
+		active_by_key = {},
 	}
 end
 
 function M.target_id(target)
 	local window = target and target.window
-	local id = window and (window.address or window.stable_id) or target and target.index
+	if window then
+		return window.address or window.stable_id or target
+	end
+
+	local id = target and target.index
 	return id or target
 end
 
@@ -25,9 +30,20 @@ function M.index_of(list, value)
 	return nil
 end
 
-function M.sync(state, key, targets)
+function M.active_id(targets, active_index)
+	local active = active_index(targets)
+	return M.target_id(targets[active])
+end
+
+function M.remember_active(state, key, targets, active_index)
+	if key then
+		state.active_by_key[key] = M.active_id(targets, active_index)
+	end
+end
+
+function M.sync(state, key, targets, insert_after_id)
 	if not key then
-		return nil, nil
+		return nil, nil, false
 	end
 
 	local order = state.order_by_key[key]
@@ -63,14 +79,23 @@ function M.sync(state, key, targets)
 		order[index] = nil
 	end
 
+	local added = false
 	for index = 1, #targets do
 		local id = M.target_id(targets[index])
 		if not M.index_of(order, id) then
-			order[#order + 1] = id
+			local insert_at = #order + 1
+			local after_index = insert_after_id and M.index_of(order, insert_after_id) or nil
+			if after_index then
+				insert_at = after_index + 1
+			end
+
+			table.insert(order, insert_at, id)
+			insert_after_id = id
+			added = true
 		end
 	end
 
-	return order, targets_by_id
+	return order, targets_by_id, added
 end
 
 function M.targets_from_order(state, key, order, targets_by_id, source_targets)
