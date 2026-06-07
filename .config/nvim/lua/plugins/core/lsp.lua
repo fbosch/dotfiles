@@ -19,8 +19,26 @@ local servers = {
 	biome = {
 		cmd = { "biome", "lsp-proxy" },
 	},
-	astro = {},
+	astro = {
+		cmd = { "astro-ls", "--stdio" },
+	},
+	eslint = {
+		cmd = { "vscode-eslint-language-server", "--stdio" },
+	},
+	html = {
+		cmd = { "vscode-html-language-server", "--stdio" },
+	},
+	marksman = {
+		cmd = { "marksman", "server" },
+	},
+	rust_analyzer = {
+		cmd = { "rust-analyzer" },
+	},
+	docker_compose_language_service = {
+		cmd = { "docker-compose-langserver", "--stdio" },
+	},
 	cssls = {
+		cmd = { "vscode-css-language-server", "--stdio" },
 		settings = {
 			css = {
 				lint = {
@@ -180,31 +198,6 @@ local function get_capabilities()
 	return capabilities
 end
 
-local function get_ensure_installed()
-	local ensure = {
-		"eslint",
-		"biome",
-		"html",
-		"marksman",
-		"rust_analyzer",
-		"docker_compose_language_service",
-		"tailwindcss",
-		"cssls",
-	}
-
-	if not platform.is_nixos() then
-		table.insert(ensure, "lua_ls")
-	end
-
-	for name, config in pairs(servers) do
-		if config.enabled ~= false and name ~= "lua_ls" then
-			table.insert(ensure, name)
-		end
-	end
-
-	return ensure
-end
-
 local function root_dir_from_markers(markers)
 	return function(bufnr)
 		local path = vim.api.nvim_buf_get_name(bufnr)
@@ -261,38 +254,26 @@ local function server_config(server_name, capabilities, on_attach)
 	}
 end
 
-local function mason_handlers(capabilities, on_attach)
-	return function(server_name)
-		local server = servers[server_name] or {}
-		if server.enabled == false then
-			pcall(vim.lsp.enable, server_name, false)
-			return
-		end
+local disabled_ts_servers = { "typescript", "ts_ls", "tsserver", "vtsls" }
 
-		vim.lsp.config(server_name, server_config(server_name, capabilities, on_attach))
-		vim.lsp.enable(server_name)
+local function cmd_available(server)
+	if server.cmd == nil or server.cmd[1] == nil then
+		return true
 	end
+
+	return vim.fn.executable(server.cmd[1]) == 1
 end
 
-local trigger_filetypes = {
-	"astro",
-	"css",
-	"scss",
-	"less",
-	"sass",
-	"html",
-	"javascript",
-	"javascriptreact",
-	"json",
-	"lua",
-	"markdown",
-	"rust",
-	"typescript",
-	"typescriptreact",
-	"yaml",
-}
-
-local disabled_ts_servers = { "typescript", "ts_ls", "tsserver", "vtsls" }
+local function enable_servers(capabilities, on_attach)
+	for server_name, server in pairs(servers) do
+		if server.enabled ~= false and cmd_available(server) then
+			vim.lsp.config(server_name, server_config(server_name, capabilities, on_attach))
+			vim.lsp.enable(server_name)
+		else
+			pcall(vim.lsp.enable, server_name, false)
+		end
+	end
+end
 
 return {
 	"neovim/nvim-lspconfig",
@@ -300,24 +281,9 @@ return {
 	dependencies = {
 
 		"antosha417/nvim-lsp-file-operations",
-		"williamboman/mason-lspconfig.nvim",
-		"WhoIsSethDaniel/mason-tool-installer.nvim",
 		{
 			"folke/lazydev.nvim",
 			ft = { "lua" },
-		},
-		{
-			"williamboman/mason.nvim",
-			opts = {
-				ui = {
-					border = "rounded",
-					icons = {
-						package_installed = "",
-						package_pending = "",
-						package_uninstalled = "",
-					},
-				},
-			},
 		},
 		{
 			"nvimdev/lspsaga.nvim",
@@ -367,17 +333,10 @@ return {
 	},
 	config = function()
 		local capabilities = get_capabilities()
-		local ensure_installed = get_ensure_installed()
 		for _, server_name in ipairs(disabled_ts_servers) do
 			pcall(vim.lsp.enable, server_name, false)
 		end
-		require("mason-tool-installer").setup({ ensure_installed = ensure_installed })
-		require("mason").setup()
-		require("mason-lspconfig").setup({
-			ensure_installed = ensure_installed,
-			automatic_installation = false,
-			handlers = { mason_handlers(capabilities, on_attach) },
-		})
+		enable_servers(capabilities, on_attach)
 		for _, server_name in ipairs(disabled_ts_servers) do
 			pcall(vim.lsp.enable, server_name, false)
 		end
