@@ -167,6 +167,20 @@ run("spawned active window does not reorder existing rows", function()
 	assert_box(second.placed, { x = 10, y = 220, w = 120, h = 100 }, "bottom target")
 end)
 
+run("dragged existing window from another workspace can move to top", function()
+	local dragged = make_workspace_target(1, "drag-source", true)
+	local source_other = make_workspace_target(2, "drag-source")
+	registered_layout.layout.recalculate(make_context({ dragged, source_other }))
+
+	dragged.window.workspace = { name = "drag-target" }
+	local existing = set_geometry(make_workspace_target(3, "drag-target"), 220)
+	set_geometry(dragged, 20)
+	registered_layout.layout.recalculate(make_context({ existing, dragged }))
+
+	assert_box(dragged.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
+	assert_box(existing.placed, { x = 10, y = 120, w = 120, h = 200 }, "existing target")
+end)
+
 run("four windows degrade to equal vertical rows", function()
 	local targets = { make_target(1), make_target(2), make_target(3), make_target(4) }
 	registered_layout.layout.recalculate(make_context(targets))

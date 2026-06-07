@@ -203,11 +203,11 @@ function M.recalculate(ctx)
 	local source_targets = targets
 	local position_active = should_position_active(source_targets, key)
 	local previous_active = key and state.active_by_key[key] or nil
-	local order, targets_by_id, added_targets = order_state.sync(state, key, source_targets, previous_active)
+	local order, targets_by_id, added_targets, added_seen_targets = order_state.sync(state, key, source_targets, previous_active)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	if skip_position_order then
 		state.skip_position_by_key[key] = nil
-	elseif position_active and not added_targets then
+	elseif (position_active and not added_targets) or added_seen_targets then
 		move_active_to_position(targets, key, ratios, y, height)
 		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	end

@@ -1,4 +1,5 @@
 local M = {}
+local seen_ids = {}
 
 function M.new()
 	return {
@@ -80,9 +81,14 @@ function M.sync(state, key, targets, insert_after_id)
 	end
 
 	local added = false
+	local added_seen = false
 	for index = 1, #targets do
 		local id = M.target_id(targets[index])
 		if not M.index_of(order, id) then
+			if seen_ids[id] then
+				added_seen = true
+			end
+
 			local insert_at = #order + 1
 			local after_index = insert_after_id and M.index_of(order, insert_after_id) or nil
 			if after_index then
@@ -93,9 +99,10 @@ function M.sync(state, key, targets, insert_after_id)
 			insert_after_id = id
 			added = true
 		end
+		seen_ids[id] = true
 	end
 
-	return order, targets_by_id, added
+	return order, targets_by_id, added, added_seen
 end
 
 function M.targets_from_order(state, key, order, targets_by_id, source_targets)
