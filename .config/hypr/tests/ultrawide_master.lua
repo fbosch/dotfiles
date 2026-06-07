@@ -17,7 +17,7 @@ hl = {
 local function make_target(index, active)
 	return {
 		index = index,
-		window = { active = active or false, monitor = { name = "DP-2" }, workspace = { name = "ultrawide-test" } },
+		window = { active = active or false, address = "0x" .. tostring(index), stable_id = index, monitor = { name = "DP-2" }, workspace = { name = "ultrawide-test" } },
 		placed = nil,
 		place = function(self, box)
 			self.placed = { x = box.x, y = box.y, w = box.w, h = box.h }
@@ -36,9 +36,9 @@ local function set_monitor(target, monitor)
 	return target
 end
 
-local function make_context(targets)
+local function make_context(targets, workspace_name)
 	workspace_counter = workspace_counter + 1
-	local workspace = { name = "ultrawide-test-" .. tostring(workspace_counter) }
+	local workspace = { name = workspace_name or "ultrawide-test-" .. tostring(workspace_counter) }
 	for index = 1, #targets do
 		targets[index].window.workspace = workspace
 	end
@@ -111,14 +111,33 @@ run("hdmi fallback uses portrait rows", function()
 	assert_box(bottom.placed, { x = 10, y = 20 + 500 / 3, w = 1000, h = 1000 / 3 }, "bottom target")
 end)
 
-run("dragged active window moves to cursor column", function()
+run("active geometry does not reorder columns", function()
 	local first = set_geometry(make_target(1, true), 850)
 	local second = set_geometry(make_target(2), 200)
 	local ctx = make_context({ first, second })
 	registered_layout.layout.recalculate(ctx)
 
-	assert_box(second.placed, { x = 10, y = 20, w = 670, h = 500 }, "left target")
-	assert_box(first.placed, { x = 680, y = 20, w = 330, h = 500 }, "right target")
+	assert_box(first.placed, { x = 10, y = 20, w = 670, h = 500 }, "left target")
+	assert_box(second.placed, { x = 680, y = 20, w = 330, h = 500 }, "right target")
+end)
+
+run("spawned active window does not reorder existing columns", function()
+	local first = set_geometry(make_target(1, true), 100)
+	local second = set_geometry(make_target(2), 800)
+	local workspace = "spawn-no-reorder"
+	registered_layout.layout.recalculate(make_context({ first, second }, workspace))
+
+	first.window.active = false
+	local third = set_geometry(make_target(3, true), 10)
+	third.index = 2
+	third.window.stable_id = 2
+	second.index = 3
+	second.window.stable_id = 3
+	registered_layout.layout.recalculate(make_context({ first, third, second }, workspace))
+
+	assert_box(first.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
+	assert_box(second.placed, { x = 310, y = 20, w = 400, h = 500 }, "center target")
+	assert_box(third.placed, { x = 710, y = 20, w = 300, h = 500 }, "spawned target")
 end)
 
 run("swapnext moves active column despite old geometry", function()

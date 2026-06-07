@@ -55,49 +55,8 @@ local function active_index(targets)
 	return 1
 end
 
-local function vertical_center(target)
-	local window = target and target.window
-	local at = window and window.at
-	local size = window and window.size
-	local y = at and at.y
-	if not y then
-		return nil
-	end
-
-	local height = size and size.y or 0
-	return y + height / 2
-end
-
 local function move_active(targets, key, delta)
 	order_state.move_active(state, key, targets, active_index, delta)
-end
-
-local function desired_index(center, ratios, area_y, area_height)
-	if not center then
-		return nil
-	end
-
-	local offset = center - area_y
-	local boundary = 0
-	for index = 1, #ratios do
-		boundary = boundary + area_height * ratios[index]
-		if offset < boundary then
-			return index
-		end
-	end
-
-	return #ratios
-end
-
-local function move_active_to_position(targets, key, ratios, area_y, area_height)
-	local active = active_index(targets)
-	local center = vertical_center(targets[active])
-	local target_index = desired_index(center, ratios, area_y, area_height)
-	if not target_index or target_index == active then
-		return
-	end
-
-	order_state.move_active_to_index(state, key, targets, active_index, target_index)
 end
 
 local function default_ratios(count)
@@ -194,9 +153,6 @@ function M.recalculate(ctx)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	if skip_position_order then
 		state.skip_position_by_key[key] = nil
-	else
-		move_active_to_position(targets, key, ratios, y, height)
-		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	end
 
 	box.x = x

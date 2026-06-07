@@ -11,7 +11,7 @@ end
 
 function M.target_id(target)
 	local window = target and target.window
-	local id = window and window.stable_id or target and target.index
+	local id = window and (window.address or window.stable_id) or target and target.index
 	return id or target
 end
 

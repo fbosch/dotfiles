@@ -61,19 +61,6 @@ local function active_index(targets)
 	return 1
 end
 
-local function horizontal_center(target)
-	local window = target and target.window
-	local at = window and window.at
-	local size = window and window.size
-	local x = at and at.x
-	if not x then
-		return nil
-	end
-
-	local width = size and size.x or 0
-	return x + width / 2
-end
-
 local function ratios_for(count)
 	if count == 2 then
 		return ratios_two
@@ -119,33 +106,6 @@ local function row_ratios_for_workspace(key, count)
 	end
 
 	return ratios
-end
-
-local function desired_index(center, ratios, area_x, area_width)
-	if not center then
-		return nil
-	end
-
-	local offset = center - area_x
-	local boundary = 0
-	for index = 1, #ratios do
-		boundary = boundary + area_width * ratios[index]
-		if offset < boundary then
-			return index
-		end
-	end
-
-	return #ratios
-end
-
-local function move_active_to_position(targets, key, ratios, area_x, area_width)
-	local active = active_index(targets)
-	local target_index = desired_index(horizontal_center(targets[active]), ratios, area_x, area_width)
-	if not target_index or target_index == active then
-		return
-	end
-
-	order_state.move_active_to_index(state, key, targets, active_index, target_index)
 end
 
 local function move_active(targets, key, delta)
@@ -225,9 +185,6 @@ function M.recalculate(ctx)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	if skip_position_order then
 		state.skip_position_by_key[key] = nil
-	else
-		move_active_to_position(targets, key, ratios, x, width)
-		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	end
 
 	place_columns(targets, ratios, x, y, width, height)
