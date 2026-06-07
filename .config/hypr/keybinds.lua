@@ -3,7 +3,6 @@
 local programs = require("programs")
 local window = require("lib.window")
 local volume = require("actions.volume")
-local minimized = require("runtime.windows.minimized-state")
 local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
 local window_switcher = require("actions.window-switcher")
@@ -132,8 +131,8 @@ bind("bind", main_mod .. " + CTRL + SHIFT", "F", hl.dsp.pass({ window = "class:^
 bind("bind", main_mod, "W", exec("~/.config/hypr/runtime/windows/killactive-selective.sh"))
 bind("bind", main_mod, "D", exec("~/.config/hypr/runtime/windows/toggle-show-desktop.sh"))
 
-bind("bind", main_mod, "Z", minimized.toggle_window)
-bind("bind", main_mod .. " + SHIFT", "Z", minimized.toggle_workspace)
+bind("bind", main_mod, "Z", exec("~/.config/hypr/runtime/windows/minimized-state.lua toggle-window"))
+bind("bind", main_mod .. " + SHIFT", "Z", exec("~/.config/hypr/runtime/windows/minimized-state.lua toggle-workspace"))
 bind("bind", main_mod, "X", function()
 	hl.dispatch(hl.dsp.window.move({ workspace = "+0", follow = false }))
 end)
