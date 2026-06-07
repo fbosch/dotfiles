@@ -53,9 +53,20 @@ end
 
 local function get_gaming_window_pid(clients_json)
 	return jq(clients_json or get_clients_json(), "--arg ws " .. shell_quote(gaming_workspace) .. " --arg exclude_title " .. shell_quote(freeze_excluded_title_pattern), [[
-(first(.[] | select(.workspace.name == $ws) | select((((.title // "") | test($exclude_title)) or (((.initialTitle // "") | test($exclude_title))) | not) | select((((.class // "") | ascii_downcase) == "gamescope") or (((.initialClass // "") | ascii_downcase) == "gamescope")) | .pid) //
- first(.[] | select(.workspace.name == $ws) | select((((.title // "") | test($exclude_title)) or (((.initialTitle // "") | test($exclude_title))) | not) | select((((.class // "") | ascii_downcase) | test("^steam_app_[0-9]+$")) or (((.initialClass // "") | ascii_downcase) | test("^steam_app_[0-9]+$"))) | .pid) //
- empty)
+[
+ .[]
+ | select(.workspace.name == $ws)
+ | select(((.title // "") | test($exclude_title) | not) and ((.initialTitle // "") | test($exclude_title) | not))
+ | select((((.class // "") | ascii_downcase) == "gamescope") or (((.initialClass // "") | ascii_downcase) == "gamescope"))
+ | .pid
+][0] //
+[
+ .[]
+ | select(.workspace.name == $ws)
+ | select(((.title // "") | test($exclude_title) | not) and ((.initialTitle // "") | test($exclude_title) | not))
+ | select((((.class // "") | ascii_downcase) | test("^steam_app_[0-9]+$")) or (((.initialClass // "") | ascii_downcase) | test("^steam_app_[0-9]+$")))
+ | .pid
+][0] // empty
 ]])
 end
 
@@ -173,13 +184,18 @@ local function cleanup()
 end
 
 local function run()
-	local last_count = sync_gaming_state(nil, get_clients_json(), true)
-	local last_overlay_count = overlay_window_count(get_clients_json())
-	sync_gaming_freeze_state(get_clients_json(), hypr_ipc.request("j/monitors"))
+	local last_count = nil
+	local last_overlay_count = 0
 
 	while true do
 		local ok, err = pcall(function()
 			local events = hypr_ipc.connect_event_socket({ read_timeout = event_idle_timeout_seconds })
+			local clients_json = get_clients_json()
+			local monitors_json = hypr_ipc.request("j/monitors")
+			last_overlay_count = overlay_window_count(clients_json)
+			sync_gaming_freeze_state(clients_json, monitors_json)
+			last_count = sync_gaming_state(last_count, clients_json, true)
+
 			while true do
 				local line, read_err, partial = events:receive("*l")
 				line = line or partial

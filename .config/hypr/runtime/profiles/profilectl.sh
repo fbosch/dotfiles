@@ -2,7 +2,16 @@
 
 set -euo pipefail
 
-export PATH="/etc/profiles/per-user/fbb/bin:/run/current-system/sw/bin:${PATH:-}"
+USER_PROFILE_BIN="/etc/profiles/per-user/${USER:-${HOME##*/}}/bin"
+BASE_PATH="/run/current-system/sw/bin:/usr/bin:/bin"
+if [[ -n "${PATH:-}" ]]; then
+  export PATH="$PATH:$BASE_PATH"
+else
+  export PATH="$BASE_PATH"
+fi
+if [[ -d "$USER_PROFILE_BIN" ]]; then
+  export PATH="$PATH:$USER_PROFILE_BIN"
+fi
 
 STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-profiles"
 LOCK_FILE="$STATE_DIR/lock"
@@ -16,7 +25,9 @@ flock 9
 
 count_file() {
   local profile="$1"
-  printf "%s/%s.count" "$STATE_DIR" "$profile"
+  local source="$2"
+
+  printf "%s/%s.%s.count" "$STATE_DIR" "$profile" "$source"
 }
 
 is_valid_profile() {
@@ -26,8 +37,9 @@ is_valid_profile() {
 
 get_count() {
   local profile="$1"
+  local source="$2"
   local file
-  file="$(count_file "$profile")"
+  file="$(count_file "$profile" "$source")"
 
   if [[ -f "$file" ]]; then
     cat "$file"
@@ -39,15 +51,41 @@ get_count() {
 
 set_count() {
   local profile="$1"
-  local value="$2"
+  local source="$2"
+  local value="$3"
   local file
 
   if [[ "$value" -lt 0 ]]; then
     value=0
   fi
 
-  file="$(count_file "$profile")"
+  file="$(count_file "$profile" "$source")"
   printf "%s" "$value" > "$file"
+}
+
+get_profile_count() {
+  local profile="$1"
+  local total=0
+  local file
+  local value
+
+  for file in "$STATE_DIR/$profile".*.count; do
+    if [[ ! -f "$file" ]]; then
+      continue
+    fi
+
+    value="$(< "$file")"
+    if [[ "$value" =~ ^[0-9]+$ ]]; then
+      total=$((total + value))
+    fi
+  done
+
+  printf "%s" "$total"
+}
+
+is_valid_source() {
+  local source="$1"
+  [[ "$source" =~ ^[a-z][a-z0-9_-]*$ ]]
 }
 
 apply_hypr_powersave_overlay() {
@@ -103,8 +141,8 @@ get_desired_overlay_mode() {
   local powersave_count
   local gaming_count
 
-  powersave_count="$(get_count "$POWERSAVE_PROFILE")"
-  gaming_count="$(get_count "$GAMING_PROFILE")"
+  powersave_count="$(get_profile_count "$POWERSAVE_PROFILE")"
+  gaming_count="$(get_profile_count "$GAMING_PROFILE")"
 
   if [[ "$gaming_count" -gt 0 ]]; then
     printf "gaming"
@@ -176,27 +214,30 @@ apply_effective_state() {
 
 apply_profile() {
   local profile="$1"
+  local source="${2:-manual}"
   local value
 
-  value="$(get_count "$profile")"
-  set_count "$profile" $((value + 1))
+  value="$(get_count "$profile" "$source")"
+  set_count "$profile" "$source" $((value + 1))
   apply_effective_state
 }
 
 remove_profile() {
   local profile="$1"
+  local source="${2:-manual}"
   local value
 
-  value="$(get_count "$profile")"
-  set_count "$profile" $((value - 1))
+  value="$(get_count "$profile" "$source")"
+  set_count "$profile" "$source" $((value - 1))
   apply_effective_state
 }
 
 set_profile_count() {
   local profile="$1"
-  local count="$2"
+  local source="$2"
+  local count="$3"
 
-  set_count "$profile" "$count"
+  set_count "$profile" "$source" "$count"
   apply_effective_state
 }
 
@@ -204,8 +245,8 @@ print_status() {
   local powersave_count
   local gaming_count
 
-  powersave_count="$(get_count "$POWERSAVE_PROFILE")"
-  gaming_count="$(get_count "$GAMING_PROFILE")"
+  powersave_count="$(get_profile_count "$POWERSAVE_PROFILE")"
+  gaming_count="$(get_profile_count "$GAMING_PROFILE")"
 
   printf "powersave=%s\n" "$powersave_count"
   printf "gaming=%s\n" "$gaming_count"
@@ -222,7 +263,20 @@ is_profile_active() {
   local profile="$1"
   local value
 
-  value="$(get_count "$profile")"
+  value="$(get_profile_count "$profile")"
+  if [[ "$value" -gt 0 ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
+is_source_active() {
+  local profile="$1"
+  local source="$2"
+  local value
+
+  value="$(get_count "$profile" "$source")"
   if [[ "$value" -gt 0 ]]; then
     return 0
   fi
@@ -231,7 +285,7 @@ is_profile_active() {
 }
 
 usage() {
-  printf "usage: %s <apply|remove|toggle|sync|is-active|status|reconcile> [profile] [count]\n" "$0" >&2
+  printf "usage: %s <apply|remove|toggle|sync|apply-source|remove-source|sync-source|is-active|is-source-active|status|reconcile> [profile] [source] [count]\n" "$0" >&2
 }
 
 main() {
@@ -264,11 +318,29 @@ main() {
         usage
         exit 1
       fi
-      if is_profile_active "$profile"; then
+      if is_source_active "$profile" manual; then
         remove_profile "$profile"
       else
         apply_profile "$profile"
       fi
+      ;;
+    apply-source)
+      if is_valid_profile "$profile" && is_valid_source "${3:-}"; then
+        :
+      else
+        usage
+        exit 1
+      fi
+      apply_profile "$profile" "$3"
+      ;;
+    remove-source)
+      if is_valid_profile "$profile" && is_valid_source "${3:-}"; then
+        :
+      else
+        usage
+        exit 1
+      fi
+      remove_profile "$profile" "$3"
       ;;
     sync)
       if is_valid_profile "$profile"; then
@@ -285,7 +357,24 @@ main() {
         exit 1
       fi
 
-      set_profile_count "$profile" "$3"
+      set_profile_count "$profile" watchdog "$3"
+      ;;
+    sync-source)
+      if is_valid_profile "$profile" && is_valid_source "${3:-}"; then
+        :
+      else
+        usage
+        exit 1
+      fi
+
+      if [[ "${4:-}" =~ ^[0-9]+$ ]]; then
+        :
+      else
+        usage
+        exit 1
+      fi
+
+      set_profile_count "$profile" "$3" "$4"
       ;;
     is-active)
       if is_valid_profile "$profile"; then
@@ -295,6 +384,15 @@ main() {
         exit 1
       fi
       is_profile_active "$profile"
+      ;;
+    is-source-active)
+      if is_valid_profile "$profile" && is_valid_source "${3:-}"; then
+        :
+      else
+        usage
+        exit 1
+      fi
+      is_source_active "$profile" "$3"
       ;;
     status)
       print_status
