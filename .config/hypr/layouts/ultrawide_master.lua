@@ -112,6 +112,33 @@ local function move_active(targets, key, delta)
 	order_state.move_active(state, key, targets, active_index, delta)
 end
 
+local function desired_index(center, ratios, area_x, area_width)
+	if not center then
+		return nil
+	end
+
+	local offset = center - area_x
+	local boundary = 0
+	for index = 1, #ratios do
+		boundary = boundary + area_width * ratios[index]
+		if offset < boundary then
+			return index
+		end
+	end
+
+	return #ratios
+end
+
+local function move_active_to_position(targets, key, ratios, area_x, area_width)
+	local active = active_index(targets)
+	local target_index = desired_index(order_state.position(targets[active], "x"), ratios, area_x, area_width)
+	if not target_index or target_index == active then
+		return
+	end
+
+	order_state.move_active_to_index(state, key, targets, active_index, target_index)
+end
+
 local function place_columns(targets, ratios, x, y, width, height)
 	local next_x = x
 	box.y = y
@@ -125,6 +152,7 @@ local function place_columns(targets, ratios, x, y, width, height)
 		end
 
 		targets[index]:place(box)
+		order_state.remember_position(state, targets[index], "x", box.x + box.w / 2)
 		next_x = next_x + box.w
 	end
 end
@@ -142,6 +170,7 @@ local function place_rows(targets, ratios, x, y, width, height)
 		end
 
 		targets[index]:place(box)
+		order_state.remember_position(state, targets[index], "y", box.y + box.h / 2)
 		next_y = next_y + box.h
 	end
 end
@@ -179,10 +208,17 @@ function M.recalculate(ctx)
 		return
 	end
 
+	local manual_change = state.manual_change_by_key[key]
 	local source_targets = targets
 	local previous_active = key and state.active_by_key[key] or nil
-	local order, targets_by_id = order_state.sync(state, key, source_targets, previous_active)
+	local order, targets_by_id, _, added_seen_targets = order_state.sync(state, key, source_targets, previous_active)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
+	if manual_change then
+		state.manual_change_by_key[key] = nil
+	elseif order_state.position_changed(state, targets[active_index(targets)], "x") or added_seen_targets then
+		move_active_to_position(targets, key, ratios, x, width)
+		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
+	end
 
 	place_columns(targets, ratios, x, y, width, height)
 	order_state.remember_active(state, key, source_targets, active_index)
@@ -204,6 +240,9 @@ function M.resize(ctx, target, delta, corner)
 	local amount = resize_state.delta_ratio(delta, "x", area and area.w, resize_step)
 	local index = resize_state.target_index(targets, target, active_index)
 	resize_state.adjust_active(ratios, index, count, amount, min_ratio)
+	if key then
+		state.manual_change_by_key[key] = true
+	end
 
 	return true
 end
@@ -237,6 +276,9 @@ function M.layout_msg(ctx, msg)
 		local index = active_index(targets)
 		local boundary = resize_state.boundary_for_edge(index, count, edge)
 		resize_state.set_boundary_at(ratios, boundary, tonumber(position), area and area.x, area and area.w, min_ratio)
+		if key then
+			state.manual_change_by_key[key] = true
+		end
 	elseif command == "resize-y-at" then
 		local edge, position = msg:match("^%S+%s+(%S+)%s+(-?%d+%.?%d*)")
 		local area = ctx.area
@@ -244,6 +286,9 @@ function M.layout_msg(ctx, msg)
 		local index = active_index(targets)
 		local boundary = resize_state.boundary_for_edge(index, count, edge)
 		resize_state.set_boundary_at(ratios, boundary, tonumber(position), area and area.y, area and area.h, min_ratio)
+		if key then
+			state.manual_change_by_key[key] = true
+		end
 	elseif command == "reset" then
 		if key then
 			ratios_by_workspace[key] = nil

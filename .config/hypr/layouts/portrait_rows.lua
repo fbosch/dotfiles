@@ -59,6 +59,33 @@ local function move_active(targets, key, delta)
 	order_state.move_active(state, key, targets, active_index, delta)
 end
 
+local function desired_index(center, ratios, area_y, area_height)
+	if not center then
+		return nil
+	end
+
+	local offset = center - area_y
+	local boundary = 0
+	for index = 1, #ratios do
+		boundary = boundary + area_height * ratios[index]
+		if offset < boundary then
+			return index
+		end
+	end
+
+	return #ratios
+end
+
+local function move_active_to_position(targets, key, ratios, area_y, area_height)
+	local active = active_index(targets)
+	local target_index = desired_index(order_state.position(targets[active], "y"), ratios, area_y, area_height)
+	if not target_index or target_index == active then
+		return
+	end
+
+	order_state.move_active_to_index(state, key, targets, active_index, target_index)
+end
+
 local function default_ratios(count)
 	local ratios = {}
 
@@ -96,6 +123,7 @@ local function place_rows(targets, count, x, y, width, height)
 	for index = 1, count do
 		box.y = y + row_height * (index - 1)
 		targets[index]:place(box)
+		order_state.remember_position(state, targets[index], "y", box.y + box.h / 2)
 	end
 end
 
@@ -112,6 +140,7 @@ local function place_ratio_rows(targets, ratios, x, y, width, height)
 		end
 
 		targets[index]:place(box)
+		order_state.remember_position(state, targets[index], "y", box.y + box.h / 2)
 		next_y = next_y + box.h
 	end
 end
@@ -146,11 +175,18 @@ function M.recalculate(ctx)
 		return
 	end
 
+	local manual_change = state.manual_change_by_key[key]
 	local ratios = ratios_for(workspace_key(targets), count)
 	local source_targets = targets
 	local previous_active = key and state.active_by_key[key] or nil
-	local order, targets_by_id = order_state.sync(state, key, source_targets, previous_active)
+	local order, targets_by_id, _, added_seen_targets = order_state.sync(state, key, source_targets, previous_active)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
+	if manual_change then
+		state.manual_change_by_key[key] = nil
+	elseif order_state.position_changed(state, targets[active_index(targets)], "y") or added_seen_targets then
+		move_active_to_position(targets, key, ratios, y, height)
+		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
+	end
 	order_state.remember_active(state, key, source_targets, active_index)
 
 	box.x = x
@@ -183,6 +219,9 @@ function M.resize(ctx, target, delta, corner)
 	local amount = resize_state.delta_ratio(delta, "y", area and area.h, resize_step)
 	local index = resize_state.target_index(targets, target, active_index)
 	resize_state.adjust_active(ratios, index, count, amount, min_ratio)
+	if key then
+		state.manual_change_by_key[key] = true
+	end
 
 	return true
 end
@@ -219,6 +258,9 @@ function M.layout_msg(ctx, msg)
 		local index = active_index(targets)
 		local boundary = resize_state.boundary_for_edge(index, count, edge)
 		resize_state.set_boundary_at(ratios, boundary, tonumber(position), area and area.y, area and area.h, min_ratio)
+		if key then
+			state.manual_change_by_key[key] = true
+		end
 	elseif command == "reset" then
 		if ratio_key then
 			ratios_by_workspace[ratio_key] = default_ratios(count)
