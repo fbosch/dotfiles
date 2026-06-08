@@ -8,6 +8,97 @@ local box = {}
 local ratios_by_workspace = {}
 local state = order_state.new()
 
+local function state_file()
+	if rawget(_G, "__PORTRAIT_ROWS_DISABLE_STATE") then
+		return nil
+	end
+
+	local override = rawget(_G, "__PORTRAIT_ROWS_STATE_FILE")
+	if override then
+		return override
+	end
+
+	local runtime_dir = os.getenv("XDG_RUNTIME_DIR")
+	local signature = os.getenv("HYPRLAND_INSTANCE_SIGNATURE")
+	if not runtime_dir or runtime_dir == "" or not signature or signature == "" then
+		return nil
+	end
+
+	return runtime_dir .. "/hypr/" .. signature .. "/portrait-rows-ratios.tsv"
+end
+
+local function encode(value)
+	return tostring(value):gsub("([^%w_.-])", function(char)
+		return string.format("%%%02X", string.byte(char))
+	end)
+end
+
+local function decode(value)
+	return tostring(value):gsub("%%(%x%x)", function(hex)
+		return string.char(tonumber(hex, 16))
+	end)
+end
+
+local function serialize_ratios(ratios)
+	local values = {}
+	for index = 1, #ratios do
+		values[index] = tostring(ratios[index])
+	end
+
+	return table.concat(values, ",")
+end
+
+local function parse_ratios(value)
+	local ratios = {}
+	for ratio in tostring(value):gmatch("[^,]+") do
+		ratios[#ratios + 1] = tonumber(ratio)
+	end
+
+	return ratios
+end
+
+local function save_ratio_state()
+	local path = state_file()
+	if not path then
+		return
+	end
+
+	local handle = io.open(path, "w")
+	if not handle then
+		return
+	end
+
+	for key, ratios in pairs(ratios_by_workspace) do
+		handle:write(encode(key), "\t", #ratios, "\t", serialize_ratios(ratios), "\n")
+	end
+
+	handle:close()
+end
+
+local function load_ratio_state()
+	local path = state_file()
+	if not path then
+		return
+	end
+
+	local handle = io.open(path, "r")
+	if not handle then
+		return
+	end
+
+	for line in handle:lines() do
+		local encoded_key, count, serialized = line:match("^(%S+)\t(%d+)\t(.+)$")
+		local ratios = serialized and parse_ratios(serialized) or nil
+		if ratios and #ratios == tonumber(count) then
+			ratios_by_workspace[decode(encoded_key)] = ratios
+		end
+	end
+
+	handle:close()
+end
+
+load_ratio_state()
+
 local function monitor_name(targets)
 	for index = 1, #targets do
 		local window = targets[index].window
@@ -222,6 +313,9 @@ function M.resize(ctx, target, delta, corner)
 	if key then
 		state.manual_change_by_key[key] = true
 	end
+	if ratio_key then
+		save_ratio_state()
+	end
 
 	return true
 end
@@ -261,9 +355,13 @@ function M.layout_msg(ctx, msg)
 		if key then
 			state.manual_change_by_key[key] = true
 		end
+		if ratio_key then
+			save_ratio_state()
+		end
 	elseif command == "reset" then
 		if ratio_key then
 			ratios_by_workspace[ratio_key] = default_ratios(count)
+			save_ratio_state()
 		end
 	else
 		return true

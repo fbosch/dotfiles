@@ -11,6 +11,104 @@ local fallback_ratios = {}
 local ratios_by_workspace = {}
 local row_ratios_by_workspace = {}
 
+local function state_file()
+	if rawget(_G, "__ULTRAWIDE_MASTER_DISABLE_STATE") then
+		return nil
+	end
+
+	local override = rawget(_G, "__ULTRAWIDE_MASTER_STATE_FILE")
+	if override then
+		return override
+	end
+
+	local runtime_dir = os.getenv("XDG_RUNTIME_DIR")
+	local signature = os.getenv("HYPRLAND_INSTANCE_SIGNATURE")
+	if not runtime_dir or runtime_dir == "" or not signature or signature == "" then
+		return nil
+	end
+
+	return runtime_dir .. "/hypr/" .. signature .. "/ultrawide-master-ratios.tsv"
+end
+
+local function encode(value)
+	return tostring(value):gsub("([^%w_.-])", function(char)
+		return string.format("%%%02X", string.byte(char))
+	end)
+end
+
+local function decode(value)
+	return tostring(value):gsub("%%(%x%x)", function(hex)
+		return string.char(tonumber(hex, 16))
+	end)
+end
+
+local function serialize_ratios(ratios)
+	local values = {}
+	for index = 1, #ratios do
+		values[index] = tostring(ratios[index])
+	end
+
+	return table.concat(values, ",")
+end
+
+local function parse_ratios(value)
+	local ratios = {}
+	for ratio in tostring(value):gmatch("[^,]+") do
+		ratios[#ratios + 1] = tonumber(ratio)
+	end
+
+	return ratios
+end
+
+local function save_ratio_state()
+	local path = state_file()
+	if not path then
+		return
+	end
+
+	local handle = io.open(path, "w")
+	if not handle then
+		return
+	end
+
+	for key, ratios in pairs(ratios_by_workspace) do
+		handle:write("columns\t", encode(key), "\t", #ratios, "\t", serialize_ratios(ratios), "\n")
+	end
+	for key, ratios in pairs(row_ratios_by_workspace) do
+		handle:write("rows\t", encode(key), "\t", #ratios, "\t", serialize_ratios(ratios), "\n")
+	end
+
+	handle:close()
+end
+
+local function load_ratio_state()
+	local path = state_file()
+	if not path then
+		return
+	end
+
+	local handle = io.open(path, "r")
+	if not handle then
+		return
+	end
+
+	for line in handle:lines() do
+		local kind, encoded_key, count, serialized = line:match("^(%S+)\t(%S+)\t(%d+)\t(.+)$")
+		local ratios = serialized and parse_ratios(serialized) or nil
+		if ratios and #ratios == tonumber(count) then
+			if kind == "columns" then
+				ratios_by_workspace[decode(encoded_key)] = ratios
+			elseif kind == "rows" then
+				row_ratios_by_workspace[decode(encoded_key)] = ratios
+			end
+		end
+	end
+
+	handle:close()
+end
+
+load_ratio_state()
+
 local function default_row_ratios(count)
 	local ratios = {}
 	if count == 2 then
@@ -242,6 +340,7 @@ function M.resize(ctx, target, delta, corner)
 	resize_state.adjust_active(ratios, index, count, amount, min_ratio)
 	if key then
 		state.manual_change_by_key[key] = true
+		save_ratio_state()
 	end
 
 	return true
@@ -278,6 +377,7 @@ function M.layout_msg(ctx, msg)
 		resize_state.set_boundary_at(ratios, boundary, tonumber(position), area and area.x, area and area.w, min_ratio)
 		if key then
 			state.manual_change_by_key[key] = true
+			save_ratio_state()
 		end
 	elseif command == "resize-y-at" then
 		local edge, position = msg:match("^%S+%s+(%S+)%s+(-?%d+%.?%d*)")
@@ -288,11 +388,13 @@ function M.layout_msg(ctx, msg)
 		resize_state.set_boundary_at(ratios, boundary, tonumber(position), area and area.y, area and area.h, min_ratio)
 		if key then
 			state.manual_change_by_key[key] = true
+			save_ratio_state()
 		end
 	elseif command == "reset" then
 		if key then
 			ratios_by_workspace[key] = nil
 			row_ratios_by_workspace[key] = nil
+			save_ratio_state()
 		end
 	else
 		return true

@@ -14,6 +14,8 @@ hl = {
 	},
 }
 
+_G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
+
 local function make_target(index, active)
 	return {
 		index = index,
@@ -318,4 +320,35 @@ run("reset restores default column ratios", function()
 
 	assert_box(first.placed, { x = 10, y = 20, w = 670, h = 500 }, "left target")
 	assert_box(second.placed, { x = 680, y = 20, w = 330, h = 500 }, "right target")
+end)
+
+run("manual column ratios survive layout module reload", function()
+	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = nil
+	_G.__ULTRAWIDE_MASTER_STATE_FILE = os.tmpname()
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+
+	local workspace = "persisted-ratio-test"
+	local first = set_geometry(make_target(1, true), 100)
+	local second = set_geometry(make_target(2), 800)
+	local ctx = make_context({ first, second }, workspace)
+
+	registered_layout.layout.layout_msg(ctx, "resize-x 50")
+	registered_layout.layout.recalculate(ctx)
+	assert_box(first.placed, { x = 10, y = 20, w = 720, h = 500 }, "resized left target")
+
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+
+	local reloaded_first = set_geometry(make_target(1, true), 100)
+	local reloaded_second = set_geometry(make_target(2), 800)
+	local reloaded_ctx = make_context({ reloaded_first, reloaded_second }, workspace)
+	registered_layout.layout.recalculate(reloaded_ctx)
+
+	assert_box(reloaded_first.placed, { x = 10, y = 20, w = 720, h = 500 }, "reloaded left target")
+	assert_box(reloaded_second.placed, { x = 730, y = 20, w = 280, h = 500 }, "reloaded right target")
+	registered_layout.layout.layout_msg(reloaded_ctx, "reset")
+	os.remove(_G.__ULTRAWIDE_MASTER_STATE_FILE)
+	_G.__ULTRAWIDE_MASTER_STATE_FILE = nil
+	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
 end)
