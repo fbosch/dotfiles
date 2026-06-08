@@ -8,16 +8,42 @@ local runtime_dir = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-custom-la
 local command_socket_path = runtime_dir .. "/command.sock"
 local state_file = runtime_dir .. "/state"
 local pid_file = runtime_dir .. "/daemon.pid"
+local profile_mode_file = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-profiles/profile-overlay.mode"
 local min_floating_size = 64
 local drag_numerator = 1
 local drag_denominator = 1
 local monitors_by_id = {}
 local drag_active = false
+local windows_move_animation = [[hl.animation({ leaf = "windowsMove", enabled = true, speed = 1.5, bezier = "quick" })]]
 
 local hypr_socket = hypr_ipc.socket_path(".socket.sock")
 
 local function request(message)
 	return hypr_ipc.request(message, { path = hypr_socket, timeout = 0.2 })
+end
+
+local function eval(code)
+	request("eval " .. code)
+end
+
+local function read_file(path)
+	local handle = io.open(path, "r")
+	if not handle then
+		return ""
+	end
+
+	local value = handle:read("*l") or ""
+	handle:close()
+	return value
+end
+
+local function restore_resize_animation()
+	if read_file(profile_mode_file) ~= "" then
+		eval([[require("profiles").apply_current()]])
+		return
+	end
+
+	eval(windows_move_animation)
 end
 
 local function json_number(text, key)
@@ -147,6 +173,11 @@ local handle_command
 local function stop_drag()
 	drag_active = false
 	os.remove(state_file)
+	restore_resize_animation()
+end
+
+local function disable_resize_animation()
+	eval([[hl.animation({ leaf = "windowsMove", enabled = false })]])
 end
 
 local function start_floating_drag(active, poll_interval)
@@ -155,6 +186,7 @@ local function start_floating_drag(active, poll_interval)
 	local edge_x = resize_edge("x", initial_x, active.x, active.y, active.width, active.height)
 	local edge_y = resize_edge("y", initial_y, active.x, active.y, active.width, active.height)
 	drag_active = true
+	disable_resize_animation()
 	write_file(state_file, "active\n")
 
 	local last_geometry = nil
@@ -250,6 +282,7 @@ local function start_drag()
 	local initial = cursor_axis(axis)
 	local edge = resize_edge(axis, initial, active.x, active.y, active.width, active.height)
 	drag_active = true
+	disable_resize_animation()
 	write_file(state_file, "active\n")
 
 	local last_sent = nil

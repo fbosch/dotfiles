@@ -64,6 +64,12 @@ local function move_to_workspace(workspace)
 	hl.dispatch(hl.dsp.window.move({ workspace = workspace }))
 end
 
+local function custom_layout_resize(action)
+	return exec(
+		"~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh " .. action
+	)
+end
+
 local function resize_keep_aspect_ratio()
 	hl.dispatch(custom_layout_resize("stop"))
 	hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "1" }))
@@ -77,12 +83,6 @@ end
 local function start_custom_layout_resize()
 	reset_keep_aspect_ratio()
 	hl.dispatch(custom_layout_resize("start"))
-end
-
-local function custom_layout_resize(action)
-	return exec(
-		"~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh " .. action
-	)
 end
 
 local function drag_openpets()
