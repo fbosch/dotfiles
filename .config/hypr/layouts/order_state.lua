@@ -6,7 +6,6 @@ function M.new()
 		order_by_key = {},
 		targets_by_key = {},
 		target_maps_by_key = {},
-		skip_position_by_key = {},
 		active_by_key = {},
 	}
 end
@@ -137,25 +136,6 @@ function M.move_active(state, key, targets, active_index, delta)
 	end
 
 	order[index], order[next_index] = order[next_index], order[index]
-	if key then
-		state.skip_position_by_key[key] = true
-	end
-end
-
-function M.move_active_to_index(state, key, targets, active_index, target_index)
-	local active = active_index(targets)
-	if not target_index or target_index == active then
-		return
-	end
-
-	local order = state.order_by_key[key]
-	if not order then
-		return
-	end
-
-	local id = M.target_id(targets[active])
-	table.remove(order, active)
-	table.insert(order, target_index, id)
 end
 
 return M

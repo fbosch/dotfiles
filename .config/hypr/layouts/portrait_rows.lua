@@ -55,60 +55,8 @@ local function active_index(targets)
 	return 1
 end
 
-local function vertical_center(target)
-	local window = target and target.window
-	local at = window and window.at
-	local size = window and window.size
-	local y = at and at.y
-	if not y then
-		return nil
-	end
-
-	local height = size and size.y or 0
-	return y + height / 2
-end
-
 local function move_active(targets, key, delta)
 	order_state.move_active(state, key, targets, active_index, delta)
-end
-
-local function should_position_active(targets, key)
-	local order = key and state.order_by_key[key] or nil
-	if not order then
-		return false
-	end
-
-	local active = active_index(targets)
-	local id = order_state.target_id(targets[active])
-	return order_state.index_of(order, id) ~= nil
-end
-
-local function desired_index(center, ratios, area_y, area_height)
-	if not center then
-		return nil
-	end
-
-	local offset = center - area_y
-	local boundary = 0
-	for index = 1, #ratios do
-		boundary = boundary + area_height * ratios[index]
-		if offset < boundary then
-			return index
-		end
-	end
-
-	return #ratios
-end
-
-local function move_active_to_position(targets, key, ratios, area_y, area_height)
-	local active = active_index(targets)
-	local center = vertical_center(targets[active])
-	local target_index = desired_index(center, ratios, area_y, area_height)
-	if not target_index or target_index == active then
-		return
-	end
-
-	order_state.move_active_to_index(state, key, targets, active_index, target_index)
 end
 
 local function default_ratios(count)
@@ -198,19 +146,11 @@ function M.recalculate(ctx)
 		return
 	end
 
-	local skip_position_order = state.skip_position_by_key[key]
 	local ratios = ratios_for(workspace_key(targets), count)
 	local source_targets = targets
-	local position_active = should_position_active(source_targets, key)
 	local previous_active = key and state.active_by_key[key] or nil
-	local order, targets_by_id, added_targets, added_seen_targets = order_state.sync(state, key, source_targets, previous_active)
+	local order, targets_by_id = order_state.sync(state, key, source_targets, previous_active)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
-	if skip_position_order then
-		state.skip_position_by_key[key] = nil
-	elseif (position_active and not added_targets) or added_seen_targets then
-		move_active_to_position(targets, key, ratios, y, height)
-		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
-	end
 	order_state.remember_active(state, key, source_targets, active_index)
 
 	box.x = x
@@ -243,9 +183,6 @@ function M.resize(ctx, target, delta, corner)
 	local amount = resize_state.delta_ratio(delta, "y", area and area.h, resize_step)
 	local index = resize_state.target_index(targets, target, active_index)
 	resize_state.adjust_active(ratios, index, count, amount, min_ratio)
-	if key then
-		state.skip_position_by_key[key] = true
-	end
 
 	return true
 end
@@ -282,9 +219,6 @@ function M.layout_msg(ctx, msg)
 		local index = active_index(targets)
 		local boundary = resize_state.boundary_for_edge(index, count, edge)
 		resize_state.set_boundary_at(ratios, boundary, tonumber(position), area and area.y, area and area.h, min_ratio)
-		if key then
-			state.skip_position_by_key[key] = true
-		end
 	elseif command == "reset" then
 		if ratio_key then
 			ratios_by_workspace[ratio_key] = default_ratios(count)
