@@ -6,12 +6,10 @@ set -euo pipefail
 source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
 PROFILECTL="$HOME/.config/hypr/runtime/profiles/profilectl.sh"
-MINIMIZE_SCRIPT="$HOME/.config/hypr/runtime/windows/toggle-minimized-window.sh"
 TASKBAR_APP_SCRIPT="$HOME/.config/hypr/taskbar/actions.sh"
 
 readonly ACTION_KILL="kill"
 readonly ACTION_BLOCK="block"
-readonly ACTION_MINIMIZE="minimize"
 
 dispatch_killactive() {
   hypr_dispatch_lua 'hl.dsp.window.close()'
@@ -32,12 +30,6 @@ is_gaming_protected_window() {
   [[ "$app_class" =~ ^(gamescope|steam_app_.*)$ ]]
 }
 
-is_steam_window() {
-  local app_class="$1"
-
-  [[ "$app_class" =~ ^(Steam|steam)$ ]]
-}
-
 rule_block_gaming_protected_window() {
   local app_class="$1"
 
@@ -49,24 +41,12 @@ rule_block_gaming_protected_window() {
   return 1
 }
 
-rule_minimize_steam() {
-  local app_class="$1"
-
-  if is_steam_window "$app_class"; then
-    printf '%s\n' "$ACTION_MINIMIZE"
-    return 0
-  fi
-
-  return 1
-}
-
 resolve_close_action() {
   local app_class="$1"
   local rule
 
   for rule in \
-    rule_block_gaming_protected_window \
-    rule_minimize_steam
+    rule_block_gaming_protected_window
   do
     if action="$($rule "$app_class")"; then
       printf '%s\n' "$action"
@@ -83,11 +63,6 @@ run_close_action() {
 
   if [[ "$action" == "$ACTION_BLOCK" ]]; then
     notify_close_action "Kill blocked" "Gamemoded window protected: $title"
-    exit 0
-  fi
-
-  if [[ "$action" == "$ACTION_MINIMIZE" ]]; then
-    "$MINIMIZE_SCRIPT"
     exit 0
   fi
 
