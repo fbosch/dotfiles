@@ -8,6 +8,7 @@ local profilectl = home .. "/.config/hypr/runtime/profiles/profilectl.sh"
 local reconnect_delay_seconds = 1
 local event_idle_timeout_seconds = 5
 local gaming_workspace = "10"
+local minimized_workspace_prefix = "special:minimized"
 local gaming_overlay_workspace = "special:gaming-overlay"
 local freeze_excluded_title_pattern = "^(World of Warcraft)$"
 local wl_freeze_checked = false
@@ -51,28 +52,45 @@ local function get_gaming_window_count(clients_json)
 	return tonumber(count) or 0
 end
 
-local function get_gaming_window_pid(clients_json)
-	return jq(clients_json or get_clients_json(), "--arg ws " .. shell_quote(gaming_workspace) .. " --arg exclude_title " .. shell_quote(freeze_excluded_title_pattern), [[
-[
- .[]
- | select(.workspace.name == $ws)
- | select(((.title // "") | test($exclude_title) | not) and ((.initialTitle // "") | test($exclude_title) | not))
- | select((((.class // "") | ascii_downcase) == "gamescope") or (((.initialClass // "") | ascii_downcase) == "gamescope"))
- | .pid
-][0] //
-[
- .[]
- | select(.workspace.name == $ws)
- | select(((.title // "") | test($exclude_title) | not) and ((.initialTitle // "") | test($exclude_title) | not))
- | select((((.class // "") | ascii_downcase) | test("^steam_app_[0-9]+$")) or (((.initialClass // "") | ascii_downcase) | test("^steam_app_[0-9]+$")))
- | .pid
-][0] // empty
+local function get_freezable_gaming_windows(clients_json)
+	local rows = jq(clients_json or get_clients_json(), "--arg ws "
+		.. shell_quote(gaming_workspace)
+		.. " --arg minimized "
+		.. shell_quote(minimized_workspace_prefix)
+		.. " --arg exclude_title "
+		.. shell_quote(freeze_excluded_title_pattern), [[
+.[]
+| (.workspace.name // "") as $workspace
+| select(($workspace == $ws) or ($workspace | startswith($minimized)))
+| select(((.title // "") | test($exclude_title) | not) and ((.initialTitle // "") | test($exclude_title) | not))
+| select(
+    (((.class // "") | ascii_downcase) == "gamescope")
+    or (((.initialClass // "") | ascii_downcase) == "gamescope")
+    or (((.class // "") | ascii_downcase) | test("^steam_app_[0-9]+$"))
+    or (((.initialClass // "") | ascii_downcase) | test("^steam_app_[0-9]+$"))
+  )
+| [.pid, $workspace]
+| @tsv
 ]])
+	local windows = {}
+	for line in rows:gmatch("[^\n]+") do
+		local pid, workspace = line:match("^(%d+)\t(.+)$")
+		if pid and workspace then
+			windows[#windows + 1] = { pid = pid, workspace = workspace }
+		end
+	end
+
+	return windows
 end
 
-local function gaming_workspace_visible(monitors_json)
-	local visible = jq(monitors_json or hypr_ipc.request("j/monitors"), "--arg ws " .. shell_quote(gaming_workspace), [[
-any(.[]; .activeWorkspace.name == $ws)
+local function workspace_visible(workspace, monitors_json)
+	local monitor_field = "activeWorkspace"
+	if workspace:sub(1, 8) == "special:" then
+		monitor_field = "specialWorkspace"
+	end
+
+	local visible = jq(monitors_json or hypr_ipc.request("j/monitors"), "--arg ws " .. shell_quote(workspace) .. " --arg field " .. shell_quote(monitor_field), [[
+any(.[]; .[$field].name == $ws)
 ]])
 	return visible == "true"
 end
@@ -117,7 +135,20 @@ local function set_process_frozen(pid, should_freeze)
 end
 
 local function sync_gaming_freeze_state(clients_json, monitors_json)
-	set_process_frozen(get_gaming_window_pid(clients_json), not gaming_workspace_visible(monitors_json))
+	local should_freeze_by_pid = {}
+	for _, window in ipairs(get_freezable_gaming_windows(clients_json)) do
+		local visible = workspace_visible(window.workspace, monitors_json)
+		if should_freeze_by_pid[window.pid] == nil then
+			should_freeze_by_pid[window.pid] = true
+		end
+		if visible then
+			should_freeze_by_pid[window.pid] = false
+		end
+	end
+
+	for pid, should_freeze in pairs(should_freeze_by_pid) do
+		set_process_frozen(pid, should_freeze)
+	end
 end
 
 local function sync_gaming_state(last_count, clients_json, force)
@@ -172,6 +203,7 @@ local function event_kind(event)
 		or event:match("^closewindow")
 		or event:match("^movewindow")
 		or event:match("^workspace")
+		or event:match("^activespecial")
 		or event:match("^activewindow")
 		or event:match("^fullscreen") then
 		return "window"

@@ -13,6 +13,8 @@ hl = {
 	},
 }
 
+_G.__PORTRAIT_ROWS_DISABLE_STATE = true
+
 local function make_target(index, active)
 	return {
 		index = index,
@@ -321,4 +323,35 @@ run("ignores unrelated layout messages", function()
 
 	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "first target")
 	assert_box(second.placed, { x = 10, y = 120, w = 120, h = 200 }, "second target")
+end)
+
+run("manual row ratios survive layout module reload", function()
+	_G.__PORTRAIT_ROWS_DISABLE_STATE = nil
+	_G.__PORTRAIT_ROWS_STATE_FILE = os.tmpname()
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local workspace = "persisted-row-ratio"
+	local first = make_workspace_target(1, workspace, true)
+	local second = make_workspace_target(2, workspace)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "resize-y 15")
+	registered_layout.layout.recalculate(ctx)
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 115 }, "resized first target")
+
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local reloaded_first = make_workspace_target(1, workspace, true)
+	local reloaded_second = make_workspace_target(2, workspace)
+	local reloaded_ctx = make_context({ reloaded_first, reloaded_second })
+	registered_layout.layout.recalculate(reloaded_ctx)
+
+	assert_box(reloaded_first.placed, { x = 10, y = 20, w = 120, h = 115 }, "reloaded first target")
+	assert_box(reloaded_second.placed, { x = 10, y = 135, w = 120, h = 185 }, "reloaded second target")
+	registered_layout.layout.layout_msg(reloaded_ctx, "reset")
+	os.remove(_G.__PORTRAIT_ROWS_STATE_FILE)
+	_G.__PORTRAIT_ROWS_STATE_FILE = nil
+	_G.__PORTRAIT_ROWS_DISABLE_STATE = true
 end)
