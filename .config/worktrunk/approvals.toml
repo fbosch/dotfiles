@@ -21,4 +21,5 @@ approved-commands = [
     "ln -sfn {{ primary_worktree_path }}/node_modules node_modules",
     "CI=true pnpm install --prefer-offline --frozen-lockfile --reporter=silent",
     "wt step copy-ignored",
+    "CI=true NODE_OPTIONS=--no-warnings pnpm install --prefer-offline --frozen-lockfile --reporter=silent",
 ]
