@@ -2,6 +2,10 @@
   "$schema": "https://opencode.ai/config.json",
   "theme": "zenwritten-dark",
   "autoupdate": false,
+  "disabled_providers": [
+    "github-copilot",
+    "github-models"
+  ],
   "watcher": {
     "ignore": [
       ".git/**",
