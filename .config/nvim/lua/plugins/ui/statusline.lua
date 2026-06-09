@@ -108,7 +108,6 @@ return {
 				globalstatus = true,
 				always_divide_middle = false,
 			},
-			extensions = { "symbols-outline" },
 			sections = {
 				lualine_b = lualine_b,
 				lualine_c = lualine_c,

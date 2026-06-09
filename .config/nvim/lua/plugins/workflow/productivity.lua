@@ -37,7 +37,6 @@ return {
 					end
 
 					if is_todo_file then
-						local map = require("utils").set_keymap
 						vim.opt_local.wrap = true
 					end
 				end,
