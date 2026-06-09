@@ -40,17 +40,83 @@ return {
 		end,
 	},
 	{
-		"ibhagwan/fzf-lua",
-		dependencies = { "nvim-tree/nvim-web-devicons" },
-		cmd = { "FzfLua", "FzfRg", "FzfRgVisualSelection", "FzfLuaFilesExtended" },
+		"dmtrKovalenko/fff.nvim",
+		build = function()
+			require("fff.download").download_or_build_binary()
+		end,
+		lazy = false,
 		keys = {
 			{
 				"<C-p>",
-				"<cmd>FzfLua files<cr>",
+				function()
+					require("fff").find_files()
+				end,
 				desc = "find files",
 				mode = { "n" },
 				silent = true,
 			},
+		},
+		opts = {
+			title = "Find Files",
+			max_results = 100,
+			max_threads = 4,
+			lazy_sync = true,
+			prompt = "> ",
+			layout = {
+				width = 0.9,
+				height = 0.8,
+				prompt_position = "top",
+				preview_position = "right",
+				preview_size = 0.5,
+				flex = { size = 130, wrap = "top" },
+				show_scrollbar = true,
+				path_shorten_strategy = "middle_number",
+			},
+			preview = {
+				enabled = true,
+				max_size = 10 * 1024 * 1024,
+				chunk_size = 8192,
+				binary_file_threshold = 1024,
+				line_numbers = false,
+				wrap_lines = false,
+			},
+			keymaps = {
+				close = { "<C-c>", "<Esc>" },
+				select = "<CR>",
+				select_split = "<C-s>",
+				select_vsplit = "<C-v>",
+				select_tab = "<C-t>",
+				move_up = { "<Up>", "<C-p>", "<C-k>" },
+				move_down = { "<Down>", "<C-n>", "<C-j>" },
+				preview_scroll_up = "<C-u>",
+				preview_scroll_down = "<C-d>",
+				toggle_select = "<Tab>",
+				send_to_quickfix = "<C-q>",
+			},
+			git = {
+				status_text_color = false,
+			},
+			frecency = {
+				enabled = true,
+				db_path = vim.fn.stdpath("cache") .. "/fff_nvim",
+			},
+			history = {
+				enabled = true,
+				db_path = vim.fn.stdpath("data") .. "/fff_queries",
+				min_combo_count = 3,
+				combo_boost_score_multiplier = 100,
+			},
+			debug = {
+				enabled = false,
+				show_scores = false,
+			},
+		},
+	},
+	{
+		"ibhagwan/fzf-lua",
+		dependencies = { "nvim-tree/nvim-web-devicons" },
+		cmd = { "FzfLua", "FzfRg", "FzfRgVisualSelection", "FzfLuaFilesExtended" },
+		keys = {
 			{
 				"<leader>l",
 				"<cmd>FzfRg<cr>",
