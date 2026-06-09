@@ -1,5 +1,5 @@
 {
-  "$schema": "https://unpkg.com/opencode-toolbox@latest/toolbox.schema.json",
+  "$schema": "https://unpkg.com/opencode-toolbox@0.10.4/toolbox.schema.json",
   "mcp": {
     "context7": {
       "type": "local",
@@ -34,6 +34,12 @@
       "command": [
         "gh",
         "mcp"
+      ]
+    },
+    "fff": {
+      "type": "local",
+      "command": [
+        "fff-mcp"
       ]
     },
     "exa": {
@@ -86,7 +92,7 @@
         "ghcr.io/puppeteer/puppeteer:latest",
         "npx",
         "-y",
-        "chrome-devtools-mcp@latest",
+        "chrome-devtools-mcp@1.2.0",
         "--headless",
         "--isolated",
         "--no-usage-statistics",
