@@ -8,6 +8,19 @@
     }
   },
   "mcp": {
+    "github": {
+      "type": "local",
+      "command": [
+        "gh",
+        "mcp"
+      ]
+    },
+    "fff": {
+      "type": "local",
+      "command": [
+        "fff-mcp"
+      ]
+    },
     "context7": {
       "type": "local",
       "command": [
@@ -34,19 +47,6 @@
         "--name",
         "mcp-sequential-thinking",
         "mcp/sequentialthinking"
-      ]
-    },
-    "github": {
-      "type": "local",
-      "command": [
-        "gh",
-        "mcp"
-      ]
-    },
-    "fff": {
-      "type": "local",
-      "command": [
-        "fff-mcp"
       ]
     },
     "exa": {

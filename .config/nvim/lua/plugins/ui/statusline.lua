@@ -69,13 +69,36 @@ return {
 		local lualine_c = {
 			{
 				function()
-					return vim.b.gitsigns_blame_line or ""
+					return vim.b.gitsigns_blame_line or vim.b.last_gitsigns_blame_line or ""
 				end,
 				cond = function()
-					return git.is_git_repo() and is_valid_status(vim.b.gitsigns_blame_line)
+					return git.is_git_repo()
+						and (is_valid_status(vim.b.gitsigns_blame_line) or is_valid_status(vim.b.last_gitsigns_blame_line))
 				end,
 			},
 		}
+
+		local blame_refresh_id = 0
+		vim.api.nvim_create_autocmd({ "BufEnter", "CursorMoved" }, {
+			group = vim.api.nvim_create_augroup("LualineGitsignsBlame", { clear = true }),
+			callback = function()
+				if is_valid_status(vim.b.gitsigns_blame_line) then
+					vim.b.last_gitsigns_blame_line = vim.b.gitsigns_blame_line
+				end
+
+				blame_refresh_id = blame_refresh_id + 1
+				local current_refresh_id = blame_refresh_id
+				vim.defer_fn(function()
+					if is_valid_status(vim.b.gitsigns_blame_line) then
+						vim.b.last_gitsigns_blame_line = vim.b.gitsigns_blame_line
+					end
+
+					if current_refresh_id == blame_refresh_id then
+						pcall(require("lualine").refresh, { place = { "statusline" } })
+					end
+				end, 100)
+			end,
+		})
 
 		require("lualine").setup({
 			options = {

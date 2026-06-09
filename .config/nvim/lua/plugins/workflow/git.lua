@@ -71,7 +71,7 @@ return {
 			current_line_blame = true,
 			current_line_blame_opts = {
 				virt_text = false,
-				delay = 1000,
+				delay = 100,
 			},
 			current_line_blame_formatter = " <author>   <author_time:%R>   <abbrev_sha> ",
 			signs = {
