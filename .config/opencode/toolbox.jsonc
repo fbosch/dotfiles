@@ -1,6 +1,26 @@
 {
-  "$schema": "https://unpkg.com/opencode-toolbox@latest/toolbox.schema.json",
+  "$schema": "https://unpkg.com/opencode-toolbox@0.10.4/toolbox.schema.json",
+  "settings": {
+    "defaultLimit": 5,
+    "initMode": "lazy",
+    "connection": {
+      "connectTimeout": 30000
+    }
+  },
   "mcp": {
+    "github": {
+      "type": "local",
+      "command": [
+        "gh",
+        "mcp"
+      ]
+    },
+    "fff": {
+      "type": "local",
+      "command": [
+        "fff-mcp"
+      ]
+    },
     "context7": {
       "type": "local",
       "command": [
@@ -27,13 +47,6 @@
         "--name",
         "mcp-sequential-thinking",
         "mcp/sequentialthinking"
-      ]
-    },
-    "github": {
-      "type": "local",
-      "command": [
-        "gh",
-        "mcp"
       ]
     },
     "exa": {
@@ -83,23 +96,17 @@
         "CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=true",
         "-e",
         "CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS=true",
-        "ghcr.io/puppeteer/puppeteer:latest",
+        "mcr.microsoft.com/playwright:v1.57.0-noble",
         "npx",
         "-y",
-        "chrome-devtools-mcp@latest",
+        "chrome-devtools-mcp@1.2.0",
         "--headless",
         "--isolated",
         "--no-usage-statistics",
         "--no-performance-crux",
+        "--executable-path=/ms-playwright/chromium-1200/chrome-linux/chrome",
         "--chrome-arg=--no-sandbox"
       ]
-    }
-  },
-  "settings": {
-    "defaultLimit": 5,
-    "initMode": "lazy",
-    "connection": {
-      "connectTimeout": 30000
     }
   }
 }

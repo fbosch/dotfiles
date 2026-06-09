@@ -30,8 +30,10 @@ return {
 			"FTermClose",
 			"FTermExit",
 			"FTermToggle",
-			"FtermMProcs",
+			"FTermMProcs",
 			"FTermLazyGit",
+			"FTermBtop",
+			"FTermCheckmate",
 			"FTermScooter",
 		},
 		keys = term_keymaps({
@@ -168,76 +170,6 @@ return {
 				end
 
 				checkmate_instance:toggle()
-			end, { bang = true })
-		end,
-	},
-	{
-		"akinsho/toggleterm.nvim",
-		event = "VeryLazy",
-		cmd = {
-			"DiffnavTerminal",
-		},
-		keys = {
-			{
-				"<A-d>",
-				"<cmd>DiffnavTerminal<cr>",
-				desc = "toggle diffnav right pane",
-				mode = "n",
-				silent = true,
-			},
-			{
-				"<A-d>",
-				"<C-\\><C-n><cmd>DiffnavTerminal<cr>",
-				desc = "toggle diffnav right pane",
-				mode = "t",
-				silent = true,
-			},
-		},
-		opts = {
-			size = 20,
-			open_mapping = [[<a-\>]],
-			close_mapping = [[<a-\>]],
-			hide_numbers = true,
-			shade_filetypes = {},
-			shade_terminals = true,
-			shading_factor = 1,
-			start_in_insert = true,
-			persist_size = true,
-			direction = "horizontal",
-			close_on_exit = true,
-			shell = vim.o.shell,
-		},
-		config = function(_, opts)
-			require("toggleterm").setup(opts)
-
-			local diffnav_terminal = nil
-			vim.api.nvim_create_user_command("DiffnavTerminal", function()
-				if not diffnav_terminal then
-					local Terminal = require("toggleterm.terminal").Terminal
-					diffnav_terminal = Terminal:new({
-						cmd = "diffnav --watch",
-						direction = "vertical",
-						start_in_insert = true,
-						close_on_exit = false,
-						size = function(term)
-							if term.direction == "vertical" then
-								return math.floor(vim.o.columns * 0.45)
-							end
-						end,
-						on_open = function(term)
-							vim.cmd("wincmd L")
-							vim.api.nvim_buf_set_keymap(
-								term.bufnr,
-								"n",
-								"q",
-								"<cmd>close<CR>",
-								{ noremap = true, silent = true }
-							)
-						end,
-					})
-				end
-
-				diffnav_terminal:toggle()
 			end, { bang = true })
 		end,
 	},

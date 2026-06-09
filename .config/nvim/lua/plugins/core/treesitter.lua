@@ -3,11 +3,7 @@ return {
 		"nvim-treesitter/nvim-treesitter",
 		build = ":TSUpdate",
 		lazy = false,
-		dependencies = {
-			{ "andymass/vim-matchup", enabled = false },
-			{ "nvim-treesitter/nvim-treesitter-context", enabled = false },
-			"windwp/nvim-ts-autotag",
-		},
+		dependencies = { "windwp/nvim-ts-autotag" },
 		config = function()
 			local ok, treesitter = pcall(require, "nvim-treesitter")
 			if not ok then

@@ -1,45 +1,6 @@
 local is_git_repo = require("utils.git").is_git_repo()
 return {
 	{
-		"f-person/git-blame.nvim",
-		event = "VeryLazy",
-		cond = is_git_repo,
-		init = function()
-			-- Configure before loading
-			vim.g.gitblame_display_virtual_text = 0
-			vim.g.gitblame_date_format = "%r"
-			vim.g.gitblame_message_template = " <author>   <date>   <sha> "
-		end,
-	},
-	{
-		"dinhhuy258/git.nvim",
-		cmd = {
-			"GitBlameOpenCommitURL",
-			"GitBlameCopySHA",
-		},
-		cond = is_git_repo,
-		keys = {
-			{
-				"<leader>gBo",
-				"<cmd>GitBlameOpenCommitURL<CR>",
-				desc = "git blame open commit url",
-				mode = { "n" },
-			},
-			{
-				"<leader>gBc",
-				"<cmd>GitBlameCopySHA<CR>",
-				desc = "git blame copy commit sha",
-				mode = { "n" },
-			},
-		},
-		opts = {
-			keymaps = {
-				blame_line = "gbc",
-				blame_tree = "gbt",
-			},
-		},
-	},
-	{
 		"akinsho/git-conflict.nvim",
 		event = "BufReadPost",
 		cond = is_git_repo,
@@ -107,6 +68,12 @@ return {
 		event = { "BufReadPost", "BufNewFile", "BufWritePost" },
 		cond = is_git_repo,
 		opts = {
+			current_line_blame = true,
+			current_line_blame_opts = {
+				virt_text = false,
+				delay = 100,
+			},
+			current_line_blame_formatter = " <author>   <author_time:%R>   <abbrev_sha> ",
 			signs = {
 				add = { text = "+▕" },
 				change = { text = "~▕" },

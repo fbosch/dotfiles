@@ -1,16 +1,31 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "theme": "zenwritten-dark",
+  "autoupdate": false,
+  "disabled_providers": [
+    "github-copilot",
+    "github-models"
+  ],
+  "watcher": {
+    "ignore": [
+      ".git/**",
+      "**/node_modules/**",
+      "**/.devenv/**",
+      "**/__pycache__/**",
+      "result/**"
+    ]
+  },
   "plugin": [
-    "opencode-toolbox",
+    "opencode-toolbox@0.10.4",
     "./plugins/openmemory/openmemory.ts",
-    "opencode-wakatime",
-    "opencode-toon-plugin",
+    "opencode-wakatime@1.3.8",
+    "opencode-toon-plugin@0.1.2",
     "./plugins/rtk.ts",
     "./plugins/opencode-handoff/handoff.ts"
   ],
   "instructions": [
     "~/.config/opencode/instructions/RTK.md",
+    "~/.config/opencode/instructions/fff.md",
     "~/.config/opencode/instructions/caveman.md",
     "~/.config/opencode/instructions/orchestration.md",
     "~/.config/opencode/instructions/worktrunk.md"

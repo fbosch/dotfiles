@@ -7,8 +7,7 @@ return {
 	config = function()
 		local git = require("utils.git")
 		local codexbar = require("utils.usage.codex")
-		local copilot_usage = require("utils.usage.copilot")
-		local opencode_zen_stats = require("utils.usage.opencode")
+		require("utils.usage.opencode")
 		-- local anthropic_usage = require("utils.usage.anthropic")
 
 		local function is_valid_status(result)
@@ -38,7 +37,7 @@ return {
 					if not ok or not is_valid_status(result) then
 						return ""
 					end
-					return result .. " %#Comment#│%*"
+					return result
 				end,
 				cond = function()
 					local ok, result = pcall(codexbar.statusline_component)
@@ -55,19 +54,6 @@ return {
 			-- 		return ok and result ~= nil and result ~= ""
 			-- 	end,
 			-- },
-			{
-				function()
-					local ok, result = pcall(copilot_usage.statusline_component)
-					if not ok or not is_valid_status(result) then
-						return ""
-					end
-					return result .. " %#Comment#│%*"
-				end,
-				cond = function()
-					local ok, result = pcall(copilot_usage.statusline_component)
-					return ok and is_valid_status(result)
-				end,
-			},
 		}
 
 		-- Make git components conditional on current buffer being in a git repo
@@ -83,19 +69,36 @@ return {
 		local lualine_c = {
 			{
 				function()
-					-- Lazy-load git-blame only when needed
-					local ok, git_blame = pcall(require, "gitblame")
-					if ok then
-						return git_blame.get_current_blame_text()
-					end
-					return ""
+					return vim.b.gitsigns_blame_line or vim.b.last_gitsigns_blame_line or ""
 				end,
 				cond = function()
-					local ok, git_blame = pcall(require, "gitblame")
-					return git.is_git_repo() and ok and git_blame.is_blame_text_available()
+					return git.is_git_repo()
+						and (is_valid_status(vim.b.gitsigns_blame_line) or is_valid_status(vim.b.last_gitsigns_blame_line))
 				end,
 			},
 		}
+
+		local blame_refresh_id = 0
+		vim.api.nvim_create_autocmd({ "BufEnter", "CursorMoved" }, {
+			group = vim.api.nvim_create_augroup("LualineGitsignsBlame", { clear = true }),
+			callback = function()
+				if is_valid_status(vim.b.gitsigns_blame_line) then
+					vim.b.last_gitsigns_blame_line = vim.b.gitsigns_blame_line
+				end
+
+				blame_refresh_id = blame_refresh_id + 1
+				local current_refresh_id = blame_refresh_id
+				vim.defer_fn(function()
+					if is_valid_status(vim.b.gitsigns_blame_line) then
+						vim.b.last_gitsigns_blame_line = vim.b.gitsigns_blame_line
+					end
+
+					if current_refresh_id == blame_refresh_id then
+						pcall(require("lualine").refresh, { place = { "statusline" } })
+					end
+				end, 100)
+			end,
+		})
 
 		require("lualine").setup({
 			options = {
@@ -105,7 +108,6 @@ return {
 				globalstatus = true,
 				always_divide_middle = false,
 			},
-			extensions = { "symbols-outline" },
 			sections = {
 				lualine_b = lualine_b,
 				lualine_c = lualine_c,

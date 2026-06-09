@@ -190,7 +190,6 @@ return {
 						"Ibl*",
 						"Whitespace",
 						"NonText",
-						"Hop*",
 						"Ccc*",
 						"Leap*",
 					},

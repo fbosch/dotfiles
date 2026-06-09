@@ -1,8 +1,5 @@
 return {
 	"nvim-tree/nvim-tree.lua",
-	dependencies = {
-		"stevearc/dressing.nvim",
-	},
 	cmd = { "NvimTreeToggle", "NvimTreeFindFile" },
 	keys = {
 		{

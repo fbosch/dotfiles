@@ -85,8 +85,6 @@ vim.opt.hidden = true
 vim.opt.mouse = "a"
 vim.opt.errorbells = false
 
--- paths
-vim.opt.rtp:append("/opt/homebrew/opt/fzf")
 vim.opt.path:append("**")
 vim.opt.wildoptions = "pum"
 vim.opt.wildignore:append(
