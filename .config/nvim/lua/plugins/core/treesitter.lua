@@ -3,15 +3,12 @@ return {
 		"nvim-treesitter/nvim-treesitter",
 		build = ":TSUpdate",
 		lazy = false,
-		dependencies = { "windwp/nvim-ts-autotag" },
 		config = function()
 			local ok, treesitter = pcall(require, "nvim-treesitter")
 			if not ok then
 				vim.notify("nvim-treesitter not found", vim.log.levels.ERROR)
 				return
 			end
-
-			treesitter.setup({})
 
 			local required_languages = { "typescript", "tsx", "javascript", "jsdoc" }
 			local missing_languages = {}
@@ -34,6 +31,11 @@ return {
 				end,
 			})
 		end,
+	},
+	{
+		"windwp/nvim-ts-autotag",
+		event = { "BufReadPre", "BufNewFile" },
+		opts = {},
 	},
 	{
 		"Wansmer/treesj",
