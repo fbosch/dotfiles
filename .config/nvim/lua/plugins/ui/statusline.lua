@@ -7,8 +7,7 @@ return {
 	config = function()
 		local git = require("utils.git")
 		local codexbar = require("utils.usage.codex")
-		local copilot_usage = require("utils.usage.copilot")
-		local opencode_zen_stats = require("utils.usage.opencode")
+		require("utils.usage.opencode")
 		-- local anthropic_usage = require("utils.usage.anthropic")
 
 		local function is_valid_status(result)
@@ -38,7 +37,7 @@ return {
 					if not ok or not is_valid_status(result) then
 						return ""
 					end
-					return result .. " %#Comment#│%*"
+					return result
 				end,
 				cond = function()
 					local ok, result = pcall(codexbar.statusline_component)
@@ -55,19 +54,6 @@ return {
 			-- 		return ok and result ~= nil and result ~= ""
 			-- 	end,
 			-- },
-			{
-				function()
-					local ok, result = pcall(copilot_usage.statusline_component)
-					if not ok or not is_valid_status(result) then
-						return ""
-					end
-					return result .. " %#Comment#│%*"
-				end,
-				cond = function()
-					local ok, result = pcall(copilot_usage.statusline_component)
-					return ok and is_valid_status(result)
-				end,
-			},
 		}
 
 		-- Make git components conditional on current buffer being in a git repo

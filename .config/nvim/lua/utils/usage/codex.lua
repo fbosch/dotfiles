@@ -226,8 +226,6 @@ function M.statusline_component()
 		end
 
 		local parts = {}
-		local provider = cache.data.provider or "codex"
-		table.insert(parts, string.format("%%#Comment#%s", provider))
 
 		local secondary = nilify(cache.data.usage.secondary)
 		local secondary_remaining = secondary and remaining_percent(secondary.usedPercent) or nil
