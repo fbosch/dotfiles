@@ -1,7 +1,7 @@
 return {
 	{
 		"wakatime/vim-wakatime",
-		lazy = false,
+		event = { "BufReadPre", "BufNewFile" },
 		config = function()
 			require("wakatime").setup()
 			vim.api.nvim_clear_autocmds({ group = "WakaTime", event = "QuitPre" })

@@ -1,10 +1,10 @@
 return {
-	{ "echasnovski/mini.ai", version = "*", opts = {} },
+	{ "echasnovski/mini.ai", version = "*", event = "VeryLazy", opts = {} },
 	{ "tpope/vim-unimpaired", keys = { "]", "[" } },
 	{ "tpope/vim-repeat", event = "BufEnter" },
 	{ "windwp/nvim-autopairs", event = { "InsertEnter" }, opts = {} },
 	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },
-	{ "folke/ts-comments.nvim", event = "BufEnter", opts = {} },
+	{ "folke/ts-comments.nvim", event = "VeryLazy", opts = {} },
 	{
 		"tpope/vim-abolish",
 		event = "InsertEnter",
@@ -33,7 +33,7 @@ return {
 			require("nvim-surround").setup({})
 		end,
 	},
-	{ "nguyenvukhang/nvim-toggler", event = { "BufEnter" }, opts = {} },
+	{ "nguyenvukhang/nvim-toggler", event = "VeryLazy", opts = {} },
 	{
 		"chrisgrieser/nvim-spider",
 		event = { "BufEnter" },
