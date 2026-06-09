@@ -1,3 +1,12 @@
+local function get_visual_selection()
+	local lines = vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() })
+	if #lines == 0 then
+		return nil
+	end
+
+	return vim.trim(table.concat(lines, " "))
+end
+
 return {
 	-- { "tpope/vim-unimpaired", event = "VeryLazy" },
 	{
@@ -55,6 +64,24 @@ return {
 				mode = { "n" },
 				silent = true,
 			},
+			{
+				"<leader>l",
+				function()
+					require("fff").live_grep()
+				end,
+				desc = "live grep",
+				mode = { "n" },
+				silent = true,
+			},
+			{
+				"<leader>l",
+				function()
+					require("fff").live_grep({ query = get_visual_selection() })
+				end,
+				desc = "live grep selection",
+				mode = { "v" },
+				silent = true,
+			},
 		},
 		opts = {
 			title = "Find Files",
@@ -96,6 +123,13 @@ return {
 			git = {
 				status_text_color = false,
 			},
+			grep = {
+				max_file_size = 10 * 1024 * 1024,
+				max_matches_per_file = 100,
+				smart_case = true,
+				time_budget_ms = 150,
+				modes = { "plain", "regex", "fuzzy" },
+			},
 			frecency = {
 				enabled = true,
 				db_path = vim.fn.stdpath("cache") .. "/fff_nvim",
@@ -117,20 +151,6 @@ return {
 		dependencies = { "nvim-tree/nvim-web-devicons" },
 		cmd = { "FzfLua", "FzfRg", "FzfRgVisualSelection", "FzfLuaFilesExtended" },
 		keys = {
-			{
-				"<leader>l",
-				"<cmd>FzfRg<cr>",
-				desc = "livegrep ripgrep search",
-				mode = { "n" },
-				silent = true,
-			},
-			{
-				"<leader>l",
-				"<cmd>FzfRgVisualSelection<cr>",
-				desc = "ripgrep search visual selection",
-				mode = { "v" },
-				silent = true,
-			},
 			{
 				"<leader>b",
 				"<cmd>FzfLua buffers<cr>",

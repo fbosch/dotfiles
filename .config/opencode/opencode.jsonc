@@ -9,8 +9,16 @@
     "./plugins/rtk.ts",
     "./plugins/opencode-handoff/handoff.ts"
   ],
+  "mcp": {
+    "fff": {
+      "type": "local",
+      "command": ["fff-mcp"],
+      "enabled": true
+    }
+  },
   "instructions": [
     "~/.config/opencode/instructions/RTK.md",
+    "~/.config/opencode/instructions/fff.md",
     "~/.config/opencode/instructions/caveman.md",
     "~/.config/opencode/instructions/orchestration.md",
     "~/.config/opencode/instructions/worktrunk.md"
