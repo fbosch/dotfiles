@@ -30,8 +30,10 @@ return {
 			"FTermClose",
 			"FTermExit",
 			"FTermToggle",
-			"FtermMProcs",
+			"FTermMProcs",
 			"FTermLazyGit",
+			"FTermBtop",
+			"FTermCheckmate",
 			"FTermScooter",
 		},
 		keys = term_keymaps({
