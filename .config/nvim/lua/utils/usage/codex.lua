@@ -2,10 +2,62 @@ local M = {}
 
 local cache_dir = vim.fn.stdpath("cache") .. "/codexbar"
 local cache_file = cache_dir .. "/data.json"
+local auth_file = vim.fn.expand("~/.codex/auth.json")
 local file_cache_enabled = vim.g.codexbar_file_cache ~= false
+
+local alias_map = {
+	["indigo-harbor-ddce"] = "fbb",
+	["atlas-thicket-3afa"] = "jpb",
+	["aurora-auroraforge-efd2"] = "work",
+}
+
+local adjectives = {
+	"ember",
+	"cobalt",
+	"amber",
+	"jade",
+	"coral",
+	"indigo",
+	"silver",
+	"scarlet",
+	"atlas",
+	"lotus",
+	"cedar",
+	"pine",
+	"aurora",
+	"frost",
+	"orbit",
+	"dune",
+	"maple",
+	"zenith",
+}
+
+local nouns = {
+	"falcon",
+	"otter",
+	"comet",
+	"harbor",
+	"meadow",
+	"emberfox",
+	"lynx",
+	"kestrel",
+	"glacier",
+	"thicket",
+	"river",
+	"moss",
+	"canyon",
+	"beacon",
+	"auroraforge",
+	"wave",
+	"ridge",
+}
 
 local cache = {
 	data = nil,
+	profile = nil,
+	profile_mtime = nil,
+	profile_last_update = 0,
+	profile_check_interval = 1,
 	last_update = 0,
 	update_interval = 600, -- 10 minutes
 	fetching = false,
@@ -217,15 +269,81 @@ local function generate_bar(percent, width)
 	return string.rep(filled_char, filled), string.rep(empty_char, width - filled)
 end
 
+local function build_profile_label(account_id)
+	local seed_hex = account_id:gsub("[^0-9a-fA-F]", "")
+	if seed_hex == "" then
+		seed_hex = "00"
+	end
+
+	local adjective_index = (tonumber(seed_hex:sub(1, 2), 16) or 0) % #adjectives + 1
+	local noun_index = (tonumber(seed_hex:sub(3, 4), 16) or 0) % #nouns + 1
+	local id_tail = account_id:sub(math.max(1, #account_id - 3))
+	local generated_label = string.format("%s-%s-%s", adjectives[adjective_index], nouns[noun_index], id_tail)
+
+	return alias_map[generated_label] or generated_label
+end
+
+local function read_profile_label()
+	local file = io.open(auth_file, "r")
+	if not file then
+		return nil
+	end
+
+	local content = file:read("*a")
+	file:close()
+
+	if not content or content == "" then
+		return nil
+	end
+
+	local ok, decoded = pcall(vim.json.decode, content)
+	if not ok or type(decoded) ~= "table" or type(decoded.tokens) ~= "table" then
+		return nil
+	end
+
+	local account_id = decoded.tokens.account_id
+	if type(account_id) ~= "string" or account_id == "" then
+		return nil
+	end
+
+	return build_profile_label(account_id)
+end
+
+local function profile_label()
+	local current_time = os.time()
+	if cache.profile_last_update > 0 and (current_time - cache.profile_last_update) < cache.profile_check_interval then
+		return cache.profile
+	end
+
+	cache.profile_last_update = current_time
+	local mtime = vim.fn.getftime(auth_file)
+	if mtime == cache.profile_mtime then
+		return cache.profile
+	end
+
+	cache.profile_mtime = mtime
+	if mtime < 0 then
+		cache.profile = nil
+		return nil
+	end
+
+	cache.profile = read_profile_label()
+	return cache.profile
+end
+
 function M.statusline_component()
 	M.fetch_data_async()
 
 	local ok, result = pcall(function()
-		if not cache.data or not cache.data.usage then
-			return ""
+		local parts = {}
+		local profile = profile_label()
+		if profile then
+			table.insert(parts, string.format("%%#NonText#%s%%*", profile))
 		end
 
-		local parts = {}
+		if not cache.data or not cache.data.usage then
+			return table.concat(parts, " ")
+		end
 
 		local secondary = nilify(cache.data.usage.secondary)
 		local secondary_remaining = secondary and remaining_percent(secondary.usedPercent) or nil
@@ -294,6 +412,9 @@ load_cache_from_disk()
 
 function M.clear_cache()
 	cache.data = nil
+	cache.profile = nil
+	cache.profile_mtime = nil
+	cache.profile_last_update = 0
 	cache.last_update = 0
 	cache.fetching = false
 
