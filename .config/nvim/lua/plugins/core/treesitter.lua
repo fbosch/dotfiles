@@ -27,6 +27,11 @@ return {
 			vim.api.nvim_create_autocmd("FileType", {
 				group = group,
 				callback = function(args)
+					if vim.api.nvim_get_option_value("buftype", { buf = args.buf }) ~= "" then
+						pcall(vim.treesitter.stop, args.buf)
+						return
+					end
+
 					pcall(vim.treesitter.start, args.buf)
 				end,
 			})

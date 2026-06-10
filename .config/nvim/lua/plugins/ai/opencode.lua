@@ -52,12 +52,7 @@ return {
 					.. " || '/%' or "
 					.. cwd_sql
 					.. " like directory || '/%')"
-					.. " order by case when directory = "
-					.. cwd_sql
-					.. " then 0 else 1 end asc"
-					.. ", abs(length(directory) - length("
-					.. cwd_sql
-					.. ")) asc, time_updated desc limit 1"
+					.. " order by time_updated desc limit 1"
 
 				local result = vim.system({ "sqlite3", opencode_db_path, "-json", query }, { text = true }):wait()
 				if result.code ~= 0 or type(result.stdout) ~= "string" then
