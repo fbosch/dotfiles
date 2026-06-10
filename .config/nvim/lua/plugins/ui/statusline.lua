@@ -20,14 +20,20 @@ return {
 		local lualine_x = {
 			{
 				function()
-					local ok, result = pcall(require("opencode").statusline)
+					local opencode = package.loaded.opencode
+					local ok, result = pcall(opencode and opencode.statusline or function()
+						return ""
+					end)
 					if not ok or not is_valid_status(result) then
 						return ""
 					end
 					return result
 				end,
 				cond = function()
-					local ok, result = pcall(require("opencode").statusline)
+					local opencode = package.loaded.opencode
+					local ok, result = pcall(opencode and opencode.statusline or function()
+						return ""
+					end)
 					return ok and is_valid_status(result)
 				end,
 			},

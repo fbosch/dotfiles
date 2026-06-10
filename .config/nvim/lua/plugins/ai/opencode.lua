@@ -1,7 +1,24 @@
 return {
 	{
 		"NickvanDyke/opencode.nvim",
-		lazy = false,
+		keys = {
+			{ "<leader>ac", mode = { "n", "x" }, desc = "Ask opencode" },
+			{ "<leader>as", mode = { "n", "x" }, desc = "opencode actions" },
+			{ "<leader>aS", mode = "n", desc = "Select opencode session" },
+			{ "ga", mode = { "n", "x" }, desc = "Add to opencode" },
+			{ "<A-a>", mode = { "n", "t" }, desc = "Toggle opencode" },
+			{ "<A-x>", mode = { "n", "v" }, desc = "Send to opencode" },
+			{ "<leader>ae", mode = { "n", "v" }, desc = "Explain code" },
+			{ "<leader>ao", mode = { "n", "v" }, desc = "Optimize code" },
+			{ "<leader>ad", mode = { "n", "v" }, desc = "Add documentation" },
+			{ "<leader>aa", mode = { "n", "v" }, desc = "Add tests" },
+			{ "<leader>ar", mode = { "n", "v" }, desc = "Review code" },
+			{ "<leader>af", mode = { "n", "v" }, desc = "Fix diagnostics" },
+			{ "<leader>ax", mode = { "n", "v" }, desc = "Explain diagnostics" },
+			{ "<leader>ag", mode = { "n", "v" }, desc = "Grammar correction" },
+			{ "<leader>ak", mode = { "n", "v" }, desc = "Extract keywords" },
+			{ "<leader>al", mode = { "n", "v" }, desc = "Code readability" },
+		},
 		dependencies = {
 			"folke/snacks.nvim",
 		},
