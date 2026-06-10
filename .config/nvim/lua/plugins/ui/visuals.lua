@@ -206,12 +206,12 @@ return {
 			local is_tty = terminal.is_plain_tty()
 			local indent_char = is_tty and "|" or "▏"
 			local scope_char = is_tty and "|" or "▏"
-			
+
 			-- Set highlights before setup to ensure colors are applied
 			local colors = require("config.colors")
 			vim.api.nvim_set_hl(0, "IblIndent", { fg = colors.dark_gray })
 			vim.api.nvim_set_hl(0, "IblScope", { fg = colors.match_blue })
-			
+
 			require("ibl").setup({
 				indent = { char = indent_char },
 				scope = {
@@ -224,6 +224,7 @@ return {
 	{
 		"b0o/incline.nvim",
 		event = "VeryLazy",
+		enabled = false,
 		dependencies = { "nvim-tree/nvim-web-devicons" },
 		config = function()
 			local colors = require("config.colors")
