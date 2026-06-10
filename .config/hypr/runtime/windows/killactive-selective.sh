@@ -43,16 +43,11 @@ rule_block_gaming_protected_window() {
 
 resolve_close_action() {
   local app_class="$1"
-  local rule
 
-  for rule in \
-    rule_block_gaming_protected_window
-  do
-    if action="$($rule "$app_class")"; then
-      printf '%s\n' "$action"
-      return
-    fi
-  done
+  if action="$(rule_block_gaming_protected_window "$app_class")"; then
+    printf '%s\n' "$action"
+    return
+  fi
 
   printf '%s\n' "$ACTION_KILL"
 }

@@ -98,7 +98,7 @@ notify_state() {
     body="Color temperature restored to normal"
   fi
 
-  icon="$($HOME/.config/hypr/runtime/desktop/nerd-icon-gen.sh "$glyph" 64 "$color" 2>/dev/null || printf "")"
+  icon="$("$HOME"/.config/hypr/runtime/desktop/nerd-icon-gen.sh "$glyph" 64 "$color" 2>/dev/null || printf "")"
   if [[ -n "$icon" && -f "$icon" ]]; then
     notify-send -a "Hyprland" -h string:x-canonical-private-synchronous:night-light "$title" "$body" -i "$icon"
     return
