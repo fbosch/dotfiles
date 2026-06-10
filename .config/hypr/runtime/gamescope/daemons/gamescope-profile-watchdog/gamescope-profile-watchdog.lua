@@ -10,6 +10,7 @@ local event_idle_timeout_seconds = 5
 local gaming_workspace = "10"
 local minimized_workspace_prefix = "special:minimized"
 local gaming_overlay_workspace = "special:gaming-overlay"
+local profile_excluded_title_pattern = "[Ff]augus"
 local freeze_excluded_title_pattern = "^(World of Warcraft)$"
 local wl_freeze_checked = false
 local wl_freeze_available = false
@@ -46,8 +47,14 @@ local function get_clients_json()
 end
 
 local function get_gaming_window_count(clients_json)
-	local count = jq(clients_json or get_clients_json(), "", [[
-[.[] | select((((.class // "") | ascii_downcase) | test("^(gamescope|steam_app_[0-9]+)$")) or (((.initialClass // "") | ascii_downcase) | test("^(gamescope|steam_app_[0-9]+)$")))] | length
+	local count = jq(clients_json or get_clients_json(), "--arg minimized "
+		.. shell_quote(minimized_workspace_prefix)
+		.. " --arg exclude_title "
+		.. shell_quote(profile_excluded_title_pattern), [[
+[.[]
+| select(((.workspace.name // "") | startswith($minimized) | not))
+| select(((.title // "") | test($exclude_title) | not) and ((.initialTitle // "") | test($exclude_title) | not))
+| select((((.class // "") | ascii_downcase) | test("^(gamescope|steam_app_[0-9]+)$")) or (((.initialClass // "") | ascii_downcase) | test("^(gamescope|steam_app_[0-9]+)$")))] | length
 ]])
 	return tonumber(count) or 0
 end
