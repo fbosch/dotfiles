@@ -1,0 +1,87 @@
+## Context
+
+The current Waybar clock right-click opens GNOME Calendar through the Hyprland taskbar popup system. The desired behavior is a lightweight AGS Calendar Widget that is defined from the design-system Calendar contract and backed by the same calendar service GNOME Calendar uses: Evolution Data Server.
+
+The implementation spans two project areas: `design-system` defines the pure React/Tailwind Calendar Surface and AGS implements a GTK widget that mirrors that contract. Storybook stories are reference material only; AGS must not import or depend on them. System package and runtime dependency changes, such as adding EDS GIR bindings, are owned by the separate `fbosch/nixos` repository rather than this dotfiles repository.
+
+## Goals / Non-Goals
+
+**Goals:**
+
+- Define a read-only design-system Calendar Surface before implementing AGS.
+- Optimize the Calendar for date, weekday, public-holiday, and compact event-marker glancing.
+- Keep the Calendar controlled, surface-only, and backend-agnostic.
+- Add tests for the date helper behavior that determines fixed grids, local-day overlap, and labels.
+- Implement an AGS Calendar Widget in `ags-bundled` that mirrors the Calendar contract.
+- Read Events from visible EDS calendar sources when EDS is available.
+- Replace Waybar clock right-click GNOME Calendar launching with Calendar Widget toggling.
+- Keep Waybar visible while the Calendar Widget is open.
+
+**Non-Goals:**
+
+- Creating, editing, deleting, accepting, declining, or manually syncing Events.
+- Rendering an agenda panel, event detail popup, event tooltip, event times, or week numbers.
+- Importing React, Storybook, or design-system runtime code into AGS.
+- Adding Nix package configuration in this dotfiles repository.
+- Continuous event polling.
+
+## Decisions
+
+### Design-system first, AGS mirrors the contract
+
+The Calendar starts in `design-system/src/components/Calendar/` as the visual and data contract. AGS implements the same concepts in GTK rather than importing React or Storybook code.
+
+Alternative considered: implement AGS first and backfill design-system later. Rejected because this would let the runtime widget define visual behavior separately from the design-system source of truth.
+
+### Calendar is surface-only and controlled
+
+The Calendar receives `visibleMonth`, `selectedDate`, Events, status, locale, and Week Start from the caller. It exposes callbacks for selection and Month Navigation. Popup placement, dismissal, Waybar visibility, and backend loading belong to the Calendar Widget.
+
+Alternative considered: include open/close popup behavior in the Calendar component. Rejected because shell placement and layer behavior are AGS concerns and would make the design-system component less reusable.
+
+### Calendar owns visual date math
+
+The Calendar owns fixed 42-cell grid construction, Outside-Month Day state, Local Day overlap, Event Marker placement, and Event Label selection. Pure date helpers are colocated with the Calendar and tested.
+
+Alternative considered: callers pass a precomputed grid. Rejected because it would duplicate visual date math across Storybook, AGS, and future callers.
+
+### Events are display-ready summaries
+
+Events in the Calendar contract contain only display fields needed by the month grid: id, title, start/end, all-day state, optional source name, optional color, and optional location. Backend details such as recurrence rules, attendees, alarms, source objects, and sync state are hidden by the Calendar Backend.
+
+Alternative considered: expose richer EDS event data to the Calendar. Rejected because it couples pure UI to backend semantics and broadens the first read-only slice.
+
+### Public-holiday glance behavior
+
+The Calendar shows at most one all-day Event Label per Visible Month Day. Timed Events use dots only, and Outside-Month Days never show labels. Event Markers are capped colored dots with overflow indication. Event times, tooltips, and agenda panels are excluded.
+
+Alternative considered: render an agenda panel or all event titles. Rejected because the primary use case is a compact public-holiday/date/weekday glance, not a full calendar application.
+
+### EDS backend is visible-only and read-only
+
+The Calendar Backend loads Events from visible/enabled EDS calendar sources for the full Grid Range when the widget opens or the Visible Month changes. It watches for EDS changes only while the Calendar Widget is visible and does not poll continuously.
+
+Alternative considered: keep an EDS watch active for the whole AGS daemon lifetime. Rejected because open/month-change loading catches up on demand and visible-only watching reduces shared daemon risk.
+
+### Waybar integration replaces right-click only
+
+The clock left-click continues to toggle SwayNC. Clock right-click sends `ags request -i ags-bundled calendar-widget '{"action":"toggle"}'`. The Calendar Widget participates in the existing Waybar Visibility Guard through `is-visible`.
+
+Alternative considered: replace clock left-click too. Rejected because current left-click behavior is unrelated and should remain stable.
+
+## Risks / Trade-offs
+
+- EDS GIR bindings may be missing locally -> the widget must degrade safely, and package requirements must be documented for `fbosch/nixos` rather than implemented here.
+- GJS EDS APIs may be awkward or unavailable through generated typings -> backend discovery is an explicit first AGS phase, and `ags-bundled` must not crash when bindings cannot load.
+- React Calendar and AGS Calendar can drift visually -> Storybook remains reference material, and the AGS implementation must mirror the same named states and contract terms.
+- Local Day behavior can regress around midnight/all-day boundaries -> pure date helper tests cover crossing-midnight and multi-day all-day Events.
+- Waybar auto-hide could detach the popup -> the Calendar Widget signals Waybar visible on show and participates in the Waybar Visibility Guard while open.
+
+## Migration Plan
+
+1. Build and validate the design-system Calendar Surface, helpers, tests, and reference stories.
+2. Add the AGS Calendar Widget to `ags-bundled` with backend unavailable state first.
+3. Discover EDS GIR availability and implement the read-only Calendar Backend when available.
+4. Replace Waybar clock right-click with Calendar Toggle.
+5. Extend the Waybar Visibility Guard to query `calendar-widget is-visible`.
+6. Roll back by restoring the previous Waybar right-click action to `~/.config/hypr/taskbar/actions.sh calendar`.
