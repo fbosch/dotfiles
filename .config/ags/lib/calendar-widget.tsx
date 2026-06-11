@@ -42,6 +42,23 @@ interface CachedEvents {
   message: string;
 }
 
+interface SerializedEvent {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  allDay?: boolean;
+  calendarName?: string;
+  color?: string;
+  location?: string;
+}
+
+interface SerializedCacheEntry {
+  events: SerializedEvent[];
+  status: BackendStatus;
+  message: string;
+}
+
 interface DaySlot {
   button: Gtk.Button;
   number: Gtk.Label;
@@ -58,6 +75,7 @@ let weekdayLabelWidgets: Gtk.Label[] = [];
 let daySlots: DaySlot[] = [];
 let isVisible = false;
 let ignoreNextOutsideClick = false;
+let lastToggleAtMs = 0;
 let visibleMonth = startOfMonth(new Date());
 let selectedDate = startOfLocalDay(new Date());
 let events: CalendarEventPreview[] = [];
@@ -70,12 +88,31 @@ let backendModules: BackendModules | null = null;
 let backendRegistry: any | null = null;
 let backendRegistrySignalIds: number[] = [];
 let backendRefreshSource = 0;
+let backendLoadSource = 0;
 let eventCache = new Map<string, CachedEvents>();
 let clientCache = new Map<string, any>();
+let sourceInfoCache = new Map<string, { name?: string; color?: string }>();
 
 const weekStartsOn: WeekStart = 1;
 const markerLimit = 3;
 const dayInMs = 24 * 60 * 60 * 1000;
+const edsConnectWaitSeconds = 1;
+const runtimeDir = GLib.getenv("XDG_RUNTIME_DIR") || GLib.get_tmp_dir();
+const eventCachePath = `${runtimeDir}/ags-calendar-widget-events.json`;
+const monthFormatter = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" });
+const dateLabelFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+  year: "numeric",
+});
+const weekdayFormatter = new Intl.DateTimeFormat(undefined, { weekday: "short" });
+const weekdayLabelCache = Array.from({ length: 7 }, (_, index) => {
+  const sunday = new Date(2026, 0, 4);
+  const dayOffset = (weekStartsOn + index) % 7;
+  return weekdayFormatter.format(addLocalDays(sunday, dayOffset));
+});
+const desktopTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
 function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -154,29 +191,15 @@ function buildCalendarDays(): CalendarDay[] {
 }
 
 function formatMonthLabel(date: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "long",
-    year: "numeric",
-  }).format(date);
+  return monthFormatter.format(date);
 }
 
 function formatDateLabel(date: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
+  return dateLabelFormatter.format(date);
 }
 
 function weekdayLabels(): string[] {
-  const formatter = new Intl.DateTimeFormat(undefined, { weekday: "short" });
-  const sunday = new Date(2026, 0, 4);
-
-  return Array.from({ length: 7 }, (_, index) => {
-    const dayOffset = (weekStartsOn + index) % 7;
-    return formatter.format(addLocalDays(sunday, dayOffset));
-  });
+  return weekdayLabelCache;
 }
 
 function eventTooltip(day: CalendarDay): string | null {
@@ -198,7 +221,7 @@ function isValidCssColor(value: string | undefined): value is string {
 }
 
 function resolvedTimeZone(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  return desktopTimeZone;
 }
 
 function formatEdsTime(date: Date): string {
@@ -279,6 +302,7 @@ function componentToEvent(
   const start = componentDateToDate(component?.get_dtstart?.());
   if (!start) return null;
 
+  const info = sourceInfo(source, EDataServer);
   const end = componentDateToDate(component?.get_dtend?.());
   const fallbackEnd = start.allDay
     ? addLocalDays(start.date, 1)
@@ -291,8 +315,8 @@ function componentToEvent(
     start: start.date,
     end: end?.date || fallbackEnd,
     allDay: start.allDay,
-    calendarName: sourceDisplayName(source),
-    color: sourceColor(source, EDataServer),
+    calendarName: info.name,
+    color: info.color,
     location: textValue(component?.get_location?.()) || undefined,
   };
 }
@@ -301,19 +325,96 @@ function sourceUid(source: any): string {
   return source?.get_uid?.() || sourceDisplayName(source) || "unknown-source";
 }
 
+function sourceInfo(source: any, EDataServer: any): { name?: string; color?: string } {
+  const uid = sourceUid(source);
+  const cached = sourceInfoCache.get(uid);
+  if (cached) return cached;
+
+  const info = {
+    name: sourceDisplayName(source),
+    color: sourceColor(source, EDataServer),
+  };
+  sourceInfoCache.set(uid, info);
+  return info;
+}
+
 function getCachedClient(source: any, ECal: any): any {
   const uid = sourceUid(source);
   const cached = clientCache.get(uid);
   if (cached) return cached;
 
-  const client = ECal.Client.connect_sync(
-    source,
-    ECal.ClientSourceType.EVENTS,
-    2,
-    null as Gio.Cancellable | null,
-  );
-  clientCache.set(uid, client);
-  return client;
+  const mark = perf.start("calendar-widget", "connectSourceClient");
+  try {
+    const client = ECal.Client.connect_sync(
+      source,
+      ECal.ClientSourceType.EVENTS,
+      edsConnectWaitSeconds,
+      null as Gio.Cancellable | null,
+    );
+    clientCache.set(uid, client);
+    return client;
+  } finally {
+    mark.end();
+  }
+}
+
+function serializeEvent(event: CalendarEventPreview): SerializedEvent {
+  return {
+    ...event,
+    start: event.start.toISOString(),
+    end: event.end.toISOString(),
+  };
+}
+
+function deserializeEvent(event: SerializedEvent): CalendarEventPreview | null {
+  const start = new Date(event.start);
+  const end = new Date(event.end);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+
+  return {
+    ...event,
+    start,
+    end,
+  };
+}
+
+function loadEventCacheFromTmpfs(): void {
+  try {
+    const [ok, contents] = GLib.file_get_contents(eventCachePath);
+    if (!ok || !contents) return;
+
+    const text = new TextDecoder("utf-8").decode(contents);
+    const parsed = JSON.parse(text) as Record<string, SerializedCacheEntry>;
+    for (const [cacheKey, entry] of Object.entries(parsed)) {
+      const cachedEvents = entry.events
+        .map(deserializeEvent)
+        .filter((event): event is CalendarEventPreview => event !== null);
+      eventCache.set(cacheKey, {
+        events: cachedEvents,
+        status: entry.status,
+        message: entry.message,
+      });
+    }
+  } catch (e) {
+    console.error("Failed to read calendar event cache:", e);
+  }
+}
+
+function writeEventCacheToTmpfs(): void {
+  try {
+    const serialized: Record<string, SerializedCacheEntry> = {};
+    for (const [cacheKey, entry] of eventCache) {
+      serialized[cacheKey] = {
+        events: entry.events.map(serializeEvent),
+        status: entry.status,
+        message: entry.message,
+      };
+    }
+
+    GLib.file_set_contents(eventCachePath, JSON.stringify(serialized));
+  } catch (e) {
+    console.error("Failed to write calendar event cache:", e);
+  }
 }
 
 function applyCachedEvents(cacheKey: string): boolean {
@@ -325,6 +426,12 @@ function applyCachedEvents(cacheKey: string): boolean {
   backendMessage = cached.message;
   renderCalendar();
   return true;
+}
+
+function applyVisibleGridCache(): boolean {
+  const { start, end } = getCalendarGridRange();
+  const cacheKey = gridRangeKey(start, end);
+  return applyCachedEvents(cacheKey);
 }
 
 async function loadEventsForVisibleGrid(): Promise<void> {
@@ -346,7 +453,14 @@ async function loadEventsForVisibleGrid(): Promise<void> {
     const { ECal, EDataServer } = await loadBackendModules();
     if (loadVersion !== backendLoadVersion) return;
 
-    backendRegistry ||= EDataServer.SourceRegistry.new_sync(null);
+    if (!backendRegistry) {
+      const registryMark = perf.start("calendar-widget", "loadSourceRegistry");
+      try {
+        backendRegistry = EDataServer.SourceRegistry.new_sync(null);
+      } finally {
+        registryMark.end();
+      }
+    }
     const sources = asArray<any>(
       backendRegistry.list_enabled?.(EDataServer.SOURCE_EXTENSION_CALENDAR) ??
         backendRegistry.list_sources?.(EDataServer.SOURCE_EXTENSION_CALENDAR),
@@ -357,6 +471,7 @@ async function loadEventsForVisibleGrid(): Promise<void> {
       backendStatus = "unavailable";
       backendMessage = "No visible EDS calendars";
       eventCache.set(cacheKey, { events, status: backendStatus, message: backendMessage });
+      writeEventCacheToTmpfs();
       renderCalendar();
       return;
     }
@@ -366,7 +481,14 @@ async function loadEventsForVisibleGrid(): Promise<void> {
     for (const source of sources) {
       try {
         const client = getCachedClient(source, ECal);
-        const [ok, components] = client.get_object_list_as_comps_sync(sexp, null);
+        const queryMark = perf.start("calendar-widget", "querySourceEvents");
+        let ok: boolean;
+        let components: unknown;
+        try {
+          [ok, components] = client.get_object_list_as_comps_sync(sexp, null);
+        } finally {
+          queryMark.end();
+        }
         if (!ok) continue;
 
         for (const [index, component] of asArray<any>(components).entries()) {
@@ -383,6 +505,7 @@ async function loadEventsForVisibleGrid(): Promise<void> {
     backendStatus = "ready";
     backendMessage = "";
     eventCache.set(cacheKey, { events, status: backendStatus, message: backendMessage });
+    writeEventCacheToTmpfs();
     renderCalendar();
   } catch (e) {
     ok = false;
@@ -392,6 +515,7 @@ async function loadEventsForVisibleGrid(): Promise<void> {
     backendStatus = "unavailable";
     backendMessage = "Calendar events unavailable";
     eventCache.set(cacheKey, { events, status: backendStatus, message: backendMessage });
+    writeEventCacheToTmpfs();
     console.error("EDS calendar backend unavailable:", e);
     renderCalendar();
   } finally {
@@ -423,6 +547,11 @@ function startBackendWatch(): void {
 }
 
 function stopBackendWatch(): void {
+  if (backendLoadSource !== 0) {
+    GLib.source_remove(backendLoadSource);
+    backendLoadSource = 0;
+  }
+
   if (backendRefreshSource !== 0) {
     GLib.source_remove(backendRefreshSource);
     backendRefreshSource = 0;
@@ -437,12 +566,24 @@ function stopBackendWatch(): void {
 
 function refreshVisibleEvents(): void {
   if (!isVisible) return;
-  void loadEventsForVisibleGrid().then(startBackendWatch);
+  applyVisibleGridCache();
+  if (backendLoadSource !== 0) return;
+  backendLoadSource = GLib.timeout_add(GLib.PRIORITY_LOW, 100, () => {
+    backendLoadSource = 0;
+    if (isVisible) void loadEventsForVisibleGrid().then(startBackendWatch);
+    return GLib.SOURCE_REMOVE;
+  });
 }
 
 function invalidateBackendCache(): void {
   eventCache = new Map();
   clientCache = new Map();
+  sourceInfoCache = new Map();
+  try {
+    GLib.unlink(eventCachePath);
+  } catch {
+    // Missing cache file is fine.
+  }
 }
 
 function nextMarkerName(): string {
@@ -690,6 +831,10 @@ function showCalendar(): void {
 }
 
 function toggleCalendar(): void {
+  const now = GLib.get_monotonic_time() / 1000;
+  if (now - lastToggleAtMs < 300) return;
+  lastToggleAtMs = now;
+
   if (isVisible) {
     hideCalendar();
     return;
@@ -922,6 +1067,7 @@ function createWindow(): void {
 }
 
 function initCalendarWidget(): void {
+  loadEventCacheFromTmpfs();
   applyStaticCSS();
 }
 
