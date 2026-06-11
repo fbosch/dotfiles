@@ -51,7 +51,7 @@ interface CalendarBackendSnapshot extends CachedEvents {}
 
 interface CalendarBackendModule {
   init: () => void;
-  refresh: () => void;
+  refresh: () => boolean;
   stop: () => void;
 }
 
@@ -592,15 +592,16 @@ function createCalendarBackendModule(options: {
 
   return {
     init: loadCacheFromTmpfs,
-    refresh(): void {
-      if (!options.isVisible()) return;
-      applyVisibleGridCache();
-      if (loadSource !== 0) return;
+    refresh(): boolean {
+      if (!options.isVisible()) return false;
+      const appliedCache = applyVisibleGridCache();
+      if (loadSource !== 0) return appliedCache;
       loadSource = GLib.timeout_add(GLib.PRIORITY_LOW, 100, () => {
         loadSource = 0;
         if (options.isVisible()) void loadEventsForVisibleGrid().then(startBackendWatch);
         return GLib.SOURCE_REMOVE;
       });
+      return appliedCache;
     },
     stop,
   };
@@ -848,11 +849,10 @@ function hideCalendar(): void {
 function showCalendar(): void {
   if (!win) createWindow();
   setTriggerMonitor();
-  renderCalendar();
   ignoreNextOutsideClick = true;
   win?.set_visible(true);
   isVisible = true;
-  calendarBackend.refresh();
+  if (!calendarBackend.refresh()) renderCalendar();
 
   try {
     GLib.spawn_command_line_async("pkill -SIGUSR1 waybar");
@@ -875,22 +875,19 @@ function toggleCalendar(): void {
 
 function previousMonth(): void {
   visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1);
-  renderCalendar();
-  calendarBackend.refresh();
+  if (!calendarBackend.refresh()) renderCalendar();
 }
 
 function nextMonth(): void {
   visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1);
-  renderCalendar();
-  calendarBackend.refresh();
+  if (!calendarBackend.refresh()) renderCalendar();
 }
 
 function goToday(): void {
   const today = new Date();
   visibleMonth = startOfMonth(today);
   selectedDate = startOfLocalDay(today);
-  renderCalendar();
-  calendarBackend.refresh();
+  if (!calendarBackend.refresh()) renderCalendar();
 }
 
 function selectDate(value: string | undefined): void {
@@ -899,8 +896,7 @@ function selectDate(value: string | undefined): void {
   if (Number.isNaN(date.getTime())) return;
   selectedDate = date;
   visibleMonth = startOfMonth(date);
-  renderCalendar();
-  calendarBackend.refresh();
+  if (!calendarBackend.refresh()) renderCalendar();
 }
 
 function handleOutsideClick(x: number, y: number): void {
