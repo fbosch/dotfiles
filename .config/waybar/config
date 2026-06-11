@@ -37,15 +37,13 @@
       "normal": 10,
       "warning": 70,
       "critical": 90
-    },
-    "on-click": "~/.config/hypr/taskbar/actions.sh missioncenter"
+    }
   },
 
   "memory": {
     "format": "{icon} {percentage}%",
     "tooltip-format": "{used:0.1f} GiB / {avail} GiB \n({swapPercentage}% Swap)",
-    "format-icons": [""],
-    "on-click": "~/.config/hypr/taskbar/actions.sh missioncenter"
+    "format-icons": [""]
   },
 
   "custom/cpu_temp": {
@@ -53,8 +51,7 @@
     "interval": 60,
     "return-type": "json",
     "format": "  {}",
-    "tooltip": true,
-    "on-click": "~/.config/hypr/taskbar/actions.sh s-tui"
+    "tooltip": true
   },
 
   "custom/gpu_temp": {
@@ -62,8 +59,7 @@
     "interval": 60,
     "return-type": "json",
     "format": "󰢮  {}",
-    "tooltip": true,
-    "on-click": "~/.config/hypr/taskbar/actions.sh nvitop"
+    "tooltip": true
   },
 
   "custom/mullvad": {
