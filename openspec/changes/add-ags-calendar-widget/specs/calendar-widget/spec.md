@@ -62,16 +62,16 @@ The Calendar SHALL accept display-ready Events and render compact day-level indi
 - **AND** markers fall back to the design-system accent color when Event colors are missing or invalid
 - **AND** marker overflow is indicated without expanding the Day Cell
 
-#### Scenario: All-day event label renders in visible month
-- **WHEN** one or more all-day Events overlap a Visible Month Day
-- **THEN** the Calendar renders at most one compact Event Label in that Day Cell
-- **AND** the label text comes from the first matching all-day Event in caller-supplied Event Order
-- **AND** additional all-day Events contribute to overflow indication
+#### Scenario: Events render as markers with day tooltip details
+- **WHEN** one or more Events overlap a Local Day
+- **THEN** the Calendar renders Event Markers in that Day Cell
+- **AND** it does not render Event text inside the Day Cell
+- **AND** the Day Cell hover tooltip lists the Local Day's Events in caller-supplied Event Order
 
 #### Scenario: Outside-month days do not render event labels
 - **WHEN** an all-day Event overlaps an Outside-Month Day
 - **THEN** the Calendar may render muted Event Markers
-- **AND** it does not render an Event Label for that Outside-Month Day
+- **AND** it does not render Event text inside that Outside-Month Day
 
 #### Scenario: Timed events do not render event text
 - **WHEN** a timed Event overlaps a Day Cell
@@ -80,7 +80,8 @@ The Calendar SHALL accept display-ready Events and render compact day-level indi
 
 #### Scenario: Event details are omitted
 - **WHEN** the user hovers, focuses, or selects a Day Cell or Event indicator
-- **THEN** the Calendar does not show an agenda panel, event tooltip, event detail popover, or event detail panel
+- **THEN** the Calendar does not show an agenda panel, event detail popover, or event detail panel
+- **AND** hover Event Details are limited to the Day Cell tooltip
 
 ### Requirement: Calendar Interaction
 The Calendar SHALL support basic selection and navigation callbacks without shell-specific popup behavior.
@@ -94,6 +95,7 @@ The Calendar SHALL support basic selection and navigation callbacks without shel
 - **WHEN** the Calendar renders Day Cells
 - **THEN** each Day Cell is a native button with `type="button"`
 - **AND** Outside-Month Day Cells remain selectable
+- **AND** each Day Cell is square
 
 #### Scenario: Day selection is visual and callback-only
 - **WHEN** the user activates a Day Cell
@@ -124,7 +126,7 @@ The system SHALL provide Storybook stories as visual reference material for the 
 
 #### Scenario: Essential stories exist
 - **WHEN** Calendar stories are added
-- **THEN** they include open month, holiday labels, backend unavailable, and reference-only Waybar spawning states
+- **THEN** they include open month, event markers with tooltips, backend unavailable, and reference-only Waybar spawning states
 - **AND** they avoid exhaustive variant showcases
 
 #### Scenario: AGS does not depend on stories
@@ -138,11 +140,11 @@ The system SHALL colocate pure date logic with the Calendar component and valida
 - **WHEN** Calendar Date Helpers are implemented
 - **THEN** they construct fixed 42-cell grids
 - **AND** they evaluate Local Day overlap for timed and all-day Events
-- **AND** they select Event Labels by caller-supplied Event Order
+- **AND** they expose per-day Events in caller-supplied Event Order for tooltips
 
 #### Scenario: Date helper tests cover core behavior
 - **WHEN** design-system tests run
-- **THEN** they cover fixed-grid construction, Sunday and Monday Week Start behavior, timed midnight-crossing Events, multi-day all-day Events, Outside-Month Day behavior, and Event Label selection
+- **THEN** they cover fixed-grid construction, Sunday and Monday Week Start behavior, timed midnight-crossing Events, multi-day all-day Events, Outside-Month Day behavior, and Event ordering for tooltips
 
 ### Requirement: AGS Calendar Widget
 The system SHALL add an AGS Calendar Widget that mirrors the design-system Calendar contract without importing React or Storybook code.

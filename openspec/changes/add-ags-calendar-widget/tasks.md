@@ -1,17 +1,17 @@
 ## 1. Design-System Calendar Contract
 
-- [ ] 1.1 Add `design-system/src/components/Calendar/Calendar.tsx` with controlled surface props, public types, and Tailwind-only styling.
-- [ ] 1.2 Add `design-system/src/components/Calendar/calendar-date.ts` for fixed 42-cell grids, Week Start handling, Local Day overlap, Event Marker data, and Event Label selection.
-- [ ] 1.3 Add `design-system/src/components/Calendar/index.ts` local exports for the Calendar component and public types.
-- [ ] 1.4 Ensure Day Cells are native `button type="button"` elements and support basic focus/activation without arrow-key date navigation.
-- [ ] 1.5 Ensure Backend Status states keep the month grid usable and render only subtle loading/unavailable/error messaging.
+- [x] 1.1 Add `design-system/src/components/Calendar/Calendar.tsx` with controlled surface props, public types, and Tailwind-only styling.
+- [x] 1.2 Add `design-system/src/components/Calendar/calendar-date.ts` for fixed 42-cell grids, Week Start handling, Local Day overlap, Event Marker data, and caller-ordered Event tooltip data.
+- [x] 1.3 Add `design-system/src/components/Calendar/index.ts` local exports for the Calendar component and public types.
+- [x] 1.4 Ensure Day Cells are native `button type="button"` elements and support basic focus/activation without arrow-key date navigation.
+- [x] 1.5 Ensure Backend Status states keep the month grid usable and render only subtle loading/unavailable/error messaging.
 
 ## 2. Design-System Tests and Stories
 
-- [ ] 2.1 Add unit tests for 42-cell grid construction with Monday and Sunday Week Start behavior.
-- [ ] 2.2 Add unit tests for Local Day overlap with timed midnight-crossing Events and multi-day all-day Events.
-- [ ] 2.3 Add unit tests for Outside-Month Day marker behavior and caller-ordered Event Label selection.
-- [ ] 2.4 Add Calendar Storybook stories for open month, holiday labels, backend unavailable, and reference-only Waybar spawning.
+- [x] 2.1 Add unit tests for 42-cell grid construction with Monday and Sunday Week Start behavior.
+- [x] 2.2 Add unit tests for Local Day overlap with timed midnight-crossing Events and multi-day all-day Events.
+- [x] 2.3 Add unit tests for Outside-Month Day marker behavior and caller-ordered Event tooltip data.
+- [x] 2.4 Add Calendar Storybook stories for open month, event markers with tooltips, backend unavailable, and reference-only Waybar spawning.
 - [ ] 2.5 Run design-system validation with `pnpm lint` and `pnpm build` from `design-system/`.
 
 ## 3. AGS Calendar Widget Shell

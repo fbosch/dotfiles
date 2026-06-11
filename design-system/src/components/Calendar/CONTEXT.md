@@ -77,7 +77,7 @@ The local component export for the Calendar directory. The first slice adds a `C
 _Avoid_: root export barrel
 
 **Calendar Story**:
-A Storybook reference for the Calendar Surface. The first slice keeps stories minimal: open month, holiday labels, backend unavailable, and reference-only Waybar spawning.
+A Storybook reference for the Calendar Surface. The first slice keeps stories minimal: open month, event markers with tooltips, backend unavailable, and reference-only Waybar spawning.
 _Avoid_: exhaustive variant showcase, AGS dependency
 
 **Calendar Date Helper**:
@@ -85,7 +85,7 @@ Pure date logic colocated with the Calendar component, such as fixed-grid constr
 _Avoid_: shared AGS runtime helper, story helper
 
 **Calendar Date Helper Test**:
-A unit test for Calendar Date Helper behavior, including fixed-grid construction, Week Start handling, Local Day overlap, Outside-Month Day behavior, and Event Label selection.
+A unit test for Calendar Date Helper behavior, including fixed-grid construction, Week Start handling, Local Day overlap, Outside-Month Day behavior, and Event ordering for tooltips.
 _Avoid_: Storybook-only date validation
 
 **Backend Status**:
@@ -101,7 +101,7 @@ The first weekday column rendered by the Calendar. Week Start is configurable as
 _Avoid_: locale auto-detection
 
 **Week Number**:
-An ISO-style numeric week indicator. Week Numbers are excluded from the first Calendar slice to preserve room for date readability and Event Labels.
+An ISO-style numeric week indicator. Week Numbers are excluded from the first Calendar slice to preserve room for date readability and Event Markers.
 _Avoid_: week column
 
 **Calendar Locale**:
@@ -109,31 +109,31 @@ The locale used by the Calendar to format month and weekday labels. The Calendar
 _Avoid_: preformatted weekday labels, preformatted month labels
 
 **Event Marker**:
-A compact visual indication that one or more Events overlap a Local Day. The Calendar shows capped colored dots in the month grid, using Event colors when available and an overflow indicator when the cap is exceeded; it does not include an agenda panel.
+A compact visual indication that one or more Events overlap a Local Day. The Calendar shows capped colored dots in the month grid, using Event colors when available and an overflow indicator when the cap is exceeded; it does not show Event text inside Day Cells.
 _Avoid_: agenda, event list
 
 **Event Color**:
-The display color supplied for an Event by its source calendar. Event Colors are used for Event Markers when available; Event Labels keep Calendar-owned text styling for readability.
+The display color supplied for an Event by its source calendar. Event Colors are used for Event Markers when available; Day Cell text keeps Calendar-owned styling for readability.
 _Avoid_: label color, generated event palette
 
 **Event Color Fallback**:
 The Calendar-owned fallback used when an Event Color is missing or invalid. Calendar implementations sanitize Event Colors at the render boundary and fall back to the design-system accent color rather than trusting source data blindly.
 _Avoid_: backend-owned color fallback
 
-**Event Label**:
-A compact text label rendered inside a Local Day cell for an all-day Event, primarily to support public-holiday glancing. Timed Events use Event Markers only; each Local Day shows at most one Event Label plus an overflow indicator when more all-day Events exist.
-_Avoid_: agenda item, timed event title
+**Event Tooltip**:
+A hover tooltip on a Day Cell that lists the Events for that Local Day. Event details are available through the tooltip rather than truncated text inside the grid.
+_Avoid_: day-cell event label, truncated event title
 
 **Event Detail**:
-Additional Event information beyond the compact month grid presentation. The first Calendar slice does not show Event Details through tooltips, popovers, or an agenda panel.
-_Avoid_: hover detail, event tooltip
+Additional Event information beyond the compact month grid presentation. The first Calendar slice exposes Event Details only through Day Cell tooltips, not through popovers or an agenda panel.
+_Avoid_: event popover, agenda panel
 
 **Outside-Month Day**:
-A Local Day rendered in the fixed grid but outside the Visible Month. Outside-Month Days may show muted Event Markers, but they do not render Event Labels.
+A Local Day rendered in the fixed grid but outside the Visible Month. Outside-Month Days may show muted Event Markers, but they do not render Event text inside Day Cells.
 _Avoid_: adjacent-month label
 
 **Event Order**:
-The caller-controlled order of Events supplied to the Calendar. When multiple all-day Events overlap a Local Day, the Calendar uses the first matching Event as the Event Label and treats the rest as overflow.
+The caller-controlled order of Events supplied to the Calendar. Day Cell tooltips list Events in caller-supplied Event Order.
 _Avoid_: UI-inferred event priority
 
 **Event Time**:
@@ -149,7 +149,7 @@ The first Calendar slice supports basic focus and activation for controls and da
 _Avoid_: full keyboard calendar navigation
 
 **Day Cell**:
-A button representing a Local Day in the Calendar grid. Day Cells remain selectable for both Visible Month and Outside-Month Days and use native button activation semantics.
+A square button representing a Local Day in the Calendar grid. Day Cells remain selectable for both Visible Month and Outside-Month Days and use native button activation semantics.
 _Avoid_: inert day div, disabled outside-month day
 
 ## Example Dialogue

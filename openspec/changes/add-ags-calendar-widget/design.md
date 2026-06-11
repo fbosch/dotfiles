@@ -41,7 +41,7 @@ Alternative considered: include open/close popup behavior in the Calendar compon
 
 ### Calendar owns visual date math
 
-The Calendar owns fixed 42-cell grid construction, Outside-Month Day state, Local Day overlap, Event Marker placement, and Event Label selection. Pure date helpers are colocated with the Calendar and tested.
+The Calendar owns fixed 42-cell grid construction, Outside-Month Day state, Local Day overlap, Event Marker placement, and caller-ordered per-day Event data for tooltips. Pure date helpers are colocated with the Calendar and tested.
 
 Alternative considered: callers pass a precomputed grid. Rejected because it would duplicate visual date math across Storybook, AGS, and future callers.
 
@@ -51,11 +51,11 @@ Events in the Calendar contract contain only display fields needed by the month 
 
 Alternative considered: expose richer EDS event data to the Calendar. Rejected because it couples pure UI to backend semantics and broadens the first read-only slice.
 
-### Public-holiday glance behavior
+### Event marker and tooltip behavior
 
-The Calendar shows at most one all-day Event Label per Visible Month Day. Timed Events use dots only, and Outside-Month Days never show labels. Event Markers are capped colored dots with overflow indication. Event times, tooltips, and agenda panels are excluded.
+The Calendar shows Events as capped colored dots with overflow indication. Day Cells do not render truncated Event text; hovering a Day Cell uses the native tooltip to list that Local Day's Events in caller-supplied order. Event times, popovers, and agenda panels are excluded.
 
-Alternative considered: render an agenda panel or all event titles. Rejected because the primary use case is a compact public-holiday/date/weekday glance, not a full calendar application.
+Alternative considered: render all-day Event titles in cells. Rejected because labels truncate in the compact grid and reduce date readability.
 
 ### EDS backend is visible-only and read-only
 
