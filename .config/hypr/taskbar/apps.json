@@ -1,26 +1,5 @@
 [
   {
-    "id": "calendar",
-    "class": "org.gnome.Calendar",
-    "class_pattern": "^(org\\.gnome\\.Calendar)$",
-    "command": ["env", "TZDIR=/etc/zoneinfo", "gnome-calendar"],
-    "tag": "taskbar_calendar",
-    "rule_size": [725, 600],
-    "workspace": "special:taskbar-calendar",
-    "prewarm": true
-  },
-  {
-    "id": "missioncenter",
-    "class": "io.missioncenter.MissionCenter",
-    "class_pattern": "^(io\\.missioncenter\\.MissionCenter)$",
-    "command": ["missioncenter"],
-    "tag": "taskbar_missioncenter",
-    "rule_size": [755, 760],
-    "saved_size": [754, 759],
-    "workspace": "special:taskbar-missioncenter",
-    "prewarm": false
-  },
-  {
     "id": "btop-cpu",
     "class": "btop_cpu_terminal",
     "class_pattern": "^(btop_cpu_terminal)$",

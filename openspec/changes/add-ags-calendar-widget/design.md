@@ -20,7 +20,7 @@ The implementation spans two project areas: `design-system` defines the pure Rea
 **Non-Goals:**
 
 - Creating, editing, deleting, accepting, declining, or manually syncing Events.
-- Rendering an agenda panel, event detail popup, event tooltip, event times, or week numbers.
+- Rendering an agenda panel, event detail popup, event times, or week numbers.
 - Importing React, Storybook, or design-system runtime code into AGS.
 - Adding Nix package configuration in this dotfiles repository.
 - Continuous event polling.
@@ -85,3 +85,9 @@ Alternative considered: replace clock left-click too. Rejected because current l
 4. Replace Waybar clock right-click with Calendar Toggle.
 5. Extend the Waybar Visibility Guard to query `calendar-widget is-visible`.
 6. Roll back by restoring the previous Waybar right-click action to `~/.config/hypr/taskbar/actions.sh calendar`.
+
+## Runtime Dependency Note
+
+Local AGS runtime discovery on 2026-06-11 showed the current AGS environment cannot load EDS by default: `Typelib file for namespace 'ECal', version '2.0' not found`. `ECal-2.0.typelib` and `EDataServer-1.2.typelib` exist under `/run/current-system/sw/lib/girepository-1.0`, so the AGS daemon startup now exposes that directory through `GI_TYPELIB_PATH`. Loading `ECal` then requires transitive typelibs that are not in the current system profile, specifically `ICalGLib-3.0` from `libical` and `Json-1.0` from `json-glib`. Adding those GIR typelibs to the system profile belongs in `fbosch/nixos`, not this dotfiles repo.
+
+With a temporary full `GI_TYPELIB_PATH` containing EDS, 64-bit `libical`, and `json-glib`, AGS can import `ECal`/`EDataServer`, list 3 enabled calendar sources, and read 30 components from the Denmark Holidays source via `get_object_list_as_comps_sync("#t", null)`. Current visible grid testing returned zero components for the active month, so marker rendering still needs validation against a month that contains EDS events after the runtime dependency path is fixed.

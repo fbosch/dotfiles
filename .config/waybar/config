@@ -120,8 +120,6 @@
     "ignore-list": [
       "vicinae",
       "Vicinae Launcher",
-      "org.gnome.Calendar",
-      "io.missioncenter.MissionCenter",
       "open-pets-desktop",
       "btop_cpu_terminal",
       "btop_mem_terminal",
@@ -158,15 +156,8 @@
     "align": 1,
     "justify": "right",
     "on-click": "swaync-client -t",
-    "on-click-right": "~/.config/hypr/taskbar/actions.sh calendar",
-    "tooltip": false,
-    "menu-file": "~/.config/waybar/power_menu.xml",
-    "menu-actions": {
-      "shutdown": "shutdown 0",
-      "reboot": "reboot",
-      "suspend": "systemctl suspend",
-      "hibernate": "systemctl hibernate",
-    }
+    "on-click-right": "ags request -i ags-bundled calendar-widget '{\"action\":\"toggle\"}'",
+    "tooltip": false
   },
 
   "custom/power": {

@@ -16,41 +16,41 @@
 
 ## 3. AGS Calendar Widget Shell
 
-- [ ] 3.1 Add `.config/ags/lib/calendar-widget.tsx` with lazy window creation and the `globalThis.CalendarWidget` component contract.
-- [ ] 3.2 Mirror the design-system Calendar contract in GTK without importing React, Storybook stories, or design-system runtime code.
-- [ ] 3.3 Implement request actions: `show`, `hide`, `toggle`, `is-visible`, `next-month`, `prev-month`, `today`, and `select-date`.
-- [ ] 3.4 Anchor the Calendar Widget bottom-right near the Waybar clock on the Trigger Monitor, with default-monitor fallback.
-- [ ] 3.5 Implement Escape and outside-click dismissal while keeping day selection from closing the widget.
-- [ ] 3.6 Signal Waybar visible when the Calendar Widget is shown.
+- [x] 3.1 Add `.config/ags/lib/calendar-widget.tsx` with lazy window creation and the `globalThis.CalendarWidget` component contract.
+- [x] 3.2 Mirror the design-system Calendar contract in GTK without importing React, Storybook stories, or design-system runtime code.
+- [x] 3.3 Implement request actions: `show`, `hide`, `toggle`, `is-visible`, `next-month`, `prev-month`, `today`, and `select-date`.
+- [x] 3.4 Anchor the Calendar Widget bottom-right near the Waybar clock on the Trigger Monitor, with default-monitor fallback.
+- [x] 3.5 Implement Escape and outside-click dismissal while keeping day selection from closing the widget.
+- [x] 3.6 Signal Waybar visible when the Calendar Widget is shown.
 
 ## 4. Bundled AGS Wiring
 
-- [ ] 4.1 Add `CalendarWidget` to `.config/ags/config-bundled.tsx` global declarations.
-- [ ] 4.2 Import `./lib/calendar-widget.tsx` in `.config/ags/config-bundled.tsx`.
-- [ ] 4.3 Initialize and register `calendar-widget` in the bundled component registry.
-- [ ] 4.4 Update bundled daemon component-count log text if it lists the number of initialized components.
+- [x] 4.1 Add `CalendarWidget` to `.config/ags/config-bundled.tsx` global declarations.
+- [x] 4.2 Import `./lib/calendar-widget.tsx` in `.config/ags/config-bundled.tsx`.
+- [x] 4.3 Initialize and register `calendar-widget` in the bundled component registry.
+- [x] 4.4 Update bundled daemon component-count log text if it lists the number of initialized components.
 
 ## 5. Read-Only EDS Calendar Backend
 
-- [ ] 5.1 Verify local GJS/AGS runtime availability for EDS GIR bindings (`ECal` and `EDataServer`).
-- [ ] 5.2 If EDS GIR bindings are missing, document the required package change for the separate `fbosch/nixos` repo instead of adding Nix config here.
-- [ ] 5.3 Implement a read-only Calendar Backend interface that loads display-ready Events for a Grid Range.
-- [ ] 5.4 Load Events only from enabled or visible EDS calendar sources where source visibility is exposed.
-- [ ] 5.5 Preserve source calendar color/name when available and normalize missing or invalid colors for Calendar fallback.
-- [ ] 5.6 Start EDS change watching only while the Calendar Widget is visible, and stop watching when hidden.
-- [ ] 5.7 Ensure EDS unavailable/error states do not crash `ags-bundled` and render the Calendar with Backend Status messaging.
+- [x] 5.1 Verify local GJS/AGS runtime availability for EDS GIR bindings (`ECal` and `EDataServer`).
+- [x] 5.2 If EDS GIR bindings are missing, document the required package change for the separate `fbosch/nixos` repo instead of adding Nix config here.
+- [x] 5.3 Implement a read-only Calendar Backend interface that loads display-ready Events for a Grid Range.
+- [x] 5.4 Load Events only from enabled or visible EDS calendar sources where source visibility is exposed.
+- [x] 5.5 Preserve source calendar color/name when available and normalize missing or invalid colors for Calendar fallback.
+- [x] 5.6 Start EDS change watching only while the Calendar Widget is visible, and stop watching when hidden.
+- [x] 5.7 Ensure EDS unavailable/error states do not crash `ags-bundled` and render the Calendar with Backend Status messaging.
 
 ## 6. Waybar Integration
 
-- [ ] 6.1 Replace `.config/waybar/config` clock `on-click-right` GNOME Calendar action with `ags request -i ags-bundled calendar-widget '{"action":"toggle"}'`.
-- [ ] 6.2 Keep `.config/waybar/config` clock `on-click` SwayNC behavior unchanged.
-- [ ] 6.3 Update `.config/hypr/runtime/desktop/waybar-lib.sh` to query `calendar-widget` `is-visible`.
-- [ ] 6.4 Ensure Waybar stays visible when start menu, SwayNC, taskbar apps, or Calendar Widget are visible.
+- [x] 6.1 Replace `.config/waybar/config` clock `on-click-right` GNOME Calendar action with `ags request -i ags-bundled calendar-widget '{"action":"toggle"}'`.
+- [x] 6.2 Keep `.config/waybar/config` clock `on-click` SwayNC behavior unchanged.
+- [x] 6.3 Update `.config/hypr/runtime/desktop/waybar-lib.sh` to query `calendar-widget` `is-visible`.
+- [x] 6.4 Ensure Waybar stays visible when start menu, SwayNC, taskbar apps, or Calendar Widget are visible.
 
 ## 7. Validation
 
-- [ ] 7.1 Run `stow -n .` from the dotfiles repo root.
-- [ ] 7.2 Run AGS type generation only if runtime GIR package availability changes require regenerated typings.
+- [x] 7.1 Run `stow -n .` from the dotfiles repo root.
+- [x] 7.2 Run AGS type generation only if runtime GIR package availability changes require regenerated typings.
 - [ ] 7.3 Verify `ags request -i ags-bundled calendar-widget '{"action":"is-visible"}'` returns a non-crashing response.
 - [ ] 7.4 Verify Waybar clock right-click toggles the Calendar Widget and clock left-click still toggles SwayNC.
 - [ ] 7.5 Compare visible public-holiday/all-day event markers and labels against GNOME Calendar for the current Grid Range.
