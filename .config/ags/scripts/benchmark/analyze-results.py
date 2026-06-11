@@ -181,6 +181,19 @@ def main():
                     f"p95 {stats['p95_ms']:.2f}ms count {stats['count']}"
                 )
     extras = summary.get("extras", {})
+    calendar = extras.get("calendar_widget")
+    if calendar:
+        print("Calendar widget extras:")
+        print(
+            f"- cold show {calendar.get('cold_show_ms')}ms, "
+            f"warm show {calendar.get('warm_show_ms')}ms, "
+            f"next avg {calendar.get('next_month_avg_ms')}ms, "
+            f"prev avg {calendar.get('prev_month_avg_ms')}ms, "
+            f"today {calendar.get('today_ms')}ms"
+        )
+        rss = calendar.get("memory_rss_kb", {})
+        pss = calendar.get("memory_pss_kb", {})
+        print(f"- memory delta: rss {rss.get('delta')}KB pss {pss.get('delta')}KB")
     component_memory = extras.get("component_memory_delta_kb")
     if component_memory:
         print("Component memory delta (kb):")

@@ -91,3 +91,17 @@ Alternative considered: replace clock left-click too. Rejected because current l
 Local AGS runtime discovery on 2026-06-11 showed the current AGS environment cannot load EDS by default: `Typelib file for namespace 'ECal', version '2.0' not found`. `ECal-2.0.typelib` and `EDataServer-1.2.typelib` exist under `/run/current-system/sw/lib/girepository-1.0`, so the AGS daemon startup now exposes that directory through `GI_TYPELIB_PATH`. Loading `ECal` then requires transitive typelibs that are not in the current system profile, specifically `ICalGLib-3.0` from `libical` and `Json-1.0` from `json-glib`. Adding those GIR typelibs to the system profile belongs in `fbosch/nixos`, not this dotfiles repo.
 
 With a temporary full `GI_TYPELIB_PATH` containing EDS, 64-bit `libical`, and `json-glib`, AGS can import `ECal`/`EDataServer`, list 3 enabled calendar sources, and read 30 components from the Denmark Holidays source via `get_object_list_as_comps_sync("#t", null)`. Current visible grid testing returned zero components for the active month, so marker rendering still needs validation against a month that contains EDS events after the runtime dependency path is fixed.
+
+## Performance Baseline
+
+Benchmarking on 2026-06-11 uses `.config/ags/scripts/benchmark/run-benchmarks.sh` with `BENCH_RESTART=1 BENCH_CALENDAR_CYCLES=12 BENCH_COMPONENT_CYCLES=10 BENCH_MEM_CYCLES=30`. The script now waits for an AGS request-handler readiness probe before measuring, exports the system GIR path when it starts the daemon, and writes summaries to `$XDG_RUNTIME_DIR/ags-benchmark-summary.json`.
+
+Calendar Widget baseline after caching marker CSS by event color:
+
+- IPC/request-facing latency: cold show 51ms, warm show 27ms, next-month average 22ms, previous-month average 22ms, today 10ms.
+- `calendar-widget.handleRequest`: average 4.95ms, p95 11.21ms, max 39.14ms over 30 requests.
+- `calendar-widget.renderCalendar`: average 1.87ms, p95 3.33ms, max 24.79ms over 82 renders.
+- `calendar-widget.loadEventsForVisibleGrid`: median 8.83ms, analyzer p95 18.52ms, max 4066.11ms over 27 loads. The max is the cold EDS client/source path; warm cached range loads stay low.
+- Process memory during the calendar sequence showed 0KB RSS/PSS delta in this run.
+
+The main remaining optimization candidate is cold EDS client connection. It happens in the background after the request returns, but it can still block the shared GJS main loop during the first backend load. The current source-client and grid-range caches are necessary and should stay. Further work should target reducing or deferring cold EDS connection cost only if it causes visible UI stalls in normal use.

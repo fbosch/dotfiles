@@ -14,6 +14,7 @@ SUMMARY_OUT="$RUNTIME_DIR/ags-benchmark-summary.json"
 EXTRAS_OUT="$RUNTIME_DIR/ags-benchmark-extras.json"
 RUN_LOG="$RUNTIME_DIR/ags-benchmark-run.log"
 BASELINE_PATH="${AGS_DIR}/benchmarks/baseline.json"
+SYSTEM_GI_TYPELIB_PATH="/run/current-system/sw/lib/girepository-1.0"
 
 BENCH_COLD="${BENCH_COLD:-0}"
 BENCH_RESTART="${BENCH_RESTART:-0}"
@@ -22,6 +23,8 @@ BENCH_CYCLE_SLEEP="${BENCH_CYCLE_SLEEP:-0.05}"
 BENCH_WARMUP_COUNT="${BENCH_WARMUP_COUNT:-2}"
 BENCH_MEM_CYCLES="${BENCH_MEM_CYCLES:-100}"
 BENCH_COMPONENT_CYCLES="${BENCH_COMPONENT_CYCLES:-25}"
+BENCH_CALENDAR_CYCLES="${BENCH_CALENDAR_CYCLES:-12}"
+BENCH_CALENDAR_REFRESH_WAIT="${BENCH_CALENDAR_REFRESH_WAIT:-0.25}"
 
 function is_running() {
   ags list 2>/dev/null | grep -q "${INSTANCE}"
@@ -30,7 +33,7 @@ function is_running() {
 function wait_for_instance() {
   local tries=20
   for _ in $(seq 1 "$tries"); do
-    if is_running; then
+    if is_running && ags request -i "$INSTANCE" "" >/dev/null 2>&1; then
       return 0
     fi
     sleep 0.25
@@ -41,6 +44,27 @@ function wait_for_instance() {
 function request() {
   local payload="$1"
   ags request -i "$INSTANCE" "$COMPONENT" "$payload" >/dev/null
+}
+
+function request_component() {
+  local component="$1"
+  local payload="$2"
+  ags request -i "$INSTANCE" "$component" "$payload" >/dev/null
+}
+
+function request_calendar() {
+  local payload="$1"
+  request_component "calendar-widget" "$payload"
+}
+
+function timed_calendar_request() {
+  local payload="$1"
+  local start_ns
+  local end_ns
+  start_ns="$(now_ns)"
+  request_calendar "$payload"
+  end_ns="$(now_ns)"
+  ms_from_ns "$((end_ns - start_ns))"
 }
 
 function now_ns() {
@@ -79,11 +103,14 @@ STARTED_INSTANCE=0
 AGS_PID=""
 
 if { [[ "$BENCH_COLD" == "1" ]] || [[ "$BENCH_RESTART" == "1" ]]; } && is_running; then
-  ags quit "$INSTANCE" >/dev/null 2>&1 || true
+  ags quit -i "$INSTANCE" >/dev/null 2>&1 || true
   sleep 1
 fi
 
 if ! is_running; then
+  if [[ -d "$SYSTEM_GI_TYPELIB_PATH" ]]; then
+    export GI_TYPELIB_PATH="$SYSTEM_GI_TYPELIB_PATH${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
+  fi
   ags run "${AGS_DIR}/config-bundled.tsx" >"$RUN_LOG" 2>&1 &
   AGS_PID="$!"
   STARTED_INSTANCE=1
@@ -106,6 +133,52 @@ rm -f "$PERF_LOG"
 touch "$PERF_FLAG"
 
 printf "AGS benchmark: %s\n" "$INSTANCE"
+
+printf -- "%s\n" "- calendar-widget baseline (${BENCH_CALENDAR_CYCLES} nav cycles)"
+calendar_before_rss_kb="$(read_rss_kb "$AGS_PID")"
+calendar_before_pss_kb="$(read_pss_kb "$AGS_PID")"
+request_calendar '{"action":"hide"}'
+calendar_cold_show_ms="$(timed_calendar_request '{"action":"show"}')"
+sleep "$BENCH_CALENDAR_REFRESH_WAIT"
+request_calendar '{"action":"hide"}'
+calendar_warm_show_ms="$(timed_calendar_request '{"action":"show"}')"
+sleep "$BENCH_CALENDAR_REFRESH_WAIT"
+
+calendar_next_total_ms=0
+calendar_prev_total_ms=0
+for _ in $(seq 1 "$BENCH_CALENDAR_CYCLES"); do
+  nav_ms="$(timed_calendar_request '{"action":"next-month"}')"
+  calendar_next_total_ms="$((calendar_next_total_ms + nav_ms))"
+  sleep "$BENCH_CYCLE_SLEEP"
+done
+for _ in $(seq 1 "$BENCH_CALENDAR_CYCLES"); do
+  nav_ms="$(timed_calendar_request '{"action":"prev-month"}')"
+  calendar_prev_total_ms="$((calendar_prev_total_ms + nav_ms))"
+  sleep "$BENCH_CYCLE_SLEEP"
+done
+calendar_today_ms="$(timed_calendar_request '{"action":"today"}')"
+sleep "$BENCH_CALENDAR_REFRESH_WAIT"
+request_calendar '{"action":"hide"}'
+calendar_after_rss_kb="$(read_rss_kb "$AGS_PID")"
+calendar_after_pss_kb="$(read_pss_kb "$AGS_PID")"
+calendar_delta_rss_kb=""
+calendar_delta_pss_kb=""
+if is_number "$calendar_before_rss_kb" && is_number "$calendar_after_rss_kb"; then
+  calendar_delta_rss_kb="$((calendar_after_rss_kb - calendar_before_rss_kb))"
+fi
+if is_number "$calendar_before_pss_kb" && is_number "$calendar_after_pss_kb"; then
+  calendar_delta_pss_kb="$((calendar_after_pss_kb - calendar_before_pss_kb))"
+fi
+calendar_next_avg_ms="$((calendar_next_total_ms / BENCH_CALENDAR_CYCLES))"
+calendar_prev_avg_ms="$((calendar_prev_total_ms / BENCH_CALENDAR_CYCLES))"
+printf "  cold_show=%sms warm_show=%sms next_avg=%sms prev_avg=%sms today=%sms rss_delta=%sKB pss_delta=%sKB\n" \
+  "$calendar_cold_show_ms" \
+  "$calendar_warm_show_ms" \
+  "$calendar_next_avg_ms" \
+  "$calendar_prev_avg_ms" \
+  "$calendar_today_ms" \
+  "${calendar_delta_rss_kb:-}" \
+  "${calendar_delta_pss_kb:-}"
 
 for _ in $(seq 1 "$BENCH_WARMUP_COUNT"); do
   request '{"action":"get-mode"}'
@@ -293,12 +366,37 @@ ks_delta_rss_json="$(json_number_or_null "$ks_delta_rss_kb")"
 ks_delta_pss_json="$(json_number_or_null "$ks_delta_pss_kb")"
 dc_delta_rss_json="$(json_number_or_null "$dc_delta_rss_kb")"
 dc_delta_pss_json="$(json_number_or_null "$dc_delta_pss_kb")"
+calendar_before_rss_json="$(json_number_or_null "$calendar_before_rss_kb")"
+calendar_after_rss_json="$(json_number_or_null "$calendar_after_rss_kb")"
+calendar_delta_rss_json="$(json_number_or_null "$calendar_delta_rss_kb")"
+calendar_before_pss_json="$(json_number_or_null "$calendar_before_pss_kb")"
+calendar_after_pss_json="$(json_number_or_null "$calendar_after_pss_kb")"
+calendar_delta_pss_json="$(json_number_or_null "$calendar_delta_pss_kb")"
 
 cat > "$EXTRAS_OUT" <<EOF
 {
   "warm_show_ms": ${latency_ms},
   "cycle_total_ms": ${total_ms},
   "cycle_avg_ms": ${avg_ms},
+  "calendar_widget": {
+    "cold_show_ms": ${calendar_cold_show_ms},
+    "warm_show_ms": ${calendar_warm_show_ms},
+    "next_month_avg_ms": ${calendar_next_avg_ms},
+    "prev_month_avg_ms": ${calendar_prev_avg_ms},
+    "today_ms": ${calendar_today_ms},
+    "nav_cycles": ${BENCH_CALENDAR_CYCLES},
+    "refresh_wait_seconds": ${BENCH_CALENDAR_REFRESH_WAIT},
+    "memory_rss_kb": {
+      "before": ${calendar_before_rss_json},
+      "after": ${calendar_after_rss_json},
+      "delta": ${calendar_delta_rss_json}
+    },
+    "memory_pss_kb": {
+      "before": ${calendar_before_pss_json},
+      "after": ${calendar_after_pss_json},
+      "delta": ${calendar_delta_pss_json}
+    }
+  },
   "memory_rss_kb": {
     "before": ${before_rss_json},
     "after": ${after_rss_json},
@@ -338,7 +436,7 @@ python3 "${SCRIPT_DIR}/analyze-results.py" --input "$PERF_LOG" --output "$SUMMAR
 rm -f "$PERF_FLAG"
 
 if [[ "$STARTED_INSTANCE" == "1" ]]; then
-  ags quit "$INSTANCE" >/dev/null 2>&1 || true
+  ags quit -i "$INSTANCE" >/dev/null 2>&1 || true
 fi
 
 printf "Results: %s\n" "$SUMMARY_OUT"

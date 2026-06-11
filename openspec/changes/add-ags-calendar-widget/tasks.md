@@ -54,3 +54,4 @@
 - [ ] 7.3 Verify `ags request -i ags-bundled calendar-widget '{"action":"is-visible"}'` returns a non-crashing response.
 - [ ] 7.4 Verify Waybar clock right-click toggles the Calendar Widget and clock left-click still toggles SwayNC.
 - [ ] 7.5 Compare visible public-holiday/all-day event markers and labels against GNOME Calendar for the current Grid Range.
+- [x] 7.6 Establish AGS Calendar Widget benchmark coverage for cold/warm show, month navigation, render/update, EDS refresh, and process memory impact.

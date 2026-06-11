@@ -64,6 +64,7 @@ let events: CalendarEventPreview[] = [];
 let backendStatus: BackendStatus = "unavailable";
 let backendMessage = "Calendar events unavailable";
 let markerCssCounter = 0;
+let markerCssClasses = new Map<string, string>();
 let backendLoadVersion = 0;
 let backendModules: BackendModules | null = null;
 let backendRegistry: any | null = null;
@@ -327,18 +328,21 @@ function applyCachedEvents(cacheKey: string): boolean {
 }
 
 async function loadEventsForVisibleGrid(): Promise<void> {
+  const mark = perf.start("calendar-widget", "loadEventsForVisibleGrid");
+  let ok = true;
+  let error: string | undefined;
   const loadVersion = ++backendLoadVersion;
   const { start, end } = getCalendarGridRange();
   const cacheKey = gridRangeKey(start, end);
 
-  if (!applyCachedEvents(cacheKey)) {
-    events = [];
-    backendStatus = "loading";
-    backendMessage = "Loading events...";
-    renderCalendar();
-  }
-
   try {
+    if (!applyCachedEvents(cacheKey)) {
+      events = [];
+      backendStatus = "loading";
+      backendMessage = "Loading events...";
+      renderCalendar();
+    }
+
     const { ECal, EDataServer } = await loadBackendModules();
     if (loadVersion !== backendLoadVersion) return;
 
@@ -381,6 +385,8 @@ async function loadEventsForVisibleGrid(): Promise<void> {
     eventCache.set(cacheKey, { events, status: backendStatus, message: backendMessage });
     renderCalendar();
   } catch (e) {
+    ok = false;
+    error = String(e);
     if (loadVersion !== backendLoadVersion) return;
     events = [];
     backendStatus = "unavailable";
@@ -388,6 +394,8 @@ async function loadEventsForVisibleGrid(): Promise<void> {
     eventCache.set(cacheKey, { events, status: backendStatus, message: backendMessage });
     console.error("EDS calendar backend unavailable:", e);
     renderCalendar();
+  } finally {
+    mark.end(ok, error);
   }
 }
 
@@ -440,6 +448,20 @@ function invalidateBackendCache(): void {
 function nextMarkerName(): string {
   markerCssCounter += 1;
   return `calendar-marker-${markerCssCounter}`;
+}
+
+function markerCssClass(event: CalendarEventPreview): string {
+  const color = markerColor(event);
+  const cached = markerCssClasses.get(color);
+  if (cached) return cached;
+
+  const className = nextMarkerName();
+  markerCssClasses.set(color, className);
+  app.apply_css(
+    `window.calendar-widget box.${className} { background-color: ${color}; }`,
+    false,
+  );
+  return className;
 }
 
 function clearBox(box: Gtk.Box): void {
@@ -581,18 +603,12 @@ function updateDaySlot(slot: DaySlot, day: CalendarDay): void {
 
   clearBox(slot.markerRow);
   for (const event of day.markers) {
-    const markerName = nextMarkerName();
     const marker = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
     marker.add_css_class("calendar-event-marker");
+    marker.add_css_class(markerCssClass(event));
     marker.set_size_request(6, 6);
     marker.set_tooltip_text(event.title);
-    marker.set_name(markerName);
     slot.markerRow.append(marker);
-
-    app.apply_css(
-      `#${markerName} { background-color: ${markerColor(event)}; }`,
-      false,
-    );
   }
   if (day.markerOverflow > 0) {
     slot.markerRow.append(makeLabel(`+${day.markerOverflow}`, "calendar-marker-overflow"));
@@ -601,26 +617,31 @@ function updateDaySlot(slot: DaySlot, day: CalendarDay): void {
 
 function renderCalendar(): void {
   if (!calendarBox) return;
-  if (daySlots.length !== 42 || !monthTitleLabel || !statusLabel) {
-    buildCalendarShell();
-  }
+  const mark = perf.start("calendar-widget", "renderCalendar");
+  try {
+    if (daySlots.length !== 42 || !monthTitleLabel || !statusLabel) {
+      buildCalendarShell();
+    }
 
-  monthTitleLabel?.set_label(formatMonthLabel(visibleMonth));
-  if (statusLabel) {
-    statusLabel.set_label(backendStatus === "ready" ? "" : backendMessage);
-    statusLabel.set_visible(backendStatus !== "ready");
-  }
+    monthTitleLabel?.set_label(formatMonthLabel(visibleMonth));
+    if (statusLabel) {
+      statusLabel.set_label(backendStatus === "ready" ? "" : backendMessage);
+      statusLabel.set_visible(backendStatus !== "ready");
+    }
 
-  const labels = weekdayLabels();
-  for (const [index, label] of labels.entries()) {
-    weekdayLabelWidgets[index]?.set_label(label);
-  }
+    const labels = weekdayLabels();
+    for (const [index, label] of labels.entries()) {
+      weekdayLabelWidgets[index]?.set_label(label);
+    }
 
-  dayButtons = new Map();
-  const days = buildCalendarDays();
-  for (const [index, day] of days.entries()) {
-    const slot = daySlots[index];
-    if (slot) updateDaySlot(slot, day);
+    dayButtons = new Map();
+    const days = buildCalendarDays();
+    for (const [index, day] of days.entries()) {
+      const slot = daySlots[index];
+      if (slot) updateDaySlot(slot, day);
+    }
+  } finally {
+    mark.end();
   }
 }
 
