@@ -25,6 +25,36 @@ BENCH_MEM_CYCLES="${BENCH_MEM_CYCLES:-100}"
 BENCH_COMPONENT_CYCLES="${BENCH_COMPONENT_CYCLES:-25}"
 BENCH_CALENDAR_CYCLES="${BENCH_CALENDAR_CYCLES:-12}"
 BENCH_CALENDAR_REFRESH_WAIT="${BENCH_CALENDAR_REFRESH_WAIT:-0.25}"
+BENCH_TARGET="${1:-${BENCH_TARGET:-all}}"
+
+function target_enabled() {
+  local target="$1"
+  case "$BENCH_TARGET" in
+    all)
+      return 0
+      ;;
+    bundle-legacy)
+      [[ "$target" == "window-switcher" || "$target" == "components" || "$target" == "memory" ]]
+      ;;
+    calendar | calendar-widget)
+      [[ "$target" == "calendar-widget" ]]
+      ;;
+    window | window-switcher)
+      [[ "$target" == "window-switcher" ]]
+      ;;
+    components)
+      [[ "$target" == "components" ]]
+      ;;
+    memory)
+      [[ "$target" == "memory" ]]
+      ;;
+    *)
+      printf "Unknown BENCH_TARGET: %s\n" "$BENCH_TARGET" >&2
+      printf "Expected one of: all, calendar-widget, window-switcher, components, memory, bundle-legacy\n" >&2
+      exit 2
+      ;;
+  esac
+}
 
 function is_running() {
   ags list 2>/dev/null | grep -q "${INSTANCE}"
@@ -132,8 +162,43 @@ fi
 rm -f "$PERF_LOG"
 touch "$PERF_FLAG"
 
-printf "AGS benchmark: %s\n" "$INSTANCE"
+printf "AGS benchmark: %s target=%s\n" "$INSTANCE" "$BENCH_TARGET"
 
+latency_ms=0
+total_ms=0
+avg_ms=0
+calendar_cold_show_ms=0
+calendar_warm_show_ms=0
+calendar_next_avg_ms=0
+calendar_prev_avg_ms=0
+calendar_today_ms=0
+calendar_before_rss_kb=""
+calendar_after_rss_kb=""
+calendar_delta_rss_kb=""
+calendar_before_pss_kb=""
+calendar_after_pss_kb=""
+calendar_delta_pss_kb=""
+calendar_enabled=false
+sm_delta_rss_kb=""
+sm_delta_pss_kb=""
+vi_delta_rss_kb=""
+vi_delta_pss_kb=""
+ks_delta_rss_kb=""
+ks_delta_pss_kb=""
+dc_delta_rss_kb=""
+dc_delta_pss_kb=""
+before_rss_kb=""
+after_rss_kb=""
+delta_rss_kb=""
+avg_rss_kb=""
+rss_peak_kb=""
+before_pss_kb=""
+after_pss_kb=""
+avg_pss_kb=""
+pss_peak_kb=""
+
+if target_enabled "calendar-widget"; then
+calendar_enabled=true
 printf -- "%s\n" "- calendar-widget baseline (${BENCH_CALENDAR_CYCLES} nav cycles)"
 calendar_before_rss_kb="$(read_rss_kb "$AGS_PID")"
 calendar_before_pss_kb="$(read_pss_kb "$AGS_PID")"
@@ -179,7 +244,11 @@ printf "  cold_show=%sms warm_show=%sms next_avg=%sms prev_avg=%sms today=%sms r
   "$calendar_today_ms" \
   "${calendar_delta_rss_kb:-}" \
   "${calendar_delta_pss_kb:-}"
+else
+  printf -- "%s\n" "- calendar-widget: skipped"
+fi
 
+if target_enabled "window-switcher"; then
 for _ in $(seq 1 "$BENCH_WARMUP_COUNT"); do
   request '{"action":"get-mode"}'
 done
@@ -203,7 +272,11 @@ request '{"action":"hide"}'
 total_ms="$(ms_from_ns "$((end_ns - start_ns))")"
 avg_ms="$((total_ms / BENCH_CYCLE_COUNT))"
 printf "%sms avg\n" "$avg_ms"
+else
+  printf -- "%s\n" "- window-switcher: skipped"
+fi
 
+if target_enabled "components"; then
 printf -- "%s\n" "- start-menu toggle (${BENCH_COMPONENT_CYCLES} cycles)"
 sm_before_rss_kb="$(read_rss_kb "$AGS_PID")"
 sm_before_pss_kb="$(read_pss_kb "$AGS_PID")"
@@ -284,8 +357,11 @@ fi
 if is_number "$dc_before_pss_kb" && is_number "$dc_after_pss_kb"; then
   dc_delta_pss_kb="$((dc_after_pss_kb - dc_before_pss_kb))"
 fi
+else
+  printf -- "%s\n" "- bundled components: skipped"
+fi
 
-if [[ -n "$AGS_PID" ]] && [[ -r "/proc/${AGS_PID}/status" ]]; then
+if target_enabled "memory" && [[ -n "$AGS_PID" ]] && [[ -r "/proc/${AGS_PID}/status" ]]; then
   printf -- "%s" "- memory (rss/pss) over ${BENCH_MEM_CYCLES} cycles: "
   before_rss_kb="$(read_rss_kb "$AGS_PID")"
   before_pss_kb="$(read_pss_kb "$AGS_PID")"
@@ -337,16 +413,7 @@ if [[ -n "$AGS_PID" ]] && [[ -r "/proc/${AGS_PID}/status" ]]; then
   fi
   printf "\n"
 else
-  printf -- "%s\n" "- memory: skipped (no pid)"
-  before_rss_kb=""
-  after_rss_kb=""
-  delta_rss_kb=""
-  avg_rss_kb=""
-  rss_peak_kb=""
-  before_pss_kb=""
-  after_pss_kb=""
-  avg_pss_kb=""
-  pss_peak_kb=""
+  printf -- "%s\n" "- memory: skipped"
 fi
 
 before_rss_json="$(json_number_or_null "$before_rss_kb")"
@@ -375,10 +442,12 @@ calendar_delta_pss_json="$(json_number_or_null "$calendar_delta_pss_kb")"
 
 cat > "$EXTRAS_OUT" <<EOF
 {
+  "target": "${BENCH_TARGET}",
   "warm_show_ms": ${latency_ms},
   "cycle_total_ms": ${total_ms},
   "cycle_avg_ms": ${avg_ms},
   "calendar_widget": {
+    "enabled": ${calendar_enabled},
     "cold_show_ms": ${calendar_cold_show_ms},
     "warm_show_ms": ${calendar_warm_show_ms},
     "next_month_avg_ms": ${calendar_next_avg_ms},

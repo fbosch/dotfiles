@@ -87,7 +87,6 @@ let statusLabel: Gtk.Label | null = null;
 let weekdayLabelWidgets: Gtk.Label[] = [];
 let daySlots: DaySlot[] = [];
 let isVisible = false;
-let ignoreNextOutsideClick = false;
 let lastToggleAtMs = 0;
 let visibleMonth = startOfMonth(new Date());
 let selectedDate = startOfLocalDay(new Date());
@@ -849,7 +848,6 @@ function hideCalendar(): void {
 function showCalendar(): void {
   if (!win) createWindow();
   setTriggerMonitor();
-  ignoreNextOutsideClick = true;
   win?.set_visible(true);
   isVisible = true;
   if (!calendarBackend.refresh()) renderCalendar();
@@ -901,10 +899,6 @@ function selectDate(value: string | undefined): void {
 
 function handleOutsideClick(x: number, y: number): void {
   if (!isVisible || !calendarBox) return;
-  if (ignoreNextOutsideClick) {
-    ignoreNextOutsideClick = false;
-    return;
-  }
 
   const allocation = calendarBox.get_allocation();
   if (
@@ -1072,6 +1066,7 @@ function createWindow(): void {
         self.add_controller(keyController);
 
         const clickController = new Gtk.GestureClick();
+        clickController.set_button(0);
         clickController.connect("released", (_controller, _nPress, x, y) => {
           handleOutsideClick(x, y);
         });

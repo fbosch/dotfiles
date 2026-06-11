@@ -182,7 +182,7 @@ def main():
                 )
     extras = summary.get("extras", {})
     calendar = extras.get("calendar_widget")
-    if calendar:
+    if calendar and calendar.get("enabled", True):
         print("Calendar widget extras:")
         print(
             f"- cold show {calendar.get('cold_show_ms')}ms, "
@@ -195,7 +195,10 @@ def main():
         pss = calendar.get("memory_pss_kb", {})
         print(f"- memory delta: rss {rss.get('delta')}KB pss {pss.get('delta')}KB")
     component_memory = extras.get("component_memory_delta_kb")
-    if component_memory:
+    if component_memory and any(
+        values.get("rss") is not None or values.get("pss") is not None
+        for values in component_memory.values()
+    ):
         print("Component memory delta (kb):")
         for component, values in sorted(component_memory.items()):
             rss = values.get("rss")
