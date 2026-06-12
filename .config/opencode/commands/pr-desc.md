@@ -21,7 +21,7 @@ PR BODY POLICY (authoritative for body content only):
 @~/.config/opencode/skills/pr-description/SKILL.md
 
 TONE POLICY (authoritative for voice and phrasing only):
-@.config/opencode/TONE.md
+@~/.config/opencode/TONE.md
 
 Follow this precedence order:
 

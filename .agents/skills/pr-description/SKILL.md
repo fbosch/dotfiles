@@ -7,7 +7,7 @@ description: Write effective pull request description bodies that explain what c
 
 This skill covers PR body writing only.
 
-Do not define or rewrite PR title conventions here. Title format and type rules stay in command-specific prompts such as `.config/opencode/commands/pr-desc.md`.
+Do not define or rewrite PR title conventions here. Title format and type rules stay in command-specific prompts such as `~/.config/opencode/commands/pr-desc.md`.
 
 ## Core Principles
 
@@ -22,14 +22,14 @@ Do not define or rewrite PR title conventions here. Title format and type rules 
 
 ## Voice And Priority
 
-Before writing or editing final PR prose, read `.config/opencode/TONE.md` when it exists.
+Before writing or editing final PR prose, read `~/.config/opencode/TONE.md` when it exists. If a repo-local `.config/opencode/TONE.md` also exists, use it only when the task explicitly asks for repo-local voice.
 
 Use this priority order when instructions conflict:
 
 1. Factual correctness and verified evidence.
 2. Explicit user constraints for this PR.
 3. Required output contract from a command, tool, template, or maintainer.
-4. `.config/opencode/TONE.md`.
+4. `~/.config/opencode/TONE.md`.
 5. This skill's general PR-writing guidance.
 
 ## PR Classification

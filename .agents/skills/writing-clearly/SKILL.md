@@ -1,6 +1,6 @@
 ---
 name: writing-clearly
-description: Write and edit substantial human-facing prose with clear, concise technical style while preserving the user's canonical voice from `.config/opencode/TONE.md`. Use for documentation, README prose, PR descriptions, commit-message bodies, changelog notes, issue summaries, long-form explanations, UI/help text, error messages, and copyediting drafts for clarity, concision, structure, tone, and tradeoffs.
+description: Write and edit substantial human-facing prose with clear, concise technical style while preserving the user's canonical voice from `~/.config/opencode/TONE.md`. Use for documentation, README prose, PR descriptions, commit-message bodies, changelog notes, issue summaries, long-form explanations, UI/help text, error messages, and copyediting drafts for clarity, concision, structure, tone, and tradeoffs.
 ---
 
 # Writing Clearly
@@ -9,7 +9,7 @@ Use this skill to make prose easier to read without making it generic.
 
 ## Source of Voice
 
-Before writing or editing final prose, read `.config/opencode/TONE.md` when it exists.
+Before writing or editing final prose, read `~/.config/opencode/TONE.md` when it exists. If a repo-local `.config/opencode/TONE.md` also exists, use it only when the task explicitly asks for repo-local voice.
 
 Treat `TONE.md` as canonical for voice. This skill supplies process and clarity checks; it must not duplicate or override the tone file. Task-specific output contracts still win.
 
@@ -18,7 +18,7 @@ When instructions conflict, use this priority order:
 1. Factual correctness and verified evidence.
 2. Explicit user constraints for this task.
 3. Required output contract from a command, tool, template, or maintainer.
-4. `.config/opencode/TONE.md`.
+4. `~/.config/opencode/TONE.md`.
 5. This skill's general writing guidance.
 
 ## Process

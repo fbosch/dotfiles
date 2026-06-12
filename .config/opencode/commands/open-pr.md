@@ -8,11 +8,11 @@ Use the `open_pr` tool for provider routing, pushing, and PR creation.
 
 PR BODY POLICY (authoritative for body content only):
 
-@.agents/skills/pr-description/SKILL.md
+@~/.config/opencode/skills/pr-description/SKILL.md
 
 TONE POLICY (authoritative for voice and phrasing only):
 
-@.config/opencode/TONE.md
+@~/.config/opencode/TONE.md
 
 Follow this precedence order:
 
