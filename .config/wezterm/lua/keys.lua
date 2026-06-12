@@ -1,50 +1,49 @@
 local wezterm = require("wezterm")
 return function(config)
 	config.keys = {
-		-- Tab switching using raw key codes (works with any keyboard layout)
-		-- raw:10-18 are the physical number row keys 1-9
+		-- Tab switching outside macOS Cmd+number, which is owned by AeroSpace.
 		{
-			key = "raw:10",
+			key = "1",
 			mods = "CTRL|SHIFT",
 			action = wezterm.action.ActivateTab(0),
 		},
 		{
-			key = "raw:11",
+			key = "2",
 			mods = "CTRL|SHIFT",
 			action = wezterm.action.ActivateTab(1),
 		},
 		{
-			key = "raw:12",
+			key = "3",
 			mods = "CTRL|SHIFT",
 			action = wezterm.action.ActivateTab(2),
 		},
 		{
-			key = "raw:13",
+			key = "4",
 			mods = "CTRL|SHIFT",
 			action = wezterm.action.ActivateTab(3),
 		},
 		{
-			key = "raw:14",
+			key = "5",
 			mods = "CTRL|SHIFT",
 			action = wezterm.action.ActivateTab(4),
 		},
 		{
-			key = "raw:15",
+			key = "6",
 			mods = "CTRL|SHIFT",
 			action = wezterm.action.ActivateTab(5),
 		},
 		{
-			key = "raw:16",
+			key = "7",
 			mods = "CTRL|SHIFT",
 			action = wezterm.action.ActivateTab(6),
 		},
 		{
-			key = "raw:17",
+			key = "8",
 			mods = "CTRL|SHIFT",
 			action = wezterm.action.ActivateTab(7),
 		},
 		{
-			key = "raw:18",
+			key = "9",
 			mods = "CTRL|SHIFT",
 			action = wezterm.action.ActivateTab(8),
 		},
