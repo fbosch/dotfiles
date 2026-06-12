@@ -18,6 +18,11 @@ LOG_FILE="$RUNTIME_DIR/ags-daemons.log"
 BUNDLED_CONFIG="config-bundled.tsx"  # Bundled configuration entry point
 BUNDLED_INSTANCE="ags-bundled"       # Bundled daemon instance name
 
+# Let GJS resolve GIR typelibs exported by the current Nix system profile.
+# EDS calendar loading also needs transitive typelibs, e.g. libical and json-glib,
+# to be present in the profile that provides this directory.
+SYSTEM_GI_TYPELIB_PATH="/run/current-system/sw/lib/girepository-1.0"
+
 # Startup behavior
 WAIT_FOR_HYPRLAND=true           # Wait for Hyprland to be ready before starting
 HYPRLAND_TIMEOUT=4               # Max time to wait for first Hyprland event (seconds)
@@ -102,6 +107,9 @@ main() {
     
     # Start bundled daemons (AGS can run TypeScript directly)
     log "${BLUE}→${NC} Launching bundled process: $BUNDLED_CONFIG"
+    if [[ -d "$SYSTEM_GI_TYPELIB_PATH" ]]; then
+        export GI_TYPELIB_PATH="$SYSTEM_GI_TYPELIB_PATH${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
+    fi
     ags run "$bundled_config" &
     local pid=$!
     
@@ -114,7 +122,7 @@ main() {
     if is_bundled_running; then
         log "${GREEN}✓${NC} Bundled daemon started successfully: $BUNDLED_INSTANCE"
         log "${BLUE}ℹ${NC} Bundled PID: $pid"
-        log "${GREEN}✓${NC} All 6 components initialized (confirm-dialog, volume-indicator, keyboard-switcher, start-menu, window-switcher, desktop-clock)"
+        log "${GREEN}✓${NC} All 7 components initialized (confirm-dialog, volume-indicator, keyboard-switcher, start-menu, window-switcher, desktop-clock, calendar-widget)"
         log "════════════════════════════════════════"
         log "${GREEN}✓${NC} Memory usage: ~104 MB (vs ~375 MB for separate processes)"
         return 0

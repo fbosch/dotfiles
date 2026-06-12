@@ -11,6 +11,13 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI, using bundled mode.
 ## Commands
 
 - `ags types`
+- `bash scripts/benchmark/run-benchmarks.sh calendar-widget` - benchmark only the Calendar Widget slice.
+- `bash scripts/benchmark/run-benchmarks.sh window-switcher` - benchmark only the Window Switcher slice.
+- `bash scripts/benchmark/run-benchmarks.sh components` - benchmark bundled non-calendar component toggles.
+- `bash scripts/benchmark/run-benchmarks.sh memory` - run only the legacy bundled memory loop.
+- `bash scripts/benchmark/run-benchmarks.sh all` - run the full benchmark suite.
+
+Benchmark target can also be set with `BENCH_TARGET`; positional target wins. Keep targeted runs focused when investigating one bundled component.
 
 ## References
 

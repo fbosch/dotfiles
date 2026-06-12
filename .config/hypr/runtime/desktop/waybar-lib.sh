@@ -6,6 +6,11 @@ check_start_menu_visible() {
     ags request -i ags-bundled start-menu '{"action":"is-visible"}' 2>/dev/null || echo "false"
 }
 
+# Check if the calendar widget is currently visible
+check_calendar_widget_visible() {
+    ags request -i ags-bundled calendar-widget '{"action":"is-visible"}' 2>/dev/null || echo "false"
+}
+
 # Check if SwayNC notification center is currently visible
 check_swaync_visible() {
     local result
@@ -34,9 +39,11 @@ should_waybar_stay_visible() {
     
     # Cursor is far - now check expensive menu states
     local start_menu_visible
+    local calendar_widget_visible
     local swaync_visible
     local taskbar_app_open=false
     start_menu_visible=$(check_start_menu_visible)
+    calendar_widget_visible=$(check_calendar_widget_visible)
     swaync_visible=$(check_swaync_visible)
     if check_taskbar_app_open; then
         taskbar_app_open=true
@@ -44,11 +51,12 @@ should_waybar_stay_visible() {
     
     # Export for callers who want to log
     export START_MENU_VISIBLE="$start_menu_visible"
+    export CALENDAR_WIDGET_VISIBLE="$calendar_widget_visible"
     export SWAYNC_VISIBLE="$swaync_visible"
     export TASKBAR_APP_OPEN="$taskbar_app_open"
     
-    # Stay visible if start menu or SwayNC is open
-    if [ "$start_menu_visible" = "true" ] || [ "$swaync_visible" = "true" ] || [ "$taskbar_app_open" = "true" ]; then
+    # Stay visible if a taskbar-adjacent surface is open
+    if [ "$start_menu_visible" = "true" ] || [ "$calendar_widget_visible" = "true" ] || [ "$swaync_visible" = "true" ] || [ "$taskbar_app_open" = "true" ]; then
         return 0  # Should stay visible
     else
         return 1  # Can hide

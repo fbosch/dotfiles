@@ -2,12 +2,13 @@
 /**
  * Bundled AGS Configuration
  * 
- * This file bundles all 5 AGS daemon components into a single process:
+ * This file bundles all AGS daemon components into a single process:
  * - confirm-dialog
  * - volume-change-indicator  
  * - keyboard-layout-switcher
  * - start-menu
  * - window-switcher
+ * - calendar-widget
  * 
  * Each component maintains its own isolated scope while sharing a single
  * app.start() entry point and unified request handler.
@@ -29,6 +30,7 @@ declare global {
   var StartMenu: ComponentModule;
   var WindowSwitcher: ComponentModule;
   var DesktopClock: ComponentModule;
+  var CalendarWidget: ComponentModule;
 }
 
 // Load components using global namespace pattern (no ES6 exports)
@@ -38,6 +40,7 @@ import "./lib/keyboard-switcher.tsx";
 import "./lib/start-menu.tsx";
 import "./lib/window-switcher.tsx";
 import "./lib/desktop-clock.tsx";
+import "./lib/calendar-widget.tsx";
 
 // Component registry for request routing
 type ComponentHandler = (argv: string[], res: (response: string) => void) => void;
@@ -151,6 +154,15 @@ app.start({
       console.log(`[Bundled AGS] ✓ ${globalThis.DesktopClock.instanceName} initialized`);
     } catch (e) {
       console.error(`[Bundled AGS] ✗ Failed to initialize desktop-clock:`, e);
+    }
+
+    // Initialize calendar-widget
+    try {
+      globalThis.CalendarWidget.init();
+      registerComponent(globalThis.CalendarWidget.instanceName, globalThis.CalendarWidget.handleRequest);
+      console.log(`[Bundled AGS] ✓ ${globalThis.CalendarWidget.instanceName} initialized`);
+    } catch (e) {
+      console.error(`[Bundled AGS] ✗ Failed to initialize calendar-widget:`, e);
     }
     
     console.log("[Bundled AGS] All components initialized");

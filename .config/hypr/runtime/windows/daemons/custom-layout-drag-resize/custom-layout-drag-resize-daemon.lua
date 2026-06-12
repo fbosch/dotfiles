@@ -65,7 +65,7 @@ local function active_monitor_info()
 			local refresh = json_number(object, "refreshRate") or 60
 			monitors_by_id[id] = {
 				name = name,
-				poll_interval = math.max(0.003, math.min(0.010, 0.25 / refresh)),
+				poll_interval = math.max(0.006, math.min(0.017, 1 / refresh)),
 			}
 		end
 	end
@@ -171,9 +171,12 @@ local accept_command
 local handle_command
 
 local function stop_drag()
+	local was_active = drag_active or read_file(state_file) ~= ""
 	drag_active = false
 	os.remove(state_file)
-	restore_resize_animation()
+	if was_active then
+		restore_resize_animation()
+	end
 end
 
 local function disable_resize_animation()
@@ -263,7 +266,6 @@ local function start_drag()
 	local monitor_name = monitor and monitor.name or nil
 	local poll_interval = monitor and monitor.poll_interval or 0.008
 	if active.floating then
-		start_floating_drag(active, poll_interval)
 		return
 	end
 
