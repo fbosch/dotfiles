@@ -22,6 +22,11 @@ vim.opt.updatetime = 300
 vim.opt.lazyredraw = true
 vim.opt.termguicolors = true
 vim.opt.background = "dark"
+
+if vim.lsp.document_color then
+	vim.lsp.document_color.enable(false)
+end
+
 vim.opt.number = true
 vim.opt.signcolumn = "yes"
 vim.opt.wrap = false -- disable line wrap
