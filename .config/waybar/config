@@ -175,6 +175,8 @@
       "dnd-inhibited-notification": "󰂛"
     },
     "on-click": "swaync-client -t",
+    "on-click-right": "swaync-client -d",
+    "on-click-middle": "swaync-client -C",
     "tooltip": false
   },
 

@@ -34,7 +34,7 @@
     "hyprland-reset": {
       "state": "transient",
       "app-name": "^Hyprland$",
-      "body": "Config Reloaded"
+      "summary": "^Config Reloaded$"
     },
     "keyboard-layout-switch": {
       "state": "transient",
