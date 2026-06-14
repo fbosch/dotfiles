@@ -1051,7 +1051,7 @@ function applyStaticCSS(): void {
       min-width: 336px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24), 0 2px 8px rgba(0, 0, 0, 0.12);
       margin-bottom: 53px;
-      margin-right: 8px;
+      margin-right: 4px;
     }
 
     window.calendar-widget box.calendar-header {
