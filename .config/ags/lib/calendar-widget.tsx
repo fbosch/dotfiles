@@ -1144,8 +1144,13 @@ function applyStaticCSS(): void {
     }
 
     window.calendar-widget button.calendar-day.selected {
+      border-radius: 6px;
       background-color: rgba(0, 103, 192, 0.2);
       box-shadow: inset 0 0 0 1px ${tokens.colors.accent.primary.value};
+    }
+
+    window.calendar-widget button.calendar-day.today.selected {
+      background-color: rgba(0, 103, 192, 0.2);
     }
 
     window.calendar-widget button.calendar-day.outside-month {

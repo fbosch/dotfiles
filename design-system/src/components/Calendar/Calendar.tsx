@@ -55,7 +55,7 @@ const dayCellVariants = cva(
           'border-white/[0.05] text-foreground-tertiary/35 opacity-50 hover:bg-white/[0.04] focus-visible:bg-white/[0.04] focus-visible:ring-1 focus-visible:ring-white/15',
       },
       selected: {
-        true: 'bg-accent-primary/20 text-foreground-primary ring-1 ring-inset ring-accent-primary',
+        true: 'rounded-md bg-accent-primary/20 text-foreground-primary ring-1 ring-inset ring-accent-primary',
         false: '',
       },
       today: {
@@ -217,7 +217,7 @@ export const Calendar: React.FC<CalendarProps> = ({
               dayCellVariants({
                 inVisibleMonth: day.inVisibleMonth,
                 selected: day.isSelected,
-                today: day.isToday,
+                today: day.isToday && !day.isSelected,
                 animated: !disableAnimations,
               }),
               index % 7 !== 0 && 'border-l',
