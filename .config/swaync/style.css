@@ -392,9 +392,11 @@
     opacity 150ms ease;
 }
 
+.control-center .close-button,
+.control-center .notification-row .close-button,
 .control-center-list .close-button,
 .notification-list .close-button {
-  margin: 6px 18px 0 -42px;
+  margin: 6px 0 0 -64px;
 }
 
 .floating-notifications .close-button {

@@ -297,15 +297,15 @@ export const StartMenu: React.FC<StartMenuProps> = ({
       </div>
       <div className="mb-1 flex items-center gap-1 rounded-md px-2 py-1 text-xs text-foreground-primary hover:bg-white/[0.06]">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <span className="font-medium text-foreground-primary">Profile</span>
-            <span className="truncate text-[11px] text-foreground-secondary">
+            <span className="truncate text-xs text-foreground-secondary">
               {profileSummary(profile)}
             </span>
             {(profile.gamingManual || profile.powersaveManual) && (
               <button
                 type="button"
-                className="inline-flex size-[18px] items-center justify-center rounded text-xs font-semibold leading-none text-foreground-secondary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none active:scale-[0.98]"
+                className="inline-flex size-5 items-center justify-center rounded text-xs font-semibold leading-none text-foreground-secondary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none active:scale-[0.98]"
                 onClick={() => onProfileAction?.("clear-manual")}
                 tabIndex={isOpen ? 0 : -1}
                 aria-label="Clear manual profile"
@@ -321,7 +321,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({
           <button
             type="button"
             className={cn(
-              "inline-flex h-5 min-w-5 items-center justify-center rounded border border-white/10 px-1 text-[10px] font-semibold text-foreground-secondary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none active:scale-[0.98]",
+              "inline-flex h-5 min-w-5 items-center justify-center rounded border border-white/10 px-1 text-xs font-semibold text-foreground-secondary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none active:scale-[0.98]",
               profile.mode === "gaming" && "border-state-success/40 bg-state-success/15 text-state-success",
             )}
             onClick={() => onProfileAction?.("gaming")}
@@ -335,7 +335,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({
           <button
             type="button"
             className={cn(
-              "inline-flex h-5 min-w-5 items-center justify-center rounded border border-white/10 px-1 text-[10px] font-semibold text-foreground-secondary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none active:scale-[0.98]",
+              "inline-flex h-5 min-w-5 items-center justify-center rounded border border-white/10 px-1 text-xs font-semibold text-foreground-secondary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none active:scale-[0.98]",
               profile.mode === "powersave" && "border-state-warning/40 bg-state-warning/15 text-state-warning",
             )}
             onClick={() => onProfileAction?.("powersave")}

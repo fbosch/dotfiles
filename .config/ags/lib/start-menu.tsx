@@ -779,7 +779,7 @@ function createProfileControls(): Gtk.Box {
 
   const profileBox = (
     <box orientation={Gtk.Orientation.HORIZONTAL} spacing={4} class="profile-row">
-      <box orientation={Gtk.Orientation.HORIZONTAL} spacing={6} hexpand={true} class="profile-summary">
+      <box orientation={Gtk.Orientation.HORIZONTAL} spacing={8} hexpand={true} class="profile-summary">
         <label label="Profile" class="profile-label" />
         <label label={profileSummary()} class="profile-source" />
         {manualActive && (
@@ -1128,8 +1128,9 @@ function applyStaticCSS() {
     }
 
     window.start-menu box.profile-row {
-      padding: 4px 8px;
+      padding: 2px 6px;
       border-radius: 6px;
+      min-height: 24px;
     }
 
     window.start-menu box.profile-row:hover {
@@ -1137,19 +1138,19 @@ function applyStaticCSS() {
     }
 
     window.start-menu box.profile-summary {
-      margin-top: 1px;
+      margin-top: 2px;
     }
 
     window.start-menu label.profile-label {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 500;
       color: ${tokens.colors.foreground.primary.value};
     }
 
     window.start-menu label.profile-source {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 11px;
+      font-size: 14px;
       color: ${tokens.colors.foreground.secondary.value};
     }
 
@@ -1162,7 +1163,7 @@ function applyStaticCSS() {
       background-color: transparent;
       color: ${tokens.colors.foreground.secondary.value};
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 600;
     }
 
@@ -1175,13 +1176,13 @@ function applyStaticCSS() {
       background-color: transparent;
       color: ${tokens.colors.foreground.secondary.value};
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 600;
     }
 
     window.start-menu label.profile-clear-icon {
       font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
-      font-size: 12px;
+      font-size: 14px;
       color: inherit;
     }
 
@@ -1208,7 +1209,7 @@ function applyStaticCSS() {
 
     window.start-menu label.profile-toggle-icon {
       font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
-      font-size: 12px;
+      font-size: 13px;
       color: inherit;
     }
 
