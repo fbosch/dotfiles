@@ -93,21 +93,6 @@ function itemIcon(item: AudioMixerItem): string {
   return '\uE995';
 }
 
-const Badge: React.FC<{ children: React.ReactNode; tone?: 'default' | 'accent' | 'muted' }> = ({
-  children,
-  tone = 'accent',
-}) => (
-  <span
-    className={cn(
-      'rounded-full border px-2 py-0.5 text-[11px]',
-      tone === 'accent' && 'border-accent-primary/40 bg-accent-primary/20 text-foreground-primary',
-      tone === 'muted' && 'border-state-error/30 bg-state-error/10 text-state-error'
-    )}
-  >
-    {children}
-  </span>
-);
-
 const VolumeMeter: React.FC<{
   item: AudioMixerItem;
   maxVolume: number;
@@ -250,8 +235,6 @@ const AudioRow: React.FC<{
           <div className="min-w-0">
             <h3 className="truncate text-sm font-semibold text-foreground-primary">{item.name}</h3>
           </div>
-          {item.isDefault && <Badge tone="accent">Default</Badge>}
-          {item.muted && <Badge tone="muted">Muted</Badge>}
         </div>
 
         <VolumeMeter item={item} maxVolume={maxVolume} onVolumeChange={onVolumeChange} />

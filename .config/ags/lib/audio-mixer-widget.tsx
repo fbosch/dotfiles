@@ -162,8 +162,20 @@ function getList<T>(object: any, keys: string[]): T[] {
 }
 
 function objectId(object: any, fallback: string): string {
+  const numericSerial = getNumber(object, ["serial", "id"]);
+  if (numericSerial !== undefined) return String(Math.round(numericSerial));
+
   const serial = getText(object, ["serial", "id", "name", "description"]);
   return serial ?? fallback;
+}
+
+function sameAudioObject(a: any, b: any): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+
+  const aId = objectId(a, "");
+  const bId = objectId(b, "");
+  return aId !== "" && aId === bId;
 }
 
 function displayName(object: any, fallback: string): string {
@@ -379,10 +391,12 @@ function makeIconLabel(label: string): Gtk.Label {
 
 function makeTabIconLabel(label: string): Gtk.Label {
   const widget = makeLabel(label, "audio-mixer-icon-label");
+  widget.add_css_class("audio-mixer-tab-icon");
+  widget.set_size_request(18, 18);
   widget.set_halign(Gtk.Align.CENTER);
   widget.set_valign(Gtk.Align.CENTER);
   widget.set_xalign(0.5);
-  widget.set_yalign(0.5);
+  widget.set_yalign(0.45);
   return widget;
 }
 
@@ -462,8 +476,8 @@ function createAudioBackend(options: { applySnapshot: (snapshot: AudioSnapshot) 
 
     const rows = emptyRows();
     rows.playback = streams.map((stream, index) => makeRow(stream, "stream", `Playback ${index + 1}`, "\uE768"));
-    rows.output = speakers.map((speaker, index) => makeRow(speaker, "endpoint", `Output ${index + 1}`, "\uE995", speaker === defaultSpeaker));
-    rows.input = microphones.map((microphone, index) => makeRow(microphone, "endpoint", `Input ${index + 1}`, "\uE720", microphone === defaultMicrophone));
+    rows.output = speakers.map((speaker, index) => makeRow(speaker, "endpoint", `Output ${index + 1}`, "\uE995", sameAudioObject(speaker, defaultSpeaker)));
+    rows.input = microphones.map((microphone, index) => makeRow(microphone, "endpoint", `Input ${index + 1}`, "\uE720", sameAudioObject(microphone, defaultMicrophone)));
 
     return { status: "ready", message: "", rows };
   }
@@ -566,6 +580,11 @@ function createAudioBackend(options: { applySnapshot: (snapshot: AudioSnapshot) 
       else row.object.mute = muted;
     },
     setDefault(row: AudioRow) {
+      const group = snapshot.rows.output.some((endpoint) => endpoint.id === row.id)
+        ? snapshot.rows.output
+        : snapshot.rows.input;
+      for (const endpoint of group) endpoint.isDefault = endpoint.id === row.id;
+      row.isDefault = true;
       if (typeof row.object?.set_is_default === "function") row.object.set_is_default(true);
       else if (typeof row.object?.set_default === "function") row.object.set_default();
       scheduleRefresh();
@@ -612,11 +631,11 @@ function handleRowKeyboard(keyval: number, state: Gdk.ModifierType): boolean {
   const rows = activeRows();
   if (rows.length === 0) return false;
 
-  if (keyval === Gdk.KEY_Up) {
+  if (keyval === Gdk.KEY_Up || keyval === Gdk.KEY_k || keyval === Gdk.KEY_K) {
     focusRow(focusedRowIndex - 1, true);
     return true;
   }
-  if (keyval === Gdk.KEY_Down) {
+  if (keyval === Gdk.KEY_Down || keyval === Gdk.KEY_j || keyval === Gdk.KEY_J) {
     focusRow(focusedRowIndex + 1, true);
     return true;
   }
@@ -624,10 +643,11 @@ function handleRowKeyboard(keyval: number, state: Gdk.ModifierType): boolean {
   const row = rows[focusedRowIndex];
   if (!row) return false;
 
-  if (keyval === Gdk.KEY_Left || keyval === Gdk.KEY_Right) {
+  if (keyval === Gdk.KEY_Left || keyval === Gdk.KEY_Right || keyval === Gdk.KEY_h || keyval === Gdk.KEY_H || keyval === Gdk.KEY_l || keyval === Gdk.KEY_L) {
     const step = (state & Gdk.ModifierType.SHIFT_MASK) !== 0 ? 10 : 5;
     rowFocusVisible = true;
-    adjustRowVolume(row, keyval === Gdk.KEY_Left ? -step : step);
+    const decrease = keyval === Gdk.KEY_Left || keyval === Gdk.KEY_h || keyval === Gdk.KEY_H;
+    adjustRowVolume(row, decrease ? -step : step);
     focusRow(focusedRowIndex, true);
     return true;
   }
@@ -660,18 +680,16 @@ function makeTabButton(tab: { id: AudioMixerTab; label: string; icon: string }):
   button.set_cursor_from_name("pointer");
   button.connect("clicked", () => activateTab(tab.id));
 
-  const content = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 5 });
-  content.set_size_request(84, -1);
-  content.set_halign(Gtk.Align.CENTER);
-  content.set_valign(Gtk.Align.CENTER);
-  content.append(makeTabIconLabel(tab.icon));
-  const label = makeLabel(tab.label, "audio-mixer-tab-label");
+  const label = makeLabel("", "audio-mixer-tab-label");
+  label.set_use_markup(true);
+  label.set_markup(`<span rise="-1800">${tab.icon}</span>  ${tab.label}`);
+  label.set_size_request(112, 20);
   label.set_halign(Gtk.Align.CENTER);
   label.set_valign(Gtk.Align.CENTER);
-  label.set_xalign(0);
+  label.set_xalign(0.5);
+  label.set_yalign(0.5);
   label.set_ellipsize(3);
-  content.append(label);
-  button.set_child(content);
+  button.set_child(label);
 
   tabButtons.set(tab.id, button);
   return button;
@@ -760,7 +778,7 @@ function makeMeter(row: AudioRow): Gtk.Box | null {
     const segmentHeight = 8;
     const segmentY = Math.round((height - segmentHeight) / 2);
     const segmentWidth = Math.max(2, (width - gap * (meterSegments - 1)) / meterSegments);
-    const accent = tokens.colors.accent.primary.value;
+    const accent = row.muted ? tokens.colors.foreground.tertiary.value : tokens.colors.accent.primary.value;
 
     for (let index = 0; index < meterSegments; index++) {
       const x = index * (segmentWidth + gap);
@@ -858,6 +876,8 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
   topRow.set_halign(Gtk.Align.FILL);
   const iconBox = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL });
   iconBox.add_css_class("audio-mixer-row-icon");
+  if (row.isDefault) iconBox.add_css_class("default");
+  if (row.muted) iconBox.add_css_class("muted");
   iconBox.set_halign(Gtk.Align.CENTER);
   iconBox.set_valign(Gtk.Align.START);
   iconBox.set_size_request(36, 36);
@@ -882,8 +902,6 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
   title.set_ellipsize(3);
   titleRow.append(title);
 
-  if (row.isDefault) titleRow.append(makeBadge("Default", "default"));
-  if (row.muted) titleRow.append(makeBadge("Muted", "muted"));
   content.append(titleRow);
   topRow.append(content);
 
@@ -891,8 +909,10 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
   actions.set_halign(Gtk.Align.END);
   actions.set_valign(Gtk.Align.START);
   if (row.volume !== undefined || row.muted !== undefined) {
-    const muteButton = new Gtk.Button({ label: row.muted ? "Unmute" : "Mute" });
+    const muteButton = new Gtk.Button({ label: row.muted ? "\uE74F" : "\uE995" });
     muteButton.add_css_class("audio-mixer-action");
+    muteButton.add_css_class("icon");
+    muteButton.set_tooltip_text(row.muted ? "Unmute" : "Mute");
     muteButton.set_focusable(false);
     muteButton.set_cursor_from_name("pointer");
     muteButton.connect("clicked", () => {
@@ -900,12 +920,20 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
     });
     actions.append(muteButton);
   }
-  if (row.kind === "endpoint" && !row.isDefault) {
-    const defaultButton = new Gtk.Button({ label: "Default" });
+  if (row.kind === "endpoint") {
+    const defaultButton = new Gtk.Button({ label: "\uE8FB" });
     defaultButton.add_css_class("audio-mixer-action");
+    defaultButton.add_css_class("icon");
+    defaultButton.add_css_class("default-icon");
+    if (row.isDefault) defaultButton.add_css_class("active");
+    defaultButton.set_tooltip_text(row.isDefault ? "Default" : "Set default");
     defaultButton.set_focusable(false);
     defaultButton.set_cursor_from_name("pointer");
-    defaultButton.connect("clicked", () => audioBackend.setDefault(row));
+    defaultButton.connect("clicked", () => {
+      audioBackend.setDefault(row);
+      renderRows();
+      focusRow(index, false);
+    });
     actions.append(defaultButton);
   }
   if (actions.get_first_child()) topRow.append(actions);
@@ -1194,6 +1222,7 @@ function applyStaticCSS(): void {
     }
 
     window.audio-mixer-widget label.audio-mixer-tab-label {
+      font-family: "SF Pro Text", "Segoe Fluent Icons", system-ui, sans-serif;
       font-size: 12px;
       color: inherit;
     }
@@ -1228,6 +1257,16 @@ function applyStaticCSS(): void {
       min-height: 36px;
       max-height: 36px;
       padding: 0;
+    }
+
+    window.audio-mixer-widget box.audio-mixer-row-icon.default {
+      background-color: rgba(0, 103, 192, 0.25);
+      color: #ffffff;
+    }
+
+    window.audio-mixer-widget box.audio-mixer-row-icon.muted {
+      background-color: rgba(196, 43, 28, 0.12);
+      color: ${tokens.colors.state.error.value};
     }
 
     window.audio-mixer-widget box.audio-mixer-row-icon label.audio-mixer-icon-label {
@@ -1295,6 +1334,21 @@ function applyStaticCSS(): void {
       font-size: 11px;
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
     }
+
+    window.audio-mixer-widget button.audio-mixer-action.icon {
+      min-width: 28px;
+      min-height: 28px;
+      padding: 0;
+      font-family: "Segoe Fluent Icons";
+      font-size: 15px;
+    }
+
+    window.audio-mixer-widget button.audio-mixer-action.default-icon.active {
+      color: #ffffff;
+      border-color: rgba(0, 103, 192, 0.55);
+      background-color: ${tokens.colors.accent.primary.value};
+    }
+
 
     window.audio-mixer-widget button.audio-mixer-action:hover,
     window.audio-mixer-widget button.audio-mixer-action:focus {
