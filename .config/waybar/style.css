@@ -174,7 +174,7 @@
 #custom-swaync.dnd-notification,
 #custom-swaync.inhibited-notification,
 #custom-swaync.dnd-inhibited-notification {
-  color: #dea721;
+  color: rgba(255, 255, 255, 1);
 }
 
 /* Tray */
