@@ -340,6 +340,13 @@ function getIconForAudioObject(object: any, client: HyprlandClient | null): Icon
   return null;
 }
 
+function getEndpointGlyphForAudioObject(object: any, icon: string): string {
+  if (icon !== "\uE995") return icon;
+
+  const name = displayName(object, "").toLowerCase();
+  return name.includes("ora") || name.includes("kanto") ? "\uE7F5" : icon;
+}
+
 function clamp(value: number, max = maxVolume): number {
   return Math.max(0, Math.min(max, Math.round(value)));
 }
@@ -466,10 +473,11 @@ function createAudioBackend(options: { applySnapshot: (snapshot: AudioSnapshot) 
   function makeRow(object: any, kind: RowKind, fallback: string, icon: string, isDefault = false): AudioRow {
     const client = kind === "stream" ? getHyprClientForAudioObject(object) : null;
     const clientTitle = client?.title?.trim();
+    const displayIcon = kind === "endpoint" ? getEndpointGlyphForAudioObject(object, icon) : icon;
     return {
       id: `${kind}:${objectId(object, fallback)}`,
       name: kind === "stream" && clientTitle ? clientTitle : displayName(object, fallback),
-      icon,
+      icon: displayIcon,
       iconRef: kind === "stream" ? getIconForAudioObject(object, client) : null,
       kind,
       object,
