@@ -55,7 +55,6 @@
     "title",
     "notifications",
     "dnd",
-    "volume",
     "buttons-grid"
   ],
   "widget-config": {
@@ -74,10 +73,6 @@
     "mpris": {
       "image-size": 96,
       "image-radius": 12
-    },
-    "volume": {
-      "label": "",
-      "show-per-app": true
     },
     "buttons-grid": {
       "actions": [
