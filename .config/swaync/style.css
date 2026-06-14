@@ -70,15 +70,29 @@
 }
 
 .control-center-list .notification {
-  background: var(--solid-bg-color);
-  border: 1px solid var(--border-color);
+  background: transparent;
+  border: none;
   border-radius: var(--radius-large);
   box-shadow: none;
-  margin: 0 12px 6px 12px;
+  margin: 0;
   transition: none;
 }
 
+.control-center-list .notification-background,
+.notification-list .notification-background {
+  background: var(--solid-bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-large);
+  margin: 0 12px 6px 12px;
+}
+
 .control-center-list .notification:hover {
+  background: transparent;
+  border-color: transparent;
+}
+
+.control-center-list .notification-background:hover,
+.notification-list .notification-background:hover {
   background: var(--solid-bg-color);
   border-color: var(--border-color);
 }
@@ -93,6 +107,11 @@
 }
 
 .control-center-list .notification:last-child {
+  margin-bottom: 0;
+}
+
+.control-center-list .notification-background:last-child,
+.notification-list .notification-background:last-child {
   margin-bottom: 12px;
 }
 
@@ -245,6 +264,18 @@
   margin-bottom: 8px;
 }
 
+.notification-row .notification-background {
+  background: var(--solid-bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-large);
+}
+
+.notification-row .notification-background .notification {
+  background: transparent;
+  border: none;
+  margin: 0;
+}
+
 .notification-row image,
 .notification-row .image {
   padding: 0;
@@ -381,7 +412,7 @@
   min-height: 20px;
   max-width: 20px;
   max-height: 20px;
-  margin: 6px 6px 0 -26px;
+  margin: 6px 6px 0 0;
   padding: 0;
   opacity: 0;
   font-size: 12px;
@@ -396,11 +427,11 @@
 .control-center .notification-row .close-button,
 .control-center-list .close-button,
 .notification-list .close-button {
-  margin: 6px 0 0 -64px;
+  margin: 6px 6px 0 0;
 }
 
 .floating-notifications .close-button {
-  margin: 6px 6px 0 -26px;
+  margin: 6px 6px 0 0;
 }
 
 .close-button > image,
@@ -431,6 +462,10 @@
 }
 
 .floating-notifications .notification {
+  margin-right: 0;
+}
+
+.floating-notifications .notification-background {
   margin-right: 20px;
 }
 
@@ -801,15 +836,15 @@
 }
 
 .notification-list .notification {
-  background: var(--bg-color);
-  border: 1px solid var(--border-color);
+  background: transparent;
+  border: none;
   margin-right: 0px;
   transition: none;
 }
 
 .notification-list .notification:hover {
-  background: var(--bg-color);
-  border-color: var(--border-color);
+  background: transparent;
+  border-color: transparent;
 }
 
 /* Scrollbar */

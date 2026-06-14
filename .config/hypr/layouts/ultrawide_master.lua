@@ -317,17 +317,11 @@ function M.recalculate(ctx)
 	local order, targets_by_id, _, added_seen_targets = order_state.sync(state, key, source_targets, previous_active)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	local active_target = targets[active_index(targets)]
-	local active_window = active_target and active_target.window
-	local active_monitor = active_window and active_window.monitor
-	local active_position = order_state.position(active_target, "x")
 	local active_position_in_area = order_state.position_in_area(active_target, "x", x, width)
-	local active_position_outside_area = active_position ~= nil and not active_position_in_area
 	local active_position_changed = order_state.position_changed(state, active_target, "x")
 	if manual_change then
 		state.manual_change_by_key[key] = nil
-	elseif (active_position_in_area and (active_position_changed or added_seen_targets))
-		or (active_position_outside_area and active_monitor and active_monitor.name == "DP-2")
-	then
+	elseif active_position_in_area and (active_position_changed or added_seen_targets) then
 		move_active_to_position(targets, key, ratios, x, width)
 		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	end
