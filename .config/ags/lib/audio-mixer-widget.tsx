@@ -197,6 +197,9 @@ function parseWpctlInspect(id: number): Record<string, string> | null {
   const cached = wpctlInspectCache.get(id);
   if (cached && nowMs - cached.timestampMs < hyprClientCacheTtlMs) return cached.properties;
 
+  const mark = perf.start("audio-mixer-widget", "wpctlInspect");
+  let ok = true;
+  let error: string | undefined;
   try {
     const [, stdout] = GLib.spawn_command_line_sync(`wpctl inspect ${id}`);
     if (!stdout) return null;
@@ -210,9 +213,13 @@ function parseWpctlInspect(id: number): Record<string, string> | null {
 
     wpctlInspectCache.set(id, { timestampMs: nowMs, properties });
     return properties;
-  } catch {
+  } catch (e) {
+    ok = false;
+    error = String(e);
     wpctlInspectCache.set(id, null);
     return null;
+  } finally {
+    mark.end(ok, error);
   }
 }
 
@@ -222,6 +229,9 @@ function getWpctlStreams(): Array<{ id: number; name: string }> {
     return wpctlStatusCache.streams;
   }
 
+  const mark = perf.start("audio-mixer-widget", "wpctlStatus");
+  let ok = true;
+  let error: string | undefined;
   try {
     const [, stdout] = GLib.spawn_command_line_sync("wpctl status");
     if (!stdout) return [];
@@ -246,8 +256,12 @@ function getWpctlStreams(): Array<{ id: number; name: string }> {
 
     wpctlStatusCache = { timestampMs: nowMs, streams };
     return streams;
-  } catch {
+  } catch (e) {
+    ok = false;
+    error = String(e);
     return wpctlStatusCache?.streams ?? [];
+  } finally {
+    mark.end(ok, error);
   }
 }
 
@@ -286,6 +300,9 @@ function getHyprlandClients(): HyprlandClient[] {
     return hyprClientCache.clients;
   }
 
+  const mark = perf.start("audio-mixer-widget", "hyprctlClients");
+  let ok = true;
+  let error: string | undefined;
   try {
     const [, stdout] = GLib.spawn_command_line_sync("hyprctl clients -j");
     if (!stdout) return [];
@@ -293,8 +310,12 @@ function getHyprlandClients(): HyprlandClient[] {
     hyprClientCache = { timestampMs: nowMs, clients };
     return clients;
   } catch (e) {
+    ok = false;
+    error = String(e);
     console.error("Failed to read Hyprland clients for audio mixer:", e);
     return hyprClientCache?.clients ?? [];
+  } finally {
+    mark.end(ok, error);
   }
 }
 
@@ -319,37 +340,48 @@ function ensureIconTheme(): Gtk.IconTheme | null {
 }
 
 function getIconForAudioObject(object: any, client: HyprlandClient | null): IconRef | null {
-  const directIcon = getText(object, ["icon_name", "icon", "application_icon_name"]);
-  const theme = ensureIconTheme();
-  const pipeWireProperties = getPipeWirePropertiesForAudioObject(object);
-  const candidates = Array.from(
-    new Set(
-      [
-        ...windowTitleCandidates(client),
-        pipeWireProperties?.["application.process.binary"],
-        pipeWireProperties?.["application.name"],
-        pipeWireProperties?.["node.name"],
-        getText(object, ["application_id", "app_id", "application_process_binary", "binary"]),
-        getText(object, ["application.process.binary"]),
-        getText(object, ["application_name", "app_name", "name", "media_name", "description"]),
-        pipeWireProperties?.["media.name"],
-        getText(object, ["application.name", "media.name", "node.name"]),
-      ].filter((candidate): candidate is string => candidate !== undefined),
-    ),
-  );
+  const mark = perf.start("audio-mixer-widget", "resolveAudioIcon");
+  let ok = true;
+  let error: string | undefined;
+  try {
+    const directIcon = getText(object, ["icon_name", "icon", "application_icon_name"]);
+    const theme = ensureIconTheme();
+    const pipeWireProperties = getPipeWirePropertiesForAudioObject(object);
+    const candidates = Array.from(
+      new Set(
+        [
+          ...windowTitleCandidates(client),
+          pipeWireProperties?.["application.process.binary"],
+          pipeWireProperties?.["application.name"],
+          pipeWireProperties?.["node.name"],
+          getText(object, ["application_id", "app_id", "application_process_binary", "binary"]),
+          getText(object, ["application.process.binary"]),
+          getText(object, ["application_name", "app_name", "name", "media_name", "description"]),
+          pipeWireProperties?.["media.name"],
+          getText(object, ["application.name", "media.name", "node.name"]),
+        ].filter((candidate): candidate is string => candidate !== undefined),
+      ),
+    );
 
-  const faugusIcon = getFaugusIconForCandidates(candidates);
-  if (faugusIcon) return faugusIcon;
+    const faugusIcon = getFaugusIconForCandidates(candidates);
+    if (faugusIcon) return faugusIcon;
 
-  for (const candidate of candidates) {
-    const icon = getIconForClass(candidate, ensureIconTheme());
-    if (icon) return icon;
+    for (const candidate of candidates) {
+      const icon = getIconForClass(candidate, ensureIconTheme());
+      if (icon) return icon;
+    }
+
+    if (directIcon && theme?.has_icon(directIcon)) return { kind: "theme", name: directIcon };
+    if (directIcon && directIcon.startsWith("/") && fileExists(directIcon)) return { kind: "file", path: directIcon };
+
+    return null;
+  } catch (e) {
+    ok = false;
+    error = String(e);
+    throw e;
+  } finally {
+    mark.end(ok, error);
   }
-
-  if (directIcon && theme?.has_icon(directIcon)) return { kind: "theme", name: directIcon };
-  if (directIcon && directIcon.startsWith("/") && fileExists(directIcon)) return { kind: "file", path: directIcon };
-
-  return null;
 }
 
 function getEndpointGlyphForAudioObject(object: any, icon: string): string {
@@ -500,20 +532,31 @@ function createAudioBackend(options: { applySnapshot: (snapshot: AudioSnapshot) 
   }
 
   function buildSnapshot(): AudioSnapshot {
-    if (!audio) return emptySnapshot("AstalWP audio unavailable", "unavailable");
+    const mark = perf.start("audio-mixer-widget", "buildSnapshot");
+    let ok = true;
+    let error: string | undefined;
+    try {
+      if (!audio) return emptySnapshot("AstalWP audio unavailable", "unavailable");
 
-    const defaultSpeaker = audio.get_default_speaker?.() ?? audio.default_speaker;
-    const defaultMicrophone = audio.get_default_microphone?.() ?? audio.default_microphone;
-    const speakers = getList<any>(audio, ["speakers"]);
-    const microphones = getList<any>(audio, ["microphones"]);
-    const streams = getList<any>(audio, ["streams"]);
+      const defaultSpeaker = audio.get_default_speaker?.() ?? audio.default_speaker;
+      const defaultMicrophone = audio.get_default_microphone?.() ?? audio.default_microphone;
+      const speakers = getList<any>(audio, ["speakers"]);
+      const microphones = getList<any>(audio, ["microphones"]);
+      const streams = getList<any>(audio, ["streams"]);
 
-    const rows = emptyRows();
-    rows.playback = streams.map((stream, index) => makeRow(stream, "stream", `Playback ${index + 1}`, "\uE768"));
-    rows.output = speakers.map((speaker, index) => makeRow(speaker, "endpoint", `Output ${index + 1}`, "\uE995", sameAudioObject(speaker, defaultSpeaker)));
-    rows.input = microphones.map((microphone, index) => makeRow(microphone, "endpoint", `Input ${index + 1}`, "\uE720", sameAudioObject(microphone, defaultMicrophone)));
+      const rows = emptyRows();
+      rows.playback = streams.map((stream, index) => makeRow(stream, "stream", `Playback ${index + 1}`, "\uE768"));
+      rows.output = speakers.map((speaker, index) => makeRow(speaker, "endpoint", `Output ${index + 1}`, "\uE995", sameAudioObject(speaker, defaultSpeaker)));
+      rows.input = microphones.map((microphone, index) => makeRow(microphone, "endpoint", `Input ${index + 1}`, "\uE720", sameAudioObject(microphone, defaultMicrophone)));
 
-    return { status: "ready", message: "", rows };
+      return { status: "ready", message: "", rows };
+    } catch (e) {
+      ok = false;
+      error = String(e);
+      throw e;
+    } finally {
+      mark.end(ok, error);
+    }
   }
 
   function scheduleRefresh(): void {
@@ -1045,26 +1088,37 @@ function makeEmptyState(): Gtk.Box {
 }
 
 function renderRows(): void {
-  if (!rowList) return;
-  clearBox(rowList);
-  rowCards = [];
-  const rows = snapshot.rows[activeTab] ?? [];
-  if (rows.length === 0) {
-    focusedRowIndex = 0;
-    rowList.append(makeEmptyState());
-    return;
-  }
-  focusedRowIndex = Math.max(0, Math.min(focusedRowIndex, rows.length - 1));
-  rows.forEach((row, index) => {
-    const card = makeRow(row, index);
-    rowCards.push(card);
-    rowList.append(card);
-  });
-  if (isVisible) {
-    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-      focusRow(focusedRowIndex);
-      return GLib.SOURCE_REMOVE;
+  const mark = perf.start("audio-mixer-widget", "renderRows");
+  let ok = true;
+  let error: string | undefined;
+  try {
+    if (!rowList) return;
+    clearBox(rowList);
+    rowCards = [];
+    const rows = snapshot.rows[activeTab] ?? [];
+    if (rows.length === 0) {
+      focusedRowIndex = 0;
+      rowList.append(makeEmptyState());
+      return;
+    }
+    focusedRowIndex = Math.max(0, Math.min(focusedRowIndex, rows.length - 1));
+    rows.forEach((row, index) => {
+      const card = makeRow(row, index);
+      rowCards.push(card);
+      rowList.append(card);
     });
+    if (isVisible) {
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        focusRow(focusedRowIndex);
+        return GLib.SOURCE_REMOVE;
+      });
+    }
+  } catch (e) {
+    ok = false;
+    error = String(e);
+    throw e;
+  } finally {
+    mark.end(ok, error);
   }
 }
 

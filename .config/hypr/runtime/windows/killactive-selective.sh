@@ -8,6 +8,7 @@ source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 PROFILECTL="$HOME/.config/hypr/runtime/profiles/profilectl.sh"
 TASKBAR_APP_SCRIPT="$HOME/.config/hypr/taskbar/actions.sh"
 SCRIPT_PATH="$HOME/.config/hypr/runtime/windows/killactive-selective.sh"
+AGS_START_SCRIPT="$HOME/.config/ags/start-daemons.sh"
 
 readonly ACTION_KILL="kill"
 readonly ACTION_CONFIRM="confirm"
@@ -104,10 +105,29 @@ request_confirm_close() {
       }
     }')"
 
-  if ! ags request -i ags-bundled confirm-dialog "$payload" >/dev/null 2>&1; then
+  if ! show_confirm_dialog "$payload"; then
     notify_close_action "Close blocked" "Could not show confirmation dialog for: $display_title"
     return 1
   fi
+}
+
+show_confirm_dialog() {
+  local payload="$1"
+  local response
+
+  response="$(ags request -i ags-bundled confirm-dialog "$payload" 2>/dev/null || true)"
+  if [[ "$response" == "shown" ]]; then
+    return 0
+  fi
+
+  if [[ -x "$AGS_START_SCRIPT" ]]; then
+    "$AGS_START_SCRIPT" >/dev/null 2>&1 || true
+    response="$(ags request -i ags-bundled confirm-dialog "$payload" 2>/dev/null || true)"
+    [[ "$response" == "shown" ]]
+    return
+  fi
+
+  return 1
 }
 
 if [[ "${1:-}" == "--confirmed-address" ]]; then
