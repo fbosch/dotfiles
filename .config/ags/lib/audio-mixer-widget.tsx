@@ -63,6 +63,7 @@ let activeTab: AudioMixerTab = "playback";
 let tabButtons = new Map<AudioMixerTab, Gtk.Button>();
 let rowCards: Gtk.Box[] = [];
 let focusedRowIndex = 0;
+let rowFocusVisible = false;
 let snapshot: AudioSnapshot = emptySnapshot("Audio backend unavailable", "unavailable");
 let iconTheme: Gtk.IconTheme | null = null;
 const iconCache = new Map<string, IconRef | null>();
@@ -376,6 +377,15 @@ function makeIconLabel(label: string): Gtk.Label {
   return widget;
 }
 
+function makeTabIconLabel(label: string): Gtk.Label {
+  const widget = makeLabel(label, "audio-mixer-icon-label");
+  widget.set_halign(Gtk.Align.CENTER);
+  widget.set_valign(Gtk.Align.CENTER);
+  widget.set_xalign(0.5);
+  widget.set_yalign(0.5);
+  return widget;
+}
+
 function setImageFile(image: Gtk.Image, path: string): void {
   try {
     image.set_from_file(path);
@@ -573,6 +583,7 @@ const audioBackend = createAudioBackend({
 function activateTab(tab: AudioMixerTab): void {
   activeTab = tab;
   focusedRowIndex = 0;
+  rowFocusVisible = false;
   for (const [tabId, button] of tabButtons) {
     setCssClass(button, "active", tabId === activeTab);
   }
@@ -585,11 +596,47 @@ function activateAdjacentTab(direction: 1 | -1): void {
   activateTab(tabs[nextIndex].id);
 }
 
-function focusRow(index: number): void {
+function focusRow(index: number, visible = rowFocusVisible): void {
   if (rowCards.length === 0) return;
   focusedRowIndex = Math.max(0, Math.min(rowCards.length - 1, index));
-  rowCards.forEach((card, cardIndex) => setCssClass(card, "focused", cardIndex === focusedRowIndex));
+  rowFocusVisible = visible;
+  rowCards.forEach((card, cardIndex) => setCssClass(card, "focused", visible && cardIndex === focusedRowIndex));
   rowCards[focusedRowIndex]?.grab_focus();
+}
+
+function activeRows(): AudioRow[] {
+  return snapshot.rows[activeTab] ?? [];
+}
+
+function handleRowKeyboard(keyval: number, state: Gdk.ModifierType): boolean {
+  const rows = activeRows();
+  if (rows.length === 0) return false;
+
+  if (keyval === Gdk.KEY_Up) {
+    focusRow(focusedRowIndex - 1, true);
+    return true;
+  }
+  if (keyval === Gdk.KEY_Down) {
+    focusRow(focusedRowIndex + 1, true);
+    return true;
+  }
+
+  const row = rows[focusedRowIndex];
+  if (!row) return false;
+
+  if (keyval === Gdk.KEY_Left || keyval === Gdk.KEY_Right) {
+    const step = (state & Gdk.ModifierType.SHIFT_MASK) !== 0 ? 10 : 5;
+    rowFocusVisible = true;
+    adjustRowVolume(row, keyval === Gdk.KEY_Left ? -step : step);
+    focusRow(focusedRowIndex, true);
+    return true;
+  }
+  if (keyval === Gdk.KEY_space) {
+    toggleRowMute(row, focusedRowIndex, true);
+    return true;
+  }
+
+  return false;
 }
 
 function adjustRowVolume(row: AudioRow, delta: number): void {
@@ -599,10 +646,10 @@ function adjustRowVolume(row: AudioRow, delta: number): void {
   renderRows();
 }
 
-function toggleRowMute(row: AudioRow, index: number): void {
+function toggleRowMute(row: AudioRow, index: number, visible = rowFocusVisible): void {
   audioBackend.toggleMute(row);
   renderRows();
-  focusRow(index);
+  focusRow(index, visible);
 }
 
 function makeTabButton(tab: { id: AudioMixerTab; label: string; icon: string }): Gtk.Button {
@@ -613,12 +660,14 @@ function makeTabButton(tab: { id: AudioMixerTab; label: string; icon: string }):
   button.set_cursor_from_name("pointer");
   button.connect("clicked", () => activateTab(tab.id));
 
-  const content = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4 });
+  const content = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 5 });
+  content.set_size_request(84, -1);
   content.set_halign(Gtk.Align.CENTER);
-  content.append(makeIconLabel(tab.icon));
+  content.set_valign(Gtk.Align.CENTER);
+  content.append(makeTabIconLabel(tab.icon));
   const label = makeLabel(tab.label, "audio-mixer-tab-label");
-  label.set_width_chars(8);
-  label.set_max_width_chars(8);
+  label.set_halign(Gtk.Align.CENTER);
+  label.set_valign(Gtk.Align.CENTER);
   label.set_xalign(0);
   label.set_ellipsize(3);
   content.append(label);
@@ -771,7 +820,7 @@ function makeMeter(row: AudioRow): Gtk.Box | null {
 function makeRow(row: AudioRow, index: number): Gtk.Box {
   const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 });
   card.add_css_class("audio-mixer-row");
-  if (index === focusedRowIndex) card.add_css_class("focused");
+  if (rowFocusVisible && index === focusedRowIndex) card.add_css_class("focused");
   card.set_hexpand(true);
   card.set_halign(Gtk.Align.FILL);
   card.set_focusable(true);
@@ -780,30 +829,14 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
   const focusController = new Gtk.EventControllerFocus();
   focusController.connect("enter", () => {
     focusedRowIndex = index;
-    rowCards.forEach((rowCard, cardIndex) => setCssClass(rowCard, "focused", cardIndex === focusedRowIndex));
+    rowCards.forEach((rowCard, cardIndex) => setCssClass(rowCard, "focused", rowFocusVisible && cardIndex === focusedRowIndex));
   });
   card.add_controller(focusController);
 
   const keyController = new Gtk.EventControllerKey();
   keyController.connect("key-pressed", (_controller, keyval, _keycode, state) => {
-    if (keyval === Gdk.KEY_Up) {
-      focusRow(focusedRowIndex - 1);
-      return true;
-    }
-    if (keyval === Gdk.KEY_Down) {
-      focusRow(focusedRowIndex + 1);
-      return true;
-    }
-    if (keyval === Gdk.KEY_Left || keyval === Gdk.KEY_Right) {
-      const step = (state & Gdk.ModifierType.SHIFT_MASK) !== 0 ? 10 : 5;
-      adjustRowVolume(row, keyval === Gdk.KEY_Left ? -step : step);
-      focusRow(index);
-      return true;
-    }
-    if (keyval === Gdk.KEY_space) {
-      toggleRowMute(row, index);
-      return true;
-    }
+    focusedRowIndex = index;
+    if (handleRowKeyboard(keyval, state)) return true;
     if (keyval === Gdk.KEY_Tab || keyval === Gdk.KEY_ISO_Left_Tab) {
       const backwards = keyval === Gdk.KEY_ISO_Left_Tab || (state & Gdk.ModifierType.SHIFT_MASK) !== 0;
       activateAdjacentTab(backwards ? -1 : 1);
@@ -816,14 +849,13 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
   const clickController = new Gtk.GestureClick();
   clickController.set_button(0);
   clickController.connect("pressed", () => {
-    focusedRowIndex = index;
-    focusRow(index);
+    focusRow(index, false);
   });
   card.add_controller(clickController);
 
-  const header = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 10 });
-  header.set_hexpand(true);
-  header.set_halign(Gtk.Align.FILL);
+  const topRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 10 });
+  topRow.set_hexpand(true);
+  topRow.set_halign(Gtk.Align.FILL);
   const iconBox = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL });
   iconBox.add_css_class("audio-mixer-row-icon");
   iconBox.set_halign(Gtk.Align.CENTER);
@@ -832,7 +864,7 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
   iconBox.set_hexpand(false);
   iconBox.set_vexpand(false);
   iconBox.append(makeAudioIconWidget(row));
-  header.append(iconBox);
+  topRow.append(iconBox);
 
   const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 });
   content.set_hexpand(true);
@@ -853,10 +885,7 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
   if (row.isDefault) titleRow.append(makeBadge("Default", "default"));
   if (row.muted) titleRow.append(makeBadge("Muted", "muted"));
   content.append(titleRow);
-
-  const meter = makeMeter(row);
-  if (meter) content.append(meter);
-  header.append(content);
+  topRow.append(content);
 
   const actions = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4 });
   actions.set_halign(Gtk.Align.END);
@@ -879,9 +908,23 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
     defaultButton.connect("clicked", () => audioBackend.setDefault(row));
     actions.append(defaultButton);
   }
-  if (actions.get_first_child()) header.append(actions);
+  if (actions.get_first_child()) topRow.append(actions);
 
-  card.append(header);
+  card.append(topRow);
+
+  const meter = makeMeter(row);
+  if (meter) {
+    const meterRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 10 });
+    meterRow.set_hexpand(true);
+    meterRow.set_halign(Gtk.Align.FILL);
+
+    const meterIndent = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL });
+    meterIndent.set_size_request(36, -1);
+    meterIndent.set_hexpand(false);
+    meterRow.append(meterIndent);
+    meterRow.append(meter);
+    card.append(meterRow);
+  }
   return card;
 }
 
@@ -1050,11 +1093,17 @@ function createWindow(): void {
       class="audio-mixer-widget"
       $={(self: Astal.Window) => {
         const keyController = new Gtk.EventControllerKey();
-        keyController.connect("key-pressed", (_controller, keyval) => {
+        keyController.connect("key-pressed", (_controller, keyval, _keycode, state) => {
           if (keyval === Gdk.KEY_Escape) {
             hideAudioMixer();
             return true;
           }
+          if (keyval === Gdk.KEY_Tab || keyval === Gdk.KEY_ISO_Left_Tab) {
+            const backwards = keyval === Gdk.KEY_ISO_Left_Tab || (state & Gdk.ModifierType.SHIFT_MASK) !== 0;
+            activateAdjacentTab(backwards ? -1 : 1);
+            return true;
+          }
+          if (handleRowKeyboard(keyval, state)) return true;
           return false;
         });
         self.add_controller(keyController);
