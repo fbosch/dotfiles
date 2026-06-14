@@ -55,7 +55,7 @@ const tabs: Array<{ id: AudioMixerTab; label: string; icon: string }> = [
 
 const maxVolume = 150;
 const meterSegments = 12;
-const wpctlCacheTtlMs = 500;
+const wpctlCacheTtlMs = 2000;
 const hyprClientCacheTtlMs = 2000;
 
 let win: Astal.Window | null = null;
