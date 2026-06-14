@@ -81,6 +81,7 @@ interface DaySlot {
 
 let win: Astal.Window | null = null;
 let calendarBox: Gtk.Box | null = null;
+let dayGridBox: Gtk.Box | null = null;
 let dayButtons = new Map<string, Gtk.Button>();
 let monthTitleLabel: Gtk.Label | null = null;
 let statusLabel: Gtk.Label | null = null;
@@ -89,7 +90,7 @@ let daySlots: DaySlot[] = [];
 let isVisible = false;
 let lastToggleAtMs = 0;
 let visibleMonth = startOfMonth(new Date());
-let selectedDate = startOfLocalDay(new Date());
+let selectedDate: Date | null = startOfLocalDay(new Date());
 let events: CalendarEventPreview[] = [];
 let backendStatus: BackendStatus = "unavailable";
 let backendMessage = "Calendar events unavailable";
@@ -185,7 +186,7 @@ function buildCalendarDays(): CalendarDay[] {
       date,
       inVisibleMonth: monthKey(date) === visibleMonthId,
       isToday: sameLocalDay(date, today),
-      isSelected: sameLocalDay(date, selectedDate),
+      isSelected: selectedDate ? sameLocalDay(date, selectedDate) : false,
       events: dayEvents,
       markers: dayEvents.slice(0, markerLimit),
       markerOverflow: Math.max(0, dayEvents.length - markerLimit),
@@ -348,7 +349,7 @@ function createCalendarBackendModule(options: {
   let refreshSource = 0;
   let loadSource = 0;
   let eventCache = new Map<string, CachedEvents>();
-  let clientCache = new Map<string, any>();
+  let clientCache = new Map<string, Promise<any>>();
   let sourceInfoCache = new Map<string, { name?: string; color?: string }>();
 
   async function loadModules(): Promise<BackendModules> {
@@ -375,28 +376,69 @@ function createCalendarBackendModule(options: {
     return info;
   }
 
-  function getClient(source: any, ECal: any): any {
+  function loadSourceRegistry(EDataServer: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      EDataServer.SourceRegistry.new(null, (_sourceRegistry: unknown, result: Gio.AsyncResult) => {
+        try {
+          resolve(EDataServer.SourceRegistry.new_finish(result));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+  }
+
+  function connectSourceClient(source: any, ECal: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      ECal.Client.connect(
+        source,
+        ECal.ClientSourceType.EVENTS,
+        edsConnectWaitSeconds,
+        null,
+        (_client: unknown, result: Gio.AsyncResult) => {
+          try {
+            resolve(ECal.Client.connect_finish(result));
+          } catch (e) {
+            reject(e);
+          }
+        },
+      );
+    });
+  }
+
+  function querySourceEvents(client: any, sexp: string): Promise<unknown[]> {
+    return new Promise((resolve, reject) => {
+      client.get_object_list_as_comps(sexp, null, (_client: unknown, result: Gio.AsyncResult) => {
+        try {
+          const response = client.get_object_list_as_comps_finish(result);
+          if (Array.isArray(response)) {
+            const [ok, components] = response;
+            resolve(ok ? asArray<unknown>(components) : []);
+            return;
+          }
+
+          resolve(asArray<unknown>(response));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+  }
+
+  function getClient(source: any, ECal: any): Promise<any> {
     const uid = sourceUid(source);
     const cached = clientCache.get(uid);
     if (cached) return cached;
 
     const mark = perf.start("calendar-widget", "connectSourceClient");
-    try {
-      const client = ECal.Client.connect_sync(
-        source,
-        ECal.ClientSourceType.EVENTS,
-        edsConnectWaitSeconds,
-        null as Gio.Cancellable | null,
-      );
-      clientCache.set(uid, client);
-      return client;
-    } finally {
-      mark.end();
-    }
+    const clientPromise = connectSourceClient(source, ECal).finally(() => mark.end());
+    clientCache.set(uid, clientPromise);
+    return clientPromise;
   }
 
   function loadCacheFromTmpfs(): void {
     try {
+      if (!Gio.File.new_for_path(eventCachePath).query_exists(null)) return;
       const [ok, contents] = GLib.file_get_contents(eventCachePath);
       if (!ok || !contents) return;
 
@@ -448,6 +490,10 @@ function createCalendarBackendModule(options: {
     return applyCachedEvents(cacheKey);
   }
 
+  function applyLoadingSnapshot(): void {
+    options.applySnapshot({ events: [], status: "loading", message: "" });
+  }
+
   function invalidate(): void {
     eventCache = new Map();
     clientCache = new Map();
@@ -478,7 +524,7 @@ function createCalendarBackendModule(options: {
       if (!registry) {
         const registryMark = perf.start("calendar-widget", "loadSourceRegistry");
         try {
-          registry = EDataServer.SourceRegistry.new_sync(null);
+          registry = await loadSourceRegistry(EDataServer);
         } finally {
           registryMark.end();
         }
@@ -500,19 +546,18 @@ function createCalendarBackendModule(options: {
       const sexp = buildRangeQuery(start, end);
       for (const source of sources) {
         try {
-          const client = getClient(source, ECal);
+          const client = await getClient(source, ECal);
+          if (currentLoadVersion !== loadVersion) return;
           const queryMark = perf.start("calendar-widget", "querySourceEvents");
-          let queryOk: boolean;
-          let components: unknown;
+          let components: unknown[];
           try {
-            [queryOk, components] = client.get_object_list_as_comps_sync(sexp, null);
+            components = await querySourceEvents(client, sexp);
           } finally {
             queryMark.end();
           }
-          if (!queryOk) continue;
 
           const info = sourceInfo(source, EDataServer);
-          for (const [index, component] of asArray<any>(components).entries()) {
+          for (const [index, component] of components.entries()) {
             const event = componentToEvent(component, source, info, index);
             if (event) nextEvents.push(event);
           }
@@ -594,6 +639,7 @@ function createCalendarBackendModule(options: {
     refresh(): boolean {
       if (!options.isVisible()) return false;
       const appliedCache = applyVisibleGridCache();
+      if (!appliedCache) applyLoadingSnapshot();
       if (loadSource !== 0) return appliedCache;
       loadSource = GLib.timeout_add(GLib.PRIORITY_LOW, 100, () => {
         loadSource = 0;
@@ -658,7 +704,7 @@ function updateDaySelection(): void {
     return;
   }
 
-  const selectedKey = localDateKey(selectedDate);
+  const selectedKey = selectedDate ? localDateKey(selectedDate) : null;
   for (const [dateKey, button] of dayButtons) {
     setCssClass(button, "selected", dateKey === selectedKey);
   }
@@ -668,6 +714,7 @@ function resetCalendarRefs(): void {
   dayButtons = new Map();
   monthTitleLabel = null;
   statusLabel = null;
+  dayGridBox = null;
   weekdayLabelWidgets = [];
   daySlots = [];
 }
@@ -690,7 +737,9 @@ function makeHeaderButton(label: string, className: string, onClick: () => void)
 function makeDayButton(slotIndex: number): DaySlot {
   const button = new Gtk.Button();
   button.add_css_class("calendar-day");
-  button.set_size_request(44, 44);
+  if (slotIndex % 7 !== 0) button.add_css_class("not-first-column");
+  if (slotIndex >= 7) button.add_css_class("not-first-row");
+  button.set_size_request(48, 48);
   button.set_cursor_from_name("pointer");
   button.connect("clicked", () => {
     const slot = daySlots[slotIndex];
@@ -701,8 +750,12 @@ function makeDayButton(slotIndex: number): DaySlot {
 
   const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 });
   content.add_css_class("calendar-day-content");
+  content.set_hexpand(true);
+  content.set_vexpand(true);
 
   const number = makeLabel("", "calendar-day-number");
+  number.set_halign(Gtk.Align.START);
+  number.set_xalign(0);
   content.append(number);
 
   const spacer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
@@ -715,7 +768,7 @@ function makeDayButton(slotIndex: number): DaySlot {
   content.append(markerRow);
 
   button.set_child(content);
-  return { button, number, markerRow, date: selectedDate };
+  return { button, number, markerRow, date: selectedDate ?? startOfLocalDay(new Date()) };
 }
 
 function buildCalendarShell(): void {
@@ -728,17 +781,24 @@ function buildCalendarShell(): void {
   header.add_css_class("calendar-header");
   header.append(makeHeaderButton("‹", "previous", previousMonth));
 
+  const titleBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 });
+  titleBox.add_css_class("calendar-title-box");
+  titleBox.set_hexpand(true);
+
   const title = makeLabel("", "calendar-title");
-  title.set_hexpand(true);
+  title.set_halign(Gtk.Align.CENTER);
   monthTitleLabel = title;
-  header.append(title);
+
+  statusLabel = makeLabel("", "calendar-status");
+  statusLabel.set_halign(Gtk.Align.CENTER);
+
+  titleBox.append(title);
+  titleBox.append(statusLabel);
+  header.append(titleBox);
 
   header.append(makeHeaderButton("Today", "today-button", goToday));
   header.append(makeHeaderButton("›", "next", nextMonth));
   calendarBox.append(header);
-
-  statusLabel = makeLabel("", "calendar-status");
-  calendarBox.append(statusLabel);
 
   const weekdays = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4, homogeneous: true });
   weekdays.add_css_class("calendar-weekdays");
@@ -751,16 +811,22 @@ function buildCalendarShell(): void {
   }
   calendarBox.append(weekdays);
 
+  const dayGrid = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 });
+  dayGrid.add_css_class("calendar-day-grid");
+  dayGridBox = dayGrid;
+
   for (let rowIndex = 0; rowIndex < 6; rowIndex++) {
-    const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4, homogeneous: true });
+    const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 0, homogeneous: true });
     row.add_css_class("calendar-day-row");
     for (let columnIndex = 0; columnIndex < 7; columnIndex++) {
       const slot = makeDayButton(rowIndex * 7 + columnIndex);
       daySlots.push(slot);
       row.append(slot.button);
     }
-    calendarBox.append(row);
+    dayGrid.append(row);
   }
+
+  calendarBox.append(dayGrid);
 }
 
 function updateDaySlot(slot: DaySlot, day: CalendarDay): void {
@@ -797,8 +863,9 @@ function renderCalendar(): void {
 
     monthTitleLabel?.set_label(formatMonthLabel(visibleMonth));
     if (statusLabel) {
-      statusLabel.set_label(backendStatus === "ready" ? "" : backendMessage);
-      statusLabel.set_visible(backendStatus !== "ready");
+      const showStatus = backendStatus !== "ready" && backendStatus !== "loading";
+      statusLabel.set_label(showStatus ? backendMessage : "");
+      statusLabel.set_visible(showStatus);
     }
 
     const labels = weekdayLabels();
@@ -908,6 +975,22 @@ function handleOutsideClick(x: number, y: number): void {
     y > allocation.y + allocation.height
   ) {
     hideCalendar();
+    return;
+  }
+
+  if (!dayGridBox) return;
+  const gridAllocation = dayGridBox.get_allocation();
+  const localX = x - allocation.x;
+  const localY = y - allocation.y;
+  const insideGrid =
+    localX >= gridAllocation.x &&
+    localX <= gridAllocation.x + gridAllocation.width &&
+    localY >= gridAllocation.y &&
+    localY <= gridAllocation.y + gridAllocation.height;
+
+  if (!insideGrid && selectedDate) {
+    selectedDate = null;
+    updateDaySelection();
   }
 }
 
@@ -925,14 +1008,18 @@ function applyStaticCSS(): void {
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 8px;
       padding: 12px;
-      min-width: 338px;
+      min-width: 336px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24), 0 2px 8px rgba(0, 0, 0, 0.12);
       margin-bottom: 53px;
       margin-right: 8px;
     }
 
     window.calendar-widget box.calendar-header {
-      margin-bottom: 8px;
+      margin-bottom: 12px;
+    }
+
+    window.calendar-widget box.calendar-title-box {
+      min-width: 0;
     }
 
     window.calendar-widget button.calendar-nav-button {
@@ -947,6 +1034,11 @@ function applyStaticCSS(): void {
       font-size: 12px;
     }
 
+    window.calendar-widget button.today-button {
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+
     window.calendar-widget button.calendar-nav-button:hover,
     window.calendar-widget button.calendar-nav-button:focus {
       background-color: rgba(255, 255, 255, 0.1);
@@ -958,17 +1050,22 @@ function applyStaticCSS(): void {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       font-size: 14px;
       font-weight: 600;
+      text-transform: capitalize;
     }
 
     window.calendar-widget label.calendar-status {
       color: ${tokens.colors.foreground.tertiary.value};
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       font-size: 11px;
-      margin-bottom: 6px;
     }
 
     window.calendar-widget box.calendar-weekdays {
       margin-bottom: 4px;
+    }
+
+    window.calendar-widget box.calendar-day-grid {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
     }
 
     window.calendar-widget label.calendar-weekday {
@@ -978,19 +1075,27 @@ function applyStaticCSS(): void {
       font-weight: 500;
     }
 
-    window.calendar-widget box.calendar-day-row {
-      margin-bottom: 4px;
-    }
-
     window.calendar-widget button.calendar-day {
-      min-width: 44px;
-      min-height: 44px;
-      padding: 4px;
-      border-radius: 6px;
-      border: 1px solid transparent;
+      min-width: 48px;
+      min-height: 48px;
+      padding: 0;
+      border-radius: 0;
+      border: none;
       background-color: transparent;
       color: ${tokens.colors.foreground.primary.value};
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+    }
+
+    window.calendar-widget box.calendar-day-content {
+      padding: 4px;
+    }
+
+    window.calendar-widget button.calendar-day.not-first-column {
+      border-left: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    window.calendar-widget button.calendar-day.not-first-row {
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     window.calendar-widget button.calendar-day:hover,
@@ -999,8 +1104,8 @@ function applyStaticCSS(): void {
     }
 
     window.calendar-widget button.calendar-day.selected {
-      border-color: ${tokens.colors.accent.primary.value};
       background-color: rgba(0, 103, 192, 0.2);
+      box-shadow: inset 0 0 0 1px ${tokens.colors.accent.primary.value};
     }
 
     window.calendar-widget button.calendar-day.outside-month {
@@ -1014,10 +1119,11 @@ function applyStaticCSS(): void {
     }
 
     window.calendar-widget button.calendar-day.today label.calendar-day-number {
+      font-weight: 600;
+    }
+
+    window.calendar-widget button.calendar-day.today {
       background-color: rgba(255, 255, 255, 0.15);
-      border-radius: 999px;
-      min-width: 20px;
-      min-height: 20px;
     }
 
     window.calendar-widget box.calendar-event-marker {

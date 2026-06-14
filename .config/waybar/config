@@ -128,6 +128,7 @@
       "wiremix_terminal"
     ],
     "app_ids-mapping": {
+      "steam_app_0": "Pokmon Infinite Fusion",
       "WowUp-CF": "wowup-cf",
       "WowUpCf": "wowup-cf",
       "chrome-chat.openai.com__-ChatGPTProfile": "ChatGPT",

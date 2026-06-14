@@ -46,20 +46,20 @@ const calendarVariants = cva(
 );
 
 const dayCellVariants = cva(
-  'group relative flex min-w-0 flex-col rounded-md border p-1 text-left outline-none',
+  'group relative flex min-w-0 flex-col rounded-none border-0 p-1 text-left outline-none',
   {
     variants: {
       inVisibleMonth: {
-        true: 'border-transparent text-foreground-primary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:ring-1 focus-visible:ring-white/30',
+        true: 'border-white/[0.08] text-foreground-primary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:ring-1 focus-visible:ring-white/30',
         false:
-          'border-transparent text-foreground-tertiary/35 opacity-50 hover:bg-white/[0.04] focus-visible:bg-white/[0.04] focus-visible:ring-1 focus-visible:ring-white/15',
+          'border-white/[0.05] text-foreground-tertiary/35 opacity-50 hover:bg-white/[0.04] focus-visible:bg-white/[0.04] focus-visible:ring-1 focus-visible:ring-white/15',
       },
       selected: {
-        true: 'border-accent-primary bg-accent-primary/20 text-foreground-primary',
+        true: 'bg-accent-primary/20 text-foreground-primary ring-1 ring-inset ring-accent-primary',
         false: '',
       },
       today: {
-        true: 'font-semibold',
+        true: 'bg-white/15 font-semibold',
         false: '',
       },
       animated: {
@@ -205,20 +205,24 @@ export const Calendar: React.FC<CalendarProps> = ({
       </div>
 
       <div
-        className="grid grid-cols-7 gap-1"
+        className="grid grid-cols-7 gap-0 overflow-hidden rounded-md border border-white/[0.08]"
         style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}
       >
-        {days.map((day) => (
+        {days.map((day, index) => (
           <button
             type="button"
             key={localDateKey(day.date)}
             onClick={() => onSelectDate?.(day.date)}
-            className={dayCellVariants({
-              inVisibleMonth: day.inVisibleMonth,
-              selected: day.isSelected,
-              today: day.isToday,
-              animated: !disableAnimations,
-            })}
+            className={cn(
+              dayCellVariants({
+                inVisibleMonth: day.inVisibleMonth,
+                selected: day.isSelected,
+                today: day.isToday,
+                animated: !disableAnimations,
+              }),
+              index % 7 !== 0 && 'border-l',
+              index >= 7 && 'border-t'
+            )}
             aria-pressed={day.isSelected}
             aria-label={dayAriaLabel(day, locale)}
             title={dayTooltip(day, locale)}
@@ -226,8 +230,8 @@ export const Calendar: React.FC<CalendarProps> = ({
           >
             <span
               className={cn(
-                'flex h-5 w-5 items-center justify-center rounded-full text-xs',
-                day.isToday && 'bg-white/15 text-foreground-primary'
+                'flex h-5 w-5 items-center justify-center text-xs',
+                day.isToday && 'text-foreground-primary'
               )}
             >
               {day.date.getDate()}
