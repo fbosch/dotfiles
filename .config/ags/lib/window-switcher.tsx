@@ -8,6 +8,7 @@ import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
 import { execAsync } from "ags/process";
 import { getFallbackLetter, getIconForWindow, setImageFile } from "./app-icons";
+import { queryHyprlandJson } from "./hyprland-ipc";
 import { perf } from "./performance-monitor";
 
 /**
@@ -419,8 +420,10 @@ async function getWindows(): Promise<WindowInfo[]> {
     }
   }
   try {
-    const jsonStr = await execAsync("hyprctl clients -j");
-    const clients = JSON.parse(jsonStr) as HyprlandClient[];
+    const clients = queryHyprlandJson<HyprlandClient[]>("j/clients", {
+      component: "window-switcher",
+      metric: "hyprSocketClients",
+    }) ?? JSON.parse(await execAsync("hyprctl clients -j")) as HyprlandClient[];
     const focusedClient = clients.find((client) => client.focused);
     if (focusedClient?.address) {
       activeWindowCache = { timestampMs: nowMs, address: focusedClient.address };
@@ -538,8 +541,10 @@ async function getActiveWindowAddress(): Promise<string | null> {
     }
   }
   try {
-    const jsonStr = await execAsync("hyprctl activewindow -j");
-    const activeWindow = JSON.parse(jsonStr);
+    const activeWindow = queryHyprlandJson<{ address?: string }>("j/activewindow", {
+      component: "window-switcher",
+      metric: "hyprSocketActiveWindow",
+    }) ?? JSON.parse(await execAsync("hyprctl activewindow -j"));
     const address = activeWindow.address || null;
     activeWindowCache = { timestampMs: nowMs, address };
     return address;
