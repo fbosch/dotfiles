@@ -48,6 +48,17 @@ interface FlatpakUpdatesData {
   timestamp: string;
 }
 
+interface ProfileState {
+  mode: "default" | "gaming" | "powersave";
+  source: "none" | "manual" | "auto";
+  gamingTotal: number;
+  gamingManual: number;
+  gamingWatchdog: number;
+  gamingGamemode: number;
+  powersaveTotal: number;
+  powersaveManual: number;
+}
+
 // Default menu items - matching design system
 const defaultMenuItems: MenuItem[] = [
   {
@@ -128,6 +139,16 @@ let flakeUpdatesCount: number = 0;
 let flakeUpdatesData: FlakeUpdatesData | null = null;
 let flatpakUpdatesCount: number = 0;
 let flatpakUpdatesData: FlatpakUpdatesData | null = null;
+let profileState: ProfileState = {
+  mode: "default",
+  source: "none",
+  gamingTotal: 0,
+  gamingManual: 0,
+  gamingWatchdog: 0,
+  gamingGamemode: 0,
+  powersaveTotal: 0,
+  powersaveManual: 0,
+};
 const menuItemButtons: Map<string, Gtk.Button> = new Map();
 let flakeUpdateBadgeButton: Gtk.Button | null = null;
 let flatpakUpdateBadgeButton: Gtk.Button | null = null;
@@ -273,6 +294,132 @@ const getXdgUserDir = (dirKey: string): string | null => {
 
 const getXdgUserDirOrDefault = (dirKey: string, fallback: string): string =>
   getXdgUserDir(dirKey) || fallback;
+
+const profileStateDir = `${GLib.getenv("XDG_RUNTIME_DIR") || "/tmp"}/hypr-profiles`;
+const profilectlPath = `${homeDir}/.config/hypr/runtime/profiles/profilectl.sh`;
+
+function readProfileCount(profile: string, source: string): number {
+  try {
+    const path = `${profileStateDir}/${profile}.${source}.count`;
+    if (!GLib.file_test(path, GLib.FileTest.EXISTS)) {
+      return 0;
+    }
+
+    const [success, contents] = GLib.file_get_contents(path);
+    if (!success || !contents) {
+      return 0;
+    }
+
+    const value = Number.parseInt(new TextDecoder("utf-8").decode(contents), 10);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch (_e) {
+    return 0;
+  }
+}
+
+function readProfileTotal(profile: string): number {
+  try {
+    const dir = Gio.File.new_for_path(profileStateDir);
+    const enumerator = dir.enumerate_children("standard::name", Gio.FileQueryInfoFlags.NONE, null);
+    let total = 0;
+    let fileInfo;
+    while ((fileInfo = enumerator.next_file(null)) !== null) {
+      const name = fileInfo.get_name();
+      if (!name.startsWith(`${profile}.`) || !name.endsWith(".count")) {
+        continue;
+      }
+
+      total += readProfileCount(profile, name.slice(profile.length + 1, -".count".length));
+    }
+    return total;
+  } catch (_e) {
+    return 0;
+  }
+}
+
+function readProfileState(): ProfileState {
+  const gamingManual = readProfileCount("gaming", "manual");
+  const gamingWatchdog = readProfileCount("gaming", "watchdog");
+  const gamingGamemode = readProfileCount("gaming", "gamemode");
+  const powersaveManual = readProfileCount("powersave", "manual");
+  const gamingTotal = readProfileTotal("gaming");
+  const powersaveTotal = readProfileTotal("powersave");
+
+  if (gamingTotal > 0) {
+    return {
+      mode: "gaming",
+      source: gamingManual > 0 ? "manual" : "auto",
+      gamingTotal,
+      gamingManual,
+      gamingWatchdog,
+      gamingGamemode,
+      powersaveTotal,
+      powersaveManual,
+    };
+  }
+
+  if (powersaveTotal > 0) {
+    return {
+      mode: "powersave",
+      source: powersaveManual > 0 ? "manual" : "auto",
+      gamingTotal,
+      gamingManual,
+      gamingWatchdog,
+      gamingGamemode,
+      powersaveTotal,
+      powersaveManual,
+    };
+  }
+
+  return {
+    mode: "default",
+    source: "none",
+    gamingTotal,
+    gamingManual,
+    gamingWatchdog,
+    gamingGamemode,
+    powersaveTotal,
+    powersaveManual,
+  };
+}
+
+function refreshProfileState() {
+  profileState = readProfileState();
+}
+
+function profileSummary(): string {
+  if (profileState.source !== "none") {
+    return profileState.source;
+  }
+
+  return "auto";
+}
+
+function profileTooltip(): string {
+  return [
+    `Profile: ${profileSummary()}`,
+    `Gaming: total=${profileState.gamingTotal} manual=${profileState.gamingManual} watchdog=${profileState.gamingWatchdog} gamemode=${profileState.gamingGamemode}`,
+    `Powersave: total=${profileState.powersaveTotal} manual=${profileState.powersaveManual}`,
+  ].join("\n");
+}
+
+function runProfileCommand(command: string) {
+  try {
+    GLib.spawn_command_line_async(command);
+  } catch (e) {
+    console.error("Failed to update profile:", e);
+  }
+
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+    updateMenuItems();
+    return GLib.SOURCE_REMOVE;
+  });
+}
+
+function clearManualProfiles() {
+  runProfileCommand(`${profilectlPath} sync-source gaming manual 0`);
+  runProfileCommand(`${profilectlPath} sync-source powersave manual 0`);
+}
 
 // Build terminal command with correct flags based on terminal
 const getSystemUpdatesCommand = (): string => {
@@ -427,6 +574,8 @@ function showMenu() {
 
   if (!win) {
     createWindow();
+  } else {
+    updateMenuItems();
   }
 
   if (win) {
@@ -601,6 +750,75 @@ function createDivider(): Gtk.Separator {
   return separator;
 }
 
+function createProfileToggle(
+  id: string,
+  icon: string,
+  active: boolean,
+  activeClass: string,
+  command: string,
+): Gtk.Button {
+  return (
+    <button
+      canFocus={true}
+      class={`profile-toggle ${active ? activeClass : ""}`}
+      onClicked={() => runProfileCommand(command)}
+      $={(self: Gtk.Button) => {
+        self.set_cursor_from_name("pointer");
+        menuItemButtons.set(id, self);
+      }}
+    >
+      <label label={icon} class="profile-toggle-icon" />
+    </button>
+  ) as Gtk.Button;
+}
+
+function createProfileControls(): Gtk.Box {
+  const manualActive = profileState.gamingManual > 0 || profileState.powersaveManual > 0;
+  const gamingActive = profileState.mode === "gaming";
+  const powersaveActive = profileState.mode === "powersave";
+
+  const profileBox = (
+    <box orientation={Gtk.Orientation.HORIZONTAL} spacing={4} class="profile-row">
+      <box orientation={Gtk.Orientation.HORIZONTAL} spacing={6} hexpand={true} class="profile-summary">
+        <label label="Profile" class="profile-label" />
+        <label label={profileSummary()} class="profile-source" />
+        {manualActive && (
+          <button
+            canFocus={true}
+            class="profile-clear"
+            onClicked={() => clearManualProfiles()}
+            $={(self: Gtk.Button) => {
+              self.set_cursor_from_name("pointer");
+              menuItemButtons.set("profile-clear", self);
+            }}
+          >
+            <label label={"\uE711"} class="profile-clear-icon" />
+          </button>
+        )}
+      </box>
+      <box orientation={Gtk.Orientation.HORIZONTAL} spacing={4} class="profile-actions">
+        {createProfileToggle(
+          "profile-gaming",
+          "\uE7FC",
+          gamingActive,
+          "gaming-active",
+          `${profilectlPath} ${profileState.gamingManual > 0 ? "remove-source" : "apply-source"} gaming manual`,
+        )}
+        {createProfileToggle(
+          "profile-powersave",
+          "\uE945",
+          powersaveActive,
+          "powersave-active",
+          `${profilectlPath} ${profileState.powersaveManual > 0 ? "remove-source" : "apply-source"} powersave manual`,
+        )}
+      </box>
+    </box>
+  ) as Gtk.Box;
+
+  profileBox.set_tooltip_text(profileTooltip());
+  return profileBox;
+}
+
 // Create user profile header (non-interactive)
 function createUserProfile(): Gtk.Box {
   const username = GLib.get_real_name() || GLib.get_user_name() || "User";
@@ -698,6 +916,7 @@ function updateMenuItems() {
   let error: string | undefined;
   try {
     if (!menuBox) return;
+    refreshProfileState();
     // Type assertion to help TypeScript understand menuBox is non-null after guard
     const box = menuBox as Gtk.Box;
 
@@ -718,6 +937,7 @@ function updateMenuItems() {
 
     // Add user profile at the top
     box.append(createUserProfile());
+    box.append(createProfileControls());
     box.append(createDivider());
 
     // Add menu items
@@ -905,6 +1125,91 @@ function applyStaticCSS() {
       font-size: 14px;
       font-weight: 600;
       color: ${tokens.colors.foreground.primary.value};
+    }
+
+    window.start-menu box.profile-row {
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    window.start-menu box.profile-row:hover {
+      background-color: rgba(255, 255, 255, 0.06);
+    }
+
+    window.start-menu box.profile-summary {
+      margin-top: 1px;
+    }
+
+    window.start-menu label.profile-label {
+      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      color: ${tokens.colors.foreground.primary.value};
+    }
+
+    window.start-menu label.profile-source {
+      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+      font-size: 11px;
+      color: ${tokens.colors.foreground.secondary.value};
+    }
+
+    window.start-menu button.profile-toggle {
+      min-width: 20px;
+      min-height: 20px;
+      padding: 0 4px;
+      border-radius: 5px;
+      border: none;
+      background-color: transparent;
+      color: ${tokens.colors.foreground.secondary.value};
+      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    window.start-menu button.profile-clear {
+      min-width: 18px;
+      min-height: 18px;
+      padding: 0;
+      border-radius: 5px;
+      border: none;
+      background-color: transparent;
+      color: ${tokens.colors.foreground.secondary.value};
+      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    window.start-menu label.profile-clear-icon {
+      font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
+      font-size: 12px;
+      color: inherit;
+    }
+
+    window.start-menu button.profile-toggle {
+      border: 1px solid rgba(255, 255, 255, 0.10);
+    }
+
+    window.start-menu button.profile-clear:hover,
+    window.start-menu button.profile-toggle:hover {
+      background-color: rgba(255, 255, 255, 0.10);
+    }
+
+    window.start-menu button.profile-toggle.gaming-active {
+      color: ${tokens.colors.state.success.value};
+      background-color: ${tokens.colors.state.success.value}24;
+      border-color: ${tokens.colors.state.success.value}66;
+    }
+
+    window.start-menu button.profile-toggle.powersave-active {
+      color: ${tokens.colors.state.warning.value};
+      background-color: ${tokens.colors.state.warning.value}24;
+      border-color: ${tokens.colors.state.warning.value}66;
+    }
+
+    window.start-menu label.profile-toggle-icon {
+      font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
+      font-size: 12px;
+      color: inherit;
     }
 
     /* Menu item base */

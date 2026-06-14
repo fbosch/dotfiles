@@ -305,12 +305,14 @@ export const StartMenu: React.FC<StartMenuProps> = ({
             {(profile.gamingManual || profile.powersaveManual) && (
               <button
                 type="button"
-                className="inline-flex size-4 items-center justify-center rounded text-[10px] font-semibold text-foreground-secondary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none active:scale-[0.98]"
+                className="inline-flex size-[18px] items-center justify-center rounded text-xs font-semibold leading-none text-foreground-secondary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none active:scale-[0.98]"
                 onClick={() => onProfileAction?.("clear-manual")}
                 tabIndex={isOpen ? 0 : -1}
                 aria-label="Clear manual profile"
               >
-                ×
+                <span className="font-fluent text-xs" aria-hidden="true">
+                  {"\uE711"}
+                </span>
               </button>
             )}
           </div>

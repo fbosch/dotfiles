@@ -83,6 +83,15 @@
   border-color: var(--border-color);
 }
 
+.control-center-list .notification:active,
+.control-center-list .notification-action:active,
+.control-center-list .notification-action > button:active,
+.notification-list .notification:active,
+.notification-list .notification-action:active,
+.notification-list .notification-action > button:active {
+  transform: none;
+}
+
 .control-center-list .notification:last-child {
   margin-bottom: 12px;
 }
@@ -381,6 +390,15 @@
     background 150ms ease,
     color 150ms ease,
     opacity 150ms ease;
+}
+
+.control-center-list .close-button,
+.notification-list .close-button {
+  margin: 6px 18px 0 -42px;
+}
+
+.floating-notifications .close-button {
+  margin: 6px 6px 0 -26px;
 }
 
 .close-button > image,
@@ -784,6 +802,12 @@
   background: var(--bg-color);
   border: 1px solid var(--border-color);
   margin-right: 0px;
+  transition: none;
+}
+
+.notification-list .notification:hover {
+  background: var(--bg-color);
+  border-color: var(--border-color);
 }
 
 /* Scrollbar */
