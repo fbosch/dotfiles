@@ -426,7 +426,7 @@ function makeAudioIconWidget(row: AudioRow): Gtk.Widget {
   const image = row.iconRef.kind === "theme"
     ? Gtk.Image.new_from_icon_name(row.iconRef.name)
     : new Gtk.Image();
-  image.set_pixel_size(20);
+  image.set_pixel_size(24);
   image.set_halign(Gtk.Align.CENTER);
   image.set_valign(Gtk.Align.CENTER);
   image.set_hexpand(true);
@@ -1302,7 +1302,7 @@ function applyStaticCSS(): void {
     }
 
     window.audio-mixer-widget image.audio-mixer-app-icon {
-      -gtk-icon-size: 20px;
+      -gtk-icon-size: 24px;
     }
 
     window.audio-mixer-widget label.audio-mixer-row-title {
