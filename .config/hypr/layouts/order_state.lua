@@ -61,6 +61,11 @@ function M.position_changed(state, target, axis)
 	return previous ~= nil and math.abs(current - previous) > 1
 end
 
+function M.position_in_area(target, axis, start, length)
+	local current = M.position(target, axis)
+	return current ~= nil and current >= start and current <= start + length
+end
+
 function M.remember_position(state, target, axis, center)
 	local id = M.target_id(target)
 	local positions = state.position_by_id[id]

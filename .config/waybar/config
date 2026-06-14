@@ -156,8 +156,25 @@
     "interval": 1,
     "align": 1,
     "justify": "right",
+    "on-click": "ags request -i ags-bundled calendar-widget '{\"action\":\"toggle\"}'",
+    "tooltip": false
+  },
+
+  "custom/swaync": {
+    "exec": "swaync-client -swb",
+    "return-type": "json",
+    "format": "{icon}",
+    "format-icons": {
+      "none": "󰂜",
+      "notification": "󰂚",
+      "dnd-none": "󰪑",
+      "dnd-notification": "󰂛",
+      "inhibited-none": "󰂜",
+      "inhibited-notification": "󰂚",
+      "dnd-inhibited-none": "󰪑",
+      "dnd-inhibited-notification": "󰂛"
+    },
     "on-click": "swaync-client -t",
-    "on-click-right": "ags request -i ags-bundled calendar-widget '{\"action\":\"toggle\"}'",
     "tooltip": false
   },
 
