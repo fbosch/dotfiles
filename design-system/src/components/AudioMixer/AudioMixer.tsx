@@ -166,7 +166,7 @@ const VolumeMeter: React.FC<{
   };
 
   return (
-    <div className="mt-3">
+    <div className="mt-2">
       <div className="mb-1 flex justify-between text-[11px] text-foreground-tertiary">
         <span>{item.muted ? 'Muted' : `${volume}%`}</span>
         {item.peak !== undefined && <span>Peak {clamp(item.peak, maxVolume)}%</span>}
@@ -174,7 +174,7 @@ const VolumeMeter: React.FC<{
       <div
         ref={trackRef}
         className={cn(
-          'group relative flex gap-0.5 py-2 outline-none',
+          'group relative flex gap-0.5 py-1.5 outline-none',
           onVolumeChange &&
             'cursor-pointer touch-none focus-visible:ring-2 focus-visible:ring-accent-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background-secondary'
         )}
@@ -216,8 +216,8 @@ const VolumeMeter: React.FC<{
         })}
         <div
           className={cn(
-            'pointer-events-none absolute top-1/2 h-4 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/50 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.35)]',
-            onVolumeChange && 'group-hover:h-5 group-focus-visible:h-5',
+            'pointer-events-none absolute top-1/2 h-3.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/50 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.35)]',
+            onVolumeChange && 'group-hover:h-4 group-focus-visible:h-4',
             item.muted && 'opacity-50'
           )}
           style={{ left: `${thumbPosition}%` }}
@@ -235,13 +235,13 @@ const AudioRow: React.FC<{
 }> = ({ item, maxVolume, onVolumeChange }) => (
   <article
     className={cn(
-      'rounded-lg border border-white/[0.08] bg-background-primary/45 p-3 shadow-sm',
+      'rounded-lg border border-white/[0.08] bg-background-primary/45 p-2.5 shadow-sm',
       item.muted && 'opacity-70'
     )}
   >
-    <div className="flex gap-3">
-      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-foreground-primary">
-        <span className="font-fluent text-lg" aria-hidden="true">
+    <div className="flex gap-2.5">
+      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-foreground-primary">
+        <span className="font-fluent text-base" aria-hidden="true">
           {itemIcon(item)}
         </span>
       </div>
@@ -277,28 +277,6 @@ export const AudioMixer: React.FC<AudioMixerProps> = ({
       className={cn(panelVariants({ animated: !disableAnimations }), className)}
       aria-label="Audio mixer"
     >
-      <header className="border-b border-white/[0.1] p-3">
-        <nav
-          className="flex gap-1 rounded-lg bg-background-primary/50 p-1"
-          aria-label="Audio mixer tabs"
-        >
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={tabVariants({ active: tab === activeTab, animated: !disableAnimations })}
-              onClick={() => onTabChange?.(tab)}
-              aria-pressed={tab === activeTab}
-            >
-              <span className="font-fluent" aria-hidden="true">
-                {tabMeta[tab].icon}
-              </span>
-              <span className="truncate">{tabMeta[tab].label}</span>
-            </button>
-          ))}
-        </nav>
-      </header>
-
       <div className="max-h-[520px] overflow-y-auto p-3">
         {currentItems.length === 0 ? (
           <div className="flex min-h-[220px] flex-col items-center justify-center rounded-lg border border-dashed border-white/[0.12] bg-background-primary/30 p-8 text-center">
@@ -320,6 +298,28 @@ export const AudioMixer: React.FC<AudioMixerProps> = ({
           </div>
         )}
       </div>
+
+      <footer className="border-t border-white/[0.1] p-3">
+        <nav
+          className="flex gap-1 rounded-lg bg-background-primary/50 p-1"
+          aria-label="Audio mixer tabs"
+        >
+          {tabs.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              className={tabVariants({ active: tab === activeTab, animated: !disableAnimations })}
+              onClick={() => onTabChange?.(tab)}
+              aria-pressed={tab === activeTab}
+            >
+              <span className="font-fluent" aria-hidden="true">
+                {tabMeta[tab].icon}
+              </span>
+              <span className="truncate">{tabMeta[tab].label}</span>
+            </button>
+          ))}
+        </nav>
+      </footer>
     </section>
   );
 };

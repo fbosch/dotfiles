@@ -1,6 +1,8 @@
 import app from "ags/gtk4/app";
 import { Astal } from "ags/gtk4";
 import Gdk from "gi://Gdk?version=4.0";
+import Gio from "gi://Gio?version=2.0";
+import GioUnix from "gi://GioUnix?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
@@ -14,6 +16,7 @@ interface AudioRow {
   id: string;
   name: string;
   icon: string;
+  iconRef?: IconRef | null;
   kind: RowKind;
   object: any;
   volume?: number;
@@ -36,6 +39,10 @@ interface AudioBackend {
   setDefault: (row: AudioRow) => void;
 }
 
+type IconRef =
+  | { kind: "theme"; name: string }
+  | { kind: "file"; path: string };
+
 const tabs: Array<{ id: AudioMixerTab; label: string; icon: string }> = [
   { id: "playback", label: "Playback", icon: "\uE768" },
   { id: "output", label: "Output", icon: "\uE995" },
@@ -54,7 +61,11 @@ let lastToggleAtMs = 0;
 let pointerStartedInsideMixer = false;
 let activeTab: AudioMixerTab = "playback";
 let tabButtons = new Map<AudioMixerTab, Gtk.Button>();
+let rowCards: Gtk.Box[] = [];
+let focusedRowIndex = 0;
 let snapshot: AudioSnapshot = emptySnapshot("Audio backend unavailable", "unavailable");
+let iconTheme: Gtk.IconTheme | null = null;
+const iconCache = new Map<string, IconRef | null>();
 
 function emptyRows(): Record<AudioMixerTab, AudioRow[]> {
   return {
@@ -158,6 +169,144 @@ function displayName(object: any, fallback: string): string {
   return getText(object, ["description", "name", "nick", "media_name", "application_name"]) ?? fallback;
 }
 
+function fileExists(path: string): boolean {
+  try {
+    return Gio.File.new_for_path(path).query_exists(null);
+  } catch {
+    return false;
+  }
+}
+
+function ensureIconTheme(): Gtk.IconTheme | null {
+  if (iconTheme) return iconTheme;
+  const display = Gdk.Display.get_default();
+  iconTheme = display ? Gtk.IconTheme.get_for_display(display) : null;
+  return iconTheme;
+}
+
+function getIconRef(icon: Gio.Icon | null): IconRef | null {
+  if (!icon) return null;
+
+  if (icon instanceof Gio.ThemedIcon) {
+    const names = icon.get_names();
+    if (names && names.length > 0) return { kind: "theme", name: names[0] };
+  }
+
+  if (icon instanceof Gio.FileIcon) {
+    const path = icon.get_file().get_path();
+    if (path && fileExists(path)) return { kind: "file", path };
+  }
+
+  return null;
+}
+
+function normalizeIconCandidate(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s*\(grabbed\)\s*$/i, "")
+    .trim();
+}
+
+function iconSearchCandidates(value: string): string[] {
+  const normalized = normalizeIconCandidate(value);
+  if (!normalized) return [];
+
+  const lower = normalized.toLowerCase();
+  const classWithoutSeparators = lower.replace(/[-_\s]+/g, "");
+  const kebabFromCamel = normalized.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+  const kebabWithMergedBrand = kebabFromCamel.replace(/^([^-]+)-([^-]+)-(.+)$/, "$1$2-$3");
+
+  return Array.from(
+    new Set([
+      normalized,
+      lower,
+      lower.replace(/\s+/g, "-"),
+      lower.replace(/\s+/g, "_"),
+      classWithoutSeparators,
+      kebabFromCamel,
+      kebabWithMergedBrand,
+      kebabFromCamel.replace(/-/g, ""),
+      ...lower.split(/\s+-\s+|\s+—\s+|\s*:\s*/).filter(Boolean),
+    ]),
+  ).filter((candidate) => candidate !== "");
+}
+
+function getIconForCandidate(candidate: string): IconRef | null {
+  if (!candidate) return null;
+  if (iconCache.has(candidate)) return iconCache.get(candidate)!;
+
+  let icon: IconRef | null = null;
+  for (const desktopId of iconSearchCandidates(candidate).map((entry) => `${entry}.desktop`)) {
+    try {
+      const appInfo = GioUnix.DesktopAppInfo.new(desktopId);
+      if (!appInfo) continue;
+      icon = getIconRef(appInfo.get_icon());
+      if (icon) break;
+    } catch {
+      // Try next desktop id.
+    }
+  }
+
+  if (!icon) {
+    for (const searchTerm of iconSearchCandidates(candidate)) {
+      try {
+        const desktopSearchResults = GioUnix.DesktopAppInfo.search(searchTerm);
+        for (const desktopIds of desktopSearchResults) {
+          for (const desktopId of desktopIds) {
+            const appInfo = GioUnix.DesktopAppInfo.new(desktopId);
+            if (!appInfo) continue;
+            icon = getIconRef(appInfo.get_icon());
+            if (icon) break;
+          }
+          if (icon) break;
+        }
+        if (icon) break;
+      } catch {
+        // Try next search term.
+      }
+    }
+  }
+
+  if (!icon) {
+    const theme = ensureIconTheme();
+    if (theme) {
+      for (const iconName of iconSearchCandidates(candidate)) {
+        if (theme.has_icon(iconName)) {
+          icon = { kind: "theme", name: iconName };
+          break;
+        }
+      }
+    }
+  }
+
+  iconCache.set(candidate, icon);
+  return icon;
+}
+
+function getIconForAudioObject(object: any): IconRef | null {
+  const directIcon = getText(object, ["icon_name", "icon", "application_icon_name"]);
+  const theme = ensureIconTheme();
+  if (directIcon && theme?.has_icon(directIcon)) return { kind: "theme", name: directIcon };
+  if (directIcon && directIcon.startsWith("/") && fileExists(directIcon)) return { kind: "file", path: directIcon };
+
+  const candidates = Array.from(
+    new Set(
+      [
+        getText(object, ["application_id", "app_id", "application_process_binary", "binary"]),
+        getText(object, ["application_name", "app_name", "name", "media_name", "description"]),
+      ].filter((candidate): candidate is string => candidate !== undefined),
+    ),
+  );
+
+  for (const candidate of candidates) {
+    const icon = getIconForCandidate(candidate);
+    if (icon) return icon;
+  }
+
+  return null;
+}
+
 function clamp(value: number, max = maxVolume): number {
   return Math.max(0, Math.min(max, Math.round(value)));
 }
@@ -218,11 +367,39 @@ function makeLabel(label: string, className: string): Gtk.Label {
 
 function makeIconLabel(label: string): Gtk.Label {
   const widget = makeLabel(label, "audio-mixer-icon-label");
+  widget.set_hexpand(true);
+  widget.set_vexpand(true);
   widget.set_halign(Gtk.Align.CENTER);
   widget.set_valign(Gtk.Align.CENTER);
   widget.set_xalign(0.5);
   widget.set_yalign(0.5);
   return widget;
+}
+
+function setImageFile(image: Gtk.Image, path: string): void {
+  try {
+    image.set_from_file(path);
+  } catch (e) {
+    console.error(`Failed to load audio mixer icon file ${path}:`, e);
+  }
+}
+
+function makeAudioIconWidget(row: AudioRow): Gtk.Widget {
+  if (!row.iconRef) return makeIconLabel(speakerIcon(row));
+
+  const image = row.iconRef.kind === "theme"
+    ? Gtk.Image.new_from_icon_name(row.iconRef.name)
+    : new Gtk.Image();
+  image.set_pixel_size(20);
+  image.set_halign(Gtk.Align.CENTER);
+  image.set_valign(Gtk.Align.CENTER);
+  image.set_hexpand(true);
+  image.set_vexpand(true);
+  image.add_css_class("audio-mixer-app-icon");
+
+  if (row.iconRef.kind === "file") setImageFile(image, row.iconRef.path);
+
+  return image;
 }
 
 function createAudioBackend(options: { applySnapshot: (snapshot: AudioSnapshot) => void }): AudioBackend {
@@ -255,6 +432,7 @@ function createAudioBackend(options: { applySnapshot: (snapshot: AudioSnapshot) 
       id: `${kind}:${objectId(object, fallback)}`,
       name: displayName(object, fallback),
       icon,
+      iconRef: kind === "stream" ? getIconForAudioObject(object) : null,
       kind,
       object,
       volume: readVolume(object),
@@ -372,10 +550,10 @@ function createAudioBackend(options: { applySnapshot: (snapshot: AudioSnapshot) 
     },
     toggleMute(row: AudioRow) {
       const muted = !(row.muted ?? getBoolean(row.object, ["mute", "muted"]) ?? false);
+      row.muted = muted;
       if (typeof row.object?.set_mute === "function") row.object.set_mute(muted);
       else if (typeof row.object?.set_muted === "function") row.object.set_muted(muted);
       else row.object.mute = muted;
-      scheduleRefresh();
     },
     setDefault(row: AudioRow) {
       if (typeof row.object?.set_is_default === "function") row.object.set_is_default(true);
@@ -394,10 +572,37 @@ const audioBackend = createAudioBackend({
 
 function activateTab(tab: AudioMixerTab): void {
   activeTab = tab;
+  focusedRowIndex = 0;
   for (const [tabId, button] of tabButtons) {
     setCssClass(button, "active", tabId === activeTab);
   }
   renderRows();
+}
+
+function activateAdjacentTab(direction: 1 | -1): void {
+  const currentIndex = tabs.findIndex((tab) => tab.id === activeTab);
+  const nextIndex = (currentIndex + direction + tabs.length) % tabs.length;
+  activateTab(tabs[nextIndex].id);
+}
+
+function focusRow(index: number): void {
+  if (rowCards.length === 0) return;
+  focusedRowIndex = Math.max(0, Math.min(rowCards.length - 1, index));
+  rowCards.forEach((card, cardIndex) => setCssClass(card, "focused", cardIndex === focusedRowIndex));
+  rowCards[focusedRowIndex]?.grab_focus();
+}
+
+function adjustRowVolume(row: AudioRow, delta: number): void {
+  if (row.volume === undefined) return;
+  row.volume = clamp(row.volume + delta);
+  audioBackend.setVolume(row, row.volume);
+  renderRows();
+}
+
+function toggleRowMute(row: AudioRow, index: number): void {
+  audioBackend.toggleMute(row);
+  renderRows();
+  focusRow(index);
 }
 
 function makeTabButton(tab: { id: AudioMixerTab; label: string; icon: string }): Gtk.Button {
@@ -412,6 +617,9 @@ function makeTabButton(tab: { id: AudioMixerTab; label: string; icon: string }):
   content.set_halign(Gtk.Align.CENTER);
   content.append(makeIconLabel(tab.icon));
   const label = makeLabel(tab.label, "audio-mixer-tab-label");
+  label.set_width_chars(8);
+  label.set_max_width_chars(8);
+  label.set_xalign(0);
   label.set_ellipsize(3);
   content.append(label);
   button.set_child(content);
@@ -459,7 +667,7 @@ function makeMeter(row: AudioRow): Gtk.Box | null {
   drawing.add_css_class("audio-mixer-meter");
   drawing.set_hexpand(true);
   drawing.set_halign(Gtk.Align.FILL);
-  drawing.set_size_request(-1, 24);
+  drawing.set_size_request(-1, 20);
   drawing.set_cursor_from_name("pointer");
 
   function updateLabel(): void {
@@ -525,10 +733,10 @@ function makeMeter(row: AudioRow): Gtk.Box | null {
 
     const thumbX = Math.max(3, Math.min(width - 3, (visibleVolume / maxVolume) * width));
     cr.setSourceRGBA(0, 0, 0, 0.35);
-    roundedRect(cr, thumbX - 3, 2, 6, height - 4, 3);
+    roundedRect(cr, thumbX - 3, 3, 6, height - 6, 3);
     cr.fill();
     cr.setSourceRGBA(1, 1, 1, row.muted ? 0.5 : 1);
-    roundedRect(cr, thumbX - 2, 3, 4, height - 6, 2);
+    roundedRect(cr, thumbX - 2, 4, 4, height - 8, 2);
     cr.fill();
   });
 
@@ -560,12 +768,58 @@ function makeMeter(row: AudioRow): Gtk.Box | null {
   return meterWrapper;
 }
 
-function makeRow(row: AudioRow): Gtk.Box {
+function makeRow(row: AudioRow, index: number): Gtk.Box {
   const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 });
   card.add_css_class("audio-mixer-row");
+  if (index === focusedRowIndex) card.add_css_class("focused");
   card.set_hexpand(true);
   card.set_halign(Gtk.Align.FILL);
+  card.set_focusable(true);
   if (row.muted) card.add_css_class("muted");
+
+  const focusController = new Gtk.EventControllerFocus();
+  focusController.connect("enter", () => {
+    focusedRowIndex = index;
+    rowCards.forEach((rowCard, cardIndex) => setCssClass(rowCard, "focused", cardIndex === focusedRowIndex));
+  });
+  card.add_controller(focusController);
+
+  const keyController = new Gtk.EventControllerKey();
+  keyController.connect("key-pressed", (_controller, keyval, _keycode, state) => {
+    if (keyval === Gdk.KEY_Up) {
+      focusRow(focusedRowIndex - 1);
+      return true;
+    }
+    if (keyval === Gdk.KEY_Down) {
+      focusRow(focusedRowIndex + 1);
+      return true;
+    }
+    if (keyval === Gdk.KEY_Left || keyval === Gdk.KEY_Right) {
+      const step = (state & Gdk.ModifierType.SHIFT_MASK) !== 0 ? 10 : 5;
+      adjustRowVolume(row, keyval === Gdk.KEY_Left ? -step : step);
+      focusRow(index);
+      return true;
+    }
+    if (keyval === Gdk.KEY_space) {
+      toggleRowMute(row, index);
+      return true;
+    }
+    if (keyval === Gdk.KEY_Tab || keyval === Gdk.KEY_ISO_Left_Tab) {
+      const backwards = keyval === Gdk.KEY_ISO_Left_Tab || (state & Gdk.ModifierType.SHIFT_MASK) !== 0;
+      activateAdjacentTab(backwards ? -1 : 1);
+      return true;
+    }
+    return false;
+  });
+  card.add_controller(keyController);
+
+  const clickController = new Gtk.GestureClick();
+  clickController.set_button(0);
+  clickController.connect("pressed", () => {
+    focusedRowIndex = index;
+    focusRow(index);
+  });
+  card.add_controller(clickController);
 
   const header = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 10 });
   header.set_hexpand(true);
@@ -574,13 +828,16 @@ function makeRow(row: AudioRow): Gtk.Box {
   iconBox.add_css_class("audio-mixer-row-icon");
   iconBox.set_halign(Gtk.Align.CENTER);
   iconBox.set_valign(Gtk.Align.START);
-  iconBox.set_size_request(40, 40);
-  iconBox.append(makeIconLabel(speakerIcon(row)));
+  iconBox.set_size_request(36, 36);
+  iconBox.set_hexpand(false);
+  iconBox.set_vexpand(false);
+  iconBox.append(makeAudioIconWidget(row));
   header.append(iconBox);
 
   const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 });
   content.set_hexpand(true);
   content.set_halign(Gtk.Align.FILL);
+  content.set_size_request(0, -1);
   const titleRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6 });
   titleRow.set_hexpand(true);
   titleRow.set_halign(Gtk.Align.FILL);
@@ -589,7 +846,7 @@ function makeRow(row: AudioRow): Gtk.Box {
   title.set_halign(Gtk.Align.START);
   title.set_xalign(0);
   title.set_width_chars(1);
-  title.set_max_width_chars(42);
+  title.set_max_width_chars(32);
   title.set_ellipsize(3);
   titleRow.append(title);
 
@@ -607,13 +864,17 @@ function makeRow(row: AudioRow): Gtk.Box {
   if (row.volume !== undefined || row.muted !== undefined) {
     const muteButton = new Gtk.Button({ label: row.muted ? "Unmute" : "Mute" });
     muteButton.add_css_class("audio-mixer-action");
+    muteButton.set_focusable(false);
     muteButton.set_cursor_from_name("pointer");
-    muteButton.connect("clicked", () => audioBackend.toggleMute(row));
+    muteButton.connect("clicked", () => {
+      toggleRowMute(row, index);
+    });
     actions.append(muteButton);
   }
   if (row.kind === "endpoint" && !row.isDefault) {
     const defaultButton = new Gtk.Button({ label: "Default" });
     defaultButton.add_css_class("audio-mixer-action");
+    defaultButton.set_focusable(false);
     defaultButton.set_cursor_from_name("pointer");
     defaultButton.connect("clicked", () => audioBackend.setDefault(row));
     actions.append(defaultButton);
@@ -625,28 +886,52 @@ function makeRow(row: AudioRow): Gtk.Box {
 }
 
 function makeEmptyState(): Gtk.Box {
-  const empty = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 });
+  const empty = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 });
   empty.add_css_class("audio-mixer-empty");
   empty.set_hexpand(true);
-  empty.set_valign(Gtk.Align.CENTER);
+  empty.set_vexpand(true);
   empty.set_halign(Gtk.Align.FILL);
-  empty.append(makeIconLabel("\uE7F4"));
+
+  const topSpacer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
+  topSpacer.set_vexpand(true);
+  empty.append(topSpacer);
+
+  const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 });
+  content.add_css_class("audio-mixer-empty-content");
+  content.set_halign(Gtk.Align.CENTER);
+  content.append(makeIconLabel("\uE7F4"));
   const label = makeLabel(snapshot.status === "loading" ? "Loading audio" : snapshot.message || "No audio objects", "audio-mixer-empty-label");
   label.set_halign(Gtk.Align.CENTER);
-  empty.append(label);
+  content.append(label);
+  empty.append(content);
+
+  const bottomSpacer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
+  bottomSpacer.set_vexpand(true);
+  empty.append(bottomSpacer);
   return empty;
 }
 
 function renderRows(): void {
   if (!rowList) return;
   clearBox(rowList);
+  rowCards = [];
   const rows = snapshot.rows[activeTab] ?? [];
   if (rows.length === 0) {
+    focusedRowIndex = 0;
     rowList.append(makeEmptyState());
     return;
   }
-  for (const row of rows) {
-    rowList.append(makeRow(row));
+  focusedRowIndex = Math.max(0, Math.min(focusedRowIndex, rows.length - 1));
+  rows.forEach((row, index) => {
+    const card = makeRow(row, index);
+    rowCards.push(card);
+    rowList.append(card);
+  });
+  if (isVisible) {
+    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+      focusRow(focusedRowIndex);
+      return GLib.SOURCE_REMOVE;
+    });
   }
 }
 
@@ -660,20 +945,22 @@ function buildShell(): void {
   if (!mixerBox) return;
   clearBox(mixerBox);
 
-  const header = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 0 });
-  header.add_css_class("audio-mixer-header");
-  const nav = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4 });
-  nav.add_css_class("audio-mixer-tabs");
-  nav.set_hexpand(true);
-  tabBar = nav;
-  header.append(nav);
-  mixerBox.append(header);
-  buildTabs();
-
   const body = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 });
   body.add_css_class("audio-mixer-body");
+  body.set_size_request(500, -1);
   rowList = body;
   mixerBox.append(body);
+
+  const footer = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 0 });
+  footer.add_css_class("audio-mixer-footer");
+  const nav = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4, homogeneous: true });
+  nav.add_css_class("audio-mixer-tabs");
+  nav.set_hexpand(true);
+  nav.set_size_request(476, -1);
+  tabBar = nav;
+  footer.append(nav);
+  mixerBox.append(footer);
+  buildTabs();
   renderRows();
 }
 
@@ -818,8 +1105,8 @@ function applyStaticCSS(): void {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
     }
 
-    window.audio-mixer-widget box.audio-mixer-header {
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    window.audio-mixer-widget box.audio-mixer-footer {
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
       padding: 12px;
     }
 
@@ -864,14 +1151,14 @@ function applyStaticCSS(): void {
 
     window.audio-mixer-widget box.audio-mixer-body {
       padding: 12px;
-      min-height: 220px;
+      min-height: 180px;
     }
 
     window.audio-mixer-widget box.audio-mixer-row {
       background-color: rgba(32, 32, 32, 0.45);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 8px;
-      padding: 12px;
+      padding: 10px;
       margin-bottom: 8px;
     }
 
@@ -879,18 +1166,27 @@ function applyStaticCSS(): void {
       opacity: 0.72;
     }
 
+    window.audio-mixer-widget box.audio-mixer-row.focused {
+      border-color: rgba(0, 103, 192, 0.65);
+      background-color: rgba(32, 32, 32, 0.62);
+    }
+
     window.audio-mixer-widget box.audio-mixer-row-icon {
       background-color: rgba(255, 255, 255, 0.06);
       border-radius: 8px;
-      min-width: 40px;
-      max-width: 40px;
-      min-height: 40px;
-      max-height: 40px;
+      min-width: 36px;
+      max-width: 36px;
+      min-height: 36px;
+      max-height: 36px;
       padding: 0;
     }
 
     window.audio-mixer-widget box.audio-mixer-row-icon label.audio-mixer-icon-label {
-      font-size: 18px;
+      font-size: 17px;
+    }
+
+    window.audio-mixer-widget image.audio-mixer-app-icon {
+      -gtk-icon-size: 20px;
     }
 
     window.audio-mixer-widget label.audio-mixer-row-title {
@@ -915,7 +1211,7 @@ function applyStaticCSS(): void {
     }
 
     window.audio-mixer-widget box.audio-mixer-meter-wrapper {
-      margin-top: 12px;
+      margin-top: 8px;
     }
 
     window.audio-mixer-widget label.audio-mixer-volume-label {
@@ -941,7 +1237,7 @@ function applyStaticCSS(): void {
     }
 
     window.audio-mixer-widget button.audio-mixer-action {
-      min-height: 26px;
+      min-height: 24px;
       padding: 0 8px;
       border-radius: 6px;
       border: 1px solid rgba(255, 255, 255, 0.1);
@@ -961,8 +1257,12 @@ function applyStaticCSS(): void {
       border: 1px dashed rgba(255, 255, 255, 0.12);
       border-radius: 8px;
       background-color: rgba(32, 32, 32, 0.3);
-      padding: 36px;
+      padding: 0;
       min-height: 180px;
+    }
+
+    window.audio-mixer-widget box.audio-mixer-empty-content {
+      padding: 36px;
     }
 
     window.audio-mixer-widget box.audio-mixer-empty label.audio-mixer-icon-label {
