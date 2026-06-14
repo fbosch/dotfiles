@@ -23,6 +23,7 @@ BENCH_CYCLE_SLEEP="${BENCH_CYCLE_SLEEP:-0.05}"
 BENCH_WARMUP_COUNT="${BENCH_WARMUP_COUNT:-2}"
 BENCH_MEM_CYCLES="${BENCH_MEM_CYCLES:-100}"
 BENCH_COMPONENT_CYCLES="${BENCH_COMPONENT_CYCLES:-25}"
+BENCH_AUDIO_MIXER_SLEEP="${BENCH_AUDIO_MIXER_SLEEP:-0}"
 BENCH_CALENDAR_CYCLES="${BENCH_CALENDAR_CYCLES:-12}"
 BENCH_CALENDAR_REFRESH_WAIT="${BENCH_CALENDAR_REFRESH_WAIT:-0.25}"
 BENCH_TARGET="${1:-${BENCH_TARGET:-all}}"
@@ -381,6 +382,7 @@ am_before_pss_kb="$(read_pss_kb "$AGS_PID")"
 for _ in $(seq 1 "$BENCH_COMPONENT_CYCLES"); do
   ags request -i "$INSTANCE" "audio-mixer-widget" '{"action":"show"}' >/dev/null
   ags request -i "$INSTANCE" "audio-mixer-widget" '{"action":"hide"}' >/dev/null
+  sleep "$BENCH_AUDIO_MIXER_SLEEP"
 done
 am_after_rss_kb="$(read_rss_kb "$AGS_PID")"
 am_after_pss_kb="$(read_pss_kb "$AGS_PID")"

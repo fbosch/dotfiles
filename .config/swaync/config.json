@@ -43,7 +43,7 @@
     "hyprland-profile-toggle": {
       "state": "transient",
       "app-name": "^Hyprland$",
-      "summary": "^(Performance Mode|Game Mode) (Enabled|Disabled)$"
+      "summary": "^(Powersave Mode|Game Mode) (Enabled|Disabled)$"
     },
     "example-name": {
       "state": "muted",
@@ -83,16 +83,16 @@
       "actions": [
         {
           "label": "󱤅",
-          "command": "sh -c 'setsid -f ~/.config/hypr/runtime/profiles/toggle-performance-mode.sh >/dev/null 2>&1'",
+          "command": "sh -c 'setsid -f ~/.config/hypr/runtime/profiles/toggle-powersave-mode.sh >/dev/null 2>&1'",
           "type": "toggle",
-          "update-command": "sh -c '~/.config/hypr/runtime/profiles/profilectl.sh is-active performance && echo true || echo false'",
-          "tooltip": "Toggle Performance Mode"
+          "update-command": "sh -c '~/.config/hypr/runtime/profiles/profilectl.sh is-source-active powersave manual && echo true || echo false'",
+          "tooltip": "Toggle Powersave Mode"
         },
         {
           "label": "󰊴",
           "command": "sh -c 'setsid -f ~/.config/hypr/runtime/profiles/toggle-gaming-mode.sh >/dev/null 2>&1'",
           "type": "toggle",
-          "update-command": "sh -c '~/.config/hypr/runtime/profiles/profilectl.sh is-active gaming && echo true || echo false'",
+          "update-command": "sh -c '~/.config/hypr/runtime/profiles/profilectl.sh is-source-active gaming manual && echo true || echo false'",
           "tooltip": "Toggle Game Mode"
         },
         {

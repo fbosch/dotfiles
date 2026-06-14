@@ -5,6 +5,7 @@ import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
 import { fileExists, getFaugusIconForCandidates, getIconForClass, setImageFile, type IconRef } from "./app-icons";
+import { queryHyprlandJson } from "./hyprland-ipc";
 import { perf } from "./performance-monitor";
 
 type AudioMixerTab = "playback" | "output" | "input";
@@ -54,7 +55,8 @@ const tabs: Array<{ id: AudioMixerTab; label: string; icon: string }> = [
 
 const maxVolume = 150;
 const meterSegments = 12;
-const hyprClientCacheTtlMs = 500;
+const wpctlCacheTtlMs = 500;
+const hyprClientCacheTtlMs = 2000;
 
 let win: Astal.Window | null = null;
 let mixerBox: Gtk.Box | null = null;
@@ -195,7 +197,7 @@ function displayName(object: any, fallback: string): string {
 function parseWpctlInspect(id: number): Record<string, string> | null {
   const nowMs = GLib.get_monotonic_time() / 1000;
   const cached = wpctlInspectCache.get(id);
-  if (cached && nowMs - cached.timestampMs < hyprClientCacheTtlMs) return cached.properties;
+  if (cached && nowMs - cached.timestampMs < wpctlCacheTtlMs) return cached.properties;
 
   const mark = perf.start("audio-mixer-widget", "wpctlInspect");
   let ok = true;
@@ -225,7 +227,7 @@ function parseWpctlInspect(id: number): Record<string, string> | null {
 
 function getWpctlStreams(): Array<{ id: number; name: string }> {
   const nowMs = GLib.get_monotonic_time() / 1000;
-  if (wpctlStatusCache && nowMs - wpctlStatusCache.timestampMs < hyprClientCacheTtlMs) {
+  if (wpctlStatusCache && nowMs - wpctlStatusCache.timestampMs < wpctlCacheTtlMs) {
     return wpctlStatusCache.streams;
   }
 
@@ -298,6 +300,15 @@ function getHyprlandClients(): HyprlandClient[] {
   const nowMs = GLib.get_monotonic_time() / 1000;
   if (hyprClientCache && nowMs - hyprClientCache.timestampMs < hyprClientCacheTtlMs) {
     return hyprClientCache.clients;
+  }
+
+  const socketClients = queryHyprlandJson<HyprlandClient[]>("j/clients", {
+    component: "audio-mixer-widget",
+    metric: "hyprSocketClients",
+  });
+  if (socketClients) {
+    hyprClientCache = { timestampMs: nowMs, clients: socketClients };
+    return socketClients;
   }
 
   const mark = perf.start("audio-mixer-widget", "hyprctlClients");
