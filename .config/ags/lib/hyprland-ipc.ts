@@ -5,9 +5,14 @@ import { perf } from "./performance-monitor";
 interface HyprlandIpcOptions {
   component?: string;
   metric?: string;
+  socketName?: string;
+  timeoutSeconds?: number;
 }
 
-let cachedSocketPath: string | null | undefined;
+const defaultSocketName = ".socket.sock";
+const defaultTimeoutSeconds = 1;
+
+const cachedSocketPaths = new Map<string, string | null>();
 
 function fileExists(path: string): boolean {
   try {
@@ -17,23 +22,29 @@ function fileExists(path: string): boolean {
   }
 }
 
-export function getHyprlandSocketPath(): string | null {
+export function getHyprlandSocketPath(socketName = defaultSocketName): string | null {
+  const cachedSocketPath = cachedSocketPaths.get(socketName);
   if (cachedSocketPath !== undefined) return cachedSocketPath;
 
   const runtimeDir = GLib.getenv("XDG_RUNTIME_DIR");
   const signature = GLib.getenv("HYPRLAND_INSTANCE_SIGNATURE");
   if (!runtimeDir || !signature) {
-    cachedSocketPath = null;
-    return cachedSocketPath;
+    cachedSocketPaths.set(socketName, null);
+    return null;
   }
 
-  const socketPath = `${runtimeDir}/hypr/${signature}/.socket.sock`;
-  cachedSocketPath = fileExists(socketPath) ? socketPath : null;
-  return cachedSocketPath;
+  const socketPath = `${runtimeDir}/hypr/${signature}/${socketName}`;
+  const availableSocketPath = fileExists(socketPath) ? socketPath : null;
+  cachedSocketPaths.set(socketName, availableSocketPath);
+  return availableSocketPath;
+}
+
+export function hasHyprlandSocket(socketName = defaultSocketName): boolean {
+  return getHyprlandSocketPath(socketName) !== null;
 }
 
 export function queryHyprland(request: string, options: HyprlandIpcOptions = {}): string | null {
-  const socketPath = getHyprlandSocketPath();
+  const socketPath = getHyprlandSocketPath(options.socketName);
   if (!socketPath) return null;
 
   const mark = perf.start(options.component ?? "hyprland-ipc", options.metric ?? "query");
@@ -42,6 +53,7 @@ export function queryHyprland(request: string, options: HyprlandIpcOptions = {})
   let connection: Gio.SocketConnection | null = null;
   try {
     const socketClient = new Gio.SocketClient();
+    socketClient.set_timeout(options.timeoutSeconds ?? defaultTimeoutSeconds);
     const address = Gio.UnixSocketAddress.new(socketPath);
     connection = socketClient.connect(address, null);
     const output = connection.get_output_stream();
@@ -88,4 +100,11 @@ export function queryHyprlandJson<T>(request: string, options: HyprlandIpcOption
   } catch {
     return null;
   }
+}
+
+export function dispatchHyprland(dispatcher: string, options: HyprlandIpcOptions = {}): boolean {
+  return queryHyprland(`dispatch ${dispatcher}`, {
+    ...options,
+    metric: options.metric ?? "dispatch",
+  }) !== null;
 }
