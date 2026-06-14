@@ -146,26 +146,26 @@ run("spawned active window does not reorder existing columns", function()
 	assert_box(second.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
 end)
 
-run("dragged portrait window ignores source x outside ultrawide area", function()
+run("dragged portrait window entering from left lands leftmost", function()
 	local ultrawide_layout = registered_layout.layout
 	local portrait_layout = require("layouts.portrait_rows")
 	registered_layout.layout = ultrawide_layout
 
 	local dragged = set_monitor(make_target(1, true), "HDMI-A-2")
 	local source_other = set_monitor(make_target(2), "HDMI-A-2")
-	portrait_layout.recalculate({ area = { x = 2000, y = 0, w = 800, h = 1200 }, targets = { dragged, source_other } })
+	portrait_layout.recalculate({ area = { x = -900, y = 0, w = 800, h = 1200 }, targets = { dragged, source_other } })
 
-	local workspace = "cross-monitor-drag"
+	local workspace = "cross-monitor-drag-left"
 	dragged.window.workspace = { name = workspace }
 	dragged.window.monitor.name = "DP-2"
-	set_geometry(dragged, 2000)
+	set_geometry(dragged, -900, 800)
 
 	local left = make_target(3)
 	local right = make_target(4)
-	ultrawide_layout.recalculate(make_context({ left, dragged, right }, workspace))
+	ultrawide_layout.recalculate(make_context({ left, right, dragged }, workspace))
 
-	assert_box(left.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
-	assert_box(dragged.placed, { x = 310, y = 20, w = 400, h = 500 }, "dragged target")
+	assert_box(dragged.placed, { x = 10, y = 20, w = 300, h = 500 }, "dragged target")
+	assert_box(left.placed, { x = 310, y = 20, w = 400, h = 500 }, "left target")
 	assert_box(right.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
 end)
 

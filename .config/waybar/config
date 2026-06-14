@@ -107,7 +107,7 @@
     "format": "{}",
     "format-en": "ENG",
     "format-da": "DAN",
-    "on-click": "hyprctl switchxkblayout at-translated-set-2-keyboard next",
+    "on-click": "hyprctl switchxkblayout at-translated-set-2-keyboard next"
   },
 
   "wlr/taskbar": {
@@ -148,7 +148,7 @@
     "format-ethernet": "",
     "format-disconnected": "󰈂",
     "tooltip-format": "{ifname}",
-    "on-click": "sh -c 'if pgrep -f \"^nm-connection-editor\" > /dev/null; then pkill -f \"^nm-connection-editor\"; else nm-connection-editor & disown; fi'",
+    "on-click": "sh -c 'if pgrep -f \"^nm-connection-editor\" > /dev/null; then pkill -f \"^nm-connection-editor\"; else nm-connection-editor & disown; fi'"
    },
 
   "clock": {
@@ -189,7 +189,7 @@
       "shutdown": "shutdown 0",
       "reboot": "reboot",
       "suspend": "systemctl suspend",
-      "hibernate": "systemctl hibernate",
+      "hibernate": "systemctl hibernate"
     }
-  },
+  }
 }

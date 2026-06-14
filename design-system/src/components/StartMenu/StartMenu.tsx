@@ -87,6 +87,13 @@ export interface MenuItem {
   onClick?: () => void;
 }
 
+export interface StartMenuProfile {
+  mode: "default" | "gaming" | "powersave";
+  source?: "none" | "manual" | "auto";
+  gamingManual?: boolean;
+  powersaveManual?: boolean;
+}
+
 export interface StartMenuProps extends VariantProps<typeof menuVariants> {
   /**
    * Control menu visibility
@@ -102,6 +109,10 @@ export interface StartMenuProps extends VariantProps<typeof menuVariants> {
    */
   systemUpdatesCount?: number;
   /**
+   * Current Hyprland profile state shown in the embedded profile controls.
+   */
+  profile?: StartMenuProfile;
+  /**
    * Disable animations for better performance on slower systems
    */
   disableAnimations?: boolean;
@@ -113,6 +124,10 @@ export interface StartMenuProps extends VariantProps<typeof menuVariants> {
    * Callback when menu item is clicked
    */
   onItemClick?: (itemId: string) => void;
+  /**
+   * Callback when profile controls are clicked.
+   */
+  onProfileAction?: (action: "gaming" | "powersave" | "clear-manual") => void;
   /**
    * Additional CSS classes
    */
@@ -188,13 +203,30 @@ const defaultMenuItems: MenuItem[] = [
   },
 ];
 
+const defaultProfile: StartMenuProfile = {
+  mode: "default",
+  source: "none",
+  gamingManual: false,
+  powersaveManual: false,
+};
+
+const profileSummary = (profile: StartMenuProfile) => {
+  if (profile.mode === "default") return "Default";
+  const label = profile.mode === "gaming" ? "Gaming" : "Powersave";
+  return profile.source && profile.source !== "none"
+    ? `${label} (${profile.source})`
+    : label;
+};
+
 export const StartMenu: React.FC<StartMenuProps> = ({
   isOpen = false,
   items = defaultMenuItems,
   systemUpdatesCount = 0,
+  profile = defaultProfile,
   disableAnimations = false,
   onClose,
   onItemClick,
+  onProfileAction,
   className,
   style,
 }) => {
@@ -225,6 +257,57 @@ export const StartMenu: React.FC<StartMenuProps> = ({
       role="menu"
       aria-hidden={!isOpen}
     >
+      <div className="rounded-md border border-white/10 bg-white/[0.04] p-1.5 mb-1">
+        <div className="flex items-center justify-between gap-2 px-0.5 pb-1">
+          <span className="text-xs font-semibold text-foreground-secondary">
+            Profile
+          </span>
+          <span
+            className={cn(
+              "text-xs font-semibold",
+              profile.mode === "gaming" && "text-state-success",
+              profile.mode === "powersave" && "text-state-warning",
+              profile.mode === "default" && "text-foreground-primary",
+            )}
+          >
+            {profileSummary(profile)}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            className={cn(
+              "rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs font-semibold text-foreground-primary hover:bg-white/10 focus-visible:outline-none focus-visible:bg-white/10",
+              profile.mode === "gaming" && "border-state-success/40 bg-state-success/15",
+            )}
+            onClick={() => onProfileAction?.("gaming")}
+            tabIndex={isOpen ? 0 : -1}
+          >
+            {profile.mode === "gaming" ? "Gaming on" : "Gaming"}
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs font-semibold text-foreground-primary hover:bg-white/10 focus-visible:outline-none focus-visible:bg-white/10",
+              profile.mode === "powersave" && "border-state-warning/40 bg-state-warning/15",
+            )}
+            onClick={() => onProfileAction?.("powersave")}
+            tabIndex={isOpen ? 0 : -1}
+          >
+            {profile.mode === "powersave" ? "Save on" : "Powersave"}
+          </button>
+        </div>
+        {(profile.gamingManual || profile.powersaveManual) && (
+          <button
+            type="button"
+            className="mt-1.5 w-full rounded-md px-2 py-1 text-xs font-semibold text-foreground-secondary hover:bg-white/10 focus-visible:outline-none focus-visible:bg-white/10"
+            onClick={() => onProfileAction?.("clear-manual")}
+            tabIndex={isOpen ? 0 : -1}
+          >
+            Clear manual profile
+          </button>
+        )}
+      </div>
       {items.map((item, index) => {
         if (item.id.startsWith("divider")) {
           return (

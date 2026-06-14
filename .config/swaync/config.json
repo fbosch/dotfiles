@@ -82,20 +82,6 @@
     "buttons-grid": {
       "actions": [
         {
-          "label": "󱤅",
-          "command": "sh -c 'setsid -f ~/.config/hypr/runtime/profiles/toggle-powersave-mode.sh >/dev/null 2>&1'",
-          "type": "toggle",
-          "update-command": "sh -c '~/.config/hypr/runtime/profiles/profilectl.sh is-source-active powersave manual && echo true || echo false'",
-          "tooltip": "Toggle Powersave Mode"
-        },
-        {
-          "label": "󰊴",
-          "command": "sh -c 'setsid -f ~/.config/hypr/runtime/profiles/toggle-gaming-mode.sh >/dev/null 2>&1'",
-          "type": "toggle",
-          "update-command": "sh -c '~/.config/hypr/runtime/profiles/profilectl.sh is-source-active gaming manual && echo true || echo false'",
-          "tooltip": "Toggle Game Mode"
-        },
-        {
           "label": "󰖔",
           "command": "bash ~/.config/hypr/runtime/desktop/toggle-night-light.sh toggle",
           "type": "toggle",
