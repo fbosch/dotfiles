@@ -8,7 +8,7 @@ import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
 import { execAsync } from "ags/process";
 import { getFallbackLetter, getIconForWindow, setImageFile } from "./app-icons";
-import { queryHyprlandJson } from "./hyprland-ipc";
+import { dispatchHyprland, queryHyprlandJson } from "./hyprland-ipc";
 import { perf } from "./performance-monitor";
 
 /**
@@ -554,29 +554,39 @@ async function getActiveWindowAddress(): Promise<string | null> {
   }
 }
 
-function hyprLuaFocusCommand(address: string): string {
-  const expression = `hl.dsp.focus({ window = "address:${address}" })`;
-  const command = `hyprctl dispatch ${GLib.shell_quote(expression)} && ${WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT}`;
-  return `dash -c ${GLib.shell_quote(command)}`;
+function dispatchHyprlandWithFallback(dispatcher: string, metric: string): void {
+  if (dispatchHyprland(dispatcher, { component: "window-switcher", metric })) return;
+  GLib.spawn_command_line_sync(`hyprctl dispatch ${GLib.shell_quote(dispatcher)}`);
 }
 
-function hyprLuaFocusAndCenterCommand(window: WindowInfo): string {
+function warpCursorToActiveWindow(): void {
+  const home = GLib.getenv("HOME");
+  const script = home ? `${home}/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh` : WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT;
+  GLib.spawn_command_line_async(script);
+}
+
+function focusWindow(address: string): void {
+  dispatchHyprlandWithFallback(`hl.dsp.focus({ window = "address:${address}" })`, "hyprSocketDispatchFocus");
+  warpCursorToActiveWindow();
+}
+
+function focusAndCenterWindow(window: WindowInfo): void {
   if (!window.position || !window.size) {
-    return hyprLuaFocusCommand(window.address);
+    focusWindow(window.address);
+    return;
   }
 
   const cursorX = Math.floor(window.position.x + window.size.width / 2);
   const cursorY = Math.floor(window.position.y + window.size.height / 2);
-  const focusExpression = `hl.dsp.focus({ window = "address:${window.address}" })`;
-  const cursorExpression = `hl.dsp.cursor.move({ x = ${cursorX}, y = ${cursorY} })`;
-  const command = `hyprctl dispatch ${GLib.shell_quote(focusExpression)} && hyprctl dispatch ${GLib.shell_quote(cursorExpression)}`;
-
-  return `dash -c ${GLib.shell_quote(command)}`;
+  dispatchHyprlandWithFallback(`hl.dsp.focus({ window = "address:${window.address}" })`, "hyprSocketDispatchFocus");
+  dispatchHyprlandWithFallback(`hl.dsp.cursor.move({ x = ${cursorX}, y = ${cursorY} })`, "hyprSocketDispatchCursor");
 }
 
-function restoreMinimizedAndFocusCommand(address: string): string {
-  const command = `${TOGGLE_MINIMIZED_WORKSPACE_SCRIPT} ${GLib.shell_quote(address)} && ${hyprLuaFocusCommand(address)}`;
-  return `dash -c ${GLib.shell_quote(command)}`;
+function restoreMinimizedAndFocus(address: string): void {
+  const home = GLib.getenv("HOME");
+  const script = home ? `${home}/.config/hypr/runtime/windows/toggle-minimized-workspace.sh` : TOGGLE_MINIMIZED_WORKSPACE_SCRIPT;
+  GLib.spawn_command_line_sync(`${script} ${GLib.shell_quote(address)}`);
+  focusWindow(address);
 }
 
 // Create an app icon button
@@ -1159,13 +1169,9 @@ function onCommit() {
 
   try {
     if (targetWindow.workspace === "special:minimized") {
-      GLib.spawn_command_line_async(
-        restoreMinimizedAndFocusCommand(targetWindow.address),
-      );
+      restoreMinimizedAndFocus(targetWindow.address);
     } else {
-      GLib.spawn_command_line_async(
-        hyprLuaFocusAndCenterCommand(targetWindow),
-      );
+      focusAndCenterWindow(targetWindow);
     }
     
     // Update focus history when committing a switch
