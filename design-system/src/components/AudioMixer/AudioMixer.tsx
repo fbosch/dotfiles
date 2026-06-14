@@ -184,7 +184,6 @@ export const AudioMixer: React.FC<AudioMixerProps> = ({
   className,
 }) => {
   const currentItems = items[activeTab] ?? [];
-  const currentTab = tabMeta[activeTab];
   const normalizedMaxVolume = Math.max(1, maxVolume);
 
   return (
@@ -193,15 +192,6 @@ export const AudioMixer: React.FC<AudioMixerProps> = ({
       aria-label="Audio mixer"
     >
       <header className="border-b border-white/[0.1] p-3">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-sm font-semibold text-foreground-primary">Audio</h1>
-          </div>
-          <span className="rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-1 font-mono text-[11px] text-foreground-tertiary">
-            {normalizedMaxVolume}% max
-          </span>
-        </div>
-
         <nav
           className="flex gap-1 rounded-lg bg-background-primary/50 p-1"
           aria-label="Audio mixer tabs"
@@ -224,10 +214,6 @@ export const AudioMixer: React.FC<AudioMixerProps> = ({
       </header>
 
       <div className="max-h-[520px] overflow-y-auto p-3">
-        <div className="mb-3">
-          <h2 className="text-sm font-semibold text-foreground-primary">{currentTab.label}</h2>
-        </div>
-
         {currentItems.length === 0 ? (
           <div className="flex min-h-[220px] flex-col items-center justify-center rounded-lg border border-dashed border-white/[0.12] bg-background-primary/30 p-8 text-center">
             <span className="font-fluent text-3xl text-foreground-tertiary/60" aria-hidden="true">
