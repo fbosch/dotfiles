@@ -77,6 +77,7 @@ interface DaySlot {
   number: Gtk.Label;
   markerRow: Gtk.Box;
   date: Date;
+  markerSignature: string;
 }
 
 let win: Astal.Window | null = null;
@@ -173,14 +174,38 @@ function eventOverlapsLocalDay(event: CalendarEventPreview, day: Date): boolean 
   return event.start < dayEnd && eventEnd > dayStart;
 }
 
+function buildEventsByLocalDate(gridStart: Date, gridEnd: Date): Map<string, CalendarEventPreview[]> {
+  const eventsByDate = new Map<string, CalendarEventPreview[]>();
+
+  for (const event of events) {
+    const eventEnd = event.end > event.start ? event.end : new Date(event.start.getTime() + 1);
+    let day = startOfLocalDay(event.start > gridStart ? event.start : gridStart);
+    const lastDay = startOfLocalDay(new Date(Math.min(eventEnd.getTime() - 1, gridEnd.getTime() - 1)));
+
+    while (day <= lastDay) {
+      if (eventOverlapsLocalDay(event, day)) {
+        const key = localDateKey(day);
+        const dayEvents = eventsByDate.get(key) ?? [];
+        dayEvents.push(event);
+        eventsByDate.set(key, dayEvents);
+      }
+      day = addLocalDays(day, 1);
+    }
+  }
+
+  return eventsByDate;
+}
+
 function buildCalendarDays(): CalendarDay[] {
   const start = getCalendarGridStart(visibleMonth);
+  const end = addLocalDays(start, 42);
   const visibleMonthId = monthKey(visibleMonth);
   const today = new Date();
+  const eventsByDate = buildEventsByLocalDate(start, end);
 
   return Array.from({ length: 42 }, (_, index) => {
     const date = addLocalDays(start, index);
-    const dayEvents = events.filter((event) => eventOverlapsLocalDay(event, date));
+    const dayEvents = eventsByDate.get(localDateKey(date)) ?? [];
 
     return {
       date,
@@ -459,16 +484,15 @@ function createCalendarBackendModule(options: {
     }
   }
 
-  function writeCacheToTmpfs(): void {
+  function writeCacheEntryToTmpfs(cacheKey: string, entry: CachedEvents): void {
     try {
-      const serialized: Record<string, SerializedCacheEntry> = {};
-      for (const [cacheKey, entry] of eventCache) {
-        serialized[cacheKey] = {
+      const serialized: Record<string, SerializedCacheEntry> = {
+        [cacheKey]: {
           events: entry.events.map(serializeEvent),
           status: entry.status,
           message: entry.message,
-        };
-      }
+        },
+      };
 
       GLib.file_set_contents(eventCachePath, JSON.stringify(serialized));
     } catch (e) {
@@ -505,7 +529,7 @@ function createCalendarBackendModule(options: {
     }
   }
 
-  async function loadEventsForVisibleGrid(): Promise<void> {
+  async function loadEventsForVisibleGrid(showLoading = true): Promise<void> {
     const mark = perf.start("calendar-widget", "loadEventsForVisibleGrid");
     let ok = true;
     let error: string | undefined;
@@ -514,7 +538,7 @@ function createCalendarBackendModule(options: {
     const cacheKey = gridRangeKey(start, end);
 
     try {
-      if (!applyCachedEvents(cacheKey)) {
+      if (!eventCache.has(cacheKey) && showLoading) {
         options.applySnapshot({ events: [], status: "loading", message: "Loading events..." });
       }
 
@@ -537,17 +561,16 @@ function createCalendarBackendModule(options: {
       if (sources.length === 0) {
         const snapshot = { events: [], status: "unavailable" as BackendStatus, message: "No visible EDS calendars" };
         eventCache.set(cacheKey, snapshot);
-        writeCacheToTmpfs();
+        writeCacheEntryToTmpfs(cacheKey, snapshot);
         options.applySnapshot(snapshot);
         return;
       }
 
-      const nextEvents: CalendarEventPreview[] = [];
       const sexp = buildRangeQuery(start, end);
-      for (const source of sources) {
+      const eventGroups = await Promise.all(sources.map(async (source) => {
         try {
           const client = await getClient(source, ECal);
-          if (currentLoadVersion !== loadVersion) return;
+          if (currentLoadVersion !== loadVersion) return [];
           const queryMark = perf.start("calendar-widget", "querySourceEvents");
           let components: unknown[];
           try {
@@ -557,23 +580,27 @@ function createCalendarBackendModule(options: {
           }
 
           const info = sourceInfo(source, EDataServer);
+          const sourceEvents: CalendarEventPreview[] = [];
           for (const [index, component] of components.entries()) {
             const event = componentToEvent(component, source, info, index);
-            if (event) nextEvents.push(event);
+            if (event) sourceEvents.push(event);
           }
+          return sourceEvents;
         } catch (e) {
           console.error("Failed to read EDS calendar source:", e);
+          return [];
         }
-      }
+      }));
 
       if (currentLoadVersion !== loadVersion) return;
+      const nextEvents = eventGroups.flat();
       const snapshot = {
         events: nextEvents.sort((a, b) => a.start.getTime() - b.start.getTime()),
         status: "ready" as BackendStatus,
         message: "",
       };
       eventCache.set(cacheKey, snapshot);
-      writeCacheToTmpfs();
+      writeCacheEntryToTmpfs(cacheKey, snapshot);
       options.applySnapshot(snapshot);
     } catch (e) {
       ok = false;
@@ -585,7 +612,7 @@ function createCalendarBackendModule(options: {
         message: "Calendar events unavailable",
       };
       eventCache.set(cacheKey, snapshot);
-      writeCacheToTmpfs();
+      writeCacheEntryToTmpfs(cacheKey, snapshot);
       console.error("EDS calendar backend unavailable:", e);
       options.applySnapshot(snapshot);
     } finally {
@@ -643,7 +670,7 @@ function createCalendarBackendModule(options: {
       if (loadSource !== 0) return appliedCache;
       loadSource = GLib.timeout_add(GLib.PRIORITY_LOW, 100, () => {
         loadSource = 0;
-        if (options.isVisible()) void loadEventsForVisibleGrid().then(startBackendWatch);
+        if (options.isVisible()) void loadEventsForVisibleGrid(!appliedCache).then(startBackendWatch);
         return GLib.SOURCE_REMOVE;
       });
       return appliedCache;
@@ -768,7 +795,13 @@ function makeDayButton(slotIndex: number): DaySlot {
   content.append(markerRow);
 
   button.set_child(content);
-  return { button, number, markerRow, date: selectedDate ?? startOfLocalDay(new Date()) };
+  return {
+    button,
+    number,
+    markerRow,
+    date: selectedDate ?? startOfLocalDay(new Date()),
+    markerSignature: "",
+  };
 }
 
 function buildCalendarShell(): void {
@@ -838,6 +871,13 @@ function updateDaySlot(slot: DaySlot, day: CalendarDay): void {
   setCssClass(slot.button, "selected", day.isSelected);
   setCssClass(slot.button, "today", day.isToday);
   dayButtons.set(dateKey, slot.button);
+
+  const markerSignature = [
+    ...day.markers.map((event) => `${event.id}:${markerColor(event)}`),
+    `overflow:${day.markerOverflow}`,
+  ].join("|");
+  if (slot.markerSignature === markerSignature) return;
+  slot.markerSignature = markerSignature;
 
   clearBox(slot.markerRow);
   for (const event of day.markers) {
