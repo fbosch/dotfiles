@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 
+source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
+
 hypr_popup_find_existing_window() {
   local class_name="$1"
 
-  if command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-    hyprctl clients -j 2>/dev/null | jq -r --arg class "$class_name" 'first(.[] | select(.class == $class) | "\(.address)|\(.workspace.name)") // empty'
+  if command -v jq >/dev/null 2>&1; then
+    hypr_query 'j/clients' | jq -r --arg class "$class_name" 'first(.[] | select(.class == $class) | "\(.address)|\(.workspace.name)") // empty'
     return
   fi
 
@@ -14,19 +16,19 @@ hypr_popup_find_existing_window() {
 hypr_workspace_under_cursor() {
   local cursor_x cursor_y cursor_pos
 
-  cursor_pos="$(hyprctl cursorpos 2>/dev/null | tr -d ' ')"
+  cursor_pos="$(hypr_query 'cursorpos' | tr -d ' ')"
   if [[ -z "$cursor_pos" ]]; then
-    hyprctl activeworkspace -j 2>/dev/null | jq -r '.name // empty'
+    hypr_query 'j/activeworkspace' | jq -r '.name // empty'
     return
   fi
 
   IFS=',' read -r cursor_x cursor_y <<< "$cursor_pos"
   if [[ -z "$cursor_x" || -z "$cursor_y" ]]; then
-    hyprctl activeworkspace -j 2>/dev/null | jq -r '.name // empty'
+    hypr_query 'j/activeworkspace' | jq -r '.name // empty'
     return
   fi
 
-  hyprctl monitors -j 2>/dev/null | jq -r --arg x "$cursor_x" --arg y "$cursor_y" '
+  hypr_query 'j/monitors' | jq -r --arg x "$cursor_x" --arg y "$cursor_y" '
     ($x | tonumber) as $cx
     | ($y | tonumber) as $cy
     | first(
@@ -48,7 +50,7 @@ hypr_popup_toggle_or_focus_existing_window() {
   fi
 
   IFS='|' read -r address workspace_name <<< "$existing_window"
-  active_address="$(hyprctl activewindow -j 2>/dev/null | jq -r '.address // empty')"
+  active_address="$(hypr_query 'j/activewindow' | jq -r '.address // empty')"
 
   if [[ "$active_address" == "$address" ]]; then
     hyprctl dispatch movetoworkspacesilent "special:${special_workspace},address:${address}" >/dev/null 2>&1 || true
