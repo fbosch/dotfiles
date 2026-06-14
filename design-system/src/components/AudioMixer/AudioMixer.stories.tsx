@@ -1,7 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type React from 'react';
+import { useState } from 'react';
 import { Desktop } from '../Desktop';
-import { AudioMixer, type AudioMixerProps } from './AudioMixer';
+import {
+  AudioMixer,
+  type AudioMixerItem,
+  type AudioMixerProps,
+  type AudioMixerTab,
+} from './AudioMixer';
 
 const mixerItems: AudioMixerProps['items'] = {
   playback: [
@@ -28,24 +34,6 @@ const mixerItems: AudioMixerProps['items'] = {
       volume: 110,
       muted: true,
       target: 'Studio Display Speakers',
-    },
-  ],
-  recording: [
-    {
-      id: 'discord-input',
-      name: 'Discord',
-      icon: '\uE720',
-      volume: 72,
-      peak: 28,
-      target: 'Wave:3 USB Microphone',
-    },
-    {
-      id: 'obs-input',
-      name: 'OBS Studio',
-      icon: '\uE7FC',
-      volume: 64,
-      peak: 44,
-      target: 'Built-in Microphone',
     },
   ],
   output: [
@@ -86,27 +74,38 @@ const mixerItems: AudioMixerProps['items'] = {
       route: 'Internal microphone',
     },
   ],
-  configuration: [
-    {
-      id: 'usb-audio-card',
-      name: 'USB-C Headphone Adapter',
-      icon: '\uE7F6',
-      profile: 'Analog Stereo Output',
-      route: 'Headphones',
-    },
-    {
-      id: 'internal-audio-card',
-      name: 'Built-in Audio',
-      icon: '\uE995',
-      profile: 'Analog Stereo Duplex',
-      route: 'Speakers + Internal microphone',
-    },
-  ],
 };
 
 const baseArgs: AudioMixerProps = {
   maxVolume: 150,
   items: mixerItems,
+};
+
+function updateItemVolume(
+  items: Partial<Record<AudioMixerTab, AudioMixerItem[]>>,
+  itemId: string,
+  volume: number
+): Partial<Record<AudioMixerTab, AudioMixerItem[]>> {
+  return Object.fromEntries(
+    Object.entries(items).map(([tab, tabItems]) => [
+      tab,
+      tabItems?.map((item) => (item.id === itemId ? { ...item, volume } : item)),
+    ])
+  ) as Partial<Record<AudioMixerTab, AudioMixerItem[]>>;
+}
+
+const InteractiveMixer: React.FC<AudioMixerProps> = (args) => {
+  const [items, setItems] = useState(args.items ?? {});
+
+  return (
+    <AudioMixer
+      {...args}
+      items={items}
+      onVolumeChange={(itemId, volume) => {
+        setItems((current) => updateItemVolume(current, itemId, volume));
+      }}
+    />
+  );
 };
 
 const meta: Meta<typeof AudioMixer> = {
@@ -119,7 +118,7 @@ const meta: Meta<typeof AudioMixer> = {
   argTypes: {
     activeTab: {
       control: 'select',
-      options: ['playback', 'recording', 'output', 'input', 'configuration'],
+      options: ['playback', 'output', 'input'],
     },
     maxVolume: {
       control: { type: 'range', min: 100, max: 150, step: 10 },
@@ -156,10 +155,11 @@ export const Output: Story = {
   },
 };
 
-export const Configuration: Story = {
+export const DraggableVolume: Story = {
+  render: (args) => <InteractiveMixer {...args} />,
   args: {
     ...baseArgs,
-    activeTab: 'configuration',
+    activeTab: 'output',
   },
 };
 

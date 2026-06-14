@@ -81,7 +81,7 @@
       "headphone": "",
       "default": ["",  "", "", "", "", ""]
     },
-    "on-click": "~/.config/hypr/taskbar/actions.sh wiremix",
+    "on-click": "ags request -i ags-bundled audio-mixer-widget '{\"action\":\"toggle\"}'",
     "on-click-middle": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
     "tooltip": true
   },

@@ -9,6 +9,7 @@
  * - start-menu
  * - window-switcher
  * - calendar-widget
+ * - audio-mixer-widget
  * 
  * Each component maintains its own isolated scope while sharing a single
  * app.start() entry point and unified request handler.
@@ -31,6 +32,7 @@ declare global {
   var WindowSwitcher: ComponentModule;
   var DesktopClock: ComponentModule;
   var CalendarWidget: ComponentModule;
+  var AudioMixerWidget: ComponentModule;
 }
 
 // Load components using global namespace pattern (no ES6 exports)
@@ -41,6 +43,7 @@ import "./lib/start-menu.tsx";
 import "./lib/window-switcher.tsx";
 import "./lib/desktop-clock.tsx";
 import "./lib/calendar-widget.tsx";
+import "./lib/audio-mixer-widget.tsx";
 
 // Component registry for request routing
 type ComponentHandler = (argv: string[], res: (response: string) => void) => void;
@@ -163,6 +166,15 @@ app.start({
       console.log(`[Bundled AGS] ✓ ${globalThis.CalendarWidget.instanceName} initialized`);
     } catch (e) {
       console.error(`[Bundled AGS] ✗ Failed to initialize calendar-widget:`, e);
+    }
+
+    // Initialize audio-mixer-widget
+    try {
+      globalThis.AudioMixerWidget.init();
+      registerComponent(globalThis.AudioMixerWidget.instanceName, globalThis.AudioMixerWidget.handleRequest);
+      console.log(`[Bundled AGS] ✓ ${globalThis.AudioMixerWidget.instanceName} initialized`);
+    } catch (e) {
+      console.error(`[Bundled AGS] ✗ Failed to initialize audio-mixer-widget:`, e);
     }
     
     console.log("[Bundled AGS] All components initialized");

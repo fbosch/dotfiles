@@ -1,8 +1,9 @@
 import { cva } from 'class-variance-authority';
 import type React from 'react';
+import { useRef } from 'react';
 import { cn } from '../../utils/cn';
 
-export type AudioMixerTab = 'playback' | 'recording' | 'output' | 'input' | 'configuration';
+export type AudioMixerTab = 'playback' | 'output' | 'input';
 
 export interface AudioMixerItem {
   id: string;
@@ -23,6 +24,7 @@ export interface AudioMixerProps {
   maxVolume?: number;
   disableAnimations?: boolean;
   onTabChange?: (tab: AudioMixerTab) => void;
+  onVolumeChange?: (itemId: string, volume: number) => void;
   className?: string;
 }
 
@@ -31,10 +33,6 @@ const tabMeta: Record<AudioMixerTab, { label: string; icon: string }> = {
     label: 'Playback',
     icon: '\uE768',
   },
-  recording: {
-    label: 'Recording',
-    icon: '\uE720',
-  },
   output: {
     label: 'Output',
     icon: '\uE995',
@@ -42,10 +40,6 @@ const tabMeta: Record<AudioMixerTab, { label: string; icon: string }> = {
   input: {
     label: 'Input',
     icon: '\uE720',
-  },
-  configuration: {
-    label: 'Config',
-    icon: '\uE713',
   },
 };
 
@@ -114,15 +108,62 @@ const Badge: React.FC<{ children: React.ReactNode; tone?: 'default' | 'accent' |
   </span>
 );
 
-const VolumeMeter: React.FC<{ item: AudioMixerItem; maxVolume: number }> = ({
-  item,
-  maxVolume,
-}) => {
+const VolumeMeter: React.FC<{
+  item: AudioMixerItem;
+  maxVolume: number;
+  onVolumeChange?: (itemId: string, volume: number) => void;
+}> = ({ item, maxVolume, onVolumeChange }) => {
+  const trackRef = useRef<HTMLDivElement>(null);
+
   if (item.volume === undefined) return null;
 
   const volume = clamp(item.volume, maxVolume);
-  const filled = item.muted ? 0 : Math.round((volume / maxVolume) * volumeSegments.length);
-  const peak = Math.round((clamp(item.peak ?? 0, maxVolume) / maxVolume) * volumeSegments.length);
+  const visibleVolume = item.muted ? 0 : volume;
+  const peakVolume = item.muted ? 0 : clamp(item.peak ?? 0, maxVolume);
+  const thumbPosition = item.muted ? 0 : (volume / maxVolume) * 100;
+
+  const updateVolumeFromPointer = (clientX: number) => {
+    if (!trackRef.current || !onVolumeChange) return;
+
+    const rect = trackRef.current.getBoundingClientRect();
+    if (rect.width <= 0) return;
+
+    const nextVolume = ((clientX - rect.left) / rect.width) * maxVolume;
+    onVolumeChange(item.id, clamp(nextVolume, maxVolume));
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!onVolumeChange) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateVolumeFromPointer(event.clientX);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    updateVolumeFromPointer(event.clientX);
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!onVolumeChange) return;
+
+    const step = event.shiftKey ? 10 : 5;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      onVolumeChange(item.id, clamp(volume - step, maxVolume));
+    }
+    if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      onVolumeChange(item.id, clamp(volume + step, maxVolume));
+    }
+    if (event.key === 'Home') {
+      event.preventDefault();
+      onVolumeChange(item.id, 0);
+    }
+    if (event.key === 'End') {
+      event.preventDefault();
+      onVolumeChange(item.id, maxVolume);
+    }
+  };
 
   return (
     <div className="mt-3">
@@ -130,24 +171,68 @@ const VolumeMeter: React.FC<{ item: AudioMixerItem; maxVolume: number }> = ({
         <span>{item.muted ? 'Muted' : `${volume}%`}</span>
         {item.peak !== undefined && <span>Peak {clamp(item.peak, maxVolume)}%</span>}
       </div>
-      <div className="flex gap-0.5" aria-hidden="true">
-        {volumeSegments.map((segment) => (
-          <div
-            key={`${item.id}-segment-${segment}`}
-            className={cn(
-              'h-2 flex-1 rounded-sm',
-              segment <= filled && 'bg-accent-primary',
-              segment > filled && segment <= peak && !item.muted && 'bg-accent-primary/35',
-              (segment > filled || item.muted) && segment > peak && 'bg-white/[0.08]'
-            )}
-          />
-        ))}
+      <div
+        ref={trackRef}
+        className={cn(
+          'group relative flex gap-0.5 py-2 outline-none',
+          onVolumeChange &&
+            'cursor-pointer touch-none focus-visible:ring-2 focus-visible:ring-accent-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background-secondary'
+        )}
+        role="slider"
+        tabIndex={onVolumeChange ? 0 : -1}
+        aria-label={`${item.name} volume`}
+        aria-valuemin={0}
+        aria-valuemax={maxVolume}
+        aria-valuenow={volume}
+        aria-disabled={!onVolumeChange}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onKeyDown={handleKeyDown}
+      >
+        {volumeSegments.map((segment) => {
+          const segmentStart = ((segment - 1) / volumeSegments.length) * maxVolume;
+          const segmentEnd = (segment / volumeSegments.length) * maxVolume;
+          const segmentRange = segmentEnd - segmentStart;
+          const fillWidth = clamp(((visibleVolume - segmentStart) / segmentRange) * 100, 100);
+          const peakWidth = clamp(((peakVolume - segmentStart) / segmentRange) * 100, 100);
+
+          return (
+            <div
+              key={`${item.id}-segment-${segment}`}
+              className="relative h-2 flex-1 overflow-hidden rounded-sm bg-white/[0.08]"
+            >
+              {peakWidth > fillWidth && (
+                <div
+                  className="absolute inset-y-0 left-0 bg-accent-primary/35"
+                  style={{ width: `${peakWidth}%` }}
+                />
+              )}
+              <div
+                className="absolute inset-y-0 left-0 bg-accent-primary"
+                style={{ width: `${fillWidth}%` }}
+              />
+            </div>
+          );
+        })}
+        <div
+          className={cn(
+            'pointer-events-none absolute top-1/2 h-4 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/50 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.35)]',
+            onVolumeChange && 'group-hover:h-5 group-focus-visible:h-5',
+            item.muted && 'opacity-50'
+          )}
+          style={{ left: `${thumbPosition}%` }}
+          aria-hidden="true"
+        />
       </div>
     </div>
   );
 };
 
-const AudioRow: React.FC<{ item: AudioMixerItem; maxVolume: number }> = ({ item, maxVolume }) => (
+const AudioRow: React.FC<{
+  item: AudioMixerItem;
+  maxVolume: number;
+  onVolumeChange?: (itemId: string, volume: number) => void;
+}> = ({ item, maxVolume, onVolumeChange }) => (
   <article
     className={cn(
       'rounded-lg border border-white/[0.08] bg-background-primary/45 p-3 shadow-sm',
@@ -169,7 +254,7 @@ const AudioRow: React.FC<{ item: AudioMixerItem; maxVolume: number }> = ({ item,
           {item.muted && <Badge tone="muted">Muted</Badge>}
         </div>
 
-        <VolumeMeter item={item} maxVolume={maxVolume} />
+        <VolumeMeter item={item} maxVolume={maxVolume} onVolumeChange={onVolumeChange} />
       </div>
     </div>
   </article>
@@ -181,6 +266,7 @@ export const AudioMixer: React.FC<AudioMixerProps> = ({
   maxVolume = 150,
   disableAnimations = false,
   onTabChange,
+  onVolumeChange,
   className,
 }) => {
   const currentItems = items[activeTab] ?? [];
@@ -224,7 +310,12 @@ export const AudioMixer: React.FC<AudioMixerProps> = ({
         ) : (
           <div className="space-y-2">
             {currentItems.map((item) => (
-              <AudioRow key={item.id} item={item} maxVolume={normalizedMaxVolume} />
+              <AudioRow
+                key={item.id}
+                item={item}
+                maxVolume={normalizedMaxVolume}
+                onVolumeChange={onVolumeChange}
+              />
             ))}
           </div>
         )}
