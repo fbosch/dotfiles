@@ -22,6 +22,11 @@ type FaugusGame = {
 
 const faugusGamesPath = `${GLib.get_home_dir()}/.config/faugus-launcher/games.json`;
 const waybarConfigPath = `${GLib.get_home_dir()}/.config/waybar/config`;
+const desktopFileDirs = [
+  `${GLib.get_home_dir()}/.local/share/applications`,
+  `/etc/profiles/per-user/${GLib.get_user_name()}/share/applications`,
+  "/run/current-system/sw/share/applications",
+];
 const iconCache = new Map<string, IconRef | null>();
 let faugusGamesCache: FaugusGame[] | null = null;
 let waybarAppIdMappingCache: Record<string, string> | null = null;
@@ -64,6 +69,71 @@ function iconRefFromGioIcon(icon: Gio.Icon | null): IconRef | null {
   if (icon instanceof Gio.FileIcon) {
     const path = icon.get_file().get_path();
     if (path && fileExists(path)) return { kind: "file", path };
+  }
+
+  return null;
+}
+
+function iconFromDesktopFile(path: string): IconRef | null {
+  try {
+    const appInfo = GioUnix.DesktopAppInfo.new_from_filename(path);
+    if (!appInfo) return null;
+    return iconRefFromGioIcon(appInfo.get_icon());
+  } catch {
+    return null;
+  }
+}
+
+function desktopField(contents: string, key: string): string | null {
+  const match = contents.match(new RegExp(`^${key}=([^\n]+)$`, "m"));
+  return match?.[1]?.trim() ?? null;
+}
+
+function getIconFromDesktopFiles(value: string): IconRef | null {
+  const candidates = iconLookupCandidates(value);
+  const normalizedCandidates = candidates.map(normalizeIconSearchTerm).filter((candidate) => candidate !== "");
+  if (normalizedCandidates.length === 0) return null;
+
+  for (const dir of desktopFileDirs) {
+    for (const candidate of candidates) {
+      const path = `${dir}/${candidate}.desktop`;
+      if (!fileExists(path)) continue;
+      const icon = iconFromDesktopFile(path);
+      if (icon) return icon;
+    }
+  }
+
+  for (const dir of desktopFileDirs) {
+    try {
+      const directory = Gio.File.new_for_path(dir);
+      const entries = directory.enumerate_children("standard::name", Gio.FileQueryInfoFlags.NONE, null);
+      let entry = entries.next_file(null);
+      while (entry) {
+        const name = entry.get_name();
+        if (name.endsWith(".desktop")) {
+          const path = `${dir}/${name}`;
+          const [, contents] = Gio.File.new_for_path(path).load_contents(null);
+          if (contents) {
+            const text = new TextDecoder().decode(contents);
+            const fields = [
+              name.replace(/\.desktop$/, ""),
+              desktopField(text, "StartupWMClass"),
+              desktopField(text, "Name"),
+              desktopField(text, "Exec"),
+            ].filter((field): field is string => Boolean(field));
+
+            if (fields.some((field) => normalizedCandidates.includes(normalizeIconSearchTerm(field)))) {
+              const icon = iconFromDesktopFile(path);
+              if (icon) return icon;
+            }
+          }
+        }
+        entry = entries.next_file(null);
+      }
+      entries.close(null);
+    } catch {
+      // Desktop directories vary by system profile.
+    }
   }
 
   return null;
@@ -252,6 +322,12 @@ export function getIconForClass(appClass: string, iconTheme?: Gtk.IconTheme | nu
   if (iconCache.has(appClass)) return iconCache.get(appClass)!;
 
   let icon: IconRef | null = null;
+  icon = getIconFromDesktopFiles(appClass);
+  if (icon) {
+    iconCache.set(appClass, icon);
+    return icon;
+  }
+
   for (const desktopId of iconLookupCandidates(appClass).map((entry) => `${entry}.desktop`)) {
     try {
       const appInfo = GioUnix.DesktopAppInfo.new(desktopId);

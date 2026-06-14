@@ -251,24 +251,31 @@ function getWpctlStreams(): Array<{ id: number; name: string }> {
   }
 }
 
-function getPipeWireProcessId(object: any): number | undefined {
-  const directPid = getNumber(object, ["application.process.id", "application_process_id", "process_id", "pid"]);
-  if (directPid !== undefined) return Math.round(directPid);
-
+function getPipeWirePropertiesForAudioObject(object: any): Record<string, string> | null {
   const idCandidates = ["id", "node_id", "bound_id"].map((key) => getNumber(object, [key]));
   for (const id of idCandidates) {
     if (id === undefined) continue;
-    const pid = Number(parseWpctlInspect(Math.round(id))?.["application.process.id"]);
-    if (Number.isFinite(pid)) return Math.round(pid);
+    const properties = parseWpctlInspect(Math.round(id));
+    if (properties) return properties;
   }
 
   const nameCandidates = [displayName(object, ""), getText(object, ["name", "node.name", "application.name"]) ?? ""];
   const normalizedNames = new Set(nameCandidates.map((name) => name.trim()).filter((name) => name !== ""));
   for (const stream of getWpctlStreams()) {
     if (!normalizedNames.has(stream.name)) continue;
-    const pid = Number(parseWpctlInspect(stream.id)?.["application.process.id"]);
-    if (Number.isFinite(pid)) return Math.round(pid);
+    const properties = parseWpctlInspect(stream.id);
+    if (properties) return properties;
   }
+
+  return null;
+}
+
+function getPipeWireProcessId(object: any): number | undefined {
+  const directPid = getNumber(object, ["application.process.id", "application_process_id", "process_id", "pid"]);
+  if (directPid !== undefined) return Math.round(directPid);
+
+  const pid = Number(getPipeWirePropertiesForAudioObject(object)?.["application.process.id"]);
+  if (Number.isFinite(pid)) return Math.round(pid);
 
   return undefined;
 }
@@ -314,13 +321,18 @@ function ensureIconTheme(): Gtk.IconTheme | null {
 function getIconForAudioObject(object: any, client: HyprlandClient | null): IconRef | null {
   const directIcon = getText(object, ["icon_name", "icon", "application_icon_name"]);
   const theme = ensureIconTheme();
+  const pipeWireProperties = getPipeWirePropertiesForAudioObject(object);
   const candidates = Array.from(
     new Set(
       [
         ...windowTitleCandidates(client),
+        pipeWireProperties?.["application.process.binary"],
+        pipeWireProperties?.["application.name"],
+        pipeWireProperties?.["node.name"],
         getText(object, ["application_id", "app_id", "application_process_binary", "binary"]),
         getText(object, ["application.process.binary"]),
         getText(object, ["application_name", "app_name", "name", "media_name", "description"]),
+        pipeWireProperties?.["media.name"],
         getText(object, ["application.name", "media.name", "node.name"]),
       ].filter((candidate): candidate is string => candidate !== undefined),
     ),
@@ -681,11 +693,11 @@ function handleRowKeyboard(keyval: number, state: Gdk.ModifierType): boolean {
   return false;
 }
 
-function adjustRowVolume(row: AudioRow, delta: number): void {
+function adjustRowVolume(row: AudioRow, delta: number, shouldRender = true): void {
   if (row.volume === undefined) return;
   row.volume = clamp(row.volume + delta);
   audioBackend.setVolume(row, row.volume);
-  renderRows();
+  if (shouldRender) renderRows();
 }
 
 function toggleRowMute(row: AudioRow, index: number, visible = rowFocusVisible): void {
@@ -694,11 +706,11 @@ function toggleRowMute(row: AudioRow, index: number, visible = rowFocusVisible):
   focusRow(index, visible);
 }
 
-function handleRowScroll(row: AudioRow, index: number, deltaY: number): boolean {
-  if (row.volume === undefined || deltaY === 0) return false;
+function handleRowScroll(index: number, deltaY: number, updateVolume: (delta: number) => void): boolean {
+  if (deltaY === 0) return false;
   focusedRowIndex = index;
   rowFocusVisible = false;
-  adjustRowVolume(row, deltaY < 0 ? 5 : -5);
+  updateVolume(deltaY < 0 ? 5 : -5);
   return true;
 }
 
@@ -741,7 +753,11 @@ function makeBadge(label: string, className: string): Gtk.Label {
   return badge;
 }
 
-function makeMeter(row: AudioRow): Gtk.Box | null {
+function makeMeter(
+  row: AudioRow,
+  volumeLabel: Gtk.Label,
+  registerScrollHandler?: (handler: (delta: number) => void) => void,
+): Gtk.Box | null {
   if (row.volume === undefined) return null;
   let currentVolume = clampFloat(row.volume);
   let dragging = false;
@@ -751,14 +767,6 @@ function makeMeter(row: AudioRow): Gtk.Box | null {
   meterWrapper.add_css_class("audio-mixer-meter-wrapper");
   meterWrapper.set_hexpand(true);
   meterWrapper.set_halign(Gtk.Align.FILL);
-
-  const volumeRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8 });
-  const volumeLabel = makeLabel(row.muted ? "Muted" : `${clamp(row.volume)}%`, "audio-mixer-volume-label");
-  volumeLabel.set_hexpand(true);
-  volumeLabel.set_halign(Gtk.Align.START);
-  volumeLabel.set_xalign(0);
-  volumeRow.append(volumeLabel);
-  meterWrapper.append(volumeRow);
 
   const drawing = new Gtk.DrawingArea();
   drawing.add_css_class("audio-mixer-meter");
@@ -796,6 +804,8 @@ function makeMeter(row: AudioRow): Gtk.Box | null {
     drawing.queue_draw();
     sendVolume(immediate);
   }
+
+  registerScrollHandler?.((delta: number) => setVisualVolume(currentVolume + delta));
 
   function volumeFromX(x: number): number {
     const allocation = drawing.get_allocation();
@@ -901,9 +911,13 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
   });
   card.add_controller(clickController);
 
+  let updateScrolledVolume: ((delta: number) => void) | null = null;
   if (row.volume !== undefined) {
     const scrollController = new Gtk.EventControllerScroll({ flags: Gtk.EventControllerScrollFlags.VERTICAL });
-    scrollController.connect("scroll", (_controller, _deltaX, deltaY) => handleRowScroll(row, index, deltaY));
+    scrollController.connect("scroll", (_controller, _deltaX, deltaY) => {
+      if (!updateScrolledVolume) return false;
+      return handleRowScroll(index, deltaY, updateScrolledVolume);
+    });
     card.add_controller(scrollController);
   }
 
@@ -938,7 +952,16 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
   title.set_ellipsize(3);
   titleRow.append(title);
 
+  let volumeLabel: Gtk.Label | null = null;
   content.append(titleRow);
+  if (row.volume !== undefined) {
+    volumeLabel = makeLabel(row.muted ? "Muted" : `${clamp(row.volume)}%`, "audio-mixer-volume-label");
+    volumeLabel.set_hexpand(true);
+    volumeLabel.set_halign(Gtk.Align.START);
+    volumeLabel.set_xalign(0);
+    content.append(volumeLabel);
+  }
+
   topRow.append(content);
 
   const actions = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4 });
@@ -976,7 +999,9 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
 
   card.append(topRow);
 
-  const meter = makeMeter(row);
+  const meter = volumeLabel ? makeMeter(row, volumeLabel, (handler) => {
+    updateScrolledVolume = handler;
+  }) : null;
   if (meter) {
     const meterRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 10 });
     meterRow.set_hexpand(true);
@@ -989,6 +1014,7 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
     meterRow.append(meter);
     card.append(meterRow);
   }
+
   return card;
 }
 
@@ -1264,7 +1290,7 @@ function applyStaticCSS(): void {
     }
 
     window.audio-mixer-widget box.audio-mixer-body {
-      padding: 12px;
+      padding: 9px 12px 7px;
       min-height: 180px;
     }
 
@@ -1272,8 +1298,13 @@ function applyStaticCSS(): void {
       background-color: rgba(32, 32, 32, 0.45);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 8px;
-      padding: 10px;
-      margin-bottom: 8px;
+      padding: 8px 10px;
+      margin-bottom: 3px;
+    }
+
+    window.audio-mixer-widget box.audio-mixer-row:hover {
+      border-color: rgba(255, 255, 255, 0.16);
+      background-color: rgba(42, 42, 42, 0.62);
     }
 
     window.audio-mixer-widget box.audio-mixer-row.muted {
@@ -1335,7 +1366,7 @@ function applyStaticCSS(): void {
     }
 
     window.audio-mixer-widget box.audio-mixer-meter-wrapper {
-      margin-top: 8px;
+      margin-top: 2px;
     }
 
     window.audio-mixer-widget label.audio-mixer-volume-label {
