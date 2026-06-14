@@ -1290,8 +1290,8 @@ function applyStaticCSS(): void {
     }
 
     window.audio-mixer-widget box.audio-mixer-body {
-      padding: 9px 12px 7px;
-      min-height: 180px;
+      padding: 8px 12px 6px;
+      min-height: 104px;
     }
 
     window.audio-mixer-widget box.audio-mixer-row {
@@ -1299,7 +1299,7 @@ function applyStaticCSS(): void {
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 8px;
       padding: 8px 10px;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
     }
 
     window.audio-mixer-widget box.audio-mixer-row:hover {
