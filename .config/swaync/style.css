@@ -63,19 +63,16 @@
   background: var(--bg-color);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-control-center);
-  overflow: hidden;
 }
 
 .control-center-list {
   background: transparent;
-  overflow: hidden;
 }
 
 .control-center-list .notification {
   background: var(--solid-bg-color);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-large);
-  overflow: hidden;
   box-shadow: none;
   margin: 0 12px 6px 12px;
   transition: none;
@@ -95,11 +92,6 @@
   padding: 12px 0;
 }
 
-.control-center-list {
-  background: transparent;
-  overflow: hidden;
-}
-
 .notification-group-headers {
   padding: 8px 16px 8px 16px;
   margin: 0 0 6px 0;
@@ -114,7 +106,6 @@
 }
 
 .notification-group-buttons {
-  margin-left: auto;
   padding-left: 12px;
   margin-right: 12px;
 }
@@ -182,7 +173,6 @@
   margin: 0;
   box-shadow: none;
   opacity: 0;
-  text-align: center;
   font-size: 0;
 }
 
@@ -218,7 +208,6 @@
   background: var(--bg-color);
   border-radius: var(--radius-large);
   border: 1px solid var(--border-color);
-  overflow: hidden;
   transition: all 150ms ease;
 }
 
@@ -295,21 +284,10 @@
 
 .body-image {
   height: auto;
-  width: 100%;
   border-radius: var(--radius-medium);
-  overflow: hidden;
   box-shadow: var(--shadow-elevation-medium);
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(255, 255, 255, 0.04);
-}
-
-/* Larger preview for screenshot notifications */
-.notification[data-app-name="Screenshot"] .body-image,
-.notification[data-app-name="OCR"] .body-image {
-  height: auto;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: var(--shadow-elevation-medium);
-  border-radius: 12px;
 }
 
 /* Notification Actions - matches Button component (variant=default, size=sm) */
@@ -340,7 +318,8 @@
 }
 
 /* Action buttons */
-.notification-action {
+.notification-action,
+.notification-action > button {
   background: #373737;
   border-radius: var(--radius-small);
   color: #ffffff;
@@ -353,54 +332,77 @@
   padding: 0 12px;
   margin: 0;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  cursor: pointer;
   transition:
     background 150ms ease,
     border-color 150ms ease,
     transform 150ms ease;
 }
 
-.notification-action:hover {
+.notification-action:hover,
+.notification-action > button:hover {
   background: rgba(55, 55, 55, 0.9);
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-.notification-action:active {
+.notification-action:active,
+.notification-action > button:active {
   background: rgba(55, 55, 55, 0.8);
   transform: scale(0.98);
 }
 
-.notification-action:focus-visible {
+.notification-action:focus-visible,
+.notification-action > button:focus-visible {
   outline: 2px solid rgba(0, 103, 192, 0.5);
   outline-offset: 2px;
   border-radius: var(--radius-small);
 }
 
-.notification-action:disabled {
+.notification-action:disabled,
+.notification-action > button:disabled {
   opacity: 0.4;
-  cursor: not-allowed;
   transform: none;
 }
 
 /* Close Button */
 .close-button {
   background: transparent;
-  border-radius: 50%;
+  border-radius: 9999px;
   color: var(--text-secondary);
-  min-width: 24px;
-  min-height: 24px;
-  margin: 8px 20px 0 0;
+  min-width: 20px;
+  min-height: 20px;
+  max-width: 20px;
+  max-height: 20px;
+  margin: 6px 6px 0 -26px;
   padding: 0;
   opacity: 0;
+  font-size: 12px;
+  font-weight: 600;
   transition:
     background 150ms ease,
     color 150ms ease,
     opacity 150ms ease;
 }
 
+.close-button > image,
+.close-button > label {
+  -gtk-icon-size: 12px;
+  min-width: 12px;
+  min-height: 12px;
+  max-width: 12px;
+  max-height: 12px;
+  margin: 0;
+  padding: 0;
+}
+
 .close-button:hover {
   background: var(--surface-hover);
   color: var(--text-color);
+  opacity: 1;
+}
+
+.notification:hover .close-button,
+.notification-row:hover .close-button,
+.close-button:focus-visible {
   opacity: 1;
 }
 
@@ -460,7 +462,6 @@
   border-top: 1px solid var(--border-color);
   border-radius: 0;
   padding: 12px;
-  row-gap: 6px;
 }
 
 .widget-volume > box:first-child {
@@ -488,16 +489,6 @@
   min-width: 20px;
   padding: 2px;
   transition: color 160ms ease;
-}
-
-.widget-volume > box:first-child > button:hover {
-  color: var(--text-color);
-}
-
-.widget-volume > box:first-child > button:checked,
-.widget-volume > box:first-child > button:active {
-  background: transparent;
-  color: var(--accent-color);
 }
 
 .widget-volume > box:first-child > button:hover {
@@ -580,7 +571,6 @@
   font-size: 11px;
   font-weight: 600;
   padding: 0 8px 4px 8px;
-  text-align: left;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   opacity: 0.7;
@@ -602,7 +592,6 @@
 
 .widget-volume .per-app-volume row > box {
   padding: 0;
-  column-gap: 16px;
 }
 
 .widget-volume .per-app-volume row image {
@@ -853,7 +842,6 @@ scrollbar slider:active {
   font-size: 16px;
   font-weight: 500;
   padding: 32px;
-  text-align: center;
   box-shadow: var(--shadow-elevation-medium);
 }
 
@@ -864,75 +852,7 @@ button:focus-visible {
 }
 
 /* Remove focus outline for buttons that have their own focus styles */
-.close-button:focus-visible,
 .widget-volume button:focus-visible,
 .widget-dnd switch:focus-visible {
   outline: none;
-}
-
-/* Tighter spacing for screenshot notifications */
-.notification[data-app-name="Screenshot"] .notification-content {
-  padding: 8px;
-}
-
-.notification[data-app-name="Screenshot"] .notification-row {
-  margin-bottom: 4px;
-}
-
-.notification[data-app-name="Screenshot"] .body {
-  margin-top: 4px;
-  margin-bottom: 4px;
-}
-
-/* Add border radius to img/picture elements in screenshot notifications */
-.notification[data-app-name="Screenshot"] picture,
-.notification[data-app-name="Screenshot"] image {
-  border-radius: 12px;
-}
-
-/* Smaller action buttons for screenshot notifications to fit 3 buttons */
-.notification[data-app-name="Screenshot"] .notification-action {
-  font-size: 9px;
-  padding: 0 8px;
-  min-height: 26px;
-  max-height: 26px;
-}
-
-/* Tighter spacing for screenshot notifications */
-.notification[data-app-name="Screenshot"] .notification-content {
-  padding: 8px;
-}
-
-.notification[data-app-name="Screenshot"] .notification-row {
-  margin-bottom: 4px;
-}
-
-.notification[data-app-name="Screenshot"] .body {
-  margin-top: 4px;
-  margin-bottom: 4px;
-}
-
-/* More compact action buttons for screenshot notifications */
-.notification[data-app-name="Screenshot"] .notification-action {
-  font-size: 9px;
-  padding: 0 6px;
-  min-height: 24px;
-  max-height: 24px;
-  min-width: 0;
-}
-
-/* Extra compact buttons for floating screenshot notifications */
-.floating-notifications
-  .notification[data-app-name="Screenshot"]
-  .notification-action {
-  font-size: 8px;
-  padding: 0 4px;
-  min-height: 22px;
-  max-height: 22px;
-}
-
-/* Add border radius to img/picture elements in screenshot notifications */
-.notification[data-app-name="Screenshot"] picture,
-.notification[data-app-name="Screenshot"] image {
-  border-radius: 12px;
 }
