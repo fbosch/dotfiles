@@ -1291,7 +1291,7 @@ function applyStaticCSS(): void {
 
     window.audio-mixer-widget box.audio-mixer-body {
       padding: 8px 12px 6px;
-      min-height: 104px;
+      min-height: 70px;
     }
 
     window.audio-mixer-widget box.audio-mixer-row {
