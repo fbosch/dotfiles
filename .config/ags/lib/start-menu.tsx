@@ -756,6 +756,7 @@ function createProfileToggle(
   active: boolean,
   activeClass: string,
   command: string,
+  tooltip: string,
 ): Gtk.Button {
   return (
     <button
@@ -764,6 +765,7 @@ function createProfileToggle(
       onClicked={() => runProfileCommand(command)}
       $={(self: Gtk.Button) => {
         self.set_cursor_from_name("pointer");
+        self.set_tooltip_text(tooltip);
         menuItemButtons.set(id, self);
       }}
     >
@@ -789,6 +791,7 @@ function createProfileControls(): Gtk.Box {
             onClicked={() => clearManualProfiles()}
             $={(self: Gtk.Button) => {
               self.set_cursor_from_name("pointer");
+              self.set_tooltip_text("Clear manual profile override");
               menuItemButtons.set("profile-clear", self);
             }}
           >
@@ -803,6 +806,7 @@ function createProfileControls(): Gtk.Box {
           gamingActive,
           "gaming-active",
           `${profilectlPath} ${profileState.gamingManual > 0 ? "remove-source" : "apply-source"} gaming manual`,
+          profileState.gamingManual > 0 ? "Disable manual gaming profile" : "Enable manual gaming profile",
         )}
         {createProfileToggle(
           "profile-powersave",
@@ -810,6 +814,7 @@ function createProfileControls(): Gtk.Box {
           powersaveActive,
           "powersave-active",
           `${profilectlPath} ${profileState.powersaveManual > 0 ? "remove-source" : "apply-source"} powersave manual`,
+          profileState.powersaveManual > 0 ? "Disable manual powersave profile" : "Enable manual powersave profile",
         )}
       </box>
     </box>

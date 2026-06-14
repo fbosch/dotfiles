@@ -309,6 +309,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({
                 onClick={() => onProfileAction?.("clear-manual")}
                 tabIndex={isOpen ? 0 : -1}
                 aria-label="Clear manual profile"
+                title="Clear manual profile override"
               >
                 <span className="font-fluent text-xs" aria-hidden="true">
                   {"\uE711"}
@@ -327,6 +328,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({
             onClick={() => onProfileAction?.("gaming")}
             tabIndex={isOpen ? 0 : -1}
             aria-label="Toggle gaming profile"
+            title={profile.gamingManual ? "Disable manual gaming profile" : "Enable manual gaming profile"}
           >
             <span className="font-fluent text-xs" aria-hidden="true">
               {"\uE7FC"}
@@ -341,6 +343,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({
             onClick={() => onProfileAction?.("powersave")}
             tabIndex={isOpen ? 0 : -1}
             aria-label="Toggle powersave profile"
+            title={profile.powersaveManual ? "Disable manual powersave profile" : "Enable manual powersave profile"}
           >
             <span className="font-fluent text-xs" aria-hidden="true">
               {"\uE945"}
