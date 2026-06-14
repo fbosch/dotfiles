@@ -1,11 +1,10 @@
 import app from "ags/gtk4/app";
 import { Astal } from "ags/gtk4";
 import Gdk from "gi://Gdk?version=4.0";
-import Gio from "gi://Gio?version=2.0";
-import GioUnix from "gi://GioUnix?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
+import { fileExists, getFaugusIconForCandidates, getIconForClass, setImageFile, type IconRef } from "./app-icons";
 import { perf } from "./performance-monitor";
 
 type AudioMixerTab = "playback" | "output" | "input";
@@ -39,9 +38,13 @@ interface AudioBackend {
   setDefault: (row: AudioRow) => void;
 }
 
-type IconRef =
-  | { kind: "theme"; name: string }
-  | { kind: "file"; path: string };
+interface HyprlandClient {
+  class?: string;
+  initialClass?: string;
+  title?: string;
+  initialTitle?: string;
+  pid?: number;
+}
 
 const tabs: Array<{ id: AudioMixerTab; label: string; icon: string }> = [
   { id: "playback", label: "Playback", icon: "\uE768" },
@@ -51,6 +54,7 @@ const tabs: Array<{ id: AudioMixerTab; label: string; icon: string }> = [
 
 const maxVolume = 150;
 const meterSegments = 12;
+const hyprClientCacheTtlMs = 500;
 
 let win: Astal.Window | null = null;
 let mixerBox: Gtk.Box | null = null;
@@ -66,7 +70,9 @@ let focusedRowIndex = 0;
 let rowFocusVisible = false;
 let snapshot: AudioSnapshot = emptySnapshot("Audio backend unavailable", "unavailable");
 let iconTheme: Gtk.IconTheme | null = null;
-const iconCache = new Map<string, IconRef | null>();
+let hyprClientCache: { timestampMs: number; clients: HyprlandClient[] } | null = null;
+let wpctlStatusCache: { timestampMs: number; streams: Array<{ id: number; name: string }> } | null = null;
+const wpctlInspectCache = new Map<number, { timestampMs: number; properties: Record<string, string> } | null>();
 
 function emptyRows(): Record<AudioMixerTab, AudioRow[]> {
   return {
@@ -111,7 +117,7 @@ function getText(object: any, keys: string[]): string | undefined {
   for (const key of keys) {
     try {
       const getter = object?.[`get_${key}`];
-      const value = typeof getter === "function" ? getter.call(object) : object?.[key];
+      const value = typeof getter === "function" ? getter.call(object) : object?.[key] ?? object?.get_property?.(key);
       const text = textValue(value);
       if (text) return text;
     } catch {
@@ -138,8 +144,12 @@ function getNumber(object: any, keys: string[]): number | undefined {
   for (const key of keys) {
     try {
       const getter = object?.[`get_${key}`];
-      const value = typeof getter === "function" ? getter.call(object) : object?.[key];
+      const value = typeof getter === "function" ? getter.call(object) : object?.[key] ?? object?.get_property?.(key);
       if (typeof value === "number" && Number.isFinite(value)) return value;
+      if (typeof value === "string" && value.trim() !== "") {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) return parsed;
+      }
     } catch {
       // Keep probing optional backend fields.
     }
@@ -182,12 +192,116 @@ function displayName(object: any, fallback: string): string {
   return getText(object, ["description", "name", "nick", "media_name", "application_name"]) ?? fallback;
 }
 
-function fileExists(path: string): boolean {
+function parseWpctlInspect(id: number): Record<string, string> | null {
+  const nowMs = GLib.get_monotonic_time() / 1000;
+  const cached = wpctlInspectCache.get(id);
+  if (cached && nowMs - cached.timestampMs < hyprClientCacheTtlMs) return cached.properties;
+
   try {
-    return Gio.File.new_for_path(path).query_exists(null);
+    const [, stdout] = GLib.spawn_command_line_sync(`wpctl inspect ${id}`);
+    if (!stdout) return null;
+
+    const properties: Record<string, string> = {};
+    const text = new TextDecoder().decode(stdout);
+    for (const line of text.split("\n")) {
+      const match = line.match(/^\s*\*?\s*([a-zA-Z0-9_.-]+)\s*=\s*"(.*)"\s*$/);
+      if (match) properties[match[1]] = match[2];
+    }
+
+    wpctlInspectCache.set(id, { timestampMs: nowMs, properties });
+    return properties;
   } catch {
-    return false;
+    wpctlInspectCache.set(id, null);
+    return null;
   }
+}
+
+function getWpctlStreams(): Array<{ id: number; name: string }> {
+  const nowMs = GLib.get_monotonic_time() / 1000;
+  if (wpctlStatusCache && nowMs - wpctlStatusCache.timestampMs < hyprClientCacheTtlMs) {
+    return wpctlStatusCache.streams;
+  }
+
+  try {
+    const [, stdout] = GLib.spawn_command_line_sync("wpctl status");
+    if (!stdout) return [];
+
+    const streams: Array<{ id: number; name: string }> = [];
+    let inStreams = false;
+    for (const line of new TextDecoder().decode(stdout).split("\n")) {
+      if (line.includes("Streams:")) {
+        inStreams = true;
+        continue;
+      }
+
+      if (inStreams && /^\S/.test(line)) break;
+
+      const match = inStreams ? line.match(/^\s*(\d+)\.\s+([^<>\[]+?)\s*$/) : null;
+      if (!match) continue;
+
+      const id = Number(match[1]);
+      const name = match[2].trim();
+      if (Number.isFinite(id) && name) streams.push({ id, name });
+    }
+
+    wpctlStatusCache = { timestampMs: nowMs, streams };
+    return streams;
+  } catch {
+    return wpctlStatusCache?.streams ?? [];
+  }
+}
+
+function getPipeWireProcessId(object: any): number | undefined {
+  const directPid = getNumber(object, ["application.process.id", "application_process_id", "process_id", "pid"]);
+  if (directPid !== undefined) return Math.round(directPid);
+
+  const idCandidates = ["id", "node_id", "bound_id"].map((key) => getNumber(object, [key]));
+  for (const id of idCandidates) {
+    if (id === undefined) continue;
+    const pid = Number(parseWpctlInspect(Math.round(id))?.["application.process.id"]);
+    if (Number.isFinite(pid)) return Math.round(pid);
+  }
+
+  const nameCandidates = [displayName(object, ""), getText(object, ["name", "node.name", "application.name"]) ?? ""];
+  const normalizedNames = new Set(nameCandidates.map((name) => name.trim()).filter((name) => name !== ""));
+  for (const stream of getWpctlStreams()) {
+    if (!normalizedNames.has(stream.name)) continue;
+    const pid = Number(parseWpctlInspect(stream.id)?.["application.process.id"]);
+    if (Number.isFinite(pid)) return Math.round(pid);
+  }
+
+  return undefined;
+}
+
+function getHyprlandClients(): HyprlandClient[] {
+  const nowMs = GLib.get_monotonic_time() / 1000;
+  if (hyprClientCache && nowMs - hyprClientCache.timestampMs < hyprClientCacheTtlMs) {
+    return hyprClientCache.clients;
+  }
+
+  try {
+    const [, stdout] = GLib.spawn_command_line_sync("hyprctl clients -j");
+    if (!stdout) return [];
+    const clients = JSON.parse(new TextDecoder().decode(stdout)) as HyprlandClient[];
+    hyprClientCache = { timestampMs: nowMs, clients };
+    return clients;
+  } catch (e) {
+    console.error("Failed to read Hyprland clients for audio mixer:", e);
+    return hyprClientCache?.clients ?? [];
+  }
+}
+
+function getHyprClientForAudioObject(object: any): HyprlandClient | null {
+  const pid = getPipeWireProcessId(object);
+  if (pid === undefined) return null;
+  return getHyprlandClients().find((client) => client.pid === pid) ?? null;
+}
+
+function windowTitleCandidates(client: HyprlandClient | null): string[] {
+  if (!client) return [];
+  return [client.title, client.initialTitle, client.class, client.initialClass].filter(
+    (candidate): candidate is string => Boolean(candidate && candidate.trim() !== ""),
+  );
 }
 
 function ensureIconTheme(): Gtk.IconTheme | null {
@@ -197,125 +311,31 @@ function ensureIconTheme(): Gtk.IconTheme | null {
   return iconTheme;
 }
 
-function getIconRef(icon: Gio.Icon | null): IconRef | null {
-  if (!icon) return null;
-
-  if (icon instanceof Gio.ThemedIcon) {
-    const names = icon.get_names();
-    if (names && names.length > 0) return { kind: "theme", name: names[0] };
-  }
-
-  if (icon instanceof Gio.FileIcon) {
-    const path = icon.get_file().get_path();
-    if (path && fileExists(path)) return { kind: "file", path };
-  }
-
-  return null;
-}
-
-function normalizeIconCandidate(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s*\(grabbed\)\s*$/i, "")
-    .trim();
-}
-
-function iconSearchCandidates(value: string): string[] {
-  const normalized = normalizeIconCandidate(value);
-  if (!normalized) return [];
-
-  const lower = normalized.toLowerCase();
-  const classWithoutSeparators = lower.replace(/[-_\s]+/g, "");
-  const kebabFromCamel = normalized.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
-  const kebabWithMergedBrand = kebabFromCamel.replace(/^([^-]+)-([^-]+)-(.+)$/, "$1$2-$3");
-
-  return Array.from(
-    new Set([
-      normalized,
-      lower,
-      lower.replace(/\s+/g, "-"),
-      lower.replace(/\s+/g, "_"),
-      classWithoutSeparators,
-      kebabFromCamel,
-      kebabWithMergedBrand,
-      kebabFromCamel.replace(/-/g, ""),
-      ...lower.split(/\s+-\s+|\s+—\s+|\s*:\s*/).filter(Boolean),
-    ]),
-  ).filter((candidate) => candidate !== "");
-}
-
-function getIconForCandidate(candidate: string): IconRef | null {
-  if (!candidate) return null;
-  if (iconCache.has(candidate)) return iconCache.get(candidate)!;
-
-  let icon: IconRef | null = null;
-  for (const desktopId of iconSearchCandidates(candidate).map((entry) => `${entry}.desktop`)) {
-    try {
-      const appInfo = GioUnix.DesktopAppInfo.new(desktopId);
-      if (!appInfo) continue;
-      icon = getIconRef(appInfo.get_icon());
-      if (icon) break;
-    } catch {
-      // Try next desktop id.
-    }
-  }
-
-  if (!icon) {
-    for (const searchTerm of iconSearchCandidates(candidate)) {
-      try {
-        const desktopSearchResults = GioUnix.DesktopAppInfo.search(searchTerm);
-        for (const desktopIds of desktopSearchResults) {
-          for (const desktopId of desktopIds) {
-            const appInfo = GioUnix.DesktopAppInfo.new(desktopId);
-            if (!appInfo) continue;
-            icon = getIconRef(appInfo.get_icon());
-            if (icon) break;
-          }
-          if (icon) break;
-        }
-        if (icon) break;
-      } catch {
-        // Try next search term.
-      }
-    }
-  }
-
-  if (!icon) {
-    const theme = ensureIconTheme();
-    if (theme) {
-      for (const iconName of iconSearchCandidates(candidate)) {
-        if (theme.has_icon(iconName)) {
-          icon = { kind: "theme", name: iconName };
-          break;
-        }
-      }
-    }
-  }
-
-  iconCache.set(candidate, icon);
-  return icon;
-}
-
-function getIconForAudioObject(object: any): IconRef | null {
+function getIconForAudioObject(object: any, client: HyprlandClient | null): IconRef | null {
   const directIcon = getText(object, ["icon_name", "icon", "application_icon_name"]);
   const theme = ensureIconTheme();
-  if (directIcon && theme?.has_icon(directIcon)) return { kind: "theme", name: directIcon };
-  if (directIcon && directIcon.startsWith("/") && fileExists(directIcon)) return { kind: "file", path: directIcon };
-
   const candidates = Array.from(
     new Set(
       [
+        ...windowTitleCandidates(client),
         getText(object, ["application_id", "app_id", "application_process_binary", "binary"]),
+        getText(object, ["application.process.binary"]),
         getText(object, ["application_name", "app_name", "name", "media_name", "description"]),
+        getText(object, ["application.name", "media.name", "node.name"]),
       ].filter((candidate): candidate is string => candidate !== undefined),
     ),
   );
 
+  const faugusIcon = getFaugusIconForCandidates(candidates);
+  if (faugusIcon) return faugusIcon;
+
   for (const candidate of candidates) {
-    const icon = getIconForCandidate(candidate);
+    const icon = getIconForClass(candidate, ensureIconTheme());
     if (icon) return icon;
   }
+
+  if (directIcon && theme?.has_icon(directIcon)) return { kind: "theme", name: directIcon };
+  if (directIcon && directIcon.startsWith("/") && fileExists(directIcon)) return { kind: "file", path: directIcon };
 
   return null;
 }
@@ -400,14 +420,6 @@ function makeTabIconLabel(label: string): Gtk.Label {
   return widget;
 }
 
-function setImageFile(image: Gtk.Image, path: string): void {
-  try {
-    image.set_from_file(path);
-  } catch (e) {
-    console.error(`Failed to load audio mixer icon file ${path}:`, e);
-  }
-}
-
 function makeAudioIconWidget(row: AudioRow): Gtk.Widget {
   if (!row.iconRef) return makeIconLabel(speakerIcon(row));
 
@@ -452,11 +464,13 @@ function createAudioBackend(options: { applySnapshot: (snapshot: AudioSnapshot) 
   }
 
   function makeRow(object: any, kind: RowKind, fallback: string, icon: string, isDefault = false): AudioRow {
+    const client = kind === "stream" ? getHyprClientForAudioObject(object) : null;
+    const clientTitle = client?.title?.trim();
     return {
       id: `${kind}:${objectId(object, fallback)}`,
-      name: displayName(object, fallback),
+      name: kind === "stream" && clientTitle ? clientTitle : displayName(object, fallback),
       icon,
-      iconRef: kind === "stream" ? getIconForAudioObject(object) : null,
+      iconRef: kind === "stream" ? getIconForAudioObject(object, client) : null,
       kind,
       object,
       volume: readVolume(object),
@@ -672,6 +686,14 @@ function toggleRowMute(row: AudioRow, index: number, visible = rowFocusVisible):
   focusRow(index, visible);
 }
 
+function handleRowScroll(row: AudioRow, index: number, deltaY: number): boolean {
+  if (row.volume === undefined || deltaY === 0) return false;
+  focusedRowIndex = index;
+  rowFocusVisible = false;
+  adjustRowVolume(row, deltaY < 0 ? 5 : -5);
+  return true;
+}
+
 function makeTabButton(tab: { id: AudioMixerTab; label: string; icon: string }): Gtk.Button {
   const button = new Gtk.Button();
   button.add_css_class("audio-mixer-tab");
@@ -870,6 +892,12 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
     focusRow(index, false);
   });
   card.add_controller(clickController);
+
+  if (row.volume !== undefined) {
+    const scrollController = new Gtk.EventControllerScroll({ flags: Gtk.EventControllerScrollFlags.VERTICAL });
+    scrollController.connect("scroll", (_controller, _deltaX, deltaY) => handleRowScroll(row, index, deltaY));
+    card.add_controller(scrollController);
+  }
 
   const topRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 10 });
   topRow.set_hexpand(true);
@@ -1339,6 +1367,10 @@ function applyStaticCSS(): void {
       min-width: 28px;
       min-height: 28px;
       padding: 0;
+      font-size: 15px;
+    }
+
+    window.audio-mixer-widget button.audio-mixer-action.icon label {
       font-family: "Segoe Fluent Icons";
       font-size: 15px;
     }

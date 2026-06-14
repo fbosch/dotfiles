@@ -3,11 +3,11 @@ import { Astal } from "ags/gtk4";
 import Gdk from "gi://Gdk?version=4.0";
 import GdkPixbuf from "gi://GdkPixbuf?version=2.0";
 import Gio from "gi://Gio?version=2.0";
-import GioUnix from "gi://GioUnix?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
 import { execAsync } from "ags/process";
+import { getFallbackLetter, getIconForWindow, setImageFile } from "./app-icons";
 import { perf } from "./performance-monitor";
 
 /**
@@ -102,18 +102,7 @@ const MONITOR_DEBUG_PATH = `${RUNTIME_DIR}/monitor-debug.log`;
 const WINDOW_SWITCHER_DEBUG_PATH = `${RUNTIME_DIR}/ags-window-switcher-debug.log`;
 const TOGGLE_MINIMIZED_WORKSPACE_SCRIPT = "~/.config/hypr/runtime/windows/toggle-minimized-workspace.sh";
 const WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT = "~/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh";
-const FAUGUS_GAMES_PATH = `${GLib.get_home_dir()}/.config/faugus-launcher/games.json`;
 const DEBUG = GLib.getenv("AGS_WINDOW_SWITCHER_DEBUG") === "1";
-
-type IconRef =
-  | { kind: "theme"; name: string }
-  | { kind: "file"; path: string };
-
-type FaugusGame = {
-  title?: string;
-  path?: string;
-  icon?: string;
-};
 
 function isPerformanceOverlayActive(): boolean {
   try {
@@ -172,21 +161,6 @@ let currentIndex = 0;
 // Icon theme reference (initialized in createWindow)
 let iconTheme: Gtk.IconTheme | null = null;
 
-// Icon cache to avoid repeated desktop file lookups
-const iconCache = new Map<string, IconRef | null>();
-let faugusGamesCache: FaugusGame[] | null = null;
-
-const GENERIC_WRAPPER_CLASSES = [
-  "gamescope",
-  "steam",
-  "wine",
-  "lutris",
-  "heroic",
-  "bottles",
-  "umu",
-  "proton",
-];
-
 type PreviewCacheEntry = {
   mtime: number;
   width: number;
@@ -195,93 +169,6 @@ type PreviewCacheEntry = {
 };
 
 const previewCache = new Map<string, PreviewCacheEntry>();
-
-function fileExists(path: string): boolean {
-  try {
-    return Gio.File.new_for_path(path).query_exists(null);
-  } catch {
-    return false;
-  }
-}
-
-function getIconRef(icon: Gio.Icon | null): IconRef | null {
-  if (!icon) return null;
-
-  if (icon instanceof Gio.ThemedIcon) {
-    const names = icon.get_names();
-    if (names && names.length > 0) {
-      return { kind: "theme", name: names[0] };
-    }
-  }
-
-  if (icon instanceof Gio.FileIcon) {
-    const path = icon.get_file().get_path();
-    if (path && fileExists(path)) {
-      return { kind: "file", path };
-    }
-  }
-
-  return null;
-}
-
-function loadFaugusGames(): FaugusGame[] {
-  if (faugusGamesCache) return faugusGamesCache;
-
-  try {
-    const file = Gio.File.new_for_path(FAUGUS_GAMES_PATH);
-    const [success, contents] = file.load_contents(null);
-    if (!success || !contents) {
-      faugusGamesCache = [];
-      return faugusGamesCache;
-    }
-
-    const parsed = JSON.parse(new TextDecoder().decode(contents));
-    faugusGamesCache = Array.isArray(parsed) ? parsed : [];
-    return faugusGamesCache;
-  } catch {
-    faugusGamesCache = [];
-    return faugusGamesCache;
-  }
-}
-
-function normalizeIconSearchTerm(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/gi, "")
-    .toLowerCase();
-}
-
-function getFaugusIconForWindow(window: WindowInfo): IconRef | null {
-  const titleCandidates = [
-    ...buildTitleCandidates(window.title),
-    ...buildTitleCandidates(window.initialTitle ?? ""),
-  ].map(normalizeIconSearchTerm);
-
-  if (titleCandidates.length === 0) return null;
-
-  for (const game of loadFaugusGames()) {
-    if (!game.icon || !fileExists(game.icon)) continue;
-
-    const gameCandidates = [game.title ?? "", game.path ?? ""]
-      .filter((candidate) => candidate !== "")
-      .map(normalizeIconSearchTerm);
-
-    if (
-      gameCandidates.some((gameCandidate) =>
-        titleCandidates.some(
-          (titleCandidate) =>
-            titleCandidate.includes(gameCandidate) ||
-            gameCandidate.includes(titleCandidate),
-        ),
-      )
-    ) {
-      return { kind: "file", path: game.icon };
-    }
-  }
-
-  return null;
-}
 
 // Persistent focus history for recency-based sorting
 // Most recently focused window is at index 0
@@ -407,215 +294,6 @@ function captureWindowPreview(window: WindowInfo): string | null {
   }
 
   return null;
-}
-
-// Get icon name from desktop file based on app class
-function getIconForClass(appClass: string): IconRef | null {
-  if (!appClass) return null;
-
-  // Check cache first
-  if (iconCache.has(appClass)) {
-    return iconCache.get(appClass)!;
-  }
-
-  // Try to find desktop file for this app class
-  const normalizedClass = appClass.trim();
-  const lowerClass = normalizedClass.toLowerCase();
-  const classWithoutSeparators = lowerClass.replace(/[-_\s]+/g, "");
-  const kebabFromCamel = normalizedClass
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .toLowerCase();
-  const kebabWithMergedBrand = kebabFromCamel.replace(
-    /^([^-]+)-([^-]+)-(.+)$/,
-    "$1$2-$3",
-  );
-
-  const desktopIdAttempts = Array.from(
-    new Set([
-      normalizedClass,
-      lowerClass,
-      classWithoutSeparators,
-      kebabFromCamel,
-      kebabWithMergedBrand,
-      kebabFromCamel.replace(/-/g, ""),
-    ]),
-  ).map((candidate) => `${candidate}.desktop`);
-
-  let icon: IconRef | null = null;
-
-  for (const desktopId of desktopIdAttempts) {
-    try {
-      const appInfo = GioUnix.DesktopAppInfo.new(desktopId);
-      if (!appInfo) continue;
-
-      icon = getIconRef(appInfo.get_icon());
-      if (icon) {
-        break;
-      }
-    } catch (e) {
-      // Desktop file not found or error parsing, try next
-      continue;
-    }
-  }
-
-  // If no exact desktop ID matched, search desktop entries by name/keywords.
-  // This handles wrapper windows such as gamescope whose title is the real app.
-  if (!icon) {
-    for (const searchTerm of [normalizedClass, lowerClass, kebabFromCamel]) {
-      try {
-        const desktopSearchResults = GioUnix.DesktopAppInfo.search(searchTerm);
-        for (const desktopIds of desktopSearchResults) {
-          for (const desktopId of desktopIds) {
-            const appInfo = GioUnix.DesktopAppInfo.new(desktopId);
-            if (!appInfo) continue;
-
-            icon = getIconRef(appInfo.get_icon());
-            if (icon) break;
-          }
-
-          if (icon) break;
-        }
-
-        if (icon) break;
-      } catch (e) {
-        continue;
-      }
-    }
-  }
-
-  // If no desktop file found, try checking icon theme directly
-  // This handles apps that install icons but not desktop files
-  if (!icon && iconTheme) {
-    const iconAttempts = Array.from(
-      new Set([
-        normalizedClass,
-        lowerClass,
-        lowerClass.replace(/\s+/g, "-"),
-        kebabFromCamel,
-        kebabWithMergedBrand,
-        classWithoutSeparators,
-      ]),
-    );
-
-    for (const name of iconAttempts) {
-      if (iconTheme.has_icon(name)) {
-        icon = { kind: "theme", name };
-        break;
-      }
-    }
-  }
-
-  // Cache the result (even if null)
-  iconCache.set(appClass, icon);
-  return icon;
-}
-
-function isGenericWrapperClass(appClass: string): boolean {
-  if (!appClass) return false;
-
-  const normalizedClass = appClass.toLowerCase();
-  if (normalizedClass.startsWith("steam_app_")) return true;
-
-  return GENERIC_WRAPPER_CLASSES.some(
-    (wrapperClass) => normalizedClass === wrapperClass,
-  );
-}
-
-function buildTitleCandidates(title: string): string[] {
-  if (!title) return [];
-
-  const normalizedTitle = title.replace(/\s*\(grabbed\)\s*$/i, "").trim();
-  if (!normalizedTitle) return [];
-
-  const parts = [
-    normalizedTitle,
-    normalizedTitle.split(" - ")[0]?.trim() ?? "",
-    normalizedTitle.split(" — ")[0]?.trim() ?? "",
-    normalizedTitle.split(":")[0]?.trim() ?? "",
-  ].filter((part) => part !== "");
-
-  const candidates: string[] = [];
-  for (const part of parts) {
-    const withoutTrailingVersion = part.replace(/\s+\d+(?:\.\d+)+(?:\b.*)?$/, "").trim();
-    const partCandidates = withoutTrailingVersion && withoutTrailingVersion !== part
-      ? [part, withoutTrailingVersion]
-      : [part];
-
-    for (const partCandidate of partCandidates) {
-      const lowered = partCandidate.toLowerCase();
-      const dashSeparated = lowered.replace(/\s+/g, "-");
-      const underscored = lowered.replace(/\s+/g, "_");
-      const compact = lowered.replace(/[^a-z0-9]+/g, "");
-
-      candidates.push(partCandidate, lowered, dashSeparated, underscored, compact);
-    }
-  }
-
-  return Array.from(new Set(candidates.filter((candidate) => candidate !== "")));
-}
-
-function getIconForWindow(window: WindowInfo): IconRef | null {
-  const classCandidates = [window.class, window.initialClass].filter(
-    (candidate): candidate is string => candidate !== undefined && candidate !== "",
-  );
-
-  for (const candidate of classCandidates) {
-    const icon = getIconForClass(candidate);
-    if (icon) {
-      return icon;
-    }
-  }
-
-  const shouldTryTitleLookup =
-    classCandidates.some((candidate) => isGenericWrapperClass(candidate)) ||
-    window.title.toLowerCase().includes("(grabbed)") ||
-    (window.initialTitle?.toLowerCase().includes("(grabbed)") ?? false);
-
-  if (shouldTryTitleLookup === false) {
-    return null;
-  }
-
-  const faugusIcon = getFaugusIconForWindow(window);
-  if (faugusIcon) {
-    return faugusIcon;
-  }
-
-  const titleCandidates = [
-    ...buildTitleCandidates(window.title),
-    ...buildTitleCandidates(window.initialTitle ?? ""),
-  ];
-
-  for (const candidate of titleCandidates) {
-    const icon = getIconForClass(candidate);
-    if (icon) {
-      return icon;
-    }
-  }
-
-  return null;
-}
-
-function setImageFile(image: Gtk.Image, path: string): void {
-  try {
-    image.set_from_file(path);
-  } catch (e) {
-    console.error(`Failed to load icon file ${path}:`, e);
-  }
-}
-
-function getFallbackLetter(window: WindowInfo): string {
-  const primaryClass = window.class || window.initialClass || "";
-  const useTitleFallback =
-    isGenericWrapperClass(primaryClass) ||
-    window.title.toLowerCase().includes("(grabbed)") ||
-    primaryClass === "";
-
-  const fallbackSource = useTitleFallback ? window.title : primaryClass;
-  const normalizedSource = fallbackSource.replace(/\s*\(grabbed\)\s*$/i, "").trim();
-  if (!normalizedSource) return "?";
-
-  const firstAlphanumeric = normalizedSource.match(/[a-z0-9]/i)?.[0];
-  return firstAlphanumeric ? firstAlphanumeric.toUpperCase() : "?";
 }
 
 /**
@@ -906,7 +584,7 @@ function createAppButton(
   let ok = true;
   let error: string | undefined;
   try {
-    const icon = getIconForWindow(window);
+    const icon = getIconForWindow(window, iconTheme);
     const fallbackLetter = getFallbackLetter(window);
 
     debugLog(`Creating button for ${window.class} in ${displayMode} mode`);
