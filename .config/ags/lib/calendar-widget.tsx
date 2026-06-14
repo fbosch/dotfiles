@@ -53,6 +53,7 @@ interface CalendarBackendModule {
   init: () => void;
   refresh: () => boolean;
   stop: () => void;
+  cooldown: () => void;
 }
 
 interface SerializedEvent {
@@ -90,6 +91,7 @@ let weekdayLabelWidgets: Gtk.Label[] = [];
 let daySlots: DaySlot[] = [];
 let isVisible = false;
 let lastToggleAtMs = 0;
+let hiddenTeardownSource = 0;
 let visibleMonth = startOfMonth(new Date());
 let selectedDate: Date | null = startOfLocalDay(new Date());
 let events: CalendarEventPreview[] = [];
@@ -102,6 +104,7 @@ const weekStartsOn: WeekStart = 1;
 const markerLimit = 3;
 const dayInMs = 24 * 60 * 60 * 1000;
 const edsConnectWaitSeconds = 1;
+const hiddenTeardownDelaySeconds = 30;
 const runtimeDir = GLib.getenv("XDG_RUNTIME_DIR") || GLib.get_tmp_dir();
 const eventCachePath = `${runtimeDir}/ags-calendar-widget-events.json`;
 const monthFormatter = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" });
@@ -661,6 +664,14 @@ function createCalendarBackendModule(options: {
     registrySignalIds = [];
   }
 
+  function cooldown(): void {
+    stop();
+    loadVersion += 1;
+    registry = null;
+    clientCache = new Map();
+    sourceInfoCache = new Map();
+  }
+
   return {
     init: loadCacheFromTmpfs,
     refresh(): boolean {
@@ -676,6 +687,7 @@ function createCalendarBackendModule(options: {
       return appliedCache;
     },
     stop,
+    cooldown,
   };
 }
 
@@ -744,6 +756,32 @@ function resetCalendarRefs(): void {
   dayGridBox = null;
   weekdayLabelWidgets = [];
   daySlots = [];
+}
+
+function cancelHiddenTeardown(): void {
+  if (hiddenTeardownSource === 0) return;
+  GLib.source_remove(hiddenTeardownSource);
+  hiddenTeardownSource = 0;
+}
+
+function destroyCalendarWindow(): void {
+  if (!win) return;
+  win.destroy();
+  win = null;
+  calendarBox = null;
+  resetCalendarRefs();
+}
+
+function scheduleHiddenTeardown(): void {
+  if (hiddenTeardownSource !== 0) return;
+  hiddenTeardownSource = GLib.timeout_add_seconds(GLib.PRIORITY_LOW, hiddenTeardownDelaySeconds, () => {
+    hiddenTeardownSource = 0;
+    if (!isVisible) {
+      calendarBackend.cooldown();
+      destroyCalendarWindow();
+    }
+    return GLib.SOURCE_REMOVE;
+  });
 }
 
 function makeLabel(label: string, className: string): Gtk.Label {
@@ -950,9 +988,11 @@ function hideCalendar(): void {
   win.set_visible(false);
   isVisible = false;
   calendarBackend.stop();
+  scheduleHiddenTeardown();
 }
 
 function showCalendar(): void {
+  cancelHiddenTeardown();
   if (!win) createWindow();
   setTriggerMonitor();
   win?.set_visible(true);
