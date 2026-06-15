@@ -97,7 +97,7 @@ apply_hypr_gaming_overlay() {
 }
 
 restore_hypr_defaults() {
-  hyprctl reload >/dev/null
+  hyprctl eval 'require("profiles").apply("default")' >/dev/null
 }
 
 set_power_profile() {

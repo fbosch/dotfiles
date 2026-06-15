@@ -3,6 +3,7 @@ local command = require("lib.command")
 local paths = require("lib.paths")
 
 local profiles = {
+  default = require("profiles.default"),
   powersave = require("profiles.powersave"),
   gaming = require("profiles.gaming"),
 }
