@@ -101,6 +101,44 @@ export const WithSystemUpdates: Story = {
   ],
 };
 
+export const WithGamingProfile: Story = {
+  args: {
+    isOpen: true,
+    profile: {
+      mode: "gaming",
+      source: "auto",
+      gamingManual: false,
+      powersaveManual: false,
+    },
+  },
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div className="bg-background-primary min-h-screen p-8">
+        <Story />
+      </div>
+    ),
+  ],
+};
+
+export const WithManualPowersaveProfile: Story = {
+  args: {
+    isOpen: true,
+    profile: {
+      mode: "powersave",
+      source: "manual",
+      gamingManual: false,
+      powersaveManual: true,
+    },
+  },
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div className="bg-background-primary min-h-screen p-8">
+        <Story />
+      </div>
+    ),
+  ],
+};
+
 /**
  * With animations disabled (better performance on slower systems)
  */

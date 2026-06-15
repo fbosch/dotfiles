@@ -1,5 +1,4 @@
 local M = {}
-local seen_ids = {}
 
 function M.new()
 	return {
@@ -9,6 +8,7 @@ function M.new()
 		manual_change_by_key = {},
 		active_by_key = {},
 		position_by_id = {},
+		seen_ids = {},
 	}
 end
 
@@ -59,6 +59,11 @@ function M.position_changed(state, target, axis)
 	local previous = state.position_by_id[M.target_id(target)]
 	previous = previous and previous[axis]
 	return previous ~= nil and math.abs(current - previous) > 1
+end
+
+function M.position_in_area(target, axis, start, length)
+	local current = M.position(target, axis)
+	return current ~= nil and current >= start and current <= start + length
 end
 
 function M.remember_position(state, target, axis, center)
@@ -118,6 +123,7 @@ function M.sync(state, key, targets, insert_after_id)
 
 	local added = false
 	local added_seen = false
+	local seen_ids = state.seen_ids
 	for index = 1, #targets do
 		local id = M.target_id(targets[index])
 		if not M.index_of(order, id) then

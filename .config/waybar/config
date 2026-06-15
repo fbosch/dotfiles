@@ -81,7 +81,7 @@
       "headphone": "",
       "default": ["",  "", "", "", "", ""]
     },
-    "on-click": "~/.config/hypr/taskbar/actions.sh wiremix",
+    "on-click": "ags request -i ags-bundled audio-mixer-widget '{\"action\":\"toggle\"}'",
     "on-click-middle": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
     "tooltip": true
   },
@@ -107,7 +107,7 @@
     "format": "{}",
     "format-en": "ENG",
     "format-da": "DAN",
-    "on-click": "hyprctl switchxkblayout at-translated-set-2-keyboard next",
+    "on-click": "hyprctl switchxkblayout at-translated-set-2-keyboard next"
   },
 
   "wlr/taskbar": {
@@ -128,6 +128,7 @@
       "wiremix_terminal"
     ],
     "app_ids-mapping": {
+      "steam_app_0": "Pokmon Infinite Fusion",
       "WowUp-CF": "wowup-cf",
       "WowUpCf": "wowup-cf",
       "chrome-chat.openai.com__-ChatGPTProfile": "ChatGPT",
@@ -147,7 +148,7 @@
     "format-ethernet": "",
     "format-disconnected": "󰈂",
     "tooltip-format": "{ifname}",
-    "on-click": "sh -c 'if pgrep -f \"^nm-connection-editor\" > /dev/null; then pkill -f \"^nm-connection-editor\"; else nm-connection-editor & disown; fi'",
+    "on-click": "sh -c 'if pgrep -f \"^nm-connection-editor\" > /dev/null; then pkill -f \"^nm-connection-editor\"; else nm-connection-editor & disown; fi'"
    },
 
   "clock": {
@@ -155,8 +156,27 @@
     "interval": 1,
     "align": 1,
     "justify": "right",
+    "on-click": "ags request -i ags-bundled calendar-widget '{\"action\":\"toggle\"}'",
+    "tooltip": false
+  },
+
+  "custom/swaync": {
+    "exec": "swaync-client -swb",
+    "return-type": "json",
+    "format": "{icon}",
+    "format-icons": {
+      "none": "󰂜",
+      "notification": "󰂚",
+      "dnd-none": "󰪑",
+      "dnd-notification": "󰂛",
+      "inhibited-none": "󰂜",
+      "inhibited-notification": "󰂚",
+      "dnd-inhibited-none": "󰪑",
+      "dnd-inhibited-notification": "󰂛"
+    },
     "on-click": "swaync-client -t",
-    "on-click-right": "ags request -i ags-bundled calendar-widget '{\"action\":\"toggle\"}'",
+    "on-click-right": "swaync-client -d",
+    "on-click-middle": "swaync-client -C",
     "tooltip": false
   },
 
@@ -169,7 +189,7 @@
       "shutdown": "shutdown 0",
       "reboot": "reboot",
       "suspend": "systemctl suspend",
-      "hibernate": "systemctl hibernate",
+      "hibernate": "systemctl hibernate"
     }
-  },
+  }
 }

@@ -274,7 +274,9 @@ function M.recalculate(ctx)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	if manual_change then
 		state.manual_change_by_key[key] = nil
-	elseif order_state.position_changed(state, targets[active_index(targets)], "y") or added_seen_targets then
+	elseif order_state.position_in_area(targets[active_index(targets)], "y", y, height)
+		and (order_state.position_changed(state, targets[active_index(targets)], "y") or added_seen_targets)
+	then
 		move_active_to_position(targets, key, ratios, y, height)
 		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	end

@@ -3,11 +3,12 @@ import { Astal } from "ags/gtk4";
 import Gdk from "gi://Gdk?version=4.0";
 import GdkPixbuf from "gi://GdkPixbuf?version=2.0";
 import Gio from "gi://Gio?version=2.0";
-import GioUnix from "gi://GioUnix?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
 import { execAsync } from "ags/process";
+import { getFallbackLetter, getIconForWindow, setImageFile } from "./app-icons";
+import { dispatchHyprland, queryHyprlandJson } from "./hyprland-ipc";
 import { perf } from "./performance-monitor";
 
 /**
@@ -161,20 +162,6 @@ let currentIndex = 0;
 // Icon theme reference (initialized in createWindow)
 let iconTheme: Gtk.IconTheme | null = null;
 
-// Icon name cache to avoid repeated desktop file lookups
-const iconCache = new Map<string, string | null>();
-
-const GENERIC_WRAPPER_CLASSES = [
-  "gamescope",
-  "steam",
-  "wine",
-  "lutris",
-  "heroic",
-  "bottles",
-  "umu",
-  "proton",
-];
-
 type PreviewCacheEntry = {
   mtime: number;
   width: number;
@@ -183,19 +170,6 @@ type PreviewCacheEntry = {
 };
 
 const previewCache = new Map<string, PreviewCacheEntry>();
-
-function getThemedIconName(icon: Gio.Icon | null): string | null {
-  if (!icon) return null;
-
-  if (icon instanceof Gio.ThemedIcon) {
-    const names = icon.get_names();
-    if (names && names.length > 0) {
-      return names[0];
-    }
-  }
-
-  return null;
-}
 
 // Persistent focus history for recency-based sorting
 // Most recently focused window is at index 0
@@ -323,202 +297,6 @@ function captureWindowPreview(window: WindowInfo): string | null {
   return null;
 }
 
-// Get icon name from desktop file based on app class
-function getIconNameForClass(appClass: string): string | null {
-  if (!appClass) return null;
-
-  // Check cache first
-  if (iconCache.has(appClass)) {
-    return iconCache.get(appClass)!;
-  }
-
-  // Try to find desktop file for this app class
-  const normalizedClass = appClass.trim();
-  const lowerClass = normalizedClass.toLowerCase();
-  const classWithoutSeparators = lowerClass.replace(/[-_\s]+/g, "");
-  const kebabFromCamel = normalizedClass
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .toLowerCase();
-  const kebabWithMergedBrand = kebabFromCamel.replace(
-    /^([^-]+)-([^-]+)-(.+)$/,
-    "$1$2-$3",
-  );
-
-  const desktopIdAttempts = Array.from(
-    new Set([
-      normalizedClass,
-      lowerClass,
-      classWithoutSeparators,
-      kebabFromCamel,
-      kebabWithMergedBrand,
-      kebabFromCamel.replace(/-/g, ""),
-    ]),
-  ).map((candidate) => `${candidate}.desktop`);
-
-  let iconName: string | null = null;
-
-  for (const desktopId of desktopIdAttempts) {
-    try {
-      const appInfo = GioUnix.DesktopAppInfo.new(desktopId);
-      if (!appInfo) continue;
-
-      iconName = getThemedIconName(appInfo.get_icon());
-      if (iconName) {
-        break;
-      }
-    } catch (e) {
-      // Desktop file not found or error parsing, try next
-      continue;
-    }
-  }
-
-  // If no exact desktop ID matched, search desktop entries by name/keywords.
-  // This handles wrapper windows such as gamescope whose title is the real app.
-  if (!iconName) {
-    for (const searchTerm of [normalizedClass, lowerClass, kebabFromCamel]) {
-      try {
-        const desktopSearchResults = GioUnix.DesktopAppInfo.search(searchTerm);
-        for (const desktopIds of desktopSearchResults) {
-          for (const desktopId of desktopIds) {
-            const appInfo = GioUnix.DesktopAppInfo.new(desktopId);
-            if (!appInfo) continue;
-
-            iconName = getThemedIconName(appInfo.get_icon());
-            if (iconName) break;
-          }
-
-          if (iconName) break;
-        }
-
-        if (iconName) break;
-      } catch (e) {
-        continue;
-      }
-    }
-  }
-
-  // If no desktop file found, try checking icon theme directly
-  // This handles apps that install icons but not desktop files
-  if (!iconName && iconTheme) {
-    const iconAttempts = Array.from(
-      new Set([
-        normalizedClass,
-        lowerClass,
-        lowerClass.replace(/\s+/g, "-"),
-        kebabFromCamel,
-        kebabWithMergedBrand,
-        classWithoutSeparators,
-      ]),
-    );
-
-    for (const name of iconAttempts) {
-      if (iconTheme.has_icon(name)) {
-        iconName = name;
-        break;
-      }
-    }
-  }
-
-  // Cache the result (even if null)
-  iconCache.set(appClass, iconName);
-  return iconName;
-}
-
-function isGenericWrapperClass(appClass: string): boolean {
-  if (!appClass) return false;
-
-  const normalizedClass = appClass.toLowerCase();
-  if (normalizedClass.startsWith("steam_app_")) return true;
-
-  return GENERIC_WRAPPER_CLASSES.some(
-    (wrapperClass) => normalizedClass === wrapperClass,
-  );
-}
-
-function buildTitleCandidates(title: string): string[] {
-  if (!title) return [];
-
-  const normalizedTitle = title.replace(/\s*\(grabbed\)\s*$/i, "").trim();
-  if (!normalizedTitle) return [];
-
-  const parts = [
-    normalizedTitle,
-    normalizedTitle.split(" - ")[0]?.trim() ?? "",
-    normalizedTitle.split(" — ")[0]?.trim() ?? "",
-    normalizedTitle.split(":")[0]?.trim() ?? "",
-  ].filter((part) => part !== "");
-
-  const candidates: string[] = [];
-  for (const part of parts) {
-    const withoutTrailingVersion = part.replace(/\s+\d+(?:\.\d+)+(?:\b.*)?$/, "").trim();
-    const partCandidates = withoutTrailingVersion && withoutTrailingVersion !== part
-      ? [part, withoutTrailingVersion]
-      : [part];
-
-    for (const partCandidate of partCandidates) {
-      const lowered = partCandidate.toLowerCase();
-      const dashSeparated = lowered.replace(/\s+/g, "-");
-      const underscored = lowered.replace(/\s+/g, "_");
-      const compact = lowered.replace(/[^a-z0-9]+/g, "");
-
-      candidates.push(partCandidate, lowered, dashSeparated, underscored, compact);
-    }
-  }
-
-  return Array.from(new Set(candidates.filter((candidate) => candidate !== "")));
-}
-
-function getIconNameForWindow(window: WindowInfo): string | null {
-  const classCandidates = [window.class, window.initialClass].filter(
-    (candidate): candidate is string => candidate !== undefined && candidate !== "",
-  );
-
-  for (const candidate of classCandidates) {
-    const iconName = getIconNameForClass(candidate);
-    if (iconName) {
-      return iconName;
-    }
-  }
-
-  const shouldTryTitleLookup =
-    classCandidates.some((candidate) => isGenericWrapperClass(candidate)) ||
-    window.title.toLowerCase().includes("(grabbed)") ||
-    (window.initialTitle?.toLowerCase().includes("(grabbed)") ?? false);
-
-  if (shouldTryTitleLookup === false) {
-    return null;
-  }
-
-  const titleCandidates = [
-    ...buildTitleCandidates(window.title),
-    ...buildTitleCandidates(window.initialTitle ?? ""),
-  ];
-
-  for (const candidate of titleCandidates) {
-    const iconName = getIconNameForClass(candidate);
-    if (iconName) {
-      return iconName;
-    }
-  }
-
-  return null;
-}
-
-function getFallbackLetter(window: WindowInfo): string {
-  const primaryClass = window.class || window.initialClass || "";
-  const useTitleFallback =
-    isGenericWrapperClass(primaryClass) ||
-    window.title.toLowerCase().includes("(grabbed)") ||
-    primaryClass === "";
-
-  const fallbackSource = useTitleFallback ? window.title : primaryClass;
-  const normalizedSource = fallbackSource.replace(/\s*\(grabbed\)\s*$/i, "").trim();
-  if (!normalizedSource) return "?";
-
-  const firstAlphanumeric = normalizedSource.match(/[a-z0-9]/i)?.[0];
-  return firstAlphanumeric ? firstAlphanumeric.toUpperCase() : "?";
-}
-
 /**
  * Truncate title to fit within available width
  * Font: 13px at 500 weight (medium)
@@ -642,8 +420,10 @@ async function getWindows(): Promise<WindowInfo[]> {
     }
   }
   try {
-    const jsonStr = await execAsync("hyprctl clients -j");
-    const clients = JSON.parse(jsonStr) as HyprlandClient[];
+    const clients = queryHyprlandJson<HyprlandClient[]>("j/clients", {
+      component: "window-switcher",
+      metric: "hyprSocketClients",
+    }) ?? JSON.parse(await execAsync("hyprctl clients -j")) as HyprlandClient[];
     const focusedClient = clients.find((client) => client.focused);
     if (focusedClient?.address) {
       activeWindowCache = { timestampMs: nowMs, address: focusedClient.address };
@@ -761,8 +541,10 @@ async function getActiveWindowAddress(): Promise<string | null> {
     }
   }
   try {
-    const jsonStr = await execAsync("hyprctl activewindow -j");
-    const activeWindow = JSON.parse(jsonStr);
+    const activeWindow = queryHyprlandJson<{ address?: string }>("j/activewindow", {
+      component: "window-switcher",
+      metric: "hyprSocketActiveWindow",
+    }) ?? JSON.parse(await execAsync("hyprctl activewindow -j"));
     const address = activeWindow.address || null;
     activeWindowCache = { timestampMs: nowMs, address };
     return address;
@@ -772,29 +554,39 @@ async function getActiveWindowAddress(): Promise<string | null> {
   }
 }
 
-function hyprLuaFocusCommand(address: string): string {
-  const expression = `hl.dsp.focus({ window = "address:${address}" })`;
-  const command = `hyprctl dispatch ${GLib.shell_quote(expression)} && ${WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT}`;
-  return `dash -c ${GLib.shell_quote(command)}`;
+function dispatchHyprlandWithFallback(dispatcher: string, metric: string): void {
+  if (dispatchHyprland(dispatcher, { component: "window-switcher", metric })) return;
+  GLib.spawn_command_line_sync(`hyprctl dispatch ${GLib.shell_quote(dispatcher)}`);
 }
 
-function hyprLuaFocusAndCenterCommand(window: WindowInfo): string {
+function warpCursorToActiveWindow(): void {
+  const home = GLib.getenv("HOME");
+  const script = home ? `${home}/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh` : WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT;
+  GLib.spawn_command_line_async(script);
+}
+
+function focusWindow(address: string): void {
+  dispatchHyprlandWithFallback(`hl.dsp.focus({ window = "address:${address}" })`, "hyprSocketDispatchFocus");
+  warpCursorToActiveWindow();
+}
+
+function focusAndCenterWindow(window: WindowInfo): void {
   if (!window.position || !window.size) {
-    return hyprLuaFocusCommand(window.address);
+    focusWindow(window.address);
+    return;
   }
 
   const cursorX = Math.floor(window.position.x + window.size.width / 2);
   const cursorY = Math.floor(window.position.y + window.size.height / 2);
-  const focusExpression = `hl.dsp.focus({ window = "address:${window.address}" })`;
-  const cursorExpression = `hl.dsp.cursor.move({ x = ${cursorX}, y = ${cursorY} })`;
-  const command = `hyprctl dispatch ${GLib.shell_quote(focusExpression)} && hyprctl dispatch ${GLib.shell_quote(cursorExpression)}`;
-
-  return `dash -c ${GLib.shell_quote(command)}`;
+  dispatchHyprlandWithFallback(`hl.dsp.focus({ window = "address:${window.address}" })`, "hyprSocketDispatchFocus");
+  dispatchHyprlandWithFallback(`hl.dsp.cursor.move({ x = ${cursorX}, y = ${cursorY} })`, "hyprSocketDispatchCursor");
 }
 
-function restoreMinimizedAndFocusCommand(address: string): string {
-  const command = `${TOGGLE_MINIMIZED_WORKSPACE_SCRIPT} ${GLib.shell_quote(address)} && ${hyprLuaFocusCommand(address)}`;
-  return `dash -c ${GLib.shell_quote(command)}`;
+function restoreMinimizedAndFocus(address: string): void {
+  const home = GLib.getenv("HOME");
+  const script = home ? `${home}/.config/hypr/runtime/windows/toggle-minimized-workspace.sh` : TOGGLE_MINIMIZED_WORKSPACE_SCRIPT;
+  GLib.spawn_command_line_sync(`${script} ${GLib.shell_quote(address)}`);
+  focusWindow(address);
 }
 
 // Create an app icon button
@@ -807,7 +599,7 @@ function createAppButton(
   let ok = true;
   let error: string | undefined;
   try {
-    const iconName = getIconNameForWindow(window);
+    const icon = getIconForWindow(window, iconTheme);
     const fallbackLetter = getFallbackLetter(window);
 
     debugLog(`Creating button for ${window.class} in ${displayMode} mode`);
@@ -847,12 +639,20 @@ function createAppButton(
               widthRequest={dimensions.width}
             >
               {/* App icon */}
-              {iconName ? (
-                <image
-                  iconName={iconName}
-                  pixelSize={20}
-                  class="preview-header-icon"
-                />
+              {icon ? (
+                icon.kind === "theme" ? (
+                  <image
+                    iconName={icon.name}
+                    pixelSize={20}
+                    class="preview-header-icon"
+                  />
+                ) : (
+                  <image
+                    pixelSize={20}
+                    class="preview-header-icon"
+                    $={(self: Gtk.Image) => setImageFile(self, icon.path)}
+                  />
+                )
               ) : (
                 <box class="preview-header-icon-fallback">
                   <label
@@ -917,14 +717,22 @@ function createAppButton(
             orientation={Gtk.Orientation.HORIZONTAL}
             halign={Gtk.Align.CENTER}
             valign={Gtk.Align.CENTER}
-            class={`icon-container ${iconName ? "" : "letter-icon"}`}
+            class={`icon-container ${icon ? "" : "letter-icon"}`}
           >
-            {iconName ? (
-              <image
-                iconName={iconName}
-                pixelSize={ICON_SIZE}
-                class="app-icon-image"
-              />
+            {icon ? (
+              icon.kind === "theme" ? (
+                <image
+                  iconName={icon.name}
+                  pixelSize={ICON_SIZE}
+                  class="app-icon-image"
+                />
+              ) : (
+                <image
+                  pixelSize={ICON_SIZE}
+                  class="app-icon-image"
+                  $={(self: Gtk.Image) => setImageFile(self, icon.path)}
+                />
+              )
             ) : (
               <box class="app-icon-wrapper">
                 <label
@@ -1361,13 +1169,9 @@ function onCommit() {
 
   try {
     if (targetWindow.workspace === "special:minimized") {
-      GLib.spawn_command_line_async(
-        restoreMinimizedAndFocusCommand(targetWindow.address),
-      );
+      restoreMinimizedAndFocus(targetWindow.address);
     } else {
-      GLib.spawn_command_line_async(
-        hyprLuaFocusAndCenterCommand(targetWindow),
-      );
+      focusAndCenterWindow(targetWindow);
     }
     
     // Update focus history when committing a switch

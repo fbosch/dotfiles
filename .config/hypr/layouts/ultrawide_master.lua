@@ -125,15 +125,20 @@ local function default_row_ratios(count)
 end
 
 local function monitor_name(targets)
+	local first_name = nil
 	for index = 1, #targets do
 		local window = targets[index].window
 		local monitor = window and window.monitor
 		if monitor and monitor.name then
-			return monitor.name
+			if monitor.name == "DP-2" then
+				return monitor.name
+			end
+
+			first_name = first_name or monitor.name
 		end
 	end
 
-	return nil
+	return first_name
 end
 
 local function workspace_key(targets)
@@ -311,9 +316,12 @@ function M.recalculate(ctx)
 	local previous_active = key and state.active_by_key[key] or nil
 	local order, targets_by_id, _, added_seen_targets = order_state.sync(state, key, source_targets, previous_active)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
+	local active_target = targets[active_index(targets)]
+	local active_position_in_area = order_state.position_in_area(active_target, "x", x, width)
+	local active_position_changed = order_state.position_changed(state, active_target, "x")
 	if manual_change then
 		state.manual_change_by_key[key] = nil
-	elseif order_state.position_changed(state, targets[active_index(targets)], "x") or added_seen_targets then
+	elseif active_position_in_area and (active_position_changed or added_seen_targets) then
 		move_active_to_position(targets, key, ratios, x, width)
 		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	end

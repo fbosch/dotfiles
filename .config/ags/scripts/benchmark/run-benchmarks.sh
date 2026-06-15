@@ -23,6 +23,7 @@ BENCH_CYCLE_SLEEP="${BENCH_CYCLE_SLEEP:-0.05}"
 BENCH_WARMUP_COUNT="${BENCH_WARMUP_COUNT:-2}"
 BENCH_MEM_CYCLES="${BENCH_MEM_CYCLES:-100}"
 BENCH_COMPONENT_CYCLES="${BENCH_COMPONENT_CYCLES:-25}"
+BENCH_AUDIO_MIXER_SLEEP="${BENCH_AUDIO_MIXER_SLEEP:-0}"
 BENCH_CALENDAR_CYCLES="${BENCH_CALENDAR_CYCLES:-12}"
 BENCH_CALENDAR_REFRESH_WAIT="${BENCH_CALENDAR_REFRESH_WAIT:-0.25}"
 BENCH_TARGET="${1:-${BENCH_TARGET:-all}}"
@@ -43,14 +44,17 @@ function target_enabled() {
       [[ "$target" == "window-switcher" ]]
       ;;
     components)
-      [[ "$target" == "components" ]]
+      [[ "$target" == "components" || "$target" == "audio-mixer" ]]
+      ;;
+    audio-mixer)
+      [[ "$target" == "audio-mixer" ]]
       ;;
     memory)
       [[ "$target" == "memory" ]]
       ;;
     *)
       printf "Unknown BENCH_TARGET: %s\n" "$BENCH_TARGET" >&2
-      printf "Expected one of: all, calendar-widget, window-switcher, components, memory, bundle-legacy\n" >&2
+      printf "Expected one of: all, calendar-widget, window-switcher, components, audio-mixer, memory, bundle-legacy\n" >&2
       exit 2
       ;;
   esac
@@ -159,6 +163,14 @@ if ! wait_for_instance; then
   exit 1
 fi
 
+if [[ -z "$AGS_PID" || ! -r "/proc/${AGS_PID}/status" ]]; then
+  AGS_PID="$(pgrep -f "ags run .*config-bundled.tsx" | head -n 1 || true)"
+fi
+
+if [[ -z "$AGS_PID" || ! -r "/proc/${AGS_PID}/status" ]]; then
+  AGS_PID="$(pgrep -f "ags.*${INSTANCE}" | head -n 1 || true)"
+fi
+
 rm -f "$PERF_LOG"
 touch "$PERF_FLAG"
 
@@ -187,6 +199,8 @@ ks_delta_rss_kb=""
 ks_delta_pss_kb=""
 dc_delta_rss_kb=""
 dc_delta_pss_kb=""
+am_delta_rss_kb=""
+am_delta_pss_kb=""
 before_rss_kb=""
 after_rss_kb=""
 delta_rss_kb=""
@@ -361,6 +375,29 @@ else
   printf -- "%s\n" "- bundled components: skipped"
 fi
 
+if target_enabled "audio-mixer"; then
+printf -- "%s\n" "- audio-mixer toggle (${BENCH_COMPONENT_CYCLES} cycles)"
+am_before_rss_kb="$(read_rss_kb "$AGS_PID")"
+am_before_pss_kb="$(read_pss_kb "$AGS_PID")"
+for _ in $(seq 1 "$BENCH_COMPONENT_CYCLES"); do
+  ags request -i "$INSTANCE" "audio-mixer-widget" '{"action":"show"}' >/dev/null
+  ags request -i "$INSTANCE" "audio-mixer-widget" '{"action":"hide"}' >/dev/null
+  sleep "$BENCH_AUDIO_MIXER_SLEEP"
+done
+am_after_rss_kb="$(read_rss_kb "$AGS_PID")"
+am_after_pss_kb="$(read_pss_kb "$AGS_PID")"
+am_delta_rss_kb=""
+am_delta_pss_kb=""
+if is_number "$am_before_rss_kb" && is_number "$am_after_rss_kb"; then
+  am_delta_rss_kb="$((am_after_rss_kb - am_before_rss_kb))"
+fi
+if is_number "$am_before_pss_kb" && is_number "$am_after_pss_kb"; then
+  am_delta_pss_kb="$((am_after_pss_kb - am_before_pss_kb))"
+fi
+else
+  printf -- "%s\n" "- audio-mixer: skipped"
+fi
+
 if target_enabled "memory" && [[ -n "$AGS_PID" ]] && [[ -r "/proc/${AGS_PID}/status" ]]; then
   printf -- "%s" "- memory (rss/pss) over ${BENCH_MEM_CYCLES} cycles: "
   before_rss_kb="$(read_rss_kb "$AGS_PID")"
@@ -433,6 +470,8 @@ ks_delta_rss_json="$(json_number_or_null "$ks_delta_rss_kb")"
 ks_delta_pss_json="$(json_number_or_null "$ks_delta_pss_kb")"
 dc_delta_rss_json="$(json_number_or_null "$dc_delta_rss_kb")"
 dc_delta_pss_json="$(json_number_or_null "$dc_delta_pss_kb")"
+am_delta_rss_json="$(json_number_or_null "$am_delta_rss_kb")"
+am_delta_pss_json="$(json_number_or_null "$am_delta_pss_kb")"
 calendar_before_rss_json="$(json_number_or_null "$calendar_before_rss_kb")"
 calendar_after_rss_json="$(json_number_or_null "$calendar_after_rss_kb")"
 calendar_delta_rss_json="$(json_number_or_null "$calendar_delta_rss_kb")"
@@ -495,6 +534,10 @@ cat > "$EXTRAS_OUT" <<EOF
     "desktop-clock": {
       "rss": ${dc_delta_rss_json},
       "pss": ${dc_delta_pss_json}
+    },
+    "audio-mixer-widget": {
+      "rss": ${am_delta_rss_json},
+      "pss": ${am_delta_pss_json}
     }
   }
 }

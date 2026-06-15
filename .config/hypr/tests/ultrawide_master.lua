@@ -146,6 +146,95 @@ run("spawned active window does not reorder existing columns", function()
 	assert_box(second.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
 end)
 
+run("dragged portrait window ignores outside source x until inside ultrawide", function()
+	local ultrawide_layout = registered_layout.layout
+	local portrait_layout = require("layouts.portrait_rows")
+	registered_layout.layout = ultrawide_layout
+
+	local dragged = set_monitor(make_target(31, true), "HDMI-A-2")
+	local source_other = set_monitor(make_target(32), "HDMI-A-2")
+	portrait_layout.recalculate({ area = { x = -900, y = 0, w = 800, h = 1200 }, targets = { dragged, source_other } })
+
+	local workspace = "cross-monitor-drag-left"
+	dragged.window.workspace = { name = workspace }
+	dragged.window.monitor.name = "DP-2"
+	set_geometry(dragged, -900, 800)
+
+	local left = make_target(33)
+	local right = make_target(34)
+	ultrawide_layout.recalculate(make_context({ left, right, dragged }, workspace))
+
+	assert_box(left.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
+	assert_box(right.placed, { x = 310, y = 20, w = 400, h = 500 }, "right target")
+	assert_box(dragged.placed, { x = 710, y = 20, w = 300, h = 500 }, "dragged target")
+end)
+
+run("dragged portrait window ignores overlapping source x", function()
+	local ultrawide_layout = registered_layout.layout
+	local portrait_layout = require("layouts.portrait_rows")
+	registered_layout.layout = ultrawide_layout
+
+	local dragged = set_monitor(make_target(41, true), "HDMI-A-2")
+	local source_other = set_monitor(make_target(42), "HDMI-A-2")
+	portrait_layout.recalculate({ area = { x = 0, y = 0, w = 800, h = 1200 }, targets = { dragged, source_other } })
+
+	local workspace = "cross-monitor-drag-overlap"
+	dragged.window.workspace = { name = workspace }
+	dragged.window.monitor.name = "DP-2"
+	set_geometry(dragged, 100)
+
+	local left = make_target(43)
+	local right = make_target(44)
+	ultrawide_layout.recalculate(make_context({ left, dragged, right }, workspace))
+
+	assert_box(left.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
+	assert_box(dragged.placed, { x = 310, y = 20, w = 400, h = 500 }, "dragged target")
+	assert_box(right.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
+end)
+
+run("dragged portrait window ignores outside right source x", function()
+	local ultrawide_layout = registered_layout.layout
+	local portrait_layout = require("layouts.portrait_rows")
+	registered_layout.layout = ultrawide_layout
+
+	local dragged = set_monitor(make_target(51, true), "HDMI-A-2")
+	local source_other = set_monitor(make_target(52), "HDMI-A-2")
+	portrait_layout.recalculate({ area = { x = 2000, y = 0, w = 800, h = 1200 }, targets = { dragged, source_other } })
+
+	local workspace = "cross-monitor-drag-right"
+	dragged.window.workspace = { name = workspace }
+	dragged.window.monitor.name = "DP-2"
+	set_geometry(dragged, 2000)
+
+	local left = make_target(53)
+	local right = make_target(54)
+	ultrawide_layout.recalculate(make_context({ left, dragged, right }, workspace))
+
+	assert_box(left.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
+	assert_box(dragged.placed, { x = 310, y = 20, w = 400, h = 500 }, "dragged target")
+	assert_box(right.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
+end)
+
+run("stale active HDMI monitor does not force DP workspace into rows", function()
+	local ultrawide_layout = registered_layout.layout
+	local portrait_layout = require("layouts.portrait_rows")
+	registered_layout.layout = ultrawide_layout
+
+	local dragged = set_monitor(make_target(1, true), "HDMI-A-2")
+	local source_other = set_monitor(make_target(2), "HDMI-A-2")
+	portrait_layout.recalculate({ area = { x = 2000, y = 0, w = 800, h = 1200 }, targets = { dragged, source_other } })
+
+	local workspace = "mixed-monitor-drag"
+	dragged.window.workspace = { name = workspace }
+	set_geometry(dragged, 2000)
+
+	local existing = make_target(3)
+	ultrawide_layout.recalculate(make_context({ dragged, existing }, workspace))
+
+	assert_box(dragged.placed, { x = 10, y = 20, w = 670, h = 500 }, "dragged target")
+	assert_box(existing.placed, { x = 680, y = 20, w = 330, h = 500 }, "existing target")
+end)
+
 run("swapnext moves active column despite old geometry", function()
 	local first = set_geometry(make_target(1, true), 100)
 	local second = set_geometry(make_target(2), 800)

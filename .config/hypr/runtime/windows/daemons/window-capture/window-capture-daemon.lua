@@ -490,8 +490,9 @@ local function capture_screenshot(event_type, capture_id)
 
 	local elapsed_sleep = 0
 	while elapsed_sleep < delay_ms do
-		socket.sleep(0.1)
-		elapsed_sleep = elapsed_sleep + 100
+		local sleep_ms = math.min(20, delay_ms - elapsed_sleep)
+		socket.sleep(sleep_ms / 1000)
+		elapsed_sleep = elapsed_sleep + sleep_ms
 		local current_change_id = read_file(workspace_change_file)
 		if current_change_id and current_change_id:gsub("%s+$", "") ~= capture_id then
 			return
@@ -504,6 +505,13 @@ local function capture_screenshot(event_type, capture_id)
 
 	write_file(last_screenshot_file, tostring(now_ms()))
 	if event_type == "activewindow" then
+		capture_active_window_preview()
+		capture_visible_workspace_previews(true)
+		remove_file(capture_lock_file)
+		return
+	end
+
+	if event_type == "windowupdate" then
 		capture_active_window_preview()
 		capture_visible_workspace_previews(true)
 		remove_file(capture_lock_file)

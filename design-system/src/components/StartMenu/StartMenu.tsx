@@ -1,7 +1,7 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import type React from "react";
-import { Tag } from "../Tag";
 import { cn } from "../../utils/cn";
+import { Tag } from "../Tag";
 
 /**
  * StartMenu component - macOS-style application menu
@@ -87,6 +87,18 @@ export interface MenuItem {
   onClick?: () => void;
 }
 
+export interface StartMenuProfile {
+  mode: "default" | "gaming" | "powersave";
+  source?: "none" | "manual" | "auto";
+  gamingManual?: boolean;
+  powersaveManual?: boolean;
+}
+
+export interface StartMenuUser {
+  name: string;
+  avatarSrc?: string;
+}
+
 export interface StartMenuProps extends VariantProps<typeof menuVariants> {
   /**
    * Control menu visibility
@@ -102,6 +114,14 @@ export interface StartMenuProps extends VariantProps<typeof menuVariants> {
    */
   systemUpdatesCount?: number;
   /**
+   * Current Hyprland profile state shown in the embedded profile controls.
+   */
+  profile?: StartMenuProfile;
+  /**
+   * User card shown at the top of the menu.
+   */
+  user?: StartMenuUser;
+  /**
    * Disable animations for better performance on slower systems
    */
   disableAnimations?: boolean;
@@ -113,6 +133,10 @@ export interface StartMenuProps extends VariantProps<typeof menuVariants> {
    * Callback when menu item is clicked
    */
   onItemClick?: (itemId: string) => void;
+  /**
+   * Callback when profile controls are clicked.
+   */
+  onProfileAction?: (action: "gaming" | "powersave" | "clear-manual") => void;
   /**
    * Additional CSS classes
    */
@@ -188,13 +212,40 @@ const defaultMenuItems: MenuItem[] = [
   },
 ];
 
+const defaultProfile: StartMenuProfile = {
+  mode: "default",
+  source: "none",
+  gamingManual: false,
+  powersaveManual: false,
+};
+
+const defaultUser: StartMenuUser = {
+  name: "Frederik Bosch",
+};
+
+const initialsForName = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "?";
+
+const profileSummary = (profile: StartMenuProfile) => {
+  if (profile.source && profile.source !== "none") return profile.source;
+  return "auto";
+};
+
 export const StartMenu: React.FC<StartMenuProps> = ({
   isOpen = false,
   items = defaultMenuItems,
   systemUpdatesCount = 0,
+  profile = defaultProfile,
+  user = defaultUser,
   disableAnimations = false,
   onClose,
   onItemClick,
+  onProfileAction,
   className,
   style,
 }) => {
@@ -225,7 +276,83 @@ export const StartMenu: React.FC<StartMenuProps> = ({
       role="menu"
       aria-hidden={!isOpen}
     >
-      {items.map((item, index) => {
+      <div className="flex items-center gap-2 px-2 py-1.5">
+        <div className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-white/10 text-[11px] font-semibold text-foreground-primary ring-1 ring-white/15">
+          {user.avatarSrc ? (
+            <img
+              src={user.avatarSrc}
+              alt=""
+              className="size-full object-cover"
+              aria-hidden="true"
+            />
+          ) : (
+            initialsForName(user.name)
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs font-medium text-foreground-primary">
+            {user.name}
+          </div>
+        </div>
+      </div>
+      <div className="mb-1 flex items-center gap-1 rounded-md px-2 py-1 text-xs text-foreground-primary hover:bg-white/[0.06]">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-foreground-primary">Profile</span>
+            <span className="truncate text-xs text-foreground-secondary">
+              {profileSummary(profile)}
+            </span>
+            {(profile.gamingManual || profile.powersaveManual) && (
+              <button
+                type="button"
+                className="inline-flex size-5 items-center justify-center rounded text-xs font-semibold leading-none text-foreground-secondary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none active:scale-[0.98]"
+                onClick={() => onProfileAction?.("clear-manual")}
+                tabIndex={isOpen ? 0 : -1}
+                aria-label="Clear manual profile"
+                title="Clear manual profile override"
+              >
+                <span className="font-fluent text-xs" aria-hidden="true">
+                  {"\uE711"}
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
+        <fieldset className="flex items-center gap-1 border-0 p-0" aria-label="Profile controls">
+          <button
+            type="button"
+            className={cn(
+              "inline-flex h-5 min-w-5 items-center justify-center rounded border border-white/10 px-1 text-xs font-semibold text-foreground-secondary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none active:scale-[0.98]",
+              profile.mode === "gaming" && "border-state-success/40 bg-state-success/15 text-state-success",
+            )}
+            onClick={() => onProfileAction?.("gaming")}
+            tabIndex={isOpen ? 0 : -1}
+            aria-label="Toggle gaming profile"
+            title={profile.gamingManual ? "Disable manual gaming profile" : "Enable manual gaming profile"}
+          >
+            <span className="font-fluent text-xs" aria-hidden="true">
+              {"\uE7FC"}
+            </span>
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "inline-flex h-5 min-w-5 items-center justify-center rounded border border-white/10 px-1 text-xs font-semibold text-foreground-secondary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none active:scale-[0.98]",
+              profile.mode === "powersave" && "border-state-warning/40 bg-state-warning/15 text-state-warning",
+            )}
+            onClick={() => onProfileAction?.("powersave")}
+            tabIndex={isOpen ? 0 : -1}
+            aria-label="Toggle powersave profile"
+            title={profile.powersaveManual ? "Disable manual powersave profile" : "Enable manual powersave profile"}
+          >
+            <span className="font-fluent text-xs" aria-hidden="true">
+              {"\uE945"}
+            </span>
+          </button>
+        </fieldset>
+      </div>
+      <hr className="my-1 border-t border-white/10" />
+      {items.map((item) => {
         if (item.id.startsWith("divider")) {
           return (
             <hr key={item.id} className="border-t border-white/10 my-1" />

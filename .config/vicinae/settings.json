@@ -166,6 +166,9 @@
             "org.signal.Signal": {
                "alias": "s"
             },
+            "realforce-installer": {
+               "enabled": false
+            },
             "selectdefaultapplication": {
                "enabled": false
             },

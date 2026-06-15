@@ -144,12 +144,37 @@
 #clock {
   font-size: 0.75rem;
   padding: 0 0.5rem 0 0.25rem;
-  margin-left: 0.5rem;
+  margin: 0.33rem 0 0.33rem 0.5rem;
+  border-radius: 0.25rem;
 }
 
 #clock:hover {
   background-color: rgba(255, 255, 255, 0.1);
+}
+
+#custom-swaync {
+  padding: 0 0.58rem 0 0.5rem;
+  margin: 0.33rem 0.25rem 0.33rem 0.2rem;
   border-radius: 0.25rem;
+  font-size: 1.1rem;
+}
+
+#custom-swaync:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+#custom-swaync.none,
+#custom-swaync.dnd-none,
+#custom-swaync.inhibited-none,
+#custom-swaync.dnd-inhibited-none {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+#custom-swaync.notification,
+#custom-swaync.dnd-notification,
+#custom-swaync.inhibited-notification,
+#custom-swaync.dnd-inhibited-notification {
+  color: rgba(255, 255, 255, 1);
 }
 
 /* Tray */
