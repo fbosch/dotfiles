@@ -2,23 +2,21 @@
 
 set -euo pipefail
 
-config_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+e2e_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+config_dir="$(cd -- "${e2e_dir}/../.." && pwd)"
 
 # shellcheck disable=SC1091
 source "${config_dir}/runtime/lib/hypr-ipc.sh"
 
 portrait_monitor="${HYPR_E2E_PORTRAIT_MONITOR:-HDMI-A-2}"
 ultrawide_monitor="${HYPR_E2E_ULTRAWIDE_MONITOR:-DP-2}"
-workspace_name="${HYPR_E2E_WORKSPACE:-}"
-workspace=""
-ultrawide_workspace_name="${HYPR_E2E_ULTRAWIDE_WORKSPACE:-}"
-ultrawide_workspace=""
-window_class="opencode-hypr-portrait-e2e"
-title_prefix="${window_class}-$(date +%s)-$$"
+window_class="opencode-hypr-e2e"
 sleep_seconds="${HYPR_E2E_SLEEP_SECONDS:-300}"
+current_step="startup"
 original_workspace=""
 original_layout=""
-current_step="startup"
+title_prefix=""
+e2e_window_addresses=()
 
 status() {
 	current_step="$1"
@@ -60,25 +58,6 @@ clients_json() {
 	hypr_query j/clients
 }
 
-select_test_workspaces() {
-	if [[ -n "$workspace_name" ]]; then
-		workspace="$workspace_name"
-	fi
-	if [[ -n "$workspace" ]]; then
-		return
-	fi
-
-	for candidate in 9 8 7 6 5 4 3; do
-		if ! hyprctl workspaces -j | jq -e --arg name "$candidate" 'any(.[]; .name == $name)' >/dev/null; then
-			workspace_name="$candidate"
-			workspace="$candidate"
-			return
-		fi
-	done
-
-	skip 'no free numeric workspace in 3..9 for portrait e2e'
-}
-
 test_clients() {
 	clients_json | jq \
 		--arg class "$window_class" \
@@ -96,22 +75,51 @@ test_window_count() {
 	test_clients | jq 'length'
 }
 
+test_client_by_address() {
+	local address="$1"
+
+	clients_json | jq \
+		--arg address "$address" \
+		--arg class "$window_class" \
+		--arg prefix "$title_prefix" \
+		'first(
+			.[]
+			| select(.address == $address)
+			| select(
+				(.class == $class or .initialClass == $class)
+				and (((.title // "") | startswith($prefix)) or ((.initialTitle // "") | startswith($prefix)))
+			)
+		) // empty'
+}
+
+record_window_address() {
+	local address="$1"
+	local existing=""
+
+	[[ -n "$address" ]] || return
+	for existing in "${e2e_window_addresses[@]}"; do
+		[[ "$existing" == "$address" ]] && return
+	done
+
+	e2e_window_addresses+=("$address")
+}
+
 window_address() {
 	local title="$1"
 
 	test_clients | jq -r --arg title "$title" 'first(.[] | select(.title == $title or .initialTitle == $title)) | .address // empty'
 }
 
-window_y() {
-	local title="$1"
-
-	test_clients | jq -r --arg title "$title" 'first(.[] | select(.title == $title or .initialTitle == $title)) | .at[1] // empty'
-}
-
 window_x() {
 	local title="$1"
 
 	test_clients | jq -r --arg title "$title" 'first(.[] | select(.title == $title or .initialTitle == $title)) | .at[0] // empty'
+}
+
+window_y() {
+	local title="$1"
+
+	test_clients | jq -r --arg title "$title" 'first(.[] | select(.title == $title or .initialTitle == $title)) | .at[1] // empty'
 }
 
 window_workspace() {
@@ -122,6 +130,41 @@ window_workspace() {
 
 active_window_address() {
 	hypr_query j/activewindow | jq -r '.address // empty'
+}
+
+pick_free_workspace() {
+	local candidate=""
+
+	for candidate in 99 98 97 96 95 94 93 92 91 90; do
+		if ! hyprctl workspaces -j | jq -e --arg name "$candidate" 'any(.[]; .name == $name)' >/dev/null; then
+			printf '%s\n' "$candidate"
+			return
+		fi
+	done
+
+	return 1
+}
+
+set_global_layout() {
+	local layout="$1"
+	local layout_arg="$(lua_quote "$layout")"
+
+	hyprctl eval "hl.config({ general = { layout = ${layout_arg} } })" >/dev/null
+}
+
+require_runtime() {
+	command -v hyprctl >/dev/null 2>&1 || skip 'hyprctl not found'
+	command -v jq >/dev/null 2>&1 || skip 'jq not found'
+	command -v foot >/dev/null 2>&1 || skip 'foot not found'
+	[[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] || skip 'not running inside Hyprland'
+
+	hypr_query j/monitors | jq -e --arg monitor "$portrait_monitor" 'any(.[]; .name == $monitor)' >/dev/null \
+		|| skip "portrait monitor not present: ${portrait_monitor}"
+	hypr_query j/monitors | jq -e --arg monitor "$ultrawide_monitor" 'any(.[]; .name == $monitor)' >/dev/null \
+		|| skip "ultrawide monitor not present: ${ultrawide_monitor}"
+
+	original_workspace="$(hypr_query j/activeworkspace | jq -r '.name')"
+	original_layout="$(hyprctl getoption general:layout -j | jq -r '.str // empty')"
 }
 
 wait_for_count() {
@@ -155,8 +198,19 @@ wait_for_no_title() {
 }
 
 wait_for_test_windows_gone() {
+	local address=""
+	local found=""
+
 	for _ in {1..80}; do
-		if [[ "$(test_window_count)" == "0" ]]; then
+		found=""
+		for address in "${e2e_window_addresses[@]}"; do
+			if [[ -n "$(test_client_by_address "$address")" ]]; then
+				found="1"
+				break
+			fi
+		done
+
+		if [[ -z "$found" ]]; then
 			return
 		fi
 
@@ -166,43 +220,30 @@ wait_for_test_windows_gone() {
 	return 1
 }
 
-close_window_by_title() {
-	local title="$1"
-	local address="$(window_address "$title")"
-	local selector=""
-	local dispatcher=""
-
-	[[ -n "$address" ]] || return
-	selector="$(lua_quote "address:${address}")"
-	printf -v dispatcher 'hl.dsp.window.close(%s)' "$selector"
-	hypr_eval_dispatch "$dispatcher" || true
-	wait_for_no_title "$title"
-}
-
 cleanup_test_windows() {
-	local addresses=""
+	local address=""
 
-	addresses="$(test_clients | jq -r '.[].address')"
-	while IFS= read -r address; do
+	for address in "${e2e_window_addresses[@]}"; do
 		[[ -n "$address" ]] || continue
+		[[ -n "$(test_client_by_address "$address")" ]] || continue
 		local selector="$(lua_quote "address:${address}")"
 		local dispatcher=""
 		printf -v dispatcher 'hl.dsp.window.close(%s)' "$selector"
 		hypr_eval_dispatch "$dispatcher" || true
-	done <<< "$addresses"
+	done
 
 	if wait_for_test_windows_gone; then
 		return
 	fi
 
-	addresses="$(test_clients | jq -r '.[].address')"
-	while IFS= read -r address; do
+	for address in "${e2e_window_addresses[@]}"; do
 		[[ -n "$address" ]] || continue
+		[[ -n "$(test_client_by_address "$address")" ]] || continue
 		local selector="$(lua_quote "address:${address}")"
 		local dispatcher=""
 		printf -v dispatcher 'hl.dsp.window.kill(%s)' "$selector"
 		hypr_eval_dispatch "$dispatcher" || true
-	done <<< "$addresses"
+	done
 
 	wait_for_test_windows_gone
 }
@@ -216,30 +257,42 @@ restore_session() {
 		hypr_eval_dispatch "$dispatcher" || true
 	fi
 	if [[ -n "$original_layout" ]]; then
-		hyprctl keyword general:layout "$original_layout" >/dev/null || true
+		set_global_layout "$original_layout" || true
 	fi
-}
-
-terminal_command() {
-	local title="$1"
-	local class_arg="$(shell_quote "$window_class")"
-	local title_arg="$(shell_quote "$title")"
-	local sleep_arg="$(shell_quote "sleep ${sleep_seconds}")"
-
-	command -v foot >/dev/null 2>&1 || return 1
-	printf 'foot --app-id %s --title %s sh -c %s' "$class_arg" "$title_arg" "$sleep_arg"
 }
 
 spawn_window() {
 	local title="$1"
+	local target_workspace="${2:-}"
+	local class_arg="$(shell_quote "$window_class")"
+	local title_arg="$(shell_quote "$title")"
+	local sleep_arg="$(shell_quote "sleep ${sleep_seconds}")"
 	local command=""
 	local command_arg=""
 	local dispatcher=""
 
-	command="$(terminal_command "$title")" || skip 'foot not found for e2e window spawning'
+	printf -v command 'foot --app-id %s --title %s sh -c %s' "$class_arg" "$title_arg" "$sleep_arg"
 	command_arg="$(lua_quote "$command")"
-	printf -v dispatcher 'hl.dsp.exec_cmd(%s)' "$command_arg"
+	if [[ -n "$target_workspace" ]]; then
+		local workspace_arg="$(lua_quote "$target_workspace")"
+		printf -v dispatcher 'hl.dsp.exec_cmd(%s, { workspace = %s })' "$command_arg" "$workspace_arg"
+	else
+		printf -v dispatcher 'hl.dsp.exec_cmd(%s)' "$command_arg"
+	fi
 	hypr_eval_dispatch "$dispatcher"
+}
+
+close_window_by_title() {
+	local title="$1"
+	local address="$(window_address "$title")"
+	local selector=""
+	local dispatcher=""
+
+	[[ -n "$address" ]] || return
+	selector="$(lua_quote "address:${address}")"
+	printf -v dispatcher 'hl.dsp.window.close(%s)' "$selector"
+	hypr_eval_dispatch "$dispatcher" || true
+	wait_for_no_title "$title"
 }
 
 focus_monitor_workspace() {
@@ -268,6 +321,29 @@ focus_monitor() {
 
 	printf -v dispatcher 'hl.dsp.focus({ monitor = %s })' "$monitor_arg"
 	hypr_eval_dispatch "$dispatcher"
+}
+
+monitor_workspace() {
+	local monitor="$1"
+
+	hypr_query j/monitors | jq -r --arg monitor "$monitor" 'first(.[] | select(.name == $monitor)) | .activeWorkspace.name // empty'
+}
+
+apply_workspace_rule() {
+	local workspace="$1"
+	local monitor="$2"
+	local layout="$3"
+	local workspace_arg="$(lua_quote "$workspace")"
+	local monitor_arg="$(lua_quote "$monitor")"
+	local layout_arg="$(lua_quote "$layout")"
+
+	hyprctl eval "hl.workspace_rule({ workspace = ${workspace_arg}, monitor = ${monitor_arg}, layout = ${layout_arg} })" >/dev/null
+}
+
+workspace_layout() {
+	local workspace="$1"
+
+	hyprctl workspaces -j | jq -r --arg workspace "$workspace" 'first(.[] | select(.name == $workspace)) | .tiledLayout // empty'
 }
 
 focus_window_by_title() {
@@ -301,7 +377,7 @@ layout_msg() {
 	sleep 0.1
 }
 
-move_window_between_monitors() {
+custom_move() {
 	local direction="$1"
 	local direction_arg="$(lua_quote "$direction")"
 
@@ -311,6 +387,16 @@ move_window_between_monitors() {
 
 assert_identity() {
 	local title="$1"
+	local address=""
+
+	address="$(test_clients | jq -r --arg title "$title" --arg class "$window_class" '
+		first(.[]
+			| select(.title == $title or .initialTitle == $title)
+			| select(.class == $class or .initialClass == $class)
+		) | .address // empty
+	')"
+	[[ -n "$address" ]] || fail "missing expected foot identity for ${title}"
+	record_window_address "$address"
 
 	test_clients | jq -e --arg title "$title" --arg class "$window_class" '
 		any(.[];
@@ -334,6 +420,20 @@ assert_below() {
 	fi
 }
 
+assert_above() {
+	local upper_title="$1"
+	local lower_title="$2"
+	local message="$3"
+	local upper_y="$(window_y "$upper_title")"
+	local lower_y="$(window_y "$lower_title")"
+
+	[[ -n "$upper_y" ]] || fail "missing window y for ${upper_title}"
+	[[ -n "$lower_y" ]] || fail "missing window y for ${lower_title}"
+	if (( upper_y >= lower_y )); then
+		fail "${message}: expected ${upper_title} above ${lower_title}, got y=${upper_y} >= ${lower_y}"
+	fi
+}
+
 assert_left_of() {
 	local left_title="$1"
 	local right_title="$2"
@@ -345,6 +445,20 @@ assert_left_of() {
 	[[ -n "$right_x" ]] || fail "missing window x for ${right_title}"
 	if (( left_x >= right_x )); then
 		fail "${message}: expected ${left_title} left of ${right_title}, got x=${left_x} >= ${right_x}"
+	fi
+}
+
+assert_right_of() {
+	local right_title="$1"
+	local left_title="$2"
+	local message="$3"
+	local right_x="$(window_x "$right_title")"
+	local left_x="$(window_x "$left_title")"
+
+	[[ -n "$right_x" ]] || fail "missing window x for ${right_title}"
+	[[ -n "$left_x" ]] || fail "missing window x for ${left_title}"
+	if (( right_x <= left_x )); then
+		fail "${message}: expected ${right_title} right of ${left_title}, got x=${right_x} <= ${left_x}"
 	fi
 }
 
@@ -365,100 +479,19 @@ wait_for_workspace() {
 	fail "expected ${title} on workspace ${expected}, found ${actual}"
 }
 
-assert_above() {
-	local upper_title="$1"
-	local lower_title="$2"
-	local message="$3"
-	local upper_y="$(window_y "$upper_title")"
-	local lower_y="$(window_y "$lower_title")"
+assert_focused_monitor_workspace() {
+	local monitor="$1"
+	local expected_workspace="$2"
 
-	[[ -n "$upper_y" ]] || fail "missing window y for ${upper_title}"
-	[[ -n "$lower_y" ]] || fail "missing window y for ${lower_title}"
-	if (( upper_y >= lower_y )); then
-		fail "${message}: expected ${upper_title} above ${lower_title}, got y=${upper_y} >= ${lower_y}"
-	fi
+	hypr_query j/monitors | jq -e --arg monitor "$monitor" --arg workspace "$expected_workspace" '
+		any(.[]; .name == $monitor and .activeWorkspace.name == $workspace)
+	' >/dev/null || fail "${monitor} did not focus workspace ${expected_workspace}"
 }
 
-command -v hyprctl >/dev/null 2>&1 || skip 'hyprctl not found'
-command -v jq >/dev/null 2>&1 || skip 'jq not found'
-[[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] || skip 'not running inside Hyprland'
+assert_workspace_layout() {
+	local workspace="$1"
+	local expected_layout="$2"
+	local actual_layout="$(workspace_layout "$workspace")"
 
-status 'check monitors and select workspace'
-hypr_query j/monitors | jq -e --arg monitor "$portrait_monitor" 'any(.[]; .name == $monitor)' >/dev/null \
-	|| skip "portrait monitor not present: ${portrait_monitor}"
-hypr_query j/monitors | jq -e --arg monitor "$ultrawide_monitor" 'any(.[]; .name == $monitor)' >/dev/null \
-	|| skip "ultrawide monitor not present: ${ultrawide_monitor}"
-
-original_workspace="$(hypr_query j/activeworkspace | jq -r '.name')"
-original_layout="$(hyprctl getoption general:layout -j | jq -r '.str // empty')"
-select_test_workspaces
-trap restore_session EXIT
-
-status 'cleanup previous matching e2e windows'
-cleanup_test_windows
-status 'focus portrait test workspace'
-focus_monitor_workspace "$portrait_monitor" "$workspace"
-
-hypr_query j/monitors | jq -e --arg monitor "$portrait_monitor" --arg workspace "$workspace_name" '
-	any(.[]; .name == $monitor and .focused == true and .activeWorkspace.name == $workspace)
-' >/dev/null || fail "portrait monitor did not focus test workspace ${workspace_name}"
-
-first_title="${title_prefix}-first"
-second_title="${title_prefix}-second"
-reopened_title="${title_prefix}-reopened"
-ultrawide_title="${title_prefix}-ultrawide"
-
-status 'spawn first portrait window'
-spawn_window "$first_title"
-wait_for_count 1
-assert_identity "$first_title"
-
-status 'spawn second portrait window at bottom'
-spawn_window "$second_title"
-wait_for_count 2
-assert_identity "$second_title"
-assert_below "$second_title" "$first_title" 'initial portrait spawn order'
-
-status 'move second portrait window upward'
-focus_window_by_title "$second_title"
-layout_msg swapprev
-assert_above "$second_title" "$first_title" 'portrait swapprev order'
-
-status 'move second portrait window downward'
-focus_window_by_title "$second_title"
-layout_msg swapnext
-assert_below "$second_title" "$first_title" 'portrait swapnext order'
-
-status 'close second portrait window'
-close_window_by_title "$second_title"
-wait_for_count 1
-
-status 'reopen portrait window at bottom'
-spawn_window "$reopened_title"
-wait_for_count 2
-assert_identity "$reopened_title"
-assert_below "$reopened_title" "$first_title" 'reopened portrait spawn order'
-
-status 'spawn ultrawide reference window'
-focus_monitor "$ultrawide_monitor"
-ultrawide_workspace_name="$(hypr_query j/monitors | jq -r --arg monitor "$ultrawide_monitor" 'first(.[] | select(.name == $monitor)) | .activeWorkspace.name')"
-spawn_window "$ultrawide_title"
-wait_for_count 3
-assert_identity "$ultrawide_title"
-
-status 'move portrait window to ultrawide left edge'
-focus_window_by_title "$reopened_title"
-move_window_between_monitors right
-wait_for_workspace "$reopened_title" "$ultrawide_workspace_name"
-assert_left_of "$reopened_title" "$ultrawide_title" 'portrait to ultrawide transfer order'
-
-status 'move ultrawide window back to portrait bottom'
-focus_window_by_title "$reopened_title"
-move_window_between_monitors down
-wait_for_workspace "$reopened_title" "$workspace_name"
-assert_below "$reopened_title" "$first_title" 'ultrawide to portrait transfer order'
-
-status 'cleanup e2e windows'
-cleanup_test_windows || fail 'test windows did not clean up'
-
-printf 'PASS portrait_rows e2e spawn/move/reopen/transfer order\n'
+	[[ "$actual_layout" == "$expected_layout" ]] || fail "workspace ${workspace} uses ${actual_layout:-unknown layout}, expected ${expected_layout}"
+}
