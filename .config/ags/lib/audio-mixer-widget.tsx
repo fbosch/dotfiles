@@ -65,7 +65,6 @@ let tabBar: Gtk.Box | null = null;
 let rowList: Gtk.Box | null = null;
 let isVisible = false;
 let lastToggleAtMs = 0;
-let pointerStartedInsideMixer = false;
 let activeTab: AudioMixerTab = "playback";
 let tabButtons = new Map<AudioMixerTab, Gtk.Button>();
 let rowCards: Gtk.Box[] = [];
@@ -1214,27 +1213,20 @@ function toggleAudioMixer(): void {
   else showAudioMixer();
 }
 
-function handleOutsideClick(x: number, y: number): void {
-  if (pointerStartedInsideMixer) {
-    pointerStartedInsideMixer = false;
-    return;
+function isMixerDescendant(widget: Gtk.Widget | null): boolean {
+  let current = widget;
+  while (current) {
+    if (current === mixerBox) return true;
+    current = current.get_parent();
   }
-
-  if (!isVisible || !mixerBox) return;
-  const allocation = mixerBox.get_allocation();
-  if (x < allocation.x || x > allocation.x + allocation.width || y < allocation.y || y > allocation.y + allocation.height) {
-    hideAudioMixer();
-  }
+  return false;
 }
 
-function stopInsideClickPropagation(widget: Gtk.Widget): void {
-  const clickController = new Gtk.GestureClick();
-  clickController.set_button(0);
-  (clickController as any).set_propagation_phase?.(Gtk.PropagationPhase.CAPTURE);
-  clickController.connect("pressed", () => {
-    pointerStartedInsideMixer = true;
-  });
-  widget.add_controller(clickController);
+function handlePointerPress(root: Gtk.Widget, x: number, y: number): void {
+  if (!isVisible || !mixerBox) return;
+  const picked = root.pick(x, y, Gtk.PickFlags.DEFAULT);
+  if (isMixerDescendant(picked)) return;
+  hideAudioMixer();
 }
 
 function createWindow(): void {
@@ -1274,7 +1266,7 @@ function createWindow(): void {
 
         const clickController = new Gtk.GestureClick();
         clickController.set_button(0);
-        clickController.connect("released", (_controller, _nPress, x, y) => handleOutsideClick(x, y));
+        clickController.connect("pressed", (_controller, _nPress, x, y) => handlePointerPress(self, x, y));
         self.add_controller(clickController);
       }}
     >
@@ -1286,7 +1278,6 @@ function createWindow(): void {
           $={(self: Gtk.Box) => {
             mixerBox = self;
             mixerBox.set_size_request(500, -1);
-            stopInsideClickPropagation(self);
             buildShell();
           }}
         />
