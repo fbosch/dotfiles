@@ -130,7 +130,7 @@ bind("bind", "CTRL + SHIFT", "O", exec("bash ~/.config/hypr/runtime/capture/scre
 
 bind("bind", main_mod, "Q", exec(programs.terminal))
 bind("bind", main_mod, "B", exec(programs.browser))
-bind("bind", main_mod, "C", exec("~/.config/hypr/runtime/windows/killactive-selective.sh"))
+bind("bind", main_mod, "W", exec("~/.config/hypr/runtime/windows/killactive-selective.sh"))
 bind("bind", main_mod .. " + CTRL", "C", exec("~/.config/hypr/runtime/windows/confirm-hyprprop-kill.sh"))
 bind("bind", main_mod, "M", confirm_exit.confirm_exit)
 bind("bind", main_mod .. " + SHIFT", "R", exec("~/.config/hypr/runtime/desktop/reset-desktop.sh"))
