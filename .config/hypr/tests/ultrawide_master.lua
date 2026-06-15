@@ -234,6 +234,36 @@ run("transfer intent wins when target already arrives leftmost", function()
 	assert_box(right.placed, { x = 680, y = 20, w = 330, h = 500 }, "right target")
 end)
 
+run("portrait transfer exact id wins over existing active ultrawide target", function()
+	local existing = set_geometry(make_target(91, true), 400)
+	local dragged = set_geometry(make_target(92), -900, 800)
+	local workspace = "transfer-exact-beats-existing-active"
+
+	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+	registered_layout.layout.recalculate(make_context({ existing, dragged }, workspace))
+
+	assert_box(dragged.placed, { x = 10, y = 20, w = 670, h = 500 }, "dragged target")
+	assert_box(existing.placed, { x = 680, y = 20, w = 330, h = 500 }, "existing target")
+end)
+
+run("portrait transfer survives destination recalculate before arrival", function()
+	local workspace = "transfer-prearrival-recalculate"
+	local left = set_geometry(make_target(101), 100)
+	local active_existing = set_geometry(make_target(102, true), 800)
+
+	registered_layout.layout.recalculate(make_context({ left, active_existing }, workspace))
+
+	local dragged = set_geometry(make_target(103), -900, 800)
+	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+
+	registered_layout.layout.recalculate(make_context({ left, active_existing }, workspace))
+	registered_layout.layout.recalculate(make_context({ left, active_existing, dragged }, workspace))
+
+	assert_box(dragged.placed, { x = 10, y = 20, w = 300, h = 500 }, "dragged target")
+	assert_box(left.placed, { x = 310, y = 20, w = 400, h = 500 }, "left target")
+	assert_box(active_existing.placed, { x = 710, y = 20, w = 300, h = 500 }, "active existing target")
+end)
+
 run("portrait transfer intent survives active target id mismatch", function()
 	local dragged = set_geometry(make_target(71, true), -900, 800)
 	local left = make_target(72)

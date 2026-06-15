@@ -190,6 +190,18 @@ function M.consume_transfer_intent(target, monitor_role, axis, allow_destination
 	return intent
 end
 
+function M.consume_transfer_intent_by_id(target, monitor_role, axis)
+	local id = M.target_id(target)
+	local intent = id and pending_transfer_by_id[id] or nil
+	if intent and intent.monitor_role == monitor_role and intent.axis == axis then
+		pending_transfer_by_id[id] = nil
+		clear_transfer_destination(monitor_role, axis)
+		return intent
+	end
+
+	return nil
+end
+
 function M.has_transfer_intent(monitor_role, axis)
 	return transfer_destination(monitor_role, axis) ~= nil
 end
