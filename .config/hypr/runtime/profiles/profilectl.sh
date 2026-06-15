@@ -158,6 +158,7 @@ get_desired_overlay_mode() {
 }
 
 apply_effective_state() {
+  local force_restore="${1:-false}"
   local desired_mode
   local current_mode="none"
 
@@ -167,12 +168,12 @@ apply_effective_state() {
     current_mode="$(< "$overlay_mode_file")"
   fi
 
-  if [[ "$desired_mode" == "none" && ( -f "$overlay_active_file" || -f "$overlay_mode_file" ) ]]; then
+  if [[ "$desired_mode" == "none" && ( -f "$overlay_active_file" || -f "$overlay_mode_file" || "$force_restore" == "true" ) ]]; then
     resume_background_helpers
     set_switcher_mode_previews
-    rm -f "$overlay_active_file" "$overlay_mode_file"
-		set_power_profile balanced
+    set_power_profile balanced
     restore_hypr_defaults
+    rm -f "$overlay_active_file" "$overlay_mode_file"
     refresh_window_captures
     return
   fi
@@ -398,7 +399,7 @@ main() {
       print_status
       ;;
     reconcile)
-      apply_effective_state
+      apply_effective_state true
       ;;
     *)
       usage
