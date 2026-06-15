@@ -756,7 +756,7 @@ async function connectClient(directory: string): Promise<ConnectedClient> {
   if (useExisting) {
     const existing = createOpencodeClient({
       baseUrl: DEFAULT_SERVER_URL,
-      responseStyle: "data",
+      responseStyle: "fields",
       directory,
     });
 
@@ -876,7 +876,7 @@ async function runCommitCommand(
   }
 
   const result = await withTimeout(
-    client.session.prompt({ path: { id: sessionId }, body: promptBody, responseStyle: "data" }),
+    client.session.prompt({ path: { id: sessionId }, body: promptBody, responseStyle: "fields" }),
     timeoutMs,
     "session.prompt",
   ).catch((error) => {
@@ -898,7 +898,7 @@ async function runCommitCommand(
     });
 
     const retried = await withTimeout(
-      client.session.prompt({ path: { id: sessionId }, body: promptBody, responseStyle: "data" }),
+      client.session.prompt({ path: { id: sessionId }, body: promptBody, responseStyle: "fields" }),
       timeoutMs,
       "session.prompt.retry",
     ).catch((error) => {

@@ -269,11 +269,12 @@ async function startServer(forceStart = false): Promise<void> {
 }
 
 async function restartServer(): Promise<void> {
+  const serverPattern = `opencode(\\.exe)? serve --hostname ${OPENCODE_SERVER_HOST} --port ${String(OPENCODE_SERVER_PORT)}`;
   const killResult = spawnSync(
     "pkill",
     [
       "-f",
-      `opencode serve --hostname ${OPENCODE_SERVER_HOST} --port ${String(OPENCODE_SERVER_PORT)}`,
+      serverPattern,
     ],
     {
       stdio: "ignore",
@@ -286,7 +287,13 @@ async function restartServer(): Promise<void> {
     );
   }
 
-  await waitForServerToStop();
+  const stopped = await waitForServerToStop();
+  if (stopped === false) {
+    throw new Error(
+      `Timed out stopping opencode server on http://${OPENCODE_SERVER_HOST}:${String(OPENCODE_SERVER_PORT)}`,
+    );
+  }
+
   await startServer(true);
 }
 
