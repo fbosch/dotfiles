@@ -65,7 +65,7 @@ return {
 				silent = true,
 			},
 			{
-				"<leader>l",
+				"<leader>lg",
 				function()
 					require("fff").live_grep()
 				end,
@@ -74,7 +74,7 @@ return {
 				silent = true,
 			},
 			{
-				"<leader>l",
+				"<leader>lg",
 				function()
 					require("fff").live_grep({ query = get_visual_selection() })
 				end,
