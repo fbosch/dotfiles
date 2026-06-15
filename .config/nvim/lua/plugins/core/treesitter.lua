@@ -1,6 +1,7 @@
 return {
 	{
 		"nvim-treesitter/nvim-treesitter",
+		branch = "main",
 		build = ":TSUpdate",
 		lazy = false,
 		config = function()
@@ -10,11 +11,31 @@ return {
 				return
 			end
 
+			local function prefer_bundled_parser(lang)
+				for _, path in ipairs(vim.api.nvim_get_runtime_file("parser/" .. lang .. ".so", true)) do
+					if path:find("/lib/nvim/parser/", 1, true) ~= nil then
+						vim.treesitter.language.add(lang, { path = path })
+						return
+					end
+				end
+			end
+
+			for _, lang in ipairs({ "c", "lua", "markdown", "markdown_inline", "query", "vim", "vimdoc" }) do
+				prefer_bundled_parser(lang)
+			end
+
+			local function has_parser(lang)
+				if type(lang) ~= "string" or lang == "" then
+					return false
+				end
+
+				return pcall(vim.treesitter.language.inspect, lang)
+			end
+
 			local required_languages = { "typescript", "tsx", "javascript", "jsdoc" }
 			local missing_languages = {}
 			for _, lang in ipairs(required_languages) do
-				local has_parser = pcall(vim.treesitter.language.add, lang)
-				if has_parser == false then
+				if has_parser(lang) == false then
 					table.insert(missing_languages, lang)
 				end
 			end
@@ -32,7 +53,14 @@ return {
 						return
 					end
 
-					pcall(vim.treesitter.start, args.buf)
+					local filetype = vim.api.nvim_get_option_value("filetype", { buf = args.buf })
+					local lang = vim.treesitter.language.get_lang(filetype) or filetype
+					if has_parser(lang) == false then
+						pcall(vim.treesitter.stop, args.buf)
+						return
+					end
+
+					pcall(vim.treesitter.start, args.buf, lang)
 				end,
 			})
 		end,
