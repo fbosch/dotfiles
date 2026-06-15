@@ -12,6 +12,7 @@ $ wt switch -                      # Previous worktree (like cd -)
 $ wt switch --create new-feature   # Create new branch and worktree
 $ wt switch --create hotfix --base production
 $ wt switch pr:123                 # Switch to PR #123's branch
+$ wt switch https://github.com/owner/repo/pull/123   # ...or paste the PR's URL
 ```
 
 ## Creating a branch
@@ -46,12 +47,15 @@ $ wt switch --create temp --no-hooks       # Skip hooks
 | `mr:{N}` | GitLab MR !N's branch |
 
 ```bash
-$ wt switch -                      # Back to previous
-$ wt switch ^                      # Default branch worktree
-$ wt switch --create fix --base=@  # Branch from current HEAD
-$ wt switch pr:123                 # PR #123's branch
-$ wt switch mr:101                 # MR !101's branch
+$ wt switch -                           # Back to previous
+$ wt switch ^                           # Default branch worktree
+$ wt switch --create fix --base=@       # Branch from current HEAD
+$ wt switch --create fix --base=pr:123  # Branch from PR #123's head
+$ wt switch pr:123                      # PR #123's branch
+$ wt switch mr:101                      # MR !101's branch
 ```
+
+Shortcuts also apply to `--base`. For a fork PR/MR, the head commit is fetched and used as the base SHA without creating a tracking branch.
 
 ## Interactive picker
 
@@ -66,18 +70,21 @@ When called without arguments, `wt switch` opens an interactive picker to browse
 | `Enter` | Switch to selected worktree |
 | `Alt-c` | Create new worktree named as entered text |
 | `Esc` | Cancel |
-| `1`–`5` | Switch preview tab |
+| `Alt-1`–`Alt-5` | Jump to a preview tab |
+| `Tab`/`Shift-Tab` | Cycle preview tabs forward/backward |
 | `Alt-p` | Toggle preview panel |
 | `Ctrl-u`/`Ctrl-d` | Scroll preview up/down |
 <!-- Alt-r (remove worktree) works but is omitted: cursor resets after skim reload (#1695). Add once fixed. See #1881. -->
 
-**Preview tabs** — toggle with number keys:
+Plain digits go to the filter, so a branch name containing a number can be typed directly; the preview tabs move to `Alt`.
+
+**Preview tabs** — jump with `Alt-1`–`Alt-5`, or cycle with `Tab`/`Shift-Tab`:
 
 1. **HEAD±** — Diff of uncommitted changes
 2. **log** — Recent commits; commits already on the default branch have dimmed hashes
 3. **main…±** — Diff of changes since the merge-base with the default branch
 4. **remote⇅** — Ahead/behind diff vs upstream tracking branch
-5. **summary** — LLM-generated branch summary; requires `[list] summary = true` and `[commit.generation]`
+5. **summary** — LLM-generated branch summary; requires `[list] summary = true` and [`commit.generation`](https://worktrunk.dev/config/#commit)
 
 **Pager configuration:** The preview panel pipes diff output through git's pager. Override in user config:
 
@@ -90,16 +97,24 @@ Available on Unix only (macOS, Linux). On Windows, use `wt list` or `wt switch <
 
 ## Pull requests and merge requests
 
-The `pr:<number>` and `mr:<number>` shortcuts resolve a GitHub PR or GitLab MR to its branch. For same-repo PRs/MRs, worktrunk switches to the branch directly. For fork PRs/MRs, it fetches the ref (`refs/pull/N/head` or `refs/merge-requests/N/head`) and configures `pushRemote` to the fork URL.
+The `pr:<number>` / `mr:<number>` shortcut and the PR/MR's web URL both resolve to its branch. For same-repo PRs/MRs, worktrunk switches to the branch directly. For fork PRs/MRs, it fetches the ref (`refs/pull/N/head` or `refs/merge-requests/N/head`) and configures `pushRemote` to the fork URL.
 
 ```bash
-$ wt switch pr:101                 # GitHub PR #101
-$ wt switch mr:101                 # GitLab MR !101
+$ wt switch pr:101                                  # GitHub PR #101
+$ wt switch https://github.com/owner/repo/pull/101  # ...the same PR, by URL
+$ wt switch mr:101                                  # GitLab MR !101
+$ wt switch https://gitlab.com/owner/repo/-/merge_requests/101  # ...the same MR, by URL
 ```
 
-Requires `gh` (GitHub) or `glab` (GitLab) CLI to be installed and authenticated. The `--create` flag cannot be used with `pr:`/`mr:` syntax since the branch already exists.
+Both work anywhere a branch is accepted, including `--base`.
+
+Requires `gh` (GitHub) or `glab` (GitLab) CLI to be installed and authenticated. The `--create` flag cannot be used with a PR/MR reference since the branch already exists.
 
 **Forks:** The local branch uses the PR/MR's branch name directly (e.g., `feature-fix`), so `git push` works normally. If a local branch with that name already exists tracking something else, rename it first.
+
+**Gitea (experimental):** `pr:` is also compatible with Gitea via the `tea` CLI. Set `[forge] platform = "gitea"` in `.config/wt.toml` to opt in; worktrunk also auto-detects Gitea when the remote host contains `gitea` or when `tea login add` has been run for the host.
+
+**Azure DevOps (experimental):** `pr:` is also compatible with Azure DevOps via the `az` CLI (with the `azure-devops` extension). Set `[forge] platform = "azure-devops"` in `.config/wt.toml` to opt in; worktrunk also auto-detects Azure DevOps from `dev.azure.com` and `*.visualstudio.com` remotes.
 
 ## When wt switch fails
 
@@ -136,7 +151,8 @@ Options:
   -b, --base <BASE>
           Base branch
 
-          Defaults to default branch.
+          Defaults to default branch. Supports the same shortcuts as the branch argument: ^, @, -,
+          pr:{N}, mr:{N}.
 
   -x, --execute <EXECUTE>
           Command to run after switch
@@ -156,8 +172,8 @@ Options:
           are passed to the command, so wsc feature -- 'Fix GH #322' runs claude 'Fix GH #322',
           starting Claude with a prompt.
 
-          Template example: -x 'code {{ worktree_path }}' opens VS Code at the worktree, -x 'tmux
-          new -s {{ branch | sanitize }}' starts a tmux session named after the branch.
+          Template example: -x code -- '{{ worktree_path }}' opens VS Code at the worktree, -x tmux
+          -- new -s '{{ branch | sanitize }}' starts a tmux session named after the branch.
 
       --clobber
           Remove stale paths at target
@@ -167,9 +183,6 @@ Options:
 
           Hooks still run normally. Useful when hooks handle navigation (e.g., tmux workflows) or
           for CI/automation. Use --cd to override.
-
-          In picker mode (no branch argument), prints the selected branch name and exits without
-          switching. Useful for scripting.
 
   -h, --help
           Print help (see a summary with '-h')
@@ -182,9 +195,6 @@ Picker Options:
           Include remote branches
 
 Automation:
-  -y, --yes
-          Skip approval prompts
-
       --no-hooks
           Skip hooks
 
@@ -208,6 +218,9 @@ Global Options:
           User config file path
 
   -v, --verbose...
-          Verbose output (-v: info logs + hook/template output; -vv: debug logs + diagnostic report
-          + trace.log/output.log under .git/wt/logs/)
+          Verbose output (-v: info logs + hook/alias template variables on stderr; -vv: also debug
+          logs and raw subprocess output written to .git/wt/logs/)
+
+  -y, --yes
+          Skip approval prompts
 ```

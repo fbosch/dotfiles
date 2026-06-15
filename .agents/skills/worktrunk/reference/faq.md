@@ -53,7 +53,21 @@ Git TUIs operate on a single repository. Worktrunk manages multiple worktrees, r
 
 ## Does Worktrunk support stacked branches?
 
-Not natively — stacked-branch workflows are a large design space, so Worktrunk treats them as an extension rather than a built-in. [`worktrunk-sync`](https://github.com/pablospe/worktrunk-sync) is a community tool that auto-detects the branch dependency tree from git history and rebases each branch onto its parent in topological order. Install with `cargo install worktrunk-sync` and run as `wt sync` (via [external subcommands](https://worktrunk.dev/extending/#external-subcommands)).
+Not natively — stacked-branch workflows are a large design space, so Worktrunk treats them as an extension rather than a built-in. [`worktrunk-sync`](https://github.com/pablospe/worktrunk-sync) is a community tool that auto-detects the branch dependency tree from git history and rebases each branch onto its parent in topological order. Install with `cargo install worktrunk-sync` and run as `wt sync` (via [custom subcommands](https://worktrunk.dev/extending/#custom-subcommands)).
+
+## How do I move uncommitted changes to a new worktree?
+
+Stash the changes, create the worktree, then pop:
+
+```bash
+$ git stash push -u           # -u also stashes untracked files
+$ wt switch --create feature  # new branch off the default branch
+$ git stash pop               # changes reappear in the new worktree
+```
+
+The stash lives in the shared `.git` directory, so it's reachable from the new worktree. The original branch is left clean.
+
+`wt switch --create` bases the new branch on the default branch. To base it on the current commit instead, pass `--base=@` (needed when the current branch has commits beyond the default branch).
 
 ## There's an issue with my shell setup
 
@@ -66,9 +80,27 @@ Claude will run `wt config show`, inspect the shell config files, and identify t
 
 If Claude can't fix it, please [open an issue](https://github.com/max-sixty/worktrunk/issues/new?title=Shell%20setup%20issue&body=%23%23%20Shell%20and%20OS%0A%0A-%20Shell%3A%20%0A-%20OS%3A%20%0A%0A%23%23%20Output%20of%20%60wt%20config%20show%60%0A%0A%60%60%60%0A%0A%60%60%60%0A%0A%23%23%20What%20Claude%20found%20%28if%20available%29%0A%0A) with the output of `wt config show`, the shell (bash/zsh/fish), and OS. (And even if it fixes the problem, feel free to open an issue: non-standard success cases are useful for ensuring Worktrunk is easy to set up for others.)
 
-## What files does Worktrunk create?
+## What does `-v` / `-vv` do?
 
-Worktrunk creates files in four categories.
+Three verbosity levels. Each is a superset of the previous one.
+
+| Level | Stderr | Files (`.git/wt/logs/`) | Use case |
+|-------|--------|-------------------------|----------|
+| (none) | Warnings only | — | Normal use |
+| `-v` | + Info: hook output, alias template variable resolution | — | Debugging hooks/aliases |
+| `-vv` | Same as `-v` | + `trace.log`, `subprocess.log`, `diagnostic.md` | Filing a bug |
+
+At `-vv`, debug-level records (`$ cmd` headers, `[wt-trace]` timing, bounded subprocess preview) route to `trace.log` instead of stderr — so the terminal stays readable while the deep trace lands on disk. A one-line pointer on stderr shows where the files went.
+
+The three `-vv` files have distinct audiences:
+
+- **`trace.log`** — bounded preview (~1K lines), `[wt-trace]` records, gistable.
+- **`subprocess.log`** — raw uncapped stdout/stderr of every subprocess `wt` spawns (multi-MB possible, e.g. full `git log -p` output). The deep-dive escape hatch.
+- **`diagnostic.md`** — markdown bug-report bundle that inlines `trace.log`. `wt` prints a `gh gist create` command pointing at it.
+
+`RUST_LOG` overrides the flag baseline when set (`RUST_LOG=debug wt -v` lifts `-v` to debug-on-stderr).
+
+## What files does Worktrunk create?
 
 ### 1. Worktree directories
 
@@ -81,7 +113,7 @@ Created by `wt switch <branch>` when switching to a branch that doesn't have a w
 | File | Created by | Purpose |
 |------|------------|---------|
 | `~/.config/worktrunk/config.toml` | `wt config create` | User preferences |
-| `~/.config/worktrunk/approvals.toml` | Approving project commands | Approved hook commands |
+| `~/.config/worktrunk/approvals.toml` | Approving project commands | Approved hook and alias commands |
 | `.config/wt.toml` | `wt config create --project` | Project hooks (checked into repo) |
 
 User config location: `$XDG_CONFIG_HOME/worktrunk/` (or `~/.config/worktrunk/`) on Linux/macOS, `%APPDATA%\worktrunk\` on Windows.
@@ -95,7 +127,7 @@ Created by `wt config shell install`:
 - **Bash**: adds line to `~/.bashrc`
 - **Zsh**: adds line to `~/.zshrc` (or `$ZDOTDIR/.zshrc`)
 - **Fish**: creates `~/.config/fish/functions/wt.fish` and `~/.config/fish/completions/wt.fish`
-- **Nushell** [experimental]: creates `$nu.default-config-dir/vendor/autoload/wt.nu` (typically `~/.config/nushell` on Linux, `~/Library/Application Support/nushell` on macOS)
+- **Nushell** [experimental]: creates `wt.nu` in Nushell's user vendor-autoload directory — the last entry of `$nu.vendor-autoload-dirs`, under `$nu.data-dir` (typically `~/.local/share/nushell/vendor/autoload` on Linux, `~/Library/Application Support/nushell/vendor/autoload` on macOS)
 - **PowerShell** (Windows): creates both profile files if they don't exist:
   - `Documents/PowerShell/Microsoft.PowerShell_profile.ps1` (PowerShell 7+)
   - `Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1` (Windows PowerShell 5.1)
@@ -111,12 +143,13 @@ Worktrunk stores small amounts of cache and log data in the repository's `.git/`
 | Location | Purpose | Created by |
 |----------|---------|------------|
 | `git config worktrunk.*` | Cached default branch, switch history, branch markers, custom variables | Various commands |
-| `.git/wt/cache/{kind}/*.json` | Cached CI status and git command results (merge-tree, integration probes, diff stats, ancestry checks) | `wt list`, `wt merge`, `wt remove` |
+| `.git/wt/cache/{kind}/*.json` | Cached CI status, the largest PR/MR number seen (sizes the `wt list` CI column), and git command results (merge-tree, integration probes, diff stats, ancestry checks, ahead/behind counts) | `wt list`, `wt merge`, `wt remove` |
+| `.git/wt/cache/summary/{branch}/{hash}.json` | Cached LLM branch summaries, content-addressed by diff hash | `wt list --full`, `wt switch` (when `[list] summary = true`) |
 | `.git/wt/logs/{branch}/**/*.log` | Background hook output (nested per branch) | Hooks, background `wt remove` |
 | `.git/wt/logs/commands.jsonl` | Command audit log (~2MB max) | Hooks, LLM commands |
-| `.git/wt/logs/trace.log` | Debug log (mirrors stderr) for issue reporting | Running with `-vv` |
-| `.git/wt/logs/output.log` | Raw uncapped subprocess stdout/stderr (may be multi-MB) | Running with `-vv` |
-| `.git/wt/logs/diagnostic.md` | Diagnostic report for issue reporting | Running with `-vv` when warnings occur |
+| `.git/wt/logs/trace.log` | Debug log for issue reporting | Running with `-vv` |
+| `.git/wt/logs/subprocess.log` | Raw uncapped subprocess stdout/stderr (may be multi-MB) | Running with `-vv` |
+| `.git/wt/logs/diagnostic.md` | Diagnostic report for issue reporting | Running with `-vv` |
 | `.git/wt/trash/<name>-<timestamp>` | Staged worktree contents pending background deletion | `wt remove` |
 
 None of this is tracked by git or pushed to remotes.
@@ -136,7 +169,7 @@ Worktrunk can delete **worktrees** and **branches**. Both have safeguards.
 
 ### Worktree removal
 
-`wt remove` mirrors `git worktree remove`: it refuses to remove worktrees with uncommitted changes (staged, modified, or untracked files). The `--force` flag overrides the untracked-files check for build artifacts that weren't cleaned up.
+`wt remove` mirrors `git worktree remove`: it refuses to remove worktrees with uncommitted changes (staged, modified, or untracked files). The `--force` flag removes the worktree anyway, discarding all of those changes.
 
 For worktrees containing precious ignored data (databases, caches, large assets), use `git worktree lock`:
 
@@ -156,8 +189,10 @@ Use `-D` to force-delete branches with unmerged changes. Use `--no-delete-branch
 
 ### Other cleanup
 
-- `wt remove` — in addition to the target worktree, sweeps `.git/wt/trash/` entries older than 24 hours in the background (eventual cleanup for directories orphaned when a previous background removal was interrupted)
+- `wt remove` — in addition to the target worktree, runs a background internal sweep: deletes `.git/wt/trash/` entries older than 24 hours (eventual cleanup for directories orphaned when a previous background removal was interrupted), and terminates (`SIGTERM` then `SIGKILL`) `git fsmonitor--daemon` processes whose worktree no longer exists
+- `wt remove` — terminates the removed worktree's `git fsmonitor--daemon` process. Git starts this per-worktree filesystem-watch daemon when `core.fsmonitor=true`; once its worktree is gone it would leak. Removal sends `git fsmonitor--daemon stop`, then resolves that daemon's PID from its IPC socket and force-terminates it (SIGTERM, then SIGKILL) if it didn't exit. The signal only ever targets the daemon whose socket resolves to the worktree being removed.
 - `wt config state clear` — removes all worktrunk data from `.git/` (config keys, caches, markers, hints, variables, logs, stale trash)
+- `wt config shell install` — when migrating an integration to a new location, removes the worktrunk-managed file left at the old one: fish `conf.d/wt.fish` (now `functions/wt.fish`) and nushell wrappers stranded under `<config-dir>/vendor/autoload` (now `<data-dir>/vendor/autoload`)
 - `wt config shell uninstall` — removes shell integration from rc files
 
 See [What files does Worktrunk create?](#what-files-does-worktrunk-create) for details.
@@ -171,7 +206,7 @@ Worktrunk runs `git` commands internally and optionally runs `gh` (GitHub) or `g
 3. **LLM commands** (`~/.config/worktrunk/config.toml`) — Commit message generation and [branch summaries](https://worktrunk.dev/llm-commits/#branch-summaries)
 4. **--execute flag** — Explicitly provided commands
 
-User hooks don't require approval (you defined them). Commands from project hooks require approval on first run. Approved commands are saved to the approvals file (`approvals.toml`). If a command changes, Worktrunk requires new approval.
+User hooks and user aliases don't require approval (you defined them). Commands from project hooks and project aliases require approval on first run. Approved commands are saved to the approvals file (`approvals.toml`). If a command changes, Worktrunk requires new approval.
 
 ### Example approval prompt
 
@@ -214,11 +249,19 @@ Yes. Core commands, shell integration, and tab completion work in both Git Bash 
 
 ## How does Worktrunk determine the default branch?
 
-Worktrunk checks the local git cache first, queries the remote if needed, and falls back to local inference when no remote exists. The result is cached for fast subsequent lookups.
+Worktrunk checks the local git cache first, queries the remote if needed, and falls back to local inference when no remote exists.
 
 If the remote's default branch has changed (e.g., renamed from master to main), clear the cache with `wt config state default-branch clear`.
 
 For full details on the detection mechanism, see `wt config state default-branch --help`.
+
+## My `for-each` or `--execute` alias prints the same value in every worktree
+
+An alias body renders once at dispatch, in the invoking worktree's context, so a per-worktree variable like `{{ branch }}` is baked to that one worktree's value before the nested `wt` command iterates. Every worktree then sees the same value.
+
+Confirm it with `wt config alias dry-run <name>`: if the value is already substituted (e.g. `… echo branch=main`), it was baked at dispatch.
+
+To defer a variable to the nested command, wrap it as `{% raw %}{{ branch }}{% endraw %}`; for `wt step for-each`, also keep it inside a quoted `sh -c '…'` so the alias's shell doesn't word-split it. See [deferring expansion in an alias](https://worktrunk.dev/extending/#deferring-expansion-to-a-nested-wt-command). A repo-level variable like `{{ default_branch }}` is unaffected — it is identical in every worktree.
 
 ## Installation fails with C compilation errors
 

@@ -1,9 +1,8 @@
 ---
 name: worktrunk
-description: Guidance for Worktrunk, a CLI tool for managing git worktrees. Covers configuration (user config at ~/.config/worktrunk/config.toml and project hooks at .config/wt.toml), usage, and troubleshooting. Use for "setting up commit message generation", "configuring hooks", "automating tasks", or general worktrunk questions.
-version: 0.37.1
+description: Guidance for Worktrunk (the `wt` CLI) — git worktree management, hooks, and config. Load when editing .config/wt.toml or ~/.config/worktrunk/config.toml; adding, modifying, or debugging hooks (post-merge, post-start, pre-commit, pre-merge, post-switch, etc.); configuring commit message generation or command aliases; or troubleshooting wt behavior. Also answers general worktrunk/wt questions.
 license: MIT OR Apache-2.0
-compatibility: Requires worktrunk CLI (https://worktrunk.dev)
+compatibility: Requires the `wt` CLI (https://worktrunk.dev)
 ---
 
 # Worktrunk
@@ -17,8 +16,9 @@ Reference files are synced from [worktrunk.dev](https://worktrunk.dev) documenta
 - **reference/config.md**: User and project configuration (LLM, hooks, command defaults)
 - **reference/hook.md**: Hook types, timing, and execution order
 - **reference/switch.md**, **merge.md**, **list.md**, etc.: Command documentation
+- **reference/extending.md**: Aliases, multi-step pipelines, custom subcommands, and template-expansion gotchas (two-pass `{% raw %}` deferral, for-each recipes)
 - **reference/llm-commits.md**: LLM commit message generation
-- **reference/tips-patterns.md**: Language-specific tips and patterns
+- **reference/tips-patterns.md**: Practical recipes — aliases, per-branch variables, dev server per worktree, parallel agent patterns
 - **reference/shell-integration.md**: Shell integration debugging
 - **reference/troubleshooting.md**: Troubleshooting for LLM and hooks (Claude-specific)
 
@@ -105,13 +105,16 @@ Common request for workflow automation. Follow discovery process:
    - For Rust: Common cargo commands
    - For Python: Check pyproject.toml
 
-3. **Design appropriate hooks** (7 hook types available)
+3. **Design appropriate hooks** (10 hook types: 5 events × pre/post — see `reference/hook.md`)
    - Dependencies (fast, must complete) → `pre-start`
    - Tests/linting (must pass) → `pre-commit` or `pre-merge`
    - Long builds, dev servers → `post-start`
+   - Setup before branch resolution → `pre-switch`
    - Terminal/IDE updates → `post-switch`
+   - After-commit triggers (CI, notifications) → `post-commit`
    - Deployment → `post-merge`
-   - Cleanup tasks → `pre-remove`
+   - Cleanup before removal → `pre-remove`
+   - Cleanup after removal (stop servers, remove containers) → `post-remove`
 
 4. **Validate commands work**
    ```bash
@@ -148,26 +151,36 @@ When users want to add automation to an existing project:
 
 1. **Read existing config**: `cat .config/wt.toml`
 
-2. **Determine hook type** - When should this run?
+2. **Determine hook type** - When should this run? (10 types: 5 events × pre/post)
    - Creating worktree (blocking) → `pre-start`
    - Creating worktree (background) → `post-start`
-   - Every switch → `post-switch`
+   - Before/after a switch → `pre-switch` / `post-switch`
    - Before committing → `pre-commit`
+   - After committing (CI, notifications) → `post-commit`
    - Before merging → `pre-merge`
    - After merging → `post-merge`
-   - Before removal → `pre-remove`
+   - Before/after removal → `pre-remove` / `post-remove`
 
 3. **Handle format conversion if needed**
 
-   Single command to named table:
+   Single command to a pipeline of dependent steps:
    ```toml
    # Before
    pre-start = "npm install"
 
-   # After (adding db:migrate)
+   # After (adding db:migrate, which needs install to finish first)
+   [[pre-start]]
+   install = "npm install"
+
+   [[pre-start]]
+   migrate = "npm run db:migrate"
+   ```
+
+   For independent commands, a named table runs them concurrently:
+   ```toml
    [pre-start]
    install = "npm install"
-   migrate = "npm run db:migrate"
+   env = "cp .env.example .env"
    ```
 
 4. **Preserve existing structure and comments**
@@ -212,15 +225,21 @@ bash -n -c "if [ true ]; then echo ok; fi"
 ### User Config Tasks
 - Set up commit message generation → `reference/llm-commits.md`
 - Customize worktree paths → `reference/config.md#worktree-path-template`
-- Custom commit templates → `reference/llm-commits.md#templates`
-- Configure command defaults → `reference/config.md#command-settings`
-- Set up personal hooks → `reference/config.md#user-hooks`
+- Custom commit templates → `reference/llm-commits.md#prompt-templates`
+- Configure command defaults → `reference/config.md#command-config`
+- Set up personal hooks → `reference/config.md#hooks`
 
 ### Project Config Tasks
 - Set up hooks for new project → `reference/hook.md`
-- Add hook to existing config → `reference/hook.md#configuration`
+- Add hook to existing config → `reference/hook.md#hook-forms`
 - Use template variables → `reference/hook.md#template-variables`
 - Add dev server URL to list → `reference/config.md#dev-server-url`
+
+### Aliases & Multi-Worktree Tasks
+- Create a `wt` alias → `reference/extending.md#aliases`
+- Run a command in every worktree → `reference/step.md#wt-step-for-each`
+- Rebase every worktree (up-style) → `reference/extending.md#recipe-rebase-every-worktree-onto-its-upstream`
+- Defer a template variable to a nested `wt` command → `reference/extending.md#deferring-expansion-to-a-nested-wt-command`
 
 ## Key Commands
 
@@ -228,10 +247,10 @@ bash -n -c "if [ true ]; then echo ok; fi"
 # View all configuration
 wt config show
 
-# Create initial user config
+# Create initial user config (LLM/commit setup: see reference/llm-commits.md)
 wt config create
 
-# LLM setup guide
+# Full config reference (subcommands, templates, env vars)
 wt config --help
 ```
 
@@ -245,6 +264,25 @@ grep -A 20 "## Setup" reference/llm-commits.md
 grep -A 30 "### pre-start" reference/hook.md
 grep -A 20 "## Warning Messages" reference/shell-integration.md
 ```
+
+## Hook Approvals in Non-Interactive Sessions
+
+Project hooks and project aliases prompt for approval on first run, so an untrusted `.config/wt.toml` can't silently execute arbitrary commands. Agents running `wt merge`, `wt switch`, or other commands that trigger hooks will hit an error like:
+
+```
+▲ cargo-difftest needs approval to execute 1 command:
+○ post-merge install:
+  cargo install --path .
+✗ Cannot prompt for approval in non-interactive environment
+↳ To skip prompts in CI/CD, add --yes; to pre-approve commands, run wt config approvals add
+```
+
+Two resolutions exist — pick based on who the agent is running for:
+
+- **`wt config approvals add`** — interactive prompt that stores approvals to `~/.config/worktrunk/approvals.toml`. Run once per project; persists across invocations until the command template changes or the project moves. This is the right choice when the human owns the trust decision.
+- **`--yes`** / `-y` — bypasses approval for a single invocation. Appropriate for CI/CD where hook contents are controlled by the pipeline itself.
+
+**When invoked as an agent, stop and escalate to the user** — pre-approval is a security decision about whether this project's hooks should be trusted to run arbitrary commands on their machine. Tell the user to run `wt config approvals add` (or review and re-run with `--yes` if they accept the CI-style one-shot bypass). Don't reach for `--yes` on the user's behalf just to unblock the command.
 
 ## Advanced: Agent Handoffs
 
@@ -278,3 +316,22 @@ Example (Zellij, OpenCode):
 zellij run -- wt switch --create fix-auth-bug -x 'opencode run' -- \
   'The login session expires after 5 minutes. Find the session timeout config and extend it to 24 hours.'
 ```
+
+### Parallel sub-Agents (single Claude Code session)
+
+To spawn multiple sub-Agents that each work in their own worktree from one Claude Code session — no terminal multiplexer, no human in the other pane — pre-start each worktree from the parent and pass the path into the sub-Agent prompt:
+
+```bash
+wt switch --create <branch> --no-cd --no-hooks
+```
+
+Then call the `Agent` tool **without** `isolation: "worktree"`, naming the path in the prompt:
+
+```
+You are working in `/abs/path/to/worktrunk.<branch>` on branch `<branch>`.
+All edits must stay in that worktree.
+```
+
+`--no-cd` skips the shell-integration cd script the parent can't consume; `--no-hooks` is appropriate when each sub-Agent will run its own build/test step (e.g. `cargo run -- hook pre-merge --yes`) and you don't need post-start setup repeated per worktree.
+
+**Do not** use `Agent { isolation: "worktree" }` for this. Claude Code passes its internal agent ID as `name` to the `WorktreeCreate` hook, so `wt` creates the worktree as `worktrunk.agent-<id>` on a throwaway branch. If the sub-Agent then creates a feature branch on top, you end up with non-canonical paths, orphan branches, and post-start hooks fired against the wrong branch. Pre-creating with `wt switch --create` keeps path, branch, and hook target aligned.

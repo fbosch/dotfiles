@@ -38,7 +38,7 @@ eval "$(wt config shell init zsh)"
 wt config shell init fish | source
 
 # nushell (experimental) — save to vendor autoload directory:
-wt config shell init nu | save -f ($nu.default-config-dir | path join vendor/autoload/wt.nu)
+wt config shell init nu | save -f ($nu.vendor-autoload-dirs | last | path join wt.nu)
 
 # PowerShell ($PROFILE):
 Invoke-Expression (& wt config shell init powershell | Out-String)
@@ -253,7 +253,7 @@ If you see path issues, ensure you're using a recent Git for Windows version.
 | `WORKTRUNK_DIRECTIVE_CD_FILE` | Set by shell wrapper; wt writes a raw path, wrapper `cd`s to it |
 | `WORKTRUNK_DIRECTIVE_EXEC_FILE` | Set by shell wrapper; wt writes shell commands, wrapper sources the file |
 | `WORKTRUNK_BIN` | Override binary path (for testing dev builds) |
-| `WORKTRUNK_SHELL` | Set by PowerShell wrapper to indicate shell type |
+| `WORKTRUNK_SHELL` | Set by the PowerShell (`powershell`) and fish (`fish`) wrappers; selects how wt escapes the EXEC directive payload for that shell |
 
 ## See Also
 

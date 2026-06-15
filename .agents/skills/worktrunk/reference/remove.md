@@ -6,8 +6,13 @@ Remove worktree; delete branch if merged. Defaults to the current worktree.
 
 Remove current worktree:
 
-```bash
+```
 $ wt remove
+◎ Running pre-remove project:cleanup
+  flyctl scale count 0
+Scaling app to 0 machines
+◎ Removing api worktree & branch in background (same commit as main, _)
+○ Switched to worktree for main @ ~/repo
 ```
 
 Remove specific worktrees / branches:
@@ -42,6 +47,8 @@ Worktrunk checks six conditions (in order of cost):
 5. **Merge adds nothing** — Simulated merge produces the same tree as target. Handles squash-merged branches where target has advanced with changes to different files. Shows `⊂`.
 6. **Patch-id match** — Branch's entire diff matches a single squash-merge commit on target. Fallback for when the simulated merge conflicts because target later modified the same files the branch touched. Shows `⊂`.
 
+The default-branch walk is capped so a single check stays fast; a squash merge with hundreds of commits landed since the merge point falls outside the cap and needs `-D` to remove.
+
 The 'same commit' check uses the local default branch; for other checks, 'target' means the default branch, or its upstream (e.g., `origin/main`) when strictly ahead.
 
 Branches matching these conditions and with empty working trees are dimmed in `wt list` as safe to delete.
@@ -52,16 +59,16 @@ Worktrunk has two force flags for different situations:
 
 | Flag | Scope | When to use |
 |------|-------|-------------|
-| `--force` (`-f`) | Worktree | Worktree has untracked files |
+| `--force` (`-f`) | Worktree | Worktree has uncommitted changes |
 | `--force-delete` (`-D`) | Branch | Branch has unmerged commits |
 
 ```bash
-$ wt remove feature --force       # Remove worktree with untracked files
+$ wt remove feature --force       # Remove dirty worktree
 $ wt remove feature -D            # Delete unmerged branch
 $ wt remove feature --force -D    # Both
 ```
 
-Without `--force`, removal fails if the worktree contains untracked files. Without `--force-delete`, removal keeps branches with unmerged changes. Use `--no-delete-branch` to keep the branch regardless of merge status.
+Use `--no-delete-branch` to keep the branch regardless of merge status.
 
 ## Background removal
 
@@ -88,7 +95,7 @@ Usage: wt remove [OPTIONS] [BRANCHES]...
 
 Arguments:
   [BRANCHES]...
-          Branch name [default: current]
+          Branch name or worktree path [default: current]
 
 Options:
       --no-delete-branch
@@ -103,16 +110,13 @@ Options:
   -f, --force
           Force worktree removal
 
-          Remove worktrees even if they contain untracked files (like build artifacts). Without this
-          flag, removal fails if untracked files exist.
+          Remove a dirty worktree, including staged, modified, and untracked files. Without this
+          flag, removal fails if the worktree has any uncommitted changes.
 
   -h, --help
           Print help (see a summary with '-h')
 
 Automation:
-  -y, --yes
-          Skip approval prompts
-
       --no-hooks
           Skip hooks
 
@@ -135,6 +139,9 @@ Global Options:
           User config file path
 
   -v, --verbose...
-          Verbose output (-v: info logs + hook/template output; -vv: debug logs + diagnostic report
-          + trace.log/output.log under .git/wt/logs/)
+          Verbose output (-v: info logs + hook/alias template variables on stderr; -vv: also debug
+          logs and raw subprocess output written to .git/wt/logs/)
+
+  -y, --yes
+          Skip approval prompts
 ```

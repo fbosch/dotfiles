@@ -6,8 +6,11 @@ Run individual operations. The building blocks of wt merge — commit, squash, r
 
 Commit with LLM-generated message:
 
-```bash
+```
 $ wt step commit
+◎ Generating commit message and committing changes... (2 files, +26)
+  feat(validation): add input validation utilities
+✓ Committed changes @ a1b2c3d
 ```
 
 Manual merge workflow with review between steps:
@@ -32,7 +35,8 @@ $ wt step push
 - [`promote`](#wt-step-promote) — [experimental] Swap a branch into the main worktree
 - [`prune`](#wt-step-prune) — Remove worktrees and branches merged into the default branch
 - [`relocate`](#wt-step-relocate) — [experimental] Move worktrees to expected paths
-- [`<alias>`](#aliases) — [experimental] Run a configured command alias
+- [`tether`](#wt-step-tether) — [experimental] Run a command; kill its whole process tree when its worktree is removed
+- [`<alias>`](https://worktrunk.dev/extending/#aliases) — Run a configured command alias
 
 ## Command reference
 
@@ -55,6 +59,8 @@ Commands:
   promote       [experimental] Swap a branch into the main worktree
   prune         [experimental] Remove worktrees merged into the default branch
   relocate      [experimental] Move worktrees to expected paths
+  tether        [experimental] Run a command; kill its whole process tree when its worktree is
+                removed
 
 Options:
   -h, --help
@@ -68,8 +74,11 @@ Global Options:
           User config file path
 
   -v, --verbose...
-          Verbose output (-v: info logs + hook/template output; -vv: debug logs + diagnostic report
-          + trace.log/output.log under .git/wt/logs/)
+          Verbose output (-v: info logs + hook/alias template variables on stderr; -vv: also debug
+          logs and raw subprocess output written to .git/wt/logs/)
+
+  -y, --yes
+          Skip approval prompts
 ```
 
 # Subcommands
@@ -82,7 +91,7 @@ See [LLM-generated commit messages](https://worktrunk.dev/llm-commits/) for conf
 
 ### Options
 
-#### `--stage`
+#### Staging
 
 Controls what to stage before committing:
 
@@ -103,17 +112,15 @@ Configure the default in user config:
 stage = "tracked"
 ```
 
-#### `--show-prompt`
+#### Dry run
 
-Output the rendered LLM prompt to stdout without running the command. Useful for inspecting prompt templates or piping to other tools:
+Render the prompt, print the LLM command, generate the message, and exit without staging, running hooks, or committing:
 
 ```bash
-# Inspect the rendered prompt
-$ wt step commit --show-prompt | less
-
-# Pipe to a different LLM
-$ wt step commit --show-prompt | llm -m gpt-5-nano
+$ wt step commit --dry-run
 ```
+
+Three sections are printed: the rendered prompt, the shell command that would invoke the LLM, and the message returned. The LLM call still happens — only the commit is skipped.
 
 ### Command reference
 
@@ -134,20 +141,26 @@ Options:
           - tracked: Stage tracked changes only (like git add -u)
           - none:    Stage nothing, commit only what's already in the index
 
-      --show-prompt
-          Show prompt without running LLM
-
-          Outputs the rendered prompt to stdout for debugging or manual piping.
+      --dry-run
+          Preview prompt, command, and generated message without committing
 
   -h, --help
           Print help (see a summary with '-h')
 
 Automation:
-  -y, --yes
-          Skip approval prompts
-
       --no-hooks
           Skip hooks
+
+      --format <FORMAT>
+          Output format
+
+          JSON prints structured result to stdout after the commit completes.
+
+          Possible values:
+          - text: Human-readable text output
+          - json: JSON output
+
+          [default: text]
 
 Global Options:
   -C <path>
@@ -157,8 +170,11 @@ Global Options:
           User config file path
 
   -v, --verbose...
-          Verbose output (-v: info logs + hook/template output; -vv: debug logs + diagnostic report
-          + trace.log/output.log under .git/wt/logs/)
+          Verbose output (-v: info logs + hook/alias template variables on stderr; -vv: also debug
+          logs and raw subprocess output written to .git/wt/logs/)
+
+  -y, --yes
+          Skip approval prompts
 ```
 
 ## wt step squash
@@ -169,7 +185,7 @@ See [LLM-generated commit messages](https://worktrunk.dev/llm-commits/) for conf
 
 ### Options
 
-#### `--stage`
+#### Staging
 
 Controls what to stage before squashing:
 
@@ -190,13 +206,15 @@ Configure the default in user config:
 stage = "tracked"
 ```
 
-#### `--show-prompt`
+#### Dry run
 
-Output the rendered LLM prompt to stdout without running the command. Useful for inspecting prompt templates or piping to other tools:
+Render the prompt, print the LLM command, generate the squash message, and exit without resetting, running hooks, or committing:
 
 ```bash
-$ wt step squash --show-prompt | less
+$ wt step squash --dry-run
 ```
+
+Three sections are printed: the rendered prompt, the shell command that would invoke the LLM, and the message returned. The LLM call still happens — only the squash and commit are skipped.
 
 ### Command reference
 
@@ -222,20 +240,26 @@ Options:
           - tracked: Stage tracked changes only (like git add -u)
           - none:    Stage nothing, commit only what's already in the index
 
-      --show-prompt
-          Show prompt without running LLM
-
-          Outputs the rendered prompt to stdout for debugging or manual piping.
+      --dry-run
+          Preview prompt, command, and generated message without squashing
 
   -h, --help
           Print help (see a summary with '-h')
 
 Automation:
-  -y, --yes
-          Skip approval prompts
-
       --no-hooks
           Skip hooks
+
+      --format <FORMAT>
+          Output format
+
+          JSON prints structured result to stdout after the squash completes.
+
+          Possible values:
+          - text: Human-readable text output
+          - json: JSON output
+
+          [default: text]
 
 Global Options:
   -C <path>
@@ -245,8 +269,11 @@ Global Options:
           User config file path
 
   -v, --verbose...
-          Verbose output (-v: info logs + hook/template output; -vv: debug logs + diagnostic report
-          + trace.log/output.log under .git/wt/logs/)
+          Verbose output (-v: info logs + hook/alias template variables on stderr; -vv: also debug
+          logs and raw subprocess output written to .git/wt/logs/)
+
+  -y, --yes
+          Skip approval prompts
 ```
 
 ## wt step diff
@@ -254,6 +281,16 @@ Global Options:
 Show all changes since branching. Includes committed, staged, unstaged, and untracked files.
 
 This is what `wt merge` would include — a single diff against the merge base.
+
+### Operating on another worktree
+
+`--branch` diffs another worktree's branch without leaving the current one:
+
+```bash
+$ wt step diff --branch feature
+```
+
+The branch must have a checked-out worktree.
 
 ### Extra git diff arguments
 
@@ -302,6 +339,9 @@ Arguments:
           Extra arguments forwarded to git diff
 
 Options:
+  -b, --branch <BRANCH>
+          Branch to operate on (defaults to current worktree)
+
   -h, --help
           Print help (see a summary with '-h')
 
@@ -313,8 +353,11 @@ Global Options:
           User config file path
 
   -v, --verbose...
-          Verbose output (-v: info logs + hook/template output; -vv: debug logs + diagnostic report
-          + trace.log/output.log under .git/wt/logs/)
+          Verbose output (-v: info logs + hook/alias template variables on stderr; -vv: also debug
+          logs and raw subprocess output written to .git/wt/logs/)
+
+  -y, --yes
+          Skip approval prompts
 ```
 
 ## wt step copy-ignored
@@ -333,7 +376,7 @@ copy = "wt step copy-ignored"
 
 ### What gets copied
 
-All gitignored files are copied by default, except for built-in excluded directories: VCS metadata (`.bzr/`, `.hg/`, `.jj/`, `.pijul/`, `.sl/`, `.svn/`) and tool-state (`.conductor/`, `.entire/`, `.pi/`, `.worktrees/`). Tracked files are never touched.
+All gitignored files are copied by default, except for built-in excluded directories: VCS metadata (`.bzr/`, `.hg/`, `.jj/`, `.pijul/`, `.sl/`, `.svn/`) and tool-state (`.conductor/`, `.entire/`, `.worktrees/`). Tracked files are never touched.
 
 To limit what gets copied further, create `.worktreeinclude` with gitignore-style patterns. Files must be **both** gitignored **and** in `.worktreeinclude`:
 
@@ -366,7 +409,7 @@ exclude = [".cache/", ".turbo/"]
 - Handles nested `.gitignore` files, global excludes, and `.git/info/exclude`
 - Skips existing files by default (safe to re-run)
 - `--force` overwrites existing files in the destination
-- Always skips built-in excluded directories — VCS metadata (`.bzr/`, `.hg/`, `.jj/`, `.pijul/`, `.sl/`, `.svn/`) and tool-state (`.conductor/`, `.entire/`, `.pi/`, `.worktrees/`) — and nested worktrees
+- Always skips built-in excluded directories — VCS metadata (`.bzr/`, `.hg/`, `.jj/`, `.pijul/`, `.sl/`, `.svn/`) and tool-state (`.conductor/`, `.entire/`, `.worktrees/`) — and nested worktrees
 
 ### Performance
 
@@ -377,9 +420,15 @@ Reflink copies share disk blocks until modified — no data is actually copied. 
 | `cp -R` (full copy) | 2m |
 | `cp -Rc` / `wt step copy-ignored` | 20s |
 
-Uses per-file reflink (like `cp -Rc`) — copy time scales with file count. On Unix, the process is automatically reniced to lowest priority (nice 19) so it yields to interactive work.
+Uses per-file reflink (like `cp -Rc`) — copy time scales with file count.
 
 Use the `post-start` hook so the copy runs in the background. Use `pre-start` instead if subsequent hooks or `--execute` command need the copied files immediately.
+
+### Background-hook priority (experimental)
+
+When invoked from a background hook pipeline (`post-*` hooks), `wt step copy-ignored` self-lowers its CPU and I/O priority — `taskpolicy -b` on macOS, `nice -n 19` plus `ionice -c 3` on Linux — so it yields to interactive work. Foreground callers (`pre-*` hooks, direct interactive use) run at normal priority so the user isn't waiting on a throttled copy.
+
+wt signals background-hook context by exporting `WORKTRUNK_FOREGROUND=-1` into every detached hook pipeline; `copy-ignored` inspects that variable on entry. The variable name is experimental and may change.
 
 ### Language-specific notes
 
@@ -437,6 +486,18 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
+Automation:
+      --format <FORMAT>
+          Output format
+
+          JSON prints structured result to stdout after the copy completes.
+
+          Possible values:
+          - text: Human-readable text output
+          - json: JSON output
+
+          [default: text]
+
 Global Options:
   -C <path>
           Working directory for this command
@@ -445,8 +506,11 @@ Global Options:
           User config file path
 
   -v, --verbose...
-          Verbose output (-v: info logs + hook/template output; -vv: debug logs + diagnostic report
-          + trace.log/output.log under .git/wt/logs/)
+          Verbose output (-v: info logs + hook/alias template variables on stderr; -vv: also debug
+          logs and raw subprocess output written to .git/wt/logs/)
+
+  -y, --yes
+          Skip approval prompts
 ```
 
 ## wt step eval
@@ -486,14 +550,18 @@ $ wt step eval '{{ branch | sanitize_db }}'
 feature_auth_oauth2_a1b
 ```
 
-Show available template variables:
+List the available template variables with `-v` (alongside the expansion, on stderr):
 
 ```bash
-$ wt step eval --dry-run '{{ branch }}'
-branch=feature/auth-oauth2
-worktree_path=/home/user/projects/myapp-feature-auth-oauth2
-...
-Result: feature/auth-oauth2
+$ wt step eval -v '{{ branch }}'
+○ Available template variables
+  branch        = feature/auth-oauth2
+  worktree_path = /home/user/projects/myapp-feature-auth-oauth2
+○ Expanding eval
+  {{ branch }}
+  →
+  feature/auth-oauth2
+feature/auth-oauth2
 ```
 
 Note: This command is experimental and may change in future versions.
@@ -512,9 +580,6 @@ Arguments:
           Template expression to evaluate
 
 Options:
-      --dry-run
-          Show template variables and expanded result
-
   -h, --help
           Print help (see a summary with '-h')
 
@@ -526,46 +591,53 @@ Global Options:
           User config file path
 
   -v, --verbose...
-          Verbose output (-v: info logs + hook/template output; -vv: debug logs + diagnostic report
-          + trace.log/output.log under .git/wt/logs/)
+          Verbose output (-v: info logs + hook/alias template variables on stderr; -vv: also debug
+          logs and raw subprocess output written to .git/wt/logs/)
+
+  -y, --yes
+          Skip approval prompts
 ```
 
 ## wt step for-each
 
 [experimental]
 
-Run command in each worktree. Executes sequentially with real-time output; continues on failure.
+Run command in each worktree. Executes sequentially with real-time output; continues past command failures.
 
-A summary of successes and failures is shown at the end. Context JSON is piped to stdin for scripts that need structured data.
+A summary of successes and failures is shown at the end. A template-expansion error (a malformed `{{ … }}` argument) aborts the whole run; only command failures are tolerated and reported. Context JSON — a flat object of every template variable — is piped to stdin for scripts that need structured data.
 
-### Template variables
+### Arguments
 
-All variables are shell-escaped. See [`wt hook` template variables](https://worktrunk.dev/hook/#template-variables) for the complete list and filters.
-
-### Examples
-
-Check status across all worktrees:
+Arguments after `--` are the program and its arguments — run directly, no shell.
 
 ```bash
 $ wt step for-each -- git status --short
-```
-
-Run npm install in all worktrees:
-
-```bash
 $ wt step for-each -- npm install
 ```
 
-Use branch name in command:
+For pipes, redirects, variables, or globs, wrap in `sh -c`:
 
 ```bash
-$ wt step for-each -- "echo Branch: {{ branch }}"
+$ wt step for-each -- sh -c 'git status | wc -l'
+$ wt step for-each -- sh -c 'echo $HOME && git pull'
 ```
+
+### Template variables
+
+Variables substitute into each argv element before exec. See [`wt hook` template variables](https://worktrunk.dev/hook/#template-variables) for the complete list and filters.
+
+```bash
+$ wt step for-each -- echo 'Branch: {{ branch }}'
+```
+
+Each element is expanded fresh in every worktree, so `{{ branch }}` is that worktree's branch. An alias wrapping for-each renders templates earlier, in the invoking worktree; [deferring expansion in an alias](https://worktrunk.dev/extending/#deferring-expansion-to-a-nested-wt-command) shows how to keep a variable per-worktree.
+
+### Examples
 
 Pull updates in worktrees with upstreams (skips others):
 
 ```bash
-$ git fetch --prune && wt step for-each -- '[ "$(git rev-parse @{u} 2>/dev/null)" ] || exit 0; git pull --autostash'
+$ git fetch --prune && wt step for-each -- sh -c '[ "$(git rev-parse @{u} 2>/dev/null)" ] || exit 0; git pull --autostash'
 ```
 
 Note: This command is experimental and may change in future versions.
@@ -575,7 +647,7 @@ Note: This command is experimental and may change in future versions.
 ```
 wt step for-each - [experimental] Run command in each worktree
 
-Executes sequentially with real-time output; continues on failure.
+Executes sequentially with real-time output; continues past command failures.
 
 Usage: wt step for-each [OPTIONS] -- <ARGS>...
 
@@ -584,10 +656,6 @@ Arguments:
           Command template (see --help for all variables)
 
 Options:
-  -h, --help
-          Print help (see a summary with '-h')
-
-Automation:
       --format <FORMAT>
           Output format (text, json)
 
@@ -597,6 +665,9 @@ Automation:
 
           [default: text]
 
+  -h, --help
+          Print help (see a summary with '-h')
+
 Global Options:
   -C <path>
           Working directory for this command
@@ -605,8 +676,11 @@ Global Options:
           User config file path
 
   -v, --verbose...
-          Verbose output (-v: info logs + hook/template output; -vv: debug logs + diagnostic report
-          + trace.log/output.log under .git/wt/logs/)
+          Verbose output (-v: info logs + hook/alias template variables on stderr; -vv: also debug
+          logs and raw subprocess output written to .git/wt/logs/)
+
+  -y, --yes
+          Skip approval prompts
 ```
 
 ## wt step promote
@@ -682,8 +756,11 @@ Global Options:
           User config file path
 
   -v, --verbose...
-          Verbose output (-v: info logs + hook/template output; -vv: debug logs + diagnostic report
-          + trace.log/output.log under .git/wt/logs/)
+          Verbose output (-v: info logs + hook/alias template variables on stderr; -vv: also debug
+          logs and raw subprocess output written to .git/wt/logs/)
+
+  -y, --yes
+          Skip approval prompts
 ```
 
 ## wt step prune
@@ -696,11 +773,11 @@ Bulk-removes worktrees and branches that are integrated into the default branch,
 
 In `wt list`, candidates show `_` (same commit) or `⊂` (content integrated). Run `--dry-run` to preview. See `wt remove --help` for the full integration criteria.
 
-Locked worktrees and the main worktree are always skipped. The current worktree is removed last, triggering cd to the primary worktree. Pre-remove and post-remove hooks run for each removal.
+Locked worktrees and the main worktree are always skipped. The current worktree is removed last, triggering cd to the primary worktree. Pre-remove and post-remove hooks run for each removal; a candidate whose hooks include an unapproved project command is skipped with `(approval required)` (pre-approve with `wt config approvals add`, or pass `--yes`).
 
 ### Min-age guard
 
-Worktrees younger than `--min-age` (default: 1 hour) are skipped. This prevents removing a worktree just created from the default branch — it looks "merged" because its branch points at the same commit.
+Worktrees younger than `--min-age` (default: 1 day) are skipped. This prevents removing a worktree just created from the default branch — it looks "merged" because its branch points at the same commit.
 
 ```bash
 $ wt step prune --min-age=0s     # no age guard
@@ -735,17 +812,10 @@ Options:
       --min-age <MIN_AGE>
           Skip worktrees younger than this
 
-          [default: 1h]
+          [default: 1d]
 
       --foreground
           Run removal in foreground (block until complete)
-
-  -h, --help
-          Print help (see a summary with '-h')
-
-Automation:
-  -y, --yes
-          Skip approval prompts
 
       --format <FORMAT>
           Output format (text, json)
@@ -756,6 +826,9 @@ Automation:
 
           [default: text]
 
+  -h, --help
+          Print help (see a summary with '-h')
+
 Global Options:
   -C <path>
           Working directory for this command
@@ -764,8 +837,11 @@ Global Options:
           User config file path
 
   -v, --verbose...
-          Verbose output (-v: info logs + hook/template output; -vv: debug logs + diagnostic report
-          + trace.log/output.log under .git/wt/logs/)
+          Verbose output (-v: info logs + hook/alias template variables on stderr; -vv: also debug
+          logs and raw subprocess output written to .git/wt/logs/)
+
+  -y, --yes
+          Skip approval prompts
 ```
 
 ## wt step relocate
@@ -809,7 +885,9 @@ this by using a temporary location.
 ### Clobbering
 
 With `--clobber`, non-worktree paths at target locations are moved to
-`<path>.bak-<timestamp>` before relocating.
+`<path>.bak.<timestamp>` before relocating. If that name is already taken,
+the move counts up (`…-2`, `…-3`, …) until it finds a free name, so an
+existing backup is never overwritten.
 
 ### Main worktree behavior
 
@@ -849,8 +927,96 @@ Options:
       --clobber
           Backup non-worktree paths at target locations
 
-          Moves blocking paths to <path>.bak-<timestamp>.
+          Moves blocking paths to <path>.bak.<timestamp>. If that name is taken, counts up (…-2, …-3
+          , …) to a free name.
 
+  -h, --help
+          Print help (see a summary with '-h')
+
+Automation:
+      --format <FORMAT>
+          Output format
+
+          JSON prints structured result to stdout after the relocate completes.
+
+          Possible values:
+          - text: Human-readable text output
+          - json: JSON output
+
+          [default: text]
+
+Global Options:
+  -C <path>
+          Working directory for this command
+
+      --config <path>
+          User config file path
+
+  -v, --verbose...
+          Verbose output (-v: info logs + hook/alias template variables on stderr; -vv: also debug
+          logs and raw subprocess output written to .git/wt/logs/)
+
+  -y, --yes
+          Skip approval prompts
+```
+
+## wt step tether
+
+[experimental]
+
+Run a command; kill its whole process tree when its worktree is removed. Teardown is automatic and needs no pre-remove hook; the group gets SIGTERM then SIGKILL.
+
+### Why
+
+A `post-start` hook to start a long-lived process and a `pre-remove` hook to
+stop it is usually enough. But `pre-remove` only runs when worktrunk removes
+the worktree, so a `git worktree remove`, an `rm -rf`, or a crashed hook skips
+it. Across enough worktree churn some process is bound to outlive its worktree,
+and with no cleanup these leaks accumulate (on macOS they eventually saturate
+`fseventsd`). `tether` removes the need for a `pre-remove`: it ties the
+command's lifetime to the worktree and kills the whole process group once the
+worktree is gone.
+
+### Arguments
+
+Arguments after `--` are the program and its arguments, run directly, no shell.
+
+```bash
+$ wt step tether -- npm run dev
+```
+
+For pipes, redirects, variables, or globs, wrap in `sh -c`:
+
+```bash
+$ wt step tether -- sh -c 'PORT=$P npm run dev | tee dev.log'
+```
+
+### Examples
+
+Run a dev server, torn down automatically when the worktree goes away:
+
+```toml
+# .config/wt.toml
+[post-start]
+server = "wt step tether -- npm run dev -- --port {{ branch | hash_port }}"
+```
+
+Note: This command is experimental and may change in future versions.
+
+### Command reference
+
+```
+wt step tether - [experimental] Run a command; kill its whole process tree when its worktree is removed
+
+Teardown is automatic and needs no pre-remove hook; the group gets SIGTERM then SIGKILL.
+
+Usage: wt step tether [OPTIONS] -- <COMMAND>...
+
+Arguments:
+  <COMMAND>...
+          Command to run (after --, run directly, no shell)
+
+Options:
   -h, --help
           Print help (see a summary with '-h')
 
@@ -862,69 +1028,9 @@ Global Options:
           User config file path
 
   -v, --verbose...
-          Verbose output (-v: info logs + hook/template output; -vv: debug logs + diagnostic report
-          + trace.log/output.log under .git/wt/logs/)
+          Verbose output (-v: info logs + hook/alias template variables on stderr; -vv: also debug
+          logs and raw subprocess output written to .git/wt/logs/)
+
+  -y, --yes
+          Skip approval prompts
 ```
-
-## Aliases [experimental]
-
-Custom command templates configured in user config (`~/.config/worktrunk/config.toml`) or project config (`.config/wt.toml`). Aliases support the same [template variables](https://worktrunk.dev/hook/#template-variables) as hooks.
-
-```toml
-# .config/wt.toml
-[aliases]
-deploy = "make deploy BRANCH={{ branch }}"
-port = "echo http://localhost:{{ branch | hash_port }}"
-```
-
-```bash
-$ wt step deploy                            # run the alias
-$ wt step deploy --dry-run                  # show expanded command
-$ wt step deploy --env=staging              # pass template variable
-$ wt step deploy --var env=staging          # equivalent long form
-$ wt step deploy --my-var=value             # hyphens become underscores ({{ my_var }})
-$ wt step deploy --yes                      # skip approval prompt
-```
-
-Hyphens in variable names are canonicalized to underscores at parse time, so `--my-var=value` is referenced as `{{ my_var }}` in templates. This lets flags use natural kebab-case while avoiding the minijinja parser's interpretation of `{{ my-var }}` as subtraction.
-
-Multi-line aliases work too. This `up` alias fetches all remotes and rebases each worktree onto its upstream, skipping worktrees without a tracking branch or with a rebase already in progress:
-
-```toml
-# ~/.config/worktrunk/config.toml
-[aliases]
-up = '''
-git fetch --all --prune && wt step for-each -- '
-  git rev-parse --verify -q @{u} >/dev/null || exit 0
-  g=$(git rev-parse --git-dir)
-  test -d "$g/rebase-merge" -o -d "$g/rebase-apply" && exit 0
-  git rebase @{u} --no-autostash || git rebase --abort
-''''
-```
-
-```bash
-$ wt step up
-```
-
-Multi-step aliases run commands in order using `[[aliases.NAME]]` blocks. Each block is one step; multiple keys within a block run concurrently.
-
-```toml
-# .config/wt.toml
-[[aliases.release]]
-test = "cargo test"
-
-[[aliases.release]]
-build = "cargo build --release"
-package = "cargo package --no-verify"
-
-[[aliases.release]]
-publish = "cargo publish"
-```
-
-Here `test` runs first, then `build` and `package` run together, then `publish` runs last. A step failure aborts the remaining steps.
-
-When defined in both user and project config, both run — user first, then project. Project-config aliases require [command approval](https://worktrunk.dev/hook/#wt-hook-approvals) on first run, same as project hooks. User-config aliases are trusted.
-
-Inside an alias body, an inner `wt switch` (or `wt switch --create`) passes its `cd` through to the parent shell, so an alias wrapping `wt switch --create` lands the shell in the new worktree just like running it directly.
-
-Alias names that match a built-in step command (`commit`, `squash`, etc.) are shadowed by the built-in and will never run.

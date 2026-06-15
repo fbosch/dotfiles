@@ -8,8 +8,19 @@ Unlike `git merge`, this merges the current branch into the target branch — no
 
 Merge to the default branch:
 
-```bash
+```
 $ wt merge
+◎ Running pre-merge project:test
+  cargo nextest run
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Summary [   0.002s] 2 tests run: 2 passed, 0 skipped
+◎ Merging 1 commit to main @ a1b2c3d (no commit/squash/rebase needed)
+  * a1b2c3d feat: add hook registration
+   hook.rs | 31 +++++++++++++++++++++++++++++++
+   1 file changed, 31 insertions(+)
+✓ Merged to main (1 commit, 1 file, +31)
+◎ Removing hooks worktree & branch in background (same commit as main, _)
+○ Switched to worktree for main @ ~/repo
 ```
 
 Merge to a different branch:
@@ -114,9 +125,6 @@ Options:
           Print help (see a summary with '-h')
 
 Automation:
-  -y, --yes
-          Skip approval prompts
-
       --no-hooks
           Skip hooks
 
@@ -139,6 +147,9 @@ Global Options:
           User config file path
 
   -v, --verbose...
-          Verbose output (-v: info logs + hook/template output; -vv: debug logs + diagnostic report
-          + trace.log/output.log under .git/wt/logs/)
+          Verbose output (-v: info logs + hook/alias template variables on stderr; -vv: also debug
+          logs and raw subprocess output written to .git/wt/logs/)
+
+  -y, --yes
+          Skip approval prompts
 ```
