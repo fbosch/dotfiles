@@ -318,7 +318,9 @@ function M.recalculate(ctx)
 			break
 		end
 	end
-	if transfer_target and order_state.move_target_to_index(state, key, transfer_target, 1) then
+	if transfer_target then
+		order_state.move_target_to_index(state, key, transfer_target, 1)
+		state.manual_change_by_key[key] = nil
 		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	elseif manual_change then
 		state.manual_change_by_key[key] = nil

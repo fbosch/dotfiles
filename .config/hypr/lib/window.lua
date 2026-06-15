@@ -174,7 +174,12 @@ function M.move(value)
 		return function()
 			local active = M.active()
 			if monitor_role.for_window(active) == monitor_role.ultrawide then
-				dispatch((is_only_tiled_window(active) or on_ultrawide_left_edge(active)) and move_to_portrait or ultrawide_swap_left)
+				if is_only_tiled_window(active) or on_ultrawide_left_edge(active) then
+					order_state.record_transfer_intent(active, portrait_transfer_start)
+					dispatch(move_to_portrait)
+				else
+					dispatch(ultrawide_swap_left)
+				end
 			else
 				dispatch(move_dispatcher)
 			end

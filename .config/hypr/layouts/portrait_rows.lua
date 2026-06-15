@@ -280,7 +280,9 @@ function M.recalculate(ctx)
 			break
 		end
 	end
-	if transfer_target and order_state.move_target_to_index(state, key, transfer_target, 1) then
+	if transfer_target then
+		order_state.move_target_to_index(state, key, transfer_target, 1)
+		state.manual_change_by_key[key] = nil
 		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	elseif manual_change then
 		state.manual_change_by_key[key] = nil
@@ -291,7 +293,7 @@ function M.recalculate(ctx)
 			and order_state.same_scope(state, active_target, scope)
 			and order_state.position_in_area(active_target, "y", y, height)
 			and (order_state.position_changed(state, active_target, scope, "y") or added_seen_targets)
-	then
+		then
 			move_active_to_position(targets, key, ratios, y, height)
 			targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 		end

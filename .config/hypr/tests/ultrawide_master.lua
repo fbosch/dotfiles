@@ -220,6 +220,20 @@ run("portrait transfer intent inserts leftmost despite outside right source x", 
 	assert_box(right.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
 end)
 
+run("transfer intent wins when target already arrives leftmost", function()
+	local dragged = set_geometry(make_target(61, true), 100)
+	local right = set_geometry(make_target(62), 800)
+	local workspace = "transfer-already-leftmost"
+	registered_layout.layout.recalculate(make_context({ dragged, right }, workspace))
+
+	set_geometry(dragged, 900)
+	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+	registered_layout.layout.recalculate(make_context({ dragged, right }, workspace))
+
+	assert_box(dragged.placed, { x = 10, y = 20, w = 670, h = 500 }, "dragged target")
+	assert_box(right.placed, { x = 680, y = 20, w = 330, h = 500 }, "right target")
+end)
+
 run("swap and resize no-op without active target", function()
 	local first = make_target(1)
 	local second = make_target(2)

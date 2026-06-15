@@ -11,6 +11,10 @@ The system SHALL treat cross-monitor directional move commands as explicit inser
 - **WHEN** the active tiled window is on the ultrawide monitor and the user invokes the move-down command
 - **THEN** the window is moved to the portrait monitor and inserted as the top portrait row
 
+#### Scenario: Ultrawide left-edge move enters portrait at the leading edge
+- **WHEN** the active tiled window is on the ultrawide monitor and the user invokes the move-left command from a cross-monitor transfer position
+- **THEN** the window is moved to the portrait monitor and inserted as the top portrait row
+
 ### Requirement: Same-layout directional move commands mutate stored order
 The system SHALL handle directional move commands within a custom layout by moving the active target within the stored layout order.
 
