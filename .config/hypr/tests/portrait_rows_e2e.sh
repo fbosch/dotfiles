@@ -8,13 +8,22 @@ config_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${config_dir}/runtime/lib/hypr-ipc.sh"
 
 portrait_monitor="${HYPR_E2E_PORTRAIT_MONITOR:-HDMI-A-2}"
+ultrawide_monitor="${HYPR_E2E_ULTRAWIDE_MONITOR:-DP-2}"
 workspace_name="${HYPR_E2E_WORKSPACE:-}"
 workspace=""
+ultrawide_workspace_name="${HYPR_E2E_ULTRAWIDE_WORKSPACE:-}"
+ultrawide_workspace=""
 window_class="opencode-hypr-portrait-e2e"
 title_prefix="${window_class}-$(date +%s)-$$"
 sleep_seconds="${HYPR_E2E_SLEEP_SECONDS:-300}"
 original_workspace=""
 original_layout=""
+current_step="startup"
+
+status() {
+	current_step="$1"
+	printf 'STEP %s\n' "$current_step"
+}
 
 skip() {
 	printf 'SKIP %s\n' "$1"
@@ -22,7 +31,7 @@ skip() {
 }
 
 fail() {
-	printf 'FAIL %s\n' "$1" >&2
+	printf 'FAIL %s: %s\n' "$current_step" "$1" >&2
 	exit 1
 }
 
@@ -51,9 +60,11 @@ clients_json() {
 	hypr_query j/clients
 }
 
-select_test_workspace() {
+select_test_workspaces() {
 	if [[ -n "$workspace_name" ]]; then
 		workspace="$workspace_name"
+	fi
+	if [[ -n "$workspace" ]]; then
 		return
 	fi
 
@@ -72,15 +83,11 @@ test_clients() {
 	clients_json | jq \
 		--arg class "$window_class" \
 		--arg prefix "$title_prefix" \
-		--arg workspace "$workspace_name" \
 		'[
 			.[]
-			| select(.workspace.name == $workspace)
 			| select(
-				.class == $class
-				or .initialClass == $class
-				or ((.title // "") | startswith($prefix))
-				or ((.initialTitle // "") | startswith($prefix))
+				(.class == $class or .initialClass == $class)
+				and (((.title // "") | startswith($prefix)) or ((.initialTitle // "") | startswith($prefix)))
 			)
 		]'
 }
@@ -99,6 +106,22 @@ window_y() {
 	local title="$1"
 
 	test_clients | jq -r --arg title "$title" 'first(.[] | select(.title == $title or .initialTitle == $title)) | .at[1] // empty'
+}
+
+window_x() {
+	local title="$1"
+
+	test_clients | jq -r --arg title "$title" 'first(.[] | select(.title == $title or .initialTitle == $title)) | .at[0] // empty'
+}
+
+window_workspace() {
+	local title="$1"
+
+	test_clients | jq -r --arg title "$title" 'first(.[] | select(.title == $title or .initialTitle == $title)) | .workspace.name // empty'
+}
+
+active_window_address() {
+	hypr_query j/activewindow | jq -r '.address // empty'
 }
 
 wait_for_count() {
@@ -131,6 +154,18 @@ wait_for_no_title() {
 	fail "window did not close: ${title}"
 }
 
+wait_for_test_windows_gone() {
+	for _ in {1..80}; do
+		if [[ "$(test_window_count)" == "0" ]]; then
+			return
+		fi
+
+		sleep 0.1
+	done
+
+	return 1
+}
+
 close_window_by_title() {
 	local title="$1"
 	local address="$(window_address "$title")"
@@ -155,6 +190,21 @@ cleanup_test_windows() {
 		printf -v dispatcher 'hl.dsp.window.close(%s)' "$selector"
 		hypr_eval_dispatch "$dispatcher" || true
 	done <<< "$addresses"
+
+	if wait_for_test_windows_gone; then
+		return
+	fi
+
+	addresses="$(test_clients | jq -r '.[].address')"
+	while IFS= read -r address; do
+		[[ -n "$address" ]] || continue
+		local selector="$(lua_quote "address:${address}")"
+		local dispatcher=""
+		printf -v dispatcher 'hl.dsp.window.kill(%s)' "$selector"
+		hypr_eval_dispatch "$dispatcher" || true
+	done <<< "$addresses"
+
+	wait_for_test_windows_gone
 }
 
 restore_session() {
@@ -192,6 +242,34 @@ spawn_window() {
 	hypr_eval_dispatch "$dispatcher"
 }
 
+focus_monitor_workspace() {
+	local monitor="$1"
+	local target_workspace="$2"
+	local monitor_arg="$(lua_quote "$monitor")"
+	local workspace_arg="$(lua_quote "$target_workspace")"
+	local dispatcher=""
+
+	printf -v dispatcher 'hl.dsp.focus({ monitor = %s })' "$monitor_arg"
+	hypr_eval_dispatch "$dispatcher"
+	printf -v dispatcher 'hl.dsp.focus({ workspace = %s })' "$workspace_arg"
+	hypr_eval_dispatch "$dispatcher"
+	printf -v dispatcher 'hl.dsp.workspace.move({ workspace = %s, monitor = %s })' "$workspace_arg" "$monitor_arg"
+	hypr_eval_dispatch "$dispatcher"
+	printf -v dispatcher 'hl.dsp.focus({ workspace = %s })' "$workspace_arg"
+	hypr_eval_dispatch "$dispatcher"
+	printf -v dispatcher 'hl.dsp.focus({ monitor = %s })' "$monitor_arg"
+	hypr_eval_dispatch "$dispatcher"
+}
+
+focus_monitor() {
+	local monitor="$1"
+	local monitor_arg="$(lua_quote "$monitor")"
+	local dispatcher=""
+
+	printf -v dispatcher 'hl.dsp.focus({ monitor = %s })' "$monitor_arg"
+	hypr_eval_dispatch "$dispatcher"
+}
+
 focus_window_by_title() {
 	local title="$1"
 	local address="$(window_address "$title")"
@@ -201,7 +279,16 @@ focus_window_by_title() {
 	[[ -n "$address" ]] || fail "missing window address for ${title}"
 	selector="$(lua_quote "address:${address}")"
 	printf -v dispatcher 'hl.dsp.focus({ window = %s })' "$selector"
-	hypr_eval_dispatch "$dispatcher"
+	for _ in {1..80}; do
+		hypr_eval_dispatch "$dispatcher"
+		if [[ "$(active_window_address)" == "$address" ]]; then
+			return
+		fi
+
+		sleep 0.1
+	done
+
+	fail "window did not become active: ${title}"
 }
 
 layout_msg() {
@@ -212,6 +299,14 @@ layout_msg() {
 	printf -v dispatcher 'hl.dsp.layout(%s)' "$message_arg"
 	hypr_eval_dispatch "$dispatcher"
 	sleep 0.1
+}
+
+move_window_between_monitors() {
+	local direction="$1"
+	local direction_arg="$(lua_quote "$direction")"
+
+	hyprctl eval "require('lib.window').move(${direction_arg})()" >/dev/null
+	sleep 0.2
 }
 
 assert_identity() {
@@ -239,6 +334,37 @@ assert_below() {
 	fi
 }
 
+assert_left_of() {
+	local left_title="$1"
+	local right_title="$2"
+	local message="$3"
+	local left_x="$(window_x "$left_title")"
+	local right_x="$(window_x "$right_title")"
+
+	[[ -n "$left_x" ]] || fail "missing window x for ${left_title}"
+	[[ -n "$right_x" ]] || fail "missing window x for ${right_title}"
+	if (( left_x >= right_x )); then
+		fail "${message}: expected ${left_title} left of ${right_title}, got x=${left_x} >= ${right_x}"
+	fi
+}
+
+wait_for_workspace() {
+	local title="$1"
+	local expected="$2"
+	local actual=""
+
+	for _ in {1..80}; do
+		actual="$(window_workspace "$title")"
+		if [[ "$actual" == "$expected" ]]; then
+			return
+		fi
+
+		sleep 0.1
+	done
+
+	fail "expected ${title} on workspace ${expected}, found ${actual}"
+}
+
 assert_above() {
 	local upper_title="$1"
 	local lower_title="$2"
@@ -257,27 +383,21 @@ command -v hyprctl >/dev/null 2>&1 || skip 'hyprctl not found'
 command -v jq >/dev/null 2>&1 || skip 'jq not found'
 [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] || skip 'not running inside Hyprland'
 
+status 'check monitors and select workspace'
 hypr_query j/monitors | jq -e --arg monitor "$portrait_monitor" 'any(.[]; .name == $monitor)' >/dev/null \
 	|| skip "portrait monitor not present: ${portrait_monitor}"
+hypr_query j/monitors | jq -e --arg monitor "$ultrawide_monitor" 'any(.[]; .name == $monitor)' >/dev/null \
+	|| skip "ultrawide monitor not present: ${ultrawide_monitor}"
 
 original_workspace="$(hypr_query j/activeworkspace | jq -r '.name')"
 original_layout="$(hyprctl getoption general:layout -j | jq -r '.str // empty')"
-select_test_workspace
+select_test_workspaces
 trap restore_session EXIT
 
+status 'cleanup previous matching e2e windows'
 cleanup_test_windows
-portrait_monitor_arg="$(lua_quote "$portrait_monitor")"
-workspace_arg="$(lua_quote "$workspace")"
-printf -v dispatcher 'hl.dsp.focus({ monitor = %s })' "$portrait_monitor_arg"
-hypr_eval_dispatch "$dispatcher"
-printf -v dispatcher 'hl.dsp.focus({ workspace = %s })' "$workspace_arg"
-hypr_eval_dispatch "$dispatcher"
-printf -v dispatcher 'hl.dsp.workspace.move({ workspace = %s, monitor = %s })' "$workspace_arg" "$portrait_monitor_arg"
-hypr_eval_dispatch "$dispatcher"
-printf -v dispatcher 'hl.dsp.focus({ workspace = %s })' "$workspace_arg"
-hypr_eval_dispatch "$dispatcher"
-printf -v dispatcher 'hl.dsp.focus({ monitor = %s })' "$portrait_monitor_arg"
-hypr_eval_dispatch "$dispatcher"
+status 'focus portrait test workspace'
+focus_monitor_workspace "$portrait_monitor" "$workspace"
 
 hypr_query j/monitors | jq -e --arg monitor "$portrait_monitor" --arg workspace "$workspace_name" '
 	any(.[]; .name == $monitor and .focused == true and .activeWorkspace.name == $workspace)
@@ -286,30 +406,59 @@ hypr_query j/monitors | jq -e --arg monitor "$portrait_monitor" --arg workspace 
 first_title="${title_prefix}-first"
 second_title="${title_prefix}-second"
 reopened_title="${title_prefix}-reopened"
+ultrawide_title="${title_prefix}-ultrawide"
 
+status 'spawn first portrait window'
 spawn_window "$first_title"
 wait_for_count 1
 assert_identity "$first_title"
 
+status 'spawn second portrait window at bottom'
 spawn_window "$second_title"
 wait_for_count 2
 assert_identity "$second_title"
 assert_below "$second_title" "$first_title" 'initial portrait spawn order'
 
+status 'move second portrait window upward'
 focus_window_by_title "$second_title"
 layout_msg swapprev
 assert_above "$second_title" "$first_title" 'portrait swapprev order'
 
+status 'move second portrait window downward'
 focus_window_by_title "$second_title"
 layout_msg swapnext
 assert_below "$second_title" "$first_title" 'portrait swapnext order'
 
+status 'close second portrait window'
 close_window_by_title "$second_title"
 wait_for_count 1
 
+status 'reopen portrait window at bottom'
 spawn_window "$reopened_title"
 wait_for_count 2
 assert_identity "$reopened_title"
 assert_below "$reopened_title" "$first_title" 'reopened portrait spawn order'
 
-printf 'PASS portrait_rows e2e spawn/move/reopen order\n'
+status 'spawn ultrawide reference window'
+focus_monitor "$ultrawide_monitor"
+ultrawide_workspace_name="$(hypr_query j/monitors | jq -r --arg monitor "$ultrawide_monitor" 'first(.[] | select(.name == $monitor)) | .activeWorkspace.name')"
+spawn_window "$ultrawide_title"
+wait_for_count 3
+assert_identity "$ultrawide_title"
+
+status 'move portrait window to ultrawide left edge'
+focus_window_by_title "$reopened_title"
+move_window_between_monitors right
+wait_for_workspace "$reopened_title" "$ultrawide_workspace_name"
+assert_left_of "$reopened_title" "$ultrawide_title" 'portrait to ultrawide transfer order'
+
+status 'move ultrawide window back to portrait bottom'
+focus_window_by_title "$reopened_title"
+move_window_between_monitors down
+wait_for_workspace "$reopened_title" "$workspace_name"
+assert_below "$reopened_title" "$first_title" 'ultrawide to portrait transfer order'
+
+status 'cleanup e2e windows'
+cleanup_test_windows || fail 'test windows did not clean up'
+
+printf 'PASS portrait_rows e2e spawn/move/reopen/transfer order\n'
