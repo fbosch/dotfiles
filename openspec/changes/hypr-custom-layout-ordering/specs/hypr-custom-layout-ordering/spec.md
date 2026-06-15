@@ -7,13 +7,13 @@ The system SHALL treat cross-monitor directional move commands as explicit inser
 - **WHEN** the active tiled window is on the portrait monitor and the user invokes the move-right command
 - **THEN** the window is moved to the ultrawide monitor and inserted as the leftmost ultrawide column
 
-#### Scenario: Ultrawide move down enters portrait at the leading edge
+#### Scenario: Ultrawide move down enters portrait at the trailing edge
 - **WHEN** the active tiled window is on the ultrawide monitor and the user invokes the move-down command
-- **THEN** the window is moved to the portrait monitor and inserted as the top portrait row
+- **THEN** the window is moved to the portrait monitor and inserted as the bottom portrait row
 
-#### Scenario: Ultrawide left-edge move enters portrait at the leading edge
+#### Scenario: Ultrawide left-edge move enters portrait at the trailing edge
 - **WHEN** the active tiled window is on the ultrawide monitor and the user invokes the move-left command from a cross-monitor transfer position
-- **THEN** the window is moved to the portrait monitor and inserted as the top portrait row
+- **THEN** the window is moved to the portrait monitor and inserted as the bottom portrait row
 
 ### Requirement: Same-layout directional move commands mutate stored order
 The system SHALL handle directional move commands within a custom layout by moving the active target within the stored layout order.
@@ -55,9 +55,9 @@ The system SHALL use target geometry to reorder windows only when the target is 
 ### Requirement: Newly spawned windows preserve existing order
 The system SHALL insert newly spawned windows without reordering existing windows based on the spawned window's initial geometry.
 
-#### Scenario: Spawned active window inserts after previous active target
+#### Scenario: Spawned active window appends in portrait layout
 - **WHEN** a new active window appears in a custom layout with existing ordered targets
-- **THEN** the new window is inserted after the previously active target when that target still exists
+- **THEN** the portrait layout appends the new window after the existing ordered targets
 
 #### Scenario: Spawned active window appends when no insertion anchor exists
 - **WHEN** a new active window appears and the previously active target is unavailable

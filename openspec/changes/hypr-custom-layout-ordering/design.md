@@ -127,4 +127,4 @@ Rollback is local: revert the changed Lua layout/keybind files and tests. No dat
 ## Open Questions
 
 - Should future monitor-role mapping use connector names only, or also match monitor description/model for hotplug stability?
-- Should transfer intent eventually support explicit end-edge insertion for additional directional moves, or is leading-edge insertion enough for the current monitor topology?
+- Should transfer intent eventually support middle/anchor insertion, or are explicit leading/trailing edges enough for the current monitor topology?

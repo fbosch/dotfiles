@@ -276,6 +276,15 @@ function M.sync(state, key, targets, insert_after_id)
 		if targets_by_id[id] then
 			order[next_index] = id
 			next_index = next_index + 1
+		else
+			state.seen_ids[id] = nil
+			state.scope_by_id[id] = nil
+			if state.active_by_key[key] == id then
+				state.active_by_key[key] = nil
+			end
+			for _, positions in pairs(state.position_by_scope) do
+				positions[id] = nil
+			end
 		end
 	end
 	for index = next_index, #order do

@@ -1,10 +1,10 @@
 ## 1. Contract Tests
 
-- [x] 1.1 Add `window_move` tests for cross-monitor move intent: portrait move-right records ultrawide leading-edge insertion, and ultrawide move-down records portrait leading-edge insertion.
+- [x] 1.1 Add `window_move` tests for cross-monitor move intent: portrait move-right records ultrawide leading-edge insertion, and ultrawide move-down records portrait trailing-edge insertion.
 - [x] 1.2 Add ultrawide layout tests proving portrait-to-ultrawide transfer inserts the active window leftmost regardless of source x-coordinate or incoming target order.
-- [x] 1.3 Add portrait layout tests proving ultrawide-to-portrait transfer inserts the active window topmost regardless of source y-coordinate or incoming target order.
+- [x] 1.3 Add portrait layout tests proving ultrawide-to-portrait transfer inserts the active window bottommost regardless of source y-coordinate or incoming target order.
 - [x] 1.4 Add layout tests proving same-layout drag/reposition can reorder by current geometry only after the target is established in the same layout scope.
-- [x] 1.5 Add layout tests proving newly spawned windows insert after previous active target and do not reorder existing windows by initial geometry.
+- [x] 1.5 Add layout tests proving newly spawned portrait windows append after existing targets and do not reorder existing windows by initial geometry.
 - [x] 1.6 Add layout tests proving swap and active resize messages no-op when no active target can be resolved.
 - [x] 1.7 Add `order_state` or layout tests for missing and duplicate target identities falling back to source order without persistent order mutation.
 - [x] 1.8 Add reload recovery tests proving empty order state initializes from current in-area geometry for ultrawide columns and portrait rows.
@@ -26,7 +26,7 @@
 ## 4. Transfer Intent Implementation
 
 - [x] 4.1 Update portrait-to-ultrawide move-right dispatch to record an ultrawide start-edge transfer intent before or alongside the monitor move.
-- [x] 4.2 Update ultrawide-to-portrait move-down dispatch to record a portrait start-edge transfer intent before or alongside the monitor move.
+- [x] 4.2 Update ultrawide-to-portrait move-down dispatch to record a portrait end-edge transfer intent before or alongside the monitor move.
 - [x] 4.3 Consume pending transfer intent in `ultrawide_master.recalculate()` before geometry-based reorder and place the target at the requested edge.
 - [x] 4.4 Consume pending transfer intent in `portrait_rows.recalculate()` before geometry-based reorder and place the target at the requested edge.
 - [x] 4.5 Ensure consumed transfer intents are cleared after one matching destination placement.

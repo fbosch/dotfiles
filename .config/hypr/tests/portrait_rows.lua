@@ -153,7 +153,7 @@ run("known active geometry reorders rows", function()
 	assert_box(third.placed, { x = 10, y = 220, w = 120, h = 100 }, "bottom target")
 end)
 
-run("spawned active window does not reorder existing rows", function()
+run("spawned active window appends below existing rows", function()
 	local first = set_geometry(make_workspace_target(1, "spawn-no-reorder", true), 20)
 	local second = set_geometry(make_workspace_target(2, "spawn-no-reorder"), 220)
 	registered_layout.layout.recalculate(make_context({ first, second }))
@@ -161,15 +161,56 @@ run("spawned active window does not reorder existing rows", function()
 	first.window.active = false
 	local third = set_geometry(make_workspace_target(3, "spawn-no-reorder", true), 20)
 	third.index = 2
-	third.window.address = nil
-	third.window.stable_id = nil
 	second.index = 3
-	second.window.stable_id = 3
 	registered_layout.layout.recalculate(make_context({ first, third, second }))
 
 	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
-	assert_box(third.placed, { x = 10, y = 120, w = 120, h = 100 }, "spawned target")
-	assert_box(second.placed, { x = 10, y = 220, w = 120, h = 100 }, "bottom target")
+	assert_box(second.placed, { x = 10, y = 120, w = 120, h = 100 }, "middle target")
+	assert_box(third.placed, { x = 10, y = 220, w = 120, h = 100 }, "spawned target")
+end)
+
+run("second spawned window appends below existing single row", function()
+	local first = set_geometry(make_workspace_target(1, "spawn-from-single", true), 20)
+	registered_layout.layout.recalculate(make_context({ first }))
+
+	first.window.active = false
+	local second = set_geometry(make_workspace_target(2, "spawn-from-single", true), 20)
+	registered_layout.layout.recalculate(make_context({ second, first }))
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "existing target")
+	assert_box(second.placed, { x = 10, y = 120, w = 120, h = 200 }, "spawned target")
+end)
+
+run("transfer into empty portrait does not affect later spawn order", function()
+	local first = set_geometry(make_workspace_target(1, "transfer-then-spawn", true), 2000, 800)
+	first.window.at.x = 2000
+	order_state.record_transfer_intent(first.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
+	registered_layout.layout.recalculate(make_context({ first }))
+
+	first.window.active = false
+	local second = set_geometry(make_workspace_target(2, "transfer-then-spawn", true), 20)
+	registered_layout.layout.recalculate(make_context({ second, first }))
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "existing target")
+	assert_box(second.placed, { x = 10, y = 120, w = 120, h = 200 }, "spawned target")
+end)
+
+run("reopened window with reused identity appends below existing row", function()
+	local first = set_geometry(make_workspace_target(1, "spawn-reused-id", true), 20)
+	registered_layout.layout.recalculate(make_context({ first }))
+
+	first.window.active = false
+	local second = set_geometry(make_workspace_target(2, "spawn-reused-id", true), 20)
+	registered_layout.layout.recalculate(make_context({ second, first }))
+
+	second.window.active = false
+	registered_layout.layout.recalculate(make_context({ first }))
+
+	local reopened = set_geometry(make_workspace_target(2, "spawn-reused-id", true), 20)
+	registered_layout.layout.recalculate(make_context({ reopened, first }))
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "existing target")
+	assert_box(reopened.placed, { x = 10, y = 120, w = 120, h = 200 }, "reopened target")
 end)
 
 run("dragged existing window from another workspace can move to top", function()
@@ -186,18 +227,18 @@ run("dragged existing window from another workspace can move to top", function()
 	assert_box(existing.placed, { x = 10, y = 120, w = 120, h = 200 }, "existing target")
 end)
 
-run("ultrawide transfer intent inserts topmost despite outside source y", function()
+run("ultrawide transfer intent inserts bottommost despite outside source y", function()
 	local dragged = make_workspace_target(1, "portrait-transfer", true)
 	dragged.window.monitor.name = "HDMI-A-2"
 	set_geometry(dragged, 2000, 800)
 	dragged.window.at.x = 2000
-	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "start" })
+	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
 
 	local existing = make_workspace_target(2, "portrait-transfer")
 	registered_layout.layout.recalculate(make_context({ existing, dragged }))
 
-	assert_box(dragged.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
-	assert_box(existing.placed, { x = 10, y = 120, w = 120, h = 200 }, "existing target")
+	assert_box(existing.placed, { x = 10, y = 20, w = 120, h = 100 }, "existing target")
+	assert_box(dragged.placed, { x = 10, y = 120, w = 120, h = 200 }, "dragged target")
 end)
 
 run("transfer intent wins when target already arrives topmost", function()
@@ -207,23 +248,23 @@ run("transfer intent wins when target already arrives topmost", function()
 	registered_layout.layout.recalculate(ctx)
 
 	set_geometry(dragged, 260)
-	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "start" })
+	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
 	registered_layout.layout.recalculate(ctx)
 
-	assert_box(dragged.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
-	assert_box(bottom.placed, { x = 10, y = 120, w = 120, h = 200 }, "bottom target")
+	assert_box(bottom.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
+	assert_box(dragged.placed, { x = 10, y = 120, w = 120, h = 200 }, "dragged target")
 end)
 
 run("ultrawide transfer intent survives active target id mismatch", function()
 	local dragged = set_geometry(make_workspace_target(1, "portrait-transfer-id-mismatch", true), 2000, 800)
 	dragged.window.at.x = 2000
 	local existing = make_workspace_target(2, "portrait-transfer-id-mismatch")
-	order_state.record_transfer_intent({ address = "0xmissing" }, { monitor_role = monitor_role.portrait, axis = "y", edge = "start" })
+	order_state.record_transfer_intent({ address = "0xmissing" }, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
 
 	registered_layout.layout.recalculate(make_context({ existing, dragged }))
 
-	assert_box(dragged.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
-	assert_box(existing.placed, { x = 10, y = 120, w = 120, h = 200 }, "existing target")
+	assert_box(existing.placed, { x = 10, y = 20, w = 120, h = 100 }, "existing target")
+	assert_box(dragged.placed, { x = 10, y = 120, w = 120, h = 200 }, "dragged target")
 end)
 
 run("ultrawide transfer fallback uses single added target without active flag", function()
@@ -233,11 +274,11 @@ run("ultrawide transfer fallback uses single added target without active flag", 
 
 	local dragged = set_geometry(make_workspace_target(2, "portrait-transfer-added-no-active"), 2000, 800)
 	dragged.window.at.x = 2000
-	order_state.record_transfer_intent({ address = "0xmissing" }, { monitor_role = monitor_role.portrait, axis = "y", edge = "start" })
+	order_state.record_transfer_intent({ address = "0xmissing" }, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
 	registered_layout.layout.recalculate(make_context({ existing, dragged }))
 
-	assert_box(dragged.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
-	assert_box(existing.placed, { x = 10, y = 120, w = 120, h = 200 }, "existing target")
+	assert_box(existing.placed, { x = 10, y = 20, w = 120, h = 100 }, "existing target")
+	assert_box(dragged.placed, { x = 10, y = 120, w = 120, h = 200 }, "dragged target")
 end)
 
 run("swap and resize no-op without active target", function()

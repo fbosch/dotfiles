@@ -34,7 +34,7 @@ local ultrawide_resize_left = hl.dsp.layout("resize-left")
 local ultrawide_resize_right = hl.dsp.layout("resize-right")
 local ultrawide_x = 1440
 local edge_tolerance = 64
-local portrait_transfer_start = { monitor_role = monitor_role.portrait, axis = "y", edge = "start" }
+local portrait_transfer_end = { monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
 local ultrawide_transfer_start = { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
 
 local function direction(value)
@@ -147,7 +147,7 @@ function M.move(value)
 			local active = M.active()
 			local role = monitor_role.for_window(active)
 			if role == monitor_role.ultrawide then
-				order_state.record_transfer_intent(active, portrait_transfer_start)
+				order_state.record_transfer_intent(active, portrait_transfer_end)
 				dispatch(move_to_portrait)
 			elseif role == monitor_role.portrait then
 				dispatch(portrait_swap_down)
@@ -175,7 +175,7 @@ function M.move(value)
 			local active = M.active()
 			if monitor_role.for_window(active) == monitor_role.ultrawide then
 				if is_only_tiled_window(active) or on_ultrawide_left_edge(active) then
-					order_state.record_transfer_intent(active, portrait_transfer_start)
+					order_state.record_transfer_intent(active, portrait_transfer_end)
 					dispatch(move_to_portrait)
 				else
 					dispatch(ultrawide_swap_left)
