@@ -222,6 +222,7 @@ wait_for_test_windows_gone() {
 
 cleanup_test_windows() {
 	local address=""
+	local pkill_pattern="foot .*--app-id ${window_class} .*--title ${title_prefix}"
 
 	for address in "${e2e_window_addresses[@]}"; do
 		[[ -n "$address" ]] || continue
@@ -236,14 +237,7 @@ cleanup_test_windows() {
 		return
 	fi
 
-	for address in "${e2e_window_addresses[@]}"; do
-		[[ -n "$address" ]] || continue
-		[[ -n "$(test_client_by_address "$address")" ]] || continue
-		local selector="$(lua_quote "address:${address}")"
-		local dispatcher=""
-		printf -v dispatcher 'hl.dsp.window.kill(%s)' "$selector"
-		hypr_eval_dispatch "$dispatcher" || true
-	done
+	pkill -f -- "$pkill_pattern" || true
 
 	wait_for_test_windows_gone
 }
