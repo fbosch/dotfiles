@@ -329,7 +329,6 @@ function M.recalculate(ctx)
 		local active_target = active and targets[active] or nil
 		if active_target
 			and order_state.same_scope(state, active_target, scope)
-			and order_state.position_in_area(active_target, "y", y, height)
 			and (order_state.position_changed(state, active_target, scope, "y") or added_seen_targets)
 		then
 			move_active_to_position(targets, key, ratios, y, height)

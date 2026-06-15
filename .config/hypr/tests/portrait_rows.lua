@@ -153,6 +153,32 @@ run("known active geometry reorders rows", function()
 	assert_box(third.placed, { x = 10, y = 220, w = 120, h = 100 }, "bottom target")
 end)
 
+run("dragging active row below layout moves it to bottom", function()
+	local top = make_workspace_target(1, "drag-below", true)
+	local bottom = make_workspace_target(2, "drag-below")
+	local ctx = make_context({ top, bottom })
+	registered_layout.layout.recalculate(ctx)
+
+	set_geometry(top, 360)
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(bottom.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
+	assert_box(top.placed, { x = 10, y = 120, w = 120, h = 200 }, "dragged target")
+end)
+
+run("dragging active row above layout moves it to top", function()
+	local top = make_workspace_target(1, "drag-above")
+	local bottom = make_workspace_target(2, "drag-above", true)
+	local ctx = make_context({ top, bottom })
+	registered_layout.layout.recalculate(ctx)
+
+	set_geometry(bottom, -120)
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(bottom.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
+	assert_box(top.placed, { x = 10, y = 120, w = 120, h = 200 }, "bottom target")
+end)
+
 run("spawned active window appends below existing rows", function()
 	local first = set_geometry(make_workspace_target(1, "spawn-no-reorder", true), 20)
 	local second = set_geometry(make_workspace_target(2, "spawn-no-reorder"), 220)
