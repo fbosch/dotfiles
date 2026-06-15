@@ -8,8 +8,8 @@ local pane_states = {}
 local init_notice
 
 local nf = wezterm.nerdfonts or {}
-local theme = require("lua.theme")
-local detection = require("lua.agent.detection")
+local theme = require("theme")
+local detection = require("agent.detection")
 
 local detection_cache_ttl_ms = 5000
 local overlay_state_ttl_ms = 5000

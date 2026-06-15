@@ -1,7 +1,6 @@
 package.path = package.path
 	.. ";./.config/wezterm/?.lua"
-	.. ";./.config/wezterm/lua/?.lua"
-	.. ";./.config/wezterm/lua/?/init.lua"
+	.. ";./.config/wezterm/?/init.lua"
 
 local registered_events = {}
 
@@ -36,7 +35,7 @@ package.loaded.wezterm = {
 	end,
 }
 
-package.loaded["lua.agent"] = {
+package.loaded["agent"] = {
 	consume_init_notice = function()
 		return nil
 	end,

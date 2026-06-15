@@ -5,7 +5,6 @@
 - Prefer early returns/guard clauses; avoid deep nesting.
 - Prefer early returns over `else` branches when flow can stay clear.
 - Avoid deeply nested ternary operators; prefer clearer control flow.
-- Keep changes minimal and local; avoid drive-by refactors and formatting.
 - Favor small, focused functions/modules and clear names over cleverness.
 - Prefer existing repo conventions/patterns over introducing new ones.
 - Name meaningful magic numbers/strings (constants) and extract complex conditions into well-named helpers.
@@ -28,7 +27,7 @@
 - Prefer existing repo patterns before new architecture.
 - Prefer one clear expression or small local block before scaffolding helpers, classes, adapters, or config.
 - Only add abstraction when there is a concrete second use case or the implementation complexity is large enough to hide behind a stable interface.
-- Do not simplify away trust-boundary validation, authorization, security checks, data-loss handling, accessibility, observability needed to debug failures, or explicit user requirements.
+- Do not simplify away authorization, security checks, observability needed to debug failures, or other required safeguards.
 - When deliberately taking a shortcut, add `shortcut:` with the limitation and upgrade trigger.
 
 ## Avoid Slop

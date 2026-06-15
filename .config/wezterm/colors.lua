@@ -1,6 +1,6 @@
 local wezterm = require("wezterm")
 local scanlines_path = wezterm.config_dir .. "/scanlines.png"
-local theme = require("lua.theme")
+local theme = require("theme")
 
 return function(config)
 	config.color_scheme = "zenwritten_dark"

@@ -18,16 +18,7 @@
 - Keep changes minimal and local; prefer existing patterns.
 - Default to current schema/contract; add compatibility layers only when explicitly required.
 - Run the smallest reasonable validation for changed behavior.
-- When asked to check dotfiles, inspect the `~/dotfiles` repository.
-
-## Simplicity defaults
-
-- Before adding code, ask whether it needs to exist.
-- Prefer stdlib, native platform features, existing dependencies, and existing repo patterns before new dependencies or custom abstractions.
-- Prefer deleting code over adding wrappers, adapters, options, or extension points without a concrete second use case.
-- Keep the smallest implementation that satisfies the current requirement.
-- Do not simplify away trust-boundary validation, security checks, data-loss protections, accessibility, or explicit user requirements.
-- If taking a deliberate shortcut, mark it with `shortcut:` and name the upgrade trigger.
+- Use `~/.config/opencode/instructions/reference-loading.md` to pull detailed references only when relevant.
 
 ## Communication style
 
@@ -36,9 +27,7 @@
 - Challenge flawed ideas openly; question assumptions and offer counterpoints.
 - Omit language suggesting remorse or apology.
 - Exclude personal ethics or morals unless explicitly relevant.
-- Be concise, technical, and outcome-oriented; drop filler, throat-clearing, generic praise, and hedging.
-- Preserve exact code, commands, paths, API names, and error strings.
-- Use fuller prose when ambiguity, security, destructive operations, or architecture tradeoffs require it.
+- Be concise, technical, and outcome-oriented; use fuller prose when ambiguity, security, destructive operations, or architecture tradeoffs require it.
 - For substantial user-facing docs, README prose, PR descriptions, or long-form explanations, use the `writing-clearly` skill; `~/.config/opencode/TONE.md` remains the canonical voice reference.
 
 ## Evidence and verification
@@ -52,7 +41,6 @@
 - If a request has multiple valid interpretations, list options with tradeoffs; do not pick silently.
 - Treat follow-up requests as cumulative unless the user clearly resets scope.
 - Prefer the simpler approach when it satisfies the request; push back on over-complex directions.
-- If a scoped `AGENTS.md` names validation checks, run them after changes and before finishing.
 
 ## Done criteria
 

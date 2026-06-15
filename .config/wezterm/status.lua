@@ -1,8 +1,8 @@
 local is_windows = package.config:sub(0, 1) == "\\"
 local wezterm = require("wezterm")
-local agent_deck = require("lua.agent")
-local theme = require("lua.theme")
-local time_utils = require("lua.utils.time")
+local agent_deck = require("agent")
+local theme = require("theme")
+local time_utils = require("utils.time")
 
 -- Pre-allocate color tables to reduce allocations
 local color_gray = { Color = theme.base.fg_muted }

@@ -14,10 +14,10 @@ function M.log_performance(name, fn)
 	local stop_timer = M.timer()
 	local result = fn()
 	local elapsed = stop_timer()
-	
+
 	-- This will show up in the debug overlay log
 	print(string.format("[PERF] %s took %.2fms", name, elapsed))
-	
+
 	return result
 end
 
@@ -28,7 +28,7 @@ function M.estimate_table_size(t, seen)
 		return 0
 	end
 	seen[t] = true
-	
+
 	local size = 0
 	for k, v in pairs(t) do
 		size = size + 1

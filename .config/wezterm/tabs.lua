@@ -1,7 +1,7 @@
 local is_windows = package.config:sub(0, 1) == "\\"
 local wezterm = require("wezterm")
-local agent_deck = require("lua.agent")
-local theme = require("lua.theme")
+local agent_deck = require("agent")
+local theme = require("theme")
 
 local window_cols = wezterm.GLOBAL.window_cols or {}
 wezterm.GLOBAL.window_cols = window_cols
@@ -25,7 +25,7 @@ local function get_tab_window_key(tab)
 	return "default"
 end
 
-function get_max_cols(window)
+local function get_max_cols(window)
 	local tab = window:active_tab()
 	if not tab then
 		return 100
@@ -97,17 +97,17 @@ local function format_tab_title(tab, tabs, panes, config, hover, max_width)
 
 	local base_title = "[" .. tab.tab_index + 1 .. "] " .. title
 	local full_title_length = #base_title + icon_count + (icon_count > 0 and 1 or 0)
-	
+
 	local window_key = get_tab_window_key(tab)
 	local status_bar_offset_cols = is_windows and 0 or (right_status_cols[window_key] or 44)
 	local available_cols = math.max(1, (window_cols[window_key] or max_width or 100) - status_bar_offset_cols)
 	local num_tabs = #tabs > 0 and #tabs or 1
-	
+
 	local pad_length = math.floor((available_cols / num_tabs - full_title_length) / 2)
 	if pad_length * 2 + full_title_length > max_width then
 		pad_length = math.floor((max_width - full_title_length) / 2)
 	end
-	
+
 	local padding = get_padding(math.max(0, pad_length))
 	local result = {
 		{ Text = padding .. "[" .. tab.tab_index + 1 .. "] " },

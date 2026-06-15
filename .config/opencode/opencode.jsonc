@@ -24,9 +24,10 @@
     "./plugins/opencode-handoff/handoff.ts"
   ],
   "instructions": [
+    "~/.config/opencode/instructions/orchestration.md",
+    "~/.config/opencode/instructions/reference-loading.md",
     "~/.config/opencode/instructions/RTK.md",
     "~/.config/opencode/instructions/fff.md",
-    "~/.config/opencode/instructions/orchestration.md",
     "~/.config/opencode/instructions/worktrunk.md"
   ],
   "permission": {

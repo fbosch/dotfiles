@@ -1,6 +1,6 @@
 package.path = package.path
-	.. ";./.config/wezterm/lua/?.lua"
-	.. ";./.config/wezterm/lua/?/init.lua"
+	.. ";./.config/wezterm/?.lua"
+	.. ";./.config/wezterm/?/init.lua"
 
 local detection = require("agent.detection")
 
