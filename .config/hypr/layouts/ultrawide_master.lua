@@ -311,20 +311,23 @@ function M.recalculate(ctx)
 	local order, targets_by_id, _, added_seen_targets, added_id = order_state.sync(state, key, source_targets, previous_active)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	local transfer_target = nil
-	for index = 1, #targets do
-		local intent = order_state.consume_transfer_intent(targets[index], role, "x")
-		if intent then
-			transfer_target = targets[index]
-			break
+	local has_transfer_intent = order_state.has_transfer_intent(role, "x")
+	if has_transfer_intent then
+		for index = 1, #targets do
+			local intent = order_state.consume_transfer_intent(targets[index], role, "x")
+			if intent then
+				transfer_target = targets[index]
+				break
+			end
 		end
 	end
-	if not transfer_target and added_id then
+	if has_transfer_intent and not transfer_target and added_id then
 		local added_target = targets_by_id and targets_by_id[added_id] or nil
 		if added_target and order_state.consume_transfer_intent(added_target, role, "x", true) then
 			transfer_target = added_target
 		end
 	end
-	if not transfer_target then
+	if has_transfer_intent and not transfer_target then
 		local outside_target = nil
 		for index = 1, #targets do
 			local position = order_state.position(targets[index], "x")

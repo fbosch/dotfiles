@@ -151,21 +151,26 @@ end
 
 function M.consume_transfer_intent(target, monitor_role, axis, allow_destination_fallback)
 	local id = M.target_id(target)
+	local destination_key = monitor_role .. "\t" .. axis
 	local intent = id and pending_transfer_by_id[id] or nil
 	if intent and intent.monitor_role == monitor_role and intent.axis == axis then
 		pending_transfer_by_id[id] = nil
-		pending_transfer_by_destination[monitor_role .. "\t" .. axis] = nil
+		pending_transfer_by_destination[destination_key] = nil
 		return intent
 	end
 
 	local window = target and target.window
-	intent = (allow_destination_fallback or window and window.active) and pending_transfer_by_destination[monitor_role .. "\t" .. axis] or nil
+	intent = (allow_destination_fallback or window and window.active) and pending_transfer_by_destination[destination_key] or nil
 	if not intent then
 		return nil
 	end
 
-	pending_transfer_by_destination[monitor_role .. "\t" .. axis] = nil
+	pending_transfer_by_destination[destination_key] = nil
 	return intent
+end
+
+function M.has_transfer_intent(monitor_role, axis)
+	return pending_transfer_by_destination[monitor_role .. "\t" .. axis] ~= nil
 end
 
 function M.transfer_intent_for_window(window)
