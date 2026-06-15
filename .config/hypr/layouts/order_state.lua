@@ -102,7 +102,7 @@ function M.scope(layout, key, monitor_role, axis)
 		return nil
 	end
 
-	return table.concat({ layout, tostring(key), monitor_role, axis }, "\t")
+	return layout .. "\t" .. tostring(key) .. "\t" .. monitor_role .. "\t" .. axis
 end
 
 function M.same_scope(state, target, scope)
@@ -205,7 +205,7 @@ function M.initialize_order_from_geometry(state, key, targets, axis, start, leng
 end
 
 function M.sync(state, key, targets, insert_after_id)
-	if not key or not M.identities_safe(targets) then
+	if not key then
 		return nil, nil, false, false
 	end
 
@@ -227,7 +227,12 @@ function M.sync(state, key, targets, insert_after_id)
 
 	for index = 1, #targets do
 		local target = targets[index]
-		targets_by_id[M.target_id(target)] = target
+		local id = M.target_id(target)
+		if not id or targets_by_id[id] then
+			return nil, nil, false, false
+		end
+
+		targets_by_id[id] = target
 	end
 
 	local next_index = 1
