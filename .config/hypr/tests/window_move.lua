@@ -38,10 +38,12 @@ hl = {
 }
 
 local window = require("lib.window")
+local monitor_role = require("lib.monitor_role")
+local order_state = require("layouts.order_state")
 
 local function reset(monitor, x, monitor_x, workspace_windows)
 	dispatched = {}
-	active_window = { monitor = { name = monitor, x = monitor_x }, at = { x = x or 100, y = 200 }, size = { x = 300, y = 400 } }
+	active_window = { address = "0xactive", monitor = { name = monitor, x = monitor_x }, at = { x = x or 100, y = 200 }, size = { x = 300, y = 400 } }
 	if workspace_windows then
 		local workspace = {}
 		function workspace:get_windows()
@@ -71,6 +73,9 @@ run("dp down moves window to portrait monitor", function()
 	window.move("down")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
+	assert_equal(order_state.transfer_intent_for_window(active_window).monitor_role, monitor_role.portrait, "transfer role")
+	assert_equal(order_state.transfer_intent_for_window(active_window).axis, "y", "transfer axis")
+	assert_equal(order_state.transfer_intent_for_window(active_window).edge, "start", "transfer edge")
 	assert_equal(dispatched[2].op, "cursor.move", "cursor dispatcher")
 	assert_equal(dispatched[2].args.x, 250, "cursor x")
 	assert_equal(dispatched[2].args.y, 400, "cursor y")
@@ -142,6 +147,9 @@ run("hdmi right moves window to ultrawide monitor", function()
 	window.move("right")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "DP-2", "target monitor")
+	assert_equal(order_state.transfer_intent_for_window(active_window).monitor_role, monitor_role.ultrawide, "transfer role")
+	assert_equal(order_state.transfer_intent_for_window(active_window).axis, "x", "transfer axis")
+	assert_equal(order_state.transfer_intent_for_window(active_window).edge, "start", "transfer edge")
 end)
 
 run("hdmi down uses portrait layout swap", function()

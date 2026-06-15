@@ -1,4 +1,5 @@
 local M = {}
+local monitor_role = require("lib.monitor_role")
 local order_state = require("layouts.order_state")
 local resize_state = require("layouts.resize_state")
 local one_third = 1 / 3
@@ -99,16 +100,19 @@ end
 
 load_ratio_state()
 
-local function monitor_name(targets)
+local function role_for_targets(targets)
+	local first_role = nil
 	for index = 1, #targets do
 		local window = targets[index].window
-		local monitor = window and window.monitor
-		if monitor and monitor.name then
-			return monitor.name
+		local role = monitor_role.for_window(window)
+		if role == monitor_role.portrait then
+			return role
 		end
+
+		first_role = first_role or role
 	end
 
-	return nil
+	return first_role
 end
 
 local function workspace_key(targets)
@@ -120,7 +124,7 @@ local function workspace_key(targets)
 		end
 	end
 
-	return monitor_name(targets)
+	return role_for_targets(targets)
 end
 
 local function order_key(targets)
@@ -136,14 +140,7 @@ local function order_key(targets)
 end
 
 local function active_index(targets)
-	for index = 1, #targets do
-		local window = targets[index].window
-		if window and window.active then
-			return index
-		end
-	end
-
-	return 1
+	return order_state.active_index(targets)
 end
 
 local function move_active(targets, key, delta)
@@ -205,7 +202,7 @@ local function ratios_for(key, count)
 	return ratios
 end
 
-local function place_rows(targets, count, x, y, width, height)
+local function place_rows(targets, count, x, y, width, height, scope)
 	local row_height = height / count
 	box.x = x
 	box.w = width
@@ -214,11 +211,11 @@ local function place_rows(targets, count, x, y, width, height)
 	for index = 1, count do
 		box.y = y + row_height * (index - 1)
 		targets[index]:place(box)
-		order_state.remember_position(state, targets[index], "y", box.y + box.h / 2)
+		order_state.remember_position(state, targets[index], scope, box.y + box.h / 2)
 	end
 end
 
-local function place_ratio_rows(targets, ratios, x, y, width, height)
+local function place_ratio_rows(targets, ratios, x, y, width, height, scope)
 	local next_y = y
 	box.x = x
 	box.w = width
@@ -231,7 +228,7 @@ local function place_ratio_rows(targets, ratios, x, y, width, height)
 		end
 
 		targets[index]:place(box)
-		order_state.remember_position(state, targets[index], "y", box.y + box.h / 2)
+		order_state.remember_position(state, targets[index], scope, box.y + box.h / 2)
 		next_y = next_y + box.h
 	end
 end
@@ -261,24 +258,43 @@ function M.recalculate(ctx)
 	local width = area.w
 	local height = area.h
 
-	if monitor_name(targets) ~= "HDMI-A-2" then
-		place_rows(targets, count, x, y, width, height)
+	local role = role_for_targets(targets)
+	if role ~= monitor_role.portrait then
+		place_rows(targets, count, x, y, width, height, nil)
 		return
 	end
 
 	local manual_change = state.manual_change_by_key[key]
 	local ratios = ratios_for(workspace_key(targets), count)
 	local source_targets = targets
+	local scope = order_state.scope("portrait_rows", key, role, "y")
+	order_state.initialize_order_from_geometry(state, key, source_targets, "y", y, height)
 	local previous_active = key and state.active_by_key[key] or nil
 	local order, targets_by_id, _, added_seen_targets = order_state.sync(state, key, source_targets, previous_active)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
-	if manual_change then
-		state.manual_change_by_key[key] = nil
-	elseif order_state.position_in_area(targets[active_index(targets)], "y", y, height)
-		and (order_state.position_changed(state, targets[active_index(targets)], "y") or added_seen_targets)
-	then
-		move_active_to_position(targets, key, ratios, y, height)
+	local transfer_target = nil
+	for index = 1, #targets do
+		local intent = order_state.consume_transfer_intent(targets[index], role, "y")
+		if intent then
+			transfer_target = targets[index]
+			break
+		end
+	end
+	if transfer_target and order_state.move_target_to_index(state, key, transfer_target, 1) then
 		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
+	elseif manual_change then
+		state.manual_change_by_key[key] = nil
+	else
+		local active = active_index(targets)
+		local active_target = active and targets[active] or nil
+		if active_target
+			and order_state.same_scope(state, active_target, scope)
+			and order_state.position_in_area(active_target, "y", y, height)
+			and (order_state.position_changed(state, active_target, scope, "y") or added_seen_targets)
+	then
+			move_active_to_position(targets, key, ratios, y, height)
+			targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
+		end
 	end
 	order_state.remember_active(state, key, source_targets, active_index)
 
@@ -288,11 +304,11 @@ function M.recalculate(ctx)
 	box.h = height
 
 	if count == 2 or count == 3 then
-		place_ratio_rows(targets, ratios, x, y, width, height)
+		place_ratio_rows(targets, ratios, x, y, width, height, scope)
 		return
 	end
 
-	place_rows(targets, count, x, y, width, height)
+	place_rows(targets, count, x, y, width, height, scope)
 end
 
 function M.resize(ctx, target, delta, corner)
@@ -311,6 +327,10 @@ function M.resize(ctx, target, delta, corner)
 	local ratios = ratios_for(ratio_key, count)
 	local amount = resize_state.delta_ratio(delta, "y", area and area.h, resize_step)
 	local index = resize_state.target_index(targets, target, active_index)
+	if not index then
+		return true
+	end
+
 	resize_state.adjust_active(ratios, index, count, amount, min_ratio)
 	if key then
 		state.manual_change_by_key[key] = true
@@ -352,6 +372,10 @@ function M.layout_msg(ctx, msg)
 		local area = ctx.area
 		local ratios = ratios_for(ratio_key, count)
 		local index = active_index(targets)
+		if not index then
+			return true
+		end
+
 		local boundary = resize_state.boundary_for_edge(index, count, edge)
 		resize_state.set_boundary_at(ratios, boundary, tonumber(position), area and area.y, area and area.h, min_ratio)
 		if key then

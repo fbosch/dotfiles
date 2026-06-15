@@ -1,4 +1,6 @@
 local M = {}
+local monitor_role = require("lib.monitor_role")
+local order_state = require("layouts.order_state")
 
 local directions = {
 	l = "left",
@@ -40,10 +42,6 @@ local function direction(value)
 	end
 
 	return normalized
-end
-
-local function monitor_name(active)
-	return active and active.monitor and active.monitor.name or nil
 end
 
 local function monitor_x(active)
@@ -123,16 +121,17 @@ end
 function M.move(value)
 	local normalized = direction(value)
 	local move_dispatcher = hl.dsp.window.move({ direction = normalized })
-	local move_to_portrait = hl.dsp.window.move({ monitor = "HDMI-A-2" })
-	local move_to_ultrawide = hl.dsp.window.move({ monitor = "DP-2" })
+	local move_to_portrait = hl.dsp.window.move({ monitor = monitor_role.name_for(monitor_role.portrait) })
+	local move_to_ultrawide = hl.dsp.window.move({ monitor = monitor_role.name_for(monitor_role.ultrawide) })
 
 	if normalized == "right" then
 		return function()
 			local active = M.active()
-			local monitor = monitor_name(active)
-			if monitor == "HDMI-A-2" then
+			local role = monitor_role.for_window(active)
+			if role == monitor_role.portrait then
+				order_state.record_transfer_intent(active, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
 				dispatch(move_to_ultrawide)
-			elseif monitor == "DP-2" then
+			elseif role == monitor_role.ultrawide then
 				dispatch(ultrawide_swap_right)
 			else
 				dispatch(move_dispatcher)
@@ -144,10 +143,11 @@ function M.move(value)
 	if normalized == "down" then
 		return function()
 			local active = M.active()
-			local monitor = monitor_name(active)
-			if monitor == "DP-2" then
+			local role = monitor_role.for_window(active)
+			if role == monitor_role.ultrawide then
+				order_state.record_transfer_intent(active, { monitor_role = monitor_role.portrait, axis = "y", edge = "start" })
 				dispatch(move_to_portrait)
-			elseif monitor == "HDMI-A-2" then
+			elseif role == monitor_role.portrait then
 				dispatch(portrait_swap_down)
 			else
 				dispatch(move_dispatcher)
@@ -159,7 +159,7 @@ function M.move(value)
 	if normalized == "up" then
 		return function()
 			local active = M.active()
-			if monitor_name(active) == "HDMI-A-2" then
+			if monitor_role.for_window(active) == monitor_role.portrait then
 				dispatch(portrait_swap_up)
 			else
 				dispatch(move_dispatcher)
@@ -171,7 +171,7 @@ function M.move(value)
 	if normalized == "left" then
 		return function()
 			local active = M.active()
-			if monitor_name(active) == "DP-2" then
+			if monitor_role.for_window(active) == monitor_role.ultrawide then
 				dispatch((is_only_tiled_window(active) or on_ultrawide_left_edge(active)) and move_to_portrait or ultrawide_swap_left)
 			else
 				dispatch(move_dispatcher)
@@ -197,7 +197,7 @@ function M.adjust(kind, value)
 		if delta.x ~= 0 then
 			return function()
 				local active = M.active()
-				if monitor_name(active) == "DP-2" then
+				if monitor_role.for_window(active) == monitor_role.ultrawide then
 					dispatch(delta.x < 0 and ultrawide_resize_left or ultrawide_resize_right)
 					return
 				end
@@ -209,7 +209,7 @@ function M.adjust(kind, value)
 		if delta.y ~= 0 then
 			return function()
 				local active = M.active()
-				if monitor_name(active) == "HDMI-A-2" then
+				if monitor_role.for_window(active) == monitor_role.portrait then
 					dispatch(delta.y < 0 and portrait_resize_up or portrait_resize_down)
 					return
 				end

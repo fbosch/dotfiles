@@ -15,6 +15,9 @@ hl = {
 
 _G.__PORTRAIT_ROWS_DISABLE_STATE = true
 
+local monitor_role = require("lib.monitor_role")
+local order_state = require("layouts.order_state")
+
 local function make_target(index, active)
 	return {
 		index = index,
@@ -181,6 +184,56 @@ run("dragged existing window from another workspace can move to top", function()
 
 	assert_box(dragged.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
 	assert_box(existing.placed, { x = 10, y = 120, w = 120, h = 200 }, "existing target")
+end)
+
+run("ultrawide transfer intent inserts topmost despite outside source y", function()
+	local dragged = make_workspace_target(1, "portrait-transfer", true)
+	dragged.window.monitor.name = "HDMI-A-2"
+	set_geometry(dragged, 2000, 800)
+	dragged.window.at.x = 2000
+	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "start" })
+
+	local existing = make_workspace_target(2, "portrait-transfer")
+	registered_layout.layout.recalculate(make_context({ existing, dragged }))
+
+	assert_box(dragged.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
+	assert_box(existing.placed, { x = 10, y = 120, w = 120, h = 200 }, "existing target")
+end)
+
+run("swap and resize no-op without active target", function()
+	local first = make_workspace_target(1, "portrait-no-active")
+	local second = make_workspace_target(2, "portrait-no-active")
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.layout_msg(ctx, "swapnext")
+	registered_layout.layout.layout_msg(ctx, "resize-y 15")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "first target")
+	assert_box(second.placed, { x = 10, y = 120, w = 120, h = 200 }, "second target")
+end)
+
+run("duplicate target identity falls back to source order", function()
+	local first = set_geometry(make_workspace_target(1, "portrait-duplicate", true), 220)
+	local second = set_geometry(make_workspace_target(2, "portrait-duplicate"), 20)
+	second.window.address = first.window.address
+
+	registered_layout.layout.recalculate(make_context({ first, second }))
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "first target")
+	assert_box(second.placed, { x = 10, y = 120, w = 120, h = 200 }, "second target")
+end)
+
+run("empty order initializes from current geometry after reload", function()
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local first = set_geometry(make_workspace_target(1, "portrait-reload-order"), 220)
+	local second = set_geometry(make_workspace_target(2, "portrait-reload-order", true), 20)
+	registered_layout.layout.recalculate(make_context({ first, second }))
+
+	assert_box(second.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
+	assert_box(first.placed, { x = 10, y = 120, w = 120, h = 200 }, "bottom target")
 end)
 
 run("four windows degrade to equal vertical rows", function()

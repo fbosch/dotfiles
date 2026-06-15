@@ -1,4 +1,5 @@
 local M = {}
+local pending_transfer_by_id = {}
 
 function M.new()
 	return {
@@ -7,19 +8,19 @@ function M.new()
 		target_maps_by_key = {},
 		manual_change_by_key = {},
 		active_by_key = {},
-		position_by_id = {},
+		position_by_scope = {},
+		scope_by_id = {},
 		seen_ids = {},
 	}
 end
 
 function M.target_id(target)
 	local window = target and target.window
-	if window then
-		return window.address or window.stable_id or target
-	end
+	return window and window.address or nil
+end
 
-	local id = target and target.index
-	return id or target
+function M.window_id(window)
+	return window and window.address or nil
 end
 
 function M.index_of(list, value)
@@ -32,8 +33,37 @@ function M.index_of(list, value)
 	return nil
 end
 
+function M.active_index(targets)
+	local active_window = hl and hl.get_active_window and hl.get_active_window() or nil
+	local active_id = M.window_id(active_window)
+	if active_id then
+		for index = 1, #targets do
+			if M.target_id(targets[index]) == active_id then
+				return index
+			end
+		end
+	end
+
+	local active = nil
+	for index = 1, #targets do
+		local window = targets[index].window
+		if window and window.active then
+			if active then
+				return nil
+			end
+			active = index
+		end
+	end
+
+	return active
+end
+
 function M.active_id(targets, active_index)
 	local active = active_index(targets)
+	if not active then
+		return nil
+	end
+
 	return M.target_id(targets[active])
 end
 
@@ -50,14 +80,15 @@ function M.position(target, axis)
 	return start + length / 2
 end
 
-function M.position_changed(state, target, axis)
+function M.position_changed(state, target, scope, axis)
 	local current = M.position(target, axis)
 	if not current then
 		return false
 	end
 
-	local previous = state.position_by_id[M.target_id(target)]
-	previous = previous and previous[axis]
+	local id = M.target_id(target)
+	local previous = state.position_by_scope[scope]
+	previous = previous and previous[id]
 	return previous ~= nil and math.abs(current - previous) > 1
 end
 
@@ -66,26 +97,116 @@ function M.position_in_area(target, axis, start, length)
 	return current ~= nil and current >= start and current <= start + length
 end
 
-function M.remember_position(state, target, axis, center)
-	local id = M.target_id(target)
-	local positions = state.position_by_id[id]
-	if not positions then
-		positions = {}
-		state.position_by_id[id] = positions
+function M.scope(layout, key, monitor_role, axis)
+	if not key or not monitor_role then
+		return nil
 	end
 
-	positions[axis] = center
+	return table.concat({ layout, tostring(key), monitor_role, axis }, "\t")
+end
+
+function M.same_scope(state, target, scope)
+	local id = M.target_id(target)
+	return id ~= nil and state.scope_by_id[id] == scope
+end
+
+function M.remember_position(state, target, scope, center)
+	if not scope then
+		return
+	end
+
+	local id = M.target_id(target)
+	if not id then
+		return
+	end
+
+	local positions = state.position_by_scope[scope]
+	if not positions then
+		positions = {}
+		state.position_by_scope[scope] = positions
+	end
+
+	positions[id] = center
+	state.scope_by_id[id] = scope
 end
 
 function M.remember_active(state, key, targets, active_index)
 	if key then
-		state.active_by_key[key] = M.active_id(targets, active_index)
+		local id = M.active_id(targets, active_index)
+		if id then
+			state.active_by_key[key] = id
+		end
 	end
 end
 
+function M.record_transfer_intent(window, intent)
+	local id = M.window_id(window)
+	if not id then
+		return
+	end
+
+	pending_transfer_by_id[id] = intent
+end
+
+function M.consume_transfer_intent(target, monitor_role, axis)
+	local id = M.target_id(target)
+	local intent = id and pending_transfer_by_id[id] or nil
+	if not intent or intent.monitor_role ~= monitor_role or intent.axis ~= axis then
+		return nil
+	end
+
+	pending_transfer_by_id[id] = nil
+	return intent
+end
+
+function M.transfer_intent_for_window(window)
+	return pending_transfer_by_id[M.window_id(window)]
+end
+
+function M.identities_safe(targets)
+	local ids = {}
+	for index = 1, #targets do
+		local id = M.target_id(targets[index])
+		if not id or ids[id] then
+			return false
+		end
+
+		ids[id] = true
+	end
+
+	return true
+end
+
+function M.initialize_order_from_geometry(state, key, targets, axis, start, length)
+	if not key or state.order_by_key[key] or not M.identities_safe(targets) then
+		return
+	end
+
+	local sorted = {}
+	for index = 1, #targets do
+		local target = targets[index]
+		local position = M.position(target, axis)
+		if not position or position < start or position > start + length then
+			return
+		end
+
+		sorted[index] = { id = M.target_id(target), position = position }
+	end
+
+	table.sort(sorted, function(first, second)
+		return first.position < second.position
+	end)
+
+	local order = {}
+	for index = 1, #sorted do
+		order[index] = sorted[index].id
+	end
+	state.order_by_key[key] = order
+end
+
 function M.sync(state, key, targets, insert_after_id)
-	if not key then
-		return nil, nil, false
+	if not key or not M.identities_safe(targets) then
+		return nil, nil, false, false
 	end
 
 	local order = state.order_by_key[key]
@@ -170,34 +291,72 @@ end
 
 function M.move_active(state, key, targets, active_index, delta)
 	local order = M.sync(state, key, targets)
+	if not order then
+		return false
+	end
+
 	local active = active_index(targets)
+	if not active then
+		return false
+	end
+
 	local id = M.target_id(targets[active])
 	local index = M.index_of(order, id)
 	local next_index = index and index + delta
 	if not index or next_index < 1 or next_index > #order then
-		return
+		return false
 	end
 
 	order[index], order[next_index] = order[next_index], order[index]
 	if key then
 		state.manual_change_by_key[key] = true
 	end
+
+	return true
 end
 
 function M.move_active_to_index(state, key, targets, active_index, target_index)
 	local active = active_index(targets)
+	if not active then
+		return false
+	end
+
 	if not target_index or target_index == active then
-		return
+		return false
 	end
 
 	local order = state.order_by_key[key]
 	if not order then
-		return
+		return false
 	end
 
 	local id = M.target_id(targets[active])
-	table.remove(order, active)
+	local order_index = M.index_of(order, id)
+	if not order_index then
+		return false
+	end
+
+	table.remove(order, order_index)
 	table.insert(order, target_index, id)
+	return true
+end
+
+function M.move_target_to_index(state, key, target, target_index)
+	local order = state.order_by_key[key]
+	if not order or not target_index then
+		return false
+	end
+
+	local id = M.target_id(target)
+	local order_index = M.index_of(order, id)
+	if not order_index or order_index == target_index then
+		return false
+	end
+
+	table.remove(order, order_index)
+	table.insert(order, target_index, id)
+	state.manual_change_by_key[key] = true
+	return true
 end
 
 return M

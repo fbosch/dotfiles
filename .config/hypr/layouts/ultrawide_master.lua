@@ -1,4 +1,5 @@
 local M = {}
+local monitor_role = require("lib.monitor_role")
 local order_state = require("layouts.order_state")
 local resize_state = require("layouts.resize_state")
 local box = {}
@@ -124,21 +125,19 @@ local function default_row_ratios(count)
 	return ratios
 end
 
-local function monitor_name(targets)
-	local first_name = nil
+local function role_for_targets(targets)
+	local first_role = nil
 	for index = 1, #targets do
 		local window = targets[index].window
-		local monitor = window and window.monitor
-		if monitor and monitor.name then
-			if monitor.name == "DP-2" then
-				return monitor.name
-			end
-
-			first_name = first_name or monitor.name
+		local role = monitor_role.for_window(window)
+		if role == monitor_role.ultrawide then
+			return role
 		end
+
+		first_role = first_role or role
 	end
 
-	return first_name
+	return first_role
 end
 
 local function workspace_key(targets)
@@ -154,14 +153,7 @@ local function workspace_key(targets)
 end
 
 local function active_index(targets)
-	for index = 1, #targets do
-		local window = targets[index].window
-		if window and window.active then
-			return index
-		end
-	end
-
-	return 1
+	return order_state.active_index(targets)
 end
 
 local function ratios_for(count)
@@ -242,7 +234,7 @@ local function move_active_to_position(targets, key, ratios, area_x, area_width)
 	order_state.move_active_to_index(state, key, targets, active_index, target_index)
 end
 
-local function place_columns(targets, ratios, x, y, width, height)
+local function place_columns(targets, ratios, x, y, width, height, scope)
 	local next_x = x
 	box.y = y
 	box.h = height
@@ -255,12 +247,12 @@ local function place_columns(targets, ratios, x, y, width, height)
 		end
 
 		targets[index]:place(box)
-		order_state.remember_position(state, targets[index], "x", box.x + box.w / 2)
+		order_state.remember_position(state, targets[index], scope, box.x + box.w / 2)
 		next_x = next_x + box.w
 	end
 end
 
-local function place_rows(targets, ratios, x, y, width, height)
+local function place_rows(targets, ratios, x, y, width, height, scope)
 	local next_y = y
 	box.x = x
 	box.w = width
@@ -273,7 +265,7 @@ local function place_rows(targets, ratios, x, y, width, height)
 		end
 
 		targets[index]:place(box)
-		order_state.remember_position(state, targets[index], "y", box.y + box.h / 2)
+		order_state.remember_position(state, targets[index], scope, box.y + box.h / 2)
 		next_y = next_y + box.h
 	end
 end
@@ -300,33 +292,50 @@ function M.recalculate(ctx)
 	local width = area.w
 	local height = area.h
 	local key = workspace_key(targets)
-	local monitor = monitor_name(targets)
-	local ratios = monitor == "HDMI-A-2" and row_ratios_for_workspace(key, count) or ratios_for_workspace(key, count)
+	local role = role_for_targets(targets)
+	local ratios = role == monitor_role.portrait and row_ratios_for_workspace(key, count) or ratios_for_workspace(key, count)
 
-	if monitor == "HDMI-A-2" then
-		place_rows(targets, ratios, x, y, width, height)
+	if role == monitor_role.portrait then
+		place_rows(targets, ratios, x, y, width, height, nil)
 		return
-	elseif monitor ~= "DP-2" then
-		place_columns(targets, ratios, x, y, width, height)
+	elseif role ~= monitor_role.ultrawide then
+		place_columns(targets, ratios, x, y, width, height, nil)
 		return
 	end
 
 	local manual_change = state.manual_change_by_key[key]
 	local source_targets = targets
+	local scope = order_state.scope("ultrawide_master", key, role, "x")
+	order_state.initialize_order_from_geometry(state, key, source_targets, "x", x, width)
 	local previous_active = key and state.active_by_key[key] or nil
 	local order, targets_by_id, _, added_seen_targets = order_state.sync(state, key, source_targets, previous_active)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
-	local active_target = targets[active_index(targets)]
-	local active_position_in_area = order_state.position_in_area(active_target, "x", x, width)
-	local active_position_changed = order_state.position_changed(state, active_target, "x")
-	if manual_change then
-		state.manual_change_by_key[key] = nil
-	elseif active_position_in_area and (active_position_changed or added_seen_targets) then
-		move_active_to_position(targets, key, ratios, x, width)
+	local transfer_target = nil
+	for index = 1, #targets do
+		local intent = order_state.consume_transfer_intent(targets[index], role, "x")
+		if intent then
+			transfer_target = targets[index]
+			break
+		end
+	end
+	if transfer_target and order_state.move_target_to_index(state, key, transfer_target, 1) then
 		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
+	elseif manual_change then
+		state.manual_change_by_key[key] = nil
+	else
+		local active = active_index(targets)
+		local active_target = active and targets[active] or nil
+		if active_target
+			and order_state.same_scope(state, active_target, scope)
+			and order_state.position_in_area(active_target, "x", x, width)
+			and (order_state.position_changed(state, active_target, scope, "x") or added_seen_targets)
+		then
+			move_active_to_position(targets, key, ratios, x, width)
+			targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
+		end
 	end
 
-	place_columns(targets, ratios, x, y, width, height)
+	place_columns(targets, ratios, x, y, width, height, scope)
 	order_state.remember_active(state, key, source_targets, active_index)
 end
 
@@ -345,6 +354,10 @@ function M.resize(ctx, target, delta, corner)
 	local ratios = ratios_for_workspace(key, count)
 	local amount = resize_state.delta_ratio(delta, "x", area and area.w, resize_step)
 	local index = resize_state.target_index(targets, target, active_index)
+	if not index then
+		return true
+	end
+
 	resize_state.adjust_active(ratios, index, count, amount, min_ratio)
 	if key then
 		state.manual_change_by_key[key] = true
@@ -381,6 +394,10 @@ function M.layout_msg(ctx, msg)
 		local area = ctx.area
 		local ratios = ratios_for_workspace(key, count)
 		local index = active_index(targets)
+		if not index then
+			return true
+		end
+
 		local boundary = resize_state.boundary_for_edge(index, count, edge)
 		resize_state.set_boundary_at(ratios, boundary, tonumber(position), area and area.x, area and area.w, min_ratio)
 		if key then
@@ -392,6 +409,10 @@ function M.layout_msg(ctx, msg)
 		local area = ctx.area
 		local ratios = row_ratios_for_workspace(key, count)
 		local index = active_index(targets)
+		if not index then
+			return true
+		end
+
 		local boundary = resize_state.boundary_for_edge(index, count, edge)
 		resize_state.set_boundary_at(ratios, boundary, tonumber(position), area and area.y, area and area.h, min_ratio)
 		if key then

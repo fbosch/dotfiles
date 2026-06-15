@@ -16,6 +16,9 @@ hl = {
 
 _G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
 
+local monitor_role = require("lib.monitor_role")
+local order_state = require("layouts.order_state")
+
 local function make_target(index, active)
 	return {
 		index = index,
@@ -146,7 +149,7 @@ run("spawned active window does not reorder existing columns", function()
 	assert_box(second.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
 end)
 
-run("dragged portrait window ignores outside source x until inside ultrawide", function()
+run("portrait transfer intent inserts leftmost despite outside source x", function()
 	local ultrawide_layout = registered_layout.layout
 	local portrait_layout = require("layouts.portrait_rows")
 	registered_layout.layout = ultrawide_layout
@@ -159,17 +162,18 @@ run("dragged portrait window ignores outside source x until inside ultrawide", f
 	dragged.window.workspace = { name = workspace }
 	dragged.window.monitor.name = "DP-2"
 	set_geometry(dragged, -900, 800)
+	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
 
 	local left = make_target(33)
 	local right = make_target(34)
 	ultrawide_layout.recalculate(make_context({ left, right, dragged }, workspace))
 
-	assert_box(left.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
-	assert_box(right.placed, { x = 310, y = 20, w = 400, h = 500 }, "right target")
-	assert_box(dragged.placed, { x = 710, y = 20, w = 300, h = 500 }, "dragged target")
+	assert_box(dragged.placed, { x = 10, y = 20, w = 300, h = 500 }, "dragged target")
+	assert_box(left.placed, { x = 310, y = 20, w = 400, h = 500 }, "left target")
+	assert_box(right.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
 end)
 
-run("dragged portrait window ignores overlapping source x", function()
+run("cross-scope geometry without transfer intent keeps incoming order", function()
 	local ultrawide_layout = registered_layout.layout
 	local portrait_layout = require("layouts.portrait_rows")
 	registered_layout.layout = ultrawide_layout
@@ -192,7 +196,7 @@ run("dragged portrait window ignores overlapping source x", function()
 	assert_box(right.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
 end)
 
-run("dragged portrait window ignores outside right source x", function()
+run("portrait transfer intent inserts leftmost despite outside right source x", function()
 	local ultrawide_layout = registered_layout.layout
 	local portrait_layout = require("layouts.portrait_rows")
 	registered_layout.layout = ultrawide_layout
@@ -205,14 +209,62 @@ run("dragged portrait window ignores outside right source x", function()
 	dragged.window.workspace = { name = workspace }
 	dragged.window.monitor.name = "DP-2"
 	set_geometry(dragged, 2000)
+	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
 
 	local left = make_target(53)
 	local right = make_target(54)
 	ultrawide_layout.recalculate(make_context({ left, dragged, right }, workspace))
 
-	assert_box(left.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
-	assert_box(dragged.placed, { x = 310, y = 20, w = 400, h = 500 }, "dragged target")
+	assert_box(dragged.placed, { x = 10, y = 20, w = 300, h = 500 }, "dragged target")
+	assert_box(left.placed, { x = 310, y = 20, w = 400, h = 500 }, "left target")
 	assert_box(right.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
+end)
+
+run("swap and resize no-op without active target", function()
+	local first = make_target(1)
+	local second = make_target(2)
+	local ctx = make_context({ first, second }, "no-active-mutate")
+
+	registered_layout.layout.layout_msg(ctx, "swapnext")
+	registered_layout.layout.layout_msg(ctx, "resize-x 50")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 670, h = 500 }, "left target")
+	assert_box(second.placed, { x = 680, y = 20, w = 330, h = 500 }, "right target")
+end)
+
+run("duplicate target identity falls back to source order", function()
+	local first = set_geometry(make_target(1, true), 800)
+	local second = set_geometry(make_target(2), 100)
+	second.window.address = first.window.address
+
+	registered_layout.layout.recalculate(make_context({ first, second }, "duplicate-id"))
+
+	assert_box(first.placed, { x = 10, y = 20, w = 670, h = 500 }, "first target")
+	assert_box(second.placed, { x = 680, y = 20, w = 330, h = 500 }, "second target")
+end)
+
+run("missing target identity falls back to source order", function()
+	local first = set_geometry(make_target(1, true), 800)
+	local second = set_geometry(make_target(2), 100)
+	first.window.address = nil
+
+	registered_layout.layout.recalculate(make_context({ first, second }, "missing-id"))
+
+	assert_box(first.placed, { x = 10, y = 20, w = 670, h = 500 }, "first target")
+	assert_box(second.placed, { x = 680, y = 20, w = 330, h = 500 }, "second target")
+end)
+
+run("empty order initializes from current geometry after reload", function()
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+
+	local first = set_geometry(make_target(1), 800)
+	local second = set_geometry(make_target(2, true), 100)
+	registered_layout.layout.recalculate(make_context({ first, second }, "reload-order-geometry"))
+
+	assert_box(second.placed, { x = 10, y = 20, w = 670, h = 500 }, "left target")
+	assert_box(first.placed, { x = 680, y = 20, w = 330, h = 500 }, "right target")
 end)
 
 run("stale active HDMI monitor does not force DP workspace into rows", function()
