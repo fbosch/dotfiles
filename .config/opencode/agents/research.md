@@ -1,6 +1,6 @@
 ---
 description: Gathers information from docs, web, and codebases without making changes
-mode: all
+mode: subagent
 color: "#ae87ed"
 temperature: 0.2
 tools:

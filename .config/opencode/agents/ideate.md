@@ -1,6 +1,6 @@
 ---
 description: Spitballs ideas, alternatives, and directions within a given scope. Use before converging on a spec or implementation.
-mode: all
+mode: subagent
 color: "#78b456"
 temperature: 0.6
 tools:
