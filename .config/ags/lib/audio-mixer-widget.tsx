@@ -57,6 +57,7 @@ const maxVolume = 150;
 const meterSegments = 12;
 const wpctlCacheTtlMs = 2000;
 const hyprClientCacheTtlMs = 2000;
+const volumeLevelIcons = ["\uE992", "\uE993", "\uE994", "\uE994", "\uE995", "\uE995"];
 
 let win: Astal.Window | null = null;
 let mixerBox: Gtk.Box | null = null;
@@ -434,11 +435,16 @@ function readVolume(object: any): number | undefined {
   return volume <= 2 ? clamp(volume * 100) : clamp(volume);
 }
 
+function volumeLevelIcon(volume: number | undefined, muted: boolean | undefined): string {
+  if (muted) return "\uE74F";
+  const level = Math.max(0, Math.min(100, volume ?? 0));
+  const index = Math.min(volumeLevelIcons.length - 1, Math.floor((level / 101) * volumeLevelIcons.length));
+  return volumeLevelIcons[index];
+}
+
 function speakerIcon(row: Pick<AudioRow, "kind" | "volume" | "muted" | "icon">): string {
   if (row.icon) return row.icon;
-  if (row.muted || row.volume === 0) return "\uE74F";
-  if ((row.volume ?? 0) <= 30) return "\uE993";
-  return "\uE995";
+  return volumeLevelIcon(row.volume, row.muted);
 }
 
 function clearBox(box: Gtk.Box): void {
@@ -810,6 +816,7 @@ function makeBadge(label: string, className: string): Gtk.Label {
 function makeMeter(
   row: AudioRow,
   volumeLabel: Gtk.Label,
+  muteButton: Gtk.Button | null,
   registerScrollHandler?: (handler: (delta: number) => void) => void,
 ): Gtk.Box | null {
   if (row.volume === undefined) return null;
@@ -831,6 +838,7 @@ function makeMeter(
 
   function updateLabel(): void {
     volumeLabel.set_label(row.muted ? "Muted" : `${clamp(currentVolume)}%`);
+    muteButton?.set_label(volumeLevelIcon(currentVolume, row.muted));
   }
 
   function sendVolume(immediate = false): void {
@@ -1021,8 +1029,9 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
   const actions = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4 });
   actions.set_halign(Gtk.Align.END);
   actions.set_valign(Gtk.Align.START);
+  let muteButton: Gtk.Button | null = null;
   if (row.volume !== undefined || row.muted !== undefined) {
-    const muteButton = new Gtk.Button({ label: row.muted ? "\uE74F" : "\uE995" });
+    muteButton = new Gtk.Button({ label: volumeLevelIcon(row.volume, row.muted) });
     muteButton.add_css_class("audio-mixer-action");
     muteButton.add_css_class("icon");
     muteButton.set_tooltip_text(row.muted ? "Unmute" : "Mute");
@@ -1053,7 +1062,7 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
 
   card.append(topRow);
 
-  const meter = volumeLabel ? makeMeter(row, volumeLabel, (handler) => {
+  const meter = volumeLabel ? makeMeter(row, volumeLabel, muteButton, (handler) => {
     updateScrolledVolume = handler;
   }) : null;
   if (meter) {

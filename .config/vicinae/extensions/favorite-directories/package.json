@@ -38,6 +38,14 @@
       "icon": "user-desktop.png"
     },
     {
+      "name": "open-games",
+      "title": "Games",
+      "subtitle": "Open Games folder",
+      "description": "Open ~/Games in file manager",
+      "mode": "no-view",
+      "icon": "folder-games.png"
+    },
+    {
       "name": "open-dotfiles",
       "title": "Dotfiles",
       "subtitle": "Open Dotfiles folder",

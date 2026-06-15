@@ -55,6 +55,12 @@ const DIRECTORIES = [
     icon: "user-desktop",
   },
   {
+    name: "games",
+    title: "Games",
+    path: "~/Games",
+    icon: "folder-games",
+  },
+  {
     name: "dotfiles",
     title: "Dotfiles",
     path: "~/dotfiles",
@@ -113,11 +119,11 @@ const ASSETS_DIR = path.join(__dirname, "..", "assets");
 const PACKAGE_JSON = path.join(__dirname, "..", "package.json");
 const ICON_THEME_PATH = path.join(
   process.env.HOME,
-  ".local/share/icons/Win11/places/scalable",
+  ".icons/Win11/places/scalable",
 );
 const ICON_THEME_EMBLEMS_PATH = path.join(
   process.env.HOME,
-  ".local/share/icons/Win11/emblems/24",
+  ".icons/Win11/emblems/24",
 );
 
 // Template for command files
@@ -138,6 +144,7 @@ const ICON_MAP = {
   "folder-photos": "folder-images.svg",
   "folder-music": "folder-music.svg",
   "folder-videos": "folder-videos.svg",
+  "folder-games": "folder-games.svg",
   "folder-git": "folder-git.svg",
   "folder-encrypted": "folder-encrypted.svg",
   "folder-lacie": "folder-cloud.svg",

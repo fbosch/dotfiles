@@ -28,6 +28,11 @@ declare namespace Preferences {
 		
 	}
 
+	/** Command: Games */
+	export type OpenGames = ExtensionPreferences & {
+		
+	}
+
 	/** Command: Dotfiles */
 	export type OpenDotfiles = ExtensionPreferences & {
 		
@@ -82,6 +87,11 @@ declare namespace Arguments {
 
 	/** Command: Desktop */
 	export type OpenDesktop = {
+		
+	}
+
+	/** Command: Games */
+	export type OpenGames = {
 		
 	}
 
