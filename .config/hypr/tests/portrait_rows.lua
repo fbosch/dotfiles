@@ -214,6 +214,32 @@ run("transfer intent wins when target already arrives topmost", function()
 	assert_box(bottom.placed, { x = 10, y = 120, w = 120, h = 200 }, "bottom target")
 end)
 
+run("ultrawide transfer intent survives active target id mismatch", function()
+	local dragged = set_geometry(make_workspace_target(1, "portrait-transfer-id-mismatch", true), 2000, 800)
+	dragged.window.at.x = 2000
+	local existing = make_workspace_target(2, "portrait-transfer-id-mismatch")
+	order_state.record_transfer_intent({ address = "0xmissing" }, { monitor_role = monitor_role.portrait, axis = "y", edge = "start" })
+
+	registered_layout.layout.recalculate(make_context({ existing, dragged }))
+
+	assert_box(dragged.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
+	assert_box(existing.placed, { x = 10, y = 120, w = 120, h = 200 }, "existing target")
+end)
+
+run("ultrawide transfer fallback uses single added target without active flag", function()
+	local existing = make_workspace_target(1, "portrait-transfer-added-no-active")
+	local ctx = make_context({ existing })
+	registered_layout.layout.recalculate(ctx)
+
+	local dragged = set_geometry(make_workspace_target(2, "portrait-transfer-added-no-active"), 2000, 800)
+	dragged.window.at.x = 2000
+	order_state.record_transfer_intent({ address = "0xmissing" }, { monitor_role = monitor_role.portrait, axis = "y", edge = "start" })
+	registered_layout.layout.recalculate(make_context({ existing, dragged }))
+
+	assert_box(dragged.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
+	assert_box(existing.placed, { x = 10, y = 120, w = 120, h = 200 }, "existing target")
+end)
+
 run("swap and resize no-op without active target", function()
 	local first = make_workspace_target(1, "portrait-no-active")
 	local second = make_workspace_target(2, "portrait-no-active")

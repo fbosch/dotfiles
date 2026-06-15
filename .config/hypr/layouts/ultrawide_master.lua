@@ -308,7 +308,7 @@ function M.recalculate(ctx)
 	local scope = order_state.scope("ultrawide_master", key, role, "x")
 	order_state.initialize_order_from_geometry(state, key, source_targets, "x", x, width)
 	local previous_active = key and state.active_by_key[key] or nil
-	local order, targets_by_id, _, added_seen_targets = order_state.sync(state, key, source_targets, previous_active)
+	local order, targets_by_id, _, added_seen_targets, added_id = order_state.sync(state, key, source_targets, previous_active)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	local transfer_target = nil
 	for index = 1, #targets do
@@ -316,6 +316,28 @@ function M.recalculate(ctx)
 		if intent then
 			transfer_target = targets[index]
 			break
+		end
+	end
+	if not transfer_target and added_id then
+		local added_target = targets_by_id and targets_by_id[added_id] or nil
+		if added_target and order_state.consume_transfer_intent(added_target, role, "x", true) then
+			transfer_target = added_target
+		end
+	end
+	if not transfer_target then
+		local outside_target = nil
+		for index = 1, #targets do
+			local position = order_state.position(targets[index], "x")
+			if position and (position < x or position > x + width) then
+				if outside_target then
+					outside_target = nil
+					break
+				end
+				outside_target = targets[index]
+			end
+		end
+		if outside_target and order_state.consume_transfer_intent(outside_target, role, "x", true) then
+			transfer_target = outside_target
 		end
 	end
 	if transfer_target then

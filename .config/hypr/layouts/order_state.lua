@@ -1,5 +1,6 @@
 local M = {}
 local pending_transfer_by_id = {}
+local pending_transfer_by_destination = {}
 
 function M.new()
 	return {
@@ -141,21 +142,29 @@ end
 
 function M.record_transfer_intent(window, intent)
 	local id = M.window_id(window)
-	if not id then
-		return
+	if id then
+		pending_transfer_by_id[id] = intent
 	end
 
-	pending_transfer_by_id[id] = intent
+	pending_transfer_by_destination[intent.monitor_role .. "\t" .. intent.axis] = intent
 end
 
-function M.consume_transfer_intent(target, monitor_role, axis)
+function M.consume_transfer_intent(target, monitor_role, axis, allow_destination_fallback)
 	local id = M.target_id(target)
 	local intent = id and pending_transfer_by_id[id] or nil
-	if not intent or intent.monitor_role ~= monitor_role or intent.axis ~= axis then
+	if intent and intent.monitor_role == monitor_role and intent.axis == axis then
+		pending_transfer_by_id[id] = nil
+		pending_transfer_by_destination[monitor_role .. "\t" .. axis] = nil
+		return intent
+	end
+
+	local window = target and target.window
+	intent = (allow_destination_fallback or window and window.active) and pending_transfer_by_destination[monitor_role .. "\t" .. axis] or nil
+	if not intent then
 		return nil
 	end
 
-	pending_transfer_by_id[id] = nil
+	pending_transfer_by_destination[monitor_role .. "\t" .. axis] = nil
 	return intent
 end
 
@@ -249,10 +258,17 @@ function M.sync(state, key, targets, insert_after_id)
 
 	local added = false
 	local added_seen = false
+	local added_id = nil
 	local seen_ids = state.seen_ids
 	for index = 1, #targets do
 		local id = M.target_id(targets[index])
 		if not M.index_of(order, id) then
+			if added_id == nil then
+				added_id = id
+			else
+				added_id = false
+			end
+
 			if seen_ids[id] then
 				added_seen = true
 			end
@@ -270,7 +286,7 @@ function M.sync(state, key, targets, insert_after_id)
 		seen_ids[id] = true
 	end
 
-	return order, targets_by_id, added, added_seen
+	return order, targets_by_id, added, added_seen, added_id
 end
 
 function M.targets_from_order(state, key, order, targets_by_id, source_targets)
