@@ -1,52 +1,38 @@
 local wezterm = require("wezterm")
+local is_macos = wezterm.target_triple:find("darwin") ~= nil
+
+local macos_tab_keys = {
+	["1"] = "raw:18",
+	["2"] = "raw:19",
+	["3"] = "raw:20",
+	["4"] = "raw:21",
+	["5"] = "raw:23",
+	["6"] = "raw:22",
+	["7"] = "raw:26",
+	["8"] = "raw:28",
+	["9"] = "raw:25",
+}
+
+local function activate_tab_key(number, tab_index)
+	return {
+		key = is_macos and macos_tab_keys[number] or number,
+		mods = "CTRL|SHIFT",
+		action = wezterm.action.ActivateTab(tab_index),
+	}
+end
+
 return function(config)
 	config.keys = {
-		-- Tab switching outside macOS Cmd+number, which is owned by AeroSpace.
-		{
-			key = "1",
-			mods = "CTRL|SHIFT",
-			action = wezterm.action.ActivateTab(0),
-		},
-		{
-			key = "2",
-			mods = "CTRL|SHIFT",
-			action = wezterm.action.ActivateTab(1),
-		},
-		{
-			key = "3",
-			mods = "CTRL|SHIFT",
-			action = wezterm.action.ActivateTab(2),
-		},
-		{
-			key = "4",
-			mods = "CTRL|SHIFT",
-			action = wezterm.action.ActivateTab(3),
-		},
-		{
-			key = "5",
-			mods = "CTRL|SHIFT",
-			action = wezterm.action.ActivateTab(4),
-		},
-		{
-			key = "6",
-			mods = "CTRL|SHIFT",
-			action = wezterm.action.ActivateTab(5),
-		},
-		{
-			key = "7",
-			mods = "CTRL|SHIFT",
-			action = wezterm.action.ActivateTab(6),
-		},
-		{
-			key = "8",
-			mods = "CTRL|SHIFT",
-			action = wezterm.action.ActivateTab(7),
-		},
-		{
-			key = "9",
-			mods = "CTRL|SHIFT",
-			action = wezterm.action.ActivateTab(8),
-		},
+		-- Raw macOS codes avoid Shift+number mapped-character mismatches.
+		activate_tab_key("1", 0),
+		activate_tab_key("2", 1),
+		activate_tab_key("3", 2),
+		activate_tab_key("4", 3),
+		activate_tab_key("5", 4),
+		activate_tab_key("6", 5),
+		activate_tab_key("7", 6),
+		activate_tab_key("8", 7),
+		activate_tab_key("9", 8),
 		-- Pane splits
 		{
 			key = "v",
