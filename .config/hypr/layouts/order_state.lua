@@ -2,6 +2,28 @@ local M = {}
 local pending_transfer_by_id = {}
 local pending_transfer_by_destination = {}
 
+local function transfer_destination(monitor_role, axis)
+	local by_axis = pending_transfer_by_destination[monitor_role]
+	return by_axis and by_axis[axis] or nil
+end
+
+local function set_transfer_destination(monitor_role, axis, intent)
+	local by_axis = pending_transfer_by_destination[monitor_role]
+	if not by_axis then
+		by_axis = {}
+		pending_transfer_by_destination[monitor_role] = by_axis
+	end
+
+	by_axis[axis] = intent
+end
+
+local function clear_transfer_destination(monitor_role, axis)
+	local by_axis = pending_transfer_by_destination[monitor_role]
+	if by_axis then
+		by_axis[axis] = nil
+	end
+end
+
 function M.new()
 	return {
 		order_by_key = {},
@@ -146,31 +168,30 @@ function M.record_transfer_intent(window, intent)
 		pending_transfer_by_id[id] = intent
 	end
 
-	pending_transfer_by_destination[intent.monitor_role .. "\t" .. intent.axis] = intent
+	set_transfer_destination(intent.monitor_role, intent.axis, intent)
 end
 
 function M.consume_transfer_intent(target, monitor_role, axis, allow_destination_fallback)
 	local id = M.target_id(target)
-	local destination_key = monitor_role .. "\t" .. axis
 	local intent = id and pending_transfer_by_id[id] or nil
 	if intent and intent.monitor_role == monitor_role and intent.axis == axis then
 		pending_transfer_by_id[id] = nil
-		pending_transfer_by_destination[destination_key] = nil
+		clear_transfer_destination(monitor_role, axis)
 		return intent
 	end
 
 	local window = target and target.window
-	intent = (allow_destination_fallback or window and window.active) and pending_transfer_by_destination[destination_key] or nil
+	intent = (allow_destination_fallback or window and window.active) and transfer_destination(monitor_role, axis) or nil
 	if not intent then
 		return nil
 	end
 
-	pending_transfer_by_destination[destination_key] = nil
+	clear_transfer_destination(monitor_role, axis)
 	return intent
 end
 
 function M.has_transfer_intent(monitor_role, axis)
-	return pending_transfer_by_destination[monitor_role .. "\t" .. axis] ~= nil
+	return transfer_destination(monitor_role, axis) ~= nil
 end
 
 function M.transfer_intent_for_window(window)
