@@ -19,6 +19,9 @@
 - Scope lint/typecheck diagnostics to files you touched first; widen only if needed.
 - If a scoped `AGENTS.md` or referenced workflow doc names validation checks, run them after changes and before finishing.
 - Run the smallest reasonable validation (tests/build/typecheck) when making code changes.
+- Tiny implementations still need evidence proportional to risk; do not skip validation solely because the code is short.
+- Prefer one targeted check that exercises the changed behavior over broad validation that adds noise without new evidence.
+- If intentionally leaving a `shortcut:` path, validate the current path and state the deferred trigger clearly.
 
 ## Done Criteria
 

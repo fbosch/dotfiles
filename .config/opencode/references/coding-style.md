@@ -19,6 +19,18 @@
 - Prefer `=== false` over `!` for negating boolean expressions, especially multi-line ones.
 - Prefer event-driven listeners over polling loops whenever both are viable.
 
+## Simplicity Ladder
+
+- First ask whether the code needs to exist; no code is best when the requirement can be removed or handled operationally.
+- Prefer stdlib APIs before custom code.
+- Prefer native platform features before dependencies.
+- Prefer existing dependencies before adding new dependencies.
+- Prefer existing repo patterns before new architecture.
+- Prefer one clear expression or small local block before scaffolding helpers, classes, adapters, or config.
+- Only add abstraction when there is a concrete second use case or the implementation complexity is large enough to hide behind a stable interface.
+- Do not simplify away trust-boundary validation, authorization, security checks, data-loss handling, accessibility, observability needed to debug failures, or explicit user requirements.
+- When deliberately taking a shortcut, add `shortcut:` with the limitation and upgrade trigger.
+
 ## Avoid Slop
 
 - No redundant type annotations where inference works (`const x: string = "foo"` -> `const x = "foo"`).
@@ -29,3 +41,5 @@
 - Match existing codebase verbosity for naming.
 - Trust the type system; do not add runtime checks it already prevents.
 - Add `try/catch` only where errors are expected and handleable.
+- No speculative compatibility layers, options, adapters, or extension points without a current caller.
+- No avoidable dependency installs when stdlib, platform, or existing dependency coverage is enough.

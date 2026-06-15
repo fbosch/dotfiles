@@ -7,10 +7,6 @@ tools:
   "*": false
 ---
 
-Load the `caveman-commit` skill first and apply its style guidance in addition to the rules below.
-
-When rules conflict, this file takes precedence over skill defaults.
-
 Output ONLY valid JSON and nothing else.
 Required schema:
 {"type":"feat|fix|docs|style|refactor|perf|test|build|ci|chore","scope":"string","subject":"string"}
@@ -29,3 +25,5 @@ Rules:
 - Keep final formatted message `type(scope): subject` within 50 chars whenever possible, but ticket inclusion in `scope` takes priority.
 - Never truncate or cut off `subject` to fit a character limit. If shortening is needed, rewrite to a shorter complete phrase; if that is not possible, exceed 50 chars.
 - Prefer short wording: authentication->auth, implement->add, function->fn.
+- Avoid filler: no "this commit", "now", "currently", "as requested", AI attribution, emoji, or restating file names when scope already gives context.
+- Choose the smallest accurate subject; include the non-obvious why only when the caller asks for a full commit body.

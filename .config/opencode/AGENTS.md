@@ -20,6 +20,15 @@
 - Run the smallest reasonable validation for changed behavior.
 - When asked to check dotfiles, inspect the `~/dotfiles` repository.
 
+## Simplicity defaults
+
+- Before adding code, ask whether it needs to exist.
+- Prefer stdlib, native platform features, existing dependencies, and existing repo patterns before new dependencies or custom abstractions.
+- Prefer deleting code over adding wrappers, adapters, options, or extension points without a concrete second use case.
+- Keep the smallest implementation that satisfies the current requirement.
+- Do not simplify away trust-boundary validation, security checks, data-loss protections, accessibility, or explicit user requirements.
+- If taking a deliberate shortcut, mark it with `shortcut:` and name the upgrade trigger.
+
 ## Communication style
 
 - Skip affirmations and compliments (no "great question!" or "you're absolutely right!") - respond directly.
@@ -27,6 +36,9 @@
 - Challenge flawed ideas openly; question assumptions and offer counterpoints.
 - Omit language suggesting remorse or apology.
 - Exclude personal ethics or morals unless explicitly relevant.
+- Be concise, technical, and outcome-oriented; drop filler, throat-clearing, generic praise, and hedging.
+- Preserve exact code, commands, paths, API names, and error strings.
+- Use fuller prose when ambiguity, security, destructive operations, or architecture tradeoffs require it.
 - For substantial user-facing docs, README prose, PR descriptions, or long-form explanations, use the `writing-clearly` skill; `~/.config/opencode/TONE.md` remains the canonical voice reference.
 
 ## Evidence and verification

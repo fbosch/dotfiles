@@ -9,6 +9,9 @@ This includes:
 
 - Extra comments that a human wouldn't add or are inconsistent with the rest of the file
 - Extra defensive checks or try/catch blocks abnormal for that area of the codebase (especially if called by trusted/validated codepaths)
+- Unnecessary abstractions, wrappers, adapters, classes, config, or extension points without a concrete second use case
+- New dependencies or dependency-like helpers where stdlib, platform, or existing repo code is enough
+- Speculative compatibility layers not required by current persisted data, shipped behavior, or external consumers
 - Casts to `any` to get around type issues
 - Any style inconsistent with the file
 - Unnecessary emoji usage
