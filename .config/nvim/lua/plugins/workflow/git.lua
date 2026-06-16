@@ -1,4 +1,7 @@
-local is_git_repo = require("utils.git").is_git_repo()
+local function is_git_repo()
+	return require("utils.git").is_git_repo()
+end
+
 return {
 	{
 		"akinsho/git-conflict.nvim",

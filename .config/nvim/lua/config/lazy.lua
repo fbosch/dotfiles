@@ -29,6 +29,8 @@ local disabled_builtin_plugins = {
 	"netrwFileHandlers",
 	"matchit",
 	"matchparen",
+	"man",
+	"net",
 	"tar",
 	"tarPlugin",
 	"rrhelper",
@@ -42,6 +44,8 @@ local disabled_builtin_plugins = {
 for _, plugin in pairs(disabled_builtin_plugins) do
 	vim.g["loaded_" .. plugin] = 1
 end
+vim.g.loaded_man = true
+vim.g.loaded_nvim_net_plugin = true
 
 -- Setup lazy.nvim
 require("lazy").setup({

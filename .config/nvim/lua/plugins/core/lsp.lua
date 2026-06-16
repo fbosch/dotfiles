@@ -160,7 +160,6 @@ function setup_diagnostics()
 	})
 end
 
-local lsp_keymaps = require("config.keymaps.lsp")
 local attached_buffers = {}
 
 local function attach_once(client, bufnr)
@@ -177,6 +176,7 @@ local function attach_once(client, bufnr)
 	setup_formatters(client, bufnr)
 	-- Use vim.schedule to ensure keymaps are set after buffer is ready
 	vim.schedule(function()
+		local lsp_keymaps = require("config.keymaps.lsp")
 		lsp_keymaps.setup(client, bufnr)
 	end)
 end

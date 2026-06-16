@@ -1,8 +1,6 @@
-local utils = require("utils")
-local terminal = require("utils.terminal")
-
 local function setup_barbar_highlights()
 	local colors = require("config.colors")
+	local utils = require("utils")
 	utils.load_highlights({
 		BufferCurrent = { fg = colors.blue },
 		BufferDefaultVisibleHINT = { fg = colors.purple },
@@ -101,6 +99,7 @@ return {
 			},
 		}),
 		config = function()
+			local terminal = require("utils.terminal")
 			local is_rich = terminal.is_terminal_emulator()
 			require("barbar").setup({
 				animation = false,
