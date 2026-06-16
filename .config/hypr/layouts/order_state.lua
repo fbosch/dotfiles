@@ -31,6 +31,7 @@ function M.new()
 		target_maps_by_key = {},
 		manual_change_by_key = {},
 		active_by_key = {},
+		position_by_id = {},
 		position_by_scope = {},
 		scope_by_id = {},
 		seen_ids = {},
@@ -39,11 +40,35 @@ end
 
 function M.target_id(target)
 	local window = target and target.window
-	return window and window.address or nil
+	if not window then
+		return nil
+	end
+
+	if window.address then
+		return window.address
+	end
+
+	if window.stable_id then
+		return "stable:" .. tostring(window.stable_id)
+	end
+
+	return nil
 end
 
 function M.window_id(window)
-	return window and window.address or nil
+	if not window then
+		return nil
+	end
+
+	if window.address then
+		return window.address
+	end
+
+	if window.stable_id then
+		return "stable:" .. tostring(window.stable_id)
+	end
+
+	return nil
 end
 
 function M.index_of(list, value)
@@ -103,6 +128,31 @@ function M.position(target, axis)
 	return start + length / 2
 end
 
+function M.cursor_position(axis)
+	if not hl or not hl.get_cursor_pos then
+		return nil
+	end
+
+	local ok, position = pcall(hl.get_cursor_pos)
+	if not ok or not position then
+		return nil
+	end
+
+	if position[axis] then
+		return position[axis]
+	end
+
+	if axis == "x" then
+		return position[1]
+	end
+
+	if axis == "y" then
+		return position[2]
+	end
+
+	return nil
+end
+
 function M.position_changed(state, target, scope, axis)
 	local current = M.position(target, axis)
 	if not current then
@@ -112,6 +162,22 @@ function M.position_changed(state, target, scope, axis)
 	local id = M.target_id(target)
 	local previous = state.position_by_scope[scope]
 	previous = previous and previous[id]
+	return previous ~= nil and math.abs(current - previous) > 1
+end
+
+function M.position_changed_any_scope(state, target, axis)
+	local current = M.position(target, axis)
+	if not current then
+		return false
+	end
+
+	local id = M.target_id(target)
+	if not id then
+		return false
+	end
+
+	local previous = state.position_by_id[id]
+	previous = previous and previous[axis]
 	return previous ~= nil and math.abs(current - previous) > 1
 end
 
@@ -133,13 +199,23 @@ function M.same_scope(state, target, scope)
 	return id ~= nil and state.scope_by_id[id] == scope
 end
 
-function M.remember_position(state, target, scope, center)
-	if not scope then
+function M.remember_position(state, target, scope, center, axis)
+	local id = M.target_id(target)
+	if not id then
 		return
 	end
 
-	local id = M.target_id(target)
-	if not id then
+	if axis then
+		local all_positions = state.position_by_id[id]
+		if not all_positions then
+			all_positions = {}
+			state.position_by_id[id] = all_positions
+		end
+
+		all_positions[axis] = center
+	end
+
+	if not scope then
 		return
 	end
 
@@ -290,6 +366,7 @@ function M.sync(state, key, targets, insert_after_id)
 			next_index = next_index + 1
 		else
 			state.seen_ids[id] = nil
+			state.position_by_id[id] = nil
 			state.scope_by_id[id] = nil
 			if state.active_by_key[key] == id then
 				state.active_by_key[key] = nil

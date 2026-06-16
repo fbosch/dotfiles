@@ -164,9 +164,9 @@ local function desired_index(center, ratios, area_y, area_height)
 	return #ratios
 end
 
-local function move_active_to_position(targets, key, ratios, area_y, area_height)
+local function move_active_to_position(targets, key, ratios, area_y, area_height, position)
 	local active = active_index(targets)
-	local target_index = desired_index(order_state.position(targets[active], "y"), ratios, area_y, area_height)
+	local target_index = desired_index(position or order_state.position(targets[active], "y"), ratios, area_y, area_height)
 	if not target_index or target_index == active then
 		return
 	end
@@ -211,7 +211,7 @@ local function place_rows(targets, count, x, y, width, height, scope)
 	for index = 1, count do
 		box.y = y + row_height * (index - 1)
 		targets[index]:place(box)
-		order_state.remember_position(state, targets[index], scope, box.y + box.h / 2)
+		order_state.remember_position(state, targets[index], scope, box.y + box.h / 2, "y")
 	end
 end
 
@@ -228,7 +228,7 @@ local function place_ratio_rows(targets, ratios, x, y, width, height, scope)
 		end
 
 		targets[index]:place(box)
-		order_state.remember_position(state, targets[index], scope, box.y + box.h / 2)
+		order_state.remember_position(state, targets[index], scope, box.y + box.h / 2, "y")
 		next_y = next_y + box.h
 	end
 end
@@ -255,7 +255,7 @@ function M.recalculate(ctx)
 			order_state.sync(state, key, targets)
 			order_state.consume_transfer_intent(targets[1], role, "y", true)
 			order_state.remember_active(state, key, targets, active_index)
-			order_state.remember_position(state, targets[1], scope, area.y + area.h / 2)
+			order_state.remember_position(state, targets[1], scope, area.y + area.h / 2, "y")
 		end
 
 		targets[1]:place(area)
@@ -293,7 +293,16 @@ function M.recalculate(ctx)
 	local has_transfer_intent = order_state.has_transfer_intent(role, "y")
 	if has_transfer_intent and not transfer_target and added_id then
 		local added_target = targets_by_id and targets_by_id[added_id] or nil
-		local intent = added_target and order_state.consume_transfer_intent(added_target, role, "y", true) or nil
+		local added_position = order_state.position(added_target, "y")
+		local added_active = active_index(targets)
+		local added_is_active = added_active and targets[added_active] == added_target
+		local added_outside_area = added_position ~= nil and not order_state.position_in_area(added_target, "y", y, height)
+		local intent = nil
+		if added_target and added_is_active and added_outside_area then
+			order_state.consume_transfer_intent(added_target, role, "y", true)
+		else
+			intent = added_target and order_state.consume_transfer_intent(added_target, role, "y", true) or nil
+		end
 		if intent then
 			transfer_target = added_target
 			transfer_intent = intent
@@ -301,17 +310,26 @@ function M.recalculate(ctx)
 	end
 	if has_transfer_intent and not transfer_target then
 		local outside_target = nil
+		local outside_index = nil
 		for index = 1, #targets do
 			local position = order_state.position(targets[index], "y")
 			if position and (position < y or position > y + height) then
 				if outside_target then
 					outside_target = nil
+					outside_index = nil
 					break
 				end
 				outside_target = targets[index]
+				outside_index = index
 			end
 		end
-		local intent = outside_target and order_state.consume_transfer_intent(outside_target, role, "y", true) or nil
+		local active = active_index(targets)
+		local intent = nil
+		if outside_target and active and active == outside_index then
+			order_state.consume_transfer_intent(outside_target, role, "y", true)
+		else
+			intent = outside_target and order_state.consume_transfer_intent(outside_target, role, "y", true) or nil
+		end
 		if intent then
 			transfer_target = outside_target
 			transfer_intent = intent
@@ -324,16 +342,6 @@ function M.recalculate(ctx)
 		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	elseif manual_change then
 		state.manual_change_by_key[key] = nil
-	else
-		local active = active_index(targets)
-		local active_target = active and targets[active] or nil
-		if active_target
-			and order_state.same_scope(state, active_target, scope)
-			and (order_state.position_changed(state, active_target, scope, "y") or added_seen_targets)
-		then
-			move_active_to_position(targets, key, ratios, y, height)
-			targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
-		end
 	end
 	order_state.remember_active(state, key, source_targets, active_index)
 
@@ -400,6 +408,10 @@ function M.layout_msg(ctx, msg)
 		move_active(targets, key, 1)
 	elseif count > 3 then
 		return true
+	elseif command == "place-at-cursor" then
+		local area = ctx.area
+		local ratios = ratios_for(ratio_key, count)
+		move_active_to_position(targets, key, ratios, area and area.y, area and area.h, order_state.cursor_position("y"))
 	elseif command == "resize-up" then
 		M.resize(ctx, nil, { y = -resize_step }, nil)
 	elseif command == "resize-down" then

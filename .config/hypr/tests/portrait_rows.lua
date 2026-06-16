@@ -4,6 +4,7 @@ local config_dir = script_path:match("^(.*)/tests/portrait_rows%.lua$") or ".con
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local registered_layout = nil
+local cursor_position = nil
 
 hl = {
 	layout = {
@@ -11,6 +12,9 @@ hl = {
 			registered_layout = { name = name, layout = layout }
 		end,
 	},
+	get_cursor_pos = function()
+		return cursor_position
+	end,
 }
 
 _G.__PORTRAIT_ROWS_DISABLE_STATE = true
@@ -143,9 +147,9 @@ run("known active geometry reorders rows", function()
 	local third = make_workspace_target(3, "position-order")
 	local ctx = make_context({ first, second, third })
 	registered_layout.layout.recalculate(ctx)
-	set_geometry(first, 120)
-	set_geometry(second, 20)
-	set_geometry(third, 220)
+	cursor_position = { x = 20, y = 150 }
+	registered_layout.layout.layout_msg(ctx, "place-at-cursor")
+	cursor_position = nil
 	registered_layout.layout.recalculate(ctx)
 
 	assert_box(second.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
@@ -159,7 +163,9 @@ run("dragging active row below layout moves it to bottom", function()
 	local ctx = make_context({ top, bottom })
 	registered_layout.layout.recalculate(ctx)
 
-	set_geometry(top, 360)
+	cursor_position = { x = 20, y = 360 }
+	registered_layout.layout.layout_msg(ctx, "place-at-cursor")
+	cursor_position = nil
 	registered_layout.layout.recalculate(ctx)
 
 	assert_box(bottom.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
@@ -172,7 +178,9 @@ run("dragging active row above layout moves it to top", function()
 	local ctx = make_context({ top, bottom })
 	registered_layout.layout.recalculate(ctx)
 
-	set_geometry(bottom, -120)
+	cursor_position = { x = 20, y = -120 }
+	registered_layout.layout.layout_msg(ctx, "place-at-cursor")
+	cursor_position = nil
 	registered_layout.layout.recalculate(ctx)
 
 	assert_box(bottom.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
@@ -187,20 +195,23 @@ run("spawned active window appends below existing rows", function()
 	first.window.active = false
 	local third = set_geometry(make_workspace_target(3, "spawn-no-reorder", true), 20)
 	third.index = 2
+	third.window.address = nil
+	third.window.stable_id = nil
 	second.index = 3
+	second.window.stable_id = 3
 	registered_layout.layout.recalculate(make_context({ first, third, second }))
 
 	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
-	assert_box(second.placed, { x = 10, y = 120, w = 120, h = 100 }, "middle target")
-	assert_box(third.placed, { x = 10, y = 220, w = 120, h = 100 }, "spawned target")
+	assert_box(third.placed, { x = 10, y = 120, w = 120, h = 100 }, "spawned target")
+	assert_box(second.placed, { x = 10, y = 220, w = 120, h = 100 }, "bottom target")
 end)
 
 run("second spawned window appends below existing single row", function()
-	local first = set_geometry(make_workspace_target(1, "spawn-from-single", true), 20)
+	local first = set_geometry(make_workspace_target(201, "spawn-from-single", true), 20)
 	registered_layout.layout.recalculate(make_context({ first }))
 
 	first.window.active = false
-	local second = set_geometry(make_workspace_target(2, "spawn-from-single", true), 20)
+	local second = set_geometry(make_workspace_target(202, "spawn-from-single", true), 20)
 	registered_layout.layout.recalculate(make_context({ second, first }))
 
 	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "existing target")
@@ -208,13 +219,13 @@ run("second spawned window appends below existing single row", function()
 end)
 
 run("transfer into empty portrait does not affect later spawn order", function()
-	local first = set_geometry(make_workspace_target(1, "transfer-then-spawn", true), 2000, 800)
+	local first = set_geometry(make_workspace_target(211, "transfer-then-spawn", true), 2000, 800)
 	first.window.at.x = 2000
 	order_state.record_transfer_intent(first.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
 	registered_layout.layout.recalculate(make_context({ first }))
 
 	first.window.active = false
-	local second = set_geometry(make_workspace_target(2, "transfer-then-spawn", true), 20)
+	local second = set_geometry(make_workspace_target(212, "transfer-then-spawn", true), 20)
 	registered_layout.layout.recalculate(make_context({ second, first }))
 
 	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "existing target")
@@ -222,17 +233,17 @@ run("transfer into empty portrait does not affect later spawn order", function()
 end)
 
 run("reopened window with reused identity appends below existing row", function()
-	local first = set_geometry(make_workspace_target(1, "spawn-reused-id", true), 20)
+	local first = set_geometry(make_workspace_target(221, "spawn-reused-id", true), 20)
 	registered_layout.layout.recalculate(make_context({ first }))
 
 	first.window.active = false
-	local second = set_geometry(make_workspace_target(2, "spawn-reused-id", true), 20)
+	local second = set_geometry(make_workspace_target(222, "spawn-reused-id", true), 20)
 	registered_layout.layout.recalculate(make_context({ second, first }))
 
 	second.window.active = false
 	registered_layout.layout.recalculate(make_context({ first }))
 
-	local reopened = set_geometry(make_workspace_target(2, "spawn-reused-id", true), 20)
+	local reopened = set_geometry(make_workspace_target(222, "spawn-reused-id", true), 20)
 	registered_layout.layout.recalculate(make_context({ reopened, first }))
 
 	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "existing target")
@@ -247,10 +258,99 @@ run("dragged existing window from another workspace can move to top", function()
 	dragged.window.workspace = { name = "drag-target" }
 	local existing = set_geometry(make_workspace_target(3, "drag-target"), 220)
 	set_geometry(dragged, 20)
-	registered_layout.layout.recalculate(make_context({ existing, dragged }))
+	local ctx = make_context({ existing, dragged })
+	registered_layout.layout.recalculate(ctx)
+	cursor_position = { x = 20, y = 30 }
+	registered_layout.layout.layout_msg(ctx, "place-at-cursor")
+	cursor_position = nil
+	registered_layout.layout.recalculate(ctx)
 
 	assert_box(dragged.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
 	assert_box(existing.placed, { x = 10, y = 120, w = 120, h = 200 }, "existing target")
+end)
+
+run("cross-scope drag above portrait can move incoming window topmost", function()
+	local dragged = make_workspace_target(1, "portrait-drag-source-top", true)
+	local source_other = make_workspace_target(2, "portrait-drag-source-top")
+	dragged.window.monitor.name = "DP-2"
+	source_other.window.monitor.name = "DP-2"
+	registered_layout.layout.recalculate(make_context({ dragged, source_other }))
+
+	dragged.window.workspace = { name = "portrait-drag-target-top" }
+	dragged.window.monitor.name = "HDMI-A-2"
+	local existing = set_geometry(make_workspace_target(3, "portrait-drag-target-top"), 220)
+	set_geometry(dragged, -120)
+	local ctx = make_context({ existing, dragged })
+	registered_layout.layout.recalculate(ctx)
+	cursor_position = { x = 20, y = 30 }
+	registered_layout.layout.layout_msg(ctx, "place-at-cursor")
+	cursor_position = nil
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(dragged.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
+	assert_box(existing.placed, { x = 10, y = 120, w = 120, h = 200 }, "existing target")
+end)
+
+run("cross-scope drag above portrait works before active monitor updates", function()
+	local dragged = make_workspace_target(1, "portrait-drag-source-stale-monitor", true)
+	local source_other = make_workspace_target(2, "portrait-drag-source-stale-monitor")
+	dragged.window.monitor.name = "DP-2"
+	source_other.window.monitor.name = "DP-2"
+	registered_layout.layout.recalculate(make_context({ dragged, source_other }))
+
+	dragged.window.workspace = { name = "portrait-drag-target-stale-monitor" }
+	local existing = set_geometry(make_workspace_target(3, "portrait-drag-target-stale-monitor"), 220)
+	set_geometry(dragged, -120)
+	local ctx = make_context({ existing, dragged })
+	registered_layout.layout.recalculate(ctx)
+	cursor_position = { x = 20, y = 30 }
+	registered_layout.layout.layout_msg(ctx, "place-at-cursor")
+	cursor_position = nil
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(dragged.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
+	assert_box(existing.placed, { x = 10, y = 120, w = 120, h = 200 }, "existing target")
+end)
+
+run("drag geometry beats non-exact keyboard transfer fallback", function()
+	local dragged = make_workspace_target(1, "portrait-drag-stale-fallback", true)
+	dragged.window.monitor.name = "HDMI-A-2"
+	dragged.window.address = nil
+	local existing = set_geometry(make_workspace_target(2, "portrait-drag-stale-fallback"), 220)
+	set_geometry(dragged, -120)
+	order_state.record_transfer_intent({ address = "0xmissing" }, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
+
+	local ctx = make_context({ existing, dragged })
+	registered_layout.layout.recalculate(ctx)
+	cursor_position = { x = 20, y = 30 }
+	registered_layout.layout.layout_msg(ctx, "place-at-cursor")
+	cursor_position = nil
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(dragged.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
+	assert_box(existing.placed, { x = 10, y = 120, w = 120, h = 200 }, "existing target")
+end)
+
+run("cross-scope drag below portrait can move incoming window bottommost", function()
+	local dragged = make_workspace_target(1, "portrait-drag-source", true)
+	local source_other = make_workspace_target(2, "portrait-drag-source")
+	dragged.window.monitor.name = "DP-2"
+	source_other.window.monitor.name = "DP-2"
+	registered_layout.layout.recalculate(make_context({ dragged, source_other }))
+
+	dragged.window.workspace = { name = "portrait-drag-target" }
+	dragged.window.monitor.name = "HDMI-A-2"
+	local existing = set_geometry(make_workspace_target(3, "portrait-drag-target"), 20)
+	set_geometry(dragged, 400)
+	local ctx = make_context({ dragged, existing })
+	registered_layout.layout.recalculate(ctx)
+	cursor_position = { x = 20, y = 400 }
+	registered_layout.layout.layout_msg(ctx, "place-at-cursor")
+	cursor_position = nil
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(existing.placed, { x = 10, y = 20, w = 120, h = 100 }, "existing target")
+	assert_box(dragged.placed, { x = 10, y = 120, w = 120, h = 200 }, "dragged target")
 end)
 
 run("ultrawide transfer intent inserts bottommost despite outside source y", function()
@@ -324,6 +424,29 @@ run("duplicate target identity falls back to source order", function()
 	local first = set_geometry(make_workspace_target(1, "portrait-duplicate", true), 220)
 	local second = set_geometry(make_workspace_target(2, "portrait-duplicate"), 20)
 	second.window.address = first.window.address
+
+	registered_layout.layout.recalculate(make_context({ first, second }))
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "first target")
+	assert_box(second.placed, { x = 10, y = 120, w = 120, h = 200 }, "second target")
+end)
+
+run("missing address uses stable identity for drag order", function()
+	local first = set_geometry(make_workspace_target(1, "portrait-missing-address", true), 220)
+	local second = set_geometry(make_workspace_target(2, "portrait-missing-address"), 20)
+	first.window.address = nil
+
+	registered_layout.layout.recalculate(make_context({ first, second }))
+
+	assert_box(second.placed, { x = 10, y = 20, w = 120, h = 100 }, "second target")
+	assert_box(first.placed, { x = 10, y = 120, w = 120, h = 200 }, "first target")
+end)
+
+run("missing target identity falls back to source order", function()
+	local first = set_geometry(make_workspace_target(1, "portrait-missing-id", true), 220)
+	local second = set_geometry(make_workspace_target(2, "portrait-missing-id"), 20)
+	first.window.address = nil
+	first.window.stable_id = nil
 
 	registered_layout.layout.recalculate(make_context({ first, second }))
 

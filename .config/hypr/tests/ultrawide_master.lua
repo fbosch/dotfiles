@@ -5,6 +5,7 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 
 local registered_layout = nil
 local workspace_counter = 0
+local cursor_position = nil
 
 hl = {
 	layout = {
@@ -12,6 +13,9 @@ hl = {
 			registered_layout = { name = name, layout = layout }
 		end,
 	},
+	get_cursor_pos = function()
+		return cursor_position
+	end,
 }
 
 _G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
@@ -121,12 +125,43 @@ run("known active geometry reorders columns", function()
 	local second = make_target(2)
 	local ctx = make_context({ first, second })
 	registered_layout.layout.recalculate(ctx)
-	set_geometry(first, 850)
-	set_geometry(second, 200)
+	cursor_position = { x = 900, y = 30 }
+	registered_layout.layout.layout_msg(ctx, "place-at-cursor")
+	cursor_position = nil
 	registered_layout.layout.recalculate(ctx)
 
 	assert_box(second.placed, { x = 10, y = 20, w = 670, h = 500 }, "left target")
 	assert_box(first.placed, { x = 680, y = 20, w = 330, h = 500 }, "right target")
+end)
+
+run("dragging active column left of layout moves it leftmost", function()
+	local left = make_target(1)
+	local right = make_target(2, true)
+	local ctx = make_context({ left, right }, "drag-left-overshoot")
+	registered_layout.layout.recalculate(ctx)
+
+	cursor_position = { x = -400, y = 30 }
+	registered_layout.layout.layout_msg(ctx, "place-at-cursor")
+	cursor_position = nil
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(right.placed, { x = 10, y = 20, w = 670, h = 500 }, "dragged target")
+	assert_box(left.placed, { x = 680, y = 20, w = 330, h = 500 }, "right target")
+end)
+
+run("dragging active column right of layout moves it rightmost", function()
+	local left = make_target(1, true)
+	local right = make_target(2)
+	local ctx = make_context({ left, right }, "drag-right-overshoot")
+	registered_layout.layout.recalculate(ctx)
+
+	cursor_position = { x = 1200, y = 30 }
+	registered_layout.layout.layout_msg(ctx, "place-at-cursor")
+	cursor_position = nil
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(right.placed, { x = 10, y = 20, w = 670, h = 500 }, "left target")
+	assert_box(left.placed, { x = 680, y = 20, w = 330, h = 500 }, "dragged target")
 end)
 
 run("spawned active window does not reorder existing columns", function()
@@ -194,6 +229,81 @@ run("cross-scope geometry without transfer intent keeps incoming order", functio
 	assert_box(left.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
 	assert_box(dragged.placed, { x = 310, y = 20, w = 400, h = 500 }, "dragged target")
 	assert_box(right.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
+end)
+
+run("cross-scope drag left of ultrawide can move incoming window leftmost", function()
+	local ultrawide_layout = registered_layout.layout
+	local portrait_layout = require("layouts.portrait_rows")
+	registered_layout.layout = ultrawide_layout
+
+	local dragged = set_monitor(make_target(35, true), "HDMI-A-2")
+	local source_other = set_monitor(make_target(36), "HDMI-A-2")
+	portrait_layout.recalculate({ area = { x = -900, y = 0, w = 800, h = 1200 }, targets = { dragged, source_other } })
+
+	local workspace = "cross-monitor-drag-leftmost"
+	dragged.window.workspace = { name = workspace }
+	dragged.window.monitor.name = "DP-2"
+	set_geometry(dragged, -900)
+
+	local left = make_target(37)
+	local right = make_target(38)
+	local ctx = make_context({ left, dragged, right }, workspace)
+	ultrawide_layout.recalculate(ctx)
+	cursor_position = { x = -900, y = 30 }
+	ultrawide_layout.layout_msg(ctx, "place-at-cursor")
+	cursor_position = nil
+	ultrawide_layout.recalculate(ctx)
+
+	assert_box(dragged.placed, { x = 10, y = 20, w = 300, h = 500 }, "dragged target")
+	assert_box(left.placed, { x = 310, y = 20, w = 400, h = 500 }, "left target")
+	assert_box(right.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
+end)
+
+run("cross-scope drag right of ultrawide can move incoming window rightmost", function()
+	local ultrawide_layout = registered_layout.layout
+	local portrait_layout = require("layouts.portrait_rows")
+	registered_layout.layout = ultrawide_layout
+
+	local dragged = set_monitor(make_target(45, true), "HDMI-A-2")
+	local source_other = set_monitor(make_target(46), "HDMI-A-2")
+	portrait_layout.recalculate({ area = { x = 2000, y = 0, w = 800, h = 1200 }, targets = { dragged, source_other } })
+
+	local workspace = "cross-monitor-drag-rightmost"
+	dragged.window.workspace = { name = workspace }
+	dragged.window.monitor.name = "DP-2"
+	set_geometry(dragged, 2000)
+
+	local left = make_target(47)
+	local right = make_target(48)
+	local ctx = make_context({ left, dragged, right }, workspace)
+	ultrawide_layout.recalculate(ctx)
+	cursor_position = { x = 2000, y = 30 }
+	ultrawide_layout.layout_msg(ctx, "place-at-cursor")
+	cursor_position = nil
+	ultrawide_layout.recalculate(ctx)
+
+	assert_box(left.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
+	assert_box(right.placed, { x = 310, y = 20, w = 400, h = 500 }, "center target")
+	assert_box(dragged.placed, { x = 710, y = 20, w = 300, h = 500 }, "dragged target")
+end)
+
+run("drag geometry beats non-exact ultrawide transfer fallback", function()
+	local dragged = set_geometry(make_target(39, true), 2000)
+	dragged.window.address = nil
+	local left = make_target(40)
+	local right = make_target(41)
+	order_state.record_transfer_intent({ address = "0xmissing" }, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+
+	local ctx = make_context({ left, dragged, right }, "ultrawide-drag-stale-fallback")
+	registered_layout.layout.recalculate(ctx)
+	cursor_position = { x = 2000, y = 30 }
+	registered_layout.layout.layout_msg(ctx, "place-at-cursor")
+	cursor_position = nil
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(left.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
+	assert_box(right.placed, { x = 310, y = 20, w = 400, h = 500 }, "center target")
+	assert_box(dragged.placed, { x = 710, y = 20, w = 300, h = 500 }, "dragged target")
 end)
 
 run("portrait transfer intent inserts leftmost despite outside right source x", function()
@@ -316,10 +426,22 @@ run("duplicate target identity falls back to source order", function()
 	assert_box(second.placed, { x = 680, y = 20, w = 330, h = 500 }, "second target")
 end)
 
+run("missing address uses stable identity for drag order", function()
+	local first = set_geometry(make_target(1, true), 800)
+	local second = set_geometry(make_target(2), 100)
+	first.window.address = nil
+
+	registered_layout.layout.recalculate(make_context({ first, second }, "missing-address-stable-id"))
+
+	assert_box(second.placed, { x = 10, y = 20, w = 670, h = 500 }, "second target")
+	assert_box(first.placed, { x = 680, y = 20, w = 330, h = 500 }, "first target")
+end)
+
 run("missing target identity falls back to source order", function()
 	local first = set_geometry(make_target(1, true), 800)
 	local second = set_geometry(make_target(2), 100)
 	first.window.address = nil
+	first.window.stable_id = nil
 
 	registered_layout.layout.recalculate(make_context({ first, second }, "missing-id"))
 
