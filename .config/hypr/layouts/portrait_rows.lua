@@ -293,16 +293,7 @@ function M.recalculate(ctx)
 	local has_transfer_intent = order_state.has_transfer_intent(role, "y")
 	if has_transfer_intent and not transfer_target and added_id then
 		local added_target = targets_by_id and targets_by_id[added_id] or nil
-		local added_position = order_state.position(added_target, "y")
-		local added_active = active_index(targets)
-		local added_is_active = added_active and targets[added_active] == added_target
-		local added_outside_area = added_position ~= nil and not order_state.position_in_area(added_target, "y", y, height)
-		local intent = nil
-		if added_target and added_is_active and added_outside_area then
-			order_state.consume_transfer_intent(added_target, role, "y", true)
-		else
-			intent = added_target and order_state.consume_transfer_intent(added_target, role, "y", true) or nil
-		end
+		local intent = added_target and order_state.consume_transfer_intent(added_target, role, "y", true) or nil
 		if intent then
 			transfer_target = added_target
 			transfer_intent = intent
@@ -310,26 +301,17 @@ function M.recalculate(ctx)
 	end
 	if has_transfer_intent and not transfer_target then
 		local outside_target = nil
-		local outside_index = nil
 		for index = 1, #targets do
 			local position = order_state.position(targets[index], "y")
 			if position and (position < y or position > y + height) then
 				if outside_target then
 					outside_target = nil
-					outside_index = nil
 					break
 				end
 				outside_target = targets[index]
-				outside_index = index
 			end
 		end
-		local active = active_index(targets)
-		local intent = nil
-		if outside_target and active and active == outside_index then
-			order_state.consume_transfer_intent(outside_target, role, "y", true)
-		else
-			intent = outside_target and order_state.consume_transfer_intent(outside_target, role, "y", true) or nil
-		end
+		local intent = outside_target and order_state.consume_transfer_intent(outside_target, role, "y", true) or nil
 		if intent then
 			transfer_target = outside_target
 			transfer_intent = intent
