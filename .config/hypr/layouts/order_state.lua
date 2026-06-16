@@ -1,26 +1,42 @@
 local M = {}
 local pending_transfer_by_id = {}
 local pending_transfer_by_destination = {}
+local pending_transfer_destination_id = {}
 
 local function transfer_destination(monitor_role, axis)
 	local by_axis = pending_transfer_by_destination[monitor_role]
 	return by_axis and by_axis[axis] or nil
 end
 
-local function set_transfer_destination(monitor_role, axis, intent)
+local function transfer_destination_id(monitor_role, axis)
+	local by_axis = pending_transfer_destination_id[monitor_role]
+	return by_axis and by_axis[axis] or nil
+end
+
+local function set_transfer_destination(monitor_role, axis, intent, id)
 	local by_axis = pending_transfer_by_destination[monitor_role]
 	if not by_axis then
 		by_axis = {}
 		pending_transfer_by_destination[monitor_role] = by_axis
 	end
+	local ids_by_axis = pending_transfer_destination_id[monitor_role]
+	if not ids_by_axis then
+		ids_by_axis = {}
+		pending_transfer_destination_id[monitor_role] = ids_by_axis
+	end
 
 	by_axis[axis] = intent
+	ids_by_axis[axis] = id
 end
 
 local function clear_transfer_destination(monitor_role, axis)
 	local by_axis = pending_transfer_by_destination[monitor_role]
 	if by_axis then
 		by_axis[axis] = nil
+	end
+	local ids_by_axis = pending_transfer_destination_id[monitor_role]
+	if ids_by_axis then
+		ids_by_axis[axis] = nil
 	end
 end
 
@@ -240,22 +256,16 @@ end
 
 function M.record_transfer_intent(window, intent)
 	local id = M.window_id(window)
-	local pending = {
-		axis = intent.axis,
-		edge = intent.edge,
-		id = id,
-		monitor_role = intent.monitor_role,
-	}
-	local previous = transfer_destination(intent.monitor_role, intent.axis)
-	if previous and previous.id then
-		pending_transfer_by_id[previous.id] = nil
+	local previous_id = transfer_destination_id(intent.monitor_role, intent.axis)
+	if previous_id then
+		pending_transfer_by_id[previous_id] = nil
 	end
 
 	if id then
-		pending_transfer_by_id[id] = pending
+		pending_transfer_by_id[id] = intent
 	end
 
-	set_transfer_destination(intent.monitor_role, intent.axis, pending)
+	set_transfer_destination(intent.monitor_role, intent.axis, intent, id)
 end
 
 function M.consume_transfer_intent(target, monitor_role, axis, allow_destination_fallback)
@@ -273,9 +283,10 @@ function M.consume_transfer_intent(target, monitor_role, axis, allow_destination
 		return nil
 	end
 
+	local destination_id = transfer_destination_id(monitor_role, axis)
 	clear_transfer_destination(monitor_role, axis)
-	if intent.id then
-		pending_transfer_by_id[intent.id] = nil
+	if destination_id then
+		pending_transfer_by_id[destination_id] = nil
 	end
 	return intent
 end

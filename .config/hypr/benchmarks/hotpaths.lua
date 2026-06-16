@@ -384,6 +384,25 @@ local function bench_window_motion(iterations)
 	end)
 end
 
+local function bench_transfer_intent(iterations)
+	clear_modules()
+	local monitor_role = require("lib.monitor_role")
+	local order_state = require("layouts.order_state")
+	local stale = { address = "0xstale" }
+	local current = { address = "0xcurrent" }
+	local target = { window = current }
+	local intent = { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
+
+	run_case("order_state/record-stale-replace", iterations, function()
+		order_state.record_transfer_intent(stale, intent)
+		order_state.record_transfer_intent(current, intent)
+	end)
+	run_case("order_state/consume-exact-id", iterations, function()
+		order_state.record_transfer_intent(current, intent)
+		order_state.consume_transfer_intent_by_id(target, monitor_role.ultrawide, "x")
+	end)
+end
+
 local cases = {
 	ultrawide_master = bench_ultrawide_master,
 	portrait = bench_portrait_rows,
@@ -392,18 +411,19 @@ local cases = {
 	rule_loader = bench_rule_loader,
 	profiles = bench_profiles,
 	window_motion = bench_window_motion,
+	transfer_intent = bench_transfer_intent,
 }
 
 local selected = arg[1] or "all"
 local iterations = tonumber(arg[2]) or default_iterations
 
 if selected == "all" then
-	for _, name in ipairs({ "ultrawide_master", "portrait", "window_switcher", "clipboard", "rule_loader", "profiles", "window_motion" }) do
+	for _, name in ipairs({ "ultrawide_master", "portrait", "window_switcher", "clipboard", "rule_loader", "profiles", "window_motion", "transfer_intent" }) do
 		cases[name](iterations)
 	end
 elseif cases[selected] then
 	cases[selected](iterations)
 else
-	print("usage: lua " .. script_path .. " [all|ultrawide_master|portrait|window_switcher|clipboard|rule_loader|profiles|window_motion] [iterations]")
+	print("usage: lua " .. script_path .. " [all|ultrawide_master|portrait|window_switcher|clipboard|rule_loader|profiles|window_motion|transfer_intent] [iterations]")
 	os.exit(2)
 end
