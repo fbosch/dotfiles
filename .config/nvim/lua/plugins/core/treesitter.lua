@@ -10,6 +10,7 @@ return {
 				vim.notify("nvim-treesitter not found", vim.log.levels.ERROR)
 				return
 			end
+			treesitter.setup()
 
 			local function prefer_bundled_parser(lang)
 				for _, path in ipairs(vim.api.nvim_get_runtime_file("parser/" .. lang .. ".so", true)) do
@@ -32,16 +33,21 @@ return {
 				return pcall(vim.treesitter.language.inspect, lang)
 			end
 
+			local function has_highlight_query(lang)
+				local query_ok, query = pcall(vim.treesitter.query.get, lang, "highlights")
+				return query_ok and query ~= nil
+			end
+
 			local required_languages = { "typescript", "tsx", "javascript", "jsdoc" }
 			local missing_languages = {}
 			for _, lang in ipairs(required_languages) do
-				if has_parser(lang) == false then
+				if has_parser(lang) == false or has_highlight_query(lang) == false then
 					table.insert(missing_languages, lang)
 				end
 			end
 
 			if #missing_languages > 0 then
-				treesitter.install(missing_languages)
+				treesitter.install(missing_languages, { force = true })
 			end
 
 			local group = vim.api.nvim_create_augroup("TreesitterStart", { clear = true })

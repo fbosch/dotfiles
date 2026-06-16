@@ -18,7 +18,53 @@
 - Keep changes minimal and local; prefer existing patterns.
 - Default to current schema/contract; add compatibility layers only when explicitly required.
 - Run the smallest reasonable validation for changed behavior.
-- Use `~/.config/opencode/instructions/reference-loading.md` to pull detailed references only when relevant.
+- Read references on demand; do not load all of them by default.
+- Before changing behavior, APIs, config formats, data handling, or validation paths, read `~/.config/opencode/references/compatibility.md`.
+- Before running or reporting validation, read `~/.config/opencode/references/validation.md`.
+- Before substantial user-facing prose, PR descriptions, issue summaries, or docs, read `~/.config/opencode/TONE.md`.
+- Skip reference reads for trivial answers, single-line edits, or when the same reference has already been read for the current task.
+- If unsure whether a task is non-trivial, prefer reading the narrowest relevant reference over guessing.
+
+## Coding style
+
+- Prefer early returns and guard clauses; avoid deep nesting and avoid `else` when flow can stay clear.
+- Avoid deeply nested ternary operators; prefer clearer control flow.
+- Favor small, focused functions/modules and clear names over cleverness.
+- Prefer existing repo conventions and patterns over introducing new ones.
+- Name meaningful magic numbers/strings and extract complex conditions into well-named helpers.
+- Keep each unit focused on one job; separate decision logic from I/O when it improves clarity.
+- Prefer adding new code paths over modifying stable/shared code; avoid extension points without a concrete second use case.
+- Preserve contracts when using inheritance/interfaces: no surprise behavior, stricter inputs, or weaker outputs.
+- Prefer small, purpose-built interfaces/types/props; avoid god interfaces.
+- Keep core logic independent of frameworks/external services where practical; inject dependencies or wrap external APIs only when it improves testability/coupling.
+- Avoid single-use wrapper functions, trivial helpers, and IIFEs.
+- Prefer `=== false` over `!` for negating boolean expressions, especially multi-line ones.
+- Prefer event-driven listeners over polling loops whenever both are viable.
+
+## Simplicity ladder
+
+- First ask whether the code needs to exist; no code is best when the requirement can be removed or handled operationally.
+- Prefer stdlib APIs before custom code.
+- Prefer native platform features before dependencies.
+- Prefer existing dependencies before adding new dependencies.
+- Prefer existing repo patterns before new architecture.
+- Prefer one clear expression or small local block before scaffolding helpers, classes, adapters, or config.
+- Only add abstraction when there is a concrete second use case or the implementation complexity is large enough to hide behind a stable interface.
+- Do not simplify away authorization, security checks, observability needed to debug failures, or other required safeguards.
+- When deliberately taking a shortcut, add `shortcut:` with the limitation and upgrade trigger.
+
+## Avoid slop
+
+- No redundant type annotations where inference works.
+- No type casts to `any` to bypass type issues; fix types properly.
+- No explanatory comments for obvious code.
+- No console.log or debug prints in committed code; remove temporary debug logs before finishing.
+- No commented-out code blocks; delete or rely on git history.
+- Match existing codebase verbosity for naming.
+- Trust the type system; do not add runtime checks it already prevents.
+- Add `try/catch` only where errors are expected and handleable.
+- No speculative compatibility layers, options, adapters, or extension points without a current caller.
+- No avoidable dependency installs when stdlib, platform, or existing dependency coverage is enough.
 
 ## Communication style
 
