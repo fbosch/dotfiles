@@ -117,30 +117,40 @@ if status is-interactive; and command -v atuin >/dev/null 2>&1
 end
 
 # Zoxide initialization
-if status is-interactive; and command -v zoxide >/dev/null 2>&1
+if status is-interactive
     set -l zoxide_cache ~/.cache/fish/zoxide-init.fish
     if not test -f $zoxide_cache
-        mkdir -p (dirname $zoxide_cache)
-        zoxide init fish > $zoxide_cache
+        if command -v zoxide >/dev/null 2>&1
+            mkdir -p (dirname $zoxide_cache)
+            zoxide init fish > $zoxide_cache
+        end
     end
-    source $zoxide_cache
+    if test -f $zoxide_cache
+        source $zoxide_cache
+    end
 end
 
 # Navi widget (Ctrl+G)
-if status is-interactive; and command -v navi >/dev/null 2>&1
+if status is-interactive
     set -l navi_cache ~/.cache/fish/navi-widget.fish
     if not test -f $navi_cache
-        mkdir -p (dirname $navi_cache)
-        navi widget fish > $navi_cache
+        if command -v navi >/dev/null 2>&1
+            mkdir -p (dirname $navi_cache)
+            navi widget fish > $navi_cache
+        end
     end
-    source $navi_cache
+    if test -f $navi_cache
+        source $navi_cache
+    end
 end
 
-if status is-interactive; and command -v just >/dev/null 2>&1
+if status is-interactive
     set -l just_cache ~/.cache/fish/generated_completions/just.fish
     if not test -f $just_cache
-        mkdir -p (dirname $just_cache)
-        just --completions fish > $just_cache
+        if command -v just >/dev/null 2>&1
+            mkdir -p (dirname $just_cache)
+            just --completions fish > $just_cache
+        end
     end
 end
 
@@ -166,13 +176,17 @@ else
 end
 
 # Starship initialization
-if status is-interactive; and command -v starship >/dev/null 2>&1
+if status is-interactive
     set -l starship_cache ~/.cache/fish/starship-init.fish
     if not test -f $starship_cache
-        mkdir -p (dirname $starship_cache)
-        starship init fish --print-full-init > $starship_cache
+        if command -v starship >/dev/null 2>&1
+            mkdir -p (dirname $starship_cache)
+            starship init fish --print-full-init > $starship_cache
+        end
     end
-    source $starship_cache
+    if test -f $starship_cache
+        source $starship_cache
+    end
 end
 
 # fnm (Fast Node Manager)
@@ -218,6 +232,6 @@ end
 fish_add_path $HOME/.local/bin
 
 # Keep fnm's selected Node ahead of Nix/Homebrew Node entries after PATH setup.
-if set -q FNM_MULTISHELL_PATH
-    set -gx PATH "$FNM_MULTISHELL_PATH/bin" (string match -v -- "$FNM_MULTISHELL_PATH/bin" $PATH)
+if set -q FNM_MULTISHELL_PATH; and test "$PATH[1]" != "$FNM_MULTISHELL_PATH/bin"
+    set -gx PATH "$FNM_MULTISHELL_PATH/bin" $PATH
 end

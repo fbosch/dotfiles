@@ -1,8 +1,19 @@
 # Neovim
-alias nvim 'nvim -i NONE --noplugin'
-alias snvim 'sudo -E -s nvim'
-alias vimdiff 'nvim -d'
-alias pip "uv pip" # python pip to uv
+function nvim --description 'alias nvim nvim -i NONE --noplugin'
+    command nvim -i NONE --noplugin $argv
+end
+
+function snvim --wraps='sudo -E -s nvim' --description 'alias snvim sudo -E -s nvim'
+    sudo -E -s nvim $argv
+end
+
+function vimdiff --wraps='nvim -d' --description 'alias vimdiff nvim -d'
+    nvim -d $argv
+end
+
+function pip --description 'alias pip uv pip'
+    uv pip $argv
+end
 abbr n nvim
 abbr nlup 'nvim --headless +"Lazy! sync" +qa' # lazy update neovim plugins
 abbr nwipe 'nvim --headless +"WipeAllSessions!" +qa'
@@ -17,10 +28,17 @@ abbr bup 'brew upgrade'
 abbr ff freshfetch
 abbr mrs5 mullvad_random_socks5
 
-alias cdwow 'cd "/home/fbb/Faugus/battlenet/drive_c/Program Files (x86)/World of Warcraft"'
+function cdwow --wraps='cd "/home/fbb/Faugus/battlenet/drive_c/Program Files (x86)/World of Warcraft"' --description 'alias cdwow cd "/home/fbb/Faugus/battlenet/drive_c/Program Files (x86)/World of Warcraft"'
+    cd "/home/fbb/Faugus/battlenet/drive_c/Program Files (x86)/World of Warcraft" $argv
+end
 
-alias uge get_week_dates
-alias rw remaining_work_hours
+function uge --wraps=get_week_dates --description 'alias uge get_week_dates'
+    get_week_dates $argv
+end
+
+function rw --wraps=remaining_work_hours --description 'alias rw remaining_work_hours'
+    remaining_work_hours $argv
+end
 
 # Directory shortcuts - fingers too fast for accuracy ⚡
 abbr prj 'cd ~/Projects'
@@ -39,7 +57,9 @@ abbr ocps opencode_profile_switch
 abbr ocas opencode_auth_switch
 
 abbr liw linear_issue_workflow
-alias wsc 'wt switch --create --execute=opencode'
+function wsc --wraps='wt switch --create --execute=opencode' --description 'alias wsc wt switch --create --execute=opencode'
+    wt switch --create --execute=opencode $argv
+end
 
 # Helpers
 abbr x exit
@@ -49,19 +69,46 @@ abbr cl clear
 abbr mki 'sudo make && sudo make clean install'
 
 # File viewing (bat wrappers)
-alias cat 'bat --style=plain --color=always'
-alias bat_fast 'bat --style=plain --color=never --wrap=never --paging=never'
-alias batbuild 'bat cache --build'
+function cat --wraps='bat --style=plain --color=always' --description 'alias cat bat --style=plain --color=always'
+    bat --style=plain --color=always $argv
+end
+
+function bat_fast --wraps='bat --style=plain --color=never --wrap=never --paging=never' --description 'alias bat_fast bat --style=plain --color=never --wrap=never --paging=never'
+    bat --style=plain --color=never --wrap=never --paging=never $argv
+end
+
+function batbuild --wraps='bat cache --build' --description 'alias batbuild bat cache --build'
+    bat cache --build $argv
+end
 
 # ls aliases using eza
-alias ls 'eza --icons -F'
-alias l 'eza --icons -F -lh'
-alias la 'eza --icons -F -A'
-alias lla 'eza --icons -F -la'
-alias ld 'eza --icons -F -l --sort=date --ignore-glob="node_modules" -D --time-style=relative'
-alias lt 'eza --tree -m --git --level=2 --ignore-glob="node_modules"'
+function ls --wraps='eza --icons -F' --description 'alias ls eza --icons -F'
+    eza --icons -F $argv
+end
 
-alias lw 'cd (latest_worktree)'
+function l --wraps='eza --icons -F -lh' --description 'alias l eza --icons -F -lh'
+    eza --icons -F -lh $argv
+end
+
+function la --wraps='eza --icons -F -A' --description 'alias la eza --icons -F -A'
+    eza --icons -F -A $argv
+end
+
+function lla --wraps='eza --icons -F -la' --description 'alias lla eza --icons -F -la'
+    eza --icons -F -la $argv
+end
+
+function ld --wraps='eza --icons -F -l --sort=date --ignore-glob="node_modules" -D --time-style=relative' --description 'alias ld eza --icons -F -l --sort=date --ignore-glob="node_modules" -D --time-style=relative'
+    eza --icons -F -l --sort=date --ignore-glob="node_modules" -D --time-style=relative $argv
+end
+
+function lt --wraps='eza --tree -m --git --level=2 --ignore-glob="node_modules"' --description 'alias lt eza --tree -m --git --level=2 --ignore-glob="node_modules"'
+    eza --tree -m --git --level=2 --ignore-glob="node_modules" $argv
+end
+
+function lw --wraps='cd (latest_worktree)' --description 'alias lw cd (latest_worktree)'
+    cd (latest_worktree) $argv
+end
 
 # Tmux
 abbr xtm 'pkill -f tmux'
@@ -133,14 +180,39 @@ abbr wid workitems_on_date
 abbr wiw workitems_week
 
 # Package manager shortcuts
-alias dev 'pnpm dev'
-alias t 'pnpm test'
-alias pr 'pnpm remove'
-alias sb 'pnpm storybook'
-alias sblg 'pnpm exec cross-env NODE_OPTIONS=--openssl-legacy-provider start-storybook -p 9000'
-alias lint 'pnpm lint'
-alias pw 'pnpm -r'
-alias pup 'pnpm update --interactive'
+function dev --wraps='pnpm dev' --description 'alias dev pnpm dev'
+    pnpm dev $argv
+end
+
+function t --wraps='pnpm test' --description 'alias t pnpm test'
+    pnpm test $argv
+end
+
+function pr --wraps='pnpm remove' --description 'alias pr pnpm remove'
+    pnpm remove $argv
+end
+
+function sb --wraps='pnpm storybook' --description 'alias sb pnpm storybook'
+    pnpm storybook $argv
+end
+
+function sblg --wraps='pnpm exec cross-env NODE_OPTIONS=--openssl-legacy-provider start-storybook -p 9000' --description 'alias sblg pnpm exec cross-env NODE_OPTIONS=--openssl-legacy-provider start-storybook -p 9000'
+    pnpm exec cross-env NODE_OPTIONS=--openssl-legacy-provider start-storybook -p 9000 $argv
+end
+
+function lint --wraps='pnpm lint' --description 'alias lint pnpm lint'
+    pnpm lint $argv
+end
+
+function pw --wraps='pnpm -r' --description 'alias pw pnpm -r'
+    pnpm -r $argv
+end
+
+function pup --wraps='pnpm update --interactive' --description 'alias pup pnpm update --interactive'
+    pnpm update --interactive $argv
+end
 
 # Weather
-alias wtr 'curl "wttr.in/Copenhagen?format=%n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"'
+function wtr --wraps='curl "wttr.in/Copenhagen?format=%n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"' --description 'alias wtr curl "wttr.in/Copenhagen?format=%n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n"'
+    curl "wttr.in/Copenhagen?format=%n+%c%C+%t++🌧️++%p++💧+%h++🌬️+%w\n" $argv
+end
