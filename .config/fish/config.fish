@@ -107,13 +107,32 @@ end
 
 # --- Third-party Tools ---
 # Atuin shell history
-if status is-interactive; and command -v atuin >/dev/null 2>&1
-    set -l atuin_cache ~/.cache/fish/atuin-init.fish
-    if not test -f $atuin_cache
-        mkdir -p (dirname $atuin_cache)
-        atuin init fish --disable-up-arrow > $atuin_cache
+if status is-interactive
+    function __load_atuin
+        set -q __ATUIN_LOADED; and return 0
+        command -q atuin; or return 1
+
+        set -l atuin_cache ~/.cache/fish/atuin-init.fish
+        if not test -f $atuin_cache
+            mkdir -p (dirname $atuin_cache)
+            atuin init fish --disable-up-arrow > $atuin_cache
+        end
+        source $atuin_cache
+        set -g __ATUIN_LOADED 1
     end
-    source $atuin_cache
+
+    function _atuin_search
+        functions -e _atuin_search
+        __load_atuin; and _atuin_search $argv
+    end
+
+    function __atuin_lazy_preexec --on-event fish_preexec
+        functions -e __atuin_lazy_preexec
+        __load_atuin; and _atuin_preexec $argv
+    end
+
+    bind ctrl-r _atuin_search
+    bind --mode insert ctrl-r _atuin_search
 end
 
 # Zoxide initialization
@@ -190,8 +209,45 @@ if status is-interactive
 end
 
 # fnm (Fast Node Manager)
-# Load eagerly - lazy loading causes issues with git hooks, mprocs, etc.
-fnm env --use-on-cd --version-file-strategy=recursive --log-level=quiet --shell fish | source
+function __load_fnm
+    set -q FNM_MULTISHELL_PATH; and return 0
+    command -q fnm; or return 1
+
+    command fnm env --use-on-cd --version-file-strategy=recursive --log-level=quiet --shell fish | source
+    functions -e fnm node npm npx pnpm pnpx yarn corepack
+end
+
+function fnm
+    __load_fnm; and command fnm $argv
+end
+
+function node
+    __load_fnm; and command node $argv
+end
+
+function npm
+    __load_fnm; and command npm $argv
+end
+
+function npx
+    __load_fnm; and command npx $argv
+end
+
+function pnpm
+    __load_fnm; and command pnpm $argv
+end
+
+function pnpx
+    __load_fnm; and command pnpx $argv
+end
+
+function yarn
+    __load_fnm; and command yarn $argv
+end
+
+function corepack
+    __load_fnm; and command corepack $argv
+end
 
 # --- pnpm globals (managed by Nix) ---
 switch $OS_TYPE
