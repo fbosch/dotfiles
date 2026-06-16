@@ -196,5 +196,5 @@ fish_add_path $HOME/.local/bin
 
 # Keep fnm's selected Node ahead of Nix/Homebrew Node entries after PATH setup.
 if set -q FNM_MULTISHELL_PATH
-    fish_add_path --prepend --move "$FNM_MULTISHELL_PATH/bin"
+    set -gx PATH "$FNM_MULTISHELL_PATH/bin" (string match -v -- "$FNM_MULTISHELL_PATH/bin" $PATH)
 end
