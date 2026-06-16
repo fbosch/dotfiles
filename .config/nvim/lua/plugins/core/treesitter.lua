@@ -33,41 +33,45 @@ return {
 				return pcall(vim.treesitter.language.inspect, lang)
 			end
 
-			local function has_highlight_query(lang)
-				local query_ok, query = pcall(vim.treesitter.query.get, lang, "highlights")
-				return query_ok and query ~= nil
-			end
-
-			local required_languages = {
-				"astro",
-				"bash",
-				"css",
-				"dockerfile",
-				"fish",
-				"html",
-				"javascript",
-				"jsdoc",
-				"json",
-				"lua",
-				"markdown",
-				"markdown_inline",
-				"nix",
-				"rust",
-				"toml",
-				"tsx",
-				"typescript",
-				"yaml",
-			}
-			local missing_languages = {}
-			for _, lang in ipairs(required_languages) do
-				if has_parser(lang) == false or has_highlight_query(lang) == false then
-					table.insert(missing_languages, lang)
+			vim.api.nvim_create_user_command("TSInstallMissing", function()
+				local function has_highlight_query(lang)
+					local query_ok, query = pcall(vim.treesitter.query.get, lang, "highlights")
+					return query_ok and query ~= nil
 				end
-			end
 
-			if #missing_languages > 0 then
+				local missing_languages = {}
+				for _, lang in ipairs({
+					"astro",
+					"bash",
+					"css",
+					"dockerfile",
+					"fish",
+					"html",
+					"javascript",
+					"jsdoc",
+					"json",
+					"lua",
+					"markdown",
+					"markdown_inline",
+					"nix",
+					"rust",
+					"toml",
+					"tsx",
+					"typescript",
+					"yaml",
+				}) do
+					if has_parser(lang) == false or has_highlight_query(lang) == false then
+						table.insert(missing_languages, lang)
+					end
+				end
+
+				if #missing_languages == 0 then
+					vim.notify("All configured treesitter parsers are installed", vim.log.levels.INFO)
+					return
+				end
+
 				treesitter.install(missing_languages, { force = true })
-			end
+			end, { desc = "Install missing configured treesitter parsers" })
 
 			local group = vim.api.nvim_create_augroup("TreesitterStart", { clear = true })
 			vim.api.nvim_create_autocmd("FileType", {
