@@ -240,11 +240,22 @@ end
 
 function M.record_transfer_intent(window, intent)
 	local id = M.window_id(window)
-	if id then
-		pending_transfer_by_id[id] = intent
+	local pending = {
+		axis = intent.axis,
+		edge = intent.edge,
+		id = id,
+		monitor_role = intent.monitor_role,
+	}
+	local previous = transfer_destination(intent.monitor_role, intent.axis)
+	if previous and previous.id then
+		pending_transfer_by_id[previous.id] = nil
 	end
 
-	set_transfer_destination(intent.monitor_role, intent.axis, intent)
+	if id then
+		pending_transfer_by_id[id] = pending
+	end
+
+	set_transfer_destination(intent.monitor_role, intent.axis, pending)
 end
 
 function M.consume_transfer_intent(target, monitor_role, axis, allow_destination_fallback)
@@ -263,6 +274,9 @@ function M.consume_transfer_intent(target, monitor_role, axis, allow_destination
 	end
 
 	clear_transfer_destination(monitor_role, axis)
+	if intent.id then
+		pending_transfer_by_id[intent.id] = nil
+	end
 	return intent
 end
 

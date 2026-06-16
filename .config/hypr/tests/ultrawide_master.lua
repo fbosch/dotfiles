@@ -356,6 +356,19 @@ run("portrait transfer exact id wins over existing active ultrawide target", fun
 	assert_box(existing.placed, { x = 680, y = 20, w = 330, h = 500 }, "existing target")
 end)
 
+run("new ultrawide transfer replaces stale exact intent", function()
+	local stale = set_geometry(make_target(93), 100)
+	local current = set_geometry(make_target(94, true), 800)
+	local workspace = "transfer-replaces-stale-exact"
+
+	order_state.record_transfer_intent(stale.window, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+	order_state.record_transfer_intent(current.window, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+	registered_layout.layout.recalculate(make_context({ stale, current }, workspace))
+
+	assert_box(current.placed, { x = 10, y = 20, w = 670, h = 500 }, "current transfer target")
+	assert_box(stale.placed, { x = 680, y = 20, w = 330, h = 500 }, "stale transfer target")
+end)
+
 run("portrait transfer survives destination recalculate before arrival", function()
 	local workspace = "transfer-prearrival-recalculate"
 	local left = set_geometry(make_target(101), 100)

@@ -381,6 +381,18 @@ run("transfer intent wins when target already arrives topmost", function()
 	assert_box(dragged.placed, { x = 10, y = 120, w = 120, h = 200 }, "dragged target")
 end)
 
+run("new portrait transfer replaces stale exact intent", function()
+	local stale = set_geometry(make_workspace_target(231, "portrait-transfer-replaces-stale"), 20)
+	local current = set_geometry(make_workspace_target(232, "portrait-transfer-replaces-stale", true), 220)
+
+	order_state.record_transfer_intent(stale.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
+	order_state.record_transfer_intent(current.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
+	registered_layout.layout.recalculate(make_context({ stale, current }))
+
+	assert_box(stale.placed, { x = 10, y = 20, w = 120, h = 100 }, "stale transfer target")
+	assert_box(current.placed, { x = 10, y = 120, w = 120, h = 200 }, "current transfer target")
+end)
+
 run("ultrawide transfer intent survives active target id mismatch", function()
 	local dragged = set_geometry(make_workspace_target(1, "portrait-transfer-id-mismatch", true), 2000, 800)
 	dragged.window.at.x = 2000
