@@ -38,7 +38,26 @@ return {
 				return query_ok and query ~= nil
 			end
 
-			local required_languages = { "typescript", "tsx", "javascript", "jsdoc" }
+			local required_languages = {
+				"astro",
+				"bash",
+				"css",
+				"dockerfile",
+				"fish",
+				"html",
+				"javascript",
+				"jsdoc",
+				"json",
+				"lua",
+				"markdown",
+				"markdown_inline",
+				"nix",
+				"rust",
+				"toml",
+				"tsx",
+				"typescript",
+				"yaml",
+			}
 			local missing_languages = {}
 			for _, lang in ipairs(required_languages) do
 				if has_parser(lang) == false or has_highlight_query(lang) == false then

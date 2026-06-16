@@ -49,6 +49,7 @@ export const HandoffPlugin: Plugin = async (ctx) => {
       config.command = config.command || {}
       config.command["handoff"] = {
         description: "Create a focused handoff prompt for a new session",
+        model: config.small_model,
         template: HANDOFF_COMMAND,
       }
     },
