@@ -208,9 +208,43 @@ async function detectBaseBranch(branch: string, remote: string, cwd: string): Pr
   return null
 }
 
-function normalizeBaseForProvider(base: string): string {
-  const slashIndex = base.indexOf("/")
-  return slashIndex === -1 ? base : base.slice(slashIndex + 1)
+function normalizeBaseForProvider(base: string, remote: string): string {
+  const remoteRefPrefix = `refs/remotes/${remote}/`
+  if (base.startsWith(remoteRefPrefix)) {
+    return base.slice(remoteRefPrefix.length)
+  }
+
+  const headRefPrefix = "refs/heads/"
+  if (base.startsWith(headRefPrefix)) {
+    return base.slice(headRefPrefix.length)
+  }
+
+  const remotePrefix = `${remote}/`
+  if (base.startsWith(remotePrefix)) {
+    return base.slice(remotePrefix.length)
+  }
+
+  return base
+}
+
+async function resolveTargetBranch(targetBranch: string, remote: string, cwd: string): Promise<{ base: string; targetBranch: string } | null> {
+  const normalizedTargetBranch = normalizeBaseForProvider(targetBranch, remote)
+  const candidates = [
+    `refs/remotes/${remote}/${normalizedTargetBranch}`,
+    `${remote}/${normalizedTargetBranch}`,
+    `refs/heads/${normalizedTargetBranch}`,
+    normalizedTargetBranch,
+    targetBranch,
+  ]
+
+  for (const ref of candidates) {
+    const result = await runCommand("git", ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], cwd)
+    if (result.exitCode === 0) {
+      return { base: ref, targetBranch: normalizedTargetBranch }
+    }
+  }
+
+  return null
 }
 
 function toHeadRef(branch: string): string {
@@ -280,7 +314,7 @@ async function selectRemote(remotes: RemoteContext[], cwd: string, provider?: Pr
   )
 }
 
-async function detectContext(cwd: string, providerArg?: ProviderArg): Promise<{ context?: PrContext; error?: string }> {
+async function detectContext(cwd: string, providerArg?: ProviderArg, targetBranchArg?: string): Promise<{ context?: PrContext; error?: string }> {
   const insideWorkTree = await git(["rev-parse", "--is-inside-work-tree"], cwd)
   if (insideWorkTree !== "true") {
     return { error: "ERROR: Not inside a git worktree." }
@@ -302,7 +336,25 @@ async function detectContext(cwd: string, providerArg?: ProviderArg): Promise<{ 
     return { error: "ERROR: Could not detect GitHub or Azure DevOps from git remotes." }
   }
 
-  const base = await detectBaseBranch(branch, remote.name, cwd)
+  const requestedTargetBranch = targetBranchArg?.trim()
+  if (requestedTargetBranch !== undefined && requestedTargetBranch.length === 0) {
+    return { error: "ERROR: targetBranch cannot be empty." }
+  }
+
+  let base: string | null
+  let targetBranch = ""
+
+  if (requestedTargetBranch === undefined) {
+    base = await detectBaseBranch(branch, remote.name, cwd)
+    if (base !== null) {
+      targetBranch = normalizeBaseForProvider(base, remote.name)
+    }
+  } else {
+    const resolvedTarget = await resolveTargetBranch(requestedTargetBranch, remote.name, cwd)
+    base = resolvedTarget?.base ?? null
+    targetBranch = resolvedTarget?.targetBranch ?? requestedTargetBranch
+  }
+
   if (base === null) {
     return { error: "ERROR: Cannot open PR: unable to determine base branch." }
   }
@@ -321,7 +373,7 @@ async function detectContext(cwd: string, providerArg?: ProviderArg): Promise<{ 
       ahead: aheadText === null ? null : Number.parseInt(aheadText, 10),
       behind: behindText === null ? null : Number.parseInt(behindText, 10),
       base,
-      targetBranch: normalizeBaseForProvider(base),
+      targetBranch,
       hasUncommittedChanges: unstaged.exitCode !== 0 || staged.exitCode !== 0,
     },
   }
@@ -480,6 +532,7 @@ export default tool({
     title: tool.schema.string().optional().describe("PR title. If omitted, return detected PR context only."),
     body: tool.schema.string().optional().describe("Markdown PR body. Required when title is provided."),
     provider: tool.schema.string().optional().describe("Optional provider override: gh, github, az, or azure-devops."),
+    targetBranch: tool.schema.string().optional().describe("Optional PR target branch. Defaults to the repository's main branch."),
   },
   async execute(args, context) {
     const provider = args.provider as string | undefined
@@ -493,7 +546,7 @@ export default tool({
       return "ERROR: provider must be one of: gh, github, az, azure-devops."
     }
 
-    const detected = await detectContext(context.directory, provider as ProviderArg | undefined)
+    const detected = await detectContext(context.directory, provider as ProviderArg | undefined, args.targetBranch as string | undefined)
     if (detected.error !== undefined) {
       return detected.error
     }
