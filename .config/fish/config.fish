@@ -33,9 +33,17 @@ switch $OS_TYPE
         end
 end
 
-for file in aliases scripts profile private colors fzf
+for file in profile private
     if test -f ~/.config/fish/$file.fish
         source ~/.config/fish/$file.fish
+    end
+end
+
+if status is-interactive
+    for file in aliases scripts colors fzf
+        if test -f ~/.config/fish/$file.fish
+            source ~/.config/fish/$file.fish
+        end
     end
 end
 
@@ -84,9 +92,11 @@ function lfcd --description "lf to switch directories"
 end
 
 # --- Keybindings ---
-bind -M insert \cc kill-whole-line
-bind -M insert \cc repaint
-bind \cP ctrl_p_picker
+if status is-interactive
+    bind -M insert \cc kill-whole-line
+    bind -M insert \cc repaint
+    bind \cP ctrl_p_picker
+end
 
 function fish_user_keybindings
     fish_vi_key_bindings
@@ -97,7 +107,7 @@ end
 
 # --- Third-party Tools ---
 # Atuin shell history
-if command -v atuin >/dev/null 2>&1
+if status is-interactive; and command -v atuin >/dev/null 2>&1
     set -l atuin_cache ~/.cache/fish/atuin-init.fish
     if not test -f $atuin_cache
         mkdir -p (dirname $atuin_cache)
@@ -107,7 +117,7 @@ if command -v atuin >/dev/null 2>&1
 end
 
 # Zoxide initialization
-if command -v zoxide >/dev/null 2>&1
+if status is-interactive; and command -v zoxide >/dev/null 2>&1
     set -l zoxide_cache ~/.cache/fish/zoxide-init.fish
     if not test -f $zoxide_cache
         mkdir -p (dirname $zoxide_cache)
@@ -117,7 +127,7 @@ if command -v zoxide >/dev/null 2>&1
 end
 
 # Navi widget (Ctrl+G)
-if command -v navi >/dev/null 2>&1
+if status is-interactive; and command -v navi >/dev/null 2>&1
     set -l navi_cache ~/.cache/fish/navi-widget.fish
     if not test -f $navi_cache
         mkdir -p (dirname $navi_cache)
@@ -126,8 +136,12 @@ if command -v navi >/dev/null 2>&1
     source $navi_cache
 end
 
-if command -v just >/dev/null 2>&1
-    just --completions fish | source
+if status is-interactive; and command -v just >/dev/null 2>&1
+    set -l just_cache ~/.cache/fish/generated_completions/just.fish
+    if not test -f $just_cache
+        mkdir -p (dirname $just_cache)
+        just --completions fish > $just_cache
+    end
 end
 
 # --- Starship Configuration ---
@@ -136,9 +150,13 @@ if test $OS_TYPE = Linux
     # Check if we're in TTY1 (console) vs terminal emulator
     # TTY1 typically doesn't have DISPLAY/WAYLAND_DISPLAY and tty shows /dev/tty1
     # Exclude SSH sessions (SSH_TTY or SSH_CONNECTION will be set)
-    set -l tty_device (tty 2>/dev/null)
-    if test -z "$SSH_TTY" -a -z "$SSH_CONNECTION" -a -z "$DISPLAY" -a -z "$WAYLAND_DISPLAY" -a -n "$tty_device" -a (string match -q "/dev/tty*" "$tty_device")
-        set -gx STARSHIP_CONFIG "$HOME/.config/starship-tty.toml"
+    if test -z "$SSH_TTY" -a -z "$SSH_CONNECTION" -a -z "$DISPLAY" -a -z "$WAYLAND_DISPLAY"
+        set -l tty_device (tty 2>/dev/null)
+        if test -n "$tty_device" -a (string match -q "/dev/tty*" "$tty_device")
+            set -gx STARSHIP_CONFIG "$HOME/.config/starship-tty.toml"
+        else
+            set -gx STARSHIP_CONFIG "$HOME/.config/starship.toml"
+        end
     else
         set -gx STARSHIP_CONFIG "$HOME/.config/starship.toml"
     end
@@ -148,8 +166,13 @@ else
 end
 
 # Starship initialization
-if command -v starship >/dev/null 2>&1
-    starship init fish | source
+if status is-interactive; and command -v starship >/dev/null 2>&1
+    set -l starship_cache ~/.cache/fish/starship-init.fish
+    if not test -f $starship_cache
+        mkdir -p (dirname $starship_cache)
+        starship init fish --print-full-init > $starship_cache
+    end
+    source $starship_cache
 end
 
 # fnm (Fast Node Manager)
@@ -157,7 +180,7 @@ end
 fnm env --use-on-cd --version-file-strategy=recursive --log-level=quiet --shell fish | source
 
 # --- pnpm globals (managed by Nix) ---
-switch (uname)
+switch $OS_TYPE
     case Darwin
         set -gx PNPM_HOME "$HOME/Library/pnpm"
     case '*'
@@ -188,7 +211,7 @@ if test $OS_TYPE = Darwin
 end
 
 # --- Inshellisense ---
-if test -f ~/.inshellisense/key-bindings.fish
+if status is-interactive; and test -f ~/.inshellisense/key-bindings.fish
     source ~/.inshellisense/key-bindings.fish
 end
 

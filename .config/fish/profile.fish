@@ -37,14 +37,16 @@ end
 set -U nvm_default_version 20
 # podman docker compat
 if command -q podman
-    if test (uname) = Darwin
+    if test "$OS_TYPE" = Darwin
         set -l sock (podman machine inspect podman-machine-default --format '{{.ConnectionInfo.PodmanSocket.Path}}' 2>/dev/null)
         if test -n "$sock"
             set -gx DOCKER_HOST "unix://"(string replace -r '^unix://' '' -- $sock)
         end
     else if test -S /tmp/podman.sock
         set -gx DOCKER_HOST unix:///tmp/podman.sock
-    else
+    else if set -q XDG_RUNTIME_DIR; and test -S "$XDG_RUNTIME_DIR/podman/podman.sock"
+        set -gx DOCKER_HOST unix://$XDG_RUNTIME_DIR/podman/podman.sock
+    else if status is-interactive
         set -l sock (podman info --format '{{.Host.RemoteSocket.Path}}' 2>/dev/null)
         if test -n "$sock"
             set -gx DOCKER_HOST "unix://"(string replace -r '^unix://' '' -- $sock)
