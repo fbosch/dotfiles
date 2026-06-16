@@ -154,7 +154,7 @@ end
 
 # fnm (Fast Node Manager)
 # Load eagerly - lazy loading causes issues with git hooks, mprocs, etc.
-fnm env --use-on-cd --log-level=quiet --shell fish | source
+fnm env --use-on-cd --version-file-strategy=recursive --log-level=quiet --shell fish | source
 
 # --- pnpm globals (managed by Nix) ---
 switch (uname)
