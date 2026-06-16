@@ -327,6 +327,10 @@ return {
 		},
 	},
 	config = function()
+		if vim.lsp.document_color then
+			vim.lsp.document_color.enable(false)
+		end
+
 		local capabilities = get_capabilities()
 		for _, server_name in ipairs(disabled_ts_servers) do
 			pcall(vim.lsp.enable, server_name, false)
