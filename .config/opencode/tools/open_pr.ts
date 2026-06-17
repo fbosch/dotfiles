@@ -5,7 +5,6 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 type Provider = "github" | "azure-devops"
-type ProviderArg = Provider | "gh" | "az"
 
 type CommandResult = {
   stdout: string
@@ -178,26 +177,17 @@ async function detectBaseBranch(branch: string, remote: string, cwd: string): Pr
   }
 
   const remoteHead = await git(["symbolic-ref", "--quiet", "--short", `refs/remotes/${remote}/HEAD`], cwd)
-  if (remoteHead !== null) {
+  if (remoteHead !== null && (remoteHead === `${remote}/main` || remoteHead === `${remote}/master`)) {
     return remoteHead
   }
 
   for (const ref of [
     `${remote}/main`,
     `${remote}/master`,
-    `${remote}/develop`,
-    `${remote}/dev`,
-    `${remote}/trunk`,
     "origin/main",
     "origin/master",
-    "origin/develop",
-    "origin/dev",
-    "origin/trunk",
     "main",
     "master",
-    "develop",
-    "dev",
-    "trunk",
   ]) {
     const result = await runCommand("git", ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], cwd)
     if (result.exitCode === 0) {
@@ -295,15 +285,12 @@ async function getRemotes(cwd: string): Promise<RemoteContext[]> {
   return remotes
 }
 
-function normalizeProvider(value: ProviderArg): Provider {
-  return value === "gh" ? "github" : value === "az" ? "azure-devops" : value
+function optionalString(value: string | undefined): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed === undefined || trimmed.length === 0 ? undefined : trimmed
 }
 
-async function selectRemote(remotes: RemoteContext[], cwd: string, provider?: Provider): Promise<RemoteContext | null> {
-  if (provider !== undefined) {
-    return remotes.find((remote) => remote.provider === provider) ?? null
-  }
-
+async function selectRemote(remotes: RemoteContext[], cwd: string): Promise<RemoteContext | null> {
   const trackedRemote = (await git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], cwd))?.split("/")[0]
 
   return (
@@ -314,7 +301,7 @@ async function selectRemote(remotes: RemoteContext[], cwd: string, provider?: Pr
   )
 }
 
-async function detectContext(cwd: string, providerArg?: ProviderArg, targetBranchArg?: string): Promise<{ context?: PrContext; error?: string }> {
+async function detectContext(cwd: string, targetBranchArg?: string): Promise<{ context?: PrContext; error?: string }> {
   const insideWorkTree = await git(["rev-parse", "--is-inside-work-tree"], cwd)
   if (insideWorkTree !== "true") {
     return { error: "ERROR: Not inside a git worktree." }
@@ -326,25 +313,18 @@ async function detectContext(cwd: string, providerArg?: ProviderArg, targetBranc
   }
 
   const remotes = await getRemotes(cwd)
-  const provider = providerArg === undefined ? undefined : normalizeProvider(providerArg)
-  const remote = await selectRemote(remotes, cwd, provider)
+  const remote = await selectRemote(remotes, cwd)
   if (remote === null || remote.provider === null) {
-    if (provider !== undefined) {
-      return { error: `ERROR: Could not detect ${provider} from git remotes.` }
-    }
-
     return { error: "ERROR: Could not detect GitHub or Azure DevOps from git remotes." }
   }
 
   const requestedTargetBranch = targetBranchArg?.trim()
-  if (requestedTargetBranch !== undefined && requestedTargetBranch.length === 0) {
-    return { error: "ERROR: targetBranch cannot be empty." }
-  }
+  const hasTargetBranch = requestedTargetBranch !== undefined && requestedTargetBranch.length > 0
 
   let base: string | null
   let targetBranch = ""
 
-  if (requestedTargetBranch === undefined) {
+  if (hasTargetBranch === false) {
     base = await detectBaseBranch(branch, remote.name, cwd)
     if (base !== null) {
       targetBranch = normalizeBaseForProvider(base, remote.name)
@@ -531,22 +511,13 @@ export default tool({
   args: {
     title: tool.schema.string().optional().describe("PR title. If omitted, return detected PR context only."),
     body: tool.schema.string().optional().describe("Markdown PR body. Required when title is provided."),
-    provider: tool.schema.string().optional().describe("Optional provider override: gh, github, az, or azure-devops."),
     targetBranch: tool.schema.string().optional().describe("Optional PR target branch. Defaults to the repository's main branch."),
+    argument1: tool.schema.string().optional().describe("Optional slash-command target branch argument."),
   },
   async execute(args, context) {
-    const provider = args.provider as string | undefined
-    if (
-      provider !== undefined &&
-      provider !== "gh" &&
-      provider !== "github" &&
-      provider !== "az" &&
-      provider !== "azure-devops"
-    ) {
-      return "ERROR: provider must be one of: gh, github, az, azure-devops."
-    }
+    const targetBranch = optionalString(args.targetBranch as string | undefined) ?? optionalString(args.argument1 as string | undefined)
 
-    const detected = await detectContext(context.directory, provider as ProviderArg | undefined, args.targetBranch as string | undefined)
+    const detected = await detectContext(context.directory, targetBranch)
     if (detected.error !== undefined) {
       return detected.error
     }
