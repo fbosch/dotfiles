@@ -58,7 +58,12 @@ abbr ocas opencode_auth_switch
 
 abbr liw linear_issue_workflow
 function wsc --wraps='wt switch --create --execute=opencode' --description 'alias wsc wt switch --create --execute=opencode'
-    wt switch --create --execute=opencode $argv
+    set -l opencode_path (__opencode_command_path)
+    if test -z "$opencode_path"
+        set opencode_path opencode
+    end
+
+    wt switch --create --execute=$opencode_path $argv
 end
 
 # Helpers

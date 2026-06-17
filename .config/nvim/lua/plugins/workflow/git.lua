@@ -166,4 +166,19 @@ return {
 			"DiffviewClose",
 		},
 	},
+	{
+		"lionyxml/gitlineage.nvim",
+		dependencies = { "sindrets/diffview.nvim" },
+		cond = is_git_repo,
+		keys = {
+			{
+				mode = { "v" },
+				"<leader>gl",
+				desc = "git line history",
+			},
+		},
+		opts = {
+			keymap = "<leader>gl",
+		},
+	},
 }

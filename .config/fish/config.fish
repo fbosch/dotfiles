@@ -10,10 +10,9 @@ function hyprstart
     exec uwsm start -F hyprland.desktop
 end
 
-# Cache uname result as a universal variable (persists across sessions)
-if not set -q OS_TYPE
-    set -U OS_TYPE (uname)
-end
+# Keep OS detection per-shell. Universal variables are shared across hosts and can
+# leave Linux shells using a stale Darwin value after syncing dotfiles.
+set -g OS_TYPE (uname)
 
 switch $OS_TYPE
     case Linux
@@ -256,28 +255,27 @@ switch $OS_TYPE
     case '*'
         set -gx PNPM_HOME "$HOME/.local/share/pnpm"
 end
-fish_add_path --prepend "$PNPM_HOME/bin"
+fish_add_path --path --prepend "$PNPM_HOME/bin"
 
 # --- bun ---
 set -gx BUN_INSTALL "$HOME/.bun"
 
-fish_add_path --prepend $BUN_INSTALL/bin
+fish_add_path --path --prepend $BUN_INSTALL/bin
 
-# --- Nix paths (ensure they come before Homebrew) ---
+# --- Nix paths (ensure they come before package-manager globals) ---
 if test -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
-    # Source nix-daemon first (idempotent - only runs once)
     source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+end
 
-    # Then explicitly move nix paths to the front to override Homebrew
-    fish_add_path --prepend --move /nix/var/nix/profiles/default/bin
-    fish_add_path --prepend --move ~/.nix-profile/bin
-    fish_add_path --prepend --move /etc/profiles/per-user/fbb/bin
-    fish_add_path --prepend --move /run/current-system/sw/bin
+for nix_path in /nix/var/nix/profiles/default/bin $HOME/.nix-profile/bin /etc/profiles/per-user/$USER/bin /run/current-system/sw/bin
+    if test -d $nix_path
+        fish_add_path --path --prepend --move $nix_path
+    end
 end
 
 # --- Homebrew paths (ensure they're present for child processes like Neovim) ---
 if test $OS_TYPE = Darwin
-    fish_add_path /opt/homebrew/bin /opt/homebrew/sbin
+    fish_add_path --path /opt/homebrew/bin /opt/homebrew/sbin
 end
 
 # --- Inshellisense ---
@@ -285,7 +283,7 @@ if status is-interactive; and test -f ~/.inshellisense/key-bindings.fish
     source ~/.inshellisense/key-bindings.fish
 end
 
-fish_add_path $HOME/.local/bin
+fish_add_path --path --append $HOME/.local/bin
 
 # Keep fnm's selected Node ahead of Nix/Homebrew Node entries after PATH setup.
 if set -q FNM_MULTISHELL_PATH; and test "$PATH[1]" != "$FNM_MULTISHELL_PATH/bin"

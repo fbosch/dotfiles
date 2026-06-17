@@ -50,7 +50,7 @@ return {
 	{
 		"fbosch/barbar.nvim",
 		dependencies = { "nvim-tree/nvim-web-devicons" },
-		event = "VeryLazy",
+		lazy = false,
 		init = function()
 			vim.g.barbar_auto_setup = false
 		end,
