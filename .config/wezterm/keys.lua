@@ -15,7 +15,7 @@ local macos_tab_keys = {
 
 local function activate_tab_key(number, tab_index)
 	return {
-		key = is_macos and macos_tab_keys[number] or number,
+		key = is_macos and macos_tab_keys[number] or "phys:" .. number,
 		mods = "CTRL|SHIFT",
 		action = wezterm.action.ActivateTab(tab_index),
 	}
