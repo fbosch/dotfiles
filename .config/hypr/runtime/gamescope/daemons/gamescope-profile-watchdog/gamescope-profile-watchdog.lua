@@ -11,7 +11,7 @@ local gaming_workspace = "10"
 local minimized_workspace_prefix = "special:minimized"
 local gaming_overlay_workspace = "special:gaming-overlay"
 local profile_excluded_title_pattern = "[Ff]augus"
-local freeze_excluded_title_pattern = "^(World of Warcraft)$"
+local freeze_excluded_title_pattern = "^(World of Warcraft|Battle[.]net( .*)?)$"
 local wl_freeze_checked = false
 local wl_freeze_available = false
 
