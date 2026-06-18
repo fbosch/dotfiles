@@ -55,6 +55,11 @@ Run relevant test suites when validation requires interpretation, failure diagno
 - Scope diagnostics to touched files first; widen only when failures indicate a broader regression.
 - Never weaken assertions, narrow coverage, or skip relevant checks to force a pass.
 
+## Output format
+
+- When all relevant tests pass, keep the response terse: `PASS`, commands run, and any coverage gap or skipped validation.
+- When tests fail, include the failing command, minimal failing output, likely root cause, files or tests to inspect next, and whether product code or test expectations look suspect.
+
 ## Done when
 
 - New or updated tests cover happy, edge, and error paths
