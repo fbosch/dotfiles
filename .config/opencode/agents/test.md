@@ -40,12 +40,15 @@ Run relevant test suites when validation requires interpretation, failure diagno
 
 - Load `api-and-interface-design` when tests need to lock API or interface contracts (payload shape, error semantics, pagination, backward compatibility).
 - Load `security-and-hardening` when adding tests for security boundaries (validation failures, authz bypass attempts, secret leakage, injection resistance).
+- Load `test-pruner` when new or changed tests show low-value test smells, or when explicitly auditing, pruning, consolidating, deleting, quarantining, or rewriting tests.
+- Use `test-pruner` in audit-only mode by default; report cleanup opportunities instead of deleting or rewriting existing tests unless requested.
 
 ## Quality bar
 
 - Test names describe scenario and expected outcome
 - Assertions verify behavior, not implementation details
 - Prefer targeted tests first, then broader suites if needed
+- Before finishing new or changed tests, check for low-value test smells: weak assertions, fully mocked SUT, duplicate coverage, brittle snapshots, skipped tests, or tests that cannot fail for the intended regression.
 
 ## Failure handling
 
