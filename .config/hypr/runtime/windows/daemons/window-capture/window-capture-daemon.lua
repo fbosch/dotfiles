@@ -372,6 +372,32 @@ local function capture_active_window_preview()
 	end)
 end
 
+local function capture_window_preview_by_address(address)
+	address = (address or ""):gsub("^0x", "")
+	if address == "" then
+		return
+	end
+
+	local all_clients_json = query("j/clients")
+	if all_clients_json == "" then
+		return
+	end
+
+	with_temp_file("clients", all_clients_json, function(path)
+		local output = jq_from_file(
+			path,
+			'.[] | select(((.address // "") | sub("^0x"; "")) == $address) | [((.stableId // "") | if length > 0 then . else ((.address // "") | sub("^0x"; "")) end), (.mapped // true), (.size[0] // 0), (.size[1] // 0)] | @tsv',
+			"--arg address " .. shell_quote(address)
+		)
+		local preview_id, mapped, width, height = output:match("([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\n]*)")
+		if mapped == "false" or not preview_id then
+			return
+		end
+
+		capture_window_preview(preview_id, tonumber(width) or 0, tonumber(height) or 0)
+	end)
+end
+
 local function visible_workspace_ids_json()
 	local monitors_json = query("j/monitors")
 	if monitors_json == "" then
@@ -466,7 +492,7 @@ local function is_in_overlay_cooldown()
 	return elapsed >= 0 and elapsed < overlay_cooldown_ms
 end
 
-local function capture_screenshot(event_type, capture_id)
+local function capture_screenshot(event_type, capture_id, event_payload)
 	local last_time = read_number(last_screenshot_file)
 	if last_time then
 		local elapsed = now_ms() - last_time
@@ -518,6 +544,12 @@ local function capture_screenshot(event_type, capture_id)
 		return
 	end
 
+	if event_type == "windowtitle" then
+		capture_window_preview_by_address(event_payload or "")
+		remove_file(capture_lock_file)
+		return
+	end
+
 	capture_visible_workspace_previews(false)
 	cleanup_stale_preview_files()
 	remove_file(capture_lock_file)
@@ -530,6 +562,8 @@ local function event_type_for(line)
 		return "workspace"
 	elseif line:match("^openwindow") or line:match("^openwindowv2") then
 		return "windowupdate"
+	elseif line:match("^windowtitle") or line:match("^windowtitlev2") then
+		return "windowtitle", line:match("^[^>,]+>>([^,]+)") or line:match("^[^,]+,([^,]+)") or ""
 	elseif line:match("^movewindow")
 		or line:match("^movewindowv2")
 		or line:match("^changefloatingmode")
@@ -584,7 +618,7 @@ local function handle_event(line)
 	write_file(capture_lock_file, tostring(timestamp))
 	write_file(last_event_file, tostring(timestamp))
 	write_file(workspace_change_file, capture_id)
-	capture_screenshot(event_type, capture_id)
+	capture_screenshot(event_type, capture_id, event_payload)
 end
 
 local function current_pid()
