@@ -16,7 +16,7 @@
 | `research`         | Source-backed investigation across docs, web, and code without making changes                                            |
 | `review`           | Findings are the main output: code review, PR review, risk audit                                                         |
 | `spec`             | Turning a request into an explicit contract before implementation                                                        |
-| `test`             | Writing or expanding tests                                                                                               |
+| `test`             | Writing, running, or diagnosing tests and coverage                                                                        |
 
 ## Guardrails
 
@@ -26,4 +26,6 @@
 - Do not use `quick` for detailed specification work, documentation writing, or other deliverables where depth, nuance, or contract-shaping matters.
 - Prefer `spec` for specs and `docs` for documentation.
 - Use `research` for source-backed investigation across external docs, web, GitHub, or unfamiliar codebases when citations or provenance matter.
+- Use `test` for test-writing, coverage improvement, non-trivial test-suite runs, and diagnosing test failures.
+- Do not delegate trivial validation commands unless the test output needs interpretation or follow-up changes.
 - Disambiguate: `analyze` explains known code; `explore` finds unknown code; `patterns` finds conventions; `debug` investigates failures.
