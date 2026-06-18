@@ -220,12 +220,12 @@
           "textVerbosity": "low"
         },
         "title": {
-          "model": "openai/gpt-5.4-mini-fast",
+          "model": "openai/gpt-5.4-mini",
           "reasoningEffort": "low",
           "textVerbosity": "low"
         },
         "summary": {
-          "model": "openai/gpt-5.4-mini-fast",
+          "model": "openai/gpt-5.4-mini",
           "reasoningEffort": "low",
           "textVerbosity": "medium"
         },
@@ -260,7 +260,7 @@
           "textVerbosity": "low"
         },
         "benchmark": {
-          "model": "openai/gpt-5.4-mini-fast",
+          "model": "openai/gpt-5.4-mini",
           "reasoningEffort": "low",
           "textVerbosity": "low"
         },
