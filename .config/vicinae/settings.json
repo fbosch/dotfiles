@@ -36,6 +36,7 @@
       }
    },
    "favorites": [
+      "applications:protonmail",
       "applications:org.signal.Signal",
       "applications:one.ablaze.floorp",
       "@fbosch/yr-weather:yr-weather",
