@@ -190,10 +190,10 @@ local function target_window_info()
 
 	local hovered = hovered_window_info(x, y)
 	if not hovered or not focus_window(hovered.address) then
-		return active_window_info()
+		return active_window_info(), x, y
 	end
 
-	return hovered
+	return hovered, x, y
 end
 
 local function cursor_axis(axis)
@@ -353,7 +353,7 @@ end
 local function start_drag()
 	stop_drag()
 
-	local active = target_window_info()
+	local active, initial_x, initial_y = target_window_info()
 	if not active then
 		return
 	end
@@ -378,7 +378,10 @@ local function start_drag()
 		return
 	end
 
-	local initial = cursor_axis(axis)
+	local initial = axis == "x" and initial_x or initial_y
+	if not initial then
+		initial = cursor_axis(axis)
+	end
 	local edge = resize_edge(axis, initial, active.x, active.y, active.width, active.height)
 	drag_active = true
 	disable_resize_animation()
