@@ -104,7 +104,7 @@
         "--isolated",
         "--no-usage-statistics",
         "--no-performance-crux",
-        "--executable-path=/ms-playwright/chromium-1200/chrome-linux/chrome",
+        "--executable-path=/ms-playwright/chromium-1200/chrome-linux64/chrome",
         "--chrome-arg=--no-sandbox"
       ]
     }
