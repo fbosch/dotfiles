@@ -3,9 +3,7 @@
 local socket = require("socket")
 local unix = require("socket.unix")
 local config_dir = os.getenv("HOME") .. "/.config/hypr"
-package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
-local json = require("lib.json")
 local hypr_ipc = dofile(config_dir .. "/runtime/lib/hypr-ipc.lua")
 
 local runtime_dir = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-custom-layout-drag-resize"
@@ -59,13 +57,18 @@ local function json_string(text, key)
 	return text:match('"' .. key .. '"%s*:%s*"([^"]*)"')
 end
 
-local function query_json(message, fallback)
-	local ok, value = pcall(json.decode, request(message))
-	if ok then
-		return value
+local function json_bool(text, key)
+	local value = text:match('"' .. key .. '"%s*:%s*(true)')
+	if value then
+		return true
 	end
 
-	return fallback
+	value = text:match('"' .. key .. '"%s*:%s*(false)')
+	if value then
+		return false
+	end
+
+	return nil
 end
 
 local function active_monitor_info()
@@ -117,35 +120,45 @@ end
 
 local cursor_position
 
-local function client_window_info(client)
-	local at = type(client.at) == "table" and client.at or {}
-	local size = type(client.size) == "table" and client.size or {}
-	if not client.monitor or not at[1] or not at[2] or not size[1] or not size[2] then
+local function window_contains_cursor(window, x, y)
+	return x >= window.x and x < window.x + window.width and y >= window.y and y < window.y + window.height
+end
+
+local function client_window_info(object)
+	local address = json_string(object, "address")
+	local monitor_id = json_number(object, "monitor")
+	local x, y = object:match('"at"%s*:%s*%[%s*(-?%d+)%s*,%s*(-?%d+)%s*%]')
+	local width, height = object:match('"size"%s*:%s*%[%s*(%d+)%s*,%s*(%d+)%s*%]')
+	if not address or not monitor_id or not x or not y or not width or not height then
 		return nil
 	end
 
 	return {
-		address = client.address,
-		monitor_id = client.monitor,
-		floating = client.floating == true,
-		x = at[1],
-		y = at[2],
-		width = size[1],
-		height = size[2],
+		address = address,
+		monitor_id = monitor_id,
+		floating = json_bool(object, "floating") == true,
+		mapped = json_bool(object, "mapped"),
+		hidden = json_bool(object, "hidden"),
+		visible = json_bool(object, "visible"),
+		acceptsInput = json_bool(object, "acceptsInput"),
+		focusHistoryID = json_number(object, "focusHistoryID"),
+		x = tonumber(x),
+		y = tonumber(y),
+		width = tonumber(width),
+		height = tonumber(height),
 	}
 end
 
 local function client_contains_cursor(client, x, y)
+	if not client then
+		return false
+	end
+
 	if client.mapped ~= true or client.hidden == true or client.visible ~= true or client.acceptsInput == false then
 		return false
 	end
 
-	local info = client_window_info(client)
-	if not info then
-		return false
-	end
-
-	return x >= info.x and x < info.x + info.width and y >= info.y and y < info.y + info.height
+	return window_contains_cursor(client, x, y)
 end
 
 local function preferred_hover_candidate(candidate, best)
@@ -163,15 +176,16 @@ local function preferred_hover_candidate(candidate, best)
 end
 
 local function hovered_window_info(x, y)
-	local clients = query_json("j/clients", {})
+	local clients = request("j/clients")
 	local best = nil
-	for _, client in ipairs(clients) do
+	for object in clients:gmatch("%b{}") do
+		local client = client_window_info(object)
 		if client_contains_cursor(client, x, y) and preferred_hover_candidate(client, best) then
 			best = client
 		end
 	end
 
-	return best and client_window_info(best) or nil
+	return best
 end
 
 local function focus_window(address)
@@ -188,9 +202,14 @@ local function target_window_info()
 		return active_window_info()
 	end
 
+	local active = active_window_info()
+	if active and window_contains_cursor(active, x, y) then
+		return active, x, y
+	end
+
 	local hovered = hovered_window_info(x, y)
 	if not hovered or not focus_window(hovered.address) then
-		return active_window_info(), x, y
+		return active, x, y
 	end
 
 	return hovered, x, y
