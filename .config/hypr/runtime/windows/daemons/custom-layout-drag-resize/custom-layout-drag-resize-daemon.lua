@@ -2,7 +2,11 @@
 
 local socket = require("socket")
 local unix = require("socket.unix")
-local hypr_ipc = dofile(os.getenv("HOME") .. "/.config/hypr/runtime/lib/hypr-ipc.lua")
+local config_dir = os.getenv("HOME") .. "/.config/hypr"
+package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
+
+local json = require("lib.json")
+local hypr_ipc = dofile(config_dir .. "/runtime/lib/hypr-ipc.lua")
 
 local runtime_dir = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-custom-layout-drag-resize"
 local command_socket_path = runtime_dir .. "/command.sock"
@@ -55,6 +59,15 @@ local function json_string(text, key)
 	return text:match('"' .. key .. '"%s*:%s*"([^"]*)"')
 end
 
+local function query_json(message, fallback)
+	local ok, value = pcall(json.decode, request(message))
+	if ok then
+		return value
+	end
+
+	return fallback
+end
+
 local function active_monitor_info()
 	monitors_by_id = {}
 	local monitors = request("j/monitors")
@@ -82,6 +95,7 @@ end
 
 local function active_window_info()
 	local active = request("j/activewindow")
+	local address = json_string(active, "address")
 	local monitor_id = json_number(active, "monitor")
 	local floating = active:match('"floating"%s*:%s*true') ~= nil
 	local x, y = active:match('"at"%s*:%s*%[%s*(-?%d+)%s*,%s*(-?%d+)%s*%]')
@@ -91,6 +105,7 @@ local function active_window_info()
 	end
 
 	return {
+		address = address,
 		monitor_id = monitor_id,
 		floating = floating,
 		x = tonumber(x),
@@ -98,6 +113,87 @@ local function active_window_info()
 		width = tonumber(width),
 		height = tonumber(height),
 	}
+end
+
+local cursor_position
+
+local function client_window_info(client)
+	local at = type(client.at) == "table" and client.at or {}
+	local size = type(client.size) == "table" and client.size or {}
+	if not client.monitor or not at[1] or not at[2] or not size[1] or not size[2] then
+		return nil
+	end
+
+	return {
+		address = client.address,
+		monitor_id = client.monitor,
+		floating = client.floating == true,
+		x = at[1],
+		y = at[2],
+		width = size[1],
+		height = size[2],
+	}
+end
+
+local function client_contains_cursor(client, x, y)
+	if client.mapped ~= true or client.hidden == true or client.visible ~= true or client.acceptsInput == false then
+		return false
+	end
+
+	local info = client_window_info(client)
+	if not info then
+		return false
+	end
+
+	return x >= info.x and x < info.x + info.width and y >= info.y and y < info.y + info.height
+end
+
+local function preferred_hover_candidate(candidate, best)
+	if not best then
+		return true
+	end
+
+	if candidate.floating == true and best.floating ~= true then
+		return true
+	elseif candidate.floating ~= true and best.floating == true then
+		return false
+	end
+
+	return (candidate.focusHistoryID or math.huge) < (best.focusHistoryID or math.huge)
+end
+
+local function hovered_window_info(x, y)
+	local clients = query_json("j/clients", {})
+	local best = nil
+	for _, client in ipairs(clients) do
+		if client_contains_cursor(client, x, y) and preferred_hover_candidate(client, best) then
+			best = client
+		end
+	end
+
+	return best and client_window_info(best) or nil
+end
+
+local function focus_window(address)
+	if type(address) ~= "string" or not address:match("^0x%x+$") then
+		return false
+	end
+
+	return pcall(request, string.format("dispatch hl.dsp.focus({ window = %q })", "address:" .. address))
+end
+
+local function target_window_info()
+	local ok, x, y = pcall(cursor_position)
+	if not ok then
+		return active_window_info()
+	end
+
+	local hovered = hovered_window_info(x, y)
+	if not hovered or not focus_window(hovered.address) then
+		return active_window_info()
+	end
+
+	return hovered
 end
 
 local function cursor_axis(axis)
@@ -110,7 +206,7 @@ local function cursor_axis(axis)
 	return value
 end
 
-local function cursor_position()
+function cursor_position()
 	local response = request("j/cursorpos")
 	local x = json_number(response, "x")
 	local y = json_number(response, "y")
@@ -257,7 +353,7 @@ end
 local function start_drag()
 	stop_drag()
 
-	local active = active_window_info()
+	local active = target_window_info()
 	if not active then
 		return
 	end
@@ -266,6 +362,7 @@ local function start_drag()
 	local monitor_name = monitor and monitor.name or nil
 	local poll_interval = monitor and monitor.poll_interval or 0.008
 	if active.floating then
+		request("dispatch hl.dsp.window.resize()")
 		return
 	end
 

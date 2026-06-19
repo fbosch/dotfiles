@@ -83,12 +83,6 @@ end
 
 local function start_custom_layout_resize()
 	reset_keep_aspect_ratio()
-	local active = hl.get_active_window()
-	if active and active.floating then
-		hl.dispatch(hl.dsp.window.resize())
-		return
-	end
-
 	hl.dispatch(custom_layout_resize("start"))
 end
 
