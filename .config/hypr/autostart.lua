@@ -2,7 +2,6 @@
 
 local paths = require("lib.paths")
 local system = require("lib.system")
-local taskbar_apps = require("taskbar")
 local host = system.hostname()
 
 local function uwsm(scope, command)
@@ -41,10 +40,6 @@ local commands = {
 
 if host == "rvn-pc" then
 	table.insert(commands, 1, "xrandr --output DP-2 --primary")
-end
-
-for _, command in ipairs(taskbar_apps.autostart_commands()) do
-	commands[#commands + 1] = command
 end
 
 local function run_commands()

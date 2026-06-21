@@ -1,8 +1,6 @@
 -- Static window rules ported from rules.conf.
 -- Preserve declaration order.
 
-local taskbar_apps = require("taskbar")
-
 -- Gamescope
 hl.window_rule({
 	match = { class = "^(gamescope)$" },
@@ -28,7 +26,6 @@ hl.window_rule({ match = { class = "^(Bitwarden)$" }, float = true, size = "900 
 hl.window_rule({ match = { class = "^(org\\.gnome\\.Calculator)$" }, float = true })
 hl.window_rule({ match = { class = "^(org\\.gnome\\.TextEditor)$" }, float = true })
 hl.window_rule({ match = { class = "^(org\\.gnome\\.Loupe)$" }, float = true })
-taskbar_apps.apply_rules()
 
 -- Plexamp
 hl.window_rule({ match = { class = "Plexamp" }, float = true, size = "360 620" })

@@ -46,11 +46,6 @@ check_swaync_visible() {
     echo "${result#* }"
 }
 
-# Check if a taskbar-adjacent app is currently shown from its parking workspace.
-check_taskbar_app_open() {
-    "$HOME/.config/hypr/taskbar/actions.sh" --any-open >/dev/null 2>&1
-}
-
 # Check if waybar should stay visible (returns 0 if should stay visible, 1 if can hide)
 # Usage: should_waybar_stay_visible distance_from_bottom [threshold]
 should_waybar_stay_visible() {
@@ -67,22 +62,17 @@ should_waybar_stay_visible() {
     # Cursor is far - now check expensive menu states
     local swaync_visible
     local taskbar_ags_component_open=false
-    local taskbar_app_open=false
     if taskbar_ags_component_visible; then
         taskbar_ags_component_open=true
     fi
     swaync_visible=$(check_swaync_visible)
-    if check_taskbar_app_open; then
-        taskbar_app_open=true
-    fi
     
     # Export for callers who want to log
     export TASKBAR_AGS_COMPONENT_OPEN="$taskbar_ags_component_open"
     export SWAYNC_VISIBLE="$swaync_visible"
-    export TASKBAR_APP_OPEN="$taskbar_app_open"
     
     # Stay visible if a taskbar-adjacent surface is open
-    if [ "$taskbar_ags_component_open" = "true" ] || [ "$swaync_visible" = "true" ] || [ "$taskbar_app_open" = "true" ]; then
+    if [ "$taskbar_ags_component_open" = "true" ] || [ "$swaync_visible" = "true" ]; then
         return 0  # Should stay visible
     else
         return 1  # Can hide

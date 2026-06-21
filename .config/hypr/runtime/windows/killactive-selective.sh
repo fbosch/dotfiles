@@ -6,7 +6,6 @@ set -euo pipefail
 source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
 PROFILECTL="$HOME/.config/hypr/runtime/profiles/profilectl.sh"
-TASKBAR_APP_SCRIPT="$HOME/.config/hypr/taskbar/actions.sh"
 SCRIPT_PATH="$HOME/.config/hypr/runtime/windows/killactive-selective.sh"
 AGS_START_SCRIPT="$HOME/.config/ags/start-daemons.sh"
 
@@ -139,10 +138,6 @@ active_window_json="$(hypr_query 'j/activewindow' || printf '{}')"
 app_class="$(jq -r 'if (.class // "") != "" then .class else (.initialClass // "") end' <<< "$active_window_json")"
 title="$(jq -r '.title // ""' <<< "$active_window_json")"
 address="$(jq -r '.address // ""' <<< "$active_window_json")"
-
-if "$TASKBAR_APP_SCRIPT" --park-active; then
-  exit 0
-fi
 
 action="$(resolve_close_action "$app_class")"
 
