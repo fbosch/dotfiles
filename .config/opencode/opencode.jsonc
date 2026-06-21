@@ -30,6 +30,15 @@
     "~/.config/opencode/instructions/fff.md",
     "~/.config/opencode/instructions/worktrunk.md"
   ],
+  "mcp": {
+    "fff": {
+      "type": "local",
+      "command": [
+        "fff-mcp"
+      ],
+      "enabled": true
+    }
+  },
   "permission": {
     "external_directory": {
       "~/.config/opencode/**": "allow",

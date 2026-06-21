@@ -8,15 +8,16 @@
 # shellcheck disable=SC1091
 . "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
-# Get monitor height and cursor position
-monitor_height=$(hypr_query 'j/monitors' | jq -r '.[0].height')
 cursor_pos=$(hypr_query 'cursorpos')
-IFS=', ' read -r _ cursor_y <<EOF
+IFS=', ' read -r cursor_x cursor_y <<EOF
 $cursor_pos
 EOF
 
-# Calculate distance from bottom
-distance_from_bottom=$((monitor_height - cursor_y))
+distance_from_bottom=$(hypr_query 'j/monitors' | jq -r --argjson x "$cursor_x" --argjson y "$cursor_y" '
+    map(select($x >= .x and $x < (.x + .width) and $y >= .y and $y < (.y + .height)))
+    | first
+    | if . == null then -1 else (.height - ($y - .y)) end
+')
 
 # Check if waybar should stay visible
 if should_waybar_stay_visible "$distance_from_bottom" 60; then

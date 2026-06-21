@@ -1,19 +1,27 @@
 #!/usr/bin/env bash
 # Shared library for waybar visibility checks
 
-# Check if start menu is currently visible
-check_start_menu_visible() {
-    ags request -i ags-bundled start-menu '{"action":"is-visible"}' 2>/dev/null || echo "false"
+TASKBAR_AGS_COMPONENTS="start-menu calendar-widget audio-mixer-widget"
+
+ags_component_visible() {
+    local component=$1
+    ags request -i ags-bundled "$component" '{"action":"is-visible"}' 2>/dev/null || echo "false"
 }
 
-# Check if the calendar widget is currently visible
-check_calendar_widget_visible() {
-    ags request -i ags-bundled calendar-widget '{"action":"is-visible"}' 2>/dev/null || echo "false"
-}
+taskbar_ags_component_visible() {
+    local component
+    local visible
 
-# Check if the audio mixer widget is currently visible
-check_audio_mixer_widget_visible() {
-    ags request -i ags-bundled audio-mixer-widget '{"action":"is-visible"}' 2>/dev/null || echo "false"
+    for component in $TASKBAR_AGS_COMPONENTS; do
+        visible=$(ags_component_visible "$component")
+        if [ "$visible" = "true" ]; then
+            export TASKBAR_AGS_VISIBLE_COMPONENT="$component"
+            return 0
+        fi
+    done
+
+    export TASKBAR_AGS_VISIBLE_COMPONENT=""
+    return 1
 }
 
 # Check if SwayNC notification center is currently visible
@@ -37,34 +45,30 @@ should_waybar_stay_visible() {
     
     # Short-circuit: If cursor is near waybar, return immediately (no expensive checks needed)
     if [ "$distance_from_bottom" -le "$threshold" ]; then
-        export START_MENU_VISIBLE="unknown"
+        export TASKBAR_AGS_VISIBLE_COMPONENT="unknown"
         export SWAYNC_VISIBLE="unknown"
         return 0  # Should stay visible
     fi
     
     # Cursor is far - now check expensive menu states
-    local start_menu_visible
-    local calendar_widget_visible
-    local audio_mixer_widget_visible
     local swaync_visible
+    local taskbar_ags_component_open=false
     local taskbar_app_open=false
-    start_menu_visible=$(check_start_menu_visible)
-    calendar_widget_visible=$(check_calendar_widget_visible)
-    audio_mixer_widget_visible=$(check_audio_mixer_widget_visible)
+    if taskbar_ags_component_visible; then
+        taskbar_ags_component_open=true
+    fi
     swaync_visible=$(check_swaync_visible)
     if check_taskbar_app_open; then
         taskbar_app_open=true
     fi
     
     # Export for callers who want to log
-    export START_MENU_VISIBLE="$start_menu_visible"
-    export CALENDAR_WIDGET_VISIBLE="$calendar_widget_visible"
-    export AUDIO_MIXER_WIDGET_VISIBLE="$audio_mixer_widget_visible"
+    export TASKBAR_AGS_COMPONENT_OPEN="$taskbar_ags_component_open"
     export SWAYNC_VISIBLE="$swaync_visible"
     export TASKBAR_APP_OPEN="$taskbar_app_open"
     
     # Stay visible if a taskbar-adjacent surface is open
-    if [ "$start_menu_visible" = "true" ] || [ "$calendar_widget_visible" = "true" ] || [ "$audio_mixer_widget_visible" = "true" ] || [ "$swaync_visible" = "true" ] || [ "$taskbar_app_open" = "true" ]; then
+    if [ "$taskbar_ags_component_open" = "true" ] || [ "$swaync_visible" = "true" ] || [ "$taskbar_app_open" = "true" ]; then
         return 0  # Should stay visible
     else
         return 1  # Can hide

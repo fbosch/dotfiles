@@ -11,6 +11,17 @@
   "on-sigusr2": "hide",
   "passthrough": false,
   "mode": "dock",
+  "modes": {
+    "dock": {
+      "layer": "top"
+    },
+    "hide": {
+      "layer": "top"
+    },
+    "invisible": {
+      "layer": "bottom"
+    }
+  },
 
   "modules-left": ["custom/startbutton", "hyprland/workspaces"],
   "modules-center": ["wlr/taskbar"],
