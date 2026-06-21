@@ -15,12 +15,6 @@
         "mcp"
       ]
     },
-    "fff": {
-      "type": "local",
-      "command": [
-        "fff-mcp"
-      ]
-    },
     "context7": {
       "type": "local",
       "command": [
