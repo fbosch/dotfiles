@@ -60,6 +60,19 @@ listen_status() {
   fi
 }
 
+cleanup_listener() {
+  trap - EXIT INT TERM
+  if [[ -n "${listener_pid:-}" ]]; then
+    kill "$listener_pid" 2>/dev/null || true
+    wait "$listener_pid" 2>/dev/null || true
+  fi
+}
+
+stop_listener() {
+  cleanup_listener
+  exit 0
+}
+
 main() {
   local mode="${1:-once}"
 
@@ -67,10 +80,15 @@ main() {
     if [[ "$mode" == "--listen" ]]; then
       emit_status "$(mullvad status 2>/dev/null || true)"
       if command -v stdbuf >/dev/null 2>&1; then
-        stdbuf -oL mullvad status listen 2>/dev/null | listen_status
+        coproc MULLVAD_LISTENER { exec stdbuf -oL mullvad status listen 2>/dev/null; }
       else
-        mullvad status listen 2>/dev/null | listen_status
+        coproc MULLVAD_LISTENER { exec mullvad status listen 2>/dev/null; }
       fi
+
+      listener_pid=$MULLVAD_LISTENER_PID
+      trap cleanup_listener EXIT
+      trap stop_listener INT TERM
+      listen_status <&"${MULLVAD_LISTENER[0]}"
       return 0
     fi
 

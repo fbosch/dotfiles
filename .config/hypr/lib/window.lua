@@ -74,6 +74,10 @@ local function uses_custom_layout(active, expected)
 	return false
 end
 
+function M.uses_any_custom_layout(active)
+	return uses_custom_layout(active, monitor_role.portrait) or uses_custom_layout(active, monitor_role.ultrawide)
+end
+
 local function direction(value)
 	local normalized = directions[value]
 	if not normalized then
