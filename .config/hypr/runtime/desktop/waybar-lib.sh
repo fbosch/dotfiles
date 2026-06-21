@@ -1,16 +1,30 @@
 #!/usr/bin/env bash
 # Shared library for waybar visibility checks
 
+# shellcheck disable=SC1091
+. "${HOME}/.config/hypr/runtime/lib/ags-ipc.sh"
+
 TASKBAR_AGS_COMPONENTS="start-menu calendar-widget audio-mixer-widget"
 
 ags_component_visible() {
     local component=$1
-    ags request -i ags-bundled "$component" '{"action":"is-visible"}' 2>/dev/null || echo "false"
+    ags_request "$component" '{"action":"is-visible"}' 2>/dev/null || echo "false"
 }
 
 taskbar_ags_component_visible() {
     local component
     local visible
+
+    component=$(ags_request taskbar-visibility '{"action":"visible-component"}' 2>/dev/null || echo "")
+    if [ "$component" != "" ] && [ "$component" != "none" ] && [ "${component#error:}" = "$component" ]; then
+        export TASKBAR_AGS_VISIBLE_COMPONENT="$component"
+        return 0
+    fi
+
+    if [ "$component" = "none" ]; then
+        export TASKBAR_AGS_VISIBLE_COMPONENT=""
+        return 1
+    fi
 
     for component in $TASKBAR_AGS_COMPONENTS; do
         visible=$(ags_component_visible "$component")

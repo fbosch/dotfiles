@@ -41,16 +41,16 @@ local window = require("lib.window")
 local monitor_role = require("lib.monitor_role")
 local order_state = require("layouts.order_state")
 
-local function reset(monitor, x, monitor_x, workspace_windows)
+local function reset(monitor, x, monitor_x, workspace_windows, name)
 	dispatched = {}
 	active_window = { address = "0xactive", monitor = { name = monitor, x = monitor_x }, at = { x = x or 100, y = 200 }, size = { x = 300, y = 400 } }
+	local workspace = { name = name or "2" }
+	active_window.workspace = workspace
 	if workspace_windows then
-		local workspace = {}
 		function workspace:get_windows()
 			return workspace_windows
 		end
 
-		active_window.workspace = workspace
 		for index = 1, #workspace_windows do
 			workspace_windows[index].workspace = workspace
 		end
@@ -146,6 +146,13 @@ run("dp right uses ultrawide layout swap", function()
 	assert_equal(dispatched[2].op, "cursor.move", "cursor dispatcher")
 end)
 
+run("dp scrolling workspace uses native move", function()
+	reset("DP-2", nil, nil, nil, "10")
+	window.move("right")()
+	assert_equal(dispatched[1].op, "window.move", "dispatcher")
+	assert_equal(dispatched[1].args.direction, "right", "move direction")
+end)
+
 run("hdmi right moves window to ultrawide monitor", function()
 	reset("HDMI-A-2")
 	window.move("right")()
@@ -182,6 +189,13 @@ run("dp resize right uses ultrawide layout resize", function()
 	window.adjust("resize", "right")()
 	assert_equal(dispatched[1].op, "layout", "dispatcher")
 	assert_equal(dispatched[1].value, "resize-right", "layout message")
+end)
+
+run("dp scrolling workspace uses native resize", function()
+	reset("DP-2", nil, nil, nil, "10")
+	window.adjust("resize", "right")()
+	assert_equal(dispatched[1].op, "window.resize", "dispatcher")
+	assert_equal(dispatched[1].args.x, 32, "resize x")
 end)
 
 run("hdmi resize up uses portrait layout resize", function()

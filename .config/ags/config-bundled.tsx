@@ -53,10 +53,56 @@ interface ComponentRegistry {
 }
 
 const components: ComponentRegistry = {};
+const taskbarVisibilityComponents = [
+  "start-menu",
+  "calendar-widget",
+  "audio-mixer-widget",
+];
 
 // Register components
 function registerComponent(name: string, handler: ComponentHandler) {
   components[name] = handler;
+}
+
+function requestComponent(component: string, payload: unknown): string {
+  const handler = components[component];
+  if (!handler) return "";
+
+  let response = "";
+  handler([JSON.stringify(payload)], (value: string) => {
+    response = String(value);
+  });
+  return response;
+}
+
+function handleTaskbarVisibilityRequest(argv: string[], res: (response: string) => void) {
+  const request = argv.join(" ");
+  if (!request || request.trim() === "") {
+    res("none");
+    return;
+  }
+
+  let data: { action?: string };
+  try {
+    data = JSON.parse(request);
+  } catch {
+    res("error: invalid JSON");
+    return;
+  }
+
+  if (data.action !== "visible-component") {
+    res("unknown action");
+    return;
+  }
+
+  for (const component of taskbarVisibilityComponents) {
+    if (requestComponent(component, { action: "is-visible" }) === "true") {
+      res(component);
+      return;
+    }
+  }
+
+  res("none");
 }
 
 // Unified request handler that routes to appropriate component
@@ -72,7 +118,9 @@ function handleRequest(argv: string[], res: (response: any) => void) {
     }
     
     // Route to component handler
-    if (components[component]) {
+    if (component === "taskbar-visibility") {
+      handleTaskbarVisibilityRequest(rest, res);
+    } else if (components[component]) {
       components[component](rest, res);
     } else {
       // Try parsing as JSON (backwards compatibility)

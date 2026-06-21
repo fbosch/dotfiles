@@ -118,6 +118,11 @@ local function active_window_info()
 	}
 end
 
+local function active_workspace_layout()
+	local workspace = request("j/activeworkspace")
+	return json_string(workspace, "tiledLayout")
+end
+
 local cursor_position
 
 local function window_contains_cursor(window, x, y)
@@ -378,18 +383,18 @@ local function start_drag()
 	end
 
 	local monitor = monitor_info(active.monitor_id)
-	local monitor_name = monitor and monitor.name or nil
 	local poll_interval = monitor and monitor.poll_interval or 0.008
 	if active.floating then
-		request("dispatch hl.dsp.window.resize()")
+		start_floating_drag(active, poll_interval)
 		return
 	end
 
 	local axis, command
-	if monitor_name == "DP-2" then
+	local layout = active_workspace_layout()
+	if layout == "lua:ultrawide_master" then
 		axis = "x"
 		command = "resize-x-at"
-	elseif monitor_name == "HDMI-A-2" then
+	elseif layout == "lua:portrait_rows" then
 		axis = "y"
 		command = "resize-y-at"
 	else

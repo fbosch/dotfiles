@@ -4,6 +4,7 @@ local socket = require("socket")
 
 local config_dir = os.getenv("HOME") .. "/.config/hypr"
 local hypr_ipc = dofile(config_dir .. "/runtime/lib/hypr-ipc.lua")
+local ags_ipc = dofile(config_dir .. "/runtime/lib/ags-ipc.lua")
 
 local mode = arg[1] or "daemon"
 local runtime_dir = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
@@ -34,7 +35,6 @@ local black_frame_mean_threshold = 10
 local jpeg_quality = 85
 local preview_target_height = 180
 local preview_target_max_width = 320
-local ags_bundled_instance = "ags-bundled"
 local command_cache = {}
 
 local function shell_quote(value)
@@ -466,13 +466,11 @@ local function maybe_run_healthcheck()
 end
 
 local function is_any_overlay_visible()
-	local response = command_output(
-		"ags request -i "
-			.. shell_quote(ags_bundled_instance)
-			.. " window-switcher "
-			.. shell_quote('{"action":"get-visibility"}')
-			.. " 2>/dev/null"
-	)
+	local ok, response = pcall(ags_ipc.request, "window-switcher", '{"action":"get-visibility"}')
+	if not ok then
+		response = ""
+	end
+
 	response = response:gsub("%s+$", "")
 	if response == "visible" then
 		write_file(last_overlay_file, tostring(now_ms()))

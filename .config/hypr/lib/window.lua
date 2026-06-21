@@ -37,6 +37,43 @@ local edge_tolerance = 64
 local portrait_transfer_end = { monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
 local ultrawide_transfer_start = { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
 
+local function expected_layout(role)
+	if role == monitor_role.portrait then
+		return "lua:portrait_rows"
+	end
+
+	if role == monitor_role.ultrawide then
+		return "lua:ultrawide_master"
+	end
+
+	return nil
+end
+
+local function uses_custom_layout(active, expected)
+	local workspace = active and active.workspace
+	local layout = workspace and (workspace.tiledLayout or workspace.layout)
+	local expected_name = expected_layout(expected)
+	if layout or not expected_name then
+		return layout == expected_name
+	end
+
+	local name = workspace and tostring(workspace.name or workspace.id) or nil
+	if not name or name == "10" or name:match("^special:") then
+		return false
+	end
+
+	local role = monitor_role.for_window(active)
+	if expected == monitor_role.portrait then
+		return role == monitor_role.portrait
+	end
+
+	if expected == monitor_role.ultrawide then
+		return role == monitor_role.ultrawide
+	end
+
+	return false
+end
+
 local function direction(value)
 	local normalized = directions[value]
 	if not normalized then
@@ -129,11 +166,10 @@ function M.move(value)
 	if normalized == "right" then
 		return function()
 			local active = M.active()
-			local role = monitor_role.for_window(active)
-			if role == monitor_role.portrait then
+			if uses_custom_layout(active, monitor_role.portrait) then
 				order_state.record_transfer_intent(active, ultrawide_transfer_start)
 				dispatch(move_to_ultrawide)
-			elseif role == monitor_role.ultrawide then
+			elseif uses_custom_layout(active, monitor_role.ultrawide) then
 				dispatch(ultrawide_swap_right)
 			else
 				dispatch(move_dispatcher)
@@ -145,11 +181,10 @@ function M.move(value)
 	if normalized == "down" then
 		return function()
 			local active = M.active()
-			local role = monitor_role.for_window(active)
-			if role == monitor_role.ultrawide then
+			if uses_custom_layout(active, monitor_role.ultrawide) then
 				order_state.record_transfer_intent(active, portrait_transfer_end)
 				dispatch(move_to_portrait)
-			elseif role == monitor_role.portrait then
+			elseif uses_custom_layout(active, monitor_role.portrait) then
 				dispatch(portrait_swap_down)
 			else
 				dispatch(move_dispatcher)
@@ -161,7 +196,7 @@ function M.move(value)
 	if normalized == "up" then
 		return function()
 			local active = M.active()
-			if monitor_role.for_window(active) == monitor_role.portrait then
+			if uses_custom_layout(active, monitor_role.portrait) then
 				dispatch(portrait_swap_up)
 			else
 				dispatch(move_dispatcher)
@@ -173,7 +208,7 @@ function M.move(value)
 	if normalized == "left" then
 		return function()
 			local active = M.active()
-			if monitor_role.for_window(active) == monitor_role.ultrawide then
+			if uses_custom_layout(active, monitor_role.ultrawide) then
 				if is_only_tiled_window(active) or on_ultrawide_left_edge(active) then
 					order_state.record_transfer_intent(active, portrait_transfer_end)
 					dispatch(move_to_portrait)
@@ -204,7 +239,7 @@ function M.adjust(kind, value)
 		if delta.x ~= 0 then
 			return function()
 				local active = M.active()
-				if monitor_role.for_window(active) == monitor_role.ultrawide then
+				if uses_custom_layout(active, monitor_role.ultrawide) then
 					dispatch(delta.x < 0 and ultrawide_resize_left or ultrawide_resize_right)
 					return
 				end
@@ -216,7 +251,7 @@ function M.adjust(kind, value)
 		if delta.y ~= 0 then
 			return function()
 				local active = M.active()
-				if monitor_role.for_window(active) == monitor_role.portrait then
+				if uses_custom_layout(active, monitor_role.portrait) then
 					dispatch(delta.y < 0 and portrait_resize_up or portrait_resize_down)
 					return
 				end
