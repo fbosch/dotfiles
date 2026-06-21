@@ -16,16 +16,16 @@ import { perf } from "./performance-monitor";
  * 1. Icon caching - Desktop file lookups are cached to avoid repeated I/O
  * 2. Smart UI updates - Only rebuild UI when window list changes; otherwise just update CSS classes
  * 3. Window list caching - During switcher session, reuse window list instead of re-fetching
- * 4. Event-driven Alt monitoring - Uses GDK key events instead of polling for better performance
+ * 4. Event-driven modifier monitoring - Uses GDK key events when the switcher has key focus
  *
  * State Machine:
- * - IDLE: Switcher hidden, waiting for Alt+Tab
- * - ACTIVE: Switcher visible, cycling through windows, waiting for Alt release
+ * - IDLE: Switcher hidden, waiting for a switcher keybind
+ * - ACTIVE: Switcher visible, cycling through windows, waiting for trigger modifier release
  *
  * Transitions:
  * - IDLE + (next/prev with >1 windows) -> ACTIVE
  * - ACTIVE + next/prev -> ACTIVE (cycles selection)
- * - ACTIVE + Alt release -> IDLE (commits and hides)
+ * - ACTIVE + trigger modifier release -> IDLE (commits and hides)
  * - ACTIVE + hide -> IDLE (just hides)
  */
 
@@ -158,6 +158,8 @@ let isVisible = false; // Derived from state, kept for GTK
 let windowButtons: Map<string, Gtk.Button> = new Map();
 let currentWindows: WindowInfo[] = [];
 let currentIndex = 0;
+let activeTriggerModifier = "ALT";
+let triggerModifierWatchId: number | null = null;
 
 // Icon theme reference (initialized in createWindow)
 let iconTheme: Gtk.IconTheme | null = null;
@@ -1001,8 +1003,17 @@ Will wrap: ${(buttonWidths.reduce((sum, w) => sum + w, 0) + (currentWindows.leng
 // State Machine Transitions
 // ============================================================================
 
-// Check if Alt modifier is currently pressed
-function isAltPressed(): boolean {
+function modifierMaskFor(name: string): Gdk.ModifierType {
+  const normalized = name.toUpperCase();
+  if (normalized === "SUPER") return Gdk.ModifierType.SUPER_MASK;
+  if (normalized === "ALT") return Gdk.ModifierType.ALT_MASK;
+  if (normalized === "CTRL" || normalized === "CONTROL") return Gdk.ModifierType.CONTROL_MASK;
+  if (normalized === "SHIFT") return Gdk.ModifierType.SHIFT_MASK;
+
+  return Gdk.ModifierType.ALT_MASK;
+}
+
+function isModifierPressed(name: string): boolean {
   const display = Gdk.Display.get_default();
   if (!display) return false;
 
@@ -1013,11 +1024,47 @@ function isAltPressed(): boolean {
   if (!device) return false;
 
   const modifiers = device.get_modifier_state();
-  return (modifiers & Gdk.ModifierType.ALT_MASK) !== 0;
+  return (modifiers & modifierMaskFor(name)) !== 0;
+}
+
+function isTriggerModifierKey(keyval: number): boolean {
+  const normalized = activeTriggerModifier.toUpperCase();
+  if (normalized === "SUPER") return keyval === 65515 || keyval === 65516;
+  if (normalized === "ALT") return keyval === 65513 || keyval === 65514;
+  if (normalized === "CTRL" || normalized === "CONTROL") return keyval === 65507 || keyval === 65508;
+  if (normalized === "SHIFT") return keyval === 65505 || keyval === 65506;
+
+  return keyval === 65513 || keyval === 65514;
+}
+
+function stopTriggerModifierWatch() {
+  if (triggerModifierWatchId === null) return;
+
+  GLib.source_remove(triggerModifierWatchId);
+  triggerModifierWatchId = null;
+}
+
+function startTriggerModifierWatch() {
+  stopTriggerModifierWatch();
+  triggerModifierWatchId = GLib.timeout_add(GLib.PRIORITY_HIGH, 25, () => {
+    if (state !== SwitcherState.ACTIVE) {
+      triggerModifierWatchId = null;
+      return GLib.SOURCE_REMOVE;
+    }
+
+    if (!isModifierPressed(activeTriggerModifier)) {
+      debugLog(`${activeTriggerModifier} released, committing switch`);
+      triggerModifierWatchId = null;
+      onCommit();
+      return GLib.SOURCE_REMOVE;
+    }
+
+    return GLib.SOURCE_CONTINUE;
+  });
 }
 
 // Transition to ACTIVE state
-function enterActiveState(windows: WindowInfo[], index: number) {
+function enterActiveState(windows: WindowInfo[], index: number, triggerModifier = "ALT") {
   debugLog(
     `[State] IDLE -> ACTIVE (${windows.length} windows, index ${index})`,
   );
@@ -1025,32 +1072,27 @@ function enterActiveState(windows: WindowInfo[], index: number) {
   currentWindows = windows;
   currentIndex = index;
   isVisible = true;
+  activeTriggerModifier = triggerModifier;
 
   if (win) {
     applyStaticCSS();
     updateSwitcher();
+    win.set_keymode(Astal.Keymode.EXCLUSIVE);
     win.set_visible(true);
-
-    // Safety check: if Alt was already released before window became visible,
-    // commit immediately. This handles the "quick Alt+Tab" edge case.
-    GLib.timeout_add(GLib.PRIORITY_HIGH, 33, () => {
-      if (state === SwitcherState.ACTIVE && !isAltPressed()) {
-        debugLog("Alt already released, committing immediately");
-        onCommit();
-      }
-      return GLib.SOURCE_REMOVE;
-    });
+    startTriggerModifierWatch();
   }
 }
 
 // Transition to IDLE state
 function enterIdleState() {
   debugLog(`[State] ${state} -> IDLE`);
+  stopTriggerModifierWatch();
   state = SwitcherState.IDLE;
   isVisible = false;
 
   if (win) {
     win.set_visible(false);
+    win.set_keymode(Astal.Keymode.NONE);
   }
 }
 
@@ -1059,7 +1101,7 @@ function enterIdleState() {
 // ============================================================================
 
 // Handle next window event
-async function onNext() {
+async function onNext(triggerModifier = "ALT") {
   if (state === SwitcherState.IDLE) {
     // Fetch windows and initialize
     const windows = await getWindows();
@@ -1092,7 +1134,7 @@ async function onNext() {
       index = (index + 1) % windows.length;
     }
 
-    enterActiveState(windows, index);
+    enterActiveState(windows, index, triggerModifier);
   } else if (state === SwitcherState.ACTIVE) {
     // Cycle within current session
     if (currentWindows.length === 0) return;
@@ -1104,7 +1146,7 @@ async function onNext() {
 }
 
 // Handle previous window event
-async function onPrev() {
+async function onPrev(triggerModifier = "ALT") {
   if (state === SwitcherState.IDLE) {
     // Fetch windows and initialize
     const windows = await getWindows();
@@ -1137,7 +1179,7 @@ async function onPrev() {
       index = (index - 1 + windows.length) % windows.length;
     }
 
-    enterActiveState(windows, index);
+    enterActiveState(windows, index, triggerModifier);
   } else if (state === SwitcherState.ACTIVE) {
     // Cycle within current session
     if (currentWindows.length === 0) return;
@@ -1188,10 +1230,9 @@ function onHide() {
   enterIdleState();
 }
 
-// Handle Alt key release
-function onAltRelease() {
+function onTriggerModifierRelease() {
   if (state !== SwitcherState.ACTIVE) return;
-  debugLog("Alt key released, committing switch");
+  debugLog(`${activeTriggerModifier} key released, committing switch`);
   onCommit();
 }
 
@@ -1203,8 +1244,7 @@ function commitSwitch() {
   onCommit();
 }
 
-// Monitor for Alt key release using GDK events (set up once at window creation)
-function setupAltMonitoring() {
+function setupTriggerModifierMonitoring() {
   if (!win) return;
 
   // Create a key event controller
@@ -1219,10 +1259,8 @@ function setupAltMonitoring() {
       _keycode: number,
       _state: Gdk.ModifierType,
     ) => {
-      // Check if Alt key was released
-      // Alt_L = 65513 (0xffe9), Alt_R = 65514 (0xffea)
-      if (keyval === 65513 || keyval === 65514) {
-        onAltRelease();
+      if (isTriggerModifierKey(keyval)) {
+        onTriggerModifierRelease();
       }
       
       // Handle Print key for screenshots (Print = 0xff61 = 65377)
@@ -1261,7 +1299,7 @@ function createWindow() {
       }
       layer={Astal.Layer.OVERLAY}
       exclusivity={Astal.Exclusivity.IGNORE}
-      keymode={Astal.Keymode.ON_DEMAND}
+      keymode={Astal.Keymode.NONE}
       application={app}
       class="window-switcher"
     >
@@ -1302,8 +1340,7 @@ function createWindow() {
     </window>
   ) as Astal.Window;
 
-  // Set up Alt key monitoring (always listening, but only acts when visible)
-  setupAltMonitoring();
+  setupTriggerModifierMonitoring();
 }
 
 // Apply static CSS
@@ -1584,7 +1621,7 @@ function handleWindowSwitcherRequest(argv: string[], res: (response: string) => 
 
     if (action === "next") {
       asyncHandled = true;
-      onNext()
+      onNext(data.triggerModifier)
         .then(() => {
           res("cycled next");
           mark.end(ok, error);
@@ -1600,7 +1637,7 @@ function handleWindowSwitcherRequest(argv: string[], res: (response: string) => 
 
     if (action === "prev") {
       asyncHandled = true;
-      onPrev()
+      onPrev(data.triggerModifier)
         .then(() => {
           res("cycled prev");
           mark.end(ok, error);

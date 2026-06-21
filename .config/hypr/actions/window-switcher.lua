@@ -74,12 +74,18 @@ local function focus_window(win)
 	return true
 end
 
-local function send_ags_action(action)
-	action_payloads[action] = action_payloads[action] or { action = action }
-	ags.request("window-switcher", action_payloads[action])
+local function send_ags_action(action, opts)
+	local trigger_modifier = opts and opts.trigger_modifier
+	if not trigger_modifier then
+		action_payloads[action] = action_payloads[action] or { action = action }
+		ags.request("window-switcher", action_payloads[action])
+		return
+	end
+
+	ags.request("window-switcher", { action = action, triggerModifier = trigger_modifier })
 end
 
-local function switch_window(action)
+local function switch_window(action, opts)
 	if action == "next" or action == "prev" then
 		local single = single_regular_window()
 		if single and focus_window(single) then
@@ -87,15 +93,21 @@ local function switch_window(action)
 		end
 	end
 
-	send_ags_action(action)
+	send_ags_action(action, opts)
 end
 
-function M.next()
-	switch_window("next")
+function M.next(opts)
+	switch_window("next", opts)
 end
 
-function M.prev()
-	switch_window("prev")
+function M.prev(opts)
+	switch_window("prev", opts)
+end
+
+function M.action(action, trigger_modifier)
+	return function()
+		M[action]({ trigger_modifier = trigger_modifier })
+	end
 end
 
 function M.commit()
