@@ -334,7 +334,7 @@ local function restore_window_state(state, address)
 end
 
 local function ensure_daemon_running()
-	if command_ok("pgrep -f '[m]inimized-state-daemon.sh'") then
+	if command_ok("pgrep -f '[m]inimized-state-daemon'") then
 		return
 	end
 
