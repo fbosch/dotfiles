@@ -29,19 +29,10 @@ local function command_ok(command)
 	return ok == true or ok == 0
 end
 
-local function decode_array(content)
-	local ok, decoded = pcall(json.decode, content or "[]")
-	if not ok or type(decoded) ~= "table" then
-		return {}
-	end
-
-	return decoded
-end
-
 local function get_clients()
 	local ok, clients = pcall(hypr_ipc.request, "j/clients")
 	if ok and clients and clients ~= "" then
-		return decode_array(clients)
+		return json.array(clients)
 	end
 	return {}
 end
@@ -49,7 +40,7 @@ end
 local function get_monitors()
 	local ok, monitors = pcall(hypr_ipc.request, "j/monitors")
 	if ok and monitors and monitors ~= "" then
-		return decode_array(monitors)
+		return json.array(monitors)
 	end
 	return {}
 end

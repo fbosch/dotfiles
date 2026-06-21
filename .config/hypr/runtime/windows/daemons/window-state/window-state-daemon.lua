@@ -26,11 +26,14 @@ local selector_state = {
 	matchers_json = "[]",
 }
 local monitors_json = "[]"
+local monitors_cache_json = nil
+local monitors_cache = {}
 local rules_cache = {}
 local current_hash = ""
 local debounce_started_at = nil
 local polling = false
 local next_poll_at = nil
+local lua_pattern_cache = {}
 
 local function now()
 	return socket.gettime()
@@ -80,28 +83,78 @@ local function fetch_monitors()
 	end
 end
 
-local state_jq_filter = [[
-def field_of(w; m): w | if   m.field == "class"        then .class
-                         elif m.field == "title"        then .title
-                         elif m.field == "initialClass" then .initialClass
-                         elif m.field == "initialTitle" then .initialTitle
-                         else empty end;
-($monitors | map({id, name, x, y}) | INDEX(.id)) as $mon_map |
-[.[] | select(.floating) |
-. as $w |
-first($matchers[] | . as $m | select(field_of($w; $m) | test($m.pattern))) as $matched |
-($mon_map[$w.monitor | tostring] // {name: "", x: 0, y: 0}) as $mon |
-{
-  class: $w.class,
-  matcher: $matched.matcher,
-  pattern: $matched.pattern,
-  monitor: $mon.name,
-  x: ($w.at[0] - $mon.x),
-  y: ($w.at[1] - $mon.y),
-  width: $w.size[0],
-  height: $w.size[1]
-}] | sort_by(.class)
-]]
+local function lua_pattern_for_regex(pattern)
+	if lua_pattern_cache[pattern] then
+		return lua_pattern_cache[pattern]
+	end
+
+	local parts = {}
+	local escaped = false
+	for index = 1, #pattern do
+		local char = pattern:sub(index, index)
+		if escaped then
+			parts[#parts + 1] = "%" .. char
+			escaped = false
+		elseif char == "\\" then
+			escaped = true
+		elseif char == "-" then
+			parts[#parts + 1] = "%-"
+		else
+			parts[#parts + 1] = char
+		end
+	end
+
+	if escaped then
+		parts[#parts + 1] = "\\"
+	end
+
+	local converted = table.concat(parts)
+	lua_pattern_cache[pattern] = converted
+	return converted
+end
+
+local function field_matches(value, pattern)
+	if value == nil then
+		return false
+	end
+
+	local ok, matched = pcall(string.match, tostring(value), lua_pattern_for_regex(pattern))
+	return ok and matched ~= nil
+end
+
+local function matched_selector(client)
+	for _, selector in ipairs(selector_state.selectors) do
+		local field = state_rules.matcher_client_field(selector.matcher)
+		if field and field_matches(client[field], selector.pattern) then
+			return selector
+		end
+	end
+
+	return nil
+end
+
+local function monitor_index()
+	if monitors_cache_json == monitors_json then
+		return monitors_cache
+	end
+
+	local indexed = {}
+	for _, monitor in ipairs(json.array(monitors_json)) do
+		indexed[tostring(monitor.id)] = {
+			name = monitor.name or "",
+			x = tonumber(monitor.x) or 0,
+			y = tonumber(monitor.y) or 0,
+		}
+	end
+
+	monitors_cache_json = monitors_json
+	monitors_cache = indexed
+	return monitors_cache
+end
+
+local function number_at(values, index)
+	return tonumber(values and values[index]) or 0
+end
 
 local function get_window_states()
 	if #selector_state.selectors == 0 then
@@ -117,23 +170,31 @@ local function get_window_states()
 		return "[]"
 	end
 
-	local command = table.concat({
-		"printf %s " .. shell_quote(clients),
-		"| jq -c",
-		"--argjson matchers " .. shell_quote(selector_state.matchers_json),
-		"--argjson monitors " .. shell_quote(monitors_json),
-		shell_quote(state_jq_filter),
-	}, " ")
-	local handle = io.popen(command, "r")
-	local output = handle and handle:read("*a") or ""
-	local ok = handle and handle:close()
-
-	if not ok or output == "" then
-		log("ERROR: jq state extraction failed")
-		return "[]"
+	local mon_map = monitor_index()
+	local windows = {}
+	for _, client in ipairs(json.array(clients)) do
+		if client.floating == true then
+			local selector = matched_selector(client)
+			if selector then
+				local monitor = mon_map[tostring(client.monitor)] or { name = "", x = 0, y = 0 }
+				windows[#windows + 1] = {
+					class = client.class,
+					matcher = selector.matcher,
+					pattern = selector.pattern,
+					monitor = monitor.name,
+					x = number_at(client.at, 1) - monitor.x,
+					y = number_at(client.at, 2) - monitor.y,
+					width = number_at(client.size, 1),
+					height = number_at(client.size, 2),
+				}
+			end
+		end
 	end
 
-	return (output:gsub("%s+$", ""))
+	table.sort(windows, function(left, right)
+		return tostring(left.class or "") < tostring(right.class or "")
+	end)
+	return json.encode(windows)
 end
 
 local function is_state_empty(state)

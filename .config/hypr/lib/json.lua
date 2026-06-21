@@ -332,4 +332,41 @@ function M.decode(source)
 	return value
 end
 
+function M.decode_or(source, fallback)
+	if type(source) ~= "string" or source == "" then
+		return fallback
+	end
+
+	local ok, decoded = pcall(M.decode, source)
+	if ok then
+		return decoded
+	end
+
+	return fallback
+end
+
+function M.array(source)
+	local decoded = type(source) == "table" and source or M.decode_or(source, {})
+	if type(decoded) == "table" and is_array(decoded) then
+		return decoded
+	end
+
+	return {}
+end
+
+function M.object(source)
+	local decoded = type(source) == "table" and source or M.decode_or(source, {})
+	if type(decoded) ~= "table" or is_array(decoded) then
+		return {}
+	end
+
+	for key in pairs(decoded) do
+		if type(key) ~= "string" then
+			return {}
+		end
+	end
+
+	return decoded
+end
+
 return M

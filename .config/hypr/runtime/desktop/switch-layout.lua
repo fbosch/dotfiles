@@ -100,17 +100,8 @@ local function sync_gamescope_xwayland_layout(target_layout)
 	end
 end
 
-local function decode_json(content, fallback)
-	local ok, decoded = pcall(json.decode, content or "")
-	if ok and type(decoded) == "table" then
-		return decoded
-	end
-
-	return fallback
-end
-
 local function main_keyboard()
-	local devices = decode_json(hypr_ipc.request("j/devices"), {})
+	local devices = json.object(hypr_ipc.request("j/devices"))
 	for _, keyboard in ipairs(devices.keyboards or {}) do
 		if keyboard.main == true then
 			return keyboard

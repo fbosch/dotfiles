@@ -143,15 +143,6 @@ local function query(request)
 	return ""
 end
 
-local function decode_json(content, fallback)
-	local ok, decoded = pcall(json.decode, content or "")
-	if ok and type(decoded) == "table" then
-		return decoded
-	end
-
-	return fallback
-end
-
 local function preview_id_for_window(window)
 	local stable_id = window and window.stableId or ""
 	if stable_id and stable_id ~= "" then
@@ -197,7 +188,7 @@ local function cleanup_stale_preview_files()
 	end
 
 	local live_preview_ids = {}
-	for _, client in ipairs(decode_json(all_clients_json, {})) do
+	for _, client in ipairs(json.array(all_clients_json)) do
 		local stable_id = tostring(client.stableId or "")
 		local address = tostring(client.address or ""):gsub("^0x", "")
 		if stable_id ~= "" then
@@ -359,7 +350,7 @@ local function capture_active_window_preview()
 		return
 	end
 
-	capture_preview_for_window(decode_json(active_window_json, {}))
+	capture_preview_for_window(json.object(active_window_json))
 end
 
 local function capture_window_preview_by_address(address)
@@ -373,7 +364,7 @@ local function capture_window_preview_by_address(address)
 		return
 	end
 
-	for _, client in ipairs(decode_json(all_clients_json, {})) do
+	for _, client in ipairs(json.array(all_clients_json)) do
 		if tostring(client.address or ""):gsub("^0x", "") == address then
 			capture_preview_for_window(client)
 			return
@@ -388,7 +379,7 @@ local function visible_workspace_ids()
 	end
 
 	local visible = {}
-	for _, monitor in ipairs(decode_json(monitors_json, {})) do
+	for _, monitor in ipairs(json.array(monitors_json)) do
 		local workspace_id = monitor.activeWorkspace and monitor.activeWorkspace.id
 		if type(workspace_id) == "number" then
 			visible[workspace_id] = true
@@ -405,7 +396,7 @@ local function capture_visible_workspace_previews(missing_only)
 
 	local visible_workspaces = visible_workspace_ids()
 	local capture_pids = {}
-	for _, client in ipairs(decode_json(all_clients_json, {})) do
+	for _, client in ipairs(json.array(all_clients_json)) do
 		local workspace_id = client.workspace and client.workspace.id
 		local preview_id, mapped, width, height = window_preview_fields(client)
 		if visible_workspaces[workspace_id] and mapped and preview_id ~= "" then

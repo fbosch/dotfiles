@@ -34,8 +34,7 @@ local function clients()
 		return {}
 	end
 
-	local decode_ok, decoded = pcall(json.decode, body)
-	return decode_ok and type(decoded) == "table" and decoded or {}
+	return json.array(body)
 end
 
 for _, win in ipairs(clients()) do

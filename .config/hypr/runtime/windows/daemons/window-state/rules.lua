@@ -234,12 +234,7 @@ function M.write_rules_file(opts)
 end
 
 function M.update_cache_from_windows(cache, windows, log)
-	local ok, decoded = pcall(json.decode, windows)
-	if not ok or type(decoded) ~= "table" then
-		return
-	end
-
-	for _, window in ipairs(decoded) do
+	for _, window in ipairs(json.array(windows)) do
 		if window.class and window.class ~= "" then
 			cache[cache_key(window.matcher, window.pattern)] = cache_entry(
 				window.matcher,

@@ -82,39 +82,8 @@ local function write_file_atomic(path, content)
 	assert(os.rename(temp, path))
 end
 
-local function json_array(value)
-	return type(value) == "table" and value or {}
-end
-
-local function json_object(value)
-	if type(value) ~= "table" then
-		return {}
-	end
-
-	for key in pairs(value) do
-		if type(key) ~= "string" then
-			return {}
-		end
-	end
-
-	return value
-end
-
-local function decode_json(content, fallback)
-	if not content or content == "" then
-		return fallback
-	end
-
-	local ok, decoded = pcall(json.decode, content)
-	if not ok then
-		return fallback
-	end
-
-	return decoded
-end
-
 local function load_state()
-	return json_object(decode_json(read_file(state_file), {}))
+	return json.object(read_file(state_file))
 end
 
 local function save_state(state)
@@ -164,7 +133,7 @@ local function request(message)
 end
 
 local function query_json(message, fallback)
-	return decode_json(request(message), fallback)
+	return json.decode_or(request(message), fallback)
 end
 
 local function lua_quote(value)
@@ -265,7 +234,7 @@ local function special_workspace_for_bucket(bucket_key)
 end
 
 local function monitor_name_for_id(monitors, monitor_id)
-	for _, monitor in ipairs(json_array(monitors)) do
+	for _, monitor in ipairs(json.array(monitors)) do
 		if tostring(monitor.id or "") == tostring(monitor_id or "") then
 			return monitor.name
 		end
@@ -398,7 +367,7 @@ local function live_windows_in_special(special_workspace)
 	end
 
 	local count = 0
-	for _, client in ipairs(json_array(query_json("j/clients", {}))) do
+	for _, client in ipairs(json.array(query_json("j/clients", {}))) do
 		if client.workspace and client.workspace.name == special_workspace then
 			count = count + 1
 		end
@@ -421,7 +390,7 @@ local function monitor_for_special_workspace(state, special_workspace)
 end
 
 local function visible_special_workspace(monitors)
-	for _, monitor in ipairs(json_array(monitors)) do
+	for _, monitor in ipairs(json.array(monitors)) do
 		local special = monitor.specialWorkspace
 		local name = type(special) == "table" and special.name or ""
 		if name:sub(1, #minimized_workspace_prefix) == minimized_workspace_prefix then
@@ -437,7 +406,7 @@ local function visible_special_monitor(monitors, special_workspace)
 		return ""
 	end
 
-	for _, monitor in ipairs(json_array(monitors)) do
+	for _, monitor in ipairs(json.array(monitors)) do
 		local special = monitor.specialWorkspace
 		if type(special) == "table" and special.name == special_workspace then
 			return monitor.name or ""
@@ -457,7 +426,7 @@ local function toggle_special_workspace_on_monitor(monitor_name, special_workspa
 end
 
 local function focused_monitor(monitors)
-	for _, monitor in ipairs(json_array(monitors)) do
+	for _, monitor in ipairs(json.array(monitors)) do
 		if monitor.focused == true then
 			return monitor
 		end
@@ -467,7 +436,7 @@ local function focused_monitor(monitors)
 end
 
 local function target_special_from_live_client(address)
-	for _, client in ipairs(json_array(query_json("j/clients", {}))) do
+	for _, client in ipairs(json.array(query_json("j/clients", {}))) do
 		local workspace = client.workspace and client.workspace.name or ""
 		if client.address == address and workspace:sub(1, #minimized_workspace_prefix) == minimized_workspace_prefix then
 			return workspace
@@ -564,16 +533,16 @@ local function mkdir_p(path)
 end
 
 local function restore_show_desktop(state_path, current_workspace)
-	local state = json_object(decode_json(read_file(state_path), {}))
+	local state = json.object(read_file(state_path))
 	local target_workspace = state.workspace or current_workspace
 
-	for _, window in ipairs(json_array(state.windows)) do
+	for _, window in ipairs(json.array(state.windows)) do
 		if window.address and window.address ~= "" then
 			move_window_to_workspace("name:" .. target_workspace, window.address)
 		end
 	end
 
-	for _, window in ipairs(json_array(state.windows)) do
+	for _, window in ipairs(json.array(state.windows)) do
 		if window.address and window.address ~= "" and window.floating == true then
 			focus_window(window.address)
 			resize_window(window.address, window.width or 0, window.height or 0)
@@ -586,7 +555,7 @@ end
 
 local function windows_for_show_desktop(workspace, monitor_id)
 	local windows = {}
-	for _, client in ipairs(json_array(query_json("j/clients", {}))) do
+	for _, client in ipairs(json.array(query_json("j/clients", {}))) do
 		local client_workspace = client.workspace and client.workspace.name or ""
 		if client_workspace == workspace and tostring(client.monitor or "") == tostring(monitor_id or "") then
 			windows[#windows + 1] = {
@@ -654,7 +623,7 @@ end
 local function prune()
 	local state = ensure_state_file()
 	local live = {}
-	for _, client in ipairs(json_array(query_json("j/clients", {}))) do
+	for _, client in ipairs(json.array(query_json("j/clients", {}))) do
 		if client.address then
 			live[client.address] = true
 		end
