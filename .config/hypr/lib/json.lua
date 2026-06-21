@@ -1,6 +1,16 @@
 local M = {}
 M.null = {}
 
+local encode_escapes = {
+	["\\"] = "\\\\",
+	['"'] = '\\"',
+	["\b"] = "\\b",
+	["\f"] = "\\f",
+	["\n"] = "\\n",
+	["\r"] = "\\r",
+	["\t"] = "\\t",
+}
+
 local function escape_string(value)
 	value = tostring(value)
 	if not value:find('[%z\1-\31\\"]') then
@@ -8,17 +18,7 @@ local function escape_string(value)
 	end
 
 	return value:gsub('[%z\1-\31\\"]', function(char)
-		local escapes = {
-			["\\"] = "\\\\",
-			['"'] = '\\"',
-			["\b"] = "\\b",
-			["\f"] = "\\f",
-			["\n"] = "\\n",
-			["\r"] = "\\r",
-			["\t"] = "\\t",
-		}
-
-		return escapes[char] or string.format("\\u%04x", char:byte())
+		return encode_escapes[char] or string.format("\\u%04x", char:byte())
 	end)
 end
 
