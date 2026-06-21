@@ -95,9 +95,11 @@ end
 local function get_gaming_window_count(clients)
 	local count = 0
 	for _, client in ipairs(clients or get_clients()) do
-		if not starts_with(workspace_name(client), minimized_workspace_prefix)
+		if
+			not starts_with(workspace_name(client), minimized_workspace_prefix)
 			and not has_profile_excluded_title(client)
-			and has_gaming_class(client) then
+			and has_gaming_class(client)
+		then
 			count = count + 1
 		end
 	end
@@ -108,9 +110,11 @@ local function get_freezable_gaming_windows(clients)
 	local windows = {}
 	for _, client in ipairs(clients or get_clients()) do
 		local workspace = workspace_name(client)
-		if (workspace == gaming_workspace or starts_with(workspace, minimized_workspace_prefix))
+		if
+			(workspace == gaming_workspace or starts_with(workspace, minimized_workspace_prefix))
 			and not has_freeze_excluded_title(client)
-			and has_gaming_class(client) then
+			and has_gaming_class(client)
+		then
 			windows[#windows + 1] = { pid = tostring(client.pid or ""), workspace = workspace }
 		end
 	end
@@ -239,28 +243,34 @@ local function maybe_show_gaming_overlay(current_count, last_count, monitors)
 
 	for _, monitor in ipairs(monitors) do
 		local special_workspace = monitor.specialWorkspace
-		if monitor.name == target_monitor
+		if
+			monitor.name == target_monitor
 			and special_workspace
-			and special_workspace.name == gaming_overlay_workspace then
+			and special_workspace.name == gaming_overlay_workspace
+		then
 			return
 		end
 	end
 
 	hypr_ipc.request("dispatch hl.dsp.focus({ monitor = " .. lua_string(target_monitor) .. " })")
-	hypr_ipc.request("dispatch hl.dsp.workspace.toggle_special(" .. lua_string(gaming_overlay_workspace:gsub("^special:", "")) .. ")")
+	hypr_ipc.request(
+		"dispatch hl.dsp.workspace.toggle_special(" .. lua_string(gaming_overlay_workspace:gsub("^special:", "")) .. ")"
+	)
 end
 
 local function event_kind(event)
 	if event:match("^configreloaded") then
 		return "reload"
 	end
-	if event:match("^openwindow")
+	if
+		event:match("^openwindow")
 		or event:match("^closewindow")
 		or event:match("^movewindow")
 		or event:match("^workspace")
 		or event:match("^activespecial")
 		or event:match("^activewindow")
-		or event:match("^fullscreen") then
+		or event:match("^fullscreen")
+	then
 		return "window"
 	end
 	return nil

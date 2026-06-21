@@ -3,6 +3,7 @@
 local socket = require("socket")
 
 local config_dir = os.getenv("HOME") .. "/.config/hypr"
+local json = dofile(config_dir .. "/lib/json.lua")
 local hypr_ipc = dofile(config_dir .. "/runtime/lib/hypr-ipc.lua")
 local ags_ipc = dofile(config_dir .. "/runtime/lib/ags-ipc.lua")
 
@@ -36,6 +37,7 @@ local jpeg_quality = 85
 local preview_target_height = 180
 local preview_target_max_width = 320
 local command_cache = {}
+local capture_window_preview
 
 local function shell_quote(value)
 	return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
@@ -53,17 +55,6 @@ local function command_output(command)
 	end
 
 	local output = handle:read("*a") or ""
-	handle:close()
-	return output
-end
-
-local function command_output_line(command)
-	local handle = io.popen(command)
-	if not handle then
-		return ""
-	end
-
-	local output = handle:read("*l") or ""
 	handle:close()
 	return output
 end
@@ -133,23 +124,6 @@ local function mkdir(path)
 	command_ok("mkdir -p " .. shell_quote(path) .. " >/dev/null 2>&1")
 end
 
-local function temp_path(prefix)
-	local path = command_output_line("mktemp " .. shell_quote(screenshot_dir .. "/" .. prefix .. ".XXXXXX"))
-	assert(path ~= "", "failed to create temporary file")
-	return path
-end
-
-local function with_temp_file(prefix, content, callback)
-	local path = temp_path(prefix)
-	write_file(path, content)
-	local ok, result = pcall(callback, path)
-	remove_file(path)
-	if not ok then
-		error(result)
-	end
-	return result
-end
-
 local function query(request)
 	local ok, response = pcall(hypr_ipc.request, request, { timeout = 0.5 })
 	if ok and response and response ~= "" then
@@ -169,15 +143,41 @@ local function query(request)
 	return ""
 end
 
-local function jq_from_file(path, filter, extra_args)
-	local command = table.concat({
-		"jq -r",
-		extra_args or "",
-		shell_quote(filter),
-		shell_quote(path),
-		"2>/dev/null",
-	}, " ")
-	return command_output(command)
+local function decode_json(content, fallback)
+	local ok, decoded = pcall(json.decode, content or "")
+	if ok and type(decoded) == "table" then
+		return decoded
+	end
+
+	return fallback
+end
+
+local function preview_id_for_window(window)
+	local stable_id = window and window.stableId or ""
+	if stable_id and stable_id ~= "" then
+		return stable_id
+	end
+
+	return tostring((window and window.address) or ""):gsub("^0x", "")
+end
+
+local function window_preview_fields(window)
+	if type(window) ~= "table" then
+		return "", false, 0, 0
+	end
+
+	local width = tonumber(window.size and window.size[1]) or 0
+	local height = tonumber(window.size and window.size[2]) or 0
+	return preview_id_for_window(window), window.mapped ~= false, width, height
+end
+
+local function capture_preview_for_window(window)
+	local preview_id, mapped, width, height = window_preview_fields(window)
+	if mapped == false or preview_id == "" then
+		return
+	end
+
+	capture_window_preview(preview_id, width, height)
 end
 
 local function cleanup_stale_temp_files()
@@ -197,15 +197,16 @@ local function cleanup_stale_preview_files()
 	end
 
 	local live_preview_ids = {}
-	with_temp_file("clients", all_clients_json, function(path)
-		local output = jq_from_file(
-			path,
-			'.[] | [(.stableId // ""), ((.address // "") | sub("^0x"; ""))] | .[] | select(length > 0)'
-		)
-		for live_id in output:gmatch("[^\n]+") do
-			live_preview_ids[live_id] = true
+	for _, client in ipairs(decode_json(all_clients_json, {})) do
+		local stable_id = tostring(client.stableId or "")
+		local address = tostring(client.address or ""):gsub("^0x", "")
+		if stable_id ~= "" then
+			live_preview_ids[stable_id] = true
 		end
-	end)
+		if address ~= "" then
+			live_preview_ids[address] = true
+		end
+	end
 
 	local previews = command_output("find " .. shell_quote(screenshot_dir) .. " -maxdepth 1 -name '*.jpg' -type f 2>/dev/null")
 	for preview_path in previews:gmatch("[^\n]+") do
@@ -248,7 +249,7 @@ local function frame_is_too_dark(image_path)
 	return mean_brightness ~= nil and mean_brightness < black_frame_mean_threshold
 end
 
-local function capture_window_preview(preview_id, width, height)
+function capture_window_preview(preview_id, width, height)
 	if preview_id == "" or width <= 0 or height <= 0 then
 		return
 	end
@@ -358,18 +359,7 @@ local function capture_active_window_preview()
 		return
 	end
 
-	with_temp_file("active-window", active_window_json, function(path)
-		local output = jq_from_file(
-			path,
-			'[((.stableId // "") | if length > 0 then . else ((.address // "") | sub("^0x"; "")) end), (.mapped // true), (.size[0] // 0), (.size[1] // 0)] | @tsv'
-		)
-		local preview_id, mapped, width, height = output:match("([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\n]*)")
-		if mapped == "false" or not preview_id then
-			return
-		end
-
-		capture_window_preview(preview_id, tonumber(width) or 0, tonumber(height) or 0)
-	end)
+	capture_preview_for_window(decode_json(active_window_json, {}))
 end
 
 local function capture_window_preview_by_address(address)
@@ -383,35 +373,28 @@ local function capture_window_preview_by_address(address)
 		return
 	end
 
-	with_temp_file("clients", all_clients_json, function(path)
-		local output = jq_from_file(
-			path,
-			'.[] | select(((.address // "") | sub("^0x"; "")) == $address) | [((.stableId // "") | if length > 0 then . else ((.address // "") | sub("^0x"; "")) end), (.mapped // true), (.size[0] // 0), (.size[1] // 0)] | @tsv',
-			"--arg address " .. shell_quote(address)
-		)
-		local preview_id, mapped, width, height = output:match("([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\n]*)")
-		if mapped == "false" or not preview_id then
+	for _, client in ipairs(decode_json(all_clients_json, {})) do
+		if tostring(client.address or ""):gsub("^0x", "") == address then
+			capture_preview_for_window(client)
 			return
 		end
-
-		capture_window_preview(preview_id, tonumber(width) or 0, tonumber(height) or 0)
-	end)
+	end
 end
 
-local function visible_workspace_ids_json()
+local function visible_workspace_ids()
 	local monitors_json = query("j/monitors")
 	if monitors_json == "" then
-		return "[]"
+		return {}
 	end
 
-	return with_temp_file("monitors", monitors_json, function(path)
-		local output = jq_from_file(path, "[.[].activeWorkspace.id | numbers] | unique | @json")
-		if output == "" then
-			return "[]"
+	local visible = {}
+	for _, monitor in ipairs(decode_json(monitors_json, {})) do
+		local workspace_id = monitor.activeWorkspace and monitor.activeWorkspace.id
+		if type(workspace_id) == "number" then
+			visible[workspace_id] = true
 		end
-
-		return (output:gsub("\n+$", ""))
-	end)
+	end
+	return visible
 end
 
 local function capture_visible_workspace_previews(missing_only)
@@ -420,36 +403,29 @@ local function capture_visible_workspace_previews(missing_only)
 		return
 	end
 
-	local visible_workspaces = visible_workspace_ids_json()
-	with_temp_file("clients", all_clients_json, function(path)
-		local output = jq_from_file(
-			path,
-			'.[] | select(((.workspace.id // -1) as $ws | ($visible_ws | index($ws))) != null) | [((.stableId // "") | if length > 0 then . else ((.address // "") | sub("^0x"; "")) end), (.mapped // true), (.size[0] // 0), (.size[1] // 0)] | @tsv',
-			"--argjson visible_ws " .. shell_quote(visible_workspaces)
-		)
+	local visible_workspaces = visible_workspace_ids()
+	local capture_pids = {}
+	for _, client in ipairs(decode_json(all_clients_json, {})) do
+		local workspace_id = client.workspace and client.workspace.id
+		local preview_id, mapped, width, height = window_preview_fields(client)
+		if visible_workspaces[workspace_id] and mapped and preview_id ~= "" then
+			if not missing_only or not file_is_nonempty(screenshot_dir .. "/" .. preview_id .. ".jpg") then
+				local pid = spawn_capture_window_preview(preview_id, width, height)
+				if pid then
+					capture_pids[#capture_pids + 1] = pid
+				end
 
-		local capture_pids = {}
-		for line in output:gmatch("[^\n]+") do
-			local preview_id, mapped, width, height = line:match("([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\n]*)")
-			if preview_id and preview_id ~= "" and mapped ~= "false" then
-				if not missing_only or not file_is_nonempty(screenshot_dir .. "/" .. preview_id .. ".jpg") then
-					local pid = spawn_capture_window_preview(preview_id, tonumber(width) or 0, tonumber(height) or 0)
-					if pid then
-						capture_pids[#capture_pids + 1] = pid
-					end
-
-					if #capture_pids >= max_parallel_captures then
-						wait_for_capture_batch(capture_pids)
-						capture_pids = {}
-					end
+				if #capture_pids >= max_parallel_captures then
+					wait_for_capture_batch(capture_pids)
+					capture_pids = {}
 				end
 			end
 		end
+	end
 
-		if #capture_pids > 0 then
-			wait_for_capture_batch(capture_pids)
-		end
-	end)
+	if #capture_pids > 0 then
+		wait_for_capture_batch(capture_pids)
+	end
 end
 
 local function maybe_run_healthcheck()
