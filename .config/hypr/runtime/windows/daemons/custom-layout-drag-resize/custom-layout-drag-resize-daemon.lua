@@ -5,6 +5,7 @@ local unix = require("socket.unix")
 local config_dir = os.getenv("HOME") .. "/.config/hypr"
 
 local hypr_ipc = dofile(config_dir .. "/runtime/lib/hypr-ipc.lua")
+local monitor_role = dofile(config_dir .. "/lib/monitor_role.lua")
 
 local runtime_dir = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-custom-layout-drag-resize"
 local command_socket_path = runtime_dir .. "/command.sock"
@@ -383,6 +384,7 @@ local function start_drag()
 	end
 
 	local monitor = monitor_info(active.monitor_id)
+	local role = monitor_role.for_name(monitor and monitor.name)
 	local poll_interval = monitor and monitor.poll_interval or 0.008
 	if active.floating then
 		start_floating_drag(active, poll_interval)
@@ -391,7 +393,10 @@ local function start_drag()
 
 	local axis, command
 	local layout = active_workspace_layout()
-	if layout == "lua:ultrawide_master" then
+	if layout == "lua:ultrawide_master" and role == monitor_role.portrait then
+		axis = "y"
+		command = "resize-y-at"
+	elseif layout == "lua:ultrawide_master" then
 		axis = "x"
 		command = "resize-x-at"
 	elseif layout == "lua:portrait_rows" then

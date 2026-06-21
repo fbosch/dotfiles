@@ -79,6 +79,50 @@ const menuItemVariants = cva(
   },
 );
 
+const profileOptionVariants = cva(
+  "inline-flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium leading-none focus-visible:outline-none active:scale-[0.98]",
+  {
+    variants: {
+      active: {
+        true: "shadow-sm",
+        false:
+          "text-foreground-secondary hover:bg-white/10 hover:text-foreground-primary focus-visible:bg-white/10 focus-visible:text-foreground-primary",
+      },
+      tone: {
+        auto: "",
+        gaming: "",
+        powersave: "",
+      },
+      animated: {
+        true: "transition-colors duration-150",
+        false: "",
+      },
+    },
+    compoundVariants: [
+      {
+        active: true,
+        tone: "auto",
+        className: "bg-white/[0.12] text-foreground-primary ring-1 ring-white/10",
+      },
+      {
+        active: true,
+        tone: "gaming",
+        className: "bg-state-success/15 text-state-success ring-1 ring-state-success/40",
+      },
+      {
+        active: true,
+        tone: "powersave",
+        className: "bg-state-warning/15 text-state-warning ring-1 ring-state-warning/40",
+      },
+    ],
+    defaultVariants: {
+      active: false,
+      tone: "auto",
+      animated: true,
+    },
+  },
+);
+
 export interface MenuItem {
   id: string;
   label: string;
@@ -231,9 +275,15 @@ const initialsForName = (name: string) =>
     .map((part) => part[0]?.toUpperCase())
     .join("") || "?";
 
-const profileSummary = (profile: StartMenuProfile) => {
-  if (profile.source && profile.source !== "none") return profile.source;
-  return "auto";
+const profileModeLabel = (mode: StartMenuProfile["mode"]) => {
+  if (mode === "gaming") return "Gaming";
+  if (mode === "powersave") return "Saver";
+  return "Balanced";
+};
+
+const profileSourceLabel = (profile: StartMenuProfile) => {
+  if (profile.source === "manual") return "Manual";
+  return "Auto";
 };
 
 export const StartMenu: React.FC<StartMenuProps> = ({
@@ -249,6 +299,12 @@ export const StartMenu: React.FC<StartMenuProps> = ({
   className,
   style,
 }) => {
+  const gamingManualActive =
+    profile.gamingManual || (profile.source === "manual" && profile.mode === "gaming");
+  const powersaveManualActive =
+    profile.powersaveManual || (profile.source === "manual" && profile.mode === "powersave");
+  const autoControlActive = !gamingManualActive && !powersaveManualActive;
+
   const handleItemClick = (item: MenuItem) => {
     if (item.id.startsWith("divider")) return;
 
@@ -295,57 +351,63 @@ export const StartMenu: React.FC<StartMenuProps> = ({
           </div>
         </div>
       </div>
-      <div className="mb-1 flex items-center gap-1 rounded-md px-2 py-1 text-xs text-foreground-primary hover:bg-white/[0.06]">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-foreground-primary">Profile</span>
-            <span className="truncate text-xs text-foreground-secondary">
-              {profileSummary(profile)}
-            </span>
-            {(profile.gamingManual || profile.powersaveManual) && (
-              <button
-                type="button"
-                className="inline-flex size-5 items-center justify-center rounded text-xs font-semibold leading-none text-foreground-secondary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none active:scale-[0.98]"
-                onClick={() => onProfileAction?.("clear-manual")}
-                tabIndex={isOpen ? 0 : -1}
-                aria-label="Clear manual profile"
-                title="Clear manual profile override"
-              >
-                <span className="font-fluent text-xs" aria-hidden="true">
-                  {"\uE711"}
-                </span>
-              </button>
-            )}
-          </div>
+      <div className="mb-1 rounded-lg bg-background-primary/30 p-1">
+        <div className="flex items-center justify-between gap-2 px-1 py-0.5 text-[11px] leading-tight">
+          <span className="font-medium text-foreground-primary">Profile</span>
+          <span className="truncate text-foreground-secondary">
+            {profileModeLabel(profile.mode)} · {profileSourceLabel(profile)}
+          </span>
         </div>
-        <fieldset className="flex items-center gap-1 border-0 p-0" aria-label="Profile controls">
+        <fieldset
+          className="mt-1 flex items-center gap-1 rounded-md bg-background-primary/50 p-0.5"
+          aria-label="Profile controls"
+        >
           <button
             type="button"
-            className={cn(
-              "inline-flex h-5 min-w-5 items-center justify-center rounded border border-white/10 px-1 text-xs font-semibold text-foreground-secondary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none active:scale-[0.98]",
-              profile.mode === "gaming" && "border-state-success/40 bg-state-success/15 text-state-success",
-            )}
+            className={profileOptionVariants({
+              active: autoControlActive,
+              tone: "auto",
+              animated: !disableAnimations,
+            })}
+            onClick={() => onProfileAction?.("clear-manual")}
+            tabIndex={isOpen ? 0 : -1}
+            aria-label="Use automatic profile"
+            aria-pressed={autoControlActive}
+            title="Let automatic profile rules decide"
+          >
+            Auto
+          </button>
+          <button
+            type="button"
+            className={profileOptionVariants({
+              active: gamingManualActive,
+              tone: "gaming",
+              animated: !disableAnimations,
+            })}
             onClick={() => onProfileAction?.("gaming")}
             tabIndex={isOpen ? 0 : -1}
             aria-label="Toggle gaming profile"
-            title={profile.gamingManual ? "Disable manual gaming profile" : "Enable manual gaming profile"}
+            aria-pressed={gamingManualActive}
+            title={gamingManualActive ? "Disable manual gaming profile" : "Enable manual gaming profile"}
           >
-            <span className="font-fluent text-xs" aria-hidden="true">
+            <span className="font-fluent text-[11px]" aria-hidden="true">
               {"\uE7FC"}
             </span>
           </button>
           <button
             type="button"
-            className={cn(
-              "inline-flex h-5 min-w-5 items-center justify-center rounded border border-white/10 px-1 text-xs font-semibold text-foreground-secondary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none active:scale-[0.98]",
-              profile.mode === "powersave" && "border-state-warning/40 bg-state-warning/15 text-state-warning",
-            )}
+            className={profileOptionVariants({
+              active: powersaveManualActive,
+              tone: "powersave",
+              animated: !disableAnimations,
+            })}
             onClick={() => onProfileAction?.("powersave")}
             tabIndex={isOpen ? 0 : -1}
             aria-label="Toggle powersave profile"
-            title={profile.powersaveManual ? "Disable manual powersave profile" : "Enable manual powersave profile"}
+            aria-pressed={powersaveManualActive}
+            title={powersaveManualActive ? "Disable manual powersave profile" : "Enable manual powersave profile"}
           >
-            <span className="font-fluent text-xs" aria-hidden="true">
+            <span className="font-fluent text-[11px]" aria-hidden="true">
               {"\uE945"}
             </span>
           </button>
