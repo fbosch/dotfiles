@@ -16,7 +16,7 @@ ensure_daemon() {
 
   mkdir -p "$runtime_dir"
   rm -f "$command_socket"
-  lua "$daemon" >/dev/null 2>&1 &
+  "$0" daemon >/dev/null 2>&1 &
 
   tries=0
   while [ ! -S "$command_socket" ] && [ "$tries" -lt 20 ]; do

@@ -387,17 +387,20 @@ function refreshProfileState() {
   profileState = readProfileState();
 }
 
-function profileSummary(): string {
-  if (profileState.source !== "none") {
-    return profileState.source;
-  }
+function profileModeLabel(): string {
+  if (profileState.mode === "gaming") return "Gaming";
+  if (profileState.mode === "powersave") return "Saver";
+  return "Balanced";
+}
 
-  return "auto";
+function profileSourceLabel(): string {
+  if (profileState.source === "manual") return "Manual";
+  return "Auto";
 }
 
 function profileTooltip(): string {
   return [
-    `Profile: ${profileSummary()}`,
+    `Profile: ${profileModeLabel()} · ${profileSourceLabel()}`,
     `Gaming: total=${profileState.gamingTotal} manual=${profileState.gamingManual} watchdog=${profileState.gamingWatchdog} gamemode=${profileState.gamingGamemode}`,
     `Powersave: total=${profileState.powersaveTotal} manual=${profileState.powersaveManual}`,
   ].join("\n");
@@ -761,6 +764,7 @@ function createProfileToggle(
   return (
     <button
       canFocus={true}
+      hexpand={true}
       class={`profile-toggle ${active ? activeClass : ""}`}
       onClicked={() => runProfileCommand(command)}
       $={(self: Gtk.Button) => {
@@ -775,31 +779,35 @@ function createProfileToggle(
 }
 
 function createProfileControls(): Gtk.Box {
-  const manualActive = profileState.gamingManual > 0 || profileState.powersaveManual > 0;
-  const gamingActive = profileState.mode === "gaming";
-  const powersaveActive = profileState.mode === "powersave";
+  const gamingActive = profileState.gamingManual > 0;
+  const powersaveActive = profileState.powersaveManual > 0;
+  const autoActive = !gamingActive && !powersaveActive;
 
   const profileBox = (
-    <box orientation={Gtk.Orientation.HORIZONTAL} spacing={4} class="profile-row">
-      <box orientation={Gtk.Orientation.HORIZONTAL} spacing={8} hexpand={true} class="profile-summary">
+    <box orientation={Gtk.Orientation.VERTICAL} spacing={4} class="profile-row">
+      <box orientation={Gtk.Orientation.HORIZONTAL} spacing={8} class="profile-summary">
         <label label="Profile" class="profile-label" />
-        <label label={profileSummary()} class="profile-source" />
-        {manualActive && (
-          <button
-            canFocus={true}
-            class="profile-clear"
-            onClicked={() => clearManualProfiles()}
-            $={(self: Gtk.Button) => {
-              self.set_cursor_from_name("pointer");
-              self.set_tooltip_text("Clear manual profile override");
-              menuItemButtons.set("profile-clear", self);
-            }}
-          >
-            <label label={"\uE711"} class="profile-clear-icon" />
-          </button>
-        )}
+        <label
+          label={`${profileModeLabel()} · ${profileSourceLabel()}`}
+          halign={Gtk.Align.END}
+          hexpand={true}
+          class="profile-source"
+        />
       </box>
       <box orientation={Gtk.Orientation.HORIZONTAL} spacing={4} class="profile-actions">
+        <button
+          canFocus={true}
+          hexpand={true}
+          class={`profile-toggle profile-auto ${autoActive ? "auto-active" : ""}`}
+          onClicked={() => clearManualProfiles()}
+          $={(self: Gtk.Button) => {
+            self.set_cursor_from_name("pointer");
+            self.set_tooltip_text("Let automatic profile rules decide");
+            menuItemButtons.set("profile-auto", self);
+          }}
+        >
+          <label label="Auto" class="profile-auto-label" />
+        </button>
         {createProfileToggle(
           "profile-gaming",
           "\uE7FC",
@@ -1133,71 +1141,55 @@ function applyStaticCSS() {
     }
 
     window.start-menu box.profile-row {
-      padding: 2px 6px;
-      border-radius: 6px;
-      min-height: 24px;
-    }
-
-    window.start-menu box.profile-row:hover {
-      background-color: rgba(255, 255, 255, 0.06);
+      padding: 4px;
+      border-radius: 8px;
+      background-color: ${tokens.colors.background.primary.value}4D;
     }
 
     window.start-menu box.profile-summary {
-      margin-top: 2px;
+      padding: 2px 4px 0 4px;
     }
 
     window.start-menu label.profile-label {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 14px;
+      font-size: 11px;
       font-weight: 500;
       color: ${tokens.colors.foreground.primary.value};
     }
 
     window.start-menu label.profile-source {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 14px;
+      font-size: 11px;
       color: ${tokens.colors.foreground.secondary.value};
+    }
+
+    window.start-menu box.profile-actions {
+      padding: 2px;
+      border-radius: 6px;
+      background-color: ${tokens.colors.background.primary.value}80;
     }
 
     window.start-menu button.profile-toggle {
-      min-width: 20px;
-      min-height: 20px;
-      padding: 0 4px;
+      min-height: 22px;
+      padding: 0 6px;
       border-radius: 5px;
-      border: none;
+      border: 1px solid transparent;
       background-color: transparent;
       color: ${tokens.colors.foreground.secondary.value};
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 12px;
-      font-weight: 600;
+      font-size: 11px;
+      font-weight: 500;
     }
 
-    window.start-menu button.profile-clear {
-      min-width: 18px;
-      min-height: 18px;
-      padding: 0;
-      border-radius: 5px;
-      border: none;
-      background-color: transparent;
-      color: ${tokens.colors.foreground.secondary.value};
-      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 14px;
-      font-weight: 600;
-    }
-
-    window.start-menu label.profile-clear-icon {
-      font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
-      font-size: 14px;
-      color: inherit;
-    }
-
-    window.start-menu button.profile-toggle {
-      border: 1px solid rgba(255, 255, 255, 0.10);
-    }
-
-    window.start-menu button.profile-clear:hover,
     window.start-menu button.profile-toggle:hover {
       background-color: rgba(255, 255, 255, 0.10);
+      color: ${tokens.colors.foreground.primary.value};
+    }
+
+    window.start-menu button.profile-toggle.auto-active {
+      color: ${tokens.colors.foreground.primary.value};
+      background-color: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.10);
     }
 
     window.start-menu button.profile-toggle.gaming-active {
@@ -1214,7 +1206,14 @@ function applyStaticCSS() {
 
     window.start-menu label.profile-toggle-icon {
       font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
-      font-size: 13px;
+      font-size: 11px;
+      color: inherit;
+    }
+
+    window.start-menu label.profile-auto-label {
+      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+      font-size: 11px;
+      font-weight: 500;
       color: inherit;
     }
 
