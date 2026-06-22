@@ -197,6 +197,26 @@ return {
 				end)
 			end
 
+			local function ask_opencode_and_focus_after_submit(default)
+				require("opencode.server.discovery")
+					.get()
+					:next(function(server)
+						local context = require("opencode.context").new()
+						return require("opencode.ui.ask").ask(default, server, context):next(function(input)
+							return require("opencode.api.prompt").prompt(input, server, context):next(function()
+								if not input:match(" $") then
+									focus_opencode_window()
+								end
+							end)
+						end)
+					end)
+					:catch(function(err)
+						if err then
+							vim.notify(err, vim.log.levels.ERROR, { title = "opencode" })
+						end
+					end)
+			end
+
 
 			local function send_opencode(method, prompt, opts)
 				require("opencode")[method](prompt, opts)
@@ -276,7 +296,7 @@ return {
 
 			-- Core keymaps
 			vim.keymap.set({ "n", "x" }, "<leader>ac", function()
-				send_opencode("ask", "@this: ", { submit = true })
+				ask_opencode_and_focus_after_submit("@this: ")
 			end, { desc = "Ask opencode" })
 
 			vim.keymap.set({ "n", "x" }, "<leader>as", function()
@@ -396,15 +416,15 @@ return {
 
 			-- Custom prompts for grammar and translate (replacing ChatGPT functionality)
 			vim.keymap.set({ "n", "v" }, "<leader>ag", function()
-				send_opencode("ask", "Fix grammar and improve writing: @this", { submit = true })
+				ask_opencode_and_focus_after_submit("Fix grammar and improve writing: @this")
 			end, { desc = "Grammar correction" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>ak", function()
-				send_opencode("ask", "Extract keywords from: @this", { submit = true })
+				ask_opencode_and_focus_after_submit("Extract keywords from: @this")
 			end, { desc = "Extract keywords" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>al", function()
-				send_opencode("ask", "Analyze code readability: @this", { submit = true })
+				ask_opencode_and_focus_after_submit("Analyze code readability: @this")
 			end, { desc = "Code readability" })
 		end,
 	},
