@@ -2,7 +2,7 @@
 description: Writes, runs, and diagnoses tests including unit, integration, edge case, coverage, and regression suites. Use when adding tests, improving coverage, running relevant test suites, or investigating test failures.
 mode: subagent
 color: "#96bd78"
-temperature: 0.2
+temperature: 0.0
 permission:
   bash:
     "git commit *": deny
