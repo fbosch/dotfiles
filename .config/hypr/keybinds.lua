@@ -115,7 +115,7 @@ bind("bind", main_mod, "SPACE", exec(programs.menu))
 bind("bind", "ALT", "grave", exec("~/.config/hypr/runtime/capture/hyprwhspr-record.sh start"))
 bind("bindr", "ALT", "grave", exec("~/.config/hypr/runtime/capture/hyprwhspr-record.sh stop"))
 
-bind("bind", "ALT", "SPACE", exec("bash ~/.config/hypr/runtime/desktop/switch-layout.sh"))
+bind("bind", "CTRL", "SPACE", exec("bash ~/.config/hypr/runtime/desktop/switch-layout.sh"))
 bind("bind", main_mod .. " + SHIFT", "V", clipboard_bridge.paste_with_clipboard_bridge)
 bind("bindn", "CTRL", "C", clipboard_bridge.sync_wayland_to_xwayland)
 bind("bindn", "CTRL", "X", clipboard_bridge.sync_wayland_to_xwayland)
