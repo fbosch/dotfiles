@@ -34,7 +34,9 @@
     "fff": {
       "type": "local",
       "command": [
-        "fff-mcp"
+        "sh",
+        "-lc",
+        "exec fff-mcp --frecency-db \"${XDG_CACHE_HOME:-$HOME/.cache}/nvim/fff_nvim\""
       ],
       "enabled": true
     }
