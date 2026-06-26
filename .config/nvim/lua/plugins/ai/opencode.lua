@@ -201,9 +201,9 @@ return {
 				require("opencode.server.discovery")
 					.get()
 					:next(function(server)
-						local context = require("opencode.context").new()
-						return require("opencode.ui.ask").ask(default, server, context):next(function(input)
-							return require("opencode.api.prompt").prompt(input, server, context):next(function()
+						local context = require("opencode.context").new(server)
+						return require("opencode.ui.ask").ask(default, context):next(function(input)
+							return require("opencode.api.prompt").prompt(input, context):next(function()
 								if not input:match(" $") then
 									focus_opencode_window()
 								end
@@ -217,17 +217,18 @@ return {
 					end)
 			end
 
+			local function append_opencode(prompt)
+				require("opencode").prompt(prompt .. " ")
+				focus_opencode_window()
+			end
 
-			local function send_opencode(method, prompt, opts)
-				require("opencode")[method](prompt, opts)
-				if not (opts and opts.submit) then
-					focus_opencode_window()
-				end
+			local function configured_prompt(name)
+				return require("opencode.config").opts.select.prompts[name] or name
 			end
 
 			local function show_opencode_health()
-				local connected_server = require("opencode.events").connected_server
-				local status = require("opencode.status").status
+				local connected_server = require("opencode.server").connected
+				local status = require("opencode.events.status").statusline()
 				local terminal_bufnr = nil
 
 				for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
@@ -248,10 +249,13 @@ return {
 									tostring(connected_server.port),
 									tostring(connected_server.cwd)
 								)
-								or "disconnected"
+							or "disconnected"
 					),
-					string.format("Status: %s", status or "unknown"),
-					string.format("Terminal: %s", terminal_bufnr and ("alive (buf " .. terminal_bufnr .. ")") or "not found"),
+					string.format("Status: %s", status),
+					string.format(
+						"Terminal: %s",
+						terminal_bufnr and ("alive (buf " .. terminal_bufnr .. ")") or "not found"
+					),
 					string.format("Nvim CWD: %s", vim.fn.getcwd()),
 				}
 
@@ -308,7 +312,7 @@ return {
 			end, { desc = "Select opencode session" })
 
 			vim.keymap.set({ "n", "x" }, "ga", function()
-				send_opencode("prompt", "@this")
+				append_opencode("@this")
 			end, { desc = "Add to opencode" })
 
 			vim.keymap.set({ "n", "t" }, "<A-a>", function()
@@ -340,7 +344,7 @@ return {
 					vim.bo.filetype,
 					code_block
 				)
-				send_opencode("prompt", formatted_text)
+				append_opencode(formatted_text)
 
 				vim.notify(
 					string.format(
@@ -380,38 +384,38 @@ return {
 
 				-- Send all visible files to opencode
 				local formatted_text = table.concat(visible_files, " ")
-				send_opencode("prompt", formatted_text)
+				append_opencode(formatted_text)
 
 				vim.notify(string.format("Sent %d visible buffers to opencode", #visible_files), vim.log.levels.INFO)
 			end, { desc = "Send visible buffers to opencode" })
 
 			-- Code actions with prompts (replacing ChatGPT commands)
 			vim.keymap.set({ "n", "v" }, "<leader>ae", function()
-				send_opencode("prompt", "explain")
+				append_opencode(configured_prompt("explain"))
 			end, { desc = "Explain code" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>ao", function()
-				send_opencode("prompt", "optimize")
+				append_opencode(configured_prompt("optimize"))
 			end, { desc = "Optimize code" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>ad", function()
-				send_opencode("prompt", "document")
+				append_opencode(configured_prompt("document"))
 			end, { desc = "Add documentation" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>aa", function()
-				send_opencode("prompt", "test")
+				append_opencode(configured_prompt("test"))
 			end, { desc = "Add tests" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>ar", function()
-				send_opencode("prompt", "review")
+				append_opencode(configured_prompt("review"))
 			end, { desc = "Review code" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>af", function()
-				send_opencode("prompt", "fix")
+				append_opencode(configured_prompt("fix"))
 			end, { desc = "Fix diagnostics" })
 
 			vim.keymap.set({ "n", "v" }, "<leader>ax", function()
-				send_opencode("prompt", "diagnostics")
+				append_opencode(configured_prompt("diagnostics"))
 			end, { desc = "Explain diagnostics" })
 
 			-- Custom prompts for grammar and translate (replacing ChatGPT functionality)
