@@ -131,11 +131,11 @@ return {
 			},
 			frecency = {
 				enabled = true,
-				db_path = vim.fn.stdpath("cache") .. "/fff_nvim",
+				db_path = vim.fn.stdpath("cache") .. "/fff_nvim_picker",
 			},
 			history = {
 				enabled = true,
-				db_path = vim.fn.stdpath("data") .. "/fff_queries",
+				db_path = vim.fn.stdpath("data") .. "/fff_nvim_queries",
 				min_combo_count = 3,
 				combo_boost_score_multiplier = 100,
 			},
