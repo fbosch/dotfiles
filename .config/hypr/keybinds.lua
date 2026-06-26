@@ -3,7 +3,6 @@
 local programs = require("programs")
 local window = require("lib.window")
 local volume = require("actions.volume")
-local ags = require("lib.ags")
 local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
 local keyboard_layout = require("actions.keyboard-layout")
@@ -31,6 +30,10 @@ local function key(mods, name)
 end
 
 local function bind(kind, mods, name, dispatcher)
+	if kind ~= "bind" and not opts[kind] then
+		error("unknown bind kind: " .. tostring(kind))
+	end
+
 	hl.bind(key(mods, name), dispatcher, opts[kind])
 end
 
@@ -157,7 +160,7 @@ bind("bindl", "", "XF86AudioPrev", exec("playerctl previous"))
 bind("bindel", main_mod .. " + CTRL", "up", volume.raise)
 bind("bindel", main_mod .. " + CTRL", "down", volume.lower)
 bind("bindel", main_mod .. " + CTRL", "End", volume.mute)
-bind("bind", main_mod .. " + CTRL", "A", exec(ags.request_command("audio-mixer-widget", { action = "toggle" })))
+bind("bind", main_mod .. " + CTRL", "A", volume.toggle_mixer)
 
 bind("bindl", main_mod .. " + CTRL", "left", exec("playerctl previous"))
 bind("bindl", main_mod .. " + CTRL", "right", exec("playerctl next"))
