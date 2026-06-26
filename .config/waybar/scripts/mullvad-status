@@ -10,6 +10,33 @@ json_escape() {
   printf '%s' "$value"
 }
 
+recent_mullvad_failure() {
+  local logs
+
+  if ! command -v journalctl >/dev/null 2>&1; then
+    return 1
+  fi
+
+  logs="$(journalctl -u mullvad-daemon.service --since '15 minutes ago' --no-pager 2>/dev/null || true)"
+
+  if grep -q 'EXPIRED_ACCOUNT' <<<"$logs"; then
+    printf 'Account expired. Add time to the Mullvad account, then reconnect.'
+    return 0
+  fi
+
+  if grep -qi 'Authentication with remote server failed' <<<"$logs"; then
+    printf 'Authentication failed. Check the Mullvad account status, then reconnect.'
+    return 0
+  fi
+
+  if grep -q 'THROTTLED\|429 Too Many Requests' <<<"$logs"; then
+    printf 'Mullvad API is rate-limiting checks. Wait a few minutes, then reconnect.'
+    return 0
+  fi
+
+  return 1
+}
+
 emit_status() {
   local status_text="$1"
 
@@ -34,6 +61,13 @@ emit_status() {
   fi
 
   if [[ "$status_text" == Disconnected* ]]; then
+    local failure
+
+    if failure="$(recent_mullvad_failure)"; then
+      printf '{"text":"󰖂","tooltip":"%s","class":"error"}\n' "$(json_escape "Mullvad disconnected\n$failure")"
+      return 0
+    fi
+
     printf '{"text":"󰖂","tooltip":"Mullvad disconnected","class":"disconnected"}\n'
     return 0
   fi
