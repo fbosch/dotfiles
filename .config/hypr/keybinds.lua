@@ -6,6 +6,7 @@ local volume = require("actions.volume")
 local ags = require("lib.ags")
 local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
+local keyboard_layout = require("actions.keyboard-layout")
 local window_switcher = require("actions.window-switcher")
 
 local main_mod = "SUPER"
@@ -38,11 +39,6 @@ end
 
 local function exec(command)
 	return hl.dsp.exec_cmd(command)
-end
-
-local function is_gaming_class(value)
-	local class = tostring(value or ""):lower()
-	return class == "gamescope" or class:match("^steam_app_%d+$") ~= nil
 end
 
 local waybar_toggle_smart = exec("sleep 0.5 && ~/.config/hypr/runtime/desktop/waybar-toggle-smart.sh")
@@ -112,16 +108,6 @@ local function drag_openpets()
 	end
 end
 
-local function switch_layout_or_pass_to_game()
-	local active = window.active()
-	if active and (is_gaming_class(active.class) or is_gaming_class(active.initialClass)) then
-		hl.dispatch(hl.dsp.pass({ window = "activewindow" }))
-		return
-	end
-
-	hl.dispatch(exec("bash ~/.config/hypr/runtime/desktop/switch-layout.sh"))
-end
-
 bind("bindo", "", "SUPER_L", exec("pkill -SIGUSR1 waybar"))
 bind("bindir", "", "SUPER_L", super_release)
 bind("bindr", "", "SUPER_R", window_switcher.commit)
@@ -130,7 +116,7 @@ bind("bind", main_mod, "SPACE", exec(programs.menu))
 bind("bind", "ALT", "grave", exec("~/.config/hypr/runtime/capture/hyprwhspr-record.sh start"))
 bind("bindr", "ALT", "grave", exec("~/.config/hypr/runtime/capture/hyprwhspr-record.sh stop"))
 
-bind("bind", "CTRL", "SPACE", switch_layout_or_pass_to_game)
+bind("bind", "CTRL", "SPACE", keyboard_layout.switch)
 bind("bind", main_mod .. " + SHIFT", "V", clipboard_bridge.paste_with_clipboard_bridge)
 bind("bindn", "CTRL", "C", clipboard_bridge.sync_wayland_to_xwayland)
 bind("bindn", "CTRL", "X", clipboard_bridge.sync_wayland_to_xwayland)
@@ -181,14 +167,16 @@ bind("bind", main_mod, "K", window.focus("up"))
 bind("bind", main_mod .. " + SHIFT", "d", hl.dsp.layout("setratio 0.6"))
 
 for workspace = 1, 10 do
+	local workspace_name = tostring(workspace)
 	bind("bind", main_mod, tostring(workspace % 10), function()
-		focus_workspace(tostring(workspace))
+		focus_workspace(workspace_name)
 	end)
 end
 
 for workspace = 1, 10 do
+	local workspace_name = tostring(workspace)
 	bind("bind", main_mod .. " + SHIFT", tostring(workspace % 10), function()
-		move_to_workspace(tostring(workspace))
+		move_to_workspace(workspace_name)
 	end)
 end
 
