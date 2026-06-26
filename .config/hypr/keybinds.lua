@@ -48,58 +48,6 @@ local function super_release()
 	hl.dispatch(waybar_toggle_smart)
 end
 
-local function send_to_gaming_workspace()
-	hl.dispatch(hl.dsp.window.move({ workspace = "10" }))
-end
-
-local function pin_workspace_one()
-	hl.dispatch(hl.dsp.workspace.move({ workspace = "1", monitor = "HDMI-A-2" }))
-end
-
-local function focus_workspace(workspace)
-	if workspace == "1" then
-		pin_workspace_one()
-		hl.dispatch(hl.dsp.focus({ monitor = "HDMI-A-2" }))
-	end
-
-	hl.dispatch(hl.dsp.focus({ workspace = workspace }))
-end
-
-local function move_to_workspace(workspace)
-	if workspace == "1" then
-		pin_workspace_one()
-	end
-
-	hl.dispatch(hl.dsp.window.move({ workspace = workspace }))
-end
-
-local function custom_layout_resize(action)
-	return exec(
-		"~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh " .. action
-	)
-end
-
-local function resize_keep_aspect_ratio()
-	hl.dispatch(custom_layout_resize("stop"))
-	hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "1" }))
-	hl.dispatch(hl.dsp.window.resize())
-end
-
-local function reset_keep_aspect_ratio()
-	hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "0" }))
-end
-
-local function start_custom_layout_resize()
-	reset_keep_aspect_ratio()
-	hl.dispatch(custom_layout_resize("start"))
-end
-
-local function place_custom_layout_at_cursor()
-	if window.uses_any_custom_layout(window.active()) then
-		hl.dispatch(hl.dsp.layout("place-at-cursor"))
-	end
-end
-
 local function drag_openpets()
 	local active = hl.get_active_window()
 
@@ -131,7 +79,7 @@ bind("bind", "CTRL + ALT", "L", exec("hyprlock"))
 bind("bind", "", "PAUSE", exec("wl-freeze -a"))
 bind("bind", main_mod .. " + SHIFT", "P", exec("~/.config/hypr/runtime/profiles/toggle-powersave-mode.sh"))
 bind("bind", main_mod, "G", exec("~/.config/hypr/runtime/windows/focus-gaming-workspace.lua"))
-bind("bind", main_mod .. " + SHIFT", "G", send_to_gaming_workspace)
+bind("bind", main_mod .. " + SHIFT", "G", window.move_to_gaming_workspace)
 
 bind("bind", "CTRL + SHIFT", "C", exec("bash ~/.config/hypr/runtime/capture/screenshot.sh area"))
 bind("bindnitl", "", "PRINT", exec("bash ~/.config/hypr/runtime/capture/screenshot.sh screen"))
@@ -169,14 +117,14 @@ bind("bind", main_mod .. " + SHIFT", "d", hl.dsp.layout("setratio 0.6"))
 for workspace = 1, 10 do
 	local workspace_name = tostring(workspace)
 	bind("bind", main_mod, tostring(workspace % 10), function()
-		focus_workspace(workspace_name)
+		window.focus_workspace(workspace_name)
 	end)
 end
 
 for workspace = 1, 10 do
 	local workspace_name = tostring(workspace)
 	bind("bind", main_mod .. " + SHIFT", tostring(workspace % 10), function()
-		move_to_workspace(workspace_name)
+		window.move_to_workspace(workspace_name)
 	end)
 end
 
@@ -194,11 +142,11 @@ hl.config({
 -- Current Lua mouse binds do not become native bindm entries, so custom layout
 -- right-drag resize is bridged through a bounded IPC helper.
 bind("bind", main_mod, "mouse:272", hl.dsp.window.drag())
-bind("bindr", main_mod, "mouse:272", place_custom_layout_at_cursor)
-bind("bind", main_mod, "mouse:273", start_custom_layout_resize)
-bind("bindr", main_mod, "mouse:273", custom_layout_resize("stop"))
-bind("bind", main_mod .. " + SHIFT", "mouse:273", resize_keep_aspect_ratio)
-bind("bindr", main_mod .. " + SHIFT", "mouse:273", reset_keep_aspect_ratio)
+bind("bindr", main_mod, "mouse:272", window.place_custom_layout_at_cursor)
+bind("bind", main_mod, "mouse:273", window.start_custom_layout_resize)
+bind("bindr", main_mod, "mouse:273", window.stop_custom_layout_resize)
+bind("bind", main_mod .. " + SHIFT", "mouse:273", window.resize_keep_aspect_ratio)
+bind("bindr", main_mod .. " + SHIFT", "mouse:273", window.reset_keep_aspect_ratio)
 bind("bindmn", "", "mouse:272", drag_openpets)
 
 bind("bind", main_mod .. " + SHIFT", "H", window.move("left"))

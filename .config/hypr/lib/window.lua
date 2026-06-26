@@ -22,6 +22,7 @@ local deltas = {
 
 local dispatch = hl.dispatch
 local warp_command = "~/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh"
+local custom_layout_resize_command = "~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh"
 local warp_active = hl.dsp.exec_cmd(warp_command)
 local warp_active_after_focus = hl.dsp.exec_cmd(warp_command .. " 0.03")
 local portrait_resize_up = hl.dsp.layout("resize-up")
@@ -34,6 +35,9 @@ local ultrawide_resize_left = hl.dsp.layout("resize-left")
 local ultrawide_resize_right = hl.dsp.layout("resize-right")
 local ultrawide_x = 1440
 local edge_tolerance = 64
+local pinned_workspace = "1"
+local pinned_workspace_monitor = "HDMI-A-2"
+local gaming_workspace = "10"
 local portrait_transfer_end = { monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
 local ultrawide_transfer_start = { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
 
@@ -137,6 +141,10 @@ local function warp_window(active)
 	dispatch(hl.dsp.cursor.move({ x = at.x + size.x / 2, y = at.y + size.y / 2 }))
 end
 
+local function custom_layout_resize(action)
+	return hl.dsp.exec_cmd(custom_layout_resize_command .. " " .. action)
+end
+
 function M.active()
 	if hl.get_active_window then
 		return hl.get_active_window()
@@ -149,6 +157,56 @@ function M.active()
 	end
 
 	return nil
+end
+
+local function pin_workspace_one()
+	dispatch(hl.dsp.workspace.move({ workspace = pinned_workspace, monitor = pinned_workspace_monitor }))
+end
+
+function M.focus_workspace(workspace)
+	if workspace == pinned_workspace then
+		pin_workspace_one()
+		dispatch(hl.dsp.focus({ monitor = pinned_workspace_monitor }))
+	end
+
+	dispatch(hl.dsp.focus({ workspace = workspace }))
+end
+
+function M.move_to_workspace(workspace)
+	if workspace == pinned_workspace then
+		pin_workspace_one()
+	end
+
+	dispatch(hl.dsp.window.move({ workspace = workspace }))
+end
+
+function M.move_to_gaming_workspace()
+	M.move_to_workspace(gaming_workspace)
+end
+
+function M.place_custom_layout_at_cursor()
+	if M.uses_any_custom_layout(M.active()) then
+		dispatch(hl.dsp.layout("place-at-cursor"))
+	end
+end
+
+function M.start_custom_layout_resize()
+	M.reset_keep_aspect_ratio()
+	dispatch(custom_layout_resize("start"))
+end
+
+function M.stop_custom_layout_resize()
+	dispatch(custom_layout_resize("stop"))
+end
+
+function M.resize_keep_aspect_ratio()
+	dispatch(custom_layout_resize("stop"))
+	dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "1" }))
+	dispatch(hl.dsp.window.resize())
+end
+
+function M.reset_keep_aspect_ratio()
+	dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "0" }))
 end
 
 function M.focus(value)

@@ -28,15 +28,6 @@ local function log(message)
 	handle:close()
 end
 
-local function lower(value)
-	return tostring(value or ""):lower()
-end
-
-local function is_gaming_class(value)
-	local class = lower(value)
-	return class == "gamescope" or class:match("^steam_app_%d+$") ~= nil
-end
-
 local function command_output(command)
 	local handle = io.popen(command)
 	if not handle then
@@ -109,11 +100,6 @@ local function sync_gamescope_xwayland_layout(target_layout)
 	end
 end
 
-local function focused_window_is_gamescope()
-	local active = json.object(hypr_ipc.request("j/activewindow"))
-	return is_gaming_class(active.class) or is_gaming_class(active.initialClass)
-end
-
 local function main_keyboard()
 	local devices = json.object(hypr_ipc.request("j/devices"))
 	for _, keyboard in ipairs(devices.keyboards or {}) do
@@ -154,11 +140,6 @@ local function show_keyboard_switcher(layouts, active_code)
 end
 
 local function run()
-	if focused_window_is_gamescope() then
-		log("Keyboard layout switch skipped: Gamescope window focused")
-		return
-	end
-
 	local before = main_keyboard()
 	if not before or not before.name then
 		log("Keyboard layout switch skipped: main keyboard not found")
