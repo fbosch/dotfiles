@@ -2,6 +2,8 @@
 
 set -eu
 
+hyprctl reload
+
 pkill waybar 2>/dev/null || true
 pkill gjs 2>/dev/null || true
 pkill -f waybar-edge-monitor 2>/dev/null || true
