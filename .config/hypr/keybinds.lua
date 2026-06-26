@@ -41,13 +41,6 @@ local function exec(command)
 	return hl.dsp.exec_cmd(command)
 end
 
-local waybar_toggle_smart = exec("sleep 0.5 && ~/.config/hypr/runtime/desktop/waybar-toggle-smart.sh")
-
-local function super_release()
-	window_switcher.commit()
-	hl.dispatch(waybar_toggle_smart)
-end
-
 local function drag_openpets()
 	local active = hl.get_active_window()
 
@@ -57,7 +50,7 @@ local function drag_openpets()
 end
 
 bind("bindo", "", "SUPER_L", exec("pkill -SIGUSR1 waybar"))
-bind("bindir", "", "SUPER_L", super_release)
+bind("bindir", "", "SUPER_L", window_switcher.release_super)
 bind("bindr", "", "SUPER_R", window_switcher.commit)
 
 bind("bind", main_mod, "SPACE", exec(programs.menu))
@@ -103,9 +96,7 @@ bind("bind", main_mod, "D", exec("~/.config/hypr/runtime/windows/toggle-show-des
 
 bind("bind", main_mod, "Z", exec("~/.config/hypr/runtime/windows/minimized-state.lua toggle-window"))
 bind("bind", main_mod .. " + SHIFT", "Z", exec("~/.config/hypr/runtime/windows/minimized-state.lua toggle-workspace"))
-bind("bind", main_mod, "X", function()
-	hl.dispatch(hl.dsp.window.move({ workspace = "+0", follow = false }))
-end)
+bind("bind", main_mod, "X", window.hide_from_current_workspace)
 
 bind("bind", main_mod, "H", window.focus("left"))
 bind("bind", main_mod, "L", window.focus("right"))

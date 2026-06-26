@@ -7,6 +7,7 @@ local minimized_state = require("runtime.windows.minimized-state")
 local M = {}
 
 local minimized_workspace_prefix = "special:minimized"
+local waybar_toggle_smart = hl.dsp.exec_cmd("sleep 0.5 && ~/.config/hypr/runtime/desktop/waybar-toggle-smart.sh")
 local action_payloads = {}
 
 local function workspace_name(win)
@@ -112,6 +113,11 @@ end
 
 function M.commit()
 	switch_window("commit")
+end
+
+function M.release_super()
+	M.commit()
+	hl.dispatch(waybar_toggle_smart)
 end
 
 function M.hide()

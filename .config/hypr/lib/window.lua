@@ -184,6 +184,10 @@ function M.move_to_gaming_workspace()
 	M.move_to_workspace(gaming_workspace)
 end
 
+function M.hide_from_current_workspace()
+	dispatch(hl.dsp.window.move({ workspace = "+0", follow = false }))
+end
+
 function M.place_custom_layout_at_cursor()
 	if M.uses_any_custom_layout(M.active()) then
 		dispatch(hl.dsp.layout("place-at-cursor"))
