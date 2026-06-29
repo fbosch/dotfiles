@@ -39,6 +39,15 @@
         "exec fff-mcp --frecency-db \"${XDG_CACHE_HOME:-$HOME/.cache}/nvim/fff_nvim\""
       ],
       "enabled": true
+    },
+    "headroom": {
+      "type": "local",
+      "command": [
+        "headroom",
+        "mcp",
+        "serve"
+      ],
+      "enabled": false
     }
   },
   "permission": {
