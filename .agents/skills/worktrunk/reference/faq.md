@@ -88,17 +88,20 @@ Three verbosity levels. Each is a superset of the previous one.
 |-------|--------|-------------------------|----------|
 | (none) | Warnings only | — | Normal use |
 | `-v` | + Info: hook output, alias template variable resolution | — | Debugging hooks/aliases |
-| `-vv` | Same as `-v` | + `trace.log`, `subprocess.log`, `diagnostic.md` | Filing a bug |
+| `-vv` | Same as `-v` | + `trace.log`, `trace.jsonl`, `subprocess.log`, `diagnostic.md` | Filing a bug |
 
-At `-vv`, debug-level records (`$ cmd` headers, `[wt-trace]` timing, bounded subprocess preview) route to `trace.log` instead of stderr — so the terminal stays readable while the deep trace lands on disk. A one-line pointer on stderr shows where the files went.
+At `-vv`, debug-level records (command lines, in-process spans, bounded subprocess preview) route to `trace.log` instead of stderr — so the terminal stays readable while the deep trace lands on disk. A one-line pointer on stderr shows where the files went.
 
-The three `-vv` files have distinct audiences:
+The `-vv` files have distinct audiences:
 
-- **`trace.log`** — bounded preview (~1K lines), `[wt-trace]` records, gistable.
+- **`trace.log`** — the human trace (bounded ~1K lines, gistable): each command's start (`$ git status`) and finish (`✓ git status [wt]  12.3ms`, `✗` on failure), spans, and milestones.
+- **`trace.jsonl`** — the same records as one JSON object per line, for machines (`jq`, chrome://tracing). `wt config state logs profile` reads it.
 - **`subprocess.log`** — raw uncapped stdout/stderr of every subprocess `wt` spawns (multi-MB possible, e.g. full `git log -p` output). The deep-dive escape hatch.
-- **`diagnostic.md`** — markdown bug-report bundle that inlines `trace.log`. `wt` prints a `gh gist create` command pointing at it.
+- **`diagnostic.md`** — markdown bug-report bundle that inlines `trace.log` and a rendered performance profile (subprocess time by command type, slowest calls, repeated calls). `wt` prints a `gh gist create` command pointing at it.
 
 `RUST_LOG` overrides the flag baseline when set (`RUST_LOG=debug wt -v` lifts `-v` to debug-on-stderr).
+
+The flags only reach a command you type; shell completion runs as its own process with nowhere to pass one. Set `WORKTRUNK_VERBOSE=0|1|2` to apply the level to *every* invocation, completion included — it's the env-var equivalent of `-v`/`-vv`, so level 2 writes the same `trace.log`/`trace.jsonl`/`subprocess.log`/`diagnostic.md` files. An explicit `-v`/`-vv` on a command raises the level further but never lowers this baseline. To profile a slow tab-completion, run it the way your shell does — e.g. `WORKTRUNK_VERBOSE=2 COMPLETE=fish wt -- wt switch ''` — then render the result with `wt config state logs profile`.
 
 ## What files does Worktrunk create?
 
@@ -147,7 +150,8 @@ Worktrunk stores small amounts of cache and log data in the repository's `.git/`
 | `.git/wt/cache/summary/{branch}/{hash}.json` | Cached LLM branch summaries, content-addressed by diff hash | `wt list --full`, `wt switch` (when `[list] summary = true`) |
 | `.git/wt/logs/{branch}/**/*.log` | Background hook output (nested per branch) | Hooks, background `wt remove` |
 | `.git/wt/logs/commands.jsonl` | Command audit log (~2MB max) | Hooks, LLM commands |
-| `.git/wt/logs/trace.log` | Debug log for issue reporting | Running with `-vv` |
+| `.git/wt/logs/trace.log` | Human debug trace for issue reporting | Running with `-vv` |
+| `.git/wt/logs/trace.jsonl` | Machine trace (one JSON object per record) | Running with `-vv` |
 | `.git/wt/logs/subprocess.log` | Raw uncapped subprocess stdout/stderr (may be multi-MB) | Running with `-vv` |
 | `.git/wt/logs/diagnostic.md` | Diagnostic report for issue reporting | Running with `-vv` |
 | `.git/wt/trash/<name>-<timestamp>` | Staged worktree contents pending background deletion | `wt remove` |
@@ -245,7 +249,7 @@ Yes. Core commands, shell integration, and tab completion work in both Git Bash 
 
 **Git for Windows required** — Hooks use bash syntax and execute via Git Bash, so [Git for Windows](https://gitforwindows.org/) must be installed even when PowerShell is the interactive shell.
 
-**`wt switch` interactive picker unavailable** — Uses [skim](https://github.com/skim-rs/skim), which doesn't support Windows. Use `wt list` and `wt switch <branch>` instead.
+The `wt switch` interactive picker runs on Windows too, on [skim](https://github.com/skim-rs/skim)'s crossterm backend.
 
 ## How does Worktrunk determine the default branch?
 
