@@ -34,6 +34,11 @@ local servers = {
 	rust_analyzer = {
 		cmd = { "rust-analyzer" },
 	},
+	fallow = {
+		cmd = { "fallow-lsp" },
+		filetypes = { "javascript", "typescript", "javascriptreact", "typescriptreact" },
+		root_files = { ".fallowrc.json", "package.json", ".git" },
+	},
 	docker_compose_language_service = {
 		cmd = { "docker-compose-langserver", "--stdio" },
 	},
@@ -244,6 +249,7 @@ local function server_config(server_name, capabilities, on_attach)
 		on_attach = on_attach,
 		settings = settings,
 		cmd = server.cmd,
+		filetypes = server.filetypes,
 		root_dir = resolve_root(server_name, server),
 	}
 end
