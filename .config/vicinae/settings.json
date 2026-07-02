@@ -31,8 +31,12 @@
       "client_side_decorations": {
          "enabled": true
       },
+      "compact_mode": {
+         "enabled": true
+      },
       "layer_shell": {
-         "keyboard_interactivity": "on_demand"
+         "keyboard_interactivity": "on_demand",
+         "enabled": true
       }
    },
    "favorites": [
