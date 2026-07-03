@@ -2,6 +2,7 @@
   "name": "opencode-plugins-workspace",
   "private": true,
   "dependencies": {
-    "@clack/prompts": "^0.11.0"
+    "@clack/prompts": "^0.11.0",
+    "effect": "^3.21.4"
   }
 }

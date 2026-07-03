@@ -1,3 +1,4 @@
+import { Effect } from "effect"
 import { nodeCommandRunner, type CommandRunner } from "./command"
 import { captureScreenshot } from "./capture"
 import { writeEvidence } from "./evidence"
@@ -30,26 +31,41 @@ function sideEffectMessage(mode: string): string {
   return `Mode '${mode}' is outside the read-only Hyprland visibility capability`
 }
 
-async function recordEvidence(record: EvidenceRecord, evidenceDir?: string) {
-  const evidencePath = await writeEvidence(record, evidenceDir)
-  return {
-    ...record,
-    evidencePath,
-  }
+function asHyprError(error: unknown): HyprComputerUseError {
+  if (error instanceof HyprComputerUseError) return error
+  return new HyprComputerUseError(
+    ERROR.unavailableState,
+    error instanceof Error ? error.message : String(error),
+  )
 }
 
-export async function executeReadonlyTool(args: ToolArgs, options: ToolOptions = {}) {
+function recordEvidence(record: EvidenceRecord, evidenceDir?: string) {
+  return Effect.tryPromise({
+    try: () => writeEvidence(record, evidenceDir),
+    catch: asHyprError,
+  }).pipe(
+    Effect.map((evidencePath) => ({
+      ...record,
+      evidencePath,
+    })),
+  )
+}
+
+export function executeReadonlyToolEffect(args: ToolArgs, options: ToolOptions = {}) {
   const runner = options.runner ?? nodeCommandRunner
   const mode = args.mode ?? "state"
 
-  try {
+  const program = Effect.gen(function* () {
     if (["click", "type", "pointer", "keyboard", "dispatch", "clipboard", "locked-use"].includes(mode)) {
-      throw new HyprComputerUseError(ERROR.rejectedSideEffect, sideEffectMessage(mode), { mode })
+      yield* Effect.fail(new HyprComputerUseError(ERROR.rejectedSideEffect, sideEffectMessage(mode), { mode }))
     }
 
     if (mode === "state") {
-      const state = await readHyprlandState(runner)
-      const evidence = await recordEvidence(
+      const state = yield* Effect.tryPromise({
+        try: () => readHyprlandState(runner),
+        catch: asHyprError,
+      })
+      const evidence = yield* recordEvidence(
         {
           timestamp: state.timestamp,
           operation: "state",
@@ -67,9 +83,12 @@ export async function executeReadonlyTool(args: ToolArgs, options: ToolOptions =
     }
 
     if (mode === "snapshot") {
-      const state = await readHyprlandState(runner)
+      const state = yield* Effect.tryPromise({
+        try: () => readHyprlandState(runner),
+        catch: asHyprError,
+      })
       const target = activeTargetFromState(state)
-      const evidence = await recordEvidence(
+      const evidence = yield* recordEvidence(
         {
           timestamp: state.timestamp,
           operation: "snapshot",
@@ -87,12 +106,17 @@ export async function executeReadonlyTool(args: ToolArgs, options: ToolOptions =
     }
 
     if (mode === "capture") {
-      if (!args.scope) {
-        throw new HyprComputerUseError(ERROR.unsupportedScope, "Capture mode requires an explicit scope")
+      const scope = args.scope
+      if (!scope) {
+        yield* Effect.fail(new HyprComputerUseError(ERROR.unsupportedScope, "Capture mode requires an explicit scope"))
+        throw new Error("unreachable")
       }
 
-      const capture = await captureScreenshot(runner, { ...args, scope: args.scope })
-      const evidence = await recordEvidence(
+      const capture = yield* Effect.tryPromise({
+        try: () => captureScreenshot(runner, { ...args, scope }),
+        catch: asHyprError,
+      })
+      const evidence = yield* recordEvidence(
         {
           timestamp: capture.timestamp,
           operation: "capture",
@@ -117,11 +141,13 @@ export async function executeReadonlyTool(args: ToolArgs, options: ToolOptions =
       }
     }
 
-    throw new HyprComputerUseError(ERROR.unsupportedScope, "Unsupported read-only tool mode", { mode })
-  } catch (error) {
+    return yield* Effect.fail(new HyprComputerUseError(ERROR.unsupportedScope, "Unsupported read-only tool mode", { mode }))
+  })
+
+  return program.pipe(
+    Effect.catchAll((error) => {
     const result = errorResult(error)
-    try {
-      const evidence = await recordEvidence(
+      return recordEvidence(
         {
           timestamp: new Date().toISOString(),
           operation: "rejected",
@@ -131,10 +157,14 @@ export async function executeReadonlyTool(args: ToolArgs, options: ToolOptions =
           },
         },
         args.evidenceDir,
+      ).pipe(
+        Effect.map((evidence) => ({ ...result, evidence })),
+        Effect.catchAll(() => Effect.succeed(result)),
       )
-      return { ...result, evidence }
-    } catch {
-      return result
-    }
-  }
+    }),
+  )
+}
+
+export async function executeReadonlyTool(args: ToolArgs, options: ToolOptions = {}) {
+  return await Effect.runPromise(executeReadonlyToolEffect(args, options))
 }
