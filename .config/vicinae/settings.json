@@ -28,7 +28,7 @@
       }
    },
    "launcher_window": {
-      "opacity": 1,
+      "opacity": 0.9,
       "client_side_decorations": {
          "enabled": true,
          "shadow_size": 0
@@ -37,7 +37,7 @@
          "enabled": false
       },
       "compact_mode": {
-         "enabled": true
+         "enabled": false
       },
       "layer_shell": {
          "keyboard_interactivity": "on_demand",
