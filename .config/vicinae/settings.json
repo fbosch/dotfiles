@@ -12,6 +12,7 @@
    "$schema": "https://vicinae.com/schemas/config.json",
    "close_on_focus_loss": false,
    "pop_to_root_on_close": true,
+   "escape_key_behavior": "close_window",
    "search_files_in_root": false,
    "font": {
       "rendering": "native",
@@ -27,13 +28,13 @@
       }
    },
    "launcher_window": {
-      "opacity": 1.0,
-      "blur": {
-         "enabled": false
-      },
+      "opacity": 1,
       "client_side_decorations": {
          "enabled": true,
          "shadow_size": 0
+      },
+      "blur": {
+         "enabled": false
       },
       "compact_mode": {
          "enabled": true
