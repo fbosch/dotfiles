@@ -80,3 +80,48 @@ declare module "@opencode-ai/plugin/tui" {
     tui: TuiPlugin
   }
 }
+
+declare module "@opencode-ai/plugin" {
+  type Hooks = {
+    "tool.execute.before"?: (input: any, output: any) => Promise<void> | void
+    [key: string]: unknown
+  }
+
+  export type Plugin = (input: any, options?: any) => Promise<Hooks>
+
+  type OptionalSchema = {
+    optional(): unknown
+  }
+
+  type Schema = {
+    string(): OptionalSchema
+    number(): OptionalSchema
+    boolean(): OptionalSchema
+    enum(values: string[]): OptionalSchema
+    object(shape: Record<string, unknown>): OptionalSchema
+  }
+
+  type ToolFactory = {
+    schema: Schema
+    (definition: {
+      description: string
+      args: Record<string, unknown>
+      execute(args: any): Promise<string> | string
+    }): unknown
+  }
+
+  export const tool: ToolFactory
+}
+
+declare module "bun:test" {
+  export function describe(name: string, fn: () => void): void
+  export function test(name: string, fn: () => unknown | Promise<unknown>): void
+  export function expect(value: unknown): {
+    toBe(expected: unknown): void
+    toBeNull(): void
+    toContain(expected: string): void
+    not: {
+      toContain(expected: string): void
+    }
+  }
+}
