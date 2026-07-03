@@ -2,7 +2,7 @@
 -- Preserve declaration order.
 
 hl.layer_rule({ match = { namespace = "waybar" }, blur = true, ignore_alpha = 0.3 })
-hl.layer_rule({ match = { namespace = "vicinae" }, blur = true, no_anim = true, ignore_alpha = 0 })
+hl.layer_rule({ match = { namespace = "^vicinae.*$" }, blur = true, no_anim = true, ignore_alpha = 0 })
 hl.layer_rule({ match = { namespace = "rofi" }, blur = true })
 hl.layer_rule({ match = { namespace = "nemo" }, blur = true })
 hl.layer_rule({ match = { namespace = "rofi" }, ignore_alpha = 0 })
