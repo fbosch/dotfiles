@@ -69,11 +69,74 @@ export type CaptureResult = {
 
 export type EvidenceRecord = {
   timestamp: string
-  operation: "state" | "snapshot" | "capture" | "rejected"
+  operation: "state" | "snapshot" | "capture" | "browser" | "rejected"
   target?: TargetSnapshot | null
   capture?: Omit<CaptureResult, "target">
+  browser?: BrowserTargetReport
   error?: {
     code: string
     message: string
   }
+}
+
+export type DesktopEntry = {
+  desktopId: string
+  path: string
+  name: string | null
+  exec: string | null
+  startupWMClass: string | null
+  mimeTypes: string[]
+  categories: string[]
+}
+
+export type BrowserIdentity = {
+  desktopId: string
+  name: string | null
+  exec: string | null
+  startupWMClass: string | null
+  flatpakId: string | null
+  classCandidates: string[]
+  source: string
+  desktopEntryPath: string | null
+}
+
+export type BrowserTargetMatch = ClientSnapshot & {
+  reasons: string[]
+  monitorName: string | null
+}
+
+export type BrowserCapabilities = {
+  nativeWindowCapture: "available" | "unavailable"
+  xdgOpen: "available" | "unavailable"
+  family: "firefox-gecko" | "unknown"
+  protocols: {
+    cdp: {
+      support: "unsupported" | "unknown"
+      endpoint: "notConfigured"
+      reason?: string
+    }
+    webdriverBidi: {
+      support: "supported" | "unknown"
+      endpoint: "notConfigured" | "available" | "unreachable" | "rejected"
+      url?: string
+      reason?: string
+    }
+    marionette: {
+      support: "supported" | "unknown"
+      endpoint: "notConfigured"
+      reason?: string
+    }
+  }
+}
+
+export type BrowserTargetReport = {
+  timestamp: string
+  defaultBrowser: {
+    desktopId: string | null
+    source: string | null
+  }
+  desktopEntry: DesktopEntry | null
+  identity: BrowserIdentity | null
+  matches: BrowserTargetMatch[] | null
+  capabilities: BrowserCapabilities
 }

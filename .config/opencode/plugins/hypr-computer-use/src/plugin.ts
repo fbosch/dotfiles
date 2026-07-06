@@ -13,6 +13,9 @@ export const HyprComputerUsePlugin = async () => {
               "state",
               "snapshot",
               "capture",
+              "browser-default",
+              "browser-targets",
+              "browser-capabilities",
               "click",
               "type",
               "pointer",
@@ -35,6 +38,7 @@ export const HyprComputerUsePlugin = async () => {
             .optional(),
           allowFullDesktop: tool.schema.boolean().optional(),
           evidenceDir: tool.schema.string().optional(),
+          webdriverBidiEndpoint: tool.schema.string().optional(),
         },
         async execute(args) {
           const result = await executeReadonlyTool(args)

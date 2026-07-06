@@ -1,4 +1,5 @@
 import { Effect } from "effect"
+import { browserTargetReport } from "./browser"
 import { nodeCommandRunner, type CommandRunner } from "./command"
 import { captureScreenshot } from "./capture"
 import { writeEvidence } from "./evidence"
@@ -10,6 +11,9 @@ export type ToolMode =
   | "state"
   | "snapshot"
   | "capture"
+  | "browser-default"
+  | "browser-targets"
+  | "browser-capabilities"
   | "click"
   | "type"
   | "pointer"
@@ -21,6 +25,7 @@ export type ToolMode =
 export type ToolArgs = Omit<CaptureRequest, "scope"> & {
   mode?: ToolMode
   scope?: CaptureRequest["scope"]
+  webdriverBidiEndpoint?: string
 }
 
 export type ToolOptions = {
@@ -137,6 +142,60 @@ export function executeReadonlyToolEffect(args: ToolArgs, options: ToolOptions =
         ok: true as const,
         mode,
         capture,
+        evidence,
+      }
+    }
+
+    if (mode === "browser-default" || mode === "browser-targets" || mode === "browser-capabilities") {
+      const state = yield* Effect.tryPromise({
+        try: () => readHyprlandState(runner),
+        catch: () => null,
+      })
+      const browser = yield* Effect.tryPromise({
+        try: () => browserTargetReport(runner, state, { webdriverBidiEndpoint: args.webdriverBidiEndpoint }),
+        catch: asHyprError,
+      })
+      const evidence = yield* recordEvidence(
+        {
+          timestamp: browser.timestamp,
+          operation: "browser",
+          browser,
+        },
+        args.evidenceDir,
+      )
+
+      if (mode === "browser-default") {
+        return {
+          ok: true as const,
+          mode,
+          browser: {
+            timestamp: browser.timestamp,
+            defaultBrowser: browser.defaultBrowser,
+            desktopEntry: browser.desktopEntry,
+            identity: browser.identity,
+          },
+          evidence,
+        }
+      }
+
+      if (mode === "browser-capabilities") {
+        return {
+          ok: true as const,
+          mode,
+          browser: {
+            timestamp: browser.timestamp,
+            defaultBrowser: browser.defaultBrowser,
+            identity: browser.identity,
+            capabilities: browser.capabilities,
+          },
+          evidence,
+        }
+      }
+
+      return {
+        ok: true as const,
+        mode,
+        browser,
         evidence,
       }
     }
