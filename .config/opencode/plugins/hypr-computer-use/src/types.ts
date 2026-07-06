@@ -33,6 +33,7 @@ export type ClientSnapshot = Geometry & {
   mapped: boolean
   floating: boolean
   fullscreen: boolean
+  xwayland: boolean
 }
 
 export type HyprlandState = {
@@ -71,14 +72,17 @@ export type CaptureResult = {
 
 export type EvidenceRecord = {
   timestamp: string
-  operation: "state" | "snapshot" | "capture" | "browser" | "approval" | "rejected"
+  operation: "state" | "snapshot" | "capture" | "browser" | "approval" | "keyboard" | "keyboard-plan" | "controls-cache" | "rejected"
   target?: TargetSnapshot | null
   capture?: Omit<CaptureResult, "target">
   browser?: BrowserTargetReport
   approval?: ApprovalReport
+  keyboard?: Record<string, unknown>
+  controls?: Record<string, unknown> | null
   error?: {
     code: string
     message: string
+    details?: Record<string, unknown>
   }
 }
 

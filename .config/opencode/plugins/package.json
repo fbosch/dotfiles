@@ -3,6 +3,14 @@
   "private": true,
   "dependencies": {
     "@clack/prompts": "^0.11.0",
-    "effect": "^3.21.4"
+    "effect": "^3.21.4",
+    "ts-pattern": "^5.9.0"
+  },
+  "devDependencies": {
+    "fallow": "^3.2.0"
+  },
+  "scripts": {
+    "quality:fallow": "fallow review",
+    "quality:fallow:audit": "fallow audit"
   }
 }

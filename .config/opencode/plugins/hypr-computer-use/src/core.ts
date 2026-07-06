@@ -3,9 +3,11 @@ import { appApprovalReport } from "./approval"
 import { browserTargetReport } from "./browser"
 import { nodeCommandRunner, type CommandRunner } from "./command"
 import { captureScreenshot } from "./capture"
+import { lookupControls, upsertControls } from "./controls"
 import { writeEvidence } from "./evidence"
 import { ERROR, HyprComputerUseError, errorResult } from "./errors"
 import { activeTargetFromState, readHyprlandState } from "./hyprland"
+import { executeGuardedKeyboard, executeGuardedKeyboardPlan } from "./keyboard"
 import type { CaptureRequest, CaptureResult, EvidenceRecord, Geometry, TargetSnapshot } from "./types"
 
 export type ToolMode =
@@ -16,10 +18,12 @@ export type ToolMode =
   | "browser-targets"
   | "browser-capabilities"
   | "app-approval"
+  | "controls-cache"
   | "click"
   | "type"
   | "pointer"
   | "keyboard"
+  | "keyboard-plan"
   | "dispatch"
   | "clipboard"
   | "locked-use"
@@ -33,6 +37,40 @@ export type ToolArgs = Omit<CaptureRequest, "scope"> & {
   targetHint?: string
   persistApproval?: boolean
   includeCapture?: boolean
+  controlsCachePath?: string
+  controls?: {
+    source?: string | null
+    notes?: string | null
+    bindings?: Array<{
+      action: string
+      keys: string[]
+      note?: string | null
+    }>
+  }
+  key?: string
+  chord?: string
+  sequence?: string[]
+  text?: string
+  waitMs?: number
+  steps?: Array<{
+    action?: string
+    key?: string
+    chord?: string
+    sequence?: string[]
+    waitMs?: number
+  }>
+  approvedTarget?: {
+    stableId?: string | null
+    address?: string | null
+    class?: string | null
+    title?: string | null
+    workspace?: {
+      id?: number | null
+      name?: string | null
+    } | null
+    monitor?: number | null
+    monitorName?: string | null
+  }
 }
 
 export type ToolOptions = {
@@ -88,7 +126,7 @@ export function executeReadonlyToolEffect(args: ToolArgs, options: ToolOptions =
   const mode = args.mode ?? "state"
 
   const program = Effect.gen(function* () {
-    if (["click", "type", "pointer", "keyboard", "dispatch", "clipboard", "locked-use"].includes(mode)) {
+    if (["click", "type", "pointer", "dispatch", "clipboard", "locked-use"].includes(mode)) {
       yield* Effect.fail(new HyprComputerUseError(ERROR.rejectedSideEffect, sideEffectMessage(mode), { mode }))
     }
 
@@ -252,6 +290,12 @@ export function executeReadonlyToolEffect(args: ToolArgs, options: ToolOptions =
           catch: asHyprError,
         })
         : null
+      const controls = approvalTarget !== null
+        ? yield* Effect.tryPromise({
+          try: () => lookupControls(approvalTarget, args.controlsCachePath),
+          catch: asHyprError,
+        })
+        : null
       const evidence = yield* recordEvidence(
         {
           timestamp: approval.timestamp,
@@ -259,6 +303,7 @@ export function executeReadonlyToolEffect(args: ToolArgs, options: ToolOptions =
           target: approval.target,
           approval,
           capture: capture ? evidenceCapture(capture) : undefined,
+          controls,
         },
         args.evidenceDir,
       )
@@ -268,6 +313,119 @@ export function executeReadonlyToolEffect(args: ToolArgs, options: ToolOptions =
         mode,
         approval,
         capture,
+        controls,
+        evidence,
+      }
+    }
+
+    if (mode === "controls-cache") {
+      const state = yield* Effect.tryPromise({
+        try: () => readHyprlandState(runner),
+        catch: asHyprError,
+      })
+      const approval = appApprovalReport(state, {
+        requestedRoute: args.requestedRoute,
+        actionSummary: args.actionSummary,
+        targetHint: args.targetHint,
+      })
+      const target = approval.target
+
+      if (!target && args.controls) {
+        yield* Effect.fail(new HyprComputerUseError(ERROR.approvalRequired, "Controls cache update requires a resolved target", {
+          approval,
+        }))
+        throw new Error("unreachable")
+      }
+
+      const controls = target
+        ? yield* Effect.tryPromise({
+          try: () => args.controls
+            ? upsertControls(target, args.controls, args.controlsCachePath)
+            : lookupControls(target, args.controlsCachePath),
+          catch: asHyprError,
+        })
+        : null
+      const evidence = yield* recordEvidence(
+        {
+          timestamp: new Date().toISOString(),
+          operation: "controls-cache",
+          target,
+          approval,
+          controls,
+        },
+        args.evidenceDir,
+      )
+
+      return {
+        ok: true as const,
+        mode,
+        approval,
+        controls,
+        evidence,
+      }
+    }
+
+    if (mode === "keyboard") {
+      const keyboard = yield* Effect.tryPromise({
+        try: () => executeGuardedKeyboard(runner, args),
+        catch: asHyprError,
+      })
+      const evidence = yield* recordEvidence(
+        {
+          timestamp: keyboard.timestamp,
+          operation: "keyboard",
+          target: keyboard.target,
+          approval: keyboard.approval,
+          keyboard: {
+            input: keyboard.input,
+            backend: keyboard.backend,
+            selector: keyboard.selector,
+            beforeCapture: evidenceCapture(keyboard.beforeCapture),
+            afterCapture: evidenceCapture(keyboard.afterCapture),
+            dispatch: keyboard.dispatch,
+          },
+        },
+        args.evidenceDir,
+      )
+
+      return {
+        ok: true as const,
+        mode,
+        keyboard,
+        evidence,
+      }
+    }
+
+    if (mode === "keyboard-plan") {
+      const plan = yield* Effect.tryPromise({
+        try: () => executeGuardedKeyboardPlan(runner, args),
+        catch: asHyprError,
+      })
+      const evidence = yield* recordEvidence(
+        {
+          timestamp: plan.timestamp,
+          operation: "keyboard-plan",
+          target: plan.steps[plan.steps.length - 1]?.keyboard.target ?? null,
+          keyboard: {
+            steps: plan.steps.map((step) => ({
+              index: step.index,
+              action: step.action,
+              input: step.keyboard.input,
+              backend: step.keyboard.backend,
+              selector: step.keyboard.selector,
+              beforeCapture: evidenceCapture(step.keyboard.beforeCapture),
+              afterCapture: evidenceCapture(step.keyboard.afterCapture),
+              dispatch: step.keyboard.dispatch,
+            })),
+          },
+        },
+        args.evidenceDir,
+      )
+
+      return {
+        ok: true as const,
+        mode,
+        plan,
         evidence,
       }
     }
@@ -277,7 +435,7 @@ export function executeReadonlyToolEffect(args: ToolArgs, options: ToolOptions =
 
   return program.pipe(
     Effect.catchAll((error) => {
-    const result = errorResult(error)
+      const result = errorResult(error)
       return recordEvidence(
         {
           timestamp: new Date().toISOString(),
@@ -285,6 +443,7 @@ export function executeReadonlyToolEffect(args: ToolArgs, options: ToolOptions =
           error: {
             code: result.error.code,
             message: result.error.message,
+            details: result.error.details,
           },
         },
         args.evidenceDir,

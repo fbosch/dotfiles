@@ -99,6 +99,7 @@ declare module "@opencode-ai/plugin" {
     boolean(): OptionalSchema
     enum(values: string[]): OptionalSchema
     object(shape: Record<string, unknown>): OptionalSchema
+    array(item: unknown): OptionalSchema
   }
 
   type ToolFactory = {

@@ -74,6 +74,7 @@ const state: HyprlandState = {
       mapped: true,
       floating: false,
       fullscreen: false,
+      xwayland: false,
       x: 0,
       y: 0,
       width: 100,

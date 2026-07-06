@@ -17,7 +17,7 @@ This ranks how realistic it is to recreate Codex Computer Use-style features on 
 | Area | Rank | Assessment |
 | --- | --- | --- |
 | Screen/window visibility | 4 | Hyprland can expose monitor/window state through IPC, and screenshots are available through portal/grim-style tools. Precise per-app visual context needs approval and careful capture boundaries. |
-| Input control | 2 | Wayland blocks generic global input injection. Hyprland dispatchers can move focus/windows, but arbitrary click/type automation needs compositor support, virtual input protocols, app APIs, or a privileged helper. |
+| Input control | 2 | Wayland blocks generic global input injection. Guarded keyboard now covers a narrow Hyprland-targeted slice for explicit keys/chords/sequences; arbitrary click/text automation still needs compositor support, virtual input protocols, app APIs, or a privileged helper. |
 | Browser automation | 5 | Best target. Use Chrome DevTools Protocol, Playwright, browser profiles, or extension APIs instead of pixel automation. |
 | Native app automation | 3 | Feasible for apps with CLIs, DBus, portals, accessibility APIs, or predictable UI. Brittle for generic GTK/Qt/Electron apps without automation hooks. |
 | Background operation | 3 | Hyprland workspaces and window rules can isolate tasks, but true non-interference depends on avoiding global focus/input conflicts. Browser/API automation is much safer than GUI input. |
@@ -47,7 +47,7 @@ This ranks how realistic it is to recreate Codex Computer Use-style features on 
 | Screenshots | Straightforward | 5 | grim, slurp, hyprshot, portal screenshot API, browser CDP screenshots | Capturing without user consent can be sensitive. Tool availability varies by system. | Support monitor, region, active-window, and browser modes. Prefer explicit target selection. |
 | Clicking | Hard / partial | 2 | Hyprland focus dispatchers, virtual pointer protocols, ydotool/uinput | Generic click injection is restricted and can hit the wrong app. | Prefer app APIs. If used, require current-window verification immediately before click. |
 | Typing | Hard / partial | 2 | virtual keyboard protocol, ydotool/uinput, clipboard paste, app APIs | Generic typing has the same focus and privilege problems as clicking. Clipboard paste leaks state. | Prefer structured text insertion APIs. Clipboard-based paste needs save/restore and explicit permission. |
-| Keyboard navigation | Hard / partial | 2 | Hyprland dispatch, virtual keyboard, app shortcuts, DBus | Safe for compositor shortcuts; unsafe for arbitrary focused-app keystrokes. | Separate compositor commands from app keystrokes. Treat app keystrokes as high-risk input injection. |
+| Keyboard navigation | Hard / partial | 2 | Hyprland targeted dispatch, virtual keyboard, app shortcuts, DBus | Guarded explicit keys can target one approved window without requiring active focus, but arbitrary text entry and XWayland edge cases remain unsafe. | Keep app keystrokes approval-gated, target-revalidated, and evidence-backed. |
 | Menu navigation | Brittle | 3 | App shortcuts, DBus menus, AT-SPI, screenshots/OCR | Many apps expose menus differently. Pixel navigation breaks with theme/layout changes. | Use DBus/app APIs for known apps; avoid generic menu-walking unless supervised. |
 | Window interaction | Feasible | 4 | Hyprland dispatchers, `hyprctl clients -j`, workspace/window rules | Window movement/focus is compositor-safe; app internals are not. | This is one of the best Hyprland-native capabilities. Build it around client addresses and workspace IDs. |
 | Clipboard state | Feasible | 4 | wl-clipboard, cliphist, app APIs | Clipboard may contain secrets. Clipboard managers can persist sensitive data. | Require explicit permission for read/write. Save/restore only when safe, and avoid logging clipboard contents. |
@@ -116,7 +116,8 @@ This ranks how realistic it is to recreate Codex Computer Use-style features on 
 | 3 | App registry and approval policy | Makes targeting explicit before adding side-effecting actions. |
 | 4 | Clipboard and file handoff workflows | Useful for app workflows, but needs secret handling and logging discipline. |
 | 5 | App-specific automation for known apps | Better than generic pixel control and easier to test. |
-| 6 | Optional virtual input helper | Only after policy, targeting, and logging exist. Keep disabled by default. |
+| 6 | Guarded keyboard through Hyprland targeted dispatch | First narrow input-control slice: explicit keys/chords/sequences, one-turn approval, target revalidation, and before/after evidence. |
+| 7 | Optional virtual input helper | Only after policy, targeting, and logging exist. Keep disabled by default. |
 | Never by default | Locked-session temporary unlock | Too much security surface for a plugin/dotfiles layer. |
 
 ## Practical Takeaway

@@ -2,17 +2,17 @@
 
 The plugin now has read-only visibility, target capture, browser target detection, and app approval decisions. macOS Computer Use can click, type, and navigate after Screen Recording, Accessibility, and app approval are granted. Hyprland does not provide a safe universal equivalent to macOS Accessibility, so input control must start narrower.
 
-Keyboard-only execution is the smallest useful side-effecting slice. It is enough to test game workflows and simple keyboard navigation while avoiding pointer coordinates, free-form text entry, clipboard mutation, and menu walking.
+Keyboard-only execution is the smallest useful side-effecting slice. Hyprland 0.55 provides targeted dispatcher APIs for shortcuts/key state with an optional window selector, which makes a Hyprland-specific keyboard backend more realistic than generic Wayland input injection. This is enough to test game workflows and simple keyboard navigation while avoiding pointer coordinates, free-form text entry, clipboard mutation, and menu walking.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Send one explicit allowlisted key to one approved Hyprland target.
+- Send explicit keys, chords, or short key sequences to one approved Hyprland target.
 - Revalidate the target immediately before input.
 - Capture before and after evidence around the input attempt.
 - Fail closed when approval, target identity, session state, or input backend is unsafe or unavailable.
-- Keep backend selection explicit and inspectable.
+- Prefer Hyprland targeted dispatchers and keep backend selection explicit and inspectable.
 
 **Non-Goals:**
 
@@ -24,11 +24,17 @@ Keyboard-only execution is the smallest useful side-effecting slice. It is enoug
 
 ## Decisions
 
-### Keyboard-only first
+### Keyboard model first
 
-The first side-effecting capability should send one discrete key from a fixed allowlist. It should not accept arbitrary strings. Allowed keys should cover game/navigation use first: arrows, Enter, Escape, z, x, and a small set of explicit button keys if needed.
+The first side-effecting capability should support explicit keys, chords, and short key sequences. It should not accept arbitrary text strings. This gets closer to macOS Accessibility keyboard control while preserving inspectable intent. Examples: `ArrowUp`, `Enter`, `z`, `Ctrl+S`, or `[ArrowDown, ArrowDown, Enter]`.
 
 Alternative considered: implement click/type together. That expands the risk surface before target drift, backend safety, and evidence loops are proven.
+
+### Hyprland dispatcher is the preferred backend
+
+The preferred backend is Hyprland 0.55 targeted dispatch via `hl.dsp.send_shortcut` and `hl.dsp.send_key_state`. The executor should target a specific window selector, preferring `stableid:<stableId>` and falling back to address only when stable ID is unavailable. Class/title/PID should support revalidation, not primary targeting.
+
+Alternative considered: use `wtype`, `ydotool`, `dotool`, `evemu`, or libei first. These are generally global, focused, privileged, or not clearly target-bound, so they should remain explicit non-default backends unless proven safe.
 
 ### Approval must be `approved` or explicit one-turn approval
 
@@ -44,7 +50,7 @@ Alternative considered: rely on the target captured during approval. Focus and w
 
 ### Backend is explicit, no unsafe fallback
 
-The first implementation should support a configured backend only if it can be used knowingly. If no backend is configured or available, return `no-input-backend`. Candidate backends include a compositor-supported virtual keyboard helper, `ydotool`/uinput helper, or another narrowly scoped local command, but none should be assumed.
+The first implementation should use the Hyprland dispatcher backend when available. If that backend cannot represent the requested key/chord/sequence or the dispatch command is unavailable, return `no-input-backend` or a specific unsupported-key result. Generic focused/global input tools must not be used as silent fallbacks.
 
 Alternative considered: shell out to whichever keyboard tool exists. That could silently switch to a privileged/global input path and hit the wrong target.
 
@@ -56,8 +62,8 @@ Alternative considered: capture only after action. The before image is needed to
 
 ## Risks / Trade-offs
 
-- Wayland input injection is global or privileged in many backends -> require exact target revalidation and explicit backend configuration.
-- Game windows may be XWayland and focus-sensitive -> start with single-key actions and before/after evidence.
+- Hyprland dispatcher semantics can differ from macOS Accessibility -> keep this backend Hyprland-specific and evidence-backed.
+- XWayland game windows may receive shortcuts inconsistently -> record backend failures and do not silently switch to global input.
 - `ask` decisions are not real approvals -> require explicit one-turn approval before executing.
-- Backend setup may live outside dotfiles -> document required external setup instead of adding Nix config here.
+- Generic input backend setup may live outside dotfiles -> document required external setup instead of adding Nix config here.
 - Screenshots are still relatively slow -> use the combined approval/capture path and avoid extra state loops.

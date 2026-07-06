@@ -6,7 +6,7 @@ The first `hypr-computer-use` slice exposes desktop visibility only. It can iden
 
 | Tool | Purpose |
 | --- | --- |
-| `hypr_computer_use_readonly` | Read Hyprland state, create target snapshots, capture scoped screenshots, and reject side-effecting computer-use requests. |
+| `hypr_computer_use_readonly` | Read Hyprland state, create target snapshots, capture scoped screenshots, evaluate app approvals, and run guarded explicit keyboard input. |
 
 ## Modes
 
@@ -15,7 +15,8 @@ The first `hypr-computer-use` slice exposes desktop visibility only. It can iden
 | `state` | Returns monitors, workspaces, clients, active-window metadata, and a metadata evidence record. |
 | `snapshot` | Returns the normalized active-target snapshot or `null` when no active target exists. |
 | `capture` | Captures an explicit screenshot scope and records screenshot metadata. |
-| `click`, `type`, `pointer`, `keyboard`, `dispatch`, `clipboard`, `locked-use` | Always rejected as outside the read-only capability. |
+| `keyboard` | Sends guarded explicit keys/chords/sequences only after one-turn approval, target revalidation, and Hyprland targeted backend checks. |
+| `click`, `type`, `pointer`, `dispatch`, `clipboard`, `locked-use` | Always rejected as outside the current capability. |
 
 ## Capture Scopes
 
@@ -34,4 +35,4 @@ Evidence records include metadata such as operation, timestamp, target identity,
 
 ## Safety Boundary
 
-This slice does not perform GUI actions. It does not call Hyprland dispatchers, inject input, read or write the clipboard, install packages, use privileged helpers, or interact with the lockscreen. Future side-effecting features must verify the active target against this read-only snapshot layer before acting.
+The visibility modes do not perform GUI actions. Guarded keyboard is the only current side-effecting mode, and it is limited to explicit keys/chords/sequences for one approved target. The plugin does not click, type free-form text, read or write the clipboard, install packages, use privileged helpers, or interact with the lockscreen. Future side-effecting features must verify the active target against this snapshot layer before acting.

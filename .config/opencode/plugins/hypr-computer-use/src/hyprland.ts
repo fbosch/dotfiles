@@ -87,6 +87,7 @@ export function normalizeClient(raw: JsonObject): ClientSnapshot {
     mapped: booleanValue(raw.mapped, true),
     floating: booleanValue(raw.floating),
     fullscreen: Boolean(numberValue(raw.fullscreen) ?? 0),
+    xwayland: booleanValue(raw.xwayland),
   }
 }
 
