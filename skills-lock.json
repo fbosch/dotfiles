@@ -46,17 +46,11 @@
       "sourceType": "github",
       "computedHash": "702e1b8bb122bb981d276fbdcaa2fde1435b8c548910e1b365f088735b7a5365"
     },
-    "modern-web-guidance": {
-      "source": "GoogleChrome/modern-web-guidance",
-      "sourceType": "github",
-      "skillPath": "skills/modern-web-guidance/SKILL.md",
-      "computedHash": "35bcb9ecc1650b7cac4820f5efa2ea74d505458ff276b0761ac29f808592687f"
-    },
     "tdd": {
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/tdd/SKILL.md",
-      "computedHash": "d5ca5c8ae0615f343f1cfd71591f4a586046d77b1f36e8d67b8f643bad51043e"
+      "computedHash": "c9326b88419cfba1d54dd713b7ddb23020e6a93f4b0d13aea58cebba58cda2ee"
     },
     "thermo-nuclear-code-quality-review": {
       "source": "cursor/plugins",
@@ -86,13 +80,13 @@
       "source": "max-sixty/worktrunk",
       "sourceType": "github",
       "skillPath": "skills/worktrunk/SKILL.md",
-      "computedHash": "e74f7f56abf0d17984e6781024d127c545ae6ded72b5fe09bbf1031b31e30a91"
+      "computedHash": "3badf5a2e64a1cd31379de1fadfd0c16e97de8fee8005092591858d8181fa68a"
     },
     "wt-switch-create": {
       "source": "max-sixty/worktrunk",
       "sourceType": "github",
       "skillPath": "skills/wt-switch-create/SKILL.md",
-      "computedHash": "ce58afd89b04834c90fbed2ea45d37b200b7cf3069ba252d95fc7412efae7008"
+      "computedHash": "6bfa83e8e49be606b19682432b65f1b9728a923bdaac2fd051bb48feab2bd741"
     },
     "zoom-out": {
       "source": "mattpocock/skills",
