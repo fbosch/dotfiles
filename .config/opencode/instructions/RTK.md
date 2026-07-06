@@ -1,36 +1,45 @@
-<!-- rtk-instructions v3 (compact) -->
+<!-- headroom:rtk-instructions -->
 
-# RTK Rules (Compact)
+# RTK (Rust Token Killer) - Token-Optimized Commands
 
-RTK plugin auto-rewrites `bash`/`shell` commands.
+When running shell commands, **always prefix with `rtk`**. This reduces context
+usage by 60-90% with zero behavior change. If rtk has no filter for a command,
+it passes through unchanged — so it is always safe to use.
 
-- Write normal commands. Do not add `rtk` manually unless using explicit RTK subcommands.
-- Rewritten command display is expected (`pnpm lint` may display as `rtk lint`).
-- Treat RTK summaries as authoritative results.
-
-## Result Semantics
-
-- `ok` = command succeeded.
-- For `git status --short`: `ok` = clean tree; non-`ok` lines = file changes.
-- Do not re-run same status command only to verify `ok`.
-
-## Loop Guard
-
-If summarized command shows parser/adapter warning:
-
-1. Run summarized command once.
-2. Run one fallback: `rtk proxy <original-command>`.
-3. Treat proxy output as source of truth.
-4. Do not retry summarized form unless inputs changed (files/flags/env/cwd).
-5. If proxy fails, stop retries and report failure.
-
-Use `rtk proxy ...` when exact raw/machine-readable output required.
-
-Example:
+## Key Commands
 
 ```bash
-rtk lint
-rtk proxy pnpm lint
+# Git (59-80% savings)
+rtk git status          rtk git diff            rtk git log
+
+# Files & Search (60-75% savings)
+rtk ls <path>           rtk read <file>         rtk grep <pattern>
+rtk find <pattern>      rtk diff <file>
+
+# Test (90-99% savings) — shows failures only
+rtk pytest tests/       rtk cargo test          rtk test <cmd>
+
+# Build & Lint (80-90% savings) — shows errors only
+rtk tsc                 rtk lint                rtk cargo build
+rtk prettier --check    rtk mypy                rtk ruff check
+
+# Analysis (70-90% savings)
+rtk err <cmd>           rtk log <file>          rtk json <file>
+rtk summary <cmd>       rtk deps                rtk env
+
+# GitHub (26-87% savings)
+rtk gh pr view <n>      rtk gh run list         rtk gh issue list
+
+# Infrastructure (85% savings)
+rtk docker ps           rtk kubectl get         rtk docker logs <c>
+
+# Package managers (70-90% savings)
+rtk pip list            rtk pnpm install        rtk npm run <script>
 ```
 
-<!-- /rtk-instructions -->
+## Rules
+
+- In command chains, prefix each segment: `rtk git add . && rtk git commit -m "msg"`
+- For debugging, use raw command without rtk prefix
+- `rtk proxy <cmd>` runs command without filtering but tracks usage
+<!-- /headroom:rtk-instructions -->

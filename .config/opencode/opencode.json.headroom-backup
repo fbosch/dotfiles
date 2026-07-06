@@ -1,0 +1,29 @@
+{
+  "mcp": {
+    "headroom": {
+      "type": "local",
+      "command": [
+        "/home/fbb/.cache/uv/archive-v0/3hMpL-V_CmtHAjCz/bin/headroom",
+        "mcp",
+        "serve"
+      ],
+      "enabled": true
+    },
+    "serena": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--project-from-cwd",
+        "--context",
+        "agent",
+        "--open-web-dashboard",
+        "False"
+      ],
+      "enabled": true
+    }
+  }
+}

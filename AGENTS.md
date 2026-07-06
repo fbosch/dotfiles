@@ -5,6 +5,7 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 ## Preferences
 
 - Prefer event-based systems over polling when both are viable.
+- Planning tasks should be vertical slices with observable outcomes, not horizontal layers.
 
 ## Essentials
 
