@@ -5,7 +5,8 @@
       "~/tmp/**": "allow",
       "~/nixos/**": "allow",
       "~/dotfiles/**": "allow",
-      "~/.config/**": "allow"
+      "~/.config/**": "allow",
+      "/run/user/1000/hypr-computer-use/**": "allow"
     }
   },
   "watcher": {

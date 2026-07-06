@@ -1,11 +1,12 @@
 import { Effect } from "effect"
+import { appApprovalReport } from "./approval"
 import { browserTargetReport } from "./browser"
 import { nodeCommandRunner, type CommandRunner } from "./command"
 import { captureScreenshot } from "./capture"
 import { writeEvidence } from "./evidence"
 import { ERROR, HyprComputerUseError, errorResult } from "./errors"
 import { activeTargetFromState, readHyprlandState } from "./hyprland"
-import type { CaptureRequest, EvidenceRecord } from "./types"
+import type { CaptureRequest, CaptureResult, EvidenceRecord, Geometry, TargetSnapshot } from "./types"
 
 export type ToolMode =
   | "state"
@@ -14,6 +15,7 @@ export type ToolMode =
   | "browser-default"
   | "browser-targets"
   | "browser-capabilities"
+  | "app-approval"
   | "click"
   | "type"
   | "pointer"
@@ -26,6 +28,11 @@ export type ToolArgs = Omit<CaptureRequest, "scope"> & {
   mode?: ToolMode
   scope?: CaptureRequest["scope"]
   webdriverBidiEndpoint?: string
+  requestedRoute?: string
+  actionSummary?: string
+  targetHint?: string
+  persistApproval?: boolean
+  includeCapture?: boolean
 }
 
 export type ToolOptions = {
@@ -54,6 +61,26 @@ function recordEvidence(record: EvidenceRecord, evidenceDir?: string) {
       evidencePath,
     })),
   )
+}
+
+function geometryFromTarget(target: TargetSnapshot): Geometry {
+  return {
+    x: target.x,
+    y: target.y,
+    width: target.width,
+    height: target.height,
+  }
+}
+
+function evidenceCapture(capture: CaptureResult): Omit<CaptureResult, "target"> {
+  return {
+    timestamp: capture.timestamp,
+    scope: capture.scope,
+    backend: capture.backend,
+    path: capture.path,
+    monitor: capture.monitor,
+    region: capture.region,
+  }
 }
 
 export function executeReadonlyToolEffect(args: ToolArgs, options: ToolOptions = {}) {
@@ -196,6 +223,51 @@ export function executeReadonlyToolEffect(args: ToolArgs, options: ToolOptions =
         ok: true as const,
         mode,
         browser,
+        evidence,
+      }
+    }
+
+    if (mode === "app-approval") {
+      const state = yield* Effect.tryPromise({
+        try: () => readHyprlandState(runner),
+        catch: asHyprError,
+      })
+      const approval = appApprovalReport(state, {
+        requestedRoute: args.requestedRoute,
+        actionSummary: args.actionSummary,
+        targetHint: args.targetHint,
+        persistApproval: args.persistApproval,
+      })
+      const approvalTarget = approval.target
+      const capture = args.includeCapture === true && approvalTarget !== null
+        ? yield* Effect.tryPromise({
+          try: async () => {
+            const result = await captureScreenshot(runner, {
+              ...args,
+              scope: "region",
+              region: geometryFromTarget(approvalTarget),
+            })
+            return { ...result, target: approvalTarget }
+          },
+          catch: asHyprError,
+        })
+        : null
+      const evidence = yield* recordEvidence(
+        {
+          timestamp: approval.timestamp,
+          operation: "approval",
+          target: approval.target,
+          approval,
+          capture: capture ? evidenceCapture(capture) : undefined,
+        },
+        args.evidenceDir,
+      )
+
+      return {
+        ok: true as const,
+        mode,
+        approval,
+        capture,
         evidence,
       }
     }

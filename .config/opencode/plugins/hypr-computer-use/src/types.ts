@@ -1,3 +1,5 @@
+import type { ApprovalReport } from "./approval"
+
 export type JsonObject = Record<string, unknown>
 
 export type Geometry = {
@@ -69,10 +71,11 @@ export type CaptureResult = {
 
 export type EvidenceRecord = {
   timestamp: string
-  operation: "state" | "snapshot" | "capture" | "browser" | "rejected"
+  operation: "state" | "snapshot" | "capture" | "browser" | "approval" | "rejected"
   target?: TargetSnapshot | null
   capture?: Omit<CaptureResult, "target">
   browser?: BrowserTargetReport
+  approval?: ApprovalReport
   error?: {
     code: string
     message: string
