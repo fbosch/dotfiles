@@ -69,8 +69,8 @@
       "git commit *": "deny"
     }
   },
-  "model": "headroom/gpt-5.5",
-  "small_model": "headroom/gpt-5.4-mini-fast",
+  "model": "openai/gpt-5.5",
+  "small_model": "openai/gpt-5.4-mini-fast",
   "agent": {
     "build": {
       "color": "#6099C0",
@@ -78,108 +78,108 @@
     },
     "plan": {
       "color": "#B279A7",
-      "model": "headroom/gpt-5.5",
+      "model": "openai/gpt-5.5",
       "reasoningEffort": "high",
       "textVerbosity": "medium"
     },
     "explore": {
       "temperature": 0,
-      "model": "headroom/gpt-5.4-mini-fast",
+      "model": "openai/gpt-5.4-mini-fast",
       "reasoningEffort": "low",
       "textVerbosity": "low"
     },
     "general": {
       "steps": 15,
       "temperature": 0.3,
-      "model": "headroom/gpt-5.5",
+      "model": "openai/gpt-5.5",
       "reasoningEffort": "low",
       "textVerbosity": "medium"
     },
     "title": {
       "temperature": 0,
-      "model": "headroom/gpt-5.4-mini",
+      "model": "openai/gpt-5.4-mini",
       "reasoningEffort": "low",
       "textVerbosity": "low"
     },
     "summary": {
       "temperature": 0.1,
-      "model": "headroom/gpt-5.4-mini",
+      "model": "openai/gpt-5.4-mini",
       "reasoningEffort": "low",
       "textVerbosity": "medium"
     },
     "compaction": {
       "temperature": 0,
-      "model": "headroom/gpt-5.4-mini-fast",
+      "model": "openai/gpt-5.4-mini-fast",
       "reasoningEffort": "medium",
       "textVerbosity": "medium"
     },
     "test": {
-      "model": "headroom/gpt-5.5-fast",
+      "model": "openai/gpt-5.5-fast",
       "reasoningEffort": "medium",
       "textVerbosity": "medium"
     },
     "review": {
-      "model": "headroom/gpt-5.5",
+      "model": "openai/gpt-5.5",
       "reasoningEffort": "high",
       "textVerbosity": "medium"
     },
     "docs": {
-      "model": "headroom/gpt-5.5",
+      "model": "openai/gpt-5.5",
       "reasoningEffort": "medium",
       "textVerbosity": "medium"
     },
     "research": {
-      "model": "headroom/gpt-5.5",
+      "model": "openai/gpt-5.5",
       "reasoningEffort": "high",
       "textVerbosity": "medium"
     },
     "quick": {
-      "model": "headroom/gpt-5.4-mini-fast",
+      "model": "openai/gpt-5.4-mini-fast",
       "reasoningEffort": "low",
       "textVerbosity": "low"
     },
     "benchmark": {
-      "model": "headroom/gpt-5.4-mini",
+      "model": "openai/gpt-5.4-mini",
       "reasoningEffort": "low",
       "textVerbosity": "low"
     },
     "spec": {
-      "model": "headroom/gpt-5.5",
+      "model": "openai/gpt-5.5",
       "reasoningEffort": "xhigh",
       "textVerbosity": "medium"
     },
     "analyze": {
-      "model": "headroom/gpt-5.5",
+      "model": "openai/gpt-5.5",
       "reasoningEffort": "low",
       "textVerbosity": "low"
     },
     "debug": {
-      "model": "headroom/gpt-5.5",
+      "model": "openai/gpt-5.5",
       "reasoningEffort": "medium",
       "textVerbosity": "medium"
     },
     "ideate": {
-      "model": "headroom/gpt-5.5",
+      "model": "openai/gpt-5.5",
       "reasoningEffort": "medium",
       "textVerbosity": "medium"
     },
     "patterns": {
-      "model": "headroom/gpt-5.4-mini-fast",
+      "model": "openai/gpt-5.4-mini-fast",
       "reasoningEffort": "low",
       "textVerbosity": "low"
     },
     "adversarial": {
-      "model": "headroom/gpt-5.5",
+      "model": "openai/gpt-5.5",
       "reasoningEffort": "high",
       "textVerbosity": "medium"
     },
     "refactor": {
-      "model": "headroom/gpt-5.5",
+      "model": "openai/gpt-5.5",
       "reasoningEffort": "medium",
       "textVerbosity": "medium"
     },
     "commit": {
-      "model": "headroom/gpt-5.4-mini-fast",
+      "model": "openai/gpt-5.4-mini-fast",
       "reasoningEffort": "low",
       "textVerbosity": "low"
     }
