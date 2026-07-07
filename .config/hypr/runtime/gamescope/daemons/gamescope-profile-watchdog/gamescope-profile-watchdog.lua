@@ -12,7 +12,14 @@ local gaming_workspace = "10"
 local minimized_workspace_prefix = "special:minimized"
 local gaming_overlay_workspace = "special:gaming-overlay"
 local profile_excluded_title_pattern = "[Ff]augus"
-local freeze_excluded_title_pattern = "^(World of Warcraft|Battle[.]net( .*)?)$"
+local freeze_excluded_exact_titles = {
+	"World of Warcraft",
+	"Battle.net",
+	"Baldur's Gate 3",
+}
+local freeze_excluded_title_prefixes = {
+	"Battle.net ",
+}
 local wl_freeze_checked = false
 local wl_freeze_available = false
 
@@ -68,7 +75,17 @@ end
 
 local function matches_freeze_excluded_title(value)
 	value = tostring(value or "")
-	return value == "World of Warcraft" or value == "Battle.net" or value:match("^Battle%.net .*$") ~= nil
+	for _, title in ipairs(freeze_excluded_exact_titles) do
+		if value == title then
+			return true
+		end
+	end
+	for _, prefix in ipairs(freeze_excluded_title_prefixes) do
+		if starts_with(value, prefix) then
+			return true
+		end
+	end
+	return false
 end
 
 local function has_gaming_class(client)
