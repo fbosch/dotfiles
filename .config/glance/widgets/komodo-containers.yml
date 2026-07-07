@@ -4,7 +4,7 @@
   method: POST
   cache: 5m
   allow-insecure: false
-  url: https://komodo.corvus-corax.synology.me/read
+  url: http://127.0.0.1:9120/read
   body-type: json
   body:
     type: ListAllDockerContainers

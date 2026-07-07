@@ -3,7 +3,7 @@
   hide-header: true
   cache: 12h
   title-url: https://linkwarden.corvus-corax.synology.me/dashboard
-  url: https://linkwarden.corvus-corax.synology.me/api/v1/links?pinnedOnly=true&test23
+  url: http://127.0.0.1:3100/api/v1/links?pinnedOnly=true&test23
   headers:
     Authorization: Bearer ${LINKWARDEN_TOKEN}
     Accept: application/json
