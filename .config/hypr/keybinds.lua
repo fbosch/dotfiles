@@ -15,8 +15,6 @@ hl.bind("SUPER_L", window_switcher.release_super, { ignore_mods = true, release 
 hl.bind("SUPER_R", window_switcher.commit, { release = true })
 
 hl.bind(main_mod .. " + SPACE", hl.dsp.exec_cmd(programs.menu))
-hl.bind("ALT + grave", hl.dsp.exec_cmd("~/.config/hypr/runtime/capture/hyprwhspr-record.sh start"))
-hl.bind("ALT + grave", hl.dsp.exec_cmd("~/.config/hypr/runtime/capture/hyprwhspr-record.sh stop"), { release = true })
 
 hl.bind("CTRL + SPACE", keyboard_layout.switch)
 hl.bind(main_mod .. " + SHIFT + V", clipboard_bridge.paste_with_clipboard_bridge)
