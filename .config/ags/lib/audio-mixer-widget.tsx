@@ -330,10 +330,45 @@ function getHyprlandClients(): HyprlandClient[] {
   }
 }
 
+function getParentProcessId(pid: number): number | null {
+  try {
+    const [, contents] = Gio.File.new_for_path(`/proc/${pid}/stat`).load_contents(null);
+    if (!contents) return null;
+
+    const text = new TextDecoder().decode(contents);
+    const processNameEnd = text.lastIndexOf(")");
+    if (processNameEnd === -1) return null;
+
+    const fields = text.slice(processNameEnd + 2).split(" ");
+    const ppid = Number(fields[1]);
+    return Number.isFinite(ppid) && ppid > 0 ? Math.round(ppid) : null;
+  } catch {
+    return null;
+  }
+}
+
+function processAncestorPids(pid: number): Set<number> {
+  const ancestors = new Set<number>();
+  let currentPid: number | null = pid;
+
+  for (let depth = 0; currentPid !== null && depth < 32; depth += 1) {
+    if (ancestors.has(currentPid)) break;
+    ancestors.add(currentPid);
+    currentPid = getParentProcessId(currentPid);
+  }
+
+  return ancestors;
+}
+
 function getHyprClientForAudioObject(object: any): HyprlandClient | null {
   const pid = getPipeWireProcessId(object);
   if (pid === undefined) return null;
-  return getHyprlandClients().find((client) => client.pid === pid) ?? null;
+  const clients = getHyprlandClients();
+  const directClient = clients.find((client) => client.pid === pid);
+  if (directClient) return directClient;
+
+  const ancestorPids = processAncestorPids(pid);
+  return clients.find((client) => client.pid !== undefined && ancestorPids.has(client.pid)) ?? null;
 }
 
 function windowTitleCandidates(client: HyprlandClient | null): string[] {
