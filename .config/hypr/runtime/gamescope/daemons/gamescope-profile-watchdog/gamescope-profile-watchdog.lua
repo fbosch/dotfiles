@@ -19,6 +19,7 @@ local freeze_excluded_exact_titles = {
 }
 local freeze_excluded_title_prefixes = {
 	"Battle.net ",
+	"Baldur's Gate 3 ",
 }
 local wl_freeze_checked = false
 local wl_freeze_available = false
