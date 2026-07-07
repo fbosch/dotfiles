@@ -6,7 +6,7 @@
       "~/nixos/**": "allow",
       "~/dotfiles/**": "allow",
       "~/.config/**": "allow",
-      "/run/user/1000/hypr-computer-use/**": "allow"
+      "/run/user/1000/**": "allow"
     }
   },
   "watcher": {
@@ -16,13 +16,6 @@
     ]
   },
   "mcp": {
-    "fff": {
-      "type": "local",
-      "command": [
-        "fff-mcp"
-      ],
-      "enabled": true
-    },
     "design-system": {
       "enabled": false,
       "type": "remote",
