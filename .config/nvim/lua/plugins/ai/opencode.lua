@@ -101,10 +101,10 @@ return {
 				local cwd = vim.fn.getcwd()
 				local session_id = infer_session_id_for_cwd(cwd)
 				if type(session_id) ~= "string" or session_id == "" then
-					return "headroom wrap opencode --no-proxy -- --port"
+					return "opencode -- --port"
 				end
 
-				return "headroom wrap opencode --no-proxy -- --port --session " .. vim.fn.shellescape(session_id)
+				return "opencode --port --session " .. vim.fn.shellescape(session_id)
 			end
 
 			local function opencode_terminal()

@@ -1,15 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "headroom": {
-      "type": "local",
-      "command": [
-        "/home/fbb/.cache/uv/archive-v0/ZhqarDmSBzK-37gI/bin/headroom",
-        "mcp",
-        "serve"
-      ],
-      "enabled": true
-    },
     "serena": {
       "type": "local",
       "command": [
@@ -23,6 +14,15 @@
         "agent",
         "--open-web-dashboard",
         "False"
+      ],
+      "enabled": true
+    },
+    "headroom": {
+      "type": "local",
+      "command": [
+        "/home/fbb/.cache/uv/archive-v0/tT_IM4P7yzQeWFBs/bin/headroom",
+        "mcp",
+        "serve"
       ],
       "enabled": true
     }
