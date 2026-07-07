@@ -20,12 +20,7 @@
     "./plugins/openmemory/openmemory.ts",
     "opencode-wakatime@latest",
     "opencode-toon-plugin@latest",
-    [
-      "headroom-opencode",
-      {
-        "proxyUrl": "http://127.0.0.1:8787"
-      }
-    ],
+    "./plugins/headroom-openai-oauth.ts",
     "./plugins/rtk.ts",
     "./plugins/opencode-handoff/handoff.ts"
   ],
@@ -69,7 +64,7 @@
         "mcp",
         "serve"
       ],
-      "enabled": false
+      "enabled": true
     }
   },
   "permission": {
@@ -89,6 +84,41 @@
       "git checkout *": "ask",
       "git switch *": "ask",
       "git commit *": "deny"
+    }
+  },
+  "provider": {
+    "headroom": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Headroom Proxy",
+      "options": {
+        "baseURL": "http://127.0.0.1:8787/v1"
+      },
+      "models": {
+        "gpt-5.5": {
+          "name": "GPT-5.5",
+          "family": "gpt-5",
+          "reasoning": true,
+          "tool_call": true
+        },
+        "gpt-5.5-fast": {
+          "name": "GPT-5.5 Fast",
+          "family": "gpt-5",
+          "reasoning": true,
+          "tool_call": true
+        },
+        "gpt-5.4-mini": {
+          "name": "GPT-5.4 Mini",
+          "family": "gpt-5",
+          "reasoning": true,
+          "tool_call": true
+        },
+        "gpt-5.4-mini-fast": {
+          "name": "GPT-5.4 Mini Fast",
+          "family": "gpt-5",
+          "reasoning": true,
+          "tool_call": true
+        }
+      }
     }
   },
   "model": "openai/gpt-5.5",
