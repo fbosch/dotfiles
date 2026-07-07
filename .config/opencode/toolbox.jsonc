@@ -76,6 +76,31 @@
         "--stdio"
       ]
     },
+    "serena": {
+      "type": "local",
+      "command": [
+        "podman",
+        "run",
+        "-i",
+        "--rm",
+        "--replace",
+        "--name",
+        "mcp-serena",
+        "-v",
+        ".:/workspace",
+        "-e",
+        "SERENA_DOCKER=1",
+        "ghcr.io/oraios/serena:latest",
+        "serena",
+        "start-mcp-server",
+        "--project",
+        "/workspace",
+        "--context",
+        "agent",
+        "--open-web-dashboard",
+        "False"
+      ]
+    },
     "chrome-devtools": {
       "type": "local",
       "command": [

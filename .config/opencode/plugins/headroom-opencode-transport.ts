@@ -10,6 +10,11 @@ type TransportState = {
   proxyUrl: string
 }
 
+type FetchArgs = Parameters<typeof fetch>
+type ShellEnvOutput = {
+  env: Record<string, string>
+}
+
 type TransportGlobal = typeof globalThis & {
   [STATE_KEY]?: TransportState
 }
@@ -40,10 +45,10 @@ function routedPath(upstream: URL) {
   return undefined
 }
 
-function routedFetchArgs(input: RequestInfo | URL, init: RequestInit | undefined, proxyUrl: string) {
+function routedFetchArgs(input: FetchArgs[0], init: FetchArgs[1], proxyUrl: string): FetchArgs | undefined {
   const upstream = requestUrl(input)
   const path = routedPath(upstream)
-  if (!path) return [input, init] as const
+  if (!path) return undefined
 
   const proxy = new URL(proxyUrl)
   const nextUrl = new URL(`${path}${upstream.search}`, proxy.origin)
@@ -61,6 +66,14 @@ function routedFetchArgs(input: RequestInfo | URL, init: RequestInit | undefined
   return [nextUrl, nextInit] as const
 }
 
+async function fetchWithHeadroomFallback(originalFetch: typeof fetch, routedArgs: FetchArgs, originalArgs: FetchArgs) {
+  try {
+    return await originalFetch(...routedArgs)
+  } catch {
+    return originalFetch(...originalArgs)
+  }
+}
+
 function installTransport(proxyUrl: string) {
   const currentGlobal = globalThis as TransportGlobal
   const existing = currentGlobal[STATE_KEY]
@@ -75,13 +88,19 @@ function installTransport(proxyUrl: string) {
   }
 
   currentGlobal[STATE_KEY] = state
-  globalThis.fetch = async (...args) => {
+  const wrappedFetch: typeof fetch = Object.assign(async (...args: FetchArgs) => {
     const current = currentGlobal[STATE_KEY]
     if (!current) return state.originalFetch(...args)
 
-    const [input, init] = routedFetchArgs(args[0], args[1], current.proxyUrl)
-    return state.originalFetch(input, init)
-  }
+    const originalArgs: FetchArgs = args[0] instanceof Request ? [args[0].clone(), args[1]] : args
+
+    const routedArgs = routedFetchArgs(args[0], args[1], current.proxyUrl)
+    if (!routedArgs) return state.originalFetch(...args)
+
+    return fetchWithHeadroomFallback(state.originalFetch, routedArgs, originalArgs)
+  }, state.originalFetch)
+
+  globalThis.fetch = wrappedFetch
 }
 
 export const HeadroomOpenCodeTransportPlugin: Plugin = async (input, options = {}) => {
@@ -93,7 +112,7 @@ export const HeadroomOpenCodeTransportPlugin: Plugin = async (input, options = {
   installTransport(proxyUrl)
 
   return {
-    "shell.env": async (_input, output) => {
+    "shell.env": async (_input: unknown, output: ShellEnvOutput) => {
       output.env.HEADROOM_ACTIVE = "1"
       output.env.HEADROOM_PROXY_URL = proxyUrl
       output.env.HEADROOM_PROJECT = pluginOptions.project ?? String(input.project?.id ?? input.directory)
