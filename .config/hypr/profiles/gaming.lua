@@ -20,5 +20,8 @@ return {
 		general = {
 			allow_tearing = true,
 		},
+		render = {
+			direct_scanout = 1,
+		},
 	},
 }
