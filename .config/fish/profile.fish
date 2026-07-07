@@ -30,6 +30,10 @@ set -gx OPENCODE_EXPERIMENTAL_LSP_TOOL 1
 set -gx OPENCODE_EXPERIMENTAL_LSP_TY 1
 set -gx OPENCODE_EXPERIMENTAL_EXA 1
 
+# headroom proxy
+set -gx OPENAI_BASE_URL http://127.0.0.1:8787/v1
+set -gx ANTHROPIC_BASE_URL http://127.0.0.1:8787
+
 set -gx OPENCODE_TOON_PLUGIN_TOOLS "bash,rtk,python3"
 
 # Lazy set GPG_TTY only when GPG is actually used (saves 5ms on startup)

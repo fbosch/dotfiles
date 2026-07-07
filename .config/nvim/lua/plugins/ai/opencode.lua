@@ -101,10 +101,11 @@ return {
 				local cwd = vim.fn.getcwd()
 				local session_id = infer_session_id_for_cwd(cwd)
 				if type(session_id) ~= "string" or session_id == "" then
-					return "opencode --port"
+					return "env -u OPENAI_API_KEY headroom wrap opencode --no-proxy -- --port"
 				end
 
-				return "opencode --port --session " .. vim.fn.shellescape(session_id)
+				return "env -u OPENAI_API_KEY headroom wrap opencode --no-proxy -- --port --session "
+					.. vim.fn.shellescape(session_id)
 			end
 
 			local function opencode_terminal()
@@ -147,7 +148,8 @@ return {
 				end
 
 				local name = vim.api.nvim_buf_get_name(buf)
-				return name:find("term://", 1, true) ~= nil and name:find("opencode --port", 1, true) ~= nil
+				return name:find("term://", 1, true) ~= nil
+					and (name:find("opencode --port", 1, true) ~= nil or name:find("headroom wrap opencode", 1, true) ~= nil)
 			end
 
 			local function mark_opencode_terminal(buf)

@@ -20,6 +20,12 @@
     "./plugins/openmemory/openmemory.ts",
     "opencode-wakatime@latest",
     "opencode-toon-plugin@latest",
+    [
+      "headroom-opencode",
+      {
+        "proxyUrl": "http://127.0.0.1:8787"
+      }
+    ],
     "./plugins/rtk.ts",
     "./plugins/opencode-handoff/handoff.ts"
   ],
@@ -31,6 +37,22 @@
     "~/.config/opencode/instructions/worktrunk.md"
   ],
   "mcp": {
+   "serena": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--project-from-cwd",
+        "--context",
+        "agent",
+        "--open-web-dashboard",
+        "False"
+      ],
+      "enabled": true
+    },
     "fff": {
       "type": "local",
       "command": [

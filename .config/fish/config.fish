@@ -38,6 +38,8 @@ for file in profile private
     end
 end
 
+set -e OPENAI_API_KEY
+
 if status is-interactive
     for file in aliases scripts colors fzf
         if test -f ~/.config/fish/$file.fish
