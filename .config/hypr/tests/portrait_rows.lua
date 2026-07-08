@@ -39,6 +39,12 @@ local function make_workspace_target(index, workspace, active)
 	return target
 end
 
+local function make_workspace_object_target(index, workspace, active)
+	local target = make_target(index, active)
+	target.window.workspace = workspace
+	return target
+end
+
 local function make_dp_target(index)
 	local target = make_target(index)
 	target.window.monitor.name = "DP-2"
@@ -436,6 +442,7 @@ run("duplicate target identity falls back to source order", function()
 	local first = set_geometry(make_workspace_target(1, "portrait-duplicate", true), 220)
 	local second = set_geometry(make_workspace_target(2, "portrait-duplicate"), 20)
 	second.window.address = first.window.address
+	second.window.stable_id = first.window.stable_id
 
 	registered_layout.layout.recalculate(make_context({ first, second }))
 
@@ -645,6 +652,178 @@ run("manual row ratios survive layout module reload", function()
 
 	assert_box(reloaded_first.placed, { x = 10, y = 20, w = 120, h = 115 }, "reloaded first target")
 	assert_box(reloaded_second.placed, { x = 10, y = 135, w = 120, h = 185 }, "reloaded second target")
+	registered_layout.layout.layout_msg(reloaded_ctx, "reset")
+	os.remove(_G.__PORTRAIT_ROWS_STATE_FILE)
+	_G.__PORTRAIT_ROWS_STATE_FILE = nil
+	_G.__PORTRAIT_ROWS_DISABLE_STATE = true
+end)
+
+run("manual row order survives layout module reload", function()
+	_G.__PORTRAIT_ROWS_DISABLE_STATE = nil
+	_G.__PORTRAIT_ROWS_STATE_FILE = os.tmpname()
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local workspace = "persisted-row-order"
+	local first = make_workspace_target(1, workspace, true)
+	local second = make_workspace_target(2, workspace)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.recalculate(ctx)
+	registered_layout.layout.layout_msg(ctx, "swapnext")
+	registered_layout.layout.recalculate(ctx)
+	assert_box(second.placed, { x = 10, y = 20, w = 120, h = 100 }, "swapped top target")
+
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local reloaded_first = make_workspace_target(1, workspace, true)
+	local reloaded_second = make_workspace_target(2, workspace)
+	local reloaded_ctx = make_context({ reloaded_first, reloaded_second })
+	registered_layout.layout.recalculate(reloaded_ctx)
+
+	assert_box(reloaded_second.placed, { x = 10, y = 20, w = 120, h = 100 }, "reloaded top target")
+	assert_box(reloaded_first.placed, { x = 10, y = 120, w = 120, h = 200 }, "reloaded bottom target")
+	registered_layout.layout.layout_msg(reloaded_ctx, "reset")
+	os.remove(_G.__PORTRAIT_ROWS_STATE_FILE)
+	_G.__PORTRAIT_ROWS_STATE_FILE = nil
+	_G.__PORTRAIT_ROWS_DISABLE_STATE = true
+end)
+
+run("manual row order survives reload with numeric workspace id", function()
+	_G.__PORTRAIT_ROWS_DISABLE_STATE = nil
+	_G.__PORTRAIT_ROWS_STATE_FILE = os.tmpname()
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local workspace = { id = 404, name = "numeric-portrait-workspace" }
+	local first = make_workspace_object_target(1, workspace, true)
+	local second = make_workspace_object_target(2, workspace)
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.recalculate(ctx)
+	registered_layout.layout.layout_msg(ctx, "swapnext")
+	registered_layout.layout.recalculate(ctx)
+	assert_box(second.placed, { x = 10, y = 20, w = 120, h = 100 }, "swapped top target")
+
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local reloaded_first = make_workspace_object_target(1, workspace, true)
+	local reloaded_second = make_workspace_object_target(2, workspace)
+	local reloaded_ctx = make_context({ reloaded_first, reloaded_second })
+	registered_layout.layout.recalculate(reloaded_ctx)
+
+	assert_box(reloaded_second.placed, { x = 10, y = 20, w = 120, h = 100 }, "reloaded top target")
+	assert_box(reloaded_first.placed, { x = 10, y = 120, w = 120, h = 200 }, "reloaded bottom target")
+	registered_layout.layout.layout_msg(reloaded_ctx, "reset")
+	os.remove(_G.__PORTRAIT_ROWS_STATE_FILE)
+	_G.__PORTRAIT_ROWS_STATE_FILE = nil
+	_G.__PORTRAIT_ROWS_DISABLE_STATE = true
+end)
+
+run("manual row order uses stable ids for same app windows", function()
+	_G.__PORTRAIT_ROWS_DISABLE_STATE = nil
+	_G.__PORTRAIT_ROWS_STATE_FILE = os.tmpname()
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local workspace = { id = 405, name = "same-app-portrait-workspace" }
+	local first = make_workspace_object_target(1, workspace, true)
+	local second = make_workspace_object_target(2, workspace)
+	first.window.class = "org.wezfurlong.wezterm"
+	second.window.class = "org.wezfurlong.wezterm"
+	first.window.title = "wezterm"
+	second.window.title = "wezterm"
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.recalculate(ctx)
+	registered_layout.layout.layout_msg(ctx, "swapnext")
+	registered_layout.layout.recalculate(ctx)
+
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local reloaded_first = make_workspace_object_target(1, workspace, true)
+	local reloaded_second = make_workspace_object_target(2, workspace)
+	reloaded_first.window.class = "org.wezfurlong.wezterm"
+	reloaded_second.window.class = "org.wezfurlong.wezterm"
+	reloaded_first.window.title = "wezterm"
+	reloaded_second.window.title = "wezterm"
+	local reloaded_ctx = make_context({ reloaded_first, reloaded_second })
+	registered_layout.layout.recalculate(reloaded_ctx)
+
+	assert_box(reloaded_second.placed, { x = 10, y = 20, w = 120, h = 100 }, "reloaded top target")
+	assert_box(reloaded_first.placed, { x = 10, y = 120, w = 120, h = 200 }, "reloaded bottom target")
+	registered_layout.layout.layout_msg(reloaded_ctx, "reset")
+	os.remove(_G.__PORTRAIT_ROWS_STATE_FILE)
+	_G.__PORTRAIT_ROWS_STATE_FILE = nil
+	_G.__PORTRAIT_ROWS_DISABLE_STATE = true
+end)
+
+run("saved row order survives partial reload target list", function()
+	_G.__PORTRAIT_ROWS_DISABLE_STATE = nil
+	_G.__PORTRAIT_ROWS_STATE_FILE = os.tmpname()
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local workspace = { id = 406, name = "partial-portrait-workspace" }
+	local first = make_workspace_object_target(1, workspace)
+	local second = make_workspace_object_target(2, workspace)
+	local third = make_workspace_object_target(3, workspace)
+	local ctx = make_context({ first, second, third })
+	registered_layout.layout.recalculate(ctx)
+
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local partial_first = make_workspace_object_target(1, workspace)
+	local partial_third = make_workspace_object_target(3, workspace)
+	registered_layout.layout.recalculate(make_context({ partial_first, partial_third }))
+
+	local reloaded_first = make_workspace_object_target(1, workspace)
+	local reloaded_second = make_workspace_object_target(2, workspace)
+	local reloaded_third = make_workspace_object_target(3, workspace)
+	local reloaded_ctx = make_context({ reloaded_first, reloaded_third, reloaded_second })
+	registered_layout.layout.recalculate(reloaded_ctx)
+
+	assert_box(reloaded_first.placed, { x = 10, y = 20, w = 120, h = 100 }, "reloaded top target")
+	assert_box(reloaded_second.placed, { x = 10, y = 120, w = 120, h = 100 }, "reloaded middle target")
+	assert_box(reloaded_third.placed, { x = 10, y = 220, w = 120, h = 100 }, "reloaded bottom target")
+	registered_layout.layout.layout_msg(reloaded_ctx, "reset")
+	os.remove(_G.__PORTRAIT_ROWS_STATE_FILE)
+	_G.__PORTRAIT_ROWS_STATE_FILE = nil
+	_G.__PORTRAIT_ROWS_DISABLE_STATE = true
+end)
+
+run("saved row order survives single-window reload target list", function()
+	_G.__PORTRAIT_ROWS_DISABLE_STATE = nil
+	_G.__PORTRAIT_ROWS_STATE_FILE = os.tmpname()
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local workspace = { id = 407, name = "single-partial-portrait-workspace" }
+	local first = make_workspace_object_target(1, workspace)
+	local second = make_workspace_object_target(2, workspace)
+	local third = make_workspace_object_target(3, workspace)
+	local ctx = make_context({ first, second, third })
+	registered_layout.layout.recalculate(ctx)
+
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local partial_first = make_workspace_object_target(1, workspace)
+	registered_layout.layout.recalculate(make_context({ partial_first }))
+
+	local reloaded_first = make_workspace_object_target(1, workspace)
+	local reloaded_second = make_workspace_object_target(2, workspace)
+	local reloaded_third = make_workspace_object_target(3, workspace)
+	local reloaded_ctx = make_context({ reloaded_first, reloaded_third, reloaded_second })
+	registered_layout.layout.recalculate(reloaded_ctx)
+
+	assert_box(reloaded_first.placed, { x = 10, y = 20, w = 120, h = 100 }, "reloaded top target")
+	assert_box(reloaded_second.placed, { x = 10, y = 120, w = 120, h = 100 }, "reloaded middle target")
+	assert_box(reloaded_third.placed, { x = 10, y = 220, w = 120, h = 100 }, "reloaded bottom target")
 	registered_layout.layout.layout_msg(reloaded_ctx, "reset")
 	os.remove(_G.__PORTRAIT_ROWS_STATE_FILE)
 	_G.__PORTRAIT_ROWS_STATE_FILE = nil

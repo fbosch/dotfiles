@@ -60,12 +60,13 @@ function M.target_id(target)
 		return nil
 	end
 
-	if window.address then
-		return window.address
+	local stable_id = window.stable_id or window.stableId
+	if stable_id then
+		return "stable:" .. tostring(stable_id)
 	end
 
-	if window.stable_id then
-		return "stable:" .. tostring(window.stable_id)
+	if window.address then
+		return "address:" .. tostring(window.address)
 	end
 
 	return nil
@@ -76,12 +77,13 @@ function M.window_id(window)
 		return nil
 	end
 
-	if window.address then
-		return window.address
+	local stable_id = window.stable_id or window.stableId
+	if stable_id then
+		return "stable:" .. tostring(stable_id)
 	end
 
-	if window.stable_id then
-		return "stable:" .. tostring(window.stable_id)
+	if window.address then
+		return "address:" .. tostring(window.address)
 	end
 
 	return nil
@@ -352,7 +354,34 @@ function M.initialize_order_from_geometry(state, key, targets, axis, start, leng
 	state.order_by_key[key] = order
 end
 
-function M.sync(state, key, targets, insert_after_id)
+function M.clear_order_if_stale(state, key, targets)
+	local order = key and state.order_by_key[key] or nil
+	if not order then
+		return false
+	end
+
+	local target_ids = {}
+	for index = 1, #targets do
+		local id = M.target_id(targets[index])
+		if id then
+			target_ids[id] = true
+		end
+	end
+
+	for index = 1, #order do
+		if target_ids[order[index]] then
+			return false
+		end
+	end
+
+	state.order_by_key[key] = nil
+	state.targets_by_key[key] = nil
+	state.target_maps_by_key[key] = nil
+	state.active_by_key[key] = nil
+	return true
+end
+
+function M.sync(state, key, targets, insert_after_id, preserve_missing)
 	if not key then
 		return nil, nil, false, false
 	end
@@ -383,26 +412,28 @@ function M.sync(state, key, targets, insert_after_id)
 		targets_by_id[id] = target
 	end
 
-	local next_index = 1
-	for index = 1, #order do
-		local id = order[index]
-		if targets_by_id[id] then
-			order[next_index] = id
-			next_index = next_index + 1
-		else
-			state.seen_ids[id] = nil
-			state.position_by_id[id] = nil
-			state.scope_by_id[id] = nil
-			if state.active_by_key[key] == id then
-				state.active_by_key[key] = nil
-			end
-			for _, positions in pairs(state.position_by_scope) do
-				positions[id] = nil
+	if not preserve_missing then
+		local next_index = 1
+		for index = 1, #order do
+			local id = order[index]
+			if targets_by_id[id] then
+				order[next_index] = id
+				next_index = next_index + 1
+			else
+				state.seen_ids[id] = nil
+				state.position_by_id[id] = nil
+				state.scope_by_id[id] = nil
+				if state.active_by_key[key] == id then
+					state.active_by_key[key] = nil
+				end
+				for _, positions in pairs(state.position_by_scope) do
+					positions[id] = nil
+				end
 			end
 		end
-	end
-	for index = next_index, #order do
-		order[index] = nil
+		for index = next_index, #order do
+			order[index] = nil
+		end
 	end
 
 	local added = false
@@ -449,10 +480,15 @@ function M.targets_from_order(state, key, order, targets_by_id, source_targets)
 		state.targets_by_key[key] = targets
 	end
 
+	local next_index = 1
 	for index = 1, #order do
-		targets[index] = targets_by_id[order[index]]
+		local target = targets_by_id[order[index]]
+		if target then
+			targets[next_index] = target
+			next_index = next_index + 1
+		end
 	end
-	for index = #order + 1, #targets do
+	for index = next_index, #targets do
 		targets[index] = nil
 	end
 

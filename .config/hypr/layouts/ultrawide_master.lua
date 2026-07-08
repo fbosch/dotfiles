@@ -1,6 +1,7 @@
 local M = {}
 local monitor_role = require("lib.monitor_role")
 local order_state = require("layouts.order_state")
+local persistent_state = require("layouts.persistent_state")
 local resize_state = require("layouts.resize_state")
 local box = {}
 local state = order_state.new()
@@ -13,99 +14,21 @@ local ratios_by_workspace = {}
 local row_ratios_by_workspace = {}
 
 local function state_file()
-	if rawget(_G, "__ULTRAWIDE_MASTER_DISABLE_STATE") then
-		return nil
-	end
-
-	local override = rawget(_G, "__ULTRAWIDE_MASTER_STATE_FILE")
-	if override then
-		return override
-	end
-
-	local runtime_dir = os.getenv("XDG_RUNTIME_DIR")
-	local signature = os.getenv("HYPRLAND_INSTANCE_SIGNATURE")
-	if not runtime_dir or runtime_dir == "" or not signature or signature == "" then
-		return nil
-	end
-
-	return runtime_dir .. "/hypr/" .. signature .. "/ultrawide-master-ratios.tsv"
-end
-
-local function encode(value)
-	return tostring(value):gsub("([^%w_.-])", function(char)
-		return string.format("%%%02X", string.byte(char))
-	end)
-end
-
-local function decode(value)
-	return tostring(value):gsub("%%(%x%x)", function(hex)
-		return string.char(tonumber(hex, 16))
-	end)
-end
-
-local function serialize_ratios(ratios)
-	local values = {}
-	for index = 1, #ratios do
-		values[index] = tostring(ratios[index])
-	end
-
-	return table.concat(values, ",")
-end
-
-local function parse_ratios(value)
-	local ratios = {}
-	for ratio in tostring(value):gmatch("[^,]+") do
-		ratios[#ratios + 1] = tonumber(ratio)
-	end
-
-	return ratios
+	return persistent_state.state_file("__ULTRAWIDE_MASTER_DISABLE_STATE", "__ULTRAWIDE_MASTER_STATE_FILE", "ultrawide-master-ratios.tsv")
 end
 
 local function save_ratio_state()
-	local path = state_file()
-	if not path then
-		return
-	end
-
-	local handle = io.open(path, "w")
-	if not handle then
-		return
-	end
-
-	for key, ratios in pairs(ratios_by_workspace) do
-		handle:write("columns\t", encode(key), "\t", #ratios, "\t", serialize_ratios(ratios), "\n")
-	end
-	for key, ratios in pairs(row_ratios_by_workspace) do
-		handle:write("rows\t", encode(key), "\t", #ratios, "\t", serialize_ratios(ratios), "\n")
-	end
-
-	handle:close()
+	persistent_state.save(state_file(), {
+		{ kind = "columns", values = ratios_by_workspace },
+		{ kind = "rows", values = row_ratios_by_workspace },
+	}, state.order_by_key)
 end
 
 local function load_ratio_state()
-	local path = state_file()
-	if not path then
-		return
-	end
-
-	local handle = io.open(path, "r")
-	if not handle then
-		return
-	end
-
-	for line in handle:lines() do
-		local kind, encoded_key, count, serialized = line:match("^(%S+)\t(%S+)\t(%d+)\t(.+)$")
-		local ratios = serialized and parse_ratios(serialized) or nil
-		if ratios and #ratios == tonumber(count) then
-			if kind == "columns" then
-				ratios_by_workspace[decode(encoded_key)] = ratios
-			elseif kind == "rows" then
-				row_ratios_by_workspace[decode(encoded_key)] = ratios
-			end
-		end
-	end
-
-	handle:close()
+	persistent_state.load(state_file(), {
+		columns = ratios_by_workspace,
+		rows = row_ratios_by_workspace,
+	}, state.order_by_key)
 end
 
 load_ratio_state()
@@ -141,15 +64,7 @@ local function role_for_targets(targets)
 end
 
 local function workspace_key(targets)
-	for index = 1, #targets do
-		local window = targets[index].window
-		local workspace = window and window.workspace
-		if workspace then
-			return workspace.id or workspace.name
-		end
-	end
-
-	return nil
+	return persistent_state.workspace_key(targets)
 end
 
 local function active_index(targets)
@@ -204,7 +119,9 @@ local function row_ratios_for_workspace(key, count)
 end
 
 local function move_active(targets, key, delta)
-	order_state.move_active(state, key, targets, active_index, delta)
+	if order_state.move_active(state, key, targets, active_index, delta) then
+		save_ratio_state()
+	end
 end
 
 local function desired_index(center, ratios, area_x, area_width)
@@ -231,7 +148,9 @@ local function move_active_to_position(targets, key, ratios, area_x, area_width,
 		return
 	end
 
-	order_state.move_active_to_index(state, key, targets, active_index, target_index)
+	if order_state.move_active_to_index(state, key, targets, active_index, target_index) then
+		save_ratio_state()
+	end
 end
 
 local function place_columns(targets, ratios, x, y, width, height, scope)
@@ -306,9 +225,12 @@ function M.recalculate(ctx)
 	local manual_change = state.manual_change_by_key[key]
 	local source_targets = targets
 	local scope = order_state.scope("ultrawide_master", key, role, "x")
+	local cleared_stale_order = order_state.clear_order_if_stale(state, key, source_targets)
+	local needs_state_save = key and state.order_by_key[key] == nil
 	order_state.initialize_order_from_geometry(state, key, source_targets, "x", x, width)
 	local previous_active = key and state.active_by_key[key] or nil
-	local order, targets_by_id, _, added_seen_targets, added_id = order_state.sync(state, key, source_targets, previous_active)
+	local order, targets_by_id, _, added_seen_targets, added_id = order_state.sync(state, key, source_targets, previous_active, true)
+	needs_state_save = needs_state_save or cleared_stale_order or added_id ~= nil
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	local transfer_target = nil
 	local transfer_intent = nil
@@ -351,13 +273,18 @@ function M.recalculate(ctx)
 		local target_index = transfer_intent and transfer_intent.edge == "end" and #targets or 1
 		order_state.move_target_to_index(state, key, transfer_target, target_index)
 		state.manual_change_by_key[key] = nil
+		needs_state_save = true
 		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 	elseif manual_change then
 		state.manual_change_by_key[key] = nil
+		needs_state_save = true
 	end
 
 	place_columns(targets, ratios, x, y, width, height, scope)
 	order_state.remember_active(state, key, source_targets, active_index)
+	if needs_state_save then
+		save_ratio_state()
+	end
 end
 
 function M.resize(ctx, target, delta, corner)
