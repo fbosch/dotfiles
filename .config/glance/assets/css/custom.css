@@ -1,5 +1,6 @@
 /* Zenwritten Dark - Custom Configuration */
 
+html,
 body {
   background-color: color-mix(in hsl, var(--color-background), transparent 20%);
 }
@@ -121,13 +122,18 @@ body {
 }
 
 /* Improve text wrapping for headings and titles */
-h1, h2, h3,
-.size-h1, .size-h2, .size-h3 {
+h1,
+h2,
+h3,
+.size-h1,
+.size-h2,
+.size-h3 {
   text-wrap: balance;
 }
 
 /* Better wrapping for body text and descriptions */
-p, .size-base {
+p,
+.size-base {
   text-wrap: pretty;
 }
 
