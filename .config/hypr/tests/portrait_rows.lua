@@ -20,7 +20,7 @@ hl = {
 _G.__PORTRAIT_ROWS_DISABLE_STATE = true
 
 local monitor_role = require("lib.monitor_role")
-local order_state = require("layouts.order_state")
+local order_state = require("layouts.shared.order_state")
 
 local function make_target(index, active)
 	return {

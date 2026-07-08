@@ -387,7 +387,7 @@ end
 local function bench_transfer_intent(iterations)
 	clear_modules()
 	local monitor_role = require("lib.monitor_role")
-	local order_state = require("layouts.order_state")
+	local order_state = require("layouts.shared.order_state")
 	local stale = { address = "0xstale" }
 	local current = { address = "0xcurrent" }
 	local target = { window = current }

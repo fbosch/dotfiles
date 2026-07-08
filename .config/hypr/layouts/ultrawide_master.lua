@@ -1,9 +1,9 @@
 local M = {}
 local monitor_role = require("lib.monitor_role")
-local order_state = require("layouts.order_state")
-local persistent_state = require("layouts.persistent_state")
-local resize_state = require("layouts.resize_state")
-local box = {}
+local order_state = require("layouts.shared.order_state")
+local ordered_axis = require("layouts.shared.ordered_axis")
+local persistent_state = require("layouts.shared.persistent_state")
+local resize_state = require("layouts.shared.resize_state")
 local state = order_state.new()
 local min_ratio = 0.15
 local resize_step = 0.05
@@ -119,74 +119,19 @@ local function row_ratios_for_workspace(key, count)
 end
 
 local function move_active(targets, key, delta)
-	if order_state.move_active(state, key, targets, active_index, delta) then
-		save_ratio_state()
-	end
-end
-
-local function desired_index(center, ratios, area_x, area_width)
-	if not center then
-		return nil
-	end
-
-	local offset = center - area_x
-	local boundary = 0
-	for index = 1, #ratios do
-		boundary = boundary + area_width * ratios[index]
-		if offset < boundary then
-			return index
-		end
-	end
-
-	return #ratios
+	ordered_axis.move_active(state, key, targets, active_index, save_ratio_state, delta)
 end
 
 local function move_active_to_position(targets, key, ratios, area_x, area_width, position)
-	local active = active_index(targets)
-	local target_index = desired_index(position or order_state.position(targets[active], "x"), ratios, area_x, area_width)
-	if not target_index or target_index == active then
-		return
-	end
-
-	if order_state.move_active_to_index(state, key, targets, active_index, target_index) then
-		save_ratio_state()
-	end
+	ordered_axis.move_active_to_position(state, key, targets, active_index, save_ratio_state, "x", ratios, area_x, area_width, position)
 end
 
 local function place_columns(targets, ratios, x, y, width, height, scope)
-	local next_x = x
-	box.y = y
-	box.h = height
-
-	for index = 1, #targets do
-		box.x = next_x
-		box.w = width * ratios[index]
-		if index == #targets then
-			box.w = x + width - next_x
-		end
-
-		targets[index]:place(box)
-		order_state.remember_position(state, targets[index], scope, box.x + box.w / 2, "x")
-		next_x = next_x + box.w
-	end
+	ordered_axis.place_weighted(state, targets, ratios, { x = x, y = y, w = width, h = height }, "x", scope)
 end
 
 local function place_rows(targets, ratios, x, y, width, height, scope)
-	local next_y = y
-	box.x = x
-	box.w = width
-
-	for index = 1, #targets do
-		box.y = next_y
-		box.h = height * ratios[index]
-		if index == #targets then
-			box.h = y + height - next_y
-		end
-
-		targets[index]:place(box)
-		order_state.remember_position(state, targets[index], scope, box.y + box.h / 2, "y")
-		next_y = next_y + box.h
-	end
+	ordered_axis.place_weighted(state, targets, ratios, { x = x, y = y, w = width, h = height }, "y", scope)
 end
 
 function M.recalculate(ctx)
@@ -222,69 +167,23 @@ function M.recalculate(ctx)
 		return
 	end
 
-	local manual_change = state.manual_change_by_key[key]
-	local source_targets = targets
-	local scope = order_state.scope("ultrawide_master", key, role, "x")
-	local cleared_stale_order = order_state.clear_order_if_stale(state, key, source_targets)
-	local needs_state_save = key and state.order_by_key[key] == nil
-	order_state.initialize_order_from_geometry(state, key, source_targets, "x", x, width)
 	local previous_active = key and state.active_by_key[key] or nil
-	local order, targets_by_id, _, added_seen_targets, added_id = order_state.sync(state, key, source_targets, previous_active, true)
-	needs_state_save = needs_state_save or cleared_stale_order or added_id ~= nil
-	targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
-	local transfer_target = nil
-	local transfer_intent = nil
-	for index = 1, #targets do
-		local intent = order_state.consume_transfer_intent_by_id(targets[index], role, "x")
-		if intent then
-			transfer_target = targets[index]
-			transfer_intent = intent
-			break
-		end
-	end
-	local has_transfer_intent = order_state.has_transfer_intent(role, "x")
-	if has_transfer_intent and not transfer_target and added_id then
-		local added_target = targets_by_id and targets_by_id[added_id] or nil
-		local intent = added_target and order_state.consume_transfer_intent(added_target, role, "x", true) or nil
-		if intent then
-			transfer_target = added_target
-			transfer_intent = intent
-		end
-	end
-	if has_transfer_intent and not transfer_target then
-		local outside_target = nil
-		for index = 1, #targets do
-			local position = order_state.position(targets[index], "x")
-			if position and (position < x or position > x + width) then
-				if outside_target then
-					outside_target = nil
-					break
-				end
-				outside_target = targets[index]
-			end
-		end
-		local intent = outside_target and order_state.consume_transfer_intent(outside_target, role, "x", true) or nil
-		if intent then
-			transfer_target = outside_target
-			transfer_intent = intent
-		end
-	end
-	if transfer_target then
-		local target_index = transfer_intent and transfer_intent.edge == "end" and #targets or 1
-		order_state.move_target_to_index(state, key, transfer_target, target_index)
-		state.manual_change_by_key[key] = nil
-		needs_state_save = true
-		targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
-	elseif manual_change then
-		state.manual_change_by_key[key] = nil
-		needs_state_save = true
-	end
+	local scope = nil
+	targets, scope = ordered_axis.recalculate_ordered({
+		state = state,
+		key = key,
+		targets = targets,
+		layout_name = "ultrawide_master",
+		role = role,
+		axis = "x",
+		start = x,
+		span = width,
+		insert_after_id = previous_active,
+		active_index = active_index,
+		save_state = save_ratio_state,
+	})
 
 	place_columns(targets, ratios, x, y, width, height, scope)
-	order_state.remember_active(state, key, source_targets, active_index)
-	if needs_state_save then
-		save_ratio_state()
-	end
 end
 
 function M.resize(ctx, target, delta, corner)

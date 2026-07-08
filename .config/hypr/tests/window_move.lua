@@ -39,7 +39,7 @@ hl = {
 
 local window = require("lib.window")
 local monitor_role = require("lib.monitor_role")
-local order_state = require("layouts.order_state")
+local order_state = require("layouts.shared.order_state")
 
 local function reset(monitor, x, monitor_x, workspace_windows, name)
 	dispatched = {}
