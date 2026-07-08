@@ -48,6 +48,5 @@
               show-thumbnails: true
               limit: 14
               collapse-after: 10
-              comments-url-template: https://redlib.corvus-corax.synology.me/{POST-PATH}
     - size: small
       widgets: []
