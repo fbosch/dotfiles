@@ -114,15 +114,33 @@ export function parseTypoRules(text: string): Map<string, string> {
 }
 
 export function correctCompletedWord(input: string, rules: ReadonlyMap<string, string>): string {
-  const match = /(^|[^A-Za-z0-9_'])([A-Za-z][A-Za-z0-9_']*)([^A-Za-z0-9_']+)$/.exec(input)
-  if (!match) {
+  let wordEnd = input.length
+  while (wordEnd > 0 && isWordCharacter(input.charCodeAt(wordEnd - 1)) === false) {
+    wordEnd -= 1
+  }
+
+  let wordStart = wordEnd
+  while (wordStart > 0 && isWordCharacter(input.charCodeAt(wordStart - 1))) {
+    wordStart -= 1
+  }
+
+  if (wordStart === wordEnd || isAsciiLetter(input.charCodeAt(wordStart)) === false) {
     return input
   }
 
-  const replacement = rules.get(match[2])
-  if (replacement === undefined || replacement === match[2]) {
+  const word = input.slice(wordStart, wordEnd)
+  const replacement = rules.get(word)
+  if (replacement === undefined || replacement === word) {
     return input
   }
 
-  return input.slice(0, match.index) + match[1] + replacement + match[3]
+  return input.slice(0, wordStart) + replacement + input.slice(wordEnd)
+}
+
+function isAsciiLetter(code: number): boolean {
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
+}
+
+function isWordCharacter(code: number): boolean {
+  return isAsciiLetter(code) || (code >= 48 && code <= 57) || code === 95 || code === 39
 }
