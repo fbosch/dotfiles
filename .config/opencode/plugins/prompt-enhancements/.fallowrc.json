@@ -1,0 +1,8 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": [
+    "prompt-enhancements.tsx",
+    "typo-engine.test.ts",
+    "typo-engine.bench.ts"
+  ]
+}

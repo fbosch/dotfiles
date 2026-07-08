@@ -3,7 +3,7 @@
   "plugin": [
     "./plugins/current-port.tsx",
     [
-      "./plugins/prompt-enhancements.tsx",
+      "./plugins/prompt-enhancements/prompt-enhancements.tsx",
       {
         "breakpoints": [
           {

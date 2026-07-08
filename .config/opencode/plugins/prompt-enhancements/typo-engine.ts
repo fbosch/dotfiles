@@ -1,9 +1,12 @@
-export type TypoRule = {
+type TypoRule = {
   from: string
   to: string
 }
 
-export type TypoRuleEndingChars = ReadonlyMap<number, ReadonlySet<number>>
+type WordRange = {
+  start: number
+  end: number
+}
 
 function camelcase(word: string): string {
   const normalized = word.replaceAll("-", "_")
@@ -79,7 +82,7 @@ function expandBraces(dictionary: ReadonlyMap<string, string>): Map<string, stri
   return expanded
 }
 
-export function parseTypoRule(line: string): TypoRule[] {
+function parseTypoRule(line: string): TypoRule[] {
   const match = /^(\S+)\s+(\S+)$/.exec(line)
   if (!match) {
     return []
@@ -115,30 +118,70 @@ export function parseTypoRules(text: string): Map<string, string> {
   return rules
 }
 
-export function typoRuleEndingChars(rules: ReadonlyMap<string, string>): Map<number, Set<number>> {
-  const chars = new Map<number, Set<number>>()
+export function typoRuleLengths(rules: ReadonlyMap<string, string>): Set<number> {
+  const lengths = new Set<number>()
   for (const typo of rules.keys()) {
-    const length = typo.length
-    const existing = chars.get(length)
-    if (existing) {
-      existing.add(typo.charCodeAt(length - 1))
-      continue
-    }
-
-    chars.set(length, new Set([typo.charCodeAt(length - 1)]))
+    lengths.add(typo.length)
   }
 
-  return chars
+  return lengths
 }
 
 export function correctCompletedWord(
   input: string,
   rules: ReadonlyMap<string, string>,
-  endingChars?: TypoRuleEndingChars,
+  ruleLengths?: ReadonlySet<number>,
 ): string {
+  const word = completedWordRange(input, true)
+  if (!word) {
+    return input
+  }
+
+  const wordLength = word.end - word.start
+  if (ruleLengths && ruleLengths.has(wordLength) === false) {
+    return input
+  }
+
+  const value = input.slice(word.start, word.end)
+  const replacement = rules.get(value)
+  if (replacement === undefined || replacement === value) {
+    return input
+  }
+
+  return input.slice(0, word.start) + replacement + input.slice(word.end)
+}
+
+export function appendDelimiterAndCorrect(
+  input: string,
+  delimiter: string,
+  rules: ReadonlyMap<string, string>,
+  ruleLengths?: ReadonlySet<number>,
+): string {
+  const word = completedWordRange(input, false)
+  if (!word) {
+    return input + delimiter
+  }
+
+  const wordLength = word.end - word.start
+  if (ruleLengths && ruleLengths.has(wordLength) === false) {
+    return input + delimiter
+  }
+
+  const value = input.slice(word.start, word.end)
+  const replacement = rules.get(value)
+  if (replacement === undefined || replacement === value) {
+    return input + delimiter
+  }
+
+  return input.slice(0, word.start) + replacement + delimiter
+}
+
+function completedWordRange(input: string, trimTrailingDelimiters: boolean): WordRange | undefined {
   let wordEnd = input.length
-  while (wordEnd > 0 && isWordCharacter(input.charCodeAt(wordEnd - 1)) === false) {
-    wordEnd -= 1
+  if (trimTrailingDelimiters) {
+    while (wordEnd > 0 && isWordCharacter(input.charCodeAt(wordEnd - 1)) === false) {
+      wordEnd -= 1
+    }
   }
 
   let wordStart = wordEnd
@@ -147,52 +190,10 @@ export function correctCompletedWord(
   }
 
   if (wordStart === wordEnd || isAsciiLetter(input.charCodeAt(wordStart)) === false) {
-    return input
+    return undefined
   }
 
-  const wordLength = wordEnd - wordStart
-  const endings = endingChars?.get(wordLength)
-  if (endingChars && (!endings || endings.has(input.charCodeAt(wordEnd - 1)) === false)) {
-    return input
-  }
-
-  const word = input.slice(wordStart, wordEnd)
-  const replacement = rules.get(word)
-  if (replacement === undefined || replacement === word) {
-    return input
-  }
-
-  return input.slice(0, wordStart) + replacement + input.slice(wordEnd)
-}
-
-export function appendDelimiterAndCorrect(
-  input: string,
-  delimiter: string,
-  rules: ReadonlyMap<string, string>,
-  endingChars?: TypoRuleEndingChars,
-): string {
-  let wordStart = input.length
-  while (wordStart > 0 && isWordCharacter(input.charCodeAt(wordStart - 1))) {
-    wordStart -= 1
-  }
-
-  if (wordStart === input.length || isAsciiLetter(input.charCodeAt(wordStart)) === false) {
-    return input + delimiter
-  }
-
-  const wordLength = input.length - wordStart
-  const endings = endingChars?.get(wordLength)
-  if (endingChars && (!endings || endings.has(input.charCodeAt(input.length - 1)) === false)) {
-    return input + delimiter
-  }
-
-  const word = input.slice(wordStart)
-  const replacement = rules.get(word)
-  if (replacement === undefined || replacement === word) {
-    return input + delimiter
-  }
-
-  return input.slice(0, wordStart) + replacement + delimiter
+  return { start: wordStart, end: wordEnd }
 }
 
 function isAsciiLetter(code: number): boolean {
