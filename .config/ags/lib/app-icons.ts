@@ -20,16 +20,33 @@ type FaugusGame = {
   icon?: string;
 };
 
+type SteamApp = {
+  appid: string;
+  name: string;
+  installdir: string;
+};
+
+type DesktopEntry = {
+  path: string;
+  lookupTerms: string[];
+};
+
 const faugusGamesPath = `${GLib.get_home_dir()}/.config/faugus-launcher/games.json`;
+const steamAppsPath = `${GLib.get_home_dir()}/.local/share/Steam/steamapps`;
+const steamLibraryCachePath = `${GLib.get_home_dir()}/.local/share/Steam/appcache/librarycache`;
 const waybarConfigPath = `${GLib.get_home_dir()}/.config/waybar/config`;
 const desktopFileDirs = [
+  `${GLib.get_home_dir()}/Desktop`,
   `${GLib.get_home_dir()}/.local/share/applications`,
   `/etc/profiles/per-user/${GLib.get_user_name()}/share/applications`,
   "/run/current-system/sw/share/applications",
 ];
 const iconCache = new Map<string, IconRef | null>();
+const themeIconFileCache = new Map<string, string | null>();
 let faugusGamesCache: FaugusGame[] | null = null;
+let steamAppsCache: SteamApp[] | null = null;
 let waybarAppIdMappingCache: Record<string, string> | null = null;
+let desktopEntriesCache: DesktopEntry[] | null = null;
 
 const genericWrapperClasses = [
   "gamescope",
@@ -76,6 +93,21 @@ function iconRefFromGioIcon(icon: Gio.Icon | null): IconRef | null {
 
 function iconFromDesktopFile(path: string): IconRef | null {
   try {
+    const [, contents] = Gio.File.new_for_path(path).load_contents(null);
+    if (contents) {
+      const iconName = desktopField(new TextDecoder().decode(contents), "Icon");
+      if (iconName && !iconName.startsWith("/")) {
+        const themeIcon = findThemeIconFile(iconName);
+        if (themeIcon) return { kind: "file", path: themeIcon };
+      }
+
+      const steamIcon = iconName?.match(/^steam_icon_(\d+)$/);
+      if (steamIcon) {
+        const icon = getSteamLibraryIconForAppId(steamIcon[1]);
+        if (icon) return icon;
+      }
+    }
+
     const appInfo = GioUnix.DesktopAppInfo.new_from_filename(path);
     if (!appInfo) return null;
     return iconRefFromGioIcon(appInfo.get_icon());
@@ -89,20 +121,10 @@ function desktopField(contents: string, key: string): string | null {
   return match?.[1]?.trim() ?? null;
 }
 
-function getIconFromDesktopFiles(value: string): IconRef | null {
-  const candidates = iconLookupCandidates(value);
-  const normalizedCandidates = candidates.map(normalizeIconSearchTerm).filter((candidate) => candidate !== "");
-  if (normalizedCandidates.length === 0) return null;
+function loadDesktopEntries(): DesktopEntry[] {
+  if (desktopEntriesCache) return desktopEntriesCache;
 
-  for (const dir of desktopFileDirs) {
-    for (const candidate of candidates) {
-      const path = `${dir}/${candidate}.desktop`;
-      if (!fileExists(path)) continue;
-      const icon = iconFromDesktopFile(path);
-      if (icon) return icon;
-    }
-  }
-
+  const entriesByPath = new Map<string, DesktopEntry>();
   for (const dir of desktopFileDirs) {
     try {
       const directory = Gio.File.new_for_path(dir);
@@ -115,17 +137,15 @@ function getIconFromDesktopFiles(value: string): IconRef | null {
           const [, contents] = Gio.File.new_for_path(path).load_contents(null);
           if (contents) {
             const text = new TextDecoder().decode(contents);
-            const fields = [
-              name.replace(/\.desktop$/, ""),
-              desktopField(text, "StartupWMClass"),
-              desktopField(text, "Name"),
-              desktopField(text, "Exec"),
-            ].filter((field): field is string => Boolean(field));
-
-            if (fields.some((field) => normalizedCandidates.includes(normalizeIconSearchTerm(field)))) {
-              const icon = iconFromDesktopFile(path);
-              if (icon) return icon;
-            }
+            entriesByPath.set(path, {
+              path,
+              lookupTerms: [
+                name.replace(/\.desktop$/, ""),
+                desktopField(text, "StartupWMClass"),
+                desktopField(text, "Name"),
+                desktopField(text, "Exec"),
+              ].filter((field): field is string => Boolean(field)),
+            });
           }
         }
         entry = entries.next_file(null);
@@ -134,6 +154,30 @@ function getIconFromDesktopFiles(value: string): IconRef | null {
     } catch {
       // Desktop directories vary by system profile.
     }
+  }
+
+  desktopEntriesCache = Array.from(entriesByPath.values());
+  return desktopEntriesCache;
+}
+
+function getIconFromDesktopFiles(value: string): IconRef | null {
+  const candidates = iconLookupCandidates(value);
+  const normalizedCandidates = new Set(candidates.map(normalizeIconSearchTerm).filter((candidate) => candidate !== ""));
+  if (normalizedCandidates.size === 0) return null;
+
+  for (const dir of desktopFileDirs) {
+    for (const candidate of candidates) {
+      const path = `${dir}/${candidate}.desktop`;
+      if (!fileExists(path)) continue;
+      const icon = iconFromDesktopFile(path);
+      if (icon) return icon;
+    }
+  }
+
+  for (const entry of loadDesktopEntries()) {
+    if (!entry.lookupTerms.some((term) => normalizedCandidates.has(normalizeIconSearchTerm(term)))) continue;
+    const icon = iconFromDesktopFile(entry.path);
+    if (icon) return icon;
   }
 
   return null;
@@ -157,6 +201,133 @@ function loadFaugusGames(): FaugusGame[] {
     faugusGamesCache = [];
     return faugusGamesCache;
   }
+}
+
+function steamManifestField(contents: string, key: string): string {
+  const match = contents.match(new RegExp(`"${key}"\\s+"([^"]+)"`));
+  return match?.[1] ?? "";
+}
+
+function loadSteamApps(): SteamApp[] {
+  if (steamAppsCache) return steamAppsCache;
+
+  const apps: SteamApp[] = [];
+  try {
+    const directory = Gio.File.new_for_path(steamAppsPath);
+    const entries = directory.enumerate_children("standard::name", Gio.FileQueryInfoFlags.NONE, null);
+    let entry = entries.next_file(null);
+    while (entry) {
+      const name = entry.get_name();
+      if (name.startsWith("appmanifest_") && name.endsWith(".acf")) {
+        const path = `${steamAppsPath}/${name}`;
+        const [, contents] = Gio.File.new_for_path(path).load_contents(null);
+        if (contents) {
+          const text = new TextDecoder().decode(contents);
+          const appid = steamManifestField(text, "appid");
+          const appName = steamManifestField(text, "name");
+          const installdir = steamManifestField(text, "installdir");
+          if (appid && appName) {
+            apps.push({ appid, name: appName, installdir });
+          }
+        }
+      }
+      entry = entries.next_file(null);
+    }
+    entries.close(null);
+  } catch {
+    // Steam may not be installed or may use another library path.
+  }
+
+  steamAppsCache = apps;
+  return steamAppsCache;
+}
+
+function getSteamLibraryIconForCandidate(candidate: string): IconRef | null {
+  const normalizedCandidates = [candidate, ...buildTitleCandidates(candidate)]
+    .map(normalizeIconSearchTerm)
+    .filter((value) => value !== "");
+  if (normalizedCandidates.length === 0) return null;
+
+  for (const app of loadSteamApps()) {
+    const appCandidates = [app.name, app.installdir, app.appid]
+      .filter((value) => value !== "")
+      .map(normalizeIconSearchTerm);
+    if (!appCandidates.some((value) => normalizedCandidates.includes(value))) continue;
+
+    const icon = getSteamLibraryIconForAppId(app.appid);
+    if (icon) return icon;
+  }
+
+  return null;
+}
+
+function getSteamLibraryIconForAppId(appid: string): IconRef | null {
+  const themeIcon = getSteamThemeIconForAppId(appid);
+  if (themeIcon) return themeIcon;
+
+  const cacheDir = `${steamLibraryCachePath}/${appid}`;
+  const coverPath = `${cacheDir}/library_600x900.jpg`;
+  if (fileExists(coverPath)) return { kind: "file", path: coverPath };
+
+  const logoPath = `${cacheDir}/logo.png`;
+  if (fileExists(logoPath)) return { kind: "file", path: logoPath };
+
+  const squareIcon = findSteamSquareIcon(cacheDir);
+  if (squareIcon) return { kind: "file", path: squareIcon };
+
+  return null;
+}
+
+function findThemeIconFile(iconName: string): string | null {
+  if (themeIconFileCache.has(iconName)) return themeIconFileCache.get(iconName)!;
+
+  const iconDirs = [
+    `${GLib.get_home_dir()}/.local/share/icons/hicolor`,
+    `/etc/profiles/per-user/${GLib.get_user_name()}/share/icons/hicolor`,
+    "/run/current-system/sw/share/icons/hicolor",
+  ];
+
+  for (const dir of iconDirs) {
+    for (const size of ["512x512", "256x256", "128x128", "64x64", "48x48", "32x32", "16x16"]) {
+      for (const extension of ["png", "svg", "jpg", "jpeg"]) {
+        const path = `${dir}/${size}/apps/${iconName}.${extension}`;
+        if (fileExists(path)) {
+          themeIconFileCache.set(iconName, path);
+          return path;
+        }
+      }
+    }
+  }
+
+  themeIconFileCache.set(iconName, null);
+  return null;
+}
+
+function getSteamThemeIconForAppId(appid: string): IconRef | null {
+  const path = findThemeIconFile(`steam_icon_${appid}`);
+  return path ? { kind: "file", path } : null;
+}
+
+function findSteamSquareIcon(cacheDir: string): string | null {
+  try {
+    const directory = Gio.File.new_for_path(cacheDir);
+    const entries = directory.enumerate_children("standard::name,standard::type", Gio.FileQueryInfoFlags.NONE, null);
+    let entry = entries.next_file(null);
+    while (entry) {
+      const name = entry.get_name();
+      if (entry.get_file_type() === Gio.FileType.REGULAR && name.endsWith(".jpg") && name !== "library_600x900.jpg" && name !== "library_hero.jpg" && name !== "library_hero_blur.jpg") {
+        const path = `${cacheDir}/${name}`;
+        entries.close(null);
+        return path;
+      }
+      entry = entries.next_file(null);
+    }
+    entries.close(null);
+  } catch {
+    return null;
+  }
+
+  return null;
 }
 
 function loadWaybarAppIdMapping(): Record<string, string> {
@@ -212,8 +383,11 @@ export function buildTitleCandidates(title: string): string[] {
   const normalizedTitle = title.replace(/\s*\(grabbed\)\s*$/i, "").trim();
   if (!normalizedTitle) return [];
 
+  const withoutTrailingParentheticals = normalizedTitle.replace(/(?:\s+\([^)]*\))+$/, "").trim();
+
   const parts = [
     normalizedTitle,
+    withoutTrailingParentheticals,
     normalizedTitle.split(" - ")[0]?.trim() ?? "",
     normalizedTitle.split("-")[0]?.trim() ?? "",
     normalizedTitle.split(" — ")[0]?.trim() ?? "",
@@ -223,9 +397,10 @@ export function buildTitleCandidates(title: string): string[] {
   const candidates: string[] = [];
   for (const part of parts) {
     const withoutTrailingVersion = part.replace(/\s+\d+(?:\.\d+)+(?:\b.*)?$/, "").trim();
-    const partCandidates = withoutTrailingVersion && withoutTrailingVersion !== part
-      ? [part, withoutTrailingVersion]
-      : [part];
+    const withoutParentheticals = part.replace(/\s+\([^)]*\)/g, "").trim();
+    const partCandidates = [part, withoutTrailingVersion, withoutParentheticals].filter(
+      (candidate, index, candidates) => candidate !== "" && candidates.indexOf(candidate) === index,
+    );
 
     for (const partCandidate of partCandidates) {
       const lowered = partCandidate.toLowerCase();
@@ -322,7 +497,14 @@ export function getIconForClass(appClass: string, iconTheme?: Gtk.IconTheme | nu
   if (iconCache.has(appClass)) return iconCache.get(appClass)!;
 
   let icon: IconRef | null = null;
+
   icon = getIconFromDesktopFiles(appClass);
+  if (icon) {
+    iconCache.set(appClass, icon);
+    return icon;
+  }
+
+  icon = getSteamLibraryIconForCandidate(appClass);
   if (icon) {
     iconCache.set(appClass, icon);
     return icon;
@@ -377,11 +559,6 @@ export function getIconForWindow(window: IconWindowInfo, iconTheme?: Gtk.IconThe
     (candidate): candidate is string => Boolean(candidate && candidate !== ""),
   );
 
-  for (const candidate of classCandidates) {
-    const icon = getIconForClass(candidate, iconTheme);
-    if (icon) return icon;
-  }
-
   const title = window.title ?? "";
   const initialTitle = window.initialTitle ?? "";
   const shouldTryTitleLookup =
@@ -389,7 +566,13 @@ export function getIconForWindow(window: IconWindowInfo, iconTheme?: Gtk.IconThe
     title.toLowerCase().includes("(grabbed)") ||
     initialTitle.toLowerCase().includes("(grabbed)");
 
-  if (!shouldTryTitleLookup) return null;
+  if (!shouldTryTitleLookup) {
+    for (const candidate of classCandidates) {
+      const icon = getIconForClass(candidate, iconTheme);
+      if (icon) return icon;
+    }
+    return null;
+  }
 
   const mappedClassCandidates = classCandidates
     .map(getWaybarMappedAppId)
@@ -403,6 +586,11 @@ export function getIconForWindow(window: IconWindowInfo, iconTheme?: Gtk.IconThe
   if (faugusIcon) return faugusIcon;
 
   for (const candidate of titleCandidates) {
+    const icon = getIconForClass(candidate, iconTheme);
+    if (icon) return icon;
+  }
+
+  for (const candidate of classCandidates) {
     const icon = getIconForClass(candidate, iconTheme);
     if (icon) return icon;
   }
