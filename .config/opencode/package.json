@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@10.33.0",
   "dependencies": {
-    "@opencode-ai/plugin": "1.17.15"
+    "@opencode-ai/plugin": "1.17.14"
   },
   "scripts": {
     "deps:list": "pnpm -r list --depth 0"
