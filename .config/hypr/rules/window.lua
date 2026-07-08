@@ -90,25 +90,6 @@ hl.window_rule({ match = { class = "^(io\\.github\\.flattool\\.Warehouse)$" }, f
 hl.window_rule({ match = { class = "^(xdg-desktop-portal-gtk)$" }, float = true, pin = true, no_anim = true })
 
 -- Zen Browser
-local function float_zen_extension_popup(window)
-	if window == nil then
-		return
-	end
-
-	if window.class ~= "app.zen_browser.zen" then
-		return
-	end
-
-	if window.title == nil or string.sub(window.title, 1, 10) ~= "Extension:" then
-		return
-	end
-
-	hl.dispatch(hl.dsp.window.float({ action = "set", window = window }))
-end
-
-hl.on("window.open", float_zen_extension_popup)
-hl.on("window.title", float_zen_extension_popup)
-
 hl.window_rule({ match = { title = "^([Pp]icture-in-[Pp]icture)$" }, float = true, no_initial_focus = true, pin = true })
 hl.window_rule({ match = { title = "([Pp]icture-in-[Pp]icture)" }, animation = "slide right" })
 hl.window_rule({ match = { initial_title = "(^(Picture-in-Picture)$)" }, size = "688 388", move = "2739 993" })
