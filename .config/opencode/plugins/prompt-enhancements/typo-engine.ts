@@ -113,7 +113,16 @@ export function parseTypoRules(text: string): Map<string, string> {
   return rules
 }
 
-export function correctCompletedWord(input: string, rules: ReadonlyMap<string, string>): string {
+export function typoRuleLengths(rules: ReadonlyMap<string, string>): Set<number> {
+  const lengths = new Set<number>()
+  for (const typo of rules.keys()) {
+    lengths.add(typo.length)
+  }
+
+  return lengths
+}
+
+export function correctCompletedWord(input: string, rules: ReadonlyMap<string, string>, ruleLengths?: ReadonlySet<number>): string {
   let wordEnd = input.length
   while (wordEnd > 0 && isWordCharacter(input.charCodeAt(wordEnd - 1)) === false) {
     wordEnd -= 1
@@ -128,6 +137,11 @@ export function correctCompletedWord(input: string, rules: ReadonlyMap<string, s
     return input
   }
 
+  const wordLength = wordEnd - wordStart
+  if (ruleLengths && ruleLengths.has(wordLength) === false) {
+    return input
+  }
+
   const word = input.slice(wordStart, wordEnd)
   const replacement = rules.get(word)
   if (replacement === undefined || replacement === word) {
@@ -135,6 +149,35 @@ export function correctCompletedWord(input: string, rules: ReadonlyMap<string, s
   }
 
   return input.slice(0, wordStart) + replacement + input.slice(wordEnd)
+}
+
+export function appendDelimiterAndCorrect(
+  input: string,
+  delimiter: string,
+  rules: ReadonlyMap<string, string>,
+  ruleLengths?: ReadonlySet<number>,
+): string {
+  let wordStart = input.length
+  while (wordStart > 0 && isWordCharacter(input.charCodeAt(wordStart - 1))) {
+    wordStart -= 1
+  }
+
+  if (wordStart === input.length || isAsciiLetter(input.charCodeAt(wordStart)) === false) {
+    return input + delimiter
+  }
+
+  const wordLength = input.length - wordStart
+  if (ruleLengths && ruleLengths.has(wordLength) === false) {
+    return input + delimiter
+  }
+
+  const word = input.slice(wordStart)
+  const replacement = rules.get(word)
+  if (replacement === undefined || replacement === word) {
+    return input + delimiter
+  }
+
+  return input.slice(0, wordStart) + replacement + delimiter
 }
 
 function isAsciiLetter(code: number): boolean {

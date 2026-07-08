@@ -63,3 +63,16 @@ Updated engine-path results from the same run:
 | Correct short match | 0.169 us/op | 5,900,108 ops/s | 1,000,000 |
 | Correct long no match | 0.088 us/op | 11,308,515 ops/s | 500,000 |
 | Correct long match | 0.162 us/op | 6,154,315 ops/s | 500,000 |
+
+## Append Delimiter Optimization
+
+Changed the runtime space handler to call `appendDelimiterAndCorrect(input, " ", ...)` instead of prebuilding `${input} ` and passing it to `correctCompletedWord`.
+
+Results:
+
+| Case | Previous Mean | Append Mean | Throughput | Iterations | Change |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Short no match | 0.104 us/op | 0.092 us/op | 10,891,681 ops/s | 1,000,000 | 1.13x faster |
+| Short match | 0.157 us/op | 0.144 us/op | 6,959,431 ops/s | 1,000,000 | 1.09x faster |
+| Long no match | 0.093 us/op | 0.093 us/op | 10,695,455 ops/s | 500,000 | unchanged |
+| Long match | 0.165 us/op | 0.150 us/op | 6,650,399 ops/s | 500,000 | 1.10x faster |
