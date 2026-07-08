@@ -1,58 +1,44 @@
 # Yr Weather
 
-Weather forecast from Yr.no (Norwegian Meteorological Institute) directly in Vicinae.
+Weather forecast in Vicinae using MET Norway's Yr/Locationforecast API.
 
-## Features
+## Command
 
-- 10-day weather forecast for any location on Earth
-- Temperature, precipitation, wind, humidity, and pressure data
-- Detailed weather information with expandable views
-- Automatic caching (30 minutes) to reduce API calls
-- Data from the Norwegian Meteorological Institute's official API
+`Weather Forecast` shows a multi-day forecast for configured coordinates. Details include temperature, precipitation, wind, humidity, and pressure where the API provides them.
 
 ## Setup
 
-### 1. Find Your Coordinates
+Find latitude and longitude with:
 
-You can find your latitude and longitude using:
 - Google Maps: Right-click any location and select the coordinates
 - [latlong.net](https://www.latlong.net/)
-- Your favorite mapping service
+- Any mapping service that returns decimal coordinates
 
-### 2. Configure the Extension
+Configure these Vicinae preferences:
 
-1. Open Vicinae settings
-2. Navigate to Extensions → Yr Weather
-3. Enter your coordinates:
-   - **Latitude**: Decimal degrees (e.g., `59.9139` for Oslo)
-   - **Longitude**: Decimal degrees (e.g., `10.7522` for Oslo)
-   - **Altitude** (optional): Ground surface height in meters (improves temperature accuracy)
-   - **Location Name** (optional): A friendly name like "Home" or "Oslo"
+- Latitude in decimal degrees, for example `59.9139`.
+- Longitude in decimal degrees, for example `10.7522`.
+- Optional altitude in meters. This can improve temperature accuracy.
+- Optional location name for display.
 
 ## Usage
 
-1. Open Vicinae
-2. Type "Weather Forecast" or "yr" to activate the extension
-3. Browse through the 10-day forecast
-4. Press `Enter` or `Space` to view detailed information for a specific day
-5. Use keyboard shortcuts for quick actions:
-   - `Cmd+C` - Copy weather summary
-   - `Cmd+Shift+T` - Copy temperature
-   - `Cmd+Shift+P` - Copy precipitation
-   - `Cmd+Shift+W` - Copy wind information
+1. Run `Weather Forecast` from Vicinae.
+2. Browse the forecast list.
+3. Press `Enter` or `Space` for day details.
+4. Use `Cmd+C`, `Cmd+Shift+T`, `Cmd+Shift+P`, or `Cmd+Shift+W` to copy summary, temperature, precipitation, or wind details.
 
 ## Data Source
 
 This extension uses the [Locationforecast API](https://api.met.no/weatherapi/locationforecast/2.0/documentation) from the Norwegian Meteorological Institute (MET Norway).
 
-- Weather data is provided free of charge
-- Forecasts are updated regularly
-- Coverage: Global (best accuracy in Nordic and Arctic regions)
-- Forecast period: Up to 10 days
+- Coverage is global, with best accuracy in Nordic and Arctic regions.
+- Forecast period is up to 10 days.
+- Results are cached locally to reduce API calls.
 
 ## Privacy
 
-All weather data is fetched directly from the MET Norway API. No data is stored or sent to third parties. The extension caches weather data locally for 30 minutes to reduce API calls.
+Weather data is fetched directly from MET Norway. Coordinates are sent to that API and cached locally by the extension.
 
 ## Attribution
 
@@ -60,18 +46,15 @@ Weather data provided by the [Norwegian Meteorological Institute](https://www.me
 
 ## Troubleshooting
 
-### "Failed to fetch weather"
+- Failed fetch: check coordinates, network access, and MET Norway API availability.
+- Invalid coordinates: latitude must be `-90` to `90`; longitude must be `-180` to `180`; use decimal format.
+- Incorrect temperature: add altitude in preferences.
 
-- Check that your latitude and longitude are valid
-- Ensure you have an active internet connection
-- The API may be temporarily unavailable
+## Development
 
-### Invalid coordinates error
-
-- Latitude must be between -90 and 90
-- Longitude must be between -180 and 180
-- Use decimal format (e.g., `59.9139`, not `59°54'50"N`)
-
-### Temperature seems incorrect
-
-Try adding your location's altitude in the settings for more accurate temperature readings.
+```bash
+pnpm install
+pnpm run dev
+pnpm run lint
+pnpm run build
+```

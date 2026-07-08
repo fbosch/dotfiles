@@ -1,70 +1,43 @@
 # System Info
 
-View detailed system information in a beautiful "About This Mac" style interface for Linux systems.
+Vicinae extension for viewing Linux system information in a single visual summary.
 
-## Features
+## Command
 
-- **SVG-Based Visual Interface**: Dynamically generated SVG with beautiful cards and visual elements
-- **Hardware Overview**: Display CPU, memory, storage, and GPU information
-- **Visual Progress Bars**: Animated progress bars with color-coded status indicators
-- **Real-time Stats**: Memory and storage usage with live updates
-- **Display Information**: Show connected displays with resolution and refresh rate (Hyprland/X11)
-- **Auto-refresh**: Optionally refresh stats automatically at configurable intervals
-- **Professional Design**: Clean, card-based layout inspired by macOS Big Sur
-- **Quick Actions**: Copy hostname, OS info, or full system details to clipboard
+`Show System Info` displays OS, kernel, architecture, uptime, CPU, memory, storage, GPU, and display details where the host exposes them.
 
-## Visual Design
+## Data Sources
 
-The extension uses a dynamically generated SVG interface featuring:
-- Dark theme with Zenwritten Dark color palette
-- Smooth animated progress bars
-- Card-based layout with rounded corners and subtle borders
-- Color-coded indicators (green/yellow/red) for resource usage
-- Clean typography and visual hierarchy
-- Professional, polished appearance
+- Linux `/proc` files for core system data.
+- Standard system commands where needed.
+- `lspci` for GPU information when available.
+- Hyprland or X11 data for connected displays when available.
 
-## Information Displayed
+Some fields are absent on VMs, containers, headless machines, or hosts missing optional commands.
 
-### Overview
-- Operating system name and version
-- Kernel version
-- System architecture
-- Uptime
+## Actions
 
-### Hardware
-- Computer hostname and model (if available)
-- CPU name, cores, and threads
-- Current CPU frequency
-- Total memory and usage
-- Storage devices with usage statistics
-- GPU information (via lspci)
-- Connected displays with resolution and refresh rate
-
-### Actions
-- **Cmd+R**: Refresh system information
-- **Cmd+C**: Copy hostname
-- **Cmd+Shift+C**: Copy OS info
-- **Cmd+Shift+A**: Copy all info as markdown
+- `Cmd+R` refreshes system information.
+- `Cmd+C` copies the hostname.
+- `Cmd+Shift+C` copies OS information.
+- `Cmd+Shift+A` copies all info as markdown.
 
 ## Preferences
 
-### Show Distribution Logo
-Display ASCII art logo for your Linux distribution (feature in development)
-
-### Auto-refresh Interval
-Choose how often to automatically refresh system stats:
-- Disabled (manual only)
-- Every 5 seconds
-- Every 10 seconds
-- Every 30 seconds
-- Every minute
+- Show distribution logo.
+- Auto-refresh interval: disabled, 5 seconds, 10 seconds, 30 seconds, or 1 minute.
 
 ## Requirements
 
-- Linux system with `/proc` filesystem
-- Optional: `lspci` for GPU information
-- Optional: Hyprland or X11 for display information
+- Linux with `/proc`.
+- Optional `lspci` for GPU information.
+- Optional Hyprland or X11 for display information.
 
-## Notes
+## Development
 
-This extension is designed for Linux systems and gathers information from standard system files and commands. Some information (like model name or display details) may not be available on all systems, particularly in VMs or headless setups.
+```bash
+pnpm install
+pnpm run dev
+pnpm run lint
+pnpm run build
+```

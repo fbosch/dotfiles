@@ -1,33 +1,24 @@
 # opencode-handoff
 
-Create focused handoff prompts for continuing work in new sessions.
+OpenCode plugin for continuing work in a fresh session without losing the useful parts of the previous one.
 
-Inspired by Amp's handoff command - see their [post](https://ampcode.com/news/handoff) and [manual](https://ampcode.com/manual#handoff) about it.
+Inspired by Amp's handoff command: [post](https://ampcode.com/news/handoff), [manual](https://ampcode.com/manual#handoff).
 
-## Features
+## What It Adds
 
-- `/handoff <goal>` command that analyzes the conversation and generates a continuation prompt
-- Guides the AI to include relevant `@file` references so the next session starts with context loaded
-- Opens a new session with the prompt as an editable draft
-- `read_session` tool for retrieving full conversation transcripts from previous sessions when the handoff summary isn't sufficient
+- `/handoff <goal>` creates a focused continuation prompt from the current conversation.
+- The prompt can include relevant `@file` references for the next session.
+- A new session opens with the generated prompt as an editable draft.
+- `read_session` lets the next session fetch the original transcript when the summary is not enough.
 
 ## Requirements
 
-- [OpenCode](https://opencode.ai/) v1.2.15 or later
+- OpenCode v1.2.15 or later.
+- Bun for local typechecking and development.
 
-## Installation
+## Install
 
-Add to your OpenCode config (`~/.config/opencode/opencode.json`):
-
-```json
-{
-  "plugin": ["opencode-handoff"]
-}
-```
-
-Restart OpenCode and you're ready to go.
-
-Optionally, pin to a specific version for stability:
+Add the plugin to `~/.config/opencode/opencode.json`:
 
 ```json
 {
@@ -35,64 +26,31 @@ Optionally, pin to a specific version for stability:
 }
 ```
 
-OpenCode fetches unpinned plugins from npm on each startup; pinned versions are cached and require a manual version bump to update.
+Pinning avoids startup-to-startup changes from an unpinned npm plugin.
 
 ## Usage
 
-1. Have a conversation in OpenCode with some context
-2. When ready to continue in a fresh session, type `/handoff <your goal>`
-3. A new session opens with the handoff prompt as an editable draft
-4. Review and edit the draft if needed, then send
+Run the command with the next session's goal:
 
-**Example:**
-
-```
+```text
 /handoff implement the user authentication feature we discussed
 ```
 
-The AI analyzes the conversation, extracts key decisions and relevant files, generates a focused prompt, and creates a new session with that prompt ready to edit.
+The new session gets a prompt draft. Review it before sending if the current conversation had noisy or sensitive context.
 
-### Reading Previous Session Transcripts
+Generated prompts include a source session reference, for example:
 
-When you use `/handoff`, the generated prompt includes a session reference line:
-
-```
+```text
 Continuing work from session sess_01jxyz123. When you lack specific information you can use read_session to get it.
 ```
 
-This gives the AI in the new session access to the `read_session` tool, which can fetch the full conversation transcript from the source session. If the handoff summary doesn't include something you need, just ask - the AI can look it up.
+That reference is enough for the next session to call `read_session` when it needs exact earlier details.
 
-**Example:**
-
-```
-You: What were the specific error messages we saw earlier?
-```
-
-The AI will use `read_session` to retrieve details from the previous session that weren't included in the handoff summary.
-
-## Contributing
-
-Contributions are welcome! Here's how to set up for development:
+## Development
 
 ```bash
-git clone https://github.com/joshuadavidthomas/opencode-handoff
-cd opencode-handoff
 bun install
+bun run typecheck
 ```
 
-Then symlink the plugin to your OpenCode config:
-
-```bash
-mkdir -p ~/.config/opencode/plugin
-ln -sf "$(pwd)/src/plugin.ts" ~/.config/opencode/plugin/handoff.ts
-```
-
-## License
-
-opencode-handoff is licensed under the MIT license. See the [`LICENSE`](LICENSE) file for more information.
-
----
-
-opencode-handoff is not built by, or affiliated with, the OpenCode team.
-
-OpenCode is ©2025 Anomaly.
+The package exports `handoff.ts` and expects `@opencode-ai/plugin` as a runtime peer supplied by OpenCode.

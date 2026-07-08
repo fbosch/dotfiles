@@ -1,37 +1,27 @@
-# Wezterm Config
+# WezTerm Config
 
-Wezterm terminal configuration with modular Lua setup for theming, keybinds, and UI customization.
+Lua configuration for WezTerm. The entrypoint stays thin and delegates settings to small modules by concern.
 
-**Project:** [Wezterm](https://wezfurlong.org/wezterm/)
+## Layout
 
-**Configuration modules (wezterm.lua imports):**
-- `base.lua` - Core settings (OpenGL frontend, performance, status updates, shell processes)
-- `colors.lua` - Color scheme (zenwritten_dark) and tab bar colors
-- `agent/deck.lua` - AI agent status integration via wezterm-agent-deck plugin
-- `theme.lua` - Shared theme palette used by WezTerm modules
-- `fonts.lua` - Font stack with fallbacks (Zenbones Brainy, JetBrains Mono, Nerd Fonts)
-- `keys.lua` - Keyboard keybindings (raw key codes for layout independence)
-- `layout.lua` - Window decorations, padding, and startup behavior
-- `mux.lua` - Unix mux domain setup
-- `platform.lua` - Platform-specific settings
-- `status.lua` - Status bar with date/time, week number, and work hours tracking
-- `tabs.lua` - Tab bar configuration (bottom position, custom formatting)
+- `wezterm.lua` builds and returns the final WezTerm config.
+- `base.lua`, `platform.lua`, `layout.lua`, `fonts.lua`, `colors.lua`, `theme.lua`, `tabs.lua`, `status.lua`, `keys.lua`, and `mux.lua` hold the main config groups.
+- `agent/` detects AI-agent activity and decorates tabs with state icons.
+- `utils/` contains small text, time, performance, and benchmark helpers.
+- `tests/` contains Lua specs for work-hour status and agent-deck detection.
 
-**Utilities:**
-- `utils/text.lua` - Text manipulation helpers
-- `utils/time.lua` - Time calculation for tracking work hours
+## Behavior
 
-**Assets:**
-- `scanlines.png` - Visual effect asset
+- Status text includes date, week number, and work-hour state from the `first_login` user variable.
+- Agent tab state can come from the WezTerm agent deck plugin or pane-text fallback detection.
+- Keybinds use raw key codes where layout independence matters.
+- The tab bar is bottom-aligned and styled from the shared theme palette.
 
-**Notes:**
-- Modular architecture: each concern is isolated in its own file
-- Status bar includes work hours calculation based on `first_login` user variable
-- Tab titles show wezterm-agent-deck activity icons for detected agent panes
-- Includes fallback detection from pane text so OpenCode in Neovim terminal panes still shows state
-- Agent deck icons use Nerd Font glyphs (with Unicode fallback)
-- Tab icons are colorized by agent state (working/waiting/idle/inactive)
-- Tab bar positioned at bottom with custom formatting
-- Uses raw key codes for keybinds (keyboard layout independent)
-- OpenGL frontend with 120fps max, Wayland enabled on Linux
-- Managed via GNU Stow as part of dotfiles
+## Validation
+
+Run the focused specs after changing related logic:
+
+```bash
+lua .config/wezterm/tests/status_workhours_spec.lua
+lua .config/wezterm/tests/agent_deck_detection_spec.lua
+```

@@ -1,82 +1,32 @@
 # Fish Configuration
 
-Fish shell configuration with extensive functions, aliases, and environment setup.
+Fish shell configuration for interactive work, dotfiles maintenance, and local workflow commands.
 
-**Project:** [Fish Shell](https://fishshell.com/)
+## Layout
 
-**Root configuration files (sourced by config.fish):**
+- `config.fish` is the entrypoint.
+- `aliases.fish`, `profile.fish`, `scripts.fish`, `coreutils.fish`, `gum.fish`, and `colors.fish` are sourced from the entrypoint.
+- `private.fish` is local-only and not committed.
+- `functions/` contains autoloaded Fish functions.
+- `libexec/` contains TypeScript/Bun helpers used by wrapper functions.
 
-- `config.fish` - Main entry point (OS detection, Hyprland launcher, function autoloading)
-- `aliases.fish` - Abbreviations and command aliases (neovim, pnpm, brew, directory shortcuts)
-- `profile.fish` - Environment variables (TERM, EDITOR, PATH, FZF options, XDG paths)
-- `scripts.fish` - Miscellaneous utilities (copy_output, etc.)
-- `coreutils.fish` - uutils-coreutils replacements
-- `gum.fish` - Gum CLI wrapper functions
-- `colors.fish` - Color theme and utilities
-- `private.fish` - Local/private settings (not in repo)
+## Function Groups
 
-**Functions (autoloaded):
+- OpenCode and agent workflow: `opencode.fish`, `ai_commit.fish`, `ai_pr.fish`, `linear_issue_workflow.fish`, profile/auth switching helpers.
+- Worktree and branch helpers: `wt.fish`, `worktree_add.fish`, `worktree_clone.fish`, `latest_worktree.fish`, `wtfzf.fish`.
+- Azure DevOps helpers: `ado_test_case.fish`, `ado_refinement_candidates.fish`, `workitems_on_date.fish`, `workitems_week.fish`, `workitems_cache_clear.fish`.
+- Nix helpers: `flake_check_updates.fish`, `flake_update_interactive.fish`, `flake_updates_daemon.fish`, `flake_restore.fish`, `nxrb.fish`.
+- Navigation and utilities: `cdlc.fish`, `cdlm.fish`, `fzfcd.fish`, `mntnas.fish`, `open.fish`, `killport.fish`, `disk_space.fish`.
+- Time and workday helpers: `first_login_of_the_day.fish`, `set_workday_start.fish`, `remaining_work_hours.fish`, `workday_end.fish`, date parsing helpers.
 
-_AI/OpenCode integration:_
+## Helper Scripts
 
-- `ai_commit.fish` - OpenCode AI commit message generation
-- `ai_pr.fish` - OpenCode AI PR description generation
+Fish wrappers call Bun helpers from `libexec/` with `bun --cwd ...`. Keep helper dependencies in `libexec/package.json` and `libexec/bun.lock`.
 
-_Git worktree management:_
+Biome config for helper scripts lives at `libexec/biome.json`.
 
-- `worktree_add.fish`, `worktrees_clean.fish`, `latest_worktree.fish`
-- `git_add_gum.fish` - Interactive git add with gum
+## Notes
 
-_Directory navigation:_
-
-- `cdlc.fish`, `cdlm.fish`, `fzfcd.fish` - Custom cd variants
-- `mntnas.fish` - Mount NAS
-
-_Work/time tracking:_
-
-- `first_login_of_the_day.fish`, `set_workday_start.fish`, `remaining_work_hours.fish`, `workday_end.fish`
-- `get_week_dates.fish`, `parse_flexible_date.fish`, `format_date_display.fish`
-- `__time_ago_from_timestamp.fish` - Time calculation helper
-
-_Azure DevOps integration:_
-
-- `workitems_on_date.fish`, `workitems_week.fish`, `workitems_cache_clear.fish`
-- `__workitems_extract.fish` - Helper for parsing work items
-- `ado_test_case.fish` - Azure DevOps test case helpers
-
-_Nix/flake management:_
-
-- `flake_check_updates.fish`, `flake_update_interactive.fish`, `flake_updates_daemon.fish`
-- `flake_update_cache_metadata.fish` - Cache metadata updates
-- `nxrb.fish` - Nix rebuild shortcut
-
-_System utilities:_
-
-- `proxy_status.fish`, `toggle_proxy.fish`, `mullvad_random_socks5.fish` - Network/VPN
-- `disk_space.fish`, `killport.fish`, `hyprprop_kill.fish` - System utilities
-- `progress_bar.fish` - Progress bar utilities
-
-_Package management:_
-
-- `export_npm_globals.fish`, `install_npm_globals.fish` - NPM global management
-- `pnpx.fish` - pnpm exec wrapper
-
-_General utilities:_
-
-- `colors.fish` - Color helpers
-- `open.fish` - Open command wrapper
-- `copykey.fish` - Copy SSH key to clipboard
-- `wezterm_set_user_var.fish` - Wezterm integration
-- `gum.fish` - Gum CLI wrappers
-- `src.fish` - Source config reload
-
-**Notes:**
-
-- Functions are autoloaded from `functions/` directory
-- Internal helper scripts live in `libexec/` and are invoked by Fish wrappers
-- Fish wrappers invoke Bun helpers with `bun --cwd ...`; Bun defaults are pinned in `libexec/bunfig.toml`, and dependencies are pinned in `libexec/package.json` + `libexec/bun.lock`
-- Biome config for helper scripts: `libexec/biome.json` (`biome check .config/fish/libexec`)
-- Managed via Nix/Home Manager as part of dotfiles
-- Uses gum for interactive prompts and colored output
-- FZF configured for fd-based file finding with threading
-- Environment variables cached to avoid repeated external commands on startup
+- Functions are autoloaded by Fish; avoid sourcing function files manually from `config.fish` unless startup order requires it.
+- Some commands assume local tools such as `gum`, `fzf`, `fd`, `bun`, `opencode`, and `wt` are available from the system environment.
+- Package installation belongs in the Nix system repo, not this dotfiles repo.

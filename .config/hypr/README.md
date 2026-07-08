@@ -1,36 +1,40 @@
 # Hyprland Config
 
-Hyprland window manager Lua configuration with custom keybinds, rules, and runtime helpers.
+Lua-first Hyprland configuration with runtime helpers for window rules, session actions, profiles, capture, startup, and desktop state.
 
-**Project:** [Hyprland](https://github.com/hyprwm/Hyprland)
+## Layout
 
-**Configuration files:**
-- `hyprland.lua` - Main Lua config entrypoint
-- `keybinds.lua`, `autostart.lua`, `animations.lua`, `appearance.lua`, `input.lua`, `monitors.lua` - Core config modules
-- `rules/` - Static and generated Lua window/workspace/layer rules
-- `rules/window-state-selectors.lua` - Window state persistence selectors
-- `hyprlock.conf` - Screen lock
-- `hypridle.conf` - Idle behavior
-- `legacy/hyprland-conf/` - Previous hyprlang setup retained for reference
+- `hyprland.lua` is the compositor entrypoint.
+- `base.lua`, `programs.lua`, `monitors.lua`, `keybinds.lua`, `animations.lua`, `environment.lua`, `appearance.lua`, `input.lua`, and `autostart.lua` hold the main config groups.
+- `layouts/` contains custom layout modules.
+- `rules/` contains static layer, workspace, window, generated, and window-state rule data.
+- `rule-loader.lua` applies generated and window-state rule phases in the required order.
+- `runtime/` contains shell and Lua helpers invoked by binds, daemons, and startup scripts.
+- `lib/` contains shared Lua helpers used by runtime scripts.
+- `legacy/hyprland-conf/` is rollback/reference material for the old hyprlang setup.
 
-**Runtime helpers:**
-- `runtime/windows/` - Window state, minimize/restore, capture daemon, force-kill helpers
-- `runtime/session/` - Session confirmation and exit helpers
-- `runtime/profiles/` - Performance and gaming profile controls
-- `runtime/gamescope/` - Gamescope profile and clipboard helpers
-- `runtime/desktop/` - Desktop reset, Waybar, browser, layout, Hypridle, and icon helpers
-- `runtime/capture/` - Screenshot and OCR helpers
-- `runtime/startup/` - Startup workspace routing and UI launch helper
+## Rule Flow
 
-**Docs:**
-- Agent guides: `structure.md`, `debugging.md`, `layer-rules.md`, `pitfalls.md`, `version.md`
+Window rules are applied in this order:
 
-**Assets:**
-- Audio feedback: `bootup.ogg`, `warn.mp3`, `warn.ogg`
+1. Generated rules from `rules/generated.lua`.
+2. Static rules from `rules/`.
+3. Window-state rules from `rules/window-state.lua`.
 
-**Setup notes:**
-- Create `hyprpaper.conf` from `hyprpaper.conf.example` for wallpaper config
-- `rules/generated.lua` and `rules/window-state.lua` are auto-generated; don't edit directly
-- `legacy/hyprland-conf/window-state.conf` is retained only for legacy rollback reference
-- Validate changes: `hyprctl reload` and `hyprctl configerrors`
-- Managed via Nix/Home Manager as part of dotfiles
+Edit `rules/window-state-selectors.lua` when changing which windows should persist size and position. Do not edit generated rule outputs directly.
+
+## Local Setup
+
+Create `hyprpaper.conf` from `hyprpaper.conf.example` when wallpaper config is needed locally.
+
+Audio feedback files live next to the config: `bootup.ogg`, `warn.mp3`, and `warn.ogg`.
+
+## Validation
+
+After `.conf` changes, run:
+
+```bash
+hyprctl configerrors
+```
+
+Use `hyprctl reload` when you need to apply and observe the change in the current session.
