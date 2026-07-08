@@ -1,131 +1,49 @@
-# Wallhaven Search Extension
+# Wallhaven
 
-Search and browse wallpapers from [Wallhaven.cc](https://wallhaven.cc) directly in Vicinae.
+Vicinae extension for searching [Wallhaven](https://wallhaven.cc), previewing results, downloading wallpapers, and applying them through `hyprpaper`.
 
-## Features
+## Command
 
-- ?? Search wallpapers by keyword
-- ??? Grid view with thumbnail previews (edge-to-edge display)
-- ?? Filter by category (General, Anime, People)
-- ?? Configurable preferences (content purity, sorting, time range)
-- ?? Optional API key support with user settings sync
-- ?? Local storage caching (12 hours) - instant results for recent searches
-- ?? Infinite loading - click "Load More" to append more wallpapers
-- ??? Full-size preview when selecting wallpapers
-- ?? View favorites and view counts
-- ?? Copy wallpaper URLs
-- ?? Open in browser
-- ??? **Direct wallpaper downloads** - Save wallpapers directly to your filesystem with custom directory
+`Search for Wallpapers` searches Wallhaven, shows paginated grid results, and appends more results through the `Load More` item.
 
 ## Preferences
 
-Configure default search settings in the extension preferences:
-
-- **API Key**: Optional Wallhaven API key for accessing additional features (get yours at https://wallhaven.cc/settings/account)
-- **Use User Settings**: When enabled with an API key, automatically uses your Wallhaven account settings (purity, top range) instead of extension settings
-- **Content Purity**: SFW Only, SFW + Sketchy, SFW + NSFW, or SFW + Sketchy + NSFW (overridden when "Use User Settings" is enabled)
-- **NSFW note**: NSFW results require a valid Wallhaven API key
-- **Default Sorting**: Top List, Most Recent, Most Views, Most Favorites, Relevance, or Random
-- **Top Range**: Time range for top list sorting (Last Day to Last Year) (overridden when "Use User Settings" is enabled)
-- **Download Directory**: Directory where wallpapers will be saved (default: `~/Pictures/Wallpapers`, supports `~` for home directory)
-- **Hyprpaper Config Path**: Path to your hyprpaper.conf file for the "Download and Apply" action (default: `~/.config/hypr/hyprpaper.conf`)
-
-### Using Your Wallhaven Account Settings
-
-1. Get your API key from https://wallhaven.cc/settings/account
-2. Enter it in the extension preferences
-3. Enable "Use User Settings" checkbox
-4. The extension will now use your Wallhaven account preferences for:
-   - **Purity settings** (SFW/Sketchy/NSFW filters)
-   - **Categories** (General/Anime/People) - the category dropdown will be disabled and show your account's default categories
-   - **Top range** (time range for top list sorting)
-   - **Resolutions** (filter by preferred resolutions)
-   - **Aspect ratios** (filter by preferred aspect ratios)
-   - **AI art filter** (exclude AI-generated art if configured)
-
-When "Use User Settings" is enabled, your Wallhaven account settings override the extension preferences for these values. The category dropdown in the UI will be disabled and display your account's configured categories.
-
-## Usage
-
-1. Install dependencies: `pnpm install`
-2. Run in dev mode: `pnpm run dev`
-3. Search for wallpapers using the search bar
-4. Use the category dropdown to filter by General, Anime, or People
-5. Browse results in a 3-column grid (24 wallpapers per page)
-6. Scroll to the bottom and press **Enter** on "Load More" to append the next page
-7. All loaded wallpapers stay visible - keep loading more to see additional results
-8. Press **Enter** on any wallpaper to see full-size preview
+- Optional API key from <https://wallhaven.cc/settings/account>.
+- Use Wallhaven account settings when an API key is configured.
+- Content purity filter. NSFW results require a valid API key.
+- Default sorting and top-list range.
+- Download directory, default `~/Pictures/Wallpapers`.
+- Hyprpaper config path for download-and-apply, default `~/.config/hypr/hyprpaper.conf`.
 
 ## Actions
 
-### On Wallpapers
-- **Enter**: Show full-size preview
-- **Save**: Download wallpaper directly to your configured download directory
-- **Cmd+S**: Download and apply wallpaper (downloads to directory and sets as desktop background via hyprpaper)
-- **Open**: Open wallpaper page in browser
-- **Copy**: Copy image URL
-- **Copy Deeplink**: Copy page URL
-- **Cmd+Shift+S**: Open Wallhaven settings page
+- `Enter` opens the full preview.
+- Save/download writes the image to the configured directory.
+- `Cmd+S` downloads and applies the wallpaper through hyprpaper.
+- Open opens the Wallhaven page in the browser.
+- Copy actions copy image and page URLs.
+- `Cmd+Shift+S` opens Wallhaven settings.
+- `Enter` on `Load More` appends the next page.
 
-### On "Load More" Item
-- **Enter**: Load and append next page of wallpapers
+## API Notes
 
-## How It Works
+- The extension uses `https://wallhaven.cc/api/v1`.
+- Wallhaven rate limit is 45 requests per minute.
+- Search input is debounced and results are cached in Vicinae cache storage.
+- API keys must not be logged, shown in errors, or committed.
 
-The extension uses react-query's `useInfiniteQuery` to efficiently manage wallpaper loading. When you click "Load More", the next page is fetched and appended to your current view. All previously loaded pages remain visible, allowing you to browse through hundreds of wallpapers seamlessly. The section subtitle shows how many wallpapers you've loaded versus the total available.
+## Troubleshooting
 
-### Caching & Rate Limiting
+- `401`: check the API key, especially for NSFW searches.
+- `429`: slow down requests or wait for the Wallhaven rate-limit window to reset.
+- Downloads fail: check filesystem permissions and the configured download directory.
+- Download-and-apply fails: check `hyprpaper` and the configured `hyprpaper.conf` path.
 
-The extension implements smart caching and debouncing to respect Wallhaven's 45 requests/minute rate limit:
-
-**Debouncing:**
-- Search input is debounced by 800ms
-- Prevents rapid-fire API requests while typing
-- Only searches after you stop typing for 800ms
-
-**Caching:**
-- All queries are cached in Vicinae cache storage for 12 hours
-- Identical searches return instant results (no API call)
-- Cache persists across extension restarts
-- Cached data automatically expires after 12 hours
-
-**Benefits:**
-- Respects Wallhaven API rate limits
-- Fast, responsive search experience
-- Reduces unnecessary API load
-- Works offline for cached searches
-
-## API Options
-
-The extension uses the Wallhaven API with support for:
-
-- **Categories**: Filter between General (100), Anime (010), People (001), or combinations
-- **Purity**: SFW content filtering (configurable in preferences)
-- **Sorting**: Multiple sorting options including toplist, recent, views, favorites, relevance, and random
-- **Top Range**: Time-based filtering for toplist results
-- **Infinite Loading**: Seamlessly append pages to browse through thousands of results
-
-## Direct Download Feature
-
-The extension now supports direct wallpaper downloads to your local filesystem:
-
-1. **Configure download directory** in extension preferences (default: `~/Pictures/Wallpapers`)
-2. Press **Cmd+D** on any wallpaper to download it directly
-3. Files are saved with descriptive names: `wallhaven-{id}-{resolution}.{ext}`
-4. Download progress is shown with toast notifications
-5. Downloads require filesystem write access to the configured directory
-
-### Download Behavior
-
-- **Success**: Toast shows "Wallpaper downloaded!" with the file path
-- **Failure**: Toast shows error message with details
-- **Filesystem errors**: If filesystem access fails, the extension returns a clear disk/permission error
-- **Directory creation**: The download directory is created automatically if it doesn't exist
-
-## Build
-
-To build for production:
+## Development
 
 ```bash
+pnpm install
+pnpm run dev
+pnpm run lint
 pnpm run build
 ```

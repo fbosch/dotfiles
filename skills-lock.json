@@ -62,7 +62,7 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/to-issues/SKILL.md",
-      "computedHash": "4e2a11d35f018490d42a79234432f779d7131b9920373ef24cfbc68229bfef6c"
+      "computedHash": "367cba4fc169e4c9246504907ed98578ea578228dfb05b9294ff401b9a0088a5"
     },
     "to-prd": {
       "source": "mattpocock/skills",
@@ -80,7 +80,7 @@
       "source": "max-sixty/worktrunk",
       "sourceType": "github",
       "skillPath": "skills/worktrunk/SKILL.md",
-      "computedHash": "3badf5a2e64a1cd31379de1fadfd0c16e97de8fee8005092591858d8181fa68a"
+      "computedHash": "d1a913184e9cf16930f1049f238e0b41b4b3c93e2935146bdef9d6072e739f7c"
     },
     "wt-switch-create": {
       "source": "max-sixty/worktrunk",

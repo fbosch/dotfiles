@@ -251,7 +251,7 @@ Keep the daemon architecture unchanged initially:
 - debounced writes
 - immediate save on close
 
-Keep `rules/window-state-selectors.lua` as the writable selector source. Keep `window-state.conf` under `legacy/hyprland-conf/` until HyprLua is the default and only config language.
+Keep `rules/window-state-selectors.lua` as the writable selector source.
 
 Dual-write generated rule outputs:
 
@@ -272,7 +272,7 @@ Current Lua runtime helper areas:
 - `lua/runtime/session/` for session exit helpers used by Lua actions.
 - `lua/runtime/startup/` for startup-only workspace routing that needs Lua-compatible dispatcher syntax.
 
-Runtime helpers are categorized by behavior area under `runtime/`. Old hyprlang configs and migration helpers live under `legacy/` for reference while Lua remains primary.
+Runtime helpers are categorized by behavior area under `runtime/`.
 
 ### 6. Validate Reload Behavior
 

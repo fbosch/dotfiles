@@ -1,164 +1,52 @@
 # AGS Configuration
 
-Custom AGS (Aylur's GTK Shell) configuration for Hyprland desktop environment using **bundled mode architecture**.
+Bundled AGS configuration for Hyprland desktop UI. One `ags-bundled` process owns the shell surfaces and routes requests to component handlers.
 
 ## Components
 
-This configuration includes 5 components running in a single bundled process:
+The bundled entrypoint imports these components from `lib/`:
 
-1. **confirm-dialog** - Confirmation dialogs for system actions (shutdown, restart, suspend)
-2. **volume-indicator** - Volume level overlay indicator
-3. **keyboard-switcher** - Keyboard layout switch indicator
-4. **start-menu** - System start menu with update badges (NixOS/Flatpak)
-5. **window-switcher** - Alt+Tab window switcher with live previews
+- `confirm-dialog.tsx` for shutdown, restart, suspend, and exit confirmations.
+- `volume-indicator.tsx` for volume overlays.
+- `keyboard-switcher.tsx` for layout switch feedback.
+- `start-menu.tsx` for the launcher surface.
+- `window-switcher.tsx` for Alt-Tab style window switching.
+- `desktop-clock.tsx` for the desktop clock surface.
+- `calendar-widget.tsx` for the taskbar calendar.
+- `audio-mixer-widget.tsx` for audio controls.
 
-All components are located in the `lib/` directory and bundled via `config-bundled.tsx`.
+## Layout
 
-## Bundled Mode Architecture
+- `config-bundled.tsx` imports every component, registers handlers, and starts AGS with `instanceName: "ags-bundled"`.
+- `config.tsx` is a stub; bundled mode is the supported path.
+- `start-daemons.sh` starts the bundled process during the desktop session.
+- `lib/` is the canonical component source.
+- `docs/agents/` contains deeper implementation notes for agents.
 
-### What is Bundled Mode?
+## Working With It
 
-Instead of running 5 separate GTK processes, bundled mode combines all components into a single process. This provides:
+Start the bundled process manually:
 
-- **Faster startup**: ~50-100ms total vs 500-1000ms for 5 separate processes (5-10x faster)
-- **Lower memory usage**: ~104MB vs ~375MB (72% reduction)
-- **Faster IPC**: <1ms internal calls vs 2-5ms socket communication
-- **Easier deployment**: Single process hosting all components
-
-### Usage
-
-**Start bundled AGS** (automatically runs at boot via `hyprland.conf`):
-```bash
-./start-daemons.sh
-```
-
-**Manual start:**
 ```bash
 ags run ~/.config/ags/config-bundled.tsx
 ```
 
-**Communicate with components** (via bundled process):
-```bash
-# Example IPC format (actual API depends on component implementation)
-ags request -i ags-bundled '{"window":"start-menu","action":"toggle"}'
-ags request -i ags-bundled '{"window":"window-switcher","action":"next"}'
+Regenerate AGS typings after AGS updates:
 
-# See component-specific documentation in AGENTS.md for exact APIs
-```
-
-## Architecture
-
-### Bundled Mode Structure
-
-```
-.config/ags/
-├── lib/                        # Component library (canonical source)
-│   ├── confirm-dialog.tsx
-│   ├── keyboard-switcher.tsx
-│   ├── volume-indicator.tsx
-│   ├── start-menu.tsx
-│   └── window-switcher.tsx
-├── config-bundled.tsx          # Main entry point (imports from lib/)
-├── config.tsx                  # Stub (bundled mode required)
-└── start-daemons.sh            # Boot script (runs config-bundled.tsx)
-```
-
-Each component in `lib/`:
-1. Applies CSS for styling
-2. Creates windows during module import
-3. Exports API to `globalThis` namespace for IPC
-
-When bundled:
-- All components are imported into `config-bundled.tsx`
-- Single GTK process hosts all windows
-- Components communicate via `globalThis` namespace
-- `requestHandler` in main config routes IPC calls to components
-
-### Design System Integration
-
-All components use tokens from `../../design-system/tokens.json` for consistent theming:
-- Colors: Zenwritten Dark palette
-- Typography: Zenbones Brainy + SF Pro Rounded
-- Spacing, borders, shadows, etc.
-
-## Development
-
-### Building
-
-TypeScript compilation happens automatically when using `ags run`.
-
-### Type Definitions
-
-Generate AGS type definitions (after AGS updates):
 ```bash
 ags types
 ```
 
-### Testing Changes
+Use component-specific request formats from the component source or agent docs. The request handler expects a component name followed by that component's payload.
 
-**Test bundled mode:**
+## Validation
+
+For runtime checks, restart the bundled process and confirm Vicinae/Hyprland callers can still reach the affected surface:
+
 ```bash
-# Kill existing process
 pkill -f "ags run.*config-bundled"
-
-# Start bundled version
-./start-daemons.sh
-
-# Check logs
-tail -f /tmp/ags-daemons.log
-
-# Verify bundled process is running
+~/.config/ags/start-daemons.sh
 ags list
 ```
 
-**Test individual component:**
-```bash
-# Run component file directly for development
-ags run ~/.config/ags/lib/window-switcher.tsx
-```
-
-## Performance Notes
-
-### Bundled Mode Measurements
-
-- Startup time: 50-100ms (vs 500-1000ms for 5 separate processes)
-- Memory: ~104MB (vs ~375MB for 5 processes)
-- IPC latency: <1ms (vs 2-5ms for socket communication)
-
-### Optimizations
-
-1. **CSS Application**: Static CSS applied once on module load, dynamic CSS only for state changes
-2. **Window Pre-creation**: Windows created during import for instant display
-3. **Shared Resources**: Single GTK display connection, icon theme, GObject runtime
-4. **Event-Driven**: No polling, all updates driven by IPC requests or GTK events
-
-## Troubleshooting
-
-**Bundled process not starting:**
-```bash
-# Check if AGS is installed
-which ags
-
-# Check logs
-cat /tmp/ags-daemons.log
-
-# Verify bundled process is running
-ags list
-```
-
-**CSS not updating:**
-```bash
-# Restart bundled process
-pkill -f "ags run.*config-bundled"
-./start-daemons.sh
-```
-
-**Type errors:**
-```bash
-# Regenerate type definitions
-ags types
-```
-
-## License
-
-Part of personal dotfiles configuration.
+For benchmark-sensitive changes, use the targeted scripts listed in `AGENTS.md`.
