@@ -115,15 +115,6 @@ export function parseTypoRules(text: string): Map<string, string> {
   return rules
 }
 
-export function typoRuleLengths(rules: ReadonlyMap<string, string>): Set<number> {
-  const lengths = new Set<number>()
-  for (const typo of rules.keys()) {
-    lengths.add(typo.length)
-  }
-
-  return lengths
-}
-
 export function typoRuleEndingChars(rules: ReadonlyMap<string, string>): Map<number, Set<number>> {
   const chars = new Map<number, Set<number>>()
   for (const typo of rules.keys()) {
@@ -143,7 +134,6 @@ export function typoRuleEndingChars(rules: ReadonlyMap<string, string>): Map<num
 export function correctCompletedWord(
   input: string,
   rules: ReadonlyMap<string, string>,
-  ruleLengths?: ReadonlySet<number>,
   endingChars?: TypoRuleEndingChars,
 ): string {
   let wordEnd = input.length
@@ -161,11 +151,8 @@ export function correctCompletedWord(
   }
 
   const wordLength = wordEnd - wordStart
-  if (ruleLengths && ruleLengths.has(wordLength) === false) {
-    return input
-  }
-
-  if (endingChars && endingChars.get(wordLength)?.has(input.charCodeAt(wordEnd - 1)) === false) {
+  const endings = endingChars?.get(wordLength)
+  if (endingChars && (!endings || endings.has(input.charCodeAt(wordEnd - 1)) === false)) {
     return input
   }
 
@@ -182,7 +169,6 @@ export function appendDelimiterAndCorrect(
   input: string,
   delimiter: string,
   rules: ReadonlyMap<string, string>,
-  ruleLengths?: ReadonlySet<number>,
   endingChars?: TypoRuleEndingChars,
 ): string {
   let wordStart = input.length
@@ -195,11 +181,8 @@ export function appendDelimiterAndCorrect(
   }
 
   const wordLength = input.length - wordStart
-  if (ruleLengths && ruleLengths.has(wordLength) === false) {
-    return input + delimiter
-  }
-
-  if (endingChars && endingChars.get(wordLength)?.has(input.charCodeAt(input.length - 1)) === false) {
+  const endings = endingChars?.get(wordLength)
+  if (endingChars && (!endings || endings.has(input.charCodeAt(input.length - 1)) === false)) {
     return input + delimiter
   }
 

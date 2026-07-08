@@ -3,7 +3,7 @@ import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plug
 import { RGBA } from "@opentui/core"
 import type { JSX } from "solid-js"
 import { createMemo, createSignal, onCleanup, Show } from "solid-js"
-import { appendDelimiterAndCorrect, parseTypoRules, typoRuleEndingChars, typoRuleLengths } from "./prompt-enhancements/typo-engine"
+import { appendDelimiterAndCorrect, parseTypoRules, typoRuleEndingChars } from "./prompt-enhancements/typo-engine"
 
 declare const Bun: {
   file(path: string): {
@@ -168,11 +168,10 @@ async function loadTypoRules(): Promise<Map<string, string>> {
 function insertSpaceAndCorrect(
   ref: PromptRef,
   rules: ReadonlyMap<string, string>,
-  ruleLengths: ReadonlySet<number>,
   endingChars: ReturnType<typeof typoRuleEndingChars>,
 ) {
   const current = ref.current
-  ref.set({ ...current, input: appendDelimiterAndCorrect(current.input, " ", rules, ruleLengths, endingChars) })
+  ref.set({ ...current, input: appendDelimiterAndCorrect(current.input, " ", rules, endingChars) })
 }
 
 function PromptWithEnhancements(
@@ -520,7 +519,6 @@ function TokenUsageOverlay(props: { api: TuiPluginApi; sessionID: string; config
 const tui: TuiPlugin = async (api: TuiPluginApi, options: unknown) => {
   const config = parseConfig(options)
   const typoRules = await loadTypoRules()
-  const typoLengths = typoRuleLengths(typoRules)
   const typoEndings = typoRuleEndingChars(typoRules)
   let activePromptRef: PromptRef | undefined
   const ui = api.ui as TuiPluginApi["ui"] & {
@@ -553,7 +551,7 @@ const tui: TuiPlugin = async (api: TuiPluginApi, options: unknown) => {
             return
           }
 
-          insertSpaceAndCorrect(ref, typoRules, typoLengths, typoEndings)
+          insertSpaceAndCorrect(ref, typoRules, typoEndings)
         },
       },
     ],

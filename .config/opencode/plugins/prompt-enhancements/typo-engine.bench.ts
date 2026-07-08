@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { appendDelimiterAndCorrect, correctCompletedWord, parseTypoRules, typoRuleEndingChars, typoRuleLengths } from "./typo-engine"
+import { appendDelimiterAndCorrect, correctCompletedWord, parseTypoRules, typoRuleEndingChars } from "./typo-engine"
 
 type BenchResult = {
   name: string
@@ -13,13 +13,14 @@ type BenchResult = {
 const typoRulesPath = resolve(import.meta.dir, "../../../fbb/data/typos.abolish")
 const typoRulesText = readFileSync(typoRulesPath, "utf8")
 const rules = parseTypoRules(typoRulesText)
-const ruleLengths = typoRuleLengths(rules)
 const endingChars = typoRuleEndingChars(rules)
 
 const cases = {
   shortNoMatch: "please fix this ",
+  shortNoLengthMatch: "please fix ok ",
   shortMatch: "please fix teh ",
   shortNoMatchPendingSpace: "please fix this",
+  shortNoLengthMatchPendingSpace: "please fix ok",
   shortMatchPendingSpace: "please fix teh",
   longNoMatch: `${"review this implementation carefully ".repeat(40)}before sending `,
   longMatch: `${"review this implementation carefully ".repeat(40)}teh `,
@@ -69,28 +70,34 @@ for (const result of [
     parseTypoRules(typoRulesText)
   }),
   bench("correct short no match", 1_000_000, () => {
-    correctCompletedWord(cases.shortNoMatch, rules, ruleLengths, endingChars)
+    correctCompletedWord(cases.shortNoMatch, rules, endingChars)
+  }),
+  bench("correct no length match", 1_000_000, () => {
+    correctCompletedWord(cases.shortNoLengthMatch, rules, endingChars)
   }),
   bench("correct short match", 1_000_000, () => {
-    correctCompletedWord(cases.shortMatch, rules, ruleLengths, endingChars)
+    correctCompletedWord(cases.shortMatch, rules, endingChars)
   }),
   bench("correct long no match", 500_000, () => {
-    correctCompletedWord(cases.longNoMatch, rules, ruleLengths, endingChars)
+    correctCompletedWord(cases.longNoMatch, rules, endingChars)
   }),
   bench("correct long match", 500_000, () => {
-    correctCompletedWord(cases.longMatch, rules, ruleLengths, endingChars)
+    correctCompletedWord(cases.longMatch, rules, endingChars)
   }),
   bench("append short no match", 1_000_000, () => {
-    appendDelimiterAndCorrect(cases.shortNoMatchPendingSpace, " ", rules, ruleLengths, endingChars)
+    appendDelimiterAndCorrect(cases.shortNoMatchPendingSpace, " ", rules, endingChars)
+  }),
+  bench("append no length match", 1_000_000, () => {
+    appendDelimiterAndCorrect(cases.shortNoLengthMatchPendingSpace, " ", rules, endingChars)
   }),
   bench("append short match", 1_000_000, () => {
-    appendDelimiterAndCorrect(cases.shortMatchPendingSpace, " ", rules, ruleLengths, endingChars)
+    appendDelimiterAndCorrect(cases.shortMatchPendingSpace, " ", rules, endingChars)
   }),
   bench("append long no match", 500_000, () => {
-    appendDelimiterAndCorrect(cases.longNoMatchPendingSpace, " ", rules, ruleLengths, endingChars)
+    appendDelimiterAndCorrect(cases.longNoMatchPendingSpace, " ", rules, endingChars)
   }),
   bench("append long match", 500_000, () => {
-    appendDelimiterAndCorrect(cases.longMatchPendingSpace, " ", rules, ruleLengths, endingChars)
+    appendDelimiterAndCorrect(cases.longMatchPendingSpace, " ", rules, endingChars)
   }),
   bench("find ref via set spread", 1_000_000, () => {
     ;[...promptRefs].find((promptRef) => promptRef.focused)

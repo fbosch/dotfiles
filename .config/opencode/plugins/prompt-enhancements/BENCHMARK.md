@@ -91,3 +91,24 @@ Results:
 | Short match | 0.144 us/op | 0.156 us/op | 6,420,204 ops/s | 1,000,000 | 8.3% slower |
 | Long no match | 0.093 us/op | 0.053 us/op | 18,735,798 ops/s | 500,000 | 43.0% faster |
 | Long match | 0.150 us/op | 0.163 us/op | 6,122,255 ops/s | 500,000 | 8.7% slower |
+
+## Single Ending-Map Guard Optimization
+
+Removed the separate typo-length `Set` and made the `(word length -> ending chars)` map the only pre-slice guard. Missing lengths now return before word slicing and map lookup.
+
+Results:
+
+| Case | Mean | Throughput | Iterations |
+| --- | ---: | ---: | ---: |
+| Correct short no match | 0.118 us/op | 8,504,197 ops/s | 1,000,000 |
+| Correct no length match | 0.034 us/op | 29,791,986 ops/s | 1,000,000 |
+| Correct short match | 0.180 us/op | 5,567,298 ops/s | 1,000,000 |
+| Correct long no match | 0.051 us/op | 19,503,878 ops/s | 500,000 |
+| Correct long match | 0.160 us/op | 6,260,487 ops/s | 500,000 |
+| Append short no match | 0.106 us/op | 9,424,569 ops/s | 1,000,000 |
+| Append no length match | 0.042 us/op | 23,840,914 ops/s | 1,000,000 |
+| Append short match | 0.154 us/op | 6,474,000 ops/s | 1,000,000 |
+| Append long no match | 0.054 us/op | 18,632,880 ops/s | 500,000 |
+| Append long match | 0.147 us/op | 6,812,653 ops/s | 500,000 |
+
+This improves words outside the typo length range substantially, but costs a little on short in-range words.
