@@ -3,6 +3,7 @@
     - size: small
       widgets:
         - $include: ../widgets/gluetun-vpn-status.yml
+        - $include: ../widgets/media/lacie-drive.yml
         - $include: ../widgets/media/services-monitor.yml
         - $include: ../widgets/media/prowlarr-indexers.yml
     - size: full

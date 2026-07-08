@@ -1,0 +1,63 @@
+- type: custom-api
+  title: Storage
+  title-url: https://glances-srv.corvus-corax.synology.me/
+  cache: 2m
+  url: https://glances-srv.corvus-corax.synology.me/api/4/fs
+  template: |
+    {{ if eq .Response.StatusCode 200 }}
+      {{ $mount := "/mnt/nas/LaCie" }}
+      {{ $size := 0.0 }}
+      {{ $used := 0.0 }}
+      {{ $free := 0.0 }}
+      {{ $percent := 0.0 }}
+
+      {{ range .JSON.Array "" }}
+        {{ if eq (.String "mnt_point") $mount }}
+          {{ $size = .Float "size" }}
+          {{ $used = .Float "used" }}
+          {{ $free = .Float "free" }}
+          {{ $percent = .Float "percent" }}
+        {{ end }}
+      {{ end }}
+
+      {{ if gt $size 0.0 }}
+        {{ $totalTB := div $size 1099511627776 }}
+        {{ $usedTB := div $used 1099511627776 }}
+        {{ $freeTB := div $free 1099511627776 }}
+        {{ $notice := "" }}
+        {{ if ge $percent 85.0 }}
+          {{ $notice = "notice" }}
+        {{ end }}
+
+        <div class="flex justify-between items-end size-h5">
+          <div>LaCie</div>
+          <div class="color-highlight text-very-compact">{{ $percent | printf "%.0f" }} <span class="color-base">%</span></div>
+        </div>
+        <div class="margin-top-3 color-highlight text-very-compact">
+          {{ $usedTB | printf "%.1f" }} <span class="color-base size-h5">TB</span>
+          <span class="color-base size-h5">/</span>
+          {{ $totalTB | printf "%.1f" }} <span class="color-base size-h5">TB</span>
+        </div>
+        <div data-popover-type="html">
+          <div data-popover-html="">
+            <div class="flex">
+              <div class="size-h5">USED</div>
+              <div class="value-separator"></div>
+              <div class="color-highlight text-very-compact">{{ $usedTB | printf "%.1f" }} <span class="color-base size-h5">TB</span> <span class="color-base size-h5">/</span> {{ $totalTB | printf "%.1f" }} <span class="color-base size-h5">TB</span></div>
+            </div>
+            <div class="flex margin-top-3">
+              <div class="size-h5">FREE</div>
+              <div class="value-separator"></div>
+              <div class="color-highlight text-very-compact">{{ $freeTB | printf "%.1f" }} <span class="color-base size-h5">TB</span></div>
+            </div>
+          </div>
+          <div class="progress-bar {{ $notice }}">
+            <div class="progress-value" style="--percent: {{ $percent | printf "%.0f" }}"></div>
+          </div>
+        </div>
+      {{ else }}
+        <div class="color-negative">LaCie mount not found in Glances filesystem data.</div>
+      {{ end }}
+    {{ else }}
+      <div class="color-negative">Glances error: {{ .Response.StatusCode }}</div>
+    {{ end }}
