@@ -1,3 +1,7 @@
 packages:
   - "plugins"
   - "plugins/*"
+allowBuilds:
+  '@mongodb-js/zstd': true
+  msgpackr-extract: true
+  node-liblzma: true
