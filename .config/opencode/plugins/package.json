@@ -10,6 +10,7 @@
     "fallow": "^3.2.0"
   },
   "scripts": {
+    "bench:typos": "bun run prompt-enhancements/typo-engine.bench.ts",
     "test:typos": "bun test prompt-enhancements/typo-engine.test.ts",
     "quality:fallow": "fallow review",
     "quality:fallow:audit": "fallow audit"
