@@ -3,7 +3,7 @@ import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plug
 import { RGBA } from "@opentui/core"
 import type { JSX } from "solid-js"
 import { createMemo, createSignal, onCleanup, Show } from "solid-js"
-import { correctCompletedWord, parseTypoRules } from "./prompt-enhancements/typo-engine"
+import { appendDelimiterAndCorrect, parseTypoRules, typoRuleLengths } from "./typo-engine"
 
 declare const Bun: {
   file(path: string): {
@@ -129,22 +129,77 @@ function asFiniteNumber(value: unknown): number | undefined {
   return value
 }
 
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined
+}
+
+function asBoolean(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined
+}
+
+function asSubmitHandler(value: unknown): (() => void) | undefined {
+  return typeof value === "function" ? (value as () => void) : undefined
+}
+
+function asPromptRefHandler(value: unknown): ((ref: PromptRef | undefined) => void) | undefined {
+  return typeof value === "function" ? (value as (ref: PromptRef | undefined) => void) : undefined
+}
+
+function breakpointMetric(value: unknown): TokenBreakPoint["metric"] | undefined {
+  if (value === "tokens" || value === "percent") {
+    return value
+  }
+
+  return undefined
+}
+
+function parseBreakpoint(entry: unknown): TokenBreakPoint | undefined {
+  if (isRecord(entry) === false) {
+    return undefined
+  }
+
+  return breakpointFromParts(breakpointMetric(entry.metric), asFiniteNumber(entry.lte), breakpointColor(entry.color))
+}
+
+function breakpointColor(value: unknown): string | undefined {
+  const color = asString(value)?.trim()
+  if (!color) {
+    return undefined
+  }
+
+  return color
+}
+
+function breakpointFromParts(
+  metric: TokenBreakPoint["metric"] | undefined,
+  lte: number | undefined,
+  color: string | undefined,
+): TokenBreakPoint | undefined {
+  if (metric === undefined) {
+    return undefined
+  }
+
+  if (lte === undefined) {
+    return undefined
+  }
+
+  if (color === undefined) {
+    return undefined
+  }
+
+  return { metric, lte, color }
+}
+
+function defined<T>(value: T | undefined): value is T {
+  return value !== undefined
+}
+
 function parseConfig(options: unknown): PluginConfig {
   if (isRecord(options) === false || Array.isArray(options.breakpoints) === false) {
     return defaultConfig
   }
 
-  const breakpoints = options.breakpoints
-    .flatMap((entry) => {
-      if (isRecord(entry) === false) return []
-
-      const metric = entry.metric === "tokens" ? "tokens" : entry.metric === "percent" ? "percent" : undefined
-      const lte = asFiniteNumber(entry.lte)
-      const color = typeof entry.color === "string" ? entry.color.trim() : ""
-      if (metric === undefined || lte === undefined || color.length === 0) return []
-      const breakpoint: TokenBreakPoint = { metric, lte, color }
-      return [breakpoint]
-    })
+  const breakpoints = options.breakpoints.map(parseBreakpoint).filter(defined)
 
   if (breakpoints.length === 0) {
     return defaultConfig
@@ -165,9 +220,13 @@ async function loadTypoRules(): Promise<Map<string, string>> {
   }
 }
 
-function insertSpaceAndCorrect(ref: PromptRef, rules: ReadonlyMap<string, string>) {
+function insertSpaceAndCorrect(
+  ref: PromptRef,
+  rules: ReadonlyMap<string, string>,
+  ruleLengths: ReadonlySet<number>,
+) {
   const current = ref.current
-  ref.set({ ...current, input: correctCompletedWord(`${current.input} `, rules) })
+  ref.set({ ...current, input: appendDelimiterAndCorrect(current.input, " ", rules, ruleLengths) })
 }
 
 function PromptWithEnhancements(
@@ -240,6 +299,18 @@ function colorKey(color: ThemeColor): string {
   return `${color.r}:${color.g}:${color.b}:${color.a}`
 }
 
+function breakpointMatches(entry: TokenBreakPoint, usage: { used: number; percent?: number }): boolean {
+  if (entry.metric === "tokens") {
+    return usage.used <= entry.lte
+  }
+
+  return usage.percent !== undefined && usage.percent <= entry.lte
+}
+
+function fallbackUsageColor(config: PluginConfig): string {
+  return config.breakpoints[config.breakpoints.length - 1]?.color ?? "textMuted"
+}
+
 function usageColor(
   theme: ThemeMap,
   config: PluginConfig,
@@ -249,30 +320,16 @@ function usageColor(
     return textMuted(theme)
   }
 
-  const match = config.breakpoints.find((entry) => {
-    if (entry.metric === "tokens") {
-      return usage.used <= entry.lte
-    }
-
-    if (usage.percent === undefined) {
-      return false
-    }
-
-    return usage.percent <= entry.lte
-  })
+  const match = config.breakpoints.find((entry) => breakpointMatches(entry, usage))
 
   if (match) {
     return resolveColor(theme, match.color, textMuted(theme))
   }
 
-  return resolveColor(theme, config.breakpoints[config.breakpoints.length - 1]?.color ?? "textMuted", textMuted(theme))
+  return resolveColor(theme, fallbackUsageColor(config), textMuted(theme))
 }
 
-function toAssistantMessage(row: unknown): AssistantMessage | undefined {
-  if (isRecord(row) === false) {
-    return undefined
-  }
-
+function assistantFromRecord(row: Record<string, unknown>): AssistantMessage | undefined {
   if (row.role === "assistant") {
     return row as AssistantMessage
   }
@@ -282,6 +339,14 @@ function toAssistantMessage(row: unknown): AssistantMessage | undefined {
   }
 
   return undefined
+}
+
+function toAssistantMessage(row: unknown): AssistantMessage | undefined {
+  if (isRecord(row) === false) {
+    return undefined
+  }
+
+  return assistantFromRecord(row)
 }
 
 function assistantMessagesFromRows(rows: ReadonlyArray<unknown> | undefined): AssistantMessage[] {
@@ -295,62 +360,83 @@ function assistantMessagesFromRows(rows: ReadonlyArray<unknown> | undefined): As
   })
 }
 
+function messageModelRef(message: AssistantMessage): { providerID: string; modelID: string } | undefined {
+  const providerID = asString(message.providerID)
+  const modelID = asString(message.modelID)
+  if (!providerID) {
+    return undefined
+  }
+
+  if (!modelID) {
+    return undefined
+  }
+
+  return { providerID, modelID }
+}
+
 function contextLimit(api: TuiPluginApi, message: AssistantMessage): number | undefined {
-  const providerID = typeof message.providerID === "string" ? message.providerID : undefined
-  const modelID = typeof message.modelID === "string" ? message.modelID : undefined
-  if (!providerID || !modelID) {
+  const modelRef = messageModelRef(message)
+  if (modelRef === undefined) {
     return undefined
   }
 
   const providers = Array.isArray(api.state.provider) ? api.state.provider : []
-  const provider = providers.find((entry): entry is ProviderInfo => isRecord(entry) && entry.id === providerID)
-  return asFiniteNumber(provider?.models?.[modelID]?.limit?.context)
+  const provider = providers.find((entry): entry is ProviderInfo => providerHasID(entry, modelRef.providerID))
+  return asFiniteNumber(provider?.models?.[modelRef.modelID]?.limit?.context)
+}
+
+function providerHasID(entry: unknown, providerID: string): entry is ProviderInfo {
+  if (isRecord(entry) === false) {
+    return false
+  }
+
+  return entry.id === providerID
 }
 
 function totalTokens(tokens: AssistantTokens): number {
-  return (
-    (tokens.input ?? 0) +
-    (tokens.output ?? 0) +
-    (tokens.reasoning ?? 0) +
-    (tokens.cache?.read ?? 0) +
-    (tokens.cache?.write ?? 0)
-  )
+  return [tokens.input, tokens.output, tokens.reasoning, tokens.cache?.read, tokens.cache?.write]
+    .reduce((total, value) => total + (value ?? 0), 0)
+}
+
+function hasTokenUsage(message: AssistantMessage | undefined): message is AssistantMessage & { tokens: AssistantTokens } {
+  return message?.tokens !== undefined && totalTokens(message.tokens) > 0
 }
 
 function lastAssistantWithUsage(messages: AssistantMessage[]): AssistantMessage | undefined {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index]
-    if (!message?.tokens) {
-      continue
-    }
+  return messages.findLast(hasTokenUsage)
+}
 
-    if (totalTokens(message.tokens) > 0) {
-      return message
-    }
+function contextCompact(used: number, percent: number | undefined): string {
+  if (percent === undefined) {
+    return compactNumber.format(used)
   }
 
-  return undefined
+  return `${compactNumber.format(used)} (${percent}%)`
+}
+
+function usageFull(percent: number | undefined): string | undefined {
+  if (percent === undefined) {
+    return undefined
+  }
+
+  return `${percent}% used`
 }
 
 function usageTextFromAssistants(api: TuiPluginApi, assistants: AssistantMessage[]) {
   const last = lastAssistantWithUsage(assistants)
 
-  if (!last?.tokens) {
+  if (last === undefined) {
     return undefined
   }
 
   const used = totalTokens(last.tokens)
-  if (used <= 0) {
-    return undefined
-  }
-
   const limit = contextLimit(api, last)
   const percent = limit && limit > 0 ? Math.round((used / limit) * 100) : undefined
   return {
     used,
-    contextCompact: percent !== undefined ? `${compactNumber.format(used)} (${percent}%)` : compactNumber.format(used),
+    contextCompact: contextCompact(used, percent),
     tokensFull: `${fullNumber.format(used)} tokens`,
-    usageFull: percent !== undefined ? `${percent}% used` : undefined,
+    usageFull: usageFull(percent),
     percent,
   }
 }
@@ -359,24 +445,31 @@ function eventProperties(event: { properties?: unknown }): Record<string, unknow
   return isRecord(event.properties) ? event.properties : {}
 }
 
-function eventSessionID(properties: Record<string, unknown>): string | undefined {
-  if (typeof properties.sessionID === "string") {
-    return properties.sessionID
-  }
-
-  if (isRecord(properties.info) && typeof properties.info.sessionID === "string") {
-    return properties.info.sessionID
-  }
-
-  if (isRecord(properties.part) && typeof properties.part.sessionID === "string") {
-    return properties.part.sessionID
-  }
-
-  if (isRecord(properties.message) && typeof properties.message.sessionID === "string") {
-    return properties.message.sessionID
+function sessionIDFromRecord(value: unknown): string | undefined {
+  if (isRecord(value) && typeof value.sessionID === "string") {
+    return value.sessionID
   }
 
   return undefined
+}
+
+function eventSessionID(properties: Record<string, unknown>): string | undefined {
+  return sessionIDFromRecord(properties)
+    ?? sessionIDFromRecord(properties.info)
+    ?? sessionIDFromRecord(properties.part)
+    ?? sessionIDFromRecord(properties.message)
+}
+
+function responseRows(response: unknown): ReadonlyArray<unknown> {
+  if (Array.isArray(response)) {
+    return response
+  }
+
+  if (isRecord(response) && Array.isArray(response.data)) {
+    return response.data
+  }
+
+  return []
 }
 
 function useUsage(props: { api: TuiPluginApi; sessionID: string }) {
@@ -395,8 +488,7 @@ function useUsage(props: { api: TuiPluginApi; sessionID: string }) {
         sessionID: props.sessionID,
         limit: 100,
       })
-      const rows = Array.isArray(response) ? response : Array.isArray(response.data) ? response.data : []
-      setFetchedAssistants(assistantMessagesFromRows(rows))
+      setFetchedAssistants(assistantMessagesFromRows(responseRows(response)))
       setRefresh((value) => value + 1)
     } catch {
       // Ignore initial fetch failures and fall back to synced state updates.
@@ -432,16 +524,35 @@ function useUsage(props: { api: TuiPluginApi; sessionID: string }) {
 
   let bootstrapAttempts = 0
   const maxBootstrapAttempts = 12
+  const hasUsage = (assistants: AssistantMessage[]) => usageTextFromAssistants(props.api, assistants) !== undefined
+  const needsInitialFetch = (syncedAssistants: AssistantMessage[]) => {
+    if (syncedAssistants.length > 0) {
+      return false
+    }
+
+    return fetchedAssistants().length === 0
+  }
+  const shouldStopBootstrap = (syncedAssistants: AssistantMessage[]) => {
+    if (hasUsage(syncedAssistants)) {
+      return true
+    }
+
+    if (hasUsage(fetchedAssistants())) {
+      return true
+    }
+
+    return bootstrapAttempts >= maxBootstrapAttempts
+  }
   const runBootstrapRefresh = () => {
     bootstrapAttempts += 1
     setRefresh((value) => value + 1)
 
     const syncedAssistants = assistantMessagesFromRows(props.api.state.session.messages(props.sessionID))
-    if (syncedAssistants.length === 0 && fetchedAssistants().length === 0) {
+    if (needsInitialFetch(syncedAssistants)) {
       void fetchAssistants()
     }
 
-    if (usageTextFromAssistants(props.api, syncedAssistants) || usageTextFromAssistants(props.api, fetchedAssistants()) || bootstrapAttempts >= maxBootstrapAttempts) {
+    if (shouldStopBootstrap(syncedAssistants)) {
       return
     }
 
@@ -474,6 +585,20 @@ function useUsage(props: { api: TuiPluginApi; sessionID: string }) {
 
     return usageTextFromAssistants(props.api, fetchedAssistants())
   })
+}
+
+function sessionPromptProps(props: Record<string, unknown>) {
+  return {
+    sessionID: asString(props.session_id) ?? "",
+    visible: asBoolean(props.visible),
+    disabled: asBoolean(props.disabled),
+    onSubmit: asSubmitHandler(props.on_submit),
+    ref: asPromptRefHandler(props.ref),
+  }
+}
+
+function promptRefProp(props: Record<string, unknown>): ((ref: PromptRef | undefined) => void) | undefined {
+  return asPromptRefHandler(props.ref)
 }
 
 function TokenUsageOverlay(props: { api: TuiPluginApi; sessionID: string; config: PluginConfig }): JSX.Element {
@@ -515,6 +640,7 @@ function TokenUsageOverlay(props: { api: TuiPluginApi; sessionID: string; config
 const tui: TuiPlugin = async (api: TuiPluginApi, options: unknown) => {
   const config = parseConfig(options)
   const typoRules = await loadTypoRules()
+  const typoLengths = typoRuleLengths(typoRules)
   let activePromptRef: PromptRef | undefined
   const ui = api.ui as TuiPluginApi["ui"] & {
     Prompt: PromptComponent
@@ -546,7 +672,7 @@ const tui: TuiPlugin = async (api: TuiPluginApi, options: unknown) => {
             return
           }
 
-          insertSpaceAndCorrect(ref, typoRules)
+          insertSpaceAndCorrect(ref, typoRules, typoLengths)
         },
       },
     ],
@@ -559,27 +685,27 @@ const tui: TuiPlugin = async (api: TuiPluginApi, options: unknown) => {
         return (
           <PromptWithEnhancements
             Prompt={ui.Prompt}
-            ref={typeof props.ref === "function" ? (props.ref as (ref: PromptRef | undefined) => void) : undefined}
+            ref={promptRefProp(props)}
             onPromptRef={trackPromptRef}
             right={<ui.Slot name="home_prompt_right" />}
           />
         )
       },
       session_prompt(_ctx: unknown, props: Record<string, unknown>) {
-        const sessionID = typeof props.session_id === "string" ? props.session_id : ""
+        const promptProps = sessionPromptProps(props)
         return (
           <box position="relative">
             <PromptWithEnhancements
               Prompt={ui.Prompt}
-              sessionID={sessionID}
-              visible={typeof props.visible === "boolean" ? props.visible : undefined}
-              disabled={typeof props.disabled === "boolean" ? props.disabled : undefined}
-              onSubmit={typeof props.on_submit === "function" ? (props.on_submit as () => void) : undefined}
-              ref={typeof props.ref === "function" ? (props.ref as (ref: PromptRef | undefined) => void) : undefined}
+              sessionID={promptProps.sessionID}
+              visible={promptProps.visible}
+              disabled={promptProps.disabled}
+              onSubmit={promptProps.onSubmit}
+              ref={promptProps.ref}
               onPromptRef={trackPromptRef}
-              right={<ui.Slot name="session_prompt_right" session_id={sessionID} />}
+              right={<ui.Slot name="session_prompt_right" session_id={promptProps.sessionID} />}
             />
-            <TokenUsageOverlay api={api} sessionID={sessionID} config={config} />
+            <TokenUsageOverlay api={api} sessionID={promptProps.sessionID} config={config} />
           </box>
         )
       },

@@ -12,7 +12,9 @@
   "scripts": {
     "bench:typos": "bun run prompt-enhancements/typo-engine.bench.ts",
     "test:typos": "bun test prompt-enhancements/typo-engine.test.ts",
-    "quality:fallow": "fallow review",
-    "quality:fallow:audit": "fallow audit"
+    "quality:fallow": "bun run quality:fallow:prompt-enhancements",
+    "quality:fallow:audit": "bun run quality:fallow:audit:prompt-enhancements",
+    "quality:fallow:prompt-enhancements": "fallow review --root prompt-enhancements --config prompt-enhancements/.fallowrc.json",
+    "quality:fallow:audit:prompt-enhancements": "fallow audit --root prompt-enhancements --config prompt-enhancements/.fallowrc.json"
   }
 }
