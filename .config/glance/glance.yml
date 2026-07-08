@@ -54,7 +54,6 @@ document:
     <!-- Preconnect for self-hosted services (iframes, client-side resources) -->
     <link rel="preconnect" href="https://linkwarden.corvus-corax.synology.me">
     <link rel="preconnect" href="https://freshrss.corvus-corax.synology.me">
-    <link rel="preconnect" href="https://redlib.corvus-corax.synology.me">
     <link rel="preconnect" href="https://dozzle.corvus-corax.synology.me">
     <link rel="preconnect" href="https://uptime.corvus-corax.synology.me">
 
