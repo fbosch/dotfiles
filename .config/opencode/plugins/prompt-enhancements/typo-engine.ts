@@ -3,6 +3,8 @@ export type TypoRule = {
   to: string
 }
 
+export type TypoRuleEndingChars = ReadonlyMap<number, ReadonlySet<number>>
+
 function camelcase(word: string): string {
   const normalized = word.replaceAll("-", "_")
   if (!normalized.includes("_") && /[a-z]/.test(normalized)) {
@@ -122,7 +124,28 @@ export function typoRuleLengths(rules: ReadonlyMap<string, string>): Set<number>
   return lengths
 }
 
-export function correctCompletedWord(input: string, rules: ReadonlyMap<string, string>, ruleLengths?: ReadonlySet<number>): string {
+export function typoRuleEndingChars(rules: ReadonlyMap<string, string>): Map<number, Set<number>> {
+  const chars = new Map<number, Set<number>>()
+  for (const typo of rules.keys()) {
+    const length = typo.length
+    const existing = chars.get(length)
+    if (existing) {
+      existing.add(typo.charCodeAt(length - 1))
+      continue
+    }
+
+    chars.set(length, new Set([typo.charCodeAt(length - 1)]))
+  }
+
+  return chars
+}
+
+export function correctCompletedWord(
+  input: string,
+  rules: ReadonlyMap<string, string>,
+  ruleLengths?: ReadonlySet<number>,
+  endingChars?: TypoRuleEndingChars,
+): string {
   let wordEnd = input.length
   while (wordEnd > 0 && isWordCharacter(input.charCodeAt(wordEnd - 1)) === false) {
     wordEnd -= 1
@@ -142,6 +165,10 @@ export function correctCompletedWord(input: string, rules: ReadonlyMap<string, s
     return input
   }
 
+  if (endingChars && endingChars.get(wordLength)?.has(input.charCodeAt(wordEnd - 1)) === false) {
+    return input
+  }
+
   const word = input.slice(wordStart, wordEnd)
   const replacement = rules.get(word)
   if (replacement === undefined || replacement === word) {
@@ -156,6 +183,7 @@ export function appendDelimiterAndCorrect(
   delimiter: string,
   rules: ReadonlyMap<string, string>,
   ruleLengths?: ReadonlySet<number>,
+  endingChars?: TypoRuleEndingChars,
 ): string {
   let wordStart = input.length
   while (wordStart > 0 && isWordCharacter(input.charCodeAt(wordStart - 1))) {
@@ -168,6 +196,10 @@ export function appendDelimiterAndCorrect(
 
   const wordLength = input.length - wordStart
   if (ruleLengths && ruleLengths.has(wordLength) === false) {
+    return input + delimiter
+  }
+
+  if (endingChars && endingChars.get(wordLength)?.has(input.charCodeAt(input.length - 1)) === false) {
     return input + delimiter
   }
 

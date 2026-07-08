@@ -2,6 +2,8 @@
 
 Baseline benchmark for the OpenCode prompt typo engine.
 
+Bun 1.3.13 does not expose a native `bench` API from `bun:test`, and `bun test --help` does not list a benchmark mode. The benchmark script uses a small local harness around `process.hrtime.bigint()` until Bun provides a native benchmark API in this environment.
+
 Run from `.config/opencode/plugins`:
 
 ```bash
@@ -76,3 +78,16 @@ Results:
 | Short match | 0.157 us/op | 0.144 us/op | 6,959,431 ops/s | 1,000,000 | 1.09x faster |
 | Long no match | 0.093 us/op | 0.093 us/op | 10,695,455 ops/s | 500,000 | unchanged |
 | Long match | 0.165 us/op | 0.150 us/op | 6,650,399 ops/s | 500,000 | 1.10x faster |
+
+## Last-Character Guard Optimization
+
+Added a `(word length, last char)` guard before slicing the completed word. This skips allocation and map lookup for no-match words whose final character cannot match any typo of that length.
+
+Results:
+
+| Case | Previous Append Mean | New Append Mean | Throughput | Iterations | Change |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Short no match | 0.092 us/op | 0.098 us/op | 10,212,137 ops/s | 1,000,000 | 6.5% slower |
+| Short match | 0.144 us/op | 0.156 us/op | 6,420,204 ops/s | 1,000,000 | 8.3% slower |
+| Long no match | 0.093 us/op | 0.053 us/op | 18,735,798 ops/s | 500,000 | 43.0% faster |
+| Long match | 0.150 us/op | 0.163 us/op | 6,122,255 ops/s | 500,000 | 8.7% slower |
