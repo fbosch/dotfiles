@@ -515,7 +515,7 @@ function TokenUsageOverlay(props: { api: TuiPluginApi; sessionID: string; config
 const tui: TuiPlugin = async (api: TuiPluginApi, options: unknown) => {
   const config = parseConfig(options)
   const typoRules = await loadTypoRules()
-  const promptRefs = new Set<PromptRef>()
+  let activePromptRef: PromptRef | undefined
   const ui = api.ui as TuiPluginApi["ui"] & {
     Prompt: PromptComponent
     Slot: SlotComponent
@@ -523,14 +523,12 @@ const tui: TuiPlugin = async (api: TuiPluginApi, options: unknown) => {
 
   const trackPromptRef = (ref: PromptRef | undefined) => {
     if (ref) {
-      promptRefs.add(ref)
+      activePromptRef = ref
       return
     }
 
-    for (const promptRef of promptRefs) {
-      if (promptRef.focused === false) {
-        promptRefs.delete(promptRef)
-      }
+    if (activePromptRef?.focused === false) {
+      activePromptRef = undefined
     }
   }
 
@@ -543,7 +541,7 @@ const tui: TuiPlugin = async (api: TuiPluginApi, options: unknown) => {
         category: "Prompt",
         hidden: true,
         run() {
-          const ref = [...promptRefs].find((promptRef) => promptRef.focused)
+          const ref = activePromptRef?.focused ? activePromptRef : undefined
           if (!ref) {
             return
           }

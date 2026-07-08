@@ -21,6 +21,9 @@ const cases = {
   longMatch: `${"review this implementation carefully ".repeat(40)}teh `,
 }
 
+const focusedPromptRef = { focused: true }
+const promptRefs = new Set([focusedPromptRef])
+
 function nowNs(): bigint {
   return process.hrtime.bigint()
 }
@@ -70,6 +73,12 @@ for (const result of [
   }),
   bench("correct long match", 500_000, () => {
     correctCompletedWord(cases.longMatch, rules)
+  }),
+  bench("find ref via set spread", 1_000_000, () => {
+    ;[...promptRefs].find((promptRef) => promptRef.focused)
+  }),
+  bench("read active ref directly", 1_000_000, () => {
+    focusedPromptRef.focused ? focusedPromptRef : undefined
   }),
 ]) {
   printResult(result)
