@@ -1,67 +1,34 @@
-# Assets Directory Structure
+# Glance Assets
 
-Organized assets for the Glance dashboard.
+Static files served by Glance from `/assets/*`. The container maps this directory through `server.assets-path` in `glance.yml`.
 
-## Directory Layout
+## Layout
 
-```
-assets/
-├── css/           # Stylesheets
-│   ├── custom.css
-│   └── komodo-containers.css
-├── icons/         # SVG icons
-│   ├── pihole-two.svg
-│   ├── vaultwarden.svg
-│   └── portainer.svg
-└── js/            # JavaScript files
-    ├── mullvad-check.js
-    ├── service-worker.js
-    └── sw-register.js
-```
+- `css/` contains the global theme CSS and widget-specific styles.
+- `icons/` contains local favicons, profile images, and service icons.
+- `js/` contains small client-side helpers loaded from `document.head`.
 
-## Usage
+## Current Entry Points
 
-### CSS Files
-Referenced in `glance.yml`:
-```yaml
-theme:
-  custom-css-file: /assets/css/custom.css
-```
+`glance.yml` references these assets directly:
 
-### JavaScript Files
-Loaded in document head via `glance.yml`:
-```yaml
-document:
-  head: |
-    <script src="/assets/js/mullvad-check.js"></script>
-    <script src="/assets/js/sw-register.js"></script>
-```
+- `/assets/css/custom.css`
+- `/assets/css/start-command-prompt.css`
+- `/assets/css/real-debrid.css`
+- `/assets/css/plex.css`
+- `/assets/css/komodo-containers.css`
+- `/assets/js/quicklink-init.js`
+- `/assets/js/freshrss-actualize.js`
+- `/assets/js/start-command-prompt.js`
+- `/assets/js/real-debrid-live.js`
+- `/assets/icons/politoed.png`
+- `/assets/icons/favicon.ico`
 
-### Icons
-Referenced in widget configurations:
-```yaml
-icon: /assets/icons/pihole-two.svg
-```
+Widget YAML can also reference icons directly, for example `/assets/icons/pihole-two.svg`.
 
-## Adding New Assets
+## Adding Assets
 
-### Icons
-1. Save SVG files to `icons/` directory
-2. Reference them in widgets: `/assets/icons/filename.svg`
-3. Icons from your previous site (home.corvus-corax.synology.me) have been extracted
-
-### CSS
-1. Add new stylesheets to `css/` directory
-2. Import in `custom.css` or reference directly in `glance.yml`
-
-### JavaScript
-1. Add new scripts to `js/` directory
-2. Load via `document.head` in `glance.yml`
-
-## Icon Sources
-
-- **Dashboard Icons** (di:): https://dashboardicons.com
-- **Simple Icons** (si:): https://simpleicons.org
-- **selfh.st** (sh:): https://selfh.st/icons/
-- **Material Design Icons** (mdi:): https://pictogrammers.com/library/mdi/
-- **Custom**: Extracted from home.corvus-corax.synology.me or custom-created
+- Put shared dashboard CSS in `css/custom.css`.
+- Put widget-specific CSS in a dedicated file under `css/` once inline CSS stops being small.
+- Put client-side widget scripts under `js/` and load them from `document.head` in `glance.yml`.
+- Prefer Twenty Icons API for normal service favicons; keep local icons for custom branding or assets that need to stay stable.

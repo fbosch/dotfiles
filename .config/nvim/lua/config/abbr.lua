@@ -4,6 +4,7 @@ local fmt = string.format
 local log = vim.log.levels
 
 local M = {}
+local typo_rules_path = fn.fnamemodify(fn.stdpath("config"), ":h") .. "/fbb/data/typos.abolish"
 
 local ft_abbr_group = api.nvim_create_augroup("ConfigFiletypeAbbreviations", { clear = true })
 
@@ -41,6 +42,23 @@ function M.ft_abbr(filetypes, abbreviations)
 	})
 end
 
+local function read_typo_rules()
+	if fn.filereadable(typo_rules_path) == 0 then
+		vim.notify(fmt("typo rules file is not readable: %s", typo_rules_path), log.WARN)
+		return {}
+	end
+
+	local rules = {}
+	for _, line in ipairs(fn.readfile(typo_rules_path)) do
+		local trimmed = vim.trim(line)
+		if trimmed ~= "" and not vim.startswith(trimmed, "#") then
+			table.insert(rules, trimmed)
+		end
+	end
+
+	return rules
+end
+
 M.ft_abbr({ "javascript", "javascriptreact", "typescript", "typescriptreact" }, {
 	cl = "console.log()<esc>h",
 	cdir = "console.dir()<esc>h",
@@ -57,85 +75,7 @@ M.ft_abbr({ "lua" }, {
 	ret = "return ",
 })
 
-M.typos = {
-	"acheive achieve",
-	"adn and",
-	"adress address",
-	"argu{ement,ments} argument{}",
-	"calender calendar",
-	"cancle cancel",
-	"cahnge change",
-	"compar{ision,isons,isno} comparison{}",
-	"cosnt const",
-	"covert convert",
-	"defin{ately,etely,atly,ately} definitely",
-	"depend{e,a}nc{ie,ei,y,i}es dependencies",
-	"depenedencies dependencies",
-	"dont don't",
-	"cant can't",
-	"wont won't",
-	"enviro{n,}ment environment",
-	"erros errors",
-	"eq{uivalent,ivalent} equivalent",
-	"exmaple example",
-	"flase false",
-	"futher further",
-	"funct{ion,ion,oin} function",
-	"functino function",
-	"fucntion function",
-	"hieght height",
-	"histroy history",
-	"hte the",
-	"ident{ifer,ifers} identifier{}",
-	"importn{t,at} important",
-	"init{ial,ialize,ialized,ialize} init{ial,ialize,ialized,ialize}",
-	"intial initial",
-	"lenght length",
-	"lib{ary,aries} library{}",
-	"listner listener",
-	"moduel module",
-	"escpae escape",
-	"ne{ccessary,cesary} necessary",
-	"occas{sion,ion} occasion",
-	"occurr{ance,ence,ed,ed} occurr{ence,ed}",
-	"pakage package",
-	"purpsoe purpose",
-	"sorround surround",
-	"desing design",
-	"gradeint gradient",
-	"persist{ance,ence} persistence{}",
-	"plese please",
-	"pr{omise,omsie,omse} promise",
-	"pubic public",
-	"q{uo,ou,uo,uote,oute}te quote",
-	-- "rec{ei,ie}ve receive",
-	-- "rec{ieve,eived,eiving} receive{}",
-	"requ{ire,ier,ieer,iere,rie,re} require",
-	"resutl result",
-	"retrun return",
-	"se{p,e}rate separate",
-	"satic static",
-	"self self",
-	"statuc static",
-	"stirng string",
-	"stuct struct",
-	"succes{,sful} success{}",
-	"sytem system",
-	"teh the",
-	"tempor{ary,ry} temporary",
-	"thorw throw",
-	"truw true",
-	"unkown unknown",
-	"untill until",
-	"valud valid",
-	"visiblity visibility",
-	"purposesly purposesly",
-	"una{ail,ial,ali}able unavailable",
-	"sensetive sensitive",
-	"craete create",
-	"visble visible",
-	"sandwhich sandwich", -- 🥪
-}
+M.typos = read_typo_rules()
 
 function M.autofix_typos()
 	if fn.exists(":Abolish") == 0 then
