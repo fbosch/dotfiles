@@ -3,6 +3,7 @@ import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plug
 import { RGBA } from "@opentui/core"
 import type { JSX } from "solid-js"
 import { createMemo, createSignal, onCleanup, Show } from "solid-js"
+import { correctCompletedWord, parseTypoRules } from "./prompt-typo-engine"
 
 declare const Bun: {
   file(path: string): {
@@ -41,15 +42,6 @@ type PromptRef = {
   current: PromptInfo
   set(prompt: PromptInfo): void
 }
-
-type TypoRule = {
-  from: string
-  to: string
-}
-
-type PatternPart =
-  | { type: "text"; value: string }
-  | { type: "group"; alternatives: string[] }
 
 type AssistantTokens = {
   input?: number
@@ -165,145 +157,12 @@ function typoRulesPath(): string {
   return `${process.env.XDG_CONFIG_HOME ?? `${process.env.HOME ?? ""}/.config`}/fbb/data/typos.abolish`
 }
 
-function parsePattern(pattern: string): PatternPart[] {
-  const parts: PatternPart[] = []
-  let index = 0
-
-  while (index < pattern.length) {
-    const open = pattern.indexOf("{", index)
-    if (open === -1) {
-      parts.push({ type: "text", value: pattern.slice(index) })
-      break
-    }
-
-    if (open > index) {
-      parts.push({ type: "text", value: pattern.slice(index, open) })
-    }
-
-    const close = pattern.indexOf("}", open + 1)
-    if (close === -1) {
-      parts.push({ type: "text", value: pattern.slice(open) })
-      break
-    }
-
-    parts.push({ type: "group", alternatives: pattern.slice(open + 1, close).split(",") })
-    index = close + 1
-  }
-
-  return parts
-}
-
-function expandLeftPattern(parts: PatternPart[]) {
-  const expanded: { text: string; captures: string[]; indexes: number[] }[] = [{ text: "", captures: [], indexes: [] }]
-
-  for (const part of parts) {
-    if (part.type === "text") {
-      for (const entry of expanded) {
-        entry.text += part.value
-      }
-      continue
-    }
-
-    const alternatives = part.alternatives.length === 0 ? [""] : part.alternatives
-    const next = expanded.flatMap((entry) =>
-      alternatives.map((alternative, index) => ({
-        text: entry.text + alternative,
-        captures: [...entry.captures, alternative],
-        indexes: [...entry.indexes, index],
-      })),
-    )
-
-    expanded.splice(0, expanded.length, ...next)
-  }
-
-  return expanded
-}
-
-function expandRightPattern(parts: PatternPart[], captures: string[], indexes: number[]): string {
-  let groupIndex = 0
-  let result = ""
-
-  for (const part of parts) {
-    if (part.type === "text") {
-      result += part.value
-      continue
-    }
-
-    if (part.alternatives.length === 1 && part.alternatives[0] === "") {
-      result += captures[groupIndex] ?? ""
-      groupIndex += 1
-      continue
-    }
-
-    const alternatives = part.alternatives.length === 0 ? [""] : part.alternatives
-    const selectedIndex = indexes[groupIndex] ?? 0
-    result += alternatives[selectedIndex % alternatives.length] ?? ""
-    groupIndex += 1
-  }
-
-  return result
-}
-
-function caseVariants(rule: TypoRule): TypoRule[] {
-  const titleFrom = rule.from.charAt(0).toUpperCase() + rule.from.slice(1)
-  const titleTo = rule.to.charAt(0).toUpperCase() + rule.to.slice(1)
-  return [
-    rule,
-    { from: titleFrom, to: titleTo },
-    { from: rule.from.toUpperCase(), to: rule.to.toUpperCase() },
-  ]
-}
-
-function parseTypoRule(line: string): TypoRule[] {
-  const match = /^(\S+)\s+(\S+)$/.exec(line)
-  if (!match) {
-    return []
-  }
-
-  const left = parsePattern(match[1])
-  const right = parsePattern(match[2])
-
-  return expandLeftPattern(left).flatMap((entry) =>
-    caseVariants({
-      from: entry.text,
-      to: expandRightPattern(right, entry.captures, entry.indexes),
-    }),
-  )
-}
-
 async function loadTypoRules(): Promise<Map<string, string>> {
-  const rules = new Map<string, string>()
-
   try {
-    for (const line of (await Bun.file(typoRulesPath()).text()).split(/\r?\n/)) {
-      const trimmed = line.trim()
-      if (trimmed === "" || trimmed.startsWith("#")) {
-        continue
-      }
-
-      for (const rule of parseTypoRule(trimmed)) {
-        rules.set(rule.from, rule.to)
-      }
-    }
+    return parseTypoRules(await Bun.file(typoRulesPath()).text())
   } catch {
-    return rules
+    return new Map<string, string>()
   }
-
-  return rules
-}
-
-function correctCompletedWord(input: string, rules: ReadonlyMap<string, string>): string {
-  const match = /(^|[^A-Za-z0-9_'])([A-Za-z][A-Za-z0-9_']*)([^A-Za-z0-9_']+)$/.exec(input)
-  if (!match) {
-    return input
-  }
-
-  const replacement = rules.get(match[2])
-  if (replacement === undefined || replacement === match[2]) {
-    return input
-  }
-
-  return input.slice(0, match.index) + match[1] + replacement + match[3]
 }
 
 function insertSpaceAndCorrect(ref: PromptRef, rules: ReadonlyMap<string, string>) {
