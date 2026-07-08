@@ -20,6 +20,6 @@ The custom Hyprland layouts currently infer window-ordering intent from composit
 
 ## Impact
 
-- Affected code: `.config/hypr/lib/window.lua`, `.config/hypr/layouts/order_state.lua`, `.config/hypr/layouts/portrait_rows.lua`, `.config/hypr/layouts/ultrawide_master.lua`, and tests under `.config/hypr/tests/`.
+- Affected code: `.config/hypr/lib/window.lua`, `.config/hypr/layouts/shared/order_state.lua`, `.config/hypr/layouts/portrait_rows.lua`, `.config/hypr/layouts/ultrawide_master.lua`, and tests under `.config/hypr/tests/`.
 - Affected runtime behavior: `SUPER+SHIFT+H/J/K/L` move/swap behavior, custom layout resize messages, cross-monitor transfer placement, and layout behavior after reload.
 - No new dependencies are expected.

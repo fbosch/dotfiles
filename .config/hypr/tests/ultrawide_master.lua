@@ -21,7 +21,7 @@ hl = {
 _G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
 
 local monitor_role = require("lib.monitor_role")
-local order_state = require("layouts.order_state")
+local order_state = require("layouts.shared.order_state")
 
 local function make_target(index, active)
 	return {
@@ -48,6 +48,14 @@ end
 local function make_context(targets, workspace_name)
 	workspace_counter = workspace_counter + 1
 	local workspace = { name = workspace_name or "ultrawide-test-" .. tostring(workspace_counter) }
+	for index = 1, #targets do
+		targets[index].window.workspace = workspace
+	end
+
+	return { area = { x = 10, y = 20, w = 1000, h = 500 }, targets = targets }
+end
+
+local function make_context_with_workspace(targets, workspace)
 	for index = 1, #targets do
 		targets[index].window.workspace = workspace
 	end
@@ -432,6 +440,7 @@ run("duplicate target identity falls back to source order", function()
 	local first = set_geometry(make_target(1, true), 800)
 	local second = set_geometry(make_target(2), 100)
 	second.window.address = first.window.address
+	second.window.stable_id = first.window.stable_id
 
 	registered_layout.layout.recalculate(make_context({ first, second }, "duplicate-id"))
 
@@ -695,6 +704,144 @@ run("manual column ratios survive layout module reload", function()
 
 	assert_box(reloaded_first.placed, { x = 10, y = 20, w = 720, h = 500 }, "reloaded left target")
 	assert_box(reloaded_second.placed, { x = 730, y = 20, w = 280, h = 500 }, "reloaded right target")
+	registered_layout.layout.layout_msg(reloaded_ctx, "reset")
+	os.remove(_G.__ULTRAWIDE_MASTER_STATE_FILE)
+	_G.__ULTRAWIDE_MASTER_STATE_FILE = nil
+	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
+end)
+
+run("manual column order survives layout module reload", function()
+	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = nil
+	_G.__ULTRAWIDE_MASTER_STATE_FILE = os.tmpname()
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+
+	local workspace = "persisted-order-test"
+	local first = set_geometry(make_target(1, true), 100)
+	local second = set_geometry(make_target(2), 800)
+	local ctx = make_context({ first, second }, workspace)
+
+	registered_layout.layout.recalculate(ctx)
+	registered_layout.layout.layout_msg(ctx, "swapnext")
+	registered_layout.layout.recalculate(ctx)
+	assert_box(second.placed, { x = 10, y = 20, w = 670, h = 500 }, "swapped left target")
+
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+
+	local reloaded_first = set_geometry(make_target(1, true), 100)
+	local reloaded_second = set_geometry(make_target(2), 800)
+	local reloaded_ctx = make_context({ reloaded_first, reloaded_second }, workspace)
+	registered_layout.layout.recalculate(reloaded_ctx)
+
+	assert_box(reloaded_second.placed, { x = 10, y = 20, w = 670, h = 500 }, "reloaded left target")
+	assert_box(reloaded_first.placed, { x = 680, y = 20, w = 330, h = 500 }, "reloaded right target")
+	registered_layout.layout.layout_msg(reloaded_ctx, "reset")
+	os.remove(_G.__ULTRAWIDE_MASTER_STATE_FILE)
+	_G.__ULTRAWIDE_MASTER_STATE_FILE = nil
+	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
+end)
+
+run("manual column order survives reload with numeric workspace id", function()
+	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = nil
+	_G.__ULTRAWIDE_MASTER_STATE_FILE = os.tmpname()
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+
+	local workspace = { id = 202, name = "numeric-workspace-test" }
+	local first = set_geometry(make_target(1, true), 100)
+	local second = set_geometry(make_target(2), 800)
+	local ctx = make_context_with_workspace({ first, second }, workspace)
+
+	registered_layout.layout.recalculate(ctx)
+	registered_layout.layout.layout_msg(ctx, "swapnext")
+	registered_layout.layout.recalculate(ctx)
+	assert_box(second.placed, { x = 10, y = 20, w = 670, h = 500 }, "swapped left target")
+
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+
+	local reloaded_first = set_geometry(make_target(1, true), 100)
+	local reloaded_second = set_geometry(make_target(2), 800)
+	local reloaded_ctx = make_context_with_workspace({ reloaded_first, reloaded_second }, workspace)
+	registered_layout.layout.recalculate(reloaded_ctx)
+
+	assert_box(reloaded_second.placed, { x = 10, y = 20, w = 670, h = 500 }, "reloaded left target")
+	assert_box(reloaded_first.placed, { x = 680, y = 20, w = 330, h = 500 }, "reloaded right target")
+	registered_layout.layout.layout_msg(reloaded_ctx, "reset")
+	os.remove(_G.__ULTRAWIDE_MASTER_STATE_FILE)
+	_G.__ULTRAWIDE_MASTER_STATE_FILE = nil
+	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
+end)
+
+run("manual column order uses stable ids for same app windows", function()
+	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = nil
+	_G.__ULTRAWIDE_MASTER_STATE_FILE = os.tmpname()
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+
+	local workspace = { id = 303, name = "same-app-workspace" }
+	local first = set_geometry(make_target(1, true), 100)
+	local second = set_geometry(make_target(2), 800)
+	first.window.class = "org.wezfurlong.wezterm"
+	second.window.class = "org.wezfurlong.wezterm"
+	first.window.title = "wezterm"
+	second.window.title = "wezterm"
+	local ctx = make_context_with_workspace({ first, second }, workspace)
+
+	registered_layout.layout.recalculate(ctx)
+	registered_layout.layout.layout_msg(ctx, "swapnext")
+	registered_layout.layout.recalculate(ctx)
+
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+
+	local reloaded_first = set_geometry(make_target(1, true), 100)
+	local reloaded_second = set_geometry(make_target(2), 800)
+	reloaded_first.window.class = "org.wezfurlong.wezterm"
+	reloaded_second.window.class = "org.wezfurlong.wezterm"
+	reloaded_first.window.title = "wezterm"
+	reloaded_second.window.title = "wezterm"
+	local reloaded_ctx = make_context_with_workspace({ reloaded_first, reloaded_second }, workspace)
+	registered_layout.layout.recalculate(reloaded_ctx)
+
+	assert_box(reloaded_second.placed, { x = 10, y = 20, w = 670, h = 500 }, "reloaded left target")
+	assert_box(reloaded_first.placed, { x = 680, y = 20, w = 330, h = 500 }, "reloaded right target")
+	registered_layout.layout.layout_msg(reloaded_ctx, "reset")
+	os.remove(_G.__ULTRAWIDE_MASTER_STATE_FILE)
+	_G.__ULTRAWIDE_MASTER_STATE_FILE = nil
+	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
+end)
+
+run("saved column order survives partial reload target list", function()
+	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = nil
+	_G.__ULTRAWIDE_MASTER_STATE_FILE = os.tmpname()
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+
+	local workspace = { id = 304, name = "partial-reload-workspace" }
+	local first = set_geometry(make_target(1), 100)
+	local second = set_geometry(make_target(2), 400)
+	local third = set_geometry(make_target(3), 800)
+	local ctx = make_context_with_workspace({ first, second, third }, workspace)
+	registered_layout.layout.recalculate(ctx)
+
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+
+	local partial_first = set_geometry(make_target(1), 100)
+	local partial_third = set_geometry(make_target(3), 800)
+	registered_layout.layout.recalculate(make_context_with_workspace({ partial_first, partial_third }, workspace))
+
+	local reloaded_first = set_geometry(make_target(1), 100)
+	local reloaded_second = set_geometry(make_target(2), 400)
+	local reloaded_third = set_geometry(make_target(3), 800)
+	local reloaded_ctx = make_context_with_workspace({ reloaded_first, reloaded_third, reloaded_second }, workspace)
+	registered_layout.layout.recalculate(reloaded_ctx)
+
+	assert_box(reloaded_first.placed, { x = 10, y = 20, w = 300, h = 500 }, "reloaded left target")
+	assert_box(reloaded_second.placed, { x = 310, y = 20, w = 400, h = 500 }, "reloaded middle target")
+	assert_box(reloaded_third.placed, { x = 710, y = 20, w = 300, h = 500 }, "reloaded right target")
 	registered_layout.layout.layout_msg(reloaded_ctx, "reset")
 	os.remove(_G.__ULTRAWIDE_MASTER_STATE_FILE)
 	_G.__ULTRAWIDE_MASTER_STATE_FILE = nil
