@@ -11,7 +11,6 @@ Lua-first Hyprland configuration with runtime helpers for window rules, session 
 - `rule-loader.lua` applies generated and window-state rule phases in the required order.
 - `runtime/` contains shell and Lua helpers invoked by binds, daemons, and startup scripts.
 - `lib/` contains shared Lua helpers used by runtime scripts.
-- `legacy/hyprland-conf/` is rollback/reference material for the old hyprlang setup.
 
 ## Rule Flow
 
