@@ -1,5 +1,1 @@
-import type { Plugin } from "@opencode-ai/plugin";
-
-const JustBashPluginDisabled: Plugin = async () => ({});
-
-export default JustBashPluginDisabled;
+export { JustBashPlugin as default } from "./src/plugin";

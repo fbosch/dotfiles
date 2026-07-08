@@ -8,7 +8,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "just-bash": "^2.12.2",
+    "just-bash": "^3.0.3",
     "strip-json-comments": "^5.0.1"
   },
   "devDependencies": {
