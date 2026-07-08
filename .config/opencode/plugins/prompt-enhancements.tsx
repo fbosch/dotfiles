@@ -4,6 +4,19 @@ import { RGBA } from "@opentui/core"
 import type { JSX } from "solid-js"
 import { createMemo, createSignal, onCleanup, Show } from "solid-js"
 
+declare const Bun: {
+  file(path: string): {
+    text(): Promise<string>
+  }
+}
+
+declare const process: {
+  env: {
+    HOME?: string
+    XDG_CONFIG_HOME?: string
+  }
+}
+
 type ThemeColor = string | RGBA
 type ThemeMap = Record<string, unknown>
 
@@ -16,6 +29,27 @@ type TokenBreakPoint = {
 type PluginConfig = {
   breakpoints: TokenBreakPoint[]
 }
+
+type PromptInfo = {
+  input: string
+  mode?: "normal" | "shell"
+  parts: unknown[]
+}
+
+type PromptRef = {
+  focused: boolean
+  current: PromptInfo
+  set(prompt: PromptInfo): void
+}
+
+type TypoRule = {
+  from: string
+  to: string
+}
+
+type PatternPart =
+  | { type: "text"; value: string }
+  | { type: "group"; alternatives: string[] }
 
 type AssistantTokens = {
   input?: number
@@ -52,8 +86,13 @@ type PromptComponent = (props: {
   visible?: boolean
   disabled?: boolean
   onSubmit?: () => void
-  ref?: unknown
+  ref?: (ref: PromptRef | undefined) => void
   right?: JSX.Element
+  showPlaceholder?: boolean
+  placeholders?: {
+    normal?: string[]
+    shell?: string[]
+  }
 }) => JSX.Element
 
 type SlotComponent = (
@@ -64,7 +103,7 @@ type SlotComponent = (
   } & Record<string, unknown>,
 ) => JSX.Element | null
 
-const id = "token-usage-highlight"
+const id = "prompt-enhancements"
 const PROMPT_COMMAND_HINT_WIDTH = 17
 
 const compactNumber = new Intl.NumberFormat("en-US", {
@@ -120,6 +159,188 @@ function parseConfig(options: unknown): PluginConfig {
   }
 
   return { breakpoints }
+}
+
+function typoRulesPath(): string {
+  return `${process.env.XDG_CONFIG_HOME ?? `${process.env.HOME ?? ""}/.config`}/fbb/data/typos.abolish`
+}
+
+function parsePattern(pattern: string): PatternPart[] {
+  const parts: PatternPart[] = []
+  let index = 0
+
+  while (index < pattern.length) {
+    const open = pattern.indexOf("{", index)
+    if (open === -1) {
+      parts.push({ type: "text", value: pattern.slice(index) })
+      break
+    }
+
+    if (open > index) {
+      parts.push({ type: "text", value: pattern.slice(index, open) })
+    }
+
+    const close = pattern.indexOf("}", open + 1)
+    if (close === -1) {
+      parts.push({ type: "text", value: pattern.slice(open) })
+      break
+    }
+
+    parts.push({ type: "group", alternatives: pattern.slice(open + 1, close).split(",") })
+    index = close + 1
+  }
+
+  return parts
+}
+
+function expandLeftPattern(parts: PatternPart[]) {
+  const expanded: { text: string; captures: string[]; indexes: number[] }[] = [{ text: "", captures: [], indexes: [] }]
+
+  for (const part of parts) {
+    if (part.type === "text") {
+      for (const entry of expanded) {
+        entry.text += part.value
+      }
+      continue
+    }
+
+    const alternatives = part.alternatives.length === 0 ? [""] : part.alternatives
+    const next = expanded.flatMap((entry) =>
+      alternatives.map((alternative, index) => ({
+        text: entry.text + alternative,
+        captures: [...entry.captures, alternative],
+        indexes: [...entry.indexes, index],
+      })),
+    )
+
+    expanded.splice(0, expanded.length, ...next)
+  }
+
+  return expanded
+}
+
+function expandRightPattern(parts: PatternPart[], captures: string[], indexes: number[]): string {
+  let groupIndex = 0
+  let result = ""
+
+  for (const part of parts) {
+    if (part.type === "text") {
+      result += part.value
+      continue
+    }
+
+    if (part.alternatives.length === 1 && part.alternatives[0] === "") {
+      result += captures[groupIndex] ?? ""
+      groupIndex += 1
+      continue
+    }
+
+    const alternatives = part.alternatives.length === 0 ? [""] : part.alternatives
+    const selectedIndex = indexes[groupIndex] ?? 0
+    result += alternatives[selectedIndex % alternatives.length] ?? ""
+    groupIndex += 1
+  }
+
+  return result
+}
+
+function caseVariants(rule: TypoRule): TypoRule[] {
+  const titleFrom = rule.from.charAt(0).toUpperCase() + rule.from.slice(1)
+  const titleTo = rule.to.charAt(0).toUpperCase() + rule.to.slice(1)
+  return [
+    rule,
+    { from: titleFrom, to: titleTo },
+    { from: rule.from.toUpperCase(), to: rule.to.toUpperCase() },
+  ]
+}
+
+function parseTypoRule(line: string): TypoRule[] {
+  const match = /^(\S+)\s+(\S+)$/.exec(line)
+  if (!match) {
+    return []
+  }
+
+  const left = parsePattern(match[1])
+  const right = parsePattern(match[2])
+
+  return expandLeftPattern(left).flatMap((entry) =>
+    caseVariants({
+      from: entry.text,
+      to: expandRightPattern(right, entry.captures, entry.indexes),
+    }),
+  )
+}
+
+async function loadTypoRules(): Promise<Map<string, string>> {
+  const rules = new Map<string, string>()
+
+  try {
+    for (const line of (await Bun.file(typoRulesPath()).text()).split(/\r?\n/)) {
+      const trimmed = line.trim()
+      if (trimmed === "" || trimmed.startsWith("#")) {
+        continue
+      }
+
+      for (const rule of parseTypoRule(trimmed)) {
+        rules.set(rule.from, rule.to)
+      }
+    }
+  } catch {
+    return rules
+  }
+
+  return rules
+}
+
+function correctCompletedWord(input: string, rules: ReadonlyMap<string, string>): string {
+  const match = /(^|[^A-Za-z0-9_'])([A-Za-z][A-Za-z0-9_']*)([^A-Za-z0-9_']+)$/.exec(input)
+  if (!match) {
+    return input
+  }
+
+  const replacement = rules.get(match[2])
+  if (replacement === undefined || replacement === match[2]) {
+    return input
+  }
+
+  return input.slice(0, match.index) + match[1] + replacement + match[3]
+}
+
+function insertSpaceAndCorrect(ref: PromptRef, rules: ReadonlyMap<string, string>) {
+  const current = ref.current
+  ref.set({ ...current, input: correctCompletedWord(`${current.input} `, rules) })
+}
+
+function PromptWithEnhancements(
+  props: Parameters<PromptComponent>[0] & {
+    Prompt: PromptComponent
+    onPromptRef?: (ref: PromptRef | undefined) => void
+  },
+): JSX.Element {
+  const Prompt = props.Prompt
+  let currentRef: PromptRef | undefined
+
+  const setRef = (ref: PromptRef | undefined) => {
+    if (ref !== currentRef) {
+      currentRef = ref
+      props.onPromptRef?.(ref)
+    }
+
+    props.ref?.(ref)
+  }
+
+  return (
+    <Prompt
+      sessionID={props.sessionID}
+      visible={props.visible}
+      disabled={props.disabled}
+      onSubmit={props.onSubmit}
+      ref={setRef}
+      right={props.right}
+      showPlaceholder={props.showPlaceholder}
+      placeholders={props.placeholders}
+    />
+  )
 }
 
 function resolveColor(theme: ThemeMap, name: string, fallback: ThemeColor): ThemeColor {
@@ -434,23 +655,71 @@ function TokenUsageOverlay(props: { api: TuiPluginApi; sessionID: string; config
 
 const tui: TuiPlugin = async (api: TuiPluginApi, options: unknown) => {
   const config = parseConfig(options)
+  const typoRules = await loadTypoRules()
+  const promptRefs = new Set<PromptRef>()
   const ui = api.ui as TuiPluginApi["ui"] & {
     Prompt: PromptComponent
     Slot: SlotComponent
   }
 
+  const trackPromptRef = (ref: PromptRef | undefined) => {
+    if (ref) {
+      promptRefs.add(ref)
+      return
+    }
+
+    for (const promptRef of promptRefs) {
+      if (promptRef.focused === false) {
+        promptRefs.delete(promptRef)
+      }
+    }
+  }
+
+  api.keymap.registerLayer({
+    mode: "base",
+    commands: [
+      {
+        name: "prompt-enhancements.space",
+        title: "Insert Space",
+        category: "Prompt",
+        hidden: true,
+        run() {
+          const ref = [...promptRefs].find((promptRef) => promptRef.focused)
+          if (!ref) {
+            return
+          }
+
+          insertSpaceAndCorrect(ref, typoRules)
+        },
+      },
+    ],
+    bindings: [{ key: "space", cmd: "prompt-enhancements.space", desc: "Insert space and fix prompt typo" }],
+  })
+
   api.slots.register({
     slots: {
+      home_prompt(_ctx: unknown, props: Record<string, unknown>) {
+        return (
+          <PromptWithEnhancements
+            Prompt={ui.Prompt}
+            ref={typeof props.ref === "function" ? (props.ref as (ref: PromptRef | undefined) => void) : undefined}
+            onPromptRef={trackPromptRef}
+            right={<ui.Slot name="home_prompt_right" />}
+          />
+        )
+      },
       session_prompt(_ctx: unknown, props: Record<string, unknown>) {
         const sessionID = typeof props.session_id === "string" ? props.session_id : ""
         return (
           <box position="relative">
-            <ui.Prompt
+            <PromptWithEnhancements
+              Prompt={ui.Prompt}
               sessionID={sessionID}
               visible={typeof props.visible === "boolean" ? props.visible : undefined}
               disabled={typeof props.disabled === "boolean" ? props.disabled : undefined}
               onSubmit={typeof props.on_submit === "function" ? (props.on_submit as () => void) : undefined}
-              ref={props.ref}
+              ref={typeof props.ref === "function" ? (props.ref as (ref: PromptRef | undefined) => void) : undefined}
+              onPromptRef={trackPromptRef}
               right={<ui.Slot name="session_prompt_right" session_id={sessionID} />}
             />
             <TokenUsageOverlay api={api} sessionID={sessionID} config={config} />
