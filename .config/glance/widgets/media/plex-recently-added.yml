@@ -4,12 +4,14 @@
   cache: 5m
   options:
     base-url: "https://plex.corvus-corax.synology.me"
+    api-base-url: "http://127.0.0.1:32402"
     api-key: ${PLEX_TOKEN}
     machine-id: "527fd9cb40e644876667e21682d049ec24466835"
     limit: 10
     layout: vertical
   template: |
     {{ $baseURL := .Options.StringOr "base-url" "" }}
+    {{ $apiBaseURL := .Options.StringOr "api-base-url" $baseURL }}
     {{ $apiKey := .Options.StringOr "api-key" "" }}
     {{ $machineId := .Options.StringOr "machine-id" "" }}
     {{ $layout := .Options.StringOr "layout" "vertical" }}
@@ -20,7 +22,7 @@
     {{ if or (eq $baseURL "") (eq $apiKey "") (eq $machineId "") }}
       <p class="color-negative">Set Plex base URL, API token, and machine ID in this widget options block.</p>
     {{ else }}
-      {{ $call := newRequest (concat $baseURL "/library/recentlyAdded")
+      {{ $call := newRequest (concat $apiBaseURL "/library/recentlyAdded")
         | withHeader "Accept" "application/json"
         | withHeader "X-Plex-Token" $apiKey
         | withParameter "X-Plex-Container-Start" "0"

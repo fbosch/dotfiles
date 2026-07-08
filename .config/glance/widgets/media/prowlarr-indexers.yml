@@ -4,16 +4,18 @@
   cache: 1m
   options:
     base-url: "https://prowlarr.corvus-corax.synology.me"
+    api-base-url: "http://127.0.0.1:9696"
     api-key: ${PROWLARR_API_KEY}
     collapse-after: 5
   template: |
     {{ $baseUrl := .Options.StringOr "base-url" "" }}
+    {{ $apiBaseUrl := .Options.StringOr "api-base-url" $baseUrl }}
     {{ $key := .Options.StringOr "api-key" "" }}
     {{ $collapseAfter := .Options.IntOr "collapse-after" 5 }}
     {{ if or (eq $baseUrl "") (eq $key "") }}
       <p class="color-negative">Set the Prowlarr base URL and API key in this widget options block.</p>
     {{ else }}
-      {{ $indexData := newRequest (printf "%s/api/v1/indexer" $baseUrl) | withHeader "Accept" "application/json" | withHeader "X-Api-Key" $key | getResponse }}
+      {{ $indexData := newRequest (printf "%s/api/v1/indexer" $apiBaseUrl) | withHeader "Accept" "application/json" | withHeader "X-Api-Key" $key | getResponse }}
       {{ if eq $indexData.Response.StatusCode 200 }}
         <ul class="list list-gap-10 collapsible-container" data-collapse-after="{{ $collapseAfter }}">
           {{ range $indexData.JSON.Array "" }}

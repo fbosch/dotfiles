@@ -1,7 +1,7 @@
 - type: custom-api
   title: VPN Status
   cache: 1m
-  url: https://gluetun.corvus-corax.synology.me/v1/publicip/ip
+  url: http://127.0.0.1:8000/v1/publicip/ip
   headers:
     X-API-Key: ${GLUETUN_API_KEY}
   template: |
