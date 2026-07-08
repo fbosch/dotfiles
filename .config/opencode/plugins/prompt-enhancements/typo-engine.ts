@@ -3,11 +3,6 @@ type TypoRule = {
   to: string
 }
 
-type WordRange = {
-  start: number
-  end: number
-}
-
 function camelcase(word: string): string {
   const normalized = word.replaceAll("-", "_")
   if (!normalized.includes("_") && /[a-z]/.test(normalized)) {
@@ -138,12 +133,12 @@ export function typoRuleLengths(rules: ReadonlyMap<string, string>): Set<number>
   return lengths
 }
 
-function ruleLengthAllows(ruleLengths: ReadonlySet<number> | undefined, word: WordRange): boolean {
+function ruleLengthAllows(ruleLengths: ReadonlySet<number> | undefined, wordStart: number, wordEnd: number): boolean {
   if (ruleLengths === undefined) {
     return true
   }
 
-  return ruleLengths.has(word.end - word.start)
+  return ruleLengths.has(wordEnd - wordStart)
 }
 
 export function correctCompletedWord(
@@ -151,21 +146,22 @@ export function correctCompletedWord(
   rules: ReadonlyMap<string, string>,
   ruleLengths?: ReadonlySet<number>,
 ): string {
-  const word = completedWordRange(input, trimmedWordEnd(input))
-  if (!word) {
+  const wordEnd = trimmedWordEnd(input)
+  const wordStart = completedWordStart(input, wordEnd)
+  if (wordStart === undefined) {
     return input
   }
 
-  if (ruleLengthAllows(ruleLengths, word) === false) {
+  if (ruleLengthAllows(ruleLengths, wordStart, wordEnd) === false) {
     return input
   }
 
-  const replacement = replacementForWord(input, word, rules)
+  const replacement = replacementForWord(input, wordStart, wordEnd, rules)
   if (replacement === undefined) {
     return input
   }
 
-  return input.slice(0, word.start) + replacement + input.slice(word.end)
+  return input.slice(0, wordStart) + replacement + input.slice(wordEnd)
 }
 
 export function appendDelimiterAndCorrect(
@@ -174,29 +170,31 @@ export function appendDelimiterAndCorrect(
   rules: ReadonlyMap<string, string>,
   ruleLengths?: ReadonlySet<number>,
 ): string {
-  const word = completedWordRange(input, input.length)
-  if (!word) {
+  const wordEnd = input.length
+  const wordStart = completedWordStart(input, wordEnd)
+  if (wordStart === undefined) {
     return input + delimiter
   }
 
-  if (ruleLengthAllows(ruleLengths, word) === false) {
+  if (ruleLengthAllows(ruleLengths, wordStart, wordEnd) === false) {
     return input + delimiter
   }
 
-  const replacement = replacementForWord(input, word, rules)
+  const replacement = replacementForWord(input, wordStart, wordEnd, rules)
   if (replacement === undefined) {
     return input + delimiter
   }
 
-  return input.slice(0, word.start) + replacement + delimiter
+  return input.slice(0, wordStart) + replacement + delimiter
 }
 
 function replacementForWord(
   input: string,
-  word: WordRange,
+  wordStart: number,
+  wordEnd: number,
   rules: ReadonlyMap<string, string>,
 ): string | undefined {
-  const value = input.slice(word.start, word.end)
+  const value = input.slice(wordStart, wordEnd)
   const replacement = rules.get(value)
   if (replacement === undefined || replacement === value) {
     return undefined
@@ -214,7 +212,7 @@ function trimmedWordEnd(input: string): number {
   return wordEnd
 }
 
-function completedWordRange(input: string, wordEnd: number): WordRange | undefined {
+function completedWordStart(input: string, wordEnd: number): number | undefined {
   let wordStart = wordEnd
   while (wordStart > 0 && isWordCharacter(input.charCodeAt(wordStart - 1))) {
     wordStart -= 1
@@ -224,7 +222,7 @@ function completedWordRange(input: string, wordEnd: number): WordRange | undefin
     return undefined
   }
 
-  return { start: wordStart, end: wordEnd }
+  return wordStart
 }
 
 function isCompletedWordStart(input: string, wordStart: number, wordEnd: number): boolean {
