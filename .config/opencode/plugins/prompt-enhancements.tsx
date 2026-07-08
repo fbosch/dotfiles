@@ -3,7 +3,7 @@ import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plug
 import { RGBA } from "@opentui/core"
 import type { JSX } from "solid-js"
 import { createMemo, createSignal, onCleanup, Show } from "solid-js"
-import { correctCompletedWord, parseTypoRules } from "./prompt-typo-engine"
+import { correctCompletedWord, parseTypoRules } from "./prompt-enhancements/typo-engine"
 
 declare const Bun: {
   file(path: string): {

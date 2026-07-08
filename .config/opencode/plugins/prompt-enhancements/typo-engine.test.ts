@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { parseTypoRules } from "./prompt-typo-engine"
+import { parseTypoRules } from "./typo-engine"
 
 const vimAbolishPath = `${process.env.HOME}/.local/share/nvim/lazy/vim-abolish`
 

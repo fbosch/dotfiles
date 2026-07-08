@@ -10,7 +10,7 @@
     "fallow": "^3.2.0"
   },
   "scripts": {
-    "test:typos": "bun test prompt-typo-engine.test.ts",
+    "test:typos": "bun test prompt-enhancements/typo-engine.test.ts",
     "quality:fallow": "fallow review",
     "quality:fallow:audit": "fallow audit"
   }
