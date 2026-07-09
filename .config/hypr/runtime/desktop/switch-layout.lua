@@ -4,19 +4,18 @@ local socket = require("socket")
 
 local home = os.getenv("HOME")
 local config_dir = home .. "/.config/hypr"
-local json = dofile(config_dir .. "/lib/json.lua")
-local hypr_ipc = dofile(config_dir .. "/runtime/lib/hypr-ipc.lua")
-local ags_ipc = dofile(config_dir .. "/runtime/lib/ags-ipc.lua")
+package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
+
+local json = require("lib.json")
+local command = require("lib.command")
+local hypr_ipc = require("runtime.lib.hypr-ipc")
+local ags_ipc = require("runtime.lib.ags-ipc")
 
 local log_file = "/tmp/hyprland-layout.log"
 local layout_display_codes = {
 	us = "ENG",
 	dk = "DAN",
 }
-
-local function shell_quote(value)
-	return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
-end
 
 local function log(message)
 	local handle = io.open(log_file, "a")
@@ -28,28 +27,12 @@ local function log(message)
 	handle:close()
 end
 
-local function command_output(command)
-	local handle = io.popen(command)
-	if not handle then
-		return ""
-	end
-
-	local output = handle:read("*a") or ""
-	handle:close()
-	return output
-end
-
-local function command_ok(command)
-	local ok, _, code = os.execute(command .. " >/dev/null 2>&1")
-	return ok == true or ok == 0 or code == 0
-end
-
 local function executable(path)
-	return path ~= "" and command_ok("test -x " .. shell_quote(path))
+	return path ~= "" and command.ok("test -x " .. command.arg(path) .. " >/dev/null 2>&1")
 end
 
 local function command_path(name)
-	local path = command_output("command -v " .. shell_quote(name) .. " 2>/dev/null"):match("^[^\n]+") or ""
+	local path = command.output("command -v " .. command.arg(name) .. " 2>/dev/null"):match("^[^\n]+") or ""
 	if path ~= "" then
 		return path
 	end
@@ -77,7 +60,7 @@ end
 local function xwayland_displays()
 	local displays = {}
 	local seen = {}
-	for line in command_output("pgrep -af 'Xwayland' 2>/dev/null"):gmatch("[^\n]+") do
+	for line in command.output("pgrep -af 'Xwayland' 2>/dev/null"):gmatch("[^\n]+") do
 		for display in line:gmatch(":%d+") do
 			if not seen[display] then
 				seen[display] = true
@@ -96,7 +79,7 @@ local function sync_gamescope_xwayland_layout(target_layout)
 	end
 
 	for _, display in ipairs(xwayland_displays()) do
-		command_ok("DISPLAY=" .. shell_quote(display) .. " " .. shell_quote(setxkbmap) .. " -layout " .. shell_quote(target_layout) .. " -option ''")
+		command.ok("DISPLAY=" .. command.arg(display) .. " " .. command.arg(setxkbmap) .. " -layout " .. command.arg(target_layout) .. " -option '' >/dev/null 2>&1")
 	end
 end
 
@@ -147,7 +130,7 @@ local function run()
 	end
 
 	local layouts = split_layouts(before.layout)
-	command_ok("hyprctl switchxkblayout " .. shell_quote(before.name) .. " next")
+	command.ok("hyprctl switchxkblayout " .. command.arg(before.name) .. " next >/dev/null 2>&1")
 	socket.sleep(0.1)
 
 	local after = main_keyboard() or before

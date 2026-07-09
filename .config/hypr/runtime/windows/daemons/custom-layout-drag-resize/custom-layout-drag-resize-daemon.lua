@@ -3,9 +3,10 @@
 local socket = require("socket")
 local unix = require("socket.unix")
 local config_dir = os.getenv("HOME") .. "/.config/hypr"
+package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
-local hypr_ipc = dofile(config_dir .. "/runtime/lib/hypr-ipc.lua")
-local monitor_role = dofile(config_dir .. "/lib/monitor_role.lua")
+local hypr_ipc = require("runtime.lib.hypr-ipc")
+local monitor_role = require("lib.monitor_role")
 
 local runtime_dir = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-custom-layout-drag-resize"
 local command_socket_path = runtime_dir .. "/command.sock"

@@ -6,8 +6,9 @@ local config_dir = os.getenv("HOME") .. "/.config/hypr"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local json = require("lib.json")
+local command = require("lib.command")
 local state_rules = require("runtime.windows.daemons.window-state.rules")
-local hypr_ipc = dofile(config_dir .. "/runtime/lib/hypr-ipc.lua")
+local hypr_ipc = require("runtime.lib.hypr-ipc")
 
 local selectors_lua_file = config_dir .. "/rules/window-state-selectors.lua"
 local rules_lua_file = config_dir .. "/rules/window-state.lua"
@@ -58,10 +59,6 @@ local function write_file(path, content)
 	local handle = assert(io.open(path, "w"))
 	handle:write(content)
 	handle:close()
-end
-
-local function shell_quote(value)
-	return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
 end
 
 local query_socket_path = hypr_ipc.socket_path(".socket.sock")
@@ -222,8 +219,7 @@ local function apply_window_state_rules()
 	local script = "local config_dir = "
 		.. json.encode(config_dir)
 		.. '; package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path; require("rule-loader").apply_window_rule_phase(config_dir, "window_state")'
-	local ok = os.execute("hyprctl eval " .. shell_quote(script) .. " >/dev/null 2>&1")
-	return ok == true or ok == 0
+	return command.ok("hyprctl eval " .. command.arg(script) .. " >/dev/null 2>&1")
 end
 
 local function update_rules(windows)

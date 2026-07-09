@@ -5,7 +5,7 @@ local config_dir = home .. "/.config/hypr"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local json = require("lib.json")
-local hypr_ipc = dofile(config_dir .. "/runtime/lib/hypr-ipc.lua")
+local hypr_ipc = require("runtime.lib.hypr-ipc")
 
 local gaming_workspace = "10"
 

@@ -3,9 +3,12 @@
 local socket = require("socket")
 
 local config_dir = os.getenv("HOME") .. "/.config/hypr"
-local json = dofile(config_dir .. "/lib/json.lua")
-local hypr_ipc = dofile(config_dir .. "/runtime/lib/hypr-ipc.lua")
-local ags_ipc = dofile(config_dir .. "/runtime/lib/ags-ipc.lua")
+package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
+
+local json = require("lib.json")
+local command = require("lib.command")
+local hypr_ipc = require("runtime.lib.hypr-ipc")
+local ags_ipc = require("runtime.lib.ags-ipc")
 
 local mode = arg[1] or "daemon"
 local runtime_dir = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
@@ -39,45 +42,25 @@ local preview_target_max_width = 320
 local command_cache = {}
 local capture_window_preview
 
-local function shell_quote(value)
-	return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
-end
-
-local function command_ok(command)
-	local ok, _, code = os.execute(command)
-	return ok == true or ok == 0 or code == 0
-end
-
-local function command_output(command)
-	local handle = io.popen(command)
-	if not handle then
-		return ""
-	end
-
-	local output = handle:read("*a") or ""
-	handle:close()
-	return output
-end
-
 local function command_exists(name)
 	if command_cache[name] ~= nil then
 		return command_cache[name]
 	end
 
-	command_cache[name] = command_ok("command -v " .. shell_quote(name) .. " >/dev/null 2>&1")
+	command_cache[name] = command.ok("command -v " .. command.arg(name) .. " >/dev/null 2>&1")
 	return command_cache[name]
 end
 
 local function process_is_running(pid)
-	return pid ~= "" and command_ok("kill -0 " .. shell_quote(pid) .. " 2>/dev/null")
+	return pid ~= "" and command.ok("kill -0 " .. command.arg(pid) .. " 2>/dev/null")
 end
 
-local function run_with_timeout(timeout_s, command)
+local function run_with_timeout(timeout_s, command_line)
 	if command_exists("timeout") then
-		return command_ok("timeout --kill-after=1 " .. shell_quote(tostring(timeout_s) .. "s") .. " " .. command)
+		return command.ok("timeout --kill-after=1 " .. command.arg(tostring(timeout_s) .. "s") .. " " .. command_line)
 	end
 
-	return command_ok(command)
+	return command.ok(command_line)
 end
 
 local function now_ms()
@@ -121,7 +104,7 @@ local function file_is_nonempty(path)
 end
 
 local function mkdir(path)
-	command_ok("mkdir -p " .. shell_quote(path) .. " >/dev/null 2>&1")
+	command.ok("mkdir -p " .. command.arg(path) .. " >/dev/null 2>&1")
 end
 
 local function query(request)
@@ -137,7 +120,7 @@ local function query(request)
 	}
 
 	if fallback[request] then
-		return command_output(fallback[request])
+		return command.output(fallback[request])
 	end
 
 	return ""
@@ -172,9 +155,9 @@ local function capture_preview_for_window(window)
 end
 
 local function cleanup_stale_temp_files()
-	command_ok(
+	command.ok(
 		"find "
-			.. shell_quote(screenshot_dir)
+			.. command.arg(screenshot_dir)
 			.. " -maxdepth 1 -name '.temp_*.jpg' -type f -mmin +"
 			.. tostring(math.max(1, math.floor(temp_file_max_age_s / 60)))
 			.. " -delete 2>/dev/null"
@@ -199,7 +182,7 @@ local function cleanup_stale_preview_files()
 		end
 	end
 
-	local previews = command_output("find " .. shell_quote(screenshot_dir) .. " -maxdepth 1 -name '*.jpg' -type f 2>/dev/null")
+	local previews = command.output("find " .. command.arg(screenshot_dir) .. " -maxdepth 1 -name '*.jpg' -type f 2>/dev/null")
 	for preview_path in previews:gmatch("[^\n]+") do
 		local preview_id = preview_path:match("([^/]+)%.jpg$")
 		if preview_id and not live_preview_ids[preview_id] then
@@ -226,14 +209,14 @@ local function frame_is_too_dark(image_path)
 		return false
 	end
 
-	local command = "magick "
-		.. shell_quote(image_path)
+	local command_line = "magick "
+		.. command.arg(image_path)
 		.. " -colorspace Gray -format '%[fx:floor(mean*1000)]' info: 2>/dev/null"
 	local output
 	if command_exists("timeout") then
-		output = command_output("timeout --kill-after=1 1s " .. command)
+		output = command.output("timeout --kill-after=1 1s " .. command_line)
 	else
-		output = command_output(command)
+		output = command.output(command_line)
 	end
 
 	local mean_brightness = tonumber(output)
@@ -252,10 +235,10 @@ function capture_window_preview(preview_id, width, height)
 		"grim -t jpeg -q",
 		tostring(jpeg_quality),
 		"-s",
-		shell_quote(calculate_capture_scale(width, height)),
+		command.arg(calculate_capture_scale(width, height)),
 		"-T",
-		shell_quote(preview_id),
-		shell_quote(temp_output),
+		command.arg(preview_id),
+		command.arg(temp_output),
 		"2>/dev/null",
 	}, " ")
 
@@ -280,25 +263,25 @@ local function capture_window_preview_command(preview_id, width, height)
 		"grim -t jpeg -q",
 		tostring(jpeg_quality),
 		"-s",
-		shell_quote(calculate_capture_scale(width, height)),
+		command.arg(calculate_capture_scale(width, height)),
 		"-T",
-		shell_quote(preview_id),
-		shell_quote(temp_output),
+		command.arg(preview_id),
+		command.arg(temp_output),
 		"2>/dev/null",
 	}, " ")
 
 	if command_exists("timeout") then
-		grim_command = "timeout --kill-after=1 " .. shell_quote(tostring(grim_timeout_s) .. "s") .. " " .. grim_command
+		grim_command = "timeout --kill-after=1 " .. command.arg(tostring(grim_timeout_s) .. "s") .. " " .. grim_command
 	end
 
 	local parts = {
-		grim_command .. " || { rm -f " .. shell_quote(temp_output) .. "; exit 0; }",
-		"[ -s " .. shell_quote(temp_output) .. " ] || { rm -f " .. shell_quote(temp_output) .. "; exit 0; }",
+		grim_command .. " || { rm -f " .. command.arg(temp_output) .. "; exit 0; }",
+		"[ -s " .. command.arg(temp_output) .. " ] || { rm -f " .. command.arg(temp_output) .. "; exit 0; }",
 	}
 
 	if command_exists("magick") then
 		local magick_command = "magick "
-			.. shell_quote(temp_output)
+			.. command.arg(temp_output)
 			.. " -colorspace Gray -format '%[fx:floor(mean*1000)]' info: 2>/dev/null"
 		if command_exists("timeout") then
 			magick_command = "timeout --kill-after=1 1s " .. magick_command
@@ -308,11 +291,11 @@ local function capture_window_preview_command(preview_id, width, height)
 		parts[#parts + 1] = "case $mean in ''|*[!0-9]*) ;; *) [ \"$mean\" -lt "
 			.. tostring(black_frame_mean_threshold)
 			.. " ] && { rm -f "
-			.. shell_quote(temp_output)
+			.. command.arg(temp_output)
 			.. "; exit 0; } ;; esac"
 	end
 
-	parts[#parts + 1] = "mv " .. shell_quote(temp_output) .. " " .. shell_quote(output_path)
+	parts[#parts + 1] = "mv " .. command.arg(temp_output) .. " " .. command.arg(output_path)
 	return table.concat(parts, "; ")
 end
 
@@ -322,7 +305,7 @@ local function spawn_capture_window_preview(preview_id, width, height)
 	end
 
 	local command = capture_window_preview_command(preview_id, width, height)
-	local handle = io.popen("sh -c " .. shell_quote("( " .. command .. " ) & printf '%s\n' \"$!\""), "r")
+	local handle = io.popen("sh -c " .. command.arg("( " .. command .. " ) & printf '%s\n' \"$!\""), "r")
 	if not handle then
 		return nil
 	end
@@ -596,7 +579,7 @@ local function pid_is_running(pid)
 end
 
 local function acquire_daemon_lock()
-	if command_ok("mkdir " .. shell_quote(daemon_lock_dir) .. " 2>/dev/null") then
+	if command.ok("mkdir " .. command.arg(daemon_lock_dir) .. " 2>/dev/null") then
 		write_file(daemon_lock_dir .. "/pid", current_pid())
 		return true
 	end
@@ -607,8 +590,8 @@ local function acquire_daemon_lock()
 		return false
 	end
 
-	command_ok("rm -rf " .. shell_quote(daemon_lock_dir) .. " 2>/dev/null")
-	if command_ok("mkdir " .. shell_quote(daemon_lock_dir) .. " 2>/dev/null") then
+	command.ok("rm -rf " .. command.arg(daemon_lock_dir) .. " 2>/dev/null")
+	if command.ok("mkdir " .. command.arg(daemon_lock_dir) .. " 2>/dev/null") then
 		write_file(daemon_lock_dir .. "/pid", current_pid())
 		return true
 	end
@@ -646,7 +629,7 @@ local function usage()
 end
 
 mkdir(screenshot_dir)
-command_ok("find " .. shell_quote(screenshot_dir) .. " -maxdepth 1 -name '.temp_*.jpg' -type f -delete 2>/dev/null")
+command.ok("find " .. command.arg(screenshot_dir) .. " -maxdepth 1 -name '.temp_*.jpg' -type f -delete 2>/dev/null")
 
 if mode == "refresh-once" then
 	remove_file(last_overlay_file)

@@ -1,11 +1,8 @@
 local json = require("lib.json")
+local command = require("lib.command")
 local generated_rules = require("lib.generated_rules")
 
 local M = {}
-
-local function shell_quote(value)
-	return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
-end
 
 local function read_file(path)
 	local handle = io.open(path, "r")
@@ -19,8 +16,8 @@ local function read_file(path)
 end
 
 local function temp_path_in(directory, prefix)
-	local command = "mktemp " .. shell_quote(directory .. "/" .. prefix .. ".XXXXXX")
-	local handle = assert(io.popen(command, "r"))
+	local command_line = "mktemp " .. command.arg(directory .. "/" .. prefix .. ".XXXXXX")
+	local handle = assert(io.popen(command_line, "r"))
 	local path = handle:read("*l")
 	handle:close()
 	assert(path and path ~= "", "failed to create temporary file")
@@ -215,7 +212,7 @@ end
 
 function M.write_rules_file(opts)
 	local rules_dir = opts.config_dir .. "/rules"
-	os.execute("mkdir -p " .. shell_quote(rules_dir))
+	command.ok("mkdir -p " .. command.arg(rules_dir) .. " >/dev/null 2>&1")
 	local temp = temp_path_in(rules_dir, ".window-state")
 	local next_content = render_rules(opts.cache, opts.selectors_lua_file)
 

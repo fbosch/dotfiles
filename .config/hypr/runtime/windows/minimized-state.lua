@@ -5,6 +5,7 @@ local config_dir = home .. "/.config/hypr"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local json = require("lib.json")
+local command_lib = require("lib.command")
 local hypr_ipc = nil
 
 local minimized_workspace_prefix = "special:minimized"
@@ -15,15 +16,6 @@ local runtime_dir = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
 local state_file = runtime_dir .. "/hypr-minimized-state.json"
 local state_lock = runtime_dir .. "/hypr-minimized-state.lock"
 local show_desktop_dir = runtime_dir .. "/hypr-show-desktop"
-
-local function shell_quote(value)
-	return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
-end
-
-local function command_ok(command)
-	local ok = os.execute(command .. " >/dev/null 2>&1")
-	return ok == true or ok == 0
-end
 
 local function exit_from_status(ok, _, code)
 	if ok == true then
@@ -36,7 +28,7 @@ local function exit_from_status(ok, _, code)
 end
 
 local function run_locked()
-	if os.getenv("HYPR_MINIMIZED_STATE_LOCKED") == "1" or not command_ok("command -v flock") then
+	if os.getenv("HYPR_MINIMIZED_STATE_LOCKED") == "1" or not command_lib.ok("command -v flock >/dev/null 2>&1") then
 		return
 	end
 
@@ -44,12 +36,12 @@ local function run_locked()
 		"HYPR_MINIMIZED_STATE_LOCKED=1",
 		"flock",
 		"-x",
-		shell_quote(state_lock),
-		shell_quote(arg[-1] or "lua"),
-		shell_quote(arg[0]),
+		command_lib.arg(state_lock),
+		command_lib.arg(arg[-1] or "lua"),
+		command_lib.arg(arg[0]),
 	}
 	for index = 1, #arg do
-		command[#command + 1] = shell_quote(arg[index])
+		command[#command + 1] = command_lib.arg(arg[index])
 	end
 
 	exit_from_status(os.execute(table.concat(command, " ")))
@@ -151,7 +143,7 @@ local function dispatch_lua(script)
 	end
 
 	if not hypr_ipc then
-		local load_ok, ipc = pcall(dofile, config_dir .. "/runtime/lib/hypr-ipc.lua")
+		local load_ok, ipc = pcall(require, "runtime.lib.hypr-ipc")
 		if load_ok then
 			hypr_ipc = ipc
 		end
@@ -162,7 +154,7 @@ local function dispatch_lua(script)
 		return
 	end
 
-	os.execute("hyprctl dispatch " .. shell_quote(script) .. " >/dev/null 2>&1")
+	command_lib.ok("hyprctl dispatch " .. command_lib.arg(script) .. " >/dev/null 2>&1")
 end
 
 local function move_window_to_workspace(workspace, address)
@@ -224,11 +216,7 @@ local function special_workspace_for_bucket(bucket_key)
 		return minimized_workspace_prefix
 	end
 
-	local handle = io.popen("printf %s " .. shell_quote(bucket_key) .. " | sha1sum", "r")
-	local hash = handle and handle:read("*l") or ""
-	if handle then
-		handle:close()
-	end
+	local hash = command_lib.output_line("printf %s " .. command_lib.arg(bucket_key) .. " | sha1sum")
 
 	return minimized_workspace_prefix .. "-" .. hash:sub(1, 12)
 end
@@ -303,15 +291,15 @@ local function restore_window_state(state, address)
 end
 
 local function ensure_daemon_running()
-	if command_ok("pgrep -f '[m]inimized-state-daemon'") then
+	if command_lib.ok("pgrep -f '[m]inimized-state-daemon' >/dev/null 2>&1") then
 		return
 	end
 
 	local daemon_script = config_dir .. "/runtime/windows/daemons/minimized-state/minimized-state-daemon.sh"
-	if command_ok("command -v uwsm-app") then
-		os.execute("uwsm-app -s b -- " .. shell_quote(daemon_script) .. " >/dev/null 2>&1 &")
+	if command_lib.ok("command -v uwsm-app >/dev/null 2>&1") then
+		command_lib.ok("uwsm-app -s b -- " .. command_lib.arg(daemon_script) .. " >/dev/null 2>&1 &")
 	else
-		os.execute(shell_quote(daemon_script) .. " >/dev/null 2>&1 &")
+		command_lib.ok(command_lib.arg(daemon_script) .. " >/dev/null 2>&1 &")
 	end
 end
 
@@ -529,7 +517,7 @@ local function state_path_for_show_desktop(monitor_name, workspace)
 end
 
 local function mkdir_p(path)
-	os.execute("mkdir -p " .. shell_quote(path))
+	command_lib.ok("mkdir -p " .. command_lib.arg(path) .. " >/dev/null 2>&1")
 end
 
 local function restore_show_desktop(state_path, current_workspace)

@@ -1,34 +1,15 @@
 local M = {}
 
+local command = require("lib.command")
 local empty_opts = {}
 local busctl_ready = nil
-
-local function shell_quote(value)
-	return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
-end
-
-local function command_output(command)
-	local handle = io.popen(command)
-	if not handle then
-		return ""
-	end
-
-	local output = handle:read("*a") or ""
-	handle:close()
-	return output
-end
-
-local function command_ok(command)
-	local ok, _, code = os.execute(command)
-	return ok == true or ok == 0 or code == 0
-end
 
 local function busctl_available()
 	if busctl_ready ~= nil then
 		return busctl_ready
 	end
 
-	busctl_ready = command_ok("command -v busctl >/dev/null 2>&1")
+	busctl_ready = command.ok("command -v busctl >/dev/null 2>&1")
 	return busctl_ready
 end
 
@@ -51,18 +32,18 @@ function M.request(component, payload, opts)
 	local timeout = opts.timeout or 0.5
 
 	if busctl_available() then
-		local response = command_output(table.concat({
+		local response = command.output(table.concat({
 			"busctl --user",
-			"--timeout=" .. shell_quote(timeout),
+			"--timeout=" .. command.arg(timeout),
 			"call",
-			shell_quote("io.Astal." .. instance),
+			command.arg("io.Astal." .. instance),
 			"/io/Astal/Application",
 			"io.Astal.Application",
 			"Request",
 			"as",
 			"2",
-			shell_quote(component),
-			shell_quote(payload),
+			command.arg(component),
+			command.arg(payload),
 			"2>/dev/null",
 		}, " "))
 
@@ -72,11 +53,11 @@ function M.request(component, payload, opts)
 		end
 	end
 
-	return command_output(table.concat({
+	return command.output(table.concat({
 		"ags request -i",
-		shell_quote(instance),
-		shell_quote(component),
-		shell_quote(payload),
+		command.arg(instance),
+		command.arg(component),
+		command.arg(payload),
 		"2>/dev/null",
 	}, " ")):gsub("%s+$", "")
 end

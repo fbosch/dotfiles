@@ -3,8 +3,12 @@
 local socket = require("socket")
 
 local home = os.getenv("HOME")
-local json = dofile(home .. "/.config/hypr/lib/json.lua")
-local hypr_ipc = dofile(home .. "/.config/hypr/runtime/lib/hypr-ipc.lua")
+local config_dir = home .. "/.config/hypr"
+package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
+
+local json = require("lib.json")
+local command = require("lib.command")
+local hypr_ipc = require("runtime.lib.hypr-ipc")
 local profilectl = home .. "/.config/hypr/runtime/profiles/profilectl.sh"
 local reconnect_delay_seconds = 1
 local event_idle_timeout_seconds = 5
@@ -24,17 +28,8 @@ local freeze_excluded_title_prefixes = {
 local wl_freeze_checked = false
 local wl_freeze_available = false
 
-local function shell_quote(value)
-	return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
-end
-
 local function profile_sync(count)
-	os.execute(shell_quote(profilectl) .. " sync gaming " .. shell_quote(count) .. " >/dev/null 2>&1")
-end
-
-local function command_ok(command)
-	local ok = os.execute(command .. " >/dev/null 2>&1")
-	return ok == true or ok == 0
+	command.ok(command.arg(profilectl) .. " sync gaming " .. command.arg(count) .. " >/dev/null 2>&1")
 end
 
 local function get_clients()
@@ -151,17 +146,13 @@ local function process_state(pid)
 		return ""
 	end
 
-	local handle = io.popen("ps -p " .. pid .. " -o state= 2>/dev/null", "r")
-	local output = handle and handle:read("*a") or ""
-	if handle then
-		handle:close()
-	end
+	local output = command.output("ps -p " .. command.arg(pid) .. " -o state= 2>/dev/null")
 	return (output:gsub("%s+", ""))
 end
 
 local function can_wl_freeze()
 	if not wl_freeze_checked then
-		wl_freeze_available = command_ok("command -v wl-freeze")
+		wl_freeze_available = command.ok("command -v wl-freeze >/dev/null 2>&1")
 		wl_freeze_checked = true
 	end
 	return wl_freeze_available
@@ -182,7 +173,7 @@ local function set_process_frozen(pid, should_freeze)
 		return
 	end
 
-	os.execute("wl-freeze -p " .. pid .. " -s >/dev/null 2>&1")
+	command.ok("wl-freeze -p " .. command.arg(pid) .. " -s >/dev/null 2>&1")
 end
 
 local function sync_gaming_freeze_state(clients, monitors)
