@@ -11,10 +11,10 @@ local function read_all(path)
 	return content
 end
 
----@alias FbbPaletteJsonDecoder fun(content: string): table
+---@alias JsonDecoder fun(content: string): table
 
 ---@param config_home string
----@param decode_json FbbPaletteJsonDecoder
+---@param decode_json JsonDecoder
 ---@return table palette
 ---@return table ansi
 ---@return table semantic
