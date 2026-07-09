@@ -5,6 +5,7 @@ package.path = package.path
 local registered_events = {}
 
 package.loaded.wezterm = {
+	config_dir = "." .. package.config:sub(1, 1) .. ".config" .. package.config:sub(1, 1) .. "wezterm",
 	strftime = function(format)
 		if format == "(%Y-%m-%d) %a %b %-d " then
 			return "(2026-03-17) Tue Mar 17 "
@@ -29,6 +30,20 @@ package.loaded.wezterm = {
 	},
 	format = function(items)
 		return items
+	end,
+	json_parse = function(content)
+		return {
+			zenwritten = {
+				dark = {
+					background = "#191919",
+					foreground = "#BBBBBB",
+					semantic = {
+						muted = "#636363",
+					},
+					ansi = {},
+				},
+			},
+		}
 	end,
 	on = function(event, callback)
 		registered_events[event] = callback

@@ -1,11 +1,24 @@
 local M = {}
+local palette_path = vim.fn.fnamemodify(vim.fn.stdpath("config"), ":h") .. "/fbb/data/palette.json"
+
+local function read_palette()
+	local content = table.concat(vim.fn.readfile(palette_path), "\n")
+	local palette = vim.json.decode(content)
+	assert(type(palette.zenwritten) == "table", "missing zenwritten palette")
+	assert(type(palette.zenwritten.dark) == "table", "missing zenwritten dark palette")
+	return palette.zenwritten.dark
+end
+
+local palette = read_palette()
+local ansi = assert(palette.ansi, "missing zenwritten dark ANSI palette")
+local semantic = assert(palette.semantic, "missing zenwritten dark semantic palette")
 
 M.white = "#ffffff"
-M.background = "#191919"
-M.lighter_gray = "#bbbbbb"
-M.light_gray = "#636363"
+M.background = palette.background
+M.lighter_gray = palette.foreground
+M.light_gray = semantic.muted
 M.gray = "#303030"
-M.dark_gray = "#2c2c2c"
+M.dark_gray = semantic.panel
 M.darker_gray = "#252525"
 M.darkest_gray = "#1d1d1d"
 M.almost_black = "#131313"
@@ -14,14 +27,14 @@ M.mispell_red = "#A8334C"
 M.match_blue = "#6e8aa5"
 M.search_backdrop = "#797979"
 
-M.red = "#DE6E7C"
-M.orange = "#D68C67"
-M.blue = "#97bdde"
-M.dark_blue = "#6099C0"
-M.purple = "#b279a7"
-M.yellow = "#E5B769"
-M.green = "#8BAE68"
-M.cyan = "#65B8C1"
+M.red = ansi.red
+M.orange = ansi.brightYellow
+M.blue = semantic.blue
+M.dark_blue = ansi.blue
+M.purple = ansi.magenta
+M.yellow = ansi.brightYellow
+M.green = ansi.brightGreen
+M.cyan = ansi.brightCyan
 
 M.highlight_args = {
 	"#9ec5cb",

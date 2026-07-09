@@ -1,0 +1,75 @@
+{
+  "zenwritten": {
+    "source": "https://github.com/mcchrish/zenbones.nvim",
+    "dark": {
+      "foreground": "#BBBBBB",
+      "background": "#191919",
+      "selectionForeground": "#BBBBBB",
+      "selectionBackground": "#404040",
+      "cursor": "#C9C9C9",
+      "cursorText": "#191919",
+      "activeTabForeground": "#BBBBBB",
+      "activeTabBackground": "#65435E",
+      "inactiveTabForeground": "#BBBBBB",
+      "inactiveTabBackground": "#303030",
+      "ansi": {
+        "black": "#191919",
+        "red": "#DE6E7C",
+        "green": "#819B69",
+        "yellow": "#B77E64",
+        "blue": "#6099C0",
+        "magenta": "#B279A7",
+        "cyan": "#66A5AD",
+        "white": "#BBBBBB",
+        "brightBlack": "#3D3839",
+        "brightRed": "#E8838F",
+        "brightGreen": "#8BAE68",
+        "brightYellow": "#D68C67",
+        "brightBlue": "#61ABDA",
+        "brightMagenta": "#CF86C1",
+        "brightCyan": "#65B8C1",
+        "brightWhite": "#8E8E8E"
+      },
+      "semantic": {
+        "muted": "#636363",
+        "panel": "#2c2c2c",
+        "blue": "#97bdde"
+      }
+    },
+    "light": {
+      "foreground": "#353535",
+      "background": "#EEEEEE",
+      "selectionForeground": "#353535",
+      "selectionBackground": "#D7D7D7",
+      "cursor": "#353535",
+      "cursorText": "#EEEEEE",
+      "activeTabForeground": "#353535",
+      "activeTabBackground": "#DEB9D6",
+      "inactiveTabForeground": "#353535",
+      "inactiveTabBackground": "#CFCFCF",
+      "ansi": {
+        "black": "#EEEEEE",
+        "red": "#A8334C",
+        "green": "#4F6C31",
+        "yellow": "#944927",
+        "blue": "#286486",
+        "magenta": "#88507D",
+        "cyan": "#3B8992",
+        "white": "#353535",
+        "brightBlack": "#C6C3C3",
+        "brightRed": "#94253E",
+        "brightGreen": "#3F5A22",
+        "brightYellow": "#803D1C",
+        "brightBlue": "#1D5573",
+        "brightMagenta": "#7B3B70",
+        "brightCyan": "#2B747C",
+        "brightWhite": "#5C5C5C"
+      },
+      "semantic": {
+        "muted": "#8B8B8B",
+        "panel": "#D7D7D7",
+        "blue": "#286486"
+      }
+    }
+  }
+}
