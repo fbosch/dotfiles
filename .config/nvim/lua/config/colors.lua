@@ -1,17 +1,7 @@
 local M = {}
-local palette_path = vim.fn.fnamemodify(vim.fn.stdpath("config"), ":h") .. "/fbb/data/palette.json"
-
-local function read_palette()
-	local content = table.concat(vim.fn.readfile(palette_path), "\n")
-	local palette = vim.json.decode(content)
-	assert(type(palette.zenwritten) == "table", "missing zenwritten palette")
-	assert(type(palette.zenwritten.dark) == "table", "missing zenwritten dark palette")
-	return palette.zenwritten.dark
-end
-
-local palette = read_palette()
-local ansi = assert(palette.ansi, "missing zenwritten dark ANSI palette")
-local semantic = assert(palette.semantic, "missing zenwritten dark semantic palette")
+local config_home = vim.fn.fnamemodify(vim.fn.stdpath("config"), ":h")
+package.path = config_home .. "/fbb/lua/?.lua;" .. package.path
+local palette, ansi, semantic = require("fbb.palette").zenwritten_dark(config_home, vim.json.decode)
 
 M.white = "#ffffff"
 M.background = palette.background

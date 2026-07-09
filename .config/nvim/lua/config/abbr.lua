@@ -4,7 +4,10 @@ local fmt = string.format
 local log = vim.log.levels
 
 local M = {}
-local typo_rules_path = fn.fnamemodify(fn.stdpath("config"), ":h") .. "/fbb/data/typos.abolish"
+local config_home = fn.fnamemodify(fn.stdpath("config"), ":h")
+package.path = config_home .. "/fbb/lua/?.lua;" .. package.path
+local paths = require("fbb.paths")
+local typo_rules_path = paths.data_path("typos.abolish", config_home)
 
 local ft_abbr_group = api.nvim_create_augroup("ConfigFiletypeAbbreviations", { clear = true })
 
