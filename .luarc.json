@@ -9,6 +9,7 @@
   "Lua.workspace.library": [
     "$VIMRUNTIME",
     "./.config/nvim",
+    "./.config/fbb/lua",
     "/usr/share/hypr/stubs"
   ]
 }

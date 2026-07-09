@@ -6,6 +6,7 @@
   ],
   "Lua.workspace.checkThirdParty": false,
   "Lua.workspace.library": [
-    "$VIMRUNTIME"
+    "$VIMRUNTIME",
+    "../fbb/lua"
   ]
 }
