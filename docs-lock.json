@@ -14,7 +14,7 @@
     "vicinae-docs": {
       "repo": "https://github.com/vicinaehq/docs.git",
       "ref": "HEAD",
-      "resolvedCommit": "2516e47f53abe6ed4f338aa36c2b891c8c1759b3",
+      "resolvedCommit": "bd2cd8fe89ef0d702ad2f06ccc27a558d8a62c70",
       "bytes": 58916,
       "fileCount": 34,
       "manifestSha256": "6939a47c343a73de73f80609c96f0b73154b05a47a0b3376f46a535801ff06c7",
@@ -32,7 +32,7 @@
     "waybar": {
       "repo": "https://github.com/Alexays/Waybar.wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "5e1db423049385bc8d6780234fb6a3f1329e2ba5",
+      "resolvedCommit": "6d9df5ff3ca0e638bbfa1f202c4d20a9050de7a4",
       "bytes": 22789,
       "fileCount": 2,
       "manifestSha256": "6ce880bf38b379777e79aa3ba0909f4351f89b3a6c39df253a3c357948d2d865",
