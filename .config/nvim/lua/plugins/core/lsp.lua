@@ -1,17 +1,86 @@
 local platform = require("utils.platform")
 
+local tsc_lsp_support = {}
+
+local function find_tsc(root_dir)
+	local dir = root_dir
+	while dir ~= nil do
+		local candidate = vim.fs.joinpath(dir, "node_modules", ".bin", "tsc")
+		if vim.fn.executable(candidate) == 1 then
+			return candidate
+		end
+
+		local parent = vim.fs.dirname(dir)
+		if parent == nil or parent == dir then
+			break
+		end
+
+		dir = parent
+	end
+
+	return "tsc"
+end
+
+local function tsc_supports_lsp(tsc)
+	if tsc_lsp_support[tsc] ~= nil then
+		return tsc_lsp_support[tsc]
+	end
+
+	if vim.fn.executable(tsc) ~= 1 then
+		tsc_lsp_support[tsc] = false
+		return false
+	end
+
+	local result = vim.system({ tsc, "--lsp", "--help" }, { text = true }):wait()
+	tsc_lsp_support[tsc] = result.code == 0
+	return tsc_lsp_support[tsc]
+end
+
+local function typescript_root(bufnr)
+	local path = vim.api.nvim_buf_get_name(bufnr)
+	if path == "" then
+		return nil
+	end
+
+	if vim.fs.root(path, { "deno.json", "deno.jsonc" }) ~= nil then
+		return nil
+	end
+
+	return vim.fs.root(path, {
+		"package-lock.json",
+		"yarn.lock",
+		"pnpm-lock.yaml",
+		"bun.lockb",
+		"bun.lock",
+		"tsconfig.json",
+		"jsconfig.json",
+		"package.json",
+		".git",
+	})
+end
+
 local servers = {
-	typescript = {
-		enabled = false, -- use typescript-tools.nvim instead
-	},
 	ts_ls = {
-		enabled = false, -- use typescript-tools.nvim instead
+		cmd = { "typescript-language-server", "--stdio" },
+		root_dir = function(bufnr, on_dir)
+			local root = typescript_root(bufnr)
+			if root ~= nil and tsc_supports_lsp(find_tsc(root)) == false then
+				on_dir(root)
+			end
+		end,
 	},
-	vtsls = {
-		enabled = false, -- use typescript-tools.nvim instead
-	},
-	tsserver = {
-		enabled = false, -- use typescript-tools.nvim instead
+	ts7 = {
+		cmd = function(dispatchers, config)
+			local tsc = find_tsc(config.root_dir)
+			return vim.lsp.rpc.start({ tsc, "--lsp", "--stdio" }, dispatchers)
+		end,
+		filetypes = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
+		root_dir = function(bufnr, on_dir)
+			local root = typescript_root(bufnr)
+			if root ~= nil and tsc_supports_lsp(find_tsc(root)) then
+				on_dir(root)
+			end
+		end,
 	},
 	tailwindcss = {
 		cmd = { "tailwindcss-language-server", "--stdio" },
@@ -254,9 +323,11 @@ local function server_config(server_name, capabilities, on_attach)
 	}
 end
 
-local disabled_ts_servers = { "typescript", "ts_ls", "tsserver", "vtsls" }
-
 local function cmd_available(server)
+	if type(server.cmd) == "function" then
+		return true
+	end
+
 	if server.cmd == nil or server.cmd[1] == nil then
 		return true
 	end
@@ -308,29 +379,6 @@ return {
 				},
 			},
 		},
-		{
-			"pmizio/typescript-tools.nvim",
-			ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
-			dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig" },
-			config = function()
-				require("typescript-tools").setup({
-					on_attach = on_attach,
-					separate_diagnostic_server = true,
-					publish_diagnostic_on = "insert_leave",
-					complete_function_calls = false,
-					settings = {
-						tsserver_file_preferences = {
-							importModuleSpecifierPreference = "non-relative",
-							importModuleSpecifierEnding = "auto",
-						},
-					},
-					jsx_close_tag = {
-						enable = false,
-						filetypes = { "javascriptreact", "typescriptreact" },
-					},
-				})
-			end,
-		},
 	},
 	config = function()
 		if vim.lsp.document_color then
@@ -338,13 +386,7 @@ return {
 		end
 
 		local capabilities = get_capabilities()
-		for _, server_name in ipairs(disabled_ts_servers) do
-			pcall(vim.lsp.enable, server_name, false)
-		end
 		enable_servers(capabilities, on_attach)
-		for _, server_name in ipairs(disabled_ts_servers) do
-			pcall(vim.lsp.enable, server_name, false)
-		end
 		require("lazydev").setup({ capabilities = capabilities, on_attach = on_attach })
 		require("lsp-file-operations").setup()
 		setup_diagnostics()
