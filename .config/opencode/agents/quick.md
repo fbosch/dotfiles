@@ -17,7 +17,6 @@ permission:
     "npm install *": deny
     "npm ci *": deny
     "pip install *": deny
-    "*": allow
 ---
 
 You handle fast, cost-efficient work for well-scoped tasks, especially repeatable command workflows.

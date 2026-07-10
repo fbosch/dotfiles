@@ -8,6 +8,9 @@ tools:
   edit: false
   patch: false
 permission:
+  edit: deny
+  open_pr: deny
+  gh_pr_feedback_resolve_threads: deny
   bash:
     "*": ask
     "git commit *": deny

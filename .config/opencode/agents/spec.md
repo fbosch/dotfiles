@@ -7,6 +7,9 @@ tools:
   write: false
   edit: false
 permission:
+  edit: deny
+  open_pr: deny
+  gh_pr_feedback_resolve_threads: deny
   bash:
     "git commit *": deny
     "git merge *": deny
@@ -20,7 +23,7 @@ permission:
     "npm install *": deny
     "npm ci *": deny
     "pip install *": deny
-    "*": allow
+    "*": ask
 ---
 
 Turn the request into a precise contract. No implementation.

@@ -13,6 +13,10 @@ tools:
   patch: false
   bash: false
   task: false
+permission:
+  edit: deny
+  open_pr: deny
+  gh_pr_feedback_resolve_threads: deny
 ---
 
 You are a divergent thinking partner. Expand the solution space, then triage it into a ranked shortlist.

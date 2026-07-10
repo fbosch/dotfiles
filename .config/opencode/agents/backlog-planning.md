@@ -11,6 +11,12 @@ tools:
   write: false
   edit: false
   patch: false
+permission:
+  edit: deny
+  open_pr: deny
+  gh_pr_feedback_resolve_threads: deny
+  bash:
+    "*": ask
 ---
 
 You are a backlog planning agent.

@@ -15,7 +15,6 @@ permission:
     "npm install *": deny
     "npm ci *": deny
     "pip install *": deny
-    "*": allow
 ---
 
 You write, run, and diagnose comprehensive tests.
