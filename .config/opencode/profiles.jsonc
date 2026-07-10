@@ -6,7 +6,7 @@
   //   Claude Haiku 4.5     200K     —        0.33x
   //   Claude Sonnet 4.6    200K     —        1x
   //   Claude Opus 4.6      200K     —        3x
-  //   GPT-5.5 Low          —        —        —
+  //   GPT-5.6 Low          —        —        —
   //   GPT-5.1 Codex Max    400K     272K     1x
   //   GPT-5.1 Codex Mini   400K     272K     0.33x
   //   GPT-5.2 Codex        272K     —        1x
@@ -18,11 +18,11 @@
   "profiles": {
     "default": {
       "description": "Preferred mixed routing",
-      "model": "opencode/gpt-5.5",
+      "model": "opencode/gpt-5.6",
       "small_model": "anthropic/claude-haiku-4-5",
       "agents": {
         "plan": {
-          "model": "opencode/gpt-5.5",
+          "model": "opencode/gpt-5.6",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
@@ -36,28 +36,28 @@
         "refactor": "anthropic/claude-sonnet-4-6",
         "commit": "anthropic/claude-haiku-4-5",
         "title": {
-          "model": "opencode/gpt-5.5",
+          "model": "opencode/gpt-5.6",
           "reasoningEffort": "low",
           "textVerbosity": "low"
         },
         "summary": {
-          "model": "opencode/gpt-5.5",
+          "model": "opencode/gpt-5.6",
           "reasoningEffort": "low",
           "textVerbosity": "medium"
         },
         "compaction": {
-          "model": "opencode/gpt-5.5",
+          "model": "opencode/gpt-5.6",
           "reasoningEffort": "low",
           "textVerbosity": "medium"
         },
         "test": "anthropic/claude-sonnet-4-6",
         "review": {
-          "model": "opencode/gpt-5.5",
+          "model": "opencode/gpt-5.6",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
         "spec": {
-          "model": "opencode/gpt-5.5",
+          "model": "opencode/gpt-5.6",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
@@ -69,7 +69,7 @@
     },
     "github-copilot": {
       "description": "Preferred mixed routing with GitHub Copilot",
-      "model": "github-copilot/gpt-5.5",
+      "model": "github-copilot/gpt-5.6",
       "small_model": "github-copilot/claude-haiku-4.5",
       "agents": {
         "plan": "github-copilot/claude-opus-4.6",
@@ -108,7 +108,7 @@
     },
     "opencode-zen": {
       "description": "Preferred mixed routing via OpenCode Zen",
-      "model": "opencode/gpt-5.5",
+      "model": "opencode/gpt-5.6",
       "small_model": "opencode/claude-haiku-4-5",
       "agents": {
         "plan": "opencode/claude-opus-4-6",
@@ -124,7 +124,7 @@
         "title": "opencode/big-pickle",
         "summary": "opencode/big-pickle",
         "compaction": {
-          "model": "opencode/gpt-5.5",
+          "model": "opencode/gpt-5.6",
           "reasoningEffort": "low",
           "textVerbosity": "medium"
         },
@@ -166,11 +166,11 @@
     },
     "openai": {
       "description": "OpenAI routing",
-      "model": "openai/gpt-5.5",
+      "model": "openai/gpt-5.6",
       "small_model": "openai/gpt-5.4-mini-fast",
       "agents": {
         "plan": {
-          "model": "openai/gpt-5.5",
+          "model": "openai/gpt-5.6",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
@@ -180,22 +180,22 @@
           "textVerbosity": "low"
         },
         "general": {
-          "model": "openai/gpt-5.5",
+          "model": "openai/gpt-5.6",
           "reasoningEffort": "low",
           "textVerbosity": "medium"
         },
         "analyze": {
-          "model": "openai/gpt-5.5",
+          "model": "openai/gpt-5.6",
           "reasoningEffort": "low",
           "textVerbosity": "low"
         },
         "debug": {
-          "model": "openai/gpt-5.5",
+          "model": "openai/gpt-5.6",
           "reasoningEffort": "medium",
           "textVerbosity": "medium"
         },
         "ideate": {
-          "model": "openai/gpt-5.5",
+          "model": "openai/gpt-5.6",
           "reasoningEffort": "medium",
           "textVerbosity": "medium"
         },
@@ -205,12 +205,12 @@
           "textVerbosity": "low"
         },
         "adversarial": {
-          "model": "openai/gpt-5.5",
+          "model": "openai/gpt-5.6",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
         "refactor": {
-          "model": "openai/gpt-5.5",
+          "model": "openai/gpt-5.6",
           "reasoningEffort": "medium",
           "textVerbosity": "medium"
         },
@@ -235,22 +235,22 @@
           "textVerbosity": "medium"
         },
         "test": {
-          "model": "openai/gpt-5.5-fast",
+          "model": "openai/gpt-5.6-fast",
           "reasoningEffort": "medium",
           "textVerbosity": "medium"
         },
         "review": {
-          "model": "openai/gpt-5.5",
+          "model": "openai/gpt-5.6",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
         "docs": {
-          "model": "openai/gpt-5.5",
+          "model": "openai/gpt-5.6",
           "reasoningEffort": "medium",
           "textVerbosity": "medium"
         },
         "research": {
-          "model": "openai/gpt-5.5",
+          "model": "openai/gpt-5.6",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
@@ -265,7 +265,7 @@
           "textVerbosity": "low"
         },
         "spec": {
-          "model": "openai/gpt-5.5",
+          "model": "openai/gpt-5.6",
           "reasoningEffort": "xhigh",
           "textVerbosity": "medium"
         }
