@@ -6,7 +6,9 @@
   //   Claude Haiku 4.5     200K     —        0.33x
   //   Claude Sonnet 4.6    200K     —        1x
   //   Claude Opus 4.6      200K     —        3x
-  //   GPT-5.6 Low          —        —        —
+  //   GPT-5.6 Sol          1.05M    —        —
+  //   GPT-5.6 Terra        1.05M    —        —
+  //   GPT-5.6 Luna         1.05M    —        —
   //   GPT-5.1 Codex Max    400K     272K     1x
   //   GPT-5.1 Codex Mini   400K     272K     0.33x
   //   GPT-5.2 Codex        272K     —        1x
@@ -166,11 +168,11 @@
     },
     "openai": {
       "description": "OpenAI routing",
-      "model": "openai/gpt-5.6",
+      "model": "openai/gpt-5.6-terra",
       "small_model": "openai/gpt-5.4-mini-fast",
       "agents": {
         "plan": {
-          "model": "openai/gpt-5.6",
+          "model": "openai/gpt-5.6-sol",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
@@ -180,22 +182,22 @@
           "textVerbosity": "low"
         },
         "general": {
-          "model": "openai/gpt-5.6",
+          "model": "openai/gpt-5.6-luna",
           "reasoningEffort": "low",
           "textVerbosity": "medium"
         },
         "analyze": {
-          "model": "openai/gpt-5.6",
+          "model": "openai/gpt-5.6-terra",
           "reasoningEffort": "low",
           "textVerbosity": "low"
         },
         "debug": {
-          "model": "openai/gpt-5.6",
+          "model": "openai/gpt-5.6-terra",
           "reasoningEffort": "medium",
           "textVerbosity": "medium"
         },
         "ideate": {
-          "model": "openai/gpt-5.6",
+          "model": "openai/gpt-5.6-terra",
           "reasoningEffort": "medium",
           "textVerbosity": "medium"
         },
@@ -205,12 +207,12 @@
           "textVerbosity": "low"
         },
         "adversarial": {
-          "model": "openai/gpt-5.6",
+          "model": "openai/gpt-5.6-sol",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
         "refactor": {
-          "model": "openai/gpt-5.6",
+          "model": "openai/gpt-5.6-terra",
           "reasoningEffort": "medium",
           "textVerbosity": "medium"
         },
@@ -235,27 +237,27 @@
           "textVerbosity": "medium"
         },
         "test": {
-          "model": "openai/gpt-5.6-fast",
+          "model": "openai/gpt-5.6-luna",
           "reasoningEffort": "medium",
           "textVerbosity": "medium"
         },
         "review": {
-          "model": "openai/gpt-5.6",
+          "model": "openai/gpt-5.6-sol",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
         "docs": {
-          "model": "openai/gpt-5.6",
+          "model": "openai/gpt-5.6-terra",
           "reasoningEffort": "medium",
           "textVerbosity": "medium"
         },
         "research": {
-          "model": "openai/gpt-5.6",
+          "model": "openai/gpt-5.6-sol",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
         "quick": {
-          "model": "openai/gpt-5.4-mini-fast",
+          "model": "openai/gpt-5.6-luna",
           "reasoningEffort": "low",
           "textVerbosity": "low"
         },
@@ -265,7 +267,7 @@
           "textVerbosity": "low"
         },
         "spec": {
-          "model": "openai/gpt-5.6",
+          "model": "openai/gpt-5.6-sol",
           "reasoningEffort": "xhigh",
           "textVerbosity": "medium"
         }
