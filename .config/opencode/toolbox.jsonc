@@ -78,6 +78,8 @@
         "mcp-serena",
         "-v",
         ".:/workspace",
+        "-v",
+        "opencode-serena:/workspaces/serena/config",
         "-e",
         "SERENA_DOCKER=1",
         "ghcr.io/oraios/serena:latest",

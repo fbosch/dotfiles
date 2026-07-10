@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { parseTypoRules } from "./typo-engine"
+import { appendDelimiterAndCorrect, parseTypoRules } from "./typo-engine"
 
 const vimAbolishPath = `${process.env.HOME}/.local/share/nvim/lazy/vim-abolish`
 
@@ -65,4 +65,12 @@ test("TypeScript typo engine matches documented vim-abolish abbreviation expansi
   const expected = await vimAbolishRules(abolishSpecRules)
 
   expect(sortedEntries(actual)).toEqual(sortedEntries(expected))
+})
+
+test("corrects a completed word before punctuation", () => {
+  const rules = new Map([["teh", "the"]])
+
+  for (const delimiter of [".", ",", "!", "?", ":", ";"]) {
+    expect(appendDelimiterAndCorrect("teh", delimiter, rules)).toBe(`the${delimiter}`)
+  }
 })

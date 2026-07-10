@@ -57,7 +57,7 @@
       "/Users/fbb/.config/opencode/**": "allow"
     },
     "bash": {
-      "*": "ask",
+      "*": "allow",
       "rm *": "ask",
       "rtk rm *": "ask",
       "sudo *": "deny",

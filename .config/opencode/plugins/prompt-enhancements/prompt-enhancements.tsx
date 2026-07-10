@@ -31,6 +31,16 @@ type PluginConfig = {
   breakpoints: TokenBreakPoint[]
 }
 
+const typoDelimiters = [
+  { key: "space", name: "space", value: " ", description: "Insert space and fix prompt typo" },
+  { key: ".", name: "period", value: "." },
+  { key: ",", name: "comma", value: "," },
+  { key: "!", name: "exclamation", value: "!" },
+  { key: "?", name: "question", value: "?" },
+  { key: ":", name: "colon", value: ":" },
+  { key: ";", name: "semicolon", value: ";" },
+] as const
+
 type PromptInfo = {
   input: string
   mode?: "normal" | "shell"
@@ -220,13 +230,14 @@ async function loadTypoRules(): Promise<Map<string, string>> {
   }
 }
 
-function insertSpaceAndCorrect(
+function insertDelimiterAndCorrect(
   ref: PromptRef,
+  delimiter: string,
   rules: ReadonlyMap<string, string>,
   ruleLengths: ReadonlySet<number>,
 ) {
   const current = ref.current
-  ref.set({ ...current, input: appendDelimiterAndCorrect(current.input, " ", rules, ruleLengths) })
+  ref.set({ ...current, input: appendDelimiterAndCorrect(current.input, delimiter, rules, ruleLengths) })
 }
 
 function PromptWithEnhancements(
@@ -661,9 +672,9 @@ const tui: TuiPlugin = async (api: TuiPluginApi, options: unknown) => {
   api.keymap.registerLayer({
     mode: "base",
     commands: [
-      {
-        name: "prompt-enhancements.space",
-        title: "Insert Space",
+      ...typoDelimiters.map((delimiter) => ({
+        name: `prompt-enhancements.insert-${delimiter.name}`,
+        title: `Insert ${delimiter.name}`,
         category: "Prompt",
         hidden: true,
         run() {
@@ -672,11 +683,15 @@ const tui: TuiPlugin = async (api: TuiPluginApi, options: unknown) => {
             return
           }
 
-          insertSpaceAndCorrect(ref, typoRules, typoLengths)
+          insertDelimiterAndCorrect(ref, delimiter.value, typoRules, typoLengths)
         },
-      },
+      })),
     ],
-    bindings: [{ key: "space", cmd: "prompt-enhancements.space", desc: "Insert space and fix prompt typo" }],
+    bindings: typoDelimiters.map((delimiter) => ({
+      key: delimiter.key,
+      cmd: `prompt-enhancements.insert-${delimiter.name}`,
+      desc: delimiter.description ?? "Insert punctuation and fix prompt typo",
+    })),
   })
 
   api.slots.register({
