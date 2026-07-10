@@ -11,8 +11,7 @@ PR input: $ARGUMENTS
 If `$ARGUMENTS` is empty, output only:
 `Usage: /ado-pr-review <pr-url-or-id>`
 
-Fetched PR review context:
-!`~/.config/opencode/scripts/fetch-ado-pr.sh "$ARGUMENTS"`
+Fetch the PR review context with the `ado_fetch` tool using `kind: "pr-review"` and the supplied PR input.
 
 Instructions:
 

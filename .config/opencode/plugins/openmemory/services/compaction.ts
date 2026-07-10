@@ -20,7 +20,6 @@ const CLAUDE_MODEL_PATTERN = /claude-(opus|sonnet|haiku)/i;
 interface CompactionState {
   lastCompactionTime: Map<string, number>;
   compactionInProgress: Set<string>;
-  summarizedSessions: Set<string>;
 }
 
 interface TokenInfo {
@@ -265,7 +264,6 @@ export function createCompactionHook(
   const state: CompactionState = {
     lastCompactionTime: new Map(),
     compactionInProgress: new Set(),
-    summarizedSessions: new Set(),
   };
 
   const threshold = options?.threshold ?? DEFAULT_THRESHOLD;
@@ -299,29 +297,6 @@ export function createCompactionHook(
         sessionID: summarizeCtx.sessionID,
         memoriesCount: projectMemories.length 
       });
-    }
-  }
-
-  async function saveSummaryAsMemory(sessionID: string, summaryContent: string): Promise<void> {
-    if (!summaryContent || summaryContent.length < 100) {
-      log("[compaction] summary too short to save", { sessionID, length: summaryContent.length });
-      return;
-    }
-
-    try {
-      const result = await openMemoryClient.addMemory(
-        `[Session Summary]\n${summaryContent}`,
-        scopes.project,
-        { type: "conversation" }
-      );
-
-      if (result.success) {
-        log("[compaction] summary saved as memory", { sessionID, memoryId: result.id });
-      } else {
-        log("[compaction] failed to save summary", { error: result.error });
-      }
-    } catch (err) {
-      log("[compaction] failed to save summary", { error: String(err) });
     }
   }
 
@@ -411,8 +386,6 @@ export function createCompactionHook(
         agent,
       });
 
-      state.summarizedSessions.add(sessionID);
-
       await ctx.client.session.summarize({
         path: { id: sessionID },
         body: { providerID, modelID },
@@ -453,52 +426,6 @@ export function createCompactionHook(
     }
   }
 
-  async function handleSummaryMessage(sessionID: string, _messageInfo: MessageInfo): Promise<void> {
-    log("[compaction] handleSummaryMessage called", { sessionID, inSet: state.summarizedSessions.has(sessionID) });
-    
-    if (!state.summarizedSessions.has(sessionID)) return;
-
-    state.summarizedSessions.delete(sessionID);
-    log("[compaction] capturing summary for memory", { sessionID });
-
-    try {
-      const resp = await ctx.client.session.messages({
-        path: { id: sessionID },
-        query: { directory: ctx.directory },
-      });
-
-      const messages = (resp.data ?? resp) as Array<{ info: MessageInfo; parts?: Array<{ type: string; text?: string }> }>;
-      
-      const summaryMessage = messages.find(m => 
-        m.info.role === "assistant" && 
-        m.info.summary === true
-      );
-
-      log("[compaction] looking for summary message", { 
-        sessionID, 
-        found: !!summaryMessage,
-        hasParts: !!summaryMessage?.parts
-      });
-
-      if (summaryMessage?.parts) {
-        const textParts = summaryMessage.parts.filter(p => p.type === "text" && p.text);
-        const summaryContent = textParts.map(p => p.text).join("\n");
-        
-        log("[compaction] summary content", { 
-          sessionID, 
-          textPartsCount: textParts.length,
-          contentLength: summaryContent.length 
-        });
-        
-        if (summaryContent) {
-          await saveSummaryAsMemory(sessionID, summaryContent);
-        }
-      }
-    } catch (err) {
-      log("[compaction] failed to capture summary", { error: String(err) });
-    }
-  }
-
   return {
     async event({ event }: { event: { type: string; properties?: unknown } }) {
       const props = event.properties as Record<string, unknown> | undefined;
@@ -508,7 +435,6 @@ export function createCompactionHook(
         if (sessionInfo?.id) {
           state.lastCompactionTime.delete(sessionInfo.id);
           state.compactionInProgress.delete(sessionInfo.id);
-          state.summarizedSessions.delete(sessionInfo.id);
         }
         return;
       }
@@ -519,11 +445,6 @@ export function createCompactionHook(
 
         const sessionID = info.sessionID;
         if (!sessionID) return;
-
-        if (info.role === "assistant" && info.summary === true && info.finish) {
-          await handleSummaryMessage(sessionID, info);
-          return;
-        }
 
         if (info.role !== "assistant" || !info.finish) return;
 

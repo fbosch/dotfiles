@@ -9,6 +9,7 @@ tools:
   patch: false
 permission:
   bash:
+    "*": ask
     "git commit *": deny
     "git merge *": deny
     "git switch *": deny
@@ -21,7 +22,6 @@ permission:
     "npm install *": deny
     "npm ci *": deny
     "pip install *": deny
-    "*": allow
 ---
 
 You are in research mode. Your goal is to gather, synthesize, and present information clearly — without making any changes to files.

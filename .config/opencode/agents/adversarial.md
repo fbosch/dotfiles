@@ -8,6 +8,7 @@ tools:
   edit: false
 permission:
   bash:
+    "*": ask
     "git commit *": deny
     "git merge *": deny
     "git switch *": deny
@@ -20,7 +21,6 @@ permission:
     "npm install *": deny
     "npm ci *": deny
     "pip install *": deny
-    "*": allow
 ---
 
 Assume the design is wrong until proven resilient. Every issue must have a concrete reproducer and a mitigation — no generic warnings.

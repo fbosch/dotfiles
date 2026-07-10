@@ -9,8 +9,7 @@ PBI input: $ARGUMENTS
 
 If `$ARGUMENTS` is empty, infer PBI ID from current branch name (for example `AB#54032`, `pbi-54032`, or `feature/54032-something`).
 
-**Fetched data:**
-!`sh -c 'OPENCODE_LIBEXEC_CWD="$PWD" bun --cwd "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/libexec" "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/libexec/azure/ado_pbi_fetch.ts" "$1" 2>/dev/null || OPENCODE_LIBEXEC_CWD="$PWD" bun --cwd "$HOME/dotfiles/.config/opencode/libexec" "$HOME/dotfiles/.config/opencode/libexec/azure/ado_pbi_fetch.ts" "$1" 2>/dev/null || echo "ERROR: Missing ado_pbi_fetch.ts"' -- "$ARGUMENTS"`
+**Fetched data:** Use the `ado_fetch` tool with `kind: "pbi"` and the supplied PBI input. If the input is empty, omit the tool's `input` argument so the helper can infer the PBI ID from the current branch.
 
 **Output format:**
 

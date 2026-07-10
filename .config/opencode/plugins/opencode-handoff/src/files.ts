@@ -50,8 +50,10 @@ export async function buildSyntheticFileParts(
   refs: Set<string>
 ): Promise<TextPartInput[]> {
   const parts: TextPartInput[] = []
+  const root = await fs.realpath(directory)
 
   for (const ref of refs) {
+    if (path.isAbsolute(ref)) continue
     const filepath = path.resolve(directory, ref)
 
     try {
@@ -59,24 +61,27 @@ export async function buildSyntheticFileParts(
       const stats = await fs.stat(filepath)
       if (!stats.isFile()) continue
 
+      const realpath = await fs.realpath(filepath)
+      if (realpath !== root && !realpath.startsWith(`${root}${path.sep}`)) continue
+
       // Skip binary files
-      if (await isBinaryFile(filepath)) continue
+      if (await isBinaryFile(realpath)) continue
 
       // Read file content
-      const content = await fs.readFile(filepath, "utf-8")
+      const content = await fs.readFile(realpath, "utf-8")
 
       // Create header part (matching OpenCode's prompt.ts:820 format)
       parts.push({
         type: "text",
         synthetic: true,
-        text: `Called the Read tool with the following input: ${JSON.stringify({ filePath: filepath })}`
+        text: `Called the Read tool with the following input: ${JSON.stringify({ filePath: realpath })}`
       })
 
       // Create content part (matching OpenCode's ReadTool format)
       parts.push({
         type: "text",
         synthetic: true,
-        text: formatFileContent(filepath, content)
+        text: formatFileContent(realpath, content)
       })
     } catch {
       // Skip silently if file can't be read

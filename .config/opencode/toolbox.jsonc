@@ -45,6 +45,9 @@
     },
     "exa": {
       "type": "local",
+      "environment": {
+        "EXA_API_KEY": "{env:EXA_API_KEY}"
+      },
       "command": [
         "podman",
         "run",
@@ -54,7 +57,7 @@
         "--name",
         "mcp-exa",
         "-e",
-        "EXA_API_KEY={env:EXA_API_KEY}",
+        "EXA_API_KEY",
         "mcp/exa"
       ]
     },

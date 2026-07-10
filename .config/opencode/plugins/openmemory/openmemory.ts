@@ -75,7 +75,7 @@ export const OpenMemoryPlugin: Plugin = async (ctx: PluginInput) => {
         }
 
         log("chat.message: processing", {
-          messagePreview: userMessage.slice(0, 100),
+          messageLength: userMessage.length,
           partsCount: output.parts.length,
           textPartsCount: textParts.length,
         });
@@ -98,14 +98,13 @@ export const OpenMemoryPlugin: Plugin = async (ctx: PluginInput) => {
         if (isFirstMessage) {
           injectedSessions.add(input.sessionID);
 
-          const [profileResult, userMemoriesResult, projectMemoriesListResult] = await Promise.all([
-            openMemoryClient.getProfile(scopes.user, userMessage),
-            openMemoryClient.searchMemories(userMessage, scopes.user, { limit: CONFIG.maxMemories }),
+          const [profileResult, projectMemoriesListResult] = await Promise.all([
+            openMemoryClient.getProfile(scopes.user),
             openMemoryClient.listMemories(scopes.project, { limit: CONFIG.maxProjectMemories }),
           ]);
 
           const profile = profileResult.success ? profileResult : null;
-          const userMemories = userMemoriesResult.success ? userMemoriesResult : { results: [] };
+          const userMemories = { results: [] };
           const projectMemoriesList = projectMemoriesListResult.success ? projectMemoriesListResult : { memories: [] };
 
           const projectMemories = {
