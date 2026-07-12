@@ -16,7 +16,6 @@ local event_idle_timeout_seconds = 5
 local gaming_workspace = "10"
 local minimized_workspace_prefix = "special:minimized"
 local gaming_overlay_workspace = "special:gaming-overlay"
-local profile_excluded_title_pattern = "[Ff]augus"
 local wl_freeze_checked = false
 local wl_freeze_available = false
 
@@ -66,10 +65,6 @@ local function rule_window(client)
 	}
 end
 
-local function matches_profile_excluded_title(value)
-	return tostring(value or ""):match(profile_excluded_title_pattern) ~= nil
-end
-
 local function has_gaming_class(client)
 	local game = gaming.match(rule_window(client))
 	return is_gaming_class(client.class)
@@ -78,7 +73,7 @@ local function has_gaming_class(client)
 end
 
 local function has_profile_excluded_title(client)
-	return matches_profile_excluded_title(client.title) or matches_profile_excluded_title(client.initialTitle)
+	return gaming.is_profile_excluded(rule_window(client))
 end
 
 local function excludes_freezing(client)

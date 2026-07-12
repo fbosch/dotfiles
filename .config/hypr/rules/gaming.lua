@@ -5,6 +5,23 @@ M.default_presentation = {
 	direct_scanout = 0,
 }
 
+---@alias GamingSelector table<string, string>
+
+---@class GamingPresentation
+---@field vrr integer Hyprland `misc:vrr` value.
+---@field direct_scanout integer Hyprland `render:direct_scanout` value.
+
+---@class GamingPolicy
+---@field name string Stable policy identifier.
+---@field selectors GamingSelector[] Window selectors shared by Hyprland and the watchdog.
+---@field fullscreen_state? string Hyprland internal and client fullscreen states.
+---@field suppress_event? string Hyprland event to suppress for the matching window.
+---@field enable_profile? boolean Activates the gaming profile for this window.
+---@field exclude_profile? boolean Prevents this window from activating the gaming profile.
+---@field freeze? boolean `false` excludes this window from watchdog `wl-freeze` handling.
+---@field presentation? GamingPresentation Presentation settings when the gaming profile is active.
+
+---@type GamingPolicy[]
 M.games = {
 	{
 		name = "bg3",
@@ -43,6 +60,14 @@ M.games = {
 		},
 		freeze = false,
 	},
+	{
+		name = "faugus",
+		selectors = {
+			{ initial_title = "[Ff]augus" },
+			{ title = "[Ff]augus" },
+		},
+		exclude_profile = true,
+	},
 }
 
 local function matches_pattern(value, pattern)
@@ -77,6 +102,11 @@ function M.is_freeze_excluded(window)
 	return game ~= nil and game.freeze == false
 end
 
+function M.is_profile_excluded(window)
+	local game = M.match(window)
+	return game ~= nil and game.exclude_profile == true
+end
+
 local function gaming_window_rule(selector, fullscreen_state, content, suppress_event)
 	local rule = {
 		match = selector,
@@ -100,7 +130,7 @@ local function gaming_window_rule(selector, fullscreen_state, content, suppress_
 	return rule
 end
 
-function M.register_window_rules()
+local function register_gamescope_rules()
 	hl.window_rule({
 		match = { class = "^(gamescope)$" },
 		workspace = "10 silent",
@@ -113,7 +143,9 @@ function M.register_window_rules()
 		match = { workspace = "10", class = "negative:^(gamescope)$" },
 		workspace = "special:gaming-overlay silent",
 	})
+end
 
+local function register_steam_rules()
 	for _, initial_title in ipairs({ "^(Friends List)$", "^(Add Non-Steam Game)$" }) do
 		hl.window_rule({ match = { initial_title = initial_title }, float = true })
 	end
@@ -122,7 +154,9 @@ function M.register_window_rules()
 	for _, selector in ipairs({ { class = "^(steam_app_[0-9]+)$" }, { initial_class = "^(steam_app_[0-9]+)$" } }) do
 		hl.window_rule(gaming_window_rule(selector, "2 2"))
 	end
+end
 
+local function register_game_rules()
 	for _, game in ipairs(M.games) do
 		if game.fullscreen_state ~= nil then
 			for _, selector in ipairs(game.selectors) do
@@ -130,29 +164,33 @@ function M.register_window_rules()
 			end
 		end
 	end
+end
 
+local function register_game_client_rules()
 	hl.window_rule({ match = { class = "^(SGDBoop)$" }, float = true, pin = true })
 
-	hl.window_rule({ match = { initial_title = "^(Battle\\.net Login)$" }, workspace = "10 silent" })
-	hl.window_rule({ match = { initial_title = "^(Battle.net Login)$" }, no_anim = true, rounding = 0, border_size = 0 })
-	hl.window_rule({ match = { initial_title = "^(Battle\\.net)$" }, workspace = "10 silent" })
-	hl.window_rule({ match = { initial_title = "^(Battle.net)$" }, no_anim = true, rounding = 0, border_size = 0 })
-	hl.window_rule({ match = { initial_title = "^(Battle\\.net Settings)$" }, workspace = "10 silent" })
+	local battle_net_title = "^(Battle\\.net( Login| Settings)?)$"
 	hl.window_rule({
-		match = { initial_title = "^(Battle.net Settings)$" },
+		match = { initial_title = battle_net_title },
+		workspace = "10 silent",
 		no_anim = true,
 		rounding = 0,
 		border_size = 0,
+	})
+	hl.window_rule({
+		match = { initial_title = "^(Battle\\.net Settings)$" },
 		pin = true,
 	})
+end
 
+local function register_fullscreen_handler()
 	hl.on("window.fullscreen", function(window)
 		if window.fullscreen == 2 then
 			return
 		end
 
 		local game = M.match(window)
-		if game == nil then
+		if game == nil or game.fullscreen_state == nil then
 			return
 		end
 
@@ -164,6 +202,14 @@ function M.register_window_rules()
 			window = "address:" .. window.address,
 		}))
 	end)
+end
+
+function M.register_window_rules()
+	register_gamescope_rules()
+	register_steam_rules()
+	register_game_rules()
+	register_game_client_rules()
+	register_fullscreen_handler()
 end
 
 return M
