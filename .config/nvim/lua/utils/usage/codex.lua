@@ -408,7 +408,7 @@ local function color_for_reset_expiry(expires_at)
 	if seconds_remaining <= 7 * 24 * 60 * 60 then
 		return "%#DiagnosticWarn#"
 	end
-	return "%#DiagnosticOk#"
+	return "%#NonText#"
 end
 
 local function color_for_percent(percent)
