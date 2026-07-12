@@ -172,32 +172,24 @@ function getGitUserEmail(): string {
 }
 
 function resolveMainRef(): { mainRef: string; refsState: string } {
-    const commands = [
-        ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
-        ["show-ref", "--verify", "--quiet", "refs/remotes/origin/main"],
-        ["show-ref", "--verify", "--quiet", "refs/remotes/origin/master"],
-        ["show-ref", "--verify", "--quiet", "refs/heads/main"],
-        ["show-ref", "--verify", "--quiet", "refs/heads/master"],
-    ] as const;
-
-    const symbolicResult = run("git", [...commands[0]]);
+    const symbolicResult = run("git", ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]);
     if (symbolicResult.isOk() && symbolicResult.value.trim()) {
         const mainRef = symbolicResult.value.trim();
         const revResult = run("git", ["rev-parse", mainRef]);
         return { mainRef, refsState: revResult.isOk() ? revResult.value.trim() : "no-main-ref" };
     }
 
-    const fallbackRefs = ["origin/main", "origin/master", "main", "master"] as const;
-    for (const ref of fallbackRefs) {
-        const verifyResult = run("git", [
-            "show-ref",
-            "--verify",
-            "--quiet",
-            `refs/${ref.startsWith("origin/") ? "remotes" : "heads"}/${ref}`,
-        ]);
+    const fallbackRefs = [
+        { name: "origin/main", fullName: "refs/remotes/origin/main" },
+        { name: "origin/master", fullName: "refs/remotes/origin/master" },
+        { name: "main", fullName: "refs/heads/main" },
+        { name: "master", fullName: "refs/heads/master" },
+    ];
+    for (const { name, fullName } of fallbackRefs) {
+        const verifyResult = run("git", ["show-ref", "--verify", "--quiet", fullName]);
         if (verifyResult.isOk()) {
-            const revResult = run("git", ["rev-parse", ref]);
-            return { mainRef: ref, refsState: revResult.isOk() ? revResult.value.trim() : "no-main-ref" };
+            const revResult = run("git", ["rev-parse", name]);
+            return { mainRef: name, refsState: revResult.isOk() ? revResult.value.trim() : "no-main-ref" };
         }
     }
 
@@ -322,22 +314,19 @@ function collectAuthoredBranchItems(commits: CommitRecord[]): AppResult<string[]
             return err(branchesResult.error);
         }
 
-        const branchNames = branchesResult.value;
-
-        for (const branchName of branchNames) {
+        for (const branchName of branchesResult.value) {
             const workitem = extractBranchWorkitem(branchName);
             if (workitem) {
                 items.add(`${commit.date}|${workitem}|${branchName}`);
             }
         }
 
-        const commitItems = extractWorkitems(commit.subject);
-        if (commitItems.length === 0 || branchNames.length === 0) {
+        const primaryBranch = branchesResult.value[0];
+        if (!primaryBranch) {
             continue;
         }
 
-        const primaryBranch = branchNames[0];
-        for (const workitem of commitItems) {
+        for (const workitem of extractWorkitems(commit.subject)) {
             items.add(`${commit.date}|${workitem}|${primaryBranch}`);
         }
     }
@@ -371,7 +360,7 @@ function extractWorkitemsForRange(
     const cacheable = cacheableResult.value;
     const cacheFile = cacheFileResult.value;
 
-    if (!refresh && cacheable) {
+    if (cacheable && !refresh) {
         const cachedResult = readCache(cacheFile);
         if (cachedResult.isErr()) {
             return err(cachedResult.error);
@@ -386,14 +375,13 @@ function extractWorkitemsForRange(
         return err(commitsResult.error);
     }
 
-    const commitChunks = chunk(commitsResult.value, 100);
+    const collectItems =
+        mode === "merged_main"
+            ? (commits: CommitRecord[]) => ok(collectMergedMainItems(commits, mainRef))
+            : collectAuthoredBranchItems;
     let lines: string[] = [];
-    for (const commitChunk of commitChunks) {
-        const chunkResult = match(mode)
-            .with("merged_main", () => ok(collectMergedMainItems(commitChunk, mainRef)))
-            .with("authored_branches", () => collectAuthoredBranchItems(commitChunk))
-            .exhaustive();
-
+    for (const commitChunk of chunk(commitsResult.value, 100)) {
+        const chunkResult = collectItems(commitChunk);
         if (chunkResult.isErr()) {
             return err(chunkResult.error);
         }

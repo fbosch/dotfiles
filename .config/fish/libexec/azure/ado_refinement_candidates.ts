@@ -47,6 +47,15 @@ type Candidate = {
     url: string | null;
 };
 
+type CandidateDetails = Omit<Candidate, "score" | "reasons" | "gaps" | "url">;
+
+type CandidateScoreRule = {
+    matches: boolean;
+    points: number;
+    reason: string;
+    gap?: string;
+};
+
 type CachePayload = {
     org: string | null;
     project: string | null;
@@ -61,9 +70,30 @@ type BuildResult =
     | { type: "error"; error: string };
 
 type WorkItemRecord = Record<string, unknown>;
+type CandidateContext = { org: string | null; project: string | null; team: string };
+type CandidateContextInput = { context: AdoContext; remoteUrl: string | null };
 
 const REFINEMENT_TAG_PATTERNS = [/refine/i, /refinement/i, /needs[- ]refinement/i, /discovery/i, /analysis/i];
 const CANDIDATE_STATES = new Set(["New", "Approved", "To Be Refined"]);
+const EMPTY_ADO_CONTEXT: AdoContext = { org: null, project: null, repositoryName: null };
+const REMOTE_URL_PATTERNS = [
+    {
+        pattern: /(?:https:\/\/|https:\/\/[^@]+@)dev\.azure\.com\/([^/]+)\/([^/]+)\/_git\/([^/]+)/,
+        org: (match: RegExpMatchArray) => `https://dev.azure.com/${match[1]}`,
+    },
+    {
+        pattern: /ssh\.dev\.azure\.com:v3\/([^/]+)\/([^/]+)\/([^/]+)/,
+        org: (match: RegExpMatchArray) => `https://dev.azure.com/${match[1]}`,
+    },
+    {
+        pattern: /https:\/\/([^.]+)\.visualstudio\.com\/([^/]+)\/_git\/([^/]+)/,
+        org: (match: RegExpMatchArray) => `https://${match[1]}.visualstudio.com`,
+    },
+    {
+        pattern: /[^@]+@vs-ssh\.visualstudio\.com:v3\/([^/]+)\/([^/]+)\/[^/]+/,
+        org: (match: RegExpMatchArray) => `https://${match[1]}.visualstudio.com`,
+    },
+];
 
 main();
 
@@ -229,80 +259,126 @@ function renderPrompt(cacheFile: string, idInputs: string[]): void {
 }
 
 function buildCachePayload(contextInput: string, teamInput: string): BuildResult {
-    const urlContext = parseOrgAndProject(contextInput);
-    const remoteUrl = detectGitRemoteUrl();
-    const remoteContext = detectContextFromGitRemote();
-    const org = urlContext.org ?? remoteContext.org;
-    let project = urlContext.project ?? remoteContext.project;
-    const repositoryName = urlContext.repositoryName ?? remoteContext.repositoryName;
-
-    const explicitTeam = teamInput.trim();
-    if (explicitTeam === "" && project === null) {
-        if (remoteUrl !== null) {
-            return {
-                type: "error",
-                error: `Could not determine Azure DevOps project from git remote '${remoteUrl}'. Re-run with --context <ado-url> or --team <team>.`,
-            };
-        }
-
-        return {
-            type: "error",
-            error: "Could not determine Azure DevOps project from context. Re-run with --context <ado-url> or --team <team>.",
-        };
+    const contextResult = resolveCandidateContext(contextInput, teamInput);
+    if ("type" in contextResult) {
+        return contextResult;
     }
 
-    let team = explicitTeam;
-    if (team === "") {
-        const resolvedTeam = resolveTeamFallback(org, project, repositoryName);
-        if (resolvedTeam.type === "error") {
-            return resolvedTeam;
-        }
+    return buildPayloadForContext(contextResult);
+}
 
-        if (resolvedTeam.type === "choose-team") {
-            return {
-                type: "choose-team",
-                project: project ?? "N/A",
-                teams: resolvedTeam.teams,
-            };
-        }
-
-        team = resolvedTeam.team;
+function buildPayloadForContext(context: CandidateContext): BuildResult {
+    const iterationResult = nextTeamIteration(context);
+    if (typeof iterationResult === "string") {
+        return { type: "error", error: iterationResult };
     }
 
-    const iterationList = listTeamIterations(team, org, project);
-    if (typeof iterationList === "string") {
-        return { type: "error", error: iterationList };
-    }
-
-    const nextIteration = selectNextIteration(iterationList);
-    if (nextIteration === null) {
-        return { type: "error", error: `No future iteration found for team '${team}'.` };
-    }
-
-    if (project === null || project === "") {
-        project = projectFromIterationPath(nextIteration.path);
-    }
-
-    const candidateIds = queryCandidateIds(org, project, team, nextIteration.id);
+    const { iteration, project } = iterationResult;
+    const candidateIds = queryCandidateIds(context.org, project, context.team, iteration.id);
     if (typeof candidateIds === "string") {
         return { type: "error", error: candidateIds };
     }
 
     const candidates = candidateIds
-        .map((id) => fetchCandidate(id, org, project))
+        .map((id) => fetchCandidate(id, context.org, project))
         .filter((entry): entry is Candidate => entry !== null)
         .sort(compareCandidates);
 
     return {
         type: "payload",
-        payload: {
-            org,
-            project,
-            team,
-            iteration: nextIteration,
-            candidates,
-        },
+        payload: { org: context.org, project, team: context.team, iteration, candidates },
     };
+}
+
+function nextTeamIteration(context: CandidateContext): { iteration: Iteration; project: string | null } | string {
+    const iterationList = listTeamIterations(context.team, context.org, context.project);
+    if (typeof iterationList === "string") {
+        return iterationList;
+    }
+
+    const nextIteration = selectNextIteration(iterationList);
+    if (nextIteration === null) {
+        return `No future iteration found for team '${context.team}'.`;
+    }
+
+    return { iteration: nextIteration, project: iterationProject(context.project, nextIteration.path) };
+}
+
+function iterationProject(project: string | null, iterationPath: string): string | null {
+    if (project === null || project === "") {
+        return projectFromIterationPath(iterationPath);
+    }
+
+    return project;
+}
+
+function resolveCandidateContext(contextInput: string, teamInput: string): CandidateContext | Exclude<BuildResult, { type: "payload" }> {
+    const { context, remoteUrl } = candidateContextInput(contextInput);
+
+    const explicitTeam = teamInput.trim();
+    if (explicitTeam !== "") {
+        return { org: context.org, project: context.project, team: explicitTeam };
+    }
+
+    if (context.project === null) {
+        return missingProjectError(remoteUrl);
+    }
+
+    return resolveFallbackTeam(context.org, context.project, context.repositoryName);
+}
+
+function candidateContextInput(contextInput: string): CandidateContextInput {
+    const remoteUrl = detectGitRemoteUrl();
+    return {
+        context: mergeAdoContexts(parseOrgAndProject(contextInput), remoteAdoContext(remoteUrl)),
+        remoteUrl,
+    };
+}
+
+function remoteAdoContext(remoteUrl: string | null): AdoContext {
+    if (remoteUrl === null) {
+        return EMPTY_ADO_CONTEXT;
+    }
+
+    return parseRemoteUrl(remoteUrl);
+}
+
+function mergeAdoContexts(primary: AdoContext, fallback: AdoContext): AdoContext {
+    return {
+        org: primary.org ?? fallback.org,
+        project: primary.project ?? fallback.project,
+        repositoryName: primary.repositoryName ?? fallback.repositoryName,
+    };
+}
+
+function missingProjectError(remoteUrl: string | null): { type: "error"; error: string } {
+    if (remoteUrl !== null) {
+        return {
+            type: "error",
+            error: `Could not determine Azure DevOps project from git remote '${remoteUrl}'. Re-run with --context <ado-url> or --team <team>.`,
+        };
+    }
+
+    return {
+        type: "error",
+        error: "Could not determine Azure DevOps project from context. Re-run with --context <ado-url> or --team <team>.",
+    };
+}
+
+function resolveFallbackTeam(
+    org: string | null,
+    project: string,
+    repositoryName: string | null,
+): CandidateContext | Exclude<BuildResult, { type: "payload" }> {
+    const resolvedTeam = resolveTeamFallback(org, project, repositoryName);
+    if (resolvedTeam.type === "resolved") {
+        return { org, project, team: resolvedTeam.team };
+    }
+    if (resolvedTeam.type === "choose-team") {
+        return { type: "choose-team", project, teams: resolvedTeam.teams };
+    }
+
+    return resolvedTeam;
 }
 
 function printList(cacheFile: string, payload: CachePayload): void {
@@ -351,14 +427,14 @@ function helperCwd(): string | undefined {
 function parseOrgAndProject(value: string): AdoContext {
     const text = value.trim();
     if (text.startsWith("http") === false) {
-        return { org: null, project: null, repositoryName: null };
+        return EMPTY_ADO_CONTEXT;
     }
 
     let parsed: URL;
     try {
         parsed = new URL(text);
     } catch {
-        return { org: null, project: null, repositoryName: null };
+        return EMPTY_ADO_CONTEXT;
     }
 
     const host = parsed.hostname.toLowerCase();
@@ -368,14 +444,15 @@ function parseOrgAndProject(value: string): AdoContext {
         .map(decodeSegment);
 
     if (host.endsWith("dev.azure.com")) {
-        if (segments.length < 2) {
-            return { org: null, project: null, repositoryName: null };
+        const [organization, project, marker, repositoryName] = segments;
+        if (organization === undefined || project === undefined) {
+            return EMPTY_ADO_CONTEXT;
         }
 
         return {
-            org: `https://dev.azure.com/${segments[0]}`,
-            project: segments[1],
-            repositoryName: segments[2] === "_git" ? (segments[3] ?? null) : null,
+            org: `https://dev.azure.com/${organization}`,
+            project,
+            repositoryName: marker === "_git" ? (repositoryName ?? null) : null,
         };
     }
 
@@ -387,7 +464,7 @@ function parseOrgAndProject(value: string): AdoContext {
         };
     }
 
-    return { org: null, project: null, repositoryName: null };
+    return EMPTY_ADO_CONTEXT;
 }
 
 function decodeSegment(value: string): string {
@@ -399,43 +476,18 @@ function decodeSegment(value: string): string {
 }
 
 function parseRemoteUrl(remote: string): AdoContext {
-    const devHttpsMatch = remote.match(/(?:https:\/\/|https:\/\/[^@]+@)dev\.azure\.com\/([^/]+)\/([^/]+)\/_git\/([^/]+)/);
-    if (devHttpsMatch?.[1] && devHttpsMatch[2]) {
-        return {
-            org: `https://dev.azure.com/${devHttpsMatch[1]}`,
-            project: decodeSegment(devHttpsMatch[2]),
-            repositoryName: decodeSegment(devHttpsMatch[3] ?? ""),
-        };
+    for (const { pattern, org } of REMOTE_URL_PATTERNS) {
+        const match = remote.match(pattern);
+        if (match?.[1] && match[2]) {
+            return {
+                org: org(match),
+                project: decodeSegment(match[2]),
+                repositoryName: decodeSegment(match[3] ?? ""),
+            };
+        }
     }
 
-    const devSshMatch = remote.match(/ssh\.dev\.azure\.com:v3\/([^/]+)\/([^/]+)\/([^/]+)/);
-    if (devSshMatch?.[1] && devSshMatch[2]) {
-        return {
-            org: `https://dev.azure.com/${devSshMatch[1]}`,
-            project: decodeSegment(devSshMatch[2]),
-            repositoryName: decodeSegment(devSshMatch[3] ?? ""),
-        };
-    }
-
-    const visualStudioMatch = remote.match(/https:\/\/([^.]+)\.visualstudio\.com\/([^/]+)\/_git\/([^/]+)/);
-    if (visualStudioMatch?.[1] && visualStudioMatch[2]) {
-        return {
-            org: `https://${visualStudioMatch[1]}.visualstudio.com`,
-            project: decodeSegment(visualStudioMatch[2]),
-            repositoryName: decodeSegment(visualStudioMatch[3] ?? ""),
-        };
-    }
-
-    const visualStudioSshMatch = remote.match(/[^@]+@vs-ssh\.visualstudio\.com:v3\/([^/]+)\/([^/]+)\/[^/]+/);
-    if (visualStudioSshMatch?.[1] && visualStudioSshMatch[2]) {
-        return {
-            org: `https://${visualStudioSshMatch[1]}.visualstudio.com`,
-            project: decodeSegment(visualStudioSshMatch[2]),
-            repositoryName: decodeSegment(visualStudioSshMatch[3] ?? ""),
-        };
-    }
-
-    return { org: null, project: null, repositoryName: null };
+    return EMPTY_ADO_CONTEXT;
 }
 
 function detectGitRemoteUrl(): string | null {
@@ -446,15 +498,6 @@ function detectGitRemoteUrl(): string | null {
 
     const remote = remoteResult.value.trim();
     return remote === "" ? null : remote;
-}
-
-function detectContextFromGitRemote(): AdoContext {
-    const remote = detectGitRemoteUrl();
-    if (remote === null) {
-        return { org: null, project: null, repositoryName: null };
-    }
-
-    return parseRemoteUrl(remote);
 }
 
 function listProjectTeams(org: string | null, project: string | null): TeamInfo[] | string {
@@ -657,35 +700,29 @@ function selectNextIteration(iterations: Iteration[]): Iteration | null {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const futureWithDates = iterations.filter((iteration) => iteration.timeFrame === "future" && iteration.startDate !== null);
-    for (const iteration of futureWithDates) {
-        const startDate = new Date(iteration.startDate as string);
-        if (Number.isNaN(startDate.getTime()) === false) {
-            return iteration;
-        }
+    const futureWithValidDate = iterations.find(
+        (iteration) =>
+            iteration.timeFrame === "future" &&
+            iteration.startDate !== null &&
+            Number.isNaN(new Date(iteration.startDate).getTime()) === false,
+    );
+    if (futureWithValidDate !== undefined) {
+        return futureWithValidDate;
     }
 
-    const futureWithoutDates = iterations.find((iteration) => iteration.timeFrame === "future");
-    if (futureWithoutDates !== undefined) {
-        return futureWithoutDates;
+    const futureIteration = iterations.find((iteration) => iteration.timeFrame === "future");
+    if (futureIteration !== undefined) {
+        return futureIteration;
     }
 
-    for (const iteration of iterations) {
-        if (iteration.startDate === null) {
-            continue;
-        }
-
-        const startDate = new Date(iteration.startDate);
-        if (Number.isNaN(startDate.getTime())) {
-            continue;
-        }
-
-        if (startDate.getTime() > today.getTime()) {
-            return iteration;
-        }
-    }
-
-    return null;
+    return (
+        iterations.find(
+            (iteration) =>
+                iteration.startDate !== null &&
+                Number.isNaN(new Date(iteration.startDate).getTime()) === false &&
+                new Date(iteration.startDate).getTime() > today.getTime(),
+        ) ?? null
+    );
 }
 
 function projectFromIterationPath(path: string): string | null {
@@ -737,90 +774,82 @@ function fetchCandidate(id: number, org: string | null, project: string | null):
         return null;
     }
 
-    const record = asRecord(result);
-    const fields = asRecord(record?.fields) ?? {};
-    const relations = Array.isArray(record?.relations) ? record.relations : [];
+    const candidate = candidateDetails(id, result, project);
+    return candidate === null ? null : scoreCandidate(candidate, org);
+}
 
-    const title = stringValue(fields["System.Title"]) ?? `PBI #${String(id)}`;
-    const state = stringValue(fields["System.State"]) ?? "N/A";
-    const workItemType = stringValue(fields["System.WorkItemType"]);
-    if (workItemType !== "Product Backlog Item") {
+function candidateDetails(id: number, value: unknown, project: string | null): CandidateDetails | null {
+    const record = asRecord(value);
+    const fields = workItemFields(record);
+    const state = defaultString(fields["System.State"], "N/A");
+    if (isCandidateWorkItem(fields, state) === false) {
         return null;
     }
-    if (CANDIDATE_STATES.has(state) === false) {
-        return null;
-    }
-    const assignedTo = displayName(fields["System.AssignedTo"]);
-    const iterationPath = stringValue(fields["System.IterationPath"]) ?? "N/A";
-    const teamProject = stringValue(fields["System.TeamProject"]) ?? (project ?? "N/A");
-    const description = normalizeHtmlField(fields["System.Description"]);
-    const acceptanceCriteria = normalizeHtmlField(fields["Microsoft.VSTS.Common.AcceptanceCriteria"]);
-    const storyPoints = numericField(fields["Microsoft.VSTS.Scheduling.StoryPoints"]);
-    const backlogPriority = numericField(fields["Microsoft.VSTS.Common.BacklogPriority"]);
-    const priority = numericField(fields["Microsoft.VSTS.Common.Priority"]);
-    const tags = splitTags(stringValue(fields["System.Tags"]));
-    const childTaskCount = relations.filter((entry) => relationType(entry) === "System.LinkTypes.Hierarchy-Forward").length;
-    const reasons: string[] = [];
-    const gaps: string[] = [];
-    let score = 0;
 
-    if (acceptanceCriteria === "N/A") {
-        score += 5;
-        reasons.push("Missing acceptance criteria");
-        gaps.push("acceptance criteria");
-    }
+    return buildCandidateDetails(id, fields, workItemRelations(record), project, state);
+}
 
-    if (storyPoints === null) {
-        score += 4;
-        reasons.push("Missing story points");
-        gaps.push("story points");
-    }
+function workItemFields(record: WorkItemRecord | null): WorkItemRecord {
+    return asRecord(record?.fields) ?? {};
+}
 
-    if (description === "N/A" || description.length < 80) {
-        score += 3;
-        reasons.push(description === "N/A" ? "Missing description" : "Description is still short");
-        gaps.push("description");
-    }
+function workItemRelations(record: WorkItemRecord | null): unknown[] {
+    return Array.isArray(record?.relations) ? record.relations : [];
+}
 
-    if (childTaskCount === 0) {
-        score += 2;
-        reasons.push("No child tasks linked yet");
-        gaps.push("child tasks");
-    }
-
-    const matchingTags = tags.filter((tag) => REFINEMENT_TAG_PATTERNS.some((pattern) => pattern.test(tag)));
-    if (matchingTags.length > 0) {
-        score += 2;
-        reasons.push(`Refinement-related tags present: ${matchingTags.join(", ")}`);
-    }
-
-    if (priority === 1) {
-        score += 2;
-        reasons.push("Marked with highest priority");
-    } else if (priority === 2) {
-        score += 1;
-        reasons.push("Marked with elevated priority");
-    }
-
+function buildCandidateDetails(
+    id: number,
+    fields: WorkItemRecord,
+    relations: unknown[],
+    project: string | null,
+    state: string,
+): CandidateDetails {
     return {
         id,
-        title,
+        title: defaultString(fields["System.Title"], `PBI #${String(id)}`),
         state,
-        assignedTo,
-        iterationPath,
-        teamProject,
-        tags,
-        description,
-        acceptanceCriteria,
-        storyPoints,
-        childTaskCount,
-        backlogPriority,
-        priority,
-        score,
-        reasons,
-        gaps: uniqueStrings(gaps),
-        url: workItemUrl(org, teamProject, id),
+        assignedTo: displayName(fields["System.AssignedTo"]),
+        iterationPath: defaultString(fields["System.IterationPath"], "N/A"),
+        teamProject: defaultString(fields["System.TeamProject"], defaultString(project, "N/A")),
+        tags: splitTags(stringValue(fields["System.Tags"])),
+        description: normalizeHtmlField(fields["System.Description"]),
+        acceptanceCriteria: normalizeHtmlField(fields["Microsoft.VSTS.Common.AcceptanceCriteria"]),
+        storyPoints: numericField(fields["Microsoft.VSTS.Scheduling.StoryPoints"]),
+        childTaskCount: relations.filter((entry) => relationType(entry) === "System.LinkTypes.Hierarchy-Forward").length,
+        backlogPriority: numericField(fields["Microsoft.VSTS.Common.BacklogPriority"]),
+        priority: numericField(fields["Microsoft.VSTS.Common.Priority"]),
     };
+}
+
+function defaultString(value: unknown, fallback: string): string {
+    return stringValue(value) ?? fallback;
+}
+
+function isCandidateWorkItem(fields: WorkItemRecord, state: string): boolean {
+    if (stringValue(fields["System.WorkItemType"]) !== "Product Backlog Item") {
+        return false;
+    }
+
+    return CANDIDATE_STATES.has(state);
+}
+
+function scoreCandidate(candidate: CandidateDetails, org: string | null): Candidate {
+    const matchingTags = candidate.tags.filter((tag) => REFINEMENT_TAG_PATTERNS.some((pattern) => pattern.test(tag)));
+    const rules: CandidateScoreRule[] = [
+        { matches: candidate.acceptanceCriteria === "N/A", points: 5, reason: "Missing acceptance criteria", gap: "acceptance criteria" },
+        { matches: candidate.storyPoints === null, points: 4, reason: "Missing story points", gap: "story points" },
+        { matches: candidate.description === "N/A", points: 3, reason: "Missing description", gap: "description" },
+        { matches: candidate.description !== "N/A" && candidate.description.length < 80, points: 3, reason: "Description is still short", gap: "description" },
+        { matches: candidate.childTaskCount === 0, points: 2, reason: "No child tasks linked yet", gap: "child tasks" },
+        { matches: matchingTags.length > 0, points: 2, reason: `Refinement-related tags present: ${matchingTags.join(", ")}` },
+        { matches: candidate.priority === 1, points: 2, reason: "Marked with highest priority" },
+        { matches: candidate.priority === 2, points: 1, reason: "Marked with elevated priority" },
+    ];
+    const score = rules.filter((rule) => rule.matches).reduce((total, rule) => total + rule.points, 0);
+    const reasons = rules.filter((rule) => rule.matches).map((rule) => rule.reason);
+    const gaps = rules.flatMap((rule) => (rule.matches && rule.gap !== undefined ? [rule.gap] : []));
+
+    return { ...candidate, score, reasons, gaps: uniqueStrings(gaps), url: workItemUrl(org, candidate.teamProject, candidate.id) };
 }
 
 function compareCandidates(left: Candidate, right: Candidate): number {

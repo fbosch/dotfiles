@@ -67,12 +67,7 @@ const paletteDark = [39, 45, 51, 75, 81, 87, 111, 117, 123, 159, 195, 214, 220, 
 const paletteLight = [18, 19, 20, 22, 23, 24, 52, 53, 54, 88, 89, 90, 94, 124];
 
 const ListArgsSchema = z.object({
-    command: z.literal("list"),
-    authFile: z.string().min(1),
-    bgMode: z.enum(["dark", "light"]).default("dark"),
-});
-const AliasesArgsSchema = z.object({
-    command: z.literal("aliases"),
+    command: z.enum(["list", "aliases"]),
     authFile: z.string().min(1),
     bgMode: z.enum(["dark", "light"]).default("dark"),
 });
@@ -95,7 +90,7 @@ const CodexAuthSchema = z
                 account_id: z.string().min(1).optional(),
             })
             .passthrough()
-            .optional(),
+            .default({}),
     })
     .passthrough();
 const CodexProfilesSchema = z
@@ -220,12 +215,46 @@ function deriveInactiveKey(auth: Record<string, JsonObject>, provider: string, t
     }
 }
 
-function swapActiveProvider(
+function swappedAuthEntry(
+    key: string,
+    value: JsonObject,
+    provider: string,
+    targetKey: string,
+    inactiveKey: string,
+    activeValue: JsonObject,
+    selectedValue: JsonObject,
+): [string, JsonObject] | null {
+    if (key === provider) {
+        return [key, selectedValue];
+    }
+    if (key === targetKey) {
+        return inactiveKey === targetKey ? [key, activeValue] : null;
+    }
+    return [key, value];
+}
+
+function swappedAuthEntries(
     auth: Record<string, JsonObject>,
     provider: string,
     targetKey: string,
-): AppResult<Record<string, JsonObject>> {
-    if (!(provider in auth) || !(targetKey in auth)) {
+    inactiveKey: string,
+): [string, JsonObject][] {
+    const activeValue = auth[provider];
+    const selectedValue = auth[targetKey];
+    const entries = Object.entries(auth).flatMap(([key, value]) => {
+        const entry = swappedAuthEntry(key, value, provider, targetKey, inactiveKey, activeValue, selectedValue);
+        return entry === null ? [] : [entry];
+    });
+
+    if (inactiveKey !== targetKey) {
+        entries.push([inactiveKey, activeValue]);
+    }
+
+    return entries;
+}
+
+function validateSwap(auth: Record<string, JsonObject>, provider: string, targetKey: string): AppResult<void> {
+    if ([provider, targetKey].every((key) => key in auth) === false) {
         return err("missing provider key");
     }
 
@@ -234,31 +263,76 @@ function swapActiveProvider(
         return err("inactive key already exists");
     }
 
-    const activeValue = auth[provider];
-    const selectedValue = auth[targetKey];
-    const nextAuth: Record<string, JsonObject> = {};
+    return ok(undefined);
+}
 
-    for (const key of Object.keys(auth)) {
-        if (key === provider) {
-            nextAuth[key] = selectedValue;
-            continue;
-        }
-
-        if (key === targetKey) {
-            if (inactiveKey === targetKey) {
-                nextAuth[key] = activeValue;
-            }
-            continue;
-        }
-
-        nextAuth[key] = auth[key];
+function swapActiveProvider(
+    auth: Record<string, JsonObject>,
+    provider: string,
+    targetKey: string,
+): AppResult<Record<string, JsonObject>> {
+    const validationResult = validateSwap(auth, provider, targetKey);
+    if (validationResult.isErr()) {
+        return err(validationResult.error);
     }
 
-    if (inactiveKey !== targetKey) {
-        nextAuth[inactiveKey] = activeValue;
+    const inactiveKey = deriveInactiveKey(auth, provider, targetKey);
+    return ok(Object.fromEntries(swappedAuthEntries(auth, provider, targetKey, inactiveKey)));
+}
+
+function canSyncCodexProfiles(selectedAccountId: string, codexAuthFile: string): boolean {
+    return selectedAccountId !== "" && existsSync(codexAuthFile);
+}
+
+function loadCodexProfiles(codexProfilesFile: string): AppResult<z.infer<typeof CodexProfilesSchema>> {
+    if (existsSync(codexProfilesFile) === false) {
+        return ok({ profiles: {} });
     }
 
-    return ok(nextAuth);
+    const result = readJsonFile(codexProfilesFile, CodexProfilesSchema);
+    if (result.isErr()) {
+        return err(`codex profiles file invalid: ${codexProfilesFile}`);
+    }
+
+    return ok(result.value);
+}
+
+function writeSelectedCodexProfile(
+    codexAuthFile: string,
+    profiles: z.infer<typeof CodexProfilesSchema>["profiles"],
+    selectedAccountId: string,
+): AppResult<string> {
+    const selectedProfile = profiles[selectedAccountId];
+    if (selectedProfile === undefined) {
+        return ok(`codex profile missing for: ${selectedAccountId} (run codex login once)`);
+    }
+
+    const writeResult = writeJsonAtomic(codexAuthFile, selectedProfile, existingMode(codexAuthFile) ?? 0o600);
+    if (writeResult.isErr()) {
+        return ok("codex update failed");
+    }
+
+    return ok(`codex switched: ${selectedAccountId}`);
+}
+
+function saveAndSwitchCodexProfile(
+    codexAuthFile: string,
+    codexProfilesFile: string,
+    codexProfiles: z.infer<typeof CodexProfilesSchema>,
+    auth: z.infer<typeof CodexAuthSchema>,
+    selectedAccountId: string,
+): AppResult<string> {
+    const accountId = auth.tokens.account_id;
+    if (accountId) {
+        codexProfiles.profiles[accountId] = auth;
+    }
+
+    const writeResult = writeJsonAtomic(codexProfilesFile, codexProfiles, existingMode(codexProfilesFile) ?? 0o600);
+    if (writeResult.isErr()) {
+        return err(writeResult.error);
+    }
+
+    return writeSelectedCodexProfile(codexAuthFile, codexProfiles.profiles, selectedAccountId);
 }
 
 function syncCodexProfiles(
@@ -266,7 +340,7 @@ function syncCodexProfiles(
     codexProfilesFile: string,
     selectedAccountId: string,
 ): AppResult<string> {
-    if (!selectedAccountId || !existsSync(codexAuthFile)) {
+    if (canSyncCodexProfiles(selectedAccountId, codexAuthFile) === false) {
         return ok("codex unchanged");
     }
 
@@ -275,43 +349,18 @@ function syncCodexProfiles(
         return ok(`codex auth parse failed: ${codexAuthFile}`);
     }
 
-    let codexProfiles: z.infer<typeof CodexProfilesSchema> = { profiles: {} };
-    if (existsSync(codexProfilesFile)) {
-        const codexProfilesResult = readJsonFile(codexProfilesFile, CodexProfilesSchema);
-        if (codexProfilesResult.isErr()) {
-            return ok(`codex profiles file invalid: ${codexProfilesFile}`);
-        }
-        codexProfiles = codexProfilesResult.value;
+    const codexProfilesResult = loadCodexProfiles(codexProfilesFile);
+    if (codexProfilesResult.isErr()) {
+        return ok(codexProfilesResult.error);
     }
 
-    const currentAccountId = codexAuthResult.value.tokens?.account_id || "";
-    if (currentAccountId) {
-        codexProfiles.profiles[currentAccountId] = codexAuthResult.value;
-    }
-
-    const profilesWriteResult = writeJsonAtomic(
-        codexProfilesFile,
-        codexProfiles,
-        existingMode(codexProfilesFile) ?? 0o600,
-    );
-    if (profilesWriteResult.isErr()) {
-        return err(profilesWriteResult.error);
-    }
-
-    if (!(selectedAccountId in codexProfiles.profiles)) {
-        return ok(`codex profile missing for: ${selectedAccountId} (run codex login once)`);
-    }
-
-    const codexAuthWriteResult = writeJsonAtomic(
+    return saveAndSwitchCodexProfile(
         codexAuthFile,
-        codexProfiles.profiles[selectedAccountId],
-        existingMode(codexAuthFile) ?? 0o600,
+        codexProfilesFile,
+        codexProfilesResult.value,
+        codexAuthResult.value,
+        selectedAccountId,
     );
-    if (codexAuthWriteResult.isErr()) {
-        return ok("codex update failed");
-    }
-
-    return ok(`codex switched: ${selectedAccountId}`);
 }
 
 function applySelection(
@@ -351,100 +400,105 @@ function applySelection(
     });
 }
 
+function parseArgs<T>(schema: z.ZodType<T>, args: unknown): T | null {
+    const parsedArgs = schema.safeParse(args);
+    if (parsedArgs.success) {
+        return parsedArgs.data;
+    }
+
+    const summary = parsedArgs.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ");
+    console.error(`opencode_auth_switch_helper: invalid args (${summary})`);
+    return null;
+}
+
+function emitListResult(result: AppResult<string[]>): number {
+    if (result.isErr()) {
+        console.error(`opencode_auth_switch_helper: ${result.error}`);
+        return 1;
+    }
+
+    if (result.value.length > 0) {
+        console.log(result.value.join("\n"));
+    }
+    return 0;
+}
+
+function runListCommand(command: "list" | "aliases", args: string[]): number {
+    const parsedArgs = parseArgs(ListArgsSchema, {
+        command,
+        authFile: args[0],
+        bgMode: args[1] || "dark",
+    });
+    if (!parsedArgs) {
+        return 1;
+    }
+
+    const list = listCommands[command];
+    return emitListResult(list(parsedArgs.authFile, parsedArgs.bgMode));
+}
+
+function runApplyCommand(args: string[]): number {
+    const parsedArgs = parseArgs(ApplyArgsSchema, {
+        command: "apply",
+        authFile: args[0],
+        codexAuthFile: args[1],
+        codexProfilesFile: args[2],
+        provider: args[3],
+        targetKey: args[4],
+    });
+    if (!parsedArgs) {
+        return 1;
+    }
+
+    const applyResult = applySelection(
+        parsedArgs.authFile,
+        parsedArgs.codexAuthFile,
+        parsedArgs.codexProfilesFile,
+        parsedArgs.provider,
+        parsedArgs.targetKey,
+    );
+    if (applyResult.isErr()) {
+        console.error(`opencode_auth_switch_helper: ${applyResult.error}`);
+        return 1;
+    }
+
+    console.log(applyResult.value.codexStatus);
+    return 0;
+}
+
+const commandHandlers: Record<string, (args: string[]) => number> = {
+    list: (args) => runListCommand("list", args),
+    aliases: (args) => runListCommand("aliases", args),
+    apply: runApplyCommand,
+};
+
+const listCommands: Record<"list" | "aliases", (authFile: string, bgMode: "dark" | "light") => AppResult<string[]>> = {
+    list: listProfiles,
+    aliases: listAccountAliases,
+};
+
+function isHelpCommand(command: string): boolean {
+    return command === "-h" || command === "--help";
+}
+
 function main(): number {
     const [, , command, ...rest] = process.argv;
-    if (!command || command === "-h" || command === "--help") {
+    if (!command) {
         usage();
-        return command ? 0 : 1;
+        return 1;
     }
-
-    if (command === "list") {
-        const parsedArgs = ListArgsSchema.safeParse({
-            command,
-            authFile: rest[0],
-            bgMode: rest[1] || "dark",
-        });
-        if (!parsedArgs.success) {
-            const summary = parsedArgs.error.issues
-                .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-                .join("; ");
-            console.error(`opencode_auth_switch_helper: invalid args (${summary})`);
-            return 1;
-        }
-
-        const listResult = listProfiles(parsedArgs.data.authFile, parsedArgs.data.bgMode);
-        if (listResult.isErr()) {
-            console.error(`opencode_auth_switch_helper: ${listResult.error}`);
-            return 1;
-        }
-
-        if (listResult.value.length > 0) {
-            console.log(listResult.value.join("\n"));
-        }
+    if (isHelpCommand(command)) {
+        usage();
         return 0;
     }
 
-    if (command === "aliases") {
-        const parsedArgs = AliasesArgsSchema.safeParse({
-            command,
-            authFile: rest[0],
-            bgMode: rest[1] || "dark",
-        });
-        if (!parsedArgs.success) {
-            const summary = parsedArgs.error.issues
-                .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-                .join("; ");
-            console.error(`opencode_auth_switch_helper: invalid args (${summary})`);
-            return 1;
-        }
-
-        const aliasesResult = listAccountAliases(parsedArgs.data.authFile, parsedArgs.data.bgMode);
-        if (aliasesResult.isErr()) {
-            console.error(`opencode_auth_switch_helper: ${aliasesResult.error}`);
-            return 1;
-        }
-
-        if (aliasesResult.value.length > 0) {
-            console.log(aliasesResult.value.join("\n"));
-        }
-        return 0;
+    const handler = commandHandlers[command];
+    if (!handler) {
+        usage();
+        return 1;
     }
 
-    if (command === "apply") {
-        const parsedArgs = ApplyArgsSchema.safeParse({
-            command,
-            authFile: rest[0],
-            codexAuthFile: rest[1],
-            codexProfilesFile: rest[2],
-            provider: rest[3],
-            targetKey: rest[4],
-        });
-        if (!parsedArgs.success) {
-            const summary = parsedArgs.error.issues
-                .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-                .join("; ");
-            console.error(`opencode_auth_switch_helper: invalid args (${summary})`);
-            return 1;
-        }
-
-        const applyResult = applySelection(
-            parsedArgs.data.authFile,
-            parsedArgs.data.codexAuthFile,
-            parsedArgs.data.codexProfilesFile,
-            parsedArgs.data.provider,
-            parsedArgs.data.targetKey,
-        );
-        if (applyResult.isErr()) {
-            console.error(`opencode_auth_switch_helper: ${applyResult.error}`);
-            return 1;
-        }
-
-        console.log(applyResult.value.codexStatus);
-        return 0;
-    }
-
-    usage();
-    return 1;
+    return handler(rest);
 }
 
 process.exit(main());

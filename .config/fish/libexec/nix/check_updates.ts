@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
+import { batchScanWarning, cursorFileForFlake, prepareInputBatch } from "./update_batch.js";
 
 type FlakeLock = {
     nodes?: Record<string, { locked?: { rev?: string }; inputs?: Record<string, string> }>;
@@ -85,65 +85,6 @@ function usage(): void {
 function emitResult(result: UpdateResult): void {
     console.log(JSON.stringify(result));
 }
-function cursorFileForFlake(resolvedFlakePath: string, cursorFileOverride?: string): string {
-    if (cursorFileOverride) {
-        return resolve(cursorFileOverride);
-    }
-
-    const cacheRoot = process.env.XDG_CACHE_HOME || (process.env.HOME ? join(process.env.HOME, ".cache") : "/tmp");
-    const key = createHash("sha1").update(resolvedFlakePath).digest("hex");
-    return join(cacheRoot, "flake_check_updates", `${key}.cursor`);
-}
-
-function loadCursor(cursorFile: string): number {
-    if (!existsSync(cursorFile)) {
-        return 0;
-    }
-
-    try {
-        const raw = readFileSync(cursorFile, "utf8").trim();
-        const parsed = Number.parseInt(raw, 10);
-        if (Number.isNaN(parsed) || parsed < 0) {
-            return 0;
-        }
-
-        return parsed;
-    } catch {
-        return 0;
-    }
-}
-
-function saveCursor(cursorFile: string, nextCursor: number): AppResult<void> {
-    try {
-        mkdirSync(dirname(cursorFile), { recursive: true });
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return err(message);
-    }
-
-    try {
-        writeFileSync(cursorFile, `${nextCursor}\n`, "utf8");
-        return ok(undefined);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return err(message);
-    }
-}
-
-function buildBatch(allInputs: string[], start: number, batchSize: number): string[] {
-    if (allInputs.length <= batchSize) {
-        return allInputs;
-    }
-
-    const batch: string[] = [];
-    for (let i = 0; i < batchSize; i += 1) {
-        const idx = (start + i) % allInputs.length;
-        batch.push(allInputs[idx]);
-    }
-
-    return batch;
-}
-
 function loadLock(lockPath: string): AppResult<FlakeLock> {
     try {
         const raw = readFileSync(lockPath, "utf8");
@@ -199,139 +140,280 @@ function shortRev(rev: string): string {
     return rev.slice(0, 7);
 }
 
+type CheckInputsOptions = {
+    flakePath: string;
+    lockPath: string;
+    originalLockRaw: string;
+    initialLock: FlakeLock;
+    rootInputs: Record<string, string>;
+    inputs: string[];
+    timeoutMs: number;
+    warnings: string[];
+};
+
+type InputCheck = {
+    update?: UpdateInfo;
+    warning?: string;
+};
+
+function checkInput(options: CheckInputsOptions, input: string): AppResult<InputCheck> {
+    const restoreResult = restoreOriginalLock(options.lockPath, options.originalLockRaw);
+    if (restoreResult.isErr()) {
+        return err(`failed to restore lock file: ${restoreResult.error}`);
+    }
+
+    const currentRev = inputRevision(options.initialLock, options.rootInputs, input);
+    if (!currentRev) {
+        return ok({});
+    }
+
+    const updatedLockResult = updateInputLock(options, input);
+    if (updatedLockResult.isErr()) {
+        return ok({ warning: `${input}: ${updatedLockResult.error}` });
+    }
+
+    return ok(createInputCheck(input, currentRev, inputRevision(updatedLockResult.value, options.rootInputs, input)));
+}
+
+function inputRevision(lock: FlakeLock, rootInputs: Record<string, string>, input: string): string | undefined {
+    const nodeName = rootInputs[input];
+    if (!nodeName) {
+        return undefined;
+    }
+
+    return lock.nodes?.[nodeName]?.locked?.rev;
+}
+
+function updateInputLock(options: CheckInputsOptions, input: string): AppResult<FlakeLock> {
+    const updateResult = runNixUpdate(options.flakePath, input, options.timeoutMs);
+    if (updateResult.isErr()) {
+        return err(updateResult.error);
+    }
+
+    const updatedLockResult = loadLock(options.lockPath);
+    if (updatedLockResult.isErr()) {
+        return err(`failed to read updated lock (${updatedLockResult.error})`);
+    }
+
+    return updatedLockResult;
+}
+
+function createInputCheck(input: string, currentRev: string, newRev: string | undefined): InputCheck {
+    if (!newRev) {
+        return {};
+    }
+
+    if (newRev === currentRev) {
+        return {};
+    }
+
+    return {
+        update: {
+            name: input,
+            currentRev,
+            currentShort: shortRev(currentRev),
+            newRev,
+            newShort: shortRev(newRev),
+        },
+    };
+}
+
+function collectInputUpdates(options: CheckInputsOptions): AppResult<UpdateInfo[]> {
+    const updates: UpdateInfo[] = [];
+
+    for (const input of options.inputs) {
+        const result = checkInput(options, input);
+        if (result.isErr()) {
+            return err(result.error);
+        }
+        collectInputCheck(result.value, updates, options.warnings);
+    }
+
+    return ok(updates);
+}
+
+function collectInputCheck(inputCheck: InputCheck, updates: UpdateInfo[], warnings: string[]): void {
+    if (inputCheck.warning) {
+        warnings.push(inputCheck.warning);
+    }
+
+    if (inputCheck.update) {
+        updates.push(inputCheck.update);
+    }
+}
+
+function checkInputs(options: CheckInputsOptions): AppResult<UpdateInfo[]> {
+    try {
+        return collectInputUpdates(options);
+    } catch (error) {
+        restoreOriginalLock(options.lockPath, options.originalLockRaw);
+        return err(error instanceof Error ? error.message : String(error));
+    }
+}
+
+type CheckContext = {
+    flakePath: string;
+    lockPath: string;
+    initialLock: FlakeLock;
+    rootInputs: Record<string, string>;
+    env: z.infer<typeof EnvSchema>;
+};
+
+function loadCheckContext(args: string[]): AppResult<CheckContext> {
+    const envResult = loadCheckEnv();
+    if (envResult.isErr()) {
+        return err(envResult.error);
+    }
+
+    const resolvedFlakePath = resolve(checkFlakePath(args[0]));
+    const lockPath = join(resolvedFlakePath, "flake.lock");
+    if (existsSync(lockPath) === false) {
+        return err("");
+    }
+
+    const lockResult = loadCheckLock(lockPath);
+    if (lockResult.isErr()) {
+        return err(lockResult.error);
+    }
+
+    return ok({ flakePath: resolvedFlakePath, lockPath, ...lockResult.value, env: envResult.value });
+}
+
+function checkFlakePath(pathArg: string | undefined): string {
+    return expandHomePath(pathArg ?? defaultFlakePath());
+}
+
+function defaultFlakePath(): string {
+    return `${process.env.HOME ?? "~"}/nixos`;
+}
+
+function loadCheckEnv(): AppResult<z.infer<typeof EnvSchema>> {
+    const envParsed = EnvSchema.safeParse(process.env);
+    if (envParsed.success) {
+        return ok(envParsed.data);
+    }
+
+    const summary = envParsed.error.issues
+        .map((issue) => `${issue.path.join(".") || "env"}: ${issue.message}`)
+        .join("; ");
+    return err(`flake_check_updates: invalid env settings (${summary})`);
+}
+
+function expandHomePath(rawPath: string): string {
+    const home = process.env.HOME;
+    if (home === undefined || rawPath.startsWith("~/") === false) {
+        return rawPath;
+    }
+
+    return join(home, rawPath.slice(2));
+}
+
+function loadCheckLock(lockPath: string): AppResult<Pick<CheckContext, "initialLock" | "rootInputs">> {
+    const initialLockResult = loadLock(lockPath);
+    if (initialLockResult.isErr()) {
+        return err(`flake_check_updates: failed to read lock file: ${initialLockResult.error}`);
+    }
+
+    const rootInputs = initialLockResult.value.nodes?.root?.inputs;
+    if (!rootInputs) {
+        return err("");
+    }
+
+    return ok({ initialLock: initialLockResult.value, rootInputs });
+}
+
+function failWithEmptyResult(error: string): number {
+    if (error) {
+        console.error(error);
+    }
+    emitResult(EMPTY_RESULT);
+    return 1;
+}
+
 function main(): number {
     const args = process.argv.slice(2);
-    if (args[0] === "-h" || args[0] === "--help") {
+    if (isHelpRequest(args[0])) {
         usage();
         return 0;
     }
 
-    const defaultFlakePath = process.env.HOME ? `${process.env.HOME}/nixos` : "~/nixos";
-    const rawPath = args[0] ?? defaultFlakePath;
-    const flakePath = rawPath.startsWith("~/") && process.env.HOME ? join(process.env.HOME, rawPath.slice(2)) : rawPath;
-    const resolvedFlakePath = resolve(flakePath);
-    const lockPath = join(resolvedFlakePath, "flake.lock");
-    const envParsed = EnvSchema.safeParse(process.env);
-    if (!envParsed.success) {
-        const summary = envParsed.error.issues
-            .map((issue) => `${issue.path.join(".") || "env"}: ${issue.message}`)
-            .join("; ");
-        console.error(`flake_check_updates: invalid env settings (${summary})`);
-        emitResult(EMPTY_RESULT);
-        return 1;
+    const contextResult = loadCheckContext(args);
+    if (contextResult.isErr()) {
+        return failWithEmptyResult(contextResult.error);
     }
 
-    const batchSize = envParsed.data.FLAKE_CHECK_BATCH_SIZE;
-    const updateTimeoutMs = envParsed.data.FLAKE_CHECK_TIMEOUT_MS;
-    const useCursor = envParsed.data.FLAKE_CHECK_CURSOR;
-
-    if (!existsSync(lockPath)) {
-        emitResult(EMPTY_RESULT);
-        return 1;
+    const context = contextResult.value;
+    const checkResult = runCheck(context);
+    if (checkResult.isErr()) {
+        return failWithEmptyResult(checkResult.error);
     }
 
-    const initialLockResult = loadLock(lockPath);
-    if (initialLockResult.isErr()) {
-        console.error(`flake_check_updates: failed to read lock file: ${initialLockResult.error}`);
-        emitResult(EMPTY_RESULT);
-        return 1;
+    emitWarnings(checkResult.value.warnings);
+    emitResult({ count: checkResult.value.updates.length, updates: checkResult.value.updates });
+    return 0;
+}
+
+function isHelpRequest(arg: string | undefined): boolean {
+    return arg === "-h" || arg === "--help";
+}
+
+type CheckRun = {
+    updates: UpdateInfo[];
+    warnings: string[];
+};
+
+function runCheck(context: CheckContext): AppResult<CheckRun> {
+    const allInputs = Object.keys(context.rootInputs).sort();
+    const cursorFile = cursorFileForFlake(
+        context.flakePath,
+        context.env.FLAKE_CHECK_CURSOR_FILE,
+        "flake_check_updates",
+    );
+    const batch = prepareInputBatch(
+        allInputs,
+        context.env.FLAKE_CHECK_BATCH_SIZE,
+        context.env.FLAKE_CHECK_CURSOR,
+        cursorFile,
+    );
+    const warnings = collectBatchWarnings(batch, allInputs.length, context.env.FLAKE_CHECK_BATCH_SIZE);
+    const originalLockRaw = readFileSync(context.lockPath, "utf8");
+    const updatesResult = checkInputs({
+        flakePath: context.flakePath,
+        lockPath: context.lockPath,
+        originalLockRaw,
+        initialLock: context.initialLock,
+        rootInputs: context.rootInputs,
+        inputs: batch.inputs,
+        timeoutMs: context.env.FLAKE_CHECK_TIMEOUT_MS,
+        warnings,
+    });
+    if (updatesResult.isErr()) {
+        return err(`flake_check_updates: ${updatesResult.error}`);
     }
 
-    const initialLock = initialLockResult.value;
-    if (!initialLock.nodes?.root?.inputs) {
-        emitResult(EMPTY_RESULT);
-        return 1;
-    }
-
-    const rootInputs = initialLock.nodes.root.inputs;
-    const allInputs = Object.keys(rootInputs).sort();
-    const cursorFile = cursorFileForFlake(resolvedFlakePath, envParsed.data.FLAKE_CHECK_CURSOR_FILE);
-    const cursor = useCursor ? loadCursor(cursorFile) : 0;
-    const start = allInputs.length > 0 ? cursor % allInputs.length : 0;
-    const inputList = buildBatch(allInputs, start, batchSize);
-    const originalLockRaw = readFileSync(lockPath, "utf8");
-    const updates: UpdateInfo[] = [];
-    const warnings: string[] = [];
-
-    if (allInputs.length > batchSize) {
-        warnings.push(`batch scan ${inputList.length}/${allInputs.length} starting at index ${start}`);
-    }
-
-    if (useCursor && allInputs.length > 0) {
-        const nextCursor = (start + inputList.length) % allInputs.length;
-        const saveResult = saveCursor(cursorFile, nextCursor);
-        if (saveResult.isErr()) {
-            warnings.push(`failed to save cursor: ${saveResult.error}`);
-        }
-    }
-
-    try {
-        for (const input of inputList) {
-            const restoreResult = restoreOriginalLock(lockPath, originalLockRaw);
-            if (restoreResult.isErr()) {
-                console.error(`flake_check_updates: failed to restore lock file: ${restoreResult.error}`);
-                emitResult(EMPTY_RESULT);
-                return 1;
-            }
-
-            const nodeName = rootInputs[input];
-            if (!nodeName) {
-                continue;
-            }
-
-            const nodeData = initialLock.nodes?.[nodeName];
-            const currentRev = nodeData?.locked?.rev;
-            if (!currentRev) {
-                continue;
-            }
-
-            const updateResult = runNixUpdate(resolvedFlakePath, input, updateTimeoutMs);
-            if (updateResult.isErr()) {
-                warnings.push(`${input}: ${updateResult.error}`);
-                continue;
-            }
-
-            const updatedLockResult = loadLock(lockPath);
-            if (updatedLockResult.isErr()) {
-                warnings.push(`${input}: failed to read updated lock (${updatedLockResult.error})`);
-                continue;
-            }
-
-            const updatedNode = updatedLockResult.value.nodes?.[nodeName];
-            const newRev = updatedNode?.locked?.rev;
-
-            if (!newRev || newRev === currentRev) {
-                continue;
-            }
-
-            updates.push({
-                name: input,
-                currentRev,
-                currentShort: shortRev(currentRev),
-                newRev,
-                newShort: shortRev(newRev),
-            });
-        }
-    } catch (error) {
-        restoreOriginalLock(lockPath, originalLockRaw);
-        console.error(`flake_check_updates: ${error instanceof Error ? error.message : String(error)}`);
-        emitResult(EMPTY_RESULT);
-        return 1;
-    }
-
-    const finalRestoreResult = restoreOriginalLock(lockPath, originalLockRaw);
+    const finalRestoreResult = restoreOriginalLock(context.lockPath, originalLockRaw);
     if (finalRestoreResult.isErr()) {
-        console.error(`flake_check_updates: failed final lock restore: ${finalRestoreResult.error}`);
-        emitResult(EMPTY_RESULT);
-        return 1;
+        return err(`flake_check_updates: failed final lock restore: ${finalRestoreResult.error}`);
     }
 
+    return ok({ updates: updatesResult.value, warnings });
+}
+
+function collectBatchWarnings(
+    batch: ReturnType<typeof prepareInputBatch>,
+    totalInputs: number,
+    batchSize: number,
+): string[] {
+    return [
+        batchScanWarning(batch, totalInputs, batchSize),
+        batch.cursorError && `failed to save cursor: ${batch.cursorError}`,
+    ].filter((warning): warning is string => Boolean(warning));
+}
+
+function emitWarnings(warnings: string[]): void {
     for (const warning of warnings) {
         console.error(`flake_check_updates: ${warning}`);
     }
-
-    emitResult({ count: updates.length, updates });
-    return 0;
 }
 
 process.exit(main());

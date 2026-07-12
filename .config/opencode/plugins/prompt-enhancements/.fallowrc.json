@@ -3,6 +3,9 @@
   "production": {
     "health": true
   },
+  "ignorePatterns": [
+    "**/*.test.ts"
+  ],
   "entry": [
     "prompt-enhancements.tsx"
   ]

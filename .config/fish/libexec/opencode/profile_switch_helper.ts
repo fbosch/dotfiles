@@ -66,107 +66,121 @@ const ConfigSchema = z
     })
     .passthrough();
 
-function stripComments(text: string): string {
+type StringState = {
+    inString: boolean;
+    escaped: boolean;
+};
+
+function advanceString(text: string, index: number, out: string[], state: StringState): number {
+    const character = text[index];
+    out.push(character);
+    if (state.escaped) {
+        state.escaped = false;
+    } else if (character === "\\") {
+        state.escaped = true;
+    } else if (character === '"') {
+        state.inString = false;
+    }
+    return index + 1;
+}
+
+function transformOutsideStrings(
+    text: string,
+    transform: (text: string, index: number, out: string[]) => number,
+): string {
     const out: string[] = [];
     let i = 0;
     const length = text.length;
-    let inString = false;
-    let escaped = false;
+    const state: StringState = { inString: false, escaped: false };
 
     while (i < length) {
         const ch = text[i];
-        const nxt = i + 1 < length ? text[i + 1] : "";
-
-        if (inString) {
-            out.push(ch);
-            if (escaped) {
-                escaped = false;
-            } else if (ch === "\\") {
-                escaped = true;
-            } else if (ch === '"') {
-                inString = false;
-            }
-            i += 1;
+        if (state.inString) {
+            i = advanceString(text, i, out, state);
             continue;
         }
 
         if (ch === '"') {
-            inString = true;
+            state.inString = true;
             out.push(ch);
             i += 1;
             continue;
         }
 
-        if (ch === "/" && nxt === "/") {
-            i += 2;
-            while (i < length && text[i] !== "\n") {
-                i += 1;
-            }
-            continue;
-        }
-
-        if (ch === "/" && nxt === "*") {
-            i += 2;
-            while (i + 1 < length && !(text[i] === "*" && text[i + 1] === "/")) {
-                i += 1;
-            }
-            i += 2;
-            continue;
-        }
-
-        out.push(ch);
-        i += 1;
+        i = transform(text, i, out);
     }
 
     return out.join("");
 }
 
-function stripTrailingCommas(text: string): string {
-    const out: string[] = [];
-    let i = 0;
-    const length = text.length;
-    let inString = false;
-    let escaped = false;
+function lineCommentEnd(text: string, index: number): number {
+    while (index < text.length && text[index] !== "\n") {
+        index += 1;
+    }
+    return index;
+}
 
-    while (i < length) {
-        const ch = text[i];
+function blockCommentEnd(text: string, index: number): number {
+    while (index + 1 < text.length && !(text[index] === "*" && text[index + 1] === "/")) {
+        index += 1;
+    }
+    return index + 2;
+}
 
-        if (inString) {
-            out.push(ch);
-            if (escaped) {
-                escaped = false;
-            } else if (ch === "\\") {
-                escaped = true;
-            } else if (ch === '"') {
-                inString = false;
-            }
-            i += 1;
-            continue;
-        }
-
-        if (ch === '"') {
-            inString = true;
-            out.push(ch);
-            i += 1;
-            continue;
-        }
-
-        if (ch === ",") {
-            let j = i + 1;
-            while (j < length && " \t\r\n".includes(text[j])) {
-                j += 1;
-            }
-            if (j < length && "}]".includes(text[j])) {
-                i += 1;
-                continue;
-            }
-        }
-
-        out.push(ch);
-        i += 1;
+function commentEnd(text: string, index: number): number | null {
+    if (text[index] !== "/") {
+        return null;
     }
 
-    return out.join("");
+    const marker = text[index + 1];
+    if (marker === "/") {
+        return lineCommentEnd(text, index + 2);
+    }
+    if (marker === "*") {
+        return blockCommentEnd(text, index + 2);
+    }
+    return null;
+}
+
+function copyWithoutComments(text: string, index: number, out: string[]): number {
+    const end = commentEnd(text, index);
+    if (end !== null) {
+        return end;
+    }
+
+    out.push(text[index]);
+    return index + 1;
+}
+
+function stripComments(text: string): string {
+    return transformOutsideStrings(text, copyWithoutComments);
+}
+
+function nextNonWhitespaceIndex(text: string, index: number): number {
+    while (index < text.length && " \t\r\n".includes(text[index])) {
+        index += 1;
+    }
+    return index;
+}
+
+function isTrailingComma(text: string, index: number): boolean {
+    if (text[index] !== ",") {
+        return false;
+    }
+
+    const next = nextNonWhitespaceIndex(text, index + 1);
+    return next < text.length && "}]".includes(text[next]);
+}
+
+function copyWithoutTrailingCommas(text: string, index: number, out: string[]): number {
+    if (!isTrailingComma(text, index)) {
+        out.push(text[index]);
+    }
+    return index + 1;
+}
+
+function stripTrailingCommas(text: string): string {
+    return transformOutsideStrings(text, copyWithoutTrailingCommas);
 }
 
 function readJsonc<T>(filePath: string): AppResult<T> {
@@ -289,28 +303,61 @@ function profileMatches(snapshot: ReturnType<typeof currentSnapshot>, profile: P
     return true;
 }
 
-function listProfiles(profilesPath: string, configPath: string): AppResult<string> {
-    const profilesResult = readJsonc<unknown>(profilesPath);
+type LoadedProfilesAndConfig = {
+    profiles: z.infer<typeof ProfilesSchema>["profiles"];
+    config: ConfigShape;
+};
+
+function readProfiles(profilesPath: string): AppResult<LoadedProfilesAndConfig["profiles"]> {
+    const result = readJsonc<unknown>(profilesPath);
+    if (result.isErr()) {
+        return err(`failed to parse profiles: ${result.error}`);
+    }
+
+    const parsed = ProfilesSchema.safeParse(result.value);
+    if (parsed.success) {
+        return ok(parsed.data.profiles);
+    }
+
+    return err("profiles file missing valid profiles object");
+}
+
+function readConfig(configPath: string): AppResult<ConfigShape> {
+    const result = readJsonc<unknown>(configPath);
+    if (result.isErr()) {
+        return err(`failed to parse config: ${result.error}`);
+    }
+
+    const parsed = ConfigSchema.safeParse(result.value);
+    if (parsed.success) {
+        return ok(result.value as ConfigShape);
+    }
+
+    return err("config file invalid");
+}
+
+function loadProfilesAndConfig(profilesPath: string, configPath: string): AppResult<LoadedProfilesAndConfig> {
+    const profilesResult = readProfiles(profilesPath);
     if (profilesResult.isErr()) {
-        return err(`failed to parse profiles: ${profilesResult.error}`);
+        return err(profilesResult.error);
     }
-    const configResult = readJsonc<unknown>(configPath);
+    const configResult = readConfig(configPath);
     if (configResult.isErr()) {
-        return err(`failed to parse config: ${configResult.error}`);
+        return err(configResult.error);
     }
 
-    const profilesParsed = ProfilesSchema.safeParse(profilesResult.value);
-    if (!profilesParsed.success) {
-        return err("profiles file missing valid profiles object");
-    }
-    const configParsed = ConfigSchema.safeParse(configResult.value);
-    if (!configParsed.success) {
-        return err("config file invalid");
+    return ok({ profiles: profilesResult.value, config: configResult.value });
+}
+
+function listProfiles(profilesPath: string, configPath: string): AppResult<string> {
+    const loadedResult = loadProfilesAndConfig(profilesPath, configPath);
+    if (loadedResult.isErr()) {
+        return err(loadedResult.error);
     }
 
-    const config = configResult.value as ConfigShape;
+    const { profiles, config } = loadedResult.value;
     const snapshot = currentSnapshot(config);
-    const items = Object.entries(profilesParsed.data.profiles).map(([name, value]) => {
+    const items = Object.entries(profiles).map(([name, value]) => {
         const profile = profileSpecFromParsed(value);
         return {
             name,
@@ -322,54 +369,53 @@ function listProfiles(profilesPath: string, configPath: string): AppResult<strin
     return ok(items.map((item) => [item.name, item.description, String(item.active)].join("\t")).join("\n"));
 }
 
+function applyProfileModelSettings(config: ConfigShape, profile: ProfileSpec): void {
+    if (profile.model !== null) {
+        config.model = profile.model;
+    }
+    if (profile.small_model !== null) {
+        config.small_model = profile.small_model;
+    }
+}
+
+function updatedAgents(existingAgents: NonNullable<ConfigShape["agent"]>, profileAgents: AgentMap) {
+    const updatedAgents = Object.fromEntries(
+        Object.entries(existingAgents).map(([agentName, agentValue]) => [
+            agentName,
+            applyAgentOptions({ ...(agentValue || {}) }, profileAgents[agentName]),
+        ]),
+    ) as Record<string, { model?: string; [key: string]: unknown }>;
+
+    for (const [agentName, agentOptions] of Object.entries(profileAgents)) {
+        if (agentName in updatedAgents || agentOptions === null) {
+            continue;
+        }
+        updatedAgents[agentName] = applyAgentOptions({}, agentOptions);
+    }
+
+    return updatedAgents;
+}
+
+function updatedConfig(config: ConfigShape, profile: ProfileSpec): ConfigShape {
+    const nextConfig: ConfigShape = structuredClone(config);
+    applyProfileModelSettings(nextConfig, profile);
+    nextConfig.agent = updatedAgents(nextConfig.agent || {}, profile.agents);
+    return nextConfig;
+}
+
 function applyProfile(profilesPath: string, configPath: string, profileName: string): AppResult<string> {
-    const profilesResult = readJsonc<unknown>(profilesPath);
-    if (profilesResult.isErr()) {
-        return err(`failed to parse profiles: ${profilesResult.error}`);
-    }
-    const configResult = readJsonc<unknown>(configPath);
-    if (configResult.isErr()) {
-        return err(`failed to parse config: ${configResult.error}`);
+    const loadedResult = loadProfilesAndConfig(profilesPath, configPath);
+    if (loadedResult.isErr()) {
+        return err(loadedResult.error);
     }
 
-    const profilesParsed = ProfilesSchema.safeParse(profilesResult.value);
-    if (!profilesParsed.success) {
-        return err("profiles file missing valid profiles object");
-    }
-    const configParsed = ConfigSchema.safeParse(configResult.value);
-    if (!configParsed.success) {
-        return err("config file invalid");
-    }
-
-    const target = profilesParsed.data.profiles[profileName];
+    const target = loadedResult.value.profiles[profileName];
     if (!target) {
         return err(`missing profile: ${profileName}`);
     }
 
     const profile = profileSpecFromParsed(target);
-    const nextConfig: ConfigShape = structuredClone(configResult.value as ConfigShape);
-
-    if (profile.model !== null) {
-        nextConfig.model = profile.model;
-    }
-    if (profile.small_model !== null) {
-        nextConfig.small_model = profile.small_model;
-    }
-
-    const existingAgents = nextConfig.agent || {};
-    const updatedAgents: Record<string, { model?: string; [key: string]: unknown }> = {};
-
-    for (const [agentName, agentValue] of Object.entries(existingAgents)) {
-        updatedAgents[agentName] = applyAgentOptions({ ...(agentValue || {}) }, profile.agents[agentName]);
-    }
-
-    for (const [agentName, agentOptions] of Object.entries(profile.agents)) {
-        if (!(agentName in updatedAgents) && agentOptions !== null) {
-            updatedAgents[agentName] = applyAgentOptions({}, agentOptions);
-        }
-    }
-
-    nextConfig.agent = updatedAgents;
+    const nextConfig = updatedConfig(loadedResult.value.config, profile);
 
     const writeResult = writeJsonAtomic(configPath, nextConfig);
     if (writeResult.isErr()) {
@@ -385,24 +431,32 @@ function usage(): void {
     console.log("  opencode/profile_switch_helper.ts apply <profiles.jsonc> <opencode.json/jsonc> <profile>");
 }
 
-function main(): number {
-    const [, , command, ...args] = process.argv;
-    if (!command || command === "-h" || command === "--help") {
-        usage();
-        return command ? 0 : 1;
+const commandHandlers: Record<string, (args: string[]) => AppResult<string>> = {
+    list: (args) => (args.length === 2 ? listProfiles(args[0], args[1]) : err("list requires 2 args")),
+    apply: (args) => (args.length === 3 ? applyProfile(args[0], args[1], args[2]) : err("apply requires 3 args")),
+};
+
+function runCommand(command: string, args: string[]): AppResult<string> {
+    const handler = commandHandlers[command];
+    if (handler) {
+        return handler(args);
     }
+    return err(`unknown command: ${command}`);
+}
 
-    const result =
-        command === "list"
-            ? args.length === 2
-                ? listProfiles(args[0], args[1])
-                : err("list requires 2 args")
-            : command === "apply"
-              ? args.length === 3
-                  ? applyProfile(args[0], args[1], args[2])
-                  : err("apply requires 3 args")
-              : err(`unknown command: ${command}`);
+function commandOrUsageExit(command: string | undefined): string | number {
+    if (!command) {
+        usage();
+        return 1;
+    }
+    if (command === "-h" || command === "--help") {
+        usage();
+        return 0;
+    }
+    return command;
+}
 
+function emitResult(result: AppResult<string>): number {
     if (result.isErr()) {
         console.error(`opencode_profile_switch_helper: ${result.error}`);
         return 1;
@@ -410,6 +464,12 @@ function main(): number {
 
     console.log(result.value);
     return 0;
+}
+
+function main(): number {
+    const [, , command, ...args] = process.argv;
+    const commandOrExitCode = commandOrUsageExit(command);
+    return typeof commandOrExitCode === "number" ? commandOrExitCode : emitResult(runCommand(commandOrExitCode, args));
 }
 
 process.exit(main());

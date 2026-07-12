@@ -84,12 +84,23 @@ const CacheSchema = z.object({
 type Credits = z.infer<typeof CreditsSchema>;
 type Usage = z.infer<typeof UsageSchema>;
 type Credentials = { accessToken: string; accountId: string };
-type Command = "status" | "consume-preview" | "consume";
+const commands = ["status", "consume-preview", "consume"] as const;
+type Command = typeof commands[number];
 type Arguments = {
     command: Command;
     authFile: string;
     creditId?: string;
     refresh: boolean;
+};
+type ValueOptionHandler = (args: Arguments, value: string) => void;
+
+const valueOptionHandlers: Record<string, ValueOptionHandler> = {
+    "--auth": (args, value) => {
+        args.authFile = value;
+    },
+    "--credit-id": (args, value) => {
+        args.creditId = value;
+    },
 };
 
 function defaultAuthFile(): string {
@@ -100,33 +111,73 @@ function usage(): void {
     console.log("Usage: reset_helper.ts <status|consume-preview|consume> [--auth PATH] [--credit-id ID] [--refresh]");
 }
 
-function parseArguments(argv: string[]): AppResult<Arguments> {
-    const [command, ...rest] = argv;
-    if (command !== "status" && command !== "consume-preview" && command !== "consume") {
+function isCommand(value: string | undefined): value is Command {
+    return commands.includes(value as Command);
+}
+
+function parseCommand(value: string | undefined): AppResult<Command> {
+    if (!isCommand(value)) {
         return err("command must be status, consume-preview, or consume");
     }
 
-    const args: Arguments = { command, authFile: defaultAuthFile(), refresh: false };
+    return ok(value);
+}
+
+function parseValueOption(
+    option: string,
+    value: string | undefined,
+    setValue: ValueOptionHandler,
+    args: Arguments,
+): AppResult<number> {
+    if (!value) {
+        return err(`${option} requires a value`);
+    }
+
+    setValue(args, value);
+    return ok(1);
+}
+
+function parseFlagOption(command: Command, option: string, args: Arguments): AppResult<number> {
+    if (option !== "--refresh") {
+        return err(`unknown or invalid option: ${option}`);
+    }
+    if (command !== "status") {
+        return err(`unknown or invalid option: ${option}`);
+    }
+
+    args.refresh = true;
+    return ok(0);
+}
+
+function parseOption(
+    command: Command,
+    option: string,
+    value: string | undefined,
+    args: Arguments,
+): AppResult<number> {
+    const setValue = valueOptionHandlers[option];
+    if (setValue) {
+        return parseValueOption(option, value, setValue, args);
+    }
+
+    return parseFlagOption(command, option, args);
+}
+
+function parseArguments(argv: string[]): AppResult<Arguments> {
+    const [commandValue, ...rest] = argv;
+    const commandResult = parseCommand(commandValue);
+    if (commandResult.isErr()) {
+        return err(commandResult.error);
+    }
+
+    const args: Arguments = { command: commandResult.value, authFile: defaultAuthFile(), refresh: false };
     for (let index = 0; index < rest.length; index += 1) {
-        const argument = rest[index];
-        if (argument === "--auth" || argument === "--credit-id") {
-            const value = rest[index + 1];
-            if (!value) {
-                return err(`${argument} requires a value`);
-            }
-            if (argument === "--auth") {
-                args.authFile = value;
-            } else {
-                args.creditId = value;
-            }
-            index += 1;
-            continue;
+        const optionResult = parseOption(commandResult.value, rest[index], rest[index + 1], args);
+        if (optionResult.isErr()) {
+            return err(optionResult.error);
         }
-        if (argument === "--refresh" && command === "status") {
-            args.refresh = true;
-            continue;
-        }
-        return err(`unknown or invalid option: ${argument}`);
+
+        index += optionResult.value;
     }
 
     return ok(args);

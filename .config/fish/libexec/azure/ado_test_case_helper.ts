@@ -97,10 +97,10 @@ function fetchOrLoadTestCase(
         return err(ensureCacheDirResult.error);
     }
 
-    const cacheFile = join(cacheDir, `test_case_${testCaseId}.json`);
-    if (!refresh && existsSync(cacheFile)) {
+    const cachePath = join(cacheDir, `test_case_${testCaseId}.json`);
+    if (!refresh && existsSync(cachePath)) {
         try {
-            return ok(readFileSync(cacheFile, "utf8"));
+            return ok(readFileSync(cachePath, "utf8"));
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             return err(message);
@@ -114,14 +114,14 @@ function fetchOrLoadTestCase(
 
     const fetchResult = run("az", args);
     if (fetchResult.isErr()) {
-        if (existsSync(cacheFile)) {
-            rmSync(cacheFile, { force: true });
+        if (existsSync(cachePath)) {
+            rmSync(cachePath, { force: true });
         }
         return err(fetchResult.error);
     }
 
     try {
-        writeFileSync(cacheFile, fetchResult.value, "utf8");
+        writeFileSync(cachePath, fetchResult.value, "utf8");
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return err(message);
@@ -170,20 +170,16 @@ function parseStepsTable(stepsRaw: string): string {
     let stepNumber = 1;
 
     for (const stepBlock of stepBlocks) {
-        const paramValues = [...stepBlock.matchAll(/<parameterizedString[^>]*>([\s\S]*?)<\/parameterizedString>/g)].map(
-            (match) => match[1] || "",
-        );
-
-        if (paramValues.length === 0) {
+        const [actionRaw, expectedRaw] = [
+            ...stepBlock.matchAll(/<parameterizedString[^>]*>([\s\S]*?)<\/parameterizedString>/g),
+        ].map((match) => match[1] || "");
+        if (actionRaw === undefined) {
             continue;
         }
 
-        const action = htmlToText(decodeXmlEntities(paramValues[0] || ""), 1000)
-            .replaceAll("\n", " ")
-            .trim();
-        const expected = htmlToText(decodeXmlEntities(paramValues[1] || ""), 1000)
-            .replaceAll("\n", " ")
-            .trim();
+        const [action, expected] = [actionRaw, expectedRaw ?? ""].map((value) =>
+            htmlToText(decodeXmlEntities(value), 1000).replaceAll("\n", " ").trim(),
+        );
         if (!action) {
             continue;
         }

@@ -1,7 +1,6 @@
 import { type SpawnSyncOptionsWithStringEncoding, spawnSync } from "node:child_process";
-import { err, ok, type Result } from "neverthrow";
-
-export type AppResult<T> = Result<T, string>;
+import { err, ok } from "neverthrow";
+import type { AppResult } from "./fs.js";
 
 type RunOptions = Omit<SpawnSyncOptionsWithStringEncoding, "encoding" | "stdio">;
 

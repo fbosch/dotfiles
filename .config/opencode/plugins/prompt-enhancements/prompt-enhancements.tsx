@@ -3,6 +3,7 @@ import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plug
 import { RGBA } from "@opentui/core"
 import type { JSX } from "solid-js"
 import { createMemo, createSignal, onCleanup, Show } from "solid-js"
+import { contextHealth } from "./context-health"
 import { appendDelimiterAndCorrect, parseTypoRules, typoRuleLengths } from "./typo-engine"
 
 declare const Bun: {
@@ -20,16 +21,6 @@ declare const process: {
 
 type ThemeColor = string | RGBA
 type ThemeMap = Record<string, unknown>
-
-type TokenBreakPoint = {
-  metric: "tokens" | "percent"
-  lte: number
-  color: string
-}
-
-type PluginConfig = {
-  breakpoints: TokenBreakPoint[]
-}
 
 const typoDelimiters = [
   { key: "space", name: "space", value: " ", description: "Insert space and fix prompt typo" },
@@ -115,12 +106,10 @@ const compactNumber = new Intl.NumberFormat("en-US", {
 
 const fullNumber = new Intl.NumberFormat("en-US")
 
-const defaultConfig: PluginConfig = {
-  breakpoints: [
-    { metric: "tokens", lte: 100000, color: "#98c379" },
-    { metric: "percent", lte: 74, color: "#e5c07b" },
-    { metric: "percent", lte: Infinity, color: "#e06c75" },
-  ],
+const usageColors = {
+  green: "#98c379",
+  yellow: "#e5c07b",
+  red: "#e06c75",
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -153,69 +142,6 @@ function asSubmitHandler(value: unknown): (() => void) | undefined {
 
 function asPromptRefHandler(value: unknown): ((ref: PromptRef | undefined) => void) | undefined {
   return typeof value === "function" ? (value as (ref: PromptRef | undefined) => void) : undefined
-}
-
-function breakpointMetric(value: unknown): TokenBreakPoint["metric"] | undefined {
-  if (value === "tokens" || value === "percent") {
-    return value
-  }
-
-  return undefined
-}
-
-function parseBreakpoint(entry: unknown): TokenBreakPoint | undefined {
-  if (isRecord(entry) === false) {
-    return undefined
-  }
-
-  return breakpointFromParts(breakpointMetric(entry.metric), asFiniteNumber(entry.lte), breakpointColor(entry.color))
-}
-
-function breakpointColor(value: unknown): string | undefined {
-  const color = asString(value)?.trim()
-  if (!color) {
-    return undefined
-  }
-
-  return color
-}
-
-function breakpointFromParts(
-  metric: TokenBreakPoint["metric"] | undefined,
-  lte: number | undefined,
-  color: string | undefined,
-): TokenBreakPoint | undefined {
-  if (metric === undefined) {
-    return undefined
-  }
-
-  if (lte === undefined) {
-    return undefined
-  }
-
-  if (color === undefined) {
-    return undefined
-  }
-
-  return { metric, lte, color }
-}
-
-function defined<T>(value: T | undefined): value is T {
-  return value !== undefined
-}
-
-function parseConfig(options: unknown): PluginConfig {
-  if (isRecord(options) === false || Array.isArray(options.breakpoints) === false) {
-    return defaultConfig
-  }
-
-  const breakpoints = options.breakpoints.map(parseBreakpoint).filter(defined)
-
-  if (breakpoints.length === 0) {
-    return defaultConfig
-  }
-
-  return { breakpoints }
 }
 
 function typoRulesPath(): string {
@@ -310,34 +236,15 @@ function colorKey(color: ThemeColor): string {
   return `${color.r}:${color.g}:${color.b}:${color.a}`
 }
 
-function breakpointMatches(entry: TokenBreakPoint, usage: { used: number; percent?: number }): boolean {
-  if (entry.metric === "tokens") {
-    return usage.used <= entry.lte
-  }
-
-  return usage.percent !== undefined && usage.percent <= entry.lte
-}
-
-function fallbackUsageColor(config: PluginConfig): string {
-  return config.breakpoints[config.breakpoints.length - 1]?.color ?? "textMuted"
-}
-
 function usageColor(
   theme: ThemeMap,
-  config: PluginConfig,
-  usage: { used: number; percent?: number } | undefined,
+  usage: { used: number; contextLimit?: number } | undefined,
 ): ThemeColor {
   if (usage === undefined) {
     return textMuted(theme)
   }
 
-  const match = config.breakpoints.find((entry) => breakpointMatches(entry, usage))
-
-  if (match) {
-    return resolveColor(theme, match.color, textMuted(theme))
-  }
-
-  return resolveColor(theme, fallbackUsageColor(config), textMuted(theme))
+  return resolveColor(theme, usageColors[contextHealth(usage.used, usage.contextLimit)], textMuted(theme))
 }
 
 function assistantFromRecord(row: Record<string, unknown>): AssistantMessage | undefined {
@@ -445,6 +352,7 @@ function usageTextFromAssistants(api: TuiPluginApi, assistants: AssistantMessage
   const percent = limit && limit > 0 ? Math.round((used / limit) * 100) : undefined
   return {
     used,
+    contextLimit: limit,
     contextCompact: contextCompact(used, percent),
     tokensFull: `${fullNumber.format(used)} tokens`,
     usageFull: usageFull(percent),
@@ -612,11 +520,11 @@ function promptRefProp(props: Record<string, unknown>): ((ref: PromptRef | undef
   return asPromptRefHandler(props.ref)
 }
 
-function TokenUsageOverlay(props: { api: TuiPluginApi; sessionID: string; config: PluginConfig }): JSX.Element {
+function TokenUsageOverlay(props: { api: TuiPluginApi; sessionID: string }): JSX.Element {
   const usage = useUsage(props)
   const theme = createMemo(() => props.api.theme.current as ThemeMap)
   const background = createMemo(() => promptBackground(theme()))
-  const foreground = createMemo(() => usageColor(theme(), props.config, usage()))
+  const foreground = createMemo(() => usageColor(theme(), usage()))
   const info = createMemo(() => usage())
 
   return (
@@ -648,8 +556,7 @@ function TokenUsageOverlay(props: { api: TuiPluginApi; sessionID: string; config
   )
 }
 
-const tui: TuiPlugin = async (api: TuiPluginApi, options: unknown) => {
-  const config = parseConfig(options)
+const tui: TuiPlugin = async (api: TuiPluginApi) => {
   const typoRules = await loadTypoRules()
   const typoLengths = typoRuleLengths(typoRules)
   let activePromptRef: PromptRef | undefined
@@ -720,7 +627,7 @@ const tui: TuiPlugin = async (api: TuiPluginApi, options: unknown) => {
               onPromptRef={trackPromptRef}
               right={<ui.Slot name="session_prompt_right" session_id={promptProps.sessionID} />}
             />
-            <TokenUsageOverlay api={api} sessionID={promptProps.sessionID} config={config} />
+            <TokenUsageOverlay api={api} sessionID={promptProps.sessionID} />
           </box>
         )
       },

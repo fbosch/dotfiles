@@ -26,6 +26,21 @@ type IssueListRow = {
     title: string;
     detail: string;
 };
+type ListBuildContext = {
+    cache: Record<string, CachedIssueMeta>;
+    cacheTtlSeconds: number;
+    enrichLimit: number;
+    now: number;
+    enrichFetchCount: number;
+    cacheDirty: boolean;
+};
+type IssueDetails = {
+    detail: string;
+    title: string;
+    stateName: string;
+    stateType: string;
+    priorityValue: string;
+};
 
 type IssueView = {
     title?: string;
@@ -246,6 +261,90 @@ function deriveBranch(issueId: string, title: string, branchName?: string): stri
     return `feature/${issueId.toLowerCase()}-${slug.slice(0, 48)}`;
 }
 
+function applyCachedDetails(details: IssueDetails, cached: CachedIssueMeta | undefined, context: ListBuildContext): void {
+    if (!cached || context.now - cached.timestamp > context.cacheTtlSeconds) {
+        return;
+    }
+
+    details.stateName = cached.stateName;
+    details.stateType = cached.stateType;
+    details.priorityValue = cached.priorityValue;
+    details.title = cached.title || details.title;
+}
+
+function canEnrich(details: IssueDetails, context: ListBuildContext): boolean {
+    return !details.stateName && context.enrichFetchCount < context.enrichLimit;
+}
+
+function trimmedOr(value: string | undefined, fallback: string): string {
+    return value?.trim() || fallback;
+}
+
+function fetchAndCacheDetails(id: string, details: IssueDetails, context: ListBuildContext): void {
+    const issueView = fetchIssueView(id);
+    if (issueView.isErr()) {
+        return;
+    }
+
+    details.title = trimmedOr(issueView.value.title, details.title);
+    details.stateName = trimmedOr(issueView.value.state?.name, "");
+    details.stateType = trimmedOr(issueView.value.state?.type, "");
+    details.priorityValue = normalizePriorityValue(issueView.value.priority);
+    context.cache[id] = {
+        timestamp: context.now,
+        stateName: details.stateName,
+        stateType: details.stateType,
+        priorityValue: details.priorityValue,
+        title: sanitizeField(details.title),
+    };
+    context.cacheDirty = true;
+}
+
+function enrichDetails(id: string, details: IssueDetails, context: ListBuildContext): void {
+    if (canEnrich(details, context)) {
+        context.enrichFetchCount += 1;
+        fetchAndCacheDetails(id, details, context);
+    }
+}
+
+function buildListRow(plainLine: string, id: string, context: ListBuildContext): IssueListRow {
+    const detail = plainLine.replace(/^[^A-Z0-9]*[A-Z][A-Z0-9]+-\d+\s+/, "").trim();
+    const details: IssueDetails = { detail, title: detail, stateName: "", stateType: "", priorityValue: "" };
+    const cached = context.cache[id];
+    applyCachedDetails(details, cached, context);
+    enrichDetails(id, details, context);
+
+    if (!details.stateName) {
+        details.stateName = parseStateNameFromDetail(details.detail) || "No State";
+    }
+
+    details.priorityValue = normalizeListPriorityValue(details.priorityValue, plainLine);
+
+    const stateKey = normalizeStateKey(details.stateType, details.stateName);
+
+    return {
+        id,
+        stateName: sanitizeField(details.stateName),
+        stateKey,
+        priorityValue: details.priorityValue,
+        title: sanitizeField(details.title),
+        detail: sanitizeField(details.detail),
+    };
+}
+
+function issueIdFromLine(plainLine: string): string | undefined {
+    return plainLine.match(/([A-Z][A-Z0-9]+-\d+)/)?.[1];
+}
+
+function isNewIssue(id: string | undefined, seenIds: Set<string>): id is string {
+    if (!id || seenIds.has(id)) {
+        return false;
+    }
+
+    seenIds.add(id);
+    return true;
+}
+
 function buildListRows(
     rawList: string,
     cache: Record<string, CachedIssueMeta>,
@@ -254,77 +353,26 @@ function buildListRows(
 ): { rows: IssueListRow[]; cacheDirty: boolean } {
     const rows: IssueListRow[] = [];
     const seenIds = new Set<string>();
-    const now = Math.floor(Date.now() / 1000);
-    let enrichFetchCount = 0;
-    let cacheDirty = false;
+    const context: ListBuildContext = {
+        cache,
+        cacheTtlSeconds,
+        enrichLimit,
+        now: Math.floor(Date.now() / 1000),
+        enrichFetchCount: 0,
+        cacheDirty: false,
+    };
 
     for (const rawLine of rawList.split("\n")) {
         const plainLine = stripAnsi(rawLine);
-        const id = plainLine.match(/([A-Z][A-Z0-9]+-\d+)/)?.[1] || "";
-        if (!id || seenIds.has(id)) {
+        const id = issueIdFromLine(plainLine);
+        if (!isNewIssue(id, seenIds)) {
             continue;
         }
 
-        seenIds.add(id);
-
-        let detail = plainLine.replace(/^[^A-Z0-9]*[A-Z][A-Z0-9]+-\d+\s+/, "").trim();
-        let title = detail;
-        let stateName = "";
-        let stateType = "";
-        let priorityValue = "";
-
-        const cached = cache[id];
-        if (cached && now - cached.timestamp <= cacheTtlSeconds) {
-            stateName = cached.stateName;
-            stateType = cached.stateType;
-            priorityValue = cached.priorityValue;
-            if (cached.title) {
-                title = cached.title;
-            }
-        }
-
-        if (!stateName && enrichFetchCount < enrichLimit) {
-            enrichFetchCount += 1;
-            const issueView = fetchIssueView(id);
-            if (issueView.isOk()) {
-                title = issueView.value.title?.trim() || title;
-                stateName = issueView.value.state?.name?.trim() || "";
-                stateType = issueView.value.state?.type?.trim() || "";
-                priorityValue = normalizePriorityValue(issueView.value.priority);
-
-                cache[id] = {
-                    timestamp: now,
-                    stateName,
-                    stateType,
-                    priorityValue,
-                    title: sanitizeField(title),
-                };
-                cacheDirty = true;
-            }
-        }
-
-        if (!stateName) {
-            stateName = parseStateNameFromDetail(detail) || "No State";
-        }
-
-        priorityValue = normalizeListPriorityValue(priorityValue, plainLine);
-
-        const stateKey = normalizeStateKey(stateType, stateName);
-        title = sanitizeField(title);
-        detail = sanitizeField(detail);
-        stateName = sanitizeField(stateName);
-
-        rows.push({
-            id,
-            stateName,
-            stateKey,
-            priorityValue,
-            title,
-            detail,
-        });
+        rows.push(buildListRow(plainLine, id, context));
     }
 
-    return { rows, cacheDirty };
+    return { rows, cacheDirty: context.cacheDirty };
 }
 
 function emitRows(rows: IssueListRow[]): void {

@@ -3,9 +3,10 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
+import { batchScanWarning, cursorFileForFlake, prepareInputBatch } from "./update_batch.js";
 
 type AppResult<T> = Result<T, string>;
 
@@ -145,65 +146,6 @@ function ensureCacheDir(filePath: string): AppResult<void> {
     }
 }
 
-function cursorFileForFlake(resolvedFlakePath: string, cursorFileOverride?: string): string {
-    if (cursorFileOverride) {
-        return resolve(cursorFileOverride);
-    }
-
-    const cacheRoot = process.env.XDG_CACHE_HOME || (process.env.HOME ? join(process.env.HOME, ".cache") : "/tmp");
-    const key = createHash("sha1").update(resolvedFlakePath).digest("hex");
-    return join(cacheRoot, "flake_update_engine", `${key}.cursor`);
-}
-
-function loadCursor(cursorFile: string): number {
-    if (!existsSync(cursorFile)) {
-        return 0;
-    }
-
-    try {
-        const raw = readFileSync(cursorFile, "utf8").trim();
-        const parsed = Number.parseInt(raw, 10);
-        if (Number.isNaN(parsed) || parsed < 0) {
-            return 0;
-        }
-
-        return parsed;
-    } catch {
-        return 0;
-    }
-}
-
-function saveCursor(cursorFile: string, nextCursor: number): AppResult<void> {
-    try {
-        mkdirSync(dirname(cursorFile), { recursive: true });
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return err(message);
-    }
-
-    try {
-        writeFileSync(cursorFile, `${nextCursor}\n`, "utf8");
-        return ok(undefined);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return err(message);
-    }
-}
-
-function buildBatch(allInputs: string[], start: number, batchSize: number): string[] {
-    if (allInputs.length <= batchSize) {
-        return allInputs;
-    }
-
-    const batch: string[] = [];
-    for (let i = 0; i < batchSize; i += 1) {
-        const idx = (start + i) % allInputs.length;
-        batch.push(allInputs[idx]);
-    }
-
-    return batch;
-}
-
 function loadLock(lockPath: string): AppResult<FlakeLock> {
     try {
         const raw = readFileSync(lockPath, "utf8");
@@ -304,6 +246,84 @@ function asCachedResult(result: ScanResult): ScanResult {
     };
 }
 
+function loadCachedResult(cachePath: string, expectedHash: string, ttlSeconds: number): AppResult<ScanResult | null> {
+    const cachedResult = readCache(cachePath);
+    if (cachedResult.isErr()) {
+        return err(cachedResult.error);
+    }
+
+    if (cachedResult.value && cachedResultUsable(cachedResult.value, expectedHash, ttlSeconds)) {
+        return ok(asCachedResult(cachedResult.value));
+    }
+
+    return ok(null);
+}
+
+type ScanInputOptions = {
+    flakePath: string;
+    lockPath: string;
+    originalLockRaw: string;
+    initialLock: FlakeLock;
+    rootInputs: Record<string, string>;
+    timeoutMs: number;
+};
+
+function scanInput(options: ScanInputOptions, input: string): AppResult<UpdateInfo | undefined> {
+    const restoreResult = restoreLock(options.lockPath, options.originalLockRaw);
+    if (restoreResult.isErr()) {
+        return err(restoreResult.error);
+    }
+
+    const currentRev = inputRevision(options.initialLock, options.rootInputs, input);
+    if (!currentRev) {
+        return ok(undefined);
+    }
+
+    const updatedLock = updateInputLock(options, input);
+    if (!updatedLock) {
+        return ok(undefined);
+    }
+
+    return ok(createUpdateInfo(input, currentRev, inputRevision(updatedLock, options.rootInputs, input)));
+}
+
+function inputRevision(lock: FlakeLock, rootInputs: Record<string, string>, input: string): string | undefined {
+    const nodeName = rootInputs[input];
+    if (!nodeName) {
+        return undefined;
+    }
+
+    return lock.nodes?.[nodeName]?.locked?.rev;
+}
+
+function updateInputLock(options: ScanInputOptions, input: string): FlakeLock | undefined {
+    const updateResult = runNixUpdate(options.flakePath, input, options.timeoutMs);
+    if (updateResult.isErr()) {
+        console.error(`flake_update_engine: ${updateResult.error}`);
+        return undefined;
+    }
+
+    const updatedLockResult = loadLock(options.lockPath);
+    if (updatedLockResult.isErr()) {
+        console.error(`flake_update_engine: ${updatedLockResult.error}`);
+        return undefined;
+    }
+
+    return updatedLockResult.value;
+}
+
+function createUpdateInfo(input: string, currentRev: string, newRev: string | undefined): UpdateInfo | undefined {
+    if (!newRev) {
+        return undefined;
+    }
+
+    if (newRev === currentRev) {
+        return undefined;
+    }
+
+    return { name: input, currentShort: shortRev(currentRev), newShort: shortRev(newRev) };
+}
+
 function scanUpdates(
     flakePath: string,
     timeoutMs: number,
@@ -311,6 +331,46 @@ function scanUpdates(
     useCursor: boolean,
     cursorFile: string,
 ): AppResult<ScanUpdatesResult> {
+    const contextResult = loadScanContext(flakePath);
+    if (contextResult.isErr()) {
+        return err(contextResult.error);
+    }
+
+    const context = contextResult.value;
+    const allInputs = Object.keys(context.rootInputs).sort();
+    const batch = prepareInputBatch(allInputs, batchSize, useCursor, cursorFile);
+    const originalLockRaw = readFileSync(context.lockPath, "utf8");
+    reportBatchDiagnostics(batch, allInputs.length, batchSize);
+    const updatesResult = scanBatch(
+        {
+            flakePath,
+            lockPath: context.lockPath,
+            originalLockRaw,
+            initialLock: context.initialLock,
+            rootInputs: context.rootInputs,
+            timeoutMs,
+        },
+        batch.inputs,
+    );
+    if (updatesResult.isErr()) {
+        return err(updatesResult.error);
+    }
+
+    return ok({
+        updates: updatesResult.value,
+        scannedCount: batch.inputs.length,
+        totalInputs: allInputs.length,
+        partial: allInputs.length > batch.inputs.length,
+    });
+}
+
+type ScanContext = {
+    lockPath: string;
+    initialLock: FlakeLock;
+    rootInputs: Record<string, string>;
+};
+
+function loadScanContext(flakePath: string): AppResult<ScanContext> {
     const lockPath = join(flakePath, "flake.lock");
     const initialLockResult = loadLock(lockPath);
     if (initialLockResult.isErr()) {
@@ -322,78 +382,45 @@ function scanUpdates(
         return err("failed to get flake inputs");
     }
 
-    const allInputs = Object.keys(rootInputs).sort();
-    const cursor = useCursor ? loadCursor(cursorFile) : 0;
-    const start = allInputs.length > 0 ? cursor % allInputs.length : 0;
-    const inputList = buildBatch(allInputs, start, batchSize);
-    const originalLockRaw = readFileSync(lockPath, "utf8");
-    const updates: UpdateInfo[] = [];
+    return ok({ lockPath, initialLock: initialLockResult.value, rootInputs });
+}
 
-    if (useCursor && allInputs.length > 0) {
-        const nextCursor = (start + inputList.length) % allInputs.length;
-        const saveResult = saveCursor(cursorFile, nextCursor);
-        if (saveResult.isErr()) {
-            console.error(`flake_update_engine: failed to save cursor (${saveResult.error})`);
-        }
+function reportBatchDiagnostics(
+    batch: ReturnType<typeof prepareInputBatch>,
+    totalInputs: number,
+    batchSize: number,
+): void {
+    if (batch.cursorError) {
+        console.error(`flake_update_engine: failed to save cursor (${batch.cursorError})`);
     }
 
-    if (allInputs.length > batchSize) {
-        console.error(
-            `flake_update_engine: batch scan ${inputList.length}/${allInputs.length} starting at index ${start}`,
-        );
+    const batchWarning = batchScanWarning(batch, totalInputs, batchSize);
+    if (batchWarning) {
+        console.error(`flake_update_engine: ${batchWarning}`);
     }
+}
 
+function scanBatch(options: ScanInputOptions, inputs: string[]): AppResult<UpdateInfo[]> {
     try {
-        for (const input of inputList) {
-            const restoreResult = restoreLock(lockPath, originalLockRaw);
-            if (restoreResult.isErr()) {
-                return err(restoreResult.error);
-            }
-
-            const nodeName = rootInputs[input];
-            if (!nodeName) {
-                continue;
-            }
-
-            const nodeData = initialLockResult.value.nodes?.[nodeName];
-            const currentRev = nodeData?.locked?.rev;
-            if (!currentRev) {
-                continue;
-            }
-
-            const updateResult = runNixUpdate(flakePath, input, timeoutMs);
-            if (updateResult.isErr()) {
-                console.error(`flake_update_engine: ${updateResult.error}`);
-                continue;
-            }
-
-            const updatedLockResult = loadLock(lockPath);
-            if (updatedLockResult.isErr()) {
-                console.error(`flake_update_engine: ${updatedLockResult.error}`);
-                continue;
-            }
-
-            const newRev = updatedLockResult.value.nodes?.[nodeName]?.locked?.rev;
-            if (!newRev || newRev === currentRev) {
-                continue;
-            }
-
-            updates.push({
-                name: input,
-                currentShort: shortRev(currentRev),
-                newShort: shortRev(newRev),
-            });
-        }
+        return collectScannedUpdates(options, inputs);
     } finally {
-        restoreLock(lockPath, originalLockRaw);
+        restoreLock(options.lockPath, options.originalLockRaw);
+    }
+}
+
+function collectScannedUpdates(options: ScanInputOptions, inputs: string[]): AppResult<UpdateInfo[]> {
+    const updates: UpdateInfo[] = [];
+    for (const input of inputs) {
+        const updateResult = scanInput(options, input);
+        if (updateResult.isErr()) {
+            return err(updateResult.error);
+        }
+        if (updateResult.value) {
+            updates.push(updateResult.value);
+        }
     }
 
-    return ok({
-        updates,
-        scannedCount: inputList.length,
-        totalInputs: allInputs.length,
-        partial: allInputs.length > inputList.length,
-    });
+    return ok(updates);
 }
 
 function scan(
@@ -414,13 +441,11 @@ function scan(
     const currentHash = lockHash(lockRaw);
     const cachePath = cacheFilePath();
 
-    if (force === false) {
-        const cachedResult = readCache(cachePath);
-        if (cachedResult.isErr()) {
-            console.error(`flake_update_engine: failed to read cache (${cachedResult.error})`);
-        } else if (cachedResult.value && cachedResultUsable(cachedResult.value, currentHash, ttlSeconds)) {
-            return ok(asCachedResult(cachedResult.value));
-        }
+    const cachedResult = force ? ok(null) : loadCachedResult(cachePath, currentHash, ttlSeconds);
+    if (cachedResult.isErr()) {
+        console.error(`flake_update_engine: failed to read cache (${cachedResult.error})`);
+    } else if (cachedResult.value) {
+        return ok(cachedResult.value);
     }
 
     const updatesResult = scanUpdates(flakePath, timeoutMs, batchSize, useCursor, cursorFile);
@@ -475,7 +500,7 @@ function main(): number {
     }
 
     const flakePath = resolve(parsedArgs.data.flakePath);
-    const cursorFile = cursorFileForFlake(flakePath, parsedEnv.data.FLAKE_UPDATE_CURSOR_FILE);
+    const cursorFile = cursorFileForFlake(flakePath, parsedEnv.data.FLAKE_UPDATE_CURSOR_FILE, "flake_update_engine");
     const result = scan(
         flakePath,
         parsedEnv.data.FLAKE_UPDATE_CACHE_TTL_SECONDS,
