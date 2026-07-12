@@ -42,15 +42,16 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         codexbar usage --source oauth --provider codex --json 2>/dev/null | jq -r "$query" 2>/dev/null
     end
 
-    function __opencode_usage_color --argument-names remaining
-        if test "$remaining" -ge 75
-            echo 42
-        else if test "$remaining" -ge 50
-            echo 220
-        else if test "$remaining" -ge 25
-            echo 208
-        else
-            echo 196
+    function __opencode_usage_color --argument-names capacity_band
+        switch "$capacity_band"
+            case high
+                echo 42
+            case medium
+                echo 220
+            case low
+                echo 208
+            case critical
+                echo 196
         end
     end
 
@@ -113,22 +114,21 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         gum style --foreground 111 --bold "$title usage ($usage_provider)"
 
         if test -n "$primary_remaining"
-            set -l primary_color (__opencode_usage_color "$primary_remaining")
-            set -l primary_filled (math "floor(($primary_remaining * $bar_width) / 100)")
-            if test "$primary_filled" -lt 1; and test "$primary_remaining" -gt 0
-                set primary_filled 1
-            end
-            if test "$primary_filled" -gt $bar_width
-                set primary_filled $bar_width
-            end
-            set -l primary_empty (math "$bar_width - $primary_filled")
+            set -l primary_segments (__rate_limit_bar_segments \
+                --remaining "$primary_remaining" \
+                --width "$bar_width" \
+                --filled "█" \
+                --empty "░" \
+                --minimum-one)
+            set -l primary_fields (string split \t -- "$primary_segments")
+            set -l primary_color (__opencode_usage_color "$primary_fields[3]")
             set -l primary_bar_filled ""
-            if test "$primary_filled" -gt 0
-                set primary_bar_filled (gum style --foreground "$primary_color" (string repeat -n $primary_filled -- "█"))
+            if test -n "$primary_fields[1]"
+                set primary_bar_filled (gum style --foreground "$primary_color" "$primary_fields[1]")
             end
             set -l primary_bar_empty ""
-            if test "$primary_empty" -gt 0
-                set primary_bar_empty (gum style --foreground 240 (string repeat -n $primary_empty -- "░"))
+            if test -n "$primary_fields[2]"
+                set primary_bar_empty (gum style --foreground 240 "$primary_fields[2]")
             end
             set -l primary_percent (gum style --foreground "$primary_color" --bold "$primary_remaining%")
             printf '  %-9s [%s%s] %s left\n' "primary" "$primary_bar_filled" "$primary_bar_empty" "$primary_percent"
@@ -143,22 +143,21 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         end
 
         if test -n "$secondary_remaining"
-            set -l secondary_color (__opencode_usage_color "$secondary_remaining")
-            set -l secondary_filled (math "floor(($secondary_remaining * $bar_width) / 100)")
-            if test "$secondary_filled" -lt 1; and test "$secondary_remaining" -gt 0
-                set secondary_filled 1
-            end
-            if test "$secondary_filled" -gt $bar_width
-                set secondary_filled $bar_width
-            end
-            set -l secondary_empty (math "$bar_width - $secondary_filled")
+            set -l secondary_segments (__rate_limit_bar_segments \
+                --remaining "$secondary_remaining" \
+                --width "$bar_width" \
+                --filled "█" \
+                --empty "░" \
+                --minimum-one)
+            set -l secondary_fields (string split \t -- "$secondary_segments")
+            set -l secondary_color (__opencode_usage_color "$secondary_fields[3]")
             set -l secondary_bar_filled ""
-            if test "$secondary_filled" -gt 0
-                set secondary_bar_filled (gum style --foreground "$secondary_color" (string repeat -n $secondary_filled -- "█"))
+            if test -n "$secondary_fields[1]"
+                set secondary_bar_filled (gum style --foreground "$secondary_color" "$secondary_fields[1]")
             end
             set -l secondary_bar_empty ""
-            if test "$secondary_empty" -gt 0
-                set secondary_bar_empty (gum style --foreground 240 (string repeat -n $secondary_empty -- "░"))
+            if test -n "$secondary_fields[2]"
+                set secondary_bar_empty (gum style --foreground 240 "$secondary_fields[2]")
             end
             set -l secondary_percent (gum style --foreground "$secondary_color" --bold "$secondary_remaining%")
             printf '  %-9s [%s%s] %s left\n' "secondary" "$secondary_bar_filled" "$secondary_bar_empty" "$secondary_percent"

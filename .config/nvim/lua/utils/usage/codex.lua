@@ -55,9 +55,17 @@ local nouns = {
 local cache = {
 	data = nil,
 	profile = nil,
+	profile_account_id = nil,
 	profile_mtime = nil,
 	profile_last_update = 0,
 	profile_check_interval = 1,
+	reset_count = nil,
+	reset_account_id = nil,
+	reset_nearest_expiry = nil,
+	reset_expiry_known = false,
+	reset_last_update = 0,
+	reset_fetching = false,
+	reset_update_interval = 8 * 60 * 60,
 	last_update = 0,
 	update_interval = 600, -- 10 minutes
 	fetching = false,
@@ -84,10 +92,21 @@ local function load_cache_from_disk()
 
 	if content and content ~= "" then
 		local ok, decoded = pcall(vim.json.decode, content)
-		if ok and decoded and decoded.data and decoded.last_update then
-			cache.data = decoded.data
-			cache.last_update = decoded.last_update
-			return true
+		if ok and decoded then
+			if decoded.data and decoded.last_update then
+				cache.data = decoded.data
+				cache.last_update = decoded.last_update
+			end
+
+			if type(decoded.reset_account_id) == "string" and type(decoded.reset_last_update) == "number" then
+				cache.reset_account_id = decoded.reset_account_id
+				cache.reset_last_update = decoded.reset_last_update
+				cache.reset_count = tonumber(decoded.reset_count)
+				cache.reset_nearest_expiry = type(decoded.reset_nearest_expiry) == "string" and decoded.reset_nearest_expiry or nil
+				cache.reset_expiry_known = decoded.reset_expiry_known == true
+			end
+
+			return cache.data ~= nil or cache.reset_account_id ~= nil
 		end
 	end
 
@@ -104,6 +123,11 @@ local function save_cache_to_disk()
 	local cache_content = {
 		data = cache.data,
 		last_update = cache.last_update,
+		reset_account_id = cache.reset_account_id,
+		reset_count = cache.reset_count,
+		reset_nearest_expiry = cache.reset_nearest_expiry,
+		reset_expiry_known = cache.reset_expiry_known,
+		reset_last_update = cache.reset_last_update,
 	}
 
 	local ok, encoded = pcall(vim.json.encode, cache_content)
@@ -130,8 +154,135 @@ local function parse_and_cache(result)
 	cache.fetching = false
 end
 
-function M.fetch_data_async()
+local function parse_and_cache_reset_count(result, account_id)
+	cache.reset_last_update = os.time()
+	cache.reset_fetching = false
+
+	local ok, decoded = pcall(vim.json.decode, result)
+	local count = ok and type(decoded) == "table" and tonumber(decoded.available_count)
+	if not count then
+		return
+	end
+
+	cache.reset_account_id = account_id
+	cache.reset_count = math.max(0, math.floor(count))
+	cache.reset_nearest_expiry = nil
+	cache.reset_expiry_known = true
+	for _, credit in ipairs(decoded.credits or {}) do
+		if credit.status == "available" and type(credit.expires_at) == "string" then
+			if not cache.reset_nearest_expiry or credit.expires_at < cache.reset_nearest_expiry then
+				cache.reset_nearest_expiry = credit.expires_at
+			end
+		end
+	end
+	save_cache_to_disk()
+end
+
+local function read_auth_tokens()
+	local file = io.open(auth_file, "r")
+	if not file then
+		return nil
+	end
+
+	local content = file:read("*a")
+	file:close()
+	if not content or content == "" then
+		return nil
+	end
+
+	local ok, decoded = pcall(vim.json.decode, content)
+	local tokens = ok and decoded and decoded.tokens
+	if type(tokens) ~= "table" then
+		return nil
+	end
+
+	if type(tokens.account_id) ~= "string" or tokens.account_id == "" then
+		return nil
+	end
+
+	if type(tokens.access_token) ~= "string" or tokens.access_token == "" then
+		return nil
+	end
+
+	return tokens
+end
+
+local function fetch_reset_count_async(account_id)
+	if not account_id then
+		return
+	end
+
 	local current_time = os.time()
+	local has_legacy_reset_cache = cache.reset_count ~= nil and not cache.reset_expiry_known
+	if cache.reset_fetching or (cache.reset_account_id == account_id and not has_legacy_reset_cache and (current_time - cache.reset_last_update) < cache.reset_update_interval) then
+		return
+	end
+
+	local tokens = read_auth_tokens()
+	if not tokens or tokens.account_id ~= account_id then
+		return
+	end
+
+	cache.reset_fetching = true
+	cache.reset_account_id = tokens.account_id
+	cache.reset_count = nil
+	cache.reset_expiry_known = false
+
+	local stdout = vim.loop.new_pipe(false)
+	local handle
+	handle = vim.loop.spawn("curl", {
+		args = {
+			"--silent",
+			"--show-error",
+			"--connect-timeout",
+			"5",
+			"--max-time",
+			"10",
+			"--header",
+			"Authorization: Bearer " .. tokens.access_token,
+			"--header",
+			"ChatGPT-Account-Id: " .. tokens.account_id,
+			"https://chatgpt.com/backend-api/wham/rate-limit-reset-credits",
+		},
+		stdio = { nil, stdout, nil },
+	}, function()
+		if stdout and not stdout:is_closing() then
+			stdout:close()
+		end
+		if handle and not handle:is_closing() then
+			handle:close()
+		end
+	end)
+
+	if not handle then
+		if stdout and not stdout:is_closing() then
+			stdout:close()
+		end
+		cache.reset_last_update = current_time
+		cache.reset_fetching = false
+		return
+	end
+
+	local result = ""
+	stdout:read_start(function(err, data)
+		if err then
+			cache.reset_last_update = os.time()
+			cache.reset_fetching = false
+			return
+		end
+		if data then
+			result = result .. data
+		else
+			vim.schedule(function()
+				parse_and_cache_reset_count(result, tokens.account_id)
+			end)
+		end
+	end)
+end
+
+function M.fetch_data_async(account_id)
+	local current_time = os.time()
+	fetch_reset_count_async(account_id)
 
 	if cache.fetching or (cache.data and (current_time - cache.last_update) < cache.update_interval) then
 		return
@@ -210,7 +361,8 @@ local function format_countdown(resets_at)
 		return nil
 	end
 
-	local reset_ts = vim.fn.strptime("%Y-%m-%dT%H:%M:%SZ", resets_at)
+	local normalized = resets_at:gsub("%.%d+Z$", "Z")
+	local reset_ts = vim.fn.strptime("%Y-%m-%dT%H:%M:%SZ", normalized)
 	if reset_ts == 0 then
 		return nil
 	end
@@ -236,6 +388,27 @@ local function format_countdown(resets_at)
 
 	local days = math.floor(hours / 24)
 	return string.format("~%dd", days)
+end
+
+local function color_for_reset_expiry(expires_at)
+	if not expires_at or expires_at == "" then
+		return "%#NonText#"
+	end
+
+	local normalized = expires_at:gsub("%.%d+Z$", "Z")
+	local expiry_ts = vim.fn.strptime("%Y-%m-%dT%H:%M:%SZ", normalized)
+	if expiry_ts == 0 then
+		return "%#NonText#"
+	end
+
+	local seconds_remaining = expiry_ts - os.time(os.date("!*t"))
+	if seconds_remaining <= 24 * 60 * 60 then
+		return "%#DiagnosticError#"
+	end
+	if seconds_remaining <= 7 * 24 * 60 * 60 then
+		return "%#DiagnosticWarn#"
+	end
+	return "%#DiagnosticOk#"
 end
 
 local function color_for_percent(percent)
@@ -284,61 +457,47 @@ local function build_profile_label(account_id)
 end
 
 local function read_profile_label()
-	local file = io.open(auth_file, "r")
-	if not file then
+	local tokens = read_auth_tokens()
+	if not tokens then
 		return nil
 	end
 
-	local content = file:read("*a")
-	file:close()
-
-	if not content or content == "" then
-		return nil
-	end
-
-	local ok, decoded = pcall(vim.json.decode, content)
-	if not ok or type(decoded) ~= "table" or type(decoded.tokens) ~= "table" then
-		return nil
-	end
-
-	local account_id = decoded.tokens.account_id
-	if type(account_id) ~= "string" or account_id == "" then
-		return nil
-	end
-
-	return build_profile_label(account_id)
+	return build_profile_label(tokens.account_id), tokens.account_id
 end
 
 local function profile_label()
 	local current_time = os.time()
 	if cache.profile_last_update > 0 and (current_time - cache.profile_last_update) < cache.profile_check_interval then
-		return cache.profile
+		return cache.profile, cache.profile_account_id
 	end
 
 	cache.profile_last_update = current_time
 	local mtime = vim.fn.getftime(auth_file)
 	if mtime == cache.profile_mtime then
-		return cache.profile
+		return cache.profile, cache.profile_account_id
 	end
 
 	cache.profile_mtime = mtime
 	if mtime < 0 then
 		cache.profile = nil
-		return nil
+		cache.profile_account_id = nil
+		return nil, nil
 	end
 
-	cache.profile = read_profile_label()
-	return cache.profile
+	cache.profile, cache.profile_account_id = read_profile_label()
+	return cache.profile, cache.profile_account_id
 end
 
 function M.statusline_component()
-	M.fetch_data_async()
-
 	local ok, result = pcall(function()
 		local parts = {}
-		local profile = profile_label()
+		local profile, profile_account_id = profile_label()
+		M.fetch_data_async(profile_account_id)
 		if profile then
 			table.insert(parts, string.format("%%#NonText#%s%%*", profile))
+			if cache.reset_account_id == profile_account_id and cache.reset_count ~= nil then
+				table.insert(parts, string.format("%s(%d)%%*", color_for_reset_expiry(cache.reset_nearest_expiry), cache.reset_count))
+			end
 		end
 
 		if not cache.data or not cache.data.usage then
@@ -413,8 +572,15 @@ load_cache_from_disk()
 function M.clear_cache()
 	cache.data = nil
 	cache.profile = nil
+	cache.profile_account_id = nil
 	cache.profile_mtime = nil
 	cache.profile_last_update = 0
+	cache.reset_count = nil
+	cache.reset_account_id = nil
+	cache.reset_nearest_expiry = nil
+	cache.reset_expiry_known = false
+	cache.reset_last_update = 0
+	cache.reset_fetching = false
 	cache.last_update = 0
 	cache.fetching = false
 
@@ -426,7 +592,8 @@ function M.clear_cache()
 end
 
 vim.defer_fn(function()
-	M.fetch_data_async()
+	local _, account_id = profile_label()
+	M.fetch_data_async(account_id)
 end, 100)
 
 return M

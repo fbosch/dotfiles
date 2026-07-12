@@ -104,7 +104,25 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
 
     if test "$action" = status
         set -l available_count (printf '%s\n' "$credits_body" | jq -r '.available_count // 0')
-        printf 'banked reset credits: %s available\n' "$available_count"
+        set -l profiles_file (path dirname "$auth_file")/auth-profiles.json
+        set -l account_alias_lines
+        set -l helper_dir (path dirname (status filename))
+        set -l fish_root (path resolve "$helper_dir/..")
+        set -l libexec_dir "$fish_root/libexec"
+        set -l aliases_helper "$libexec_dir/opencode/auth_switch_helper.ts"
+        set -l opencode_auth_file "$HOME/.local/share/opencode/auth.json"
+        if command -q bun; and test -f "$aliases_helper"; and test -f "$opencode_auth_file"
+            set account_alias_lines (bun --cwd "$libexec_dir" "$aliases_helper" aliases "$opencode_auth_file" dark)
+        end
+
+        set -l active_alias "account-"(string sub -s -4 -- "$account_id")
+        for account_alias_line in $account_alias_lines
+            set -l fields (string split \t -- "$account_alias_line")
+            if test "$fields[1]" = "$account_id"
+                set active_alias "$fields[2]"
+                break
+            end
+        end
 
         set -l credit_lines (printf '%s\n' "$credits_body" | jq -r '
             def expires_at:
@@ -131,6 +149,33 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
         ')
         set -l adjectives ember cobalt amber jade coral indigo silver scarlet atlas lotus cedar pine aurora frost orbit dune maple zenith
         set -l nouns falcon otter comet harbor meadow emberfox lynx kestrel glacier thicket river moss canyon beacon auroraforge wave ridge
+        set -l nickname_colors blue magenta cyan brblue brmagenta brcyan
+        set -l nearest_available_urgency unknown
+        for credit_line in $credit_lines
+            set -l fields (string split \t -- "$credit_line")
+            if test "$fields[2]" = available
+                set nearest_available_urgency "$fields[1]"
+                break
+            end
+        end
+
+        set -l active_count_color ""
+        set -l active_count_reset ""
+        if test -t 1
+            switch "$nearest_available_urgency"
+                case urgent
+                    set active_count_color (set_color red)
+                case soon
+                    set active_count_color (set_color yellow)
+                case later
+                    set active_count_color (set_color green)
+                case '*'
+                    set active_count_color (set_color brblack)
+            end
+            set active_count_reset (set_color normal)
+        end
+        set -l active_count_display "$active_count_color$available_count$active_count_reset"
+        printf 'banked reset credits: %s available (%s)\n' "$active_count_display" "$active_alias"
 
         for credit_line in $credit_lines
             set -l fields (string split \t -- "$credit_line")
@@ -142,16 +187,24 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
             set -l color ""
             set -l reset ""
             set -l dim ""
+            set -l nickname_color ""
             set -l guid (string replace -r '^.*_' '' -- "$current_credit_id")
             set -l nickname "$current_credit_id"
 
-            if string match -rq '^[0-9a-fA-F]{6,}$' -- "$guid"
-                set -l adjective_byte (string sub -s 1 -l 2 -- "$guid")
-                set -l noun_byte (string sub -s 3 -l 2 -- "$guid")
+            # Use GUID bytes after the account-switcher seeds for distinct labels.
+            if string match -rq '^[0-9a-fA-F]{12,}$' -- "$guid"
+                set -l adjective_byte (string sub -s 7 -l 2 -- "$guid")
+                set -l noun_byte (string sub -s 9 -l 2 -- "$guid")
+                set -l color_byte (string sub -s 11 -l 2 -- "$guid")
                 set -l adjective_index (math "0x$adjective_byte % "(count $adjectives)" + 1")
                 set -l noun_index (math "0x$noun_byte % "(count $nouns)" + 1")
+                set -l color_index (math "0x$color_byte % "(count $nickname_colors)" + 1")
                 set -l guid_suffix (string sub -s -4 -- "$guid")
                 set nickname "$adjectives[$adjective_index]-$nouns[$noun_index]-$guid_suffix"
+
+                if test -t 1
+                    set nickname_color (set_color --bold "$nickname_colors[$color_index]")
+                end
             end
 
             if test -t 1
@@ -169,7 +222,7 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
                 set dim (set_color brblack)
             end
 
-            printf '  %s%-10s expires in %-7s %s%s\n' "$color" "$credit_status" "$expires_in" "$nickname" "$reset"
+            printf '  %s%-10s expires in %-7s %s%s%s\n' "$color" "$credit_status" "$expires_in" "$nickname_color" "$nickname" "$reset"
             printf '                               %s%s%s\n' "$dim" "$current_credit_id" "$reset"
             if test -n "$title"
                 printf '                               %s%s%s\n' "$dim" "$title" "$reset"
@@ -200,26 +253,165 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
         end
 
         printf '\ncurrent usage:\n'
-        printf '%s\n' "$usage_body" | jq -r '
+        set -l usage_rows (printf '%s\n' "$usage_body" | jq -r '
             def duration($seconds):
                 if $seconds < 60 then "\($seconds)s"
                 elif $seconds < 3600 then "\(($seconds / 60 | floor))m"
                 elif $seconds < 86400 then "\(($seconds / 3600 * 10 | floor / 10))h"
                 else "\(($seconds / 86400 * 10 | floor / 10))d"
                 end;
-            def window($value):
-                if $value == null then "n/a" else
-                    [
-                        if $value.used_percent == null then "?%" else "\($value.used_percent)% used" end,
-                        if $value.limit_window_seconds then "window=\(duration($value.limit_window_seconds))" else empty end,
-                        if $value.reset_after_seconds == null then empty else "resets in \(duration($value.reset_after_seconds))" end
-                    ] | join(", ")
+            def remaining($window):
+                if $window == null or $window.used_percent == null then null else
+                    (100 - ($window.used_percent | floor))
+                    | if . < 0 then 0 elif . > 100 then 100 else . end
                 end;
-            .rate_limit // {} | "  primary  : \(window(.primary_window))\n  secondary: \(window(.secondary_window))"
-        '
+            .rate_limit // {} |
+            [["primary", .primary_window], ["secondary", .secondary_window]][] |
+            .[0] as $name |
+            .[1] as $window |
+            [
+                $name,
+                remaining($window),
+                if $window.limit_window_seconds == null then "n/a" else duration($window.limit_window_seconds) end,
+                if $window.reset_after_seconds == null then "n/a" else duration($window.reset_after_seconds) end
+            ] | @tsv
+        ')
+        set -l usage_bar_width 18
+        for usage_row in $usage_rows
+            set -l usage_fields (string split \t -- "$usage_row")
+            set -l window_name "$usage_fields[1]"
+            set -l remaining "$usage_fields[2]"
+            set -l window_duration "$usage_fields[3]"
+            set -l reset_duration "$usage_fields[4]"
+            if test -z "$remaining"
+                printf '  %-9s n/a\n' "$window_name"
+                continue
+            end
+
+            set -l bar_segments (__rate_limit_bar_segments \
+                --remaining "$remaining" \
+                --width "$usage_bar_width" \
+                --filled = \
+                --empty -)
+            set -l bar_fields (string split \t -- "$bar_segments")
+            set -l filled_bar "$bar_fields[1]"
+            set -l empty_bar "$bar_fields[2]"
+            set -l capacity_band "$bar_fields[3]"
+            set -l capacity_color ""
+            set -l muted_color ""
+            set -l reset_color ""
+            if test -t 1
+                switch "$capacity_band"
+                    case high
+                        set capacity_color (set_color green)
+                    case medium
+                        set capacity_color (set_color yellow)
+                    case low
+                        set capacity_color (set_color brred)
+                    case critical
+                        set capacity_color (set_color red)
+                end
+                set muted_color (set_color brblack)
+                set reset_color (set_color normal)
+            end
+
+            printf '  %-9s [%s%s%s%s%s] %s%3s%%%s remaining  %s window, resets in %s\n' \
+                "$window_name" "$capacity_color" "$filled_bar" "$reset_color" "$muted_color" "$empty_bar" "$capacity_color" "$remaining" "$reset_color" "$window_duration" "$reset_duration"
+        end
 
         if test "$available_count" -gt 0
             printf '\nrun `codex-reset consume` to redeem one credit now.\n'
+        end
+
+        printf '\naccounts:\n'
+        printf '  %s (%s resets available, active)\n' "$active_alias" "$active_count_display"
+        if test -f "$profiles_file"
+            set -l profile_lines (jq -r '
+                (.profiles // {}) | to_entries[] |
+                .value.tokens? as $tokens |
+                select($tokens.access_token? and $tokens.account_id?) |
+                [$tokens.account_id, $tokens.access_token] | @tsv
+            ' "$profiles_file" 2>/dev/null)
+            if test $status -ne 0
+                echo "warning: failed to parse saved Codex profiles: $profiles_file" >&2
+            end
+
+            for profile_line in $profile_lines
+                set -l fields (string split \t -- "$profile_line")
+                set -l profile_account_id "$fields[1]"
+                set -l profile_token "$fields[2]"
+                if test "$profile_account_id" = "$account_id"
+                    continue
+                end
+
+                set -l profile_alias "account-"(string sub -s -4 -- "$profile_account_id")
+                for account_alias_line in $account_alias_lines
+                    set -l alias_fields (string split \t -- "$account_alias_line")
+                    if test "$alias_fields[1]" = "$profile_account_id"
+                        set profile_alias "$alias_fields[2]"
+                        break
+                    end
+                end
+
+                set -l profile_response (curl --silent --show-error --connect-timeout 10 --max-time 30 --write-out '\n%{http_code}' \
+                    --header "Authorization: Bearer $profile_token" \
+                    --header "ChatGPT-Account-Id: $profile_account_id" \
+                    "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits")
+                set -l profile_curl_status $status
+                if test $profile_curl_status -ne 0
+                    printf '  %s (reset availability unavailable)\n' "$profile_alias"
+                    continue
+                end
+
+                set -l profile_http "$profile_response[-1]"
+                set -l profile_body (string join \n -- $profile_response[..-2])
+                if test "$profile_http" != 200
+                    printf '  %s (reset availability unavailable, HTTP %s)\n' "$profile_alias" "$profile_http"
+                    continue
+                end
+
+                set -l profile_summary (printf '%s\n' "$profile_body" | jq -er '
+                    def expires_at:
+                        .expires_at? as $expires |
+                        if $expires == null then null
+                        else $expires | sub("[.][0-9]+Z$"; "Z") | fromdateiso8601?
+                        end;
+                    def urgency($expires):
+                        if $expires == null then "unknown"
+                        elif $expires <= now + 86400 then "urgent"
+                        elif $expires <= now + 604800 then "soon"
+                        else "later"
+                        end;
+                    [.credits[]? | select(.status == "available") | expires_at] as $expires |
+                    ($expires | if length == 0 then null else min end) as $nearest_expiry |
+                    [(.available_count // 0), urgency($nearest_expiry)] | @tsv
+                ' 2>/dev/null)
+                if test $status -ne 0
+                    printf '  %s (reset availability unavailable)\n' "$profile_alias"
+                    continue
+                end
+
+                set -l profile_summary_fields (string split \t -- "$profile_summary")
+                set -l profile_available_count "$profile_summary_fields[1]"
+                set -l profile_urgency "$profile_summary_fields[2]"
+                set -l profile_count_color ""
+                set -l profile_count_reset ""
+                if test -t 1
+                    switch "$profile_urgency"
+                        case urgent
+                            set profile_count_color (set_color red)
+                        case soon
+                            set profile_count_color (set_color yellow)
+                        case later
+                            set profile_count_color (set_color green)
+                        case '*'
+                            set profile_count_color (set_color brblack)
+                    end
+                    set profile_count_reset (set_color normal)
+                end
+                set -l profile_count_display "$profile_count_color$profile_available_count$profile_count_reset"
+                printf '  %s (%s resets available)\n' "$profile_alias" "$profile_count_display"
+            end
         end
         return 0
     end

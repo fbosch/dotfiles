@@ -12,6 +12,7 @@ type ProviderProfile = {
     accountId: string;
     generatedLabel: string;
     label: string;
+    alias: string | null;
     color: number;
 };
 
@@ -70,6 +71,11 @@ const ListArgsSchema = z.object({
     authFile: z.string().min(1),
     bgMode: z.enum(["dark", "light"]).default("dark"),
 });
+const AliasesArgsSchema = z.object({
+    command: z.literal("aliases"),
+    authFile: z.string().min(1),
+    bgMode: z.enum(["dark", "light"]).default("dark"),
+});
 
 const ApplyArgsSchema = z.object({
     command: z.literal("apply"),
@@ -102,6 +108,7 @@ function usage(): void {
     console.log("Usage: opencode/auth_switch_helper.ts <list|apply> ...");
     console.log("Commands:");
     console.log("  list <auth_file> [dark|light]");
+    console.log("  aliases <auth_file> [dark|light]");
     console.log("  apply <auth_file> <codex_auth_file> <codex_profiles_file> <provider> <target_key>");
 }
 
@@ -147,6 +154,7 @@ function buildProfileLabel(
         accountId,
         generatedLabel,
         label: alias ? `${generatedLabel} (${alias})` : generatedLabel,
+        alias: alias ?? null,
         color: palette[colorIndex - 1],
     };
 }
@@ -168,6 +176,33 @@ function listProfiles(authFile: string, bgMode: "dark" | "light"): AppResult<str
     }
 
     return ok(lines);
+}
+
+function listAccountAliases(authFile: string, bgMode: "dark" | "light"): AppResult<string[]> {
+    const authResult = readJsonFile(authFile, AuthFileSchema);
+    if (authResult.isErr()) {
+        return err(authResult.error);
+    }
+
+    const auth = authResult.value as Record<string, JsonObject>;
+    const providers = listProviderNames(auth);
+    const aliases = new Map<string, string>();
+    for (const [key, entry] of Object.entries(auth)) {
+        const provider = providers.find((candidate) => key === candidate || key.startsWith(`${candidate}_`));
+        if (!provider) {
+            continue;
+        }
+
+        const accountId = accountIdForEntry(key, entry);
+        if (aliases.has(accountId)) {
+            continue;
+        }
+
+        const profile = buildProfileLabel(provider, key, accountId, bgMode);
+        aliases.set(accountId, profile.alias ?? profile.generatedLabel);
+    }
+
+    return ok([...aliases].map(([accountId, alias]) => [accountId, alias].join("\t")));
 }
 
 function deriveInactiveKey(auth: Record<string, JsonObject>, provider: string, targetKey: string): string {
@@ -345,6 +380,32 @@ function main(): number {
 
         if (listResult.value.length > 0) {
             console.log(listResult.value.join("\n"));
+        }
+        return 0;
+    }
+
+    if (command === "aliases") {
+        const parsedArgs = AliasesArgsSchema.safeParse({
+            command,
+            authFile: rest[0],
+            bgMode: rest[1] || "dark",
+        });
+        if (!parsedArgs.success) {
+            const summary = parsedArgs.error.issues
+                .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+                .join("; ");
+            console.error(`opencode_auth_switch_helper: invalid args (${summary})`);
+            return 1;
+        }
+
+        const aliasesResult = listAccountAliases(parsedArgs.data.authFile, parsedArgs.data.bgMode);
+        if (aliasesResult.isErr()) {
+            console.error(`opencode_auth_switch_helper: ${aliasesResult.error}`);
+            return 1;
+        }
+
+        if (aliasesResult.value.length > 0) {
+            console.log(aliasesResult.value.join("\n"));
         }
         return 0;
     }
