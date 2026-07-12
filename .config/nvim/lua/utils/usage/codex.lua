@@ -166,6 +166,10 @@ local function cache_reset_payload(account_id, payload, fetched_at)
 end
 
 local function load_reset_cache(account_id)
+	if not file_cache_enabled then
+		return false
+	end
+
 	local file = io.open(reset_cache_file, "r")
 	if not file then
 		return false
@@ -187,7 +191,7 @@ local function load_reset_cache(account_id)
 end
 
 local function save_reset_cache()
-	if not cache.reset_account_id or not cache.reset_payload then
+	if not file_cache_enabled or not cache.reset_account_id or not cache.reset_payload then
 		return
 	end
 
@@ -233,11 +237,14 @@ local function parse_and_cache_reset_count(result, account_id)
 
 	local ok, decoded = pcall(vim.json.decode, result)
 	if not ok or type(decoded) ~= "table" then
+		cache.reset_last_update = os.time()
 		return
 	end
 
 	if cache_reset_payload(account_id, decoded, os.time()) then
 		save_reset_cache()
+	else
+		cache.reset_last_update = os.time()
 	end
 end
 
@@ -661,9 +668,11 @@ function M.clear_cache()
 
 	if file_cache_enabled then
 		pcall(vim.fn.delete, cache_file)
+		pcall(vim.fn.delete, reset_cache_file)
 	end
 
-	M.fetch_data_async()
+	local _, account_id = profile_label()
+	M.fetch_data_async(account_id)
 end
 
 vim.defer_fn(function()
