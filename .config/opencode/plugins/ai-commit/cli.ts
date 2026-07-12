@@ -229,6 +229,7 @@ async function startServer(forceStart = false): Promise<void> {
     "opencode",
     [
       "serve",
+      "--pure",
       "--hostname",
       OPENCODE_SERVER_HOST,
       "--port",

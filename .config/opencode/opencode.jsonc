@@ -83,7 +83,10 @@
       "git clean*": "ask",
       "rtk git clean*": "ask",
       "git restore*": "ask",
-      "rtk git restore*": "ask"
+      "rtk git restore*": "ask",
+      "gh pr view*": "allow",
+      "gh pr issue*": "allow",
+      "gh search*": "allow"
     }
   },
   "model": "openai/gpt-5.6-terra-fast",
