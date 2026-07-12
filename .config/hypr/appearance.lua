@@ -60,7 +60,7 @@ hl.config({
 		fullscreen_on_one_column = true,
 	},
 	misc = {
-		vrr = 2,
+		vrr = false,
 		animate_manual_resizes = false,
 		animate_mouse_windowdragging = false,
 		force_default_wallpaper = -1,
