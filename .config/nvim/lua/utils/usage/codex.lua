@@ -354,7 +354,7 @@ function M.statusline_component()
 		end
 
 		if show_primary then
-			local primary = cache.data.usage.primary
+			local primary = nilify(cache.data.usage.primary)
 			if primary then
 				local percent = remaining_percent(primary.usedPercent)
 				local filled_bar, empty_bar = generate_bar(percent, 9)
