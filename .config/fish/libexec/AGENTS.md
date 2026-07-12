@@ -43,3 +43,4 @@ Internal Bun/TypeScript helpers for Fish functions.
 
 - `biome check .config/fish/libexec`
 - `bunx tsc -p .config/fish/libexec/tsconfig.json`
+- `bun run audit`

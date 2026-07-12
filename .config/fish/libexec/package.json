@@ -4,7 +4,8 @@
   "packageManager": "bun@1.3.11",
   "type": "module",
   "devDependencies": {
-    "@types/node": "^24.7.2"
+    "@types/node": "^24.7.2",
+    "fallow": "^3.3.0"
   },
   "dependencies": {
     "c12": "^4.0.0-beta.4",
@@ -14,5 +15,8 @@
     "p-limit": "^7.3.0",
     "ts-pattern": "^5.9.0",
     "zod": "^4.3.6"
+  },
+  "scripts": {
+    "audit": "fallow audit --root . --format json --quiet"
   }
 }
