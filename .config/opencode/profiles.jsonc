@@ -257,7 +257,7 @@
           "textVerbosity": "medium"
         },
         "quick": {
-          "model": "openai/gpt-5.6-luna",
+          "model": "openai/gpt-5.6-luna-fast",
           "reasoningEffort": "low",
           "textVerbosity": "low"
         },

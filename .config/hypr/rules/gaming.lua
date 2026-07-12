@@ -168,6 +168,7 @@ end
 
 local function register_game_client_rules()
 	hl.window_rule({ match = { class = "^(SGDBoop)$" }, float = true, pin = true })
+	hl.window_rule({ match = { initial_title = "^(Larian Launcher)$" }, float = true, decorate = false })
 
 	local battle_net_title = "^(Battle\\.net( Login| Settings)?)$"
 	hl.window_rule({
