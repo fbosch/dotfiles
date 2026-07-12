@@ -13,8 +13,8 @@ if host == "rvn-pc" then
 		bitdepth = 10,
 		-- cm = "hdr",
 		-- sdr_eotf = "srgb",
-		-- sdrbrightness = 3,
-		-- sdrsaturation = 1.2,
+		-- sdrbrightness = 5,
+		-- sdrsaturation = 1,
 	})
 
 	hl.monitor({

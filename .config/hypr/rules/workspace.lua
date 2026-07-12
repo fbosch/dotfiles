@@ -46,15 +46,17 @@ if host == "rvn-pc" then
 		workspace = "r[1-9] m[DP-2] w[tv3]",
 		layout = "lua:ultrawide_master",
 	})
+
+	hl.workspace_rule({
+		workspace = "10",
+		layout = "scrolling",
+		gaps_in = 0,
+		gaps_out = 0,
+	})
+
+	hl.workspace_rule({
+		workspace = "special:gaming-overlay",
+		gaps_in = 0,
+		gaps_out = 0,
+	})
 end
-
-hl.workspace_rule({
-	workspace = "10",
-	layout = "scrolling",
-})
-
-hl.workspace_rule({
-	workspace = "special:gaming-overlay",
-	gaps_in = 0,
-	gaps_out = 0,
-})

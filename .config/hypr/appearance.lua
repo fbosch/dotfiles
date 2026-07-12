@@ -69,6 +69,7 @@ hl.config({
 		disable_splash_rendering = true,
 		disable_hyprland_guiutils_check = true,
 		mouse_move_focuses_monitor = true,
+		on_focus_under_fullscreen = 1,
 		initial_workspace_tracking = 0,
 	},
 })

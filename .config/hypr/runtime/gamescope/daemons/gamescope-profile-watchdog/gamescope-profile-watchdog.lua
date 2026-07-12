@@ -9,6 +9,7 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 local json = require("lib.json")
 local command = require("lib.command")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
+local gaming = require("rules.gaming")
 local profilectl = home .. "/.config/hypr/runtime/profiles/profilectl.sh"
 local reconnect_delay_seconds = 1
 local event_idle_timeout_seconds = 5
@@ -16,15 +17,6 @@ local gaming_workspace = "10"
 local minimized_workspace_prefix = "special:minimized"
 local gaming_overlay_workspace = "special:gaming-overlay"
 local profile_excluded_title_pattern = "[Ff]augus"
-local freeze_excluded_exact_titles = {
-	"World of Warcraft",
-	"Battle.net",
-	"Baldur's Gate 3",
-}
-local freeze_excluded_title_prefixes = {
-	"Battle.net ",
-	"Baldur's Gate 3 ",
-}
 local wl_freeze_checked = false
 local wl_freeze_available = false
 
@@ -65,35 +57,32 @@ local function is_gaming_class(value)
 	return class == "gamescope" or class:match("^steam_app_%d+$") ~= nil
 end
 
+local function rule_window(client)
+	return {
+		class = client.class,
+		initial_class = client.initialClass,
+		title = client.title,
+		initial_title = client.initialTitle,
+	}
+end
+
 local function matches_profile_excluded_title(value)
 	return tostring(value or ""):match(profile_excluded_title_pattern) ~= nil
 end
 
-local function matches_freeze_excluded_title(value)
-	value = tostring(value or "")
-	for _, title in ipairs(freeze_excluded_exact_titles) do
-		if value == title then
-			return true
-		end
-	end
-	for _, prefix in ipairs(freeze_excluded_title_prefixes) do
-		if starts_with(value, prefix) then
-			return true
-		end
-	end
-	return false
-end
-
 local function has_gaming_class(client)
-	return is_gaming_class(client.class) or is_gaming_class(client.initialClass)
+	local game = gaming.match(rule_window(client))
+	return is_gaming_class(client.class)
+		or is_gaming_class(client.initialClass)
+		or (game ~= nil and game.enable_profile)
 end
 
 local function has_profile_excluded_title(client)
 	return matches_profile_excluded_title(client.title) or matches_profile_excluded_title(client.initialTitle)
 end
 
-local function has_freeze_excluded_title(client)
-	return matches_freeze_excluded_title(client.title) or matches_freeze_excluded_title(client.initialTitle)
+local function excludes_freezing(client)
+	return gaming.is_freeze_excluded(rule_window(client))
 end
 
 local function get_gaming_window_count(clients)
@@ -116,7 +105,7 @@ local function get_freezable_gaming_windows(clients)
 		local workspace = workspace_name(client)
 		if
 			(workspace == gaming_workspace or starts_with(workspace, minimized_workspace_prefix))
-			and not has_freeze_excluded_title(client)
+			and not excludes_freezing(client)
 			and has_gaming_class(client)
 		then
 			windows[#windows + 1] = { pid = tostring(client.pid or ""), workspace = workspace }

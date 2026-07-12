@@ -1,20 +1,7 @@
 -- Static window rules ported from rules.conf.
 -- Preserve declaration order.
 
--- Gamescope
-hl.window_rule({
-	match = { class = "^(gamescope)$" },
-	workspace = "10 silent",
-	tile = true,
-	fullscreen_state = "2 2",
-	immediate = true,
-})
-
--- Gaming overlay scratchpad
-hl.window_rule({
-	match = { workspace = "10", class = "negative:^(gamescope)$" },
-	workspace = "special:gaming-overlay silent",
-})
+require("rules.gaming").register_window_rules()
 
 -- GTK Application
 hl.window_rule({ match = { class = "^(GTK Application)$" }, float = true })
@@ -116,78 +103,8 @@ hl.window_rule({ match = { class = "nz.mega.MEGAsync" }, float = true })
 hl.window_rule({ match = { initial_title = "^(MEGAsync)$" }, float = true, pin = true, rounding = 15 })
 hl.window_rule({ match = { initial_class = "nz.co.mega" }, float = true })
 
--- Steam
-hl.window_rule({ match = { initial_title = "^(Friends List)$" }, float = true })
-hl.window_rule({ match = { initial_title = "^(Add Non-Steam Game)$" }, float = true })
-hl.window_rule({ match = { initial_title = "^(Sign in to Steam)$" }, float = true, center = true })
-
--- Steam games
-hl.window_rule({
-	match = { class = "^(steam_app_[0-9]+)$" },
-	workspace = "10 silent",
-	no_anim = true,
-	border_size = 0,
-	rounding = 0,
-	no_shadow = true,
-	opacity = "1.0 override 1.0 override",
-	fullscreen_state = "2 2",
-	immediate = true,
-})
-hl.window_rule({
-	match = { initial_class = "^(steam_app_[0-9]+)$" },
-	workspace = "10 silent",
-	no_anim = true,
-	border_size = 0,
-	rounding = 0,
-	no_shadow = true,
-	opacity = "1.0 override 1.0 override",
-	fullscreen_state = "2 2",
-	immediate = true,
-})
-
--- SGDBoop
-hl.window_rule({ match = { class = "^(SGDBoop)$" }, float = true, pin = true })
-
 -- Wine
 hl.window_rule({ match = { class = "^(winecfg\\.exe)$" }, float = true })
-
--- Battle.net
-hl.window_rule({ match = { initial_title = "^(Battle\\.net Login)$" }, workspace = "10 silent" })
-hl.window_rule({ match = { initial_title = "^(Battle.net Login)$" }, no_anim = true, rounding = 0, border_size = 0 })
-hl.window_rule({ match = { initial_title = "^(Battle\\.net)$" }, workspace = "10 silent" })
-hl.window_rule({ match = { initial_title = "^(Battle.net)$" }, no_anim = true, rounding = 0, border_size = 0 })
-hl.window_rule({ match = { initial_title = "^(Battle\\.net Settings)$" }, workspace = "10 silent" })
-hl.window_rule({
-	match = { initial_title = "^(Battle.net Settings)$" },
-	no_anim = true,
-	rounding = 0,
-	border_size = 0,
-	pin = true,
-})
-
--- World of Warcraft
-hl.window_rule({
-	match = { initial_title = "^(World of Warcraft)$" },
-	workspace = "10 silent",
-	no_anim = true,
-	border_size = 0,
-	rounding = 0,
-	no_shadow = true,
-	opacity = "1.0 override 1.0 override",
-	fullscreen_state = "2 2",
-	immediate = true,
-})
-hl.window_rule({
-	match = { title = "^(World of Warcraft)$" },
-	workspace = "10 silent",
-	no_anim = true,
-	border_size = 0,
-	rounding = 0,
-	no_shadow = true,
-	opacity = "1.0 override 1.0 override",
-	fullscreen_state = "2 2",
-	immediate = true,
-})
 
 -- Zenity
 hl.window_rule({
