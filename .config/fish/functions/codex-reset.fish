@@ -2,15 +2,14 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
     set -l auth_file ""
     set -l credit_id ""
     set -l dry_run false
-    set -l assume_yes false
 
-    argparse 'h/help' 'auth=' 'credit-id=' 'dry-run' 'y/yes' -- $argv
+    argparse 'h/help' 'auth=' 'credit-id=' 'dry-run' -- $argv
     or return 2
 
     if set -q _flag_help
         printf '%s\n' \
             "Usage: codex-reset [status] [--auth PATH]" \
-            "       codex-reset consume [--credit-id ID] [--dry-run] [--yes] [--auth PATH]" \
+            "       codex-reset consume [--credit-id ID] [--dry-run] [--auth PATH]" \
             "" \
             "Shows available banked Codex rate-limit resets or redeems one."
         return 0
@@ -30,10 +29,6 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
 
     if set -q _flag_dry_run
         set dry_run true
-    end
-
-    if set -q _flag_yes
-        set assume_yes true
     end
 
     set -l action status
@@ -108,13 +103,78 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
     end
 
     if test "$action" = status
-        printf '%s\n' "$credits_body" | jq -r '
-            "banked credits: \(.available_count // 0) available",
-            (.credits[]? |
-                "  \(if .status == "available" then "*" else "-" end) \(.id)  status=\(.status)  granted=\(.granted_at)  expires=\(.expires_at)",
-                if .title then "      \(.title)" else empty end
-            )
-        '
+        set -l available_count (printf '%s\n' "$credits_body" | jq -r '.available_count // 0')
+        printf 'banked reset credits: %s available\n' "$available_count"
+
+        set -l credit_lines (printf '%s\n' "$credits_body" | jq -r '
+            def expires_at:
+                .expires_at? as $expires |
+                if $expires == null then null
+                else $expires | sub("[.][0-9]+Z$"; "Z") | fromdateiso8601?
+                end;
+            def urgency($expires):
+                if $expires == null then "unknown"
+                elif $expires <= now + 86400 then "urgent"
+                elif $expires <= now + 604800 then "soon"
+                else "later"
+                end;
+            def expires_in($expires):
+                if $expires == null then "unknown"
+                elif $expires <= now then "expired"
+                else "\((($expires - now) / 86400 | ceil))d"
+                end;
+            .credits
+            | sort_by(.expires_at // "9999-12-31T23:59:59Z")[]?
+            | expires_at as $expires
+            | [urgency($expires), .status, expires_in($expires), .id, (.title // "")]
+            | @tsv
+        ')
+        set -l adjectives ember cobalt amber jade coral indigo silver scarlet atlas lotus cedar pine aurora frost orbit dune maple zenith
+        set -l nouns falcon otter comet harbor meadow emberfox lynx kestrel glacier thicket river moss canyon beacon auroraforge wave ridge
+
+        for credit_line in $credit_lines
+            set -l fields (string split \t -- "$credit_line")
+            set -l urgency "$fields[1]"
+            set -l credit_status "$fields[2]"
+            set -l expires_in "$fields[3]"
+            set -l current_credit_id "$fields[4]"
+            set -l title "$fields[5]"
+            set -l color ""
+            set -l reset ""
+            set -l dim ""
+            set -l guid (string replace -r '^.*_' '' -- "$current_credit_id")
+            set -l nickname "$current_credit_id"
+
+            if string match -rq '^[0-9a-fA-F]{6,}$' -- "$guid"
+                set -l adjective_byte (string sub -s 1 -l 2 -- "$guid")
+                set -l noun_byte (string sub -s 3 -l 2 -- "$guid")
+                set -l adjective_index (math "0x$adjective_byte % "(count $adjectives)" + 1")
+                set -l noun_index (math "0x$noun_byte % "(count $nouns)" + 1")
+                set -l guid_suffix (string sub -s -4 -- "$guid")
+                set nickname "$adjectives[$adjective_index]-$nouns[$noun_index]-$guid_suffix"
+            end
+
+            if test -t 1
+                switch "$urgency"
+                    case urgent
+                        set color (set_color red)
+                    case soon
+                        set color (set_color yellow)
+                    case later
+                        set color (set_color green)
+                    case '*'
+                        set color (set_color brblack)
+                end
+                set reset (set_color normal)
+                set dim (set_color brblack)
+            end
+
+            printf '  %s%-10s expires in %-7s %s%s\n' "$color" "$credit_status" "$expires_in" "$nickname" "$reset"
+            printf '                               %s%s%s\n' "$dim" "$current_credit_id" "$reset"
+            if test -n "$title"
+                printf '                               %s%s%s\n' "$dim" "$title" "$reset"
+            end
+        end
 
         set -l usage_response (curl --silent --show-error --connect-timeout 10 --max-time 30 --write-out '\n%{http_code}' \
             --header "Authorization: Bearer $token" \
@@ -158,7 +218,6 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
             .rate_limit // {} | "  primary  : \(window(.primary_window))\n  secondary: \(window(.secondary_window))"
         '
 
-        set -l available_count (printf '%s\n' "$credits_body" | jq -r '.available_count // 0')
         if test "$available_count" -gt 0
             printf '\nrun `codex-reset consume` to redeem one credit now.\n'
         end
@@ -183,17 +242,20 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
         "about to redeem:\n  credit_id : \(.id)\n  reset_type: \(.reset_type)\n  granted_at: \(.granted_at)\n  expires_at: \(.expires_at)"
     '
 
-    if test "$assume_yes" = false
-        read -l -P "proceed? [y/N] " confirmation
-        if not contains -- (string lower -- "$confirmation") y yes
-            echo "aborted."
-            return 1
-        end
-    end
-
     if test "$dry_run" = true
         echo "--dry-run: skipping POST."
         return 0
+    end
+
+    if not command -q gum
+        echo "error: gum is required to confirm redemption" >&2
+        return 1
+    end
+
+    set -l confirmation (gum input --prompt "Type confirm to redeem this reset: " --placeholder "confirm")
+    if test $status -ne 0; or test "$confirmation" != confirm
+        echo "aborted."
+        return 1
     end
 
     if not command -q uuidgen
