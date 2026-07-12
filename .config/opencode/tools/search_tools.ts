@@ -214,8 +214,8 @@ function isRegex(query: string): boolean {
   return /[\\^$.*+?()[\]{}|]/u.test(query)
 }
 
-function scoreTool(toolName: string, description: string, query: string, regex: boolean): number | null {
-  const searchable = `${toolName} ${description}`.toLowerCase()
+function scoreTool(toolId: string, description: string, query: string, regex: boolean): number | null {
+  const searchable = `${toolId} ${description}`.toLowerCase()
   if (regex) {
     try {
       return new RegExp(query, "iu").test(searchable) ? 1 : null
@@ -229,7 +229,7 @@ function scoreTool(toolName: string, description: string, query: string, regex: 
     return null
   }
 
-  return terms.reduce((score, term) => score + (toolName.toLowerCase().includes(term) ? 2 : 1), 0)
+  return terms.reduce((score, term) => score + (toolId.toLowerCase().includes(term) ? 2 : 1), 0)
 }
 
 export default tool({
@@ -256,11 +256,12 @@ export default tool({
       .flatMap((server) =>
         server.tools.flatMap((catalogTool) => {
           const description = catalogTool.description ?? ""
-          const score = scoreTool(catalogTool.name, description, args.query, regex)
+          const toolId = `${server.name}_${catalogTool.name}`
+          const score = scoreTool(toolId, description, args.query, regex)
           if (score === null) {
             return []
           }
-          return [{ toolId: `${server.name}_${catalogTool.name}`, name: catalogTool.name, description, score, schema: catalogTool.inputSchema ?? null }]
+          return [{ toolId, name: catalogTool.name, description, score, schema: catalogTool.inputSchema ?? null }]
         }),
       )
       .sort((left, right) => right.score - left.score || left.toolId.localeCompare(right.toolId))
