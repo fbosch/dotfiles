@@ -16,7 +16,7 @@ return {
 			fullscreen_opacity = 1.0,
 		},
 		misc = {
-			vrr = false,
+			vrr = 2,
 		},
 		general = {
 			allow_tearing = false,
