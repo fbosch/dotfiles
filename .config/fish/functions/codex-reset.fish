@@ -2,13 +2,14 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
     set -l auth_file ""
     set -l credit_id ""
     set -l dry_run false
+    set -l refresh false
 
-    argparse 'h/help' 'auth=' 'credit-id=' 'dry-run' -- $argv
+    argparse 'h/help' 'auth=' 'credit-id=' 'dry-run' 'refresh' -- $argv
     or return 2
 
     if set -q _flag_help
         printf '%s\n' \
-            "Usage: codex-reset [status] [--auth PATH]" \
+            "Usage: codex-reset [status] [--refresh] [--auth PATH]" \
             "       codex-reset consume [--credit-id ID] [--dry-run] [--auth PATH]" \
             "" \
             "Shows available banked Codex rate-limit resets or redeems one."
@@ -31,6 +32,10 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
         set dry_run true
     end
 
+    if set -q _flag_refresh
+        set refresh true
+    end
+
     set -l action status
     if test (count $argv) -gt 1
         echo "error: expected one command: status or consume" >&2
@@ -51,6 +56,11 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
 
     if test "$action" = status; and test "$dry_run" = true
         echo "error: --dry-run is only valid with consume" >&2
+        return 2
+    end
+
+    if test "$action" = consume; and test "$refresh" = true
+        echo "error: --refresh is only valid with status" >&2
         return 2
     end
 
@@ -79,27 +89,42 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
         return 1
     end
 
-    set -l credits_response (curl --silent --show-error --connect-timeout 10 --max-time 30 --write-out '\n%{http_code}' \
-        --header "Authorization: Bearer $token" \
-        --header "ChatGPT-Account-Id: $account_id" \
-        "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits")
-    set -l curl_status $status
-    if test $curl_status -ne 0
-        echo "error: failed to list reset credits" >&2
-        return 1
+    set -l credits_body ""
+    set -l loaded_from_cache false
+    if test "$action" = status; and test "$refresh" = false
+        set credits_body (__codex_reset_cache_get "$account_id")
+        if test $status -eq 0; and test -n "$credits_body"
+            set loaded_from_cache true
+        end
     end
 
-    set -l credits_http "$credits_response[-1]"
-    set -l credits_body (string join \n -- $credits_response[..-2])
-    if test "$credits_http" != 200
-        echo "error: listing reset credits failed (HTTP $credits_http)" >&2
-        printf '%s\n' "$credits_body" | jq . 2>/dev/null; or printf '%s\n' "$credits_body" >&2
-        return 1
+    if test -z "$credits_body"
+        set -l credits_response (curl --silent --show-error --connect-timeout 10 --max-time 30 --write-out '\n%{http_code}' \
+            --header "Authorization: Bearer $token" \
+            --header "ChatGPT-Account-Id: $account_id" \
+            "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits")
+        set -l curl_status $status
+        if test $curl_status -ne 0
+            echo "error: failed to list reset credits" >&2
+            return 1
+        end
+
+        set -l credits_http "$credits_response[-1]"
+        set credits_body (string join \n -- $credits_response[..-2])
+        if test "$credits_http" != 200
+            echo "error: listing reset credits failed (HTTP $credits_http)" >&2
+            printf '%s\n' "$credits_body" | jq . 2>/dev/null; or printf '%s\n' "$credits_body" >&2
+            return 1
+        end
     end
 
     if not printf '%s\n' "$credits_body" | jq -e . >/dev/null 2>&1
         echo "error: reset-credits endpoint returned invalid JSON" >&2
         return 1
+    end
+
+    if test "$action" = status; and test "$loaded_from_cache" = false
+        __codex_reset_cache_put "$account_id" "$credits_body"
     end
 
     if test "$action" = status
@@ -353,21 +378,36 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
                     end
                 end
 
-                set -l profile_response (curl --silent --show-error --connect-timeout 10 --max-time 30 --write-out '\n%{http_code}' \
-                    --header "Authorization: Bearer $profile_token" \
-                    --header "ChatGPT-Account-Id: $profile_account_id" \
-                    "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits")
-                set -l profile_curl_status $status
-                if test $profile_curl_status -ne 0
-                    printf '  %s (reset availability unavailable)\n' "$profile_alias"
-                    continue
+                set -l profile_body ""
+                set -l profile_loaded_from_cache false
+                if test "$refresh" = false
+                    set profile_body (__codex_reset_cache_get "$profile_account_id")
+                    if test $status -eq 0; and test -n "$profile_body"
+                        set profile_loaded_from_cache true
+                    end
                 end
 
-                set -l profile_http "$profile_response[-1]"
-                set -l profile_body (string join \n -- $profile_response[..-2])
-                if test "$profile_http" != 200
-                    printf '  %s (reset availability unavailable, HTTP %s)\n' "$profile_alias" "$profile_http"
-                    continue
+                if test -z "$profile_body"
+                    set -l profile_response (curl --silent --show-error --connect-timeout 10 --max-time 30 --write-out '\n%{http_code}' \
+                        --header "Authorization: Bearer $profile_token" \
+                        --header "ChatGPT-Account-Id: $profile_account_id" \
+                        "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits")
+                    set -l profile_curl_status $status
+                    if test $profile_curl_status -ne 0
+                        printf '  %s (reset availability unavailable)\n' "$profile_alias"
+                        continue
+                    end
+
+                    set -l profile_http "$profile_response[-1]"
+                    set profile_body (string join \n -- $profile_response[..-2])
+                    if test "$profile_http" != 200
+                        printf '  %s (reset availability unavailable, HTTP %s)\n' "$profile_alias" "$profile_http"
+                        continue
+                    end
+                end
+
+                if test "$profile_loaded_from_cache" = false
+                    __codex_reset_cache_put "$profile_account_id" "$profile_body"
                 end
 
                 set -l profile_summary (printf '%s\n' "$profile_body" | jq -er '

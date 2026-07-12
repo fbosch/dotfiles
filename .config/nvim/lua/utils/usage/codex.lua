@@ -2,6 +2,8 @@ local M = {}
 
 local cache_dir = vim.fn.stdpath("cache") .. "/codexbar"
 local cache_file = cache_dir .. "/data.json"
+local reset_cache_dir = (vim.env.XDG_CACHE_HOME or vim.fn.expand("~/.cache")) .. "/codex-reset"
+local reset_cache_file = reset_cache_dir .. "/credits.json"
 local auth_file = vim.fn.expand("~/.codex/auth.json")
 local file_cache_enabled = vim.g.codexbar_file_cache ~= false
 
@@ -61,8 +63,8 @@ local cache = {
 	profile_check_interval = 1,
 	reset_count = nil,
 	reset_account_id = nil,
+	reset_payload = nil,
 	reset_nearest_expiry = nil,
-	reset_expiry_known = false,
 	reset_last_update = 0,
 	reset_fetching = false,
 	reset_update_interval = 8 * 60 * 60,
@@ -98,15 +100,7 @@ local function load_cache_from_disk()
 				cache.last_update = decoded.last_update
 			end
 
-			if type(decoded.reset_account_id) == "string" and type(decoded.reset_last_update) == "number" then
-				cache.reset_account_id = decoded.reset_account_id
-				cache.reset_last_update = decoded.reset_last_update
-				cache.reset_count = tonumber(decoded.reset_count)
-				cache.reset_nearest_expiry = type(decoded.reset_nearest_expiry) == "string" and decoded.reset_nearest_expiry or nil
-				cache.reset_expiry_known = decoded.reset_expiry_known == true
-			end
-
-			return cache.data ~= nil or cache.reset_account_id ~= nil
+			return cache.data ~= nil
 		end
 	end
 
@@ -123,11 +117,6 @@ local function save_cache_to_disk()
 	local cache_content = {
 		data = cache.data,
 		last_update = cache.last_update,
-		reset_account_id = cache.reset_account_id,
-		reset_count = cache.reset_count,
-		reset_nearest_expiry = cache.reset_nearest_expiry,
-		reset_expiry_known = cache.reset_expiry_known,
-		reset_last_update = cache.reset_last_update,
 	}
 
 	local ok, encoded = pcall(vim.json.encode, cache_content)
@@ -154,28 +143,102 @@ local function parse_and_cache(result)
 	cache.fetching = false
 end
 
-local function parse_and_cache_reset_count(result, account_id)
-	cache.reset_last_update = os.time()
-	cache.reset_fetching = false
-
-	local ok, decoded = pcall(vim.json.decode, result)
-	local count = ok and type(decoded) == "table" and tonumber(decoded.available_count)
+local function cache_reset_payload(account_id, payload, fetched_at)
+	local count = tonumber(payload.available_count)
 	if not count then
-		return
+		return false
 	end
 
 	cache.reset_account_id = account_id
+	cache.reset_payload = payload
 	cache.reset_count = math.max(0, math.floor(count))
 	cache.reset_nearest_expiry = nil
-	cache.reset_expiry_known = true
-	for _, credit in ipairs(decoded.credits or {}) do
+	cache.reset_last_update = fetched_at
+	for _, credit in ipairs(payload.credits or {}) do
 		if credit.status == "available" and type(credit.expires_at) == "string" then
 			if not cache.reset_nearest_expiry or credit.expires_at < cache.reset_nearest_expiry then
 				cache.reset_nearest_expiry = credit.expires_at
 			end
 		end
 	end
-	save_cache_to_disk()
+
+	return true
+end
+
+local function load_reset_cache(account_id)
+	local file = io.open(reset_cache_file, "r")
+	if not file then
+		return false
+	end
+
+	local content = file:read("*a")
+	file:close()
+	local ok, decoded = pcall(vim.json.decode, content)
+	local entry = ok and decoded and decoded.accounts and decoded.accounts[account_id]
+	if type(entry) ~= "table" or type(entry.fetched_at) ~= "number" or type(entry.payload) ~= "table" then
+		return false
+	end
+
+	if (os.time() - entry.fetched_at) >= cache.reset_update_interval then
+		return false
+	end
+
+	return cache_reset_payload(account_id, entry.payload, entry.fetched_at)
+end
+
+local function save_reset_cache()
+	if not cache.reset_account_id or not cache.reset_payload then
+		return
+	end
+
+	local document = { version = 1, accounts = {} }
+	local file = io.open(reset_cache_file, "r")
+	if file then
+		local content = file:read("*a")
+		file:close()
+		local ok, decoded = pcall(vim.json.decode, content)
+		if ok and type(decoded) == "table" then
+			document = decoded
+		end
+	end
+
+	document.version = 1
+	document.accounts = document.accounts or {}
+	document.accounts[cache.reset_account_id] = {
+		fetched_at = cache.reset_last_update,
+		payload = cache.reset_payload,
+	}
+
+	local ok, encoded = pcall(vim.json.encode, document)
+	if not ok then
+		return
+	end
+
+	vim.fn.mkdir(reset_cache_dir, "p")
+	local temporary_file = string.format("%s.%d", reset_cache_file, vim.fn.getpid())
+	local temporary = io.open(temporary_file, "w")
+	if not temporary then
+		return
+	end
+
+	temporary:write(encoded)
+	temporary:close()
+	if not vim.loop.fs_rename(temporary_file, reset_cache_file) then
+		vim.fn.delete(temporary_file)
+	end
+end
+
+local function parse_and_cache_reset_count(result, account_id)
+	cache.reset_fetching = false
+
+	local ok, decoded = pcall(vim.json.decode, result)
+	if not ok or type(decoded) ~= "table" then
+		return
+	end
+
+	if cache_reset_payload(account_id, decoded, os.time()) then
+		save_reset_cache()
+	end
 end
 
 local function read_auth_tokens()
@@ -212,9 +275,20 @@ local function fetch_reset_count_async(account_id)
 		return
 	end
 
+	if cache.reset_fetching then
+		return
+	end
+
 	local current_time = os.time()
-	local has_legacy_reset_cache = cache.reset_count ~= nil and not cache.reset_expiry_known
-	if cache.reset_fetching or (cache.reset_account_id == account_id and not has_legacy_reset_cache and (current_time - cache.reset_last_update) < cache.reset_update_interval) then
+	if cache.reset_account_id == account_id and cache.reset_count ~= nil and (current_time - cache.reset_last_update) < cache.reset_update_interval then
+		return
+	end
+
+	if load_reset_cache(account_id) then
+		return
+	end
+
+	if cache.reset_account_id == account_id and (current_time - cache.reset_last_update) < cache.reset_update_interval then
 		return
 	end
 
@@ -226,7 +300,8 @@ local function fetch_reset_count_async(account_id)
 	cache.reset_fetching = true
 	cache.reset_account_id = tokens.account_id
 	cache.reset_count = nil
-	cache.reset_expiry_known = false
+	cache.reset_payload = nil
+	cache.reset_nearest_expiry = nil
 
 	local stdout = vim.loop.new_pipe(false)
 	local handle
@@ -577,8 +652,8 @@ function M.clear_cache()
 	cache.profile_last_update = 0
 	cache.reset_count = nil
 	cache.reset_account_id = nil
+	cache.reset_payload = nil
 	cache.reset_nearest_expiry = nil
-	cache.reset_expiry_known = false
 	cache.reset_last_update = 0
 	cache.reset_fetching = false
 	cache.last_update = 0
