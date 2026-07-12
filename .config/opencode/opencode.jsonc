@@ -52,6 +52,7 @@
   "permission": {
     "toolbox_execute": "allow",
     "external_directory": {
+      "/tmp/*": "allow",
       "~/.config/opencode/**": "allow",
       "/Users/fbb/.config/opencode/**": "allow"
     },

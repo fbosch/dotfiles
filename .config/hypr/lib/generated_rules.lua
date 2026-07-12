@@ -1,5 +1,12 @@
 local M = {}
 
+---@class GeneratedRule
+---@field id string Stable generated-rule identifier.
+---@field match table Hyprland window selector.
+---@field effects table Hyprland rule properties merged with `match` before registration.
+---@field source? string Rule generator identifier.
+---@field comment? string Human-readable generation context.
+
 function M.validate(rule)
 	if type(rule) ~= "table" then
 		return "expected a table"

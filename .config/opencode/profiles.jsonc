@@ -6,14 +6,14 @@
   //   Claude Haiku 4.5     200K     —        0.33x
   //   Claude Sonnet 4.6    200K     —        1x
   //   Claude Opus 4.6      200K     —        3x
+  //   GPT-5.6              1.05M    —        —
   //   GPT-5.6 Sol          1.05M    —        —
   //   GPT-5.6 Terra        1.05M    —        —
+  //   GPT-5.6 Terra Fast   1.05M    —        —
   //   GPT-5.6 Luna         1.05M    —        —
-  //   GPT-5.1 Codex Max    400K     272K     1x
-  //   GPT-5.1 Codex Mini   400K     272K     0.33x
-  //   GPT-5.2 Codex        272K     —        1x
-   //   GPT-5.4 Mini         400K     —        0x
-  //   Grok Code Fast 1     128K     —        0.25x
+  //   GPT-5.6 Luna Fast    1.05M    —        —
+  //   GPT-5.4 Mini         400K     —        0x
+  //   GPT-5.4 Mini Fast    400K     —        0x
   //   Big Pickle           200K     —        —
   //  ─────────────────────────────────────────────────
   //

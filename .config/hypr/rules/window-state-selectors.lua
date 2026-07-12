@@ -1,6 +1,19 @@
 -- Window state persistence selectors.
 -- Source selector list read by runtime/windows/daemons/window-state/window-state.sh.
 
+---@alias WindowStateMatcher
+---| "match:class" # Hyprland client class.
+---| "match:title" # Hyprland client title.
+---| "match:initialClass" # Initial client class.
+---| "match:initial_class" # Initial client class.
+---| "match:initialTitle" # Initial client title.
+---| "match:initial_title" # Initial client title.
+
+---@class WindowStateSelector
+---@field matcher WindowStateMatcher Identifies the client field and emitted window-rule selector.
+---@field pattern string Regex preserved as-is, or a literal string matched exactly by generated rules.
+
+---@return WindowStateSelector[]
 return {
   { matcher = "match:class", pattern = [=[^xdg-desktop-portal-gtk$]=] },
   { matcher = "match:class", pattern = [=[^Bitwarden$]=] },

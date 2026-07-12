@@ -1,13 +1,22 @@
 local M = {}
 
+---@alias MonitorRole
+---| "ultrawide"
+---| "portrait"
+
+---@type MonitorRole
 M.ultrawide = "ultrawide"
+---@type MonitorRole
 M.portrait = "portrait"
 
+-- Keep both maps aligned: roles_by_name[names_by_role[role]] must equal role.
+---@type table<string, MonitorRole>
 local roles_by_name = {
 	["DP-2"] = M.ultrawide,
 	["HDMI-A-2"] = M.portrait,
 }
 
+---@type table<MonitorRole, string>
 local names_by_role = {
 	[M.ultrawide] = "DP-2",
 	[M.portrait] = "HDMI-A-2",

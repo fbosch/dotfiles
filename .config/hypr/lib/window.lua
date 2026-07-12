@@ -38,7 +38,16 @@ local edge_tolerance = 64
 local pinned_workspace = "1"
 local pinned_workspace_monitor = "HDMI-A-2"
 local gaming_workspace = "10"
+
+--- One-shot placement request consumed when a window enters a custom layout.
+---@class TransferIntent
+---@field monitor_role string Target monitor role.
+---@field axis "x"|"y" Layout axis that consumes the request.
+---@field edge "start"|"end" Insertion edge on that axis.
+
+---@type TransferIntent
 local portrait_transfer_end = { monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
+---@type TransferIntent
 local ultrawide_transfer_start = { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
 
 local function expected_layout(role)
