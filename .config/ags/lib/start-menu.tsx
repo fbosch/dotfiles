@@ -420,8 +420,7 @@ function runProfileCommand(command: string) {
 }
 
 function clearManualProfiles() {
-  runProfileCommand(`${profilectlPath} sync-source gaming manual 0`);
-  runProfileCommand(`${profilectlPath} sync-source powersave manual 0`);
+  runProfileCommand(`${profilectlPath} clear-manual`);
 }
 
 // Build terminal command with correct flags based on terminal

@@ -103,11 +103,15 @@ restore_hypr_defaults() {
 }
 
 set_power_profile() {
-	local profile="$1"
+  local profile="$1"
 
-	if command -v powerprofilesctl >/dev/null 2>&1; then
-		powerprofilesctl set "$profile" >/dev/null 2>&1 && return
-	fi
+  if command -v powerprofilesctl >/dev/null 2>&1; then
+    if powerprofilesctl set "$profile" >/dev/null 2>&1; then
+      return
+    fi
+
+    printf "profilectl: failed to set power profile to %s\n" "$profile" >&2
+  fi
 }
 
 pause_background_helpers() {
@@ -288,7 +292,7 @@ is_source_active() {
 }
 
 usage() {
-  printf "usage: %s <apply|remove|toggle|sync|apply-source|remove-source|sync-source|is-active|is-source-active|status|reconcile> [profile] [source] [count]\n" "$0" >&2
+  printf "usage: %s <apply|remove|toggle|sync|apply-source|remove-source|sync-source|clear-manual|is-active|is-source-active|status|reconcile> [profile] [source] [count]\n" "$0" >&2
 }
 
 main() {
@@ -378,6 +382,11 @@ main() {
       fi
 
       set_profile_count "$profile" "$3" "$4"
+      ;;
+    clear-manual)
+      set_count "$GAMING_PROFILE" manual 0
+      set_count "$POWERSAVE_PROFILE" manual 0
+      apply_effective_state true
       ;;
     is-active)
       if is_valid_profile "$profile"; then
