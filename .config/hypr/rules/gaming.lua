@@ -33,8 +33,8 @@ M.games = {
 		enable_profile = true,
 		freeze = false,
 		presentation = {
-			vrr = 2,
-			direct_scanout = 0,
+			vrr = 0,
+			direct_scanout = 1,
 		},
 	},
 	{

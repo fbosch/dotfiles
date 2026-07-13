@@ -85,7 +85,15 @@ function M.apply(mode)
   end
 
   hl.config(profile.config)
-  return true
+	return true
+end
+
+function M.apply_presentation(vrr, direct_scanout)
+	hl.config({
+		misc = { vrr = vrr },
+		render = { direct_scanout = direct_scanout },
+	})
+	return true
 end
 
 function M.apply_current()
