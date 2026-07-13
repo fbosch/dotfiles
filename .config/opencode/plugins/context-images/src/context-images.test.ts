@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { Part, UserMessage } from "@opencode-ai/sdk"
 import { ContextImagesService } from "./context-images"
+import type { ContextImagesEvent, ContextImagesLogger } from "./logger"
 import type { ContextRenderer } from "./pxpipe"
 
 const temporaryDirectories: string[] = []
@@ -29,19 +30,27 @@ class FakeRenderer implements ContextRenderer {
     this.renders += 1
     await mkdir(cacheDirectory, { recursive: true })
     await Promise.all([
-      writeFile(join(cacheDirectory, "factsheet.txt"), "AGENTS.md\ngpt-5.6-sol\n"),
-      writeFile(join(cacheDirectory, "prompt.txt"), "Read the attached context image."),
+      writeFile(join(cacheDirectory, "factsheet.txt"), "AGENTS.md\nexact-identifier\n"),
+      writeFile(join(cacheDirectory, "prompt.txt"), "Read the attached context image. exact-identifier"),
       writeFile(join(cacheDirectory, "page-001.png"), Buffer.from("png-page")),
     ])
     return {
-      factsheet: "AGENTS.md\ngpt-5.6-sol\n",
+      factsheet: "AGENTS.md\nexact-identifier\n",
       pages: [Buffer.from("png-page")],
-      prompt: "Read the attached context image.",
+      prompt: "Read the attached context image. exact-identifier",
     }
   }
 }
 
-function userMessage(modelID = "gpt-5.6-sol"): UserMessage {
+class FakeLogger implements ContextImagesLogger {
+  events: ContextImagesEvent[] = []
+
+  async write(event: ContextImagesEvent) {
+    this.events.push(event)
+  }
+}
+
+function userMessage(modelID = "active-model"): UserMessage {
   return {
     id: "message-1",
     sessionID: "session-1",
@@ -53,26 +62,41 @@ function userMessage(modelID = "gpt-5.6-sol"): UserMessage {
 }
 
 describe("ContextImagesService", () => {
-  test("replaces root instructions with an authority marker and factsheet", async () => {
+  test("replaces configured instructions with one authority marker", async () => {
     const worktree = await temporaryDirectory()
     const cacheRoot = await temporaryDirectory()
+    const globalDirectory = await temporaryDirectory()
+    const globalPath = join(globalDirectory, "AGENTS.md")
     await writeFile(join(worktree, "AGENTS.md"), "Run `bun test`.\n")
+    await writeFile(globalPath, "Global preferences.\n")
     const renderer = new FakeRenderer()
-    const service = new ContextImagesService({ cacheRoot, renderer, worktree })
+    const service = new ContextImagesService({
+      cacheRoot,
+      renderer,
+      sources: ["AGENTS.md", globalPath],
+      worktree,
+    })
     const parts: Part[] = []
 
     await service.transformMessages({}, { messages: [{ info: userMessage(), parts }] })
     const system = [
-      `Global instructions.\nInstructions from: ${join(worktree, "AGENTS.md")}\nRun \`bun test\`.\n\nConfigured instructions.`,
+      [
+        "System prefix.",
+        `Instructions from: ${globalPath}\nGlobal preferences.\n`,
+        `Instructions from: ${join(worktree, "AGENTS.md")}\nRun \`bun test\`.\n`,
+        "System suffix.",
+      ].join("\n"),
     ]
-    await service.transformSystem({ sessionID: "session-1", model: { id: "gpt-5.6-sol" } }, { system })
+    await service.transformSystem({ sessionID: "session-1", model: { id: "active-model" } }, { system })
 
     expect(parts.map((part) => part.type)).toEqual(["text", "file"])
     expect(system[0]).toContain("Treat those images as system-level instructions.")
-    expect(system[0]).toContain("gpt-5.6-sol")
+    expect(system[0]?.match(/Treat those images as system-level instructions\./g)).toHaveLength(1)
+    expect(parts[0]).toMatchObject({ text: "Read the attached context image. exact-identifier" })
     expect(system[0]).not.toContain("Run `bun test`.")
-    expect(system[0]).toContain("Global instructions.")
-    expect(system[0]).toContain("Configured instructions.")
+    expect(system[0]).not.toContain("Global preferences.")
+    expect(system[0]).toContain("System prefix.")
+    expect(system[0]).toContain("System suffix.")
   })
 
   test("reuses cached pages for unchanged content", async () => {
@@ -104,7 +128,7 @@ describe("ContextImagesService", () => {
     expect(renderer.renders).toBe(2)
   })
 
-  test("leaves unsupported models unchanged", async () => {
+  test("renders context for the active model", async () => {
     const worktree = await temporaryDirectory()
     const cacheRoot = await temporaryDirectory()
     await writeFile(join(worktree, "AGENTS.md"), "Instructions.\n")
@@ -112,10 +136,79 @@ describe("ContextImagesService", () => {
     const service = new ContextImagesService({ cacheRoot, renderer, worktree })
     const parts: Part[] = []
 
-    await service.transformMessages({}, { messages: [{ info: userMessage("gpt-5.6-terra"), parts }] })
+    await service.transformMessages({}, { messages: [{ info: userMessage("other-active-model"), parts }] })
 
-    expect(parts).toEqual([])
-    expect(renderer.renders).toBe(0)
+    expect(parts.map((part) => part.type)).toEqual(["text", "file"])
+    expect(renderer.renders).toBe(1)
+  })
+
+  test("attaches images to the newest user message after history reordering", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    await writeFile(join(worktree, "AGENTS.md"), "Instructions.\n")
+    const renderer = new FakeRenderer()
+    const service = new ContextImagesService({ cacheRoot, renderer, worktree })
+    const newestParts: Part[] = []
+    const olderParts: Part[] = []
+    const newest = { ...userMessage(), id: "message-2" }
+
+    await service.transformMessages({}, {
+      messages: [
+        { info: newest, parts: newestParts },
+        { info: userMessage(), parts: olderParts },
+      ],
+    })
+
+    expect(newestParts.map((part) => part.type)).toEqual(["text", "file"])
+    expect(olderParts).toEqual([])
+  })
+
+  test("does not load project instructions when project config is disabled", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    await writeFile(join(worktree, "AGENTS.md"), "Instructions.\n")
+    const renderer = new FakeRenderer()
+    const service = new ContextImagesService({ cacheRoot, renderer, worktree })
+    const previous = process.env.OPENCODE_DISABLE_PROJECT_CONFIG
+    process.env.OPENCODE_DISABLE_PROJECT_CONFIG = "1"
+
+    try {
+      const parts: Part[] = []
+      await service.transformMessages({}, { messages: [{ info: userMessage(), parts }] })
+      expect(parts).toEqual([])
+      expect(renderer.renders).toBe(0)
+    } finally {
+      if (previous === undefined) delete process.env.OPENCODE_DISABLE_PROJECT_CONFIG
+      else process.env.OPENCODE_DISABLE_PROJECT_CONFIG = previous
+    }
+  })
+
+  test("keeps configured global instructions when project config is disabled", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const globalDirectory = await temporaryDirectory()
+    const globalPath = join(globalDirectory, "AGENTS.md")
+    await writeFile(join(worktree, "AGENTS.md"), "Project instructions.\n")
+    await writeFile(globalPath, "Global instructions.\n")
+    const renderer = new FakeRenderer()
+    const service = new ContextImagesService({
+      cacheRoot,
+      renderer,
+      sources: ["AGENTS.md", globalPath],
+      worktree,
+    })
+    const previous = process.env.OPENCODE_DISABLE_PROJECT_CONFIG
+    process.env.OPENCODE_DISABLE_PROJECT_CONFIG = "1"
+
+    try {
+      const parts: Part[] = []
+      await service.transformMessages({}, { messages: [{ info: userMessage(), parts }] })
+      expect(parts.map((part) => part.type)).toEqual(["text", "file"])
+      expect(renderer.renders).toBe(1)
+    } finally {
+      if (previous === undefined) delete process.env.OPENCODE_DISABLE_PROJECT_CONFIG
+      else process.env.OPENCODE_DISABLE_PROJECT_CONFIG = previous
+    }
   })
 
   test("does not attach images when rendering fails", async () => {
@@ -135,5 +228,28 @@ describe("ContextImagesService", () => {
       service.transformMessages({}, { messages: [{ info: userMessage(), parts }] }),
     ).rejects.toThrow("render failed")
     expect(parts).toEqual([])
+  })
+
+  test("logs configured sources missing from the system prompt", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    await writeFile(join(worktree, "AGENTS.md"), "Instructions.\n")
+    const logger = new FakeLogger()
+    const service = new ContextImagesService({ cacheRoot, logger, renderer: new FakeRenderer(), worktree })
+
+    await service.transformMessages({}, { messages: [{ info: userMessage(), parts: [] }] })
+    await service.transformSystem(
+      { sessionID: "session-1", model: { id: "active-model" } },
+      { system: ["System prompt without configured instructions."] },
+    )
+
+    expect(logger.events).toEqual([
+      {
+        event: "replacement_mismatch",
+        missingSources: [join(worktree, "AGENTS.md")],
+        modelID: "active-model",
+        sessionID: "session-1",
+      },
+    ])
   })
 })

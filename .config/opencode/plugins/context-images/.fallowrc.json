@@ -3,6 +3,13 @@
   "entry": [
     "context-images.ts",
     "src/plugin.ts",
-    "src/context-images.test.ts"
+    "src/context-images.test.ts",
+    "src/logger.test.ts"
+  ],
+  "usedClassMembers": [
+    {
+      "implements": "ContextRenderer",
+      "members": ["version"]
+    }
   ]
 }

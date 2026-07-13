@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process"
 import { mkdir, mkdtemp, readFile, readdir, rename, rm } from "node:fs/promises"
-import { tmpdir } from "node:os"
 import { dirname, join, resolve, sep } from "node:path"
+
+const MAX_PROCESS_OUTPUT_BYTES = 1024 * 1024
+const PROCESS_TIMEOUT_MS = 60_000
 
 export type RenderedContext = {
   factsheet: string
@@ -25,16 +27,34 @@ async function runPxpipe(args: string[], stdin?: string) {
     })
     const stdout: Buffer[] = []
     const stderr: Buffer[] = []
+    let outputBytes = 0
     if (!child.stdout || !child.stderr || (stdin !== undefined && !child.stdin)) {
       child.kill()
       reject(new Error("pxpipe process streams are unavailable"))
       return
     }
 
-    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk))
-    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk))
+    const timeout = setTimeout(() => {
+      child.kill("SIGKILL")
+      reject(new Error(`pxpipe timed out after ${PROCESS_TIMEOUT_MS}ms`))
+    }, PROCESS_TIMEOUT_MS)
+    timeout.unref()
+
+    const capture = (chunks: Buffer[], chunk: Buffer) => {
+      outputBytes += chunk.length
+      if (outputBytes <= MAX_PROCESS_OUTPUT_BYTES) {
+        chunks.push(chunk)
+        return
+      }
+      child.kill("SIGKILL")
+      reject(new Error(`pxpipe output exceeded ${MAX_PROCESS_OUTPUT_BYTES} bytes`))
+    }
+
+    child.stdout.on("data", (chunk: Buffer) => capture(stdout, chunk))
+    child.stderr.on("data", (chunk: Buffer) => capture(stderr, chunk))
     child.once("error", reject)
     child.once("close", (code) => {
+      clearTimeout(timeout)
       if (code === 0) {
         resolveOutput(Buffer.concat(stdout).toString("utf8").trim())
         return
@@ -70,7 +90,9 @@ export class PxpipeRenderer implements ContextRenderer {
   }
 
   async render(text: string, modelID: string, cacheDirectory: string) {
-    const temporaryRoot = await mkdtemp(join(tmpdir(), "opencode-context-images-"))
+    const cacheParent = dirname(cacheDirectory)
+    await mkdir(cacheParent, { recursive: true })
+    const temporaryRoot = await mkdtemp(join(cacheParent, ".staging-"))
     try {
       const output = await runPxpipe(
         ["export", "--stdin", "--out", temporaryRoot, "--model", modelID, "--json"],
@@ -86,7 +108,6 @@ export class PxpipeRenderer implements ContextRenderer {
       }
 
       await loadRenderedContext(outputDirectory)
-      await mkdir(dirname(cacheDirectory), { recursive: true })
       try {
         await rename(outputDirectory, cacheDirectory)
       } catch (error) {

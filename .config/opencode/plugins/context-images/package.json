@@ -1,0 +1,14 @@
+{
+  "name": "opencode-context-images",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./context-images.ts",
+  "scripts": {
+    "test": "bun test"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "*",
+    "@opencode-ai/sdk": "*"
+  }
+}

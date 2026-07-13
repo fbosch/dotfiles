@@ -17,7 +17,15 @@
   },
   "plugin": [
     "opencode-toolbox@0.10.4",
-    "./plugins/context-images/context-images.ts",
+    [
+      "./plugins/context-images/context-images.ts",
+      {
+        "sources": [
+          "AGENTS.md",
+          "~/.config/opencode/AGENTS.md"
+        ]
+      }
+    ],
     "./plugins/openmemory/openmemory.ts",
     "opencode-wakatime@1.3.8",
     "opencode-toon-plugin@0.1.2",

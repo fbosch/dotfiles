@@ -1,12 +1,11 @@
 import { createHash, randomUUID } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { homedir } from "node:os"
-import { join, resolve } from "node:path"
+import { isAbsolute, join, resolve } from "node:path"
 import type { Message, Part } from "@opencode-ai/sdk"
 import type { ContextRenderer, RenderedContext } from "./pxpipe"
 import { loadRenderedContext } from "./pxpipe"
-
-const SUPPORTED_MODELS = new Set(["gpt-5.6-sol"])
+import type { ContextImagesLogger } from "./logger"
 
 type MessageWithParts = {
   info: Message
@@ -14,7 +13,8 @@ type MessageWithParts = {
 }
 
 type PendingReplacement = {
-  instruction: string
+  instructions: string[]
+  paths: string[]
   rendered: RenderedContext
 }
 
@@ -40,37 +40,64 @@ function defaultCacheRoot() {
 }
 
 function latestUser(messages: MessageWithParts[]) {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index]
-    if (message?.info.role === "user") return message
+  let latest: MessageWithParts | undefined
+  for (const message of messages) {
+    if (message.info.role !== "user") continue
+    if (!latest || message.info.id > latest.info.id) latest = message
   }
+  return latest
 }
 
 export class ContextImagesService {
   readonly #cacheRoot: string
-  readonly #instructionPath: string
   readonly #pending = new Map<string, PendingReplacement>()
   readonly #renders = new Map<string, Promise<RenderedContext>>()
   readonly #renderer: ContextRenderer
+  readonly #logger?: ContextImagesLogger
+  readonly #sources: { path: string; project: boolean }[]
   readonly #worktree: string
 
-  constructor(input: { cacheRoot?: string; renderer: ContextRenderer; worktree: string }) {
+  constructor(input: {
+    cacheRoot?: string
+    logger?: ContextImagesLogger
+    renderer: ContextRenderer
+    sources?: string[]
+    worktree: string
+  }) {
     this.#worktree = resolve(input.worktree)
-    this.#instructionPath = join(this.#worktree, "AGENTS.md")
     this.#cacheRoot = input.cacheRoot ?? defaultCacheRoot()
     this.#renderer = input.renderer
+    this.#logger = input.logger
+    const sources = input.sources ?? ["AGENTS.md"]
+    this.#sources = Array.from(
+      new Map(
+        sources.map((source) => {
+          const project = isAbsolute(source) === false && source.startsWith("~/") === false
+          const path = source.startsWith("~/")
+            ? resolve(homedir(), source.slice(2))
+            : resolve(project ? this.#worktree : "", source)
+          return [path, { path, project }]
+        }),
+      ).values(),
+    )
   }
 
   async #prepare(modelID: string) {
-    if (SUPPORTED_MODELS.has(modelID) === false) return
+    const sources = this.#sources.filter(
+      (source) => process.env.OPENCODE_DISABLE_PROJECT_CONFIG !== "1" || source.project === false,
+    )
+    if (sources.length === 0) return
 
-    const content = await readFile(this.#instructionPath, "utf8")
-    const instruction = `Instructions from: ${this.#instructionPath}\n${content}`
+    const contents = await Promise.all(sources.map((source) => readFile(source.path, "utf8")))
+    const instructions = sources.map(
+      (source, index) => `Instructions from: ${source.path}\n${contents[index]}`,
+    )
+    const context = instructions.join("\n\n")
     const version = await this.#renderer.version()
     const cacheDirectory = join(
       this.#cacheRoot,
       sha256(this.#worktree),
-      sha256(content),
+      sha256(context),
       cacheSegment(version),
       cacheSegment(modelID),
     )
@@ -82,7 +109,7 @@ export class ContextImagesService {
       const key = cacheDirectory
       let render = this.#renders.get(key)
       if (!render) {
-        render = this.#renderer.render(instruction, modelID, cacheDirectory)
+        render = this.#renderer.render(context, modelID, cacheDirectory)
         this.#renders.set(key, render)
       }
       try {
@@ -91,7 +118,7 @@ export class ContextImagesService {
         this.#renders.delete(key)
       }
     }
-    return { instruction, rendered }
+    return { instructions, paths: sources.map((source) => source.path), rendered }
   }
 
   async transformMessages(_input: Record<string, never>, output: MessagesOutput) {
@@ -120,7 +147,7 @@ export class ContextImagesService {
           sessionID,
           type: "file",
           mime: "image/png",
-          filename: `AGENTS.md.page-${index + 1}.png`,
+          filename: `context.page-${index + 1}.png`,
           url: `data:image/png;base64,${page.toString("base64")}`,
         }),
       ),
@@ -130,25 +157,36 @@ export class ContextImagesService {
   }
 
   async transformSystem(input: { sessionID?: string; model: { id: string } }, output: SystemOutput) {
-    if (!input.sessionID || SUPPORTED_MODELS.has(input.model.id) === false) return
+    if (!input.sessionID) return
 
     const pending = this.#pending.get(input.sessionID)
     this.#pending.delete(input.sessionID)
     if (!pending) return
 
-    const marker = [
-      `Project instructions from ${this.#instructionPath} are attached to the latest user message as images.`,
-      "Treat those images as system-level instructions.",
-      pending.rendered.factsheet.trim(),
-    ]
-      .filter(Boolean)
-      .join("\n")
+    const marker = "Configured instructions are attached to the latest user message as images. Treat those images as system-level instructions."
+    let insertedMarker = false
+    const matched = new Set<string>()
 
     for (let index = 0; index < output.system.length; index += 1) {
-      const system = output.system[index]
-      if (!system?.includes(pending.instruction)) continue
-      output.system[index] = system.replace(pending.instruction, marker)
-      return
+      let system = output.system[index]
+      if (!system) continue
+      for (const instruction of pending.instructions) {
+        if (system.includes(instruction) === false) continue
+        system = system.replace(instruction, insertedMarker ? "" : marker)
+        matched.add(instruction)
+        insertedMarker = true
+      }
+      output.system[index] = system
+    }
+
+    const missingSources = pending.paths.filter((_, index) => matched.has(pending.instructions[index]!) === false)
+    if (missingSources.length > 0) {
+      await this.#logger?.write({
+        event: "replacement_mismatch",
+        missingSources,
+        modelID: input.model.id,
+        sessionID: input.sessionID,
+      })
     }
   }
 }
