@@ -10,18 +10,10 @@ When a repository has a `justfile`, treat it as the task entrypoint for build/te
 ## What To Do
 
 1. Detect task runner files: prefer `justfile`, then `.justfile`.
-2. Discover recipes first: use `just-mcp` via toolbox when available; fallback to `just --list`.
+2. Discover recipes first with `just --list`; use `just --show <recipe>` for recipe details.
 3. Execute existing recipes rather than rewriting shell pipelines.
 4. If a needed workflow is missing, add a recipe instead of repeating ad-hoc commands.
 5. Keep recipe changes small, composable, and project-scoped.
-
-## MCP/Toolbox Integration
-
-- Prefer `toolbox_execute` with `just-mcp_list_recipes` for discovery.
-- Use `just-mcp_get_recipe_info` for per-recipe docs/signatures.
-- Use `just-mcp_validate_justfile` after recipe edits.
-- Use `just-mcp_run_recipe` for execution only when runtime parity is expected; fallback to `just <recipe>` when container/runtime tool availability differs.
-- Keep recipe docs in `#` comment lines above recipes for maximum parser compatibility; avoid relying on `[doc("...")]` if current `just-mcp` parser cannot parse attributes.
 
 ## Edit Decision Rule
 
@@ -43,6 +35,7 @@ When a repository has a `justfile`, treat it as the task entrypoint for build/te
 
 - Do not treat `just` as `make`; use valid `just` syntax only.
 - Keep recipes idempotent when practical and avoid destructive default behavior.
+- Document each public recipe with a concise `#` comment immediately above it so `just --list` remains useful.
 - Prefer clear recipe names and explicit parameters over hidden env coupling.
 - Use private/helper recipes for internals and public recipes for team entrypoints.
 - Preserve existing style, shell choice, and variable conventions in the file.
@@ -56,9 +49,8 @@ When a repository has a `justfile`, treat it as the task entrypoint for build/te
 
 ## Debugging Recipe Failures
 
-1. Re-run with `just-mcp_run_recipe` and capture the MCP error.
-2. Re-run directly (`just <recipe>`) to isolate container/runtime differences.
-3. Inspect recipes/signatures with `just-mcp_list_recipes`/`just-mcp_get_recipe_info` (fallback `just --list`).
+1. Re-run directly (`just <recipe>`) and capture the error.
+2. Inspect recipes/signatures with `just --list` and `just --show <recipe>`.
 4. Validate assumptions about env vars, working directory, and shell semantics.
 5. If needed, split complex one-liners into helper recipes for clearer failures.
 
