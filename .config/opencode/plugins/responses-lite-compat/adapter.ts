@@ -1,42 +1,95 @@
 const CODEX_RESPONSES_PATH = "/backend-api/codex/responses"
+const CODEX_API_ENDPOINT = "https://chatgpt.com/backend-api/codex/responses"
 const COMPATIBILITY_VERSION = "0.144.0"
 const RESPONSES_LITE_HEADER = "x-openai-internal-codex-responses-lite"
 const RESPONSES_LITE_MODELS = new Set(["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])
-const STATE_KEY = Symbol.for("dotfiles.opencode.responses-lite-compat")
+const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
+const ISSUER = "https://auth.openai.com"
 
 // Remove after an OpenCode release includes anomalyco/opencode#36143.
 
 type FetchArgs = Parameters<typeof fetch>
-type TransportState = {
-  originalFetch: typeof fetch
-  sessionIDs: Map<string, string>
+type OAuthAuth = {
+  type: "oauth"
+  refresh: string
+  access: string
+  expires: number
+  accountId?: string
 }
 type LiteRequest = Record<string, unknown> & {
   input: unknown[]
   tools?: unknown[]
   instructions?: string
 }
-type TransportGlobal = typeof globalThis & {
-  [STATE_KEY]?: TransportState
+type CodexOAuthFetchOptions = {
+  getAuth: () => Promise<unknown>
+  setAuth: (auth: OAuthAuth) => Promise<unknown>
+  sessionIDs: Map<string, string>
+  httpFetch?: typeof fetch
 }
 type BunRuntime = {
   randomUUIDv7?: () => string
 }
 
-export function installResponsesLiteCompatibility() {
-  const currentGlobal = globalThis as TransportGlobal
-  if (currentGlobal[STATE_KEY]) return
+export function isOAuthAuth(auth: unknown): auth is OAuthAuth {
+  if (!isRecord(auth) || auth.type !== "oauth") return false
+  return typeof auth.refresh === "string" && typeof auth.access === "string" && typeof auth.expires === "number"
+}
 
-  const state: TransportState = {
-    originalFetch: globalThis.fetch,
-    sessionIDs: new Map(),
+export function createCodexOAuthFetch(options: CodexOAuthFetchOptions) {
+  const httpFetch = options.httpFetch ?? fetch
+  let refreshPromise: Promise<OAuthAuth> | undefined
+
+  return async (requestInput: RequestInfo | URL, init?: RequestInit) => {
+    let auth = await options.getAuth()
+    if (!isOAuthAuth(auth)) return httpFetch(requestInput, init)
+    let currentAuth = auth
+
+    if (!currentAuth.access || currentAuth.expires < Date.now()) {
+      refreshPromise ??= refreshAccessToken(currentAuth.refresh, httpFetch).then(async (next) => {
+        await options.setAuth(next)
+        return next
+      })
+      currentAuth = await refreshPromise.finally(() => {
+        refreshPromise = undefined
+      })
+    }
+
+    const headers = requestHeaders(requestInput, init)
+    headers.set("authorization", `Bearer ${currentAuth.access}`)
+    if (currentAuth.accountId) headers.set("ChatGPT-Account-Id", currentAuth.accountId)
+
+    const source = requestUrl(requestInput)
+    const url = source.pathname.includes("/v1/responses") || source.pathname.includes("/chat/completions")
+      ? new URL(CODEX_API_ENDPOINT)
+      : source
+    const request = prepareResponsesLiteRequest([url, { ...init, headers }], options.sessionIDs)
+    return httpFetch(...(request ?? [url, { ...init, headers }]))
   }
-  currentGlobal[STATE_KEY] = state
+}
 
-  globalThis.fetch = Object.assign(async (...args: FetchArgs) => {
-    const request = prepareResponsesLiteRequest(args, state.sessionIDs)
-    return state.originalFetch(...(request ?? args))
-  }, state.originalFetch)
+async function refreshAccessToken(refreshToken: string, httpFetch: typeof fetch): Promise<OAuthAuth> {
+  const response = await httpFetch(`${ISSUER}/oauth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: CLIENT_ID,
+    }).toString(),
+  })
+  if (!response.ok) throw new Error(`Token refresh failed: ${response.status}`)
+
+  const tokens: unknown = await response.json()
+  if (!isRecord(tokens) || typeof tokens.access_token !== "string" || typeof tokens.refresh_token !== "string") {
+    throw new Error("Token refresh returned an invalid response")
+  }
+  return {
+    type: "oauth",
+    access: tokens.access_token,
+    refresh: tokens.refresh_token,
+    expires: Date.now() + (typeof tokens.expires_in === "number" ? tokens.expires_in : 3600) * 1000,
+  }
 }
 
 export function prepareResponsesLiteRequest(args: FetchArgs, sessionIDs: Map<string, string>): FetchArgs | undefined {

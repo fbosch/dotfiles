@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { prepareResponsesLiteRequest } from "./adapter"
+import { createCodexOAuthFetch, prepareResponsesLiteRequest } from "./adapter"
 
 describe("Responses Lite compatibility", () => {
   test("rewrites all GPT-5.6 Lite models and preserves their mapped sessions", () => {
@@ -38,6 +38,40 @@ describe("Responses Lite compatibility", () => {
     expect(legacy).toBeUndefined()
     expect(adapted).toBeUndefined()
     expect(sessionIDs.size).toBe(0)
+  })
+
+  test("overrides the OAuth fetch boundary", async () => {
+    const requests: Array<{ url: string; headers: Headers; body: Record<string, unknown> }> = []
+    const providerFetch = createCodexOAuthFetch({
+      getAuth: async () => ({
+        type: "oauth",
+        access: "access-token",
+        refresh: "refresh-token",
+        expires: Date.now() + 60_000,
+        accountId: "account-id",
+      }),
+      setAuth: async () => {},
+      sessionIDs: new Map(),
+      httpFetch: async (input, init) => {
+        requests.push({
+          url: String(input),
+          headers: new Headers(init?.headers),
+          body: JSON.parse(String(init?.body)),
+        })
+        return new Response()
+      },
+    })
+
+    await providerFetch("https://api.openai.com/v1/responses", {
+      headers: { "session-id": "ses_test" },
+      body: JSON.stringify({ model: "gpt-5.6-luna", input: [], stream: true }),
+    })
+
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.url).toBe("https://chatgpt.com/backend-api/codex/responses")
+    expect(requests[0]?.headers.get("authorization")).toBe("Bearer access-token")
+    expect(requests[0]?.headers.get("chatgpt-account-id")).toBe("account-id")
+    expect(requests[0]?.headers.get("x-openai-internal-codex-responses-lite")).toBe("true")
   })
 })
 
