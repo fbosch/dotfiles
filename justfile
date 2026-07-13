@@ -24,9 +24,9 @@ build-storybook:
 install-opencode-plugins:
 	{{dev}} bun install --cwd .config/opencode/plugins
 
-# Restart user daemons used by the desktop setup.
+# Restart user daemons used by the desktop setup asynchronously.
 restart-daemons:
-	bash .config/hypr/scripts/restart-daemons.sh
+	nohup bash .config/hypr/runtime/desktop/restart-daemons.sh >/dev/null 2>&1 &
 
 # Sync docs cache metadata.
 update-docs:

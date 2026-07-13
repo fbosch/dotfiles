@@ -299,32 +299,25 @@ local function capture_window_preview_command(preview_id, width, height)
 	return table.concat(parts, "; ")
 end
 
-local function spawn_capture_window_preview(preview_id, width, height)
+local function capture_window_preview_command_for_window(preview_id, width, height)
 	if preview_id == "" or width <= 0 or height <= 0 then
 		return nil
 	end
 
-	local capture_command = capture_window_preview_command(preview_id, width, height)
-	local handle = io.popen("sh -c " .. command.arg("( " .. capture_command .. " ) & printf '%s\n' \"$!\""), "r")
-	if not handle then
-		return nil
-	end
-
-	local pid = handle:read("*l") or ""
-	handle:close()
-	return pid ~= "" and pid or nil
+	return capture_window_preview_command(preview_id, width, height)
 end
 
-local function wait_for_capture(pid)
-	while process_is_running(pid) do
-		socket.sleep(0.02)
+local function capture_window_preview_batch(commands)
+	if #commands == 0 then
+		return
 	end
-end
 
-local function wait_for_capture_batch(pids)
-	for _, pid in ipairs(pids) do
-		wait_for_capture(pid)
+	local processes = {}
+	for _, capture_command in ipairs(commands) do
+		processes[#processes + 1] = "( " .. capture_command .. " )"
 	end
+
+	command.ok("sh -c " .. command.arg(table.concat(processes, " & ") .. " & wait"))
 end
 
 local function capture_active_window_preview()
@@ -378,27 +371,27 @@ local function capture_visible_workspace_previews(missing_only)
 	end
 
 	local visible_workspaces = visible_workspace_ids()
-	local capture_pids = {}
+	local capture_commands = {}
 	for _, client in ipairs(json.array(all_clients_json)) do
 		local workspace_id = client.workspace and client.workspace.id
 		local preview_id, mapped, width, height = window_preview_fields(client)
 		if visible_workspaces[workspace_id] and mapped and preview_id ~= "" then
 			if not missing_only or not file_is_nonempty(screenshot_dir .. "/" .. preview_id .. ".jpg") then
-				local pid = spawn_capture_window_preview(preview_id, width, height)
-				if pid then
-					capture_pids[#capture_pids + 1] = pid
+				local capture_command = capture_window_preview_command_for_window(preview_id, width, height)
+				if capture_command then
+					capture_commands[#capture_commands + 1] = capture_command
 				end
 
-				if #capture_pids >= max_parallel_captures then
-					wait_for_capture_batch(capture_pids)
-					capture_pids = {}
+				if #capture_commands >= max_parallel_captures then
+					capture_window_preview_batch(capture_commands)
+					capture_commands = {}
 				end
 			end
 		end
 	end
 
-	if #capture_pids > 0 then
-		wait_for_capture_batch(capture_pids)
+	if #capture_commands > 0 then
+		capture_window_preview_batch(capture_commands)
 	end
 end
 
@@ -500,16 +493,15 @@ local function capture_screenshot(event_type, capture_id, event_payload)
 end
 
 local function event_type_for(line)
-	if line:match("^activewindow") or line:match("^activewindowv2") then
+	if line:match("^activewindowv2") then
 		return "activewindow"
-	elseif line:match("^workspace") or line:match("^workspacev2") then
+	elseif line:match("^workspacev2") then
 		return "workspace"
-	elseif line:match("^openwindow") or line:match("^openwindowv2") then
+	elseif line:match("^openwindow") then
 		return "windowupdate"
-	elseif line:match("^windowtitle") or line:match("^windowtitlev2") then
+	elseif line:match("^windowtitlev2") then
 		return "windowtitle", line:match("^[^>,]+>>([^,]+)") or line:match("^[^,]+,([^,]+)") or ""
-	elseif line:match("^movewindow")
-		or line:match("^movewindowv2")
+	elseif line:match("^movewindowv2")
 		or line:match("^changefloatingmode")
 		or line:match("^fullscreen")
 		or line:match("^fullscreenv2")
