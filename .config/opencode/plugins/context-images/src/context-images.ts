@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { homedir } from "node:os"
-import { isAbsolute, join, resolve } from "node:path"
+import { isAbsolute, join, resolve, sep } from "node:path"
 import type { Message, Part } from "@opencode-ai/sdk"
 import type { ContextRenderer, RenderedContext } from "./pxpipe"
 import { loadRenderedContext } from "./pxpipe"
@@ -16,6 +16,12 @@ type PendingReplacement = {
   instructions: string[]
   paths: string[]
   rendered: RenderedContext
+}
+
+type InstructionSource = {
+  content: string
+  path: string
+  project: boolean
 }
 
 type MessagesOutput = {
@@ -50,26 +56,37 @@ function latestUser(messages: MessageWithParts[]) {
 
 export class ContextImagesService {
   readonly #cacheRoot: string
+  readonly #directory: string
+  readonly #explicitSources?: { path: string; project: boolean }[]
   readonly #pending = new Map<string, PendingReplacement>()
   readonly #renders = new Map<string, Promise<RenderedContext>>()
   readonly #renderer: ContextRenderer
   readonly #logger?: ContextImagesLogger
-  readonly #sources: { path: string; project: boolean }[]
   readonly #worktree: string
+  #configuredInstructions: string[] = []
 
   constructor(input: {
     cacheRoot?: string
+    directory?: string
     logger?: ContextImagesLogger
     renderer: ContextRenderer
     sources?: string[]
     worktree: string
   }) {
     this.#worktree = resolve(input.worktree)
+    this.#directory = resolve(input.directory ?? input.worktree)
     this.#cacheRoot = input.cacheRoot ?? defaultCacheRoot()
     this.#renderer = input.renderer
     this.#logger = input.logger
-    const sources = input.sources ?? ["AGENTS.md"]
-    this.#sources = Array.from(
+    if (input.sources) this.#explicitSources = this.#resolveSources(input.sources)
+  }
+
+  setConfiguredInstructions(instructions: string[]) {
+    this.#configuredInstructions = instructions
+  }
+
+  #resolveSources(sources: string[]) {
+    return Array.from(
       new Map(
         sources.map((source) => {
           const project = isAbsolute(source) === false && source.startsWith("~/") === false
@@ -82,16 +99,76 @@ export class ContextImagesService {
     )
   }
 
-  async #prepare(modelID: string) {
-    const sources = this.#sources.filter(
-      (source) => process.env.OPENCODE_DISABLE_PROJECT_CONFIG !== "1" || source.project === false,
+  async #loadSources(sources: { path: string; project: boolean }[]) {
+    const loaded = await Promise.all(
+      sources.map(async (source): Promise<InstructionSource | undefined> => {
+        try {
+          return { ...source, content: await readFile(source.path, "utf8") }
+        } catch {
+          return
+        }
+      }),
     )
+    return loaded.filter((source): source is InstructionSource => source !== undefined)
+  }
+
+  #projectCandidates(filename: string) {
+    const paths: string[] = []
+    let directory = this.#directory
+    if (directory !== this.#worktree && directory.startsWith(this.#worktree + sep) === false) return paths
+    while (true) {
+      paths.push(join(directory, filename))
+      if (directory === this.#worktree) break
+      const parent = resolve(directory, "..")
+      if (parent === directory || directory.startsWith(this.#worktree + sep) === false) break
+      directory = parent
+    }
+    return paths
+  }
+
+  async #discoverSources() {
+    if (this.#explicitSources) {
+      const sources = this.#explicitSources.filter(
+        (source) => process.env.OPENCODE_DISABLE_PROJECT_CONFIG !== "1" || source.project === false,
+      )
+      return await this.#loadSources(sources)
+    }
+
+    const configRoot = process.env.OPENCODE_CONFIG_DIR
+      ? resolve(process.env.OPENCODE_CONFIG_DIR)
+      : join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "opencode")
+    const sources: InstructionSource[] = []
+    sources.push(...(await this.#loadSources([{ path: join(configRoot, "AGENTS.md"), project: false }])))
+
+    if (process.env.OPENCODE_DISABLE_PROJECT_CONFIG !== "1") {
+      for (const filename of ["AGENTS.md", "CLAUDE.md", "CONTEXT.md"]) {
+        const project = await this.#loadSources(
+          this.#projectCandidates(filename).map((path) => ({ path, project: true })),
+        )
+        if (project.length > 0) {
+          sources.push(...project)
+          break
+        }
+      }
+    }
+
+    const configured = this.#configuredInstructions
+      .filter((source) => source.startsWith("http://") === false && source.startsWith("https://") === false)
+      .flatMap((source) => {
+        if (source.startsWith("~/")) return [{ path: resolve(homedir(), source.slice(2)), project: false }]
+        if (isAbsolute(source)) return [{ path: resolve(source), project: false }]
+        if (process.env.OPENCODE_DISABLE_PROJECT_CONFIG === "1") return []
+        return [{ path: resolve(this.#directory, source), project: true }]
+      })
+    sources.push(...(await this.#loadSources(configured)))
+
+    return Array.from(new Map(sources.map((source) => [source.path, source])).values())
+  }
+
+  async #prepareSources(sources: InstructionSource[], modelID: string) {
     if (sources.length === 0) return
 
-    const contents = await Promise.all(sources.map((source) => readFile(source.path, "utf8")))
-    const instructions = sources.map(
-      (source, index) => `Instructions from: ${source.path}\n${contents[index]}`,
-    )
+    const instructions = sources.map((source) => `Instructions from: ${source.path}\n${source.content}`)
     const context = instructions.join("\n\n")
     const version = await this.#renderer.version()
     const cacheDirectory = join(
@@ -119,6 +196,10 @@ export class ContextImagesService {
       }
     }
     return { instructions, paths: sources.map((source) => source.path), rendered }
+  }
+
+  async #prepare(modelID: string) {
+    return await this.#prepareSources(await this.#discoverSources(), modelID)
   }
 
   async transformMessages(_input: Record<string, never>, output: MessagesOutput) {
@@ -164,22 +245,10 @@ export class ContextImagesService {
     if (!pending) return
 
     const marker = "Configured instructions are attached to the latest user message as images. Treat those images as system-level instructions."
-    let insertedMarker = false
-    const matched = new Set<string>()
-
-    for (let index = 0; index < output.system.length; index += 1) {
-      let system = output.system[index]
-      if (!system) continue
-      for (const instruction of pending.instructions) {
-        if (system.includes(instruction) === false) continue
-        system = system.replace(instruction, insertedMarker ? "" : marker)
-        matched.add(instruction)
-        insertedMarker = true
-      }
-      output.system[index] = system
-    }
-
-    const missingSources = pending.paths.filter((_, index) => matched.has(pending.instructions[index]!) === false)
+    const matchCounts = pending.instructions.map((instruction) =>
+      output.system.reduce((count, system) => count + system.split(instruction).length - 1, 0),
+    )
+    const missingSources = pending.paths.filter((_, index) => matchCounts[index] !== 1)
     if (missingSources.length > 0) {
       await this.#logger?.write({
         event: "replacement_mismatch",
@@ -187,6 +256,21 @@ export class ContextImagesService {
         modelID: input.model.id,
         sessionID: input.sessionID,
       })
+      return
     }
+
+    let insertedMarker = false
+
+    for (let index = 0; index < output.system.length; index += 1) {
+      let system = output.system[index]
+      if (!system) continue
+      for (const instruction of pending.instructions) {
+        if (system.includes(instruction) === false) continue
+        system = system.replace(instruction, insertedMarker ? "" : marker)
+        insertedMarker = true
+      }
+      output.system[index] = system
+    }
+
   }
 }

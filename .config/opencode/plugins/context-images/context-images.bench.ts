@@ -154,11 +154,13 @@ async function main() {
     const cached = new ContextImagesService({
       cacheRoot: join(root, "cached"),
       renderer: new CachedRenderer(),
+      sources: ["AGENTS.md"],
       worktree,
     })
     const uncached = new ContextImagesService({
       cacheRoot: join(root, "uncached"),
       renderer: new UncachedRenderer(),
+      sources: ["AGENTS.md"],
       worktree,
     })
     await cached.transformMessages({}, { messages: [{ info: userMessage("prime"), parts: [] }] })
@@ -185,6 +187,7 @@ async function main() {
     const systemService = new ContextImagesService({
       cacheRoot: join(root, "cached"),
       renderer: new CachedRenderer(),
+      sources: ["AGENTS.md"],
       worktree,
     })
     results.push(

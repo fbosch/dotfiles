@@ -21,13 +21,15 @@ afterEach(async () => {
 
 class FakeRenderer implements ContextRenderer {
   renders = 0
+  texts: string[] = []
 
   async version() {
     return "test-1.0.0"
   }
 
-  async render(_text: string, _modelID: string, cacheDirectory: string) {
+  async render(text: string, _modelID: string, cacheDirectory: string) {
     this.renders += 1
+    this.texts.push(text)
     await mkdir(cacheDirectory, { recursive: true })
     await Promise.all([
       writeFile(join(cacheDirectory, "factsheet.txt"), "AGENTS.md\nexact-identifier\n"),
@@ -105,9 +107,9 @@ describe("ContextImagesService", () => {
     await writeFile(join(worktree, "AGENTS.md"), "Stable instructions.\n")
     const renderer = new FakeRenderer()
 
-    const first = new ContextImagesService({ cacheRoot, renderer, worktree })
+    const first = new ContextImagesService({ cacheRoot, renderer, sources: ["AGENTS.md"], worktree })
     await first.transformMessages({}, { messages: [{ info: userMessage(), parts: [] }] })
-    const second = new ContextImagesService({ cacheRoot, renderer, worktree })
+    const second = new ContextImagesService({ cacheRoot, renderer, sources: ["AGENTS.md"], worktree })
     await second.transformMessages({}, { messages: [{ info: userMessage(), parts: [] }] })
 
     expect(renderer.renders).toBe(1)
@@ -118,7 +120,7 @@ describe("ContextImagesService", () => {
     const cacheRoot = await temporaryDirectory()
     const instructionPath = join(worktree, "AGENTS.md")
     const renderer = new FakeRenderer()
-    const service = new ContextImagesService({ cacheRoot, renderer, worktree })
+    const service = new ContextImagesService({ cacheRoot, renderer, sources: ["AGENTS.md"], worktree })
 
     await writeFile(instructionPath, "First instructions.\n")
     await service.transformMessages({}, { messages: [{ info: userMessage(), parts: [] }] })
@@ -133,7 +135,7 @@ describe("ContextImagesService", () => {
     const cacheRoot = await temporaryDirectory()
     await writeFile(join(worktree, "AGENTS.md"), "Instructions.\n")
     const renderer = new FakeRenderer()
-    const service = new ContextImagesService({ cacheRoot, renderer, worktree })
+    const service = new ContextImagesService({ cacheRoot, renderer, sources: ["AGENTS.md"], worktree })
     const parts: Part[] = []
 
     await service.transformMessages({}, { messages: [{ info: userMessage("other-active-model"), parts }] })
@@ -147,7 +149,7 @@ describe("ContextImagesService", () => {
     const cacheRoot = await temporaryDirectory()
     await writeFile(join(worktree, "AGENTS.md"), "Instructions.\n")
     const renderer = new FakeRenderer()
-    const service = new ContextImagesService({ cacheRoot, renderer, worktree })
+    const service = new ContextImagesService({ cacheRoot, renderer, sources: ["AGENTS.md"], worktree })
     const newestParts: Part[] = []
     const olderParts: Part[] = []
     const newest = { ...userMessage(), id: "message-2" }
@@ -168,7 +170,7 @@ describe("ContextImagesService", () => {
     const cacheRoot = await temporaryDirectory()
     await writeFile(join(worktree, "AGENTS.md"), "Instructions.\n")
     const renderer = new FakeRenderer()
-    const service = new ContextImagesService({ cacheRoot, renderer, worktree })
+    const service = new ContextImagesService({ cacheRoot, renderer, sources: ["AGENTS.md"], worktree })
     const previous = process.env.OPENCODE_DISABLE_PROJECT_CONFIG
     process.env.OPENCODE_DISABLE_PROJECT_CONFIG = "1"
 
@@ -211,6 +213,50 @@ describe("ContextImagesService", () => {
     }
   })
 
+  test("discovers global, hierarchical, and configured instructions", async () => {
+    const worktree = await temporaryDirectory()
+    const directory = join(worktree, "nested")
+    const cacheRoot = await temporaryDirectory()
+    const configHome = await temporaryDirectory()
+    const configuredPath = join(configHome, "configured.md")
+    await mkdir(join(configHome, "opencode"), { recursive: true })
+    await mkdir(directory)
+    await Promise.all([
+      writeFile(join(configHome, "opencode", "AGENTS.md"), "Global instructions.\n"),
+      writeFile(join(worktree, "AGENTS.md"), "Root instructions.\n"),
+      writeFile(join(directory, "AGENTS.md"), "Nested ambient instructions.\n"),
+      writeFile(configuredPath, "Configured instructions.\n"),
+    ])
+    const previousConfigDir = process.env.OPENCODE_CONFIG_DIR
+    const previousXdgConfigHome = process.env.XDG_CONFIG_HOME
+    process.env.OPENCODE_CONFIG_DIR = join(configHome, "opencode")
+    process.env.XDG_CONFIG_HOME = configHome
+    const renderer = new FakeRenderer()
+    const service = new ContextImagesService({ cacheRoot, directory, renderer, worktree })
+    service.setConfiguredInstructions([configuredPath])
+
+    try {
+      await service.transformMessages({}, { messages: [{ info: userMessage(), parts: [] }] })
+    } finally {
+      if (previousConfigDir === undefined) delete process.env.OPENCODE_CONFIG_DIR
+      else process.env.OPENCODE_CONFIG_DIR = previousConfigDir
+      if (previousXdgConfigHome === undefined) delete process.env.XDG_CONFIG_HOME
+      else process.env.XDG_CONFIG_HOME = previousXdgConfigHome
+    }
+
+    expect(renderer.texts).toHaveLength(1)
+    expect(renderer.texts[0]).toContain("Global instructions.")
+    expect(renderer.texts[0]).toContain("Nested ambient instructions.")
+    expect(renderer.texts[0]).toContain("Root instructions.")
+    expect(renderer.texts[0]).toContain("Configured instructions.")
+    expect(renderer.texts[0]!.indexOf("Global instructions.")).toBeLessThan(
+      renderer.texts[0]!.indexOf("Nested ambient instructions."),
+    )
+    expect(renderer.texts[0]!.indexOf("Nested ambient instructions.")).toBeLessThan(
+      renderer.texts[0]!.indexOf("Root instructions."),
+    )
+  })
+
   test("does not attach images when rendering fails", async () => {
     const worktree = await temporaryDirectory()
     const cacheRoot = await temporaryDirectory()
@@ -221,7 +267,7 @@ describe("ContextImagesService", () => {
       },
       version: async () => "test-1.0.0",
     }
-    const service = new ContextImagesService({ cacheRoot, renderer, worktree })
+    const service = new ContextImagesService({ cacheRoot, renderer, sources: ["AGENTS.md"], worktree })
     const parts: Part[] = []
 
     await expect(
@@ -235,7 +281,13 @@ describe("ContextImagesService", () => {
     const cacheRoot = await temporaryDirectory()
     await writeFile(join(worktree, "AGENTS.md"), "Instructions.\n")
     const logger = new FakeLogger()
-    const service = new ContextImagesService({ cacheRoot, logger, renderer: new FakeRenderer(), worktree })
+    const service = new ContextImagesService({
+      cacheRoot,
+      logger,
+      renderer: new FakeRenderer(),
+      sources: ["AGENTS.md"],
+      worktree,
+    })
 
     await service.transformMessages({}, { messages: [{ info: userMessage(), parts: [] }] })
     await service.transformSystem(

@@ -12,16 +12,19 @@ function warnOnce(error: unknown) {
   process.stderr.write(`[context-images] preserving text instructions: ${detail}\n`)
 }
 
-export const ContextImagesPlugin: Plugin = async ({ worktree }, options = {}) => {
-  const sources = Array.isArray(options.sources)
-    ? options.sources.filter((source): source is string => typeof source === "string")
-    : undefined
+export const ContextImagesPlugin: Plugin = async ({ directory, worktree }, options = {}) => {
+  if ("sources" in options) {
+    throw new Error('[context-images] option "sources" is no longer supported; use OpenCode instruction discovery')
+  }
   const logFile = typeof options.logFile === "string" ? options.logFile : undefined
   const logger = new JsonlLogger(logFile)
   await logger.write({ event: "plugin_loaded" })
-  const service = new ContextImagesService({ logger, renderer: new PxpipeRenderer(), sources, worktree })
+  const service = new ContextImagesService({ directory, logger, renderer: new PxpipeRenderer(), worktree })
 
   return {
+    config: async (config) => {
+      service.setConfiguredInstructions(config.instructions ?? [])
+    },
     "experimental.chat.messages.transform": async (input, output) => {
       try {
         await service.transformMessages(input, output)

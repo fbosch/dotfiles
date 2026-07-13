@@ -22,18 +22,18 @@ The package script removes Bun's `npm_package_version` environment variable so t
 
 | Case | Mean range | Median range | p95 range |
 | --- | ---: | ---: | ---: |
-| Load rendered context | 0.098-0.113 ms | 0.070-0.078 ms | 0.134-0.303 ms |
-| Message transform, cache hit | 0.225-0.308 ms | 0.190-0.202 ms | 0.305-0.691 ms |
-| Message transform, cache miss | 0.161-0.175 ms | 0.115-0.139 ms | 0.207-0.288 ms |
-| System replacement | 0.041-0.043 ms | 0.039-0.041 ms | 0.062-0.068 ms |
-| Cold pxpipe identity | 0.271-0.298 ms | 0.231-0.290 ms | 0.385-0.403 ms |
-| Library first use, immediate | 594.579-597.199 ms | 590.469-593.541 ms | 620.623-630.929 ms |
-| Library first use, after 100 ms | 96.782-100.265 ms | 47.737-48.761 ms | 544.017-567.131 ms |
-| Library first use, after 500 ms | 40.193-41.487 ms | 38.655-42.019 ms | 49.038-52.281 ms |
-| Warm pxpipe library render | 16.474-17.320 ms | 15.395-17.910 ms | 19.748-22.482 ms |
-| Pxpipe CLI render | 351.518-387.236 ms | 341.509-385.022 ms | 397.619-405.984 ms |
+| Load rendered context | 0.163-0.185 ms | 0.066-0.088 ms | 0.364-0.832 ms |
+| Message transform, cache hit | 0.305-0.384 ms | 0.220-0.247 ms | 0.722-0.759 ms |
+| Message transform, cache miss | 0.154-0.244 ms | 0.114-0.146 ms | 0.229-0.928 ms |
+| System replacement | 0.032-0.038 ms | 0.028-0.036 ms | 0.059-0.065 ms |
+| Cold pxpipe identity | 0.288-0.327 ms | 0.290-0.318 ms | 0.371-0.450 ms |
+| Library first use, immediate | 610.900-632.611 ms | 608.437-623.357 ms | 635.485-672.805 ms |
+| Library first use, after 100 ms | 43.798-44.797 ms | 42.081-42.515 ms | 48.807-52.611 ms |
+| Library first use, after 500 ms | 43.983-46.118 ms | 43.378-44.392 ms | 52.068-52.845 ms |
+| Warm pxpipe library render | 19.517-20.090 ms | 17.655-18.583 ms | 26.738-29.098 ms |
+| Pxpipe CLI render | 397.169-420.940 ms | 394.409-421.034 ms | 422.718-461.036 ms |
 
-The recurring cached path is sub-millisecond. Warm in-process rendering averages 16-17 ms, roughly 21-23 times faster than the CLI fallback. Library import is expensive: an immediate first use costs about 596 ms. Background preload needs more than 100 ms to complete reliably; after 500 ms idle, first-request rendering averages 40-41 ms. Compare future results on the same host and inspect multiple runs before treating sub-millisecond differences as regressions.
+The recurring cached path is sub-millisecond. Warm in-process rendering averages 19-20 ms, roughly 20 times faster than the CLI fallback. Library import is expensive: an immediate first use costs 611-633 ms. After background preload, first-request rendering averages 44-46 ms. Compare future results on the same host and inspect multiple runs before treating sub-millisecond differences as regressions.
 
 ## Change From Initial Baseline
 
