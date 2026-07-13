@@ -8,7 +8,6 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 local json = require("lib.json")
 local command = require("lib.command")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
-local ags_ipc = require("runtime.lib.ags-ipc")
 
 local mode = arg[1] or "daemon"
 local runtime_dir = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
@@ -20,13 +19,11 @@ end
 local daemon_lock_dir = runtime_dir .. "/hypr-window-capture-daemon.lock.d"
 local last_screenshot_file = screenshot_dir .. "/.last_screenshot"
 local last_event_file = screenshot_dir .. "/.last_event"
-local last_overlay_file = screenshot_dir .. "/.last_overlay"
 local capture_lock_file = screenshot_dir .. "/.capture_lock"
 local workspace_change_file = screenshot_dir .. "/.workspace_change"
 local last_healthcheck_file = screenshot_dir .. "/.last_healthcheck"
 
 local debounce_ms = 100
-local overlay_cooldown_ms = 5
 local capture_delay_ms = 50
 local window_settle_delay_ms = 150
 local workspace_delay_ms = 100
@@ -408,31 +405,6 @@ local function maybe_run_healthcheck()
 	return true
 end
 
-local function is_any_overlay_visible()
-	local ok, response = pcall(ags_ipc.request, "window-switcher", '{"action":"get-visibility"}')
-	if not ok then
-		response = ""
-	end
-
-	response = response:gsub("%s+$", "")
-	if response == "visible" then
-		write_file(last_overlay_file, tostring(now_ms()))
-		return true
-	end
-
-	return false
-end
-
-local function is_in_overlay_cooldown()
-	local last_overlay_time = read_number(last_overlay_file)
-	if not last_overlay_time then
-		return false
-	end
-
-	local elapsed = now_ms() - last_overlay_time
-	return elapsed >= 0 and elapsed < overlay_cooldown_ms
-end
-
 local function capture_screenshot(event_type, capture_id, event_payload)
 	local last_time = read_number(last_screenshot_file)
 	if last_time then
@@ -442,10 +414,6 @@ local function capture_screenshot(event_type, capture_id, event_payload)
 		elseif elapsed < debounce_ms then
 			return
 		end
-	end
-
-	if is_any_overlay_visible() or is_in_overlay_cooldown() then
-		return
 	end
 
 	local delay_ms = capture_delay_ms
@@ -464,10 +432,6 @@ local function capture_screenshot(event_type, capture_id, event_payload)
 		if current_change_id and current_change_id:gsub("%s+$", "") ~= capture_id then
 			return
 		end
-	end
-
-	if is_any_overlay_visible() then
-		return
 	end
 
 	write_file(last_screenshot_file, tostring(now_ms()))
@@ -626,9 +590,8 @@ mkdir(screenshot_dir)
 command.ok("find " .. command.arg(screenshot_dir) .. " -maxdepth 1 -name '.temp_*.jpg' -type f -delete 2>/dev/null")
 
 if mode == "refresh-once" then
-	remove_file(last_overlay_file)
 	remove_file(last_screenshot_file)
-	handle_event("workspace>>refresh-once")
+	handle_event("workspacev2>>refresh-once")
 elseif mode == "handle-event" then
 	handle_event(arg[2] or "")
 elseif mode == "daemon" then
