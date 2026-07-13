@@ -8,7 +8,7 @@ import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
 import { execAsync } from "ags/process";
 import { getFallbackLetter, getIconForWindow, setImageFile } from "./app-icons";
-import { dispatchHyprland, queryHyprlandJson } from "./hyprland-ipc";
+import { queryHyprlandJson } from "./hyprland-ipc";
 import { perf } from "./performance-monitor";
 
 /**
@@ -102,7 +102,7 @@ const PERFORMANCE_MODE_PATH = `${RUNTIME_DIR}/hypr-performance-mode`;
 const MONITOR_DEBUG_PATH = `${RUNTIME_DIR}/monitor-debug.log`;
 const WINDOW_SWITCHER_DEBUG_PATH = `${RUNTIME_DIR}/ags-window-switcher-debug.log`;
 const TOGGLE_MINIMIZED_WORKSPACE_SCRIPT = "~/.config/hypr/runtime/windows/toggle-minimized-workspace.sh";
-const WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT = "~/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh";
+const WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT = "lua ~/.config/hypr/runtime/windows/warp-cursor-to-active-window.lua";
 const DEBUG = GLib.getenv("AGS_WINDOW_SWITCHER_DEBUG") === "1";
 
 function isPerformanceOverlayActive(): boolean {
@@ -210,8 +210,8 @@ function getMonitorWidth(): number {
       return 1920;
     }
     
-    const pointer = seat.get_pointer();
-    if (!pointer) {
+    const pointer = seat.get_pointer() as unknown as { get_position?: () => [unknown, number, number] } | null;
+    if (!pointer?.get_position) {
       debugWriteFile(MONITOR_DEBUG_PATH, "No pointer found\n");
       return 1920;
     }
@@ -556,32 +556,18 @@ async function getActiveWindowAddress(): Promise<string | null> {
   }
 }
 
-function dispatchHyprlandWithFallback(dispatcher: string, metric: string): void {
-  if (dispatchHyprland(dispatcher, { component: "window-switcher", metric })) return;
-  GLib.spawn_command_line_sync(`hyprctl dispatch ${GLib.shell_quote(dispatcher)}`);
-}
-
-function warpCursorToActiveWindow(): void {
+function focusAndWarpWindow(address: string): void {
   const home = GLib.getenv("HOME");
-  const script = home ? `${home}/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh` : WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT;
-  GLib.spawn_command_line_async(script);
+  const script = home ? `lua ${home}/.config/hypr/runtime/windows/warp-cursor-to-active-window.lua` : WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT;
+  GLib.spawn_command_line_async(`${script} --window ${GLib.shell_quote(address)}`);
 }
 
 function focusWindow(address: string): void {
-  dispatchHyprlandWithFallback(`hl.dsp.focus({ window = "address:${address}" })`, "hyprSocketDispatchFocus");
-  warpCursorToActiveWindow();
+  focusAndWarpWindow(address);
 }
 
 function focusAndCenterWindow(window: WindowInfo): void {
-  if (!window.position || !window.size) {
-    focusWindow(window.address);
-    return;
-  }
-
-  const cursorX = Math.floor(window.position.x + window.size.width / 2);
-  const cursorY = Math.floor(window.position.y + window.size.height / 2);
-  dispatchHyprlandWithFallback(`hl.dsp.focus({ window = "address:${window.address}" })`, "hyprSocketDispatchFocus");
-  dispatchHyprlandWithFallback(`hl.dsp.cursor.move({ x = ${cursorX}, y = ${cursorY} })`, "hyprSocketDispatchCursor");
+  focusAndWarpWindow(window.address);
 }
 
 function restoreMinimizedAndFocus(address: string): void {

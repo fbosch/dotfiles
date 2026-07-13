@@ -1,4 +1,5 @@
 local M = {}
+local async = require("lib.async")
 local monitor_role = require("lib.monitor_role")
 local order_state = require("layouts.shared.order_state")
 
@@ -21,10 +22,9 @@ local deltas = {
 }
 
 local dispatch = hl.dispatch
-local warp_command = "~/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh"
 local custom_layout_resize_command = "~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh"
-local warp_active = hl.dsp.exec_cmd(warp_command)
-local warp_active_after_focus = hl.dsp.exec_cmd(warp_command .. " 0.03")
+local warp_active = async.runtime_lua("windows/warp-cursor-to-active-window.lua")
+local warp_active_after_focus = async.runtime_lua("windows/warp-cursor-to-active-window.lua", "--delay", "0.03")
 local portrait_resize_up = hl.dsp.layout("resize-up")
 local portrait_resize_down = hl.dsp.layout("resize-down")
 local portrait_swap_up = hl.dsp.layout("swapprev")

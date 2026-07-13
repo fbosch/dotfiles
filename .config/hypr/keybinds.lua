@@ -1,6 +1,7 @@
 -- Keybindings ported from keybinds.conf.
 
 local programs = require("programs")
+local async = require("lib.async")
 local window = require("lib.window")
 local volume = require("actions.volume")
 local confirm_exit = require("actions.confirm-exit")
@@ -53,7 +54,7 @@ hl.bind(main_mod .. " + B", function()
 
 	hl.dispatch(hl.dsp.exec_cmd(programs.browser))
 end)
-hl.bind(main_mod .. " + W", hl.dsp.exec_cmd("lua ~/.config/hypr/runtime/windows/killactive-selective.lua"))
+hl.bind(main_mod .. " + W", async.runtime_lua("windows/killactive-selective.lua"))
 hl.bind(main_mod .. " + CTRL + C", hl.dsp.exec_cmd("~/.config/hypr/runtime/windows/confirm-hyprprop-kill.sh"))
 hl.bind(main_mod .. " + M", confirm_exit.confirm_exit)
 hl.bind(main_mod .. " + SHIFT + R", hl.dsp.exec_cmd("~/.config/hypr/runtime/desktop/reset-desktop.sh"))

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 iterations="${1:-100}"
-script="${HOME}/.config/hypr/runtime/windows/warp-cursor-to-active-window.sh"
+script=(lua "${HOME}/.config/hypr/runtime/windows/warp-cursor-to-active-window.lua")
 
 elapsed_ms() {
   local start="$1"
@@ -17,7 +17,7 @@ per_call_us() {
 
 start="$(date +%s.%N)"
 for ((index = 0; index < iterations; index++)); do
-  "$script"
+  "${script[@]}"
 done
 end="$(date +%s.%N)"
 script_ms="$(elapsed_ms "$start" "$end")"
@@ -28,5 +28,5 @@ hyprctl eval "$lua_code" >/dev/null
 end="$(date +%s.%N)"
 lua_ms="$(elapsed_ms "$start" "$end")"
 
-printf '%-34s %9d iters %10s us/call %8s ms total\n' "cursor-warp/shell-script" "$iterations" "$(per_call_us "$script_ms")" "$script_ms"
+printf '%-34s %9d iters %10s us/call %8s ms total\n' "cursor-warp/lua-script" "$iterations" "$(per_call_us "$script_ms")" "$script_ms"
 printf '%-34s %9d iters %10s us/call %8s ms total\n' "cursor-warp/lua-eval-loop" "$iterations" "$(per_call_us "$lua_ms")" "$lua_ms"
