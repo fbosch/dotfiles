@@ -75,6 +75,22 @@ function percentile(sorted: number[], fraction: number) {
   return sorted[Math.ceil(sorted.length * fraction) - 1]!
 }
 
+function summarize(name: string, samples: number[]): Benchmark {
+  const sorted = samples.toSorted((left, right) => left - right)
+  const meanMs = samples.reduce((sum, sample) => sum + sample, 0) / samples.length
+  const variance = samples.reduce((sum, sample) => sum + (sample - meanMs) ** 2, 0) / samples.length
+  return {
+    iterations: samples.length,
+    maxMs: sorted.at(-1)!,
+    meanMs,
+    medianMs: percentile(sorted, 0.5),
+    minMs: sorted[0]!,
+    name,
+    p95Ms: percentile(sorted, 0.95),
+    standardDeviationMs: Math.sqrt(variance),
+  }
+}
+
 async function benchmark(
   name: string,
   iterations: number,
@@ -96,19 +112,21 @@ async function benchmark(
     samples.push((Bun.nanoseconds() - start) / 1_000_000)
   }
 
-  const sorted = samples.toSorted((left, right) => left - right)
-  const meanMs = samples.reduce((sum, sample) => sum + sample, 0) / samples.length
-  const variance = samples.reduce((sum, sample) => sum + (sample - meanMs) ** 2, 0) / samples.length
-  return {
-    iterations,
-    maxMs: sorted.at(-1)!,
-    meanMs,
-    medianMs: percentile(sorted, 0.5),
-    minMs: sorted[0]!,
-    name,
-    p95Ms: percentile(sorted, 0.95),
-    standardDeviationMs: Math.sqrt(variance),
+  return summarize(name, samples)
+}
+
+async function benchmarkColdLibrary(name: string, preloadDelayMs: number) {
+  const samples: number[] = []
+  for (let index = 0; index < EXTERNAL_ITERATIONS; index += 1) {
+    const child = Bun.spawn([process.execPath, import.meta.path, "--cold-library-worker", String(preloadDelayMs)], {
+      stderr: "inherit",
+      stdout: "pipe",
+    })
+    const output = await new Response(child.stdout).text()
+    if ((await child.exited) !== 0) throw new Error("cold library benchmark worker failed")
+    samples.push(Number(output))
   }
+  return summarize(name, samples)
 }
 
 function printBenchmark(result: Benchmark) {
@@ -187,13 +205,17 @@ async function main() {
     )
 
     const pxpipeVersion = Bun.spawnSync(["pxpipe", "--version"]).stdout.toString().trim()
-    const libraryRenderer = new PxpipeRenderer()
-    const cliRenderer = new PxpipeRenderer("pxpipe", false)
     results.push(
       await benchmark("pxpipe identity, cold", EXTERNAL_ITERATIONS, EXTERNAL_WARMUP, async () => {
-        await new PxpipeRenderer().version()
+        await new PxpipeRenderer("pxpipe", false).version()
       }),
     )
+    results.push(await benchmarkColdLibrary("pxpipe library, first use", 0))
+    results.push(await benchmarkColdLibrary("pxpipe library, after 100ms", 100))
+    results.push(await benchmarkColdLibrary("pxpipe library, after 500ms", 500))
+    const libraryRenderer = new PxpipeRenderer()
+    const cliRenderer = new PxpipeRenderer("pxpipe", false)
+    await libraryRenderer.preload()
     results.push(
       await benchmark("pxpipe library render", EXTERNAL_ITERATIONS, EXTERNAL_WARMUP, async (iteration) => {
         await libraryRenderer.render(INSTRUCTIONS, MODEL_ID, join(root, `pxpipe-library-${iteration}`))
@@ -217,4 +239,21 @@ async function main() {
   }
 }
 
-await main()
+async function coldLibraryWorker(preloadDelayMs: number) {
+  const root = await mkdtemp(join(tmpdir(), "context-images-cold-bench-"))
+  try {
+    const renderer = new PxpipeRenderer()
+    if (preloadDelayMs > 0) await Bun.sleep(preloadDelayMs)
+    const start = Bun.nanoseconds()
+    await renderer.render(INSTRUCTIONS, MODEL_ID, join(root, "cache"))
+    process.stdout.write(String((Bun.nanoseconds() - start) / 1_000_000))
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}
+
+if (process.argv[2] === "--cold-library-worker") {
+  await coldLibraryWorker(Number(process.argv[3] ?? 0))
+} else {
+  await main()
+}

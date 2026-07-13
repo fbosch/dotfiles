@@ -34,6 +34,7 @@ test("PxpipeRenderer renders through the installed library", async () => {
       join(moduleDirectory, "export.js"),
       `
 export const DEFAULT_EXPORT_COLS = 312
+export const DEFAULT_EXPORT_MODEL = "model"
 export async function runExportCore() {
   const encode = (value) => new TextEncoder().encode(value)
   return { artifacts: [
@@ -45,7 +46,9 @@ export async function runExportCore() {
 `,
     )
 
-    const rendered = await new PxpipeRenderer(executable).render("instructions", "model", join(directory, "cache"))
+    const renderer = new PxpipeRenderer(executable)
+    await renderer.preload()
+    const rendered = await renderer.render("instructions", "model", join(directory, "cache"))
 
     expect(rendered.prompt).toBe("library prompt")
     expect(rendered.pages[0]?.toString()).toBe("library page")
@@ -62,7 +65,7 @@ test("PxpipeRenderer falls back to the CLI when library rendering fails", async 
     await mkdir(moduleDirectory, { recursive: true })
     await writeFile(
       join(moduleDirectory, "export.js"),
-      "export const DEFAULT_EXPORT_COLS = 312\nexport async function runExportCore() { throw new Error('failed') }\n",
+      "export const DEFAULT_EXPORT_COLS = 312\nexport const DEFAULT_EXPORT_MODEL = 'model'\nexport async function runExportCore() { throw new Error('failed') }\n",
     )
     await writeFile(
       executable,

@@ -12,7 +12,7 @@ Run the benchmark from this directory with `bun run bench`.
 
 ## Method
 
-The in-process cases use 10 warmup iterations and 50 measured iterations. The pxpipe render cases use one warmup and 10 measured iterations. Results below are the ranges from two consecutive runs on an otherwise interactive workstation.
+The in-process cases use 10 warmup iterations and 50 measured iterations. The warm pxpipe render cases use one warmup and 10 measured iterations. Cold library cases use 10 fresh Bun processes and report timing from inside each worker, excluding process launch. Results below are the ranges from two consecutive runs on an otherwise interactive workstation.
 
 The cache-miss case stubs rendering. It measures plugin overhead through render dispatch, not pxpipe. The pxpipe cases measure cold executable identity detection and the full library and CLI render paths, including cache publication and artifact reload.
 
@@ -22,18 +22,25 @@ The package script removes Bun's `npm_package_version` environment variable so t
 
 | Case | Mean range | Median range | p95 range |
 | --- | ---: | ---: | ---: |
-| Load rendered context | 0.115-0.150 ms | 0.074-0.088 ms | 0.135-0.225 ms |
-| Message transform, cache hit | 0.251-0.392 ms | 0.230-0.242 ms | 0.327-1.053 ms |
-| Message transform, cache miss | 0.164-0.190 ms | 0.142-0.152 ms | 0.230-0.241 ms |
-| System replacement | 0.042-0.046 ms | 0.040-0.042 ms | 0.063-0.077 ms |
-| Cold pxpipe identity | 0.400-0.622 ms | 0.340-0.459 ms | 0.678-1.430 ms |
-| Pxpipe library render | 21.538-22.865 ms | 21.287-21.917 ms | 26.214-28.570 ms |
-| Pxpipe CLI render | 429.061-429.798 ms | 402.927-429.243 ms | 466.808-619.340 ms |
+| Load rendered context | 0.098-0.113 ms | 0.070-0.078 ms | 0.134-0.303 ms |
+| Message transform, cache hit | 0.225-0.308 ms | 0.190-0.202 ms | 0.305-0.691 ms |
+| Message transform, cache miss | 0.161-0.175 ms | 0.115-0.139 ms | 0.207-0.288 ms |
+| System replacement | 0.041-0.043 ms | 0.039-0.041 ms | 0.062-0.068 ms |
+| Cold pxpipe identity | 0.271-0.298 ms | 0.231-0.290 ms | 0.385-0.403 ms |
+| Library first use, immediate | 594.579-597.199 ms | 590.469-593.541 ms | 620.623-630.929 ms |
+| Library first use, after 100 ms | 96.782-100.265 ms | 47.737-48.761 ms | 544.017-567.131 ms |
+| Library first use, after 500 ms | 40.193-41.487 ms | 38.655-42.019 ms | 49.038-52.281 ms |
+| Warm pxpipe library render | 16.474-17.320 ms | 15.395-17.910 ms | 19.748-22.482 ms |
+| Pxpipe CLI render | 351.518-387.236 ms | 341.509-385.022 ms | 397.619-405.984 ms |
 
-The recurring cached path is sub-millisecond. Persistent in-process rendering averages about 22 ms, while the CLI fallback averages about 429 ms. The library path is roughly 19 times faster and removes about 95% of render latency. Compare future results on the same host and inspect multiple runs before treating sub-millisecond differences as regressions.
+The recurring cached path is sub-millisecond. Warm in-process rendering averages 16-17 ms, roughly 21-23 times faster than the CLI fallback. Library import is expensive: an immediate first use costs about 596 ms. Background preload needs more than 100 ms to complete reliably; after 500 ms idle, first-request rendering averages 40-41 ms. Compare future results on the same host and inspect multiple runs before treating sub-millisecond differences as regressions.
 
 ## Change From Initial Baseline
 
 Replacing `pxpipe --version` with a SHA-256 identity of the resolved executable reduced cold cache-version lookup from 345.440-348.465 ms to 0.360-0.393 ms, about 99.9%. This removes roughly 347 ms from a first-process cache hit and from a first-process cache miss. Real rendering stayed near 400 ms.
 
 Loading pxpipe's `runExportCore` into the plugin process reduced a warm render from 429.061-429.798 ms through the CLI to 21.538-22.865 ms through the library. The plugin falls back to `pxpipe export` when package discovery, import, or library rendering fails.
+
+Starting package import and a tiny renderer warmup during plugin initialization reduced first-render latency after a 500 ms idle period from 608-615 ms to 40-41 ms. A 100 ms idle period was insufficient in one of ten samples per run.
+
+Returning validated in-memory artifacts after successful cache publication, instead of reading them before and after rename, reduced warm library rendering from 20.760 ms immediately before the change to 16.474-17.320 ms afterward.

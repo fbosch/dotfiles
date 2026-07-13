@@ -23,8 +23,14 @@ type ExportReport = {
   outDir?: unknown
 }
 
+type RenderOutput = {
+  directory: string
+  rendered?: RenderedContext
+}
+
 type ExportModule = {
   DEFAULT_EXPORT_COLS: number
+  DEFAULT_EXPORT_MODEL: string
   runExportCore(
     text: string,
     options: { cols: number; model: string; sourceFiles: string[] },
@@ -76,7 +82,11 @@ async function findExportModule(command: string) {
 function isExportModule(value: unknown): value is ExportModule {
   if (typeof value !== "object" || value === null) return false
   const module = value as Record<string, unknown>
-  return typeof module.DEFAULT_EXPORT_COLS === "number" && typeof module.runExportCore === "function"
+  return (
+    typeof module.DEFAULT_EXPORT_COLS === "number" &&
+    typeof module.DEFAULT_EXPORT_MODEL === "string" &&
+    typeof module.runExportCore === "function"
+  )
 }
 
 async function loadExportModule(command: string) {
@@ -151,11 +161,30 @@ export class PxpipeRenderer implements ContextRenderer {
   readonly #executable: string
   readonly #useLibrary: boolean
   #library?: Promise<ExportModule | undefined>
+  #libraryReady = false
+  #preload: Promise<void>
   #version?: Promise<string>
 
   constructor(executable = "pxpipe", useLibrary = true) {
     this.#executable = executable
     this.#useLibrary = useLibrary
+    if (useLibrary === false) {
+      this.#preload = Promise.resolve()
+      return
+    }
+
+    this.#library = loadExportModule(executable).catch(() => undefined)
+    this.#preload = this.#library
+      .then(async (library) => {
+        if (!library) return
+        await library.runExportCore("pxpipe warmup", {
+          cols: library.DEFAULT_EXPORT_COLS,
+          model: library.DEFAULT_EXPORT_MODEL,
+          sourceFiles: [],
+        })
+        this.#libraryReady = true
+      })
+      .catch(() => undefined)
   }
 
   version() {
@@ -163,8 +192,14 @@ export class PxpipeRenderer implements ContextRenderer {
     return this.#version
   }
 
+  preload() {
+    return this.#preload
+  }
+
   async #renderWithLibrary(text: string, modelID: string, temporaryRoot: string) {
     if (this.#useLibrary === false) return
+    await this.#preload
+    if (this.#libraryReady === false) return
     this.#library ??= loadExportModule(this.#executable)
     const library = await this.#library
     if (!library) return
@@ -182,8 +217,20 @@ export class PxpipeRenderer implements ContextRenderer {
     await Promise.all(
       result.artifacts.map((artifact) => writeFile(join(outputDirectory, artifact.filename), artifact.data)),
     )
-    await loadRenderedContext(outputDirectory)
-    return outputDirectory
+    const factsheet = result.artifacts.find((artifact) => artifact.filename === "factsheet.txt")
+    const prompt = result.artifacts.find((artifact) => artifact.filename === "prompt.txt")
+    const pages = result.artifacts
+      .filter((artifact) => /^page-\d+\.png$/.test(artifact.filename))
+      .sort((left, right) => left.filename.localeCompare(right.filename))
+    if (!factsheet || !prompt || pages.length === 0) throw new Error("pxpipe library returned incomplete artifacts")
+    return {
+      directory: outputDirectory,
+      rendered: {
+        factsheet: Buffer.from(factsheet.data).toString("utf8"),
+        pages: pages.map((page) => Buffer.from(page.data)),
+        prompt: Buffer.from(prompt.data).toString("utf8"),
+      },
+    }
   }
 
   async #renderWithCli(text: string, modelID: string, temporaryRoot: string) {
@@ -200,7 +247,7 @@ export class PxpipeRenderer implements ContextRenderer {
     if (outputDirectory.startsWith(root) === false) {
       throw new Error("pxpipe returned an output directory outside its temporary root")
     }
-    return outputDirectory
+    return { directory: outputDirectory }
   }
 
   async render(text: string, modelID: string, cacheDirectory: string) {
@@ -208,17 +255,17 @@ export class PxpipeRenderer implements ContextRenderer {
     await mkdir(cacheParent, { recursive: true })
     const temporaryRoot = await mkdtemp(join(cacheParent, ".staging-"))
     try {
-      let outputDirectory: string | undefined
+      let output: RenderOutput | undefined
       try {
-        outputDirectory = await this.#renderWithLibrary(text, modelID, temporaryRoot)
+        output = await this.#renderWithLibrary(text, modelID, temporaryRoot)
       } catch {
-        outputDirectory = undefined
+        output = undefined
       }
-      outputDirectory ??= await this.#renderWithCli(text, modelID, temporaryRoot)
+      output ??= await this.#renderWithCli(text, modelID, temporaryRoot)
 
-      await loadRenderedContext(outputDirectory)
+      const rendered = output.rendered ?? (await loadRenderedContext(output.directory))
       try {
-        await rename(outputDirectory, cacheDirectory)
+        await rename(output.directory, cacheDirectory)
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code
         if (code !== "EEXIST" && code !== "ENOTEMPTY") throw error
@@ -226,10 +273,10 @@ export class PxpipeRenderer implements ContextRenderer {
           return await loadRenderedContext(cacheDirectory)
         } catch {
           await rm(cacheDirectory, { recursive: true, force: true })
-          await rename(outputDirectory, cacheDirectory)
+          await rename(output.directory, cacheDirectory)
         }
       }
-      return await loadRenderedContext(cacheDirectory)
+      return rendered
     } finally {
       await rm(temporaryRoot, { recursive: true, force: true })
     }
