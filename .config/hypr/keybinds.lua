@@ -51,7 +51,7 @@ hl.bind(main_mod .. " + B", function()
 		end
 	end
 
-	hl.dispatch(hl.dsp.exec_cmd('flock -n "$XDG_RUNTIME_DIR/zen-browser-launch.lock" ' .. programs.browser))
+	hl.dispatch(hl.dsp.exec_cmd(programs.browser))
 end)
 hl.bind(main_mod .. " + W", hl.dsp.exec_cmd("~/.config/hypr/runtime/windows/killactive-selective.sh"))
 hl.bind(main_mod .. " + CTRL + C", hl.dsp.exec_cmd("~/.config/hypr/runtime/windows/confirm-hyprprop-kill.sh"))
