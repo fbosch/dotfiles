@@ -222,7 +222,7 @@
           "textVerbosity": "low"
         },
         "title": {
-          "model": "opencode/gpt-5.4-nano",
+          "model": "opencode/gpt-5.4-mini",
           "reasoningEffort": "low",
           "textVerbosity": "low"
         },
@@ -262,7 +262,7 @@
           "textVerbosity": "low"
         },
         "benchmark": {
-          "model": "openai/gpt-5.4-mini",
+          "model": "openai/gpt-5.4-mini-fast",
           "reasoningEffort": "low",
           "textVerbosity": "low"
         },
