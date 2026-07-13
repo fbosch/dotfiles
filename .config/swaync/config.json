@@ -17,6 +17,7 @@
   "timeout": 5,
   "timeout-low": 5,
   "timeout-critical": 0,
+  "notification-grouping": true,
   "fit-to-screen": false,
   "keyboard-shortcuts": true,
   "image-visibility": "when-available",
