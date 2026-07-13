@@ -118,7 +118,7 @@
     },
     "title": {
       "temperature": 0,
-      "model": "openai/gpt-5.4-mini",
+      "model": "opencode/gpt-5.4-nano",
       "reasoningEffort": "low",
       "textVerbosity": "low"
     },
