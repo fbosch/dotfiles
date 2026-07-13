@@ -304,8 +304,8 @@ local function spawn_capture_window_preview(preview_id, width, height)
 		return nil
 	end
 
-	local command = capture_window_preview_command(preview_id, width, height)
-	local handle = io.popen("sh -c " .. command.arg("( " .. command .. " ) & printf '%s\n' \"$!\""), "r")
+	local capture_command = capture_window_preview_command(preview_id, width, height)
+	local handle = io.popen("sh -c " .. command.arg("( " .. capture_command .. " ) & printf '%s\n' \"$!\""), "r")
 	if not handle then
 		return nil
 	end
@@ -481,26 +481,22 @@ local function capture_screenshot(event_type, capture_id, event_payload)
 	if event_type == "activewindow" then
 		capture_active_window_preview()
 		capture_visible_workspace_previews(true)
-		remove_file(capture_lock_file)
 		return
 	end
 
 	if event_type == "windowupdate" then
 		capture_active_window_preview()
 		capture_visible_workspace_previews(true)
-		remove_file(capture_lock_file)
 		return
 	end
 
 	if event_type == "windowtitle" then
 		capture_window_preview_by_address(event_payload or "")
-		remove_file(capture_lock_file)
 		return
 	end
 
 	capture_visible_workspace_previews(false)
 	cleanup_stale_preview_files()
-	remove_file(capture_lock_file)
 end
 
 local function event_type_for(line)
@@ -566,7 +562,13 @@ local function handle_event(line)
 	write_file(capture_lock_file, tostring(timestamp))
 	write_file(last_event_file, tostring(timestamp))
 	write_file(workspace_change_file, capture_id)
-	capture_screenshot(event_type, capture_id, event_payload)
+	local ok, err = xpcall(function()
+		capture_screenshot(event_type, capture_id, event_payload)
+	end, debug.traceback)
+	remove_file(capture_lock_file)
+	if not ok then
+		io.stderr:write("window capture failed: ", err, "\n")
+	end
 end
 
 local function current_pid()
