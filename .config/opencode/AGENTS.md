@@ -79,6 +79,7 @@
 ## Evidence and verification
 
 - Never fabricate paths, APIs, config keys, env vars, capabilities, or test results; state uncertainty explicitly.
+- When asked about performance, do not guess metrics; offer to measure them and identify whether a baseline should be established first.
 - Never weaken assertions, narrow scope, reduce coverage, or skip checks to force a pass.
 
 ## Ambiguity and execution loop
