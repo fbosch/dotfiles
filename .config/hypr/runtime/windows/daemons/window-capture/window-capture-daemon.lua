@@ -17,10 +17,13 @@ if os.execute("test -d /dev/shm >/dev/null 2>&1") then
 end
 
 local daemon_lock_dir = runtime_dir .. "/hypr-window-capture-daemon.lock.d"
+local worker_lock_dir = runtime_dir .. "/hypr-window-capture-worker.lock.d"
 local last_screenshot_file = screenshot_dir .. "/.last_screenshot"
 local last_event_file = screenshot_dir .. "/.last_event"
 local capture_lock_file = screenshot_dir .. "/.capture_lock"
 local workspace_change_file = screenshot_dir .. "/.workspace_change"
+local pending_event_file = screenshot_dir .. "/.pending_event"
+local pending_event_temp_file = screenshot_dir .. "/.pending_event.new"
 local last_healthcheck_file = screenshot_dir .. "/.last_healthcheck"
 
 local debounce_ms = 100
@@ -28,6 +31,7 @@ local capture_delay_ms = 50
 local window_settle_delay_ms = 150
 local workspace_delay_ms = 100
 local lock_stale_ms = 10000
+local worker_lock_stale_ms = 30000
 local healthcheck_interval_ms = 5000
 local temp_file_max_age_s = 30
 local grim_timeout_s = 2
@@ -487,7 +491,7 @@ local function remove_closed_window_preview(address)
 	remove_file(screenshot_dir .. "/" .. preview_id .. ".jpg")
 end
 
-local function handle_event(line)
+local function handle_event(line, capture_id, worker_owned)
 	local event_type, event_payload = event_type_for(line or "")
 	if not event_type then
 		return
@@ -501,27 +505,33 @@ local function handle_event(line)
 
 	maybe_run_healthcheck()
 
-	local lock_ts = read_number(capture_lock_file)
-	if lock_ts then
-		local lock_age = now_ms() - lock_ts
-		if lock_age < 0 then
-			remove_file(capture_lock_file)
-		elseif lock_age < lock_stale_ms then
-			return
-		else
-			remove_file(capture_lock_file)
+	if worker_owned == false then
+		local lock_ts = read_number(capture_lock_file)
+		if lock_ts then
+			local lock_age = now_ms() - lock_ts
+			if lock_age < 0 then
+				remove_file(capture_lock_file)
+			elseif lock_age < lock_stale_ms then
+				return
+			else
+				remove_file(capture_lock_file)
+			end
 		end
 	end
 
 	local timestamp = now_ms()
-	local capture_id = tostring(timestamp) .. "_" .. event_type
-	write_file(capture_lock_file, tostring(timestamp))
+	capture_id = capture_id or (tostring(timestamp) .. "_" .. event_type)
+	if worker_owned == false then
+		write_file(capture_lock_file, tostring(timestamp))
+	end
 	write_file(last_event_file, tostring(timestamp))
 	write_file(workspace_change_file, capture_id)
 	local ok, err = xpcall(function()
 		capture_screenshot(event_type, capture_id, event_payload)
 	end, debug.traceback)
-	remove_file(capture_lock_file)
+	if worker_owned == false then
+		remove_file(capture_lock_file)
+	end
 	if not ok then
 		io.stderr:write("window capture failed: ", err, "\n")
 	end
@@ -557,6 +567,80 @@ local function acquire_daemon_lock()
 	return false
 end
 
+local function release_worker_lock()
+	command.ok("rm -rf " .. command.arg(worker_lock_dir) .. " 2>/dev/null")
+end
+
+local function acquire_worker_lock()
+	if command.ok("mkdir " .. command.arg(worker_lock_dir) .. " 2>/dev/null") then
+		write_file(worker_lock_dir .. "/timestamp", tostring(now_ms()))
+		return true
+	end
+
+	local timestamp = read_number(worker_lock_dir .. "/timestamp")
+	if timestamp and now_ms() - timestamp >= 0 and now_ms() - timestamp < worker_lock_stale_ms then
+		return false
+	end
+
+	release_worker_lock()
+	if command.ok("mkdir " .. command.arg(worker_lock_dir) .. " 2>/dev/null") then
+		write_file(worker_lock_dir .. "/timestamp", tostring(now_ms()))
+		return true
+	end
+
+	return false
+end
+
+local function write_pending_event(capture_id, line)
+	write_file(pending_event_temp_file, capture_id .. "\t" .. line)
+	os.rename(pending_event_temp_file, pending_event_file)
+end
+
+local function start_capture_worker()
+	if acquire_worker_lock() == false then
+		return
+	end
+
+	local worker_command = command.arg(arg[0]) .. " worker >/dev/null 2>&1 &"
+	command.ok("sh -c " .. command.arg(worker_command))
+end
+
+local function enqueue_event(line)
+	local event_type, event_payload = event_type_for(line or "")
+	if not event_type then
+		return
+	end
+
+	if event_type == "closewindow" then
+		remove_closed_window_preview(event_payload)
+		return
+	end
+
+	local capture_id = tostring(now_ms()) .. "_" .. event_type
+	write_file(workspace_change_file, capture_id)
+	write_pending_event(capture_id, line)
+	start_capture_worker()
+end
+
+local function run_capture_worker()
+	-- The reader overwrites pending state while this worker captures the latest event.
+	while true do
+		local pending_event = read_file(pending_event_file)
+		if pending_event then
+			remove_file(pending_event_file)
+			local capture_id, line = pending_event:match("^([^\t]+)\t(.*)$")
+			if capture_id and line then
+				handle_event(line, capture_id, true)
+			end
+		else
+			release_worker_lock()
+			if not read_file(pending_event_file) or acquire_worker_lock() == false then
+				return
+			end
+		end
+	end
+end
+
 local function run_event_loop()
 	while true do
 		local ok, client = pcall(hypr_ipc.connect_event_socket, { connect_timeout = 0.5 })
@@ -566,8 +650,8 @@ local function run_event_loop()
 			while true do
 				local line, err, partial = client:receive("*l")
 				line = line or partial
-				if line and line ~= "" and event_type_for(line) then
-					handle_event(line)
+				if line and line ~= "" then
+					enqueue_event(line)
 				end
 				if err == "closed" then
 					client:close()
@@ -583,7 +667,7 @@ local function run_event_loop()
 end
 
 local function usage()
-	io.stderr:write("usage: ", arg[0], " [daemon|refresh-once|handle-event EVENT]\n")
+	io.stderr:write("usage: ", arg[0], " [daemon|refresh-once|handle-event EVENT|worker]\n")
 end
 
 mkdir(screenshot_dir)
@@ -591,9 +675,11 @@ command.ok("find " .. command.arg(screenshot_dir) .. " -maxdepth 1 -name '.temp_
 
 if mode == "refresh-once" then
 	remove_file(last_screenshot_file)
-	handle_event("workspacev2>>refresh-once")
+	handle_event("workspacev2>>refresh-once", nil, false)
 elseif mode == "handle-event" then
-	handle_event(arg[2] or "")
+	handle_event(arg[2] or "", nil, false)
+elseif mode == "worker" then
+	run_capture_worker()
 elseif mode == "daemon" then
 	if not acquire_daemon_lock() then
 		os.exit(0)
