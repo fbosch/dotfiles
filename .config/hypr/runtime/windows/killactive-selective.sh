@@ -7,6 +7,7 @@ source "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
 PROFILECTL="$HOME/.config/hypr/runtime/profiles/profilectl.sh"
 SCRIPT_PATH="$HOME/.config/hypr/runtime/windows/killactive-selective.sh"
+GAMING_CLOSE_POLICY="$HOME/.config/hypr/runtime/windows/matches-gaming-close-policy.lua"
 AGS_START_SCRIPT="$HOME/.config/ags/start-daemons.sh"
 
 readonly ACTION_KILL="kill"
@@ -36,16 +37,10 @@ notify_close_action() {
   fi
 }
 
-is_gaming_protected_window() {
-  local app_class="$1"
-
-  [[ "$app_class" =~ ^(gamescope|steam_app_.*)$ ]]
-}
-
 rule_confirm_gaming_protected_window() {
-  local app_class="$1"
+	local window_json="$1"
 
-  if "$PROFILECTL" is-active gaming && is_gaming_protected_window "$app_class"; then
+	if "$PROFILECTL" is-active gaming && lua "$GAMING_CLOSE_POLICY" <<< "$window_json"; then
     printf '%s\n' "$ACTION_CONFIRM"
     return 0
   fi
@@ -54,9 +49,9 @@ rule_confirm_gaming_protected_window() {
 }
 
 resolve_close_action() {
-  local app_class="$1"
+	local window_json="$1"
 
-  if action="$(rule_confirm_gaming_protected_window "$app_class")"; then
+	if action="$(rule_confirm_gaming_protected_window "$window_json")"; then
     printf '%s\n' "$action"
     return
   fi
@@ -135,10 +130,9 @@ if [[ "${1:-}" == "--confirmed-address" ]]; then
 fi
 
 active_window_json="$(hypr_query 'j/activewindow' || printf '{}')"
-app_class="$(jq -r 'if (.class // "") != "" then .class else (.initialClass // "") end' <<< "$active_window_json")"
 title="$(jq -r '.title // ""' <<< "$active_window_json")"
 address="$(jq -r '.address // ""' <<< "$active_window_json")"
 
-action="$(resolve_close_action "$app_class")"
+action="$(resolve_close_action "$active_window_json")"
 
 run_close_action "$action" "$title" "$address"

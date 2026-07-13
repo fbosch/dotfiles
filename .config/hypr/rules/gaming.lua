@@ -19,6 +19,7 @@ M.default_presentation = {
 ---@field enable_profile? boolean Activates the gaming profile for this window.
 ---@field exclude_profile? boolean Prevents this window from activating the gaming profile.
 ---@field freeze? boolean `false` excludes this window from watchdog `wl-freeze` handling.
+---@field confirm_close? boolean Requires confirmation before `CMD+W` closes this window.
 ---@field presentation? GamingPresentation Presentation settings when the gaming profile is active.
 
 ---@type GamingPolicy[]
@@ -32,6 +33,7 @@ M.games = {
 		suppress_event = "fullscreen",
 		enable_profile = true,
 		freeze = false,
+		confirm_close = true,
 		presentation = {
 			vrr = 0,
 			direct_scanout = 1,
@@ -47,6 +49,7 @@ M.games = {
 		fullscreen_state = "2 0",
 		enable_profile = true,
 		freeze = false,
+		confirm_close = true,
 		presentation = {
 			vrr = 2,
 			direct_scanout = 1,
@@ -67,6 +70,21 @@ M.games = {
 			{ title = "[Ff]augus" },
 		},
 		exclude_profile = true,
+	},
+	{
+		name = "gamescope",
+		selectors = {
+			{ class = "^(gamescope)$" },
+		},
+		confirm_close = true,
+	},
+	{
+		name = "steam-app",
+		selectors = {
+			{ class = "^(steam_app_[0-9]+)$" },
+			{ initial_class = "^(steam_app_[0-9]+)$" },
+		},
+		confirm_close = true,
 	},
 }
 
@@ -105,6 +123,11 @@ end
 function M.is_profile_excluded(window)
 	local game = M.match(window)
 	return game ~= nil and game.exclude_profile == true
+end
+
+function M.requires_close_confirmation(window)
+	local game = M.match(window)
+	return game ~= nil and game.confirm_close == true
 end
 
 local function gaming_window_rule(selector, fullscreen_state, content, suppress_event)
