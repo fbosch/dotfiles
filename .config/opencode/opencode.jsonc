@@ -21,6 +21,7 @@
     "opencode-wakatime@1.3.8",
     "opencode-toon-plugin@0.1.2",
     "./plugins/headroom-opencode-transport.ts",
+    "./plugins/responses-lite-compat/responses-lite-compat.ts",
     "./plugins/rtk.ts",
     "./plugins/opencode-handoff/handoff.ts"
   ],

@@ -3,6 +3,6 @@
 return {
 	terminal = "uwsm-app -s a -- wezterm",
 	file_manager = "uwsm-app -s a -- nemo",
-	browser = "~/.config/hypr/runtime/desktop/launch-browser.sh",
+	browser = "uwsm-app -s a -- flatpak run app.zen_browser.zen",
 	menu = "vicinae toggle",
 }
