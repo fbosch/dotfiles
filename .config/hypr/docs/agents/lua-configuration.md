@@ -33,7 +33,7 @@ Sources:
 
 - Use `require` for stable hand-written modules.
 - Hyprland sets Lua `package.path` to include the config directory as `?.lua` and `?/init.lua`.
-- Module names are rooted at `.config/hypr`: use `require("programs")` for `programs.lua`, `require("rules")` for `rules/init.lua`, and `require("actions.close-active")` for `actions/close-active.lua`.
+- Module names are rooted at `.config/hypr`: use `require("programs")` for `programs.lua`, `require("rules")` for `rules/init.lua`, and `require("actions.confirm-exit")` for `actions/confirm-exit.lua`.
 - Hyphenated filenames are valid in quoted module names, but future hand-written files should prefer underscores when there is no existing filename to preserve.
 - The Lua entrypoint prepends the same config-root paths to `package.path` so plain `lua .config/hypr/hyprland.lua` validates the same module layout.
 - On reload, Hyprland clears non-stdlib `package.loaded` entries, so required user modules re-run.
