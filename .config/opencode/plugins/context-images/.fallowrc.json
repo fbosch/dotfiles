@@ -2,6 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
   "entry": [
     "context-images.ts",
+    "context-images.bench.ts",
     "src/plugin.ts",
     "src/context-images.test.ts",
     "src/logger.test.ts"

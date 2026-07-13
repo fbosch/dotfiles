@@ -5,6 +5,7 @@
   "type": "module",
   "exports": "./context-images.ts",
   "scripts": {
+    "bench": "env -u npm_package_version bun context-images.bench.ts",
     "test": "bun test"
   },
   "peerDependencies": {
