@@ -213,6 +213,44 @@ describe("ContextImagesService", () => {
     }
   })
 
+  test("preserves text instructions during compaction", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    await writeFile(join(worktree, "AGENTS.md"), "Instructions.\n")
+    const renderer = new FakeRenderer()
+    const service = new ContextImagesService({ cacheRoot, renderer, sources: ["AGENTS.md"], worktree })
+    const parts: Part[] = []
+    service.markCompacting("session-1")
+
+    await service.transformMessages({}, { messages: [{ info: userMessage(), parts }] })
+
+    expect(parts).toEqual([])
+    expect(renderer.renders).toBe(0)
+  })
+
+  test("preserves text instructions for models without image input", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const instructionContent = "Instructions.\n"
+    await writeFile(join(worktree, "AGENTS.md"), instructionContent)
+    const service = new ContextImagesService({
+      cacheRoot,
+      renderer: new FakeRenderer(),
+      sources: ["AGENTS.md"],
+      worktree,
+    })
+    const system = [`Instructions from: ${join(worktree, "AGENTS.md")}\n${instructionContent}`]
+
+    await service.transformMessages({}, { messages: [{ info: userMessage(), parts: [] }] })
+    await service.transformSystem(
+      { sessionID: "session-1", model: { id: "text-model", capabilities: { input: { image: false } } } },
+      { system },
+    )
+
+    expect(system[0]).toContain(instructionContent)
+    expect(system[0]).not.toContain("attached to the latest user message")
+  })
+
   test("discovers global, hierarchical, and configured instructions", async () => {
     const worktree = await temporaryDirectory()
     const directory = join(worktree, "nested")

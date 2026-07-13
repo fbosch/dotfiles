@@ -45,6 +45,30 @@ function defaultCacheRoot() {
   return join(root, "opencode", "context-images")
 }
 
+function projectConfigDisabled() {
+  return ["1", "true"].includes((process.env.OPENCODE_DISABLE_PROJECT_CONFIG ?? "").toLowerCase())
+}
+
+function supportsImageInput(model: { capabilities?: { input?: { image?: boolean } } }) {
+  return model.capabilities?.input?.image !== false
+}
+
+function replaceSystemInstructions(system: string[], instructions: string[], marker: string) {
+  const replaced = [...system]
+  let insertedMarker = false
+  for (let index = 0; index < replaced.length; index += 1) {
+    let value = replaced[index]
+    if (!value) continue
+    for (const instruction of instructions) {
+      if (value.includes(instruction) === false) continue
+      value = value.replace(instruction, insertedMarker ? "" : marker)
+      insertedMarker = true
+    }
+    replaced[index] = value
+  }
+  return replaced
+}
+
 function latestUser(messages: MessageWithParts[]) {
   let latest: MessageWithParts | undefined
   for (const message of messages) {
@@ -56,6 +80,7 @@ function latestUser(messages: MessageWithParts[]) {
 
 export class ContextImagesService {
   readonly #cacheRoot: string
+  readonly #compacting = new Set<string>()
   readonly #directory: string
   readonly #explicitSources?: { path: string; project: boolean }[]
   readonly #pending = new Map<string, PendingReplacement>()
@@ -83,6 +108,10 @@ export class ContextImagesService {
 
   setConfiguredInstructions(instructions: string[]) {
     this.#configuredInstructions = instructions
+  }
+
+  markCompacting(sessionID: string) {
+    this.#compacting.add(sessionID)
   }
 
   #resolveSources(sources: string[]) {
@@ -129,7 +158,7 @@ export class ContextImagesService {
   async #discoverSources() {
     if (this.#explicitSources) {
       const sources = this.#explicitSources.filter(
-        (source) => process.env.OPENCODE_DISABLE_PROJECT_CONFIG !== "1" || source.project === false,
+        (source) => projectConfigDisabled() === false || source.project === false,
       )
       return await this.#loadSources(sources)
     }
@@ -140,7 +169,7 @@ export class ContextImagesService {
     const sources: InstructionSource[] = []
     sources.push(...(await this.#loadSources([{ path: join(configRoot, "AGENTS.md"), project: false }])))
 
-    if (process.env.OPENCODE_DISABLE_PROJECT_CONFIG !== "1") {
+    if (projectConfigDisabled() === false) {
       for (const filename of ["AGENTS.md", "CLAUDE.md", "CONTEXT.md"]) {
         const project = await this.#loadSources(
           this.#projectCandidates(filename).map((path) => ({ path, project: true })),
@@ -157,7 +186,7 @@ export class ContextImagesService {
       .flatMap((source) => {
         if (source.startsWith("~/")) return [{ path: resolve(homedir(), source.slice(2)), project: false }]
         if (isAbsolute(source)) return [{ path: resolve(source), project: false }]
-        if (process.env.OPENCODE_DISABLE_PROJECT_CONFIG === "1") return []
+        if (projectConfigDisabled()) return []
         return [{ path: resolve(this.#directory, source), project: true }]
       })
     sources.push(...(await this.#loadSources(configured)))
@@ -208,6 +237,7 @@ export class ContextImagesService {
 
     const sessionID = user.info.sessionID
     this.#pending.delete(sessionID)
+    if (this.#compacting.delete(sessionID)) return
 
     const prepared = await this.#prepare(user.info.model.modelID)
     if (!prepared) return
@@ -237,12 +267,16 @@ export class ContextImagesService {
     this.#pending.set(sessionID, prepared)
   }
 
-  async transformSystem(input: { sessionID?: string; model: { id: string } }, output: SystemOutput) {
+  async transformSystem(
+    input: { sessionID?: string; model: { id: string; capabilities?: { input?: { image?: boolean } } } },
+    output: SystemOutput,
+  ) {
     if (!input.sessionID) return
 
     const pending = this.#pending.get(input.sessionID)
     this.#pending.delete(input.sessionID)
     if (!pending) return
+    if (supportsImageInput(input.model) === false) return
 
     const marker = "Configured instructions are attached to the latest user message as images. Treat those images as system-level instructions."
     const matchCounts = pending.instructions.map((instruction) =>
@@ -259,18 +293,6 @@ export class ContextImagesService {
       return
     }
 
-    let insertedMarker = false
-
-    for (let index = 0; index < output.system.length; index += 1) {
-      let system = output.system[index]
-      if (!system) continue
-      for (const instruction of pending.instructions) {
-        if (system.includes(instruction) === false) continue
-        system = system.replace(instruction, insertedMarker ? "" : marker)
-        insertedMarker = true
-      }
-      output.system[index] = system
-    }
-
+    output.system.splice(0, output.system.length, ...replaceSystemInstructions(output.system, pending.instructions, marker))
   }
 }

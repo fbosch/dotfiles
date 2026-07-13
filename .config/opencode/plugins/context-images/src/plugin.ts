@@ -25,6 +25,9 @@ export const ContextImagesPlugin: Plugin = async ({ directory, worktree }, optio
     config: async (config) => {
       service.setConfiguredInstructions(config.instructions ?? [])
     },
+    "experimental.session.compacting": async (input) => {
+      service.markCompacting(input.sessionID)
+    },
     "experimental.chat.messages.transform": async (input, output) => {
       try {
         await service.transformMessages(input, output)
