@@ -172,6 +172,7 @@ type PreviewCacheEntry = {
 };
 
 const previewCache = new Map<string, PreviewCacheEntry>();
+let previewCacheMonitor: Gio.FileMonitor | null = null;
 
 // Persistent focus history for recency-based sorting
 // Most recently focused window is at index 0
@@ -271,6 +272,39 @@ const PREVIEW_CACHE_DIR = GLib.file_test("/dev/shm", GLib.FileTest.IS_DIR)
   ? "/dev/shm/hypr-window-captures"
   : `${GLib.get_tmp_dir()}/hypr-window-captures`;
 
+function previewMtime(fileInfo: Gio.FileInfo): number {
+  const modified = fileInfo.get_modification_time();
+  return modified.tv_sec * 1_000_000 + modified.tv_usec;
+}
+
+function ensurePreviewCacheMonitor() {
+  if (previewCacheMonitor || !GLib.file_test(PREVIEW_CACHE_DIR, GLib.FileTest.IS_DIR)) {
+    return;
+  }
+
+  const directory = Gio.File.new_for_path(PREVIEW_CACHE_DIR);
+  previewCacheMonitor = directory.monitor_directory(Gio.FileMonitorFlags.NONE, null);
+  previewCacheMonitor.connect("changed", (_monitor, file, otherFile) => {
+    const previewPaths = [file.get_path(), otherFile?.get_path()];
+    const previewChanged = previewPaths.some(
+      (path) => path?.startsWith(`${PREVIEW_CACHE_DIR}/`) && path.endsWith(".jpg"),
+    );
+    if (!previewChanged) {
+      return;
+    }
+
+    for (const path of previewPaths) {
+      if (path) {
+        previewCache.delete(path);
+      }
+    }
+
+    if (state === SwitcherState.ACTIVE && displayMode === DisplayMode.PREVIEWS) {
+      updateSwitcher();
+    }
+  });
+}
+
 // Get window preview path if it exists (screenshots managed by window-capture-daemon.sh)
 // Screenshots are named {stableId}.jpg, with {address}.jpg as a legacy fallback.
 function captureWindowPreview(window: WindowInfo): string | null {
@@ -339,11 +373,11 @@ function getPreviewInfo(imagePath: string | null): PreviewCacheEntry {
   try {
     const file = Gio.File.new_for_path(imagePath);
     const fileInfo = file.query_info(
-      "time::modified",
+      "time::modified,time::modified-usec",
       Gio.FileQueryInfoFlags.NONE,
       null,
     );
-    const mtime = fileInfo.get_modification_time().tv_sec;
+    const mtime = previewMtime(fileInfo);
 
     const cached = previewCache.get(imagePath);
     if (cached && cached.mtime === mtime) {
@@ -766,18 +800,14 @@ let previousPreviewMtimes: Map<string, number> = new Map();
 
 function getPreviewMtime(previewPath: string | null): number | null {
   if (!previewPath) return null;
-  const cached = previewCache.get(previewPath);
-  if (cached) {
-    return cached.mtime;
-  }
   try {
     const file = Gio.File.new_for_path(previewPath);
     const fileInfo = file.query_info(
-      "time::modified",
+      "time::modified,time::modified-usec",
       Gio.FileQueryInfoFlags.NONE,
       null,
     );
-    return fileInfo.get_modification_time().tv_sec;
+    return previewMtime(fileInfo);
   } catch (e) {
     console.error("Failed to read preview mtime:", e);
     return null;
@@ -1498,6 +1528,7 @@ function applyStaticCSS() {
 
 // Helper functions for request handler
 async function handleShowAction() {
+  ensurePreviewCacheMonitor();
   // Window is pre-created at init for Alt monitoring
   const windows = await getWindows();
   if (windows.length <= 1) {
