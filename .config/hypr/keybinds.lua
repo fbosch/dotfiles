@@ -43,7 +43,16 @@ hl.bind("PRINT", hl.dsp.exec_cmd("bash ~/.config/hypr/runtime/capture/screenshot
 hl.bind("CTRL + SHIFT + O", hl.dsp.exec_cmd("bash ~/.config/hypr/runtime/capture/screenshot.sh ocr"))
 
 hl.bind(main_mod .. " + Q", hl.dsp.exec_cmd(programs.terminal))
-hl.bind(main_mod .. " + B", hl.dsp.exec_cmd(programs.browser))
+hl.bind(main_mod .. " + B", function()
+	for _, client in ipairs(hl.get_windows()) do
+		if client.class == "app.zen_browser.zen" and (client.title or ""):match("^Extension:") == nil then
+			hl.dispatch(hl.dsp.send_shortcut({ mods = "CTRL", key = "N", window = client }))
+			return
+		end
+	end
+
+	hl.dispatch(hl.dsp.exec_cmd('flock -n "$XDG_RUNTIME_DIR/zen-browser-launch.lock" ' .. programs.browser))
+end)
 hl.bind(main_mod .. " + W", hl.dsp.exec_cmd("~/.config/hypr/runtime/windows/killactive-selective.sh"))
 hl.bind(main_mod .. " + CTRL + C", hl.dsp.exec_cmd("~/.config/hypr/runtime/windows/confirm-hyprprop-kill.sh"))
 hl.bind(main_mod .. " + M", confirm_exit.confirm_exit)
@@ -59,7 +68,10 @@ hl.bind(main_mod .. " + CTRL + SHIFT + F", hl.dsp.pass({ window = "class:^(xfree
 hl.bind(main_mod .. " + D", hl.dsp.exec_cmd("~/.config/hypr/runtime/windows/toggle-show-desktop.sh"))
 
 hl.bind(main_mod .. " + Z", hl.dsp.exec_cmd("~/.config/hypr/runtime/windows/minimized-state.lua toggle-window"))
-hl.bind(main_mod .. " + SHIFT + Z", hl.dsp.exec_cmd("~/.config/hypr/runtime/windows/minimized-state.lua toggle-workspace"))
+hl.bind(
+	main_mod .. " + SHIFT + Z",
+	hl.dsp.exec_cmd("~/.config/hypr/runtime/windows/minimized-state.lua toggle-workspace")
+)
 hl.bind(main_mod .. " + X", window.hide_from_current_workspace)
 
 hl.bind(main_mod .. " + H", window.focus("left"))
