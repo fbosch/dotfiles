@@ -5,7 +5,8 @@
     "context-images.bench.ts",
     "src/plugin.ts",
     "src/context-images.test.ts",
-    "src/logger.test.ts"
+    "src/logger.test.ts",
+    "src/pxpipe.test.ts"
   ],
   "usedClassMembers": [
     {

@@ -12,21 +12,28 @@ Run the benchmark from this directory with `bun run bench`.
 
 ## Method
 
-The in-process cases use 10 warmup iterations and 50 measured iterations. The real pxpipe render uses one warmup and 10 measured iterations. Results below are the ranges from two consecutive runs on an otherwise interactive workstation.
+The in-process cases use 10 warmup iterations and 50 measured iterations. The pxpipe render cases use one warmup and 10 measured iterations. Results below are the ranges from two consecutive runs on an otherwise interactive workstation.
 
-The cache-miss case stubs rendering. It measures plugin overhead through render dispatch, not pxpipe. The pxpipe cases measure cold version detection and the real export, cache publication, and artifact reload path separately.
+The cache-miss case stubs rendering. It measures plugin overhead through render dispatch, not pxpipe. The pxpipe cases measure cold executable identity detection and the full library and CLI render paths, including cache publication and artifact reload.
 
-The package script removes Bun's `npm_package_version` environment variable. Without that, `pxpipe --version` reports this package's version instead of the pxpipe version and produces an invalid cache key.
+The package script removes Bun's `npm_package_version` environment variable so the displayed pxpipe version is accurate.
 
 ## Baseline
 
 | Case | Mean range | Median range | p95 range |
 | --- | ---: | ---: | ---: |
-| Load rendered context | 0.085-0.102 ms | 0.066-0.068 ms | 0.180-0.220 ms |
-| Message transform, cache hit | 0.238-0.270 ms | 0.185-0.201 ms | 0.470-0.567 ms |
-| Message transform, cache miss | 0.184-0.191 ms | 0.131-0.135 ms | 0.218-0.244 ms |
-| System replacement | 0.046-0.047 ms | 0.040-0.045 ms | 0.059-0.085 ms |
-| Cold pxpipe version | 345.440-348.465 ms | 344.398-347.593 ms | 362.204-365.283 ms |
-| Real pxpipe render | 387.391-397.522 ms | 392.356-394.865 ms | 413.046-418.571 ms |
+| Load rendered context | 0.115-0.150 ms | 0.074-0.088 ms | 0.135-0.225 ms |
+| Message transform, cache hit | 0.251-0.392 ms | 0.230-0.242 ms | 0.327-1.053 ms |
+| Message transform, cache miss | 0.164-0.190 ms | 0.142-0.152 ms | 0.230-0.241 ms |
+| System replacement | 0.042-0.046 ms | 0.040-0.042 ms | 0.063-0.077 ms |
+| Cold pxpipe identity | 0.400-0.622 ms | 0.340-0.459 ms | 0.678-1.430 ms |
+| Pxpipe library render | 21.538-22.865 ms | 21.287-21.917 ms | 26.214-28.570 ms |
+| Pxpipe CLI render | 429.061-429.798 ms | 402.927-429.243 ms | 466.808-619.340 ms |
 
-The recurring cached path is sub-millisecond. A new plugin process adds about 347 ms for version detection, even on a cache hit. A first-process cache miss costs about 740 ms across version detection and rendering; subsequent renders cost about 390 ms. Compare future results on the same host and inspect multiple runs before treating sub-millisecond differences as regressions.
+The recurring cached path is sub-millisecond. Persistent in-process rendering averages about 22 ms, while the CLI fallback averages about 429 ms. The library path is roughly 19 times faster and removes about 95% of render latency. Compare future results on the same host and inspect multiple runs before treating sub-millisecond differences as regressions.
+
+## Change From Initial Baseline
+
+Replacing `pxpipe --version` with a SHA-256 identity of the resolved executable reduced cold cache-version lookup from 345.440-348.465 ms to 0.360-0.393 ms, about 99.9%. This removes roughly 347 ms from a first-process cache hit and from a first-process cache miss. Real rendering stayed near 400 ms.
+
+Loading pxpipe's `runExportCore` into the plugin process reduced a warm render from 429.061-429.798 ms through the CLI to 21.538-22.865 ms through the library. The plugin falls back to `pxpipe export` when package discovery, import, or library rendering fails.

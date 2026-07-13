@@ -1,6 +1,9 @@
 import { spawn } from "node:child_process"
-import { mkdir, mkdtemp, readFile, readdir, rename, rm } from "node:fs/promises"
-import { dirname, join, resolve, sep } from "node:path"
+import { createHash } from "node:crypto"
+import { constants } from "node:fs"
+import { access, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises"
+import { basename, delimiter, dirname, join, resolve, sep } from "node:path"
+import { pathToFileURL } from "node:url"
 
 const MAX_PROCESS_OUTPUT_BYTES = 1024 * 1024
 const PROCESS_TIMEOUT_MS = 60_000
@@ -20,9 +23,72 @@ type ExportReport = {
   outDir?: unknown
 }
 
-async function runPxpipe(args: string[], stdin?: string) {
+type ExportModule = {
+  DEFAULT_EXPORT_COLS: number
+  runExportCore(
+    text: string,
+    options: { cols: number; model: string; sourceFiles: string[] },
+  ): Promise<{ artifacts: { data: Uint8Array; filename: string }[] }>
+}
+
+async function resolveExecutable(command: string) {
+  if (command.includes(sep)) return await realpath(command)
+
+  for (const directory of (process.env.PATH ?? "").split(delimiter)) {
+    const candidate = join(directory || ".", command)
+    try {
+      await access(candidate, constants.X_OK)
+      return await realpath(candidate)
+    } catch {
+      continue
+    }
+  }
+  throw new Error(`${command} executable was not found in PATH`)
+}
+
+async function executableIdentity(command: string) {
+  const executable = await resolveExecutable(command)
+  const content = await readFile(executable)
+  return createHash("sha256").update(executable).update("\0").update(content).digest("hex")
+}
+
+async function findExportModule(command: string) {
+  let directory = dirname(await resolveExecutable(command))
+  while (true) {
+    for (const candidate of [
+      join(directory, "dist", "core", "export.js"),
+      join(directory, "lib", "pxpipe", "dist", "core", "export.js"),
+    ]) {
+      try {
+        await access(candidate, constants.R_OK)
+        return candidate
+      } catch {
+        continue
+      }
+    }
+
+    const parent = dirname(directory)
+    if (parent === directory) return
+    directory = parent
+  }
+}
+
+function isExportModule(value: unknown): value is ExportModule {
+  if (typeof value !== "object" || value === null) return false
+  const module = value as Record<string, unknown>
+  return typeof module.DEFAULT_EXPORT_COLS === "number" && typeof module.runExportCore === "function"
+}
+
+async function loadExportModule(command: string) {
+  const modulePath = await findExportModule(command)
+  if (!modulePath) return
+  const module: unknown = await import(pathToFileURL(modulePath).href)
+  return isExportModule(module) ? module : undefined
+}
+
+async function runPxpipe(executable: string, args: string[], stdin?: string) {
   return await new Promise<string>((resolveOutput, reject) => {
-    const child = spawn("pxpipe", args, {
+    const child = spawn(executable, args, {
       stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
     })
     const stdout: Buffer[] = []
@@ -82,11 +148,59 @@ export async function loadRenderedContext(directory: string): Promise<RenderedCo
 }
 
 export class PxpipeRenderer implements ContextRenderer {
+  readonly #executable: string
+  readonly #useLibrary: boolean
+  #library?: Promise<ExportModule | undefined>
   #version?: Promise<string>
 
+  constructor(executable = "pxpipe", useLibrary = true) {
+    this.#executable = executable
+    this.#useLibrary = useLibrary
+  }
+
   version() {
-    this.#version ??= runPxpipe(["--version"])
+    this.#version ??= executableIdentity(this.#executable)
     return this.#version
+  }
+
+  async #renderWithLibrary(text: string, modelID: string, temporaryRoot: string) {
+    if (this.#useLibrary === false) return
+    this.#library ??= loadExportModule(this.#executable)
+    const library = await this.#library
+    if (!library) return
+
+    const result = await library.runExportCore(text, {
+      cols: library.DEFAULT_EXPORT_COLS,
+      model: modelID,
+      sourceFiles: [],
+    })
+    const outputDirectory = join(temporaryRoot, "pxpipe-export-library")
+    await mkdir(outputDirectory)
+    if (result.artifacts.some((artifact) => basename(artifact.filename) !== artifact.filename)) {
+      throw new Error("pxpipe library returned an unsafe artifact filename")
+    }
+    await Promise.all(
+      result.artifacts.map((artifact) => writeFile(join(outputDirectory, artifact.filename), artifact.data)),
+    )
+    await loadRenderedContext(outputDirectory)
+    return outputDirectory
+  }
+
+  async #renderWithCli(text: string, modelID: string, temporaryRoot: string) {
+    const output = await runPxpipe(
+      this.#executable,
+      ["export", "--stdin", "--out", temporaryRoot, "--model", modelID, "--json"],
+      text,
+    )
+    const report = JSON.parse(output) as ExportReport
+    if (typeof report.outDir !== "string") throw new Error("pxpipe returned no output directory")
+
+    const outputDirectory = resolve(report.outDir)
+    const root = resolve(temporaryRoot) + sep
+    if (outputDirectory.startsWith(root) === false) {
+      throw new Error("pxpipe returned an output directory outside its temporary root")
+    }
+    return outputDirectory
   }
 
   async render(text: string, modelID: string, cacheDirectory: string) {
@@ -94,18 +208,13 @@ export class PxpipeRenderer implements ContextRenderer {
     await mkdir(cacheParent, { recursive: true })
     const temporaryRoot = await mkdtemp(join(cacheParent, ".staging-"))
     try {
-      const output = await runPxpipe(
-        ["export", "--stdin", "--out", temporaryRoot, "--model", modelID, "--json"],
-        text,
-      )
-      const report = JSON.parse(output) as ExportReport
-      if (typeof report.outDir !== "string") throw new Error("pxpipe returned no output directory")
-
-      const outputDirectory = resolve(report.outDir)
-      const root = resolve(temporaryRoot) + sep
-      if (outputDirectory.startsWith(root) === false) {
-        throw new Error("pxpipe returned an output directory outside its temporary root")
+      let outputDirectory: string | undefined
+      try {
+        outputDirectory = await this.#renderWithLibrary(text, modelID, temporaryRoot)
+      } catch {
+        outputDirectory = undefined
       }
+      outputDirectory ??= await this.#renderWithCli(text, modelID, temporaryRoot)
 
       await loadRenderedContext(outputDirectory)
       try {

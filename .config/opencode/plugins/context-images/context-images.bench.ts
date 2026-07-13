@@ -187,15 +187,21 @@ async function main() {
     )
 
     const pxpipeVersion = Bun.spawnSync(["pxpipe", "--version"]).stdout.toString().trim()
-    const renderer = new PxpipeRenderer()
+    const libraryRenderer = new PxpipeRenderer()
+    const cliRenderer = new PxpipeRenderer("pxpipe", false)
     results.push(
-      await benchmark("pxpipe version, cold", EXTERNAL_ITERATIONS, EXTERNAL_WARMUP, async () => {
+      await benchmark("pxpipe identity, cold", EXTERNAL_ITERATIONS, EXTERNAL_WARMUP, async () => {
         await new PxpipeRenderer().version()
       }),
     )
     results.push(
-      await benchmark("pxpipe render", EXTERNAL_ITERATIONS, EXTERNAL_WARMUP, async (iteration) => {
-        await renderer.render(INSTRUCTIONS, MODEL_ID, join(root, `pxpipe-${iteration}`))
+      await benchmark("pxpipe library render", EXTERNAL_ITERATIONS, EXTERNAL_WARMUP, async (iteration) => {
+        await libraryRenderer.render(INSTRUCTIONS, MODEL_ID, join(root, `pxpipe-library-${iteration}`))
+      }),
+    )
+    results.push(
+      await benchmark("pxpipe CLI render", EXTERNAL_ITERATIONS, EXTERNAL_WARMUP, async (iteration) => {
+        await cliRenderer.render(INSTRUCTIONS, MODEL_ID, join(root, `pxpipe-cli-${iteration}`))
       }),
     )
 
