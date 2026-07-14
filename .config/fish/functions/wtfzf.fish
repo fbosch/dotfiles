@@ -58,6 +58,10 @@ function wtfzf --description 'Pick git worktree quickly via git porcelain'
             return
         end
 
+        if test -z "$branch"; and string match -q '/tmp/*' -- "$path"
+            return
+        end
+
         set -l marker ' '
         if test "$path" = "$current_path"
             set marker '*'
