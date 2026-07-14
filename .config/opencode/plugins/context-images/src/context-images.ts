@@ -6,6 +6,7 @@ import type { FilePart, Message, Part } from "@opencode-ai/sdk"
 import type { ContextRenderer, RenderedContext } from "./pxpipe"
 import { loadRenderedContext } from "./pxpipe"
 import type { ContextImagesLogger } from "./logger"
+import { RenderCoordinator } from "./render-coordinator"
 
 type MessageWithParts = {
   info: Message
@@ -49,8 +50,6 @@ type SystemOutput = {
   system: string[]
 }
 
-const MAX_BACKGROUND_RENDERS = 2
-
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex")
 }
@@ -67,18 +66,6 @@ function defaultCacheRoot() {
 async function secureCacheRoot(path: string) {
   await mkdir(path, { recursive: true, mode: 0o700 })
   await chmod(path, 0o700)
-}
-
-async function waitAtMost(task: Promise<void>, timeoutMs: number) {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<void>((resolveTimeout) => {
-    timer = setTimeout(resolveTimeout, timeoutMs)
-  })
-  try {
-    return await Promise.race([task.then(() => true), timeout.then(() => false)])
-  } finally {
-    if (timer) clearTimeout(timer)
-  }
 }
 
 function projectConfigDisabled() {
@@ -182,7 +169,7 @@ export class ContextImagesService {
   readonly #experimentalReadResultSources: Set<string>
   readonly #imageSupport?: (providerID: string, modelID: string) => Promise<boolean>
   readonly #pending = new Map<string, PendingReplacement>()
-  readonly #renders = new Map<string, Promise<RenderedContext>>()
+  readonly #renderCoordinator: RenderCoordinator
   readonly #renderer: ContextRenderer
   readonly #logger?: ContextImagesLogger
   readonly #worktree: string
@@ -204,6 +191,7 @@ export class ContextImagesService {
     this.#cacheRoot = input.cacheRoot ?? defaultCacheRoot()
     this.#renderer = input.renderer
     this.#logger = input.logger
+    this.#renderCoordinator = new RenderCoordinator({ logger: input.logger })
     this.#imageSupport = input.imageSupport
     if (input.sources) this.#explicitSources = this.#resolveSources(input.sources)
     this.#experimentalReadResultSources = new Set(
@@ -325,14 +313,15 @@ export class ContextImagesService {
       cacheSegment(modelID),
     )
 
-    let rendered: RenderedContext
-    try {
-      rendered = await loadRenderedContext(cacheDirectory)
-    } catch {
-      await secureCacheRoot(this.#cacheRoot)
-      this.#scheduleRender(context, modelID, cacheDirectory)
-      return
-    }
+    const rendered = await this.#renderCoordinator.lookupOrWarm({
+      key: cacheDirectory,
+      load: () => loadRenderedContext(cacheDirectory),
+      render: async () => {
+        await secureCacheRoot(this.#cacheRoot)
+        return await this.#renderer.render(context, modelID, cacheDirectory)
+      },
+    })
+    if (!rendered) return
     return {
       instructions,
       modelID,
@@ -346,53 +335,14 @@ export class ContextImagesService {
     return await this.#prepareSources(await this.#discoverSources(), modelID, "configured-instructions", "configured")
   }
 
-  #scheduleRender(context: string, modelID: string, cacheDirectory: string) {
-    if (this.#renders.has(cacheDirectory) || this.#renders.size >= MAX_BACKGROUND_RENDERS) return
-
-    const render = new Promise<RenderedContext>((resolveRender, rejectRender) => {
-      const timer = setTimeout(() => {
-        const task = Promise.resolve()
-          .then(() => this.#renderer.render(context, modelID, cacheDirectory))
-          .then(() => loadRenderedContext(cacheDirectory))
-        void task.then(resolveRender, rejectRender)
-      }, 0)
-      timer.unref()
-    })
-    this.#renders.set(cacheDirectory, render)
-    void render
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error)
-        return this.#logger?.write({ event: "transform_failed", message })
-      })
-      .catch(() => undefined)
-    void render
-      .finally(() => {
-        if (this.#renders.get(cacheDirectory) === render) this.#renders.delete(cacheDirectory)
-      })
-      .catch(() => undefined)
-  }
-
   async waitForRenders() {
-    await Promise.allSettled([...this.#renders.values()])
+    await this.#renderCoordinator.drain()
   }
 
   async warmAmbient(modelID: string, timeoutMs?: number) {
-    const warm = (async () => {
+    await this.#renderCoordinator.startup(async () => {
       await this.#prepare(modelID)
-      await this.waitForRenders()
-    })()
-    if (timeoutMs === undefined) {
-      await warm
-      return
-    }
-    const completed = await waitAtMost(warm, timeoutMs)
-    if (completed) return
-    void warm
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error)
-        return this.#logger?.write({ event: "transform_failed", message })
-      })
-      .catch(() => undefined)
+    }, timeoutMs)
   }
 
   async #prepareNested(messages: MessageWithParts[], providerID: string, modelID: string) {

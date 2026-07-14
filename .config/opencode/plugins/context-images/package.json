@@ -10,6 +10,7 @@
   },
   "peerDependencies": {
     "@opencode-ai/plugin": "*",
-    "@opencode-ai/sdk": "*"
+    "@opencode-ai/sdk": "*",
+    "effect": "^3.21.4"
   }
 }

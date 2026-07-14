@@ -41,6 +41,7 @@ Sources are discovered automatically rather than configured through a plugin-spe
 - Rendered artifacts are cached by source content and renderer identity under `~/.cache/opencode/context-images/`.
 - The cache root and rendered directories use mode `0700`; generated artifacts use mode `0600` so only the owning user can read instruction images.
 - A cache miss retains plaintext for that call and schedules bounded, deduplicated warming; later calls use the image only after cache publication is validated.
+- An Effect-based render coordinator owns keyed deduplication, the two-render concurrency limit, detached warming, startup timeout, publication validation, failure cleanup, retries, and test draining. Discovery and message transformation remain plain TypeScript.
 - Startup blocks for at most one second while warming ambient instructions for the configured default model. Cache hits add about 0.14 ms; slow or failed warming falls back to the normal plaintext-first path.
 - Best-effort structured events are written to `~/.local/state/opencode/context-images/events.jsonl` without instruction contents.
 - pxpipe loads `runExportCore` in-process when available and falls back to `pxpipe export` when package discovery, import, or library rendering fails.
@@ -50,7 +51,7 @@ Sources are discovered automatically rather than configured through a plugin-spe
 
 Recorded on 2026-07-13 and 2026-07-14:
 
-- 28 Bun tests pass with 77 expectations.
+- 32 Bun tests pass with 91 expectations.
 - Strict TypeScript checking passes.
 - Bun bundling passes.
 - Fallow reports no dead code and no duplication.

@@ -6,7 +6,8 @@
     "src/plugin.ts",
     "src/context-images.test.ts",
     "src/logger.test.ts",
-    "src/pxpipe.test.ts"
+    "src/pxpipe.test.ts",
+    "src/render-coordinator.test.ts"
   ],
   "usedClassMembers": [
     {
