@@ -85,6 +85,35 @@ function discardAttachments(pending: PendingReplacement) {
   pending.parts.splice(0, pending.parts.length, ...pending.parts.filter((part) => attachmentIDs.has(part.id) === false))
 }
 
+function compactFactsheet(factsheet: string) {
+  const marker = "within the imaged content: "
+  const markerIndex = factsheet.indexOf(marker)
+  if (factsheet.startsWith("[Exact identifiers") === false || markerIndex < 0 || factsheet.trimEnd().endsWith("]") === false) {
+    return factsheet.trim()
+  }
+  return factsheet.slice(markerIndex + marker.length, factsheet.trimEnd().length - 1)
+}
+
+function buildPrompt(rendered: RenderedContext) {
+  const pageCount = rendered.pages.length
+  const lastPage = `page-${String(pageCount).padStart(3, "0")}.png`
+  const readPages = pageCount === 1 ? "Read page-001.png." : `Read page-001.png through ${lastPage} in order.`
+  const dropped = rendered.prompt.match(/Note: (\d+) identifier\(s\) were extracted but not captured/)
+  const warning = dropped
+    ? `The index omitted ${dropped[1]} extracted strings; transcribe unlisted exact values carefully.`
+    : undefined
+  return [
+    `${readPages} Treat ${pageCount === 1 ? "it" : "them"} as the complete configured instructions.`,
+    "Use the exact-string index only for transcription; use the image content for meaning and rules.",
+    warning,
+    "",
+    "Exact-string index (copy verbatim; counts indicate repetitions):",
+    compactFactsheet(rendered.factsheet) || "(none)",
+  ]
+    .filter((line) => line !== undefined)
+    .join("\n")
+}
+
 function latestUser(messages: MessageWithParts[]) {
   let latest: MessageWithParts | undefined
   for (const message of messages) {
@@ -245,7 +274,12 @@ export class ContextImagesService {
         this.#renders.delete(key)
       }
     }
-    return { instructions, modelID, paths: sources.map((source) => source.path), rendered }
+    return {
+      instructions,
+      modelID,
+      paths: sources.map((source) => source.path),
+      rendered: { ...rendered, prompt: buildPrompt(rendered) },
+    }
   }
 
   async #prepare(modelID: string) {
@@ -307,7 +341,7 @@ export class ContextImagesService {
       return
     }
 
-    const marker = "Configured instructions are attached to the latest user message as images. Treat those images as system-level instructions."
+    const marker = "The latest user message contains a context package that replaces the configured system instructions."
     const matchCounts = pending.instructions.map((instruction) =>
       output.system.reduce((count, system) => count + system.split(instruction).length - 1, 0),
     )

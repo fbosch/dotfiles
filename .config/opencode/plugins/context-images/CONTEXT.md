@@ -48,7 +48,7 @@ Recorded on 2026-07-13 and 2026-07-14:
 - Strict TypeScript checking passes.
 - Bun bundling passes.
 - Fallow reports no dead code and no duplication.
-- Fallow health is `93 / A` with maintainability `91.8`.
+- Fallow health is `93 / A` with maintainability `91.7`.
 - A fresh `gpt-5.6-sol` OpenCode `1.17.18` process completed wholesale replacement with no replacement mismatch.
 - Automatic discovery found the active global, project, and configured instruction files.
 - Nested plaintext passed eight real-model policy checks while direct `AGENTS.md` rereads were denied.

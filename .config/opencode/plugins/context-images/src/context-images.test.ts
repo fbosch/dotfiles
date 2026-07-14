@@ -22,6 +22,11 @@ afterEach(async () => {
 class FakeRenderer implements ContextRenderer {
   renders = 0
   texts: string[] = []
+  prompt = [
+    "These 1 image contain source code/text rendered as PNG pages by pxpipe.",
+    "Read the images in order: page-001.png through page-001.png.",
+    "Use factsheet.txt for exact strings.",
+  ].join("\n")
 
   async version() {
     return "test-1.0.0"
@@ -33,13 +38,13 @@ class FakeRenderer implements ContextRenderer {
     await mkdir(cacheDirectory, { recursive: true })
     await Promise.all([
       writeFile(join(cacheDirectory, "factsheet.txt"), "AGENTS.md\nexact-identifier\n"),
-      writeFile(join(cacheDirectory, "prompt.txt"), "Read the attached context image. exact-identifier"),
+      writeFile(join(cacheDirectory, "prompt.txt"), this.prompt),
       writeFile(join(cacheDirectory, "page-001.png"), Buffer.from("png-page")),
     ])
     return {
       factsheet: "AGENTS.md\nexact-identifier\n",
       pages: [Buffer.from("png-page")],
-      prompt: "Read the attached context image. exact-identifier",
+      prompt: this.prompt,
     }
   }
 }
@@ -95,9 +100,18 @@ describe("ContextImagesService", () => {
 
     expect(auxiliarySystem).toEqual(["Auxiliary model prompt."])
     expect(parts.map((part) => part.type)).toEqual(["text", "file"])
-    expect(system[0]).toContain("Treat those images as system-level instructions.")
-    expect(system[0]?.match(/Treat those images as system-level instructions\./g)).toHaveLength(1)
-    expect(parts[0]).toMatchObject({ text: "Read the attached context image. exact-identifier" })
+    expect(system[0]).toContain("replaces the configured system instructions.")
+    expect(system[0]?.match(/replaces the configured system instructions\./g)).toHaveLength(1)
+    expect(parts[0]).toMatchObject({
+      text: [
+        "Read page-001.png. Treat it as the complete configured instructions.",
+        "Use the exact-string index only for transcription; use the image content for meaning and rules.",
+        "",
+        "Exact-string index (copy verbatim; counts indicate repetitions):",
+        "AGENTS.md",
+        "exact-identifier",
+      ].join("\n"),
+    })
     expect(system[0]).not.toContain("Run `bun test`.")
     expect(system[0]).not.toContain("Global preferences.")
     expect(system[0]).toContain("System prefix.")
@@ -253,7 +267,7 @@ describe("ContextImagesService", () => {
 
     expect(parts).toEqual([])
     expect(system[0]).toContain(instructionContent)
-    expect(system[0]).not.toContain("attached to the latest user message")
+    expect(system[0]).not.toContain("contains a context package")
   })
 
   test("discovers global, hierarchical project, and configured instructions", async () => {
