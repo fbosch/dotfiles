@@ -18,9 +18,9 @@ The cache-miss case stubs rendering. It measures plugin overhead through render 
 
 The benchmark reports pxpipe's portable SHA-256 executable identity because pxpipe 0.7.1 has a stale `0.2.0` command fallback.
 
-## Context Savings
+## Historical Context Savings
 
-The active bundle contains the global and project `AGENTS.md` files plus the three local files in `config.instructions`. With the current source contents and compact prompt:
+The following single-package measurement predates per-file image locality and is retained only as a historical baseline:
 
 | Representation | Tokens |
 | --- | ---: |
@@ -30,9 +30,9 @@ The active bundle contains the global and project `AGENTS.md` files plus the thr
 | PNG input (provider-accounted) | approximately 851 |
 | **Complete image replacement** | **approximately 1,136** |
 
-The replacement saves approximately 1,713 input-context tokens per qualifying model call, or 60.1% of this instruction block. The prompt and marker use 285 text tokens. The additional authority language is intentional: it identifies the package as trusted configured context rather than user-pasted text.
+That representation saved approximately 1,713 input-context tokens per qualifying model call, or 60.1% of the instruction block. It is not the current representation. The per-file package requires a new provider-accounted measurement covering every prompt and image before current savings can be stated.
 
-This snapshot uses 14,360 source characters and one unchanged 1568×384 PNG (`sha256:6693cd806edd`). A fresh OpenCode process completed replacement without a mismatch. The PNG figure comes from the controlled provider usage measurement for that byte-identical page; pxpipe's manifest estimate is lower and is not used in the total. These numbers measure context usage, not billing, and do not establish semantic parity.
+This historical snapshot used 14,360 source characters and one unchanged 1568×384 PNG (`sha256:6693cd806edd`). The PNG figure came from the controlled provider usage measurement for that byte-identical page; pxpipe's manifest estimate was lower and was not used in the total. These numbers measured context usage, not billing, and did not establish semantic parity.
 
 ## Baseline
 
@@ -61,7 +61,7 @@ Prompt and factsheet compaction did not materially regress the recurring path. C
 
 Immediately before this change, a warm in-process pxpipe render averaged 19.812 ms and was awaited by the cache-miss request. Background warming reduces request-path dispatch to 0.278-0.672 ms, at least 96.6% less preparation latency. The cache becomes usable after 23.664-30.416 ms, outside the measured request path.
 
-The first call for a new source-content, renderer, and model cache key retains plaintext. Later calls use the image after publication succeeds. Identical misses share one task. At most two distinct background renders run concurrently; additional misses stay plaintext and retry after a slot opens. Rendering is deferred to a later event-loop turn but remains in the OpenCode process rather than a worker thread.
+The first call for a new source-content, renderer, and model cache key retains plaintext. Each instruction file has an independent cache entry, and replacement waits until every source package is ready. Later calls use the images after all publications succeed. Identical misses share one task. Two distinct renders may run concurrently and at most 16 may be active or queued; excess keys remain plaintext and retry later. Rendering is deferred to a later event-loop turn but remains in the OpenCode process rather than a worker thread.
 
 The plugin warms ambient instructions for the configured default model during startup. A cache hit adds 0.133-0.146 ms. A preloaded cache miss adds 16.457-16.966 ms. Startup waiting is capped at one second; if rendering is still incomplete, OpenCode continues and the render remains active in the background.
 

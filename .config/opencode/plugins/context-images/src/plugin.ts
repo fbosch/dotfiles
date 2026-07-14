@@ -24,13 +24,17 @@ export const ContextImagesPlugin: Plugin = async ({ client, directory, worktree 
   if ("sources" in options) {
     throw new Error('[context-images] option "sources" is no longer supported; use OpenCode instruction discovery')
   }
-  const experimentalReadResultSources = options.experimentalReadResultSources
+  const readResultSources = options.readResultSources
   if (
-    experimentalReadResultSources !== undefined &&
-    (Array.isArray(experimentalReadResultSources) === false ||
-      experimentalReadResultSources.some((source) => typeof source !== "string" || source.trim().length === 0))
+    readResultSources !== undefined &&
+    (Array.isArray(readResultSources) === false ||
+      readResultSources.some((source) => typeof source !== "string" || source.trim().length === 0))
   ) {
-    throw new Error('[context-images] option "experimentalReadResultSources" must be an array of non-empty paths')
+    throw new Error('[context-images] option "readResultSources" must be an array of non-empty paths')
+  }
+  const scopedInstructions = options.scopedInstructions
+  if (scopedInstructions !== undefined && typeof scopedInstructions !== "boolean") {
+    throw new Error('[context-images] option "scopedInstructions" must be a boolean')
   }
   const logFile = typeof options.logFile === "string" ? options.logFile : undefined
   const logger = new JsonlLogger(logFile)
@@ -38,7 +42,8 @@ export const ContextImagesPlugin: Plugin = async ({ client, directory, worktree 
   let providers: ReturnType<typeof client.config.providers> | undefined
   const service = new ContextImagesService({
     directory,
-    experimentalReadResultSources,
+    readResultSources,
+    scopedInstructions,
     imageSupport: async (providerID, modelID) => {
       const request = (providers ??= client.config.providers({ query: { directory } }))
       const response = await request.catch(() => undefined)

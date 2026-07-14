@@ -16,7 +16,7 @@ Images are not supplementary context. A successful transformation removes the co
 - Never send images and their source text together as duplicate or supplementary context.
 - Treat paths, commands, identifiers, hashes, versions, flags, environment variables, glob patterns, key chords, casing-sensitive names, and quoted values as precision-critical factsheet content.
 
-Nested read-scoped replacement remains disabled by default. The experimental `experimentalReadResultSources` option enables exact-path allowlisting for successful `read` tool results. It replaces the tool output only after image capability is confirmed and leaves plaintext unchanged on preparation failure. Nested replacement is committed independently from ambient system replacement. Real-model parity previously failed even with metadata and a factsheet, so allowlisted sources remain experimental rather than part of the ambient replacement guarantee.
+Nested read-result replacement remains disabled by default. The `readResultSources` option enables exact-path allowlisting for successful `read` tool results. The `scopedInstructions` option enables lazy replacement of `AGENTS.md` files discovered through OpenCode's Read metadata. Both paths replace tool output only after image capability is confirmed and leave plaintext unchanged on preparation failure. Nested replacement is committed independently from ambient system replacement. Real-model parity previously failed even with metadata and a factsheet, so these options remain higher-risk than the ambient replacement guarantee.
 
 ## Source Discovery
 
@@ -33,14 +33,15 @@ Sources are discovered automatically rather than configured through a plugin-spe
 
 - `experimental.chat.messages.transform` prepares and attaches rendered context to the newest user message.
 - `experimental.chat.system.transform` removes matched system text and inserts one authority marker.
-- Ambient pages use descriptive names such as `configured-instructions-001.png`; allowlisted Read results use source-specific names such as `read-TONE.md-001.png`.
+- Each ambient instruction file is rendered and cached independently, preserving nested `AGENTS.md` locality and source order. Source-specific pages use names such as `configured-AGENTS.md-1234abcd5678efab-001.png`; allowlisted Read results use names such as `read-TONE.md-1234abcd5678efab-001.png`.
 - Both the system marker and package prompt identify ambient images as trusted configured context and instruct the model not to classify them as user-pasted text.
 - Allowlisted completed `read` results use their exact tool output as the rendered source; unrelated reads remain plaintext.
+- Completed Reads expose newly discovered nested instruction paths through OpenCode's `metadata.loaded`. Their exact `<system-reminder>` blocks are lazily rendered as source-local packages and replaced atomically; cache misses or incomplete packages leave the reminder plaintext.
 - Pending replacements are bound to the active model so concurrent title and summary prompts cannot consume them.
 - System replacement validates every source before removing plaintext and logs `replacement_mismatch` on failure. OpenCode 1.17.18 converts message attachments before the system hook, so rollback cannot remove an already-converted ambient image from that provider request.
 - Rendered artifacts are cached by source content and renderer identity under `~/.cache/opencode/context-images/`.
 - The cache root and rendered directories use mode `0700`; generated artifacts use mode `0600` so only the owning user can read instruction images.
-- A cache miss retains plaintext for that call and schedules bounded, deduplicated warming; later calls use the image only after cache publication is validated.
+- A cache miss in any source retains all ambient plaintext for that call and schedules missing sources behind bounded, deduplicated warming. Two renders may run concurrently and at most 16 may be active or queued; excess keys retry on later transformations. Images are used only after every required cache publication validates.
 - An Effect-based render coordinator owns keyed deduplication, the two-render concurrency limit, detached warming, startup timeout, publication validation, failure cleanup, retries, and test draining. Discovery and message transformation remain plain TypeScript.
 - Startup blocks for at most one second while warming ambient instructions for the configured default model. Cache hits add about 0.14 ms; slow or failed warming falls back to the normal plaintext-first path.
 - Best-effort structured events are written to `~/.local/state/opencode/context-images/events.jsonl` without instruction contents.
@@ -51,7 +52,7 @@ Sources are discovered automatically rather than configured through a plugin-spe
 
 Recorded on 2026-07-13 and 2026-07-14:
 
-- 32 Bun tests pass with 91 expectations.
+- 41 Bun tests pass with 125 expectations.
 - Strict TypeScript checking passes.
 - Bun bundling passes.
 - Fallow reports no dead code and no duplication.

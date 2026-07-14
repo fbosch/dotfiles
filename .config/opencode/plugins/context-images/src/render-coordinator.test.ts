@@ -30,8 +30,49 @@ function request(input: { key: string; load: () => Promise<RenderedContext>; ren
 }
 
 describe("RenderCoordinator", () => {
-  test("deduplicates keys, bounds concurrency, and leaves skipped keys retryable", async () => {
+  test("deduplicates keys and queues distinct renders with bounded concurrency", async () => {
     const coordinator = new RenderCoordinator({ maxConcurrent: 2 })
+    const gate = deferred()
+    const published = new Set<string>()
+    const starts: string[] = []
+    let active = 0
+    let maxActive = 0
+    const makeRequest = (key: string) =>
+      request({
+        key,
+        load: async () => {
+          if (published.has(key) === false) throw new Error("cache miss")
+          return rendered
+        },
+        render: async () => {
+          starts.push(key)
+          active += 1
+          maxActive = Math.max(maxActive, active)
+          await gate.promise
+          active -= 1
+          published.add(key)
+        },
+      })
+
+    await Promise.all([
+      coordinator.lookupOrWarm(makeRequest("first")),
+      coordinator.lookupOrWarm(makeRequest("first")),
+      coordinator.lookupOrWarm(makeRequest("second")),
+      coordinator.lookupOrWarm(makeRequest("third")),
+    ])
+    await Bun.sleep(0)
+
+    expect(starts.sort()).toEqual(["first", "second"])
+    gate.resolve()
+    await coordinator.drain()
+    expect(await coordinator.lookupOrWarm(makeRequest("first"))).toBe(rendered)
+    expect(await coordinator.lookupOrWarm(makeRequest("third"))).toBe(rendered)
+    expect(starts.sort()).toEqual(["first", "second", "third"])
+    expect(maxActive).toBe(2)
+  })
+
+  test("bounds pending renders and retries excess keys later", async () => {
+    const coordinator = new RenderCoordinator({ maxConcurrent: 1, maxPending: 2 })
     const gate = deferred()
     const published = new Set<string>()
     const starts: string[] = []
@@ -49,21 +90,17 @@ describe("RenderCoordinator", () => {
         },
       })
 
-    await Promise.all([
-      coordinator.lookupOrWarm(makeRequest("first")),
-      coordinator.lookupOrWarm(makeRequest("first")),
-      coordinator.lookupOrWarm(makeRequest("second")),
-      coordinator.lookupOrWarm(makeRequest("third")),
-    ])
+    await Promise.all(["first", "second", "third", "fourth"].map((key) => coordinator.lookupOrWarm(makeRequest(key))))
     await Bun.sleep(0)
+    expect(starts).toEqual(["first"])
 
-    expect(starts.sort()).toEqual(["first", "second"])
     gate.resolve()
     await coordinator.drain()
-    expect(await coordinator.lookupOrWarm(makeRequest("first"))).toBe(rendered)
-    expect(await coordinator.lookupOrWarm(makeRequest("third"))).toBeUndefined()
+    expect(starts).toEqual(["first", "second"])
+
+    await Promise.all(["third", "fourth"].map((key) => coordinator.lookupOrWarm(makeRequest(key))))
     await coordinator.drain()
-    expect(starts.sort()).toEqual(["first", "second", "third"])
+    expect(starts).toEqual(["first", "second", "third", "fourth"])
   })
 
   test("validates publication, logs failures, and retries after cleanup", async () => {

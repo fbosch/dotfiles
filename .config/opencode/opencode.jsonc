@@ -20,9 +20,10 @@
     [
       "./plugins/context-images/context-images.ts",
       {
-        "experimentalReadResultSources": [
+        "readResultSources": [
           "~/.config/opencode/TONE.md"
-        ]
+        ],
+        "scopedInstructions": true
       }
     ],
     "./plugins/openmemory/openmemory.ts",

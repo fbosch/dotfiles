@@ -11,13 +11,15 @@ export type RenderRequest = {
 export class RenderCoordinator {
   readonly #logger?: ContextImagesLogger
   readonly #maxConcurrent: number
+  readonly #maxPending: number
   readonly #renders = new Map<string, Fiber.RuntimeFiber<void, never>>()
   readonly #semaphore: Effect.Semaphore
   readonly #startups = new Set<Fiber.RuntimeFiber<void, unknown>>()
 
-  constructor(input: { logger?: ContextImagesLogger; maxConcurrent?: number } = {}) {
+  constructor(input: { logger?: ContextImagesLogger; maxConcurrent?: number; maxPending?: number } = {}) {
     this.#logger = input.logger
     this.#maxConcurrent = input.maxConcurrent ?? 2
+    this.#maxPending = input.maxPending ?? 16
     this.#semaphore = Effect.unsafeMakeSemaphore(this.#maxConcurrent)
   }
 
@@ -33,7 +35,7 @@ export class RenderCoordinator {
   #schedule(request: RenderRequest) {
     const existing = this.#renders.get(request.key)
     if (existing) return existing
-    if (this.#renders.size >= this.#maxConcurrent) return
+    if (this.#renders.size >= this.#maxPending) return
 
     let fiber!: Fiber.RuntimeFiber<void, never>
     const render = Effect.tryPromise({

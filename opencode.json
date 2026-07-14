@@ -6,7 +6,8 @@
       "~/nixos/**": "allow",
       "~/dotfiles/**": "allow",
       "~/.config/**": "allow",
-      "/run/user/1000/**": "allow"
+      "/run/user/1000/**": "allow",
+      "~/.cache/opencode/**": "allow"
     }
   },
   "watcher": {

@@ -5,7 +5,7 @@
 - Read `CONTEXT.md` before changing discovery, rendering, replacement, model capability, or compaction behavior.
 - Preserve the wholesale replacement contract: attach every image page and the factsheet before atomically removing matched plaintext.
 - Fail open to the original plaintext. Never send an image as supplementary duplicate context.
-- Keep nested read-scoped replacement default-off. Treat exact-path opt-ins as experimental until real-model equivalence is demonstrated.
+- Keep nested read-scoped replacement default-off. When enabled, discover only `AGENTS.md` paths supplied by OpenCode's trusted Read metadata and preserve plaintext unless every package validates.
 - Keep durable design decisions and measured baselines in `CONTEXT.md`; keep commands and temporary plans out of it.
 
 ## Validation
