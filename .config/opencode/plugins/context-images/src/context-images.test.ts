@@ -89,8 +89,11 @@ describe("ContextImagesService", () => {
         "System suffix.",
       ].join("\n"),
     ]
+    const auxiliarySystem = ["Auxiliary model prompt."]
+    await service.transformSystem({ sessionID: "session-1", model: { id: "active-model" } }, { system: auxiliarySystem })
     await service.transformSystem({ sessionID: "session-1", model: { id: "active-model" } }, { system })
 
+    expect(auxiliarySystem).toEqual(["Auxiliary model prompt."])
     expect(parts.map((part) => part.type)).toEqual(["text", "file"])
     expect(system[0]).toContain("Treat those images as system-level instructions.")
     expect(system[0]?.match(/Treat those images as system-level instructions\./g)).toHaveLength(1)
@@ -240,18 +243,20 @@ describe("ContextImagesService", () => {
       worktree,
     })
     const system = [`Instructions from: ${join(worktree, "AGENTS.md")}\n${instructionContent}`]
+    const parts: Part[] = []
 
-    await service.transformMessages({}, { messages: [{ info: userMessage(), parts: [] }] })
+    await service.transformMessages({}, { messages: [{ info: userMessage("text-model"), parts }] })
     await service.transformSystem(
       { sessionID: "session-1", model: { id: "text-model", capabilities: { input: { image: false } } } },
       { system },
     )
 
+    expect(parts).toEqual([])
     expect(system[0]).toContain(instructionContent)
     expect(system[0]).not.toContain("attached to the latest user message")
   })
 
-  test("discovers global, hierarchical, and configured instructions", async () => {
+  test("discovers global, hierarchical project, and configured instructions", async () => {
     const worktree = await temporaryDirectory()
     const directory = join(worktree, "nested")
     const cacheRoot = await temporaryDirectory()
@@ -295,6 +300,32 @@ describe("ContextImagesService", () => {
     )
   })
 
+  test("uses CLAUDE.md before deprecated CONTEXT.md when the project has no AGENTS.md", async () => {
+    const worktree = await temporaryDirectory()
+    const directory = join(worktree, "nested")
+    const cacheRoot = await temporaryDirectory()
+    const configHome = await temporaryDirectory()
+    await mkdir(join(configHome, "opencode"), { recursive: true })
+    await mkdir(directory)
+    await writeFile(join(worktree, "CLAUDE.md"), "Claude fallback instructions.\n")
+    await writeFile(join(directory, "CONTEXT.md"), "Context documentation.\n")
+    const previousConfigDir = process.env.OPENCODE_CONFIG_DIR
+    process.env.OPENCODE_CONFIG_DIR = join(configHome, "opencode")
+    const renderer = new FakeRenderer()
+    const service = new ContextImagesService({ cacheRoot, directory, renderer, worktree })
+
+    try {
+      await service.transformMessages({}, { messages: [{ info: userMessage(), parts: [] }] })
+    } finally {
+      if (previousConfigDir === undefined) delete process.env.OPENCODE_CONFIG_DIR
+      else process.env.OPENCODE_CONFIG_DIR = previousConfigDir
+    }
+
+    expect(renderer.texts).toHaveLength(1)
+    expect(renderer.texts[0]).toContain("Claude fallback instructions.")
+    expect(renderer.texts[0]).not.toContain("Context documentation.")
+  })
+
   test("does not attach images when rendering fails", async () => {
     const worktree = await temporaryDirectory()
     const cacheRoot = await temporaryDirectory()
@@ -327,12 +358,15 @@ describe("ContextImagesService", () => {
       worktree,
     })
 
-    await service.transformMessages({}, { messages: [{ info: userMessage(), parts: [] }] })
+    const parts: Part[] = []
+    await service.transformMessages({}, { messages: [{ info: userMessage(), parts }] })
+    const instruction = `Instructions from: ${join(worktree, "AGENTS.md")}\nInstructions.\n`
     await service.transformSystem(
       { sessionID: "session-1", model: { id: "active-model" } },
-      { system: ["System prompt without configured instructions."] },
+      { system: [`${instruction}\n${instruction}`] },
     )
 
+    expect(parts).toEqual([])
     expect(logger.events).toEqual([
       {
         event: "replacement_mismatch",

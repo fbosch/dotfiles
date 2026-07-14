@@ -37,6 +37,14 @@ export const ContextImagesPlugin: Plugin = async ({ directory, worktree }, optio
         warnOnce(error)
       }
     },
-    "experimental.chat.system.transform": service.transformSystem.bind(service),
+    "experimental.chat.system.transform": async (input, output) => {
+      try {
+        await service.transformSystem(input, output)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        await logger.write({ event: "transform_failed", message })
+        warnOnce(error)
+      }
+    },
   }
 }

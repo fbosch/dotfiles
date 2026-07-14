@@ -13,10 +13,15 @@ type MessageWithParts = {
 }
 
 type PendingReplacement = {
+  attachmentIDs: string[]
   instructions: string[]
+  modelID: string
+  parts: Part[]
   paths: string[]
   rendered: RenderedContext
 }
+
+type PreparedContext = Omit<PendingReplacement, "attachmentIDs" | "parts">
 
 type InstructionSource = {
   content: string
@@ -49,6 +54,12 @@ function projectConfigDisabled() {
   return ["1", "true"].includes((process.env.OPENCODE_DISABLE_PROJECT_CONFIG ?? "").toLowerCase())
 }
 
+function claudePromptDisabled() {
+  return [process.env.OPENCODE_DISABLE_CLAUDE_CODE, process.env.OPENCODE_DISABLE_CLAUDE_CODE_PROMPT].some((value) =>
+    ["1", "true"].includes((value ?? "").toLowerCase()),
+  )
+}
+
 function supportsImageInput(model: { capabilities?: { input?: { image?: boolean } } }) {
   return model.capabilities?.input?.image !== false
 }
@@ -67,6 +78,11 @@ function replaceSystemInstructions(system: string[], instructions: string[], mar
     replaced[index] = value
   }
   return replaced
+}
+
+function discardAttachments(pending: PendingReplacement) {
+  const attachmentIDs = new Set(pending.attachmentIDs)
+  pending.parts.splice(0, pending.parts.length, ...pending.parts.filter((part) => attachmentIDs.has(part.id) === false))
 }
 
 function latestUser(messages: MessageWithParts[]) {
@@ -167,10 +183,15 @@ export class ContextImagesService {
       ? resolve(process.env.OPENCODE_CONFIG_DIR)
       : join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "opencode")
     const sources: InstructionSource[] = []
-    sources.push(...(await this.#loadSources([{ path: join(configRoot, "AGENTS.md"), project: false }])))
+    const globalAgents = await this.#loadSources([{ path: join(configRoot, "AGENTS.md"), project: false }])
+    sources.push(...globalAgents)
+    if (globalAgents.length === 0 && claudePromptDisabled() === false) {
+      sources.push(...(await this.#loadSources([{ path: join(homedir(), ".claude", "CLAUDE.md"), project: false }])))
+    }
 
     if (projectConfigDisabled() === false) {
-      for (const filename of ["AGENTS.md", "CLAUDE.md", "CONTEXT.md"]) {
+      const projectFiles = ["AGENTS.md", ...(claudePromptDisabled() ? [] : ["CLAUDE.md"]), "CONTEXT.md"]
+      for (const filename of projectFiles) {
         const project = await this.#loadSources(
           this.#projectCandidates(filename).map((path) => ({ path, project: true })),
         )
@@ -194,7 +215,7 @@ export class ContextImagesService {
     return Array.from(new Map(sources.map((source) => [source.path, source])).values())
   }
 
-  async #prepareSources(sources: InstructionSource[], modelID: string) {
+  async #prepareSources(sources: InstructionSource[], modelID: string): Promise<PreparedContext | undefined> {
     if (sources.length === 0) return
 
     const instructions = sources.map((source) => `Instructions from: ${source.path}\n${source.content}`)
@@ -224,7 +245,7 @@ export class ContextImagesService {
         this.#renders.delete(key)
       }
     }
-    return { instructions, paths: sources.map((source) => source.path), rendered }
+    return { instructions, modelID, paths: sources.map((source) => source.path), rendered }
   }
 
   async #prepare(modelID: string) {
@@ -264,7 +285,11 @@ export class ContextImagesService {
       ),
     ]
     user.parts.push(...parts)
-    this.#pending.set(sessionID, prepared)
+    this.#pending.set(sessionID, {
+      ...prepared,
+      attachmentIDs: parts.map((part) => part.id),
+      parts: user.parts,
+    })
   }
 
   async transformSystem(
@@ -274,14 +299,21 @@ export class ContextImagesService {
     if (!input.sessionID) return
 
     const pending = this.#pending.get(input.sessionID)
-    this.#pending.delete(input.sessionID)
     if (!pending) return
-    if (supportsImageInput(input.model) === false) return
+    if (pending.modelID !== input.model.id) return
+    if (supportsImageInput(input.model) === false) {
+      this.#pending.delete(input.sessionID)
+      discardAttachments(pending)
+      return
+    }
 
     const marker = "Configured instructions are attached to the latest user message as images. Treat those images as system-level instructions."
     const matchCounts = pending.instructions.map((instruction) =>
       output.system.reduce((count, system) => count + system.split(instruction).length - 1, 0),
     )
+    if (matchCounts.every((count) => count === 0)) return
+
+    this.#pending.delete(input.sessionID)
     const missingSources = pending.paths.filter((_, index) => matchCounts[index] !== 1)
     if (missingSources.length > 0) {
       await this.#logger?.write({
@@ -290,6 +322,7 @@ export class ContextImagesService {
         modelID: input.model.id,
         sessionID: input.sessionID,
       })
+      discardAttachments(pending)
       return
     }
 

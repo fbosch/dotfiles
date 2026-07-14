@@ -23,7 +23,8 @@ Nested read-scoped instruction replacement is currently disabled. Real-model par
 Sources are discovered automatically rather than configured through a plugin-specific `sources` option:
 
 - Global `${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-~/.config}/opencode}/AGENTS.md`.
-- Project `AGENTS.md`, `CLAUDE.md`, and `CONTEXT.md` candidates from the active directory toward the worktree root.
+- Project `AGENTS.md` files found toward the worktree root, or `CLAUDE.md` and then deprecated `CONTEXT.md` as file-family fallbacks.
+- Global `~/.config/opencode/AGENTS.md`, or `~/.claude/CLAUDE.md` as a compatibility fallback when enabled.
 - Local paths from OpenCode `config.instructions`; URL instructions are excluded.
 
 `OPENCODE_DISABLE_PROJECT_CONFIG=1` and `OPENCODE_DISABLE_PROJECT_CONFIG=true` disable project sources while preserving global and explicitly configured sources.
@@ -32,7 +33,8 @@ Sources are discovered automatically rather than configured through a plugin-spe
 
 - `experimental.chat.messages.transform` prepares and attaches rendered context to the newest user message.
 - `experimental.chat.system.transform` removes matched system text and inserts one authority marker.
-- System replacement is atomic and logs a `replacement_mismatch` event instead of removing partial context.
+- Pending replacements are bound to the active model so concurrent title and summary prompts cannot consume them.
+- System replacement is atomic. A mismatch removes the attached image payload, retains plaintext, and logs `replacement_mismatch`.
 - Rendered artifacts are cached by source content and renderer identity under `~/.cache/opencode/context-images/`.
 - Best-effort structured events are written to `~/.local/state/opencode/context-images/events.jsonl` without instruction contents.
 - pxpipe loads `runExportCore` in-process when available and falls back to `pxpipe export` when package discovery, import, or library rendering fails.
@@ -42,12 +44,12 @@ Sources are discovered automatically rather than configured through a plugin-spe
 
 Recorded on 2026-07-13 and 2026-07-14:
 
-- 16 Bun tests pass with 40 expectations.
+- 17 Bun tests pass with 46 expectations.
 - Strict TypeScript checking passes.
 - Bun bundling passes.
 - Fallow reports no dead code and no duplication.
-- Fallow health is `92 / A` with maintainability `91.9`.
-- A fresh `gpt-5.6-sol` OpenCode process completed with no replacement mismatch.
+- Fallow health is `93 / A` with maintainability `91.8`.
+- A fresh `gpt-5.6-sol` OpenCode `1.17.18` process completed wholesale replacement with no replacement mismatch.
 - Automatic discovery found the active global, project, and configured instruction files.
 - Nested plaintext passed eight real-model policy checks while direct `AGENTS.md` rereads were denied.
 - Compaction preservation and text-only model behavior are unit-tested, not provider-level end-to-end tested.
