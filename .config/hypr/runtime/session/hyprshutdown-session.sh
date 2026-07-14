@@ -19,18 +19,13 @@ readonly -a PRETERM_PROCESS_ARGS=(
 )
 
 preclose_windows() {
-  local provider class address
-  provider=$(hyprctl status -j | jq -r '.configProvider // ""' 2>/dev/null || true)
+	local class address
 
   for class in "${PRECLOSE_WINDOW_CLASSES[@]}"; do
     while IFS= read -r address; do
       [[ -n "$address" ]] || continue
 
-      if [[ $provider == lua ]]; then
-        hypr_dispatch_lua "hl.dsp.window.close({ window = \"address:$address\" })" || true
-      else
-        hyprctl dispatch closewindow "address:$address" >/dev/null 2>&1 || true
-      fi
+		hypr_dispatch_lua "hl.dsp.window.close({ window = \"address:$address\" })" || true
     done < <(
       hypr_query 'j/clients' \
         | jq -r --arg class "$class" '.[] | select(.class == $class and .address != null) | .address' \

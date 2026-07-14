@@ -16,6 +16,7 @@ Hyprland compositor configuration deployed with GNU Stow; system packages are ma
 - Keep cross-module policy tables declarative and typed at their writable source; consumers must read them instead of duplicating per-client exceptions.
 - Preserve window-rule declaration order: generated rules, static rules, then window-state rules.
 - For performance-sensitive read-only Hyprland queries in scripts, prefer the IPC query socket over spawning `hyprctl`, e.g. `printf 'j/clients' | nc -U "$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock"`; keep a `hyprctl` fallback when practical.
+- For state-changing dispatches on Hyprland 0.55, send Lua dispatcher expressions (e.g. `hypr_dispatch_lua "hl.dsp.window.close({ window = \"address:$address\" })"`); do not use legacy `dispatch closewindow ...` syntax.
 - For Lua runtime helpers, reuse existing `lib/` modules such as `lib.json`, `lib.command`, `lib.paths`, and `lib.monitor_role` before adding local parsing, quoting, or path helpers.
 - Prefer configuring `package.path` and using `require(...)` for Lua modules; reserve `dofile(...)` for dynamic data/config files that must be re-read or are not modules.
 - Avoid spawning `jq` from long-lived Lua daemons or hot loops when `lib.json` plus in-process filtering is practical; keep `jq` for one-shot shell glue where it is simpler.
