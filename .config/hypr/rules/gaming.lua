@@ -44,9 +44,9 @@ M.games = {
 	{
 		name = "world-of-warcraft",
 		selectors = {
-			{ class = "^(gamescope)$", title = "^World of Warcraft" },
-			{ initial_title = "^World of Warcraft" },
-			{ title = "^World of Warcraft" },
+			{ class = "^(gamescope)$", title = "^World of Warcraft$" },
+			{ initial_title = "^World of Warcraft$" },
+			{ title = "^World of Warcraft$" },
 		},
 		fullscreen_state = "2 0",
 		enable_profile = true,
