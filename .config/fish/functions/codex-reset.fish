@@ -92,11 +92,33 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
         end
 
         set credit_id (printf '%s\n' "$preview_credit" | jq -r '.id')
-        printf '%s\n' "$preview_credit" | jq -r '
-            "about to redeem:\n  credit_id : \(.id)\n  reset_type: \(.resetType)\n  granted_at: \(.grantedAt)\n  expires_at: \(.expiresAt)"
-        '
+        set -l preview_fields (printf '%s\n' "$preview_credit" | jq -r '[.nickname, (.resetType // "unknown"), (.grantedAt // "unknown"), (.expiresAt // "unknown"), .expiresIn, .id] | @tsv')
+        set -l fields (string split \t -- "$preview_fields")
+        set -l heading_color ""
+        set -l muted_color ""
+        set -l urgency_color ""
+        set -l color_reset ""
+        if test -t 1
+            set heading_color (set_color --bold yellow)
+            set muted_color (set_color brblack)
+            switch (printf '%s\n' "$preview_credit" | jq -r '.urgency')
+                case urgent
+                    set urgency_color (set_color red)
+                case soon
+                    set urgency_color (set_color yellow)
+                case later
+                    set urgency_color (set_color green)
+            end
+            set color_reset (set_color normal)
+        end
+        printf '\n%sRedeem reset credit%s\n' "$heading_color" "$color_reset"
+        printf '  %-14s %s\n' "Credit" "$fields[1]"
+        printf '  %-14s %s\n' "Type" "$fields[2]"
+        printf '  %-14s %s%s%s (%s)\n' "Expires" "$urgency_color" "$fields[4]" "$color_reset" "$fields[5]"
+        printf '  %-14s %s\n' "Granted" "$fields[3]"
+        printf '  %-14s %s%s%s\n' "ID" "$muted_color" "$fields[6]" "$color_reset"
         if test "$dry_run" = true
-            echo "--dry-run: skipping POST."
+            printf '\n%sDry run:%s no reset was redeemed.\n' "$muted_color" "$color_reset"
             return 0
         end
         if not command -q gum
@@ -114,7 +136,16 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
         if test $status -ne 0
             return 1
         end
-        printf '%s\n' "$result" | jq -r '"consumed. windows_reset=\(.windowsReset), code=\(.code), redeemed_at=\(.redeemedAt)"'
+        set -l result_fields (printf '%s\n' "$result" | jq -r '[(.windowsReset // "unknown"), (.code // "unknown"), (.redeemedAt // "unknown")] | @tsv')
+        set fields (string split \t -- "$result_fields")
+        set -l success_color ""
+        if test -t 1
+            set success_color (set_color --bold green)
+        end
+        printf '\n%sReset redeemed%s\n' "$success_color" "$color_reset"
+        printf '  %-14s %s\n' "Windows reset" "$fields[1]"
+        printf '  %-14s %s\n' "Redeemed" "$fields[3]"
+        printf '  %-14s %s%s%s\n' "Code" "$muted_color" "$fields[2]" "$color_reset"
         return 0
     end
 

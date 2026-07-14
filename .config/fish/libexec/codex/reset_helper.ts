@@ -471,7 +471,9 @@ async function status(args: Arguments, credentials: Credentials): Promise<AppRes
 function selectCredit(credits: Credits, creditId?: string) {
     const available = credits.credits.filter((credit) => credit.status === "available");
     if (!creditId) {
-        return available[0] || null;
+        return available.sort(
+            (left, right) => (parseExpiry(left.expires_at) ?? Infinity) - (parseExpiry(right.expires_at) ?? Infinity),
+        )[0] || null;
     }
     return available.find((credit) => credit.id === creditId) || null;
 }
