@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { isAbsolute, join, resolve, sep } from "node:path"
-import type { Message, Part } from "@opencode-ai/sdk"
+import type { FilePart, Message, Part } from "@opencode-ai/sdk"
 import type { ContextRenderer, RenderedContext } from "./pxpipe"
 import { loadRenderedContext } from "./pxpipe"
 import type { ContextImagesLogger } from "./logger"
@@ -12,16 +12,25 @@ type MessageWithParts = {
   parts: Part[]
 }
 
-type PendingReplacement = {
+type AmbientReplacement = {
   attachmentIDs: string[]
   instructions: string[]
-  modelID: string
   parts: Part[]
+  paths: string[]
+}
+
+type PendingReplacement = {
+  ambient: AmbientReplacement
+  modelID: string
+  providerID: string
+}
+
+type PreparedContext = {
+  instructions: string[]
+  modelID: string
   paths: string[]
   rendered: RenderedContext
 }
-
-type PreparedContext = Omit<PendingReplacement, "attachmentIDs" | "parts">
 
 type InstructionSource = {
   content: string
@@ -81,8 +90,12 @@ function replaceSystemInstructions(system: string[], instructions: string[], mar
 }
 
 function discardAttachments(pending: PendingReplacement) {
-  const attachmentIDs = new Set(pending.attachmentIDs)
-  pending.parts.splice(0, pending.parts.length, ...pending.parts.filter((part) => attachmentIDs.has(part.id) === false))
+  const attachmentIDs = new Set(pending.ambient.attachmentIDs)
+  pending.ambient.parts.splice(
+    0,
+    pending.ambient.parts.length,
+    ...pending.ambient.parts.filter((part) => attachmentIDs.has(part.id) === false),
+  )
 }
 
 function compactFactsheet(factsheet: string) {
@@ -129,6 +142,8 @@ export class ContextImagesService {
   readonly #compacting = new Set<string>()
   readonly #directory: string
   readonly #explicitSources?: { path: string; project: boolean }[]
+  readonly #experimentalReadResultSources: Set<string>
+  readonly #imageSupport?: (providerID: string, modelID: string) => Promise<boolean>
   readonly #pending = new Map<string, PendingReplacement>()
   readonly #renders = new Map<string, Promise<RenderedContext>>()
   readonly #renderer: ContextRenderer
@@ -139,6 +154,8 @@ export class ContextImagesService {
   constructor(input: {
     cacheRoot?: string
     directory?: string
+    experimentalReadResultSources?: string[]
+    imageSupport?: (providerID: string, modelID: string) => Promise<boolean>
     logger?: ContextImagesLogger
     renderer: ContextRenderer
     sources?: string[]
@@ -149,7 +166,11 @@ export class ContextImagesService {
     this.#cacheRoot = input.cacheRoot ?? defaultCacheRoot()
     this.#renderer = input.renderer
     this.#logger = input.logger
+    this.#imageSupport = input.imageSupport
     if (input.sources) this.#explicitSources = this.#resolveSources(input.sources)
+    this.#experimentalReadResultSources = new Set(
+      this.#resolveSources(input.experimentalReadResultSources ?? []).map((source) => source.path),
+    )
   }
 
   setConfiguredInstructions(instructions: string[]) {
@@ -287,6 +308,29 @@ export class ContextImagesService {
     return await this.#prepareSources(await this.#discoverSources(), modelID)
   }
 
+  async #prepareNested(messages: MessageWithParts[], providerID: string, modelID: string) {
+    const candidates = messages.flatMap((message) =>
+      message.parts.flatMap((part) => {
+        if (part.type !== "tool" || part.tool.toLowerCase() !== "read" || part.state.status !== "completed") return []
+        const filePath = part.state.input.filePath
+        if (typeof filePath !== "string") return []
+        const path = isAbsolute(filePath) ? resolve(filePath) : resolve(this.#directory, filePath)
+        if (this.#experimentalReadResultSources.has(path) === false) return []
+        return [{ originalState: part.state, part, path }]
+      }),
+    )
+    if (candidates.length === 0 || (await this.#imageSupport?.(providerID, modelID)) !== true) return []
+    return await Promise.all(
+      candidates.map(async (candidate) => ({
+        ...candidate,
+        prepared: await this.#prepareSources(
+          [{ content: candidate.originalState.output, path: candidate.path, project: false }],
+          modelID,
+        ),
+      })),
+    )
+  }
+
   async transformMessages(_input: Record<string, never>, output: MessagesOutput) {
     const user = latestUser(output.messages)
     if (!user || user.info.role !== "user") return
@@ -295,47 +339,89 @@ export class ContextImagesService {
     this.#pending.delete(sessionID)
     if (this.#compacting.delete(sessionID)) return
 
-    const prepared = await this.#prepare(user.info.model.modelID)
-    if (!prepared) return
+    const [ambientResult, nestedResult] = await Promise.allSettled([
+      this.#prepare(user.info.model.modelID),
+      this.#prepareNested(output.messages, user.info.model.providerID, user.info.model.modelID),
+    ])
+    if (ambientResult.status === "rejected" && nestedResult.status === "rejected") throw ambientResult.reason
+    const failed = ambientResult.status === "rejected" ? ambientResult : nestedResult.status === "rejected" ? nestedResult : undefined
+    if (failed) {
+      const message = failed.reason instanceof Error ? failed.reason.message : String(failed.reason)
+      await this.#logger?.write({ event: "transform_failed", message })
+    }
+    const prepared = ambientResult.status === "fulfilled" ? ambientResult.value : undefined
+    const preparedNested = nestedResult.status === "fulfilled" ? nestedResult.value : []
+    if (!prepared && preparedNested.length === 0) return
 
-    const parts: Part[] = [
-      {
-        id: randomUUID(),
-        messageID: user.info.id,
-        sessionID,
-        type: "text",
-        text: prepared.rendered.prompt,
-        synthetic: true,
-      },
-      ...prepared.rendered.pages.map(
-        (page, index): Part => ({
+    let ambient: AmbientReplacement | undefined
+    if (prepared) {
+      const parts: Part[] = [
+        {
           id: randomUUID(),
           messageID: user.info.id,
           sessionID,
-          type: "file",
-          mime: "image/png",
-          filename: `context.page-${index + 1}.png`,
-          url: `data:image/png;base64,${page.toString("base64")}`,
-        }),
-      ),
-    ]
-    user.parts.push(...parts)
+          type: "text",
+          text: prepared.rendered.prompt,
+          synthetic: true,
+        },
+        ...prepared.rendered.pages.map(
+          (page, index): Part => ({
+            id: randomUUID(),
+            messageID: user.info.id,
+            sessionID,
+            type: "file",
+            mime: "image/png",
+            filename: `context.page-${index + 1}.png`,
+            url: `data:image/png;base64,${page.toString("base64")}`,
+          }),
+        ),
+      ]
+      user.parts.push(...parts)
+      ambient = {
+        attachmentIDs: parts.map((part) => part.id),
+        instructions: prepared.instructions,
+        parts: user.parts,
+        paths: prepared.paths,
+      }
+    }
+
+    for (const { originalState, part, prepared: nestedPrepared } of preparedNested) {
+      const pages: FilePart[] = (nestedPrepared?.rendered.pages ?? []).map((page, index) => ({
+        id: randomUUID(),
+        messageID: part.messageID,
+        sessionID: part.sessionID,
+        type: "file",
+        mime: "image/png",
+        filename: `context.page-${index + 1}.png`,
+        url: `data:image/png;base64,${page.toString("base64")}`,
+      }))
+      if (!nestedPrepared || pages.length === 0) continue
+      part.state = {
+        ...originalState,
+        attachments: [...(originalState.attachments ?? []), ...pages],
+        output: nestedPrepared.rendered.prompt,
+      }
+    }
+    if (!ambient) return
     this.#pending.set(sessionID, {
-      ...prepared,
-      attachmentIDs: parts.map((part) => part.id),
-      parts: user.parts,
+      ambient,
+      modelID: user.info.model.modelID,
+      providerID: user.info.model.providerID,
     })
   }
 
   async transformSystem(
-    input: { sessionID?: string; model: { id: string; capabilities?: { input?: { image?: boolean } } } },
+    input: {
+      sessionID?: string
+      model: { id: string; providerID: string; capabilities?: { input?: { image?: boolean } } }
+    },
     output: SystemOutput,
   ) {
     if (!input.sessionID) return
 
     const pending = this.#pending.get(input.sessionID)
     if (!pending) return
-    if (pending.modelID !== input.model.id) return
+    if (pending.modelID !== input.model.id || pending.providerID !== input.model.providerID) return
     if (supportsImageInput(input.model) === false) {
       this.#pending.delete(input.sessionID)
       discardAttachments(pending)
@@ -343,13 +429,13 @@ export class ContextImagesService {
     }
 
     const marker = "The latest user message contains a context package that replaces the configured system instructions."
-    const matchCounts = pending.instructions.map((instruction) =>
+    const matchCounts = pending.ambient.instructions.map((instruction) =>
       output.system.reduce((count, system) => count + system.split(instruction).length - 1, 0),
     )
     if (matchCounts.every((count) => count === 0)) return
 
     this.#pending.delete(input.sessionID)
-    const missingSources = pending.paths.filter((_, index) => matchCounts[index] !== 1)
+    const missingSources = pending.ambient.paths.filter((_, index) => matchCounts[index] !== 1)
     if (missingSources.length > 0) {
       await this.#logger?.write({
         event: "replacement_mismatch",
@@ -361,6 +447,10 @@ export class ContextImagesService {
       return
     }
 
-    output.system.splice(0, output.system.length, ...replaceSystemInstructions(output.system, pending.instructions, marker))
+    output.system.splice(
+      0,
+      output.system.length,
+      ...replaceSystemInstructions(output.system, pending.ambient.instructions, marker),
+    )
   }
 }

@@ -18,6 +18,22 @@ The cache-miss case stubs rendering. It measures plugin overhead through render 
 
 The benchmark reports pxpipe's portable SHA-256 executable identity because pxpipe 0.7.1 has a stale `0.2.0` command fallback.
 
+## Context Savings
+
+The active bundle contains the global and project `AGENTS.md` files plus the three local files in `config.instructions`. With the current source contents and compact prompt:
+
+| Representation | Tokens |
+| --- | ---: |
+| OpenCode-wrapped plaintext (`o200k_base`) | 2,849 |
+| Inline prompt and exact-string index (`o200k_base`) | 195 |
+| System authority marker (`o200k_base`) | 15 |
+| PNG input (provider-accounted) | approximately 851 |
+| **Complete image replacement** | **approximately 1,061** |
+
+The replacement saves approximately 1,788 input-context tokens per qualifying model call, or 62.8% of this instruction block. The compact prompt and marker remain at 210 text tokens, down from 366 before compaction.
+
+This snapshot uses 14,360 source characters and one unchanged 1568×384 PNG (`sha256:6693cd806edd`). A fresh OpenCode process completed replacement without a mismatch. The PNG figure comes from the controlled provider usage measurement for that byte-identical page; pxpipe's manifest estimate is lower and is not used in the total. These numbers measure context usage, not billing, and do not establish semantic parity.
+
 ## Baseline
 
 | Case | Mean range | Median range | p95 range |

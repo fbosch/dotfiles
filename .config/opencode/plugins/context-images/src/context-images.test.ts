@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import type { Part, UserMessage } from "@opencode-ai/sdk"
+import type { AssistantMessage, Part, ToolPart, UserMessage } from "@opencode-ai/sdk"
 import { ContextImagesService } from "./context-images"
 import type { ContextImagesEvent, ContextImagesLogger } from "./logger"
 import type { ContextRenderer } from "./pxpipe"
@@ -54,6 +54,17 @@ class FakeRenderer implements ContextRenderer {
   }
 }
 
+class SelectiveRenderer extends FakeRenderer {
+  constructor(readonly rejectedText: string) {
+    super()
+  }
+
+  override async render(text: string, modelID: string, cacheDirectory: string) {
+    if (text.includes(this.rejectedText)) throw new Error(`rejected ${this.rejectedText}`)
+    return await super.render(text, modelID, cacheDirectory)
+  }
+}
+
 class FakeLogger implements ContextImagesLogger {
   events: ContextImagesEvent[] = []
 
@@ -70,6 +81,41 @@ function userMessage(modelID = "active-model"): UserMessage {
     time: { created: 1 },
     agent: "build",
     model: { providerID: "openai", modelID },
+  }
+}
+
+function assistantMessage(worktree: string): AssistantMessage {
+  return {
+    id: "message-2",
+    sessionID: "session-1",
+    role: "assistant",
+    time: { created: 2, completed: 3 },
+    parentID: "message-1",
+    modelID: "active-model",
+    providerID: "openai",
+    mode: "build",
+    path: { cwd: worktree, root: worktree },
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  }
+}
+
+function completedRead(path: string, output: string): ToolPart {
+  return {
+    id: "part-read",
+    sessionID: "session-1",
+    messageID: "message-2",
+    type: "tool",
+    callID: "call-read",
+    tool: "read",
+    state: {
+      status: "completed",
+      input: { filePath: path },
+      output,
+      title: path,
+      metadata: {},
+      time: { start: 1, end: 2 },
+    },
   }
 }
 
@@ -100,8 +146,14 @@ describe("ContextImagesService", () => {
       ].join("\n"),
     ]
     const auxiliarySystem = ["Auxiliary model prompt."]
-    await service.transformSystem({ sessionID: "session-1", model: { id: "active-model" } }, { system: auxiliarySystem })
-    await service.transformSystem({ sessionID: "session-1", model: { id: "active-model" } }, { system })
+    await service.transformSystem(
+      { sessionID: "session-1", model: { id: "active-model", providerID: "anthropic" } },
+      { system: auxiliarySystem },
+    )
+    await service.transformSystem(
+      { sessionID: "session-1", model: { id: "active-model", providerID: "openai" } },
+      { system },
+    )
 
     expect(auxiliarySystem).toEqual(["Auxiliary model prompt."])
     expect(parts.map((part) => part.type)).toEqual(["text", "file"])
@@ -264,13 +316,221 @@ describe("ContextImagesService", () => {
 
     await service.transformMessages({}, { messages: [{ info: userMessage("text-model"), parts }] })
     await service.transformSystem(
-      { sessionID: "session-1", model: { id: "text-model", capabilities: { input: { image: false } } } },
+      {
+        sessionID: "session-1",
+        model: { id: "text-model", providerID: "openai", capabilities: { input: { image: false } } },
+      },
       { system },
     )
 
     expect(parts).toEqual([])
     expect(system[0]).toContain(instructionContent)
     expect(system[0]).not.toContain("contains a context package")
+  })
+
+  test("replaces allowlisted completed read results after image capability confirmation", async () => {
+    const worktree = await temporaryDirectory()
+    const directory = join(worktree, "nested")
+    const cacheRoot = await temporaryDirectory()
+    const tonePath = join(worktree, "TONE.md")
+    await mkdir(directory)
+    const read = completedRead("../TONE.md", "Direct and factual.\n")
+    const userParts: Part[] = []
+    const service = new ContextImagesService({
+      cacheRoot,
+      directory,
+      experimentalReadResultSources: [tonePath],
+      imageSupport: async () => true,
+      renderer: new FakeRenderer(),
+      sources: [],
+      worktree,
+    })
+
+    await service.transformMessages({}, {
+      messages: [
+        { info: userMessage(), parts: userParts },
+        { info: assistantMessage(worktree), parts: [read] },
+      ],
+    })
+    await service.transformSystem(
+      {
+        sessionID: "session-1",
+        model: { id: "active-model", providerID: "openai", capabilities: { input: { image: true } } },
+      },
+      { system: ["System prompt."] },
+    )
+
+    expect(userParts).toEqual([])
+    expect(read.state).toMatchObject({
+      status: "completed",
+      output: [
+        "Read page-001.png. Use the index to copy exact strings; derive all rules and meaning from the image.",
+        "",
+        "Exact strings:",
+        "AGENTS.md · exact-identifier",
+      ].join("\n"),
+      attachments: [{ type: "file", mime: "image/png", filename: "context.page-1.png" }],
+    })
+  })
+
+  test("leaves completed read results unchanged unless explicitly allowlisted", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const tonePath = join(worktree, "TONE.md")
+    const read = completedRead(tonePath, "Direct and factual.\n")
+    const originalState = read.state
+    const service = new ContextImagesService({ cacheRoot, renderer: new FakeRenderer(), sources: [], worktree })
+
+    await service.transformMessages({}, {
+      messages: [
+        { info: userMessage(), parts: [] },
+        { info: assistantMessage(worktree), parts: [read] },
+      ],
+    })
+
+    expect(read.state).toBe(originalState)
+  })
+
+  test("does not replace allowlisted read results without confirmed image input", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const tonePath = join(worktree, "TONE.md")
+    const read = completedRead(tonePath, "Direct and factual.\n")
+    const originalState = read.state
+    const service = new ContextImagesService({
+      cacheRoot,
+      experimentalReadResultSources: [tonePath],
+      imageSupport: async () => false,
+      renderer: new FakeRenderer(),
+      sources: [],
+      worktree,
+    })
+
+    await service.transformMessages({}, {
+      messages: [
+        { info: userMessage("text-model"), parts: [] },
+        { info: assistantMessage(worktree), parts: [read] },
+      ],
+    })
+    await service.transformSystem(
+      {
+        sessionID: "session-1",
+        model: { id: "text-model", providerID: "openai", capabilities: { input: { image: false } } },
+      },
+      { system: ["System prompt."] },
+    )
+
+    expect(read.state).toBe(originalState)
+    expect(read.state).toMatchObject({ output: "Direct and factual.\n" })
+    expect("attachments" in read.state).toBe(false)
+  })
+
+  test("keeps capability-confirmed read replacement independent from an ambient mismatch", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const tonePath = join(worktree, "TONE.md")
+    await writeFile(join(worktree, "AGENTS.md"), "Instructions.\n")
+    const read = completedRead(tonePath, "Direct and factual.\n")
+    const originalState = read.state
+    const ambientInstruction = `Instructions from: ${join(worktree, "AGENTS.md")}\nInstructions.\n`
+    const userParts: Part[] = []
+    const service = new ContextImagesService({
+      cacheRoot,
+      experimentalReadResultSources: [tonePath],
+      imageSupport: async () => true,
+      renderer: new FakeRenderer(),
+      sources: ["AGENTS.md"],
+      worktree,
+    })
+
+    await service.transformMessages({}, {
+      messages: [
+        { info: userMessage(), parts: userParts },
+        { info: assistantMessage(worktree), parts: [read] },
+      ],
+    })
+    await service.transformSystem(
+      {
+        sessionID: "session-1",
+        model: { id: "active-model", providerID: "openai", capabilities: { input: { image: true } } },
+      },
+      { system: ["System prompt without configured instructions."] },
+    )
+    await service.transformSystem(
+      {
+        sessionID: "session-1",
+        model: { id: "active-model", providerID: "openai", capabilities: { input: { image: true } } },
+      },
+      { system: [`${ambientInstruction}\n${ambientInstruction}`] },
+    )
+
+    expect(read.state).not.toBe(originalState)
+    expect(read.state).toMatchObject({
+      output: [
+        "Read page-001.png. Use the index to copy exact strings; derive all rules and meaning from the image.",
+        "",
+        "Exact strings:",
+        "AGENTS.md · exact-identifier",
+      ].join("\n"),
+    })
+    expect(userParts).toEqual([])
+  })
+
+  test("keeps ambient replacement when experimental read rendering fails", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const tonePath = join(worktree, "TONE.md")
+    await writeFile(join(worktree, "AGENTS.md"), "Instructions.\n")
+    const read = completedRead(tonePath, "Direct and factual.\n")
+    const originalState = read.state
+    const userParts: Part[] = []
+    const service = new ContextImagesService({
+      cacheRoot,
+      experimentalReadResultSources: [tonePath],
+      imageSupport: async () => true,
+      renderer: new SelectiveRenderer("TONE.md"),
+      sources: ["AGENTS.md"],
+      worktree,
+    })
+
+    await service.transformMessages({}, {
+      messages: [
+        { info: userMessage(), parts: userParts },
+        { info: assistantMessage(worktree), parts: [read] },
+      ],
+    })
+
+    expect(read.state).toBe(originalState)
+    expect(userParts.map((part) => part.type)).toEqual(["text", "file"])
+  })
+
+  test("keeps experimental read replacement when ambient rendering fails", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const tonePath = join(worktree, "TONE.md")
+    await writeFile(join(worktree, "AGENTS.md"), "Instructions.\n")
+    const read = completedRead(tonePath, "Direct and factual.\n")
+    const originalState = read.state
+    const userParts: Part[] = []
+    const service = new ContextImagesService({
+      cacheRoot,
+      experimentalReadResultSources: [tonePath],
+      imageSupport: async () => true,
+      renderer: new SelectiveRenderer("AGENTS.md"),
+      sources: ["AGENTS.md"],
+      worktree,
+    })
+
+    await service.transformMessages({}, {
+      messages: [
+        { info: userMessage(), parts: userParts },
+        { info: assistantMessage(worktree), parts: [read] },
+      ],
+    })
+
+    expect(read.state).not.toBe(originalState)
+    expect(read.state).toMatchObject({ attachments: [{ type: "file", mime: "image/png" }] })
+    expect(userParts).toEqual([])
   })
 
   test("discovers global, hierarchical project, and configured instructions", async () => {
@@ -353,13 +613,14 @@ describe("ContextImagesService", () => {
       },
       version: async () => "test-1.0.0",
     }
-    const service = new ContextImagesService({ cacheRoot, renderer, sources: ["AGENTS.md"], worktree })
+    const logger = new FakeLogger()
+    const service = new ContextImagesService({ cacheRoot, logger, renderer, sources: ["AGENTS.md"], worktree })
     const parts: Part[] = []
 
-    await expect(
-      service.transformMessages({}, { messages: [{ info: userMessage(), parts }] }),
-    ).rejects.toThrow("render failed")
+    await service.transformMessages({}, { messages: [{ info: userMessage(), parts }] })
+
     expect(parts).toEqual([])
+    expect(logger.events).toEqual([{ event: "transform_failed", message: "render failed" }])
   })
 
   test("logs configured sources missing from the system prompt", async () => {
@@ -379,7 +640,7 @@ describe("ContextImagesService", () => {
     await service.transformMessages({}, { messages: [{ info: userMessage(), parts }] })
     const instruction = `Instructions from: ${join(worktree, "AGENTS.md")}\nInstructions.\n`
     await service.transformSystem(
-      { sessionID: "session-1", model: { id: "active-model" } },
+      { sessionID: "session-1", model: { id: "active-model", providerID: "openai" } },
       { system: [`${instruction}\n${instruction}`] },
     )
 

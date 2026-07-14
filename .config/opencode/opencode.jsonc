@@ -17,7 +17,14 @@
   },
   "plugin": [
     "opencode-toolbox@0.10.4",
-    "./plugins/context-images/context-images.ts",
+    [
+      "./plugins/context-images/context-images.ts",
+      {
+        "experimentalReadResultSources": [
+          "~/.config/opencode/TONE.md"
+        ]
+      }
+    ],
     "./plugins/openmemory/openmemory.ts",
     "opencode-wakatime@1.3.8",
     "opencode-toon-plugin@0.1.2",
@@ -86,6 +93,7 @@
       "rtk git clean*": "ask",
       "git restore*": "ask",
       "rtk git restore*": "ask",
+      "git fetch*": "allow",
       "gh pr view*": "allow",
       "gh pr issue*": "allow",
       "gh search*": "allow"

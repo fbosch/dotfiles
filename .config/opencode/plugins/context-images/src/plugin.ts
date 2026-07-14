@@ -12,14 +12,39 @@ function warnOnce(error: unknown) {
   process.stderr.write(`[context-images] preserving text instructions: ${detail}\n`)
 }
 
-export const ContextImagesPlugin: Plugin = async ({ directory, worktree }, options = {}) => {
+export const ContextImagesPlugin: Plugin = async ({ client, directory, worktree }, options = {}) => {
   if ("sources" in options) {
     throw new Error('[context-images] option "sources" is no longer supported; use OpenCode instruction discovery')
+  }
+  const experimentalReadResultSources = options.experimentalReadResultSources
+  if (
+    experimentalReadResultSources !== undefined &&
+    (Array.isArray(experimentalReadResultSources) === false ||
+      experimentalReadResultSources.some((source) => typeof source !== "string" || source.trim().length === 0))
+  ) {
+    throw new Error('[context-images] option "experimentalReadResultSources" must be an array of non-empty paths')
   }
   const logFile = typeof options.logFile === "string" ? options.logFile : undefined
   const logger = new JsonlLogger(logFile)
   await logger.write({ event: "plugin_loaded" })
-  const service = new ContextImagesService({ directory, logger, renderer: new PxpipeRenderer(), worktree })
+  let providers: ReturnType<typeof client.config.providers> | undefined
+  const service = new ContextImagesService({
+    directory,
+    experimentalReadResultSources,
+    imageSupport: async (providerID, modelID) => {
+      const request = (providers ??= client.config.providers({ query: { directory } }))
+      const response = await request.catch(() => undefined)
+      if (!response?.data) {
+        if (providers === request) providers = undefined
+        return false
+      }
+      const model = response.data.providers.find((provider) => provider.id === providerID)?.models[modelID]
+      return model?.capabilities.input.image === true
+    },
+    logger,
+    renderer: new PxpipeRenderer(),
+    worktree,
+  })
 
   return {
     config: async (config) => {

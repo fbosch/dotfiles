@@ -198,7 +198,10 @@ async function main() {
         async (iteration) => {
           const sessionID = `system-${iteration}`
           const system = [`prefix\nInstructions from: ${join(worktree, "AGENTS.md")}\n${INSTRUCTIONS}\nsuffix`]
-          await systemService.transformSystem({ sessionID, model: { id: MODEL_ID } }, { system })
+          await systemService.transformSystem(
+            { sessionID, model: { id: MODEL_ID, providerID: "openai" } },
+            { system },
+          )
         },
         async (iteration) => {
           const sessionID = `system-${iteration}`
