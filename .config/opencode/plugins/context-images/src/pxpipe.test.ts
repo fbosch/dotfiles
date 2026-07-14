@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { PxpipeRenderer } from "./pxpipe"
@@ -52,6 +52,8 @@ export async function runExportCore() {
 
     expect(rendered.prompt).toBe("library prompt")
     expect(rendered.pages[0]?.toString()).toBe("library page")
+    expect((await stat(join(directory, "cache"))).mode & 0o777).toBe(0o700)
+    expect((await stat(join(directory, "cache", "page-001.png"))).mode & 0o777).toBe(0o600)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

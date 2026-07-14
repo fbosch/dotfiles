@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { constants } from "node:fs"
-import { access, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises"
+import { access, chmod, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises"
 import { basename, delimiter, dirname, join, resolve, sep } from "node:path"
 import { pathToFileURL } from "node:url"
 
@@ -157,6 +157,14 @@ export async function loadRenderedContext(directory: string): Promise<RenderedCo
   return { factsheet, pages, prompt }
 }
 
+async function secureOutputDirectory(directory: string) {
+  await chmod(directory, 0o700)
+  const entries = await readdir(directory, { withFileTypes: true })
+  await Promise.all(
+    entries.filter((entry) => entry.isFile()).map((entry) => chmod(join(directory, entry.name), 0o600)),
+  )
+}
+
 export class PxpipeRenderer implements ContextRenderer {
   readonly #executable: string
   readonly #useLibrary: boolean
@@ -253,6 +261,7 @@ export class PxpipeRenderer implements ContextRenderer {
   async render(text: string, modelID: string, cacheDirectory: string) {
     const cacheParent = dirname(cacheDirectory)
     await mkdir(cacheParent, { recursive: true })
+    await chmod(cacheParent, 0o700)
     const temporaryRoot = await mkdtemp(join(cacheParent, ".staging-"))
     try {
       let output: RenderOutput | undefined
@@ -262,6 +271,7 @@ export class PxpipeRenderer implements ContextRenderer {
         output = undefined
       }
       output ??= await this.#renderWithCli(text, modelID, temporaryRoot)
+      await secureOutputDirectory(output.directory)
 
       const rendered = output.rendered ?? (await loadRenderedContext(output.directory))
       try {
@@ -270,6 +280,7 @@ export class PxpipeRenderer implements ContextRenderer {
         const code = (error as NodeJS.ErrnoException).code
         if (code !== "EEXIST" && code !== "ENOTEMPTY") throw error
         try {
+          await secureOutputDirectory(cacheDirectory)
           return await loadRenderedContext(cacheDirectory)
         } catch {
           await rm(cacheDirectory, { recursive: true, force: true })

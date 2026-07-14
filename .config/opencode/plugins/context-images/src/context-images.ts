@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto"
-import { readFile } from "node:fs/promises"
+import { chmod, mkdir, readFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { isAbsolute, join, resolve, sep } from "node:path"
 import type { FilePart, Message, Part } from "@opencode-ai/sdk"
@@ -57,6 +57,11 @@ function cacheSegment(value: string) {
 function defaultCacheRoot() {
   const root = process.env.XDG_CACHE_HOME || join(homedir(), ".cache")
   return join(root, "opencode", "context-images")
+}
+
+async function secureCacheRoot(path: string) {
+  await mkdir(path, { recursive: true, mode: 0o700 })
+  await chmod(path, 0o700)
 }
 
 function projectConfigDisabled() {
@@ -138,6 +143,7 @@ function latestUser(messages: MessageWithParts[]) {
 }
 
 export class ContextImagesService {
+  readonly #cacheReady: Promise<void>
   readonly #cacheRoot: string
   readonly #compacting = new Set<string>()
   readonly #directory: string
@@ -164,6 +170,7 @@ export class ContextImagesService {
     this.#worktree = resolve(input.worktree)
     this.#directory = resolve(input.directory ?? input.worktree)
     this.#cacheRoot = input.cacheRoot ?? defaultCacheRoot()
+    this.#cacheReady = secureCacheRoot(this.#cacheRoot)
     this.#renderer = input.renderer
     this.#logger = input.logger
     this.#imageSupport = input.imageSupport
@@ -268,6 +275,7 @@ export class ContextImagesService {
 
   async #prepareSources(sources: InstructionSource[], modelID: string): Promise<PreparedContext | undefined> {
     if (sources.length === 0) return
+    await this.#cacheReady
 
     const instructions = sources.map((source) => `Instructions from: ${source.path}\n${source.content}`)
     const context = instructions.join("\n\n")

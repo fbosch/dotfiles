@@ -37,6 +37,7 @@ Sources are discovered automatically rather than configured through a plugin-spe
 - Pending replacements are bound to the active model so concurrent title and summary prompts cannot consume them.
 - System replacement validates every source before removing plaintext and logs `replacement_mismatch` on failure. OpenCode 1.17.18 converts message attachments before the system hook, so rollback cannot remove an already-converted ambient image from that provider request.
 - Rendered artifacts are cached by source content and renderer identity under `~/.cache/opencode/context-images/`.
+- The cache root and rendered directories use mode `0700`; generated artifacts use mode `0600` so only the owning user can read instruction images.
 - Best-effort structured events are written to `~/.local/state/opencode/context-images/events.jsonl` without instruction contents.
 - pxpipe loads `runExportCore` in-process when available and falls back to `pxpipe export` when package discovery, import, or library rendering fails.
 - Background preload reduces first-request renderer initialization after idle.
@@ -45,7 +46,7 @@ Sources are discovered automatically rather than configured through a plugin-spe
 
 Recorded on 2026-07-13 and 2026-07-14:
 
-- 23 Bun tests pass with 60 expectations.
+- 23 Bun tests pass with 63 expectations.
 - Strict TypeScript checking passes.
 - Bun bundling passes.
 - Fallow reports no dead code and no duplication.

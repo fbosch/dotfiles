@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, mkdir, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { AssistantMessage, Part, ToolPart, UserMessage } from "@opencode-ai/sdk"
@@ -213,6 +213,7 @@ describe("ContextImagesService", () => {
     await service.transformMessages({}, { messages: [{ info: userMessage("other-active-model"), parts }] })
 
     expect(parts.map((part) => part.type)).toEqual(["text", "file"])
+    expect((await stat(cacheRoot)).mode & 0o777).toBe(0o700)
     expect(renderer.renders).toBe(1)
   })
 
