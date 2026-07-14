@@ -22,11 +22,11 @@ end
 
 local function close_window(address)
 	if valid_address(address) then
-		hypr_ipc.request('dispatch hl.dsp.window.close({ window = "address:' .. address .. '" })')
+		hypr_ipc.request("dispatch closewindow address:" .. address)
 		return
 	end
 
-	hypr_ipc.request("dispatch hl.dsp.window.close()")
+	hypr_ipc.request("dispatch closewindow")
 end
 
 local function gaming_is_active()

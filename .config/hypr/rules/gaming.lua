@@ -16,6 +16,7 @@ M.default_presentation = {
 ---@field selectors GamingSelector[] Window selectors shared by Hyprland and the watchdog.
 ---@field fullscreen_state? string Hyprland internal and client fullscreen states.
 ---@field suppress_event? string Hyprland event to suppress for the matching window.
+---@field focus_on_open? boolean Focus the window once after it opens.
 ---@field enable_profile? boolean Activates the gaming profile for this window.
 ---@field exclude_profile? boolean Prevents this window from activating the gaming profile.
 ---@field freeze? boolean `false` excludes this window from watchdog `wl-freeze` handling.
@@ -31,6 +32,7 @@ M.games = {
 		},
 		fullscreen_state = "2 0",
 		suppress_event = "fullscreen",
+		focus_on_open = true,
 		enable_profile = true,
 		freeze = false,
 		confirm_close = true,
@@ -189,6 +191,17 @@ local function register_game_rules()
 	end
 end
 
+local function register_open_handler()
+	hl.on("window.open", function(window)
+		local game = M.match(window)
+		if game == nil or game.focus_on_open ~= true then
+			return
+		end
+
+		hl.dispatch(hl.dsp.focus({ window = "address:" .. window.address }))
+	end)
+end
+
 local function register_game_client_rules()
 	hl.window_rule({ match = { class = "^(SGDBoop)$" }, float = true, pin = true })
 	hl.window_rule({ match = { initial_title = "^(Larian Launcher)$" }, float = true, decorate = false })
@@ -234,6 +247,7 @@ function M.register_window_rules()
 	register_game_rules()
 	register_game_client_rules()
 	register_fullscreen_handler()
+	register_open_handler()
 end
 
 return M
