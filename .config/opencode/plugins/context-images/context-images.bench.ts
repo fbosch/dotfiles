@@ -41,16 +41,6 @@ class CachedRenderer implements ContextRenderer {
   }
 }
 
-class UncachedRenderer implements ContextRenderer {
-  async version() {
-    return "benchmark-1.0.0"
-  }
-
-  async render() {
-    return RENDERED
-  }
-}
-
 function userMessage(sessionID: string): UserMessage {
   return {
     id: `message-${sessionID}`,
@@ -115,18 +105,79 @@ async function benchmark(
   return summarize(name, samples)
 }
 
-async function benchmarkColdLibrary(name: string, preloadDelayMs: number) {
+async function benchmarkColdWorker(name: string, worker: string, preloadDelayMs: number) {
   const samples: number[] = []
   for (let index = 0; index < EXTERNAL_ITERATIONS; index += 1) {
-    const child = Bun.spawn([process.execPath, import.meta.path, "--cold-library-worker", String(preloadDelayMs)], {
+    const child = Bun.spawn([process.execPath, import.meta.path, worker, String(preloadDelayMs)], {
       stderr: "inherit",
       stdout: "pipe",
     })
     const output = await new Response(child.stdout).text()
-    if ((await child.exited) !== 0) throw new Error("cold library benchmark worker failed")
+    if ((await child.exited) !== 0) throw new Error(`${worker} benchmark worker failed`)
     samples.push(Number(output))
   }
   return summarize(name, samples)
+}
+
+function freshService(root: string, worktree: string, renderer: ContextRenderer, prefix: string, index: number) {
+  return new ContextImagesService({
+    cacheRoot: join(root, `${prefix}-${index}`),
+    renderer,
+    sources: ["AGENTS.md"],
+    worktree,
+  })
+}
+
+async function benchmarkStubMiss(root: string, worktree: string) {
+  const samples: number[] = []
+  const renderer = new CachedRenderer()
+  for (let index = 0; index < FAST_ITERATIONS + FAST_WARMUP; index += 1) {
+    const service = freshService(root, worktree, renderer, "stub-miss", index)
+    const start = Bun.nanoseconds()
+    await service.transformMessages({}, { messages: [{ info: userMessage(`miss-${index}`), parts: [] }] })
+    if (index >= FAST_WARMUP) samples.push((Bun.nanoseconds() - start) / 1_000_000)
+    await service.waitForRenders()
+  }
+  return summarize("message transform, cache miss", samples)
+}
+
+async function benchmarkBackgroundMiss(
+  root: string,
+  worktree: string,
+  renderer: ContextRenderer,
+): Promise<Benchmark[]> {
+  const dispatchSamples: number[] = []
+  const readySamples: number[] = []
+  for (let index = 0; index < EXTERNAL_ITERATIONS + EXTERNAL_WARMUP; index += 1) {
+    const service = freshService(root, worktree, renderer, "background-miss", index)
+    const start = Bun.nanoseconds()
+    await service.transformMessages({}, { messages: [{ info: userMessage(`background-${index}`), parts: [] }] })
+    const dispatched = (Bun.nanoseconds() - start) / 1_000_000
+    await service.waitForRenders()
+    const ready = (Bun.nanoseconds() - start) / 1_000_000
+    const parts: Part[] = []
+    await service.transformMessages({}, { messages: [{ info: userMessage(`ready-${index}`), parts }] })
+    if (parts.some((part) => part.type === "file") === false) throw new Error("background cache was not published")
+    if (index >= EXTERNAL_WARMUP) {
+      dispatchSamples.push(dispatched)
+      readySamples.push(ready)
+    }
+  }
+  return [
+    summarize("pxpipe miss dispatch", dispatchSamples),
+    summarize("pxpipe miss cache ready", readySamples),
+  ]
+}
+
+async function benchmarkStartupWarm(root: string, worktree: string, renderer: ContextRenderer) {
+  const samples: number[] = []
+  for (let index = 0; index < EXTERNAL_ITERATIONS + EXTERNAL_WARMUP; index += 1) {
+    const service = freshService(root, worktree, renderer, "startup-warm", index)
+    const start = Bun.nanoseconds()
+    await service.warmAmbient(MODEL_ID)
+    if (index >= EXTERNAL_WARMUP) samples.push((Bun.nanoseconds() - start) / 1_000_000)
+  }
+  return summarize("startup warm, cache miss", samples)
 }
 
 function printBenchmark(result: Benchmark) {
@@ -157,13 +208,8 @@ async function main() {
       sources: ["AGENTS.md"],
       worktree,
     })
-    const uncached = new ContextImagesService({
-      cacheRoot: join(root, "uncached"),
-      renderer: new UncachedRenderer(),
-      sources: ["AGENTS.md"],
-      worktree,
-    })
     await cached.transformMessages({}, { messages: [{ info: userMessage("prime"), parts: [] }] })
+    await cached.waitForRenders()
 
     const results: Benchmark[] = []
     results.push(
@@ -178,11 +224,11 @@ async function main() {
       }),
     )
     results.push(
-      await benchmark("message transform, cache miss", FAST_ITERATIONS, FAST_WARMUP, async (iteration) => {
-        const parts: Part[] = []
-        await uncached.transformMessages({}, { messages: [{ info: userMessage(`miss-${iteration}`), parts }] })
+      await benchmark("startup warm, cache hit", FAST_ITERATIONS, FAST_WARMUP, async () => {
+        await cached.warmAmbient(MODEL_ID)
       }),
     )
+    results.push(await benchmarkStubMiss(root, worktree))
 
     const systemService = new ContextImagesService({
       cacheRoot: join(root, "cached"),
@@ -215,12 +261,17 @@ async function main() {
         await new PxpipeRenderer("pxpipe", false).version()
       }),
     )
-    results.push(await benchmarkColdLibrary("pxpipe library, first use", 0))
-    results.push(await benchmarkColdLibrary("pxpipe library, after 100ms", 100))
-    results.push(await benchmarkColdLibrary("pxpipe library, after 500ms", 500))
+    results.push(await benchmarkColdWorker("pxpipe library, first use", "--cold-library-worker", 0))
+    results.push(await benchmarkColdWorker("pxpipe library, after 100ms", "--cold-library-worker", 100))
+    results.push(await benchmarkColdWorker("pxpipe library, after 500ms", "--cold-library-worker", 500))
+    results.push(await benchmarkColdWorker("startup first use", "--cold-startup-worker", 0))
+    results.push(await benchmarkColdWorker("startup after 100ms", "--cold-startup-worker", 100))
+    results.push(await benchmarkColdWorker("startup after 500ms", "--cold-startup-worker", 500))
     const libraryRenderer = new PxpipeRenderer()
     const cliRenderer = new PxpipeRenderer("pxpipe", false)
     await libraryRenderer.preload()
+    results.push(await benchmarkStartupWarm(root, worktree, libraryRenderer))
+    results.push(...(await benchmarkBackgroundMiss(root, worktree, libraryRenderer)))
     results.push(
       await benchmark("pxpipe library render", EXTERNAL_ITERATIONS, EXTERNAL_WARMUP, async (iteration) => {
         await libraryRenderer.render(INSTRUCTIONS, MODEL_ID, join(root, `pxpipe-library-${iteration}`))
@@ -258,8 +309,31 @@ async function coldLibraryWorker(preloadDelayMs: number) {
   }
 }
 
+async function coldStartupWorker(preloadDelayMs: number) {
+  const root = await mkdtemp(join(tmpdir(), "context-images-startup-bench-"))
+  try {
+    const worktree = join(root, "worktree")
+    await mkdir(worktree)
+    await writeFile(join(worktree, "AGENTS.md"), INSTRUCTIONS)
+    const service = new ContextImagesService({
+      cacheRoot: join(root, "cache"),
+      renderer: new PxpipeRenderer(),
+      sources: ["AGENTS.md"],
+      worktree,
+    })
+    if (preloadDelayMs > 0) await Bun.sleep(preloadDelayMs)
+    const start = Bun.nanoseconds()
+    await service.warmAmbient(MODEL_ID, 1_000)
+    process.stdout.write(String((Bun.nanoseconds() - start) / 1_000_000))
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}
+
 if (process.argv[2] === "--cold-library-worker") {
   await coldLibraryWorker(Number(process.argv[3] ?? 0))
+} else if (process.argv[2] === "--cold-startup-worker") {
+  await coldStartupWorker(Number(process.argv[3] ?? 0))
 } else {
   await main()
 }

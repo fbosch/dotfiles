@@ -4,12 +4,20 @@ import { JsonlLogger } from "./logger"
 import { PxpipeRenderer } from "./pxpipe"
 
 let warned = false
+const STARTUP_WARM_TIMEOUT_MS = 1_000
 
 function warnOnce(error: unknown) {
   if (warned) return
   warned = true
   const detail = error instanceof Error ? error.message : String(error)
   process.stderr.write(`[context-images] preserving text instructions: ${detail}\n`)
+}
+
+function configuredModelID(model: unknown) {
+  if (typeof model !== "string") return
+  const separator = model.indexOf("/")
+  if (separator < 1 || separator === model.length - 1) return
+  return model.slice(separator + 1)
 }
 
 export const ContextImagesPlugin: Plugin = async ({ client, directory, worktree }, options = {}) => {
@@ -49,6 +57,15 @@ export const ContextImagesPlugin: Plugin = async ({ client, directory, worktree 
   return {
     config: async (config) => {
       service.setConfiguredInstructions(config.instructions ?? [])
+      const modelID = configuredModelID(config.model)
+      if (!modelID) return
+      try {
+        await service.warmAmbient(modelID, STARTUP_WARM_TIMEOUT_MS)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        await logger.write({ event: "transform_failed", message })
+        warnOnce(error)
+      }
     },
     "experimental.session.compacting": async (input) => {
       service.markCompacting(input.sessionID)
