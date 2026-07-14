@@ -207,7 +207,6 @@ async function main() {
       ),
     )
 
-    const pxpipeVersion = Bun.spawnSync(["pxpipe", "--version"]).stdout.toString().trim()
     results.push(
       await benchmark("pxpipe identity, cold", EXTERNAL_ITERATIONS, EXTERNAL_WARMUP, async () => {
         await new PxpipeRenderer("pxpipe", false).version()
@@ -229,11 +228,12 @@ async function main() {
         await cliRenderer.render(INSTRUCTIONS, MODEL_ID, join(root, `pxpipe-cli-${iteration}`))
       }),
     )
+    const pxpipeIdentity = await new PxpipeRenderer("pxpipe", false).version()
 
     console.log(`platform: ${platform()} ${release()}`)
     console.log(`cpu: ${cpus()[0]?.model ?? "unknown"}`)
     console.log(`bun: ${Bun.version}`)
-    console.log(`pxpipe: ${pxpipeVersion}`)
+    console.log(`pxpipe executable: sha256:${pxpipeIdentity.slice(0, 12)}`)
     console.log(`fixture: ${Buffer.byteLength(INSTRUCTIONS)} instruction bytes, ${PAGE_BYTES} cached PNG bytes`)
     console.log("")
     for (const result of results) printBenchmark(result)

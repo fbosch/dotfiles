@@ -1,11 +1,11 @@
 # Context Images Performance Baseline
 
-Recorded on 2026-07-13 with:
+Recorded on 2026-07-14 with:
 
 - Linux 7.1.3-cachyos
 - Intel Core i7-8700K at 3.70 GHz
 - Bun 1.3.13
-- pxpipe 0.2.0
+- pxpipe 0.7.1 (`sha256:b7eedd655e27` executable identity)
 - 9,180 bytes of instructions and one 32 KiB cached PNG
 
 Run the benchmark from this directory with `bun run bench`.
@@ -16,24 +16,26 @@ The in-process cases use 10 warmup iterations and 50 measured iterations. The wa
 
 The cache-miss case stubs rendering. It measures plugin overhead through render dispatch, not pxpipe. The pxpipe cases measure cold executable identity detection and the full library and CLI render paths, including cache publication and artifact reload.
 
-The package script removes Bun's `npm_package_version` environment variable so the displayed pxpipe version is accurate.
+The benchmark reports pxpipe's portable SHA-256 executable identity because pxpipe 0.7.1 has a stale `0.2.0` command fallback.
 
 ## Baseline
 
 | Case | Mean range | Median range | p95 range |
 | --- | ---: | ---: | ---: |
-| Load rendered context | 0.163-0.185 ms | 0.066-0.088 ms | 0.364-0.832 ms |
-| Message transform, cache hit | 0.305-0.384 ms | 0.220-0.247 ms | 0.722-0.759 ms |
-| Message transform, cache miss | 0.154-0.244 ms | 0.114-0.146 ms | 0.229-0.928 ms |
-| System replacement | 0.032-0.038 ms | 0.028-0.036 ms | 0.059-0.065 ms |
-| Cold pxpipe identity | 0.288-0.327 ms | 0.290-0.318 ms | 0.371-0.450 ms |
-| Library first use, immediate | 610.900-632.611 ms | 608.437-623.357 ms | 635.485-672.805 ms |
-| Library first use, after 100 ms | 43.798-44.797 ms | 42.081-42.515 ms | 48.807-52.611 ms |
-| Library first use, after 500 ms | 43.983-46.118 ms | 43.378-44.392 ms | 52.068-52.845 ms |
-| Warm pxpipe library render | 19.517-20.090 ms | 17.655-18.583 ms | 26.738-29.098 ms |
-| Pxpipe CLI render | 397.169-420.940 ms | 394.409-421.034 ms | 422.718-461.036 ms |
+| Load rendered context | 0.104-0.117 ms | 0.081-0.091 ms | 0.127-0.162 ms |
+| Message transform, cache hit | 0.249-0.306 ms | 0.232-0.237 ms | 0.333-0.405 ms |
+| Message transform, cache miss | 0.155-0.161 ms | 0.118-0.152 ms | 0.218-0.237 ms |
+| System replacement | 0.046-0.047 ms | 0.042-0.046 ms | 0.077-0.088 ms |
+| Cold pxpipe identity | 0.336-0.346 ms | 0.285-0.335 ms | 0.443-0.606 ms |
+| Library first use, immediate | 561.955-622.589 ms | 559.772-579.496 ms | 586.069-994.833 ms |
+| Library first use, after 100 ms | 41.668-43.917 ms | 41.940-44.239 ms | 45.130-50.727 ms |
+| Library first use, after 500 ms | 41.786-43.695 ms | 40.589-44.170 ms | 46.430-52.100 ms |
+| Warm pxpipe library render | 17.201-19.079 ms | 16.458-18.099 ms | 21.401-24.193 ms |
+| Pxpipe CLI render | 374.595-386.871 ms | 370.576-378.305 ms | 411.253-422.447 ms |
 
-The recurring cached path is sub-millisecond. Warm in-process rendering averages 19-20 ms, roughly 20 times faster than the CLI fallback. Library import is expensive: an immediate first use costs 611-633 ms. After background preload, first-request rendering averages 44-46 ms. Compare future results on the same host and inspect multiple runs before treating sub-millisecond differences as regressions.
+The recurring cached path is sub-millisecond. Warm in-process rendering averages 17-19 ms, roughly 21 times faster than the CLI fallback. Library import remains expensive and variable: immediate first use averaged 562-623 ms, with one cold p95 outlier near 995 ms. After background preload, first-request rendering averages 42-44 ms. Compare future results on the same host and inspect multiple runs before treating sub-millisecond differences as regressions.
+
+Prompt and factsheet compaction did not materially regress the recurring path. Cache-hit transformation is no slower than the previous range. System replacement increased by about 0.01 ms while remaining below 0.05 ms. Since pxpipe changed from 0.2.0 to 0.7.1 between recorded baselines, renderer improvements cannot be attributed solely to plugin changes.
 
 ## Change From Initial Baseline
 
