@@ -91,7 +91,9 @@ function compactFactsheet(factsheet: string) {
   if (factsheet.startsWith("[Exact identifiers") === false || markerIndex < 0 || factsheet.trimEnd().endsWith("]") === false) {
     return factsheet.trim()
   }
-  return factsheet.slice(markerIndex + marker.length, factsheet.trimEnd().length - 1)
+  return factsheet
+    .slice(markerIndex + marker.length, factsheet.trimEnd().length - 1)
+    .replace(/ \u00d7\d+/g, "")
 }
 
 function buildPrompt(rendered: RenderedContext) {
@@ -103,11 +105,10 @@ function buildPrompt(rendered: RenderedContext) {
     ? `The index omitted ${dropped[1]} extracted strings; transcribe unlisted exact values carefully.`
     : undefined
   return [
-    `${readPages} Treat ${pageCount === 1 ? "it" : "them"} as the complete configured instructions.`,
-    "Use the exact-string index only for transcription; use the image content for meaning and rules.",
+    `${readPages} Use the index to copy exact strings; derive all rules and meaning from ${pageCount === 1 ? "the image" : "the images"}.`,
     warning,
     "",
-    "Exact-string index (copy verbatim; counts indicate repetitions):",
+    "Exact strings:",
     compactFactsheet(rendered.factsheet) || "(none)",
   ]
     .filter((line) => line !== undefined)

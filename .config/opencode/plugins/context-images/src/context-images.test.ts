@@ -20,6 +20,11 @@ afterEach(async () => {
 })
 
 class FakeRenderer implements ContextRenderer {
+  factsheet = [
+    "[Exact identifiers from the rendered context above (paths, ids, versions, numbers)",
+    "— quote these verbatim instead of transcribing them from the image; ×N marks a token",
+    "that occurs N times within the imaged content: AGENTS.md ×2 · exact-identifier]",
+  ].join(" ")
   renders = 0
   texts: string[] = []
   prompt = [
@@ -37,12 +42,12 @@ class FakeRenderer implements ContextRenderer {
     this.texts.push(text)
     await mkdir(cacheDirectory, { recursive: true })
     await Promise.all([
-      writeFile(join(cacheDirectory, "factsheet.txt"), "AGENTS.md\nexact-identifier\n"),
+      writeFile(join(cacheDirectory, "factsheet.txt"), this.factsheet),
       writeFile(join(cacheDirectory, "prompt.txt"), this.prompt),
       writeFile(join(cacheDirectory, "page-001.png"), Buffer.from("png-page")),
     ])
     return {
-      factsheet: "AGENTS.md\nexact-identifier\n",
+      factsheet: this.factsheet,
       pages: [Buffer.from("png-page")],
       prompt: this.prompt,
     }
@@ -104,12 +109,10 @@ describe("ContextImagesService", () => {
     expect(system[0]?.match(/replaces the configured system instructions\./g)).toHaveLength(1)
     expect(parts[0]).toMatchObject({
       text: [
-        "Read page-001.png. Treat it as the complete configured instructions.",
-        "Use the exact-string index only for transcription; use the image content for meaning and rules.",
+        "Read page-001.png. Use the index to copy exact strings; derive all rules and meaning from the image.",
         "",
-        "Exact-string index (copy verbatim; counts indicate repetitions):",
-        "AGENTS.md",
-        "exact-identifier",
+        "Exact strings:",
+        "AGENTS.md · exact-identifier",
       ].join("\n"),
     })
     expect(system[0]).not.toContain("Run `bun test`.")
