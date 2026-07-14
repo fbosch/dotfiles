@@ -45,7 +45,7 @@ Sources are discovered automatically rather than configured through a plugin-spe
 - An Effect-based render coordinator owns keyed deduplication, the two-render concurrency limit, detached warming, startup timeout, publication validation, failure cleanup, retries, and test draining. Discovery and message transformation remain plain TypeScript.
 - Startup blocks for at most one second while warming ambient instructions for the configured default model. Cache hits add about 0.14 ms; slow or failed warming falls back to the normal plaintext-first path.
 - Best-effort structured events are written to `~/.local/state/opencode/context-images/events.jsonl` without instruction contents.
-- Successful replacements and plaintext fallbacks append content-free estimates to `~/.local/state/opencode/context-images/stats.jsonl`. The plugin-defined `/context-images-stats [session|repo|total]` command reports session statistics by default.
+- Successful replacements and plaintext fallbacks enqueue content-free estimates for `~/.local/state/opencode/context-images/stats.jsonl` without awaiting filesystem writes in provider hooks. Reports flush the queue before reading. The plugin-defined `/context-images-stats [session|repo|total]` command reports session statistics by default.
 - pxpipe loads `runExportCore` in-process when available and falls back to `pxpipe export` when package discovery, import, or library rendering fails.
 - Background preload reduces first-request renderer initialization after idle.
 
@@ -53,7 +53,7 @@ Sources are discovered automatically rather than configured through a plugin-spe
 
 Recorded on 2026-07-13 through 2026-07-15:
 
-- 49 Bun tests pass with 142 expectations.
+- 49 Bun tests pass with 143 expectations.
 - Strict TypeScript checking passes.
 - Bun bundling passes.
 - Fallow reports no dead code and no duplication.

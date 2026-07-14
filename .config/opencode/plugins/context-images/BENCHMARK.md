@@ -65,6 +65,10 @@ The first call for a new source-content, renderer, and model cache key retains p
 
 The plugin warms ambient instructions for the configured default model during startup. A cache hit adds 0.133-0.146 ms. A preloaded cache miss adds 16.457-16.966 ms. Startup waiting is capped at one second; if rendering is still incomplete, OpenCode continues and the render remains active in the background.
 
+## Statistics Accounting
+
+The stats recorder was measured directly on the same host. The first JSONL write took `0.457 ms`; 100 recurring writes averaged `0.183 ms` with a `0.132 ms` median and `0.412 ms` p95. Writes are queued without being awaited by provider hooks, so this filesystem cost is outside the request path. Reports await the queue before reading: 1,000 records took `31.517 ms` on the first read and `4.829-8.223 ms` on four warm reads.
+
 ## Change From Initial Baseline
 
 Replacing `pxpipe --version` with a SHA-256 identity of the resolved executable reduced cold cache-version lookup from 345.440-348.465 ms to 0.360-0.393 ms, about 99.9%. This removes roughly 347 ms from a first-process cache hit and from a first-process cache miss. Real rendering stayed near 400 ms.

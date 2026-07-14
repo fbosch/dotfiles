@@ -10,7 +10,7 @@ if host == "rvn-pc" then
 		mode = "3440x1440@164.9",
 		position = "1440x500",
 		scale = 1.0,
-		bitdepth = 10,
+		-- bitdepth = 10,
 		-- cm = "hdr",
 		-- sdr_eotf = "srgb",
 		-- sdrbrightness = 5,

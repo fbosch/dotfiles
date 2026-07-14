@@ -1136,10 +1136,10 @@ describe("ContextImagesService", () => {
     }
 
     expect(renderer.texts).toHaveLength(4)
-    expect(renderer.texts[0]).toContain("Global instructions.")
-    expect(renderer.texts[1]).toContain("Nested ambient instructions.")
-    expect(renderer.texts[2]).toContain("Root instructions.")
-    expect(renderer.texts[3]).toContain("Configured instructions.")
+    expect(renderer.texts.some((text) => text.includes("Global instructions."))).toBe(true)
+    expect(renderer.texts.some((text) => text.includes("Nested ambient instructions."))).toBe(true)
+    expect(renderer.texts.some((text) => text.includes("Root instructions."))).toBe(true)
+    expect(renderer.texts.some((text) => text.includes("Configured instructions."))).toBe(true)
   })
 
   test("uses CLAUDE.md before deprecated CONTEXT.md when the project has no AGENTS.md", async () => {

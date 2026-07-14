@@ -573,10 +573,10 @@ export class ContextImagesService {
       nestedResult.status === "fulfilled" ? nestedResult.value : { fallbacks: [], readResults: [], scoped: [] }
     const requestID = randomUUID()
     if (ambientPreparation.eligible && !prepared) {
-      await this.#stats?.recordFallback({ kind: "ambient", reason: "not-ready", requestID, sessionID })
+      void this.#stats?.recordFallback({ kind: "ambient", reason: "not-ready", requestID, sessionID })
     }
     for (const fallback of preparedNested.fallbacks) {
-      await this.#stats?.recordFallback({ ...fallback, requestID })
+      void this.#stats?.recordFallback({ ...fallback, requestID })
     }
     if (!prepared && preparedNested.readResults.length === 0 && preparedNested.scoped.length === 0) {
       return
@@ -628,7 +628,7 @@ export class ContextImagesService {
         url: `data:image/png;base64,${page.toString("base64")}`,
       }))
       if (!preparedPackage || pages.length === 0) {
-        await this.#stats?.recordFallback({
+        void this.#stats?.recordFallback({
           kind: "read-result",
           reason: "not-ready",
           requestID,
@@ -641,7 +641,7 @@ export class ContextImagesService {
         attachments: [...(originalState.attachments ?? []), ...pages],
         output: preparedPackage.rendered.prompt,
       }
-      await this.#stats?.recordReplacement({
+      void this.#stats?.recordReplacement({
         kind: "read-result",
         packages: [preparedPackage.estimate],
         requestID,
@@ -650,12 +650,12 @@ export class ContextImagesService {
     }
     for (const { originalState, part, prepared: scopedPrepared } of preparedNested.scoped) {
       if (!scopedPrepared) {
-        await this.#stats?.recordFallback({ kind: "scoped", reason: "not-ready", requestID, sessionID: part.sessionID })
+        void this.#stats?.recordFallback({ kind: "scoped", reason: "not-ready", requestID, sessionID: part.sessionID })
         continue
       }
       const output = replaceScopedInstructions(originalState.output, scopedPrepared.instructions, scopedPrepared.packages)
       if (!output) {
-        await this.#stats?.recordFallback({
+        void this.#stats?.recordFallback({
           kind: "scoped",
           reason: "replacement-mismatch",
           requestID,
@@ -680,7 +680,7 @@ export class ContextImagesService {
         attachments: [...(originalState.attachments ?? []), ...pages],
         output,
       }
-      await this.#stats?.recordReplacement({
+      void this.#stats?.recordReplacement({
         kind: "scoped",
         packages: scopedPrepared.packages.map((item) => item.estimate),
         requestID,
@@ -710,7 +710,7 @@ export class ContextImagesService {
     if (supportsImageInput(input.model) === false) {
       this.#pending.delete(input.sessionID)
       discardAttachments(pending)
-      await this.#stats?.recordFallback({
+      void this.#stats?.recordFallback({
         kind: "ambient",
         reason: "image-unsupported",
         requestID: pending.ambient.requestID,
@@ -736,7 +736,7 @@ export class ContextImagesService {
         sessionID: input.sessionID,
       })
       discardAttachments(pending)
-      await this.#stats?.recordFallback({
+      void this.#stats?.recordFallback({
         kind: "ambient",
         reason: "replacement-mismatch",
         requestID: pending.ambient.requestID,
@@ -750,7 +750,7 @@ export class ContextImagesService {
       output.system.length,
       ...replaceSystemInstructions(output.system, pending.ambient.instructions, marker),
     )
-    await this.#stats?.recordReplacement({
+    void this.#stats?.recordReplacement({
       kind: "ambient",
       packages: pending.ambient.packages,
       requestID: pending.ambient.requestID,

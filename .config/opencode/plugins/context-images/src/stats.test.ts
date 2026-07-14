@@ -52,7 +52,8 @@ describe("ContextImagesStats", () => {
     expect(await first.stats.report("total", "session-1")).toContain("Plaintext fallback groups: 1")
     expect(await first.stats.report("total", "session-1")).toContain("Net saved: 140 tokens (41.2%)")
     expect(await first.stats.report("repo", "session-1")).toContain("/repo/first/nested/AGENTS.md: -10 tokens")
-    expect(await first.stats.report("total", "session-1")).toContain("Skipped corrupt records: 2")
+    expect(await first.stats.report("total", "session-1")).toContain("Skipped incompatible records: 1")
+    expect(await first.stats.report("total", "session-1")).toContain("Skipped corrupt records: 1")
     expect((await stat(first.file)).mode & 0o777).toBe(0o600)
   })
 

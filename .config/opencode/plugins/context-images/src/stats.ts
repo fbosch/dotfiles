@@ -174,7 +174,8 @@ export class ContextImagesStats {
     let matched = 0
     let plaintextTokens = 0
     let replacementGroups = 0
-    let skipped = 0
+    let corrupt = 0
+    let incompatible = 0
     const lines = createInterface({ input: createReadStream(this.#file, { encoding: "utf8" }), crlfDelay: Infinity })
     try {
       for await (const line of lines) {
@@ -183,12 +184,12 @@ export class ContextImagesStats {
         try {
           const value: unknown = JSON.parse(line)
           if (!isStatsEvent(value)) {
-            skipped += 1
+            incompatible += 1
             continue
           }
           event = value
         } catch {
-          skipped += 1
+          corrupt += 1
           continue
         }
         if (scope === "session" && event.sessionID !== sessionID) continue
@@ -220,7 +221,8 @@ export class ContextImagesStats {
         `Context image statistics (${scope}, estimated)`,
         "",
         "No statistics recorded for this scope.",
-        ...(skipped > 0 ? [`Skipped corrupt records: ${formatNumber(skipped)}`] : []),
+        ...(incompatible > 0 ? [`Skipped incompatible records: ${formatNumber(incompatible)}`] : []),
+        ...(corrupt > 0 ? [`Skipped corrupt records: ${formatNumber(corrupt)}`] : []),
         ...(this.#writeError ? [`Recording warning: events may be incomplete (${this.#writeError})`] : []),
       ].join("\n")
     }
@@ -242,7 +244,8 @@ export class ContextImagesStats {
       `- Net saved: ${formatNumber(saved)} tokens (${percent.toFixed(1)}%)`,
       `- Plaintext fallback groups: ${formatNumber(fallbackGroups)}`,
       `- Recording since: ${new Date(firstTimestamp!).toISOString()}`,
-      ...(skipped > 0 ? [`- Skipped corrupt records: ${formatNumber(skipped)}`] : []),
+      ...(incompatible > 0 ? [`- Skipped incompatible records: ${formatNumber(incompatible)}`] : []),
+      ...(corrupt > 0 ? [`- Skipped corrupt records: ${formatNumber(corrupt)}`] : []),
       ...(this.#writeError ? [`- Recording warning: events may be incomplete (${this.#writeError})`] : []),
       "",
       "Breakdown",
