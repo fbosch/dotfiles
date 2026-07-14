@@ -2,7 +2,22 @@ import { expect, test } from "bun:test"
 import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { PxpipeRenderer } from "./pxpipe"
+import { loadRenderedContext, PxpipeRenderer } from "./pxpipe"
+
+test("loadRenderedContext rejects caches without token metadata", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pxpipe-renderer-test-"))
+  try {
+    await Promise.all([
+      writeFile(join(directory, "factsheet.txt"), "facts"),
+      writeFile(join(directory, "prompt.txt"), "prompt"),
+      writeFile(join(directory, "page-001.png"), "page"),
+    ])
+
+    await expect(loadRenderedContext(directory)).rejects.toThrow("manifest.json")
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
 
 test("PxpipeRenderer invalidates its cache identity when the executable changes", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pxpipe-renderer-test-"))
@@ -41,6 +56,7 @@ export async function runExportCore() {
     { filename: "factsheet.txt", data: encode("library factsheet") },
     { filename: "prompt.txt", data: encode("library prompt") },
     { filename: "page-001.png", data: encode("library page") },
+    { filename: "manifest.json", data: encode('{"tokenReport":{"textTokens":100,"imageTokens":20}}') },
   ] }
 }
 `,
@@ -81,6 +97,7 @@ await Promise.all([
   writeFile(join(directory, "factsheet.txt"), "cli factsheet"),
   writeFile(join(directory, "prompt.txt"), "cli prompt"),
   writeFile(join(directory, "page-001.png"), "cli page"),
+  writeFile(join(directory, "manifest.json"), '{"tokenReport":{"textTokens":100,"imageTokens":20}}'),
 ])
 console.log(JSON.stringify({ outDir: directory }))
 `,

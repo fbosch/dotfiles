@@ -45,18 +45,19 @@ Sources are discovered automatically rather than configured through a plugin-spe
 - An Effect-based render coordinator owns keyed deduplication, the two-render concurrency limit, detached warming, startup timeout, publication validation, failure cleanup, retries, and test draining. Discovery and message transformation remain plain TypeScript.
 - Startup blocks for at most one second while warming ambient instructions for the configured default model. Cache hits add about 0.14 ms; slow or failed warming falls back to the normal plaintext-first path.
 - Best-effort structured events are written to `~/.local/state/opencode/context-images/events.jsonl` without instruction contents.
+- Successful replacements and plaintext fallbacks append content-free estimates to `~/.local/state/opencode/context-images/stats.jsonl`. The plugin-defined `/context-images-stats [session|repo|total]` command reports session statistics by default.
 - pxpipe loads `runExportCore` in-process when available and falls back to `pxpipe export` when package discovery, import, or library rendering fails.
 - Background preload reduces first-request renderer initialization after idle.
 
 ## Verified Baseline
 
-Recorded on 2026-07-13 and 2026-07-14:
+Recorded on 2026-07-13 through 2026-07-15:
 
-- 41 Bun tests pass with 125 expectations.
+- 49 Bun tests pass with 142 expectations.
 - Strict TypeScript checking passes.
 - Bun bundling passes.
 - Fallow reports no dead code and no duplication.
-- Fallow health is `90 / A` with maintainability `91.3`.
+- Fallow health is `90 / A` with maintainability `90.8`.
 - A fresh `gpt-5.6-sol` OpenCode `1.17.18` process completed wholesale replacement with no replacement mismatch.
 - Automatic discovery found the active global, project, and configured instruction files.
 - Nested plaintext passed eight real-model policy checks while direct `AGENTS.md` rereads were denied.
@@ -65,13 +66,13 @@ Recorded on 2026-07-13 and 2026-07-14:
 
 See `BENCHMARK.md` for the method and complete results. Current representative means are:
 
-- Message transform, cache hit: `0.217-0.326 ms`.
+- Message transform, cache hit: `0.319-0.450 ms`.
 - Pxpipe cache-miss dispatch: `0.278-0.672 ms`.
 - Pxpipe cache ready: `23.664-30.416 ms`.
-- Warm in-process pxpipe render: `17.809-21.981 ms`.
-- CLI pxpipe render: `399.624-408.671 ms`.
-- Immediate cold library use: `579.249-629.600 ms`.
-- First library use after background preload: usually `42.189-52.075 ms`, with one cold outlier.
+- Warm in-process pxpipe render: `12.257-14.206 ms`.
+- CLI pxpipe render: `296.274-320.345 ms`.
+- Immediate cold library use: `427.323-468.667 ms`.
+- First library use after background preload: `28.923-38.539 ms` in stable cases.
 
 ## Known Limits
 

@@ -7,6 +7,7 @@ const rendered: RenderedContext = {
   factsheet: "facts",
   pages: [Buffer.from("page")],
   prompt: "prompt",
+  tokenReport: { imageTokens: 20, textTokens: 100 },
 }
 
 class FakeLogger implements ContextImagesLogger {

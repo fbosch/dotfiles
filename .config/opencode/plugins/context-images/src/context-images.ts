@@ -7,6 +7,7 @@ import type { ContextRenderer, RenderedContext } from "./pxpipe"
 import { loadRenderedContext } from "./pxpipe"
 import type { ContextImagesLogger } from "./logger"
 import { RenderCoordinator } from "./render-coordinator"
+import type { ContextImagesStats, PackageEstimate } from "./stats"
 
 type MessageWithParts = {
   info: Message
@@ -16,8 +17,10 @@ type MessageWithParts = {
 type AmbientReplacement = {
   attachmentIDs: string[]
   instructions: string[]
+  packages: PackageEstimate[]
   parts: Part[]
   paths: string[]
+  requestID: string
 }
 
 type PendingReplacement = {
@@ -34,6 +37,7 @@ type PreparedContext = {
 }
 
 type PreparedPackage = {
+  estimate: PackageEstimate
   pagePrefix: string
   path: string
   rendered: RenderedContext
@@ -230,6 +234,7 @@ export class ContextImagesService {
   readonly #renderCoordinator: RenderCoordinator
   readonly #renderer: ContextRenderer
   readonly #logger?: ContextImagesLogger
+  readonly #stats?: ContextImagesStats
   readonly #worktree: string
   #cacheReady?: Promise<void>
   #configuredInstructions: string[] = []
@@ -243,6 +248,7 @@ export class ContextImagesService {
     logger?: ContextImagesLogger
     renderer: ContextRenderer
     sources?: string[]
+    stats?: ContextImagesStats
     worktree: string
   }) {
     this.#worktree = resolve(input.worktree)
@@ -250,6 +256,7 @@ export class ContextImagesService {
     this.#cacheRoot = input.cacheRoot ?? defaultCacheRoot()
     this.#renderer = input.renderer
     this.#logger = input.logger
+    this.#stats = input.stats
     this.#renderCoordinator = new RenderCoordinator({ logger: input.logger })
     this.#imageSupport = input.imageSupport
     if (input.sources) this.#explicitSources = this.#resolveSources(input.sources)
@@ -394,10 +401,18 @@ export class ContextImagesService {
         })
         if (!rendered) return
         const prefix = pagePrefix(source)
+        const prompt = buildPrompt(rendered, prefix, kind, source.path)
+        const estimate = {
+          imageTokens: rendered.tokenReport.imageTokens,
+          plaintextTokens: rendered.tokenReport.textTokens,
+          promptTokens: Math.round((prompt.length * rendered.tokenReport.textTokens) / context.length),
+          sourcePath: source.path,
+        }
         return {
+          estimate,
           pagePrefix: prefix,
           path: source.path,
-          rendered: { ...rendered, prompt: buildPrompt(rendered, prefix, kind, source.path) },
+          rendered: { ...rendered, prompt },
         }
       }),
     )
@@ -412,12 +427,16 @@ export class ContextImagesService {
   }
 
   async #prepare(modelID: string) {
-    return await this.#prepareSources(
-      await this.#discoverSources(),
+    const sources = await this.#discoverSources()
+    return {
+      eligible: sources.length > 0,
+      prepared: await this.#prepareSources(
+      sources,
       modelID,
       (source) => `configured-${cacheSegment(basename(source.path))}-${sha256(source.path).slice(0, 16)}`,
       "configured",
-    )
+      ),
+    }
   }
 
   async waitForRenders() {
@@ -440,13 +459,13 @@ export class ContextImagesService {
         return [{ originalState: part.state, part, path }]
       }),
     )
-    if (readParts.length === 0 || (await this.#imageSupport?.(providerID, modelID)) !== true) {
-      return { readResults: [], scoped: [] }
-    }
     const readResults = readParts.filter(
       (candidate) =>
         this.#readResultSources.has(candidate.path) &&
         hasLoadedInstructions(candidate.originalState.metadata) === false,
+    )
+    const conflicts = readParts.filter(
+      (candidate) => this.#readResultSources.has(candidate.path) && hasLoadedInstructions(candidate.originalState.metadata),
     )
     const scoped = readParts.flatMap((candidate) => {
       if (this.#scopedInstructions === false || this.#readResultSources.has(candidate.path)) {
@@ -458,8 +477,36 @@ export class ContextImagesService {
       if (sources.length === 0) return []
       return [{ ...candidate, sources }]
     })
-    return {
-      readResults: await Promise.all(
+    const conflictFallbacks = conflicts.map((candidate) => ({
+      kind: "read-result" as const,
+      reason: "scoped-conflict",
+      sessionID: candidate.part.sessionID,
+    }))
+    if (readResults.length === 0 && scoped.length === 0) {
+      return { fallbacks: conflictFallbacks, readResults: [], scoped: [] }
+    }
+    const imageSupported = this.#imageSupport ? await this.#imageSupport(providerID, modelID).catch(() => false) : false
+    if (imageSupported === false) {
+      return {
+        fallbacks: [
+          ...conflictFallbacks,
+          ...readResults.map((candidate) => ({
+            kind: "read-result" as const,
+            reason: "image-unsupported",
+            sessionID: candidate.part.sessionID,
+          })),
+          ...scoped.map((candidate) => ({
+            kind: "scoped" as const,
+            reason: "image-unsupported",
+            sessionID: candidate.part.sessionID,
+          })),
+        ],
+        readResults: [],
+        scoped: [],
+      }
+    }
+    const [preparedReadResults, preparedScoped] = await Promise.all([
+      Promise.allSettled(
         readResults.map(async (candidate) => ({
           ...candidate,
           prepared: await this.#prepareSources(
@@ -470,7 +517,7 @@ export class ContextImagesService {
           ),
         })),
       ),
-      scoped: await Promise.all(
+      Promise.allSettled(
         scoped.map(async (candidate) => ({
           ...candidate,
           prepared: await this.#prepareSources(
@@ -481,6 +528,23 @@ export class ContextImagesService {
           ),
         })),
       ),
+    ])
+    return {
+      fallbacks: [
+        ...conflictFallbacks,
+        ...preparedReadResults.flatMap((result, index) =>
+          result.status === "rejected"
+            ? [{ kind: "read-result" as const, reason: "preparation-failed", sessionID: readResults[index]!.part.sessionID }]
+            : [],
+        ),
+        ...preparedScoped.flatMap((result, index) =>
+          result.status === "rejected"
+            ? [{ kind: "scoped" as const, reason: "preparation-failed", sessionID: scoped[index]!.part.sessionID }]
+            : [],
+        ),
+      ],
+      readResults: preparedReadResults.flatMap((result) => (result.status === "fulfilled" ? [result.value] : [])),
+      scoped: preparedScoped.flatMap((result) => (result.status === "fulfilled" ? [result.value] : [])),
     }
   }
 
@@ -502,10 +566,21 @@ export class ContextImagesService {
       const message = failed.reason instanceof Error ? failed.reason.message : String(failed.reason)
       await this.#logger?.write({ event: "transform_failed", message })
     }
-    const prepared = ambientResult.status === "fulfilled" ? ambientResult.value : undefined
+    const ambientPreparation =
+      ambientResult.status === "fulfilled" ? ambientResult.value : { eligible: true, prepared: undefined }
+    const prepared = ambientPreparation.prepared
     const preparedNested =
-      nestedResult.status === "fulfilled" ? nestedResult.value : { readResults: [], scoped: [] }
-    if (!prepared && preparedNested.readResults.length === 0 && preparedNested.scoped.length === 0) return
+      nestedResult.status === "fulfilled" ? nestedResult.value : { fallbacks: [], readResults: [], scoped: [] }
+    const requestID = randomUUID()
+    if (ambientPreparation.eligible && !prepared) {
+      await this.#stats?.recordFallback({ kind: "ambient", reason: "not-ready", requestID, sessionID })
+    }
+    for (const fallback of preparedNested.fallbacks) {
+      await this.#stats?.recordFallback({ ...fallback, requestID })
+    }
+    if (!prepared && preparedNested.readResults.length === 0 && preparedNested.scoped.length === 0) {
+      return
+    }
 
     let ambient: AmbientReplacement | undefined
     if (prepared) {
@@ -534,8 +609,10 @@ export class ContextImagesService {
       ambient = {
         attachmentIDs: parts.map((part) => part.id),
         instructions: prepared.instructions,
+        packages: prepared.packages.map((item) => item.estimate),
         parts: user.parts,
         paths: prepared.paths,
+        requestID,
       }
     }
 
@@ -550,17 +627,42 @@ export class ContextImagesService {
         filename: pageName(preparedPackage?.pagePrefix ?? "read-result", index + 1),
         url: `data:image/png;base64,${page.toString("base64")}`,
       }))
-      if (!preparedPackage || pages.length === 0) continue
+      if (!preparedPackage || pages.length === 0) {
+        await this.#stats?.recordFallback({
+          kind: "read-result",
+          reason: "not-ready",
+          requestID,
+          sessionID: part.sessionID,
+        })
+        continue
+      }
       part.state = {
         ...originalState,
         attachments: [...(originalState.attachments ?? []), ...pages],
         output: preparedPackage.rendered.prompt,
       }
+      await this.#stats?.recordReplacement({
+        kind: "read-result",
+        packages: [preparedPackage.estimate],
+        requestID,
+        sessionID: part.sessionID,
+      })
     }
     for (const { originalState, part, prepared: scopedPrepared } of preparedNested.scoped) {
-      if (!scopedPrepared) continue
+      if (!scopedPrepared) {
+        await this.#stats?.recordFallback({ kind: "scoped", reason: "not-ready", requestID, sessionID: part.sessionID })
+        continue
+      }
       const output = replaceScopedInstructions(originalState.output, scopedPrepared.instructions, scopedPrepared.packages)
-      if (!output) continue
+      if (!output) {
+        await this.#stats?.recordFallback({
+          kind: "scoped",
+          reason: "replacement-mismatch",
+          requestID,
+          sessionID: part.sessionID,
+        })
+        continue
+      }
       const pages: FilePart[] = scopedPrepared.packages.flatMap((preparedPackage) =>
         preparedPackage.rendered.pages.map((page, index) => ({
           id: randomUUID(),
@@ -578,6 +680,12 @@ export class ContextImagesService {
         attachments: [...(originalState.attachments ?? []), ...pages],
         output,
       }
+      await this.#stats?.recordReplacement({
+        kind: "scoped",
+        packages: scopedPrepared.packages.map((item) => item.estimate),
+        requestID,
+        sessionID: part.sessionID,
+      })
     }
     if (!ambient) return
     this.#pending.set(sessionID, {
@@ -602,6 +710,12 @@ export class ContextImagesService {
     if (supportsImageInput(input.model) === false) {
       this.#pending.delete(input.sessionID)
       discardAttachments(pending)
+      await this.#stats?.recordFallback({
+        kind: "ambient",
+        reason: "image-unsupported",
+        requestID: pending.ambient.requestID,
+        sessionID: input.sessionID,
+      })
       return
     }
 
@@ -622,6 +736,12 @@ export class ContextImagesService {
         sessionID: input.sessionID,
       })
       discardAttachments(pending)
+      await this.#stats?.recordFallback({
+        kind: "ambient",
+        reason: "replacement-mismatch",
+        requestID: pending.ambient.requestID,
+        sessionID: input.sessionID,
+      })
       return
     }
 
@@ -630,5 +750,11 @@ export class ContextImagesService {
       output.system.length,
       ...replaceSystemInstructions(output.system, pending.ambient.instructions, marker),
     )
+    await this.#stats?.recordReplacement({
+      kind: "ambient",
+      packages: pending.ambient.packages,
+      requestID: pending.ambient.requestID,
+      sessionID: input.sessionID,
+    })
   }
 }

@@ -17,6 +17,7 @@ const RENDERED: RenderedContext = {
   factsheet: "AGENTS.md\nbenchmark fixture\n",
   pages: [PAGE],
   prompt: "Read the attached context image.",
+  tokenReport: { imageTokens: 256, textTokens: 2_400 },
 }
 
 type Benchmark = {
@@ -58,6 +59,7 @@ async function writeRenderedContext(directory: string) {
     writeFile(join(directory, "factsheet.txt"), RENDERED.factsheet),
     writeFile(join(directory, "prompt.txt"), RENDERED.prompt),
     writeFile(join(directory, "page-001.png"), PAGE),
+    writeFile(join(directory, "manifest.json"), JSON.stringify({ tokenReport: RENDERED.tokenReport })),
   ])
 }
 

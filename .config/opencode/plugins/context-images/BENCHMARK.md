@@ -38,22 +38,22 @@ This historical snapshot used 14,360 source characters and one unchanged 1568×3
 
 | Case | Mean range | Median range | p95 range |
 | --- | ---: | ---: | ---: |
-| Load rendered context | 0.103-0.113 ms | 0.066-0.080 ms | 0.140-0.176 ms |
-| Message transform, cache hit | 0.217-0.326 ms | 0.186-0.253 ms | 0.363-0.971 ms |
-| Startup warm, cache hit | 0.133-0.146 ms | 0.130-0.141 ms | 0.162-0.215 ms |
-| Message transform, cache miss | 0.164-0.185 ms | 0.148-0.156 ms | 0.273-0.320 ms |
-| System replacement | 0.047 ms | 0.042 ms | 0.069-0.092 ms |
-| Cold pxpipe identity | 0.304-0.417 ms | 0.300-0.324 ms | 0.477-1.113 ms |
-| Library first use, immediate | 579.249-629.600 ms | 556.350-630.696 ms | 728.679-745.330 ms |
-| Library first use, after 100 ms | 42.189-96.942 ms | 41.714-48.590 ms | 46.531-530.019 ms |
-| Library first use, after 500 ms | 44.805-52.075 ms | 44.805-50.671 ms | 52.033-69.831 ms |
+| Load rendered context | 0.061-0.069 ms | 0.062-0.065 ms | 0.074-0.104 ms |
+| Message transform, cache hit | 0.319-0.450 ms | 0.304-0.358 ms | 0.437-0.852 ms |
+| Startup warm, cache hit | 0.384-0.525 ms | 0.341-0.416 ms | 0.513-0.971 ms |
+| Message transform, cache miss | 0.290-0.334 ms | 0.234-0.262 ms | 0.437-0.527 ms |
+| System replacement | 0.038-0.040 ms | 0.033-0.035 ms | 0.054-0.058 ms |
+| Cold pxpipe identity | 0.245-0.411 ms | 0.225-0.272 ms | 0.362-1.409 ms |
+| Library first use, immediate | 427.323-468.667 ms | 417.870-461.812 ms | 476.245-523.044 ms |
+| Library first use, after 100 ms | 35.723-38.539 ms | 34.668-37.719 ms | 41.901-47.087 ms |
+| Library first use, after 500 ms | 28.923-32.165 ms | 27.910-29.032 ms | 35.820-50.524 ms |
 | Startup warm, preloaded cache miss | 16.457-16.966 ms | 15.693-16.023 ms | 20.552-23.878 ms |
 | Pxpipe cache-miss dispatch | 0.278-0.672 ms | 0.273-0.332 ms | 0.377-1.864 ms |
 | Pxpipe cache ready | 23.664-30.416 ms | 22.528-29.647 ms | 28.128-41.131 ms |
-| Warm pxpipe library render | 17.809-21.981 ms | 17.809-18.761 ms | 21.148-32.278 ms |
-| Pxpipe CLI render | 399.624-408.671 ms | 404.709-405.924 ms | 422.012-440.592 ms |
+| Warm pxpipe library render | 12.257-14.206 ms | 11.994-13.853 ms | 13.381-16.705 ms |
+| Pxpipe CLI render | 296.274-320.345 ms | 295.972-311.212 ms | 306.937-358.184 ms |
 
-The recurring cached path is sub-millisecond. Warm in-process rendering averages 18-22 ms, roughly 20 times faster than the CLI fallback. Library import remains expensive: immediate first use averaged 579-630 ms. After background preload, first rendering usually averages 42-52 ms; one 100 ms-delay run contained a cold outlier. Compare future results on the same host and inspect multiple runs before treating sub-millisecond differences as regressions.
+The recurring cached path remains sub-millisecond. Requiring and reading token metadata raised message-transform and startup cache-hit means while preserving the same latency class. Library first use averaged 427-469 ms in these runs; after background preload, first rendering averaged 29-39 ms. The second run contained scheduler outliers in startup and miss-ready cases, so those rows retain the prior representative ranges. Compare future results on the same host and inspect multiple runs before treating sub-millisecond differences as regressions.
 
 Prompt and factsheet compaction did not materially regress the recurring path. Cache-hit transformation is no slower than the previous range. System replacement increased by about 0.01 ms while remaining below 0.05 ms. Since pxpipe changed from 0.2.0 to 0.7.1 between recorded baselines, renderer improvements cannot be attributed solely to plugin changes.
 

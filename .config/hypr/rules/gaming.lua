@@ -54,7 +54,7 @@ M.games = {
 		confirm_close = true,
 		presentation = {
 			vrr = 2,
-			direct_scanout = 1,
+			direct_scanout = 0,
 		},
 	},
 	{

@@ -7,6 +7,7 @@ import type { AssistantMessage, Part, ToolPart, UserMessage } from "@opencode-ai
 import { ContextImagesService } from "./context-images"
 import type { ContextImagesEvent, ContextImagesLogger } from "./logger"
 import type { ContextRenderer } from "./pxpipe"
+import { ContextImagesStats } from "./stats"
 
 const temporaryDirectories: string[] = []
 
@@ -46,11 +47,16 @@ class FakeRenderer implements ContextRenderer {
       writeFile(join(cacheDirectory, "factsheet.txt"), this.factsheet),
       writeFile(join(cacheDirectory, "prompt.txt"), this.prompt),
       writeFile(join(cacheDirectory, "page-001.png"), Buffer.from("png-page")),
+      writeFile(
+        join(cacheDirectory, "manifest.json"),
+        JSON.stringify({ tokenReport: { imageTokens: 20, textTokens: 100 } }),
+      ),
     ])
     return {
       factsheet: this.factsheet,
       pages: [Buffer.from("png-page")],
       prompt: this.prompt,
+      tokenReport: { imageTokens: 20, textTokens: 100 },
     }
   }
 }
@@ -230,6 +236,59 @@ describe("ContextImagesService", () => {
     expect(system[0]).not.toContain("Global preferences.")
     expect(system[0]).toContain("System prefix.")
     expect(system[0]).toContain("System suffix.")
+  })
+
+  test("records ambient estimates only after system replacement commits", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const stateRoot = await temporaryDirectory()
+    const instructionPath = join(worktree, "AGENTS.md")
+    await writeFile(instructionPath, "Instructions.\n")
+    const stats = new ContextImagesStats({ file: join(stateRoot, "stats.jsonl"), repoID: "repo-1", worktree })
+    const service = new ContextImagesService({
+      cacheRoot,
+      renderer: new FakeRenderer(),
+      sources: ["AGENTS.md"],
+      stats,
+      worktree,
+    })
+    await warmAndTransform(service, { messages: [{ info: userMessage(), parts: [] }] })
+
+    expect(await stats.report("session", "session-1")).toContain("Requests transformed: 0")
+    await service.transformSystem(
+      { sessionID: "session-1", model: { id: "active-model", providerID: "openai" } },
+      { system: [`Instructions from: ${instructionPath}\nInstructions.\n`] },
+    )
+    const report = await stats.report("session", "session-1")
+    expect(report).toContain("Requests transformed: 1")
+    expect(report).toContain("ambient:")
+  })
+
+  test("counts repeated tool-loop transformations as distinct requests", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const stateRoot = await temporaryDirectory()
+    const instructionPath = join(worktree, "AGENTS.md")
+    await writeFile(instructionPath, "Instructions.\n")
+    const stats = new ContextImagesStats({ file: join(stateRoot, "stats.jsonl"), repoID: "repo-1", worktree })
+    const service = new ContextImagesService({
+      cacheRoot,
+      renderer: new FakeRenderer(),
+      sources: ["AGENTS.md"],
+      stats,
+      worktree,
+    })
+    await service.warmAmbient("active-model")
+
+    for (let index = 0; index < 2; index += 1) {
+      await service.transformMessages({}, { messages: [{ info: userMessage(), parts: [] }] })
+      await service.transformSystem(
+        { sessionID: "session-1", model: { id: "active-model", providerID: "openai" } },
+        { system: [`Instructions from: ${instructionPath}\nInstructions.\n`] },
+      )
+    }
+
+    expect(await stats.report("session", "session-1")).toContain("Requests transformed: 2")
   })
 
   test("reuses cached pages for unchanged content", async () => {
@@ -876,6 +935,33 @@ describe("ContextImagesService", () => {
     expect(read.state).toBe(originalState)
     expect(read.state).toMatchObject({ output: "Direct and factual.\n" })
     expect("attachments" in read.state).toBe(false)
+  })
+
+  test("records a fallback when nested preparation rejects", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const stateRoot = await temporaryDirectory()
+    const tonePath = join(worktree, "TONE.md")
+    const read = completedRead(tonePath, "Direct and factual.\n")
+    const stats = new ContextImagesStats({ file: join(stateRoot, "stats.jsonl"), repoID: "repo-1", worktree })
+    const service = new ContextImagesService({
+      cacheRoot,
+      imageSupport: async () => true,
+      readResultSources: [tonePath],
+      renderer: { render: async () => new FakeRenderer().render("", "", ""), version: async () => Promise.reject(new Error("version failed")) },
+      sources: [],
+      stats,
+      worktree,
+    })
+
+    await service.transformMessages({}, {
+      messages: [
+        { info: userMessage(), parts: [] },
+        { info: assistantMessage(worktree), parts: [read] },
+      ],
+    })
+
+    expect(await stats.report("session", "session-1")).toContain("Plaintext fallback groups: 1")
   })
 
   test("keeps capability-confirmed read replacement independent from an ambient mismatch", async () => {

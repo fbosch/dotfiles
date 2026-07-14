@@ -7,11 +7,16 @@ import { pathToFileURL } from "node:url"
 
 const MAX_PROCESS_OUTPUT_BYTES = 1024 * 1024
 const PROCESS_TIMEOUT_MS = 60_000
+const MAX_TOKEN_ESTIMATE = 100_000_000
 
 export type RenderedContext = {
   factsheet: string
   pages: Buffer[]
   prompt: string
+  tokenReport: {
+    imageTokens: number
+    textTokens: number
+  }
 }
 
 export interface ContextRenderer {
@@ -35,6 +40,28 @@ type ExportModule = {
     text: string,
     options: { cols: number; model: string; sourceFiles: string[] },
   ): Promise<{ artifacts: { data: Uint8Array; filename: string }[] }>
+}
+
+function parseTokenReport(value: unknown) {
+  if (typeof value !== "object" || value === null || !("tokenReport" in value)) {
+    throw new Error("pxpipe cache has no token report")
+  }
+  const report = value.tokenReport
+  if (
+    typeof report !== "object" ||
+    report === null ||
+    !("textTokens" in report) ||
+    !Number.isSafeInteger(report.textTokens) ||
+    (report.textTokens as number) <= 0 ||
+    (report.textTokens as number) > MAX_TOKEN_ESTIMATE ||
+    !("imageTokens" in report) ||
+    !Number.isSafeInteger(report.imageTokens) ||
+    (report.imageTokens as number) <= 0 ||
+    (report.imageTokens as number) > MAX_TOKEN_ESTIMATE
+  ) {
+    throw new Error("pxpipe cache has an invalid token report")
+  }
+  return { textTokens: report.textTokens as number, imageTokens: report.imageTokens as number }
 }
 
 async function resolveExecutable(command: string) {
@@ -149,12 +176,13 @@ export async function loadRenderedContext(directory: string): Promise<RenderedCo
   const pageNames = files.filter((file) => /^page-\d+\.png$/.test(file)).sort()
   if (pageNames.length === 0) throw new Error("pxpipe cache has no image pages")
 
-  const [factsheet, prompt, pages] = await Promise.all([
+  const [factsheet, prompt, pages, manifest] = await Promise.all([
     readFile(join(directory, "factsheet.txt"), "utf8"),
     readFile(join(directory, "prompt.txt"), "utf8"),
     Promise.all(pageNames.map((file) => readFile(join(directory, file)))),
+    readFile(join(directory, "manifest.json"), "utf8").then((value): unknown => JSON.parse(value)),
   ])
-  return { factsheet, pages, prompt }
+  return { factsheet, pages, prompt, tokenReport: parseTokenReport(manifest) }
 }
 
 async function secureOutputDirectory(directory: string) {
@@ -227,16 +255,20 @@ export class PxpipeRenderer implements ContextRenderer {
     )
     const factsheet = result.artifacts.find((artifact) => artifact.filename === "factsheet.txt")
     const prompt = result.artifacts.find((artifact) => artifact.filename === "prompt.txt")
+    const manifest = result.artifacts.find((artifact) => artifact.filename === "manifest.json")
     const pages = result.artifacts
       .filter((artifact) => /^page-\d+\.png$/.test(artifact.filename))
       .sort((left, right) => left.filename.localeCompare(right.filename))
-    if (!factsheet || !prompt || pages.length === 0) throw new Error("pxpipe library returned incomplete artifacts")
+    if (!factsheet || !prompt || !manifest || pages.length === 0) {
+      throw new Error("pxpipe library returned incomplete artifacts")
+    }
     return {
       directory: outputDirectory,
       rendered: {
         factsheet: Buffer.from(factsheet.data).toString("utf8"),
         pages: pages.map((page) => Buffer.from(page.data)),
         prompt: Buffer.from(prompt.data).toString("utf8"),
+        tokenReport: parseTokenReport(JSON.parse(Buffer.from(manifest.data).toString("utf8")) as unknown),
       },
     }
   }
