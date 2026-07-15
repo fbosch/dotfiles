@@ -89,10 +89,10 @@
     "test": "node --experimental-strip-types --test src/**/*.test.ts"
   },
   "dependencies": {
-    "@vicinae/api": "^0.20.13"
+    "@vicinae/api": "^0.23.1"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.12",
-    "typescript": "^6.0.2"
+    "@biomejs/biome": "^2.5.4",
+    "typescript": "^7.0.2"
   }
 }
