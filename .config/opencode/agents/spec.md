@@ -23,7 +23,6 @@ permission:
     "npm install *": deny
     "npm ci *": deny
     "pip install *": deny
-    "*": ask
 ---
 
 Turn the request into a precise contract. No implementation.

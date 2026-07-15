@@ -18,7 +18,6 @@ permission:
   todowrite: deny
   task: deny
   bash:
-    "*": ask
     "git status*": allow
     "git diff*": allow
     "git log*": allow

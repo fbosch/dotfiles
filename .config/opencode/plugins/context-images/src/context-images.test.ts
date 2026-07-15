@@ -186,9 +186,10 @@ function scopedPrompt(path: string) {
 
 describe("ContextImagesService", () => {
   test("validates image read-result selectors", () => {
-    expect(parseImageReadResults({ imageReadResults: { paths: ["~/TONE.md"], filenames: ["TOC.md"] } })).toEqual({
+    expect(parseImageReadResults({ imageReadResults: { paths: ["~/TONE.md"], filenames: ["TOC.md"], referenceContents: true } })).toEqual({
       paths: ["~/TONE.md"],
       filenames: ["TOC.md"],
+      referenceContents: true,
     })
     for (const [options, message] of [
       [{ readResultSources: ["~/TONE.md"] }, 'option "readResultSources" was replaced'],
@@ -196,6 +197,7 @@ describe("ContextImagesService", () => {
       [{ imageReadResults: { regex: ["TOC"] } }, 'option "imageReadResults" only supports'],
       [{ imageReadResults: { paths: [""] } }, 'option "imageReadResults.paths" must be an array'],
       [{ imageReadResults: { filenames: ["docs/TOC.md"] } }, 'option "imageReadResults.filenames" must be an array'],
+      [{ imageReadResults: { referenceContents: "yes" } }, 'option "imageReadResults.referenceContents" must be a boolean'],
     ] as const) {
       expect(() => parseImageReadResults(options)).toThrow(message)
     }
@@ -696,6 +698,64 @@ describe("ContextImagesService", () => {
     })
     expect(lowercase.state).toMatchObject({ output: "Lowercase table of contents.\n" })
     expect("attachments" in lowercase.state).toBe(false)
+  })
+
+  test("replaces completed read results beneath configured reference roots", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const referenceRoot = join(worktree, ".docs", "reference")
+    const referenced = join(referenceRoot, "guide.md")
+    const sibling = join(worktree, ".docs", "reference-other", "guide.md")
+    const referenceRead = completedRead(referenced, "Reference guide.\n")
+    const siblingRead = completedRead(sibling, "Sibling guide.\n")
+    const service = new ContextImagesService({
+      cacheRoot,
+      imageReadResults: { referenceContents: true },
+      imageSupport: async () => true,
+      referenceRoots: async () => [referenceRoot],
+      renderer: new FakeRenderer(),
+      sources: [],
+      worktree,
+    })
+
+    await warmAndTransform(service, {
+      messages: [
+        { info: userMessage(), parts: [] },
+        { info: assistantMessage(worktree), parts: [referenceRead, siblingRead] },
+      ],
+    })
+
+    expect(referenceRead.state).toMatchObject({
+      output: readResultPrompt(referenced),
+      attachments: [{ type: "file", mime: "image/png", filename: `${readResultPrefix(referenced)}-001.png` }],
+    })
+    expect(siblingRead.state).toMatchObject({ output: "Sibling guide.\n" })
+    expect("attachments" in siblingRead.state).toBe(false)
+  })
+
+  test("keeps reference read results as plaintext when reference discovery fails", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const read = completedRead(join(worktree, ".docs", "reference", "guide.md"), "Reference guide.\n")
+    const originalState = read.state
+    const service = new ContextImagesService({
+      cacheRoot,
+      imageReadResults: { referenceContents: true },
+      imageSupport: async () => true,
+      referenceRoots: async () => Promise.reject(new Error("reference lookup failed")),
+      renderer: new FakeRenderer(),
+      sources: [],
+      worktree,
+    })
+
+    await warmAndTransform(service, {
+      messages: [
+        { info: userMessage(), parts: [] },
+        { info: assistantMessage(worktree), parts: [read] },
+      ],
+    })
+
+    expect(read.state).toBe(originalState)
   })
 
   test("lazily replaces scoped instructions discovered by a completed read", async () => {

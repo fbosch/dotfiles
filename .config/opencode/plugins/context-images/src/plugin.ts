@@ -27,7 +27,13 @@ function configuredModelID(model: unknown) {
   return model.slice(separator + 1)
 }
 
-export function parseImageReadResults(options: Record<string, unknown>) {
+export type ImageReadResults = {
+  filenames?: string[]
+  paths?: string[]
+  referenceContents?: boolean
+}
+
+export function parseImageReadResults(options: Record<string, unknown>): ImageReadResults | undefined {
   if ("readResultSources" in options) {
     throw new Error('[context-images] option "readResultSources" was replaced by "imageReadResults.paths"')
   }
@@ -36,9 +42,9 @@ export function parseImageReadResults(options: Record<string, unknown>) {
   if (typeof imageReadResults !== "object" || imageReadResults === null || Array.isArray(imageReadResults)) {
     throw new Error('[context-images] option "imageReadResults" must be an object')
   }
-  const { filenames, paths, ...unknown } = imageReadResults as Record<string, unknown>
+  const { filenames, paths, referenceContents, ...unknown } = imageReadResults as Record<string, unknown>
   if (Object.keys(unknown).length > 0) {
-    throw new Error('[context-images] option "imageReadResults" only supports "paths" and "filenames"')
+    throw new Error('[context-images] option "imageReadResults" only supports "paths", "filenames", and "referenceContents"')
   }
   if (paths !== undefined && (Array.isArray(paths) === false || paths.some((path) => typeof path !== "string" || path.trim().length === 0))) {
     throw new Error('[context-images] option "imageReadResults.paths" must be an array of non-empty paths')
@@ -58,7 +64,14 @@ export function parseImageReadResults(options: Record<string, unknown>) {
   ) {
     throw new Error('[context-images] option "imageReadResults.filenames" must be an array of non-empty basenames')
   }
-  return { ...(paths === undefined ? {} : { paths }), ...(filenames === undefined ? {} : { filenames }) }
+  if (referenceContents !== undefined && typeof referenceContents !== "boolean") {
+    throw new Error('[context-images] option "imageReadResults.referenceContents" must be a boolean')
+  }
+  return {
+    ...(paths === undefined ? {} : { paths: paths as string[] }),
+    ...(filenames === undefined ? {} : { filenames: filenames as string[] }),
+    ...(referenceContents === undefined ? {} : { referenceContents }),
+  }
 }
 
 export const ContextImagesPlugin: Plugin = async ({ client, directory, project, worktree }, options = {}) => {
@@ -75,9 +88,19 @@ export const ContextImagesPlugin: Plugin = async ({ client, directory, project, 
   const stats = new ContextImagesStats({ repoID: project.id, worktree })
   await logger.write({ event: "plugin_loaded" })
   let providers: ReturnType<typeof client.config.providers> | undefined
+  let references: ReturnType<typeof client.v2.reference.list> | undefined
   const service = new ContextImagesService({
     directory,
     imageReadResults,
+    referenceRoots: async () => {
+      const request = (references ??= client.v2.reference.list({ location: { directory } }))
+      const response = await request.catch(() => undefined)
+      if (!response?.data) {
+        if (references === request) references = undefined
+        return []
+      }
+      return response.data.flatMap((reference) => (typeof reference.path === "string" ? [reference.path] : []))
+    },
     scopedInstructions,
     imageSupport: async (providerID, modelID) => {
       const request = (providers ??= client.config.providers({ query: { directory } }))

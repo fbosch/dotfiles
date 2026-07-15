@@ -24,9 +24,7 @@
           "paths": [
             "~/.config/opencode/TONE.md"
           ],
-          "filenames": [
-            "TOC.md"
-          ]
+          "referenceContents": true
         },
         "scopedInstructions": true
       }
@@ -83,6 +81,16 @@
       "rtk chown *": "ask",
       "git push*": "ask",
       "rtk git push*": "ask",
+      "git merge*": "ask",
+      "rtk git merge*": "ask",
+      "git stash*": "ask",
+      "rtk git stash*": "ask",
+      "git tag*": "ask",
+      "rtk git tag*": "ask",
+      "git add *": "ask",
+      "rtk git add *": "ask",
+      "git rm *": "ask",
+      "rtk git rm *": "ask",
       "git reset*": "ask",
       "rtk git reset*": "ask",
       "git rebase*": "ask",
@@ -103,23 +111,8 @@
       "rtk git clean*": "ask",
       "git restore*": "ask",
       "rtk git restore*": "ask",
-      "git status*": "allow",
-      "rtk git status*": "allow",
-      "git diff*": "allow",
-      "rtk git diff*": "allow",
-      "git log*": "allow",
-      "rtk git log*": "allow",
-      "git show*": "allow",
-      "rtk git show*": "allow",
-      "git branch --show-current*": "allow",
-      "rtk git branch --show-current*": "allow",
-      "git rev-parse*": "allow",
-      "rtk git rev-parse*": "allow",
-      "git fetch*": "allow",
-      "gh pr view*": "allow",
-      "gh pr issue*": "allow",
-      "gh search*": "allow",
-      "gh api*": "allow"
+      "gh api*": "ask",
+      "rtk gh api*": "ask"
     }
   },
   "model": "openai/gpt-5.6-terra-fast",

@@ -3,6 +3,7 @@ import { chmod, mkdir, readFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { basename, isAbsolute, join, resolve, sep } from "node:path"
 import type { FilePart, Message, Part } from "@opencode-ai/sdk"
+import type { ImageReadResults } from "./plugin"
 import type { ContextRenderer, RenderedContext } from "./pxpipe"
 import { loadRenderedContext } from "./pxpipe"
 import type { ContextImagesLogger } from "./logger"
@@ -131,6 +132,10 @@ function pageName(prefix: string, index: number) {
   return `${prefix}-${String(index).padStart(3, "0")}.png`
 }
 
+function isDescendant(path: string, root: string) {
+  return path.startsWith(root + sep)
+}
+
 function buildPrompt(rendered: RenderedContext, pagePrefix: string, kind: PackageKind, sourcePath: string) {
   const pageCount = rendered.pages.length
   const firstPage = pageName(pagePrefix, 1)
@@ -228,6 +233,8 @@ export class ContextImagesService {
   readonly #explicitSources?: { path: string; project: boolean }[]
   readonly #imageReadResultPaths: Set<string>
   readonly #imageReadResultFilenames: Set<string>
+  readonly #referenceContents: boolean
+  readonly #referenceRoots?: () => Promise<string[]>
   readonly #scopedInstructions: boolean
   readonly #imageSupport?: (providerID: string, modelID: string) => Promise<boolean>
   readonly #knownAmbientSources = new Map<string, { project: boolean }>()
@@ -243,10 +250,11 @@ export class ContextImagesService {
   constructor(input: {
     cacheRoot?: string
     directory?: string
-    imageReadResults?: { filenames?: string[]; paths?: string[] }
+    imageReadResults?: ImageReadResults
     scopedInstructions?: boolean
     imageSupport?: (providerID: string, modelID: string) => Promise<boolean>
     logger?: ContextImagesLogger
+    referenceRoots?: () => Promise<string[]>
     renderer: ContextRenderer
     sources?: string[]
     stats?: ContextImagesStats
@@ -265,6 +273,8 @@ export class ContextImagesService {
       this.#resolveSources(input.imageReadResults?.paths ?? []).map((source) => source.path),
     )
     this.#imageReadResultFilenames = new Set(input.imageReadResults?.filenames ?? [])
+    this.#referenceContents = input.imageReadResults?.referenceContents ?? false
+    this.#referenceRoots = input.referenceRoots
     this.#scopedInstructions = input.scopedInstructions ?? false
   }
 
@@ -461,8 +471,14 @@ export class ContextImagesService {
         return [{ originalState: part.state, part, path }]
       }),
     )
+    const referenceRoots =
+      this.#referenceContents && this.#referenceRoots
+        ? await this.#referenceRoots().then((roots) => roots.map((root) => resolve(root))).catch(() => [])
+        : []
     const matchesImageReadResult = (path: string) =>
-      this.#imageReadResultPaths.has(path) || this.#imageReadResultFilenames.has(basename(path))
+      this.#imageReadResultPaths.has(path) ||
+      this.#imageReadResultFilenames.has(basename(path)) ||
+      referenceRoots.some((root) => isDescendant(path, root))
     const readResults = readParts.filter(
       (candidate) => matchesImageReadResult(candidate.path) && hasLoadedInstructions(candidate.originalState.metadata) === false,
     )
