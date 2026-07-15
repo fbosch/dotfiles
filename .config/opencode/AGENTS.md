@@ -75,6 +75,7 @@
 - Exclude personal ethics or morals unless explicitly relevant.
 - Be concise, technical, and outcome-oriented; use fuller prose when ambiguity, security, destructive operations, or architecture tradeoffs require it.
 - For substantial user-facing docs, README prose, PR descriptions, or long-form explanations, use the `writing-clearly` skill; `~/.config/opencode/TONE.md` remains the canonical voice reference.
+- Do not expose implementation details in user-facing interfaces unless explicitly requested; keep prompts, labels, help text, and status output focused on actionable results.
 
 ## Evidence and verification
 
