@@ -27,18 +27,45 @@ function configuredModelID(model: unknown) {
   return model.slice(separator + 1)
 }
 
+export function parseImageReadResults(options: Record<string, unknown>) {
+  if ("readResultSources" in options) {
+    throw new Error('[context-images] option "readResultSources" was replaced by "imageReadResults.paths"')
+  }
+  const imageReadResults = options.imageReadResults
+  if (imageReadResults === undefined) return
+  if (typeof imageReadResults !== "object" || imageReadResults === null || Array.isArray(imageReadResults)) {
+    throw new Error('[context-images] option "imageReadResults" must be an object')
+  }
+  const { filenames, paths, ...unknown } = imageReadResults as Record<string, unknown>
+  if (Object.keys(unknown).length > 0) {
+    throw new Error('[context-images] option "imageReadResults" only supports "paths" and "filenames"')
+  }
+  if (paths !== undefined && (Array.isArray(paths) === false || paths.some((path) => typeof path !== "string" || path.trim().length === 0))) {
+    throw new Error('[context-images] option "imageReadResults.paths" must be an array of non-empty paths')
+  }
+  if (
+    filenames !== undefined &&
+    (Array.isArray(filenames) === false ||
+      filenames.some(
+        (filename) =>
+          typeof filename !== "string" ||
+          filename.trim().length === 0 ||
+          filename === "." ||
+          filename === ".." ||
+          filename.includes("/") ||
+          filename.includes("\\"),
+      ))
+  ) {
+    throw new Error('[context-images] option "imageReadResults.filenames" must be an array of non-empty basenames')
+  }
+  return { ...(paths === undefined ? {} : { paths }), ...(filenames === undefined ? {} : { filenames }) }
+}
+
 export const ContextImagesPlugin: Plugin = async ({ client, directory, project, worktree }, options = {}) => {
   if ("sources" in options) {
     throw new Error('[context-images] option "sources" is no longer supported; use OpenCode instruction discovery')
   }
-  const readResultSources = options.readResultSources
-  if (
-    readResultSources !== undefined &&
-    (Array.isArray(readResultSources) === false ||
-      readResultSources.some((source) => typeof source !== "string" || source.trim().length === 0))
-  ) {
-    throw new Error('[context-images] option "readResultSources" must be an array of non-empty paths')
-  }
+  const imageReadResults = parseImageReadResults(options)
   const scopedInstructions = options.scopedInstructions
   if (scopedInstructions !== undefined && typeof scopedInstructions !== "boolean") {
     throw new Error('[context-images] option "scopedInstructions" must be a boolean')
@@ -50,7 +77,7 @@ export const ContextImagesPlugin: Plugin = async ({ client, directory, project, 
   let providers: ReturnType<typeof client.config.providers> | undefined
   const service = new ContextImagesService({
     directory,
-    readResultSources,
+    imageReadResults,
     scopedInstructions,
     imageSupport: async (providerID, modelID) => {
       const request = (providers ??= client.config.providers({ query: { directory } }))

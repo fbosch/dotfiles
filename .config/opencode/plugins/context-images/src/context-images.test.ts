@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { createHash } from "node:crypto"
 import { mkdtemp, mkdir, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { basename, join } from "node:path"
 import type { AssistantMessage, Part, ToolPart, UserMessage } from "@opencode-ai/sdk"
 import { ContextImagesService } from "./context-images"
 import type { ContextImagesEvent, ContextImagesLogger } from "./logger"
@@ -153,7 +153,7 @@ function configuredPrompt(path: string) {
 
 function readResultPrefix(path: string) {
   const hash = createHash("sha256").update(path).digest("hex").slice(0, 16)
-  return `read-TONE.md-${hash}`
+  return `read-${basename(path)}-${hash}`
 }
 
 function readResultPrompt(path: string) {
@@ -620,7 +620,7 @@ describe("ContextImagesService", () => {
     const service = new ContextImagesService({
       cacheRoot,
       directory,
-      readResultSources: [tonePath],
+      imageReadResults: { paths: [tonePath] },
       imageSupport: async () => true,
       renderer: new FakeRenderer(),
       sources: [],
@@ -648,6 +648,37 @@ describe("ContextImagesService", () => {
       output: readResultPrompt(tonePath),
       attachments: [{ type: "file", mime: "image/png", filename: `${readResultPrefix(tonePath)}-001.png` }],
     })
+  })
+
+  test("replaces completed read results matching configured basenames", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const tocPath = join(worktree, "docs", "TOC.md")
+    const lowercasePath = join(worktree, "docs", "toc.md")
+    const toc = completedRead(tocPath, "Documentation table of contents.\n")
+    const lowercase = completedRead(lowercasePath, "Lowercase table of contents.\n")
+    const service = new ContextImagesService({
+      cacheRoot,
+      imageReadResults: { filenames: ["TOC.md"] },
+      imageSupport: async () => true,
+      renderer: new FakeRenderer(),
+      sources: [],
+      worktree,
+    })
+
+    await warmAndTransform(service, {
+      messages: [
+        { info: userMessage(), parts: [] },
+        { info: assistantMessage(worktree), parts: [toc, lowercase] },
+      ],
+    })
+
+    expect(toc.state).toMatchObject({
+      output: readResultPrompt(tocPath),
+      attachments: [{ type: "file", mime: "image/png", filename: `${readResultPrefix(tocPath)}-001.png` }],
+    })
+    expect(lowercase.state).toMatchObject({ output: "Lowercase table of contents.\n" })
+    expect("attachments" in lowercase.state).toBe(false)
   })
 
   test("lazily replaces scoped instructions discovered by a completed read", async () => {
@@ -866,7 +897,7 @@ describe("ContextImagesService", () => {
     const renderer = new FakeRenderer()
     const service = new ContextImagesService({
       cacheRoot,
-      readResultSources: [tonePath],
+      imageReadResults: { paths: [tonePath] },
       scopedInstructions: true,
       imageSupport: async () => true,
       renderer,
@@ -911,7 +942,7 @@ describe("ContextImagesService", () => {
     const originalState = read.state
     const service = new ContextImagesService({
       cacheRoot,
-      readResultSources: [tonePath],
+      imageReadResults: { paths: [tonePath] },
       imageSupport: async () => false,
       renderer: new FakeRenderer(),
       sources: [],
@@ -947,7 +978,7 @@ describe("ContextImagesService", () => {
     const service = new ContextImagesService({
       cacheRoot,
       imageSupport: async () => true,
-      readResultSources: [tonePath],
+      imageReadResults: { paths: [tonePath] },
       renderer: { render: async () => new FakeRenderer().render("", "", ""), version: async () => Promise.reject(new Error("version failed")) },
       sources: [],
       stats,
@@ -975,7 +1006,7 @@ describe("ContextImagesService", () => {
     const userParts: Part[] = []
     const service = new ContextImagesService({
       cacheRoot,
-      readResultSources: [tonePath],
+      imageReadResults: { paths: [tonePath] },
       imageSupport: async () => true,
       renderer: new FakeRenderer(),
       sources: ["AGENTS.md"],
@@ -1021,7 +1052,7 @@ describe("ContextImagesService", () => {
     const userParts: Part[] = []
     const service = new ContextImagesService({
       cacheRoot,
-      readResultSources: [tonePath],
+      imageReadResults: { paths: [tonePath] },
       imageSupport: async () => true,
       renderer: new SelectiveRenderer("TONE.md"),
       sources: ["AGENTS.md"],
@@ -1082,7 +1113,7 @@ describe("ContextImagesService", () => {
     const userParts: Part[] = []
     const service = new ContextImagesService({
       cacheRoot,
-      readResultSources: [tonePath],
+      imageReadResults: { paths: [tonePath] },
       imageSupport: async () => true,
       renderer: new SelectiveRenderer("AGENTS.md"),
       sources: ["AGENTS.md"],

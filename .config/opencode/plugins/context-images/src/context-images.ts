@@ -226,7 +226,8 @@ export class ContextImagesService {
   readonly #compacting = new Set<string>()
   readonly #directory: string
   readonly #explicitSources?: { path: string; project: boolean }[]
-  readonly #readResultSources: Set<string>
+  readonly #imageReadResultPaths: Set<string>
+  readonly #imageReadResultFilenames: Set<string>
   readonly #scopedInstructions: boolean
   readonly #imageSupport?: (providerID: string, modelID: string) => Promise<boolean>
   readonly #knownAmbientSources = new Map<string, { project: boolean }>()
@@ -242,7 +243,7 @@ export class ContextImagesService {
   constructor(input: {
     cacheRoot?: string
     directory?: string
-    readResultSources?: string[]
+    imageReadResults?: { filenames?: string[]; paths?: string[] }
     scopedInstructions?: boolean
     imageSupport?: (providerID: string, modelID: string) => Promise<boolean>
     logger?: ContextImagesLogger
@@ -260,9 +261,10 @@ export class ContextImagesService {
     this.#renderCoordinator = new RenderCoordinator({ logger: input.logger })
     this.#imageSupport = input.imageSupport
     if (input.sources) this.#explicitSources = this.#resolveSources(input.sources)
-    this.#readResultSources = new Set(
-      this.#resolveSources(input.readResultSources ?? []).map((source) => source.path),
+    this.#imageReadResultPaths = new Set(
+      this.#resolveSources(input.imageReadResults?.paths ?? []).map((source) => source.path),
     )
+    this.#imageReadResultFilenames = new Set(input.imageReadResults?.filenames ?? [])
     this.#scopedInstructions = input.scopedInstructions ?? false
   }
 
@@ -459,16 +461,16 @@ export class ContextImagesService {
         return [{ originalState: part.state, part, path }]
       }),
     )
+    const matchesImageReadResult = (path: string) =>
+      this.#imageReadResultPaths.has(path) || this.#imageReadResultFilenames.has(basename(path))
     const readResults = readParts.filter(
-      (candidate) =>
-        this.#readResultSources.has(candidate.path) &&
-        hasLoadedInstructions(candidate.originalState.metadata) === false,
+      (candidate) => matchesImageReadResult(candidate.path) && hasLoadedInstructions(candidate.originalState.metadata) === false,
     )
     const conflicts = readParts.filter(
-      (candidate) => this.#readResultSources.has(candidate.path) && hasLoadedInstructions(candidate.originalState.metadata),
+      (candidate) => matchesImageReadResult(candidate.path) && hasLoadedInstructions(candidate.originalState.metadata),
     )
     const scoped = readParts.flatMap((candidate) => {
-      if (this.#scopedInstructions === false || this.#readResultSources.has(candidate.path)) {
+      if (this.#scopedInstructions === false || matchesImageReadResult(candidate.path)) {
         return []
       }
       const sources = scopedInstructionSources(candidate.originalState.output, candidate.originalState.metadata).filter(

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "toolVersion": "0.6.0",
+  "toolVersion": "0.7.0",
   "sources": {
     "ags": {
       "repo": "https://github.com/Aylur/ags.git",

@@ -20,9 +20,14 @@
     [
       "./plugins/context-images/context-images.ts",
       {
-        "readResultSources": [
-          "~/.config/opencode/TONE.md"
-        ],
+        "imageReadResults": {
+          "paths": [
+            "~/.config/opencode/TONE.md"
+          ],
+          "filenames": [
+            "TOC.md"
+          ]
+        },
         "scopedInstructions": true
       }
     ],
