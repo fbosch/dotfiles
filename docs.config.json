@@ -34,12 +34,13 @@
       "repo": "https://github.com/Alexays/Waybar.wiki.git"
     },
     {
-      "id": "glance",
-      "repo": "https://github.com/glanceapp/glance",
       "include": [
         "docs/**/*.md"
       ],
+      "id": "glance",
+      "repo": "https://github.com/glanceapp/glance",
       "targetDir": "./.config/glance/docs/agents/references"
     }
-  ]
+  ],
+  "opencode": true
 }

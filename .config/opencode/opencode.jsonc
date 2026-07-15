@@ -97,7 +97,8 @@
       "git fetch*": "allow",
       "gh pr view*": "allow",
       "gh pr issue*": "allow",
-      "gh search*": "allow"
+      "gh search*": "allow",
+      "gh api*": "allow"
     }
   },
   "model": "openai/gpt-5.6-terra-fast",
