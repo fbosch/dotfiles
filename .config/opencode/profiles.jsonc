@@ -7,11 +7,11 @@
   //   Claude Sonnet 4.6    200K     —        1x
   //   Claude Opus 4.6      200K     —        3x
   //   GPT-5.6              1.05M    —        —
-  //   GPT-5.6 Sol          1.05M    —        —
-  //   GPT-5.6 Terra        1.05M    —        —
-  //   GPT-5.6 Terra Fast   1.05M    —        —
-  //   GPT-5.6 Luna         1.05M    —        —
-  //   GPT-5.6 Luna Fast    1.05M    —        —
+   //   GPT-5.6 Sol          500K     —        —
+   //   GPT-5.6 Terra        500K     —        —
+   //   GPT-5.6 Terra Fast   500K     —        —
+   //   GPT-5.6 Luna         500K     —        —
+   //   GPT-5.6 Luna Fast    500K     —        —
   //   GPT-5.4 Mini         400K     —        0x
   //   GPT-5.4 Mini Fast    400K     —        0x
   //   Big Pickle           200K     —        —
@@ -24,6 +24,11 @@
       "small_model": "anthropic/claude-haiku-4-5",
       "agents": {
         "plan": {
+          "model": "opencode/gpt-5.6",
+          "reasoningEffort": "high",
+          "textVerbosity": "medium"
+        },
+        "backlog-planning": {
           "model": "opencode/gpt-5.6",
           "reasoningEffort": "high",
           "textVerbosity": "medium"
@@ -75,6 +80,7 @@
       "small_model": "github-copilot/claude-haiku-4.5",
       "agents": {
         "plan": "github-copilot/claude-opus-4.6",
+        "backlog-planning": "github-copilot/claude-opus-4.6",
         "explore": "github-copilot/claude-haiku-4.5",
         "general": "github-copilot/claude-sonnet-4.6",
         "analyze": "github-copilot/claude-sonnet-4.6",
@@ -114,6 +120,7 @@
       "small_model": "opencode/claude-haiku-4-5",
       "agents": {
         "plan": "opencode/claude-opus-4-6",
+        "backlog-planning": "opencode/claude-opus-4-6",
         "explore": "opencode/claude-haiku-4-5",
         "general": "opencode/claude-sonnet-4-6",
         "analyze": "opencode/claude-sonnet-4-6",
@@ -145,6 +152,7 @@
       "small_model": "anthropic/claude-haiku-4-5",
       "agents": {
         "plan": "anthropic/claude-opus-4-6",
+        "backlog-planning": "anthropic/claude-opus-4-6",
         "explore": "anthropic/claude-haiku-4-5",
         "general": "anthropic/claude-sonnet-4-6",
         "analyze": "anthropic/claude-sonnet-4-6",
@@ -176,20 +184,25 @@
           "reasoningEffort": "high",
           "textVerbosity": "medium"
         },
+        "backlog-planning": {
+          "model": "openai/gpt-5.6-terra",
+          "reasoningEffort": "medium",
+          "textVerbosity": "medium"
+        },
         "explore": {
           "model": "openai/gpt-5.4-mini-fast",
           "reasoningEffort": "low",
           "textVerbosity": "low"
         },
         "general": {
-          "model": "openai/gpt-5.6-luna-fast",
-          "reasoningEffort": "low",
+          "model": "openai/gpt-5.6-terra-fast",
+          "reasoningEffort": "medium",
           "textVerbosity": "medium"
         },
         "analyze": {
           "model": "openai/gpt-5.6-terra-fast",
-          "reasoningEffort": "low",
-          "textVerbosity": "low"
+          "reasoningEffort": "medium",
+          "textVerbosity": "medium"
         },
         "debug": {
           "model": "openai/gpt-5.6-terra",
@@ -204,7 +217,7 @@
         "patterns": {
           "model": "openai/gpt-5.4-mini-fast",
           "reasoningEffort": "low",
-          "textVerbosity": "low"
+          "textVerbosity": "medium"
         },
         "adversarial": {
           "model": "openai/gpt-5.6-sol",
@@ -262,13 +275,13 @@
           "textVerbosity": "low"
         },
         "benchmark": {
-          "model": "openai/gpt-5.4-mini-fast",
-          "reasoningEffort": "low",
-          "textVerbosity": "low"
+          "model": "openai/gpt-5.6-luna",
+          "reasoningEffort": "medium",
+          "textVerbosity": "medium"
         },
         "spec": {
           "model": "openai/gpt-5.6-sol",
-          "reasoningEffort": "xhigh",
+          "reasoningEffort": "high",
           "textVerbosity": "medium"
         }
       }
@@ -279,6 +292,7 @@
       "small_model": "anthropic/claude-haiku-4-5",
       "agents": {
         "plan": "anthropic/claude-sonnet-4-6",
+        "backlog-planning": "anthropic/claude-sonnet-4-6",
         "explore": "anthropic/claude-haiku-4-5",
         "general": "anthropic/claude-haiku-4-5",
         "analyze": "anthropic/claude-haiku-4-5",

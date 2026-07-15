@@ -7,7 +7,7 @@ import type { AssistantMessage, Part, ToolPart, UserMessage } from "@opencode-ai
 import { ContextImagesService } from "./context-images"
 import type { ContextImagesEvent, ContextImagesLogger } from "./logger"
 import type { ContextRenderer } from "./pxpipe"
-import { parseImageReadResults } from "./plugin"
+import { fetchMaterializedReferencePaths, materializedReferencePaths, parseImageReadResults } from "./plugin"
 import { ContextImagesStats } from "./stats"
 
 const temporaryDirectories: string[] = []
@@ -201,6 +201,36 @@ describe("ContextImagesService", () => {
     ] as const) {
       expect(() => parseImageReadResults(options)).toThrow(message)
     }
+  })
+
+  test("extracts materialized roots from the v2 reference response", () => {
+    expect(
+      materializedReferencePaths({
+        location: { directory: "/workspace" },
+        data: [{ name: "docs", path: "/references/docs" }, { name: "invalid" }],
+      }),
+    ).toEqual(["/references/docs"])
+    expect(materializedReferencePaths({ data: {} })).toEqual([])
+  })
+
+  test("fetches materialized roots through the v2 reference client", async () => {
+    const calls: unknown[] = []
+    const roots = await fetchMaterializedReferencePaths(
+      {
+        v2: {
+          reference: {
+            list: async (input) => {
+              calls.push(input)
+              return { data: { location: {}, data: [{ name: "docs", path: "/references/docs" }] } }
+            },
+          },
+        },
+      },
+      "/workspace",
+    )
+
+    expect(calls).toEqual([{ location: { directory: "/workspace" } }])
+    expect(roots).toEqual(["/references/docs"])
   })
 
   test("replaces configured instructions with one authority marker", async () => {

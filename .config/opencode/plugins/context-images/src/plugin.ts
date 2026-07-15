@@ -1,4 +1,5 @@
 import { tool, type Plugin } from "@opencode-ai/plugin"
+import { createOpencodeClient } from "@opencode-ai/sdk/v2"
 import { ContextImagesService } from "./context-images"
 import { JsonlLogger } from "./logger"
 import { PxpipeRenderer } from "./pxpipe"
@@ -74,7 +75,31 @@ export function parseImageReadResults(options: Record<string, unknown>): ImageRe
   }
 }
 
-export const ContextImagesPlugin: Plugin = async ({ client, directory, project, worktree }, options = {}) => {
+export function materializedReferencePaths(response: unknown) {
+  if (typeof response !== "object" || response === null) return []
+  const data = (response as Record<string, unknown>).data
+  if (Array.isArray(data) === false) return []
+  return data.flatMap((reference) => {
+    if (typeof reference !== "object" || reference === null) return []
+    const path = (reference as Record<string, unknown>).path
+    return typeof path === "string" ? [path] : []
+  })
+}
+
+type ReferenceClient = {
+  v2: {
+    reference: {
+      list(input: { location: { directory: string } }): Promise<{ data?: unknown }>
+    }
+  }
+}
+
+export async function fetchMaterializedReferencePaths(client: ReferenceClient, directory: string) {
+  const response = await client.v2.reference.list({ location: { directory } })
+  return materializedReferencePaths(response.data)
+}
+
+export const ContextImagesPlugin: Plugin = async ({ client, directory, project, serverUrl, worktree }, options = {}) => {
   if ("sources" in options) {
     throw new Error('[context-images] option "sources" is no longer supported; use OpenCode instruction discovery')
   }
@@ -88,18 +113,19 @@ export const ContextImagesPlugin: Plugin = async ({ client, directory, project, 
   const stats = new ContextImagesStats({ repoID: project.id, worktree })
   await logger.write({ event: "plugin_loaded" })
   let providers: ReturnType<typeof client.config.providers> | undefined
-  let references: ReturnType<typeof client.v2.reference.list> | undefined
+  const referenceClient = createOpencodeClient({ baseUrl: serverUrl.toString() })
+  let references: Promise<string[]> | undefined
   const service = new ContextImagesService({
     directory,
     imageReadResults,
     referenceRoots: async () => {
-      const request = (references ??= client.v2.reference.list({ location: { directory } }))
-      const response = await request.catch(() => undefined)
-      if (!response?.data) {
+      const request = (references ??= fetchMaterializedReferencePaths(referenceClient, directory))
+      try {
+        return await request
+      } catch {
         if (references === request) references = undefined
         return []
       }
-      return response.data.flatMap((reference) => (typeof reference.path === "string" ? [reference.path] : []))
     },
     scopedInstructions,
     imageSupport: async (providerID, modelID) => {

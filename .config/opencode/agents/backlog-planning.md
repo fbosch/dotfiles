@@ -15,7 +15,6 @@ permission:
   edit: deny
   open_pr: deny
   gh_pr_feedback_resolve_threads: deny
-  bash:
 ---
 
 You are a backlog planning agent.
