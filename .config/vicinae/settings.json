@@ -197,7 +197,7 @@
          "preferences": {
             "autoIndexing": true,
             "paths": "/home/fbb",
-             "excludedPaths": "/home/fbb/.local/share/Steam;/home/fbb/.local/share/umu;/home/fbb/.local/share/opencode;/home/fbb/.local/share/pnpm;/home/fbb/.local/share/flatpak;/home/fbb/.local/share/containers;/home/fbb/.var/app;/home/fbb/.npm;/home/fbb/.bun;/home/fbb/.rustup;/home/fbb/.cargo;/home/fbb/.claude",
+            "excludedPaths": "/home/fbb/.local/share/Steam;/home/fbb/.local/share/umu;/home/fbb/.local/share/opencode;/home/fbb/.local/share/pnpm;/home/fbb/.local/share/flatpak;/home/fbb/.local/share/containers;/home/fbb/.var/app;/home/fbb/.npm;/home/fbb/.bun;/home/fbb/.rustup;/home/fbb/.cargo;/home/fbb/.claude",
             "watcherPaths": ""
          }
       },
