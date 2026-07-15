@@ -7,6 +7,7 @@ import type { AssistantMessage, Part, ToolPart, UserMessage } from "@opencode-ai
 import { ContextImagesService } from "./context-images"
 import type { ContextImagesEvent, ContextImagesLogger } from "./logger"
 import type { ContextRenderer } from "./pxpipe"
+import { parseImageReadResults } from "./plugin"
 import { ContextImagesStats } from "./stats"
 
 const temporaryDirectories: string[] = []
@@ -184,6 +185,22 @@ function scopedPrompt(path: string) {
 }
 
 describe("ContextImagesService", () => {
+  test("validates image read-result selectors", () => {
+    expect(parseImageReadResults({ imageReadResults: { paths: ["~/TONE.md"], filenames: ["TOC.md"] } })).toEqual({
+      paths: ["~/TONE.md"],
+      filenames: ["TOC.md"],
+    })
+    for (const [options, message] of [
+      [{ readResultSources: ["~/TONE.md"] }, 'option "readResultSources" was replaced'],
+      [{ imageReadResults: [] }, 'option "imageReadResults" must be an object'],
+      [{ imageReadResults: { regex: ["TOC"] } }, 'option "imageReadResults" only supports'],
+      [{ imageReadResults: { paths: [""] } }, 'option "imageReadResults.paths" must be an array'],
+      [{ imageReadResults: { filenames: ["docs/TOC.md"] } }, 'option "imageReadResults.filenames" must be an array'],
+    ] as const) {
+      expect(() => parseImageReadResults(options)).toThrow(message)
+    }
+  })
+
   test("replaces configured instructions with one authority marker", async () => {
     const worktree = await temporaryDirectory()
     const cacheRoot = await temporaryDirectory()

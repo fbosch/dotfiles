@@ -53,7 +53,7 @@ Sources are discovered automatically rather than configured through a plugin-spe
 
 Recorded on 2026-07-13 through 2026-07-15:
 
-- 56 Bun tests pass with 152 expectations.
+- 51 Bun tests pass with 152 expectations.
 - Strict TypeScript checking passes.
 - Bun bundling passes.
 - Fallow reports no dead code and no duplication.
