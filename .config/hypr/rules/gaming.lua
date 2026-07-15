@@ -28,7 +28,7 @@ M.games = {
 	{
 		name = "bg3",
 		selectors = {
-			{ class = "^(bg3)$" },
+			{ class = "^(bg3|steam_app_1086940)$" },
 		},
 		fullscreen_state = "2 0",
 		suppress_event = "fullscreen",
@@ -37,7 +37,7 @@ M.games = {
 		freeze = false,
 		confirm_close = true,
 		presentation = {
-			vrr = 0,
+			vrr = 2,
 			direct_scanout = 1,
 		},
 	},
