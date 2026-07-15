@@ -21,7 +21,6 @@ jobs:
             .config/ags/scripts/*.sh \
             .config/hypr/runtime/**/*.sh \
             .config/hypr/legacy/scripts/*.sh \
-            .config/rofi/launchers/type-3/launcher.sh \
             .config/vicinae/extensions/*.sh
 
   stow-dry-run:
