@@ -145,10 +145,12 @@ test("opens a workspace file before highlighting it", async () => {
 
 test("adds a bounded temporary inline annotation", async () => {
 	await withNvim(["file bridge-annotation.lua", "call setline(1, ['return true'])"], async function(bridge, socket) {
-		const result = await bridge.annotate({ buffer: 1, line: 1, text: "Explain this boundary", kind: "warning", placement: "callout", durationMs: 20, reveal: true })
-		expect(result).toMatchObject({ ok: true, annotation: { buffer: { number: 1 }, line: 1, text: "Explain this boundary", kind: "warning", placement: "callout", revealed: true } })
+		const result = await bridge.annotate({ buffer: 1, line: 1, anchor: "true", text: "Explain this boundary", kind: "warning", durationMs: 20, reveal: true })
+		expect(result).toMatchObject({ ok: true, annotation: { buffer: { number: 1 }, line: 1, column: 8, text: "Explain this boundary", kind: "warning", placement: "callout", revealed: true } })
 		const nvim = attach({ socket })
-		expect(await nvim.executeLua("return #vim.api.nvim_buf_get_extmarks(1, vim.api.nvim_create_namespace('opencode_mcp_presentation'), 0, -1, {})", [])).toBe(1)
+		const marks = await nvim.executeLua("return vim.api.nvim_buf_get_extmarks(1, vim.api.nvim_create_namespace('opencode_mcp_presentation'), 0, -1, { details = true })", [])
+		expect(marks).toEqual([expect.arrayContaining([expect.any(Number), 0, 0, expect.objectContaining({ virt_lines_above: false, virt_lines_overflow: "scroll" })])])
+		expect(marks[0][3].virt_lines[0]).toEqual([["       ", ""], ["└──── ", "OpencodeAnnotationWarning"], ["Explain this boundary", "OpencodeAnnotationWarning"]])
 	})
 })
 

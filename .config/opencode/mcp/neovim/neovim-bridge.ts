@@ -475,38 +475,53 @@ return { cleared = vim.api.nvim_buf_del_extmark(buffer, namespace, id) }
 `
 
 const ANNOTATE_LUA = `
-local buffer, line, text, kind, placement, duration_ms, reveal = ...
+local buffer, path, line, anchor, text, kind, duration_ms, reveal = ...
+if buffer == 0 then
+  if type(path) ~= "string" or path == "" or path:sub(1, 1) == "/" then return { error = "invalidPath" } end
+  local cwd = vim.fs.normalize(vim.fn.getcwd())
+  local filename = vim.fs.normalize(vim.fs.joinpath(cwd, path))
+  if filename:sub(1, #cwd + 1) ~= cwd .. "/" or vim.fn.filereadable(filename) == 0 then return { error = "invalidPath" } end
+  buffer = vim.fn.bufadd(filename)
+  vim.fn.bufload(buffer)
+end
 if vim.api.nvim_buf_is_valid(buffer) == false or vim.api.nvim_buf_is_loaded(buffer) == false then return { error = "invalidBuffer" } end
 local options = vim.bo[buffer]
 local metadata = { number = buffer, name = vim.api.nvim_buf_get_name(buffer), loaded = true, filetype = options.filetype, buftype = options.buftype, modified = options.modified }
 if metadata.name == "" or metadata.buftype ~= "" or metadata.filetype == "opencode" or metadata.filetype == "opencode_terminal" then return { error = "invalidBuffer" } end
 local total_lines = vim.api.nvim_buf_line_count(buffer)
 if line > total_lines then return { error = "invalidRange", totalLines = total_lines } end
-local groups = { note = "Comment", warning = "DiagnosticWarn", error = "DiagnosticError" }
+local source_line = vim.api.nvim_buf_get_lines(buffer, line - 1, line, true)[1]
+local column = source_line:find(anchor, 1, true)
+if column == nil then return { error = "invalidAnchor" } end
+if source_line:find(anchor, column + 1, true) ~= nil then return { error = "ambiguousAnchor" } end
+if column > #source_line + 1 then return { error = "invalidColumn" } end
+vim.api.nvim_set_hl(0, "OpencodeAnnotationNote", { default = true, link = "DiagnosticInfo" })
+vim.api.nvim_set_hl(0, "OpencodeAnnotationWarning", { default = true, link = "DiagnosticWarn" })
+vim.api.nvim_set_hl(0, "OpencodeAnnotationError", { default = true, link = "DiagnosticError" })
+local groups = { note = "OpencodeAnnotationNote", warning = "OpencodeAnnotationWarning", error = "OpencodeAnnotationError" }
 local namespace = vim.api.nvim_create_namespace("opencode_mcp_presentation")
-local decoration = { priority = 200 }
-if placement == "above" then
-  decoration.virt_lines = {{{ "-> " .. text, groups[kind] }}}
-  decoration.virt_lines_above = true
-elseif placement == "callout" then
-  local lines = {}
-  local remaining = text
-  for index = 1, 3 do
-    if remaining == "" then break end
-    local part = remaining:sub(1, 72)
-    if #remaining > 72 then
-      local boundary = part:match("^.*()%s")
-      if boundary then part = part:sub(1, boundary - 1) end
-    end
-    table.insert(lines, {{ index == 1 and "└─ " or "   ", groups[kind] }, { part, groups[kind] }})
-    remaining = remaining:sub(#part + 1):gsub("^%s+", "")
+local lines = {}
+local remaining = text
+local indent = vim.api.nvim_buf_call(buffer, function()
+  local start = vim.fn.virtcol({ line, 0 })
+  local finish = vim.fn.virtcol({ line, column })
+  return math.max(0, finish - 1 - start)
+end)
+for index = 1, 3 do
+  if remaining == "" then break end
+  local part = remaining:sub(1, 72)
+  if #remaining > 72 then
+    local boundary = part:match("^.*()%s")
+    if boundary then part = part:sub(1, boundary - 1) end
   end
-  decoration.virt_lines = lines
-  decoration.virt_lines_above = false
-else
-  decoration.virt_text = {{ "  -> " .. text, groups[kind] }}
-  decoration.virt_text_pos = "eol"
+  table.insert(lines, {
+    { string.rep(" ", indent), "" },
+    { index == 1 and "└──── " or "      ", index == 1 and groups[kind] or "" },
+    { part, groups[kind] },
+  })
+  remaining = remaining:sub(#part + 1):gsub("^%s+", "")
 end
+local decoration = { priority = 200, virt_lines = lines, virt_lines_above = false, virt_lines_overflow = "scroll" }
 local id = vim.api.nvim_buf_set_extmark(buffer, namespace, line - 1, 0, decoration)
 if duration_ms > 0 then vim.defer_fn(function() if vim.api.nvim_buf_is_valid(buffer) then vim.api.nvim_buf_del_extmark(buffer, namespace, id) end end, duration_ms) end
 local revealed = false
@@ -522,7 +537,7 @@ if reveal then
   end
   if window ~= nil then vim.api.nvim_win_set_buf(window, buffer); vim.api.nvim_win_set_cursor(window, { line, 0 }); vim.api.nvim_win_call(window, function() vim.cmd("normal! zz") end); revealed = true end
 end
-return { pid = vim.fn.getpid(), cwd = vim.fn.getcwd(), buffer = metadata, annotationId = id, line = line, text = text, kind = kind, placement = placement, expiresInMs = duration_ms, revealed = revealed }
+return { pid = vim.fn.getpid(), cwd = vim.fn.getcwd(), buffer = metadata, annotationId = id, line = line, column = column, text = text, kind = kind, placement = "callout", expiresInMs = duration_ms, revealed = revealed }
 `
 
 const BUFFER_INFO_GUARDS = { number: isNumber, name: isString, filetype: isString, buftype: isString, loaded: isBoolean, modified: isBoolean }
@@ -542,7 +557,7 @@ const QUICKFIX_ITEM_GUARDS = { filename: isString, line: isNumber, column: isNum
 const QUICKFIX_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, kind: isString, title: isString, total: isNumber, items: isQuickfixItemList }
 const REVEAL_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, window: isNumber, position: isPosition, focused: isBoolean, splitCreated: isBoolean }
 const HIGHLIGHT_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, highlightId: isNumber, start: isPosition, end: isPosition, expiresInMs: isNumber, revealed: isBoolean }
-const ANNOTATION_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, annotationId: isNumber, line: isNumber, text: isString, kind: isString, placement: isString, expiresInMs: isNumber, revealed: isBoolean }
+const ANNOTATION_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, annotationId: isNumber, line: isNumber, column: isNumber, text: isString, kind: isString, placement: isString, expiresInMs: isNumber, revealed: isBoolean }
 
 export type BridgeError = {
 	code: "NVIM_SOCKET_MISSING" | "NVIM_UNAVAILABLE" | "NVIM_INVALID_RESPONSE" | "NVIM_INVALID_ARGUMENT" | "NVIM_CONTENT_LIMIT"
@@ -578,12 +593,12 @@ export type QuickfixOptions = { kind: "quickfix" | "location"; maxItems: number 
 export type RevealOptions = { buffer: number; line: number; column: number; focus: boolean; split: "none" | "horizontal" | "vertical" }
 export type HighlightOptions = { buffer?: number; path?: string; startLine: number; startColumn?: number; endLine?: number; endColumn?: number; durationMs: number; reveal: boolean }
 export type ClearHighlightOptions = { buffer: number; highlightId: number }
-export type AnnotationOptions = { buffer: number; line: number; text: string; kind: "note" | "warning" | "error"; placement: "above" | "eol" | "callout"; durationMs: number; reveal: boolean }
+export type AnnotationOptions = { buffer?: number; path?: string; line: number; anchor: string; text: string; kind: "note" | "warning" | "error"; durationMs: number; reveal: boolean }
 export type QuickfixResult = { ok: true; quickfix: { instance: ActiveContext["instance"]; kind: "quickfix" | "location"; title: string; total: number; items: QuickfixItem[] } } | BridgeFailure
 export type RevealResult = { ok: true; reveal: { instance: ActiveContext["instance"]; buffer: BufferInfo; window: number; position: { line: number; column: number }; focused: boolean; splitCreated: boolean } } | BridgeFailure
 export type HighlightResult = { ok: true; highlight: { instance: ActiveContext["instance"]; buffer: BufferInfo; highlightId: number; start: { line: number; column: number }; end: { line: number; column: number }; expiresInMs: number; revealed: boolean } } | BridgeFailure
 export type ClearHighlightResult = { ok: true; clearHighlight: { cleared: boolean } } | BridgeFailure
-export type AnnotationResult = { ok: true; annotation: { instance: ActiveContext["instance"]; buffer: BufferInfo; annotationId: number; line: number; text: string; kind: "note" | "warning" | "error"; placement: "above" | "eol" | "callout"; expiresInMs: number; revealed: boolean } } | BridgeFailure
+export type AnnotationResult = { ok: true; annotation: { instance: ActiveContext["instance"]; buffer: BufferInfo; annotationId: number; line: number; column: number; text: string; kind: "note" | "warning" | "error"; placement: "callout"; expiresInMs: number; revealed: boolean } } | BridgeFailure
 export type QuickfixItem = { filename: string; line: number; column: number; endLine: number; endColumn: number; text: string; type: string; valid: boolean }
 export type NvimClientFactory = (socket: string) => NeovimClient
 export type TimeoutObserver = { created(): void; cleared(): void; fired(): void }
@@ -597,7 +612,7 @@ type DiagnosticSummarySnapshot = { pid: number; cwd: string; buffer: BufferInfo;
 type QuickfixSnapshot = { pid: number; cwd: string; kind: "quickfix" | "location"; title: string; total: number; items: QuickfixItem[] }
 type RevealSnapshot = { pid: number; cwd: string; buffer: BufferInfo; window: number; position: { line: number; column: number }; focused: boolean; splitCreated: boolean }
 type HighlightSnapshot = { pid: number; cwd: string; buffer: BufferInfo; highlightId: number; start: { line: number; column: number }; end: { line: number; column: number }; expiresInMs: number; revealed: boolean }
-type AnnotationSnapshot = { pid: number; cwd: string; buffer: BufferInfo; annotationId: number; line: number; text: string; kind: "note" | "warning" | "error"; placement: "above" | "eol" | "callout"; expiresInMs: number; revealed: boolean }
+type AnnotationSnapshot = { pid: number; cwd: string; buffer: BufferInfo; annotationId: number; line: number; column: number; text: string; kind: "note" | "warning" | "error"; placement: "callout"; expiresInMs: number; revealed: boolean }
 
 function bridgeError(code: BridgeError["code"], message: string): BridgeFailure {
 	return { ok: false, error: { code, message } }
@@ -825,6 +840,8 @@ const PRESENTATION_FAILURES: Record<string, (value: Record<string, unknown>) => 
 	invalidRange: invalidRevealPosition,
 	invalidColumn: function() { return bridgeError("NVIM_INVALID_ARGUMENT", "Choose a column within the target line") },
 	invalidPath: function() { return bridgeError("NVIM_INVALID_ARGUMENT", "Choose a readable workspace-relative file path") },
+	invalidAnchor: function() { return bridgeError("NVIM_INVALID_ARGUMENT", "The annotation anchor was not found on the target line") },
+	ambiguousAnchor: function() { return bridgeError("NVIM_INVALID_ARGUMENT", "The annotation anchor occurs more than once on the target line; use column instead") },
 	lineLimit: function() { return bridgeError("NVIM_CONTENT_LIMIT", `Highlight at most ${MAX_HIGHLIGHT_LINES} lines`) },
 	missingSourceWindow: function() { return bridgeError("NVIM_INVALID_ARGUMENT", "No source window is available for presentation") },
 }
@@ -851,7 +868,7 @@ function isHighlightSnapshot(value: unknown): value is HighlightSnapshot {
 
 // fallow-ignore-next-line complexity -- validates the fixed annotation enums.
 function isAnnotationSnapshot(value: unknown): value is AnnotationSnapshot {
-	return hasProperties(value, ANNOTATION_SNAPSHOT_GUARDS) && (value.kind === "note" || value.kind === "warning" || value.kind === "error") && (value.placement === "above" || value.placement === "eol" || value.placement === "callout")
+	return hasProperties(value, ANNOTATION_SNAPSHOT_GUARDS) && (value.kind === "note" || value.kind === "warning" || value.kind === "error") && value.placement === "callout"
 }
 
 function annotationSnapshotResult(value: unknown): AnnotationSnapshot | BridgeFailure {
@@ -1044,7 +1061,7 @@ export class NvimContextBridge {
 		try {
 			const result = await this.annotationSnapshot(client.nvim, options)
 			if ("error" in result) return result
-			return { ok: true, annotation: { instance: { socket: this.#socket!, pid: result.pid, cwd: result.cwd }, buffer: result.buffer, annotationId: result.annotationId, line: result.line, text: result.text, kind: result.kind, placement: result.placement, expiresInMs: result.expiresInMs, revealed: result.revealed } }
+			return { ok: true, annotation: { instance: { socket: this.#socket!, pid: result.pid, cwd: result.cwd }, buffer: result.buffer, annotationId: result.annotationId, line: result.line, column: result.column, text: result.text, kind: result.kind, placement: result.placement, expiresInMs: result.expiresInMs, revealed: result.revealed } }
 		} catch {
 			return this.unavailable()
 		}
@@ -1120,7 +1137,7 @@ export class NvimContextBridge {
 	}
 
 	async annotationSnapshot(nvim: NeovimClient, options: AnnotationOptions): Promise<AnnotationSnapshot | BridgeFailure> {
-		const snapshot = await withTimeout(nvim.executeLua(ANNOTATE_LUA, [options.buffer, options.line, options.text, options.kind, options.placement, options.durationMs, options.reveal]), this.#timeoutObserver)
+		const snapshot = await withTimeout(nvim.executeLua(ANNOTATE_LUA, annotationSnapshotArguments(options)), this.#timeoutObserver)
 		return annotationSnapshotResult(snapshot)
 	}
 
@@ -1147,6 +1164,10 @@ export class NvimContextBridge {
 
 function highlightSnapshotArguments(options: HighlightOptions) {
 	return [highlightBuffer(options.buffer), highlightPath(options.path), options.startLine, highlightPosition(options.startColumn), highlightPosition(options.endLine), highlightPosition(options.endColumn), options.durationMs, options.reveal, MAX_HIGHLIGHT_LINES]
+}
+
+function annotationSnapshotArguments(options: AnnotationOptions) {
+	return [highlightBuffer(options.buffer), highlightPath(options.path), options.line, options.anchor, options.text, options.kind, options.durationMs, options.reveal]
 }
 
 function highlightBuffer(value: number | undefined) {

@@ -21,7 +21,7 @@ const QUICKFIX_OPTION_NAMES = new Set(["kind", "maxItems"])
 const REVEAL_OPTION_NAMES = new Set(["buffer", "line", "column", "focus", "split"])
 const HIGHLIGHT_OPTION_NAMES = new Set(["buffer", "path", "startLine", "startColumn", "endLine", "endColumn", "durationMs", "reveal"])
 const CLEAR_HIGHLIGHT_OPTION_NAMES = new Set(["buffer", "highlightId"])
-const ANNOTATE_OPTION_NAMES = new Set(["buffer", "line", "text", "kind", "placement", "durationMs", "reveal"])
+const ANNOTATE_OPTION_NAMES = new Set(["buffer", "path", "line", "anchor", "text", "kind", "durationMs", "reveal"])
 const REVEAL_SPLITS = new Set(["none", "horizontal", "vertical"])
 
 type ToolResult = AnnotationResult | BridgeResult | VisibleWindowsResult | BufferInventoryResult | BufferReadResult | ClearHighlightResult | DiagnosticSummaryResult | DiagnosticsResult | FocusContextResult | HighlightResult | QuickfixResult | RevealResult | SelectionResult
@@ -250,25 +250,32 @@ function parseAnnotationOptions(params: JsonRecord): AnnotationOptions | BridgeF
 function annotationOptions(arguments_: JsonRecord): AnnotationOptions | BridgeFailure {
 	const unsupportedArgument = unsupportedPresentationArgument(arguments_, ANNOTATE_OPTION_NAMES, "annotation")
 	if (unsupportedArgument) return unsupportedArgument
-	const position = annotationPosition(arguments_)
-	if ("error" in position) return position
+	const target = highlightTarget(arguments_)
+	if ("error" in target) return target
+	const line = positiveInteger(arguments_.line)
+	if (line === null) return bridgeError("NVIM_INVALID_ARGUMENT", "line must be a positive integer")
 	const text = annotationText(arguments_.text)
 	if (typeof text !== "string") return text
 	const kind = annotationKind(arguments_.kind)
 	if (typeof kind !== "string") return kind
-	const placement = annotationPlacement(arguments_.placement)
-	if (typeof placement !== "string") return placement
 	const reveal = optionalBoolean(arguments_.reveal)
 	if (reveal === null) return bridgeError("NVIM_INVALID_ARGUMENT", "reveal must be a boolean")
 	const durationMs = highlightDuration(arguments_.durationMs)
 	if (typeof durationMs !== "number") return durationMs
-	return { buffer: position[0], line: position[1], text, kind, placement, durationMs, reveal: reveal ?? true }
+	const anchor = annotationAnchor(arguments_.anchor)
+	if (typeof anchor !== "string") return anchor ?? bridgeError("NVIM_INVALID_ARGUMENT", "anchor is required for an annotation")
+	return { ...target, line, anchor, text, kind, durationMs, reveal: reveal ?? true }
 }
 
-function annotationPosition(arguments_: JsonRecord): [number, number] | BridgeFailure {
-	const buffer = positiveInteger(arguments_.buffer)
-	const line = positiveInteger(arguments_.line)
-	return buffer === null || line === null ? bridgeError("NVIM_INVALID_ARGUMENT", "buffer and line must be positive integers") : [buffer, line]
+function annotationAnchor(value: unknown): string | undefined | BridgeFailure {
+	if (value === undefined) return undefined
+	if (isString(value) === false) return bridgeError("NVIM_INVALID_ARGUMENT", "anchor must be a non-empty string of at most 128 characters")
+	return boundedAnnotationAnchor(value)
+}
+
+function boundedAnnotationAnchor(value: string): string | BridgeFailure {
+	if (value !== "" && value.length <= 128) return value
+	return bridgeError("NVIM_INVALID_ARGUMENT", "anchor must be a non-empty string of at most 128 characters")
 }
 
 function annotationText(value: unknown): string | BridgeFailure {
@@ -280,12 +287,6 @@ function annotationKind(value: unknown): AnnotationOptions["kind"] | BridgeFailu
 	if (value === undefined || value === "note") return "note"
 	if (value === "warning" || value === "error") return value
 	return bridgeError("NVIM_INVALID_ARGUMENT", "kind must be note, warning, or error")
-}
-
-function annotationPlacement(value: unknown): AnnotationOptions["placement"] | BridgeFailure {
-	if (value === undefined || value === "eol") return "eol"
-	if (value === "above" || value === "callout") return value
-	return bridgeError("NVIM_INVALID_ARGUMENT", "placement must be above, callout, or eol")
 }
 
 function unsupportedPresentationArgument(arguments_: JsonRecord, names: Set<string>, label: string): BridgeFailure | undefined {
@@ -405,7 +406,7 @@ function tools() {
 		{ name: REVEAL_TOOL_NAME, description: "Reveal an existing source buffer at an exact position, optionally creating an explicit split. Focus remains unchanged unless requested.", inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, line: { type: "integer", minimum: 1 }, column: { type: "integer", minimum: 1 }, focus: { type: "boolean", default: false }, split: { type: "string", enum: ["none", "horizontal", "vertical"], default: "none" } }, required: ["buffer", "line", "column"], additionalProperties: false } },
 		{ name: HIGHLIGHT_TOOL_NAME, description: `Temporarily open or reuse a workspace source file and highlight a line or exact range for up to ${MAX_HIGHLIGHT_DURATION_MS} ms without changing text. Specify exactly one of buffer or workspace-relative path. Omitting columns highlights the whole line.`, inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, path: { type: "string", minLength: 1 }, startLine: { type: "integer", minimum: 1 }, startColumn: { type: "integer", minimum: 1 }, endLine: { type: "integer", minimum: 1 }, endColumn: { type: "integer", minimum: 1 }, durationMs: { type: "integer", minimum: 1, maximum: MAX_HIGHLIGHT_DURATION_MS, default: DEFAULT_HIGHLIGHT_DURATION_MS }, reveal: { type: "boolean", default: true } }, required: ["startLine"], anyOf: [{ required: ["buffer"] }, { required: ["path"] }], additionalProperties: false } },
 		{ name: CLEAR_HIGHLIGHT_TOOL_NAME, description: "Clear a temporary highlight previously returned by nvim_highlight.", inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, highlightId: { type: "integer", minimum: 1 } }, required: ["buffer", "highlightId"], additionalProperties: false } },
-		{ name: ANNOTATE_TOOL_NAME, description: "Temporarily add one concise colored note for an actionable review finding or explanation. callout renders an arrowed multi-line note and reveals the target by default. Do not use for routine status updates.", inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, line: { type: "integer", minimum: 1 }, text: { type: "string", minLength: 1, maxLength: 512 }, kind: { type: "string", enum: ["note", "warning", "error"], default: "note" }, placement: { type: "string", enum: ["above", "callout", "eol"], default: "eol" }, reveal: { type: "boolean", default: true }, durationMs: { type: "integer", minimum: 1, maximum: MAX_HIGHLIGHT_DURATION_MS, default: DEFAULT_HIGHLIGHT_DURATION_MS } }, required: ["buffer", "line", "text"], additionalProperties: false } },
+		{ name: ANNOTATE_TOOL_NAME, description: "Temporarily open or reuse a workspace source file and add one concise colored LSP-lines-style callout for an actionable review finding or explanation. anchor must be a unique source token on the exact target line; invalid targets fail instead of rendering approximately. Do not use for routine status updates.", inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, path: { type: "string", minLength: 1 }, line: { type: "integer", minimum: 1 }, anchor: { type: "string", minLength: 1, maxLength: 128 }, text: { type: "string", minLength: 1, maxLength: 512 }, kind: { type: "string", enum: ["note", "warning", "error"], default: "note" }, reveal: { type: "boolean", default: true }, durationMs: { type: "integer", minimum: 1, maximum: MAX_HIGHLIGHT_DURATION_MS, default: DEFAULT_HIGHLIGHT_DURATION_MS } }, required: ["line", "anchor", "text"], anyOf: [{ required: ["buffer"] }, { required: ["path"] }], additionalProperties: false } },
 	]
 }
 
