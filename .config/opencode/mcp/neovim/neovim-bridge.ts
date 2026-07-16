@@ -5,6 +5,8 @@ import { isDiagnostic, isSourceBuffer } from "./neovim-metadata"
 const REQUEST_TIMEOUT_MS = 1000
 export const MAX_READ_LINES = 500
 export const MAX_READ_BYTES = 32 * 1024
+export const MAX_DIAGNOSTIC_SUMMARY_ITEMS = 50
+export const DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS = 20
 
 const DIAGNOSTICS_LUA = `
 local buffer = ...
@@ -35,6 +37,58 @@ return {
     modified = options.modified,
   },
   diagnostics = diagnostics,
+}
+`
+
+const DIAGNOSTIC_SUMMARY_LUA = `
+local buffer, max_items = ...
+if buffer == 0 then buffer = vim.api.nvim_get_current_buf() end
+if vim.api.nvim_buf_is_valid(buffer) == false or vim.api.nvim_buf_is_loaded(buffer) == false then return { invalid = true } end
+
+local options = vim.bo[buffer]
+local diagnostics = vim.diagnostic.get(buffer)
+local counts = { error = 0, warning = 0, information = 0, hint = 0, total = #diagnostics }
+for _, diagnostic in ipairs(diagnostics) do
+  if diagnostic.severity == vim.diagnostic.severity.ERROR then counts.error = counts.error + 1
+  elseif diagnostic.severity == vim.diagnostic.severity.WARN then counts.warning = counts.warning + 1
+  elseif diagnostic.severity == vim.diagnostic.severity.INFO then counts.information = counts.information + 1
+  elseif diagnostic.severity == vim.diagnostic.severity.HINT then counts.hint = counts.hint + 1
+  end
+end
+table.sort(diagnostics, function(left, right)
+  if left.severity ~= right.severity then return left.severity < right.severity end
+  if left.lnum ~= right.lnum then return left.lnum < right.lnum end
+  if left.col ~= right.col then return left.col < right.col end
+  if (left.source or "") ~= (right.source or "") then return (left.source or "") < (right.source or "") end
+  return left.message < right.message
+end)
+
+local items = {}
+for index = 1, math.min(max_items, #diagnostics) do
+  local diagnostic = diagnostics[index]
+  table.insert(items, {
+    line = diagnostic.lnum,
+    column = diagnostic.col,
+    endLine = diagnostic.end_lnum or diagnostic.lnum,
+    endColumn = diagnostic.end_col or diagnostic.col,
+    severity = diagnostic.severity,
+    message = diagnostic.message,
+    source = diagnostic.source or "",
+  })
+end
+return {
+  pid = vim.fn.getpid(),
+  cwd = vim.fn.getcwd(),
+  buffer = {
+    number = buffer,
+    name = vim.api.nvim_buf_get_name(buffer),
+    loaded = true,
+    filetype = options.filetype,
+    buftype = options.buftype,
+    modified = options.modified,
+  },
+  counts = counts,
+  diagnostics = items,
 }
 `
 
@@ -242,6 +296,8 @@ const FOCUS_CONTEXT_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: is
 const READ_BUFFER_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, startLine: isNumber, endLine: isNumber, totalLines: isNumber, lines: isStringList }
 const BUFFER_INVENTORY_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffers: isBufferInfoList }
 const SELECTION_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, mode: isString, anchor: isPosition, cursor: isPosition, lines: isStringList }
+const DIAGNOSTIC_COUNTS_GUARDS = { error: isNumber, warning: isNumber, information: isNumber, hint: isNumber, total: isNumber }
+const DIAGNOSTIC_SUMMARY_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, counts: isDiagnosticCounts, diagnostics: isDiagnosticList }
 
 export type BridgeError = {
 	code: "NVIM_SOCKET_MISSING" | "NVIM_UNAVAILABLE" | "NVIM_INVALID_RESPONSE" | "NVIM_INVALID_ARGUMENT" | "NVIM_CONTENT_LIMIT"
@@ -269,6 +325,8 @@ export type BufferReadResult = { ok: true; bufferRead: BufferRead } | BridgeFail
 export type BufferReadOptions = { buffer?: number; startLine?: number; endLine?: number }
 export type Diagnostic = { line: number; column: number; endLine: number; endColumn: number; severity: number; message: string; source: string }
 export type DiagnosticsResult = { ok: true; diagnostics: { instance: ActiveContext["instance"]; buffer: BufferInfo; diagnostics: Diagnostic[] } } | BridgeFailure
+export type DiagnosticSummaryOptions = { buffer?: number; maxItems: number }
+export type DiagnosticSummaryResult = { ok: true; diagnosticSummary: { instance: ActiveContext["instance"]; buffer: BufferInfo; counts: { error: number; warning: number; information: number; hint: number; total: number }; diagnostics: Diagnostic[] } } | BridgeFailure
 export type FocusContextResult = { ok: true; focusContext: { instance: ActiveContext["instance"]; buffer: BufferInfo; cursor: { line: number; column: number } } } | BridgeFailure
 export type SelectionResult = { ok: true; selection: { instance: ActiveContext["instance"]; buffer: BufferInfo; mode: string; anchor: { line: number; column: number }; cursor: { line: number; column: number }; lines: string[] } } | BridgeFailure
 export type NvimClientFactory = (socket: string) => NeovimClient
@@ -278,6 +336,8 @@ type FocusContextSnapshot = { pid: number; cwd: string; buffer: BufferInfo; curs
 type ReadBufferSnapshot = { pid: number; cwd: string; buffer: BufferInfo; startLine: number; endLine: number; totalLines: number; lines: string[] }
 type BufferInventorySnapshot = { pid: number; cwd: string; buffers: BufferInfo[] }
 type SelectionSnapshot = { pid: number; cwd: string; buffer: BufferInfo; mode: string; anchor: { line: number; column: number }; cursor: { line: number; column: number }; lines: string[] }
+type DiagnosticCounts = { error: number; warning: number; information: number; hint: number; total: number }
+type DiagnosticSummarySnapshot = { pid: number; cwd: string; buffer: BufferInfo; counts: DiagnosticCounts; diagnostics: Diagnostic[] }
 
 function bridgeError(code: BridgeError["code"], message: string): BridgeFailure {
 	return { ok: false, error: { code, message } }
@@ -322,6 +382,10 @@ function isDiagnosticList(value: unknown): value is Diagnostic[] {
 	return Array.isArray(value) && value.every(isDiagnostic)
 }
 
+function isDiagnosticCounts(value: unknown): value is DiagnosticCounts {
+	return hasProperties(value, DIAGNOSTIC_COUNTS_GUARDS)
+}
+
 function isStringList(value: unknown): value is string[] {
 	return Array.isArray(value) && value.every(isString)
 }
@@ -353,6 +417,15 @@ function invalidDiagnostics(): BridgeFailure {
 function diagnosticsSnapshotResult(value: unknown): DiagnosticsSnapshot | BridgeFailure {
 	if (isRecord(value) && value.invalid === true) return invalidDiagnostics()
 	return isDiagnosticsSnapshot(value) ? value : invalidDiagnostics()
+}
+
+function isDiagnosticSummarySnapshot(value: unknown): value is DiagnosticSummarySnapshot {
+	return hasProperties(value, DIAGNOSTIC_SUMMARY_SNAPSHOT_GUARDS)
+}
+
+function diagnosticSummarySnapshotResult(value: unknown): DiagnosticSummarySnapshot | BridgeFailure {
+	if (isRecord(value) && value.invalid === true) return invalidDiagnostics()
+	return isDiagnosticSummarySnapshot(value) ? value : invalidDiagnostics()
 }
 
 function missingFocusContext(): BridgeFailure {
@@ -526,6 +599,18 @@ export class NvimContextBridge {
 		}
 	}
 
+	async diagnosticSummary(options: DiagnosticSummaryOptions): Promise<DiagnosticSummaryResult> {
+		const client = this.client()
+		if ("error" in client) return client
+		try {
+			const result = await this.diagnosticSummarySnapshot(client.nvim, options)
+			if ("error" in result) return result
+			return { ok: true, diagnosticSummary: { instance: { socket: this.#socket!, pid: result.pid, cwd: result.cwd }, buffer: result.buffer, counts: result.counts, diagnostics: result.diagnostics } }
+		} catch {
+			return this.unavailable()
+		}
+	}
+
 	async focusContext(): Promise<FocusContextResult> {
 		const client = this.client()
 		if ("error" in client) return client
@@ -577,6 +662,11 @@ export class NvimContextBridge {
 	async diagnosticsSnapshot(nvim: NeovimClient, bufferNumber?: number): Promise<DiagnosticsSnapshot | BridgeFailure> {
 		const snapshot = await withTimeout(nvim.executeLua(DIAGNOSTICS_LUA, [bufferNumber ?? 0]), this.#timeoutObserver)
 		return diagnosticsSnapshotResult(snapshot)
+	}
+
+	async diagnosticSummarySnapshot(nvim: NeovimClient, options: DiagnosticSummaryOptions): Promise<DiagnosticSummarySnapshot | BridgeFailure> {
+		const snapshot = await withTimeout(nvim.executeLua(DIAGNOSTIC_SUMMARY_LUA, [options.buffer ?? 0, options.maxItems]), this.#timeoutObserver)
+		return diagnosticSummarySnapshotResult(snapshot)
 	}
 
 	async focusContextSnapshot(nvim: NeovimClient): Promise<FocusContextSnapshot | BridgeFailure> {

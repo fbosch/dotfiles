@@ -18,6 +18,7 @@ Sibling worktrees normally produce separate OpenCode server processes because th
 - `nvim_visible_windows`: visible windows and source buffers beside OpenCode.
 - `nvim_list_buffers`: listed buffers and source-buffer subset.
 - `nvim_read_buffer`: bounded in-memory source reads, including unsaved content.
+- `nvim_diagnostic_summary`: severity counts and a bounded diagnostic prefix for the active or selected buffer.
 - `nvim_diagnostics`: current diagnostics for the active or selected buffer.
 
 `nvim_read_buffer` and `nvim_selection` allow at most 500 lines or 32 KiB per call. The bridge does not expose arbitrary Neovim evaluation, commands, edits, terminal input, or socket selection.

@@ -187,6 +187,8 @@ test("Neovim MCP baseline", async () => {
 		const name = `diagnostics/${DIAGNOSTIC_COUNTS[index]}-items`
 		printResult(await bench(name, fixture.metrics, () => successful(name, () => fixture.bridge.diagnostics(1))), fixture.metrics)
 	}
+	const diagnosticSummaryFixture = diagnosticFixtures.at(-1)!
+	printResult(await bench("diagnosticSummary/250-items", diagnosticSummaryFixture.metrics, () => successful("diagnosticSummary/250-items", () => diagnosticSummaryFixture.bridge.diagnosticSummary({ maxItems: 20 }))), diagnosticSummaryFixture.metrics)
 	printResult(await bench("focusContext/recorded", focusFixture.metrics, () => successful("focusContext/recorded", () => focusFixture.bridge.focusContext())), focusFixture.metrics)
 	} finally {
 		activeMetrics = undefined

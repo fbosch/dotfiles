@@ -162,10 +162,23 @@ test("preserves invalid-buffer and range errors", async () => {
 test("reads diagnostics through the official client", async () => {
 	await withNvim(["file bridge-diagnostics.lua", "call setline(1, ['local value = unknown'])"], async function(bridge, socket) {
 		const nvim = attach({ socket })
-		await nvim.executeLua("vim.diagnostic.set(vim.api.nvim_create_namespace('bridge-test'), 0, {{ lnum = 0, col = 14, severity = vim.diagnostic.severity.ERROR, message = 'unknown variable', source = 'bridge-test' }})")
-		expect(await bridge.diagnostics(1)).toMatchObject({
+		await nvim.executeLua("vim.diagnostic.set(vim.api.nvim_create_namespace('bridge-test'), 0, {{ lnum = 0, col = 14, severity = vim.diagnostic.severity.WARN, message = 'warning', source = 'bridge-test' }, { lnum = 0, col = 10, severity = vim.diagnostic.severity.ERROR, message = 'unknown variable', source = 'bridge-test' }, { lnum = 2, col = 0, severity = vim.diagnostic.severity.HINT, message = 'hint', source = 'bridge-test' }})")
+		const diagnostics = await bridge.diagnostics(1)
+		expect(diagnostics).toMatchObject({
 			ok: true,
-			diagnostics: { buffer: { name: expect.stringContaining("bridge-diagnostics.lua") }, diagnostics: [{ line: 0, column: 14, severity: 1, message: "unknown variable", source: "bridge-test" }] },
+			diagnostics: { buffer: { name: expect.stringContaining("bridge-diagnostics.lua") } },
+		})
+		if (diagnostics.ok) expect(diagnostics.diagnostics.diagnostics.some(function(diagnostic) { return diagnostic.line === 0 && diagnostic.column === 10 && diagnostic.severity === 1 && diagnostic.message === "unknown variable" && diagnostic.source === "bridge-test" })).toBe(true)
+		expect(await bridge.diagnosticSummary({ buffer: 1, maxItems: 2 })).toMatchObject({
+			ok: true,
+			diagnosticSummary: {
+				buffer: { name: expect.stringContaining("bridge-diagnostics.lua") },
+				counts: { error: 1, warning: 1, information: 0, hint: 1, total: 3 },
+				diagnostics: [
+					{ line: 0, column: 10, severity: 1, message: "unknown variable" },
+					{ line: 0, column: 14, severity: 2, message: "warning" },
+				],
+			},
 		})
 	})
 })
@@ -173,6 +186,7 @@ test("reads diagnostics through the official client", async () => {
 test("rejects diagnostics from an unavailable buffer", async () => {
 	await withNvim([], async function(bridge) {
 		expect(await bridge.diagnostics(999)).toMatchObject({ error: { code: "NVIM_INVALID_RESPONSE" } })
+		expect(await bridge.diagnosticSummary({ buffer: 999, maxItems: 1 })).toMatchObject({ error: { code: "NVIM_INVALID_RESPONSE" } })
 	})
 })
 
@@ -200,7 +214,9 @@ test("advertises connected-server instructions, focused context, and selections"
 	const response = await handleMessage({ jsonrpc: "2.0", id: 1, method: "initialize" }, new NvimContextBridge(undefined))
 	expect(response).toMatchObject({ result: { instructions: expect.stringContaining("Prefer nvim_focus_context") } })
 	const tools = await handleMessage({ jsonrpc: "2.0", id: 2, method: "tools/list" }, new NvimContextBridge(undefined))
-	expect(tools).toMatchObject({ result: { tools: expect.arrayContaining([expect.objectContaining({ name: "nvim_focus_context" }), expect.objectContaining({ name: "nvim_selection" })]) } })
+	expect(tools).toMatchObject({ result: { tools: expect.arrayContaining([expect.objectContaining({ name: "nvim_focus_context" }), expect.objectContaining({ name: "nvim_selection" }), expect.objectContaining({ name: "nvim_diagnostic_summary" })]) } })
+	const summary = await handleMessage({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "nvim_diagnostic_summary", arguments: { maxItems: 51 } } }, new NvimContextBridge(undefined))
+	expect(summary).toMatchObject({ result: { isError: true, content: [expect.objectContaining({ text: expect.stringContaining("Request at most 50 diagnostic summary items") })] } })
 })
 
 test("isolates context, source reads, visible windows, and diagnostics across sibling worktrees", async () => {
@@ -253,6 +269,6 @@ test("keeps the curated MCP tool contract", async () => {
 	const response = await handleMessage({ jsonrpc: "2.0", id: 1, method: "tools/list" }, new NvimContextBridge(undefined))
 	expect(response).toMatchObject({ jsonrpc: "2.0", id: 1 })
 	if (response && "result" in response && typeof response.result === "object" && response.result !== null && "tools" in response.result && Array.isArray(response.result.tools)) {
-		expect(response.result.tools.map(function(tool) { return tool.name })).toEqual(["nvim_context", "nvim_visible_windows", "nvim_list_buffers", "nvim_read_buffer", "nvim_diagnostics", "nvim_focus_context", "nvim_selection"])
+		expect(response.result.tools.map(function(tool) { return tool.name })).toEqual(["nvim_context", "nvim_visible_windows", "nvim_list_buffers", "nvim_read_buffer", "nvim_diagnostic_summary", "nvim_diagnostics", "nvim_focus_context", "nvim_selection"])
 	}
 })

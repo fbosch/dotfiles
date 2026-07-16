@@ -1,4 +1,4 @@
-import { MAX_READ_BYTES, MAX_READ_LINES, NvimContextBridge, type BridgeFailure, type BridgeResult, type BufferInventoryResult, type BufferReadOptions, type BufferReadResult, type DiagnosticsResult, type FocusContextResult, type SelectionResult, type VisibleWindowsResult } from "./neovim-bridge"
+import { DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS, MAX_DIAGNOSTIC_SUMMARY_ITEMS, MAX_READ_BYTES, MAX_READ_LINES, NvimContextBridge, type BridgeFailure, type BridgeResult, type BufferInventoryResult, type BufferReadOptions, type BufferReadResult, type DiagnosticSummaryOptions, type DiagnosticSummaryResult, type DiagnosticsResult, type FocusContextResult, type SelectionResult, type VisibleWindowsResult } from "./neovim-bridge"
 import { isNumber, isRecord, isString, type JsonRecord } from "./nvim-utils"
 
 const TOOL_NAME = "nvim_context"
@@ -6,12 +6,14 @@ const VISIBLE_WINDOWS_TOOL_NAME = "nvim_visible_windows"
 const LIST_BUFFERS_TOOL_NAME = "nvim_list_buffers"
 const READ_BUFFER_TOOL_NAME = "nvim_read_buffer"
 const DIAGNOSTICS_TOOL_NAME = "nvim_diagnostics"
+const DIAGNOSTIC_SUMMARY_TOOL_NAME = "nvim_diagnostic_summary"
 const FOCUS_CONTEXT_TOOL_NAME = "nvim_focus_context"
 const SELECTION_TOOL_NAME = "nvim_selection"
 const PROTOCOL_VERSION = "2025-06-18"
 const READ_OPTION_NAMES = new Set(["buffer", "startLine", "endLine"])
+const DIAGNOSTIC_SUMMARY_OPTION_NAMES = new Set(["buffer", "maxItems"])
 
-type ToolResult = BridgeResult | VisibleWindowsResult | BufferInventoryResult | BufferReadResult | DiagnosticsResult | FocusContextResult | SelectionResult
+type ToolResult = BridgeResult | VisibleWindowsResult | BufferInventoryResult | BufferReadResult | DiagnosticSummaryResult | DiagnosticsResult | FocusContextResult | SelectionResult
 type ToolHandler = (params: JsonRecord, bridge: NvimContextBridge) => Promise<ToolResult>
 
 export { NvimContextBridge } from "./neovim-bridge"
@@ -67,6 +69,27 @@ function diagnosticBuffer(params: JsonRecord): number | undefined | null {
 	return optionalPositiveInteger(isRecord(params.arguments) ? params.arguments.buffer : undefined)
 }
 
+function parseDiagnosticSummaryOptions(params: JsonRecord): DiagnosticSummaryOptions | BridgeFailure {
+	const arguments_ = readArguments(params)
+	if ("error" in arguments_) return arguments_
+	return diagnosticSummaryOptions(arguments_)
+}
+
+function diagnosticSummaryOptions(arguments_: JsonRecord): DiagnosticSummaryOptions | BridgeFailure {
+	const unsupportedArgument = Object.keys(arguments_).find(function(key) { return DIAGNOSTIC_SUMMARY_OPTION_NAMES.has(key) === false })
+	if (unsupportedArgument) return bridgeError("NVIM_INVALID_ARGUMENT", `Unsupported diagnostic summary argument: ${unsupportedArgument}`)
+	const buffer = optionalPositiveInteger(arguments_.buffer)
+	const maxItems = optionalPositiveInteger(arguments_.maxItems)
+	if ([buffer, maxItems].includes(null)) return bridgeError("NVIM_INVALID_ARGUMENT", "Buffer and maxItems values must be positive integers")
+	return diagnosticSummaryLimit(buffer, maxItems)
+}
+
+function diagnosticSummaryLimit(buffer: number | undefined, maxItems: number | undefined): DiagnosticSummaryOptions | BridgeFailure {
+	const requestedMaxItems = maxItems ?? DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS
+	if (requestedMaxItems > MAX_DIAGNOSTIC_SUMMARY_ITEMS) return bridgeError("NVIM_INVALID_ARGUMENT", `Request at most ${MAX_DIAGNOSTIC_SUMMARY_ITEMS} diagnostic summary items`)
+	return { buffer, maxItems: requestedMaxItems }
+}
+
 function jsonRpcError(id: unknown, code: number, message: string): JsonRecord {
 	return { jsonrpc: "2.0", id: id ?? null, error: { code, message } }
 }
@@ -87,13 +110,17 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
 		const buffer = diagnosticBuffer(params)
 		return buffer === null ? bridgeError("NVIM_INVALID_ARGUMENT", "Buffer must be a positive integer") : bridge.diagnostics(buffer)
 	},
+	[DIAGNOSTIC_SUMMARY_TOOL_NAME]: async function(params, bridge) {
+		const options = parseDiagnosticSummaryOptions(params)
+		return "error" in options ? options : bridge.diagnosticSummary(options)
+	},
 	[FOCUS_CONTEXT_TOOL_NAME]: async function(_, bridge) { return bridge.focusContext() },
 	[SELECTION_TOOL_NAME]: async function(_, bridge) { return bridge.selection() },
 }
 
 const REQUEST_HANDLERS: Record<string, (id: unknown) => JsonRecord | undefined> = {
 	"notifications/initialized": function() { return undefined },
-	initialize: function(id) { return jsonRpcResult(id, { protocolVersion: PROTOCOL_VERSION, capabilities: { tools: {} }, instructions: "Use these tools only when live Neovim state is relevant. Prefer nvim_focus_context for ambiguous references to this file or this code. Use nvim_visible_windows or nvim_list_buffers to discover buffers, nvim_selection for active visual text, nvim_read_buffer for bounded live or unsaved text, and nvim_diagnostics for editor diagnostics. Results are read-only point-in-time snapshots from one bound Neovim instance; do not infer another editor instance or on-disk state.", serverInfo: { name: "neovim-context", version: "0.1.0" } }) },
+	initialize: function(id) { return jsonRpcResult(id, { protocolVersion: PROTOCOL_VERSION, capabilities: { tools: {} }, instructions: "Use these tools only when live Neovim state is relevant. Prefer nvim_focus_context for ambiguous references to this file or this code. Use nvim_visible_windows or nvim_list_buffers to discover buffers, nvim_selection for active visual text, nvim_read_buffer for bounded live or unsaved text, nvim_diagnostic_summary to triage editor diagnostics, and nvim_diagnostics for complete diagnostics. Results are read-only point-in-time snapshots from one bound Neovim instance; do not infer another editor instance or on-disk state.", serverInfo: { name: "neovim-context", version: "0.1.0" } }) },
 	"tools/list": function(id) { return jsonRpcResult(id, { tools: tools() }) },
 }
 
@@ -126,6 +153,7 @@ function tools() {
 		{ name: VISIBLE_WINDOWS_TOOL_NAME, description: "Get visible Neovim windows and the source buffers visible beside OpenCode.", inputSchema: { type: "object", additionalProperties: false } },
 		{ name: LIST_BUFFERS_TOOL_NAME, description: "List buffers from the Neovim instance bound to this OpenCode server.", inputSchema: { type: "object", additionalProperties: false } },
 		{ name: READ_BUFFER_TOOL_NAME, description: `Read up to ${MAX_READ_LINES} lines or ${MAX_READ_BYTES} bytes from a loaded source buffer in Neovim memory.`, inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, startLine: { type: "integer", minimum: 1 }, endLine: { type: "integer", minimum: 1 } }, additionalProperties: false } },
+		{ name: DIAGNOSTIC_SUMMARY_TOOL_NAME, description: `Summarize diagnostics and return up to ${DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS} highest-priority items from the active or selected buffer.`, inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, maxItems: { type: "integer", minimum: 1, maximum: MAX_DIAGNOSTIC_SUMMARY_ITEMS } }, additionalProperties: false } },
 		{ name: DIAGNOSTICS_TOOL_NAME, description: "Get current diagnostics and their source buffer from the bound Neovim instance.", inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 } }, additionalProperties: false } },
 		{ name: FOCUS_CONTEXT_TOOL_NAME, description: "Get the most recently focused source buffer before focus entered OpenCode or another special buffer.", inputSchema: { type: "object", additionalProperties: false } },
 		{ name: SELECTION_TOOL_NAME, description: `Get up to ${MAX_READ_LINES} lines or ${MAX_READ_BYTES} bytes of the active source visual selection from Neovim memory.`, inputSchema: { type: "object", additionalProperties: false } },
