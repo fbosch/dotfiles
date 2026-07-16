@@ -7,6 +7,9 @@ export const MAX_READ_LINES = 500
 export const MAX_READ_BYTES = 32 * 1024
 export const MAX_DIAGNOSTIC_SUMMARY_ITEMS = 50
 export const DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS = 20
+export const MAX_HOVER_BYTES = 32 * 1024
+
+const LSP_HOVER_TIMEOUT_MS = 750
 
 const DIAGNOSTICS_LUA = `
 local buffer = ...
@@ -285,6 +288,88 @@ return {
 }
 `
 
+const LSP_HOVER_LUA = `
+local requested_buffer, requested_line, requested_column, max_bytes, timeout_ms = ...
+local buffer = requested_buffer == 0 and vim.api.nvim_get_current_buf() or requested_buffer
+if vim.api.nvim_buf_is_valid(buffer) == false then return { error = "invalidBuffer" } end
+
+local options = vim.bo[buffer]
+local metadata = {
+  number = buffer,
+  name = vim.api.nvim_buf_get_name(buffer),
+  loaded = vim.api.nvim_buf_is_loaded(buffer),
+  filetype = options.filetype,
+  buftype = options.buftype,
+  modified = options.modified,
+}
+if metadata.loaded == false or metadata.name == "" or metadata.buftype ~= "" or metadata.filetype == "opencode" or metadata.filetype == "opencode_terminal" then return { error = "invalidBuffer" } end
+
+local line, column
+if requested_line == 0 then
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  line = cursor[1]
+  column = cursor[2] + 1
+else
+  line = requested_line
+  column = requested_column
+end
+local supports_hover = false
+for _, client in ipairs(vim.lsp.get_clients({ bufnr = buffer })) do
+  if client.server_capabilities.hoverProvider then
+    supports_hover = true
+    break
+  end
+end
+if supports_hover == false then return { error = "noHover" } end
+local responses = vim.lsp.buf_request_sync(buffer, "textDocument/hover", {
+  textDocument = { uri = vim.uri_from_bufnr(buffer) },
+  position = { line = line - 1, character = column - 1 },
+}, timeout_ms)
+
+local function text(contents)
+  if type(contents) == "string" then return contents end
+  if type(contents) ~= "table" then return "" end
+  if type(contents.value) == "string" then return contents.value end
+  local parts = {}
+  for _, item in ipairs(contents) do
+    if type(item) == "string" then table.insert(parts, item)
+    elseif type(item) == "table" and type(item.value) == "string" then
+      if type(item.language) == "string" and item.language ~= "" then table.insert(parts, "\`\`\`" .. item.language .. "\\n" .. item.value .. "\\n\`\`\`")
+      else table.insert(parts, item.value)
+      end
+    end
+  end
+  return table.concat(parts, "\\n\\n")
+end
+
+local hovers = {}
+local bytes = 0
+for client_id, response in pairs(responses or {}) do
+  if response.result and response.result.contents then
+    local contents = text(response.result.contents)
+    if contents ~= "" then
+      bytes = bytes + #contents
+      if bytes > max_bytes then return { error = "contentLimit" } end
+      local client = vim.lsp.get_client_by_id(client_id)
+      table.insert(hovers, { client = client and client.name or tostring(client_id), contents = contents, clientId = client_id })
+    end
+  end
+end
+if #hovers == 0 then return { error = "noHover" } end
+table.sort(hovers, function(left, right)
+  if left.client ~= right.client then return left.client < right.client end
+  return left.clientId < right.clientId
+end)
+for _, hover in ipairs(hovers) do hover.clientId = nil end
+return {
+  pid = vim.fn.getpid(),
+  cwd = vim.fn.getcwd(),
+  buffer = metadata,
+  position = { line = line, column = column },
+  hovers = hovers,
+}
+`
+
 const BUFFER_INFO_GUARDS = { number: isNumber, name: isString, filetype: isString, buftype: isString, loaded: isBoolean, modified: isBoolean }
 const VISIBLE_WINDOW_GUARDS = { window: isNumber, buffer: isNumber, name: isString, filetype: isString, buftype: isString, topline: isNumber, botline: isNumber }
 const VISIBLE_WINDOWS_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, activeBuffer: isBufferInfo, windows: isVisibleWindowList }
@@ -298,6 +383,8 @@ const BUFFER_INVENTORY_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffers
 const SELECTION_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, mode: isString, anchor: isPosition, cursor: isPosition, lines: isStringList }
 const DIAGNOSTIC_COUNTS_GUARDS = { error: isNumber, warning: isNumber, information: isNumber, hint: isNumber, total: isNumber }
 const DIAGNOSTIC_SUMMARY_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, counts: isDiagnosticCounts, diagnostics: isDiagnosticList }
+const HOVER_GUARDS = { client: isString, contents: isString }
+const LSP_HOVER_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, position: isPosition, hovers: isHoverList }
 
 export type BridgeError = {
 	code: "NVIM_SOCKET_MISSING" | "NVIM_UNAVAILABLE" | "NVIM_INVALID_RESPONSE" | "NVIM_INVALID_ARGUMENT" | "NVIM_CONTENT_LIMIT"
@@ -329,6 +416,8 @@ export type DiagnosticSummaryOptions = { buffer?: number; maxItems: number }
 export type DiagnosticSummaryResult = { ok: true; diagnosticSummary: { instance: ActiveContext["instance"]; buffer: BufferInfo; counts: { error: number; warning: number; information: number; hint: number; total: number }; diagnostics: Diagnostic[] } } | BridgeFailure
 export type FocusContextResult = { ok: true; focusContext: { instance: ActiveContext["instance"]; buffer: BufferInfo; cursor: { line: number; column: number } } } | BridgeFailure
 export type SelectionResult = { ok: true; selection: { instance: ActiveContext["instance"]; buffer: BufferInfo; mode: string; anchor: { line: number; column: number }; cursor: { line: number; column: number }; lines: string[] } } | BridgeFailure
+export type HoverOptions = { buffer?: number; line?: number; column?: number }
+export type HoverResult = { ok: true; lspHover: { instance: ActiveContext["instance"]; buffer: BufferInfo; position: { line: number; column: number }; hovers: { client: string; contents: string }[] } } | BridgeFailure
 export type NvimClientFactory = (socket: string) => NeovimClient
 export type TimeoutObserver = { created(): void; cleared(): void; fired(): void }
 type DiagnosticsSnapshot = { pid: number; cwd: string; buffer: BufferInfo; diagnostics: Diagnostic[] }
@@ -338,6 +427,7 @@ type BufferInventorySnapshot = { pid: number; cwd: string; buffers: BufferInfo[]
 type SelectionSnapshot = { pid: number; cwd: string; buffer: BufferInfo; mode: string; anchor: { line: number; column: number }; cursor: { line: number; column: number }; lines: string[] }
 type DiagnosticCounts = { error: number; warning: number; information: number; hint: number; total: number }
 type DiagnosticSummarySnapshot = { pid: number; cwd: string; buffer: BufferInfo; counts: DiagnosticCounts; diagnostics: Diagnostic[] }
+type HoverSnapshot = { pid: number; cwd: string; buffer: BufferInfo; position: { line: number; column: number }; hovers: { client: string; contents: string }[] }
 
 function bridgeError(code: BridgeError["code"], message: string): BridgeFailure {
 	return { ok: false, error: { code, message } }
@@ -384,6 +474,14 @@ function isDiagnosticList(value: unknown): value is Diagnostic[] {
 
 function isDiagnosticCounts(value: unknown): value is DiagnosticCounts {
 	return hasProperties(value, DIAGNOSTIC_COUNTS_GUARDS)
+}
+
+function isHover(value: unknown): value is { client: string; contents: string } {
+	return hasProperties(value, HOVER_GUARDS)
+}
+
+function isHoverList(value: unknown): value is { client: string; contents: string }[] {
+	return Array.isArray(value) && value.every(isHover)
 }
 
 function isStringList(value: unknown): value is string[] {
@@ -520,6 +618,32 @@ function selectionSnapshotResult(value: unknown): SelectionSnapshot | BridgeFail
 	throw new Error("Neovim returned invalid selection")
 }
 
+function noHover(): BridgeFailure {
+	return bridgeError("NVIM_INVALID_ARGUMENT", "No LSP hover information is available")
+}
+
+const LSP_HOVER_FAILURES: Record<string, (value: Record<string, unknown>) => BridgeFailure> = {
+	...READ_BUFFER_FAILURES,
+	noHover,
+	contentLimit: function() { return bridgeError("NVIM_CONTENT_LIMIT", `Read at most ${MAX_HOVER_BYTES} bytes of LSP hover information`) },
+}
+
+function lspHoverFailure(value: unknown): BridgeFailure | undefined {
+	if (isRecord(value) === false || isString(value.error) === false) return undefined
+	return LSP_HOVER_FAILURES[value.error]?.(value)
+}
+
+function isHoverSnapshot(value: unknown): value is HoverSnapshot {
+	return hasProperties(value, LSP_HOVER_SNAPSHOT_GUARDS)
+}
+
+function lspHoverSnapshotResult(value: unknown): HoverSnapshot | BridgeFailure {
+	const failure = lspHoverFailure(value)
+	if (failure) return failure
+	if (isHoverSnapshot(value) && isSourceBuffer(value.buffer)) return value
+	throw new Error("Neovim returned invalid LSP hover information")
+}
+
 function isFocusCursor(value: unknown): value is { line: number; column: number } {
 	return hasProperties(value, POSITION_GUARDS)
 }
@@ -635,6 +759,18 @@ export class NvimContextBridge {
 		}
 	}
 
+	async lspHover(options: HoverOptions): Promise<HoverResult> {
+		const client = this.client()
+		if ("error" in client) return client
+		try {
+			const result = await this.lspHoverSnapshot(client.nvim, options)
+			if ("error" in result) return result
+			return { ok: true, lspHover: { instance: { socket: this.#socket!, pid: result.pid, cwd: result.cwd }, buffer: result.buffer, position: result.position, hovers: result.hovers } }
+		} catch {
+			return this.unavailable()
+		}
+	}
+
 	async activeContextSnapshot(nvim: NeovimClient): Promise<Omit<ActiveContext, "instance"> & { pid: number; cwd: string }> {
 		const snapshot = await withTimeout(nvim.executeLua(ACTIVE_CONTEXT_LUA, []), this.#timeoutObserver)
 		if (isActiveContextSnapshot(snapshot) === false) throw new Error("Neovim returned invalid context")
@@ -682,6 +818,11 @@ export class NvimContextBridge {
 	async selectionSnapshot(nvim: NeovimClient): Promise<SelectionSnapshot | BridgeFailure> {
 		const snapshot = await withTimeout(nvim.executeLua(SELECTION_LUA, [MAX_READ_LINES, MAX_READ_BYTES]), this.#timeoutObserver)
 		return selectionSnapshotResult(snapshot)
+	}
+
+	async lspHoverSnapshot(nvim: NeovimClient, options: HoverOptions): Promise<HoverSnapshot | BridgeFailure> {
+		const snapshot = await withTimeout(nvim.executeLua(LSP_HOVER_LUA, [options.buffer ?? 0, options.line ?? 0, options.column ?? 0, MAX_HOVER_BYTES, LSP_HOVER_TIMEOUT_MS]), this.#timeoutObserver)
+		return lspHoverSnapshotResult(snapshot)
 	}
 
 	#clientForSocket(): NeovimClient | BridgeFailure {

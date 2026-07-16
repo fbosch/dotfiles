@@ -80,6 +80,12 @@ test("rejects an inactive visual selection", async () => {
 	})
 })
 
+test("rejects unavailable LSP hover information", async () => {
+	await withNvim(["file bridge-hover.lua"], async function(bridge) {
+		expect(await bridge.lspHover({})).toMatchObject({ error: { code: "NVIM_INVALID_ARGUMENT", message: "No LSP hover information is available" } })
+	})
+})
+
 test("fails closed after the bound Neovim instance exits", async () => {
 	const { nvimProcess, socket } = await startNvim()
 	const bridge = new NvimContextBridge(socket)
@@ -210,13 +216,15 @@ test("rejects missing or stale focus context", async () => {
 	})
 })
 
-test("advertises connected-server instructions, focused context, and selections", async () => {
+test("advertises connected-server instructions, focused context, selections, and LSP hover", async () => {
 	const response = await handleMessage({ jsonrpc: "2.0", id: 1, method: "initialize" }, new NvimContextBridge(undefined))
 	expect(response).toMatchObject({ result: { instructions: expect.stringContaining("Prefer nvim_focus_context") } })
 	const tools = await handleMessage({ jsonrpc: "2.0", id: 2, method: "tools/list" }, new NvimContextBridge(undefined))
-	expect(tools).toMatchObject({ result: { tools: expect.arrayContaining([expect.objectContaining({ name: "nvim_focus_context" }), expect.objectContaining({ name: "nvim_selection" }), expect.objectContaining({ name: "nvim_diagnostic_summary" })]) } })
+	expect(tools).toMatchObject({ result: { tools: expect.arrayContaining([expect.objectContaining({ name: "nvim_focus_context" }), expect.objectContaining({ name: "nvim_selection" }), expect.objectContaining({ name: "nvim_diagnostic_summary" }), expect.objectContaining({ name: "nvim_lsp_hover" })]) } })
 	const summary = await handleMessage({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "nvim_diagnostic_summary", arguments: { maxItems: 51 } } }, new NvimContextBridge(undefined))
 	expect(summary).toMatchObject({ result: { isError: true, content: [expect.objectContaining({ text: expect.stringContaining("Request at most 50 diagnostic summary items") })] } })
+	const hover = await handleMessage({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "nvim_lsp_hover", arguments: { buffer: 1, line: 1 } } }, new NvimContextBridge(undefined))
+	expect(hover).toMatchObject({ result: { isError: true, content: [expect.objectContaining({ text: expect.stringContaining("Specify buffer, line, and column together") })] } })
 })
 
 test("isolates context, source reads, visible windows, and diagnostics across sibling worktrees", async () => {
@@ -269,6 +277,6 @@ test("keeps the curated MCP tool contract", async () => {
 	const response = await handleMessage({ jsonrpc: "2.0", id: 1, method: "tools/list" }, new NvimContextBridge(undefined))
 	expect(response).toMatchObject({ jsonrpc: "2.0", id: 1 })
 	if (response && "result" in response && typeof response.result === "object" && response.result !== null && "tools" in response.result && Array.isArray(response.result.tools)) {
-		expect(response.result.tools.map(function(tool) { return tool.name })).toEqual(["nvim_context", "nvim_visible_windows", "nvim_list_buffers", "nvim_read_buffer", "nvim_diagnostic_summary", "nvim_diagnostics", "nvim_focus_context", "nvim_selection"])
+		expect(response.result.tools.map(function(tool) { return tool.name })).toEqual(["nvim_context", "nvim_visible_windows", "nvim_list_buffers", "nvim_read_buffer", "nvim_diagnostic_summary", "nvim_diagnostics", "nvim_focus_context", "nvim_selection", "nvim_lsp_hover"])
 	}
 })
