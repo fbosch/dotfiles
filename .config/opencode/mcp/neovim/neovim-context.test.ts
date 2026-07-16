@@ -45,8 +45,22 @@ test("reads live context only from the configured socket", async () => {
 		if (result.ok) {
 			expect(result.context.instance.socket).toBe(socket)
 			expect(result.context.instance.pid).toBeGreaterThan(0)
+			expect(result.context).toMatchObject({ mode: "n", cursor: { line: 1, column: 1 }, selection: null })
 			expect(result.context.activeBuffer.name).toContain("bridge-context.lua")
 		}
+	})
+})
+
+test("reads visual selection from the configured socket", async () => {
+	await withNvim(["file bridge-selection.lua", "call setline(1, ['first', 'second'])", "call cursor(1, 1)", "normal! vj"], async function(bridge) {
+		expect(await bridge.context()).toMatchObject({
+			ok: true,
+			context: {
+				mode: "v",
+				cursor: { line: 2, column: 1 },
+				selection: { mode: "v", start: { line: 0, column: 1 }, end: { line: 0, column: 1 } },
+			},
+		})
 	})
 })
 

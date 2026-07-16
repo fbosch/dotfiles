@@ -91,9 +91,44 @@ end
 return { lines = lines }
 `
 
+const ACTIVE_CONTEXT_LUA = `
+local buffer = vim.api.nvim_get_current_buf()
+local options = vim.bo[buffer]
+local mode = vim.api.nvim_get_mode().mode
+local cursor = vim.api.nvim_win_get_cursor(0)
+local selection = vim.NIL
+if mode == "v" or mode == "V" or mode == string.char(22) then
+  local start = vim.api.nvim_buf_get_mark(buffer, "<")
+  local finish = vim.api.nvim_buf_get_mark(buffer, ">")
+  selection = {
+    mode = mode,
+    start = { line = start[1], column = start[2] + 1 },
+    ["end"] = { line = finish[1], column = finish[2] + 1 },
+  }
+end
+return {
+  pid = vim.fn.getpid(),
+  cwd = vim.fn.getcwd(),
+  mode = mode,
+  activeBuffer = {
+    number = buffer,
+    name = vim.api.nvim_buf_get_name(buffer),
+    loaded = vim.api.nvim_buf_is_loaded(buffer),
+    filetype = options.filetype,
+    buftype = options.buftype,
+    modified = options.modified,
+  },
+  cursor = { line = cursor[1], column = cursor[2] + 1 },
+  selection = selection,
+}
+`
+
 const BUFFER_INFO_GUARDS = { number: isNumber, name: isString, filetype: isString, buftype: isString, loaded: isBoolean, modified: isBoolean }
 const VISIBLE_WINDOW_GUARDS = { window: isNumber, buffer: isNumber, name: isString, filetype: isString, buftype: isString, topline: isNumber, botline: isNumber }
 const VISIBLE_WINDOWS_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, activeBuffer: isBufferInfo, windows: isVisibleWindowList }
+const POSITION_GUARDS = { line: isNumber, column: isNumber }
+const SELECTION_GUARDS = { mode: isString, start: isPosition, end: isPosition }
+const ACTIVE_CONTEXT_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, mode: isString, activeBuffer: isBufferInfo, cursor: isPosition, selection: isSelection }
 
 export type BridgeError = {
 	code: "NVIM_SOCKET_MISSING" | "NVIM_UNAVAILABLE" | "NVIM_INVALID_RESPONSE" | "NVIM_INVALID_ARGUMENT" | "NVIM_CONTENT_LIMIT"
@@ -148,10 +183,6 @@ function withTimeout<T>(request: Promise<T>, observer?: TimeoutObserver): Promis
 	})
 }
 
-function position(value: [number, number]): { line: number; column: number } {
-	return { line: value[0], column: value[1] + 1 }
-}
-
 function readRange(options: BufferReadOptions, totalLines: number): { startLine: number; endLine: number } | BridgeFailure {
 	const { startLine, endLine } = requestedRange(options, totalLines)
 	if ([startLine > totalLines, endLine < startLine, endLine > totalLines].some(Boolean)) return bridgeError("NVIM_INVALID_ARGUMENT", `Choose a line range within 1-${totalLines}`)
@@ -186,6 +217,18 @@ function isVisibleWindowList(value: unknown): value is VisibleWindow[] {
 
 function isVisibleWindowsSnapshot(value: unknown): value is { pid: number; cwd: string; activeBuffer: BufferInfo; windows: VisibleWindow[] } {
 	return hasProperties(value, VISIBLE_WINDOWS_SNAPSHOT_GUARDS)
+}
+
+function isPosition(value: unknown): value is { line: number; column: number } {
+	return hasProperties(value, POSITION_GUARDS)
+}
+
+function isSelection(value: unknown): value is ActiveContext["selection"] {
+	return value === null || hasProperties(value, SELECTION_GUARDS)
+}
+
+function isActiveContextSnapshot(value: unknown): value is Omit<ActiveContext, "instance"> & { pid: number; cwd: string } {
+	return hasProperties(value, ACTIVE_CONTEXT_SNAPSHOT_GUARDS)
 }
 
 function isOversizedRead(value: unknown) {
@@ -231,7 +274,8 @@ export class NvimContextBridge {
 		const client = this.client()
 		if ("error" in client) return client
 		try {
-			const context = await this.#contextFrom(client.nvim)
+			const snapshot = await this.activeContextSnapshot(client.nvim)
+			const context = { instance: { socket: this.#socket!, pid: snapshot.pid, cwd: snapshot.cwd }, mode: snapshot.mode, activeBuffer: snapshot.activeBuffer, cursor: snapshot.cursor, selection: snapshot.selection }
 			return { ok: true, context }
 		} catch {
 			return this.unavailable()
@@ -300,11 +344,10 @@ export class NvimContextBridge {
 		}
 	}
 
-	async #contextFrom(nvim: NeovimClient): Promise<ActiveContext> {
-		const [pid, cwd, mode, activeBuffer, cursor] = await withTimeout(Promise.all([nvim.call("getpid"), nvim.call("getcwd"), nvim.mode, nvim.buffer.then(bufferInfo), nvim.window.then(function(window) { return window.cursor })]), this.#timeoutObserver)
-		if (isNumber(pid) === false || isString(cwd) === false || isString(mode.mode) === false) throw new Error("Neovim returned invalid context")
-		const selection = await this.selection(nvim, mode.mode, activeBuffer)
-		return { instance: { socket: this.#socket!, pid, cwd }, mode: mode.mode, activeBuffer, cursor: position(cursor), selection }
+	async activeContextSnapshot(nvim: NeovimClient): Promise<Omit<ActiveContext, "instance"> & { pid: number; cwd: string }> {
+		const snapshot = await withTimeout(nvim.executeLua(ACTIVE_CONTEXT_LUA, []), this.#timeoutObserver)
+		if (isActiveContextSnapshot(snapshot) === false) throw new Error("Neovim returned invalid context")
+		return snapshot
 	}
 
 	async instanceConnection(): Promise<{ instance: ActiveContext["instance"]; nvim: NeovimClient } | BridgeFailure> {
@@ -380,12 +423,6 @@ export class NvimContextBridge {
 		if (this.#unavailable) return { ok: false, error: this.#unavailable }
 		const client = this.#clientForSocket()
 		return "error" in client ? client : { nvim: client }
-	}
-
-	async selection(nvim: NeovimClient, mode: string, buffer: Buffer): Promise<ActiveContext["selection"]> {
-		if (["v", "V", "\u0016"].includes(mode) === false) return null
-		const [start, end] = await Promise.all([buffer.mark("<"), buffer.mark(">")])
-		return { mode, start: position(start), end: position(end) }
 	}
 
 	invalidBuffer(): BridgeFailure {
