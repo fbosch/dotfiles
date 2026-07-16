@@ -1,5 +1,5 @@
 packages:
-  - "mcp"
+  - "mcp/*"
   - "plugins"
   - "plugins/*"
 allowBuilds:

@@ -1,9 +1,10 @@
 {
-  "name": "opencode-mcps",
+  "name": "opencode-neovim-mcp",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "bun test",
+    "benchmark": "bun test --timeout 60000 ./run-neovim-context.ts",
     "quality:fallow": "fallow review --root . --config .fallowrc.json",
     "quality:fallow:audit": "fallow audit --root . --config .fallowrc.json"
   },

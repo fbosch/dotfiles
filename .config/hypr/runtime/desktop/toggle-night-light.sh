@@ -8,39 +8,57 @@ PID_FILE="$STATE_DIR/daemon.pid"
 
 DAY_TEMP=6500
 NIGHT_TEMP=4000
-SUNRISE="06:30"
-SUNSET="18:30"
+LATITUDE=55.6761
+LONGITUDE=12.5683
 AUTO_SCHEDULE=true
 ENABLED=false
 
 mkdir -p "$STATE_DIR"
 
-time_to_minutes() {
-  local value="$1"
-  local hour="${value%%:*}"
-  local minute="${value##*:}"
+solar_event_epoch() {
+  local date="$1"
+  local event="$2"
+  local day_of_year utc_midnight utc_seconds
 
-  printf "%d" $((10#$hour * 60 + 10#$minute))
-}
+  day_of_year="$(date -d "$date" +%j)"
+  utc_midnight="$(date -u -d "$date 00:00:00" +%s)"
+  # Calculate the local solar event from the date and fixed Copenhagen coordinates.
+  utc_seconds="$(awk -v day="$day_of_year" -v latitude="$LATITUDE" -v longitude="$LONGITUDE" -v event="$event" '
+    function radians(degrees) { return degrees * atan2(0, -1) / 180 }
+    function degrees(radians) { return radians * 180 / atan2(0, -1) }
+    function normalize(value) { value %= 360; return value < 0 ? value + 360 : value }
+    function arcsine(value) { return atan2(value, sqrt(1 - value * value)) }
+    function arccosine(value) { return atan2(sqrt(1 - value * value), value) }
+    BEGIN {
+      approximate_time = day + ((event == "sunrise" ? 6 : 18) - longitude / 15) / 24
+      mean_anomaly = 0.9856 * approximate_time - 3.289
+      true_longitude = normalize(mean_anomaly + 1.916 * sin(radians(mean_anomaly)) + 0.020 * sin(radians(2 * mean_anomaly)) + 282.634)
+      right_ascension = normalize(degrees(atan2(0.91764 * sin(radians(true_longitude)), cos(radians(true_longitude)))))
+      right_ascension += int(true_longitude / 90) * 90 - int(right_ascension / 90) * 90
+      right_ascension /= 15
+      sin_declination = 0.39782 * sin(radians(true_longitude))
+      cos_declination = cos(arcsine(sin_declination))
+      cos_hour_angle = (cos(radians(90.833)) - sin_declination * sin(radians(latitude))) / (cos_declination * cos(radians(latitude)))
+      if (cos_hour_angle < -1 || cos_hour_angle > 1) exit 1
+      hour_angle = degrees(arccosine(cos_hour_angle))
+      if (event == "sunrise") hour_angle = 360 - hour_angle
+      universal_time = (hour_angle / 15 + right_ascension - 0.06571 * approximate_time - 6.622 - longitude / 15) % 24
+      if (universal_time < 0) universal_time += 24
+      printf "%.0f", universal_time * 3600
+    }
+  ')" || return 1
 
-current_minutes() {
-  local now
-  now="$(date +%H:%M)"
-  time_to_minutes "$now"
+  printf "%s" "$((utc_midnight + utc_seconds))"
 }
 
 scheduled_active() {
-  local sunrise sunset now
-  sunrise="$(time_to_minutes "$SUNRISE")"
-  sunset="$(time_to_minutes "$SUNSET")"
-  now="$(current_minutes)"
+  local today now sunrise sunset
+  today="$(date +%F)"
+  now="$(date +%s)"
+  sunrise="$(solar_event_epoch "$today" sunrise)"
+  sunset="$(solar_event_epoch "$today" sunset)"
 
-  if [[ "$sunset" -gt "$sunrise" ]]; then
-    [[ "$now" -ge "$sunset" || "$now" -lt "$sunrise" ]]
-    return
-  fi
-
-  [[ "$now" -ge "$sunset" && "$now" -lt "$sunrise" ]]
+  [[ "$now" -ge "$sunset" || "$now" -lt "$sunrise" ]]
 }
 
 desired_active() {
@@ -108,14 +126,14 @@ notify_state() {
 }
 
 next_boundary_epoch() {
-  local candidate next sunrise sunset now today_sunrise today_sunset tomorrow_sunrise tomorrow_sunset
-  sunrise="$SUNRISE"
-  sunset="$SUNSET"
+  local candidate next now today tomorrow today_sunrise today_sunset tomorrow_sunrise tomorrow_sunset
   now="$(date +%s)"
-  today_sunrise="$(date -d "today $sunrise" +%s)"
-  today_sunset="$(date -d "today $sunset" +%s)"
-  tomorrow_sunrise="$(date -d "tomorrow $sunrise" +%s)"
-  tomorrow_sunset="$(date -d "tomorrow $sunset" +%s)"
+  today="$(date +%F)"
+  tomorrow="$(date -d tomorrow +%F)"
+  today_sunrise="$(solar_event_epoch "$today" sunrise)"
+  today_sunset="$(solar_event_epoch "$today" sunset)"
+  tomorrow_sunrise="$(solar_event_epoch "$tomorrow" sunrise)"
+  tomorrow_sunset="$(solar_event_epoch "$tomorrow" sunset)"
 
   next="$tomorrow_sunrise"
   for candidate in "$today_sunrise" "$today_sunset" "$tomorrow_sunrise" "$tomorrow_sunset"; do

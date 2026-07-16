@@ -1,4 +1,4 @@
-import { MAX_READ_BYTES, MAX_READ_LINES, NvimContextBridge, type BridgeFailure, type BridgeResult, type BufferInventoryResult, type BufferReadOptions, type BufferReadResult, type DiagnosticsResult, type VisibleWindowsResult } from "./neovim-bridge"
+import { MAX_READ_BYTES, MAX_READ_LINES, NvimContextBridge, type BridgeFailure, type BridgeResult, type BufferInventoryResult, type BufferReadOptions, type BufferReadResult, type DiagnosticsResult, type FocusContextResult, type VisibleWindowsResult } from "./neovim-bridge"
 import { isNumber, isRecord, isString, type JsonRecord } from "./nvim-utils"
 
 const TOOL_NAME = "nvim_context"
@@ -6,10 +6,11 @@ const VISIBLE_WINDOWS_TOOL_NAME = "nvim_visible_windows"
 const LIST_BUFFERS_TOOL_NAME = "nvim_list_buffers"
 const READ_BUFFER_TOOL_NAME = "nvim_read_buffer"
 const DIAGNOSTICS_TOOL_NAME = "nvim_diagnostics"
+const FOCUS_CONTEXT_TOOL_NAME = "nvim_focus_context"
 const PROTOCOL_VERSION = "2025-06-18"
 const READ_OPTION_NAMES = new Set(["buffer", "startLine", "endLine"])
 
-type ToolResult = BridgeResult | VisibleWindowsResult | BufferInventoryResult | BufferReadResult | DiagnosticsResult
+type ToolResult = BridgeResult | VisibleWindowsResult | BufferInventoryResult | BufferReadResult | DiagnosticsResult | FocusContextResult
 type ToolHandler = (params: JsonRecord, bridge: NvimContextBridge) => Promise<ToolResult>
 
 export { NvimContextBridge } from "./neovim-bridge"
@@ -85,11 +86,12 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
 		const buffer = diagnosticBuffer(params)
 		return buffer === null ? bridgeError("NVIM_INVALID_ARGUMENT", "Buffer must be a positive integer") : bridge.diagnostics(buffer)
 	},
+	[FOCUS_CONTEXT_TOOL_NAME]: async function(_, bridge) { return bridge.focusContext() },
 }
 
 const REQUEST_HANDLERS: Record<string, (id: unknown) => JsonRecord | undefined> = {
 	"notifications/initialized": function() { return undefined },
-	initialize: function(id) { return jsonRpcResult(id, { protocolVersion: PROTOCOL_VERSION, capabilities: { tools: {} }, serverInfo: { name: "neovim-context", version: "0.1.0" } }) },
+	initialize: function(id) { return jsonRpcResult(id, { protocolVersion: PROTOCOL_VERSION, capabilities: { tools: {} }, instructions: "Use these tools only when live Neovim state is relevant. Prefer nvim_focus_context for ambiguous references to this file or this code. Use nvim_visible_windows or nvim_list_buffers to discover buffers, nvim_read_buffer for bounded live or unsaved text, and nvim_diagnostics for editor diagnostics. Results are read-only point-in-time snapshots from one bound Neovim instance; do not infer another editor instance or on-disk state.", serverInfo: { name: "neovim-context", version: "0.1.0" } }) },
 	"tools/list": function(id) { return jsonRpcResult(id, { tools: tools() }) },
 }
 
@@ -123,6 +125,7 @@ function tools() {
 		{ name: LIST_BUFFERS_TOOL_NAME, description: "List buffers from the Neovim instance bound to this OpenCode server.", inputSchema: { type: "object", additionalProperties: false } },
 		{ name: READ_BUFFER_TOOL_NAME, description: `Read up to ${MAX_READ_LINES} lines or ${MAX_READ_BYTES} bytes from a loaded source buffer in Neovim memory.`, inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, startLine: { type: "integer", minimum: 1 }, endLine: { type: "integer", minimum: 1 } }, additionalProperties: false } },
 		{ name: DIAGNOSTICS_TOOL_NAME, description: "Get current diagnostics and their source buffer from the bound Neovim instance.", inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 } }, additionalProperties: false } },
+		{ name: FOCUS_CONTEXT_TOOL_NAME, description: "Get the most recently focused source buffer before focus entered OpenCode or another special buffer.", inputSchema: { type: "object", additionalProperties: false } },
 	]
 }
 

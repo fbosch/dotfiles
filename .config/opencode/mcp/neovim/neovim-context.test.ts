@@ -77,6 +77,32 @@ test("uses the official client to read unsaved source buffers", async () => {
 	})
 })
 
+test("collects listed buffers and visible windows in fixed snapshots", async () => {
+	await withNvim(["edit bridge-inventory-one.lua", "vsplit", "edit bridge-inventory-two.lua"], async function(bridge) {
+		const inventory = await bridge.bufferInventory()
+		expect(inventory).toMatchObject({
+			ok: true,
+			bufferInventory: {
+				sourceBuffers: expect.arrayContaining([
+					expect.objectContaining({ name: expect.stringContaining("bridge-inventory-one.lua"), loaded: true, filetype: "", buftype: "", modified: false }),
+					expect.objectContaining({ name: expect.stringContaining("bridge-inventory-two.lua"), loaded: true, filetype: "", buftype: "", modified: false }),
+				]),
+			},
+		})
+
+		const visible = await bridge.visibleWindows()
+		expect(visible).toMatchObject({
+			ok: true,
+			visibleWindows: {
+				sourceWindows: expect.arrayContaining([
+					expect.objectContaining({ name: expect.stringContaining("bridge-inventory-one.lua"), filetype: "", buftype: "", topline: 1 }),
+					expect.objectContaining({ name: expect.stringContaining("bridge-inventory-two.lua"), filetype: "", buftype: "", topline: 1 }),
+				]),
+			},
+		})
+	})
+})
+
 test("enforces read line and byte limits", async () => {
 	const tooManyLines = Array.from({ length: 501 }, function() { return "line" }).join("', '")
 	await withNvim(["file bridge-line-limit.lua", `call setline(1, ['${tooManyLines}'])`], async function(bridge) {
@@ -96,6 +122,24 @@ test("reads diagnostics through the official client", async () => {
 			diagnostics: { buffer: { name: expect.stringContaining("bridge-diagnostics.lua") }, diagnostics: [{ line: 0, column: 14, severity: 1, message: "unknown variable", source: "bridge-test" }] },
 		})
 	})
+})
+
+test("returns the recorded source context after focus leaves the buffer", async () => {
+	await withNvim(["file bridge-focus.lua", "call setline(1, ['local focused = true'])"], async function(bridge, socket) {
+		const nvim = attach({ socket })
+		await nvim.setVar("opencode_last_source_context", { buffer: 1, cursor: { line: 1, column: 1 } })
+		expect(await bridge.focusContext()).toMatchObject({
+			ok: true,
+			focusContext: { buffer: { name: expect.stringContaining("bridge-focus.lua") }, cursor: { line: 1, column: 1 } },
+		})
+	})
+})
+
+test("advertises connected-server instructions and focused context", async () => {
+	const response = await handleMessage({ jsonrpc: "2.0", id: 1, method: "initialize" }, new NvimContextBridge(undefined))
+	expect(response).toMatchObject({ result: { instructions: expect.stringContaining("Prefer nvim_focus_context") } })
+	const tools = await handleMessage({ jsonrpc: "2.0", id: 2, method: "tools/list" }, new NvimContextBridge(undefined))
+	expect(tools).toMatchObject({ result: { tools: expect.arrayContaining([expect.objectContaining({ name: "nvim_focus_context" })]) } })
 })
 
 test("isolates context, source reads, visible windows, and diagnostics across sibling worktrees", async () => {
@@ -148,6 +192,6 @@ test("keeps the curated MCP tool contract", async () => {
 	const response = await handleMessage({ jsonrpc: "2.0", id: 1, method: "tools/list" }, new NvimContextBridge(undefined))
 	expect(response).toMatchObject({ jsonrpc: "2.0", id: 1 })
 	if (response && "result" in response && typeof response.result === "object" && response.result !== null && "tools" in response.result && Array.isArray(response.result.tools)) {
-		expect(response.result.tools.map(function(tool) { return tool.name })).toEqual(["nvim_context", "nvim_visible_windows", "nvim_list_buffers", "nvim_read_buffer", "nvim_diagnostics"])
+		expect(response.result.tools.map(function(tool) { return tool.name })).toEqual(["nvim_context", "nvim_visible_windows", "nvim_list_buffers", "nvim_read_buffer", "nvim_diagnostics", "nvim_focus_context"])
 	}
 })

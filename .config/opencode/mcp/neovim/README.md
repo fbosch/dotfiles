@@ -13,6 +13,7 @@ Sibling worktrees normally produce separate OpenCode server processes because th
 ## Tools
 
 - `nvim_context`: active buffer, cursor, mode, and selection metadata.
+- `nvim_focus_context`: the most recently focused normal source buffer before focus entered OpenCode.
 - `nvim_visible_windows`: visible windows and source buffers beside OpenCode.
 - `nvim_list_buffers`: listed buffers and source-buffer subset.
 - `nvim_read_buffer`: bounded in-memory source reads, including unsaved content.
@@ -22,10 +23,18 @@ Sibling worktrees normally produce separate OpenCode server processes because th
 
 ## Validation
 
-Run the MCP tests and quality checks from `.config/opencode`:
+Run the MCP tests and quality checks from `.config/opencode/mcp/neovim`:
 
 ```sh
-pnpm --dir mcp test
-pnpm run quality:fallow:mcp
-pnpm run quality:fallow:mcp:audit
+pnpm test
+pnpm run quality:fallow
+pnpm run quality:fallow:audit
+```
+
+## Benchmark
+
+Run the baseline benchmark from `.config/opencode/mcp/neovim`:
+
+```sh
+pnpm run benchmark
 ```

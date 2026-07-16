@@ -164,6 +164,20 @@ return {
 				vim.b[buf][opencode_terminal_var] = true
 			end
 
+			local function record_source_context()
+				local buf = vim.api.nvim_get_current_buf()
+				local filetype = vim.bo[buf].filetype
+				if vim.bo[buf].buftype ~= "" or filetype == "opencode" or filetype == "opencode_terminal" then
+					return
+				end
+
+				local cursor = vim.api.nvim_win_get_cursor(0)
+				vim.g.opencode_last_source_context = {
+					buffer = buf,
+					cursor = { line = cursor[1], column = cursor[2] + 1 },
+				}
+			end
+
 			local function set_opencode_terminal_keymaps(buf)
 				local buf_opts = { buffer = buf, silent = true }
 
@@ -337,6 +351,10 @@ return {
 						pcall(vim.cmd, "startinsert")
 					end
 				end,
+			})
+
+			vim.api.nvim_create_autocmd({ "BufEnter", "CursorMoved", "WinLeave" }, {
+				callback = record_source_context,
 			})
 
 			vim.api.nvim_create_user_command("OpencodeHealth", show_opencode_health, {

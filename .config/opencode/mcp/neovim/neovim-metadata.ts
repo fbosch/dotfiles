@@ -1,9 +1,8 @@
-import { type Buffer, type Window } from "neovim"
+import { type Buffer } from "neovim"
 import { hasProperties, isNumber, isString } from "./nvim-utils"
-import type { BufferInfo, Diagnostic, VisibleWindow } from "./neovim-bridge"
+import type { BufferInfo, Diagnostic } from "./neovim-bridge"
 
 const BUFFER_METADATA_GUARDS = { name: isString, loaded: isBoolean, filetype: isString, buftype: isString, modified: isBoolean }
-const WINDOW_METADATA_GUARDS = { topline: isNumber, botline: isNumber }
 const DIAGNOSTIC_GUARDS = { line: isNumber, column: isNumber, endLine: isNumber, endColumn: isNumber, severity: isNumber, message: isString, source: isString }
 
 function isBoolean(value: unknown): value is boolean {
@@ -36,15 +35,4 @@ export async function bufferInfo(buffer: Buffer): Promise<BufferInfo> {
 		buffer.getOption("modified"),
 	])
 	return bufferMetadata(buffer.id, { name, loaded, filetype, buftype, modified })
-}
-
-export async function windowInfo(window: Window): Promise<VisibleWindow> {
-	const [buffer, response] = await Promise.all([
-		window.buffer,
-		window.request("nvim_call_function", ["getwininfo", [window.id]]),
-	])
-	const [metadata, windowMetadata] = await Promise.all([bufferInfo(buffer), response])
-	const viewport = Array.isArray(windowMetadata) ? windowMetadata[0] : undefined
-	if (hasProperties(viewport, WINDOW_METADATA_GUARDS) === false) return invalidMetadata("Neovim returned invalid window metadata")
-	return { window: window.id, buffer: metadata.number, name: metadata.name, filetype: metadata.filetype, buftype: metadata.buftype, topline: viewport.topline as number, botline: viewport.botline as number }
 }

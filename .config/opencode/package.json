@@ -7,11 +7,11 @@
   },
   "scripts": {
     "deps:list": "pnpm -r list --depth 0",
-    "quality:fallow:mcp": "pnpm --dir mcp run quality:fallow",
-    "quality:fallow:mcp:audit": "pnpm --dir mcp run quality:fallow:audit"
+    "quality:fallow:mcp": "pnpm --dir mcp/neovim run quality:fallow",
+    "quality:fallow:mcp:audit": "pnpm --dir mcp/neovim run quality:fallow:audit"
   },
   "workspaces": [
-    "mcp",
+    "mcp/*",
     "plugins",
     "plugins/*"
   ]

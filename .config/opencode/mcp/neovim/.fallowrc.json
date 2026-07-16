@@ -4,9 +4,10 @@
     "health": true
   },
   "ignorePatterns": [
-    "**/*.test.ts"
+    "**/*.test.ts",
+    "run-neovim-context.ts"
   ],
   "entry": [
-    "neovim/*.ts"
+    "*.ts"
   ]
 }

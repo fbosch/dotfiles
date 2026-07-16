@@ -1,5 +1,5 @@
 import { attach, type Buffer, type NeovimClient } from "neovim"
-import { isNumber, isRecord, isString } from "./nvim-utils"
+import { hasProperties, isNumber, isRecord, isString } from "./nvim-utils"
 import { bufferInfo, isDiagnostic, isSourceBuffer, windowInfo } from "./neovim-metadata"
 
 const REQUEST_TIMEOUT_MS = 1000
@@ -20,6 +20,51 @@ return vim.tbl_map(function(diagnostic)
   }
 end, diagnostics)
 `
+
+const BUFFER_INVENTORY_LUA = `
+local listed = {}
+for _, info in ipairs(vim.fn.getbufinfo({ buflisted = 1 })) do
+  listed[info.bufnr] = true
+end
+
+local buffers = {}
+for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+  if listed[buffer] then
+    local options = vim.bo[buffer]
+    table.insert(buffers, {
+      number = buffer,
+      name = vim.api.nvim_buf_get_name(buffer),
+      loaded = vim.api.nvim_buf_is_loaded(buffer),
+      filetype = options.filetype,
+      buftype = options.buftype,
+      modified = options.modified,
+    })
+  end
+end
+return buffers
+`
+
+const VISIBLE_WINDOWS_LUA = `
+local windows = {}
+for _, window in ipairs(vim.api.nvim_list_wins()) do
+  local buffer = vim.api.nvim_win_get_buf(window)
+  local options = vim.bo[buffer]
+  local viewport = vim.fn.getwininfo(window)[1]
+  table.insert(windows, {
+    window = window,
+    buffer = buffer,
+    name = vim.api.nvim_buf_get_name(buffer),
+    filetype = options.filetype,
+    buftype = options.buftype,
+    topline = viewport.topline,
+    botline = viewport.botline,
+  })
+end
+return windows
+`
+
+const BUFFER_INFO_GUARDS = { number: isNumber, name: isString, filetype: isString, buftype: isString, loaded: isBoolean, modified: isBoolean }
+const VISIBLE_WINDOW_GUARDS = { window: isNumber, buffer: isNumber, name: isString, filetype: isString, buftype: isString, topline: isNumber, botline: isNumber }
 
 export type BridgeError = {
 	code: "NVIM_SOCKET_MISSING" | "NVIM_UNAVAILABLE" | "NVIM_INVALID_RESPONSE" | "NVIM_INVALID_ARGUMENT" | "NVIM_CONTENT_LIMIT"
@@ -47,10 +92,15 @@ export type BufferReadResult = { ok: true; bufferRead: BufferRead } | BridgeFail
 export type BufferReadOptions = { buffer?: number; startLine?: number; endLine?: number }
 export type Diagnostic = { line: number; column: number; endLine: number; endColumn: number; severity: number; message: string; source: string }
 export type DiagnosticsResult = { ok: true; diagnostics: { instance: ActiveContext["instance"]; buffer: BufferInfo; diagnostics: Diagnostic[] } } | BridgeFailure
+export type FocusContextResult = { ok: true; focusContext: { instance: ActiveContext["instance"]; buffer: BufferInfo; cursor: { line: number; column: number } } } | BridgeFailure
 export type NvimClientFactory = (socket: string) => NeovimClient
 
 function bridgeError(code: BridgeError["code"], message: string): BridgeFailure {
 	return { ok: false, error: { code, message } }
+}
+
+function isBoolean(value: unknown): value is boolean {
+	return typeof value === "boolean"
 }
 
 function withTimeout<T>(request: Promise<T>): Promise<T> {
@@ -86,6 +136,26 @@ function hasDiagnostics(value: unknown): value is Diagnostic[] {
 	return Array.isArray(value) && value.every(isDiagnostic)
 }
 
+function isBufferInfo(value: unknown): value is BufferInfo {
+	return hasProperties(value, BUFFER_INFO_GUARDS)
+}
+
+function isVisibleWindow(value: unknown): value is VisibleWindow {
+	return hasProperties(value, VISIBLE_WINDOW_GUARDS)
+}
+
+function focusState(value: unknown): { buffer: number; cursor: { line: number; column: number } } | undefined {
+	if (isRecord(value) === false || isNumber(value.buffer) === false) return undefined
+	const cursor = focusCursor(value.cursor)
+	return cursor === undefined ? undefined : { buffer: value.buffer, cursor }
+}
+
+function focusCursor(value: unknown): { line: number; column: number } | undefined {
+	if (isRecord(value) === false) return undefined
+	if (isNumber(value.line) === false || isNumber(value.column) === false) return undefined
+	return { line: value.line, column: value.column }
+}
+
 export class NvimContextBridge {
 	readonly #socket: string | undefined
 	readonly #createClient: NvimClientFactory
@@ -118,7 +188,7 @@ export class NvimContextBridge {
 		if (context.ok === false) return context
 		if ("error" in client) return client
 		try {
-			const windows = await withTimeout(client.nvim.windows.then(function(windows) { return Promise.all(windows.map(windowInfo)) }))
+			const windows = await this.visibleWindowSnapshot(client.nvim)
 			return { ok: true, visibleWindows: { instance: context.context.instance, activeBuffer: context.context.activeBuffer, windows, sourceWindows: windows.filter(isSourceBuffer) } }
 		} catch {
 			return this.unavailable()
@@ -131,7 +201,7 @@ export class NvimContextBridge {
 		if (context.ok === false) return context
 		if ("error" in client) return client
 		try {
-			const buffers = await this.listedBuffers(client.nvim)
+			const buffers = await this.bufferInventorySnapshot(client.nvim)
 			return { ok: true, bufferInventory: { instance: context.context.instance, buffers, sourceBuffers: buffers.filter(isSourceBuffer) } }
 		} catch {
 			return this.unavailable()
@@ -162,6 +232,18 @@ export class NvimContextBridge {
 		}
 	}
 
+	async focusContext(): Promise<FocusContextResult> {
+		const connection = await this.connection()
+		if ("error" in connection) return connection
+		try {
+			const focus = focusState(await withTimeout(connection.nvim.getVar("opencode_last_source_context")))
+			if (focus === undefined) return this.missingFocusContext()
+			return this.focusedSourceContext(connection.context.instance, connection.nvim, focus)
+		} catch {
+			return this.missingFocusContext()
+		}
+	}
+
 	async #contextFrom(nvim: NeovimClient): Promise<ActiveContext> {
 		const [pid, cwd, mode, activeBuffer, cursor] = await withTimeout(Promise.all([nvim.call("getpid"), nvim.call("getcwd"), nvim.mode, nvim.buffer.then(bufferInfo), nvim.window.then(function(window) { return window.cursor })]))
 		if (isNumber(pid) === false || isString(cwd) === false || isString(mode.mode) === false) throw new Error("Neovim returned invalid context")
@@ -176,11 +258,16 @@ export class NvimContextBridge {
 		return "error" in client ? client : { context: context.context, nvim: client.nvim }
 	}
 
-	async listedBuffers(nvim: NeovimClient): Promise<BufferInfo[]> {
-		const [buffers, listedBufferInfo] = await withTimeout(Promise.all([nvim.buffers.then(function(buffers) { return Promise.all(buffers.map(bufferInfo)) }), nvim.call("getbufinfo", [{ buflisted: 1 }])]))
-		if (Array.isArray(listedBufferInfo) === false) throw new Error("Neovim returned invalid buffer inventory")
-		const listedBufferNumbers = new Set(listedBufferInfo.map(function(buffer) { return isRecord(buffer) ? buffer.bufnr : undefined }).filter(isNumber))
-		return buffers.filter(function(buffer) { return listedBufferNumbers.has(buffer.number) })
+	async bufferInventorySnapshot(nvim: NeovimClient): Promise<BufferInfo[]> {
+		const buffers = await withTimeout(nvim.executeLua(BUFFER_INVENTORY_LUA, []))
+		if (Array.isArray(buffers) === false || buffers.every(isBufferInfo) === false) throw new Error("Neovim returned invalid buffer inventory")
+		return buffers
+	}
+
+	async visibleWindowSnapshot(nvim: NeovimClient): Promise<VisibleWindow[]> {
+		const windows = await withTimeout(nvim.executeLua(VISIBLE_WINDOWS_LUA, []))
+		if (Array.isArray(windows) === false || windows.every(isVisibleWindow) === false) throw new Error("Neovim returned invalid visible windows")
+		return windows
 	}
 
 	async selectedBuffer(nvim: NeovimClient, bufferNumber?: number): Promise<Buffer | undefined> {
@@ -206,6 +293,14 @@ export class NvimContextBridge {
 		const sizeError = readSize(lines)
 		if (sizeError) return sizeError
 		return { ok: true, bufferRead: { instance, buffer: metadata, startLine: range.startLine, endLine: range.endLine, totalLines, lines } }
+	}
+
+	async focusedSourceContext(instance: ActiveContext["instance"], nvim: NeovimClient, focus: { buffer: number; cursor: { line: number; column: number } }): Promise<FocusContextResult> {
+		const buffer = await this.selectedBuffer(nvim, focus.buffer)
+		if (buffer === undefined) return bridgeError("NVIM_INVALID_ARGUMENT", "The recent source buffer is no longer available")
+		const metadata = await withTimeout(bufferInfo(buffer))
+		if (isSourceBuffer(metadata) === false) return bridgeError("NVIM_INVALID_ARGUMENT", "The recent source buffer is no longer available")
+		return { ok: true, focusContext: { instance, buffer: metadata, cursor: focus.cursor } }
 	}
 
 	#clientForSocket(): NeovimClient | BridgeFailure {
@@ -235,6 +330,10 @@ export class NvimContextBridge {
 
 	invalidDiagnostics(): BridgeFailure {
 		return bridgeError("NVIM_INVALID_RESPONSE", "The bound Neovim instance returned invalid diagnostic data")
+	}
+
+	missingFocusContext(): BridgeFailure {
+		return bridgeError("NVIM_INVALID_ARGUMENT", "No recent source buffer is available")
 	}
 
 	unavailable(): BridgeFailure {
