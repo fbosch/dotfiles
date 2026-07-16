@@ -14,12 +14,21 @@ const abolishSpecRules = [
   "argu{ement,ments} argument{}",
   "depen{d{e,a}nc{ie,ei,y,i}es,edencies} dependencies",
   "occur{ance,ence,ed,rance} occurr{ence,ence,ed,ence}",
-  "succes{,sful,fully} success{,,fully}",
+  "succes{,ful,fully} success{,ful,fully}",
   "re{psonse,spos{e,nse}} response",
-  "tru{w,e} true",
+  "t{ruw,ure} true",
   "{hte,teh} the",
-  "e{q{uivalent,ivalent},quivilant} equivalent",
-  "vis{iblity,ble,ibile} visible",
+  "e{qivalent,quivilant} equivalent",
+  "vis{ble,ibile} visible",
+  "visiblity visibility",
+  "occassion occasion",
+  "pr{omsie,omse} promise",
+  "{qoute,quotete,qoutete} quote",
+  "requ{ier,ieer,iere,rie,re} require",
+  "satic static",
+  "tempory temporary",
+  "repositry repository",
+  "enviroment environment",
   "foo_bar baz_qux",
   "left{One,Two} right",
   "pre{a,b}mid{x,y} post{1,2}end{3,4}",
@@ -82,4 +91,13 @@ test("corrects a completed word before punctuation", () => {
   for (const delimiter of [".", ",", "!", "?", ":", ";"]) {
     expect(appendDelimiterAndCorrect("teh", delimiter, rules)).toBe(`the${delimiter}`)
   }
+})
+
+test("corrects success typo variants without rewriting the correct spelling", () => {
+  const rules = parseTypoRules("succes{,ful,fully} success{,ful,fully}")
+
+  expect(rules.get("succes")).toBe("success")
+  expect(rules.get("succesful")).toBe("successful")
+  expect(rules.get("succesfully")).toBe("successfully")
+  expect(rules.has("successful")).toBeFalse()
 })

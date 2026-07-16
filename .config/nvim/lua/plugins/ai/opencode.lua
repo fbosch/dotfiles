@@ -263,29 +263,48 @@ return {
 					end
 				end
 
-				local lines = {
-					"opencode health",
-					"--------------",
-					string.format(
-						"Server: %s",
-						type(connected_server) == "table"
-								and string.format(
-									"connected (port %s, cwd %s)",
-									tostring(connected_server.port),
-									tostring(connected_server.cwd)
-								)
-							or "disconnected"
-					),
-					string.format("Status: %s", status),
-					string.format("Bridge: %s", bridge_status),
-					string.format(
-						"Terminal: %s",
-						terminal_bufnr and ("alive (buf " .. terminal_bufnr .. ")") or "not found"
-					),
-					string.format("Nvim CWD: %s", vim.fn.getcwd()),
-				}
+				local function notify(server_status)
+					local lines = {
+						"opencode health",
+						"--------------",
+						"Server: " .. server_status,
+						string.format("Status: %s", status),
+						string.format("Bridge: %s", bridge_status),
+						string.format(
+							"Terminal: %s",
+							terminal_bufnr and ("alive (buf " .. terminal_bufnr .. ")") or "not found"
+						),
+						string.format("Nvim CWD: %s", vim.fn.getcwd()),
+					}
 
-				vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "OpencodeHealth" })
+					vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "OpencodeHealth" })
+				end
+
+				if type(connected_server) == "table" then
+					notify(string.format("connected (%s, cwd %s)", connected_server.url, connected_server.cwd))
+					return
+				end
+
+				require("opencode.server.discovery")
+					.locally()
+					:next(function(servers)
+						local cwd = vim.fn.getcwd()
+						local matches = vim.tbl_filter(function(server)
+							return server.cwd:find(cwd, 1, true) == 1 or cwd:find(server.cwd, 1, true) == 1
+						end, servers)
+
+						if #matches == 1 then
+							local server = matches[1]
+							notify(string.format("discoverable (%s, cwd %s)", server.url, server.cwd))
+						elseif #matches > 1 then
+							notify(string.format("ambiguous (%d matching servers)", #matches))
+						else
+							notify("disconnected")
+						end
+					end)
+					:catch(function()
+						notify("disconnected")
+					end)
 			end
 
 			-- Keep opencode UI buffers out of bufferline
