@@ -5,6 +5,7 @@
   },
   "ignorePatterns": [
     "**/*.test.ts",
+    "hover-lsp-server.ts",
     "run-neovim-context.ts"
   ],
   "entry": [

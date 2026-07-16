@@ -5,6 +5,9 @@ import { join } from "node:path"
 import { attach } from "neovim"
 import { NvimContextBridge, handleMessage } from "./neovim-context"
 
+const HOVER_LSP_SERVER = join(import.meta.dir, "hover-lsp-server.ts")
+const BUN_PATH = Bun.which("bun")
+
 async function startNvim(commands: string[] = [], cwd?: string) {
 	const socket = `/tmp/neovim-context-${process.pid}-${crypto.randomUUID()}.sock`
 	const arguments_ = ["nvim", "-u", "NONE", "--headless", "--cmd", "set noswapfile", ...commands.flatMap(function(command) { return ["--cmd", command] }), "--listen", socket]
@@ -29,6 +32,25 @@ async function withNvim(commands: string[], run: (bridge: NvimContextBridge, soc
 		nvimProcess.kill()
 		await nvimProcess.exited
 	}
+}
+
+async function startHoverClients(socket: string, labels: string[]) {
+	if (BUN_PATH === undefined) throw new Error("Bun executable is required for the hover LSP fixture")
+	const nvim = attach({ socket })
+	const ready = await nvim.executeLua(`
+local bun, server, labels = ...
+for _, label in ipairs(labels) do
+  vim.lsp.start({ name = label, cmd = { bun, server }, root_dir = vim.fn.getcwd(), init_options = { label = label } })
+end
+return vim.wait(5000, function()
+  local ready = 0
+  for _, client in ipairs(vim.lsp.get_clients({ bufnr = 0 })) do
+    if vim.tbl_contains(labels, client.name) and client.server_capabilities.hoverProvider then ready = ready + 1 end
+  end
+  return ready == #labels
+end, 10)
+`, [BUN_PATH, HOVER_LSP_SERVER, labels])
+	if (ready !== true) throw new Error("Hover LSP fixture did not initialize")
 }
 
 test("fails closed when no socket is configured", async () => {
@@ -82,6 +104,38 @@ test("rejects an inactive visual selection", async () => {
 
 test("rejects unavailable LSP hover information", async () => {
 	await withNvim(["file bridge-hover.lua"], async function(bridge) {
+		expect(await bridge.lspHover({})).toMatchObject({ error: { code: "NVIM_INVALID_ARGUMENT", message: "No LSP hover information is available" } })
+	})
+})
+
+test("reads deterministic hover information from attached LSP clients", async () => {
+	await withNvim(["file bridge-hover.lua", "call setline(1, ['local hover = true', 'return hover'])", "call cursor(1, 1)"], async function(bridge, socket) {
+		await startHoverClients(socket, ["zeta-hover", "alpha-hover"])
+		expect(await bridge.lspHover({})).toMatchObject({
+			ok: true,
+			lspHover: {
+				buffer: { name: expect.stringContaining("bridge-hover.lua") },
+				position: { line: 1, column: 1 },
+				hovers: [
+					{ client: "alpha-hover", contents: "alpha-hover hover at 0:0" },
+					{ client: "zeta-hover", contents: "zeta-hover hover at 0:0" },
+				],
+			},
+		})
+		expect(await bridge.lspHover({ buffer: 1, line: 2, column: 1 })).toMatchObject({
+			ok: true,
+			lspHover: { position: { line: 2, column: 1 }, hovers: [{ contents: "alpha-hover hover at 1:0" }, { contents: "zeta-hover hover at 1:0" }] },
+		})
+	})
+})
+
+test("bounds oversized and slow LSP hover responses", async () => {
+	await withNvim(["file bridge-large-hover.lua"], async function(bridge, socket) {
+		await startHoverClients(socket, ["large-hover"])
+		expect(await bridge.lspHover({})).toMatchObject({ error: { code: "NVIM_CONTENT_LIMIT" } })
+	})
+	await withNvim(["file bridge-slow-hover.lua"], async function(bridge, socket) {
+		await startHoverClients(socket, ["slow-hover"])
 		expect(await bridge.lspHover({})).toMatchObject({ error: { code: "NVIM_INVALID_ARGUMENT", message: "No LSP hover information is available" } })
 	})
 })
