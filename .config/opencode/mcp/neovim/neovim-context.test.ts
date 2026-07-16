@@ -130,7 +130,7 @@ test("returns the recorded source context after focus leaves the buffer", async 
 		await nvim.setVar("opencode_last_source_context", { buffer: 1, cursor: { line: 1, column: 1 } })
 		expect(await bridge.focusContext()).toMatchObject({
 			ok: true,
-			focusContext: { buffer: { name: expect.stringContaining("bridge-focus.lua") }, cursor: { line: 1, column: 1 } },
+			focusContext: { instance: { socket }, buffer: { name: expect.stringContaining("bridge-focus.lua") }, cursor: { line: 1, column: 1 } },
 		})
 	})
 })

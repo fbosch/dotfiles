@@ -209,36 +209,36 @@ export class NvimContextBridge {
 	}
 
 	async readBuffer(options: BufferReadOptions): Promise<BufferReadResult> {
-		const connection = await this.connection()
+		const connection = await this.instanceConnection()
 		if ("error" in connection) return connection
 		try {
 			const buffer = await this.selectedBuffer(connection.nvim, options.buffer)
 			if (buffer === undefined) return this.invalidBuffer()
-			return await this.readSelectedBuffer(connection.context.instance, buffer, options)
+			return await this.readSelectedBuffer(connection.instance, buffer, options)
 		} catch {
 			return this.unavailable()
 		}
 	}
 
 	async diagnostics(bufferNumber?: number): Promise<DiagnosticsResult> {
-		const connection = await this.connection()
+		const connection = await this.instanceConnection()
 		if ("error" in connection) return connection
 		try {
 			const result = await this.diagnosticsFor(connection.nvim, bufferNumber)
 			if ("error" in result) return result
-			return { ok: true, diagnostics: { instance: connection.context.instance, ...result } }
+			return { ok: true, diagnostics: { instance: connection.instance, ...result } }
 		} catch {
 			return this.unavailable()
 		}
 	}
 
 	async focusContext(): Promise<FocusContextResult> {
-		const connection = await this.connection()
+		const connection = await this.instanceConnection()
 		if ("error" in connection) return connection
 		try {
 			const focus = focusState(await withTimeout(connection.nvim.getVar("opencode_last_source_context")))
 			if (focus === undefined) return this.missingFocusContext()
-			return this.focusedSourceContext(connection.context.instance, connection.nvim, focus)
+			return this.focusedSourceContext(connection.instance, connection.nvim, focus)
 		} catch {
 			return this.missingFocusContext()
 		}
@@ -251,11 +251,20 @@ export class NvimContextBridge {
 		return { instance: { socket: this.#socket!, pid, cwd }, mode: mode.mode, activeBuffer, cursor: position(cursor), selection }
 	}
 
-	async connection(): Promise<{ context: ActiveContext; nvim: NeovimClient } | BridgeFailure> {
-		const context = await this.context()
-		if (context.ok === false) return context
+	async instanceConnection(): Promise<{ instance: ActiveContext["instance"]; nvim: NeovimClient } | BridgeFailure> {
 		const client = this.client()
-		return "error" in client ? client : { context: context.context, nvim: client.nvim }
+		if ("error" in client) return client
+		try {
+			return { instance: await this.instance(client.nvim), nvim: client.nvim }
+		} catch {
+			return this.unavailable()
+		}
+	}
+
+	async instance(nvim: NeovimClient): Promise<ActiveContext["instance"]> {
+		const [pid, cwd] = await withTimeout(Promise.all([nvim.call("getpid"), nvim.call("getcwd")]))
+		if (isNumber(pid) === false || isString(cwd) === false) throw new Error("Neovim returned invalid instance")
+		return { socket: this.#socket!, pid, cwd }
 	}
 
 	async bufferInventorySnapshot(nvim: NeovimClient): Promise<BufferInfo[]> {
