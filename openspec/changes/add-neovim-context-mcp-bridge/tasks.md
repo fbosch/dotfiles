@@ -17,12 +17,12 @@
 ## 3. Current Workspace and Diagnostic Context
 
 - [x] 3.1 Add a visible-windows tool that reports each visible buffer and its visible line range from the bound Neovim instance.
-- [ ] 3.2 Add a diagnostics tool for the active or identified buffer that returns current message, source, severity, and position data.
-- [ ] 3.3 Ensure visible-window and diagnostic results identify the bound instance and their source window or buffer.
-- [ ] 3.4 Verify end to end that the tools report the active editor view and diagnostics after the editor state changes, including unsaved modifications.
+- [x] 3.2 Add a diagnostics tool for the active or identified buffer that returns current message, source, severity, and position data.
+- [x] 3.3 Ensure visible-window and diagnostic results identify the bound instance and their source window or buffer.
+- [x] 3.4 Verify end to end that the tools report the active editor view and diagnostics after the editor state changes, including unsaved modifications.
 
 ## 4. Multi-Worktree Operational Readiness
 
-- [ ] 4.1 Validate two Neovim instances in sibling worktrees with separate OpenCode servers and prove each bridge returns only its originating instance's active context, source reads, visible windows, and diagnostics.
-- [ ] 4.2 Document the connection model, including worktree CWD isolation, immutable socket binding, and the same-worktree requirement to use a dedicated selected server for correct live context.
-- [ ] 4.3 Run the bridge test suite, the relevant Neovim Lua formatter or linter, and `:checkhealth opencode` after configuration changes.
+- [x] 4.1 Validate two Neovim instances in sibling worktrees with separate OpenCode servers and prove each bridge returns only its originating instance's active context, source reads, visible windows, and diagnostics.
+- [x] 4.2 Document the connection model, including worktree CWD isolation, immutable socket binding, and the same-worktree requirement to use a dedicated selected server for correct live context.
+- [x] 4.3 Run the bridge test suite, the relevant Neovim Lua formatter or linter, and `:checkhealth opencode` after configuration changes.
