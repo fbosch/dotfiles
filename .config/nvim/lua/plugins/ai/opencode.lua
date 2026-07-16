@@ -98,13 +98,19 @@ return {
 			end
 
 			local function opencode_command()
+				local socket = vim.v.servername
+				if type(socket) ~= "string" or socket == "" then
+					error("opencode requires a Neovim RPC socket")
+				end
+
+				local environment = "OPENCODE_NVIM_SOCKET=" .. vim.fn.shellescape(socket) .. " "
 				local cwd = vim.fn.getcwd()
 				local session_id = infer_session_id_for_cwd(cwd)
 				if type(session_id) ~= "string" or session_id == "" then
-					return "opencode -- --port"
+					return environment .. "opencode -- --port"
 				end
 
-				return "opencode --port --session " .. vim.fn.shellescape(session_id)
+				return environment .. "opencode --port --session " .. vim.fn.shellescape(session_id)
 			end
 
 			local function opencode_terminal()
@@ -230,9 +236,24 @@ return {
 				return require("opencode.config").opts.select.prompts[name] or name
 			end
 
+			local function opencode_bridge_health()
+				local socket = vim.v.servername
+				if type(socket) ~= "string" or socket == "" then
+					return "unavailable (Neovim socket missing)"
+				end
+
+				local bridge = vim.fn.expand("~/.config/opencode/mcp/neovim-context.ts")
+				if vim.fn.filereadable(bridge) == 0 then
+					return "unavailable (bridge not found)"
+				end
+
+				return "configured (bound to " .. socket .. ")"
+			end
+
 			local function show_opencode_health()
 				local connected_server = require("opencode.server").connected
 				local status = require("opencode.events.status").statusline()
+				local bridge_status = opencode_bridge_health()
 				local terminal_bufnr = nil
 
 				for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
@@ -256,6 +277,7 @@ return {
 							or "disconnected"
 					),
 					string.format("Status: %s", status),
+					string.format("Bridge: %s", bridge_status),
 					string.format(
 						"Terminal: %s",
 						terminal_bufnr and ("alive (buf " .. terminal_bufnr .. ")") or "not found"

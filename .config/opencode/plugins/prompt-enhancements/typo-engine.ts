@@ -85,7 +85,7 @@ function expandBraces(dictionary: ReadonlyMap<string, string>): Map<string, stri
 }
 
 function parseTypoRule(line: string): TypoRule[] {
-  const match = /^(\S+)\s+(\S+)$/.exec(line)
+  const match = /^(\S+)\s+(.+)$/.exec(line)
   if (!match) {
     return []
   }

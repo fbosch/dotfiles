@@ -1,10 +1,10 @@
 ## 1. Bound Active-Context Bridge
 
-- [ ] 1.1 Choose the local bridge runtime, MCP SDK, entrypoint, and test command after inspecting the existing OpenCode MCP configuration.
-- [ ] 1.2 Implement a bridge that requires an explicit Neovim socket at startup, connects only to that socket, and exposes a read-only active-context tool with instance metadata, CWD, active buffer, cursor, mode, and selection metadata.
-- [ ] 1.3 Wire the launching Neovim socket through the OpenCode server process to its MCP child and add bridge binding status to `:OpencodeHealth`.
-- [ ] 1.4 Add automated and manual verification that a configured OpenCode instance retrieves active context from its launching Neovim instance.
-- [ ] 1.5 Add unavailable-socket and closed-Neovim tests proving the bridge returns a structured error and never discovers or falls back to another active Neovim instance.
+- [x] 1.1 Choose the local bridge runtime, MCP SDK, entrypoint, and test command after inspecting the existing OpenCode MCP configuration.
+- [x] 1.2 Implement a bridge that requires an explicit Neovim socket at startup, connects only to that socket, and exposes a read-only active-context tool with instance metadata, CWD, active buffer, cursor, mode, and selection metadata.
+- [x] 1.3 Wire the launching Neovim socket through the OpenCode server process to its MCP child and add bridge binding status to `:OpencodeHealth`.
+- [x] 1.4 Add automated and manual verification that a configured OpenCode instance retrieves active context from its launching Neovim instance.
+- [x] 1.5 Add unavailable-socket and closed-Neovim tests proving the bridge returns a structured error and never discovers or falls back to another active Neovim instance.
 
 ## 2. Live Unsaved Source Context
 

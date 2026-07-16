@@ -8,9 +8,18 @@ const vimAbolishPath = `${process.env.HOME}/.local/share/nvim/lazy/vim-abolish`
 
 const abolishSpecRules = [
   "foo bar",
+  "alot a lot",
   "box{,es} bag{,s}",
   "box{,es,ed,ing} bag{,s}",
   "argu{ement,ments} argument{}",
+  "depen{d{e,a}nc{ie,ei,y,i}es,edencies} dependencies",
+  "occur{ance,ence,ed,rance} occurr{ence,ence,ed,ence}",
+  "succes{,sful,fully} success{,,fully}",
+  "re{psonse,spos{e,nse}} response",
+  "tru{w,e} true",
+  "{hte,teh} the",
+  "e{q{uivalent,ivalent},quivilant} equivalent",
+  "vis{iblity,ble,ibile} visible",
   "foo_bar baz_qux",
   "left{One,Two} right",
   "pre{a,b}mid{x,y} post{1,2}end{3,4}",
@@ -36,7 +45,7 @@ end
 
 local rules = {}
 for line in vim.fn.execute("iabbrev"):gmatch("[^\\n]+") do
-  local lhs, rhs = line:match("^i%s+(%S+)%s+%*?%s*(%S+)%s*$")
+  local lhs, rhs = line:match("^i%s+(%S+)%s+%*?%s*(.-)%s*$")
   if lhs and rhs then
     rules[lhs] = rhs
   end
