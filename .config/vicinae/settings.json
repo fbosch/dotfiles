@@ -28,10 +28,12 @@
       }
    },
    "launcher_window": {
-      "opacity": 0.9,
+      "rounding": 8,
+      "opacity": 0.85,
       "client_side_decorations": {
          "enabled": true,
-         "shadow_size": 0
+         "border_width": 1,
+         "shadow_size": 3
       },
       "blur": {
          "enabled": false
@@ -42,7 +44,8 @@
       "layer_shell": {
          "keyboard_interactivity": "on_demand",
          "enabled": true
-      }
+      },
+      "material": "blur"
    },
    "favorites": [
       "applications:protonmail",

@@ -105,6 +105,7 @@ export type Diagnostic = { line: number; column: number; endLine: number; endCol
 export type DiagnosticsResult = { ok: true; diagnostics: { instance: ActiveContext["instance"]; buffer: BufferInfo; diagnostics: Diagnostic[] } } | BridgeFailure
 export type FocusContextResult = { ok: true; focusContext: { instance: ActiveContext["instance"]; buffer: BufferInfo; cursor: { line: number; column: number } } } | BridgeFailure
 export type NvimClientFactory = (socket: string) => NeovimClient
+export type TimeoutObserver = { created(): void; cleared(): void; fired(): void }
 
 function bridgeError(code: BridgeError["code"], message: string): BridgeFailure {
 	return { ok: false, error: { code, message } }
@@ -114,8 +115,19 @@ function isBoolean(value: unknown): value is boolean {
 	return typeof value === "boolean"
 }
 
-function withTimeout<T>(request: Promise<T>): Promise<T> {
-	return Promise.race([request, new Promise<never>(function(_, reject) { setTimeout(function() { reject(new Error("Neovim RPC request timed out")) }, REQUEST_TIMEOUT_MS) })])
+function withTimeout<T>(request: Promise<T>, observer?: TimeoutObserver): Promise<T> {
+	let timer: ReturnType<typeof setTimeout>
+	const timeout = new Promise<never>(function(_, reject) {
+		observer?.created()
+		timer = setTimeout(function() {
+			observer?.fired()
+			reject(new Error("Neovim RPC request timed out"))
+		}, REQUEST_TIMEOUT_MS)
+	})
+	return Promise.race([request, timeout]).finally(function() {
+		clearTimeout(timer)
+		observer?.cleared()
+	})
 }
 
 function position(value: [number, number]): { line: number; column: number } {
@@ -179,12 +191,14 @@ function focusCursor(value: unknown): { line: number; column: number } | undefin
 export class NvimContextBridge {
 	readonly #socket: string | undefined
 	readonly #createClient: NvimClientFactory
+	readonly #timeoutObserver: TimeoutObserver | undefined
 	#client: NeovimClient | undefined
 	#unavailable: BridgeError | undefined
 
-	constructor(socket: string | undefined, createClient: NvimClientFactory = function(socket) { return attach({ socket }) }) {
+	constructor(socket: string | undefined, createClient: NvimClientFactory = function(socket) { return attach({ socket }) }, timeoutObserver?: TimeoutObserver) {
 		this.#socket = socket
 		this.#createClient = createClient
+		this.#timeoutObserver = timeoutObserver
 	}
 
 	async context(): Promise<BridgeResult> {
@@ -203,26 +217,22 @@ export class NvimContextBridge {
 	}
 
 	async visibleWindows(): Promise<VisibleWindowsResult> {
-		const context = await this.context()
 		const client = this.client()
-		if (context.ok === false) return context
 		if ("error" in client) return client
 		try {
-			const windows = await this.visibleWindowSnapshot(client.nvim)
-			return { ok: true, visibleWindows: { instance: context.context.instance, activeBuffer: context.context.activeBuffer, windows, sourceWindows: windows.filter(isSourceBuffer) } }
+			const [context, windows] = await Promise.all([this.#contextFrom(client.nvim), this.visibleWindowSnapshot(client.nvim)])
+			return { ok: true, visibleWindows: { instance: context.instance, activeBuffer: context.activeBuffer, windows, sourceWindows: windows.filter(isSourceBuffer) } }
 		} catch {
 			return this.unavailable()
 		}
 	}
 
 	async bufferInventory(): Promise<BufferInventoryResult> {
-		const context = await this.context()
 		const client = this.client()
-		if (context.ok === false) return context
 		if ("error" in client) return client
 		try {
-			const buffers = await this.bufferInventorySnapshot(client.nvim)
-			return { ok: true, bufferInventory: { instance: context.context.instance, buffers, sourceBuffers: buffers.filter(isSourceBuffer) } }
+			const [context, buffers] = await Promise.all([this.#contextFrom(client.nvim), this.bufferInventorySnapshot(client.nvim)])
+			return { ok: true, bufferInventory: { instance: context.instance, buffers, sourceBuffers: buffers.filter(isSourceBuffer) } }
 		} catch {
 			return this.unavailable()
 		}
@@ -256,7 +266,7 @@ export class NvimContextBridge {
 		const connection = await this.instanceConnection()
 		if ("error" in connection) return connection
 		try {
-			const focus = focusState(await withTimeout(connection.nvim.getVar("opencode_last_source_context")))
+			const focus = focusState(await withTimeout(connection.nvim.getVar("opencode_last_source_context"), this.#timeoutObserver))
 			if (focus === undefined) return this.missingFocusContext()
 			return this.focusedSourceContext(connection.instance, connection.nvim, focus)
 		} catch {
@@ -265,7 +275,7 @@ export class NvimContextBridge {
 	}
 
 	async #contextFrom(nvim: NeovimClient): Promise<ActiveContext> {
-		const [pid, cwd, mode, activeBuffer, cursor] = await withTimeout(Promise.all([nvim.call("getpid"), nvim.call("getcwd"), nvim.mode, nvim.buffer.then(bufferInfo), nvim.window.then(function(window) { return window.cursor })]))
+		const [pid, cwd, mode, activeBuffer, cursor] = await withTimeout(Promise.all([nvim.call("getpid"), nvim.call("getcwd"), nvim.mode, nvim.buffer.then(bufferInfo), nvim.window.then(function(window) { return window.cursor })]), this.#timeoutObserver)
 		if (isNumber(pid) === false || isString(cwd) === false || isString(mode.mode) === false) throw new Error("Neovim returned invalid context")
 		const selection = await this.selection(nvim, mode.mode, activeBuffer)
 		return { instance: { socket: this.#socket!, pid, cwd }, mode: mode.mode, activeBuffer, cursor: position(cursor), selection }
@@ -282,19 +292,19 @@ export class NvimContextBridge {
 	}
 
 	async instance(nvim: NeovimClient): Promise<ActiveContext["instance"]> {
-		const [pid, cwd] = await withTimeout(Promise.all([nvim.call("getpid"), nvim.call("getcwd")]))
+		const [pid, cwd] = await withTimeout(Promise.all([nvim.call("getpid"), nvim.call("getcwd")]), this.#timeoutObserver)
 		if (isNumber(pid) === false || isString(cwd) === false) throw new Error("Neovim returned invalid instance")
 		return { socket: this.#socket!, pid, cwd }
 	}
 
 	async bufferInventorySnapshot(nvim: NeovimClient): Promise<BufferInfo[]> {
-		const buffers = await withTimeout(nvim.executeLua(BUFFER_INVENTORY_LUA, []))
+		const buffers = await withTimeout(nvim.executeLua(BUFFER_INVENTORY_LUA, []), this.#timeoutObserver)
 		if (Array.isArray(buffers) === false || buffers.every(isBufferInfo) === false) throw new Error("Neovim returned invalid buffer inventory")
 		return buffers
 	}
 
 	async visibleWindowSnapshot(nvim: NeovimClient): Promise<VisibleWindow[]> {
-		const windows = await withTimeout(nvim.executeLua(VISIBLE_WINDOWS_LUA, []))
+		const windows = await withTimeout(nvim.executeLua(VISIBLE_WINDOWS_LUA, []), this.#timeoutObserver)
 		if (Array.isArray(windows) === false || windows.every(isVisibleWindow) === false) throw new Error("Neovim returned invalid visible windows")
 		return windows
 	}
@@ -307,18 +317,18 @@ export class NvimContextBridge {
 	async diagnosticsFor(nvim: NeovimClient, bufferNumber?: number): Promise<{ buffer: BufferInfo; diagnostics: Diagnostic[] } | BridgeFailure> {
 		const buffer = await this.selectedBuffer(nvim, bufferNumber)
 		if (buffer === undefined) return this.invalidDiagnostics()
-		const metadata = await withTimeout(bufferInfo(buffer))
+		const metadata = await withTimeout(bufferInfo(buffer), this.#timeoutObserver)
 		if (metadata.loaded === false) return this.invalidDiagnostics()
-		const diagnostics = await withTimeout(nvim.executeLua(DIAGNOSTICS_LUA, [buffer.id]))
+		const diagnostics = await withTimeout(nvim.executeLua(DIAGNOSTICS_LUA, [buffer.id]), this.#timeoutObserver)
 		return hasDiagnostics(diagnostics) ? { buffer: metadata, diagnostics } : this.invalidDiagnostics()
 	}
 
 	async readSelectedBuffer(instance: ActiveContext["instance"], nvim: NeovimClient, buffer: Buffer, options: BufferReadOptions): Promise<BufferReadResult> {
-		const [metadata, totalLines] = await withTimeout(Promise.all([bufferInfo(buffer), buffer.length]))
+		const [metadata, totalLines] = await withTimeout(Promise.all([bufferInfo(buffer), buffer.length]), this.#timeoutObserver)
 		if (isReadableBuffer(metadata) === false) return this.invalidBuffer()
 		const range = readRange(options, totalLines)
 		if ("error" in range) return range
-		const lines = readLines(await withTimeout(nvim.executeLua(BUFFER_READ_LUA, [buffer.id, range.startLine - 1, range.endLine, MAX_READ_BYTES])))
+		const lines = readLines(await withTimeout(nvim.executeLua(BUFFER_READ_LUA, [buffer.id, range.startLine - 1, range.endLine, MAX_READ_BYTES]), this.#timeoutObserver))
 		if ("error" in lines) return lines
 		return { ok: true, bufferRead: { instance, buffer: metadata, startLine: range.startLine, endLine: range.endLine, totalLines, lines } }
 	}
@@ -326,7 +336,7 @@ export class NvimContextBridge {
 	async focusedSourceContext(instance: ActiveContext["instance"], nvim: NeovimClient, focus: { buffer: number; cursor: { line: number; column: number } }): Promise<FocusContextResult> {
 		const buffer = await this.selectedBuffer(nvim, focus.buffer)
 		if (buffer === undefined) return bridgeError("NVIM_INVALID_ARGUMENT", "The recent source buffer is no longer available")
-		const metadata = await withTimeout(bufferInfo(buffer))
+		const metadata = await withTimeout(bufferInfo(buffer), this.#timeoutObserver)
 		if (isSourceBuffer(metadata) === false) return bridgeError("NVIM_INVALID_ARGUMENT", "The recent source buffer is no longer available")
 		return { ok: true, focusContext: { instance, buffer: metadata, cursor: focus.cursor } }
 	}
