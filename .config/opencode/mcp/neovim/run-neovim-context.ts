@@ -157,6 +157,8 @@ test("Neovim MCP baseline", async () => {
 	const restoreRequests = instrumentRequests()
 	try {
 		const contextFixture = await createFixture("neovim-context-main-", ["edit context.lua", "call setline(1, ['local context = true'])"])
+		const pathFixture = await createFixture("neovim-context-highlight-path-", ["edit source.lua", "call setline(1, ['local source = true'])"])
+		await Bun.write(join(pathFixture.root, "project", "target.lua"), "return 'target'\n")
 		const selectionFixture = await createFixture("neovim-context-selection-", ["edit selection.lua", "call setline(1, ['first', 'second'])", "call cursor(1, 1)", "normal! vj"])
 
 	const readSmallFixture = await createFixture("neovim-context-read-small-", ["edit read-small.lua", "call setline(1, ['local read = true', 'return read'])"])
@@ -181,10 +183,11 @@ test("Neovim MCP baseline", async () => {
 	}
 	printResult(await bench("context/active", contextFixture.metrics, () => successful("context/active", () => contextFixture.bridge.context())), contextFixture.metrics)
 	printResult(await bench("selection/active", selectionFixture.metrics, () => successful("selection/active", () => selectionFixture.bridge.selection())), selectionFixture.metrics)
-	printResult(await bench("lspHover/no-client", contextFixture.metrics, () => rejected(() => contextFixture.bridge.lspHover({}))), contextFixture.metrics)
-	printResult(await bench("documentSymbols/no-client", contextFixture.metrics, () => rejected(() => contextFixture.bridge.documentSymbols({ maxItems: 20 }))), contextFixture.metrics)
-	printResult(await bench("lspStatus/no-client", contextFixture.metrics, () => successful("lspStatus/no-client", () => contextFixture.bridge.lspStatus({ maxItems: 20 }))), contextFixture.metrics)
-	printResult(await bench("quickfix/empty", contextFixture.metrics, () => successful("quickfix/empty", () => contextFixture.bridge.quickfix({ kind: "quickfix", maxItems: 20 }))), contextFixture.metrics)
+		printResult(await bench("quickfix/empty", contextFixture.metrics, () => successful("quickfix/empty", () => contextFixture.bridge.quickfix({ kind: "quickfix", maxItems: 20 }))), contextFixture.metrics)
+		printResult(await bench("reveal/current-buffer", contextFixture.metrics, () => successful("reveal/current-buffer", () => contextFixture.bridge.reveal({ buffer: 1, line: 1, column: 1, focus: false, split: "none" }))), contextFixture.metrics)
+		printResult(await bench("highlight/one-line", contextFixture.metrics, () => successful("highlight/one-line", () => contextFixture.bridge.highlight({ buffer: 1, startLine: 1, startColumn: 1, endLine: 1, endColumn: 1, durationMs: 2000, reveal: true }))), contextFixture.metrics)
+		await successful("highlight/path-initial", () => pathFixture.bridge.highlight({ path: "target.lua", startLine: 1, durationMs: 2000, reveal: true }))
+		printResult(await bench("highlight/path-warm", pathFixture.metrics, () => successful("highlight/path-warm", () => pathFixture.bridge.highlight({ path: "target.lua", startLine: 1, durationMs: 2000, reveal: true }))), pathFixture.metrics)
 	printResult(await bench("readBuffer/normal", readSmallFixture.metrics, () => successful("readBuffer/normal", () => readSmallFixture.bridge.readBuffer({}))), readSmallFixture.metrics)
 	printResult(await bench("readBuffer/oversized-reject", readLargeFixture.metrics, () => rejected(() => readLargeFixture.bridge.readBuffer({}))), readLargeFixture.metrics)
 	for (const [index, fixture] of diagnosticFixtures.entries()) {

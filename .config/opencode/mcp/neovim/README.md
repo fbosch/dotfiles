@@ -1,6 +1,6 @@
 # Neovim MCP
 
-`neovim-context.ts` gives OpenCode read-only access to the Neovim instance that started its server.
+`neovim-context.ts` gives OpenCode live context and tightly bounded presentation access to the Neovim instance that started its server.
 
 ## Binding
 
@@ -20,14 +20,16 @@ Sibling worktrees normally produce separate OpenCode server processes because th
 - `nvim_read_buffer`: bounded in-memory source reads, including unsaved content.
 - `nvim_diagnostic_summary`: severity counts and a bounded diagnostic prefix for the active or selected buffer.
 - `nvim_diagnostics`: current diagnostics for the active or selected buffer.
-- `nvim_lsp_hover`: live LSP hover information at the active cursor or an explicit source position.
-- `nvim_document_symbols`: bounded live LSP file structure from the active or selected buffer.
-- `nvim_lsp_status`: bounded attached-LSP client status for the active or selected buffer.
 - `nvim_quickfix`: bounded current quickfix or location-list entries.
+- `nvim_reveal`: reveal an existing source buffer at an exact position, optionally in an explicit split.
+- `nvim_highlight`: temporarily mark one exact source-buffer range without changing text.
+- `nvim_clear_highlight`: remove a highlight returned by `nvim_highlight` before it expires.
 
 `nvim_read_buffer` and `nvim_selection` allow at most 500 lines or 32 KiB per call. The bridge does not expose arbitrary Neovim evaluation, commands, edits, terminal input, or socket selection.
 
-`nvim_document_symbols`, `nvim_lsp_status`, and `nvim_quickfix` return 20 items by default, at most 50 items, and no more than 32 KiB of discovery data.
+`nvim_quickfix` returns 20 items by default, at most 50 items, and no more than 32 KiB of discovery data.
+
+Presentation tools use loaded source buffers or readable workspace-relative paths. `nvim_reveal` never steals focus unless `focus: true` is explicit and creates a split only when `split` is `horizontal` or `vertical`. `nvim_highlight` needs `startLine` plus exactly one of `buffer` or `path` to mark a whole live line; exact columns remain optional. A path is loaded or reused, then shown in a source window without focus stealing. Highlights use a bridge-owned extmark namespace, expire after 2 seconds by default, and are capped at 30 seconds and 500 lines.
 
 ## Validation
 

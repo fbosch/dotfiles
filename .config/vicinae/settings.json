@@ -56,7 +56,6 @@
       "applications:com.discordapp.Discord",
       "@aurelleb/store.vicinae.mullvad:connect",
       "@aurelleb/store.vicinae.mullvad:disconnect",
-      "@fbosch/flathub-search:flathub-search",
       "applications:bitwarden",
       "applications:steam",
       "applications:helium-browser",

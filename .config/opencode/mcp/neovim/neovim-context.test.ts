@@ -5,8 +5,6 @@ import { join } from "node:path"
 import { attach } from "neovim"
 import { NvimContextBridge, handleMessage } from "./neovim-context"
 
-const HOVER_LSP_SERVER = join(import.meta.dir, "hover-lsp-server.ts")
-const BUN_PATH = Bun.which("bun")
 
 async function startNvim(commands: string[] = [], cwd?: string) {
 	const socket = `/tmp/neovim-context-${process.pid}-${crypto.randomUUID()}.sock`
@@ -24,33 +22,14 @@ async function startNvim(commands: string[] = [], cwd?: string) {
 	return { nvimProcess, socket }
 }
 
-async function withNvim(commands: string[], run: (bridge: NvimContextBridge, socket: string) => Promise<void>) {
-	const { nvimProcess, socket } = await startNvim(commands)
+async function withNvim(commands: string[], run: (bridge: NvimContextBridge, socket: string) => Promise<void>, cwd?: string) {
+	const { nvimProcess, socket } = await startNvim(commands, cwd)
 	try {
 		await run(new NvimContextBridge(socket), socket)
 	} finally {
 		nvimProcess.kill()
 		await nvimProcess.exited
 	}
-}
-
-async function startHoverClients(socket: string, labels: string[]) {
-	if (BUN_PATH === undefined) throw new Error("Bun executable is required for the hover LSP fixture")
-	const nvim = attach({ socket })
-	const ready = await nvim.executeLua(`
-local bun, server, labels = ...
-for _, label in ipairs(labels) do
-  vim.lsp.start({ name = label, cmd = { bun, server }, root_dir = vim.fn.getcwd(), init_options = { label = label } })
-end
-return vim.wait(5000, function()
-  local ready = 0
-  for _, client in ipairs(vim.lsp.get_clients({ bufnr = 0 })) do
-    if vim.tbl_contains(labels, client.name) and client.server_capabilities.hoverProvider then ready = ready + 1 end
-  end
-  return ready == #labels
-end, 10)
-`, [BUN_PATH, HOVER_LSP_SERVER, labels])
-	if (ready !== true) throw new Error("Hover LSP fixture did not initialize")
 }
 
 test("fails closed when no socket is configured", async () => {
@@ -102,70 +81,6 @@ test("rejects an inactive visual selection", async () => {
 	})
 })
 
-test("rejects unavailable LSP hover information", async () => {
-	await withNvim(["file bridge-hover.lua"], async function(bridge) {
-		expect(await bridge.lspHover({})).toMatchObject({ error: { code: "NVIM_INVALID_ARGUMENT", message: "No LSP hover information is available" } })
-	})
-})
-
-test("reads deterministic hover information from attached LSP clients", async () => {
-	await withNvim(["file bridge-hover.lua", "call setline(1, ['local hover = true', 'return hover'])", "call cursor(1, 1)"], async function(bridge, socket) {
-		await startHoverClients(socket, ["zeta-hover", "alpha-hover"])
-		expect(await bridge.lspHover({})).toMatchObject({
-			ok: true,
-			lspHover: {
-				buffer: { name: expect.stringContaining("bridge-hover.lua") },
-				position: { line: 1, column: 1 },
-				hovers: [
-					{ client: "alpha-hover", contents: "alpha-hover hover at 0:0" },
-					{ client: "zeta-hover", contents: "zeta-hover hover at 0:0" },
-				],
-			},
-		})
-		expect(await bridge.lspHover({ buffer: 1, line: 2, column: 1 })).toMatchObject({
-			ok: true,
-			lspHover: { position: { line: 2, column: 1 }, hovers: [{ contents: "alpha-hover hover at 1:0" }, { contents: "zeta-hover hover at 1:0" }] },
-		})
-	})
-})
-
-test("bounds oversized and slow LSP hover responses", async () => {
-	await withNvim(["file bridge-large-hover.lua"], async function(bridge, socket) {
-		await startHoverClients(socket, ["large-hover"])
-		expect(await bridge.lspHover({})).toMatchObject({ error: { code: "NVIM_CONTENT_LIMIT" } })
-	})
-	await withNvim(["file bridge-slow-hover.lua"], async function(bridge, socket) {
-		await startHoverClients(socket, ["slow-hover"])
-		expect(await bridge.lspHover({})).toMatchObject({ error: { code: "NVIM_INVALID_ARGUMENT", message: "No LSP hover information is available" } })
-	})
-})
-
-test("reads document symbols and attached LSP status", async () => {
-	await withNvim(["file bridge-symbols.lua", "call setline(1, ['local symbol = true'])"], async function(bridge, socket) {
-		await startHoverClients(socket, ["zeta-symbols", "alpha-symbols"])
-		expect(await bridge.documentSymbols({ maxItems: 20 })).toMatchObject({
-			ok: true,
-			documentSymbols: {
-				total: 2,
-				symbols: [
-					{ client: "alpha-symbols", name: "alpha-symbols symbol", kind: 12, detail: "fixture", line: 1, column: 1 },
-					{ client: "zeta-symbols", name: "zeta-symbols symbol", kind: 12, detail: "fixture", line: 1, column: 1 },
-				],
-			},
-		})
-		expect(await bridge.lspStatus({ maxItems: 20 })).toMatchObject({
-			ok: true,
-			lspStatus: {
-				total: 2,
-				clients: [
-					{ name: "alpha-symbols", initialized: true, hover: true, documentSymbols: true },
-					{ name: "zeta-symbols", initialized: true, hover: true, documentSymbols: true },
-				],
-			},
-		})
-	})
-})
-
 test("reports bounded quickfix and location-list entries", async () => {
 	await withNvim(["file bridge-quickfix.lua"], async function(bridge, socket) {
 		const nvim = attach({ socket })
@@ -173,6 +88,59 @@ test("reports bounded quickfix and location-list entries", async () => {
 		expect(await bridge.quickfix({ kind: "quickfix", maxItems: 1 })).toMatchObject({ ok: true, quickfix: { kind: "quickfix", title: "quickfix fixture", total: 2, items: [{ line: 2, column: 3, text: "first quickfix", type: "E", valid: true }] } })
 		expect(await bridge.quickfix({ kind: "location", maxItems: 20 })).toMatchObject({ ok: true, quickfix: { kind: "location", title: "location fixture", total: 1, items: [{ line: 6, column: 7, text: "location entry", type: "I", valid: true }] } })
 	})
+})
+
+test("reveals existing source buffers without stealing focus unless requested", async () => {
+	await withNvim(["edit bridge-reveal-one.lua", "call setline(1, ['first', 'second'])", "vsplit", "edit bridge-reveal-two.lua"], async function(bridge, socket) {
+		const nvim = attach({ socket })
+		const reveal = await bridge.reveal({ buffer: 1, line: 2, column: 1, focus: false, split: "none" })
+		expect(reveal).toMatchObject({ ok: true, reveal: { buffer: { number: 1 }, position: { line: 2, column: 1 }, focused: false, splitCreated: false } })
+		expect(await nvim.executeLua("return vim.api.nvim_get_current_buf()", [])).toBe(2)
+		expect(await bridge.reveal({ buffer: 1, line: 1, column: 1, focus: true, split: "horizontal" })).toMatchObject({ ok: true, reveal: { buffer: { number: 1 }, focused: true, splitCreated: true } })
+		expect(await nvim.executeLua("return vim.api.nvim_get_current_buf()", [])).toBe(1)
+	})
+})
+
+test("creates bounded temporary highlights without changing buffer text", async () => {
+	await withNvim(["file bridge-highlight.lua"], async function(bridge, socket) {
+		const nvim = attach({ socket })
+		const lines = Array.from({ length: 100 }, function(_, index) { return `line ${index + 1}` })
+		await nvim.executeLua("vim.api.nvim_buf_set_lines(1, 0, -1, true, ...)", [lines])
+		const result = await bridge.highlight({ buffer: 1, startLine: 80, startColumn: 1, endLine: 80, endColumn: 4, durationMs: 30000, reveal: true })
+		expect(result).toMatchObject({ ok: true, highlight: { buffer: { number: 1 }, start: { line: 80, column: 1 }, end: { line: 80, column: 4 }, expiresInMs: 30000, revealed: true } })
+		if (result.ok === false) return
+		const marks = await nvim.executeLua("return vim.api.nvim_buf_get_extmarks(1, vim.api.nvim_create_namespace('opencode_mcp_presentation'), 0, -1, {})")
+		expect(marks).toEqual([expect.arrayContaining([result.highlight.highlightId, 79, 0])])
+		expect(await nvim.executeLua("local viewport = vim.fn.getwininfo(vim.api.nvim_get_current_win())[1]; return { visible = viewport.topline <= 80 and viewport.botline >= 80, cursor = vim.api.nvim_win_get_cursor(0) }", [])).toEqual({ visible: true, cursor: [80, 0] })
+		expect(await bridge.readBuffer({ buffer: 1, startLine: 80, endLine: 80 })).toMatchObject({ ok: true, bufferRead: { lines: ["line 80"] } })
+		expect(await bridge.clearHighlight({ buffer: 1, highlightId: result.highlight.highlightId })).toEqual({ ok: true, clearHighlight: { cleared: true } })
+		expect(await bridge.clearHighlight({ buffer: 1, highlightId: result.highlight.highlightId })).toEqual({ ok: true, clearHighlight: { cleared: false } })
+		const mcpResult = await handleMessage({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "nvim_highlight", arguments: { buffer: 1, startLine: 1, durationMs: 20 } } }, bridge)
+		expect(mcpResult).toMatchObject({ result: { content: [expect.objectContaining({ text: expect.stringContaining("highlightId") })] } })
+		const expiring = await bridge.highlight({ buffer: 1, startLine: 1, startColumn: 1, endLine: 1, endColumn: 2, durationMs: 20, reveal: false })
+		expect(expiring.ok).toBe(true)
+		await Bun.sleep(50)
+		expect(await nvim.executeLua("return vim.api.nvim_buf_get_extmarks(1, vim.api.nvim_create_namespace('opencode_mcp_presentation'), 0, -1, {})", [])).toEqual([])
+	})
+})
+
+test("opens a workspace file before highlighting it", async () => {
+	const workspace = await mkdtemp(join(tmpdir(), "neovim-highlight-path-"))
+	const source = join(workspace, "source.lua")
+	const target = join(workspace, "target.lua")
+	await Bun.write(source, "return 'source'\n")
+	await Bun.write(target, "return 'target'\n")
+	try {
+		await withNvim([`edit ${source}`], async function(bridge, socket) {
+			expect(await bridge.highlight({ path: "../outside.lua", startLine: 1, durationMs: 20, reveal: true })).toMatchObject({ error: { code: "NVIM_INVALID_ARGUMENT", message: "Choose a readable workspace-relative file path" } })
+			const result = await bridge.highlight({ path: "target.lua", startLine: 1, durationMs: 20, reveal: true })
+			expect(result).toMatchObject({ ok: true, highlight: { buffer: { name: target }, start: { line: 1, column: 1 }, end: { line: 1, column: 16 }, revealed: true } })
+			const nvim = attach({ socket })
+			expect(await nvim.executeLua("return vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(0))", [])).toBe(target)
+		}, workspace)
+	} finally {
+		await rm(workspace, { recursive: true, force: true })
+	}
 })
 
 test("fails closed after the bound Neovim instance exits", async () => {
@@ -305,15 +273,17 @@ test("rejects missing or stale focus context", async () => {
 	})
 })
 
-test("advertises connected-server instructions, focused context, selections, and LSP hover", async () => {
+test("advertises connected-server instructions, presentation tools, focused context, selections, and LSP hover", async () => {
 	const response = await handleMessage({ jsonrpc: "2.0", id: 1, method: "initialize" }, new NvimContextBridge(undefined))
 	expect(response).toMatchObject({ result: { instructions: expect.stringContaining("Prefer nvim_focus_context") } })
 	const tools = await handleMessage({ jsonrpc: "2.0", id: 2, method: "tools/list" }, new NvimContextBridge(undefined))
-	expect(tools).toMatchObject({ result: { tools: expect.arrayContaining([expect.objectContaining({ name: "nvim_focus_context" }), expect.objectContaining({ name: "nvim_selection" }), expect.objectContaining({ name: "nvim_diagnostic_summary" }), expect.objectContaining({ name: "nvim_lsp_hover" })]) } })
+	expect(tools).toMatchObject({ result: { tools: expect.arrayContaining([expect.objectContaining({ name: "nvim_focus_context" }), expect.objectContaining({ name: "nvim_selection" }), expect.objectContaining({ name: "nvim_diagnostic_summary" }), expect.objectContaining({ name: "nvim_reveal" }), expect.objectContaining({ name: "nvim_highlight" })]) } })
 	const summary = await handleMessage({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "nvim_diagnostic_summary", arguments: { maxItems: 51 } } }, new NvimContextBridge(undefined))
 	expect(summary).toMatchObject({ result: { isError: true, content: [expect.objectContaining({ text: expect.stringContaining("Request at most 50 diagnostic summary items") })] } })
-	const hover = await handleMessage({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "nvim_lsp_hover", arguments: { buffer: 1, line: 1 } } }, new NvimContextBridge(undefined))
-	expect(hover).toMatchObject({ result: { isError: true, content: [expect.objectContaining({ text: expect.stringContaining("Specify buffer, line, and column together") })] } })
+	const reveal = await handleMessage({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "nvim_reveal", arguments: { buffer: 1, line: 1 } } }, new NvimContextBridge(undefined))
+	expect(reveal).toMatchObject({ result: { isError: true, content: [expect.objectContaining({ text: expect.stringContaining("Specify buffer, line, and column") })] } })
+	const highlight = await handleMessage({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "nvim_highlight", arguments: { buffer: 1, startLine: 1, startColumn: 1, endLine: 1, endColumn: 2, durationMs: 30001 } } }, new NvimContextBridge(undefined))
+	expect(highlight).toMatchObject({ result: { isError: true, content: [expect.objectContaining({ text: expect.stringContaining("must not exceed 30000 ms") })] } })
 })
 
 test("isolates context, source reads, visible windows, and diagnostics across sibling worktrees", async () => {
@@ -366,6 +336,6 @@ test("keeps the curated MCP tool contract", async () => {
 	const response = await handleMessage({ jsonrpc: "2.0", id: 1, method: "tools/list" }, new NvimContextBridge(undefined))
 	expect(response).toMatchObject({ jsonrpc: "2.0", id: 1 })
 	if (response && "result" in response && typeof response.result === "object" && response.result !== null && "tools" in response.result && Array.isArray(response.result.tools)) {
-		expect(response.result.tools.map(function(tool) { return tool.name })).toEqual(["nvim_context", "nvim_visible_windows", "nvim_list_buffers", "nvim_read_buffer", "nvim_diagnostic_summary", "nvim_diagnostics", "nvim_focus_context", "nvim_selection", "nvim_lsp_hover", "nvim_document_symbols", "nvim_lsp_status", "nvim_quickfix"])
+		expect(response.result.tools.map(function(tool) { return tool.name })).toEqual(["nvim_context", "nvim_visible_windows", "nvim_list_buffers", "nvim_read_buffer", "nvim_diagnostic_summary", "nvim_diagnostics", "nvim_focus_context", "nvim_selection", "nvim_quickfix", "nvim_reveal", "nvim_highlight", "nvim_clear_highlight"])
 	}
 })

@@ -7,12 +7,12 @@ export const MAX_READ_LINES = 500
 export const MAX_READ_BYTES = 32 * 1024
 export const MAX_DIAGNOSTIC_SUMMARY_ITEMS = 50
 export const DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS = 20
-export const MAX_HOVER_BYTES = 32 * 1024
 export const MAX_DISCOVERY_BYTES = 32 * 1024
 export const MAX_DISCOVERY_ITEMS = 50
 export const DEFAULT_DISCOVERY_ITEMS = 20
-
-const LSP_HOVER_TIMEOUT_MS = 750
+export const MAX_HIGHLIGHT_LINES = 500
+export const DEFAULT_HIGHLIGHT_DURATION_MS = 2000
+export const MAX_HIGHLIGHT_DURATION_MS = 30000
 
 const DIAGNOSTICS_LUA = `
 local buffer = ...
@@ -291,216 +291,6 @@ return {
 }
 `
 
-const LSP_HOVER_LUA = `
-local requested_buffer, requested_line, requested_column, max_bytes, timeout_ms = ...
-local buffer = requested_buffer == 0 and vim.api.nvim_get_current_buf() or requested_buffer
-if vim.api.nvim_buf_is_valid(buffer) == false then return { error = "invalidBuffer" } end
-
-local options = vim.bo[buffer]
-local metadata = {
-  number = buffer,
-  name = vim.api.nvim_buf_get_name(buffer),
-  loaded = vim.api.nvim_buf_is_loaded(buffer),
-  filetype = options.filetype,
-  buftype = options.buftype,
-  modified = options.modified,
-}
-if metadata.loaded == false or metadata.name == "" or metadata.buftype ~= "" or metadata.filetype == "opencode" or metadata.filetype == "opencode_terminal" then return { error = "invalidBuffer" } end
-
-local line, column
-if requested_line == 0 then
-  local cursor = vim.api.nvim_win_get_cursor(0)
-  line = cursor[1]
-  column = cursor[2] + 1
-else
-  line = requested_line
-  column = requested_column
-end
-local supports_hover = false
-for _, client in ipairs(vim.lsp.get_clients({ bufnr = buffer })) do
-  if client.server_capabilities.hoverProvider then
-    supports_hover = true
-    break
-  end
-end
-if supports_hover == false then return { error = "noHover" } end
-local responses = vim.lsp.buf_request_sync(buffer, "textDocument/hover", {
-  textDocument = { uri = vim.uri_from_bufnr(buffer) },
-  position = { line = line - 1, character = column - 1 },
-}, timeout_ms)
-
-local function text(contents)
-  if type(contents) == "string" then return contents end
-  if type(contents) ~= "table" then return "" end
-  if type(contents.value) == "string" then return contents.value end
-  local parts = {}
-  for _, item in ipairs(contents) do
-    if type(item) == "string" then table.insert(parts, item)
-    elseif type(item) == "table" and type(item.value) == "string" then
-      if type(item.language) == "string" and item.language ~= "" then table.insert(parts, "\`\`\`" .. item.language .. "\\n" .. item.value .. "\\n\`\`\`")
-      else table.insert(parts, item.value)
-      end
-    end
-  end
-  return table.concat(parts, "\\n\\n")
-end
-
-local hovers = {}
-local bytes = 0
-for client_id, response in pairs(responses or {}) do
-  if response.result and response.result.contents then
-    local contents = text(response.result.contents)
-    if contents ~= "" then
-      bytes = bytes + #contents
-      if bytes > max_bytes then return { error = "contentLimit" } end
-      local client = vim.lsp.get_client_by_id(client_id)
-      table.insert(hovers, { client = client and client.name or tostring(client_id), contents = contents, clientId = client_id })
-    end
-  end
-end
-if #hovers == 0 then return { error = "noHover" } end
-table.sort(hovers, function(left, right)
-  if left.client ~= right.client then return left.client < right.client end
-  return left.clientId < right.clientId
-end)
-for _, hover in ipairs(hovers) do hover.clientId = nil end
-return {
-  pid = vim.fn.getpid(),
-  cwd = vim.fn.getcwd(),
-  buffer = metadata,
-  position = { line = line, column = column },
-  hovers = hovers,
-}
-`
-
-const DOCUMENT_SYMBOLS_LUA = `
-local requested_buffer, max_items, max_bytes, timeout_ms = ...
-local buffer = requested_buffer == 0 and vim.api.nvim_get_current_buf() or requested_buffer
-if vim.api.nvim_buf_is_valid(buffer) == false then return { error = "invalidBuffer" } end
-
-local options = vim.bo[buffer]
-local metadata = {
-  number = buffer,
-  name = vim.api.nvim_buf_get_name(buffer),
-  loaded = vim.api.nvim_buf_is_loaded(buffer),
-  filetype = options.filetype,
-  buftype = options.buftype,
-  modified = options.modified,
-}
-if metadata.loaded == false or metadata.name == "" or metadata.buftype ~= "" or metadata.filetype == "opencode" or metadata.filetype == "opencode_terminal" then return { error = "invalidBuffer" } end
-
-local supports_symbols = false
-for _, client in ipairs(vim.lsp.get_clients({ bufnr = buffer })) do
-  if client.server_capabilities.documentSymbolProvider then
-    supports_symbols = true
-    break
-  end
-end
-if supports_symbols == false then return { error = "noSymbols" } end
-local responses = vim.lsp.buf_request_sync(buffer, "textDocument/documentSymbol", { textDocument = { uri = vim.uri_from_bufnr(buffer) } }, timeout_ms)
-local symbols = {}
-local function add_document_symbol(symbol, client)
-  local range = symbol.selectionRange or symbol.range
-  if type(range) == "table" and type(range.start) == "table" and type(range["end"]) == "table" then
-    table.insert(symbols, {
-      client = client,
-      name = symbol.name,
-      kind = symbol.kind,
-      detail = symbol.detail or "",
-      line = range.start.line + 1,
-      column = range.start.character + 1,
-      endLine = range["end"].line + 1,
-      endColumn = range["end"].character + 1,
-    })
-  end
-  for _, child in ipairs(symbol.children or {}) do add_document_symbol(child, client) end
-end
-for client_id, response in pairs(responses or {}) do
-  if response.result then
-    local client = vim.lsp.get_client_by_id(client_id)
-    local name = client and client.name or tostring(client_id)
-    for _, symbol in ipairs(response.result) do
-      if symbol.location then
-        local range = symbol.location.range
-        table.insert(symbols, {
-          client = name,
-          name = symbol.name,
-          kind = symbol.kind,
-          detail = symbol.containerName or "",
-          line = range.start.line + 1,
-          column = range.start.character + 1,
-          endLine = range["end"].line + 1,
-          endColumn = range["end"].character + 1,
-        })
-      else
-        add_document_symbol(symbol, name)
-      end
-    end
-  end
-end
-if #symbols == 0 then return { error = "noSymbols" } end
-table.sort(symbols, function(left, right)
-  if left.client ~= right.client then return left.client < right.client end
-  if left.line ~= right.line then return left.line < right.line end
-  if left.column ~= right.column then return left.column < right.column end
-  if left.name ~= right.name then return left.name < right.name end
-  return left.kind < right.kind
-end)
-local total = #symbols
-while #symbols > max_items do table.remove(symbols) end
-if #vim.json.encode(symbols) > max_bytes then return { error = "contentLimit" } end
-return {
-  pid = vim.fn.getpid(),
-  cwd = vim.fn.getcwd(),
-  buffer = metadata,
-  total = total,
-  symbols = symbols,
-}
-`
-
-const LSP_STATUS_LUA = `
-local requested_buffer, max_items = ...
-local buffer = requested_buffer == 0 and vim.api.nvim_get_current_buf() or requested_buffer
-if vim.api.nvim_buf_is_valid(buffer) == false then return { error = "invalidBuffer" } end
-
-local options = vim.bo[buffer]
-local metadata = {
-  number = buffer,
-  name = vim.api.nvim_buf_get_name(buffer),
-  loaded = vim.api.nvim_buf_is_loaded(buffer),
-  filetype = options.filetype,
-  buftype = options.buftype,
-  modified = options.modified,
-}
-if metadata.loaded == false or metadata.name == "" or metadata.buftype ~= "" or metadata.filetype == "opencode" or metadata.filetype == "opencode_terminal" then return { error = "invalidBuffer" } end
-
-local clients = {}
-for _, client in ipairs(vim.lsp.get_clients({ bufnr = buffer })) do
-  table.insert(clients, {
-    name = client.name,
-    root = client.root_dir or "",
-    initialized = client.initialized == true,
-    hover = client.server_capabilities.hoverProvider == true,
-    documentSymbols = client.server_capabilities.documentSymbolProvider == true,
-    clientId = client.id,
-  })
-end
-table.sort(clients, function(left, right)
-  if left.name ~= right.name then return left.name < right.name end
-  return left.clientId < right.clientId
-end)
-local total = #clients
-while #clients > max_items do table.remove(clients) end
-for _, client in ipairs(clients) do client.clientId = nil end
-return {
-  pid = vim.fn.getpid(),
-  cwd = vim.fn.getcwd(),
-  buffer = metadata,
-  total = total,
-  clients = clients,
-}
-`
-
 const QUICKFIX_LUA = `
 local kind, max_items, max_bytes = ...
 local list = kind == "location" and vim.fn.getloclist(0, { items = 1, title = 1 }) or vim.fn.getqflist({ items = 1, title = 1 })
@@ -531,6 +321,159 @@ return {
 }
 `
 
+const REVEAL_LUA = `
+local buffer, line, column, focus, split = ...
+if vim.api.nvim_buf_is_valid(buffer) == false or vim.api.nvim_buf_is_loaded(buffer) == false then return { error = "invalidBuffer" } end
+local options = vim.bo[buffer]
+local metadata = {
+  number = buffer,
+  name = vim.api.nvim_buf_get_name(buffer),
+  loaded = true,
+  filetype = options.filetype,
+  buftype = options.buftype,
+  modified = options.modified,
+}
+if metadata.name == "" or metadata.buftype ~= "" or metadata.filetype == "opencode" or metadata.filetype == "opencode_terminal" then return { error = "invalidBuffer" } end
+
+local total_lines = vim.api.nvim_buf_line_count(buffer)
+if line > total_lines then return { error = "invalidPosition", totalLines = total_lines } end
+local text = vim.api.nvim_buf_get_lines(buffer, line - 1, line, true)[1]
+if column > #text + 1 then return { error = "invalidColumn", maxColumn = #text + 1 } end
+
+local function is_source_window(window)
+  local window_buffer = vim.api.nvim_win_get_buf(window)
+  local window_options = vim.bo[window_buffer]
+  return vim.api.nvim_buf_is_valid(window_buffer) and vim.api.nvim_buf_is_loaded(window_buffer) and vim.api.nvim_buf_get_name(window_buffer) ~= "" and window_options.buftype == "" and window_options.filetype ~= "opencode" and window_options.filetype ~= "opencode_terminal"
+end
+
+local window = nil
+for _, candidate in ipairs(vim.api.nvim_list_wins()) do
+  if vim.api.nvim_win_get_buf(candidate) == buffer then window = candidate break end
+end
+if window == nil then
+  local ok, recent = pcall(vim.api.nvim_get_var, "opencode_last_source_context")
+  if ok and type(recent) == "table" and type(recent.buffer) == "number" then
+    for _, candidate in ipairs(vim.api.nvim_list_wins()) do
+      if vim.api.nvim_win_get_buf(candidate) == recent.buffer and is_source_window(candidate) then window = candidate break end
+    end
+  end
+end
+if window == nil then
+  for _, candidate in ipairs(vim.api.nvim_list_wins()) do
+    if is_source_window(candidate) then window = candidate break end
+  end
+end
+if window == nil then return { error = "missingSourceWindow" } end
+
+local created = false
+if split ~= "none" then
+  local direction = split == "horizontal" and "below" or "right"
+  window = vim.api.nvim_open_win(buffer, focus, { split = direction, win = window })
+  created = true
+else
+  vim.api.nvim_win_set_buf(window, buffer)
+end
+vim.api.nvim_win_set_cursor(window, { line, column - 1 })
+vim.api.nvim_win_call(window, function() vim.cmd("normal! zz") end)
+if focus then vim.api.nvim_set_current_win(window) end
+return {
+  pid = vim.fn.getpid(),
+  cwd = vim.fn.getcwd(),
+  buffer = metadata,
+  window = window,
+  position = { line = line, column = column },
+  focused = focus,
+  splitCreated = created,
+}
+`
+
+const HIGHLIGHT_LUA = `
+local buffer, path, start_line, start_column, end_line, end_column, duration_ms, reveal, max_lines = ...
+if buffer == 0 then
+  if type(path) ~= "string" or path == "" or path:sub(1, 1) == "/" then return { error = "invalidPath" } end
+  local cwd = vim.fs.normalize(vim.fn.getcwd())
+  local filename = vim.fs.normalize(vim.fs.joinpath(cwd, path))
+  if filename:sub(1, #cwd + 1) ~= cwd .. "/" or vim.fn.filereadable(filename) == 0 then return { error = "invalidPath" } end
+  buffer = vim.fn.bufadd(filename)
+  vim.fn.bufload(buffer)
+end
+if vim.api.nvim_buf_is_valid(buffer) == false or vim.api.nvim_buf_is_loaded(buffer) == false then return { error = "invalidBuffer" } end
+local options = vim.bo[buffer]
+local metadata = {
+  number = buffer,
+  name = vim.api.nvim_buf_get_name(buffer),
+  loaded = true,
+  filetype = options.filetype,
+  buftype = options.buftype,
+  modified = options.modified,
+}
+if metadata.name == "" or metadata.buftype ~= "" or metadata.filetype == "opencode" or metadata.filetype == "opencode_terminal" then return { error = "invalidBuffer" } end
+
+local total_lines = vim.api.nvim_buf_line_count(buffer)
+if start_line > total_lines then return { error = "invalidRange", totalLines = total_lines } end
+if start_column == 0 then start_column = 1 end
+if end_line == 0 then end_line = start_line end
+if end_column == 0 then
+  local end_text = vim.api.nvim_buf_get_lines(buffer, end_line - 1, end_line, true)[1]
+  end_column = #end_text + 1
+end
+if start_line > total_lines or end_line > total_lines or end_line < start_line or (end_line == start_line and end_column < start_column) then return { error = "invalidRange", totalLines = total_lines } end
+if end_line - start_line + 1 > max_lines then return { error = "lineLimit" } end
+local start_text = vim.api.nvim_buf_get_lines(buffer, start_line - 1, start_line, true)[1]
+local end_text = vim.api.nvim_buf_get_lines(buffer, end_line - 1, end_line, true)[1]
+if start_column > #start_text + 1 or end_column > #end_text + 1 then return { error = "invalidColumn" } end
+
+local namespace = vim.api.nvim_create_namespace("opencode_mcp_presentation")
+local id = vim.api.nvim_buf_set_extmark(buffer, namespace, start_line - 1, start_column - 1, {
+  end_row = end_line - 1,
+  end_col = end_column - 1,
+  hl_group = "Search",
+  priority = 200,
+})
+if duration_ms > 0 then
+  vim.defer_fn(function()
+    if vim.api.nvim_buf_is_valid(buffer) then vim.api.nvim_buf_del_extmark(buffer, namespace, id) end
+  end, duration_ms)
+end
+local revealed = false
+if reveal then
+  local window = nil
+  for _, candidate in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_buf(candidate) == buffer then window = candidate break end
+  end
+  if window == nil then
+    for _, candidate in ipairs(vim.api.nvim_list_wins()) do
+      local candidate_buffer = vim.api.nvim_win_get_buf(candidate)
+      local candidate_options = vim.bo[candidate_buffer]
+      if vim.api.nvim_buf_is_loaded(candidate_buffer) and vim.api.nvim_buf_get_name(candidate_buffer) ~= "" and candidate_options.buftype == "" and candidate_options.filetype ~= "opencode" and candidate_options.filetype ~= "opencode_terminal" then window = candidate break end
+    end
+  end
+  if window ~= nil then
+    vim.api.nvim_win_set_buf(window, buffer)
+    vim.api.nvim_win_set_cursor(window, { start_line, start_column - 1 })
+    vim.api.nvim_win_call(window, function() vim.cmd("normal! zz") end)
+    revealed = true
+  end
+end
+return {
+  pid = vim.fn.getpid(),
+  cwd = vim.fn.getcwd(),
+  buffer = metadata,
+  highlightId = id,
+  start = { line = start_line, column = start_column },
+  ["end"] = { line = end_line, column = end_column },
+  expiresInMs = duration_ms,
+  revealed = revealed,
+}
+`
+
+const CLEAR_HIGHLIGHT_LUA = `
+local buffer, id = ...
+if vim.api.nvim_buf_is_valid(buffer) == false then return { error = "invalidBuffer" } end
+local namespace = vim.api.nvim_create_namespace("opencode_mcp_presentation")
+return { cleared = vim.api.nvim_buf_del_extmark(buffer, namespace, id) }
+`
+
 const BUFFER_INFO_GUARDS = { number: isNumber, name: isString, filetype: isString, buftype: isString, loaded: isBoolean, modified: isBoolean }
 const VISIBLE_WINDOW_GUARDS = { window: isNumber, buffer: isNumber, name: isString, filetype: isString, buftype: isString, topline: isNumber, botline: isNumber }
 const VISIBLE_WINDOWS_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, activeBuffer: isBufferInfo, windows: isVisibleWindowList }
@@ -544,14 +487,10 @@ const BUFFER_INVENTORY_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffers
 const SELECTION_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, mode: isString, anchor: isPosition, cursor: isPosition, lines: isStringList }
 const DIAGNOSTIC_COUNTS_GUARDS = { error: isNumber, warning: isNumber, information: isNumber, hint: isNumber, total: isNumber }
 const DIAGNOSTIC_SUMMARY_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, counts: isDiagnosticCounts, diagnostics: isDiagnosticList }
-const HOVER_GUARDS = { client: isString, contents: isString }
-const LSP_HOVER_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, position: isPosition, hovers: isHoverList }
-const DOCUMENT_SYMBOL_GUARDS = { client: isString, name: isString, kind: isNumber, detail: isString, line: isNumber, column: isNumber, endLine: isNumber, endColumn: isNumber }
-const LSP_CLIENT_GUARDS = { name: isString, root: isString, initialized: isBoolean, hover: isBoolean, documentSymbols: isBoolean }
 const QUICKFIX_ITEM_GUARDS = { filename: isString, line: isNumber, column: isNumber, endLine: isNumber, endColumn: isNumber, text: isString, type: isString, valid: isBoolean }
-const DOCUMENT_SYMBOLS_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, total: isNumber, symbols: isDocumentSymbolList }
-const LSP_STATUS_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, total: isNumber, clients: isLspClientList }
 const QUICKFIX_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, kind: isString, title: isString, total: isNumber, items: isQuickfixItemList }
+const REVEAL_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, window: isNumber, position: isPosition, focused: isBoolean, splitCreated: isBoolean }
+const HIGHLIGHT_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, highlightId: isNumber, start: isPosition, end: isPosition, expiresInMs: isNumber, revealed: isBoolean }
 
 export type BridgeError = {
 	code: "NVIM_SOCKET_MISSING" | "NVIM_UNAVAILABLE" | "NVIM_INVALID_RESPONSE" | "NVIM_INVALID_ARGUMENT" | "NVIM_CONTENT_LIMIT"
@@ -583,15 +522,14 @@ export type DiagnosticSummaryOptions = { buffer?: number; maxItems: number }
 export type DiagnosticSummaryResult = { ok: true; diagnosticSummary: { instance: ActiveContext["instance"]; buffer: BufferInfo; counts: { error: number; warning: number; information: number; hint: number; total: number }; diagnostics: Diagnostic[] } } | BridgeFailure
 export type FocusContextResult = { ok: true; focusContext: { instance: ActiveContext["instance"]; buffer: BufferInfo; cursor: { line: number; column: number } } } | BridgeFailure
 export type SelectionResult = { ok: true; selection: { instance: ActiveContext["instance"]; buffer: BufferInfo; mode: string; anchor: { line: number; column: number }; cursor: { line: number; column: number }; lines: string[] } } | BridgeFailure
-export type HoverOptions = { buffer?: number; line?: number; column?: number }
-export type HoverResult = { ok: true; lspHover: { instance: ActiveContext["instance"]; buffer: BufferInfo; position: { line: number; column: number }; hovers: { client: string; contents: string }[] } } | BridgeFailure
-export type DiscoveryOptions = { buffer?: number; maxItems: number }
 export type QuickfixOptions = { kind: "quickfix" | "location"; maxItems: number }
-export type DocumentSymbolsResult = { ok: true; documentSymbols: { instance: ActiveContext["instance"]; buffer: BufferInfo; total: number; symbols: DocumentSymbol[] } } | BridgeFailure
-export type LspStatusResult = { ok: true; lspStatus: { instance: ActiveContext["instance"]; buffer: BufferInfo; total: number; clients: LspClientStatus[] } } | BridgeFailure
+export type RevealOptions = { buffer: number; line: number; column: number; focus: boolean; split: "none" | "horizontal" | "vertical" }
+export type HighlightOptions = { buffer?: number; path?: string; startLine: number; startColumn?: number; endLine?: number; endColumn?: number; durationMs: number; reveal: boolean }
+export type ClearHighlightOptions = { buffer: number; highlightId: number }
 export type QuickfixResult = { ok: true; quickfix: { instance: ActiveContext["instance"]; kind: "quickfix" | "location"; title: string; total: number; items: QuickfixItem[] } } | BridgeFailure
-export type DocumentSymbol = { client: string; name: string; kind: number; detail: string; line: number; column: number; endLine: number; endColumn: number }
-export type LspClientStatus = { name: string; root: string; initialized: boolean; hover: boolean; documentSymbols: boolean }
+export type RevealResult = { ok: true; reveal: { instance: ActiveContext["instance"]; buffer: BufferInfo; window: number; position: { line: number; column: number }; focused: boolean; splitCreated: boolean } } | BridgeFailure
+export type HighlightResult = { ok: true; highlight: { instance: ActiveContext["instance"]; buffer: BufferInfo; highlightId: number; start: { line: number; column: number }; end: { line: number; column: number }; expiresInMs: number; revealed: boolean } } | BridgeFailure
+export type ClearHighlightResult = { ok: true; clearHighlight: { cleared: boolean } } | BridgeFailure
 export type QuickfixItem = { filename: string; line: number; column: number; endLine: number; endColumn: number; text: string; type: string; valid: boolean }
 export type NvimClientFactory = (socket: string) => NeovimClient
 export type TimeoutObserver = { created(): void; cleared(): void; fired(): void }
@@ -602,10 +540,9 @@ type BufferInventorySnapshot = { pid: number; cwd: string; buffers: BufferInfo[]
 type SelectionSnapshot = { pid: number; cwd: string; buffer: BufferInfo; mode: string; anchor: { line: number; column: number }; cursor: { line: number; column: number }; lines: string[] }
 type DiagnosticCounts = { error: number; warning: number; information: number; hint: number; total: number }
 type DiagnosticSummarySnapshot = { pid: number; cwd: string; buffer: BufferInfo; counts: DiagnosticCounts; diagnostics: Diagnostic[] }
-type HoverSnapshot = { pid: number; cwd: string; buffer: BufferInfo; position: { line: number; column: number }; hovers: { client: string; contents: string }[] }
-type DocumentSymbolsSnapshot = { pid: number; cwd: string; buffer: BufferInfo; total: number; symbols: DocumentSymbol[] }
-type LspStatusSnapshot = { pid: number; cwd: string; buffer: BufferInfo; total: number; clients: LspClientStatus[] }
 type QuickfixSnapshot = { pid: number; cwd: string; kind: "quickfix" | "location"; title: string; total: number; items: QuickfixItem[] }
+type RevealSnapshot = { pid: number; cwd: string; buffer: BufferInfo; window: number; position: { line: number; column: number }; focused: boolean; splitCreated: boolean }
+type HighlightSnapshot = { pid: number; cwd: string; buffer: BufferInfo; highlightId: number; start: { line: number; column: number }; end: { line: number; column: number }; expiresInMs: number; revealed: boolean }
 
 function bridgeError(code: BridgeError["code"], message: string): BridgeFailure {
 	return { ok: false, error: { code, message } }
@@ -654,29 +591,6 @@ function isDiagnosticCounts(value: unknown): value is DiagnosticCounts {
 	return hasProperties(value, DIAGNOSTIC_COUNTS_GUARDS)
 }
 
-function isHover(value: unknown): value is { client: string; contents: string } {
-	return hasProperties(value, HOVER_GUARDS)
-}
-
-function isHoverList(value: unknown): value is { client: string; contents: string }[] {
-	return Array.isArray(value) && value.every(isHover)
-}
-
-function isDocumentSymbol(value: unknown): value is DocumentSymbol {
-	return hasProperties(value, DOCUMENT_SYMBOL_GUARDS)
-}
-
-function isDocumentSymbolList(value: unknown): value is DocumentSymbol[] {
-	return Array.isArray(value) && value.every(isDocumentSymbol)
-}
-
-function isLspClientStatus(value: unknown): value is LspClientStatus {
-	return hasProperties(value, LSP_CLIENT_GUARDS)
-}
-
-function isLspClientList(value: unknown): value is LspClientStatus[] {
-	return Array.isArray(value) && value.every(isLspClientStatus)
-}
 
 function isQuickfixItem(value: unknown): value is QuickfixItem {
 	return hasProperties(value, QUICKFIX_ITEM_GUARDS)
@@ -820,71 +734,18 @@ function selectionSnapshotResult(value: unknown): SelectionSnapshot | BridgeFail
 	throw new Error("Neovim returned invalid selection")
 }
 
-function noHover(): BridgeFailure {
-	return bridgeError("NVIM_INVALID_ARGUMENT", "No LSP hover information is available")
-}
-
-const LSP_HOVER_FAILURES: Record<string, (value: Record<string, unknown>) => BridgeFailure> = {
-	...READ_BUFFER_FAILURES,
-	noHover,
-	contentLimit: function() { return bridgeError("NVIM_CONTENT_LIMIT", `Read at most ${MAX_HOVER_BYTES} bytes of LSP hover information`) },
-}
-
-function lspHoverFailure(value: unknown): BridgeFailure | undefined {
-	if (isRecord(value) === false || isString(value.error) === false) return undefined
-	return LSP_HOVER_FAILURES[value.error]?.(value)
-}
-
-function isHoverSnapshot(value: unknown): value is HoverSnapshot {
-	return hasProperties(value, LSP_HOVER_SNAPSHOT_GUARDS)
-}
-
-function lspHoverSnapshotResult(value: unknown): HoverSnapshot | BridgeFailure {
-	const failure = lspHoverFailure(value)
-	if (failure) return failure
-	if (isHoverSnapshot(value) && isSourceBuffer(value.buffer)) return value
-	throw new Error("Neovim returned invalid LSP hover information")
-}
-
-function noDocumentSymbols(): BridgeFailure {
-	return bridgeError("NVIM_INVALID_ARGUMENT", "No LSP document symbols are available")
-}
-
 function discoveryContentLimit(): BridgeFailure {
 	return bridgeError("NVIM_CONTENT_LIMIT", `Read at most ${MAX_DISCOVERY_BYTES} bytes of discovery information`)
 }
 
 const DISCOVERY_FAILURES: Record<string, (value: Record<string, unknown>) => BridgeFailure> = {
 	...READ_BUFFER_FAILURES,
-	noSymbols: noDocumentSymbols,
 	contentLimit: discoveryContentLimit,
 }
 
 function discoveryFailure(value: unknown): BridgeFailure | undefined {
 	if (isRecord(value) === false || isString(value.error) === false) return undefined
 	return DISCOVERY_FAILURES[value.error]?.(value)
-}
-
-function isDocumentSymbolsSnapshot(value: unknown): value is DocumentSymbolsSnapshot {
-	return hasProperties(value, DOCUMENT_SYMBOLS_SNAPSHOT_GUARDS)
-}
-
-function documentSymbolsSnapshotResult(value: unknown): DocumentSymbolsSnapshot | BridgeFailure {
-	const failure = discoveryFailure(value)
-	if (failure) return failure
-	if (isDocumentSymbolsSnapshot(value) && isSourceBuffer(value.buffer)) return value
-	throw new Error("Neovim returned invalid document symbols")
-}
-
-function isLspStatusSnapshot(value: unknown): value is LspStatusSnapshot {
-	return hasProperties(value, LSP_STATUS_SNAPSHOT_GUARDS)
-}
-
-function lspStatusSnapshotResult(value: unknown): LspStatusSnapshot | BridgeFailure {
-	const failure = discoveryFailure(value)
-	if (failure) return failure
-	if (isLspStatusSnapshot(value) && isSourceBuffer(value.buffer)) return value
-	throw new Error("Neovim returned invalid LSP status")
 }
 
 function isQuickfixSnapshot(value: unknown): value is QuickfixSnapshot {
@@ -896,6 +757,55 @@ function quickfixSnapshotResult(value: unknown): QuickfixSnapshot | BridgeFailur
 	if (failure) return failure
 	if (isQuickfixSnapshot(value)) return value
 	throw new Error("Neovim returned invalid quickfix data")
+}
+
+function invalidRevealPosition(value: Record<string, unknown>): BridgeFailure {
+	if (isNumber(value.totalLines)) return bridgeError("NVIM_INVALID_ARGUMENT", `Choose a position within 1-${value.totalLines} lines`)
+	return bridgeError("NVIM_INVALID_ARGUMENT", "Choose a valid source position")
+}
+
+const PRESENTATION_FAILURES: Record<string, (value: Record<string, unknown>) => BridgeFailure> = {
+	invalidBuffer,
+	invalidPosition: invalidRevealPosition,
+	invalidRange: invalidRevealPosition,
+	invalidColumn: function() { return bridgeError("NVIM_INVALID_ARGUMENT", "Choose a column within the target line") },
+	invalidPath: function() { return bridgeError("NVIM_INVALID_ARGUMENT", "Choose a readable workspace-relative file path") },
+	lineLimit: function() { return bridgeError("NVIM_CONTENT_LIMIT", `Highlight at most ${MAX_HIGHLIGHT_LINES} lines`) },
+	missingSourceWindow: function() { return bridgeError("NVIM_INVALID_ARGUMENT", "No source window is available for presentation") },
+}
+
+function presentationFailure(value: unknown): BridgeFailure | undefined {
+	if (isRecord(value) === false || isString(value.error) === false) return undefined
+	return PRESENTATION_FAILURES[value.error]?.(value)
+}
+
+function isRevealSnapshot(value: unknown): value is RevealSnapshot {
+	return hasProperties(value, REVEAL_SNAPSHOT_GUARDS)
+}
+
+function revealSnapshotResult(value: unknown): RevealSnapshot | BridgeFailure {
+	const failure = presentationFailure(value)
+	if (failure) return failure
+	if (isRevealSnapshot(value) && isSourceBuffer(value.buffer)) return value
+	throw new Error("Neovim returned invalid reveal data")
+}
+
+function isHighlightSnapshot(value: unknown): value is HighlightSnapshot {
+	return hasProperties(value, HIGHLIGHT_SNAPSHOT_GUARDS)
+}
+
+function highlightSnapshotResult(value: unknown): HighlightSnapshot | BridgeFailure {
+	const failure = presentationFailure(value)
+	if (failure) return failure
+	if (isHighlightSnapshot(value) && isSourceBuffer(value.buffer)) return value
+	throw new Error("Neovim returned invalid highlight data")
+}
+
+function clearHighlightSnapshotResult(value: unknown): { cleared: boolean } | BridgeFailure {
+	const failure = presentationFailure(value)
+	if (failure) return failure
+	if (hasProperties(value, { cleared: isBoolean })) return value
+	throw new Error("Neovim returned invalid highlight cleanup data")
 }
 
 function isFocusCursor(value: unknown): value is { line: number; column: number } {
@@ -1013,42 +923,6 @@ export class NvimContextBridge {
 		}
 	}
 
-	async lspHover(options: HoverOptions): Promise<HoverResult> {
-		const client = this.client()
-		if ("error" in client) return client
-		try {
-			const result = await this.lspHoverSnapshot(client.nvim, options)
-			if ("error" in result) return result
-			return { ok: true, lspHover: { instance: { socket: this.#socket!, pid: result.pid, cwd: result.cwd }, buffer: result.buffer, position: result.position, hovers: result.hovers } }
-		} catch {
-			return this.unavailable()
-		}
-	}
-
-	async documentSymbols(options: DiscoveryOptions): Promise<DocumentSymbolsResult> {
-		const client = this.client()
-		if ("error" in client) return client
-		try {
-			const result = await this.documentSymbolsSnapshot(client.nvim, options)
-			if ("error" in result) return result
-			return { ok: true, documentSymbols: { instance: { socket: this.#socket!, pid: result.pid, cwd: result.cwd }, buffer: result.buffer, total: result.total, symbols: result.symbols } }
-		} catch {
-			return this.unavailable()
-		}
-	}
-
-	async lspStatus(options: DiscoveryOptions): Promise<LspStatusResult> {
-		const client = this.client()
-		if ("error" in client) return client
-		try {
-			const result = await this.lspStatusSnapshot(client.nvim, options)
-			if ("error" in result) return result
-			return { ok: true, lspStatus: { instance: { socket: this.#socket!, pid: result.pid, cwd: result.cwd }, buffer: result.buffer, total: result.total, clients: result.clients } }
-		} catch {
-			return this.unavailable()
-		}
-	}
-
 	async quickfix(options: QuickfixOptions): Promise<QuickfixResult> {
 		const client = this.client()
 		if ("error" in client) return client
@@ -1056,6 +930,42 @@ export class NvimContextBridge {
 			const result = await this.quickfixSnapshot(client.nvim, options)
 			if ("error" in result) return result
 			return { ok: true, quickfix: { instance: { socket: this.#socket!, pid: result.pid, cwd: result.cwd }, kind: result.kind, title: result.title, total: result.total, items: result.items } }
+		} catch {
+			return this.unavailable()
+		}
+	}
+
+	async reveal(options: RevealOptions): Promise<RevealResult> {
+		const client = this.client()
+		if ("error" in client) return client
+		try {
+			const result = await this.revealSnapshot(client.nvim, options)
+			if ("error" in result) return result
+			return { ok: true, reveal: { instance: { socket: this.#socket!, pid: result.pid, cwd: result.cwd }, buffer: result.buffer, window: result.window, position: result.position, focused: result.focused, splitCreated: result.splitCreated } }
+		} catch {
+			return this.unavailable()
+		}
+	}
+
+	async highlight(options: HighlightOptions): Promise<HighlightResult> {
+		const client = this.client()
+		if ("error" in client) return client
+		try {
+			const result = await this.highlightSnapshot(client.nvim, options)
+			if ("error" in result) return result
+			return { ok: true, highlight: { instance: { socket: this.#socket!, pid: result.pid, cwd: result.cwd }, buffer: result.buffer, highlightId: result.highlightId, start: result.start, end: result.end, expiresInMs: result.expiresInMs, revealed: result.revealed } }
+		} catch {
+			return this.unavailable()
+		}
+	}
+
+	async clearHighlight(options: ClearHighlightOptions): Promise<ClearHighlightResult> {
+		const client = this.client()
+		if ("error" in client) return client
+		try {
+			const result = await this.clearHighlightSnapshot(client.nvim, options)
+			if ("error" in result) return result
+			return { ok: true, clearHighlight: result }
 		} catch {
 			return this.unavailable()
 		}
@@ -1110,24 +1020,24 @@ export class NvimContextBridge {
 		return selectionSnapshotResult(snapshot)
 	}
 
-	async lspHoverSnapshot(nvim: NeovimClient, options: HoverOptions): Promise<HoverSnapshot | BridgeFailure> {
-		const snapshot = await withTimeout(nvim.executeLua(LSP_HOVER_LUA, [options.buffer ?? 0, options.line ?? 0, options.column ?? 0, MAX_HOVER_BYTES, LSP_HOVER_TIMEOUT_MS]), this.#timeoutObserver)
-		return lspHoverSnapshotResult(snapshot)
-	}
-
-	async documentSymbolsSnapshot(nvim: NeovimClient, options: DiscoveryOptions): Promise<DocumentSymbolsSnapshot | BridgeFailure> {
-		const snapshot = await withTimeout(nvim.executeLua(DOCUMENT_SYMBOLS_LUA, [options.buffer ?? 0, options.maxItems, MAX_DISCOVERY_BYTES, LSP_HOVER_TIMEOUT_MS]), this.#timeoutObserver)
-		return documentSymbolsSnapshotResult(snapshot)
-	}
-
-	async lspStatusSnapshot(nvim: NeovimClient, options: DiscoveryOptions): Promise<LspStatusSnapshot | BridgeFailure> {
-		const snapshot = await withTimeout(nvim.executeLua(LSP_STATUS_LUA, [options.buffer ?? 0, options.maxItems]), this.#timeoutObserver)
-		return lspStatusSnapshotResult(snapshot)
-	}
-
 	async quickfixSnapshot(nvim: NeovimClient, options: QuickfixOptions): Promise<QuickfixSnapshot | BridgeFailure> {
 		const snapshot = await withTimeout(nvim.executeLua(QUICKFIX_LUA, [options.kind, options.maxItems, MAX_DISCOVERY_BYTES]), this.#timeoutObserver)
 		return quickfixSnapshotResult(snapshot)
+	}
+
+	async revealSnapshot(nvim: NeovimClient, options: RevealOptions): Promise<RevealSnapshot | BridgeFailure> {
+		const snapshot = await withTimeout(nvim.executeLua(REVEAL_LUA, [options.buffer, options.line, options.column, options.focus, options.split]), this.#timeoutObserver)
+		return revealSnapshotResult(snapshot)
+	}
+
+	async highlightSnapshot(nvim: NeovimClient, options: HighlightOptions): Promise<HighlightSnapshot | BridgeFailure> {
+		const snapshot = await withTimeout(nvim.executeLua(HIGHLIGHT_LUA, highlightSnapshotArguments(options)), this.#timeoutObserver)
+		return highlightSnapshotResult(snapshot)
+	}
+
+	async clearHighlightSnapshot(nvim: NeovimClient, options: ClearHighlightOptions): Promise<{ cleared: boolean } | BridgeFailure> {
+		const snapshot = await withTimeout(nvim.executeLua(CLEAR_HIGHLIGHT_LUA, [options.buffer, options.highlightId]), this.#timeoutObserver)
+		return clearHighlightSnapshotResult(snapshot)
 	}
 
 	#clientForSocket(): NeovimClient | BridgeFailure {
@@ -1149,4 +1059,20 @@ export class NvimContextBridge {
 		this.#unavailable = { code: "NVIM_UNAVAILABLE", message: "The Neovim instance bound to NVIM_CONTEXT_SOCKET is unavailable" }
 		return { ok: false, error: this.#unavailable }
 	}
+}
+
+function highlightSnapshotArguments(options: HighlightOptions) {
+	return [highlightBuffer(options.buffer), highlightPath(options.path), options.startLine, highlightPosition(options.startColumn), highlightPosition(options.endLine), highlightPosition(options.endColumn), options.durationMs, options.reveal, MAX_HIGHLIGHT_LINES]
+}
+
+function highlightBuffer(value: number | undefined) {
+	return value === undefined ? 0 : value
+}
+
+function highlightPath(value: string | undefined) {
+	return value === undefined ? "" : value
+}
+
+function highlightPosition(value: number | undefined) {
+	return value === undefined ? 0 : value
 }

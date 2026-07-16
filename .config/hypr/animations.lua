@@ -6,6 +6,27 @@ hl.config({
   },
 })
 
+local has_hyprfocus = false
+for _, plugin in ipairs(hl.get_loaded_plugins()) do
+  if plugin:match("hyprfocus") then
+    has_hyprfocus = true
+    break
+  end
+end
+
+if has_hyprfocus then
+  hl.config({
+    plugin = {
+      hyprfocus = {
+        enable = true,
+        keyboard_focus_animation = "shrink",
+        mouse_focus_animation = "shrink",
+        shrink_percentage = 0.98,
+      },
+    },
+  })
+end
+
 hl.curve("easeOutQuint", { type = "bezier", points = { { 0.23, 1 }, { 0.32, 1 } } })
 hl.curve("easeInOutCubic", { type = "bezier", points = { { 0.65, 0.05 }, { 0.36, 1 } } })
 hl.curve("linear", { type = "bezier", points = { { 0, 0 }, { 1, 1 } } })
@@ -23,6 +44,10 @@ hl.animation({ leaf = "fadeIn", enabled = true, speed = 1.73, bezier = "almostLi
 hl.animation({ leaf = "fadeOut", enabled = true, speed = 1.46, bezier = "almostLinear" })
 hl.animation({ leaf = "fade", enabled = true, speed = 3.03, bezier = "quick" })
 hl.animation({ leaf = "fadeSwitch", enabled = true, speed = 5, bezier = "easeOutQuint" })
+if has_hyprfocus then
+  hl.animation({ leaf = "hyprfocusIn", enabled = true, speed = 8, bezier = "easeOutQuint" })
+  hl.animation({ leaf = "hyprfocusOut", enabled = true, speed = 8, bezier = "easeOutQuint" })
+end
 hl.animation({ leaf = "workspaces", enabled = true, speed = 0.3, bezier = "almostLinear", style = "slide" })
 hl.animation({ leaf = "workspacesIn", enabled = true, speed = 0.3, bezier = "almostLinear", style = "slide" })
 hl.animation({ leaf = "workspacesOut", enabled = true, speed = 0.3, bezier = "almostLinear", style = "slide" })
