@@ -113,6 +113,12 @@ test("enforces read line and byte limits", async () => {
 	})
 })
 
+test("accepts a read at the UTF-8 byte limit", async () => {
+	await withNvim(["file bridge-byte-boundary.lua", `call setline(1, ['${"\u00e9".repeat(16384)}'])`], async function(bridge) {
+		expect(await bridge.readBuffer({})).toMatchObject({ ok: true, bufferRead: { lines: ["\u00e9".repeat(16384)] } })
+	})
+})
+
 test("reads diagnostics through the official client", async () => {
 	await withNvim(["file bridge-diagnostics.lua", "call setline(1, ['local value = unknown'])"], async function(bridge, socket) {
 		const nvim = attach({ socket })

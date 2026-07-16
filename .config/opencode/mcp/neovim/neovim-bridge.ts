@@ -63,6 +63,17 @@ end
 return windows
 `
 
+const BUFFER_READ_LUA = `
+local buffer, start_line, end_line, max_bytes = ...
+local lines = vim.api.nvim_buf_get_lines(buffer, start_line, end_line, true)
+local bytes = #lines - 1
+for _, line in ipairs(lines) do
+  bytes = bytes + #line
+  if bytes > max_bytes then return { tooLarge = true } end
+end
+return { lines = lines }
+`
+
 const BUFFER_INFO_GUARDS = { number: isNumber, name: isString, filetype: isString, buftype: isString, loaded: isBoolean, modified: isBoolean }
 const VISIBLE_WINDOW_GUARDS = { window: isNumber, buffer: isNumber, name: isString, filetype: isString, buftype: isString, topline: isNumber, botline: isNumber }
 
@@ -123,11 +134,6 @@ function requestedRange(options: BufferReadOptions, totalLines: number): { start
 	return { startLine, endLine: options.endLine ?? Math.min(totalLines, startLine + MAX_READ_LINES - 1) }
 }
 
-function readSize(lines: string[]): BridgeFailure | undefined {
-	if (new TextEncoder().encode(lines.join("\n")).byteLength <= MAX_READ_BYTES) return undefined
-	return bridgeError("NVIM_CONTENT_LIMIT", `Read at most ${MAX_READ_BYTES} bytes; narrow the requested range`)
-}
-
 function isReadableBuffer(metadata: BufferInfo) {
 	return [metadata.loaded, isSourceBuffer(metadata)].every(Boolean)
 }
@@ -142,6 +148,20 @@ function isBufferInfo(value: unknown): value is BufferInfo {
 
 function isVisibleWindow(value: unknown): value is VisibleWindow {
 	return hasProperties(value, VISIBLE_WINDOW_GUARDS)
+}
+
+function isOversizedRead(value: unknown) {
+	return isRecord(value) && value.tooLarge === true
+}
+
+function hasReadLines(value: unknown): value is { lines: string[] } {
+	return isRecord(value) && Array.isArray(value.lines) && value.lines.every(isString)
+}
+
+function readLines(value: unknown): string[] | BridgeFailure {
+	if (isOversizedRead(value)) return bridgeError("NVIM_CONTENT_LIMIT", `Read at most ${MAX_READ_BYTES} bytes; narrow the requested range`)
+	if (hasReadLines(value)) return value.lines
+	throw new Error("Neovim returned invalid buffer content")
 }
 
 function focusState(value: unknown): { buffer: number; cursor: { line: number; column: number } } | undefined {
@@ -214,7 +234,7 @@ export class NvimContextBridge {
 		try {
 			const buffer = await this.selectedBuffer(connection.nvim, options.buffer)
 			if (buffer === undefined) return this.invalidBuffer()
-			return await this.readSelectedBuffer(connection.instance, buffer, options)
+			return await this.readSelectedBuffer(connection.instance, connection.nvim, buffer, options)
 		} catch {
 			return this.unavailable()
 		}
@@ -293,14 +313,13 @@ export class NvimContextBridge {
 		return hasDiagnostics(diagnostics) ? { buffer: metadata, diagnostics } : this.invalidDiagnostics()
 	}
 
-	async readSelectedBuffer(instance: ActiveContext["instance"], buffer: Buffer, options: BufferReadOptions): Promise<BufferReadResult> {
+	async readSelectedBuffer(instance: ActiveContext["instance"], nvim: NeovimClient, buffer: Buffer, options: BufferReadOptions): Promise<BufferReadResult> {
 		const [metadata, totalLines] = await withTimeout(Promise.all([bufferInfo(buffer), buffer.length]))
 		if (isReadableBuffer(metadata) === false) return this.invalidBuffer()
 		const range = readRange(options, totalLines)
 		if ("error" in range) return range
-		const lines = await withTimeout(buffer.getLines({ start: range.startLine - 1, end: range.endLine, strictIndexing: true }))
-		const sizeError = readSize(lines)
-		if (sizeError) return sizeError
+		const lines = readLines(await withTimeout(nvim.executeLua(BUFFER_READ_LUA, [buffer.id, range.startLine - 1, range.endLine, MAX_READ_BYTES])))
+		if ("error" in lines) return lines
 		return { ok: true, bufferRead: { instance, buffer: metadata, startLine: range.startLine, endLine: range.endLine, totalLines, lines } }
 	}
 
