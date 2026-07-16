@@ -157,6 +157,7 @@ test("Neovim MCP baseline", async () => {
 	const restoreRequests = instrumentRequests()
 	try {
 		const contextFixture = await createFixture("neovim-context-main-", ["edit context.lua", "call setline(1, ['local context = true'])"])
+		const selectionFixture = await createFixture("neovim-context-selection-", ["edit selection.lua", "call setline(1, ['first', 'second'])", "call cursor(1, 1)", "normal! vj"])
 
 	const readSmallFixture = await createFixture("neovim-context-read-small-", ["edit read-small.lua", "call setline(1, ['local read = true', 'return read'])"])
 
@@ -179,6 +180,7 @@ test("Neovim MCP baseline", async () => {
 		printResult(await bench(name, fixture.metrics, () => successful(name, () => fixture.bridge.visibleWindows())), fixture.metrics)
 	}
 	printResult(await bench("context/active", contextFixture.metrics, () => successful("context/active", () => contextFixture.bridge.context())), contextFixture.metrics)
+	printResult(await bench("selection/active", selectionFixture.metrics, () => successful("selection/active", () => selectionFixture.bridge.selection())), selectionFixture.metrics)
 	printResult(await bench("readBuffer/normal", readSmallFixture.metrics, () => successful("readBuffer/normal", () => readSmallFixture.bridge.readBuffer({}))), readSmallFixture.metrics)
 	printResult(await bench("readBuffer/oversized-reject", readLargeFixture.metrics, () => rejected(() => readLargeFixture.bridge.readBuffer({}))), readLargeFixture.metrics)
 	for (const [index, fixture] of diagnosticFixtures.entries()) {

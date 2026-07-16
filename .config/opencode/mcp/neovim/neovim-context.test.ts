@@ -61,6 +61,22 @@ test("reads visual selection from the configured socket", async () => {
 				selection: { mode: "v", start: { line: 0, column: 1 }, end: { line: 0, column: 1 } },
 			},
 		})
+		expect(await bridge.selection()).toMatchObject({
+			ok: true,
+			selection: {
+				buffer: { name: expect.stringContaining("bridge-selection.lua") },
+				mode: "v",
+				anchor: { line: 1, column: 1 },
+				cursor: { line: 2, column: 1 },
+				lines: ["first", "s"],
+			},
+		})
+	})
+})
+
+test("rejects an inactive visual selection", async () => {
+	await withNvim([], async function(bridge) {
+		expect(await bridge.selection()).toMatchObject({ error: { code: "NVIM_INVALID_ARGUMENT", message: "No active source selection is available" } })
 	})
 })
 
@@ -180,11 +196,11 @@ test("rejects missing or stale focus context", async () => {
 	})
 })
 
-test("advertises connected-server instructions and focused context", async () => {
+test("advertises connected-server instructions, focused context, and selections", async () => {
 	const response = await handleMessage({ jsonrpc: "2.0", id: 1, method: "initialize" }, new NvimContextBridge(undefined))
 	expect(response).toMatchObject({ result: { instructions: expect.stringContaining("Prefer nvim_focus_context") } })
 	const tools = await handleMessage({ jsonrpc: "2.0", id: 2, method: "tools/list" }, new NvimContextBridge(undefined))
-	expect(tools).toMatchObject({ result: { tools: expect.arrayContaining([expect.objectContaining({ name: "nvim_focus_context" })]) } })
+	expect(tools).toMatchObject({ result: { tools: expect.arrayContaining([expect.objectContaining({ name: "nvim_focus_context" }), expect.objectContaining({ name: "nvim_selection" })]) } })
 })
 
 test("isolates context, source reads, visible windows, and diagnostics across sibling worktrees", async () => {
@@ -237,6 +253,6 @@ test("keeps the curated MCP tool contract", async () => {
 	const response = await handleMessage({ jsonrpc: "2.0", id: 1, method: "tools/list" }, new NvimContextBridge(undefined))
 	expect(response).toMatchObject({ jsonrpc: "2.0", id: 1 })
 	if (response && "result" in response && typeof response.result === "object" && response.result !== null && "tools" in response.result && Array.isArray(response.result.tools)) {
-		expect(response.result.tools.map(function(tool) { return tool.name })).toEqual(["nvim_context", "nvim_visible_windows", "nvim_list_buffers", "nvim_read_buffer", "nvim_diagnostics", "nvim_focus_context"])
+		expect(response.result.tools.map(function(tool) { return tool.name })).toEqual(["nvim_context", "nvim_visible_windows", "nvim_list_buffers", "nvim_read_buffer", "nvim_diagnostics", "nvim_focus_context", "nvim_selection"])
 	}
 })
