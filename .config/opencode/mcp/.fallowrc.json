@@ -7,6 +7,6 @@
     "**/*.test.ts"
   ],
   "entry": [
-    "*.ts"
+    "neovim/*.ts"
   ]
 }

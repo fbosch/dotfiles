@@ -242,7 +242,7 @@ return {
 					return "unavailable (Neovim socket missing)"
 				end
 
-				local bridge = vim.fn.expand("~/.config/opencode/mcp/neovim-context.ts")
+				local bridge = vim.fn.expand("~/.config/opencode/mcp/neovim/neovim-context.ts")
 				if vim.fn.filereadable(bridge) == 0 then
 					return "unavailable (bridge not found)"
 				end

@@ -63,7 +63,7 @@
       "command": [
         "sh",
         "-lc",
-        "exec env NVIM_CONTEXT_SOCKET=\"$OPENCODE_NVIM_SOCKET\" bun \"$HOME/.config/opencode/mcp/neovim-context.ts\""
+        "exec env NVIM_CONTEXT_SOCKET=\"$OPENCODE_NVIM_SOCKET\" bun \"$HOME/.config/opencode/mcp/neovim/neovim-context.ts\""
       ],
       "enabled": true
     }

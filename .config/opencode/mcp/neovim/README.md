@@ -1,4 +1,4 @@
-# Custom MCPs
+# Neovim MCP
 
 `neovim-context.ts` gives OpenCode read-only access to the Neovim instance that started its server.
 
