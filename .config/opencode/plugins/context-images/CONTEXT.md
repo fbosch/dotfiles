@@ -16,7 +16,7 @@ Images are not supplementary context. A successful transformation removes the co
 - Never send images and their source text together as duplicate or supplementary context.
 - Treat paths, commands, identifiers, hashes, versions, flags, environment variables, glob patterns, key chords, casing-sensitive names, and quoted values as precision-critical factsheet content.
 
-Nested read-result replacement remains disabled by default. The `imageReadResults.paths` option enables exact-path allowlisting, `imageReadResults.filenames` enables case-sensitive basename matching, and `imageReadResults.referenceContents` matches files read beneath OpenCode's materialized reference roots. The `scopedInstructions` option enables lazy replacement of `AGENTS.md` files discovered through OpenCode's Read metadata. Both paths replace tool output only after image capability is confirmed and leave plaintext unchanged on preparation failure. Nested replacement is committed independently from ambient system replacement. Real-model parity previously failed even with metadata and a factsheet, so these options remain higher-risk than the ambient replacement guarantee.
+Nested read-result replacement remains disabled by default. The `imageReadResults.paths` option enables exact-path allowlisting, `imageReadResults.filenames` enables case-sensitive basename matching, and `imageReadResults.referenceContents` matches files read beneath OpenCode's materialized reference roots. The `scopedInstructions` option enables lazy replacement of `AGENTS.md` files discovered through OpenCode's Read metadata. Both paths replace tool output only after image capability is confirmed, retain plaintext when their package has no positive estimated token saving, and leave plaintext unchanged on preparation failure. Nested replacement is committed independently from ambient system replacement. Real-model parity previously failed even with metadata and a factsheet, so these options remain higher-risk than the ambient replacement guarantee.
 
 ## Source Discovery
 
@@ -53,7 +53,7 @@ Sources are discovered automatically rather than configured through a plugin-spe
 
 Recorded on 2026-07-13 through 2026-07-15:
 
-- 55 Bun tests pass with 161 expectations.
+- 57 Bun tests pass with 167 expectations.
 - Strict TypeScript checking passes.
 - Bun bundling passes.
 - Fallow reports no dead code and no duplication.

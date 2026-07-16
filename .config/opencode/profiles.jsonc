@@ -37,6 +37,7 @@
         "general": "anthropic/claude-sonnet-4-6",
         "analyze": "anthropic/claude-sonnet-4-6",
         "debug": "anthropic/claude-sonnet-4-6",
+        "pr-feedback": "anthropic/claude-sonnet-4-6",
         "ideate": "anthropic/claude-opus-4-6",
         "patterns": "anthropic/claude-haiku-4-5",
         "adversarial": "anthropic/claude-opus-4-6",
@@ -85,6 +86,7 @@
         "general": "github-copilot/claude-sonnet-4.6",
         "analyze": "github-copilot/claude-sonnet-4.6",
         "debug": "github-copilot/claude-sonnet-4.6",
+        "pr-feedback": "github-copilot/claude-sonnet-4.6",
         "ideate": "github-copilot/claude-opus-4.6",
         "patterns": "github-copilot/claude-haiku-4.5",
         "adversarial": "github-copilot/claude-opus-4.6",
@@ -125,6 +127,7 @@
         "general": "opencode/claude-sonnet-4-6",
         "analyze": "opencode/claude-sonnet-4-6",
         "debug": "opencode/claude-sonnet-4-6",
+        "pr-feedback": "opencode/claude-sonnet-4-6",
         "ideate": "opencode/claude-opus-4-6",
         "patterns": "opencode/claude-haiku-4-5",
         "adversarial": "opencode/claude-opus-4-6",
@@ -157,6 +160,7 @@
         "general": "anthropic/claude-sonnet-4-6",
         "analyze": "anthropic/claude-sonnet-4-6",
         "debug": "anthropic/claude-sonnet-4-6",
+        "pr-feedback": "anthropic/claude-sonnet-4-6",
         "ideate": "anthropic/claude-opus-4-6",
         "patterns": "anthropic/claude-haiku-4-5",
         "adversarial": "anthropic/claude-opus-4-6",
@@ -205,6 +209,11 @@
           "textVerbosity": "medium"
         },
         "debug": {
+          "model": "openai/gpt-5.6-terra",
+          "reasoningEffort": "medium",
+          "textVerbosity": "medium"
+        },
+        "pr-feedback": {
           "model": "openai/gpt-5.6-terra",
           "reasoningEffort": "medium",
           "textVerbosity": "medium"
@@ -297,6 +306,7 @@
         "general": "anthropic/claude-haiku-4-5",
         "analyze": "anthropic/claude-haiku-4-5",
         "debug": "anthropic/claude-sonnet-4-6",
+        "pr-feedback": "anthropic/claude-sonnet-4-6",
         "ideate": "anthropic/claude-sonnet-4-6",
         "patterns": "anthropic/claude-haiku-4-5",
         "adversarial": "anthropic/claude-sonnet-4-6",

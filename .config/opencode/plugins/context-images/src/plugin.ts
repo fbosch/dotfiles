@@ -7,6 +7,7 @@ import { ContextImagesStats } from "./stats"
 
 let warned = false
 const STARTUP_WARM_TIMEOUT_MS = 1_000
+const MINIMUM_SAVINGS_TOKENS = 1
 const STATS_COMMAND = `Scope: $ARGUMENTS
 
 If Scope is empty, use session. If Scope is not exactly session, repo, or total, output only:
@@ -96,7 +97,24 @@ type ReferenceClient = {
 
 export async function fetchMaterializedReferencePaths(client: ReferenceClient, directory: string) {
   const response = await client.v2.reference.list({ location: { directory } })
-  return materializedReferencePaths(response.data)
+  const data = response.data
+  if (typeof data !== "object" || data === null || Array.isArray((data as Record<string, unknown>).data) === false) {
+    throw new Error("OpenCode returned an invalid reference list")
+  }
+  return materializedReferencePaths(data)
+}
+
+export function cachedReferenceRoots(fetchRoots: () => Promise<string[]>) {
+  let roots: Promise<string[]> | undefined
+  return async () => {
+    const request = (roots ??= fetchRoots())
+    try {
+      return await request
+    } catch {
+      if (roots === request) roots = undefined
+      return []
+    }
+  }
 }
 
 export const ContextImagesPlugin: Plugin = async ({ client, directory, project, serverUrl, worktree }, options = {}) => {
@@ -114,19 +132,10 @@ export const ContextImagesPlugin: Plugin = async ({ client, directory, project, 
   await logger.write({ event: "plugin_loaded" })
   let providers: ReturnType<typeof client.config.providers> | undefined
   const referenceClient = createOpencodeClient({ baseUrl: serverUrl.toString() })
-  let references: Promise<string[]> | undefined
   const service = new ContextImagesService({
     directory,
     imageReadResults,
-    referenceRoots: async () => {
-      const request = (references ??= fetchMaterializedReferencePaths(referenceClient, directory))
-      try {
-        return await request
-      } catch {
-        if (references === request) references = undefined
-        return []
-      }
-    },
+    referenceRoots: cachedReferenceRoots(async () => await fetchMaterializedReferencePaths(referenceClient, directory)),
     scopedInstructions,
     imageSupport: async (providerID, modelID) => {
       const request = (providers ??= client.config.providers({ query: { directory } }))
@@ -139,6 +148,7 @@ export const ContextImagesPlugin: Plugin = async ({ client, directory, project, 
       return model?.capabilities.input.image === true
     },
     logger,
+    minimumSavingsTokens: MINIMUM_SAVINGS_TOKENS,
     renderer: new PxpipeRenderer(),
     stats,
     worktree,

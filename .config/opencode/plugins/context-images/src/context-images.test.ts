@@ -7,7 +7,7 @@ import type { AssistantMessage, Part, ToolPart, UserMessage } from "@opencode-ai
 import { ContextImagesService } from "./context-images"
 import type { ContextImagesEvent, ContextImagesLogger } from "./logger"
 import type { ContextRenderer } from "./pxpipe"
-import { fetchMaterializedReferencePaths, materializedReferencePaths, parseImageReadResults } from "./plugin"
+import { cachedReferenceRoots, fetchMaterializedReferencePaths, materializedReferencePaths, parseImageReadResults } from "./plugin"
 import { ContextImagesStats } from "./stats"
 
 const temporaryDirectories: string[] = []
@@ -231,6 +231,20 @@ describe("ContextImagesService", () => {
 
     expect(calls).toEqual([{ location: { directory: "/workspace" } }])
     expect(roots).toEqual(["/references/docs"])
+  })
+
+  test("retries reference discovery after an error response", async () => {
+    let attempts = 0
+    const roots = cachedReferenceRoots(async () => {
+      attempts += 1
+      if (attempts === 1) throw new Error("reference lookup failed")
+      return ["/references/docs"]
+    })
+
+    expect(await roots()).toEqual([])
+    expect(await roots()).toEqual(["/references/docs"])
+    expect(await roots()).toEqual(["/references/docs"])
+    expect(attempts).toBe(2)
   })
 
   test("replaces configured instructions with one authority marker", async () => {
@@ -728,6 +742,38 @@ describe("ContextImagesService", () => {
     })
     expect(lowercase.state).toMatchObject({ output: "Lowercase table of contents.\n" })
     expect("attachments" in lowercase.state).toBe(false)
+  })
+
+  test("preserves uneconomical read results while replacing beneficial packages", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const smallPath = join(worktree, "small.md")
+    const largePath = join(worktree, "large.md")
+    const small = completedRead(smallPath, "Tiny.\n")
+    const large = completedRead(largePath, "Long content.\n".repeat(200))
+    const originalSmallState = small.state
+    const service = new ContextImagesService({
+      cacheRoot,
+      imageReadResults: { paths: [smallPath, largePath] },
+      imageSupport: async () => true,
+      minimumSavingsTokens: 1,
+      renderer: new FakeRenderer(),
+      sources: [],
+      worktree,
+    })
+
+    await warmAndTransform(service, {
+      messages: [
+        { info: userMessage(), parts: [] },
+        { info: assistantMessage(worktree), parts: [small, large] },
+      ],
+    })
+
+    expect(small.state).toBe(originalSmallState)
+    expect(large.state).toMatchObject({
+      output: readResultPrompt(largePath),
+      attachments: [{ type: "file", mime: "image/png", filename: `${readResultPrefix(largePath)}-001.png` }],
+    })
   })
 
   test("replaces completed read results beneath configured reference roots", async () => {

@@ -11,6 +11,7 @@
 | `explore`          | Broad codebase discovery, locating relevant files, or answering where/how something is implemented                       |
 | `ideate`           | Generating options, alternatives, and directions before converging                                                       |
 | `patterns`         | Finding existing examples, conventions, or prior implementations to copy from                                            |
+| `pr-feedback`      | Triaging existing GitHub PR review threads, validating claims, applying approved fixes, and resolving approved threads   |
 | `quick`            | Well-scoped, deterministic work: fetch-and-format tasks, small localized edits, focused cleanup, lightweight repo checks |
 | `refactor`         | Improving structure or readability without changing behavior                                                             |
 | `research`         | Source-backed investigation across docs, web, and code without making changes                                            |
@@ -35,6 +36,7 @@
 - `ideate` generates alternatives before a direction is chosen; `spec` defines the behavioral contract; `backlog-planning` decomposes an established direction or specification into deliverable work.
 - `analyze` explains known code; `explore` locates unknown code; `patterns` finds precedents; `debug` diagnoses observed failures.
 - `review` audits an implementation; `adversarial` actively searches for ways a design or implementation can fail.
+- `pr-feedback` handles existing reviewer threads; `review` performs an independent PR or code review, and `quick` handles generic deterministic workflows.
 - `research` gathers source-backed external evidence without making changes.
 - `docs` owns substantial documentation deliverables; `test` owns non-trivial test creation or diagnosis.
 - `quick` is only for deterministic, tightly scoped execution. Do not use it where judgment, contract design, or substantial prose is the deliverable.

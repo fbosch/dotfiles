@@ -242,6 +242,7 @@ export class ContextImagesService {
   readonly #renderCoordinator: RenderCoordinator
   readonly #renderer: ContextRenderer
   readonly #logger?: ContextImagesLogger
+  readonly #minimumSavingsTokens?: number
   readonly #stats?: ContextImagesStats
   readonly #worktree: string
   #cacheReady?: Promise<void>
@@ -254,6 +255,7 @@ export class ContextImagesService {
     scopedInstructions?: boolean
     imageSupport?: (providerID: string, modelID: string) => Promise<boolean>
     logger?: ContextImagesLogger
+    minimumSavingsTokens?: number
     referenceRoots?: () => Promise<string[]>
     renderer: ContextRenderer
     sources?: string[]
@@ -265,6 +267,7 @@ export class ContextImagesService {
     this.#cacheRoot = input.cacheRoot ?? defaultCacheRoot()
     this.#renderer = input.renderer
     this.#logger = input.logger
+    this.#minimumSavingsTokens = input.minimumSavingsTokens
     this.#stats = input.stats
     this.#renderCoordinator = new RenderCoordinator({ logger: input.logger })
     this.#imageSupport = input.imageSupport
@@ -419,6 +422,12 @@ export class ContextImagesService {
           plaintextTokens: rendered.tokenReport.textTokens,
           promptTokens: Math.round((prompt.length * rendered.tokenReport.textTokens) / context.length),
           sourcePath: source.path,
+        }
+        if (
+          this.#minimumSavingsTokens !== undefined &&
+          estimate.plaintextTokens - estimate.imageTokens - estimate.promptTokens < this.#minimumSavingsTokens
+        ) {
+          return
         }
         return {
           estimate,
