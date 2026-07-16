@@ -17,6 +17,7 @@
   },
   "plugin": [
     "opencode-toolbox@0.10.4",
+    "./plugins/ado-fetch/ado-fetch.ts",
     [
       "./plugins/context-images/context-images.ts",
       {
@@ -29,9 +30,9 @@
       }
     ],
     "opencode-toon-plugin@0.1.2",
-    "./plugins/headroom-opencode-transport.ts",
+    "./plugins/headroom-opencode-transport/headroom-opencode-transport.ts",
     "./plugins/responses-lite-compat/responses-lite-compat.ts",
-    "./plugins/rtk.ts",
+    "./plugins/rtk/rtk.ts",
     "./plugins/opencode-handoff/handoff.ts"
   ],
   "instructions": [

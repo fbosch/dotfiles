@@ -1,0 +1,16 @@
+{
+  "name": "opencode-mcps",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "quality:fallow": "fallow review --root . --config .fallowrc.json",
+    "quality:fallow:audit": "fallow audit --root . --config .fallowrc.json"
+  },
+  "devDependencies": {
+    "fallow": "^3.2.0"
+  },
+  "dependencies": {
+    "neovim": "5.4.0"
+  }
+}
