@@ -19,6 +19,7 @@
 - Default to current schema/contract; add compatibility layers only when explicitly required.
 - Run the smallest reasonable validation for changed behavior.
 - Read references on demand; do not load all of them by default.
+- Before adding or selecting a dependency, library, or development tool, read `~/.config/opencode/references/library-preferences.md`. When multiple suitable listed options exist and the repository does not establish one, ask the user to choose before adding one.
 - Before changing behavior, APIs, config formats, data handling, or validation paths, read `~/.config/opencode/references/compatibility.md`.
 - Before running or reporting validation, read `~/.config/opencode/references/validation.md`.
 - Before substantial user-facing prose, PR descriptions, issue summaries, or docs, read `~/.config/opencode/TONE.md`.
