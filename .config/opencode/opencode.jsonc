@@ -23,8 +23,7 @@
         "imageReadResults": {
           "paths": [
             "~/.config/opencode/TONE.md"
-          ],
-          "referenceContents": true
+          ]
         },
         "scopedInstructions": true
       }
