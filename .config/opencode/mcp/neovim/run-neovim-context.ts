@@ -182,6 +182,9 @@ test("Neovim MCP baseline", async () => {
 	printResult(await bench("context/active", contextFixture.metrics, () => successful("context/active", () => contextFixture.bridge.context())), contextFixture.metrics)
 	printResult(await bench("selection/active", selectionFixture.metrics, () => successful("selection/active", () => selectionFixture.bridge.selection())), selectionFixture.metrics)
 	printResult(await bench("lspHover/no-client", contextFixture.metrics, () => rejected(() => contextFixture.bridge.lspHover({}))), contextFixture.metrics)
+	printResult(await bench("documentSymbols/no-client", contextFixture.metrics, () => rejected(() => contextFixture.bridge.documentSymbols({ maxItems: 20 }))), contextFixture.metrics)
+	printResult(await bench("lspStatus/no-client", contextFixture.metrics, () => successful("lspStatus/no-client", () => contextFixture.bridge.lspStatus({ maxItems: 20 }))), contextFixture.metrics)
+	printResult(await bench("quickfix/empty", contextFixture.metrics, () => successful("quickfix/empty", () => contextFixture.bridge.quickfix({ kind: "quickfix", maxItems: 20 }))), contextFixture.metrics)
 	printResult(await bench("readBuffer/normal", readSmallFixture.metrics, () => successful("readBuffer/normal", () => readSmallFixture.bridge.readBuffer({}))), readSmallFixture.metrics)
 	printResult(await bench("readBuffer/oversized-reject", readLargeFixture.metrics, () => rejected(() => readLargeFixture.bridge.readBuffer({}))), readLargeFixture.metrics)
 	for (const [index, fixture] of diagnosticFixtures.entries()) {

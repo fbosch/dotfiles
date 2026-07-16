@@ -1,4 +1,4 @@
-import { DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS, MAX_DIAGNOSTIC_SUMMARY_ITEMS, MAX_HOVER_BYTES, MAX_READ_BYTES, MAX_READ_LINES, NvimContextBridge, type BridgeFailure, type BridgeResult, type BufferInventoryResult, type BufferReadOptions, type BufferReadResult, type DiagnosticSummaryOptions, type DiagnosticSummaryResult, type DiagnosticsResult, type FocusContextResult, type HoverOptions, type HoverResult, type SelectionResult, type VisibleWindowsResult } from "./neovim-bridge"
+import { DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS, DEFAULT_DISCOVERY_ITEMS, MAX_DIAGNOSTIC_SUMMARY_ITEMS, MAX_DISCOVERY_ITEMS, MAX_HOVER_BYTES, MAX_READ_BYTES, MAX_READ_LINES, NvimContextBridge, type BridgeFailure, type BridgeResult, type BufferInventoryResult, type BufferReadOptions, type BufferReadResult, type DiagnosticSummaryOptions, type DiagnosticSummaryResult, type DiscoveryOptions, type DocumentSymbolsResult, type DiagnosticsResult, type FocusContextResult, type HoverOptions, type HoverResult, type LspStatusResult, type QuickfixOptions, type QuickfixResult, type SelectionResult, type VisibleWindowsResult } from "./neovim-bridge"
 import { isNumber, isRecord, isString, type JsonRecord } from "./nvim-utils"
 
 const TOOL_NAME = "nvim_context"
@@ -10,12 +10,17 @@ const DIAGNOSTIC_SUMMARY_TOOL_NAME = "nvim_diagnostic_summary"
 const FOCUS_CONTEXT_TOOL_NAME = "nvim_focus_context"
 const SELECTION_TOOL_NAME = "nvim_selection"
 const LSP_HOVER_TOOL_NAME = "nvim_lsp_hover"
+const DOCUMENT_SYMBOLS_TOOL_NAME = "nvim_document_symbols"
+const LSP_STATUS_TOOL_NAME = "nvim_lsp_status"
+const QUICKFIX_TOOL_NAME = "nvim_quickfix"
 const PROTOCOL_VERSION = "2025-06-18"
 const READ_OPTION_NAMES = new Set(["buffer", "startLine", "endLine"])
 const DIAGNOSTIC_SUMMARY_OPTION_NAMES = new Set(["buffer", "maxItems"])
 const LSP_HOVER_OPTION_NAMES = new Set(["buffer", "line", "column"])
+const DISCOVERY_OPTION_NAMES = new Set(["buffer", "maxItems"])
+const QUICKFIX_OPTION_NAMES = new Set(["kind", "maxItems"])
 
-type ToolResult = BridgeResult | VisibleWindowsResult | BufferInventoryResult | BufferReadResult | DiagnosticSummaryResult | DiagnosticsResult | FocusContextResult | HoverResult | SelectionResult
+type ToolResult = BridgeResult | VisibleWindowsResult | BufferInventoryResult | BufferReadResult | DiagnosticSummaryResult | DocumentSymbolsResult | DiagnosticsResult | FocusContextResult | HoverResult | LspStatusResult | QuickfixResult | SelectionResult
 type ToolHandler = (params: JsonRecord, bridge: NvimContextBridge) => Promise<ToolResult>
 
 export { NvimContextBridge } from "./neovim-bridge"
@@ -72,24 +77,7 @@ function diagnosticBuffer(params: JsonRecord): number | undefined | null {
 }
 
 function parseDiagnosticSummaryOptions(params: JsonRecord): DiagnosticSummaryOptions | BridgeFailure {
-	const arguments_ = readArguments(params)
-	if ("error" in arguments_) return arguments_
-	return diagnosticSummaryOptions(arguments_)
-}
-
-function diagnosticSummaryOptions(arguments_: JsonRecord): DiagnosticSummaryOptions | BridgeFailure {
-	const unsupportedArgument = Object.keys(arguments_).find(function(key) { return DIAGNOSTIC_SUMMARY_OPTION_NAMES.has(key) === false })
-	if (unsupportedArgument) return bridgeError("NVIM_INVALID_ARGUMENT", `Unsupported diagnostic summary argument: ${unsupportedArgument}`)
-	const buffer = optionalPositiveInteger(arguments_.buffer)
-	const maxItems = optionalPositiveInteger(arguments_.maxItems)
-	if ([buffer, maxItems].includes(null)) return bridgeError("NVIM_INVALID_ARGUMENT", "Buffer and maxItems values must be positive integers")
-	return diagnosticSummaryLimit(buffer, maxItems)
-}
-
-function diagnosticSummaryLimit(buffer: number | undefined, maxItems: number | undefined): DiagnosticSummaryOptions | BridgeFailure {
-	const requestedMaxItems = maxItems ?? DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS
-	if (requestedMaxItems > MAX_DIAGNOSTIC_SUMMARY_ITEMS) return bridgeError("NVIM_INVALID_ARGUMENT", `Request at most ${MAX_DIAGNOSTIC_SUMMARY_ITEMS} diagnostic summary items`)
-	return { buffer, maxItems: requestedMaxItems }
+	return parseBoundedBufferOptions(params, DIAGNOSTIC_SUMMARY_OPTION_NAMES, "diagnostic summary", DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS, MAX_DIAGNOSTIC_SUMMARY_ITEMS)
 }
 
 function parseHoverOptions(params: JsonRecord): HoverOptions | BridgeFailure {
@@ -112,6 +100,61 @@ function hoverPosition(buffer: number | undefined, line: number | undefined, col
 	if ([buffer, line, column].every(function(value) { return value === undefined })) return {}
 	if ([buffer, line, column].every(function(value) { return value !== undefined })) return { buffer, line, column }
 	return bridgeError("NVIM_INVALID_ARGUMENT", "Specify buffer, line, and column together for an explicit LSP hover position")
+}
+
+function parseDiscoveryOptions(params: JsonRecord): DiscoveryOptions | BridgeFailure {
+	return parseBoundedBufferOptions(params, DISCOVERY_OPTION_NAMES, "discovery", DEFAULT_DISCOVERY_ITEMS, MAX_DISCOVERY_ITEMS)
+}
+
+function parseBoundedBufferOptions(params: JsonRecord, names: Set<string>, label: string, defaultMaxItems: number, maximumMaxItems: number): DiscoveryOptions | BridgeFailure {
+	const arguments_ = readArguments(params)
+	if ("error" in arguments_) return arguments_
+	return boundedBufferOptions(arguments_, names, label, defaultMaxItems, maximumMaxItems)
+}
+
+function boundedBufferOptions(arguments_: JsonRecord, names: Set<string>, label: string, defaultMaxItems: number, maximumMaxItems: number): DiscoveryOptions | BridgeFailure {
+	const unsupportedArgument = Object.keys(arguments_).find(function(key) { return names.has(key) === false })
+	if (unsupportedArgument) return bridgeError("NVIM_INVALID_ARGUMENT", `Unsupported ${label} argument: ${unsupportedArgument}`)
+	return boundedBufferValues(arguments_, label, defaultMaxItems, maximumMaxItems)
+}
+
+function boundedBufferValues(arguments_: JsonRecord, label: string, defaultMaxItems: number, maximumMaxItems: number): DiscoveryOptions | BridgeFailure {
+	const buffer = optionalPositiveInteger(arguments_.buffer)
+	const maxItems = optionalPositiveInteger(arguments_.maxItems)
+	if ([buffer, maxItems].includes(null)) return bridgeError("NVIM_INVALID_ARGUMENT", "Buffer and maxItems values must be positive integers")
+	return boundedBufferLimit(buffer, maxItems, label, defaultMaxItems, maximumMaxItems)
+}
+
+function boundedBufferLimit(buffer: number | undefined, maxItems: number | undefined, label: string, defaultMaxItems: number, maximumMaxItems: number): DiscoveryOptions | BridgeFailure {
+	const requestedMaxItems = maxItems ?? defaultMaxItems
+	if (requestedMaxItems > maximumMaxItems) return bridgeError("NVIM_INVALID_ARGUMENT", `Request at most ${maximumMaxItems} ${label} items`)
+	return { buffer, maxItems: requestedMaxItems }
+}
+
+function parseQuickfixOptions(params: JsonRecord): QuickfixOptions | BridgeFailure {
+	const arguments_ = readArguments(params)
+	if ("error" in arguments_) return arguments_
+	return quickfixOptions(arguments_)
+}
+
+function quickfixOptions(arguments_: JsonRecord): QuickfixOptions | BridgeFailure {
+	const unsupportedArgument = Object.keys(arguments_).find(function(key) { return QUICKFIX_OPTION_NAMES.has(key) === false })
+	if (unsupportedArgument) return bridgeError("NVIM_INVALID_ARGUMENT", `Unsupported quickfix argument: ${unsupportedArgument}`)
+	const maxItems = optionalPositiveInteger(arguments_.maxItems)
+	if (maxItems === null) return bridgeError("NVIM_INVALID_ARGUMENT", "maxItems must be a positive integer")
+	return quickfixKind(arguments_.kind, maxItems)
+}
+
+function quickfixKind(value: unknown, maxItems: number | undefined): QuickfixOptions | BridgeFailure {
+	const kind = value ?? "quickfix"
+	if (kind !== "quickfix" && kind !== "location") return bridgeError("NVIM_INVALID_ARGUMENT", "kind must be quickfix or location")
+	return quickfixLimit(kind, maxItems)
+}
+
+function quickfixLimit(kind: "quickfix" | "location", maxItems: number | undefined): QuickfixOptions | BridgeFailure {
+	const requestedMaxItems = maxItems ?? DEFAULT_DISCOVERY_ITEMS
+	if (requestedMaxItems > MAX_DISCOVERY_ITEMS) return bridgeError("NVIM_INVALID_ARGUMENT", `Request at most ${MAX_DISCOVERY_ITEMS} quickfix items`)
+	return { kind, maxItems: requestedMaxItems }
 }
 
 function jsonRpcError(id: unknown, code: number, message: string): JsonRecord {
@@ -144,11 +187,23 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
 		const options = parseHoverOptions(params)
 		return "error" in options ? options : bridge.lspHover(options)
 	},
+	[DOCUMENT_SYMBOLS_TOOL_NAME]: async function(params, bridge) {
+		const options = parseDiscoveryOptions(params)
+		return "error" in options ? options : bridge.documentSymbols(options)
+	},
+	[LSP_STATUS_TOOL_NAME]: async function(params, bridge) {
+		const options = parseDiscoveryOptions(params)
+		return "error" in options ? options : bridge.lspStatus(options)
+	},
+	[QUICKFIX_TOOL_NAME]: async function(params, bridge) {
+		const options = parseQuickfixOptions(params)
+		return "error" in options ? options : bridge.quickfix(options)
+	},
 }
 
 const REQUEST_HANDLERS: Record<string, (id: unknown) => JsonRecord | undefined> = {
 	"notifications/initialized": function() { return undefined },
-	initialize: function(id) { return jsonRpcResult(id, { protocolVersion: PROTOCOL_VERSION, capabilities: { tools: {} }, instructions: "Use these tools only when live Neovim state is relevant. Prefer nvim_focus_context for ambiguous references to this file or this code. Use nvim_visible_windows or nvim_list_buffers to discover buffers, nvim_selection for active visual text, nvim_read_buffer for bounded live or unsaved text, nvim_diagnostic_summary to triage editor diagnostics, nvim_diagnostics for complete diagnostics, and nvim_lsp_hover for live LSP hover information. Results are read-only point-in-time snapshots from one bound Neovim instance; do not infer another editor instance or on-disk state.", serverInfo: { name: "neovim-context", version: "0.1.0" } }) },
+	initialize: function(id) { return jsonRpcResult(id, { protocolVersion: PROTOCOL_VERSION, capabilities: { tools: {} }, instructions: "Use these tools only when live Neovim state is relevant. Prefer nvim_focus_context for ambiguous references to this file or this code. Use nvim_visible_windows or nvim_list_buffers to discover buffers, nvim_selection for active visual text, nvim_read_buffer for bounded live or unsaved text, nvim_diagnostic_summary to triage editor diagnostics, nvim_diagnostics for complete diagnostics, nvim_lsp_hover for live LSP hover information, nvim_document_symbols for LSP file structure, nvim_lsp_status for attached-client state, and nvim_quickfix for current problem lists. Results are read-only point-in-time snapshots from one bound Neovim instance; do not infer another editor instance or on-disk state.", serverInfo: { name: "neovim-context", version: "0.1.0" } }) },
 	"tools/list": function(id) { return jsonRpcResult(id, { tools: tools() }) },
 }
 
@@ -186,6 +241,9 @@ function tools() {
 		{ name: FOCUS_CONTEXT_TOOL_NAME, description: "Get the most recently focused source buffer before focus entered OpenCode or another special buffer.", inputSchema: { type: "object", additionalProperties: false } },
 		{ name: SELECTION_TOOL_NAME, description: `Get up to ${MAX_READ_LINES} lines or ${MAX_READ_BYTES} bytes of the active source visual selection from Neovim memory.`, inputSchema: { type: "object", additionalProperties: false } },
 		{ name: LSP_HOVER_TOOL_NAME, description: `Get up to ${MAX_HOVER_BYTES} bytes of live LSP hover information at the active cursor or an explicit source position.`, inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, line: { type: "integer", minimum: 1 }, column: { type: "integer", minimum: 1 } }, additionalProperties: false } },
+		{ name: DOCUMENT_SYMBOLS_TOOL_NAME, description: `Get up to ${DEFAULT_DISCOVERY_ITEMS} live LSP document symbols from the active or selected buffer.`, inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, maxItems: { type: "integer", minimum: 1, maximum: MAX_DISCOVERY_ITEMS } }, additionalProperties: false } },
+		{ name: LSP_STATUS_TOOL_NAME, description: `Get up to ${DEFAULT_DISCOVERY_ITEMS} attached LSP clients for the active or selected buffer.`, inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, maxItems: { type: "integer", minimum: 1, maximum: MAX_DISCOVERY_ITEMS } }, additionalProperties: false } },
+		{ name: QUICKFIX_TOOL_NAME, description: `Get up to ${DEFAULT_DISCOVERY_ITEMS} entries from the current quickfix or location list.`, inputSchema: { type: "object", properties: { kind: { type: "string", enum: ["quickfix", "location"] }, maxItems: { type: "integer", minimum: 1, maximum: MAX_DISCOVERY_ITEMS } }, additionalProperties: false } },
 	]
 }
 

@@ -140,6 +140,41 @@ test("bounds oversized and slow LSP hover responses", async () => {
 	})
 })
 
+test("reads document symbols and attached LSP status", async () => {
+	await withNvim(["file bridge-symbols.lua", "call setline(1, ['local symbol = true'])"], async function(bridge, socket) {
+		await startHoverClients(socket, ["zeta-symbols", "alpha-symbols"])
+		expect(await bridge.documentSymbols({ maxItems: 20 })).toMatchObject({
+			ok: true,
+			documentSymbols: {
+				total: 2,
+				symbols: [
+					{ client: "alpha-symbols", name: "alpha-symbols symbol", kind: 12, detail: "fixture", line: 1, column: 1 },
+					{ client: "zeta-symbols", name: "zeta-symbols symbol", kind: 12, detail: "fixture", line: 1, column: 1 },
+				],
+			},
+		})
+		expect(await bridge.lspStatus({ maxItems: 20 })).toMatchObject({
+			ok: true,
+			lspStatus: {
+				total: 2,
+				clients: [
+					{ name: "alpha-symbols", initialized: true, hover: true, documentSymbols: true },
+					{ name: "zeta-symbols", initialized: true, hover: true, documentSymbols: true },
+				],
+			},
+		})
+	})
+})
+
+test("reports bounded quickfix and location-list entries", async () => {
+	await withNvim(["file bridge-quickfix.lua"], async function(bridge, socket) {
+		const nvim = attach({ socket })
+		await nvim.executeLua("vim.fn.setqflist({}, 'r', { title = 'quickfix fixture', items = {{ bufnr = 1, lnum = 2, col = 3, text = 'first quickfix', type = 'E' }, { bufnr = 1, lnum = 4, col = 5, text = 'second quickfix', type = 'W' }} }); vim.fn.setloclist(0, {}, 'r', { title = 'location fixture', items = {{ bufnr = 1, lnum = 6, col = 7, text = 'location entry', type = 'I' }} })")
+		expect(await bridge.quickfix({ kind: "quickfix", maxItems: 1 })).toMatchObject({ ok: true, quickfix: { kind: "quickfix", title: "quickfix fixture", total: 2, items: [{ line: 2, column: 3, text: "first quickfix", type: "E", valid: true }] } })
+		expect(await bridge.quickfix({ kind: "location", maxItems: 20 })).toMatchObject({ ok: true, quickfix: { kind: "location", title: "location fixture", total: 1, items: [{ line: 6, column: 7, text: "location entry", type: "I", valid: true }] } })
+	})
+})
+
 test("fails closed after the bound Neovim instance exits", async () => {
 	const { nvimProcess, socket } = await startNvim()
 	const bridge = new NvimContextBridge(socket)
@@ -331,6 +366,6 @@ test("keeps the curated MCP tool contract", async () => {
 	const response = await handleMessage({ jsonrpc: "2.0", id: 1, method: "tools/list" }, new NvimContextBridge(undefined))
 	expect(response).toMatchObject({ jsonrpc: "2.0", id: 1 })
 	if (response && "result" in response && typeof response.result === "object" && response.result !== null && "tools" in response.result && Array.isArray(response.result.tools)) {
-		expect(response.result.tools.map(function(tool) { return tool.name })).toEqual(["nvim_context", "nvim_visible_windows", "nvim_list_buffers", "nvim_read_buffer", "nvim_diagnostic_summary", "nvim_diagnostics", "nvim_focus_context", "nvim_selection", "nvim_lsp_hover"])
+		expect(response.result.tools.map(function(tool) { return tool.name })).toEqual(["nvim_context", "nvim_visible_windows", "nvim_list_buffers", "nvim_read_buffer", "nvim_diagnostic_summary", "nvim_diagnostics", "nvim_focus_context", "nvim_selection", "nvim_lsp_hover", "nvim_document_symbols", "nvim_lsp_status", "nvim_quickfix"])
 	}
 })

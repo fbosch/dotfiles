@@ -21,8 +21,13 @@ Sibling worktrees normally produce separate OpenCode server processes because th
 - `nvim_diagnostic_summary`: severity counts and a bounded diagnostic prefix for the active or selected buffer.
 - `nvim_diagnostics`: current diagnostics for the active or selected buffer.
 - `nvim_lsp_hover`: live LSP hover information at the active cursor or an explicit source position.
+- `nvim_document_symbols`: bounded live LSP file structure from the active or selected buffer.
+- `nvim_lsp_status`: bounded attached-LSP client status for the active or selected buffer.
+- `nvim_quickfix`: bounded current quickfix or location-list entries.
 
 `nvim_read_buffer` and `nvim_selection` allow at most 500 lines or 32 KiB per call. The bridge does not expose arbitrary Neovim evaluation, commands, edits, terminal input, or socket selection.
+
+`nvim_document_symbols`, `nvim_lsp_status`, and `nvim_quickfix` return 20 items by default, at most 50 items, and no more than 32 KiB of discovery data.
 
 ## Validation
 

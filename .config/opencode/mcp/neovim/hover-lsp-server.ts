@@ -51,12 +51,16 @@ async function handle(value: unknown) {
 	if (isRecord(value) === false || typeof value.method !== "string") return false
 	if (value.method === "initialize") {
 		initializedLabel(value.params)
-		response(value.id ?? null, { capabilities: { hoverProvider: true, positionEncoding: "utf-16" } })
+		response(value.id ?? null, { capabilities: { hoverProvider: true, documentSymbolProvider: true, positionEncoding: "utf-16" } })
 		return false
 	}
 	if (value.method === "textDocument/hover") {
 		if (label === "slow-hover") await Bun.sleep(1000)
 		response(value.id ?? null, hoverResult(value.params))
+		return false
+	}
+	if (value.method === "textDocument/documentSymbol") {
+		response(value.id ?? null, [{ name: `${label} symbol`, kind: 12, detail: "fixture", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 12 } }, selectionRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 12 } } }])
 		return false
 	}
 	if (value.method === "shutdown") {
