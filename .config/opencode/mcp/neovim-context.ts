@@ -1,6 +1,12 @@
 const TOOL_NAME = "nvim_context"
+const VISIBLE_WINDOWS_TOOL_NAME = "nvim_visible_windows"
+const LIST_BUFFERS_TOOL_NAME = "nvim_list_buffers"
+const READ_BUFFER_TOOL_NAME = "nvim_read_buffer"
+const DIAGNOSTICS_TOOL_NAME = "nvim_diagnostics"
 const PROTOCOL_VERSION = "2025-06-18"
 const REQUEST_TIMEOUT_MS = 1000
+const MAX_READ_LINES = 500
+const MAX_READ_BYTES = 32 * 1024
 
 const ACTIVE_CONTEXT_EXPRESSION = [
 	"json_encode({",
@@ -25,10 +31,33 @@ const ACTIVE_CONTEXT_EXPRESSION = [
 	"})",
 ].join(" ")
 
+const VISIBLE_WINDOWS_EXPRESSION = [
+	"json_encode({'windows': map(nvim_list_wins(), {_, win -> {",
+	"'window': win,",
+	"'buffer': nvim_win_get_buf(win),",
+	"'name': nvim_buf_get_name(nvim_win_get_buf(win)),",
+	"'filetype': getbufvar(nvim_win_get_buf(win), '&filetype'),",
+	"'buftype': getbufvar(nvim_win_get_buf(win), '&buftype'),",
+	"'topline': line('w0', win),",
+	"'botline': line('w$', win)",
+	"}})})",
+].join(" ")
+
+const BUFFER_INVENTORY_EXPRESSION = [
+	"json_encode({'buffers': map(getbufinfo({'buflisted': 1}), {_, info -> {",
+	"'number': info.bufnr,",
+	"'name': bufname(info.bufnr),",
+	"'filetype': getbufvar(info.bufnr, '&filetype'),",
+	"'buftype': getbufvar(info.bufnr, '&buftype'),",
+	"'loaded': bufloaded(info.bufnr) == 1,",
+	"'modified': getbufvar(info.bufnr, '&modified') == 1",
+	"}})})",
+].join(" ")
+
 type JsonRecord = Record<string, unknown>
 
 export type BridgeError = {
-	code: "NVIM_SOCKET_MISSING" | "NVIM_UNAVAILABLE" | "NVIM_INVALID_RESPONSE"
+	code: "NVIM_SOCKET_MISSING" | "NVIM_UNAVAILABLE" | "NVIM_INVALID_RESPONSE" | "NVIM_INVALID_ARGUMENT" | "NVIM_CONTENT_LIMIT"
 	message: string
 }
 
@@ -57,13 +86,80 @@ export type ActiveContext = {
 	}
 }
 
-export type BridgeResult =
-	| { ok: true; context: ActiveContext }
-	| { ok: false; error: BridgeError }
+export type BridgeFailure = { ok: false; error: BridgeError }
+
+export type BridgeResult = { ok: true; context: ActiveContext } | BridgeFailure
+
+export type VisibleWindow = {
+	window: number
+	buffer: number
+	name: string
+	filetype: string
+	buftype: string
+	topline: number
+	botline: number
+}
+
+export type VisibleWindows = {
+	instance: ActiveContext["instance"]
+	activeBuffer: ActiveContext["activeBuffer"]
+	windows: VisibleWindow[]
+	sourceWindows: VisibleWindow[]
+}
+
+export type VisibleWindowsResult = { ok: true; visibleWindows: VisibleWindows } | BridgeFailure
+
+export type BufferInfo = {
+	number: number
+	name: string
+	filetype: string
+	buftype: string
+	loaded: boolean
+	modified: boolean
+}
+
+export type BufferInventory = {
+	instance: ActiveContext["instance"]
+	buffers: BufferInfo[]
+	sourceBuffers: BufferInfo[]
+}
+
+export type BufferInventoryResult = { ok: true; bufferInventory: BufferInventory } | BridgeFailure
+
+export type BufferRead = {
+	instance: ActiveContext["instance"]
+	buffer: BufferInfo
+	startLine: number
+	endLine: number
+	totalLines: number
+	lines: string[]
+}
+
+export type BufferReadResult = { ok: true; bufferRead: BufferRead } | BridgeFailure
+
+export type BufferReadOptions = {
+	buffer?: number
+	startLine?: number
+	endLine?: number
+}
+
+export type Diagnostic = {
+	line: number
+	column: number
+	endLine: number
+	endColumn: number
+	severity: number
+	message: string
+	source: string
+}
+
+export type DiagnosticsResult = { ok: true; diagnostics: { instance: ActiveContext["instance"]; buffer: BufferInfo; diagnostics: Diagnostic[] } } | BridgeFailure
+
+type BufferMetadata = BufferInfo & { totalLines: number }
 
 export type RemoteExpressionRunner = (socket: string, expression: string) => Promise<string>
 
-function bridgeError(code: BridgeError["code"], message: string): BridgeResult {
+function bridgeError(code: BridgeError["code"], message: string): BridgeFailure {
 	return { ok: false, error: { code, message } }
 }
 
@@ -97,6 +193,10 @@ function isPosition(value: unknown): value is { line: number; column: number } {
 	return isRecord(value) && isNumber(value.line) && isNumber(value.column)
 }
 
+function isSelection(value: unknown): value is NonNullable<ActiveContext["selection"]> {
+	return isRecord(value) && isString(value.mode) && isPosition(value.start) && isPosition(value.end)
+}
+
 function parseActiveContext(socket: string, output: string): BridgeResult {
 	let decoded: unknown
 
@@ -127,7 +227,7 @@ function parseActiveContext(socket: string, output: string): BridgeResult {
 		return bridgeError("NVIM_INVALID_RESPONSE", "The bound Neovim instance returned invalid context fields")
 	}
 
-	if (selection !== null && (isRecord(selection) === false || isString(selection.mode) === false || isPosition(selection.start) === false || isPosition(selection.end) === false)) {
+	if (selection !== null && isSelection(selection) === false) {
 		return bridgeError("NVIM_INVALID_RESPONSE", "The bound Neovim instance returned invalid selection data")
 	}
 
@@ -147,6 +247,176 @@ function parseActiveContext(socket: string, output: string): BridgeResult {
 			selection: selection === null ? null : selection,
 		},
 	}
+}
+
+function isVisibleWindow(value: unknown): value is VisibleWindow {
+	return (
+		isRecord(value) &&
+		isNumber(value.window) &&
+		isNumber(value.buffer) &&
+		isString(value.name) &&
+		isString(value.filetype) &&
+		isString(value.buftype) &&
+		isNumber(value.topline) &&
+		isNumber(value.botline)
+	)
+}
+
+function parseBufferInfo(value: unknown): BufferInfo | undefined {
+	if (isRecord(value) === false || isNumber(value.number) === false || isString(value.name) === false || isString(value.filetype) === false || isString(value.buftype) === false) {
+		return undefined
+	}
+
+	const loaded = booleanValue(value.loaded)
+	const modified = booleanValue(value.modified)
+	if (loaded === undefined || modified === undefined) {
+		return undefined
+	}
+
+	return {
+		number: value.number,
+		name: value.name,
+		filetype: value.filetype,
+		buftype: value.buftype,
+		loaded,
+		modified,
+	}
+}
+
+function isSourceBuffer(buffer: BufferInfo) {
+	return buffer.name !== "" && buffer.buftype === "" && buffer.filetype !== "opencode" && buffer.filetype !== "opencode_terminal"
+}
+
+function parseVisibleWindows(context: ActiveContext, output: string): VisibleWindowsResult {
+	let decoded: unknown
+
+	try {
+		decoded = JSON.parse(output)
+	} catch {
+		return bridgeError("NVIM_INVALID_RESPONSE", "The bound Neovim instance returned invalid window data")
+	}
+
+	if (isRecord(decoded) === false || Array.isArray(decoded.windows) === false) {
+		return bridgeError("NVIM_INVALID_RESPONSE", "The bound Neovim instance returned incomplete window data")
+	}
+
+	const windows = decoded.windows.filter(isVisibleWindow)
+	if (windows.length !== decoded.windows.length) {
+		return bridgeError("NVIM_INVALID_RESPONSE", "The bound Neovim instance returned invalid window data")
+	}
+
+	const sourceWindows = windows.filter(function(window) {
+		return window.name !== "" && window.buftype === "" && window.filetype !== "opencode" && window.filetype !== "opencode_terminal"
+	})
+
+	return {
+		ok: true,
+		visibleWindows: {
+			instance: context.instance,
+			activeBuffer: context.activeBuffer,
+			windows,
+			sourceWindows,
+		},
+	}
+}
+
+function parseBufferInventory(context: ActiveContext, output: string): BufferInventoryResult {
+	let decoded: unknown
+
+	try {
+		decoded = JSON.parse(output)
+	} catch {
+		return bridgeError("NVIM_INVALID_RESPONSE", "The bound Neovim instance returned invalid buffer data")
+	}
+
+	if (isRecord(decoded) === false || Array.isArray(decoded.buffers) === false) {
+		return bridgeError("NVIM_INVALID_RESPONSE", "The bound Neovim instance returned incomplete buffer data")
+	}
+
+	const parsedBuffers = decoded.buffers.map(parseBufferInfo)
+	if (parsedBuffers.some(function(buffer) { return buffer === undefined })) {
+		return bridgeError("NVIM_INVALID_RESPONSE", "The bound Neovim instance returned invalid buffer data")
+	}
+	const buffers = parsedBuffers.filter(function(buffer): buffer is BufferInfo { return buffer !== undefined })
+
+	return {
+		ok: true,
+		bufferInventory: {
+			instance: context.instance,
+			buffers,
+			sourceBuffers: buffers.filter(isSourceBuffer),
+		},
+	}
+}
+
+function bufferMetadataExpression(buffer: number) {
+	return `json_encode(bufexists(${buffer}) && bufloaded(${buffer}) ? {'number': ${buffer}, 'name': bufname(${buffer}), 'filetype': getbufvar(${buffer}, '&filetype'), 'buftype': getbufvar(${buffer}, '&buftype'), 'loaded': bufloaded(${buffer}) == 1, 'modified': getbufvar(${buffer}, '&modified') == 1, 'totalLines': nvim_buf_line_count(${buffer})} : v:null)`
+}
+
+function parseBufferMetadata(output: string): BufferMetadata | undefined {
+	let decoded: unknown
+
+	try {
+		decoded = JSON.parse(output)
+	} catch {
+		return undefined
+	}
+
+	const buffer = parseBufferInfo(decoded)
+	if (buffer === undefined || isRecord(decoded) === false || isNumber(decoded.totalLines) === false) {
+		return undefined
+	}
+
+	return { ...buffer, totalLines: decoded.totalLines }
+}
+
+function bufferLinesExpression(buffer: number, startLine: number, endLine: number) {
+	return `json_encode({'lines': nvim_buf_get_lines(${buffer}, ${startLine - 1}, ${endLine}, v:false)})`
+}
+
+function diagnosticsExpression(buffer: number) {
+	return `json_encode(bufexists(${buffer}) && bufloaded(${buffer}) ? {'buffer': {'number': ${buffer}, 'name': bufname(${buffer}), 'filetype': getbufvar(${buffer}, '&filetype'), 'buftype': getbufvar(${buffer}, '&buftype'), 'loaded': bufloaded(${buffer}) == 1, 'modified': getbufvar(${buffer}, '&modified') == 1}, 'diagnostics': luaeval("vim.tbl_map(function(d) return {line=d.lnum, column=d.col, endLine=d.end_lnum or d.lnum, endColumn=d.end_col or d.col, severity=d.severity, message=d.message, source=d.source or ''} end, vim.diagnostic.get(_A))", ${buffer})} : v:null)`
+}
+
+function isDiagnostic(value: unknown): value is Diagnostic {
+	return isRecord(value) && isNumber(value.line) && isNumber(value.column) && isNumber(value.endLine) && isNumber(value.endColumn) && isNumber(value.severity) && isString(value.message) && isString(value.source)
+}
+
+function parseDiagnostics(context: ActiveContext, output: string): DiagnosticsResult {
+	let decoded: unknown
+
+	try {
+		decoded = JSON.parse(output)
+	} catch {
+		return bridgeError("NVIM_INVALID_RESPONSE", "The bound Neovim instance returned invalid diagnostic data")
+	}
+
+	if (isRecord(decoded) === false || Array.isArray(decoded.diagnostics) === false) {
+		return bridgeError("NVIM_INVALID_RESPONSE", "The bound Neovim instance returned incomplete diagnostic data")
+	}
+
+	const buffer = parseBufferInfo(decoded.buffer)
+	if (buffer === undefined || decoded.diagnostics.every(isDiagnostic) === false) {
+		return bridgeError("NVIM_INVALID_RESPONSE", "The bound Neovim instance returned invalid diagnostic data")
+	}
+
+	return { ok: true, diagnostics: { instance: context.instance, buffer, diagnostics: decoded.diagnostics } }
+}
+
+function parseBufferLines(output: string): string[] | undefined {
+	let decoded: unknown
+
+	try {
+		decoded = JSON.parse(output)
+	} catch {
+		return undefined
+	}
+
+	if (isRecord(decoded) === false || Array.isArray(decoded.lines) === false || decoded.lines.every(isString) === false) {
+		return undefined
+	}
+
+	return decoded.lines
 }
 
 export async function runRemoteExpression(socket: string, expression: string): Promise<string> {
@@ -212,19 +482,189 @@ export class NvimContextBridge {
 	async initialize(): Promise<BridgeResult> {
 		return this.context()
 	}
-}
 
-function toolResult(result: BridgeResult) {
-	if (result.ok) {
-		return {
-			content: [{ type: "text", text: JSON.stringify(result.context) }],
+	async visibleWindows(): Promise<VisibleWindowsResult> {
+		const context = await this.context()
+		if (context.ok === false) {
+			return context
+		}
+
+		try {
+			const output = await this.#run(context.context.instance.socket, VISIBLE_WINDOWS_EXPRESSION)
+			const result = parseVisibleWindows(context.context, output)
+			if (result.ok === false) {
+				this.#unavailable = result.error
+			}
+			return result
+		} catch {
+			this.#unavailable = {
+				code: "NVIM_UNAVAILABLE",
+				message: "The Neovim instance bound to NVIM_CONTEXT_SOCKET is unavailable",
+			}
+			return { ok: false, error: this.#unavailable }
 		}
 	}
 
-	return {
-		content: [{ type: "text", text: JSON.stringify({ error: result.error }) }],
-		isError: true,
+	async bufferInventory(): Promise<BufferInventoryResult> {
+		const context = await this.context()
+		if (context.ok === false) {
+			return context
+		}
+
+		try {
+			const output = await this.#run(context.context.instance.socket, BUFFER_INVENTORY_EXPRESSION)
+			const result = parseBufferInventory(context.context, output)
+			if (result.ok === false) {
+				this.#unavailable = result.error
+			}
+			return result
+		} catch {
+			this.#unavailable = {
+				code: "NVIM_UNAVAILABLE",
+				message: "The Neovim instance bound to NVIM_CONTEXT_SOCKET is unavailable",
+			}
+			return { ok: false, error: this.#unavailable }
+		}
 	}
+
+	async readBuffer(options: BufferReadOptions): Promise<BufferReadResult> {
+		const context = await this.context()
+		if (context.ok === false) {
+			return context
+		}
+
+		const bufferNumber = options.buffer ?? context.context.activeBuffer.number
+		try {
+			const metadataOutput = await this.#run(context.context.instance.socket, bufferMetadataExpression(bufferNumber))
+			const buffer = parseBufferMetadata(metadataOutput)
+			if (buffer === undefined || isSourceBuffer(buffer) === false) {
+				return bridgeError("NVIM_INVALID_ARGUMENT", "Choose a loaded source buffer from nvim_list_buffers or nvim_visible_windows")
+			}
+
+			const startLine = options.startLine ?? 1
+			const endLine = options.endLine ?? Math.min(buffer.totalLines, startLine + MAX_READ_LINES - 1)
+			if (startLine > buffer.totalLines || endLine < startLine || endLine > buffer.totalLines) {
+				return bridgeError("NVIM_INVALID_ARGUMENT", `Choose a line range within 1-${buffer.totalLines}`)
+			}
+			if (endLine - startLine + 1 > MAX_READ_LINES) {
+				return bridgeError("NVIM_CONTENT_LIMIT", `Read at most ${MAX_READ_LINES} lines; narrow the requested range`)
+			}
+
+			const linesOutput = await this.#run(context.context.instance.socket, bufferLinesExpression(bufferNumber, startLine, endLine))
+			const lines = parseBufferLines(linesOutput)
+			if (lines === undefined) {
+				this.#unavailable = {
+					code: "NVIM_INVALID_RESPONSE",
+					message: "The bound Neovim instance returned invalid buffer content",
+				}
+				return { ok: false, error: this.#unavailable }
+			}
+			if (new TextEncoder().encode(lines.join("\n")).byteLength > MAX_READ_BYTES) {
+				return bridgeError("NVIM_CONTENT_LIMIT", `Read at most ${MAX_READ_BYTES} bytes; narrow the requested range`)
+			}
+
+			return {
+				ok: true,
+				bufferRead: {
+					instance: context.context.instance,
+					buffer,
+					startLine,
+					endLine,
+					totalLines: buffer.totalLines,
+					lines,
+				},
+			}
+		} catch {
+			this.#unavailable = {
+				code: "NVIM_UNAVAILABLE",
+				message: "The Neovim instance bound to NVIM_CONTEXT_SOCKET is unavailable",
+			}
+			return { ok: false, error: this.#unavailable }
+		}
+	}
+
+	async diagnostics(buffer?: number): Promise<DiagnosticsResult> {
+		const context = await this.context()
+		if (context.ok === false) {
+			return context
+		}
+
+		try {
+			const output = await this.#run(context.context.instance.socket, diagnosticsExpression(buffer ?? context.context.activeBuffer.number))
+			const result = parseDiagnostics(context.context, output)
+			if (result.ok === false) {
+				this.#unavailable = result.error
+			}
+			return result
+		} catch {
+			this.#unavailable = {
+				code: "NVIM_UNAVAILABLE",
+				message: "The Neovim instance bound to NVIM_CONTEXT_SOCKET is unavailable",
+			}
+			return { ok: false, error: this.#unavailable }
+		}
+	}
+}
+
+function toolResult(result: BridgeResult | VisibleWindowsResult | BufferInventoryResult | BufferReadResult | DiagnosticsResult) {
+	if ("error" in result) {
+		return {
+			content: [{ type: "text", text: JSON.stringify({ error: result.error }) }],
+			isError: true,
+		}
+	}
+
+	let data: unknown
+	if ("context" in result) {
+		data = result.context
+	} else if ("visibleWindows" in result) {
+		data = result.visibleWindows
+	} else if ("bufferInventory" in result) {
+		data = result.bufferInventory
+	} else if ("bufferRead" in result) {
+		data = result.bufferRead
+	} else {
+		data = result.diagnostics
+	}
+	return {
+		content: [{ type: "text", text: JSON.stringify(data) }],
+	}
+}
+
+function parseReadOptions(params: unknown): BufferReadOptions | BridgeFailure {
+	if (isRecord(params) === false || params.arguments === undefined) {
+		return {}
+	}
+	if (isRecord(params.arguments) === false) {
+		return bridgeError("NVIM_INVALID_ARGUMENT", "Buffer read arguments must be an object")
+	}
+
+	for (const key of Object.keys(params.arguments)) {
+		if (key !== "buffer" && key !== "startLine" && key !== "endLine") {
+			return bridgeError("NVIM_INVALID_ARGUMENT", `Unsupported buffer read argument: ${key}`)
+		}
+	}
+
+	const buffer = optionalPositiveInteger(params.arguments.buffer)
+	const startLine = optionalPositiveInteger(params.arguments.startLine)
+	const endLine = optionalPositiveInteger(params.arguments.endLine)
+	if (buffer === null || startLine === null || endLine === null) {
+		return bridgeError("NVIM_INVALID_ARGUMENT", "Buffer and line values must be positive integers")
+	}
+
+	return { buffer, startLine, endLine }
+}
+
+function optionalPositiveInteger(value: unknown): number | undefined | null {
+	if (value === undefined) {
+		return undefined
+	}
+
+	if (isNumber(value) && Number.isInteger(value) && value >= 1) {
+		return value
+	}
+
+	return null
 }
 
 function jsonRpcError(id: unknown, code: number, message: string) {
@@ -264,6 +704,38 @@ export async function handleMessage(message: unknown, bridge: NvimContextBridge)
 						description: "Get live context from the Neovim instance bound to this OpenCode server.",
 						inputSchema: { type: "object", additionalProperties: false },
 					},
+					{
+						name: VISIBLE_WINDOWS_TOOL_NAME,
+						description: "Get visible Neovim windows and the source buffers visible beside OpenCode.",
+						inputSchema: { type: "object", additionalProperties: false },
+					},
+					{
+						name: LIST_BUFFERS_TOOL_NAME,
+						description: "List buffers from the Neovim instance bound to this OpenCode server.",
+						inputSchema: { type: "object", additionalProperties: false },
+					},
+					{
+						name: READ_BUFFER_TOOL_NAME,
+						description: `Read up to ${MAX_READ_LINES} lines or ${MAX_READ_BYTES} bytes from a loaded source buffer in Neovim memory.`,
+						inputSchema: {
+							type: "object",
+							properties: {
+								buffer: { type: "integer", minimum: 1 },
+								startLine: { type: "integer", minimum: 1 },
+								endLine: { type: "integer", minimum: 1 },
+							},
+							additionalProperties: false,
+						},
+					},
+					{
+						name: DIAGNOSTICS_TOOL_NAME,
+						description: "Get current diagnostics and their source buffer from the bound Neovim instance.",
+						inputSchema: {
+							type: "object",
+							properties: { buffer: { type: "integer", minimum: 1 } },
+							additionalProperties: false,
+						},
+					},
 				],
 			},
 		}
@@ -271,11 +743,37 @@ export async function handleMessage(message: unknown, bridge: NvimContextBridge)
 
 	if (message.method === "tools/call") {
 		const name = isRecord(message.params) ? message.params.name : undefined
-		if (name !== TOOL_NAME) {
-			return jsonRpcError(id, -32602, `Unknown tool: ${String(name)}`)
+		if (name === TOOL_NAME) {
+			return { jsonrpc: "2.0", id: id ?? null, result: toolResult(await bridge.context()) }
 		}
 
-		return { jsonrpc: "2.0", id: id ?? null, result: toolResult(await bridge.context()) }
+		if (name === VISIBLE_WINDOWS_TOOL_NAME) {
+			return { jsonrpc: "2.0", id: id ?? null, result: toolResult(await bridge.visibleWindows()) }
+		}
+
+		if (name === LIST_BUFFERS_TOOL_NAME) {
+			return { jsonrpc: "2.0", id: id ?? null, result: toolResult(await bridge.bufferInventory()) }
+		}
+
+		if (name === READ_BUFFER_TOOL_NAME) {
+			const options = parseReadOptions(isRecord(message.params) ? message.params : undefined)
+			if ("error" in options) {
+				return { jsonrpc: "2.0", id: id ?? null, result: toolResult(options) }
+			}
+			return { jsonrpc: "2.0", id: id ?? null, result: toolResult(await bridge.readBuffer(options)) }
+		}
+
+		if (name === DIAGNOSTICS_TOOL_NAME) {
+			const arguments_ = isRecord(message.params) && isRecord(message.params.arguments) ? message.params.arguments : {}
+			const buffer = optionalPositiveInteger(arguments_.buffer)
+			if (buffer === null) {
+				return { jsonrpc: "2.0", id: id ?? null, result: toolResult(bridgeError("NVIM_INVALID_ARGUMENT", "Buffer must be a positive integer")) }
+			}
+			return { jsonrpc: "2.0", id: id ?? null, result: toolResult(await bridge.diagnostics(buffer)) }
+		}
+
+
+		return jsonRpcError(id, -32602, `Unknown tool: ${String(name)}`)
 	}
 
 	return jsonRpcError(id, -32601, "Method not found")

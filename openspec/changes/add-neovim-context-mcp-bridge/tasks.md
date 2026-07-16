@@ -8,15 +8,15 @@
 
 ## 2. Live Unsaved Source Context
 
-- [ ] 2.1 Extend the bridge with a read-only buffer-inventory tool that identifies listed buffers, filetypes, loaded state, and modified state.
-- [ ] 2.2 Add a bounded buffer-read tool that retrieves an active or explicitly identified buffer range from Neovim memory and returns source metadata with the result.
-- [ ] 2.3 Enforce and document line and byte response limits; reject invalid buffers, ranges, and oversized reads with actionable structured errors.
-- [ ] 2.4 Verify end to end that an OpenCode MCP call reads unsaved content from the bound Neovim buffer rather than its on-disk file.
-- [ ] 2.5 Verify the exposed MCP surface has no generic RPC proxy, evaluation, mutation, terminal-input, or socket-selection operation.
+- [x] 2.1 Extend the bridge with a read-only buffer-inventory tool that identifies listed buffers, filetypes, loaded state, and modified state.
+- [x] 2.2 Add a bounded buffer-read tool that retrieves an active or explicitly identified buffer range from Neovim memory and returns source metadata with the result.
+- [x] 2.3 Enforce and document line and byte response limits; reject invalid buffers, ranges, and oversized reads with actionable structured errors.
+- [x] 2.4 Verify end to end that an OpenCode MCP call reads unsaved content from the bound Neovim buffer rather than its on-disk file.
+- [x] 2.5 Verify the exposed MCP surface has no generic RPC proxy, evaluation, mutation, terminal-input, or socket-selection operation.
 
 ## 3. Current Workspace and Diagnostic Context
 
-- [ ] 3.1 Add a visible-windows tool that reports each visible buffer and its visible line range from the bound Neovim instance.
+- [x] 3.1 Add a visible-windows tool that reports each visible buffer and its visible line range from the bound Neovim instance.
 - [ ] 3.2 Add a diagnostics tool for the active or identified buffer that returns current message, source, severity, and position data.
 - [ ] 3.3 Ensure visible-window and diagnostic results identify the bound instance and their source window or buffer.
 - [ ] 3.4 Verify end to end that the tools report the active editor view and diagnostics after the editor state changes, including unsaved modifications.

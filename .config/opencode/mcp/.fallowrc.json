@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "production": {
+    "health": true
+  },
+  "ignorePatterns": [
+    "**/*.test.ts"
+  ],
+  "entry": [
+    "*.ts"
+  ]
+}
