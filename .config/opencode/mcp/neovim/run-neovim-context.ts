@@ -188,6 +188,7 @@ test("Neovim MCP baseline", async () => {
 		printResult(await bench("highlight/one-line", contextFixture.metrics, () => successful("highlight/one-line", () => contextFixture.bridge.highlight({ buffer: 1, startLine: 1, startColumn: 1, endLine: 1, endColumn: 1, durationMs: 2000, reveal: true }))), contextFixture.metrics)
 		await successful("highlight/path-initial", () => pathFixture.bridge.highlight({ path: "target.lua", startLine: 1, durationMs: 2000, reveal: true }))
 		printResult(await bench("highlight/path-warm", pathFixture.metrics, () => successful("highlight/path-warm", () => pathFixture.bridge.highlight({ path: "target.lua", startLine: 1, durationMs: 2000, reveal: true }))), pathFixture.metrics)
+		printResult(await bench("annotate/one-item", contextFixture.metrics, () => successful("annotate/one-item", () => contextFixture.bridge.annotate({ buffer: 1, annotations: [{ line: 1, anchor: "context", text: "Context entry point", kind: "note" }], durationMs: 2000, reveal: true }))), contextFixture.metrics)
 	printResult(await bench("readBuffer/normal", readSmallFixture.metrics, () => successful("readBuffer/normal", () => readSmallFixture.bridge.readBuffer({}))), readSmallFixture.metrics)
 	printResult(await bench("readBuffer/oversized-reject", readLargeFixture.metrics, () => rejected(() => readLargeFixture.bridge.readBuffer({}))), readLargeFixture.metrics)
 	for (const [index, fixture] of diagnosticFixtures.entries()) {

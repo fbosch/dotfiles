@@ -143,14 +143,19 @@ test("opens a workspace file before highlighting it", async () => {
 	}
 })
 
-test("adds a bounded temporary inline annotation", async () => {
-	await withNvim(["file bridge-annotation.lua", "call setline(1, ['return true'])"], async function(bridge, socket) {
-		const result = await bridge.annotate({ buffer: 1, line: 1, anchor: "true", text: "Explain this boundary", kind: "warning", durationMs: 20, reveal: true })
-		expect(result).toMatchObject({ ok: true, annotation: { buffer: { number: 1 }, line: 1, column: 8, text: "Explain this boundary", kind: "warning", placement: "callout", revealed: true } })
+test("adds an atomic annotation batch and reveals the earliest item", async () => {
+	await withNvim(["file bridge-annotation.lua", "call setline(1, ['return true', 'local middle = true', 'return false'])"], async function(bridge, socket) {
+		const invalid = await bridge.annotate({ buffer: 1, annotations: [{ line: 1, anchor: "true", text: "Valid", kind: "note" }, { line: 3, anchor: "missing", text: "Invalid", kind: "error" }], durationMs: 30000, reveal: true })
+		expect(invalid).toMatchObject({ error: { code: "NVIM_INVALID_ARGUMENT", message: "Annotation 2 anchor \"missing\" was not found in the target buffer (requested line 3)" } })
 		const nvim = attach({ socket })
+		expect(await nvim.executeLua("return #vim.api.nvim_buf_get_extmarks(1, vim.api.nvim_create_namespace('opencode_mcp_presentation'), 0, -1, {})", [])).toBe(0)
+		const result = await bridge.annotate({ buffer: 1, annotations: [{ line: 2, anchor: "false", text: "Later boundary", kind: "note" }, { line: 1, anchor: "true", text: "Explain this boundary", kind: "warning" }], durationMs: 30000, reveal: true })
+		expect(result).toMatchObject({ ok: true, annotation: { buffer: { number: 1 }, focused: { line: 1, column: 8 }, annotations: [{ line: 1, column: 8, text: "Explain this boundary", kind: "warning", placement: "callout" }, { line: 3, column: 8, text: "Later boundary", kind: "note", placement: "callout" }], revealed: true } })
 		const marks = await nvim.executeLua("return vim.api.nvim_buf_get_extmarks(1, vim.api.nvim_create_namespace('opencode_mcp_presentation'), 0, -1, { details = true })", [])
-		expect(marks).toEqual([expect.arrayContaining([expect.any(Number), 0, 0, expect.objectContaining({ virt_lines_above: false, virt_lines_overflow: "scroll" })])])
+		expect(marks).toHaveLength(2)
+		expect(marks[0]).toEqual(expect.arrayContaining([expect.any(Number), 0, 0, expect.objectContaining({ virt_lines_above: false, virt_lines_overflow: "scroll" })]))
 		expect(marks[0][3].virt_lines[0]).toEqual([["       ", ""], ["└──── ", "OpencodeAnnotationWarning"], ["Explain this boundary", "OpencodeAnnotationWarning"]])
+		expect(await nvim.executeLua("return vim.api.nvim_win_get_cursor(0)", [])).toEqual([1, 7])
 	})
 })
 

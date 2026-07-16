@@ -24,7 +24,7 @@ Sibling worktrees normally produce separate OpenCode server processes because th
 - `nvim_reveal`: reveal an existing source buffer at an exact position, optionally in an explicit split.
 - `highlight`: temporarily mark one exact source-buffer range without changing text.
 - `clear_highlight`: remove a highlight returned by `highlight` before it expires.
-- `annotate`: temporarily attach one concise, color-coded LSP-lines-style callout to a source line.
+- `annotate`: atomically attach up to 10 concise, color-coded LSP-lines-style callouts in one source file and reveal the earliest one.
 
 `nvim_read_buffer` and `nvim_selection` allow at most 500 lines or 32 KiB per call. The bridge does not expose arbitrary Neovim evaluation, commands, edits, terminal input, or socket selection.
 

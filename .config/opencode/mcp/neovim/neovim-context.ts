@@ -1,4 +1,4 @@
-import { DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS, DEFAULT_DISCOVERY_ITEMS, DEFAULT_HIGHLIGHT_DURATION_MS, MAX_DIAGNOSTIC_SUMMARY_ITEMS, MAX_DISCOVERY_ITEMS, MAX_HIGHLIGHT_DURATION_MS, MAX_HIGHLIGHT_LINES, MAX_READ_BYTES, MAX_READ_LINES, NvimContextBridge, type AnnotationOptions, type AnnotationResult, type BridgeFailure, type BridgeResult, type BufferInventoryResult, type BufferReadOptions, type BufferReadResult, type ClearHighlightOptions, type ClearHighlightResult, type DiagnosticSummaryOptions, type DiagnosticSummaryResult, type DiagnosticsResult, type FocusContextResult, type HighlightOptions, type HighlightResult, type QuickfixOptions, type QuickfixResult, type RevealOptions, type RevealResult, type SelectionResult, type VisibleWindowsResult } from "./neovim-bridge"
+import { DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS, DEFAULT_DISCOVERY_ITEMS, DEFAULT_HIGHLIGHT_DURATION_MS, MAX_ANNOTATIONS, MAX_DIAGNOSTIC_SUMMARY_ITEMS, MAX_DISCOVERY_ITEMS, MAX_HIGHLIGHT_DURATION_MS, MAX_HIGHLIGHT_LINES, MAX_READ_BYTES, MAX_READ_LINES, NvimContextBridge, type AnnotationInput, type AnnotationOptions, type AnnotationResult, type BridgeFailure, type BridgeResult, type BufferInventoryResult, type BufferReadOptions, type BufferReadResult, type ClearHighlightOptions, type ClearHighlightResult, type DiagnosticSummaryOptions, type DiagnosticSummaryResult, type DiagnosticsResult, type FocusContextResult, type HighlightOptions, type HighlightResult, type QuickfixOptions, type QuickfixResult, type RevealOptions, type RevealResult, type SelectionResult, type VisibleWindowsResult } from "./neovim-bridge"
 import { isNumber, isRecord, isString, type JsonRecord } from "./nvim-utils"
 
 const TOOL_NAME = "context"
@@ -21,7 +21,8 @@ const QUICKFIX_OPTION_NAMES = new Set(["kind", "maxItems"])
 const REVEAL_OPTION_NAMES = new Set(["buffer", "line", "column", "focus", "split"])
 const HIGHLIGHT_OPTION_NAMES = new Set(["buffer", "path", "startLine", "startColumn", "endLine", "endColumn", "durationMs", "reveal"])
 const CLEAR_HIGHLIGHT_OPTION_NAMES = new Set(["buffer", "highlightId"])
-const ANNOTATE_OPTION_NAMES = new Set(["buffer", "path", "line", "anchor", "text", "kind", "durationMs", "reveal"])
+const ANNOTATE_OPTION_NAMES = new Set(["buffer", "path", "annotations", "durationMs", "reveal"])
+const ANNOTATION_OPTION_NAMES = new Set(["line", "anchor", "text", "kind"])
 const REVEAL_SPLITS = new Set(["none", "horizontal", "vertical"])
 
 type ToolResult = AnnotationResult | BridgeResult | VisibleWindowsResult | BufferInventoryResult | BufferReadResult | ClearHighlightResult | DiagnosticSummaryResult | DiagnosticsResult | FocusContextResult | HighlightResult | QuickfixResult | RevealResult | SelectionResult
@@ -246,25 +247,54 @@ function parseAnnotationOptions(params: JsonRecord): AnnotationOptions | BridgeF
 	return annotationOptions(arguments_)
 }
 
-// fallow-ignore-next-line complexity -- combines the independently validated annotation fields.
 function annotationOptions(arguments_: JsonRecord): AnnotationOptions | BridgeFailure {
 	const unsupportedArgument = unsupportedPresentationArgument(arguments_, ANNOTATE_OPTION_NAMES, "annotation")
 	if (unsupportedArgument) return unsupportedArgument
 	const target = highlightTarget(arguments_)
 	if ("error" in target) return target
-	const line = positiveInteger(arguments_.line)
-	if (line === null) return bridgeError("NVIM_INVALID_ARGUMENT", "line must be a positive integer")
-	const text = annotationText(arguments_.text)
-	if (typeof text !== "string") return text
-	const kind = annotationKind(arguments_.kind)
-	if (typeof kind !== "string") return kind
+	const annotations = annotationInputs(arguments_.annotations)
+	if ("error" in annotations) return annotations
+	return annotationSettings(arguments_, target, annotations)
+}
+
+function annotationSettings(arguments_: JsonRecord, target: Pick<AnnotationOptions, "buffer" | "path">, annotations: AnnotationInput[]): AnnotationOptions | BridgeFailure {
 	const reveal = optionalBoolean(arguments_.reveal)
 	if (reveal === null) return bridgeError("NVIM_INVALID_ARGUMENT", "reveal must be a boolean")
 	const durationMs = highlightDuration(arguments_.durationMs)
 	if (typeof durationMs !== "number") return durationMs
-	const anchor = annotationAnchor(arguments_.anchor)
-	if (typeof anchor !== "string") return anchor ?? bridgeError("NVIM_INVALID_ARGUMENT", "anchor is required for an annotation")
-	return { ...target, line, anchor, text, kind, durationMs, reveal: reveal ?? true }
+	return { ...target, annotations, durationMs, reveal: reveal ?? true }
+}
+
+// fallow-ignore-next-line complexity -- validates and short-circuits an atomic bounded batch.
+function annotationInputs(value: unknown): AnnotationInput[] | BridgeFailure {
+	if (Array.isArray(value) === false || value.length === 0 || value.length > MAX_ANNOTATIONS) return bridgeError("NVIM_INVALID_ARGUMENT", `annotations must contain between 1 and ${MAX_ANNOTATIONS} items`)
+	const annotations: AnnotationInput[] = []
+	for (const [index, item] of value.entries()) {
+		const annotation = annotationInput(item, index)
+		if ("error" in annotation) return annotation
+		annotations.push(annotation)
+	}
+	return annotations
+}
+
+function annotationInput(value: unknown, index: number): AnnotationInput | BridgeFailure {
+	if (isRecord(value) === false) return bridgeError("NVIM_INVALID_ARGUMENT", `annotation ${index + 1} must be an object`)
+	const unsupportedArgument = Object.keys(value).find(function(key) { return ANNOTATION_OPTION_NAMES.has(key) === false })
+	if (unsupportedArgument) return bridgeError("NVIM_INVALID_ARGUMENT", `Unsupported annotation ${index + 1} argument: ${unsupportedArgument}`)
+	return annotationInputValues(value, index)
+}
+
+// fallow-ignore-next-line complexity -- combines independently validated item fields.
+function annotationInputValues(value: JsonRecord, index: number): AnnotationInput | BridgeFailure {
+	const line = positiveInteger(value.line)
+	if (line === null) return bridgeError("NVIM_INVALID_ARGUMENT", `annotation ${index + 1} line must be a positive integer`)
+	const anchor = annotationAnchor(value.anchor)
+	if (typeof anchor !== "string") return anchor ?? bridgeError("NVIM_INVALID_ARGUMENT", `annotation ${index + 1} anchor is required`)
+	const text = annotationText(value.text)
+	if (typeof text !== "string") return text
+	const kind = annotationKind(value.kind)
+	if (typeof kind !== "string") return kind
+	return { line, anchor, text, kind }
 }
 
 function annotationAnchor(value: unknown): string | undefined | BridgeFailure {
@@ -405,8 +435,8 @@ function tools() {
 		{ name: QUICKFIX_TOOL_NAME, description: `Get up to ${DEFAULT_DISCOVERY_ITEMS} entries from the current quickfix or location list.`, inputSchema: { type: "object", properties: { kind: { type: "string", enum: ["quickfix", "location"] }, maxItems: { type: "integer", minimum: 1, maximum: MAX_DISCOVERY_ITEMS } }, additionalProperties: false } },
 		{ name: REVEAL_TOOL_NAME, description: "Reveal an existing source buffer at an exact position, optionally creating an explicit split. Focus remains unchanged unless requested.", inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, line: { type: "integer", minimum: 1 }, column: { type: "integer", minimum: 1 }, focus: { type: "boolean", default: false }, split: { type: "string", enum: ["none", "horizontal", "vertical"], default: "none" } }, required: ["buffer", "line", "column"], additionalProperties: false } },
 		{ name: HIGHLIGHT_TOOL_NAME, description: `Temporarily open or reuse a workspace source file and highlight a line or exact range for up to ${MAX_HIGHLIGHT_DURATION_MS} ms without changing text. Specify exactly one of buffer or workspace-relative path. Omitting columns highlights the whole line.`, inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, path: { type: "string", minLength: 1 }, startLine: { type: "integer", minimum: 1 }, startColumn: { type: "integer", minimum: 1 }, endLine: { type: "integer", minimum: 1 }, endColumn: { type: "integer", minimum: 1 }, durationMs: { type: "integer", minimum: 1, maximum: MAX_HIGHLIGHT_DURATION_MS, default: DEFAULT_HIGHLIGHT_DURATION_MS }, reveal: { type: "boolean", default: true } }, required: ["startLine"], anyOf: [{ required: ["buffer"] }, { required: ["path"] }], additionalProperties: false } },
-		{ name: CLEAR_HIGHLIGHT_TOOL_NAME, description: "Clear a temporary highlight previously returned by nvim_highlight.", inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, highlightId: { type: "integer", minimum: 1 } }, required: ["buffer", "highlightId"], additionalProperties: false } },
-		{ name: ANNOTATE_TOOL_NAME, description: "Temporarily open or reuse a workspace source file and add one concise colored LSP-lines-style callout for an actionable review finding or explanation. anchor must be a unique source token on the exact target line; invalid targets fail instead of rendering approximately. Do not use for routine status updates.", inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, path: { type: "string", minLength: 1 }, line: { type: "integer", minimum: 1 }, anchor: { type: "string", minLength: 1, maxLength: 128 }, text: { type: "string", minLength: 1, maxLength: 512 }, kind: { type: "string", enum: ["note", "warning", "error"], default: "note" }, reveal: { type: "boolean", default: true }, durationMs: { type: "integer", minimum: 1, maximum: MAX_HIGHLIGHT_DURATION_MS, default: DEFAULT_HIGHLIGHT_DURATION_MS } }, required: ["line", "anchor", "text"], anyOf: [{ required: ["buffer"] }, { required: ["path"] }], additionalProperties: false } },
+		{ name: CLEAR_HIGHLIGHT_TOOL_NAME, description: "Clear a temporary highlight previously returned by highlight.", inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, highlightId: { type: "integer", minimum: 1 } }, required: ["buffer", "highlightId"], additionalProperties: false } },
+		{ name: ANNOTATE_TOOL_NAME, description: `Temporarily open or reuse one workspace source file and add up to ${MAX_ANNOTATIONS} concise colored LSP-lines-style callouts. line is a fast hint; a unique anchor is relocated within the buffer when the line drifted. The earliest resolved annotation is revealed. Do not use for routine status updates.`, inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, path: { type: "string", minLength: 1 }, annotations: { type: "array", minItems: 1, maxItems: MAX_ANNOTATIONS, items: { type: "object", properties: { line: { type: "integer", minimum: 1 }, anchor: { type: "string", minLength: 1, maxLength: 128 }, text: { type: "string", minLength: 1, maxLength: 512 }, kind: { type: "string", enum: ["note", "warning", "error"], default: "note" } }, required: ["line", "anchor", "text"], additionalProperties: false } }, reveal: { type: "boolean", default: true }, durationMs: { type: "integer", minimum: 1, maximum: MAX_HIGHLIGHT_DURATION_MS, default: DEFAULT_HIGHLIGHT_DURATION_MS } }, required: ["annotations"], anyOf: [{ required: ["buffer"] }, { required: ["path"] }], additionalProperties: false } },
 	]
 }
 
