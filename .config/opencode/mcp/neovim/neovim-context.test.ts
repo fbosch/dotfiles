@@ -136,6 +136,13 @@ test("accepts a read at the UTF-8 byte limit", async () => {
 	})
 })
 
+test("preserves invalid-buffer and range errors", async () => {
+	await withNvim(["file bridge-read-errors.lua", "call setline(1, ['line'])"], async function(bridge) {
+		expect(await bridge.readBuffer({ buffer: 999 })).toMatchObject({ error: { code: "NVIM_INVALID_ARGUMENT", message: "Choose a loaded source buffer from nvim_list_buffers or nvim_visible_windows" } })
+		expect(await bridge.readBuffer({ startLine: 2 })).toMatchObject({ error: { code: "NVIM_INVALID_ARGUMENT", message: "Choose a line range within 1-1" } })
+	})
+})
+
 test("reads diagnostics through the official client", async () => {
 	await withNvim(["file bridge-diagnostics.lua", "call setline(1, ['local value = unknown'])"], async function(bridge, socket) {
 		const nvim = attach({ socket })
@@ -161,6 +168,15 @@ test("returns the recorded source context after focus leaves the buffer", async 
 			ok: true,
 			focusContext: { instance: { socket }, buffer: { name: expect.stringContaining("bridge-focus.lua") }, cursor: { line: 1, column: 1 } },
 		})
+	})
+})
+
+test("rejects missing or stale focus context", async () => {
+	await withNvim([], async function(bridge, socket) {
+		expect(await bridge.focusContext()).toMatchObject({ error: { code: "NVIM_INVALID_ARGUMENT", message: "No recent source buffer is available" } })
+		const nvim = attach({ socket })
+		await nvim.setVar("opencode_last_source_context", { buffer: 999, cursor: { line: 1, column: 1 } })
+		expect(await bridge.focusContext()).toMatchObject({ error: { code: "NVIM_INVALID_ARGUMENT", message: "The recent source buffer is no longer available" } })
 	})
 })
 
