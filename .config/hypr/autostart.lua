@@ -1,10 +1,8 @@
 -- Autostart commands ported from autostart.conf.
 
 local paths = require("lib.paths")
-local command = require("lib.command")
 local system = require("lib.system")
 local host = system.hostname()
-local hyprfocus_plugin = os.getenv("HYPRFOCUS_PLUGIN")
 
 local function uwsm(scope, command)
 	return "uwsm-app -s " .. scope .. " -- " .. command
@@ -42,10 +40,6 @@ local commands = {
 
 if host == "rvn-pc" then
 	table.insert(commands, 1, "xrandr --output DP-2 --primary")
-end
-
-if hyprfocus_plugin and hyprfocus_plugin ~= "" then
-	table.insert(commands, 1, command.line("hyprctl", "plugin", "load", hyprfocus_plugin) .. " && hyprctl reload")
 end
 
 local function run_commands()
