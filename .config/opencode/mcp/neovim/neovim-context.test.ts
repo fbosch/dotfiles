@@ -115,7 +115,7 @@ test("creates bounded temporary highlights without changing buffer text", async 
 		expect(await bridge.readBuffer({ buffer: 1, startLine: 80, endLine: 80 })).toMatchObject({ ok: true, bufferRead: { lines: ["line 80"] } })
 		expect(await bridge.clearHighlight({ buffer: 1, highlightId: result.highlight.highlightId })).toEqual({ ok: true, clearHighlight: { cleared: true } })
 		expect(await bridge.clearHighlight({ buffer: 1, highlightId: result.highlight.highlightId })).toEqual({ ok: true, clearHighlight: { cleared: false } })
-		const mcpResult = await handleMessage({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "nvim_highlight", arguments: { buffer: 1, startLine: 1, durationMs: 20 } } }, bridge)
+		const mcpResult = await handleMessage({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "highlight", arguments: { buffer: 1, startLine: 1, durationMs: 20 } } }, bridge)
 		expect(mcpResult).toMatchObject({ result: { content: [expect.objectContaining({ text: expect.stringContaining("highlightId") })] } })
 		const expiring = await bridge.highlight({ buffer: 1, startLine: 1, startColumn: 1, endLine: 1, endColumn: 2, durationMs: 20, reveal: false })
 		expect(expiring.ok).toBe(true)
@@ -141,6 +141,15 @@ test("opens a workspace file before highlighting it", async () => {
 	} finally {
 		await rm(workspace, { recursive: true, force: true })
 	}
+})
+
+test("adds a bounded temporary inline annotation", async () => {
+	await withNvim(["file bridge-annotation.lua", "call setline(1, ['return true'])"], async function(bridge, socket) {
+		const result = await bridge.annotate({ buffer: 1, line: 1, text: "Explain this boundary", kind: "warning", placement: "callout", durationMs: 20, reveal: true })
+		expect(result).toMatchObject({ ok: true, annotation: { buffer: { number: 1 }, line: 1, text: "Explain this boundary", kind: "warning", placement: "callout", revealed: true } })
+		const nvim = attach({ socket })
+		expect(await nvim.executeLua("return #vim.api.nvim_buf_get_extmarks(1, vim.api.nvim_create_namespace('opencode_mcp_presentation'), 0, -1, {})", [])).toBe(1)
+	})
 })
 
 test("fails closed after the bound Neovim instance exits", async () => {
@@ -275,14 +284,14 @@ test("rejects missing or stale focus context", async () => {
 
 test("advertises connected-server instructions, presentation tools, focused context, selections, and LSP hover", async () => {
 	const response = await handleMessage({ jsonrpc: "2.0", id: 1, method: "initialize" }, new NvimContextBridge(undefined))
-	expect(response).toMatchObject({ result: { instructions: expect.stringContaining("Prefer nvim_focus_context") } })
+	expect(response).toMatchObject({ result: { instructions: expect.stringContaining("Prefer focus_context") } })
 	const tools = await handleMessage({ jsonrpc: "2.0", id: 2, method: "tools/list" }, new NvimContextBridge(undefined))
-	expect(tools).toMatchObject({ result: { tools: expect.arrayContaining([expect.objectContaining({ name: "nvim_focus_context" }), expect.objectContaining({ name: "nvim_selection" }), expect.objectContaining({ name: "nvim_diagnostic_summary" }), expect.objectContaining({ name: "nvim_reveal" }), expect.objectContaining({ name: "nvim_highlight" })]) } })
-	const summary = await handleMessage({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "nvim_diagnostic_summary", arguments: { maxItems: 51 } } }, new NvimContextBridge(undefined))
+	expect(tools).toMatchObject({ result: { tools: expect.arrayContaining([expect.objectContaining({ name: "focus_context" }), expect.objectContaining({ name: "selection" }), expect.objectContaining({ name: "diagnostic_summary" }), expect.objectContaining({ name: "reveal" }), expect.objectContaining({ name: "highlight" })]) } })
+	const summary = await handleMessage({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "diagnostic_summary", arguments: { maxItems: 51 } } }, new NvimContextBridge(undefined))
 	expect(summary).toMatchObject({ result: { isError: true, content: [expect.objectContaining({ text: expect.stringContaining("Request at most 50 diagnostic summary items") })] } })
-	const reveal = await handleMessage({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "nvim_reveal", arguments: { buffer: 1, line: 1 } } }, new NvimContextBridge(undefined))
+	const reveal = await handleMessage({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "reveal", arguments: { buffer: 1, line: 1 } } }, new NvimContextBridge(undefined))
 	expect(reveal).toMatchObject({ result: { isError: true, content: [expect.objectContaining({ text: expect.stringContaining("Specify buffer, line, and column") })] } })
-	const highlight = await handleMessage({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "nvim_highlight", arguments: { buffer: 1, startLine: 1, startColumn: 1, endLine: 1, endColumn: 2, durationMs: 30001 } } }, new NvimContextBridge(undefined))
+	const highlight = await handleMessage({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "highlight", arguments: { buffer: 1, startLine: 1, startColumn: 1, endLine: 1, endColumn: 2, durationMs: 30001 } } }, new NvimContextBridge(undefined))
 	expect(highlight).toMatchObject({ result: { isError: true, content: [expect.objectContaining({ text: expect.stringContaining("must not exceed 30000 ms") })] } })
 })
 
@@ -336,6 +345,6 @@ test("keeps the curated MCP tool contract", async () => {
 	const response = await handleMessage({ jsonrpc: "2.0", id: 1, method: "tools/list" }, new NvimContextBridge(undefined))
 	expect(response).toMatchObject({ jsonrpc: "2.0", id: 1 })
 	if (response && "result" in response && typeof response.result === "object" && response.result !== null && "tools" in response.result && Array.isArray(response.result.tools)) {
-		expect(response.result.tools.map(function(tool) { return tool.name })).toEqual(["nvim_context", "nvim_visible_windows", "nvim_list_buffers", "nvim_read_buffer", "nvim_diagnostic_summary", "nvim_diagnostics", "nvim_focus_context", "nvim_selection", "nvim_quickfix", "nvim_reveal", "nvim_highlight", "nvim_clear_highlight"])
+		expect(response.result.tools.map(function(tool) { return tool.name })).toEqual(["context", "visible_windows", "list_buffers", "read_buffer", "diagnostic_summary", "diagnostics", "focus_context", "selection", "quickfix", "reveal", "highlight", "clear_highlight", "annotate"])
 	}
 })

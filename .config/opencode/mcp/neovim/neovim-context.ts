@@ -1,18 +1,19 @@
-import { DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS, DEFAULT_DISCOVERY_ITEMS, DEFAULT_HIGHLIGHT_DURATION_MS, MAX_DIAGNOSTIC_SUMMARY_ITEMS, MAX_DISCOVERY_ITEMS, MAX_HIGHLIGHT_DURATION_MS, MAX_HIGHLIGHT_LINES, MAX_READ_BYTES, MAX_READ_LINES, NvimContextBridge, type BridgeFailure, type BridgeResult, type BufferInventoryResult, type BufferReadOptions, type BufferReadResult, type ClearHighlightOptions, type ClearHighlightResult, type DiagnosticSummaryOptions, type DiagnosticSummaryResult, type DiagnosticsResult, type FocusContextResult, type HighlightOptions, type HighlightResult, type QuickfixOptions, type QuickfixResult, type RevealOptions, type RevealResult, type SelectionResult, type VisibleWindowsResult } from "./neovim-bridge"
+import { DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS, DEFAULT_DISCOVERY_ITEMS, DEFAULT_HIGHLIGHT_DURATION_MS, MAX_DIAGNOSTIC_SUMMARY_ITEMS, MAX_DISCOVERY_ITEMS, MAX_HIGHLIGHT_DURATION_MS, MAX_HIGHLIGHT_LINES, MAX_READ_BYTES, MAX_READ_LINES, NvimContextBridge, type AnnotationOptions, type AnnotationResult, type BridgeFailure, type BridgeResult, type BufferInventoryResult, type BufferReadOptions, type BufferReadResult, type ClearHighlightOptions, type ClearHighlightResult, type DiagnosticSummaryOptions, type DiagnosticSummaryResult, type DiagnosticsResult, type FocusContextResult, type HighlightOptions, type HighlightResult, type QuickfixOptions, type QuickfixResult, type RevealOptions, type RevealResult, type SelectionResult, type VisibleWindowsResult } from "./neovim-bridge"
 import { isNumber, isRecord, isString, type JsonRecord } from "./nvim-utils"
 
-const TOOL_NAME = "nvim_context"
-const VISIBLE_WINDOWS_TOOL_NAME = "nvim_visible_windows"
-const LIST_BUFFERS_TOOL_NAME = "nvim_list_buffers"
-const READ_BUFFER_TOOL_NAME = "nvim_read_buffer"
-const DIAGNOSTICS_TOOL_NAME = "nvim_diagnostics"
-const DIAGNOSTIC_SUMMARY_TOOL_NAME = "nvim_diagnostic_summary"
-const FOCUS_CONTEXT_TOOL_NAME = "nvim_focus_context"
-const SELECTION_TOOL_NAME = "nvim_selection"
-const QUICKFIX_TOOL_NAME = "nvim_quickfix"
-const REVEAL_TOOL_NAME = "nvim_reveal"
-const HIGHLIGHT_TOOL_NAME = "nvim_highlight"
-const CLEAR_HIGHLIGHT_TOOL_NAME = "nvim_clear_highlight"
+const TOOL_NAME = "context"
+const VISIBLE_WINDOWS_TOOL_NAME = "visible_windows"
+const LIST_BUFFERS_TOOL_NAME = "list_buffers"
+const READ_BUFFER_TOOL_NAME = "read_buffer"
+const DIAGNOSTICS_TOOL_NAME = "diagnostics"
+const DIAGNOSTIC_SUMMARY_TOOL_NAME = "diagnostic_summary"
+const FOCUS_CONTEXT_TOOL_NAME = "focus_context"
+const SELECTION_TOOL_NAME = "selection"
+const QUICKFIX_TOOL_NAME = "quickfix"
+const REVEAL_TOOL_NAME = "reveal"
+const HIGHLIGHT_TOOL_NAME = "highlight"
+const CLEAR_HIGHLIGHT_TOOL_NAME = "clear_highlight"
+const ANNOTATE_TOOL_NAME = "annotate"
 const PROTOCOL_VERSION = "2025-06-18"
 const READ_OPTION_NAMES = new Set(["buffer", "startLine", "endLine"])
 const DIAGNOSTIC_SUMMARY_OPTION_NAMES = new Set(["buffer", "maxItems"])
@@ -20,9 +21,10 @@ const QUICKFIX_OPTION_NAMES = new Set(["kind", "maxItems"])
 const REVEAL_OPTION_NAMES = new Set(["buffer", "line", "column", "focus", "split"])
 const HIGHLIGHT_OPTION_NAMES = new Set(["buffer", "path", "startLine", "startColumn", "endLine", "endColumn", "durationMs", "reveal"])
 const CLEAR_HIGHLIGHT_OPTION_NAMES = new Set(["buffer", "highlightId"])
+const ANNOTATE_OPTION_NAMES = new Set(["buffer", "line", "text", "kind", "placement", "durationMs", "reveal"])
 const REVEAL_SPLITS = new Set(["none", "horizontal", "vertical"])
 
-type ToolResult = BridgeResult | VisibleWindowsResult | BufferInventoryResult | BufferReadResult | ClearHighlightResult | DiagnosticSummaryResult | DiagnosticsResult | FocusContextResult | HighlightResult | QuickfixResult | RevealResult | SelectionResult
+type ToolResult = AnnotationResult | BridgeResult | VisibleWindowsResult | BufferInventoryResult | BufferReadResult | ClearHighlightResult | DiagnosticSummaryResult | DiagnosticsResult | FocusContextResult | HighlightResult | QuickfixResult | RevealResult | SelectionResult
 type ToolHandler = (params: JsonRecord, bridge: NvimContextBridge) => Promise<ToolResult>
 
 export { NvimContextBridge } from "./neovim-bridge"
@@ -238,6 +240,54 @@ function parseClearHighlightOptions(params: JsonRecord): ClearHighlightOptions |
 	return { buffer: values[0], highlightId: values[1] }
 }
 
+function parseAnnotationOptions(params: JsonRecord): AnnotationOptions | BridgeFailure {
+	const arguments_ = readArguments(params)
+	if ("error" in arguments_) return arguments_
+	return annotationOptions(arguments_)
+}
+
+// fallow-ignore-next-line complexity -- combines the independently validated annotation fields.
+function annotationOptions(arguments_: JsonRecord): AnnotationOptions | BridgeFailure {
+	const unsupportedArgument = unsupportedPresentationArgument(arguments_, ANNOTATE_OPTION_NAMES, "annotation")
+	if (unsupportedArgument) return unsupportedArgument
+	const position = annotationPosition(arguments_)
+	if ("error" in position) return position
+	const text = annotationText(arguments_.text)
+	if (typeof text !== "string") return text
+	const kind = annotationKind(arguments_.kind)
+	if (typeof kind !== "string") return kind
+	const placement = annotationPlacement(arguments_.placement)
+	if (typeof placement !== "string") return placement
+	const reveal = optionalBoolean(arguments_.reveal)
+	if (reveal === null) return bridgeError("NVIM_INVALID_ARGUMENT", "reveal must be a boolean")
+	const durationMs = highlightDuration(arguments_.durationMs)
+	if (typeof durationMs !== "number") return durationMs
+	return { buffer: position[0], line: position[1], text, kind, placement, durationMs, reveal: reveal ?? true }
+}
+
+function annotationPosition(arguments_: JsonRecord): [number, number] | BridgeFailure {
+	const buffer = positiveInteger(arguments_.buffer)
+	const line = positiveInteger(arguments_.line)
+	return buffer === null || line === null ? bridgeError("NVIM_INVALID_ARGUMENT", "buffer and line must be positive integers") : [buffer, line]
+}
+
+function annotationText(value: unknown): string | BridgeFailure {
+	return isString(value) && value !== "" && value.length <= 512 ? value : bridgeError("NVIM_INVALID_ARGUMENT", "text must be a non-empty string of at most 512 characters")
+}
+
+// fallow-ignore-next-line complexity -- three fixed presentation kinds form the public contract.
+function annotationKind(value: unknown): AnnotationOptions["kind"] | BridgeFailure {
+	if (value === undefined || value === "note") return "note"
+	if (value === "warning" || value === "error") return value
+	return bridgeError("NVIM_INVALID_ARGUMENT", "kind must be note, warning, or error")
+}
+
+function annotationPlacement(value: unknown): AnnotationOptions["placement"] | BridgeFailure {
+	if (value === undefined || value === "eol") return "eol"
+	if (value === "above" || value === "callout") return value
+	return bridgeError("NVIM_INVALID_ARGUMENT", "placement must be above, callout, or eol")
+}
+
 function unsupportedPresentationArgument(arguments_: JsonRecord, names: Set<string>, label: string): BridgeFailure | undefined {
 	const unsupportedArgument = Object.keys(arguments_).find(function(key) { return names.has(key) === false })
 	return unsupportedArgument ? bridgeError("NVIM_INVALID_ARGUMENT", `Unsupported ${label} argument: ${unsupportedArgument}`) : undefined
@@ -306,11 +356,15 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
 		const options = parseClearHighlightOptions(params)
 		return "error" in options ? options : bridge.clearHighlight(options)
 	},
+	[ANNOTATE_TOOL_NAME]: async function(params, bridge) {
+		const options = parseAnnotationOptions(params)
+		return "error" in options ? options : bridge.annotate(options)
+	},
 }
 
 const REQUEST_HANDLERS: Record<string, (id: unknown) => JsonRecord | undefined> = {
 	"notifications/initialized": function() { return undefined },
-	initialize: function(id) { return jsonRpcResult(id, { protocolVersion: PROTOCOL_VERSION, capabilities: { tools: {} }, instructions: "Use these tools only when live Neovim state is relevant. Prefer nvim_focus_context for ambiguous references to this file or this code. Use nvim_visible_windows or nvim_list_buffers to discover buffers, nvim_selection for active visual text, nvim_read_buffer for bounded live or unsaved text, nvim_diagnostic_summary to triage editor diagnostics, nvim_diagnostics for complete diagnostics, and nvim_quickfix for current problem lists. For a where-is request, search first, then use nvim_highlight with either its loaded buffer or its workspace-relative path plus line. It opens or reuses the file in a source window, highlights the whole line when columns are omitted, and does not steal focus. Use nvim_reveal when a position should be shown without a highlight. These presentation tools preserve buffer contents. Results are point-in-time snapshots or presentation changes in one bound Neovim instance; do not infer another editor instance or on-disk state.", serverInfo: { name: "neovim-context", version: "0.1.0" } }) },
+	initialize: function(id) { return jsonRpcResult(id, { protocolVersion: PROTOCOL_VERSION, capabilities: { tools: {} }, instructions: "Use these tools only when live Neovim state is relevant. Prefer focus_context for ambiguous references to this file or this code. Use visible_windows or list_buffers to discover buffers, selection for active visual text, read_buffer for bounded live or unsaved text, diagnostic_summary to triage editor diagnostics, diagnostics for complete diagnostics, and quickfix for current problem lists. For a where-is request, search first, then use highlight with either its loaded buffer or its workspace-relative path plus line. Use annotate only for concise, actionable review findings or explanations tied to a source line; do not use it for routine status updates or lengthy prose. These presentation tools preserve buffer contents. Results are point-in-time snapshots or presentation changes in one bound Neovim instance; do not infer another editor instance or on-disk state.", serverInfo: { name: "neovim-context", version: "0.1.0" } }) },
 	"tools/list": function(id) { return jsonRpcResult(id, { tools: tools() }) },
 }
 
@@ -351,6 +405,7 @@ function tools() {
 		{ name: REVEAL_TOOL_NAME, description: "Reveal an existing source buffer at an exact position, optionally creating an explicit split. Focus remains unchanged unless requested.", inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, line: { type: "integer", minimum: 1 }, column: { type: "integer", minimum: 1 }, focus: { type: "boolean", default: false }, split: { type: "string", enum: ["none", "horizontal", "vertical"], default: "none" } }, required: ["buffer", "line", "column"], additionalProperties: false } },
 		{ name: HIGHLIGHT_TOOL_NAME, description: `Temporarily open or reuse a workspace source file and highlight a line or exact range for up to ${MAX_HIGHLIGHT_DURATION_MS} ms without changing text. Specify exactly one of buffer or workspace-relative path. Omitting columns highlights the whole line.`, inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, path: { type: "string", minLength: 1 }, startLine: { type: "integer", minimum: 1 }, startColumn: { type: "integer", minimum: 1 }, endLine: { type: "integer", minimum: 1 }, endColumn: { type: "integer", minimum: 1 }, durationMs: { type: "integer", minimum: 1, maximum: MAX_HIGHLIGHT_DURATION_MS, default: DEFAULT_HIGHLIGHT_DURATION_MS }, reveal: { type: "boolean", default: true } }, required: ["startLine"], anyOf: [{ required: ["buffer"] }, { required: ["path"] }], additionalProperties: false } },
 		{ name: CLEAR_HIGHLIGHT_TOOL_NAME, description: "Clear a temporary highlight previously returned by nvim_highlight.", inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, highlightId: { type: "integer", minimum: 1 } }, required: ["buffer", "highlightId"], additionalProperties: false } },
+		{ name: ANNOTATE_TOOL_NAME, description: "Temporarily add one concise colored note for an actionable review finding or explanation. callout renders an arrowed multi-line note and reveals the target by default. Do not use for routine status updates.", inputSchema: { type: "object", properties: { buffer: { type: "integer", minimum: 1 }, line: { type: "integer", minimum: 1 }, text: { type: "string", minLength: 1, maxLength: 512 }, kind: { type: "string", enum: ["note", "warning", "error"], default: "note" }, placement: { type: "string", enum: ["above", "callout", "eol"], default: "eol" }, reveal: { type: "boolean", default: true }, durationMs: { type: "integer", minimum: 1, maximum: MAX_HIGHLIGHT_DURATION_MS, default: DEFAULT_HIGHLIGHT_DURATION_MS } }, required: ["buffer", "line", "text"], additionalProperties: false } },
 	]
 }
 

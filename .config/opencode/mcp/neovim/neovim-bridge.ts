@@ -474,6 +474,57 @@ local namespace = vim.api.nvim_create_namespace("opencode_mcp_presentation")
 return { cleared = vim.api.nvim_buf_del_extmark(buffer, namespace, id) }
 `
 
+const ANNOTATE_LUA = `
+local buffer, line, text, kind, placement, duration_ms, reveal = ...
+if vim.api.nvim_buf_is_valid(buffer) == false or vim.api.nvim_buf_is_loaded(buffer) == false then return { error = "invalidBuffer" } end
+local options = vim.bo[buffer]
+local metadata = { number = buffer, name = vim.api.nvim_buf_get_name(buffer), loaded = true, filetype = options.filetype, buftype = options.buftype, modified = options.modified }
+if metadata.name == "" or metadata.buftype ~= "" or metadata.filetype == "opencode" or metadata.filetype == "opencode_terminal" then return { error = "invalidBuffer" } end
+local total_lines = vim.api.nvim_buf_line_count(buffer)
+if line > total_lines then return { error = "invalidRange", totalLines = total_lines } end
+local groups = { note = "Comment", warning = "DiagnosticWarn", error = "DiagnosticError" }
+local namespace = vim.api.nvim_create_namespace("opencode_mcp_presentation")
+local decoration = { priority = 200 }
+if placement == "above" then
+  decoration.virt_lines = {{{ "-> " .. text, groups[kind] }}}
+  decoration.virt_lines_above = true
+elseif placement == "callout" then
+  local lines = {}
+  local remaining = text
+  for index = 1, 3 do
+    if remaining == "" then break end
+    local part = remaining:sub(1, 72)
+    if #remaining > 72 then
+      local boundary = part:match("^.*()%s")
+      if boundary then part = part:sub(1, boundary - 1) end
+    end
+    table.insert(lines, {{ index == 1 and "└─ " or "   ", groups[kind] }, { part, groups[kind] }})
+    remaining = remaining:sub(#part + 1):gsub("^%s+", "")
+  end
+  decoration.virt_lines = lines
+  decoration.virt_lines_above = false
+else
+  decoration.virt_text = {{ "  -> " .. text, groups[kind] }}
+  decoration.virt_text_pos = "eol"
+end
+local id = vim.api.nvim_buf_set_extmark(buffer, namespace, line - 1, 0, decoration)
+if duration_ms > 0 then vim.defer_fn(function() if vim.api.nvim_buf_is_valid(buffer) then vim.api.nvim_buf_del_extmark(buffer, namespace, id) end end, duration_ms) end
+local revealed = false
+if reveal then
+  local window = nil
+  for _, candidate in ipairs(vim.api.nvim_list_wins()) do if vim.api.nvim_win_get_buf(candidate) == buffer then window = candidate break end end
+  if window == nil then
+    for _, candidate in ipairs(vim.api.nvim_list_wins()) do
+      local candidate_buffer = vim.api.nvim_win_get_buf(candidate)
+      local candidate_options = vim.bo[candidate_buffer]
+      if vim.api.nvim_buf_is_loaded(candidate_buffer) and vim.api.nvim_buf_get_name(candidate_buffer) ~= "" and candidate_options.buftype == "" and candidate_options.filetype ~= "opencode" and candidate_options.filetype ~= "opencode_terminal" then window = candidate break end
+    end
+  end
+  if window ~= nil then vim.api.nvim_win_set_buf(window, buffer); vim.api.nvim_win_set_cursor(window, { line, 0 }); vim.api.nvim_win_call(window, function() vim.cmd("normal! zz") end); revealed = true end
+end
+return { pid = vim.fn.getpid(), cwd = vim.fn.getcwd(), buffer = metadata, annotationId = id, line = line, text = text, kind = kind, placement = placement, expiresInMs = duration_ms, revealed = revealed }
+`
+
 const BUFFER_INFO_GUARDS = { number: isNumber, name: isString, filetype: isString, buftype: isString, loaded: isBoolean, modified: isBoolean }
 const VISIBLE_WINDOW_GUARDS = { window: isNumber, buffer: isNumber, name: isString, filetype: isString, buftype: isString, topline: isNumber, botline: isNumber }
 const VISIBLE_WINDOWS_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, activeBuffer: isBufferInfo, windows: isVisibleWindowList }
@@ -491,6 +542,7 @@ const QUICKFIX_ITEM_GUARDS = { filename: isString, line: isNumber, column: isNum
 const QUICKFIX_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, kind: isString, title: isString, total: isNumber, items: isQuickfixItemList }
 const REVEAL_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, window: isNumber, position: isPosition, focused: isBoolean, splitCreated: isBoolean }
 const HIGHLIGHT_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, highlightId: isNumber, start: isPosition, end: isPosition, expiresInMs: isNumber, revealed: isBoolean }
+const ANNOTATION_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, buffer: isBufferInfo, annotationId: isNumber, line: isNumber, text: isString, kind: isString, placement: isString, expiresInMs: isNumber, revealed: isBoolean }
 
 export type BridgeError = {
 	code: "NVIM_SOCKET_MISSING" | "NVIM_UNAVAILABLE" | "NVIM_INVALID_RESPONSE" | "NVIM_INVALID_ARGUMENT" | "NVIM_CONTENT_LIMIT"
@@ -526,10 +578,12 @@ export type QuickfixOptions = { kind: "quickfix" | "location"; maxItems: number 
 export type RevealOptions = { buffer: number; line: number; column: number; focus: boolean; split: "none" | "horizontal" | "vertical" }
 export type HighlightOptions = { buffer?: number; path?: string; startLine: number; startColumn?: number; endLine?: number; endColumn?: number; durationMs: number; reveal: boolean }
 export type ClearHighlightOptions = { buffer: number; highlightId: number }
+export type AnnotationOptions = { buffer: number; line: number; text: string; kind: "note" | "warning" | "error"; placement: "above" | "eol" | "callout"; durationMs: number; reveal: boolean }
 export type QuickfixResult = { ok: true; quickfix: { instance: ActiveContext["instance"]; kind: "quickfix" | "location"; title: string; total: number; items: QuickfixItem[] } } | BridgeFailure
 export type RevealResult = { ok: true; reveal: { instance: ActiveContext["instance"]; buffer: BufferInfo; window: number; position: { line: number; column: number }; focused: boolean; splitCreated: boolean } } | BridgeFailure
 export type HighlightResult = { ok: true; highlight: { instance: ActiveContext["instance"]; buffer: BufferInfo; highlightId: number; start: { line: number; column: number }; end: { line: number; column: number }; expiresInMs: number; revealed: boolean } } | BridgeFailure
 export type ClearHighlightResult = { ok: true; clearHighlight: { cleared: boolean } } | BridgeFailure
+export type AnnotationResult = { ok: true; annotation: { instance: ActiveContext["instance"]; buffer: BufferInfo; annotationId: number; line: number; text: string; kind: "note" | "warning" | "error"; placement: "above" | "eol" | "callout"; expiresInMs: number; revealed: boolean } } | BridgeFailure
 export type QuickfixItem = { filename: string; line: number; column: number; endLine: number; endColumn: number; text: string; type: string; valid: boolean }
 export type NvimClientFactory = (socket: string) => NeovimClient
 export type TimeoutObserver = { created(): void; cleared(): void; fired(): void }
@@ -543,6 +597,7 @@ type DiagnosticSummarySnapshot = { pid: number; cwd: string; buffer: BufferInfo;
 type QuickfixSnapshot = { pid: number; cwd: string; kind: "quickfix" | "location"; title: string; total: number; items: QuickfixItem[] }
 type RevealSnapshot = { pid: number; cwd: string; buffer: BufferInfo; window: number; position: { line: number; column: number }; focused: boolean; splitCreated: boolean }
 type HighlightSnapshot = { pid: number; cwd: string; buffer: BufferInfo; highlightId: number; start: { line: number; column: number }; end: { line: number; column: number }; expiresInMs: number; revealed: boolean }
+type AnnotationSnapshot = { pid: number; cwd: string; buffer: BufferInfo; annotationId: number; line: number; text: string; kind: "note" | "warning" | "error"; placement: "above" | "eol" | "callout"; expiresInMs: number; revealed: boolean }
 
 function bridgeError(code: BridgeError["code"], message: string): BridgeFailure {
 	return { ok: false, error: { code, message } }
@@ -794,6 +849,18 @@ function isHighlightSnapshot(value: unknown): value is HighlightSnapshot {
 	return hasProperties(value, HIGHLIGHT_SNAPSHOT_GUARDS)
 }
 
+// fallow-ignore-next-line complexity -- validates the fixed annotation enums.
+function isAnnotationSnapshot(value: unknown): value is AnnotationSnapshot {
+	return hasProperties(value, ANNOTATION_SNAPSHOT_GUARDS) && (value.kind === "note" || value.kind === "warning" || value.kind === "error") && (value.placement === "above" || value.placement === "eol" || value.placement === "callout")
+}
+
+function annotationSnapshotResult(value: unknown): AnnotationSnapshot | BridgeFailure {
+	const failure = presentationFailure(value)
+	if (failure) return failure
+	if (isAnnotationSnapshot(value) && isSourceBuffer(value.buffer)) return value
+	throw new Error("Neovim returned invalid annotation data")
+}
+
 function highlightSnapshotResult(value: unknown): HighlightSnapshot | BridgeFailure {
 	const failure = presentationFailure(value)
 	if (failure) return failure
@@ -971,6 +1038,18 @@ export class NvimContextBridge {
 		}
 	}
 
+	async annotate(options: AnnotationOptions): Promise<AnnotationResult> {
+		const client = this.client()
+		if ("error" in client) return client
+		try {
+			const result = await this.annotationSnapshot(client.nvim, options)
+			if ("error" in result) return result
+			return { ok: true, annotation: { instance: { socket: this.#socket!, pid: result.pid, cwd: result.cwd }, buffer: result.buffer, annotationId: result.annotationId, line: result.line, text: result.text, kind: result.kind, placement: result.placement, expiresInMs: result.expiresInMs, revealed: result.revealed } }
+		} catch {
+			return this.unavailable()
+		}
+	}
+
 	async activeContextSnapshot(nvim: NeovimClient): Promise<Omit<ActiveContext, "instance"> & { pid: number; cwd: string }> {
 		const snapshot = await withTimeout(nvim.executeLua(ACTIVE_CONTEXT_LUA, []), this.#timeoutObserver)
 		if (isActiveContextSnapshot(snapshot) === false) throw new Error("Neovim returned invalid context")
@@ -1038,6 +1117,11 @@ export class NvimContextBridge {
 	async clearHighlightSnapshot(nvim: NeovimClient, options: ClearHighlightOptions): Promise<{ cleared: boolean } | BridgeFailure> {
 		const snapshot = await withTimeout(nvim.executeLua(CLEAR_HIGHLIGHT_LUA, [options.buffer, options.highlightId]), this.#timeoutObserver)
 		return clearHighlightSnapshotResult(snapshot)
+	}
+
+	async annotationSnapshot(nvim: NeovimClient, options: AnnotationOptions): Promise<AnnotationSnapshot | BridgeFailure> {
+		const snapshot = await withTimeout(nvim.executeLua(ANNOTATE_LUA, [options.buffer, options.line, options.text, options.kind, options.placement, options.durationMs, options.reveal]), this.#timeoutObserver)
+		return annotationSnapshotResult(snapshot)
 	}
 
 	#clientForSocket(): NeovimClient | BridgeFailure {

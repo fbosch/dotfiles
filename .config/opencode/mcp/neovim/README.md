@@ -12,18 +12,19 @@ Sibling worktrees normally produce separate OpenCode server processes because th
 
 ## Tools
 
-- `nvim_context`: active buffer, cursor, mode, and selection metadata.
+- `context`: active buffer, cursor, mode, and selection metadata.
 - `nvim_focus_context`: the most recently focused normal source buffer before focus entered OpenCode.
 - `nvim_selection`: bounded exact text from the active source visual selection.
-- `nvim_visible_windows`: visible windows and source buffers beside OpenCode.
+- `visible_windows`: visible windows and source buffers beside OpenCode.
 - `nvim_list_buffers`: listed buffers and source-buffer subset.
 - `nvim_read_buffer`: bounded in-memory source reads, including unsaved content.
 - `nvim_diagnostic_summary`: severity counts and a bounded diagnostic prefix for the active or selected buffer.
 - `nvim_diagnostics`: current diagnostics for the active or selected buffer.
 - `nvim_quickfix`: bounded current quickfix or location-list entries.
 - `nvim_reveal`: reveal an existing source buffer at an exact position, optionally in an explicit split.
-- `nvim_highlight`: temporarily mark one exact source-buffer range without changing text.
-- `nvim_clear_highlight`: remove a highlight returned by `nvim_highlight` before it expires.
+- `highlight`: temporarily mark one exact source-buffer range without changing text.
+- `clear_highlight`: remove a highlight returned by `highlight` before it expires.
+- `annotate`: temporarily attach one concise, color-coded actionable note above or beside a source line.
 
 `nvim_read_buffer` and `nvim_selection` allow at most 500 lines or 32 KiB per call. The bridge does not expose arbitrary Neovim evaluation, commands, edits, terminal input, or socket selection.
 
