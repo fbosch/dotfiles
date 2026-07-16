@@ -18,6 +18,7 @@
 | `review`           | Findings are the main output: code review, PR review, risk audit                                                         |
 | `spec`             | Turning a request into an explicit contract before implementation                                                        |
 | `test`             | Writing, running, or diagnosing tests and coverage                                                                        |
+| `validate`         | Bounded, read-only post-change validation with targeted checks and explicit evidence                                     |
 
 ## Routing Rules
 
@@ -29,7 +30,7 @@
 - Give each agent the user intent, known context, scope, whether it may modify files, required validation, and expected final output.
 - Reuse an agent's `task_id` for follow-up work on the same problem.
 - Integrate and verify completed agent work rather than repeating it, unless evidence conflicts with it.
-- Do not delegate trivial validation commands unless their output needs interpretation or follow-up changes.
+- Do not delegate trivial validation commands. Use `validate` when selecting and isolating several targeted checks or interpreting their evidence adds value.
 
 ## Agent Boundaries
 
@@ -37,6 +38,7 @@
 - `analyze` explains known code; `explore` locates unknown code; `patterns` finds precedents; `debug` diagnoses observed failures.
 - `review` audits an implementation; `adversarial` actively searches for ways a design or implementation can fail.
 - `pr-feedback` handles existing reviewer threads; `review` performs an independent PR or code review, and `quick` handles generic deterministic workflows.
+- `validate` runs bounded, read-only checks after changes; `test` owns test design and failure diagnosis, `debug` owns unexplained failures, and `review` owns risk assessment.
 - `research` gathers source-backed external evidence without making changes.
 - `docs` owns substantial documentation deliverables; `test` owns non-trivial test creation or diagnosis.
 - `quick` is only for deterministic, tightly scoped execution. Do not use it where judgment, contract design, or substantial prose is the deliverable.

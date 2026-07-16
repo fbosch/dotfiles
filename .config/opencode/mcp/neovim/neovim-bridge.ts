@@ -1,6 +1,6 @@
 import { attach, type Buffer, type NeovimClient } from "neovim"
 import { hasProperties, isNumber, isRecord, isString } from "./nvim-utils"
-import { bufferInfo, isDiagnostic, isSourceBuffer, windowInfo } from "./neovim-metadata"
+import { bufferInfo, isDiagnostic, isSourceBuffer } from "./neovim-metadata"
 
 const REQUEST_TIMEOUT_MS = 1000
 export const MAX_READ_LINES = 500
@@ -45,6 +45,18 @@ return buffers
 `
 
 const VISIBLE_WINDOWS_LUA = `
+local function buffer_info(buffer)
+  local options = vim.bo[buffer]
+  return {
+    number = buffer,
+    name = vim.api.nvim_buf_get_name(buffer),
+    loaded = vim.api.nvim_buf_is_loaded(buffer),
+    filetype = options.filetype,
+    buftype = options.buftype,
+    modified = options.modified,
+  }
+end
+
 local windows = {}
 for _, window in ipairs(vim.api.nvim_list_wins()) do
   local buffer = vim.api.nvim_win_get_buf(window)
@@ -60,7 +72,12 @@ for _, window in ipairs(vim.api.nvim_list_wins()) do
     botline = viewport.botline,
   })
 end
-return windows
+return {
+  pid = vim.fn.getpid(),
+  cwd = vim.fn.getcwd(),
+  activeBuffer = buffer_info(vim.api.nvim_get_current_buf()),
+  windows = windows,
+}
 `
 
 const BUFFER_READ_LUA = `
@@ -76,6 +93,7 @@ return { lines = lines }
 
 const BUFFER_INFO_GUARDS = { number: isNumber, name: isString, filetype: isString, buftype: isString, loaded: isBoolean, modified: isBoolean }
 const VISIBLE_WINDOW_GUARDS = { window: isNumber, buffer: isNumber, name: isString, filetype: isString, buftype: isString, topline: isNumber, botline: isNumber }
+const VISIBLE_WINDOWS_SNAPSHOT_GUARDS = { pid: isNumber, cwd: isString, activeBuffer: isBufferInfo, windows: isVisibleWindowList }
 
 export type BridgeError = {
 	code: "NVIM_SOCKET_MISSING" | "NVIM_UNAVAILABLE" | "NVIM_INVALID_RESPONSE" | "NVIM_INVALID_ARGUMENT" | "NVIM_CONTENT_LIMIT"
@@ -162,6 +180,14 @@ function isVisibleWindow(value: unknown): value is VisibleWindow {
 	return hasProperties(value, VISIBLE_WINDOW_GUARDS)
 }
 
+function isVisibleWindowList(value: unknown): value is VisibleWindow[] {
+	return Array.isArray(value) && value.every(isVisibleWindow)
+}
+
+function isVisibleWindowsSnapshot(value: unknown): value is { pid: number; cwd: string; activeBuffer: BufferInfo; windows: VisibleWindow[] } {
+	return hasProperties(value, VISIBLE_WINDOWS_SNAPSHOT_GUARDS)
+}
+
 function isOversizedRead(value: unknown) {
 	return isRecord(value) && value.tooLarge === true
 }
@@ -220,8 +246,8 @@ export class NvimContextBridge {
 		const client = this.client()
 		if ("error" in client) return client
 		try {
-			const [context, windows] = await Promise.all([this.#contextFrom(client.nvim), this.visibleWindowSnapshot(client.nvim)])
-			return { ok: true, visibleWindows: { instance: context.instance, activeBuffer: context.activeBuffer, windows, sourceWindows: windows.filter(isSourceBuffer) } }
+			const snapshot = await this.visibleWindowSnapshot(client.nvim)
+			return { ok: true, visibleWindows: { instance: { socket: this.#socket!, pid: snapshot.pid, cwd: snapshot.cwd }, activeBuffer: snapshot.activeBuffer, windows: snapshot.windows, sourceWindows: snapshot.windows.filter(isSourceBuffer) } }
 		} catch {
 			return this.unavailable()
 		}
@@ -231,8 +257,8 @@ export class NvimContextBridge {
 		const client = this.client()
 		if ("error" in client) return client
 		try {
-			const [context, buffers] = await Promise.all([this.#contextFrom(client.nvim), this.bufferInventorySnapshot(client.nvim)])
-			return { ok: true, bufferInventory: { instance: context.instance, buffers, sourceBuffers: buffers.filter(isSourceBuffer) } }
+			const [instance, buffers] = await Promise.all([this.instance(client.nvim), this.bufferInventorySnapshot(client.nvim)])
+			return { ok: true, bufferInventory: { instance, buffers, sourceBuffers: buffers.filter(isSourceBuffer) } }
 		} catch {
 			return this.unavailable()
 		}
@@ -303,10 +329,10 @@ export class NvimContextBridge {
 		return buffers
 	}
 
-	async visibleWindowSnapshot(nvim: NeovimClient): Promise<VisibleWindow[]> {
-		const windows = await withTimeout(nvim.executeLua(VISIBLE_WINDOWS_LUA, []), this.#timeoutObserver)
-		if (Array.isArray(windows) === false || windows.every(isVisibleWindow) === false) throw new Error("Neovim returned invalid visible windows")
-		return windows
+	async visibleWindowSnapshot(nvim: NeovimClient): Promise<{ pid: number; cwd: string; activeBuffer: BufferInfo; windows: VisibleWindow[] }> {
+		const snapshot = await withTimeout(nvim.executeLua(VISIBLE_WINDOWS_LUA, []), this.#timeoutObserver)
+		if (isVisibleWindowsSnapshot(snapshot) === false) throw new Error("Neovim returned invalid visible windows")
+		return snapshot
 	}
 
 	async selectedBuffer(nvim: NeovimClient, bufferNumber?: number): Promise<Buffer | undefined> {

@@ -78,11 +78,12 @@ test("uses the official client to read unsaved source buffers", async () => {
 })
 
 test("collects listed buffers and visible windows in fixed snapshots", async () => {
-	await withNvim(["edit bridge-inventory-one.lua", "vsplit", "edit bridge-inventory-two.lua"], async function(bridge) {
+	await withNvim(["edit bridge-inventory-one.lua", "vsplit", "edit bridge-inventory-two.lua"], async function(bridge, socket) {
 		const inventory = await bridge.bufferInventory()
 		expect(inventory).toMatchObject({
 			ok: true,
 			bufferInventory: {
+				instance: { socket },
 				sourceBuffers: expect.arrayContaining([
 					expect.objectContaining({ name: expect.stringContaining("bridge-inventory-one.lua"), loaded: true, filetype: "", buftype: "", modified: false }),
 					expect.objectContaining({ name: expect.stringContaining("bridge-inventory-two.lua"), loaded: true, filetype: "", buftype: "", modified: false }),
@@ -94,6 +95,8 @@ test("collects listed buffers and visible windows in fixed snapshots", async () 
 		expect(visible).toMatchObject({
 			ok: true,
 			visibleWindows: {
+				instance: { socket },
+				activeBuffer: { name: expect.stringContaining("bridge-inventory-two.lua"), loaded: true, filetype: "", buftype: "", modified: false },
 				sourceWindows: expect.arrayContaining([
 					expect.objectContaining({ name: expect.stringContaining("bridge-inventory-one.lua"), filetype: "", buftype: "", topline: 1 }),
 					expect.objectContaining({ name: expect.stringContaining("bridge-inventory-two.lua"), filetype: "", buftype: "", topline: 1 }),

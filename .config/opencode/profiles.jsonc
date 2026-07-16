@@ -72,6 +72,7 @@
         "docs": "anthropic/claude-opus-4-6",
         "research": "anthropic/claude-opus-4-6",
         "quick": "anthropic/claude-haiku-4-5",
+        "validate": "anthropic/claude-haiku-4-5",
         "benchmark": "anthropic/claude-haiku-4-5"
       }
     },
@@ -112,6 +113,7 @@
         "docs": "github-copilot/claude-opus-4.6",
         "research": "github-copilot/claude-sonnet-4.6",
         "quick": "github-copilot/claude-haiku-4.5",
+        "validate": "github-copilot/claude-haiku-4.5",
         "benchmark": "github-copilot/claude-haiku-4.5",
         "spec": "github-copilot/claude-opus-4.6"
       }
@@ -145,6 +147,7 @@
         "docs": "opencode/claude-opus-4-6",
         "research": "opencode/claude-sonnet-4-6",
         "quick": "opencode/claude-haiku-4-5",
+        "validate": "opencode/claude-haiku-4-5",
         "benchmark": "opencode/claude-haiku-4-5",
         "spec": "opencode/claude-opus-4-6"
       }
@@ -174,6 +177,7 @@
         "docs": "anthropic/claude-opus-4-6",
         "research": "anthropic/claude-sonnet-4-6",
         "quick": "anthropic/claude-haiku-4-5",
+        "validate": "anthropic/claude-haiku-4-5",
         "benchmark": "anthropic/claude-haiku-4-5",
         "spec": "anthropic/claude-opus-4-6"
       }
@@ -283,6 +287,11 @@
           "reasoningEffort": "low",
           "textVerbosity": "low"
         },
+        "validate": {
+          "model": "openai/gpt-5.6-luna-fast",
+          "reasoningEffort": "low",
+          "textVerbosity": "low"
+        },
         "benchmark": {
           "model": "openai/gpt-5.6-luna",
           "reasoningEffort": "medium",
@@ -320,6 +329,7 @@
         "docs": "anthropic/claude-sonnet-4-6",
         "research": "anthropic/claude-sonnet-4-6",
         "quick": "anthropic/claude-haiku-4-5",
+        "validate": "anthropic/claude-haiku-4-5",
         "benchmark": "anthropic/claude-haiku-4-5",
         "spec": "anthropic/claude-sonnet-4-6"
       }

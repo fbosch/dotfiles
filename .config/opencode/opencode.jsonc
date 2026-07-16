@@ -196,6 +196,11 @@
       "reasoningEffort": "low",
       "textVerbosity": "low"
     },
+    "validate": {
+      "model": "openai/gpt-5.6-luna-fast",
+      "reasoningEffort": "low",
+      "textVerbosity": "low"
+    },
     "benchmark": {
       "model": "openai/gpt-5.6-luna",
       "reasoningEffort": "medium",
