@@ -147,6 +147,12 @@ test("reads diagnostics through the official client", async () => {
 	})
 })
 
+test("rejects diagnostics from an unavailable buffer", async () => {
+	await withNvim([], async function(bridge) {
+		expect(await bridge.diagnostics(999)).toMatchObject({ error: { code: "NVIM_INVALID_RESPONSE" } })
+	})
+})
+
 test("returns the recorded source context after focus leaves the buffer", async () => {
 	await withNvim(["file bridge-focus.lua", "call setline(1, ['local focused = true'])"], async function(bridge, socket) {
 		const nvim = attach({ socket })
