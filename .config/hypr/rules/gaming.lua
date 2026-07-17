@@ -1,15 +1,15 @@
 local M = {}
 
 M.default_presentation = {
-	vrr = 2,
+	vrr = 3,
 	direct_scanout = 0,
 }
 
 ---@alias GamingSelector table<string, string>
 
 ---@class GamingPresentation
----@field vrr integer Hyprland `misc:vrr` value.
----@field direct_scanout integer Hyprland `render:direct_scanout` value.
+---@field vrr? integer Hyprland `misc:vrr` override.
+---@field direct_scanout? integer Hyprland `render:direct_scanout` override.
 
 ---@class GamingPolicy
 ---@field name string Stable policy identifier.
@@ -38,7 +38,6 @@ M.games = {
 		freeze = false,
 		confirm_close = true,
 		presentation = {
-			vrr = 2,
 			direct_scanout = 1,
 		},
 	},
@@ -54,7 +53,6 @@ M.games = {
 		freeze = false,
 		confirm_close = true,
 		presentation = {
-			vrr = 2,
 			direct_scanout = 1,
 		},
 	},

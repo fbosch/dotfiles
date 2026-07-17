@@ -208,10 +208,14 @@ local function select_presentation(clients)
 	for _, client in ipairs(clients) do
 		local game = gaming.match(rule_window(client))
 		if game ~= nil and game.presentation ~= nil then
+			local presentation = {
+				vrr = game.presentation.vrr or gaming.default_presentation.vrr,
+				direct_scanout = game.presentation.direct_scanout or gaming.default_presentation.direct_scanout,
+			}
 			if client.focusHistoryID == 0 then
-				return game.presentation
+				return presentation
 			end
-			fallback = fallback or game.presentation
+			fallback = fallback or presentation
 		end
 	end
 

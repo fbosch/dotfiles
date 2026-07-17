@@ -10,7 +10,7 @@ hl.window_rule({ match = { class = "^(GTK Application)$" }, float = true })
 hl.window_rule({ match = { class = "^(Bitwarden)$" }, float = true, size = "900 900" })
 
 -- GNOME Applications (general)
-hl.window_rule({ match = { class = "^(org\\.gnome\\.Calculator)$" }, float = true })
+hl.window_rule({ match = { class = "^(org\\.gnome\\.Calculator)$" }, float = true, persistent_size = true })
 hl.window_rule({ match = { class = "^(org\\.gnome\\.TextEditor)$" }, float = true })
 hl.window_rule({ match = { class = "^(org\\.gnome\\.Loupe)$" }, float = true })
 
@@ -21,7 +21,7 @@ hl.window_rule({ match = { class = "Plexamp" }, float = true, size = "360 620" }
 hl.window_rule({ match = { title = "^(OpenPets Default Pet)$" }, no_blur = true, no_shadow = true, border_size = 0 })
 
 -- Flatseal
-hl.window_rule({ match = { class = "^(com\\.github\\.tchx84\\.Flatseal)$" }, float = true })
+hl.window_rule({ match = { class = "^(com\\.github\\.tchx84\\.Flatseal)$" }, float = true, persistent_size = true })
 
 -- Font Viewer (GNOME)
 hl.window_rule({ match = { class = "^(org\\.gnome\\.font-viewer)$" }, float = true })
