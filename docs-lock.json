@@ -23,10 +23,10 @@
     "hyprland-docs": {
       "repo": "https://github.com/hyprwm/hyprland-wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "8657d27f63aa9b6964078b7ef0c742fa0806f145",
-      "bytes": 210739,
+      "resolvedCommit": "acd42ada671df9bc098c65998b855564aa71146c",
+      "bytes": 213649,
       "fileCount": 32,
-      "manifestSha256": "cb5a6863c957c618954b74c6a4255124693accc58824db594957abcc97946f82",
+      "manifestSha256": "f4c5749651c9000c0a4ddebe516fb5555c87e3b93553d7bc0fd7ec21505dddd0",
       "rulesSha256": "9711428153e452825f0368860d30401cea3ed5f5e90d569d70558c392fe0dc83"
     },
     "waybar-docs": {
