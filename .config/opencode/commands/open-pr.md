@@ -35,6 +35,6 @@ Instructions:
 4. Do not open a PR from only uncommitted working-tree changes. If the branch has no committed changes relative to base, output only `Cannot generate PR description: branch has no committed changes; commit local changes first.` and stop.
 5. If base branch or merge-base cannot be determined, output only the matching `Cannot generate PR description:` error and stop.
 6. Generate PR content using the policy above: first line is `title`, remaining lines are markdown `body`.
-7. Call `open_pr` exactly once with `title`, `body`, `argument1`, and `targetBranch` only when target branch came from Additional context rather than Target branch argument.
+7. Use the `question` tool to ask whether to request a ChatGPT Codex review. If the user confirms, call `open_pr` exactly once with `requestCodexReview: true`; otherwise set `requestCodexReview: false`. Include `title`, `body`, `argument1`, and `targetBranch` only when target branch came from Additional context rather than Target branch argument.
 8. If tool output starts with `ERROR:`, output only that error and stop.
 9. On success, output only the PR URL or success output returned by the tool.

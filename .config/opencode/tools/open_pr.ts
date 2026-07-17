@@ -451,6 +451,16 @@ async function openPullRequest(context: PrContext, title: string, body: string, 
   }
 }
 
+async function requestCodexReview(context: PrContext, prUrl: string, cwd: string): Promise<string | null> {
+  if (context.remote.provider !== "github") {
+    return "ERROR: Cannot request Codex review: it is only supported for GitHub pull requests."
+  }
+
+  const repo = `${context.remote.owner}/${context.remote.repo}`
+  const result = await runCommand("gh", ["pr", "comment", prUrl, "--repo", repo, "--body", "@codex review"], cwd)
+  return result.exitCode === 0 ? null : formatCommandError("gh pr comment", result)
+}
+
 function pathSegment(value: string): string {
   return encodeURIComponent(value).replace(/%20/g, "%20")
 }
@@ -513,6 +523,7 @@ export default tool({
     body: tool.schema.string().optional().describe("Markdown PR body. Required when title is provided."),
     targetBranch: tool.schema.string().optional().describe("Optional PR target branch. Defaults to the repository's main branch."),
     argument1: tool.schema.string().optional().describe("Optional slash-command target branch argument."),
+    requestCodexReview: tool.schema.boolean().optional().describe("Post '@codex review' on the new GitHub pull request."),
   },
   async execute(args, context) {
     const targetBranch = optionalString(args.targetBranch as string | undefined) ?? optionalString(args.argument1 as string | undefined)
@@ -535,6 +546,22 @@ export default tool({
       return "ERROR: Both title and body are required to open a PR."
     }
 
-    return openPullRequest(prContext, args.title, args.body, context.directory)
+    if (args.requestCodexReview === true && prContext.remote.provider !== "github") {
+      return "ERROR: Cannot request Codex review: it is only supported for GitHub pull requests."
+    }
+
+    const prUrl = await openPullRequest(prContext, args.title, args.body, context.directory)
+    if (prUrl.startsWith("ERROR:")) {
+      return prUrl
+    }
+
+    if (args.requestCodexReview === true) {
+      const reviewError = await requestCodexReview(prContext, prUrl, context.directory)
+      if (reviewError !== null) {
+        return `${reviewError}\nPR opened: ${prUrl}`
+      }
+    }
+
+    return prUrl
   },
 })
