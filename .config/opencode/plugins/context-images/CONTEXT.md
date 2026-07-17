@@ -27,7 +27,7 @@ Sources are discovered automatically rather than configured through a plugin-spe
 - Global `~/.config/opencode/AGENTS.md`, or `~/.claude/CLAUDE.md` as a compatibility fallback when enabled.
 - Local paths from OpenCode `config.instructions`; URL instructions are excluded.
 
-Set the plugin's `includeInstructions` option to `true` to replace ambient and nested `imageNestedInstructions` instruction text with images. It defaults to `false`; `imageReadResults` remains independently configured.
+Project and global instruction files discovered from `AGENTS.md` (with `CLAUDE.md` and `CONTEXT.md` fallbacks) are replaced by default. Set the plugin's `includeInstructions` option to `true` to also replace files configured through OpenCode's `config.instructions`. `imageNestedInstructions` and `imageReadResults` are independently configured.
 
 `OPENCODE_DISABLE_PROJECT_CONFIG=1` and `OPENCODE_DISABLE_PROJECT_CONFIG=true` disable project sources while preserving global and explicitly configured sources.
 

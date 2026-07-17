@@ -191,7 +191,7 @@ function scopedPrompt(path: string) {
 }
 
 describe("ContextImagesService", () => {
-  test("defaults instruction replacement to disabled", () => {
+  test("defaults configured instruction replacement to disabled", () => {
     expect(parseIncludeInstructions({})).toBe(false)
     expect(parseIncludeInstructions({ includeInstructions: true })).toBe(true)
     expect(() => parseIncludeInstructions({ includeInstructions: "yes" })).toThrow(
@@ -905,7 +905,7 @@ describe("ContextImagesService", () => {
     expect(renderer.texts).toContain(`Instructions from: ${parentPath}\nParent instructions.`)
   })
 
-  test("leaves scoped instructions as plaintext by default", async () => {
+  test("replaces scoped instructions without configured instruction replacement", async () => {
     const worktree = await temporaryDirectory()
     const cacheRoot = await temporaryDirectory()
     const instructionPath = join(worktree, "nested", "AGENTS.md")
@@ -919,7 +919,7 @@ describe("ContextImagesService", () => {
     const read = completedRead(join(worktree, "nested", "source.ts"), originalOutput, [instructionPath])
     const service = new ContextImagesService({
       cacheRoot,
-  imageNestedInstructions: true,
+      imageNestedInstructions: true,
       imageSupport: async () => true,
       renderer: new FakeRenderer(),
       worktree,
@@ -933,7 +933,11 @@ describe("ContextImagesService", () => {
 
     await warmAndTransform(service, output)
 
-    expect(read.state.output).toBe(originalOutput)
+    expect(read.state.output).toContain(scopedPrompt(instructionPath))
+    expect(read.state.output).not.toContain("Excluded instructions.")
+    expect(read.state).toMatchObject({
+      attachments: [{ filename: `${scopedPrefix(instructionPath)}-001.png` }],
+    })
   })
 
   test("keeps scoped instruction plaintext when one lazy package fails", async () => {
@@ -1371,22 +1375,36 @@ describe("ContextImagesService", () => {
     expect(renderer.texts.some((text) => text.includes("Configured instructions."))).toBe(true)
   })
 
-  test("leaves ambient instructions as plaintext by default", async () => {
+  test("replaces discovered AGENTS.md but excludes configured instructions by default", async () => {
     const worktree = await temporaryDirectory()
     const cacheRoot = await temporaryDirectory()
-    const excludedPath = join(worktree, "AGENTS.md")
-    await writeFile(excludedPath, "Ambient instructions.\n")
+    const configHome = await temporaryDirectory()
+    const configuredPath = join(configHome, "configured.md")
+    await mkdir(join(configHome, "opencode"), { recursive: true })
+    await Promise.all([
+      writeFile(join(worktree, "AGENTS.md"), "Ambient instructions.\n"),
+      writeFile(configuredPath, "Configured instructions.\n"),
+    ])
+    const previousConfigDir = process.env.OPENCODE_CONFIG_DIR
+    process.env.OPENCODE_CONFIG_DIR = join(configHome, "opencode")
     const renderer = new FakeRenderer()
     const service = new ContextImagesService({
       cacheRoot,
       renderer,
       worktree,
     })
+    service.setConfiguredInstructions([configuredPath])
 
-    await service.transformMessages({}, { messages: [{ info: userMessage(), parts: [] }] })
-    await service.waitForRenders()
+    try {
+      await service.transformMessages({}, { messages: [{ info: userMessage(), parts: [] }] })
+      await service.waitForRenders()
+    } finally {
+      if (previousConfigDir === undefined) delete process.env.OPENCODE_CONFIG_DIR
+      else process.env.OPENCODE_CONFIG_DIR = previousConfigDir
+    }
 
-    expect(renderer.texts.some((text) => text.includes("Ambient instructions."))).toBe(false)
+    expect(renderer.texts.some((text) => text.includes("Ambient instructions."))).toBe(true)
+    expect(renderer.texts.some((text) => text.includes("Configured instructions."))).toBe(false)
   })
 
   test("uses CLAUDE.md before deprecated CONTEXT.md when the project has no AGENTS.md", async () => {

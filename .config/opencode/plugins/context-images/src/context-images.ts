@@ -345,7 +345,6 @@ export class ContextImagesService {
   }
 
   async #discoverSources() {
-    if (this.#includeInstructions === false) return []
     if (this.#explicitSources) {
       const sources = this.#explicitSources.filter(
         (source) => projectConfigDisabled() === false || source.project === false,
@@ -376,15 +375,17 @@ export class ContextImagesService {
       }
     }
 
-    const configured = this.#configuredInstructions
-      .filter((source) => source.startsWith("http://") === false && source.startsWith("https://") === false)
-      .flatMap((source) => {
-        if (source.startsWith("~/")) return [{ path: resolve(homedir(), source.slice(2)), project: false }]
-        if (isAbsolute(source)) return [{ path: resolve(source), project: false }]
-        if (projectConfigDisabled()) return []
-        return [{ path: resolve(this.#directory, source), project: true }]
-      })
-    sources.push(...(await this.#loadSources(configured, true)))
+    if (this.#includeInstructions) {
+      const configured = this.#configuredInstructions
+        .filter((source) => source.startsWith("http://") === false && source.startsWith("https://") === false)
+        .flatMap((source) => {
+          if (source.startsWith("~/")) return [{ path: resolve(homedir(), source.slice(2)), project: false }]
+          if (isAbsolute(source)) return [{ path: resolve(source), project: false }]
+          if (projectConfigDisabled()) return []
+          return [{ path: resolve(this.#directory, source), project: true }]
+        })
+      sources.push(...(await this.#loadSources(configured, true)))
+    }
 
     return this.#rememberAmbientSources(Array.from(new Map(sources.map((source) => [source.path, source])).values()))
   }
@@ -500,7 +501,6 @@ export class ContextImagesService {
     )
     const scoped = readParts.flatMap((candidate) => {
     if (
-      this.#includeInstructions === false ||
       this.#imageNestedInstructions === false ||
       matchesImageReadResult(candidate.path)
     ) {
