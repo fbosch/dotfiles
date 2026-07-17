@@ -33,7 +33,7 @@
       "client_side_decorations": {
          "enabled": true,
          "border_width": 1,
-         "shadow_size": 3
+          "shadow_size": 12
       },
       "blur": {
          "enabled": false

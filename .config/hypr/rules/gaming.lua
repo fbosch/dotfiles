@@ -161,7 +161,7 @@ local function register_gamescope_rules()
 		match = { class = "^(gamescope)$" },
 		workspace = "10 silent",
 		tile = true,
-		fullscreen_state = "2 2",
+		fullscreen_state = "2 0",
 	})
 
 	hl.window_rule({
