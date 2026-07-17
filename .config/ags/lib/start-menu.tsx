@@ -931,6 +931,11 @@ function updateMenuItems() {
     refreshProfileState();
     // Type assertion to help TypeScript understand menuBox is non-null after guard
     const box = menuBox as Gtk.Box;
+    if (profileState.mode === "gaming") {
+      box.add_css_class("gaming-profile");
+    } else {
+      box.remove_css_class("gaming-profile");
+    }
 
     // Build dynamic menu with Updates item if there are updates
     const menuItems = buildMenuItemsList();
@@ -1114,6 +1119,11 @@ function applyStaticCSS() {
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
       margin-bottom: 53px; /* Waybar height (45px) + gap (8px) */
       margin-left: 4px;
+    }
+
+    window.start-menu box.start-menu-container.gaming-profile {
+      background-color: rgb(45, 45, 45);
+      border-color: rgb(83, 83, 83);
     }
 
     /* User profile header */

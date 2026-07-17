@@ -174,12 +174,12 @@ apply_effective_state() {
     current_mode="$(< "$overlay_mode_file")"
   fi
 
-  if [[ "$desired_mode" == "none" && ( -f "$overlay_active_file" || -f "$overlay_mode_file" || "$force_restore" == "true" ) ]]; then
-    resume_background_helpers
-    set_switcher_mode_previews
+   if [[ "$desired_mode" == "none" && ( -f "$overlay_active_file" || -f "$overlay_mode_file" || "$force_restore" == "true" ) ]]; then
+     resume_background_helpers
     set_power_profile balanced
     restore_hypr_defaults
     rm -f "$overlay_active_file" "$overlay_mode_file"
+    set_switcher_mode_previews
     refresh_window_captures
     return
   fi
@@ -194,8 +194,7 @@ apply_effective_state() {
       restore_hypr_defaults
     fi
 
-    pause_background_helpers
-		set_switcher_mode_icons
+		pause_background_helpers
 		if [[ "$desired_mode" == "gaming" ]]; then
 			set_power_profile performance
 			apply_hypr_gaming_overlay
@@ -205,6 +204,7 @@ apply_effective_state() {
 		fi
     touch "$overlay_active_file"
     printf "%s" "$desired_mode" > "$overlay_mode_file"
+		set_switcher_mode_icons
     return
   fi
 

@@ -4,9 +4,6 @@ return {
 			enabled = false,
 		},
 		decoration = {
-			blur = {
-				enabled = false,
-			},
 			shadow = {
 				enabled = false,
 			},

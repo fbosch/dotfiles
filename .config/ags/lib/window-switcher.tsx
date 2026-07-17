@@ -97,23 +97,17 @@ const WINDOW_CACHE_TTL_MS = 150; // Cache window list briefly for request bursts
 const ACTIVE_WINDOW_CACHE_TTL_MS = 100; // Cache active window briefly
 const RUNTIME_DIR = GLib.getenv("XDG_RUNTIME_DIR") || GLib.get_tmp_dir();
 const PERFORMANCE_OVERLAY_STATE_DIR = `${RUNTIME_DIR}/hypr-profiles`;
-const PERFORMANCE_OVERLAY_ACTIVE_PATH = `${PERFORMANCE_OVERLAY_STATE_DIR}/performance-overlay.active`;
-const PERFORMANCE_MODE_PATH = `${RUNTIME_DIR}/hypr-performance-mode`;
+const PROFILE_MODE_PATH = `${PERFORMANCE_OVERLAY_STATE_DIR}/profile-overlay.mode`;
 const MONITOR_DEBUG_PATH = `${RUNTIME_DIR}/monitor-debug.log`;
 const WINDOW_SWITCHER_DEBUG_PATH = `${RUNTIME_DIR}/ags-window-switcher-debug.log`;
 const TOGGLE_MINIMIZED_WORKSPACE_SCRIPT = "~/.config/hypr/runtime/windows/toggle-minimized-workspace.sh";
 const WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT = "lua ~/.config/hypr/runtime/windows/warp-cursor-to-active-window.lua";
 const DEBUG = GLib.getenv("AGS_WINDOW_SWITCHER_DEBUG") === "1";
 
-function isPerformanceOverlayActive(): boolean {
+function isGamingProfileActive(): boolean {
   try {
-    const overlayActiveFile = Gio.File.new_for_path(PERFORMANCE_OVERLAY_ACTIVE_PATH);
-    if (overlayActiveFile.query_exists(null)) {
-      return true;
-    }
-
-    const perfModeFile = Gio.File.new_for_path(PERFORMANCE_MODE_PATH);
-    return perfModeFile.query_exists(null);
+    const [success, contents] = GLib.file_get_contents(PROFILE_MODE_PATH);
+    return success && new TextDecoder("utf-8").decode(contents).trim() === "gaming";
   } catch {
     return false;
   }
@@ -1361,7 +1355,7 @@ function createWindow() {
 
 // Apply static CSS
 function applyStaticCSS() {
-  const transparencyDisabled = isPerformanceOverlayActive();
+const transparencyDisabled = isGamingProfileActive();
 
   const switcherBackground = transparencyDisabled
     ? "rgb(25, 25, 25)"
@@ -1682,6 +1676,7 @@ function handleWindowSwitcherRequest(argv: string[], res: (response: string) => 
 
     if (action === "set-mode") {
       const response = handleSetMode(data.mode);
+      applyStaticCSS();
       res(response);
       return;
     }
