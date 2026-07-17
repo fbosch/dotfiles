@@ -29,7 +29,7 @@
    },
    "launcher_window": {
       "rounding": 8,
-      "opacity": 0.85,
+      "opacity": 0.97,
       "client_side_decorations": {
          "enabled": true,
          "border_width": 1,
@@ -48,7 +48,7 @@
       "material": "blur"
    },
    "keybinds": {
-      "toggle-action-panel": "control+A"
+      "toggle-action-panel": "control+RETURN"
    },
    "favorites": [
       "applications:protonmail",
@@ -146,7 +146,7 @@
                "enabled": false
             },
             "io.github.Foldex.AdwSteamGtk": {
-               "enabled": true
+               "enabled": false
             },
             "mullvad-vpn": {
                "enabled": false
