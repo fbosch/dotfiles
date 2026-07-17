@@ -181,7 +181,7 @@ local function register_steam_rules()
 	end
 	hl.window_rule({ match = { initial_title = "^(Sign in to Steam)$" }, float = true, center = true })
 
-	for _, selector in ipairs({ { class = "^(steam_app_[0-9]+)$" }, { initial_class = "^(steam_app_[0-9]+)$" } }) do
+	for _, selector in ipairs({ { class = "^(steam_app_.+)$" }, { initial_class = "^(steam_app_.+)$" } }) do
 		hl.window_rule(gaming_window_rule(selector, "2 2", "game"))
 	end
 

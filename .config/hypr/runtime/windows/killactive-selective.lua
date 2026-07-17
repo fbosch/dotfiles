@@ -9,7 +9,6 @@ local gaming = require("rules.gaming")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
 local json = require("lib.json")
 
-local profilectl = config_dir .. "/runtime/profiles/profilectl.sh"
 local ags_start_script = home .. "/.config/ags/start-daemons.sh"
 
 local function notify(summary, body)
@@ -27,10 +26,6 @@ local function close_window(address)
 	end
 
 	hypr_ipc.request("dispatch hl.dsp.window.close(" .. target .. ")")
-end
-
-local function gaming_is_active()
-	return command.ok(command.line(profilectl, "is-active", "gaming") .. " >/dev/null 2>&1")
 end
 
 local function confirm_payload(address, title)
@@ -91,7 +86,7 @@ local policy_window = {
 	content = active_window.contentType,
 }
 
-if gaming_is_active() and gaming.requires_close_confirmation(policy_window) then
+if gaming.requires_close_confirmation(policy_window) then
 	request_confirm_close(address, title)
 	return
 end

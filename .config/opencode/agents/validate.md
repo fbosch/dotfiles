@@ -3,7 +3,6 @@ description: Runs bounded, read-only post-change validation and reports evidence
 mode: subagent
 color: "#70b5a1"
 temperature: 0.0
-steps: 6
 permission:
   edit: deny
   bash:
