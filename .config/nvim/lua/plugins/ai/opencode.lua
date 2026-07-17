@@ -102,8 +102,7 @@ return {
 
 				infer_cache = { cwd = normalized_cwd, session_id = session_id, at = now }
 				if session_id ~= nil then
-					metadata.opencode_session_id = session_id
-					session.set_metadata(metadata, normalized_cwd)
+					session.set_opencode_session_id(session_id, normalized_cwd)
 				end
 				return session_id
 			end

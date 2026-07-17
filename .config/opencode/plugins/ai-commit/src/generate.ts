@@ -948,6 +948,38 @@ async function generateCommitValue(
   const totalStart = startDebugTimer(options);
   let connected: ConnectedClient | null = null;
   let sessionId: string | null = null;
+  let cleanupPromise: Promise<void> | null = null;
+
+  const cleanup = (): Promise<void> => {
+    if (cleanupPromise !== null) {
+      return cleanupPromise;
+    }
+
+    cleanupPromise = (async () => {
+      if (connected !== null && sessionId !== null) {
+        const deleteSessionStart = startDebugTimer(options);
+        await deleteSession(connected.client, sessionId);
+        writeDebugTiming("session.delete", deleteSessionStart);
+      }
+
+      if (connected !== null && typeof connected.cleanup === "function") {
+        await connected.cleanup().catch(() => undefined);
+      }
+    })();
+
+    return cleanupPromise;
+  };
+
+  const exitAfterCleanup = (exitCode: number): void => {
+    void cleanup().finally(() => {
+      process.exit(exitCode);
+    });
+  };
+
+  const onInterrupt = (): void => exitAfterCleanup(130);
+  const onTerminate = (): void => exitAfterCleanup(143);
+  process.once("SIGINT", onInterrupt);
+  process.once("SIGTERM", onTerminate);
 
   try {
     const connectStart = startDebugTimer(options);
@@ -986,16 +1018,9 @@ async function generateCommitValue(
 
     return validatedScope.value;
   } finally {
-    if (connected !== null && sessionId !== null) {
-      const deleteSessionStart = startDebugTimer(options);
-      await deleteSession(connected.client, sessionId);
-      writeDebugTiming("session.delete", deleteSessionStart);
-    }
-
-    if (connected !== null && typeof connected.cleanup === "function") {
-      await connected.cleanup().catch(() => undefined);
-    }
-
+    await cleanup();
+    process.off("SIGINT", onInterrupt);
+    process.off("SIGTERM", onTerminate);
     writeDebugTiming("total", totalStart);
   }
 }

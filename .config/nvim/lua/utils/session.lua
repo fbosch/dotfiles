@@ -46,4 +46,19 @@ function M.set_metadata(metadata, cwd)
 	vim.fn.writefile({ vim.json.encode(metadata) }, metadata_dir .. M.get_name(cwd) .. ".json")
 end
 
+function M.set_opencode_session_id(session_id, cwd)
+	if type(session_id) ~= "string" or session_id:match("^ses_[A-Za-z0-9]+$") == nil then
+		return false
+	end
+
+	local metadata = M.get_metadata(cwd)
+	if metadata.opencode_session_id == session_id then
+		return true
+	end
+
+	metadata.opencode_session_id = session_id
+	M.set_metadata(metadata, cwd)
+	return true
+end
+
 return M
