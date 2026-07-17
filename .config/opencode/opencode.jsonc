@@ -113,8 +113,16 @@
       "rtk git clean*": "ask",
       "git restore*": "ask",
       "rtk git restore*": "ask",
-      "gh api*": "ask",
-      "rtk gh api*": "ask"
+       "gh api*": "allow",
+       "rtk gh api*": "allow",
+       "gh api * --method DELETE*": "ask",
+       "rtk gh api * --method DELETE*": "ask",
+       "gh api * --method=DELETE*": "ask",
+       "rtk gh api * --method=DELETE*": "ask",
+       "gh api * -X DELETE*": "ask",
+       "rtk gh api * -X DELETE*": "ask",
+       "gh api * -XDELETE*": "ask",
+       "rtk gh api * -XDELETE*": "ask"
     }
   },
   "model": "openai/gpt-5.6-terra-fast",
