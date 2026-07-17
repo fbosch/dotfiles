@@ -162,7 +162,6 @@ local function register_gamescope_rules()
 		workspace = "10 silent",
 		tile = true,
 		fullscreen_state = "2 2",
-		immediate = true,
 	})
 
 	hl.window_rule({
