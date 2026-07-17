@@ -229,7 +229,6 @@ async function startServer(forceStart = false): Promise<void> {
     "opencode",
     [
       "serve",
-      "--pure",
       "--hostname",
       OPENCODE_SERVER_HOST,
       "--port",
@@ -270,7 +269,7 @@ async function startServer(forceStart = false): Promise<void> {
 }
 
 async function restartServer(): Promise<void> {
-  const serverPattern = `opencode(\\.exe)? serve --hostname ${OPENCODE_SERVER_HOST} --port ${String(OPENCODE_SERVER_PORT)}`;
+  const serverPattern = `opencode(\\.exe)? serve .*--hostname ${OPENCODE_SERVER_HOST} --port ${String(OPENCODE_SERVER_PORT)}`;
   const killResult = spawnSync(
     "pkill",
     [
