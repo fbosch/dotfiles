@@ -2,15 +2,6 @@
   "version": 1,
   "toolVersion": "0.7.0",
   "sources": {
-    "ags": {
-      "repo": "https://github.com/Aylur/ags.git",
-      "ref": "HEAD",
-      "resolvedCommit": "bbee2f18939f1ec7ff720e717cf305e73635628f",
-      "bytes": 58879,
-      "fileCount": 12,
-      "manifestSha256": "bc5aa60ba05c0aca149a8f74e5f40bd1693b875bdc88a82076702efde50d26c4",
-      "rulesSha256": "d0dc18979f534e18311f4e49bdd6739e3be9e5c7e97d623c9825ad7cff190a45"
-    },
     "vicinae-docs": {
       "repo": "https://github.com/vicinaehq/docs.git",
       "ref": "HEAD",
@@ -20,16 +11,25 @@
       "manifestSha256": "6939a47c343a73de73f80609c96f0b73154b05a47a0b3376f46a535801ff06c7",
       "rulesSha256": "9eeb141726160fa429a21b24d6220b5dce6ffb4c44a06d54a0fc3cb492318f4a"
     },
-    "hyprland-wiki": {
+    "ags-docs": {
+      "repo": "https://github.com/Aylur/ags.git",
+      "ref": "HEAD",
+      "resolvedCommit": "bbee2f18939f1ec7ff720e717cf305e73635628f",
+      "bytes": 58879,
+      "fileCount": 12,
+      "manifestSha256": "bc5aa60ba05c0aca149a8f74e5f40bd1693b875bdc88a82076702efde50d26c4",
+      "rulesSha256": "d0dc18979f534e18311f4e49bdd6739e3be9e5c7e97d623c9825ad7cff190a45"
+    },
+    "hyprland-docs": {
       "repo": "https://github.com/hyprwm/hyprland-wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "9eea05aa5bd215b842c7b37784e4edcee73b9f15",
-      "bytes": 210521,
+      "resolvedCommit": "8657d27f63aa9b6964078b7ef0c742fa0806f145",
+      "bytes": 210739,
       "fileCount": 32,
-      "manifestSha256": "49f7847eae92c39110f80f0eecc7b9750af387cff574d56deb2b080f91be7bd7",
+      "manifestSha256": "cb5a6863c957c618954b74c6a4255124693accc58824db594957abcc97946f82",
       "rulesSha256": "9711428153e452825f0368860d30401cea3ed5f5e90d569d70558c392fe0dc83"
     },
-    "waybar": {
+    "waybar-docs": {
       "repo": "https://github.com/Alexays/Waybar.wiki.git",
       "ref": "HEAD",
       "resolvedCommit": "c0878da88695dae946537b21dbb60556bc5ab971",
@@ -38,7 +38,7 @@
       "manifestSha256": "6ce880bf38b379777e79aa3ba0909f4351f89b3a6c39df253a3c357948d2d865",
       "rulesSha256": "b081a738d08a508e04d08ab700ae515252de04000d5108b2ae3cbcf211ac1a8c"
     },
-    "glance": {
+    "glance-docs": {
       "repo": "https://github.com/glanceapp/glance",
       "ref": "HEAD",
       "resolvedCommit": "91324e8de762702e97b0ac5c8e36271d644d8642",
@@ -52,10 +52,10 @@
     "configPath": "opencode.json",
     "aliases": [
       "vicinae-docs",
-      "ags",
-      "hyprland-wiki",
-      "waybar",
-      "glance"
+      "ags-docs",
+      "hyprland-docs",
+      "waybar-docs",
+      "glance-docs"
     ]
   }
 }

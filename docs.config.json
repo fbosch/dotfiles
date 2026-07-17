@@ -13,7 +13,7 @@
       "include": [
         "docs/guide/**/*.md"
       ],
-      "id": "ags",
+      "id": "ags-docs",
       "repo": "https://github.com/Aylur/ags.git",
       "targetDir": "./.config/ags/docs/agents/guide"
     },
@@ -21,7 +21,7 @@
       "include": [
         "content/Configuring/**/*.md"
       ],
-      "id": "hyprland-wiki",
+      "id": "hyprland-docs",
       "repo": "https://github.com/hyprwm/hyprland-wiki.git",
       "targetDir": "./.config/hypr/docs/agents/references"
     },
@@ -30,14 +30,14 @@
         "Configuration.md",
         "Styling.md"
       ],
-      "id": "waybar",
+      "id": "waybar-docs",
       "repo": "https://github.com/Alexays/Waybar.wiki.git"
     },
     {
       "include": [
         "docs/**/*.md"
       ],
-      "id": "glance",
+      "id": "glance-docs",
       "repo": "https://github.com/glanceapp/glance",
       "targetDir": "./.config/glance/docs/agents/references"
     }
