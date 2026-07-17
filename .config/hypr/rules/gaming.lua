@@ -82,13 +82,18 @@ M.games = {
 		confirm_close = true,
 	},
 	{
-		name = "steam-app",
+		name = "game-content",
 		selectors = {
-			{ class = "^(steam_app_[0-9]+)$" },
-			{ initial_class = "^(steam_app_[0-9]+)$" },
+			{ content = "^game$" },
 		},
+		enable_profile = true,
 		confirm_close = true,
 	},
+}
+
+local window_property_aliases = {
+	xdg_tag = "xdgTag",
+	content = "contentType",
 }
 
 local function matches_pattern(value, pattern)
@@ -98,7 +103,8 @@ end
 
 function M.matches_selector(window, selector)
 	for property, pattern in pairs(selector) do
-		if type(window[property]) ~= "string" or not matches_pattern(window[property], pattern) then
+		local value = window[property] or window[window_property_aliases[property]]
+		if type(value) ~= "string" or not matches_pattern(value, pattern) then
 			return false
 		end
 	end
@@ -162,6 +168,7 @@ local function register_gamescope_rules()
 		workspace = "10 silent",
 		tile = true,
 		fullscreen_state = "2 0",
+		content = "game",
 	})
 
 	hl.window_rule({
@@ -177,8 +184,10 @@ local function register_steam_rules()
 	hl.window_rule({ match = { initial_title = "^(Sign in to Steam)$" }, float = true, center = true })
 
 	for _, selector in ipairs({ { class = "^(steam_app_[0-9]+)$" }, { initial_class = "^(steam_app_[0-9]+)$" } }) do
-		hl.window_rule(gaming_window_rule(selector, "2 2"))
+		hl.window_rule(gaming_window_rule(selector, "2 2", "game"))
 	end
+
+	hl.window_rule({ match = { xdg_tag = "^proton[-]game$" }, content = "game" })
 end
 
 local function register_game_rules()

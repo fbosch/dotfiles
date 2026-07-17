@@ -88,6 +88,7 @@ local policy_window = {
 	initial_class = active_window.initialClass,
 	title = title,
 	initial_title = active_window.initialTitle,
+	content = active_window.contentType,
 }
 
 if gaming_is_active() and gaming.requires_close_confirmation(policy_window) then

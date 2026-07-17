@@ -3,7 +3,6 @@ description: Minimal agent for commit message generation — no provider system 
 mode: primary
 hidden: true
 prompt: ""
-steps: 1
 tools:
   "*": false
 ---

@@ -12,6 +12,8 @@ approved-commands = [
     "pnpm install --frozen-lockfile --prefer-offline",
     "pnpm type-check",
     "pnpm test:run",
+    "pnpm install --frozen-lockfile --prefer-offline && sh ./.config/ensure-vercel-link.sh && devenv shell -- true",
+    "pnpm quality:pre-push",
 ]
 
 [projects."github.com/fbosch/pkdx"]

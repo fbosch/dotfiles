@@ -71,6 +71,7 @@ local function rule_window(client)
 		initial_class = client.initialClass,
 		title = client.title,
 		initial_title = client.initialTitle,
+		content = client.contentType,
 	}
 end
 
