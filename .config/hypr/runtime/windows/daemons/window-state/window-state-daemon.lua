@@ -294,6 +294,18 @@ local function adaptive_interval(mode)
 	return busy and poll_interval_active_busy or poll_interval_active_idle
 end
 
+local function schedule_active_poll()
+	local deadline = now() + adaptive_interval("active")
+	if not polling then
+		polling = true
+		log("Started polling")
+	end
+
+	if next_poll_at == nil or next_poll_at > deadline then
+		next_poll_at = deadline
+	end
+end
+
 local function check_and_save_with_state(state)
 	if is_state_empty(state) then
 		return
@@ -372,12 +384,15 @@ local function poll_once()
 end
 
 local function handle_event(event)
-	if event:match("^openwindow") or event:match("^changefloatingmode") or event:match("^movewindow") or event:match("^resizewindow") then
+	if event:match("^openwindow") or event:match("^changefloatingmode") then
 		local state = get_window_states()
 		if not is_state_empty(state) then
 			start_polling()
 			check_and_save_with_state(state)
 		end
+	elseif event:match("^movewindow") or event:match("^resizewindow") then
+		-- Coalesce compositor-rate geometry events into the active polling interval.
+		schedule_active_poll()
 	elseif event:match("^closewindow") then
 		local state = immediate_save()
 		if not is_state_empty(state) then
