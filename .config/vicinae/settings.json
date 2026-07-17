@@ -33,7 +33,7 @@
       "client_side_decorations": {
          "enabled": true,
          "border_width": 1,
-          "shadow_size": 12
+         "shadow_size": 12
       },
       "blur": {
          "enabled": false
@@ -46,6 +46,9 @@
          "enabled": true
       },
       "material": "blur"
+   },
+   "keybinds": {
+      "toggle-action-panel": "control+A"
    },
    "favorites": [
       "applications:protonmail",
