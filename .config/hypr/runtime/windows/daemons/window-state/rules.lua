@@ -211,21 +211,19 @@ local function render_rules(cache, selectors_path)
 end
 
 function M.write_rules_file(opts)
-	local rules_dir = opts.config_dir .. "/rules"
-	command.ok("mkdir -p " .. command.arg(rules_dir) .. " >/dev/null 2>&1")
-	local temp = temp_path_in(rules_dir, ".window-state")
 	local next_content = render_rules(opts.cache, opts.selectors_lua_file)
-
-	local handle = assert(io.open(temp, "w"))
-	handle:write(next_content)
-	handle:close()
 
 	local existing = read_file(opts.rules_lua_file)
 	if existing == next_content then
-		os.remove(temp)
 		return false
 	end
 
+	local rules_dir = opts.config_dir .. "/rules"
+	command.ok("mkdir -p " .. command.arg(rules_dir) .. " >/dev/null 2>&1")
+	local temp = temp_path_in(rules_dir, ".window-state")
+	local handle = assert(io.open(temp, "w"))
+	handle:write(next_content)
+	handle:close()
 	assert(os.rename(temp, opts.rules_lua_file))
 	return true
 end
