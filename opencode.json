@@ -25,6 +25,10 @@
     }
   },
   "references": {
+    "nixos": {
+      "path": "~/nixos",
+      "description": "Personal nixos configuration"
+    },
     "vicinae-docs": {
       "path": ".docs/vicinae-docs",
       "description": "Use for documentation from vicinaehq/docs. Start with TOC.md."
