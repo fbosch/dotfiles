@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { Buffer } from "node:buffer";
 import { existsSync } from "node:fs";
 import { err, ok } from "neverthrow";
 import { z } from "zod";
@@ -83,6 +84,13 @@ const ApplyArgsSchema = z.object({
 
 const AuthEntrySchema = z.record(z.string(), z.unknown());
 const AuthFileSchema = z.record(z.string(), AuthEntrySchema);
+const OpenAIAccessTokenSchema = z.object({
+    "https://api.openai.com/auth": z
+        .object({
+            chatgpt_account_id: z.string().min(1).optional(),
+        })
+        .optional(),
+});
 const CodexAuthSchema = z
     .object({
         tokens: z
@@ -108,7 +116,27 @@ function usage(): void {
 }
 
 function accountIdForEntry(key: string, entry: JsonObject): string {
-    return typeof entry.accountId === "string" && entry.accountId.trim().length > 0 ? entry.accountId : key;
+    if (typeof entry.accountId === "string" && entry.accountId.trim().length > 0) {
+        return entry.accountId;
+    }
+
+    if (typeof entry.access !== "string") {
+        return key;
+    }
+
+    const payload = entry.access.split(".")[1];
+    if (!payload) {
+        return key;
+    }
+
+    try {
+        const claims = OpenAIAccessTokenSchema.safeParse(
+            JSON.parse(Buffer.from(payload, "base64url").toString("utf8")),
+        );
+        return claims.success ? (claims.data["https://api.openai.com/auth"]?.chatgpt_account_id ?? key) : key;
+    } catch {
+        return key;
+    }
 }
 
 function listProviderNames(auth: Record<string, JsonObject>): string[] {
@@ -117,7 +145,7 @@ function listProviderNames(auth: Record<string, JsonObject>): string[] {
 }
 
 function profileKeysForProvider(auth: Record<string, JsonObject>, provider: string): string[] {
-    return Object.keys(auth).filter((key) => key.startsWith(`${provider}_`));
+    return Object.keys(auth).filter((key) => key === provider || key.startsWith(`${provider}_`));
 }
 
 function buildProfileLabel(
@@ -387,7 +415,8 @@ function applySelection(
     }
 
     const selectedEntry = auth[targetKey] || {};
-    const selectedAccountId = typeof selectedEntry.accountId === "string" ? selectedEntry.accountId : "";
+    const resolvedAccountId = accountIdForEntry(targetKey, selectedEntry);
+    const selectedAccountId = resolvedAccountId === targetKey ? "" : resolvedAccountId;
     const codexStatusResult = syncCodexProfiles(codexAuthFile, codexProfilesFile, selectedAccountId);
     if (codexStatusResult.isErr()) {
         return err(codexStatusResult.error);

@@ -238,13 +238,16 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         set -l key "$parts[2]"
         set -l label "$parts[3]"
         set -l color "$parts[4]"
+        if test "$key" = "$provider"
+            set label "$label (active)"
+        end
         set -a profile_keys "$key"
         set -a profile_plain_labels "$label"
         set -a profile_labels (printf '\e[1;38;5;%sm%s\e[0m' "$color" "$label")
     end
 
     if test (count $profile_keys) -eq 0
-        echo "no suffixed duplicate profiles found for provider: $provider"
+        echo "no profiles found for provider: $provider"
         return 1
     end
 
@@ -269,6 +272,11 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
     if test -z "$target_key"
         echo "failed to resolve selected profile key"
         return 1
+    end
+
+    if test "$target_key" = "$provider"
+        echo "provider already active: $provider"
+        return 0
     end
 
     set -l selected_label "$profile_plain_labels[$selected_index]"
