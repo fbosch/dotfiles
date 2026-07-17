@@ -87,6 +87,9 @@
             "topRange": "3d"
          }
       },
+      "@fbosch/wallhaven-search": {
+         "enabled": false
+      },
       "@fbosch/wowhead": {
          "entrypoints": {
             "wowhead": {
