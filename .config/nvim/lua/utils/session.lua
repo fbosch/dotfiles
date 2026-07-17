@@ -1,6 +1,7 @@
 local M = {}
 
 local root_dir = vim.fn.expand("~/.config") .. "/nvim/.sessions//"
+local metadata_dir = root_dir .. ".metadata/"
 
 local function resolve_cwd(cwd)
 	if type(cwd) == "string" and cwd ~= "" then
@@ -24,6 +25,25 @@ end
 
 function M.get_path(cwd)
 	return root_dir .. M.get_name(cwd)
+end
+
+function M.get_metadata(cwd)
+	local path = metadata_dir .. M.get_name(cwd) .. ".json"
+	if vim.fn.filereadable(path) == 0 then
+		return {}
+	end
+
+	local ok, metadata = pcall(vim.json.decode, table.concat(vim.fn.readfile(path), "\n"))
+	if ok == false or type(metadata) ~= "table" then
+		return {}
+	end
+
+	return metadata
+end
+
+function M.set_metadata(metadata, cwd)
+	vim.fn.mkdir(metadata_dir, "p")
+	vim.fn.writefile({ vim.json.encode(metadata) }, metadata_dir .. M.get_name(cwd) .. ".json")
 end
 
 return M

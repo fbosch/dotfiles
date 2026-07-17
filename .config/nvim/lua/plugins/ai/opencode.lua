@@ -23,6 +23,7 @@ return {
 			"folke/snacks.nvim",
 		},
 		init = function()
+			local session = require("utils.session")
 			local infer_cache = {
 				cwd = nil,
 				session_id = nil,
@@ -53,6 +54,12 @@ return {
 				local normalized_cwd = normalize_path(cwd)
 				if normalized_cwd == nil then
 					return nil
+				end
+
+				local metadata = session.get_metadata(normalized_cwd)
+				local saved_session_id = metadata.opencode_session_id
+				if type(saved_session_id) == "string" and saved_session_id ~= "" then
+					return saved_session_id
 				end
 
 				local now = vim.uv.now()
@@ -94,6 +101,10 @@ return {
 				end
 
 				infer_cache = { cwd = normalized_cwd, session_id = session_id, at = now }
+				if session_id ~= nil then
+					metadata.opencode_session_id = session_id
+					session.set_metadata(metadata, normalized_cwd)
+				end
 				return session_id
 			end
 
