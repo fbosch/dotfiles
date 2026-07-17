@@ -7,7 +7,13 @@ import type { AssistantMessage, Part, ToolPart, UserMessage } from "@opencode-ai
 import { ContextImagesService } from "./context-images"
 import type { ContextImagesEvent, ContextImagesLogger } from "./logger"
 import type { ContextRenderer } from "./pxpipe"
-import { cachedReferenceRoots, fetchMaterializedReferencePaths, materializedReferencePaths, parseImageReadResults } from "./plugin"
+import {
+  cachedReferenceRoots,
+  fetchMaterializedReferencePaths,
+  materializedReferencePaths,
+  parseIncludeInstructions,
+  parseImageReadResults,
+} from "./plugin"
 import { ContextImagesStats } from "./stats"
 
 const temporaryDirectories: string[] = []
@@ -185,6 +191,14 @@ function scopedPrompt(path: string) {
 }
 
 describe("ContextImagesService", () => {
+  test("defaults instruction replacement to disabled", () => {
+    expect(parseIncludeInstructions({})).toBe(false)
+    expect(parseIncludeInstructions({ includeInstructions: true })).toBe(true)
+    expect(() => parseIncludeInstructions({ includeInstructions: "yes" })).toThrow(
+      'option "includeInstructions" must be a boolean',
+    )
+  })
+
   test("validates image read-result selectors", () => {
     expect(parseImageReadResults({ imageReadResults: { paths: ["~/TONE.md"], filenames: ["TOC.md"], referenceContents: true } })).toEqual({
       paths: ["~/TONE.md"],
@@ -861,7 +875,7 @@ describe("ContextImagesService", () => {
     const renderer = new FakeRenderer()
     const service = new ContextImagesService({
       cacheRoot,
-      scopedInstructions: true,
+  imageNestedInstructions: true,
       imageSupport: async () => true,
       renderer,
       sources: [],
@@ -891,6 +905,37 @@ describe("ContextImagesService", () => {
     expect(renderer.texts).toContain(`Instructions from: ${parentPath}\nParent instructions.`)
   })
 
+  test("leaves scoped instructions as plaintext by default", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const instructionPath = join(worktree, "nested", "AGENTS.md")
+    const originalOutput = [
+      `<path>${join(worktree, "nested", "source.ts")}</path>`,
+      "<system-reminder>",
+      `Instructions from: ${instructionPath}`,
+      "Excluded instructions.",
+      "</system-reminder>",
+    ].join("\n")
+    const read = completedRead(join(worktree, "nested", "source.ts"), originalOutput, [instructionPath])
+    const service = new ContextImagesService({
+      cacheRoot,
+  imageNestedInstructions: true,
+      imageSupport: async () => true,
+      renderer: new FakeRenderer(),
+      worktree,
+    })
+    const output = {
+      messages: [
+        { info: userMessage(), parts: [] },
+        { info: assistantMessage(worktree), parts: [read] },
+      ],
+    }
+
+    await warmAndTransform(service, output)
+
+    expect(read.state.output).toBe(originalOutput)
+  })
+
   test("keeps scoped instruction plaintext when one lazy package fails", async () => {
     const worktree = await temporaryDirectory()
     const cacheRoot = await temporaryDirectory()
@@ -910,7 +955,7 @@ describe("ContextImagesService", () => {
     const originalState = read.state
     const service = new ContextImagesService({
       cacheRoot,
-      scopedInstructions: true,
+  imageNestedInstructions: true,
       imageSupport: async () => true,
       renderer: new SelectiveRenderer("Parent instructions."),
       sources: [],
@@ -979,7 +1024,7 @@ describe("ContextImagesService", () => {
     const originalState = read.state
     const service = new ContextImagesService({
       cacheRoot,
-      scopedInstructions: true,
+  imageNestedInstructions: true,
       imageSupport: async () => true,
       renderer: new FakeRenderer(),
       sources: [],
@@ -1013,7 +1058,7 @@ describe("ContextImagesService", () => {
     const read = completedRead(join(worktree, "nested", "source.ts"), originalOutput, [agentsPath, claudePath])
     const service = new ContextImagesService({
       cacheRoot,
-      scopedInstructions: true,
+  imageNestedInstructions: true,
       imageSupport: async () => true,
       renderer: new FakeRenderer(),
       sources: [],
@@ -1051,7 +1096,7 @@ describe("ContextImagesService", () => {
     const service = new ContextImagesService({
       cacheRoot,
       imageReadResults: { paths: [tonePath] },
-      scopedInstructions: true,
+  imageNestedInstructions: true,
       imageSupport: async () => true,
       renderer,
       sources: [],
@@ -1306,7 +1351,7 @@ describe("ContextImagesService", () => {
     process.env.OPENCODE_CONFIG_DIR = join(configHome, "opencode")
     process.env.XDG_CONFIG_HOME = configHome
     const renderer = new FakeRenderer()
-    const service = new ContextImagesService({ cacheRoot, directory, renderer, worktree })
+    const service = new ContextImagesService({ cacheRoot, directory, includeInstructions: true, renderer, worktree })
     service.setConfiguredInstructions([configuredPath])
 
     try {
@@ -1326,6 +1371,24 @@ describe("ContextImagesService", () => {
     expect(renderer.texts.some((text) => text.includes("Configured instructions."))).toBe(true)
   })
 
+  test("leaves ambient instructions as plaintext by default", async () => {
+    const worktree = await temporaryDirectory()
+    const cacheRoot = await temporaryDirectory()
+    const excludedPath = join(worktree, "AGENTS.md")
+    await writeFile(excludedPath, "Ambient instructions.\n")
+    const renderer = new FakeRenderer()
+    const service = new ContextImagesService({
+      cacheRoot,
+      renderer,
+      worktree,
+    })
+
+    await service.transformMessages({}, { messages: [{ info: userMessage(), parts: [] }] })
+    await service.waitForRenders()
+
+    expect(renderer.texts.some((text) => text.includes("Ambient instructions."))).toBe(false)
+  })
+
   test("uses CLAUDE.md before deprecated CONTEXT.md when the project has no AGENTS.md", async () => {
     const worktree = await temporaryDirectory()
     const directory = join(worktree, "nested")
@@ -1338,7 +1401,7 @@ describe("ContextImagesService", () => {
     const previousConfigDir = process.env.OPENCODE_CONFIG_DIR
     process.env.OPENCODE_CONFIG_DIR = join(configHome, "opencode")
     const renderer = new FakeRenderer()
-    const service = new ContextImagesService({ cacheRoot, directory, renderer, worktree })
+    const service = new ContextImagesService({ cacheRoot, directory, includeInstructions: true, renderer, worktree })
 
     try {
       await service.transformMessages({}, { messages: [{ info: userMessage(), parts: [] }] })

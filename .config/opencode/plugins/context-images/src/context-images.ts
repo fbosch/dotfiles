@@ -231,11 +231,12 @@ export class ContextImagesService {
   readonly #compacting = new Set<string>()
   readonly #directory: string
   readonly #explicitSources?: { path: string; project: boolean }[]
+  readonly #includeInstructions: boolean
   readonly #imageReadResultPaths: Set<string>
   readonly #imageReadResultFilenames: Set<string>
   readonly #referenceContents: boolean
   readonly #referenceRoots?: () => Promise<string[]>
-  readonly #scopedInstructions: boolean
+  readonly #imageNestedInstructions: boolean
   readonly #imageSupport?: (providerID: string, modelID: string) => Promise<boolean>
   readonly #knownAmbientSources = new Map<string, { project: boolean }>()
   readonly #pending = new Map<string, PendingReplacement>()
@@ -251,8 +252,9 @@ export class ContextImagesService {
   constructor(input: {
     cacheRoot?: string
     directory?: string
+    includeInstructions?: boolean
     imageReadResults?: ImageReadResults
-    scopedInstructions?: boolean
+    imageNestedInstructions?: boolean
     imageSupport?: (providerID: string, modelID: string) => Promise<boolean>
     logger?: ContextImagesLogger
     minimumSavingsTokens?: number
@@ -272,13 +274,14 @@ export class ContextImagesService {
     this.#renderCoordinator = new RenderCoordinator({ logger: input.logger })
     this.#imageSupport = input.imageSupport
     if (input.sources) this.#explicitSources = this.#resolveSources(input.sources)
+    this.#includeInstructions = input.includeInstructions ?? input.sources !== undefined
     this.#imageReadResultPaths = new Set(
       this.#resolveSources(input.imageReadResults?.paths ?? []).map((source) => source.path),
     )
     this.#imageReadResultFilenames = new Set(input.imageReadResults?.filenames ?? [])
     this.#referenceContents = input.imageReadResults?.referenceContents ?? false
     this.#referenceRoots = input.referenceRoots
-    this.#scopedInstructions = input.scopedInstructions ?? false
+    this.#imageNestedInstructions = input.imageNestedInstructions ?? false
   }
 
   setConfiguredInstructions(instructions: string[]) {
@@ -342,6 +345,7 @@ export class ContextImagesService {
   }
 
   async #discoverSources() {
+    if (this.#includeInstructions === false) return []
     if (this.#explicitSources) {
       const sources = this.#explicitSources.filter(
         (source) => projectConfigDisabled() === false || source.project === false,
@@ -495,7 +499,11 @@ export class ContextImagesService {
       (candidate) => matchesImageReadResult(candidate.path) && hasLoadedInstructions(candidate.originalState.metadata),
     )
     const scoped = readParts.flatMap((candidate) => {
-      if (this.#scopedInstructions === false || matchesImageReadResult(candidate.path)) {
+    if (
+      this.#includeInstructions === false ||
+      this.#imageNestedInstructions === false ||
+      matchesImageReadResult(candidate.path)
+    ) {
         return []
       }
       const sources = scopedInstructionSources(candidate.originalState.output, candidate.originalState.metadata).filter(

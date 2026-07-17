@@ -16,7 +16,7 @@ Images are not supplementary context. A successful transformation removes the co
 - Never send images and their source text together as duplicate or supplementary context.
 - Treat paths, commands, identifiers, hashes, versions, flags, environment variables, glob patterns, key chords, casing-sensitive names, and quoted values as precision-critical factsheet content.
 
-Nested read-result replacement remains disabled by default. The `imageReadResults.paths` option enables exact-path allowlisting, `imageReadResults.filenames` enables case-sensitive basename matching, and `imageReadResults.referenceContents` matches files read beneath OpenCode's materialized reference roots. The `scopedInstructions` option enables lazy replacement of `AGENTS.md` files discovered through OpenCode's Read metadata. Both paths replace tool output only after image capability is confirmed, retain plaintext when their package has no positive estimated token saving, and leave plaintext unchanged on preparation failure. Nested replacement is committed independently from ambient system replacement. Real-model parity previously failed even with metadata and a factsheet, so these options remain higher-risk than the ambient replacement guarantee.
+Nested read-result replacement remains disabled by default. The `imageReadResults.paths` option enables exact-path allowlisting, `imageReadResults.filenames` enables case-sensitive basename matching, and `imageReadResults.referenceContents` matches files read beneath OpenCode's materialized reference roots. The `imageNestedInstructions` option enables lazy replacement of `AGENTS.md` files discovered through OpenCode's Read metadata. Both paths replace tool output only after image capability is confirmed, retain plaintext when their package has no positive estimated token saving, and leave plaintext unchanged on preparation failure. Nested replacement is committed independently from ambient system replacement. Real-model parity previously failed even with metadata and a factsheet, so these options remain higher-risk than the ambient replacement guarantee.
 
 ## Source Discovery
 
@@ -26,6 +26,8 @@ Sources are discovered automatically rather than configured through a plugin-spe
 - Project `AGENTS.md` files found toward the worktree root, or `CLAUDE.md` and then deprecated `CONTEXT.md` as file-family fallbacks.
 - Global `~/.config/opencode/AGENTS.md`, or `~/.claude/CLAUDE.md` as a compatibility fallback when enabled.
 - Local paths from OpenCode `config.instructions`; URL instructions are excluded.
+
+Set the plugin's `includeInstructions` option to `true` to replace ambient and nested `imageNestedInstructions` instruction text with images. It defaults to `false`; `imageReadResults` remains independently configured.
 
 `OPENCODE_DISABLE_PROJECT_CONFIG=1` and `OPENCODE_DISABLE_PROJECT_CONFIG=true` disable project sources while preserving global and explicitly configured sources.
 

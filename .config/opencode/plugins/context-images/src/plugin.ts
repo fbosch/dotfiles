@@ -35,6 +35,15 @@ export type ImageReadResults = {
   referenceContents?: boolean
 }
 
+export function parseIncludeInstructions(options: Record<string, unknown>) {
+  const includeInstructions = options.includeInstructions
+  if (includeInstructions === undefined) return false
+  if (typeof includeInstructions !== "boolean") {
+    throw new Error('[context-images] option "includeInstructions" must be a boolean')
+  }
+  return includeInstructions
+}
+
 export function parseImageReadResults(options: Record<string, unknown>): ImageReadResults | undefined {
   if ("readResultSources" in options) {
     throw new Error('[context-images] option "readResultSources" was replaced by "imageReadResults.paths"')
@@ -122,9 +131,10 @@ export const ContextImagesPlugin: Plugin = async ({ client, directory, project, 
     throw new Error('[context-images] option "sources" is no longer supported; use OpenCode instruction discovery')
   }
   const imageReadResults = parseImageReadResults(options)
-  const scopedInstructions = options.scopedInstructions
-  if (scopedInstructions !== undefined && typeof scopedInstructions !== "boolean") {
-    throw new Error('[context-images] option "scopedInstructions" must be a boolean')
+  const includeInstructions = parseIncludeInstructions(options)
+  const imageNestedInstructions = options.imageNestedInstructions
+  if (imageNestedInstructions !== undefined && typeof imageNestedInstructions !== "boolean") {
+    throw new Error('[context-images] option "imageNestedInstructions" must be a boolean')
   }
   const logFile = typeof options.logFile === "string" ? options.logFile : undefined
   const logger = new JsonlLogger(logFile)
@@ -134,9 +144,10 @@ export const ContextImagesPlugin: Plugin = async ({ client, directory, project, 
   const referenceClient = createOpencodeClient({ baseUrl: serverUrl.toString() })
   const service = new ContextImagesService({
     directory,
+    includeInstructions,
     imageReadResults,
     referenceRoots: cachedReferenceRoots(async () => await fetchMaterializedReferencePaths(referenceClient, directory)),
-    scopedInstructions,
+    imageNestedInstructions,
     imageSupport: async (providerID, modelID) => {
       const request = (providers ??= client.config.providers({ query: { directory } }))
       const response = await request.catch(() => undefined)
