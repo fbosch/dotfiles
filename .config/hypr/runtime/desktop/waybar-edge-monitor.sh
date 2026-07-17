@@ -146,7 +146,9 @@ while true; do
 
             # Show after delay (prevents quick hovers)
             if (( now - show_started_ms >= SHOW_DELAY_MS )); then
-                if pkill -SIGUSR1 waybar; then
+                if gaming_workspace_is_active; then
+                    :
+                elif pkill -SIGUSR1 waybar; then
                     waybar_visible=1
                 fi
                 show_started_ms=0

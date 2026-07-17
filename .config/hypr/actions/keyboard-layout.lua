@@ -8,7 +8,7 @@ end
 
 local function is_gaming_class(value)
 	local class = tostring(value or ""):lower()
-	return class == "gamescope" or class:match("^steam_app_%d+$") ~= nil
+	return class == "gamescope" or class == "steam_app_default" or class:match("^steam_app_%d+$") ~= nil
 end
 
 function M.switch()

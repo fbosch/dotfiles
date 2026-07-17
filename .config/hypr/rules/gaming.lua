@@ -21,7 +21,7 @@ M.default_presentation = {
 ---@field exclude_profile? boolean Prevents this window from activating the gaming profile.
 ---@field freeze? boolean `false` excludes this window from watchdog `wl-freeze` handling.
 ---@field confirm_close? boolean Requires confirmation before `CMD+W` closes this window.
----@field presentation? GamingPresentation Presentation settings when the gaming profile is active.
+---@field presentation? GamingPresentation Presentation settings applied when the gaming profile activates.
 
 ---@type GamingPolicy[]
 M.games = {

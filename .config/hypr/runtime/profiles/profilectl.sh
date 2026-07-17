@@ -116,12 +116,10 @@ set_power_profile() {
 
 pause_background_helpers() {
   pkill -STOP -f window-capture-daemon 2>/dev/null || true
-  pkill -STOP -f waybar-edge-monitor 2>/dev/null || true
 }
 
 resume_background_helpers() {
   pkill -CONT -f window-capture-daemon 2>/dev/null || true
-  pkill -CONT -f waybar-edge-monitor 2>/dev/null || true
 }
 
 refresh_window_captures() {

@@ -11,7 +11,13 @@ local window_switcher = require("actions.window-switcher")
 
 local main_mod = "SUPER"
 
-hl.bind("SUPER_L", hl.dsp.exec_cmd("pkill -SIGUSR1 waybar"), { long_press = true })
+hl.bind("SUPER_L", function()
+	if hl.get_active_workspace().name == "10" then
+		return
+	end
+
+	hl.dispatch(hl.dsp.exec_cmd("pkill -SIGUSR1 waybar"))
+end, { long_press = true })
 hl.bind("SUPER_L", window_switcher.release_super, { ignore_mods = true, release = true })
 hl.bind("SUPER_R", window_switcher.commit, { release = true })
 

@@ -8,6 +8,10 @@
 # shellcheck disable=SC1091
 . "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
+if gaming_workspace_is_active; then
+    exit 0
+fi
+
 cursor_pos=$(hypr_query 'cursorpos')
 IFS=', ' read -r cursor_x cursor_y <<EOF
 $cursor_pos

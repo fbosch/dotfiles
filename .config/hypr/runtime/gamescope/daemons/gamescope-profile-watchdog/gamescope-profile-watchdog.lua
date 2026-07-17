@@ -81,19 +81,6 @@ local function has_gaming_class(client)
 		or (game ~= nil and game.enable_profile)
 end
 
-local function active_presentation(clients)
-	for _, client in ipairs(clients) do
-		if client.focusHistoryID == 0 then
-			local game = gaming.match(rule_window(client))
-			if game ~= nil and game.presentation ~= nil then
-				return game.presentation
-			end
-		end
-	end
-
-	return gaming.default_presentation
-end
-
 local function has_profile_excluded_title(client)
 	return gaming.is_profile_excluded(rule_window(client))
 end
@@ -215,22 +202,27 @@ local function sync_gaming_state(last_count, clients, force)
 	return last_count
 end
 
-local function sync_gaming_presentation(last_presentation, clients, gaming_count)
-	if gaming_count == 0 then
-		return nil
+local function select_presentation(clients)
+	local fallback = nil
+	for _, client in ipairs(clients) do
+		local game = gaming.match(rule_window(client))
+		if game ~= nil and game.presentation ~= nil then
+			if client.focusHistoryID == 0 then
+				return game.presentation
+			end
+			fallback = fallback or game.presentation
+		end
 	end
 
-	local presentation = active_presentation(clients)
-	if
-		last_presentation ~= nil
-		and last_presentation.vrr == presentation.vrr
-		and last_presentation.direct_scanout == presentation.direct_scanout
-	then
-		return last_presentation
+	return fallback or gaming.default_presentation
+end
+
+local function sync_gaming_presentation(previous_count, current_count, clients)
+	if previous_count ~= 0 or current_count == 0 then
+		return
 	end
 
-	apply_presentation(presentation)
-	return presentation
+	apply_presentation(select_presentation(clients))
 end
 
 local function overlay_window_count(clients)
@@ -305,9 +297,8 @@ local function cleanup()
 end
 
 local function run()
-	local last_count = nil
+	local last_count = 0
 	local last_overlay_count = 0
-	local last_presentation = nil
 
 	while true do
 		local ok, err = pcall(function()
@@ -316,8 +307,9 @@ local function run()
 			local monitors = get_monitors()
 			last_overlay_count = overlay_window_count(clients)
 			sync_gaming_freeze_state(clients, monitors)
-			last_count = sync_gaming_state(last_count, clients, true)
-			last_presentation = sync_gaming_presentation(last_presentation, clients, last_count)
+			local current_count = sync_gaming_state(last_count, clients, true)
+			sync_gaming_presentation(last_count, current_count, clients)
+			last_count = current_count
 
 			while true do
 				local line, read_err, partial = events:receive("*l")
@@ -333,9 +325,10 @@ local function run()
 
 					maybe_show_gaming_overlay(current_overlay_count, last_overlay_count, monitors)
 					sync_gaming_freeze_state(clients, monitors)
-					last_overlay_count = current_overlay_count
-					last_count = sync_gaming_state(last_count, clients, kind == "reload")
-					last_presentation = sync_gaming_presentation(last_presentation, clients, last_count)
+				last_overlay_count = current_overlay_count
+				local current_count = sync_gaming_state(last_count, clients, kind == "reload")
+				sync_gaming_presentation(last_count, current_count, clients)
+				last_count = current_count
 				end
 				if read_err then
 					events:close()

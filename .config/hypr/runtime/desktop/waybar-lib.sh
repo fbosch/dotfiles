@@ -6,6 +6,10 @@
 
 TASKBAR_AGS_COMPONENTS="start-menu calendar-widget audio-mixer-widget"
 
+gaming_workspace_is_active() {
+    hypr_query 'j/activeworkspace' | jq -e '.name == "10"' >/dev/null
+}
+
 ags_component_visible() {
     local component=$1
     ags_request "$component" '{"action":"is-visible"}' 2>/dev/null || echo "false"
