@@ -33,6 +33,7 @@ declare global {
   var DesktopClock: ComponentModule;
   var CalendarWidget: ComponentModule;
   var AudioMixerWidget: ComponentModule;
+  var PaperWallpaper: ComponentModule;
 }
 
 // Load components using global namespace pattern (no ES6 exports)
@@ -44,6 +45,7 @@ import "./lib/window-switcher.tsx";
 import "./lib/desktop-clock.tsx";
 import "./lib/calendar-widget.tsx";
 import "./lib/audio-mixer-widget.tsx";
+import "./lib/paper-wallpaper.tsx";
 
 // Component registry for request routing
 type ComponentHandler = (argv: string[], res: (response: string) => void) => void;
@@ -205,6 +207,15 @@ app.start({
       console.log(`[Bundled AGS] ✓ ${globalThis.DesktopClock.instanceName} initialized`);
     } catch (e) {
       console.error(`[Bundled AGS] ✗ Failed to initialize desktop-clock:`, e);
+    }
+
+    // Initialize Paper wallpaper experiment
+    try {
+      globalThis.PaperWallpaper.init();
+      registerComponent(globalThis.PaperWallpaper.instanceName, globalThis.PaperWallpaper.handleRequest);
+      console.log(`[Bundled AGS] ✓ ${globalThis.PaperWallpaper.instanceName} initialized`);
+    } catch (e) {
+      console.error(`[Bundled AGS] ✗ Failed to initialize Paper wallpaper:`, e);
     }
 
     // Initialize calendar-widget
