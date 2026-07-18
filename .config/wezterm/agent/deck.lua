@@ -542,6 +542,27 @@ function M.get()
 	return agent_deck
 end
 
+local function call_agent_deck(method_name, ...)
+	if agent_deck == nil then
+		return nil
+	end
+
+	local plugin = agent_deck
+	local args = { ... }
+	local ok, result = pcall(function()
+		return plugin[method_name](table.unpack(args))
+	end)
+	if ok then
+		return result
+	end
+
+	agent_deck = nil
+	wezterm.log_warn(
+		"[wezterm] agent deck " .. method_name .. " failed; using fallback detection: " .. tostring(result)
+	)
+	return nil
+end
+
 function M.update_pane(pane)
 	local now = now_ms()
 	local pane_id = pane:pane_id()
@@ -557,8 +578,8 @@ function M.update_pane(pane)
 	pane_refresh_timestamps[pane_id] = now
 
 	if agent_deck then
-		agent_deck.update_pane(pane)
-		plugin_state = normalize_state(agent_deck.get_agent_state(pane_id), "plugin")
+		call_agent_deck("update_pane", pane)
+		plugin_state = normalize_state(call_agent_deck("get_agent_state", pane_id), "plugin")
 	end
 
 	if plugin_state then
@@ -590,7 +611,7 @@ end
 
 function M.get_agent_state(pane_id)
 	if agent_deck then
-		local state = normalize_state(agent_deck.get_agent_state(pane_id), "plugin")
+		local state = normalize_state(call_agent_deck("get_agent_state", pane_id), "plugin")
 		if state then
 			return state
 		end
@@ -601,7 +622,10 @@ end
 
 function M.get_status_icon(status)
 	if agent_deck then
-		return agent_deck.get_status_icon(status)
+		local icon = call_agent_deck("get_status_icon", status)
+		if icon then
+			return icon
+		end
 	end
 
 	return fallback_icons[status] or fallback_icons.inactive
@@ -622,7 +646,10 @@ end
 
 function M.get_status_color(status)
 	if agent_deck then
-		return agent_deck.get_status_color(status)
+		local color = call_agent_deck("get_status_color", status)
+		if color then
+			return color
+		end
 	end
 
 	return fallback_colors[status] or fallback_colors.inactive
