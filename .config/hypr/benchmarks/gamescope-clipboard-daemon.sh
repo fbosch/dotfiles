@@ -4,7 +4,7 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 hypr_dir="$(cd -- "$script_dir/.." && pwd)"
-daemon="$hypr_dir/runtime/gamescope/gamescope-clipboard-sync.sh"
+daemon="$hypr_dir/runtime/gaming/gamescope-clipboard-sync.sh"
 run_seconds="${1:-1}"
 
 tmp_dir="$(mktemp -d)"

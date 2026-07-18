@@ -28,7 +28,7 @@ local commands = {
 	background(paths.runtime_script("windows/daemons/minimized-state/minimized-state-daemon.sh")),
 	background(paths.runtime_script("windows/daemons/window-capture/window-capture-daemon.lua")),
 background(paths.runtime_script("gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh")),
-	background(paths.runtime_script("gamescope/gamescope-clipboard-sync.sh")),
+background(paths.runtime_script("gaming/gamescope-clipboard-sync.sh")),
 	session("hyprpaper"),
 	session("waybar"),
 	session("swaync -c ~/.config/swaync/config.json -s ~/.config/swaync/style.css"),
