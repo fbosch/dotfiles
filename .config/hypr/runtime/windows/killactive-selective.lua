@@ -19,13 +19,14 @@ local function valid_address(address)
 	return type(address) == "string" and address:match("^0x[%da-fA-F]+$") ~= nil
 end
 
-local function close_window(address)
+local function close_window(address, force)
 	local target = "{}"
 	if valid_address(address) then
 		target = '{ window = "address:' .. address .. '" }'
 	end
 
-	hypr_ipc.request("dispatch hl.dsp.window.close(" .. target .. ")")
+	local dispatcher = force and "kill" or "close"
+	hypr_ipc.request("dispatch hl.dsp.window." .. dispatcher .. "(" .. target .. ")")
 end
 
 local function confirm_payload(address, title)
@@ -68,7 +69,7 @@ end
 
 if arg[1] == "--confirmed-address" then
 	if valid_address(arg[2]) then
-		close_window(arg[2])
+		close_window(arg[2], false)
 	else
 		notify("Close failed", "Invalid window address")
 	end
@@ -86,9 +87,10 @@ local policy_window = {
 	content = active_window.contentType,
 }
 
-if gaming.requires_close_confirmation(policy_window) then
+local game = gaming.match(policy_window)
+if game ~= nil and game.confirm_close == true then
 	request_confirm_close(address, title)
 	return
 end
 
-close_window(address)
+close_window(address, game ~= nil and game.force_close == true)

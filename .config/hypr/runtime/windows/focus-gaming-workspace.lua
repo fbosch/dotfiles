@@ -9,23 +9,9 @@ local hypr_ipc = require("runtime.lib.hypr-ipc")
 
 local gaming_workspace = "10"
 
-local function lower(value)
-	return tostring(value or ""):lower()
-end
-
 local function workspace_name(win)
 	local workspace = win.workspace
 	return type(workspace) == "table" and tostring(workspace.name or workspace.id or "") or tostring(workspace or "")
-end
-
-local function is_gaming_window(win)
-	local app_class = lower(win.class)
-	local initial_class = lower(win.initialClass or win.initial_class)
-
-	return app_class == "gamescope"
-		or initial_class == "gamescope"
-		or app_class:match("^steam_app_%d+$") ~= nil
-		or initial_class:match("^steam_app_%d+$") ~= nil
 end
 
 local function clients()
@@ -38,7 +24,7 @@ local function clients()
 end
 
 for _, win in ipairs(clients()) do
-	if workspace_name(win) == gaming_workspace and is_gaming_window(win) then
+	if workspace_name(win) == gaming_workspace then
 		hypr_ipc.request('dispatch hl.dsp.focus({ workspace = "' .. gaming_workspace .. '" })')
 		return
 	end

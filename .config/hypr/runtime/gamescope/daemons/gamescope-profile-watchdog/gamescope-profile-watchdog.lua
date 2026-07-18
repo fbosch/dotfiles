@@ -60,11 +60,6 @@ local function starts_with(value, prefix)
 	return tostring(value or ""):sub(1, #prefix) == prefix
 end
 
-local function is_gaming_class(value)
-	local class = lower(value)
-	return class == "gamescope" or class:match("^steam_app_%d+$") ~= nil
-end
-
 local function rule_window(client)
 	return {
 		class = client.class,
@@ -75,11 +70,8 @@ local function rule_window(client)
 	}
 end
 
-local function has_gaming_class(client)
-	local game = gaming.match(rule_window(client))
-	return is_gaming_class(client.class)
-		or is_gaming_class(client.initialClass)
-		or (game ~= nil and game.enable_profile)
+local function has_game_content(client)
+	return lower(client.contentType) == "game"
 end
 
 local function has_profile_excluded_title(client)
@@ -96,7 +88,7 @@ local function get_gaming_window_count(clients)
 		if
 			not starts_with(workspace_name(client), minimized_workspace_prefix)
 			and not has_profile_excluded_title(client)
-			and has_gaming_class(client)
+			and has_game_content(client)
 		then
 			count = count + 1
 		end
@@ -111,7 +103,7 @@ local function get_freezable_gaming_windows(clients)
 		if
 			(workspace == gaming_workspace or starts_with(workspace, minimized_workspace_prefix))
 			and not excludes_freezing(client)
-			and has_gaming_class(client)
+			and has_game_content(client)
 		then
 			windows[#windows + 1] = { pid = tostring(client.pid or ""), workspace = workspace }
 		end
@@ -244,20 +236,35 @@ local function lua_string(value)
 	return string.format("%q", value)
 end
 
+local function gaming_workspace_monitor(monitors)
+	monitors = monitors or get_monitors()
+	for _, monitor in ipairs(monitors) do
+		local active_workspace = monitor.activeWorkspace
+		if active_workspace and active_workspace.name == gaming_workspace then
+			return monitor.name or ""
+		end
+	end
+	return ""
+end
+
+local function toggle_gaming_overlay(monitor_name)
+	if monitor_name == "" then
+		return
+	end
+
+	hypr_ipc.request("dispatch hl.dsp.focus({ monitor = " .. lua_string(monitor_name) .. " })")
+	hypr_ipc.request(
+		"dispatch hl.dsp.workspace.toggle_special(" .. lua_string(gaming_overlay_workspace:gsub("^special:", "")) .. ")"
+	)
+end
+
 local function maybe_show_gaming_overlay(current_count, last_count, monitors)
 	if current_count <= last_count then
 		return
 	end
 
 	monitors = monitors or get_monitors()
-	local target_monitor = ""
-	for _, monitor in ipairs(monitors) do
-		local active_workspace = monitor.activeWorkspace
-		if active_workspace and active_workspace.name == gaming_workspace then
-			target_monitor = monitor.name or ""
-			break
-		end
-	end
+	local target_monitor = gaming_workspace_monitor(monitors)
 	if target_monitor == "" then
 		return
 	end
@@ -273,21 +280,44 @@ local function maybe_show_gaming_overlay(current_count, last_count, monitors)
 		end
 	end
 
-	hypr_ipc.request("dispatch hl.dsp.focus({ monitor = " .. lua_string(target_monitor) .. " })")
-	hypr_ipc.request(
-		"dispatch hl.dsp.workspace.toggle_special(" .. lua_string(gaming_overlay_workspace:gsub("^special:", "")) .. ")"
-	)
+	toggle_gaming_overlay(target_monitor)
+end
+
+local function hide_gaming_overlay_outside_workspace(monitors)
+	monitors = monitors or get_monitors()
+	local target_monitor = gaming_workspace_monitor(monitors)
+	local focused_monitor = ""
+	local hidden_overlay = false
+	for _, monitor in ipairs(monitors) do
+		if monitor.focused == true then
+			focused_monitor = monitor.name or ""
+		end
+
+		local special_workspace = monitor.specialWorkspace
+		if special_workspace and special_workspace.name == gaming_overlay_workspace then
+			if monitor.name ~= target_monitor then
+				toggle_gaming_overlay(monitor.name or "")
+				hidden_overlay = true
+			end
+		end
+	end
+
+	if hidden_overlay and focused_monitor ~= "" then
+		hypr_ipc.request("dispatch hl.dsp.focus({ monitor = " .. lua_string(focused_monitor) .. " })")
+	end
 end
 
 local function event_kind(event)
 	if event:match("^configreloaded") then
 		return "reload"
 	end
+	if event:match("^workspace") then
+		return "workspace"
+	end
 	if
 		event:match("^openwindow")
 		or event:match("^closewindow")
 		or event:match("^movewindow")
-		or event:match("^workspace")
 		or event:match("^activespecial")
 		or event:match("^activewindow")
 		or event:match("^fullscreen")
@@ -311,6 +341,7 @@ local function run()
 			local clients = get_clients()
 			local monitors = get_monitors()
 			last_overlay_count = overlay_window_count(clients)
+			hide_gaming_overlay_outside_workspace(monitors)
 			sync_gaming_freeze_state(clients, monitors)
 			local current_count = sync_gaming_state(last_count, clients, true)
 			sync_gaming_presentation(last_count, current_count, clients)
@@ -324,13 +355,16 @@ local function run()
 					local clients = get_clients()
 					local current_overlay_count = overlay_window_count(clients)
 					local monitors = nil
-					if current_overlay_count > last_overlay_count or kind == "window" then
+					if current_overlay_count > last_overlay_count or kind == "workspace" then
 						monitors = get_monitors()
 					end
 
 					maybe_show_gaming_overlay(current_overlay_count, last_overlay_count, monitors)
+					if kind == "workspace" then
+						hide_gaming_overlay_outside_workspace(monitors)
+					end
 					sync_gaming_freeze_state(clients, monitors)
-				last_overlay_count = current_overlay_count
+					last_overlay_count = current_overlay_count
 				local current_count = sync_gaming_state(last_count, clients, kind == "reload")
 				sync_gaming_presentation(last_count, current_count, clients, kind == "reload")
 				last_count = current_count
