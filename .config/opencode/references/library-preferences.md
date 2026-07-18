@@ -47,3 +47,5 @@ These are conditional defaults for new work. Existing repository conventions, sc
 | [release-please](https://github.com/googleapis/release-please) | Automating versioning and release pull requests. | `/googleapis/release-please` |
 | [devenv](https://devenv.sh/) and `devenv.nix` | Defining a reproducible development environment. | `/cachix/devenv` |
 | [just](https://just.systems/man/en/) and a `justfile` | Adding discoverable project task recipes. | `/casey/just` |
+| [Portless](https://github.com/vercel-labs/portless) | Running local web applications with stable, named URLs instead of manually managed ports. | `/vercel-labs/portless` |
+| [Worktrunk](https://github.com/max-sixty/worktrunk) (`wt`) | Managing Git branches through isolated worktrees. | `/max-sixty/worktrunk` |
