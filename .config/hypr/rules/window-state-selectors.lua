@@ -30,4 +30,5 @@ return {
   { matcher = "match:class", pattern = [=[^io\.github\.efogdev\.mpris-timer$]=] },
   { matcher = "match:class", pattern = [=[^zenity$]=] },
   { matcher = "match:class", pattern = [=[^steam_app_0$]=] },
+  { matcher = "match:class", pattern = [=[^org\.signal\.Signal$]=] },
 }

@@ -9,6 +9,9 @@ hl.window_rule({ match = { class = "^(GTK Application)$" }, float = true })
 -- Bitwarden
 hl.window_rule({ match = { class = "^(Bitwarden)$" }, float = true, size = "900 900" })
 
+-- Signal
+hl.window_rule({ match = { class = "^(org\\.signal\\.Signal)$" }, float = true })
+
 -- GNOME Applications (general)
 hl.window_rule({ match = { class = "^(org\\.gnome\\.Calculator)$" }, float = true, persistent_size = true })
 hl.window_rule({ match = { class = "^(org\\.gnome\\.TextEditor)$" }, float = true })
