@@ -222,8 +222,8 @@ local function select_presentation(clients)
 	return fallback or gaming.default_presentation
 end
 
-local function sync_gaming_presentation(previous_count, current_count, clients)
-	if previous_count ~= 0 or current_count == 0 then
+local function sync_gaming_presentation(previous_count, current_count, clients, force)
+	if not force and (previous_count ~= 0 or current_count == 0) then
 		return
 	end
 
@@ -332,7 +332,7 @@ local function run()
 					sync_gaming_freeze_state(clients, monitors)
 				last_overlay_count = current_overlay_count
 				local current_count = sync_gaming_state(last_count, clients, kind == "reload")
-				sync_gaming_presentation(last_count, current_count, clients)
+				sync_gaming_presentation(last_count, current_count, clients, kind == "reload")
 				last_count = current_count
 				end
 				if read_err then

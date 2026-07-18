@@ -38,6 +38,7 @@ M.games = {
 		freeze = false,
 		confirm_close = true,
 		presentation = {
+			vrr = 0,
 			direct_scanout = 1,
 		},
 	},
