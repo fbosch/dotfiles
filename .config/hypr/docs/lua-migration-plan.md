@@ -50,8 +50,10 @@ Do not emit Hyprland named rules initially. Use internal `id` fields for dedupe 
       workspace.lua
       window.lua
     runtime/
-      gamescope/
-        gamescope-profile-watchdog.sh
+      gaming/
+        daemons/
+          gaming-session-watchdog/
+            gaming-session-watchdog.sh
       session/
         exit-session.sh
       startup/

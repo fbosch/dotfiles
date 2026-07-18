@@ -376,7 +376,7 @@ local function run()
 			end
 		end)
 		if not ok then
-			io.stderr:write("gamescope-profile-watchdog: ", tostring(err), "\n")
+		io.stderr:write("gaming-session-watchdog: ", tostring(err), "\n")
 		end
 		socket.sleep(reconnect_delay_seconds)
 	end

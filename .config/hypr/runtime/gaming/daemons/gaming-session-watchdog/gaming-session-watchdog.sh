@@ -26,6 +26,6 @@ cleanup() {
 trap cleanup EXIT
 trap 'cleanup; exit 0' INT TERM
 
-"${HOME}/.config/hypr/runtime/gamescope/daemons/gamescope-profile-watchdog/gamescope-profile-watchdog.lua" "$@" &
+"${HOME}/.config/hypr/runtime/gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.lua" "$@" &
 child_pid="$!"
 wait "$child_pid"
