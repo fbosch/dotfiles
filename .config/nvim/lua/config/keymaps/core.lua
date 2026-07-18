@@ -29,5 +29,11 @@ end)
 -- compare selection with clipboard
 map("v", "<leader>dc", "<CMD>DiffClip<CR>", "Compare selection with clipboard")
 
+map("n", "<leader>br", function()
+	if vim.fn.confirm("Reload current buffer and discard unsaved changes?", "&Yes\n&No", 2) == 1 then
+		vim.cmd("edit!")
+	end
+end, "Reload buffer and discard changes")
+
 -- find conflicts
 map("n", "<leader>fc", "/<<<<CR>", "Find conflicts")
