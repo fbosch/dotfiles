@@ -15,6 +15,8 @@ approved-commands = [
     "pnpm install --frozen-lockfile --prefer-offline && sh ./.config/ensure-vercel-link.sh && devenv shell -- true",
     "pnpm quality:pre-push",
     "pnpm install --frozen-lockfile --prefer-offline && sh ./.config/ensure-vercel-link.sh && if command -v devenv >/dev/null 2>&1; then devenv shell -- true; fi",
+    'source={{ base_worktree_path }}; if [ -d "$source/.devenv" ] && [ ! -e .devenv ] && cmp -s "$source/devenv.nix" devenv.nix && cmp -s "$source/devenv.yaml" devenv.yaml && cmp -s "$source/devenv.lock" devenv.lock; then cp -a "$source/.devenv" .; fi',
+    "sh ./.config/ensure-vercel-link.sh && if command -v devenv >/dev/null 2>&1; then devenv shell -- true; else pnpm install --frozen-lockfile --prefer-offline; fi",
 ]
 
 [projects."github.com/fbosch/pkdx"]
