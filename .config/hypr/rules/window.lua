@@ -77,7 +77,7 @@ hl.window_rule({ match = { class = "^(io\\.github\\.flattool\\.Warehouse)$" }, f
 hl.window_rule({ match = { class = "^(xdg-desktop-portal-gtk)$" }, float = true, pin = true, no_anim = true })
 
 -- Zen Browser
-hl.window_rule({ match = { title = "^([Pp]icture-in-[Pp]icture)$" }, float = true, no_initial_focus = true, pin = true })
+hl.window_rule({ match = { title = "^([Pp]icture-in-[Pp]icture)$" }, float = true, no_initial_focus = true, pin = true, content = "video" })
 hl.window_rule({ match = { title = "([Pp]icture-in-[Pp]icture)" }, animation = "slide right" })
 hl.window_rule({ match = { initial_title = "(^(Picture-in-Picture)$)" }, size = "688 388", move = "2739 993" })
 
