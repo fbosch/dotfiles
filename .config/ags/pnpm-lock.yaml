@@ -4,19 +4,4 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-importers:
-
-  .:
-    dependencies:
-      '@paper-design/shaders':
-        specifier: ^0.0.77
-        version: 0.0.77
-
-packages:
-
-  '@paper-design/shaders@0.0.77':
-    resolution: {integrity: sha512-y0mR3brBu6qvVgbnvBdXX3zL/hajdamkECLt8NbexaEc1L46W3a+ZIEwxu1NJ2/bqwxAgjJC0o2+4CAii5wp/w==}
-
-snapshots:
-
-  '@paper-design/shaders@0.0.77': {}
+importers: {}

@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/hypr-profiles/gamescope-watchdog.lock"
+LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/hypr-profiles/gaming-session-watchdog.lock"
 PROFILECTL="$HOME/.config/hypr/runtime/profiles/profilectl.sh"
 
 mkdir -p "$(dirname "$LOCK_FILE")"

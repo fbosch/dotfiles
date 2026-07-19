@@ -21,8 +21,5 @@
     "wayland"
   ],
   "author": "",
-  "license": "UNLICENSED",
-  "dependencies": {
-    "@paper-design/shaders": "^0.0.77"
-  }
+  "license": "UNLICENSED"
 }
