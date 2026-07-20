@@ -3,6 +3,7 @@ const CODEX_API_ENDPOINT = "https://chatgpt.com/backend-api/codex/responses"
 const COMPATIBILITY_VERSION = "0.144.0"
 const RESPONSES_LITE_HEADER = "x-openai-internal-codex-responses-lite"
 const RESPONSES_LITE_MODELS = new Set(["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])
+const TOOL_SEARCH = "tool_search"
 const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 const ISSUER = "https://auth.openai.com"
 
@@ -94,11 +95,18 @@ async function refreshAccessToken(refreshToken: string, httpFetch: typeof fetch)
 
 export function prepareResponsesLiteRequest(args: FetchArgs, sessionIDs: Map<string, string>): FetchArgs | undefined {
   const [input, init] = args
-  const request = liteRequest(input, init)
+  const request = responsesRequest(input, init)
   if (!request) return
 
   const headers = requestHeaders(input, init)
   if (headers.get(RESPONSES_LITE_HEADER) === "true") return
+
+  const rewroteToolSearch = rewriteToolSearch(request)
+  if (!isResponsesLiteRequest(request)) {
+    if (!rewroteToolSearch) return
+    headers.delete("content-length")
+    return [input, { ...init, body: JSON.stringify(request), headers }]
+  }
 
   const sessionID = providerSessionID(headers, sessionIDs)
   transformRequest(request, sessionID)
@@ -112,11 +120,11 @@ export function prepareResponsesLiteRequest(args: FetchArgs, sessionIDs: Map<str
   return [input, { ...init, body: JSON.stringify(request), headers }]
 }
 
-function liteRequest(input: RequestInfo | URL, init: RequestInit | undefined) {
+function responsesRequest(input: RequestInfo | URL, init: RequestInit | undefined) {
   const url = requestUrl(input)
   if (url.hostname !== "chatgpt.com" || url.pathname !== CODEX_RESPONSES_PATH) return
   if (typeof init?.body !== "string") return
-  return parseResponsesLiteRequest(init.body)
+  return parseRequest(init.body)
 }
 
 function providerSessionID(headers: Headers, sessionIDs: Map<string, string>) {
@@ -155,6 +163,42 @@ function transformRequest(request: Record<string, unknown>, sessionID: string) {
   }
 }
 
+function rewriteToolSearch(request: Record<string, unknown>): boolean {
+  if (!Array.isArray(request.tools)) return false
+
+  let changed = false
+  let foundNativeTool = false
+  const tools: unknown[] = []
+  for (const definition of request.tools) {
+    if (isToolSearchSentinel(definition)) {
+      changed = true
+      if (foundNativeTool) continue
+      tools.push({ type: TOOL_SEARCH })
+      foundNativeTool = true
+      continue
+    }
+    if (isNativeToolSearch(definition)) {
+      if (foundNativeTool) {
+        changed = true
+        continue
+      }
+      foundNativeTool = true
+    }
+    tools.push(definition)
+  }
+
+  if (changed) request.tools = tools
+  return changed
+}
+
+function isToolSearchSentinel(definition: unknown) {
+  return isRecord(definition) && definition.type === "function" && definition.name === TOOL_SEARCH
+}
+
+function isNativeToolSearch(definition: unknown) {
+  return isRecord(definition) && definition.type === TOOL_SEARCH
+}
+
 function validateRequest(request: Record<string, unknown>): asserts request is LiteRequest {
   if (!Array.isArray(request.input)) throw new Error("Responses Lite requires an input array")
   if (request.tools !== undefined && !Array.isArray(request.tools)) {
@@ -179,7 +223,7 @@ function requestHeaders(input: RequestInfo | URL, init: RequestInit | undefined)
   return headers
 }
 
-function parseResponsesLiteRequest(body: string): Record<string, unknown> | undefined {
+function parseRequest(body: string): Record<string, unknown> | undefined {
   let request: unknown
   try {
     request = JSON.parse(body)
@@ -187,9 +231,11 @@ function parseResponsesLiteRequest(body: string): Record<string, unknown> | unde
     return
   }
 
-  if (!isRecord(request)) return
-  if (typeof request.model !== "string" || !RESPONSES_LITE_MODELS.has(request.model)) return
-  return request
+  return isRecord(request) ? request : undefined
+}
+
+function isResponsesLiteRequest(request: Record<string, unknown>): request is LiteRequest {
+  return typeof request.model === "string" && RESPONSES_LITE_MODELS.has(request.model)
 }
 
 function createSessionID() {

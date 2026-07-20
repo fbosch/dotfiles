@@ -4,13 +4,12 @@
 local command = require("lib.command")
 local window = require("lib.window")
 local gaming = require("rules.gaming")
+local async = require("lib.async")
 
 local M = {}
-local config_root = os.getenv("HOME") .. "/.config/hypr"
 local tool_cache = {}
 local clipboard_wrapper = nil
 local gamescope_displays = nil
-local scheduled_commands = {}
 
 local function read_clipboard_text()
 	local clipboard_text = command.output("wl-paste --no-newline --type text/plain 2>/dev/null || true")
@@ -150,36 +149,13 @@ function M.paste_with_xwayland_clipboard_now()
 	end
 end
 
-local function schedule(action, delay)
-	local cache_key = action .. "\0" .. delay
-	local scheduled_command = scheduled_commands[cache_key]
-	if scheduled_command then
-		hl.exec_cmd(scheduled_command)
-		return
-	end
-
-	local lua_code = table.concat({
-		"package.path=",
-		string.format("%q", config_root .. "/?.lua;" .. config_root .. "/?/init.lua;"),
-		"..package.path;require(",
-		string.format("%q", "actions.clipboard-bridge"),
-		").",
-		action,
-		"()",
-	})
-
-	scheduled_command = "sh -c " .. command.arg("sleep " .. delay .. "; lua -e " .. command.arg(lua_code))
-	scheduled_commands[cache_key] = scheduled_command
-	hl.exec_cmd(scheduled_command)
-end
-
 function M.sync_wayland_to_xwayland()
-	schedule("sync_wayland_to_xwayland_now", "0.05")
+	async.defer(M.sync_wayland_to_xwayland_now, 50)
 end
 
 function M.paste_with_clipboard_bridge()
 	if active_is_gamescope() then
-		schedule("paste_with_xwayland_clipboard_now", "0.08")
+		async.defer(M.paste_with_xwayland_clipboard_now, 80)
 		return
 	end
 end

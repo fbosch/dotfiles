@@ -40,6 +40,51 @@ describe("Responses Lite compatibility", () => {
     expect(sessionIDs.size).toBe(0)
   })
 
+  test("replaces the sentinel function with one native tool-search descriptor", () => {
+    const { body } = responseParts(transform("gpt-5.6-terra", new Map(), {
+      input: [],
+      tools: [
+        { type: "function", name: "tool_search", description: "Internal", parameters: {} },
+        { type: "function", name: "noop" },
+        { type: "tool_search" },
+      ],
+    }))
+
+    expect(body.input).toEqual([
+      {
+        type: "additional_tools",
+        role: "developer",
+        tools: [{ type: "tool_search" }, { type: "function", name: "noop" }],
+      },
+    ])
+  })
+
+  test("rewrites the sentinel for non-Lite Responses requests", () => {
+    const result = prepareResponsesLiteRequest(
+      [
+        "https://chatgpt.com/backend-api/codex/responses",
+        {
+          headers: { "session-id": "ses_test", "content-length": "123" },
+          body: JSON.stringify({
+            model: "gpt-5.4-mini-fast",
+            input: [],
+            tools: [{ type: "function", name: "tool_search", description: "Internal", parameters: {} }],
+          }),
+        },
+      ],
+      new Map(),
+    )
+    if (!result) throw new Error("Expected native tool-search rewrite")
+
+    const { headers, body } = responseParts(result)
+    expect(headers.get("content-length")).toBeNull()
+    expect(body).toEqual({
+      model: "gpt-5.4-mini-fast",
+      input: [],
+      tools: [{ type: "tool_search" }],
+    })
+  })
+
   test("overrides the OAuth fetch boundary", async () => {
     const requests: Array<{ url: string; headers: Headers; body: Record<string, unknown> }> = []
     const providerFetch = createCodexOAuthFetch({
