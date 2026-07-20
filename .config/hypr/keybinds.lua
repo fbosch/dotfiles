@@ -1,5 +1,3 @@
--- Keybindings ported from keybinds.conf.
-
 local programs = require("programs")
 local async = require("lib.async")
 local bind = require("lib.bind")
@@ -25,13 +23,16 @@ bind.register(
 	"pkill -SIGUSR1 waybar",
 	{ long_press = true, predicate = window.active_workspace_is_not(gaming.workspace), on_false = bind.consume }
 )
-
 bind.register("SUPER_L", window_switcher.release_super, { ignore_mods = true, release = true })
 bind.register("SUPER_R", window_switcher.commit, { release = true })
+bind.register(main("TAB"), window_switcher.action("next", main_mod))
+bind.register(main("SHIFT + TAB"), window_switcher.action("prev", main_mod))
 
--- Launchers and clipboard
+-- Launchers
 bind.register(main("SPACE"), programs.menu)
+bind.register(main("R"), programs.menu)
 
+-- Input and clipboard
 bind.register("CTRL + SPACE", keyboard_layout.switch, {
 	predicate = window.active_is_not_game,
 })
@@ -52,18 +53,17 @@ bind.register(
 	{ non_consuming = true, predicate = profiles.is_gaming_active }
 )
 
--- Application switcher
-bind.register(main("TAB"), window_switcher.action("next", main_mod))
-bind.register(main("SHIFT + TAB"), window_switcher.action("prev", main_mod))
-
--- Desktop controls
+-- Desktop and session controls
 bind.register(main("SHIFT + C"), "hyprpicker -a")
 bind.register(main("N"), "swaync-client -t")
 bind.register("CTRL + ALT + L", "hyprlock")
 bind.register("PAUSE", "wl-freeze -a")
 bind.register(main("SHIFT + P"), "~/.config/hypr/runtime/profiles/toggle-powersave-mode.sh")
+bind.register(main("M"), confirm_exit.confirm_exit)
+bind.register(main("SHIFT + R"), "~/.config/hypr/runtime/desktop/reset-desktop.sh")
+bind.register(main("D"), "~/.config/hypr/runtime/windows/toggle-show-desktop.sh")
 
--- Gaming workspace
+-- Gaming
 bind.register(main("G"), window.focus_gaming_workspace)
 bind.register(main("SHIFT + G"), window.move_to_gaming_workspace)
 
@@ -89,26 +89,23 @@ bind.register(main("B"), function()
 
 	hl.dispatch(hl.dsp.exec_cmd(programs.browser))
 end)
+bind.register(main("E"), programs.file_manager)
 
--- Window and desktop state
+-- Window state
 bind.register(main("W"), async.runtime_lua("windows/killactive-selective.lua"))
 bind.register(main("CTRL + C"), "~/.config/hypr/runtime/windows/confirm-hyprprop-kill.sh")
-bind.register(main("M"), confirm_exit.confirm_exit)
-bind.register(main("SHIFT + R"), "~/.config/hypr/runtime/desktop/reset-desktop.sh")
-bind.register(main("E"), programs.file_manager)
 bind.register(main("V"), hl.dsp.window.float())
-bind.register(main("R"), programs.menu)
 bind.register(main("P"), hl.dsp.window.pseudo())
 
 bind.register(main("F"), hl.dsp.window.fullscreen({ mode = "maximized" }))
 bind.register(main("CTRL + F"), hl.dsp.window.fullscreen({ mode = "fullscreen" }))
 bind.register(main("CTRL + SHIFT + F"), hl.dsp.pass({ window = "class:^(xfreerdp)$" }))
-bind.register(main("D"), "~/.config/hypr/runtime/windows/toggle-show-desktop.sh")
 
 bind.register(main("Z"), "~/.config/hypr/runtime/windows/minimized-state.lua toggle-window")
 bind.register(main("SHIFT + Z"), "~/.config/hypr/runtime/windows/minimized-state.lua toggle-workspace")
 bind.register(main("X"), window.hide_from_current_workspace)
 
+-- Window focus and layout
 bind.register(main("H"), window.focus("left"))
 bind.register(main("L"), window.focus("right"))
 bind.register(main("J"), window.focus("down"))
@@ -119,19 +116,17 @@ bind.register(main("SHIFT + d"), hl.dsp.layout("setratio 0.6"))
 -- Workspace selection
 for workspace = 1, 10 do
 	local workspace_name = tostring(workspace)
-		bind.register(main(tostring(workspace % 10)), function()
+	local workspace_key = tostring(workspace % 10)
+	bind.register(main(workspace_key), function()
 		window.focus_workspace(workspace_name)
 	end)
-end
-
-for workspace = 1, 10 do
-	local workspace_name = tostring(workspace)
-		bind.register(main("SHIFT + " .. tostring(workspace % 10)), function()
+	bind.register(main("SHIFT + " .. workspace_key), function()
 		window.move_to_workspace(workspace_name)
 	end)
 end
 
 -- Workspace navigation
+-- Both selectors are intentional: one advances each workspace family.
 bind.register(main("mouse_down"), hl.dsp.focus({ workspace = "e+1" }))
 bind.register(main("mouse_up"), hl.dsp.focus({ workspace = "e-1" }))
 bind.register(main("mouse_down"), hl.dsp.focus({ workspace = "m+1" }))
@@ -175,17 +170,16 @@ bind.register("XF86AudioMute", volume.mute, { repeating = true, locked = true })
 bind.register("XF86AudioMicMute", volume.mute_mic, { repeating = true, locked = true })
 bind.register("XF86MonBrightnessUp", "brightnessctl -e4 -n2 set 5%+", { repeating = true, locked = true })
 bind.register("XF86MonBrightnessDown", "brightnessctl -e4 -n2 set 5%-", { repeating = true, locked = true })
+bind.register(main("CTRL + up"), volume.raise, { repeating = true, locked = true })
+bind.register(main("CTRL + down"), volume.lower, { repeating = true, locked = true })
+bind.register(main("CTRL + End"), volume.mute, { repeating = true, locked = true })
+bind.register(main("CTRL + A"), volume.toggle_mixer)
 
 -- Media controls
 bind.register("XF86AudioNext", "playerctl next", { locked = true })
 bind.register("XF86AudioPause", "playerctl play-pause", { locked = true })
 bind.register("XF86AudioPlay", "playerctl play-pause", { locked = true })
 bind.register("XF86AudioPrev", "playerctl previous", { locked = true })
-
-bind.register(main("CTRL + up"), volume.raise, { repeating = true, locked = true })
-bind.register(main("CTRL + down"), volume.lower, { repeating = true, locked = true })
-bind.register(main("CTRL + End"), volume.mute, { repeating = true, locked = true })
-bind.register(main("CTRL + A"), volume.toggle_mixer)
 
 bind.register(main("CTRL + left"), "playerctl previous", { locked = true })
 bind.register(main("CTRL + right"), "playerctl next", { locked = true })

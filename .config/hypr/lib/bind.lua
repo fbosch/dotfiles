@@ -14,7 +14,6 @@
 ---@field repeating? boolean
 ---@field non_consuming? boolean
 ---@field auto_consuming? boolean
----@field mouse? boolean
 ---@field click? boolean
 ---@field drag? boolean
 ---@field ignore_mods? boolean
