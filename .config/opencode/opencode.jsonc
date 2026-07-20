@@ -17,7 +17,7 @@
   },
   "plugin": [
     "opencode-toolbox@0.10.4",
-    "@simonwjackson/opencode-direnv@2025.1211.9",
+    "./plugins/direnv/direnv-session-env.ts",
     "./plugins/ado-fetch/ado-fetch.ts",
     [
       "./plugins/context-images/context-images.ts",

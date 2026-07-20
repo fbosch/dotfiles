@@ -1,5 +1,3 @@
-local window = require("lib.window")
-
 local M = {}
 
 local function exec(command)
@@ -8,10 +6,6 @@ end
 
 function M.switch()
 	hl.dispatch(exec("bash ~/.config/hypr/runtime/desktop/switch-layout.sh"))
-end
-
-function M.bind()
-	hl.bind("CTRL + SPACE", M.switch)
 end
 
 return M
