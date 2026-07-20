@@ -232,24 +232,35 @@ local function register_game_client_rules()
 	})
 end
 
+local function set_fullscreen_state(window, game)
+	if window.fullscreen == 2 or game.fullscreen_state == nil then
+		return
+	end
+
+	local internal, client = game.fullscreen_state:match("^(%d+) (%d+)$")
+	hl.dispatch(hl.dsp.window.fullscreen_state({
+		internal = tonumber(internal),
+		client = tonumber(client),
+		action = "set",
+		window = "address:" .. window.address,
+	}))
+end
+
 local function register_fullscreen_handler()
 	hl.on("window.fullscreen", function(window)
-		if window.fullscreen == 2 then
-			return
-		end
-
 		local game = M.match(window)
-		if game == nil or game.fullscreen_state == nil then
+		if game ~= nil then
+			set_fullscreen_state(window, game)
+		end
+	end)
+
+	hl.on("window.active", function(window)
+		local game = M.match(window)
+		if game == nil or game.presentation == nil or game.presentation.direct_scanout ~= 1 then
 			return
 		end
 
-		local internal, client = game.fullscreen_state:match("^(%d+) (%d+)$")
-		hl.dispatch(hl.dsp.window.fullscreen_state({
-			internal = tonumber(internal),
-			client = tonumber(client),
-			action = "set",
-			window = "address:" .. window.address,
-		}))
+		set_fullscreen_state(window, game)
 	end)
 end
 
