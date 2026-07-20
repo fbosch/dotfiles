@@ -233,14 +233,20 @@ local function register_game_client_rules()
 end
 
 local function set_fullscreen_state(window, game)
-	if window.fullscreen == 2 or game.fullscreen_state == nil then
+	if game.fullscreen_state == nil then
 		return
 	end
 
 	local internal, client = game.fullscreen_state:match("^(%d+) (%d+)$")
+	internal = tonumber(internal)
+	client = tonumber(client)
+	if window.fullscreen == internal and window.fullscreen_client == client then
+		return
+	end
+
 	hl.dispatch(hl.dsp.window.fullscreen_state({
-		internal = tonumber(internal),
-		client = tonumber(client),
+		internal = internal,
+		client = client,
 		action = "set",
 		window = "address:" .. window.address,
 	}))
