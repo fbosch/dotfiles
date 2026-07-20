@@ -23,7 +23,7 @@ hl.bind("SUPER_R", window_switcher.commit, { release = true })
 
 hl.bind(main_mod .. " + SPACE", hl.dsp.exec_cmd(programs.menu))
 
-hl.bind("CTRL + SPACE", keyboard_layout.switch)
+keyboard_layout.bind()
 hl.bind(main_mod .. " + SHIFT + V", clipboard_bridge.paste_with_clipboard_bridge)
 hl.bind("CTRL + C", clipboard_bridge.sync_wayland_to_xwayland, { non_consuming = true })
 hl.bind("CTRL + X", clipboard_bridge.sync_wayland_to_xwayland, { non_consuming = true })

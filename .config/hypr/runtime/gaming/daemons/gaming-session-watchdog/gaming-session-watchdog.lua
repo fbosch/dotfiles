@@ -18,6 +18,7 @@ local minimized_workspace_prefix = "special:minimized"
 local gaming_overlay_workspace = "special:gaming-overlay"
 local wl_freeze_checked = false
 local wl_freeze_available = false
+local ctrl_space_is_bound = nil
 
 local function profile_sync(count)
 	command.ok(command.arg(profilectl) .. " sync gaming " .. command.arg(count) .. " >/dev/null 2>&1")
@@ -195,6 +196,34 @@ local function sync_gaming_state(last_count, clients, force)
 	return last_count
 end
 
+local function active_window_is_game(clients)
+	for _, client in ipairs(clients) do
+		if client.focusHistoryID == 0 then
+			return has_game_content(client)
+		end
+	end
+
+	return false
+end
+
+local function sync_keyboard_layout_binding(clients, force)
+	local should_bind = not active_window_is_game(clients)
+	if not force and should_bind == ctrl_space_is_bound then
+		return
+	end
+
+	local expression
+	if should_bind then
+		expression = 'require("actions.keyboard-layout").bind()'
+	else
+		expression = 'hl.unbind("CTRL + SPACE")'
+	end
+
+	if command.ok("hyprctl eval " .. command.arg(expression) .. " >/dev/null 2>&1") then
+		ctrl_space_is_bound = should_bind
+	end
+end
+
 local function select_presentation(clients)
 	local fallback = nil
 	for _, client in ipairs(clients) do
@@ -344,6 +373,7 @@ local function run()
 			hide_gaming_overlay_outside_workspace(monitors)
 			sync_gaming_freeze_state(clients, monitors)
 			local current_count = sync_gaming_state(last_count, clients, true)
+			sync_keyboard_layout_binding(clients, true)
 			sync_gaming_presentation(last_count, current_count, clients)
 			last_count = current_count
 
@@ -364,6 +394,7 @@ local function run()
 						hide_gaming_overlay_outside_workspace(monitors)
 					end
 					sync_gaming_freeze_state(clients, monitors)
+					sync_keyboard_layout_binding(clients, kind == "reload")
 					last_overlay_count = current_overlay_count
 				local current_count = sync_gaming_state(last_count, clients, kind == "reload")
 				sync_gaming_presentation(last_count, current_count, clients, kind == "reload")

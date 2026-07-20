@@ -7,12 +7,11 @@ local function exec(command)
 end
 
 function M.switch()
-	local active = window.active()
-	if active and active.contentType == "game" then
-		return
-	end
-
 	hl.dispatch(exec("bash ~/.config/hypr/runtime/desktop/switch-layout.sh"))
+end
+
+function M.bind()
+	hl.bind("CTRL + SPACE", M.switch)
 end
 
 return M
