@@ -102,6 +102,15 @@ restore_hypr_defaults() {
   hyprctl eval 'require("profiles").apply("default")' >/dev/null
 }
 
+rollback_overlay() {
+  resume_background_helpers
+  set_power_profile balanced
+  restore_hypr_defaults || true
+  rm -f "$overlay_active_file" "$overlay_mode_file"
+  set_switcher_mode_previews
+  refresh_window_captures
+}
+
 set_power_profile() {
   local profile="$1"
 
@@ -189,32 +198,46 @@ apply_effective_state() {
 
   if [[ "$current_mode" != "$desired_mode" ]]; then
     if [[ -f "$overlay_active_file" ]]; then
-      restore_hypr_defaults
+      if ! restore_hypr_defaults; then
+        return 1
+      fi
     fi
 
-		pause_background_helpers
-		if [[ "$desired_mode" == "gaming" ]]; then
-			set_power_profile performance
-			apply_hypr_gaming_overlay
-		else
-			set_power_profile power-saver
-			apply_hypr_powersave_overlay
-		fi
+    pause_background_helpers
+    if [[ "$desired_mode" == "gaming" ]]; then
+      set_power_profile performance
+      if ! apply_hypr_gaming_overlay; then
+        rollback_overlay
+        return 1
+      fi
+    else
+      set_power_profile power-saver
+      if ! apply_hypr_powersave_overlay; then
+        rollback_overlay
+        return 1
+      fi
+    fi
     touch "$overlay_active_file"
     printf "%s" "$desired_mode" > "$overlay_mode_file"
-		set_switcher_mode_icons
+    set_switcher_mode_icons
     return
   fi
 
   pause_background_helpers
-	set_switcher_mode_icons
-	if [[ "$desired_mode" == "gaming" ]]; then
-		set_power_profile performance
-		apply_hypr_gaming_overlay
-	else
-		set_power_profile power-saver
-		apply_hypr_powersave_overlay
-	fi
+  set_switcher_mode_icons
+  if [[ "$desired_mode" == "gaming" ]]; then
+    set_power_profile performance
+    if ! apply_hypr_gaming_overlay; then
+      rollback_overlay
+      return 1
+    fi
+  else
+    set_power_profile power-saver
+    if ! apply_hypr_powersave_overlay; then
+      rollback_overlay
+      return 1
+    fi
+  fi
 }
 
 apply_profile() {
@@ -223,8 +246,7 @@ apply_profile() {
   local value
 
   value="$(get_count "$profile" "$source")"
-  set_count "$profile" "$source" $((value + 1))
-  apply_effective_state
+  set_profile_count "$profile" "$source" $((value + 1))
 }
 
 remove_profile() {
@@ -233,17 +255,22 @@ remove_profile() {
   local value
 
   value="$(get_count "$profile" "$source")"
-  set_count "$profile" "$source" $((value - 1))
-  apply_effective_state
+  set_profile_count "$profile" "$source" $((value - 1))
 }
 
 set_profile_count() {
   local profile="$1"
   local source="$2"
   local count="$3"
+  local previous_count
 
+  previous_count="$(get_count "$profile" "$source")"
   set_count "$profile" "$source" "$count"
-  apply_effective_state
+  if ! apply_effective_state; then
+    set_count "$profile" "$source" "$previous_count"
+    apply_effective_state || true
+    return 1
+  fi
 }
 
 print_status() {

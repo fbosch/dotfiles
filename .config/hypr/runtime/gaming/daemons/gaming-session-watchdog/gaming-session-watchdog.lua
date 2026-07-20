@@ -18,9 +18,11 @@ local minimized_workspace_prefix = "special:minimized"
 local gaming_overlay_workspace = "special:gaming-overlay"
 local wl_freeze_checked = false
 local wl_freeze_available = false
+local frozen_pids = {}
+local last_presentation = nil
 
 local function profile_sync(count)
-	command.ok(command.arg(profilectl) .. " sync gaming " .. command.arg(count) .. " >/dev/null 2>&1")
+	return command.ok(command.arg(profilectl) .. " sync gaming " .. command.arg(count) .. " >/dev/null 2>&1")
 end
 
 local function apply_presentation(presentation)
@@ -29,7 +31,7 @@ local function apply_presentation(presentation)
 		presentation.vrr,
 		tostring(presentation.direct_scanout == 1)
 	)
-	command.ok("hyprctl eval " .. command.arg(expression) .. " >/dev/null 2>&1")
+	return command.ok("hyprctl eval " .. command.arg(expression) .. " >/dev/null 2>&1")
 end
 
 local function get_clients()
@@ -146,32 +148,30 @@ end
 
 local function set_process_frozen(pid, should_freeze)
 	if not pid or pid == "" or not can_wl_freeze() then
-		return
+		return false
 	end
 
 	local state = process_state(pid)
 	if state == "" then
-		return
+		return false
 	end
 
 	local is_frozen = state:match("^T") ~= nil
 	if is_frozen == should_freeze then
-		return
+		return true
 	end
 
-	command.ok("wl-freeze -p " .. command.arg(pid) .. " -s >/dev/null 2>&1")
+	return command.ok("wl-freeze -p " .. command.arg(pid) .. " -s >/dev/null 2>&1")
 end
 
 local function sync_gaming_freeze_state(clients, monitors)
 	local windows = get_freezable_gaming_windows(clients)
-	if #windows == 0 then
-		return
-	end
-
 	monitors = monitors or get_monitors()
 
+	local tracked_pids = {}
 	local should_freeze_by_pid = {}
 	for _, window in ipairs(windows) do
+		tracked_pids[window.pid] = true
 		local visible = workspace_visible(window.workspace, monitors)
 		if should_freeze_by_pid[window.pid] == nil then
 			should_freeze_by_pid[window.pid] = true
@@ -181,16 +181,25 @@ local function sync_gaming_freeze_state(clients, monitors)
 		end
 	end
 
+	for pid in pairs(frozen_pids) do
+		if not tracked_pids[pid] and set_process_frozen(pid, false) then
+			frozen_pids[pid] = nil
+		end
+	end
+
 	for pid, should_freeze in pairs(should_freeze_by_pid) do
-		set_process_frozen(pid, should_freeze)
+		if set_process_frozen(pid, should_freeze) then
+			frozen_pids[pid] = should_freeze or nil
+		end
 	end
 end
 
 local function sync_gaming_state(last_count, clients, force)
 	local count = get_gaming_window_count(clients)
 	if force or count ~= last_count then
-		profile_sync(count)
-		return count
+		if profile_sync(count) then
+			return count
+		end
 	end
 	return last_count
 end
@@ -214,12 +223,25 @@ local function select_presentation(clients)
 	return fallback or gaming.default_presentation
 end
 
-local function sync_gaming_presentation(previous_count, current_count, clients, force)
-	if not force and (previous_count ~= 0 or current_count == 0) then
+local function same_presentation(left, right)
+	return left ~= nil
+		and right ~= nil
+		and left.vrr == right.vrr
+		and left.direct_scanout == right.direct_scanout
+end
+
+local function sync_gaming_presentation(current_count, clients, force)
+	if current_count == 0 then
+		last_presentation = nil
 		return
 	end
 
-	apply_presentation(select_presentation(clients))
+	local presentation = select_presentation(clients)
+	if force or not same_presentation(last_presentation, presentation) then
+		if apply_presentation(presentation) then
+			last_presentation = presentation
+		end
+	end
 end
 
 local function overlay_window_count(clients)
@@ -328,6 +350,9 @@ local function event_kind(event)
 end
 
 local function cleanup()
+	for pid in pairs(frozen_pids) do
+		set_process_frozen(pid, false)
+	end
 	profile_sync(0)
 end
 
@@ -344,7 +369,7 @@ local function run()
 			hide_gaming_overlay_outside_workspace(monitors)
 			sync_gaming_freeze_state(clients, monitors)
 			local current_count = sync_gaming_state(last_count, clients, true)
-			sync_gaming_presentation(last_count, current_count, clients)
+				sync_gaming_presentation(current_count, clients, true)
 			last_count = current_count
 
 			while true do
@@ -366,7 +391,7 @@ local function run()
 					sync_gaming_freeze_state(clients, monitors)
 					last_overlay_count = current_overlay_count
 				local current_count = sync_gaming_state(last_count, clients, kind == "reload")
-				sync_gaming_presentation(last_count, current_count, clients, kind == "reload")
+				sync_gaming_presentation(current_count, clients, kind == "reload")
 				last_count = current_count
 				end
 				if read_err then

@@ -135,8 +135,7 @@ let state: SwitcherState = SwitcherState.IDLE;
 let displayMode: DisplayMode = DisplayMode.PREVIEWS;
 let sortMode: SortMode = SortMode.RECENCY; // Default to recency like Windows 11
 try {
-  const perfModeFile = Gio.File.new_for_path(PERFORMANCE_MODE_PATH);
-  if (perfModeFile.query_exists(null)) {
+  if (isGamingProfileActive()) {
     displayMode = DisplayMode.ICONS;
     debugLog("Performance mode detected, starting in ICONS mode");
   }
