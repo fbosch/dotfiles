@@ -1,5 +1,15 @@
 local M = {}
 
+local function callback(action)
+	if type(action) == "string" then
+		return function()
+			return hl.dispatch(hl.dsp.exec_cmd(action))
+		end
+	end
+
+	return action
+end
+
 function M.pass()
 	return { pass_event = true }
 end
@@ -9,7 +19,8 @@ function M.consume()
 end
 
 function M.when(predicate, on_true, on_false)
-	on_false = on_false or M.consume
+	on_true = callback(on_true)
+	on_false = callback(on_false or M.consume)
 
 	return function(...)
 		if predicate(...) then
@@ -24,7 +35,11 @@ function M.pass_when(predicate, action)
 	return M.when(predicate, M.pass, action)
 end
 
-function M.key(keys, action, options)
+function M.register(keys, action, options)
+	if type(action) == "string" then
+		action = hl.dsp.exec_cmd(action)
+	end
+
 	hl.bind(keys, action, options)
 end
 

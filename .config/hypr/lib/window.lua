@@ -182,6 +182,13 @@ function M.active()
 	return nil
 end
 
+function M.active_workspace_is(workspace_name)
+	return function()
+		local active_workspace = hl.get_active_workspace()
+		return active_workspace ~= nil and active_workspace.name == workspace_name
+	end
+end
+
 function M.is_game(active)
 	return active ~= nil and active.content_type == "game"
 end
