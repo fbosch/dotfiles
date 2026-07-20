@@ -14,7 +14,7 @@ Instructions:
 2. If the tool output starts with `ERROR:`, report that error and stop. A missing pull request is handled by the tool as a branch-pipeline report, not an error.
 3. Present the report exactly as returned. Do not infer a root cause beyond the reported evidence.
 4. If the report contains failed checks, use the `question` tool to offer: `Diagnose and fix`, `Diagnose only`, or `Stop`.
-5. For `Diagnose and fix`, follow the `diagnose` skill: inspect the relevant code and CI configuration, reproduce the failure when feasible, then make the smallest evidenced fix. Run the narrowest relevant validation. Do not commit, push, rerun, cancel, or modify remote CI.
+5. For `Diagnose and fix`, follow the `diagnose` skill: inspect the failed CI logs in the report first, then inspect the relevant code and CI configuration. Reproduce locally only when the logs do not establish the cause or a reproduction is needed to validate the smallest evidenced fix. Run the narrowest relevant validation. Do not commit, push, rerun, cancel, or modify remote CI.
 6. For `Diagnose only`, identify the most likely cause, evidence, and highest-value next check without editing files.
 7. If there are pending checks but no failures, report the current state and stop. Do not poll or wait for completion.
 8. If no checks are failed or pending, report the current state and stop.

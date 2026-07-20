@@ -2,7 +2,10 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, test } from "bun:test"
-import { DirenvSessionEnvironmentPlugin, loadDirenvEnvironment } from "./direnv-session-env"
+import * as direnvPlugin from "./direnv-session-env"
+import { loadDirenvEnvironment } from "./direnv-environment"
+
+const { DirenvSessionEnvironmentPlugin } = direnvPlugin
 
 const directories: string[] = []
 
@@ -15,6 +18,10 @@ const projectDirectory = async () => {
   directories.push(directory)
   return directory
 }
+
+test("exports only the plugin factory", () => {
+  expect(Object.keys(direnvPlugin)).toEqual(["DirenvSessionEnvironmentPlugin"])
+})
 
 test("skips projects without an envrc without invoking direnv", async () => {
   const project = await projectDirectory()
@@ -70,7 +77,7 @@ test("loads structured exports from the nearest envrc inside the project", async
   })
 })
 
-test("injects an allowed environment only into the creating session's shells", async () => {
+test("injects an allowed environment into the creating session's shells", async () => {
   const project = await projectDirectory()
   await writeFile(join(project, ".envrc"), "")
 
@@ -93,9 +100,37 @@ test("injects an allowed environment only into the creating session's shells", a
   await plugin["shell.env"]?.({ cwd: project, sessionID: "session-a" }, sessionEnvironment)
   expect(sessionEnvironment.env).toEqual({ PROJECT_TOKEN: "test-value" })
 
-  const otherSessionEnvironment = { env: {} }
-  await plugin["shell.env"]?.({ cwd: project, sessionID: "session-b" }, otherSessionEnvironment)
-  expect(otherSessionEnvironment.env).toEqual({})
+  const unscopedEnvironment = { env: {} }
+  await plugin["shell.env"]?.({ cwd: project }, unscopedEnvironment)
+  expect(unscopedEnvironment.env).toEqual({})
+})
+
+test("lazily loads the environment for a restored session", async () => {
+  const project = await projectDirectory()
+  await writeFile(join(project, ".envrc"), "")
+  let exports = 0
+  const shell = () => ({
+    cwd: () => ({
+      quiet: () => ({
+        text: async () => {
+          exports += 1
+          return JSON.stringify({ DEVENV_ROOT: project })
+        },
+      }),
+    }),
+  })
+  const plugin = await DirenvSessionEnvironmentPlugin({
+    client: { tui: { showToast: async () => undefined } },
+    project: { worktree: project },
+    $: shell,
+  } as never)
+
+  const environment = { env: {} }
+  await plugin["shell.env"]?.({ cwd: project, sessionID: "restored" }, environment)
+  await plugin["shell.env"]?.({ cwd: project, sessionID: "restored" }, environment)
+
+  expect(exports).toBe(1)
+  expect(environment.env).toEqual({ DEVENV_ROOT: project })
 })
 
 test("notifies the user when an envrc is blocked without injecting it", async () => {
