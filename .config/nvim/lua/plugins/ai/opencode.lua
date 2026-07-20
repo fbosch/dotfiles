@@ -113,8 +113,8 @@ return {
 					error("opencode requires a Neovim RPC socket")
 				end
 
-				local environment = "OPENCODE_NVIM_SOCKET=" .. vim.fn.shellescape(socket) .. " "
 				local cwd = vim.fn.getcwd()
+				local environment = "OPENCODE_NVIM_SOCKET=" .. vim.fn.shellescape(socket) .. " "
 				local session_id = infer_session_id_for_cwd(cwd)
 				if type(session_id) ~= "string" or session_id == "" then
 					return environment .. "opencode -- --port"

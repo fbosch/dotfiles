@@ -63,7 +63,25 @@ function wsc --wraps='wt switch --create --execute=opencode' --description 'alia
         set opencode_path opencode
     end
 
-    wt switch --create --execute=$opencode_path $argv
+    if not type -q direnv
+        wt switch --create --execute=$opencode_path $argv
+        return $status
+    end
+
+    set -l switch_args
+    set -l opencode_args
+    set -l forwarding_opencode_args false
+    for argument in $argv
+        if test "$argument" = "--"
+            set forwarding_opencode_args true
+        else if test "$forwarding_opencode_args" = true
+            set -a opencode_args $argument
+        else
+            set -a switch_args $argument
+        end
+    end
+
+    wt switch --create --execute=direnv $switch_args -- exec "{{ worktree_path }}" $opencode_path $opencode_args
 end
 
 # Helpers

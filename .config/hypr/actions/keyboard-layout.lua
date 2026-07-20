@@ -9,7 +9,6 @@ end
 function M.switch()
 	local active = window.active()
 	if active and active.contentType == "game" then
-		hl.dispatch(hl.dsp.pass({ window = "activewindow" }))
 		return
 	end
 
