@@ -158,13 +158,78 @@ function githubRunId(link: string | undefined): string | null {
   return match?.[1] ?? null
 }
 
-async function githubReport(remote: Remote, cwd: string): Promise<string> {
+function noPullRequestFound(result: CommandResult): boolean {
+  const output = `${result.stdout}\n${result.stderr}`.toLowerCase()
+  return output.includes("no pull request found") || output.includes("no pull requests found")
+}
+
+async function githubBranchReport(remote: Remote, branch: string, cwd: string): Promise<string> {
+  const repo = `${remote.owner}/${remote.repo}`
+  const commit = await git(["rev-parse", "HEAD"], cwd)
+  if (commit === null) {
+    return "ERROR: Cannot inspect CI: current commit cannot be determined."
+  }
+  const runsResult = await runCommand("gh", ["run", "list", "--branch", branch, "--commit", commit, "--repo", repo, "--limit", "100", "--json", "databaseId,name,status,conclusion,url,workflowName"], cwd)
+  const parsedRuns = parseJson(runsResult.stdout)
+  if (Array.isArray(parsedRuns) === false) {
+    return runsResult.exitCode === 0 ? "ERROR: Cannot inspect CI: gh run list returned invalid data." : formatError("gh run list", runsResult)
+  }
+  const runs = parsedRuns.filter(isRecord)
+  const failed = runs.filter((run) => ["action_required", "cancelled", "failure", "startup_failure", "timed_out"].includes(string(run.conclusion) ?? ""))
+  const pending = runs.filter((run) => ["in_progress", "pending", "queued", "requested", "waiting"].includes(string(run.status) ?? ""))
+  const passed = runs.filter((run) => string(run.conclusion) === "success")
+  const other = runs.length - failed.length - pending.length - passed.length
+  const lines = [
+    "CI report",
+    "Provider: GitHub",
+    `Branch pipeline: ${branch}`,
+    `Summary: ${passed.length} passed, ${failed.length} failed, ${pending.length} pending, ${other} other`,
+  ]
+
+  if (failed.length > 0) {
+    lines.push("", "Failed checks:")
+    for (const run of failed) {
+      const runId = number(run.databaseId)
+      const name = string(run.workflowName) ?? string(run.name) ?? "Unnamed workflow"
+      const state = string(run.conclusion) ?? string(run.status) ?? "unknown"
+      const url = string(run.url)
+      lines.push(`- ${name} [${state}]${url === undefined ? "" : `\n  ${url}`}`)
+      if (runId === undefined) {
+        continue
+      }
+      const logs = await runCommand("gh", ["run", "view", String(runId), "--repo", repo, "--log-failed"], cwd)
+      if (logs.exitCode === 0 && logs.stdout.trim().length > 0) {
+        lines.push(`  Failed log:\n${excerpt(logs.stdout).split("\n").map((line) => `  ${line}`).join("\n")}`)
+      }
+    }
+  }
+
+  if (pending.length > 0) {
+    lines.push("", "Pending checks:")
+    for (const run of pending) {
+      const name = string(run.workflowName) ?? string(run.name) ?? "Unnamed workflow"
+      const state = string(run.status) ?? "unknown"
+      const url = string(run.url)
+      lines.push(`- ${name} [${state}]${url === undefined ? "" : `\n  ${url}`}`)
+    }
+  }
+
+  if (failed.length === 0 && pending.length === 0) {
+    lines.push("", "No failing or pending checks found.")
+  }
+  return lines.join("\n")
+}
+
+async function githubReport(remote: Remote, branch: string, cwd: string): Promise<string> {
   if ((await commandExists("gh", cwd)) === false) {
     return "ERROR: Cannot inspect CI: gh is not available."
   }
 
   const prResult = await runCommand("gh", ["pr", "view", "--json", "number,url,title,state,isDraft,headRefName,baseRefName"], cwd)
   if (prResult.exitCode !== 0) {
+    if (noPullRequestFound(prResult)) {
+      return githubBranchReport(remote, branch, cwd)
+    }
     return formatError("gh pr view", prResult)
   }
   const pr = parseJson(prResult.stdout)
@@ -265,6 +330,57 @@ async function azureTimeline(remote: Remote, runId: number, cwd: string): Promis
   return failures
 }
 
+async function azureBranchReport(remote: Remote, branch: string, cwd: string): Promise<string> {
+  const environment = { ...process.env, AZURE_EXTENSION_USE_DYNAMIC_INSTALL: "yes_without_prompt" }
+  const commit = await git(["rev-parse", "HEAD"], cwd)
+  if (commit === null) {
+    return "ERROR: Cannot inspect CI: current commit cannot be determined."
+  }
+  const repositoryResult = await runCommand("az", ["repos", "show", "--org", remote.org ?? "", "--project", remote.project ?? "", "--repository", remote.repo, "--output", "json", "--only-show-errors"], cwd, environment)
+  const repository = parseJson(repositoryResult.stdout)
+  const repositoryId = isRecord(repository) ? string(repository.id) : undefined
+  if (repositoryResult.exitCode !== 0 || repositoryId === undefined) {
+    return repositoryResult.exitCode === 0 ? "ERROR: Cannot inspect CI: Azure DevOps returned an invalid repository." : formatError("az repos show", repositoryResult)
+  }
+  const runsResult = await runCommand("az", ["pipelines", "runs", "list", "--org", remote.org ?? "", "--project", remote.project ?? "", "--branch", `refs/heads/${branch}`, "--query-order", "StartTimeDesc", "--top", "100", "--output", "json", "--only-show-errors"], cwd, environment)
+  const runs = parseJson(runsResult.stdout)
+  if (runsResult.exitCode !== 0 || Array.isArray(runs) === false) {
+    return formatError("az pipelines runs list", runsResult)
+  }
+  const matchingRuns = runs.filter(isRecord).filter((run) => isRecord(run.repository) && string(run.repository.id) === repositoryId && string(run.sourceVersion) === commit)
+  const failedRuns = matchingRuns.filter((run) => azureResult(run.result) === "failed" || azureResult(run.result) === "partiallySucceeded")
+  const pendingRuns = matchingRuns.filter((run) => ["notStarted", "postponed", "inProgress", "cancelling"].includes(azureResult(run.status)))
+  const passedRuns = matchingRuns.filter((run) => azureResult(run.result) === "succeeded")
+  const lines = [
+    "CI report",
+    "Provider: Azure DevOps",
+    `Branch pipeline: ${branch}`,
+    `Summary: ${passedRuns.length} passed, ${failedRuns.length} failed, ${pendingRuns.length} pending`,
+  ]
+
+  if (failedRuns.length > 0) {
+    lines.push("", "Failed checks:")
+    for (const run of failedRuns) {
+      const runId = number(run.id)
+      const definition = isRecord(run.definition) ? string(run.definition.name) : undefined
+      lines.push(`- ${definition ?? string(run.buildNumber) ?? "Unnamed pipeline"} [${azureResult(run.result)}]${runId === undefined ? "" : ` (run ${runId})`}`)
+      if (runId !== undefined) {
+        lines.push(...(await azureTimeline(remote, runId, cwd)))
+      }
+    }
+  }
+  if (pendingRuns.length > 0) {
+    lines.push("", "Pending checks:")
+    for (const run of pendingRuns) {
+      lines.push(`- ${isRecord(run.definition) ? string(run.definition.name) ?? "Unnamed pipeline" : "Unnamed pipeline"} [${azureResult(run.status)}]`)
+    }
+  }
+  if (failedRuns.length === 0 && pendingRuns.length === 0) {
+    lines.push("", "No failing or pending checks found.")
+  }
+  return lines.join("\n")
+}
+
 async function azureReport(remote: Remote, branch: string, cwd: string): Promise<string> {
   if ((await commandExists("az", cwd)) === false) {
     return "ERROR: Cannot inspect CI: az is not available."
@@ -276,7 +392,7 @@ async function azureReport(remote: Remote, branch: string, cwd: string): Promise
     return formatError("az repos pr list", prResult)
   }
   if (Array.isArray(prs) === false || prs.length === 0) {
-    return "ERROR: Cannot inspect CI: no active pull request found for the current branch."
+    return azureBranchReport(remote, branch, cwd)
   }
   if (prs.length > 1) {
     return "ERROR: Cannot inspect CI: multiple active pull requests found for the current branch."
@@ -339,7 +455,7 @@ async function azureReport(remote: Remote, branch: string, cwd: string): Promise
 }
 
 export default tool({
-  description: "Inspect the current pull request's GitHub Actions or Azure DevOps CI failures and pending checks",
+  description: "Inspect the current pull request's CI, or the current branch's pipeline when no pull request exists",
   args: {},
   async execute(_args, context) {
     const branch = await git(["branch", "--show-current"], context.directory)
@@ -350,6 +466,6 @@ export default tool({
     if (remote === null) {
       return "ERROR: Cannot inspect CI: GitHub or Azure DevOps remote cannot be determined."
     }
-    return remote.provider === "github" ? githubReport(remote, context.directory) : azureReport(remote, branch, context.directory)
+    return remote.provider === "github" ? githubReport(remote, branch, context.directory) : azureReport(remote, branch, context.directory)
   },
 })
