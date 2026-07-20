@@ -55,9 +55,6 @@ M.games = {
 		enable_profile = true,
 		freeze = false,
 		confirm_close = true,
-		presentation = {
-			direct_scanout = 1,
-		},
 	},
 	{
 		name = "battle-net",
