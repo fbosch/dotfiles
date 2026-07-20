@@ -34,6 +34,14 @@ Profile and benchmark code systematically.
 
 Do not modify source files. Present results as structured comparisons.
 
+## Hot-path profiling
+
+- When the parent asks to identify hot paths, load the `hot-path-analysis` skill and follow its workflow.
+- The parent task message supplies the profiling target, representative workload, declared symptom, authorization, and relevant implementation context. Treat that context as authoritative. If the target or representative workload is absent, report the missing information and do not invent it.
+- Confirm profiling is authorized for the target environment. Do not attach to production or collect sensitive artifacts without explicit authorization.
+- Identify static suspects separately from dynamic findings. Establish a repeated unprofiled baseline, select the profiler signal for the declared symptom, and report results using the skill's evidence labels.
+- Mark the result `inconclusive` when dynamic evidence cannot be collected.
+
 ## Inconclusive results
 
 - If baseline or candidate measurements cannot be captured, do not compare; report the missing side and the smallest next step to make the comparison possible.
