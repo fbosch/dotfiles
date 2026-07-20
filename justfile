@@ -52,7 +52,7 @@ fish-syntax:
 
 # Run shellcheck on shell scripts.
 shellcheck:
-	shellcheck scripts/*.sh .config/ags/*.sh .config/ags/scripts/*.sh .config/hypr/scripts/*.sh .config/rofi/launchers/type-3/launcher.sh .config/vicinae/extensions/*.sh
+	git ls-files -z -- '*.sh' ':(exclude).config/hypr/tests/**' | xargs -0 shellcheck
 
 # Build Vicinae extensions.
 vicinae-build:
