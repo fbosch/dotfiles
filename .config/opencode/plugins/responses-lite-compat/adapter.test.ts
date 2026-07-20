@@ -40,13 +40,12 @@ describe("Responses Lite compatibility", () => {
     expect(sessionIDs.size).toBe(0)
   })
 
-  test("replaces the sentinel function with one native tool-search descriptor", () => {
+  test("replaces the sentinel function when a deferred tool is available", () => {
     const { body } = responseParts(transform("gpt-5.6-terra", new Map(), {
       input: [],
       tools: [
         { type: "function", name: "tool_search", description: "Internal", parameters: {} },
-        { type: "function", name: "noop" },
-        { type: "tool_search" },
+        { type: "function", name: "noop", defer_loading: true },
       ],
     }))
 
@@ -54,12 +53,36 @@ describe("Responses Lite compatibility", () => {
       {
         type: "additional_tools",
         role: "developer",
-        tools: [{ type: "tool_search" }, { type: "function", name: "noop" }],
+        tools: [{ type: "tool_search" }, { type: "function", name: "noop", defer_loading: true }],
       },
     ])
   })
 
-  test("rewrites the sentinel for non-Lite Responses requests", () => {
+  test("preserves an existing native tool-search descriptor", () => {
+    const nativeTool = {
+      type: "tool_search",
+      execution: "client",
+      description: "Search client tools.",
+      parameters: { type: "object" },
+    }
+    const { body } = responseParts(transform("gpt-5.6-terra", new Map(), {
+      input: [],
+      tools: [
+        { type: "function", name: "tool_search", description: "Internal", parameters: {} },
+        nativeTool,
+      ],
+    }))
+
+    expect(body.input).toEqual([
+      {
+        type: "additional_tools",
+        role: "developer",
+        tools: [nativeTool],
+      },
+    ])
+  })
+
+  test("removes the sentinel when no deferred tool is available", () => {
     const result = prepareResponsesLiteRequest(
       [
         "https://chatgpt.com/backend-api/codex/responses",
@@ -81,8 +104,86 @@ describe("Responses Lite compatibility", () => {
     expect(body).toEqual({
       model: "gpt-5.4-mini-fast",
       input: [],
-      tools: [{ type: "tool_search" }],
+      tools: [],
     })
+  })
+
+  test("detects deferred custom namespace children and MCP tools", () => {
+    const namespace = responseParts(transform("gpt-5.6-terra", new Map(), {
+      input: [],
+      tools: [
+        { type: "function", name: "tool_search", description: "Internal", parameters: {} },
+        {
+          type: "namespace",
+          tools: [{ type: "custom", name: "deferred_child", defer_loading: true }],
+        },
+      ],
+    })).body
+    const mcp = responseParts(transform("gpt-5.6-terra", new Map(), {
+      input: [],
+      tools: [
+        { type: "function", name: "tool_search", description: "Internal", parameters: {} },
+        { type: "mcp", server_label: "docs", defer_loading: true },
+      ],
+    })).body
+
+    expect(namespace.input[0]).toEqual({
+      type: "additional_tools",
+      role: "developer",
+      tools: [
+        { type: "tool_search" },
+        {
+          type: "namespace",
+          tools: [{ type: "custom", name: "deferred_child", defer_loading: true }],
+        },
+      ],
+    })
+    expect(mcp.input[0]).toEqual({
+      type: "additional_tools",
+      role: "developer",
+      tools: [{ type: "tool_search" }, { type: "mcp", server_label: "docs", defer_loading: true }],
+    })
+  })
+
+  test("rewrites the sentinel through the OAuth fetch boundary", async () => {
+    const requests: Array<{ url: string; body: Record<string, unknown> }> = []
+    const providerFetch = createCodexOAuthFetch({
+      getAuth: async () => ({
+        type: "oauth",
+        access: "access-token",
+        refresh: "refresh-token",
+        expires: Date.now() + 60_000,
+      }),
+      setAuth: async () => {},
+      sessionIDs: new Map(),
+      httpFetch: async (input, init) => {
+        requests.push({ url: String(input), body: JSON.parse(String(init?.body)) })
+        return new Response()
+      },
+    })
+
+    await providerFetch("https://api.openai.com/v1/responses", {
+      headers: { "session-id": "ses_test" },
+      body: JSON.stringify({
+        model: "gpt-5.4-mini-fast",
+        input: [],
+        tools: [
+          { type: "function", name: "tool_search", description: "Internal", parameters: {} },
+          { type: "function", name: "deferred", defer_loading: true },
+        ],
+      }),
+    })
+
+    expect(requests).toEqual([
+      {
+        url: "https://chatgpt.com/backend-api/codex/responses",
+        body: {
+          model: "gpt-5.4-mini-fast",
+          input: [],
+          tools: [{ type: "tool_search" }, { type: "function", name: "deferred", defer_loading: true }],
+        },
+      },
+    ])
   })
 
   test("overrides the OAuth fetch boundary", async () => {

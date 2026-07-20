@@ -165,30 +165,35 @@ function transformRequest(request: Record<string, unknown>, sessionID: string) {
 
 function rewriteToolSearch(request: Record<string, unknown>): boolean {
   if (!Array.isArray(request.tools)) return false
+  if (!request.tools.some(isToolSearchSentinel)) return false
 
-  let changed = false
-  let foundNativeTool = false
-  const tools: unknown[] = []
-  for (const definition of request.tools) {
-    if (isToolSearchSentinel(definition)) {
-      changed = true
-      if (foundNativeTool) continue
-      tools.push({ type: TOOL_SEARCH })
-      foundNativeTool = true
-      continue
-    }
-    if (isNativeToolSearch(definition)) {
-      if (foundNativeTool) {
-        changed = true
-        continue
-      }
-      foundNativeTool = true
-    }
-    tools.push(definition)
+  if (request.tools.some(isNativeToolSearch)) {
+    request.tools = request.tools.filter(definition => !isToolSearchSentinel(definition))
+    return true
   }
 
-  if (changed) request.tools = tools
-  return changed
+  if (!hasDeferredTool(request.tools)) {
+    request.tools = request.tools.filter(definition => !isToolSearchSentinel(definition))
+    return true
+  }
+
+  let replaced = false
+  request.tools = request.tools.flatMap(definition => {
+    if (!isToolSearchSentinel(definition)) return [definition]
+    if (replaced) return []
+    replaced = true
+    return [{ type: TOOL_SEARCH }]
+  })
+  return true
+}
+
+function hasDeferredTool(definitions: unknown[]): boolean {
+  return definitions.some(definition => {
+    if (!isRecord(definition)) return false
+    if ((definition.type === "function" || definition.type === "custom" || definition.type === "mcp") && definition.defer_loading === true) return true
+    if (definition.type !== "namespace" || !Array.isArray(definition.tools)) return false
+    return hasDeferredTool(definition.tools)
+  })
 }
 
 function isToolSearchSentinel(definition: unknown) {
