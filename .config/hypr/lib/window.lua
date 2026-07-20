@@ -2,6 +2,7 @@ local M = {}
 local async = require("lib.async")
 local monitor_role = require("lib.monitor_role")
 local order_state = require("layouts.shared.order_state")
+local gaming = require("rules.gaming")
 
 local directions = {
 	l = "left",
@@ -37,7 +38,7 @@ local ultrawide_x = 1440
 local edge_tolerance = 64
 local pinned_workspace = "1"
 local pinned_workspace_monitor = "HDMI-A-2"
-local gaming_workspace = "10"
+local gaming_workspace = gaming.workspace
 
 --- One-shot placement request consumed when a window enters a custom layout.
 ---@class TransferIntent
@@ -71,7 +72,7 @@ local function uses_custom_layout(active, expected)
 	end
 
 	local name = workspace and tostring(workspace.name or workspace.id) or nil
-	if not name or name == "10" or name:match("^special:") then
+	if not name or name == gaming_workspace or name:match("^special:") then
 		return false
 	end
 
@@ -82,6 +83,19 @@ local function uses_custom_layout(active, expected)
 
 	if expected == monitor_role.ultrawide then
 		return role == monitor_role.ultrawide
+	end
+
+	return false
+end
+
+function M.focus_gaming_workspace()
+	for _, client in ipairs(hl.get_windows()) do
+		local workspace = client.workspace
+		local name = workspace and tostring(workspace.name or workspace.id) or ""
+		if name == gaming_workspace then
+			dispatch(hl.dsp.focus({ workspace = gaming_workspace }))
+			return true
+		end
 	end
 
 	return false
@@ -166,6 +180,14 @@ function M.active()
 	end
 
 	return nil
+end
+
+function M.is_game(active)
+	return active ~= nil and active.content_type == "game"
+end
+
+function M.active_is_game()
+	return M.is_game(M.active())
 end
 
 local function pin_workspace_one()

@@ -2,7 +2,10 @@
 
 local programs = require("programs")
 local async = require("lib.async")
+local bind = require("lib.bind")
 local window = require("lib.window")
+local profiles = require("profiles")
+local gaming = require("rules.gaming")
 local volume = require("actions.volume")
 local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
@@ -12,7 +15,7 @@ local window_switcher = require("actions.window-switcher")
 local main_mod = "SUPER"
 
 hl.bind("SUPER_L", function()
-	if hl.get_active_workspace().name == "10" then
+	if hl.get_active_workspace().name == gaming.workspace then
 		return
 	end
 
@@ -23,18 +26,23 @@ hl.bind("SUPER_R", window_switcher.commit, { release = true })
 
 hl.bind(main_mod .. " + SPACE", hl.dsp.exec_cmd(programs.menu))
 
-hl.bind("CTRL + SPACE", function()
-	local active = window.active()
-	if active and active.content_type == "game" then
-		return { pass_event = true }
-	end
-
-	keyboard_layout.switch()
-end)
+bind.key("CTRL + SPACE", bind.pass_when(window.active_is_game, keyboard_layout.switch))
 hl.bind(main_mod .. " + SHIFT + V", clipboard_bridge.paste_with_clipboard_bridge)
-hl.bind("CTRL + C", clipboard_bridge.sync_wayland_to_xwayland, { non_consuming = true })
-hl.bind("CTRL + X", clipboard_bridge.sync_wayland_to_xwayland, { non_consuming = true })
-hl.bind("CTRL + V", clipboard_bridge.paste_with_clipboard_bridge, { non_consuming = true })
+bind.key(
+	"CTRL + C",
+	bind.when(profiles.is_gaming_active, clipboard_bridge.sync_wayland_to_xwayland, bind.pass),
+	{ non_consuming = true }
+)
+bind.key(
+	"CTRL + X",
+	bind.when(profiles.is_gaming_active, clipboard_bridge.sync_wayland_to_xwayland, bind.pass),
+	{ non_consuming = true }
+)
+bind.key(
+	"CTRL + V",
+	bind.when(profiles.is_gaming_active, clipboard_bridge.paste_with_clipboard_bridge, bind.pass),
+	{ non_consuming = true }
+)
 
 hl.bind(main_mod .. " + TAB", window_switcher.action("next", main_mod))
 hl.bind(main_mod .. " + SHIFT + TAB", window_switcher.action("prev", main_mod))
@@ -44,7 +52,7 @@ hl.bind(main_mod .. " + N", hl.dsp.exec_cmd("swaync-client -t"))
 hl.bind("CTRL + ALT + L", hl.dsp.exec_cmd("hyprlock"))
 hl.bind("PAUSE", hl.dsp.exec_cmd("wl-freeze -a"))
 hl.bind(main_mod .. " + SHIFT + P", hl.dsp.exec_cmd("~/.config/hypr/runtime/profiles/toggle-powersave-mode.sh"))
-hl.bind(main_mod .. " + G", hl.dsp.exec_cmd("~/.config/hypr/runtime/windows/focus-gaming-workspace.lua"))
+hl.bind(main_mod .. " + G", window.focus_gaming_workspace)
 hl.bind(main_mod .. " + SHIFT + G", window.move_to_gaming_workspace)
 
 hl.bind("CTRL + SHIFT + C", hl.dsp.exec_cmd("bash ~/.config/hypr/runtime/capture/screenshot.sh area"))

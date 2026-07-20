@@ -5,6 +5,7 @@
 -- before the count-specific overrides for deterministic startup behavior.
 
 local system = require("lib.system")
+local gaming = require("rules.gaming")
 local host = system.hostname()
 
 if host == "rvn-pc" then
@@ -16,7 +17,7 @@ if host == "rvn-pc" then
 	})
 
 	hl.workspace_rule({
-		workspace = "10",
+		workspace = gaming.workspace,
 		monitor = "DP-2",
 	})
 
@@ -48,7 +49,7 @@ if host == "rvn-pc" then
 	})
 
 	hl.workspace_rule({
-		workspace = "10",
+		workspace = gaming.workspace,
 		layout = "scrolling",
 		gaps_in = 0,
 		gaps_out = 0,

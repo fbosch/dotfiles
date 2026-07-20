@@ -41,6 +41,14 @@ function M.current_mode()
   return read_file(mode_file())
 end
 
+function M.is_current_mode(mode)
+  return valid_mode(mode) and M.current_mode() == mode
+end
+
+function M.is_gaming_active()
+  return M.is_current_mode("gaming")
+end
+
 function M.is_active(mode)
   if not valid_mode(mode) then
     return false

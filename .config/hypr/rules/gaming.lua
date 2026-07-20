@@ -1,5 +1,6 @@
 local M = {}
 
+M.workspace = "10"
 M.default_presentation = {
 	vrr = 3,
 	direct_scanout = 0,
@@ -144,7 +145,7 @@ end
 local function gaming_window_rule(selector, fullscreen_state, content, suppress_event)
 	local rule = {
 		match = selector,
-		workspace = "10 silent",
+		workspace = M.workspace .. " silent",
 		no_anim = true,
 		border_size = 0,
 		rounding = 0,
@@ -167,14 +168,14 @@ end
 local function register_gamescope_rules()
 	hl.window_rule({
 		match = { class = "^(gamescope)$" },
-		workspace = "10 silent",
+		workspace = M.workspace .. " silent",
 		tile = true,
 		fullscreen_state = "2 0",
 		content = "game",
 	})
 
 	hl.window_rule({
-		match = { workspace = "10", class = "negative:^(gamescope)$" },
+		match = { workspace = M.workspace, class = "negative:^(gamescope)$" },
 		workspace = "special:gaming-overlay silent",
 	})
 end
@@ -220,7 +221,7 @@ local function register_game_client_rules()
 	local battle_net_title = "^(Battle\\.net( Login| Settings)?)$"
 	hl.window_rule({
 		match = { initial_title = battle_net_title },
-		workspace = "10 silent",
+		workspace = M.workspace .. " silent",
 		no_anim = true,
 		rounding = 0,
 		border_size = 0,

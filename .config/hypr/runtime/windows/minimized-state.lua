@@ -6,11 +6,12 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 
 local json = require("lib.json")
 local command_lib = require("lib.command")
+local gaming = require("rules.gaming")
 local hypr_ipc = nil
 
 local minimized_workspace_prefix = "special:minimized"
 local desktop_workspace = "special:desktop"
-local gaming_workspace = "10"
+local gaming_workspace = gaming.workspace
 local gaming_overlay_workspace = "special:gaming-overlay"
 local runtime_dir = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
 local state_file = runtime_dir .. "/hypr-minimized-state.json"
