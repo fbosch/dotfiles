@@ -182,11 +182,20 @@ function M.active()
 	return nil
 end
 
-function M.active_workspace_is(workspace_name)
+local function active_workspace_matches(workspace_name, expected)
 	return function()
 		local active_workspace = hl.get_active_workspace()
-		return active_workspace ~= nil and active_workspace.name == workspace_name
+		local matches = active_workspace ~= nil and active_workspace.name == workspace_name
+		return matches == expected
 	end
+end
+
+function M.active_workspace_is(workspace_name)
+	return active_workspace_matches(workspace_name, true)
+end
+
+function M.active_workspace_is_not(workspace_name)
+	return active_workspace_matches(workspace_name, false)
 end
 
 function M.is_game(active)
@@ -195,6 +204,10 @@ end
 
 function M.active_is_game()
 	return M.is_game(M.active())
+end
+
+function M.active_is_not_game()
+	return not M.active_is_game()
 end
 
 local function pin_workspace_one()
