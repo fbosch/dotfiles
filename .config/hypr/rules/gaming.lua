@@ -142,6 +142,20 @@ function M.requires_close_confirmation(window)
 	return game ~= nil and game.confirm_close == true
 end
 
+function M.is_gamescope_window(window)
+	return window.class == "gamescope" or window.initial_class == "gamescope"
+end
+
+function M.has_gamescope_window()
+	for _, window in ipairs(hl.get_windows()) do
+		if M.is_gamescope_window(window) then
+			return true
+		end
+	end
+
+	return false
+end
+
 local function gaming_window_rule(selector, fullscreen_state, content, suppress_event)
 	local rule = {
 		match = selector,

@@ -3,6 +3,7 @@
 
 local command = require("lib.command")
 local window = require("lib.window")
+local gaming = require("rules.gaming")
 
 local M = {}
 local config_root = os.getenv("HOME") .. "/.config/hypr"
@@ -61,7 +62,9 @@ local function list_gamescope_displays()
 		result[#result + 1] = display
 	end
 	table.sort(result)
-	gamescope_displays = result
+	if #result > 0 then
+		gamescope_displays = result
+	end
 	return result
 end
 
@@ -75,24 +78,48 @@ local function write_xclip(display, selection, text)
 		"w"
 	)
 	if not handle then
-		return
+		return false
 	end
 
-	handle:write(text)
-	handle:close()
+	local wrote = pcall(handle.write, handle, text)
+	local closed = handle:close()
+	return wrote and closed == true
+end
+
+local function sync_clipboard_to_gamescope(text)
+	local displays = list_gamescope_displays()
+	local wrote = true
+	for _, display in ipairs(displays) do
+		wrote = write_xclip(display, "clipboard", text) and wrote
+		wrote = write_xclip(display, "primary", text) and wrote
+	end
+
+	if wrote then
+		return displays
+	end
+
+	gamescope_displays = nil
+	displays = list_gamescope_displays()
+	for _, display in ipairs(displays) do
+		write_xclip(display, "clipboard", text)
+		write_xclip(display, "primary", text)
+	end
+
+	return displays
 end
 
 local function active_is_gamescope()
 	local active = window.active()
-	if not active then
-		return false
-	end
-
-	return active.class == "gamescope" or active.initial_class == "gamescope"
+	return active ~= nil and gaming.is_gamescope_window(active)
 end
 
 function M.sync_wayland_to_xwayland_now()
-	if not have("wl-paste") or not have("xclip") or using_wl_clipboard_wrapper() then
+	if
+		not gaming.has_gamescope_window()
+		or not have("wl-paste")
+		or not have("xclip")
+		or using_wl_clipboard_wrapper()
+	then
 		return
 	end
 
@@ -101,11 +128,7 @@ function M.sync_wayland_to_xwayland_now()
 		return
 	end
 
-	local displays = list_gamescope_displays()
-	for _, display in ipairs(displays) do
-		write_xclip(display, "clipboard", clipboard_text)
-		write_xclip(display, "primary", clipboard_text)
-	end
+	sync_clipboard_to_gamescope(clipboard_text)
 end
 
 function M.paste_with_xwayland_clipboard_now()
@@ -118,11 +141,7 @@ function M.paste_with_xwayland_clipboard_now()
 		return
 	end
 
-	local displays = list_gamescope_displays()
-	for _, display in ipairs(displays) do
-		write_xclip(display, "clipboard", clipboard_text)
-		write_xclip(display, "primary", clipboard_text)
-	end
+	local displays = sync_clipboard_to_gamescope(clipboard_text)
 
 	local display = first_gamescope_display(displays)
 	if display and have("xdotool") then

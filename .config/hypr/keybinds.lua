@@ -2,7 +2,6 @@ local programs = require("programs")
 local async = require("lib.async")
 local bind = require("lib.bind")
 local window = require("lib.window")
-local profiles = require("profiles")
 local gaming = require("rules.gaming")
 local volume = require("actions.volume")
 local confirm_exit = require("actions.confirm-exit")
@@ -40,17 +39,17 @@ bind.register(main("SHIFT + V"), clipboard_bridge.paste_with_clipboard_bridge)
 bind.register(
 	"CTRL + C",
 	clipboard_bridge.sync_wayland_to_xwayland,
-	{ non_consuming = true, predicate = profiles.is_gaming_active }
+	{ non_consuming = true, predicate = gaming.has_gamescope_window }
 )
 bind.register(
 	"CTRL + X",
 	clipboard_bridge.sync_wayland_to_xwayland,
-	{ non_consuming = true, predicate = profiles.is_gaming_active }
+	{ non_consuming = true, predicate = gaming.has_gamescope_window }
 )
 bind.register(
 	"CTRL + V",
 	clipboard_bridge.paste_with_clipboard_bridge,
-	{ non_consuming = true, predicate = profiles.is_gaming_active }
+	{ non_consuming = true, predicate = gaming.has_gamescope_window }
 )
 
 -- Desktop and session controls
