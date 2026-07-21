@@ -15,6 +15,9 @@ M.default_presentation = {
 ---@class GamingPolicy
 ---@field name string Stable policy identifier.
 ---@field selectors GamingSelector[] Window selectors shared by Hyprland and the watchdog.
+---@field launcher_selectors? GamingSelector[] Launcher windows that receive lifecycle and cosmetic rules only.
+---@field steam_app_id? string UMU Steam app ID used for matching the Steam client class.
+---@field hide_empty_wine_desktop? boolean Hides Wine's untitled virtual desktop helper.
 ---@field fullscreen_state? string Hyprland internal and client fullscreen states.
 ---@field suppress_event? string Hyprland event to suppress for the matching window.
 ---@field focus_on_open? boolean Focus the window once after it opens.
@@ -46,10 +49,16 @@ M.games = {
 	},
 	{
 		name = "world-of-warcraft",
+		steam_app_id = "worldofwarcraft",
+		hide_empty_wine_desktop = true,
 		selectors = {
 			{ class = "^(gamescope)$", title = "^World of Warcraft$" },
 			{ initial_title = "^World of Warcraft$" },
 			{ title = "^World of Warcraft$" },
+		},
+		launcher_selectors = {
+			{ initial_title = "^Battle\\.net" },
+			{ title = "^Battle\\.net" },
 		},
 		fullscreen_state = "2 0",
 		enable_profile = true,
@@ -61,12 +70,16 @@ M.games = {
 		},
 	},
 	{
-		name = "battle-net",
-		selectors = {
-			{ initial_title = "^Battle\\.net" },
-			{ title = "^Battle\\.net" },
+		name = "elder-scrolls-online",
+		steam_app_id = "elderscrollsonline",
+		hide_empty_wine_desktop = true,
+		selectors = {},
+		launcher_selectors = {
+			{ initial_title = "^Zenimax Online Studios Launcher$" },
+			{ title = "^Zenimax Online Studios Launcher$" },
 		},
 		freeze = false,
+		confirm_close = true,
 	},
 	{
 		name = "faugus",
@@ -120,7 +133,13 @@ function M.match(window)
 	for _, game in ipairs(M.games) do
 		for _, selector in ipairs(game.selectors) do
 			if M.matches_selector(window, selector) then
-				return game
+				return game, false
+			end
+		end
+
+		for _, selector in ipairs(game.launcher_selectors or {}) do
+			if M.matches_selector(window, selector) then
+				return game, true
 			end
 		end
 	end
@@ -134,8 +153,8 @@ function M.is_freeze_excluded(window)
 end
 
 function M.is_profile_excluded(window)
-	local game = M.match(window)
-	return game ~= nil and game.exclude_profile == true
+	local game, is_launcher = M.match(window)
+	return game ~= nil and (is_launcher or game.exclude_profile == true)
 end
 
 function M.requires_close_confirmation(window)
@@ -164,7 +183,6 @@ local function gaming_window_rule(selector, fullscreen_state, content, suppress_
 		no_anim = true,
 		border_size = 0,
 		rounding = 0,
-		no_shadow = true,
 		opacity = "1.0 override 1.0 override",
 		fullscreen_state = fullscreen_state,
 		immediate = true,
@@ -178,6 +196,18 @@ local function gaming_window_rule(selector, fullscreen_state, content, suppress_
 	end
 
 	return rule
+end
+
+local function launcher_window_rule(selector)
+	return {
+		match = selector,
+		workspace = M.workspace .. " silent",
+		no_anim = true,
+		no_blur = true,
+		no_shadow = true,
+		border_size = 0,
+		rounding = 0,
+	}
 end
 
 local function register_gamescope_rules()
@@ -201,7 +231,17 @@ local function register_steam_rules()
 	end
 	hl.window_rule({ match = { initial_title = "^(Sign in to Steam)$" }, float = true, center = true })
 
-	for _, selector in ipairs({ { class = "^(steam_app_.+)$" }, { initial_class = "^(steam_app_.+)$" } }) do
+	for _, game in ipairs(M.games) do
+		if game.hide_empty_wine_desktop == true and game.steam_app_id ~= nil then
+			hl.window_rule({
+				match = { class = "^(steam_app_" .. game.steam_app_id .. ")$", initial_title = "^$" },
+				workspace = "special:wine-helpers silent",
+				no_initial_focus = true,
+			})
+		end
+	end
+
+	for _, selector in ipairs({ { class = "^(steam_app_[0-9]+)$" }, { initial_class = "^(steam_app_[0-9]+)$" } }) do
 		hl.window_rule(gaming_window_rule(selector, "2 2", "game"))
 	end
 
@@ -220,8 +260,8 @@ end
 
 local function register_open_handler()
 	hl.on("window.open", function(window)
-		local game = M.match(window)
-		if game == nil or game.focus_on_open ~= true then
+		local game, is_launcher = M.match(window)
+		if game == nil or is_launcher or game.focus_on_open ~= true then
 			return
 		end
 
@@ -233,14 +273,12 @@ local function register_game_client_rules()
 	hl.window_rule({ match = { class = "^(SGDBoop)$" }, float = true, pin = true })
 	hl.window_rule({ match = { initial_title = "^(Larian Launcher)$" }, float = true, decorate = false })
 
-	local battle_net_title = "^(Battle\\.net( Login| Settings)?)$"
-	hl.window_rule({
-		match = { initial_title = battle_net_title },
-		workspace = M.workspace .. " silent",
-		no_anim = true,
-		rounding = 0,
-		border_size = 0,
-	})
+	for _, game in ipairs(M.games) do
+		for _, selector in ipairs(game.launcher_selectors or {}) do
+			hl.window_rule(launcher_window_rule(selector))
+		end
+	end
+
 	hl.window_rule({
 		match = { initial_title = "^(Battle\\.net Settings)$" },
 		pin = true,
@@ -269,15 +307,15 @@ end
 
 local function register_fullscreen_handler()
 	hl.on("window.fullscreen", function(window)
-		local game = M.match(window)
-		if game ~= nil then
+		local game, is_launcher = M.match(window)
+		if game ~= nil and is_launcher == false then
 			set_fullscreen_state(window, game)
 		end
 	end)
 
 	hl.on("window.active", function(window)
-		local game = M.match(window)
-		if game == nil or game.presentation == nil or game.presentation.direct_scanout ~= 1 then
+		local game, is_launcher = M.match(window)
+		if game == nil or is_launcher or game.presentation == nil or game.presentation.direct_scanout ~= 1 then
 			return
 		end
 

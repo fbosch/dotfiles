@@ -31,4 +31,6 @@ return {
   { matcher = "match:class", pattern = [=[^zenity$]=] },
   { matcher = "match:class", pattern = [=[^steam_app_0$]=] },
   { matcher = "match:class", pattern = [=[^org\.signal\.Signal$]=] },
+  { matcher = "match:initial_title", pattern = [=[^Battle\.net$]=] },
+  { matcher = "match:initial_title", pattern = [=[^Zenimax Online Studios Launcher$]=] },
 }

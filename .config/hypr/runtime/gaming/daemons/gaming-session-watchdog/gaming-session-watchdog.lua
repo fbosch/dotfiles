@@ -207,8 +207,8 @@ end
 local function select_presentation(clients)
 	local fallback = nil
 	for _, client in ipairs(clients) do
-		local game = gaming.match(rule_window(client))
-		if game ~= nil and game.presentation ~= nil then
+		local game, is_launcher = gaming.match(rule_window(client))
+		if game ~= nil and is_launcher == false and game.presentation ~= nil then
 			local presentation = {
 				vrr = game.presentation.vrr or gaming.default_presentation.vrr,
 				direct_scanout = game.presentation.direct_scanout or gaming.default_presentation.direct_scanout,
