@@ -39,15 +39,17 @@ daemon-status:
 	  "Minimized state|[m]inimized-state-daemon.lua"
 	  "Gaming watchdog|[g]aming-session-watchdog"
 	)
+	running="$(CLICOLOR_FORCE=1 gum style --foreground 10 "running")"
+	stopped="$(CLICOLOR_FORCE=1 gum style --foreground 9 "stopped")"
 	rows=()
 	for daemon in "${daemons[@]}"; do
 	  name="${daemon%%|*}"
 	  pattern="${daemon#*|}"
 	  pids="$(pgrep -f "$pattern" | paste -sd " " - || true)"
 	  if [ -n "$pids" ]; then
-	    rows+=("$name,running,$pids")
+	    rows+=("$name,$running,$pids")
 	  else
-	    rows+=("$name,stopped,-")
+	    rows+=("$name,$stopped,-")
 	  fi
 	done
 	gum style --bold --foreground 212 "Hyprland Daemons"
