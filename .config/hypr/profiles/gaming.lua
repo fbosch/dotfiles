@@ -15,7 +15,7 @@ return {
 			fullscreen_opacity = 1.0,
 		},
 		general = {
-			allow_tearing = false,
+			allow_tearing = true,
 		},
 	},
 }

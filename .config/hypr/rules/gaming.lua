@@ -36,6 +36,10 @@ M.games = {
 			{ class = "^bg3$" },
 			{ class = "^steam_app_1086940$" },
 		},
+		launcher_selectors = {
+			{ initial_title = "^Larian Launcher$" },
+			{ title = "^Larian Launcher$" },
+		},
 		fullscreen_state = "2 0",
 		suppress_event = "fullscreen",
 		focus_on_open = true,
@@ -44,7 +48,7 @@ M.games = {
 		confirm_close = true,
 		presentation = {
 			vrr = 0,
-			direct_scanout = 1,
+			direct_scanout = 0,
 		},
 	},
 	{
@@ -64,10 +68,6 @@ M.games = {
 		enable_profile = true,
 		freeze = false,
 		confirm_close = true,
-		presentation = {
-			vrr = 0,
-			direct_scanout = 0,
-		},
 	},
 	{
 		name = "elder-scrolls-online",

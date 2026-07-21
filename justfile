@@ -28,6 +28,31 @@ install-opencode-plugins:
 restart-daemons:
 	nohup bash .config/hypr/runtime/desktop/restart-daemons.sh >/dev/null 2>&1 &
 
+# Show Hyprland daemon status and matching process IDs.
+daemon-status:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	daemons=(
+	  "Window state|[w]indow-state-daemon.lua"
+	  "Window capture|[w]indow-capture-daemon.lua"
+	  "Custom layout|[c]ustom-layout-drag-resize-daemon.lua"
+	  "Minimized state|[m]inimized-state-daemon.lua"
+	  "Gaming watchdog|[g]aming-session-watchdog"
+	)
+	rows=()
+	for daemon in "${daemons[@]}"; do
+	  name="${daemon%%|*}"
+	  pattern="${daemon#*|}"
+	  pids="$(pgrep -f "$pattern" | paste -sd " " - || true)"
+	  if [ -n "$pids" ]; then
+	    rows+=("$name,running,$pids")
+	  else
+	    rows+=("$name,stopped,-")
+	  fi
+	done
+	gum style --bold --foreground 212 "Hyprland Daemons"
+	printf "%s\n" "${rows[@]}" | gum table --print --columns "Daemon,Status,PIDs" --border rounded --padding "0 1"
+
 # Sync docs cache metadata.
 update-docs:
 	pnpx docs-cache@latest sync
