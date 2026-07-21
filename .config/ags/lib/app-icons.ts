@@ -504,10 +504,12 @@ export function getIconForClass(appClass: string, iconTheme?: Gtk.IconTheme | nu
     return icon;
   }
 
-  icon = getSteamLibraryIconForCandidate(appClass);
-  if (icon) {
-    iconCache.set(appClass, icon);
-    return icon;
+  for (const candidate of iconLookupCandidates(appClass)) {
+    icon = getSteamLibraryIconForCandidate(candidate);
+    if (icon) {
+      iconCache.set(appClass, icon);
+      return icon;
+    }
   }
 
   for (const desktopId of iconLookupCandidates(appClass).map((entry) => `${entry}.desktop`)) {
