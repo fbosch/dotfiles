@@ -4,7 +4,7 @@ local paths = require("lib.paths")
 local M = {}
 
 function M.runtime_lua(script, ...)
-	return hl.dsp.exec_cmd(command.line("lua", paths.runtime_script(script), ...))
+	return hl.dsp.exec_cmd(command.line("luajit", paths.runtime_script(script), ...))
 end
 
 function M.defer(callback, timeout)

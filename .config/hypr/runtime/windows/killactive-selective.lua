@@ -38,7 +38,7 @@ local function confirm_payload(address, title)
 			message = "Close protected game window: " .. (title ~= "" and title or "game window") .. "?",
 			confirmLabel = "Close",
 			cancelLabel = "Cancel",
-			confirmCommand = "lua " .. config_dir .. "/runtime/windows/killactive-selective.lua --confirmed-address " .. address,
+			confirmCommand = "luajit " .. config_dir .. "/runtime/windows/killactive-selective.lua --confirmed-address " .. address,
 			variant = "warning",
 		},
 	}
