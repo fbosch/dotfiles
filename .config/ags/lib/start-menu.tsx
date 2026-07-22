@@ -809,7 +809,7 @@ function createProfileControls(): Gtk.Box {
         </button>
         {createProfileToggle(
           "profile-gaming",
-          "\uE7FC",
+          "\u{F02B4}",
           gamingActive,
           "gaming-active",
           `${profilectlPath} ${profileState.gamingManual > 0 ? "remove-source" : "apply-source"} gaming manual`,
@@ -1214,7 +1214,7 @@ function applyStaticCSS() {
     }
 
     window.start-menu label.profile-toggle-icon {
-      font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
+      font-family: "Symbols Nerd Font", "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
       font-size: 11px;
       color: inherit;
     }
