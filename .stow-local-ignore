@@ -25,6 +25,7 @@ docs-lock.json
 ^/devenv\.yaml$
 ^/devenv\.lock$
 ^/\.devenv
+^/\.envrc
 
 # Example files should not be stowed, only used as templates
 \.example$
