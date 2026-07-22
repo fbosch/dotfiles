@@ -7,6 +7,7 @@ M.default_presentation = {
 }
 
 ---@alias GamingSelector table<string, string>
+---@alias GamingLauncherRule table<string, boolean|GamingSelector>
 
 ---@class GamingPresentation
 ---@field vrr? integer Hyprland `misc:vrr` override.
@@ -15,7 +16,7 @@ M.default_presentation = {
 ---@class GamingPolicy
 ---@field name string Stable policy identifier.
 ---@field selectors GamingSelector[] Window selectors shared by Hyprland and the watchdog.
----@field launcher_selectors? GamingSelector[] Launcher windows that receive lifecycle and cosmetic rules only.
+---@field launcher_rules? GamingLauncherRule[] Launcher windows that receive lifecycle and cosmetic rules only.
 ---@field steam_app_id? string UMU Steam app ID used for matching the Steam client class.
 ---@field hide_empty_wine_desktop? boolean Hides Wine's untitled virtual desktop helper.
 ---@field fullscreen_state? string Hyprland internal and client fullscreen states.
@@ -36,9 +37,9 @@ M.games = {
 			{ class = "^bg3$" },
 			{ class = "^steam_app_1086940$" },
 		},
-		launcher_selectors = {
-			{ initial_title = "^Larian Launcher$" },
-			{ title = "^Larian Launcher$" },
+		launcher_rules = {
+			{ match = { initial_title = "^Larian Launcher$" }, float = true, decorate = false },
+			{ match = { title = "^Larian Launcher$" }, float = true, decorate = false },
 		},
 		fullscreen_state = "2 0",
 		suppress_event = "fullscreen",
@@ -60,9 +61,10 @@ M.games = {
 			{ initial_title = "^World of Warcraft$" },
 			{ title = "^World of Warcraft$" },
 		},
-		launcher_selectors = {
-			{ initial_title = "^Battle\\.net" },
-			{ title = "^Battle\\.net" },
+		launcher_rules = {
+			{ match = { initial_title = "^Battle\\.net" } },
+			{ match = { title = "^Battle\\.net" } },
+			{ match = { initial_title = "^Battle\\.net Settings$" }, pin = true },
 		},
 		fullscreen_state = "2 0",
 		enable_profile = true,
@@ -81,9 +83,9 @@ M.games = {
 			{ class = "^(steam_app_elderscrollsonline)$", initial_title = "^Elder Scrolls Online$" },
 			{ class = "^(steam_app_elderscrollsonline)$", title = "^Elder Scrolls Online$" },
 		},
-		launcher_selectors = {
-			{ initial_title = "^Zenimax Online Studios Launcher$" },
-			{ title = "^Zenimax Online Studios Launcher$" },
+		launcher_rules = {
+			{ match = { initial_title = "^Zenimax Online Studios Launcher$" } },
+			{ match = { title = "^Zenimax Online Studios Launcher$" } },
 		},
 		freeze = false,
 		confirm_close = true,
@@ -144,8 +146,8 @@ function M.match(window)
 			end
 		end
 
-		for _, selector in ipairs(game.launcher_selectors or {}) do
-			if M.matches_selector(window, selector) then
+		for _, rule in ipairs(game.launcher_rules or {}) do
+			if M.matches_selector(window, rule.match) then
 				return game, true
 			end
 		end
@@ -205,9 +207,9 @@ local function gaming_window_rule(selector, fullscreen_state, content, suppress_
 	return rule
 end
 
-local function launcher_window_rule(selector)
-	return {
-		match = selector,
+local function launcher_window_rule(launcher_rule)
+	local rule = {
+		match = launcher_rule.match,
 		workspace = M.workspace .. " silent",
 		no_anim = true,
 		no_blur = true,
@@ -215,6 +217,14 @@ local function launcher_window_rule(selector)
 		border_size = 0,
 		rounding = 0,
 	}
+
+	for property, value in pairs(launcher_rule) do
+		if property ~= "match" then
+			rule[property] = value
+		end
+	end
+
+	return rule
 end
 
 local function register_gamescope_rules()
@@ -262,6 +272,10 @@ local function register_game_rules()
 				hl.window_rule(gaming_window_rule(selector, game.fullscreen_state, "game", game.suppress_event))
 			end
 		end
+
+		for _, launcher_rule in ipairs(game.launcher_rules or {}) do
+			hl.window_rule(launcher_window_rule(launcher_rule))
+		end
 	end
 end
 
@@ -276,20 +290,8 @@ local function register_open_handler()
 	end)
 end
 
-local function register_game_client_rules()
+local function register_client_rules()
 	hl.window_rule({ match = { class = "^(SGDBoop)$" }, float = true, pin = true })
-	hl.window_rule({ match = { initial_title = "^(Larian Launcher)$" }, float = true, decorate = false })
-
-	for _, game in ipairs(M.games) do
-		for _, selector in ipairs(game.launcher_selectors or {}) do
-			hl.window_rule(launcher_window_rule(selector))
-		end
-	end
-
-	hl.window_rule({
-		match = { initial_title = "^(Battle\\.net Settings)$" },
-		pin = true,
-	})
 end
 
 local function set_fullscreen_state(window, game)
@@ -334,7 +336,7 @@ function M.register_window_rules()
 	register_gamescope_rules()
 	register_steam_rules()
 	register_game_rules()
-	register_game_client_rules()
+	register_client_rules()
 	register_fullscreen_handler()
 	register_open_handler()
 end
