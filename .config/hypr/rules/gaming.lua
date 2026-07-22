@@ -19,6 +19,7 @@ M.default_presentation = {
 ---@field launcher_rules? GamingLauncherRule[] Launcher windows that receive lifecycle and cosmetic rules only.
 ---@field steam_app_id? string UMU Steam app ID used for matching the Steam client class.
 ---@field hide_empty_wine_desktop? boolean Hides Wine's untitled virtual desktop helper.
+---@field route_to_gaming_workspace? boolean Applies the standard gaming workspace rule without forcing fullscreen.
 ---@field fullscreen_state? string Hyprland internal and client fullscreen states.
 ---@field suppress_event? string Hyprland event to suppress for the matching window.
 ---@field focus_on_open? boolean Focus the window once after it opens.
@@ -79,6 +80,7 @@ M.games = {
 		name = "elder-scrolls-online",
 		steam_app_id = "elderscrollsonline",
 		hide_empty_wine_desktop = true,
+		route_to_gaming_workspace = true,
 		selectors = {
 			{ class = "^(steam_app_elderscrollsonline)$", initial_title = "^Elder Scrolls Online$" },
 			{ class = "^(steam_app_elderscrollsonline)$", title = "^Elder Scrolls Online$" },
@@ -267,7 +269,7 @@ end
 
 local function register_game_rules()
 	for _, game in ipairs(M.games) do
-		if game.fullscreen_state ~= nil then
+		if game.fullscreen_state ~= nil or game.route_to_gaming_workspace == true then
 			for _, selector in ipairs(game.selectors) do
 				hl.window_rule(gaming_window_rule(selector, game.fullscreen_state, "game", game.suppress_event))
 			end
@@ -291,6 +293,7 @@ local function register_open_handler()
 end
 
 local function register_client_rules()
+	-- SteamGridDB's browser-extension companion needs to stay above the Steam client.
 	hl.window_rule({ match = { class = "^(SGDBoop)$" }, float = true, pin = true })
 end
 
