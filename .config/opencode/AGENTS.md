@@ -83,6 +83,7 @@
 - Never fabricate paths, APIs, config keys, env vars, capabilities, or test results; state uncertainty explicitly.
 - When asked about performance, do not guess metrics; offer to measure them and identify whether a baseline should be established first.
 - Never weaken assertions, narrow scope, reduce coverage, or skip checks to force a pass.
+- Test supported current behavior and happy paths. Avoid assertions that only prove removed UI or behavior is absent, unless the absence is a current safety, security, or exclusivity invariant.
 
 ## Ambiguity and execution loop
 
