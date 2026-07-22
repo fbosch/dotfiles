@@ -4,10 +4,14 @@ set -euo pipefail
 
 STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-night-light"
 OVERRIDE_FILE="$STATE_DIR/override"
+OVERRIDE_EXPIRY_FILE="$STATE_DIR/override-expiry"
 PID_FILE="$STATE_DIR/daemon.pid"
+TEMPERATURE_FILE="$STATE_DIR/temperature"
 
 DAY_TEMP=6500
 NIGHT_TEMP=4000
+TRANSITION_SECONDS=3600
+UPDATE_INTERVAL=300
 LATITUDE=55.6761
 LONGITUDE=12.5683
 AUTO_SCHEDULE=true
@@ -51,31 +55,56 @@ solar_event_epoch() {
   printf "%s" "$((utc_midnight + utc_seconds))"
 }
 
-scheduled_active() {
+scheduled_temperature() {
   local today now sunrise sunset
   today="$(date +%F)"
   now="$(date +%s)"
   sunrise="$(solar_event_epoch "$today" sunrise)"
   sunset="$(solar_event_epoch "$today" sunset)"
 
-  [[ "$now" -ge "$sunset" || "$now" -lt "$sunrise" ]]
+  awk -v now="$now" -v sunrise="$sunrise" -v sunset="$sunset" \
+    -v day_temp="$DAY_TEMP" -v night_temp="$NIGHT_TEMP" \
+    -v transition="$TRANSITION_SECONDS" '
+      function interpolate(start, end, progress) {
+        return int(start + (end - start) * progress + 0.5)
+      }
+      BEGIN {
+        if (now < sunrise - transition || now >= sunset + transition) {
+          print night_temp
+        } else if (now < sunrise + transition) {
+          print interpolate(night_temp, day_temp, (now - (sunrise - transition)) / (2 * transition))
+        } else if (now < sunset - transition) {
+          print day_temp
+        } else {
+          print interpolate(day_temp, night_temp, (now - (sunset - transition)) / (2 * transition))
+        }
+      }
+    '
 }
 
-desired_active() {
+desired_temperature() {
   local override
 
   if [[ -f "$OVERRIDE_FILE" ]]; then
     override="$(< "$OVERRIDE_FILE")"
-    [[ "$override" == "on" ]]
+    if [[ "$override" == "on" ]]; then
+      printf "%s" "$NIGHT_TEMP"
+    else
+      printf "%s" "$DAY_TEMP"
+    fi
     return
   fi
 
   if [[ "$AUTO_SCHEDULE" != "true" ]]; then
-    [[ "$ENABLED" == "true" ]]
+    if [[ "$ENABLED" == "true" ]]; then
+      printf "%s" "$NIGHT_TEMP"
+    else
+      printf "%s" "$DAY_TEMP"
+    fi
     return
   fi
 
-  scheduled_active
+  scheduled_temperature
 }
 
 is_active() {
@@ -83,21 +112,30 @@ is_active() {
 }
 
 set_temperature() {
-  local temperature="$1"
+  local temperature="$1" previous_temperature=""
+
+  if [[ -f "$TEMPERATURE_FILE" ]]; then
+    previous_temperature="$(< "$TEMPERATURE_FILE")"
+  fi
+
+  if [[ "$temperature" == "$previous_temperature" ]]; then
+    if [[ "$temperature" -lt "$DAY_TEMP" ]] && is_active; then
+      return
+    fi
+    if [[ "$temperature" -ge "$DAY_TEMP" ]] && ! is_active; then
+      return
+    fi
+  fi
 
   pkill -x hyprsunset 2>/dev/null || true
   if [[ "$temperature" -lt "$DAY_TEMP" ]]; then
     hyprsunset -t "$temperature" >/dev/null 2>&1 &
   fi
+  printf "%s" "$temperature" > "$TEMPERATURE_FILE"
 }
 
 apply_state() {
-  if desired_active; then
-    set_temperature "$NIGHT_TEMP"
-    return
-  fi
-
-  set_temperature "$DAY_TEMP"
+  set_temperature "$(desired_temperature)"
 }
 
 notify_state() {
@@ -156,12 +194,21 @@ run_daemon() {
   trap 'rm -f "$PID_FILE"' EXIT
 
   while true; do
-    rm -f "$OVERRIDE_FILE"
+    if [[ -f "$OVERRIDE_FILE" && ! -f "$OVERRIDE_EXPIRY_FILE" ]]; then
+      next_boundary_epoch > "$OVERRIDE_EXPIRY_FILE"
+    fi
+
+    if [[ -f "$OVERRIDE_EXPIRY_FILE" ]] && [[ "$(< "$OVERRIDE_EXPIRY_FILE")" -le "$(date +%s)" ]]; then
+      rm -f "$OVERRIDE_FILE" "$OVERRIDE_EXPIRY_FILE"
+    fi
     apply_state
 
     boundary="$(next_boundary_epoch)"
     now="$(date +%s)"
-    sleep_for=$((boundary - now + 1))
+    sleep_for="$UPDATE_INTERVAL"
+    if [[ $((boundary - now + 1)) -lt "$sleep_for" ]]; then
+      sleep_for=$((boundary - now + 1))
+    fi
     if [[ "$sleep_for" -lt 60 ]]; then
       sleep_for=60
     fi
@@ -171,8 +218,12 @@ run_daemon() {
 }
 
 toggle() {
+  local boundary
+
+  boundary="$(next_boundary_epoch)"
   if is_active; then
     printf "off" > "$OVERRIDE_FILE"
+    printf "%s" "$boundary" > "$OVERRIDE_EXPIRY_FILE"
     apply_state
     notify_state false
     printf "Night light disabled\n"
@@ -180,6 +231,7 @@ toggle() {
   fi
 
   printf "on" > "$OVERRIDE_FILE"
+  printf "%s" "$boundary" > "$OVERRIDE_EXPIRY_FILE"
   apply_state
   notify_state true
   printf "Night light enabled\n"
