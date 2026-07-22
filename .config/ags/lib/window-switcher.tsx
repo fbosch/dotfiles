@@ -101,7 +101,7 @@ const PROFILE_MODE_PATH = `${PERFORMANCE_OVERLAY_STATE_DIR}/profile-overlay.mode
 const MONITOR_DEBUG_PATH = `${RUNTIME_DIR}/monitor-debug.log`;
 const WINDOW_SWITCHER_DEBUG_PATH = `${RUNTIME_DIR}/ags-window-switcher-debug.log`;
 const TOGGLE_MINIMIZED_WORKSPACE_SCRIPT = "~/.config/hypr/runtime/windows/toggle-minimized-workspace.sh";
-const WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT = "lua ~/.config/hypr/runtime/windows/warp-cursor-to-active-window.lua";
+const WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT = "luajit ~/.config/hypr/runtime/windows/warp-cursor-to-active-window.lua";
 const DEBUG = GLib.getenv("AGS_WINDOW_SWITCHER_DEBUG") === "1";
 
 function isGamingProfileActive(): boolean {
@@ -585,7 +585,7 @@ async function getActiveWindowAddress(): Promise<string | null> {
 
 function focusAndWarpWindow(address: string): void {
   const home = GLib.getenv("HOME");
-  const script = home ? `lua ${home}/.config/hypr/runtime/windows/warp-cursor-to-active-window.lua` : WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT;
+  const script = home ? `luajit ${home}/.config/hypr/runtime/windows/warp-cursor-to-active-window.lua` : WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT;
   GLib.spawn_command_line_async(`${script} --window ${GLib.shell_quote(address)}`);
 }
 

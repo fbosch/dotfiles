@@ -3,6 +3,7 @@
 set -eu
 
 hyprctl reload
+systemctl --user restart vicinae.service
 
 pkill waybar 2>/dev/null || true
 pkill swaync 2>/dev/null || true
