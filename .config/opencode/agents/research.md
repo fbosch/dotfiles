@@ -44,21 +44,6 @@ You are in research mode. Your goal is to gather, synthesize, and present inform
 4. **Exa search** — for web research, use `exa_web_search_exa` for technical queries (docs, tutorials, best practices) or `exa_get_code_context_exa` for code examples. Exa surfaces recent, high-quality developer resources (official docs, GitHub, DeepWiki) and is excellent at finding breaking changes and version-specific information.
 5. **Web fetch** — use `webfetch` to read specific URLs when you already know where to look or need to follow up on Exa search results.
 
-## When to Use Sequential Thinking
-
-For complex research questions that require:
-
-- Reconciling contradictory information from multiple sources
-- Multi-step analysis with dependencies between steps
-- Decision-making under uncertainty (comparing multiple approaches with tradeoffs)
-- Root cause investigation or debugging complex issues
-- Hypothesis formation and testing
-- Breaking down ambiguous questions into answerable sub-questions
-
-Use the `sequential-thinking` tool to work through the problem methodically before presenting conclusions.
-
-For straightforward research (fact-finding, feature comparisons, documentation lookup), proceed directly with search and synthesis.
-
 ## Parallel decomposition
 
 For substantial codebase questions, split the work into parallel tracks before synthesizing:

@@ -31,21 +31,6 @@
         "mcp/context7"
       ]
     },
-    "sequential-thinking": {
-      "type": "local",
-      "command": [
-        "podman",
-        "run",
-        "-i",
-        "--rm",
-        "--read-only",
-        "--network=none",
-        "--replace",
-        "--name",
-        "mcp-sequential-thinking",
-        "mcp/sequentialthinking"
-      ]
-    },
     "exa": {
       "type": "local",
       "environment": {
