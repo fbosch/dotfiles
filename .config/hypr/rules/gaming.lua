@@ -77,7 +77,10 @@ M.games = {
 		name = "elder-scrolls-online",
 		steam_app_id = "elderscrollsonline",
 		hide_empty_wine_desktop = true,
-		selectors = {},
+		selectors = {
+			{ class = "^(steam_app_elderscrollsonline)$", initial_title = "^Elder Scrolls Online$" },
+			{ class = "^(steam_app_elderscrollsonline)$", title = "^Elder Scrolls Online$" },
+		},
 		launcher_selectors = {
 			{ initial_title = "^Zenimax Online Studios Launcher$" },
 			{ title = "^Zenimax Online Studios Launcher$" },
@@ -224,7 +227,7 @@ local function register_gamescope_rules()
 	})
 
 	hl.window_rule({
-		match = { workspace = M.workspace, class = "negative:^(gamescope)$" },
+		match = { workspace = M.workspace, class = "negative:^(gamescope)$", content = "negative:^game$" },
 		workspace = "special:gaming-overlay silent",
 	})
 end
