@@ -2,7 +2,7 @@
 set -euo pipefail
 
 iterations="${1:-100}"
-script=(lua "${HOME}/.config/hypr/runtime/windows/warp-cursor-to-active-window.lua")
+script=(luajit "${HOME}/.config/hypr/runtime/windows/warp-cursor-to-active-window.lua")
 
 elapsed_ms() {
   local start="$1"

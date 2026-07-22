@@ -1,4 +1,4 @@
-#!/usr/bin/env lua
+#!/usr/bin/env luajit
 
 local home = os.getenv("HOME")
 local config_dir = home .. "/.config/hypr"

@@ -1,4 +1,4 @@
-#!/usr/bin/env lua
+#!/usr/bin/env luajit
 
 local home = os.getenv("HOME")
 local config_dir = home .. "/.config/hypr"
@@ -38,7 +38,7 @@ local function run_locked()
 		"flock",
 		"-x",
 		command_lib.arg(state_lock),
-		command_lib.arg(arg[-1] or "lua"),
+		command_lib.arg(arg[-1] or "luajit"),
 		command_lib.arg(arg[0]),
 	}
 	for index = 1, #arg do
