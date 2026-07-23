@@ -111,6 +111,10 @@ is_active() {
   pgrep -x hyprsunset >/dev/null
 }
 
+is_enabled() {
+  [[ "$(desired_temperature)" -lt "$DAY_TEMP" ]]
+}
+
 set_temperature() {
   local temperature="$1" previous_temperature=""
 
@@ -221,7 +225,7 @@ toggle() {
   local boundary
 
   boundary="$(next_boundary_epoch)"
-  if is_active; then
+  if is_enabled; then
     printf "off" > "$OVERRIDE_FILE"
     printf "%s" "$boundary" > "$OVERRIDE_EXPIRY_FILE"
     apply_state
@@ -248,10 +252,10 @@ case "${1:-toggle}" in
     toggle
     ;;
   is-active)
-    is_active
+    is_enabled
     ;;
   status)
-    if is_active; then
+    if is_enabled; then
       printf "active\n"
     else
       printf "inactive\n"
