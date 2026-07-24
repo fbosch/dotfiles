@@ -299,7 +299,7 @@ local function append_chatgpt_usage(items)
 		table.insert(items, { Text = profile })
 		if reset_count ~= nil then
 			table.insert(items, { Foreground = reset_credit_color(reset_expires_at) })
-			table.insert(items, { Text = "(" .. reset_count .. ") " })
+			table.insert(items, { Text = " (" .. reset_count .. ") " })
 		else
 			table.insert(items, { Text = " " })
 		end

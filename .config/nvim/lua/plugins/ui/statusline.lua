@@ -6,7 +6,6 @@ return {
 	event = "VeryLazy",
 	config = function()
 		local git = require("utils.git")
-		local codexbar = require("utils.usage.codex")
 		require("utils.usage.opencode")
 		-- local anthropic_usage = require("utils.usage.anthropic")
 
@@ -34,19 +33,6 @@ return {
 					local ok, result = pcall(opencode and opencode.statusline or function()
 						return ""
 					end)
-					return ok and is_valid_status(result)
-				end,
-			},
-			{
-				function()
-					local ok, result = pcall(codexbar.statusline_component)
-					if not ok or not is_valid_status(result) then
-						return ""
-					end
-					return result
-				end,
-				cond = function()
-					local ok, result = pcall(codexbar.statusline_component)
 					return ok and is_valid_status(result)
 				end,
 			},
