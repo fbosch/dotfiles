@@ -1,0 +1,19 @@
+id = "fbb.chatgpt-usage"
+name = "ChatGPT Usage"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+description = "Shows the current ChatGPT Codex allowance in Herdr agent rows"
+platforms = ["linux"]
+
+[[startup]]
+command = ["sh", "refresh.sh"]
+
+[[events]]
+on = "pane.focused"
+command = ["sh", "refresh.sh"]
+
+[[actions]]
+id = "refresh"
+title = "Refresh ChatGPT usage"
+contexts = ["workspace", "pane"]
+command = ["sh", "refresh.sh"]
