@@ -25,6 +25,9 @@
 - Before substantial user-facing prose, PR descriptions, issue summaries, or docs, read `~/.config/opencode/TONE.md`.
 - Skip reference reads for trivial answers, single-line edits, or when the same reference has already been read for the current task.
 - If unsure whether a task is non-trivial, prefer reading the narrowest relevant reference over guessing.
+- Format user-executed multi-step instructions as a numbered list of bounded actions, with the immediate next action first.
+- For work spanning multiple replies, state the current step, completed outcome, and immediate next action; use the task list rather than repeating a full plan.
+- Keep responses and implementation focused on the active problem; raise unrelated findings only when they affect correctness, safety, or the requested outcome.
 
 ## Coding style
 
@@ -77,10 +80,10 @@
 - Be concise, technical, and outcome-oriented; use fuller prose when ambiguity, security, destructive operations, or architecture tradeoffs require it.
 - For substantial user-facing docs, README prose, PR descriptions, or long-form explanations, use the `writing-clearly` skill; `~/.config/opencode/TONE.md` remains the canonical voice reference.
 - Do not expose implementation details in user-facing interfaces unless explicitly requested; keep prompts, labels, help text, and status output focused on actionable results.
+- When reporting a failure or blocker, state the observed symptom, likely cause or uncertainty, and the concrete next diagnostic or fix.
 
 ## Evidence and verification
 
-- Never fabricate paths, APIs, config keys, env vars, capabilities, or test results; state uncertainty explicitly.
 - When asked about performance, do not guess metrics; offer to measure them and identify whether a baseline should be established first.
 - Never weaken assertions, narrow scope, reduce coverage, or skip checks to force a pass.
 - Test supported current behavior and happy paths. Avoid assertions that only prove removed UI or behavior is absent, unless the absence is a current safety, security, or exclusivity invariant.
@@ -91,6 +94,7 @@
 - If a request has multiple valid interpretations, list options with tradeoffs; do not pick silently.
 - Treat follow-up requests as cumulative unless the user clearly resets scope.
 - Prefer the simpler approach when it satisfies the request; push back on over-complex directions.
+- After repeated failed targeted fixes, re-evaluate the reproduction and underlying assumption before making another speculative change.
 
 ## Done criteria
 
