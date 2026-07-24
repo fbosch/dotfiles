@@ -83,11 +83,18 @@ scheduled_temperature() {
 }
 
 desired_temperature() {
-  local override
+  local override scheduled
 
   if [[ -f "$OVERRIDE_FILE" ]]; then
     override="$(< "$OVERRIDE_FILE")"
     if [[ "$override" == "on" ]]; then
+      if [[ "$AUTO_SCHEDULE" == "true" ]]; then
+        scheduled="$(scheduled_temperature)"
+        if [[ "$scheduled" -lt "$DAY_TEMP" ]]; then
+          printf "%s" "$scheduled"
+          return
+        fi
+      fi
       printf "%s" "$NIGHT_TEMP"
     else
       printf "%s" "$DAY_TEMP"
@@ -143,14 +150,14 @@ apply_state() {
 }
 
 notify_state() {
-  local active="$1"
+  local active="$1" temperature="${2:-$NIGHT_TEMP}"
   local icon title body color glyph
 
   if [[ "$active" == "true" ]]; then
     glyph="󰖔"
     color="#e67e22"
     title="Night Light Enabled"
-    body="Color temperature set to ${NIGHT_TEMP}K"
+    body="Color temperature set to ${temperature}K"
   else
     glyph="󰖨"
     color="#dea721"
@@ -222,7 +229,7 @@ run_daemon() {
 }
 
 toggle() {
-  local boundary
+  local boundary temperature
 
   boundary="$(next_boundary_epoch)"
   if is_enabled; then
@@ -236,8 +243,9 @@ toggle() {
 
   printf "on" > "$OVERRIDE_FILE"
   printf "%s" "$boundary" > "$OVERRIDE_EXPIRY_FILE"
-  apply_state
-  notify_state true
+  temperature="$(desired_temperature)"
+  set_temperature "$temperature"
+  notify_state true "$temperature"
   printf "Night light enabled\n"
 }
 

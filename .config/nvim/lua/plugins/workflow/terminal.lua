@@ -77,8 +77,8 @@ return {
 				local root = project.get_project_root()
 				local cwd = root or vim.fn.getcwd()
 
-				if project.has_file(cwd, "devenv.nix") then
-					cmd = string.format("devenv shell %s", cmd)
+				if project.has_file(cwd, ".envrc") then
+					cmd = string.format("direnv exec %s %s", vim.fn.shellescape(cwd), cmd)
 				end
 
 				if root then
