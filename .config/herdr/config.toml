@@ -1,0 +1,20 @@
+[keys]
+prefix = "ctrl+w"
+focus_pane_left = "prefix+h"
+focus_pane_down = "prefix+j"
+focus_pane_up = "prefix+k"
+focus_pane_right = "prefix+l"
+split_vertical = "prefix+v"
+split_horizontal = "prefix+s"
+close_pane = "prefix+c"
+last_pane = "prefix+p"
+zoom = "prefix+shift+z"
+
+# Move conflicting non-window actions away from Neovim window commands.
+new_tab = "prefix+alt+t"
+previous_tab = "prefix+alt+comma"
+next_tab = "prefix+alt+period"
+open_notification_target = "prefix+shift+o"
+
+[ui]
+agent_panel_sort = "priority"
