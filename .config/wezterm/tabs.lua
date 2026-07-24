@@ -83,6 +83,10 @@ local function get_display_title(title)
 end
 
 local function format_tab_title(tab, tabs, panes, config, hover, max_width)
+	if #tabs == 1 then
+		return { { Text = "" } }
+	end
+
 	local title, is_herdr_tab = get_display_title(tab.active_pane.title)
 	local icon_items = {}
 	local icon_count = 0
