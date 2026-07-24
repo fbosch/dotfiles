@@ -41,9 +41,13 @@ function rw --wraps=remaining_work_hours --description 'alias rw remaining_work_
 end
 
 # Directory shortcuts - fingers too fast for accuracy ⚡
-abbr prj 'cd ~/Projects'
-abbr pjr 'cd ~/Projects'
-abbr rpj 'cd ~/Projects'
+abbr prj 'cd (xdg-user-dir PROJECTS)'
+abbr pjr 'cd (xdg-user-dir PROJECTS)'
+abbr rpj 'cd (xdg-user-dir PROJECTS)'
+abbr dl 'cd (xdg-user-dir DOWNLOAD)'
+abbr pics 'cd (xdg-user-dir PICTURES)'
+abbr docs 'cd (xdg-user-dir DOCUMENTS)'
+abbr desk 'cd (xdg-user-dir DESKTOP)'
 
 abbr attp 'attic push nix-cache $(nix path-info /run/current-system/)'
 abbr nxe 'nvim ~/nixos'
