@@ -10,6 +10,7 @@
 | `docs`             | Documentation is the main deliverable                                                                                    |
 | `explore`          | Broad codebase discovery, locating relevant files, or answering where/how something is implemented                       |
 | `ideate`           | Generating options, alternatives, and directions before converging                                                       |
+| `lookup`           | Fast, narrow Context7/Exa-backed online reference retrieval with verified sources                                        |
 | `patterns`         | Finding existing examples, conventions, or prior implementations to copy from                                            |
 | `pr-feedback`      | Triaging existing GitHub PR review threads, validating claims, applying approved fixes, and resolving approved threads   |
 | `quick`            | Well-scoped, deterministic work: fetch-and-format tasks, small localized edits, focused cleanup, lightweight repo checks |
@@ -39,6 +40,6 @@
 - `review` audits an implementation; `adversarial` actively searches for ways a design or implementation can fail.
 - `pr-feedback` handles existing reviewer threads; `review` performs an independent PR or code review, and `quick` handles generic deterministic workflows.
 - `validate` runs bounded, read-only checks after changes; `test` owns test design and failure diagnosis, `debug` owns unexplained failures, and `review` owns risk assessment.
-- `research` gathers source-backed external evidence without making changes.
+- `lookup` answers a narrow online reference question quickly; `research` owns investigation and synthesis, delegating independent lookup tracks only when parallel collection has clear value.
 - `docs` owns substantial documentation deliverables; `test` owns non-trivial test creation or diagnosis.
 - `quick` is only for deterministic, tightly scoped execution. Do not use it where judgment, contract design, or substantial prose is the deliverable.

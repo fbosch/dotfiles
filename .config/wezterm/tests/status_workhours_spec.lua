@@ -44,6 +44,16 @@ package.loaded.wezterm = {
 			}
 		end
 
+		if content == "chatgpt-usage" then
+			return {
+				{
+					usage = {
+						secondary = { usedPercent = 57 },
+					},
+				},
+			}
+		end
+
 		return {
 			zenwritten = {
 				dark = {
@@ -61,11 +71,21 @@ package.loaded.wezterm = {
 		registered_events[event] = callback
 	end,
 	run_child_process = function(argv)
+		if argv[1] == "codexbar" then
+			return true, "chatgpt-usage", ""
+		end
+
 		return true, "herdr-agents", ""
 	end,
 }
 
 package.loaded["agent"] = {
+	get_status_icon = function(status)
+		return "[" .. status .. "]"
+	end,
+	get_status_color = function(status)
+		return "#ffffff"
+	end,
 	consume_init_notice = function()
 		return nil
 	end,
@@ -138,8 +158,9 @@ update_status(window)
 os.date = original_os_date
 
 assert_eq(type(captured_status), "table", "status payload type")
-assert_eq(find_text(captured_status, "H 2 "), true, "Herdr working count rendered")
-assert_eq(find_text(captured_status, "[end] 6.5 "), true, "workhours indicator rendered")
+	assert_eq(find_text(captured_status, "[working] 2 "), true, "Herdr working count rendered")
+	assert_eq(find_text(captured_status, "[end] 6.5 "), true, "workhours indicator rendered")
+	assert_eq(find_text(captured_status, "43%"), true, "ChatGPT remaining allowance rendered")
 
 captured_status = nil
 update_status({

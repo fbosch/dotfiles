@@ -1,6 +1,7 @@
 local is_windows = package.config:sub(0, 1) == "\\"
 local wezterm = require("wezterm")
 local agent_deck = require("agent")
+local herdr = require("agent.herdr")
 local theme = require("theme")
 
 local window_cols = wezterm.GLOBAL.window_cols or {}
@@ -68,8 +69,21 @@ local function get_tab_title_color(tab, wezterm_config, hover)
 	return tab.is_active and theme.tab_bar.active_fg or theme.tab_bar.inactive_fg
 end
 
+local function get_display_title(title)
+	if title == "herdr" then
+		return "", true
+	end
+
+	local cwd = title:match("^herdr%s+(.+)$")
+	if cwd then
+		return cwd, true
+	end
+
+	return title, false
+end
+
 local function format_tab_title(tab, tabs, panes, config, hover, max_width)
-	local title = tab.active_pane.title
+	local title, is_herdr_tab = get_display_title(tab.active_pane.title)
 	local icon_items = {}
 	local icon_count = 0
 
@@ -95,11 +109,30 @@ local function format_tab_title(tab, tabs, panes, config, hover, max_width)
 		end
 	end
 
+	if is_herdr_tab then
+		local summary = herdr.get_summary()
+		for _, state in ipairs({
+			{ status = "working", count = summary.working },
+			{ status = "waiting", count = summary.blocked },
+			{ status = "idle", count = summary.idle },
+			{ status = "inactive", count = summary.inactive },
+		}) do
+			if state.count > 0 then
+				table.insert(icon_items, {
+					icon = agent_deck.get_status_icon(state.status),
+					count = state.count,
+					color = agent_deck.get_status_color(state.status),
+				})
+				icon_count = icon_count + 2 + #tostring(state.count)
+			end
+		end
+	end
+
 	local base_title = "[" .. tab.tab_index + 1 .. "] " .. title
 	local full_title_length = #base_title + icon_count + (icon_count > 0 and 1 or 0)
 
 	local window_key = get_tab_window_key(tab)
-	local status_bar_offset_cols = is_windows and 0 or (right_status_cols[window_key] or 44)
+	local status_bar_offset_cols = is_windows and 0 or math.max(right_status_cols[window_key] or 0, 96)
 	local available_cols = math.max(1, (window_cols[window_key] or max_width or 100) - status_bar_offset_cols)
 	local num_tabs = #tabs > 0 and #tabs or 1
 
@@ -113,9 +146,13 @@ local function format_tab_title(tab, tabs, panes, config, hover, max_width)
 		{ Text = padding .. "[" .. tab.tab_index + 1 .. "] " },
 	}
 
-	for _, item in ipairs(icon_items) do
+	for index, item in ipairs(icon_items) do
 		table.insert(result, { Foreground = { Color = item.color } })
-		table.insert(result, { Text = item.icon })
+		local text = item.icon .. (item.count and " " .. item.count or "")
+		if item.count and icon_items[index + 1] and icon_items[index + 1].count then
+			text = text .. " "
+		end
+		table.insert(result, { Text = text })
 	end
 
 	if #icon_items > 0 then

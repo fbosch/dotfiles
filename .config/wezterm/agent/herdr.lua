@@ -3,7 +3,7 @@ local wezterm = require("wezterm")
 local M = {}
 
 local refresh_interval_seconds = 5
-local cache = { checked_at = 0, working = 0, blocked = 0 }
+local cache = { checked_at = 0, working = 0, blocked = 0, idle = 0, inactive = 0 }
 
 function M.get_summary()
 	local now = os.time()
@@ -14,6 +14,8 @@ function M.get_summary()
 	cache.checked_at = now
 	cache.working = 0
 	cache.blocked = 0
+	cache.idle = 0
+	cache.inactive = 0
 
 	local ok, stdout = wezterm.run_child_process({ "herdr", "agent", "list" })
 	if ok == false then
@@ -31,6 +33,10 @@ function M.get_summary()
 			cache.working = cache.working + 1
 		elseif agent.agent_status == "blocked" then
 			cache.blocked = cache.blocked + 1
+		elseif agent.agent_status == "idle" then
+			cache.idle = cache.idle + 1
+		elseif agent.agent_status == "done" then
+			cache.inactive = cache.inactive + 1
 		end
 	end
 

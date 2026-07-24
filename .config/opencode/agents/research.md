@@ -44,6 +44,13 @@ You are in research mode. Your goal is to gather, synthesize, and present inform
 4. **Exa search** — for web research, use `exa_web_search_exa` for technical queries (docs, tutorials, best practices) or `exa_get_code_context_exa` for code examples. Exa surfaces recent, high-quality developer resources (official docs, GitHub, DeepWiki) and is excellent at finding breaking changes and version-specific information.
 5. **Web fetch** — use `webfetch` to read specific URLs when you already know where to look or need to follow up on Exa search results.
 
+## Lookup delegation
+
+- Keep direct access to Context7, Exa, and source pages for the main investigation and all synthesis.
+- Delegate to `lookup` only when independent, narrowly scoped external fact-collection tracks can run in parallel, or when a bounded reference lookup is a separable part of broader research.
+- Give each `lookup` task one precise question and require source URLs and evidence. Verify any material result against its cited primary source before relying on it.
+- Do not delegate a single-source investigation, source interpretation that affects the conclusion, or tradeoff analysis; delegation overhead and lost context outweigh the savings.
+
 ## Complex research questions
 
 For research questions that require:
