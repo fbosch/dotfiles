@@ -1,6 +1,7 @@
 local is_windows = package.config:sub(0, 1) == "\\"
 local wezterm = require("wezterm")
 local agent_deck = require("agent")
+local herdr = require("agent.herdr")
 local theme = require("theme")
 local time_utils = require("utils.time")
 
@@ -94,6 +95,7 @@ end
 
 local function update_right_status(window)
 	local waiting_count = 0
+	local herdr_summary = herdr.get_summary()
 	local init_notice = agent_deck.consume_init_notice and agent_deck.consume_init_notice() or nil
 	if init_notice then
 		window:toast_notification("Agent Deck", init_notice, nil, 2500)
@@ -123,6 +125,11 @@ local function update_right_status(window)
 		{ Text = waiting_count > 0 and ("◔ " .. waiting_count .. " ") or "" },
 		{ Foreground = color_separator },
 		{ Text = waiting_count > 0 and "▏" or "" },
+		{ Foreground = color_waiting },
+		{ Text = herdr_summary.working > 0 and ("H " .. herdr_summary.working .. " ") or "" },
+		{ Text = herdr_summary.blocked > 0 and ("! " .. herdr_summary.blocked .. " ") or "" },
+		{ Foreground = color_separator },
+		{ Text = (herdr_summary.working > 0 or herdr_summary.blocked > 0) and "▏" or "" },
 		{ Foreground = color_gray },
 		{ Text = date },
 		{ Foreground = color_separator },

@@ -32,6 +32,18 @@ package.loaded.wezterm = {
 		return items
 	end,
 	json_parse = function(content)
+		if content == "herdr-agents" then
+			return {
+				result = {
+					agents = {
+						{ agent_status = "working" },
+						{ agent_status = "working" },
+						{ agent_status = "idle" },
+					},
+				},
+			}
+		end
+
 		return {
 			zenwritten = {
 				dark = {
@@ -47,6 +59,9 @@ package.loaded.wezterm = {
 	end,
 	on = function(event, callback)
 		registered_events[event] = callback
+	end,
+	run_child_process = function(argv)
+		return true, "herdr-agents", ""
 	end,
 }
 
@@ -123,6 +138,7 @@ update_status(window)
 os.date = original_os_date
 
 assert_eq(type(captured_status), "table", "status payload type")
+assert_eq(find_text(captured_status, "H 2 "), true, "Herdr working count rendered")
 assert_eq(find_text(captured_status, "[end] 6.5 "), true, "workhours indicator rendered")
 
 captured_status = nil
