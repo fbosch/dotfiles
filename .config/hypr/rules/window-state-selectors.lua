@@ -30,7 +30,8 @@ return {
   { matcher = "match:class", pattern = [=[^io\.github\.efogdev\.mpris-timer$]=] },
   { matcher = "match:class", pattern = [=[^zenity$]=] },
   { matcher = "match:class", pattern = [=[^steam_app_0$]=] },
-  { matcher = "match:class", pattern = [=[^org\.signal\.Signal$]=] },
-  { matcher = "match:initial_title", pattern = [=[^Battle\.net$]=] },
+   { matcher = "match:class", pattern = [=[^org\.signal\.Signal$]=] },
+   { matcher = "match:class", pattern = [=[^mpv$]=] },
+   { matcher = "match:initial_title", pattern = [=[^Battle\.net$]=] },
   { matcher = "match:initial_title", pattern = [=[^Zenimax Online Studios Launcher$]=] },
 }

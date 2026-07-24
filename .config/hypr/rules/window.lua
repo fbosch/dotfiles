@@ -20,6 +20,12 @@ hl.window_rule({ match = { class = "^(org\\.gnome\\.Loupe)$" }, float = true })
 -- Plexamp
 hl.window_rule({ match = { class = "Plexamp" }, float = true, size = "360 620" })
 
+-- VLC
+hl.window_rule({ match = { class = "^(vlc)$" }, content = "video" })
+
+-- mpv
+hl.window_rule({ match = { class = "^(mpv)$" }, float = true, content = "video" })
+
 -- OpenPets
 hl.window_rule({ match = { title = "^(OpenPets Default Pet)$" }, no_blur = true, no_shadow = true, border_size = 0 })
 
