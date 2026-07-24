@@ -37,6 +37,12 @@ workspace_picker = "prefix+space"
 pane_gaps = false
 agent_panel_sort = "priority"
 
+[ui.sidebar.agents.rows_by_agent]
+opencode = [
+  ["state_icon", "workspace", "tab"],
+  ["terminal_title_stripped"],
+]
+
 [[keys.command]]
 key = "prefix+shift+g"
 type = "plugin_action"
