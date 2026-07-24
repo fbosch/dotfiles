@@ -43,7 +43,7 @@
     },
     {
       "include": [
-        "docs/next/**/*.md"
+        "docs/next/website/src/content/docs/**/*.mdx"
       ],
       "id": "herdr-docs",
       "repo": "https://github.com/ogulcancelik/herdr.git"
