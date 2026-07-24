@@ -1,7 +1,9 @@
+onboarding = false
 [theme]
 # Herdr custom themes layer token overrides over a built-in base theme.
 name = "terminal"
 
+auto_switch = false
 [theme.custom]
 accent = "#6099C0"
 panel_bg = "#2C2C2C"
@@ -21,7 +23,7 @@ teal = "#66A5AD"
 peach = "#D68C67"
 
 [keys]
-prefix = "ctrl+b"
+prefix = "ctrl+a"
 focus_pane_left = "prefix+h"
 focus_pane_down = "prefix+j"
 focus_pane_up = "prefix+k"
@@ -130,3 +132,6 @@ key = "alt+s"
 type = "plugin_action"
 command = "terminal-workflows.scooter"
 description = "Scooter workflow"
+
+[experimental]
+pane_history = true
