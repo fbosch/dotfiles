@@ -45,6 +45,7 @@ These are conditional defaults for new work. Existing repository conventions, sc
 | [clsx](https://github.com/lukeed/clsx) with [tailwind-merge](https://github.com/dcastil/tailwind-merge) | Conditionally composing classes in a Tailwind React project. | `/lukeed/clsx`, `/dcastil/tailwind-merge` |
 | [class-variance-authority](https://cva.style/docs) | Defining typed component variants in a Tailwind React design system. | `/joe-bell/cva` |
 | [Lucide React](https://lucide.dev/guide/packages/lucide-react) | Adding icons to a React application. | `/lucide-icons/lucide` |
+| [React Doctor](https://github.com/million-co/react-doctor) | Auditing a React application for performance and correctness issues. | `/million-co/react-doctor` |
 
 ## Testing And Mocks
 
