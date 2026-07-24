@@ -94,3 +94,39 @@ key = "prefix+shift+f"
 type = "shell"
 command = "herdr plugin action invoke open-file-viewer-tab --plugin herdr-file-viewer"
 description = "File viewer: open in tab"
+
+[[keys.command]]
+key = "alt+t"
+type = "plugin_action"
+command = "terminal-workflows.terminal"
+description = "Terminal workflow"
+
+[[keys.command]]
+key = "alt+m"
+type = "plugin_action"
+command = "terminal-workflows.mprocs"
+description = "Mprocs workflow"
+
+[[keys.command]]
+key = "alt+g"
+type = "plugin_action"
+command = "terminal-workflows.lazygit"
+description = "LazyGit workflow"
+
+[[keys.command]]
+key = "alt+b"
+type = "plugin_action"
+command = "terminal-workflows.btop"
+description = "btop workflow"
+
+[[keys.command]]
+key = "alt+c"
+type = "plugin_action"
+command = "terminal-workflows.checkmate"
+description = "Checkmate workflow"
+
+[[keys.command]]
+key = "alt+s"
+type = "plugin_action"
+command = "terminal-workflows.scooter"
+description = "Scooter workflow"

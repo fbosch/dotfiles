@@ -97,6 +97,7 @@ if status is-interactive
     bind -M insert \cc kill-whole-line
     bind -M insert \cc repaint
     bind \cP ctrl_p_picker
+    bind \cH ctrl_h_herdr
 end
 
 function fish_user_keybindings
@@ -104,6 +105,7 @@ function fish_user_keybindings
     bind \cg _navi_smart_replace
     bind --mode insert \cg _navi_smart_replace
     bind --mode insert \cP ctrl_p_picker
+    bind --mode insert \cH ctrl_h_herdr
 end
 
 # --- Third-party Tools ---

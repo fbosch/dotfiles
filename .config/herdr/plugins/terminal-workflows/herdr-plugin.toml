@@ -1,0 +1,88 @@
+id = "terminal-workflows"
+name = "Terminal workflows"
+version = "0.1.0"
+description = "Context-aware terminal workflows that preserve Neovim FTerm shortcuts."
+min_herdr_version = "0.7.0"
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "terminal"
+title = "Terminal"
+contexts = ["workspace"]
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" terminal"]
+
+[[actions]]
+id = "mprocs"
+title = "Mprocs"
+contexts = ["workspace"]
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" mprocs"]
+
+[[actions]]
+id = "lazygit"
+title = "LazyGit"
+contexts = ["workspace"]
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" lazygit"]
+
+[[actions]]
+id = "btop"
+title = "btop"
+contexts = ["workspace"]
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" btop"]
+
+[[actions]]
+id = "checkmate"
+title = "Checkmate"
+contexts = ["workspace"]
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" checkmate"]
+
+[[actions]]
+id = "scooter"
+title = "Scooter"
+contexts = ["workspace"]
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" scooter"]
+
+[[panes]]
+id = "terminal"
+title = "Terminal"
+placement = "popup"
+width = "85%"
+height = "85%"
+command = ["fish"]
+
+[[panes]]
+id = "mprocs"
+title = "mprocs"
+placement = "tab"
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/mprocs.sh\""]
+
+[[panes]]
+id = "lazygit"
+title = "LazyGit"
+placement = "popup"
+width = "85%"
+height = "85%"
+command = ["lazygit"]
+
+[[panes]]
+id = "btop"
+title = "btop"
+placement = "popup"
+width = "85%"
+height = "85%"
+command = ["btop", "-p", "2", "--update", "1000"]
+
+[[panes]]
+id = "checkmate"
+title = "Checkmate"
+placement = "popup"
+width = "45%"
+height = "65%"
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/checkmate.sh\""]
+
+[[panes]]
+id = "scooter"
+title = "Scooter"
+placement = "popup"
+width = "85%"
+height = "85%"
+command = ["scooter"]
