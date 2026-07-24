@@ -59,7 +59,7 @@
       "light": "lightMuted"
     },
     "background": {
-      "dark": "darkBg",
+      "dark": "none",
       "light": "lightBg"
     },
     "backgroundPanel": {
