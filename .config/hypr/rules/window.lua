@@ -20,6 +20,9 @@ hl.window_rule({ match = { class = "^(org\\.gnome\\.Loupe)$" }, float = true })
 -- Plexamp
 hl.window_rule({ match = { class = "Plexamp" }, float = true, size = "360 620" })
 
+-- Media Downloader
+hl.window_rule({ match = { class = "^(media-downloader)$" }, float = true, size = "900 450", center = true })
+
 -- VLC
 hl.window_rule({ match = { class = "^(vlc)$" }, content = "video" })
 
