@@ -193,6 +193,9 @@
             "tectonic": {
                "enabled": false
             },
+            "url2app": {
+               "enabled": false
+            },
             "wine.Programs.Topre REALFORCE CONNECT Software.REALFORCE CONNECT": {
                "enabled": false
             },
