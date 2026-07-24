@@ -1,5 +1,5 @@
 function wezterm_set_user_var
-    if hash base64 2>/dev/null
+    if command -q base64
         set -l encoded_value (echo -n "$argv[2]" | base64)
 
         if status is-command-substitution
