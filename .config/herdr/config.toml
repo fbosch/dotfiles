@@ -10,11 +10,28 @@ close_pane = "prefix+c"
 last_pane = "prefix+p"
 zoom = "prefix+shift+z"
 
+# Ctrl-W w/W cycles Neovim windows; use it for Herdr agents.
+next_agent = "prefix+w"
+previous_agent = "prefix+shift+w"
+
+# [ and ] follow Vim's backward/forward navigation convention for spaces.
+previous_workspace = "prefix+["
+next_workspace = "prefix+]"
+
+# Select spaces with j/k; use arrows for vertical pane navigation.
+navigate_workspace_up = "k"
+navigate_workspace_down = "j"
+navigate_pane_up = "up"
+navigate_pane_down = "down"
+
 # Move conflicting non-window actions away from Neovim window commands.
 new_tab = "prefix+alt+t"
 previous_tab = "prefix+alt+comma"
 next_tab = "prefix+alt+period"
+switch_tab = "prefix+1..9"
 open_notification_target = "prefix+shift+o"
+workspace_picker = "prefix+space"
 
 [ui]
+pane_gaps = false
 agent_panel_sort = "priority"
