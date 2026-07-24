@@ -3,6 +3,19 @@ package.path = package.path
 	.. ";./.config/wezterm/?/init.lua"
 
 local registered_events = {}
+local original_io_open = io.open
+
+io.open = function(path, mode)
+	if mode == "r" and path:match("codex%-usage%.json$") then
+		return {
+			read = function()
+				return "chatgpt-usage"
+			end,
+			close = function() end,
+		}
+	end
+	return original_io_open(path, mode)
+end
 
 package.loaded.wezterm = {
 	config_dir = "." .. package.config:sub(1, 1) .. ".config" .. package.config:sub(1, 1) .. "wezterm",
@@ -77,6 +90,7 @@ package.loaded.wezterm = {
 
 		return true, "herdr-agents", ""
 	end,
+	background_child_process = function() end,
 }
 
 package.loaded["agent"] = {
@@ -176,3 +190,4 @@ update_status({
 assert_eq(type(captured_status), "table", "status handles missing mux window")
 
 print("status_workhours_spec: ok")
+io.open = original_io_open

@@ -39,6 +39,7 @@ if wezterm.GLOBAL then
 end
 
 local chatgpt_usage = { checked_at = 0, windows = {} }
+local chatgpt_usage_cache = (os.getenv("XDG_CACHE_HOME") or ((os.getenv("HOME") or "") .. "/.cache")) .. "/wezterm/codex-usage.json"
 local profile_cache = { checked_at = 0 }
 local reset_credits = { checked_at = 0 }
 
@@ -254,33 +255,38 @@ end
 
 local function get_chatgpt_usage()
 	local now = os.time()
-	if now - chatgpt_usage.checked_at < 600 then
-		return chatgpt_usage.windows
+	local cache_file = io.open(chatgpt_usage_cache, "r")
+	local content = cache_file and cache_file:read("*a") or ""
+	if cache_file then
+		cache_file:close()
 	end
 
-	chatgpt_usage.checked_at = now
-	local ok, stdout = wezterm.run_child_process({ "codexbar", "usage", "--source", "oauth", "--provider", "codex", "--json" })
-	if ok == false then
-		return chatgpt_usage.windows
-	end
-
-	local parsed_ok, response = pcall(wezterm.json_parse, stdout)
+	local parsed_ok, response = pcall(wezterm.json_parse, content)
 	local usage = parsed_ok and response and response[1] and response[1].usage
-	if type(usage) ~= "table" then
-		return chatgpt_usage.windows
+	if type(usage) == "table" then
+		chatgpt_usage.windows = {}
+		for _, window in ipairs({ usage.primary or false, usage.secondary or false }) do
+			local used_percent = type(window) == "table" and tonumber(window.usedPercent) or nil
+			if used_percent then
+				local remaining = math.max(0, math.min(100, 100 - math.floor(used_percent)))
+				table.insert(chatgpt_usage.windows, {
+					color = usage_color(remaining),
+					remaining = remaining,
+					resets_at = window.resetsAt,
+				})
+			end
+		end
 	end
 
-	chatgpt_usage.windows = {}
-	for _, window in ipairs({ usage.primary or false, usage.secondary or false }) do
-		local used_percent = type(window) == "table" and tonumber(window.usedPercent) or nil
-		if used_percent then
-			local remaining = math.max(0, math.min(100, 100 - math.floor(used_percent)))
-			table.insert(chatgpt_usage.windows, {
-				color = usage_color(remaining),
-				remaining = remaining,
-				resets_at = window.resetsAt,
-			})
-		end
+	if now - chatgpt_usage.checked_at >= 600 then
+		chatgpt_usage.checked_at = now
+		wezterm.background_child_process({
+			"sh", "-c",
+			string.format(
+				"mkdir -p %q && temporary=%q.$$ && codexbar usage --source oauth --provider codex --json >\"$temporary\" && mv \"$temporary\" %q",
+				chatgpt_usage_cache:match("^(.+)/[^/]+$"), chatgpt_usage_cache, chatgpt_usage_cache
+			),
+		})
 	end
 
 	return chatgpt_usage.windows
@@ -405,5 +411,14 @@ end
 return function(config)
 	if not is_windows then
 		wezterm.on("update-right-status", update_right_status)
+		wezterm.on("user-var-changed", function(window, _, name)
+			if name == "codex_profile_changed" then
+				chatgpt_usage.checked_at = 0
+				chatgpt_usage.windows = {}
+				profile_cache.checked_at = 0
+				reset_credits.checked_at = 0
+				update_right_status(window)
+			end
+		end)
 	end
 end

@@ -290,6 +290,14 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         return 1
     end
 
+    set -l wezterm_cache_base "$XDG_CACHE_HOME"
+    if test -z "$wezterm_cache_base"
+        set wezterm_cache_base "$HOME/.cache"
+    end
+    set -l wezterm_usage_cache "$wezterm_cache_base/wezterm/codex-usage.json"
+    rm -f "$wezterm_usage_cache"
+    wezterm_set_user_var codex_profile_changed (date +%s)
+
     set -l switched_usage_tsv ""
     set -l switched_usage_error ""
 

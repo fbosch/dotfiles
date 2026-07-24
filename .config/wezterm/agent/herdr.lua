@@ -2,7 +2,7 @@ local wezterm = require("wezterm")
 
 local M = {}
 
-local refresh_interval_seconds = 5
+local refresh_interval_seconds = 10
 local cache = { checked_at = 0, working = 0, blocked = 0, idle = 0, inactive = 0 }
 
 function M.get_summary()
