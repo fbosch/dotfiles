@@ -1,3 +1,25 @@
+[theme]
+# Herdr custom themes layer token overrides over a built-in base theme.
+name = "terminal"
+
+[theme.custom]
+accent = "#6099C0"
+panel_bg = "#2C2C2C"
+surface0 = "#303030"
+surface1 = "#404040"
+surface_dim = "#191919"
+overlay0 = "#8E8E8E"
+overlay1 = "#BBBBBB"
+text = "#BBBBBB"
+subtext0 = "#8E8E8E"
+mauve = "#B279A7"
+green = "#819B69"
+yellow = "#B77E64"
+red = "#DE6E7C"
+blue = "#6099C0"
+teal = "#66A5AD"
+peach = "#D68C67"
+
 [keys]
 prefix = "ctrl+b"
 focus_pane_left = "prefix+h"
