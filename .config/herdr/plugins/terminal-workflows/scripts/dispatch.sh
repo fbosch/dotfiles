@@ -19,13 +19,26 @@ forward_to_neovim() {
 	fi
 }
 
-open_popup() {
-	exec "$herdr_bin" plugin pane open \
+overlay_state_file="$HERDR_PLUGIN_CONFIG_DIR/overlay-${workspace_id}.state"
+
+open_or_close_overlay() {
+	local overlay_pane result
+	mkdir -p "$HERDR_PLUGIN_CONFIG_DIR"
+
+	if [[ -f "$overlay_state_file" ]] && read -r overlay_pane <"$overlay_state_file" && "$herdr_bin" pane get "$overlay_pane" >/dev/null 2>&1; then
+		rm -f "$overlay_state_file"
+		exec "$herdr_bin" plugin pane close "$overlay_pane"
+	fi
+	rm -f "$overlay_state_file"
+
+	result="$("$herdr_bin" plugin pane open \
 		--plugin "$HERDR_PLUGIN_ID" \
 		--entrypoint "$workflow" \
-		--placement popup \
+		--placement overlay \
 		--cwd "$cwd" \
-		--focus
+		--focus)"
+	overlay_pane="$(jq -er '.result.plugin_pane.pane.pane_id' <<<"$result")"
+	printf '%s\n' "$overlay_pane" >"$overlay_state_file"
 }
 
 mprocs_state_file="$HERDR_PLUGIN_CONFIG_DIR/mprocs-${workspace_id}.state"
@@ -61,7 +74,7 @@ open_or_focus_mprocs() {
 case "$workflow" in
 	terminal)
 		forward_to_neovim "alt+t"
-		open_popup
+		open_or_close_overlay
 		;;
 	mprocs)
 		forward_to_neovim "alt+m"
@@ -69,19 +82,19 @@ case "$workflow" in
 		;;
 	lazygit)
 		forward_to_neovim "alt+g"
-		open_popup
+		open_or_close_overlay
 		;;
 	btop)
 		forward_to_neovim "alt+b"
-		open_popup
+		open_or_close_overlay
 		;;
 	checkmate)
 		forward_to_neovim "alt+c"
-		open_popup
+		open_or_close_overlay
 		;;
 	scooter)
 		forward_to_neovim "alt+s"
-		open_popup
+		open_or_close_overlay
 		;;
 	*)
 		printf 'Unknown workflow: %s\n' "$workflow" >&2

@@ -44,9 +44,7 @@ command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" scoote
 [[panes]]
 id = "terminal"
 title = "Terminal"
-placement = "popup"
-width = "85%"
-height = "85%"
+placement = "overlay"
 command = ["fish"]
 
 [[panes]]
@@ -58,31 +56,23 @@ command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/mprocs.sh\""]
 [[panes]]
 id = "lazygit"
 title = "LazyGit"
-placement = "popup"
-width = "85%"
-height = "85%"
+placement = "overlay"
 command = ["lazygit"]
 
 [[panes]]
 id = "btop"
 title = "btop"
-placement = "popup"
-width = "85%"
-height = "85%"
+placement = "overlay"
 command = ["btop", "-p", "2", "--update", "1000"]
 
 [[panes]]
 id = "checkmate"
 title = "Checkmate"
-placement = "popup"
-width = "45%"
-height = "65%"
+placement = "overlay"
 command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/checkmate.sh\""]
 
 [[panes]]
 id = "scooter"
 title = "Scooter"
-placement = "popup"
-width = "85%"
-height = "85%"
+placement = "overlay"
 command = ["scooter"]

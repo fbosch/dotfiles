@@ -96,12 +96,6 @@ command = "herdr plugin action invoke open-file-viewer-tab --plugin herdr-file-v
 description = "File viewer: open in tab"
 
 [[keys.command]]
-key = "alt+t"
-type = "plugin_action"
-command = "terminal-workflows.terminal"
-description = "Terminal workflow"
-
-[[keys.command]]
 key = "alt+m"
 type = "plugin_action"
 command = "terminal-workflows.mprocs"

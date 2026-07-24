@@ -46,6 +46,15 @@
       "fileCount": 6,
       "manifestSha256": "e7d88341a5b021a859a819329fcedd6117cbecd0c9778e318530762d806a7aad",
       "rulesSha256": "292a912375f27e4d0426baae461ae7a8c300a1f84c557d8cf7421743fb8b1fde"
+    },
+    "herdr-docs": {
+      "repo": "https://github.com/ogulcancelik/herdr.git",
+      "ref": "HEAD",
+      "resolvedCommit": "38d2b0780c50e4773d6948660873386261cde71d",
+      "bytes": 98116,
+      "fileCount": 2,
+      "manifestSha256": "a7873be76b82a238ec354cddd20787587a462d8cd765ecad79e7321a0e79df08",
+      "rulesSha256": "00f2df7301246fbf1de65f88ffb062cbd85b164c51de96df8a0f9a765a90e1fb"
     }
   },
   "opencode": {
@@ -55,7 +64,8 @@
       "ags-docs",
       "hyprland-docs",
       "waybar-docs",
-      "glance-docs"
+      "glance-docs",
+      "herdr-docs"
     ]
   }
 }

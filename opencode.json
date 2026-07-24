@@ -48,6 +48,10 @@
     "glance-docs": {
       "path": ".docs/glance-docs",
       "description": "Use for documentation from glanceapp/glance. Start with TOC.md."
+    },
+    "herdr-docs": {
+      "path": ".docs/herdr-docs",
+      "description": "Use for documentation from ogulcancelik/herdr. Start with TOC.md."
     }
   }
 }

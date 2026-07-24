@@ -40,6 +40,13 @@
       "id": "glance-docs",
       "repo": "https://github.com/glanceapp/glance",
       "targetDir": "./.config/glance/docs/agents/references"
+    },
+    {
+      "include": [
+        "docs/next/**/*.md"
+      ],
+      "id": "herdr-docs",
+      "repo": "https://github.com/ogulcancelik/herdr.git"
     }
   ],
   "opencode": true
