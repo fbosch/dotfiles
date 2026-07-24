@@ -25,7 +25,7 @@ return function(config)
 			},
 			width = "100%",
 			height = "100%",
-			opacity = 0.98,
+			opacity = 0.97,
 		},
 		{
 			source = {
