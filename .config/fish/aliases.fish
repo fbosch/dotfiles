@@ -41,13 +41,33 @@ function rw --wraps=remaining_work_hours --description 'alias rw remaining_work_
 end
 
 # Directory shortcuts - fingers too fast for accuracy ⚡
-abbr prj 'cd (xdg-user-dir PROJECTS)'
-abbr pjr 'cd (xdg-user-dir PROJECTS)'
-abbr rpj 'cd (xdg-user-dir PROJECTS)'
-abbr dl 'cd (xdg-user-dir DOWNLOAD)'
-abbr pics 'cd (xdg-user-dir PICTURES)'
-abbr docs 'cd (xdg-user-dir DOCUMENTS)'
-abbr desk 'cd (xdg-user-dir DESKTOP)'
+function directory_shortcut --argument-names directory
+    if test (uname) != Darwin
+        xdg-user-dir $directory
+        return
+    end
+
+    switch $directory
+        case PROJECTS
+            printf '%s\n' ~/Projects
+        case DOWNLOAD
+            printf '%s\n' ~/Downloads
+        case PICTURES
+            printf '%s\n' ~/Pictures
+        case DOCUMENTS
+            printf '%s\n' ~/Documents
+        case DESKTOP
+            printf '%s\n' ~/Desktop
+    end
+end
+
+abbr prj 'cd (directory_shortcut PROJECTS)'
+abbr pjr 'cd (directory_shortcut PROJECTS)'
+abbr rpj 'cd (directory_shortcut PROJECTS)'
+abbr dl 'cd (directory_shortcut DOWNLOAD)'
+abbr pics 'cd (directory_shortcut PICTURES)'
+abbr docs 'cd (directory_shortcut DOCUMENTS)'
+abbr desk 'cd (directory_shortcut DESKTOP)'
 
 abbr attp 'attic push nix-cache $(nix path-info /run/current-system/)'
 abbr nxe 'nvim ~/nixos'
