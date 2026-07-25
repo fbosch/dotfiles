@@ -1,10 +1,9 @@
 onboarding = false
 [theme]
-# Herdr custom themes layer token overrides over a built-in base theme.
-name = "terminal"
+name = "zenwritten-dark"
 
 auto_switch = false
-[theme.custom]
+[theme.zenwritten-dark]
 accent = "#6099C0"
 panel_bg = "#2C2C2C"
 surface0 = "#303030"
@@ -34,7 +33,6 @@ close_pane = "prefix+c"
 last_pane = "prefix+p"
 zoom = "prefix+shift+z"
 
-# Ctrl-B avoids capturing Neovim's Ctrl-W window-command prefix.
 next_agent = "prefix+w"
 previous_agent = "prefix+shift+w"
 

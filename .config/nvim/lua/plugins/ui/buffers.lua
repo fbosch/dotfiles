@@ -127,8 +127,8 @@ return {
 						button = is_rich and "󰐃" or "[P]",
 						filename = true,
 					},
-					separator = { left = is_rich and "▎" or "|", right = "" },
-					separator_at_end = true,
+					separator = { left = is_rich and " " or " ", right = "" },
+					separator_at_end = false,
 					diagnostics = {
 						[vim.diagnostic.severity.ERROR] = { enabled = true, icon = " ", custom_color = true },
 						[vim.diagnostic.severity.WARN] = { enabled = true, icon = " ", custom_color = true },
