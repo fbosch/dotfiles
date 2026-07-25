@@ -245,6 +245,9 @@ local function register_gamescope_rules()
 end
 
 local function register_steam_rules()
+	hl.window_rule({ match = { class = "^(steam)$", title = "^$" }, stay_focused = true })
+	hl.window_rule({ match = { class = "^(steam)$", title = "^$" }, min_size = "1 1" })
+
 	for _, initial_title in ipairs({ "^(Friends List)$", "^(Add Non-Steam Game)$" }) do
 		hl.window_rule({ match = { initial_title = initial_title }, float = true })
 	end
