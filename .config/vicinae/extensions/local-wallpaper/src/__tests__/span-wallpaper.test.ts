@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Monitor } from "../types.ts";
-import { getSpanCrops } from "./span-wallpaper.ts";
+import { getSpanCrops } from "../utils/span-wallpaper.ts";
 
 const monitor = (
 	name: string,
@@ -55,5 +55,19 @@ test("getSpanCrops accounts for scaled and rotated monitor dimensions", () => {
 	assert.deepEqual(layout.crops, [
 		{ monitor: "HDMI-A-2", width: 2880, height: 5120, x: 0, y: 0 },
 		{ monitor: "DP-2", width: 3840, height: 2160, x: 2880, y: 1000 },
+	]);
+});
+
+test("getSpanCrops preserves offset placement for a rotated portrait monitor", () => {
+	const layout = getSpanCrops([
+		monitor("HDMI-A-2", 0, 0, 2560, 1440, 1, 3),
+		monitor("DP-2", 1440, 500, 3440, 1440),
+	]);
+
+	assert.equal(layout.width, 4880);
+	assert.equal(layout.height, 2560);
+	assert.deepEqual(layout.crops, [
+		{ monitor: "HDMI-A-2", width: 1440, height: 2560, x: 0, y: 0 },
+		{ monitor: "DP-2", width: 3440, height: 1440, x: 1440, y: 500 },
 	]);
 });

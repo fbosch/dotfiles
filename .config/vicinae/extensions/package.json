@@ -14,6 +14,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.5",
     "@tanstack/react-query": "^5.101.4",
+    "@types/node": "^25.0.3",
     "@vicinae/api": "^0.23.2",
     "typescript": "^7.0.2"
   }

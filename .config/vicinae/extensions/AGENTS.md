@@ -8,6 +8,7 @@ Custom Vicinae extensions with consistent UX, keybindings, and build workflow.
 - Package manager: pnpm workspaces (use `pnpm` commands).
 - Build extensions individually; use bulk build script only for full refresh.
 - Prefer React Query persistence (`PersistQueryClientProvider`) with a Vicinae Cache-backed persister for cross-session query cache.
+- Place extension tests in `src/__tests__/`; do not colocate test files with implementation.
 
 ## More Guidance
 

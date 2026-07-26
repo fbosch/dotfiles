@@ -105,6 +105,9 @@ export async function createSpanWallpapers(
 			"center",
 			"-extent",
 			`${layout.width}x${layout.height}`,
+			// Crop coordinates are relative to the virtual desktop's top-left corner.
+			"-gravity",
+			"northwest",
 			"-crop",
 			`${crop.width}x${crop.height}+${crop.x}+${crop.y}`,
 			"+repage",
