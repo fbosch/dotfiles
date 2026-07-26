@@ -98,10 +98,7 @@
          }
       },
       "@fbosch/yr-weather": {
-         "preferences": {
-            "latitude": "55.704819",
-            "longitude": "12.496380"
-         }
+         "preferences": {}
       },
       "applications": {
          "preferences": {

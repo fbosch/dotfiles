@@ -24,7 +24,7 @@
   "preferences": [
     {
       "name": "latitude",
-      "type": "textfield",
+      "type": "password",
       "required": true,
       "title": "Latitude",
       "description": "Latitude in decimal degrees (e.g., 59.9139 for Oslo)",
@@ -32,7 +32,7 @@
     },
     {
       "name": "longitude",
-      "type": "textfield",
+      "type": "password",
       "required": true,
       "title": "Longitude",
       "description": "Longitude in decimal degrees (e.g., 10.7522 for Oslo)",
