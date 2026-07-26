@@ -12,9 +12,9 @@
     "clean": "pnpm -r exec rm -rf dist node_modules"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.4",
-    "@tanstack/react-query": "^5.101.2",
-    "@vicinae/api": "^0.23.1",
+    "@biomejs/biome": "^2.5.5",
+    "@tanstack/react-query": "^5.101.4",
+    "@vicinae/api": "^0.23.2",
     "typescript": "^7.0.2"
   }
 }
