@@ -38,6 +38,9 @@ storybook-static
 .codex/**
 !.codex/skills/**/*
 .agents/skills/.system
+# Herdr publishes its skill from the repository root; keep only its skill entry point.
+.agents/skills/herdr/**
+!.agents/skills/herdr/SKILL.md
 __pycache__
 .ruff_cache
 
