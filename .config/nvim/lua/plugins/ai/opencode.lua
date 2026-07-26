@@ -117,7 +117,7 @@ return {
 				local environment = "OPENCODE_NVIM_SOCKET=" .. vim.fn.shellescape(socket) .. " "
 				local session_id = infer_session_id_for_cwd(cwd)
 				if type(session_id) ~= "string" or session_id == "" then
-					return environment .. "opencode --port"
+					return environment .. "opencode -- --port"
 				end
 
 				return environment .. "opencode --port --session " .. vim.fn.shellescape(session_id)

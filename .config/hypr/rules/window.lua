@@ -29,6 +29,9 @@ hl.window_rule({ match = { class = "^(vlc)$" }, content = "video" })
 -- mpv
 hl.window_rule({ match = { class = "^(mpv)$" }, float = true, content = "video" })
 
+-- SVP
+hl.window_rule({ match = { class = "^(SVPManager)$" }, float = true })
+
 -- OpenPets
 hl.window_rule({ match = { title = "^(OpenPets Default Pet)$" }, no_blur = true, no_shadow = true, border_size = 0 })
 
@@ -49,6 +52,10 @@ hl.window_rule({ match = { class = "^(Mullvad VPN)$" }, float = true, pin = true
 
 -- Nemo File Manager
 hl.window_rule({ match = { class = "^(nemo)$" }, float = true, no_anim = true })
+hl.window_rule({
+	match = { class = "^(nemo)$", initial_title = "^(Preparing|File Operations)$" },
+	stay_focused = true,
+})
 
 -- File Roller
 hl.window_rule({ match = { class = "^(org\\.gnome\\.FileRoller)$" }, float = true })
