@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { err, ok } from "neverthrow";
 import { z } from "zod";
-import { cacheRoot, readJsonFile, writeJsonAtomic, type AppResult } from "../shared/fs.js";
+import { type AppResult, cacheRoot, readJsonFile, writeJsonAtomic } from "../shared/fs.js";
 
 const backendUrl = "https://chatgpt.com/backend-api";
 const cacheFile = join(cacheRoot(), "codex-reset", "credits.json");
@@ -84,7 +84,7 @@ const CacheSchema = z.object({
 type Credits = z.infer<typeof CreditsSchema>;
 type Usage = z.infer<typeof UsageSchema>;
 type Credentials = { accessToken: string; accountId: string };
-const commands = ["status", "consume-preview", "consume"] as const;
+const commands = ["credits", "status", "consume-preview", "consume"] as const;
 type Command = typeof commands[number];
 type Arguments = {
     command: Command;
@@ -108,7 +108,7 @@ function defaultAuthFile(): string {
 }
 
 function usage(): void {
-    console.log("Usage: reset_helper.ts <status|consume-preview|consume> [--auth PATH] [--credit-id ID] [--refresh]");
+    console.log("Usage: reset_helper.ts <credits|status|consume-preview|consume> [--auth PATH] [--credit-id ID] [--refresh]");
 }
 
 function isCommand(value: string | undefined): value is Command {
@@ -117,7 +117,7 @@ function isCommand(value: string | undefined): value is Command {
 
 function parseCommand(value: string | undefined): AppResult<Command> {
     if (!isCommand(value)) {
-        return err("command must be status, consume-preview, or consume");
+        return err("command must be credits, status, consume-preview, or consume");
     }
 
     return ok(value);
@@ -141,7 +141,7 @@ function parseFlagOption(command: Command, option: string, args: Arguments): App
     if (option !== "--refresh") {
         return err(`unknown or invalid option: ${option}`);
     }
-    if (command !== "status") {
+    if (command !== "status" && command !== "credits") {
         return err(`unknown or invalid option: ${option}`);
     }
 
@@ -468,6 +468,22 @@ async function status(args: Arguments, credentials: Credentials): Promise<AppRes
     });
 }
 
+async function credits(args: Arguments, credentials: Credentials): Promise<AppResult<unknown>> {
+    const creditsResult = await creditsForAccount(credentials, args.refresh);
+    if (creditsResult.isErr()) {
+        return err(`failed to read reset credits: ${creditsResult.error}`);
+    }
+
+    const available = creditsResult.value.credits
+        .filter((credit) => credit.status === "available")
+        .sort((left, right) => (parseExpiry(left.expires_at) ?? Infinity) - (parseExpiry(right.expires_at) ?? Infinity));
+    return ok({
+        accountId: credentials.accountId,
+        availableCount: creditsResult.value.available_count,
+        expiresAt: available[0]?.expires_at ?? null,
+    });
+}
+
 function selectCredit(credits: Credits, creditId?: string) {
     const available = credits.credits.filter((credit) => credit.status === "available");
     if (!creditId) {
@@ -542,11 +558,13 @@ async function main(): Promise<number> {
 
     const args = argsResult.value;
     const credentials = credentialsResult.value;
-    const result = args.command === "status"
-        ? await status(args, credentials)
-        : args.command === "consume-preview"
-            ? await previewConsume(args, credentials)
-            : await consume(args, credentials);
+    const result = args.command === "credits"
+        ? await credits(args, credentials)
+        : args.command === "status"
+            ? await status(args, credentials)
+            : args.command === "consume-preview"
+                ? await previewConsume(args, credentials)
+                : await consume(args, credentials);
     if (result.isErr()) {
         console.error(`codex_reset_helper: ${result.error}`);
         return 1;

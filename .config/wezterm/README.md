@@ -5,7 +5,7 @@ Lua configuration for WezTerm. The entrypoint stays thin and delegates settings 
 ## Layout
 
 - `wezterm.lua` builds and returns the final WezTerm config.
-- `base.lua`, `platform.lua`, `layout.lua`, `fonts.lua`, `colors.lua`, `theme.lua`, `tabs.lua`, `status.lua`, `keys.lua`, and `mux.lua` hold the main config groups.
+- `base.lua`, `platform.lua`, `layout.lua`, `fonts.lua`, `colors.lua`, `theme.lua`, `tabs.lua`, `status/`, `keys.lua`, and `mux.lua` hold the main config groups.
 - `agent/` detects AI-agent activity and decorates tabs with state icons.
 - `utils/` contains small text, time, performance, and benchmark helpers.
 - `tests/` contains Lua specs for work-hour status and agent-deck detection.

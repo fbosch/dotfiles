@@ -17,6 +17,7 @@
   },
   "plugin": [
     "opencode-toolbox@0.10.4",
+    "./plugins/hyprland/hyprland.ts",
     "./plugins/direnv/direnv-session-env.ts",
     "./plugins/ado-fetch/ado-fetch.ts",
     [

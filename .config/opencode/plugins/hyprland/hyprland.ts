@@ -1,4 +1,4 @@
-import { tool } from "@opencode-ai/plugin/tool"
+import { tool, type Plugin } from "@opencode-ai/plugin"
 import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import { mkdir, writeFile } from "node:fs/promises"
@@ -146,6 +146,14 @@ function parseWindow(value: unknown): WindowInfo | null {
   }
 }
 
+function parseWindows(value: unknown): WindowInfo[] {
+  if (Array.isArray(value) === false) {
+    return []
+  }
+
+  return value.map(parseWindow).filter((window): window is WindowInfo => window !== null)
+}
+
 function parseMonitors(value: unknown): Monitor[] {
   if (Array.isArray(value) === false) {
     return []
@@ -227,6 +235,47 @@ function hintTokens(hint: string): string[] {
     .split(/[^a-z0-9_.-]+/)
     .map(normalizeToken)
     .filter((token) => token.length >= 3)
+}
+
+function scoreWindow(window: WindowInfo, tokens: string[]): number {
+  const classes = [normalizeToken(window.className), normalizeToken(window.initialClass)]
+  const title = window.title.toLowerCase()
+  let score = 0
+
+  for (const token of tokens) {
+    if (classes.includes(token)) {
+      score += 6
+    } else if (classes.some((item) => item.includes(token))) {
+      score += 4
+    }
+
+    if (title === token) {
+      score += 3
+    } else if (title.includes(token)) {
+      score += 2
+    }
+  }
+
+  return score
+}
+
+function windowForHint(activeWindow: WindowInfo | null, clients: WindowInfo[], hint: string): WindowInfo | null {
+  const tokens = hintTokens(hint)
+  if (tokens.length === 0) {
+    return activeWindow
+  }
+
+  let selected: WindowInfo | null = null
+  let highestScore = 0
+  for (const client of clients) {
+    const score = scoreWindow(client, tokens)
+    if (score > highestScore) {
+      selected = client
+      highestScore = score
+    }
+  }
+
+  return selected ?? activeWindow
 }
 
 function focusedMonitor(monitors: Monitor[], activeWindow: WindowInfo | null): Monitor | null {
@@ -410,8 +459,8 @@ function grimFormatArgs(format: Format): string[] {
 }
 
 async function captureWindow(window: WindowInfo | null, format: Format, cwd: string): Promise<CaptureResult | string> {
-  if (window === null || window.mapped === false || window.visible === false) {
-    return "No active mapped window."
+  if (window === null || window.mapped === false) {
+    return "No mapped window matched the hint."
   }
 
   const target = windowTarget(window)
@@ -641,15 +690,17 @@ function formatResult(result: CaptureResult, hint: string, fallback: string[]): 
   return lines.join("\n")
 }
 
-async function gatherContext(cwd: string): Promise<{ activeWindow: WindowInfo | null; monitors: Monitor[]; layers: Layer[] }> {
-  const [activeWindowJson, monitorsJson, layersJson] = await Promise.all([
+async function gatherContext(cwd: string): Promise<{ activeWindow: WindowInfo | null; clients: WindowInfo[]; monitors: Monitor[]; layers: Layer[] }> {
+  const [activeWindowJson, clientsJson, monitorsJson, layersJson] = await Promise.all([
     hyprctlJson("activewindow", cwd),
+    hyprctlJson("clients", cwd),
     hyprctlJson("monitors", cwd),
     hyprctlJson("layers", cwd),
   ])
 
   return {
     activeWindow: parseWindow(activeWindowJson),
+    clients: parseWindows(clientsJson),
     monitors: parseMonitors(monitorsJson),
     layers: collectLayers(layersJson),
   }
@@ -658,10 +709,11 @@ async function gatherContext(cwd: string): Promise<{ activeWindow: WindowInfo | 
 async function captureByMode(args: { mode: Mode; hint: string; format: Format; fullPage: boolean }, cwd: string): Promise<string> {
   const context = await gatherContext(cwd)
   const monitor = focusedMonitor(context.monitors, context.activeWindow)
+  const targetWindow = windowForHint(context.activeWindow, context.clients, args.hint)
   const fallback: string[] = []
 
-  if (args.mode === "browser" || (args.mode === "auto" && isBrowserWindow(context.activeWindow))) {
-    if (isChromiumWindow(context.activeWindow) || args.mode === "browser") {
+  if (args.mode === "browser" || (args.mode === "auto" && isBrowserWindow(targetWindow))) {
+    if (isChromiumWindow(targetWindow) || args.mode === "browser") {
       const browserResult = await captureBrowserCdp(args.hint, args.format, args.fullPage)
       if (typeof browserResult !== "string") {
         return formatResult(browserResult, args.hint, fallback)
@@ -675,7 +727,7 @@ async function captureByMode(args: { mode: Mode; hint: string; format: Format; f
   }
 
   if (args.mode === "window") {
-    const result = await captureWindow(context.activeWindow, args.format, cwd)
+    const result = await captureWindow(targetWindow, args.format, cwd)
     return typeof result === "string" ? `ERROR: ${result}` : formatResult(result, args.hint, fallback)
   }
 
@@ -710,7 +762,7 @@ async function captureByMode(args: { mode: Mode; hint: string; format: Format; f
     }
   }
 
-  const windowResult = await captureWindow(context.activeWindow, args.format, cwd)
+  const windowResult = await captureWindow(targetWindow, args.format, cwd)
   if (typeof windowResult !== "string") {
     return formatResult(windowResult, args.hint, fallback)
   }
@@ -726,7 +778,7 @@ async function captureByMode(args: { mode: Mode; hint: string; format: Format; f
   return typeof fullResult === "string" ? `ERROR: ${fullResult}` : formatResult(fullResult, args.hint, fallback)
 }
 
-export default tool({
+const hyprWindowScreenshot = tool({
   description: "Capture a Wayland/Hyprland screenshot from context, using browser CDP when possible and grim window/region/monitor fallback",
   args: {
     hint: tool.schema.string().optional().describe("Natural-language target hint, e.g. 'calendar popup above bottom bar' or 'current browser page'"),
@@ -741,6 +793,9 @@ export default tool({
     if (process.env.XDG_RUNTIME_DIR === undefined) {
       return "ERROR: XDG_RUNTIME_DIR is not set; cannot talk to the Wayland/Hyprland session."
     }
+    if (process.env.WAYLAND_DISPLAY === undefined) {
+      return "ERROR: WAYLAND_DISPLAY is not set; this tool requires a Wayland display."
+    }
 
     const mode = args.mode ?? "auto"
     const format = args.format ?? "png"
@@ -748,3 +803,21 @@ export default tool({
     return captureByMode({ mode, hint, format, fullPage: args.fullPage ?? false }, context.directory)
   },
 })
+
+function supportsHyprlandSession(): boolean {
+  return process.env.HYPRLAND_INSTANCE_SIGNATURE !== undefined && process.env.XDG_RUNTIME_DIR !== undefined && process.env.WAYLAND_DISPLAY !== undefined
+}
+
+const hyprlandPlugin: Plugin = async () => {
+  if (supportsHyprlandSession() === false) {
+    return {}
+  }
+
+  return {
+    tool: {
+      hypr_window_screenshot: hyprWindowScreenshot,
+    },
+  }
+}
+
+export default hyprlandPlugin

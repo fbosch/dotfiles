@@ -1,6 +1,6 @@
 onboarding = false
 [theme]
-name = "zenwritten-dark"
+name = "terminal"
 
 auto_switch = false
 [theme.zenwritten-dark]
@@ -59,6 +59,7 @@ workspace_picker = "prefix+space"
 pane_gaps = false
 agent_panel_sort = "priority"
 
+show_agent_labels_on_pane_borders = true
 [ui.sidebar.agents.rows_by_agent]
 opencode = [
   ["state_icon", "workspace", "tab"],
@@ -133,3 +134,6 @@ description = "Scooter workflow"
 
 [experimental]
 pane_history = true
+
+[ui.toast]
+delivery = "system"

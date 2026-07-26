@@ -157,6 +157,9 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
     if test $status -ne 0
         return 1
     end
+    if test "$refresh" = true
+        wezterm_set_user_var codex_reset_refreshed (date +%s)
+    end
 
     set -l account_alias_lines
     set -l opencode_auth_file "$HOME/.local/share/opencode/auth.json"

@@ -136,7 +136,7 @@ local function format_tab_title(tab, tabs, panes, config, hover, max_width)
 	local full_title_length = #base_title + icon_count + (icon_count > 0 and 1 or 0)
 
 	local window_key = get_tab_window_key(tab)
-	local status_bar_offset_cols = is_windows and 0 or math.max(right_status_cols[window_key] or 0, 96)
+	local status_bar_offset_cols = is_windows and 0 or right_status_cols[window_key] or 0
 	local available_cols = math.max(1, (window_cols[window_key] or max_width or 100) - status_bar_offset_cols)
 	local num_tabs = #tabs > 0 and #tabs or 1
 
@@ -174,7 +174,7 @@ return function(config)
 	config.use_fancy_tab_bar = false
 	config.hide_tab_bar_if_only_one_tab = false
 	config.show_new_tab_button_in_tab_bar = false
-	config.tab_max_width = 999
+	config.tab_max_width = 40
 
 	wezterm.on("window-config-reloaded", function(window)
 		window_cols[get_window_key(window)] = get_max_cols(window)
