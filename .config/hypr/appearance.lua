@@ -25,11 +25,11 @@ hl.config({
 		inactive_opacity = 0.97,
 		shadow = {
 			enabled = true,
-			range = 10,
-			render_power = 8,
-			color = "rgba(0000001A)",
+			range = 30,
+			render_power = 4,
+			color = "rgba(0000002A)",
 			offset = "0 2",
-			scale = 1.2,
+			scale = 1.0,
 		},
 		blur = {
 			enabled = true,

@@ -183,9 +183,3 @@ bind.register("XF86AudioPrev", "playerctl previous", { locked = true })
 bind.register(main("CTRL + left"), "playerctl previous", { locked = true })
 bind.register(main("CTRL + right"), "playerctl next", { locked = true })
 bind.register(main("CTRL + space"), "playerctl play-pause", { locked = true })
-
--- Passthrough mode
-bind.register(main("Escape"), hl.dsp.submap("passthru"))
-hl.define_submap("passthru", function()
-	bind.register(main("Escape"), hl.dsp.submap("reset"))
-end)

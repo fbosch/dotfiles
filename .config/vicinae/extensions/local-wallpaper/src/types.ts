@@ -34,6 +34,8 @@ export type Monitor = {
 	name: string;
 	width: number;
 	height: number;
+	physicalWidth: number;
+	physicalHeight: number;
 	x: number;
 	y: number;
 	scale: number;
