@@ -3,6 +3,8 @@ import { promisify } from "node:util";
 import { showToast, Toast } from "@vicinae/api";
 import type { FillMode } from "../types";
 import { expandPath } from "./filesystem";
+import { getConnectedMonitors } from "./monitors";
+import { createSpanWallpapers } from "./span-wallpaper";
 import {
 	buildHyprpaperConfig,
 	parseWallpaperAssignments,
@@ -273,6 +275,39 @@ export async function setWallpaper(
 	} catch (error) {
 		toast.style = Toast.Style.Failure;
 		toast.title = "Failed to set wallpaper";
+		toast.message = error instanceof Error ? error.message : "Unknown error";
+		await toast.show();
+		throw error;
+	}
+}
+
+export async function setSpanningWallpaper(
+	wallpaperPath: string,
+	configPath: string,
+): Promise<void> {
+	const toast = await showToast({
+		style: Toast.Style.Animated,
+		title: "Creating spanning wallpaper...",
+	});
+
+	try {
+		const monitors = await getConnectedMonitors();
+		const spanWallpapers = await createSpanWallpapers(wallpaperPath, monitors);
+		const assignments = new Map<string, WallpaperConfig>();
+		for (const [monitor, path] of spanWallpapers) {
+			assignments.set(monitor, { path, fillMode: "fill" });
+		}
+
+		await writeWallpaperAssignments(configPath, assignments);
+		await reloadHyprpaper();
+
+		toast.style = Toast.Style.Success;
+		toast.title = "Spanning wallpaper applied";
+		toast.message = `Applied across ${monitors.length} monitors`;
+		await toast.show();
+	} catch (error) {
+		toast.style = Toast.Style.Failure;
+		toast.title = "Failed to span wallpaper";
 		toast.message = error instanceof Error ? error.message : "Unknown error";
 		await toast.show();
 		throw error;

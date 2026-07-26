@@ -29,6 +29,7 @@ import {
 import {
 	applyWallpaperCollection,
 	getCurrentWallpaperAssignments,
+	setSpanningWallpaper,
 	setWallpaper,
 } from "./utils/hyprpaper";
 import {
@@ -149,6 +150,13 @@ export default function BrowseWallpapers() {
 			preferences.hyprpaperConfigPath,
 			monitor,
 			fillMode,
+		);
+	};
+
+	const handleSetSpanningWallpaper = async (wallpaper: LocalWallpaper) => {
+		await setSpanningWallpaper(
+			wallpaper.absolutePath,
+			preferences.hyprpaperConfigPath,
 		);
 	};
 
@@ -522,6 +530,13 @@ export default function BrowseWallpapers() {
 									}
 									shortcut={{ modifiers: ["cmd"], key: "s" }}
 								/>
+								{monitors.length > 1 ? (
+									<Action
+										title="Span All Monitors"
+										icon={Icon.ArrowsExpand}
+										onAction={() => handleSetSpanningWallpaper(wallpaper)}
+									/>
+								) : null}
 								{monitors.length > 1 ? (
 									<ActionPanel.Submenu
 										title="Set as Wallpaper Options"
