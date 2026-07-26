@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui"
 import type { JSX } from "solid-js"
+import { colorNativeUsage, type Renderable } from "./native-usage-color"
 import { appendDelimiterAndCorrect, parseTypoRules, typoRuleLengths } from "./typo-engine"
 
 declare const Bun: {
@@ -61,6 +62,10 @@ type SlotComponent = (
 ) => JSX.Element | null
 
 const id = "prompt-enhancements"
+
+type Renderer = {
+  root: Renderable
+}
 
 function asString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined
@@ -146,9 +151,46 @@ function promptRefProp(props: Record<string, unknown>): ((ref: PromptRef | undef
   return asPromptRefHandler(props.ref)
 }
 
+function useNativeUsageColor(api: TuiPluginApi) {
+  const renderer = (api as unknown as { renderer?: Renderer }).renderer
+  if (renderer === undefined) {
+    return
+  }
+
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const refresh = () => {
+    if (timer) {
+      clearTimeout(timer)
+    }
+
+    timer = setTimeout(() => colorNativeUsage(renderer.root), 80)
+  }
+  const unsubscribe = [
+    api.event.on("message.updated", refresh),
+    api.event.on("message.part.updated", refresh),
+    api.event.on("session.compacted", refresh),
+    api.event.on("session.idle", refresh),
+    api.event.on("session.updated", refresh),
+  ]
+
+  refresh()
+
+  const lifecycle = api as unknown as { lifecycle?: { onDispose(cleanup: () => void): void } }
+  lifecycle.lifecycle?.onDispose(() => {
+    if (timer) {
+      clearTimeout(timer)
+    }
+
+    for (const stop of unsubscribe) {
+      stop()
+    }
+  })
+}
+
 const tui: TuiPlugin = async (api: TuiPluginApi) => {
   const typoRules = await loadTypoRules()
   const typoLengths = typoRuleLengths(typoRules)
+  useNativeUsageColor(api)
   let activePromptRef: PromptRef | undefined
   const ui = api.ui as TuiPluginApi["ui"] & {
     Prompt: PromptComponent

@@ -24,6 +24,12 @@ contexts = ["workspace"]
 command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" lazygit"]
 
 [[actions]]
+id = "gac"
+title = "Git add and commit"
+contexts = ["workspace"]
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" gac"]
+
+[[actions]]
 id = "btop"
 title = "btop"
 contexts = ["workspace"]
@@ -58,6 +64,12 @@ id = "lazygit"
 title = "LazyGit"
 placement = "overlay"
 command = ["lazygit"]
+
+[[panes]]
+id = "gac"
+title = "Git add and commit"
+placement = "overlay"
+command = ["fish", "-ic", "git add --all && ai_commit; exec fish"]
 
 [[panes]]
 id = "btop"

@@ -84,6 +84,10 @@ case "$workflow" in
 		forward_to_neovim "alt+g"
 		open_or_close_overlay
 		;;
+	gac)
+		forward_to_neovim "alt+shift+g"
+		open_or_close_overlay
+		;;
 	btop)
 		forward_to_neovim "alt+b"
 		open_or_close_overlay
