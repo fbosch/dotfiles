@@ -1,2 +1,2 @@
 #!/bin/sh
-exec bun --cwd "$HOME/.config/fish/libexec" run herdr-notify-send.ts -- "$@"
+exec bun --cwd "$HOME/.config/fish/libexec" herdr-notify-send.ts -- "$@"

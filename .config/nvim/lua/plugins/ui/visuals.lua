@@ -94,6 +94,9 @@ return {
 		priority = 10,
 		opts = {
 			excluded_buftypes = { "terminal", "prompt" },
+			handle = {
+				color = "#222222",
+			},
 		},
 	},
 	{
