@@ -131,6 +131,8 @@ configure_status({})
 
 local update_status = registered_events["update-right-status"]
 assert_eq(type(update_status), "function", "status callback registered")
+local user_var_changed = registered_events["user-var-changed"]
+assert_eq(type(user_var_changed), "function", "user variable callback registered")
 
 local captured_status
 local original_os_date = os.date
@@ -175,6 +177,10 @@ assert_eq(type(captured_status), "table", "status payload type")
 	assert_eq(find_text(captured_status, "[working] 2 "), true, "Herdr working count rendered")
 	assert_eq(find_text(captured_status, "[end] 6.5 "), true, "workhours indicator rendered")
 	assert_eq(find_text(captured_status, "43%"), true, "ChatGPT remaining allowance rendered")
+
+captured_status = nil
+user_var_changed(window, nil, "codex_profile_changed")
+assert_eq(type(captured_status), "table", "profile change rerenders status")
 
 captured_status = nil
 update_status({
