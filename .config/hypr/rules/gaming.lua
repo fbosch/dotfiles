@@ -3,7 +3,7 @@ local M = {}
 M.workspace = "10"
 M.default_presentation = {
 	vrr = 3,
-	direct_scanout = 0,
+	direct_scanout = 2,
 }
 
 ---@alias GamingSelector table<string, string>
@@ -73,7 +73,7 @@ M.games = {
 		confirm_close = true,
 		presentation = {
 			vrr = 3,
-			direct_scanout = 0,
+			direct_scanout = 2,
 		},
 	},
 	{
@@ -330,7 +330,7 @@ local function register_fullscreen_handler()
 
 	hl.on("window.active", function(window)
 		local game, is_launcher = M.match(window)
-		if game == nil or is_launcher or game.presentation == nil or game.presentation.direct_scanout ~= 1 then
+		if game == nil or is_launcher or game.presentation == nil or game.presentation.direct_scanout == 0 then
 			return
 		end
 

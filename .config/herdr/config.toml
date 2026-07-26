@@ -29,11 +29,11 @@ focus_pane_up = "prefix+k"
 focus_pane_right = "prefix+l"
 split_vertical = "prefix+v"
 split_horizontal = "prefix+s"
-close_pane = "prefix+c"
+close_pane = "prefix+w"
 last_pane = "prefix+p"
 zoom = "prefix+shift+z"
 
-next_agent = ["prefix+w", "alt+shift+j"]
+next_agent = "alt+shift+j"
 previous_agent = ["prefix+shift+w", "alt+shift+k"]
 
 # [ and ] follow Vim's backward/forward navigation convention for spaces.

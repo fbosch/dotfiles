@@ -15,7 +15,10 @@ return {
 			fullscreen_opacity = 1.0,
 		},
 		general = {
-			allow_tearing = true,
+			allow_tearing = false,
+		},
+		render = {
+			direct_scanout = 2,
 		},
 	},
 }

@@ -27,9 +27,9 @@ end
 
 local function apply_presentation(presentation)
 	local expression = string.format(
-		'require("profiles").apply_presentation(%d, %s)',
+		'require("profiles").apply_presentation(%d, %d)',
 		presentation.vrr,
-		tostring(presentation.direct_scanout == 1)
+		presentation.direct_scanout
 	)
 	return command.ok("hyprctl eval " .. command.arg(expression) .. " >/dev/null 2>&1")
 end
