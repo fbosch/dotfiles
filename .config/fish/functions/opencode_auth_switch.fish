@@ -39,7 +39,7 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
             return 127
         end
 
-        codexbar usage --source oauth --provider codex --json 2>/dev/null | jq -r "$query" 2>/dev/null
+        codexbar usage --source cli --provider codex --json 2>/dev/null | jq -r "$query" 2>/dev/null
     end
 
     function __opencode_usage_color --argument-names capacity_band
@@ -290,6 +290,9 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         return 1
     end
 
+    set -l switched_usage_tsv ""
+    set -l switched_usage_error ""
+
     set -l wezterm_cache_base "$XDG_CACHE_HOME"
     if test -z "$wezterm_cache_base"
         set wezterm_cache_base "$HOME/.cache"
@@ -298,21 +301,16 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
     rm -f "$wezterm_usage_cache"
     wezterm_set_user_var codex_profile_changed (date +%s)
 
-    set -l switched_usage_tsv ""
-    set -l switched_usage_error ""
-
-    if string match -q 'codex switched:*' -- "$codex_status"
-        set switched_usage_tsv (__opencode_fetch_usage_tsv "$usage_query")
-        set -l switched_usage_fetch_status $status
-        if test $switched_usage_fetch_status -eq 0; and test -n "$switched_usage_tsv"
-            set switched_usage_error ""
-        else if test $switched_usage_fetch_status -eq 127
-            set switched_usage_error "switched usage unavailable (codexbar not installed)"
-            set switched_usage_tsv ""
-        else
-            set switched_usage_error "switched usage unavailable (codexbar parse failed)"
-            set switched_usage_tsv ""
-        end
+    set switched_usage_tsv (__opencode_fetch_usage_tsv "$usage_query")
+    set -l switched_usage_fetch_status $status
+    if test $switched_usage_fetch_status -eq 0; and test -n "$switched_usage_tsv"
+        set switched_usage_error ""
+    else if test $switched_usage_fetch_status -eq 127
+        set switched_usage_error "switched usage unavailable (codexbar not installed)"
+        set switched_usage_tsv ""
+    else
+        set switched_usage_error "switched usage unavailable (codexbar parse failed)"
+        set switched_usage_tsv ""
     end
 
     echo "active provider switched: $provider <= $selected_label"

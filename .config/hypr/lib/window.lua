@@ -93,7 +93,7 @@ function M.focus_gaming_workspace()
 		local workspace = client.workspace
 		local name = workspace and tostring(workspace.name or workspace.id) or ""
 		if name == gaming_workspace then
-			dispatch(hl.dsp.focus({ workspace = gaming_workspace }))
+			dispatch(hl.dsp.focus({ window = client }))
 			return true
 		end
 	end

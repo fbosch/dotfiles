@@ -160,7 +160,7 @@ local function get_usage()
 		wezterm.background_child_process({
 			"sh", "-c",
 			string.format(
-				"mkdir -p %q && temporary=%q.$$ && codexbar usage --source oauth --provider codex --json >\"$temporary\" && mv \"$temporary\" %q",
+				"mkdir -p %q && temporary=%q.$$ && codexbar usage --source cli --provider codex --json >\"$temporary\" && mv \"$temporary\" %q",
 				usage_cache:match("^(.+)/[^/]+$"), usage_cache, usage_cache
 			),
 		})
