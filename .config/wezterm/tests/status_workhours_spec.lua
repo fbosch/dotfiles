@@ -4,6 +4,7 @@ package.path = package.path
 
 local registered_events = {}
 local original_io_open = io.open
+local mock_used_percent = 57
 
 io.open = function(path, mode)
 	if mode == "r" and path:match("codex%-usage%.json$") then
@@ -61,7 +62,7 @@ package.loaded.wezterm = {
 			return {
 				{
 					usage = {
-						secondary = { usedPercent = 57 },
+						secondary = { usedPercent = mock_used_percent },
 					},
 				},
 			}
@@ -176,7 +177,24 @@ os.date = original_os_date
 assert_eq(type(captured_status), "table", "status payload type")
 	assert_eq(find_text(captured_status, "[working] 2 "), true, "Herdr working count rendered")
 	assert_eq(find_text(captured_status, "[end] 6.5 "), true, "workhours indicator rendered")
+	assert_eq(find_text(captured_status, "███▊"), true, "ChatGPT allowance uses fractional blocks")
 	assert_eq(find_text(captured_status, "43%"), true, "ChatGPT remaining allowance rendered")
+
+for _, case in ipairs({
+	{ used = 98, block = "▏" },
+	{ used = 97, block = "▎" },
+	{ used = 95, block = "▍" },
+	{ used = 94, block = "▌" },
+	{ used = 93, block = "▋" },
+	{ used = 91, block = "▊" },
+	{ used = 90, block = "▉" },
+	{ used = 0, block = "█████████" },
+}) do
+	mock_used_percent = case.used
+	captured_status = nil
+	update_status(window)
+	assert_eq(find_text(captured_status, case.block), true, "usage bar renders " .. case.block)
+end
 
 captured_status = nil
 user_var_changed(window, nil, "codex_profile_changed")
