@@ -10,3 +10,4 @@ packages:
   - 'protondb-search'
   - 'sysinfo'
   - 'wallhaven-search'
+  - 'yr-weather'
