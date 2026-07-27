@@ -23,14 +23,14 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         if test (count $argv) -gt 0
             switch $argv[1]
                 case restart-server restart
-                    env OPENCODE_BIN="$opencode_path" bun run "$script" --restart-server
+                    env -u HERDR_ENV -u HERDR_SOCKET_PATH -u HERDR_PANE_ID OPENCODE_BIN="$opencode_path" bun run "$script" --restart-server
                     set -l run_status $status
                     functions -e __ai_commit_err
                     return $run_status
             end
         end
 
-        env OPENCODE_BIN="$opencode_path" bun run "$script" $argv
+        env -u HERDR_ENV -u HERDR_SOCKET_PATH -u HERDR_PANE_ID OPENCODE_BIN="$opencode_path" bun run "$script" $argv
         set -l run_status $status
         functions -e __ai_commit_err
         return $run_status
