@@ -38,7 +38,7 @@
   ],
   "instructions": [
     "~/.config/opencode/instructions/orchestration.md",
-    "~/.config/opencode/instructions/fff.md",
+    "~/.config/opencode/instructions/code-search.md",
     "~/.config/opencode/instructions/worktrunk.md"
   ],
   "mcp": {

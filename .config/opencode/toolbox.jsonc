@@ -78,6 +78,27 @@
         "False"
       ]
     },
+    "ast-grep": {
+      "type": "local",
+      "command": [
+        "podman",
+        "run",
+        "-i",
+        "--rm",
+        "--read-only",
+        "--network=none",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,size=64m",
+        "--replace",
+        "--name",
+        "mcp-ast-grep",
+        "-v",
+        ".:/src:ro,Z",
+        "docker.io/mcp/ast-grep@sha256:5f6ebc4bbd57a93d5472f0fcf6e37042092d7aefc3315101bcae138c93b1c299"
+      ]
+    },
     "chrome-devtools": {
       "type": "local",
       "command": [
