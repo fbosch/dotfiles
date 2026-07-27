@@ -31,7 +31,6 @@
         "imageNestedInstructions": true
       }
     ],
-    "opencode-toon-plugin@0.1.2",
     "./plugins/headroom-opencode-transport/headroom-opencode-transport.ts",
     "./plugins/responses-lite-compat/responses-lite-compat.ts",
     "./plugins/rtk/rtk.ts",
