@@ -8,6 +8,7 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         set -lx AI_COMMIT_MODEL openai/gpt-5.4-mini-fast
     end
 
+    set -l opencode_path (__opencode_command_path)
     function __ai_commit_err -a message
         echo "$message"
     end
@@ -22,14 +23,14 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         if test (count $argv) -gt 0
             switch $argv[1]
                 case restart-server restart
-                    bun run "$script" --restart-server
+                    env OPENCODE_BIN="$opencode_path" bun run "$script" --restart-server
                     set -l run_status $status
                     functions -e __ai_commit_err
                     return $run_status
             end
         end
 
-        bun run "$script" $argv
+        env OPENCODE_BIN="$opencode_path" bun run "$script" $argv
         set -l run_status $status
         functions -e __ai_commit_err
         return $run_status

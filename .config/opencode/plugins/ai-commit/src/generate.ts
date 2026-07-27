@@ -3,7 +3,6 @@ import { err, ok, ResultAsync, type Result } from "neverthrow";
 import { P, match } from "ts-pattern";
 import { DIFF_TRUNCATED_MARKER } from "./git";
 
-const DEFAULT_SERVER_URL = "http://127.0.0.1:4096";
 const COMMIT_AGENT_NAME = "commit";
 const START_TIMEOUT_MS = 12000;
 const SESSION_TIMEOUT_MS = 5000;
@@ -106,6 +105,8 @@ function getEnvVar(name: string): string | undefined {
   const globalObject = globalThis as { process?: { env?: Record<string, string | undefined> } };
   return globalObject.process?.env?.[name];
 }
+
+const DEFAULT_SERVER_URL = `http://127.0.0.1:${getEnvVar("AI_COMMIT_SERVER_PORT") ?? "4097"}`;
 
 function isGenerateErrorKind(value: unknown): value is GenerateErrorKind {
   return typeof value === "string" && (GENERATE_ERROR_KINDS as readonly string[]).includes(value);

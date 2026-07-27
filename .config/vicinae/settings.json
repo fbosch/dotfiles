@@ -55,6 +55,10 @@
       "toggle-action-panel": "control+RETURN"
    },
    "favorites": [
+      "applications:company.thebrowser.Browser",
+      "applications:com.github.wez.wezterm",
+      "applications:com.tinyspeck.slackmacgap",
+      "applications:com.microsoft.teams2",
       "applications:protonmail",
       "applications:org.signal.Signal",
       "applications:one.ablaze.floorp",

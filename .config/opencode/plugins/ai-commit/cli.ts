@@ -40,7 +40,8 @@ const FALLBACK_MODELS: ReadonlyArray<{ label: string; ref: string }> = [
   },
 ];
 const OPENCODE_SERVER_HOST = "127.0.0.1";
-const OPENCODE_SERVER_PORT = 4096;
+const OPENCODE_SERVER_PORT = Number.parseInt(process.env.AI_COMMIT_SERVER_PORT ?? "4097", 10);
+const OPENCODE_BIN = process.env.OPENCODE_BIN || "opencode";
 const SERVER_RETRY_TIMEOUT_MS = 5000;
 const SERVER_RETRY_INTERVAL_MS = 200;
 const SERVER_STOP_TIMEOUT_MS = 3000;
@@ -226,7 +227,7 @@ async function startServer(forceStart = false): Promise<void> {
   }
 
   const child = spawn(
-    "opencode",
+    OPENCODE_BIN,
     [
       "serve",
       "--hostname",
