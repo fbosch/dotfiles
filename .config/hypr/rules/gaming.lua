@@ -29,7 +29,6 @@ M.default_presentation = {
 ---@field confirm_close? boolean Requires confirmation before `CMD+W` closes this window.
 ---@field force_close? boolean Makes `CMD+W` kill the owning process instead of requesting a close.
 ---@field presentation? GamingPresentation Presentation settings applied when the gaming profile activates.
----@field force_rgbx? boolean Ignore the client alpha channel to preserve unfocused frames.
 
 ---@type GamingPolicy[]
 M.games = {
@@ -48,13 +47,12 @@ M.games = {
 		fullscreen_state = "2 0",
 		suppress_event = "fullscreen",
 		focus_on_open = true,
-		force_rgbx = true,
 		enable_profile = true,
 		freeze = false,
 		confirm_close = true,
 		presentation = {
 			vrr = 0,
-			direct_scanout = 2,
+			direct_scanout = 0,
 		},
 	},
 	{
@@ -219,7 +217,7 @@ function M.has_gamescope_window()
 	return false
 end
 
-local function gaming_window_rule(selector, fullscreen_state, content, suppress_event, force_rgbx)
+local function gaming_window_rule(selector, fullscreen_state, content, suppress_event)
 	local rule = {
 		match = selector,
 		workspace = M.workspace .. " silent",
@@ -237,10 +235,6 @@ local function gaming_window_rule(selector, fullscreen_state, content, suppress_
 	if suppress_event ~= nil then
 		rule.suppress_event = suppress_event
 	end
-	if force_rgbx == true then
-		rule.force_rgbx = true
-	end
-
 	return rule
 end
 
@@ -318,9 +312,7 @@ local function register_game_rules()
 	for _, game in ipairs(M.games) do
 		if game.fullscreen_state ~= nil or game.route_to_gaming_workspace == true then
 			for _, selector in ipairs(game.selectors) do
-				hl.window_rule(
-					gaming_window_rule(selector, game.fullscreen_state, "game", game.suppress_event, game.force_rgbx)
-				)
+				hl.window_rule(gaming_window_rule(selector, game.fullscreen_state, "game", game.suppress_event))
 			end
 		end
 
@@ -332,8 +324,8 @@ end
 
 local function register_open_handler()
 	hl.on("window.open", function(window)
-		local game, is_launcher = M.match(window)
-		if game == nil or is_launcher or game.focus_on_open ~= true then
+		local game = M.match(window)
+		if game == nil or game.focus_on_open ~= true then
 			return
 		end
 
@@ -384,47 +376,12 @@ local function register_fullscreen_handler()
 	end)
 end
 
-local function register_game_close_handler()
-	hl.on("window.destroy", function(window)
-		local game = M.match(window)
-		local workspace = window.workspace
-		if game == nil or workspace == nil or workspace.name ~= M.workspace then
-			return
-		end
-
-		for _, candidate in ipairs(hl.get_windows()) do
-			local candidate_game, candidate_is_launcher = M.match(candidate)
-			if
-				candidate_game ~= nil
-				and candidate_is_launcher == false
-				and candidate.workspace
-				and candidate.workspace.name == M.workspace
-			then
-				return
-			end
-		end
-
-		local previous_workspace = hl.get_last_workspace()
-		if
-			previous_workspace == nil
-			or previous_workspace.name == M.workspace
-			or previous_workspace.monitor ~= window.monitor
-			or #previous_workspace:get_windows() == 0
-		then
-			return
-		end
-
-		hl.dispatch(hl.dsp.focus({ workspace = previous_workspace.name }))
-	end)
-end
-
 function M.register_window_rules()
 	register_gamescope_rules()
 	register_steam_rules()
 	register_game_rules()
 	register_client_rules()
 	register_fullscreen_handler()
-	register_game_close_handler()
 	register_open_handler()
 end
 

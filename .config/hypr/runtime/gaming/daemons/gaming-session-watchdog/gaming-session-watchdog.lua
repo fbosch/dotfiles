@@ -98,6 +98,17 @@ local function get_gaming_window_count(clients)
 	return count
 end
 
+local function get_gaming_workspace_window_count(clients)
+	local count = 0
+	for _, client in ipairs(clients or get_clients()) do
+		if workspace_name(client) == gaming_workspace and has_game_content(client) then
+			count = count + 1
+		end
+	end
+
+	return count
+end
+
 local function get_freezable_gaming_windows(clients)
 	local windows = {}
 	for _, client in ipairs(clients or get_clients()) do
@@ -269,6 +280,41 @@ local function gaming_workspace_monitor(monitors)
 	return ""
 end
 
+local function focus_previous_workspace_after_game_close(clients, monitors)
+	local target_monitor = gaming_workspace_monitor(monitors)
+	if target_monitor == "" then
+		return
+	end
+
+	local target_monitor_id = nil
+	for _, monitor in ipairs(monitors or get_monitors()) do
+		if monitor.name == target_monitor then
+			target_monitor_id = monitor.id
+			break
+		end
+	end
+	if target_monitor_id == nil then
+		return
+	end
+
+	local candidate = nil
+	for _, client in ipairs(clients or get_clients()) do
+		local workspace = workspace_name(client)
+		if
+			client.monitor == target_monitor_id
+			and workspace ~= gaming_workspace
+			and not starts_with(workspace, "special:")
+			and (candidate == nil or (client.focusHistoryID or math.huge) < (candidate.focusHistoryID or math.huge))
+		then
+			candidate = client
+		end
+	end
+
+	if candidate then
+		hypr_ipc.request("dispatch hl.dsp.focus({ workspace = " .. lua_string(workspace_name(candidate)) .. " })")
+	end
+end
+
 local function toggle_gaming_overlay(monitor_name)
 	if monitor_name == "" then
 		return
@@ -359,6 +405,7 @@ end
 local function run()
 	local last_count = 0
 	local last_overlay_count = 0
+	local last_gaming_workspace_count = 0
 
 	while true do
 		local ok, err = pcall(function()
@@ -366,6 +413,7 @@ local function run()
 			local clients = get_clients()
 			local monitors = get_monitors()
 			last_overlay_count = overlay_window_count(clients)
+			last_gaming_workspace_count = get_gaming_workspace_window_count(clients)
 			hide_gaming_overlay_outside_workspace(monitors)
 			sync_gaming_freeze_state(clients, monitors)
 			local current_count = sync_gaming_state(last_count, clients, true)
@@ -378,10 +426,15 @@ local function run()
 				local kind = line and event_kind(line) or nil
 				if kind then
 					local clients = get_clients()
+					local current_gaming_workspace_count = get_gaming_workspace_window_count(clients)
 					local current_overlay_count = overlay_window_count(clients)
 					local monitors = nil
 					if current_overlay_count > last_overlay_count or kind == "workspace" then
 						monitors = get_monitors()
+					end
+					if line:match("^closewindow") and last_gaming_workspace_count > 0 and current_gaming_workspace_count == 0 then
+						monitors = monitors or get_monitors()
+						focus_previous_workspace_after_game_close(clients, monitors)
 					end
 
 					maybe_show_gaming_overlay(current_overlay_count, last_overlay_count, monitors)
@@ -390,6 +443,7 @@ local function run()
 					end
 					sync_gaming_freeze_state(clients, monitors)
 					last_overlay_count = current_overlay_count
+					last_gaming_workspace_count = current_gaming_workspace_count
 				local current_count = sync_gaming_state(last_count, clients, kind == "reload")
 				sync_gaming_presentation(current_count, clients, kind == "reload")
 				last_count = current_count
