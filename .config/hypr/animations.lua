@@ -6,9 +6,9 @@ hl.config({
 	},
 })
 
-hl.curve("window", { type = "spring", mass = 1, stiffness = 400, dampening = 40 })
-hl.curve("windowQuick", { type = "spring", mass = 1, stiffness = 5000, dampening = 141.4 })
-hl.curve("windowInstant", { type = "spring", mass = 1, stiffness = 19500, dampening = 279.3 })
+hl.curve("window", { type = "spring", mass = 1, stiffness = 302, dampening = 34.8 })
+hl.curve("windowQuick", { type = "spring", mass = 1, stiffness = 3780, dampening = 123 })
+hl.curve("windowInstant", { type = "spring", mass = 1, stiffness = 14745, dampening = 242.9 })
 
 hl.animation({ leaf = "global", enabled = true, speed = 10, spring = "window" })
 hl.animation({ leaf = "border", enabled = true, speed = 1.75, spring = "windowQuick" })
