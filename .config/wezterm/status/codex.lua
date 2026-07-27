@@ -59,8 +59,6 @@ local usage_cache = (os.getenv("XDG_CACHE_HOME") or ((os.getenv("HOME") or "") .
 local reset_credits = { checked_at = 0 }
 local fish_libexec_dir = (os.getenv("HOME") or "") .. "/.config/fish/libexec"
 local reset_helper = fish_libexec_dir .. "/codex/reset_helper.ts"
-local usage_bar_width = 9
-local partial_blocks = { "", "▏", "▎", "▍", "▌", "▋", "▊", "▉" }
 local command_path = table.concat({
 	-- Home Manager exposes user packages here on macOS and NixOS.
 	"/etc/profiles/per-user/" .. (os.getenv("USER") or "") .. "/bin",
@@ -250,16 +248,14 @@ local function append(items)
 
 	for index, window in ipairs(windows) do
 		local window_color = (#windows == 1 and window.remaining == 0) and colors.gray or window.color
-		local filled_eighths = math.floor(window.remaining * usage_bar_width * 8 / 100)
-		local full_blocks = math.floor(filled_eighths / 8)
-		local partial_block = filled_eighths % 8
-		local used_cells = full_blocks + (partial_block > 0 and 1 or 0)
-		if full_blocks > 0 or partial_block > 0 then
-			table.insert(items, { Foreground = window_color })
-			table.insert(items, { Text = string.rep("█", full_blocks) .. partial_blocks[partial_block + 1] })
+		local filled = math.floor(window.remaining * 9 / 100)
+		if window.remaining > 0 and filled == 0 then
+			filled = 1
 		end
+		table.insert(items, { Foreground = window_color })
+		table.insert(items, { Text = string.rep("▂", filled) })
 		table.insert(items, { Foreground = colors.gray })
-		table.insert(items, { Text = string.rep("░", usage_bar_width - used_cells) .. " " })
+		table.insert(items, { Text = string.rep("▁", 9 - filled) .. " " })
 		table.insert(items, { Foreground = window_color })
 		table.insert(items, { Text = window.remaining .. "%" })
 		local countdown = format_countdown(window.resets_at)

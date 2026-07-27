@@ -190,23 +190,19 @@ assert_eq(type(captured_status), "table", "status payload type")
 	assert_eq(find_text(captured_status, "[end] 6.5 "), true, "workhours indicator rendered")
 	assert_eq(find_text(captured_status, "work"), true, "Codex profile alias rendered")
 	assert_eq(find_text(captured_status, " (2) "), true, "Codex reset credits rendered")
-	assert_eq(find_text(captured_status, "███▊"), true, "ChatGPT allowance uses fractional blocks")
+	assert_eq(find_text(captured_status, "▂▂▂"), true, "ChatGPT allowance uses stepped blocks")
 	assert_eq(find_text(captured_status, "43%"), true, "ChatGPT remaining allowance rendered")
 
 for _, case in ipairs({
-	{ used = 98, block = "▏" },
-	{ used = 97, block = "▎" },
-	{ used = 95, block = "▍" },
-	{ used = 94, block = "▌" },
-	{ used = 93, block = "▋" },
-	{ used = 91, block = "▊" },
-	{ used = 90, block = "▉" },
-	{ used = 0, block = "█████████" },
+	{ used = 98, block = "▂" },
+	{ used = 89, block = "▂" },
+	{ used = 77, block = "▂▂" },
+	{ used = 0, block = "▂▂▂▂▂▂▂▂▂" },
 }) do
 	mock_used_percent = case.used
 	captured_status = nil
 	update_status(window)
-	assert_eq(find_text(captured_status, case.block), true, "usage bar renders " .. case.block)
+	assert_eq(find_text(captured_status, case.block), true, "usage bar renders stepped blocks")
 end
 
 captured_status = nil
