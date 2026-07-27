@@ -62,10 +62,11 @@ local reset_helper = fish_libexec_dir .. "/codex/reset_helper.ts"
 local usage_bar_width = 9
 local partial_blocks = { "", "▏", "▎", "▍", "▌", "▋", "▊", "▉" }
 local command_path = table.concat({
+	-- Home Manager exposes user packages here on macOS and NixOS.
+	"/etc/profiles/per-user/" .. (os.getenv("USER") or "") .. "/bin",
+	-- nix-darwin manages codexbar through Homebrew on macOS.
 	"/opt/homebrew/bin",
 	"/usr/local/bin",
-	(os.getenv("HOME") or "") .. "/.nix-profile/bin",
-	(os.getenv("HOME") or "") .. "/.local/bin",
 	"/run/current-system/sw/bin",
 	"$PATH",
 }, ":")

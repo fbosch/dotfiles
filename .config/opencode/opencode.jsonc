@@ -77,7 +77,7 @@
       "~/.config/opencode/**": "allow",
       "/Users/fbb/.config/opencode/**": "allow",
       "/home/fbb/**": "allow",
-      "/nix/store/**":"allow",
+      "/nix/store/**": "allow",
       "/dev/shm/opencode-window-screenshots/": "allow"
     },
     "bash": {
@@ -117,16 +117,16 @@
       "rtk git clean*": "ask",
       "git restore*": "ask",
       "rtk git restore*": "ask",
-       "gh api*": "allow",
-       "rtk gh api*": "allow",
-       "gh api * --method DELETE*": "ask",
-       "rtk gh api * --method DELETE*": "ask",
-       "gh api * --method=DELETE*": "ask",
-       "rtk gh api * --method=DELETE*": "ask",
-       "gh api * -X DELETE*": "ask",
-       "rtk gh api * -X DELETE*": "ask",
-       "gh api * -XDELETE*": "ask",
-       "rtk gh api * -XDELETE*": "ask"
+      "gh api*": "allow",
+      "rtk gh api*": "allow",
+      "gh api * --method DELETE*": "ask",
+      "rtk gh api * --method DELETE*": "ask",
+      "gh api * --method=DELETE*": "ask",
+      "rtk gh api * --method=DELETE*": "ask",
+      "gh api * -X DELETE*": "ask",
+      "rtk gh api * -X DELETE*": "ask",
+      "gh api * -XDELETE*": "ask",
+      "rtk gh api * -XDELETE*": "ask"
     }
   },
   "model": "openai/gpt-5.6-terra-fast",
@@ -198,11 +198,7 @@
       "reasoningEffort": "high",
       "textVerbosity": "medium"
     },
-    "lookup": {
-      "model": "openai/gpt-5.4-mini-fast",
-      "reasoningEffort": "low",
-      "textVerbosity": "low"
-    },
+    "lookup": {},
     "quick": {
       "model": "openai/gpt-5.6-luna-fast",
       "reasoningEffort": "low",
