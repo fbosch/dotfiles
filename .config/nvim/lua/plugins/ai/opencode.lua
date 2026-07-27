@@ -191,10 +191,17 @@ return {
 			local function set_opencode_terminal_keymaps(buf)
 				local buf_opts = { buffer = buf, silent = true }
 
-				vim.keymap.set("t", "<C-Esc>", function()
+				local function exit_opencode_terminal()
 					vim.cmd("stopinsert")
 					vim.cmd("wincmd p")
-				end, vim.tbl_extend("force", buf_opts, { desc = "Exit opencode terminal" }))
+				end
+
+				vim.keymap.set("t", "<C-Esc>", exit_opencode_terminal, vim.tbl_extend("force", buf_opts, {
+					desc = "Exit opencode terminal",
+				}))
+				vim.keymap.set("t", "<C-\\>", exit_opencode_terminal, vim.tbl_extend("force", buf_opts, {
+					desc = "Exit opencode terminal",
+				}))
 
 				vim.keymap.set("n", "q", function()
 					vim.cmd("wincmd p")

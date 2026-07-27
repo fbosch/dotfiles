@@ -23,6 +23,12 @@ end
 
 return function(config)
 	config.keys = {
+		-- Herdr's legacy path cannot preserve Ctrl-Escape; use Ctrl-\\ end-to-end.
+		{
+			key = "Escape",
+			mods = "CTRL",
+			action = wezterm.action.SendString("\x1c"),
+		},
 		-- Raw macOS codes avoid Shift+number mapped-character mismatches.
 		activate_tab_key("1", 0),
 		activate_tab_key("2", 1),

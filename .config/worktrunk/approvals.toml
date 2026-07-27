@@ -33,3 +33,9 @@ approved-commands = [
     "wt step copy-ignored",
     "CI=true NODE_OPTIONS=--no-warnings pnpm install --prefer-offline --frozen-lockfile --reporter=silent",
 ]
+
+[projects."vs-ssh.visualstudio.com/v3/kommunekredit/KK%20Laaneportal/KommuneKredit.Frontend"]
+approved-commands = [
+    "wt step copy-ignored",
+    "CI=true NODE_OPTIONS=--no-warnings pnpm install --prefer-offline --frozen-lockfile --reporter=silent",
+]
