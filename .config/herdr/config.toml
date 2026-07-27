@@ -3,23 +3,6 @@ onboarding = false
 name = "terminal"
 
 auto_switch = false
-[theme.zenwritten-dark]
-accent = "#6099C0"
-panel_bg = "#2C2C2C"
-surface0 = "#303030"
-surface1 = "#404040"
-surface_dim = "#191919"
-overlay0 = "#8E8E8E"
-overlay1 = "#BBBBBB"
-text = "#BBBBBB"
-subtext0 = "#8E8E8E"
-mauve = "#B279A7"
-green = "#819B69"
-yellow = "#B77E64"
-red = "#DE6E7C"
-blue = "#6099C0"
-teal = "#66A5AD"
-peach = "#D68C67"
 
 [keys]
 prefix = "ctrl+a"
@@ -96,48 +79,6 @@ key = "prefix+shift+f"
 type = "shell"
 command = "herdr plugin action invoke open-file-viewer-tab --plugin herdr-file-viewer"
 description = "File viewer: open in tab"
-
-[[keys.command]]
-key = "alt+t"
-type = "plugin_action"
-command = "terminal-workflows.terminal"
-description = "Terminal workflow"
-
-[[keys.command]]
-key = "alt+m"
-type = "plugin_action"
-command = "terminal-workflows.mprocs"
-description = "Mprocs workflow"
-
-[[keys.command]]
-key = "alt+g"
-type = "plugin_action"
-command = "terminal-workflows.lazygit"
-description = "LazyGit workflow"
-
-[[keys.command]]
-key = "alt+shift+g"
-type = "plugin_action"
-command = "terminal-workflows.gac"
-description = "Git add and commit workflow"
-
-[[keys.command]]
-key = "alt+b"
-type = "plugin_action"
-command = "terminal-workflows.btop"
-description = "btop workflow"
-
-[[keys.command]]
-key = "alt+c"
-type = "plugin_action"
-command = "terminal-workflows.checkmate"
-description = "Checkmate workflow"
-
-[[keys.command]]
-key = "alt+s"
-type = "plugin_action"
-command = "terminal-workflows.scooter"
-description = "Scooter workflow"
 
 [experimental]
 pane_history = true

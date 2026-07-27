@@ -41,6 +41,9 @@ storybook-static
 # Herdr publishes its skill from the repository root; keep only its skill entry point.
 .agents/skills/herdr/**
 !.agents/skills/herdr/SKILL.md
+# Herdr runtime state contains machine-specific layouts and agent sessions.
+.config/herdr/session.json
+.config/herdr/session-history.json
 __pycache__
 .ruff_cache
 

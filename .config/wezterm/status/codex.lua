@@ -15,20 +15,60 @@ local profile_aliases = {
 	["aurora-auroraforge-efd2"] = "work",
 }
 local profile_adjectives = {
-	"ember", "cobalt", "amber", "jade", "coral", "indigo", "silver", "scarlet", "atlas",
-	"lotus", "cedar", "pine", "aurora", "frost", "orbit", "dune", "maple", "zenith",
+	"ember",
+	"cobalt",
+	"amber",
+	"jade",
+	"coral",
+	"indigo",
+	"silver",
+	"scarlet",
+	"atlas",
+	"lotus",
+	"cedar",
+	"pine",
+	"aurora",
+	"frost",
+	"orbit",
+	"dune",
+	"maple",
+	"zenith",
 }
 local profile_nouns = {
-	"falcon", "otter", "comet", "harbor", "meadow", "emberfox", "lynx", "kestrel",
-	"glacier", "thicket", "river", "moss", "canyon", "beacon", "auroraforge", "wave", "ridge",
+	"falcon",
+	"otter",
+	"comet",
+	"harbor",
+	"meadow",
+	"emberfox",
+	"lynx",
+	"kestrel",
+	"glacier",
+	"thicket",
+	"river",
+	"moss",
+	"canyon",
+	"beacon",
+	"auroraforge",
+	"wave",
+	"ridge",
 }
 local usage = { checked_at = 0, windows = {} }
-local usage_cache = (os.getenv("XDG_CACHE_HOME") or ((os.getenv("HOME") or "") .. "/.cache")) .. "/wezterm/codex-usage.json"
+local usage_cache = (os.getenv("XDG_CACHE_HOME") or ((os.getenv("HOME") or "") .. "/.cache"))
+	.. "/wezterm/codex-usage.json"
 local reset_credits = { checked_at = 0 }
 local fish_libexec_dir = (os.getenv("HOME") or "") .. "/.config/fish/libexec"
 local reset_helper = fish_libexec_dir .. "/codex/reset_helper.ts"
 local usage_bar_width = 9
 local partial_blocks = { "", "▏", "▎", "▍", "▌", "▋", "▊", "▉" }
+local command_path = table.concat({
+	"/opt/homebrew/bin",
+	"/usr/local/bin",
+	(os.getenv("HOME") or "") .. "/.nix-profile/bin",
+	(os.getenv("HOME") or "") .. "/.local/bin",
+	"/run/current-system/sw/bin",
+	"$PATH",
+}, ":")
 
 local function usage_color(remaining)
 	if remaining >= 75 then
@@ -101,12 +141,26 @@ local function get_reset_credits()
 		reset_credits.profile = nil
 		reset_credits.count = nil
 		reset_credits.expires_at = nil
-		local ok, stdout = wezterm.run_child_process({ "bun", "--cwd", fish_libexec_dir, reset_helper, "credits" })
+		local ok, stdout = wezterm.run_child_process({
+			"/bin/sh",
+			"-c",
+			string.format(
+				"PATH=%q; export PATH; exec bun --cwd %q %q credits",
+				command_path,
+				fish_libexec_dir,
+				reset_helper
+			),
+		})
 		local parsed_ok, data = false, nil
 		if ok then
 			parsed_ok, data = pcall(wezterm.json_parse, stdout)
 		end
-		if parsed_ok and type(data) == "table" and type(data.accountId) == "string" and tonumber(data.availableCount) then
+		if
+			parsed_ok
+			and type(data) == "table"
+			and type(data.accountId) == "string"
+			and tonumber(data.availableCount)
+		then
 			reset_credits.profile = profile_label(data.accountId)
 			reset_credits.count = math.max(0, math.floor(tonumber(data.availableCount)))
 			reset_credits.expires_at = data.expiresAt
@@ -160,10 +214,14 @@ local function get_usage()
 	if now - usage.checked_at >= 600 then
 		usage.checked_at = now
 		wezterm.background_child_process({
-			"sh", "-c",
+			"/bin/sh",
+			"-c",
 			string.format(
-				"mkdir -p %q && temporary=%q.$$ && codexbar usage --source cli --provider codex --json >\"$temporary\" && mv \"$temporary\" %q",
-				usage_cache:match("^(.+)/[^/]+$"), usage_cache, usage_cache
+				'PATH=%q; export PATH; mkdir -p %q && temporary=%q.$$ && codexbar usage --source cli --provider codex --json >"$temporary" && mv "$temporary" %q',
+				command_path,
+				usage_cache:match("^(.+)/[^/]+$"),
+				usage_cache,
+				usage_cache
 			),
 		})
 	end

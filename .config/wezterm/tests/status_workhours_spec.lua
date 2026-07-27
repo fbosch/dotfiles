@@ -68,6 +68,13 @@ package.loaded.wezterm = {
 			}
 		end
 
+		if content:match('"availableCount":2') then
+			return {
+				accountId = "f6b80000-0000-0000-0000-00000000efd2",
+				availableCount = 2,
+			}
+		end
+
 		return {
 			zenwritten = {
 				dark = {
@@ -85,6 +92,10 @@ package.loaded.wezterm = {
 		registered_events[event] = callback
 	end,
 	run_child_process = function(argv)
+		if argv[1] == "/bin/sh" and argv[3]:match("reset_helper") then
+			return true, [[{"accountId":"f6b80000-0000-0000-0000-00000000efd2","availableCount":2}]], ""
+		end
+
 		if argv[1] == "codexbar" then
 			return true, "chatgpt-usage", ""
 		end
@@ -177,6 +188,8 @@ os.date = original_os_date
 assert_eq(type(captured_status), "table", "status payload type")
 	assert_eq(find_text(captured_status, "[working] 2 "), true, "Herdr working count rendered")
 	assert_eq(find_text(captured_status, "[end] 6.5 "), true, "workhours indicator rendered")
+	assert_eq(find_text(captured_status, "work"), true, "Codex profile alias rendered")
+	assert_eq(find_text(captured_status, " (2) "), true, "Codex reset credits rendered")
 	assert_eq(find_text(captured_status, "███▊"), true, "ChatGPT allowance uses fractional blocks")
 	assert_eq(find_text(captured_status, "43%"), true, "ChatGPT remaining allowance rendered")
 
