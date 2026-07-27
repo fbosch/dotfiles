@@ -13,12 +13,16 @@
    "close_on_focus_loss": false,
    "pop_to_root_on_close": true,
    "escape_key_behavior": "close_window",
+   "keybinding": "vim",
    "search_files_in_root": false,
+   "global_shortcuts": {
+      "toggle": "control+SPACE"
+   },
    "font": {
       "rendering": "native",
       "normal": {
          "family": "SF Pro Text",
-         "size": 10
+         "size": 12
       }
    },
    "theme": {
