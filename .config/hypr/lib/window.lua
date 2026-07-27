@@ -89,13 +89,23 @@ local function uses_custom_layout(active, expected)
 end
 
 function M.focus_gaming_workspace()
+	local fallback = nil
 	for _, client in ipairs(hl.get_windows()) do
 		local workspace = client.workspace
 		local name = workspace and tostring(workspace.name or workspace.id) or ""
 		if name == gaming_workspace then
-			dispatch(hl.dsp.focus({ window = client }))
-			return true
+			if M.is_game(client) then
+				dispatch(hl.dsp.focus({ window = client }))
+				return true
+			end
+
+			fallback = fallback or client
 		end
+	end
+
+	if fallback then
+		dispatch(hl.dsp.focus({ window = fallback }))
+		return true
 	end
 
 	return false

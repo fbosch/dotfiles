@@ -3,6 +3,7 @@ import test from "node:test";
 import type { Monitor } from "../types.ts";
 import {
 	getSpanCrops,
+	getSpanCacheKey,
 	getSpanWallpaperCommand,
 } from "../utils/span-wallpaper.ts";
 
@@ -93,13 +94,22 @@ test("getSpanCrops preserves offset placement for a rotated portrait monitor", (
 	]);
 });
 
-test("getSpanWallpaperCommand fits once and crops from the virtual top-left", () => {
+test("getSpanWallpaperCommand fits once and crops clones from the virtual top-left", () => {
 	assert.deepEqual(
 		getSpanWallpaperCommand(
 			"/wallpaper.png",
-			{ width: 5313, height: 2560 },
-			{ monitor: "DP-2", width: 3864, height: 1642, x: 1449, y: 500 },
-			"/cache/DP-2.png",
+			{
+				width: 5313,
+				height: 2560,
+				crops: [
+					{ monitor: "HDMI-A-2", width: 1449, height: 2560, x: 0, y: 0 },
+					{ monitor: "DP-2", width: 3864, height: 1642, x: 1449, y: 500 },
+				],
+			},
+			new Map([
+				["HDMI-A-2", "/cache/HDMI-A-2.tmp"],
+				["DP-2", "/cache/DP-2.tmp"],
+			]),
 		),
 		[
 			"/wallpaper.png",
@@ -109,12 +119,45 @@ test("getSpanWallpaperCommand fits once and crops from the virtual top-left", ()
 			"center",
 			"-extent",
 			"5313x2560",
+			"-define",
+			"png:compression-level=1",
+			"(",
+			"+clone",
+			"-gravity",
+			"northwest",
+			"-crop",
+			"1449x2560+0+0",
+			"+repage",
+			"-write",
+			"PNG:/cache/HDMI-A-2.tmp",
+			"+delete",
+			")",
+			"(",
+			"+clone",
 			"-gravity",
 			"northwest",
 			"-crop",
 			"3864x1642+1449+500",
 			"+repage",
-			"/cache/DP-2.png",
+			"-write",
+			"PNG:/cache/DP-2.tmp",
+			"+delete",
+			")",
+			"null:",
 		],
+	);
+});
+
+test("getSpanCacheKey changes with source content and span layout", () => {
+	const layout = {
+		width: 100,
+		height: 100,
+		crops: [{ monitor: "DP-1", width: 100, height: 100, x: 0, y: 0 }],
+	};
+
+	assert.notEqual(getSpanCacheKey("source-a", layout), getSpanCacheKey("source-b", layout));
+	assert.notEqual(
+		getSpanCacheKey("source-a", layout),
+		getSpanCacheKey("source-a", { ...layout, width: 101 }),
 	);
 });

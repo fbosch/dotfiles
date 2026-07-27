@@ -1,12 +1,15 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Monitor } from "../types";
 
 const execFileAsync = promisify(execFile);
+const SPAN_ALGORITHM_VERSION = "span-wallpaper-v2";
+const PNG_COMPRESSION_LEVEL = 1;
+const inFlight = new Map<string, Promise<Map<string, string>>>();
 
 export type SpanCrop = {
 	monitor: string;
@@ -202,37 +205,103 @@ export async function createSpanWallpapers(
 	monitors: Monitor[],
 ): Promise<Map<string, string>> {
 	const layout = getSpanCrops(monitors);
-	const cacheKey = createHash("sha256")
+	const sourceHash = createHash("sha256")
+		.update(await readFile(wallpaperPath))
+		.digest("hex");
+	const cacheKey = getSpanCacheKey(sourceHash, layout);
+	const existingGeneration = inFlight.get(cacheKey);
+	if (existingGeneration !== undefined) {
+		return existingGeneration;
+	}
+
+	const generation = loadOrGenerateSpanWallpapers(cacheKey, wallpaperPath, layout)
+		.finally(() => {
+			inFlight.delete(cacheKey);
+		});
+	inFlight.set(cacheKey, generation);
+	return generation;
+}
+
+export function getSpanCacheKey(sourceHash: string, layout: SpanLayout): string {
+	return createHash("sha256")
 		.update(
 			JSON.stringify({
-				wallpaperPath,
+				version: SPAN_ALGORITHM_VERSION,
+				sourceHash,
 				layout,
+				pngCompressionLevel: PNG_COMPRESSION_LEVEL,
 			}),
 		)
 		.digest("hex");
-	const cacheDirectory = join(homedir(), ".cache", "vicinae", "local-wallpaper", "span");
-	await mkdir(cacheDirectory, { recursive: true });
+}
 
-	const outputs = new Map<string, string>();
-	for (const crop of layout.crops) {
-		const outputPath = join(cacheDirectory, `${cacheKey}-${crop.monitor}.png`);
+async function loadOrGenerateSpanWallpapers(
+	cacheKey: string,
+	wallpaperPath: string,
+	layout: SpanLayout,
+): Promise<Map<string, string>> {
+	const cacheDirectory = join(homedir(), ".cache", "vicinae", "local-wallpaper", "span");
+	const cachePath = join(cacheDirectory, cacheKey);
+	const outputs = new Map(
+		layout.crops.map((crop) => [crop.monitor, join(cachePath, `${crop.monitor}.png`)]),
+	);
+	const readyPath = join(cachePath, "ready");
+
+	if (await isSpanCacheReady(readyPath, outputs)) {
+		return outputs;
+	}
+
+	await mkdir(cachePath, { recursive: true });
+	await rm(readyPath, { force: true });
+	const temporaryOutputs = new Map(
+		layout.crops.map((crop) => [
+			crop.monitor,
+			join(cachePath, `.${crop.monitor}-${randomUUID()}.tmp`),
+		]),
+	);
+
+	try {
 		await execFileAsync(
 			"magick",
-			getSpanWallpaperCommand(wallpaperPath, layout, crop, outputPath),
+			getSpanWallpaperCommand(wallpaperPath, layout, temporaryOutputs),
 		);
-		outputs.set(crop.monitor, outputPath);
+		await Promise.all(
+			[...outputs].map(([monitor, outputPath]) =>
+				rename(temporaryOutputs.get(monitor)!, outputPath),
+			),
+		);
+		await writeFile(readyPath, "");
+	} catch (error) {
+		await Promise.all(
+			[...temporaryOutputs.values()].map((path) => rm(path, { force: true })),
+		);
+		throw error;
 	}
 
 	return outputs;
 }
 
+async function isSpanCacheReady(
+	readyPath: string,
+	outputs: Map<string, string>,
+): Promise<boolean> {
+	try {
+		await stat(readyPath);
+		const outputStats = await Promise.all(
+			[...outputs.values()].map((path) => stat(path)),
+		);
+		return outputStats.every((output) => output.isFile());
+	} catch {
+		return false;
+	}
+}
+
 export function getSpanWallpaperCommand(
 	wallpaperPath: string,
-	layout: Pick<SpanLayout, "width" | "height">,
-	crop: SpanCrop,
-	outputPath: string,
+	layout: SpanLayout,
+	outputPaths: Map<string, string>,
 ): string[] {
-	return [
+	const args = [
 		wallpaperPath,
 		"-resize",
 		`${layout.width}x${layout.height}^`,
@@ -240,12 +309,32 @@ export function getSpanWallpaperCommand(
 		"center",
 		"-extent",
 		`${layout.width}x${layout.height}`,
-		// Crop coordinates are relative to the virtual desktop's top-left corner.
-		"-gravity",
-		"northwest",
-		"-crop",
-		`${crop.width}x${crop.height}+${crop.x}+${crop.y}`,
-		"+repage",
-		outputPath,
+		"-define",
+		`png:compression-level=${PNG_COMPRESSION_LEVEL}`,
 	];
+
+	for (const crop of layout.crops) {
+		const outputPath = outputPaths.get(crop.monitor);
+		if (outputPath === undefined) {
+			throw new Error(`Missing output path for ${crop.monitor}`);
+		}
+
+		args.push(
+			"(",
+			"+clone",
+			// Crop coordinates are relative to the virtual desktop's top-left corner.
+			"-gravity",
+			"northwest",
+			"-crop",
+			`${crop.width}x${crop.height}+${crop.x}+${crop.y}`,
+			"+repage",
+			"-write",
+			`PNG:${outputPath}`,
+			"+delete",
+			")",
+		);
+	}
+
+	args.push("null:");
+	return args;
 }

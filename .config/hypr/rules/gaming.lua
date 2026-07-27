@@ -29,6 +29,7 @@ M.default_presentation = {
 ---@field confirm_close? boolean Requires confirmation before `CMD+W` closes this window.
 ---@field force_close? boolean Makes `CMD+W` kill the owning process instead of requesting a close.
 ---@field presentation? GamingPresentation Presentation settings applied when the gaming profile activates.
+---@field force_rgbx? boolean Ignore the client alpha channel to preserve unfocused frames.
 
 ---@type GamingPolicy[]
 M.games = {
@@ -36,21 +37,24 @@ M.games = {
 		name = "bg3",
 		selectors = {
 			{ class = "^bg3$" },
-			{ class = "^steam_app_1086940$" },
+			{ class = "^steam_app_1086940$", initial_title = "^Window$" },
 		},
 		launcher_rules = {
 			{ match = { initial_title = "^Larian Launcher$" }, float = true, decorate = false },
 			{ match = { title = "^Larian Launcher$" }, float = true, decorate = false },
+			{ match = { initial_title = "^LariLauncher$" }, float = true, decorate = false },
+			{ match = { title = "^LariLauncher$" }, float = true, decorate = false },
 		},
 		fullscreen_state = "2 0",
 		suppress_event = "fullscreen",
 		focus_on_open = true,
+		force_rgbx = true,
 		enable_profile = true,
 		freeze = false,
 		confirm_close = true,
 		presentation = {
 			vrr = 0,
-			direct_scanout = 0,
+			direct_scanout = 2,
 		},
 	},
 	{
@@ -118,6 +122,34 @@ M.games = {
 		confirm_close = true,
 	},
 }
+
+local function collection_negative_match(property)
+	local patterns = {}
+	local seen = {}
+
+	local function collect(selector)
+		local pattern = selector[property]
+		if type(pattern) == "string" and not seen[pattern] then
+			seen[pattern] = true
+			patterns[#patterns + 1] = pattern
+		end
+	end
+
+	for _, game in ipairs(M.games) do
+		for _, selector in ipairs(game.selectors) do
+			collect(selector)
+		end
+
+		for _, rule in ipairs(game.launcher_rules or {}) do
+			collect(rule.match)
+		end
+	end
+
+	return "negative:(" .. table.concat(patterns, "|") .. ")"
+end
+
+local collection_class_exclusion = collection_negative_match("class")
+local collection_initial_title_exclusion = collection_negative_match("initial_title")
 
 local window_property_aliases = {
 	xdg_tag = "xdgTag",
@@ -187,7 +219,7 @@ function M.has_gamescope_window()
 	return false
 end
 
-local function gaming_window_rule(selector, fullscreen_state, content, suppress_event)
+local function gaming_window_rule(selector, fullscreen_state, content, suppress_event, force_rgbx)
 	local rule = {
 		match = selector,
 		workspace = M.workspace .. " silent",
@@ -204,6 +236,9 @@ local function gaming_window_rule(selector, fullscreen_state, content, suppress_
 	end
 	if suppress_event ~= nil then
 		rule.suppress_event = suppress_event
+	end
+	if force_rgbx == true then
+		rule.force_rgbx = true
 	end
 
 	return rule
@@ -239,7 +274,13 @@ local function register_gamescope_rules()
 	})
 
 	hl.window_rule({
-		match = { workspace = M.workspace, class = "negative:^(gamescope)$", content = "negative:^game$" },
+		-- Game clients can briefly report non-game content while mapping.
+		match = {
+			workspace = M.workspace,
+			class = collection_class_exclusion,
+			content = "negative:^game$",
+			initial_title = collection_initial_title_exclusion,
+		},
 		workspace = "special:gaming-overlay silent",
 	})
 end
@@ -263,7 +304,10 @@ local function register_steam_rules()
 		end
 	end
 
-	for _, selector in ipairs({ { class = "^(steam_app_[0-9]+)$" }, { initial_class = "^(steam_app_[0-9]+)$" } }) do
+	for _, selector in ipairs({
+		{ class = "^(steam_app_[0-9]+)$", initial_title = collection_initial_title_exclusion },
+		{ initial_class = "^(steam_app_[0-9]+)$", initial_title = collection_initial_title_exclusion },
+	}) do
 		hl.window_rule(gaming_window_rule(selector, "2 2", "game"))
 	end
 
@@ -274,7 +318,9 @@ local function register_game_rules()
 	for _, game in ipairs(M.games) do
 		if game.fullscreen_state ~= nil or game.route_to_gaming_workspace == true then
 			for _, selector in ipairs(game.selectors) do
-				hl.window_rule(gaming_window_rule(selector, game.fullscreen_state, "game", game.suppress_event))
+				hl.window_rule(
+					gaming_window_rule(selector, game.fullscreen_state, "game", game.suppress_event, game.force_rgbx)
+				)
 			end
 		end
 
@@ -338,12 +384,47 @@ local function register_fullscreen_handler()
 	end)
 end
 
+local function register_game_close_handler()
+	hl.on("window.destroy", function(window)
+		local game = M.match(window)
+		local workspace = window.workspace
+		if game == nil or workspace == nil or workspace.name ~= M.workspace then
+			return
+		end
+
+		for _, candidate in ipairs(hl.get_windows()) do
+			local candidate_game, candidate_is_launcher = M.match(candidate)
+			if
+				candidate_game ~= nil
+				and candidate_is_launcher == false
+				and candidate.workspace
+				and candidate.workspace.name == M.workspace
+			then
+				return
+			end
+		end
+
+		local previous_workspace = hl.get_last_workspace()
+		if
+			previous_workspace == nil
+			or previous_workspace.name == M.workspace
+			or previous_workspace.monitor ~= window.monitor
+			or #previous_workspace:get_windows() == 0
+		then
+			return
+		end
+
+		hl.dispatch(hl.dsp.focus({ workspace = previous_workspace.name }))
+	end)
+end
+
 function M.register_window_rules()
 	register_gamescope_rules()
 	register_steam_rules()
 	register_game_rules()
 	register_client_rules()
 	register_fullscreen_handler()
+	register_game_close_handler()
 	register_open_handler()
 end
 
