@@ -32,5 +32,14 @@ function git_pull_system_repos --description 'Pull ~/nixos and ~/dotfiles with f
         end
     end
 
+    if test $had_failure -eq 0
+        echo '==> Restowing ~/dotfiles'
+        stow -R -d ~/dotfiles -t ~ .
+        if test $status -ne 0
+            echo '==> Failed to restow ~/dotfiles'
+            set had_failure 1
+        end
+    end
+
     return $had_failure
 end
