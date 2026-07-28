@@ -42,6 +42,7 @@ storybook-static
 .agents/skills/herdr/**
 !.agents/skills/herdr/SKILL.md
 # Herdr runtime state contains machine-specific layouts and agent sessions.
+.config/herdr/plugins.json
 .config/herdr/session.json
 .config/herdr/session-history.json
 __pycache__
