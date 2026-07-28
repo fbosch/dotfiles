@@ -24,8 +24,6 @@ return {
 		},
 		init = function()
 			local session = require("utils.session")
-			local restore_nvim_only = vim.uv.os_uname().sysname == "Linux"
-				and vim.env.HERDR_MINI_SESSION_RESTORE == "1"
 			vim.env.HERDR_MINI_SESSION_RESTORE = nil
 			local infer_cache = {
 				cwd = nil,
@@ -195,10 +193,6 @@ return {
 				pattern = "SessionLoadPost",
 				once = true,
 				callback = function()
-					if restore_nvim_only then
-						return
-					end
-
 					if not is_herdr_session() then
 						return
 					end
