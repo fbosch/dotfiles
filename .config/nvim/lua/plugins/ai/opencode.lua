@@ -33,6 +33,7 @@ return {
 			local infer_cache_ttl_ms = 15000
 			local opencode_db_path = vim.fn.expand("~/.local/share/opencode/opencode.db")
 			local opencode_terminal_opts = { win = { position = "left", width = 100 } }
+			local opencode_terminal_instance
 			local opened_fresh_opencode = false
 
 			local function normalize_path(path)
@@ -152,6 +153,36 @@ return {
 				return require("snacks.terminal")
 			end
 
+			local function current_opencode_terminal()
+				if opencode_terminal_instance ~= nil and opencode_terminal_instance:buf_valid() then
+					return opencode_terminal_instance
+				end
+
+				opencode_terminal_instance = nil
+				return nil
+			end
+
+			local function open_opencode_terminal()
+				local terminal = current_opencode_terminal()
+				if terminal ~= nil then
+					terminal:show():focus()
+					return terminal
+				end
+
+				terminal = opencode_terminal().open(opencode_command(), opencode_terminal_opts)
+				opencode_terminal_instance = terminal
+
+				local function clear_terminal()
+					if opencode_terminal_instance == terminal then
+						opencode_terminal_instance = nil
+					end
+				end
+
+				terminal:on("TermClose", clear_terminal, { buf = true })
+				terminal:on("BufWipeout", clear_terminal, { buf = true })
+				return terminal
+			end
+
 			local function connect_to_session(session_id, attempts)
 				local function retry()
 					if attempts > 1 then
@@ -202,7 +233,7 @@ return {
 					end
 
 					vim.schedule(function()
-						opencode_terminal().open(opencode_command(), opencode_terminal_opts)
+						open_opencode_terminal()
 						connect_to_session(saved_session_id(), 10)
 					end)
 				end,
@@ -220,19 +251,22 @@ return {
 			vim.g.opencode_opts = {
 				server = {
 					start = function()
-						opencode_terminal().open(opencode_command(), opencode_terminal_opts)
+						open_opencode_terminal()
 					end,
 					stop = function()
-						local terminal = opencode_terminal().get(
-							opencode_command(),
-							vim.tbl_extend("force", opencode_terminal_opts, { create = false })
-						)
-						if terminal then
+						local terminal = current_opencode_terminal()
+						if terminal ~= nil then
 							terminal:close()
 						end
 					end,
 					toggle = function()
-						opencode_terminal().toggle(opencode_command(), opencode_terminal_opts)
+						local terminal = current_opencode_terminal()
+						if terminal ~= nil then
+							terminal:toggle()
+							return
+						end
+
+						open_opencode_terminal()
 					end,
 				},
 				events = {

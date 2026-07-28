@@ -5,7 +5,7 @@ set -euo pipefail
 STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-night-light"
 OVERRIDE_FILE="$STATE_DIR/override"
 OVERRIDE_EXPIRY_FILE="$STATE_DIR/override-expiry"
-PID_FILE="$STATE_DIR/daemon.pid"
+LOCK_FILE="$STATE_DIR/daemon.lock"
 TEMPERATURE_FILE="$STATE_DIR/temperature"
 
 DAY_TEMP=6500
@@ -195,14 +195,18 @@ next_boundary_epoch() {
 }
 
 run_daemon() {
-  local sleep_for boundary now
+  local sleep_for boundary now status
 
-  if [[ -f "$PID_FILE" ]] && kill -0 "$(< "$PID_FILE")" 2>/dev/null; then
-    exit 0
+  if [[ "${NIGHT_LIGHT_LOCK_HELD:-false}" != "true" ]]; then
+    if flock -n -E 75 -o "$LOCK_FILE" env NIGHT_LIGHT_LOCK_HELD=true "$0" daemon; then
+      return
+    fi
+    status=$?
+    if [[ "$status" -eq 75 ]]; then
+      exit 0
+    fi
+    return "$status"
   fi
-
-  printf "%s" "$$" > "$PID_FILE"
-  trap 'rm -f "$PID_FILE"' EXIT
 
   while true; do
     if [[ -f "$OVERRIDE_FILE" && ! -f "$OVERRIDE_EXPIRY_FILE" ]]; then
