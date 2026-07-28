@@ -18,7 +18,7 @@ pkill -f "minimized-state-daemon" 2>/dev/null || true
 pkill -f "window-capture-daemon" 2>/dev/null || true
 pkill -f "gaming-session-watchdog" 2>/dev/null || true
 pkill -f "waybar-edge-monitor.sh" 2>/dev/null || true
-pkill -f "toggle-night-light.sh daemon" 2>/dev/null || true
+pkill -f "night-light.sh daemon" 2>/dev/null || true
 pkill gjs 2>/dev/null || true
 
 sleep 0.2
@@ -32,7 +32,7 @@ uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-state/window-stat
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/minimized-state/minimized-state-daemon.sh &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.lua &
 uwsm-app -s b -- ~/.config/hypr/runtime/gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh &
-uwsm-app -s b -- ~/.config/hypr/runtime/desktop/toggle-night-light.sh daemon &
+uwsm-app -s b -- ~/.config/hypr/runtime/desktop/night-light.sh daemon &
 uwsm-app -s s -- waybar &
 uwsm-app -s s -- hyprpaper &
 uwsm-app -s s -- swaync -c ~/.config/swaync/config.json -s ~/.config/swaync/style.css &

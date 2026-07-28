@@ -139,6 +139,7 @@ set_temperature() {
   fi
 
   pkill -x hyprsunset 2>/dev/null || true
+  sleep 1
   if [[ "$temperature" -lt "$DAY_TEMP" ]]; then
     hyprsunset -t "$temperature" >/dev/null 2>&1 &
   fi

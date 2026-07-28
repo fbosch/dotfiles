@@ -79,9 +79,9 @@
       "actions": [
         {
           "label": "󰖔",
-          "command": "bash ~/.config/hypr/runtime/desktop/toggle-night-light.sh toggle",
+    "command": "bash ~/.config/hypr/runtime/desktop/night-light.sh toggle",
           "type": "toggle",
-          "update-command": "sh -c '~/.config/hypr/runtime/desktop/toggle-night-light.sh is-active && echo true || echo false'",
+    "update-command": "sh -c '~/.config/hypr/runtime/desktop/night-light.sh is-active && echo true || echo false'",
           "tooltip": "Toggle Night Light"
         },
         {
