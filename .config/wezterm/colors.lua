@@ -5,6 +5,7 @@ local theme = require("theme")
 return function(config)
 	config.color_scheme = "zenwritten_dark"
 	config.colors = {
+		background = theme.base.bg,
 		tab_bar = {
 			background = theme.tab_bar.background,
 			active_tab = {
@@ -25,7 +26,7 @@ return function(config)
 			},
 			width = "100%",
 			height = "100%",
-			opacity = 0.97,
+			opacity = 0.95,
 		},
 		{
 			source = {
