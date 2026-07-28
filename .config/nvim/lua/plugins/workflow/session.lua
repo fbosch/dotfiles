@@ -1,10 +1,6 @@
 local git = require("utils.git")
 local session = require("utils.session")
 
-local root_dir = session.get_root_dir()
-local session_file = session.get_name()
-local path = session.get_path()
-
 local function mark_herdr_pane()
 	local pane_id = vim.env.HERDR_PANE_ID
 	if vim.env.HERDR_ENV ~= "1" or type(pane_id) ~= "string" or pane_id == "" then
@@ -28,8 +24,10 @@ return {
 		cond = should_persist_session,
 		config = function()
 			local sessions = require("mini.sessions")
+			local target = session.resolve_requested()
+			session.set_current(target)
 			sessions.setup({
-				directory = root_dir,
+				directory = session.get_root_dir(),
 				file = "",
 				hooks = {
 					pre = {
@@ -39,6 +37,15 @@ return {
 								tree_api.tree.close()
 							end
 							vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
+						end,
+					},
+					post = {
+						read = function()
+							session.touch(target)
+							vim.api.nvim_exec_autocmds("User", { pattern = "SessionLoadPost" })
+						end,
+						write = function()
+							session.touch(target)
 						end,
 					},
 				},
@@ -52,11 +59,10 @@ return {
 			vim.api.nvim_create_autocmd({ "VimEnter" }, {
 				callback = function()
 					mark_herdr_pane()
-					local existing_session = vim.loop.fs_stat(path)
+					local existing_session = vim.uv.fs_stat(target.path)
 					if existing_session and existing_session.type == "file" then
 						vim.defer_fn(function()
-							sessions.read(session_file)
-							vim.api.nvim_exec_autocmds("User", { pattern = "SessionLoadPost" })
+							sessions.read(target.name)
 						end, 50)
 					end
 				end,
@@ -64,9 +70,9 @@ return {
 
 			vim.api.nvim_create_autocmd({ "VimLeavePre" }, {
 				callback = function()
-					local dir_exists = vim.loop.fs_stat(root_dir)
+					local dir_exists = vim.uv.fs_stat(session.get_root_dir())
 					if dir_exists and dir_exists.type == "directory" then
-						sessions.write(session_file)
+						sessions.write(target.name)
 					end
 				end,
 			})

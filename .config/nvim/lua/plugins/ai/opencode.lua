@@ -32,6 +32,7 @@ return {
 			local infer_cache_ttl_ms = 15000
 			local opencode_db_path = vim.fn.expand("~/.local/share/opencode/opencode.db")
 			local opencode_terminal_opts = { win = { position = "left", width = 100 } }
+			local opened_fresh_opencode = false
 
 			local function normalize_path(path)
 				if type(path) ~= "string" or path == "" then
@@ -50,16 +51,25 @@ return {
 				return "'" .. value:gsub("'", "''") .. "'"
 			end
 
-			local function infer_session_id_for_cwd(cwd)
+			local function saved_session_id()
+				local nvim_session = session.get_current(vim.fn.getcwd())
+				if nvim_session == nil then
+					return nil
+				end
+
+				local session_id = session.get_metadata(nvim_session).opencode_session_id
+				return type(session_id) == "string" and session_id or nil
+			end
+
+			local function capture_fresh_session_id(cwd)
 				local normalized_cwd = normalize_path(cwd)
 				if normalized_cwd == nil then
 					return nil
 				end
 
-				local metadata = session.get_metadata(normalized_cwd)
-				local saved_session_id = metadata.opencode_session_id
-				if type(saved_session_id) == "string" and saved_session_id ~= "" then
-					return saved_session_id
+				local nvim_session = session.get_current(normalized_cwd)
+				if nvim_session == nil then
+					return nil
 				end
 
 				local now = vim.uv.now()
@@ -102,7 +112,7 @@ return {
 
 				infer_cache = { cwd = normalized_cwd, session_id = session_id, at = now }
 				if session_id ~= nil then
-					session.set_opencode_session_id(session_id, normalized_cwd)
+					session.set_opencode_session_id(session_id, nvim_session)
 				end
 				return session_id
 			end
@@ -117,8 +127,9 @@ return {
 				local environment = "HERDR_ENV=0 HERDR_SOCKET_PATH= OPENCODE_NVIM_SOCKET="
 					.. vim.fn.shellescape(socket)
 					.. " "
-				local session_id = infer_session_id_for_cwd(cwd)
+				local session_id = saved_session_id()
 				if type(session_id) ~= "string" or session_id == "" then
+					opened_fresh_opencode = true
 					return environment .. "opencode -- --port"
 				end
 
@@ -137,7 +148,7 @@ return {
 						return
 					end
 
-					if infer_session_id_for_cwd(vim.fn.getcwd()) == nil then
+					if saved_session_id() == nil then
 						return
 					end
 
@@ -150,7 +161,9 @@ return {
 			vim.api.nvim_create_autocmd("User", {
 				pattern = "SessionSavePre",
 				callback = function()
-					infer_session_id_for_cwd(vim.fn.getcwd())
+					if opened_fresh_opencode then
+						capture_fresh_session_id(vim.fn.getcwd())
+					end
 				end,
 			})
 
