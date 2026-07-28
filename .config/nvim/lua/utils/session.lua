@@ -70,7 +70,7 @@ function M.resolve_requested(cwd)
 	end
 
 	cwd = resolve_cwd(cwd)
-	local workspace_id, pane_id = (vim.env.HERDR_ENV == "1" and vim.env.HERDR_PANE_ID or ""):match("^w(%d+):p(%d+)$")
+	local workspace_id, pane_id = (vim.env.HERDR_ENV == "1" and vim.env.HERDR_PANE_ID or ""):match("^w([A-Za-z0-9_-]+):p([A-Za-z0-9_-]+)$")
 	if workspace_id ~= nil then
 		return M.resolve(cwd, ("herdr-w%s-p%s"):format(workspace_id, pane_id)), true
 	end

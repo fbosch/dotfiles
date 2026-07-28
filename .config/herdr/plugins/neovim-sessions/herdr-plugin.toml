@@ -2,7 +2,7 @@ id = "neovim-sessions"
 name = "Neovim sessions"
 version = "0.1.0"
 description = "Restores pane-specific Neovim and OpenCode sessions."
-min_herdr_version = "0.7.0"
+min_herdr_version = "0.7.5"
 platforms = ["linux", "macos"]
 
 [[startup]]

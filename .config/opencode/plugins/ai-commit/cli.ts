@@ -27,18 +27,6 @@ import {
   withSpinner,
 } from "./src/ui";
 
-const FALLBACK_MODELS: ReadonlyArray<{ label: string; ref: string }> = [
-  { label: "gpt-5.2-codex  (openai)", ref: "openai/gpt-5.2-codex" },
-  { label: "gpt-5.3-codex  (openai)", ref: "openai/gpt-5.3-codex" },
-  {
-    label: "claude-haiku-4.5  (github-copilot)",
-    ref: "github-copilot/claude-haiku-4.5",
-  },
-  {
-    label: "grok-code-fast-1  (github-copilot)",
-    ref: "github-copilot/grok-code-fast-1",
-  },
-];
 const OPENCODE_SERVER_HOST = "127.0.0.1";
 const OPENCODE_SERVER_PORT = Number.parseInt(process.env.AI_COMMIT_SERVER_PORT ?? "4097", 10);
 const OPENCODE_BIN = process.env.OPENCODE_BIN || "opencode";
@@ -96,6 +84,30 @@ function getModelRef(cliValue?: string): string | null {
     return value.trim();
   }
   return null;
+}
+
+function getFallbackModels(): string[] {
+  const raw = process.env.AI_COMMIT_FALLBACK_MODELS;
+  if (typeof raw !== "string" || raw.length === 0) {
+    return [];
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !Array.isArray((parsed as { models?: unknown }).models)
+    ) {
+      return [];
+    }
+
+    return (parsed as { models: unknown[] }).models.filter(
+      (model): model is string => typeof model === "string" && model.length > 0,
+    );
+  } catch {
+    return [];
+  }
 }
 
 function formatGitError(error: GitError): string {
@@ -159,18 +171,18 @@ function shouldSuggestAnotherModel(error: GenerateError): boolean {
 }
 
 async function selectFallbackModel(currentModelRef: string | null): Promise<string | null> {
-  const options = FALLBACK_MODELS.filter((model) => model.ref !== currentModelRef);
+  const options = getFallbackModels().filter((model) => model !== currentModelRef);
   if (options.length === 0) {
+    style(" No alternate models are configured for the active OpenCode profile", 3);
     return null;
   }
 
-  const selected = await choose("Select a model", options.map((model) => model.label));
+  const selected = await choose("Select a model", options);
   if (selected === null) {
     return null;
   }
 
-  const found = options.find((model) => model.label === selected);
-  return found?.ref ?? null;
+  return options.includes(selected) ? selected : null;
 }
 
 function isServerReachable(): Promise<boolean> {

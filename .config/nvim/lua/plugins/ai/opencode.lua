@@ -24,6 +24,9 @@ return {
 		},
 		init = function()
 			local session = require("utils.session")
+			local restore_nvim_only = vim.uv.os_uname().sysname == "Linux"
+				and vim.env.HERDR_MINI_SESSION_RESTORE == "1"
+			vim.env.HERDR_MINI_SESSION_RESTORE = nil
 			local infer_cache = {
 				cwd = nil,
 				session_id = nil,
@@ -63,7 +66,8 @@ return {
 
 			local function is_herdr_session()
 				local nvim_session = session.get_current(vim.fn.getcwd())
-				return nvim_session ~= nil and nvim_session.specifier:match("^herdr%-w%d+%-p%d+$") ~= nil
+				return nvim_session ~= nil
+					and nvim_session.specifier:match("^herdr%-w[A-Za-z0-9_-]+%-p[A-Za-z0-9_-]+$") ~= nil
 			end
 
 			local function capture_fresh_session_id(cwd)
@@ -130,6 +134,13 @@ return {
 
 				local cwd = vim.fn.getcwd()
 				local environment = "OPENCODE_NVIM_SOCKET=" .. vim.fn.shellescape(socket) .. " "
+				local pane_id = vim.env.HERDR_PANE_ID
+				if vim.env.HERDR_ENV == "1" and type(pane_id) == "string" and pane_id ~= "" then
+					environment = "env -u HERDR_PANE_ID OPENCODE_NVIM_HERDR_PANE_ID="
+						.. vim.fn.shellescape(pane_id)
+						.. " "
+						.. environment
+				end
 				local session_id = saved_session_id()
 				if type(session_id) ~= "string" or session_id == "" then
 					opened_fresh_opencode = true
@@ -184,6 +195,10 @@ return {
 				pattern = "SessionLoadPost",
 				once = true,
 				callback = function()
+					if restore_nvim_only then
+						return
+					end
+
 					if not is_herdr_session() then
 						return
 					end

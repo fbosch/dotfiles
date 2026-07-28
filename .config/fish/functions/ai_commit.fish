@@ -1,12 +1,35 @@
 function ai_commit --description 'Generate AI-powered Commitizen commit message from staged changes'
     set -l script "$HOME/.config/opencode/plugins/ai-commit/cli.ts"
-    if set -q AI_COMMIT_MODEL; and test "$AI_COMMIT_MODEL" = "openai/gpt-5.1-codex-mini"
-        set -lx AI_COMMIT_MODEL openai/gpt-5.4-mini-fast
-    else if set -q AI_COMMIT_MODEL; and test "$AI_COMMIT_MODEL" = "openai/codex-mini-latest"
-        set -lx AI_COMMIT_MODEL openai/gpt-5.4-mini-fast
-    else if not set -q AI_COMMIT_MODEL
-        set -lx AI_COMMIT_MODEL openai/gpt-5.4-mini-fast
+    set -l config_root "$HOME/.config/opencode"
+    if set -q OPENCODE_CONFIG_DIR
+        set config_root "$OPENCODE_CONFIG_DIR"
     end
+
+    set -l profiles_file "$config_root/profiles.jsonc"
+    set -l opencode_file "$config_root/opencode.json"
+    if test -f "$config_root/opencode.jsonc"
+        set opencode_file "$config_root/opencode.jsonc"
+    end
+
+    set -l helper_dir (path dirname (status filename))
+    set -l fish_root (path resolve "$helper_dir/..")
+    set -l profile_helper "$fish_root/libexec/opencode/profile_switch_helper.ts"
+    set -l profile_models (bun --cwd "$fish_root/libexec" "$profile_helper" commit-models "$profiles_file" "$opencode_file")
+    if test $status -ne 0
+        echo "failed to load active OpenCode profile models"
+        return 1
+    end
+
+    set -l profile_model (string match -r '"primary":"([^"]+)"' -- "$profile_models")
+    if test (count $profile_model) -ne 2
+        echo "failed to resolve active OpenCode commit model"
+        return 1
+    end
+
+    if not set -q AI_COMMIT_MODEL
+        set -lx AI_COMMIT_MODEL "$profile_model[2]"
+    end
+    set -lx AI_COMMIT_FALLBACK_MODELS "$profile_models"
 
     set -l opencode_path (__opencode_command_path)
     function __ai_commit_err -a message

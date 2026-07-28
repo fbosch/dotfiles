@@ -62,7 +62,7 @@ return {
 					local existing_session = vim.uv.fs_stat(target.path)
 					if existing_session and existing_session.type == "file" then
 						vim.defer_fn(function()
-							sessions.read(target.name)
+							sessions.read(target.name, { force = true })
 						end, 50)
 					end
 				end,

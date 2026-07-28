@@ -369,6 +369,51 @@ function listProfiles(profilesPath: string, configPath: string): AppResult<strin
     return ok(items.map((item) => [item.name, item.description, String(item.active)].join("\t")).join("\n"));
 }
 
+function modelRef(value: AgentOptions | null | undefined): string | null {
+    const model = value?.model;
+    return typeof model === "string" && model.length > 0 ? model : null;
+}
+
+function activeProfile(profiles: LoadedProfilesAndConfig["profiles"], config: ConfigShape): AppResult<ProfileSpec> {
+    const snapshot = currentSnapshot(config);
+    const matches = Object.values(profiles)
+        .map(profileSpecFromParsed)
+        .filter((profile) => profileMatches(snapshot, profile));
+
+    if (matches.length !== 1) {
+        return err(matches.length === 0 ? "no active profile matches config" : "multiple profiles match config");
+    }
+
+    return ok(matches[0]);
+}
+
+function commitModels(profilesPath: string, configPath: string): AppResult<string> {
+    const loadedResult = loadProfilesAndConfig(profilesPath, configPath);
+    if (loadedResult.isErr()) {
+        return err(loadedResult.error);
+    }
+
+    const profileResult = activeProfile(loadedResult.value.profiles, loadedResult.value.config);
+    if (profileResult.isErr()) {
+        return err(profileResult.error);
+    }
+
+    const profile = profileResult.value;
+    const primary = modelRef(profile.agents.commit) ?? profile.small_model ?? profile.model;
+    if (primary === null) {
+        return err("active profile has no commit model");
+    }
+
+    const models = [
+        primary,
+        profile.small_model,
+        profile.model,
+        ...Object.values(profile.agents).map(modelRef),
+    ].filter((model): model is string => model !== null);
+
+    return ok(JSON.stringify({ primary, models: [...new Set(models)] }));
+}
+
 function applyProfileModelSettings(config: ConfigShape, profile: ProfileSpec): void {
     if (profile.model !== null) {
         config.model = profile.model;
@@ -429,11 +474,13 @@ function usage(): void {
     console.log("Usage:");
     console.log("  opencode/profile_switch_helper.ts list <profiles.jsonc> <opencode.json/jsonc>");
     console.log("  opencode/profile_switch_helper.ts apply <profiles.jsonc> <opencode.json/jsonc> <profile>");
+    console.log("  opencode/profile_switch_helper.ts commit-models <profiles.jsonc> <opencode.json/jsonc>");
 }
 
 const commandHandlers: Record<string, (args: string[]) => AppResult<string>> = {
     list: (args) => (args.length === 2 ? listProfiles(args[0], args[1]) : err("list requires 2 args")),
     apply: (args) => (args.length === 3 ? applyProfile(args[0], args[1], args[2]) : err("apply requires 3 args")),
+    "commit-models": (args) => (args.length === 2 ? commitModels(args[0], args[1]) : err("commit-models requires 2 args")),
 };
 
 function runCommand(command: string, args: string[]): AppResult<string> {
