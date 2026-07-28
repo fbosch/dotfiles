@@ -143,6 +143,43 @@ return {
 				return require("snacks.terminal")
 			end
 
+			local function connect_to_session(session_id, attempts)
+				local function retry()
+					if attempts > 1 then
+						vim.defer_fn(function()
+							connect_to_session(session_id, attempts - 1)
+						end, 500)
+					end
+				end
+
+				require("opencode.server.discovery")
+					.locally()
+					:next(function(servers)
+						local function try_server(index)
+							local server = servers[index]
+							if server == nil then
+								retry()
+								return
+							end
+
+							server:get_sessions():next(function(sessions)
+								for _, candidate in ipairs(sessions) do
+									if candidate.id == session_id then
+										server:connect():catch(retry)
+										return
+									end
+								end
+								try_server(index + 1)
+							end):catch(function()
+								try_server(index + 1)
+							end)
+						end
+
+						try_server(1)
+					end)
+					:catch(retry)
+			end
+
 			vim.api.nvim_create_autocmd("User", {
 				pattern = "SessionLoadPost",
 				once = true,
@@ -157,6 +194,7 @@ return {
 
 					vim.schedule(function()
 						opencode_terminal().open(opencode_command(), opencode_terminal_opts)
+						connect_to_session(saved_session_id(), 10)
 					end)
 				end,
 			})

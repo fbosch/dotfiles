@@ -1,9 +1,10 @@
 import { tool, type Plugin } from "@opencode-ai/plugin";
 import { join } from "node:path";
 
-const LIBEXEC_DIRECTORY = join(import.meta.dir, "..", "libexec");
+const OPENCODE_DIRECTORY = join(import.meta.dir, "..", "..");
+const LIBEXEC_DIRECTORY = join(OPENCODE_DIRECTORY, "libexec");
 const SCRIPTS = {
-  "pr-review": join(import.meta.dir, "..", "scripts", "fetch-ado-pr.sh"),
+  "pr-review": join(OPENCODE_DIRECTORY, "scripts", "fetch-ado-pr.sh"),
   pbi: join(LIBEXEC_DIRECTORY, "azure", "ado_pbi_fetch.ts"),
   "test-case": join(LIBEXEC_DIRECTORY, "azure", "ado_case_fetch.ts"),
 } as const;
