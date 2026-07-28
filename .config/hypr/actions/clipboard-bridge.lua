@@ -3,7 +3,7 @@
 
 local command = require("lib.command")
 local window = require("lib.window")
-local gaming = require("rules.gaming")
+local gaming = require("gaming")
 local async = require("lib.async")
 
 local M = {}

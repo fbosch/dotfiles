@@ -85,8 +85,22 @@ package.loaded.wezterm = {
 					foreground = "#BBBBBB",
 					semantic = {
 						muted = "#636363",
+						active_foreground = "#b7b7b7",
+						separator = "#515151",
+						tab_active_background = "#262626",
+						tab_inactive_background = "#191918",
+						subtle = "#999999",
+						attention = "#c49f6f",
+						critical = "#d79999",
+						agent = {
+							working = "#8f9a72",
+							idle = "#7f9b99",
+						},
 					},
-					ansi = {},
+					ansi = {
+						green = "#819B69",
+						yellow = "#B77E64",
+					},
 				},
 			},
 		}

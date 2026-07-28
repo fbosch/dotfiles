@@ -1,32 +1,32 @@
 local wezterm = require("wezterm")
 local scanlines_path = wezterm.config_dir .. "/scanlines.png"
-local theme = require("theme")
+local palette = require("theme")
 
 return function(config)
 	config.color_scheme = "zenwritten_dark"
 	config.colors = {
-		background = theme.base.bg,
+		background = palette.background,
 		tab_bar = {
-			background = theme.tab_bar.background,
+			background = palette.background,
 			active_tab = {
-				bg_color = theme.tab_bar.active_bg,
-				fg_color = theme.tab_bar.active_fg,
+				bg_color = palette.semantic.tab_active_background,
+				fg_color = palette.semantic.active_foreground,
 				intensity = "Normal",
 			},
 			inactive_tab = {
-				bg_color = theme.tab_bar.inactive_bg,
-				fg_color = theme.tab_bar.inactive_fg,
+				bg_color = palette.semantic.tab_inactive_background,
+				fg_color = palette.semantic.muted,
 			},
 		},
 	}
 	config.background = {
 		{
 			source = {
-				Color = theme.base.bg,
+				Color = palette.background,
 			},
 			width = "100%",
 			height = "100%",
-			opacity = 0.95,
+			opacity = 0.97,
 		},
 		{
 			source = {

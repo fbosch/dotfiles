@@ -8,7 +8,7 @@ local pane_states = {}
 local init_notice
 
 local nf = wezterm.nerdfonts or {}
-local theme = require("theme")
+local palette = require("theme")
 local detection = require("agent.detection")
 
 local detection_cache_ttl_ms = 5000
@@ -46,10 +46,10 @@ local fallback_icons = {
 }
 
 local fallback_colors = {
-	working = theme.agent.working,
-	waiting = theme.agent.waiting,
-	idle = theme.agent.idle,
-	inactive = theme.agent.inactive,
+	working = palette.semantic.agent.working,
+	waiting = palette.semantic.attention,
+	idle = palette.semantic.agent.idle,
+	inactive = palette.semantic.muted,
 }
 
 local agent_patterns = {

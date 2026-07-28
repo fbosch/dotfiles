@@ -5,7 +5,7 @@ local config_dir = home .. "/.config/hypr"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local command = require("lib.command")
-local gaming = require("rules.gaming")
+local gaming = require("gaming")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
 local json = require("lib.json")
 

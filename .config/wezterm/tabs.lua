@@ -2,7 +2,7 @@ local is_windows = package.config:sub(0, 1) == "\\"
 local wezterm = require("wezterm")
 local agent_deck = require("agent")
 local herdr = require("agent.herdr")
-local theme = require("theme")
+local palette = require("theme")
 
 local window_cols = wezterm.GLOBAL.window_cols or {}
 wezterm.GLOBAL.window_cols = window_cols
@@ -51,7 +51,7 @@ end
 local function get_tab_title_color(tab, wezterm_config, hover)
 	local tab_colors = wezterm_config and wezterm_config.colors and wezterm_config.colors.tab_bar
 	if tab_colors == nil then
-		return tab.is_active and theme.tab_bar.active_fg or theme.tab_bar.inactive_fg
+		return tab.is_active and palette.semantic.active_foreground or palette.semantic.muted
 	end
 
 	if tab.is_active and tab_colors.active_tab and tab_colors.active_tab.fg_color then
@@ -66,7 +66,7 @@ local function get_tab_title_color(tab, wezterm_config, hover)
 		return tab_colors.inactive_tab.fg_color
 	end
 
-	return tab.is_active and theme.tab_bar.active_fg or theme.tab_bar.inactive_fg
+	return tab.is_active and palette.semantic.active_foreground or palette.semantic.muted
 end
 
 local function get_display_title(title)

@@ -28,6 +28,10 @@ map("n", "<A-S-l>", ":wincmd L<CR>")
 map("n", "<leader>bd", ":bp <bar> :bd #<CR>", "Close buffer but keep split") -- close buffer but keep split
 map("n", "<leader>0", ":b#<CR>", "Go to previoulsy active buffer") --  previously active buffer
 
+-- tab controls
+map("n", "<A-h>", ":tabprevious<CR>", "Previous tab")
+map("n", "<A-l>", ":tabnext<CR>", "Next tab")
+
 -- auto switch to newly created splits
 map("n", "<C-W>v", ":vsplit<CR> <bar> :wincmd l<CR>")
 map("n", "<C-W>s", ":split<CR> <bar> :wincmd j<CR>")

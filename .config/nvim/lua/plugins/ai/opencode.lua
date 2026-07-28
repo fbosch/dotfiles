@@ -142,7 +142,7 @@ return {
 				local session_id = saved_session_id()
 				if type(session_id) ~= "string" or session_id == "" then
 					opened_fresh_opencode = true
-					return environment .. "opencode -- --port"
+					return environment .. "opencode --port"
 				end
 
 				return environment .. "opencode --port --session " .. vim.fn.shellescape(session_id)

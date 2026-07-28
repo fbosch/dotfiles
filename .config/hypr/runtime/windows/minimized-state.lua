@@ -6,7 +6,7 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 
 local json = require("lib.json")
 local command_lib = require("lib.command")
-local gaming = require("rules.gaming")
+local gaming = require("gaming")
 local hypr_ipc = nil
 
 local minimized_workspace_prefix = "special:minimized"

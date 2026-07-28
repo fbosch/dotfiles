@@ -2,14 +2,14 @@ local is_windows = package.config:sub(0, 1) == "\\"
 local wezterm = require("wezterm")
 local agent_deck = require("agent")
 local herdr = require("agent.herdr")
-local theme = require("theme")
+local palette = require("theme")
 local codex = require("status.codex")
 local workhours = require("status.workhours")
 
-local color_gray = { Color = theme.base.fg_muted }
-local color_separator = { Color = theme.base.separator }
-local color_white = { Color = theme.base.fg }
-local color_waiting = { Color = theme.agent.waiting }
+local color_gray = { Color = palette.semantic.muted }
+local color_separator = { Color = palette.semantic.separator }
+local color_white = { Color = palette.foreground }
+local color_waiting = { Color = palette.semantic.attention }
 local right_status_cols = wezterm.GLOBAL and wezterm.GLOBAL.right_status_cols or {}
 
 if wezterm.GLOBAL then

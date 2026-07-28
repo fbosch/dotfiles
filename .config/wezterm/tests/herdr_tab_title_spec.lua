@@ -17,9 +17,9 @@ package.loaded.wezterm = {
 }
 
 package.loaded.theme = {
-	tab_bar = {
-		active_fg = "active",
-		inactive_fg = "inactive",
+	semantic = {
+		active_foreground = "active",
+		muted = "inactive",
 	},
 }
 

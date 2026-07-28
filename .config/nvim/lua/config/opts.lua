@@ -16,6 +16,7 @@ vim.opt.syntax = "off"
 
 -- timings
 vim.opt.timeoutlen = 200
+vim.opt.ttimeoutlen = 100
 vim.opt.updatetime = 300
 
 -- visual

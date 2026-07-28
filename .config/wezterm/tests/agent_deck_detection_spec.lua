@@ -103,11 +103,13 @@ package.preload.wezterm = function()
 end
 package.preload.theme = function()
 	return {
-		agent = {
+		semantic = {
+			attention = "yellow",
+			muted = "gray",
+			agent = {
 			working = "green",
-			waiting = "yellow",
 			idle = "blue",
-			inactive = "gray",
+			},
 		},
 	}
 end

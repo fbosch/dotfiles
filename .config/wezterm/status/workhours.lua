@@ -1,12 +1,13 @@
 local wezterm = require("wezterm")
+local palette = require("theme")
 local time_utils = require("utils.time")
 
 local colors = {
-	start = { Color = "#999999" },
-	half = { Color = "#B77E64" },
-	end_time = { Color = "#d2af0d" },
-	good = { Color = "#819B69" },
-	over = { Color = "#d79999" },
+	start = { Color = palette.semantic.subtle },
+	half = { Color = palette.ansi.yellow },
+	end_time = { Color = palette.semantic.attention },
+	good = { Color = palette.ansi.green },
+	over = { Color = palette.semantic.critical },
 }
 
 local function get_display(window)

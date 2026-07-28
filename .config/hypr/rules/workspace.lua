@@ -5,7 +5,7 @@
 -- before the count-specific overrides for deterministic startup behavior.
 
 local system = require("lib.system")
-local gaming = require("rules.gaming")
+local gaming = require("gaming")
 local host = system.hostname()
 
 if host == "rvn-pc" then

@@ -2,7 +2,7 @@ local M = {}
 local async = require("lib.async")
 local monitor_role = require("lib.monitor_role")
 local order_state = require("layouts.shared.order_state")
-local gaming = require("rules.gaming")
+local gaming = require("gaming")
 
 local directions = {
 	l = "left",

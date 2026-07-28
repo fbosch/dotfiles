@@ -1,14 +1,6 @@
 local wezterm = require("wezterm")
-local theme = require("theme")
+local palette = require("theme")
 
-local colors = {
-	gray = { Color = theme.base.fg_muted },
-	separator = { Color = theme.base.separator },
-	good = { Color = "#819B69" },
-	warn = { Color = "#d2af0d" },
-	caution = { Color = "#B77E64" },
-	critical = { Color = "#d79999" },
-}
 local profile_aliases = {
 	["indigo-harbor-ddce"] = "fbb",
 	["atlas-thicket-3afa"] = "jpb",
@@ -71,15 +63,15 @@ local command_path = table.concat({
 
 local function usage_color(remaining)
 	if remaining >= 75 then
-		return colors.good
+		return palette.ansi.green
 	end
 	if remaining >= 50 then
-		return colors.warn
+		return palette.semantic.attention
 	end
 	if remaining >= 25 then
-		return colors.caution
+		return palette.ansi.yellow
 	end
-	return colors.critical
+	return palette.semantic.critical
 end
 
 local function parse_utc_timestamp(value)
@@ -172,17 +164,17 @@ end
 local function reset_credit_color(expires_at)
 	local expires_timestamp = type(expires_at) == "string" and parse_utc_timestamp(expires_at) or nil
 	if expires_timestamp == nil then
-		return colors.gray
+		return palette.semantic.muted
 	end
 
 	local seconds = expires_timestamp - os.time()
 	if seconds <= 24 * 60 * 60 then
-		return colors.critical
+		return palette.semantic.critical
 	end
 	if seconds <= 7 * 24 * 60 * 60 then
-		return colors.warn
+		return palette.semantic.attention
 	end
-	return colors.gray
+	return palette.semantic.muted
 end
 
 local function get_usage()
@@ -236,10 +228,10 @@ local function append(items)
 	end
 
 	if profile then
-		table.insert(items, { Foreground = colors.gray })
+		table.insert(items, { Foreground = { Color = palette.semantic.muted } })
 		table.insert(items, { Text = profile })
 		if reset_count ~= nil then
-			table.insert(items, { Foreground = reset_credit_color(reset_expires_at) })
+			table.insert(items, { Foreground = { Color = reset_credit_color(reset_expires_at) } })
 			table.insert(items, { Text = " (" .. reset_count .. ") " })
 		else
 			table.insert(items, { Text = " " })
@@ -247,30 +239,30 @@ local function append(items)
 	end
 
 	for index, window in ipairs(windows) do
-		local window_color = (#windows == 1 and window.remaining == 0) and colors.gray or window.color
+		local window_color = (#windows == 1 and window.remaining == 0) and palette.semantic.muted or window.color
 		local filled = math.floor(window.remaining * 9 / 100)
 		if window.remaining > 0 and filled == 0 then
 			filled = 1
 		end
-		table.insert(items, { Foreground = window_color })
+		table.insert(items, { Foreground = { Color = window_color } })
 		table.insert(items, { Text = string.rep("▂", filled) })
-		table.insert(items, { Foreground = colors.gray })
+		table.insert(items, { Foreground = { Color = palette.semantic.muted } })
 		table.insert(items, { Text = string.rep("▁", 9 - filled) .. " " })
-		table.insert(items, { Foreground = window_color })
+		table.insert(items, { Foreground = { Color = window_color } })
 		table.insert(items, { Text = window.remaining .. "%" })
 		local countdown = format_countdown(window.resets_at)
 		if countdown then
-			table.insert(items, { Foreground = colors.gray })
+			table.insert(items, { Foreground = { Color = palette.semantic.muted } })
 			table.insert(items, { Text = " " .. countdown })
 		end
 		if index < #windows then
-			table.insert(items, { Foreground = colors.gray })
+			table.insert(items, { Foreground = { Color = palette.semantic.muted } })
 			table.insert(items, { Text = " " })
 		end
 	end
 
 	table.insert(items, { Text = " " })
-	table.insert(items, { Foreground = colors.separator })
+	table.insert(items, { Foreground = { Color = palette.semantic.separator } })
 	table.insert(items, { Text = "▏" })
 end
 

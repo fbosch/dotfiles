@@ -50,12 +50,18 @@ return function(config)
 			mods = "CTRL|ALT",
 			action = wezterm.action.SplitHorizontal({ domain = "CurrentPaneDomain" }),
 		},
-		-- Pane navigation
+		-- Tab navigation
 		{
 			key = "h",
 			mods = "CTRL|SHIFT",
-			action = wezterm.action.ActivatePaneDirection("Left"),
+			action = wezterm.action.ActivateTabRelative(-1),
 		},
+		{
+			key = "l",
+			mods = "CTRL|SHIFT",
+			action = wezterm.action.ActivateTabRelative(1),
+		},
+		-- Vertical pane navigation
 		{
 			key = "j",
 			mods = "CTRL|SHIFT",
@@ -65,11 +71,6 @@ return function(config)
 			key = "k",
 			mods = "CTRL|SHIFT",
 			action = wezterm.action.ActivatePaneDirection("Up"),
-		},
-		{
-			key = "l",
-			mods = "CTRL|SHIFT",
-			action = wezterm.action.ActivatePaneDirection("Right"),
 		},
 		-- Pane resizing
 		{
