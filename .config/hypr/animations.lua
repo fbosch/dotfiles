@@ -1,5 +1,7 @@
 -- Animations ported from animations.conf.
 
+local M = {}
+
 hl.config({
 	animations = {
 		enabled = true,
@@ -10,10 +12,16 @@ hl.curve("window", { type = "spring", mass = 1, stiffness = 302, dampening = 34.
 hl.curve("windowQuick", { type = "spring", mass = 1, stiffness = 3780, dampening = 123 })
 hl.curve("windowInstant", { type = "spring", mass = 1, stiffness = 14745, dampening = 242.9 })
 
+local windows_move_animation = { leaf = "windowsMove", enabled = true, speed = 1.5, spring = "windowQuick" }
+
+function M.restore_windows_move()
+	hl.animation(windows_move_animation)
+end
+
 hl.animation({ leaf = "global", enabled = true, speed = 10, spring = "window" })
 hl.animation({ leaf = "border", enabled = true, speed = 1.75, spring = "windowQuick" })
 hl.animation({ leaf = "windows", enabled = true, speed = 4.79, spring = "window" })
-hl.animation({ leaf = "windowsMove", enabled = true, speed = 1.5, spring = "windowQuick" })
+M.restore_windows_move()
 hl.animation({ leaf = "windowsIn", enabled = true, speed = 1.5, spring = "windowQuick", style = "popin 96%" })
 hl.animation({ leaf = "windowsOut", enabled = true, speed = 0.8, spring = "windowInstant", style = "popin 94%" })
 hl.animation({ leaf = "fadeIn", enabled = true, speed = 1.73, spring = "windowQuick" })
@@ -43,3 +51,5 @@ hl.animation({ leaf = "fadeLayersOut", enabled = true, speed = 1.39, spring = "w
 hl.animation({ leaf = "layers", enabled = true, speed = 3.81, spring = "windowQuick" })
 hl.animation({ leaf = "layersIn", enabled = true, speed = 4, spring = "windowQuick", style = "fade" })
 hl.animation({ leaf = "layersOut", enabled = true, speed = 1.5, spring = "windowQuick", style = "fade" })
+
+return M

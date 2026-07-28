@@ -44,7 +44,7 @@ run_daemon() {
   fi
 
   trap 'rm -rf "$lock_dir" "$command_socket"' EXIT INT TERM
-  lua "$daemon"
+  luajit "$daemon"
 }
 
 case "$mode" in

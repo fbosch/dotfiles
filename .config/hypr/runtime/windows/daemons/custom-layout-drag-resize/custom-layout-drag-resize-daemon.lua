@@ -18,8 +18,6 @@ local drag_numerator = 1
 local drag_denominator = 1
 local monitors_by_id = {}
 local drag_active = false
-local windows_move_animation = [[hl.animation({ leaf = "windowsMove", enabled = true, speed = 1.5, bezier = "quick" })]]
-
 local hypr_socket = hypr_ipc.socket_path(".socket.sock")
 
 local function request(message)
@@ -47,7 +45,7 @@ local function restore_resize_animation()
 		return
 	end
 
-	eval(windows_move_animation)
+	eval([[require("animations").restore_windows_move()]])
 end
 
 local function json_number(text, key)
@@ -463,6 +461,7 @@ local function run()
 		local line = accept_command(0.1)
 		if line == "start" then
 			pcall(start_drag)
+			stop_drag()
 		elseif line == "ping" then
 			-- Health check for the shell wrapper's singleton guard.
 		elseif line == "stop" then
