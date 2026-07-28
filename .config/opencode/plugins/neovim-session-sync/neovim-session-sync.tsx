@@ -10,7 +10,7 @@ const herdr_lifecycle_source = "herdr:opencode"
 let herdr_report_seq = Date.now() * 1000
 
 function report_herdr_session_title(title: string | null) {
-  const pane_id = process.env.HERDR_PANE_ID
+  const pane_id = process.env.OPENCODE_NVIM_HERDR_PANE_ID ?? process.env.HERDR_PANE_ID
   const socket_path = process.env.HERDR_SOCKET_PATH
   if (
     process.env.HERDR_ENV !== "1" ||
