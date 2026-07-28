@@ -75,11 +75,23 @@ function parseRemote(name: string, url: string): Remote | null {
     return { provider: "azure-devops", name, org: `https://dev.azure.com/${ssh[1]}`, project: decodeURIComponent(ssh[2]), repo: stripGitSuffix(decodeURIComponent(ssh[3])) }
   }
 
+  const legacySsh = url.match(/^[^@]+@vs-ssh\.visualstudio\.com:v3\/([^/]+)\/([^/]+)\/([^/]+)$/)
+  if (legacySsh?.[1] !== undefined && legacySsh[2] !== undefined && legacySsh[3] !== undefined) {
+    return { provider: "azure-devops", name, org: `https://dev.azure.com/${legacySsh[1]}`, project: decodeURIComponent(legacySsh[2]), repo: stripGitSuffix(decodeURIComponent(legacySsh[3])) }
+  }
+
   try {
     const parsed = new URL(url)
     const segments = parsed.pathname.split("/").filter(Boolean).map(decodeURIComponent)
     if (parsed.hostname.endsWith("dev.azure.com") && segments[2] === "_git" && segments.length >= 4) {
       return { provider: "azure-devops", name, org: `https://dev.azure.com/${segments[0]}`, project: segments[1], repo: stripGitSuffix(segments[3]) }
+    }
+    if (parsed.hostname.endsWith("visualstudio.com") && segments[1] === "_git" && segments.length >= 3) {
+      const organization = parsed.hostname.split(".")[0]
+      if (organization === undefined || organization.length === 0) {
+        return null
+      }
+      return { provider: "azure-devops", name, org: `https://dev.azure.com/${organization}`, project: segments[0], repo: stripGitSuffix(segments[2]) }
     }
   } catch {
     return null
@@ -290,6 +302,54 @@ function azureResult(value: unknown): string {
   return string(value) ?? "unknown"
 }
 
+function azureLogText(stdout: string): string {
+  const parsed = parseJson(stdout)
+  if (typeof parsed === "string") {
+    return parsed
+  }
+  let lines: unknown[] | null = null
+  if (Array.isArray(parsed)) {
+    lines = parsed
+  } else if (isRecord(parsed) && Array.isArray(parsed.value)) {
+    lines = parsed.value
+  }
+  if (lines === null) {
+    return stdout.trim()
+  }
+  return lines
+    .map((line) => typeof line === "string" ? line : isRecord(line) ? string(line.line) : undefined)
+    .filter((line): line is string => line !== undefined)
+    .join("\n")
+}
+
+async function azureLogLineCounts(remote: Remote, runId: number, cwd: string): Promise<Map<number, number>> {
+  const result = await runCommand(
+    "az",
+    ["devops", "invoke", "--area", "build", "--resource", "logs", "--route-parameters", `project=${remote.project}`, `buildId=${runId}`, "--api-version", "7.1", "--org", remote.org ?? "", "--output", "json", "--only-show-errors"],
+    cwd,
+    { ...process.env, AZURE_EXTENSION_USE_DYNAMIC_INSTALL: "yes_without_prompt" },
+  )
+  const parsed = parseJson(result.stdout)
+  let logs: unknown[] = []
+  if (Array.isArray(parsed)) {
+    logs = parsed
+  } else if (isRecord(parsed) && Array.isArray(parsed.value)) {
+    logs = parsed.value
+  }
+  const lineCounts = new Map<number, number>()
+  for (const log of logs) {
+    if (isRecord(log) === false) {
+      continue
+    }
+    const id = number(log.id)
+    const lineCount = number(log.lineCount)
+    if (id !== undefined && lineCount !== undefined) {
+      lineCounts.set(id, lineCount)
+    }
+  }
+  return lineCounts
+}
+
 async function azureTimeline(remote: Remote, runId: number, cwd: string): Promise<string[]> {
   const result = await runCommand(
     "az",
@@ -302,6 +362,7 @@ async function azureTimeline(remote: Remote, runId: number, cwd: string): Promis
     return []
   }
 
+  const lineCounts = await azureLogLineCounts(remote, runId, cwd)
   const failures: string[] = []
   for (const record of timeline.records) {
     if (isRecord(record) === false || azureResult(record.result) !== "failed") {
@@ -312,18 +373,17 @@ async function azureTimeline(remote: Remote, runId: number, cwd: string): Promis
       ? record.issues.filter(isRecord).map((issue) => string(issue.message)).filter((message): message is string => message !== undefined)
       : []
     const log = isRecord(record.log) ? number(record.log.id) : undefined
+    const endLine = log === undefined ? 200 : lineCounts.get(log) ?? 200
+    const startLine = Math.max(1, endLine - 199)
     const logResult = log === undefined
       ? null
       : await runCommand(
           "az",
-          ["devops", "invoke", "--area", "build", "--resource", "logs", "--route-parameters", `project=${remote.project}`, `buildId=${runId}`, `logId=${log}`, "--query-parameters", "startLine=1", "endLine=200", "--api-version", "7.1", "--org", remote.org ?? "", "--output", "json", "--only-show-errors"],
+          ["devops", "invoke", "--area", "build", "--resource", "logs", "--route-parameters", `project=${remote.project}`, `buildId=${runId}`, `logId=${log}`, "--query-parameters", `startLine=${startLine}`, `endLine=${endLine}`, "--api-version", "7.1", "--org", remote.org ?? "", "--output", "json", "--only-show-errors"],
           cwd,
           { ...process.env, AZURE_EXTENSION_USE_DYNAMIC_INSTALL: "yes_without_prompt" },
         )
-    const logLines = logResult === null ? null : parseJson(logResult.stdout)
-    const logText = Array.isArray(logLines)
-      ? logLines.map(string).filter((line): line is string => line !== undefined).join("\n")
-      : ""
+    const logText = logResult === null || logResult.exitCode !== 0 ? "" : azureLogText(logResult.stdout)
     const details = [...issues, ...(logText.length > 0 ? [excerpt(logText)] : [])]
     failures.push(`- ${name}${details.length === 0 ? "" : `\n  ${details.join("\n  ")}`}`)
   }
