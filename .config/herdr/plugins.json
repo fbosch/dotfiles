@@ -38,5 +38,40 @@
     "source": {
       "kind": "local"
     }
+  },
+  {
+    "plugin_id": "worktrunk-lifecycle",
+    "name": "Worktrunk lifecycle",
+    "version": "0.1.0",
+    "min_herdr_version": "0.7.0",
+    "description": "Runs compatible Worktrunk post-lifecycle hooks for native Herdr worktrees.",
+    "manifest_path": "/Users/fbb/dotfiles/.config/herdr/plugins/worktrunk-lifecycle/herdr-plugin.toml",
+    "plugin_root": "/Users/fbb/dotfiles/.config/herdr/plugins/worktrunk-lifecycle",
+    "enabled": true,
+    "platforms": [
+      "linux",
+      "macos"
+    ],
+    "events": [
+      {
+        "on": "worktree.created",
+        "command": [
+          "bash",
+          "-c",
+          "exec \"$HERDR_PLUGIN_ROOT/scripts/run-hook.sh\" pre-start"
+        ]
+      },
+      {
+        "on": "worktree.removed",
+        "command": [
+          "bash",
+          "-c",
+          "exec \"$HERDR_PLUGIN_ROOT/scripts/run-hook.sh\" post-remove"
+        ]
+      }
+    ],
+    "source": {
+      "kind": "local"
+    }
   }
 ]
