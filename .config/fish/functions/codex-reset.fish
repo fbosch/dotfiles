@@ -146,6 +146,7 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
         printf '  %-14s %s\n' "Windows reset" "$fields[1]"
         printf '  %-14s %s\n' "Redeemed" "$fields[3]"
         printf '  %-14s %s%s%s\n' "Code" "$muted_color" "$fields[2]" "$color_reset"
+        wezterm_set_user_var codex_reset_refreshed (date +%s)
         return 0
     end
 

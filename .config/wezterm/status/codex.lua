@@ -282,6 +282,8 @@ local function handle_user_var(name)
 		return true
 	end
 	if name == "codex_reset_refreshed" then
+		usage.checked_at = 0
+		usage.windows = {}
 		reset_credits.checked_at = 0
 		return true
 	end

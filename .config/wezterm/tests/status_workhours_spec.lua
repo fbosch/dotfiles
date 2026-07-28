@@ -5,6 +5,8 @@ package.path = package.path
 local registered_events = {}
 local original_io_open = io.open
 local mock_used_percent = 57
+local mock_credit_count = 2
+local usage_refreshes = 0
 
 io.open = function(path, mode)
 	if mode == "r" and path:match("codex%-usage%.json$") then
@@ -68,10 +70,11 @@ package.loaded.wezterm = {
 			}
 		end
 
-		if content:match('"availableCount":2') then
+		local available_count = content:match('"availableCount":(%d+)')
+		if available_count then
 			return {
 				accountId = "f6b80000-0000-0000-0000-00000000efd2",
-				availableCount = 2,
+				availableCount = tonumber(available_count),
 			}
 		end
 
@@ -93,7 +96,7 @@ package.loaded.wezterm = {
 	end,
 	run_child_process = function(argv)
 		if argv[1] == "/bin/sh" and argv[3]:match("reset_helper") then
-			return true, [[{"accountId":"f6b80000-0000-0000-0000-00000000efd2","availableCount":2}]], ""
+			return true, string.format('{"accountId":"f6b80000-0000-0000-0000-00000000efd2","availableCount":%d}', mock_credit_count), ""
 		end
 
 		if argv[1] == "codexbar" then
@@ -102,7 +105,9 @@ package.loaded.wezterm = {
 
 		return true, "herdr-agents", ""
 	end,
-	background_child_process = function() end,
+	background_child_process = function()
+		usage_refreshes = usage_refreshes + 1
+	end,
 }
 
 package.loaded["agent"] = {
@@ -208,6 +213,13 @@ end
 captured_status = nil
 user_var_changed(window, nil, "codex_profile_changed")
 assert_eq(type(captured_status), "table", "profile change rerenders status")
+
+mock_credit_count = 1
+local usage_refreshes_before_reset = usage_refreshes
+captured_status = nil
+user_var_changed(window, nil, "codex_reset_refreshed")
+assert_eq(find_text(captured_status, " (1) "), true, "reset redemption refreshes credit count")
+assert_eq(usage_refreshes, usage_refreshes_before_reset + 1, "reset redemption refreshes usage")
 
 captured_status = nil
 update_status({

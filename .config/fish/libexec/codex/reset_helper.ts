@@ -289,6 +289,19 @@ async function creditsForAccount(credentials: Credentials, refresh: boolean): Pr
     return creditsResult;
 }
 
+function invalidateCachedCredits(accountId: string): void {
+    const cache = readCache();
+    if (!cache.accounts[accountId]) {
+        return;
+    }
+
+    delete cache.accounts[accountId];
+    const writeResult = writeJsonAtomic(cacheFile, cache, 0o600);
+    if (writeResult.isErr()) {
+        console.error(`codex_reset_helper: reset credit redeemed, but failed to invalidate cache: ${writeResult.error}`);
+    }
+}
+
 function parseExpiry(value?: string | null): number | null {
     if (!value) {
         return null;
@@ -534,6 +547,8 @@ async function consume(args: Arguments, credentials: Credentials): Promise<AppRe
     if (!parsed.success) {
         return err("consume response has an unexpected shape");
     }
+
+    invalidateCachedCredits(credentials.accountId);
 
     return ok({
         code: parsed.data.code || null,
