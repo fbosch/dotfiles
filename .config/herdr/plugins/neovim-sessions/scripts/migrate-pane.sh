@@ -11,7 +11,8 @@ if jq -e '[.result.process_info.foreground_processes[]?.name] | any(. == "fish" 
 	result="$("$herdr_bin" pane split --pane "$pane_id" --direction right --cwd "$cwd" --no-focus)"
 	new_pane_id="$(jq -er '.result.pane.pane_id' <<<"$result")"
 	"$herdr_bin" pane rename "$new_pane_id" nvim
-	"$herdr_bin" pane run "$new_pane_id" "HERDR_MINI_SESSION_RESTORE=1 exec nvim"
+	nvim_session="herdr-${new_pane_id/:/-}"
+	"$herdr_bin" pane run "$new_pane_id" "NVIM_SESSION=$nvim_session nvim"
 	"$herdr_bin" pane close "$pane_id"
 	exec "$herdr_bin" pane focus "$new_pane_id"
 fi

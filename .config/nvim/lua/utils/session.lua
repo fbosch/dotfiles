@@ -128,6 +128,11 @@ function M.set_opencode_session_id(session_id, session)
 		return false
 	end
 
+	session = session or M.get_current()
+	if session == nil then
+		return false
+	end
+
 	local metadata = M.get_metadata(session)
 	if metadata.opencode_session_id == session_id then
 		return true

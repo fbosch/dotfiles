@@ -14,48 +14,6 @@ title = "Migrate pane to Neovim session restore"
 contexts = ["workspace"]
 command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/migrate-nvim-session.sh\""]
 
-[[actions]]
-id = "terminal"
-title = "Terminal"
-contexts = ["workspace"]
-command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" terminal"]
-
-[[actions]]
-id = "mprocs"
-title = "Mprocs"
-contexts = ["workspace"]
-command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" mprocs"]
-
-[[actions]]
-id = "lazygit"
-title = "LazyGit"
-contexts = ["workspace"]
-command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" lazygit"]
-
-[[actions]]
-id = "gac"
-title = "Git add and commit"
-contexts = ["workspace"]
-command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" gac"]
-
-[[actions]]
-id = "btop"
-title = "btop"
-contexts = ["workspace"]
-command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" btop"]
-
-[[actions]]
-id = "checkmate"
-title = "Checkmate"
-contexts = ["workspace"]
-command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" checkmate"]
-
-[[actions]]
-id = "scooter"
-title = "Scooter"
-contexts = ["workspace"]
-command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/dispatch.sh\" scooter"]
-
 [[panes]]
 id = "terminal"
 title = "Terminal"

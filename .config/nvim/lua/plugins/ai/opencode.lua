@@ -61,6 +61,11 @@ return {
 				return type(session_id) == "string" and session_id or nil
 			end
 
+			local function is_herdr_session()
+				local nvim_session = session.get_current(vim.fn.getcwd())
+				return nvim_session ~= nil and nvim_session.specifier:match("^herdr%-w%d+%-p%d+$") ~= nil
+			end
+
 			local function capture_fresh_session_id(cwd)
 				local normalized_cwd = normalize_path(cwd)
 				if normalized_cwd == nil then
@@ -124,9 +129,7 @@ return {
 				end
 
 				local cwd = vim.fn.getcwd()
-				local environment = "HERDR_ENV=0 HERDR_SOCKET_PATH= OPENCODE_NVIM_SOCKET="
-					.. vim.fn.shellescape(socket)
-					.. " "
+				local environment = "OPENCODE_NVIM_SOCKET=" .. vim.fn.shellescape(socket) .. " "
 				local session_id = saved_session_id()
 				if type(session_id) ~= "string" or session_id == "" then
 					opened_fresh_opencode = true
@@ -144,7 +147,7 @@ return {
 				pattern = "SessionLoadPost",
 				once = true,
 				callback = function()
-					if vim.env.HERDR_MINI_SESSION_RESTORE ~= "1" then
+					if not is_herdr_session() then
 						return
 					end
 
