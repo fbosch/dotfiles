@@ -20,17 +20,17 @@
     "./plugins/hyprland/hyprland.ts",
     "./plugins/direnv/direnv-session-env.ts",
     "./plugins/ado-fetch/ado-fetch.ts",
-    [
-      "./plugins/context-images/context-images.ts",
-      {
-        "imageReadResults": {
-          "paths": [
-            "~/.config/opencode/TONE.md"
-          ]
-        },
-        "imageNestedInstructions": true
-      }
-    ],
+    // [
+    //   "./plugins/context-images/context-images.ts",
+    //   {
+    //     "imageReadResults": {
+    //       "paths": [
+    //         "~/.config/opencode/TONE.md"
+    //       ]
+    //     },
+    //     "imageNestedInstructions": true
+    //   }
+    // ],
     "./plugins/headroom-opencode-transport/headroom-opencode-transport.ts",
     "./plugins/neovim-herdr-agent/neovim-herdr-agent.ts",
     "./plugins/responses-lite-compat/responses-lite-compat.ts",
