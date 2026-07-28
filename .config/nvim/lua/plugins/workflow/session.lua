@@ -5,6 +5,15 @@ local root_dir = session.get_root_dir()
 local session_file = session.get_name()
 local path = session.get_path()
 
+local function mark_herdr_pane()
+	local pane_id = vim.env.HERDR_PANE_ID
+	if vim.env.HERDR_ENV ~= "1" or type(pane_id) ~= "string" or pane_id == "" then
+		return
+	end
+
+	vim.system({ "herdr", "pane", "rename", pane_id, "nvim" }, { detach = true })
+end
+
 local should_persist_session = not (
 	git.is_git_message_buffer() -- opened git message buffer
 	or vim.fn.argc() > 0 -- opened specific file
@@ -42,6 +51,7 @@ return {
 
 			vim.api.nvim_create_autocmd({ "VimEnter" }, {
 				callback = function()
+					mark_herdr_pane()
 					local existing_session = vim.loop.fs_stat(path)
 					if existing_session and existing_session.type == "file" then
 						vim.defer_fn(function()

@@ -5,6 +5,15 @@ description = "Context-aware terminal workflows that preserve Neovim FTerm short
 min_herdr_version = "0.7.0"
 platforms = ["linux", "macos"]
 
+[[startup]]
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/restore-nvim-sessions.sh\""]
+
+[[actions]]
+id = "migrate-nvim-session"
+title = "Migrate pane to Neovim session restore"
+contexts = ["workspace"]
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/migrate-nvim-session.sh\""]
+
 [[actions]]
 id = "terminal"
 title = "Terminal"

@@ -114,7 +114,9 @@ return {
 				end
 
 				local cwd = vim.fn.getcwd()
-				local environment = "OPENCODE_NVIM_SOCKET=" .. vim.fn.shellescape(socket) .. " "
+				local environment = "HERDR_ENV=0 HERDR_SOCKET_PATH= OPENCODE_NVIM_SOCKET="
+					.. vim.fn.shellescape(socket)
+					.. " "
 				local session_id = infer_session_id_for_cwd(cwd)
 				if type(session_id) ~= "string" or session_id == "" then
 					return environment .. "opencode -- --port"
@@ -126,6 +128,31 @@ return {
 			local function opencode_terminal()
 				return require("snacks.terminal")
 			end
+
+			vim.api.nvim_create_autocmd("User", {
+				pattern = "SessionLoadPost",
+				once = true,
+				callback = function()
+					if vim.env.HERDR_MINI_SESSION_RESTORE ~= "1" then
+						return
+					end
+
+					if infer_session_id_for_cwd(vim.fn.getcwd()) == nil then
+						return
+					end
+
+					vim.schedule(function()
+						opencode_terminal().open(opencode_command(), opencode_terminal_opts)
+					end)
+				end,
+			})
+
+			vim.api.nvim_create_autocmd("User", {
+				pattern = "SessionSavePre",
+				callback = function()
+					infer_session_id_for_cwd(vim.fn.getcwd())
+				end,
+			})
 
 			vim.g.opencode_opts = {
 				server = {

@@ -87,6 +87,7 @@
 	repo = /home/fbb/nixos
 	repo = /home/fbb/dotfiles
 	repo = /home/fbb/Projects/docs-cache
+	repo = /home/fbb/Faugus/battlenet/drive_c/Program Files (x86)/World of Warcraft
 
 [gpg]
 	format = ssh
