@@ -20,21 +20,8 @@
     "./plugins/hyprland/hyprland.ts",
     "./plugins/direnv/direnv-session-env.ts",
     "./plugins/ado-fetch/ado-fetch.ts",
-    // [
-    //   "./plugins/context-images/context-images.ts",
-    //   {
-    //     "imageReadResults": {
-    //       "paths": [
-    //         "~/.config/opencode/TONE.md"
-    //       ]
-    //     },
-    //     "imageNestedInstructions": true
-    //   }
-    // ],
-    "./plugins/headroom-opencode-transport/headroom-opencode-transport.ts",
     "./plugins/neovim-herdr-agent/neovim-herdr-agent.ts",
     "./plugins/responses-lite-compat/responses-lite-compat.ts",
-    "./plugins/rtk/rtk.ts",
     "./plugins/opencode-handoff/handoff.ts"
   ],
   "instructions": [
@@ -49,15 +36,6 @@
         "sh",
         "-lc",
         "exec fff-mcp --frecency-db \"${XDG_CACHE_HOME:-$HOME/.cache}/nvim/fff_nvim\""
-      ],
-      "enabled": true
-    },
-    "headroom": {
-      "type": "local",
-      "command": [
-        "headroom",
-        "mcp",
-        "serve"
       ],
       "enabled": true
     },
@@ -82,51 +60,28 @@
     },
     "bash": {
       "rm *": "ask",
-      "rtk rm *": "ask",
       "sudo *": "deny",
-      "rtk sudo *": "deny",
       "chmod *": "ask",
-      "rtk chmod *": "ask",
       "chmod +x *": "allow",
-      "rtk chmod +x *": "allow",
       "chown *": "ask",
-      "rtk chown *": "ask",
       "git push*": "ask",
-      "rtk git push*": "ask",
       "git stash drop*": "ask",
-      "rtk git stash drop*": "ask",
       "git stash clear*": "ask",
-      "rtk git stash clear*": "ask",
       "git rm *": "ask",
-      "rtk git rm *": "ask",
       "git reset*": "ask",
-      "rtk git reset*": "ask",
       "git rebase*": "ask",
-      "rtk git rebase*": "ask",
       "git worktree*": "ask",
-      "rtk git worktree*": "ask",
       "git worktree list*": "allow",
-      "rtk git worktree list*": "allow",
       "git worktree prune --dry-run*": "allow",
-      "rtk git worktree prune --dry-run*": "allow",
       "git checkout*": "ask",
-      "rtk git checkout*": "ask",
       "git switch*": "ask",
-      "rtk git switch*": "ask",
       "git clean*": "ask",
-      "rtk git clean*": "ask",
       "git restore*": "ask",
-      "rtk git restore*": "ask",
       "gh api*": "allow",
-      "rtk gh api*": "allow",
       "gh api * --method DELETE*": "ask",
-      "rtk gh api * --method DELETE*": "ask",
       "gh api * --method=DELETE*": "ask",
-      "rtk gh api * --method=DELETE*": "ask",
       "gh api * -X DELETE*": "ask",
-      "rtk gh api * -X DELETE*": "ask",
       "gh api * -XDELETE*": "ask",
-      "rtk gh api * -XDELETE*": "ask"
     }
   },
   "model": "openai/gpt-5.6-terra-fast",
