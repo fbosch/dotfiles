@@ -94,8 +94,7 @@ end
 
 # --- Keybindings ---
 if status is-interactive
-    bind -M insert \cc kill-whole-line
-    bind -M insert \cc repaint
+    bind -M insert \cc kill-whole-line repaint
     bind \cP ctrl_p_picker
     bind \cH ctrl_h_herdr
 end

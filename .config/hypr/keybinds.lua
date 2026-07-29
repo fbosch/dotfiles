@@ -126,6 +126,7 @@ end
 
 -- Workspace navigation
 -- Both selectors are intentional: one advances each workspace family.
+-- keybind-validator: allow-duplicate
 bind.register(main("mouse_down"), hl.dsp.focus({ workspace = "e+1" }))
 bind.register(main("mouse_up"), hl.dsp.focus({ workspace = "e-1" }))
 bind.register(main("mouse_down"), hl.dsp.focus({ workspace = "m+1" }))

@@ -65,6 +65,10 @@ validate-core:
 	fish -c "source ~/.config/fish/config.fish"
 	nvim --headless +checkhealth +qa
 
+# Check declared keybindings for duplicate tool and mode combinations.
+validate-keybinds:
+	bun scripts/validate-keybinds.ts
+
 # Run Lua diagnostics and config tests. Mode: baseline, changed, staged, ci.
 lua-quality mode="baseline":
 	bash scripts/lua-quality.sh {{mode}}
