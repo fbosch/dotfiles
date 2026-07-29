@@ -1,69 +1,7 @@
 local platform = require("utils.platform")
 
-local function find_tsgo(root_dir)
-	local dir = root_dir
-	while dir ~= nil do
-		local candidate = vim.fs.joinpath(dir, "node_modules", ".bin", "tsgo")
-		if vim.fn.executable(candidate) == 1 then
-			return candidate
-		end
-
-		local parent = vim.fs.dirname(dir)
-		if parent == nil or parent == dir then
-			break
-		end
-
-		dir = parent
-	end
-
-	return "tsgo"
-end
-
-local function tsgo_available(root_dir)
-	return vim.fn.executable(find_tsgo(root_dir)) == 1
-end
-
-local function typescript_root(bufnr)
-	local path = vim.api.nvim_buf_get_name(bufnr)
-	if path == "" then
-		return nil
-	end
-
-	if vim.fs.root(path, { "deno.json", "deno.jsonc" }) ~= nil then
-		return nil
-	end
-
-	return vim.fs.root(path, {
-		"package-lock.json",
-		"yarn.lock",
-		"pnpm-lock.yaml",
-		"bun.lockb",
-		"bun.lock",
-		"tsconfig.json",
-		"jsconfig.json",
-		"package.json",
-		".git",
-	})
-end
-
 local servers = {
-	ts_ls = {
-		cmd = { "typescript-language-server", "--stdio" },
-		root_dir = function(bufnr, on_dir)
-			local root = typescript_root(bufnr)
-			if root ~= nil and tsgo_available(root) == false then
-				on_dir(root)
-			end
-		end,
-	},
-	tsgo = {
-		root_dir = function(bufnr, on_dir)
-			local root = typescript_root(bufnr)
-			if root ~= nil and tsgo_available(root) then
-				on_dir(root)
-			end
-		end,
-	},
+	tsgo = {},
 	tailwindcss = {
 		cmd = { "tailwindcss-language-server", "--stdio" },
 	},
