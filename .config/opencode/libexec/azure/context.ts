@@ -70,6 +70,11 @@ export function detectOrgFromGitRemote(): string | null {
         return `https://dev.azure.com/${devAzureMatch[1]}`;
     }
 
+    const devAzureSshMatch = remote.match(/(?:^|@)ssh\.dev\.azure\.com(?::|\/)v3\/([^/]+)\//i);
+    if (devAzureSshMatch?.[1]) {
+        return `https://dev.azure.com/${devAzureSshMatch[1]}`;
+    }
+
     const visualStudioMatch = remote.match(/https:\/\/([^.]+)\.visualstudio\.com/);
     if (visualStudioMatch?.[1]) {
         return `https://${visualStudioMatch[1]}.visualstudio.com`;

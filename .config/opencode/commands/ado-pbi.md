@@ -11,6 +11,8 @@ If `$ARGUMENTS` is empty, infer PBI ID from current branch name (for example `AB
 
 **Fetched data:** Use the `ado_fetch` tool with `kind: "pbi"` and the supplied PBI input. If the input is empty, omit the tool's `input` argument so the helper can infer the PBI ID from the current branch.
 
+**Direct execution:** Call `ado_fetch` yourself. Do not use the `task` tool or delegate any part of this request.
+
 **Output format:**
 
 ```markdown

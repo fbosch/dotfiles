@@ -65,7 +65,7 @@ validate-core:
 	fish -c "source ~/.config/fish/config.fish"
 	nvim --headless +checkhealth +qa
 
-# Check declared keybindings for duplicate tool and mode combinations.
+# Check runtime and declared keybindings for overlapping input combinations.
 validate-keybinds:
 	bun scripts/validate-keybinds.ts
 

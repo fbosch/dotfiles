@@ -12,14 +12,14 @@ const bindings: Binding[] = [];
 const unsupported: string[] = [];
 
 function relative(path: string) {
-  return path.slice(root.length + 1);
+  return path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path;
 }
 
 function add(tool: string, scope: string, key: string, file: string, line: number, allowDuplicate = false) {
   bindings.push({
     tool,
     scope,
-    key: normalize(key, tool === "neovim"),
+    key: normalize(tool === "neovim" ? key.replaceAll(" ", "<space>") : key, tool === "neovim"),
     file: relative(file),
     line,
     allowDuplicate,
@@ -34,8 +34,11 @@ function normalize(key: string, preserveKeyCase = false) {
     ESC: "ESCAPE",
   };
   const expanded = key
+    .replace(/<(?:A|M)-S-([^>]+)>/gi, "ALT+SHIFT+$1")
+    .replace(/<(?:A|M)-([A-Z])>/g, "ALT+SHIFT+$1")
     .replace(/<C-([^>]+)>/gi, "CTRL+$1")
     .replace(/<A-([^>]+)>/gi, "ALT+$1")
+    .replace(/<M-([^>]+)>/gi, "ALT+$1")
     .replace(/<S-([^>]+)>/gi, "SHIFT+$1")
     .replace(/<leader>/gi, "LEADER+")
     .replace(/<esc>/gi, "ESCAPE+")
@@ -50,7 +53,9 @@ function normalize(key: string, preserveKeyCase = false) {
       return aliases[upper] ?? (preserveKeyCase ? part : upper);
     });
   const modifiers = ["CTRL", "ALT", "SHIFT", "SUPER"].filter((modifier) => parts.includes(modifier));
-  const keys = parts.filter((part) => !["CTRL", "ALT", "SHIFT", "SUPER"].includes(part));
+  const keys = parts
+    .filter((part) => !["CTRL", "ALT", "SHIFT", "SUPER"].includes(part))
+    .map((part) => (preserveKeyCase && modifiers.length === 0 ? part : part.toUpperCase()));
   return [...modifiers, ...keys].join("+");
 }
 
@@ -80,7 +85,8 @@ async function extractHerdr() {
       prefix = normalize(keys[0]);
       continue;
     }
-    for (const key of keys) add("herdr", "global", key.replaceAll("prefix", prefix), file, index + 1);
+    const scope = name.startsWith("navigate_") ? "navigate" : "global";
+    for (const key of keys) add("herdr", scope, key.replaceAll("prefix", prefix), file, index + 1);
   }
 }
 
@@ -127,7 +133,11 @@ async function extractHyprland() {
       unsupported.push(`${relative(file)}:${index + 1}: dynamic Hyprland binding`);
       continue;
     }
-    const phase = /release\s*=\s*true/.test(argumentsText) ? "release" : "press";
+    const phase = /release\s*=\s*true/.test(argumentsText)
+      ? "release"
+      : /non_consuming\s*=\s*true/.test(argumentsText)
+        ? "non-consuming"
+        : "press";
     const allowDuplicate = lines.slice(Math.max(0, index - 10), index).some((entry) =>
       entry.includes("keybind-validator: allow-duplicate"),
     );
@@ -136,16 +146,28 @@ async function extractHyprland() {
 }
 
 async function extractNeovim() {
-  const directory = `${root}/.config/nvim/lua/config/keymaps`;
-  for (const file of new Bun.Glob("**/*.lua").scanSync(directory)) {
-    const path = `${directory}/${file}`;
-    const lines = await source(path);
-    for (const [index, line] of lines.entries()) {
-      const match = line.match(/\bmap\(\s*"([nvisxot]+)"\s*,\s*"([^"]+)"/);
-      if (!match) continue;
-      for (const mode of match[1]) add("neovim", mode, match[2], path, index + 1);
-    }
+  const process = Bun.spawn(["nvim", "--headless", "+luafile scripts/keybinds/neovim.lua", "+qa"], {
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [output, errors, exitCode] = await Promise.all([
+    new Response(process.stdout).text(),
+    new Response(process.stderr).text(),
+    process.exited,
+  ]);
+  if (exitCode !== 0) throw new Error(`Neovim runtime keymap query failed: ${errors.trim()}`);
+
+  const report = JSON.parse(output) as {
+    bindings: { source: string; mode: string; lhs: string; context: string; desc?: string; owner?: string }[];
+    limitations: string[];
+  };
+  for (const map of report.bindings) {
+    const lhs = map.lhs.startsWith(" ") ? `<leader>${map.lhs.slice(1)}` : map.lhs;
+    const detail = [map.source, map.owner, map.desc].filter(Boolean).join(": ");
+    add("neovim", `${map.mode}:${map.context}`, lhs, `neovim ${detail || "unnamed"}`, 0);
   }
+  for (const limitation of report.limitations) unsupported.push(`Neovim: ${limitation}`);
 }
 
 async function extractWezterm() {
@@ -178,12 +200,43 @@ for (const binding of bindings) {
 const conflicts = [...duplicates.values()].filter(
   (entries) => entries.length > 1 && !entries.every((entry) => entry.allowDuplicate),
 );
+const capturingPairs = new Set([
+  "fish:herdr",
+  "herdr:neovim",
+  "herdr:wezterm",
+  "fish:hyprland",
+  "herdr:hyprland",
+  "hyprland:neovim",
+  "hyprland:wezterm",
+  "fish:wezterm",
+  "neovim:wezterm",
+]);
+const crossToolConflicts: Binding[][] = [];
+for (let index = 0; index < bindings.length; index++) {
+  for (let other = index + 1; other < bindings.length; other++) {
+    const left = bindings[index];
+    const right = bindings[other];
+    const pair = [left.tool, right.tool].sort().join(":");
+    const capturesInput = (binding: Binding) =>
+      binding.scope !== "non-consuming" && !(binding.tool === "herdr" && binding.scope !== "global");
+    if (left.key === right.key && capturingPairs.has(pair) && capturesInput(left) && capturesInput(right)) {
+      crossToolConflicts.push([left, right]);
+    }
+  }
+}
 console.log(`Validated ${bindings.length} bindings across ${new Set(bindings.map((binding) => binding.tool)).size} tools.`);
 for (const conflict of conflicts) {
   const [first] = conflict;
   console.error(`\nerror: ${first.key} is bound multiple times in ${first.tool} (${first.scope})`);
   for (const binding of conflict) console.error(`  ${binding.file}:${binding.line}`);
 }
+for (const conflict of crossToolConflicts) {
+  console.error(`\nerror: ${conflict[0].key} overlaps across tools`);
+  for (const binding of conflict) {
+    const location = binding.line > 0 ? `${binding.file}:${binding.line}` : binding.file;
+    console.error(`  ${binding.tool} (${binding.scope}): ${location}`);
+  }
+}
 for (const message of unsupported) console.warn(`warning: ${message}`);
 
-if (conflicts.length > 0) process.exit(1);
+if (conflicts.length > 0 || crossToolConflicts.length > 0) process.exit(1);

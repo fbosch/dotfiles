@@ -16,12 +16,12 @@ close_pane = "prefix+w"
 last_pane = "prefix+p"
 zoom = "prefix+shift+z"
 
-next_agent = "alt+shift+j"
-previous_agent = ["prefix+shift+w", "alt+shift+k"]
+next_agent = "prefix+shift+j"
+previous_agent = "prefix+shift+w"
 
 # [ and ] follow Vim's backward/forward navigation convention for spaces.
-previous_workspace = ["prefix+[", "alt+k"]
-next_workspace = ["prefix+]", "alt+j"]
+previous_workspace = "prefix+["
+next_workspace = "prefix+]"
 
 # Select spaces with J/K in navigate mode; use arrows for vertical pane navigation.
 navigate_workspace_up = "k"
@@ -31,8 +31,8 @@ navigate_pane_down = "down"
 
 # Move conflicting non-window actions away from Neovim window commands.
 new_tab = "prefix+t"
-previous_tab = ["prefix+alt+comma", "alt+shift+h"]
-next_tab = ["prefix+alt+period", "alt+shift+l"]
+previous_tab = "prefix+alt+comma"
+next_tab = "prefix+alt+period"
 switch_tab = ["prefix+1..9", "alt+shift+1..9"]
 close_tab = "prefix+x"
 open_notification_target = "prefix+shift+o"
