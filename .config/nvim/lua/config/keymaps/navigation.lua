@@ -18,11 +18,11 @@ map("n", "<leader>iN", function()
 	vim.cmd("normal! zz")
 end, "Navigate to the previous issue in the current buffer")
 
--- remap split manipulation to ALT + SHIFT + hjkl
-map("n", "<A-S-h>", ":wincmd H<CR>")
-map("n", "<A-S-j>", ":wincmd J<CR>")
-map("n", "<A-S-k>", ":wincmd K<CR>")
-map("n", "<A-S-l>", ":wincmd L<CR>")
+-- Keep direct Alt bindings available to Herdr.
+map("n", "<C-A-S-h>", ":wincmd H<CR>")
+map("n", "<C-A-S-j>", ":wincmd J<CR>")
+map("n", "<C-A-S-k>", ":wincmd K<CR>")
+map("n", "<C-A-S-l>", ":wincmd L<CR>")
 
 -- buffer controls
 map("n", "<leader>bd", ":bp <bar> :bd #<CR>", "Close buffer but keep split") -- close buffer but keep split

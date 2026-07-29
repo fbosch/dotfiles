@@ -21,10 +21,10 @@ map("n", "<leader>S", ":wqa!<CR>", "Save all files and quit")
 map("v", "<", "<gv", "Indent left")
 map("v", ">", ">gv", "Indent right")
 
--- move lines
-map("n", "<A-j>", ":m .+1<CR>==")
-map("n", "<A-k>", ":m .-2<CR>==")
-map("i", "<A-j>", "<Esc>:m .+1<CR>==gi")
-map("i", "<A-k>", "<Esc>:m .-2<CR>==gi")
-map("v", "<A-j>", ":m '>+1<CR>gv=gv")
-map("v", "<A-k>", ":m '<-2<CR>gv=gv")
+-- Keep direct Alt bindings available to Herdr.
+map("n", "<C-A-S-Down>", ":m .+1<CR>==")
+map("n", "<C-A-S-Up>", ":m .-2<CR>==")
+map("i", "<C-A-S-Down>", "<Esc>:m .+1<CR>==gi")
+map("i", "<C-A-S-Up>", "<Esc>:m .-2<CR>==gi")
+map("v", "<C-A-S-Down>", ":m '>+1<CR>gv=gv")
+map("v", "<C-A-S-Up>", ":m '<-2<CR>gv=gv")
