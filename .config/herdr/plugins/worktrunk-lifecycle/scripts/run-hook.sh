@@ -7,8 +7,9 @@ event=$HERDR_PLUGIN_EVENT_JSON
 worktree_path=$(jq -er '.data.worktree.path' <<<"$event")
 
 case "$hook_type" in
-  pre-start)
-    # The checkout exists, so Worktrunk can resolve its project config and context.
+  post-create)
+    # Herdr only emits after creation, but preserve Worktrunk's create-hook order.
+    wt -C "$worktree_path" hook pre-start
     exec wt -C "$worktree_path" hook post-start
     ;;
   post-remove)
