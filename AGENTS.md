@@ -24,8 +24,6 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 - Local plugins live in `.config/opencode/plugins/` and are auto-loaded by OpenCode; npm plugins are configured in `opencode.json`.
 - Each plugin entry file **must have a unique filename** (not `index.ts`). OpenCode deduplicates plugins by filename only, so multiple `index.ts` files collapse to one.
 - `@opencode-ai/plugin` must be a `peerDependency`, not `devDependency` — the published package ships empty `dist/`; opencode provides it at runtime.
-- RTK's official OpenCode hook lives at `.config/opencode/plugins/rtk.ts`.
-- The `rtk` plugin only rewrites `bash`/`shell` tool commands. `host_exec` is excluded because its strict allowlist rejects the `rtk` prefix.
 
 ## References
 
@@ -37,6 +35,3 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 - [Theme and consistency](docs/agents/theme.md)
 - [Platform notes](docs/agents/platform.md)
 - [Git workflow and validation](docs/agents/git-workflow.md)
-
-
-For OpenCode `bash` and `shell` calls, issue normal commands. The local RTK plugin rewrites eligible commands before execution; manually prefix only contexts that do not load that plugin.
