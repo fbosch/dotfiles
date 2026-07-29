@@ -1,13 +1,13 @@
 id = "worktrunk-lifecycle"
 name = "Worktrunk lifecycle"
-version = "0.1.0"
+version = "0.1.1"
 min_herdr_version = "0.7.0"
-description = "Runs compatible Worktrunk post-lifecycle hooks for native Herdr worktrees."
+description = "Runs compatible Worktrunk lifecycle hooks for native Herdr worktrees."
 platforms = ["linux", "macos"]
 
 [[events]]
 on = "worktree.created"
-command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/run-hook.sh\" pre-start"]
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/run-hook.sh\" post-create"]
 
 [[events]]
 on = "worktree.removed"
