@@ -7,6 +7,7 @@ OVERRIDE_FILE="$STATE_DIR/override"
 OVERRIDE_EXPIRY_FILE="$STATE_DIR/override-expiry"
 LOCK_FILE="$STATE_DIR/daemon.lock"
 TEMPERATURE_FILE="$STATE_DIR/temperature"
+HYPRSUNSET_SOCKET="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr/${HYPRLAND_INSTANCE_SIGNATURE:-}/.hyprsunset.sock"
 
 DAY_TEMP=6500
 NIGHT_TEMP=4000
@@ -118,6 +119,13 @@ is_active() {
   pgrep -x hyprsunset >/dev/null
 }
 
+hyprsunset_ipc() {
+  local command="$1" response
+
+  response="$(printf "%s" "$command" | nc -N -U "$HYPRSUNSET_SOCKET" 2>/dev/null)" || return 1
+  [[ "$response" == "ok" ]]
+}
+
 is_enabled() {
   [[ "$(desired_temperature)" -lt "$DAY_TEMP" ]]
 }
@@ -138,11 +146,27 @@ set_temperature() {
     fi
   fi
 
-  pkill -x hyprsunset 2>/dev/null || true
-  sleep 1
-  if [[ "$temperature" -lt "$DAY_TEMP" ]]; then
-    hyprsunset -t "$temperature" >/dev/null 2>&1 &
+  if [[ "$temperature" -ge "$DAY_TEMP" ]]; then
+    if is_active; then
+      if hyprsunset_ipc "identity"; then
+        printf "%s" "$temperature" > "$TEMPERATURE_FILE"
+        return
+      fi
+
+      pkill -x hyprsunset 2>/dev/null || true
+      hyprsunset -i >/dev/null 2>&1 &
+    fi
+    printf "%s" "$temperature" > "$TEMPERATURE_FILE"
+    return
   fi
+
+  if is_active && hyprsunset_ipc "temperature $temperature"; then
+    printf "%s" "$temperature" > "$TEMPERATURE_FILE"
+    return
+  fi
+
+  pkill -x hyprsunset 2>/dev/null || true
+  hyprsunset -t "$temperature" >/dev/null 2>&1 &
   printf "%s" "$temperature" > "$TEMPERATURE_FILE"
 }
 

@@ -1,11 +1,9 @@
 local platform = require("utils.platform")
 
-local tsc_lsp_support = {}
-
-local function find_tsc(root_dir)
+local function find_tsgo(root_dir)
 	local dir = root_dir
 	while dir ~= nil do
-		local candidate = vim.fs.joinpath(dir, "node_modules", ".bin", "tsc")
+		local candidate = vim.fs.joinpath(dir, "node_modules", ".bin", "tsgo")
 		if vim.fn.executable(candidate) == 1 then
 			return candidate
 		end
@@ -18,22 +16,11 @@ local function find_tsc(root_dir)
 		dir = parent
 	end
 
-	return "tsc"
+	return "tsgo"
 end
 
-local function tsc_supports_lsp(tsc)
-	if tsc_lsp_support[tsc] ~= nil then
-		return tsc_lsp_support[tsc]
-	end
-
-	if vim.fn.executable(tsc) ~= 1 then
-		tsc_lsp_support[tsc] = false
-		return false
-	end
-
-	local result = vim.system({ tsc, "--lsp", "--help" }, { text = true }):wait()
-	tsc_lsp_support[tsc] = result.code == 0
-	return tsc_lsp_support[tsc]
+local function tsgo_available(root_dir)
+	return vim.fn.executable(find_tsgo(root_dir)) == 1
 end
 
 local function typescript_root(bufnr)
@@ -64,20 +51,15 @@ local servers = {
 		cmd = { "typescript-language-server", "--stdio" },
 		root_dir = function(bufnr, on_dir)
 			local root = typescript_root(bufnr)
-			if root ~= nil and tsc_supports_lsp(find_tsc(root)) == false then
+			if root ~= nil and tsgo_available(root) == false then
 				on_dir(root)
 			end
 		end,
 	},
-	ts7 = {
-		cmd = function(dispatchers, config)
-			local tsc = find_tsc(config.root_dir)
-			return vim.lsp.rpc.start({ tsc, "--lsp", "--stdio" }, dispatchers)
-		end,
-		filetypes = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
+	tsgo = {
 		root_dir = function(bufnr, on_dir)
 			local root = typescript_root(bufnr)
-			if root ~= nil and tsc_supports_lsp(find_tsc(root)) then
+			if root ~= nil and tsgo_available(root) then
 				on_dir(root)
 			end
 		end,

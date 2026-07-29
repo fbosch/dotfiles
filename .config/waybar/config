@@ -159,10 +159,10 @@
       "chrome-mail.proton.me__-ProtonmailProfile": "Proton Mail",
        "chrome-calendar.proton.me__-ProtonCalendarProfile": "Proton Calendar",
        "chrome-photos.corvus-corax.synology.me__-SynologyPhotosProfile": "Synology Photos",
-       "chrome-maps.apple.com__-AppleMapsProfile": "apple-maps",
-       "chrome-device.realforce.co.jp__-RealforceProfile": "Realforce"
-    }
-  },
+        "chrome-maps.apple.com__-AppleMapsProfile": "apple-maps",
+        "chrome-device.realforce.co.jp__-RealforceProfile": "Realforce"
+     }
+   },
   
   "network": { 
     "interface": "enp0s3",
