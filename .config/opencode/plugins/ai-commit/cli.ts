@@ -435,6 +435,7 @@ async function main(): Promise<void> {
 
           const action = await choose("Timed out", [
             "Retry",
+            "Restart commit server and retry",
             "Retry with another model",
             "Cancel",
           ]);
@@ -452,13 +453,15 @@ async function main(): Promise<void> {
             modelRef = selectedModel;
           }
 
-          try {
-            await restartServer();
-            hasStartedServer = true;
-          } catch (error) {
-            const message =
-              error instanceof Error ? error.message : String(error);
-            reportGenerateError({ kind: "connection", message });
+          if (action === "Restart commit server and retry") {
+            try {
+              await withSpinner("Restarting commit server...", () => restartServer());
+              hasStartedServer = true;
+            } catch (error) {
+              const message =
+                error instanceof Error ? error.message : String(error);
+              reportGenerateError({ kind: "connection", message });
+            }
           }
 
           continue;
