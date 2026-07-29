@@ -1,5 +1,8 @@
 return {
 	"nvim-tree/nvim-tree.lua",
+	dependencies = {
+		"antosha417/nvim-lsp-file-operations",
+	},
 	cmd = { "NvimTreeToggle", "NvimTreeFindFile" },
 	keys = {
 		{
@@ -136,5 +139,6 @@ return {
 				},
 			},
 		})
+		require("lsp-file-operations").setup()
 	end,
 }

@@ -2,37 +2,24 @@ local platform = require("utils.platform")
 
 local servers = {
 	tsgo = {},
-	tailwindcss = {
-		cmd = { "tailwindcss-language-server", "--stdio" },
-	},
-	biome = {
-		cmd = { "biome", "lsp-proxy" },
-	},
-	astro = {
-		cmd = { "astro-ls", "--stdio" },
-	},
+	tailwindcss = {},
+	biome = {},
+	astro = {},
 	eslint = {
-		cmd = { "vscode-eslint-language-server", "--stdio" },
+		settings = {
+			experimental = { useFlatConfig = true },
+		},
 	},
-	html = {
-		cmd = { "vscode-html-language-server", "--stdio" },
-	},
-	marksman = {
-		cmd = { "marksman", "server" },
-	},
-	rust_analyzer = {
-		cmd = { "rust-analyzer" },
-	},
+	html = {},
+	marksman = {},
+	rust_analyzer = {},
 	fallow = {
 		cmd = { "fallow-lsp" },
 		filetypes = { "javascript", "typescript", "javascriptreact", "typescriptreact" },
-		root_files = { ".fallowrc.json", "package.json", ".git" },
+		root_markers = { ".fallowrc.json", "package.json", ".git" },
 	},
-	docker_compose_language_service = {
-		cmd = { "docker-compose-langserver", "--stdio" },
-	},
+	docker_compose_language_service = {},
 	cssls = {
-		cmd = { "vscode-css-language-server", "--stdio" },
 		settings = {
 			css = {
 				lint = {
@@ -42,7 +29,7 @@ local servers = {
 		},
 	},
 	lua_ls = {
-		cmd = platform.is_nixos() and { "lua-language-server" } or nil,
+		enabled = platform.is_nixos(),
 		settings = {
 			Lua = {
 				runtime = {
@@ -69,22 +56,11 @@ local servers = {
 	},
 }
 
-local function setup_formatters(client, bufnr)
-	local group = vim.api.nvim_create_augroup("LspFormatting", {})
-
-	-- if client.name == "eslint" then
-	-- 	vim.api.nvim_create_autocmd("BufWritePre", {
-	-- 		buffer = bufnr,
-	-- 		command = "EslintFixAll",
-	-- 		group = group,
-	-- 	})
-	-- end
-end
-
 function setup_diagnostics()
 	local diagnostic_close_events = {
 		"BufLeave",
 		"CursorMoved",
+		"CursorMovedI",
 		"InsertEnter",
 		"FocusLost",
 	}
@@ -128,7 +104,6 @@ function setup_diagnostics()
 			end,
 		},
 		float = {
-			show_header = true,
 			source = "if_many",
 			border = "rounded",
 			focusable = false,
@@ -154,92 +129,26 @@ function setup_diagnostics()
 	})
 end
 
-local attached_buffers = {}
-
-local function attach_once(client, bufnr)
-	if client == nil then
-		return
-	end
-
-	attached_buffers[client.id] = attached_buffers[client.id] or {}
-	if attached_buffers[client.id][bufnr] == true then
-		return
-	end
-
-	attached_buffers[client.id][bufnr] = true
-	setup_formatters(client, bufnr)
-	-- Use vim.schedule to ensure keymaps are set after buffer is ready
-	vim.schedule(function()
-		local lsp_keymaps = require("config.keymaps.lsp")
-		lsp_keymaps.setup(client, bufnr)
-	end)
-end
-
-local on_attach = function(client, bufnr)
-	attach_once(client, bufnr)
-end
-
 local function get_capabilities()
-	return require("blink.cmp").get_lsp_capabilities({
+	local capabilities = require("lsp-file-operations").default_capabilities()
+	capabilities = vim.tbl_deep_extend("force", capabilities, {
 		workspace = { didChangeWatchedFiles = { dynamicRegistration = false } },
 		textDocument = { foldingRange = { dynamicRegistration = false, lineFoldingOnly = true } },
 	})
+
+	return require("blink.cmp").get_lsp_capabilities(capabilities, true)
 end
 
-local function root_dir_from_markers(markers)
-	return function(bufnr)
-		local path = vim.api.nvim_buf_get_name(bufnr)
-		if path == "" then
-			path = vim.loop.cwd()
-		end
-		return vim.fs.root(path, markers)
-	end
-end
-
-local function resolve_root(server_name, server)
-	if server_name == "eslint" then
-		return root_dir_from_markers({
-			"eslint.config.js",
-			"eslint.config.cjs",
-			"eslint.config.mjs",
-			".eslintrc.js",
-			".eslintrc.json",
-			".eslintrc",
-			".eslintrc.yml",
-			".eslintrc.yaml",
-		})
-	end
-
-	if server_name == "biome" then
-		return root_dir_from_markers({ "biome.json", "biome.jsonc", ".git" })
-	end
-
-	if type(server.root_dir) == "function" then
-		return server.root_dir
-	end
-
-	if type(server.root_files) == "table" and #server.root_files > 0 then
-		return root_dir_from_markers(server.root_files)
-	end
-end
-
-local function server_config(server_name, capabilities, on_attach)
+local function server_config(server_name, capabilities)
 	local server = servers[server_name] or {}
 	local settings = server.settings or {}
 
-	if server_name == "eslint" then
-		settings = vim.tbl_deep_extend("force", settings, {
-			experimental = { useFlatConfig = true },
-		})
-	end
-
 	return {
 		capabilities = vim.tbl_deep_extend("force", {}, capabilities, server.capabilities or {}),
-		on_attach = on_attach,
 		settings = settings,
 		cmd = server.cmd,
 		filetypes = server.filetypes,
-		root_dir = resolve_root(server_name, server),
+		root_markers = server.root_markers,
 	}
 end
 
@@ -255,10 +164,10 @@ local function cmd_available(server)
 	return vim.fn.executable(server.cmd[1]) == 1
 end
 
-local function enable_servers(capabilities, on_attach)
+local function enable_servers(capabilities)
 	for server_name, server in pairs(servers) do
 		if server.enabled ~= false and cmd_available(server) then
-			vim.lsp.config(server_name, server_config(server_name, capabilities, on_attach))
+			vim.lsp.config(server_name, server_config(server_name, capabilities))
 			vim.lsp.enable(server_name)
 		else
 			pcall(vim.lsp.enable, server_name, false)
@@ -288,9 +197,6 @@ return {
 					border = "rounded",
 					winblend = 20,
 				},
-				definition = {
-					edit = "false",
-				},
 				symbol_in_winbar = {
 					enable = false,
 				},
@@ -301,25 +207,23 @@ return {
 		},
 	},
 	config = function()
-		if vim.lsp.document_color then
-			vim.lsp.document_color.enable(false)
-		end
+		vim.lsp.document_color.enable(false)
 
 		local capabilities = get_capabilities()
-		enable_servers(capabilities, on_attach)
-		require("lazydev").setup({ capabilities = capabilities, on_attach = on_attach })
-		require("lsp-file-operations").setup()
+		enable_servers(capabilities)
+		require("lazydev").setup({ capabilities = capabilities })
 		setup_diagnostics()
 
-		-- Backup: Set keymaps via autocmd to ensure they're always set
 		vim.api.nvim_create_autocmd("LspAttach", {
 			group = vim.api.nvim_create_augroup("LspKeymapsAuto", { clear = true }),
 			callback = function(args)
 				local bufnr = args.buf
 				local client = vim.lsp.get_client_by_id(args.data.client_id)
-				if client then
-					on_attach(client, bufnr)
+				if client == nil then
+					return
 				end
+
+				require("config.keymaps.lsp").setup(client, bufnr)
 			end,
 		})
 	end,
