@@ -89,7 +89,7 @@ const CacheSchema = z.object({
 type Credits = z.infer<typeof CreditsSchema>;
 type Usage = z.infer<typeof UsageSchema>;
 type Credentials = { accessToken: string; accountId: string };
-const commands = ["credits", "status", "consume-preview", "consume"] as const;
+const commands = ["credits", "usage", "status", "consume-preview", "consume"] as const;
 type Command = typeof commands[number];
 type Arguments = {
     command: Command;
@@ -112,8 +112,10 @@ function defaultAuthFile(): string {
     return join(process.env.CODEX_HOME || join(process.env.HOME || "", ".codex"), "auth.json");
 }
 
-function usage(): void {
-    console.log("Usage: reset_helper.ts <credits|status|consume-preview|consume> [--auth PATH] [--credit-id ID] [--refresh]");
+function printUsage(): void {
+    console.log(
+        "Usage: reset_helper.ts <credits|usage|status|consume-preview|consume> [--auth PATH] [--credit-id ID] [--refresh]",
+    );
 }
 
 function isCommand(value: string | undefined): value is Command {
@@ -122,7 +124,7 @@ function isCommand(value: string | undefined): value is Command {
 
 function parseCommand(value: string | undefined): AppResult<Command> {
     if (!isCommand(value)) {
-        return err("command must be credits, status, consume-preview, or consume");
+        return err("command must be credits, usage, status, consume-preview, or consume");
     }
 
     return ok(value);
@@ -394,7 +396,7 @@ function formatUsage(usage: Usage) {
         { name: "secondary", window: rateLimit.secondary_window },
     ].map(({ name, window }) => {
         if (!window || window.used_percent === undefined) {
-            return { name, remaining: null, window: null, resetsIn: null };
+            return { name, remaining: null, window: null, resetsIn: null, resetsAt: null };
         }
 
         return {
@@ -402,6 +404,10 @@ function formatUsage(usage: Usage) {
             remaining: Math.max(0, Math.min(100, 100 - Math.floor(window.used_percent))),
             window: humanSeconds(window.limit_window_seconds),
             resetsIn: humanSeconds(window.reset_after_seconds),
+            resetsAt:
+                window.reset_after_seconds === undefined
+                    ? null
+                    : new Date(Date.now() + window.reset_after_seconds * 1000).toISOString(),
         };
     });
 }
@@ -441,6 +447,47 @@ function profileCredentials(authFile: string, activeAccountId: string): Credenti
     return profiles;
 }
 
+type AccountSummary = {
+    accountId: string;
+    profileLabel: string;
+    availableCount?: number;
+    urgency?: "urgent" | "soon" | "later" | "unknown";
+    usage?: ReturnType<typeof formatUsage>;
+    active: boolean;
+    error?: string;
+};
+
+async function profileSummary(
+    args: Arguments,
+    credentials: Credentials,
+    aliases: AccountAliases,
+): Promise<AccountSummary> {
+    const [creditsResult, usageResult] = await Promise.all([
+        creditsForAccount(credentials, args.refresh),
+        fetchUsage(credentials),
+    ]);
+    const summary: AccountSummary = {
+        accountId: credentials.accountId,
+        profileLabel: buildAccountProfile("openai", credentials.accountId, aliases).shortLabel,
+        active: false,
+    };
+    const errors: string[] = [];
+    if (creditsResult.isOk()) {
+        Object.assign(summary, summaryForCredits(creditsResult.value));
+    } else {
+        errors.push(`credits: ${creditsResult.error}`);
+    }
+    if (usageResult.isOk()) {
+        summary.usage = formatUsage(usageResult.value);
+    } else {
+        errors.push(`usage: ${usageResult.error}`);
+    }
+    if (errors.length > 0) {
+        summary.error = errors.join("; ");
+    }
+    return summary;
+}
+
 async function status(
     args: Arguments,
     credentials: Credentials,
@@ -457,35 +504,22 @@ async function status(
         return err(`failed to read usage: ${usageResult.error}`);
     }
 
-    const accounts: Array<{
-        accountId: string;
-        profileLabel: string;
-        availableCount?: number;
-        urgency?: "urgent" | "soon" | "later" | "unknown";
-        active: boolean;
-        error?: string;
-    }> = [
+    const accounts: AccountSummary[] = [
         {
             accountId: credentials.accountId,
             profileLabel: buildAccountProfile("openai", credentials.accountId, aliases).shortLabel,
             ...summaryForCredits(creditsResult.value),
+            usage: formatUsage(usageResult.value),
             active: true,
         },
     ];
-    for (const profile of profileCredentials(args.authFile, credentials.accountId)) {
-        const profileCredits = await creditsForAccount(profile, args.refresh);
-        const profileLabel = buildAccountProfile("openai", profile.accountId, aliases).shortLabel;
-        if (profileCredits.isErr()) {
-            accounts.push({ accountId: profile.accountId, profileLabel, active: false, error: profileCredits.error });
-            continue;
-        }
-        accounts.push({
-            accountId: profile.accountId,
-            profileLabel,
-            ...summaryForCredits(profileCredits.value),
-            active: false,
-        });
-    }
+    accounts.push(
+        ...(await Promise.all(
+            profileCredentials(args.authFile, credentials.accountId).map((profile) =>
+                profileSummary(args, profile, aliases),
+            ),
+        )),
+    );
 
     return ok({
         active: {
@@ -496,6 +530,20 @@ async function status(
             usage: formatUsage(usageResult.value),
         },
         accounts,
+    });
+}
+
+async function accountUsage(credentials: Credentials, aliases: AccountAliases): Promise<AppResult<unknown>> {
+    const usageResult = await fetchUsage(credentials);
+    if (usageResult.isErr()) {
+        return err(`failed to read usage: ${usageResult.error}`);
+    }
+
+    return ok({
+        provider: "codex",
+        accountId: credentials.accountId,
+        profileLabel: buildAccountProfile("openai", credentials.accountId, aliases).shortLabel,
+        usage: formatUsage(usageResult.value),
     });
 }
 
@@ -580,11 +628,25 @@ async function consume(args: Arguments, credentials: Credentials): Promise<AppRe
     });
 }
 
+type CommandHandler = (
+    args: Arguments,
+    credentials: Credentials,
+    aliases: AccountAliases,
+) => Promise<AppResult<unknown>>;
+
+const commandHandlers: Record<Command, CommandHandler> = {
+    credits,
+    usage: (_args, credentials, aliases) => accountUsage(credentials, aliases),
+    status,
+    "consume-preview": (args, credentials) => previewConsume(args, credentials),
+    consume: (args, credentials) => consume(args, credentials),
+};
+
 async function main(): Promise<number> {
     const argsResult = parseArguments(process.argv.slice(2));
     if (argsResult.isErr()) {
         console.error(`codex_reset_helper: ${argsResult.error}`);
-        usage();
+        printUsage();
         return 2;
     }
 
@@ -597,7 +659,7 @@ async function main(): Promise<number> {
     const args = argsResult.value;
     const credentials = credentialsResult.value;
     let aliases: AccountAliases = {};
-    if (args.command === "credits" || args.command === "status") {
+    if (args.command === "credits" || args.command === "usage" || args.command === "status") {
         const aliasesResult = loadAccountAliases();
         if (aliasesResult.isErr()) {
             console.error(`codex_reset_helper: ${aliasesResult.error}`);
@@ -605,13 +667,7 @@ async function main(): Promise<number> {
         }
         aliases = aliasesResult.value;
     }
-    const result = args.command === "credits"
-        ? await credits(args, credentials, aliases)
-        : args.command === "status"
-            ? await status(args, credentials, aliases)
-            : args.command === "consume-preview"
-                ? await previewConsume(args, credentials)
-                : await consume(args, credentials);
+    const result = await commandHandlers[args.command](args, credentials, aliases);
     if (result.isErr()) {
         console.error(`codex_reset_helper: ${result.error}`);
         return 1;

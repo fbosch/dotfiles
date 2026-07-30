@@ -9,10 +9,10 @@ local mock_credit_count = 2
 local usage_refreshes = 0
 
 io.open = function(path, mode)
-	if mode == "r" and path:match("codex%-usage%.json$") then
+	if mode == "r" and path:match("codex%-status%.json$") then
 		return {
 			read = function()
-				return "chatgpt-usage"
+				return "codex-status"
 			end,
 			close = function() end,
 		}
@@ -60,21 +60,29 @@ package.loaded.wezterm = {
 			}
 		end
 
-		if content == "chatgpt-usage" then
+		if content == "codex-status" then
 			return {
-				{
-					usage = {
-						secondary = { usedPercent = mock_used_percent },
+				accounts = {
+					{
+						profileLabel = "ct",
+						availableCount = mock_credit_count,
+						urgency = "soon",
+						active = true,
+						usage = {
+							{ remaining = 100 - math.floor(mock_used_percent) },
+						},
+					},
+					{
+						profileLabel = "kk",
+						availableCount = 1,
+						urgency = "later",
+						active = false,
+						usage = {
+							{ remaining = 71 },
+							{ remaining = 94 },
+						},
 					},
 				},
-			}
-		end
-
-		local available_count = content:match('"availableCount":(%d+)')
-		if available_count then
-			return {
-				accountId = "f6b80000-0000-0000-0000-00000000efd2",
-				availableCount = tonumber(available_count),
 			}
 		end
 
@@ -109,14 +117,6 @@ package.loaded.wezterm = {
 		registered_events[event] = callback
 	end,
 	run_child_process = function(argv)
-		if argv[1] == "/bin/sh" and argv[3]:match("reset_helper") then
-			return true, string.format('{"accountId":"f6b80000-0000-0000-0000-00000000efd2","availableCount":%d}', mock_credit_count), ""
-		end
-
-		if argv[1] == "codexbar" then
-			return true, "chatgpt-usage", ""
-		end
-
 		return true, "herdr-agents", ""
 	end,
 	background_child_process = function()
@@ -207,21 +207,22 @@ os.date = original_os_date
 assert_eq(type(captured_status), "table", "status payload type")
 	assert_eq(find_text(captured_status, "[working] 2 "), true, "Herdr working count rendered")
 	assert_eq(find_text(captured_status, "[end] 6.5 "), true, "workhours indicator rendered")
-	assert_eq(find_text(captured_status, "work"), true, "Codex profile alias rendered")
-	assert_eq(find_text(captured_status, " (2) "), true, "Codex reset credits rendered")
-	assert_eq(find_text(captured_status, "▂▂▂"), true, "ChatGPT allowance uses stepped blocks")
+	assert_eq(find_text(captured_status, "ct*"), true, "active Codex profile alias rendered")
+	assert_eq(find_text(captured_status, "kk"), true, "inactive Codex profile alias rendered")
+	assert_eq(find_text(captured_status, "(2)"), true, "Codex reset credits rendered")
 	assert_eq(find_text(captured_status, "43%"), true, "ChatGPT remaining allowance rendered")
 
 for _, case in ipairs({
-	{ used = 98, block = "▂" },
-	{ used = 89, block = "▂" },
-	{ used = 77, block = "▂▂" },
-	{ used = 0, block = "▂▂▂▂▂▂▂▂▂" },
+	{ used = 98, remaining = "2" },
+	{ used = 89, remaining = "11" },
+	{ used = 77, remaining = "23" },
+	{ used = 100, remaining = "0" },
+	{ used = 0, remaining = "100" },
 }) do
 	mock_used_percent = case.used
 	captured_status = nil
 	update_status(window)
-	assert_eq(find_text(captured_status, case.block), true, "usage bar renders stepped blocks")
+	assert_eq(find_text(captured_status, case.remaining .. "%"), true, "usage percentage renders")
 end
 
 captured_status = nil
@@ -232,7 +233,7 @@ mock_credit_count = 1
 local usage_refreshes_before_reset = usage_refreshes
 captured_status = nil
 user_var_changed(window, nil, "codex_reset_refreshed")
-assert_eq(find_text(captured_status, " (1) "), true, "reset redemption refreshes credit count")
+assert_eq(find_text(captured_status, "(1)"), true, "reset redemption refreshes credit count")
 assert_eq(usage_refreshes, usage_refreshes_before_reset + 1, "reset redemption refreshes usage")
 
 captured_status = nil

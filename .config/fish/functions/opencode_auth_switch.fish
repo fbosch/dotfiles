@@ -2,8 +2,7 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
     set -l auth_file "$HOME/.local/share/opencode/auth.json"
     set -l codex_auth_file "$HOME/.codex/auth.json"
     set -l codex_profiles_file "$HOME/.codex/auth-profiles.json"
-    set -l codexbar_cache_file "$HOME/.cache/nvim/codexbar/data.json"
-    set -l usage_query 'def rem($p): (100 - (($p // 0) | tonumber | floor)) | if . < 0 then 0 elif . > 100 then 100 else . end; .[0] as $root | ($root.usage.primary // null) as $primary | ($root.usage.secondary // null) as $secondary | [($root.provider // "codex"), (if $primary then (rem($primary.usedPercent) | tostring) else "" end), ($primary.resetsAt // ""), (if $secondary then (rem($secondary.usedPercent) | tostring) else "" end), ($secondary.resetsAt // "")] | @tsv'
+    set -l usage_query '.usage as $windows | [(.provider // "codex"), (($windows[0].remaining // "") | tostring), ($windows[0].resetsAt // ""), (($windows[1].remaining // "") | tostring), ($windows[1].resetsAt // "")] | @tsv'
     set -l usage_bar_width 16
     set -l bg_mode dark
 
@@ -34,12 +33,8 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         return 1
     end
 
-    function __opencode_fetch_usage_tsv --argument-names query
-        if not command -q codexbar
-            return 127
-        end
-
-        codexbar usage --source cli --provider codex --json 2>/dev/null | jq -r "$query" 2>/dev/null
+    function __opencode_fetch_usage_tsv --argument-names query helper_cwd usage_helper
+        bun --cwd "$helper_cwd" "$usage_helper" usage 2>/dev/null | jq -r "$query" 2>/dev/null
     end
 
     function __opencode_usage_color --argument-names capacity_band
@@ -174,19 +169,22 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
     set -l fish_root (path resolve "$helper_dir/..")
     set -l libexec_dir "$fish_root/libexec"
     set -l helper "$libexec_dir/opencode/auth_switch_helper.ts"
+    set -l reset_helper "$libexec_dir/codex/reset_helper.ts"
     if not test -f "$helper"
         echo "helper not found: $helper"
         return 1
     end
+    if not test -f "$reset_helper"
+        echo "helper not found: $reset_helper"
+        return 1
+    end
 
-    set -l current_usage_tsv (__opencode_fetch_usage_tsv "$usage_query")
+    set -l current_usage_tsv (__opencode_fetch_usage_tsv "$usage_query" "$libexec_dir" "$reset_helper")
     set -l current_usage_status $status
     if test $current_usage_status -eq 0; and test -n "$current_usage_tsv"
         __opencode_render_usage "current" "$current_usage_tsv" "$usage_bar_width"
-    else if test $current_usage_status -eq 127
-        gum style --foreground 196 "current usage unavailable (codexbar not installed)"
     else
-        gum style --foreground 196 "current usage unavailable (codexbar parse failed)"
+        gum style --foreground 196 "current usage unavailable (OpenAI request failed)"
     end
 
     echo ""
@@ -297,19 +295,16 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
     if test -z "$wezterm_cache_base"
         set wezterm_cache_base "$HOME/.cache"
     end
-    set -l wezterm_usage_cache "$wezterm_cache_base/wezterm/codex-usage.json"
-    rm -f "$wezterm_usage_cache"
+    set -l wezterm_status_cache "$wezterm_cache_base/wezterm/codex-status.json"
+    rm -f "$wezterm_status_cache"
     wezterm_set_user_var codex_profile_changed (date +%s)
 
-    set switched_usage_tsv (__opencode_fetch_usage_tsv "$usage_query")
+    set switched_usage_tsv (__opencode_fetch_usage_tsv "$usage_query" "$libexec_dir" "$reset_helper")
     set -l switched_usage_fetch_status $status
     if test $switched_usage_fetch_status -eq 0; and test -n "$switched_usage_tsv"
         set switched_usage_error ""
-    else if test $switched_usage_fetch_status -eq 127
-        set switched_usage_error "switched usage unavailable (codexbar not installed)"
-        set switched_usage_tsv ""
     else
-        set switched_usage_error "switched usage unavailable (codexbar parse failed)"
+        set switched_usage_error "switched usage unavailable (OpenAI request failed)"
         set switched_usage_tsv ""
     end
 
@@ -322,6 +317,4 @@ function opencode_auth_switch --description 'Switch active OpenCode provider wit
         echo ""
         gum style --foreground 196 "$switched_usage_error"
     end
-
-    rm -f "$codexbar_cache_file"
 end
