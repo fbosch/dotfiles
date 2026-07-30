@@ -1,14 +1,17 @@
 import { discoverAccounts } from "./discovery.ts";
 import {
-	accountIdForEntry,
 	aliasLabel,
 	assertMutableDiscovery,
 	deleteAliasesForValue,
-	generatedLabelFor,
-	nextInactiveKey,
 	normalizeAlias,
-	requireOpenAIAliases,
 } from "./profiles.ts";
+import {
+	accountIdForEntry,
+	activeKey,
+	aliasesFor,
+	generatedLabelFor,
+	nextProfileKey,
+} from "./providers/codex.ts";
 import { isJsonObject, readJsonObject, writeJsonAtomic } from "./storage.ts";
 import {
 	type LoginTransaction,
@@ -16,11 +19,11 @@ import {
 	removeLoginTransaction,
 	writeLoginTransaction,
 } from "./transactions.ts";
-import type { AccountDiscovery, OcmaPaths } from "./types.ts";
+import type { AccountDiscovery, AccountPaths } from "./types.ts";
 
 export async function switchAccount(
 	aliasOrLabel: string,
-	paths: OcmaPaths,
+	paths: AccountPaths,
 ): Promise<AccountDiscovery> {
 	const target = normalizeAlias(aliasOrLabel);
 	const discovery = await discoverAccounts(paths);
@@ -36,7 +39,7 @@ export async function switchAccount(
 	}
 
 	const auth = await readJsonObject(paths.auth);
-	const activeEntry = auth.openai;
+	const activeEntry = auth[activeKey()];
 	const targetEntry = auth[matches[0].key];
 	if (
 		isJsonObject(activeEntry) === false ||
@@ -44,7 +47,7 @@ export async function switchAccount(
 	) {
 		throw new Error("OpenAI profile changed while preparing switch");
 	}
-	auth.openai = targetEntry;
+	auth[activeKey()] = targetEntry;
 	auth[matches[0].key] = activeEntry;
 	await writeJsonAtomic(paths.auth, auth, 0o600);
 	return discoverAccounts(paths);
@@ -52,29 +55,29 @@ export async function switchAccount(
 
 export async function beginLogin(
 	alias: string,
-	paths: OcmaPaths,
+	paths: AccountPaths,
 ): Promise<void> {
 	const requestedAlias = normalizeAlias(alias);
 	if (await readLoginTransaction(paths)) {
-		throw new Error("an incomplete ocma login transaction requires recovery");
+		throw new Error("an incomplete login transaction requires recovery");
 	}
 
 	const discovery = await discoverAccounts(paths);
 	assertMutableDiscovery(discovery);
 	const auth = await readJsonObject(paths.auth);
 	const aliases = await readJsonObject(paths.aliases);
-	const openaiAliases = requireOpenAIAliases(aliases, paths.aliases);
-	const activeEntry = auth.openai;
+	const accountAliases = aliasesFor(aliases, paths.aliases);
+	const activeEntry = auth[activeKey()];
 	if (isJsonObject(activeEntry) === false) {
 		throw new Error("active OpenAI profile is invalid");
 	}
 
 	const transaction: LoginTransaction = {
-		schema: "fbb.ocma-login/v1",
+		schema: "fbb.openai-login/v1",
 		phase: "prepared",
 		alias: requestedAlias,
-		reservedKey: nextInactiveKey(auth),
-		priorAliasLabel: aliasLabel(openaiAliases, requestedAlias),
+		reservedKey: nextProfileKey(auth),
+		priorAliasLabel: aliasLabel(accountAliases, requestedAlias),
 	};
 	await writeLoginTransaction(paths, transaction);
 	try {
@@ -87,20 +90,20 @@ export async function beginLogin(
 }
 
 export async function completeLogin(
-	paths: OcmaPaths,
+	paths: AccountPaths,
 ): Promise<AccountDiscovery> {
 	const transaction = await readLoginTransaction(paths);
 	if (transaction === null) {
-		throw new Error("no pending ocma login transaction");
+		throw new Error("no pending login transaction");
 	}
 	if (transaction.phase !== "prepared") {
-		throw new Error("ocma login transaction is not ready to complete");
+		throw new Error("login transaction is not ready to complete");
 	}
 
 	const auth = await readJsonObject(paths.auth);
 	const aliases = await readJsonObject(paths.aliases);
-	const openaiAliases = requireOpenAIAliases(aliases, paths.aliases);
-	const activeEntry = auth.openai;
+	const accountAliases = aliasesFor(aliases, paths.aliases);
+	const activeEntry = auth[activeKey()];
 	const reservedEntry = auth[transaction.reservedKey];
 	if (
 		isJsonObject(activeEntry) === false ||
@@ -117,8 +120,8 @@ export async function completeLogin(
 	}
 	const newLabel = generatedLabelFor(activeAccountId);
 	const labelAlias =
-		typeof openaiAliases[newLabel] === "string"
-			? openaiAliases[newLabel]
+		typeof accountAliases[newLabel] === "string"
+			? accountAliases[newLabel]
 			: null;
 	if (labelAlias !== null && labelAlias !== transaction.alias) {
 		throw new Error(
@@ -133,9 +136,9 @@ export async function completeLogin(
 		.map(([key]) => key);
 	const discardReserved = accountIdForEntry(reservedEntry) === activeAccountId;
 	const nextAliases = structuredClone(aliases);
-	const nextOpenaiAliases = requireOpenAIAliases(nextAliases, paths.aliases);
-	deleteAliasesForValue(nextOpenaiAliases, transaction.alias);
-	nextOpenaiAliases[newLabel] = transaction.alias;
+	const nextAccountAliases = aliasesFor(nextAliases, paths.aliases);
+	deleteAliasesForValue(nextAccountAliases, transaction.alias);
+	nextAccountAliases[newLabel] = transaction.alias;
 
 	await writeLoginTransaction(paths, {
 		...transaction,
@@ -161,7 +164,7 @@ function isReplacement(
 	activeAccountId: string,
 ): boolean {
 	if (
-		key === "openai" ||
+		key === activeKey() ||
 		key === transaction.reservedKey ||
 		isJsonObject(value) === false
 	) {

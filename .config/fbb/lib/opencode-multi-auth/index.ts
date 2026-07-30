@@ -3,7 +3,8 @@ import { defineCommand, runMain } from "citty";
 import { discoverAccounts, toPublicDiscovery } from "./discovery.ts";
 import { renderAccountCards } from "./list-presentation.ts";
 import { beginLogin, completeLogin, switchAccount } from "./mutations.ts";
-import { acquireMutationLock } from "./storage.ts";
+import { discoverUsage, loginCommand } from "./providers/codex.ts";
+import { acquireMutationLock, readJsonObject } from "./storage.ts";
 import { recoverPendingLogin } from "./transactions.ts";
 import type {
 	AccountDiscovery,
@@ -13,7 +14,6 @@ import type {
 	PublicAccountListProfile,
 } from "./types.ts";
 import { defaultPaths } from "./types.ts";
-import { discoverAccountUsage } from "./usage.ts";
 
 const VERSION = "0.1.0";
 const OUTPUT_SCHEMA = "fbb.ocma/v1";
@@ -93,9 +93,13 @@ async function runReadCommand(
 	format: OutputFormat,
 ): Promise<void> {
 	await emitCommand(format, command, async () => {
-		const discovery = await discoverAccounts(defaultPaths());
+		const paths = defaultPaths();
+		const discovery = await discoverAccounts(paths);
 		if (command === "list") {
-			const usage = await discoverAccountUsage(discovery, defaultPaths());
+			const usage = await discoverUsage(
+				discovery,
+				await readJsonObject(paths.auth),
+			);
 			const completeDiscovery = {
 				...discovery,
 				diagnostics: [...discovery.diagnostics, ...usage.diagnostics],
@@ -197,14 +201,11 @@ async function promptForAlias(format: OutputFormat): Promise<string> {
 }
 
 async function runOpenCodeLogin(): Promise<void> {
-	const process = Bun.spawn(
-		["opencode", "auth", "login", "--provider", "openai"],
-		{
-			stdin: "inherit",
-			stdout: "inherit",
-			stderr: "inherit",
-		},
-	);
+	const process = Bun.spawn(loginCommand, {
+		stdin: "inherit",
+		stdout: "inherit",
+		stderr: "inherit",
+	});
 	const exitCode = await process.exited;
 	if (exitCode !== 0) {
 		throw new Error(`OpenCode login exited with status ${exitCode}`);

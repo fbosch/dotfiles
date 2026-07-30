@@ -1,9 +1,10 @@
 import { join } from "node:path";
 
-export type OcmaPaths = {
+export type AccountPaths = {
 	auth: string;
 	aliases: string;
 	state?: string;
+	legacyState?: string;
 };
 
 export type AccountProfile = {
@@ -54,7 +55,9 @@ export type MutationLock = {
 	release: () => Promise<void>;
 };
 
-export function defaultPaths(env: NodeJS.ProcessEnv = process.env): OcmaPaths {
+export function defaultPaths(
+	env: NodeJS.ProcessEnv = process.env,
+): AccountPaths {
 	const home = env.HOME || "";
 	const dataHome = env.XDG_DATA_HOME || join(home, ".local", "share");
 	const configHome = env.XDG_CONFIG_HOME || join(home, ".config");
@@ -63,6 +66,7 @@ export function defaultPaths(env: NodeJS.ProcessEnv = process.env): OcmaPaths {
 	return {
 		auth: join(dataHome, "opencode", "auth.json"),
 		aliases: join(configHome, "fbb", "data", "account-aliases.json"),
-		state: join(stateHome, "fbb", "ocma", "login-transaction.json"),
+		state: join(stateHome, "fbb", "openai-accounts", "login-transaction.json"),
+		legacyState: join(stateHome, "fbb", "ocma", "login-transaction.json"),
 	};
 }

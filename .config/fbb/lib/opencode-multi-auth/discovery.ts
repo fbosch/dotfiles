@@ -1,40 +1,35 @@
-import {
-	compareProfiles,
-	discoveryDiagnostics,
-	profileFromEntry,
-	requireOpenAIAliases,
-} from "./profiles.ts";
+import { compareProfiles, discoveryDiagnostics } from "./profiles.ts";
+import { aliasesFor, profilesFromAuth } from "./providers/codex.ts";
 import { readJsonObject } from "./storage.ts";
 import { hasPendingLogin } from "./transactions.ts";
 import type {
 	AccountDiscovery,
-	OcmaPaths,
+	AccountPaths,
 	PublicAccountDiscovery,
 } from "./types.ts";
 
 export async function discoverAccounts(
-	paths: OcmaPaths,
+	paths: AccountPaths,
 ): Promise<AccountDiscovery> {
 	const [auth, aliases] = await Promise.all([
 		readJsonObject(paths.auth),
 		readJsonObject(paths.aliases),
 	]);
-	const openaiAliases = requireOpenAIAliases(aliases, paths.aliases);
-	const profiles = Object.entries(auth)
-		.filter(([key]) => key === "openai" || key.startsWith("openai_"))
-		.map(([key, value]) => profileFromEntry(key, value, openaiAliases))
-		.sort(compareProfiles);
+	const profiles = profilesFromAuth(
+		auth,
+		aliasesFor(aliases, paths.aliases),
+	).sort(compareProfiles);
 	const diagnostics = discoveryDiagnostics(profiles);
 	if (profiles.some((profile) => profile.active) === false) {
 		diagnostics.push({
 			code: "active-profile-missing",
-			message: "active OpenAI profile is missing",
+			message: "active profile is missing",
 		});
 	}
 	if (await hasPendingLogin(paths)) {
 		diagnostics.push({
 			code: "login-transaction-pending",
-			message: "an interrupted OpenAI login requires recovery before mutation",
+			message: "an interrupted login requires recovery before mutation",
 		});
 	}
 	return { profiles, diagnostics };

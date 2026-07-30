@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { deleteAliasesForValue, requireOpenAIAliases } from "./profiles.ts";
+import { deleteAliasesForValue } from "./profiles.ts";
+import { activeKey, aliasesFor } from "./providers/codex.ts";
 import {
 	isJsonObject,
 	isNotFound,
@@ -8,21 +9,26 @@ import {
 	removeFile,
 	writeJsonAtomic,
 } from "./storage.ts";
-import type { OcmaPaths } from "./types.ts";
+import type { AccountPaths } from "./types.ts";
+
+const loginTransactionSchema = "fbb.openai-login/v1";
+const legacyLoginTransactionSchema = "fbb.ocma-login/v1";
 
 export type LoginTransaction = {
-	schema: "fbb.ocma-login/v1";
+	schema: typeof loginTransactionSchema;
 	phase: "prepared" | "aliases-pending" | "auth-written";
 	alias: string;
 	reservedKey: string;
 	priorAliasLabel: string | null;
 };
 
-export async function hasPendingLogin(paths: OcmaPaths): Promise<boolean> {
+export async function hasPendingLogin(paths: AccountPaths): Promise<boolean> {
 	return (await readLoginTransaction(paths)) !== null;
 }
 
-export async function recoverPendingLogin(paths: OcmaPaths): Promise<boolean> {
+export async function recoverPendingLogin(
+	paths: AccountPaths,
+): Promise<boolean> {
 	const transaction = await readLoginTransaction(paths);
 	if (transaction === null) {
 		return false;
@@ -35,17 +41,17 @@ export async function recoverPendingLogin(paths: OcmaPaths): Promise<boolean> {
 	const auth = await readJsonObject(paths.auth);
 	const reservedEntry = auth[transaction.reservedKey];
 	if (isJsonObject(reservedEntry)) {
-		auth.openai = reservedEntry;
+		auth[activeKey()] = reservedEntry;
 		delete auth[transaction.reservedKey];
 		await writeJsonAtomic(paths.auth, auth, 0o600);
 	}
 
 	if (transaction.phase === "aliases-pending") {
 		const aliases = await readJsonObject(paths.aliases);
-		const openaiAliases = requireOpenAIAliases(aliases, paths.aliases);
-		deleteAliasesForValue(openaiAliases, transaction.alias);
+		const accountAliases = aliasesFor(aliases, paths.aliases);
+		deleteAliasesForValue(accountAliases, transaction.alias);
 		if (transaction.priorAliasLabel !== null) {
-			openaiAliases[transaction.priorAliasLabel] = transaction.alias;
+			accountAliases[transaction.priorAliasLabel] = transaction.alias;
 		}
 		await writeJsonAtomic(paths.aliases, aliases, 0o644);
 	}
@@ -55,15 +61,15 @@ export async function recoverPendingLogin(paths: OcmaPaths): Promise<boolean> {
 }
 
 export async function readLoginTransaction(
-	paths: OcmaPaths,
+	paths: AccountPaths,
 ): Promise<LoginTransaction | null> {
-	const path = loginTransactionPath(paths);
+	const path = await loginTransactionPath(paths);
 	try {
 		const value = JSON.parse(await readFile(path, "utf8")) as unknown;
 		if (isLoginTransaction(value) === false) {
-			throw new Error(`invalid ocma login transaction in ${path}`);
+			throw new Error(`invalid login transaction in ${path}`);
 		}
-		return value;
+		return { ...value, schema: loginTransactionSchema };
 	} catch (error) {
 		if (isNotFound(error)) {
 			return null;
@@ -73,20 +79,23 @@ export async function readLoginTransaction(
 }
 
 export async function writeLoginTransaction(
-	paths: OcmaPaths,
+	paths: AccountPaths,
 	transaction: LoginTransaction,
 ): Promise<void> {
-	await writeJsonAtomic(loginTransactionPath(paths), transaction, 0o600);
+	await writeJsonAtomic(await loginTransactionPath(paths), transaction, 0o600);
 }
 
-export async function removeLoginTransaction(paths: OcmaPaths): Promise<void> {
-	await removeFile(loginTransactionPath(paths));
+export async function removeLoginTransaction(
+	paths: AccountPaths,
+): Promise<void> {
+	await removeFile(await loginTransactionPath(paths));
 }
 
 function isLoginTransaction(value: unknown): value is LoginTransaction {
 	return (
 		isJsonObject(value) &&
-		value.schema === "fbb.ocma-login/v1" &&
+		(value.schema === loginTransactionSchema ||
+			value.schema === legacyLoginTransactionSchema) &&
 		(value.phase === "prepared" ||
 			value.phase === "aliases-pending" ||
 			value.phase === "auth-written") &&

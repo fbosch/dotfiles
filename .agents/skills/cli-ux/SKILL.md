@@ -1,120 +1,83 @@
 ---
 name: cli-ux
-description: Use for packages/cli changes that affect command UX, prompts, help, output layout, progress, success, warnings, errors, JSON/stdout/stderr contracts, non-interactive/agent behavior, copy, or tests for those surfaces. Do not load for implementation-only refactors with unchanged CLI surface.
+description: Design, implement, refactor, or review line-oriented command-line interfaces across any language or renderer. Use when changing commands, flags, help, prompts, confirmations, progress, errors, warnings, results, lists, tables, output layout, colors, stdout/stderr, machine formats, TTY behavior, non-interactive behavior, destructive actions, streams, wrappers, or CLI compatibility. Do not use for internal refactors with no observable CLI change or for full-screen terminal UIs.
 ---
 
-# Vercel CLI UX
+# CLI UX
 
-Canonical front door for making the Vercel CLI consistent, sharp, scriptable, and agent-ready.
+Create clear, scriptable line-oriented CLIs with one exact human-output style.
+Treat Fish, shell, Gum, Clack, Rich, Charmbracelet, Cobra, Click, and plain ANSI as renderers. Choose the smallest renderer that fits the interaction; do not let a renderer define the visible design.
 
-## Stance
+## Classify First
 
-Act like a CLI product engineer, not a string polisher.
+Classify each command or subcommand before changing its output. A command can have more than one profile.
 
-- For material changes, define the user job, current friction, desired outcome, success signal, and non-goals before choosing output.
-- Inspect the current command source and tests before judging.
-- Treat shipped output as evidence, not automatic precedent. Check it against this skill, product behavior, and compatibility contracts.
-- Fix the flow when the flow is wrong; copy-only edits are not enough.
-- Treat copy changes as symptoms. Inspect the surrounding flow, layout, resolved-state preview, side effects, and tests before stopping.
-- Keep human output readable and machine output stable.
-- Treat agents as first-class users and untrusted input sources.
-- Preserve compatibility unless the migration is explicit and tested.
-- Prefer existing command-family helpers and patterns.
+| Profile | Primary contract |
+| --- | --- |
+| Human workflow | Guided task completion |
+| Query or report | Scannable human result |
+| Filter | Exact transformed records |
+| Machine protocol | Stable documented data |
+| Interactive command | Prompt and selection flow |
+| Live stream | Ordered ongoing records |
+| Transparent wrapper | Preserve child behavior |
+| CI adapter | Preserve CI control protocol |
+| Stable public CLI | Preserve compatibility |
 
-## Decision Authority
+Answer before implementation:
 
-Resolve conflicts in this order:
-
-1. The user's explicit goal and constraints.
-2. Verified product and system truth: API behavior, permissions, billing, data models, reachable states, and compatibility contracts.
-3. Repository-canonical guidance: `AGENTS.md`, this skill, shared helper contracts, and tests that encode intentional behavior.
-4. Accepted command-specific contracts in `command-contracts.md`.
-5. Verified adjacent command-family patterns.
-6. General CLI heuristics.
-
-Do not let a lower source override a higher one. Shipped code proves what exists, not why it is correct.
+1. Who consumes stdout and stderr?
+2. Is stdin payload, prompt input, or unused?
+3. Is output already a stable text or machine protocol?
+4. Does a child process own either stream or the terminal?
+5. Which modes exist: TTY, pipe, CI, no-input, plain, JSON, JSONL?
+6. Which compatibility contracts must remain unchanged?
 
 ## Workflow
 
-1. **Outcome map.** For material UX changes, name the user and job, current behavior, desired outcome, success signal, and non-goals.
-2. **Surface map.** List help, flags, prompts, progress, warnings, success, errors, tables/lists, detail views, JSON, and agent/non-interactive payloads.
-3. **Structure map.** For each touched line, identify its surface role, order, vertical rhythm, layout helper, gutter glyph or blank gutter, resolved-state preview, mutation preview, result block, and next action.
-4. **Mode map.** Trace TTY, non-TTY, `--non-interactive`, JSON/format flags, CI, and pipeable stdout.
-5. **State map.** Name team, project, cwd/root, environment, config files, framework/services, auth, remote resources, and defaults.
-6. **Question audit.** For every prompt, prove the value cannot be inferred and that a flag/arg/payload exists.
-7. **Mutation audit.** Identify local writes, remote mutations, polling, retries, idempotency, `--yes`, `--force`, typed confirmation, and `--dry-run`.
-8. **Agent audit.** Verify JSON/action payloads, bounded output, safe suggested commands, and no untrusted text in instructions.
-9. **Transcript review.** Read the before/after transcript for order, rhythm, duplicated concepts, alignment, and next action.
-10. **Regression lock.** Test the new path and lock out old prompts, stale terms, and broken machine contracts.
+1. Identify the user job, target, side effects, failure states, and recovery path.
+2. Map every observable surface: context, resolved state, prompt, preview, progress, result, warning, error, empty state, list, detail, stream, and machine record.
+3. Draft the intended plain-text transcript before choosing a renderer.
+4. Load only the reference required for the changed surface.
+5. Implement semantic output before color, animation, or library-specific controls.
+6. Test the relevant matrix in [verification.md](references/verification.md).
+7. Review the complete before/after transcript, not only edited strings.
 
-## When to Load References
+## Reference Routing
 
-Load only what the task needs.
+| Change | Required references | Do not load unless the change also affects it |
+| --- | --- | --- |
+| Copy or layout only | [visual-language.md](references/visual-language.md) | `behavior.md` and `verification.md` |
+| Stream, mode, safety, signal, or compatibility change | [behavior.md](references/behavior.md) | `visual-language.md` for changed human presentation |
+| Visual implementation or review | `visual-language.md` + [verification.md](references/verification.md) | `behavior.md` for unchanged contracts |
+| Behavioral implementation or review | `behavior.md` + `verification.md` | `visual-language.md` for unchanged presentation |
+| Prompt, destructive action, or combined surface | All three references | None |
 
-| Task surface                     | Load                                                                                            |
-| -------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Any CLI UX/output change         | [`references/core.md`](references/core.md)                                                      |
-| User-facing copy or copy review  | [`references/core.md`](references/core.md) + [`references/copy.md`](references/copy.md)         |
-| Prompt/setup flow                | `copy.md` → Prompts; `core.md` → Flow Design, Prompts, Setup + Mutation Flows                   |
-| Output layout/progress           | `core.md` → Output Surfaces, Layout, Glyphs + Color, Progress + Completion, Terminal Resilience |
-| List/detail/resource views       | `core.md` → List + Detail Commands, Layout, Streams + Formats, Machine Introspection            |
-| Streaming/follow/live commands   | `core.md` → Streaming + Long-Running Commands, Streams + Formats, Terminal Resilience           |
-| Errors/permissions/rate limits   | `copy.md` → Errors + Warnings; `core.md` → Errors, Warnings, Remote Work, Secrets               |
-| JSON/agent/non-interactive paths | `core.md` → Streams + Formats, Agent + Non-Interactive Output, Machine Introspection, Hardening |
-| Help/flags/completions           | `copy.md` → Help; `core.md` → Commands + Flags, Help + Discoverability, Compatibility           |
-| Destructive/production mutation  | `copy.md` → Clear + Consistent, Prompts; `core.md` → Dangerous Actions, Remote Work, Secrets    |
-| `vc link` or setup/link work     | [`references/command-contracts.md`](references/command-contracts.md) → Link Flow Contract       |
-| `vc env add` work                | `command-contracts.md` → Env Add Flow Contract                                                  |
-| `vc`, `vc deploy`, deploy output | `command-contracts.md` → Deploy Flow Contract                                                   |
-| Tests, stale-copy sweeps, review | [`references/verification.md`](references/verification.md)                                      |
+## Non-Negotiables
 
-If you add durable guidance, put detailed wording rules in `copy.md`, keep only the cross-cutting copy baseline plus reusable flow/output rules in `core.md`, put command-only state machines in `command-contracts.md`, and put test/review gates in `verification.md`. Short safety rules may repeat when sections need to stand alone; the canonical reject/fix checklist stays in `verification.md`.
+- Design the command journey, not isolated strings.
+- Make human output useful without breaking composition and automation.
+- Treat interaction, format, decoration, and verbosity as separate axes.
+- Ask only for unresolved input; never require a prompt.
+- Show meaningful state transitions, but omit phases that add no information.
+- Scale confirmation strength to the consequence of the action.
+- Print enough for slow work and state changes, but not developer-only detail by default.
+- Make errors explain the failure and the safest next action.
+- Treat command grammar, streams, exit codes, and machine output as APIs.
+- Treat secrets and remote or user-provided text as untrusted data.
+- Preserve compatibility over visual consistency for an established public contract.
 
-## Quality Bar
+## Completion Check
 
-Every changed command should answer:
+Before considering a CLI change done, answer:
 
-- What target did the CLI resolve?
-- What will change?
+- What target did the command resolve?
+- What will it change?
 - What happened?
-- What can the user or agent do next?
+- What can the user or caller do next?
 
-Top-tier commands:
+Filters, machine protocols, live streams, wrappers, CI adapters, and no-op queries may intentionally omit some answers. Do not force workflow output onto them.
 
-- make the common path short
-- ask only what cannot be inferred
-- show detected state before asking for overrides
-- show resolved targets in structured output before confirmations
-- avoid restating values already visible in argv, prompts, or nearby rows
-- show user-facing local and remote side effects in result blocks after mutation
-- use gutter glyphs only for semantic state, not decoration
-- use one concept per prompt
-- support flags or payloads for every prompt path
-- behave predictably in TTY, CI, and agent contexts
-- expose stable machine-readable contracts for scripted use
-- avoid duplicate remote mutations on retry
-- make no-op and already-done states explicit
-- end with a completed result or exact next command
+## Source Basis
 
-## Review Gates
-
-Apply the canonical Review Checklist in [`references/verification.md`](references/verification.md). Keep the checklist there so safety rules do not drift.
-
-Durable skill guidance needs verified current-source evidence, scope and exceptions, rationale tied to user or compatibility consequences, and a concrete bad/good example when the rule is mechanical. One shipped string, screenshot, or review comment is not enough to establish a universal rule.
-
-## Minimum Done State
-
-A CLI UX change is not done until:
-
-- the before/after transcript is easier to scan
-- copy changes review every user-facing string in the supplied command surface and directly coupled states, not only the edited line
-- prompt/result copy changes also checked layout, vertical rhythm, order, and surrounding flow
-- resolved target and planned mutation are visible before risky work
-- inferred resource confirmations show the resolved target before asking
-- mutation results show durable remote resources and user-actionable local artifacts changed
-- aligned rows use `printAlignedLabel()` with the shared 16-character label column and correct gutter: `▲` for production rows, `✓` for the primary completed phase, `!` for warnings, blank for previews, progress, and secondary receipt rows
-- every prompt has a flag, argument, or machine-readable action path
-- old vague prompts/output are locked out by tests
-- JSON/agent output remains valid, bounded, and stdout-clean
-- focused tests pass, or unrelated failures are named with evidence
-- changes to this skill are checked against at least 2 command families with different surfaces
+This original synthesis is informed by the [Command Line Interface Guidelines](https://clig.dev/) and Vercel's [CLI UX skill](https://github.com/vercel/vercel/tree/main/packages/cli/.agents/skills/cli-ux). It deliberately does not reuse their product vocabulary, branded glyphs, helper APIs, or command contracts.

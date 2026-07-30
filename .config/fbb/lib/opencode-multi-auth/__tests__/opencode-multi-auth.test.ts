@@ -6,15 +6,15 @@ import { renderProgressBar } from "../../progress-bar.ts";
 import { discoverAccounts, toPublicDiscovery } from "../discovery.ts";
 import { renderAccountCards } from "../list-presentation.ts";
 import { beginLogin, completeLogin, switchAccount } from "../mutations.ts";
+import { usageFromPayload } from "../providers/codex.ts";
 import { recoverPendingLogin } from "../transactions.ts";
-import type { OcmaPaths } from "../types.ts";
-import { usageFromPayload } from "../usage.ts";
+import type { AccountPaths } from "../types.ts";
 
 async function fixturePaths(
 	auth: unknown,
 	aliases: unknown,
-): Promise<OcmaPaths> {
-	const root = await mkdtemp(join(tmpdir(), "ocma-"));
+): Promise<AccountPaths> {
+	const root = await mkdtemp(join(tmpdir(), "openai-accounts-"));
 	const authPath = join(root, "auth.json");
 	const aliasesPath = join(root, "account-aliases.json");
 	await mkdir(root, { recursive: true });
@@ -29,7 +29,7 @@ async function fixturePaths(
 	};
 }
 
-async function readAuth(paths: OcmaPaths): Promise<Record<string, unknown>> {
+async function readAuth(paths: AccountPaths): Promise<Record<string, unknown>> {
 	return JSON.parse(await readFile(paths.auth, "utf8")) as Record<
 		string,
 		unknown

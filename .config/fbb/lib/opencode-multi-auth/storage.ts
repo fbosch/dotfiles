@@ -9,7 +9,7 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { MutationLock, OcmaPaths } from "./types.ts";
+import type { AccountPaths, MutationLock } from "./types.ts";
 
 export type JsonObject = Record<string, unknown>;
 
@@ -61,9 +61,12 @@ export async function writeJsonAtomic(
 }
 
 export async function acquireMutationLock(
-	paths: OcmaPaths,
+	paths: AccountPaths,
 ): Promise<MutationLock> {
-	const path = join(dirname(loginTransactionPath(paths)), "mutation.lock");
+	const path = join(
+		dirname(preferredLoginTransactionPath(paths)),
+		"mutation.lock",
+	);
 	await mkdir(dirname(path), { recursive: true });
 
 	try {
@@ -85,16 +88,26 @@ export async function acquireMutationLock(
 			isAlreadyExists(error) === false ||
 			(await removeStaleLock(path)) === false
 		) {
-			throw new Error("another ocma mutation is already in progress");
+			throw new Error("another account mutation is already in progress");
 		}
 		return acquireMutationLock(paths);
 	}
 }
 
-export function loginTransactionPath(paths: OcmaPaths): string {
-	return (
-		paths.state || join(dirname(paths.auth), ".ocma-login-transaction.json")
-	);
+export async function loginTransactionPath(
+	paths: AccountPaths,
+): Promise<string> {
+	const path = preferredLoginTransactionPath(paths);
+	if (paths.legacyState && (await fileExists(path)) === false) {
+		if (await fileExists(paths.legacyState)) {
+			return paths.legacyState;
+		}
+	}
+	return path;
+}
+
+function preferredLoginTransactionPath(paths: AccountPaths): string {
+	return paths.state || join(dirname(paths.auth), ".login-transaction.json");
 }
 
 export async function removeFile(path: string): Promise<void> {
@@ -148,4 +161,16 @@ function processExists(pid: number): boolean {
 
 function isAlreadyExists(error: unknown): boolean {
 	return (error as NodeJS.ErrnoException).code === "EEXIST";
+}
+
+async function fileExists(path: string): Promise<boolean> {
+	try {
+		await stat(path);
+		return true;
+	} catch (error) {
+		if (isNotFound(error)) {
+			return false;
+		}
+		throw error;
+	}
 }

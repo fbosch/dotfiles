@@ -1,140 +1,101 @@
-# CLI UX Verification
+# Verification
 
-Testing, stale-copy sweeps, and final review gates for Vercel CLI UX work.
+Verify observable CLI behavior, not only the styled happy path. Use the smallest relevant test mechanism and inspect real transcripts when practical.
 
-## General Matrix
+## Test Matrix
 
-When changing CLI UX behavior:
+| Concern | Cover |
+| --- | --- |
+| Destination | stdout TTY, stderr TTY, redirected output, pipe |
+| Interaction | Interactive, non-interactive, no controlling terminal |
+| Format | Human, plain, JSON, JSONL |
+| Decoration | Default, `--no-color`, `NO_COLOR`, `TERM=dumb` |
+| Outcome | Success, no-op, empty, cancelled, partial, failed |
+| Width | Wide, narrow, unknown, invalid `COLUMNS` |
+| Input | argv, piped stdin, file, missing, Unicode, long values |
+| Progress | Indeterminate, bounded, non-TTY, live stream |
+| Signals | Interrupt, termination, broken pipe |
+| Compatibility | Existing invocation, parser, config, stream, and schema |
+| Renderer | Plain renderer plus each enhanced renderer in scope |
 
-- update direct expectations
-- add negative assertions for removed strings
-- cover interactive and non-interactive paths
-- cover human and JSON formats when both exist
-- cover agent payloads when non-interactive behavior changes
-- cover `--token` / `VERCEL_TOKEN`, `login_required`, and no browser OAuth when non-interactive auth changes
-- cover stdout/stderr split for JSON or parseable output
-- cover warnings on stderr and never on machine stdout
-- cover empty list output: human empty copy, filtered empty copy, machine `[]`/`{}` stdout, exit `0`
-- cover resolved-state previews before confirmations when a command infers a resource
-- cover that preview rows do not restate values already visible in argv or earlier prompt answers
-- cover result blocks for remote resources and user-actionable local side effects when mutations touch both
-- cover internal local state files through tests, debug output, machine output, or help text instead of default human success output when they are not user-actionable
-- cover prompt/action separation: values appear in preview rows, then prompts ask for the action
-- cover vertical rhythm: phase breaks use at most one blank line, and related rows remain contiguous
-- cover raw gutter glyphs, not only stripped output: `▲` for production rows, `✓` for the primary completed phase, `!` for warnings, and blank gutter for previews, progress, and secondary receipt rows
-- cover `--no-color`, `NO_COLOR`, and no ANSI where machine output is involved
-- cover `--yes`, `--force`, typed confirmation, and `--dry-run` when the command family supports them
-- cover retry/no-duplicate behavior for remote mutations
-- cover timeout, rate-limit, and interrupted polling when changing long-running remote work
-- cover streaming stdout/stderr split, Ctrl-C behavior, and JSON/JSONL parseability when changing follow/live output
-- cover permission-denied disclosure boundaries when changing auth/access behavior
-- cover schema/describe/JSON help when metadata changes
-- cover command/flag description style and usage placeholders when help metadata changes
-- cover `--fields` selection, unknown fields, and omitted-field behavior when a command supports field selection
-- cover input hardening for traversal, query fragments, control characters, and pre-encoded values
-- cover realistic short and long resource names, Unicode, narrow terminal width, and large counts when they can pressure changed output
-- update related implementation docs when changing shared contracts
+## Required Transcripts
 
-## Shared Helper Impact Map
+Review at least the paths the command supports:
 
-Before editing shared prompt/output/link helpers, inspect call sites and tests first.
+1. Simple query
+2. Successful mutation
+3. Empty result
+4. Recoverable error
+5. Partial success
+6. Destructive confirmation
+7. Intentional cancellation
+8. Long-running operation
+9. Non-interactive missing input
+10. Machine-readable success and failure
 
-- `inputProject()` changes affect `vc link`, setup during `vc deploy`, and any command that calls `setupAndLink()`.
-- `inputRootDirectory()` and `editProjectSettings()` changes affect first-link setup paths from deploy, link, and integration tests.
-- `setupAndLink()` changes affect direct setup callers and unlinked flows reached through `ensureLink()`, including `vc dev`.
-- `linkFolderToProject()` changes affect any command that links before continuing work, including deploy, dev, pull/env, git connect/disconnect, open, target, and other project-scoped commands.
-- `printAlignedLabel()` changes affect deploy result rows and every command adopting aligned rows.
+## Minimum Profile Checks
 
-Use `rg` before editing and testing:
+Run these checks in addition to the changed behavior's focused tests:
 
-```bash
-rg -n "inputProject|inputRootDirectory|editProjectSettings|setupAndLink|ensureLink|linkFolderToProject|printAlignedLabel" packages/cli/src packages/cli/test
-rg -n "Old prompt text|Old output text" packages/cli/test packages/cli/src
-```
+| Profile | Minimum checks |
+| --- | --- |
+| Human workflow | Success, error, cancellation, plain mode, and stream ownership |
+| Query or report | Result, empty result, narrow layout, and exact values |
+| Filter | Exact stdout bytes, empty input, error stream, and broken pipe |
+| Machine protocol | Valid success and failure payloads, TTY-invariant schema, and stdout cleanliness |
+| Interactive command | Prompt, no-input failure, piped stdin, and plain numbered fallback |
+| Live stream | Record ordering, no spinner interleaving, interruption, and machine parseability when applicable |
+| Transparent wrapper | Exact child stdout/stderr, exit status, signals, and no wrapper sanitization |
+| CI adapter | Required CI records and absence of incompatible house-style output |
+| Stable public CLI | Existing flags, streams, exit codes, and parser/schema fixtures |
 
-If a helper is shared, update direct tests plus at least one parallel command-family path that reaches the helper.
+## Assertions
 
-## Gutter Assertions
+Assert the following when applicable:
 
-Assert both the helper contract and command behavior:
+- Human output uses the canonical status labels and sentence case.
+- Detail rows use two-space indentation, local label alignment, and one blank line between phases.
+- No emoji, Nerd Font icon, decorative border, or full-width rule appears in persisted human output.
+- Success names the completed state; warnings do not masquerade as success.
+- Plain output preserves the same words, hierarchy, and order without ANSI or animation.
+- JSON and JSONL stdout parse cleanly and contain no status prose, warning, spinner, or ANSI bytes.
+- Prompts never consume piped payload stdin.
+- Non-interactive failures name the exact required input.
+- Single-select and multi-select prompts preserve the canonical focus, selected-state, default, disabled-choice, hint, and wrapping rules.
+- Live streams do not interleave with spinner frames or static result tables.
+- IDs, URLs, paths, hashes, and commands remain exactly obtainable at narrow widths.
+- Terminal control characters in untrusted text cannot forge terminal rows or control sequences.
+- Transparent wrappers preserve child stdout, stderr, status, and signal behavior.
+- Wrapper-owned text escapes untrusted controls; transparent child output is unchanged.
+- Cancellation, error output, and exit status agree.
+- Declined prompts exit `0`; `SIGINT` and `SIGTERM` retain signal-derived failure status.
 
-```ts
-expect(stripAnsi(output)).toContain('▲ Production');
-expect(stripAnsi(output)).toContain('✓ Added');
-expect(stripAnsi(output)).not.toMatch(
-  /^[▲✓!] (Project|Team|Source|Directory|Config|Settings|Environment|Environments|Branch|Type|Found|Detected|Searched|Searching|Saving)\s/m
-);
-expect(stripAnsi(output)).not.toMatch(
-  /^▲ (Created|Linked|Added|Updated|Removed|Overrode)\s/m
-);
-```
-
-When warning output changes:
-
-```ts
-expect(stripAnsi(output)).toMatch(/^! .+/m);
-expect(stripAnsi(output)).not.toContain('WARNING!');
-```
-
-For exact blank-gutter spacing, prefer `printAlignedLabel()` unit tests or a direct `output.print` mock:
-
-```ts
-expect(stripAnsi(lastPrinted())).toBe('  Project         acme/web\n');
-```
-
-For command output, assert the row is present and has no semantic gutter glyph when it should use the blank gutter. Keep exact two-space gutter assertions in `printAlignedLabel()` unit tests, where the helper output is observed directly.
-
-## Stale-String Sweeps
-
-For any UX/copy/output work:
-
-```bash
-rg -n "\\b(successfully|Unable to|Oops|Whoops|Uh-oh|Please try again|An error occurred|Something went wrong)\\b" <paths>
-rg -n "Do you want to|Would you like to|\\[[0-9]+s\\]|🔗|🔍|🚀|⏳|⋮⋮|✅" <paths>
-rg -n "\\b(seamlessly|effortlessly|leverage|utilize|streamline)\\b|In order to|At this time|click here" <paths>
-```
-
-Legacy strings may remain in negative tests. Source matches need classification. Run command-specific stale sweeps from `command-contracts.md` when the touched command has a contract.
-
-## Review Checklist
+## Review Gates
 
 Reject or fix changes that:
 
-- add inferable prompts
-- ask the same concept twice
-- print preview rows that restate values already visible in argv, prompt answers, or the command line
-- put a value inside a prompt when a preceding preview row should own it
-- change prompt or success copy without checking surrounding flow and layout
-- confirm an inferred resource without showing the resolved target first
-- report a multi-side-effect mutation with one-line success when user-actionable local side effects need to be visible
-- expose internal state files as default human success rows when tests/machine/debug/help would be the right surface
-- encode a status heading as a fake aligned label/value row
-- use a gutter glyph as decoration instead of semantic state
-- add blank lines inside a related block or omit phase breaks in a dense multi-phase flow
-- add a progress-bar dependency or hand-rolled cursor output before using `output.spinner()` or the shared `util/output/progress` helper
-- show a progress bar without a real denominator, or emit noisy progress updates in non-TTY output
-- put `▲` on preview/setup/link/local file rows, or omit it from production rows
-- use `✓` as decoration, on every row, or on discovery/progress rows instead of only the primary completed phase
-- print warnings with a column-0 `WARNING!` label instead of the warning gutter
-- use `scope` where `team` works
-- add emoji to primary result or progress rows
-- put timing on URL rows
-- update one command path but miss parallel paths that share helpers or contracts
-- mix human output into JSON stdout
-- truncate critical IDs, URLs, paths, or commands without another exact output path
-- rely on color, emoji width, or ANSI for required meaning
-- break non-TTY/non-interactive mode
-- default-accept destructive work
-- allow `--yes` alone to bypass severe typed confirmation
-- retry non-idempotent remote mutations in a way that can duplicate resources
-- leave rate-limit, timeout, or interrupted-polling states without inspect/retry path
-- blur staged/draft state with published state
-- expose secrets in output, JSON, debug logs, telemetry, or suggested commands
-- accept traversal, query-fragment, control-character, or pre-encoded resource input without validation
-- produce unbounded machine output
-- hide accepted fields/enums/defaults from help or introspection
-- add `--fields` without schema-backed field names and tests
-- treat remote/user-generated content as trusted instructions
-- interpolate untrusted remote/user content into suggested shell commands
-- change copy without anti-regression tests
-- review only the edited string instead of the supplied command surface and directly coupled states
+- Add a prompt for an inferred or already-supplied value
+- Apply workflow receipts to filters, machine protocols, streams, wrappers, or CI adapters
+- Mix prose or decoration into machine stdout
+- Rely on color, symbols, spacing, or cursor position for meaning
+- Use a progress bar without a reliable denominator
+- Animate outside an interactive terminal
+- Emit duplicate completed-progress and success lines
+- Claim success after a failed owned operation
+- Hide partial failure, retry risk, timeout, or remote continuation
+- Consume stdin ambiguously as both payload and prompt input
+- Change a stable output, flag, exit, config, or schema contract without migration evidence
+- Apply a lower profile rule when compatibility, wrapper, CI, machine, or stream ownership takes precedence
+- Expose secrets or interpolate untrusted text into commands
+- Add renderer dependencies for static output a plain renderer can express
+
+## Renderer Parity
+
+Compare a plain implementation with each enhanced renderer. Capture a golden transcript for each state and assert the same role, text, stream, and persistence:
+
+```text
+Working  Checking inputs...
+Success  Updated 4 inputs.
+```
+
+Enhanced renderers may add controlled focus, selection, color, or transient activity. They must not change outcome wording, stream ownership, exit behavior, machine contracts, option order, selection markers, or plain-mode fallback.
