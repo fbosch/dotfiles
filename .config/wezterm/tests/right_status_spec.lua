@@ -257,5 +257,5 @@ update_status({
 
 assert_eq(type(captured_status), "table", "status handles missing mux window")
 
-print("status_workhours_spec: ok")
+print("right_status_spec: ok")
 io.open = original_io_open

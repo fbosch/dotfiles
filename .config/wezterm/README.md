@@ -22,6 +22,6 @@ Lua configuration for WezTerm. The entrypoint stays thin and delegates settings 
 Run the focused specs after changing related logic:
 
 ```bash
-lua .config/wezterm/tests/status_workhours_spec.lua
+lua .config/wezterm/tests/right_status_spec.lua
 lua .config/wezterm/tests/agent_deck_detection_spec.lua
 ```

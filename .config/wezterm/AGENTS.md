@@ -14,7 +14,7 @@ WezTerm Lua configuration.
 
 ## Commands
 
-- `lua .config/wezterm/tests/status_workhours_spec.lua`
+- `lua .config/wezterm/tests/right_status_spec.lua`
 - `lua .config/wezterm/tests/agent_deck_detection_spec.lua`
 
 ## More Guidance
