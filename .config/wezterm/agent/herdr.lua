@@ -17,8 +17,8 @@ function M.get_summary()
 	cache.idle = 0
 	cache.inactive = 0
 
-	local ok, stdout = wezterm.run_child_process({ "herdr", "agent", "list" })
-	if ok == false then
+	local ran, ok, stdout = pcall(wezterm.run_child_process, { "herdr", "agent", "list" })
+	if ran == false or ok == false then
 		return cache
 	end
 

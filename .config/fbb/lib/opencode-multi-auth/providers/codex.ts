@@ -8,8 +8,6 @@ import type {
 	AccountPaths,
 	AccountProfile,
 	AccountResetCreditDiscovery,
-	AccountResetCredits,
-	AccountUsage,
 	AccountUsageDiscovery,
 } from "../types.ts";
 
@@ -106,41 +104,19 @@ export async function discoverUsage(
 	paths: AccountPaths,
 ): Promise<AccountUsageDiscovery> {
 	const queryClient = queryClientFor(paths).queryClient;
-	const results = await Promise.all(
-		discovery.profiles.map(async (profile) => {
-			const entry = auth[profile.key];
-			if (isJsonObject(entry) === false) {
-				return [profile.key, new Error("invalid Codex profile")] as const;
-			}
-			try {
-				return [
-					profile.key,
-					await queryClient.fetchQuery(
-						usageQueryOptions(profile.key, credentialsForEntry(entry)),
-					),
-				] as const;
-			} catch (error) {
-				return [
-					profile.key,
-					error instanceof Error ? error : new Error(String(error)),
-				] as const;
-			}
-		}),
+	const result = await discoverProfileValues(
+		discovery,
+		auth,
+		(profileKey, entry) =>
+			queryClient.fetchQuery(
+				usageQueryOptions(profileKey, credentialsForEntry(entry)),
+			),
+		"usage",
 	);
-
-	const usageByProfile = new Map<string, AccountUsage>();
-	const diagnostics = [];
-	for (const [key, result] of results) {
-		if (result instanceof Error) {
-			diagnostics.push({
-				code: "usage-unavailable",
-				message: `usage unavailable for ${key}`,
-			});
-			continue;
-		}
-		usageByProfile.set(key, result);
-	}
-	return { usageByProfile, diagnostics };
+	return {
+		usageByProfile: result.valuesByProfile,
+		diagnostics: result.diagnostics,
+	};
 }
 
 export async function discoverResetCredits(
@@ -149,6 +125,30 @@ export async function discoverResetCredits(
 	paths: AccountPaths,
 ): Promise<AccountResetCreditDiscovery> {
 	const queryClient = queryClientFor(paths).queryClient;
+	const result = await discoverProfileValues(
+		discovery,
+		auth,
+		(profileKey, entry) =>
+			queryClient.fetchQuery(
+				resetCreditsQueryOptions(profileKey, credentialsForEntry(entry)),
+			),
+		"reset credits",
+	);
+	return {
+		resetCreditsByProfile: result.valuesByProfile,
+		diagnostics: result.diagnostics,
+	};
+}
+
+async function discoverProfileValues<T>(
+	discovery: AccountDiscovery,
+	auth: JsonObject,
+	fetchValue: (profileKey: string, entry: JsonObject) => Promise<T>,
+	label: string,
+): Promise<{
+	valuesByProfile: Map<string, T>;
+	diagnostics: AccountDiscovery["diagnostics"];
+}> {
 	const results = await Promise.all(
 		discovery.profiles.map(async (profile) => {
 			const entry = auth[profile.key];
@@ -156,12 +156,7 @@ export async function discoverResetCredits(
 				return [profile.key, new Error("invalid Codex profile")] as const;
 			}
 			try {
-				return [
-					profile.key,
-					await queryClient.fetchQuery(
-						resetCreditsQueryOptions(profile.key, credentialsForEntry(entry)),
-					),
-				] as const;
+				return [profile.key, await fetchValue(profile.key, entry)] as const;
 			} catch (error) {
 				return [
 					profile.key,
@@ -170,19 +165,19 @@ export async function discoverResetCredits(
 			}
 		}),
 	);
-	const resetCreditsByProfile = new Map<string, AccountResetCredits>();
+	const valuesByProfile = new Map<string, T>();
 	const diagnostics = [];
 	for (const [key, result] of results) {
 		if (result instanceof Error) {
 			diagnostics.push({
-				code: "reset-credits-unavailable",
-				message: `reset credits unavailable for ${key}`,
+				code: `${label.replaceAll(" ", "-")}-unavailable`,
+				message: `${label} unavailable for ${key}`,
 			});
 			continue;
 		}
-		resetCreditsByProfile.set(key, result);
+		valuesByProfile.set(key, result);
 	}
-	return { resetCreditsByProfile, diagnostics };
+	return { valuesByProfile, diagnostics };
 }
 
 export function activeKey(): string {

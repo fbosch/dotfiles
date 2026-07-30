@@ -3,23 +3,8 @@ package.path = package.path
 	.. ";./.config/wezterm/?/init.lua"
 
 local registered_events = {}
-local original_io_open = io.open
 local mock_used_percent = 57
 local mock_credit_count = 2
-local usage_refreshes = 0
-local scheduled_callbacks = {}
-
-io.open = function(path, mode)
-	if mode == "r" and path:match("ocma%-status%.json$") then
-		return {
-			read = function()
-				return "codex-status"
-			end,
-			close = function() end,
-		}
-	end
-	return original_io_open(path, mode)
-end
 
 package.loaded.wezterm = {
 	config_dir = "." .. package.config:sub(1, 1) .. ".config" .. package.config:sub(1, 1) .. "wezterm",
@@ -48,6 +33,9 @@ package.loaded.wezterm = {
 	format = function(items)
 		return items
 	end,
+	shell_join_args = function(args)
+		return table.concat(args, " ")
+	end,
 	json_parse = function(content)
 		if content == "herdr-agents" then
 			return {
@@ -61,7 +49,7 @@ package.loaded.wezterm = {
 			}
 		end
 
-		if content == "codex-status" then
+		if content == "ocma-list" then
 			return {
 				data = {
 					profiles = {
@@ -125,16 +113,11 @@ package.loaded.wezterm = {
 		registered_events[event] = callback
 	end,
 	run_child_process = function(argv)
+		if argv[1] == "/bin/sh" then
+			return true, "ocma-list", ""
+		end
 		return true, "herdr-agents", ""
 	end,
-	background_child_process = function()
-		usage_refreshes = usage_refreshes + 1
-	end,
-	time = {
-		call_after = function(_, callback)
-			table.insert(scheduled_callbacks, callback)
-		end,
-	},
 }
 
 package.loaded["agent"] = {
@@ -236,22 +219,18 @@ for _, case in ipairs({
 }) do
 	mock_used_percent = case.used
 	captured_status = nil
-	update_status(window)
+	user_var_changed(window, nil, "codex_profile_changed")
 	assert_eq(find_text(captured_status, case.remaining .. "%"), true, "usage percentage renders")
 end
 
 captured_status = nil
 user_var_changed(window, nil, "codex_profile_changed")
 assert_eq(type(captured_status), "table", "profile change rerenders status")
-assert_eq(#scheduled_callbacks, 1, "profile change schedules a cache-refresh rerender")
-scheduled_callbacks[1]()
 
 mock_credit_count = 1
-local usage_refreshes_before_reset = usage_refreshes
 captured_status = nil
 user_var_changed(window, nil, "codex_reset_refreshed")
 assert_eq(find_text(captured_status, "⁽¹⁾"), true, "reset redemption refreshes credit count")
-assert_eq(usage_refreshes, usage_refreshes_before_reset + 1, "reset redemption refreshes usage")
 
 mock_credit_count = 0
 captured_status = nil

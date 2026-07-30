@@ -20,7 +20,7 @@ export const resetCreditsQueryKey = [
 	"reset-credits",
 ] as const;
 
-export const usageCacheTimeMs = 60_000;
+const usageCacheTimeMs = 30_000;
 export const resetCreditsCacheTimeMs = 8 * 60 * 60 * 1_000;
 const usageCacheBuster = "fbb.opencode-multi-auth-query-cache/v2";
 const usageCachePrefix = "fbb-opencode-multi-auth";
@@ -43,7 +43,7 @@ export function queryClientFor(paths: AccountPaths): PersistentQueryClient {
 		filters: { queryKey: accountQueryKey },
 		maxAge: resetCreditsCacheTimeMs,
 		prefix: usageCachePrefix,
-		refetchOnRestore: false,
+		refetchOnRestore: true,
 		storage: fileStorage(cacheDirectory),
 	});
 	const persistentClient = {

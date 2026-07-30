@@ -1,18 +1,63 @@
+local paths = require("fbb.paths")
+
 local M = {}
 
----@param cache_path string
+---@return string
+local function command_path()
+	return paths.join(paths.fbb_dir(), "bin", "ocma")
+end
+
+---@param run_command fun(command: string, args: string[]): boolean, boolean, string
+---@param subcommand string
+---@param args string[]
+---@return boolean ran
+---@return boolean ok
+---@return string output
+local function run_ocma(run_command, subcommand, args)
+	local command_args = { subcommand }
+	for _, arg in ipairs(args) do
+		table.insert(command_args, arg)
+	end
+	return run_command(command_path(), command_args)
+end
+
+---@param run_command fun(command: string, args: string[]): boolean, boolean, string
 ---@param decode_json fun(content: string): table
----@param format_reset fun(reset_after_seconds: number|nil): string|nil
 ---@return table[]|nil
-function M.read_accounts(cache_path, decode_json, format_reset)
-	local cache_file = io.open(cache_path, "r")
-	if not cache_file then
+function M.list(run_command, decode_json)
+	assert(type(run_command) == "function", "run_command must be a function")
+	local ran, ok, output = run_ocma(run_command, "list", { "--format", "json" })
+	if not ran or not ok then
 		return nil
 	end
+	return M.read_accounts(output, decode_json)
+end
 
-	local content = cache_file:read("*a")
-	cache_file:close()
+---@param seconds number|nil
+---@return string|nil
+local function format_reset(seconds)
+	if type(seconds) ~= "number" then
+		return nil
+	end
+	if seconds <= 0 then
+		return "now"
+	end
+	if seconds < 60 then
+		return string.format("%ds", math.ceil(seconds))
+	end
+	if seconds < 3600 then
+		return string.format("%dm", math.ceil(seconds / 60))
+	end
+	if seconds < 86400 then
+		return string.format("%dh", math.ceil(seconds / 3600))
+	end
+	return string.format("%dd", math.ceil(seconds / 86400))
+end
 
+---@param content string
+---@param decode_json fun(content: string): table
+---@return table[]|nil
+function M.read_accounts(content, decode_json)
 	local parsed_ok, payload = pcall(decode_json, content)
 	local profiles = parsed_ok and type(payload) == "table" and payload.data and payload.data.profiles or nil
 	if type(profiles) ~= "table" then

@@ -121,9 +121,6 @@ return function()
 		wezterm.on("user-var-changed", function(window, _, name)
 			if codex.handle_user_var(name) then
 				update_right_status(window)
-				wezterm.time.call_after(1, function()
-					update_right_status(window)
-				end)
 			end
 		end)
 	end

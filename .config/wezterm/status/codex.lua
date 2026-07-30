@@ -4,11 +4,10 @@ local palette = require("theme")
 package.path = wezterm.config_dir .. "/../fbb/lua/?.lua;" .. package.path
 local ocma = require("fbb.ocma")
 
+local unpack_args = table.unpack or unpack
+local refresh_interval_seconds = 30
 local codex_status = { checked_at = 0, accounts = {} }
-local home_dir = os.getenv("HOME") or ""
-local status_cache = (os.getenv("XDG_CACHE_HOME") or (home_dir .. "/.cache")) .. "/wezterm/ocma-status.json"
-local ocma_command = home_dir .. "/.config/fbb/bin/ocma"
-local command_path = table.concat({
+local command_search_path = table.concat({
 	-- Home Manager exposes user packages here on macOS and NixOS.
 	"/etc/profiles/per-user/" .. (os.getenv("USER") or "") .. "/bin",
 	"/opt/homebrew/bin",
@@ -16,6 +15,19 @@ local command_path = table.concat({
 	"/run/current-system/sw/bin",
 	"$PATH",
 }, ":")
+
+local function run_command(command, args)
+	local command_line = wezterm.shell_join_args({ command, unpack_args(args) })
+	return pcall(wezterm.run_child_process, {
+		"/bin/sh",
+		"-c",
+		string.format(
+			"PATH=%q; export PATH; %s",
+			command_search_path,
+			command_line
+		),
+	})
+end
 
 local function usage_color(remaining)
 	if remaining >= 75 then
@@ -68,45 +80,15 @@ local function superscript_duration(value)
 	return superscript:gsub("[dhms]", superscript_units)
 end
 
-local function reset_in(seconds)
-	if type(seconds) ~= "number" then
-		return nil
-	end
-	if seconds <= 0 then
-		return "now"
-	end
-	if seconds < 60 then
-		return string.format("%ds", math.ceil(seconds))
-	end
-	if seconds < 3600 then
-		return string.format("%dm", math.ceil(seconds / 60))
-	end
-	if seconds < 86400 then
-		return string.format("%dh", math.ceil(seconds / 3600))
-	end
-	return string.format("%dd", math.ceil(seconds / 86400))
-end
-
 local function get_accounts()
-	local accounts = ocma.read_accounts(status_cache, wezterm.json_parse, reset_in)
+	if os.time() - codex_status.checked_at < refresh_interval_seconds then
+		return codex_status.accounts
+	end
+
+	codex_status.checked_at = os.time()
+	local accounts = ocma.list(run_command, wezterm.json_parse)
 	if accounts then
 		codex_status.accounts = accounts
-	end
-
-	if os.time() - codex_status.checked_at >= 10 * 60 then
-		codex_status.checked_at = os.time()
-		wezterm.background_child_process({
-			"/bin/sh",
-			"-c",
-			string.format(
-				'PATH=%q; export PATH; mkdir -p %q && temporary=%q.$$ && %q list --format json >"$temporary" && mv "$temporary" %q',
-				command_path,
-				status_cache:match("^(.+)/[^/]+$"),
-				status_cache,
-				ocma_command,
-				status_cache
-			),
-		})
 	end
 
 	return codex_status.accounts
