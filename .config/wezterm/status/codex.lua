@@ -38,6 +38,23 @@ local function reset_credit_color(urgency)
 	return palette.semantic.muted
 end
 
+local superscript_digits = {
+	["0"] = "⁰",
+	["1"] = "¹",
+	["2"] = "²",
+	["3"] = "³",
+	["4"] = "⁴",
+	["5"] = "⁵",
+	["6"] = "⁶",
+	["7"] = "⁷",
+	["8"] = "⁸",
+	["9"] = "⁹",
+}
+
+local function superscript_number(value)
+	return tostring(math.floor(value)):gsub("%d", superscript_digits)
+end
+
 local function get_accounts()
 	local cache_file = io.open(status_cache, "r")
 	local content = cache_file and cache_file:read("*a") or ""
@@ -83,6 +100,10 @@ local function append_usage(items, windows)
 			end
 			table.insert(items, { Foreground = { Color = usage_color(remaining) } })
 			table.insert(items, { Text = string.format("%d%%", math.floor(remaining)) })
+			if type(window.resetsIn) == "string" then
+				table.insert(items, { Foreground = { Color = palette.semantic.muted } })
+				table.insert(items, { Text = "@" .. window.resetsIn })
+			end
 			rendered = rendered + 1
 		end
 	end
@@ -99,12 +120,15 @@ local function append(items)
 			table.insert(items, { Foreground = { Color = palette.semantic.separator } })
 			table.insert(items, { Text = " · " })
 		end
-		local label_color = account.active and palette.semantic.attention or palette.semantic.muted
-		table.insert(items, { Foreground = { Color = label_color } })
-		table.insert(items, { Text = account.profileLabel .. (account.active and "*" or "") })
-		if tonumber(account.availableCount) then
+		table.insert(items, { Foreground = { Color = palette.semantic.muted } })
+		table.insert(items, { Text = account.profileLabel })
+		if account.active then
+			table.insert(items, { Foreground = { Color = palette.ansi.magenta } })
+			table.insert(items, { Text = "*" })
+		end
+		if tonumber(account.availableCount) and tonumber(account.availableCount) > 0 then
 			table.insert(items, { Foreground = { Color = reset_credit_color(account.urgency) } })
-			table.insert(items, { Text = "(" .. math.floor(tonumber(account.availableCount)) .. ")" })
+			table.insert(items, { Text = superscript_number(tonumber(account.availableCount)) })
 		end
 		append_usage(items, account.usage)
 	end

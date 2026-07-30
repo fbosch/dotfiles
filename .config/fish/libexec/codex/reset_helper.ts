@@ -345,9 +345,9 @@ function humanSeconds(seconds?: number): string | null {
         return `${Math.floor(seconds / 60)}m`;
     }
     if (seconds < 86_400) {
-        return `${Math.floor((seconds / 3_600) * 10) / 10}h`;
+        return `${Math.round(seconds / 3_600)}h`;
     }
-    return `${Math.floor((seconds / 86_400) * 10) / 10}d`;
+    return `${Math.round(seconds / 86_400)}d`;
 }
 
 function creditNickname(id: string): string {
@@ -500,16 +500,15 @@ async function status(
     if (creditsResult.isErr()) {
         return err(`failed to read reset credits: ${creditsResult.error}`);
     }
-    if (usageResult.isErr()) {
-        return err(`failed to read usage: ${usageResult.error}`);
-    }
 
     const accounts: AccountSummary[] = [
         {
             accountId: credentials.accountId,
             profileLabel: buildAccountProfile("openai", credentials.accountId, aliases).shortLabel,
             ...summaryForCredits(creditsResult.value),
-            usage: formatUsage(usageResult.value),
+            ...(usageResult.isOk()
+                ? { usage: formatUsage(usageResult.value) }
+                : { error: `usage: ${usageResult.error}` }),
             active: true,
         },
     ];
@@ -527,7 +526,8 @@ async function status(
             profileLabel: buildAccountProfile("openai", credentials.accountId, aliases).shortLabel,
             availableCount: creditsResult.value.available_count,
             credits: formatCredits(creditsResult.value),
-            usage: formatUsage(usageResult.value),
+            usage: usageResult.isOk() ? formatUsage(usageResult.value) : [],
+            error: usageResult.isErr() ? `usage: ${usageResult.error}` : null,
         },
         accounts,
     });

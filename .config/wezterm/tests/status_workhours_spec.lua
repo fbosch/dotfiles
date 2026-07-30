@@ -69,7 +69,7 @@ package.loaded.wezterm = {
 						urgency = "soon",
 						active = true,
 						usage = {
-							{ remaining = 100 - math.floor(mock_used_percent) },
+							{ remaining = 100 - math.floor(mock_used_percent), resetsIn = "3h" },
 						},
 					},
 					{
@@ -78,8 +78,8 @@ package.loaded.wezterm = {
 						urgency = "later",
 						active = false,
 						usage = {
-							{ remaining = 71 },
-							{ remaining = 94 },
+							{ remaining = 71, resetsIn = "2h" },
+							{ remaining = 94, resetsIn = "5d" },
 						},
 					},
 				},
@@ -107,6 +107,7 @@ package.loaded.wezterm = {
 					},
 					ansi = {
 						green = "#819B69",
+						magenta = "#B279A7",
 						yellow = "#B77E64",
 					},
 				},
@@ -207,10 +208,12 @@ os.date = original_os_date
 assert_eq(type(captured_status), "table", "status payload type")
 	assert_eq(find_text(captured_status, "[working] 2 "), true, "Herdr working count rendered")
 	assert_eq(find_text(captured_status, "[end] 6.5 "), true, "workhours indicator rendered")
-	assert_eq(find_text(captured_status, "ct*"), true, "active Codex profile alias rendered")
+	assert_eq(find_text(captured_status, "ct"), true, "active Codex profile alias rendered")
+	assert_eq(find_text(captured_status, "*"), true, "active Codex profile indicator rendered")
 	assert_eq(find_text(captured_status, "kk"), true, "inactive Codex profile alias rendered")
-	assert_eq(find_text(captured_status, "(2)"), true, "Codex reset credits rendered")
+	assert_eq(find_text(captured_status, "²"), true, "Codex reset credits rendered")
 	assert_eq(find_text(captured_status, "43%"), true, "ChatGPT remaining allowance rendered")
+	assert_eq(find_text(captured_status, "@3h"), true, "ChatGPT usage reset countdown rendered")
 
 for _, case in ipairs({
 	{ used = 98, remaining = "2" },
@@ -233,8 +236,13 @@ mock_credit_count = 1
 local usage_refreshes_before_reset = usage_refreshes
 captured_status = nil
 user_var_changed(window, nil, "codex_reset_refreshed")
-assert_eq(find_text(captured_status, "(1)"), true, "reset redemption refreshes credit count")
+assert_eq(find_text(captured_status, "¹"), true, "reset redemption refreshes credit count")
 assert_eq(usage_refreshes, usage_refreshes_before_reset + 1, "reset redemption refreshes usage")
+
+mock_credit_count = 0
+captured_status = nil
+update_status(window)
+assert_eq(find_text(captured_status, "⁰"), false, "zero reset credits omitted")
 
 captured_status = nil
 update_status({
