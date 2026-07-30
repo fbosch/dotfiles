@@ -7,7 +7,11 @@ import {
 } from "../progress-bar.ts";
 import { colorUsage } from "../usage-color.ts";
 import { escapeTerminalText } from "./terminal-text.ts";
-import type { AccountUsage, PublicAccountListProfile } from "./types.ts";
+import type {
+	AccountResetCredits,
+	AccountUsage,
+	PublicAccountListProfile,
+} from "./types.ts";
 
 type Colorize = (
 	format: InspectColor | readonly InspectColor[],
@@ -79,6 +83,7 @@ function renderCompactAccountCard(
 		`${color(profile.active ? "green" : "gray", marker)} ${colorProfileName(name, profile.displayColor, colorEnabled)} ${color(profile.active ? "green" : "gray", state)}`,
 		`  primary    ${formatUsageWindow(profile.usage?.primary ?? null, color, colorEnabled)}`,
 		`  secondary  ${formatUsageWindow(profile.usage?.secondary ?? null, color, colorEnabled)}`,
+		`  reset tokens  ${formatResetCredits(profile.resetCredits ?? null, color)}`,
 	].join("\n");
 }
 
@@ -105,7 +110,39 @@ function renderStackedAccountCard(
 			colorEnabled,
 			plain,
 		),
+		`  Reset tokens\n    ${formatResetCredits(profile.resetCredits ?? null, color)}`,
 	].join("\n");
+}
+
+function formatResetCredits(
+	resetCredits: AccountResetCredits | null,
+	color: Colorize,
+): string {
+	if (resetCredits === null) {
+		return color("gray", "unavailable");
+	}
+	const count = `${resetCredits.availableCount} available`;
+	const countColor = resetCreditColor(resetCredits);
+	if (resetCredits.nextExpiresAt === null) {
+		return color(countColor, count);
+	}
+	return `${color(countColor, count)}  ${color("gray", `expires in ${formatReset(resetCredits.nextExpiresAt)}`)}`;
+}
+
+function resetCreditColor(resetCredits: AccountResetCredits): InspectColor {
+	if (resetCredits.availableCount === 0) {
+		return "gray";
+	}
+	switch (resetCredits.urgency) {
+		case "urgent":
+			return "red";
+		case "soon":
+			return "yellow";
+		case "later":
+			return "green";
+		case "unknown":
+			return "gray";
+	}
 }
 
 function formatUsageDetail(

@@ -41,6 +41,7 @@ export type UsageWindow = {
 	remainingPercent: number | null;
 	resetAt: string | null;
 	resetAfterSeconds?: number | null;
+	limitWindowSeconds?: number | null;
 };
 
 export type AccountUsage = {

@@ -1,6 +1,9 @@
 import { profileColor } from "../../profile-color.ts";
 import { queryClientFor } from "../queryclient/client.ts";
-import { resetCreditsQueryOptions } from "../queryclient/queries/reset-credits.ts";
+import {
+	resetCreditsQueryOptions,
+	resetCreditsSummary,
+} from "../queryclient/queries/reset-credits.ts";
 import { usageQueryOptions } from "../queryclient/queries/usage.ts";
 import { isJsonObject, type JsonObject } from "../storage.ts";
 import type {
@@ -109,7 +112,7 @@ export async function discoverUsage(
 		auth,
 		(profileKey, entry) =>
 			queryClient.fetchQuery(
-				usageQueryOptions(profileKey, credentialsForEntry(entry)),
+				usageQueryOptions(credentialsForEntry(entry)),
 			),
 		"usage",
 	);
@@ -130,8 +133,8 @@ export async function discoverResetCredits(
 		auth,
 		(profileKey, entry) =>
 			queryClient.fetchQuery(
-				resetCreditsQueryOptions(profileKey, credentialsForEntry(entry)),
-			),
+				resetCreditsQueryOptions(credentialsForEntry(entry)),
+			).then(resetCreditsSummary),
 		"reset credits",
 	);
 	return {
@@ -215,7 +218,7 @@ function profileFromEntry(
 	};
 }
 
-function credentialsForEntry(entry: JsonObject): {
+export function credentialsForEntry(entry: JsonObject): {
 	accessToken: string;
 	accountId: string;
 } {

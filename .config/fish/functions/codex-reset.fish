@@ -62,36 +62,41 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
 
     set -l helper_dir (path dirname (status filename))
     set -l fish_root (path resolve "$helper_dir/..")
-    set -l libexec_dir "$fish_root/libexec"
-    set -l reset_helper "$libexec_dir/codex/reset_helper.ts"
-    if not test -f "$reset_helper"
-        echo "error: helper not found: $reset_helper" >&2
+    set -l ocma (path resolve "$fish_root/../fbb/bin/ocma")
+    if not test -x "$ocma"
+        echo "error: ocma is required: $ocma" >&2
         return 1
     end
 
-    set -l helper_auth_args
+    set -l ocma_auth_args
     if test -n "$auth_file"
-        set helper_auth_args --auth "$auth_file"
+        set ocma_auth_args --auth "$auth_file"
     end
 
     if test "$action" = consume
-        set -l preview_args consume-preview $helper_auth_args
+        set -l preview_args reset preview --format=json $ocma_auth_args
         if test -n "$credit_id"
             set -a preview_args --credit-id "$credit_id"
         end
-        set -l preview (bun --cwd "$libexec_dir" "$reset_helper" $preview_args)
+        set -l preview ("$ocma" $preview_args)
         if test $status -ne 0
+            printf '%s\n' "$preview" | jq -r '.diagnostics[]? | "ocma: \(.code): \(.message)"' >&2
+            return 1
+        end
+        set -l preview_data (__codex_reset_response_data "$preview" reset.preview)
+        if test $status -ne 0
+            echo "error: invalid response from ocma" >&2
             return 1
         end
 
-        set -l preview_credit (printf '%s\n' "$preview" | jq -c '.credit')
+        set -l preview_credit (printf '%s\n' "$preview_data" | jq -c '.credit')
         if test "$preview_credit" = null
             echo "no available credits to redeem."
             return 0
         end
 
         set credit_id (printf '%s\n' "$preview_credit" | jq -r '.id')
-        set -l preview_fields (printf '%s\n' "$preview_credit" | jq -r '[.nickname, (.resetType // "unknown"), (.grantedAt // "unknown"), (.expiresAt // "unknown"), .expiresIn, .id] | @tsv')
+        set -l preview_fields (printf '%s\n' "$preview_credit" | jq -r '[(.title // "Reset credit"), (.resetType // "unknown"), (.grantedAt // "unknown"), (.expiresAt // "unknown"), .expiresIn, .id] | @tsv')
         set -l fields (string split \t -- "$preview_fields")
         set -l heading_color ""
         set -l muted_color ""
@@ -131,11 +136,18 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
             return 1
         end
 
-        set -l result (bun --cwd "$libexec_dir" "$reset_helper" consume $helper_auth_args --credit-id "$credit_id")
+        set -l result ("$ocma" reset consume --format=json $ocma_auth_args --credit-id "$credit_id")
         if test $status -ne 0
+            printf '%s\n' "$result" | jq -r '.diagnostics[]? | "ocma: \(.code): \(.message)"' >&2
             return 1
         end
-        set -l result_fields (printf '%s\n' "$result" | jq -r '[(.windowsReset // "unknown"), (.code // "unknown"), (.redeemedAt // "unknown")] | @tsv')
+        set -l result_data (__codex_reset_response_data "$result" reset.consume)
+        if test $status -ne 0
+            echo "error: invalid response from ocma" >&2
+            return 1
+        end
+        printf '%s\n' "$result" | jq -r '.diagnostics[]? | "warning: \(.code): \(.message)"' >&2
+        set -l result_fields (printf '%s\n' "$result_data" | jq -r '[(.windowsReset // "unknown"), (.code // "unknown"), (.redeemedAt // "unknown")] | @tsv')
         set fields (string split \t -- "$result_fields")
         set -l success_color ""
         if test -t 1
@@ -149,21 +161,27 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
         return 0
     end
 
-    set -l status_args status $helper_auth_args
+    set -l status_args reset status --format=json $ocma_auth_args
     if test "$refresh" = true
         set -a status_args --refresh
     end
-    set -l status_payload (bun --cwd "$libexec_dir" "$reset_helper" $status_args)
+    set -l status_payload ("$ocma" $status_args)
     if test $status -ne 0
+        printf '%s\n' "$status_payload" | jq -r '.diagnostics[]? | "ocma: \(.code): \(.message)"' >&2
+        return 1
+    end
+    set -l status_data (__codex_reset_response_data "$status_payload" reset.status)
+    if test $status -ne 0
+        echo "error: invalid response from ocma" >&2
         return 1
     end
     if test "$refresh" = true
         wezterm_set_user_var codex_reset_refreshed (date +%s)
     end
 
-    set -l active_alias (printf '%s\n' "$status_payload" | jq -r '.active.profileLabel')
+    set -l active_alias (printf '%s\n' "$status_data" | jq -r '.active.profileLabel')
 
-    set -l credit_lines (printf '%s\n' "$status_payload" | jq -r '.active.credits[] | [.urgency, .status, .expiresIn, .id, .nickname, (.title // "")] | @tsv')
+    set -l credit_lines (printf '%s\n' "$status_data" | jq -r '.active.credits[] | [.urgency, .status, .expiresIn, .id, (.title // "")] | @tsv')
     set -l nearest_urgency unknown
     for credit_line in $credit_lines
         set -l fields (string split \t -- "$credit_line")
@@ -173,7 +191,7 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
         end
     end
 
-    set -l available_count (printf '%s\n' "$status_payload" | jq -r '.active.availableCount')
+    set -l available_count (printf '%s\n' "$status_data" | jq -r '.active.availableCount')
     set -l count_color ""
     set -l color_reset ""
     if test -t 1
@@ -197,10 +215,8 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
         set -l credit_status "$fields[2]"
         set -l expires_in "$fields[3]"
         set -l current_credit_id "$fields[4]"
-        set -l nickname "$fields[5]"
-        set -l title "$fields[6]"
+        set -l title "$fields[5]"
         set -l urgency_color ""
-        set -l nickname_color ""
         set -l dim ""
         if test -t 1
             switch "$urgency"
@@ -213,21 +229,15 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
                 case '*'
                     set urgency_color (set_color brblack)
             end
-            set -l nickname_palette blue magenta cyan brblue brmagenta brcyan
-            set -l color_index (math "0x"(string sub -s 11 -l 2 -- (string replace -r '^.*_' '' -- "$current_credit_id"))" % "(count $nickname_palette)" + 1")
-            set nickname_color (set_color --bold "$nickname_palette[$color_index]")
             set dim (set_color brblack)
         end
 
-        printf '  %s%-10s expires in %-7s %s%s%s\n' "$urgency_color" "$credit_status" "$expires_in" "$nickname_color" "$nickname" "$color_reset"
+        printf '  %s%-10s%s expires in %-7s %s\n' "$urgency_color" "$credit_status" "$color_reset" "$expires_in" "$title"
         printf '                               %s%s%s\n' "$dim" "$current_credit_id" "$color_reset"
-        if test -n "$title"
-            printf '                               %s%s%s\n' "$dim" "$title" "$color_reset"
-        end
     end
 
     printf '\ncurrent usage:\n'
-    set -l usage_rows (printf '%s\n' "$status_payload" | jq -r '.active.usage[] | [.name, (.remaining // ""), (.window // "n/a"), (.resetsIn // "n/a")] | @tsv')
+    set -l usage_rows (printf '%s\n' "$status_data" | jq -r '.active.usage[] | [.name, (.remaining // ""), (.window // "n/a"), (.resetsIn // "n/a")] | @tsv')
     for usage_row in $usage_rows
         set -l usage_fields (string split \t -- "$usage_row")
         set -l window_name "$usage_fields[1]"
@@ -262,7 +272,7 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
         printf '\nrun `codex-reset consume` to redeem one credit now.\n'
     end
     printf '\naccounts:\n'
-    set -l account_rows (printf '%s\n' "$status_payload" | jq -r '.accounts[] | [.profileLabel, (.availableCount // ""), (.urgency // "unknown"), (.error // ""), (.active | tostring)] | @tsv')
+    set -l account_rows (printf '%s\n' "$status_data" | jq -r '.accounts[] | [.profileLabel, (.availableCount // ""), (.urgency // "unknown"), (.error // ""), (.active | tostring)] | @tsv')
     for account_row in $account_rows
         set -l fields (string split \t -- "$account_row")
         set -l account_alias "$fields[1]"
@@ -290,4 +300,29 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
             printf '  %s (%s%s%s resets available)\n' "$account_alias" "$account_color" "$fields[2]" "$color_reset"
         end
     end
+end
+
+function __codex_reset_response_data --argument-names payload expected_command
+    printf '%s\n' "$payload" | jq -ce --arg command "$expected_command" '
+        if .schema == "fbb.ocma/v1"
+            and .command == $command
+            and .outcome == "success"
+            and (.data | type) == "object"
+            and (
+                ($command == "reset.preview"
+                    and (.data | has("credit"))
+                    and (.data.credit == null or (.data.credit | type) == "object"))
+                or ($command == "reset.consume")
+                or ($command == "reset.status"
+                    and (.data.active | type) == "object"
+                    and (.data.active.profileLabel | type) == "string"
+                    and (.data.active.availableCount | type) == "number"
+                    and (.data.active.credits | type) == "array"
+                    and (.data.active.usage | type) == "array"
+                    and (.data.accounts | type) == "array")
+            )
+        then .data
+        else error("invalid ocma response")
+        end
+    ' 2>/dev/null
 end

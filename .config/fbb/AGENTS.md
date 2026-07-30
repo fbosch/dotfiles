@@ -12,6 +12,12 @@ Shared personal config consumed by multiple app configs.
 - Keep generated state and caches out of this directory. `bun.lock` is the tracked dependency lock for FBB executables.
 - Prefer fail-loud parsing at app boundaries instead of silent fallback defaults.
 
+## TanStack Query
+
+- Define query factories with TanStack Query's `queryOptions(...)` API; do not return untyped option object literals.
+- Keep query factories under `lib/*/queryclient/queries/` and let each factory own its query key, request, response validation, and stale policy.
+- Define remote mutations with `mutationOptions(...)`, execute them through the shared `QueryClient`, and invalidate their associated query-key subtree after success.
+
 ## Validation
 
 - `bun run test`

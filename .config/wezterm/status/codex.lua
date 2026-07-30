@@ -109,7 +109,7 @@ local function append_usage(items, windows)
 			table.insert(items, { Text = string.format("%d%%", math.floor(remaining)) })
 			if type(window.resetsIn) == "string" then
 				table.insert(items, { Foreground = { Color = palette.semantic.muted } })
-				table.insert(items, { Text = "⁽" .. superscript_duration(window.resetsIn) .. "⁾" })
+				table.insert(items, { Text = " " .. superscript_duration(window.resetsIn) })
 			end
 			rendered = rendered + 1
 		end
@@ -136,7 +136,7 @@ local function append(items)
 		end
 		if tonumber(account.availableCount) and tonumber(account.availableCount) > 0 then
 			table.insert(items, { Foreground = { Color = reset_credit_color(account.urgency) } })
-			table.insert(items, { Text = "⁽" .. superscript_number(tonumber(account.availableCount)) .. "⁾" })
+			table.insert(items, { Text = superscript_number(tonumber(account.availableCount)) })
 		end
 		append_usage(items, account.usage)
 	end

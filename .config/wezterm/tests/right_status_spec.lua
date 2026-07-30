@@ -206,9 +206,9 @@ assert_eq(type(captured_status), "table", "status payload type")
 	assert_eq(find_text(captured_status, "ct"), true, "active Codex profile alias rendered")
 	assert_eq(find_text(captured_status, "*"), true, "active Codex profile indicator rendered")
 	assert_eq(find_text(captured_status, "kk"), true, "inactive Codex profile alias rendered")
-	assert_eq(find_text(captured_status, "⁽²⁾"), true, "Codex reset credits rendered")
+	assert_eq(find_text(captured_status, "²"), true, "Codex reset credits rendered")
 	assert_eq(find_text(captured_status, "43%"), true, "ChatGPT remaining allowance rendered")
-	assert_eq(find_text(captured_status, "⁽³ʰ⁾"), true, "ChatGPT usage reset countdown rendered")
+	assert_eq(find_text(captured_status, " ³ʰ"), true, "ChatGPT usage reset countdown rendered")
 
 for _, case in ipairs({
 	{ used = 98, remaining = "2" },
@@ -230,7 +230,7 @@ assert_eq(type(captured_status), "table", "profile change rerenders status")
 mock_credit_count = 1
 captured_status = nil
 user_var_changed(window, nil, "codex_reset_refreshed")
-assert_eq(find_text(captured_status, "⁽¹⁾"), true, "reset redemption refreshes credit count")
+	assert_eq(find_text(captured_status, "¹"), true, "reset redemption refreshes credit count")
 
 mock_credit_count = 0
 captured_status = nil

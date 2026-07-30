@@ -1,6 +1,7 @@
+import { queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
 import type { AccountUsage, UsageWindow } from "../../types.ts";
-import { usageQueryKey } from "../client.ts";
+import { accountCredentialKey, usageQueryKey } from "../client.ts";
 
 const usageUrl = "https://chatgpt.com/backend-api/wham/usage";
 const requestTimeoutMs = 10_000;
@@ -11,6 +12,7 @@ const UsageWindowSchema = z
 	.object({
 		used_percent: FiniteNumberSchema.optional(),
 		reset_after_seconds: FiniteNumberSchema.optional(),
+		limit_window_seconds: FiniteNumberSchema.optional(),
 	})
 	.nullish();
 const UsageSchema = z.object({
@@ -23,11 +25,10 @@ const UsageSchema = z.object({
 });
 
 export function usageQueryOptions(
-	profileKey: string,
 	credentials: { accessToken: string; accountId: string },
 ) {
-	return {
-		queryKey: [...usageQueryKey, profileKey],
+	return queryOptions({
+		queryKey: [...usageQueryKey, accountCredentialKey(credentials.accountId)],
 		queryFn: async (): Promise<AccountUsage> => {
 			const response = await fetch(usageUrl, {
 				headers: {
@@ -41,7 +42,7 @@ export function usageQueryOptions(
 			}
 			return usageFromPayload(await response.json());
 		},
-	};
+	});
 }
 
 export function usageFromPayload(payload: unknown): AccountUsage {
@@ -69,5 +70,6 @@ function usageWindow(window: z.infer<typeof UsageWindowSchema>): UsageWindow {
 				? null
 				: new Date(Date.now() + resetAfterSeconds * 1000).toISOString(),
 		resetAfterSeconds: resetAfterSeconds ?? null,
+		limitWindowSeconds: window?.limit_window_seconds ?? null,
 	};
 }

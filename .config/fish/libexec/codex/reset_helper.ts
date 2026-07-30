@@ -350,33 +350,12 @@ function humanSeconds(seconds?: number): string | null {
     return `${Math.round(seconds / 86_400)}d`;
 }
 
-function creditNickname(id: string): string {
-    const guid = id.replace(/^.*_/, "");
-    if (!/^[0-9a-fA-F]{12,}$/.test(guid)) {
-        return id;
-    }
-
-    const adjectives = [
-        "ember", "cobalt", "amber", "jade", "coral", "indigo", "silver", "scarlet", "atlas",
-        "lotus", "cedar", "pine", "aurora", "frost", "orbit", "dune", "maple", "zenith",
-    ];
-    const nouns = [
-        "falcon", "otter", "comet", "harbor", "meadow", "emberfox", "lynx", "kestrel", "glacier",
-        "thicket", "river", "moss", "canyon", "beacon", "auroraforge", "wave", "ridge",
-    ];
-    const adjective = adjectives[Number.parseInt(guid.slice(6, 8), 16) % adjectives.length];
-    const noun = nouns[Number.parseInt(guid.slice(8, 10), 16) % nouns.length];
-    const suffix = guid.slice(-4);
-    return `${adjective}-${noun}-${suffix}`;
-}
-
 function formatCredits(credits: Credits) {
     return credits.credits
         .map((credit) => {
             const expiry = parseExpiry(credit.expires_at);
             return {
                 id: credit.id,
-                nickname: creditNickname(credit.id),
                 status: credit.status || "unknown",
                 resetType: credit.reset_type || null,
                 grantedAt: credit.granted_at || null,

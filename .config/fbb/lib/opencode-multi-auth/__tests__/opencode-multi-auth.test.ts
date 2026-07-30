@@ -6,9 +6,26 @@ import { renderProgressBar } from "../../progress-bar.ts";
 import { discoverAccounts, toPublicDiscovery } from "../discovery.ts";
 import { renderAccountCards } from "../list-presentation.ts";
 import { beginLogin, completeLogin, switchAccount } from "../mutations.ts";
-import { queryClientFor } from "../queryclient/client.ts";
-import { mutateAccount } from "../queryclient/mutations.ts";
-import { resetCreditsFromPayload } from "../queryclient/queries/reset-credits.ts";
+import { accountQueryKey, queryClientFor } from "../queryclient/client.ts";
+import {
+	consumeResetCredit,
+	mutateAccount,
+} from "../queryclient/mutations.ts";
+import {
+	detailedResetCreditsFromPayload,
+	resetCreditsFromPayload,
+	selectAvailableCredit,
+} from "../queryclient/queries/reset-credits.ts";
+import {
+	resetProfilesFromLegacyAuth,
+	resetProfilesFromOpenCodeAuth,
+	resetStatus,
+} from "../reset.ts";
+import {
+	renderResetConsume,
+	renderResetPreview,
+	renderResetStatus,
+} from "../reset-presentation.ts";
 import {
 	usageFromPayload,
 	usageQueryOptions,
@@ -199,7 +216,11 @@ test("recovers an interrupted login without changing aliases", async () => {
 test("formats usage windows without exposing credentials", () => {
 	const usage = usageFromPayload({
 		rate_limit: {
-			primary_window: { used_percent: 23.7, reset_after_seconds: 60 },
+			primary_window: {
+				used_percent: 23.7,
+				reset_after_seconds: 60,
+				limit_window_seconds: 18_000,
+			},
 			secondary_window: { used_percent: 100, reset_after_seconds: 3_600 },
 		},
 	});
@@ -209,6 +230,7 @@ test("formats usage windows without exposing credentials", () => {
 		secondary: { remainingPercent: 0 },
 	});
 	expect(usage.primary.resetAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+	expect(usage.primary.limitWindowSeconds).toBe(18_000);
 	expect(usage.secondary.resetAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 });
 
@@ -237,7 +259,7 @@ test("caches usage until account mutations invalidate it", async () => {
 
 	try {
 		const queryClient = queryClientFor(paths).queryClient;
-		const options = usageQueryOptions("openai", {
+		const options = usageQueryOptions({
 			accessToken: "token",
 			accountId: "account",
 		});
@@ -265,11 +287,23 @@ test("caches usage until account mutations invalidate it", async () => {
 test("summarizes available reset credits without exposing their IDs", () => {
 	expect(
 		resetCreditsFromPayload({
-			available_count: 2,
-			credits: [
-				{ status: "available", expires_at: "2099-01-08T00:00:00.000Z" },
-				{ status: "available", expires_at: "2099-01-01T00:00:00.000Z" },
-				{ status: "redeemed", expires_at: "2099-01-02T00:00:00.000Z" },
+		available_count: 2,
+		credits: [
+			{
+				id: "later",
+				status: "available",
+				expires_at: "2099-01-08T00:00:00.000Z",
+			},
+			{
+				id: "first",
+				status: "available",
+				expires_at: "2099-01-01T00:00:00.000Z",
+			},
+			{
+				id: "redeemed",
+				status: "redeemed",
+				expires_at: "2099-01-02T00:00:00.000Z",
+			},
 			],
 		}),
 	).toEqual({
@@ -277,6 +311,328 @@ test("summarizes available reset credits without exposing their IDs", () => {
 		nextExpiresAt: "2099-01-01T00:00:00.000Z",
 		urgency: "later",
 	});
+});
+
+test("normalizes detailed reset credits and selects the earliest available credit", () => {
+	const credits = detailedResetCreditsFromPayload({
+		available_count: 2,
+		credits: [
+			{
+				id: "later",
+				status: "available",
+				reset_type: "primary",
+				granted_at: "2099-01-01T00:00:00.000Z",
+				expires_at: "2099-01-08T00:00:00.000Z",
+				title: "Reset primary",
+				extra: "stripped",
+			},
+			{
+				id: "first",
+				status: "available",
+				reset_type: null,
+				granted_at: null,
+				expires_at: "2099-01-01T00:00:00.000Z",
+				title: null,
+			},
+			{
+				id: "spent",
+				status: "redeemed",
+				reset_type: "primary",
+				granted_at: "2099-01-01T00:00:00.000Z",
+				expires_at: "2099-01-02T00:00:00.000Z",
+				title: "Spent",
+			},
+		],
+	});
+
+	expect(credits.credits.find((credit) => credit.id === "later")).toMatchObject({
+		id: "later",
+		resetType: "primary",
+		grantedAt: "2099-01-01T00:00:00.000Z",
+		expiresAt: "2099-01-08T00:00:00.000Z",
+	});
+	expect(selectAvailableCredit(credits.credits)?.id).toBe("first");
+	expect(selectAvailableCredit(credits.credits, "spent")).toBeNull();
+	expect(selectAvailableCredit(credits.credits, "later")?.id).toBe("later");
+});
+
+test("resolves reset profiles from OpenCode auth without serializing account IDs", () => {
+	const profiles = resetProfilesFromOpenCodeAuth(
+		{
+			openai: { access: "active-secret", accountId: "account-active-abcd" },
+			openai_1: { access: "inactive-secret", accountId: "account-other-1234" },
+		},
+		{ "ember-falcon-abcd": "main" },
+	);
+
+	expect(profiles).toMatchObject([
+		{ key: "openai", active: true },
+		{ key: "openai_1", active: false },
+	]);
+	const publicProfiles = profiles.map(({ credentials: _, ...profile }) => profile);
+	expect(JSON.stringify(publicProfiles)).not.toContain("account-active-abcd");
+	expect(JSON.stringify(publicProfiles)).not.toContain("active-secret");
+});
+
+test("deduplicates the active account in legacy reset profiles", async () => {
+	const root = await mkdtemp(join(tmpdir(), "legacy-reset-profiles-"));
+	const authPath = join(root, "auth.json");
+	await Promise.all([
+		writeFile(
+			authPath,
+			JSON.stringify({ access_token: "active", account_id: "account-active" }),
+		),
+		writeFile(
+			join(root, "auth-profiles.json"),
+			JSON.stringify({
+				profiles: {
+					active: {
+						tokens: {
+							access_token: "duplicate",
+							account_id: "account-active",
+						},
+					},
+					other: {
+						tokens: {
+							access_token: "other",
+							account_id: "account-other",
+						},
+					},
+				},
+			}),
+		),
+	]);
+
+	const profiles = await resetProfilesFromLegacyAuth(authPath, {});
+
+	expect(profiles).toHaveLength(2);
+	expect(profiles.map((profile) => profile.credentials?.accountId)).toEqual([
+		"account-active",
+		"account-other",
+	]);
+});
+
+test("refreshes reset credits and usage together", async () => {
+	const paths = await fixturePaths({}, {});
+	let usageRequests = 0;
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = (async (input: string | URL | Request) => {
+		const url = String(input);
+		if (url.endsWith("/wham/usage")) {
+			usageRequests += 1;
+			return Response.json({
+				rate_limit: {
+					primary_window: { used_percent: usageRequests === 1 ? 10 : 20 },
+				},
+			});
+		}
+		return Response.json({ available_count: 0, credits: [] });
+	}) as typeof fetch;
+	const profiles = [
+		{
+			key: "openai",
+			profileLabel: "main",
+			active: true,
+			credentials: { accessToken: "secret", accountId: "account" },
+			error: null,
+		},
+	];
+
+	try {
+		expect((await resetStatus(profiles, paths, false)).active.usage[0]?.remaining).toBe(90);
+		expect((await resetStatus(profiles, paths, true)).active.usage[0]?.remaining).toBe(80);
+		expect(usageRequests).toBe(2);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("rejects terminal control characters in reset-credit details", () => {
+	expect(() =>
+		detailedResetCreditsFromPayload({
+			available_count: 1,
+			credits: [
+				{
+					id: "credit",
+					status: "available",
+					title: "forged\nrow",
+				},
+			],
+		}),
+	).toThrow("reset credits response has an unexpected shape");
+});
+
+test("validates consume responses and sends a unique redemption request", async () => {
+	const paths = await fixturePaths({}, {});
+	const queryClient = queryClientFor(paths).queryClient;
+	const associatedQueryKey = [...accountQueryKey, "mutation-test"];
+	queryClient.setQueryData(associatedQueryKey, "cached");
+	const originalFetch = globalThis.fetch;
+	let request: Request | null = null;
+	globalThis.fetch = (async (
+		input: string | URL | Request,
+		init?: RequestInit,
+	) => {
+		request = new Request(input, init);
+		return Response.json({
+			code: "redeemed",
+			windows_reset: 2,
+			credit: { redeemed_at: "2099-01-01T00:00:00.000Z" },
+			extra: "stripped",
+		});
+	}) as unknown as typeof fetch;
+
+	try {
+		expect(
+			await consumeResetCredit(
+				paths,
+				{ accessToken: "secret", accountId: "account" },
+				"credit",
+			),
+		).toEqual({
+			data: {
+				code: "redeemed",
+				windowsReset: 2,
+				redeemedAt: "2099-01-01T00:00:00.000Z",
+			},
+			cacheInvalidationError: null,
+		});
+		const capturedRequest = request as Request | null;
+		expect(capturedRequest).not.toBeNull();
+		if (capturedRequest === null) {
+			throw new Error("consume request was not captured");
+		}
+		expect(capturedRequest.method).toBe("POST");
+		expect(capturedRequest.url).toBe(
+			"https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume",
+		);
+		expect(capturedRequest.headers.get("Authorization")).toBe("Bearer secret");
+		expect(capturedRequest.headers.get("ChatGPT-Account-Id")).toBe("account");
+		const body = (await capturedRequest.json()) as Record<string, string>;
+		expect(body.credit_id).toBe("credit");
+		expect(body.redeem_request_id).toMatch(/^[0-9a-f-]{36}$/);
+		expect(queryClient.getQueryState(associatedQueryKey)?.isInvalidated).toBe(true);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("rejects malformed reset-credit consume responses", async () => {
+	const paths = await fixturePaths({}, {});
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = (async () =>
+		Response.json({ windows_reset: "invalid" })) as unknown as typeof fetch;
+	try {
+		await expect(
+			consumeResetCredit(
+				paths,
+				{ accessToken: "secret", accountId: "account" },
+				"credit",
+			),
+		).rejects.toThrow("reset credit consume response has an unexpected shape");
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("accepts consume responses with omitted optional result fields", async () => {
+	const paths = await fixturePaths({}, {});
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = (async () => Response.json({})) as unknown as typeof fetch;
+	try {
+		expect(
+			await consumeResetCredit(
+				paths,
+				{ accessToken: "secret", accountId: "account" },
+				"credit",
+			),
+		).toEqual({
+			data: { code: null, windowsReset: null, redeemedAt: null },
+			cacheInvalidationError: null,
+		});
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("renders reset status as account cards with credit details", () => {
+	const output = renderResetStatus(
+		{
+			active: {
+				profileLabel: "main",
+				availableCount: 1,
+				credits: [
+					{
+						id: "credit-1",
+						status: "available",
+						resetType: "codex_rate_limits",
+						grantedAt: null,
+						expiresAt: "2099-01-01T00:00:00.000Z",
+						expiresIn: "2d",
+						urgency: "soon",
+						title: "Full reset",
+					},
+				],
+				usage: [
+					{
+						name: "primary",
+						remaining: 75,
+						window: "7d",
+						resetsIn: "2d",
+						resetsAt: "2099-01-01T00:00:00.000Z",
+					},
+				],
+				error: null,
+			},
+			accounts: [
+				{
+					profileLabel: "main",
+					availableCount: 1,
+					urgency: "soon",
+					active: true,
+					error: null,
+				},
+			],
+		},
+		{ colorEnabled: false, plain: false },
+	);
+
+	expect(output).toContain("* main active");
+	expect(output).toContain("reset tokens  1 available");
+	expect(output).toContain("reset credit  available");
+	expect(output).toContain("ID credit-1");
+});
+
+test("renders reset preview and consume results", () => {
+	expect(
+		renderResetPreview(
+			{ profileLabel: "main", credit: null },
+			{ colorEnabled: false, plain: true },
+		),
+	).toBe("Info     No available reset credits.");
+	expect(
+		renderResetConsume(
+			{
+				profileLabel: "main",
+				code: "redeemed",
+				windowsReset: 2,
+				redeemedAt: "2099-01-01T00:00:00.000Z",
+			},
+			{ colorEnabled: false, plain: false },
+		),
+	).toContain("* main active\n  reset credit  redeemed");
+	expect(
+		renderResetConsume(
+			{
+				profileLabel: "main",
+				displayColor: 39,
+				code: null,
+				windowsReset: null,
+				redeemedAt: null,
+			},
+			{ colorEnabled: true, plain: false },
+		),
+	).toContain("\u001b[1;38;5;39mmain\u001b[0m");
 });
 
 test("renders compact quota cards with Unicode partial-block progress", () => {
@@ -292,6 +648,11 @@ test("renders compact quota cards with Unicode partial-block progress", () => {
 					primary: { remainingPercent: 75, resetAt: null },
 					secondary: { remainingPercent: null, resetAt: null },
 				},
+				resetCredits: {
+					availableCount: 2,
+					nextExpiresAt: "2099-01-01T00:00:00.000Z",
+					urgency: "later",
+				},
 			},
 		],
 		{ colorEnabled: false, plain: false, columns: 80 },
@@ -300,6 +661,30 @@ test("renders compact quota cards with Unicode partial-block progress", () => {
 	expect(cards).toContain("* main active");
 	expect(cards).toContain("━━━━━━━━━━╸─── 75% remaining");
 	expect(cards).toContain("secondary  unavailable");
+	expect(cards).toMatch(/reset tokens  2 available  expires in \d+d/);
+});
+
+test("renders reset tokens in narrow account cards", () => {
+	const cards = renderAccountCards(
+		[
+			{
+				key: "openai",
+				displayColor: null,
+				generatedLabel: "ember-falcon-abcd",
+				alias: "main",
+				active: true,
+				usage: null,
+				resetCredits: {
+					availableCount: 0,
+					nextExpiresAt: null,
+					urgency: "unknown",
+				},
+			},
+		],
+		{ colorEnabled: false, plain: true, columns: 20 },
+	);
+
+	expect(cards).toContain("Reset tokens\n    0 available");
 });
 
 test("renders a terminal-safe empty state in plain output", () => {

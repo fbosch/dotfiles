@@ -10,11 +10,28 @@ import {
 import { beginLogin, completeLogin, switchAccount } from "./mutations.ts";
 import { assertMutableDiscovery } from "./profiles.ts";
 import {
+	aliasesFor,
 	discoverResetCredits,
 	discoverUsage,
 	loginCommand,
 } from "./providers/codex.ts";
 import { mutateAccount } from "./queryclient/mutations.ts";
+import {
+	renderResetConsume,
+	renderResetPreview,
+	renderResetStatus,
+} from "./reset-presentation.ts";
+import {
+	previewResetCredit,
+	redeemResetCredit,
+	resetProfilesFromLegacyAuth,
+	resetProfilesFromOpenCodeAuth,
+	resetStatus,
+	type ResetConsumeData,
+	type ResetPreviewData,
+	type ResetProfile,
+	type ResetStatusData,
+} from "./reset.ts";
 import { acquireMutationLock, readJsonObject } from "./storage.ts";
 import { escapeTerminalText } from "./terminal-text.ts";
 import { recoverPendingLogin } from "./transactions.ts";
@@ -25,7 +42,7 @@ import type {
 	Diagnostic,
 	PublicAccountDiscovery,
 } from "./types.ts";
-import { defaultPaths } from "./types.ts";
+import { defaultPaths, type AccountPaths } from "./types.ts";
 
 const VERSION = "0.1.0";
 const OUTPUT_SCHEMA = "fbb.ocma/v1";
@@ -112,6 +129,74 @@ const main = defineCommand({
 			run: ({ args }) =>
 				runLoginCommand(args._, args.format, textOptions(args)),
 		}),
+		reset: defineCommand({
+			meta: { name: "reset", description: "Manage ChatGPT reset credits." },
+			subCommands: {
+				status: defineCommand({
+					meta: {
+						name: "status",
+						description: "Show reset credits and usage.",
+					},
+					args: {
+						format: formatArg,
+						noColor: noColorArg,
+						plain: plainArg,
+						refresh: { type: "boolean" },
+						auth: { type: "string" },
+					},
+					run: ({ args, rawArgs }) =>
+						runResetStatus(
+							args.format,
+							args.refresh === true,
+							args.auth,
+							rawArgs,
+							textOptions(args),
+						),
+				}),
+				preview: defineCommand({
+					meta: {
+						name: "preview",
+						description: "Preview an available reset credit.",
+					},
+					args: {
+						format: formatArg,
+						noColor: noColorArg,
+						plain: plainArg,
+						"credit-id": { type: "string" },
+						auth: { type: "string" },
+					},
+					run: ({ args, rawArgs }) =>
+						runResetPreview(
+							args.format,
+							args["credit-id"],
+							args.auth,
+							rawArgs,
+							textOptions(args),
+						),
+				}),
+				consume: defineCommand({
+					meta: {
+						name: "consume",
+						description: "Redeem an available reset credit.",
+					},
+					args: {
+						format: formatArg,
+						noColor: noColorArg,
+						plain: plainArg,
+						"credit-id": { type: "string" },
+						auth: { type: "string" },
+					},
+					run: ({ args, rawArgs }) =>
+						runResetConsume(
+							args.format,
+							args["credit-id"],
+							args.auth,
+							rawArgs,
+							textOptions(args),
+						),
+				}),
+			},
+		}),
 	},
 });
 
@@ -173,6 +258,217 @@ async function runReadCommand(
 			),
 		);
 	});
+}
+
+async function runResetStatus(
+	format: OutputFormat,
+	refresh: boolean,
+	authPath: string | undefined,
+	rawArgs: string[],
+	textOutput: TextOutputOptions,
+): Promise<void> {
+	await emitCommand(format, "reset.status", textOutput, async () => {
+		assertResetArguments("status", rawArgs, [
+			"format",
+			"no-color",
+			"plain",
+			"refresh",
+			"auth",
+		]);
+		const paths = defaultPaths();
+		const result = await withResetLock(paths, async () =>
+			resetStatus(await resetProfiles(authPath, paths), paths, refresh),
+		);
+		return resetOutput("reset.status", result.value, result.releaseError);
+	});
+}
+
+async function runResetPreview(
+	format: OutputFormat,
+	creditId: string | undefined,
+	authPath: string | undefined,
+	rawArgs: string[],
+	textOutput: TextOutputOptions,
+): Promise<void> {
+	await emitCommand(format, "reset.preview", textOutput, async () => {
+		assertResetArguments("preview", rawArgs, [
+			"format",
+			"no-color",
+			"plain",
+			"credit-id",
+			"auth",
+		]);
+		const profile = await activeResetProfile(authPath, defaultPaths());
+		return resetSuccess("reset.preview", {
+			profileLabel: profile.profileLabel,
+			displayColor: profile.displayColor ?? null,
+			credit: await previewResetCredit(profile, creditId),
+		});
+	});
+}
+
+async function runResetConsume(
+	format: OutputFormat,
+	creditId: string | undefined,
+	authPath: string | undefined,
+	rawArgs: string[],
+	textOutput: TextOutputOptions,
+): Promise<void> {
+	await emitCommand(format, "reset.consume", textOutput, async () => {
+		assertResetArguments("consume", rawArgs, [
+			"format",
+			"no-color",
+			"plain",
+			"credit-id",
+			"auth",
+		]);
+		if (creditId === undefined || creditId === "") {
+			throw new UsageError("ocma reset consume: --credit-id is required");
+		}
+		const paths = defaultPaths();
+		const result = await withResetLock(paths, async () => {
+			const profile = await activeResetProfile(authPath, paths);
+			return {
+				profileLabel: profile.profileLabel,
+				displayColor: profile.displayColor ?? null,
+				redemption: await redeemResetCredit(profile, creditId, paths),
+			};
+		});
+		const output = resetOutput(
+			"reset.consume",
+			{
+				profileLabel: result.value.profileLabel,
+				displayColor: result.value.displayColor,
+				...result.value.redemption.data,
+			},
+			result.releaseError,
+		);
+		if (result.value.redemption.cacheInvalidationError) {
+			output.diagnostics.push({
+				code: "reset-cache-invalidation-failed",
+				message: result.value.redemption.cacheInvalidationError,
+			});
+		}
+		return output;
+	});
+}
+
+async function resetProfiles(
+	authPath: string | undefined,
+	paths: AccountPaths,
+): Promise<ResetProfile[]> {
+	const aliases = aliasesFor(await readJsonObject(paths.aliases), paths.aliases);
+	if (authPath) {
+		return resetProfilesFromLegacyAuth(authPath, aliases);
+	}
+	return resetProfilesFromOpenCodeAuth(await readJsonObject(paths.auth), aliases);
+}
+
+async function activeResetProfile(
+	authPath: string | undefined,
+	paths: AccountPaths,
+): Promise<ResetProfile> {
+	const profiles = await resetProfiles(authPath, paths);
+	const profile = profiles.find((candidate) => candidate.active);
+	if (profile === undefined) throw new Error("active OpenAI profile is missing");
+	return profile;
+}
+
+async function withResetLock<T>(
+	paths: AccountPaths,
+	action: () => Promise<T>,
+): Promise<{ value: T; releaseError: string | null }> {
+	const lock = await acquireMutationLock(paths);
+	let value: T;
+	try {
+		value = await action();
+	} catch (error) {
+		await lock.release().catch(() => undefined);
+		throw error;
+	}
+	try {
+		await lock.release();
+		return { value, releaseError: null };
+	} catch {
+		return {
+			value,
+			releaseError: "operation completed, but mutation lock cleanup failed",
+		};
+	}
+}
+
+function assertResetArguments(
+	command: string,
+	rawArgs: string[],
+	allowedOptions: string[],
+): void {
+	for (let index = 0; index < rawArgs.length; index += 1) {
+		index += resetArgumentValueOffset(
+			command,
+			rawArgs[index],
+			rawArgs[index + 1],
+			allowedOptions,
+		);
+	}
+}
+
+function resetArgumentValueOffset(
+	command: string,
+	argument: string,
+	nextArgument: string | undefined,
+	allowedOptions: string[],
+): number {
+	if (argument.startsWith("--") === false) {
+		throw new UsageError(`ocma reset ${command}: unexpected argument: ${argument}`);
+	}
+	const [option, inlineValue] = argument.slice(2).split("=", 2);
+	if (allowedOptions.includes(option) === false) {
+		throw new UsageError(`ocma reset ${command}: unknown option: --${option}`);
+	}
+	if (["format", "credit-id", "auth"].includes(option)) {
+		return resetValueOffset(command, option, inlineValue, nextArgument);
+	}
+	if (inlineValue !== undefined) {
+		throw new UsageError(`ocma reset ${command}: --${option} does not take a value`);
+	}
+	return 0;
+}
+
+function resetValueOffset(
+	command: string,
+	option: string,
+	inlineValue: string | undefined,
+	nextArgument: string | undefined,
+): number {
+	if (inlineValue === "") {
+		throw new UsageError(`ocma reset ${command}: --${option} requires a value`);
+	}
+	if (inlineValue !== undefined) {
+		return 0;
+	}
+	if (nextArgument === undefined || nextArgument.startsWith("-")) {
+		throw new UsageError(`ocma reset ${command}: --${option} requires a value`);
+	}
+	return 1;
+}
+
+function resetSuccess<T>(command: string, data: T): CommandOutput<T> {
+	return { schema: OUTPUT_SCHEMA, command, outcome: "success", data, diagnostics: [] };
+}
+
+function resetOutput<T>(
+	command: string,
+	data: T,
+	releaseError: string | null,
+): CommandOutput<T> {
+	const output = resetSuccess(command, data);
+	if (releaseError) {
+		output.diagnostics.push({
+			code: "mutation-lock-cleanup-failed",
+			message: releaseError,
+		});
+	}
+	return output;
 }
 
 async function runSwitchCommand(
@@ -503,10 +799,27 @@ function emitOutput(
 
 	if (output.command === "list") {
 		printAccounts(output.data as ListData, textOutput);
-	} else {
+	} else if (output.command === "status") {
 		printStatus(output.data as StatusData, textOutput);
+	} else if (output.command.startsWith("reset.")) {
+		printResetOutput(output, textOutput);
 	}
 	printDiagnostics(output.diagnostics, output.outcome);
+}
+
+function printResetOutput(
+	output: CommandOutput<unknown>,
+	textOutput: TextOutputOptions,
+): void {
+	if (output.command === "reset.status") {
+		console.log(renderResetStatus(output.data as ResetStatusData, textOutput));
+		return;
+	}
+	if (output.command === "reset.preview") {
+		console.log(renderResetPreview(output.data as ResetPreviewData, textOutput));
+		return;
+	}
+	console.log(renderResetConsume(output.data as ResetConsumeData, textOutput));
 }
 
 function exitCode(outcome: Outcome): number {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
 	mkdirSync,
 	readdirSync,
@@ -19,6 +20,10 @@ export const resetCreditsQueryKey = [
 	...accountQueryKey,
 	"reset-credits",
 ] as const;
+
+export function accountCredentialKey(accountId: string): string {
+	return createHash("sha256").update(accountId).digest("hex");
+}
 
 const usageCacheTimeMs = 30_000;
 export const resetCreditsCacheTimeMs = 8 * 60 * 60 * 1_000;
