@@ -1,11 +1,15 @@
-import { isCancel, text } from "@clack/prompts";
+import { styleText } from "node:util";
+import { isCancel, select, text } from "@clack/prompts";
 import { defineCommand, runMain } from "citty";
+import { colorProfileName } from "../profile-color.ts";
+import { usageColor } from "../usage-color.ts";
 import { discoverAccounts, toPublicDiscovery } from "./discovery.ts";
 import {
 	type DisplayAccountListProfile,
 	renderAccountCards,
 } from "./list-presentation.ts";
 import { beginLogin, completeLogin, switchAccount } from "./mutations.ts";
+import { assertMutableDiscovery } from "./profiles.ts";
 import { discoverUsage, loginCommand } from "./providers/codex.ts";
 import { mutateAccount } from "./queryclient/mutations.ts";
 import { acquireMutationLock, readJsonObject } from "./storage.ts";
@@ -132,17 +136,7 @@ async function runReadCommand(
 	await emitCommand(format, command, textOutput, async () => {
 		const paths = defaultPaths();
 		const discovery = await discoverAccounts(paths);
-		const usage = await discoverUsage(
-			{
-				...discovery,
-				profiles:
-					command === "list"
-						? discovery.profiles
-						: discovery.profiles.filter((profile) => profile.active),
-			},
-			await readJsonObject(paths.auth),
-			paths,
-		);
+		const usage = await discoverUsageFor(discovery, paths, command === "list");
 		const completeDiscovery = {
 			...discovery,
 			diagnostics: [...discovery.diagnostics, ...usage.diagnostics],
@@ -168,23 +162,59 @@ async function runSwitchCommand(
 	textOutput: TextOutputOptions,
 ): Promise<void> {
 	await emitCommand(format, "switch", textOutput, async () => {
-		if (positionals.length !== 1) {
+		if (positionals.length > 1) {
 			throw new UsageError(
-				"ocma switch: expected one alias or generated label",
+				"ocma switch: expected zero or one alias or generated label",
 			);
 		}
 		const paths = defaultPaths();
+		const currentDiscovery = await discoverAccounts(paths);
+		const currentUsage = await discoverUsageFor(currentDiscovery, paths, true);
+		const target =
+			positionals[0] ||
+			(await promptForSwitchTarget(
+				currentDiscovery,
+				currentUsage.usageByProfile,
+				format,
+				textOutput.colorEnabled,
+			));
 		const lock = await acquireMutationLock(paths);
 		try {
 			await mutateAccount(paths, "recover", () => recoverPendingLogin(paths));
 			const discovery = await mutateAccount(paths, "switch", () =>
-				switchAccount(positionals[0], paths),
+				switchAccount(target, paths),
 			);
-			return successOutput("switch", discovery, statusData(discovery));
+			const usage = await discoverUsageFor(discovery, paths, false);
+			const completeDiscovery = {
+				...discovery,
+				diagnostics: [...discovery.diagnostics, ...usage.diagnostics],
+			};
+			return successOutput(
+				"switch",
+				completeDiscovery,
+				statusData(completeDiscovery, usage.usageByProfile),
+			);
 		} finally {
 			await lock.release();
 		}
 	});
+}
+
+async function discoverUsageFor(
+	discovery: AccountDiscovery,
+	paths: ReturnType<typeof defaultPaths>,
+	includeInactiveProfiles: boolean,
+) {
+	return discoverUsage(
+		{
+			...discovery,
+			profiles: includeInactiveProfiles
+				? discovery.profiles
+				: discovery.profiles.filter((profile) => profile.active),
+		},
+		await readJsonObject(paths.auth),
+		paths,
+	);
 }
 
 async function runLoginCommand(
@@ -267,6 +297,58 @@ async function promptForAlias(format: OutputFormat): Promise<string> {
 		throw new Error("OpenCode login did not return an alias");
 	}
 	return alias;
+}
+
+async function promptForSwitchTarget(
+	discovery: AccountDiscovery,
+	usageByProfile: Map<string, AccountUsage>,
+	format: OutputFormat,
+	colorEnabled: boolean,
+): Promise<string> {
+	if (format === "json" || process.stdin.isTTY !== true) {
+		throw new UsageError(
+			"ocma switch: an alias or generated label is required when stdin is not interactive",
+		);
+	}
+	assertMutableDiscovery(discovery);
+	const target = await select({
+		message: "Select account",
+		options: discovery.profiles.map((profile) => ({
+			value: profile.alias || profile.generatedLabel || profile.key,
+			label: colorProfileName(
+				escapeTerminalText(
+					profile.alias || profile.generatedLabel || profile.key,
+				),
+				profile.displayColor,
+				colorEnabled,
+			),
+			hint: switchUsageHint(
+				profile.active,
+				usageByProfile.get(profile.key),
+				colorEnabled,
+			),
+		})),
+	});
+	if (isCancel(target)) {
+		throw new PromptCancelled();
+	}
+	if (typeof target !== "string") {
+		throw new Error("ocma switch did not return a target");
+	}
+	return target;
+}
+
+function switchUsageHint(
+	active: boolean,
+	usage: AccountUsage | undefined,
+	colorEnabled: boolean,
+): string {
+	const state = active ? "active" : "inactive";
+	if (usage?.primary.remainingPercent === null || usage === undefined) {
+		return `${state}  usage unavailable`;
+	}
+	const remaining = `${usage.primary.remainingPercent}% remaining`;
+	return `${state}  ${colorEnabled ? styleText(["bold", usageColor(usage.primary.remainingPercent)], remaining) : remaining}`;
 }
 
 async function runOpenCodeLogin(): Promise<void> {

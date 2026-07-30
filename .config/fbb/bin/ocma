@@ -1,3 +1,19 @@
 #!/usr/bin/env sh
 
-exec bun "$(dirname "$0")/../lib/opencode-multi-auth/index.ts" "$@"
+command=$1
+bun "$(dirname "$0")/../lib/opencode-multi-auth/index.ts" "$@"
+status=$?
+
+if [ "$status" -eq 0 ] && { [ "$command" = switch ] || [ "$command" = login ]; }; then
+    if { [ -t 0 ] || [ -t 1 ] || [ -t 2 ]; } && command -v base64 >/dev/null 2>&1; then
+        value=$(date +%s)
+        encoded=$(printf %s "$value" | base64 | tr -d '\n')
+        if [ -n "$TMUX" ]; then
+            printf '\033Ptmux;\033\033]1337;SetUserVar=codex_profile_changed=%s\007\033\\' "$encoded" >/dev/tty 2>/dev/null
+        else
+            printf '\033]1337;SetUserVar=codex_profile_changed=%s\007' "$encoded" >/dev/tty 2>/dev/null
+        fi
+    fi
+fi
+
+exit "$status"

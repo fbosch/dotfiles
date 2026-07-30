@@ -5,6 +5,7 @@ import {
 	filledProgressCells,
 	renderProgressBar,
 } from "../progress-bar.ts";
+import { usageColor } from "../usage-color.ts";
 import { escapeTerminalText } from "./terminal-text.ts";
 import type { AccountUsage, PublicAccountListProfile } from "./types.ts";
 
@@ -67,31 +68,22 @@ function renderAccountCard(
 	const name = escapeTerminalText(
 		profile.alias || profile.generatedLabel || "unresolved",
 	);
-	const key = escapeTerminalText(profile.key);
 	if (stacked) {
-		return renderStackedAccountCard(
-			profile,
-			name,
-			key,
-			color,
-			colorEnabled,
-			plain,
-		);
+		return renderStackedAccountCard(profile, name, color, colorEnabled, plain);
 	}
-	return renderCompactAccountCard(profile, name, key, color, colorEnabled);
+	return renderCompactAccountCard(profile, name, color, colorEnabled);
 }
 
 function renderCompactAccountCard(
 	profile: DisplayAccountListProfile,
 	name: string,
-	key: string,
 	color: Colorize,
 	colorEnabled: boolean,
 ): string {
 	const state = profile.active ? "active" : "inactive";
 	const marker = profile.active ? "*" : "-";
 	return [
-		`${color(profile.active ? "green" : "gray", marker)} ${colorProfileName(name, profile.displayColor, colorEnabled)} ${color(profile.active ? "green" : "gray", state)} ${color("gray", `[${key}]`)}`,
+		`${color(profile.active ? "green" : "gray", marker)} ${colorProfileName(name, profile.displayColor, colorEnabled)} ${color(profile.active ? "green" : "gray", state)}`,
 		`  primary    ${formatUsageWindow(profile.usage?.primary ?? null, color)}`,
 		`  secondary  ${formatUsageWindow(profile.usage?.secondary ?? null, color)}`,
 	].join("\n");
@@ -100,15 +92,12 @@ function renderCompactAccountCard(
 function renderStackedAccountCard(
 	profile: DisplayAccountListProfile,
 	name: string,
-	key: string,
 	color: Colorize,
 	colorEnabled: boolean,
 	plain: boolean,
 ): string {
 	return [
 		`${colorProfileName(name, profile.displayColor, colorEnabled)} ${profile.active ? "active" : "inactive"}`,
-		"  Profile",
-		`    ${key}`,
 		formatUsageDetail("Primary", profile.usage?.primary ?? null, color, plain),
 		formatUsageDetail(
 			"Secondary",
@@ -128,7 +117,7 @@ function formatUsageDetail(
 	if (window === null || window.remainingPercent === null) {
 		return `  ${label}\n    ${color("gray", "unavailable")}`;
 	}
-	const style = usageStyle(window.remainingPercent);
+	const style = usageColor(window.remainingPercent);
 	const usage = plain
 		? `${window.remainingPercent}% remaining`
 		: `${renderUsageBar(window.remainingPercent, style, color)} ${color(style, `${window.remainingPercent}% remaining`)}`;
@@ -142,7 +131,7 @@ function formatUsageWindow(
 	if (window === null || window.remainingPercent === null) {
 		return color("gray", "unavailable");
 	}
-	const style = usageStyle(window.remainingPercent);
+	const style = usageColor(window.remainingPercent);
 	const bar = renderUsageBar(window.remainingPercent, style, color);
 	return `${bar} ${color(style, `${window.remainingPercent}% remaining`)}  ${color("gray", `resets ${formatReset(window.resetAt)}`)}`;
 }
@@ -162,16 +151,6 @@ function renderUsageBar(
 	const { fullCells, partialCell, emptyCells } =
 		renderProgressBar(remainingPercent);
 	return `${color(style, filledProgressCells(fullCells))}${color(style, partialCell)}${color("gray", emptyProgressCells(emptyCells))}`;
-}
-
-function usageStyle(remainingPercent: number): InspectColor {
-	if (remainingPercent > 50) {
-		return "green";
-	}
-	if (remainingPercent > 20) {
-		return "yellow";
-	}
-	return "red";
 }
 
 function formatReset(resetAt: string | null): string {

@@ -34,8 +34,9 @@ JSON output always has this envelope:
 non-zero. JSON never includes access tokens, refresh tokens, JWTs, or account
 IDs.
 
-`ocma switch <alias>` atomically promotes an inactive `openai_<n>` profile to
-the active `openai` profile. `ocma login [alias]` runs OpenCode's OAuth login,
+`ocma switch [alias]` atomically promotes an inactive `openai_<n>` profile to
+the active `openai` profile. Without an alias, it opens an interactive account
+picker. `ocma login [alias]` runs OpenCode's OAuth login,
 preserves the prior active profile, and assigns the new login to the alias. A
 pending login is reported by `status`; the next mutation restores it before
 continuing.

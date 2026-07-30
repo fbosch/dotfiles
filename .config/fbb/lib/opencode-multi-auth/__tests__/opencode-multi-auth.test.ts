@@ -258,7 +258,7 @@ test("renders compact quota cards with Unicode partial-block progress", () => {
 	);
 
 	expect(cards).toContain("OpenAI accounts (1)");
-	expect(cards).toContain("* main active [openai]");
+	expect(cards).toContain("* main active");
 	expect(cards).toContain("━━━━━━━━━━╸─── 75% remaining");
 	expect(cards).toContain("secondary  unavailable");
 });
@@ -275,7 +275,7 @@ test("renders a terminal-safe empty state in plain output", () => {
 	);
 });
 
-test("escapes control characters and stacks narrow account cards", () => {
+test("escapes control characters in narrow account cards", () => {
 	const cards = renderAccountCards(
 		[
 			{
@@ -291,7 +291,6 @@ test("escapes control characters and stacks narrow account cards", () => {
 	);
 
 	expect(cards).toContain("work\\x07 inactive");
-	expect(cards).toContain("    openai_\\x1b[2J");
 	expect(cards).not.toContain("\u001b");
 });
 
