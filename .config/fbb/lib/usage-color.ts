@@ -1,11 +1,25 @@
-import type { InspectColor } from "node:util";
+export function colorUsage(
+	value: string,
+	remainingPercent: number,
+	colorEnabled: boolean,
+	bold = false,
+): string {
+	if (!colorEnabled) {
+		return value;
+	}
+	const weight = bold ? "1;" : "";
+	return `\x1b[${weight}${usageSgr(remainingPercent)}m${value}\x1b[0m`;
+}
 
-export function usageColor(remainingPercent: number): InspectColor {
-	if (remainingPercent > 50) {
-		return "green";
+function usageSgr(remainingPercent: number): string {
+	if (remainingPercent >= 75) {
+		return "32";
 	}
-	if (remainingPercent > 20) {
-		return "yellow";
+	if (remainingPercent >= 50) {
+		return "33";
 	}
-	return "red";
+	if (remainingPercent >= 25) {
+		return "93";
+	}
+	return "31";
 }

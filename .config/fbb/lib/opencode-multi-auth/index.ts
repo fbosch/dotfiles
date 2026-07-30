@@ -1,8 +1,7 @@
-import { styleText } from "node:util";
 import { isCancel, select, text } from "@clack/prompts";
 import { defineCommand, runMain } from "citty";
 import { colorProfileName } from "../profile-color.ts";
-import { usageColor } from "../usage-color.ts";
+import { colorUsage } from "../usage-color.ts";
 import { discoverAccounts, toPublicDiscovery } from "./discovery.ts";
 import {
 	type DisplayAccountListProfile,
@@ -170,19 +169,23 @@ async function runSwitchCommand(
 		const paths = defaultPaths();
 		const currentDiscovery = await discoverAccounts(paths);
 		const currentUsage = await discoverUsageFor(currentDiscovery, paths, true);
-		const target =
-			positionals[0] ||
+		const target = positionals[0];
+		const selectedTarget =
+			target ||
 			(await promptForSwitchTarget(
 				currentDiscovery,
 				currentUsage.usageByProfile,
 				format,
 				textOutput.colorEnabled,
 			));
+		if (!target) {
+			console.log(textOutput.colorEnabled ? "\x1b[90m│\x1b[39m" : "│");
+		}
 		const lock = await acquireMutationLock(paths);
 		try {
 			await mutateAccount(paths, "recover", () => recoverPendingLogin(paths));
 			const discovery = await mutateAccount(paths, "switch", () =>
-				switchAccount(target, paths),
+				switchAccount(selectedTarget, paths),
 			);
 			const usage = await discoverUsageFor(discovery, paths, false);
 			const completeDiscovery = {
@@ -348,7 +351,7 @@ function switchUsageHint(
 		return `${state}  usage unavailable`;
 	}
 	const remaining = `${usage.primary.remainingPercent}% remaining`;
-	return `${state}  ${colorEnabled ? styleText(["bold", usageColor(usage.primary.remainingPercent)], remaining) : remaining}`;
+	return `${state}  ${colorUsage(remaining, usage.primary.remainingPercent, colorEnabled, true)}`;
 }
 
 async function runOpenCodeLogin(): Promise<void> {
@@ -469,7 +472,6 @@ function printStatus(status: StatusData, textOutput: TextOutputOptions): void {
 	console.log(
 		renderAccountCards(status.active ? [status.active] : [], {
 			...textOutput,
-			heading: `OpenAI account (${status.profileCount} profiles)`,
 			emptyMessage: "No active account found.",
 			nextAction: "  Run `ocma login <alias>` to add an account.",
 		}),

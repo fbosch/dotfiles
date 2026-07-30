@@ -257,7 +257,6 @@ test("renders compact quota cards with Unicode partial-block progress", () => {
 		{ colorEnabled: false, plain: false, columns: 80 },
 	);
 
-	expect(cards).toContain("OpenAI accounts (1)");
 	expect(cards).toContain("* main active");
 	expect(cards).toContain("━━━━━━━━━━╸─── 75% remaining");
 	expect(cards).toContain("secondary  unavailable");
@@ -271,7 +270,7 @@ test("renders a terminal-safe empty state in plain output", () => {
 	});
 
 	expect(cards).toBe(
-		"OpenAI accounts (0)\nInfo     No accounts found.\n  Run `ocma login <alias>` to add an account.",
+		"Info     No accounts found.\n  Run `ocma login <alias>` to add an account.",
 	);
 });
 
