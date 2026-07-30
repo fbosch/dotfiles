@@ -60,7 +60,7 @@ const paletteLight = [18, 19, 20, 22, 23, 24, 52, 53, 54, 88, 89, 90, 94, 124];
 
 function aliasesFile(): string {
     const configRoot = process.env.XDG_CONFIG_HOME || join(process.env.HOME || "", ".config");
-    return join(configRoot, "fbb", "data", "account-aliases.json");
+    return join(configRoot, "fbb", "data", "opencode", "account-aliases.json");
 }
 
 function profileSeed(accountId: string): string {

@@ -7,7 +7,7 @@ App-specific integration stays in each app directory. Files here should be neutr
 ## OCMA
 
 `ocma` manages OpenCode account metadata. It reads credentials from OpenCode's
-existing auth file and keeps non-secret aliases in `data/account-aliases.json`.
+existing auth file and keeps non-secret aliases in `data/opencode/account-aliases.json`.
 The executable launcher is `bin/ocma`; its typed command adapter is
 `lib/opencode-multi-auth/index.ts`, separate from the account-state library in
 `lib/opencode-multi-auth/opencode-multi-auth.ts`. The FBB Bun package provides Citty command

@@ -86,7 +86,7 @@ export function defaultPaths(
 
 	return {
 		auth: join(dataHome, "opencode", "auth.json"),
-		aliases: join(configHome, "fbb", "data", "account-aliases.json"),
+		aliases: join(configHome, "fbb", "data", "opencode", "account-aliases.json"),
 		state: join(stateHome, "fbb", "openai-accounts", "login-transaction.json"),
 		legacyState: join(stateHome, "fbb", "ocma", "login-transaction.json"),
 		queryCacheDirectory: join(

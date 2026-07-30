@@ -46,7 +46,7 @@ test("derives stable repository names from common origin URLs", () => {
 
 test("resolves the default mapping path from XDG configuration", () => {
   expect(defaultRepositoryMappingPath({ HOME: "/home/test", XDG_CONFIG_HOME: "/config" })).toBe(
-    "/config/fbb/data/opencode-repository-accounts.json",
+    "/config/fbb/data/opencode/repository-account-preferences.json",
   )
 })
 
@@ -709,7 +709,7 @@ async function pluginFixture(repositoryAliases: string[] = []) {
   process.env.XDG_RUNTIME_DIR = join(root, "runtime")
   await Promise.all([
     mkdir(join(data, "opencode"), { recursive: true }),
-    mkdir(join(config, "fbb", "data"), { recursive: true }),
+    mkdir(join(config, "fbb", "data", "opencode"), { recursive: true }),
     mkdir(worktree, { recursive: true }),
   ])
   const accountIds = {
@@ -721,7 +721,7 @@ async function pluginFixture(repositoryAliases: string[] = []) {
     JSON.stringify({ openai: authEntry(accountIds.fbb), openai_1: authEntry(accountIds.jpb) }),
   )
   await writeFile(
-    join(config, "fbb", "data", "account-aliases.json"),
+    join(config, "fbb", "data", "opencode", "account-aliases.json"),
     JSON.stringify({
       openai: {
         [generatedLabelFor(accountIds.fbb)]: "fbb",
@@ -730,7 +730,7 @@ async function pluginFixture(repositoryAliases: string[] = []) {
     }),
   )
   await writeFile(
-    join(config, "fbb", "data", "opencode-repository-accounts.json"),
+    join(config, "fbb", "data", "opencode", "repository-account-preferences.json"),
     JSON.stringify({ pkdx: repositoryAliases }),
   )
   return { accountIds, worktree }

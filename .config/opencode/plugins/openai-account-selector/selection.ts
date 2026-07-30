@@ -39,7 +39,7 @@ type SelectionOptions = {
 export const defaultRepositoryMappingPath = (env: NodeJS.ProcessEnv = process.env) => {
   const home = env.HOME || ""
   const configHome = env.XDG_CONFIG_HOME || join(home, ".config")
-  return join(configHome, "fbb", "data", "opencode-repository-accounts.json")
+  return join(configHome, "fbb", "data", "opencode", "repository-account-preferences.json")
 }
 
 export const repositoryNameFromOrigin = (origin: string) => {

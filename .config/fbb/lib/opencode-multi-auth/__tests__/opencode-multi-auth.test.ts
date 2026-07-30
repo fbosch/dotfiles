@@ -32,7 +32,7 @@ import {
 	usageQueryOptions,
 } from "../queryclient/queries/usage.ts";
 import { recoverPendingLogin } from "../transactions.ts";
-import type { AccountPaths } from "../types.ts";
+import { defaultPaths, type AccountPaths } from "../types.ts";
 
 async function fixturePaths(
 	auth: unknown,
@@ -40,8 +40,8 @@ async function fixturePaths(
 ): Promise<AccountPaths> {
 	const root = await mkdtemp(join(tmpdir(), "openai-accounts-"));
 	const authPath = join(root, "auth.json");
-	const aliasesPath = join(root, "account-aliases.json");
-	await mkdir(root, { recursive: true });
+	const aliasesPath = join(root, "opencode", "account-aliases.json");
+	await mkdir(join(root, "opencode"), { recursive: true });
 	await Promise.all([
 		writeFile(authPath, JSON.stringify(auth)),
 		writeFile(aliasesPath, JSON.stringify(aliases)),
@@ -53,6 +53,12 @@ async function fixturePaths(
 		queryCacheDirectory: join(root, "cache", "queries"),
 	};
 }
+
+test("resolves the default aliases path from XDG configuration", () => {
+	expect(defaultPaths({ HOME: "/home/test", XDG_CONFIG_HOME: "/config" }).aliases).toBe(
+		"/config/fbb/data/opencode/account-aliases.json",
+	);
+});
 
 async function readAuth(paths: AccountPaths): Promise<Record<string, unknown>> {
 	return JSON.parse(await readFile(paths.auth, "utf8")) as Record<
