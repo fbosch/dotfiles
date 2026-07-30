@@ -290,8 +290,16 @@ function getPipeWireProcessId(object: any): number | undefined {
   const directPid = getNumber(object, ["application.process.id", "application_process_id", "process_id", "pid"]);
   if (directPid !== undefined) return Math.round(directPid);
 
-  const pid = Number(getPipeWirePropertiesForAudioObject(object)?.["application.process.id"]);
+  const properties = getPipeWirePropertiesForAudioObject(object);
+  const pid = Number(properties?.["application.process.id"]);
   if (Number.isFinite(pid)) return Math.round(pid);
+
+  const clientId = Number(properties?.["client.id"]);
+  if (!Number.isFinite(clientId)) return undefined;
+
+  // Stream nodes may omit process metadata while their owning client provides it.
+  const clientPid = Number(parseWpctlInspect(Math.round(clientId))?.["application.process.id"]);
+  if (Number.isFinite(clientPid)) return Math.round(clientPid);
 
   return undefined;
 }

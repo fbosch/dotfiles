@@ -41,13 +41,16 @@ export async function writeJsonAtomic(
 	path: string,
 	value: unknown,
 	fallbackMode: number,
+	preserveExistingMode = true,
 ): Promise<void> {
 	await mkdir(dirname(path), { recursive: true });
 	const temporaryPath = join(
 		dirname(path),
 		`.${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`,
 	);
-	const mode = await existingMode(path, fallbackMode);
+	const mode = preserveExistingMode
+		? await existingMode(path, fallbackMode)
+		: fallbackMode;
 	try {
 		await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, {
 			mode,

@@ -8,11 +8,18 @@ const requestTimeoutMs = 10_000;
 const FiniteNumberSchema = z.custom<number>(
 	(value) => typeof value === "number" && Number.isFinite(value),
 );
+const UsedPercentSchema = FiniteNumberSchema.refine(
+	(value) => value >= 0 && value <= 100,
+);
+const maxWindowSeconds = 31_536_000;
+const WindowSecondsSchema = FiniteNumberSchema.refine(
+	(value) => value >= 0 && value <= maxWindowSeconds,
+);
 const UsageWindowSchema = z
 	.object({
-		used_percent: FiniteNumberSchema.optional(),
-		reset_after_seconds: FiniteNumberSchema.optional(),
-		limit_window_seconds: FiniteNumberSchema.optional(),
+		used_percent: UsedPercentSchema.optional(),
+		reset_after_seconds: WindowSecondsSchema.optional(),
+		limit_window_seconds: WindowSecondsSchema.optional(),
 	})
 	.nullish();
 const UsageSchema = z.object({

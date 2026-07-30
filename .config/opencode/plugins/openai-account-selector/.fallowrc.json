@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": [
+    "openai-account-selector.ts",
+    "openai-account-selector.test.ts"
+  ],
+  "health": {
+    "maxCyclomatic": 15,
+    "maxCognitive": 16,
+    "maxCrap": 250
+  }
+}

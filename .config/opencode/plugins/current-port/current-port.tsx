@@ -1,7 +1,9 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui"
 import type { JSX } from "solid-js"
-import { createMemo } from "solid-js"
+import { createMemo, createSignal } from "solid-js"
+import { readProfileState, watchProfileState } from "../openai-account-selector/profile-state"
+import { promptStatusLabel } from "./status-label"
 
 type ThemeMap = Record<string, unknown>
 
@@ -63,20 +65,22 @@ function clientBaseUrl(api: TuiPluginApi): string | undefined {
   return config.baseUrl
 }
 
+function currentServerUrl(api: TuiPluginApi): string | undefined {
+  if (process.env.OPENCODE_SERVER_PORT) return `http://127.0.0.1:${process.env.OPENCODE_SERVER_PORT}`
+  if (process.env.OPENCODE_SERVER_URL) return process.env.OPENCODE_SERVER_URL
+  if (process.env.OPENCODE_PORT) return `http://127.0.0.1:${process.env.OPENCODE_PORT}`
+  return clientBaseUrl(api)
+}
+
 function currentPortLabel(api: TuiPluginApi): string {
-  const baseUrl = clientBaseUrl(api)
-  const port =
-    normalizePort(process.env.OPENCODE_SERVER_PORT) ??
-    normalizePort(process.env.OPENCODE_SERVER_URL) ??
-    normalizePort(process.env.OPENCODE_PORT) ??
-    normalizePort(baseUrl) ??
-    configuredPort(api)
+  const serverUrl = currentServerUrl(api)
+  const port = normalizePort(serverUrl) ?? configuredPort(api)
 
   if (port) {
     return `:${port}`
   }
 
-  if (baseUrl?.includes("opencode.internal")) {
+  if (serverUrl?.includes("opencode.internal")) {
     return ":internal"
   }
 
@@ -87,8 +91,8 @@ function themeColor(theme: ThemeMap, key: string, fallback: string): unknown {
   return theme[key] ?? fallback
 }
 
-function CurrentPort(props: { api: TuiPluginApi }): JSX.Element {
-  const label = createMemo(() => currentPortLabel(props.api))
+function CurrentPort(props: { api: TuiPluginApi; profile: () => string | undefined }): JSX.Element {
+  const label = createMemo(() => promptStatusLabel(currentPortLabel(props.api), props.profile()))
   const theme = createMemo(() => props.api.theme.current as ThemeMap)
 
   return (
@@ -101,13 +105,28 @@ function CurrentPort(props: { api: TuiPluginApi }): JSX.Element {
 }
 
 const tui: TuiPlugin = async (api: TuiPluginApi) => {
+  const serverUrl = currentServerUrl(api)
+  const directory = api.state.path.directory
+  const [profile, setProfile] = createSignal<string | undefined>(undefined)
+  let refreshGeneration = 0
+  const refreshProfile = async () => {
+    const generation = ++refreshGeneration
+    const next = serverUrl ? (await readProfileState(directory, serverUrl))?.profile : undefined
+    if (generation === refreshGeneration) setProfile(next)
+  }
+  const stopWatching = serverUrl
+    ? await watchProfileState(directory, serverUrl, () => void refreshProfile()).catch(() => undefined)
+    : undefined
+  await refreshProfile()
+  const lifecycle = api as unknown as { lifecycle?: { onDispose(cleanup: () => void): void } }
+  lifecycle.lifecycle?.onDispose(() => stopWatching?.())
   api.slots.register({
     slots: {
       home_prompt_right() {
-        return <CurrentPort api={api} />
+        return <CurrentPort api={api} profile={profile} />
       },
       session_prompt_right() {
-        return <CurrentPort api={api} />
+        return <CurrentPort api={api} profile={profile} />
       },
     },
   })

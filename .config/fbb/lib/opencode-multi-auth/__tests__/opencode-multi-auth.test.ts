@@ -240,6 +240,28 @@ test("rejects malformed usage payloads", () => {
 			rate_limit: { primary_window: { used_percent: "nope" } },
 		}),
 	).toThrow("usage response has an unexpected shape");
+	expect(() =>
+		usageFromPayload({
+			rate_limit: { primary_window: { used_percent: -1 } },
+		}),
+	).toThrow("usage response has an unexpected shape");
+	expect(() =>
+		usageFromPayload({
+			rate_limit: { primary_window: { used_percent: 101 } },
+		}),
+	).toThrow("usage response has an unexpected shape");
+	expect(() =>
+		usageFromPayload({
+			rate_limit: { primary_window: { reset_after_seconds: -1 } },
+		}),
+	).toThrow("usage response has an unexpected shape");
+	expect(() =>
+		usageFromPayload({
+			rate_limit: {
+				primary_window: { reset_after_seconds: Number.MAX_VALUE },
+			},
+		}),
+	).toThrow("usage response has an unexpected shape");
 });
 
 test("caches usage until account mutations invalidate it", async () => {

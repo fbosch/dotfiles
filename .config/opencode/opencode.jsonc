@@ -4,7 +4,8 @@
   "autoupdate": false,
   "disabled_providers": [
     "github-copilot",
-    "github-models"
+    "github-models",
+    "openai"
   ],
   "watcher": {
     "ignore": [
@@ -21,7 +22,8 @@
     "./plugins/direnv/direnv-session-env.ts",
     "./plugins/ado-fetch/ado-fetch.ts",
     "./plugins/neovim-herdr-agent/neovim-herdr-agent.ts",
-    "./plugins/opencode-handoff/handoff.ts"
+    "./plugins/opencode-handoff/handoff.ts",
+    "./plugins/openai-account-selector/openai-account-selector.ts"
   ],
   "instructions": [
     "~/.config/opencode/instructions/orchestration.md",
