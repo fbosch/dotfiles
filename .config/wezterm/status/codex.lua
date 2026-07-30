@@ -76,6 +76,9 @@ local function get_accounts()
 	local parsed_ok, data = pcall(wezterm.json_parse, content)
 	if parsed_ok and type(data) == "table" and type(data.accounts) == "table" then
 		codex_status.accounts = data.accounts
+		table.sort(codex_status.accounts, function(left, right)
+			return tostring(left.profileLabel) < tostring(right.profileLabel)
+		end)
 	end
 
 	if os.time() - codex_status.checked_at >= 10 * 60 then
@@ -105,7 +108,7 @@ local function append_usage(items, windows)
 		if remaining ~= nil then
 			table.insert(items, { Foreground = { Color = palette.semantic.muted } })
 			if rendered == 0 then
-				table.insert(items, { Text = ":" })
+				table.insert(items, { Text = " " })
 			else
 				table.insert(items, { Text = "/" })
 			end
@@ -113,7 +116,7 @@ local function append_usage(items, windows)
 			table.insert(items, { Text = string.format("%d%%", math.floor(remaining)) })
 			if type(window.resetsIn) == "string" then
 				table.insert(items, { Foreground = { Color = palette.semantic.muted } })
-				table.insert(items, { Text = superscript_duration(window.resetsIn) })
+				table.insert(items, { Text = "⁽" .. superscript_duration(window.resetsIn) .. "⁾" })
 			end
 			rendered = rendered + 1
 		end
@@ -129,9 +132,10 @@ local function append(items)
 	for index, account in ipairs(accounts) do
 		if index > 1 then
 			table.insert(items, { Foreground = { Color = palette.semantic.separator } })
-			table.insert(items, { Text = " · " })
+			table.insert(items, { Text = " ▏ " })
 		end
-		table.insert(items, { Foreground = { Color = palette.semantic.muted } })
+		local profile_color = account.active and palette.ansi.magenta or palette.semantic.muted
+		table.insert(items, { Foreground = { Color = profile_color } })
 		table.insert(items, { Text = account.profileLabel })
 		if account.active then
 			table.insert(items, { Foreground = { Color = palette.ansi.magenta } })
@@ -139,7 +143,7 @@ local function append(items)
 		end
 		if tonumber(account.availableCount) and tonumber(account.availableCount) > 0 then
 			table.insert(items, { Foreground = { Color = reset_credit_color(account.urgency) } })
-			table.insert(items, { Text = superscript_number(tonumber(account.availableCount)) })
+			table.insert(items, { Text = "⁽" .. superscript_number(tonumber(account.availableCount)) .. "⁾" })
 		end
 		append_usage(items, account.usage)
 	end
