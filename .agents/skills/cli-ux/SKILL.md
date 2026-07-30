@@ -45,13 +45,16 @@ Answer before implementation:
 
 ## Reference Routing
 
-| Change | Required references | Do not load unless the change also affects it |
+Choose the lowest numbered matching row. Do not combine lower-priority rows after choosing one.
+
+| Priority | Change | Required references |
 | --- | --- | --- |
-| Copy or layout only | [visual-language.md](references/visual-language.md) | `behavior.md` and `verification.md` |
-| Stream, mode, safety, signal, or compatibility change | [behavior.md](references/behavior.md) | `visual-language.md` for changed human presentation |
-| Visual implementation or review | `visual-language.md` + [verification.md](references/verification.md) | `behavior.md` for unchanged contracts |
-| Behavioral implementation or review | `behavior.md` + `verification.md` | `visual-language.md` for unchanged presentation |
-| Prompt, destructive action, or combined surface | All three references | None |
+| 1 | Prompt, destructive action, or any change affecting both presentation and behavior | All three references |
+| 2 | Visual implementation or review with unchanged streams, modes, and contracts | `visual-language.md` + [verification.md](references/verification.md) |
+| 3 | Stream, mode, safety, signal, compatibility, or other behavioral implementation or review with unchanged human presentation | [behavior.md](references/behavior.md) + `verification.md` |
+| 4 | Advisory copy or layout draft with no source change | `visual-language.md` |
+
+Every implementation or review loads `verification.md` and runs the minimum checks for every applicable profile.
 
 ## Non-Negotiables
 

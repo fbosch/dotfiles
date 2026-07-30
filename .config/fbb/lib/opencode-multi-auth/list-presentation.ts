@@ -1,5 +1,11 @@
 import { type InspectColor, styleText } from "node:util";
-import { renderProgressBar } from "../progress-bar.ts";
+import { colorProfileName } from "../profile-color.ts";
+import {
+	emptyProgressCells,
+	filledProgressCells,
+	renderProgressBar,
+} from "../progress-bar.ts";
+import { escapeTerminalText } from "./terminal-text.ts";
 import type { AccountUsage, PublicAccountListProfile } from "./types.ts";
 
 type Colorize = (
@@ -7,10 +13,24 @@ type Colorize = (
 	value: string,
 ) => string;
 
+export type AccountCardOptions = {
+	colorEnabled: boolean;
+	plain: boolean;
+	columns?: number;
+};
+
+export type DisplayAccountListProfile = PublicAccountListProfile & {
+	displayColor: number | null;
+};
+
 export function renderAccountCards(
-	profiles: PublicAccountListProfile[],
-	colorEnabled = process.stdout.isTTY === true,
+	profiles: DisplayAccountListProfile[],
+	options: AccountCardOptions = {
+		colorEnabled: process.stdout.isTTY === true,
+		plain: false,
+	},
 ): string {
+	const { colorEnabled, plain } = options;
 	const color: Colorize = colorEnabled
 		? styleText
 		: (_: InspectColor | readonly InspectColor[], value: string) => value;
@@ -18,27 +38,106 @@ export function renderAccountCards(
 		["bold", "cyan"],
 		`OpenAI accounts (${profiles.length})`,
 	);
+	if (profiles.length === 0) {
+		return [
+			heading,
+			"Info     No accounts found.",
+			"  Run `ocma login <alias>` to add an account.",
+		].join("\n");
+	}
+	const stacked = plain || narrowOutput(options.columns);
 	return [
 		heading,
 		...profiles.map((profile) =>
-			renderAccountCard(profile, color, colorEnabled),
+			renderAccountCard(profile, color, colorEnabled, stacked, plain),
 		),
 	].join("\n\n");
 }
 
 function renderAccountCard(
-	profile: PublicAccountListProfile,
+	profile: DisplayAccountListProfile,
+	color: Colorize,
+	colorEnabled: boolean,
+	stacked: boolean,
+	plain: boolean,
+): string {
+	const name = escapeTerminalText(
+		profile.alias || profile.generatedLabel || "unresolved",
+	);
+	const key = escapeTerminalText(profile.key);
+	if (stacked) {
+		return renderStackedAccountCard(
+			profile,
+			name,
+			key,
+			color,
+			colorEnabled,
+			plain,
+		);
+	}
+	return renderCompactAccountCard(profile, name, key, color, colorEnabled);
+}
+
+function renderCompactAccountCard(
+	profile: DisplayAccountListProfile,
+	name: string,
+	key: string,
 	color: Colorize,
 	colorEnabled: boolean,
 ): string {
-	const name = profile.alias || profile.generatedLabel || "unresolved";
 	const state = profile.active ? "active" : "inactive";
 	const marker = profile.active ? "*" : "-";
 	return [
-		`${color(profile.active ? "green" : "gray", marker)} ${color("bold", name)} ${color(profile.active ? "green" : "gray", state)} ${color("gray", `[${profile.key}]`)}`,
+		`${color(profile.active ? "green" : "gray", marker)} ${colorProfileName(name, profile.displayColor, colorEnabled)} ${color(profile.active ? "green" : "gray", state)} ${color("gray", `[${key}]`)}`,
 		`  primary    ${formatUsageWindow(profile.usage?.primary ?? null, color, colorEnabled)}`,
 		`  secondary  ${formatUsageWindow(profile.usage?.secondary ?? null, color, colorEnabled)}`,
 	].join("\n");
+}
+
+function renderStackedAccountCard(
+	profile: DisplayAccountListProfile,
+	name: string,
+	key: string,
+	color: Colorize,
+	colorEnabled: boolean,
+	plain: boolean,
+): string {
+	return [
+		`${colorProfileName(name, profile.displayColor, colorEnabled)} ${profile.active ? "active" : "inactive"}`,
+		"  Profile",
+		`    ${key}`,
+		formatUsageDetail(
+			"Primary",
+			profile.usage?.primary ?? null,
+			color,
+			colorEnabled,
+			plain,
+		),
+		formatUsageDetail(
+			"Secondary",
+			profile.usage?.secondary ?? null,
+			color,
+			colorEnabled,
+			plain,
+		),
+	].join("\n");
+}
+
+function formatUsageDetail(
+	label: string,
+	window: AccountUsage["primary"] | null,
+	color: Colorize,
+	colorEnabled: boolean,
+	plain: boolean,
+): string {
+	if (window === null || window.remainingPercent === null) {
+		return `  ${label}\n    ${color("gray", "unavailable")}`;
+	}
+	const style = usageStyle(window.remainingPercent);
+	const usage = plain
+		? `${window.remainingPercent}% remaining`
+		: `${renderUsageBar(window.remainingPercent, style, color)} ${color(style, `${window.remainingPercent}% remaining`)}`;
+	return `  ${label}\n    ${usage}\n    ${color("gray", `resets ${formatReset(window.resetAt)}`)}`;
 }
 
 function formatUsageWindow(
@@ -50,37 +149,25 @@ function formatUsageWindow(
 		return color("gray", "unavailable");
 	}
 	const style = usageStyle(window.remainingPercent);
-	const bar = renderUsageBar(
-		window.remainingPercent,
-		style,
-		color,
-		colorEnabled,
-	);
+	const bar = renderUsageBar(window.remainingPercent, style, color);
 	return `${bar} ${color(style, `${window.remainingPercent}% remaining`)}  ${color("gray", `resets ${formatReset(window.resetAt)}`)}`;
+}
+
+function narrowOutput(columns: number | undefined): boolean {
+	if (columns === undefined) {
+		return false;
+	}
+	return Math.max(20, Math.min(500, columns)) < 48;
 }
 
 function renderUsageBar(
 	remainingPercent: number,
 	style: InspectColor,
 	color: Colorize,
-	colorEnabled: boolean,
 ): string {
 	const { fullCells, partialCell, emptyCells } =
 		renderProgressBar(remainingPercent);
-	if (colorEnabled === false) {
-		return `${"█".repeat(fullCells)}${partialCell}${"░".repeat(emptyCells)}`;
-	}
-	return `${color(backgroundStyle(style), " ".repeat(fullCells))}${color(["bgBlack", style], partialCell)}${color("bgBlack", " ".repeat(emptyCells))}`;
-}
-
-function backgroundStyle(style: InspectColor): InspectColor {
-	if (style === "green") {
-		return "bgGreen";
-	}
-	if (style === "yellow") {
-		return "bgYellow";
-	}
-	return "bgRed";
+	return `${color(style, filledProgressCells(fullCells))}${color(style, partialCell)}${color("gray", emptyProgressCells(emptyCells))}`;
 }
 
 function usageStyle(remainingPercent: number): InspectColor {

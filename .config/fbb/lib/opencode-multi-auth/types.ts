@@ -10,6 +10,7 @@ export type AccountPaths = {
 export type AccountProfile = {
 	key: string;
 	accountId: string | null;
+	displayColor: number | null;
 	generatedLabel: string | null;
 	alias: string | null;
 	active: boolean;
@@ -25,7 +26,10 @@ export type Diagnostic = {
 	message: string;
 };
 
-export type PublicAccountProfile = Omit<AccountProfile, "accountId">;
+export type PublicAccountProfile = Omit<
+	AccountProfile,
+	"accountId" | "displayColor"
+>;
 
 export type PublicAccountDiscovery = {
 	profiles: PublicAccountProfile[];

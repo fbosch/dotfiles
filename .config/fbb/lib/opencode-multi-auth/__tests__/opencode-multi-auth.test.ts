@@ -144,6 +144,7 @@ test("replaces an alias while retaining the prior active profile", async () => {
 		{
 			key: "openai",
 			accountId: "22000000-0000-0000-0000-00000000beef",
+			displayColor: 39,
 			generatedLabel: "maple-falcon-beef",
 			alias: "work",
 			active: true,
@@ -151,6 +152,7 @@ test("replaces an alias while retaining the prior active profile", async () => {
 		{
 			key: "openai_2",
 			accountId: "00000000-0000-0000-0000-00000000abcd",
+			displayColor: 39,
 			generatedLabel: "ember-falcon-abcd",
 			alias: "main",
 			active: false,
@@ -216,6 +218,7 @@ test("renders compact quota cards with Unicode partial-block progress", () => {
 		[
 			{
 				key: "openai",
+				displayColor: 39,
 				generatedLabel: "ember-falcon-abcd",
 				alias: "main",
 				active: true,
@@ -225,19 +228,51 @@ test("renders compact quota cards with Unicode partial-block progress", () => {
 				},
 			},
 		],
-		false,
+		{ colorEnabled: false, plain: false, columns: 80 },
 	);
 
 	expect(cards).toContain("OpenAI accounts (1)");
 	expect(cards).toContain("* main active [openai]");
-	expect(cards).toContain("██████████▌░░░ 75% remaining");
+	expect(cards).toContain("━━━━━━━━━━╸─── 75% remaining");
 	expect(cards).toContain("secondary  unavailable");
+});
+
+test("renders a terminal-safe empty state in plain output", () => {
+	const cards = renderAccountCards([], {
+		colorEnabled: false,
+		plain: true,
+		columns: 20,
+	});
+
+	expect(cards).toBe(
+		"OpenAI accounts (0)\nInfo     No accounts found.\n  Run `ocma login <alias>` to add an account.",
+	);
+});
+
+test("escapes control characters and stacks narrow account cards", () => {
+	const cards = renderAccountCards(
+		[
+			{
+				key: "openai_\u001b[2J",
+				displayColor: null,
+				generatedLabel: null,
+				alias: "work\u0007",
+				active: false,
+				usage: null,
+			},
+		],
+		{ colorEnabled: false, plain: false, columns: 20 },
+	);
+
+	expect(cards).toContain("work\\x07 inactive");
+	expect(cards).toContain("    openai_\\x1b[2J");
+	expect(cards).not.toContain("\u001b");
 });
 
 test("renders progress with partial Unicode blocks", () => {
 	expect(renderProgressBar(75)).toEqual({
 		fullCells: 10,
-		partialCell: "▌",
+		partialCell: "╸",
 		emptyCells: 3,
 	});
 	expect(renderProgressBar(150, 2)).toEqual({

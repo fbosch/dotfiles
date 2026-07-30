@@ -39,7 +39,9 @@ export function toPublicDiscovery(
 	discovery: AccountDiscovery,
 ): PublicAccountDiscovery {
 	return {
-		profiles: discovery.profiles.map(({ accountId: _, ...profile }) => profile),
+		profiles: discovery.profiles.map(
+			({ accountId: _, displayColor: __, ...profile }) => profile,
+		),
 		diagnostics: discovery.diagnostics,
 	};
 }

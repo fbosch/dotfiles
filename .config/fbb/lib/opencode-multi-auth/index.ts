@@ -1,17 +1,20 @@
-import { cancel, isCancel, text } from "@clack/prompts";
+import { isCancel, text } from "@clack/prompts";
 import { defineCommand, runMain } from "citty";
 import { discoverAccounts, toPublicDiscovery } from "./discovery.ts";
-import { renderAccountCards } from "./list-presentation.ts";
+import {
+	type DisplayAccountListProfile,
+	renderAccountCards,
+} from "./list-presentation.ts";
 import { beginLogin, completeLogin, switchAccount } from "./mutations.ts";
 import { discoverUsage, loginCommand } from "./providers/codex.ts";
 import { acquireMutationLock, readJsonObject } from "./storage.ts";
+import { escapeTerminalText } from "./terminal-text.ts";
 import { recoverPendingLogin } from "./transactions.ts";
 import type {
 	AccountDiscovery,
 	AccountUsage,
 	Diagnostic,
 	PublicAccountDiscovery,
-	PublicAccountListProfile,
 } from "./types.ts";
 import { defaultPaths } from "./types.ts";
 
@@ -30,14 +33,33 @@ type CommandOutput<T> = {
 };
 
 type ListData = Omit<PublicAccountDiscovery, "profiles"> & {
-	profiles: PublicAccountListProfile[];
+	profiles: DisplayAccountListProfile[];
 };
+
+type TextOutputOptions = {
+	colorEnabled: boolean;
+	plain: boolean;
+};
+
+class UsageError extends Error {}
+
+class PromptCancelled extends Error {}
 
 const formatArg = {
 	type: "enum" as const,
 	description: "Output format",
 	options: ["text", "json"] as OutputFormat[],
 	default: "text" as OutputFormat,
+};
+
+const noColorArg = {
+	type: "boolean" as const,
+	description: "Disable ANSI color",
+};
+
+const plainArg = {
+	type: "boolean" as const,
+	description: "Use plain, narrow-safe text output",
 };
 
 const main = defineCommand({
@@ -49,34 +71,42 @@ const main = defineCommand({
 	subCommands: {
 		list: defineCommand({
 			meta: { name: "list", description: "List OpenAI profiles and aliases." },
-			args: { format: formatArg },
-			run: ({ args }) => runReadCommand("list", args.format),
+			args: { format: formatArg, noColor: noColorArg, plain: plainArg },
+			run: ({ args }) => runReadCommand("list", args.format, textOptions(args)),
 		}),
 		status: defineCommand({
 			meta: { name: "status", description: "Show the active OpenAI profile." },
-			args: { format: formatArg },
-			run: ({ args }) => runReadCommand("status", args.format),
+			args: { format: formatArg, noColor: noColorArg, plain: plainArg },
+			run: ({ args }) =>
+				runReadCommand("status", args.format, textOptions(args)),
 		}),
 		switch: defineCommand({
 			meta: {
 				name: "switch",
 				description: "Activate an OpenAI alias or generated label.",
 			},
-			args: { format: formatArg },
-			run: ({ args }) => runSwitchCommand(args._, args.format),
+			args: { format: formatArg, noColor: noColorArg, plain: plainArg },
+			run: ({ args }) =>
+				runSwitchCommand(args._, args.format, textOptions(args)),
 		}),
 		login: defineCommand({
 			meta: {
 				name: "login",
 				description: "Log in and assign an OpenAI alias.",
 			},
-			args: { format: formatArg },
-			run: ({ args }) => runLoginCommand(args._, args.format),
+			args: { format: formatArg, noColor: noColorArg, plain: plainArg },
+			run: ({ args }) =>
+				runLoginCommand(args._, args.format, textOptions(args)),
 		}),
 	},
 });
 
-await runMain(main, { rawArgs: normalizedArgs(process.argv.slice(2)) });
+const rawArgs = normalizedArgs(process.argv.slice(2));
+if (shouldDisableColor(rawArgs)) {
+	process.env.NO_COLOR = "1";
+	process.env.FORCE_COLOR = "0";
+}
+await runMain(main, { rawArgs });
 
 function normalizedArgs(args: string[]): string[] {
 	if (args.length === 1 && args[0] === "help") {
@@ -91,8 +121,9 @@ function normalizedArgs(args: string[]): string[] {
 async function runReadCommand(
 	command: "list" | "status",
 	format: OutputFormat,
+	textOutput: TextOutputOptions,
 ): Promise<void> {
-	await emitCommand(format, command, async () => {
+	await emitCommand(format, command, textOutput, async () => {
 		const paths = defaultPaths();
 		const discovery = await discoverAccounts(paths);
 		if (command === "list") {
@@ -117,10 +148,13 @@ async function runReadCommand(
 async function runSwitchCommand(
 	positionals: string[],
 	format: OutputFormat,
+	textOutput: TextOutputOptions,
 ): Promise<void> {
-	await emitCommand(format, "switch", async () => {
+	await emitCommand(format, "switch", textOutput, async () => {
 		if (positionals.length !== 1) {
-			throw new Error("ocma switch: expected one alias or generated label");
+			throw new UsageError(
+				"ocma switch: expected one alias or generated label",
+			);
 		}
 		const paths = defaultPaths();
 		const lock = await acquireMutationLock(paths);
@@ -137,10 +171,16 @@ async function runSwitchCommand(
 async function runLoginCommand(
 	positionals: string[],
 	format: OutputFormat,
+	textOutput: TextOutputOptions,
 ): Promise<void> {
-	await emitCommand(format, "login", async () => {
+	await emitCommand(format, "login", textOutput, async () => {
+		if (format === "json") {
+			throw new UsageError(
+				"ocma login: JSON output is unavailable because OpenCode login is interactive",
+			);
+		}
 		if (positionals.length > 1) {
-			throw new Error("ocma login: expected zero or one alias");
+			throw new UsageError("ocma login: expected zero or one alias");
 		}
 		const requestedAlias = positionals[0] || (await promptForAlias(format));
 		const paths = defaultPaths();
@@ -165,23 +205,30 @@ async function runLoginCommand(
 async function emitCommand(
 	format: OutputFormat,
 	command: string,
+	textOutput: TextOutputOptions,
 	action: () => Promise<CommandOutput<unknown>>,
 ): Promise<void> {
 	try {
 		const output = await action();
-		emitOutput(format, output);
+		emitOutput(format, output, textOutput);
 		process.exitCode = exitCode(output.outcome);
 	} catch (error) {
+		if (error instanceof PromptCancelled) {
+			console.error("Info     Cancelled.");
+			process.exitCode = 0;
+			return;
+		}
 		const message = error instanceof Error ? error.message : String(error);
 		const output = errorOutput(command, message);
-		emitOutput(format, output);
-		process.exitCode = exitCode(output.outcome);
+		emitOutput(format, output, textOutput);
+		process.exitCode =
+			error instanceof UsageError ? 2 : exitCode(output.outcome);
 	}
 }
 
 async function promptForAlias(format: OutputFormat): Promise<string> {
 	if (format === "json" || process.stdin.isTTY !== true) {
-		throw new Error(
+		throw new UsageError(
 			"ocma login: an alias is required when stdin is not interactive",
 		);
 	}
@@ -191,8 +238,7 @@ async function promptForAlias(format: OutputFormat): Promise<string> {
 			value?.trim() === "" ? "Alias cannot be empty" : undefined,
 	});
 	if (isCancel(alias)) {
-		cancel("OpenCode login cancelled.");
-		throw new Error("OpenCode login cancelled");
+		throw new PromptCancelled();
 	}
 	if (typeof alias !== "string") {
 		throw new Error("OpenCode login did not return an alias");
@@ -241,11 +287,15 @@ function listData(
 	usageByProfile: Map<string, AccountUsage>,
 ): ListData {
 	const publicDiscovery = toPublicDiscovery(discovery);
+	const colors = new Map(
+		discovery.profiles.map((profile) => [profile.key, profile.displayColor]),
+	);
 	return {
 		...publicDiscovery,
 		profiles: publicDiscovery.profiles.map((profile) => ({
 			...profile,
 			usage: usageByProfile.get(profile.key) || null,
+			displayColor: colors.get(profile.key) || null,
 		})),
 	};
 }
@@ -264,9 +314,16 @@ function statusData(discovery: AccountDiscovery): {
 function emitOutput(
 	format: OutputFormat,
 	output: CommandOutput<unknown>,
+	textOutput: TextOutputOptions,
 ): void {
 	if (format === "json") {
-		console.log(JSON.stringify(output, null, 2));
+		console.log(
+			JSON.stringify(
+				output,
+				(key, value) => (key === "displayColor" ? undefined : value),
+				2,
+			),
+		);
 		return;
 	}
 
@@ -276,30 +333,63 @@ function emitOutput(
 	}
 
 	if (output.command === "list") {
-		printAccounts(output.data as ListData);
+		printAccounts(output.data as ListData, textOutput);
 	} else {
 		printStatus(output.data as ReturnType<typeof statusData>);
 	}
-	printDiagnostics(output.diagnostics);
+	printDiagnostics(output.diagnostics, output.outcome);
 }
 
 function exitCode(outcome: Outcome): number {
 	return outcome === "success" ? 0 : 1;
 }
 
-function printAccounts(discovery: ListData): void {
-	console.log(renderAccountCards(discovery.profiles));
+function printAccounts(
+	discovery: ListData,
+	textOutput: TextOutputOptions,
+): void {
+	console.log(renderAccountCards(discovery.profiles, textOutput));
 }
 
 function printStatus(status: ReturnType<typeof statusData>): void {
 	const name =
 		status.active?.alias || status.active?.generatedLabel || "unresolved";
-	console.log(`openai active: ${name}`);
+	console.log(`openai active: ${escapeTerminalText(name)}`);
 	console.log(`openai profiles: ${status.profileCount}`);
 }
 
-function printDiagnostics(diagnostics: Diagnostic[]): void {
+function printDiagnostics(
+	diagnostics: Diagnostic[],
+	outcome: Outcome = "error",
+): void {
 	for (const diagnostic of diagnostics) {
-		console.error(`ocma: ${diagnostic.code}: ${diagnostic.message}`);
+		const code = escapeTerminalText(diagnostic.code);
+		const message = escapeTerminalText(diagnostic.message);
+		if (outcome === "warning") {
+			console.error(`Warning  ${code}: ${message}`);
+		} else {
+			console.error(`ocma: ${code}: ${message}`);
+		}
 	}
+}
+
+function textOptions(args: {
+	noColor?: boolean;
+	plain?: boolean;
+}): TextOutputOptions {
+	const plain = args.plain === true;
+	return {
+		plain,
+		colorEnabled: plain === false && shouldDisableColor() === false,
+	};
+}
+
+function shouldDisableColor(args: string[] = process.argv.slice(2)): boolean {
+	return (
+		args.includes("--no-color") ||
+		args.includes("--plain") ||
+		(process.env.NO_COLOR !== undefined && process.env.NO_COLOR !== "") ||
+		process.env.TERM === "dumb" ||
+		process.stdout.isTTY !== true
+	);
 }

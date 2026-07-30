@@ -15,7 +15,10 @@ parsing and Clack interactive prompts; Bun automatically installs its locked
 dependencies when `ocma` first runs on a new machine.
 
 Commands default to human-readable text. Use `--format json` for scripts and
-other configurations. JSON output always has this envelope:
+other configurations. `ocma login` is interactive and only supports text
+output; use JSON with the query and switch commands. `--no-color` disables
+ANSI color and `--plain` uses a narrow-safe, decoration-free text layout.
+JSON output always has this envelope:
 
 ```json
 {

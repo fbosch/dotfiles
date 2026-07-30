@@ -9,7 +9,7 @@ Treat these as separate axes:
 | Axis | Modes |
 | --- | --- |
 | Interaction | Interactive, non-interactive |
-| Format | Human, plain, JSON, JSONL |
+| Format | Human, JSON, JSONL |
 | Decoration | Styled, no-color, plain |
 | Verbosity | Quiet, normal, verbose, debug |
 | Destination | TTY, redirected, pipe, CI |
@@ -53,12 +53,15 @@ Do not normalize existing public exit codes without an explicit migration. The f
 When profiles overlap, resolve them in this order:
 
 1. Existing public compatibility contract
-2. CI adapter or transparent-wrapper protocol
-3. Machine format and live-stream ownership
-4. Interaction and safety requirements
-5. Human visual language
+2. CI adapter protocol
+3. Transparent-wrapper protocol
+4. Machine format and stream contract
+5. Live-stream ownership
+6. Interaction and safety requirements
+7. Human visual language
 
 Apply the first applicable contract to a conflicting surface. Apply lower rules only where they do not alter the higher contract.
+Constraints within one profile compose. If two constraints conflict at the same precedence level, write an explicit command-specific contract before implementation.
 
 Examples:
 
@@ -75,13 +78,13 @@ For new commands:
 - A non-empty `NO_COLOR` disables automatic color; `NO_COLOR=""` is unset.
 - `TERM=dumb` disables ANSI styling and cursor movement.
 - `--no-color` disables color only.
-- `--plain` disables color, animation, cursor movement, decorative glyphs, and width-dependent reflow.
+- `--plain` selects a width-independent linear layout and disables color, animation, cursor movement, and decorative glyphs.
 - Evaluate stdout and stderr TTY capability separately.
 - Never emit ANSI in JSON, JSONL, or other machine output.
 
 Use ANSI 8-color roles when a renderer supports them: cyan for headings, `Working`, and `Info`; green for `Success`; yellow for `Warning`; red for `Error`; magenta for active prompt focus. A renderer without ANSI renders the same text without color; it must not substitute another semantic color.
 
-Measure display cells, not bytes. Strip ANSI before measuring. Clamp untrusted width values such as `COLUMNS` to `20..500`. Use stacked fields and record blocks below 48 columns or when width is unknown. Render a table only when every column fits without wrapping; otherwise use record blocks. Never truncate the only exact copy of an ID, URL, path, hash, or command.
+Measure display cells, not bytes. Strip ANSI before measuring. Clamp untrusted width values such as `COLUMNS` to `20..500`. In styled human mode, use stacked fields and record blocks below 48 columns or when width is unknown. Render a table only when every column fits without wrapping; otherwise use record blocks. In plain mode, always use stacked fields and record blocks regardless of width. Never truncate the only exact copy of an ID, URL, path, hash, or command.
 
 Escape control characters in user-provided, file, and remote text before human rendering. Do not interpolate untrusted text into a suggested shell command or instruction. This rule applies only to text rendered by this command. A transparent wrapper preserves child bytes unchanged; treat child output as a separate trust boundary. Sanitizing child output creates a transforming wrapper and requires an explicit contract.
 

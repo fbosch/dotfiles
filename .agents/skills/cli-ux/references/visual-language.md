@@ -45,7 +45,7 @@ Error    Failed to rebuild the system.
 - Do not use emoji, Nerd Font icons, checkmarks, or log abbreviations.
 - State what changed. Never use `Done!`, `Success!`, or `Completed successfully`.
 
-For a plain diagnostic or transparent wrapper, use `command-name: message` instead of a status line. Do not combine both forms.
+For a plain diagnostic, use `command-name: message` instead of a status line. A transparent wrapper may use it only for its own launch or preflight diagnostics; never prefix, sanitize, buffer, merge, or otherwise rewrite child stdout or stderr. Do not combine both forms.
 
 ## Type and Color
 
@@ -76,7 +76,7 @@ OpenCode profile
 - Indent detail rows by two spaces.
 - Use title-case labels without colons.
 - Align labels within one block only. Cap the label column at 16 display cells.
-- Stack fields below 48 columns or when width is unknown:
+- In styled human mode, stack fields below 48 columns or when width is unknown. In plain mode, always stack fields:
 
 ```text
 OpenCode profile
@@ -109,7 +109,7 @@ Window capture  stopped  -
 - Left-align text; right-align numeric columns only when comparison benefits.
 - Prefer fewer columns over wrapping.
 - Use `-` for compact unavailable values.
-- Fall back to record blocks below 48 columns or whenever columns would wrap.
+- In styled human mode, fall back to record blocks below 48 columns or whenever columns would wrap. In plain mode, always use record blocks.
 
 ## Empty, Error, and Next States
 

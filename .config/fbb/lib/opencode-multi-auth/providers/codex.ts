@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { profileColor } from "../../profile-color.ts";
 import { isJsonObject, type JsonObject } from "../storage.ts";
 import type {
 	AccountDiscovery,
@@ -168,6 +169,7 @@ function profileFromEntry(
 		return {
 			key,
 			accountId: null,
+			displayColor: null,
 			generatedLabel: null,
 			alias: null,
 			active: key === activeProfileKey,
@@ -182,6 +184,7 @@ function profileFromEntry(
 	return {
 		key,
 		accountId,
+		displayColor: accountId ? profileColor(accountId) : null,
 		generatedLabel,
 		alias,
 		active: key === activeProfileKey,

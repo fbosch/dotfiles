@@ -1,4 +1,6 @@
-const partialBlocks = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"];
+const filledCell = "━";
+const partialCell = "╸";
+const emptyCell = "─";
 
 export type ProgressBarSegments = {
 	fullCells: number;
@@ -11,12 +13,20 @@ export function renderProgressBar(
 	width = 14,
 ): ProgressBarSegments {
 	const clampedPercent = Math.max(0, Math.min(100, percent));
-	const units = Math.round((clampedPercent / 100) * width * 8);
-	const fullCells = Math.floor(units / 8);
-	const partialCell = partialBlocks[units % 8];
+	const cells = (clampedPercent / 100) * width;
+	const fullCells = Math.floor(cells);
+	const partial = cells - fullCells >= 0.5 ? partialCell : "";
 	return {
 		fullCells,
-		partialCell,
-		emptyCells: width - fullCells - Number(partialCell !== ""),
+		partialCell: partial,
+		emptyCells: width - fullCells - Number(partial !== ""),
 	};
+}
+
+export function filledProgressCells(count: number): string {
+	return filledCell.repeat(count);
+}
+
+export function emptyProgressCells(count: number): string {
+	return emptyCell.repeat(count);
 }
