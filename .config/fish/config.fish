@@ -288,6 +288,11 @@ end
 
 fish_add_path --path --append $HOME/.local/bin
 
+# Shared executable helpers from the FBB config package.
+if test -d "$HOME/.config/fbb/bin"
+    fish_add_path --path --append "$HOME/.config/fbb/bin"
+end
+
 # Keep fnm's selected Node ahead of Nix/Homebrew Node entries after PATH setup.
 if set -q FNM_MULTISHELL_PATH; and test "$PATH[1]" != "$FNM_MULTISHELL_PATH/bin"
     set -gx PATH "$FNM_MULTISHELL_PATH/bin" $PATH
