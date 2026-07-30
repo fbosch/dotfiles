@@ -7,6 +7,7 @@ local original_io_open = io.open
 local mock_used_percent = 57
 local mock_credit_count = 2
 local usage_refreshes = 0
+local scheduled_callbacks = {}
 
 io.open = function(path, mode)
 	if mode == "r" and path:match("ocma%-status%.json$") then
@@ -74,7 +75,7 @@ package.loaded.wezterm = {
 							usage = {
 								primary = {
 									remainingPercent = 100 - math.floor(mock_used_percent),
-									resetAt = "2026-03-17T18:30:00Z",
+									resetAfterSeconds = 3 * 60 * 60,
 								},
 							},
 						},
@@ -83,8 +84,8 @@ package.loaded.wezterm = {
 							active = false,
 							resetCredits = { availableCount = 1, urgency = "later" },
 							usage = {
-								primary = { remainingPercent = 71, resetAt = "2026-03-17T17:30:00Z" },
-								secondary = { remainingPercent = 94, resetAt = "2026-03-20T15:30:00Z" },
+								primary = { remainingPercent = 71, resetAfterSeconds = 2 * 60 * 60 },
+								secondary = { remainingPercent = 94, resetAfterSeconds = 5 * 24 * 60 * 60 },
 							},
 						},
 					},
@@ -130,11 +131,8 @@ package.loaded.wezterm = {
 		usage_refreshes = usage_refreshes + 1
 	end,
 	time = {
-		parse_rfc3339 = function()
-			return 3 * 60 * 60
-		end,
-		now = function()
-			return 0
+		call_after = function(_, callback)
+			table.insert(scheduled_callbacks, callback)
 		end,
 	},
 }
@@ -245,6 +243,8 @@ end
 captured_status = nil
 user_var_changed(window, nil, "codex_profile_changed")
 assert_eq(type(captured_status), "table", "profile change rerenders status")
+assert_eq(#scheduled_callbacks, 1, "profile change schedules a cache-refresh rerender")
+scheduled_callbacks[1]()
 
 mock_credit_count = 1
 local usage_refreshes_before_reset = usage_refreshes

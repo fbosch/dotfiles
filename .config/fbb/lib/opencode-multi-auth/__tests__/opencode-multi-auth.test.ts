@@ -233,7 +233,7 @@ test("caches usage until account mutations invalidate it", async () => {
 	globalThis.fetch = (async () => {
 		requests += 1;
 		return Response.json(payload);
-	}) as typeof fetch;
+	}) as unknown as typeof fetch;
 
 	try {
 		const queryClient = queryClientFor(paths).queryClient;
@@ -248,7 +248,7 @@ test("caches usage until account mutations invalidate it", async () => {
 			primary: { remainingPercent: 75 },
 		});
 		expect(requests).toBe(1);
-		await Bun.sleep(0);
+		await Bun.sleep(10);
 		expect(await readdir(paths.queryCacheDirectory || "")).toHaveLength(1);
 
 		await mutateAccount(paths, "test", async () => undefined);

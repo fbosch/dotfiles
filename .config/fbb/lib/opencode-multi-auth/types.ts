@@ -40,6 +40,7 @@ export type PublicAccountDiscovery = {
 export type UsageWindow = {
 	remainingPercent: number | null;
 	resetAt: string | null;
+	resetAfterSeconds?: number | null;
 };
 
 export type AccountUsage = {

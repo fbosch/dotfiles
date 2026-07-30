@@ -68,5 +68,6 @@ function usageWindow(window: z.infer<typeof UsageWindowSchema>): UsageWindow {
 			resetAfterSeconds === undefined
 				? null
 				: new Date(Date.now() + resetAfterSeconds * 1000).toISOString(),
+		resetAfterSeconds: resetAfterSeconds ?? null,
 	};
 }
