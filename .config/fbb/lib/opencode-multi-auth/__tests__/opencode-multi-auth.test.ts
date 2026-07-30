@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { renderProgressBar } from "../../progress-bar.ts";
@@ -7,6 +7,8 @@ import { discoverAccounts, toPublicDiscovery } from "../discovery.ts";
 import { renderAccountCards } from "../list-presentation.ts";
 import { beginLogin, completeLogin, switchAccount } from "../mutations.ts";
 import { usageFromPayload } from "../providers/codex.ts";
+import { mutateAccount } from "../queryclient/mutations.ts";
+import { queryUsage } from "../queryclient/usage.ts";
 import { recoverPendingLogin } from "../transactions.ts";
 import type { AccountPaths } from "../types.ts";
 
@@ -26,6 +28,7 @@ async function fixturePaths(
 		auth: authPath,
 		aliases: aliasesPath,
 		state: join(root, "state", "login-transaction.json"),
+		queryCacheDirectory: join(root, "cache", "queries"),
 	};
 }
 
@@ -211,6 +214,29 @@ test("rejects malformed usage payloads", () => {
 			rate_limit: { primary_window: { used_percent: "nope" } },
 		}),
 	).toThrow("usage response has an unexpected shape");
+});
+
+test("caches usage until account mutations invalidate it", async () => {
+	const paths = await fixturePaths({}, { openai: {} });
+	const usage = {
+		primary: { remainingPercent: 75, resetAt: null },
+		secondary: { remainingPercent: null, resetAt: null },
+	};
+	let requests = 0;
+	const request = async () => {
+		requests += 1;
+		return usage;
+	};
+
+	expect(await queryUsage(paths, "openai", request)).toEqual(usage);
+	expect(await queryUsage(paths, "openai", request)).toEqual(usage);
+	expect(requests).toBe(1);
+	expect(await readdir(paths.queryCacheDirectory || "")).toHaveLength(1);
+
+	await mutateAccount(paths, "test", async () => undefined);
+	expect(await readdir(paths.queryCacheDirectory || "")).toHaveLength(0);
+	expect(await queryUsage(paths, "openai", request)).toEqual(usage);
+	expect(requests).toBe(2);
 });
 
 test("renders compact quota cards with Unicode partial-block progress", () => {

@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { profileColor } from "../../profile-color.ts";
+import { queryUsage } from "../queryclient/usage.ts";
 import { isJsonObject, type JsonObject } from "../storage.ts";
 import type {
 	AccountDiscovery,
+	AccountPaths,
 	AccountProfile,
 	AccountUsage,
 	AccountUsageDiscovery,
@@ -118,6 +120,7 @@ export function nextProfileKey(auth: JsonObject): string {
 export async function discoverUsage(
 	discovery: AccountDiscovery,
 	auth: JsonObject,
+	paths: AccountPaths,
 ): Promise<AccountUsageDiscovery> {
 	const results = await Promise.all(
 		discovery.profiles.map(async (profile) => {
@@ -125,7 +128,17 @@ export async function discoverUsage(
 			if (isJsonObject(entry) === false) {
 				return [profile.key, new Error("invalid Codex profile")] as const;
 			}
-			return [profile.key, await usageForEntry(entry)] as const;
+			try {
+				return [
+					profile.key,
+					await queryUsage(paths, profile.key, () => requestUsage(entry)),
+				] as const;
+			} catch (error) {
+				return [
+					profile.key,
+					error instanceof Error ? error : new Error(String(error)),
+				] as const;
+			}
 		}),
 	);
 
@@ -191,11 +204,11 @@ function profileFromEntry(
 	};
 }
 
-async function usageForEntry(entry: JsonObject): Promise<AccountUsage | Error> {
+async function requestUsage(entry: JsonObject): Promise<AccountUsage> {
 	const accessToken = typeof entry.access === "string" ? entry.access : null;
 	const accountId = accountIdForEntry(entry);
 	if (accessToken === null || accountId === null) {
-		return new Error("Codex profile is missing usage credentials");
+		throw new Error("Codex profile is missing usage credentials");
 	}
 	try {
 		const response = await fetch(usageUrl, {
@@ -206,11 +219,11 @@ async function usageForEntry(entry: JsonObject): Promise<AccountUsage | Error> {
 			signal: AbortSignal.timeout(requestTimeoutMs),
 		});
 		if (response.ok === false) {
-			return new Error(`usage request failed with ${response.status}`);
+			throw new Error(`usage request failed with ${response.status}`);
 		}
 		return usageFromPayload(await response.json());
 	} catch (error) {
-		return error instanceof Error ? error : new Error(String(error));
+		throw error instanceof Error ? error : new Error(String(error));
 	}
 }
 

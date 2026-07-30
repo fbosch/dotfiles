@@ -7,6 +7,7 @@ import {
 } from "./list-presentation.ts";
 import { beginLogin, completeLogin, switchAccount } from "./mutations.ts";
 import { discoverUsage, loginCommand } from "./providers/codex.ts";
+import { mutateAccount } from "./queryclient/mutations.ts";
 import { acquireMutationLock, readJsonObject } from "./storage.ts";
 import { escapeTerminalText } from "./terminal-text.ts";
 import { recoverPendingLogin } from "./transactions.ts";
@@ -34,6 +35,11 @@ type CommandOutput<T> = {
 
 type ListData = Omit<PublicAccountDiscovery, "profiles"> & {
 	profiles: DisplayAccountListProfile[];
+};
+
+type StatusData = {
+	active: DisplayAccountListProfile | null;
+	profileCount: number;
 };
 
 type TextOutputOptions = {
@@ -126,22 +132,33 @@ async function runReadCommand(
 	await emitCommand(format, command, textOutput, async () => {
 		const paths = defaultPaths();
 		const discovery = await discoverAccounts(paths);
-		if (command === "list") {
-			const usage = await discoverUsage(
-				discovery,
-				await readJsonObject(paths.auth),
-			);
-			const completeDiscovery = {
+		const usage = await discoverUsage(
+			{
 				...discovery,
-				diagnostics: [...discovery.diagnostics, ...usage.diagnostics],
-			};
+				profiles:
+					command === "list"
+						? discovery.profiles
+						: discovery.profiles.filter((profile) => profile.active),
+			},
+			await readJsonObject(paths.auth),
+			paths,
+		);
+		const completeDiscovery = {
+			...discovery,
+			diagnostics: [...discovery.diagnostics, ...usage.diagnostics],
+		};
+		if (command === "list") {
 			return successOutput(
 				"list",
 				completeDiscovery,
 				listData(completeDiscovery, usage.usageByProfile),
 			);
 		}
-		return successOutput(command, discovery, statusData(discovery));
+		return successOutput(
+			command,
+			completeDiscovery,
+			statusData(completeDiscovery, usage.usageByProfile),
+		);
 	});
 }
 
@@ -159,8 +176,10 @@ async function runSwitchCommand(
 		const paths = defaultPaths();
 		const lock = await acquireMutationLock(paths);
 		try {
-			await recoverPendingLogin(paths);
-			const discovery = await switchAccount(positionals[0], paths);
+			await mutateAccount(paths, "recover", () => recoverPendingLogin(paths));
+			const discovery = await mutateAccount(paths, "switch", () =>
+				switchAccount(positionals[0], paths),
+			);
 			return successOutput("switch", discovery, statusData(discovery));
 		} finally {
 			await lock.release();
@@ -186,14 +205,18 @@ async function runLoginCommand(
 		const paths = defaultPaths();
 		const lock = await acquireMutationLock(paths);
 		try {
-			await recoverPendingLogin(paths);
-			await beginLogin(requestedAlias, paths);
+			await mutateAccount(paths, "recover", () => recoverPendingLogin(paths));
+			await mutateAccount(paths, "login-prepare", () =>
+				beginLogin(requestedAlias, paths),
+			);
 			try {
 				await runOpenCodeLogin();
-				const discovery = await completeLogin(paths);
+				const discovery = await mutateAccount(paths, "login-complete", () =>
+					completeLogin(paths),
+				);
 				return successOutput("login", discovery, statusData(discovery));
 			} catch (error) {
-				await recoverPendingLogin(paths);
+				await mutateAccount(paths, "recover", () => recoverPendingLogin(paths));
 				throw error;
 			}
 		} finally {
@@ -300,13 +323,22 @@ function listData(
 	};
 }
 
-function statusData(discovery: AccountDiscovery): {
-	active: PublicAccountDiscovery["profiles"][number] | null;
-	profileCount: number;
-} {
+function statusData(
+	discovery: AccountDiscovery,
+	usageByProfile: Map<string, AccountUsage> = new Map(),
+): StatusData {
 	const publicDiscovery = toPublicDiscovery(discovery);
+	const active = publicDiscovery.profiles.find((profile) => profile.active);
 	return {
-		active: publicDiscovery.profiles.find((profile) => profile.active) || null,
+		active: active
+			? {
+					...active,
+					usage: usageByProfile.get(active.key) || null,
+					displayColor:
+						discovery.profiles.find((profile) => profile.key === active.key)
+							?.displayColor || null,
+				}
+			: null,
 		profileCount: publicDiscovery.profiles.length,
 	};
 }
@@ -335,7 +367,7 @@ function emitOutput(
 	if (output.command === "list") {
 		printAccounts(output.data as ListData, textOutput);
 	} else {
-		printStatus(output.data as ReturnType<typeof statusData>);
+		printStatus(output.data as StatusData, textOutput);
 	}
 	printDiagnostics(output.diagnostics, output.outcome);
 }
@@ -351,11 +383,15 @@ function printAccounts(
 	console.log(renderAccountCards(discovery.profiles, textOutput));
 }
 
-function printStatus(status: ReturnType<typeof statusData>): void {
-	const name =
-		status.active?.alias || status.active?.generatedLabel || "unresolved";
-	console.log(`openai active: ${escapeTerminalText(name)}`);
-	console.log(`openai profiles: ${status.profileCount}`);
+function printStatus(status: StatusData, textOutput: TextOutputOptions): void {
+	console.log(
+		renderAccountCards(status.active ? [status.active] : [], {
+			...textOutput,
+			heading: `OpenAI account (${status.profileCount} profiles)`,
+			emptyMessage: "No active account found.",
+			nextAction: "  Run `ocma login <alias>` to add an account.",
+		}),
+	);
 }
 
 function printDiagnostics(

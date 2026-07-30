@@ -5,6 +5,7 @@ export type AccountPaths = {
 	aliases: string;
 	state?: string;
 	legacyState?: string;
+	queryCacheDirectory?: string;
 };
 
 export type AccountProfile = {
@@ -72,5 +73,11 @@ export function defaultPaths(
 		aliases: join(configHome, "fbb", "data", "account-aliases.json"),
 		state: join(stateHome, "fbb", "openai-accounts", "login-transaction.json"),
 		legacyState: join(stateHome, "fbb", "ocma", "login-transaction.json"),
+		queryCacheDirectory: join(
+			env.XDG_CACHE_HOME || join(home, ".cache"),
+			"fbb",
+			"opencode-multi-auth",
+			"query-cache",
+		),
 	};
 }

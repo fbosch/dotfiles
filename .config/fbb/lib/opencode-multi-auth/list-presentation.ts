@@ -17,6 +17,9 @@ export type AccountCardOptions = {
 	colorEnabled: boolean;
 	plain: boolean;
 	columns?: number;
+	heading?: string;
+	emptyMessage?: string;
+	nextAction?: string;
 };
 
 export type DisplayAccountListProfile = PublicAccountListProfile & {
@@ -36,13 +39,13 @@ export function renderAccountCards(
 		: (_: InspectColor | readonly InspectColor[], value: string) => value;
 	const heading = color(
 		["bold", "cyan"],
-		`OpenAI accounts (${profiles.length})`,
+		options.heading || `OpenAI accounts (${profiles.length})`,
 	);
 	if (profiles.length === 0) {
 		return [
 			heading,
-			"Info     No accounts found.",
-			"  Run `ocma login <alias>` to add an account.",
+			`Info     ${options.emptyMessage || "No accounts found."}`,
+			options.nextAction || "  Run `ocma login <alias>` to add an account.",
 		].join("\n");
 	}
 	const stacked = plain || narrowOutput(options.columns);
@@ -89,8 +92,8 @@ function renderCompactAccountCard(
 	const marker = profile.active ? "*" : "-";
 	return [
 		`${color(profile.active ? "green" : "gray", marker)} ${colorProfileName(name, profile.displayColor, colorEnabled)} ${color(profile.active ? "green" : "gray", state)} ${color("gray", `[${key}]`)}`,
-		`  primary    ${formatUsageWindow(profile.usage?.primary ?? null, color, colorEnabled)}`,
-		`  secondary  ${formatUsageWindow(profile.usage?.secondary ?? null, color, colorEnabled)}`,
+		`  primary    ${formatUsageWindow(profile.usage?.primary ?? null, color)}`,
+		`  secondary  ${formatUsageWindow(profile.usage?.secondary ?? null, color)}`,
 	].join("\n");
 }
 
@@ -106,18 +109,11 @@ function renderStackedAccountCard(
 		`${colorProfileName(name, profile.displayColor, colorEnabled)} ${profile.active ? "active" : "inactive"}`,
 		"  Profile",
 		`    ${key}`,
-		formatUsageDetail(
-			"Primary",
-			profile.usage?.primary ?? null,
-			color,
-			colorEnabled,
-			plain,
-		),
+		formatUsageDetail("Primary", profile.usage?.primary ?? null, color, plain),
 		formatUsageDetail(
 			"Secondary",
 			profile.usage?.secondary ?? null,
 			color,
-			colorEnabled,
 			plain,
 		),
 	].join("\n");
@@ -127,7 +123,6 @@ function formatUsageDetail(
 	label: string,
 	window: AccountUsage["primary"] | null,
 	color: Colorize,
-	colorEnabled: boolean,
 	plain: boolean,
 ): string {
 	if (window === null || window.remainingPercent === null) {
@@ -143,7 +138,6 @@ function formatUsageDetail(
 function formatUsageWindow(
 	window: AccountUsage["primary"] | null,
 	color: Colorize,
-	colorEnabled: boolean,
 ): string {
 	if (window === null || window.remainingPercent === null) {
 		return color("gray", "unavailable");
