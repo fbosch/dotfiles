@@ -31,6 +31,25 @@ export type PublicAccountDiscovery = {
 	diagnostics: Diagnostic[];
 };
 
+export type UsageWindow = {
+	remainingPercent: number | null;
+	resetAt: string | null;
+};
+
+export type AccountUsage = {
+	primary: UsageWindow;
+	secondary: UsageWindow;
+};
+
+export type AccountUsageDiscovery = {
+	usageByProfile: Map<string, AccountUsage>;
+	diagnostics: Diagnostic[];
+};
+
+export type PublicAccountListProfile = PublicAccountProfile & {
+	usage: AccountUsage | null;
+};
+
 export type MutationLock = {
 	release: () => Promise<void>;
 };

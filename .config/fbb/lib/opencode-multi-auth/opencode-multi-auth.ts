@@ -4,8 +4,12 @@ export { acquireMutationLock } from "./storage.ts";
 export { recoverPendingLogin } from "./transactions.ts";
 export type {
 	AccountDiscovery,
+	AccountUsage,
+	AccountUsageDiscovery,
 	Diagnostic,
 	OcmaPaths,
 	PublicAccountDiscovery,
+	UsageWindow,
 } from "./types.ts";
 export { defaultPaths } from "./types.ts";
+export { discoverAccountUsage } from "./usage.ts";

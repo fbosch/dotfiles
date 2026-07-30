@@ -11,6 +11,7 @@ import {
 	switchAccount,
 	toPublicDiscovery,
 } from "../opencode-multi-auth.ts";
+import { usageFromPayload } from "../usage.ts";
 
 async function fixturePaths(
 	auth: unknown,
@@ -187,4 +188,28 @@ test("recovers an interrupted login without changing aliases", async () => {
 		profiles: [{ key: "openai", alias: "main", active: true }],
 		diagnostics: [],
 	});
+});
+
+test("formats usage windows without exposing credentials", () => {
+	const usage = usageFromPayload({
+		rate_limit: {
+			primary_window: { used_percent: 23.7, reset_after_seconds: 60 },
+			secondary_window: { used_percent: 100, reset_after_seconds: 3_600 },
+		},
+	});
+
+	expect(usage).toMatchObject({
+		primary: { remainingPercent: 77 },
+		secondary: { remainingPercent: 0 },
+	});
+	expect(usage.primary.resetAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+	expect(usage.secondary.resetAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+});
+
+test("rejects malformed usage payloads", () => {
+	expect(() =>
+		usageFromPayload({
+			rate_limit: { primary_window: { used_percent: "nope" } },
+		}),
+	).toThrow("usage response has an unexpected shape");
 });
