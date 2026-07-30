@@ -9,7 +9,7 @@ local mock_credit_count = 2
 local usage_refreshes = 0
 
 io.open = function(path, mode)
-	if mode == "r" and path:match("codex%-status%.json$") then
+	if mode == "r" and path:match("ocma%-status%.json$") then
 		return {
 			read = function()
 				return "codex-status"
@@ -62,24 +62,30 @@ package.loaded.wezterm = {
 
 		if content == "codex-status" then
 			return {
-				accounts = {
-					{
-						profileLabel = "ct",
-						availableCount = mock_credit_count,
-						urgency = "soon",
-						active = true,
-						usage = {
-							{ remaining = 100 - math.floor(mock_used_percent), resetsIn = "3h" },
+				data = {
+					profiles = {
+						{
+							alias = "ct",
+							active = true,
+							resetCredits = {
+								availableCount = mock_credit_count,
+								urgency = "soon",
+							},
+							usage = {
+								primary = {
+									remainingPercent = 100 - math.floor(mock_used_percent),
+									resetAt = "2026-03-17T18:30:00Z",
+								},
+							},
 						},
-					},
-					{
-						profileLabel = "kk",
-						availableCount = 1,
-						urgency = "later",
-						active = false,
-						usage = {
-							{ remaining = 71, resetsIn = "2h" },
-							{ remaining = 94, resetsIn = "5d" },
+						{
+							alias = "kk",
+							active = false,
+							resetCredits = { availableCount = 1, urgency = "later" },
+							usage = {
+								primary = { remainingPercent = 71, resetAt = "2026-03-17T17:30:00Z" },
+								secondary = { remainingPercent = 94, resetAt = "2026-03-20T15:30:00Z" },
+							},
 						},
 					},
 				},
@@ -123,6 +129,14 @@ package.loaded.wezterm = {
 	background_child_process = function()
 		usage_refreshes = usage_refreshes + 1
 	end,
+	time = {
+		parse_rfc3339 = function()
+			return 3 * 60 * 60
+		end,
+		now = function()
+			return 0
+		end,
+	},
 }
 
 package.loaded["agent"] = {

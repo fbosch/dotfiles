@@ -13,10 +13,16 @@ import {
 } from "@tanstack/query-persist-client-core";
 import type { AccountPaths } from "../types.ts";
 
-export const usageQueryKey = ["codex", "usage"] as const;
+export const accountQueryKey = ["codex"] as const;
+export const usageQueryKey = [...accountQueryKey, "usage"] as const;
+export const resetCreditsQueryKey = [
+	...accountQueryKey,
+	"reset-credits",
+] as const;
 
-const usageCacheTimeMs = 60_000;
-const usageCacheBuster = "fbb.opencode-multi-auth-query-cache/v1";
+export const usageCacheTimeMs = 60_000;
+export const resetCreditsCacheTimeMs = 8 * 60 * 60 * 1_000;
+const usageCacheBuster = "fbb.opencode-multi-auth-query-cache/v2";
 const usageCachePrefix = "fbb-opencode-multi-auth";
 const clients = new Map<string, PersistentQueryClient>();
 
@@ -34,8 +40,8 @@ export function queryClientFor(paths: AccountPaths): PersistentQueryClient {
 
 	const queryPersister = experimental_createQueryPersister({
 		buster: usageCacheBuster,
-		filters: { queryKey: usageQueryKey },
-		maxAge: usageCacheTimeMs,
+		filters: { queryKey: accountQueryKey },
+		maxAge: resetCreditsCacheTimeMs,
 		prefix: usageCachePrefix,
 		refetchOnRestore: false,
 		storage: fileStorage(cacheDirectory),

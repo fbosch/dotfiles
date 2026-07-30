@@ -9,13 +9,18 @@ import {
 } from "./list-presentation.ts";
 import { beginLogin, completeLogin, switchAccount } from "./mutations.ts";
 import { assertMutableDiscovery } from "./profiles.ts";
-import { discoverUsage, loginCommand } from "./providers/codex.ts";
+import {
+	discoverResetCredits,
+	discoverUsage,
+	loginCommand,
+} from "./providers/codex.ts";
 import { mutateAccount } from "./queryclient/mutations.ts";
 import { acquireMutationLock, readJsonObject } from "./storage.ts";
 import { escapeTerminalText } from "./terminal-text.ts";
 import { recoverPendingLogin } from "./transactions.ts";
 import type {
 	AccountDiscovery,
+	AccountResetCredits,
 	AccountUsage,
 	Diagnostic,
 	PublicAccountDiscovery,
@@ -135,22 +140,37 @@ async function runReadCommand(
 	await emitCommand(format, command, textOutput, async () => {
 		const paths = defaultPaths();
 		const discovery = await discoverAccounts(paths);
-		const usage = await discoverUsageFor(discovery, paths, command === "list");
+		const [usage, resetCredits] = await Promise.all([
+			discoverUsageFor(discovery, paths, command === "list"),
+			discoverResetCreditsFor(discovery, paths, command === "list"),
+		]);
 		const completeDiscovery = {
 			...discovery,
-			diagnostics: [...discovery.diagnostics, ...usage.diagnostics],
+			diagnostics: [
+				...discovery.diagnostics,
+				...usage.diagnostics,
+				...resetCredits.diagnostics,
+			],
 		};
 		if (command === "list") {
 			return successOutput(
 				"list",
 				completeDiscovery,
-				listData(completeDiscovery, usage.usageByProfile),
+				listData(
+					completeDiscovery,
+					usage.usageByProfile,
+					resetCredits.resetCreditsByProfile,
+				),
 			);
 		}
 		return successOutput(
 			command,
 			completeDiscovery,
-			statusData(completeDiscovery, usage.usageByProfile),
+			statusData(
+				completeDiscovery,
+				usage.usageByProfile,
+				resetCredits.resetCreditsByProfile,
+			),
 		);
 	});
 }
@@ -187,15 +207,26 @@ async function runSwitchCommand(
 			const discovery = await mutateAccount(paths, "switch", () =>
 				switchAccount(selectedTarget, paths),
 			);
-			const usage = await discoverUsageFor(discovery, paths, false);
+			const [usage, resetCredits] = await Promise.all([
+				discoverUsageFor(discovery, paths, false),
+				discoverResetCreditsFor(discovery, paths, false),
+			]);
 			const completeDiscovery = {
 				...discovery,
-				diagnostics: [...discovery.diagnostics, ...usage.diagnostics],
+				diagnostics: [
+					...discovery.diagnostics,
+					...usage.diagnostics,
+					...resetCredits.diagnostics,
+				],
 			};
 			return successOutput(
 				"switch",
 				completeDiscovery,
-				statusData(completeDiscovery, usage.usageByProfile),
+				statusData(
+					completeDiscovery,
+					usage.usageByProfile,
+					resetCredits.resetCreditsByProfile,
+				),
 			);
 		} finally {
 			await lock.release();
@@ -209,6 +240,23 @@ async function discoverUsageFor(
 	includeInactiveProfiles: boolean,
 ) {
 	return discoverUsage(
+		{
+			...discovery,
+			profiles: includeInactiveProfiles
+				? discovery.profiles
+				: discovery.profiles.filter((profile) => profile.active),
+		},
+		await readJsonObject(paths.auth),
+		paths,
+	);
+}
+
+async function discoverResetCreditsFor(
+	discovery: AccountDiscovery,
+	paths: ReturnType<typeof defaultPaths>,
+	includeInactiveProfiles: boolean,
+) {
+	return discoverResetCredits(
 		{
 			...discovery,
 			profiles: includeInactiveProfiles
@@ -393,6 +441,7 @@ function errorOutput(command: string, message: string): CommandOutput<null> {
 function listData(
 	discovery: AccountDiscovery,
 	usageByProfile: Map<string, AccountUsage>,
+	resetCreditsByProfile: Map<string, AccountResetCredits>,
 ): ListData {
 	const publicDiscovery = toPublicDiscovery(discovery);
 	const colors = new Map(
@@ -403,6 +452,7 @@ function listData(
 		profiles: publicDiscovery.profiles.map((profile) => ({
 			...profile,
 			usage: usageByProfile.get(profile.key) || null,
+			resetCredits: resetCreditsByProfile.get(profile.key) || null,
 			displayColor: colors.get(profile.key) || null,
 		})),
 	};
@@ -411,6 +461,7 @@ function listData(
 function statusData(
 	discovery: AccountDiscovery,
 	usageByProfile: Map<string, AccountUsage> = new Map(),
+	resetCreditsByProfile: Map<string, AccountResetCredits> = new Map(),
 ): StatusData {
 	const publicDiscovery = toPublicDiscovery(discovery);
 	const active = publicDiscovery.profiles.find((profile) => profile.active);
@@ -419,6 +470,7 @@ function statusData(
 			? {
 					...active,
 					usage: usageByProfile.get(active.key) || null,
+					resetCredits: resetCreditsByProfile.get(active.key) || null,
 					displayColor:
 						discovery.profiles.find((profile) => profile.key === active.key)
 							?.displayColor || null,

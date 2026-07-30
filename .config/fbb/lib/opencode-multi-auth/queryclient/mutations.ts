@@ -1,5 +1,5 @@
 import type { AccountPaths } from "../types.ts";
-import { queryClientFor, usageQueryKey } from "./client.ts";
+import { accountQueryKey, queryClientFor } from "./client.ts";
 
 export async function mutateAccount<T>(
 	paths: AccountPaths,
@@ -15,9 +15,9 @@ export async function mutateAccount<T>(
 		});
 	const result = await mutation.execute(undefined);
 	await client.queryClient.invalidateQueries({
-		queryKey: usageQueryKey,
+		queryKey: accountQueryKey,
 		refetchType: "none",
 	});
-	await client.queryPersister.removeQueries({ queryKey: usageQueryKey });
+	await client.queryPersister.removeQueries({ queryKey: accountQueryKey });
 	return result;
 }

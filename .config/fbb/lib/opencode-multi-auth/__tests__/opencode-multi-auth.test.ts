@@ -6,9 +6,13 @@ import { renderProgressBar } from "../../progress-bar.ts";
 import { discoverAccounts, toPublicDiscovery } from "../discovery.ts";
 import { renderAccountCards } from "../list-presentation.ts";
 import { beginLogin, completeLogin, switchAccount } from "../mutations.ts";
-import { usageFromPayload } from "../providers/codex.ts";
+import { queryClientFor } from "../queryclient/client.ts";
 import { mutateAccount } from "../queryclient/mutations.ts";
-import { queryUsage } from "../queryclient/usage.ts";
+import { resetCreditsFromPayload } from "../queryclient/queries/reset-credits.ts";
+import {
+	usageFromPayload,
+	usageQueryOptions,
+} from "../queryclient/queries/usage.ts";
 import { recoverPendingLogin } from "../transactions.ts";
 import type { AccountPaths } from "../types.ts";
 
@@ -218,25 +222,61 @@ test("rejects malformed usage payloads", () => {
 
 test("caches usage until account mutations invalidate it", async () => {
 	const paths = await fixturePaths({}, { openai: {} });
-	const usage = {
-		primary: { remainingPercent: 75, resetAt: null },
-		secondary: { remainingPercent: null, resetAt: null },
+	const payload = {
+		rate_limit: {
+			primary_window: { used_percent: 25 },
+			secondary_window: null,
+		},
 	};
 	let requests = 0;
-	const request = async () => {
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = (async () => {
 		requests += 1;
-		return usage;
-	};
+		return Response.json(payload);
+	}) as typeof fetch;
 
-	expect(await queryUsage(paths, "openai", request)).toEqual(usage);
-	expect(await queryUsage(paths, "openai", request)).toEqual(usage);
-	expect(requests).toBe(1);
-	expect(await readdir(paths.queryCacheDirectory || "")).toHaveLength(1);
+	try {
+		const queryClient = queryClientFor(paths).queryClient;
+		const options = usageQueryOptions("openai", {
+			accessToken: "token",
+			accountId: "account",
+		});
+		expect(await queryClient.fetchQuery(options)).toMatchObject({
+			primary: { remainingPercent: 75 },
+		});
+		expect(await queryClient.fetchQuery(options)).toMatchObject({
+			primary: { remainingPercent: 75 },
+		});
+		expect(requests).toBe(1);
+		await Bun.sleep(0);
+		expect(await readdir(paths.queryCacheDirectory || "")).toHaveLength(1);
 
-	await mutateAccount(paths, "test", async () => undefined);
-	expect(await readdir(paths.queryCacheDirectory || "")).toHaveLength(0);
-	expect(await queryUsage(paths, "openai", request)).toEqual(usage);
-	expect(requests).toBe(2);
+		await mutateAccount(paths, "test", async () => undefined);
+		expect(await readdir(paths.queryCacheDirectory || "")).toHaveLength(0);
+		expect(await queryClient.fetchQuery(options)).toMatchObject({
+			primary: { remainingPercent: 75 },
+		});
+		expect(requests).toBe(2);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("summarizes available reset credits without exposing their IDs", () => {
+	expect(
+		resetCreditsFromPayload({
+			available_count: 2,
+			credits: [
+				{ status: "available", expires_at: "2099-01-08T00:00:00.000Z" },
+				{ status: "available", expires_at: "2099-01-01T00:00:00.000Z" },
+				{ status: "redeemed", expires_at: "2099-01-02T00:00:00.000Z" },
+			],
+		}),
+	).toEqual({
+		availableCount: 2,
+		nextExpiresAt: "2099-01-01T00:00:00.000Z",
+		urgency: "later",
+	});
 });
 
 test("renders compact quota cards with Unicode partial-block progress", () => {

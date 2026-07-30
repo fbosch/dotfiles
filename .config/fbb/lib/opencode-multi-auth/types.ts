@@ -47,13 +47,27 @@ export type AccountUsage = {
 	secondary: UsageWindow;
 };
 
+export type ResetCreditUrgency = "urgent" | "soon" | "later" | "unknown";
+
+export type AccountResetCredits = {
+	availableCount: number;
+	nextExpiresAt: string | null;
+	urgency: ResetCreditUrgency;
+};
+
 export type AccountUsageDiscovery = {
 	usageByProfile: Map<string, AccountUsage>;
 	diagnostics: Diagnostic[];
 };
 
+export type AccountResetCreditDiscovery = {
+	resetCreditsByProfile: Map<string, AccountResetCredits>;
+	diagnostics: Diagnostic[];
+};
+
 export type PublicAccountListProfile = PublicAccountProfile & {
 	usage: AccountUsage | null;
+	resetCredits?: AccountResetCredits | null;
 };
 
 export type MutationLock = {

@@ -1,19 +1,19 @@
-import { z } from "zod";
 import { profileColor } from "../../profile-color.ts";
-import { queryUsage } from "../queryclient/usage.ts";
+import { queryClientFor } from "../queryclient/client.ts";
+import { resetCreditsQueryOptions } from "../queryclient/queries/reset-credits.ts";
+import { usageQueryOptions } from "../queryclient/queries/usage.ts";
 import { isJsonObject, type JsonObject } from "../storage.ts";
 import type {
 	AccountDiscovery,
 	AccountPaths,
 	AccountProfile,
+	AccountResetCreditDiscovery,
+	AccountResetCredits,
 	AccountUsage,
 	AccountUsageDiscovery,
-	UsageWindow,
 } from "../types.ts";
 
 const activeProfileKey = "openai";
-const usageUrl = "https://chatgpt.com/backend-api/wham/usage";
-const requestTimeoutMs = 10_000;
 const adjectives = [
 	"ember",
 	"cobalt",
@@ -53,23 +53,6 @@ const nouns = [
 	"wave",
 	"ridge",
 ];
-const FiniteNumberSchema = z.custom<number>(
-	(value) => typeof value === "number" && Number.isFinite(value),
-);
-const UsageWindowSchema = z
-	.object({
-		used_percent: FiniteNumberSchema.optional(),
-		reset_after_seconds: FiniteNumberSchema.optional(),
-	})
-	.nullish();
-const UsageSchema = z.object({
-	rate_limit: z
-		.object({
-			primary_window: UsageWindowSchema,
-			secondary_window: UsageWindowSchema,
-		})
-		.default({}),
-});
 
 export const loginCommand = [
 	"opencode",
@@ -122,6 +105,7 @@ export async function discoverUsage(
 	auth: JsonObject,
 	paths: AccountPaths,
 ): Promise<AccountUsageDiscovery> {
+	const queryClient = queryClientFor(paths).queryClient;
 	const results = await Promise.all(
 		discovery.profiles.map(async (profile) => {
 			const entry = auth[profile.key];
@@ -131,7 +115,9 @@ export async function discoverUsage(
 			try {
 				return [
 					profile.key,
-					await queryUsage(paths, profile.key, () => requestUsage(entry)),
+					await queryClient.fetchQuery(
+						usageQueryOptions(profile.key, credentialsForEntry(entry)),
+					),
 				] as const;
 			} catch (error) {
 				return [
@@ -157,16 +143,46 @@ export async function discoverUsage(
 	return { usageByProfile, diagnostics };
 }
 
-export function usageFromPayload(payload: unknown): AccountUsage {
-	const parsed = UsageSchema.safeParse(payload);
-	if (parsed.success === false) {
-		throw new Error("usage response has an unexpected shape");
+export async function discoverResetCredits(
+	discovery: AccountDiscovery,
+	auth: JsonObject,
+	paths: AccountPaths,
+): Promise<AccountResetCreditDiscovery> {
+	const queryClient = queryClientFor(paths).queryClient;
+	const results = await Promise.all(
+		discovery.profiles.map(async (profile) => {
+			const entry = auth[profile.key];
+			if (isJsonObject(entry) === false) {
+				return [profile.key, new Error("invalid Codex profile")] as const;
+			}
+			try {
+				return [
+					profile.key,
+					await queryClient.fetchQuery(
+						resetCreditsQueryOptions(profile.key, credentialsForEntry(entry)),
+					),
+				] as const;
+			} catch (error) {
+				return [
+					profile.key,
+					error instanceof Error ? error : new Error(String(error)),
+				] as const;
+			}
+		}),
+	);
+	const resetCreditsByProfile = new Map<string, AccountResetCredits>();
+	const diagnostics = [];
+	for (const [key, result] of results) {
+		if (result instanceof Error) {
+			diagnostics.push({
+				code: "reset-credits-unavailable",
+				message: `reset credits unavailable for ${key}`,
+			});
+			continue;
+		}
+		resetCreditsByProfile.set(key, result);
 	}
-	const rateLimit = parsed.data.rate_limit;
-	return {
-		primary: usageWindow(rateLimit.primary_window),
-		secondary: usageWindow(rateLimit.secondary_window),
-	};
+	return { resetCreditsByProfile, diagnostics };
 }
 
 export function activeKey(): string {
@@ -204,41 +220,18 @@ function profileFromEntry(
 	};
 }
 
-async function requestUsage(entry: JsonObject): Promise<AccountUsage> {
+function credentialsForEntry(entry: JsonObject): {
+	accessToken: string;
+	accountId: string;
+} {
 	const accessToken = typeof entry.access === "string" ? entry.access : null;
 	const accountId = accountIdForEntry(entry);
 	if (accessToken === null || accountId === null) {
-		throw new Error("Codex profile is missing usage credentials");
+		throw new Error("Codex profile is missing credentials");
 	}
-	try {
-		const response = await fetch(usageUrl, {
-			headers: {
-				Authorization: `Bearer ${accessToken}`,
-				"ChatGPT-Account-Id": accountId,
-			},
-			signal: AbortSignal.timeout(requestTimeoutMs),
-		});
-		if (response.ok === false) {
-			throw new Error(`usage request failed with ${response.status}`);
-		}
-		return usageFromPayload(await response.json());
-	} catch (error) {
-		throw error instanceof Error ? error : new Error(String(error));
-	}
-}
-
-function usageWindow(window: z.infer<typeof UsageWindowSchema>): UsageWindow {
-	const usedPercent = window?.used_percent;
-	const resetAfterSeconds = window?.reset_after_seconds;
 	return {
-		remainingPercent:
-			usedPercent === undefined
-				? null
-				: Math.max(0, Math.min(100, 100 - Math.floor(usedPercent))),
-		resetAt:
-			resetAfterSeconds === undefined
-				? null
-				: new Date(Date.now() + resetAfterSeconds * 1000).toISOString(),
+		accessToken,
+		accountId,
 	};
 }
 

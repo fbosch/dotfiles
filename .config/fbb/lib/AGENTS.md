@@ -1,5 +1,13 @@
 # FBB Libraries
 
+## TanStack Queries
+
+- Put each query in `queryclient/queries/` and export a `*QueryOptions` factory.
+- A query-options factory owns its query key, request function, external-response validation, and query-specific stale policy. It must not import or construct a `QueryClient`.
+- Providers resolve non-secret credentials, then call the configured shared `QueryClient` directly with the query options.
+- Configure persistence once in `queryclient/client.ts` through `QueryClient.defaultOptions.queries.persister`; do not manually persist successful queries.
+- Keep related keys beneath `accountQueryKey` so account mutations can invalidate and remove all persisted account data together.
+
 ## Terminal Output
 
 - Treat `--format json` as the stable automation interface. Keep it free of ANSI sequences, prompts, and decorative layout.

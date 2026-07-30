@@ -2,10 +2,9 @@ local wezterm = require("wezterm")
 local palette = require("theme")
 
 local codex_status = { checked_at = 0, accounts = {} }
-local status_cache = (os.getenv("XDG_CACHE_HOME") or ((os.getenv("HOME") or "") .. "/.cache"))
-	.. "/wezterm/codex-status.json"
-local fish_libexec_dir = (os.getenv("HOME") or "") .. "/.config/fish/libexec"
-local reset_helper = fish_libexec_dir .. "/codex/reset_helper.ts"
+local home_dir = os.getenv("HOME") or ""
+local status_cache = (os.getenv("XDG_CACHE_HOME") or (home_dir .. "/.cache")) .. "/wezterm/ocma-status.json"
+local ocma = home_dir .. "/.config/fbb/bin/ocma"
 local command_path = table.concat({
 	-- Home Manager exposes user packages here on macOS and NixOS.
 	"/etc/profiles/per-user/" .. (os.getenv("USER") or "") .. "/bin",
@@ -66,6 +65,50 @@ local function superscript_duration(value)
 	return superscript:gsub("[dhms]", superscript_units)
 end
 
+local function reset_in(reset_at)
+	local reset_time = type(reset_at) == "string" and wezterm.time.parse_rfc3339(reset_at) or nil
+	if reset_time == nil then
+		return nil
+	end
+	local seconds = reset_time - wezterm.time.now()
+	if seconds <= 0 then
+		return "now"
+	end
+	if seconds < 60 then
+		return string.format("%ds", math.ceil(seconds))
+	end
+	if seconds < 3600 then
+		return string.format("%dm", math.ceil(seconds / 60))
+	end
+	if seconds < 86400 then
+		return string.format("%dh", math.ceil(seconds / 3600))
+	end
+	return string.format("%dd", math.ceil(seconds / 86400))
+end
+
+local function profile_label(profile)
+	return tostring(profile.alias or profile.generatedLabel or "unresolved")
+end
+
+local function account_from_profile(profile)
+	local usage = {}
+	for _, name in ipairs({ "primary", "secondary" }) do
+		local window = type(profile.usage) == "table" and profile.usage[name] or nil
+		table.insert(usage, {
+			remaining = type(window) == "table" and window.remainingPercent or nil,
+			resetsIn = type(window) == "table" and reset_in(window.resetAt) or nil,
+		})
+	end
+	local reset_credits = type(profile.resetCredits) == "table" and profile.resetCredits or {}
+	return {
+		profileLabel = profile_label(profile),
+		availableCount = reset_credits.availableCount,
+		urgency = reset_credits.urgency,
+		usage = usage,
+		active = profile.active,
+	}
+end
+
 local function get_accounts()
 	local cache_file = io.open(status_cache, "r")
 	local content = cache_file and cache_file:read("*a") or ""
@@ -74,8 +117,12 @@ local function get_accounts()
 	end
 
 	local parsed_ok, data = pcall(wezterm.json_parse, content)
-	if parsed_ok and type(data) == "table" and type(data.accounts) == "table" then
-		codex_status.accounts = data.accounts
+	local profiles = parsed_ok and type(data) == "table" and data.data and data.data.profiles or nil
+	if type(profiles) == "table" then
+		codex_status.accounts = {}
+		for _, profile in ipairs(profiles) do
+			table.insert(codex_status.accounts, account_from_profile(profile))
+		end
 		table.sort(codex_status.accounts, function(left, right)
 			return tostring(left.profileLabel) < tostring(right.profileLabel)
 		end)
@@ -87,12 +134,11 @@ local function get_accounts()
 			"/bin/sh",
 			"-c",
 			string.format(
-				'PATH=%q; export PATH; mkdir -p %q && temporary=%q.$$ && bun --cwd %q %q status >"$temporary" && mv "$temporary" %q',
+				'PATH=%q; export PATH; mkdir -p %q && temporary=%q.$$ && %q list --format json >"$temporary" && mv "$temporary" %q',
 				command_path,
 				status_cache:match("^(.+)/[^/]+$"),
 				status_cache,
-				fish_libexec_dir,
-				reset_helper,
+				ocma,
 				status_cache
 			),
 		})
@@ -136,7 +182,7 @@ local function append(items)
 		end
 		local profile_color = account.active and palette.ansi.magenta or palette.semantic.muted
 		table.insert(items, { Foreground = { Color = profile_color } })
-		table.insert(items, { Text = account.profileLabel })
+		table.insert(items, { Text = profile_label(account) })
 		if account.active then
 			table.insert(items, { Foreground = { Color = palette.ansi.magenta } })
 			table.insert(items, { Text = "*" })
