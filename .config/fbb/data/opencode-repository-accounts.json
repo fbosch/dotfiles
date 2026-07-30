@@ -1,3 +1,10 @@
 {
-  "pkdx": ["jpb", "fbb"]
+  "dotfiles": [
+    "fbb",
+    "jpb"
+  ],
+  "nixos": [
+    "fbb",
+    "jpb"
+  ]
 }
