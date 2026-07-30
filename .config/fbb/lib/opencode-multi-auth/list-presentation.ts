@@ -1,7 +1,11 @@
 import { type InspectColor, styleText } from "node:util";
+import { renderProgressBar } from "../progress-bar.ts";
 import type { AccountUsage, PublicAccountListProfile } from "./types.ts";
 
-type Colorize = (format: InspectColor | readonly InspectColor[], value: string) => string;
+type Colorize = (
+	format: InspectColor | readonly InspectColor[],
+	value: string,
+) => string;
 
 export function renderAccountCards(
 	profiles: PublicAccountListProfile[],
@@ -10,32 +14,73 @@ export function renderAccountCards(
 	const color: Colorize = colorEnabled
 		? styleText
 		: (_: InspectColor | readonly InspectColor[], value: string) => value;
-	const heading = color(["bold", "cyan"], `OpenAI accounts (${profiles.length})`);
-	return [heading, ...profiles.map((profile) => renderAccountCard(profile, color))].join("\n\n");
+	const heading = color(
+		["bold", "cyan"],
+		`OpenAI accounts (${profiles.length})`,
+	);
+	return [
+		heading,
+		...profiles.map((profile) =>
+			renderAccountCard(profile, color, colorEnabled),
+		),
+	].join("\n\n");
 }
 
-function renderAccountCard(profile: PublicAccountListProfile, color: Colorize): string {
+function renderAccountCard(
+	profile: PublicAccountListProfile,
+	color: Colorize,
+	colorEnabled: boolean,
+): string {
 	const name = profile.alias || profile.generatedLabel || "unresolved";
 	const state = profile.active ? "active" : "inactive";
 	const marker = profile.active ? "*" : "-";
 	return [
 		`${color(profile.active ? "green" : "gray", marker)} ${color("bold", name)} ${color(profile.active ? "green" : "gray", state)} ${color("gray", `[${profile.key}]`)}`,
-		`  primary    ${formatUsageWindow(profile.usage?.primary ?? null, color)}`,
-		`  secondary  ${formatUsageWindow(profile.usage?.secondary ?? null, color)}`,
+		`  primary    ${formatUsageWindow(profile.usage?.primary ?? null, color, colorEnabled)}`,
+		`  secondary  ${formatUsageWindow(profile.usage?.secondary ?? null, color, colorEnabled)}`,
 	].join("\n");
 }
 
 function formatUsageWindow(
 	window: AccountUsage["primary"] | null,
 	color: Colorize,
+	colorEnabled: boolean,
 ): string {
 	if (window === null || window.remainingPercent === null) {
 		return color("gray", "unavailable");
 	}
 	const style = usageStyle(window.remainingPercent);
-	const filled = Math.round((window.remainingPercent / 100) * 14);
-	const bar = `[${"#".repeat(filled)}${".".repeat(14 - filled)}]`;
-	return `${color(style, bar)} ${color(style, `${window.remainingPercent}% remaining`)}  ${color("gray", `resets ${formatReset(window.resetAt)}`)}`;
+	const bar = renderUsageBar(
+		window.remainingPercent,
+		style,
+		color,
+		colorEnabled,
+	);
+	return `${bar} ${color(style, `${window.remainingPercent}% remaining`)}  ${color("gray", `resets ${formatReset(window.resetAt)}`)}`;
+}
+
+function renderUsageBar(
+	remainingPercent: number,
+	style: InspectColor,
+	color: Colorize,
+	colorEnabled: boolean,
+): string {
+	const { fullCells, partialCell, emptyCells } =
+		renderProgressBar(remainingPercent);
+	if (colorEnabled === false) {
+		return `${"█".repeat(fullCells)}${partialCell}${"░".repeat(emptyCells)}`;
+	}
+	return `${color(backgroundStyle(style), " ".repeat(fullCells))}${color(["bgBlack", style], partialCell)}${color("bgBlack", " ".repeat(emptyCells))}`;
+}
+
+function backgroundStyle(style: InspectColor): InspectColor {
+	if (style === "green") {
+		return "bgGreen";
+	}
+	if (style === "yellow") {
+		return "bgYellow";
+	}
+	return "bgRed";
 }
 
 function usageStyle(remainingPercent: number): InspectColor {

@@ -1,21 +1,19 @@
-import { type InspectColor, styleText } from "node:util";
 import { cancel, isCancel, text } from "@clack/prompts";
 import { defineCommand, runMain } from "citty";
-import {
-	type AccountDiscovery,
-	type AccountUsage,
-	acquireMutationLock,
-	beginLogin,
-	completeLogin,
-	type Diagnostic,
-	defaultPaths,
-	discoverAccounts,
-	discoverAccountUsage,
-	type PublicAccountDiscovery,
-	recoverPendingLogin,
-	switchAccount,
-	toPublicDiscovery,
-} from "./opencode-multi-auth.ts";
+import { discoverAccounts, toPublicDiscovery } from "./discovery.ts";
+import { renderAccountCards } from "./list-presentation.ts";
+import { beginLogin, completeLogin, switchAccount } from "./mutations.ts";
+import { acquireMutationLock } from "./storage.ts";
+import { recoverPendingLogin } from "./transactions.ts";
+import type {
+	AccountDiscovery,
+	AccountUsage,
+	Diagnostic,
+	PublicAccountDiscovery,
+	PublicAccountListProfile,
+} from "./types.ts";
+import { defaultPaths } from "./types.ts";
+import { discoverAccountUsage } from "./usage.ts";
 
 const VERSION = "0.1.0";
 const OUTPUT_SCHEMA = "fbb.ocma/v1";
@@ -32,15 +30,8 @@ type CommandOutput<T> = {
 };
 
 type ListData = Omit<PublicAccountDiscovery, "profiles"> & {
-	profiles: Array<
-		PublicAccountDiscovery["profiles"][number] & { usage: AccountUsage | null }
-	>;
+	profiles: PublicAccountListProfile[];
 };
-
-type Colorize = (
-	format: InspectColor | readonly InspectColor[],
-	value: string,
-) => string;
 
 const formatArg = {
 	type: "enum" as const,
@@ -296,85 +287,7 @@ function exitCode(outcome: Outcome): number {
 }
 
 function printAccounts(discovery: ListData): void {
-	const color: Colorize =
-		process.stdout.isTTY === true
-			? styleText
-			: (_: InspectColor | readonly InspectColor[], value: string) => value;
-	console.log(
-		color(["bold", "cyan"], `OpenAI accounts (${discovery.profiles.length})`),
-	);
-	console.log("");
-	for (const [index, profile] of discovery.profiles.entries()) {
-		printAccountCard(profile, color);
-		if (index < discovery.profiles.length - 1) {
-			console.log("");
-		}
-	}
-}
-
-function printAccountCard(
-	profile: ListData["profiles"][number],
-	color: Colorize,
-): void {
-	const name = profile.alias || profile.generatedLabel || "unresolved";
-	const state = profile.active ? "active" : "inactive";
-	const marker = profile.active ? "*" : "-";
-	console.log(
-		`${color(profile.active ? "green" : "gray", marker)} ${color("bold", name)} ${color(profile.active ? "green" : "gray", state)} ${color("gray", `[${profile.key}]`)}`,
-	);
-	console.log(
-		`  primary    ${formatUsageWindow(profile.usage?.primary ?? null, color)}`,
-	);
-	console.log(
-		`  secondary  ${formatUsageWindow(profile.usage?.secondary ?? null, color)}`,
-	);
-}
-
-function formatUsageWindow(
-	window: AccountUsage["primary"] | null,
-	color: Colorize,
-): string {
-	if (window?.remainingPercent === null || window === null) {
-		return color("gray", "unavailable");
-	}
-	const style = usageStyle(window.remainingPercent);
-	const filled = Math.round((window.remainingPercent / 100) * 14);
-	const bar = `[${"#".repeat(filled)}${".".repeat(14 - filled)}]`;
-	return `${color(style, bar)} ${color(style, `${window.remainingPercent}% remaining`)}  ${color("gray", `resets ${formatReset(window.resetAt)}`)}`;
-}
-
-function usageStyle(remainingPercent: number): InspectColor {
-	if (remainingPercent > 50) {
-		return "green";
-	}
-	if (remainingPercent > 20) {
-		return "yellow";
-	}
-	return "red";
-}
-
-function formatReset(resetAt: string | null): string {
-	if (resetAt === null) {
-		return "--";
-	}
-	const milliseconds = Date.parse(resetAt) - Date.now();
-	if (Number.isNaN(milliseconds)) {
-		return "--";
-	}
-	if (milliseconds <= 0) {
-		return "now";
-	}
-	const seconds = Math.ceil(milliseconds / 1000);
-	if (seconds < 60) {
-		return `${seconds}s`;
-	}
-	if (seconds < 3_600) {
-		return `${Math.ceil(seconds / 60)}m`;
-	}
-	if (seconds < 86_400) {
-		return `${Math.ceil(seconds / 3_600)}h`;
-	}
-	return `${Math.ceil(seconds / 86_400)}d`;
+	console.log(renderAccountCards(discovery.profiles));
 }
 
 function printStatus(status: ReturnType<typeof statusData>): void {

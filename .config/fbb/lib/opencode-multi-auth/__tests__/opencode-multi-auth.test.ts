@@ -2,15 +2,12 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-	beginLogin,
-	completeLogin,
-	discoverAccounts,
-	type OcmaPaths,
-	recoverPendingLogin,
-	switchAccount,
-	toPublicDiscovery,
-} from "../opencode-multi-auth.ts";
+import { renderProgressBar } from "../../progress-bar.ts";
+import { discoverAccounts, toPublicDiscovery } from "../discovery.ts";
+import { renderAccountCards } from "../list-presentation.ts";
+import { beginLogin, completeLogin, switchAccount } from "../mutations.ts";
+import { recoverPendingLogin } from "../transactions.ts";
+import type { OcmaPaths } from "../types.ts";
 import { usageFromPayload } from "../usage.ts";
 
 async function fixturePaths(
@@ -212,4 +209,40 @@ test("rejects malformed usage payloads", () => {
 			rate_limit: { primary_window: { used_percent: "nope" } },
 		}),
 	).toThrow("usage response has an unexpected shape");
+});
+
+test("renders compact quota cards with Unicode partial-block progress", () => {
+	const cards = renderAccountCards(
+		[
+			{
+				key: "openai",
+				generatedLabel: "ember-falcon-abcd",
+				alias: "main",
+				active: true,
+				usage: {
+					primary: { remainingPercent: 75, resetAt: null },
+					secondary: { remainingPercent: null, resetAt: null },
+				},
+			},
+		],
+		false,
+	);
+
+	expect(cards).toContain("OpenAI accounts (1)");
+	expect(cards).toContain("* main active [openai]");
+	expect(cards).toContain("██████████▌░░░ 75% remaining");
+	expect(cards).toContain("secondary  unavailable");
+});
+
+test("renders progress with partial Unicode blocks", () => {
+	expect(renderProgressBar(75)).toEqual({
+		fullCells: 10,
+		partialCell: "▌",
+		emptyCells: 3,
+	});
+	expect(renderProgressBar(150, 2)).toEqual({
+		fullCells: 2,
+		partialCell: "",
+		emptyCells: 0,
+	});
 });
