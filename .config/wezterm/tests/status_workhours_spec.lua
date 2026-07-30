@@ -213,7 +213,7 @@ assert_eq(type(captured_status), "table", "status payload type")
 	assert_eq(find_text(captured_status, "kk"), true, "inactive Codex profile alias rendered")
 	assert_eq(find_text(captured_status, "²"), true, "Codex reset credits rendered")
 	assert_eq(find_text(captured_status, "43%"), true, "ChatGPT remaining allowance rendered")
-	assert_eq(find_text(captured_status, "@3h"), true, "ChatGPT usage reset countdown rendered")
+	assert_eq(find_text(captured_status, "³ʰ"), true, "ChatGPT usage reset countdown rendered")
 
 for _, case in ipairs({
 	{ used = 98, remaining = "2" },

@@ -50,9 +50,20 @@ local superscript_digits = {
 	["8"] = "⁸",
 	["9"] = "⁹",
 }
+local superscript_units = {
+	d = "ᵈ",
+	h = "ʰ",
+	m = "ᵐ",
+	s = "ˢ",
+}
 
 local function superscript_number(value)
 	return tostring(math.floor(value)):gsub("%d", superscript_digits)
+end
+
+local function superscript_duration(value)
+	local superscript = value:gsub("%d", superscript_digits)
+	return superscript:gsub("[dhms]", superscript_units)
 end
 
 local function get_accounts()
@@ -102,7 +113,7 @@ local function append_usage(items, windows)
 			table.insert(items, { Text = string.format("%d%%", math.floor(remaining)) })
 			if type(window.resetsIn) == "string" then
 				table.insert(items, { Foreground = { Color = palette.semantic.muted } })
-				table.insert(items, { Text = "@" .. window.resetsIn })
+				table.insert(items, { Text = superscript_duration(window.resetsIn) })
 			end
 			rendered = rendered + 1
 		end
