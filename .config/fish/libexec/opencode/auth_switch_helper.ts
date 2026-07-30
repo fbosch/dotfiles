@@ -4,68 +4,10 @@ import { Buffer } from "node:buffer";
 import { existsSync } from "node:fs";
 import { err, ok } from "neverthrow";
 import { z } from "zod";
+import { type AccountAliases, buildAccountProfile, loadAccountAliases } from "../shared/account_profile.js";
 import { type AppResult, existingMode, readJsonFile, writeJsonAtomic } from "../shared/fs.js";
 
 type JsonObject = Record<string, unknown>;
-
-type ProviderProfile = {
-    key: string;
-    accountId: string;
-    generatedLabel: string;
-    label: string;
-    alias: string | null;
-    color: number;
-};
-
-const aliasMap = [
-    ["openai", "indigo-harbor-ddce", "fbb"],
-    ["openai", "atlas-thicket-3afa", "jpb"],
-    ["openai", "aurora-auroraforge-efd2", "work"],
-] as const;
-
-const adjectives = [
-    "ember",
-    "cobalt",
-    "amber",
-    "jade",
-    "coral",
-    "indigo",
-    "silver",
-    "scarlet",
-    "atlas",
-    "lotus",
-    "cedar",
-    "pine",
-    "aurora",
-    "frost",
-    "orbit",
-    "dune",
-    "maple",
-    "zenith",
-];
-
-const nouns = [
-    "falcon",
-    "otter",
-    "comet",
-    "harbor",
-    "meadow",
-    "emberfox",
-    "lynx",
-    "kestrel",
-    "glacier",
-    "thicket",
-    "river",
-    "moss",
-    "canyon",
-    "beacon",
-    "auroraforge",
-    "wave",
-    "ridge",
-];
-
-const paletteDark = [39, 45, 51, 75, 81, 87, 111, 117, 123, 159, 195, 214, 220, 226];
-const paletteLight = [18, 19, 20, 22, 23, 24, 52, 53, 54, 88, 89, 90, 94, 124];
 
 const ListArgsSchema = z.object({
     command: z.enum(["list", "aliases"]),
@@ -148,53 +90,32 @@ function profileKeysForProvider(auth: Record<string, JsonObject>, provider: stri
     return Object.keys(auth).filter((key) => key === provider || key.startsWith(`${provider}_`));
 }
 
-function buildProfileLabel(
-    provider: string,
-    key: string,
-    accountId: string,
-    bgMode: "dark" | "light",
-): ProviderProfile {
-    let seedHex = accountId.replace(/[^0-9a-fA-F]/g, "");
-    if (seedHex.length === 0) {
-        seedHex = "00";
-    }
-
-    const aHex = seedHex.slice(0, 2) || "00";
-    const nHex = seedHex.slice(2, 4) || "00";
-    const cHex = seedHex.slice(4, 6) || "00";
-    const aIndex = (Number.parseInt(aHex, 16) % adjectives.length) + 1;
-    const nIndex = (Number.parseInt(nHex, 16) % nouns.length) + 1;
-    const palette = bgMode === "light" ? paletteLight : paletteDark;
-    const colorIndex = (Number.parseInt(cHex, 16) % palette.length) + 1;
-    const idTail = accountId.slice(Math.max(0, accountId.length - 4)) || accountId;
-    const generatedLabel = `${adjectives[aIndex - 1]}-${nouns[nIndex - 1]}-${idTail}`;
-    const alias = aliasMap.find(
-        ([aliasProvider, generated]) => aliasProvider === provider && generated === generatedLabel,
-    )?.[2];
-
-    return {
-        key,
-        accountId,
-        generatedLabel,
-        label: alias ? `${generatedLabel} (${alias})` : generatedLabel,
-        alias: alias ?? null,
-        color: palette[colorIndex - 1],
-    };
-}
-
-function listProfiles(authFile: string, bgMode: "dark" | "light"): AppResult<string[]> {
+function loadProfileData(authFile: string): AppResult<{ auth: Record<string, JsonObject>; aliases: AccountAliases }> {
     const authResult = readJsonFile(authFile, AuthFileSchema);
     if (authResult.isErr()) {
         return err(authResult.error);
     }
+    const aliasesResult = loadAccountAliases();
+    if (aliasesResult.isErr()) {
+        return err(aliasesResult.error);
+    }
 
-    const auth = authResult.value as Record<string, JsonObject>;
+    return ok({ auth: authResult.value as Record<string, JsonObject>, aliases: aliasesResult.value });
+}
+
+function listProfiles(authFile: string, bgMode: "dark" | "light"): AppResult<string[]> {
+    const profileDataResult = loadProfileData(authFile);
+    if (profileDataResult.isErr()) {
+        return err(profileDataResult.error);
+    }
+
+    const { aliases, auth } = profileDataResult.value;
     const lines: string[] = [];
     for (const provider of listProviderNames(auth)) {
         for (const key of profileKeysForProvider(auth, provider)) {
             const entry = auth[key] || {};
-            const profile = buildProfileLabel(provider, key, accountIdForEntry(key, entry), bgMode);
-            lines.push([provider, profile.key, profile.label, String(profile.color)].join("\t"));
+            const profile = buildAccountProfile(provider, accountIdForEntry(key, entry), aliases, bgMode);
+            lines.push([provider, key, profile.label, String(profile.color)].join("\t"));
         }
     }
 
@@ -202,12 +123,12 @@ function listProfiles(authFile: string, bgMode: "dark" | "light"): AppResult<str
 }
 
 function listAccountAliases(authFile: string, bgMode: "dark" | "light"): AppResult<string[]> {
-    const authResult = readJsonFile(authFile, AuthFileSchema);
-    if (authResult.isErr()) {
-        return err(authResult.error);
+    const profileDataResult = loadProfileData(authFile);
+    if (profileDataResult.isErr()) {
+        return err(profileDataResult.error);
     }
 
-    const auth = authResult.value as Record<string, JsonObject>;
+    const { aliases: accountAliases, auth } = profileDataResult.value;
     const providers = listProviderNames(auth);
     const aliases = new Map<string, string>();
     for (const [key, entry] of Object.entries(auth)) {
@@ -221,8 +142,8 @@ function listAccountAliases(authFile: string, bgMode: "dark" | "light"): AppResu
             continue;
         }
 
-        const profile = buildProfileLabel(provider, key, accountId, bgMode);
-        aliases.set(accountId, profile.alias ?? profile.generatedLabel);
+        const profile = buildAccountProfile(provider, accountId, accountAliases, bgMode);
+        aliases.set(accountId, profile.shortLabel);
     }
 
     return ok([...aliases].map(([accountId, alias]) => [accountId, alias].join("\t")));
@@ -397,7 +318,11 @@ function applySelection(
     codexProfilesFile: string,
     provider: string,
     targetKey: string,
-): AppResult<{ provider: string; selectedAccountId: string; codexStatus: string }> {
+): AppResult<{
+    provider: string;
+    selectedAccountId: string;
+    codexStatus: string;
+}> {
     const authResult = readJsonFile(authFile, AuthFileSchema);
     if (authResult.isErr()) {
         return err(authResult.error);

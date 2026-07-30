@@ -5,6 +5,11 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { err, ok } from "neverthrow";
 import { z } from "zod";
+import {
+    type AccountAliases,
+    buildAccountProfile,
+    loadAccountAliases,
+} from "../shared/account_profile.js";
 import { type AppResult, cacheRoot, readJsonFile, writeJsonAtomic } from "../shared/fs.js";
 
 const backendUrl = "https://chatgpt.com/backend-api";
@@ -436,7 +441,11 @@ function profileCredentials(authFile: string, activeAccountId: string): Credenti
     return profiles;
 }
 
-async function status(args: Arguments, credentials: Credentials): Promise<AppResult<unknown>> {
+async function status(
+    args: Arguments,
+    credentials: Credentials,
+    aliases: AccountAliases,
+): Promise<AppResult<unknown>> {
     const [creditsResult, usageResult] = await Promise.all([
         creditsForAccount(credentials, args.refresh),
         fetchUsage(credentials),
@@ -450,6 +459,7 @@ async function status(args: Arguments, credentials: Credentials): Promise<AppRes
 
     const accounts: Array<{
         accountId: string;
+        profileLabel: string;
         availableCount?: number;
         urgency?: "urgent" | "soon" | "later" | "unknown";
         active: boolean;
@@ -457,22 +467,30 @@ async function status(args: Arguments, credentials: Credentials): Promise<AppRes
     }> = [
         {
             accountId: credentials.accountId,
+            profileLabel: buildAccountProfile("openai", credentials.accountId, aliases).shortLabel,
             ...summaryForCredits(creditsResult.value),
             active: true,
         },
     ];
     for (const profile of profileCredentials(args.authFile, credentials.accountId)) {
         const profileCredits = await creditsForAccount(profile, args.refresh);
+        const profileLabel = buildAccountProfile("openai", profile.accountId, aliases).shortLabel;
         if (profileCredits.isErr()) {
-            accounts.push({ accountId: profile.accountId, active: false, error: profileCredits.error });
+            accounts.push({ accountId: profile.accountId, profileLabel, active: false, error: profileCredits.error });
             continue;
         }
-        accounts.push({ accountId: profile.accountId, ...summaryForCredits(profileCredits.value), active: false });
+        accounts.push({
+            accountId: profile.accountId,
+            profileLabel,
+            ...summaryForCredits(profileCredits.value),
+            active: false,
+        });
     }
 
     return ok({
         active: {
             accountId: credentials.accountId,
+            profileLabel: buildAccountProfile("openai", credentials.accountId, aliases).shortLabel,
             availableCount: creditsResult.value.available_count,
             credits: formatCredits(creditsResult.value),
             usage: formatUsage(usageResult.value),
@@ -481,7 +499,11 @@ async function status(args: Arguments, credentials: Credentials): Promise<AppRes
     });
 }
 
-async function credits(args: Arguments, credentials: Credentials): Promise<AppResult<unknown>> {
+async function credits(
+    args: Arguments,
+    credentials: Credentials,
+    aliases: AccountAliases,
+): Promise<AppResult<unknown>> {
     const creditsResult = await creditsForAccount(credentials, args.refresh);
     if (creditsResult.isErr()) {
         return err(`failed to read reset credits: ${creditsResult.error}`);
@@ -492,6 +514,7 @@ async function credits(args: Arguments, credentials: Credentials): Promise<AppRe
         .sort((left, right) => (parseExpiry(left.expires_at) ?? Infinity) - (parseExpiry(right.expires_at) ?? Infinity));
     return ok({
         accountId: credentials.accountId,
+        profileLabel: buildAccountProfile("openai", credentials.accountId, aliases).shortLabel,
         availableCount: creditsResult.value.available_count,
         expiresAt: available[0]?.expires_at ?? null,
     });
@@ -573,10 +596,19 @@ async function main(): Promise<number> {
 
     const args = argsResult.value;
     const credentials = credentialsResult.value;
+    let aliases: AccountAliases = {};
+    if (args.command === "credits" || args.command === "status") {
+        const aliasesResult = loadAccountAliases();
+        if (aliasesResult.isErr()) {
+            console.error(`codex_reset_helper: ${aliasesResult.error}`);
+            return 1;
+        }
+        aliases = aliasesResult.value;
+    }
     const result = args.command === "credits"
-        ? await credits(args, credentials)
+        ? await credits(args, credentials, aliases)
         : args.command === "status"
-            ? await status(args, credentials)
+            ? await status(args, credentials, aliases)
             : args.command === "consume-preview"
                 ? await previewConsume(args, credentials)
                 : await consume(args, credentials);

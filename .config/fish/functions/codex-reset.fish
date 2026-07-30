@@ -64,7 +64,6 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
     set -l fish_root (path resolve "$helper_dir/..")
     set -l libexec_dir "$fish_root/libexec"
     set -l reset_helper "$libexec_dir/codex/reset_helper.ts"
-    set -l aliases_helper "$libexec_dir/opencode/auth_switch_helper.ts"
     if not test -f "$reset_helper"
         echo "error: helper not found: $reset_helper" >&2
         return 1
@@ -162,21 +161,7 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
         wezterm_set_user_var codex_reset_refreshed (date +%s)
     end
 
-    set -l account_alias_lines
-    set -l opencode_auth_file "$HOME/.local/share/opencode/auth.json"
-    if test -f "$aliases_helper"; and test -f "$opencode_auth_file"
-        set account_alias_lines (bun --cwd "$libexec_dir" "$aliases_helper" aliases "$opencode_auth_file" dark)
-    end
-
-    set -l active_account_id (printf '%s\n' "$status_payload" | jq -r '.active.accountId')
-    set -l active_alias "account-"(string sub -s -4 -- "$active_account_id")
-    for account_alias_line in $account_alias_lines
-        set -l fields (string split \t -- "$account_alias_line")
-        if test "$fields[1]" = "$active_account_id"
-            set active_alias "$fields[2]"
-            break
-        end
-    end
+    set -l active_alias (printf '%s\n' "$status_payload" | jq -r '.active.profileLabel')
 
     set -l credit_lines (printf '%s\n' "$status_payload" | jq -r '.active.credits[] | [.urgency, .status, .expiresIn, .id, .nickname, (.title // "")] | @tsv')
     set -l nearest_urgency unknown
@@ -277,17 +262,10 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
         printf '\nrun `codex-reset consume` to redeem one credit now.\n'
     end
     printf '\naccounts:\n'
-    set -l account_rows (printf '%s\n' "$status_payload" | jq -r '.accounts[] | [.accountId, (.availableCount // ""), (.urgency // "unknown"), (.error // ""), (.active | tostring)] | @tsv')
+    set -l account_rows (printf '%s\n' "$status_payload" | jq -r '.accounts[] | [.profileLabel, (.availableCount // ""), (.urgency // "unknown"), (.error // ""), (.active | tostring)] | @tsv')
     for account_row in $account_rows
         set -l fields (string split \t -- "$account_row")
-        set -l account_alias "account-"(string sub -s -4 -- "$fields[1]")
-        for account_alias_line in $account_alias_lines
-            set -l alias_fields (string split \t -- "$account_alias_line")
-            if test "$alias_fields[1]" = "$fields[1]"
-                set account_alias "$alias_fields[2]"
-                break
-            end
-        end
+        set -l account_alias "$fields[1]"
         if test -n "$fields[4]"
             printf '  %s (reset availability unavailable, %s)\n' "$account_alias" "$fields[4]"
             continue

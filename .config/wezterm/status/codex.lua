@@ -1,50 +1,6 @@
 local wezterm = require("wezterm")
 local palette = require("theme")
 
-local profile_aliases = {
-	["indigo-harbor-ddce"] = "fbb",
-	["atlas-thicket-3afa"] = "jpb",
-	["aurora-auroraforge-efd2"] = "work",
-}
-local profile_adjectives = {
-	"ember",
-	"cobalt",
-	"amber",
-	"jade",
-	"coral",
-	"indigo",
-	"silver",
-	"scarlet",
-	"atlas",
-	"lotus",
-	"cedar",
-	"pine",
-	"aurora",
-	"frost",
-	"orbit",
-	"dune",
-	"maple",
-	"zenith",
-}
-local profile_nouns = {
-	"falcon",
-	"otter",
-	"comet",
-	"harbor",
-	"meadow",
-	"emberfox",
-	"lynx",
-	"kestrel",
-	"glacier",
-	"thicket",
-	"river",
-	"moss",
-	"canyon",
-	"beacon",
-	"auroraforge",
-	"wave",
-	"ridge",
-}
 local usage = { checked_at = 0, windows = {} }
 local usage_cache = (os.getenv("XDG_CACHE_HOME") or ((os.getenv("HOME") or "") .. "/.cache"))
 	.. "/wezterm/codex-usage.json"
@@ -115,17 +71,6 @@ local function format_countdown(resets_at)
 	return string.format("~%dd", math.floor(seconds / 86400))
 end
 
-local function profile_label(account_id)
-	local seed = account_id:gsub("[^0-9a-fA-F]", "")
-	if seed == "" then
-		seed = "00"
-	end
-	local adjective = profile_adjectives[(tonumber(seed:sub(1, 2), 16) or 0) % #profile_adjectives + 1]
-	local noun = profile_nouns[(tonumber(seed:sub(3, 4), 16) or 0) % #profile_nouns + 1]
-	local generated = string.format("%s-%s-%s", adjective, noun, account_id:sub(-4))
-	return profile_aliases[generated] or generated
-end
-
 local function get_reset_credits()
 	if os.time() - reset_credits.checked_at >= 10 * 60 then
 		reset_credits.checked_at = os.time()
@@ -150,9 +95,10 @@ local function get_reset_credits()
 			parsed_ok
 			and type(data) == "table"
 			and type(data.accountId) == "string"
+			and type(data.profileLabel) == "string"
 			and tonumber(data.availableCount)
 		then
-			reset_credits.profile = profile_label(data.accountId)
+			reset_credits.profile = data.profileLabel
 			reset_credits.count = math.max(0, math.floor(tonumber(data.availableCount)))
 			reset_credits.expires_at = data.expiresAt
 		end
