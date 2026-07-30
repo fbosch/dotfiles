@@ -1,3 +1,3 @@
 #!/usr/bin/env sh
 
-exec bun "$(dirname "$0")/../lib/ocma.ts" "$@"
+exec bun "$(dirname "$0")/../lib/opencode-multi-auth/index.ts" "$@"

@@ -1,0 +1,12 @@
+{
+	"$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+	"entry": [
+		"lib/opencode-multi-auth/index.ts",
+		"lib/opencode-multi-auth/__tests__/**/*.test.ts"
+	],
+	"health": {
+		"maxCyclomatic": 12,
+		"maxCognitive": 16,
+		"maxCrap": 50
+	}
+}

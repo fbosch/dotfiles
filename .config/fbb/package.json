@@ -1,0 +1,19 @@
+{
+	"name": "fbb-config",
+	"private": true,
+	"type": "module",
+	"packageManager": "bun@1.3.13",
+	"dependencies": {
+		"@clack/prompts": "^1.7.0",
+		"citty": "^0.2.2"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.3.13",
+		"fallow": "^3.8.0"
+	},
+	"scripts": {
+		"fallow": "fallow --config lib/opencode-multi-auth/.fallowrc.json",
+		"test": "bun test ./lib",
+		"typecheck": "tsc --noEmit"
+	}
+}
