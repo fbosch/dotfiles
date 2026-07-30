@@ -6,6 +6,7 @@ import { renderProgressBar } from "../../progress-bar.ts";
 import { discoverAccounts, toPublicDiscovery } from "../discovery.ts";
 import { renderAccountCards } from "../list-presentation.ts";
 import { beginLogin, completeLogin, switchAccount } from "../mutations.ts";
+import { fetchUsage } from "../providers/codex.ts";
 import { accountQueryKey, queryClientFor } from "../queryclient/client.ts";
 import {
 	consumeResetCredit,
@@ -294,13 +295,21 @@ test("caches usage until account mutations invalidate it", async () => {
 		expect(requests).toBe(1);
 		await Bun.sleep(10);
 		expect(await readdir(paths.queryCacheDirectory || "")).toHaveLength(1);
+		expect(
+			await fetchUsage(
+				{ accessToken: "token", accountId: "account" },
+				paths,
+				true,
+			),
+		).toMatchObject({ primary: { remainingPercent: 75 } });
+		expect(requests).toBe(2);
 
 		await mutateAccount(paths, "test", async () => undefined);
 		expect(await readdir(paths.queryCacheDirectory || "")).toHaveLength(0);
 		expect(await queryClient.fetchQuery(options)).toMatchObject({
 			primary: { remainingPercent: 75 },
 		});
-		expect(requests).toBe(2);
+		expect(requests).toBe(3);
 	} finally {
 		globalThis.fetch = originalFetch;
 	}

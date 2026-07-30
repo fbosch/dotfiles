@@ -4,7 +4,10 @@ import {
 	resetCreditsQueryOptions,
 	resetCreditsSummary,
 } from "../queryclient/queries/reset-credits.ts";
-import { usageQueryOptions } from "../queryclient/queries/usage.ts";
+import {
+	fetchUsageUncached,
+	usageQueryOptions,
+} from "../queryclient/queries/usage.ts";
 import { isJsonObject, type JsonObject } from "../storage.ts";
 import type {
 	AccountDiscovery,
@@ -105,21 +108,32 @@ export async function discoverUsage(
 	discovery: AccountDiscovery,
 	auth: JsonObject,
 	paths: AccountPaths,
+	forceRefresh = false,
 ): Promise<AccountUsageDiscovery> {
-	const queryClient = queryClientFor(paths).queryClient;
 	const result = await discoverProfileValues(
 		discovery,
 		auth,
 		(profileKey, entry) =>
-			queryClient.fetchQuery(
-				usageQueryOptions(credentialsForEntry(entry)),
-			),
+			fetchUsage(credentialsForEntry(entry), paths, forceRefresh),
 		"usage",
 	);
 	return {
 		usageByProfile: result.valuesByProfile,
 		diagnostics: result.diagnostics,
 	};
+}
+
+export async function fetchUsage(
+	credentials: { accessToken: string; accountId: string },
+	paths: AccountPaths,
+	forceRefresh = false,
+) {
+	if (forceRefresh) {
+		return fetchUsageUncached(credentials);
+	}
+	const client = queryClientFor(paths);
+	const options = usageQueryOptions(credentials);
+	return client.queryClient.fetchQuery(options);
 }
 
 export async function discoverResetCredits(

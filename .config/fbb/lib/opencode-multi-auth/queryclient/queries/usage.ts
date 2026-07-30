@@ -36,20 +36,25 @@ export function usageQueryOptions(
 ) {
 	return queryOptions({
 		queryKey: [...usageQueryKey, accountCredentialKey(credentials.accountId)],
-		queryFn: async (): Promise<AccountUsage> => {
-			const response = await fetch(usageUrl, {
-				headers: {
-					Authorization: `Bearer ${credentials.accessToken}`,
-					"ChatGPT-Account-Id": credentials.accountId,
-				},
-				signal: AbortSignal.timeout(requestTimeoutMs),
-			});
-			if (response.ok === false) {
-				throw new Error(`usage request failed with ${response.status}`);
-			}
-			return usageFromPayload(await response.json());
-		},
+		queryFn: () => fetchUsageUncached(credentials),
 	});
+}
+
+export async function fetchUsageUncached(credentials: {
+	accessToken: string;
+	accountId: string;
+}): Promise<AccountUsage> {
+	const response = await fetch(usageUrl, {
+		headers: {
+			Authorization: `Bearer ${credentials.accessToken}`,
+			"ChatGPT-Account-Id": credentials.accountId,
+		},
+		signal: AbortSignal.timeout(requestTimeoutMs),
+	});
+	if (response.ok === false) {
+		throw new Error(`usage request failed with ${response.status}`);
+	}
+	return usageFromPayload(await response.json());
 }
 
 export function usageFromPayload(payload: unknown): AccountUsage {

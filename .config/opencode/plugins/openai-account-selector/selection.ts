@@ -1,8 +1,15 @@
 import { readFile } from "node:fs/promises"
 import { basename, join } from "node:path"
-import { accountIdForEntry, aliasesFor, discoverUsage, profilesFromAuth } from "../../../fbb/lib/opencode-multi-auth/providers/codex.ts"
+import {
+  accountIdForEntry,
+  aliasesFor,
+  discoverUsage,
+  fetchUsage,
+  profilesFromAuth,
+} from "../../../fbb/lib/opencode-multi-auth/providers/codex.ts"
 import { isJsonObject, readJsonObject, type JsonObject } from "../../../fbb/lib/opencode-multi-auth/storage.ts"
 import { defaultPaths, type AccountPaths, type AccountProfile, type AccountUsage } from "../../../fbb/lib/opencode-multi-auth/types.ts"
+import { refreshOAuthCredential } from "./transport.ts"
 
 export type OAuthCredential = {
   accountId: string
@@ -21,6 +28,9 @@ export type AccountSelection = {
 }
 
 type SelectionOptions = {
+  allowFallback?: boolean
+  excludedAccountIds?: ReadonlySet<string>
+  forceUsageRefresh?: boolean
   mappingPath?: string
   paths?: AccountPaths
   repository: string
@@ -56,6 +66,9 @@ export const usageIsAvailable = (usage: AccountUsage) => {
 }
 
 export async function selectRepositoryAccount({
+  allowFallback = true,
+  excludedAccountIds = new Set(),
+  forceUsageRefresh = false,
   mappingPath = defaultRepositoryMappingPath(),
   paths = defaultPaths(),
   repository,
@@ -74,7 +87,14 @@ export async function selectRepositoryAccount({
 
   if (aliases.length > 0) {
     try {
-      const selected = await selectMappedAccount(aliases, auth, paths, warnings)
+      const selected = await selectMappedAccount(
+        aliases,
+        auth,
+        paths,
+        warnings,
+        excludedAccountIds,
+        forceUsageRefresh,
+      )
       if (selected) {
         return {
           ...selected,
@@ -88,6 +108,7 @@ export async function selectRepositoryAccount({
     }
   }
 
+  if (allowFallback === false || excludedAccountIds.has(fallback.accountId)) return
   return {
     alias: null,
     credential: fallback,
@@ -103,6 +124,8 @@ async function selectMappedAccount(
   auth: JsonObject,
   paths: AccountPaths,
   warnings: string[],
+  excludedAccountIds: ReadonlySet<string>,
+  forceUsageRefresh: boolean,
 ): Promise<Omit<AccountSelection, "repository" | "source" | "warnings"> | undefined> {
   const aliasesDocument = await readJsonObject(paths.aliases)
   const profiles = profilesFromAuth(auth, aliasesFor(aliasesDocument, paths.aliases))
@@ -120,19 +143,24 @@ async function selectMappedAccount(
       warnings.push(`configured OpenAI alias has invalid OAuth credentials: ${alias}`)
       continue
     }
+    if (excludedAccountIds.has(credential.accountId)) continue
     candidates.push({ alias, credential, profile: matches[0] })
   }
 
   if (candidates.length === 0) return
 
-  const usage = await discoverUsage(
-    { profiles: candidates.map((candidate) => candidate.profile), diagnostics: [] },
-    auth,
-    paths,
-  )
+  const usageByProfile = forceUsageRefresh
+    ? await refreshCandidateUsage(candidates, paths, warnings)
+    : (
+        await discoverUsage(
+          { profiles: candidates.map((candidate) => candidate.profile), diagnostics: [] },
+          auth,
+          paths,
+        )
+      ).usageByProfile
 
   for (const candidate of candidates) {
-    const accountUsage = usage.usageByProfile.get(candidate.profile.key)
+    const accountUsage = usageByProfile.get(candidate.profile.key)
     if (!accountUsage || usageIsAvailable(accountUsage) === false) {
       warnings.push(`configured OpenAI alias has no confirmed remaining usage: ${candidate.alias}`)
       continue
@@ -143,6 +171,41 @@ async function selectMappedAccount(
       profileKey: candidate.profile.key,
     }
   }
+}
+
+async function refreshCandidateUsage(
+  candidates: Array<{ alias: string; credential: OAuthCredential; profile: AccountProfile }>,
+  paths: AccountPaths,
+  warnings: string[],
+) {
+  const ready = []
+  for (const candidate of candidates) {
+    try {
+      if (!candidate.credential.access || candidate.credential.expires < Date.now()) {
+        candidate.credential = await refreshOAuthCredential(candidate.credential, paths)
+      }
+      ready.push(candidate)
+    } catch {
+      warnings.push(`configured OpenAI alias credential refresh failed: ${candidate.alias}`)
+    }
+  }
+
+  const entries = await Promise.all(
+    ready.map(async (candidate) => {
+      try {
+        const usage = await fetchUsage(
+          { accessToken: candidate.credential.access, accountId: candidate.credential.accountId },
+          paths,
+          true,
+        )
+        return [candidate.profile.key, usage] as const
+      } catch {
+        warnings.push(`configured OpenAI alias usage request failed: ${candidate.alias}`)
+        return
+      }
+    }),
+  )
+  return new Map(entries.filter((entry): entry is NonNullable<typeof entry> => entry !== undefined))
 }
 
 function credentialForEntry(value: unknown, expectedAccountId?: string | null): OAuthCredential | undefined {

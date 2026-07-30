@@ -26,6 +26,13 @@ export const OpenAIAccountSelectorPlugin: Plugin = async ({ $, client, directory
       // Logging must not determine whether account isolation is installed.
     }
   }
+  const notify = async (message: string) => {
+    try {
+      await client.tui.showToast({ body: { message, variant: "warning" } })
+    } catch {
+      return
+    }
+  }
 
   await removeProfileState(directory, serverUrl).catch(() => undefined)
 
@@ -57,7 +64,9 @@ export const OpenAIAccountSelectorPlugin: Plugin = async ({ $, client, directory
   }
 
   for (const warning of selection.warnings) await log("warn", warning)
-  const selectedLabel = selection.alias || "default"
+  let selectedLabel = selection.alias || "default"
+  const profileLabels = new Map([[selection.credential.accountId, selectedLabel]])
+  const exhaustedUntil = new Map<string, number>()
   await log("info", `selected OpenAI account ${selectedLabel} for ${repository}`)
   await writeProfileState(directory, serverUrl, { owner: stateOwner, profile: selectedLabel, repository }).catch((error) =>
     log("warn", `failed to publish OpenAI profile display state: ${errorMessage(error)}`),
@@ -66,6 +75,51 @@ export const OpenAIAccountSelectorPlugin: Plugin = async ({ $, client, directory
   const selectedFetch = createCodexFetch({
     credential: selection.credential,
     paths: defaultPaths(),
+    onUsageLimit: async (credential, info) => {
+      const currentTime = Date.now()
+      for (const [accountId, resetAt] of exhaustedUntil) {
+        if (resetAt <= currentTime) exhaustedUntil.delete(accountId)
+      }
+      const resetAt = info.resetsAt && info.resetsAt > currentTime ? info.resetsAt : currentTime + 60_000
+      exhaustedUntil.set(credential.accountId, resetAt)
+      const exhaustedLabel = profileLabels.get(credential.accountId) || selectedLabel
+      let next: Awaited<ReturnType<typeof selectRepositoryAccount>>
+      try {
+        next = await selectRepositoryAccount({
+          allowFallback: false,
+          excludedAccountIds: new Set(exhaustedUntil.keys()),
+          forceUsageRefresh: true,
+          repository,
+        })
+      } catch (error) {
+        const message = `${exhaustedLabel} exhausted; alternate OpenAI account selection failed.`
+        void log("error", `${message} ${errorMessage(error)}`)
+        void notify(message)
+        return
+      }
+      if (!next) {
+        const message = `${exhaustedLabel} exhausted; no alternate OpenAI account is available.`
+        void log("warn", message)
+        void notify(message)
+        return
+      }
+
+      selectedLabel = next.alias || "default"
+      profileLabels.set(next.credential.accountId, selectedLabel)
+      const message = `${exhaustedLabel} exhausted; switched to ${selectedLabel}. Retry the request.`
+      try {
+        await writeProfileState(directory, serverUrl, {
+          owner: stateOwner,
+          profile: selectedLabel,
+          repository,
+        })
+      } catch (error) {
+        void log("warn", `failed to update OpenAI profile display state: ${errorMessage(error)}`)
+      }
+      void log("warn", message)
+      void notify(message)
+      return next.credential
+    },
     onWarning: (message) => log("warn", message),
   })
 

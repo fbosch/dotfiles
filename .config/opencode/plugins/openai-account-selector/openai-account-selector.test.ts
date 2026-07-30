@@ -93,6 +93,42 @@ test("falls back to the startup openai profile when no configured account is usa
   expect(selected?.credential.accountId).toBe(fixture.accountIds.fbb)
 })
 
+test("refreshes an expired alternate before forced usage selection", async () => {
+  const fixture = await accountFixture({ repositoryAliases: ["jpb", "fbb"] })
+  await writeFile(
+    fixture.paths.auth,
+    JSON.stringify({
+      openai: authEntry(fixture.accountIds.fbb, 0),
+      openai_1: authEntry(fixture.accountIds.jpb),
+    }),
+  )
+  let refreshes = 0
+  replaceGlobalFetch(async (input) => {
+    if (String(input).includes("oauth/token")) {
+      refreshes += 1
+      return Response.json({
+        access_token: jwt(fixture.accountIds.fbb),
+        refresh_token: "refresh-fbb-new",
+        expires_in: 3600,
+      })
+    }
+    return Response.json(usageResponse(20, 20))
+  })
+
+  const selected = await selectRepositoryAccount({
+    allowFallback: false,
+    excludedAccountIds: new Set([fixture.accountIds.jpb]),
+    forceUsageRefresh: true,
+    mappingPath: fixture.mapping,
+    paths: fixture.paths,
+    repository: "pkdx",
+  })
+
+  expect(selected?.alias).toBe("fbb")
+  expect(selected?.credential.refresh).toBe("refresh-fbb-new")
+  expect(refreshes).toBe(1)
+})
+
 test("rewrites Codex requests and replaces credential headers without changing the body", async () => {
   const requests: Array<{ body: string | null; headers: Headers; method: string | undefined; url: string }> = []
   const fetch = createCodexFetch({
@@ -141,6 +177,176 @@ test("rejects unknown OpenAI OAuth destinations before sending credentials", asy
   expect(requested).toBe(false)
 })
 
+test("rotates after confirmed usage exhaustion without replaying the failed request", async () => {
+  const accounts: string[] = []
+  let requests = 0
+  let rotations = 0
+  const fetch = createCodexFetch({
+    credential: credential("jpb", Date.now() + 60_000),
+    paths: pathsFor("/unused"),
+    onUsageLimit: async () => {
+      rotations += 1
+      return credential("fbb", Date.now() + 60_000)
+    },
+    fetch: async (_input, init) => {
+      requests += 1
+      accounts.push(new Headers(init?.headers).get("ChatGPT-Account-Id") || "")
+      if (requests === 1) {
+        return Response.json({ error: { message: "limit reached", type: "usage_limit_reached" } }, { status: 429 })
+      }
+      return new Response("ok")
+    },
+  })
+
+  const exhausted = await fetch("https://api.openai.com/v1/responses", { method: "POST" })
+  expect(requests).toBe(1)
+  expect(rotations).toBe(1)
+  expect(exhausted.status).toBe(400)
+  expect(await exhausted.json()).toMatchObject({ error: { code: "quota_exceeded", type: "usage_limit_reached" } })
+
+  expect((await fetch("https://api.openai.com/v1/responses", { method: "POST" })).status).toBe(200)
+  expect(accounts).toEqual(["jpb", "fbb"])
+})
+
+test("does not rotate for transient rate limiting", async () => {
+  let rotations = 0
+  const fetch = createCodexFetch({
+    credential: credential("jpb", Date.now() + 60_000),
+    paths: pathsFor("/unused"),
+    onUsageLimit: async () => {
+      rotations += 1
+      return credential("fbb", Date.now() + 60_000)
+    },
+    fetch: async () =>
+      Response.json(
+        { error: { code: "rate_limit_exceeded", message: "slow down", type: "invalid_request_error" } },
+        { status: 429 },
+      ),
+  })
+
+  const response = await fetch("https://api.openai.com/v1/responses", { method: "POST" })
+
+  expect(response.status).toBe(429)
+  expect(rotations).toBe(0)
+  expect(await response.json()).toMatchObject({ error: { code: "rate_limit_exceeded" } })
+})
+
+test("does not inspect or rotate oversized quota responses", async () => {
+  let rotations = 0
+  const fetch = createCodexFetch({
+    credential: credential("jpb", Date.now() + 60_000),
+    paths: pathsFor("/unused"),
+    onUsageLimit: async () => {
+      rotations += 1
+      return credential("fbb", Date.now() + 60_000)
+    },
+    fetch: async () =>
+      new Response("x".repeat(65 * 1024), {
+        headers: { "content-length": String(65 * 1024) },
+        status: 429,
+      }),
+  })
+
+  const response = await fetch("https://api.openai.com/v1/responses", { method: "POST" })
+
+  expect(response.status).toBe(429)
+  expect(rotations).toBe(0)
+})
+
+test("attributes delayed concurrent quota responses to the account that sent them", async () => {
+  const attemptedAccounts: string[] = []
+  const rotations: string[] = []
+  const pendingResponses: Array<(response: Response) => void> = []
+  let holdResponses = true
+  const fetch = createCodexFetch({
+    credential: credential("jpb", Date.now() + 60_000),
+    paths: pathsFor("/unused"),
+    onUsageLimit: async (attempted) => {
+      rotations.push(attempted.accountId)
+      return credential("fbb", Date.now() + 60_000)
+    },
+    fetch: async (_input, init) => {
+      attemptedAccounts.push(new Headers(init?.headers).get("ChatGPT-Account-Id") || "")
+      if (!holdResponses) return new Response("ok")
+      return new Promise<Response>((resolve) => pendingResponses.push(resolve))
+    },
+  })
+
+  const first = fetch("https://api.openai.com/v1/responses", { method: "POST" })
+  const second = fetch("https://api.openai.com/v1/responses", { method: "POST" })
+  await waitFor(() => pendingResponses.length === 2)
+  pendingResponses[0](usageLimitResponse())
+  expect((await first).status).toBe(400)
+  pendingResponses[1](usageLimitResponse())
+  expect((await second).status).toBe(400)
+
+  holdResponses = false
+  expect((await fetch("https://api.openai.com/v1/responses", { method: "POST" })).status).toBe(200)
+  expect(attemptedAccounts).toEqual(["jpb", "jpb", "fbb"])
+  expect(rotations).toEqual(["jpb"])
+})
+
+test("waits for failover that starts during token refresh", async () => {
+  const root = await temporaryDirectory()
+  const paths = pathsFor(root)
+  await mkdir(join(root, "state"), { recursive: true })
+  await writeFile(paths.auth, JSON.stringify({ openai: authEntry("jpb", 0) }))
+  let currentTime = 0
+  let resolveFirstRequest: ((response: Response) => void) | undefined
+  let resolveRefresh: ((response: Response) => void) | undefined
+  let resolveRotation: (() => void) | undefined
+  let markRotationStarted: (() => void) | undefined
+  const rotationGate = new Promise<void>((resolve) => {
+    resolveRotation = resolve
+  })
+  const rotationStarted = new Promise<void>((resolve) => {
+    markRotationStarted = resolve
+  })
+  const attemptedAccounts: string[] = []
+  const fetch = createCodexFetch({
+    credential: credential("jpb", 1),
+    paths,
+    now: () => currentTime,
+    onUsageLimit: async () => {
+      markRotationStarted?.()
+      await rotationGate
+      return credential("fbb", 10_000)
+    },
+    fetch: async (input, init) => {
+      if (String(input).includes("oauth/token")) {
+        return new Promise<Response>((resolve) => {
+          resolveRefresh = resolve
+        })
+      }
+      attemptedAccounts.push(new Headers(init?.headers).get("ChatGPT-Account-Id") || "")
+      if (attemptedAccounts.length === 1) {
+        return new Promise<Response>((resolve) => {
+          resolveFirstRequest = resolve
+        })
+      }
+      return new Response("ok")
+    },
+  })
+
+  const first = fetch("https://api.openai.com/v1/responses", { method: "POST" })
+  await waitFor(() => attemptedAccounts.length === 1)
+  currentTime = 2
+  const refreshing = fetch("https://api.openai.com/v1/responses", { method: "POST" })
+  await waitFor(() => resolveRefresh !== undefined)
+  resolveFirstRequest?.(usageLimitResponse())
+  await rotationStarted
+  resolveRefresh?.(
+    Response.json({ access_token: jwt("jpb"), refresh_token: "refresh-jpb-new", expires_in: 3600 }),
+  )
+  await Bun.sleep(10)
+  expect(attemptedAccounts).toEqual(["jpb"])
+  resolveRotation?.()
+
+  expect((await first).status).toBe(400)
+  expect((await refreshing).status).toBe(200)
+  expect(attemptedAccounts).toEqual(["jpb", "fbb"])
+})
+
 test("enables OpenAI only after installing an isolated fallback transport", async () => {
   const fixture = await pluginFixture()
   const serverUrl = new URL("http://127.0.0.1:43123")
@@ -187,6 +393,64 @@ test("keeps OpenAI disabled when WebSocket transport is requested", async () => 
   await plugin.config?.(config as never)
 
   expect(config.disabled_providers).toEqual(["openai"])
+})
+
+test("switches the next request and profile indicator after usage exhaustion", async () => {
+  const fixture = await pluginFixture(["jpb", "fbb"])
+  const serverUrl = new URL("http://127.0.0.1:43125")
+  const requestAccounts: string[] = []
+  const toasts: string[] = []
+  let codexRequests = 0
+  let usageRequests = 0
+  replaceGlobalFetch(async (input, init) => {
+    const url = String(input)
+    if (url.includes("/wham/usage")) {
+      usageRequests += 1
+      return Response.json(usageResponse(20, 20))
+    }
+    if (url.includes("/backend-api/codex/responses")) {
+      codexRequests += 1
+      requestAccounts.push(new Headers(init?.headers).get("ChatGPT-Account-Id") || "")
+      if (codexRequests === 1) {
+        return Response.json({ error: { message: "limit reached", type: "usage_limit_reached" } }, { status: 429 })
+      }
+      return new Response("ok")
+    }
+    throw new Error(`unexpected request: ${url}`)
+  })
+  const plugin = await OpenAIAccountSelectorPlugin({
+    $: originShell("git@github.com:org/pkdx.git"),
+    client: {
+      app: { log: async () => undefined },
+      tui: {
+        showToast: async ({ body }: { body: { message: string } }) => {
+          toasts.push(body.message)
+        },
+      },
+    },
+    directory: fixture.worktree,
+    project: { worktree: fixture.worktree },
+    serverUrl,
+  } as never)
+  const config: {
+    disabled_providers: string[]
+    provider: Record<string, { options: Record<string, unknown> }>
+  } = { disabled_providers: ["openai"], provider: { openai: { options: {} } } }
+  await plugin.config?.(config as never)
+  const routedFetch = config.provider.openai.options.fetch
+  if (typeof routedFetch !== "function") throw new Error("selector fetch was not installed")
+
+  const exhausted = await routedFetch("https://api.openai.com/v1/responses", { method: "POST" })
+  expect(codexRequests).toBe(1)
+  expect(usageRequests).toBe(3)
+  expect(exhausted.status).toBe(400)
+  expect(await exhausted.json()).toMatchObject({ error: { code: "quota_exceeded" } })
+  expect(await readProfileState(fixture.worktree, serverUrl)).toEqual({ profile: "fbb", repository: "pkdx" })
+  expect(toasts).toEqual(["jpb exhausted; switched to fbb. Retry the request."])
+
+  expect((await routedFetch("https://api.openai.com/v1/responses", { method: "POST" })).status).toBe(200)
+  expect(requestAccounts).toEqual([fixture.accountIds.jpb, fixture.accountIds.fbb])
+  await plugin.dispose?.()
 })
 
 test("publishes internal TUI profile updates with ownership-safe cleanup", async () => {
@@ -407,6 +671,10 @@ function usageResponse(primaryUsed: number, secondaryUsed: number) {
   }
 }
 
+function usageLimitResponse() {
+  return Response.json({ error: { message: "limit reached", type: "usage_limit_reached" } }, { status: 429 })
+}
+
 async function accountFixture({ repositoryAliases }: { repositoryAliases: string[] }) {
   const root = await temporaryDirectory()
   const paths = pathsFor(root)
@@ -427,7 +695,7 @@ async function accountFixture({ repositoryAliases }: { repositoryAliases: string
   return { accountIds, mapping, paths }
 }
 
-async function pluginFixture() {
+async function pluginFixture(repositoryAliases: string[] = []) {
   const root = await temporaryDirectory()
   const data = join(root, "data")
   const config = join(root, "config")
@@ -444,14 +712,28 @@ async function pluginFixture() {
     mkdir(join(config, "fbb", "data"), { recursive: true }),
     mkdir(worktree, { recursive: true }),
   ])
-  const accountId = "00000000-0000-0000-0000-00000000fbb0"
-  await writeFile(join(data, "opencode", "auth.json"), JSON.stringify({ openai: authEntry(accountId) }))
+  const accountIds = {
+    fbb: "00000000-0000-0000-0000-00000000fbb0",
+    jpb: "00000000-0000-0000-0000-00000000jpb0",
+  }
+  await writeFile(
+    join(data, "opencode", "auth.json"),
+    JSON.stringify({ openai: authEntry(accountIds.fbb), openai_1: authEntry(accountIds.jpb) }),
+  )
   await writeFile(
     join(config, "fbb", "data", "account-aliases.json"),
-    JSON.stringify({ openai: { [generatedLabelFor(accountId)]: "fbb" } }),
+    JSON.stringify({
+      openai: {
+        [generatedLabelFor(accountIds.fbb)]: "fbb",
+        [generatedLabelFor(accountIds.jpb)]: "jpb",
+      },
+    }),
   )
-  await writeFile(join(config, "fbb", "data", "opencode-repository-accounts.json"), JSON.stringify({ pkdx: [] }))
-  return { worktree }
+  await writeFile(
+    join(config, "fbb", "data", "opencode-repository-accounts.json"),
+    JSON.stringify({ pkdx: repositoryAliases }),
+  )
+  return { accountIds, worktree }
 }
 
 function originShell(origin: string) {
