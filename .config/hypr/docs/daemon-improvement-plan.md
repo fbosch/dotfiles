@@ -206,6 +206,8 @@ Changes:
 2. Add prefixed, rate-bounded diagnostics for missing or failed `wl-freeze`.
 3. Log event reconnect and recovery decisions.
 4. Keep ordinary gaming profile and presentation transitions quiet.
+5. Treat the configured event read timeout as a quiet recovery cycle; log only
+   unexpected disconnects and failed reconnects.
 
 Validation:
 

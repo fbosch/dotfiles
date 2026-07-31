@@ -13,6 +13,7 @@ local gaming = require("gaming")
 local profilectl = home .. "/.config/hypr/runtime/profiles/profilectl.sh"
 local reconnect_delay_seconds = 1
 local event_idle_timeout_seconds = 5
+local diagnostic_interval_seconds = 30
 local gaming_workspace = gaming.workspace
 local minimized_workspace_prefix = "special:minimized"
 local gaming_overlay_workspace = "special:gaming-overlay"
@@ -20,6 +21,19 @@ local wl_freeze_checked = false
 local wl_freeze_available = false
 local frozen_pids = {}
 local last_presentation = nil
+local last_diagnostic_at = {}
+
+local function log_diagnostic(key, message)
+	local timestamp = socket.gettime()
+	local previous = last_diagnostic_at[key]
+	if previous and timestamp - previous < diagnostic_interval_seconds then
+		return
+	end
+
+	last_diagnostic_at[key] = timestamp
+	io.stderr:write("gaming-session-watchdog: ", message, "\n")
+	io.stderr:flush()
+end
 
 local function profile_sync(count)
 	return command.ok(command.arg(profilectl) .. " sync gaming " .. command.arg(count) .. " >/dev/null 2>&1")
@@ -153,6 +167,9 @@ local function can_wl_freeze()
 	if not wl_freeze_checked then
 		wl_freeze_available = command.ok("command -v wl-freeze >/dev/null 2>&1")
 		wl_freeze_checked = true
+		if not wl_freeze_available then
+			log_diagnostic("wl-freeze-unavailable", "wl-freeze is unavailable; process freezing is disabled")
+		end
 	end
 	return wl_freeze_available
 end
@@ -172,7 +189,12 @@ local function set_process_frozen(pid, should_freeze)
 		return true
 	end
 
-	return command.ok("wl-freeze -p " .. command.arg(pid) .. " -s >/dev/null 2>&1")
+	local changed = command.ok("wl-freeze -p " .. command.arg(pid) .. " -s >/dev/null 2>&1")
+	if not changed then
+		local action = should_freeze and "freeze" or "unfreeze"
+		log_diagnostic("wl-freeze-" .. action, "failed to " .. action .. " PID " .. pid)
+	end
+	return changed
 end
 
 local function sync_gaming_freeze_state(clients, monitors)
@@ -406,10 +428,15 @@ local function run()
 	local last_count = 0
 	local last_overlay_count = 0
 	local last_gaming_workspace_count = 0
+	local event_reconnect_pending = false
 
 	while true do
 		local ok, err = pcall(function()
 			local events = hypr_ipc.connect_event_socket({ read_timeout = event_idle_timeout_seconds })
+			if event_reconnect_pending then
+				log_diagnostic("event-recovered", "event socket reconnected")
+				event_reconnect_pending = false
+			end
 			local clients = get_clients()
 			local monitors = get_monitors()
 			last_overlay_count = overlay_window_count(clients)
@@ -450,12 +477,23 @@ local function run()
 				end
 				if read_err then
 					events:close()
+					if read_err ~= "timeout" then
+						event_reconnect_pending = true
+						log_diagnostic(
+							"event-disconnect",
+							"event socket " .. tostring(read_err) .. "; retrying in " .. reconnect_delay_seconds .. "s"
+						)
+					end
 					break
 				end
 			end
 		end)
 		if not ok then
-		io.stderr:write("gaming-session-watchdog: ", tostring(err), "\n")
+			event_reconnect_pending = true
+			log_diagnostic(
+				"event-reconnect-failed",
+				"event socket recovery failed (" .. tostring(err) .. "); retrying in " .. reconnect_delay_seconds .. "s"
+			)
 		end
 		socket.sleep(reconnect_delay_seconds)
 	end
@@ -463,7 +501,7 @@ end
 
 local ok, err = xpcall(run, debug.traceback)
 if not ok then
-	io.stderr:write(tostring(err), "\n")
+	io.stderr:write("gaming-session-watchdog: ", tostring(err), "\n")
 	cleanup()
 	os.exit(1)
 end
