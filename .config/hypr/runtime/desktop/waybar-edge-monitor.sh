@@ -20,6 +20,10 @@ now_ms() {
     printf '%.0f\n' "${EPOCHREALTIME//[.,]/}e-3"
 }
 
+position_pip() {
+    luajit "${HOME}/.config/hypr/runtime/windows/pip-waybar-position.lua" "$1" >/dev/null 2>&1
+}
+
 # Cache monitor info (updated periodically)
 declare -A MONITOR_CACHE
 monitor_cache_time=0
@@ -119,6 +123,7 @@ hide_started_ms=0
 
 if pgrep -x waybar >/dev/null 2>&1; then
     waybar_visible=1
+    position_pip show
 fi
 
 while true; do
@@ -148,8 +153,11 @@ while true; do
             if (( now - show_started_ms >= SHOW_DELAY_MS )); then
                 if gaming_workspace_is_active; then
                     :
-                elif pkill -SIGUSR1 waybar; then
+                else
+                    position_pip show
+                    if pkill -SIGUSR1 waybar; then
                     waybar_visible=1
+                    fi
                 fi
                 show_started_ms=0
                 hide_started_ms=0
@@ -175,6 +183,7 @@ while true; do
                 if should_waybar_stay_visible "$DISTANCE_FROM_BOTTOM" "$HIDE_THRESHOLD"; then
                     :
                 else
+                    position_pip hide
                     if pkill -SIGUSR2 waybar; then
                         waybar_visible=0
                     fi

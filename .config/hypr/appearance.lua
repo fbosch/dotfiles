@@ -25,7 +25,7 @@ hl.config({
 		inactive_opacity = 0.97,
 		shadow = {
 			enabled = true,
-			range = 30,
+			range = 35,
 			render_power = 4,
 			color = "rgba(0000002A)",
 			offset = "0 2",

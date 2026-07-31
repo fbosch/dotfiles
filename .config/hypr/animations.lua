@@ -48,8 +48,8 @@ hl.animation({ leaf = "fadeLayersOut", enabled = true, speed = 1.39, spring = "w
 -- animation = layersIn, ags-window-switcher, 0
 -- animation = layersOut, ags-window-switcher, 0
 
-hl.animation({ leaf = "layers", enabled = true, speed = 3.81, spring = "windowQuick" })
-hl.animation({ leaf = "layersIn", enabled = true, speed = 4, spring = "windowQuick", style = "fade" })
+hl.animation({ leaf = "layers", enabled = true, speed = 1.5, spring = "windowQuick" })
+hl.animation({ leaf = "layersIn", enabled = true, speed = 1.5, spring = "windowQuick", style = "fade" })
 hl.animation({ leaf = "layersOut", enabled = true, speed = 1.5, spring = "windowQuick", style = "fade" })
 
 return M
