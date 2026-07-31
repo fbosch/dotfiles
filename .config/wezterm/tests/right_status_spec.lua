@@ -205,7 +205,7 @@ update_status(window)
 os.date = original_os_date
 
 assert_eq(type(captured_status), "table", "status payload type")
-	assert_eq(find_text(captured_status, "[working] 2 "), true, "Herdr working count rendered")
+	assert_eq(find_text(captured_status, "[working] 2 "), false, "Herdr working count omitted")
 	assert_eq(find_text(captured_status, "[end] 6.5 "), true, "workhours indicator rendered")
 	assert_eq(find_text(captured_status, "ct"), true, "active Codex profile alias rendered")
 	assert_eq(find_text(captured_status, "*"), true, "active Codex profile indicator rendered")

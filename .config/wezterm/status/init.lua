@@ -1,7 +1,6 @@
 local is_windows = package.config:sub(0, 1) == "\\"
 local wezterm = require("wezterm")
 local agent_deck = require("agent")
-local herdr = require("agent.herdr")
 local palette = require("theme")
 local codex = require("status.codex")
 local workhours = require("status.workhours")
@@ -47,7 +46,6 @@ end
 
 local function update_right_status(window)
 	local waiting_count = 0
-	local herdr_summary = herdr.get_summary()
 	local init_notice = agent_deck.consume_init_notice and agent_deck.consume_init_notice() or nil
 	if init_notice then
 		window:toast_notification("Agent Deck", init_notice, nil, 2500)
@@ -70,22 +68,12 @@ local function update_right_status(window)
 	local time = wezterm.strftime("%H:%M")
 	local week_number = os.date("%V")
 	local workhours_icon, workhours_text, workhours_color = workhours.get_display(window)
-	local herdr_working_icon = agent_deck.get_status_icon("working")
-	local herdr_blocked_icon = agent_deck.get_status_icon("waiting")
-	local herdr_working_color = { Color = agent_deck.get_status_color("working") }
-	local herdr_blocked_color = { Color = agent_deck.get_status_color("waiting") }
 
 	status = {
 		{ Foreground = color_waiting },
 		{ Text = waiting_count > 0 and ("◔ " .. waiting_count .. " ") or "" },
 		{ Foreground = color_separator },
 		{ Text = waiting_count > 0 and "▏" or "" },
-		{ Foreground = herdr_working_color },
-		{ Text = herdr_summary.working > 0 and (herdr_working_icon .. " " .. herdr_summary.working .. " ") or "" },
-		{ Foreground = herdr_blocked_color },
-		{ Text = herdr_summary.blocked > 0 and (herdr_blocked_icon .. " " .. herdr_summary.blocked .. " ") or "" },
-		{ Foreground = color_separator },
-		{ Text = (herdr_summary.working > 0 or herdr_summary.blocked > 0) and "▏" or "" },
 	}
 
 	codex.append(status)
