@@ -6,5 +6,9 @@
   "nixos": [
     "fbb",
     "jpb"
+  ],
+  "KommuneKredit.Frontend": [
+    "kk",
+    "ct"
   ]
 }
