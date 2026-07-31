@@ -5,6 +5,7 @@ color: "#70b5a1"
 temperature: 0.0
 permission:
   edit: deny
+  update_pr: deny
   bash:
     "git commit *": deny
     "git merge *": deny
