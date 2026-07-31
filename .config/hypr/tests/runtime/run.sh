@@ -6,6 +6,7 @@ tests=(
   .config/hypr/tests/runtime/window_capture_supervisor.sh
   .config/hypr/tests/runtime/lifecycle_recovery.sh
   .config/hypr/tests/runtime/night_light_missing_dependency.sh
+  .config/hypr/tests/runtime/night_light_lifecycle.sh
 )
 
 bash -n "${tests[@]}"

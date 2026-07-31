@@ -308,6 +308,9 @@ Current focused fixtures run through `devenv test`:
   waits, launcher paths, and UWSM scopes with command stubs.
 - `tests/runtime/night_light_missing_dependency.sh` verifies that a missing
   `hyprsunset` disables only night light.
+- `tests/runtime/night_light_lifecycle.sh` verifies PID-plus-start-time ownership,
+  rejection of an unrelated owner without killing its process, one bounded IPC
+  restart, and reaping on daemon termination.
 - `tests/window_state_rules.lua` verifies generated-rule publication skips
   unchanged content.
 - `tests/runtime/window_state_daemon.lua` runs the real window-state daemon
