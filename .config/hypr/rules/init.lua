@@ -1,6 +1,5 @@
-local pip = require("lib.picture_in_picture")
-
 require("gaming").register_window_rules()
+require("lib.picture_in_picture").register_window_rules()
 
 -- GTK Application
 hl.window_rule({ match = { class = "^(GTK Application)$" }, float = true })
@@ -93,8 +92,6 @@ hl.window_rule({ match = { class = "^(io\\.github\\.flattool\\.Warehouse)$" }, f
 
 -- XDG Desktop Portal GTK (File Picker)
 hl.window_rule({ match = { class = "^(xdg-desktop-portal-gtk)$" }, float = true, pin = true, no_anim = true })
-
-pip.register_window_rules()
 
 -- Floorp Browser
 hl.window_rule({ match = { class = "^(one\\.ablaze\\.floorp)$" }, monitor = "HDMI-A-2" })

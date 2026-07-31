@@ -3,6 +3,7 @@ import app from "ags/gtk4/app";
 import Gdk from "gi://Gdk?version=4.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
+import { queryHyprlandJson } from "./hyprland-ipc";
 
 type PreviewRequest = {
   action?: string;
@@ -17,6 +18,7 @@ let win: Astal.Window | null = null;
 let targetBox: Gtk.Box | null = null;
 let previewRoot: Gtk.Fixed | null = null;
 let isVisible = false;
+let appliedRounding: number | null = null;
 
 function monitorByConnector(connector: string): Gdk.Monitor | null {
   const display = Gdk.Display.get_default();
@@ -72,6 +74,7 @@ function showPreview(data: PreviewRequest): string {
   const monitor = monitorByConnector(data.monitor);
   if (!monitor) return `unknown monitor ${data.monitor}`;
 
+  applyCss();
   createWindow();
   if (!win || !targetBox || !previewRoot) return "preview unavailable";
 
@@ -90,6 +93,13 @@ function hidePreview(): string {
 }
 
 function applyCss(): void {
+  const rounding = queryHyprlandJson<{ int?: number }>("j/getoption decoration:rounding", {
+    component: "pip-snap-preview",
+    metric: "hyprlandRounding",
+  })?.int;
+  if (typeof rounding !== "number" || rounding === appliedRounding) return;
+
+  appliedRounding = rounding;
   app.apply_css(
     `
       window.pip-snap-preview {
@@ -99,7 +109,7 @@ function applyCss(): void {
       window.pip-snap-preview box.pip-snap-preview-target {
         background-color: ${tokens.colors.accent.primary.value}29;
         border: 2px solid ${tokens.colors.accent.active.value};
-        border-radius: 4px;
+        border-radius: ${rounding}px;
         box-shadow: 0 0 20px ${tokens.colors.accent.primary.value}57;
       }
     `,
