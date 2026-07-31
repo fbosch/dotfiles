@@ -73,10 +73,6 @@ validate-keybinds:
 lua-quality mode="baseline":
 	bash scripts/lua-quality.sh {{mode}}
 
-# Run bounded Hyprland runtime fixtures with streamed output.
-hypr-runtime-tests:
-	bash .config/hypr/tests/runtime/run.sh
-
 # Report Lua formatting drift without writing files. Scope: changed, staged, all.
 lua-style scope="changed":
 	bash scripts/lua-quality.sh style-{{scope}}

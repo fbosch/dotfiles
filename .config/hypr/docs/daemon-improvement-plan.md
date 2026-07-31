@@ -300,8 +300,7 @@ Required coverage:
 - Fake Hyprland event sockets for reconnect tests.
 - Stub external commands for dependency-isolation tests.
 
-Current focused fixtures run through `devenv test`; `just hypr-runtime-tests`
-runs the same suite with streamed output:
+Current focused fixtures run through `devenv test`:
 
 - `tests/runtime/window_capture_supervisor.sh` verifies worker-group cleanup and
   owned lock removal with a controlled child.

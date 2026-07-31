@@ -18,6 +18,7 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 
 - `stow .`
 - `stow -n .`
+- Add and run tests through `devenv test`.
 
 ## OpenCode Plugins
 
