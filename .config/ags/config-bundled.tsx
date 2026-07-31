@@ -33,6 +33,7 @@ declare global {
   var DesktopClock: ComponentModule;
   var CalendarWidget: ComponentModule;
   var AudioMixerWidget: ComponentModule;
+  var PipSnapPreview: ComponentModule;
 }
 
 // Load components using global namespace pattern (no ES6 exports)
@@ -44,6 +45,7 @@ import "./lib/window-switcher.tsx";
 import "./lib/desktop-clock.tsx";
 import "./lib/calendar-widget.tsx";
 import "./lib/audio-mixer-widget.tsx";
+import "./lib/pip-snap-preview.tsx";
 
 // Component registry for request routing
 type ComponentHandler = (argv: string[], res: (response: string) => void) => void;
@@ -223,6 +225,14 @@ app.start({
       console.log(`[Bundled AGS] ✓ ${globalThis.AudioMixerWidget.instanceName} initialized`);
     } catch (e) {
       console.error(`[Bundled AGS] ✗ Failed to initialize audio-mixer-widget:`, e);
+    }
+
+    try {
+      globalThis.PipSnapPreview.init();
+      registerComponent(globalThis.PipSnapPreview.instanceName, globalThis.PipSnapPreview.handleRequest);
+      console.log(`[Bundled AGS] ✓ ${globalThis.PipSnapPreview.instanceName} initialized`);
+    } catch (e) {
+      console.error(`[Bundled AGS] ✗ Failed to initialize pip-snap-preview:`, e);
     }
     
     console.log("[Bundled AGS] All components initialized");

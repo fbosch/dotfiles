@@ -141,8 +141,8 @@ hl.config({
 -- Custom layout controls
 -- Current Lua mouse binds do not become native bindm entries, so custom layout
 -- right-drag resize is bridged through a bounded IPC helper.
-bind.register(main("mouse:272"), hl.dsp.window.drag())
-bind.register(main("mouse:272"), window.place_custom_layout_at_cursor, { release = true })
+bind.register(main("mouse:272"), window.start_drag)
+bind.register(main("mouse:272"), window.finish_drag, { release = true })
 bind.register(main("mouse:273"), window.start_custom_layout_resize)
 bind.register(main("mouse:273"), window.stop_custom_layout_resize, { release = true })
 bind.register(main("SHIFT + mouse:273"), window.resize_keep_aspect_ratio)

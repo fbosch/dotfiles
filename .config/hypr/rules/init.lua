@@ -94,19 +94,7 @@ hl.window_rule({ match = { class = "^(io\\.github\\.flattool\\.Warehouse)$" }, f
 -- XDG Desktop Portal GTK (File Picker)
 hl.window_rule({ match = { class = "^(xdg-desktop-portal-gtk)$" }, float = true, pin = true, no_anim = true })
 
--- Zen Browser
-hl.window_rule({
-	match = { title = "^([Pp]icture-in-[Pp]icture)$" },
-	float = true,
-	no_initial_focus = true,
-	pin = true,
-	content = "video",
-})
-hl.window_rule({ match = { title = "([Pp]icture-in-[Pp]icture)" }, animation = "slide right" })
-hl.window_rule({
-	match = { initial_title = "(^(Picture-in-Picture)$)" },
-	move = pip.normal_move,
-})
+pip.register_window_rules()
 
 -- Floorp Browser
 hl.window_rule({ match = { class = "^(one\\.ablaze\\.floorp)$" }, monitor = "HDMI-A-2" })
