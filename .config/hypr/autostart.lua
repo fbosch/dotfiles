@@ -27,6 +27,7 @@ local commands = {
 	),
 	background(paths.runtime_script("windows/daemons/minimized-state/minimized-state-daemon.sh")),
 	background(paths.runtime_script("windows/daemons/window-capture/window-capture-daemon.lua")),
+	background("luajit " .. paths.runtime_script("windows/daemons/picture-in-picture.lua")),
 background(paths.runtime_script("gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh")),
 background(paths.runtime_script("gaming/gamescope-clipboard-sync.sh")),
 	session("hyprpaper"),

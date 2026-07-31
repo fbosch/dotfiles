@@ -3,7 +3,6 @@ local async = require("lib.async")
 local monitor_role = require("lib.monitor_role")
 local order_state = require("layouts.shared.order_state")
 local gaming = require("gaming")
-local pip = require("lib.picture_in_picture")
 
 local directions = {
 	l = "left",
@@ -40,7 +39,6 @@ local edge_tolerance = 64
 local pinned_workspace = "1"
 local pinned_workspace_monitor = "HDMI-A-2"
 local gaming_workspace = gaming.workspace
-local pip_drag_socket = 'printf "%s\\n" "$1" | nc -U "$XDG_RUNTIME_DIR/hypr-waybar-monitor.sock" >/dev/null 2>&1'
 
 --- One-shot placement request consumed when a window enters a custom layout.
 ---@class TransferIntent
@@ -257,24 +255,6 @@ end
 function M.place_custom_layout_at_cursor()
 	if M.uses_any_custom_layout(M.active()) then
 		dispatch(hl.dsp.layout("place-at-cursor"))
-	end
-end
-
-function M.start_drag()
-	local active = M.active()
-	if active and active.class == pip.class and active.title == pip.title then
-		dispatch(hl.dsp.exec_cmd((pip_drag_socket:gsub("%%s", "pip-drag-start"))))
-	end
-
-	dispatch(hl.dsp.window.drag())
-end
-
-function M.finish_drag()
-	M.place_custom_layout_at_cursor()
-
-	local active = M.active()
-	if active and active.class == pip.class and active.title == pip.title then
-		dispatch(hl.dsp.exec_cmd((pip_drag_socket:gsub("%%s", "pip-drag-end"))))
 	end
 end
 

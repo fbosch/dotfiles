@@ -7,6 +7,7 @@ local volume = require("actions.volume")
 local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
 local keyboard_layout = require("actions.keyboard-layout")
+local picture_in_picture = require("actions.picture-in-picture")
 local window_switcher = require("actions.window-switcher")
 
 local main_mod = "SUPER"
@@ -141,12 +142,23 @@ hl.config({
 -- Custom layout controls
 -- Current Lua mouse binds do not become native bindm entries, so custom layout
 -- right-drag resize is bridged through a bounded IPC helper.
-bind.register(main("mouse:272"), window.start_drag)
-bind.register(main("mouse:272"), window.finish_drag, { release = true })
-bind.register(main("mouse:273"), window.start_custom_layout_resize)
-bind.register(main("mouse:273"), window.stop_custom_layout_resize, { release = true })
-bind.register(main("SHIFT + mouse:273"), window.resize_keep_aspect_ratio)
-bind.register(main("SHIFT + mouse:273"), window.reset_keep_aspect_ratio, { release = true })
+bind.register(main("mouse:272"), picture_in_picture.drag)
+bind.register(main("mouse:272"), function()
+	window.place_custom_layout_at_cursor()
+	picture_in_picture.finish_drag()
+end, { release = true })
+bind.register(main("mouse:273"), function()
+	if picture_in_picture.start_resize(false) == false then window.start_custom_layout_resize() end
+end)
+bind.register(main("mouse:273"), function()
+	if picture_in_picture.finish_resize(false) == false then window.stop_custom_layout_resize() end
+end, { release = true })
+bind.register(main("SHIFT + mouse:273"), function()
+	if picture_in_picture.start_resize(true) == false then window.resize_keep_aspect_ratio() end
+end)
+bind.register(main("SHIFT + mouse:273"), function()
+	if picture_in_picture.finish_resize(true) == false then window.reset_keep_aspect_ratio() end
+end, { release = true })
 bind.register(main("SHIFT + H"), window.move("left"))
 bind.register(main("SHIFT + L"), window.move("right"))
 bind.register(main("SHIFT + J"), window.move("down"))
