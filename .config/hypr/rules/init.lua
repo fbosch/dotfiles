@@ -1,3 +1,5 @@
+local pip = require("lib.picture_in_picture")
+
 require("gaming").register_window_rules()
 
 -- GTK Application
@@ -101,7 +103,10 @@ hl.window_rule({
 	content = "video",
 })
 hl.window_rule({ match = { title = "([Pp]icture-in-[Pp]icture)" }, animation = "slide right" })
-hl.window_rule({ match = { initial_title = "(^(Picture-in-Picture)$)" }, size = "688 388", move = "2739 993" })
+hl.window_rule({
+	match = { initial_title = "(^(Picture-in-Picture)$)" },
+	move = pip.normal_move,
+})
 
 -- Floorp Browser
 hl.window_rule({ match = { class = "^(one\\.ablaze\\.floorp)$" }, monitor = "HDMI-A-2" })

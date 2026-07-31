@@ -24,5 +24,6 @@ if should_waybar_stay_visible "$distance_from_bottom" 60; then
     exit 0
 else
     # Cursor is away from waybar and both menus are closed - toggle it (hide)
+    luajit "${HOME}/.config/hypr/runtime/windows/pip-waybar-position.lua" hide >/dev/null 2>&1
     pkill -SIGUSR2 waybar
 fi
