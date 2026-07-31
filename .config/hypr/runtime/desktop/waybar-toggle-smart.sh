@@ -8,6 +8,8 @@
 # shellcheck disable=SC1091
 . "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
+printf 'release\n' | nc -U "${XDG_RUNTIME_DIR}/hypr-waybar-monitor.sock" >/dev/null 2>&1 || true
+
 cursor_pos=$(hypr_query 'cursorpos')
 IFS=', ' read -r cursor_x cursor_y <<EOF
 $cursor_pos
@@ -24,6 +26,5 @@ if should_waybar_stay_visible "$distance_from_bottom" 60; then
     exit 0
 else
     # Cursor is away from waybar and both menus are closed - toggle it (hide)
-    luajit "${HOME}/.config/hypr/runtime/windows/pip-waybar-position.lua" hide >/dev/null 2>&1
-    pkill -SIGUSR2 waybar
+    printf 'hide\n' | nc -U "${XDG_RUNTIME_DIR}/hypr-waybar-monitor.sock" >/dev/null 2>&1 || pkill -SIGUSR2 waybar
 fi

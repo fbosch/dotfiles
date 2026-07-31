@@ -6,7 +6,7 @@ hyprctl reload
 
 pkill waybar 2>/dev/null || true
 pkill gjs 2>/dev/null || true
-pkill -f waybar-edge-monitor 2>/dev/null || true
+pkill -f waybar-monitor.lua 2>/dev/null || true
 pkill -f window-state.sh 2>/dev/null || true
 pkill -f window-state-daemon.lua 2>/dev/null || true
 pkill -f window-capture-daemon 2>/dev/null || true
@@ -17,7 +17,7 @@ sleep 0.2
 
 uwsm-app -s s -- waybar &
 uwsm-app -s s -- ~/.config/ags/start-daemons.sh &
-uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-edge-monitor.sh &
+uwsm-app -s s -- luajit ~/.config/hypr/runtime/desktop/waybar-monitor.lua &
 swaync-client -R &
 swaync-client -rs &
 

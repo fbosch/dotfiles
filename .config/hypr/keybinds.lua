@@ -19,7 +19,7 @@ end
 bind.register(
 	"SUPER_L",
 	-- Keep the Waybar toggle out of the gaming workspace.
-	"luajit ~/.config/hypr/runtime/windows/pip-waybar-position.lua show && pkill -SIGUSR1 waybar",
+	"printf 'hold\\n' | nc -U \"$XDG_RUNTIME_DIR/hypr-waybar-monitor.sock\" >/dev/null 2>&1 || pkill -SIGUSR1 waybar",
 	{ long_press = true, predicate = window.active_workspace_is_not(gaming.workspace), on_false = bind.consume }
 )
 bind.register("SUPER_L", window_switcher.release_super, { ignore_mods = true, release = true })
