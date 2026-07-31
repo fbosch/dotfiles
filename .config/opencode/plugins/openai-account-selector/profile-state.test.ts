@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "bun:test"
-import { readProfileState, writeProfileState } from "./profile-state"
+import { readProfileState, removeProfileState, writeProfileState } from "./profile-state"
 
 test("shares profile state when server and TUI runtime directories differ", async () => {
   const root = await mkdtemp(join(tmpdir(), "openai-profile-state-"))
@@ -31,6 +31,37 @@ test("shares profile state when server and TUI runtime directories differ", asyn
     )
 
     await expect(readProfileState(directory, serverUrl, tuiEnv)).resolves.toEqual({
+      profile: "kk",
+      repository: "KommuneKredit.Frontend",
+    })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test("an older selector cannot remove the current selector state", async () => {
+  const root = await mkdtemp(join(tmpdir(), "openai-profile-state-"))
+  const env = { HOME: root, XDG_STATE_HOME: join(root, "state") }
+  const directory = join(root, "project")
+  const serverUrl = "http://127.0.0.1:43127"
+
+  try {
+    await writeProfileState(
+      directory,
+      serverUrl,
+      { owner: "older", profile: "kk", repository: "KommuneKredit.Frontend" },
+      env,
+    )
+    await writeProfileState(
+      directory,
+      serverUrl,
+      { owner: "current", profile: "kk", repository: "KommuneKredit.Frontend" },
+      env,
+    )
+
+    await removeProfileState(directory, serverUrl, "older", env)
+
+    await expect(readProfileState(directory, serverUrl, env)).resolves.toEqual({
       profile: "kk",
       repository: "KommuneKredit.Frontend",
     })

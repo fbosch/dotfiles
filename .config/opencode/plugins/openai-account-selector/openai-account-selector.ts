@@ -11,6 +11,7 @@ import {
 
 const service = "openai-account-selector"
 const oauthDummyKey = "opencode-oauth-dummy-key"
+const requestLoggingEnabled = process.env.OPENCODE_OPENAI_ACCOUNT_SELECTOR_LOG_REQUESTS === "1"
 
 type MutableConfig = {
   disabled_providers?: string[]
@@ -33,8 +34,6 @@ export const OpenAIAccountSelectorPlugin: Plugin = async ({ $, client, directory
       return
     }
   }
-
-  await removeProfileState(directory, serverUrl).catch(() => undefined)
 
   if (["1", "true"].includes(process.env.OPENCODE_EXPERIMENTAL_WEBSOCKETS?.toLowerCase() || "")) {
     await log("error", "repository account selection does not support OpenAI WebSocket transport")
@@ -75,6 +74,9 @@ export const OpenAIAccountSelectorPlugin: Plugin = async ({ $, client, directory
   const selectedFetch = createCodexFetch({
     credential: selection.credential,
     paths: defaultPaths(),
+    onRequest: requestLoggingEnabled
+      ? (accountId) => log("info", `sending OpenAI request using account ${profileLabels.get(accountId) || "unlabeled"}`)
+      : undefined,
     onUsageLimit: async (credential, info) => {
       const currentTime = Date.now()
       for (const [accountId, resetAt] of exhaustedUntil) {
