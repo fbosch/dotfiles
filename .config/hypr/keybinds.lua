@@ -1,7 +1,6 @@
 local programs = require("programs")
 local async = require("lib.async")
 local bind = require("lib.bind")
-local pip = require("lib.picture_in_picture")
 local window = require("lib.window")
 local gaming = require("gaming")
 local volume = require("actions.volume")
@@ -15,14 +14,6 @@ local main_mod = "SUPER"
 
 local function main(key)
 	return main_mod .. " + " .. key
-end
-
-local function move_window_or_pip(direction)
-	return window.with_active_window(pip, function() picture_in_picture.move_corner(direction) end, window.move(direction))
-end
-
-local function focus_window_or_pip(direction)
-	return window.with_active_window(pip, function() picture_in_picture.focus(direction) end, window.focus(direction))
 end
 
 -- Window switching
@@ -115,10 +106,10 @@ bind.register(main("SHIFT + Z"), "~/.config/hypr/runtime/windows/minimized-state
 bind.register(main("X"), window.hide_from_current_workspace)
 
 -- Window focus and layout
-bind.register(main("H"), focus_window_or_pip("left"))
-bind.register(main("L"), focus_window_or_pip("right"))
-bind.register(main("J"), focus_window_or_pip("down"))
-bind.register(main("K"), focus_window_or_pip("up"))
+bind.register(main("H"), window.focus("left"))
+bind.register(main("L"), window.focus("right"))
+bind.register(main("J"), window.focus("down"))
+bind.register(main("K"), window.focus("up"))
 
 bind.register(main("SHIFT + d"), hl.dsp.layout("setratio 0.6"))
 
@@ -168,10 +159,10 @@ end)
 bind.register(main("SHIFT + mouse:273"), function()
 	if picture_in_picture.finish_resize(true) == false then window.reset_keep_aspect_ratio() end
 end, { release = true })
-bind.register(main("SHIFT + H"), move_window_or_pip("left"))
-bind.register(main("SHIFT + L"), move_window_or_pip("right"))
-bind.register(main("SHIFT + J"), move_window_or_pip("down"))
-bind.register(main("SHIFT + K"), move_window_or_pip("up"))
+bind.register(main("SHIFT + H"), window.move("left"))
+bind.register(main("SHIFT + L"), window.move("right"))
+bind.register(main("SHIFT + J"), window.move("down"))
+bind.register(main("SHIFT + K"), window.move("up"))
 
 -- Window movement and resizing
 bind.register(main("right"), window.adjust("nudge", "right"), { repeating = true })

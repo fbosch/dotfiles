@@ -3,6 +3,8 @@ local async = require("lib.async")
 local monitor_role = require("lib.monitor_role")
 local order_state = require("layouts.shared.order_state")
 local gaming = require("gaming")
+local pip = require("lib.picture_in_picture")
+local picture_in_picture = require("actions.picture-in-picture")
 
 local directions = {
 	l = "left",
@@ -291,7 +293,7 @@ function M.reset_keep_aspect_ratio()
 	dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "0" }))
 end
 
-function M.focus(value)
+local function focus_window(value)
 	local normalized = direction(value)
 	local focus_dispatcher = hl.dsp.focus({ direction = normalized })
 
@@ -301,7 +303,16 @@ function M.focus(value)
 	end
 end
 
-function M.move(value)
+function M.focus(value)
+	local normalized = direction(value)
+	return M.with_active_window(
+		pip,
+		function() return picture_in_picture.focus(normalized) end,
+		focus_window(normalized)
+	)
+end
+
+local function move_window(value)
 	local normalized = direction(value)
 	local move_dispatcher = hl.dsp.window.move({ direction = normalized })
 	local move_to_portrait = hl.dsp.window.move({ monitor = monitor_role.name_for(monitor_role.portrait) })
@@ -371,6 +382,15 @@ function M.move(value)
 		dispatch(move_dispatcher)
 		warp_window(active)
 	end
+end
+
+function M.move(value)
+	local normalized = direction(value)
+	return M.with_active_window(
+		pip,
+		function() return picture_in_picture.move_corner(normalized) end,
+		move_window(normalized)
+	)
 end
 
 function M.adjust(kind, value)
