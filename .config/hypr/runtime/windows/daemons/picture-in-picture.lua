@@ -21,6 +21,7 @@ local monitors = {}
 local monitor_cache_at = 0
 local waybar_visible = command.ok("pgrep -x waybar >/dev/null 2>&1")
 local dragging = false
+local dragging_address = nil
 local preview_signature = nil
 local resize_anchor = nil
 
@@ -195,15 +196,28 @@ local function snap_target(window, monitor, bars)
 	}
 end
 
-local function clear_pip_corner_tags(window)
+local function has_tag(window, expected)
+	for _, tag in ipairs(window.tags or {}) do
+		if tag == expected then
+			return true
+		end
+	end
+end
+
+local function clear_pip_corner_tags(window, keep)
 	for _, candidate in pairs(pip.corners) do
-		request(string.format("dispatch hl.dsp.window.tag({ tag = %s, window = %s })", json.encode("-" .. candidate.tag), json.encode("address:" .. window.address)))
+		if candidate.tag ~= keep and has_tag(window, candidate.tag) then
+			request(string.format("dispatch hl.dsp.window.tag({ tag = %s, window = %s })", json.encode("-" .. candidate.tag), json.encode("address:" .. window.address)))
+		end
 	end
 end
 
 local function tag_pip_corner(window, corner)
-	clear_pip_corner_tags(window)
-	request(string.format("dispatch hl.dsp.window.tag({ tag = %s, window = %s })", json.encode("+" .. pip.corners[corner].tag), json.encode("address:" .. window.address)))
+	local tag = pip.corners[corner].tag
+	clear_pip_corner_tags(window, tag)
+	if has_tag(window, tag) == false then
+		request(string.format("dispatch hl.dsp.window.tag({ tag = %s, window = %s })", json.encode("+" .. tag), json.encode("address:" .. window.address)))
+	end
 end
 
 local function tagged_corner(window)
@@ -280,8 +294,16 @@ end
 local function update_snap_preview()
 	refresh_monitors()
 	local bars = waybar_visible and predicted_waybar_layers() or visible_waybar_layers()
+	local active = json.object(request("j/activewindow"))
+	if is_pip(active) and (dragging_address == nil or active.address == dragging_address) then
+		local monitor = monitor_for(active)
+		local target = monitor and snap_target(active, monitor, bars)
+		set_snap_preview(target)
+		return
+	end
+
 	for _, window in ipairs(json.array(request("j/clients"))) do
-		if is_pip(window) then
+		if is_pip(window) and window.address == dragging_address then
 			local monitor = monitor_for(window)
 			local target = monitor and snap_target(window, monitor, bars)
 			if target then
@@ -294,11 +316,11 @@ local function update_snap_preview()
 	set_snap_preview(nil)
 end
 
-local function snap_pip()
+local function snap_pip(address)
 	refresh_monitors()
 	local bars = waybar_visible and predicted_waybar_layers() or visible_waybar_layers()
 	for _, window in ipairs(json.array(request("j/clients"))) do
-		if is_pip(window) then
+		if is_pip(window) and (address == nil or window.address == address) then
 			local monitor = monitor_for(window)
 			if monitor then
 				local target = snap_target(window, monitor, bars)
@@ -348,26 +370,31 @@ end
 local function handle_control(control)
 	control:settimeout(0.05)
 	local message = control:receive("*l")
-	if message == "drag-start" then
+	local action, address = message and message:match("^(%S+)%s*(.*)$")
+	if address == "" then address = nil end
+	if action == "drag-start" then
 		dragging = true
-	elseif message == "drag-end" then
+		dragging_address = address
+	elseif action == "drag-end" then
 		if dragging then
 			update_snap_preview()
-			snap_pip()
+			snap_pip(dragging_address)
 		end
 		dragging = false
+		dragging_address = nil
 		set_snap_preview(nil)
-	elseif message == "drag-cancel" then
+	elseif action == "drag-cancel" then
 		dragging = false
+		dragging_address = nil
 		set_snap_preview(nil)
-	elseif message == "resize-start" then
+	elseif action == "resize-start" then
 		begin_resize()
-	elseif message == "resize-end" then
+	elseif action == "resize-end" then
 		finish_resize()
-	elseif message == "waybar-show" then
+	elseif action == "waybar-show" then
 		move_pip("show")
 		waybar_visible = true
-	elseif message == "waybar-hide" then
+	elseif action == "waybar-hide" then
 		move_pip("hide")
 		waybar_visible = false
 	end

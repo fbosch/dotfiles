@@ -21,7 +21,7 @@ function M.drag()
 	local active = active_pip()
 	if active then
 		dragging = true
-		notify("drag-start")
+		notify("drag-start " .. active.address)
 	else
 		notify("drag-cancel")
 	end

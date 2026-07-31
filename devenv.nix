@@ -9,6 +9,7 @@
     jq
     just
     lua
+    markdownlint-cli
     neovim
     nodejs
     pnpm
