@@ -7,7 +7,11 @@ import { discoverAccounts, toPublicDiscovery } from "../discovery.ts";
 import { renderAccountCards } from "../list-presentation.ts";
 import { beginLogin, completeLogin, switchAccount } from "../mutations.ts";
 import { fetchUsage } from "../providers/codex.ts";
-import { accountQueryKey, queryClientFor } from "../queryclient/client.ts";
+import {
+	accountQueryKey,
+	queryClientFor,
+	usageCacheTimeMs,
+} from "../queryclient/client.ts";
 import {
 	consumeResetCredit,
 	mutateAccount,
@@ -32,7 +36,11 @@ import {
 	usageQueryOptions,
 } from "../queryclient/queries/usage.ts";
 import { recoverPendingLogin } from "../transactions.ts";
-import { defaultPaths, type AccountPaths } from "../types.ts";
+import {
+	defaultPaths,
+	type AccountPaths,
+	type AccountUsage,
+} from "../types.ts";
 
 async function fixturePaths(
 	auth: unknown,
@@ -52,6 +60,19 @@ async function fixturePaths(
 		state: join(root, "state", "login-transaction.json"),
 		queryCacheDirectory: join(root, "cache", "queries"),
 	};
+}
+
+async function persistUsage(
+	paths: AccountPaths,
+	credentials: { accessToken: string; accountId: string },
+	usage: AccountUsage,
+	updatedAt: number,
+): Promise<void> {
+	const client = queryClientFor(paths);
+	const options = usageQueryOptions(credentials);
+	client.queryClient.setQueryData(options.queryKey, usage, { updatedAt });
+	await client.queryPersister.persistQueryByKey(options.queryKey, client.queryClient);
+	client.queryClient.removeQueries({ queryKey: options.queryKey, exact: true });
 }
 
 test("resolves the default aliases path from XDG configuration", () => {
@@ -316,6 +337,69 @@ test("caches usage until account mutations invalidate it", async () => {
 			primary: { remainingPercent: 75 },
 		});
 		expect(requests).toBe(3);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("returns fresh persisted usage without requesting it", async () => {
+	const paths = await fixturePaths({}, { openai: {} });
+	const credentials = { accessToken: "token", accountId: "account" };
+	await persistUsage(
+		paths,
+		credentials,
+		{
+			primary: { remainingPercent: 75, resetAt: null },
+			secondary: { remainingPercent: null, resetAt: null },
+		},
+		Date.now(),
+	);
+	let requests = 0;
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = (async () => {
+		requests += 1;
+		return Response.json({});
+	}) as unknown as typeof fetch;
+
+	try {
+		expect(await fetchUsage(credentials, paths)).toMatchObject({
+			primary: { remainingPercent: 75 },
+		});
+		expect(requests).toBe(0);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("refreshes stale persisted usage before returning it", async () => {
+	const paths = await fixturePaths({}, { openai: {} });
+	const credentials = { accessToken: "token", accountId: "account" };
+	await persistUsage(
+		paths,
+		credentials,
+		{
+			primary: { remainingPercent: 75, resetAt: null },
+			secondary: { remainingPercent: null, resetAt: null },
+		},
+		Date.now() - usageCacheTimeMs - 1,
+	);
+	let requests = 0;
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = (async () => {
+		requests += 1;
+		return Response.json({
+			rate_limit: {
+				primary_window: { used_percent: 50 },
+				secondary_window: null,
+			},
+		});
+	}) as unknown as typeof fetch;
+
+	try {
+		expect(await fetchUsage(credentials, paths)).toMatchObject({
+			primary: { remainingPercent: 50 },
+		});
+		expect(requests).toBe(1);
 	} finally {
 		globalThis.fetch = originalFetch;
 	}
