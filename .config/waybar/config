@@ -10,7 +10,8 @@
   "on-sigusr1": "show",
   "on-sigusr2": "hide",
   "passthrough": false,
-  "slide-duration": 120,
+  "slide-duration": 150,
+  "slide-ease-out-exponent": 4,
   "slide-offset": 12,
   "mode": "dock",
   "modes": {
