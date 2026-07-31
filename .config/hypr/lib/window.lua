@@ -194,6 +194,20 @@ function M.active()
 	return nil
 end
 
+function M.with_active_window(identifier, on_match, on_miss)
+	return function()
+		local active = M.active()
+		if active and active.class == identifier.class and active.title == identifier.title then
+			local handled = on_match()
+			if handled ~= false then
+				return handled
+			end
+		end
+
+		return on_miss()
+	end
+end
+
 local function active_workspace_matches(workspace_name, expected)
 	return function()
 		local active_workspace = hl.get_active_workspace()

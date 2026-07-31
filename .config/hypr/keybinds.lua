@@ -17,26 +17,12 @@ local function main(key)
 	return main_mod .. " + " .. key
 end
 
-local function with_active_window(identifier, on_match, on_miss)
-	return function()
-		local active = window.active()
-		if active and active.class == identifier.class and active.title == identifier.title then
-			local handled = on_match()
-			if handled ~= false then
-				return handled
-			end
-		end
-
-		return on_miss()
-	end
-end
-
 local function move_window_or_pip(direction)
-	return with_active_window(pip, function() picture_in_picture.move_corner(direction) end, window.move(direction))
+	return window.with_active_window(pip, function() picture_in_picture.move_corner(direction) end, window.move(direction))
 end
 
 local function focus_window_or_pip(direction)
-	return with_active_window(pip, function() picture_in_picture.focus(direction) end, window.focus(direction))
+	return window.with_active_window(pip, function() picture_in_picture.focus(direction) end, window.focus(direction))
 end
 
 -- Window switching

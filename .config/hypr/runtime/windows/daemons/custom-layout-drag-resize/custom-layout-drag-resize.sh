@@ -98,7 +98,7 @@ run_daemon() {
   child_pid=""
   shutdown_requested=0
   graceful_shutdown() {
-    [ -S "$command_socket" ] || return
+    [ -S "$command_socket" ] || return 0
     printf 'stop\n' | nc -w 1 -U "$command_socket" >/dev/null 2>&1 || true
     printf 'quit\n' | nc -w 1 -U "$command_socket" >/dev/null 2>&1 || true
   }
