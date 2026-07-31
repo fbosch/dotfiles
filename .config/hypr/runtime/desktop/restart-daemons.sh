@@ -73,6 +73,7 @@ pkill -f "picture-in-picture.sh" 2>/dev/null || true
 pkill -f "picture-in-picture.lua" 2>/dev/null || true
 pkill -f "waybar-monitor.sh" 2>/dev/null || true
 pkill -f "waybar-monitor.lua" 2>/dev/null || true
+# Night light owns hyprsunset; wait for its cleanup before starting a replacement.
 pkill -f "night-light.sh daemon" 2>/dev/null || true
 pkill gjs 2>/dev/null || true
 

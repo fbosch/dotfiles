@@ -25,7 +25,7 @@ export function accountCredentialKey(accountId: string): string {
 	return createHash("sha256").update(accountId).digest("hex");
 }
 
-const usageCacheTimeMs = 10_000;
+export const usageCacheTimeMs = 10_000;
 export const resetCreditsCacheTimeMs = 8 * 60 * 60 * 1_000;
 const usageCacheBuster = "fbb.opencode-multi-auth-query-cache/v2";
 const usageCachePrefix = "fbb-opencode-multi-auth";
@@ -59,7 +59,6 @@ export function queryClientFor(paths: AccountPaths): PersistentQueryClient {
 					gcTime: Number.POSITIVE_INFINITY,
 					persister: queryPersister.persisterFn,
 					retry: false,
-					staleTime: usageCacheTimeMs,
 				},
 			},
 		}),

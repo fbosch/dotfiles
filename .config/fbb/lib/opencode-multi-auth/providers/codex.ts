@@ -133,6 +133,12 @@ export async function fetchUsage(
 	}
 	const client = queryClientFor(paths);
 	const options = usageQueryOptions(credentials);
+	if (client.queryClient.getQueryState(options.queryKey) === undefined) {
+		await client.queryPersister.restoreQueries(client.queryClient, {
+			queryKey: options.queryKey,
+			exact: true,
+		});
+	}
 	return client.queryClient.fetchQuery(options);
 }
 

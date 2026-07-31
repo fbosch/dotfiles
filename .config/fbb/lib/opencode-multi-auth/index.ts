@@ -93,12 +93,6 @@ const plainArg = {
 	description: "Use plain, narrow-safe text output",
 };
 
-const cacheArg = {
-	type: "boolean" as const,
-	description: "Use cached usage data",
-	default: true,
-};
-
 const main = defineCommand({
 	meta: {
 		name: "ocma",
@@ -108,25 +102,14 @@ const main = defineCommand({
 	subCommands: {
 		list: defineCommand({
 			meta: { name: "list", description: "List OpenAI profiles and aliases." },
-			args: {
-				format: formatArg,
-				noColor: noColorArg,
-				plain: plainArg,
-				cache: cacheArg,
-			},
-			run: ({ args }) =>
-				runReadCommand("list", args.format, textOptions(args), args.cache),
+			args: { format: formatArg, noColor: noColorArg, plain: plainArg },
+			run: ({ args }) => runReadCommand("list", args.format, textOptions(args)),
 		}),
 		status: defineCommand({
 			meta: { name: "status", description: "Show the active OpenAI profile." },
-			args: {
-				format: formatArg,
-				noColor: noColorArg,
-				plain: plainArg,
-				cache: cacheArg,
-			},
+			args: { format: formatArg, noColor: noColorArg, plain: plainArg },
 			run: ({ args }) =>
-				runReadCommand("status", args.format, textOptions(args), args.cache),
+				runReadCommand("status", args.format, textOptions(args)),
 		}),
 		switch: defineCommand({
 			meta: {
@@ -238,13 +221,12 @@ async function runReadCommand(
 	command: "list" | "status",
 	format: OutputFormat,
 	textOutput: TextOutputOptions,
-	cache: boolean,
 ): Promise<void> {
 	await emitCommand(format, command, textOutput, async () => {
 		const paths = defaultPaths();
 		const discovery = await discoverAccounts(paths);
 		const [usage, resetCredits] = await Promise.all([
-			discoverUsageFor(discovery, paths, command === "list", cache === false),
+			discoverUsageFor(discovery, paths, command === "list"),
 			discoverResetCreditsFor(discovery, paths, command === "list"),
 		]);
 		const completeDiscovery = {
@@ -552,7 +534,6 @@ async function discoverUsageFor(
 	discovery: AccountDiscovery,
 	paths: ReturnType<typeof defaultPaths>,
 	includeInactiveProfiles: boolean,
-	forceRefresh = false,
 ) {
 	return discoverUsage(
 		{
@@ -563,7 +544,6 @@ async function discoverUsageFor(
 		},
 		await readJsonObject(paths.auth),
 		paths,
-		forceRefresh,
 	);
 }
 

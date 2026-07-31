@@ -6,7 +6,6 @@ local registered_events = {}
 local mock_used_percent = 57
 local mock_credit_count = 2
 local mock_ocma_failure = false
-local last_ocma_command
 
 package.loaded.wezterm = {
 	config_dir = "." .. package.config:sub(1, 1) .. ".config" .. package.config:sub(1, 1) .. "wezterm",
@@ -116,7 +115,6 @@ package.loaded.wezterm = {
 	end,
 	run_child_process = function(argv)
 		if argv[1] == "/bin/sh" then
-			last_ocma_command = argv[3]
 			if mock_ocma_failure then
 				return false, "", "simulated registry failure"
 			end
@@ -215,7 +213,6 @@ assert_eq(type(captured_status), "table", "status payload type")
 	assert_eq(find_text(captured_status, "²"), true, "Codex reset credits rendered")
 assert_eq(find_text(captured_status, "43%"), true, "ChatGPT remaining allowance rendered")
 assert_eq(find_text(captured_status, " ³ʰ"), true, "ChatGPT usage reset countdown rendered")
-assert_eq(last_ocma_command:find("%-%-cache=false") ~= nil, true, "Codex usage bypasses the CLI cache")
 
 for _, case in ipairs({
 	{ used = 98, remaining = "2" },

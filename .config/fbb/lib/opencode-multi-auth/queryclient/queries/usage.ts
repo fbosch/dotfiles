@@ -1,7 +1,11 @@
 import type { FetchQueryOptions } from "@tanstack/query-core";
 import { z } from "zod";
 import type { AccountUsage, UsageWindow } from "../../types.ts";
-import { accountCredentialKey, usageQueryKey } from "../client.ts";
+import {
+	accountCredentialKey,
+	usageCacheTimeMs,
+	usageQueryKey,
+} from "../client.ts";
 
 const usageUrl = "https://chatgpt.com/backend-api/wham/usage";
 const requestTimeoutMs = 10_000;
@@ -37,6 +41,7 @@ export function usageQueryOptions(
 	return {
 		queryKey: [...usageQueryKey, accountCredentialKey(credentials.accountId)],
 		queryFn: () => fetchUsageUncached(credentials),
+		staleTime: usageCacheTimeMs,
 	} satisfies FetchQueryOptions;
 }
 

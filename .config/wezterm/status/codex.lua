@@ -86,7 +86,7 @@ local function get_accounts()
 	end
 
 	codex_status.checked_at = os.time()
-	local accounts = ocma.list(run_command, wezterm.json_parse, false)
+	local accounts = ocma.list(run_command, wezterm.json_parse)
 	if accounts then
 		codex_status.accounts = accounts
 	end
