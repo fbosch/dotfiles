@@ -17,7 +17,7 @@ pkill -f "window-state.sh" 2>/dev/null || true
 pkill -f "minimized-state-daemon" 2>/dev/null || true
 pkill -f "window-capture-daemon" 2>/dev/null || true
 pkill -f "gaming-session-watchdog" 2>/dev/null || true
-pkill -f "waybar-edge-monitor.sh" 2>/dev/null || true
+pkill -f "waybar-monitor.lua" 2>/dev/null || true
 pkill -f "night-light.sh daemon" 2>/dev/null || true
 pkill gjs 2>/dev/null || true
 
@@ -37,4 +37,4 @@ uwsm-app -s s -- waybar &
 uwsm-app -s s -- hyprpaper &
 uwsm-app -s s -- swaync -c ~/.config/swaync/config.json -s ~/.config/swaync/style.css &
 uwsm-app -s s -- ~/.config/ags/start-daemons.sh &
-uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-edge-monitor.sh &
+uwsm-app -s s -- luajit ~/.config/hypr/runtime/desktop/waybar-monitor.lua &

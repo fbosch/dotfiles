@@ -34,7 +34,7 @@ background(paths.runtime_script("gaming/gamescope-clipboard-sync.sh")),
 	session("swaync -c ~/.config/swaync/config.json -s ~/.config/swaync/style.css"),
 	session("~/.config/ags/start-daemons.sh"),
 	background(paths.runtime_script("desktop/night-light.sh") .. " daemon"),
-	session(paths.runtime_script("desktop/waybar-edge-monitor.sh")),
+	session("luajit " .. paths.runtime_script("desktop/waybar-monitor.lua")),
 	paths.runtime_script("startup/startup-desktop-ready.sh"),
 }
 
