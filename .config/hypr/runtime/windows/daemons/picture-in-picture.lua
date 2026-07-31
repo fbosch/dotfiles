@@ -202,6 +202,8 @@ local function has_tag(window, expected)
 			return true
 		end
 	end
+
+	return false
 end
 
 local function clear_pip_corner_tags(window, keep)
@@ -226,6 +228,39 @@ local function tagged_corner(window)
 			if tag == candidate.tag then
 				return corner
 			end
+		end
+	end
+end
+
+local function move_pip_corner(direction, address)
+	if direction ~= "left" and direction ~= "right" and direction ~= "up" and direction ~= "down" then
+		return
+	end
+
+	refresh_monitors()
+	local bars = waybar_visible and predicted_waybar_layers() or visible_waybar_layers()
+	for _, window in ipairs(json.array(request("j/clients"))) do
+		if is_pip(window) and window.address == address then
+			local monitor = monitor_for(window)
+			if not monitor then
+				return
+			end
+
+			local corner = tagged_corner(window) or "bottom-right"
+			local left = corner:match("left$") ~= nil
+			local top = corner:match("^top") ~= nil
+			if direction == "left" then left = true end
+			if direction == "right" then left = false end
+			if direction == "up" then top = true end
+			if direction == "down" then top = false end
+
+			local width = tonumber(window.size[1]) or 0
+			local target_x = left and monitor.x + pip.margin or monitor.x + monitor.width - width - pip.margin
+			local target_y = top and monitor.y + pip.margin or bottom_y(window, monitor, target_x, bars)
+			local target_corner = (top and "top" or "bottom") .. "-" .. (left and "left" or "right")
+			tag_pip_corner(window, target_corner)
+			move_window(window, target_x, target_y)
+			return
 		end
 	end
 end
@@ -370,7 +405,8 @@ end
 local function handle_control(control)
 	control:settimeout(0.05)
 	local message = control:receive("*l")
-	local action, address = message and message:match("^(%S+)%s*(.*)$")
+	local action, address
+	if message then action, address = message:match("^(%S+)%s*(.*)$") end
 	if address == "" then address = nil end
 	if action == "drag-start" then
 		dragging = true
@@ -391,6 +427,11 @@ local function handle_control(control)
 		begin_resize()
 	elseif action == "resize-end" then
 		finish_resize()
+	elseif action == "move" then
+		if address then
+			local direction, window_address = address:match("^(%S+)%s+(%S+)$")
+			if direction and window_address then move_pip_corner(direction, window_address) end
+		end
 	elseif action == "waybar-show" then
 		move_pip("show")
 		waybar_visible = true

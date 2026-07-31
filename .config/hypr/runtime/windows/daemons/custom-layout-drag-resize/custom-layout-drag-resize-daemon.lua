@@ -6,6 +6,7 @@ local config_dir = os.getenv("HOME") .. "/.config/hypr"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local hypr_ipc = require("runtime.lib.hypr-ipc")
+local json = require("lib.json")
 local monitor_role = require("lib.monitor_role")
 
 local runtime_dir = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-custom-layout-drag-resize"
@@ -48,39 +49,14 @@ local function restore_resize_animation()
 	eval([[require("animations").restore_windows_move()]])
 end
 
-local function json_number(text, key)
-	local value = text:match('"' .. key .. '"%s*:%s*(-?%d+%.?%d*)')
-	return value and tonumber(value) or nil
-end
-
-local function json_string(text, key)
-	return text:match('"' .. key .. '"%s*:%s*"([^"]*)"')
-end
-
-local function json_bool(text, key)
-	local value = text:match('"' .. key .. '"%s*:%s*(true)')
-	if value then
-		return true
-	end
-
-	value = text:match('"' .. key .. '"%s*:%s*(false)')
-	if value then
-		return false
-	end
-
-	return nil
-end
-
 local function active_monitor_info()
 	monitors_by_id = {}
-	local monitors = request("j/monitors")
-	for object in monitors:gmatch("%b{}") do
-		local id = json_number(object, "id")
+	for _, monitor in ipairs(json.array(request("j/monitors"))) do
+		local id = monitor.id
 		if id then
-			local name = json_string(object, "name")
-			local refresh = json_number(object, "refreshRate") or 60
+			local refresh = monitor.refreshRate or 60
 			monitors_by_id[id] = {
-				name = name,
+				name = monitor.name,
 				poll_interval = math.max(0.006, math.min(0.017, 1 / refresh)),
 			}
 		end
@@ -97,30 +73,27 @@ local function monitor_info(monitor_id)
 end
 
 local function active_window_info()
-	local active = request("j/activewindow")
-	local address = json_string(active, "address")
-	local monitor_id = json_number(active, "monitor")
-	local floating = active:match('"floating"%s*:%s*true') ~= nil
-	local x, y = active:match('"at"%s*:%s*%[%s*(-?%d+)%s*,%s*(-?%d+)%s*%]')
-	local width, height = active:match('"size"%s*:%s*%[%s*(%d+)%s*,%s*(%d+)%s*%]')
+	local active = json.object(request("j/activewindow"))
+	local x, y = active.at and active.at[1], active.at and active.at[2]
+	local width, height = active.size and active.size[1], active.size and active.size[2]
+	local monitor_id = active.monitor
 	if not monitor_id or not x or not y or not width or not height then
 		return nil
 	end
 
 	return {
-		address = address,
+		address = active.address,
 		monitor_id = monitor_id,
-		floating = floating,
-		x = tonumber(x),
-		y = tonumber(y),
-		width = tonumber(width),
-		height = tonumber(height),
+		floating = active.floating == true,
+		x = x,
+		y = y,
+		width = width,
+		height = height,
 	}
 end
 
 local function active_workspace_layout()
-	local workspace = request("j/activeworkspace")
-	return json_string(workspace, "tiledLayout")
+	return json.object(request("j/activeworkspace")).tiledLayout
 end
 
 local cursor_position
@@ -129,28 +102,26 @@ local function window_contains_cursor(window, x, y)
 	return x >= window.x and x < window.x + window.width and y >= window.y and y < window.y + window.height
 end
 
-local function client_window_info(object)
-	local address = json_string(object, "address")
-	local monitor_id = json_number(object, "monitor")
-	local x, y = object:match('"at"%s*:%s*%[%s*(-?%d+)%s*,%s*(-?%d+)%s*%]')
-	local width, height = object:match('"size"%s*:%s*%[%s*(%d+)%s*,%s*(%d+)%s*%]')
-	if not address or not monitor_id or not x or not y or not width or not height then
+local function client_window_info(client)
+	local x, y = client.at and client.at[1], client.at and client.at[2]
+	local width, height = client.size and client.size[1], client.size and client.size[2]
+	if not client.address or not client.monitor or not x or not y or not width or not height then
 		return nil
 	end
 
 	return {
-		address = address,
-		monitor_id = monitor_id,
-		floating = json_bool(object, "floating") == true,
-		mapped = json_bool(object, "mapped"),
-		hidden = json_bool(object, "hidden"),
-		visible = json_bool(object, "visible"),
-		acceptsInput = json_bool(object, "acceptsInput"),
-		focusHistoryID = json_number(object, "focusHistoryID"),
-		x = tonumber(x),
-		y = tonumber(y),
-		width = tonumber(width),
-		height = tonumber(height),
+		address = client.address,
+		monitor_id = client.monitor,
+		floating = client.floating == true,
+		mapped = client.mapped,
+		hidden = client.hidden,
+		visible = client.visible,
+		acceptsInput = client.acceptsInput,
+		focusHistoryID = client.focusHistoryID,
+		x = x,
+		y = y,
+		width = width,
+		height = height,
 	}
 end
 
@@ -181,10 +152,9 @@ local function preferred_hover_candidate(candidate, best)
 end
 
 local function hovered_window_info(x, y)
-	local clients = request("j/clients")
 	local best = nil
-	for object in clients:gmatch("%b{}") do
-		local client = client_window_info(object)
+	for _, candidate in ipairs(json.array(request("j/clients"))) do
+		local client = client_window_info(candidate)
 		if client_contains_cursor(client, x, y) and preferred_hover_candidate(client, best) then
 			best = client
 		end
@@ -221,8 +191,7 @@ local function target_window_info()
 end
 
 local function cursor_axis(axis)
-	local response = request("j/cursorpos")
-	local value = json_number(response, axis)
+	local value = json.object(request("j/cursorpos"))[axis]
 	if not value then
 		error("cursor response missing " .. axis)
 	end
@@ -231,9 +200,9 @@ local function cursor_axis(axis)
 end
 
 function cursor_position()
-	local response = request("j/cursorpos")
-	local x = json_number(response, "x")
-	local y = json_number(response, "y")
+	local position = json.object(request("j/cursorpos"))
+	local x = position.x
+	local y = position.y
 	if not x or not y then
 		error("cursor response missing position")
 	end
@@ -347,6 +316,13 @@ local command_server = nil
 local function read_command(client)
 	client:settimeout(0.01)
 	local line = client:receive("*l")
+	client:settimeout(0)
+	if line == "start" or line == "stop" or line == "quit" or line == "ping" then
+		client:send("ok\n")
+	else
+		client:send("error\n")
+		line = nil
+	end
 	client:close()
 	return line
 end
@@ -445,7 +421,6 @@ end
 
 local function ensure_command_socket()
 	os.execute(string.format("mkdir -p %q", runtime_dir))
-	os.remove(command_socket_path)
 	command_server = assert(unix())
 	assert(command_server:bind(command_socket_path))
 	assert(command_server:listen())
