@@ -142,8 +142,8 @@ local function position(mode)
 	local clients = json.array(request("j/clients"))
 	local monitor_list = json.array(request("j/monitors"))
 	local monitors = monitors_by_id(monitor_list)
-	local layers = json.object(request("j/layers"))
-	local predicted_layers = predicted_waybar_layers(monitor_list)
+	local layers = mode == "hide" and json.object(request("j/layers")) or {}
+	local predicted_layers = mode == "show" and predicted_waybar_layers(monitor_list) or {}
 
 	for _, window in ipairs(clients) do
 		if window.mapped ~= false
@@ -155,10 +155,7 @@ local function position(mode)
 			local monitor = monitors[tostring(window.monitor)]
 			if monitor then
 				local normal_x, normal_y = normal_position(window, monitor)
-				local bars = waybar_layers(layers, monitor.name)
-				if mode == "show" and #bars == 0 then
-					bars = predicted_layers[monitor.name] or {}
-				end
+				local bars = mode == "show" and predicted_layers[monitor.name] or waybar_layers(layers, monitor.name)
 				local avoidance_x, avoidance_y = avoidance_position(window, normal_x, bars)
 
 				if mode == "show" then
