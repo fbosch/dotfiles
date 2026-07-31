@@ -74,6 +74,16 @@ singleton external process needs an explicit ownership mechanism.
 - Put feature command sockets, locks, markers, and short-lived caches under `$XDG_RUNTIME_DIR`.
 - Treat each command socket as a small feature API. Keep its accepted messages,
   response, owner, and callers obvious in the implementation.
+- A daemon with a command socket **MUST** expose a side-effect-free `ping`
+  health check that returns exactly `ok`.
+- Launchers **MUST** require that response before treating a socket as live.
+  Treat timeouts, malformed responses, and `error` responses as failures.
+- Run health checks only during startup, restart, recovery, or explicit
+  diagnostics. Do not add probes to polling or interaction hot paths.
+- Do not add a command socket solely for health checks. A daemon without one
+  relies on process ownership, lock state, and reconnect diagnostics instead.
+- A health check proves liveness, not readiness. Add a `status` command only
+  when callers need to distinguish ready and degraded states.
 - Prefer Hyprland socket2 events for compositor changes. Query state after
   relevant events instead of continuously polling clients or monitors.
 - Polling is appropriate only when Hyprland has no event, for pointer or drag
@@ -128,7 +138,8 @@ singleton external process needs an explicit ownership mechanism.
    termination cleanup.
 5. Use shared Hyprland IPC and socket2 events; identify and bound any necessary
    polling.
-6. Define the feature socket protocol when other helpers need to control the daemon.
+6. Define the feature socket protocol, including `ping`, expected response,
+   timeout, and stale-owner behavior when other helpers need to control it.
 7. Publish concurrently consumed state atomically and check external dependencies.
 8. Decide whether each targeted recovery script should include the daemon.
 9. Add a one-shot or status mode only when it provides a meaningful test or
@@ -140,12 +151,14 @@ singleton external process needs an explicit ownership mechanism.
    user-facing callers.
 2. Confirm one live owner controls each shared state file, socket, or external process.
 3. Verify stale locks and sockets are not removed while a live owner exists.
-4. Verify termination reaps children, restores external state, and removes only
+4. Verify health checks require their documented response and stay outside hot
+   paths.
+5. Verify termination reaps children, restores external state, and removes only
    owned resources.
-5. Verify event socket failures reconnect without a tight retry loop.
-6. Confirm every polling loop has a stated trigger, rate bound, and
+6. Verify event socket failures reconnect without a tight retry loop.
+7. Confirm every polling loop has a stated trigger, rate bound, and
    unchanged-state suppression.
-7. Confirm shared files cannot expose partial contents to readers.
-8. Confirm dynamic shell values are quoted and optional dependency failures
+8. Confirm shared files cannot expose partial contents to readers.
+9. Confirm dynamic shell values are quoted and optional dependency failures
    remain local to the feature.
-9. Confirm logs identify the feature, failure, and recovery action.
+10. Confirm logs identify the feature, failure, and recovery action.

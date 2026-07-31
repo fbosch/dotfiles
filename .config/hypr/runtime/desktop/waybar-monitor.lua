@@ -26,7 +26,7 @@ local pip_control_socket = 'nc -U "$XDG_RUNTIME_DIR/hypr-pip-monitor.sock" >/dev
 local monitors = {}
 local last_monitor_name = nil
 local monitor_cache_at = 0
-local waybar_visible = command.ok("pgrep -x waybar >/dev/null 2>&1")
+local waybar_visible = false
 local super_held = false
 local show_started_at = nil
 local hide_started_at = nil
@@ -107,6 +107,33 @@ local function monitor_at(x, y)
 	return closest
 end
 
+local function current_waybar_visibility()
+	for name, monitor_layers in pairs(json.object(request("j/layers"))) do
+		local monitor = monitors[name]
+		if monitor then
+			for _, level in pairs(monitor_layers.levels or {}) do
+				for _, layer in ipairs(level) do
+					local x = tonumber(layer.x) or 0
+					local y = tonumber(layer.y) or 0
+					local width = tonumber(layer.w) or 0
+					local height = tonumber(layer.h) or 0
+					if layer.namespace == "waybar"
+						and (tonumber(layer.alpha) or 0) > 0
+						and x < monitor.x + monitor.width
+						and monitor.x < x + width
+						and y < monitor.y + monitor.height
+						and monitor.y < y + height
+					then
+						return true
+					end
+				end
+			end
+		end
+	end
+
+	return false
+end
+
 local function taskbar_visible()
 	local component = ags_ipc.request("taskbar-visibility", '{"action":"visible-component"}')
 	if component ~= "" and component ~= "none" and not component:match("^error:") then
@@ -157,7 +184,8 @@ end
 
 local function run()
 	refresh_monitors()
-	if waybar_visible then command.ok("printf 'waybar-show\\n' | " .. pip_control_socket) end
+	waybar_visible = current_waybar_visibility()
+	command.ok("printf 'waybar-" .. (waybar_visible and "show" or "hide") .. "\\n' | " .. pip_control_socket)
 
 	os.remove(control_socket_path)
 	local server = assert(unix())

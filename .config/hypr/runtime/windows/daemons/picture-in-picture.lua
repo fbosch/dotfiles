@@ -14,16 +14,25 @@ local pip = require("lib.picture_in_picture")
 
 local monitor_cache_ttl_s = 10
 local drag_interval_s = 0.08
+local open_window_delay_s = 0.1
 local waybar_position_vicinity = 12
-local control_socket_path = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-pip-monitor.sock"
+local control_socket_path = assert(os.getenv("XDG_RUNTIME_DIR"), "XDG_RUNTIME_DIR is required") .. "/hypr-pip-monitor.sock"
 
 local monitors = {}
 local monitor_cache_at = 0
-local waybar_visible = command.ok("pgrep -x waybar >/dev/null 2>&1")
+local waybar_visible = false
 local dragging = false
 local dragging_address = nil
 local preview_signature = nil
 local resize_anchor = nil
+local control_server = nil
+local event_socket = nil
+local owns_control_socket = false
+local reconcile_at = nil
+
+local function log(message)
+	io.stderr:write("picture-in-picture: ", message, "\n")
+end
 
 local function read_file(path)
 	local handle = io.open(path, "r")
@@ -115,12 +124,15 @@ end
 local function visible_waybar_layers()
 	local layers = json.object(request("j/layers"))
 	local visible = {}
-	for name, monitor in pairs(layers) do
-		for _, level in pairs(monitor.levels or {}) do
+	for name, monitor_layers in pairs(layers) do
+		local monitor = monitors[name]
+		local monitor_rect = monitor and rectangle(monitor.x, monitor.y, monitor.width, monitor.height)
+		for _, level in pairs(monitor_layers.levels or {}) do
 			for _, layer in ipairs(level) do
-				if layer.namespace == "waybar" and (tonumber(layer.alpha) or 0) > 0 then
+				local layer_rect = rectangle(layer.x, layer.y, layer.w, layer.h)
+				if layer.namespace == "waybar" and (tonumber(layer.alpha) or 0) > 0 and monitor_rect and overlaps(layer_rect, monitor_rect) then
 					visible[name] = visible[name] or {}
-					visible[name][#visible[name] + 1] = rectangle(layer.x, layer.y, layer.w, layer.h)
+					visible[name][#visible[name] + 1] = layer_rect
 				end
 			end
 		end
@@ -198,7 +210,7 @@ end
 
 local function has_tag(window, expected)
 	for _, tag in ipairs(window.tags or {}) do
-		if tag == expected then
+		if tag:gsub("%*$", "") == expected then
 			return true
 		end
 	end
@@ -224,11 +236,7 @@ end
 
 local function tagged_corner(window)
 	for corner, candidate in pairs(pip.corners) do
-		for _, tag in ipairs(window.tags or {}) do
-			if tag == candidate.tag then
-				return corner
-			end
-		end
+		if has_tag(window, candidate.tag) then return corner end
 	end
 end
 
@@ -379,18 +387,23 @@ local function move_pip(mode)
 			if monitor then
 				local width = tonumber(window.size[1]) or 0
 				local height = tonumber(window.size[2]) or 0
-				local normal_x = corner_x(window, monitor)
+				local corner = tagged_corner(window)
+				local normal_x = corner and corner:match("left$") and monitor.x + pip.margin or corner_x(window, monitor)
 				local normal_y = monitor.y + monitor.height - height - pip.margin
 				local window_rect = rectangle(window.at[1], window.at[2], width, height)
 				local target_y
-				for _, bar in ipairs(bars[monitor.name] or {}) do
-					if mode == "show" and overlaps(window_rect, bar) then
-						target_y = bottom_y(window, monitor, normal_x, bars)
-						break
-					elseif mode == "hide" then
-						local avoidance_y = bar.top - height - pip.overlap_gap
-						if math.abs(window_rect.left - normal_x) <= waybar_position_vicinity and math.abs(window_rect.top - avoidance_y) <= waybar_position_vicinity then
-							target_y = normal_y
+				if corner and corner:match("^bottom") then
+					target_y = mode == "show" and bottom_y(window, monitor, normal_x, bars) or normal_y
+				else
+					for _, bar in ipairs(bars[monitor.name] or {}) do
+						if mode == "show" and overlaps(window_rect, bar) then
+							target_y = bottom_y(window, monitor, normal_x, bars)
+							break
+						elseif mode == "hide" then
+							local avoidance_y = bar.top - height - pip.overlap_gap
+							if math.abs(window_rect.left - normal_x) <= waybar_position_vicinity and math.abs(window_rect.top - avoidance_y) <= waybar_position_vicinity then
+								target_y = normal_y
+							end
 						end
 					end
 				end
@@ -438,32 +451,86 @@ local function handle_control(control)
 	elseif action == "waybar-hide" then
 		move_pip("hide")
 		waybar_visible = false
+	elseif action == "ping" then
+		-- Side-effect-free health check for the launcher.
+	elseif action == "quit" then
+		control:send("ok\n")
+		control:close()
+		return true
 	end
 	control:send("ok\n")
 	control:close()
+	return false
+end
+
+local function cleanup_control_socket()
+	if event_socket then
+		event_socket:close()
+		event_socket = nil
+	end
+
+	if control_server then
+		control_server:close()
+		control_server = nil
+	end
+
+	if owns_control_socket then
+		os.remove(control_socket_path)
+		owns_control_socket = false
+	end
 end
 
 local function run()
 	refresh_monitors()
-	if waybar_visible then move_pip("show") end
+	waybar_visible = next(visible_waybar_layers()) ~= nil
+	move_pip(waybar_visible and "show" or "hide")
+	event_socket = hypr_ipc.connect_event_socket({ read_timeout = 0 })
 
-	os.remove(control_socket_path)
-	local server = assert(unix())
-	assert(server:bind(control_socket_path))
-	assert(server:listen())
-	server:settimeout(0)
+	control_server = assert(unix())
+	assert(control_server:bind(control_socket_path))
+	assert(control_server:listen())
+	owns_control_socket = true
+	control_server:settimeout(0)
 
 	while true do
 		if dragging then update_snap_preview() end
-		local ready = socket.select({ server }, nil, dragging and drag_interval_s or nil)
-		if #ready > 0 then
-			local control = server:accept()
-			if control then handle_control(control) end
+		local timeout = dragging and drag_interval_s or nil
+		if reconcile_at then
+			local delay = math.max(0, reconcile_at - socket.gettime())
+			timeout = timeout and math.min(timeout, delay) or delay
+		end
+
+		local ready = socket.select({ control_server, event_socket }, nil, timeout)
+		for _, reader in ipairs(ready) do
+			if reader == control_server then
+				local control = control_server:accept()
+				if control and handle_control(control) then return end
+			elseif reader == event_socket then
+				local event, err, partial = event_socket:receive("*l")
+				event = event or partial
+				if event and event:match("^openwindow") then
+					reconcile_at = socket.gettime() + open_window_delay_s
+				end
+				if err == "closed" then
+					event_socket:close()
+					event_socket = hypr_ipc.connect_event_socket({ read_timeout = 0 })
+				end
+			end
+		end
+
+		if reconcile_at and socket.gettime() >= reconcile_at then
+			reconcile_at = nil
+			refresh_monitors()
+			waybar_visible = next(visible_waybar_layers()) ~= nil
+			move_pip(waybar_visible and "show" or "hide")
 		end
 	end
 end
 
 local ok, err = xpcall(run, debug.traceback)
 set_snap_preview(nil)
-os.remove(control_socket_path)
-if ok == false then error(err) end
+cleanup_control_socket()
+if ok == false then
+	log(err)
+	os.exit(1)
+end

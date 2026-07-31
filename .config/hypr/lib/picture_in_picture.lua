@@ -24,6 +24,7 @@ function M.register_window_rules()
 		pin = true,
 		content = "video",
 		rounding = M.rounding,
+		tag = "+" .. M.corners["bottom-right"].tag,
 	})
 	hl.window_rule({ match = { title = "([Pp]icture-in-[Pp]icture)" }, animation = M.default_animation })
 	for _, corner in pairs(M.corners) do
