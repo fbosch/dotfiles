@@ -9,6 +9,7 @@ tools:
 permission:
   edit: deny
   open_pr: deny
+  update_pr: deny
   gh_pr_feedback_resolve_threads: deny
   bash:
     "git commit *": deny

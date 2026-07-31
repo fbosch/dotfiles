@@ -25,7 +25,7 @@ export function accountCredentialKey(accountId: string): string {
 	return createHash("sha256").update(accountId).digest("hex");
 }
 
-const usageCacheTimeMs = 30_000;
+const usageCacheTimeMs = 10_000;
 export const resetCreditsCacheTimeMs = 8 * 60 * 60 * 1_000;
 const usageCacheBuster = "fbb.opencode-multi-auth-query-cache/v2";
 const usageCachePrefix = "fbb-opencode-multi-auth";

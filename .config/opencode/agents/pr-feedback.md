@@ -8,6 +8,7 @@ permission:
   edit: allow
   task: allow
   question: allow
+  update_pr: deny
   gh_pr_feedback_resolve_threads: ask
   bash:
     "git commit *": deny
