@@ -12,7 +12,9 @@ The executable launcher is `bin/ocma`; its typed command adapter is
 `lib/opencode-multi-auth/index.ts`, separate from the account-state library in
 `lib/opencode-multi-auth/opencode-multi-auth.ts`. The FBB Bun package provides Citty command
 parsing and Clack interactive prompts; Bun automatically installs its locked
-dependencies when `ocma` first runs on a new machine.
+dependencies when `ocma` first runs on a new machine or finds an incomplete
+`node_modules` tree. If the registry is unavailable, `ocma` exits non-zero
+without changing account state.
 
 Commands default to human-readable text. Use `--format json` for scripts and
 other configurations. `ocma login` is interactive and only supports text
