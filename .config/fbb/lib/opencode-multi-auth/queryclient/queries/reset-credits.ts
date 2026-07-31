@@ -1,4 +1,4 @@
-import type { QueryOptions } from "@tanstack/query-core";
+import type { FetchQueryOptions } from "@tanstack/query-core";
 import { z } from "zod";
 import type { AccountResetCredits } from "../../types.ts";
 import {
@@ -50,7 +50,7 @@ export function resetCreditsQueryOptions(credentials: ResetCredentials) {
 		],
 		queryFn: () => fetchResetCredits(credentials),
 		staleTime: resetCreditsCacheTimeMs,
-	} satisfies QueryOptions;
+	} satisfies FetchQueryOptions;
 }
 
 export async function fetchResetCredits(

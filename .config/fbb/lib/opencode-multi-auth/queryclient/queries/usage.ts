@@ -1,4 +1,4 @@
-import type { QueryOptions } from "@tanstack/query-core";
+import type { FetchQueryOptions } from "@tanstack/query-core";
 import { z } from "zod";
 import type { AccountUsage, UsageWindow } from "../../types.ts";
 import { accountCredentialKey, usageQueryKey } from "../client.ts";
@@ -37,7 +37,7 @@ export function usageQueryOptions(
 	return {
 		queryKey: [...usageQueryKey, accountCredentialKey(credentials.accountId)],
 		queryFn: () => fetchUsageUncached(credentials),
-	} satisfies QueryOptions;
+	} satisfies FetchQueryOptions;
 }
 
 export async function fetchUsageUncached(credentials: {

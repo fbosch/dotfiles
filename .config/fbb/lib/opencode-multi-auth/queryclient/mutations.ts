@@ -116,7 +116,12 @@ function consumeResetCreditMutationOptions() {
 				redeemedAt: parsed.data.credit?.redeemed_at ?? null,
 			};
 		},
-	} satisfies MutationOptions;
+	} satisfies MutationOptions<
+		ConsumeResetCreditData,
+		Error,
+		ConsumeResetCreditVariables,
+		unknown
+	>;
 }
 
 async function invalidateAccountQueries(paths: AccountPaths): Promise<void> {
