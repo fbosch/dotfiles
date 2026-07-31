@@ -304,6 +304,9 @@ Current focused fixtures run through `devenv test`:
 
 - `tests/runtime/window_capture_supervisor.sh` verifies worker-group cleanup and
   owned lock removal with a controlled child.
+- `tests/runtime/window_capture_ownership.sh` verifies stale worker-marker
+  recovery, live-marker preservation, and atomic pending-event reads using fake
+  Hyprland and capture commands.
 - `tests/runtime/lifecycle_recovery.sh` verifies documented recovery subsets,
   waits, launcher paths, and UWSM scopes with command stubs.
 - `tests/runtime/night_light_missing_dependency.sh` verifies that a missing
