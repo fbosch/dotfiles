@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-daemon="${HOME}/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.lua"
+daemon="${HYPR_WINDOW_CAPTURE_DAEMON:-${HOME}/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.lua}"
 mode="${1:-daemon}"
 
 if [[ "$mode" != "daemon" ]]; then

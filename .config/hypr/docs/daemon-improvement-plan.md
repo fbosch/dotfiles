@@ -300,6 +300,18 @@ Required coverage:
 - Fake Hyprland event sockets for reconnect tests.
 - Stub external commands for dependency-isolation tests.
 
+Current focused fixtures run through `devenv test`; `just hypr-runtime-tests`
+runs the same suite with streamed output:
+
+- `tests/runtime/window_capture_supervisor.sh` verifies worker-group cleanup and
+  owned lock removal with a controlled child.
+- `tests/runtime/lifecycle_recovery.sh` verifies documented recovery subsets,
+  waits, launcher paths, and UWSM scopes with command stubs.
+- `tests/runtime/night_light_missing_dependency.sh` verifies that a missing
+  `hyprsunset` disables only night light.
+- `tests/window_state_rules.lua` verifies generated-rule publication skips
+  unchanged content.
+
 ## Implementation Order
 
 1. Custom-layout socket ownership.
