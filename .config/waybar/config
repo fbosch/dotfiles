@@ -10,6 +10,8 @@
   "on-sigusr1": "show",
   "on-sigusr2": "hide",
   "passthrough": false,
+  "slide-duration": 120,
+  "slide-offset": 12,
   "mode": "dock",
   "modes": {
     "dock": {
@@ -18,9 +20,12 @@
     "hide": {
       "layer": "top"
     },
-    "invisible": {
-      "layer": "bottom"
-    }
+  "invisible": {
+      "layer": "top",
+      "exclusive": false,
+      "passthrough": true,
+      "visible": true
+  }
   },
 
   "modules-left": ["custom/startbutton", "hyprland/workspaces"],
