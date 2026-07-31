@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import type { QueryOptions } from "@tanstack/query-core";
 import { z } from "zod";
 import type { AccountUsage, UsageWindow } from "../../types.ts";
 import { accountCredentialKey, usageQueryKey } from "../client.ts";
@@ -34,10 +34,10 @@ const UsageSchema = z.object({
 export function usageQueryOptions(
 	credentials: { accessToken: string; accountId: string },
 ) {
-	return queryOptions({
+	return {
 		queryKey: [...usageQueryKey, accountCredentialKey(credentials.accountId)],
 		queryFn: () => fetchUsageUncached(credentials),
-	});
+	} satisfies QueryOptions;
 }
 
 export async function fetchUsageUncached(credentials: {
