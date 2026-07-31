@@ -153,10 +153,11 @@ while true; do
             if (( now - show_started_ms >= SHOW_DELAY_MS )); then
                 if gaming_workspace_is_active; then
                     :
-                elif pkill -SIGUSR1 waybar; then
-                    waybar_visible=1
-                    sleep 0.1
+                else
                     position_pip show
+                    if pkill -SIGUSR1 waybar; then
+                    waybar_visible=1
+                    fi
                 fi
                 show_started_ms=0
                 hide_started_ms=0

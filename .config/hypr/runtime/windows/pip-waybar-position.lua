@@ -9,6 +9,17 @@ local hypr_ipc = require("runtime.lib.hypr-ipc")
 
 local vicinity = 12
 
+local function read_file(path)
+	local handle = io.open(path, "r")
+	if not handle then
+		return ""
+	end
+
+	local content = handle:read("*a")
+	handle:close()
+	return content
+end
+
 local function request(message)
 	local ok, response = pcall(hypr_ipc.request, message)
 	if ok then
@@ -57,6 +68,38 @@ local function waybar_layers(layers, monitor_name)
 	return visible
 end
 
+local function predicted_waybar_layers(monitors)
+	local config = json.object(read_file(os.getenv("HOME") .. "/.config/waybar/config"))
+	local height = tonumber(config.height)
+	if config.position ~= "bottom" or not height then
+		return {}
+	end
+
+	local margin_left = tonumber(config["margin-left"]) or 0
+	local margin_right = tonumber(config["margin-right"]) or 0
+	local margin_bottom = tonumber(config["margin-bottom"]) or 0
+	local predicted = {}
+
+	for _, monitor in ipairs(monitors) do
+		local width = tonumber(monitor.width) or 0
+		local monitor_height = tonumber(monitor.height) or 0
+		if monitor.transform == 1 or monitor.transform == 3 then
+			width, monitor_height = monitor_height, width
+		end
+
+		predicted[monitor.name] = {
+			rectangle(
+				(tonumber(monitor.x) or 0) + margin_left,
+				(tonumber(monitor.y) or 0) + monitor_height - height - margin_bottom,
+				width - margin_left - margin_right,
+				height
+			),
+		}
+	end
+
+	return predicted
+end
+
 local function normal_position(window, monitor)
 	return (tonumber(monitor.x) or 0) + (tonumber(monitor.width) or 0) - (tonumber(window.size[1]) or 0) - pip.right_margin,
 		(tonumber(monitor.y) or 0) + (tonumber(monitor.height) or 0) - (tonumber(window.size[2]) or 0) - pip.bottom_margin
@@ -97,8 +140,10 @@ end
 
 local function position(mode)
 	local clients = json.array(request("j/clients"))
-	local monitors = monitors_by_id(json.array(request("j/monitors")))
+	local monitor_list = json.array(request("j/monitors"))
+	local monitors = monitors_by_id(monitor_list)
 	local layers = json.object(request("j/layers"))
+	local predicted_layers = predicted_waybar_layers(monitor_list)
 
 	for _, window in ipairs(clients) do
 		if window.mapped ~= false
@@ -111,6 +156,9 @@ local function position(mode)
 			if monitor then
 				local normal_x, normal_y = normal_position(window, monitor)
 				local bars = waybar_layers(layers, monitor.name)
+				if mode == "show" and #bars == 0 then
+					bars = predicted_layers[monitor.name] or {}
+				end
 				local avoidance_x, avoidance_y = avoidance_position(window, normal_x, bars)
 
 				if mode == "show" then
