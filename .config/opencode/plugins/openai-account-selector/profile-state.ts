@@ -66,8 +66,12 @@ export async function watchProfileState(
 
 function profileStatePath(directory: string, serverUrl: string | URL, env: NodeJS.ProcessEnv) {
   const home = env.HOME || ""
-  const stateHome = env.XDG_RUNTIME_DIR || env.XDG_STATE_HOME || join(home, ".local", "state")
-  const identity = `${process.pid}\0${resolve(directory)}\0${normalizedServerUrl(serverUrl)}`
+  // This file is shared by the OpenCode server and TUI processes. Runtime
+  // directories can differ between those processes, especially on macOS.
+  const stateHome = env.XDG_STATE_HOME || join(home, ".local", "state")
+  // The server plugin and TUI plugin run in different processes. Their state
+  // key must describe the OpenCode instance, not either process ID.
+  const identity = `${resolve(directory)}\0${normalizedServerUrl(serverUrl)}`
   const key = createHash("sha256").update(identity).digest("hex").slice(0, 16)
   return join(stateHome, "fbb", "opencode-account-selector", `${key}.json`)
 }

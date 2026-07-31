@@ -1,0 +1,15 @@
+id = "neovim-sessions"
+name = "Neovim sessions"
+version = "0.1.0"
+description = "Restores pane-specific Neovim and OpenCode sessions."
+min_herdr_version = "0.7.5"
+platforms = ["linux", "macos"]
+
+[[startup]]
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/restore.sh\""]
+
+[[actions]]
+id = "migrate-pane"
+title = "Migrate pane to Neovim session"
+contexts = ["workspace"]
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/migrate-pane.sh\""]
