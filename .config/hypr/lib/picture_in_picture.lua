@@ -4,6 +4,7 @@ local M = {
 	margin = 15,
 	overlap_gap = 15,
 	snap_vicinity = 100,
+	rounding = 8,
 	default_animation = "slide right",
 	corners = {
 		["top-left"] = { tag = "pip-top-left", animation = "slide left" },
@@ -22,6 +23,7 @@ function M.register_window_rules()
 		no_initial_focus = true,
 		pin = true,
 		content = "video",
+		rounding = M.rounding,
 	})
 	hl.window_rule({ match = { title = "([Pp]icture-in-[Pp]icture)" }, animation = M.default_animation })
 	for _, corner in pairs(M.corners) do

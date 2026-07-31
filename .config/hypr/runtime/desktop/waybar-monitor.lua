@@ -222,7 +222,15 @@ local function snap_target(window, monitor, bars)
 	local target_x = left and monitor.x + pip.margin or monitor.x + monitor.width - width - pip.margin
 	local target_y = top and monitor.y + pip.margin or bottom_y(window, monitor, target_x, bars)
 	local corner = (top and "top" or "bottom") .. "-" .. (left and "left" or "right")
-	return { monitor = monitor.name, x = target_x - monitor.x, y = target_y - monitor.y, width = width, height = height, corner = corner }
+	return {
+		monitor = monitor.name,
+		x = target_x - monitor.x,
+		y = target_y - monitor.y,
+		width = width,
+		height = height,
+		rounding = pip.rounding,
+		corner = corner,
+	}
 end
 
 local function tag_pip_corner(window, corner)
@@ -233,7 +241,7 @@ local function tag_pip_corner(window, corner)
 end
 
 local function set_snap_preview(target)
-	local signature = target and string.format("%s:%d:%d:%d:%d", target.monitor, target.x, target.y, target.width, target.height) or nil
+	local signature = target and string.format("%s:%d:%d:%d:%d:%d", target.monitor, target.x, target.y, target.width, target.height, target.rounding) or nil
 	if signature == preview_signature then
 		return
 	end
