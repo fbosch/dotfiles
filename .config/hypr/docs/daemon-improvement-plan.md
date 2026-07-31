@@ -310,6 +310,9 @@ Current focused fixtures run through `devenv test`:
   `hyprsunset` disables only night light.
 - `tests/window_state_rules.lua` verifies generated-rule publication skips
   unchanged content.
+- `tests/runtime/window_state_daemon.lua` runs the real window-state daemon
+  against fake query and event sockets to verify cache publication and
+  reconnect recovery.
 
 ## Implementation Order
 

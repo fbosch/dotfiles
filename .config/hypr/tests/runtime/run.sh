@@ -15,4 +15,5 @@ for test_file in "${tests[@]}"; do
   timeout --foreground 15s bash "$test_file"
 done
 
-luajit .config/hypr/tests/window_state_rules.lua
+timeout --foreground 15s luajit .config/hypr/tests/window_state_rules.lua
+REPO_ROOT="$PWD" timeout --foreground 15s luajit .config/hypr/tests/runtime/window_state_daemon.lua

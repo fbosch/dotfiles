@@ -11,6 +11,7 @@
     just
     lua
     luajit_2_1
+    luajitPackages.luasocket
     markdownlint-cli
     neovim
     nodejs
