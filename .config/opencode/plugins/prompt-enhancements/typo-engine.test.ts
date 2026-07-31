@@ -93,6 +93,12 @@ test("corrects a completed word before punctuation", () => {
   }
 })
 
+test("leaves an ordinary delimiter append unchanged", () => {
+  const rules = new Map([["teh", "the"]])
+
+  expect(appendDelimiterAndCorrect("review the prompt", " ", rules)).toBe("review the prompt ")
+})
+
 test("corrects success typo variants without rewriting the correct spelling", () => {
   const rules = parseTypoRules("succes{,ful,fully} success{,ful,fully}")
 

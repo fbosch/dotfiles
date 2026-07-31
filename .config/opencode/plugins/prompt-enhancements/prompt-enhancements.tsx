@@ -96,13 +96,23 @@ async function loadTypoRules(): Promise<Map<string, string>> {
 }
 
 function insertDelimiterAndCorrect(
-  ref: PromptRef,
+  ref: PromptRef | undefined,
   delimiter: string,
   rules: ReadonlyMap<string, string>,
   ruleLengths: ReadonlySet<number>,
 ) {
+  if (!ref || ref.focused === false) {
+    return false
+  }
+
   const current = ref.current
-  ref.set({ ...current, input: appendDelimiterAndCorrect(current.input, delimiter, rules, ruleLengths) })
+  const input = appendDelimiterAndCorrect(current.input, delimiter, rules, ruleLengths)
+  if (input === `${current.input}${delimiter}`) {
+    return false
+  }
+
+  ref.set({ ...current, input })
+  return true
 }
 
 function PromptWithEnhancements(
@@ -216,21 +226,23 @@ const tui: TuiPlugin = async (api: TuiPluginApi) => {
         title: `Insert ${delimiter.name}`,
         category: "Prompt",
         hidden: true,
-        run() {
-          const ref = activePromptRef?.focused ? activePromptRef : undefined
-          if (!ref) {
+        run(context) {
+          if (insertDelimiterAndCorrect(activePromptRef, delimiter.value, typoRules, typoLengths) === false) {
             return
           }
 
-          insertDelimiterAndCorrect(ref, delimiter.value, typoRules, typoLengths)
+          context.event.preventDefault()
+          context.event.stopPropagation()
         },
       })),
     ],
     bindings: typoDelimiters.map((delimiter) => ({
-      key: delimiter.key,
-      cmd: `prompt-enhancements.insert-${delimiter.name}`,
-      desc: delimiter.description ?? "Insert punctuation and fix prompt typo",
-    })),
+        key: delimiter.key,
+        cmd: `prompt-enhancements.insert-${delimiter.name}`,
+        desc: delimiter.description ?? "Insert punctuation and fix prompt typo",
+        preventDefault: false,
+        fallthrough: true,
+      })),
   })
 
   api.slots.register({

@@ -50,36 +50,6 @@ opencode = [
   ["$opencode_session_title"],
 ]
 
-[[keys.command]]
-key = "prefix+shift+g"
-type = "plugin_action"
-command = "worktrunk.open"
-description = "Worktree: switch or create from default branch"
-
-[[keys.command]]
-key = "prefix+shift+c"
-type = "plugin_action"
-command = "worktrunk.open-current"
-description = "Worktree: switch or create from current branch"
-
-[[keys.command]]
-key = "prefix+shift+d"
-type = "plugin_action"
-command = "worktrunk.remove"
-description = "Worktree: remove"
-
-[[keys.command]]
-key = "prefix+f"
-type = "shell"
-command = "herdr plugin action invoke open-file-viewer --plugin herdr-file-viewer"
-description = "File viewer: open in split"
-
-[[keys.command]]
-key = "prefix+shift+f"
-type = "shell"
-command = "herdr plugin action invoke open-file-viewer-tab --plugin herdr-file-viewer"
-description = "File viewer: open in tab"
-
 [experimental]
 pane_history = true
 

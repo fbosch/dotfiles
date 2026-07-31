@@ -13,6 +13,7 @@ Fish shell configuration for interactive work, dotfiles maintenance, and local w
 ## Function Groups
 
 - OpenCode and agent workflow: `opencode.fish`, `ai_commit.fish`, `ai_pr.fish`, `linear_issue_workflow.fish`, `codex-reset.fish`, profile/auth switching helpers.
+- Herdr: `herdr_link_plugins.fish` links the tracked local Herdr plugins after `stow .`.
 - Worktree and branch helpers: `wt.fish`, `worktree_add.fish`, `worktree_clone.fish`, `latest_worktree.fish`, `wtfzf.fish`.
 - Azure DevOps helpers: `ado_test_case.fish`, `ado_refinement_candidates.fish`, `workitems_on_date.fish`, `workitems_week.fish`, `workitems_cache_clear.fish`.
 - Nix helpers: `flake_check_updates.fish`, `flake_update_interactive.fish`, `flake_updates_daemon.fish`, `flake_restore.fish`, `nxrb.fish`.

@@ -4,7 +4,8 @@ set -euo pipefail
 herdr_bin="${HERDR_BIN_PATH:-herdr}"
 herdr_socket="${HERDR_SOCKET_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/herdr/herdr.sock}"
 
-for scan in {1..20}; do
+for _ in {1..20}; do
+	pending=0
 	while IFS= read -r workspace_id; do
 		[[ -n "$workspace_id" ]] || continue
 
@@ -13,13 +14,16 @@ for scan in {1..20}; do
 			[[ -n "$pane_id" ]] || continue
 
 			processes=""
-			for attempt in {1..20}; do
+			for _ in {1..20}; do
 				if processes="$("$herdr_bin" pane process-info --pane "$pane_id" 2>/dev/null)"; then
 					break
 				fi
 				sleep 0.1
 			done
-			[[ -n "$processes" ]] || continue
+			if [[ -z "$processes" ]]; then
+				pending=1
+				continue
+			fi
 			if jq -e '.result.process_info.foreground_processes[]? | select(.name == "nvim")' >/dev/null <<<"$processes"; then
 				continue
 			fi
@@ -28,7 +32,9 @@ for scan in {1..20}; do
 				nvim_session="herdr-${pane_id/:/-}"
 				"$herdr_bin" pane run "$pane_id" "HERDR_ENV=1 HERDR_PANE_ID=$pane_id HERDR_SOCKET_PATH=$herdr_socket NVIM_SESSION=$nvim_session HERDR_MINI_SESSION_RESTORE=1 exec nvim"
 			fi
+			pending=1
 		done < <(jq -r '.result.panes[]? | select(.label == "nvim") | .pane_id' <<<"$panes")
 	done < <("$herdr_bin" workspace list | jq -r '.result.workspaces[]?.workspace_id')
+	[[ "$pending" -eq 0 ]] && break
 	sleep 0.1
 done
