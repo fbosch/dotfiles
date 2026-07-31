@@ -1,6 +1,7 @@
 #!/usr/bin/env luajit
 
 local socket = require("socket")
+local ffi = require("ffi")
 
 local config_dir = os.getenv("HOME") .. "/.config/hypr"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
@@ -8,6 +9,15 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 local json = require("lib.json")
 local command = require("lib.command")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
+
+ffi.cdef([[
+  typedef int pid_t;
+  pid_t fork(void);
+  int setpgid(pid_t pid, pid_t pgid);
+  int kill(pid_t pid, int sig);
+  pid_t waitpid(pid_t pid, int *status, int options);
+  pid_t getpid(void);
+]])
 
 local mode = arg[1] or "daemon"
 local runtime_dir = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
@@ -23,7 +33,6 @@ local last_event_file = screenshot_dir .. "/.last_event"
 local capture_lock_file = screenshot_dir .. "/.capture_lock"
 local workspace_change_file = screenshot_dir .. "/.workspace_change"
 local pending_event_file = screenshot_dir .. "/.pending_event"
-local pending_event_temp_file = screenshot_dir .. "/.pending_event.new"
 local last_healthcheck_file = screenshot_dir .. "/.last_healthcheck"
 
 local debounce_ms = 100
@@ -31,8 +40,11 @@ local capture_delay_ms = 50
 local window_settle_delay_ms = 150
 local workspace_delay_ms = 100
 local lock_stale_ms = 10000
-local worker_lock_stale_ms = 30000
+local worker_lock_initialization_grace_ms = 100
 local healthcheck_interval_ms = 5000
+local event_reconnect_delay_s = 0.5
+local event_read_timeout_s = 0.5
+local worker_shutdown_wait_ms = 500
 local temp_file_max_age_s = 30
 local grim_timeout_s = 2
 local max_parallel_captures = 4
@@ -42,6 +54,17 @@ local preview_target_height = 180
 local preview_target_max_width = 320
 local command_cache = {}
 local capture_window_preview
+local worker_pid = nil
+local worker_token = nil
+local write_sequence = 0
+
+local sigterm = 15
+local sigkill = 9
+local wnohang = 1
+
+local function log(message)
+	io.stderr:write("window-capture: ", message, "\n")
+end
 
 local function command_exists(name)
 	if command_cache[name] ~= nil then
@@ -84,9 +107,12 @@ local function read_number(path)
 end
 
 local function write_file(path, content)
-	local handle = assert(io.open(path, "w"))
+	write_sequence = write_sequence + 1
+	local temporary_path = path .. ".tmp." .. tostring(ffi.C.getpid()) .. "." .. tostring(write_sequence)
+	local handle = assert(io.open(temporary_path, "w"))
 	handle:write(content)
 	handle:close()
+	assert(os.rename(temporary_path, path))
 end
 
 local function remove_file(path)
@@ -567,42 +593,115 @@ local function acquire_daemon_lock()
 	return false
 end
 
-local function release_worker_lock()
-	command.ok("rm -rf " .. command.arg(worker_lock_dir) .. " 2>/dev/null")
+local function worker_owner(lock_dir)
+	local owner = read_file((lock_dir or worker_lock_dir) .. "/owner") or ""
+	local pid, token = owner:match("^(%d+)\t([^\n]+)")
+	return pid or "", token or ""
+end
+
+local function release_worker_lock(expected_token)
+	write_sequence = write_sequence + 1
+	local retiring_dir = worker_lock_dir .. ".retiring." .. tostring(ffi.C.getpid()) .. "." .. tostring(write_sequence)
+	if not os.rename(worker_lock_dir, retiring_dir) then
+		return
+	end
+
+	local _, token = worker_owner(retiring_dir)
+	if token ~= expected_token then
+		os.rename(retiring_dir, worker_lock_dir)
+		return
+	end
+
+	command.ok("rm -rf " .. command.arg(retiring_dir) .. " 2>/dev/null")
 end
 
 local function acquire_worker_lock()
 	if command.ok("mkdir " .. command.arg(worker_lock_dir) .. " 2>/dev/null") then
-		write_file(worker_lock_dir .. "/timestamp", tostring(now_ms()))
 		return true
 	end
 
-	local timestamp = read_number(worker_lock_dir .. "/timestamp")
-	if timestamp and now_ms() - timestamp >= 0 and now_ms() - timestamp < worker_lock_stale_ms then
+	local pid = worker_owner()
+	if pid == "" then
+		socket.sleep(worker_lock_initialization_grace_ms / 1000)
+		pid = worker_owner()
+		if pid == "" then
+			return false
+		end
+	end
+
+	if pid_is_running(pid) then
 		return false
 	end
 
-	release_worker_lock()
-	if command.ok("mkdir " .. command.arg(worker_lock_dir) .. " 2>/dev/null") then
-		write_file(worker_lock_dir .. "/timestamp", tostring(now_ms()))
-		return true
-	end
-
-	return false
+	command.ok("rm -rf " .. command.arg(worker_lock_dir) .. " 2>/dev/null")
+	return command.ok("mkdir " .. command.arg(worker_lock_dir) .. " 2>/dev/null")
 end
 
 local function write_pending_event(capture_id, line)
-	write_file(pending_event_temp_file, capture_id .. "\t" .. line)
-	os.rename(pending_event_temp_file, pending_event_file)
+	write_file(pending_event_file, capture_id .. "\t" .. line)
+end
+
+local run_capture_worker
+
+local function reap_capture_worker()
+	if not worker_pid then
+		return false
+	end
+
+	local status = ffi.new("int[1]")
+	local result = ffi.C.waitpid(worker_pid, status, wnohang)
+	if result ~= worker_pid then
+		return false
+	end
+
+	release_worker_lock(worker_token)
+	worker_pid = nil
+	worker_token = nil
+	return true
 end
 
 local function start_capture_worker()
+	reap_capture_worker()
+	if worker_pid then
+		return
+	end
+
 	if acquire_worker_lock() == false then
 		return
 	end
 
-	local worker_command = command.arg(arg[0]) .. " worker >/dev/null 2>&1 &"
-	command.ok("sh -c " .. command.arg(worker_command))
+	local token = tostring(ffi.C.getpid()) .. "-" .. tostring(now_ms())
+	write_file(worker_lock_dir .. "/owner", tostring(ffi.C.getpid()) .. "\t" .. token)
+	local pid = ffi.C.fork()
+	if pid < 0 then
+		release_worker_lock(token)
+		io.stderr:write("window-capture: failed to fork worker\n")
+		return
+	end
+
+	if pid == 0 then
+		if ffi.C.setpgid(0, 0) ~= 0 then
+			os.exit(1)
+		end
+		local ok, err = xpcall(run_capture_worker, debug.traceback)
+		if not ok then
+			io.stderr:write("window-capture: worker failed: ", err, "\n")
+		end
+		os.exit(ok and 0 or 1)
+	end
+
+	if ffi.C.setpgid(pid, pid) ~= 0 then
+		ffi.C.kill(pid, sigterm)
+		local status = ffi.new("int[1]")
+		ffi.C.waitpid(pid, status, 0)
+		release_worker_lock(token)
+		log("failed to create worker process group")
+		return
+	end
+
+	worker_pid = tonumber(pid)
+	worker_token = token
+	write_file(worker_lock_dir .. "/owner", tostring(worker_pid) .. "\t" .. token)
 end
 
 local function enqueue_event(line)
@@ -622,7 +721,7 @@ local function enqueue_event(line)
 	start_capture_worker()
 end
 
-local function run_capture_worker()
+run_capture_worker = function()
 	-- The reader overwrites pending state while this worker captures the latest event.
 	while true do
 		local pending_event = read_file(pending_event_file)
@@ -633,37 +732,83 @@ local function run_capture_worker()
 				handle_event(line, capture_id, true)
 			end
 		else
-			release_worker_lock()
-			if not read_file(pending_event_file) or acquire_worker_lock() == false then
-				return
-			end
+			return
 		end
 	end
 end
 
+local function stop_capture_worker()
+	if not worker_pid then
+		return
+	end
+
+	ffi.C.kill(-worker_pid, sigterm)
+	local deadline = now_ms() + worker_shutdown_wait_ms
+	while now_ms() < deadline do
+		if reap_capture_worker() then
+			return
+		end
+		socket.sleep(0.01)
+	end
+
+	ffi.C.kill(-worker_pid, sigkill)
+	local status = ffi.new("int[1]")
+	ffi.C.waitpid(worker_pid, status, 0)
+	release_worker_lock(worker_token)
+	worker_pid = nil
+	worker_token = nil
+end
+
 local function run_event_loop()
+	local connection_failed = false
 	while true do
-		local ok, client = pcall(hypr_ipc.connect_event_socket, { connect_timeout = 0.5 })
+		local ok, client = pcall(hypr_ipc.connect_event_socket, {
+			connect_timeout = event_reconnect_delay_s,
+			read_timeout = event_read_timeout_s,
+		})
 		if not ok then
-			socket.sleep(0.5)
+			if connection_failed == false then
+				log("event socket unavailable; retrying")
+				connection_failed = true
+			end
+			socket.sleep(event_reconnect_delay_s)
 		else
+			if connection_failed then
+				log("event socket reconnected")
+				connection_failed = false
+			end
 			while true do
+				reap_capture_worker()
 				local line, err, partial = client:receive("*l")
 				line = line or partial
 				if line and line ~= "" then
 					enqueue_event(line)
 				end
-				if err == "closed" then
+				if err == "timeout" then
+					if read_file(pending_event_file) then
+						start_capture_worker()
+					end
+				elseif err == "closed" then
 					client:close()
+					log("event socket closed; retrying")
+					connection_failed = true
+					socket.sleep(event_reconnect_delay_s)
 					break
 				elseif err then
 					client:close()
-					socket.sleep(0.5)
+					log("event socket read failed; retrying")
+					connection_failed = true
+					socket.sleep(event_reconnect_delay_s)
 					break
 				end
 			end
 		end
 	end
+end
+
+local function cleanup_daemon()
+	stop_capture_worker()
+	command.ok("rm -rf " .. command.arg(daemon_lock_dir) .. " 2>/dev/null")
 end
 
 local function usage()
@@ -684,7 +829,12 @@ elseif mode == "daemon" then
 	if not acquire_daemon_lock() then
 		os.exit(0)
 	end
-	run_event_loop()
+	local ok, err = xpcall(run_event_loop, debug.traceback)
+	cleanup_daemon()
+	if not ok then
+		log("daemon failed: " .. err)
+		os.exit(1)
+	end
 else
 	usage()
 	os.exit(1)

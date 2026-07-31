@@ -29,6 +29,7 @@ local control_server = nil
 local event_socket = nil
 local owns_control_socket = false
 local reconcile_at = nil
+local reconcile_addresses = {}
 
 local function log(message)
 	io.stderr:write("picture-in-picture: ", message, "\n")
@@ -378,16 +379,20 @@ local function snap_pip(address)
 	end
 end
 
-local function move_pip(mode)
+local function move_pip(mode, address, assign_default_corner)
 	refresh_monitors()
 	local bars = mode == "show" and predicted_waybar_layers() or visible_waybar_layers()
 	for _, window in ipairs(json.array(request("j/clients"))) do
-		if is_pip(window) then
+		if is_pip(window) and (address == nil or window.address == address) then
 			local monitor = monitor_for(window)
 			if monitor then
 				local width = tonumber(window.size[1]) or 0
 				local height = tonumber(window.size[2]) or 0
 				local corner = tagged_corner(window)
+				if corner == nil and assign_default_corner then
+					corner = "bottom-right"
+					tag_pip_corner(window, corner)
+				end
 				local normal_x = corner and corner:match("left$") and monitor.x + pip.margin or corner_x(window, monitor)
 				local normal_y = monitor.y + monitor.height - height - pip.margin
 				local window_rect = rectangle(window.at[1], window.at[2], width, height)
@@ -508,8 +513,16 @@ local function run()
 			elseif reader == event_socket then
 				local event, err, partial = event_socket:receive("*l")
 				event = event or partial
-				if event and event:match("^openwindow") then
-					reconcile_at = socket.gettime() + open_window_delay_s
+				local opened = event and event:match("^openwindow") ~= nil
+				local resized = event and event:match("^resizewindow") ~= nil and dragging == false and resize_anchor == nil
+				local should_reconcile = opened or resized
+				if should_reconcile then
+					local address = event:match(">>([^,]+)")
+					if address then
+						if address:match("^0x") == nil then address = "0x" .. address end
+						reconcile_addresses[address] = reconcile_addresses[address] or opened
+						reconcile_at = socket.gettime() + open_window_delay_s
+					end
 				end
 				if err == "closed" then
 					event_socket:close()
@@ -522,7 +535,10 @@ local function run()
 			reconcile_at = nil
 			refresh_monitors()
 			waybar_visible = next(visible_waybar_layers()) ~= nil
-			move_pip(waybar_visible and "show" or "hide")
+			for address, assign_default_corner in pairs(reconcile_addresses) do
+				move_pip(waybar_visible and "show" or "hide", address, assign_default_corner)
+				reconcile_addresses[address] = nil
+			end
 		end
 	end
 end
