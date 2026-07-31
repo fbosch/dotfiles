@@ -130,6 +130,9 @@ Changes:
    coordination files.
 6. Name the event reconnect delay and prefix recovery diagnostics.
 7. Preserve `daemon`, `refresh-once`, `handle-event`, and `worker` modes.
+8. Route persistent startup and recovery through a feature-local shell
+   supervisor that terminates and reaps the resident daemon and its worker
+   group; keep one-shot modes as direct Lua invocations.
 
 Validation:
 

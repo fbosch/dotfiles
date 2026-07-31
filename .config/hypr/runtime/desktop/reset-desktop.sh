@@ -15,6 +15,19 @@ wait_for_waybar_monitor_shutdown() {
   done
 }
 
+wait_for_window_capture_shutdown() {
+  attempts=0
+  while pgrep -f "window-capture-daemon\.(sh|lua)" >/dev/null 2>&1; do
+    if [ "$attempts" -ge 100 ]; then
+      printf 'reset-desktop: window capture did not stop\n' >&2
+      exit 1
+    fi
+
+    attempts=$((attempts + 1))
+    sleep 0.05
+  done
+}
+
 hyprctl reload
 
 pkill waybar 2>/dev/null || true
@@ -28,6 +41,7 @@ pkill -f custom-layout-drag-resize-daemon.lua 2>/dev/null || true
 pkill -f hyprpaper 2>/dev/null || true
 
 wait_for_waybar_monitor_shutdown
+wait_for_window_capture_shutdown
 
 uwsm-app -s s -- waybar &
 uwsm-app -s s -- ~/.config/ags/start-daemons.sh &
@@ -37,7 +51,7 @@ swaync-client -rs &
 
 uwsm-app -s b -- hyprpaper &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-state/window-state.sh &
-uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.lua &
+uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.sh &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh daemon &
 
 sleep 1

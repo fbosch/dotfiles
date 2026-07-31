@@ -28,6 +28,19 @@ wait_for_waybar_monitor_shutdown() {
   done
 }
 
+wait_for_window_capture_shutdown() {
+  attempts=0
+  while pgrep -f "window-capture-daemon\.(sh|lua)" >/dev/null 2>&1; do
+    if [ "$attempts" -ge 100 ]; then
+      printf 'restart-daemons: window capture did not stop\n' >&2
+      exit 1
+    fi
+
+    attempts=$((attempts + 1))
+    sleep 0.05
+  done
+}
+
 hyprctl reload
 systemctl --user restart vicinae.service
 
@@ -52,6 +65,7 @@ pkill gjs 2>/dev/null || true
 
 wait_for_pip_shutdown
 wait_for_waybar_monitor_shutdown
+wait_for_window_capture_shutdown
 
 uwsm-app -s b -- hypridle &
 uwsm-app -s s -- atuin daemon &
@@ -60,7 +74,7 @@ uwsm-app -s b -- flake-check-updates &
 uwsm-app -s b -- swayosd-server &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-state/window-state.sh &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/minimized-state/minimized-state-daemon.sh &
-uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.lua &
+uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.sh &
 uwsm-app -s b -- ~/.config/hypr/runtime/gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/picture-in-picture.sh &
 uwsm-app -s b -- ~/.config/hypr/runtime/desktop/night-light.sh daemon &

@@ -26,7 +26,7 @@ local commands = {
 		paths.runtime_script("windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh") .. " daemon"
 	),
 	background(paths.runtime_script("windows/daemons/minimized-state/minimized-state-daemon.sh")),
-	background(paths.runtime_script("windows/daemons/window-capture/window-capture-daemon.lua")),
+	background(paths.runtime_script("windows/daemons/window-capture/window-capture-daemon.sh")),
 	background(paths.runtime_script("windows/daemons/picture-in-picture.sh")),
 background(paths.runtime_script("gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh")),
 background(paths.runtime_script("gaming/gamescope-clipboard-sync.sh")),
