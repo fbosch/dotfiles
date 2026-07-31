@@ -34,8 +34,6 @@ export const OpenAIAccountSelectorPlugin: Plugin = async ({ $, client, directory
     }
   }
 
-  await removeProfileState(directory, serverUrl).catch(() => undefined)
-
   if (["1", "true"].includes(process.env.OPENCODE_EXPERIMENTAL_WEBSOCKETS?.toLowerCase() || "")) {
     await log("error", "repository account selection does not support OpenAI WebSocket transport")
     return {
