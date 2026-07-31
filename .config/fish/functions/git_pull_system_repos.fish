@@ -38,6 +38,13 @@ function git_pull_system_repos --description 'Pull ~/nixos and ~/dotfiles with f
         if test $status -ne 0
             echo '==> Failed to restow ~/dotfiles'
             set had_failure 1
+        else
+            echo '==> Linking local Herdr plugins'
+            herdr_link_plugins
+            if test $status -ne 0
+                echo '==> Failed to link local Herdr plugins'
+                set had_failure 1
+            end
         end
     end
 
