@@ -18,6 +18,7 @@ daemon_lock_dir="$XDG_RUNTIME_DIR/hypr-window-capture-daemon.lock.d"
 worker_owner_file="$XDG_RUNTIME_DIR/hypr-window-capture-worker.lock.d/owner"
 child_pid=""
 
+# shellcheck disable=SC2329
 stop_worker_group() {
   [[ -r "$worker_owner_file" ]] || return
 
@@ -27,6 +28,7 @@ stop_worker_group() {
   kill -TERM -- "-$worker_pid" >/dev/null 2>&1 || true
 }
 
+# shellcheck disable=SC2329
 cleanup() {
   if [[ -n "$child_pid" ]]; then
     kill -TERM "$child_pid" >/dev/null 2>&1 || true
@@ -36,7 +38,10 @@ cleanup() {
   fi
 
   local lock_pid
-  lock_pid="$(<"$daemon_lock_dir/pid" 2>/dev/null || true)"
+  lock_pid=""
+  if [[ -r "$daemon_lock_dir/pid" ]]; then
+    read -r lock_pid < "$daemon_lock_dir/pid" || true
+  fi
   if [[ "$lock_pid" == "$child_pid" ]]; then
     rm -rf "$daemon_lock_dir"
   fi
