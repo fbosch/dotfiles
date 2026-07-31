@@ -131,9 +131,11 @@ test("refreshes an expired alternate before forced usage selection", async () =>
 
 test("rewrites Codex requests and replaces credential headers without changing the body", async () => {
   const requests: Array<{ body: string | null; headers: Headers; method: string | undefined; url: string }> = []
+  const observedAccounts: string[] = []
   const fetch = createCodexFetch({
     credential: credential("selected", Date.now() + 60_000),
     paths: pathsFor("/unused"),
+    onRequest: (accountId) => observedAccounts.push(accountId),
     fetch: async (input, init) => {
       requests.push({
         body: init?.body ? await new Response(init.body).text() : null,
@@ -160,6 +162,7 @@ test("rewrites Codex requests and replaces credential headers without changing t
   expect(requests[0].headers.get("ChatGPT-Account-Id")).toBe("selected")
   expect(requests[0].headers.get("session-id")).toBe("session-a")
   expect(requests[0].headers.has("x-opencode-title")).toBe(false)
+  expect(observedAccounts).toEqual(["selected"])
 })
 
 test("rejects unknown OpenAI OAuth destinations before sending credentials", async () => {

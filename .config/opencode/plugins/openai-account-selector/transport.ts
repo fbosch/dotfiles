@@ -24,6 +24,7 @@ type TransportOptions = {
   credential: OAuthCredential
   fetch?: Fetch
   now?: () => number
+  onRequest?: (accountId: string) => void | Promise<void>
   onUsageLimit?: (credential: OAuthCredential, info: UsageLimitInfo) => Promise<OAuthCredential | undefined>
   onWarning?: (message: string) => void | Promise<void>
   paths: AccountPaths
@@ -39,6 +40,7 @@ export function createCodexFetch({
   credential: initialCredential,
   fetch: fetchRequest = globalThis.fetch,
   now = Date.now,
+  onRequest,
   onUsageLimit,
   onWarning,
   paths,
@@ -91,6 +93,8 @@ export function createCodexFetch({
     headers.delete(internalTitleHeader)
     headers.set("authorization", `Bearer ${attemptedCredential.access}`)
     headers.set("ChatGPT-Account-Id", attemptedCredential.accountId)
+
+    await observeRequest(onRequest, attemptedCredential.accountId)
 
     const response = await fetchRequest(codexEndpoint, {
       body: request.body,
@@ -345,6 +349,14 @@ function errorMessage(error: unknown) {
 async function warn(onWarning: TransportOptions["onWarning"], message: string) {
   try {
     await onWarning?.(message)
+  } catch {
+    return
+  }
+}
+
+async function observeRequest(onRequest: TransportOptions["onRequest"], accountId: string) {
+  try {
+    await onRequest?.(accountId)
   } catch {
     return
   }
