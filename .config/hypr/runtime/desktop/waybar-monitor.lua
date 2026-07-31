@@ -22,6 +22,7 @@ local slow_interval_ms = 1000
 local monitor_cache_ttl_s = 10
 local monitor_margin = 50
 local pip_vicinity = 12
+local snap_delay_ms = 100
 local control_socket_path = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-waybar-monitor.sock"
 
 local monitors = {}
@@ -130,6 +131,14 @@ local function monitor_at(x, y)
 	return closest
 end
 
+local function monitor_for(window)
+	for _, monitor in pairs(monitors) do
+		if monitor.id == tostring(window.monitor) then
+			return monitor
+		end
+	end
+end
+
 local function predicted_waybar_layers()
 	local config = json.object(read_file(os.getenv("HOME") .. "/.config/waybar/config"))
 	local height = tonumber(config.height)
@@ -163,28 +172,79 @@ local function visible_waybar_layers()
 	return visible
 end
 
+local function corner_x(window, monitor)
+	local left_x = monitor.x + pip.margin
+	local right_x = monitor.x + monitor.width - (tonumber(window.size[1]) or 0) - pip.margin
+	if math.abs((tonumber(window.at[1]) or 0) - left_x) <= math.abs((tonumber(window.at[1]) or 0) - right_x) then
+		return left_x
+	end
+
+	return right_x
+end
+
+local function bottom_y(window, monitor, x, bars)
+	local height = tonumber(window.size[2]) or 0
+	local y = monitor.y + monitor.height - height - pip.margin
+	local target = rectangle(x, y, tonumber(window.size[1]) or 0, height)
+	for _, bar in ipairs(bars[monitor.name] or {}) do
+		if overlaps(target, bar) then
+			y = math.min(y, bar.top - height - pip.overlap_gap)
+		end
+	end
+
+	return y
+end
+
+local function move_window(window, x, y)
+	if (tonumber(window.at[1]) or 0) == x and (tonumber(window.at[2]) or 0) == y then
+		return
+	end
+
+	request(string.format("dispatch hl.dsp.window.move({ x = %d, y = %d, window = %s })", x, y, json.encode("address:" .. window.address)))
+end
+
+local function snap_pip()
+	refresh_monitors()
+	local bars = waybar_visible and predicted_waybar_layers() or visible_waybar_layers()
+	for _, window in ipairs(json.array(request("j/clients"))) do
+		if window.mapped ~= false and window.hidden ~= true and window.floating == true and window.class == pip.class and window.title == pip.title then
+			local monitor = monitor_for(window)
+			if monitor then
+				local x = tonumber(window.at[1]) or 0
+				local y = tonumber(window.at[2]) or 0
+				local width = tonumber(window.size[1]) or 0
+				local height = tonumber(window.size[2]) or 0
+				local left_distance = math.abs(x - monitor.x)
+				local right_distance = math.abs(x + width - monitor.x - monitor.width)
+				local top_distance = math.abs(y - monitor.y)
+				local bottom_distance = math.abs(y + height - monitor.y - monitor.height)
+				if math.min(left_distance, right_distance) <= pip.snap_vicinity and math.min(top_distance, bottom_distance) <= pip.snap_vicinity then
+					local target_x = left_distance <= right_distance and monitor.x + pip.margin or monitor.x + monitor.width - width - pip.margin
+					local target_y = top_distance <= bottom_distance and monitor.y + pip.margin or bottom_y(window, monitor, target_x, bars)
+					move_window(window, target_x, target_y)
+				end
+			end
+		end
+	end
+end
+
 local function move_pip(mode)
 	refresh_monitors()
 	local bars = mode == "show" and predicted_waybar_layers() or visible_waybar_layers()
 	for _, window in ipairs(json.array(request("j/clients"))) do
 		if window.mapped ~= false and window.hidden ~= true and window.floating == true and window.class == pip.class and window.title == pip.title then
-			local monitor
-			for _, candidate in pairs(monitors) do
-				if candidate.id == tostring(window.monitor) then
-					monitor = candidate
-					break
-				end
-			end
+			local monitor = monitor_for(window)
 			if monitor then
 				local width = tonumber(window.size[1]) or 0
 				local height = tonumber(window.size[2]) or 0
-				local normal_x = monitor.x + monitor.width - width - pip.right_margin
-				local normal_y = monitor.y + monitor.height - height - pip.bottom_margin
+				local normal_x = corner_x(window, monitor)
+				local normal_y = monitor.y + monitor.height - height - pip.margin
 				local window_rect = rectangle(window.at[1], window.at[2], width, height)
 				local target_y
 				for _, bar in ipairs(bars[monitor.name] or {}) do
 					if mode == "show" and overlaps(window_rect, bar) then
-						target_y = target_y and math.min(target_y, bar.top - height - pip.overlap_gap) or bar.top - height - pip.overlap_gap
+						target_y = bottom_y(window, monitor, normal_x, bars)
+						break
 					elseif mode == "hide" then
 						local avoidance_y = bar.top - height - pip.overlap_gap
 						if math.abs(window_rect.left - normal_x) <= pip_vicinity and math.abs(window_rect.top - avoidance_y) <= pip_vicinity then
@@ -193,11 +253,22 @@ local function move_pip(mode)
 					end
 				end
 				if target_y then
-					request(string.format("dispatch hl.dsp.window.move({ x = %d, y = %d, window = %s })", normal_x, target_y, json.encode("address:" .. window.address)))
+					move_window(window, normal_x, target_y)
 				end
 			end
 		end
 	end
+end
+
+local function pip_positions()
+	local positions = {}
+	for _, window in ipairs(json.array(request("j/clients"))) do
+		if window.mapped ~= false and window.hidden ~= true and window.floating == true and window.class == pip.class and window.title == pip.title then
+			positions[window.address] = string.format("%s:%s", window.at[1], window.at[2])
+		end
+	end
+
+	return positions
 end
 
 local function taskbar_visible()
@@ -257,6 +328,8 @@ local function run()
 	assert(server:bind(control_socket_path))
 	assert(server:listen())
 	server:settimeout(0)
+	local snap_at = nil
+	local previous_pip_positions = pip_positions()
 
 	while true do
 		local x, y = request("cursorpos"):match("^%s*([^,]+),%s*(.+)%s*$")
@@ -294,10 +367,29 @@ local function run()
 			end
 		end
 
+		local current_pip_positions = pip_positions()
+		if next(current_pip_positions) then
+			for address, position in pairs(current_pip_positions) do
+				if previous_pip_positions[address] ~= position then
+					snap_at = now_ms() + snap_delay_ms
+					break
+				end
+			end
+		end
+		previous_pip_positions = current_pip_positions
+
+		if snap_at then
+			interval = math.min(interval, math.max(0, snap_at - now_ms()))
+		end
 		local ready = socket.select({ server }, nil, interval / 1000)
 		if #ready > 0 then
 			local control = server:accept()
 			if control then handle_control(control) end
+		end
+
+		if snap_at and now_ms() >= snap_at then
+			snap_pip()
+			snap_at = nil
 		end
 	end
 end
