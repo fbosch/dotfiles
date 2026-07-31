@@ -6,6 +6,16 @@ local gaming = require("gaming")
 local pip = require("lib.picture_in_picture")
 local picture_in_picture = require("actions.picture-in-picture")
 
+local window_behaviors = {
+	{
+		matches = function(window)
+			return window.class == pip.class and window.title == pip.title
+		end,
+		focus = picture_in_picture.focus,
+		move = picture_in_picture.move_corner,
+	},
+}
+
 local directions = {
 	l = "left",
 	r = "right",
@@ -196,17 +206,22 @@ function M.active()
 	return nil
 end
 
-function M.with_active_window(identifier, on_match, on_miss)
+local function with_window_behavior(action, direction, fallback)
 	return function()
 		local active = M.active()
-		if active and active.class == identifier.class and active.title == identifier.title then
-			local handled = on_match()
-			if handled ~= false then
-				return handled
+		if active then
+			for _, behavior in ipairs(window_behaviors) do
+				local handler = behavior[action]
+				if handler and behavior.matches(active) then
+					local handled = handler(direction)
+					if handled ~= false then
+						return handled
+					end
+				end
 			end
 		end
 
-		return on_miss()
+		return fallback()
 	end
 end
 
@@ -305,11 +320,7 @@ end
 
 function M.focus(value)
 	local normalized = direction(value)
-	return M.with_active_window(
-		pip,
-		function() return picture_in_picture.focus(normalized) end,
-		focus_window(normalized)
-	)
+	return with_window_behavior("focus", normalized, focus_window(normalized))
 end
 
 local function move_window(value)
@@ -386,11 +397,7 @@ end
 
 function M.move(value)
 	local normalized = direction(value)
-	return M.with_active_window(
-		pip,
-		function() return picture_in_picture.move_corner(normalized) end,
-		move_window(normalized)
-	)
+	return with_window_behavior("move", normalized, move_window(normalized))
 end
 
 function M.adjust(kind, value)
