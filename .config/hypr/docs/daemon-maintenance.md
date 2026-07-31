@@ -21,6 +21,11 @@ not create another special case.
   of creating a shared daemon directory.
 - Name executable files and commands with hyphens. Use underscores for new
   importable Lua module names.
+- Use the kebab-case feature identity for wrappers, supervisor labels, sockets,
+  locks, and log prefixes, for example `picture-in-picture`.
+- Name a managed launcher `<feature>.sh`. Add the `-daemon` suffix to a
+  persistent implementation only when it distinguishes that process from a
+  paired one-shot command or feature entry point.
 - Keep policy and client exceptions in their declarative source modules.
   Daemons consume the policy; they do not copy exceptions locally.
 
