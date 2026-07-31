@@ -41,6 +41,19 @@ wait_for_window_capture_shutdown() {
   done
 }
 
+wait_for_window_state_shutdown() {
+  attempts=0
+  while pgrep -f "window-state(-daemon)?\.(sh|lua)" >/dev/null 2>&1; do
+    if [ "$attempts" -ge 100 ]; then
+      printf 'restart-daemons: window state did not stop\n' >&2
+      exit 1
+    fi
+
+    attempts=$((attempts + 1))
+    sleep 0.05
+  done
+}
+
 wait_for_night_light_shutdown() {
   attempts=0
   while pgrep -f "night-light.sh daemon" >/dev/null 2>&1; do
@@ -65,7 +78,9 @@ pkill swayosd-server 2>/dev/null || true
 pkill flake-check-updates 2>/dev/null || true
 pkill -f "atuin daemon" 2>/dev/null || true
 pkill -f "foot --server" 2>/dev/null || true
+# The wrapper execs Lua, so stop and wait for both before the lock can be reused.
 pkill -f "window-state.sh" 2>/dev/null || true
+pkill -f "window-state-daemon.lua" 2>/dev/null || true
 pkill -f "minimized-state-daemon" 2>/dev/null || true
 pkill -f "window-capture-daemon" 2>/dev/null || true
 pkill -f "gaming-session-watchdog" 2>/dev/null || true
@@ -80,6 +95,7 @@ pkill gjs 2>/dev/null || true
 wait_for_pip_shutdown
 wait_for_waybar_monitor_shutdown
 wait_for_window_capture_shutdown
+wait_for_window_state_shutdown
 wait_for_night_light_shutdown
 
 uwsm-app -s b -- hypridle &

@@ -13,6 +13,7 @@ readonly -a PRETERM_PROCESS_ARGS=(
   "$HOME/.config/hypr/runtime/startup/startup-desktop-ready.sh"
   "$HOME/.config/hypr/runtime/desktop/waybar-monitor.lua"
   "$HOME/.config/hypr/runtime/windows/daemons/window-state/window-state.sh"
+  "$HOME/.config/hypr/runtime/windows/daemons/window-state/window-state-daemon.lua"
   "$HOME/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.sh"
   "$HOME/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.lua"
   "$HOME/.config/waybar/scripts/mullvad-status"

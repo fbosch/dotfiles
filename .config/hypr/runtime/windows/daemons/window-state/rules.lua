@@ -240,16 +240,18 @@ function M.update_cache_from_windows(cache, windows, log)
 				window.width,
 				window.height
 			)
-			log(string.format(
-				'Updated %s "%s": %sx%s at (%s,%s) on %s',
-				window.matcher,
-				window.pattern,
-				window.width,
-				window.height,
-				window.x,
-				window.y,
-				window.monitor ~= "" and window.monitor or "unknown"
-			))
+			if log then
+				log(string.format(
+					'Updated %s "%s": %sx%s at (%s,%s) on %s',
+					window.matcher,
+					window.pattern,
+					window.width,
+					window.height,
+					window.x,
+					window.y,
+					window.monitor ~= "" and window.monitor or "unknown"
+				))
+			end
 		end
 	end
 end

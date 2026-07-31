@@ -15,6 +15,19 @@ wait_for_waybar_monitor_shutdown() {
   done
 }
 
+wait_for_window_state_shutdown() {
+  attempts=0
+  while pgrep -f "window-state(-daemon)?\.(sh|lua)" >/dev/null 2>&1; do
+    if [ "$attempts" -ge 100 ]; then
+      printf 'reset-desktop: window state did not stop\n' >&2
+      exit 1
+    fi
+
+    attempts=$((attempts + 1))
+    sleep 0.05
+  done
+}
+
 wait_for_window_capture_shutdown() {
   attempts=0
   while pgrep -f "window-capture-daemon\.(sh|lua)" >/dev/null 2>&1; do
@@ -42,6 +55,7 @@ pkill -f hyprpaper 2>/dev/null || true
 
 wait_for_waybar_monitor_shutdown
 wait_for_window_capture_shutdown
+wait_for_window_state_shutdown
 
 uwsm-app -s s -- waybar &
 uwsm-app -s s -- ~/.config/ags/start-daemons.sh &

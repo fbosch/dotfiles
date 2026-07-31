@@ -177,7 +177,8 @@ Files:
 
 Changes:
 
-1. Classify cache and debounce files as shared or private.
+1. Treat `hypr-window-state.cache` as shared state and the debounce marker as a
+   private crash-recovery marker.
 2. Atomically publish shared files and retain direct writes only for private
    markers.
 3. Prefix stderr diagnostics and name the event reconnect delay.

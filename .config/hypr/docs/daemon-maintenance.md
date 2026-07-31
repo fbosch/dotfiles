@@ -112,6 +112,8 @@ singleton external process needs an explicit ownership mechanism.
 - Publish files read by another process with a temporary file and rename.
   Direct writes are only for private markers where a partial read has no
   consequence.
+- Keep the temporary file in the destination directory so `rename` remains an
+  atomic replacement on the same filesystem.
 - Keep generated persistent Hyprland data in its designated configuration path,
   not the runtime directory.
 - Quote dynamic shell arguments through `lib.command` in Lua or shell-safe
