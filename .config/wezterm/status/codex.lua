@@ -5,7 +5,7 @@ package.path = wezterm.config_dir .. "/../fbb/lua/?.lua;" .. package.path
 local ocma = require("fbb.ocma")
 
 local unpack_args = table.unpack or unpack
-local refresh_interval_seconds = 30
+local refresh_interval_seconds = 10
 local codex_status = { checked_at = 0, accounts = {} }
 local command_search_path = table.concat({
 	-- Home Manager exposes user packages here on macOS and NixOS.

@@ -132,7 +132,7 @@ function parseGitHub(value: string): { owner: string; repo: string } | null {
 
 function parseAzureDevOps(value: string): { org: string; project: string; repo: string } | null {
   const devAzureSsh = value.match(/^[^@]+@ssh\.dev\.azure\.com:v3\/([^/]+)\/([^/]+)\/([^/]+)$/)
-  if (devAzureSsh?.[1] && devAzureSsh[2] && devAzureSsh[3]) {
+  if (devAzureSsh?.[1] && devAzureSsh[2] && devAzureSsh[3] && isAzureOrganizationName(devAzureSsh[1])) {
     return {
       org: `https://dev.azure.com/${devAzureSsh[1]}`,
       project: decodeSegment(devAzureSsh[2]),
@@ -141,7 +141,7 @@ function parseAzureDevOps(value: string): { org: string; project: string; repo: 
   }
 
   const visualStudioSsh = value.match(/^[^@]+@vs-ssh\.visualstudio\.com:v3\/([^/]+)\/([^/]+)\/([^/]+)$/)
-  if (visualStudioSsh?.[1] && visualStudioSsh[2] && visualStudioSsh[3]) {
+  if (visualStudioSsh?.[1] && visualStudioSsh[2] && visualStudioSsh[3] && isAzureOrganizationName(visualStudioSsh[1])) {
     return {
       org: `https://${visualStudioSsh[1]}.visualstudio.com`,
       project: decodeSegment(visualStudioSsh[2]),
@@ -182,6 +182,10 @@ function parseAzureDevOps(value: string): { org: string; project: string; repo: 
   }
 
   return null
+}
+
+function isAzureOrganizationName(value: string): boolean {
+  return /^[a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?$/i.test(value)
 }
 
 function decodeSegment(value: string): string {
@@ -267,41 +271,16 @@ function parseJson(value: string): unknown {
 }
 
 async function findGitHubPullRequest(context: RepositoryContext, cwd: string): Promise<{ context?: PullRequestContext; error?: string }> {
-  const repo = `${context.remote.owner}/${context.remote.repo}`
   const result = await runCommand(
     "gh",
-    [
-      "pr",
-      "list",
-      "--repo",
-      repo,
-      "--head",
-      context.branch,
-      "--state",
-      "open",
-      "--limit",
-      "2",
-      "--json",
-      "number,title,body,url,baseRefName,headRefName,state",
-    ],
+    ["pr", "view", "--json", "number,title,body,url,baseRefName,headRefName,state"],
     cwd,
   )
   if (result.exitCode !== 0) {
-    return { error: formatCommandError("gh pr list", result) }
+    return { error: formatCommandError("gh pr view", result) }
   }
 
-  const values = parseJson(result.stdout)
-  if (Array.isArray(values) === false) {
-    return { error: "ERROR: Could not parse GitHub pull request details." }
-  }
-  if (values.length === 0) {
-    return { error: `ERROR: No active pull request found for branch ${context.branch}.` }
-  }
-  if (values.length > 1) {
-    return { error: `ERROR: Multiple active pull requests found for branch ${context.branch}.` }
-  }
-
-  const value: unknown = values[0]
+  const value = parseJson(result.stdout)
   if (
     isRecord(value) === false ||
     typeof value.number !== "number" ||
@@ -445,7 +424,7 @@ async function findPullRequest(context: RepositoryContext, cwd: string): Promise
 
 async function updatePullRequest(context: PullRequestContext, title: string | undefined, body: string | undefined, cwd: string): Promise<string> {
   if (context.remote.provider === "github") {
-    const args = ["pr", "edit", String(context.id), "--repo", `${context.remote.owner}/${context.remote.repo}`]
+    const args = ["pr", "edit", context.url]
     if (title !== undefined) {
       args.push(`--title=${title}`)
     }
@@ -476,8 +455,8 @@ async function updatePullRequest(context: PullRequestContext, title: string | un
   }
 
   const result = await runCommand("az", args, cwd, {
-      ...process.env,
-      AZURE_EXTENSION_USE_DYNAMIC_INSTALL: "no",
+    ...process.env,
+    AZURE_EXTENSION_USE_DYNAMIC_INSTALL: "no",
   })
   return result.exitCode === 0 ? context.url : formatCommandError("az repos pr update", result)
 }
@@ -500,9 +479,7 @@ function formatContext(context: PullRequestContext): string {
     `Title: ${context.title}`,
   ]
 
-  if (context.remote.provider === "github") {
-    lines.push(`GitHub repository: ${context.remote.owner}/${context.remote.repo}`)
-  } else {
+  if (context.remote.provider === "azure-devops") {
     lines.push(`Azure org: ${context.remote.org}`)
     lines.push(`Azure project: ${context.remote.project}`)
     lines.push(`Azure repository: ${context.remote.repo}`)
