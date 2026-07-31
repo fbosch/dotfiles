@@ -15,6 +15,19 @@ wait_for_pip_shutdown() {
   done
 }
 
+wait_for_waybar_monitor_shutdown() {
+  attempts=0
+  while pgrep -f "waybar-monitor\.(sh|lua)" >/dev/null 2>&1; do
+    if [ "$attempts" -ge 100 ]; then
+      printf 'restart-daemons: waybar monitor did not stop\n' >&2
+      exit 1
+    fi
+
+    attempts=$((attempts + 1))
+    sleep 0.05
+  done
+}
+
 hyprctl reload
 systemctl --user restart vicinae.service
 
@@ -32,11 +45,13 @@ pkill -f "window-capture-daemon" 2>/dev/null || true
 pkill -f "gaming-session-watchdog" 2>/dev/null || true
 pkill -f "picture-in-picture.sh" 2>/dev/null || true
 pkill -f "picture-in-picture.lua" 2>/dev/null || true
+pkill -f "waybar-monitor.sh" 2>/dev/null || true
 pkill -f "waybar-monitor.lua" 2>/dev/null || true
 pkill -f "night-light.sh daemon" 2>/dev/null || true
 pkill gjs 2>/dev/null || true
 
 wait_for_pip_shutdown
+wait_for_waybar_monitor_shutdown
 
 uwsm-app -s b -- hypridle &
 uwsm-app -s s -- atuin daemon &
@@ -53,4 +68,4 @@ uwsm-app -s s -- waybar &
 uwsm-app -s s -- hyprpaper &
 uwsm-app -s s -- swaync -c ~/.config/swaync/config.json -s ~/.config/swaync/style.css &
 uwsm-app -s s -- ~/.config/ags/start-daemons.sh &
-uwsm-app -s s -- luajit ~/.config/hypr/runtime/desktop/waybar-monitor.lua &
+uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-monitor.sh &

@@ -48,6 +48,9 @@ it and state the reason in that script when it intentionally does not.
   and policy decisions.
 - Keep Bash for thin launchers, lock ownership, and external command pipelines
   where shell is materially simpler.
+- Use `runtime/lib/daemon-supervisor.sh` for a daemon with a fixed command
+  socket, `ping` health check, and supervised LuaJIT child. Keep each wrapper's
+  socket path and ordered shutdown commands declarative.
 - Use `runtime.lib.hypr-ipc` for Lua Hyprland queries and event subscriptions.
 - Reuse `lib.json`, `lib.command`, `lib.paths`, and other existing helpers
   before adding local parsing, quoting, or path logic.

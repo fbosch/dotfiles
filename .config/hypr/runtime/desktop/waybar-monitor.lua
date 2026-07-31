@@ -20,7 +20,7 @@ local fast_interval_ms = 80
 local slow_interval_ms = 1000
 local monitor_cache_ttl_s = 10
 local monitor_margin = 50
-local control_socket_path = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-waybar-monitor.sock"
+local control_socket_path = assert(os.getenv("XDG_RUNTIME_DIR"), "XDG_RUNTIME_DIR is required") .. "/hypr-waybar-monitor.sock"
 local pip_control_socket = 'nc -U "$XDG_RUNTIME_DIR/hypr-pip-monitor.sock" >/dev/null 2>&1'
 
 local monitors = {}
@@ -30,6 +30,12 @@ local waybar_visible = false
 local super_held = false
 local show_started_at = nil
 local hide_started_at = nil
+local control_server = nil
+local owns_control_socket = false
+
+local function log(message)
+	io.stderr:write("waybar-monitor: ", message, "\n")
+end
 
 local function now_ms()
 	return math.floor(socket.gettime() * 1000)
@@ -177,9 +183,28 @@ local function handle_control(control)
 		super_held = false
 	elseif message == "hide" then
 		hide_waybar()
+	elseif message == "ping" then
+		-- Side-effect-free health check for the launcher.
+	elseif message == "quit" then
+		control:send("ok\n")
+		control:close()
+		return true
 	end
 	control:send("ok\n")
 	control:close()
+	return false
+end
+
+local function cleanup_control_socket()
+	if control_server then
+		control_server:close()
+		control_server = nil
+	end
+
+	if owns_control_socket then
+		os.remove(control_socket_path)
+		owns_control_socket = false
+	end
 end
 
 local function run()
@@ -187,11 +212,11 @@ local function run()
 	waybar_visible = current_waybar_visibility()
 	command.ok("printf 'waybar-" .. (waybar_visible and "show" or "hide") .. "\\n' | " .. pip_control_socket)
 
-	os.remove(control_socket_path)
-	local server = assert(unix())
-	assert(server:bind(control_socket_path))
-	assert(server:listen())
-	server:settimeout(0)
+	control_server = assert(unix())
+	assert(control_server:bind(control_socket_path))
+	assert(control_server:listen())
+	owns_control_socket = true
+	control_server:settimeout(0)
 
 	while true do
 		local x, y = request("cursorpos"):match("^%s*([^,]+),%s*(.+)%s*$")
@@ -229,14 +254,17 @@ local function run()
 			end
 		end
 
-		local ready = socket.select({ server }, nil, interval / 1000)
+		local ready = socket.select({ control_server }, nil, interval / 1000)
 		if #ready > 0 then
-			local control = server:accept()
-			if control then handle_control(control) end
+			local control = control_server:accept()
+			if control and handle_control(control) then return end
 		end
 	end
 end
 
 local ok, err = xpcall(run, debug.traceback)
-os.remove(control_socket_path)
-if ok == false then error(err) end
+cleanup_control_socket()
+if ok == false then
+	log(err)
+	os.exit(1)
+end

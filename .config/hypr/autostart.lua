@@ -35,7 +35,8 @@ background(paths.runtime_script("gaming/gamescope-clipboard-sync.sh")),
 	session("swaync -c ~/.config/swaync/config.json -s ~/.config/swaync/style.css"),
 	session("~/.config/ags/start-daemons.sh"),
 	background(paths.runtime_script("desktop/night-light.sh") .. " daemon"),
-	session("luajit " .. paths.runtime_script("desktop/waybar-monitor.lua")),
+	-- Session-scoped because it coordinates Waybar, AGS, SwayNC, and PiP.
+	session(paths.runtime_script("desktop/waybar-monitor.sh")),
 	paths.runtime_script("startup/startup-desktop-ready.sh"),
 }
 
