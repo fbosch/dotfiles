@@ -227,6 +227,11 @@ const tui: TuiPlugin = async (api: TuiPluginApi) => {
         category: "Prompt",
         hidden: true,
         run(context) {
+          const editor = api.renderer.currentFocusedEditor
+          if (!editor || editor.cursorOffset !== editor.plainText.length) {
+            return
+          }
+
           if (insertDelimiterAndCorrect(activePromptRef, delimiter.value, typoRules, typoLengths) === false) {
             return
           }
