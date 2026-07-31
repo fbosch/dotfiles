@@ -23,10 +23,15 @@ end
 
 ---@param run_command fun(command: string, args: string[]): boolean, boolean, string
 ---@param decode_json fun(content: string): table
+---@param use_cache boolean|nil
 ---@return table[]|nil
-function M.list(run_command, decode_json)
+function M.list(run_command, decode_json, use_cache)
 	assert(type(run_command) == "function", "run_command must be a function")
-	local ran, ok, output = run_ocma(run_command, "list", { "--format", "json" })
+	local args = { "--format", "json" }
+	if use_cache == false then
+		table.insert(args, "--cache=false")
+	end
+	local ran, ok, output = run_ocma(run_command, "list", args)
 	if not ran or not ok then
 		return nil
 	end

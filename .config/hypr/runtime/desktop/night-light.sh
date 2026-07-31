@@ -2,23 +2,165 @@
 
 set -euo pipefail
 
+umask 077
+
 STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-night-light"
 OVERRIDE_FILE="$STATE_DIR/override"
 OVERRIDE_EXPIRY_FILE="$STATE_DIR/override-expiry"
 LOCK_FILE="$STATE_DIR/daemon.lock"
 TEMPERATURE_FILE="$STATE_DIR/temperature"
+HYPRSUNSET_OWNER_FILE="$STATE_DIR/hyprsunset-owner"
+RECOVERY_LOG_FILE="$STATE_DIR/last-recovery-log"
 HYPRSUNSET_SOCKET="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr/${HYPRLAND_INSTANCE_SIGNATURE:-}/.hyprsunset.sock"
 
 DAY_TEMP=6500
 NIGHT_TEMP=4000
 TRANSITION_SECONDS=3600
 UPDATE_INTERVAL=300
+RECOVERY_LOG_INTERVAL=300
+CHILD_STOP_ATTEMPTS=20
+CHILD_STOP_INTERVAL=0.05
 LATITUDE=55.6761
 LONGITUDE=12.5683
 AUTO_SCHEDULE=true
 ENABLED=false
 
 mkdir -p "$STATE_DIR"
+
+atomic_write() {
+  local target="$1" value="$2" temporary
+
+  temporary="$(mktemp "$target.XXXXXX")"
+  printf "%s\n" "$value" > "$temporary"
+  mv -f "$temporary" "$target"
+}
+
+log_recovery() {
+  local message="$1" now last_log=0
+
+  now="$(date +%s)"
+  if [[ -r "$RECOVERY_LOG_FILE" ]]; then
+    read -r last_log < "$RECOVERY_LOG_FILE" || true
+  fi
+  if [[ "$last_log" =~ ^[0-9]+$ ]] && ((now - last_log < RECOVERY_LOG_INTERVAL)); then
+    return
+  fi
+
+  atomic_write "$RECOVERY_LOG_FILE" "$now"
+  printf 'night-light: %s\n' "$message" >&2
+}
+
+require_dependencies() {
+  local dependency
+  local -a missing=()
+
+  for dependency in awk date flock mktemp nc hyprsunset; do
+    command -v "$dependency" >/dev/null 2>&1 || missing+=("$dependency")
+  done
+  if ((${#missing[@]} == 0)); then
+    return
+  fi
+
+  printf 'night-light: disabled: missing %s\n' "${missing[*]}" >&2
+  return 1
+}
+
+process_start_time() {
+  local pid="$1"
+
+  awk '{ print $22 }' "/proc/$pid/stat" 2>/dev/null
+}
+
+owned_hyprsunset() {
+  local pid start_time current_start_time process_name
+
+  [[ -r "$HYPRSUNSET_OWNER_FILE" ]] || return 1
+  read -r pid start_time < "$HYPRSUNSET_OWNER_FILE" || return 1
+  if [[ ! "$pid" =~ ^[0-9]+$ || ! "$start_time" =~ ^[0-9]+$ ]]; then
+    rm -f "$HYPRSUNSET_OWNER_FILE"
+    return 1
+  fi
+
+  process_name=""
+  if [[ -r "/proc/$pid/comm" ]]; then
+    read -r process_name < "/proc/$pid/comm" || true
+  fi
+  current_start_time="$(process_start_time "$pid")"
+  if [[ "$process_name" != "hyprsunset" || "$current_start_time" != "$start_time" ]]; then
+    rm -f "$HYPRSUNSET_OWNER_FILE"
+    return 1
+  fi
+
+  printf '%s %s\n' "$pid" "$start_time"
+}
+
+clear_hyprsunset_owner() {
+  local pid="$1" start_time="$2" owner
+
+  [[ -r "$HYPRSUNSET_OWNER_FILE" ]] || return
+  owner="$(< "$HYPRSUNSET_OWNER_FILE")"
+  [[ "$owner" == "$pid $start_time" ]] && rm -f "$HYPRSUNSET_OWNER_FILE"
+}
+
+wait_for_owned_hyprsunset() {
+  local pid="$1" attempts=0
+
+  while kill -0 "$pid" >/dev/null 2>&1; do
+    if ((attempts >= CHILD_STOP_ATTEMPTS)); then
+      return 1
+    fi
+
+    attempts=$((attempts + 1))
+    sleep "$CHILD_STOP_INTERVAL"
+  done
+}
+
+stop_owned_hyprsunset() {
+  local owner pid start_time
+
+  owner="$(owned_hyprsunset)" || return
+  read -r pid start_time <<< "$owner"
+  kill -TERM "$pid" >/dev/null 2>&1 || true
+  if ! wait_for_owned_hyprsunset "$pid"; then
+    log_recovery "forcing owned hyprsunset shutdown"
+    kill -KILL "$pid" >/dev/null 2>&1 || true
+    wait_for_owned_hyprsunset "$pid" || true
+  fi
+  wait "$pid" >/dev/null 2>&1 || true
+  clear_hyprsunset_owner "$pid" "$start_time"
+}
+
+start_hyprsunset() {
+  local temperature="$1" pid start_time
+
+  if [[ -S "$HYPRSUNSET_SOCKET" ]]; then
+    log_recovery "refusing to replace an unowned hyprsunset instance"
+    return 1
+  fi
+
+  if [[ "$temperature" -ge "$DAY_TEMP" ]]; then
+    hyprsunset -i >/dev/null 2>&1 &
+  else
+    hyprsunset -t "$temperature" >/dev/null 2>&1 &
+  fi
+  pid="$!"
+
+  sleep "$CHILD_STOP_INTERVAL"
+  if ! kill -0 "$pid" >/dev/null 2>&1; then
+    wait "$pid" >/dev/null 2>&1 || true
+    log_recovery "owned hyprsunset exited during startup"
+    return 1
+  fi
+
+  start_time="$(process_start_time "$pid")"
+  if [[ ! "$start_time" =~ ^[0-9]+$ ]]; then
+    kill -TERM "$pid" >/dev/null 2>&1 || true
+    wait "$pid" >/dev/null 2>&1 || true
+    log_recovery "could not record owned hyprsunset identity"
+    return 1
+  fi
+  atomic_write "$HYPRSUNSET_OWNER_FILE" "$pid $start_time"
+}
 
 solar_event_epoch() {
   local date="$1"
@@ -115,10 +257,6 @@ desired_temperature() {
   scheduled_temperature
 }
 
-is_active() {
-  pgrep -x hyprsunset >/dev/null
-}
-
 hyprsunset_ipc() {
   local command="$1" response
 
@@ -131,43 +269,48 @@ is_enabled() {
 }
 
 set_temperature() {
-  local temperature="$1" previous_temperature=""
+  local temperature="$1" previous_temperature="" owner pid start_time
 
   if [[ -f "$TEMPERATURE_FILE" ]]; then
     previous_temperature="$(< "$TEMPERATURE_FILE")"
   fi
 
+  owner="$(owned_hyprsunset)" || owner=""
   if [[ "$temperature" == "$previous_temperature" ]]; then
-    if [[ "$temperature" -lt "$DAY_TEMP" ]] && is_active; then
+    if [[ "$temperature" -lt "$DAY_TEMP" && -n "$owner" ]] && hyprsunset_ipc "temperature $temperature"; then
       return
     fi
-    if [[ "$temperature" -ge "$DAY_TEMP" ]] && ! is_active; then
+    if [[ "$temperature" -ge "$DAY_TEMP" && -z "$owner" ]]; then
       return
     fi
   fi
 
   if [[ "$temperature" -ge "$DAY_TEMP" ]]; then
-    if is_active; then
+    if [[ -n "$owner" ]]; then
       if hyprsunset_ipc "identity"; then
-        printf "%s" "$temperature" > "$TEMPERATURE_FILE"
+        atomic_write "$TEMPERATURE_FILE" "$temperature"
         return
       fi
 
-      pkill -x hyprsunset 2>/dev/null || true
-      hyprsunset -i >/dev/null 2>&1 &
+      log_recovery "owned hyprsunset IPC failed; restarting"
+      stop_owned_hyprsunset
+      start_hyprsunset "$temperature" || return 1
     fi
-    printf "%s" "$temperature" > "$TEMPERATURE_FILE"
+    atomic_write "$TEMPERATURE_FILE" "$temperature"
     return
   fi
 
-  if is_active && hyprsunset_ipc "temperature $temperature"; then
-    printf "%s" "$temperature" > "$TEMPERATURE_FILE"
+  if [[ -n "$owner" ]] && hyprsunset_ipc "temperature $temperature"; then
+    atomic_write "$TEMPERATURE_FILE" "$temperature"
     return
   fi
 
-  pkill -x hyprsunset 2>/dev/null || true
-  hyprsunset -t "$temperature" >/dev/null 2>&1 &
-  printf "%s" "$temperature" > "$TEMPERATURE_FILE"
+  if [[ -n "$owner" ]]; then
+    log_recovery "owned hyprsunset IPC failed; restarting"
+    stop_owned_hyprsunset
+  fi
+  start_hyprsunset "$temperature" || return 1
+  atomic_write "$TEMPERATURE_FILE" "$temperature"
 }
 
 apply_state() {
@@ -222,6 +365,8 @@ next_boundary_epoch() {
 run_daemon() {
   local sleep_for boundary now status
 
+  require_dependencies || return 0
+
   if [[ "${NIGHT_LIGHT_LOCK_HELD:-false}" != "true" ]]; then
     if flock -n -E 75 -o "$LOCK_FILE" env NIGHT_LIGHT_LOCK_HELD=true "$0" daemon; then
       return
@@ -233,9 +378,12 @@ run_daemon() {
     return "$status"
   fi
 
+  trap stop_owned_hyprsunset EXIT
+  trap 'exit 0' INT TERM
+
   while true; do
     if [[ -f "$OVERRIDE_FILE" && ! -f "$OVERRIDE_EXPIRY_FILE" ]]; then
-      next_boundary_epoch > "$OVERRIDE_EXPIRY_FILE"
+      atomic_write "$OVERRIDE_EXPIRY_FILE" "$(next_boundary_epoch)"
     fi
 
     if [[ -f "$OVERRIDE_EXPIRY_FILE" ]] && [[ "$(< "$OVERRIDE_EXPIRY_FILE")" -le "$(date +%s)" ]]; then
@@ -262,16 +410,16 @@ toggle() {
 
   boundary="$(next_boundary_epoch)"
   if is_enabled; then
-    printf "off" > "$OVERRIDE_FILE"
-    printf "%s" "$boundary" > "$OVERRIDE_EXPIRY_FILE"
+    atomic_write "$OVERRIDE_FILE" "off"
+    atomic_write "$OVERRIDE_EXPIRY_FILE" "$boundary"
     apply_state
     notify_state false
     printf "Night light disabled\n"
     return
   fi
 
-  printf "on" > "$OVERRIDE_FILE"
-  printf "%s" "$boundary" > "$OVERRIDE_EXPIRY_FILE"
+  atomic_write "$OVERRIDE_FILE" "on"
+  atomic_write "$OVERRIDE_EXPIRY_FILE" "$boundary"
   temperature="$(desired_temperature)"
   set_temperature "$temperature"
   notify_state true "$temperature"
@@ -283,15 +431,19 @@ case "${1:-toggle}" in
     run_daemon
     ;;
   sync)
+    require_dependencies
     apply_state
     ;;
   toggle)
+    require_dependencies
     toggle
     ;;
   is-active)
+    require_dependencies
     is_enabled
     ;;
   status)
+    require_dependencies
     if is_enabled; then
       printf "active\n"
     else

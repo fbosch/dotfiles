@@ -79,6 +79,8 @@ singleton external process needs an explicit ownership mechanism.
 - Clean up owned sockets, lock directories, and child processes on normal exit
   and termination.
 - Cleanup must not remove resources owned by a live competing process.
+- When a daemon manages an external singleton, record its PID and immutable
+  process identity when possible. Never use a global name match to terminate it.
 
 ## IPC And Scheduling
 

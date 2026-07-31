@@ -41,6 +41,19 @@ wait_for_window_capture_shutdown() {
   done
 }
 
+wait_for_night_light_shutdown() {
+  attempts=0
+  while pgrep -f "night-light.sh daemon" >/dev/null 2>&1; do
+    if [ "$attempts" -ge 100 ]; then
+      printf 'restart-daemons: night light did not stop\n' >&2
+      exit 1
+    fi
+
+    attempts=$((attempts + 1))
+    sleep 0.05
+  done
+}
+
 hyprctl reload
 systemctl --user restart vicinae.service
 
@@ -66,6 +79,7 @@ pkill gjs 2>/dev/null || true
 wait_for_pip_shutdown
 wait_for_waybar_monitor_shutdown
 wait_for_window_capture_shutdown
+wait_for_night_light_shutdown
 
 uwsm-app -s b -- hypridle &
 uwsm-app -s s -- atuin daemon &

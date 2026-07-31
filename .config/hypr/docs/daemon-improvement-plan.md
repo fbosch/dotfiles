@@ -151,8 +151,10 @@ File:
 Changes:
 
 1. Check required executables before enabling daemon behavior.
-2. Record the PID of the `hyprsunset` child started by night light.
-3. Restart, terminate, and reap only that owned child.
+2. Record the PID and process start time of the `hyprsunset` child started by
+   night light.
+3. Restart, terminate, and reap only that owned child; leave an unowned
+   `hyprsunset` instance untouched.
 4. Atomically publish override, expiry, and temperature files when commands can
    read them concurrently.
 5. Prefix dependency, IPC, restart, and recovery diagnostics.
