@@ -2,6 +2,10 @@
 
 set -eu
 
+# Broad desktop-service recovery. It leaves custom-layout drag/resize live to
+# avoid interrupting an active interaction and leaves Gamescope clipboard sync
+# live because it is independent of the desktop UI services restarted here.
+
 wait_for_pip_shutdown() {
   attempts=0
   while pgrep -f "picture-in-picture\.(sh|lua)" >/dev/null 2>&1; do
@@ -67,6 +71,32 @@ wait_for_night_light_shutdown() {
   done
 }
 
+wait_for_minimized_state_shutdown() {
+  attempts=0
+  while pgrep -f "minimized-state-daemon\.(sh|lua)" >/dev/null 2>&1; do
+    if [ "$attempts" -ge 100 ]; then
+      printf 'restart-daemons: minimized state did not stop\n' >&2
+      exit 1
+    fi
+
+    attempts=$((attempts + 1))
+    sleep 0.05
+  done
+}
+
+wait_for_gaming_watchdog_shutdown() {
+  attempts=0
+  while pgrep -f "gaming-session-watchdog\.(sh|lua)" >/dev/null 2>&1; do
+    if [ "$attempts" -ge 100 ]; then
+      printf 'restart-daemons: gaming watchdog did not stop\n' >&2
+      exit 1
+    fi
+
+    attempts=$((attempts + 1))
+    sleep 0.05
+  done
+}
+
 hyprctl reload
 systemctl --user restart vicinae.service
 
@@ -97,9 +127,11 @@ wait_for_waybar_monitor_shutdown
 wait_for_window_capture_shutdown
 wait_for_window_state_shutdown
 wait_for_night_light_shutdown
+wait_for_minimized_state_shutdown
+wait_for_gaming_watchdog_shutdown
 
 uwsm-app -s b -- hypridle &
-uwsm-app -s s -- atuin daemon &
+uwsm-app -s s -- atuin daemon start &
 uwsm-app -s b -- foot --server &
 uwsm-app -s b -- flake-check-updates &
 uwsm-app -s b -- swayosd-server &

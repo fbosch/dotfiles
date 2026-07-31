@@ -224,7 +224,8 @@ Files:
 
 Changes:
 
-1. Add prefixed startup, disconnect, retry, and recovery diagnostics.
+1. Add prefixed startup diagnostics plus rate-bounded disconnect, retry, and
+   recovery diagnostics.
 2. Preserve event-driven close-window cleanup, locking, and reconnect behavior.
 3. Do not change `runtime/windows/minimized-state.lua`; its one-shot locking
    and atomic publication are already compliant.
@@ -275,6 +276,16 @@ Validation:
 - Each documented subset matches actual commands.
 - A controlled recovery restarts only documented targets.
 - Omitted daemons continue running.
+
+Current recovery subsets:
+
+- `restart-daemons.sh` restarts desktop services and their dependent custom
+  daemons, while retaining custom-layout drag/resize and Gamescope clipboard
+  sync because they do not depend on the restarted UI services.
+- `reset-desktop.sh` rebuilds compositor-bound UI workers and retains minimized
+  state, picture-in-picture, gaming watchdog, Gamescope clipboard sync, and
+  night light because they retain independent state or do not depend on that
+  UI rebuild.
 
 ## Test Infrastructure
 
