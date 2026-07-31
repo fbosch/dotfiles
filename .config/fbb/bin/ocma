@@ -1,7 +1,8 @@
 #!/usr/bin/env sh
 
 command=$1
-bun "$(dirname "$0")/../lib/opencode-multi-auth/index.ts" "$@"
+fbb_dir=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd) || exit 1
+bun --cwd "$fbb_dir" "lib/opencode-multi-auth/index.ts" "$@"
 status=$?
 
 if [ "$status" -eq 0 ] && { [ "$command" = switch ] || [ "$command" = login ]; }; then

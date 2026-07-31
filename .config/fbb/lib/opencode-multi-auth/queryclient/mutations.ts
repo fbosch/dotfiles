@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mutationOptions } from "@tanstack/react-query";
+import type { MutationOptions } from "@tanstack/query-core";
 import { z } from "zod";
 import type { AccountPaths } from "../types.ts";
 import {
@@ -81,7 +81,7 @@ export async function consumeResetCredit(
 }
 
 function consumeResetCreditMutationOptions() {
-	return mutationOptions({
+	return {
 		mutationKey: ["codex", "account", "consume-reset-credit"],
 		mutationFn: async ({
 			credentials,
@@ -116,7 +116,12 @@ function consumeResetCreditMutationOptions() {
 				redeemedAt: parsed.data.credit?.redeemed_at ?? null,
 			};
 		},
-	});
+	} satisfies MutationOptions<
+		ConsumeResetCreditData,
+		Error,
+		ConsumeResetCreditVariables,
+		unknown
+	>;
 }
 
 async function invalidateAccountQueries(paths: AccountPaths): Promise<void> {

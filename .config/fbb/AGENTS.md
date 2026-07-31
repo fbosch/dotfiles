@@ -14,9 +14,9 @@ Shared personal config consumed by multiple app configs.
 
 ## TanStack Query
 
-- Define query factories with TanStack Query's `queryOptions(...)` API; do not return untyped option object literals.
+- Type query and mutation option factories against `@tanstack/query-core`; do not add the React adapter solely for option helpers.
 - Keep query factories under `lib/*/queryclient/queries/` and let each factory own its query key, request, response validation, and stale policy.
-- Define remote mutations with `mutationOptions(...)`, execute them through the shared `QueryClient`, and invalidate their associated query-key subtree after success.
+- Execute remote mutations through the shared `QueryClient` and invalidate their associated query-key subtree after success.
 
 ## Validation
 

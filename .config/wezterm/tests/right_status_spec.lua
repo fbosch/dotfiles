@@ -5,6 +5,7 @@ package.path = package.path
 local registered_events = {}
 local mock_used_percent = 57
 local mock_credit_count = 2
+local mock_ocma_failure = false
 
 package.loaded.wezterm = {
 	config_dir = "." .. package.config:sub(1, 1) .. ".config" .. package.config:sub(1, 1) .. "wezterm",
@@ -114,6 +115,9 @@ package.loaded.wezterm = {
 	end,
 	run_child_process = function(argv)
 		if argv[1] == "/bin/sh" then
+			if mock_ocma_failure then
+				return false, "", "simulated registry failure"
+			end
 			return true, "ocma-list", ""
 		end
 		return true, "herdr-agents", ""
@@ -236,6 +240,12 @@ mock_credit_count = 0
 captured_status = nil
 update_status(window)
 assert_eq(find_text(captured_status, "⁰"), false, "zero reset credits omitted")
+
+mock_ocma_failure = true
+captured_status = nil
+user_var_changed(window, nil, "codex_reset_refreshed")
+assert_eq(type(captured_status), "table", "status handles OCMA failure")
+assert_eq(find_text(captured_status, "ct"), true, "status retains cached accounts on OCMA failure")
 
 captured_status = nil
 update_status({
