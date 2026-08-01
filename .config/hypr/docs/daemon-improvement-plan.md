@@ -300,7 +300,8 @@ Required coverage:
 - Fake Hyprland event sockets for reconnect tests.
 - Stub external commands for dependency-isolation tests.
 
-Current focused fixtures run through `devenv test`:
+`devenv test` runs the `test:all` task graph, which separates shell fixtures,
+Lua suites, and the window-state socket fixture. Current focused coverage:
 
 - `tests/runtime/window_capture_supervisor.sh` verifies worker-group cleanup and
   owned lock removal with a controlled child.
@@ -318,16 +319,15 @@ Current focused fixtures run through `devenv test`:
 - `tests/runtime/gaming_session_watchdog.sh` verifies dependency failure
   diagnostics, quiet ordinary paths, event-socket recovery with the named
   one-second delay, and owned freeze/profile cleanup using fake Unix sockets.
-- `tests/window_state_rules.lua` verifies generated-rule publication skips
+- `tests/window_state_rules_spec.lua` verifies generated-rule publication skips
   unchanged content.
-- `tests/runtime/window_state_daemon.lua` runs the real window-state daemon
+- `tests/runtime/window_state_daemon_runtime.lua` runs the real window-state daemon
   against fake query and event sockets to verify cache publication and
   reconnect recovery, while a bounded concurrent reader repeatedly parses the
   runtime cache and generated rules to catch truncated publication.
-- Pure Lua tests run under LuaJIT; `tests/bind_spec.lua`,
-  `tests/window_move_spec.lua`, and `tests/portrait_rows_spec.lua` are Busted
-  pilots for structured unit tests. The comprehensive standalone portrait-row
-  suite remains in place until the pilot establishes sufficient coverage.
+- Pure Lua tests run under Busted with the LuaJIT interpreter. Layout examples
+  reload their modules and shared ordering state before each test so transfer
+  intents, ratios, and persisted-state fixtures cannot leak between examples.
 
 ## Implementation Order
 

@@ -82,7 +82,7 @@ run_lua_tests() {
   echo "lua-quality: Lua config tests"
 run_tool lua lua5_2 .config/wezterm/tests/right_status_spec.lua
   run_tool lua lua5_2 .config/wezterm/tests/agent_deck_detection_spec.lua
-  run_tool lua lua5_2 .config/hypr/tests/bind.lua
+  run_tool busted luajitPackages.busted --lua=lua .config/hypr/tests/bind_spec.lua
   run_tool luac lua5_2 -p .config/hypr/hyprland.lua
 }
 

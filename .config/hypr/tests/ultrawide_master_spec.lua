@@ -1,5 +1,5 @@
-local script_path = arg[0] or ""
-local config_dir = script_path:match("^(.*)/tests/ultrawide_master%.lua$") or ".config/hypr"
+local script_path = debug.getinfo(1, "S").source:sub(2)
+local config_dir = script_path:match("^(.*)/tests/ultrawide_master_spec%.lua$") or ".config/hypr"
 
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
@@ -7,7 +7,7 @@ local registered_layout = nil
 local workspace_counter = 0
 local cursor_position = nil
 
-hl = {
+_G.hl = {
 	layout = {
 		register = function(name, layout)
 			registered_layout = { name = name, layout = layout }
@@ -21,7 +21,7 @@ hl = {
 _G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
 
 local monitor_role = require("lib.monitor_role")
-local order_state = require("layouts.shared.order_state")
+local order_state
 
 local function make_target(index, active)
 	return {
@@ -80,17 +80,32 @@ local function assert_box(actual, expected, message)
 	assert_equal(actual.h, expected.h, message .. " h")
 end
 
-local function run(name, callback)
-	local ok, err = pcall(callback)
-	if not ok then
-		io.stderr:write("FAIL " .. name .. "\n" .. err .. "\n")
-		os.exit(1)
-	end
-
-	print("PASS " .. name)
+local function load_layout()
+	registered_layout = nil
+	workspace_counter = 0
+	cursor_position = nil
+	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
+	package.loaded["layouts.ultrawide_master"] = nil
+	package.loaded["layouts.portrait_rows"] = nil
+	package.loaded["layouts.shared.ordered_axis"] = nil
+	package.loaded["layouts.shared.order_state"] = nil
+	order_state = require("layouts.shared.order_state")
+	require("layouts.ultrawide_master")
 end
 
-require("layouts.ultrawide_master")
+before_each(load_layout)
+
+after_each(function()
+	if _G.__ULTRAWIDE_MASTER_STATE_FILE then
+		os.remove(_G.__ULTRAWIDE_MASTER_STATE_FILE)
+	end
+	_G.__ULTRAWIDE_MASTER_STATE_FILE = nil
+	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
+end)
+
+local function run(name, callback)
+	it(name, callback)
+end
 
 run("registers lua ultrawide_master layout", function()
 	assert_equal(registered_layout.name, "ultrawide_master", "registered layout name")

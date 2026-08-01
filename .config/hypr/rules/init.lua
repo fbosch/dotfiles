@@ -1,6 +1,6 @@
 require("gaming").register_window_rules()
 require("lib.picture_in_picture").register_window_rules()
-require("rules.transient-placement")
+require("rules.transient-placement").register()
 
 -- GTK Application
 hl.window_rule({ match = { class = "^(GTK Application)$" }, float = true })
@@ -127,7 +127,6 @@ hl.window_rule({
 	border_size = 0,
 	rounding = 0,
 	no_shadow = true,
-	no_anim = true,
 	opacity = "1.0 override 1.0 override",
 })
-hl.window_rule({ match = { class = "^(zenity)$" }, no_anim = true, no_blur = true })
+hl.window_rule({ match = { class = "^(zenity)$" }, no_blur = true })
