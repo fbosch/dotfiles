@@ -5,6 +5,7 @@ local child_classes_by_parent_class = {
 	nemo = {
 		"zenity",
 		"org.gnome.FileRoller",
+		"org.gnome.Loupe",
 	},
 }
 

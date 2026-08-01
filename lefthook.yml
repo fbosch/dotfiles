@@ -33,4 +33,5 @@ pre-commit:
       run: pnpm --dir .config/vicinae/extensions run lint
     lua-format:
       glob: "**/*.lua"
-      run: stylua --check --output-format=summary --syntax LuaJit --respect-ignores {staged_files}
+      run: stylua --syntax LuaJit --respect-ignores {staged_files}
+      stage_fixed: true
