@@ -13,65 +13,147 @@ _G.hl = {
 		end,
 	},
 	dispatch = function(command)
-		dispatched[#dispatched + 1] = command
+		table.insert(dispatched, command)
 		return { dispatched = true }
 	end,
 	bind = function(keys, action, options)
-		registrations[#registrations + 1] = { keys = keys, action = action, options = options }
+		table.insert(registrations, { keys = keys, action = action, options = options })
 	end,
 }
 
 local bind = require("lib.bind")
 
-describe("bind.register", function()
-	before_each(function()
-		registrations = {}
-		dispatched = {}
-	end)
+local function assert_equal(actual, expected, message)
+	if actual ~= expected then
+		error(string.format("%s: expected %s, got %s", message, tostring(expected), tostring(actual)), 2)
+	end
+end
 
-	it("converts command actions to exec_cmd dispatchers", function()
-		bind.register("SUPER, X", "notify-send hello")
+local function assert_nil(actual, message)
+	assert_equal(actual, nil, message)
+end
 
-		assert.are.equal("SUPER, X", registrations[1].keys)
-		assert.are.equal("exec_cmd", registrations[1].action.kind)
-		assert.are.equal("notify-send hello", registrations[1].action.command)
-		assert.is_nil(registrations[1].options)
-	end)
+local function assert_table(actual, message)
+	assert_equal(type(actual), "table", message)
+	return actual
+end
 
-	it("passes the original event to predicate and true action", function()
-		local event = { key = "X" }
-		local predicate_event
-		local action_event
-		local action_result = { ok = true }
+before_each(function()
+	registrations = {}
+	dispatched = {}
+end)
 
-		bind.register("SUPER, X", function(received_event)
-			action_event = received_event
-			return action_result
-		end, {
-			predicate = function(received_event)
-				predicate_event = received_event
-				return true
-			end,
-		})
+local function run(name, test)
+	it(name, test)
+end
 
-		assert.are.equal(action_result, registrations[1].action(event))
-		assert.are.equal(event, predicate_event)
-		assert.are.equal(event, action_event)
-	end)
+run("direct command is converted to exec_cmd at registration", function()
+	bind.register("SUPER, X", "notify-send hello")
 
-	it("preserves native options while dispatching the false command", function()
-		bind.register("SUPER, X", "true-command", {
-			predicate = function()
-				return false
-			end,
-			on_false = "false-command",
-			release = true,
-		})
+	local registration = assert_table(registrations[1], "registration")
+	assert_equal(registration.keys, "SUPER, X", "keys")
+	assert_equal(registration.action.kind, "exec_cmd", "action kind")
+	assert_equal(registration.action.command, "notify-send hello", "action command")
+	assert_nil(registration.options, "options")
+end)
 
-		registrations[1].action({})
-		assert.is_nil(registrations[1].options.predicate)
-		assert.is_nil(registrations[1].options.on_false)
-		assert.is_true(registrations[1].options.release)
-		assert.are.equal("false-command", dispatched[1].command)
-	end)
+run("direct callback is passed through unchanged", function()
+	local action = function(event)
+		return { event = event }
+	end
+
+	bind.register("SUPER, C", action)
+
+	assert_equal(registrations[1].action, action, "callback identity")
+	assert_nil(registrations[1].options, "options")
+end)
+
+run("predicate calls true action with the original event", function()
+	local event = { key = "X" }
+	local predicate_event
+	local action_event
+	local action_result = { ok = true }
+
+	bind.register("SUPER, X", function(received_event)
+		action_event = received_event
+		return action_result
+	end, {
+		predicate = function(received_event)
+			predicate_event = received_event
+			return true
+		end,
+	})
+
+	local result = registrations[1].action(event)
+	assert_equal(predicate_event, event, "predicate event")
+	assert_equal(action_event, event, "action event")
+	assert_equal(result, action_result, "action result")
+end)
+
+run("false predicate defaults to passing the original event", function()
+	local event = { key = "X" }
+
+	bind.register("SUPER, X", function()
+		error("true action must not run")
+	end, {
+		predicate = function(received_event)
+			return received_event == event and false
+		end,
+	})
+
+	local result = registrations[1].action(event)
+	assert_equal(result.pass_event, true, "pass event")
+end)
+
+run("false predicate calls explicit false callback with the original event", function()
+	local event = { key = "X" }
+	local false_event
+	local false_result = { ok = false, error = "not applicable" }
+
+	bind.register("SUPER, X", function()
+		error("true action must not run")
+	end, {
+		predicate = function()
+			return false
+		end,
+		on_false = function(received_event)
+			false_event = received_event
+			return false_result
+		end,
+	})
+
+	assert_equal(registrations[1].action(event), false_result, "false action result")
+	assert_equal(false_event, event, "false action event")
+end)
+
+run("predicate options are stripped and native options are preserved", function()
+	bind.register("SUPER, X", "true-command", {
+		predicate = function()
+			return true
+		end,
+		on_false = "false-command",
+		release = true,
+		locked = false,
+	})
+
+	local options = assert_table(registrations[1].options, "native options")
+	assert_nil(options.predicate, "predicate option")
+	assert_nil(options.on_false, "on_false option")
+	assert_equal(options.release, true, "release option")
+	assert_equal(options.locked, false, "locked option")
+
+	registrations[1].action({})
+	assert_equal(dispatched[1].command, "true-command", "true command")
+end)
+
+run("explicit false command is dispatched when predicate is false", function()
+	bind.register("SUPER, X", "true-command", {
+		predicate = function()
+			return false
+		end,
+		on_false = "false-command",
+	})
+
+	registrations[1].action({})
+	assert_equal(dispatched[1].command, "false-command", "false command")
 end)

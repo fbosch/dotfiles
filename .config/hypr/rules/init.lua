@@ -1,6 +1,6 @@
 require("gaming").register_window_rules()
 require("lib.picture_in_picture").register_window_rules()
-require("rules.transient-placement")
+require("rules.transient-placement").register()
 
 -- GTK Application
 hl.window_rule({ match = { class = "^(GTK Application)$" }, float = true })
@@ -57,7 +57,7 @@ hl.window_rule({
 })
 
 -- File Roller
-hl.window_rule({ match = { class = "^(org\\.gnome\\.FileRoller)$" }, float = true })
+hl.window_rule({ match = { class = "^(org\\.gnome\\.FileRoller)$" }, float = true, no_anim = true })
 
 -- Network Manager Connection Editor
 hl.window_rule({
