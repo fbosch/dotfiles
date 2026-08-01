@@ -21,6 +21,7 @@ in
     gnused
     jq
     just
+    lefthook
     lua
     luajit_2_1
     luajitPackages.busted
@@ -31,6 +32,7 @@ in
     nodejs
     pnpm
     ripgrep
+    ripsecrets
     shellcheck
     stow
     stylua

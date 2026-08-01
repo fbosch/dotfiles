@@ -1,0 +1,29 @@
+min_version: 2.1.10
+
+pre-commit:
+  parallel: true
+  commands:
+    secrets:
+      glob: "**"
+      exclude:
+        - ".agents/**"
+        - ".opencode/skills/**"
+        - ".github/skills/**"
+      run: devenv shell -- ripsecrets {staged_files}
+    shellcheck:
+      glob:
+        - "scripts/*.sh"
+        - ".config/ags/*.sh"
+        - ".config/ags/scripts/*.sh"
+        - ".config/hypr/runtime/**/*.sh"
+        - ".config/hypr/legacy/scripts/*.sh"
+        - ".config/hypr/scripts/*.sh"
+        - ".config/rofi/launchers/type-3/launcher.sh"
+        - ".config/vicinae/extensions/*.sh"
+      run: devenv shell -- shellcheck {staged_files}
+    fish:
+      glob: ".config/fish/**/*.fish"
+      run: devenv shell -- fish -n {staged_files}
+    lua-format:
+      glob: "**/*.lua"
+      run: devenv shell -- stylua --check --output-format=summary --syntax LuaJit --respect-ignores {staged_files}
