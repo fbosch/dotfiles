@@ -1,5 +1,6 @@
 require("gaming").register_window_rules()
 require("lib.picture_in_picture").register_window_rules()
+require("rules.transient-placement")
 
 -- GTK Application
 hl.window_rule({ match = { class = "^(GTK Application)$" }, float = true })
@@ -122,6 +123,7 @@ hl.window_rule({ match = { class = "^(winecfg\\.exe)$" }, float = true })
 hl.window_rule({
 	match = { initial_class = "^(zenity)$" },
 	float = true,
+	size = "525 600",
 	border_size = 0,
 	rounding = 0,
 	no_shadow = true,

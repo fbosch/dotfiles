@@ -305,8 +305,9 @@ Current focused fixtures run through `devenv test`:
 - `tests/runtime/window_capture_supervisor.sh` verifies worker-group cleanup and
   owned lock removal with a controlled child.
 - `tests/runtime/window_capture_ownership.sh` verifies stale worker-marker
-  recovery, live-marker preservation, and atomic pending-event reads using fake
-  Hyprland and capture commands.
+  recovery after event delivery, live-marker preservation under a competing
+  real daemon, and atomic pending-event reads with the configured capture
+  directory using isolated fake Hyprland and capture commands.
 - `tests/runtime/lifecycle_recovery.sh` verifies documented recovery subsets,
   waits, launcher paths, and UWSM scopes with command stubs.
 - `tests/runtime/night_light_missing_dependency.sh` verifies that a missing
@@ -319,6 +320,8 @@ Current focused fixtures run through `devenv test`:
 - `tests/runtime/window_state_daemon.lua` runs the real window-state daemon
   against fake query and event sockets to verify cache publication and
   reconnect recovery.
+- Pure Lua tests run under LuaJIT; `tests/bind_spec.lua` is the Busted pilot
+  for structured unit tests.
 
 ## Implementation Order
 

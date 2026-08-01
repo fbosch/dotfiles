@@ -72,6 +72,7 @@ FIXTURE_LOG="$reset_log" "$repo_root/runtime/desktop/reset-desktop.sh"
 assert_contains "$reset_log" 'pkill -f custom-layout-drag-resize.sh daemon'
 assert_contains "$reset_log" 'pkill -f custom-layout-drag-resize-daemon.lua'
 assert_contains "$reset_log" 'pgrep -f custom-layout-drag-resize(-daemon)?\.(sh|lua)'
+assert_contains "$reset_log" 'pkill -CONT -f window-capture-daemon'
 assert_contains "$reset_log" 'uwsm-app -s s -- hyprpaper'
 assert_contains "$reset_log" "uwsm-app -s b -- $home_dir/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh daemon"
 assert_not_contains "$reset_log" 'pkill -f minimized-state-daemon'

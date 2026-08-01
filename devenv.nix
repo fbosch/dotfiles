@@ -11,6 +11,7 @@
     just
     lua
     luajit_2_1
+    luajitPackages.busted
     luajitPackages.luasocket
     markdownlint-cli
     neovim

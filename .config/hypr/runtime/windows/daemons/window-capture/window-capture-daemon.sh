@@ -15,6 +15,7 @@ if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
 fi
 
 daemon_lock_dir="$XDG_RUNTIME_DIR/hypr-window-capture-daemon.lock.d"
+worker_lock_dir="$XDG_RUNTIME_DIR/hypr-window-capture-worker.lock.d"
 worker_owner_file="$XDG_RUNTIME_DIR/hypr-window-capture-worker.lock.d/owner"
 child_pid=""
 
@@ -23,18 +24,35 @@ stop_worker_group() {
   [[ -r "$worker_owner_file" ]] || return 0
 
   local worker_pid
-  IFS=$'\t' read -r worker_pid _ < "$worker_owner_file" || return 0
+  local owner_line
+  owner_line="$(<"$worker_owner_file")"
+  worker_pid="${owner_line%%$'\t'*}"
   [[ "$worker_pid" =~ ^[0-9]+$ ]] || return 0
+  kill -CONT -- "-$worker_pid" >/dev/null 2>&1 || true
   kill -TERM -- "-$worker_pid" >/dev/null 2>&1 || true
+}
+
+# shellcheck disable=SC2329
+cleanup_stopped_worker_lock() {
+  [[ -r "$worker_owner_file" ]] || return 0
+
+  local owner_line worker_pid
+  owner_line="$(<"$worker_owner_file")"
+  worker_pid="${owner_line%%$'\t'*}"
+  [[ "$worker_pid" =~ ^[0-9]+$ ]] || return 0
+  kill -0 "$worker_pid" >/dev/null 2>&1 && return 0
+  rm -rf "$worker_lock_dir"
 }
 
 # shellcheck disable=SC2329
 cleanup() {
   if [[ -n "$child_pid" ]]; then
+    kill -CONT "$child_pid" >/dev/null 2>&1 || true
     kill -TERM "$child_pid" >/dev/null 2>&1 || true
     pkill -TERM -P "$child_pid" >/dev/null 2>&1 || true
     stop_worker_group
     wait "$child_pid" >/dev/null 2>&1 || true
+    cleanup_stopped_worker_lock
   fi
 
   local lock_pid

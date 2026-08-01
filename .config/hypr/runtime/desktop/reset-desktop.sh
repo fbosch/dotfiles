@@ -66,6 +66,7 @@ pkill -f "waybar-monitor.sh" 2>/dev/null || true
 pkill -f "waybar-monitor.lua" 2>/dev/null || true
 pkill -f window-state.sh 2>/dev/null || true
 pkill -f window-state-daemon.lua 2>/dev/null || true
+pkill -CONT -f window-capture-daemon 2>/dev/null || true
 pkill -f window-capture-daemon 2>/dev/null || true
 pkill -f "custom-layout-drag-resize.sh daemon" 2>/dev/null || true
 pkill -f custom-layout-drag-resize-daemon.lua 2>/dev/null || true

@@ -27,7 +27,6 @@ return {
   { matcher = "match:class", pattern = [=[^GParted$]=] },
   { matcher = "match:class", pattern = [=[^net\.davidotek\.pupgui2$]=] },
   { matcher = "match:class", pattern = [=[^io\.github\.efogdev\.mpris-timer$]=] },
-  { matcher = "match:class", pattern = [=[^zenity$]=] },
   { matcher = "match:class", pattern = [=[^steam_app_0$]=] },
    { matcher = "match:class", pattern = [=[^org\.signal\.Signal$]=] },
   { matcher = "match:class", pattern = [=[^SVPManager$]=] },
