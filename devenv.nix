@@ -78,13 +78,10 @@ in
       fish -n "''${test_files[@]}"
     '';
 
-    "test:lua-quality" = {
-      showOutput = true;
-      exec = ''
-        set -euo pipefail
-        REQUIRE_LUA_TOOLS=1 bash scripts/lua-quality.sh ci
-      '';
-    };
+    "test:lua-quality".exec = ''
+      set -euo pipefail
+      REQUIRE_LUA_TOOLS=1 bash scripts/lua-quality.sh ci
+    '';
 
     "test:design-system".exec = ''
       set -euo pipefail
@@ -92,6 +89,20 @@ in
       pnpm --dir design-system lint
       pnpm --dir design-system contrast
     '';
+
+    "test:vicinae-install".exec = ''
+      set -euo pipefail
+      pnpm --dir .config/vicinae/extensions install --frozen-lockfile
+    '';
+
+    "test:vicinae" = {
+      after = [ "test:vicinae-install" ];
+      exec = ''
+      set -euo pipefail
+      pnpm --dir .config/vicinae/extensions run lint
+      pnpm --dir .config/vicinae/extensions run build
+      '';
+    };
 
     "test:runtime-shell".exec = ''
       set -euo pipefail
@@ -108,13 +119,10 @@ in
       done
     '';
 
-    "test:lua" = {
-      showOutput = true;
-      exec = ''
-        set -euo pipefail
-        timeout --foreground 15s busted --lua=luajit ${hyprTests}
-      '';
-    };
+    "test:lua".exec = ''
+      set -euo pipefail
+      timeout --foreground 15s busted --lua=luajit ${hyprTests}
+    '';
 
     "test:window-state-runtime".exec = ''
       set -euo pipefail
@@ -136,6 +144,7 @@ in
         "test:stow"
         "test:fish"
         "test:lua-quality"
+        "test:vicinae"
         "test:runtime-shell"
         "test:lua"
         "test:window-state-runtime"
