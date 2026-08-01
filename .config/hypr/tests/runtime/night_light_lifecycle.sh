@@ -97,7 +97,7 @@ sed -i "s#DATE_REAL#$(command -v date)#" "$bin_dir/date"
 cat > "$bin_dir/nc" <<'EOF'
 #!/bin/sh
 if [ -e "$FIXTURE_FAIL_IPC" ]; then
-  count=$(< "$FIXTURE_FAIL_IPC")
+  IFS= read -r count < "$FIXTURE_FAIL_IPC"
   if [ "$count" -gt 1 ]; then
     printf '%s\n' "$((count - 1))" > "$FIXTURE_FAIL_IPC"
   else
