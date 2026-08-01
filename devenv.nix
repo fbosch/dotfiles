@@ -40,6 +40,17 @@ in
   ];
 
   tasks = {
+    "hooks:install" = {
+      exec = ''
+        set -euo pipefail
+        if [[ "''${CI:-}" == "true" ]]; then
+          exit 0
+        fi
+        lefthook install
+      '';
+      before = [ "devenv:enterShell" ];
+    };
+
     "test:shellcheck".exec = ''
       set -euo pipefail
       shopt -s globstar nullglob
