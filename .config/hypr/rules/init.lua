@@ -57,7 +57,7 @@ hl.window_rule({
 })
 
 -- File Roller
-hl.window_rule({ match = { class = "^(org\\.gnome\\.FileRoller)$" }, float = true })
+hl.window_rule({ match = { class = "^(org\\.gnome\\.FileRoller)$" }, float = true, no_anim = true })
 
 -- Network Manager Connection Editor
 hl.window_rule({

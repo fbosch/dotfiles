@@ -1,9 +1,9 @@
 ---
-description: Analyze and resolve git merge conflicts with context-aware suggestions
+description: Resolve git merge conflicts automatically when safe, and flag only complex cases
 agent: build
 ---
 
-Analyze the merge conflicts below and provide resolution recommendations.
+Analyze the merge conflicts below and resolve every conflict that has a clear, safe resolution. Do not ask for confirmation, show a preview that requires a second invocation, or require an `auto` argument.
 
 **Merge context:**
 
@@ -11,14 +11,11 @@ Analyze the merge conflicts below and provide resolution recommendations.
 - Merging from: !`git log -1 MERGE_HEAD --pretty=format:"%h %s" 2>/dev/null || echo "Unknown (not in merge state)"`
 - Conflicted files: !`git diff --name-only --diff-filter=U | wc -l` files
 
-**Mode:** $ARGUMENTS
+**Resolution preference:** $ARGUMENTS
 
-**Available modes:**
-
-- (no args) — Analysis + recommendations only (default, safe)
-- `auto` — Apply resolutions automatically after showing preview
-- `keep-ours` — Bias toward current branch when ambiguous
-- `keep-theirs` — Bias toward merge source when ambiguous
+- (no args) — merge compatible changes and choose the clearly correct side when one supersedes the other
+- `keep-ours` — bias toward the current branch only when both sides are otherwise equally safe
+- `keep-theirs` — bias toward the merge source only when both sides are otherwise equally safe
 
 ---
 
@@ -41,12 +38,15 @@ Stop here.
    - **Ours (current branch):** What this side is trying to do
    - **Theirs (merge source):** What the other side is trying to do
 
-3. **Recommend resolution:**
-   - If both sides can be preserved → merge both changes
-   - If conflict is semantic (incompatible logic) → flag for manual review
-   - If one side clearly supersedes → choose that side with rationale
+3. **Resolve automatically whenever safe:**
+    - If both sides can be preserved → merge both changes
+    - If one side clearly supersedes → choose that side with rationale
+    - If it is a mechanical conflict with an unambiguous result → apply the result
+    - If the conflict is semantic, changes incompatible behavior, or its correctness cannot be determined from the available context → leave it unresolved and flag it for manual review
 
-4. **Show resolved code:**
+    Apply each safe resolution with the edit tool as part of this invocation. Remove all conflict markers from successfully resolved files, but do not modify conflicts that need manual review.
+
+4. **Show the resolved code or explain why it was left unresolved:**
    ```typescript
    // Resolved version (no conflict markers)
    const result = merged_version;
@@ -54,28 +54,24 @@ Stop here.
 
 **Output structure:**
 
-## Conflict Analysis
+## Resolved Conflicts
 
-[For each file: location, explanation, recommendation, resolved code]
+[For each resolved file: location, explanation, rationale, resolved code]
+
+## Needs Manual Review
+
+[For each unresolved file: location, explanation, and the specific decision required]
 
 ## Summary
 
-- ✅ Auto-resolvable: N conflicts
-- ⚠️ Needs review: N conflicts (semantic conflicts flagged)
+- ✅ Applied: N conflicts
+- ⚠️ Needs review: N conflicts (semantic or unsafe conflicts left unchanged)
 
 ---
 
-**If mode is `auto`:**
+When all conflicts were resolved, end with: "Applied resolutions to N files. Run `git add .` and `git merge --continue`."
 
-After showing the analysis above, ask:
-"Apply these resolutions? This will modify N files. Type 'yes' to proceed."
-
-If user confirms, use the edit tool to apply each resolution and respond:
-"✅ Applied resolutions to N files. Run `git add .` and `git merge --continue`."
-
-**If mode is NOT `auto`:**
-
-End with: "To apply these resolutions, run `/resolve-conflicts auto` or apply manually."
+When conflicts remain, end with: "Applied N safe resolutions. Resolve the M flagged conflicts, then run `git add .` and `git merge --continue`."
 
 ---
 
