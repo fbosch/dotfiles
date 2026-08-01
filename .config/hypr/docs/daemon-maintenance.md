@@ -144,6 +144,18 @@ singleton external process needs an explicit ownership mechanism.
 - Where practical, exercise stale ownership, shutdown cleanup, event-socket
   reconnection, atomic publication, and missing optional dependencies.
 
+## Runtime Fixture Portability
+
+- Match each fixture's syntax to its shebang. Use Bash only when the fixture
+  declares Bash; generated helpers declared as `sh` must use POSIX shell syntax.
+- Test generated helper scripts with the interpreter named in their shebang.
+  Do not assume the local `/bin/sh` matches CI.
+- Keep failure injection explicit and portable. For example, use `read` with
+  input redirection instead of Bash-only shorthand in a `sh` helper.
+- When a runtime fixture fails only in CI, inspect the helper interpreter and
+  reproduce the helper command with that interpreter before changing daemon
+  behavior.
+
 ## Adding A Daemon
 
 1. Confirm that the behavior must be persistent rather than a one-shot helper.
