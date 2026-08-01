@@ -2,11 +2,20 @@
 
 local socket = require("socket")
 local unix = require("socket.unix")
+local ffi = require("ffi")
+
+ffi.cdef([[typedef int pid_t;
+pid_t fork(void);
+pid_t waitpid(pid_t pid, int *status, int options);
+]])
 
 local repo_root = assert(os.getenv("REPO_ROOT"), "REPO_ROOT is required")
-local test_dir = (os.getenv("TMPDIR") or "/tmp")
-	.. "/window-state-fixture-"
-	.. tostring(math.floor(socket.gettime() * 1000000))
+local test_dir = os.getenv("TEST_DIR")
+if not test_dir then
+	test_dir = (os.getenv("TMPDIR") or "/tmp")
+		.. "/window-state-fixture-"
+		.. tostring(math.floor(socket.gettime() * 1000000))
+end
 local home_dir = test_dir .. "/home"
 local runtime_dir = test_dir .. "/runtime"
 local bin_dir = test_dir .. "/bin"
@@ -17,10 +26,14 @@ local state_path = runtime_dir .. "/hypr-window-state.cache"
 local rules_path = home_dir .. "/.config/hypr/rules/window-state.lua"
 local log_path = test_dir .. "/daemon.log"
 local pid_path = test_dir .. "/daemon.pid"
+local reader_log_path = test_dir .. "/reader.log"
+local reader_stop_path = test_dir .. "/reader.stop"
+local reader_report_path = test_dir .. "/reader.report"
 
 local query_server
 local event_server
 local daemon_pid
+local reader_pid
 local active_event_connections = 0
 local event_closed_at
 local reconnect_at
@@ -59,6 +72,39 @@ local function read_file(path)
 	local content = handle:read("*a")
 	handle:close()
 	return content
+end
+
+local function validate_reader_state()
+	local json = require("lib.json")
+	local state = read_file(state_path)
+	if state then
+		local ok, decoded = pcall(json.decode, state:gsub("%s+$", ""))
+		assert(ok and type(decoded) == "table", "runtime cache is not valid JSON")
+	end
+
+	local rules = read_file(rules_path)
+	if rules then
+		local chunk, load_error = loadstring(rules, "window-state.lua")
+		assert(chunk, "generated rules are not valid Lua: " .. tostring(load_error))
+		local ok, decoded = pcall(chunk)
+		assert(ok and type(decoded) == "table", "generated rules do not return a table")
+	end
+end
+
+local function reader_fixture()
+	package.path = home_dir .. "/.config/hypr/?.lua;" .. home_dir .. "/.config/hypr/?/init.lua;" .. package.path
+	local iterations = 0
+	local deadline = socket.gettime() + 12
+	while not read_file(reader_stop_path) and socket.gettime() < deadline do
+		validate_reader_state()
+		iterations = iterations + 1
+		socket.sleep(0.005)
+	end
+	assert(read_file(reader_stop_path), "reader exceeded its bounded lifetime")
+	assert(iterations > 0, "reader did not validate any publication")
+	local report = assert(io.open(reader_report_path, "w"))
+	report:write(tostring(iterations), "\n")
+	report:close()
 end
 
 local function wait_for(phase, predicate, timeout)
@@ -155,6 +201,49 @@ local function stop_daemon()
 	daemon_pid = nil
 end
 
+local function stop_reader()
+	if not reader_pid then
+		return
+	end
+	if read_file(reader_report_path) then
+		reader_pid = nil
+		return
+	end
+	run("touch " .. shell_quote(reader_stop_path))
+	local status = ffi.new("int[1]")
+	wait_for("reader cleanup", function()
+		return read_file(reader_report_path) ~= nil
+			or ffi.C.waitpid(reader_pid, status, 1) == reader_pid
+	end, 1)
+	local log = read_file(reader_log_path)
+	local report = read_file(reader_report_path)
+	reader_pid = nil
+	if log and log ~= "" then
+		fail("concurrent reader", log)
+	end
+	if not report or tonumber(report:match("%d+")) < 1 then
+		fail("concurrent reader", "reader did not complete any validation\n" .. (log or "reader log unavailable"))
+	end
+end
+
+local function start_reader()
+	local pid = ffi.C.fork()
+	assert(pid >= 0, "failed to fork concurrent reader")
+	if pid == 0 then
+		local handle = assert(io.open(reader_log_path, "w"))
+		io.stderr = handle
+		local ok, message = xpcall(reader_fixture, debug.traceback)
+		if not ok then
+			handle:write(message, "\n")
+			handle:close()
+			os.exit(1)
+		end
+		handle:close()
+		os.exit(0)
+	end
+	reader_pid = pid
+end
+
 local function cleanup()
 	if daemon_pid then
 		os.execute("kill -KILL " .. daemon_pid .. " 2>/dev/null")
@@ -165,6 +254,7 @@ local function cleanup()
 	if event_server then
 		event_server:close()
 	end
+	stop_reader()
 	os.execute("rm -rf " .. shell_quote(test_dir))
 end
 
@@ -227,6 +317,7 @@ local function fixture()
 		.. shell_quote(pid_path)
 	run(command)
 	daemon_pid = assert(read_file(pid_path)):match("%d+")
+	start_reader()
 
 	service_until("initial query/state publication", function()
 		local state = read_file(state_path)
@@ -255,6 +346,7 @@ local function fixture()
 	local log = read_file(log_path)
 	assert_contains("daemon reconnect log", log, "window-state: event socket reconnected")
 	stop_daemon()
+	stop_reader()
 end
 
 local ok, message = xpcall(fixture, debug.traceback)
