@@ -74,4 +74,36 @@ if ! worker_exited; then
 fi
 test ! -d "$runtime_dir/hypr-window-capture-daemon.lock.d"
 
+real_runtime_dir="$test_dir/real-runtime"
+real_capture_dir="$test_dir/real-captures"
+real_home="$test_dir/home"
+mkdir -p "$real_runtime_dir" "$real_capture_dir" "$real_home/.config"
+ln -s "$(cd "$(dirname "$0")/../.." && pwd)" "$real_home/.config/hypr"
+
+HOME="$real_home" \
+  XDG_RUNTIME_DIR="$real_runtime_dir" \
+  HYPRLAND_INSTANCE_SIGNATURE=fixture \
+  HYPR_WINDOW_CAPTURE_DIR="$real_capture_dir" \
+  "$wrapper" >/dev/null 2>&1 &
+wrapper_pid="$!"
+
+for _ in {1..100}; do
+  [[ -r "$real_runtime_dir/hypr-window-capture-daemon.lock.d/pid" ]] && break
+  sleep 0.01
+done
+test -r "$real_runtime_dir/hypr-window-capture-daemon.lock.d/pid"
+daemon_pid="$(<"$real_runtime_dir/hypr-window-capture-daemon.lock.d/pid")"
+daemon_parent_pid="$(ps -o ppid= -p "$daemon_pid" | tr -d '[:space:]')"
+test "$daemon_parent_pid" = "$wrapper_pid"
+
+kill -TERM "$wrapper_pid"
+wait "$wrapper_pid" || true
+wrapper_pid=""
+
+test ! -d "$real_runtime_dir/hypr-window-capture-daemon.lock.d"
+if kill -0 "$daemon_pid" >/dev/null 2>&1; then
+  printf 'window-capture supervisor left real daemon %s running\n' "$daemon_pid" >&2
+  exit 1
+fi
+
 printf 'PASS window-capture supervisor reaps its worker group\n'

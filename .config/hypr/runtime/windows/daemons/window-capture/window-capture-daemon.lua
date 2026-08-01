@@ -21,9 +21,12 @@ ffi.cdef([[
 
 local mode = arg[1] or "daemon"
 local runtime_dir = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
-local screenshot_dir = os.getenv("HYPR_WINDOW_CAPTURE_DIR") or "/tmp/hypr-window-captures"
-if os.execute("test -d /dev/shm >/dev/null 2>&1") then
-	screenshot_dir = "/dev/shm/hypr-window-captures"
+local screenshot_dir = os.getenv("HYPR_WINDOW_CAPTURE_DIR")
+if not screenshot_dir then
+	screenshot_dir = "/tmp/hypr-window-captures"
+	if os.execute("test -d /dev/shm >/dev/null 2>&1") then
+		screenshot_dir = "/dev/shm/hypr-window-captures"
+	end
 end
 
 local daemon_lock_dir = runtime_dir .. "/hypr-window-capture-daemon.lock.d"

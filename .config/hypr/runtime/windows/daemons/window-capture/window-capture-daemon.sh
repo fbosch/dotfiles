@@ -20,11 +20,11 @@ child_pid=""
 
 # shellcheck disable=SC2329
 stop_worker_group() {
-  [[ -r "$worker_owner_file" ]] || return
+  [[ -r "$worker_owner_file" ]] || return 0
 
   local worker_pid
-  IFS=$'\t' read -r worker_pid _ < "$worker_owner_file" || return
-  [[ "$worker_pid" =~ ^[0-9]+$ ]] || return
+  IFS=$'\t' read -r worker_pid _ < "$worker_owner_file" || return 0
+  [[ "$worker_pid" =~ ^[0-9]+$ ]] || return 0
   kill -TERM -- "-$worker_pid" >/dev/null 2>&1 || true
 }
 
