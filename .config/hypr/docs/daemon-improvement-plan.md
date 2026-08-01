@@ -315,6 +315,9 @@ Current focused fixtures run through `devenv test`:
 - `tests/runtime/night_light_lifecycle.sh` verifies PID-plus-start-time ownership,
   rejection of an unrelated owner without killing its process, one bounded IPC
   restart, and reaping on daemon termination.
+- `tests/runtime/gaming_session_watchdog.sh` verifies dependency failure
+  diagnostics, quiet ordinary paths, event-socket recovery with the named
+  one-second delay, and owned freeze/profile cleanup using fake Unix sockets.
 - `tests/window_state_rules.lua` verifies generated-rule publication skips
   unchanged content.
 - `tests/runtime/window_state_daemon.lua` runs the real window-state daemon

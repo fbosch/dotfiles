@@ -8,6 +8,7 @@ tests=(
   .config/hypr/tests/runtime/lifecycle_recovery.sh
   .config/hypr/tests/runtime/night_light_missing_dependency.sh
   .config/hypr/tests/runtime/night_light_lifecycle.sh
+  .config/hypr/tests/runtime/gaming_session_watchdog.sh
 )
 
 bash -n "${tests[@]}"
