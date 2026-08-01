@@ -320,8 +320,8 @@ Current focused fixtures run through `devenv test`:
 - `tests/runtime/window_state_daemon.lua` runs the real window-state daemon
   against fake query and event sockets to verify cache publication and
   reconnect recovery.
-- Pure Lua tests run under LuaJIT; `tests/bind_spec.lua` is the Busted pilot
-  for structured unit tests.
+- Pure Lua tests run under LuaJIT; `tests/bind_spec.lua` and
+  `tests/window_move_spec.lua` are Busted pilots for structured unit tests.
 
 ## Implementation Order
 
