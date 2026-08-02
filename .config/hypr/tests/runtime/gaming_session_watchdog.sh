@@ -34,6 +34,17 @@ assert_not_contains() {
   fi
 }
 
+assert_count() {
+  local file="$1" expected="$2" count="$3"
+  local actual
+  actual="$(grep -Fc -- "$expected" "$file" || true)"
+  [[ "$actual" == "$count" ]] || {
+    printf 'expected %s occurrences of %s, got %s\n' "$count" "$expected" "$actual" >&2
+    printf '%s\n' "$(<"$file")" >&2
+    exit 1
+  }
+}
+
 wait_for_file() {
   local file="$1" description="$2" attempts=0
   while [[ ! -s "$file" ]]; do
@@ -92,8 +103,14 @@ if kind == "query" then
     local client = accept(server)
     local buffer = ffi.new("char[64]")
     ffi.C.recv(client, buffer, 64, 0)
-    local clients = io.open(clear_file, "r") and "[]" or
-      '[{"pid":4242,"class":"fixture-game","initialClass":"fixture-game","title":"Fixture","initialTitle":"Fixture","contentType":"game","workspace":{"name":"10"},"focusHistoryID":0}]'
+    local clear_handle = io.open(clear_file, "r")
+    local is_cleared = clear_handle ~= nil
+    if clear_handle then clear_handle:close() end
+    local game = os.getenv("CLIENTS_MODE") == "override"
+      and '[{"pid":4242,"class":"bg3","initialClass":"bg3","title":"Fixture","initialTitle":"Fixture","contentType":"game","workspace":{"name":"10"},"focusHistoryID":0}]'
+      or '[{"pid":4242,"class":"fixture-game","initialClass":"fixture-game","title":"Fixture","initialTitle":"Fixture","contentType":"game","workspace":{"name":"10"},"focusHistoryID":0}]'
+    local clients = is_cleared and "[]" or game
+    if os.getenv("CLIENTS_MODE") == "late-game" then clients = is_cleared and game or "[]" end
     local monitors = '[{"name":"fixture","focused":true,"activeWorkspace":{"name":"1"},"specialWorkspace":{"name":""}}]'
     local response = buffer == nil and "" or (clients .. "\n")
     if ffi.string(buffer):match("j/monitors") then response = monitors .. "\n" end
@@ -136,22 +153,29 @@ run_case() {
   printf '%s\n' '#!/bin/sh' 'if [ "$FREEZE_MODE" = missing ]; then exit 127; fi' 'printf "%s\n" "$*" >> "$FREEZE_LOG"' 'if [ "$FREEZE_MODE" = failed ]; then exit 1; fi' 'if [ -e "$FREEZE_STATE" ]; then rm -f "$FREEZE_STATE"; else : > "$FREEZE_STATE"; fi' > "$bin_dir/wl-freeze"
   # shellcheck disable=SC2016
   printf '%s\n' '#!/bin/sh' 'if [ -e "$FREEZE_STATE" ]; then printf "T\n"; else printf "R\n"; fi' > "$bin_dir/ps"
-  chmod +x "$bin_dir/wl-freeze" "$bin_dir/ps"
+  # shellcheck disable=SC2016
+  printf '%s\n' '#!/bin/sh' 'printf "%s\n" "$*" >> "$PRESENTATION_LOG"' > "$bin_dir/hyprctl"
+  chmod +x "$bin_dir/wl-freeze" "$bin_dir/ps" "$bin_dir/hyprctl"
   if [[ "$freeze_mode" == missing ]]; then rm "$bin_dir/wl-freeze"; fi
   for utility in bash dirname flock luajit mkdir rm sleep touch; do ln -s "$(command -v "$utility")" "$bin_dir/$utility"; done
   touch "$case_dir/ready-query" "$case_dir/ready-event"
   rm "$case_dir/ready-query" "$case_dir/ready-event"
+  export CLIENTS_MODE="$clients_mode"
   "$luajit_path" "$test_dir/fake_socket.lua" "$socket_dir/.socket.sock" query "$case_dir/clear" "$case_dir/ready-query" & query_pid=$!
   "$luajit_path" "$test_dir/fake_socket.lua" "$socket_dir/.socket2.sock" "$event_mode" "$case_dir/clear" "$case_dir/ready-event" & event_pid=$!
   wait_for_socket "$socket_dir/.socket.sock" "$name query socket"
   wait_for_socket "$socket_dir/.socket2.sock" "$name event socket"
   export HOME="$home_dir" PATH="$bin_dir" XDG_RUNTIME_DIR="$runtime_dir" HYPRLAND_INSTANCE_SIGNATURE=fixture
-  export PROFILE_LOG="$case_dir/profile.log" FREEZE_LOG="$case_dir/freeze.log" FREEZE_STATE="$case_dir/frozen" FREEZE_MODE="$freeze_mode"
-  : > "$PROFILE_LOG"; : > "$FREEZE_LOG"
+  export PROFILE_LOG="$case_dir/profile.log" FREEZE_LOG="$case_dir/freeze.log" PRESENTATION_LOG="$case_dir/presentation.log" FREEZE_STATE="$case_dir/frozen" FREEZE_MODE="$freeze_mode" CLIENTS_MODE="$clients_mode"
+  : > "$PROFILE_LOG"; : > "$FREEZE_LOG"; : > "$PRESENTATION_LOG"
   if [[ "$clients_mode" == empty ]]; then touch "$case_dir/clear"; fi
   "$home_dir/.config/hypr/runtime/gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh" > "$case_dir/out" 2> "$case_dir/err" & watchdog_pid=$!
   wait_for_file "$PROFILE_LOG" "$name profile sync"
   sleep 1.2
+  if [[ "$clients_mode" == late-game ]]; then
+    touch "$case_dir/clear"
+    sleep 1.2
+  fi
   if [[ "$clients_mode" == game && "$freeze_mode" == success ]]; then
     touch "$case_dir/clear"
     sleep 1.2
@@ -163,10 +187,10 @@ run_case() {
   wait "$watchdog_pid" || true
   watchdog_pid=""
   export PATH="$original_path"
-  if [[ "$clients_mode" == game && "$freeze_mode" == missing ]]; then
-    assert_contains "$case_dir/err" 'gaming-session-watchdog: wl-freeze is unavailable; process freezing is disabled'
-    assert_contains "$case_dir/err" 'gaming-session-watchdog: event socket closed; retrying in 1s'
-    assert_contains "$case_dir/err" 'gaming-session-watchdog: event socket reconnected'
+  if [[ ( "$clients_mode" == game || "$clients_mode" == late-game ) && "$freeze_mode" == missing ]]; then
+	assert_contains "$case_dir/err" 'gaming-session-watchdog: wl-freeze is unavailable; process freezing is disabled'
+	assert_contains "$case_dir/err" 'gaming-session-watchdog: event socket closed; retrying in 1s'
+	assert_contains "$case_dir/err" 'gaming-session-watchdog: event socket reconnected'
   elif [[ "$clients_mode" == game && "$freeze_mode" == failed ]]; then
     assert_contains "$case_dir/err" 'gaming-session-watchdog: failed to freeze PID 4242'
   else
@@ -182,8 +206,13 @@ run_case missing missing game event
 run_case failed failed game event
 run_case ordinary missing empty stable
 run_case cleanup success game event
+run_case override missing override event
+run_case late-game missing late-game event
 assert_contains "$test_dir/cleanup/profile.log" 'sync gaming 0'
 assert_contains "$test_dir/cleanup/err" 'event socket closed; retrying in 1s'
 assert_contains "$test_dir/cleanup/err" 'event socket reconnected'
+assert_not_contains "$test_dir/missing/presentation.log" 'apply_presentation'
+assert_count "$test_dir/override/presentation.log" 'apply_presentation(0, 0)' 2
+assert_not_contains "$test_dir/late-game/presentation.log" 'apply_presentation'
 
 printf 'PASS gaming-session-watchdog bounded runtime fixture\n'

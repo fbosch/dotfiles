@@ -10,7 +10,8 @@ if host == "rvn-pc" then
 		mode = "3440x1440@99.98",
 		position = "1440x500",
 		scale = 1.0,
-		bitdepth = 10,
+		-- 10 bpc causes flickering black bars in the XWayland WoW client.
+		bitdepth = 8,
 		-- cm = "hdr",
 		-- sdr_eotf = "srgb",
 		-- sdrbrightness = 5,

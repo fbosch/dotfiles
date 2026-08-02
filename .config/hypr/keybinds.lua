@@ -16,6 +16,16 @@ local function main(key)
 	return main_mod .. " + " .. key
 end
 
+local function start_drag()
+	window.start_drag()
+	return bind.consume()
+end
+
+local function finish_drag()
+	window.finish_drag()
+	return bind.consume()
+end
+
 -- Window switching
 bind.register(
 	"SUPER_L",
@@ -142,22 +152,27 @@ hl.config({
 -- Custom layout controls
 -- Current Lua mouse binds do not become native bindm entries, so custom layout
 -- right-drag resize is bridged through a bounded IPC helper.
-bind.register(main("mouse:272"), picture_in_picture.drag)
-bind.register(main("mouse:272"), function()
-	window.place_custom_layout_at_cursor()
-	picture_in_picture.finish_drag()
-end, { release = true })
+bind.register(main("mouse:272"), start_drag)
+bind.register(main("mouse:272"), finish_drag, { release = true })
 bind.register(main("mouse:273"), function()
-	if picture_in_picture.start_resize(false) == false then window.start_custom_layout_resize() end
+	if picture_in_picture.start_resize(false) == false then
+		window.start_custom_layout_resize()
+	end
 end)
 bind.register(main("mouse:273"), function()
-	if picture_in_picture.finish_resize(false) == false then window.stop_custom_layout_resize() end
+	if picture_in_picture.finish_resize(false) == false then
+		window.stop_custom_layout_resize()
+	end
 end, { release = true })
 bind.register(main("SHIFT + mouse:273"), function()
-	if picture_in_picture.start_resize(true) == false then window.resize_keep_aspect_ratio() end
+	if picture_in_picture.start_resize(true) == false then
+		window.resize_keep_aspect_ratio()
+	end
 end)
 bind.register(main("SHIFT + mouse:273"), function()
-	if picture_in_picture.finish_resize(true) == false then window.reset_keep_aspect_ratio() end
+	if picture_in_picture.finish_resize(true) == false then
+		window.reset_keep_aspect_ratio()
+	end
 end, { release = true })
 bind.register(main("SHIFT + H"), window.move("left"))
 bind.register(main("SHIFT + L"), window.move("right"))

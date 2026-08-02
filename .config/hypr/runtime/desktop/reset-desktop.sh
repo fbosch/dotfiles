@@ -58,8 +58,6 @@ wait_for_custom_layout_shutdown() {
   done
 }
 
-hyprctl reload
-
 pkill waybar 2>/dev/null || true
 pkill gjs 2>/dev/null || true
 pkill -f "waybar-monitor.sh" 2>/dev/null || true
@@ -83,7 +81,7 @@ uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-monitor.sh &
 swaync-client -R &
 swaync-client -rs &
 
-uwsm-app -s s -- hyprpaper &
+uwsm-app -s s -- hyprpaper >/dev/null 2>&1 &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-state/window-state.sh &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.sh &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh daemon &

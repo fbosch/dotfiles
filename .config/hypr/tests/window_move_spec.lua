@@ -4,6 +4,8 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 
 local dispatched = {}
 local active_window = nil
+local cursor_position = nil
+local windows = {}
 
 _G.hl = {
 	dsp = {
@@ -12,6 +14,9 @@ _G.hl = {
 		end,
 		layout = function(value)
 			return { op = "layout", value = value }
+		end,
+		focus = function(args)
+			return { op = "focus", args = args }
 		end,
 		cursor = {
 			move = function(args)
@@ -28,6 +33,9 @@ _G.hl = {
 			resize = function(args)
 				return { op = "window.resize", args = args }
 			end,
+			drag = function()
+				return { op = "window.drag" }
+			end,
 		},
 	},
 	dispatch = function(dispatcher)
@@ -35,6 +43,15 @@ _G.hl = {
 	end,
 	get_active_window = function()
 		return active_window
+	end,
+	get_active_workspace = function()
+		return active_window and active_window.workspace
+	end,
+	get_cursor_pos = function()
+		return cursor_position
+	end,
+	get_windows = function()
+		return windows
 	end,
 }
 
@@ -44,9 +61,16 @@ local order_state
 
 local function reset(monitor, x, monitor_x, workspace_windows, name)
 	dispatched = {}
-	active_window = { address = "0xactive", monitor = { name = monitor, x = monitor_x }, at = { x = x or 100, y = 200 }, size = { x = 300, y = 400 } }
+	active_window = {
+		address = "0xactive",
+		monitor = { name = monitor, x = monitor_x },
+		at = { x = x or 100, y = 200 },
+		size = { x = 300, y = 400 },
+	}
 	local workspace = { name = name or "2" }
 	active_window.workspace = workspace
+	windows = { active_window }
+	cursor_position = nil
 	if workspace_windows then
 		function workspace:get_windows()
 			return workspace_windows
@@ -66,6 +90,11 @@ end
 
 local function load_modules()
 	package.loaded["lib.window"] = nil
+	package.loaded["lib.window.interaction"] = nil
+	package.loaded["lib.window.layout"] = nil
+	package.loaded["lib.window.navigation"] = nil
+	package.loaded["lib.window.state"] = nil
+	package.loaded["lib.window.workspace"] = nil
 	package.loaded["layouts.shared.order_state"] = nil
 	order_state = require("layouts.shared.order_state")
 	window = require("lib.window")
@@ -82,7 +111,11 @@ run("dp down moves window to portrait monitor", function()
 	window.move("down")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
-	assert_equal(order_state.transfer_intent_for_window(active_window).monitor_role, monitor_role.portrait, "transfer role")
+	assert_equal(
+		order_state.transfer_intent_for_window(active_window).monitor_role,
+		monitor_role.portrait,
+		"transfer role"
+	)
 	assert_equal(order_state.transfer_intent_for_window(active_window).axis, "y", "transfer axis")
 	assert_equal(order_state.transfer_intent_for_window(active_window).edge, "end", "transfer edge")
 	assert_equal(dispatched[2].op, "cursor.move", "cursor dispatcher")
@@ -90,12 +123,89 @@ run("dp down moves window to portrait monitor", function()
 	assert_equal(dispatched[2].args.y, 400, "cursor y")
 end)
 
+run("cursor lookup selects an unfocused normal window beside a game", function()
+	reset("DP-2")
+	active_window = {
+		content_type = "game",
+		visible = true,
+		at = { x = 1440, y = 0 },
+		size = { x = 3440, y = 1440 },
+	}
+	local normal_window = {
+		content_type = "none",
+		visible = true,
+		at = { x = 0, y = 0 },
+		size = { x = 1428, y = 830 },
+	}
+	windows = { active_window, normal_window }
+	cursor_position = { x = 700, y = 400 }
+
+	assert_equal(window.at_cursor(), normal_window, "window under cursor")
+end)
+
+run("cursor lookup ignores games on inactive workspaces", function()
+	reset("DP-2")
+	active_window.content_type = "none"
+	active_window.visible = true
+	active_window.at = { x = 0, y = 0 }
+	active_window.size = { x = 1428, y = 830 }
+	local game_window = {
+		content_type = "game",
+		visible = true,
+		workspace = { name = "10" },
+		at = { x = 0, y = 0 },
+		size = { x = 3440, y = 1440 },
+	}
+	windows = { game_window, active_window }
+	cursor_position = { x = 700, y = 400 }
+
+	assert_equal(window.at_cursor(), active_window, "window on active workspace")
+end)
+
+run("drag targets the normal cursor window instead of the active game", function()
+	reset("DP-2")
+	active_window = {
+		content_type = "game",
+		visible = true,
+		at = { x = 1440, y = 0 },
+		size = { x = 3440, y = 1440 },
+	}
+	local normal_window = {
+		content_type = "none",
+		visible = true,
+		at = { x = 0, y = 0 },
+		size = { x = 1428, y = 830 },
+	}
+	windows = { active_window, normal_window }
+	cursor_position = { x = 700, y = 400 }
+
+	assert_equal(window.start_drag(), true, "drag starts")
+	assert_equal(dispatched[2].op, "window.drag", "drag dispatcher")
+	assert_equal(window.finish_drag(), true, "drag finishes")
+end)
+
+run("custom layout drag places the active window after interactive dragging", function()
+	reset("DP-2")
+	active_window.workspace.tiledLayout = "lua:ultrawide_master"
+	cursor_position = { x = 250, y = 400 }
+
+	assert_equal(window.start_drag(), true, "drag starts")
+	assert_equal(dispatched[2].op, "window.drag", "drag dispatcher")
+	assert_equal(window.finish_drag(), true, "drag finishes")
+	assert_equal(dispatched[3].op, "layout", "layout dispatcher")
+	assert_equal(dispatched[3].value, "place-at-cursor", "layout message")
+end)
+
 run("dp left edge moves window to portrait monitor", function()
 	reset("DP-2", 1446)
 	window.move("left")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
-	assert_equal(order_state.transfer_intent_for_window(active_window).monitor_role, monitor_role.portrait, "transfer role")
+	assert_equal(
+		order_state.transfer_intent_for_window(active_window).monitor_role,
+		monitor_role.portrait,
+		"transfer role"
+	)
 	assert_equal(order_state.transfer_intent_for_window(active_window).axis, "y", "transfer axis")
 	assert_equal(order_state.transfer_intent_for_window(active_window).edge, "end", "transfer edge")
 	assert_equal(dispatched[2].op, "cursor.move", "cursor dispatcher")
@@ -132,7 +242,11 @@ run("dp only tiled window moves left to portrait", function()
 	window.move("left")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
-	assert_equal(order_state.transfer_intent_for_window(active_window).monitor_role, monitor_role.portrait, "transfer role")
+	assert_equal(
+		order_state.transfer_intent_for_window(active_window).monitor_role,
+		monitor_role.portrait,
+		"transfer role"
+	)
 end)
 
 run("dp multiple tiled windows still swap left", function()
@@ -167,7 +281,11 @@ run("hdmi right moves window to ultrawide monitor", function()
 	window.move("right")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "DP-2", "target monitor")
-	assert_equal(order_state.transfer_intent_for_window(active_window).monitor_role, monitor_role.ultrawide, "transfer role")
+	assert_equal(
+		order_state.transfer_intent_for_window(active_window).monitor_role,
+		monitor_role.ultrawide,
+		"transfer role"
+	)
 	assert_equal(order_state.transfer_intent_for_window(active_window).axis, "x", "transfer axis")
 	assert_equal(order_state.transfer_intent_for_window(active_window).edge, "start", "transfer edge")
 end)

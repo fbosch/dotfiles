@@ -40,11 +40,8 @@ local function profile_sync(count)
 end
 
 local function apply_presentation(presentation)
-	local expression = string.format(
-		'require("profiles").apply_presentation(%d, %d)',
-		presentation.vrr,
-		presentation.direct_scanout
-	)
+	local expression =
+		string.format('require("profiles").apply_presentation(%d, %d)', presentation.vrr, presentation.direct_scanout)
 	return command.ok("hyprctl eval " .. command.arg(expression) .. " >/dev/null 2>&1")
 end
 
@@ -257,10 +254,7 @@ local function select_presentation(clients)
 end
 
 local function same_presentation(left, right)
-	return left ~= nil
-		and right ~= nil
-		and left.vrr == right.vrr
-		and left.direct_scanout == right.direct_scanout
+	return left ~= nil and right ~= nil and left.vrr == right.vrr and left.direct_scanout == right.direct_scanout
 end
 
 local function sync_gaming_presentation(current_count, clients, force)
@@ -270,6 +264,11 @@ local function sync_gaming_presentation(current_count, clients, force)
 	end
 
 	local presentation = select_presentation(clients)
+	if same_presentation(presentation, gaming.default_presentation) and (force or last_presentation == nil) then
+		last_presentation = presentation
+		return
+	end
+
 	if force or not same_presentation(last_presentation, presentation) then
 		if apply_presentation(presentation) then
 			last_presentation = presentation
@@ -444,7 +443,7 @@ local function run()
 			hide_gaming_overlay_outside_workspace(monitors)
 			sync_gaming_freeze_state(clients, monitors)
 			local current_count = sync_gaming_state(last_count, clients, true)
-				sync_gaming_presentation(current_count, clients, true)
+			sync_gaming_presentation(current_count, clients, true)
 			last_count = current_count
 
 			while true do
@@ -459,7 +458,11 @@ local function run()
 					if current_overlay_count > last_overlay_count or kind == "workspace" then
 						monitors = get_monitors()
 					end
-					if line:match("^closewindow") and last_gaming_workspace_count > 0 and current_gaming_workspace_count == 0 then
+					if
+						line:match("^closewindow")
+						and last_gaming_workspace_count > 0
+						and current_gaming_workspace_count == 0
+					then
 						monitors = monitors or get_monitors()
 						focus_previous_workspace_after_game_close(clients, monitors)
 					end
@@ -471,9 +474,9 @@ local function run()
 					sync_gaming_freeze_state(clients, monitors)
 					last_overlay_count = current_overlay_count
 					last_gaming_workspace_count = current_gaming_workspace_count
-				local current_count = sync_gaming_state(last_count, clients, kind == "reload")
-				sync_gaming_presentation(current_count, clients, kind == "reload")
-				last_count = current_count
+					local current_count = sync_gaming_state(last_count, clients, kind == "reload")
+					sync_gaming_presentation(current_count, clients, kind == "reload")
+					last_count = current_count
 				end
 				if read_err then
 					events:close()
