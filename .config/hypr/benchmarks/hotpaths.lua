@@ -149,16 +149,18 @@ local function run_case(name, iterations, fn)
 	local elapsed = os.clock() - start
 	local after_memory = collectgarbage("count")
 	local per_call_us = elapsed * 1000000 / iterations
-	print(string.format(
-		"%-34s %9d iters %10.3f us/call %8.3f ms total dispatch=%d exec=%d mem_delta=%.1f KiB",
-		name,
-		iterations,
-		per_call_us,
-		elapsed * 1000,
-		dispatches,
-		execs,
-		after_memory - before_memory
-	))
+	print(
+		string.format(
+			"%-34s %9d iters %10.3f us/call %8.3f ms total dispatch=%d exec=%d mem_delta=%.1f KiB",
+			name,
+			iterations,
+			per_call_us,
+			elapsed * 1000,
+			dispatches,
+			execs,
+			after_memory - before_memory
+		)
+	)
 end
 
 local function callbacks(name)
@@ -185,8 +187,7 @@ local function bench_ultrawide_master(iterations)
 		context.targets[index] = {
 			index = index,
 			window = window_handle,
-			place = function()
-			end,
+			place = function() end,
 		}
 	end
 	run_case("layouts.ultrawide_master/recalculate-3", iterations, function()
@@ -205,8 +206,7 @@ local function make_layout_context(windows)
 		targets[index] = {
 			index = index,
 			window = window_handle,
-			place = function()
-			end,
+			place = function() end,
 		}
 	end
 
@@ -317,7 +317,11 @@ local function bench_clipboard_bridge(iterations)
 	active_window = current_windows[1]
 	local bridge = require("actions.clipboard-bridge")
 	run_case("clipboard/schedule-gamescope", iterations, bridge.paste_with_clipboard_bridge)
-	run_case("clipboard/sync-now-stubbed", math.max(100, math.floor(iterations / 10)), bridge.sync_wayland_to_xwayland_now)
+	run_case(
+		"clipboard/sync-now-stubbed",
+		math.max(100, math.floor(iterations / 10)),
+		bridge.sync_wayland_to_xwayland_now
+	)
 end
 
 local function bench_rule_loader(iterations)
@@ -345,10 +349,11 @@ end
 
 local function bench_window_motion(iterations)
 	clear_modules()
-	local window = require("lib.window")
-	local move_right = window.move("right")
-	local move_up = window.move("up")
-	local resize_right = window.adjust("resize", "right")
+	local window_directional = require("lib.window.directional")
+	local window_state = require("lib.window.state")
+	local move_right = window_directional.move(window_state, "right")
+	local move_up = window_directional.move(window_state, "up")
+	local resize_right = window_directional.adjust(window_state, "resize", "right")
 	local normal_window = make_window(1, { workspace = make_workspace(1), active = true })
 	normal_window.monitor = { name = "DP-2" }
 	normal_window.at = { x = 1440, y = 500 }
@@ -380,7 +385,7 @@ local function bench_window_motion(iterations)
 	current_windows = fallback_windows
 	hl.get_active_window = nil
 	run_case("window.active/fallback-50", iterations, function()
-		window.active()
+		window_state.active()
 	end)
 end
 
@@ -418,12 +423,25 @@ local selected = arg[1] or "all"
 local iterations = tonumber(arg[2]) or default_iterations
 
 if selected == "all" then
-	for _, name in ipairs({ "ultrawide_master", "portrait", "window_switcher", "clipboard", "rule_loader", "profiles", "window_motion", "transfer_intent" }) do
+	for _, name in ipairs({
+		"ultrawide_master",
+		"portrait",
+		"window_switcher",
+		"clipboard",
+		"rule_loader",
+		"profiles",
+		"window_motion",
+		"transfer_intent",
+	}) do
 		cases[name](iterations)
 	end
 elseif cases[selected] then
 	cases[selected](iterations)
 else
-	print("usage: lua " .. script_path .. " [all|ultrawide_master|portrait|window_switcher|clipboard|rule_loader|profiles|window_motion|transfer_intent] [iterations]")
+	print(
+		"usage: lua "
+			.. script_path
+			.. " [all|ultrawide_master|portrait|window_switcher|clipboard|rule_loader|profiles|window_motion|transfer_intent] [iterations]"
+	)
 	os.exit(2)
 end

@@ -55,9 +55,12 @@ _G.hl = {
 	end,
 }
 
-local window
+local interaction
+local layout
 local monitor_role = require("lib.monitor_role")
+local directional
 local order_state
+local state
 
 local function reset(monitor, x, monitor_x, workspace_windows, name)
 	dispatched = {}
@@ -89,15 +92,17 @@ local function assert_equal(actual, expected, message)
 end
 
 local function load_modules()
-	package.loaded["lib.window"] = nil
 	package.loaded["lib.window.interaction"] = nil
 	package.loaded["lib.window.layout"] = nil
-	package.loaded["lib.window.navigation"] = nil
+	package.loaded["lib.window.directional"] = nil
 	package.loaded["lib.window.state"] = nil
 	package.loaded["lib.window.workspace"] = nil
 	package.loaded["layouts.shared.order_state"] = nil
+	interaction = require("lib.window.interaction")
+	layout = require("lib.window.layout")
+	directional = require("lib.window.directional")
+	state = require("lib.window.state")
 	order_state = require("layouts.shared.order_state")
-	window = require("lib.window")
 end
 
 before_each(load_modules)
@@ -108,7 +113,7 @@ end
 
 run("dp down moves window to portrait monitor", function()
 	reset("DP-2")
-	window.move("down")()
+	directional.move(state, "down")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
 	assert_equal(
@@ -140,7 +145,7 @@ run("cursor lookup selects an unfocused normal window beside a game", function()
 	windows = { active_window, normal_window }
 	cursor_position = { x = 700, y = 400 }
 
-	assert_equal(window.at_cursor(), normal_window, "window under cursor")
+	assert_equal(state.at_cursor(), normal_window, "window under cursor")
 end)
 
 run("cursor lookup ignores games on inactive workspaces", function()
@@ -159,7 +164,7 @@ run("cursor lookup ignores games on inactive workspaces", function()
 	windows = { game_window, active_window }
 	cursor_position = { x = 700, y = 400 }
 
-	assert_equal(window.at_cursor(), active_window, "window on active workspace")
+	assert_equal(state.at_cursor(), active_window, "window on active workspace")
 end)
 
 run("drag targets the normal cursor window instead of the active game", function()
@@ -179,9 +184,9 @@ run("drag targets the normal cursor window instead of the active game", function
 	windows = { active_window, normal_window }
 	cursor_position = { x = 700, y = 400 }
 
-	assert_equal(window.start_drag(), true, "drag starts")
+	assert_equal(interaction.start_drag(state), true, "drag starts")
 	assert_equal(dispatched[2].op, "window.drag", "drag dispatcher")
-	assert_equal(window.finish_drag(), true, "drag finishes")
+	assert_equal(interaction.finish_drag(state, layout), true, "drag finishes")
 end)
 
 run("custom layout drag places the active window after interactive dragging", function()
@@ -189,16 +194,16 @@ run("custom layout drag places the active window after interactive dragging", fu
 	active_window.workspace.tiledLayout = "lua:ultrawide_master"
 	cursor_position = { x = 250, y = 400 }
 
-	assert_equal(window.start_drag(), true, "drag starts")
+	assert_equal(interaction.start_drag(state), true, "drag starts")
 	assert_equal(dispatched[2].op, "window.drag", "drag dispatcher")
-	assert_equal(window.finish_drag(), true, "drag finishes")
+	assert_equal(interaction.finish_drag(state, layout), true, "drag finishes")
 	assert_equal(dispatched[3].op, "layout", "layout dispatcher")
 	assert_equal(dispatched[3].value, "place-at-cursor", "layout message")
 end)
 
 run("dp left edge moves window to portrait monitor", function()
 	reset("DP-2", 1446)
-	window.move("left")()
+	directional.move(state, "left")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
 	assert_equal(
@@ -213,14 +218,14 @@ end)
 
 run("dp left edge uses monitor x when available", function()
 	reset("DP-2", 2006, 2000)
-	window.move("left")()
+	directional.move(state, "left")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
 end)
 
 run("dp non-left edge swaps left", function()
 	reset("DP-2", 3000)
-	window.move("left")()
+	directional.move(state, "left")()
 	assert_equal(dispatched[1].op, "layout", "dispatcher")
 	assert_equal(dispatched[1].value, "swapprev", "layout message")
 	assert_equal(dispatched[2].op, "cursor.move", "cursor dispatcher")
@@ -228,7 +233,7 @@ end)
 
 run("dp outside monitor edge tolerance swaps left", function()
 	reset("DP-2", 2100, 2000)
-	window.move("left")()
+	directional.move(state, "left")()
 	assert_equal(dispatched[1].op, "layout", "dispatcher")
 	assert_equal(dispatched[1].value, "swapprev", "layout message")
 end)
@@ -239,7 +244,7 @@ run("dp only tiled window moves left to portrait", function()
 	active_window.visible = only.visible
 	active_window.floating = only.floating
 	active_window.workspace = only.workspace
-	window.move("left")()
+	directional.move(state, "left")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
 	assert_equal(
@@ -256,14 +261,14 @@ run("dp multiple tiled windows still swap left", function()
 	active_window.visible = first.visible
 	active_window.floating = first.floating
 	active_window.workspace = first.workspace
-	window.move("left")()
+	directional.move(state, "left")()
 	assert_equal(dispatched[1].op, "layout", "dispatcher")
 	assert_equal(dispatched[1].value, "swapprev", "layout message")
 end)
 
 run("dp right uses ultrawide layout swap", function()
 	reset("DP-2")
-	window.move("right")()
+	directional.move(state, "right")()
 	assert_equal(dispatched[1].op, "layout", "dispatcher")
 	assert_equal(dispatched[1].value, "swapnext", "layout message")
 	assert_equal(dispatched[2].op, "cursor.move", "cursor dispatcher")
@@ -271,14 +276,14 @@ end)
 
 run("dp scrolling workspace uses native move", function()
 	reset("DP-2", nil, nil, nil, "10")
-	window.move("right")()
+	directional.move(state, "right")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.direction, "right", "move direction")
 end)
 
 run("hdmi right moves window to ultrawide monitor", function()
 	reset("HDMI-A-2")
-	window.move("right")()
+	directional.move(state, "right")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "DP-2", "target monitor")
 	assert_equal(
@@ -292,49 +297,49 @@ end)
 
 run("hdmi down uses portrait layout swap", function()
 	reset("HDMI-A-2")
-	window.move("down")()
+	directional.move(state, "down")()
 	assert_equal(dispatched[1].op, "layout", "dispatcher")
 	assert_equal(dispatched[1].value, "swapnext", "layout message")
 end)
 
 run("hdmi up uses portrait layout swap", function()
 	reset("HDMI-A-2")
-	window.move("up")()
+	directional.move(state, "up")()
 	assert_equal(dispatched[1].op, "layout", "dispatcher")
 	assert_equal(dispatched[1].value, "swapprev", "layout message")
 end)
 
 run("dp resize left uses ultrawide layout resize", function()
 	reset("DP-2")
-	window.adjust("resize", "left")()
+	directional.adjust(state, "resize", "left")()
 	assert_equal(dispatched[1].op, "layout", "dispatcher")
 	assert_equal(dispatched[1].value, "resize-left", "layout message")
 end)
 
 run("dp resize right uses ultrawide layout resize", function()
 	reset("DP-2")
-	window.adjust("resize", "right")()
+	directional.adjust(state, "resize", "right")()
 	assert_equal(dispatched[1].op, "layout", "dispatcher")
 	assert_equal(dispatched[1].value, "resize-right", "layout message")
 end)
 
 run("dp scrolling workspace uses native resize", function()
 	reset("DP-2", nil, nil, nil, "10")
-	window.adjust("resize", "right")()
+	directional.adjust(state, "resize", "right")()
 	assert_equal(dispatched[1].op, "window.resize", "dispatcher")
 	assert_equal(dispatched[1].args.x, 32, "resize x")
 end)
 
 run("hdmi resize up uses portrait layout resize", function()
 	reset("HDMI-A-2")
-	window.adjust("resize", "up")()
+	directional.adjust(state, "resize", "up")()
 	assert_equal(dispatched[1].op, "layout", "dispatcher")
 	assert_equal(dispatched[1].value, "resize-up", "layout message")
 end)
 
 run("non-special resize uses window resize dispatcher", function()
 	reset("DP-1")
-	window.adjust("resize", "right")()
+	directional.adjust(state, "resize", "right")()
 	assert_equal(dispatched[1].op, "window.resize", "dispatcher")
 	assert_equal(dispatched[1].args.x, 32, "resize x")
 end)

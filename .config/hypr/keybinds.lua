@@ -1,7 +1,11 @@
 local programs = require("programs")
 local async = require("lib.async")
 local bind = require("lib.bind")
-local window = require("lib.window")
+local window_interaction = require("lib.window.interaction")
+local window_layout = require("lib.window.layout")
+local window_directional = require("lib.window.directional")
+local window_state = require("lib.window.state")
+local window_workspace = require("lib.window.workspace")
 local gaming = require("gaming")
 local volume = require("actions.volume")
 local confirm_exit = require("actions.confirm-exit")
@@ -17,13 +21,17 @@ local function main(key)
 end
 
 local function start_drag()
-	window.start_drag()
+	window_interaction.start_drag(window_state)
 	return bind.consume()
 end
 
 local function finish_drag()
-	window.finish_drag()
+	window_interaction.finish_drag(window_state, window_layout)
 	return bind.consume()
+end
+
+local function focus_gaming_workspace()
+	return window_workspace.focus_gaming_workspace(window_state)
 end
 
 -- Window switching
@@ -31,7 +39,7 @@ bind.register(
 	"SUPER_L",
 	-- Keep the Waybar toggle out of the gaming workspace.
 	"printf 'hold\\n' | nc -U \"$XDG_RUNTIME_DIR/hypr-waybar-monitor.sock\" >/dev/null 2>&1 || pkill -SIGUSR1 waybar",
-	{ long_press = true, predicate = window.active_workspace_is_not(gaming.workspace), on_false = bind.consume }
+	{ long_press = true, predicate = window_state.active_workspace_is_not(gaming.workspace), on_false = bind.consume }
 )
 bind.register("SUPER_L", window_switcher.release_super, { ignore_mods = true, release = true })
 bind.register("SUPER_R", window_switcher.commit, { release = true })
@@ -44,7 +52,7 @@ bind.register(main("R"), programs.menu)
 
 -- Input and clipboard
 bind.register("CTRL + SPACE", keyboard_layout.switch, {
-	predicate = window.active_is_not_game,
+	predicate = window_state.active_is_not_game,
 })
 bind.register(main("SHIFT + V"), clipboard_bridge.paste_with_clipboard_bridge)
 bind.register(
@@ -74,8 +82,8 @@ bind.register(main("SHIFT + R"), "~/.config/hypr/runtime/desktop/reset-desktop.s
 bind.register(main("D"), "~/.config/hypr/runtime/windows/toggle-show-desktop.sh")
 
 -- Gaming
-bind.register(main("G"), window.focus_gaming_workspace)
-bind.register(main("SHIFT + G"), window.move_to_gaming_workspace)
+bind.register(main("G"), focus_gaming_workspace)
+bind.register(main("SHIFT + G"), window_workspace.move_to_gaming_workspace)
 
 -- Capture
 bind.register("CTRL + SHIFT + C", "bash ~/.config/hypr/runtime/capture/screenshot.sh area")
@@ -113,13 +121,13 @@ bind.register(main("CTRL + SHIFT + F"), hl.dsp.pass({ window = "class:^(xfreerdp
 
 bind.register(main("Z"), "~/.config/hypr/runtime/windows/minimized-state.lua toggle-window")
 bind.register(main("SHIFT + Z"), "~/.config/hypr/runtime/windows/minimized-state.lua toggle-workspace")
-bind.register(main("X"), window.hide_from_current_workspace)
+bind.register(main("X"), window_workspace.hide_from_current_workspace)
 
 -- Window focus and layout
-bind.register(main("H"), window.focus("left"))
-bind.register(main("L"), window.focus("right"))
-bind.register(main("J"), window.focus("down"))
-bind.register(main("K"), window.focus("up"))
+bind.register(main("H"), window_directional.focus(window_state, "left"))
+bind.register(main("L"), window_directional.focus(window_state, "right"))
+bind.register(main("J"), window_directional.focus(window_state, "down"))
+bind.register(main("K"), window_directional.focus(window_state, "up"))
 
 bind.register(main("SHIFT + d"), hl.dsp.layout("setratio 0.6"))
 
@@ -128,10 +136,10 @@ for workspace = 1, 10 do
 	local workspace_name = tostring(workspace)
 	local workspace_key = tostring(workspace % 10)
 	bind.register(main(workspace_key), function()
-		window.focus_workspace(workspace_name)
+		window_workspace.focus_workspace(workspace_name)
 	end)
 	bind.register(main("SHIFT + " .. workspace_key), function()
-		window.move_to_workspace(workspace_name)
+		window_workspace.move_to_workspace(workspace_name)
 	end)
 end
 
@@ -156,39 +164,39 @@ bind.register(main("mouse:272"), start_drag)
 bind.register(main("mouse:272"), finish_drag, { release = true })
 bind.register(main("mouse:273"), function()
 	if picture_in_picture.start_resize(false) == false then
-		window.start_custom_layout_resize()
+		window_layout.start_custom_layout_resize()
 	end
 end)
 bind.register(main("mouse:273"), function()
 	if picture_in_picture.finish_resize(false) == false then
-		window.stop_custom_layout_resize()
+		window_layout.stop_custom_layout_resize()
 	end
 end, { release = true })
 bind.register(main("SHIFT + mouse:273"), function()
 	if picture_in_picture.start_resize(true) == false then
-		window.resize_keep_aspect_ratio()
+		window_layout.resize_keep_aspect_ratio()
 	end
 end)
 bind.register(main("SHIFT + mouse:273"), function()
 	if picture_in_picture.finish_resize(true) == false then
-		window.reset_keep_aspect_ratio()
+		window_layout.reset_keep_aspect_ratio()
 	end
 end, { release = true })
-bind.register(main("SHIFT + H"), window.move("left"))
-bind.register(main("SHIFT + L"), window.move("right"))
-bind.register(main("SHIFT + J"), window.move("down"))
-bind.register(main("SHIFT + K"), window.move("up"))
+bind.register(main("SHIFT + H"), window_directional.move(window_state, "left"))
+bind.register(main("SHIFT + L"), window_directional.move(window_state, "right"))
+bind.register(main("SHIFT + J"), window_directional.move(window_state, "down"))
+bind.register(main("SHIFT + K"), window_directional.move(window_state, "up"))
 
 -- Window movement and resizing
-bind.register(main("right"), window.adjust("nudge", "right"), { repeating = true })
-bind.register(main("left"), window.adjust("nudge", "left"), { repeating = true })
-bind.register(main("up"), window.adjust("nudge", "up"), { repeating = true })
-bind.register(main("down"), window.adjust("nudge", "down"), { repeating = true })
+bind.register(main("right"), window_directional.adjust(window_state, "nudge", "right"), { repeating = true })
+bind.register(main("left"), window_directional.adjust(window_state, "nudge", "left"), { repeating = true })
+bind.register(main("up"), window_directional.adjust(window_state, "nudge", "up"), { repeating = true })
+bind.register(main("down"), window_directional.adjust(window_state, "nudge", "down"), { repeating = true })
 
-bind.register(main("SHIFT + right"), window.adjust("resize", "right"), { repeating = true })
-bind.register(main("SHIFT + left"), window.adjust("resize", "left"), { repeating = true })
-bind.register(main("SHIFT + up"), window.adjust("resize", "up"), { repeating = true })
-bind.register(main("SHIFT + down"), window.adjust("resize", "down"), { repeating = true })
+bind.register(main("SHIFT + right"), window_directional.adjust(window_state, "resize", "right"), { repeating = true })
+bind.register(main("SHIFT + left"), window_directional.adjust(window_state, "resize", "left"), { repeating = true })
+bind.register(main("SHIFT + up"), window_directional.adjust(window_state, "resize", "up"), { repeating = true })
+bind.register(main("SHIFT + down"), window_directional.adjust(window_state, "resize", "down"), { repeating = true })
 
 -- Hardware controls
 bind.register("XF86AudioRaiseVolume", volume.raise, { repeating = true, locked = true })

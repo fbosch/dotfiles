@@ -1,4 +1,4 @@
-local window = require("lib.window")
+local window_state = require("lib.window.state")
 
 local M = {}
 
@@ -58,7 +58,7 @@ function M.dispatch_on_window(window_handle, dispatcher)
 		return
 	end
 
-	local previous = M.address(window.active())
+	local previous = M.address(window_state.active())
 	if previous == target then
 		hl.dispatch(dispatcher)
 		return

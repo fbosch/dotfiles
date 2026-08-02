@@ -2,7 +2,7 @@
 -- Keep the Bash script for legacy hyprland.conf until Lua config is release-ready.
 
 local command = require("lib.command")
-local window = require("lib.window")
+local window_state = require("lib.window.state")
 local gaming = require("gaming")
 local async = require("lib.async")
 
@@ -108,7 +108,7 @@ local function sync_clipboard_to_gamescope(text)
 end
 
 local function active_is_gamescope()
-	local active = window.active()
+	local active = window_state.active()
 	return active ~= nil and gaming.is_gamescope_window(active)
 end
 

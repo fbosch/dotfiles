@@ -375,7 +375,7 @@ custom_move() {
 	local direction="$1"
 	local direction_arg="$(lua_quote "$direction")"
 
-	hyprctl eval "require('lib.window').move(${direction_arg})()" >/dev/null
+	hyprctl eval "require('lib.window.directional').move(require('lib.window.state'), ${direction_arg})()" >/dev/null
 	sleep 0.2
 }
 
