@@ -2,7 +2,7 @@ local programs = require("programs")
 local async = require("lib.async")
 local bind = require("lib.bind")
 local window_interaction = require("lib.window.interaction")
-local window_layout = require("lib.window.layout")
+local window_custom_layout = require("lib.window.custom_layout")
 local window_directional = require("lib.window.directional")
 local window_state = require("lib.window.state")
 local window_workspace = require("lib.window.workspace")
@@ -26,7 +26,7 @@ local function start_drag()
 end
 
 local function finish_drag()
-	window_interaction.finish_drag(window_state, window_layout)
+	window_interaction.finish_drag(window_state, window_custom_layout)
 	return bind.consume()
 end
 
@@ -164,22 +164,22 @@ bind.register(main("mouse:272"), start_drag)
 bind.register(main("mouse:272"), finish_drag, { release = true })
 bind.register(main("mouse:273"), function()
 	if picture_in_picture.start_resize(false) == false then
-		window_layout.start_custom_layout_resize()
+		window_custom_layout.start_custom_layout_resize()
 	end
 end)
 bind.register(main("mouse:273"), function()
 	if picture_in_picture.finish_resize(false) == false then
-		window_layout.stop_custom_layout_resize()
+		window_custom_layout.stop_custom_layout_resize()
 	end
 end, { release = true })
 bind.register(main("SHIFT + mouse:273"), function()
 	if picture_in_picture.start_resize(true) == false then
-		window_layout.resize_keep_aspect_ratio()
+		window_custom_layout.resize_keep_aspect_ratio()
 	end
 end)
 bind.register(main("SHIFT + mouse:273"), function()
 	if picture_in_picture.finish_resize(true) == false then
-		window_layout.reset_keep_aspect_ratio()
+		window_custom_layout.reset_keep_aspect_ratio()
 	end
 end, { release = true })
 bind.register(main("SHIFT + H"), window_directional.move(window_state, "left"))

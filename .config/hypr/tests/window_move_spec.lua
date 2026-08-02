@@ -56,7 +56,7 @@ _G.hl = {
 }
 
 local interaction
-local layout
+local custom_layout
 local monitor_role = require("lib.monitor_role")
 local directional
 local order_state
@@ -93,13 +93,13 @@ end
 
 local function load_modules()
 	package.loaded["lib.window.interaction"] = nil
-	package.loaded["lib.window.layout"] = nil
+	package.loaded["lib.window.custom_layout"] = nil
 	package.loaded["lib.window.directional"] = nil
 	package.loaded["lib.window.state"] = nil
 	package.loaded["lib.window.workspace"] = nil
 	package.loaded["layouts.shared.order_state"] = nil
 	interaction = require("lib.window.interaction")
-	layout = require("lib.window.layout")
+	custom_layout = require("lib.window.custom_layout")
 	directional = require("lib.window.directional")
 	state = require("lib.window.state")
 	order_state = require("layouts.shared.order_state")
@@ -186,7 +186,7 @@ run("drag targets the normal cursor window instead of the active game", function
 
 	assert_equal(interaction.start_drag(state), true, "drag starts")
 	assert_equal(dispatched[2].op, "window.drag", "drag dispatcher")
-	assert_equal(interaction.finish_drag(state, layout), true, "drag finishes")
+	assert_equal(interaction.finish_drag(state, custom_layout), true, "drag finishes")
 end)
 
 run("custom layout drag places the active window after interactive dragging", function()
@@ -196,7 +196,7 @@ run("custom layout drag places the active window after interactive dragging", fu
 
 	assert_equal(interaction.start_drag(state), true, "drag starts")
 	assert_equal(dispatched[2].op, "window.drag", "drag dispatcher")
-	assert_equal(interaction.finish_drag(state, layout), true, "drag finishes")
+	assert_equal(interaction.finish_drag(state, custom_layout), true, "drag finishes")
 	assert_equal(dispatched[3].op, "layout", "layout dispatcher")
 	assert_equal(dispatched[3].value, "place-at-cursor", "layout message")
 end)

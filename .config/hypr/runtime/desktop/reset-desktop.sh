@@ -75,6 +75,8 @@ wait_for_window_capture_shutdown
 wait_for_window_state_shutdown
 wait_for_custom_layout_shutdown
 
+hyprctl reload
+
 uwsm-app -s s -- waybar &
 uwsm-app -s s -- ~/.config/ags/start-daemons.sh &
 uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-monitor.sh &
