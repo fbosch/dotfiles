@@ -36,6 +36,7 @@ in
     shellcheck
     stow
     stylua
+    util-linux
     yq-go
   ];
 

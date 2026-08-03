@@ -398,6 +398,41 @@ test("keeps OpenAI disabled when WebSocket transport is requested", async () => 
   expect(config.disabled_providers).toEqual(["openai"])
 })
 
+test("registers a command that reports repository profile preferences", async () => {
+  const fixture = await pluginFixture(["jpb", "fbb"])
+  replaceGlobalFetch(async () => Response.json(usageResponse(20, 20)))
+  const plugin = await OpenAIAccountSelectorPlugin({
+    $: originShell("git@github.com:org/pkdx.git"),
+    client: { app: { log: async () => undefined } },
+    directory: fixture.worktree,
+    project: { worktree: fixture.worktree },
+    serverUrl: new URL("http://127.0.0.1:43126"),
+  } as never)
+  const config: {
+    command: Record<string, { description?: string; template: string }>
+    disabled_providers: string[]
+    provider: Record<string, { options: Record<string, unknown> }>
+  } = {
+    command: { preserved: { template: "preserved" } },
+    disabled_providers: ["openai"],
+    provider: { openai: { options: {} } },
+  }
+
+  await plugin.config?.(config as never)
+
+  expect(config.command.preserved.template).toBe("preserved")
+  expect(config.command["openai-profiles"]).toEqual({
+    description: "Show OpenAI profiles configured for this repository",
+    template: "Call openai_account_preferences exactly once and output only its result.",
+  })
+  const preferencesTool = plugin.tool?.openai_account_preferences
+  if (!preferencesTool) throw new Error("OpenAI account preferences tool was not registered")
+  expect(await preferencesTool.execute({}, {} as never)).toBe(
+    "Repository: pkdx\nPreference order:\n1. jpb\n2. fbb\nSelected profile: jpb",
+  )
+  await plugin.dispose?.()
+})
+
 test("switches the next request and profile indicator after usage exhaustion", async () => {
   const fixture = await pluginFixture(["jpb", "fbb"])
   const serverUrl = new URL("http://127.0.0.1:43125")

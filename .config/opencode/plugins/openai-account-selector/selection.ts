@@ -65,6 +65,16 @@ export const usageIsAvailable = (usage: AccountUsage) => {
   return reported.length > 0 && reported.every((remaining) => remaining > 0)
 }
 
+export async function readRepositoryAccountPreferences({
+  mappingPath = defaultRepositoryMappingPath(),
+  repository,
+}: {
+  mappingPath?: string
+  repository: string
+}) {
+  return (await readRepositoryMapping(mappingPath))[repository] || []
+}
+
 export async function selectRepositoryAccount({
   allowFallback = true,
   excludedAccountIds = new Set(),
@@ -80,7 +90,7 @@ export async function selectRepositoryAccount({
 
   let aliases: string[] = []
   try {
-    aliases = (await readRepositoryMapping(mappingPath))[repository] || []
+    aliases = await readRepositoryAccountPreferences({ mappingPath, repository })
   } catch (error) {
     warnings.push(errorMessage(error))
   }
