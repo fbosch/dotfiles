@@ -38,7 +38,7 @@ const profileManagedAgentKeys = [
 const AgentOptionsSchema = z
     .object({
         model: z.string().nullable().optional(),
-        reasoningEffort: z.enum(["minimal", "low", "medium", "high", "xhigh"]).optional(),
+        reasoningEffort: z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"]).optional(),
         textVerbosity: z.enum(["low", "medium", "high"]).optional(),
         reasoningSummary: z.enum(["auto", "detailed", "none"]).optional(),
     })
