@@ -41,7 +41,7 @@ export function styleBlock(text: string): void {
 
   stderr.write("\n");
   for (const line of lines) {
-    style(` ${line}`);
+    style(line);
   }
 }
 
