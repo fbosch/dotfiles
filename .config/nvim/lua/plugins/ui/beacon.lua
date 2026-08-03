@@ -5,7 +5,7 @@ return {
 		config = function()
 			local beacon = require("beacon")
 			local function winblend()
-				return vim.g.transparent_enabled == true and 0 or 70
+				return vim.g.transparent_enabled == true and 20 or 70
 			end
 
 			beacon.setup({ winblend = winblend() })

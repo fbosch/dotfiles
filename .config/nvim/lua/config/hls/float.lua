@@ -6,6 +6,6 @@ return {
 	LspInfoBorder = border_color,
 	NormalFloatBorder = border_color,
 	Pmenu = { bg = colors.background },
-	Beacon = { bg = colors.match_blue, ctermbg = 15 },
+	Beacon = { bg = colors.light_gray, ctermbg = 15 },
 	FloatShadow = { bg = colors.almost_black },
 }
