@@ -23,9 +23,10 @@ function workspaceFile(directory: string, file: string) {
   return absolute
 }
 
-async function revealInNeovim(socket: string, file: string) {
+async function revealInNeovim(socket: string, file: string, line: number) {
   try {
-    const expression = `luaeval("require('utils.opencode').open_file(_A)", ${JSON.stringify(file)})`
+    const args = JSON.stringify([file, line])
+    const expression = `luaeval("require('utils.opencode').open_file(_A[1], _A[2])", ${args})`
     const process = Bun.spawn(["nvim", "--server", socket, "--remote-expr", expression], {
       stderr: "ignore",
       stdout: "pipe",
@@ -56,7 +57,7 @@ function useClickablePatchHeaders(api: TuiPluginApi) {
   const refresh = () => {
     if (timer !== undefined) clearTimeout(timer)
     timer = setTimeout(() => {
-      makePatchHeadersClickable(renderer.root, api.theme.current.primary, patched, (file, event) => {
+      makePatchHeadersClickable(renderer.root, api.theme.current.primary, patched, (file, line, event) => {
         if (renderer.getSelection()?.getSelectedText()) return
         const statePath = api.state.path as typeof api.state.path & { worktree: string }
         const root = statePath.worktree === "/" ? statePath.directory : statePath.worktree
@@ -64,7 +65,7 @@ function useClickablePatchHeaders(api: TuiPluginApi) {
         if (absolute === undefined) return
 
         event.stopPropagation()
-        void revealInNeovim(socket, absolute).then((opened) => {
+        void revealInNeovim(socket, absolute, line).then((opened) => {
           if (opened) return
           pluginApi.ui.toast({ variant: "error", message: `Could not open ${file} in Neovim` })
         })

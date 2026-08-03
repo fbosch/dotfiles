@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  firstChangedLine,
   makePatchHeadersClickable,
   patchHeaderPath,
   restorePatchHeaders,
@@ -20,18 +21,34 @@ describe("patchHeaderPath", () => {
   })
 })
 
+describe("firstChangedLine", () => {
+  test("finds the first changed new-file line", () => {
+    expect(firstChangedLine("@@ -8,4 +8,5 @@\n context\n-old\n+new")).toBe(9)
+    expect(firstChangedLine("@@ -0,0 +1,2 @@\n+first\n+second")).toBe(1)
+  })
+
+  test("uses the nearest surviving line for deletion-only hunks", () => {
+    expect(firstChangedLine("@@ -20,2 +20,0 @@\n-old\n-old too")).toBe(20)
+  })
+})
+
 test("makes only patch header text clickable", () => {
   const header: PatchHeaderRenderable = { plainText: "← Patched src/main.ts" }
   const diff: PatchHeaderRenderable = { plainText: "unchanged source" }
-  const root: PatchHeaderRenderable = { getChildren: () => [header, diff] }
+  const renderedDiff: PatchHeaderRenderable = {
+    diff: "@@ -4,2 +4,2 @@\n-old\n+new",
+  }
+  const root: PatchHeaderRenderable = { getChildren: () => [header, diff, renderedDiff] }
   header.parent = root
   diff.parent = root
   const opened: string[] = []
+  const lines: number[] = []
   let stopped = false
 
   const patched = new Map<PatchHeaderRenderable, PatchedHeader>()
-  makePatchHeadersClickable(root, "orange", patched, (path, event) => {
+  makePatchHeadersClickable(root, "orange", patched, (path, line, event) => {
     opened.push(path)
+    lines.push(line)
     event.stopPropagation()
   })
   root.onMouseUp?.({ stopPropagation: () => (stopped = true) })
@@ -40,6 +57,7 @@ test("makes only patch header text clickable", () => {
   expect(diff.onMouseUp).toBeUndefined()
   expect(header.onMouseUp).toBeUndefined()
   expect(opened).toEqual(["src/main.ts"])
+  expect(lines).toEqual([4])
   expect(stopped).toBe(true)
 
   restorePatchHeaders(patched)

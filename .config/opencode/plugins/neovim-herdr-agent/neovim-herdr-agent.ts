@@ -5,6 +5,8 @@ const source = "herdr:opencode"
 const agent = "opencode"
 let sequence = Date.now() * 1000
 const childSessions = new Set<string>()
+let requestChain = Promise.resolve()
+let reportedRootSessionId: string | undefined
 
 function sessionId(properties: Record<string, unknown>) {
   return typeof properties.sessionID === "string" && properties.sessionID !== ""
@@ -25,7 +27,10 @@ function stateFromStatus(status: unknown) {
   }
 }
 
-function request(method: "pane.report_agent" | "pane.release_agent", params: Record<string, unknown> = {}) {
+function requestOnce(
+  method: "pane.report_agent" | "pane.report_agent_session" | "pane.release_agent",
+  params: Record<string, unknown> = {},
+) {
   const paneId = process.env.OPENCODE_NVIM_HERDR_PANE_ID
   const socketPath = process.env.HERDR_SOCKET_PATH
   if (process.env.HERDR_ENV !== "1" || !paneId || !socketPath) return Promise.resolve()
@@ -51,8 +56,29 @@ function request(method: "pane.report_agent" | "pane.release_agent", params: Rec
   })
 }
 
-function report(state: "idle" | "working" | "blocked") {
-  return request("pane.report_agent", { state })
+function request(
+  method: "pane.report_agent" | "pane.report_agent_session" | "pane.release_agent",
+  params: Record<string, unknown> = {},
+) {
+  const pending = requestChain.then(() => requestOnce(method, params))
+  requestChain = pending.catch(() => {})
+  return pending
+}
+
+function reportSession(sessionId: string | undefined, sessionStartSource?: "new") {
+  if (!sessionId) return Promise.resolve()
+  const params: Record<string, unknown> = { agent_session_id: sessionId }
+  if (sessionStartSource) params.session_start_source = sessionStartSource
+  return request("pane.report_agent_session", params)
+}
+
+function report(state: "idle" | "working" | "blocked", sessionId?: string) {
+  const params: Record<string, unknown> = { state }
+  if (sessionId) {
+    reportedRootSessionId = sessionId
+    params.agent_session_id = sessionId
+  }
+  return request("pane.report_agent", params)
 }
 
 function release() {
@@ -67,7 +93,7 @@ export const NeovimHerdrAgentPlugin: Plugin = async () => {
 
   return {
     "chat.message": async ({ sessionID }) => {
-      if (!sessionID || childSessions.has(sessionID) === false) await report("working")
+      if (!sessionID || childSessions.has(sessionID) === false) await report("working", sessionID)
     },
     event: async ({ event }) => {
       const properties = event.properties as Record<string, unknown>
@@ -87,18 +113,24 @@ export const NeovimHerdrAgentPlugin: Plugin = async () => {
 
       if (event.type === "session.status") {
         const state = stateFromStatus(properties.status)
-        if (state) await report(state)
+        if (state) await report(state, id)
+        else await reportSession(id)
         return
       }
-      if (event.type === "session.created" || event.type === "session.updated") {
+      if (event.type === "session.created") {
+        await reportSession(id, "new")
+        return
+      }
+      if (event.type === "session.updated") {
+        if (id && id !== reportedRootSessionId) await reportSession(id)
         return
       }
       if (["permission.asked", "question.asked", "session.error"].includes(event.type)) {
-        await report("blocked")
+        await report("blocked", id)
         return
       }
       if (event.type === "session.idle") {
-        await report("idle")
+        await report("idle", id)
         return
       }
       if (
@@ -111,7 +143,7 @@ export const NeovimHerdrAgentPlugin: Plugin = async () => {
           "session.compacted",
         ].includes(event.type)
       ) {
-        await report("working")
+        await report("working", id)
       }
     },
   }

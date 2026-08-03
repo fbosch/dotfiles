@@ -14,7 +14,7 @@ local function is_source_window(window)
 		and options.filetype ~= "opencode_terminal"
 end
 
-function M.open_file(path)
+function M.open_file(path, line)
 	if type(path) ~= "string" or path == "" or vim.fn.filereadable(path) == 0 then
 		return false
 	end
@@ -47,6 +47,11 @@ function M.open_file(path)
 	end
 
 	vim.api.nvim_win_set_buf(window, buffer)
+	local target_line = math.max(1, math.min(tonumber(line) or 1, vim.api.nvim_buf_line_count(buffer)))
+	vim.api.nvim_win_set_cursor(window, { target_line, 0 })
+	vim.api.nvim_win_call(window, function()
+		vim.cmd("normal! zz")
+	end)
 	return true
 end
 
