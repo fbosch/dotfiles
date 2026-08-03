@@ -359,6 +359,12 @@ return {
 				end, vim.tbl_extend("force", buf_opts, { desc = "Submit in opencode terminal" }))
 			end
 
+			local function configure_opencode_terminal(buf)
+				mark_opencode_terminal(buf)
+				vim.bo[buf].buflisted = false
+				set_opencode_terminal_keymaps(buf)
+			end
+
 			local function focus_opencode_window()
 				vim.schedule(function()
 					for _, win in ipairs(vim.api.nvim_list_wins()) do
@@ -490,13 +496,17 @@ return {
 				pattern = "*",
 				callback = function(args)
 					if is_opencode_terminal(args.buf) then
-						mark_opencode_terminal(args.buf)
-						vim.bo[args.buf].buflisted = false
-						set_opencode_terminal_keymaps(args.buf)
+						configure_opencode_terminal(args.buf)
 						pcall(vim.cmd, "startinsert")
 					end
 				end,
 			})
+
+			for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+				if is_opencode_terminal(buf) then
+					configure_opencode_terminal(buf)
+				end
+			end
 
 			vim.api.nvim_create_autocmd("WinEnter", {
 				pattern = "*",
