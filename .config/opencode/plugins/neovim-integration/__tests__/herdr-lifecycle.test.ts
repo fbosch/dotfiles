@@ -39,12 +39,19 @@ describe("Herdr lifecycle", () => {
   test("tracks the visible session through all event shapes", () => {
     const { handlers, states, titles } = setup()
     handlers.get("session.status")?.({ properties: { sessionID: "visible", status: { type: "busy" } } })
-    handlers.get("message.updated")?.({ properties: { info: { sessionID: "visible" } } })
     handlers.get("permission.asked")?.({ properties: { sessionID: "visible" } })
     handlers.get("session.idle")?.({ properties: { sessionID: "visible" } })
     handlers.get("session.updated")?.({ properties: { info: { id: "visible", title: "Updated title" } } })
-    expect(states).toEqual(["idle", "working", "working", "blocked", "idle"])
+    expect(states).toEqual(["idle", "working", "blocked", "idle"])
     expect(titles).toEqual(["Initial title", "Updated title"])
+  })
+
+  test("does not treat message completion updates as activity", () => {
+    const { handlers, states } = setup()
+
+    expect(handlers.has("message.updated")).toBe(false)
+    expect(handlers.has("message.part.updated")).toBe(false)
+    expect(states).toEqual(["idle"])
   })
 
   test("ignores background sessions and unsubscribes", () => {
