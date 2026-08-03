@@ -202,17 +202,20 @@ return {
 								return
 							end
 
-							server:get_sessions():next(function(sessions)
-								for _, candidate in ipairs(sessions) do
-									if candidate.id == session_id then
-										server:connect():catch(retry)
-										return
+							server
+								:get_sessions()
+								:next(function(sessions)
+									for _, candidate in ipairs(sessions) do
+										if candidate.id == session_id then
+											server:connect():catch(retry)
+											return
+										end
 									end
-								end
-								try_server(index + 1)
-							end):catch(function()
-								try_server(index + 1)
-							end)
+									try_server(index + 1)
+								end)
+								:catch(function()
+									try_server(index + 1)
+								end)
 						end
 
 						try_server(1)
@@ -320,12 +323,22 @@ return {
 					vim.cmd("wincmd p")
 				end
 
-				vim.keymap.set("t", "<C-Esc>", exit_opencode_terminal, vim.tbl_extend("force", buf_opts, {
-					desc = "Exit opencode terminal",
-				}))
-				vim.keymap.set("t", "<C-\\>", exit_opencode_terminal, vim.tbl_extend("force", buf_opts, {
-					desc = "Exit opencode terminal",
-				}))
+				vim.keymap.set(
+					"t",
+					"<C-g>",
+					exit_opencode_terminal,
+					vim.tbl_extend("force", buf_opts, {
+						desc = "Return to editor",
+					})
+				)
+				vim.keymap.set(
+					"t",
+					"<C-\\>",
+					exit_opencode_terminal,
+					vim.tbl_extend("force", buf_opts, {
+						desc = "Exit opencode terminal",
+					})
+				)
 
 				vim.keymap.set("n", "q", function()
 					vim.cmd("wincmd p")
