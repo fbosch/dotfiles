@@ -82,7 +82,7 @@
     }
   },
   "model": "openai/gpt-5.6-terra-fast",
-  "small_model": "openai/gpt-5.4-mini-fast",
+  "small_model": "openai/gpt-5.6-luna-fast",
   "agent": {
     "build": {
       "color": "#6099C0",
@@ -101,7 +101,7 @@
     },
     "explore": {
       "temperature": 0,
-      "model": "openai/gpt-5.4-mini-fast",
+      "model": "openai/gpt-5.6-luna-fast",
       "reasoningEffort": "low",
       "textVerbosity": "low"
     },
@@ -114,13 +114,13 @@
     },
     "title": {
       "temperature": 0,
-      "model": "openai/gpt-5.4-mini",
-      "reasoningEffort": "low",
+      "model": "openai/gpt-5.6-luna",
+      "reasoningEffort": "none",
       "textVerbosity": "low"
     },
     "summary": {
       "temperature": 0.1,
-      "model": "openai/gpt-5.4-mini",
+      "model": "openai/gpt-5.6-luna",
       "reasoningEffort": "low",
       "textVerbosity": "medium"
     },
@@ -192,7 +192,7 @@
       "textVerbosity": "medium"
     },
     "patterns": {
-      "model": "openai/gpt-5.4-mini-fast",
+      "model": "openai/gpt-5.6-luna-fast",
       "reasoningEffort": "low",
       "textVerbosity": "medium"
     },
@@ -207,7 +207,7 @@
       "textVerbosity": "medium"
     },
     "commit": {
-      "model": "openai/gpt-5.4-mini-fast",
+      "model": "openai/gpt-5.6-luna-fast",
       "reasoningEffort": "low",
       "textVerbosity": "low"
     }
