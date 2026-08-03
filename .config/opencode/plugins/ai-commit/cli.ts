@@ -24,6 +24,7 @@ import {
   copyCommitCommandToClipboard,
   input,
   style,
+  styleBlock,
   withSpinner,
 } from "./src/ui";
 
@@ -565,10 +566,11 @@ async function main(): Promise<void> {
   const commitResult = commit(finalMessage);
   if (commitResult.isErr()) {
     style(" Commit failed", 1);
-    style(` ${formatGitError(commitResult.error)}`, 1);
+    styleBlock(commitResult.error.stderr);
     process.exit(1);
   }
 
+  styleBlock(commitResult.value);
   style(" Commit successful!", 2);
 }
 
