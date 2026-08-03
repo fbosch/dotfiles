@@ -31,6 +31,12 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     end
     set -lx AI_COMMIT_FALLBACK_MODELS "$profile_models"
 
+    if set -q LEFTHOOK_OUTPUT
+        set -lx LEFTHOOK_OUTPUT "$LEFTHOOK_OUTPUT,execution_out"
+    else
+        set -lx LEFTHOOK_OUTPUT execution_out
+    end
+
     set -l opencode_path (__opencode_command_path)
     function __ai_commit_err -a message
         echo "$message"
