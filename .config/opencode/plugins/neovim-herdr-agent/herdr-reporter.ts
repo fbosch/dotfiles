@@ -1,11 +1,10 @@
 import net from "node:net"
 
 type AgentState = "idle" | "working" | "blocked"
-type HerdrMethod = "pane.report_agent" | "pane.report_metadata" | "pane.release_agent"
+type HerdrMethod = "pane.report_agent" | "pane.release_agent"
 type OpenCodeEvent = { type: string; properties?: unknown }
 
 const neovimAgentSource = "user:neovim-opencode-agent"
-const sessionTitleSource = "user:opencode-session-title"
 const agent = "opencode"
 
 function sessionId(properties: Record<string, unknown>) {
@@ -31,7 +30,7 @@ export class HerdrReporter {
   readonly #paneId: string
   readonly #socketPath: string
   readonly #childSessions = new Set<string>()
-  readonly #sequences = new Map<string, number>()
+  #sequence = Date.now() * 1000
   #requestChain = Promise.resolve()
 
   static async startFromEnvironment() {
@@ -78,13 +77,6 @@ export class HerdrReporter {
       return
     }
 
-    if (event.type === "session.created" || event.type === "session.updated") {
-      if (typeof info === "object" && info !== null && "title" in info && typeof info.title === "string") {
-        await this.#reportTitle(info.title)
-      }
-      return
-    }
-
     if (event.type === "session.status") {
       const state = stateFromStatus(properties.status)
       if (state) await this.#report(state)
@@ -116,27 +108,18 @@ export class HerdrReporter {
     return this.#request("pane.report_agent", { state })
   }
 
-  #reportTitle(title: string) {
-    return this.#request(
-      "pane.report_metadata",
-      { applies_to_source: neovimAgentSource, tokens: { opencode_session_title: title } },
-      sessionTitleSource,
-    )
-  }
-
-  #request(method: HerdrMethod, params: Record<string, unknown> = {}, reportSource = neovimAgentSource) {
-    const pending = this.#requestChain.then(() => this.#requestOnce(method, params, reportSource))
+  #request(method: HerdrMethod, params: Record<string, unknown> = {}) {
+    const pending = this.#requestChain.then(() => this.#requestOnce(method, params))
     this.#requestChain = pending.catch(() => {})
     return pending
   }
 
-  #requestOnce(method: HerdrMethod, params: Record<string, unknown>, reportSource: string) {
-    const sequence = (this.#sequences.get(reportSource) ?? Date.now() * 1000) + 1
-    this.#sequences.set(reportSource, sequence)
+  #requestOnce(method: HerdrMethod, params: Record<string, unknown>) {
+    this.#sequence += 1
     const payload = JSON.stringify({
-      id: `${reportSource}:${sequence}`,
+      id: `${neovimAgentSource}:${this.#sequence}`,
       method,
-      params: { pane_id: this.#paneId, source: reportSource, agent, seq: sequence, ...params },
+      params: { pane_id: this.#paneId, source: neovimAgentSource, agent, seq: this.#sequence, ...params },
     })
 
     return new Promise<void>((resolve) => {

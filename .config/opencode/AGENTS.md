@@ -45,6 +45,9 @@
 - Avoid single-use wrapper functions, trivial helpers, and IIFEs.
 - Prefer `=== false` over `!` for negating boolean expressions, especially multi-line ones.
 - Prefer event-driven listeners over polling loops whenever both are viable.
+
+## Testing style
+
 - Place new TypeScript and JavaScript tests in a `__tests__` directory next to the module under test, not alongside the source file.
 
 ## Simplicity ladder
