@@ -7,7 +7,6 @@ return {
 	config = function()
 		local git = require("utils.git")
 		require("utils.usage.opencode")
-		-- local anthropic_usage = require("utils.usage.anthropic")
 
 		local function is_valid_status(result)
 			return type(result) == "string"
@@ -36,16 +35,6 @@ return {
 					return ok and is_valid_status(result)
 				end,
 			},
-			-- {
-			-- 	function()
-			-- 		local _, result = pcall(anthropic_usage.statusline_component)
-			-- 		return result .. " %#Comment#│%*"
-			-- 	end,
-			-- 	cond = function()
-			-- 		local ok, result = pcall(anthropic_usage.statusline_component)
-			-- 		return ok and result ~= nil and result ~= ""
-			-- 	end,
-			-- },
 		}
 
 		-- Make git components conditional on current buffer being in a git repo
@@ -65,7 +54,11 @@ return {
 				end,
 				cond = function()
 					return git.is_git_repo()
-						and (is_valid_status(vim.b.gitsigns_blame_line) or is_valid_status(vim.b.last_gitsigns_blame_line))
+						and (
+							is_valid_status(vim.b.gitsigns_blame_line) or is_valid_status(
+								vim.b.last_gitsigns_blame_line
+							)
+						)
 				end,
 			},
 		}
