@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { RenderCoordinator, type RenderRequest } from "./render-coordinator"
-import type { ContextImagesEvent, ContextImagesLogger } from "./logger"
-import type { RenderedContext } from "./pxpipe"
+import { RenderCoordinator, type RenderRequest } from "../render-coordinator"
+import type { ContextImagesEvent, ContextImagesLogger } from "../logger"
+import type { RenderedContext } from "../pxpipe"
 
 const rendered: RenderedContext = {
   factsheet: "facts",

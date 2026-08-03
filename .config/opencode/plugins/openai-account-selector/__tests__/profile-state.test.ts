@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "bun:test"
-import { readProfileState, removeProfileState, writeProfileState } from "./profile-state"
+import { readProfileState, removeProfileState, writeProfileState } from "../profile-state"
 
 test("shares profile state when server and TUI runtime directories differ", async () => {
   const root = await mkdtemp(join(tmpdir(), "openai-profile-state-"))

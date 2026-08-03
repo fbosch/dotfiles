@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { contextHealth, nativeUsagePercent } from "./context-health"
+import { contextHealth, nativeUsagePercent } from "../context-health"
 
 test("uses green, yellow, and red context health thresholds", () => {
   expect(contextHealth(25)).toBe("green")

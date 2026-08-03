@@ -4,17 +4,17 @@ import { mkdtemp, mkdir, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
 import type { AssistantMessage, Part, ToolPart, UserMessage } from "@opencode-ai/sdk"
-import { ContextImagesService } from "./context-images"
-import type { ContextImagesEvent, ContextImagesLogger } from "./logger"
-import type { ContextRenderer } from "./pxpipe"
+import { ContextImagesService } from "../context-images"
+import type { ContextImagesEvent, ContextImagesLogger } from "../logger"
+import type { ContextRenderer } from "../pxpipe"
 import {
   cachedReferenceRoots,
   fetchMaterializedReferencePaths,
   materializedReferencePaths,
   parseIncludeInstructions,
   parseImageReadResults,
-} from "./plugin"
-import { ContextImagesStats } from "./stats"
+} from "../plugin"
+import { ContextImagesStats } from "../stats"
 
 const temporaryDirectories: string[] = []
 

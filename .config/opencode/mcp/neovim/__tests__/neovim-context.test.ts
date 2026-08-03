@@ -3,7 +3,7 @@ import { access, mkdtemp, mkdir, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { attach } from "neovim"
-import { NvimContextBridge, handleMessage } from "./neovim-context"
+import { NvimContextBridge, handleMessage } from "../neovim-context"
 
 
 async function startNvim(commands: string[] = [], cwd?: string) {

@@ -6,7 +6,7 @@ import {
   restorePatchHeaders,
   type PatchedHeader,
   type PatchHeaderRenderable,
-} from "./patch-navigation-core"
+} from "../patch-navigation-core"
 
 describe("patchHeaderPath", () => {
   test("extracts paths for files that still exist", () => {

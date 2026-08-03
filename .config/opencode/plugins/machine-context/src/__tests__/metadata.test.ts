@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { collectDynamicMetadata, collectStaticMetadata, formatMachineContext, marker } from "./metadata"
+import { collectDynamicMetadata, collectStaticMetadata, formatMachineContext, marker } from "../metadata"
 
 describe("machine-context metadata", () => {
   test("formats with marker wrapper", () => {

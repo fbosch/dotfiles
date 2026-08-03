@@ -11,7 +11,7 @@
   },
   "scripts": {
     "bench:typos": "bun run prompt-enhancements/typo-engine.bench.ts",
-    "test:typos": "bun test prompt-enhancements/typo-engine.test.ts",
+    "test:typos": "bun test prompt-enhancements/__tests__/typo-engine.test.ts",
     "quality:fallow": "bun run quality:fallow:prompt-enhancements",
     "quality:fallow:audit": "bun run quality:fallow:audit:prompt-enhancements",
     "quality:fallow:prompt-enhancements": "fallow review --root prompt-enhancements --config prompt-enhancements/.fallowrc.json",

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { loadRenderedContext, PxpipeRenderer } from "./pxpipe"
+import { loadRenderedContext, PxpipeRenderer } from "../pxpipe"
 
 test("loadRenderedContext rejects caches without token metadata", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pxpipe-renderer-test-"))

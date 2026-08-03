@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { appendFile, mkdtemp, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { ContextImagesStats } from "./stats"
+import { ContextImagesStats } from "../stats"
 
 const temporaryDirectories: string[] = []
 

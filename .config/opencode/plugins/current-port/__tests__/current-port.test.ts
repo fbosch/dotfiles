@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { promptStatusLabel } from "./status-label"
+import { promptStatusLabel } from "../status-label"
 
 test("renders the selected OpenAI profile beside the server port", () => {
   expect(promptStatusLabel(":4096", "jpb")).toBe("jpb:4096")

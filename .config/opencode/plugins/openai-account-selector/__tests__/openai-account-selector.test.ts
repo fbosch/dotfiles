@@ -2,18 +2,18 @@ import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/pr
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, test } from "bun:test"
-import { generatedLabelFor } from "../../../fbb/lib/opencode-multi-auth/providers/codex.ts"
-import type { AccountPaths, AccountUsage } from "../../../fbb/lib/opencode-multi-auth/types.ts"
-import { OpenAIAccountSelectorPlugin } from "./openai-account-selector.ts"
-import { readProfileState, removeProfileState, watchProfileState, writeProfileState } from "./profile-state.ts"
+import { generatedLabelFor } from "../../../../fbb/lib/opencode-multi-auth/providers/codex.ts"
+import type { AccountPaths, AccountUsage } from "../../../../fbb/lib/opencode-multi-auth/types.ts"
+import { OpenAIAccountSelectorPlugin } from "../openai-account-selector.ts"
+import { readProfileState, removeProfileState, watchProfileState, writeProfileState } from "../profile-state.ts"
 import {
   defaultRepositoryMappingPath,
   repositoryNameFallback,
   repositoryNameFromOrigin,
   selectRepositoryAccount,
   usageIsAvailable,
-} from "./selection.ts"
-import { createCodexFetch } from "./transport.ts"
+} from "../selection.ts"
+import { createCodexFetch } from "../transport.ts"
 
 const temporaryDirectories: string[] = []
 const originalFetch = globalThis.fetch

@@ -2,6 +2,6 @@
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
   "entry": [
     "direnv-session-env.ts",
-    "direnv-session-env.test.ts"
+    "__tests__/direnv-session-env.test.ts"
   ]
 }

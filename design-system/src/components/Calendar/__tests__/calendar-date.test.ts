@@ -5,7 +5,7 @@ import {
   eventOverlapsLocalDay,
   getCalendarGridStart,
   localDateKey,
-} from './calendar-date';
+} from '../calendar-date';
 
 describe('calendar-date', () => {
   it('builds a 42-cell Monday-first grid', () => {

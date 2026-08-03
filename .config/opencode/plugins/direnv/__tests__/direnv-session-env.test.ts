@@ -2,8 +2,8 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, test } from "bun:test"
-import * as direnvPlugin from "./direnv-session-env"
-import { loadDirenvEnvironment } from "./direnv-environment"
+import * as direnvPlugin from "../direnv-session-env"
+import { loadDirenvEnvironment } from "../direnv-environment"
 
 const { DirenvSessionEnvironmentPlugin } = direnvPlugin
 

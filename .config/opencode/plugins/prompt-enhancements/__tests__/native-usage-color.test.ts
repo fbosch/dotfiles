@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { colorNativeUsage, type Renderable } from "./native-usage-color"
+import { colorNativeUsage, type Renderable } from "../native-usage-color"
 
 function renderable(plainText?: string, children: Renderable[] = []): Renderable {
   return { plainText, getChildren: () => children }

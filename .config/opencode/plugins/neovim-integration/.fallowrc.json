@@ -5,7 +5,7 @@
   },
   "entry": [
     "neovim-integration.tsx",
-    "patch-navigation.test.ts",
+    "__tests__/patch-navigation.test.ts",
     "__tests__/herdr-lifecycle.test.ts"
   ]
 }
