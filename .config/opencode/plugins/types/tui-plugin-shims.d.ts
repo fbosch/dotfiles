@@ -55,7 +55,9 @@ declare module "@opencode-ai/plugin/tui" {
       }
       provider: unknown[]
       session: {
+        get(sessionID: string): { title?: string } | undefined
         messages(sessionID: string): unknown[]
+        status(sessionID: string): unknown
       }
     }
     route: {

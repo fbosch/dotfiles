@@ -1,9 +1,0 @@
-{
-  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
-  "production": {
-    "health": true
-  },
-  "entry": [
-    "neovim-herdr-agent.ts"
-  ]
-}

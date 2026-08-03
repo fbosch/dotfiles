@@ -1,7 +1,8 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui"
 import { createEffect } from "solid-js"
-import { HerdrSessionTitleReporter } from "./herdr-session-title"
+import { HerdrIntegration } from "./herdr-integration"
+import { attachHerdrLifecycle } from "./herdr-lifecycle"
 import { NeovimClient } from "./neovim-client"
 import { enablePatchNavigation } from "./patch-navigation"
 
@@ -10,37 +11,45 @@ const id = "neovim-integration"
 function SessionSync(props: {
   api: TuiPluginApi
   neovim?: NeovimClient
-  titleReporter?: HerdrSessionTitleReporter
+  herdr?: HerdrIntegration
 }) {
   let last_session_id: string | undefined
-  let last_herdr_title: string | null | undefined
   createEffect(() => {
     const route = props.api.route.current
     const session_id = route.name === "session" ? route.params.sessionID : undefined
     const session = session_id === undefined ? undefined : props.api.state.session.get(session_id)
     const title = session_id === undefined ? null : typeof session?.title === "string" ? session.title : undefined
-    if (title !== undefined && title !== last_herdr_title) {
-      last_herdr_title = title
-      props.titleReporter?.report(title)
-    }
+    if (title !== undefined) void props.herdr?.reportTitle(title)
 
-    if (props.neovim === undefined || session_id === undefined || session_id === last_session_id) return
+    if (session_id === undefined || session_id === last_session_id) return
 
     last_session_id = session_id
-    props.neovim.setSessionId(session_id)
+    void props.herdr?.reportState("idle")
+    props.neovim?.setSessionId(session_id)
   })
 
   return <box />
 }
 
+async function enableHerdrLifecycle(api: TuiPluginApi, herdr: HerdrIntegration) {
+  await herdr.initialize()
+  const unsubscribe = attachHerdrLifecycle(api, herdr)
+  const pluginApi = api as TuiPluginApi & { lifecycle: { onDispose(cleanup: () => void): void } }
+  pluginApi.lifecycle.onDispose(() => {
+    unsubscribe()
+    void herdr.shutdown()
+  })
+}
+
 const tui: TuiPlugin = async (api: TuiPluginApi) => {
   const neovim = NeovimClient.fromEnvironment()
-  const titleReporter = HerdrSessionTitleReporter.fromEnvironment()
+  const herdr = HerdrIntegration.fromEnvironment()
   if (neovim !== undefined) enablePatchNavigation(api, neovim)
+  if (herdr !== undefined) await enableHerdrLifecycle(api, herdr)
   api.slots.register({
     slots: {
       app() {
-        return <SessionSync api={api} neovim={neovim} titleReporter={titleReporter} />
+        return <SessionSync api={api} neovim={neovim} herdr={herdr} />
       },
     },
   })
