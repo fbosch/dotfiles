@@ -4,6 +4,7 @@
     "health": true
   },
   "entry": [
-    "neovim-session-sync.tsx"
+    "neovim-session-sync.tsx",
+    "clickable-patch-headers.test.ts"
   ]
 }

@@ -1,4 +1,4 @@
-# Agent Orchestration
+# OpenCode Subagent Routing
 
 | Agent              | Usually helpful for                                                                                                      |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
@@ -8,12 +8,13 @@
 | `benchmark`        | Performance measurement, profiling, before/after comparisons                                                             |
 | `debug`            | Root-cause analysis, logs, failing commands, unexpected behavior                                                         |
 | `docs`             | Documentation is the main deliverable                                                                                    |
-| `explore`          | Broad codebase discovery, locating relevant files, or answering where/how something is implemented                       |
+| `explore`          | Fast, read-only discovery: locating files, symbols, and relevant code areas                                               |
+| `general`          | Complex multi-step implementation or mixed work that does not fit a narrower specialist                                  |
 | `ideate`           | Generating options, alternatives, and directions before converging                                                       |
-| `lookup`           | Fast, narrow Context7/Exa-backed online reference retrieval with verified sources                                        |
-| `patterns`         | Finding existing examples, conventions, or prior implementations to copy from                                            |
+| `lookup`           | Narrow, verified online reference retrieval using available documentation and search tools                              |
+| `patterns`         | Finding existing examples, conventions, or prior implementations to use as references                                   |
 | `pr-feedback`      | Triaging existing GitHub PR review threads, validating claims, applying approved fixes, and resolving approved threads   |
-| `quick`            | Well-scoped, deterministic work: fetch-and-format tasks, small localized edits, focused cleanup, lightweight repo checks |
+| `quick`            | Tightly scoped, well-specified work: fetch-and-format tasks, small edits, focused cleanup, lightweight repo checks       |
 | `refactor`         | Improving structure or readability without changing behavior                                                             |
 | `research`         | Source-backed investigation across docs, web, and code without making changes                                            |
 | `review`           | Findings are the main output: code review, PR review, risk audit                                                         |
@@ -21,7 +22,7 @@
 | `test`             | Writing, running, or diagnosing tests and coverage                                                                        |
 | `validate`         | Bounded, read-only post-change validation with targeted checks and explicit evidence                                     |
 
-## Routing Rules
+## Routing Rules for Primary Agents with the Task Tool
 
 - Delegate only when specialization, isolated context, or parallel execution provides a clear benefit.
 - Continue directly for small answers, obvious edits, narrow inspections, and work already understood in the primary context.
@@ -29,17 +30,17 @@
 - Use the fewest agents needed. Give each agent a distinct, non-overlapping question or deliverable.
 - Run independent work in parallel. Run dependent work sequentially and pass relevant findings forward.
 - Give each agent the user intent, known context, scope, whether it may modify files, required validation, and expected final output.
-- Reuse an agent's `task_id` for follow-up work on the same problem.
+- When continuing the same delegated task, reuse its returned `task_id`; start a fresh task for a distinct question or when no ID was returned.
 - Integrate and verify completed agent work rather than repeating it, unless evidence conflicts with it.
-- Do not delegate trivial validation commands. Use `validate` when selecting and isolating several targeted checks or interpreting their evidence adds value.
+- Run one obvious validation command directly; use `validate` for a bounded post-change pass across several targeted checks.
 
 ## Agent Boundaries
 
-- `ideate` generates alternatives before a direction is chosen; `spec` defines the behavioral contract; `backlog-planning` decomposes an established direction or specification into deliverable work.
+- `ideate` expands alternatives before a direction is chosen; `spec` defines the behavioral contract; `backlog-planning` turns sufficiently scoped input into verifiable tasks and flags when a spec is still needed.
 - `analyze` explains known code; `explore` locates unknown code; `patterns` finds precedents; `debug` diagnoses observed failures.
 - `review` audits an implementation; `adversarial` actively searches for ways a design or implementation can fail.
-- `pr-feedback` handles existing reviewer threads; `review` performs an independent PR or code review, and `quick` handles generic deterministic workflows.
-- `validate` runs bounded, read-only checks after changes; `test` owns test design and failure diagnosis, `debug` owns unexplained failures, and `review` owns risk assessment.
-- `lookup` answers a narrow online reference question quickly; `research` owns investigation and synthesis, delegating independent lookup tracks only when parallel collection has clear value.
-- `docs` owns substantial documentation deliverables; `test` owns non-trivial test creation or diagnosis.
-- `quick` is only for deterministic, tightly scoped execution. Do not use it where judgment, contract design, or substantial prose is the deliverable.
+- `pr-feedback` handles existing reviewer threads; `review` performs an independent PR or code review, and `quick` handles generic, well-specified workflows.
+- `validate` runs bounded post-change checks; `test` owns test design, coverage, and test-failure diagnosis; `debug` owns unexplained runtime, command, environment, or product failures; `review` owns risk assessment.
+- Use `lookup` for one narrow external-reference question; use `research` for multi-source investigation and synthesis.
+- `docs` owns substantial documentation deliverables.
+- `quick` is only for tightly scoped, well-specified execution with explicit acceptance criteria. Do not use it where substantial judgment, contract design, or prose is required.
