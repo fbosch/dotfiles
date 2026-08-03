@@ -6,7 +6,7 @@ import {
   restorePatchHeaders,
   type PatchedHeader,
   type PatchHeaderRenderable,
-} from "./clickable-patch-headers"
+} from "./patch-navigation-core"
 
 describe("patchHeaderPath", () => {
   test("extracts paths for files that still exist", () => {
@@ -63,4 +63,26 @@ test("makes only patch header text clickable", () => {
   restorePatchHeaders(patched)
   expect(header.fg).toBeUndefined()
   expect(root.onMouseUp).toBeUndefined()
+})
+
+test("does not restore destroyed renderables during plugin cleanup", () => {
+  let headerWrites = 0
+  let blockWrites = 0
+  const header: PatchHeaderRenderable = {
+    isDestroyed: true,
+    set fg(_color: unknown) {
+      headerWrites += 1
+    },
+  }
+  const block: PatchHeaderRenderable = {
+    isDestroyed: true,
+    set onMouseUp(_handler: ((event: { stopPropagation(): void }) => void) | undefined) {
+      blockWrites += 1
+    },
+  }
+
+  restorePatchHeaders(new Map([[header, { block, color: "gray" }]]))
+
+  expect(headerWrites).toBe(0)
+  expect(blockWrites).toBe(0)
 })

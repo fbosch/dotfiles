@@ -3,6 +3,7 @@ export type PatchHeaderRenderable = {
   fg?: unknown
   parent?: PatchHeaderRenderable | null
   diff?: unknown
+  isDestroyed?: boolean
   onMouseUp?: (event: { stopPropagation(): void }) => void
   getChildren?(): PatchHeaderRenderable[]
 }
@@ -75,8 +76,8 @@ export function makePatchHeadersClickable(
 
 export function restorePatchHeaders(patched: Map<PatchHeaderRenderable, PatchedHeader>) {
   for (const [header, original] of patched) {
-    header.fg = original.color
-    original.block.onMouseUp = undefined
+    if (header.isDestroyed !== true) header.fg = original.color
+    if (original.block.isDestroyed !== true) original.block.onMouseUp = undefined
   }
   patched.clear()
 }
