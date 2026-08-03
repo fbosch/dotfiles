@@ -2,7 +2,7 @@ import net from "node:net"
 
 const source = "user:opencode-session-title"
 const agent = "opencode"
-const lifecycleSource = "herdr:opencode"
+const lifecycleSource = "user:neovim-opencode-agent"
 
 export class HerdrSessionTitleReporter {
   readonly #paneId: string
