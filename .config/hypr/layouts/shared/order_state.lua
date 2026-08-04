@@ -280,7 +280,8 @@ function M.consume_transfer_intent(target, monitor_role, axis, allow_destination
 	end
 
 	local window = target and target.window
-	intent = (allow_destination_fallback or window and window.active) and transfer_destination(monitor_role, axis) or nil
+	intent = (allow_destination_fallback or window and window.active) and transfer_destination(monitor_role, axis)
+		or nil
 	if not intent then
 		return nil
 	end
@@ -412,14 +413,24 @@ function M.sync(state, key, targets, insert_after_id, preserve_missing)
 		targets_by_id[id] = target
 	end
 
+	local removed = false
 	if not preserve_missing then
-		local next_index = 1
+		local pruned_order = nil
 		for index = 1, #order do
 			local id = order[index]
 			if targets_by_id[id] then
-				order[next_index] = id
-				next_index = next_index + 1
+				if pruned_order then
+					pruned_order[#pruned_order + 1] = id
+				end
 			else
+				if pruned_order == nil then
+					pruned_order = {}
+					for retained_index = 1, index - 1 do
+						pruned_order[retained_index] = order[retained_index]
+					end
+				end
+
+				removed = true
 				state.seen_ids[id] = nil
 				state.position_by_id[id] = nil
 				state.scope_by_id[id] = nil
@@ -431,8 +442,9 @@ function M.sync(state, key, targets, insert_after_id, preserve_missing)
 				end
 			end
 		end
-		for index = next_index, #order do
-			order[index] = nil
+		if pruned_order then
+			order = pruned_order
+			state.order_by_key[key] = order
 		end
 	end
 
@@ -466,7 +478,16 @@ function M.sync(state, key, targets, insert_after_id, preserve_missing)
 		seen_ids[id] = true
 	end
 
-	return order, targets_by_id, added, added_seen, added_id
+	return order, targets_by_id, added, added_seen, added_id, removed
+end
+
+function M.prune_missing(state, key, targets)
+	if not key or not state.order_by_key[key] then
+		return false
+	end
+
+	local _, _, added, _, _, removed = M.sync(state, key, targets, nil, false)
+	return added or removed
 end
 
 function M.targets_from_order(state, key, order, targets_by_id, source_targets)

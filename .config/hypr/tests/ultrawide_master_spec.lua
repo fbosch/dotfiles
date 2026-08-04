@@ -21,6 +21,7 @@ _G.hl = {
 _G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
 
 local monitor_role = require("lib.monitor_role")
+local persistent_state = require("layouts.shared.persistent_state")
 local order_state
 
 local function make_target(index, active)
@@ -976,4 +977,33 @@ run("saved column order survives partial reload target list", function()
 	os.remove(_G.__ULTRAWIDE_MASTER_STATE_FILE)
 	_G.__ULTRAWIDE_MASTER_STATE_FILE = nil
 	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
+end)
+
+run("prune-order removes missing column identities when invoked", function()
+	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = nil
+	_G.__ULTRAWIDE_MASTER_STATE_FILE = os.tmpname()
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+
+	local workspace = "prune-column-order"
+	local first = make_target(1, true)
+	local second = make_target(2)
+	local third = make_target(3)
+	registered_layout.layout.recalculate(make_context({ first, second, third }, workspace))
+	registered_layout.layout.layout_msg(make_context({ first }, workspace), "prune-order")
+	local saved_orders = {}
+	persistent_state.load(_G.__ULTRAWIDE_MASTER_STATE_FILE, {}, saved_orders)
+	assert_equal(#saved_orders[workspace], 1, "saved order size")
+
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+
+	local reloaded_first = make_target(1, true)
+	local reloaded_second = make_target(2)
+	local reloaded_third = make_target(3)
+	registered_layout.layout.recalculate(make_context({ reloaded_third, reloaded_second, reloaded_first }, workspace))
+
+	assert_box(reloaded_first.placed, { x = 10, y = 20, w = 300, h = 500 }, "retained left target")
+	assert_box(reloaded_third.placed, { x = 310, y = 20, w = 400, h = 500 }, "new middle target")
+	assert_box(reloaded_second.placed, { x = 710, y = 20, w = 300, h = 500 }, "new right target")
 end)

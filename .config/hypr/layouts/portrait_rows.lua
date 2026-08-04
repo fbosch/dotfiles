@@ -229,12 +229,23 @@ function M.layout_msg(ctx, msg)
 	end
 
 	local count = targets and #targets or 0
-	if count < 2 then
+	if count == 0 then
 		return true
 	end
 
 	local key = order_key(targets)
 	local ratio_key = workspace_key(targets)
+	if command == "prune-order" then
+		if order_state.prune_missing(state, key, targets) then
+			save_ratio_state()
+		end
+		return true
+	end
+
+	if count < 2 then
+		return true
+	end
+
 	local order, targets_by_id = order_state.sync(state, key, targets)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, targets)
 

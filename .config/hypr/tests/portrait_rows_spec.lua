@@ -20,6 +20,7 @@ _G.hl = {
 _G.__PORTRAIT_ROWS_DISABLE_STATE = true
 
 local monitor_role = require("lib.monitor_role")
+local persistent_state = require("layouts.shared.persistent_state")
 local order_state
 
 local function make_target(index, active)
@@ -887,6 +888,35 @@ run("saved row order survives partial reload target list", function()
 	os.remove(_G.__PORTRAIT_ROWS_STATE_FILE)
 	_G.__PORTRAIT_ROWS_STATE_FILE = nil
 	_G.__PORTRAIT_ROWS_DISABLE_STATE = true
+end)
+
+run("prune-order removes missing row identities when invoked", function()
+	_G.__PORTRAIT_ROWS_DISABLE_STATE = nil
+	_G.__PORTRAIT_ROWS_STATE_FILE = os.tmpname()
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local workspace = "prune-row-order"
+	local first = make_workspace_target(1, workspace, true)
+	local second = make_workspace_target(2, workspace)
+	local third = make_workspace_target(3, workspace)
+	registered_layout.layout.recalculate(make_context({ first, second, third }))
+	registered_layout.layout.layout_msg(make_context({ first }), "prune-order")
+	local saved_orders = {}
+	persistent_state.load(_G.__PORTRAIT_ROWS_STATE_FILE, {}, saved_orders)
+	assert_equal(#saved_orders[workspace], 1, "saved order size")
+
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local reloaded_first = make_workspace_target(1, workspace, true)
+	local reloaded_second = make_workspace_target(2, workspace)
+	local reloaded_third = make_workspace_target(3, workspace)
+	registered_layout.layout.recalculate(make_context({ reloaded_third, reloaded_second, reloaded_first }))
+
+	assert_box(reloaded_first.placed, { x = 10, y = 20, w = 120, h = 100 }, "retained top target")
+	assert_box(reloaded_third.placed, { x = 10, y = 120, w = 120, h = 100 }, "new middle target")
+	assert_box(reloaded_second.placed, { x = 10, y = 220, w = 120, h = 100 }, "new bottom target")
 end)
 
 run("saved row order survives single-window reload target list", function()
