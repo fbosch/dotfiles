@@ -13,6 +13,7 @@ hl.window_rule({ match = { class = "^(org\\.signal\\.Signal)$" }, float = true }
 
 -- GNOME Applications (general)
 hl.window_rule({ match = { class = "^(org\\.gnome\\.Calculator)$" }, float = true, persistent_size = true })
+hl.window_rule({ match = { class = "^(org\\.gnome\\.Calendar)$" }, float = true, center = true, persistent_size = true })
 hl.window_rule({ match = { class = "^(org\\.gnome\\.TextEditor)$" }, float = true })
 hl.window_rule({ match = { class = "^(org\\.gnome\\.Loupe)$" }, float = true })
 

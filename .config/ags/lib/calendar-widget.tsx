@@ -799,6 +799,17 @@ function makeHeaderButton(label: string, className: string, onClick: () => void)
   return button;
 }
 
+function openGnomeCalendar(date: Date): void {
+  try {
+    const launcher = new Gio.SubprocessLauncher({ flags: Gio.SubprocessFlags.NONE });
+    launcher.setenv("TZ", resolvedTimeZone(), true);
+    launcher.spawnv(["uwsm-app", "--", "gnome-calendar", "--date", localDateKey(date)]);
+    hideCalendar();
+  } catch (e) {
+    console.error("Failed to open GNOME Calendar:", e);
+  }
+}
+
 function makeDayButton(slotIndex: number): DaySlot {
   const button = new Gtk.Button();
   button.add_css_class("calendar-day");
@@ -812,6 +823,17 @@ function makeDayButton(slotIndex: number): DaySlot {
     selectedDate = slot.date;
     updateDaySelection();
   });
+
+  const middleClickController = new Gtk.GestureClick();
+  middleClickController.set_button(Gdk.BUTTON_MIDDLE);
+  middleClickController.set_propagation_phase(Gtk.PropagationPhase.CAPTURE);
+  middleClickController.connect("pressed", (_controller, nPress) => {
+    if (nPress !== 2) return;
+    const slot = daySlots[slotIndex];
+    if (!slot) return;
+    openGnomeCalendar(slot.date);
+  });
+  button.add_controller(middleClickController);
 
   const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 });
   content.add_css_class("calendar-day-content");
