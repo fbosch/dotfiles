@@ -17,4 +17,4 @@ Global per-user socket names were rejected because they collide across composito
 
 ## Consequences
 
-Waybar monitor, picture-in-picture, and custom-layout resize control channels now route only to their owning compositor instance. New daemon code must use the shared helpers, while cleanup still needs process-ownership checks. `reset-desktop.sh` should replace global process-name cleanup with current-instance control commands to complete the isolation.
+Waybar monitor, picture-in-picture, and custom-layout resize control channels now route only to their owning compositor instance. New daemon code must use the shared helpers, while cleanup still needs process-ownership checks. Desktop reset still manages application processes by name; changing that workflow requires explicit per-instance process ownership and cannot be solved by socket paths alone.
