@@ -1481,7 +1481,7 @@ function applyStaticCSS(): void {
 
     window.audio-mixer-widget label.audio-mixer-volume-label {
       color: ${tokens.colors.foreground.tertiary.value};
-      font-size: 11px;
+      font-size: 12px;
     }
 
     window.audio-mixer-widget box.audio-mixer-meter {

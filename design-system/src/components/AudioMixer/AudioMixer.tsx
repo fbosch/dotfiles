@@ -152,7 +152,7 @@ const VolumeMeter: React.FC<{
 
   return (
     <div className="mt-2">
-      <div className="mb-1 flex justify-between text-[11px] text-foreground-tertiary">
+      <div className="mb-1 flex justify-between text-xs text-foreground-tertiary">
         <span>{item.muted ? 'Muted' : `${volume}%`}</span>
         {item.peak !== undefined && <span>Peak {clamp(item.peak, maxVolume)}%</span>}
       </div>
