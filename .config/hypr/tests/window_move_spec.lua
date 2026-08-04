@@ -98,6 +98,11 @@ local function load_modules()
 	package.loaded["lib.window.state"] = nil
 	package.loaded["lib.window.workspace"] = nil
 	package.loaded["layouts.shared.order_state"] = nil
+	package.loaded["runtime.lib.hypr-ipc"] = {
+		instance_path = function(name)
+			return "/tmp/" .. name
+		end,
+	}
 	package.loaded["actions.picture-in-picture"] = {
 		drag = function()
 			hl.dispatch(hl.dsp.exec_cmd("pip drag"))
