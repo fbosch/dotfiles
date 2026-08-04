@@ -22,6 +22,8 @@ wait_for_shutdown() {
 }
 
 wait_for_shutdowns() {
+  wait_for_shutdown "AGS" pgrep -x gjs &
+  ags_pid=$!
   wait_for_shutdown "waybar" pgrep -x waybar &
   waybar_pid=$!
   wait_for_shutdown "hyprpaper" pgrep -x hyprpaper &
@@ -36,7 +38,7 @@ wait_for_shutdowns() {
   custom_layout_pid=$!
 
   status=0
-  for pid in "$waybar_pid" "$hyprpaper_pid" "$waybar_monitor_pid" "$window_capture_pid" "$window_state_pid" "$custom_layout_pid"; do
+  for pid in "$ags_pid" "$waybar_pid" "$hyprpaper_pid" "$waybar_monitor_pid" "$window_capture_pid" "$window_state_pid" "$custom_layout_pid"; do
     if wait "$pid"; then
       continue
     fi

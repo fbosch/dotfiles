@@ -1,6 +1,6 @@
 local M = {}
 
-local function is_source_window(window)
+local function is_editable_window(window)
 	if vim.api.nvim_win_is_valid(window) == false then
 		return false
 	end
@@ -8,10 +8,13 @@ local function is_source_window(window)
 	local buffer = vim.api.nvim_win_get_buf(window)
 	local options = vim.bo[buffer]
 	return vim.api.nvim_buf_is_loaded(buffer)
-		and vim.api.nvim_buf_get_name(buffer) ~= ""
 		and options.buftype == ""
 		and options.filetype ~= "opencode"
 		and options.filetype ~= "opencode_terminal"
+end
+
+local function is_source_window(window)
+	return is_editable_window(window) and vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(window)) ~= ""
 end
 
 function M.open_file(path, line)
@@ -36,6 +39,15 @@ function M.open_file(path, line)
 	if window == nil then
 		for _, candidate in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
 			if is_source_window(candidate) then
+				window = candidate
+				break
+			end
+		end
+	end
+
+	if window == nil then
+		for _, candidate in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+			if is_editable_window(candidate) then
 				window = candidate
 				break
 			end

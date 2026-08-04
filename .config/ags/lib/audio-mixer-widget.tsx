@@ -1372,7 +1372,7 @@ function applyStaticCSS(): void {
       border-radius: 6px;
       background-color: transparent;
       color: ${tokens.colors.foreground.secondary.value};
-      font-size: 20px;
+      font-size: 16px;
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
     }
 
@@ -1481,7 +1481,7 @@ function applyStaticCSS(): void {
 
     window.audio-mixer-widget label.audio-mixer-volume-label {
       color: ${tokens.colors.foreground.tertiary.value};
-      font-size: 12px;
+      font-size: 13px;
     }
 
     window.audio-mixer-widget box.audio-mixer-meter {
