@@ -26,6 +26,51 @@ function git_pull_system_repos --description 'Pull ~/nixos and ~/dotfiles with f
         git -C $repo pull --ff-only
         if test $status -eq 0
             echo "==> Done $repo"
+        else if test $repo = "$HOME/dotfiles"
+            if test $had_failure -ne 0
+                echo "==> Skipping dotfiles recovery because another repository failed"
+                continue
+            end
+
+            set -l upstream (git -C $repo rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)
+            if test -z "$upstream"; or git -C $repo merge-base HEAD $upstream >/dev/null 2>&1
+                echo "==> Failed $repo"
+                set had_failure 1
+                continue
+            end
+
+            set -l origin (git -C $repo remote get-url origin 2>/dev/null)
+            if test -z "$origin"
+                echo "==> Failed $repo (origin is not configured)"
+                set had_failure 1
+                continue
+            end
+
+            set -l timestamp (date +%Y%m%d-%H%M%S)
+            set -l replacement "$repo.recovery-$timestamp"
+
+            read -l -P "==> $repo has unrelated history. Replace the clean checkout with $origin? [y/N] " confirmation
+            if not string match -qr '^y(es)?$' -- "$confirmation"
+                echo "==> Recovery skipped for $repo"
+                set had_failure 1
+                continue
+            end
+
+            echo "==> Cloning replacement for $repo"
+            if not git clone "$origin" "$replacement"
+                echo "==> Failed to clone replacement for $repo"
+                set had_failure 1
+                continue
+            end
+
+            rm -rf "$repo"
+            and mv "$replacement" "$repo"
+            if test $status -eq 0
+                echo "==> Recovered $repo"
+            else
+                echo "==> Failed to replace $repo; replacement remains at $replacement"
+                set had_failure 1
+            end
         else
             echo "==> Failed $repo"
             set had_failure 1
