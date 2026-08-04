@@ -105,6 +105,10 @@ hypr-validate:
 ags-types:
 	bash -lc 'cd .config/ags && ags types'
 
+# Bundle the AGS configuration to a runtime artifact.
+ags-bundle:
+	pnpm --dir .config/ags bundle
+
 # Validate Glance YAML configuration.
 glance-validate:
 	bash .config/glance/scripts/validate-yaml.sh
