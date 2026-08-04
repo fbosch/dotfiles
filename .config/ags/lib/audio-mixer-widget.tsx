@@ -1372,7 +1372,7 @@ function applyStaticCSS(): void {
       border-radius: 6px;
       background-color: transparent;
       color: ${tokens.colors.foreground.secondary.value};
-      font-size: 12px;
+      font-size: 20px;
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
     }
 
