@@ -20,7 +20,7 @@ The most common creation hook is `post-start` — it runs background tasks (dev 
 
 | Hook | Purpose |
 |------|---------|
-| `pre-switch` | Runs before branch resolution or worktree creation. `{{ branch }}` is the destination as typed (before resolution) |
+| `pre-switch` | Runs in the source worktree before switching — creating, switching to existing, or staying on current |
 | `post-switch` | Triggers on all switch results: creating, switching to existing, or staying on current |
 | `pre-start` | Runs once when a new worktree is created, blocking `post-start`/`--execute` until complete: dependency install, env file generation |
 | `post-start` | Runs once when a new worktree is created, in the background: dev servers, long builds, file watchers, copying caches |
@@ -93,7 +93,7 @@ server = "npm run dev"
 
 Here `install` runs first, then `build` and `server` run together.
 
-Templates are syntax-checked before the pipeline starts and rendered as each step runs, so a step can store [per-branch vars](https://worktrunk.dev/config/#wt-config-state-vars) that later steps read via `{{ vars.<key> }}`.
+Templates are syntax-checked before the pipeline starts and rendered as each step runs, so a step can store [per-branch vars](https://worktrunk.dev/config/#wt-config-state-vars) that later steps read via `{{ vars.<key> }}`. Because an earlier step can still change those values, a preview leaves them alone: `wt hook <type> --dry-run` and `wt hook show --expanded` render `{{ vars.<key> }}` as itself while every other variable expands.
 
 Most hooks don't need `[[hook]]` blocks. Reach for them when there's a dependency chain — typically setup that must complete before later steps, like installing dependencies before running a build and dev server concurrently.
 

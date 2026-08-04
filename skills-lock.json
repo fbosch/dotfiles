@@ -5,7 +5,7 @@
       "source": "vercel-labs/agent-browser",
       "sourceType": "github",
       "skillPath": "skills/agent-browser/SKILL.md",
-      "computedHash": "ecc7641aea05f85ca3b11e7759d32aaf52fe05946ab4b63739c7bf78a41237a2"
+      "computedHash": "a674b7d81066e3cc471a7512ddb4ae724418cbfefa75cbb050b0dc430e4d57a0"
     },
     "ascii-visualizer": {
       "source": "yonatangross/orchestkit",
@@ -38,8 +38,8 @@
     "herdr": {
       "source": "ogulcancelik/herdr",
       "sourceType": "github",
-      "skillPath": "SKILL.md",
-      "computedHash": "deba68ff972346a47b8d5e52b5a56daff7e6eb4cca639aca4171f1888bf82e4c"
+      "skillPath": "skills/herdr/SKILL.md",
+      "computedHash": "489d2c6ff7e951e47071fbc5446d99d20ea215fcc5e55b9e4ceaa5a578f22d06"
     },
     "improve-codebase-architecture": {
       "source": "mattpocock/skills",
@@ -86,13 +86,13 @@
       "source": "max-sixty/worktrunk",
       "sourceType": "github",
       "skillPath": "skills/worktrunk/SKILL.md",
-      "computedHash": "c0ef9d8f14be847815727f208bcc07da3cb1c77ae32c20d908f6ff5c3e70896b"
+      "computedHash": "e61441be9d3673bce61c9f9478fcee21e96239d270b02348480ffa2314f172c5"
     },
     "wt-switch-create": {
       "source": "max-sixty/worktrunk",
       "sourceType": "github",
       "skillPath": "skills/wt-switch-create/SKILL.md",
-      "computedHash": "6bfa83e8e49be606b19682432b65f1b9728a923bdaac2fd051bb48feab2bd741"
+      "computedHash": "796db886726df2330e896ca8939789a1fc52143ecc4d4be660974bf1a78581f6"
     },
     "zoom-out": {
       "source": "mattpocock/skills",
