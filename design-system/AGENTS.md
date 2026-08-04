@@ -6,6 +6,7 @@ Design system for a Windows 11-like desktop UI with macOS-level polish.
 
 - No custom CSS classes or files; use Tailwind utilities only (except base resets in `src/index.css`).
 - Tokens live in `tokens.json` and map through `tailwind.config.js`.
+- When composing components, reuse an existing design-system component when its semantics, interaction model, and visual contract fit. Do not force reuse for distinct patterns; use native elements with appropriate accessibility when a component needs custom behavior.
 
 ## Package manager
 

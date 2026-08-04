@@ -2,6 +2,7 @@ import { cva } from 'class-variance-authority';
 import type React from 'react';
 import { useRef } from 'react';
 import { cn } from '../../utils/cn';
+import { Button } from '../Button';
 
 export type AudioMixerTab = 'playback' | 'output' | 'input';
 
@@ -61,26 +62,17 @@ const panelVariants = cva(
   }
 );
 
-const tabVariants = cva(
-  'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs outline-none',
-  {
-    variants: {
-      active: {
-        true: 'bg-accent-primary text-white shadow-sm',
-        false:
-          'text-foreground-secondary hover:bg-white/10 hover:text-foreground-primary focus-visible:bg-white/10 focus-visible:text-foreground-primary',
-      },
-      animated: {
-        true: 'transition-colors duration-150',
-        false: '',
-      },
+const tabVariants = cva('min-w-0 flex-1 gap-1 px-2 py-1.5', {
+  variants: {
+    animated: {
+      true: 'transition-colors duration-150',
+      false: '',
     },
-    defaultVariants: {
-      active: false,
-      animated: true,
-    },
-  }
-);
+  },
+  defaultVariants: {
+    animated: true,
+  },
+});
 
 function clamp(value: number, max: number): number {
   return Math.max(0, Math.min(max, Math.round(value)));
@@ -288,10 +280,11 @@ export const AudioMixer: React.FC<AudioMixerProps> = ({
           aria-label="Audio mixer tabs"
         >
           {tabs.map((tab) => (
-            <button
+            <Button
               key={tab}
-              type="button"
-              className={tabVariants({ active: tab === activeTab, animated: !disableAnimations })}
+              variant={tab === activeTab ? 'primary' : 'transparent'}
+              size="sm"
+              className={tabVariants({ animated: !disableAnimations })}
               onClick={() => onTabChange?.(tab)}
               aria-pressed={tab === activeTab}
             >
@@ -299,7 +292,7 @@ export const AudioMixer: React.FC<AudioMixerProps> = ({
                 {tabMeta[tab].icon}
               </span>
               <span className="truncate">{tabMeta[tab].label}</span>
-            </button>
+            </Button>
           ))}
         </nav>
       </footer>

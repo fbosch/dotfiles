@@ -19,6 +19,7 @@ import { cn } from "../../utils/cn";
  * - Danger: Red for destructive actions
  * - Outline: Bordered variant for secondary contexts
  * - Ghost: Minimal background for tertiary actions
+ * - Transparent: No resting background for embedded controls
  */
 
 const buttonVariants = cva(
@@ -34,6 +35,8 @@ const buttonVariants = cva(
         danger: "bg-state-error text-white hover:bg-state-error-hover shadow-sm hover:shadow focus-visible:outline-state-error",
         outline: "bg-transparent text-foreground-primary border border-white/20 hover:bg-white/8 hover:border-white/30 focus-visible:outline-white/30",
         ghost: "bg-white/5 text-foreground-secondary hover:bg-white/10 hover:text-foreground-primary focus-visible:outline-white/20",
+        transparent:
+          "bg-transparent text-foreground-secondary hover:bg-white/10 hover:text-foreground-primary focus-visible:bg-white/10 focus-visible:text-foreground-primary focus-visible:outline-white/20",
       },
       size: {
         sm: "h-7 px-3 text-xs",
