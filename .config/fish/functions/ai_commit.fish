@@ -33,6 +33,7 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
 
     # Keep successful pre-commit hooks quiet; Lefthook still prints failures.
     set -lx LEFTHOOK_OUTPUT failure
+    set -lx CLICOLOR_FORCE 1
 
     set -l opencode_path (__opencode_command_path)
     function __ai_commit_err -a message

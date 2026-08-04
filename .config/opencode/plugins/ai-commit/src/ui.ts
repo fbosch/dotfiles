@@ -39,7 +39,10 @@ export function styleBlock(text: string): void {
     return;
   }
 
-  stderr.write(`\n${lines.join("\n")}\n`);
+  stderr.write("\n│\n");
+  for (const line of lines) {
+    stderr.write(`│  ${line}\n`);
+  }
 }
 
 export async function withSpinner<T>(
