@@ -328,7 +328,8 @@ export function hasOnlyLockfiles(paths: string[]): boolean {
 }
 
 export function commit(message: string): Result<string, GitError> {
-  const result = runGit(["commit", "-m", message]);
+  // Hooks need the real terminal for their progress renderers and unbuffered output.
+  const result = runGit(["commit", "-m", message], { stdio: "inherit" });
   const output = [result.stderr, result.stdout]
     .filter((part) => part.length > 0)
     .join("\n");
