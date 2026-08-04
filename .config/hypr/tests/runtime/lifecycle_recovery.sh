@@ -13,7 +13,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$bin_dir" "$home_dir/.config/hypr/runtime/desktop" "$home_dir/.config/hypr/runtime/profiles"
+mkdir -p "$bin_dir" "$home_dir/.config/hypr/runtime/desktop" "$home_dir/.config/hypr/runtime/lib" "$home_dir/.config/hypr/runtime/profiles"
 
 write_stub() {
   local name="$1"
@@ -36,6 +36,10 @@ printf '%s\n' '#!/bin/sh' 'exit 0' > "$home_dir/.config/hypr/runtime/profiles/pr
 chmod +x "$bin_dir/pgrep" "$bin_dir/sleep" "$home_dir/.config/hypr/runtime/desktop/nerd-icon-gen.sh" \
   "$home_dir/.config/hypr/runtime/profiles/profilectl.sh"
 
+# shellcheck disable=SC2016
+printf '%s\n' '#!/bin/sh' 'hypr_instance_socket_path() {' '  printf "%s/hypr/%s/%s\n" "$XDG_RUNTIME_DIR" "$HYPRLAND_INSTANCE_SIGNATURE" "$1"' '}' \
+  > "$home_dir/.config/hypr/runtime/lib/hypr-ipc.sh"
+
 assert_contains() {
   local file="$1" expected="$2"
   if ! grep -Fqx "$expected" "$file"; then
@@ -54,6 +58,8 @@ assert_not_contains() {
 
 export HOME="$home_dir"
 export PATH="$bin_dir:$original_path"
+export XDG_RUNTIME_DIR="$test_dir/runtime"
+export HYPRLAND_INSTANCE_SIGNATURE="fixture"
 
 restart_log="$test_dir/restart.log"
 FIXTURE_LOG="$restart_log" "$repo_root/runtime/desktop/restart-daemons.sh"
@@ -69,12 +75,13 @@ assert_not_contains "$restart_log" 'pkill -f gamescope-clipboard-sync'
 
 reset_log="$test_dir/reset.log"
 FIXTURE_LOG="$reset_log" "$repo_root/runtime/desktop/reset-desktop.sh"
-assert_contains "$reset_log" 'pkill -f custom-layout-drag-resize.sh daemon'
-assert_contains "$reset_log" 'pkill -f custom-layout-drag-resize-daemon.lua'
-assert_contains "$reset_log" 'pgrep -f custom-layout-drag-resize(-daemon)?\.(sh|lua)'
 assert_contains "$reset_log" 'pkill -CONT -f window-capture-daemon'
 assert_contains "$reset_log" 'uwsm-app -s s -- hyprpaper'
 assert_contains "$reset_log" "uwsm-app -s b -- $home_dir/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh daemon"
+assert_not_contains "$reset_log" 'pkill -f waybar-monitor.sh'
+assert_not_contains "$reset_log" 'pkill -f waybar-monitor.lua'
+assert_not_contains "$reset_log" 'pkill -f custom-layout-drag-resize.sh daemon'
+assert_not_contains "$reset_log" 'pkill -f custom-layout-drag-resize-daemon.lua'
 assert_not_contains "$reset_log" 'pkill -f minimized-state-daemon'
 assert_not_contains "$reset_log" 'pkill -f gaming-session-watchdog'
 
