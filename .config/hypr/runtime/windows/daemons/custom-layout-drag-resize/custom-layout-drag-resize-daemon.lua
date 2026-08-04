@@ -9,10 +9,9 @@ local hypr_ipc = require("runtime.lib.hypr-ipc")
 local json = require("lib.json")
 local monitor_role = require("lib.monitor_role")
 
-local runtime_dir = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-custom-layout-drag-resize"
-local command_socket_path = runtime_dir .. "/command.sock"
-local state_file = runtime_dir .. "/state"
-local pid_file = runtime_dir .. "/daemon.pid"
+local command_socket_path = hypr_ipc.instance_socket_path("clr.sock")
+local state_file = hypr_ipc.instance_path("custom-layout-drag-resize.state")
+local pid_file = hypr_ipc.instance_path("custom-layout-drag-resize.pid")
 local profile_mode_file = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-profiles/profile-overlay.mode"
 local min_floating_size = 64
 local drag_numerator = 1
@@ -431,7 +430,6 @@ local function start_drag()
 end
 
 local function ensure_command_socket()
-	os.execute(string.format("mkdir -p %q", runtime_dir))
 	command_server = assert(unix())
 	assert(command_server:bind(command_socket_path))
 	assert(command_server:listen())

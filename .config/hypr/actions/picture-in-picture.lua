@@ -1,9 +1,11 @@
 local pip = require("lib.picture_in_picture")
 local async = require("lib.async")
+local command = require("lib.command")
+local hypr_ipc = require("runtime.lib.hypr-ipc")
 
 local M = {}
 
-local control_socket = 'nc -U "$XDG_RUNTIME_DIR/hypr-pip-monitor.sock" >/dev/null 2>&1'
+local control_socket = "nc -U " .. command.arg(hypr_ipc.instance_socket_path("pip-monitor.sock")) .. " >/dev/null 2>&1"
 local dragging = false
 local resizing = false
 local warp_active_after_focus = async.runtime_lua("windows/warp-cursor-to-active-window.lua", "--delay", "0.03")

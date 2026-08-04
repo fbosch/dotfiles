@@ -46,6 +46,13 @@ Sources:
 - https://github.com/hyprwm/Hyprland/blob/main/example/hyprland.lua
 - https://github.com/hyprwm/Hyprland/blob/main/src/config/lua/ConfigManager.cpp
 
+## Instance Runtime Paths
+
+- Long-lived daemon control sockets and their PID/lock files must be scoped to the active Hyprland instance.
+- Lua runtime helpers use `require("runtime.lib.hypr-ipc").instance_socket_path(...)`; shell helpers source `runtime/lib/hypr-ipc.sh` and use `hypr_instance_socket_path`.
+- Unix-domain socket paths are limited to 107 bytes, so keep daemon socket names short.
+- Keep explicit process ownership checks when removing paths. Instance scoping prevents cross-compositor collisions but does not prove a pathname is still owned by the current process.
+
 ## Rule Principles
 
 - Preserve declaration order. Current `.conf` rule precedence depends on top-to-bottom order.

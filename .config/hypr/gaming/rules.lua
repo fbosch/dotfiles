@@ -76,7 +76,6 @@ local function register_gamescope_rules()
 		match = { class = "^(gamescope)$" },
 		workspace = policies.workspace .. " silent",
 		tile = true,
-		fullscreen_state = "2 0",
 		content = "game",
 	})
 
@@ -115,7 +114,7 @@ local function register_steam_rules()
 		{ class = "^(steam_app_[0-9]+)$", initial_title = collection_initial_title_exclusion },
 		{ initial_class = "^(steam_app_[0-9]+)$", initial_title = collection_initial_title_exclusion },
 	}) do
-		hl.window_rule(gaming_window_rule(selector, "2 2", "game"))
+		hl.window_rule(gaming_window_rule(selector, nil, "game"))
 	end
 
 	hl.window_rule({ match = { xdg_tag = "^proton[-]game$" }, content = "game" })

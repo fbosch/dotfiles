@@ -16,7 +16,7 @@ local monitor_cache_ttl_s = 10
 local drag_interval_s = 0.08
 local open_window_delay_s = 0.1
 local waybar_position_vicinity = 12
-local control_socket_path = assert(os.getenv("XDG_RUNTIME_DIR"), "XDG_RUNTIME_DIR is required") .. "/hypr-pip-monitor.sock"
+local control_socket_path = hypr_ipc.instance_socket_path("pip-monitor.sock")
 
 local monitors = {}
 local monitor_cache_at = 0
@@ -56,7 +56,12 @@ local function request(message)
 end
 
 local function rectangle(left, top, width, height)
-	return { left = tonumber(left) or 0, top = tonumber(top) or 0, width = tonumber(width) or 0, height = tonumber(height) or 0 }
+	return {
+		left = tonumber(left) or 0,
+		top = tonumber(top) or 0,
+		width = tonumber(width) or 0,
+		height = tonumber(height) or 0,
+	}
 end
 
 local function overlaps(first, second)
@@ -117,7 +122,14 @@ local function predicted_waybar_layers()
 	local bottom = tonumber(config["margin-bottom"]) or 0
 	local layers = {}
 	for name, monitor in pairs(monitors) do
-		layers[name] = { rectangle(monitor.x + left, monitor.y + monitor.height - height - bottom, monitor.width - left - right, height) }
+		layers[name] = {
+			rectangle(
+				monitor.x + left,
+				monitor.y + monitor.height - height - bottom,
+				monitor.width - left - right,
+				height
+			),
+		}
 	end
 	return layers
 end
@@ -131,7 +143,12 @@ local function visible_waybar_layers()
 		for _, level in pairs(monitor_layers.levels or {}) do
 			for _, layer in ipairs(level) do
 				local layer_rect = rectangle(layer.x, layer.y, layer.w, layer.h)
-				if layer.namespace == "waybar" and (tonumber(layer.alpha) or 0) > 0 and monitor_rect and overlaps(layer_rect, monitor_rect) then
+				if
+					layer.namespace == "waybar"
+					and (tonumber(layer.alpha) or 0) > 0
+					and monitor_rect
+					and overlaps(layer_rect, monitor_rect)
+				then
 					visible[name] = visible[name] or {}
 					visible[name][#visible[name] + 1] = layer_rect
 				end
@@ -177,7 +194,14 @@ local function move_window(window, x, y)
 		return
 	end
 
-	request(string.format("dispatch hl.dsp.window.move({ x = %d, y = %d, window = %s })", x, y, json.encode("address:" .. window.address)))
+	request(
+		string.format(
+			"dispatch hl.dsp.window.move({ x = %d, y = %d, window = %s })",
+			x,
+			y,
+			json.encode("address:" .. window.address)
+		)
+	)
 end
 
 local function snap_target(window, monitor, bars)
@@ -189,7 +213,10 @@ local function snap_target(window, monitor, bars)
 	local right_distance = math.abs(x + width - monitor.x - monitor.width)
 	local top_distance = math.abs(y - monitor.y)
 	local bottom_distance = math.abs(y + height - monitor.y - monitor.height)
-	if math.min(left_distance, right_distance) > pip.snap_vicinity or math.min(top_distance, bottom_distance) > pip.snap_vicinity then
+	if
+		math.min(left_distance, right_distance) > pip.snap_vicinity
+		or math.min(top_distance, bottom_distance) > pip.snap_vicinity
+	then
 		return nil
 	end
 
@@ -222,7 +249,13 @@ end
 local function clear_pip_corner_tags(window, keep)
 	for _, candidate in pairs(pip.corners) do
 		if candidate.tag ~= keep and has_tag(window, candidate.tag) then
-			request(string.format("dispatch hl.dsp.window.tag({ tag = %s, window = %s })", json.encode("-" .. candidate.tag), json.encode("address:" .. window.address)))
+			request(
+				string.format(
+					"dispatch hl.dsp.window.tag({ tag = %s, window = %s })",
+					json.encode("-" .. candidate.tag),
+					json.encode("address:" .. window.address)
+				)
+			)
 		end
 	end
 end
@@ -231,13 +264,21 @@ local function tag_pip_corner(window, corner)
 	local tag = pip.corners[corner].tag
 	clear_pip_corner_tags(window, tag)
 	if has_tag(window, tag) == false then
-		request(string.format("dispatch hl.dsp.window.tag({ tag = %s, window = %s })", json.encode("+" .. tag), json.encode("address:" .. window.address)))
+		request(
+			string.format(
+				"dispatch hl.dsp.window.tag({ tag = %s, window = %s })",
+				json.encode("+" .. tag),
+				json.encode("address:" .. window.address)
+			)
+		)
 	end
 end
 
 local function tagged_corner(window)
 	for corner, candidate in pairs(pip.corners) do
-		if has_tag(window, candidate.tag) then return corner end
+		if has_tag(window, candidate.tag) then
+			return corner
+		end
 	end
 end
 
@@ -258,10 +299,18 @@ local function move_pip_corner(direction, address)
 			local corner = tagged_corner(window) or "bottom-right"
 			local left = corner:match("left$") ~= nil
 			local top = corner:match("^top") ~= nil
-			if direction == "left" then left = true end
-			if direction == "right" then left = false end
-			if direction == "up" then top = true end
-			if direction == "down" then top = false end
+			if direction == "left" then
+				left = true
+			end
+			if direction == "right" then
+				left = false
+			end
+			if direction == "up" then
+				top = true
+			end
+			if direction == "down" then
+				top = false
+			end
 
 			local width = tonumber(window.size[1]) or 0
 			local target_x = left and monitor.x + pip.margin or monitor.x + monitor.width - width - pip.margin
@@ -321,7 +370,17 @@ local function finish_resize()
 end
 
 local function set_snap_preview(target)
-	local signature = target and string.format("%s:%d:%d:%d:%d:%d", target.monitor, target.x, target.y, target.width, target.height, target.rounding) or nil
+	local signature = target
+			and string.format(
+				"%s:%d:%d:%d:%d:%d",
+				target.monitor,
+				target.x,
+				target.y,
+				target.width,
+				target.height,
+				target.rounding
+			)
+		or nil
 	if signature == preview_signature then
 		return
 	end
@@ -393,7 +452,8 @@ local function move_pip(mode, address, assign_default_corner)
 					corner = "bottom-right"
 					tag_pip_corner(window, corner)
 				end
-				local normal_x = corner and corner:match("left$") and monitor.x + pip.margin or corner_x(window, monitor)
+				local normal_x = corner and corner:match("left$") and monitor.x + pip.margin
+					or corner_x(window, monitor)
 				local normal_y = monitor.y + monitor.height - height - pip.margin
 				local window_rect = rectangle(window.at[1], window.at[2], width, height)
 				local target_y
@@ -406,7 +466,10 @@ local function move_pip(mode, address, assign_default_corner)
 							break
 						elseif mode == "hide" then
 							local avoidance_y = bar.top - height - pip.overlap_gap
-							if math.abs(window_rect.left - normal_x) <= waybar_position_vicinity and math.abs(window_rect.top - avoidance_y) <= waybar_position_vicinity then
+							if
+								math.abs(window_rect.left - normal_x) <= waybar_position_vicinity
+								and math.abs(window_rect.top - avoidance_y) <= waybar_position_vicinity
+							then
 								target_y = normal_y
 							end
 						end
@@ -424,8 +487,12 @@ local function handle_control(control)
 	control:settimeout(0.05)
 	local message = control:receive("*l")
 	local action, address
-	if message then action, address = message:match("^(%S+)%s*(.*)$") end
-	if address == "" then address = nil end
+	if message then
+		action, address = message:match("^(%S+)%s*(.*)$")
+	end
+	if address == "" then
+		address = nil
+	end
 	if action == "drag-start" then
 		dragging = true
 		dragging_address = address
@@ -448,7 +515,9 @@ local function handle_control(control)
 	elseif action == "move" then
 		if address then
 			local direction, window_address = address:match("^(%S+)%s+(%S+)$")
-			if direction and window_address then move_pip_corner(direction, window_address) end
+			if direction and window_address then
+				move_pip_corner(direction, window_address)
+			end
 		end
 	elseif action == "waybar-show" then
 		move_pip("show")
@@ -498,7 +567,9 @@ local function run()
 	control_server:settimeout(0)
 
 	while true do
-		if dragging then update_snap_preview() end
+		if dragging then
+			update_snap_preview()
+		end
 		local timeout = dragging and drag_interval_s or nil
 		if reconcile_at then
 			local delay = math.max(0, reconcile_at - socket.gettime())
@@ -509,17 +580,24 @@ local function run()
 		for _, reader in ipairs(ready) do
 			if reader == control_server then
 				local control = control_server:accept()
-				if control and handle_control(control) then return end
+				if control and handle_control(control) then
+					return
+				end
 			elseif reader == event_socket then
 				local event, err, partial = event_socket:receive("*l")
 				event = event or partial
 				local opened = event and event:match("^openwindow") ~= nil
-				local resized = event and event:match("^resizewindow") ~= nil and dragging == false and resize_anchor == nil
+				local resized = event
+					and event:match("^resizewindow") ~= nil
+					and dragging == false
+					and resize_anchor == nil
 				local should_reconcile = opened or resized
 				if should_reconcile then
 					local address = event:match(">>([^,]+)")
 					if address then
-						if address:match("^0x") == nil then address = "0x" .. address end
+						if address:match("^0x") == nil then
+							address = "0x" .. address
+						end
 						reconcile_addresses[address] = reconcile_addresses[address] or opened
 						reconcile_at = socket.gettime() + open_window_delay_s
 					end

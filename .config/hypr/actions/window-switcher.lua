@@ -9,6 +9,17 @@ local M = {}
 local minimized_workspace_prefix = "special:minimized"
 local waybar_toggle_smart = hl.dsp.exec_cmd("sleep 0.5 && ~/.config/hypr/runtime/desktop/waybar-toggle-smart.sh")
 local action_payloads = {}
+local diagnostic_log_path = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-window-switcher-bind.debug"
+
+local function diagnostic_log(event)
+	local file = io.open(diagnostic_log_path, "a")
+	if not file then
+		return
+	end
+
+	file:write(string.format("[WS-BIND-7f42] %s\n", event))
+	file:close()
+end
 
 local function workspace_name(win)
 	local workspace = win.workspace
@@ -107,6 +118,7 @@ end
 
 function M.action(action, trigger_modifier)
 	return function()
+		diagnostic_log("tab action=" .. action .. " modifier=" .. trigger_modifier)
 		M[action]({ trigger_modifier = trigger_modifier })
 	end
 end
@@ -116,6 +128,7 @@ function M.commit()
 end
 
 function M.release_super()
+	diagnostic_log("super_l release")
 	M.commit()
 	hl.dispatch(waybar_toggle_smart)
 end

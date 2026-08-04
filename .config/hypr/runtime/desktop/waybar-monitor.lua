@@ -20,8 +20,10 @@ local fast_interval_ms = 80
 local slow_interval_ms = 1000
 local monitor_cache_ttl_s = 10
 local monitor_margin = 50
-local control_socket_path = assert(os.getenv("XDG_RUNTIME_DIR"), "XDG_RUNTIME_DIR is required") .. "/hypr-waybar-monitor.sock"
-local pip_control_socket = 'nc -U "$XDG_RUNTIME_DIR/hypr-pip-monitor.sock" >/dev/null 2>&1'
+local control_socket_path = hypr_ipc.instance_socket_path("waybar-monitor.sock")
+local pip_control_socket = "nc -U "
+	.. command.arg(hypr_ipc.instance_socket_path("pip-monitor.sock"))
+	.. " >/dev/null 2>&1"
 
 local monitors = {}
 local last_monitor_name = nil
@@ -99,7 +101,12 @@ local function monitor_at(x, y)
 			return monitor
 		end
 
-		if x >= monitor.x - monitor_margin and x < monitor.x + monitor.width + monitor_margin and y >= monitor.y - monitor_margin and y < monitor.y + monitor.height + monitor_margin then
+		if
+			x >= monitor.x - monitor_margin
+			and x < monitor.x + monitor.width + monitor_margin
+			and y >= monitor.y - monitor_margin
+			and y < monitor.y + monitor.height + monitor_margin
+		then
 			local clamped_y = math.max(monitor.y, math.min(y, monitor.y + monitor.height - 1))
 			local distance = monitor.height - (clamped_y - monitor.y)
 			if distance < closest_distance then
@@ -123,7 +130,8 @@ local function current_waybar_visibility()
 					local y = tonumber(layer.y) or 0
 					local width = tonumber(layer.w) or 0
 					local height = tonumber(layer.h) or 0
-					if layer.namespace == "waybar"
+					if
+						layer.namespace == "waybar"
 						and (tonumber(layer.alpha) or 0) > 0
 						and x < monitor.x + monitor.width
 						and monitor.x < x + width
@@ -154,7 +162,11 @@ local function taskbar_visible()
 end
 
 local function swaync_visible()
-	return command.output("busctl --user call org.erikreider.swaync.cc /org/erikreider/swaync/cc org.erikreider.swaync.cc GetVisibility 2>/dev/null"):match("b true") ~= nil
+	return command
+		.output(
+			"busctl --user call org.erikreider.swaync.cc /org/erikreider/swaync/cc org.erikreider.swaync.cc GetVisibility 2>/dev/null"
+		)
+		:match("b true") ~= nil
 end
 
 local function show_waybar()
@@ -229,7 +241,10 @@ local function run()
 				if distance <= show_threshold then
 					show_started_at = show_started_at or now
 					interval = fast_interval_ms
-					if now - show_started_at >= show_delay_ms and json.object(request("j/activeworkspace")).name ~= gaming.workspace then
+					if
+						now - show_started_at >= show_delay_ms
+						and json.object(request("j/activeworkspace")).name ~= gaming.workspace
+					then
 						show_waybar()
 						show_started_at, hide_started_at = nil, nil
 					end
@@ -245,7 +260,9 @@ local function run()
 				if distance > hide_threshold then
 					hide_started_at = hide_started_at or now
 					if now - hide_started_at >= hide_delay_ms then
-						if not taskbar_visible() and not swaync_visible() then hide_waybar() end
+						if not taskbar_visible() and not swaync_visible() then
+							hide_waybar()
+						end
 						hide_started_at = nil
 					end
 				else
@@ -257,7 +274,9 @@ local function run()
 		local ready = socket.select({ control_server }, nil, interval / 1000)
 		if #ready > 0 then
 			local control = control_server:accept()
-			if control and handle_control(control) then return end
+			if control and handle_control(control) then
+				return
+			end
 		end
 	end
 end

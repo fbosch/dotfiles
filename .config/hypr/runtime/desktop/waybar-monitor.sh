@@ -1,11 +1,15 @@
 #!/usr/bin/env dash
+# shellcheck disable=SC2034
 set -eu
+
+# shellcheck disable=SC1091
+. "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
 daemon="${HOME}/.config/hypr/runtime/desktop/waybar-monitor.lua"
 
 daemon_supervisor_name="waybar-monitor"
-daemon_supervisor_socket="${XDG_RUNTIME_DIR:-}/hypr-waybar-monitor.sock"
-daemon_supervisor_lock_file="${XDG_RUNTIME_DIR:-}/hypr-waybar-monitor.lock"
+daemon_supervisor_socket="$(hypr_instance_socket_path waybar-monitor.sock)"
+daemon_supervisor_lock_file="$(hypr_instance_path waybar-monitor.lock)"
 daemon_supervisor_health_timeout=1
 daemon_supervisor_start_attempts=10
 daemon_supervisor_start_interval=0.1

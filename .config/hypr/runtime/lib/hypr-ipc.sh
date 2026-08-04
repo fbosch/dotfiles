@@ -3,12 +3,27 @@
 __hypr_ipc_socket_ready=""
 __hypr_ipc_socket_path=""
 
-hypr_query_socket_path() {
+hypr_instance_runtime_dir() {
   if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
     return 1
   fi
 
-  printf '%s/hypr/%s/.socket.sock\n' "$XDG_RUNTIME_DIR" "$HYPRLAND_INSTANCE_SIGNATURE"
+  printf '%s/hypr/%s\n' "$XDG_RUNTIME_DIR" "$HYPRLAND_INSTANCE_SIGNATURE"
+}
+
+hypr_instance_path() {
+  runtime_dir="$(hypr_instance_runtime_dir)" || return 1
+  printf '%s/%s\n' "$runtime_dir" "$1"
+}
+
+hypr_instance_socket_path() {
+  socket_path="$(hypr_instance_path "$1")" || return 1
+  [ "${#socket_path}" -le 107 ] || return 1
+  printf '%s\n' "$socket_path"
+}
+
+hypr_query_socket_path() {
+  hypr_instance_socket_path '.socket.sock'
 }
 
 hypr_query_socket_available() {

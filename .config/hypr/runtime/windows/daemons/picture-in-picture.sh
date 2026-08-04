@@ -1,11 +1,15 @@
 #!/usr/bin/env dash
+# shellcheck disable=SC2034
 set -eu
+
+# shellcheck disable=SC1091
+. "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
 daemon="${HOME}/.config/hypr/runtime/windows/daemons/picture-in-picture.lua"
 
 daemon_supervisor_name="picture-in-picture"
-daemon_supervisor_socket="${XDG_RUNTIME_DIR:-}/hypr-pip-monitor.sock"
-daemon_supervisor_lock_file="${XDG_RUNTIME_DIR:-}/hypr-pip-monitor.lock"
+daemon_supervisor_socket="$(hypr_instance_socket_path pip-monitor.sock)"
+daemon_supervisor_lock_file="$(hypr_instance_path pip-monitor.lock)"
 daemon_supervisor_health_timeout=0.1
 daemon_supervisor_start_attempts=10
 daemon_supervisor_start_interval=0.1

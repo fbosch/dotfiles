@@ -1,6 +1,8 @@
 local programs = require("programs")
 local async = require("lib.async")
 local bind = require("lib.bind")
+local command = require("lib.command")
+local hypr_ipc = require("runtime.lib.hypr-ipc")
 local window_interaction = require("lib.window.interaction")
 local window_custom_layout = require("lib.window.custom_layout")
 local window_directional = require("lib.window.directional")
@@ -15,6 +17,7 @@ local picture_in_picture = require("actions.picture-in-picture")
 local window_switcher = require("actions.window-switcher")
 
 local main_mod = "SUPER"
+local waybar_control_socket = command.arg(hypr_ipc.instance_socket_path("waybar-monitor.sock"))
 
 local function main(key)
 	return main_mod .. " + " .. key
@@ -38,7 +41,7 @@ end
 bind.register(
 	"SUPER_L",
 	-- Keep the Waybar toggle out of the gaming workspace.
-	"printf 'hold\\n' | nc -U \"$XDG_RUNTIME_DIR/hypr-waybar-monitor.sock\" >/dev/null 2>&1 || pkill -SIGUSR1 waybar",
+	"printf 'hold\\n' | nc -U " .. waybar_control_socket .. " >/dev/null 2>&1 || pkill -SIGUSR1 waybar",
 	{ long_press = true, predicate = window_state.active_workspace_is_not(gaming.workspace), on_false = bind.consume }
 )
 bind.register("SUPER_L", window_switcher.release_super, { ignore_mods = true, release = true })

@@ -100,6 +100,7 @@ const PERFORMANCE_OVERLAY_STATE_DIR = `${RUNTIME_DIR}/hypr-profiles`;
 const PROFILE_MODE_PATH = `${PERFORMANCE_OVERLAY_STATE_DIR}/profile-overlay.mode`;
 const MONITOR_DEBUG_PATH = `${RUNTIME_DIR}/monitor-debug.log`;
 const WINDOW_SWITCHER_DEBUG_PATH = `${RUNTIME_DIR}/ags-window-switcher-debug.log`;
+const WINDOW_SWITCHER_BIND_DIAGNOSTIC_PATH = `${RUNTIME_DIR}/ags-window-switcher-bind.debug`;
 const TOGGLE_MINIMIZED_WORKSPACE_SCRIPT = "~/.config/hypr/runtime/windows/toggle-minimized-workspace.sh";
 const WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT = "luajit ~/.config/hypr/runtime/windows/warp-cursor-to-active-window.lua";
 const DEBUG = GLib.getenv("AGS_WINDOW_SWITCHER_DEBUG") === "1";
@@ -126,6 +127,13 @@ function debugWriteFile(path: string, contents: string): void {
   } catch (e) {
     console.error(`Failed to write debug file ${path}:`, e);
   }
+}
+
+function writeBindDiagnostic(message: string): void {
+  GLib.file_set_contents(
+    WINDOW_SWITCHER_BIND_DIAGNOSTIC_PATH,
+    `[WS-AGS-7f42] ${message}\n`,
+  );
 }
 
 // State
@@ -1062,6 +1070,7 @@ function startTriggerModifierWatch() {
     }
 
     if (!isModifierPressed(activeTriggerModifier)) {
+      writeBindDiagnostic(`watch released modifier=${activeTriggerModifier}`);
       debugLog(`${activeTriggerModifier} released, committing switch`);
       triggerModifierWatchId = null;
       onCommit();
@@ -1074,6 +1083,9 @@ function startTriggerModifierWatch() {
 
 // Transition to ACTIVE state
 function enterActiveState(windows: WindowInfo[], index: number, triggerModifier = "ALT") {
+  writeBindDiagnostic(
+    `enter active modifier=${triggerModifier} pressed=${isModifierPressed(triggerModifier)}`,
+  );
   debugLog(
     `[State] IDLE -> ACTIVE (${windows.length} windows, index ${index})`,
   );
@@ -1630,6 +1642,7 @@ function handleWindowSwitcherRequest(argv: string[], res: (response: string) => 
     }
 
     if (action === "next") {
+      writeBindDiagnostic(`request next modifier=${data.triggerModifier ?? "ALT"}`);
       asyncHandled = true;
       onNext(data.triggerModifier)
         .then(() => {

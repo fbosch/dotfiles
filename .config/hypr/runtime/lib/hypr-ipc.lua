@@ -1,12 +1,12 @@
-local unix = require("socket.unix")
-
 local M = {}
 local empty_opts = {}
 local socket_paths = {}
+local instance_runtime_dir = nil
+local unix_socket_path_max = 107
 
-function M.socket_path(name)
-	if socket_paths[name] then
-		return socket_paths[name]
+function M.instance_runtime_dir()
+	if instance_runtime_dir then
+		return instance_runtime_dir
 	end
 
 	local runtime_dir = os.getenv("XDG_RUNTIME_DIR")
@@ -15,12 +15,35 @@ function M.socket_path(name)
 		error("missing Hyprland socket environment")
 	end
 
-	socket_paths[name] = runtime_dir .. "/hypr/" .. signature .. "/" .. name
+	instance_runtime_dir = runtime_dir .. "/hypr/" .. signature
+	return instance_runtime_dir
+end
+
+function M.instance_path(name)
+	return M.instance_runtime_dir() .. "/" .. name
+end
+
+function M.instance_socket_path(name)
+	local path = M.instance_path(name)
+	if #path > unix_socket_path_max then
+		error("Hyprland instance socket path is too long: " .. path)
+	end
+
+	return path
+end
+
+function M.socket_path(name)
+	if socket_paths[name] then
+		return socket_paths[name]
+	end
+
+	socket_paths[name] = M.instance_socket_path(name)
 	return socket_paths[name]
 end
 
 function M.request(message, opts)
 	opts = opts or empty_opts
+	local unix = require("socket.unix")
 	local client = assert(unix())
 	client:settimeout(opts.timeout or 0.5)
 	assert(client:connect(opts.path or M.socket_path(opts.socket_name or ".socket.sock")))
@@ -33,6 +56,7 @@ end
 
 function M.connect_event_socket(opts)
 	opts = opts or empty_opts
+	local unix = require("socket.unix")
 	local client = assert(unix())
 	client:settimeout(opts.connect_timeout or 0.5)
 	assert(client:connect(opts.path or M.socket_path(".socket2.sock")))
@@ -41,6 +65,7 @@ function M.connect_event_socket(opts)
 end
 
 function M.assert_socket_connects(path, timeout)
+	local unix = require("socket.unix")
 	local client = assert(unix())
 	client:settimeout(timeout or 0.2)
 	local ok, err = client:connect(path)
