@@ -35,24 +35,3 @@ pre-commit:
       glob: "**/*.lua"
       run: devenv shell stylua --syntax LuaJit --respect-ignores {staged_files}
       stage_fixed: true
-
-post-push:
-  commands:
-    update-dotfiles-input:
-      run: |
-        if [ -z "${NH_FLAKE:-}" ]; then
-          printf '%s\n' 'post-push: NH_FLAKE must point to the NixOS flake.' >&2
-          exit 1
-        fi
-        if [ ! -d "$NH_FLAKE" ] || [ ! -f "$NH_FLAKE/flake.nix" ]; then
-          printf 'post-push: NH_FLAKE is not a Nix flake directory: %s\n' "$NH_FLAKE" >&2
-          exit 1
-        fi
-        if ! command -v nix >/dev/null 2>&1; then
-          printf '%s\n' 'post-push: nix is not available in PATH.' >&2
-          exit 1
-        fi
-        nix flake update dotfiles --flake "$NH_FLAKE" || {
-          printf '%s\n' 'post-push: failed to update the dotfiles flake input.' >&2
-          exit 1
-        }
