@@ -98,6 +98,15 @@ local function load_modules()
 	package.loaded["lib.window.state"] = nil
 	package.loaded["lib.window.workspace"] = nil
 	package.loaded["layouts.shared.order_state"] = nil
+	package.loaded["actions.picture-in-picture"] = {
+		drag = function()
+			hl.dispatch(hl.dsp.exec_cmd("pip drag"))
+			hl.dispatch(hl.dsp.window.drag())
+		end,
+		finish_drag = function()
+			hl.dispatch(hl.dsp.exec_cmd("pip finish-drag"))
+		end,
+	}
 	interaction = require("lib.window.interaction")
 	custom_layout = require("lib.window.custom_layout")
 	directional = require("lib.window.directional")
