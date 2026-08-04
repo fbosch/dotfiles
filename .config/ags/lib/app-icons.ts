@@ -14,6 +14,12 @@ export interface IconWindowInfo {
   initialTitle?: string;
 }
 
+export interface IconResolutionRequest {
+  candidates: string[];
+  directIcon?: string;
+  iconTheme?: Gtk.IconTheme | null;
+}
+
 type FaugusGame = {
   title?: string;
   path?: string;
@@ -556,6 +562,30 @@ export function getIconForClass(appClass: string, iconTheme?: Gtk.IconTheme | nu
   return icon;
 }
 
+function getDirectIcon(iconName: string | undefined, iconTheme?: Gtk.IconTheme | null): IconRef | null {
+  if (!iconName) return null;
+  if (iconName.startsWith("/")) return fileExists(iconName) ? { kind: "file", path: iconName } : null;
+  if (iconTheme?.has_icon(iconName)) return { kind: "theme", name: iconName };
+  return null;
+}
+
+export function resolveAppIcon({ candidates, directIcon, iconTheme }: IconResolutionRequest): IconRef | null {
+  const uniqueCandidates = Array.from(
+    new Set(candidates.map((candidate) => candidate.trim()).filter((candidate) => candidate !== "")),
+  );
+  if (uniqueCandidates.length > 0) {
+    const faugusIcon = getFaugusIconForCandidates(uniqueCandidates);
+    if (faugusIcon) return faugusIcon;
+
+    for (const candidate of uniqueCandidates) {
+      const icon = getIconForClass(candidate, iconTheme);
+      if (icon) return icon;
+    }
+  }
+
+  return getDirectIcon(directIcon, iconTheme);
+}
+
 export function getIconForWindow(window: IconWindowInfo, iconTheme?: Gtk.IconTheme | null): IconRef | null {
   const classCandidates = [window.class, window.initialClass].filter(
     (candidate): candidate is string => Boolean(candidate && candidate !== ""),
@@ -568,36 +598,11 @@ export function getIconForWindow(window: IconWindowInfo, iconTheme?: Gtk.IconThe
     title.toLowerCase().includes("(grabbed)") ||
     initialTitle.toLowerCase().includes("(grabbed)");
 
-  if (!shouldTryTitleLookup) {
-    for (const candidate of classCandidates) {
-      const icon = getIconForClass(candidate, iconTheme);
-      if (icon) return icon;
-    }
-    return null;
-  }
+  const candidates = shouldTryTitleLookup
+    ? [...classCandidates, ...buildTitleCandidates(title), ...buildTitleCandidates(initialTitle)]
+    : classCandidates;
 
-  const mappedClassCandidates = classCandidates
-    .map(getWaybarMappedAppId)
-    .filter((candidate): candidate is string => Boolean(candidate));
-  const titleCandidates = [
-    ...mappedClassCandidates,
-    ...buildTitleCandidates(title),
-    ...buildTitleCandidates(initialTitle),
-  ];
-  const faugusIcon = getFaugusIconForCandidates(titleCandidates);
-  if (faugusIcon) return faugusIcon;
-
-  for (const candidate of titleCandidates) {
-    const icon = getIconForClass(candidate, iconTheme);
-    if (icon) return icon;
-  }
-
-  for (const candidate of classCandidates) {
-    const icon = getIconForClass(candidate, iconTheme);
-    if (icon) return icon;
-  }
-
-  return null;
+  return resolveAppIcon({ candidates, iconTheme });
 }
 
 export function getFallbackLetter(window: IconWindowInfo): string {

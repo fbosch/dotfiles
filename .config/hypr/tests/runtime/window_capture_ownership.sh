@@ -131,7 +131,7 @@ start_daemon() {
 
 stop_daemon() {
   kill -CONT "$wrapper_pid" >/dev/null 2>&1 || true
-  kill -TERM "$wrapper_pid"
+  kill -TERM "$wrapper_pid" >/dev/null 2>&1 || true
   for _ in {1..200}; do
     kill -0 "$wrapper_pid" >/dev/null 2>&1 || break
     sleep 0.01

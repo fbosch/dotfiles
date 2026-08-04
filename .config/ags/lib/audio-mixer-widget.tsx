@@ -4,7 +4,7 @@ import Gdk from "gi://Gdk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
-import { fileExists, getFaugusIconForCandidates, getIconForClass, setImageFile, type IconRef } from "./app-icons";
+import { resolveAppIcon, setImageFile, type IconRef } from "./app-icons";
 import { queryHyprlandJson } from "./hyprland-ipc";
 import { perf } from "./performance-monitor";
 
@@ -192,6 +192,12 @@ function sameAudioObject(a: any, b: any): boolean {
 
 function displayName(object: any, fallback: string): string {
   return getText(object, ["description", "name", "nick", "media_name", "application_name"]) ?? fallback;
+}
+
+function compareAudioObjects(first: any, second: any): number {
+  const nameOrder = displayName(first, "").localeCompare(displayName(second, ""));
+  if (nameOrder !== 0) return nameOrder;
+  return objectId(first, "").localeCompare(objectId(second, ""));
 }
 
 function parseWpctlInspect(id: number): Record<string, string> | null {
@@ -406,6 +412,7 @@ function getIconForAudioObject(object: any, client: HyprlandClient | null): Icon
         [
           ...windowTitleCandidates(client),
           pipeWireProperties?.["application.process.binary"],
+          pipeWireProperties?.["pipewire.access.portal.app_id"],
           pipeWireProperties?.["application.name"],
           pipeWireProperties?.["node.name"],
           getText(object, ["application_id", "app_id", "application_process_binary", "binary"]),
@@ -417,18 +424,7 @@ function getIconForAudioObject(object: any, client: HyprlandClient | null): Icon
       ),
     );
 
-    const faugusIcon = getFaugusIconForCandidates(candidates);
-    if (faugusIcon) return faugusIcon;
-
-    for (const candidate of candidates) {
-      const icon = getIconForClass(candidate, ensureIconTheme());
-      if (icon) return icon;
-    }
-
-    if (directIcon && theme?.has_icon(directIcon)) return { kind: "theme", name: directIcon };
-    if (directIcon && directIcon.startsWith("/") && fileExists(directIcon)) return { kind: "file", path: directIcon };
-
-    return null;
+    return resolveAppIcon({ candidates, directIcon, iconTheme: theme });
   } catch (e) {
     ok = false;
     error = String(e);
@@ -604,9 +600,15 @@ function createAudioBackend(options: { applySnapshot: (snapshot: AudioSnapshot) 
       const streams = getList<any>(audio, ["streams"]);
 
       const rows = emptyRows();
-      rows.playback = streams.map((stream, index) => makeRow(stream, "stream", `Playback ${index + 1}`, "\uE768"));
-      rows.output = speakers.map((speaker, index) => makeRow(speaker, "endpoint", `Output ${index + 1}`, "\uE995", sameAudioObject(speaker, defaultSpeaker)));
-      rows.input = microphones.map((microphone, index) => makeRow(microphone, "endpoint", `Input ${index + 1}`, "\uE720", sameAudioObject(microphone, defaultMicrophone)));
+      rows.playback = [...streams]
+        .sort(compareAudioObjects)
+        .map((stream, index) => makeRow(stream, "stream", `Playback ${index + 1}`, "\uE768"));
+      rows.output = [...speakers]
+        .sort(compareAudioObjects)
+        .map((speaker, index) => makeRow(speaker, "endpoint", `Output ${index + 1}`, "\uE995", sameAudioObject(speaker, defaultSpeaker)));
+      rows.input = [...microphones]
+        .sort(compareAudioObjects)
+        .map((microphone, index) => makeRow(microphone, "endpoint", `Input ${index + 1}`, "\uE720", sameAudioObject(microphone, defaultMicrophone)));
 
       return { status: "ready", message: "", rows };
     } catch (e) {
