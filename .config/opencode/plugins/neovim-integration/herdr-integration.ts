@@ -4,7 +4,7 @@ export type AgentState = "idle" | "working" | "blocked"
 
 type HerdrMethod = "pane.report_agent" | "pane.report_metadata" | "pane.release_agent"
 
-const source = "herdr:opencode"
+const source = "custom:neovim-opencode"
 const titleSource = "user:neovim-opencode-title"
 const legacyAgentSource = "user:neovim-opencode-agent"
 const legacyTitleSource = "user:opencode-session-title"
@@ -31,8 +31,7 @@ export class HerdrIntegration {
   }
 
   initialize() {
-    return this.#request("pane.release_agent")
-      .then(() => this.#request("pane.report_metadata", { tokens: { opencode_session_title: null } }, legacyTitleSource))
+    return this.#request("pane.report_metadata", { tokens: { opencode_session_title: null } }, legacyTitleSource)
       .then(() => this.#request("pane.report_metadata", { tokens: { opencode_session_title: null } }, legacyAgentSource))
       .then(() => this.#request("pane.report_metadata", { tokens: { opencode_session_title: null } }, titleSource))
       .then(() => this.reportState("idle"))

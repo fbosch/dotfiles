@@ -6,6 +6,7 @@
   "entry": [
     "neovim-integration.tsx",
     "__tests__/patch-navigation.test.ts",
+    "__tests__/herdr-integration.test.ts",
     "__tests__/herdr-lifecycle.test.ts"
   ]
 }
