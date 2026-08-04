@@ -1076,31 +1076,33 @@ function makeRow(row: AudioRow, index: number): Gtk.Box {
   actions.set_valign(Gtk.Align.START);
   let muteButton: Gtk.Button | null = null;
   if (row.volume !== undefined || row.muted !== undefined) {
-    muteButton = new Gtk.Button({ label: volumeLevelIcon(row.volume, row.muted) });
-    muteButton.add_css_class("audio-mixer-action");
+    muteButton = createButton({
+      variant: "transparent",
+      className: "audio-mixer-action",
+      onClick: () => toggleRowMute(row, index),
+    });
+    muteButton.set_label(volumeLevelIcon(row.volume, row.muted));
     muteButton.add_css_class("icon");
     muteButton.set_tooltip_text(row.muted ? "Unmute" : "Mute");
     muteButton.set_focusable(false);
-    muteButton.set_cursor_from_name("pointer");
-    muteButton.connect("clicked", () => {
-      toggleRowMute(row, index);
-    });
     actions.append(muteButton);
   }
   if (row.kind === "endpoint") {
-    const defaultButton = new Gtk.Button({ label: "\uE8FB" });
-    defaultButton.add_css_class("audio-mixer-action");
+    const defaultButton = createButton({
+      variant: row.isDefault ? "primary" : "transparent",
+      className: "audio-mixer-action",
+      onClick: () => {
+        audioBackend.setDefault(row);
+        renderRows();
+        focusRow(index, false);
+      },
+    });
+    defaultButton.set_label("\uE8FB");
     defaultButton.add_css_class("icon");
     defaultButton.add_css_class("default-icon");
     if (row.isDefault) defaultButton.add_css_class("active");
     defaultButton.set_tooltip_text(row.isDefault ? "Default" : "Set default");
     defaultButton.set_focusable(false);
-    defaultButton.set_cursor_from_name("pointer");
-    defaultButton.connect("clicked", () => {
-      audioBackend.setDefault(row);
-      renderRows();
-      focusRow(index, false);
-    });
     actions.append(defaultButton);
   }
   if (actions.get_first_child()) topRow.append(actions);

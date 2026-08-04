@@ -60,10 +60,12 @@ function applyStyles(): void {
     button.ags-button.button-variant-primary {
       background-color: ${tokens.colors.accent.primary.value};
       color: #ffffff;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.05);
     }
 
     button.ags-button.button-variant-primary:hover {
       background-color: ${tokens.colors.accent.hover.value};
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 3px rgba(0, 0, 0, 0.1);
     }
 
     button.ags-button.button-variant-primary:focus {
@@ -74,10 +76,12 @@ function applyStyles(): void {
     button.ags-button.button-variant-warning {
       background-color: ${tokens.colors.state.warning.value};
       color: ${tokens.colors.state["warning-text"].value};
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.05);
     }
 
     button.ags-button.button-variant-warning:hover {
       background-color: ${tokens.colors.state["warning-hover"].value};
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 3px rgba(0, 0, 0, 0.1);
     }
 
     button.ags-button.button-variant-warning:focus {
@@ -88,10 +92,12 @@ function applyStyles(): void {
     button.ags-button.button-variant-danger {
       background-color: ${tokens.colors.state.error.value};
       color: #ffffff;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.05);
     }
 
     button.ags-button.button-variant-danger:hover {
       background-color: ${tokens.colors.state["error-hover"].value};
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 3px rgba(0, 0, 0, 0.1);
     }
 
     button.ags-button.button-variant-danger:focus {
@@ -102,10 +108,12 @@ function applyStyles(): void {
     button.ags-button.button-variant-suspend {
       background-color: ${tokens.colors.state.purple.value};
       color: ${tokens.colors.state["purple-text"].value};
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.05);
     }
 
     button.ags-button.button-variant-suspend:hover {
       background-color: ${tokens.colors.state["purple-hover"].value};
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 3px rgba(0, 0, 0, 0.1);
     }
 
     button.ags-button.button-variant-suspend:focus {
