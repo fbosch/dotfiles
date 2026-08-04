@@ -5,6 +5,7 @@ import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
 import { resolveAppIcon, setImageFile, type IconRef } from "./app-icons";
+import { createButton, setButtonVariant } from "./button";
 import { queryHyprlandJson } from "./hyprland-ipc";
 import { perf } from "./performance-monitor";
 
@@ -742,7 +743,7 @@ function activateTab(tab: AudioMixerTab): void {
   focusedRowIndex = 0;
   rowFocusVisible = false;
   for (const [tabId, button] of tabButtons) {
-    setCssClass(button, "active", tabId === activeTab);
+    setButtonVariant(button, tabId === activeTab ? "primary" : "transparent");
   }
   renderRows();
 }
@@ -819,12 +820,12 @@ function handleRowScroll(index: number, deltaY: number, updateVolume: (delta: nu
 }
 
 function makeTabButton(tab: { id: AudioMixerTab; label: string; icon: string }): Gtk.Button {
-  const button = new Gtk.Button();
-  button.add_css_class("audio-mixer-tab");
-  if (tab.id === activeTab) button.add_css_class("active");
-  button.set_hexpand(true);
-  button.set_cursor_from_name("pointer");
-  button.connect("clicked", () => activateTab(tab.id));
+  const button = createButton({
+    variant: tab.id === activeTab ? "primary" : "transparent",
+    className: "audio-mixer-tab",
+    hexpand: true,
+    onClick: () => activateTab(tab.id),
+  });
 
   const label = makeLabel("", "audio-mixer-tab-label");
   label.set_use_markup(true);
@@ -1368,23 +1369,8 @@ function applyStaticCSS(): void {
     window.audio-mixer-widget button.audio-mixer-tab {
       min-height: 30px;
       padding: 0 8px;
-      border: none;
-      border-radius: 6px;
-      background-color: transparent;
-      color: ${tokens.colors.foreground.secondary.value};
       font-size: 16px;
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-    }
-
-    window.audio-mixer-widget button.audio-mixer-tab:hover,
-    window.audio-mixer-widget button.audio-mixer-tab:focus {
-      background-color: rgba(255, 255, 255, 0.1);
-      color: ${tokens.colors.foreground.primary.value};
-    }
-
-    window.audio-mixer-widget button.audio-mixer-tab.active {
-      background-color: ${tokens.colors.accent.primary.value};
-      color: #ffffff;
     }
 
     window.audio-mixer-widget label.audio-mixer-icon-label {

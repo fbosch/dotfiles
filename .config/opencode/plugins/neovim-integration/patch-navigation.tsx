@@ -28,7 +28,8 @@ function workspaceFile(directory: string, file: string) {
 
 function RouteSync(props: { api: TuiPluginApi; refresh: () => void }) {
   createEffect(() => {
-    props.api.route.current
+    const route = props.api.route.current
+    if (route.name === "session") props.api.state.session.messages(route.params.sessionID)
     props.refresh()
   })
   return <box />
@@ -61,6 +62,8 @@ export function enablePatchNavigation(api: TuiPluginApi, neovim: NeovimClient) {
   const unsubscribe = [
     api.event.on("message.updated", refresh),
     api.event.on("message.part.updated", refresh),
+    api.event.on("session.compacted", refresh),
+    api.event.on("session.idle", refresh),
     api.event.on("session.updated", refresh),
   ]
   refresh()
