@@ -15,6 +15,27 @@ function git_pull_system_repos --description 'Pull ~/nixos and ~/dotfiles with f
             continue
         end
 
+        if test $repo = "$HOME/dotfiles"; and not git -C $repo symbolic-ref --quiet HEAD >/dev/null
+            if not command -q gh; or not gh auth status --hostname github.com >/dev/null 2>&1
+                echo "==> Skipping $repo (detached HEAD; authenticate with gh to repair)"
+                set had_failure 1
+                continue
+            end
+
+            set -l origin (git -C $repo remote get-url origin 2>/dev/null)
+            if string match -q 'https://github.com/*' -- "$origin"
+                set -l ssh_origin (string replace 'https://github.com/' 'git@github.com:' -- "$origin")
+                git -C $repo remote set-url origin "$ssh_origin"
+            end
+
+            echo "==> Restoring $repo to master"
+            if not git -C $repo fetch origin master; or not git -C $repo switch master
+                echo "==> Failed to restore $repo to master"
+                set had_failure 1
+                continue
+            end
+        end
+
         set -l repo_status (git -C $repo status --porcelain)
         if test -n "$repo_status"
             echo "==> Skipping $repo (dirty working tree)"
