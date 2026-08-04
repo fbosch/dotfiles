@@ -107,7 +107,7 @@ local function count_state_writes(path, callback)
 	local original_open = io.open
 	local writes = 0
 	io.open = function(open_path, mode, ...)
-		if open_path == path and mode == "w" then
+		if (open_path == path or open_path == path .. ".tmp") and mode == "w" then
 			writes = writes + 1
 		end
 

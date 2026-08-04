@@ -1,4 +1,5 @@
 local M = {}
+local ratio_sum_epsilon = 0.000001
 
 local function encode(value)
 	return tostring(value):gsub("([^%w_.-])", function(char)
@@ -24,10 +25,33 @@ end
 local function parse_numbers(value)
 	local numbers = {}
 	for item in tostring(value):gmatch("[^,]+") do
-		numbers[#numbers + 1] = tonumber(item)
+		local number = tonumber(item)
+		if type(number) ~= "number" or number ~= number or number == math.huge or number == -math.huge then
+			return nil
+		end
+
+		numbers[#numbers + 1] = number
 	end
 
 	return numbers
+end
+
+local function ratios_are_valid(ratios, count)
+	if not ratios or #ratios ~= count then
+		return false
+	end
+
+	local sum = 0
+	for index = 1, #ratios do
+		local ratio = ratios[index]
+		if ratio <= 0 then
+			return false
+		end
+
+		sum = sum + ratio
+	end
+
+	return math.abs(sum - 1) <= ratio_sum_epsilon
 end
 
 local function serialize_strings(values)
@@ -84,7 +108,8 @@ function M.save(path, ratio_tables, order_by_key)
 		return
 	end
 
-	local handle = io.open(path, "w")
+	local temporary_path = path .. ".tmp"
+	local handle = io.open(temporary_path, "w")
 	if not handle then
 		return
 	end
@@ -92,15 +117,33 @@ function M.save(path, ratio_tables, order_by_key)
 	for index = 1, #ratio_tables do
 		local ratio_table = ratio_tables[index]
 		for key, ratios in pairs(ratio_table.values) do
-			handle:write(ratio_table.kind, "\t", encode(key), "\t", #ratios, "\t", serialize_numbers(ratios), "\n")
+			if
+				handle:write(ratio_table.kind, "\t", encode(key), "\t", #ratios, "\t", serialize_numbers(ratios), "\n")
+				== nil
+			then
+				handle:close()
+				os.remove(temporary_path)
+				return
+			end
 		end
 	end
 
 	for key, order in pairs(order_by_key) do
-		handle:write("order\t", encode(key), "\t", #order, "\t", serialize_strings(order), "\n")
+		if handle:write("order\t", encode(key), "\t", #order, "\t", serialize_strings(order), "\n") == nil then
+			handle:close()
+			os.remove(temporary_path)
+			return
+		end
 	end
 
-	handle:close()
+	if handle:close() == nil then
+		os.remove(temporary_path)
+		return
+	end
+
+	if os.rename(temporary_path, path) == nil then
+		os.remove(temporary_path)
+	end
 end
 
 function M.load(path, ratio_tables_by_kind, order_by_key, legacy_ratio_kind)
@@ -127,7 +170,7 @@ function M.load(path, ratio_tables_by_kind, order_by_key, legacy_ratio_kind)
 			end
 		elseif kind and ratio_tables_by_kind[kind] and serialized then
 			local ratios = parse_numbers(serialized)
-			if #ratios == tonumber(count) then
+			if ratios_are_valid(ratios, tonumber(count)) then
 				ratio_tables_by_kind[kind][decode(encoded_key)] = ratios
 			end
 		end
