@@ -19,6 +19,7 @@ local drag_numerator = 1
 local drag_denominator = 1
 local monitors_by_id = {}
 local drag_active = false
+local tiled_drag_active = false
 local hypr_socket = hypr_ipc.socket_path(".socket.sock")
 
 local function request(message)
@@ -47,6 +48,10 @@ local function restore_resize_animation()
 	end
 
 	eval([[require("animations").restore_windows_move()]])
+end
+
+local function save_pending_resize()
+	request([[dispatch hl.dsp.layout("save-resize")]])
 end
 
 local function active_monitor_info()
@@ -261,6 +266,11 @@ local handle_command
 
 local function stop_drag()
 	local was_active = drag_active or read_file(state_file) ~= ""
+	if tiled_drag_active then
+		pcall(save_pending_resize)
+		tiled_drag_active = false
+	end
+
 	drag_active = false
 	os.remove(state_file)
 	if was_active then
@@ -388,6 +398,7 @@ local function start_drag()
 	end
 	local edge = resize_edge(axis, initial, active.x, active.y, active.width, active.height)
 	drag_active = true
+	tiled_drag_active = true
 	disable_resize_animation()
 	write_file(state_file, "active\n")
 

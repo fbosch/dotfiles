@@ -25,7 +25,12 @@ local order_state
 local function make_target(index, active)
 	return {
 		index = index,
-		window = { active = active or false, address = "0x" .. tostring(index), stable_id = index, monitor = { name = "HDMI-A-2" } },
+		window = {
+			active = active or false,
+			address = "0x" .. tostring(index),
+			stable_id = index,
+			monitor = { name = "HDMI-A-2" },
+		},
 		placed = nil,
 		place = function(self, box)
 			self.placed = { x = box.x, y = box.y, w = box.w, h = box.h }
@@ -95,6 +100,26 @@ local function assert_box(actual, expected, message)
 	assert_equal(actual.y, expected.y, message .. " y")
 	assert_equal(actual.w, expected.w, message .. " w")
 	assert_equal(actual.h, expected.h, message .. " h")
+end
+
+local function count_state_writes(path, callback)
+	local original_open = io.open
+	local writes = 0
+	io.open = function(open_path, mode, ...)
+		if open_path == path and mode == "w" then
+			writes = writes + 1
+		end
+
+		return original_open(open_path, mode, ...)
+	end
+
+	local ok, err = pcall(callback)
+	io.open = original_open
+	if ok == false then
+		error(err, 0)
+	end
+
+	return writes
 end
 
 local function load_layout()
@@ -337,7 +362,10 @@ run("drag geometry beats non-exact keyboard transfer fallback", function()
 	dragged.window.address = nil
 	local existing = set_geometry(make_workspace_target(2, "portrait-drag-stale-fallback"), 220)
 	set_geometry(dragged, -120)
-	order_state.record_transfer_intent({ address = "0xmissing" }, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
+	order_state.record_transfer_intent(
+		{ address = "0xmissing" },
+		{ monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
+	)
 
 	local ctx = make_context({ existing, dragged })
 	registered_layout.layout.recalculate(ctx)
@@ -377,7 +405,10 @@ run("ultrawide transfer intent inserts bottommost despite outside source y", fun
 	dragged.window.monitor.name = "HDMI-A-2"
 	set_geometry(dragged, 2000, 800)
 	dragged.window.at.x = 2000
-	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
+	order_state.record_transfer_intent(
+		dragged.window,
+		{ monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
+	)
 
 	local existing = make_workspace_target(2, "portrait-transfer")
 	registered_layout.layout.recalculate(make_context({ existing, dragged }))
@@ -393,7 +424,10 @@ run("transfer intent wins when target already arrives topmost", function()
 	registered_layout.layout.recalculate(ctx)
 
 	set_geometry(dragged, 260)
-	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
+	order_state.record_transfer_intent(
+		dragged.window,
+		{ monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
+	)
 	registered_layout.layout.recalculate(ctx)
 
 	assert_box(bottom.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
@@ -405,7 +439,10 @@ run("new portrait transfer replaces stale exact intent", function()
 	local current = set_geometry(make_workspace_target(232, "portrait-transfer-replaces-stale", true), 220)
 
 	order_state.record_transfer_intent(stale.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
-	order_state.record_transfer_intent(current.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
+	order_state.record_transfer_intent(
+		current.window,
+		{ monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
+	)
 	registered_layout.layout.recalculate(make_context({ stale, current }))
 
 	assert_box(stale.placed, { x = 10, y = 20, w = 120, h = 100 }, "stale transfer target")
@@ -416,7 +453,10 @@ run("ultrawide transfer intent survives active target id mismatch", function()
 	local dragged = set_geometry(make_workspace_target(1, "portrait-transfer-id-mismatch", true), 2000, 800)
 	dragged.window.at.x = 2000
 	local existing = make_workspace_target(2, "portrait-transfer-id-mismatch")
-	order_state.record_transfer_intent({ address = "0xmissing" }, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
+	order_state.record_transfer_intent(
+		{ address = "0xmissing" },
+		{ monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
+	)
 
 	registered_layout.layout.recalculate(make_context({ existing, dragged }))
 
@@ -431,7 +471,10 @@ run("ultrawide transfer fallback uses single added target without active flag", 
 
 	local dragged = set_geometry(make_workspace_target(2, "portrait-transfer-added-no-active"), 2000, 800)
 	dragged.window.at.x = 2000
-	order_state.record_transfer_intent({ address = "0xmissing" }, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
+	order_state.record_transfer_intent(
+		{ address = "0xmissing" },
+		{ monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
+	)
 	registered_layout.layout.recalculate(make_context({ existing, dragged }))
 
 	assert_box(existing.placed, { x = 10, y = 20, w = 120, h = 100 }, "existing target")
@@ -573,6 +616,43 @@ run("absolute resize follows cursor boundary", function()
 
 	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 135 }, "first resized target")
 	assert_box(second.placed, { x = 10, y = 155, w = 120, h = 165 }, "second resized target")
+end)
+
+run("absolute resize persists once when the drag stops", function()
+	_G.__PORTRAIT_ROWS_DISABLE_STATE = nil
+	_G.__PORTRAIT_ROWS_STATE_FILE = os.tmpname()
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+
+	local first = make_workspace_target(1, "deferred-resize", true)
+	local second = make_workspace_target(2, "deferred-resize")
+	local ctx = make_context({ first, second })
+	registered_layout.layout.recalculate(ctx)
+
+	local writes = count_state_writes(_G.__PORTRAIT_ROWS_STATE_FILE, function()
+		registered_layout.layout.layout_msg(ctx, "resize-y-at down 155")
+	end)
+	assert_equal(writes, 0, "writes before drag stop")
+
+	writes = count_state_writes(_G.__PORTRAIT_ROWS_STATE_FILE, function()
+		registered_layout.layout.layout_msg(ctx, "save-resize")
+	end)
+	assert_equal(writes, 1, "writes after drag stop")
+
+	writes = count_state_writes(_G.__PORTRAIT_ROWS_STATE_FILE, function()
+		registered_layout.layout.layout_msg(ctx, "resize-y-at down 155")
+		registered_layout.layout.layout_msg(ctx, "save-resize")
+	end)
+	assert_equal(writes, 0, "writes for unchanged resize")
+
+	package.loaded["layouts.portrait_rows"] = nil
+	require("layouts.portrait_rows")
+	local reloaded_first = make_workspace_target(1, "deferred-resize", true)
+	local reloaded_second = make_workspace_target(2, "deferred-resize")
+	registered_layout.layout.recalculate(make_context({ reloaded_first, reloaded_second }))
+
+	assert_box(reloaded_first.placed, { x = 10, y = 20, w = 120, h = 135 }, "reloaded first target")
+	assert_box(reloaded_second.placed, { x = 10, y = 155, w = 120, h = 165 }, "reloaded second target")
 end)
 
 run("absolute resize uses internal boundary on outer edge", function()

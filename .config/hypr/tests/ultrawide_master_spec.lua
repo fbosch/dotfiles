@@ -26,7 +26,13 @@ local order_state
 local function make_target(index, active)
 	return {
 		index = index,
-		window = { active = active or false, address = "0x" .. tostring(index), stable_id = index, monitor = { name = "DP-2" }, workspace = { name = "ultrawide-test" } },
+		window = {
+			active = active or false,
+			address = "0x" .. tostring(index),
+			stable_id = index,
+			monitor = { name = "DP-2" },
+			workspace = { name = "ultrawide-test" },
+		},
 		placed = nil,
 		place = function(self, box)
 			self.placed = { x = box.x, y = box.y, w = box.w, h = box.h }
@@ -78,6 +84,26 @@ local function assert_box(actual, expected, message)
 	assert_equal(actual.y, expected.y, message .. " y")
 	assert_equal(actual.w, expected.w, message .. " w")
 	assert_equal(actual.h, expected.h, message .. " h")
+end
+
+local function count_state_writes(path, callback)
+	local original_open = io.open
+	local writes = 0
+	io.open = function(open_path, mode, ...)
+		if open_path == path and mode == "w" then
+			writes = writes + 1
+		end
+
+		return original_open(open_path, mode, ...)
+	end
+
+	local ok, err = pcall(callback)
+	io.open = original_open
+	if ok == false then
+		error(err, 0)
+	end
+
+	return writes
 end
 
 local function load_layout()
@@ -220,7 +246,10 @@ run("portrait transfer intent inserts leftmost despite outside source x", functi
 	dragged.window.workspace = { name = workspace }
 	dragged.window.monitor.name = "DP-2"
 	set_geometry(dragged, -900, 800)
-	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+	order_state.record_transfer_intent(
+		dragged.window,
+		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
+	)
 
 	local left = make_target(33)
 	local right = make_target(34)
@@ -315,7 +344,10 @@ run("drag geometry beats non-exact ultrawide transfer fallback", function()
 	dragged.window.address = nil
 	local left = make_target(40)
 	local right = make_target(41)
-	order_state.record_transfer_intent({ address = "0xmissing" }, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+	order_state.record_transfer_intent(
+		{ address = "0xmissing" },
+		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
+	)
 
 	local ctx = make_context({ left, dragged, right }, "ultrawide-drag-stale-fallback")
 	registered_layout.layout.recalculate(ctx)
@@ -342,7 +374,10 @@ run("portrait transfer intent inserts leftmost despite outside right source x", 
 	dragged.window.workspace = { name = workspace }
 	dragged.window.monitor.name = "DP-2"
 	set_geometry(dragged, 2000)
-	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+	order_state.record_transfer_intent(
+		dragged.window,
+		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
+	)
 
 	local left = make_target(53)
 	local right = make_target(54)
@@ -360,7 +395,10 @@ run("transfer intent wins when target already arrives leftmost", function()
 	registered_layout.layout.recalculate(make_context({ dragged, right }, workspace))
 
 	set_geometry(dragged, 900)
-	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+	order_state.record_transfer_intent(
+		dragged.window,
+		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
+	)
 	registered_layout.layout.recalculate(make_context({ dragged, right }, workspace))
 
 	assert_box(dragged.placed, { x = 10, y = 20, w = 670, h = 500 }, "dragged target")
@@ -372,7 +410,10 @@ run("portrait transfer exact id wins over existing active ultrawide target", fun
 	local dragged = set_geometry(make_target(92), -900, 800)
 	local workspace = "transfer-exact-beats-existing-active"
 
-	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+	order_state.record_transfer_intent(
+		dragged.window,
+		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
+	)
 	registered_layout.layout.recalculate(make_context({ existing, dragged }, workspace))
 
 	assert_box(dragged.placed, { x = 10, y = 20, w = 670, h = 500 }, "dragged target")
@@ -384,8 +425,14 @@ run("new ultrawide transfer replaces stale exact intent", function()
 	local current = set_geometry(make_target(94, true), 800)
 	local workspace = "transfer-replaces-stale-exact"
 
-	order_state.record_transfer_intent(stale.window, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
-	order_state.record_transfer_intent(current.window, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+	order_state.record_transfer_intent(
+		stale.window,
+		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
+	)
+	order_state.record_transfer_intent(
+		current.window,
+		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
+	)
 	registered_layout.layout.recalculate(make_context({ stale, current }, workspace))
 
 	assert_box(current.placed, { x = 10, y = 20, w = 670, h = 500 }, "current transfer target")
@@ -400,7 +447,10 @@ run("portrait transfer survives destination recalculate before arrival", functio
 	registered_layout.layout.recalculate(make_context({ left, active_existing }, workspace))
 
 	local dragged = set_geometry(make_target(103), -900, 800)
-	order_state.record_transfer_intent(dragged.window, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+	order_state.record_transfer_intent(
+		dragged.window,
+		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
+	)
 
 	registered_layout.layout.recalculate(make_context({ left, active_existing }, workspace))
 	registered_layout.layout.recalculate(make_context({ left, active_existing, dragged }, workspace))
@@ -414,7 +464,10 @@ run("portrait transfer intent survives active target id mismatch", function()
 	local dragged = set_geometry(make_target(71, true), -900, 800)
 	local left = make_target(72)
 	local right = make_target(73)
-	order_state.record_transfer_intent({ address = "0xmissing" }, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+	order_state.record_transfer_intent(
+		{ address = "0xmissing" },
+		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
+	)
 
 	registered_layout.layout.recalculate(make_context({ left, right, dragged }, "transfer-id-mismatch"))
 
@@ -430,7 +483,10 @@ run("portrait transfer fallback uses single added target without active flag", f
 	registered_layout.layout.recalculate(make_context({ left, right }, workspace))
 
 	local dragged = set_geometry(make_target(83), -900, 800)
-	order_state.record_transfer_intent({ address = "0xmissing" }, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+	order_state.record_transfer_intent(
+		{ address = "0xmissing" },
+		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
+	)
 	registered_layout.layout.recalculate(make_context({ left, right, dragged }, workspace))
 
 	assert_box(dragged.placed, { x = 10, y = 20, w = 300, h = 500 }, "dragged target")
@@ -609,6 +665,43 @@ run("absolute resize follows cursor boundary", function()
 	assert_box(second.placed, { x = 760, y = 20, w = 250, h = 500 }, "right target")
 end)
 
+run("absolute resize persists once when the drag stops", function()
+	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = nil
+	_G.__ULTRAWIDE_MASTER_STATE_FILE = os.tmpname()
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+
+	local first = set_geometry(make_target(1, true), 100)
+	local second = set_geometry(make_target(2), 800)
+	local ctx = make_context({ first, second }, "deferred-resize")
+	registered_layout.layout.recalculate(ctx)
+
+	local writes = count_state_writes(_G.__ULTRAWIDE_MASTER_STATE_FILE, function()
+		registered_layout.layout.layout_msg(ctx, "resize-x-at right 760")
+	end)
+	assert_equal(writes, 0, "writes before drag stop")
+
+	writes = count_state_writes(_G.__ULTRAWIDE_MASTER_STATE_FILE, function()
+		registered_layout.layout.layout_msg(ctx, "save-resize")
+	end)
+	assert_equal(writes, 1, "writes after drag stop")
+
+	writes = count_state_writes(_G.__ULTRAWIDE_MASTER_STATE_FILE, function()
+		registered_layout.layout.layout_msg(ctx, "resize-x-at right 760")
+		registered_layout.layout.layout_msg(ctx, "save-resize")
+	end)
+	assert_equal(writes, 0, "writes for unchanged resize")
+
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+	local reloaded_first = set_geometry(make_target(1, true), 100)
+	local reloaded_second = set_geometry(make_target(2), 800)
+	registered_layout.layout.recalculate(make_context({ reloaded_first, reloaded_second }, "deferred-resize"))
+
+	assert_box(reloaded_first.placed, { x = 10, y = 20, w = 750, h = 500 }, "reloaded left target")
+	assert_box(reloaded_second.placed, { x = 760, y = 20, w = 250, h = 500 }, "reloaded right target")
+end)
+
 run("absolute resize uses internal boundary on outer edge", function()
 	local first = set_geometry(make_target(1), 100)
 	local second = set_geometry(make_target(2, true), 800)
@@ -631,6 +724,28 @@ run("hdmi fallback supports vertical absolute resize", function()
 
 	assert_box(top.placed, { x = 10, y = 20, w = 1000, h = 200 }, "top target")
 	assert_box(bottom.placed, { x = 10, y = 220, w = 1000, h = 300 }, "bottom target")
+end)
+
+run("portrait fallback persists vertical resize when the drag stops", function()
+	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = nil
+	_G.__ULTRAWIDE_MASTER_STATE_FILE = os.tmpname()
+	package.loaded["layouts.ultrawide_master"] = nil
+	require("layouts.ultrawide_master")
+
+	local top = set_monitor(make_target(1, true), "HDMI-A-2")
+	local bottom = set_monitor(make_target(2), "HDMI-A-2")
+	local ctx = make_context({ top, bottom }, "deferred-vertical-resize")
+	registered_layout.layout.recalculate(ctx)
+
+	local writes = count_state_writes(_G.__ULTRAWIDE_MASTER_STATE_FILE, function()
+		registered_layout.layout.layout_msg(ctx, "resize-y-at down 220")
+	end)
+	assert_equal(writes, 0, "writes before drag stop")
+
+	writes = count_state_writes(_G.__ULTRAWIDE_MASTER_STATE_FILE, function()
+		registered_layout.layout.layout_msg(ctx, "save-resize")
+	end)
+	assert_equal(writes, 1, "writes after drag stop")
 end)
 
 run("resize does not reorder by stale geometry", function()

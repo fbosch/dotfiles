@@ -9,9 +9,14 @@ local min_ratio = 0.15
 local resize_step = 0.05
 local ratios_by_workspace = {}
 local state = order_state.new()
+local resize_dirty = false
 
 local function state_file()
-	return persistent_state.state_file("__PORTRAIT_ROWS_DISABLE_STATE", "__PORTRAIT_ROWS_STATE_FILE", "portrait-rows-ratios.tsv")
+	return persistent_state.state_file(
+		"__PORTRAIT_ROWS_DISABLE_STATE",
+		"__PORTRAIT_ROWS_STATE_FILE",
+		"portrait-rows-ratios.tsv"
+	)
 end
 
 local function save_ratio_state()
@@ -24,6 +29,15 @@ local function load_ratio_state()
 	persistent_state.load(state_file(), {
 		rows = ratios_by_workspace,
 	}, state.order_by_key, "rows")
+end
+
+local function save_pending_resize()
+	if resize_dirty == false then
+		return
+	end
+
+	resize_dirty = false
+	save_ratio_state()
 end
 
 load_ratio_state()
@@ -60,7 +74,18 @@ local function move_active(targets, key, delta)
 end
 
 local function move_active_to_position(targets, key, ratios, area_y, area_height, position)
-	ordered_axis.move_active_to_position(state, key, targets, active_index, save_ratio_state, "y", ratios, area_y, area_height, position)
+	ordered_axis.move_active_to_position(
+		state,
+		key,
+		targets,
+		active_index,
+		save_ratio_state,
+		"y",
+		ratios,
+		area_y,
+		area_height,
+		position
+	)
 end
 
 local function default_ratios(count)
@@ -117,7 +142,16 @@ function M.recalculate(ctx)
 	if count == 1 then
 		local role = role_for_targets(targets)
 		if role == monitor_role.portrait then
-			ordered_axis.remember_single(state, key, targets, "portrait_rows", role, "y", area.y + area.h / 2, active_index)
+			ordered_axis.remember_single(
+				state,
+				key,
+				targets,
+				"portrait_rows",
+				role,
+				"y",
+				area.y + area.h / 2,
+				active_index
+			)
 		end
 
 		targets[1]:place(area)
@@ -178,11 +212,8 @@ function M.resize(ctx, target, delta, corner)
 		return true
 	end
 
-	resize_state.adjust_active(ratios, index, count, amount, min_ratio)
-	if key then
-		state.manual_change_by_key[key] = true
-	end
-	if ratio_key then
+	local changed = resize_state.adjust_active(ratios, index, count, amount, min_ratio)
+	if ratio_key and changed then
 		save_ratio_state()
 	end
 
@@ -191,12 +222,17 @@ end
 
 function M.layout_msg(ctx, msg)
 	local targets = ctx.targets
+	local command = msg:match("^(%S+)")
+	if command == "save-resize" then
+		save_pending_resize()
+		return true
+	end
+
 	local count = targets and #targets or 0
 	if count < 2 then
 		return true
 	end
 
-	local command = msg:match("^(%S+)")
 	local key = order_key(targets)
 	local ratio_key = workspace_key(targets)
 	local order, targets_by_id = order_state.sync(state, key, targets)
@@ -211,7 +247,14 @@ function M.layout_msg(ctx, msg)
 	elseif command == "place-at-cursor" then
 		local area = ctx.area
 		local ratios = ratios_for(ratio_key, count)
-		move_active_to_position(targets, key, ratios, area and area.y, area and area.h, order_state.cursor_position("y"))
+		move_active_to_position(
+			targets,
+			key,
+			ratios,
+			area and area.y,
+			area and area.h,
+			order_state.cursor_position("y")
+		)
 	elseif command == "resize-up" then
 		M.resize(ctx, nil, { y = -resize_step }, nil)
 	elseif command == "resize-down" then
@@ -228,12 +271,16 @@ function M.layout_msg(ctx, msg)
 		end
 
 		local boundary = resize_state.boundary_for_edge(index, count, edge)
-		resize_state.set_boundary_at(ratios, boundary, tonumber(position), area and area.y, area and area.h, min_ratio)
-		if key then
-			state.manual_change_by_key[key] = true
-		end
-		if ratio_key then
-			save_ratio_state()
+		local changed = resize_state.set_boundary_at(
+			ratios,
+			boundary,
+			tonumber(position),
+			area and area.y,
+			area and area.h,
+			min_ratio
+		)
+		if ratio_key and changed then
+			resize_dirty = true
 		end
 	elseif command == "reset" then
 		if ratio_key then

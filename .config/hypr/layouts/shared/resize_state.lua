@@ -40,30 +40,35 @@ end
 function M.adjust_boundary(ratios, first_index, delta, min_ratio)
 	local second_index = first_index + 1
 	if not ratios[first_index] or not ratios[second_index] or not delta then
-		return
+		return false
 	end
 
 	delta = M.clamp_delta(ratios[first_index], ratios[second_index], delta, min_ratio)
+	if delta == 0 then
+		return false
+	end
+
 	ratios[first_index] = ratios[first_index] + delta
 	ratios[second_index] = ratios[second_index] - delta
+	return true
 end
 
 function M.adjust_active(ratios, index, count, delta, min_ratio)
 	if not delta or delta == 0 then
-		return
+		return false
 	end
 
 	if delta > 0 then
 		if index < count then
-			M.adjust_boundary(ratios, index, delta, min_ratio)
+			return M.adjust_boundary(ratios, index, delta, min_ratio)
 		else
-			M.adjust_boundary(ratios, index - 1, delta, min_ratio)
+			return M.adjust_boundary(ratios, index - 1, delta, min_ratio)
 		end
 	elseif index > 1 then
-		M.adjust_boundary(ratios, index - 1, delta, min_ratio)
-	else
-		M.adjust_boundary(ratios, index, delta, min_ratio)
+		return M.adjust_boundary(ratios, index - 1, delta, min_ratio)
 	end
+
+	return M.adjust_boundary(ratios, index, delta, min_ratio)
 end
 
 function M.boundary_for_edge(index, count, edge)
@@ -88,7 +93,7 @@ end
 
 function M.set_boundary_at(ratios, boundary_index, position, area_start, area_span, min_ratio)
 	if not boundary_index or not position or not area_start or not area_span or area_span == 0 then
-		return
+		return false
 	end
 
 	local before = 0
@@ -102,7 +107,7 @@ function M.set_boundary_at(ratios, boundary_index, position, area_start, area_sp
 	local max_target = before + ratios[boundary_index] + ratios[boundary_index + 1] - min_ratio
 	target = math.max(min_target, math.min(max_target, target))
 
-	M.adjust_boundary(ratios, boundary_index, target - current, min_ratio)
+	return M.adjust_boundary(ratios, boundary_index, target - current, min_ratio)
 end
 
 return M

@@ -12,9 +12,14 @@ local ratios_three = { 0.3, 0.4, 0.3 }
 local fallback_ratios = {}
 local ratios_by_workspace = {}
 local row_ratios_by_workspace = {}
+local resize_dirty = false
 
 local function state_file()
-	return persistent_state.state_file("__ULTRAWIDE_MASTER_DISABLE_STATE", "__ULTRAWIDE_MASTER_STATE_FILE", "ultrawide-master-ratios.tsv")
+	return persistent_state.state_file(
+		"__ULTRAWIDE_MASTER_DISABLE_STATE",
+		"__ULTRAWIDE_MASTER_STATE_FILE",
+		"ultrawide-master-ratios.tsv"
+	)
 end
 
 local function save_ratio_state()
@@ -29,6 +34,15 @@ local function load_ratio_state()
 		columns = ratios_by_workspace,
 		rows = row_ratios_by_workspace,
 	}, state.order_by_key)
+end
+
+local function save_pending_resize()
+	if resize_dirty == false then
+		return
+	end
+
+	resize_dirty = false
+	save_ratio_state()
 end
 
 load_ratio_state()
@@ -123,7 +137,18 @@ local function move_active(targets, key, delta)
 end
 
 local function move_active_to_position(targets, key, ratios, area_x, area_width, position)
-	ordered_axis.move_active_to_position(state, key, targets, active_index, save_ratio_state, "x", ratios, area_x, area_width, position)
+	ordered_axis.move_active_to_position(
+		state,
+		key,
+		targets,
+		active_index,
+		save_ratio_state,
+		"x",
+		ratios,
+		area_x,
+		area_width,
+		position
+	)
 end
 
 local function place_columns(targets, ratios, x, y, width, height, scope)
@@ -157,7 +182,8 @@ function M.recalculate(ctx)
 	local height = area.h
 	local key = workspace_key(targets)
 	local role = role_for_targets(targets)
-	local ratios = role == monitor_role.portrait and row_ratios_for_workspace(key, count) or ratios_for_workspace(key, count)
+	local ratios = role == monitor_role.portrait and row_ratios_for_workspace(key, count)
+		or ratios_for_workspace(key, count)
 
 	if role == monitor_role.portrait then
 		place_rows(targets, ratios, x, y, width, height, nil)
@@ -205,9 +231,8 @@ function M.resize(ctx, target, delta, corner)
 		return true
 	end
 
-	resize_state.adjust_active(ratios, index, count, amount, min_ratio)
-	if key then
-		state.manual_change_by_key[key] = true
+	local changed = resize_state.adjust_active(ratios, index, count, amount, min_ratio)
+	if key and changed then
 		save_ratio_state()
 	end
 
@@ -216,12 +241,17 @@ end
 
 function M.layout_msg(ctx, msg)
 	local targets = ctx.targets
+	local command = msg:match("^(%S+)")
+	if command == "save-resize" then
+		save_pending_resize()
+		return true
+	end
+
 	local count = targets and #targets or 0
 	if count < 2 then
 		return true
 	end
 
-	local command = msg:match("^(%S+)")
 	local key = workspace_key(targets)
 	local order, targets_by_id = order_state.sync(state, key, targets)
 	targets = order_state.targets_from_order(state, key, order, targets_by_id, targets)
@@ -233,7 +263,14 @@ function M.layout_msg(ctx, msg)
 	elseif command == "place-at-cursor" then
 		local area = ctx.area
 		local ratios = ratios_for_workspace(key, count)
-		move_active_to_position(targets, key, ratios, area and area.x, area and area.w, order_state.cursor_position("x"))
+		move_active_to_position(
+			targets,
+			key,
+			ratios,
+			area and area.x,
+			area and area.w,
+			order_state.cursor_position("x")
+		)
 	elseif command == "resize-left" then
 		M.resize(ctx, nil, { x = -resize_step }, nil)
 	elseif command == "resize-right" then
@@ -250,10 +287,16 @@ function M.layout_msg(ctx, msg)
 		end
 
 		local boundary = resize_state.boundary_for_edge(index, count, edge)
-		resize_state.set_boundary_at(ratios, boundary, tonumber(position), area and area.x, area and area.w, min_ratio)
-		if key then
-			state.manual_change_by_key[key] = true
-			save_ratio_state()
+		local changed = resize_state.set_boundary_at(
+			ratios,
+			boundary,
+			tonumber(position),
+			area and area.x,
+			area and area.w,
+			min_ratio
+		)
+		if key and changed then
+			resize_dirty = true
 		end
 	elseif command == "resize-y-at" then
 		local edge, position = msg:match("^%S+%s+(%S+)%s+(-?%d+%.?%d*)")
@@ -265,10 +308,16 @@ function M.layout_msg(ctx, msg)
 		end
 
 		local boundary = resize_state.boundary_for_edge(index, count, edge)
-		resize_state.set_boundary_at(ratios, boundary, tonumber(position), area and area.y, area and area.h, min_ratio)
-		if key then
-			state.manual_change_by_key[key] = true
-			save_ratio_state()
+		local changed = resize_state.set_boundary_at(
+			ratios,
+			boundary,
+			tonumber(position),
+			area and area.y,
+			area and area.h,
+			min_ratio
+		)
+		if key and changed then
+			resize_dirty = true
 		end
 	elseif command == "reset" then
 		if key then
