@@ -8,6 +8,7 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 local hypr_ipc = require("runtime.lib.hypr-ipc")
 local json = require("lib.json")
 local monitor_role = require("lib.monitor_role")
+local control_protocol = require("runtime.windows.daemons.custom-layout-drag-resize.control-protocol")
 
 local command_socket_path = hypr_ipc.instance_socket_path("clr.sock")
 local state_file = hypr_ipc.instance_path("custom-layout-drag-resize.state")
@@ -19,6 +20,7 @@ local drag_denominator = 1
 local monitors_by_id = {}
 local drag_active = false
 local tiled_drag_active = false
+local latest_control_sequence = 0
 local hypr_socket = hypr_ipc.socket_path(".socket.sock")
 
 local function request(message)
@@ -326,14 +328,14 @@ local function read_command(client)
 	client:settimeout(0.01)
 	local line = client:receive("*l")
 	client:settimeout(0)
-	if line == "start" or line == "stop" or line == "quit" or line == "ping" then
+	local command = line and control_protocol.parse(line)
+	if command then
 		client:send("ok\n")
 	else
 		client:send("error\n")
-		line = nil
 	end
 	client:close()
-	return line
+	return command
 end
 
 accept_command = function(timeout)
@@ -351,12 +353,20 @@ accept_command = function(timeout)
 end
 
 handle_command = function(command)
-	if command == "stop" then
+	if not command or control_protocol.is_newer(command, latest_control_sequence) == false then
+		return false
+	end
+
+	if command.sequence then
+		latest_control_sequence = command.sequence
+	end
+
+	if command.action == "stop" then
 		stop_drag()
 		return true
 	end
 
-	return command == "quit"
+	return command.action == "quit"
 end
 
 local function start_drag()
@@ -442,15 +452,19 @@ local function run()
 	pcall(active_monitor_info)
 
 	while true do
-		local line = accept_command(0.1)
-		if line == "start" then
-			pcall(start_drag)
-			stop_drag()
-		elseif line == "ping" then
+		local command = accept_command(0.1)
+		if command and control_protocol.is_newer(command, latest_control_sequence) == false then
+		elseif command and command.sequence then
+			latest_control_sequence = command.sequence
+			if command.action == "start" then
+				pcall(start_drag)
+				stop_drag()
+			elseif command.action == "stop" then
+				stop_drag()
+			end
+		elseif command and command.action == "ping" then
 			-- Health check for the shell wrapper's singleton guard.
-		elseif line == "stop" then
-			stop_drag()
-		elseif line == "quit" then
+		elseif command and command.action == "quit" then
 			break
 		end
 	end

@@ -1,10 +1,14 @@
 local M = {}
 local dispatch = hl.dispatch
+local hypr_ipc = require("runtime.lib.hypr-ipc")
+local control_protocol = require("runtime.windows.daemons.custom-layout-drag-resize.control-protocol")
 local custom_layout_resize_command =
 	"~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh"
+local custom_layout_resize_sequence_file = hypr_ipc.instance_path("custom-layout-drag-resize.sequence")
 
 local function custom_layout_resize(action)
-	return hl.dsp.exec_cmd(custom_layout_resize_command .. " " .. action)
+	local sequence = control_protocol.next_sequence(custom_layout_resize_sequence_file)
+	return hl.dsp.exec_cmd(string.format("%s %s %d", custom_layout_resize_command, action, sequence))
 end
 
 function M.place_custom_layout_at_cursor(state)

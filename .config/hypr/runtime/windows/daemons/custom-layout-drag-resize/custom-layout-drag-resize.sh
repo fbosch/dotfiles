@@ -6,6 +6,7 @@ set -eu
 . "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
 mode="${1:-start}"
+sequence="${2:-}"
 daemon="${HOME}/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize-daemon.lua"
 
 daemon_supervisor_name="custom-layout-drag-resize"
@@ -24,13 +25,15 @@ daemon_supervisor_cleanup_paths="$(hypr_instance_path custom-layout-drag-resize.
 . "${HOME}/.config/hypr/runtime/lib/daemon-supervisor.sh"
 
 case "$mode" in
-  stop)
+  start | stop)
+    case "$sequence" in
+      '' | *[!0-9]*)
+        printf 'usage: %s start|stop SEQUENCE\n' "$0" >&2
+        exit 2
+        ;;
+    esac
     daemon_supervisor_ensure "$0" daemon
-    daemon_supervisor_send stop
-    ;;
-  start)
-    daemon_supervisor_ensure "$0" daemon
-    daemon_supervisor_send start
+    daemon_supervisor_send "$mode $sequence"
     ;;
   daemon)
     daemon_supervise luajit "$daemon"
