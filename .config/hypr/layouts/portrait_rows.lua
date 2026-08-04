@@ -308,7 +308,6 @@ end
 hl.layout.register("portrait_rows", {
 	recalculate = M.recalculate,
 	layout_msg = M.layout_msg,
-	resize = M.resize,
 })
 
 return M

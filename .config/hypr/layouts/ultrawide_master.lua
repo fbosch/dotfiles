@@ -346,7 +346,6 @@ end
 hl.layout.register("ultrawide_master", {
 	recalculate = M.recalculate,
 	layout_msg = M.layout_msg,
-	resize = M.resize,
 })
 
 return M

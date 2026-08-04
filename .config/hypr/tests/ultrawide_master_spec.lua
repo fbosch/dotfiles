@@ -138,7 +138,6 @@ run("registers lua ultrawide_master layout", function()
 	assert_equal(registered_layout.name, "ultrawide_master", "registered layout name")
 	assert_equal(type(registered_layout.layout.recalculate), "function", "registered recalculate")
 	assert_equal(type(registered_layout.layout.layout_msg), "function", "registered layout_msg")
-	assert_equal(type(registered_layout.layout.resize), "function", "registered resize")
 end)
 
 run("two windows lay out left to right", function()
@@ -624,18 +623,6 @@ run("resize-right grows active column into next column", function()
 	local ctx = make_context({ first, second })
 
 	registered_layout.layout.layout_msg(ctx, "resize-right")
-	registered_layout.layout.recalculate(ctx)
-
-	assert_box(first.placed, { x = 10, y = 20, w = 720, h = 500 }, "left target")
-	assert_box(second.placed, { x = 730, y = 20, w = 280, h = 500 }, "right target")
-end)
-
-run("future resize callback grows active column", function()
-	local first = set_geometry(make_target(1, true), 100)
-	local second = set_geometry(make_target(2), 800)
-	local ctx = make_context({ first, second })
-
-	registered_layout.layout.resize(ctx, first, { x = 0.05 }, nil)
 	registered_layout.layout.recalculate(ctx)
 
 	assert_box(first.placed, { x = 10, y = 20, w = 720, h = 500 }, "left target")
