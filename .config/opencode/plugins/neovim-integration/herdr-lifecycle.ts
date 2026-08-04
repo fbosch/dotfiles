@@ -55,6 +55,9 @@ export function attachHerdrLifecycle(api: TuiPluginApi, reporter: Reporter) {
   const unsubscribe = [
     api.event.on("session.status", reportStatus),
     api.event.on("session.idle", report("idle")),
+    api.event.on("tool.execute.before", report("working")),
+    api.event.on("tool.execute.after", report("working")),
+    api.event.on("session.compacted", report("working")),
     api.event.on("permission.asked", report("blocked")),
     api.event.on("question.asked", report("blocked")),
     api.event.on("session.error", report("blocked")),

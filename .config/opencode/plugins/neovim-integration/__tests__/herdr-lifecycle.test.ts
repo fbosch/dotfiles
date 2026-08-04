@@ -54,6 +54,17 @@ describe("Herdr lifecycle", () => {
     expect(states).toEqual(["idle"])
   })
 
+  test("reports visible tool and compaction progress", () => {
+    const { handlers, states } = setup()
+
+    handlers.get("tool.execute.before")?.({ properties: { sessionID: "visible" } })
+    handlers.get("session.idle")?.({ properties: { sessionID: "visible" } })
+    handlers.get("tool.execute.after")?.({ properties: { sessionID: "visible" } })
+    handlers.get("session.compacted")?.({ properties: { sessionID: "visible" } })
+
+    expect(states).toEqual(["idle", "working", "idle", "working", "working"])
+  })
+
   test("ignores background sessions and unsubscribes", () => {
     const { cleanup, handlers, states } = setup()
     handlers.get("session.status")?.({ properties: { sessionID: "background", status: { type: "busy" } } })
