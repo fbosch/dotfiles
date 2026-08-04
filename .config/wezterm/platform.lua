@@ -65,8 +65,8 @@ return function(config)
 		config.font_size = 12
 		config.window_background_opacity = 0.96
 		config.window_decorations = "NONE"
-	else
-		-- macOS and other platforms
+	elseif wezterm.target_triple:find("darwin") ~= nil then
+		config.default_prog = { "/run/current-system/sw/bin/fish", "-l" }
 		config.window_background_opacity = 0.96
 		config.macos_window_background_blur = 80
 		config.font_size = 15.0
