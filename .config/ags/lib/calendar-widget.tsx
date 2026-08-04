@@ -154,6 +154,10 @@ function localDateKey(date: Date): string {
   ].join("-");
 }
 
+function formatGnomeCalendarDate(date: Date): string {
+  return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()} 00:00:00`;
+}
+
 function getCalendarGridStart(month: Date): Date {
   const firstOfMonth = new Date(month.getFullYear(), month.getMonth(), 1);
   const offset = (firstOfMonth.getDay() - weekStartsOn + 7) % 7;
@@ -803,7 +807,8 @@ function openGnomeCalendar(date: Date): void {
   try {
     const launcher = new Gio.SubprocessLauncher({ flags: Gio.SubprocessFlags.NONE });
     launcher.setenv("TZ", resolvedTimeZone(), true);
-    launcher.spawnv(["uwsm-app", "--", "gnome-calendar", "--date", localDateKey(date)]);
+    launcher.setenv("TZDIR", GLib.file_read_link("/etc/zoneinfo"), true);
+    launcher.spawnv(["gnome-calendar", "--date", formatGnomeCalendarDate(date)]);
     hideCalendar();
   } catch (e) {
     console.error("Failed to open GNOME Calendar:", e);
@@ -824,16 +829,16 @@ function makeDayButton(slotIndex: number): DaySlot {
     updateDaySelection();
   });
 
-  const middleClickController = new Gtk.GestureClick();
-  middleClickController.set_button(Gdk.BUTTON_MIDDLE);
-  middleClickController.set_propagation_phase(Gtk.PropagationPhase.CAPTURE);
-  middleClickController.connect("pressed", (_controller, nPress) => {
+  const doubleClickController = new Gtk.GestureClick();
+  doubleClickController.set_button(Gdk.BUTTON_PRIMARY);
+  doubleClickController.set_propagation_phase(Gtk.PropagationPhase.CAPTURE);
+  doubleClickController.connect("pressed", (_controller, nPress) => {
     if (nPress !== 2) return;
     const slot = daySlots[slotIndex];
     if (!slot) return;
     openGnomeCalendar(slot.date);
   });
-  button.add_controller(middleClickController);
+  button.add_controller(doubleClickController);
 
   const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 });
   content.add_css_class("calendar-day-content");
