@@ -4,6 +4,7 @@ import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import Gdk from "gi://Gdk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
+import { configureButton, setButtonVariant, type ButtonVariant } from "./button";
 
 // Configuration interface
 interface ConfirmConfig {
@@ -33,33 +34,22 @@ let currentConfig: ConfirmConfig = {
 const variants = {
   danger: {
     iconColor: tokens.colors.state.error.value,
-    confirmBg: tokens.colors.state.error.value,
-    confirmHoverBg: tokens.colors.state["error-hover"].value,
-    confirmFocusColor: tokens.colors.state.error.value,
-    confirmTextColor: "#ffffff",
   },
   warning: {
     iconColor: tokens.colors.state.warning.value,
-    confirmBg: tokens.colors.state.warning.value,
-    confirmHoverBg: tokens.colors.state["warning-hover"].value,
-    confirmFocusColor: tokens.colors.state.warning.value,
-    confirmTextColor: tokens.colors.state["warning-text"].value,
   },
   info: {
     iconColor: tokens.colors.accent.primary.value,
-    confirmBg: tokens.colors.accent.primary.value,
-    confirmHoverBg: tokens.colors.accent.hover.value,
-    confirmFocusColor: tokens.colors.accent.primary.value,
-    confirmTextColor: "#ffffff",
   },
   suspend: {
     iconColor: tokens.colors.state.purple.value,
-    confirmBg: tokens.colors.state.purple.value,
-    confirmHoverBg: tokens.colors.state["purple-hover"].value,
-    confirmFocusColor: tokens.colors.state.purple.value,
-    confirmTextColor: tokens.colors.state["purple-text"].value,
   },
 };
+
+function buttonVariantFor(variant: ConfirmConfig["variant"]): ButtonVariant {
+  if (variant === "info") return "primary";
+  return variant;
+}
 
 let win: Astal.Window | null = null;
 let icon: Gtk.Label | null = null;
@@ -125,26 +115,6 @@ function applyStaticCSS() {
       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     }
     
-    window.confirm-dialog button.dialog-button label {
-      color: inherit;
-    }
-    
-    window.confirm-dialog button.cancel {
-      background-color: #373737;
-      color: #ffffff;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    window.confirm-dialog button.cancel:hover {
-      background-color: rgba(55, 55, 55, 0.9);
-      border-color: rgba(255, 255, 255, 0.2);
-    }
-    
-    window.confirm-dialog button.cancel:focus {
-      outline: 2px solid rgba(255, 255, 255, 0.3);
-      outline-offset: 2px;
-    }
-    
     window.confirm-dialog button.cancel:active {
       transform: scale(0.98);
     }
@@ -178,22 +148,11 @@ function updateVariantCSS(variant: "danger" | "warning" | "info" | "suspend") {
       color: ${colors.iconColor};
     }
 
-    window.confirm-dialog button.confirm {
-      background-color: ${colors.confirmBg};
-      color: ${colors.confirmTextColor};
-    }
-
-    window.confirm-dialog button.confirm:hover {
-      background-color: ${colors.confirmHoverBg};
-    }
-
-    window.confirm-dialog button.confirm:focus {
-      outline: 2px solid ${colors.confirmFocusColor};
-      outline-offset: 2px;
-    }
   `,
     false,
   );
+
+  if (confirmButton) setButtonVariant(confirmButton, buttonVariantFor(variant));
 }
 
 function hideDialog() {
@@ -340,7 +299,7 @@ function createWindow() {
             onClicked={() => hideDialog()}
             $={(self: Gtk.Button) => {
               cancelButton = self;
-              self.set_cursor_from_name("pointer");
+              configureButton(self, { variant: "default" });
             }}
           >
             <label label={currentConfig.cancelLabel} />
@@ -359,7 +318,7 @@ function createWindow() {
             }}
             $={(self: Gtk.Button) => {
               confirmButton = self;
-              self.set_cursor_from_name("pointer");
+              configureButton(self, { variant: buttonVariantFor(currentConfig.variant) });
             }}
           >
             <label label={currentConfig.confirmLabel} />
