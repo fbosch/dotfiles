@@ -40,6 +40,8 @@ export const SpawningFromWaybar: Story = {
           <StartMenu
             isOpen={isMenuOpen}
             recentItems={recentItems}
+            nixFlakeUpdatesCount={3}
+            flatpakUpdatesCount={2}
             onClose={() => setIsMenuOpen(false)}
             onItemClick={fn()}
             onRecentItemClick={fn()}
@@ -65,6 +67,8 @@ export const RecentItems: Story = {
   args: {
     isOpen: true,
     recentItems,
+    nixFlakeUpdatesCount: 3,
+    flatpakUpdatesCount: 2,
     onClose: fn(),
     onRecentItemClick: fn(),
     onClearRecentItems: fn(),

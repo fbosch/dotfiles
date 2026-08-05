@@ -143,7 +143,8 @@ export interface StartMenuProps extends VariantProps<typeof menuVariants> {
   isOpen?: boolean;
   items?: StartMenuItem[];
   recentItems?: RecentItems;
-  systemUpdatesCount?: number;
+  nixFlakeUpdatesCount?: number;
+  flatpakUpdatesCount?: number;
   profile?: StartMenuProfile;
   user?: StartMenuUser;
   disableAnimations?: boolean;
@@ -157,17 +158,19 @@ export interface StartMenuProps extends VariantProps<typeof menuVariants> {
 }
 
 const defaultMenuItems: StartMenuItem[] = [
-  { type: 'action', id: 'system-settings', label: 'System Settings', icon: '\uE713' },
   { type: 'action', id: 'about-this-pc', label: 'About This PC', icon: '\uE946' },
-  { type: 'action', id: 'force-quit', label: 'Force Quit', icon: '\uE7BA' },
-  { type: 'action', id: 'lock-screen', label: 'Lock Screen', icon: '\uE72E' },
-  { type: 'separator', id: 'primary-actions' },
+  { type: 'action', id: 'system-settings', label: 'System Settings', icon: '\uE713' },
+  { type: 'action', id: 'system-updates', label: 'System Updates', icon: '\uE895' },
   { type: 'recent-items', id: 'recent-items', label: 'Recent Items', icon: '\uE81C' },
+  { type: 'separator', id: 'after-recent-items' },
+  { type: 'action', id: 'force-quit', label: 'Force Quit', icon: '\uE7BA' },
   { type: 'separator', id: 'session-actions' },
   { type: 'action', id: 'suspend', label: 'Suspend', icon: '\uE708', variant: 'purple' },
-  { type: 'action', id: 'sign-out', label: 'Sign out', icon: '\uE8AB', variant: 'warning' },
   { type: 'action', id: 'restart', label: 'Restart', icon: '\uE777', variant: 'warning' },
   { type: 'action', id: 'shutdown', label: 'Shutdown', icon: '\uE7E8', variant: 'danger' },
+  { type: 'separator', id: 'account-actions' },
+  { type: 'action', id: 'lock-screen', label: 'Lock Screen', icon: '\uE72E' },
+  { type: 'action', id: 'sign-out', label: 'Log out', icon: '\uE8AB', variant: 'warning' },
 ];
 
 const defaultProfile: StartMenuProfile = {
@@ -204,7 +207,8 @@ export const StartMenu = ({
   isOpen = false,
   items = defaultMenuItems,
   recentItems = {},
-  systemUpdatesCount = 0,
+  nixFlakeUpdatesCount = 0,
+  flatpakUpdatesCount = 0,
   profile = defaultProfile,
   user = defaultUser,
   disableAnimations = false,
@@ -482,7 +486,7 @@ export const StartMenu = ({
                 <div
                   ref={recentItemsMenuRef}
                   id={recentItemsMenuId}
-                  className="absolute left-full top-0 z-10 ml-2 w-80 rounded-lg border border-white/10 bg-background-secondary/90 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.28),0_4px_12px_rgba(0,0,0,0.14)] backdrop-blur-xl"
+                  className="absolute bottom-0 left-full z-10 ml-2 w-80 rounded-lg border border-white/10 bg-background-secondary/90 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.28),0_4px_12px_rgba(0,0,0,0.14)] backdrop-blur-xl"
                   role="menu"
                   aria-label={item.label}
                 >
@@ -536,8 +540,9 @@ export const StartMenu = ({
           );
         }
 
-        const isSettingsItem = item.id === 'system-settings';
-        const showUpdateBadge = isSettingsItem && systemUpdatesCount > 0;
+        const showNixFlakeUpdates = item.id === 'system-updates' && nixFlakeUpdatesCount > 0;
+        const showFlatpakUpdates = item.id === 'system-updates' && flatpakUpdatesCount > 0;
+        const showUpdateBadges = showNixFlakeUpdates || showFlatpakUpdates;
 
         return (
           <div key={item.id}>
@@ -545,46 +550,47 @@ export const StartMenu = ({
               type="button"
               role="menuitem"
               tabIndex={isOpen ? 0 : -1}
-              className={menuItemVariants({
-                variant: item.variant,
-                animated: !disableAnimations,
-              })}
+              className={cn(
+                menuItemVariants({
+                  variant: item.variant,
+                  animated: !disableAnimations,
+                }),
+                showUpdateBadges && 'justify-between'
+              )}
               onClick={() => handleActionClick(item)}
               onKeyDown={handleMenuItemKeyDown}
             >
-              <span className="font-fluent text-xs" aria-hidden="true">
-                {item.icon}
-              </span>
-              <span className="text-left">{item.label}</span>
-            </button>
-            {showUpdateBadge && (
-              <button
-                type="button"
-                role="menuitem"
-                tabIndex={isOpen ? 0 : -1}
-                className={cn(
-                  menuItemVariants({ animated: !disableAnimations }),
-                  'justify-between pl-6'
-                )}
-                onClick={() =>
-                  handleActionClick({
-                    type: 'action',
-                    id: 'system-updates',
-                    label: 'System Updates',
-                    icon: '\uE895',
-                  })
-                }
-                onKeyDown={handleMenuItemKeyDown}
-              >
-                <span className="flex items-center gap-2">
-                  <span className="font-fluent text-xs" aria-hidden="true">
-                    {'\uE895'}
-                  </span>
-                  <span className="text-left">System Updates</span>
+              <span className="flex min-w-0 items-center gap-2.5">
+                <span className="font-fluent text-xs" aria-hidden="true">
+                  {item.icon}
                 </span>
-                <Tag variant="primary">{systemUpdatesCount}</Tag>
-              </button>
-            )}
+                <span className="truncate text-left">{item.label}</span>
+              </span>
+              {showUpdateBadges && (
+                <span className="flex items-center gap-1">
+                  {showNixFlakeUpdates && (
+                    <Tag
+                      variant="primary"
+                      icon={'\uE895'}
+                      title="Nix flake updates"
+                      aria-label={`Nix flake updates: ${nixFlakeUpdatesCount}`}
+                    >
+                      {nixFlakeUpdatesCount}
+                    </Tag>
+                  )}
+                  {showFlatpakUpdates && (
+                    <Tag
+                      variant="primary"
+                      icon={'\uE71D'}
+                      title="Flatpak updates"
+                      aria-label={`Flatpak updates: ${flatpakUpdatesCount}`}
+                    >
+                      {flatpakUpdatesCount}
+                    </Tag>
+                  )}
+                </span>
+              )}
+            </button>
           </div>
         );
       })}
