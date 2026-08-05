@@ -20,6 +20,7 @@ This document records the current OpenCode setup, its likely Codex CLI replaceme
 | OpenCode built-in agent overrides | 7 |
 | Slash commands | 19 |
 | Shared user skills | 49 |
+| Skills requiring runtime-portability work | 13 |
 | Active server plugins | 6 |
 | Active TUI plugins | 3 |
 | Custom tools | 10 |
@@ -87,7 +88,7 @@ Subtree-specific instructions should stay near their implementation sources:
 
 There are 49 user-visible skills in `.agents/skills/`, plus the system-managed `.system/skill-installer`.
 
-Most skill bodies are portable because they are prompt and workflow guidance. Tool-specific skills depend on restoring their external executable or MCP integration. Two skills should be rewritten rather than copied:
+Most skill bodies are portable because they are prompt and workflow guidance. Tool-specific skills depend on restoring their external executable or MCP integration. Thirteen skills need either a runtime adapter, product-specific replacement, or wording cleanup before the shared tree can be treated as agent-agnostic.
 
 | Skill | Disposition |
 | --- | --- |
@@ -102,6 +103,33 @@ The remaining skill families are largely directly portable:
 | Planning and quality | `api-and-interface-design`, `cli-ux`, `deep-modules`, `deprecation-and-migration`, `diagnose`, `hot-path-analysis`, `pr-description`, `security-and-hardening`, `tdd`, `test-pruner`, `thermo-nuclear-code-quality-review`, `to-issues`, `to-prd`, `triage` |
 | Developer environments | `agent-browser`, `bun`, `devenv`, `herdr`, `justfile`, `linear`, `linear-issue-workflow`, `nix-run`, `openspec-*`, `worktrunk`, `wt-switch-create` |
 | Languages and documentation | `ascii-visualizer`, `crafting-effective-readmes`, `github-actions-docs`, `jsdoc-typescript-docs`, `lua-config-authoring`, `ts-pattern`, `tsconfig`, `typescript-advanced-types`, `vercel-react-best-practices`, `vicinae-extension-authoring`, `writing-clearly` |
+
+### Skill portability work
+
+Keep explicitly product-specific skills as source-specific implementations rather than making their names promise portability:
+
+| Skill | Disposition |
+| --- | --- |
+| `opencode-command-authoring` | Keep as OpenCode-specific source; create Codex command-authoring guidance separately |
+| `opencode-subagent-patterns` | Keep as OpenCode-specific source; create Codex subagent guidance separately |
+| `linear` | Keep Codex-specific MCP setup; split only if the Linear workflow must be shared with another host |
+| `wt-switch-create` | Split portable Worktrunk lifecycle rules from Claude Code session-entry behavior |
+| `ascii-visualizer` | Remove Claude-only frontmatter from the portable diagram guidance, or keep a Claude adapter separate |
+
+Normalize accidental runtime assumptions in otherwise generic skills:
+
+| Skill | Required change |
+| --- | --- |
+| `writing-clearly` | Resolve the tone reference through a neutral shared location instead of `~/.config/opencode/TONE.md` |
+| `pr-description` | Refer to the active PR workflow and neutral tone reference instead of OpenCode command paths |
+| `skill-creator` | Replace Claude-specific language with target-agent/model language |
+| `skill-judge` | Evaluate knowledge relative to the target agent/model rather than Claude |
+| `openspec-apply-change` | Replace exact question-tool naming with a host-neutral clarification capability |
+| `openspec-propose` | Replace exact question and todo-tool naming with host-neutral interaction and progress capabilities |
+| `openspec-archive-change` | Separate archive semantics from host-specific question, task, subagent, and skill invocation tools |
+| `improve-codebase-architecture` | Request an exploration subagent when available; otherwise inspect directly |
+
+External dependencies such as `wt`, `openspec`, Bun, Nix, Herdr, Linear, and browser automation are not agent coupling. Their prerequisites and failure behavior should remain explicit in the skills that use them.
 
 ## Agents
 
@@ -137,6 +165,75 @@ OpenCode-specific metadata cannot be copied directly:
 - per-agent reasoning effort and text verbosity
 
 The first Codex agent wave should be `explore`, `analyze`, `debug`, `review`, `test`, `validate`, and `quick`. These cover daily investigation, implementation support, and bounded verification.
+
+### Subagent portability
+
+Codex CLI supports custom subagents and parallel delegation as a stable feature. Custom agents are TOML files under `~/.codex/agents/` or `.codex/agents/`; each requires `name`, `description`, and `developer_instructions`. They can additionally set model, reasoning effort, sandbox mode, MCP servers, and skill configuration.
+
+| Capability | OpenCode | Codex CLI | Migration result |
+| --- | --- | --- | --- |
+| Global roles | `~/.config/opencode/agents/*.md` | `~/.codex/agents/*.toml` | Supported with different format |
+| Project roles | `.opencode/agents/*.md` | `.codex/agents/*.toml` | Supported with different format |
+| Role prompt | Markdown body | `developer_instructions` | Direct semantic mapping |
+| Description | YAML frontmatter | Required TOML property | Direct mapping |
+| Per-agent model and reasoning | Provider-specific options | `model`, `model_reasoning_effort` | Supported, but not field-for-field |
+| Read-only posture | Tool/permission maps | `sandbox_mode = "read-only"` | Coarse equivalent |
+| Per-agent MCP and skills | Shared tools plus prompt routing | `mcp_servers`, `skills.config` | Supported after dependency migration |
+| Parallel delegation | Task tool | Stable multi-agent workflow | Supported |
+| Thread inspection and control | Task IDs and results | `/agent`, plus spawn/send/resume/wait/close operations | Supported |
+| Per-command permission rules | Ordered command patterns | No direct per-agent equivalent | Keep host-specific |
+| Tool allowlists, colors, hidden roles, temperatures, step limits | OpenCode frontmatter | No direct equivalent | Keep host-specific or retire |
+| Primary versus subagent role | `mode` | No direct per-agent equivalent | Model primary behavior through prompts, profiles, or skills |
+
+Codex built-ins are `default`, `worker`, and `explorer`. They are not aliases for the current OpenCode role names. Preserve the nineteen named roles as custom Codex agents where they remain useful; use Codex built-ins only for their broad default purpose.
+
+The agent prompt bodies have three portability classes:
+
+| Class | Roles | Required work |
+| --- | --- | --- |
+| Direct body reuse | `commit`, `ideate`, `refactor` | Copy the instruction body; add an explicit Codex sandbox/profile only when needed |
+| Reuse after skill validation | `adversarial`, `benchmark`, `review`, `spec`, `test` | Retain substantive workflow after confirming named skills are available |
+| Adapt tool/routing vocabulary | `analyze`, `backlog-planning`, `debug`, `docs`, `lookup`, `patterns`, `pr-feedback`, `quick`, `research`, `tutor`, `validate` | Replace literal OpenCode tools, reference syntax, and task routing with configured Codex capabilities |
+
+Use a host-neutral source of truth instead of trying to share a physical file between OpenCode and Codex.
+
+```text
+.agents/roles/
+  analyze.md
+  review.md
+  test.md
+
+.agents/role-overrides/
+  opencode.yaml
+  codex.yaml
+```
+
+The shared role source should contain only the demonstrated intersection:
+
+```text
+name: string
+description: string
+developer_instructions: markdown
+access: read-only | workspace-write
+model-tier: fast | balanced | deep
+capabilities: semantic names such as code-search, external-docs, github-review
+skills: skill names
+```
+
+The host adapters resolve the semantic fields:
+
+| Concern | OpenCode adapter | Codex adapter |
+| --- | --- | --- |
+| Role registration | YAML frontmatter plus Markdown | TOML custom agent |
+| Read-only role | Tool and permission deny rules | Read-only sandbox or permission profile |
+| `code-search` capability | `fff` and Toolbox AST-grep | Configured `fff` and AST-grep MCP servers |
+| `external-docs` capability | Context7, Exa, web tools | Configured MCP or native web capability |
+| `github-review` capability | `gh_pr_feedback_*` tools | Migrated workflow MCP tools |
+| Model tier | OpenCode provider/model settings | Codex model and reasoning-effort settings |
+
+Keep these fields outside the canonical role definition: OpenCode `mode`, color, temperature, steps, hidden state, prompt field, tool maps, and command permissions; Codex concrete model IDs, sandbox/permission profile, MCP configuration, and skill configuration.
+
+The security boundary needs explicit treatment. OpenCode per-agent command rules such as `git commit *: deny` do not map to Codex role files. A Codex child inherits the parent turn's active sandbox and approval choices, so an agent definition cannot be treated as an independent privilege boundary. Use the shared role source for intent, Codex sandbox or permission profiles for broad enforcement, and global rules or execution policy for command restrictions.
 
 ## Commands
 
@@ -309,15 +406,19 @@ Outcome: Codex starts from a dotfiles-managed `~/.codex` configuration without c
 - Keep `~/.agents/skills` as the global user-skill source and verify Codex discovers it.
 - Keep system-managed Codex skills separate from user skills.
 
-### 2. Port global rules and skills
+### 2. Port global rules and make shared skills portable
 
-Outcome: A new Codex session loads global engineering rules and one representative shared skill.
+Outcome: A new Codex session loads global engineering rules and uses shared skills without following OpenCode or Claude-only behavior.
 
 - Extract reusable rules from `.config/opencode/AGENTS.md` into `~/.codex/AGENTS.md`.
 - Preserve repository `AGENTS.md` unchanged where possible.
 - Port compatibility, validation, library, and tone references.
 - Verify Codex discovers the 49 canonical user skills from `~/.agents/skills`.
-- Mark OpenCode-specific skills for later rewriting.
+- Keep the two OpenCode authoring skills as product-specific source material; create Codex replacements instead of modifying them in place.
+- Split Claude Code session-entry behavior from `wt-switch-create`.
+- Normalize the eight generic skills that currently name OpenCode, Claude, or host-specific tools.
+- Retain `agents/openai.yaml` files as Codex adapters where they declare Codex MCP dependencies; do not make the shared skill body depend on their presence.
+- Validate one generic skill, one Codex/MCP-backed skill, and one skill with a former host-specific assumption.
 
 ### 3. Restore code search and editor context
 
@@ -369,37 +470,57 @@ Priority order:
 
 Replace OpenCode interpolation and tool calls with explicit Codex prompt and MCP behavior. Reuse skills instead of duplicating policy text.
 
-### 7. Port agent roles
+### 7. Port agent roles through shared semantic definitions
 
-Outcome: Codex delegates the high-value specialist roles with equivalent read/write boundaries.
+Outcome: Codex delegates specialist roles generated from a single host-neutral source, with verified sandbox, skill, and MCP behavior.
 
-First wave:
+1. Create a canonical role source under `.agents/roles/` with only name, description, instructions, access posture, semantic capabilities, and skill dependencies.
+2. Keep OpenCode execution metadata in an OpenCode adapter and Codex execution metadata in a Codex adapter. Do not put colors, temperature, steps, OpenCode permissions, or concrete Codex model IDs in the shared role source.
+3. Render each Codex role as a TOML file under `~/.codex/agents/` or `.codex/agents/`, with `name`, `description`, and `developer_instructions` as required fields.
+4. Map semantic capabilities to verified host integrations before retaining them in a role prompt:
+   - `code-search` -> configured search and AST MCP servers
+   - `external-docs` -> configured documentation/search MCP servers or native web capability
+   - `github-review` -> migrated PR workflow MCP tools
+5. Translate OpenCode tool names, `@` reference syntax, and task-routing language in the eleven tool-dependent roles. Preserve workflow intent and output contracts.
+6. Configure Codex global multi-agent policy separately from role definitions: enabled state, concurrent-thread limit, default model, default reasoning effort, and interruption behavior are policy decisions, not inferable from the OpenCode files.
+7. Use read-only sandbox or a read-only permission profile for roles that explicitly prohibit edits. Make write-capable role access explicit rather than deriving it from the absence of OpenCode deny rules.
+8. Validate the first representative roles:
+   - `analyze` for evidence-based read-only exploration
+   - `review` for read-only skill routing
+   - `test` for workspace-write validation and test creation
+   - `pr-feedback` for approval-sensitive GitHub review mutation after workflow MCP tools exist
+9. Validate parallel delegation, `/agent` thread inspection, steering, interruption, unavailable capability failures, and parent sandbox/approval inheritance.
+10. Add a drift check that detects OpenCode-only tool names, unconfigured MCP dependencies, unavailable skills, and divergence between the canonical role source and generated adapters.
+
+First role wave:
 
 ```text
-explore
 analyze
+debug
 review
+test
 validate
 quick
 ```
 
-Second wave:
+Second role wave:
 
 ```text
-spec
+adversarial
 backlog-planning
-research
+benchmark
+docs
+ideate
 lookup
 patterns
-adversarial
-refactor
-benchmark
 pr-feedback
-ideate
-commit
+refactor
+research
+spec
+tutor
 ```
 
-Translate prompt bodies first. Preserve mutation boundaries. Reduce model-routing complexity until Codex supports a clean equivalent.
+Treat `commit` as a prompt or skill first. It only needs a dedicated Codex agent when delegation materially improves the workflow.
 
 ### 8. Restore environment and worktree ergonomics
 
