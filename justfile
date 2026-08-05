@@ -8,6 +8,10 @@ default:
 install-opencode:
 	pnpm install --dir .config/opencode
 
+# Install dependencies for shared FBB helpers.
+install-fbb:
+	bun install --frozen-lockfile --cwd .config/fbb
+
 # Validate the project devenv environment.
 devenv-test:
 	devenv test
@@ -22,7 +26,7 @@ build-storybook:
 
 # Install dependencies for OpenCode plugins.
 install-opencode-plugins:
-	bun install --cwd .config/opencode/plugins
+	bun install --frozen-lockfile --cwd .config/opencode/plugins
 
 # Restart user daemons used by the desktop setup asynchronously.
 restart-daemons:

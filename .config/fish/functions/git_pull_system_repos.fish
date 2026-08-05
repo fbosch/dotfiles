@@ -63,11 +63,18 @@ function git_pull_system_repos --description 'Pull ~/nixos and ~/dotfiles with f
             echo '==> Failed to restow ~/dotfiles'
             set had_failure 1
         else
-            echo '==> Linking local Herdr plugins'
-            herdr_link_plugins
+            echo '==> Installing OpenCode dependencies'
+            just --justfile ~/dotfiles/justfile --working-directory ~/dotfiles install-fbb install-opencode-plugins
             if test $status -ne 0
-                echo '==> Failed to link local Herdr plugins'
+                echo '==> Failed to install OpenCode dependencies'
                 set had_failure 1
+            else
+                echo '==> Linking local Herdr plugins'
+                herdr_link_plugins
+                if test $status -ne 0
+                    echo '==> Failed to link local Herdr plugins'
+                    set had_failure 1
+                end
             end
         end
     end
