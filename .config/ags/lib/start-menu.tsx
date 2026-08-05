@@ -8,6 +8,7 @@ import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
 import { bindGamingOpacity } from "./gaming-opacity";
 import { perf } from "./performance-monitor";
+import { startRecentApplicationFocusHistory } from "./recent-applications";
 import { parseComponentRequest } from "./request";
 
 // Configuration
@@ -1427,6 +1428,7 @@ function applyStaticCSS() {
 // Functions for bundled mode (using global namespace pattern)
 function initStartMenu() {
   applyStaticCSS();
+  startRecentApplicationFocusHistory();
   // Generate circular avatar from .face file
   const scriptPath = `${GLib.get_home_dir()}/.config/ags/scripts/generate-circular-avatar.sh`;
   if (GLib.file_test(scriptPath, GLib.FileTest.EXISTS)) {

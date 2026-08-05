@@ -12,7 +12,7 @@ interface HyprlandIpcOptions {
 const defaultSocketName = ".socket.sock";
 const defaultTimeoutSeconds = 1;
 
-const cachedSocketPaths = new Map<string, string | null>();
+const cachedSocketPaths = new Map<string, string>();
 
 function fileExists(path: string): boolean {
   try {
@@ -24,19 +24,20 @@ function fileExists(path: string): boolean {
 
 export function getHyprlandSocketPath(socketName = defaultSocketName): string | null {
   const cachedSocketPath = cachedSocketPaths.get(socketName);
-  if (cachedSocketPath !== undefined) return cachedSocketPath;
+  if (cachedSocketPath && fileExists(cachedSocketPath)) return cachedSocketPath;
+  cachedSocketPaths.delete(socketName);
 
   const runtimeDir = GLib.getenv("XDG_RUNTIME_DIR");
   const signature = GLib.getenv("HYPRLAND_INSTANCE_SIGNATURE");
   if (!runtimeDir || !signature) {
-    cachedSocketPaths.set(socketName, null);
     return null;
   }
 
   const socketPath = `${runtimeDir}/hypr/${signature}/${socketName}`;
-  const availableSocketPath = fileExists(socketPath) ? socketPath : null;
-  cachedSocketPaths.set(socketName, availableSocketPath);
-  return availableSocketPath;
+  if (!fileExists(socketPath)) return null;
+
+  cachedSocketPaths.set(socketName, socketPath);
+  return socketPath;
 }
 
 export function hasHyprlandSocket(socketName = defaultSocketName): boolean {
