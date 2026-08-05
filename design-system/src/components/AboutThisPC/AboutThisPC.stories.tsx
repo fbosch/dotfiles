@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { Desktop } from '../Desktop';
 import { AboutThisPC } from './AboutThisPC';
 
@@ -28,12 +28,23 @@ export const Default: Story = {
       deviceName: 'NixOS Workstation',
       manufacturer: 'Framework',
       processor: 'AMD Ryzen 7 7840U',
+      processorClock: '3.3 GHz',
+      graphics: 'AMD Radeon 780M',
       memory: '32 GB',
+      memoryClock: '3200 MHz',
       desktop: 'Hyprland',
       operatingSystem: 'NixOS 25.05',
+      kernel: 'Linux 6.12.28',
+      uptime: '3 hours, 18 minutes',
+      deviceIcon: '\uE7F8',
     },
     onClose: fn(),
     onMoreInfo: fn(),
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'More Info...' }));
+    await expect(args.onMoreInfo).toHaveBeenCalledOnce();
   },
 };
 

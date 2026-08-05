@@ -2,15 +2,22 @@ import { cn } from '../../utils/cn';
 import { Button } from '../Button';
 import { Window } from '../Window';
 
+const FLUENT_DESKTOP_ICON = '\uE7FB';
+
 export interface AboutThisPCInfo {
   deviceName: string;
   manufacturer?: string;
   deviceImageSrc?: string;
   deviceIcon?: string;
   processor?: string;
+  processorClock?: string;
+  graphics?: string;
   memory?: string;
+  memoryClock?: string;
   desktop?: string;
   operatingSystem?: string;
+  kernel?: string;
+  uptime?: string;
 }
 
 export interface AboutThisPCProps {
@@ -21,11 +28,20 @@ export interface AboutThisPCProps {
 }
 
 export const AboutThisPC = ({ isOpen = false, info, onMoreInfo, onClose }: AboutThisPCProps) => {
+  const processor = info.processor
+    ? `${info.processor}${info.processorClock ? ` (${info.processorClock})` : ''}`
+    : info.processorClock;
+  const memory = info.memory
+    ? `${info.memory}${info.memoryClock ? ` (${info.memoryClock})` : ''}`
+    : info.memoryClock;
   const details = [
-    ['Processor', info.processor],
-    ['Memory', info.memory],
+    ['CPU', processor],
+    ['GPU', info.graphics],
+    ['Memory', memory],
     ['Desktop', info.desktop],
-    ['Operating system', info.operatingSystem],
+    ['OS', info.operatingSystem],
+    ['Kernel', info.kernel],
+    ['Uptime', info.uptime],
   ].filter((detail): detail is [string, string] => Boolean(detail[1]));
 
   return (
@@ -35,51 +51,56 @@ export const AboutThisPC = ({ isOpen = false, info, onMoreInfo, onClose }: About
         isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
       )}
       role="dialog"
+      aria-modal="true"
       aria-hidden={!isOpen}
       aria-label="About This PC"
     >
-      <Window showTitlebar={false} width="360px" height="520px">
-        <div className="flex h-full flex-col items-center p-7 text-center">
+      <Window showTitlebar={false} width="420px" height="min(560px, calc(100vh - 32px))">
+        <div className="relative flex h-full flex-col items-center px-8 py-7 text-center">
+          {onClose && (
+            <Button
+              variant="transparent"
+              size="sm"
+              className="absolute right-3 top-3 size-8 p-0 font-fluent text-xs"
+              aria-label="Close"
+              onClick={onClose}
+            >
+              {'\uE711'}
+            </Button>
+          )}
           {info.deviceImageSrc ? (
-            <img src={info.deviceImageSrc} alt="" className="h-44 w-full object-contain" />
+            <img src={info.deviceImageSrc} alt="" className="h-36 w-full object-contain" />
           ) : (
             <span
-              className="grid size-32 place-items-center rounded-lg bg-white/5 font-fluent text-6xl text-foreground-primary"
+              className="grid h-36 w-full place-items-center font-fluent text-7xl text-foreground-secondary"
               aria-hidden="true"
             >
-              {info.deviceIcon ?? '\uE7F8'}
+              {info.deviceIcon ?? FLUENT_DESKTOP_ICON}
             </span>
           )}
-          <h2 className="mt-5 max-w-full truncate text-2xl font-semibold text-foreground-primary">
+          <h2 className="mt-3 max-w-full text-2xl font-semibold tracking-tight text-foreground-primary">
             {info.deviceName}
           </h2>
           {info.manufacturer && (
-            <p className="mt-1 text-base text-foreground-tertiary">{info.manufacturer}</p>
+            <p className="mt-0.5 text-sm text-foreground-tertiary">{info.manufacturer}</p>
           )}
           {details.length > 0 && (
-            <dl className="mt-7 grid w-full grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+            <dl className="mt-6 grid w-full max-w-sm grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5 px-3 text-sm">
               {details.map(([label, value]) => (
                 <div key={label} className="contents">
-                  <dt className="text-right font-medium text-foreground-secondary">{label}</dt>
-                  <dd className="truncate text-left text-foreground-primary" title={value}>
+                  <dt className="text-right font-medium text-foreground-primary">{label}</dt>
+                  <dd className="break-words text-left text-foreground-secondary" title={value}>
                     {value}
                   </dd>
                 </div>
               ))}
             </dl>
           )}
-          {(onClose || onMoreInfo) && (
-            <div className="mt-auto flex gap-2">
-              {onClose && (
-                <Button variant="transparent" onClick={onClose}>
-                  Close
-                </Button>
-              )}
-              {onMoreInfo && (
-                <Button variant="default" onClick={onMoreInfo}>
-                  More Info...
-                </Button>
-              )}
+          {onMoreInfo && (
+            <div className="mt-auto pt-6">
+              <Button variant="default" onClick={onMoreInfo}>
+                More Info...
+              </Button>
             </div>
           )}
         </div>
