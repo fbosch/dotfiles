@@ -53,10 +53,23 @@ export const ForceQuitDialog = ({
       aria-label="Force Quit Applications"
     >
       <Window showTitlebar={false} width="420px" height="500px">
-        <div className="flex h-full flex-col gap-4 p-5">
-          <h2 className="text-center text-base font-semibold text-foreground-primary">
-            Force Quit Applications
-          </h2>
+        <div className="relative flex h-full flex-col gap-4 px-5 pb-5 pt-3">
+          <div className="flex h-8 shrink-0 items-center justify-center">
+            <h2 className="text-center text-base font-semibold text-foreground-primary">
+              Force Quit Applications
+            </h2>
+          </div>
+          {onClose && (
+            <Button
+              variant="transparent"
+              size="sm"
+              className="absolute right-3 top-3 size-8 p-0 font-fluent text-xs"
+              aria-label="Close"
+              onClick={onClose}
+            >
+              {'\uE711'}
+            </Button>
+          )}
           {status === 'loading' && (
             <p className="flex flex-1 items-center justify-center text-sm text-foreground-tertiary">
               Loading running applications...
@@ -123,10 +136,7 @@ export const ForceQuitDialog = ({
               })}
             </div>
           )}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
+          <div className="flex justify-end">
             <Button
               variant="danger"
               disabled={!selectedApplication || status !== 'ready'}
