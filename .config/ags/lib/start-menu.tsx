@@ -331,7 +331,10 @@ function readProfileCount(profile: string, source: string): number {
       return 0;
     }
 
-    const value = Number.parseInt(new TextDecoder("utf-8").decode(contents), 10);
+    const value = Number.parseInt(
+      new TextDecoder("utf-8").decode(contents),
+      10,
+    );
     return Number.isFinite(value) && value > 0 ? value : 0;
   } catch (_e) {
     return 0;
@@ -341,7 +344,11 @@ function readProfileCount(profile: string, source: string): number {
 function readProfileTotal(profile: string): number {
   try {
     const dir = Gio.File.new_for_path(profileStateDir);
-    const enumerator = dir.enumerate_children("standard::name", Gio.FileQueryInfoFlags.NONE, null);
+    const enumerator = dir.enumerate_children(
+      "standard::name",
+      Gio.FileQueryInfoFlags.NONE,
+      null,
+    );
     let total = 0;
     let fileInfo;
     while ((fileInfo = enumerator.next_file(null)) !== null) {
@@ -350,7 +357,10 @@ function readProfileTotal(profile: string): number {
         continue;
       }
 
-      total += readProfileCount(profile, name.slice(profile.length + 1, -".count".length));
+      total += readProfileCount(
+        profile,
+        name.slice(profile.length + 1, -".count".length),
+      );
     }
     return total;
   } catch (_e) {
@@ -429,7 +439,10 @@ function startProfileStateMonitor() {
   try {
     GLib.mkdir_with_parents(profileStateDir, 0o700);
     const dir = Gio.File.new_for_path(profileStateDir);
-    profileStateMonitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null);
+    profileStateMonitor = dir.monitor_directory(
+      Gio.FileMonitorFlags.NONE,
+      null,
+    );
     profileStateMonitor.connect("changed", (_monitor, file) => {
       const name = file.get_basename();
       if (name?.endsWith(".count")) {
@@ -544,7 +557,10 @@ function startCacheMonitor() {
       }
     });
   } catch (e) {
-    console.error("Failed to monitor cache directory, falling back to polling:", e);
+    console.error(
+      "Failed to monitor cache directory, falling back to polling:",
+      e,
+    );
     startCacheRefreshTimer();
   }
 }
@@ -596,61 +612,61 @@ function showMenu() {
   let ok = true;
   let error: string | undefined;
   try {
-  // Read updates from both caches
-  const flakeCacheData = readFlakeUpdatesCache();
-  const flatpakCacheData = readFlatpakUpdatesCache();
+    // Read updates from both caches
+    const flakeCacheData = readFlakeUpdatesCache();
+    const flatpakCacheData = readFlatpakUpdatesCache();
 
-  let needsUpdate = false;
+    let needsUpdate = false;
 
-  if (flakeCacheData) {
-    const oldCount = flakeUpdatesCount;
-    flakeUpdatesCount = flakeCacheData.count;
-    flakeUpdatesData = flakeCacheData;
-    if (oldCount !== flakeUpdatesCount) {
-      needsUpdate = true;
+    if (flakeCacheData) {
+      const oldCount = flakeUpdatesCount;
+      flakeUpdatesCount = flakeCacheData.count;
+      flakeUpdatesData = flakeCacheData;
+      if (oldCount !== flakeUpdatesCount) {
+        needsUpdate = true;
+      }
     }
-  }
 
-  if (flatpakCacheData) {
-    const oldCount = flatpakUpdatesCount;
-    flatpakUpdatesCount = flatpakCacheData.count;
-    flatpakUpdatesData = flatpakCacheData;
-    if (oldCount !== flatpakUpdatesCount) {
-      needsUpdate = true;
+    if (flatpakCacheData) {
+      const oldCount = flatpakUpdatesCount;
+      flatpakUpdatesCount = flatpakCacheData.count;
+      flatpakUpdatesData = flatpakCacheData;
+      if (oldCount !== flatpakUpdatesCount) {
+        needsUpdate = true;
+      }
     }
-  }
 
-  if (needsUpdate) {
-    updateMenuItems();
-  }
+    if (needsUpdate) {
+      updateMenuItems();
+    }
 
-  if (!win) {
-    createWindow();
-  } else {
-    updateMenuItems();
-  }
+    if (!win) {
+      createWindow();
+    } else {
+      updateMenuItems();
+    }
 
-  if (win) {
-    win.set_visible(true);
-    isVisible = true;
-    // Clear any existing focus to ensure clean state
-    const currentFocus = win.get_focus();
-    if (currentFocus) {
-      win.set_focus(null);
+    if (win) {
+      win.set_visible(true);
+      isVisible = true;
+      // Clear any existing focus to ensure clean state
+      const currentFocus = win.get_focus();
+      if (currentFocus) {
+        win.set_focus(null);
+      }
+      // Also remove focus styling from all buttons
+      for (const button of menuItemButtons.values()) {
+        button.remove_css_class("focused");
+        // Force style update
+        button.get_style_context().remove_class("focused");
+      }
+      // Ensure Waybar stays visible while menu is open
+      try {
+        GLib.spawn_command_line_async("pkill -SIGUSR1 waybar");
+      } catch (e) {
+        console.error("Failed to show waybar:", e);
+      }
     }
-    // Also remove focus styling from all buttons
-    for (const button of menuItemButtons.values()) {
-      button.remove_css_class("focused");
-      // Force style update
-      button.get_style_context().remove_class("focused");
-    }
-    // Ensure Waybar stays visible while menu is open
-    try {
-      GLib.spawn_command_line_async("pkill -SIGUSR1 waybar");
-    } catch (e) {
-      console.error("Failed to show waybar:", e);
-    }
-  }
   } catch (e) {
     ok = false;
     error = String(e);
@@ -761,7 +777,6 @@ function createMenuItem(item: MenuItem): Gtk.Button {
           if (tooltip) {
             self.set_tooltip_text(tooltip);
           }
-
         }
       }}
     >
@@ -810,7 +825,9 @@ function createProfileToggle(
     <button
       canFocus={true}
       class={`profile-toggle ${active ? "profile-active" : ""}`}
-      onClicked={() => runProfileCommand(`${profilectlPath} set-manual ${commandMode}`)}
+      onClicked={() =>
+        runProfileCommand(`${profilectlPath} set-manual ${commandMode}`)
+      }
       $={(self: Gtk.Button) => {
         self.set_cursor_from_name("pointer");
         self.set_tooltip_text(tooltip);
@@ -818,19 +835,30 @@ function createProfileToggle(
       }}
     >
       <overlay>
-        <label label={icon} class={`profile-toggle-icon profile-${commandMode}-icon`} />
+        <label
+          label={icon}
+          class={`profile-toggle-icon profile-${commandMode}-icon`}
+        />
         {badge ? (
-          <label
+          <box
             $type="overlay"
-            label={badge}
             class="profile-auto-badge"
             halign={Gtk.Align.END}
             valign={Gtk.Align.END}
             widthRequest={14}
             heightRequest={14}
-            xalign={0.5}
-            yalign={0.5}
-          />
+          >
+            <label
+              label={badge}
+              class="profile-auto-badge-icon"
+              halign={Gtk.Align.CENTER}
+              valign={Gtk.Align.CENTER}
+              hexpand={true}
+              vexpand={true}
+              xalign={0.5}
+              yalign={0.5}
+            />
+          </box>
         ) : null}
       </overlay>
     </button>
@@ -845,7 +873,11 @@ function createProfileControls(): Gtk.Box {
 
   const profileBox = (
     <box orientation={Gtk.Orientation.VERTICAL} spacing={4} class="profile-row">
-      <box orientation={Gtk.Orientation.HORIZONTAL} spacing={44} class="profile-actions">
+      <box
+        orientation={Gtk.Orientation.HORIZONTAL}
+        spacing={44}
+        class="profile-actions"
+      >
         {createProfileToggle(
           "profile-auto",
           "\uF8B0",
@@ -890,12 +922,16 @@ function createUserProfile(): Gtk.Box {
   const username = GLib.get_real_name() || GLib.get_user_name() || "User";
   const cacheDir = GLib.get_user_cache_dir();
   const avatarSize = 32;
-  
+
   // Find the avatar file with pattern ags-avatar-*.png
   let avatarPath: string | null = null;
   try {
     const dir = Gio.File.new_for_path(cacheDir);
-    const enumerator = dir.enumerate_children("standard::name", Gio.FileQueryInfoFlags.NONE, null);
+    const enumerator = dir.enumerate_children(
+      "standard::name",
+      Gio.FileQueryInfoFlags.NONE,
+      null,
+    );
     let fileInfo;
     while ((fileInfo = enumerator.next_file(null)) !== null) {
       const name = fileInfo.get_name();
@@ -907,7 +943,7 @@ function createUserProfile(): Gtk.Box {
   } catch (e) {
     console.error("Failed to find avatar:", e);
   }
-  
+
   const profileBox = (
     <box
       orientation={Gtk.Orientation.HORIZONTAL}
@@ -1210,21 +1246,23 @@ function applyStaticCSS() {
     }
 
     window.start-menu label.profile-gaming-icon,
-    window.start-menu label.profile-auto-badge {
+    window.start-menu label.profile-auto-badge-icon {
       font-family: "Symbols Nerd Font";
     }
 
-    window.start-menu label.profile-auto-badge {
+    window.start-menu box.profile-auto-badge {
       min-width: 14px;
       min-height: 14px;
       padding: 0;
-      margin-right: -6px;
-      margin-bottom: -4px;
       border: 2px solid ${tokens.colors.accent.primary.value};
       border-radius: 999px;
       background-color: ${tokens.colors.state.success.value};
+    }
+
+    window.start-menu label.profile-auto-badge-icon {
+      padding: 0;
       color: ${tokens.colors.state["success-text"].value};
-      font-size: 8px;
+      font-size: 9px; 
     }
 
     window.start-menu box.profile-labels label {
@@ -1367,14 +1405,17 @@ function initStartMenu() {
       console.error("Failed to generate circular avatar:", e);
     }
   }
-  
+
   // Window created lazily on first show (see showMenu line 393)
   startCacheMonitor();
   startProfileStateMonitor();
   refreshCacheData();
 }
 
-function handleStartMenuRequest(argv: string[], res: (response: string) => void) {
+function handleStartMenuRequest(
+  argv: string[],
+  res: (response: string) => void,
+) {
   const mark = perf.start("start-menu", "handleRequest");
   let ok = true;
   let error: string | undefined;
@@ -1449,5 +1490,5 @@ function handleStartMenuRequest(argv: string[], res: (response: string) => void)
 globalThis.StartMenu = {
   init: initStartMenu,
   handleRequest: handleStartMenuRequest,
-  instanceName: "start-menu"
+  instanceName: "start-menu",
 };
