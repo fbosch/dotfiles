@@ -420,7 +420,7 @@ export const StartMenu = ({
       role="menu"
       aria-hidden={!isOpen}
     >
-      <div className="flex items-center gap-2.5 px-2.5 py-2">
+      <div className="flex items-center gap-3.5 px-2.5 py-2">
         <div className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-white/10 text-xs font-semibold text-foreground-primary ring-1 ring-white/15">
           {user.avatarSrc ? (
             <img
@@ -434,7 +434,7 @@ export const StartMenu = ({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-foreground-primary">{user.name}</div>
+          <div className="truncate text-base font-medium text-foreground-primary">{user.name}</div>
         </div>
       </div>
       <hr className="my-1.5 border-t border-white/10" />

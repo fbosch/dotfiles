@@ -976,7 +976,7 @@ function createUserProfile(): Gtk.Box {
   const profileBox = (
     <box
       orientation={Gtk.Orientation.HORIZONTAL}
-      spacing={10}
+      spacing={14}
       halign={Gtk.Align.FILL}
       class="user-profile"
     >
@@ -1235,7 +1235,7 @@ function applyStaticCSS() {
 
     window.start-menu label.user-name {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 14px;
+      font-size: 16px;
       font-weight: 500;
       color: ${tokens.colors.foreground.primary.value};
     }
