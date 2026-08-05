@@ -16,6 +16,7 @@ export interface AboutThisPCInfo {
   memoryClock?: string;
   desktop?: string;
   operatingSystem?: string;
+  operatingSystemCodename?: string;
   kernel?: string;
   uptime?: string;
 }
@@ -34,12 +35,15 @@ export const AboutThisPC = ({ isOpen = false, info, onMoreInfo, onClose }: About
   const memory = info.memory
     ? `${info.memory}${info.memoryClock ? ` (${info.memoryClock})` : ''}`
     : info.memoryClock;
+  const operatingSystem = info.operatingSystem
+    ? `${info.operatingSystem}${info.operatingSystemCodename ? ` (${info.operatingSystemCodename})` : ''}`
+    : info.operatingSystemCodename;
   const details = [
     ['CPU', processor],
     ['GPU', info.graphics],
     ['Memory', memory],
     ['Desktop', info.desktop],
-    ['OS', info.operatingSystem],
+    ['OS', operatingSystem],
     ['Kernel', info.kernel],
     ['Uptime', info.uptime],
   ].filter((detail): detail is [string, string] => Boolean(detail[1]));

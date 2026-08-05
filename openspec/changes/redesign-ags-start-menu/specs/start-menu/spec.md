@@ -188,7 +188,7 @@ The system SHALL provide an undecorated, translucent system-information surface 
 
 #### Scenario: About displays available system information
 - **WHEN** About This PC opens
-- **THEN** it displays available model, manufacturer, processor with CPU clock rate, GPU, memory with memory clock frequency, desktop, operating system, kernel, and uptime fields
+- **THEN** it displays available model, manufacturer, processor with CPU clock rate, GPU, memory with memory clock frequency, desktop, operating system with codename, kernel, and uptime fields
 - **AND** it omits unavailable or placeholder fields
 
 #### Scenario: Configured device image takes precedence

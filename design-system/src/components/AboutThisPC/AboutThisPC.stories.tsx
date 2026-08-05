@@ -34,6 +34,7 @@ export const Default: Story = {
       memoryClock: '3200 MHz',
       desktop: 'Hyprland',
       operatingSystem: 'NixOS 25.05',
+      operatingSystemCodename: 'Warbler',
       kernel: 'Linux 6.12.28',
       uptime: '3 hours, 18 minutes',
       deviceIcon: '\uE7F8',
