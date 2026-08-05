@@ -2,7 +2,7 @@
 
 - [x] 1.1 Align `StartMenu` public types and default items with the specified grouped order, including source-specific Nix flake and Flatpak update badges.
 - [x] 1.2 Align Recent Items data, upward submenu placement, pointer timing, keyboard navigation, focus return, and edge-flip reference behavior with the specification.
-- [ ] 1.3 Align `ForceQuitDialog` with compact grouped application rows, selection state, disabled action state, and undecorated translucent shared-window styling.
+- [x] 1.3 Align `ForceQuitDialog` with compact grouped application rows, selection state, disabled action state, and undecorated translucent shared-window styling.
 - [ ] 1.4 Align `AboutThisPC` with optional kernel/uptime rows, configured-image and Fluent fallback display states, and the fastfetch More Info intent.
 - [ ] 1.5 Update Start Menu, Force Quit, and About This PC stories to cover populated, empty, unavailable, source-badge, and optional-information states without runtime dependencies.
 - [ ] 1.6 Add focused design-system tests for Start Menu keyboard/submenu behavior and pure display-data helpers introduced by this change.

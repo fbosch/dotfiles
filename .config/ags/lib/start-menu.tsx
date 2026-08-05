@@ -1213,7 +1213,7 @@ function applyStaticCSS() {
       padding: 8px;
       min-width: 270px;
       box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28), 0 4px 12px rgba(0, 0, 0, 0.14);
-      margin-bottom: 57px;
+      margin-bottom: 54px;
       margin-left: 5px;
     }
 

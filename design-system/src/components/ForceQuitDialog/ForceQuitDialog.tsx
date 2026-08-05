@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { cn } from '../../utils/cn';
 import { Button } from '../Button';
 import { Window } from '../Window';
@@ -34,6 +34,13 @@ export const ForceQuitDialog = ({
     (application) => application.id === selectedApplicationId
   );
 
+  useEffect(() => {
+    if (selectedApplicationId === undefined) return;
+    if (isOpen && status === 'ready' && selectedApplication) return;
+
+    setSelectedApplicationId(undefined);
+  }, [isOpen, selectedApplication, selectedApplicationId, status]);
+
   return (
     <div
       className={cn(
@@ -41,6 +48,7 @@ export const ForceQuitDialog = ({
         isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
       )}
       role="dialog"
+      aria-modal="true"
       aria-hidden={!isOpen}
       aria-label="Force Quit Applications"
     >

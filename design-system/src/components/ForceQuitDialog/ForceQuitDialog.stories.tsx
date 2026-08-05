@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { Desktop } from '../Desktop';
 import { ForceQuitDialog } from './ForceQuitDialog';
 
@@ -37,6 +37,18 @@ export const RunningApplications: Story = {
     ],
     onClose: fn(),
     onForceQuit: fn(),
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const forceQuitButton = canvas.getByRole('button', { name: 'Force Quit' });
+    const editor = canvas.getByRole('option', { name: /Visual Studio Code/ });
+
+    await expect(forceQuitButton).toBeDisabled();
+    await userEvent.click(editor);
+    await expect(editor).toHaveAttribute('aria-selected', 'true');
+    await expect(forceQuitButton).toBeEnabled();
+    await userEvent.click(forceQuitButton);
+    await expect(args.onForceQuit).toHaveBeenCalledWith('editor');
   },
 };
 
