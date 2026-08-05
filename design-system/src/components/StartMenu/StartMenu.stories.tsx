@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { AboutThisPC } from '../AboutThisPC';
 import { Desktop } from '../Desktop';
 import { ForceQuitDialog } from '../ForceQuitDialog';
@@ -82,8 +82,53 @@ export const RecentItems: Story = {
   ],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('menuitem', { name: 'Recent Items' }));
+    const trigger = canvas.getByRole('menuitem', { name: 'Recent Items' });
+
+    await userEvent.hover(trigger);
+    await expect(canvas.queryByRole('menu', { name: 'Recent Items' })).not.toBeInTheDocument();
+    await waitFor(() => expect(canvas.getByRole('menu', { name: 'Recent Items' })).toBeVisible());
+
+    await userEvent.unhover(trigger);
     await expect(canvas.getByRole('menu', { name: 'Recent Items' })).toBeVisible();
+    await waitFor(() =>
+      expect(canvas.queryByRole('menu', { name: 'Recent Items' })).not.toBeInTheDocument()
+    );
+
+    trigger.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(canvas.getByRole('menu', { name: 'Recent Items' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await expect(canvas.queryByRole('menu', { name: 'Recent Items' })).not.toBeInTheDocument();
+    await expect(trigger).toHaveFocus();
+
+    await userEvent.click(trigger);
+    await expect(canvas.getByRole('menu', { name: 'Recent Items' })).toBeVisible();
+  },
+};
+
+export const RecentItemsAtRightEdge: Story = {
+  args: {
+    isOpen: true,
+    recentItems,
+    onClose: fn(),
+    onRecentItemClick: fn(),
+    onClearRecentItems: fn(),
+    style: { position: 'fixed', bottom: '8px', right: '8px' },
+  },
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div className="min-h-screen bg-background-primary">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('menuitem', { name: 'Recent Items' }));
+    await expect(canvas.getByRole('menu', { name: 'Recent Items' })).toHaveAttribute(
+      'data-side',
+      'left'
+    );
   },
 };
 

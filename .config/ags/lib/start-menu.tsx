@@ -204,7 +204,10 @@ const readFlakeUpdatesCache = () =>
   readUpdatesCache<FlakeUpdatesData>("flake-updates.json", "flake updates");
 
 const readFlatpakUpdatesCache = () =>
-  readUpdatesCache<FlatpakUpdatesData>("flatpak-updates.json", "Flatpak updates");
+  readUpdatesCache<FlatpakUpdatesData>(
+    "flatpak-updates.json",
+    "Flatpak updates",
+  );
 
 // Format time difference for tooltip
 function formatTimeSince(timestamp: string): string {
@@ -1210,7 +1213,7 @@ function applyStaticCSS() {
       padding: 8px;
       min-width: 270px;
       box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28), 0 4px 12px rgba(0, 0, 0, 0.14);
-      margin-bottom: 53px; /* Waybar height (45px) + gap (8px) */
+      margin-bottom: 57px;
       margin-left: 5px;
     }
 
@@ -1448,7 +1451,11 @@ function handleStartMenuRequest(
   let ok = true;
   let error: string | undefined;
   try {
-    const data = parseComponentRequest<{ action?: string }>("start-menu", argv, res);
+    const data = parseComponentRequest<{ action?: string }>(
+      "start-menu",
+      argv,
+      res,
+    );
     if (!data) return;
 
     if (data.action === "is-visible") {

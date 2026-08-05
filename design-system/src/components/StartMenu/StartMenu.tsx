@@ -47,6 +47,11 @@ const menuItemVariants = cva('flex h-9 w-full items-center gap-2.5 rounded-md px
   },
 });
 
+const RECENT_ITEMS_OPEN_DELAY_MS = 300;
+const RECENT_ITEMS_CLOSE_DELAY_MS = 200;
+const RECENT_ITEMS_MENU_WIDTH_PX = 320;
+const RECENT_ITEMS_MENU_GAP_PX = 8;
+
 export type StartMenuItemVariant = 'default' | 'warning' | 'danger' | 'purple';
 
 export interface StartMenuActionItem {
@@ -172,8 +177,11 @@ export const StartMenu = ({
   const menuRef = useRef<HTMLDivElement>(null);
   const recentItemsTriggerRef = useRef<HTMLButtonElement>(null);
   const recentItemsMenuRef = useRef<HTMLDivElement>(null);
+  const recentItemsOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recentItemsCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recentItemsMenuId = useId();
   const [recentItemsOpen, setRecentItemsOpen] = useState(false);
+  const [recentItemsSide, setRecentItemsSide] = useState<'left' | 'right'>('right');
   const applications = recentItems.applications ?? [];
   const documents = recentItems.documents ?? [];
   const hasRecentItems = applications.length > 0 || documents.length > 0;
@@ -217,7 +225,19 @@ export const StartMenu = ({
   ];
 
   useEffect(() => {
+    const clearRecentItemsTimers = () => {
+      if (recentItemsOpenTimerRef.current !== null) {
+        clearTimeout(recentItemsOpenTimerRef.current);
+        recentItemsOpenTimerRef.current = null;
+      }
+      if (recentItemsCloseTimerRef.current !== null) {
+        clearTimeout(recentItemsCloseTimerRef.current);
+        recentItemsCloseTimerRef.current = null;
+      }
+    };
+
     if (isOpen === false) {
+      clearRecentItemsTimers();
       setRecentItemsOpen(false);
       return;
     }
@@ -230,22 +250,74 @@ export const StartMenu = ({
     };
 
     document.addEventListener('pointerdown', handlePointerDown);
-    return () => document.removeEventListener('pointerdown', handlePointerDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      clearRecentItemsTimers();
+    };
   }, [isOpen, onClose]);
 
   const focusMenuItem = (current: HTMLButtonElement, direction: 1 | -1) => {
+    const isRecentItem = recentItemsMenuRef.current?.contains(current) === true;
+    const scope = isRecentItem ? recentItemsMenuRef.current : menuRef.current;
     const menuItems = Array.from(
-      menuRef.current?.querySelectorAll<HTMLButtonElement>(
+      scope?.querySelectorAll<HTMLButtonElement>(
         '[role^="menuitem"], [data-triple-toggle-option]'
       ) ?? []
-    ).filter((item) => item.tabIndex !== -1 && item.disabled === false);
+    ).filter(
+      (item) =>
+        item.tabIndex !== -1 &&
+        item.disabled === false &&
+        (isRecentItem || recentItemsMenuRef.current?.contains(item) !== true)
+    );
     const currentIndex = menuItems.indexOf(current);
     const nextIndex = (currentIndex + direction + menuItems.length) % menuItems.length;
     menuItems[nextIndex]?.focus();
   };
 
+  const clearRecentItemsOpenTimer = () => {
+    if (recentItemsOpenTimerRef.current === null) return;
+
+    clearTimeout(recentItemsOpenTimerRef.current);
+    recentItemsOpenTimerRef.current = null;
+  };
+
+  const clearRecentItemsCloseTimer = () => {
+    if (recentItemsCloseTimerRef.current === null) return;
+
+    clearTimeout(recentItemsCloseTimerRef.current);
+    recentItemsCloseTimerRef.current = null;
+  };
+
   const openRecentItems = () => {
+    clearRecentItemsOpenTimer();
+    clearRecentItemsCloseTimer();
+    const triggerBounds = recentItemsTriggerRef.current?.getBoundingClientRect();
+    if (triggerBounds) {
+      const rightSpace = window.innerWidth - triggerBounds.right;
+      setRecentItemsSide(
+        rightSpace >= RECENT_ITEMS_MENU_WIDTH_PX + RECENT_ITEMS_MENU_GAP_PX ? 'right' : 'left'
+      );
+    }
     setRecentItemsOpen(true);
+  };
+
+  const scheduleRecentItemsOpen = () => {
+    clearRecentItemsCloseTimer();
+    if (recentItemsOpen || recentItemsOpenTimerRef.current !== null) return;
+
+    recentItemsOpenTimerRef.current = setTimeout(() => {
+      recentItemsOpenTimerRef.current = null;
+      openRecentItems();
+    }, RECENT_ITEMS_OPEN_DELAY_MS);
+  };
+
+  const scheduleRecentItemsClose = () => {
+    clearRecentItemsOpenTimer();
+    clearRecentItemsCloseTimer();
+    recentItemsCloseTimerRef.current = setTimeout(() => {
+      recentItemsCloseTimerRef.current = null;
+      setRecentItemsOpen(false);
+    }, RECENT_ITEMS_CLOSE_DELAY_MS);
   };
 
   const openRecentItemsAndFocusFirstItem = () => {
@@ -287,7 +359,11 @@ export const StartMenu = ({
     if (event.key !== 'Escape') return;
 
     event.preventDefault();
-    if (recentItemsMenuRef.current?.contains(event.currentTarget) === true) {
+    if (
+      recentItemsOpen &&
+      (event.currentTarget === recentItemsTriggerRef.current ||
+        recentItemsMenuRef.current?.contains(event.currentTarget) === true)
+    ) {
       setRecentItemsOpen(false);
       recentItemsTriggerRef.current?.focus();
       return;
@@ -370,7 +446,10 @@ export const StartMenu = ({
         if (item.type === 'recent-items') {
           return (
             <div key={item.id}>
-              <div className="relative" onPointerEnter={openRecentItems}>
+              <div
+                className="relative"
+                onPointerLeave={scheduleRecentItemsClose}
+              >
                 <button
                   ref={recentItemsTriggerRef}
                   type="button"
@@ -386,7 +465,8 @@ export const StartMenu = ({
                   aria-haspopup="menu"
                   aria-controls={recentItemsMenuId}
                   aria-expanded={recentItemsOpen}
-                  onClick={() => setRecentItemsOpen((open) => !open)}
+                  onClick={openRecentItems}
+                  onPointerEnter={scheduleRecentItemsOpen}
                   onKeyDown={handleMenuItemKeyDown}
                 >
                   <span className="flex min-w-0 items-center gap-2">
@@ -403,9 +483,14 @@ export const StartMenu = ({
                   <div
                     ref={recentItemsMenuRef}
                     id={recentItemsMenuId}
-                    className="absolute bottom-0 left-full z-10 ml-2 w-80 rounded-lg border border-white/10 bg-background-secondary/85 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.28),0_4px_12px_rgba(0,0,0,0.14)] backdrop-blur-xl"
+                    className={cn(
+                      'absolute bottom-0 z-10 w-80 rounded-lg border border-white/10 bg-background-secondary/85 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.28),0_4px_12px_rgba(0,0,0,0.14)] backdrop-blur-xl',
+                      recentItemsSide === 'right' ? 'left-full ml-2' : 'right-full mr-2'
+                    )}
                     role="menu"
                     aria-label={item.label}
+                    data-side={recentItemsSide}
+                    onPointerEnter={clearRecentItemsCloseTimer}
                   >
                     {hasRecentItems === false ? (
                       <p className="px-2.5 py-4 text-center text-sm text-foreground-tertiary">
