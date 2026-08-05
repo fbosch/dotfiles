@@ -3,6 +3,7 @@ import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import { execAsync } from "ags/process";
+import { bindGamingOpacity } from "./gaming-opacity";
 import { perf } from "./performance-monitor";
 
 // Size configuration matching design-system component
@@ -279,6 +280,7 @@ function createWindow() {
       keymode={Astal.Keymode.NONE}
       class="volume-indicator"
       application={app}
+      $={(self: Astal.Window) => bindGamingOpacity(self)}
     >
       <box
         orientation={Gtk.Orientation.HORIZONTAL}

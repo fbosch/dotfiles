@@ -3,6 +3,7 @@ import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import Gdk from "gi://Gdk?version=4.0";
+import { bindGamingOpacity } from "./gaming-opacity";
 import { perf } from "./performance-monitor";
 
 // Clock configuration
@@ -251,6 +252,7 @@ function createWindow() {
   win.set_exclusivity(Astal.Exclusivity.NORMAL);
   win.set_keymode(Astal.Keymode.NONE);
   win.add_css_class("desktop-clock");
+  bindGamingOpacity(win);
 
   // Set monitor if specified
   const monitor = getMonitor();

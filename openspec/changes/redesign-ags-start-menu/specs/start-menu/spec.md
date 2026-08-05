@@ -212,6 +212,11 @@ The system SHALL provide an undecorated, translucent system-information surface 
 ### Requirement: Bundled Runtime And Waybar Integration
 The AGS Start Menu implementation SHALL remain compatible with the bundled runtime and existing Waybar trigger behavior.
 
+#### Scenario: Gaming mode disables shell transparency
+- **WHEN** the effective performance profile changes to Gaming
+- **THEN** AGS shell surfaces switch their panel backgrounds to opaque colors without requiring a restart
+- **AND** they restore their configured translucency when the effective profile leaves Gaming
+
 #### Scenario: Existing Start Menu request behavior remains available
 - **WHEN** AGS receives an existing Start Menu visibility request
 - **THEN** it continues to support `show`, `hide`, `toggle`, `refresh`, and `is-visible`

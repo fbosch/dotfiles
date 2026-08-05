@@ -6,6 +6,7 @@ import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
 import { resolveAppIcon, setImageFile, type IconRef } from "./app-icons";
 import { createButton, setButtonVariant } from "./button";
+import { bindGamingOpacity } from "./gaming-opacity";
 import { queryHyprlandJson } from "./hyprland-ipc";
 import { perf } from "./performance-monitor";
 
@@ -1296,6 +1297,7 @@ function createWindow(): void {
       application={app}
       class="audio-mixer-widget"
       $={(self: Astal.Window) => {
+        bindGamingOpacity(self);
         const keyController = new Gtk.EventControllerKey();
         keyController.connect("key-pressed", (_controller, keyval, _keycode, state) => {
           if (keyval === Gdk.KEY_Escape) {

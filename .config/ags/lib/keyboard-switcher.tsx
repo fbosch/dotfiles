@@ -3,6 +3,7 @@ import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
+import { bindGamingOpacity } from "./gaming-opacity";
 import { perf } from "./performance-monitor";
 
 // Configuration interface
@@ -409,6 +410,7 @@ function createWindow(layouts: string[], size: "sm" | "md" | "lg") {
   win.set_exclusivity(Astal.Exclusivity.NORMAL);
   win.set_keymode(Astal.Keymode.NONE);
   win.add_css_class("keyboard-layout-switcher");
+  bindGamingOpacity(win);
 
   shadowWrapper = new Gtk.Box({
     orientation: Gtk.Orientation.HORIZONTAL,

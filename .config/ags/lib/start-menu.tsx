@@ -6,6 +6,7 @@ import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
+import { bindGamingOpacity } from "./gaming-opacity";
 import { perf } from "./performance-monitor";
 
 // Configuration
@@ -407,6 +408,39 @@ function refreshProfileState() {
   profileState = readProfileState();
 }
 
+let profileStateMonitor: Gio.FileMonitor | null = null;
+let profileRefreshTimer: number | null = null;
+
+function queueProfileRefresh() {
+  if (profileRefreshTimer !== null) {
+    GLib.source_remove(profileRefreshTimer);
+  }
+
+  profileRefreshTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 75, () => {
+    profileRefreshTimer = null;
+    updateMenuItems();
+    return GLib.SOURCE_REMOVE;
+  });
+}
+
+function startProfileStateMonitor() {
+  if (profileStateMonitor) return;
+
+  try {
+    GLib.mkdir_with_parents(profileStateDir, 0o700);
+    const dir = Gio.File.new_for_path(profileStateDir);
+    profileStateMonitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null);
+    profileStateMonitor.connect("changed", (_monitor, file) => {
+      const name = file.get_basename();
+      if (name?.endsWith(".count")) {
+        queueProfileRefresh();
+      }
+    });
+  } catch (e) {
+    console.error("Failed to monitor profile state:", e);
+  }
+}
+
 function profileModeLabel(): string {
   if (profileState.mode === "gaming") return "Gaming";
   if (profileState.mode === "powersave") return "Saver";
@@ -792,6 +826,10 @@ function createProfileToggle(
             class="profile-auto-badge"
             halign={Gtk.Align.END}
             valign={Gtk.Align.END}
+            widthRequest={14}
+            heightRequest={14}
+            xalign={0.5}
+            yalign={0.5}
           />
         ) : null}
       </overlay>
@@ -1045,6 +1083,7 @@ function createWindow() {
       application={app}
       class="start-menu"
       $={(self: Astal.Window) => {
+        bindGamingOpacity(self);
         // Add escape key handler and keyboard navigation
         const keyController = new Gtk.EventControllerKey();
         keyController.connect(
@@ -1178,6 +1217,7 @@ function applyStaticCSS() {
     window.start-menu label.profile-auto-badge {
       min-width: 14px;
       min-height: 14px;
+      padding: 0;
       margin-right: -6px;
       margin-bottom: -4px;
       border: 2px solid ${tokens.colors.accent.primary.value};
@@ -1330,6 +1370,7 @@ function initStartMenu() {
   
   // Window created lazily on first show (see showMenu line 393)
   startCacheMonitor();
+  startProfileStateMonitor();
   refreshCacheData();
 }
 

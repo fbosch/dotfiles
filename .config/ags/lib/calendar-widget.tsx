@@ -5,6 +5,7 @@ import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
+import { bindGamingOpacity } from "./gaming-opacity";
 import { perf } from "./performance-monitor";
 
 type WeekStart = 0 | 1;
@@ -1273,6 +1274,7 @@ function createWindow(): void {
       application={app}
       class="calendar-widget"
       $={(self: Astal.Window) => {
+        bindGamingOpacity(self);
         const keyController = new Gtk.EventControllerKey();
         keyController.connect("key-pressed", (_controller, keyval) => {
           if (keyval === Gdk.KEY_Escape) {

@@ -5,6 +5,7 @@ import Gtk from "gi://Gtk?version=4.0";
 import Gdk from "gi://Gdk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
 import { configureButton, setButtonVariant, type ButtonVariant } from "./button";
+import { bindGamingOpacity } from "./gaming-opacity";
 
 // Configuration interface
 interface ConfirmConfig {
@@ -239,6 +240,7 @@ function createWindow() {
       class="confirm-dialog"
       application={app}
       $={(self: Astal.Window) => {
+        bindGamingOpacity(self);
         const keyController = new Gtk.EventControllerKey();
         keyController.connect(
           "key-pressed",

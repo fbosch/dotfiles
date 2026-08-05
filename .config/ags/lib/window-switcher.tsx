@@ -1366,8 +1366,7 @@ function createWindow() {
 
 // Apply static CSS
 function applyStaticCSS() {
-const transparencyDisabled = isGamingProfileActive();
-
+  const transparencyDisabled = isGamingProfileActive();
   const switcherBackground = transparencyDisabled
     ? "rgb(25, 25, 25)"
     : "rgba(25, 25, 25, 0.5)";
