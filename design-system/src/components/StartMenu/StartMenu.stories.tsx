@@ -148,6 +148,21 @@ export const EmptyRecentItems: Story = {
   ],
 };
 
+export const UpdateSourceBadges: Story = {
+  args: {
+    isOpen: true,
+    nixFlakeUpdatesCount: 3,
+    flatpakUpdatesCount: 2,
+  },
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div className="min-h-screen bg-background-primary p-8">
+        <Story />
+      </div>
+    ),
+  ],
+};
+
 export const WithAutomaticGaming: Story = {
   args: {
     isOpen: true,
