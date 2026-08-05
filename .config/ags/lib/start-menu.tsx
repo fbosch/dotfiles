@@ -8,6 +8,7 @@ import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
 import { bindGamingOpacity } from "./gaming-opacity";
 import { perf } from "./performance-monitor";
+import { parseComponentRequest } from "./request";
 
 // Configuration
 const ENABLE_ANIMATIONS = false; // Set to false for better performance on slower systems
@@ -176,11 +177,10 @@ const menuItemButtons: Map<string, Gtk.Button> = new Map();
 let profileControlsBox: Gtk.Box | null = null;
 let profileAutoBadge: Gtk.Box | null = null;
 
-// Function to read flake updates from cache file
-function readFlakeUpdatesCache(): FlakeUpdatesData | null {
+function readUpdatesCache<T>(filename: string, label: string): T | null {
   try {
     const cacheDir = GLib.get_user_cache_dir();
-    const cachePath = `${cacheDir}/flake-updates.json`;
+    const cachePath = `${cacheDir}/${filename}`;
 
     if (!GLib.file_test(cachePath, GLib.FileTest.EXISTS)) {
       return null;
@@ -193,36 +193,18 @@ function readFlakeUpdatesCache(): FlakeUpdatesData | null {
 
     const decoder = new TextDecoder("utf-8");
     const jsonStr = decoder.decode(contents);
-    return JSON.parse(jsonStr) as FlakeUpdatesData;
+    return JSON.parse(jsonStr) as T;
   } catch (e) {
-    console.error("Error reading flake updates cache:", e);
+    console.error(`Error reading ${label} cache:`, e);
     return null;
   }
 }
 
-// Function to read flatpak updates from cache file
-function readFlatpakUpdatesCache(): FlatpakUpdatesData | null {
-  try {
-    const cacheDir = GLib.get_user_cache_dir();
-    const cachePath = `${cacheDir}/flatpak-updates.json`;
+const readFlakeUpdatesCache = () =>
+  readUpdatesCache<FlakeUpdatesData>("flake-updates.json", "flake updates");
 
-    if (!GLib.file_test(cachePath, GLib.FileTest.EXISTS)) {
-      return null;
-    }
-
-    const [success, contents] = GLib.file_get_contents(cachePath);
-    if (!success || !contents) {
-      return null;
-    }
-
-    const decoder = new TextDecoder("utf-8");
-    const jsonStr = decoder.decode(contents);
-    return JSON.parse(jsonStr) as FlatpakUpdatesData;
-  } catch (e) {
-    console.error("Error reading flatpak updates cache:", e);
-    return null;
-  }
-}
+const readFlatpakUpdatesCache = () =>
+  readUpdatesCache<FlatpakUpdatesData>("flatpak-updates.json", "Flatpak updates");
 
 // Format time difference for tooltip
 function formatTimeSince(timestamp: string): string {
@@ -1466,21 +1448,8 @@ function handleStartMenuRequest(
   let ok = true;
   let error: string | undefined;
   try {
-    const request = argv.join(" ");
-
-    if (!request || request.trim() === "") {
-      res("ready");
-      return;
-    }
-
-    let data;
-    try {
-      data = JSON.parse(request);
-    } catch (e) {
-      console.error("Error parsing request:", e);
-      res(`error: invalid JSON`);
-      return;
-    }
+    const data = parseComponentRequest<{ action?: string }>("start-menu", argv, res);
+    if (!data) return;
 
     if (data.action === "is-visible") {
       res(isVisible ? "true" : "false");

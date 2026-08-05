@@ -7,6 +7,7 @@ import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
 import { bindGamingOpacity } from "./gaming-opacity";
 import { perf } from "./performance-monitor";
+import { parseComponentRequest } from "./request";
 
 type WeekStart = 0 | 1;
 type BackendStatus = "ready" | "loading" | "unavailable" | "error";
@@ -1318,20 +1319,12 @@ function handleCalendarWidgetRequest(argv: string[], res: (response: string) => 
   let ok = true;
   let error: string | undefined;
   try {
-    const request = argv.join(" ");
-    if (!request || request.trim() === "") {
-      res("ready");
-      return;
-    }
-
-    let data: { action?: string; date?: string };
-    try {
-      data = JSON.parse(request);
-    } catch (e) {
-      console.error("Error parsing calendar-widget request:", e);
-      res("error: invalid JSON");
-      return;
-    }
+    const data = parseComponentRequest<{ action?: string; date?: string }>(
+      "calendar-widget",
+      argv,
+      res,
+    );
+    if (!data) return;
 
     switch (data.action) {
       case "show":

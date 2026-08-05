@@ -9,6 +9,7 @@ import { createButton, setButtonVariant } from "./button";
 import { bindGamingOpacity } from "./gaming-opacity";
 import { queryHyprlandJson } from "./hyprland-ipc";
 import { perf } from "./performance-monitor";
+import { parseComponentRequest } from "./request";
 
 type AudioMixerTab = "playback" | "output" | "input";
 type BackendStatus = "loading" | "ready" | "unavailable" | "error";
@@ -1564,20 +1565,12 @@ function handleAudioMixerWidgetRequest(argv: string[], res: (response: string) =
   let ok = true;
   let error: string | undefined;
   try {
-    const request = argv.join(" ");
-    if (!request || request.trim() === "") {
-      res("ready");
-      return;
-    }
-
-    let data: { action?: string; tab?: AudioMixerTab };
-    try {
-      data = JSON.parse(request);
-    } catch (e) {
-      console.error("Error parsing audio-mixer-widget request:", e);
-      res("error: invalid JSON");
-      return;
-    }
+    const data = parseComponentRequest<{ action?: string; tab?: AudioMixerTab }>(
+      "audio-mixer-widget",
+      argv,
+      res,
+    );
+    if (!data) return;
 
     switch (data.action) {
       case "show":
