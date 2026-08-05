@@ -33,7 +33,7 @@ The migration has three distinct layers:
 2. MCP servers and command workflows are portable after interface adaptation.
 3. OpenCode server/TUI plugins need Codex-specific replacements or should be retired.
 
-The immediate migration blocker is path ownership: `.config/codex/skills` already mirrors the canonical skill tree, but Codex CLI loads from `~/.codex`, where the effective `skills/` directory contains only system-managed skills. The 49 shared user skills are therefore not currently available to Codex.
+OpenCode-specific plugins and named references are the main migration work. The 49 shared user skills are already on Codex's documented global skill path, `~/.agents/skills`; `.config/codex/skills` is an additional mirror, not the path Codex requires.
 
 ## Configuration topology
 
@@ -57,7 +57,7 @@ Canonical shared skills live at `.agents/skills/`. The existing Codex mirror is:
 .config/codex/skills -> ../../.agents/skills
 ```
 
-Codex CLI 0.146.0 instead uses `~/.codex`. Its current global `AGENTS.md` is empty, its user skills are absent, and it has only four OpenSpec prompts plus the app-provided `node_repl` MCP server.
+Codex CLI 0.146.0 uses `~/.codex` for global configuration and `~/.agents/skills` for global skills. Its current global `AGENTS.md` is empty, and it has only four Codex-specific OpenSpec prompts plus the app-provided `node_repl` MCP server.
 
 ## Instruction and policy inventory
 
@@ -266,7 +266,14 @@ glance-docs
 herdr-docs
 ```
 
-Codex has no configured equivalent to OpenCode named references. Preserve the behavior through a concise reference index, `AGENTS.md` guidance, skills that name their reference paths, and explicitly allowed additional directories where required. The documentation repositories provide `TOC.md` entry points.
+Codex has no OpenCode-style named-reference registry or `@alias` autocomplete. Its equivalent is composed from several layers:
+
+- `AGENTS.md` for a small, always-on reference index and when-to-read guidance.
+- Global `~/.agents/skills` and repository `.agents/skills` for reusable workflows with deferred `references/` content.
+- `--add-dir` or sandbox configuration when Codex needs filesystem access outside the workspace.
+- MCP resources for dynamic, remote, or centrally managed reference material.
+
+Use a concise reference index in `AGENTS.md` for the existing local documentation trees, and have skills name their own documentation dependencies. The documentation repositories provide `TOC.md` entry points.
 
 ## Models, profiles, and permissions
 
@@ -299,7 +306,7 @@ Outcome: Codex starts from a dotfiles-managed `~/.codex` configuration without c
 - Decide which existing `.codex` files are versioned source.
 - Version `config.toml`, `AGENTS.md`, prompts, user skills, and custom integration source.
 - Exclude auth files, SQLite databases, logs, caches, history, sessions, memories, installation IDs, shell snapshots, and marketplace caches.
-- Resolve the `.config/codex/skills` versus `~/.codex/skills` mismatch.
+- Keep `~/.agents/skills` as the global user-skill source and verify Codex discovers it.
 - Keep system-managed Codex skills separate from user skills.
 
 ### 2. Port global rules and skills
@@ -309,7 +316,7 @@ Outcome: A new Codex session loads global engineering rules and one representati
 - Extract reusable rules from `.config/opencode/AGENTS.md` into `~/.codex/AGENTS.md`.
 - Preserve repository `AGENTS.md` unchanged where possible.
 - Port compatibility, validation, library, and tone references.
-- Make the 49 canonical user skills visible in the effective Codex home.
+- Verify Codex discovers the 49 canonical user skills from `~/.agents/skills`.
 - Mark OpenCode-specific skills for later rewriting.
 
 ### 3. Restore code search and editor context
