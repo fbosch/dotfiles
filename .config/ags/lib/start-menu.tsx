@@ -79,6 +79,8 @@ const defaultMenuItems: MenuItem[] = [
     icon: "\uE895",
     variant: "default",
   },
+  { id: "divider-profile", label: "", icon: "", variant: "default" },
+  { id: "profile-controls", label: "", icon: "", variant: "default" },
   { id: "divider-locations", label: "", icon: "", variant: "default" },
   {
     id: "applications",
@@ -110,8 +112,6 @@ const defaultMenuItems: MenuItem[] = [
     icon: "\uE81C",
     variant: "default",
   },
-  { id: "divider-profile", label: "", icon: "", variant: "default" },
-  { id: "profile-controls", label: "", icon: "", variant: "default" },
   { id: "divider-force-quit", label: "", icon: "", variant: "default" },
   {
     id: "force-quit",

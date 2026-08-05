@@ -454,19 +454,6 @@ export const StartMenu = ({
                   </div>
                 )}
               </div>
-              <hr className="my-1.5 border-t border-white/10" />
-              <div className="my-3">
-                <TripleToggle
-                  className="mx-auto"
-                  options={profileOptions}
-                  value={manualProfile}
-                  ariaLabel="Manual performance profile"
-                  onValueChange={onProfileChange}
-                  onKeyDown={handleMenuItemKeyDown}
-                  tabIndex={isOpen ? 0 : -1}
-                  animated={!disableAnimations}
-                />
-              </div>
             </div>
           );
         }
@@ -528,6 +515,23 @@ export const StartMenu = ({
                 </span>
               )}
             </button>
+            {item.id === 'system-updates' && (
+              <>
+                <hr className="my-1.5 border-t border-white/10" />
+                <div className="my-3">
+                  <TripleToggle
+                    className="mx-auto"
+                    options={profileOptions}
+                    value={manualProfile}
+                    ariaLabel="Manual performance profile"
+                    onValueChange={onProfileChange}
+                    onKeyDown={handleMenuItemKeyDown}
+                    tabIndex={isOpen ? 0 : -1}
+                    animated={!disableAnimations}
+                  />
+                </div>
+              </>
+            )}
           </div>
         );
       })}

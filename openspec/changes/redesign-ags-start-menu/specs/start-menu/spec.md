@@ -35,7 +35,7 @@ The Start Menu SHALL present a stable grouped action order and source-specific u
 #### Scenario: Profile controls remain available
 - **WHEN** the Start Menu opens
 - **THEN** it displays the current user header above the action groups
-- **AND** it displays profile controls after Recent Items and before Force Quit
+- **AND** it displays profile controls after System Updates and before Applications
 - **AND** it presents an exclusive manual policy selection of Auto, Gaming, or Saver
 - **AND** it emits the selected policy as one intent for the runtime to apply atomically
 
