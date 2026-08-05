@@ -289,6 +289,36 @@ set_profile_count() {
   fi
 }
 
+set_manual_profile() {
+  local profile="$1"
+  local previous_gaming
+  local previous_powersave
+
+  if [[ "$profile" != "default" ]] && ! is_valid_profile "$profile"; then
+    usage
+    return 1
+  fi
+
+  previous_gaming="$(get_count "$GAMING_PROFILE" manual)"
+  previous_powersave="$(get_count "$POWERSAVE_PROFILE" manual)"
+
+  set_count "$GAMING_PROFILE" manual 0
+  set_count "$POWERSAVE_PROFILE" manual 0
+
+  if [[ "$profile" == "$GAMING_PROFILE" ]]; then
+    set_count "$GAMING_PROFILE" manual 1
+  elif [[ "$profile" == "$POWERSAVE_PROFILE" ]]; then
+    set_count "$POWERSAVE_PROFILE" manual 1
+  fi
+
+  if ! apply_effective_state true; then
+    set_count "$GAMING_PROFILE" manual "$previous_gaming"
+    set_count "$POWERSAVE_PROFILE" manual "$previous_powersave"
+    apply_effective_state true || true
+    return 1
+  fi
+}
+
 print_status() {
   local powersave_count
   local gaming_count
@@ -333,7 +363,7 @@ is_source_active() {
 }
 
 usage() {
-  printf "usage: %s <apply|remove|toggle|sync|apply-source|remove-source|sync-source|clear-manual|is-active|is-source-active|status|reconcile> [profile] [source] [count]\n" "$0" >&2
+  printf "usage: %s <apply|remove|toggle|sync|apply-source|remove-source|sync-source|set-manual|clear-manual|is-active|is-source-active|status|reconcile> [profile] [source] [count]\n" "$0" >&2
 }
 
 main() {
@@ -424,10 +454,11 @@ main() {
 
       set_profile_count "$profile" "$3" "$4"
       ;;
+    set-manual)
+      set_manual_profile "$profile"
+      ;;
     clear-manual)
-      set_count "$GAMING_PROFILE" manual 0
-      set_count "$POWERSAVE_PROFILE" manual 0
-      apply_effective_state true
+      set_manual_profile default
       ;;
     is-active)
       if is_valid_profile "$profile"; then

@@ -16,7 +16,7 @@ interface MenuItem {
   id: string;
   label: string;
   icon: string;
-  variant?: "default" | "warning" | "danger" | "suspend";
+  variant?: "default" | "warning" | "danger" | "purple";
 }
 
 // Flake update data interface
@@ -62,24 +62,24 @@ interface ProfileState {
 // Default menu items - matching design system
 const defaultMenuItems: MenuItem[] = [
   {
+    id: "about-this-pc",
+    label: "About This PC",
+    icon: "\uE946",
+    variant: "default",
+  },
+  {
     id: "system-settings",
     label: "System Settings",
-    icon: "\uE713", // Setting
+    icon: "\uE713",
     variant: "default",
   },
   {
-    id: "system-info",
-    label: "System Info",
-    icon: "\uE946", // System (Info icon)
+    id: "system-updates",
+    label: "System Updates",
+    icon: "\uE895",
     variant: "default",
   },
-  {
-    id: "lock-screen",
-    label: "Lock Screen",
-    icon: "\uE72E", // Lock
-    variant: "default",
-  },
-  { id: "divider-1", label: "", icon: "", variant: "default" },
+  { id: "divider-locations", label: "", icon: "", variant: "default" },
   {
     id: "applications",
     label: "Applications",
@@ -104,18 +104,27 @@ const defaultMenuItems: MenuItem[] = [
     icon: "\uE896", // Download
     variant: "default",
   },
-  { id: "divider-2", label: "", icon: "", variant: "default" },
+  {
+    id: "recent-items",
+    label: "Recent Items",
+    icon: "\uE81C",
+    variant: "default",
+  },
+  { id: "divider-profile", label: "", icon: "", variant: "default" },
+  { id: "profile-controls", label: "", icon: "", variant: "default" },
+  { id: "divider-force-quit", label: "", icon: "", variant: "default" },
+  {
+    id: "force-quit",
+    label: "Force Quit",
+    icon: "\uE7BA",
+    variant: "default",
+  },
+  { id: "divider-session", label: "", icon: "", variant: "default" },
   {
     id: "suspend",
     label: "Suspend",
     icon: "\uE708", // QuietHours
-    variant: "suspend",
-  },
-  {
-    id: "sign-out",
-    label: "Sign-out",
-    icon: "\uE8AB", // SwitchUser
-    variant: "warning",
+    variant: "purple",
   },
   {
     id: "restart",
@@ -128,6 +137,19 @@ const defaultMenuItems: MenuItem[] = [
     label: "Shutdown",
     icon: "\uE7E8", // PowerButton
     variant: "danger",
+  },
+  { id: "divider-account", label: "", icon: "", variant: "default" },
+  {
+    id: "lock-screen",
+    label: "Lock Screen",
+    icon: "\uE72E",
+    variant: "default",
+  },
+  {
+    id: "sign-out",
+    label: "Log out",
+    icon: "\uE8AB",
+    variant: "warning",
   },
 ];
 
@@ -150,8 +172,6 @@ let profileState: ProfileState = {
   powersaveManual: 0,
 };
 const menuItemButtons: Map<string, Gtk.Button> = new Map();
-let flakeUpdateBadgeButton: Gtk.Button | null = null;
-let flatpakUpdateBadgeButton: Gtk.Button | null = null;
 
 // Function to read flake updates from cache file
 function readFlakeUpdatesCache(): FlakeUpdatesData | null {
@@ -419,17 +439,13 @@ function runProfileCommand(command: string) {
   });
 }
 
-function clearManualProfiles() {
-  runProfileCommand(`${profilectlPath} clear-manual`);
-}
-
 // Build terminal command with correct flags based on terminal
 const getSystemUpdatesCommand = (): string => {
   return `${homeDir}/.config/ags/scripts/flake-update-terminal.sh`;
 };
 
 const menuCommands: Record<string, string> = {
-  updates: getSystemUpdatesCommand(), // Combined NixOS and Flatpak updates
+  "system-updates": getSystemUpdatesCommand(),
   "system-settings": (() => {
     const terminal = getTerminal();
     const nixosPath = `${homeDir}/nixos`;
@@ -451,7 +467,7 @@ const menuCommands: Record<string, string> = {
         return `${terminal} -e sh -c "cd ${nixosPath} && nvim"`;
     }
   })(),
-  "system-info": "xdg-open 'vicinae://extensions/fbosch/sysinfo/system-info'",
+  "about-this-pc": "xdg-open 'vicinae://extensions/fbosch/sysinfo/system-info'",
   "lock-screen": "hyprlock",
   applications: "com.github.tchx84.Flatseal",
   documents: `nemo --existing-window "${getXdgUserDirOrDefault("XDG_DOCUMENTS_DIR", `${homeDir}/Documents`)}"`,
@@ -661,7 +677,7 @@ function createUpdateBadges(): JSX.Element[] {
         class="updates-badge"
       >
         <label
-          label={`\uF313  ${flakeUpdatesCount.toString()}`}
+          label={`\uE843  ${flakeUpdatesCount.toString()}`}
           halign={Gtk.Align.CENTER}
           valign={Gtk.Align.CENTER}
         />
@@ -679,7 +695,7 @@ function createUpdateBadges(): JSX.Element[] {
         class="updates-badge"
       >
         <label
-          label={`\uF487  ${flatpakUpdatesCount.toString()}`}
+          label={`\uF1B2  ${flatpakUpdatesCount.toString()}`}
           halign={Gtk.Align.CENTER}
           valign={Gtk.Align.CENTER}
         />
@@ -693,7 +709,7 @@ function createUpdateBadges(): JSX.Element[] {
 // Create a menu item button
 function createMenuItem(item: MenuItem): Gtk.Button {
   // Create badges if this is the updates item
-  const badges = item.id === "updates" ? createUpdateBadges() : [];
+  const badges = item.id === "system-updates" ? createUpdateBadges() : [];
 
   // Create menu item button using JSX
   const button = (
@@ -706,25 +722,18 @@ function createMenuItem(item: MenuItem): Gtk.Button {
         menuItemButtons.set(item.id, self);
 
         // Set tooltip if this is the updates item
-        if (item.id === "updates") {
+        if (item.id === "system-updates") {
           const tooltip = generateUpdatesTooltip();
           if (tooltip) {
             self.set_tooltip_text(tooltip);
           }
 
-          // Store reference for tooltip updates
-          if (flakeUpdatesCount > 0) {
-            flakeUpdateBadgeButton = self;
-          }
-          if (flatpakUpdatesCount > 0) {
-            flatpakUpdateBadgeButton = self;
-          }
         }
       }}
     >
       <box
         orientation={Gtk.Orientation.HORIZONTAL}
-        spacing={8}
+        spacing={10}
         halign={Gtk.Align.FILL}
         class="menu-item-content"
       >
@@ -736,6 +745,9 @@ function createMenuItem(item: MenuItem): Gtk.Button {
           class="menu-item-label"
         />
         {badges}
+        {item.id === "recent-items" ? (
+          <label label={"\uE76C"} class="menu-item-chevron" />
+        ) : null}
       </box>
     </button>
   ) as Gtk.Button;
@@ -756,23 +768,32 @@ function createProfileToggle(
   id: string,
   icon: string,
   active: boolean,
-  activeClass: string,
-  command: string,
+  commandMode: "default" | "gaming" | "powersave",
   tooltip: string,
+  badge?: string,
 ): Gtk.Button {
   return (
     <button
       canFocus={true}
-      hexpand={true}
-      class={`profile-toggle ${active ? activeClass : ""}`}
-      onClicked={() => runProfileCommand(command)}
+      class={`profile-toggle ${active ? "profile-active" : ""}`}
+      onClicked={() => runProfileCommand(`${profilectlPath} set-manual ${commandMode}`)}
       $={(self: Gtk.Button) => {
         self.set_cursor_from_name("pointer");
         self.set_tooltip_text(tooltip);
         menuItemButtons.set(id, self);
       }}
     >
-      <label label={icon} class="profile-toggle-icon" />
+      <overlay>
+        <label label={icon} class={`profile-toggle-icon profile-${commandMode}-icon`} />
+        {badge ? (
+          <label
+            label={badge}
+            class="profile-auto-badge"
+            halign={Gtk.Align.END}
+            valign={Gtk.Align.END}
+          />
+        ) : null}
+      </overlay>
     </button>
   ) as Gtk.Button;
 }
@@ -781,48 +802,42 @@ function createProfileControls(): Gtk.Box {
   const gamingActive = profileState.gamingManual > 0;
   const powersaveActive = profileState.powersaveManual > 0;
   const autoActive = !gamingActive && !powersaveActive;
+  const automaticGamingActive = autoActive && profileState.mode === "gaming";
 
   const profileBox = (
     <box orientation={Gtk.Orientation.VERTICAL} spacing={4} class="profile-row">
-      <box orientation={Gtk.Orientation.HORIZONTAL} spacing={8} class="profile-summary">
-        <label label="Profile" class="profile-label" />
-        <label
-          label={`${profileModeLabel()} · ${profileSourceLabel()}`}
-          halign={Gtk.Align.END}
-          hexpand={true}
-          class="profile-source"
-        />
-      </box>
-      <box orientation={Gtk.Orientation.HORIZONTAL} spacing={4} class="profile-actions">
-        <button
-          canFocus={true}
-          hexpand={true}
-          class={`profile-toggle profile-auto ${autoActive ? "auto-active" : ""}`}
-          onClicked={() => clearManualProfiles()}
-          $={(self: Gtk.Button) => {
-            self.set_cursor_from_name("pointer");
-            self.set_tooltip_text("Let automatic profile rules decide");
-            menuItemButtons.set("profile-auto", self);
-          }}
-        >
-          <label label="Auto" class="profile-auto-label" />
-        </button>
+      <box orientation={Gtk.Orientation.HORIZONTAL} spacing={44} class="profile-actions">
+        {createProfileToggle(
+          "profile-auto",
+          "\uF8B0",
+          autoActive,
+          "default",
+          automaticGamingActive
+            ? "Automatic profile rules; Game Mode is active"
+            : "Use automatic profile rules",
+          automaticGamingActive ? "\u{F02B4}" : undefined,
+        )}
         {createProfileToggle(
           "profile-gaming",
           "\u{F02B4}",
           gamingActive,
-          "gaming-active",
-          `${profilectlPath} ${profileState.gamingManual > 0 ? "remove-source" : "apply-source"} gaming manual`,
-          profileState.gamingManual > 0 ? "Disable manual gaming profile" : "Enable manual gaming profile",
+          "gaming",
+          "Select manual Gaming profile",
         )}
         {createProfileToggle(
           "profile-powersave",
-          "\uE945",
+          "\uEA95",
           powersaveActive,
-          "powersave-active",
-          `${profilectlPath} ${profileState.powersaveManual > 0 ? "remove-source" : "apply-source"} powersave manual`,
-          profileState.powersaveManual > 0 ? "Disable manual powersave profile" : "Enable manual powersave profile",
+          "powersave",
+          "Select manual Power Saver profile",
         )}
+      </box>
+      <box orientation={Gtk.Orientation.HORIZONTAL} class="profile-labels">
+        <label label="Auto" widthRequest={40} />
+        <box widthRequest={32} />
+        <label label="Gaming" widthRequest={48} />
+        <box widthRequest={32} />
+        <label label="Saver" widthRequest={40} />
       </box>
     </box>
   ) as Gtk.Box;
@@ -835,7 +850,7 @@ function createProfileControls(): Gtk.Box {
 function createUserProfile(): Gtk.Box {
   const username = GLib.get_real_name() || GLib.get_user_name() || "User";
   const cacheDir = GLib.get_user_cache_dir();
-  const avatarSize = 28;
+  const avatarSize = 32;
   
   // Find the avatar file with pattern ags-avatar-*.png
   let avatarPath: string | null = null;
@@ -887,27 +902,11 @@ function createUserProfile(): Gtk.Box {
   return profileBox;
 }
 
-// Build the list of menu items with dynamic updates item
-function buildMenuItemsList(): MenuItem[] {
-  const menuItems: MenuItem[] = [];
-
-  // Add Updates item at the top if there are any updates
-  if (flakeUpdatesCount > 0 || flatpakUpdatesCount > 0) {
-    menuItems.push({
-      id: "updates",
-      label: "Updates",
-      icon: "\uE777", // UpdateRestore icon
-      variant: "default",
-    });
+function executeMenuCommand(itemId: string) {
+  if (itemId === "recent-items" || itemId === "force-quit") {
+    return;
   }
 
-  // Add all default menu items
-  menuItems.push(...defaultMenuItems);
-
-  return menuItems;
-}
-
-function executeMenuCommand(itemId: string) {
   const command = menuCommands[itemId];
   if (command) {
     try {
@@ -931,15 +930,6 @@ function updateMenuItems() {
     refreshProfileState();
     // Type assertion to help TypeScript understand menuBox is non-null after guard
     const box = menuBox as Gtk.Box;
-    if (profileState.mode === "gaming") {
-      box.add_css_class("gaming-profile");
-    } else {
-      box.remove_css_class("gaming-profile");
-    }
-
-    // Build dynamic menu with Updates item if there are updates
-    const menuItems = buildMenuItemsList();
-
     // Clear existing items
     let child = box.get_first_child();
     while (child) {
@@ -949,18 +939,17 @@ function updateMenuItems() {
 
     // Clear button references
     menuItemButtons.clear();
-    flakeUpdateBadgeButton = null;
-    flatpakUpdateBadgeButton = null;
 
     // Add user profile at the top
     box.append(createUserProfile());
-    box.append(createProfileControls());
     box.append(createDivider());
 
     // Add menu items
-    menuItems.forEach((item) => {
+    defaultMenuItems.forEach((item) => {
       if (item.id.startsWith("divider")) {
         box.append(createDivider());
+      } else if (item.id === "profile-controls") {
+        box.append(createProfileControls());
       } else {
         box.append(createMenuItem(item));
       }
@@ -1111,83 +1100,57 @@ function applyStaticCSS() {
 
     /* Menu container - matches design-system StartMenu component */
     window.start-menu box.start-menu-container {
-      background-color: rgba(45, 45, 45, 0.90);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 6px;
-      padding: 5px;
-      min-width: 208px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
+      background-color: rgba(45, 45, 45, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-radius: 8px;
+      padding: 8px;
+      min-width: 270px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28), 0 4px 12px rgba(0, 0, 0, 0.14);
       margin-bottom: 53px; /* Waybar height (45px) + gap (8px) */
-      margin-left: 4px;
-    }
-
-    window.start-menu box.start-menu-container.gaming-profile {
-      background-color: rgb(45, 45, 45);
-      border-color: rgb(83, 83, 83);
+      margin-left: 8px;
     }
 
     /* User profile header */
     window.start-menu box.user-profile {
-      padding: 6px 8px;
+      padding: 8px 10px;
     }
 
     window.start-menu box.user-avatar-image {
-      min-width: 28px;
-      min-height: 28px;
+      min-width: 32px;
+      min-height: 32px;
     }
     
     window.start-menu box.user-avatar-image image {
-      min-width: 28px;
-      min-height: 28px;
-      -gtk-icon-size: 28px;
+      min-width: 32px;
+      min-height: 32px;
+      -gtk-icon-size: 32px;
     }
 
     window.start-menu label.user-name {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       font-size: 14px;
-      font-weight: 600;
+      font-weight: 500;
       color: ${tokens.colors.foreground.primary.value};
     }
 
     window.start-menu box.profile-row {
-      padding: 4px;
-      border-radius: 8px;
-      background-color: ${tokens.colors.background.primary.value}4D;
-    }
-
-    window.start-menu box.profile-summary {
-      padding: 2px 4px 0 4px;
-    }
-
-    window.start-menu label.profile-label {
-      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 11px;
-      font-weight: 500;
-      color: ${tokens.colors.foreground.primary.value};
-    }
-
-    window.start-menu label.profile-source {
-      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 11px;
-      color: ${tokens.colors.foreground.secondary.value};
+      margin: 12px 39px;
     }
 
     window.start-menu box.profile-actions {
-      padding: 2px;
-      border-radius: 6px;
+      padding: 4px;
+      border-radius: 999px;
       background-color: ${tokens.colors.background.primary.value}80;
     }
 
     window.start-menu button.profile-toggle {
-      min-height: 22px;
-      padding: 0 6px;
-      border-radius: 5px;
-      border: 1px solid transparent;
+      min-width: 32px;
+      min-height: 32px;
+      padding: 0;
+      border-radius: 999px;
+      border: none;
       background-color: transparent;
       color: ${tokens.colors.foreground.secondary.value};
-      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 11px;
-      font-weight: 500;
     }
 
     window.start-menu button.profile-toggle:hover {
@@ -1195,43 +1158,47 @@ function applyStaticCSS() {
       color: ${tokens.colors.foreground.primary.value};
     }
 
-    window.start-menu button.profile-toggle.auto-active {
+    window.start-menu button.profile-toggle.profile-active {
       color: ${tokens.colors.foreground.primary.value};
-      background-color: rgba(255, 255, 255, 0.12);
-      border-color: rgba(255, 255, 255, 0.10);
-    }
-
-    window.start-menu button.profile-toggle.gaming-active {
-      color: ${tokens.colors.state.success.value};
-      background-color: ${tokens.colors.state.success.value}24;
-      border-color: ${tokens.colors.state.success.value}66;
-    }
-
-    window.start-menu button.profile-toggle.powersave-active {
-      color: ${tokens.colors.state.warning.value};
-      background-color: ${tokens.colors.state.warning.value}24;
-      border-color: ${tokens.colors.state.warning.value}66;
+      background-color: ${tokens.colors.accent.primary.value};
     }
 
     window.start-menu label.profile-toggle-icon {
-      font-family: "Symbols Nerd Font", "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
-      font-size: 11px;
+      font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
+      font-size: 16px;
       color: inherit;
     }
 
-    window.start-menu label.profile-auto-label {
+    window.start-menu label.profile-gaming-icon,
+    window.start-menu label.profile-auto-badge {
+      font-family: "Symbols Nerd Font";
+    }
+
+    window.start-menu label.profile-auto-badge {
+      min-width: 14px;
+      min-height: 14px;
+      margin-right: -6px;
+      margin-bottom: -4px;
+      border: 2px solid ${tokens.colors.accent.primary.value};
+      border-radius: 999px;
+      background-color: ${tokens.colors.state.success.value};
+      color: ${tokens.colors.state["success-text"].value};
+      font-size: 8px;
+    }
+
+    window.start-menu box.profile-labels label {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 500;
-      color: inherit;
+      color: ${tokens.colors.foreground.primary.value};
     }
 
     /* Menu item base */
     window.start-menu button.menu-item {
-      padding: 2px 6px;
+      padding: 0 10px;
       font-size: 14px;
       border-radius: 6px;
-      min-height: 24px;
+      min-height: 36px;
       ${transitionStyle}
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       border: none;
@@ -1286,14 +1253,14 @@ function applyStaticCSS() {
       background-color: ${tokens.colors.state.error.value}1a;
     }
 
-    window.start-menu button.menu-variant-suspend {
+    window.start-menu button.menu-variant-purple {
       color: ${tokens.colors.foreground.primary.value};
     }
-    window.start-menu button.menu-variant-suspend:hover {
+    window.start-menu button.menu-variant-purple:hover {
       color: ${tokens.colors.state.purple.value};
       background-color: ${tokens.colors.state.purple.value}1a;
     }
-    window.start-menu button.menu-variant-suspend:focus {
+    window.start-menu button.menu-variant-purple:focus {
       color: ${tokens.colors.state.purple.value};
       background-color: ${tokens.colors.state.purple.value}1a;
     }
@@ -1301,8 +1268,13 @@ function applyStaticCSS() {
     /* Icon styling */
     window.start-menu label.menu-item-icon {
       font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
-      font-size: 14px;
-      min-width: 20px;
+      font-size: 12px;
+      min-width: 16px;
+    }
+
+    window.start-menu label.menu-item-chevron {
+      font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
+      font-size: 10px;
     }
 
     /* Label styling */
@@ -1324,7 +1296,7 @@ function applyStaticCSS() {
     }
 
     window.start-menu box.updates-badge label {
-      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+      font-family: "${tokens.typography.fontFamily.symbols.value}", "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
       font-size: 11px;
       font-weight: 600;
       color: inherit;
@@ -1335,7 +1307,7 @@ function applyStaticCSS() {
     window.start-menu separator.menu-divider {
       background-color: rgba(255, 255, 255, 0.1);
       min-height: 1px;
-      margin: 4px 0;
+      margin: 6px 0;
     }
   `,
     false,
