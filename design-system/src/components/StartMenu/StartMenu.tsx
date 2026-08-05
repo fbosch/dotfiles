@@ -446,10 +446,7 @@ export const StartMenu = ({
         if (item.type === 'recent-items') {
           return (
             <div key={item.id}>
-              <div
-                className="relative"
-                onPointerLeave={scheduleRecentItemsClose}
-              >
+              <div className="relative" onPointerLeave={scheduleRecentItemsClose}>
                 <button
                   ref={recentItemsTriggerRef}
                   type="button"
