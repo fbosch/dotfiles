@@ -4,8 +4,7 @@
   "autoupdate": false,
   "disabled_providers": [
     "github-copilot",
-    "github-models",
-    "openai"
+    "github-models"
   ],
   "watcher": {
     "ignore": [
