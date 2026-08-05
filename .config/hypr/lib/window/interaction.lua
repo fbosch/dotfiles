@@ -5,7 +5,7 @@ local drag_started = false
 
 function M.start_drag(state)
 	local target = state.at_cursor() or state.active()
-	if target == nil or state.is_game(target) then
+	if target == nil or (state.is_game(target) and target.fullscreen ~= 0) then
 		return false
 	end
 
