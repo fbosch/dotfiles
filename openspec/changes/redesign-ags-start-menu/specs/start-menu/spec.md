@@ -27,13 +27,15 @@ The Start Menu SHALL present a stable grouped action order and source-specific u
 
 #### Scenario: Default action grouping
 - **WHEN** the Start Menu opens with default actions
-- **THEN** it displays About This PC, System Settings, System Updates, and Recent Items above Force Quit
+- **THEN** it displays About This PC, System Settings, System Updates, Applications, Documents, Pictures, Downloads, and Recent Items above Force Quit
+- **AND** it separates System Updates from Applications with a divider
 - **AND** it displays Force Quit above Suspend, Restart, and Shutdown
 - **AND** it displays Lock Screen and Log out after a separator below the power actions
 
 #### Scenario: Profile controls remain available
 - **WHEN** the Start Menu opens
-- **THEN** it displays the current user header and profile controls above the action groups
+- **THEN** it displays the current user header above the action groups
+- **AND** it displays profile controls after Recent Items and before Force Quit
 - **AND** it presents an exclusive manual policy selection of Auto, Gaming, or Saver
 - **AND** it emits the selected policy as one intent for the runtime to apply atomically
 

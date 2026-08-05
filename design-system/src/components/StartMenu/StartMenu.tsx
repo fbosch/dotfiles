@@ -2,6 +2,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { type CSSProperties, type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 import { cn } from '../../utils/cn';
 import { Tag } from '../Tag';
+import { TripleToggle, type TripleToggleOption } from '../TripleToggle';
 
 const menuVariants = cva(
   'w-72 rounded-lg border border-white/10 bg-background-secondary/85 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.28),0_4px_12px_rgba(0,0,0,0.14)] backdrop-blur-xl',
@@ -45,27 +46,6 @@ const menuItemVariants = cva('flex h-9 w-full items-center gap-2.5 rounded-md px
     animated: true,
   },
 });
-
-const profileSegmentVariants = cva(
-  'grid size-8 place-items-center rounded-full text-base focus-visible:outline-none active:scale-[0.98]',
-  {
-    variants: {
-      active: {
-        true: 'bg-accent-primary text-white shadow-sm',
-        false:
-          'text-foreground-secondary hover:bg-white/10 hover:text-foreground-primary focus-visible:bg-white/10 focus-visible:text-foreground-primary',
-      },
-      animated: {
-        true: 'transition-colors duration-150',
-        false: '',
-      },
-    },
-    defaultVariants: {
-      active: false,
-      animated: true,
-    },
-  }
-);
 
 export type StartMenuItemVariant = 'default' | 'warning' | 'danger' | 'purple';
 
@@ -137,6 +117,11 @@ const defaultMenuItems: StartMenuItem[] = [
   { type: 'action', id: 'about-this-pc', label: 'About This PC', icon: '\uE946' },
   { type: 'action', id: 'system-settings', label: 'System Settings', icon: '\uE713' },
   { type: 'action', id: 'system-updates', label: 'System Updates', icon: '\uE895' },
+  { type: 'separator', id: 'before-locations' },
+  { type: 'action', id: 'applications', label: 'Applications', icon: '\uE71D' },
+  { type: 'action', id: 'documents', label: 'Documents', icon: '\uE8A5' },
+  { type: 'action', id: 'pictures', label: 'Pictures', icon: '\uE91B' },
+  { type: 'action', id: 'downloads', label: 'Downloads', icon: '\uE896' },
   { type: 'recent-items', id: 'recent-items', label: 'Recent Items', icon: '\uE81C' },
   { type: 'separator', id: 'after-recent-items' },
   { type: 'action', id: 'force-quit', label: 'Force Quit', icon: '\uE7BA' },
@@ -194,6 +179,42 @@ export const StartMenu = ({
   const hasRecentItems = applications.length > 0 || documents.length > 0;
   const automaticGamingActive = profile.mode === 'gaming' && profile.source === 'auto';
   const manualProfile = profile.manualMode;
+  const profileOptions: readonly [
+    TripleToggleOption<StartMenuProfile['manualMode']>,
+    TripleToggleOption<StartMenuProfile['manualMode']>,
+    TripleToggleOption<StartMenuProfile['manualMode']>,
+  ] = [
+    {
+      value: 'default',
+      label: 'Auto',
+      icon: <span className="font-fluent">{'\uE713'}</span>,
+      badge: automaticGamingActive ? (
+        <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-nerd text-[8px] text-state-success-foreground ring-2 ring-accent-primary">
+          {'\u{F02B4}'}
+        </span>
+      ) : undefined,
+      ariaLabel: automaticGamingActive
+        ? 'Automatic profile rules; Game Mode is active'
+        : 'Automatic profile rules',
+      title: automaticGamingActive
+        ? 'Game Mode is active automatically'
+        : 'Use automatic profile rules',
+    },
+    {
+      value: 'gaming',
+      label: 'Gaming',
+      icon: <span className="font-nerd">{'\u{F02B4}'}</span>,
+      ariaLabel: 'Manual Gaming profile',
+      title: 'Select manual Gaming profile',
+    },
+    {
+      value: 'powersave',
+      label: 'Saver',
+      icon: <span className="font-fluent">{'\uE945'}</span>,
+      ariaLabel: 'Manual Power Saver profile',
+      title: 'Select manual Power Saver profile',
+    },
+  ];
 
   useEffect(() => {
     if (isOpen === false) {
@@ -214,7 +235,9 @@ export const StartMenu = ({
 
   const focusMenuItem = (current: HTMLButtonElement, direction: 1 | -1) => {
     const menuItems = Array.from(
-      menuRef.current?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]') ?? []
+      menuRef.current?.querySelectorAll<HTMLButtonElement>(
+        '[role^="menuitem"], [data-triple-toggle-option]'
+      ) ?? []
     ).filter((item) => item.tabIndex !== -1 && item.disabled === false);
     const currentIndex = menuItems.indexOf(current);
     const nextIndex = (currentIndex + direction + menuItems.length) % menuItems.length;
@@ -338,82 +361,6 @@ export const StartMenu = ({
           <div className="truncate text-sm font-medium text-foreground-primary">{user.name}</div>
         </div>
       </div>
-      <fieldset className="mb-1" aria-label="Manual performance profile">
-        <div className="mx-auto flex w-48 items-center justify-between rounded-full bg-background-primary/50 p-1">
-          <button
-            type="button"
-            role="menuitemradio"
-            tabIndex={isOpen ? 0 : -1}
-            className={profileSegmentVariants({
-              active: manualProfile === 'default',
-              animated: !disableAnimations,
-            })}
-            onClick={() => onProfileChange?.('default')}
-            onKeyDown={handleMenuItemKeyDown}
-            aria-checked={manualProfile === 'default'}
-            aria-label={
-              automaticGamingActive
-                ? 'Automatic profile rules; Game Mode is active'
-                : 'Automatic profile rules'
-            }
-            title={
-              automaticGamingActive
-                ? 'Game Mode is active automatically'
-                : 'Use automatic profile rules'
-            }
-          >
-            <span className="relative font-fluent" aria-hidden="true">
-              {'\uE713'}
-              {automaticGamingActive && (
-                <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success text-[8px] text-state-success-foreground ring-2 ring-accent-primary">
-                  {'\uE7FC'}
-                </span>
-              )}
-            </span>
-          </button>
-          <button
-            type="button"
-            role="menuitemradio"
-            tabIndex={isOpen ? 0 : -1}
-            className={profileSegmentVariants({
-              active: manualProfile === 'gaming',
-              animated: !disableAnimations,
-            })}
-            onClick={() => onProfileChange?.('gaming')}
-            onKeyDown={handleMenuItemKeyDown}
-            aria-checked={manualProfile === 'gaming'}
-            aria-label="Manual Gaming profile"
-            title="Select manual Gaming profile"
-          >
-            <span className="font-fluent" aria-hidden="true">
-              {'\uE7FC'}
-            </span>
-          </button>
-          <button
-            type="button"
-            role="menuitemradio"
-            tabIndex={isOpen ? 0 : -1}
-            className={profileSegmentVariants({
-              active: manualProfile === 'powersave',
-              animated: !disableAnimations,
-            })}
-            onClick={() => onProfileChange?.('powersave')}
-            onKeyDown={handleMenuItemKeyDown}
-            aria-checked={manualProfile === 'powersave'}
-            aria-label="Manual Power Saver profile"
-            title="Select manual Power Saver profile"
-          >
-            <span className="font-fluent" aria-hidden="true">
-              {'\uE945'}
-            </span>
-          </button>
-        </div>
-        <div className="mx-auto mt-1 flex w-48 items-center justify-between text-center text-xs font-medium text-foreground-primary">
-          <span className="w-12 -translate-x-1">Auto</span>
-          <span className="w-12">Gaming</span>
-          <span className="w-12 translate-x-1">Saver</span>
-        </div>
-      </fieldset>
       <hr className="my-1.5 border-t border-white/10" />
       {items.map((item) => {
         if (item.type === 'separator') {
@@ -422,89 +369,104 @@ export const StartMenu = ({
 
         if (item.type === 'recent-items') {
           return (
-            <div key={item.id} className="relative" onPointerEnter={openRecentItems}>
-              <button
-                ref={recentItemsTriggerRef}
-                type="button"
-                role="menuitem"
-                tabIndex={isOpen ? 0 : -1}
-                className={cn(
-                  menuItemVariants({ animated: !disableAnimations }),
-                  'justify-between',
-                  recentItemsOpen
-                    ? 'bg-accent-primary text-white hover:bg-accent-hover focus-visible:bg-accent-hover'
-                    : ''
-                )}
-                aria-haspopup="menu"
-                aria-controls={recentItemsMenuId}
-                aria-expanded={recentItemsOpen}
-                onClick={() => setRecentItemsOpen((open) => !open)}
-                onKeyDown={handleMenuItemKeyDown}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <span className="font-fluent text-xs" aria-hidden="true">
-                    {item.icon}
-                  </span>
-                  <span className="truncate text-left">{item.label}</span>
-                </span>
-                <span className="font-fluent text-[10px]" aria-hidden="true">
-                  {'\uE76C'}
-                </span>
-              </button>
-              {recentItemsOpen && (
-                <div
-                  ref={recentItemsMenuRef}
-                  id={recentItemsMenuId}
-                  className="absolute bottom-0 left-full z-10 ml-2 w-80 rounded-lg border border-white/10 bg-background-secondary/90 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.28),0_4px_12px_rgba(0,0,0,0.14)] backdrop-blur-xl"
-                  role="menu"
-                  aria-label={item.label}
-                >
-                  {hasRecentItems === false ? (
-                    <p className="px-2.5 py-4 text-center text-sm text-foreground-tertiary">
-                      No recent items
-                    </p>
-                  ) : (
-                    <>
-                      {applications.length > 0 && (
-                        <div>
-                          <p className="px-2.5 pb-1 pt-1.5 text-xs font-semibold text-foreground-secondary">
-                            Applications
-                          </p>
-                          {applications.map(renderRecentItem)}
-                        </div>
-                      )}
-                      {applications.length > 0 && documents.length > 0 && (
-                        <hr className="my-1.5 border-t border-white/10" />
-                      )}
-                      {documents.length > 0 && (
-                        <div>
-                          <p className="px-2.5 pb-1 pt-1.5 text-xs font-semibold text-foreground-secondary">
-                            Documents
-                          </p>
-                          {documents.map(renderRecentItem)}
-                        </div>
-                      )}
-                    </>
+            <div key={item.id}>
+              <div className="relative" onPointerEnter={openRecentItems}>
+                <button
+                  ref={recentItemsTriggerRef}
+                  type="button"
+                  role="menuitem"
+                  tabIndex={isOpen ? 0 : -1}
+                  className={cn(
+                    menuItemVariants({ animated: !disableAnimations }),
+                    'justify-between',
+                    recentItemsOpen
+                      ? 'bg-accent-primary text-white hover:bg-accent-hover focus-visible:bg-accent-hover'
+                      : ''
                   )}
-                  <hr className="my-1.5 border-t border-white/10" />
-                  <button
-                    type="button"
-                    role="menuitem"
-                    tabIndex={isOpen && recentItemsOpen ? 0 : -1}
-                    className={menuItemVariants({
-                      variant: 'danger',
-                      animated: !disableAnimations,
-                    })}
-                    onClick={onClearRecentItems}
-                    onKeyDown={handleMenuItemKeyDown}
-                  >
+                  aria-haspopup="menu"
+                  aria-controls={recentItemsMenuId}
+                  aria-expanded={recentItemsOpen}
+                  onClick={() => setRecentItemsOpen((open) => !open)}
+                  onKeyDown={handleMenuItemKeyDown}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
                     <span className="font-fluent text-xs" aria-hidden="true">
-                      {'\uE74D'}
+                      {item.icon}
                     </span>
-                    Clear Recent Items
-                  </button>
-                </div>
-              )}
+                    <span className="truncate text-left">{item.label}</span>
+                  </span>
+                  <span className="font-fluent text-[10px]" aria-hidden="true">
+                    {'\uE76C'}
+                  </span>
+                </button>
+                {recentItemsOpen && (
+                  <div
+                    ref={recentItemsMenuRef}
+                    id={recentItemsMenuId}
+                    className="absolute bottom-0 left-full z-10 ml-2 w-80 rounded-lg border border-white/10 bg-background-secondary/90 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.28),0_4px_12px_rgba(0,0,0,0.14)] backdrop-blur-xl"
+                    role="menu"
+                    aria-label={item.label}
+                  >
+                    {hasRecentItems === false ? (
+                      <p className="px-2.5 py-4 text-center text-sm text-foreground-tertiary">
+                        No recent items
+                      </p>
+                    ) : (
+                      <>
+                        {applications.length > 0 && (
+                          <div>
+                            <p className="px-2.5 pb-1 pt-1.5 text-xs font-semibold text-foreground-secondary">
+                              Applications
+                            </p>
+                            {applications.map(renderRecentItem)}
+                          </div>
+                        )}
+                        {applications.length > 0 && documents.length > 0 && (
+                          <hr className="my-1.5 border-t border-white/10" />
+                        )}
+                        {documents.length > 0 && (
+                          <div>
+                            <p className="px-2.5 pb-1 pt-1.5 text-xs font-semibold text-foreground-secondary">
+                              Documents
+                            </p>
+                            {documents.map(renderRecentItem)}
+                          </div>
+                        )}
+                      </>
+                    )}
+                    <hr className="my-1.5 border-t border-white/10" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      tabIndex={isOpen && recentItemsOpen ? 0 : -1}
+                      className={menuItemVariants({
+                        variant: 'danger',
+                        animated: !disableAnimations,
+                      })}
+                      onClick={onClearRecentItems}
+                      onKeyDown={handleMenuItemKeyDown}
+                    >
+                      <span className="font-fluent text-xs" aria-hidden="true">
+                        {'\uE74D'}
+                      </span>
+                      Clear Recent Items
+                    </button>
+                  </div>
+                )}
+              </div>
+              <hr className="my-1.5 border-t border-white/10" />
+              <div className="my-3">
+                <TripleToggle
+                  className="mx-auto"
+                  options={profileOptions}
+                  value={manualProfile}
+                  ariaLabel="Manual performance profile"
+                  onValueChange={onProfileChange}
+                  onKeyDown={handleMenuItemKeyDown}
+                  tabIndex={isOpen ? 0 : -1}
+                  animated={!disableAnimations}
+                />
+              </div>
             </div>
           );
         }
