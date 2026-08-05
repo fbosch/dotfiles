@@ -5,6 +5,11 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
         set config_root "$OPENCODE_CONFIG_DIR"
     end
 
+    if not command -v bun >/dev/null 2>&1
+        echo "bun is required for ai_commit"
+        return 1
+    end
+
     set -l profiles_file "$config_root/profiles.jsonc"
     set -l opencode_file "$config_root/opencode.json"
     if test -f "$config_root/opencode.jsonc"
@@ -38,12 +43,6 @@ function ai_commit --description 'Generate AI-powered Commitizen commit message 
     set -l opencode_path (__opencode_command_path)
     function __ai_commit_err -a message
         echo "$message"
-    end
-
-    if not command -v bun >/dev/null 2>&1
-        __ai_commit_err "bun is required for ai_commit"
-        functions -e __ai_commit_err
-        return 1
     end
 
     if test -f "$script"

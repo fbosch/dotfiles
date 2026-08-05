@@ -206,6 +206,55 @@ function isServerReachable(): Promise<boolean> {
   });
 }
 
+async function getServerVersion(): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `http://${OPENCODE_SERVER_HOST}:${String(OPENCODE_SERVER_PORT)}/global/health`,
+      { signal: AbortSignal.timeout(500) },
+    );
+    if (response.ok === false) {
+      return null;
+    }
+
+    const health: unknown = await response.json();
+    if (
+      typeof health === "object" &&
+      health !== null &&
+      "version" in health &&
+      typeof health.version === "string"
+    ) {
+      return health.version.trim();
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function getLocalVersion(): string | null {
+  const result = spawnSync(OPENCODE_BIN, ["--version"], {
+    encoding: "utf8",
+    timeout: 2000,
+  });
+  if (result.error || result.status !== 0) {
+    return null;
+  }
+
+  const version = result.stdout.trim();
+  return version.length > 0 ? version : null;
+}
+
+async function isServerOutdated(): Promise<boolean> {
+  const localVersion = getLocalVersion();
+  const serverVersion = await getServerVersion();
+  return (
+    localVersion !== null &&
+    serverVersion !== null &&
+    localVersion !== serverVersion
+  );
+}
+
 async function waitForServer(): Promise<boolean> {
   const deadline = Date.now() + SERVER_RETRY_TIMEOUT_MS;
 
@@ -417,6 +466,13 @@ async function main(): Promise<void> {
         hasStartedServer = true;
       } catch {
         // Let the normal generate path surface the real error if startup fails.
+      }
+    } else if (await isServerOutdated()) {
+      try {
+        await withSpinner("Updating commit server...", () => restartServer());
+        hasStartedServer = true;
+      } catch {
+        // Let the normal generate path surface the real error if restart fails.
       }
     }
 
