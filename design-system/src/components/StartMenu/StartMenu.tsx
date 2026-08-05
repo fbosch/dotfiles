@@ -403,7 +403,7 @@ export const StartMenu = ({
                   <div
                     ref={recentItemsMenuRef}
                     id={recentItemsMenuId}
-                    className="absolute bottom-0 left-full z-10 ml-2 w-80 rounded-lg border border-white/10 bg-background-secondary/90 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.28),0_4px_12px_rgba(0,0,0,0.14)] backdrop-blur-xl"
+                    className="absolute bottom-0 left-full z-10 ml-2 w-80 rounded-lg border border-white/10 bg-background-secondary/85 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.28),0_4px_12px_rgba(0,0,0,0.14)] backdrop-blur-xl"
                     role="menu"
                     aria-label={item.label}
                   >
