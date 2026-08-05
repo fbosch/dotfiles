@@ -16,7 +16,7 @@ function nxrb
             if command -q nh
                 nh darwin switch "$flake" -H "$NH_DARWIN_HOST" --accept-flake-config
             else
-                darwin-rebuild switch --flake "$flake#$NH_DARWIN_HOST" --accept-flake-config
+                darwin-rebuild switch --flake "$flake#$NH_DARWIN_HOST" --option accept-flake-config true
             end
         case Linux
             if command -q nh
