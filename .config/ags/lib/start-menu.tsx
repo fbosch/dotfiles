@@ -1229,7 +1229,7 @@ function applyStaticCSS() {
       min-width: 270px;
       box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28), 0 4px 12px rgba(0, 0, 0, 0.14);
       margin-bottom: 53px; /* Waybar height (45px) + gap (8px) */
-      margin-left: 8px;
+      margin-left: 5px;
     }
 
     /* User profile header */
