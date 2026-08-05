@@ -173,6 +173,8 @@ let profileState: ProfileState = {
   powersaveManual: 0,
 };
 const menuItemButtons: Map<string, Gtk.Button> = new Map();
+let profileControlsBox: Gtk.Box | null = null;
+let profileAutoBadge: Gtk.Box | null = null;
 
 // Function to read flake updates from cache file
 function readFlakeUpdatesCache(): FlakeUpdatesData | null {
@@ -418,6 +420,41 @@ function refreshProfileState() {
   profileState = readProfileState();
 }
 
+function refreshProfileControls() {
+  refreshProfileState();
+
+  const gamingActive = profileState.gamingManual > 0;
+  const powersaveActive = profileState.powersaveManual > 0;
+  const autoActive = !gamingActive && !powersaveActive;
+  const activeStates: Record<string, boolean> = {
+    "profile-auto": autoActive,
+    "profile-gaming": gamingActive,
+    "profile-powersave": powersaveActive,
+  };
+
+  for (const [id, active] of Object.entries(activeStates)) {
+    const button = menuItemButtons.get(id);
+    if (!button) continue;
+
+    if (active) {
+      button.add_css_class("profile-active");
+    } else {
+      button.remove_css_class("profile-active");
+    }
+  }
+
+  const automaticGamingActive = autoActive && profileState.mode === "gaming";
+  profileAutoBadge?.set_visible(automaticGamingActive);
+  menuItemButtons
+    .get("profile-auto")
+    ?.set_tooltip_text(
+      automaticGamingActive
+        ? "Automatic profile rules; Game Mode is active"
+        : "Use automatic profile rules",
+    );
+  profileControlsBox?.set_tooltip_text(profileTooltip());
+}
+
 let profileStateMonitor: Gio.FileMonitor | null = null;
 let profileRefreshTimer: number | null = null;
 
@@ -428,7 +465,7 @@ function queueProfileRefresh() {
 
   profileRefreshTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 75, () => {
     profileRefreshTimer = null;
-    updateMenuItems();
+    refreshProfileControls();
     return GLib.SOURCE_REMOVE;
   });
 }
@@ -481,7 +518,7 @@ function runProfileCommand(command: string) {
   }
 
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
-    updateMenuItems();
+    refreshProfileControls();
     return GLib.SOURCE_REMOVE;
   });
 }
@@ -820,6 +857,7 @@ function createProfileToggle(
   commandMode: "default" | "gaming" | "powersave",
   tooltip: string,
   badge?: string,
+  badgeVisible = false,
 ): Gtk.Button {
   return (
     <button
@@ -847,6 +885,10 @@ function createProfileToggle(
             valign={Gtk.Align.END}
             widthRequest={14}
             heightRequest={14}
+            visible={badgeVisible}
+            $={(self: Gtk.Box) => {
+              profileAutoBadge = self;
+            }}
           >
             <label
               label={badge}
@@ -886,7 +928,8 @@ function createProfileControls(): Gtk.Box {
           automaticGamingActive
             ? "Automatic profile rules; Game Mode is active"
             : "Use automatic profile rules",
-          automaticGamingActive ? "\u{F02B4}" : undefined,
+          "\u{F02B4}",
+          automaticGamingActive,
         )}
         {createProfileToggle(
           "profile-gaming",
@@ -913,6 +956,7 @@ function createProfileControls(): Gtk.Box {
     </box>
   ) as Gtk.Box;
 
+  profileControlsBox = profileBox;
   profileBox.set_tooltip_text(profileTooltip());
   return profileBox;
 }
@@ -1014,6 +1058,8 @@ function updateMenuItems() {
 
     // Clear button references
     menuItemButtons.clear();
+    profileControlsBox = null;
+    profileAutoBadge = null;
 
     // Add user profile at the top
     box.append(createUserProfile());
