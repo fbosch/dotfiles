@@ -3,6 +3,14 @@ local function setup_barbar_highlights()
 	local utils = require("utils")
 	utils.load_highlights({
 		BufferCurrent = { fg = colors.blue },
+		BufferAlternate = { fg = colors.lighter_gray, bg = colors.gray },
+		BufferInactive = { fg = colors.lighter_gray, bg = colors.gray },
+		BufferVisible = { fg = colors.lighter_gray, bg = colors.gray },
+		BufferAlternateSign = { fg = colors.light_gray, bg = colors.gray },
+		BufferCurrentSign = { fg = colors.blue },
+		BufferInactiveSign = { fg = colors.light_gray, bg = colors.gray },
+		BufferVisibleSign = { fg = colors.light_gray, bg = colors.gray },
+		BufferTabpageFill = { bg = colors.gray },
 		BufferDefaultVisibleHINT = { fg = colors.purple },
 		BufferDefaultCurrentHINT = { fg = colors.purple },
 		BufferDefaultInactiveHINT = { fg = colors.purple, bg = colors.gray },
@@ -60,7 +68,11 @@ return {
 				callback = function()
 					local buffers = 0
 					for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
-						if vim.bo[buffer].buflisted and vim.bo[buffer].buftype == "" then
+						if
+							vim.bo[buffer].buflisted
+							and vim.bo[buffer].buftype == ""
+							and vim.api.nvim_buf_get_name(buffer) ~= ""
+						then
 							buffers = buffers + 1
 						end
 					end
@@ -121,6 +133,13 @@ return {
 		config = function()
 			local terminal = require("utils.terminal")
 			local is_rich = terminal.is_terminal_emulator()
+			local vim_enter_autocmds = {}
+			for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
+				if autocmd.id ~= nil then
+					vim_enter_autocmds[autocmd.id] = true
+				end
+			end
+
 			require("barbar").setup({
 				animation = false,
 				auto_hide = true,
@@ -147,7 +166,7 @@ return {
 						button = is_rich and "󰐃" or "[P]",
 						filename = true,
 					},
-					separator = { left = is_rich and " " or " ", right = "" },
+					separator = { left = is_rich and "▎" or "|", right = "" },
 					separator_at_end = false,
 					diagnostics = {
 						[vim.diagnostic.severity.ERROR] = { enabled = true, icon = " ", custom_color = true },
@@ -163,6 +182,20 @@ return {
 				},
 			})
 			setup_barbar_highlights()
+
+			if vim.v.vim_did_enter == 0 then
+				return
+			end
+
+			-- Barbar defers its setup to VimEnter, which has already occurred here.
+			for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
+				if autocmd.id ~= nil and vim_enter_autocmds[autocmd.id] == nil and autocmd.callback then
+					vim.api.nvim_del_autocmd(autocmd.id)
+					autocmd.callback()
+					require("barbar.ui.render").update()
+					return
+				end
+			end
 		end,
 	},
 }
