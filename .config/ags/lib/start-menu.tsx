@@ -787,6 +787,7 @@ function createProfileToggle(
         <label label={icon} class={`profile-toggle-icon profile-${commandMode}-icon`} />
         {badge ? (
           <label
+            $type="overlay"
             label={badge}
             class="profile-auto-badge"
             halign={Gtk.Align.END}
