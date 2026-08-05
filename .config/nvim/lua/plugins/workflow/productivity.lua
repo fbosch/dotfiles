@@ -1,13 +1,5 @@
 return {
 	{
-		"wakatime/vim-wakatime",
-		event = { "BufReadPre", "BufNewFile" },
-		config = function()
-			require("wakatime").setup()
-			vim.api.nvim_clear_autocmds({ group = "WakaTime", event = "QuitPre" })
-		end,
-	},
-	{
 		"bngarren/checkmate.nvim",
 		ft = "markdown",
 		config = function()
