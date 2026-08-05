@@ -46,45 +46,22 @@ const menuItemVariants = cva('flex h-9 w-full items-center gap-2.5 rounded-md px
   },
 });
 
-const profileOptionVariants = cva(
-  'inline-flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium leading-none focus-visible:outline-none active:scale-[0.98]',
+const profileSegmentVariants = cva(
+  'grid size-8 place-items-center rounded-full text-base focus-visible:outline-none active:scale-[0.98]',
   {
     variants: {
       active: {
-        true: 'shadow-sm',
+        true: 'bg-accent-primary text-white shadow-sm',
         false:
           'text-foreground-secondary hover:bg-white/10 hover:text-foreground-primary focus-visible:bg-white/10 focus-visible:text-foreground-primary',
-      },
-      tone: {
-        auto: '',
-        gaming: '',
-        powersave: '',
       },
       animated: {
         true: 'transition-colors duration-150',
         false: '',
       },
     },
-    compoundVariants: [
-      {
-        active: true,
-        tone: 'auto',
-        className: 'bg-white/[0.12] text-foreground-primary ring-1 ring-white/10',
-      },
-      {
-        active: true,
-        tone: 'gaming',
-        className: 'bg-state-success/15 text-state-success ring-1 ring-state-success/40',
-      },
-      {
-        active: true,
-        tone: 'powersave',
-        className: 'bg-state-warning/15 text-state-warning ring-1 ring-state-warning/40',
-      },
-    ],
     defaultVariants: {
       active: false,
-      tone: 'auto',
       animated: true,
     },
   }
@@ -130,8 +107,7 @@ export interface RecentItems {
 export interface StartMenuProfile {
   mode: 'default' | 'gaming' | 'powersave';
   source?: 'none' | 'manual' | 'auto';
-  gamingManual?: boolean;
-  powersaveManual?: boolean;
+  manualMode: 'default' | 'gaming' | 'powersave';
 }
 
 export interface StartMenuUser {
@@ -152,7 +128,7 @@ export interface StartMenuProps extends VariantProps<typeof menuVariants> {
   onItemClick?: (itemId: string) => void;
   onRecentItemClick?: (item: RecentMenuItem) => void;
   onClearRecentItems?: () => void;
-  onProfileAction?: (action: 'gaming' | 'powersave' | 'clear-manual') => void;
+  onProfileChange?: (mode: StartMenuProfile['manualMode']) => void;
   className?: string;
   style?: CSSProperties;
 }
@@ -176,8 +152,7 @@ const defaultMenuItems: StartMenuItem[] = [
 const defaultProfile: StartMenuProfile = {
   mode: 'default',
   source: 'none',
-  gamingManual: false,
-  powersaveManual: false,
+  manualMode: 'default',
 };
 
 const defaultUser: StartMenuUser = {
@@ -192,17 +167,6 @@ const initialsForName = (name: string) =>
     .map((part) => part[0]?.toUpperCase())
     .join('') || '?';
 
-const profileModeLabel = (mode: StartMenuProfile['mode']) => {
-  if (mode === 'gaming') return 'Gaming';
-  if (mode === 'powersave') return 'Saver';
-  return 'Balanced';
-};
-
-const profileSourceLabel = (profile: StartMenuProfile) => {
-  if (profile.source === 'manual') return 'Manual';
-  return 'Auto';
-};
-
 export const StartMenu = ({
   isOpen = false,
   items = defaultMenuItems,
@@ -216,7 +180,7 @@ export const StartMenu = ({
   onItemClick,
   onRecentItemClick,
   onClearRecentItems,
-  onProfileAction,
+  onProfileChange,
   className,
   style,
 }: StartMenuProps) => {
@@ -228,11 +192,8 @@ export const StartMenu = ({
   const applications = recentItems.applications ?? [];
   const documents = recentItems.documents ?? [];
   const hasRecentItems = applications.length > 0 || documents.length > 0;
-  const gamingManualActive =
-    profile.gamingManual || (profile.source === 'manual' && profile.mode === 'gaming');
-  const powersaveManualActive =
-    profile.powersaveManual || (profile.source === 'manual' && profile.mode === 'powersave');
-  const autoControlActive = !gamingManualActive && !powersaveManualActive;
+  const automaticGamingActive = profile.mode === 'gaming' && profile.source === 'auto';
+  const manualProfile = profile.manualMode;
 
   useEffect(() => {
     if (isOpen === false) {
@@ -253,7 +214,7 @@ export const StartMenu = ({
 
   const focusMenuItem = (current: HTMLButtonElement, direction: 1 | -1) => {
     const menuItems = Array.from(
-      menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []
+      menuRef.current?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]') ?? []
     ).filter((item) => item.tabIndex !== -1 && item.disabled === false);
     const currentIndex = menuItems.indexOf(current);
     const nextIndex = (currentIndex + direction + menuItems.length) % menuItems.length;
@@ -377,74 +338,82 @@ export const StartMenu = ({
           <div className="truncate text-sm font-medium text-foreground-primary">{user.name}</div>
         </div>
       </div>
-      <div className="mb-1 rounded-lg bg-background-primary/30 p-1.5">
-        <div className="flex items-center justify-between gap-2 px-1 py-0.5 text-xs leading-tight">
-          <span className="font-medium text-foreground-primary">Profile</span>
-          <span className="truncate text-foreground-secondary">
-            {profileModeLabel(profile.mode)} · {profileSourceLabel(profile)}
-          </span>
-        </div>
-        <fieldset
-          className="mt-1 flex items-center gap-1 rounded-md bg-background-primary/50 p-0.5"
-          aria-label="Profile controls"
-        >
+      <fieldset className="mb-1" aria-label="Manual performance profile">
+        <div className="mx-auto flex w-48 items-center justify-between rounded-full bg-background-primary/50 p-1">
           <button
             type="button"
-            className={profileOptionVariants({
-              active: autoControlActive,
-              tone: 'auto',
+            role="menuitemradio"
+            tabIndex={isOpen ? 0 : -1}
+            className={profileSegmentVariants({
+              active: manualProfile === 'default',
               animated: !disableAnimations,
             })}
-            onClick={() => onProfileAction?.('clear-manual')}
-            tabIndex={isOpen ? 0 : -1}
-            aria-label="Use automatic profile"
-            aria-pressed={autoControlActive}
-            title="Let automatic profile rules decide"
+            onClick={() => onProfileChange?.('default')}
+            onKeyDown={handleMenuItemKeyDown}
+            aria-checked={manualProfile === 'default'}
+            aria-label={
+              automaticGamingActive
+                ? 'Automatic profile rules; Game Mode is active'
+                : 'Automatic profile rules'
+            }
+            title={
+              automaticGamingActive
+                ? 'Game Mode is active automatically'
+                : 'Use automatic profile rules'
+            }
           >
-            Auto
+            <span className="relative font-fluent" aria-hidden="true">
+              {'\uE713'}
+              {automaticGamingActive && (
+                <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success text-[8px] text-state-success-foreground ring-2 ring-accent-primary">
+                  {'\uE7FC'}
+                </span>
+              )}
+            </span>
           </button>
           <button
             type="button"
-            className={profileOptionVariants({
-              active: gamingManualActive,
-              tone: 'gaming',
+            role="menuitemradio"
+            tabIndex={isOpen ? 0 : -1}
+            className={profileSegmentVariants({
+              active: manualProfile === 'gaming',
               animated: !disableAnimations,
             })}
-            onClick={() => onProfileAction?.('gaming')}
-            tabIndex={isOpen ? 0 : -1}
-            aria-label="Toggle gaming profile"
-            aria-pressed={gamingManualActive}
-            title={
-              gamingManualActive ? 'Disable manual gaming profile' : 'Enable manual gaming profile'
-            }
+            onClick={() => onProfileChange?.('gaming')}
+            onKeyDown={handleMenuItemKeyDown}
+            aria-checked={manualProfile === 'gaming'}
+            aria-label="Manual Gaming profile"
+            title="Select manual Gaming profile"
           >
-            <span className="font-fluent text-[11px]" aria-hidden="true">
+            <span className="font-fluent" aria-hidden="true">
               {'\uE7FC'}
             </span>
           </button>
           <button
             type="button"
-            className={profileOptionVariants({
-              active: powersaveManualActive,
-              tone: 'powersave',
+            role="menuitemradio"
+            tabIndex={isOpen ? 0 : -1}
+            className={profileSegmentVariants({
+              active: manualProfile === 'powersave',
               animated: !disableAnimations,
             })}
-            onClick={() => onProfileAction?.('powersave')}
-            tabIndex={isOpen ? 0 : -1}
-            aria-label="Toggle powersave profile"
-            aria-pressed={powersaveManualActive}
-            title={
-              powersaveManualActive
-                ? 'Disable manual powersave profile'
-                : 'Enable manual powersave profile'
-            }
+            onClick={() => onProfileChange?.('powersave')}
+            onKeyDown={handleMenuItemKeyDown}
+            aria-checked={manualProfile === 'powersave'}
+            aria-label="Manual Power Saver profile"
+            title="Select manual Power Saver profile"
           >
-            <span className="font-fluent text-[11px]" aria-hidden="true">
+            <span className="font-fluent" aria-hidden="true">
               {'\uE945'}
             </span>
           </button>
-        </fieldset>
-      </div>
+        </div>
+        <div className="mx-auto mt-1 flex w-48 items-center justify-between text-center text-xs font-medium text-foreground-primary">
+          <span className="w-12 -translate-x-1">Auto</span>
+          <span className="w-12">Gaming</span>
+          <span className="w-12 translate-x-1">Saver</span>
+        </div>
+      </fieldset>
       <hr className="my-1.5 border-t border-white/10" />
       {items.map((item) => {
         if (item.type === 'separator') {

@@ -34,7 +34,13 @@ The Start Menu SHALL present a stable grouped action order and source-specific u
 #### Scenario: Profile controls remain available
 - **WHEN** the Start Menu opens
 - **THEN** it displays the current user header and profile controls above the action groups
-- **AND** profile controls remain independently activatable
+- **AND** it presents an exclusive manual policy selection of Auto, Gaming, or Saver
+- **AND** it emits the selected policy as one intent for the runtime to apply atomically
+
+#### Scenario: Automatic Gaming remains visible
+- **WHEN** automatic profile rules have activated effective Gaming mode while Auto remains the selected manual policy
+- **THEN** the Start Menu keeps Auto selected
+- **AND** it displays a separate non-interactive Game Mode active status identified as Automatic
 
 #### Scenario: Update badges identify source counts
 - **WHEN** valid positive Nix flake or Flatpak update counts are available

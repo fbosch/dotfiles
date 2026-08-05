@@ -103,15 +103,34 @@ export const EmptyRecentItems: Story = {
   ],
 };
 
-export const WithGamingProfile: Story = {
+export const WithAutomaticGaming: Story = {
   args: {
     isOpen: true,
     profile: {
       mode: 'gaming',
       source: 'auto',
-      gamingManual: false,
-      powersaveManual: false,
+      manualMode: 'default',
     },
+    onProfileChange: fn(),
+  },
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div className="min-h-screen bg-background-primary p-8">
+        <Story />
+      </div>
+    ),
+  ],
+};
+
+export const WithPinnedGaming: Story = {
+  args: {
+    isOpen: true,
+    profile: {
+      mode: 'gaming',
+      source: 'manual',
+      manualMode: 'gaming',
+    },
+    onProfileChange: fn(),
   },
   decorators: [
     (Story: React.ComponentType) => (
