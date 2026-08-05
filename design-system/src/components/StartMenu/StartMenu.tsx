@@ -187,7 +187,7 @@ export const StartMenu = ({
     {
       value: 'default',
       label: 'Auto',
-      icon: <span className="font-fluent">{'\uE713'}</span>,
+      icon: <span className="font-fluent">{'\uF8B0'}</span>,
       badge: automaticGamingActive ? (
         <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-nerd text-[8px] text-state-success-foreground ring-2 ring-accent-primary">
           {'\u{F02B4}'}
@@ -210,7 +210,7 @@ export const StartMenu = ({
     {
       value: 'powersave',
       label: 'Saver',
-      icon: <span className="font-fluent">{'\uE945'}</span>,
+      icon: <span className="font-fluent">{'\uEA95'}</span>,
       ariaLabel: 'Manual Power Saver profile',
       title: 'Select manual Power Saver profile',
     },

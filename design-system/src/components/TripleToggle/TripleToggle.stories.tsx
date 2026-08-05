@@ -4,9 +4,21 @@ import { Desktop } from '../Desktop';
 import { TripleToggle } from './TripleToggle';
 
 const options = [
-  { value: 'auto', label: 'Auto', icon: <span className="font-fluent">{'\uE713'}</span> },
-  { value: 'gaming', label: 'Gaming', icon: <span className="font-nerd">{'\u{F02B4}'}</span> },
-  { value: 'saver', label: 'Saver', icon: <span className="font-fluent">{'\uE945'}</span> },
+  {
+    value: 'auto',
+    label: 'Auto',
+    icon: <span className="font-fluent">{'\uF8B0'}</span>,
+  },
+  {
+    value: 'gaming',
+    label: 'Gaming',
+    icon: <span className="font-nerd">{'\u{F02B4}'}</span>,
+  },
+  {
+    value: 'saver',
+    label: 'Saver',
+    icon: <span className="font-fluent">{'\uEA95'}</span>,
+  },
 ] as const;
 
 const meta: Meta<typeof TripleToggle> = {
@@ -51,8 +63,8 @@ export const WithBadge: Story = {
       {
         ...options[0],
         badge: (
-          <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-nerd text-[8px] text-state-success-foreground ring-2 ring-accent-primary">
-            {'\u{F02B4}'}
+          <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-fluent text-[8px] text-state-success-foreground ring-2 ring-accent-primary">
+            {'\uE7FC'}
           </span>
         ),
         ariaLabel: 'Automatic profile rules; Game Mode is active',
@@ -62,6 +74,14 @@ export const WithBadge: Story = {
       options[2],
     ],
     value: 'auto',
+    ariaLabel: 'Performance profile',
+  },
+};
+
+export const SaverActive: Story = {
+  args: {
+    options,
+    value: 'saver',
     ariaLabel: 'Performance profile',
   },
 };
