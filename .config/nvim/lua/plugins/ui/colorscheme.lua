@@ -1,11 +1,11 @@
 return {
 	"mcchrish/zenbones.nvim",
-	dependencies = { "rktjmp/lush.nvim" },
 	lazy = false,
 	priority = 1000,
 	cond = vim.g.colors_name ~= "zenwritten",
 	config = function()
-		vim.g.zenbones_solid_line_nr = true
+		-- Use Zenwritten's bundled static theme to avoid loading Lush at startup.
+		vim.g.zenwritten_compat = 1
 
 		-- undercurl
 		vim.cmd([[let &t_Cs = "\e[4:3m"]])

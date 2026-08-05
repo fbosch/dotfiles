@@ -574,8 +574,12 @@ async function main(): Promise<void> {
   style(" Commit successful!", 2);
 }
 
-main().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
-  style(` Failed with unexpected error: ${message}`, 1);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    style(` Failed with unexpected error: ${message}`, 1);
+    process.exit(1);
+  });
