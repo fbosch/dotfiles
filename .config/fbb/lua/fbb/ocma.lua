@@ -26,8 +26,8 @@ end
 ---@return table[]|nil
 function M.list(run_command, decode_json)
 	assert(type(run_command) == "function", "run_command must be a function")
-	local ran, ok, output = run_ocma(run_command, "list", { "--format", "json" })
-	if not ran or not ok then
+	local ran, _, output = run_ocma(run_command, "list", { "--format", "json" })
+	if ran == false then
 		return nil
 	end
 	return M.read_accounts(output, decode_json)

@@ -1,11 +1,11 @@
-package.path = package.path
-	.. ";./.config/wezterm/?.lua"
-	.. ";./.config/wezterm/?/init.lua"
+package.path = package.path .. ";./.config/wezterm/?.lua" .. ";./.config/wezterm/?/init.lua"
 
 local registered_events = {}
 local mock_used_percent = 57
 local mock_credit_count = 2
 local mock_ocma_failure = false
+local mock_ocma_warning = false
+local mock_profile_alias = "ct"
 
 package.loaded.wezterm = {
 	config_dir = "." .. package.config:sub(1, 1) .. ".config" .. package.config:sub(1, 1) .. "wezterm",
@@ -55,7 +55,7 @@ package.loaded.wezterm = {
 				data = {
 					profiles = {
 						{
-							alias = "ct",
+							alias = mock_profile_alias,
 							active = true,
 							resetCredits = {
 								availableCount = mock_credit_count,
@@ -118,7 +118,7 @@ package.loaded.wezterm = {
 			if mock_ocma_failure then
 				return false, "", "simulated registry failure"
 			end
-			return true, "ocma-list", ""
+			return mock_ocma_warning == false, "ocma-list", ""
 		end
 		return true, "herdr-agents", ""
 	end,
@@ -205,12 +205,12 @@ update_status(window)
 os.date = original_os_date
 
 assert_eq(type(captured_status), "table", "status payload type")
-	assert_eq(find_text(captured_status, "[working] 2 "), false, "Herdr working count omitted")
-	assert_eq(find_text(captured_status, "[end] 6.5 "), true, "workhours indicator rendered")
-	assert_eq(find_text(captured_status, "ct"), true, "active Codex profile alias rendered")
-	assert_eq(find_text(captured_status, "*"), true, "active Codex profile indicator rendered")
-	assert_eq(find_text(captured_status, "kk"), true, "inactive Codex profile alias rendered")
-	assert_eq(find_text(captured_status, "²"), true, "Codex reset credits rendered")
+assert_eq(find_text(captured_status, "[working] 2 "), false, "Herdr working count omitted")
+assert_eq(find_text(captured_status, "[end] 6.5 "), true, "workhours indicator rendered")
+assert_eq(find_text(captured_status, "ct"), true, "active Codex profile alias rendered")
+assert_eq(find_text(captured_status, "*"), true, "active Codex profile indicator rendered")
+assert_eq(find_text(captured_status, "kk"), true, "inactive Codex profile alias rendered")
+assert_eq(find_text(captured_status, "²"), true, "Codex reset credits rendered")
 assert_eq(find_text(captured_status, "43%"), true, "ChatGPT remaining allowance rendered")
 assert_eq(find_text(captured_status, " ³ʰ"), true, "ChatGPT usage reset countdown rendered")
 
@@ -234,18 +234,24 @@ assert_eq(type(captured_status), "table", "profile change rerenders status")
 mock_credit_count = 1
 captured_status = nil
 user_var_changed(window, nil, "codex_reset_refreshed")
-	assert_eq(find_text(captured_status, "¹"), true, "reset redemption refreshes credit count")
+assert_eq(find_text(captured_status, "¹"), true, "reset redemption refreshes credit count")
 
 mock_credit_count = 0
 captured_status = nil
 update_status(window)
 assert_eq(find_text(captured_status, "⁰"), false, "zero reset credits omitted")
 
+mock_ocma_warning = true
+mock_profile_alias = "warning-profile"
+captured_status = nil
+user_var_changed(window, nil, "codex_profile_changed")
+assert_eq(find_text(captured_status, "warning-profile"), true, "warning OCMA output renders profiles")
+
 mock_ocma_failure = true
 captured_status = nil
 user_var_changed(window, nil, "codex_reset_refreshed")
 assert_eq(type(captured_status), "table", "status handles OCMA failure")
-assert_eq(find_text(captured_status, "ct"), true, "status retains cached accounts on OCMA failure")
+assert_eq(find_text(captured_status, "warning-profile"), true, "status retains cached accounts on OCMA failure")
 
 captured_status = nil
 update_status({
