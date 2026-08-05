@@ -80,7 +80,7 @@ export const RecentItems: Story = {
       </div>
     ),
   ],
-  play: async ({ canvasElement }) => {
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('menuitem', { name: 'Recent Items' });
 
@@ -88,8 +88,13 @@ export const RecentItems: Story = {
     await expect(canvas.queryByRole('menu', { name: 'Recent Items' })).not.toBeInTheDocument();
     await waitFor(() => expect(canvas.getByRole('menu', { name: 'Recent Items' })).toBeVisible());
 
+    const submenu = canvas.getByRole('menu', { name: 'Recent Items' });
     await userEvent.unhover(trigger);
-    await expect(canvas.getByRole('menu', { name: 'Recent Items' })).toBeVisible();
+    await userEvent.hover(submenu);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await expect(submenu).toBeVisible();
+
+    await userEvent.unhover(submenu);
     await waitFor(() =>
       expect(canvas.queryByRole('menu', { name: 'Recent Items' })).not.toBeInTheDocument()
     );
@@ -97,12 +102,34 @@ export const RecentItems: Story = {
     trigger.focus();
     await userEvent.keyboard('{ArrowRight}');
     await expect(canvas.getByRole('menu', { name: 'Recent Items' })).toBeVisible();
+    await waitFor(() =>
+      expect(canvas.getByRole('menuitem', { name: /Visual Studio Code/ })).toHaveFocus()
+    );
     await userEvent.keyboard('{Escape}');
     await expect(canvas.queryByRole('menu', { name: 'Recent Items' })).not.toBeInTheDocument();
     await expect(trigger).toHaveFocus();
 
+    await userEvent.keyboard('{ArrowRight}');
+    await waitFor(() =>
+      expect(canvas.getByRole('menuitem', { name: /Visual Studio Code/ })).toHaveFocus()
+    );
+    await userEvent.keyboard('{ArrowLeft}');
+    await expect(canvas.queryByRole('menu', { name: 'Recent Items' })).not.toBeInTheDocument();
+    await expect(trigger).toHaveFocus();
+
+    await userEvent.keyboard('{Enter}');
+    await expect(canvas.getByRole('menu', { name: 'Recent Items' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+
+    await userEvent.keyboard(' ');
+    await expect(canvas.getByRole('menu', { name: 'Recent Items' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+
     await userEvent.click(trigger);
     await expect(canvas.getByRole('menu', { name: 'Recent Items' })).toBeVisible();
+    await userEvent.click(canvasElement);
+    await expect(canvas.queryByRole('menu', { name: 'Recent Items' })).not.toBeInTheDocument();
+    await expect(args.onClose).toHaveBeenCalledOnce();
   },
 };
 

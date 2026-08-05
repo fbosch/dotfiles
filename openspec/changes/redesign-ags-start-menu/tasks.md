@@ -5,7 +5,7 @@
 - [x] 1.3 Align `ForceQuitDialog` with compact grouped application rows, selection state, disabled action state, and undecorated translucent shared-window styling.
 - [x] 1.4 Align `AboutThisPC` with optional parenthesized CPU and memory clock details, GPU, OS codename, kernel, and uptime rows, configured-image and Fluent fallback display states, and the fastfetch More Info intent.
 - [x] 1.5 Update Start Menu, Force Quit, and About This PC stories to cover populated, empty, unavailable, source-badge, and optional-information states without runtime dependencies.
-- [ ] 1.6 Add focused design-system tests for Start Menu keyboard/submenu behavior and pure display-data helpers introduced by this change.
+- [x] 1.6 Add focused design-system tests for Start Menu keyboard/submenu behavior and pure display-data helpers introduced by this change.
 
 ## 2. Recent Item Data Adapters
 

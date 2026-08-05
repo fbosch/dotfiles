@@ -59,6 +59,9 @@ export const Default: Story = {
   },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
+    await expect(canvas.getByText('AMD Ryzen 7 7840U (3.3 GHz)')).toBeVisible();
+    await expect(canvas.getByText('32 GB (3200 MHz)')).toBeVisible();
+    await expect(canvas.getByText('NixOS 25.05 (Warbler)')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'More Info...' }));
     await expect(args.onMoreInfo).toHaveBeenCalledOnce();
   },
@@ -90,6 +93,11 @@ export const ConfiguredDeviceImage: Story = {
     },
     onClose: fn(),
     onMoreInfo: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const image = canvasElement.querySelector('img');
+    await expect(image).toBeInTheDocument();
+    await expect(image?.getAttribute('src')).toMatch(/^data:image\/svg\+xml/);
   },
 };
 
