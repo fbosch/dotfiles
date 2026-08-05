@@ -50,9 +50,29 @@ return {
 	{
 		"fbosch/barbar.nvim",
 		dependencies = { "nvim-tree/nvim-web-devicons" },
-		lazy = false,
+		lazy = true,
 		init = function()
 			vim.g.barbar_auto_setup = false
+
+			local group = vim.api.nvim_create_augroup("LoadBarbarOnSecondBuffer", { clear = true })
+			vim.api.nvim_create_autocmd({ "BufAdd", "BufEnter" }, {
+				group = group,
+				callback = function()
+					local buffers = 0
+					for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+						if vim.bo[buffer].buflisted and vim.bo[buffer].buftype == "" then
+							buffers = buffers + 1
+						end
+					end
+
+					if buffers < 2 then
+						return
+					end
+
+					vim.api.nvim_del_augroup_by_id(group)
+					require("lazy").load({ plugins = { "barbar.nvim" } })
+				end,
+			})
 		end,
 		keys = vim.list_extend(buffer_index_keys(), {
 			{
