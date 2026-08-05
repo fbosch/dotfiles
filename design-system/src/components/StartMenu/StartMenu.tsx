@@ -571,20 +571,26 @@ export const StartMenu = ({
                   {showNixFlakeUpdates && (
                     <Tag
                       variant="primary"
-                      icon={'\uE895'}
+                      className="gap-1"
                       title="Nix flake updates"
                       aria-label={`Nix flake updates: ${nixFlakeUpdatesCount}`}
                     >
+                      <span className="font-nerd" aria-hidden="true">
+                        {'\uE843'}
+                      </span>
                       {nixFlakeUpdatesCount}
                     </Tag>
                   )}
                   {showFlatpakUpdates && (
                     <Tag
                       variant="primary"
-                      icon={'\uE71D'}
+                      className="gap-1"
                       title="Flatpak updates"
                       aria-label={`Flatpak updates: ${flatpakUpdatesCount}`}
                     >
+                      <span className="font-nerd" aria-hidden="true">
+                        {'\uF1B2'}
+                      </span>
                       {flatpakUpdatesCount}
                     </Tag>
                   )}
