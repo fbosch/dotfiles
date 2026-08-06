@@ -42,7 +42,7 @@ Alternative considered: polling current clients on menu open. Rejected because i
 
 ### Existing icon resolver is the single application-icon boundary
 
-Recent Applications and Force Quit resolve icons through `.config/ags/lib/app-icons.ts`. That resolver already handles desktop entries, Waybar mappings, Steam, Faugus, themes, and file icons. When resolution fails, callers use its initial-letter fallback.
+Recent Applications and Force Quit resolve icons through `.config/ags/services/app-icons.ts`. That resolver already handles desktop entries, Waybar mappings, Steam, Faugus, themes, and file icons. When resolution fails, callers use its initial-letter fallback.
 
 Alternative considered: separate menu-specific icon lookup. Rejected because it would duplicate desktop-entry and game-wrapper knowledge.
 

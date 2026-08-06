@@ -7,9 +7,9 @@ import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
 import { execAsync } from "ags/process";
-import { getFallbackLetter, getIconForWindow, setImageFile } from "./app-icons";
-import { queryHyprlandJson } from "./hyprland-ipc";
-import { perf } from "./performance-monitor";
+import { getFallbackLetter, getIconForWindow, setImageFile } from "../services/app-icons";
+import { queryHyprlandJson } from "../services/hyprland-ipc";
+import { perf } from "../services/performance-monitor";
 
 /**
  * Performance Optimizations:

@@ -3,8 +3,8 @@ import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
-import { bindGamingOpacity } from "./gaming-opacity";
-import { perf } from "./performance-monitor";
+import { bindGamingOpacity } from "../services/gaming-opacity";
+import { perf } from "../services/performance-monitor";
 
 // Configuration interface
 interface LayoutSwitchConfig {

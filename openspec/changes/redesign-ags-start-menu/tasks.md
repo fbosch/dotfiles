@@ -17,7 +17,7 @@
 
 ## 3. AGS Start Menu Interaction
 
-- [x] 3.1 Mirror the design-system action grouping, profile header, update badges, and Nerd Font source icons in `.config/ags/lib/start-menu.tsx`.
+- [x] 3.1 Mirror the design-system action grouping, profile header, update badges, and Nerd Font source icons in `.config/ags/components/start-menu.tsx`.
 - [ ] 3.2 Reload XBEL documents and Nix/Flatpak update caches when Start Menu opens, hiding invalid, stale, missing, or zero-count source badges.
 - [ ] 3.3 Implement the Recent Items submenu's 300 ms open delay, 200 ms close delay, immediate click/keyboard activation, timer cleanup, and Escape/focus behavior.
 - [ ] 3.4 Position the submenu upward on the trigger monitor and flip it left when the monitor work area lacks room on the right.

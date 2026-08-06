@@ -1,14 +1,14 @@
 {
 	"entry": ["config-bundled.tsx"],
-	"ignorePatterns": ["lib/start-menu.tsx", "lib/recent-applications.ts"],
-	"ignoreDependencies": ["ags", "effect"],
+	"ignorePatterns": ["components/start-menu.tsx", "services/recent-applications.ts"],
+	"ignoreDependencies": ["ags"],
 	"ignoreExports": [
 		{
-			"file": "lib/app-icons.ts",
+			"file": "services/app-icons.ts",
 			"exports": ["isGenericWrapperClass"]
 		},
 		{
-			"file": "lib/hyprland-ipc.ts",
+			"file": "services/hyprland-ipc.ts",
 			"exports": ["getHyprlandSocketPath"]
 		}
 	],

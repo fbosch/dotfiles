@@ -4,12 +4,12 @@ import Gdk from "gi://Gdk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
-import { resolveAppIcon, setImageFile, type IconRef } from "./app-icons";
+import { resolveAppIcon, setImageFile, type IconRef } from "../services/app-icons";
 import { createButton, setButtonVariant } from "./button";
-import { bindGamingOpacity } from "./gaming-opacity";
-import { queryHyprlandJson } from "./hyprland-ipc";
-import { perf } from "./performance-monitor";
-import { parseComponentRequest } from "./request";
+import { bindGamingOpacity } from "../services/gaming-opacity";
+import { queryHyprlandJson } from "../services/hyprland-ipc";
+import { perf } from "../services/performance-monitor";
+import { parseComponentRequest } from "../services/request";
 
 type AudioMixerTab = "playback" | "output" | "input";
 type BackendStatus = "loading" | "ready" | "unavailable" | "error";

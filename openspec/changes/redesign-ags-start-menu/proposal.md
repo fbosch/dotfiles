@@ -25,8 +25,8 @@ The current AGS Start Menu is a flat, implementation-led surface that does not p
 ## Impact
 
 - `design-system/src/components/StartMenu/`, `ForceQuitDialog/`, `AboutThisPC/`, and `Window/`: contract, story, and visual-reference updates.
-- `.config/ags/lib/start-menu.tsx`: menu structure, actions, recent-item lifecycle, and popup interaction behavior.
-- `.config/ags/lib/`: new focused helpers or modules for recent items, Force Quit, and About This PC where cohesive ownership reduces Start Menu complexity.
+- `.config/ags/components/start-menu.tsx`: menu structure, actions, recent-item lifecycle, and popup interaction behavior.
+- `.config/ags/components/` and `.config/ags/services/`: focused surfaces and runtime services for recent items, Force Quit, and About This PC.
 - `.config/ags/config-bundled.tsx` and `.config/waybar/config`: preserve existing component routing and Start Menu trigger behavior, adding registration only where new surfaces require IPC.
-- `.config/ags/lib/app-icons.ts`: reused as the application icon-resolution boundary; no new icon resolution system is introduced.
+- `.config/ags/services/app-icons.ts`: reused as the application icon-resolution boundary; no new icon resolution system is introduced.
 - Runtime reads local Hyprland state, `recently-used.xbel`, update caches, `/proc`, `/sys`, and `/etc`; no new package dependency is planned.

@@ -5,7 +5,7 @@ import Gtk from "gi://Gtk?version=4.0";
 import Gdk from "gi://Gdk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
 import { configureButton, setButtonVariant, type ButtonVariant } from "./button";
-import { bindGamingOpacity } from "./gaming-opacity";
+import { bindGamingOpacity } from "../services/gaming-opacity";
 
 // Configuration interface
 interface ConfirmConfig {
