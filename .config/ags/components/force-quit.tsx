@@ -4,7 +4,6 @@
 import Gdk from "gi://Gdk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
-import { Astal } from "ags/gtk4";
 import app from "ags/gtk4/app";
 import tokens from "../../../design-system/tokens.json";
 import { type IconRef, setImageFile } from "../services/app-icons";
@@ -12,6 +11,7 @@ import {
 	clearForceQuitMetricSamples,
 	type ForceQuitApplication,
 	type ForceQuitMetrics,
+	forceQuitApplication,
 	getForceQuitApplications,
 	getForceQuitMetrics,
 } from "../services/force-quit";
@@ -21,7 +21,7 @@ import { configureButton } from "./button";
 
 const metricRefreshMs = 2_000;
 
-let win: Astal.Window | null = null;
+let win: Gtk.ApplicationWindow | null = null;
 let applicationList: Gtk.Box | null = null;
 let statusLabel: Gtk.Label | null = null;
 let forceQuitButton: Gtk.Button | null = null;
@@ -31,6 +31,7 @@ let selectedApplicationId: string | null = null;
 let applications: ForceQuitApplication[] | null = [];
 let metrics = new Map<string, ForceQuitMetrics>();
 const metricLabels = new Map<string, Gtk.Label>();
+let terminationPending = false;
 
 function clearChildren(container: Gtk.Box): void {
 	let child = container.get_first_child();
@@ -127,8 +128,30 @@ function renderApplications(): void {
 		}
 	}
 
-	// Process termination is intentionally deferred to task 4.3.
+	forceQuitButton?.set_sensitive(
+		selectedApplicationId !== null && terminationPending === false,
+	);
+}
+
+function forceQuitSelectedApplication(): void {
+	if (terminationPending || !applications || !selectedApplicationId) return;
+
+	const selected = applications.find(
+		(application) => application.id === selectedApplicationId,
+	);
+	if (!selected) {
+		selectedApplicationId = null;
+		renderApplications();
+		return;
+	}
+
+	terminationPending = true;
 	forceQuitButton?.set_sensitive(false);
+	forceQuitApplication(selected, () => {
+		terminationPending = false;
+		selectedApplicationId = null;
+		if (isVisible) refreshApplications();
+	});
 }
 
 function refreshMetrics(): void {
@@ -186,7 +209,7 @@ function showForceQuit(): void {
 	if (!win) createWindow();
 	clearForceQuitMetricSamples();
 	refreshApplications();
-	win?.set_visible(true);
+	win?.present();
 	isVisible = true;
 	startMetricRefreshTimer();
 }
@@ -200,107 +223,112 @@ function destroyForceQuit(): void {
 }
 
 function createWindow(): void {
-	win = (
-		<window
-			name="force-quit"
-			namespace="ags-force-quit"
-			visible={false}
-			anchor={Astal.WindowAnchor.NONE}
-			layer={Astal.Layer.OVERLAY}
-			exclusivity={Astal.Exclusivity.IGNORE}
-			keymode={Astal.Keymode.EXCLUSIVE}
-			application={app}
-			class="force-quit"
-			$={(self: Astal.Window) => {
-				bindGamingOpacity(self);
-				const keyController = new Gtk.EventControllerKey();
-				keyController.connect("key-pressed", (_controller, keyval: number) => {
-					if (keyval !== Gdk.KEY_Escape) return false;
-					hideForceQuit();
-					return true;
-				});
-				self.add_controller(keyController);
-				self.connect("notify::visible", () => {
-					if (self.get_visible() === false) clearMetricRefreshTimer();
-				});
-			}}
-		>
-			<box
-				orientation={Gtk.Orientation.VERTICAL}
-				spacing={16}
-				class="force-quit-container"
+	const titlebar = (
+		<overlay>
+			<label
+				label="Force Quit Applications"
+				class="force-quit-title"
+				halign={Gtk.Align.CENTER}
+			/>
+			<button
+				$type="overlay"
+				halign={Gtk.Align.END}
+				valign={Gtk.Align.START}
+				class="force-quit-close"
+				onClicked={hideForceQuit}
+				$={(self: Gtk.Button) =>
+					configureButton(self, { variant: "transparent" })
+				}
 			>
-				<overlay>
-					<label
-						label="Force Quit Applications"
-						class="force-quit-title"
-						halign={Gtk.Align.CENTER}
-					/>
-					<button
-						$type="overlay"
-						halign={Gtk.Align.END}
-						valign={Gtk.Align.START}
-						class="force-quit-close"
-						onClicked={hideForceQuit}
-						$={(self: Gtk.Button) =>
-							configureButton(self, { variant: "transparent" })
-						}
-					>
-						<label label={"\uE711"} />
-					</button>
-				</overlay>
-				<label
-					class="force-quit-status"
-					halign={Gtk.Align.CENTER}
-					wrap={true}
-					$={(self: Gtk.Label) => {
-						statusLabel = self;
+				<label label={"\uE711"} />
+			</button>
+		</overlay>
+	) as Gtk.Overlay;
+	const content = (
+		<box
+			orientation={Gtk.Orientation.VERTICAL}
+			spacing={16}
+			class="force-quit-container"
+		>
+			{new Gtk.WindowHandle({ child: titlebar })}
+			<label
+				class="force-quit-status"
+				halign={Gtk.Align.CENTER}
+				wrap={true}
+				$={(self: Gtk.Label) => {
+					statusLabel = self;
+				}}
+			/>
+			<scrolledwindow
+				vexpand={true}
+				hscrollbarPolicy={Gtk.PolicyType.NEVER}
+				vscrollbarPolicy={Gtk.PolicyType.AUTOMATIC}
+				minContentHeight={260}
+				maxContentHeight={360}
+				class="force-quit-list"
+			>
+				<box
+					orientation={Gtk.Orientation.VERTICAL}
+					class="force-quit-list-content"
+					$={(self: Gtk.Box) => {
+						applicationList = self;
 					}}
 				/>
-				<scrolledwindow
-					vexpand={true}
-					hscrollbarPolicy={Gtk.PolicyType.NEVER}
-					vscrollbarPolicy={Gtk.PolicyType.AUTOMATIC}
-					minContentHeight={260}
-					maxContentHeight={360}
-					class="force-quit-list"
+			</scrolledwindow>
+			<box halign={Gtk.Align.END}>
+				<button
+					canFocus={true}
+					class="force-quit-action"
+					onClicked={forceQuitSelectedApplication}
+					$={(self: Gtk.Button) => {
+						forceQuitButton = self;
+						configureButton(self, { variant: "danger" });
+						self.set_sensitive(false);
+					}}
 				>
-					<box
-						orientation={Gtk.Orientation.VERTICAL}
-						class="force-quit-list-content"
-						$={(self: Gtk.Box) => {
-							applicationList = self;
-						}}
-					/>
-				</scrolledwindow>
-				<box halign={Gtk.Align.END}>
-					<button
-						canFocus={true}
-						class="force-quit-action"
-						tooltipText="Process termination will be available after Force Quit is completed."
-						$={(self: Gtk.Button) => {
-							forceQuitButton = self;
-							configureButton(self, { variant: "danger" });
-							self.set_sensitive(false);
-						}}
-					>
-						<label label="Force Quit" />
-					</button>
-				</box>
+					<label label="Force Quit" />
+				</button>
 			</box>
-		</window>
-	) as Astal.Window;
+		</box>
+	) as Gtk.Box;
+
+	win = new Gtk.ApplicationWindow({
+		application: app,
+		decorated: false,
+		defaultWidth: 462,
+		defaultHeight: 534,
+		resizable: true,
+		title: "Force Quit Applications",
+	});
+	win.set_name("force-quit");
+	win.add_css_class("force-quit");
+	win.set_child(content);
+	bindGamingOpacity(win);
+
+	const keyController = new Gtk.EventControllerKey();
+	keyController.connect("key-pressed", (_controller, keyval: number) => {
+		if (keyval !== Gdk.KEY_Escape) return false;
+		hideForceQuit();
+		return true;
+	});
+	win.add_controller(keyController);
+	win.connect("close-request", () => {
+		hideForceQuit();
+		return true;
+	});
+	win.connect("notify::visible", () => {
+		if (win?.get_visible() === false) clearMetricRefreshTimer();
+	});
 }
 
 function applyStaticCss(): void {
 	app.apply_css(
 		`
-		window.force-quit { background-color: transparent; border: none; padding: 40px; }
+		window.force-quit { background-color: transparent; border: none; padding: 0; }
 		window.force-quit box.force-quit-container {
 			min-width: 420px; min-height: 500px; padding: 12px 20px 20px;
 			border: 1px solid ${tokens.colors.border.hover.value}; border-radius: 12px;
 			background-color: rgba(45, 45, 45, 0.90);
-			box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28), 0 4px 12px rgba(0, 0, 0, 0.14);
 		}
 		window.force-quit label.force-quit-title { color: ${tokens.colors.foreground.primary.value}; font-size: 16px; font-weight: 600; }
 		window.force-quit button.force-quit-close { min-width: 32px; min-height: 32px; padding: 0; }

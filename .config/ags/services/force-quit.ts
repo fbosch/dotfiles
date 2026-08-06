@@ -1,3 +1,4 @@
+import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import type Gtk from "gi://Gtk?version=4.0";
 import {
@@ -7,7 +8,7 @@ import {
 	type IconWindowInfo,
 	resolveDesktopApplication,
 } from "./app-icons";
-import { queryHyprlandJson } from "./hyprland-ipc";
+import { dispatchHyprland, queryHyprlandJson } from "./hyprland-ipc";
 
 export interface ForceQuitWindow extends IconWindowInfo {
 	address: string;
@@ -47,6 +48,7 @@ const protectedIdentities = new Set([
 	"force-quit",
 	"hyprland",
 	"hyprlock",
+	"io.astal.ags-bundled",
 	"start-menu",
 	"waybar",
 ]);
@@ -117,6 +119,8 @@ interface ProcessSample {
 const processSamples = new Map<number, ProcessSample>();
 const clockTicksPerSecond = 100;
 const pageSizeBytes = 4096;
+const gracefulCloseMs = 1_500;
+const forcedTerminationSettleMs = 250;
 
 function readProcessStat(
 	pid: number,
@@ -196,6 +200,83 @@ export function getForceQuitMetrics(
 
 export function clearForceQuitMetricSamples(): void {
 	processSamples.clear();
+}
+
+export type ForceQuitResult = "resolved" | "terminated" | "unavailable";
+
+function revalidatedWindows(
+	application: ForceQuitApplication,
+	applications: ForceQuitApplication[],
+): ForceQuitWindow[] {
+	const current = applications.find(
+		(candidate) => candidate.id === application.id,
+	);
+	if (!current) return [];
+
+	const originalWindows = new Map(
+		application.windows.map((window) => [window.address, window.pid]),
+	);
+	return current.windows.filter(
+		(window) => originalWindows.get(window.address) === window.pid,
+	);
+}
+
+function terminateProcesses(pids: Set<number>): void {
+	for (const pid of pids) {
+		try {
+			Gio.Subprocess.new(
+				["kill", "-KILL", pid.toString()],
+				Gio.SubprocessFlags.NONE,
+			);
+		} catch (error) {
+			console.error(`Failed to terminate process ${pid}:`, error);
+		}
+	}
+}
+
+export function forceQuitApplication(
+	application: ForceQuitApplication,
+	onComplete: (result: ForceQuitResult) => void,
+): void {
+	const currentApplications = getForceQuitApplications();
+	if (!currentApplications) {
+		onComplete("unavailable");
+		return;
+	}
+
+	const currentWindows = revalidatedWindows(application, currentApplications);
+	if (currentWindows.length === 0) {
+		onComplete("resolved");
+		return;
+	}
+
+	for (const window of currentWindows) {
+		dispatchHyprland(
+			`hl.dsp.window.close({ window = "address:${window.address}" })`,
+			{ component: "force-quit", metric: "gracefulClose" },
+		);
+	}
+
+	GLib.timeout_add(GLib.PRIORITY_DEFAULT, gracefulCloseMs, () => {
+		const applications = getForceQuitApplications();
+		if (!applications) {
+			onComplete("unavailable");
+			return GLib.SOURCE_REMOVE;
+		}
+
+		const survivors = revalidatedWindows(application, applications);
+		if (survivors.length === 0) {
+			onComplete("resolved");
+			return GLib.SOURCE_REMOVE;
+		}
+
+		terminateProcesses(new Set(survivors.map((window) => window.pid)));
+		GLib.timeout_add(GLib.PRIORITY_DEFAULT, forcedTerminationSettleMs, () => {
+			onComplete("terminated");
+			return GLib.SOURCE_REMOVE;
+		});
+		return GLib.SOURCE_REMOVE;
+	});
 }
 
 function parseWindow(value: unknown): ForceQuitWindow | null {

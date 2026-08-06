@@ -4,6 +4,15 @@ require("rules.transient-placement").register()
 
 -- GTK Application
 hl.window_rule({ match = { class = "^(GTK Application)$" }, float = true })
+hl.window_rule({
+	match = { title = "^(Force Quit Applications)$" },
+	float = true,
+	center = true,
+	size = "462 534",
+	pin = true,
+	border_size = 0,
+	rounding = 12,
+})
 
 -- Bitwarden
 hl.window_rule({ match = { class = "^(Bitwarden)$" }, float = true, size = "900 900" })

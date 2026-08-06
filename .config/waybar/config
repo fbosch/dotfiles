@@ -147,7 +147,8 @@
       "btop_mem_terminal",
       "nvitop_terminal",
       "s_tui_terminal",
-      "wiremix_terminal"
+      "wiremix_terminal",
+      "io.Astal.ags-bundled"
     ],
     "app_ids-mapping": {
       "steam_app_worldofwarcraft": "world-of-warcraft",
