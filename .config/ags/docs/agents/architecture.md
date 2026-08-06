@@ -16,6 +16,7 @@ Services (in `services/`):
 - `services/app-icons.ts` - Application identity and icon resolution
 - `services/hyprland-ipc.ts` - Hyprland socket discovery and request helpers
 - `services/recent-applications.ts` - Session-scoped focus history
+- `services/recent-documents.ts` - XBEL-backed recent document history
 - `services/performance-monitor.ts` - Shared performance instrumentation
 
 Entry points:

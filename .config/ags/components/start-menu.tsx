@@ -14,9 +14,17 @@ import { getFallbackLetter } from "../services/app-icons";
 import { bindGamingOpacity } from "../services/gaming-opacity";
 import { perf } from "../services/performance-monitor";
 import {
+  clearRecentApplicationFocusHistory,
   getRecentApplications,
+  launchRecentApplication,
   startRecentApplicationFocusHistory,
 } from "../services/recent-applications";
+import {
+  clearRecentDocuments,
+  getRecentDocuments,
+  openRecentDocument,
+} from "../services/recent-documents";
+import type { RecentDocument } from "../services/recent-documents";
 import { parseComponentRequest } from "../services/request";
 
 // Configuration
@@ -187,6 +195,14 @@ let profileControlsBox: Gtk.Box | null = null;
 let profileAutoBadge: Gtk.Box | null = null;
 let recentItemsHost: Gtk.Box | null = null;
 let recentItemsVisible = false;
+let recentDocuments: RecentDocument[] = [];
+
+const updateCacheMaxAgeMs = 24 * 60 * 60 * 1000;
+const recentItemsOpenDelayMs = 300;
+const recentItemsCloseDelayMs = 200;
+const recentItemButtons: Gtk.Button[] = [];
+let recentItemsOpenTimer: number | null = null;
+let recentItemsCloseTimer: number | null = null;
 
 function recentItemsModel(): RecentItemsMenuModel {
   return {
@@ -196,7 +212,13 @@ function recentItemsModel(): RecentItemsMenuModel {
       icon: application.icon,
       fallbackLetter: getFallbackLetter({ class: application.name }),
     })),
-    documents: [],
+    documents: recentDocuments.map((document) => ({
+      id: document.uri,
+      label: document.name,
+      detail: document.detail,
+      icon: document.icon,
+      fallbackLetter: getFallbackLetter({ class: document.name }),
+    })),
   };
 }
 
@@ -208,23 +230,136 @@ function clearChildren(container: Gtk.Box): void {
   }
 }
 
+function clearRecentItemsOpenTimer(): void {
+  if (recentItemsOpenTimer === null) return;
+  GLib.source_remove(recentItemsOpenTimer);
+  recentItemsOpenTimer = null;
+}
+
+function clearRecentItemsCloseTimer(): void {
+  if (recentItemsCloseTimer === null) return;
+  GLib.source_remove(recentItemsCloseTimer);
+  recentItemsCloseTimer = null;
+}
+
+function clearRecentItemsTimers(): void {
+  clearRecentItemsOpenTimer();
+  clearRecentItemsCloseTimer();
+}
+
+function scheduleRecentItemsOpen(): void {
+  clearRecentItemsCloseTimer();
+  if (recentItemsVisible || recentItemsOpenTimer !== null) return;
+
+  recentItemsOpenTimer = GLib.timeout_add(
+    GLib.PRIORITY_DEFAULT,
+    recentItemsOpenDelayMs,
+    () => {
+      recentItemsOpenTimer = null;
+      showRecentItemsMenu();
+      return GLib.SOURCE_REMOVE;
+    },
+  );
+}
+
+function scheduleRecentItemsClose(): void {
+  clearRecentItemsOpenTimer();
+  clearRecentItemsCloseTimer();
+  recentItemsCloseTimer = GLib.timeout_add(
+    GLib.PRIORITY_DEFAULT,
+    recentItemsCloseDelayMs,
+    () => {
+      recentItemsCloseTimer = null;
+      hideRecentItemsMenu();
+      return GLib.SOURCE_REMOVE;
+    },
+  );
+}
+
 function hideRecentItemsMenu(): void {
+  clearRecentItemsTimers();
   recentItemsVisible = false;
   recentItemsHost?.set_visible(false);
+  recentItemButtons.length = 0;
   menuItemButtons.get("recent-items")?.remove_css_class("submenu-open");
 }
 
 function showRecentItemsMenu(): void {
   if (!recentItemsHost) return;
 
+  clearRecentItemsTimers();
+  recentItemButtons.length = 0;
   clearChildren(recentItemsHost);
-  recentItemsHost.append(createRecentItemsMenu(recentItemsModel()));
+  recentItemsHost.append(
+    createRecentItemsMenu(recentItemsModel(), {
+      onApplicationActivated: (item) => {
+        launchRecentApplication(item.id);
+        hideMenu();
+      },
+      onDocumentActivated: (item) => {
+        openRecentDocument(item.id);
+        hideMenu();
+      },
+      onClearRecentItems: () => {
+        clearRecentApplicationFocusHistory();
+        if (clearRecentDocuments()) recentDocuments = [];
+        showRecentItemsMenu();
+      },
+      onButtonCreated: (button) => recentItemButtons.push(button),
+    }),
+  );
   recentItemsHost.set_visible(true);
   recentItemsVisible = true;
   menuItemButtons.get("recent-items")?.add_css_class("submenu-open");
 }
 
-function readUpdatesCache<T>(filename: string, label: string): T | null {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isFreshCacheTimestamp(timestamp: string): boolean {
+  const checkedAt = Date.parse(timestamp);
+  if (!Number.isFinite(checkedAt)) return false;
+
+  const age = Date.now() - checkedAt;
+  return age >= 0 && age <= updateCacheMaxAgeMs;
+}
+
+function isFlakeUpdate(value: unknown): value is FlakeUpdate {
+  if (!isRecord(value)) return false;
+  return ["name", "currentRev", "currentShort", "newRev", "newShort"].every(
+    (key) => typeof value[key] === "string",
+  );
+}
+
+function isFlatpakUpdate(value: unknown): value is FlatpakUpdate {
+  if (!isRecord(value)) return false;
+  return ["app", "currentVersion", "newVersion", "branch"].every(
+    (key) => typeof value[key] === "string",
+  );
+}
+
+function isUpdatesCache<T>(
+  value: unknown,
+  isUpdate: (update: unknown) => update is T,
+): value is { count: number; updates: T[]; timestamp: string } {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.count === "number" &&
+    Number.isInteger(value.count) &&
+    value.count >= 0 &&
+    Array.isArray(value.updates) &&
+    value.updates.every(isUpdate) &&
+    typeof value.timestamp === "string" &&
+    isFreshCacheTimestamp(value.timestamp)
+  );
+}
+
+function readUpdatesCache<T>(
+  filename: string,
+  label: string,
+  isUpdate: (update: unknown) => update is T,
+): { count: number; updates: T[]; timestamp: string } | null {
   try {
     const cacheDir = GLib.get_user_cache_dir();
     const cachePath = `${cacheDir}/${filename}`;
@@ -240,7 +375,8 @@ function readUpdatesCache<T>(filename: string, label: string): T | null {
 
     const decoder = new TextDecoder("utf-8");
     const jsonStr = decoder.decode(contents);
-    return JSON.parse(jsonStr) as T;
+    const parsed: unknown = JSON.parse(jsonStr);
+    return isUpdatesCache(parsed, isUpdate) ? parsed : null;
   } catch (e) {
     console.error(`Error reading ${label} cache:`, e);
     return null;
@@ -248,12 +384,13 @@ function readUpdatesCache<T>(filename: string, label: string): T | null {
 }
 
 const readFlakeUpdatesCache = () =>
-  readUpdatesCache<FlakeUpdatesData>("flake-updates.json", "flake updates");
+  readUpdatesCache("flake-updates.json", "flake updates", isFlakeUpdate);
 
 const readFlatpakUpdatesCache = () =>
-  readUpdatesCache<FlatpakUpdatesData>(
+  readUpdatesCache(
     "flatpak-updates.json",
     "Flatpak updates",
+    isFlatpakUpdate,
   );
 
 // Format time difference for tooltip
@@ -634,32 +771,16 @@ function startCacheMonitor() {
   }
 }
 
-function refreshCacheData() {
+function refreshCacheData(updateVisibleMenu = true) {
   const flakeCacheData = readFlakeUpdatesCache();
   const flatpakCacheData = readFlatpakUpdatesCache();
 
-  let needsMenuUpdate = false;
+  flakeUpdatesCount = flakeCacheData?.count ?? 0;
+  flakeUpdatesData = flakeUpdatesCount > 0 ? flakeCacheData : null;
+  flatpakUpdatesCount = flatpakCacheData?.count ?? 0;
+  flatpakUpdatesData = flatpakUpdatesCount > 0 ? flatpakCacheData : null;
 
-  if (flakeCacheData) {
-    const oldCount = flakeUpdatesCount;
-    flakeUpdatesCount = flakeCacheData.count;
-    flakeUpdatesData = flakeCacheData;
-    if (oldCount !== flakeUpdatesCount) {
-      needsMenuUpdate = true;
-    }
-  }
-
-  if (flatpakCacheData) {
-    const oldCount = flatpakUpdatesCount;
-    flatpakUpdatesCount = flatpakCacheData.count;
-    flatpakUpdatesData = flatpakCacheData;
-    if (oldCount !== flatpakUpdatesCount) {
-      needsMenuUpdate = true;
-    }
-  }
-
-  // Update menu if counts changed (always update, not just when visible)
-  if (needsMenuUpdate) {
+  if (updateVisibleMenu && menuBox) {
     updateMenuItems();
   }
 }
@@ -682,33 +803,8 @@ function showMenu() {
   let ok = true;
   let error: string | undefined;
   try {
-    // Read updates from both caches
-    const flakeCacheData = readFlakeUpdatesCache();
-    const flatpakCacheData = readFlatpakUpdatesCache();
-
-    let needsUpdate = false;
-
-    if (flakeCacheData) {
-      const oldCount = flakeUpdatesCount;
-      flakeUpdatesCount = flakeCacheData.count;
-      flakeUpdatesData = flakeCacheData;
-      if (oldCount !== flakeUpdatesCount) {
-        needsUpdate = true;
-      }
-    }
-
-    if (flatpakCacheData) {
-      const oldCount = flatpakUpdatesCount;
-      flatpakUpdatesCount = flatpakCacheData.count;
-      flatpakUpdatesData = flatpakCacheData;
-      if (oldCount !== flatpakUpdatesCount) {
-        needsUpdate = true;
-      }
-    }
-
-    if (needsUpdate) {
-      updateMenuItems();
-    }
+    refreshCacheData(false);
+    recentDocuments = getRecentDocuments();
 
     if (!win) {
       createWindow();
@@ -841,6 +937,13 @@ function createMenuItem(item: MenuItem): Gtk.Widget {
         self.set_cursor_from_name("pointer");
         menuItemButtons.set(item.id, self);
 
+        if (item.id === "recent-items") {
+          const motion = new Gtk.EventControllerMotion();
+          motion.connect("enter", scheduleRecentItemsOpen);
+          motion.connect("leave", scheduleRecentItemsClose);
+          self.add_controller(motion);
+        }
+
         // Set tooltip if this is the updates item
         if (item.id === "system-updates") {
           const tooltip = generateUpdatesTooltip();
@@ -885,6 +988,10 @@ function createMenuItem(item: MenuItem): Gtk.Widget {
         class="recent-items-host"
         $={(self: Gtk.Box) => {
           recentItemsHost = self;
+          const motion = new Gtk.EventControllerMotion();
+          motion.connect("enter", clearRecentItemsCloseTimer);
+          motion.connect("leave", scheduleRecentItemsClose);
+          self.add_controller(motion);
         }}
       />
     </overlay>
@@ -1142,12 +1249,41 @@ function updateMenuItems() {
 
 // Handle keyboard navigation in the menu
 function handleKeyboardNavigation(keyval: number): boolean {
-  if (keyval === Gdk.KEY_Escape) {
-    if (recentItemsVisible) {
-      hideRecentItemsMenu();
-      menuItemButtons.get("recent-items")?.grab_focus();
+  const focusedWidget = win?.get_focus() ?? null;
+  const recentItemIndex = recentItemButtons.findIndex(
+    (button) => button === focusedWidget,
+  );
+
+  if (
+    recentItemsVisible &&
+    (keyval === Gdk.KEY_Escape || keyval === Gdk.KEY_Left)
+  ) {
+    hideRecentItemsMenu();
+    menuItemButtons.get("recent-items")?.grab_focus();
+    return true;
+  }
+
+  if (recentItemsVisible && recentItemIndex >= 0) {
+    if (keyval === Gdk.KEY_Down || keyval === Gdk.KEY_Tab) {
+      const nextIndex = (recentItemIndex + 1) % recentItemButtons.length;
+      recentItemButtons[nextIndex]?.grab_focus();
       return true;
     }
+    if (keyval === Gdk.KEY_Up || keyval === Gdk.KEY_ISO_Left_Tab) {
+      const previousIndex =
+        recentItemIndex === 0
+          ? recentItemButtons.length - 1
+          : recentItemIndex - 1;
+      recentItemButtons[previousIndex]?.grab_focus();
+      return true;
+    }
+    if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_space) {
+      recentItemButtons[recentItemIndex]?.activate();
+      return true;
+    }
+  }
+
+  if (keyval === Gdk.KEY_Escape) {
     hideMenu();
     return true;
   }
@@ -1158,8 +1294,19 @@ function handleKeyboardNavigation(keyval: number): boolean {
 
   if (focusableButtons.length === 0) return false;
 
-  let currentFocus = focusableButtons.find((btn) => btn.has_focus);
-  let currentIndex = currentFocus ? focusableButtons.indexOf(currentFocus) : -1;
+  const currentFocus = focusableButtons.find((btn) => btn.has_focus);
+  const currentIndex = currentFocus
+    ? focusableButtons.indexOf(currentFocus)
+    : -1;
+
+  if (
+    keyval === Gdk.KEY_Right &&
+    currentFocus === menuItemButtons.get("recent-items")
+  ) {
+    showRecentItemsMenu();
+    recentItemButtons[0]?.grab_focus();
+    return true;
+  }
 
   if (keyval === Gdk.KEY_Tab || keyval === Gdk.KEY_Down) {
     // Move to next item
@@ -1649,7 +1796,11 @@ function handleStartMenuRequest(
       }
 
       if (data.action === "refresh") {
-        refreshCacheData();
+        const reopenRecentItems = recentItemsVisible;
+        refreshCacheData(false);
+        recentDocuments = getRecentDocuments();
+        if (menuBox) updateMenuItems();
+        if (reopenRecentItems) showRecentItemsMenu();
         res("refreshed");
         return;
       }

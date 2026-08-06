@@ -17,6 +17,13 @@ export interface RecentItemsMenuModel {
 	documents: RecentItemsMenuItem[];
 }
 
+export interface RecentItemsMenuActions {
+	onApplicationActivated?: (item: RecentItemsMenuItem) => void;
+	onDocumentActivated?: (item: RecentItemsMenuItem) => void;
+	onClearRecentItems?: () => void;
+	onButtonCreated?: (button: Gtk.Button) => void;
+}
+
 function createItemIcon(item: RecentItemsMenuItem): Gtk.Widget {
 	const icon = item.icon;
 	if (icon?.kind === "theme") {
@@ -46,13 +53,19 @@ function createItemIcon(item: RecentItemsMenuItem): Gtk.Widget {
 	) as Gtk.Box;
 }
 
-function createRecentItem(item: RecentItemsMenuItem): Gtk.Button {
+function createRecentItem(
+	item: RecentItemsMenuItem,
+	onActivated?: (item: RecentItemsMenuItem) => void,
+	onButtonCreated?: (button: Gtk.Button) => void,
+): Gtk.Button {
 	return (
 		<button
-			sensitive={false}
-			canFocus={false}
+			sensitive={Boolean(onActivated)}
+			canFocus={Boolean(onActivated)}
 			class="recent-item"
 			tooltipText={item.detail}
+			onClicked={() => onActivated?.(item)}
+			$={(self: Gtk.Button) => onActivated && onButtonCreated?.(self)}
 		>
 			<box orientation={Gtk.Orientation.HORIZONTAL} spacing={10}>
 				{createItemIcon(item)}
@@ -84,16 +97,26 @@ function createRecentItem(item: RecentItemsMenuItem): Gtk.Button {
 	) as Gtk.Button;
 }
 
-function createSection(title: string, items: RecentItemsMenuItem[]): Gtk.Box {
+function createSection(
+	title: string,
+	items: RecentItemsMenuItem[],
+	onActivated?: (item: RecentItemsMenuItem) => void,
+	onButtonCreated?: (button: Gtk.Button) => void,
+): Gtk.Box {
 	return (
 		<box orientation={Gtk.Orientation.VERTICAL}>
 			<label label={title} xalign={0} class="recent-items-heading" />
-			{items.map(createRecentItem)}
+			{items.map((item) =>
+				createRecentItem(item, onActivated, onButtonCreated),
+			)}
 		</box>
 	) as Gtk.Box;
 }
 
-export function createRecentItemsMenu(model: RecentItemsMenuModel): Gtk.Box {
+export function createRecentItemsMenu(
+	model: RecentItemsMenuModel,
+	actions: RecentItemsMenuActions = {},
+): Gtk.Box {
 	const hasApplications = model.applications.length > 0;
 	const hasDocuments = model.documents.length > 0;
 	const hasRecentItems = hasApplications || hasDocuments;
@@ -103,18 +126,38 @@ export function createRecentItemsMenu(model: RecentItemsMenuModel): Gtk.Box {
 			{hasRecentItems ? (
 				<>
 					{hasApplications
-						? createSection("Applications", model.applications)
+						? createSection(
+								"Applications",
+								model.applications,
+								actions.onApplicationActivated,
+								actions.onButtonCreated,
+							)
 						: null}
 					{hasApplications && hasDocuments ? (
 						<box class="recent-items-divider" />
 					) : null}
-					{hasDocuments ? createSection("Documents", model.documents) : null}
+					{hasDocuments
+						? createSection(
+								"Documents",
+								model.documents,
+								actions.onDocumentActivated,
+								actions.onButtonCreated,
+							)
+						: null}
 				</>
 			) : (
 				<label label="No recent items" class="recent-items-empty" />
 			)}
 			<box class="recent-items-divider" />
-			<button sensitive={false} canFocus={false} class="recent-items-clear">
+			<button
+				sensitive={Boolean(actions.onClearRecentItems)}
+				canFocus={Boolean(actions.onClearRecentItems)}
+				class="recent-items-clear"
+				onClicked={() => actions.onClearRecentItems?.()}
+				$={(self: Gtk.Button) =>
+					actions.onClearRecentItems && actions.onButtonCreated?.(self)
+				}
+			>
 				<box orientation={Gtk.Orientation.HORIZONTAL} spacing={10}>
 					<label label={"\uE74D"} class="recent-items-clear-icon" />
 					<label label="Clear Recent Items" />

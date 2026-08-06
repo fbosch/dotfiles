@@ -2,12 +2,7 @@
 	"entry": ["config-bundled.tsx"],
 	"ignorePatterns": [],
 	"ignoreDependencies": ["ags"],
-	"ignoreExports": [
-		{
-			"file": "services/recent-applications.ts",
-			"exports": ["clearRecentApplicationFocusHistory"]
-		}
-	],
+	"ignoreExports": [],
 	"rules": {
 		"unused-files": "warn",
 		"unused-exports": "warn",

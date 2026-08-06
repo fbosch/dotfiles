@@ -11,16 +11,16 @@
 
 - [x] 2.1 Add a bounded, session-scoped Hyprland focus-history adapter that records application identity without persistence.
 - [x] 2.2 Resolve launchable recent applications and icons through the existing app-icons resolver, retaining closed apps only when they have a desktop launch target.
-- [ ] 2.3 Add a Recent Documents adapter that parses `recently-used.xbel` with an XML-capable parser, limits entries, and degrades to an empty section on unreadable or malformed input.
-- [ ] 2.4 Implement recent application launch-new and document URI-opening actions without shell interpolation.
-- [ ] 2.5 Implement Clear Recent Items for only in-memory application history and XBEL document history, then refresh the visible submenu state.
+- [x] 2.3 Add a Recent Documents adapter that parses `recently-used.xbel` with an XML-capable parser, limits entries, and degrades to an empty section on unreadable or malformed input.
+- [x] 2.4 Implement recent application launch-new and document URI-opening actions without shell interpolation.
+- [x] 2.5 Implement Clear Recent Items for only in-memory application history and XBEL document history, then refresh the visible submenu state.
 
 ## 3. AGS Start Menu Interaction
 
 - [x] 3.1 Mirror the design-system action grouping, profile header, update badges, and Nerd Font source icons in `.config/ags/components/start-menu.tsx`.
-- [ ] 3.2 Reload XBEL documents and Nix/Flatpak update caches when Start Menu opens, hiding invalid, stale, missing, or zero-count source badges.
+- [x] 3.2 Reload XBEL documents and Nix/Flatpak update caches when Start Menu opens, hiding invalid, stale, missing, or zero-count source badges.
 - [x] 3.3a Add the production Recent Items submenu rendering target with immediate click activation, empty state, and session focus-history preview.
-- [ ] 3.3b Complete the submenu's 300 ms open delay, 200 ms close delay, keyboard activation, timer cleanup, and Escape/focus behavior.
+- [x] 3.3b Complete the submenu's 300 ms open delay, 200 ms close delay, keyboard activation, timer cleanup, and Escape/focus behavior.
 - [ ] 3.4 Position the submenu upward on the trigger monitor and flip it left when the monitor work area lacks room on the right.
 - [ ] 3.5 Hide Start Menu before dispatching lock, logout, suspend, restart, and shutdown; retain direct lock and existing confirmation-script behavior for the other session actions.
 - [ ] 3.6 Preserve `show`, `hide`, `toggle`, `refresh`, and `is-visible` Start Menu requests and the existing Waybar trigger/visibility behavior.

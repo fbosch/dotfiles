@@ -1,4 +1,5 @@
 import Gio from "gi://Gio?version=2.0";
+import GioUnix from "gi://GioUnix?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import type { IconRef } from "./app-icons";
 import { isGenericWrapperClass, resolveDesktopApplication } from "./app-icons";
@@ -230,6 +231,19 @@ export function getRecentApplications(limit = 8): RecentApplication[] {
 	}
 
 	return applications;
+}
+
+export function launchRecentApplication(desktopId: string): boolean {
+	if (!desktopId) return false;
+
+	try {
+		const appInfo = GioUnix.DesktopAppInfo.new(desktopId);
+		if (!appInfo || appInfo.get_is_hidden()) return false;
+		return appInfo.launch(null, null);
+	} catch (error) {
+		console.error(`Failed to launch recent application ${desktopId}:`, error);
+		return false;
+	}
 }
 
 export function clearRecentApplicationFocusHistory(): void {
