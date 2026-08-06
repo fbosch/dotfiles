@@ -19,6 +19,7 @@ local window_switcher = require("actions.window-switcher")
 
 local main_mod = "SUPER"
 local waybar_control_socket = command.arg(hypr_ipc.instance_socket_path("waybar-monitor.sock"))
+local active_is_not_passthrough_exempt = window_state.active_is_not_tagged(window_tags.passthrough_exempt)
 
 local function main(key)
 	return main_mod .. " + " .. key
@@ -116,13 +117,21 @@ bind.register(main("E"), programs.file_manager)
 -- Window state
 bind.register(main("W"), async.runtime_lua("windows/killactive-selective.lua"))
 bind.register(main("CTRL + C"), "~/.config/hypr/runtime/windows/confirm-hyprprop-kill.sh")
-bind.register(main("V"), hl.dsp.window.float())
-bind.register(main("P"), hl.dsp.window.pseudo())
+bind.register(main("V"), hl.dsp.window.float(), {
+	predicate = active_is_not_passthrough_exempt,
+})
+bind.register(main("P"), hl.dsp.window.pseudo(), {
+	predicate = active_is_not_passthrough_exempt,
+})
 
-bind.register(main("F"), hl.dsp.window.fullscreen({ mode = "maximized" }))
-bind.register(main("CTRL + F"), hl.dsp.window.fullscreen({ mode = "fullscreen" }))
+bind.register(main("F"), hl.dsp.window.fullscreen({ mode = "maximized" }), {
+	predicate = active_is_not_passthrough_exempt,
+})
+bind.register(main("CTRL + F"), hl.dsp.window.fullscreen({ mode = "fullscreen" }), {
+	predicate = active_is_not_passthrough_exempt,
+})
 bind.register(main("CTRL + SHIFT + F"), hl.dsp.pass({ window = "class:^(xfreerdp)$" }), {
-	predicate = window_state.active_is_not_tagged(window_tags.passthrough_exempt),
+	predicate = active_is_not_passthrough_exempt,
 })
 
 bind.register(main("Z"), "~/.config/hypr/runtime/windows/minimized-state.lua toggle-window")
