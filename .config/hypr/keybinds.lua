@@ -2,6 +2,7 @@ local programs = require("programs")
 local async = require("lib.async")
 local bind = require("lib.bind")
 local command = require("lib.command")
+local window_tags = require("lib.window_tags")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
 local window_interaction = require("lib.window.interaction")
 local window_custom_layout = require("lib.window.custom_layout")
@@ -120,7 +121,9 @@ bind.register(main("P"), hl.dsp.window.pseudo())
 
 bind.register(main("F"), hl.dsp.window.fullscreen({ mode = "maximized" }))
 bind.register(main("CTRL + F"), hl.dsp.window.fullscreen({ mode = "fullscreen" }))
-bind.register(main("CTRL + SHIFT + F"), hl.dsp.pass({ window = "class:^(xfreerdp)$" }))
+bind.register(main("CTRL + SHIFT + F"), hl.dsp.pass({ window = "class:^(xfreerdp)$" }), {
+	predicate = window_state.active_is_not_tagged(window_tags.passthrough_exempt),
+})
 
 bind.register(main("Z"), "~/.config/hypr/runtime/windows/minimized-state.lua toggle-window")
 bind.register(main("SHIFT + Z"), "~/.config/hypr/runtime/windows/minimized-state.lua toggle-workspace")

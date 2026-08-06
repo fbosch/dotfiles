@@ -24,6 +24,8 @@ wait_for_shutdown() {
 wait_for_shutdowns() {
   wait_for_shutdown "AGS" pgrep -x gjs &
   ags_pid=$!
+  wait_for_shutdown "Foot server" pgrep -f "foot --server" &
+  foot_pid=$!
   wait_for_shutdown "waybar" pgrep -x waybar &
   waybar_pid=$!
   wait_for_shutdown "hyprpaper" pgrep -x hyprpaper &
@@ -38,7 +40,7 @@ wait_for_shutdowns() {
   custom_layout_pid=$!
 
   status=0
-  for pid in "$ags_pid" "$waybar_pid" "$hyprpaper_pid" "$waybar_monitor_pid" "$window_capture_pid" "$window_state_pid" "$custom_layout_pid"; do
+  for pid in "$ags_pid" "$foot_pid" "$waybar_pid" "$hyprpaper_pid" "$waybar_monitor_pid" "$window_capture_pid" "$window_state_pid" "$custom_layout_pid"; do
     if wait "$pid"; then
       continue
     fi
@@ -51,6 +53,7 @@ wait_for_shutdowns() {
 
 pkill waybar 2>/dev/null || true
 pkill gjs 2>/dev/null || true
+pkill -f "foot --server" 2>/dev/null || true
 pkill -f "waybar-monitor.sh" 2>/dev/null || true
 pkill -f "waybar-monitor.lua" 2>/dev/null || true
 pkill -f window-state.sh 2>/dev/null || true
@@ -68,6 +71,7 @@ hyprctl reload
 uwsm-app -s s -- waybar &
 uwsm-app -s s -- ~/.config/ags/start-daemons.sh &
 uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-monitor.sh &
+uwsm-app -s b -- foot --server &
 swaync-client -R &
 swaync-client -rs &
 

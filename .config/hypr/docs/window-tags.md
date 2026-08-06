@@ -18,6 +18,14 @@ Consumers must treat `name` and `name*` as the same tag. Use
   This PC.
 - Consumer: `custom-layout-drag-resize-daemon.lua`.
 
+### `passthrough-exempt`
+
+- Owner: `lib/window_tags.lua`
+- Purpose: prevents pass-through bindings from redirecting the active window's
+  input to another client.
+- Producer: the AGS class rule in `rules/ags.lua`.
+- Consumer: the FreeRDP pass-through bind in `keybinds.lua`.
+
 ### Picture-In-Picture Corners
 
 - Tags: `pip-top-left`, `pip-top-right`, `pip-bottom-left`, and

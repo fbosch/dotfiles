@@ -162,6 +162,15 @@ run("cursor lookup selects an unfocused normal window beside a game", function()
 	assert_equal(state.at_cursor(), normal_window, "window under cursor")
 end)
 
+run("active-window tag predicate skips tagged windows", function()
+	reset("DP-2")
+	active_window.tags = { "passthrough-exempt*" }
+
+	assert_equal(state.active_is_not_tagged("passthrough-exempt")(), false, "tagged window")
+	active_window.tags = nil
+	assert_equal(state.active_is_not_tagged("passthrough-exempt")(), true, "untagged window")
+end)
+
 run("cursor lookup ignores games on inactive workspaces", function()
 	reset("DP-2")
 	active_window.content_type = "none"

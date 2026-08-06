@@ -1,5 +1,6 @@
 local M = {
 	non_resizable = "non-resizable",
+	passthrough_exempt = "passthrough-exempt",
 }
 
 function M.has(tags, expected)

@@ -1,4 +1,5 @@
 local monitor_role = require("lib.monitor_role")
+local window_tags = require("lib.window_tags")
 local gaming = require("gaming")
 
 local M = {}
@@ -107,6 +108,13 @@ end
 
 function M.active_is_not_game()
 	return not M.active_is_game()
+end
+
+function M.active_is_not_tagged(expected)
+	return function()
+		local active = M.active()
+		return window_tags.has(active and active.tags, expected) == false
+	end
 end
 
 function M.uses_custom_layout(active, expected)

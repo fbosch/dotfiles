@@ -9,6 +9,7 @@ function M.register()
 		pin = true,
 		border_size = 0,
 		rounding = 12,
+		tag = "+" .. window_tags.passthrough_exempt,
 	})
 	hl.window_rule({
 		match = { title = "^(Force Quit Applications)$" },
