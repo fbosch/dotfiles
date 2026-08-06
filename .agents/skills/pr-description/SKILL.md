@@ -82,6 +82,8 @@ Add a section only when it changes reviewer behavior, preserves non-obvious cont
 - Keep language simple and easy to read; prefer short sentences and specific technical nouns.
 - Prefer active voice unless passive voice keeps focus on the changed behavior or risk.
 - Prefer positive, direct statements over negated or hedged phrasing.
+- Wrap repository file mentions in inline code, for example `src/auth/session.ts`.
+- Use fenced code blocks for multi-line code and specify the appropriate language, for example ```` ```js ````.
 - Start change bullets with plain verbs: `add`, `remove`, `change`, `fix`, `update`, `replace`, `move`, `extract`.
 - Avoid first-person phrasing and avoid "this PR" narration.
 - Avoid generic claims like "improves maintainability", "more robust", or "better DX" unless you specify the concrete effect or failure mode avoided.
