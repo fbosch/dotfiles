@@ -123,37 +123,47 @@ const listenForHyprlandEvents = Effect.callback<never, FocusListenerError>(
 			resume(Effect.fail(new FocusListenerError({ cause, report })));
 		};
 
-		void (async () => {
-			const socketPath = getHyprlandSocketPath(eventSocketName);
-			if (!socketPath) {
-				fail("Hyprland event socket is unavailable", false);
-				return;
-			}
+		const readNextLine = (stream: Gio.DataInputStream) => {
+			stream.read_line_async(
+				GLib.PRIORITY_DEFAULT,
+				cancellable,
+				(_source, result) => {
+					if (finished) return;
 
-			try {
-				const socketClient = new Gio.SocketClient();
-				const address = Gio.UnixSocketAddress.new(socketPath);
-				connection = await socketClient.connect_async(address, cancellable);
+					try {
+						const [line] = stream.read_line_finish(result);
+						if (line === null) {
+							fail("Hyprland event socket closed", true);
+							return;
+						}
+						handleHyprlandEvent(new TextDecoder().decode(line));
+						readNextLine(stream);
+					} catch (error) {
+						if (!cancellable.is_cancelled()) fail(error, true);
+					}
+				},
+			);
+		};
+
+		const socketPath = getHyprlandSocketPath(eventSocketName);
+		if (!socketPath) {
+			fail("Hyprland event socket is unavailable", false);
+		} else {
+			const socketClient = new Gio.SocketClient();
+			const address = Gio.UnixSocketAddress.new(socketPath);
+			socketClient.connect_async(address, cancellable, (_source, result) => {
 				if (finished) return;
 
-				input = Gio.DataInputStream.new(connection.get_input_stream());
-				connectionErrorReported = false;
-
-				while (!finished) {
-					const [line] = await input.read_line_async(
-						GLib.PRIORITY_DEFAULT,
-						cancellable,
-					);
-					if (line === null) {
-						fail("Hyprland event socket closed", true);
-						return;
-					}
-					handleHyprlandEvent(new TextDecoder().decode(line));
+				try {
+					connection = socketClient.connect_finish(result);
+					input = Gio.DataInputStream.new(connection.get_input_stream());
+					connectionErrorReported = false;
+					readNextLine(input);
+				} catch (error) {
+					if (!cancellable.is_cancelled()) fail(error, true);
 				}
-			} catch (error) {
-				if (!cancellable.is_cancelled()) fail(error, true);
-			}
-		})();
+			});
+		}
 
 		return Effect.sync(closeNativeResources);
 	},

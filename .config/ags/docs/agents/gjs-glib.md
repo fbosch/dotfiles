@@ -46,6 +46,16 @@ const timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
 GLib.source_remove(timeout);
 ```
 
+## Effect services
+
+Effect is a good fit for long-lived services that own GLib sources, Gio cancellables, streams, monitors, signals, or retry loops. It makes interruption and teardown part of the service instead of scattering cleanup across callbacks. Keep ordinary GTK widget construction imperative.
+
+- Provide a GLib-backed Effect scheduler once at the service runtime boundary. Do not replace Effect's scheduler globally.
+- Wrap Gio asynchronous operations with `Effect.callback()` and the native callback/`*_finish` pair. Promise-returning Gio methods have stalled inside Effect fibers in this runtime.
+- Return an interruption finalizer that cancels the `Gio.Cancellable`, removes owned GLib sources, closes streams or connections, and clears retained native objects.
+- Keep native signal handlers synchronous when they must return a boolean or another immediate value. Start an Effect fiber from the handler instead of returning a Promise.
+- Treat cancellation and resource release as separate operations. Cancelling a Gio wait does not release every resource it uses.
+
 ## File monitoring
 
 ```tsx

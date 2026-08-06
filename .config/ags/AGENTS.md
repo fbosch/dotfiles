@@ -9,6 +9,8 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI, using bundled mode.
 - For AGS surfaces that mirror `design-system/src/components/`, match the component source as the visual contract; do not depend on Storybook stories at runtime.
 - Compose surfaces from existing atomic components when their semantics and interaction model fit. Prefer expanding shared primitives for recurring behavior over duplicating GTK construction and styling; use native widgets for distinct custom controls.
 - Do not edit `.config/ags/@girs/` manually; regenerate typings when needed.
+- Use Effect for long-lived asynchronous services when it makes GLib/Gio ownership explicit; keep GTK widget construction imperative.
+- Run Effect through a GLib-backed scheduler. At Effect boundaries, prefer Gio callback/`*_finish` APIs and model native cancellation and cleanup explicitly.
 
 ## Commands
 
