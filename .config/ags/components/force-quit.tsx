@@ -297,7 +297,7 @@ function createWindow(): void {
 		decorated: false,
 		defaultWidth: 462,
 		defaultHeight: 534,
-		resizable: true,
+		resizable: false,
 		title: "Force Quit Applications",
 	});
 	win.set_name("force-quit");

@@ -16,6 +16,11 @@ hl.window_rule({
 	center = true,
 	size = "462 534",
 })
+hl.window_rule({
+	match = { title = "^(About This PC)$" },
+	center = true,
+	size = "420 560",
+})
 
 -- Bitwarden
 hl.window_rule({ match = { class = "^(Bitwarden)$" }, float = true, size = "900 900" })

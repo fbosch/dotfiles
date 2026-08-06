@@ -758,7 +758,6 @@ const menuCommands: Record<string, string> = {
         return `${terminal} -e sh -c "cd ${nixosPath} && nvim"`;
     }
   })(),
-  "about-this-pc": "xdg-open 'vicinae://extensions/fbosch/sysinfo/system-info'",
   "lock-screen": "hyprlock",
   applications: "com.github.tchx84.Flatseal",
   documents: `nemo --existing-window "${getXdgUserDirOrDefault("XDG_DOCUMENTS_DIR", `${homeDir}/Documents`)}"`,
@@ -1253,6 +1252,12 @@ function executeMenuCommand(itemId: string) {
     // Dismiss the menu before opening a competing exclusive surface.
     hideMenu();
     globalThis.ForceQuit?.show?.();
+    return;
+  }
+
+  if (itemId === "about-this-pc") {
+    hideMenu();
+    globalThis.AboutThisPC?.show?.();
     return;
   }
 

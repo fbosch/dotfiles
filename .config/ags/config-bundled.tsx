@@ -31,6 +31,7 @@ declare global {
   var KeyboardSwitcher: ComponentModule;
   var StartMenu: ComponentModule;
   var ForceQuit: ComponentModule;
+  var AboutThisPC: ComponentModule;
   var WindowSwitcher: ComponentModule;
   var DesktopClock: ComponentModule;
   var CalendarWidget: ComponentModule;
@@ -44,6 +45,7 @@ import "./components/volume-indicator.tsx";
 import "./components/keyboard-switcher.tsx";
 import "./components/start-menu.tsx";
 import "./components/force-quit.tsx";
+import "./components/about-this-pc.tsx";
 import "./components/window-switcher.tsx";
 import "./components/desktop-clock.tsx";
 import "./components/calendar-widget.tsx";
@@ -61,6 +63,7 @@ const components: ComponentRegistry = {};
 const taskbarVisibilityComponents = [
   "start-menu",
   "force-quit",
+  "about-this-pc",
   "calendar-widget",
   "audio-mixer-widget",
 ];
@@ -211,6 +214,15 @@ app.start({
       console.log(`[Bundled AGS] ✓ ${globalThis.ForceQuit.instanceName} initialized`);
     } catch (e) {
       console.error(`[Bundled AGS] ✗ Failed to initialize force-quit:`, e);
+    }
+
+    // Initialize about-this-pc
+    try {
+      globalThis.AboutThisPC.init();
+      registerComponent(globalThis.AboutThisPC.instanceName, globalThis.AboutThisPC.handleRequest);
+      console.log(`[Bundled AGS] ✓ ${globalThis.AboutThisPC.instanceName} initialized`);
+    } catch (e) {
+      console.error(`[Bundled AGS] ✗ Failed to initialize about-this-pc:`, e);
     }
     
     // Initialize desktop-clock

@@ -81,6 +81,7 @@ function applyStyles(): void {
       window.calendar-widget.gaming-opaque box.calendar-container,
       window.audio-mixer-widget.gaming-opaque box.audio-mixer-container,
       window.force-quit.gaming-opaque box.force-quit-container,
+      window.about-this-pc.gaming-opaque box.about-container,
       window.confirm-dialog.gaming-opaque box.dialog-box {
         background-color: rgb(45, 45, 45);
       }
