@@ -2,8 +2,10 @@
 // biome-ignore-all lint/a11y/useButtonType: Gtk.Button does not expose an HTML button type.
 
 import Gdk from "gi://Gdk?version=4.0";
+import Gio from "gi://Gio?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import app from "ags/gtk4/app";
+import { createRoot } from "gnim";
 import tokens from "../../../design-system/tokens.json";
 import {
 	type AboutThisPCInfo,
@@ -22,6 +24,8 @@ let manufacturerLabel: Gtk.Label | null = null;
 let detailsBox: Gtk.Box | null = null;
 let statusLabel: Gtk.Label | null = null;
 let moreInfoButton: Gtk.Button | null = null;
+let artworkTexture: { path: string; texture: Gdk.Texture } | null = null;
+let infoRenderDispose: (() => void) | null = null;
 
 function clearChildren(container: Gtk.Box): void {
 	let child = container.get_first_child();
@@ -29,6 +33,11 @@ function clearChildren(container: Gtk.Box): void {
 		container.remove(child);
 		child = container.get_first_child();
 	}
+}
+
+function disposeInfoRender(): void {
+	infoRenderDispose?.();
+	infoRenderDispose = null;
 }
 
 function createArtwork(info: AboutThisPCInfo): Gtk.Widget {
@@ -41,7 +50,15 @@ function createArtwork(info: AboutThisPCInfo): Gtk.Widget {
 			widthRequest: 320,
 			heightRequest: 144,
 		});
-		picture.set_filename(info.deviceImagePath);
+		if (artworkTexture?.path !== info.deviceImagePath) {
+			artworkTexture = {
+				path: info.deviceImagePath,
+				texture: Gdk.Texture.new_from_file(
+					Gio.File.new_for_path(info.deviceImagePath),
+				),
+			};
+		}
+		picture.set_paintable(artworkTexture.texture);
 		return picture;
 	}
 
@@ -110,8 +127,8 @@ function renderInfo(info: AboutThisPCInfo): void {
 		return;
 	}
 
+	disposeInfoRender();
 	clearChildren(artworkBox);
-	artworkBox.append(createArtwork(info));
 	deviceNameLabel.set_label(info.deviceName);
 	manufacturerLabel.set_label(info.manufacturer ?? "");
 	manufacturerLabel.set_visible(Boolean(info.manufacturer));
@@ -126,9 +143,13 @@ function renderInfo(info: AboutThisPCInfo): void {
 		["Kernel", info.kernel],
 		["Uptime", info.uptime],
 	];
-	for (const [label, value, icon] of details) {
-		if (value) detailsBox.append(detailRow(label, value, icon));
-	}
+	createRoot((dispose) => {
+		infoRenderDispose = dispose;
+		artworkBox.append(createArtwork(info));
+		for (const [label, value, icon] of details) {
+			if (value) detailsBox.append(detailRow(label, value, icon));
+		}
+	});
 	statusLabel?.set_visible(false);
 }
 
@@ -164,6 +185,7 @@ function showAboutThisPC(): void {
 }
 
 function destroyAboutThisPC(): void {
+	disposeInfoRender();
 	const currentWindow = win;
 	win = null;
 	artworkBox = null;
@@ -176,6 +198,10 @@ function destroyAboutThisPC(): void {
 }
 
 function createWindow(): void {
+	createRoot((dispose) => createWindowInScope(dispose));
+}
+
+function createWindowInScope(dispose: () => void): void {
 	const titlebar = (
 		<overlay class="about-titlebar">
 			<button
@@ -287,6 +313,7 @@ function createWindow(): void {
 		destroyAboutThisPC();
 		return true;
 	});
+	win.connect("destroy", dispose);
 }
 
 function applyStaticCss(): void {

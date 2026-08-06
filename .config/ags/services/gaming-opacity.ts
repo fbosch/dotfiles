@@ -104,5 +104,8 @@ export function bindGamingOpacity(widget: Gtk.Widget): void {
   applyStyles();
   startMonitor();
   boundWidgets.add(widget);
+  widget.connect('destroy', (destroyedWidget: Gtk.Widget) => {
+    boundWidgets.delete(destroyedWidget);
+  });
   applyState(widget);
 }

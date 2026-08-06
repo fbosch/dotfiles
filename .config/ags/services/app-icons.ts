@@ -1,3 +1,4 @@
+import Gdk from "gi://Gdk?version=4.0";
 import Gio from "gi://Gio?version=2.0";
 import GioUnix from "gi://GioUnix?version=2.0";
 import GLib from "gi://GLib?version=2.0";
@@ -65,6 +66,7 @@ const desktopFileDirs = Array.from(
 );
 const iconCache = new Map<string, IconRef | null>();
 const themeIconFileCache = new Map<string, string | null>();
+const imageTextureCache = new Map<string, Gdk.Texture>();
 let faugusGamesCache: FaugusGame[] | null = null;
 let steamAppsCache: SteamApp[] | null = null;
 let waybarAppIdMappingCache: Record<string, string> | null = null;
@@ -92,7 +94,12 @@ function fileExists(path: string): boolean {
 
 export function setImageFile(image: Gtk.Image, path: string): void {
 	try {
-		image.set_from_file(path);
+		let texture = imageTextureCache.get(path);
+		if (!texture) {
+			texture = Gdk.Texture.new_from_file(Gio.File.new_for_path(path));
+			imageTextureCache.set(path, texture);
+		}
+		image.set_from_paintable(texture);
 	} catch (e) {
 		console.error(`Failed to load icon file ${path}:`, e);
 	}

@@ -5,6 +5,7 @@ import Gdk from "gi://Gdk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import app from "ags/gtk4/app";
+import { createRoot } from "gnim";
 import tokens from "../../../design-system/tokens.json";
 import { type IconRef, setImageFile } from "../services/app-icons";
 import {
@@ -33,6 +34,7 @@ let applications: ForceQuitApplication[] | null = [];
 let metrics = new Map<string, ForceQuitMetrics>();
 const metricLabels = new Map<string, Gtk.Label>();
 let terminationPending = false;
+let applicationRenderDispose: (() => void) | null = null;
 
 function clearChildren(container: Gtk.Box): void {
 	let child = container.get_first_child();
@@ -40,6 +42,11 @@ function clearChildren(container: Gtk.Box): void {
 		container.remove(child);
 		child = container.get_first_child();
 	}
+}
+
+function disposeApplicationRender(): void {
+	applicationRenderDispose?.();
+	applicationRenderDispose = null;
 }
 
 function formatMemory(bytes: number): string {
@@ -94,6 +101,7 @@ function createApplicationIcon(application: ForceQuitApplication): Gtk.Widget {
 
 function renderApplications(): void {
 	if (!applicationList || !statusLabel) return;
+	disposeApplicationRender();
 	clearChildren(applicationList);
 	metricLabels.clear();
 
@@ -105,44 +113,47 @@ function renderApplications(): void {
 		statusLabel.set_visible(true);
 	} else {
 		statusLabel.set_visible(false);
-		let firstApplicationButton: Gtk.Button | null = null;
-		for (const application of applications) {
-			const selected = application.id === selectedApplicationId;
-			const row = (
-				<button
-					canFocus={true}
-					class={`force-quit-row ${selected ? "selected" : ""}`}
-					onClicked={() => {
-						selectedApplicationId = application.id;
-						renderApplications();
-					}}
-					$={(self: Gtk.Button) => self.set_cursor_from_name("pointer")}
-				>
-					<box orientation={Gtk.Orientation.HORIZONTAL} spacing={10}>
-						{createApplicationIcon(application)}
-						<label
-							label={application.name}
-							hexpand={true}
-							xalign={0}
-							ellipsize={3}
-							class="force-quit-name"
-						/>
-						<label
-							label={formatMetrics(metrics.get(application.id))}
-							class="force-quit-metrics"
-							$={(self: Gtk.Label) => {
-								metricLabels.set(application.id, self);
-							}}
-						/>
-					</box>
-				</button>
-			) as Gtk.Button;
-			firstApplicationButton ??= row;
-			applicationList.append(row);
-		}
-		if (isVisible === false && firstApplicationButton) {
-			win?.set_focus(firstApplicationButton);
-		}
+		createRoot((dispose) => {
+			applicationRenderDispose = dispose;
+			let firstApplicationButton: Gtk.Button | null = null;
+			for (const application of applications) {
+				const selected = application.id === selectedApplicationId;
+				const row = (
+					<button
+						canFocus={true}
+						class={`force-quit-row ${selected ? "selected" : ""}`}
+						onClicked={() => {
+							selectedApplicationId = application.id;
+							renderApplications();
+						}}
+						$={(self: Gtk.Button) => self.set_cursor_from_name("pointer")}
+					>
+						<box orientation={Gtk.Orientation.HORIZONTAL} spacing={10}>
+							{createApplicationIcon(application)}
+							<label
+								label={application.name}
+								hexpand={true}
+								xalign={0}
+								ellipsize={3}
+								class="force-quit-name"
+							/>
+							<label
+								label={formatMetrics(metrics.get(application.id))}
+								class="force-quit-metrics"
+								$={(self: Gtk.Label) => {
+									metricLabels.set(application.id, self);
+								}}
+							/>
+						</box>
+					</button>
+				) as Gtk.Button;
+				firstApplicationButton ??= row;
+				applicationList.append(row);
+			}
+			if (isVisible === false && firstApplicationButton) {
+				win?.set_focus(firstApplicationButton);
+			}
+		});
 	}
 
 	forceQuitButton?.set_sensitive(
@@ -291,6 +302,7 @@ function showForceQuit(): void {
 function destroyForceQuit(): void {
 	clearMetricRefreshTimer();
 	clearForceQuitMetricSamples();
+	disposeApplicationRender();
 	const currentWindow = win;
 	win = null;
 	applicationList = null;
@@ -303,6 +315,10 @@ function destroyForceQuit(): void {
 }
 
 function createWindow(): void {
+	createRoot((dispose) => createWindowInScope(dispose));
+}
+
+function createWindowInScope(dispose: () => void): void {
 	const titlebar = (
 		<overlay class="force-quit-titlebar">
 			<label
@@ -409,6 +425,7 @@ function createWindow(): void {
 		clearMetricRefreshTimer();
 		clearForceQuitMetricSamples();
 	});
+	win.connect("destroy", dispose);
 }
 
 function applyStaticCss(): void {
