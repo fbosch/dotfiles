@@ -82,7 +82,12 @@ function detailRow(label: string, value: string, icon?: string): Gtk.Widget {
 				halign={Gtk.Align.END}
 				xalign={1}
 			/>
-			<box class="about-detail-content" hexpand={true}>
+			<box
+				class="about-detail-content"
+				orientation={Gtk.Orientation.HORIZONTAL}
+				spacing={6}
+				hexpand={true}
+			>
 				{icon ? <label label={icon} class="about-detail-icon" /> : null}
 				<label
 					label={value}
@@ -143,10 +148,10 @@ function hideAboutThisPC(): void {
 function showAboutThisPC(): void {
 	if (win?.get_mapped() === true) {
 		win.present();
-		dispatchHyprland(
-			'hl.dsp.focus({ window = "title:^(About This PC)$" })',
-			{ component: "about-this-pc", metric: "focus" },
-		);
+		dispatchHyprland('hl.dsp.focus({ window = "title:^(About This PC)$" })', {
+			component: "about-this-pc",
+			metric: "focus",
+		});
 		return;
 	}
 	destroyAboutThisPC();
@@ -299,7 +304,6 @@ function applyStaticCss(): void {
 		window.about-this-pc box.about-details { margin: 24px 12px 0; }
 		window.about-this-pc box.about-detail-row { min-height: 23px; }
 		window.about-this-pc label.about-detail-label { min-width: 68px; margin-right: 16px; color: ${tokens.colors.foreground.primary.value}; font-size: 14px; font-weight: 500; }
-		window.about-this-pc box.about-detail-content { border-spacing: 6px; }
 		window.about-this-pc label.about-detail-icon { color: ${tokens.colors.foreground.secondary.value}; font-family: "Symbols Nerd Font", monospace; font-size: 14px; }
 		window.about-this-pc label.about-detail-value { color: ${tokens.colors.foreground.secondary.value}; font-size: 14px; }
 		window.about-this-pc label.about-status { margin-top: 8px; color: ${tokens.colors.state.error.value}; font-size: 13px; }
