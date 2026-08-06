@@ -17,6 +17,12 @@
       "sourceType": "well-known",
       "computedHash": "e81aa6ae97fdbc21cbccdbee38e0f314171fe8d7a09c5fdda72b82095cf4b9fa"
     },
+    "effect-ts": {
+      "source": "Effect-TS/skills",
+      "sourceType": "github",
+      "skillPath": "skills/effect-ts/SKILL.md",
+      "computedHash": "16dc62c9087d4b74035d4071fe931ff43c4218acb414407a17066045a80762fa"
+    },
     "github-actions-docs": {
       "source": "xixu-me/skills",
       "sourceType": "github",
