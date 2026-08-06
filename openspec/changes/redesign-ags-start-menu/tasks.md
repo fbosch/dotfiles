@@ -37,7 +37,7 @@
 
 - [x] 5.1 Add an About data adapter that reads model, manufacturer, CPU, CPU clock rate, GPU, memory, memory clock frequency, desktop, operating-system name and codename, kernel, and uptime while filtering unreadable and placeholder fields.
 - [x] 5.2 Read `AGS_ABOUT_DEVICE_IMAGE` on open and use it when readable; otherwise map portable chassis types to a Fluent laptop icon and desktop/unknown types to Desktop Tower.
-- [x] 5.3 Implement an undecorated translucent About surface and route More Info to a terminal running `freshfetch`.
+- [x] 5.3 Implement an undecorated translucent About surface and route More Info to a terminal running `fastfetch`.
 
 ## 6. Validation And Documentation
 

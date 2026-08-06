@@ -319,7 +319,8 @@ export function getAboutThisPCInfo(): AboutThisPCInfo {
 
 function moreInfoCommand(): string[] | null {
 	const configured =
-		usableValue(GLib.getenv("AGS_ABOUT_MORE_INFO_COMMAND")) ?? "freshfetch";
+		usableValue(GLib.getenv("AGS_ABOUT_MORE_INFO_COMMAND")) ??
+		"fastfetch --logo NixOS_small";
 	try {
 		const [success, argv] = GLib.shell_parse_argv(configured);
 		if (!success || !argv || argv.length === 0) return null;
