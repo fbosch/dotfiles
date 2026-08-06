@@ -42,9 +42,6 @@ hl.window_rule({ match = { class = "^(com\\.github\\.tchx84\\.Flatseal)$" }, flo
 -- Font Viewer (GNOME)
 hl.window_rule({ match = { class = "^(org\\.gnome\\.font-viewer)$" }, float = true })
 
--- Flake Update Terminal
-hl.window_rule({ match = { class = "^(flake_update_terminal)$" }, float = true, pin = true })
-
 -- GCR Prompter
 hl.window_rule({ match = { class = "^(gcr-prompter)$" }, pin = true })
 

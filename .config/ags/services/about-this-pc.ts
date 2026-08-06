@@ -1,5 +1,6 @@
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
+import { dispatchHyprland, queryHyprlandJson } from "./hyprland-ipc";
 
 export interface AboutThisPCInfo {
 	deviceName: string;
@@ -22,6 +23,7 @@ export interface AboutThisPCInfo {
 
 const desktopIcon = "\uE7FB";
 const laptopIcon = "\uE7F8";
+const moreInfoWindowClass = "about_this_pc_more_info";
 const portableChassisTypes = new Set([8, 9, 10, 11, 14, 30, 31, 32]);
 const distroIcons: Record<string, string> = {
 	alpine: "\uF300",
@@ -317,7 +319,7 @@ export function getAboutThisPCInfo(): AboutThisPCInfo {
 
 function moreInfoCommand(): string[] | null {
 	const configured =
-		usableValue(GLib.getenv("AGS_ABOUT_MORE_INFO_COMMAND")) ?? "fastfetch";
+		usableValue(GLib.getenv("AGS_ABOUT_MORE_INFO_COMMAND")) ?? "freshfetch";
 	try {
 		const [success, argv] = GLib.shell_parse_argv(configured);
 		if (!success || !argv || argv.length === 0) return null;
@@ -335,16 +337,71 @@ export function launchAboutMoreInfo(): boolean {
 	const moreInfo = moreInfoCommand();
 	if (!moreInfo) return false;
 
+	const existingWindow = queryHyprlandJson<
+		Array<{ address: string; class: string }>
+	>("j/clients")?.find((client) => client.class === moreInfoWindowClass);
+	if (existingWindow) {
+		return dispatchHyprland(
+			`hl.dsp.focus({ window = "address:${existingWindow.address}" })`,
+		);
+	}
+
 	const terminalCommands: Array<
 		[string, (terminal: string, command: string[]) => string[]]
 	> = [
-		["foot", (terminal, command) => [terminal, "--hold", ...command]],
-		["kitty", (terminal, command) => [terminal, "--hold", ...command]],
+		[
+			"footclient",
+			(terminal, command) => [
+				terminal,
+				"-N",
+				"-a",
+				moreInfoWindowClass,
+				"--hold",
+				...command,
+			],
+		],
+		[
+			"foot",
+			(terminal, command) => [
+				terminal,
+				"-a",
+				moreInfoWindowClass,
+				"--hold",
+				...command,
+			],
+		],
+		[
+			"kitty",
+			(terminal, command) => [
+				terminal,
+				"--class",
+				moreInfoWindowClass,
+				"--hold",
+				...command,
+			],
+		],
 		[
 			"alacritty",
-			(terminal, command) => [terminal, "--hold", "-e", ...command],
+			(terminal, command) => [
+				terminal,
+				"--class",
+				moreInfoWindowClass,
+				"--hold",
+				"-e",
+				...command,
+			],
 		],
-		["xterm", (terminal, command) => [terminal, "-hold", "-e", ...command]],
+		[
+			"xterm",
+			(terminal, command) => [
+				terminal,
+				"-class",
+				moreInfoWindowClass,
+				"-hold",
+				"-e",
+				...command,
+			],
+		],
 	];
 	for (const [name, command] of terminalCommands) {
 		const terminal = GLib.find_program_in_path(name);

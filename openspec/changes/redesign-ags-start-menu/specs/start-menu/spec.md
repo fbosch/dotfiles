@@ -200,9 +200,9 @@ The system SHALL provide an undecorated, translucent system-information surface 
 - **THEN** About This PC displays a Fluent laptop icon for portable DMI chassis types
 - **AND** it displays a Fluent Desktop Tower icon for desktop or unknown chassis types
 
-#### Scenario: More Info opens fastfetch
+#### Scenario: More Info opens freshfetch
 - **WHEN** the user selects More Info
-- **THEN** the system opens a terminal running `fastfetch`
+- **THEN** the system opens a terminal running `freshfetch`
 
 #### Scenario: About uses the shared surface language
 - **WHEN** About This PC or Force Quit is visible

@@ -80,7 +80,7 @@ Alternative considered: immediate signal-based termination. Rejected because it 
 
 `AGS_ABOUT_DEVICE_IMAGE` is read when About opens. A readable configured image takes precedence. Otherwise AGS maps portable DMI chassis types to a Fluent laptop icon and desktop/unknown types to a Fluent Desktop Tower icon. The data loader omits unreadable or placeholder fields and supplies model, vendor, CPU, CPU clock rate, GPU, memory, memory clock frequency, desktop, operating-system name and codename, kernel, and uptime data.
 
-More Info launches a terminal running `fastfetch`. The surface has no titlebar decoration and inherits the established translucent Window treatment.
+More Info launches a terminal running `freshfetch`. The surface has no titlebar decoration and inherits the established translucent Window treatment.
 
 Alternative considered: a JSON settings file or Nix-generated value. Rejected because one scoped environment variable meets the host-specific requirement without a new configuration path.
 

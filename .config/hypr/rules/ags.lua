@@ -26,6 +26,14 @@ function M.register()
 		max_size = "422 562",
 		tag = "+" .. window_tags.non_resizable,
 	})
+	hl.window_rule({ match = { class = "^(flake_update_terminal)$" }, float = true, pin = true })
+	hl.window_rule({
+		match = { class = "^(about_this_pc_more_info)$" },
+		float = true,
+		pin = true,
+		center = true,
+		size = "1003 545",
+	})
 end
 
 return M
