@@ -12,7 +12,8 @@
     "bundle": "ags bundle config-bundled.tsx \"${XDG_RUNTIME_DIR:-/tmp}/ags-bundled.js\"",
     "inspect": "ags inspect",
     "list": "ags list",
-    "benchmark": "bash scripts/benchmark/run-benchmarks.sh"
+    "benchmark": "bash scripts/benchmark/run-benchmarks.sh",
+    "quality": "fallow --only dead-code --regression-baseline .fallow-regression-baseline.json --fail-on-regression"
   },
   "keywords": [
     "ags",
@@ -21,5 +22,8 @@
     "wayland"
   ],
   "author": "",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "fallow": "3.14.0"
+  }
 }

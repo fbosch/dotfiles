@@ -33,6 +33,5 @@ File structure:
 │   ├── start-menu.tsx
 │   └── window-switcher.tsx
 ├── config-bundled.tsx          # Main entry point (imports from lib/)
-├── config.tsx                  # Stub (bundled mode required)
 └── start-daemons.sh            # Boot script (runs config-bundled.tsx)
 ```

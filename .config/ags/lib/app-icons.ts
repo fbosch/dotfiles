@@ -65,7 +65,7 @@ const genericWrapperClasses = [
   "proton",
 ];
 
-export function fileExists(path: string): boolean {
+function fileExists(path: string): boolean {
   try {
     return Gio.File.new_for_path(path).query_exists(null);
   } catch {
@@ -369,7 +369,7 @@ function getWaybarMappedAppId(appId: string): string | null {
   return mapping[appId] ?? mapping[appId.toLowerCase()] ?? null;
 }
 
-export function normalizeIconSearchTerm(value: string): string {
+function normalizeIconSearchTerm(value: string): string {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -385,7 +385,7 @@ function normalizeIconCandidate(value: string): string {
     .trim();
 }
 
-export function buildTitleCandidates(title: string): string[] {
+function buildTitleCandidates(title: string): string[] {
   const normalizedTitle = title.replace(/\s*\(grabbed\)\s*$/i, "").trim();
   if (!normalizedTitle) return [];
 
@@ -464,7 +464,7 @@ export function isGenericWrapperClass(appClass: string): boolean {
   return genericWrapperClasses.some((wrapperClass) => normalizedClass === wrapperClass);
 }
 
-export function getFaugusIconForCandidates(candidates: string[]): IconRef | null {
+function getFaugusIconForCandidates(candidates: string[]): IconRef | null {
   const normalizedCandidates = candidates
     .flatMap((candidate) => {
       const mapped = getWaybarMappedAppId(candidate);
@@ -498,7 +498,7 @@ export function getFaugusIconForCandidates(candidates: string[]): IconRef | null
   return null;
 }
 
-export function getIconForClass(appClass: string, iconTheme?: Gtk.IconTheme | null): IconRef | null {
+function getIconForClass(appClass: string, iconTheme?: Gtk.IconTheme | null): IconRef | null {
   if (!appClass) return null;
   if (iconCache.has(appClass)) return iconCache.get(appClass)!;
 

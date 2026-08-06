@@ -40,11 +40,7 @@ export function getHyprlandSocketPath(socketName = defaultSocketName): string | 
   return socketPath;
 }
 
-export function hasHyprlandSocket(socketName = defaultSocketName): boolean {
-  return getHyprlandSocketPath(socketName) !== null;
-}
-
-export function queryHyprland(request: string, options: HyprlandIpcOptions = {}): string | null {
+function queryHyprland(request: string, options: HyprlandIpcOptions = {}): string | null {
   const socketPath = getHyprlandSocketPath(options.socketName);
   if (!socketPath) return null;
 
@@ -101,11 +97,4 @@ export function queryHyprlandJson<T>(request: string, options: HyprlandIpcOption
   } catch {
     return null;
   }
-}
-
-export function dispatchHyprland(dispatcher: string, options: HyprlandIpcOptions = {}): boolean {
-  return queryHyprland(`dispatch ${dispatcher}`, {
-    ...options,
-    metric: options.metric ?? "dispatch",
-  }) !== null;
 }
