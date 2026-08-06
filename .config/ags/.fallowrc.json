@@ -1,27 +1,20 @@
 {
-  "entry": [
-    "config-bundled.tsx"
-  ],
-  "ignorePatterns": [
-    "lib/start-menu.tsx",
-    "lib/recent-applications.ts"
-  ],
-  "ignoreDependencies": [
-    "ags"
-  ],
-  "ignoreExports": [
-    {
-      "file": "lib/app-icons.ts",
-      "exports": ["isGenericWrapperClass"]
-    },
-    {
-      "file": "lib/hyprland-ipc.ts",
-      "exports": ["getHyprlandSocketPath"]
-    }
-  ],
-  "rules": {
-    "unused-files": "warn",
-    "unused-exports": "warn",
-    "unlisted-dependencies": "warn"
-  }
+	"entry": ["config-bundled.tsx"],
+	"ignorePatterns": ["lib/start-menu.tsx", "lib/recent-applications.ts"],
+	"ignoreDependencies": ["ags", "effect"],
+	"ignoreExports": [
+		{
+			"file": "lib/app-icons.ts",
+			"exports": ["isGenericWrapperClass"]
+		},
+		{
+			"file": "lib/hyprland-ipc.ts",
+			"exports": ["getHyprlandSocketPath"]
+		}
+	],
+	"rules": {
+		"unused-files": "warn",
+		"unused-exports": "warn",
+		"unlisted-dependencies": "warn"
+	}
 }

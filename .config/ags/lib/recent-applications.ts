@@ -1,5 +1,6 @@
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
+import { Context, Data, Effect, Fiber, Scheduler } from "effect";
 import { isGenericWrapperClass } from "./app-icons";
 import { getHyprlandSocketPath } from "./hyprland-ipc";
 
@@ -14,12 +15,30 @@ const activeWindowEvent = "activewindow";
 const historyLimit = 32;
 const reconnectDelayMs = 1000;
 
+const scheduler = new Scheduler.MixedScheduler("async", (runBatch) => {
+	let sourceId: number | null = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+		sourceId = null;
+		runBatch();
+		return GLib.SOURCE_REMOVE;
+	});
+	return () => {
+		if (sourceId === null) return;
+		GLib.source_remove(sourceId);
+		sourceId = null;
+	};
+});
+const runEffectFork = Effect.runForkWith(
+	Context.make(Scheduler.Scheduler, scheduler),
+);
+
 let history: RecentApplicationFocus[] = [];
-let running = false;
-let reconnectSource: number | null = null;
-let activeCancellable: Gio.Cancellable | null = null;
-let activeConnection: Gio.SocketConnection | null = null;
 let connectionErrorReported = false;
+let listenerFiber: Fiber.Fiber<never, never> | null = null;
+
+class FocusListenerError extends Data.TaggedError("FocusListenerError")<{
+	readonly cause: unknown;
+	readonly report: boolean;
+}> {}
 
 function applicationIdentity(className: string, title: string): string {
 	const normalizedClass = className.toLowerCase();
@@ -61,102 +80,113 @@ function handleHyprlandEvent(line: string): void {
 	recordFocusedApplication(className, title);
 }
 
-function scheduleReconnect(): void {
-	if (!running || reconnectSource !== null) return;
-
-	reconnectSource = GLib.timeout_add(
+const reconnectDelay = Effect.callback<void>((resume) => {
+	let sourceId: number | null = GLib.timeout_add(
 		GLib.PRIORITY_DEFAULT,
 		reconnectDelayMs,
 		() => {
-			reconnectSource = null;
-			void listenForHyprlandEvents();
+			sourceId = null;
+			resume(Effect.succeed(undefined));
 			return GLib.SOURCE_REMOVE;
 		},
 	);
-}
 
-async function listenForHyprlandEvents(): Promise<void> {
-	if (!running || activeCancellable !== null) return;
+	return Effect.sync(() => {
+		if (sourceId === null) return;
+		GLib.source_remove(sourceId);
+		sourceId = null;
+	});
+});
 
-	const socketPath = getHyprlandSocketPath(eventSocketName);
-	if (!socketPath) {
-		scheduleReconnect();
-		return;
-	}
+const listenForHyprlandEvents = Effect.callback<never, FocusListenerError>(
+	(resume) => {
+		const cancellable = new Gio.Cancellable();
+		let connection: Gio.SocketConnection | null = null;
+		let input: Gio.DataInputStream | null = null;
+		let finished = false;
 
-	const cancellable = new Gio.Cancellable();
-	activeCancellable = cancellable;
-	let input: Gio.DataInputStream | null = null;
-
-	try {
-		const socketClient = new Gio.SocketClient();
-		const address = Gio.UnixSocketAddress.new(socketPath);
-		const connection = await socketClient.connect_async(address, cancellable);
-		if (!running || activeCancellable !== cancellable) {
-			connection.close(null);
-			return;
-		}
-
-		activeConnection = connection;
-		input = Gio.DataInputStream.new(connection.get_input_stream());
-		connectionErrorReported = false;
-
-		while (running && activeCancellable === cancellable) {
-			const [line] = await input.read_line_async(
-				GLib.PRIORITY_DEFAULT,
-				cancellable,
-			);
-			if (line === null) break;
-			handleHyprlandEvent(new TextDecoder().decode(line));
-		}
-	} catch (error) {
-		if (running && !cancellable.is_cancelled() && !connectionErrorReported) {
-			connectionErrorReported = true;
-			console.error("Failed to monitor Hyprland application focus:", error);
-		}
-	} finally {
-		try {
-			input?.close(null);
-			activeConnection?.close(null);
-		} catch {
-			// The stream may already be closed after compositor shutdown.
-		}
-
-		if (activeCancellable === cancellable) {
-			activeCancellable = null;
-			activeConnection = null;
-		}
-		if (running) {
-			if (cancellable.is_cancelled()) {
-				void listenForHyprlandEvents();
-			} else {
-				scheduleReconnect();
+		const closeNativeResources = () => {
+			if (finished) return;
+			finished = true;
+			cancellable.cancel();
+			try {
+				input?.close(null);
+				connection?.close(null);
+			} catch {
+				// The stream may already be closed after compositor shutdown.
 			}
-		}
-	}
-}
+		};
+
+		const fail = (cause: unknown, report: boolean) => {
+			if (finished) return;
+			closeNativeResources();
+			resume(Effect.fail(new FocusListenerError({ cause, report })));
+		};
+
+		void (async () => {
+			const socketPath = getHyprlandSocketPath(eventSocketName);
+			if (!socketPath) {
+				fail("Hyprland event socket is unavailable", false);
+				return;
+			}
+
+			try {
+				const socketClient = new Gio.SocketClient();
+				const address = Gio.UnixSocketAddress.new(socketPath);
+				connection = await socketClient.connect_async(address, cancellable);
+				if (finished) return;
+
+				input = Gio.DataInputStream.new(connection.get_input_stream());
+				connectionErrorReported = false;
+
+				while (!finished) {
+					const [line] = await input.read_line_async(
+						GLib.PRIORITY_DEFAULT,
+						cancellable,
+					);
+					if (line === null) {
+						fail("Hyprland event socket closed", true);
+						return;
+					}
+					handleHyprlandEvent(new TextDecoder().decode(line));
+				}
+			} catch (error) {
+				if (!cancellable.is_cancelled()) fail(error, true);
+			}
+		})();
+
+		return Effect.sync(closeNativeResources);
+	},
+);
+
+const listenerProgram = Effect.forever(
+	listenForHyprlandEvents.pipe(
+		Effect.catch((error) =>
+			Effect.sync(() => {
+				if (!error.report || connectionErrorReported) return;
+				connectionErrorReported = true;
+				console.error(
+					"Failed to monitor Hyprland application focus:",
+					error.cause,
+				);
+			}).pipe(Effect.andThen(reconnectDelay)),
+		),
+	),
+);
 
 export function startRecentApplicationFocusHistory(): () => void {
-	if (running) return stopRecentApplicationFocusHistory;
+	if (listenerFiber !== null) return stopRecentApplicationFocusHistory;
 
-	running = true;
-	void listenForHyprlandEvents();
+	listenerFiber = runEffectFork(listenerProgram);
 	return stopRecentApplicationFocusHistory;
 }
 
 export function stopRecentApplicationFocusHistory(): void {
-	running = false;
-	if (reconnectSource !== null) {
-		GLib.source_remove(reconnectSource);
-		reconnectSource = null;
+	const fiber = listenerFiber;
+	listenerFiber = null;
+	if (fiber !== null) {
+		runEffectFork(Fiber.interrupt(fiber));
 	}
-	activeCancellable?.cancel();
-	try {
-		activeConnection?.close(null);
-	} catch {
-		// The connection may already be closed.
-	}
-	activeConnection = null;
 }
 
 export function getRecentApplicationFocusHistory(): RecentApplicationFocus[] {
