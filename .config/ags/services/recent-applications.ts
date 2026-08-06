@@ -1,6 +1,7 @@
 import Gio from "gi://Gio?version=2.0";
 import GioUnix from "gi://GioUnix?version=2.0";
 import GLib from "gi://GLib?version=2.0";
+import type Gtk from "gi://Gtk?version=4.0";
 import type { IconRef } from "./app-icons";
 import { isGenericWrapperClass, resolveDesktopApplication } from "./app-icons";
 import { getHyprlandSocketPath } from "./hyprland-ipc";
@@ -207,7 +208,10 @@ export function startRecentApplicationFocusHistory(): () => void {
 	};
 }
 
-export function getRecentApplications(limit = 8): RecentApplication[] {
+export function getRecentApplications(
+	limit = 8,
+	iconTheme?: Gtk.IconTheme | null,
+): RecentApplication[] {
 	const boundedLimit = Number.isFinite(limit)
 		? Math.min(8, Math.max(0, Math.trunc(limit)))
 		: 8;
@@ -217,10 +221,13 @@ export function getRecentApplications(limit = 8): RecentApplication[] {
 	const seenDesktopIds = new Set<string>();
 
 	for (const entry of history) {
-		const application = resolveDesktopApplication({
-			class: entry.class,
-			title: entry.title,
-		});
+		const application = resolveDesktopApplication(
+			{
+				class: entry.class,
+				title: entry.title,
+			},
+			iconTheme,
+		);
 		if (!application) continue;
 
 		if (seenDesktopIds.has(application.desktopId)) continue;
@@ -239,7 +246,7 @@ export function launchRecentApplication(desktopId: string): boolean {
 	try {
 		const appInfo = GioUnix.DesktopAppInfo.new(desktopId);
 		if (!appInfo || appInfo.get_is_hidden()) return false;
-		return appInfo.launch(null, null);
+		return appInfo.launch([], null);
 	} catch (error) {
 		console.error(`Failed to launch recent application ${desktopId}:`, error);
 		return false;

@@ -32,12 +32,12 @@
       }
    },
    "launcher_window": {
-      "rounding": 8,
+      "rounding": 10,
       "opacity": 0.85,
       "client_side_decorations": {
          "enabled": true,
          "border_width": 1,
-         "shadow_size": 12
+         "shadow_size": 16
       },
       "blur": {
          "enabled": false

@@ -4,7 +4,7 @@
 ---@field error? string Failure description when `ok` is false.
 
 ---@alias BindCallback fun(...: any): BindResult?
----@alias BindAction string|BindCallback
+---@alias BindAction string|BindCallback|table
 
 ---@class BindOptions
 ---@field predicate? fun(...: any): boolean Run the action only when this returns true.
@@ -35,7 +35,13 @@ local function callback(action)
 		end
 	end
 
-	return action
+	if type(action) == "function" then
+		return action
+	end
+
+	return function()
+		return hl.dispatch(action)
+	end
 end
 
 ---@return BindResult

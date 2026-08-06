@@ -206,8 +206,11 @@ let recentItemsOpenTimer: number | null = null;
 let recentItemsCloseTimer: number | null = null;
 
 function recentItemsModel(): RecentItemsMenuModel {
+	const display = Gdk.Display.get_default();
+	const iconTheme = display ? Gtk.IconTheme.get_for_display(display) : null;
+
   return {
-    applications: getRecentApplications().map((application) => ({
+    applications: getRecentApplications(8, iconTheme).map((application) => ({
       id: application.desktopId,
       label: application.name,
       icon: application.icon,

@@ -157,3 +157,16 @@ run("explicit false command is dispatched when predicate is false", function()
 	registrations[1].action({})
 	assert_equal(dispatched[1].command, "false-command", "false command")
 end)
+
+run("predicate dispatches a dispatcher table", function()
+	local dispatcher = { kind = "window.float" }
+
+	bind.register("SUPER, X", dispatcher, {
+		predicate = function()
+			return true
+		end,
+	})
+
+	registrations[1].action({})
+	assert_equal(dispatched[1], dispatcher, "dispatcher")
+end)
