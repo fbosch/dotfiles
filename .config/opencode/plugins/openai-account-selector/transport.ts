@@ -9,7 +9,6 @@ const refreshEndpoint = "https://auth.openai.com/oauth/token"
 const internalTitleHeader = "x-opencode-title"
 const lockRetryDelayMs = 50
 const lockTimeoutMs = 10_000
-const maxTokenLifetimeSeconds = 604_800
 const quotaInspectionMaxBytes = 64 * 1024
 const quotaInspectionTimeoutMs = 2_000
 const usageLimitRetryMs = 60_000
@@ -319,7 +318,7 @@ function requiredToken(value: unknown, label: "access" | "refresh") {
 
 function tokenLifetime(value: unknown) {
   if (value === undefined) return 3600
-  if (typeof value !== "number" || Number.isFinite(value) === false || value < 0 || value > maxTokenLifetimeSeconds) {
+  if (typeof value !== "number" || Number.isFinite(value) === false || value < 0) {
     throw new Error("OpenAI OAuth refresh returned an invalid expiry")
   }
   return value

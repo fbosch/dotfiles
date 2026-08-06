@@ -671,7 +671,28 @@ test("continues with a refreshed in-memory credential when persistence fails", a
   expect(warnings.some((warning) => warning.includes("persistence failed"))).toBe(true)
 })
 
-test("rejects refresh expiries outside the supported lifetime", async () => {
+test("accepts the ten-day expiry returned by OpenAI OAuth refresh", async () => {
+  const root = await temporaryDirectory()
+  const paths = pathsFor(root)
+  await mkdir(join(root, "state"), { recursive: true })
+  await writeFile(paths.auth, JSON.stringify({ openai: authEntry("selected", 0) }))
+  const fetch = createCodexFetch({
+    credential: credential("selected", 0),
+    paths,
+    now: () => 1_000,
+    fetch: async () =>
+      Response.json({
+        access_token: jwt("selected"),
+        refresh_token: "refresh-selected-new",
+        expires_in: 864_000,
+      }),
+  })
+
+  await expect(fetch("https://api.openai.com/v1/responses", { method: "POST" })).resolves.toHaveProperty("status", 200)
+  await expect(readFile(paths.auth, "utf8")).resolves.toContain('"expires": 864001000')
+})
+
+test("rejects refresh expiries that overflow the timestamp", async () => {
   const root = await temporaryDirectory()
   const paths = pathsFor(root)
   await mkdir(join(root, "state"), { recursive: true })
