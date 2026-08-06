@@ -13,7 +13,9 @@ export interface AboutThisPCInfo {
 	memoryClock?: string;
 	desktop?: string;
 	operatingSystem?: string;
+	operatingSystemIcon?: string;
 	operatingSystemCodename?: string;
+	nixosGeneration?: string;
 	kernel?: string;
 	uptime?: string;
 }
@@ -21,6 +23,21 @@ export interface AboutThisPCInfo {
 const desktopIcon = "\uE7FB";
 const laptopIcon = "\uE7F8";
 const portableChassisTypes = new Set([8, 9, 10, 11, 14, 30, 31, 32]);
+const distroIcons: Record<string, string> = {
+	alpine: "\uF300",
+	arch: "\uF303",
+	centos: "\uF304",
+	debian: "\uF306",
+	fedora: "\uF30A",
+	gentoo: "\uF30D",
+	linuxmint: "\uF30E",
+	manjaro: "\uF312",
+	nixos: "\uF313",
+	opensuse: "\uF314",
+	redhat: "\uF316",
+	rhel: "\uF316",
+	ubuntu: "\uF31B",
+};
 const placeholderValues = new Set([
 	"default string",
 	"none",
@@ -237,6 +254,23 @@ function deviceIcon(): string {
 	return portableChassisTypes.has(chassisType) ? laptopIcon : desktopIcon;
 }
 
+function nixosGeneration(): string | undefined {
+	const profilesPath = "/nix/var/nix/profiles";
+	try {
+		const profileTarget = GLib.file_read_link(`${profilesPath}/system`);
+		const generation = profileTarget.match(/^system-(\d+)-link$/)?.[1];
+		if (!generation) return undefined;
+
+		const generationTarget = GLib.file_read_link(
+			`${profilesPath}/${profileTarget}`,
+		);
+		const currentSystem = GLib.file_read_link("/run/current-system");
+		return generationTarget === currentSystem ? generation : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export function getAboutThisPCInfo(): AboutThisPCInfo {
 	const osRelease = parseKeyValueFile("/etc/os-release");
 	const productName = usableValue(
@@ -267,9 +301,15 @@ export function getAboutThisPCInfo(): AboutThisPCInfo {
 		memoryClock: memoryClockInfo(),
 		desktop,
 		operatingSystem: usableValue(operatingSystem),
+		operatingSystemIcon:
+			distroIcons[osRelease.get("ID")?.toLowerCase() ?? ""] ?? "\uF17C",
 		operatingSystemCodename: codename
 			? codename.charAt(0).toUpperCase() + codename.slice(1)
 			: undefined,
+		nixosGeneration:
+			osRelease.get("ID")?.toLowerCase() === "nixos"
+				? nixosGeneration()
+				: undefined,
 		kernel: kernelRelease ? `Linux ${kernelRelease}` : undefined,
 		uptime: formatUptime(),
 	};

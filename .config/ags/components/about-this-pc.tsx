@@ -11,6 +11,7 @@ import {
 	launchAboutMoreInfo,
 } from "../services/about-this-pc";
 import { bindGamingOpacity } from "../services/gaming-opacity";
+import { dispatchHyprland } from "../services/hyprland-ipc";
 import { parseComponentRequest } from "../services/request";
 import { configureButton } from "./button";
 
@@ -35,6 +36,8 @@ function createArtwork(info: AboutThisPCInfo): Gtk.Widget {
 			filename: info.deviceImagePath,
 			contentFit: Gtk.ContentFit.CONTAIN,
 			canShrink: true,
+			halign: Gtk.Align.FILL,
+			hexpand: true,
 			widthRequest: 320,
 			heightRequest: 144,
 		});
@@ -44,8 +47,10 @@ function createArtwork(info: AboutThisPCInfo): Gtk.Widget {
 		<label
 			label={info.deviceIcon}
 			class="about-device-icon"
-			halign={Gtk.Align.CENTER}
+			halign={Gtk.Align.FILL}
 			valign={Gtk.Align.CENTER}
+			hexpand={true}
+			xalign={0.5}
 		/>
 	) as Gtk.Label;
 }
@@ -58,7 +63,17 @@ function combinedValue(
 	return secondary;
 }
 
-function detailRow(label: string, value: string): Gtk.Widget {
+function operatingSystemValue(info: AboutThisPCInfo): string | undefined {
+	if (info.nixosGeneration && info.operatingSystem) {
+		const name = [info.operatingSystem, info.operatingSystemCodename]
+			.filter(Boolean)
+			.join(" ");
+		return `${name} (${info.nixosGeneration})`;
+	}
+	return combinedValue(info.operatingSystem, info.operatingSystemCodename);
+}
+
+function detailRow(label: string, value: string, icon?: string): Gtk.Widget {
 	return (
 		<box class="about-detail-row" orientation={Gtk.Orientation.HORIZONTAL}>
 			<label
@@ -67,15 +82,18 @@ function detailRow(label: string, value: string): Gtk.Widget {
 				halign={Gtk.Align.END}
 				xalign={1}
 			/>
-			<label
-				label={value}
-				class="about-detail-value"
-				halign={Gtk.Align.FILL}
-				xalign={0}
-				hexpand={true}
-				wrap={true}
-				wrapMode={2}
-			/>
+			<box class="about-detail-content" hexpand={true}>
+				{icon ? <label label={icon} class="about-detail-icon" /> : null}
+				<label
+					label={value}
+					class="about-detail-value"
+					halign={Gtk.Align.FILL}
+					xalign={0}
+					hexpand={true}
+					wrap={true}
+					wrapMode={2}
+				/>
+			</box>
 		</box>
 	) as Gtk.Box;
 }
@@ -92,17 +110,17 @@ function renderInfo(info: AboutThisPCInfo): void {
 	manufacturerLabel.set_visible(Boolean(info.manufacturer));
 
 	clearChildren(detailsBox);
-	const details: Array<[string, string | undefined]> = [
+	const details: Array<[string, string | undefined, string?]> = [
 		["CPU", combinedValue(info.processor, info.processorClock)],
 		["GPU", info.graphics],
 		["Memory", combinedValue(info.memory, info.memoryClock)],
 		["Desktop", info.desktop],
-		["OS", combinedValue(info.operatingSystem, info.operatingSystemCodename)],
+		["OS", operatingSystemValue(info), info.operatingSystemIcon],
 		["Kernel", info.kernel],
 		["Uptime", info.uptime],
 	];
-	for (const [label, value] of details) {
-		if (value) detailsBox.append(detailRow(label, value));
+	for (const [label, value, icon] of details) {
+		if (value) detailsBox.append(detailRow(label, value, icon));
 	}
 	statusLabel?.set_visible(false);
 }
@@ -123,6 +141,14 @@ function hideAboutThisPC(): void {
 }
 
 function showAboutThisPC(): void {
+	if (win?.get_mapped() === true) {
+		win.present();
+		dispatchHyprland(
+			'hl.dsp.focus({ window = "title:^(About This PC)$" })',
+			{ component: "about-this-pc", metric: "focus" },
+		);
+		return;
+	}
 	destroyAboutThisPC();
 	createWindow();
 	renderInfo(getAboutThisPCInfo());
@@ -273,6 +299,8 @@ function applyStaticCss(): void {
 		window.about-this-pc box.about-details { margin: 24px 12px 0; }
 		window.about-this-pc box.about-detail-row { min-height: 23px; }
 		window.about-this-pc label.about-detail-label { min-width: 68px; margin-right: 16px; color: ${tokens.colors.foreground.primary.value}; font-size: 14px; font-weight: 500; }
+		window.about-this-pc box.about-detail-content { border-spacing: 6px; }
+		window.about-this-pc label.about-detail-icon { color: ${tokens.colors.foreground.secondary.value}; font-family: "Symbols Nerd Font", monospace; font-size: 14px; }
 		window.about-this-pc label.about-detail-value { color: ${tokens.colors.foreground.secondary.value}; font-size: 14px; }
 		window.about-this-pc label.about-status { margin-top: 8px; color: ${tokens.colors.state.error.value}; font-size: 13px; }
 		window.about-this-pc box.about-actions { padding-top: 20px; }

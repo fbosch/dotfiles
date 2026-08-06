@@ -16,6 +16,7 @@ import {
 	getForceQuitMetrics,
 } from "../services/force-quit";
 import { bindGamingOpacity } from "../services/gaming-opacity";
+import { dispatchHyprland } from "../services/hyprland-ipc";
 import { parseComponentRequest } from "../services/request";
 import { configureButton } from "./button";
 
@@ -202,6 +203,14 @@ function hideForceQuit(): void {
 }
 
 function showForceQuit(): void {
+	if (win?.get_mapped() === true) {
+		win.present();
+		dispatchHyprland(
+			'hl.dsp.focus({ window = "title:^(Force Quit Applications)$" })',
+			{ component: "force-quit", metric: "focus" },
+		);
+		return;
+	}
 	destroyForceQuit();
 	createWindow();
 	clearForceQuitMetricSamples();
