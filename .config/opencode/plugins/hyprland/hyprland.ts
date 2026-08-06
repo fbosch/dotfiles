@@ -706,7 +706,12 @@ async function gatherContext(cwd: string): Promise<{ activeWindow: WindowInfo | 
   }
 }
 
-async function captureByMode(args: { mode: Mode; hint: string; format: Format; fullPage: boolean }, cwd: string): Promise<string> {
+async function captureByMode(args: { mode: Mode; hint: string; format: Format; fullPage: boolean; region?: Geometry }, cwd: string): Promise<string> {
+  if (args.region !== undefined) {
+    const result = await captureRegion(args.region, "explicit coordinates", args.format, cwd)
+    return typeof result === "string" ? `ERROR: ${result}` : formatResult(result, args.hint, [])
+  }
+
   const context = await gatherContext(cwd)
   const monitor = focusedMonitor(context.monitors, context.activeWindow)
   const targetWindow = windowForHint(context.activeWindow, context.clients, args.hint)
@@ -779,10 +784,20 @@ async function captureByMode(args: { mode: Mode; hint: string; format: Format; f
 }
 
 const hyprWindowScreenshot = tool({
-  description: "Capture a Wayland/Hyprland screenshot from context, using browser CDP when possible and grim window/region/monitor fallback",
+  description:
+    "Capture a Wayland/Hyprland screenshot. Prefer explicit region coordinates and the smallest useful area when bounds are known; otherwise use browser CDP or contextual grim fallbacks.",
   args: {
     hint: tool.schema.string().optional().describe("Natural-language target hint, e.g. 'calendar popup above bottom bar' or 'current browser page'"),
     mode: tool.schema.enum(["auto", "browser", "window", "region", "monitor", "full"]).optional().describe("Capture strategy. auto picks browser, layer region, window, monitor, then full fallback."),
+    region: tool.schema
+      .object({
+        x: tool.schema.number().int().describe("Left compositor coordinate; may be negative."),
+        y: tool.schema.number().int().describe("Top compositor coordinate; may be negative."),
+        width: tool.schema.number().int().positive().describe("Capture width in pixels."),
+        height: tool.schema.number().int().positive().describe("Capture height in pixels."),
+      })
+      .optional()
+      .describe("Exact compositor region. Prefer the smallest useful region when its bounds are known; this takes precedence over mode and hint inference."),
     format: tool.schema.enum(["png", "jpeg"]).optional().describe("Output image format. Defaults to png."),
     fullPage: tool.schema.boolean().optional().describe("For browser CDP captures, request a full-page screenshot when supported."),
   },
@@ -800,7 +815,7 @@ const hyprWindowScreenshot = tool({
     const mode = args.mode ?? "auto"
     const format = args.format ?? "png"
     const hint = args.hint ?? ""
-    return captureByMode({ mode, hint, format, fullPage: args.fullPage ?? false }, context.directory)
+    return captureByMode({ mode, hint, format, fullPage: args.fullPage ?? false, region: args.region }, context.directory)
   },
 })
 
