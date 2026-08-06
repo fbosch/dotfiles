@@ -93,39 +93,43 @@ function renderApplications(): void {
 		statusLabel.set_visible(true);
 	} else {
 		statusLabel.set_visible(false);
+		let firstApplicationButton: Gtk.Button | null = null;
 		for (const application of applications) {
 			const selected = application.id === selectedApplicationId;
-			applicationList.append(
-				(
-					<button
-						canFocus={true}
-						class={`force-quit-row ${selected ? "selected" : ""}`}
-						onClicked={() => {
-							selectedApplicationId = application.id;
-							renderApplications();
-						}}
-						$={(self: Gtk.Button) => self.set_cursor_from_name("pointer")}
-					>
-						<box orientation={Gtk.Orientation.HORIZONTAL} spacing={10}>
-							{createApplicationIcon(application)}
-							<label
-								label={application.name}
-								hexpand={true}
-								xalign={0}
-								ellipsize={3}
-								class="force-quit-name"
-							/>
-							<label
-								label={formatMetrics(metrics.get(application.id))}
-								class="force-quit-metrics"
-								$={(self: Gtk.Label) => {
-									metricLabels.set(application.id, self);
-								}}
-							/>
-						</box>
-					</button>
-				) as Gtk.Button,
-			);
+			const row = (
+				<button
+					canFocus={true}
+					class={`force-quit-row ${selected ? "selected" : ""}`}
+					onClicked={() => {
+						selectedApplicationId = application.id;
+						renderApplications();
+					}}
+					$={(self: Gtk.Button) => self.set_cursor_from_name("pointer")}
+				>
+					<box orientation={Gtk.Orientation.HORIZONTAL} spacing={10}>
+						{createApplicationIcon(application)}
+						<label
+							label={application.name}
+							hexpand={true}
+							xalign={0}
+							ellipsize={3}
+							class="force-quit-name"
+						/>
+						<label
+							label={formatMetrics(metrics.get(application.id))}
+							class="force-quit-metrics"
+							$={(self: Gtk.Label) => {
+								metricLabels.set(application.id, self);
+							}}
+						/>
+					</box>
+				</button>
+			) as Gtk.Button;
+			firstApplicationButton ??= row;
+			applicationList.append(row);
+		}
+		if (isVisible === false && firstApplicationButton) {
+			win?.set_focus(firstApplicationButton);
 		}
 	}
 
@@ -244,6 +248,7 @@ function createWindow(): void {
 			/>
 			<button
 				$type="overlay"
+				canFocus={true}
 				halign={Gtk.Align.END}
 				valign={Gtk.Align.START}
 				class="force-quit-close"

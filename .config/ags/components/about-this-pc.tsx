@@ -21,6 +21,7 @@ let deviceNameLabel: Gtk.Label | null = null;
 let manufacturerLabel: Gtk.Label | null = null;
 let detailsBox: Gtk.Box | null = null;
 let statusLabel: Gtk.Label | null = null;
+let moreInfoButton: Gtk.Button | null = null;
 
 function clearChildren(container: Gtk.Box): void {
 	let child = container.get_first_child();
@@ -158,6 +159,7 @@ function showAboutThisPC(): void {
 	createWindow();
 	renderInfo(getAboutThisPCInfo());
 	win?.present();
+	win?.set_focus(moreInfoButton);
 }
 
 function destroyAboutThisPC(): void {
@@ -168,6 +170,7 @@ function destroyAboutThisPC(): void {
 	manufacturerLabel = null;
 	detailsBox = null;
 	statusLabel = null;
+	moreInfoButton = null;
 	currentWindow?.destroy();
 }
 
@@ -176,6 +179,7 @@ function createWindow(): void {
 		<overlay class="about-titlebar">
 			<button
 				$type="overlay"
+				canFocus={true}
 				halign={Gtk.Align.END}
 				valign={Gtk.Align.START}
 				class="about-close"
@@ -246,9 +250,10 @@ function createWindow(): void {
 						canFocus={true}
 						class="about-more-info"
 						onClicked={showMoreInfo}
-						$={(self: Gtk.Button) =>
-							configureButton(self, { variant: "default" })
-						}
+						$={(self: Gtk.Button) => {
+							moreInfoButton = self;
+							configureButton(self, { variant: "default" });
+						}}
 					>
 						<label label="More Info..." />
 					</button>
