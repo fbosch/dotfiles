@@ -12,6 +12,7 @@ export interface IconWindowInfo {
   initialClass?: string;
   title?: string;
   initialTitle?: string;
+  processExecutable?: string;
 }
 
 export interface IconResolutionRequest {
@@ -754,7 +755,13 @@ export function getIconForWindow(window: IconWindowInfo, iconTheme?: Gtk.IconThe
     ? [...classCandidates, ...buildTitleCandidates(title), ...buildTitleCandidates(initialTitle)]
     : classCandidates;
 
-  return resolveAppIcon({ candidates, iconTheme });
+  const classIcon = resolveAppIcon({ candidates, iconTheme });
+  if (classIcon) return classIcon;
+
+  return resolveAppIcon({
+    candidates: window.processExecutable ? [window.processExecutable] : [],
+    iconTheme,
+  });
 }
 
 export function resolveDesktopApplication(

@@ -74,8 +74,20 @@ function createApplicationIcon(application: ForceQuitApplication): Gtk.Widget {
 	}
 
 	return (
-		<box class="force-quit-icon-fallback">
-			<label label={application.fallbackLetter} />
+		<box
+			class="force-quit-icon-fallback"
+			widthRequest={24}
+			heightRequest={24}
+			halign={Gtk.Align.CENTER}
+			valign={Gtk.Align.CENTER}
+		>
+			<label
+				label={application.fallbackLetter}
+				halign={Gtk.Align.CENTER}
+				valign={Gtk.Align.CENTER}
+				xalign={0.5}
+				yalign={0.5}
+			/>
 		</box>
 	) as Gtk.Box;
 }
@@ -169,6 +181,58 @@ function refreshMetrics(): void {
 	}
 }
 
+function applicationTopologyMatches(
+	left: ForceQuitApplication[] | null,
+	right: ForceQuitApplication[] | null,
+): boolean {
+	if (!left || !right) return left === right;
+	if (left.length !== right.length) return false;
+
+	const rightById = new Map(
+		right.map((application) => [application.id, application]),
+	);
+	return left.every((application) => {
+		const candidate = rightById.get(application.id);
+		if (!candidate) return false;
+		if (application.pids.join(",") !== candidate.pids.join(",")) return false;
+
+		const windows = application.windows
+			.map((window) => `${window.address}:${window.pid}`)
+			.sort()
+			.join(",");
+		const candidateWindows = candidate.windows
+			.map((window) => `${window.address}:${window.pid}`)
+			.sort()
+			.join(",");
+		return windows === candidateWindows;
+	});
+}
+
+function refreshVisibleState(): void {
+	if (!isVisible) return;
+	const display = Gdk.Display.get_default();
+	const iconTheme = display ? Gtk.IconTheme.get_for_display(display) : null;
+	const latestApplications = getForceQuitApplications(iconTheme);
+	const topologyChanged =
+		applicationTopologyMatches(applications, latestApplications) === false;
+	applications = latestApplications;
+
+	if (
+		applications?.some(
+			(application) => application.id === selectedApplicationId,
+		) === false
+	) {
+		selectedApplicationId = null;
+	}
+
+	if (topologyChanged) {
+		metrics = applications ? getForceQuitMetrics(applications) : new Map();
+		renderApplications();
+		return;
+	}
+	refreshMetrics();
+}
+
 function clearMetricRefreshTimer(): void {
 	if (metricRefreshTimer === null) return;
 	GLib.source_remove(metricRefreshTimer);
@@ -181,7 +245,7 @@ function startMetricRefreshTimer(): void {
 		GLib.PRIORITY_DEFAULT,
 		metricRefreshMs,
 		() => {
-			refreshMetrics();
+			refreshVisibleState();
 			return GLib.SOURCE_CONTINUE;
 		},
 	);
@@ -369,7 +433,7 @@ function applyStaticCss(): void {
 		window.force-quit button.force-quit-row.selected { background-color: ${tokens.colors.accent.primary.value}; color: #ffffff; }
 		window.force-quit image.force-quit-icon, window.force-quit box.force-quit-icon-fallback { min-width: 24px; min-height: 24px; }
 		window.force-quit box.force-quit-icon-fallback { border-radius: 4px; background-color: rgba(255, 255, 255, 0.10); }
-		window.force-quit box.force-quit-icon-fallback label { margin: auto; font-size: 12px; font-weight: 600; }
+		window.force-quit box.force-quit-icon-fallback label { min-width: 24px; min-height: 24px; font-size: 12px; font-weight: 600; }
 		window.force-quit label.force-quit-name { font-size: 14px; font-weight: 500; color: inherit; }
 		window.force-quit label.force-quit-metrics { font-size: 13px; color: ${tokens.colors.foreground.tertiary.value}; }
 		window.force-quit button.force-quit-row.selected label.force-quit-metrics { color: rgba(255, 255, 255, 0.80); }

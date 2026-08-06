@@ -333,6 +333,9 @@ export function getForceQuitApplications(
 	for (const value of response) {
 		const window = parseWindow(value);
 		if (!window || isProtectedProcess(window)) continue;
+		window.processExecutable = readProcessMetadata(window.pid)
+			.map(processIdentity)
+			.find(Boolean);
 
 		const resolved = resolveDesktopApplication(window, iconTheme);
 		const fallbackClass = window.class || window.initialClass || "application";
