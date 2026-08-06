@@ -113,6 +113,11 @@ ags-types:
 ags-bundle:
 	pnpm --dir .config/ags bundle
 
+# Rebuild and restart the bundled AGS daemon.
+ags-refresh: ags-bundle
+	ags quit --instance ags-bundled
+	uwsm-app -s s -- "$HOME/.config/ags/start-daemons.sh"
+
 # Validate Glance YAML configuration.
 glance-validate:
 	bash .config/glance/scripts/validate-yaml.sh

@@ -1,64 +1,59 @@
-import type { Meta, StoryObj } from "@storybook/react-vite";
-import { useState } from "react";
-import { Desktop } from "../Desktop";
-import { Waybar } from "../Waybar/Waybar";
-import { StartMenu } from "./StartMenu";
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { AboutThisPC } from '../AboutThisPC';
+import { Desktop } from '../Desktop';
+import { ForceQuitDialog } from '../ForceQuitDialog';
+import { Waybar } from '../Waybar/Waybar';
+import { StartMenu } from './StartMenu';
+
+const recentItems = {
+  applications: [
+    { id: 'vscode', label: 'Visual Studio Code', icon: '\uE943', detail: '5 minutes ago' },
+    { id: 'terminal', label: 'Terminal', icon: '\uE756', detail: 'Today' },
+  ],
+  documents: [
+    { id: 'proposal', label: 'kiwi-inspired-start-menu.md', icon: '\uE8A5', detail: 'Documents' },
+    { id: 'design', label: 'desktop-layout.fig', icon: '\uE8A5', detail: 'Design' },
+  ],
+};
 
 const meta: Meta<typeof StartMenu> = {
-  title: "Components/StartMenu",
+  title: 'Components/StartMenu',
   component: StartMenu,
   parameters: {
-    layout: "fullscreen",
+    layout: 'fullscreen',
   },
+  tags: ['autodocs'],
 };
 
 export default meta;
 type Story = StoryObj<typeof StartMenu>;
 
-/**
- * Interactive demo showing StartMenu spawning from the NixOS logo in Waybar
- */
 export const SpawningFromWaybar: Story = {
   render: () => {
     const [isMenuOpen, setIsMenuOpen] = useState(true);
 
-    const handleStartButtonClick = () => {
-      setIsMenuOpen(!isMenuOpen);
-    };
-
-    const handleMenuClose = () => {
-      setIsMenuOpen(false);
-    };
-
-    const handleItemClick = (itemId: string) => {
-      console.log(`Menu item clicked: ${itemId}`);
-    };
-
     return (
       <Desktop>
         <div className="relative w-full">
-          {/* Start Menu - positioned at bottom-left */}
           <StartMenu
             isOpen={isMenuOpen}
-            systemUpdatesCount={3}
-            onClose={handleMenuClose}
-            onItemClick={handleItemClick}
-            style={{
-              position: "absolute",
-              bottom: "53px",
-              left: "8px",
-            }}
+            recentItems={recentItems}
+            nixFlakeUpdatesCount={3}
+            flatpakUpdatesCount={2}
+            onClose={() => setIsMenuOpen(false)}
+            onItemClick={fn()}
+            onRecentItemClick={fn()}
+            onClearRecentItems={fn()}
+            style={{ position: 'absolute', bottom: '53px', left: '8px' }}
           />
-
-          {/* Waybar with clickable start button */}
           <div className="relative">
-            {/* Overlay to make start button clickable */}
             <button
               type="button"
-              onClick={handleStartButtonClick}
-              className="absolute left-1 top-0 h-full w-12 z-10"
+              onClick={() => setIsMenuOpen((open) => !open)}
+              className="absolute left-1 top-0 z-10 h-full w-12"
               aria-label="Toggle Start Menu"
-              style={{ background: "transparent", border: "none" }}
             />
             <Waybar position="bottom" height={45} />
           </div>
@@ -68,133 +63,215 @@ export const SpawningFromWaybar: Story = {
   },
 };
 
-/**
- * Open state demo
- */
-export const Open: Story = {
+export const RecentItems: Story = {
   args: {
     isOpen: true,
+    recentItems,
+    nixFlakeUpdatesCount: 3,
+    flatpakUpdatesCount: 2,
+    onClose: fn(),
+    onRecentItemClick: fn(),
+    onClearRecentItems: fn(),
   },
   decorators: [
     (Story: React.ComponentType) => (
-      <div className="bg-background-primary min-h-screen p-8">
+      <div className="min-h-screen bg-background-primary p-8">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('menuitem', { name: 'Recent Items' });
+
+    await userEvent.hover(trigger);
+    await expect(canvas.queryByRole('menu', { name: 'Recent Items' })).not.toBeInTheDocument();
+    await waitFor(() => expect(canvas.getByRole('menu', { name: 'Recent Items' })).toBeVisible());
+
+    const submenu = canvas.getByRole('menu', { name: 'Recent Items' });
+    await userEvent.unhover(trigger);
+    await userEvent.hover(submenu);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await expect(submenu).toBeVisible();
+
+    await userEvent.unhover(submenu);
+    await waitFor(() =>
+      expect(canvas.queryByRole('menu', { name: 'Recent Items' })).not.toBeInTheDocument()
+    );
+
+    trigger.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(canvas.getByRole('menu', { name: 'Recent Items' })).toBeVisible();
+    await waitFor(() =>
+      expect(canvas.getByRole('menuitem', { name: /Visual Studio Code/ })).toHaveFocus()
+    );
+    await userEvent.keyboard('{Escape}');
+    await expect(canvas.queryByRole('menu', { name: 'Recent Items' })).not.toBeInTheDocument();
+    await expect(trigger).toHaveFocus();
+
+    await userEvent.keyboard('{ArrowRight}');
+    await waitFor(() =>
+      expect(canvas.getByRole('menuitem', { name: /Visual Studio Code/ })).toHaveFocus()
+    );
+    await userEvent.keyboard('{ArrowLeft}');
+    await expect(canvas.queryByRole('menu', { name: 'Recent Items' })).not.toBeInTheDocument();
+    await expect(trigger).toHaveFocus();
+
+    await userEvent.keyboard('{Enter}');
+    await expect(canvas.getByRole('menu', { name: 'Recent Items' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+
+    await userEvent.keyboard(' ');
+    await expect(canvas.getByRole('menu', { name: 'Recent Items' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+
+    await userEvent.click(trigger);
+    await expect(canvas.getByRole('menu', { name: 'Recent Items' })).toBeVisible();
+    await userEvent.click(canvasElement);
+    await expect(canvas.queryByRole('menu', { name: 'Recent Items' })).not.toBeInTheDocument();
+    await expect(args.onClose).toHaveBeenCalledOnce();
+  },
+};
+
+export const RecentItemsAtRightEdge: Story = {
+  args: {
+    isOpen: true,
+    recentItems,
+    onClose: fn(),
+    onRecentItemClick: fn(),
+    onClearRecentItems: fn(),
+    style: { position: 'fixed', bottom: '8px', right: '8px' },
+  },
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div className="min-h-screen bg-background-primary">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('menuitem', { name: 'Recent Items' }));
+    await expect(canvas.getByRole('menu', { name: 'Recent Items' })).toHaveAttribute(
+      'data-side',
+      'left'
+    );
+  },
+};
+
+export const EmptyRecentItems: Story = {
+  args: {
+    isOpen: true,
+    recentItems: {},
+    onClose: fn(),
+    onClearRecentItems: fn(),
+  },
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div className="min-h-screen bg-background-primary p-8">
         <Story />
       </div>
     ),
   ],
 };
 
-/**
- * Open state with system updates available
- */
-export const WithSystemUpdates: Story = {
+export const UpdateSourceBadges: Story = {
   args: {
     isOpen: true,
-    systemUpdatesCount: 5,
+    nixFlakeUpdatesCount: 3,
+    flatpakUpdatesCount: 2,
   },
   decorators: [
     (Story: React.ComponentType) => (
-      <div className="bg-background-primary min-h-screen p-8">
+      <div className="min-h-screen bg-background-primary p-8">
         <Story />
       </div>
     ),
   ],
 };
 
-export const WithGamingProfile: Story = {
+export const WithAutomaticGaming: Story = {
   args: {
     isOpen: true,
     profile: {
-      mode: "gaming",
-      source: "auto",
-      gamingManual: false,
-      powersaveManual: false,
+      mode: 'gaming',
+      source: 'auto',
+      manualMode: 'default',
     },
+    onProfileChange: fn(),
   },
   decorators: [
     (Story: React.ComponentType) => (
-      <div className="bg-background-primary min-h-screen p-8">
+      <div className="min-h-screen bg-background-primary p-8">
         <Story />
       </div>
     ),
   ],
 };
 
-export const WithManualPowersaveProfile: Story = {
+export const WithPinnedGaming: Story = {
   args: {
     isOpen: true,
     profile: {
-      mode: "powersave",
-      source: "manual",
-      gamingManual: false,
-      powersaveManual: true,
+      mode: 'gaming',
+      source: 'manual',
+      manualMode: 'gaming',
     },
+    onProfileChange: fn(),
   },
   decorators: [
     (Story: React.ComponentType) => (
-      <div className="bg-background-primary min-h-screen p-8">
+      <div className="min-h-screen bg-background-primary p-8">
         <Story />
       </div>
     ),
   ],
 };
 
-/**
- * With animations disabled (better performance on slower systems)
- */
-export const WithoutAnimations: Story = {
-  args: {
-    isOpen: true,
-    systemUpdatesCount: 3,
-    disableAnimations: true,
-  },
-  decorators: [
-    (Story: React.ComponentType) => (
-      <div className="bg-background-primary min-h-screen p-8">
-        <Story />
-      </div>
-    ),
-  ],
-};
+export const SystemSurfaces: Story = {
+  render: () => {
+    const [surface, setSurface] = useState<'force-quit' | 'about-this-pc' | null>(null);
 
-/**
- * Purple variant demo - showing the suspend action color
- */
-export const PurpleVariant: Story = {
-  args: {
-    isOpen: true,
-    items: [
-      {
-        id: "system-settings",
-        label: "System Settings",
-        icon: "\uE713",
-        variant: "default",
-      },
-      {
-        id: "suspend",
-        label: "Suspend",
-        icon: "\uE708",
-        variant: "purple",
-      },
-      {
-        id: "restart",
-        label: "Restart",
-        icon: "\uE777",
-        variant: "warning",
-      },
-      {
-        id: "shutdown",
-        label: "Shutdown",
-        icon: "\uE7E8",
-        variant: "danger",
-      },
-    ],
+    return (
+      <Desktop minHeight="100vh">
+        <div className="p-8">
+          <StartMenu
+            isOpen={true}
+            recentItems={recentItems}
+            onItemClick={(itemId) => {
+              if (itemId === 'force-quit' || itemId === 'about-this-pc') setSurface(itemId);
+            }}
+          />
+        </div>
+        <ForceQuitDialog
+          isOpen={surface === 'force-quit'}
+          applications={[
+            { id: 'browser', name: 'Firefox', icon: '\uE774', cpu: '12.1%', memory: '1.2 GB' },
+            {
+              id: 'editor',
+              name: 'Visual Studio Code',
+              icon: '\uE943',
+              cpu: '4.6%',
+              memory: '842 MB',
+            },
+          ]}
+          onClose={() => setSurface(null)}
+          onForceQuit={fn()}
+        />
+        <AboutThisPC
+          isOpen={surface === 'about-this-pc'}
+          info={{
+            deviceName: 'NixOS Workstation',
+            manufacturer: 'Framework',
+            processor: 'AMD Ryzen 7 7840U',
+            memory: '32 GB',
+            desktop: 'Hyprland',
+            operatingSystem: 'NixOS 25.05',
+          }}
+          onClose={() => setSurface(null)}
+          onMoreInfo={fn()}
+        />
+      </Desktop>
+    );
   },
-  decorators: [
-    (Story: React.ComponentType) => (
-      <div className="bg-background-primary min-h-screen p-8">
-        <Story />
-      </div>
-    ),
-  ],
 };

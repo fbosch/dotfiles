@@ -3,6 +3,7 @@
 
 # ephemereal files
 .docs/
+.repos/**/*
 .serena/
 node_modules
 storybook-static

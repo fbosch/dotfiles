@@ -16,7 +16,7 @@ import { cn } from "../../utils/cn";
  */
 
 const windowVariants = cva(
-  "relative overflow-hidden backdrop-blur-sm transition-all duration-200",
+  "relative overflow-hidden bg-background-secondary/90 backdrop-blur-sm transition-all duration-200",
   {
     variants: {
       state: {
@@ -216,7 +216,7 @@ export const Window: React.FC<WindowProps> = ({
 
       {/* Window content */}
       <div
-        className="w-full overflow-auto bg-background-primary"
+        className="w-full overflow-auto bg-transparent"
         style={{
           height: showTitlebar ? `calc(100% - ${titlebarHeight}px)` : "100%",
         }}

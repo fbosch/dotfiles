@@ -65,11 +65,11 @@ Main config (`config-bundled.tsx`):
 import "gi://Astal?version=4.0";
 import app from "ags/gtk4/app";
 
-import "./lib/confirm-dialog.tsx";
-import "./lib/keyboard-switcher.tsx";
-import "./lib/volume-indicator.tsx";
-import "./lib/start-menu.tsx";
-import "./lib/window-switcher.tsx";
+import "./components/confirm-dialog.tsx";
+import "./components/keyboard-switcher.tsx";
+import "./components/volume-indicator.tsx";
+import "./components/start-menu.tsx";
+import "./components/window-switcher.tsx";
 
 app.start({
   instanceName: "ags-bundled",

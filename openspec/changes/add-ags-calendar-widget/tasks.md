@@ -16,7 +16,7 @@
 
 ## 3. AGS Calendar Widget Shell
 
-- [x] 3.1 Add `.config/ags/lib/calendar-widget.tsx` with lazy window creation and the `globalThis.CalendarWidget` component contract.
+- [x] 3.1 Add `.config/ags/components/calendar-widget.tsx` with lazy window creation and the `globalThis.CalendarWidget` component contract.
 - [x] 3.2 Mirror the design-system Calendar contract in GTK without importing React, Storybook stories, or design-system runtime code.
 - [x] 3.3 Implement request actions: `show`, `hide`, `toggle`, `is-visible`, `next-month`, `prev-month`, `today`, and `select-date`.
 - [x] 3.4 Anchor the Calendar Widget bottom-right near the Waybar clock on the Trigger Monitor, with default-monitor fallback.
@@ -26,7 +26,7 @@
 ## 4. Bundled AGS Wiring
 
 - [x] 4.1 Add `CalendarWidget` to `.config/ags/config-bundled.tsx` global declarations.
-- [x] 4.2 Import `./lib/calendar-widget.tsx` in `.config/ags/config-bundled.tsx`.
+- [x] 4.2 Import `./components/calendar-widget.tsx` in `.config/ags/config-bundled.tsx`.
 - [x] 4.3 Initialize and register `calendar-widget` in the bundled component registry.
 - [x] 4.4 Update bundled daemon component-count log text if it lists the number of initialized components.
 

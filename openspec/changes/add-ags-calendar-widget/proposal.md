@@ -7,7 +7,7 @@ The Waybar clock currently opens GNOME Calendar as an application popup for cale
 - Add a read-only `Calendar` component contract under `design-system/src/components/Calendar/`.
 - Add pure date helpers and tests for month grid construction, local-day overlap, event labels, and event markers.
 - Add minimal Storybook reference stories for the Calendar surface; stories remain reference material and are not an AGS dependency.
-- Add an AGS Calendar Widget under `.config/ags/lib/` that mirrors the design-system Calendar contract.
+- Add an AGS Calendar Widget under `.config/ags/components/` that mirrors the design-system Calendar contract.
 - Add a read-only Calendar Backend for Evolution Data Server events, with safe degradation when EDS GIR bindings are unavailable.
 - Replace the Waybar clock right-click GNOME Calendar launcher with an AGS Calendar Toggle request.
 - Extend Waybar visibility guarding so Waybar stays visible while the Calendar Widget is open.
@@ -26,7 +26,7 @@ The Waybar clock currently opens GNOME Calendar as an application popup for cale
 ## Impact
 
 - `design-system/src/components/Calendar/`: New Calendar component, context, date helpers, tests, stories, and local export.
-- `.config/ags/lib/`: New Calendar Widget and Calendar Backend implementation.
+- `.config/ags/components/` and `.config/ags/services/`: New Calendar Widget and Calendar Backend implementation.
 - `.config/ags/config-bundled.tsx`: Register the Calendar Widget in the bundled AGS daemon.
 - `.config/waybar/config`: Replace clock right-click calendar action with AGS toggle.
 - `.config/hypr/runtime/desktop/waybar-lib.sh`: Include Calendar Widget visibility in the Waybar visibility guard.

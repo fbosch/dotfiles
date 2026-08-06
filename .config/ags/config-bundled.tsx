@@ -37,15 +37,15 @@ declare global {
 }
 
 // Load components using global namespace pattern (no ES6 exports)
-import "./lib/confirm-dialog.tsx";
-import "./lib/volume-indicator.tsx";
-import "./lib/keyboard-switcher.tsx";
-import "./lib/start-menu.tsx";
-import "./lib/window-switcher.tsx";
-import "./lib/desktop-clock.tsx";
-import "./lib/calendar-widget.tsx";
-import "./lib/audio-mixer-widget.tsx";
-import "./lib/pip-snap-preview.tsx";
+import "./components/confirm-dialog.tsx";
+import "./components/volume-indicator.tsx";
+import "./components/keyboard-switcher.tsx";
+import "./components/start-menu.tsx";
+import "./components/window-switcher.tsx";
+import "./components/desktop-clock.tsx";
+import "./components/calendar-widget.tsx";
+import "./components/audio-mixer-widget.tsx";
+import "./components/pip-snap-preview.tsx";
 
 // Component registry for request routing
 type ComponentHandler = (argv: string[], res: (response: string) => void) => void;

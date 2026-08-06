@@ -18,7 +18,6 @@ The bundled entrypoint imports these components from `lib/`:
 ## Layout
 
 - `config-bundled.tsx` imports every component, registers handlers, and starts AGS with `instanceName: "ags-bundled"`.
-- `config.tsx` is a stub; bundled mode is the supported path.
 - `start-daemons.sh` starts the bundled process during the desktop session.
 - `lib/` is the canonical component source.
 - `docs/agents/` contains deeper implementation notes for agents.

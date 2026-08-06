@@ -1,141 +1,98 @@
-import { cva, type VariantProps } from "class-variance-authority";
-import type React from "react";
-import { cn } from "../../utils/cn";
-import { Tag } from "../Tag";
-
-/**
- * StartMenu component - macOS-style application menu
- * Spawns from bottom-left corner (NixOS logo in Waybar)
- *
- * Design reference:
- * - Similar styling to Dialog component
- * - Grows upward with transform-origin bottom-left
- * - Compact menu items with icons
- * - Sections separated by dividers
- *
- * Menu item actions:
- * - System Settings: Opens nwg-look (GTK theme configurator)
- * - System Info: Opens Vicinae system info extension (vicinae://extensions/fbosch/sysinfo/system-info)
- * - System Updates: Opens terminal with flake_update_interactive command
- * - Lock Screen: Locks the session (hyprlock)
- * - Applications: Opens Warehouse (Flatpak/app store)
- * - Documents: Opens file manager in ~/Documents
- * - Pictures: Opens file manager in ~/Pictures
- * - Downloads: Opens file manager in ~/Downloads
- * - Suspend: Suspends the system
- * - Restart: Reboots the system
- * - Shutdown: Powers off the system
- *
- * System Updates:
- * - Shows conditional update counter below System Settings
- * - Displays when flake inputs have available updates
- * - Badge shows count in red (macOS-style)
- * - Updates via `nix flake update` check
- */
+import { cva, type VariantProps } from 'class-variance-authority';
+import { type CSSProperties, type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
+import { cn } from '../../utils/cn';
+import { Tag } from '../Tag';
+import { TripleToggle, type TripleToggleOption } from '../TripleToggle';
 
 const menuVariants = cva(
-  "bg-background-secondary/90 border border-white/15 backdrop-blur-sm shadow-[0_8px_32px_rgba(0,0,0,0.2),0_2px_8px_rgba(0,0,0,0.1)] rounded-lg p-1 w-52",
+  'w-72 rounded-lg border border-white/10 bg-background-secondary/85 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.28),0_4px_12px_rgba(0,0,0,0.14)] backdrop-blur-xl',
   {
     variants: {
       isOpen: {
-        true: "opacity-100 scale-100",
-        false: "opacity-0 scale-y-0 pointer-events-none",
+        true: 'scale-100 opacity-100',
+        false: 'pointer-events-none scale-y-0 opacity-0',
       },
       animated: {
-        true: "transition-all duration-200",
-        false: "",
+        true: 'transition-all duration-200',
+        false: '',
       },
     },
     defaultVariants: {
       isOpen: false,
       animated: true,
     },
-  },
+  }
 );
 
-const menuItemVariants = cva(
-  "w-full flex items-center gap-2 px-2 py-1 text-xs rounded-md cursor-pointer",
-  {
-    variants: {
-      variant: {
-        default:
-          "text-foreground-primary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none",
-        warning:
-          "text-foreground-primary hover:text-state-warning hover:bg-state-warning/10 focus-visible:text-state-warning focus-visible:bg-state-warning/10 focus-visible:outline-none",
-        danger:
-          "text-foreground-primary hover:text-state-error hover:bg-state-error/10 focus-visible:text-state-error focus-visible:bg-state-error/10 focus-visible:outline-none",
-        purple:
-          "text-foreground-primary hover:text-state-purple hover:bg-state-purple/10 focus-visible:text-state-purple focus-visible:bg-state-purple/10 focus-visible:outline-none",
-      },
-      animated: {
-        true: "transition-colors duration-150",
-        false: "",
-      },
+const menuItemVariants = cva('flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-sm', {
+  variants: {
+    variant: {
+      default:
+        'text-foreground-primary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none',
+      warning:
+        'text-foreground-primary hover:bg-state-warning/10 hover:text-state-warning focus-visible:bg-state-warning/10 focus-visible:text-state-warning focus-visible:outline-none',
+      danger:
+        'text-foreground-primary hover:bg-state-error/10 hover:text-state-error focus-visible:bg-state-error/10 focus-visible:text-state-error focus-visible:outline-none',
+      purple:
+        'text-foreground-primary hover:bg-state-purple/10 hover:text-state-purple focus-visible:bg-state-purple/10 focus-visible:text-state-purple focus-visible:outline-none',
     },
-    defaultVariants: {
-      variant: "default",
-      animated: true,
+    animated: {
+      true: 'transition-colors duration-150',
+      false: '',
     },
   },
-);
-
-const profileOptionVariants = cva(
-  "inline-flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium leading-none focus-visible:outline-none active:scale-[0.98]",
-  {
-    variants: {
-      active: {
-        true: "shadow-sm",
-        false:
-          "text-foreground-secondary hover:bg-white/10 hover:text-foreground-primary focus-visible:bg-white/10 focus-visible:text-foreground-primary",
-      },
-      tone: {
-        auto: "",
-        gaming: "",
-        powersave: "",
-      },
-      animated: {
-        true: "transition-colors duration-150",
-        false: "",
-      },
-    },
-    compoundVariants: [
-      {
-        active: true,
-        tone: "auto",
-        className: "bg-white/[0.12] text-foreground-primary ring-1 ring-white/10",
-      },
-      {
-        active: true,
-        tone: "gaming",
-        className: "bg-state-success/15 text-state-success ring-1 ring-state-success/40",
-      },
-      {
-        active: true,
-        tone: "powersave",
-        className: "bg-state-warning/15 text-state-warning ring-1 ring-state-warning/40",
-      },
-    ],
-    defaultVariants: {
-      active: false,
-      tone: "auto",
-      animated: true,
-    },
+  defaultVariants: {
+    variant: 'default',
+    animated: true,
   },
-);
+});
 
-export interface MenuItem {
+const RECENT_ITEMS_OPEN_DELAY_MS = 300;
+const RECENT_ITEMS_CLOSE_DELAY_MS = 200;
+const RECENT_ITEMS_MENU_WIDTH_PX = 320;
+const RECENT_ITEMS_MENU_GAP_PX = 8;
+
+export type StartMenuItemVariant = 'default' | 'warning' | 'danger' | 'purple';
+
+export interface StartMenuActionItem {
+  type: 'action';
   id: string;
   label: string;
   icon: string;
-  variant?: "default" | "warning" | "danger" | "purple";
+  variant?: StartMenuItemVariant;
   onClick?: () => void;
 }
 
+export interface StartMenuSeparatorItem {
+  type: 'separator';
+  id: string;
+}
+
+export interface StartMenuRecentItemsItem {
+  type: 'recent-items';
+  id: 'recent-items';
+  label: string;
+  icon: string;
+}
+
+export type StartMenuItem = StartMenuActionItem | StartMenuSeparatorItem | StartMenuRecentItemsItem;
+
+export interface RecentMenuItem {
+  id: string;
+  label: string;
+  icon?: string;
+  detail?: string;
+}
+
+export interface RecentItems {
+  applications?: RecentMenuItem[];
+  documents?: RecentMenuItem[];
+}
+
 export interface StartMenuProfile {
-  mode: "default" | "gaming" | "powersave";
-  source?: "none" | "manual" | "auto";
-  gamingManual?: boolean;
-  powersaveManual?: boolean;
+  mode: 'default' | 'gaming' | 'powersave';
+  source?: 'none' | 'manual' | 'auto';
+  manualMode: 'default' | 'gaming' | 'powersave';
 }
 
 export interface StartMenuUser {
@@ -144,127 +101,52 @@ export interface StartMenuUser {
 }
 
 export interface StartMenuProps extends VariantProps<typeof menuVariants> {
-  /**
-   * Control menu visibility
-   */
   isOpen?: boolean;
-  /**
-   * Menu items to display
-   */
-  items?: MenuItem[];
-  /**
-   * Number of available system updates (flake inputs)
-   * Shows conditional badge below System Settings when > 0
-   */
-  systemUpdatesCount?: number;
-  /**
-   * Current Hyprland profile state shown in the embedded profile controls.
-   */
+  items?: StartMenuItem[];
+  recentItems?: RecentItems;
+  nixFlakeUpdatesCount?: number;
+  flatpakUpdatesCount?: number;
   profile?: StartMenuProfile;
-  /**
-   * User card shown at the top of the menu.
-   */
   user?: StartMenuUser;
-  /**
-   * Disable animations for better performance on slower systems
-   */
   disableAnimations?: boolean;
-  /**
-   * Callback when menu should close
-   */
   onClose?: () => void;
-  /**
-   * Callback when menu item is clicked
-   */
   onItemClick?: (itemId: string) => void;
-  /**
-   * Callback when profile controls are clicked.
-   */
-  onProfileAction?: (action: "gaming" | "powersave" | "clear-manual") => void;
-  /**
-   * Additional CSS classes
-   */
+  onRecentItemClick?: (item: RecentMenuItem) => void;
+  onClearRecentItems?: () => void;
+  onProfileChange?: (mode: StartMenuProfile['manualMode']) => void;
   className?: string;
-  /**
-   * Position style (for absolute positioning in stories)
-   */
-  style?: React.CSSProperties;
+  style?: CSSProperties;
 }
 
-const defaultMenuItems: MenuItem[] = [
-  {
-    id: "system-settings",
-    label: "System Settings",
-    icon: "\uE713", // Setting
-    variant: "default",
-  },
-  {
-    id: "system-info",
-    label: "System Info",
-    icon: "\uE946", // System (Info icon)
-    variant: "default",
-  },
-  {
-    id: "lock-screen",
-    label: "Lock Screen",
-    icon: "\uE72E", // Lock
-    variant: "default",
-  },
-  { id: "divider-1", label: "", icon: "", variant: "default" },
-  {
-    id: "applications",
-    label: "Applications",
-    icon: "\uE71D", // AllApps
-    variant: "default",
-  },
-  {
-    id: "documents",
-    label: "Documents",
-    icon: "\uE8A5", // Document
-    variant: "default",
-  },
-  {
-    id: "pictures",
-    label: "Pictures",
-    icon: "\uE91B", // Pictures
-    variant: "default",
-  },
-  {
-    id: "downloads",
-    label: "Downloads",
-    icon: "\uE896", // Download
-    variant: "default",
-  },
-  { id: "divider-2", label: "", icon: "", variant: "default" },
-  {
-    id: "suspend",
-    label: "Suspend",
-    icon: "\uE708", // QuietHours
-    variant: "purple",
-  },
-  {
-    id: "restart",
-    label: "Restart",
-    icon: "\uE777", // UpdateRestore
-    variant: "warning",
-  },
-  {
-    id: "shutdown",
-    label: "Shutdown",
-    icon: "\uE7E8", // PowerButton
-    variant: "danger",
-  },
+const defaultMenuItems: StartMenuItem[] = [
+  { type: 'action', id: 'about-this-pc', label: 'About This PC', icon: '\uE946' },
+  { type: 'action', id: 'system-settings', label: 'System Settings', icon: '\uE713' },
+  { type: 'action', id: 'system-updates', label: 'System Updates', icon: '\uE895' },
+  { type: 'separator', id: 'before-locations' },
+  { type: 'action', id: 'applications', label: 'Applications', icon: '\uE71D' },
+  { type: 'action', id: 'documents', label: 'Documents', icon: '\uE8A5' },
+  { type: 'action', id: 'pictures', label: 'Pictures', icon: '\uE91B' },
+  { type: 'action', id: 'downloads', label: 'Downloads', icon: '\uE896' },
+  { type: 'recent-items', id: 'recent-items', label: 'Recent Items', icon: '\uE81C' },
+  { type: 'separator', id: 'after-recent-items' },
+  { type: 'action', id: 'force-quit', label: 'Force Quit', icon: '\uE7BA' },
+  { type: 'separator', id: 'session-actions' },
+  { type: 'action', id: 'suspend', label: 'Suspend', icon: '\uE708', variant: 'purple' },
+  { type: 'action', id: 'restart', label: 'Restart', icon: '\uE777', variant: 'warning' },
+  { type: 'action', id: 'shutdown', label: 'Shutdown', icon: '\uE7E8', variant: 'danger' },
+  { type: 'separator', id: 'account-actions' },
+  { type: 'action', id: 'lock-screen', label: 'Lock Screen', icon: '\uE72E' },
+  { type: 'action', id: 'sign-out', label: 'Log out', icon: '\uE8AB', variant: 'warning' },
 ];
 
 const defaultProfile: StartMenuProfile = {
-  mode: "default",
-  source: "none",
-  gamingManual: false,
-  powersaveManual: false,
+  mode: 'default',
+  source: 'none',
+  manualMode: 'default',
 };
 
 const defaultUser: StartMenuUser = {
-  name: "Frederik Bosch",
+  name: 'Frederik Bosch',
 };
 
 const initialsForName = (name: string) =>
@@ -273,67 +155,273 @@ const initialsForName = (name: string) =>
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
-    .join("") || "?";
+    .join('') || '?';
 
-const profileModeLabel = (mode: StartMenuProfile["mode"]) => {
-  if (mode === "gaming") return "Gaming";
-  if (mode === "powersave") return "Saver";
-  return "Balanced";
-};
-
-const profileSourceLabel = (profile: StartMenuProfile) => {
-  if (profile.source === "manual") return "Manual";
-  return "Auto";
-};
-
-export const StartMenu: React.FC<StartMenuProps> = ({
+export const StartMenu = ({
   isOpen = false,
   items = defaultMenuItems,
-  systemUpdatesCount = 0,
+  recentItems = {},
+  nixFlakeUpdatesCount = 0,
+  flatpakUpdatesCount = 0,
   profile = defaultProfile,
   user = defaultUser,
   disableAnimations = false,
   onClose,
   onItemClick,
-  onProfileAction,
+  onRecentItemClick,
+  onClearRecentItems,
+  onProfileChange,
   className,
   style,
-}) => {
-  const gamingManualActive =
-    profile.gamingManual || (profile.source === "manual" && profile.mode === "gaming");
-  const powersaveManualActive =
-    profile.powersaveManual || (profile.source === "manual" && profile.mode === "powersave");
-  const autoControlActive = !gamingManualActive && !powersaveManualActive;
+}: StartMenuProps) => {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const recentItemsTriggerRef = useRef<HTMLButtonElement>(null);
+  const recentItemsMenuRef = useRef<HTMLDivElement>(null);
+  const recentItemsOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recentItemsCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recentItemsMenuId = useId();
+  const [recentItemsOpen, setRecentItemsOpen] = useState(false);
+  const [recentItemsSide, setRecentItemsSide] = useState<'left' | 'right'>('right');
+  const applications = recentItems.applications ?? [];
+  const documents = recentItems.documents ?? [];
+  const hasRecentItems = applications.length > 0 || documents.length > 0;
+  const automaticGamingActive = profile.mode === 'gaming' && profile.source === 'auto';
+  const manualProfile = profile.manualMode;
+  const profileOptions: readonly [
+    TripleToggleOption<StartMenuProfile['manualMode']>,
+    TripleToggleOption<StartMenuProfile['manualMode']>,
+    TripleToggleOption<StartMenuProfile['manualMode']>,
+  ] = [
+    {
+      value: 'default',
+      label: 'Auto',
+      icon: <span className="font-fluent">{'\uF8B0'}</span>,
+      badge: automaticGamingActive ? (
+        <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-nerd text-[8px] text-state-success-foreground ring-2 ring-accent-primary">
+          {'\u{F02B4}'}
+        </span>
+      ) : undefined,
+      ariaLabel: automaticGamingActive
+        ? 'Automatic profile rules; Game Mode is active'
+        : 'Automatic profile rules',
+      title: automaticGamingActive
+        ? 'Game Mode is active automatically'
+        : 'Use automatic profile rules',
+    },
+    {
+      value: 'gaming',
+      label: 'Gaming',
+      icon: <span className="font-nerd">{'\u{F02B4}'}</span>,
+      ariaLabel: 'Manual Gaming profile',
+      title: 'Select manual Gaming profile',
+    },
+    {
+      value: 'powersave',
+      label: 'Saver',
+      icon: <span className="font-fluent">{'\uEA95'}</span>,
+      ariaLabel: 'Manual Power Saver profile',
+      title: 'Select manual Power Saver profile',
+    },
+  ];
 
-  const handleItemClick = (item: MenuItem) => {
-    if (item.id.startsWith("divider")) return;
+  useEffect(() => {
+    const clearRecentItemsTimers = () => {
+      if (recentItemsOpenTimerRef.current !== null) {
+        clearTimeout(recentItemsOpenTimerRef.current);
+        recentItemsOpenTimerRef.current = null;
+      }
+      if (recentItemsCloseTimerRef.current !== null) {
+        clearTimeout(recentItemsCloseTimerRef.current);
+        recentItemsCloseTimerRef.current = null;
+      }
+    };
 
-    if (item.onClick) {
-      item.onClick();
+    if (isOpen === false) {
+      clearRecentItemsTimers();
+      setRecentItemsOpen(false);
+      return;
     }
 
-    if (onItemClick) {
-      onItemClick(item.id);
-    }
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && menuRef.current?.contains(event.target)) return;
 
-    if (onClose) {
-      onClose();
-    }
+      setRecentItemsOpen(false);
+      onClose?.();
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      clearRecentItemsTimers();
+    };
+  }, [isOpen, onClose]);
+
+  const focusMenuItem = (current: HTMLButtonElement, direction: 1 | -1) => {
+    const isRecentItem = recentItemsMenuRef.current?.contains(current) === true;
+    const scope = isRecentItem ? recentItemsMenuRef.current : menuRef.current;
+    const menuItems = Array.from(
+      scope?.querySelectorAll<HTMLButtonElement>(
+        '[role^="menuitem"], [data-triple-toggle-option]'
+      ) ?? []
+    ).filter(
+      (item) =>
+        item.tabIndex !== -1 &&
+        item.disabled === false &&
+        (isRecentItem || recentItemsMenuRef.current?.contains(item) !== true)
+    );
+    const currentIndex = menuItems.indexOf(current);
+    const nextIndex = (currentIndex + direction + menuItems.length) % menuItems.length;
+    menuItems[nextIndex]?.focus();
   };
+
+  const clearRecentItemsOpenTimer = () => {
+    if (recentItemsOpenTimerRef.current === null) return;
+
+    clearTimeout(recentItemsOpenTimerRef.current);
+    recentItemsOpenTimerRef.current = null;
+  };
+
+  const clearRecentItemsCloseTimer = () => {
+    if (recentItemsCloseTimerRef.current === null) return;
+
+    clearTimeout(recentItemsCloseTimerRef.current);
+    recentItemsCloseTimerRef.current = null;
+  };
+
+  const openRecentItems = () => {
+    clearRecentItemsOpenTimer();
+    clearRecentItemsCloseTimer();
+    const triggerBounds = recentItemsTriggerRef.current?.getBoundingClientRect();
+    if (triggerBounds) {
+      const rightSpace = window.innerWidth - triggerBounds.right;
+      setRecentItemsSide(
+        rightSpace >= RECENT_ITEMS_MENU_WIDTH_PX + RECENT_ITEMS_MENU_GAP_PX ? 'right' : 'left'
+      );
+    }
+    setRecentItemsOpen(true);
+  };
+
+  const scheduleRecentItemsOpen = () => {
+    clearRecentItemsCloseTimer();
+    if (recentItemsOpen || recentItemsOpenTimerRef.current !== null) return;
+
+    recentItemsOpenTimerRef.current = setTimeout(() => {
+      recentItemsOpenTimerRef.current = null;
+      openRecentItems();
+    }, RECENT_ITEMS_OPEN_DELAY_MS);
+  };
+
+  const scheduleRecentItemsClose = () => {
+    clearRecentItemsOpenTimer();
+    clearRecentItemsCloseTimer();
+    recentItemsCloseTimerRef.current = setTimeout(() => {
+      recentItemsCloseTimerRef.current = null;
+      setRecentItemsOpen(false);
+    }, RECENT_ITEMS_CLOSE_DELAY_MS);
+  };
+
+  const openRecentItemsAndFocusFirstItem = () => {
+    openRecentItems();
+    requestAnimationFrame(() => {
+      recentItemsMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    });
+  };
+
+  const handleMenuItemKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      focusMenuItem(event.currentTarget, 1);
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      focusMenuItem(event.currentTarget, -1);
+      return;
+    }
+
+    if (event.key === 'ArrowRight' && event.currentTarget === recentItemsTriggerRef.current) {
+      event.preventDefault();
+      openRecentItemsAndFocusFirstItem();
+      return;
+    }
+
+    if (
+      event.key === 'ArrowLeft' &&
+      recentItemsMenuRef.current?.contains(event.currentTarget) === true
+    ) {
+      event.preventDefault();
+      setRecentItemsOpen(false);
+      recentItemsTriggerRef.current?.focus();
+      return;
+    }
+
+    if (event.key !== 'Escape') return;
+
+    event.preventDefault();
+    if (
+      recentItemsOpen &&
+      (event.currentTarget === recentItemsTriggerRef.current ||
+        recentItemsMenuRef.current?.contains(event.currentTarget) === true)
+    ) {
+      setRecentItemsOpen(false);
+      recentItemsTriggerRef.current?.focus();
+      return;
+    }
+
+    onClose?.();
+  };
+
+  const handleActionClick = (item: StartMenuActionItem) => {
+    item.onClick?.();
+    onItemClick?.(item.id);
+    onClose?.();
+  };
+
+  const handleRecentItemClick = (item: RecentMenuItem) => {
+    onRecentItemClick?.(item);
+    setRecentItemsOpen(false);
+    onClose?.();
+  };
+
+  const renderRecentItem = (item: RecentMenuItem) => (
+    <button
+      key={item.id}
+      type="button"
+      role="menuitem"
+      tabIndex={isOpen && recentItemsOpen ? 0 : -1}
+      className={cn(menuItemVariants({ animated: !disableAnimations }), 'min-w-0 text-left')}
+      onClick={() => handleRecentItemClick(item)}
+      onKeyDown={handleMenuItemKeyDown}
+    >
+      {item.icon && (
+        <span className="font-fluent text-xs" aria-hidden="true">
+          {item.icon}
+        </span>
+      )}
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      {item.detail && (
+        <span className="max-w-24 truncate text-[11px] text-foreground-tertiary">
+          {item.detail}
+        </span>
+      )}
+    </button>
+  );
 
   return (
     <div
+      ref={menuRef}
       className={cn(
         menuVariants({ isOpen, animated: !disableAnimations }),
-        "origin-bottom-left",
-        className,
+        'origin-bottom-left',
+        className
       )}
       style={style}
       role="menu"
       aria-hidden={!isOpen}
     >
-      <div className="flex items-center gap-2 px-2 py-1.5">
-        <div className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-white/10 text-[11px] font-semibold text-foreground-primary ring-1 ring-white/15">
+      <div className="flex items-center gap-3.5 px-2.5 py-2">
+        <div className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-white/10 text-xs font-semibold text-foreground-primary ring-1 ring-white/15">
           {user.avatarSrc ? (
             <img
               src={user.avatarSrc}
@@ -346,123 +434,185 @@ export const StartMenu: React.FC<StartMenuProps> = ({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-medium text-foreground-primary">
-            {user.name}
-          </div>
+          <div className="truncate text-base font-medium text-foreground-primary">{user.name}</div>
         </div>
       </div>
-      <div className="mb-1 rounded-lg bg-background-primary/30 p-1">
-        <div className="flex items-center justify-between gap-2 px-1 py-0.5 text-[11px] leading-tight">
-          <span className="font-medium text-foreground-primary">Profile</span>
-          <span className="truncate text-foreground-secondary">
-            {profileModeLabel(profile.mode)} · {profileSourceLabel(profile)}
-          </span>
-        </div>
-        <fieldset
-          className="mt-1 flex items-center gap-1 rounded-md bg-background-primary/50 p-0.5"
-          aria-label="Profile controls"
-        >
-          <button
-            type="button"
-            className={profileOptionVariants({
-              active: autoControlActive,
-              tone: "auto",
-              animated: !disableAnimations,
-            })}
-            onClick={() => onProfileAction?.("clear-manual")}
-            tabIndex={isOpen ? 0 : -1}
-            aria-label="Use automatic profile"
-            aria-pressed={autoControlActive}
-            title="Let automatic profile rules decide"
-          >
-            Auto
-          </button>
-          <button
-            type="button"
-            className={profileOptionVariants({
-              active: gamingManualActive,
-              tone: "gaming",
-              animated: !disableAnimations,
-            })}
-            onClick={() => onProfileAction?.("gaming")}
-            tabIndex={isOpen ? 0 : -1}
-            aria-label="Toggle gaming profile"
-            aria-pressed={gamingManualActive}
-            title={gamingManualActive ? "Disable manual gaming profile" : "Enable manual gaming profile"}
-          >
-            <span className="font-fluent text-[11px]" aria-hidden="true">
-              {"\uE7FC"}
-            </span>
-          </button>
-          <button
-            type="button"
-            className={profileOptionVariants({
-              active: powersaveManualActive,
-              tone: "powersave",
-              animated: !disableAnimations,
-            })}
-            onClick={() => onProfileAction?.("powersave")}
-            tabIndex={isOpen ? 0 : -1}
-            aria-label="Toggle powersave profile"
-            aria-pressed={powersaveManualActive}
-            title={powersaveManualActive ? "Disable manual powersave profile" : "Enable manual powersave profile"}
-          >
-            <span className="font-fluent text-[11px]" aria-hidden="true">
-              {"\uE945"}
-            </span>
-          </button>
-        </fieldset>
-      </div>
-      <hr className="my-1 border-t border-white/10" />
+      <hr className="my-1.5 border-t border-white/10" />
       {items.map((item) => {
-        if (item.id.startsWith("divider")) {
+        if (item.type === 'separator') {
+          return <hr key={item.id} className="my-1.5 border-t border-white/10" />;
+        }
+
+        if (item.type === 'recent-items') {
           return (
-            <hr key={item.id} className="border-t border-white/10 my-1" />
+            <div key={item.id}>
+              <div className="relative" onPointerLeave={scheduleRecentItemsClose}>
+                <button
+                  ref={recentItemsTriggerRef}
+                  type="button"
+                  role="menuitem"
+                  tabIndex={isOpen ? 0 : -1}
+                  className={cn(
+                    menuItemVariants({ animated: !disableAnimations }),
+                    'justify-between',
+                    recentItemsOpen
+                      ? 'bg-accent-primary text-white hover:bg-accent-hover focus-visible:bg-accent-hover'
+                      : ''
+                  )}
+                  aria-haspopup="menu"
+                  aria-controls={recentItemsMenuId}
+                  aria-expanded={recentItemsOpen}
+                  onClick={openRecentItems}
+                  onPointerEnter={scheduleRecentItemsOpen}
+                  onKeyDown={handleMenuItemKeyDown}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="font-fluent text-xs" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                    <span className="truncate text-left">{item.label}</span>
+                  </span>
+                  <span className="font-fluent text-[10px]" aria-hidden="true">
+                    {'\uE76C'}
+                  </span>
+                </button>
+                {recentItemsOpen && (
+                  <div
+                    ref={recentItemsMenuRef}
+                    id={recentItemsMenuId}
+                    className={cn(
+                      'absolute bottom-0 z-10 w-80 rounded-lg border border-white/10 bg-background-secondary/85 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.28),0_4px_12px_rgba(0,0,0,0.14)] backdrop-blur-xl',
+                      recentItemsSide === 'right' ? 'left-full ml-2' : 'right-full mr-2'
+                    )}
+                    role="menu"
+                    aria-label={item.label}
+                    data-side={recentItemsSide}
+                    onPointerEnter={clearRecentItemsCloseTimer}
+                  >
+                    {hasRecentItems === false ? (
+                      <p className="px-2.5 py-4 text-center text-sm text-foreground-tertiary">
+                        No recent items
+                      </p>
+                    ) : (
+                      <>
+                        {applications.length > 0 && (
+                          <div>
+                            <p className="px-2.5 pb-1 pt-1.5 text-xs font-semibold text-foreground-secondary">
+                              Applications
+                            </p>
+                            {applications.map(renderRecentItem)}
+                          </div>
+                        )}
+                        {applications.length > 0 && documents.length > 0 && (
+                          <hr className="my-1.5 border-t border-white/10" />
+                        )}
+                        {documents.length > 0 && (
+                          <div>
+                            <p className="px-2.5 pb-1 pt-1.5 text-xs font-semibold text-foreground-secondary">
+                              Documents
+                            </p>
+                            {documents.map(renderRecentItem)}
+                          </div>
+                        )}
+                      </>
+                    )}
+                    <hr className="my-1.5 border-t border-white/10" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      tabIndex={isOpen && recentItemsOpen ? 0 : -1}
+                      className={menuItemVariants({
+                        variant: 'danger',
+                        animated: !disableAnimations,
+                      })}
+                      onClick={onClearRecentItems}
+                      onKeyDown={handleMenuItemKeyDown}
+                    >
+                      <span className="font-fluent text-xs" aria-hidden="true">
+                        {'\uE74D'}
+                      </span>
+                      Clear Recent Items
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           );
         }
 
-        const isSettingsItem = item.id === "system-settings";
-        const showUpdateBadge = isSettingsItem && systemUpdatesCount > 0;
+        const showNixFlakeUpdates = item.id === 'system-updates' && nixFlakeUpdatesCount > 0;
+        const showFlatpakUpdates = item.id === 'system-updates' && flatpakUpdatesCount > 0;
+        const showUpdateBadges = showNixFlakeUpdates || showFlatpakUpdates;
 
         return (
           <div key={item.id}>
             <button
               type="button"
-              className={menuItemVariants({
-                variant: item.variant,
-                animated: !disableAnimations,
-              })}
-              onClick={() => handleItemClick(item)}
               role="menuitem"
               tabIndex={isOpen ? 0 : -1}
+              className={cn(
+                menuItemVariants({
+                  variant: item.variant,
+                  animated: !disableAnimations,
+                }),
+                showUpdateBadges && 'justify-between'
+              )}
+              onClick={() => handleActionClick(item)}
+              onKeyDown={handleMenuItemKeyDown}
             >
-              <span className="font-fluent text-xs" aria-hidden="true">
-                {item.icon}
-              </span>
-              <span className="text-left">{item.label}</span>
-            </button>
-            {showUpdateBadge && (
-              <button
-                type="button"
-                className={cn(
-                  "w-full flex items-center justify-between gap-2 px-2 py-1 text-xs rounded-md cursor-pointer text-foreground-primary hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none pl-6",
-                  !disableAnimations && "transition-colors duration-150",
-                )}
-                onClick={() => {
-                  if (onItemClick) onItemClick("system-updates");
-                  if (onClose) onClose();
-                }}
-                role="menuitem"
-                tabIndex={isOpen ? 0 : -1}
-              >
-                <span className="flex items-center gap-2">
-                  <span className="font-fluent text-xs" aria-hidden="true">
-                    {"\uE895"}
-                  </span>
-                  <span className="text-left">System Updates</span>
+              <span className="flex min-w-0 items-center gap-2.5">
+                <span className="font-fluent text-xs" aria-hidden="true">
+                  {item.icon}
                 </span>
-                <Tag variant="primary">{systemUpdatesCount}</Tag>
-              </button>
+                <span className="truncate text-left">{item.label}</span>
+              </span>
+              {showUpdateBadges && (
+                <span className="flex items-center gap-1">
+                  {showNixFlakeUpdates && (
+                    <Tag
+                      variant="primary"
+                      className="gap-1"
+                      title="Nix flake updates"
+                      aria-label={`Nix flake updates: ${nixFlakeUpdatesCount}`}
+                    >
+                      <span className="font-nerd" aria-hidden="true">
+                        {'\uE843'}
+                      </span>
+                      {nixFlakeUpdatesCount}
+                    </Tag>
+                  )}
+                  {showFlatpakUpdates && (
+                    <Tag
+                      variant="primary"
+                      className="gap-1"
+                      title="Flatpak updates"
+                      aria-label={`Flatpak updates: ${flatpakUpdatesCount}`}
+                    >
+                      <span className="font-nerd" aria-hidden="true">
+                        {'\uF1B2'}
+                      </span>
+                      {flatpakUpdatesCount}
+                    </Tag>
+                  )}
+                </span>
+              )}
+            </button>
+            {item.id === 'system-updates' && (
+              <>
+                <hr className="my-1.5 border-t border-white/10" />
+                <div className="my-3">
+                  <TripleToggle
+                    className="mx-auto"
+                    options={profileOptions}
+                    value={manualProfile}
+                    ariaLabel="Manual performance profile"
+                    onValueChange={onProfileChange}
+                    onKeyDown={handleMenuItemKeyDown}
+                    tabIndex={isOpen ? 0 : -1}
+                    animated={!disableAnimations}
+                  />
+                </div>
+              </>
             )}
           </div>
         );

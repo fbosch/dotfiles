@@ -1,14 +1,22 @@
 # Architecture and Components
 
-AGS runs in bundled mode for performance. All components in `lib/` are imported by `config-bundled.tsx` and run in a single GTK process.
+AGS runs in bundled mode for performance. Components are imported by `config-bundled.tsx` and run in a single GTK process, while services own shared state and runtime integrations.
 
-Components (in `lib/`):
+Components (in `components/`):
 
-- `lib/confirm-dialog.tsx` - Confirmation dialog for high-impact operations
-- `lib/keyboard-switcher.tsx` - Keyboard layout switcher overlay
-- `lib/volume-indicator.tsx` - Volume change indicator with automatic monitoring
-- `lib/start-menu.tsx` - System start menu with update badges
-- `lib/window-switcher.tsx` - Alt+Tab window switcher with previews
+- `components/confirm-dialog.tsx` - Confirmation dialog for high-impact operations
+- `components/keyboard-switcher.tsx` - Keyboard layout switcher overlay
+- `components/volume-indicator.tsx` - Volume change indicator with automatic monitoring
+- `components/start-menu.tsx` - System start menu with update badges
+- `components/recent-items-menu.tsx` - Display-only Recent Items submenu
+- `components/window-switcher.tsx` - Alt+Tab window switcher with previews
+
+Services (in `services/`):
+
+- `services/app-icons.ts` - Application identity and icon resolution
+- `services/hyprland-ipc.ts` - Hyprland socket discovery and request helpers
+- `services/recent-applications.ts` - Session-scoped focus history
+- `services/performance-monitor.ts` - Shared performance instrumentation
 
 Entry points:
 
@@ -26,13 +34,8 @@ File structure:
 
 ```
 .config/ags/
-├── lib/                        # Component library (canonical source)
-│   ├── confirm-dialog.tsx
-│   ├── keyboard-switcher.tsx
-│   ├── volume-indicator.tsx
-│   ├── start-menu.tsx
-│   └── window-switcher.tsx
-├── config-bundled.tsx          # Main entry point (imports from lib/)
-├── config.tsx                  # Stub (bundled mode required)
+├── components/                 # GTK surfaces and shared widgets
+├── services/                   # Runtime state and integrations
+├── config-bundled.tsx          # Main entry point (imports components/)
 └── start-daemons.sh            # Boot script (runs config-bundled.tsx)
 ```

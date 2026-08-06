@@ -23,7 +23,7 @@
 
 ## 4. AGS Audio Mixer Widget Shell
 
-- [x] 4.1 Add `.config/ags/lib/audio-mixer-widget.tsx` with lazy window creation and the `globalThis.AudioMixerWidget` component contract.
+- [x] 4.1 Add `.config/ags/components/audio-mixer-widget.tsx` with lazy window creation and the `globalThis.AudioMixerWidget` component contract.
 - [x] 4.2 Mirror the design-system Audio Mixer surface in GTK without importing React, Storybook stories, or design-system runtime code.
 - [x] 4.3 Implement request actions: `show`, `hide`, `toggle`, and `is-visible`.
 - [x] 4.4 Anchor the widget near the Waybar volume indicator on the Trigger Monitor, with default-monitor fallback.
@@ -43,7 +43,7 @@
 ## 6. Bundled AGS Wiring
 
 - [x] 6.1 Add `AudioMixerWidget` to `.config/ags/config-bundled.tsx` global declarations.
-- [x] 6.2 Import `./lib/audio-mixer-widget.tsx` in `.config/ags/config-bundled.tsx`.
+- [x] 6.2 Import `./components/audio-mixer-widget.tsx` in `.config/ags/config-bundled.tsx`.
 - [x] 6.3 Initialize and register `audio-mixer-widget` in the bundled component registry.
 - [x] 6.4 Ensure backend initialization failures do not prevent other bundled components from loading.
 
