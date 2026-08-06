@@ -4,8 +4,8 @@
 import Gdk from "gi://Gdk?version=4.0";
 import Gio from "gi://Gio?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
+import { createRoot } from "ags";
 import app from "ags/gtk4/app";
-import { createRoot } from "gnim";
 import tokens from "../../../design-system/tokens.json";
 import {
 	type AboutThisPCInfo,
