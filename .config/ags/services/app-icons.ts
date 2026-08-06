@@ -1,7 +1,7 @@
 import Gio from "gi://Gio?version=2.0";
 import GioUnix from "gi://GioUnix?version=2.0";
 import GLib from "gi://GLib?version=2.0";
-import Gtk from "gi://Gtk?version=4.0";
+import type Gtk from "gi://Gtk?version=4.0";
 
 export type IconRef =
   | { kind: "theme"; name: string }
@@ -20,6 +20,12 @@ export interface IconResolutionRequest {
   iconTheme?: Gtk.IconTheme | null;
 }
 
+export interface ResolvedDesktopApplication {
+  desktopId: string;
+  name: string;
+  icon: IconRef | null;
+}
+
 type FaugusGame = {
   title?: string;
   path?: string;
@@ -33,26 +39,34 @@ type SteamApp = {
 };
 
 type DesktopEntry = {
+  desktopId: string;
   path: string;
-  lookupTerms: string[];
+  appInfo: GioUnix.DesktopAppInfo;
+  startupWmClass: string | null;
+  displayName: string;
+  executable: string;
+};
+
+type DesktopApplicationMatch = {
+  appInfo: GioUnix.DesktopAppInfo;
+  desktopId: string;
 };
 
 const faugusGamesPath = `${GLib.get_home_dir()}/.config/faugus-launcher/games.json`;
 const steamAppsPath = `${GLib.get_home_dir()}/.local/share/Steam/steamapps`;
 const steamLibraryCachePath = `${GLib.get_home_dir()}/.local/share/Steam/appcache/librarycache`;
 const waybarConfigPath = `${GLib.get_home_dir()}/.config/waybar/config`;
-const desktopFileDirs = [
-  `${GLib.get_home_dir()}/Desktop`,
-  `${GLib.get_home_dir()}/.local/share/applications`,
-  `/etc/profiles/per-user/${GLib.get_user_name()}/share/applications`,
-  "/run/current-system/sw/share/applications",
-];
+const desktopFileDirs = Array.from(new Set([
+  `${GLib.get_user_data_dir()}/applications`,
+  ...GLib.get_system_data_dirs().map((dir) => `${dir}/applications`),
+]));
 const iconCache = new Map<string, IconRef | null>();
 const themeIconFileCache = new Map<string, string | null>();
 let faugusGamesCache: FaugusGame[] | null = null;
 let steamAppsCache: SteamApp[] | null = null;
 let waybarAppIdMappingCache: Record<string, string> | null = null;
 let desktopEntriesCache: DesktopEntry[] | null = null;
+let desktopAppMonitor: Gio.AppInfoMonitor | null = null;
 
 const genericWrapperClasses = [
   "gamescope",
@@ -127,42 +141,88 @@ function desktopField(contents: string, key: string): string | null {
   return match?.[1]?.trim() ?? null;
 }
 
+function scanDesktopEntries(
+  rootDir: string,
+  currentDir: string,
+  entriesById: Map<string, DesktopEntry>,
+  seenIds: Set<string>,
+): void {
+  let entries: Gio.FileEnumerator | null = null;
+  try {
+    entries = Gio.File.new_for_path(currentDir).enumerate_children(
+      "standard::name,standard::type",
+      Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS,
+      null,
+    );
+    let entry = entries.next_file(null);
+    while (entry) {
+      const name = entry.get_name();
+      const path = `${currentDir}/${name}`;
+      if (entry.get_file_type() === Gio.FileType.DIRECTORY) {
+        scanDesktopEntries(rootDir, path, entriesById, seenIds);
+        entry = entries.next_file(null);
+        continue;
+      }
+      if (!name.endsWith(".desktop")) {
+        entry = entries.next_file(null);
+        continue;
+      }
+
+      const desktopId = path.slice(rootDir.length + 1).replaceAll("/", "-");
+      if (seenIds.has(desktopId)) {
+        entry = entries.next_file(null);
+        continue;
+      }
+      seenIds.add(desktopId);
+
+      try {
+        const appInfo = GioUnix.DesktopAppInfo.new_from_filename(path);
+        if (!isLaunchableDesktopApplication(appInfo)) {
+          entry = entries.next_file(null);
+          continue;
+        }
+        entriesById.set(desktopId, {
+          desktopId,
+          path,
+          appInfo,
+          startupWmClass: appInfo.get_startup_wm_class(),
+          displayName: appInfo.get_display_name(),
+          executable: appInfo.get_executable(),
+        });
+      } catch {
+        // Skip unreadable or invalid desktop entries.
+      }
+      entry = entries.next_file(null);
+    }
+  } catch {
+    // XDG data directories may not contain an applications directory.
+  } finally {
+    try {
+      entries?.close(null);
+    } catch {
+      // The enumerator may already be closed after an I/O failure.
+    }
+  }
+}
+
 function loadDesktopEntries(): DesktopEntry[] {
   if (desktopEntriesCache) return desktopEntriesCache;
 
-  const entriesByPath = new Map<string, DesktopEntry>();
+  const entriesById = new Map<string, DesktopEntry>();
+  const seenIds = new Set<string>();
   for (const dir of desktopFileDirs) {
-    try {
-      const directory = Gio.File.new_for_path(dir);
-      const entries = directory.enumerate_children("standard::name", Gio.FileQueryInfoFlags.NONE, null);
-      let entry = entries.next_file(null);
-      while (entry) {
-        const name = entry.get_name();
-        if (name.endsWith(".desktop")) {
-          const path = `${dir}/${name}`;
-          const [, contents] = Gio.File.new_for_path(path).load_contents(null);
-          if (contents) {
-            const text = new TextDecoder().decode(contents);
-            entriesByPath.set(path, {
-              path,
-              lookupTerms: [
-                name.replace(/\.desktop$/, ""),
-                desktopField(text, "StartupWMClass"),
-                desktopField(text, "Name"),
-                desktopField(text, "Exec"),
-              ].filter((field): field is string => Boolean(field)),
-            });
-          }
-        }
-        entry = entries.next_file(null);
-      }
-      entries.close(null);
-    } catch {
-      // Desktop directories vary by system profile.
-    }
+    scanDesktopEntries(dir, dir, entriesById, seenIds);
   }
 
-  desktopEntriesCache = Array.from(entriesByPath.values());
+  if (!desktopAppMonitor) {
+    desktopAppMonitor = Gio.AppInfoMonitor.get();
+    desktopAppMonitor.connect("changed", () => {
+      desktopEntriesCache = null;
+      iconCache.clear();
+    });
+  }
+
+  desktopEntriesCache = Array.from(entriesById.values());
   return desktopEntriesCache;
 }
 
@@ -181,7 +241,13 @@ function getIconFromDesktopFiles(value: string): IconRef | null {
   }
 
   for (const entry of loadDesktopEntries()) {
-    if (!entry.lookupTerms.some((term) => normalizedCandidates.has(normalizeIconSearchTerm(term)))) continue;
+    const lookupTerms = [
+      entry.desktopId,
+      entry.startupWmClass,
+      entry.displayName,
+      entry.executable,
+    ].filter((term): term is string => Boolean(term));
+    if (!lookupTerms.some((term) => normalizedCandidates.has(normalizeIconSearchTerm(term)))) continue;
     const icon = iconFromDesktopFile(entry.path);
     if (icon) return icon;
   }
@@ -285,7 +351,8 @@ function getSteamLibraryIconForAppId(appid: string): IconRef | null {
 }
 
 function findThemeIconFile(iconName: string): string | null {
-  if (themeIconFileCache.has(iconName)) return themeIconFileCache.get(iconName)!;
+  const cachedIcon = themeIconFileCache.get(iconName);
+  if (cachedIcon !== undefined) return cachedIcon;
 
   const iconDirs = [
     `${GLib.get_home_dir()}/.local/share/icons/hicolor`,
@@ -457,6 +524,90 @@ function iconLookupCandidates(value: string): string[] {
   ).filter((candidate) => candidate !== "");
 }
 
+function desktopApplicationCandidates(window: IconWindowInfo): string[] {
+  const classCandidates = [window.class, window.initialClass].filter(
+    (candidate): candidate is string => Boolean(candidate && candidate !== ""),
+  );
+  const candidates = classCandidates.flatMap((candidate) => {
+    const mapped = getWaybarMappedAppId(candidate);
+    return mapped ? [candidate, mapped] : [candidate];
+  });
+  if (classCandidates.some(isGenericWrapperClass)) {
+    candidates.push(
+      ...buildTitleCandidates(window.title ?? ""),
+      ...buildTitleCandidates(window.initialTitle ?? ""),
+    );
+  }
+
+  return Array.from(
+    new Set(candidates.map((candidate) => candidate.trim()).filter(Boolean)),
+  );
+}
+
+function normalizeDesktopApplicationIdentity(value: string): string {
+  return value.trim().toLowerCase().replace(/\.desktop$/, "");
+}
+
+function isLaunchableDesktopApplication(
+  appInfo: GioUnix.DesktopAppInfo | null,
+): appInfo is GioUnix.DesktopAppInfo {
+  if (!appInfo || appInfo.get_is_hidden()) return false;
+  return Boolean(
+    appInfo.get_executable() || appInfo.get_boolean("DBusActivatable"),
+  );
+}
+
+function findDesktopApplication(
+  window: IconWindowInfo,
+): DesktopApplicationMatch | null {
+  const candidates = desktopApplicationCandidates(window);
+  if (candidates.length === 0) return null;
+
+  for (const candidate of candidates) {
+    try {
+      const desktopId = candidate.endsWith(".desktop")
+        ? candidate
+        : `${candidate}.desktop`;
+      const appInfo = GioUnix.DesktopAppInfo.new(desktopId);
+      if (isLaunchableDesktopApplication(appInfo)) {
+        return { appInfo, desktopId: appInfo.get_id() ?? desktopId };
+      }
+    } catch {
+      // Try matching against the installed application catalog.
+    }
+  }
+
+  const normalizedCandidates = new Set(
+    candidates.map(normalizeDesktopApplicationIdentity),
+  );
+  for (const entry of loadDesktopEntries()) {
+    const identities = [entry.desktopId, entry.startupWmClass].filter(
+      (identity): identity is string => Boolean(identity),
+    );
+    const matchesIdentity = identities.some((identity) =>
+      normalizedCandidates.has(normalizeDesktopApplicationIdentity(identity)),
+    );
+    if (matchesIdentity) {
+      return { appInfo: entry.appInfo, desktopId: entry.desktopId };
+    }
+  }
+
+  for (const entry of loadDesktopEntries()) {
+    if (
+      normalizedCandidates.has(
+        normalizeDesktopApplicationIdentity(entry.displayName),
+      ) ||
+      normalizedCandidates.has(
+        normalizeDesktopApplicationIdentity(entry.executable),
+      )
+    ) {
+      return { appInfo: entry.appInfo, desktopId: entry.desktopId };
+    }
+  }
+
+  return null;
+}
+
 export function isGenericWrapperClass(appClass: string): boolean {
   if (!appClass) return false;
   const normalizedClass = appClass.toLowerCase();
@@ -500,7 +651,8 @@ function getFaugusIconForCandidates(candidates: string[]): IconRef | null {
 
 function getIconForClass(appClass: string, iconTheme?: Gtk.IconTheme | null): IconRef | null {
   if (!appClass) return null;
-  if (iconCache.has(appClass)) return iconCache.get(appClass)!;
+  const cachedIcon = iconCache.get(appClass);
+  if (cachedIcon !== undefined) return cachedIcon;
 
   let icon: IconRef | null = null;
 
@@ -603,6 +755,24 @@ export function getIconForWindow(window: IconWindowInfo, iconTheme?: Gtk.IconThe
     : classCandidates;
 
   return resolveAppIcon({ candidates, iconTheme });
+}
+
+export function resolveDesktopApplication(
+  window: IconWindowInfo,
+  iconTheme?: Gtk.IconTheme | null,
+): ResolvedDesktopApplication | null {
+  const application = findDesktopApplication(window);
+  if (!application) return null;
+
+  const { appInfo, desktopId } = application;
+
+  return {
+    desktopId,
+    name: appInfo.get_display_name(),
+    icon:
+      getIconForWindow(window, iconTheme) ??
+      iconRefFromGioIcon(appInfo.get_icon()),
+  };
 }
 
 export function getFallbackLetter(window: IconWindowInfo): string {

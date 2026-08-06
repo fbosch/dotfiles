@@ -14,7 +14,7 @@ import { getFallbackLetter } from "../services/app-icons";
 import { bindGamingOpacity } from "../services/gaming-opacity";
 import { perf } from "../services/performance-monitor";
 import {
-  getRecentApplicationFocusHistory,
+  getRecentApplications,
   startRecentApplicationFocusHistory,
 } from "../services/recent-applications";
 import { parseComponentRequest } from "../services/request";
@@ -190,18 +190,12 @@ let recentItemsVisible = false;
 
 function recentItemsModel(): RecentItemsMenuModel {
   return {
-    applications: getRecentApplicationFocusHistory()
-      .slice(0, 8)
-      .map((entry) => ({
-        id: entry.identity,
-        label: entry.title || entry.class,
-        detail: entry.title && entry.class ? entry.class : undefined,
-        icon: null,
-        fallbackLetter: getFallbackLetter({
-          class: entry.class,
-          title: entry.title,
-        }),
-      })),
+    applications: getRecentApplications().map((application) => ({
+      id: application.desktopId,
+      label: application.name,
+      icon: application.icon,
+      fallbackLetter: getFallbackLetter({ class: application.name }),
+    })),
     documents: [],
   };
 }

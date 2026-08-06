@@ -77,6 +77,7 @@ function applyStyles(): void {
   app.apply_css(
     `
       window.start-menu.gaming-opaque box.start-menu-container,
+      window.start-menu.gaming-opaque box.recent-items-menu,
       window.calendar-widget.gaming-opaque box.calendar-container,
       window.audio-mixer-widget.gaming-opaque box.audio-mixer-container,
       window.confirm-dialog.gaming-opaque box.dialog-box {

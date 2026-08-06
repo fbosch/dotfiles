@@ -1,12 +1,19 @@
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
-import { isGenericWrapperClass } from "./app-icons";
+import type { IconRef } from "./app-icons";
+import { isGenericWrapperClass, resolveDesktopApplication } from "./app-icons";
 import { getHyprlandSocketPath } from "./hyprland-ipc";
 
-export interface RecentApplicationFocus {
+interface RecentApplicationFocus {
 	identity: string;
 	class: string;
 	title: string;
+}
+
+export interface RecentApplication {
+	desktopId: string;
+	name: string;
+	icon: IconRef | null;
 }
 
 const eventSocketName = ".socket2.sock";
@@ -199,12 +206,30 @@ export function startRecentApplicationFocusHistory(): () => void {
 	};
 }
 
-export function stopRecentApplicationFocusHistory(): void {
-	if (listener !== null) stopListener(listener);
-}
+export function getRecentApplications(limit = 8): RecentApplication[] {
+	const boundedLimit = Number.isFinite(limit)
+		? Math.min(8, Math.max(0, Math.trunc(limit)))
+		: 8;
+	if (boundedLimit === 0) return [];
 
-export function getRecentApplicationFocusHistory(): RecentApplicationFocus[] {
-	return history.map((entry) => ({ ...entry }));
+	const applications: RecentApplication[] = [];
+	const seenDesktopIds = new Set<string>();
+
+	for (const entry of history) {
+		const application = resolveDesktopApplication({
+			class: entry.class,
+			title: entry.title,
+		});
+		if (!application) continue;
+
+		if (seenDesktopIds.has(application.desktopId)) continue;
+
+		seenDesktopIds.add(application.desktopId);
+		applications.push(application);
+		if (applications.length >= boundedLimit) break;
+	}
+
+	return applications;
 }
 
 export function clearRecentApplicationFocusHistory(): void {

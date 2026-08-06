@@ -1,15 +1,11 @@
 {
 	"entry": ["config-bundled.tsx"],
-	"ignorePatterns": ["services/recent-applications.ts"],
+	"ignorePatterns": [],
 	"ignoreDependencies": ["ags"],
 	"ignoreExports": [
 		{
-			"file": "services/app-icons.ts",
-			"exports": ["isGenericWrapperClass"]
-		},
-		{
-			"file": "services/hyprland-ipc.ts",
-			"exports": ["getHyprlandSocketPath"]
+			"file": "services/recent-applications.ts",
+			"exports": ["clearRecentApplicationFocusHistory"]
 		}
 	],
 	"rules": {

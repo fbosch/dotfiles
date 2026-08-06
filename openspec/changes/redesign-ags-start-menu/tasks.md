@@ -10,7 +10,7 @@
 ## 2. Recent Item Data Adapters
 
 - [x] 2.1 Add a bounded, session-scoped Hyprland focus-history adapter that records application identity without persistence.
-- [ ] 2.2 Resolve launchable recent applications and icons through the existing app-icons resolver, retaining closed apps only when they have a desktop launch target.
+- [x] 2.2 Resolve launchable recent applications and icons through the existing app-icons resolver, retaining closed apps only when they have a desktop launch target.
 - [ ] 2.3 Add a Recent Documents adapter that parses `recently-used.xbel` with an XML-capable parser, limits entries, and degrades to an empty section on unreadable or malformed input.
 - [ ] 2.4 Implement recent application launch-new and document URI-opening actions without shell interpolation.
 - [ ] 2.5 Implement Clear Recent Items for only in-memory application history and XBEL document history, then refresh the visible submenu state.
