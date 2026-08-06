@@ -6,9 +6,17 @@ import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
+import {
+  createRecentItemsMenu,
+  type RecentItemsMenuModel,
+} from "./recent-items-menu";
+import { getFallbackLetter } from "../services/app-icons";
 import { bindGamingOpacity } from "../services/gaming-opacity";
 import { perf } from "../services/performance-monitor";
-import { startRecentApplicationFocusHistory } from "../services/recent-applications";
+import {
+  getRecentApplicationFocusHistory,
+  startRecentApplicationFocusHistory,
+} from "../services/recent-applications";
 import { parseComponentRequest } from "../services/request";
 
 // Configuration
@@ -177,6 +185,50 @@ let profileState: ProfileState = {
 const menuItemButtons: Map<string, Gtk.Button> = new Map();
 let profileControlsBox: Gtk.Box | null = null;
 let profileAutoBadge: Gtk.Box | null = null;
+let recentItemsHost: Gtk.Box | null = null;
+let recentItemsVisible = false;
+
+function recentItemsModel(): RecentItemsMenuModel {
+  return {
+    applications: getRecentApplicationFocusHistory()
+      .slice(0, 8)
+      .map((entry) => ({
+        id: entry.identity,
+        label: entry.title || entry.class,
+        detail: entry.title && entry.class ? entry.class : undefined,
+        icon: null,
+        fallbackLetter: getFallbackLetter({
+          class: entry.class,
+          title: entry.title,
+        }),
+      })),
+    documents: [],
+  };
+}
+
+function clearChildren(container: Gtk.Box): void {
+  let child = container.get_first_child();
+  while (child) {
+    container.remove(child);
+    child = container.get_first_child();
+  }
+}
+
+function hideRecentItemsMenu(): void {
+  recentItemsVisible = false;
+  recentItemsHost?.set_visible(false);
+  menuItemButtons.get("recent-items")?.remove_css_class("submenu-open");
+}
+
+function showRecentItemsMenu(): void {
+  if (!recentItemsHost) return;
+
+  clearChildren(recentItemsHost);
+  recentItemsHost.append(createRecentItemsMenu(recentItemsModel()));
+  recentItemsHost.set_visible(true);
+  recentItemsVisible = true;
+  menuItemButtons.get("recent-items")?.add_css_class("submenu-open");
+}
 
 function readUpdatesCache<T>(filename: string, label: string): T | null {
   try {
@@ -619,6 +671,7 @@ function refreshCacheData() {
 }
 
 function hideMenu() {
+  hideRecentItemsMenu();
   if (win) {
     win.set_visible(false);
     isVisible = false;
@@ -780,7 +833,7 @@ function createUpdateBadges(): JSX.Element[] {
 }
 
 // Create a menu item button
-function createMenuItem(item: MenuItem): Gtk.Button {
+function createMenuItem(item: MenuItem): Gtk.Widget {
   // Create badges if this is the updates item
   const badges = item.id === "system-updates" ? createUpdateBadges() : [];
 
@@ -824,7 +877,24 @@ function createMenuItem(item: MenuItem): Gtk.Button {
     </button>
   ) as Gtk.Button;
 
-  return button;
+  if (item.id !== "recent-items") return button;
+
+  return (
+    <overlay>
+      {button}
+      <box
+        $type="overlay"
+        orientation={Gtk.Orientation.VERTICAL}
+        halign={Gtk.Align.START}
+        valign={Gtk.Align.END}
+        visible={false}
+        class="recent-items-host"
+        $={(self: Gtk.Box) => {
+          recentItemsHost = self;
+        }}
+      />
+    </overlay>
+  ) as Gtk.Overlay;
 }
 
 // Create a menu divider
@@ -1008,7 +1078,12 @@ function createUserProfile(): Gtk.Box {
 }
 
 function executeMenuCommand(itemId: string) {
-  if (itemId === "recent-items" || itemId === "force-quit") {
+  if (itemId === "recent-items") {
+    showRecentItemsMenu();
+    return;
+  }
+
+  if (itemId === "force-quit") {
     return;
   }
 
@@ -1032,6 +1107,7 @@ function updateMenuItems() {
   let error: string | undefined;
   try {
     if (!menuBox) return;
+    hideRecentItemsMenu();
     refreshProfileState();
     // Type assertion to help TypeScript understand menuBox is non-null after guard
     const box = menuBox as Gtk.Box;
@@ -1073,6 +1149,11 @@ function updateMenuItems() {
 // Handle keyboard navigation in the menu
 function handleKeyboardNavigation(keyval: number): boolean {
   if (keyval === Gdk.KEY_Escape) {
+    if (recentItemsVisible) {
+      hideRecentItemsMenu();
+      menuItemButtons.get("recent-items")?.grab_focus();
+      return true;
+    }
     hideMenu();
     return true;
   }
@@ -1110,26 +1191,24 @@ function handleKeyboardNavigation(keyval: number): boolean {
 
 // Handle clicks outside the menu to close it
 function handleOutsideClick(x: number, y: number): void {
-  if (!isVisible) return;
+  if (!isVisible || !win) return;
 
-  // Check if click is outside the menu container
-  if (menuBox) {
-    const allocation = menuBox.get_allocation();
-    const menuX = allocation.x;
-    const menuY = allocation.y;
-    const menuWidth = allocation.width;
-    const menuHeight = allocation.height;
-
-    // If click is outside menu bounds, close menu
-    if (
-      x < menuX ||
-      x > menuX + menuWidth ||
-      y < menuY ||
-      y > menuY + menuHeight
-    ) {
-      hideMenu();
-    }
+  const target = win.pick(x, y, Gtk.PickFlags.DEFAULT);
+  if (
+    menuBox &&
+    (target === menuBox || target?.is_ancestor(menuBox) === true)
+  ) {
+    return;
   }
+  if (
+    recentItemsVisible &&
+    recentItemsHost &&
+    (target === recentItemsHost || target?.is_ancestor(recentItemsHost) === true)
+  ) {
+    return;
+  }
+
+  hideMenu();
 }
 
 function createWindow() {
@@ -1320,6 +1399,11 @@ function applyStaticCSS() {
       background-color: rgba(255, 255, 255, 0.1);
     }
 
+    window.start-menu button.menu-item.submenu-open {
+      background-color: ${tokens.colors.accent.primary.value};
+      color: ${tokens.colors.foreground.primary.value};
+    }
+
     window.start-menu button.menu-item:focus {
       outline: 2px solid rgba(255, 255, 255, 0.3);
       outline-offset: 2px;
@@ -1419,6 +1503,87 @@ function applyStaticCSS() {
       background-color: rgba(255, 255, 255, 0.1);
       min-height: 1px;
       margin: 6px 0;
+    }
+
+    window.start-menu box.recent-items-host {
+      margin-left: 278px;
+    }
+
+    window.start-menu box.recent-items-menu {
+      min-width: 320px;
+      padding: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-radius: 8px;
+      background-color: rgba(45, 45, 45, 0.85);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28), 0 4px 12px rgba(0, 0, 0, 0.14);
+    }
+
+    window.start-menu label.recent-items-heading {
+      padding: 6px 10px 4px;
+      color: ${tokens.colors.foreground.secondary.value};
+      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    window.start-menu button.recent-item,
+    window.start-menu button.recent-items-clear {
+      min-height: 36px;
+      padding: 0 10px;
+      border: none;
+      border-radius: 6px;
+      background-color: transparent;
+      color: ${tokens.colors.foreground.primary.value};
+      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+    }
+
+    window.start-menu button.recent-item:disabled,
+    window.start-menu button.recent-items-clear:disabled {
+      opacity: 0.72;
+    }
+
+    window.start-menu image.recent-item-icon,
+    window.start-menu box.recent-item-fallback {
+      min-width: 18px;
+      min-height: 18px;
+    }
+
+    window.start-menu box.recent-item-fallback {
+      border-radius: 4px;
+      background-color: rgba(255, 255, 255, 0.10);
+    }
+
+    window.start-menu box.recent-item-fallback label {
+      color: ${tokens.colors.foreground.primary.value};
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    window.start-menu label.recent-item-label {
+      color: ${tokens.colors.foreground.primary.value};
+      font-size: 14px;
+    }
+
+    window.start-menu label.recent-item-detail {
+      color: ${tokens.colors.foreground.tertiary.value};
+      font-size: 11px;
+    }
+
+    window.start-menu label.recent-items-empty {
+      padding: 16px 10px;
+      color: ${tokens.colors.foreground.tertiary.value};
+      font-size: 14px;
+    }
+
+    window.start-menu box.recent-items-divider {
+      min-height: 1px;
+      margin: 6px 0;
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    window.start-menu label.recent-items-clear-icon {
+      font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
+      font-size: 12px;
     }
   `,
     false,

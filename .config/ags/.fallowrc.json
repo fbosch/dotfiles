@@ -1,6 +1,6 @@
 {
 	"entry": ["config-bundled.tsx"],
-	"ignorePatterns": ["components/start-menu.tsx", "services/recent-applications.ts"],
+	"ignorePatterns": ["services/recent-applications.ts"],
 	"ignoreDependencies": ["ags"],
 	"ignoreExports": [
 		{

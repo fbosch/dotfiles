@@ -8,6 +8,7 @@ Components (in `components/`):
 - `components/keyboard-switcher.tsx` - Keyboard layout switcher overlay
 - `components/volume-indicator.tsx` - Volume change indicator with automatic monitoring
 - `components/start-menu.tsx` - System start menu with update badges
+- `components/recent-items-menu.tsx` - Display-only Recent Items submenu
 - `components/window-switcher.tsx` - Alt+Tab window switcher with previews
 
 Services (in `services/`):
