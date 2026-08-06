@@ -8,6 +8,7 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 local hypr_ipc = require("runtime.lib.hypr-ipc")
 local json = require("lib.json")
 local monitor_role = require("lib.monitor_role")
+local window_tags = require("lib.window_tags")
 local control_protocol = require("runtime.windows.daemons.custom-layout-drag-resize.control-protocol")
 
 local command_socket_path = hypr_ipc.instance_socket_path("clr.sock")
@@ -91,6 +92,7 @@ local function active_window_info()
 		address = active.address,
 		monitor_id = monitor_id,
 		floating = active.floating == true,
+		tags = active.tags,
 		x = x,
 		y = y,
 		width = width,
@@ -124,6 +126,7 @@ local function client_window_info(client)
 		visible = client.visible,
 		acceptsInput = client.acceptsInput,
 		focusHistoryID = client.focusHistoryID,
+		tags = client.tags,
 		x = x,
 		y = y,
 		width = width,
@@ -374,6 +377,9 @@ local function start_drag()
 
 	local active, initial_x, initial_y = target_window_info()
 	if not active then
+		return
+	end
+	if window_tags.has(active.tags, window_tags.non_resizable) then
 		return
 	end
 

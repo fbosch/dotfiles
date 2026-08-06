@@ -1,3 +1,5 @@
+local window_tags = require("lib.window_tags")
+
 require("gaming").register_window_rules()
 require("lib.picture_in_picture").register_window_rules()
 require("rules.transient-placement").register()
@@ -15,11 +17,17 @@ hl.window_rule({
 	match = { title = "^(Force Quit Applications)$" },
 	center = true,
 	size = "462 534",
+	min_size = "462 534",
+	max_size = "462 534",
+	tag = "+" .. window_tags.non_resizable,
 })
 hl.window_rule({
 	match = { title = "^(About This PC)$" },
 	center = true,
-	size = "420 560",
+	size = "422 562",
+	min_size = "422 562",
+	max_size = "422 562",
+	tag = "+" .. window_tags.non_resizable,
 })
 
 -- Bitwarden
