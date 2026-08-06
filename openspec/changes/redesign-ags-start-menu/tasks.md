@@ -21,7 +21,7 @@
 - [x] 3.2 Reload XBEL documents and Nix/Flatpak update caches when Start Menu opens, hiding invalid, stale, missing, or zero-count source badges.
 - [x] 3.3a Add the production Recent Items submenu rendering target with immediate click activation, empty state, and session focus-history preview.
 - [x] 3.3b Complete the submenu's 300 ms open delay, 200 ms close delay, keyboard activation, timer cleanup, and Escape/focus behavior.
-- [ ] 3.4 Position the submenu upward on the trigger monitor and flip it left when the monitor work area lacks room on the right.
+- [x] 3.4 Position the submenu upward on the trigger monitor and flip it left when the monitor work area lacks room on the right.
 - [ ] 3.5 Hide Start Menu before dispatching lock, logout, suspend, restart, and shutdown; retain direct lock and existing confirmation-script behavior for the other session actions.
 - [ ] 3.6 Preserve `show`, `hide`, `toggle`, `refresh`, and `is-visible` Start Menu requests and the existing Waybar trigger/visibility behavior.
 

@@ -65,7 +65,11 @@ function createRecentItem(
 			class="recent-item"
 			tooltipText={item.detail}
 			onClicked={() => onActivated?.(item)}
-			$={(self: Gtk.Button) => onActivated && onButtonCreated?.(self)}
+			$={(self: Gtk.Button) => {
+				if (!onActivated) return;
+				self.set_cursor_from_name("pointer");
+				onButtonCreated?.(self);
+			}}
 		>
 			<box orientation={Gtk.Orientation.HORIZONTAL} spacing={10}>
 				{createItemIcon(item)}
@@ -154,9 +158,11 @@ export function createRecentItemsMenu(
 				canFocus={Boolean(actions.onClearRecentItems)}
 				class="recent-items-clear"
 				onClicked={() => actions.onClearRecentItems?.()}
-				$={(self: Gtk.Button) =>
-					actions.onClearRecentItems && actions.onButtonCreated?.(self)
-				}
+				$={(self: Gtk.Button) => {
+					if (!actions.onClearRecentItems) return;
+					self.set_cursor_from_name("pointer");
+					actions.onButtonCreated?.(self);
+				}}
 			>
 				<box orientation={Gtk.Orientation.HORIZONTAL} spacing={10}>
 					<label label={"\uE74D"} class="recent-items-clear-icon" />

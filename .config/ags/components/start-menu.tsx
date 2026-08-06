@@ -200,6 +200,7 @@ let recentDocuments: RecentDocument[] = [];
 const updateCacheMaxAgeMs = 24 * 60 * 60 * 1000;
 const recentItemsOpenDelayMs = 300;
 const recentItemsCloseDelayMs = 200;
+const recentItemsGap = 8;
 const recentItemButtons: Gtk.Button[] = [];
 let recentItemsOpenTimer: number | null = null;
 let recentItemsCloseTimer: number | null = null;
@@ -284,6 +285,42 @@ function hideRecentItemsMenu(): void {
   menuItemButtons.get("recent-items")?.remove_css_class("submenu-open");
 }
 
+function positionRecentItemsMenu(): void {
+  if (!win || !recentItemsHost) return;
+
+  const trigger = menuItemButtons.get("recent-items");
+  if (!trigger) return;
+
+  recentItemsHost.set_margin_start(0);
+  recentItemsHost.set_margin_end(0);
+
+  const [hasBounds, triggerBounds] = trigger.compute_bounds(win);
+  if (!hasBounds) {
+    recentItemsHost.set_halign(Gtk.Align.START);
+    recentItemsHost.set_margin_start(trigger.get_width() + recentItemsGap);
+    return;
+  }
+
+  const [, submenuWidth] = recentItemsHost.measure(
+    Gtk.Orientation.HORIZONTAL,
+    -1,
+  );
+  const workAreaWidth =
+    win.get_width() || win.get_gdkmonitor().get_geometry().width;
+  const triggerWidth = Math.ceil(triggerBounds.get_width());
+  const triggerRight = Math.ceil(triggerBounds.get_x()) + triggerWidth;
+  const opensRight =
+    triggerRight + recentItemsGap + submenuWidth <= workAreaWidth;
+
+  recentItemsHost.set_halign(opensRight ? Gtk.Align.START : Gtk.Align.END);
+  if (opensRight) {
+    recentItemsHost.set_margin_start(triggerWidth + recentItemsGap);
+    return;
+  }
+
+  recentItemsHost.set_margin_end(triggerWidth + recentItemsGap);
+}
+
 function showRecentItemsMenu(): void {
   if (!recentItemsHost) return;
 
@@ -308,6 +345,7 @@ function showRecentItemsMenu(): void {
       onButtonCreated: (button) => recentItemButtons.push(button),
     }),
   );
+  positionRecentItemsMenu();
   recentItemsHost.set_visible(true);
   recentItemsVisible = true;
   menuItemButtons.get("recent-items")?.add_css_class("submenu-open");
@@ -798,6 +836,25 @@ function hideMenu() {
   }
 }
 
+function setTriggerMonitor(): void {
+  if (!win) return;
+
+  try {
+    const display = Gdk.Display.get_default();
+    const seat = display?.get_default_seat();
+    const pointer = seat?.get_pointer() as unknown as {
+      get_position?: () => [unknown, number, number];
+    } | null;
+    if (!display || !pointer?.get_position) return;
+
+    const [, x, y] = pointer.get_position();
+    const monitor = display.get_monitor_at_point(x, y);
+    if (monitor) win.set_gdkmonitor(monitor);
+  } catch (e) {
+    console.error("Failed to resolve Start Menu trigger monitor:", e);
+  }
+}
+
 function showMenu() {
   const mark = perf.start("start-menu", "showMenu");
   let ok = true;
@@ -813,6 +870,7 @@ function showMenu() {
     }
 
     if (win) {
+      setTriggerMonitor();
       win.set_visible(true);
       isVisible = true;
       // Clear any existing focus to ensure clean state
@@ -1646,10 +1704,6 @@ function applyStaticCSS() {
       margin: 6px 0;
     }
 
-    window.start-menu box.recent-items-host {
-      margin-left: 278px;
-    }
-
     window.start-menu box.recent-items-menu {
       min-width: 320px;
       padding: 8px;
@@ -1676,6 +1730,22 @@ function applyStaticCSS() {
       background-color: transparent;
       color: ${tokens.colors.foreground.primary.value};
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+    }
+
+    window.start-menu button.recent-item:hover,
+    window.start-menu button.recent-items-clear:hover {
+      background-color: rgba(255, 255, 255, 0.10);
+    }
+
+    window.start-menu button.recent-item:focus,
+    window.start-menu button.recent-items-clear:focus {
+      outline: 2px solid rgba(255, 255, 255, 0.3);
+      outline-offset: -2px;
+    }
+
+    window.start-menu button.recent-item:active,
+    window.start-menu button.recent-items-clear:active {
+      background-color: rgba(255, 255, 255, 0.16);
     }
 
     window.start-menu button.recent-item:disabled,
