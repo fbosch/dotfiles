@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- NixOS snowflake by Simon Frankau and Tim Cuthbertson, CC BY 4.0.
+     Source: https://github.com/NixOS/nixos-artwork/blob/master/logo/nix-snowflake-colours.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 501.5625 501.5625">
+  <defs>
+    <linearGradient id="light" x1="200.59668" y1="351.41116" x2="290.08701" y2="506.18814" gradientTransform="translate(70.650339,-1055.1511)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#699ad7"/>
+      <stop offset=".24345198" stop-color="#7eb1dd"/>
+      <stop offset="1" stop-color="#7ebae4"/>
+    </linearGradient>
+    <linearGradient id="dark" x1="-584.19934" y1="782.33563" x2="-496.29703" y2="937.71399" gradientTransform="translate(864.69589,-1491.3405)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#415e9a"/>
+      <stop offset=".23168644" stop-color="#4a6baf"/>
+      <stop offset="1" stop-color="#5277c3"/>
+    </linearGradient>
+    <path id="arm" d="m309.54892-710.38827 122.19683 211.67512-56.15706.5268-32.6236-56.8692-32.85645 56.5653-27.90237-.011-14.29086-24.6896 46.81047-80.4901-33.22946-57.8257z"/>
+  </defs>
+  <g transform="translate(-156.41121 933.30685)">
+    <g transform="matrix(.99994059 0 0 .99994059 -.06321798 33.188377)">
+      <g fill="url(#light)">
+        <use xlink:href="#arm"/>
+        <use xlink:href="#arm" transform="rotate(60 407.11155 -715.78724)"/>
+        <use xlink:href="#arm" transform="rotate(-60 407.31177 -715.70016)"/>
+        <use xlink:href="#arm" transform="rotate(180 407.41868 -715.7565)"/>
+      </g>
+      <g fill="url(#dark)">
+        <use xlink:href="#arm"/>
+        <use xlink:href="#arm" transform="rotate(120 407.33916 -716.08356)"/>
+        <use xlink:href="#arm" transform="rotate(-120 407.28823 -715.86995)"/>
+      </g>
+    </g>
+  </g>
+</svg>
