@@ -14,6 +14,7 @@ import {
 	discoverResetCredits,
 	discoverUsage,
 	loginCommand,
+	refreshExpiredProfileCredentials,
 } from "./providers/codex.ts";
 import { mutateAccount } from "./queryclient/mutations.ts";
 import {
@@ -225,14 +226,21 @@ async function runReadCommand(
 	await emitCommand(format, command, textOutput, async () => {
 		const paths = defaultPaths();
 		const discovery = await discoverAccounts(paths);
+		const refreshed = await refreshExpiredProfileCredentials(discovery, paths);
 		const [usage, resetCredits] = await Promise.all([
-			discoverUsageFor(discovery, paths, command === "list"),
-			discoverResetCreditsFor(discovery, paths, command === "list"),
+			discoverUsageFor(discovery, refreshed.auth, paths, command === "list"),
+			discoverResetCreditsFor(
+				discovery,
+				refreshed.auth,
+				paths,
+				command === "list",
+			),
 		]);
 		const completeDiscovery = {
 			...discovery,
 			diagnostics: [
 				...discovery.diagnostics,
+				...refreshed.diagnostics,
 				...usage.diagnostics,
 				...resetCredits.diagnostics,
 			],
@@ -484,7 +492,16 @@ async function runSwitchCommand(
 		}
 		const paths = defaultPaths();
 		const currentDiscovery = await discoverAccounts(paths);
-		const currentUsage = await discoverUsageFor(currentDiscovery, paths, true);
+		const refreshed = await refreshExpiredProfileCredentials(
+			currentDiscovery,
+			paths,
+		);
+		const currentUsage = await discoverUsageFor(
+			currentDiscovery,
+			refreshed.auth,
+			paths,
+			true,
+		);
 		const target = positionals[0];
 		const selectedTarget =
 			target ||
@@ -497,41 +514,58 @@ async function runSwitchCommand(
 		if (!target) {
 			console.log(textOutput.colorEnabled ? "\x1b[90m│\x1b[39m" : "│");
 		}
+		let discovery: AccountDiscovery;
 		const lock = await acquireMutationLock(paths);
 		try {
 			await mutateAccount(paths, "recover", () => recoverPendingLogin(paths));
-			const discovery = await mutateAccount(paths, "switch", () =>
+			discovery = await mutateAccount(paths, "switch", () =>
 				switchAccount(selectedTarget, paths),
-			);
-			const [usage, resetCredits] = await Promise.all([
-				discoverUsageFor(discovery, paths, false),
-				discoverResetCreditsFor(discovery, paths, false),
-			]);
-			const completeDiscovery = {
-				...discovery,
-				diagnostics: [
-					...discovery.diagnostics,
-					...usage.diagnostics,
-					...resetCredits.diagnostics,
-				],
-			};
-			return successOutput(
-				"switch",
-				completeDiscovery,
-				statusData(
-					completeDiscovery,
-					usage.usageByProfile,
-					resetCredits.resetCreditsByProfile,
-				),
 			);
 		} finally {
 			await lock.release();
 		}
+		const refreshedAfterSwitch = await refreshExpiredProfileCredentials(
+			discovery,
+			paths,
+		);
+		const [usage, resetCredits] = await Promise.all([
+			discoverUsageFor(
+				discovery,
+				refreshedAfterSwitch.auth,
+				paths,
+				false,
+			),
+			discoverResetCreditsFor(
+				discovery,
+				refreshedAfterSwitch.auth,
+				paths,
+				false,
+			),
+		]);
+		const completeDiscovery = {
+			...discovery,
+			diagnostics: [
+				...discovery.diagnostics,
+				...refreshedAfterSwitch.diagnostics,
+				...usage.diagnostics,
+				...resetCredits.diagnostics,
+			],
+		};
+		return successOutput(
+			"switch",
+			completeDiscovery,
+			statusData(
+				completeDiscovery,
+				usage.usageByProfile,
+				resetCredits.resetCreditsByProfile,
+			),
+		);
 	});
 }
 
 async function discoverUsageFor(
 	discovery: AccountDiscovery,
+	auth: Awaited<ReturnType<typeof readJsonObject>>,
 	paths: ReturnType<typeof defaultPaths>,
 	includeInactiveProfiles: boolean,
 ) {
@@ -542,13 +576,14 @@ async function discoverUsageFor(
 				? discovery.profiles
 				: discovery.profiles.filter((profile) => profile.active),
 		},
-		await readJsonObject(paths.auth),
+		auth,
 		paths,
 	);
 }
 
 async function discoverResetCreditsFor(
 	discovery: AccountDiscovery,
+	auth: Awaited<ReturnType<typeof readJsonObject>>,
 	paths: ReturnType<typeof defaultPaths>,
 	includeInactiveProfiles: boolean,
 ) {
@@ -559,7 +594,7 @@ async function discoverResetCreditsFor(
 				? discovery.profiles
 				: discovery.profiles.filter((profile) => profile.active),
 		},
-		await readJsonObject(paths.auth),
+		auth,
 		paths,
 	);
 }

@@ -19,7 +19,7 @@ hl.config({
 		single_window_aspect_ratio_tolerance = 0.2,
 	},
 	decoration = {
-		rounding = 4,
+		rounding = 8,
 		rounding_power = 4.0,
 		active_opacity = 1.0,
 		inactive_opacity = 0.97,

@@ -37,10 +37,13 @@ const UsageSchema = z.object({
 
 export function usageQueryOptions(
 	credentials: { accessToken: string; accountId: string },
+	refreshCredentials?: (
+		credentials: { accessToken: string; accountId: string },
+	) => Promise<{ accessToken: string; accountId: string }>,
 ) {
 	return {
 		queryKey: [...usageQueryKey, accountCredentialKey(credentials.accountId)],
-		queryFn: () => fetchUsageUncached(credentials),
+		queryFn: () => fetchUsageUncached(credentials, refreshCredentials),
 		staleTime: usageCacheTimeMs,
 	} satisfies FetchQueryOptions;
 }
@@ -48,7 +51,23 @@ export function usageQueryOptions(
 export async function fetchUsageUncached(credentials: {
 	accessToken: string;
 	accountId: string;
-}): Promise<AccountUsage> {
+}, refreshCredentials?: (
+	credentials: { accessToken: string; accountId: string },
+) => Promise<{ accessToken: string; accountId: string }>): Promise<AccountUsage> {
+	let response = await fetchUsage(credentials);
+	if (response.status === 401 && refreshCredentials) {
+		response = await fetchUsage(await refreshCredentials(credentials));
+	}
+	if (response.ok === false) {
+		throw new Error(`usage request failed with ${response.status}`);
+	}
+	return usageFromPayload(await response.json());
+}
+
+async function fetchUsage(credentials: {
+	accessToken: string;
+	accountId: string;
+}): Promise<Response> {
 	const response = await fetch(usageUrl, {
 		headers: {
 			Authorization: `Bearer ${credentials.accessToken}`,
@@ -56,10 +75,7 @@ export async function fetchUsageUncached(credentials: {
 		},
 		signal: AbortSignal.timeout(requestTimeoutMs),
 	});
-	if (response.ok === false) {
-		throw new Error(`usage request failed with ${response.status}`);
-	}
-	return usageFromPayload(await response.json());
+	return response;
 }
 
 export function usageFromPayload(payload: unknown): AccountUsage {

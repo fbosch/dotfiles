@@ -42,28 +42,45 @@ export type DetailedResetCredits = {
 	credits: DetailedResetCredit[];
 };
 
-export function resetCreditsQueryOptions(credentials: ResetCredentials) {
+export function resetCreditsQueryOptions(
+	credentials: ResetCredentials,
+	refreshCredentials?: (
+		credentials: ResetCredentials,
+	) => Promise<ResetCredentials>,
+) {
 	return {
 		queryKey: [
 			...resetCreditsQueryKey,
 			accountCredentialKey(credentials.accountId),
 		],
-		queryFn: () => fetchResetCredits(credentials),
+		queryFn: () => fetchResetCredits(credentials, refreshCredentials),
 		staleTime: resetCreditsCacheTimeMs,
 	} satisfies FetchQueryOptions;
 }
 
 export async function fetchResetCredits(
 	credentials: ResetCredentials,
+	refreshCredentials?: (
+		credentials: ResetCredentials,
+	) => Promise<ResetCredentials>,
 ): Promise<DetailedResetCredits> {
-	const response = await fetch(resetCreditsUrl, {
-		headers: resetRequestHeaders(credentials),
-		signal: AbortSignal.timeout(requestTimeoutMs),
-	});
+	let response = await fetchResetCreditsRequest(credentials);
+	if (response.status === 401 && refreshCredentials) {
+		response = await fetchResetCreditsRequest(await refreshCredentials(credentials));
+	}
 	if (response.ok === false) {
 		throw new Error(`reset credits request failed with ${response.status}`);
 	}
 	return detailedResetCreditsFromPayload(await response.json());
+}
+
+async function fetchResetCreditsRequest(
+	credentials: ResetCredentials,
+): Promise<Response> {
+	return fetch(resetCreditsUrl, {
+		headers: resetRequestHeaders(credentials),
+		signal: AbortSignal.timeout(requestTimeoutMs),
+	});
 }
 
 export function detailedResetCreditsFromPayload(

@@ -6,7 +6,10 @@ import { renderProgressBar } from "../../progress-bar.ts";
 import { discoverAccounts, toPublicDiscovery } from "../discovery.ts";
 import { renderAccountCards } from "../list-presentation.ts";
 import { beginLogin, completeLogin, switchAccount } from "../mutations.ts";
-import { fetchUsage } from "../providers/codex.ts";
+import {
+	fetchUsage,
+	refreshExpiredProfileCredentials,
+} from "../providers/codex.ts";
 import {
 	accountQueryKey,
 	queryClientFor,
@@ -34,6 +37,7 @@ import {
 import {
 	usageFromPayload,
 	usageQueryOptions,
+	fetchUsageUncached,
 } from "../queryclient/queries/usage.ts";
 import { recoverPendingLogin } from "../transactions.ts";
 import {
@@ -400,6 +404,139 @@ test("refreshes stale persisted usage before returning it", async () => {
 			primary: { remainingPercent: 50 },
 		});
 		expect(requests).toBe(1);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("refreshes expired profiles and persists rotated credentials", async () => {
+	const paths = await fixturePaths(
+		{
+			openai: {
+				accountId: "account-active",
+				access: "expired-access",
+				refresh: "old-refresh",
+				expires: 0,
+				type: "oauth",
+			},
+			openai_1: {
+				accountId: "account-current",
+				access: "current-access",
+				refresh: "current-refresh",
+				expires: Date.now() + 3_600_000,
+				type: "oauth",
+			},
+		},
+		{ openai: {} },
+	);
+	const originalFetch = globalThis.fetch;
+	const requests: Request[] = [];
+	globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+		requests.push(new Request(input, init));
+		return Response.json({
+			access_token: "fresh-access",
+			refresh_token: "fresh-refresh",
+			expires_in: 3600,
+		});
+	}) as typeof fetch;
+
+	try {
+		const refreshed = await refreshExpiredProfileCredentials(
+			await discoverAccounts(paths),
+			paths,
+		);
+		expect(refreshed.diagnostics).toEqual([]);
+		expect(requests).toHaveLength(1);
+		expect(requests[0]?.url).toBe("https://auth.openai.com/oauth/token");
+		expect(await readAuth(paths)).toMatchObject({
+			openai: {
+				access: "fresh-access",
+				refresh: "fresh-refresh",
+				accountId: "account-active",
+			},
+			openai_1: {
+				access: "current-access",
+				refresh: "current-refresh",
+			},
+		});
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("rejects a refresh response for another account", async () => {
+	const paths = await fixturePaths(
+		{
+			openai: {
+				accountId: "account-active",
+				access: "expired-access",
+				refresh: "old-refresh",
+				expires: 0,
+				type: "oauth",
+			},
+		},
+		{ openai: {} },
+	);
+	const originalFetch = globalThis.fetch;
+	const idToken = `header.${Buffer.from(
+		JSON.stringify({ chatgpt_account_id: "another-account" }),
+	).toString("base64url")}.signature`;
+	globalThis.fetch = (async () =>
+		Response.json({
+			access_token: "other-access",
+			refresh_token: "other-refresh",
+			expires_in: 3600,
+			id_token: idToken,
+		})) as unknown as typeof fetch;
+
+	try {
+		const refreshed = await refreshExpiredProfileCredentials(
+			await discoverAccounts(paths),
+			paths,
+		);
+		expect(refreshed.diagnostics).toEqual([
+			{
+				code: "token-refresh-unavailable",
+				message: "token refresh unavailable for openai",
+			},
+		]);
+		expect(await readAuth(paths)).toMatchObject({
+			openai: { access: "expired-access", refresh: "old-refresh" },
+		});
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("retries a rejected usage request once with refreshed credentials", async () => {
+	const originalFetch = globalThis.fetch;
+	const authorizationHeaders: string[] = [];
+	let refreshes = 0;
+	globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+		authorizationHeaders.push(new Headers(init?.headers).get("Authorization") || "");
+		if (authorizationHeaders.length === 1) {
+			return new Response(null, { status: 401 });
+		}
+		return Response.json({
+			rate_limit: { primary_window: { used_percent: 25 } },
+		});
+	}) as typeof fetch;
+
+	try {
+		expect(
+			await fetchUsageUncached(
+				{ accessToken: "expired-access", accountId: "account" },
+				async () => {
+					refreshes += 1;
+					return { accessToken: "fresh-access", accountId: "account" };
+				},
+			),
+		).toMatchObject({ primary: { remainingPercent: 75 } });
+		expect(refreshes).toBe(1);
+		expect(authorizationHeaders).toEqual([
+			"Bearer expired-access",
+			"Bearer fresh-access",
+		]);
 	} finally {
 		globalThis.fetch = originalFetch;
 	}

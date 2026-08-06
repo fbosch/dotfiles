@@ -8,7 +8,13 @@ import {
 	fetchUsageUncached,
 	usageQueryOptions,
 } from "../queryclient/queries/usage.ts";
-import { isJsonObject, type JsonObject } from "../storage.ts";
+import {
+	acquireMutationLock,
+	isJsonObject,
+	readJsonObject,
+	type JsonObject,
+	writeJsonAtomic,
+} from "../storage.ts";
 import type {
 	AccountDiscovery,
 	AccountPaths,
@@ -18,6 +24,11 @@ import type {
 } from "../types.ts";
 
 const activeProfileKey = "openai";
+const oauthClientId = "app_EMoamEEZ73f0CkXaXp7hrann";
+const oauthRefreshUrl = "https://auth.openai.com/oauth/token";
+const oauthRefreshTimeoutMs = 15_000;
+const mutationLockRetryDelayMs = 50;
+const mutationLockTimeoutMs = 10_000;
 const adjectives = [
 	"ember",
 	"cobalt",
@@ -114,7 +125,13 @@ export async function discoverUsage(
 		discovery,
 		auth,
 		(profileKey, entry) =>
-			fetchUsage(credentialsForEntry(entry), paths, forceRefresh),
+			fetchUsage(
+				credentialsForEntry(entry),
+				paths,
+				forceRefresh,
+				(credentials) =>
+					refreshProfileCredentials(profileKey, credentials, paths),
+			),
 		"usage",
 	);
 	return {
@@ -127,12 +144,15 @@ export async function fetchUsage(
 	credentials: { accessToken: string; accountId: string },
 	paths: AccountPaths,
 	forceRefresh = false,
+	refreshCredentials?: (
+		credentials: { accessToken: string; accountId: string },
+	) => Promise<{ accessToken: string; accountId: string }>,
 ) {
 	if (forceRefresh) {
-		return fetchUsageUncached(credentials);
+		return fetchUsageUncached(credentials, refreshCredentials);
 	}
 	const client = queryClientFor(paths);
-	const options = usageQueryOptions(credentials);
+	const options = usageQueryOptions(credentials, refreshCredentials);
 	if (client.queryClient.getQueryState(options.queryKey) === undefined) {
 		await client.queryPersister.restoreQueries(client.queryClient, {
 			queryKey: options.queryKey,
@@ -153,7 +173,11 @@ export async function discoverResetCredits(
 		auth,
 		(profileKey, entry) =>
 			queryClient.fetchQuery(
-				resetCreditsQueryOptions(credentialsForEntry(entry)),
+				resetCreditsQueryOptions(
+					credentialsForEntry(entry),
+					(credentials) =>
+						refreshProfileCredentials(profileKey, credentials, paths),
+				),
 			).then(resetCreditsSummary),
 		"reset credits",
 	);
@@ -253,30 +277,101 @@ export function credentialsForEntry(entry: JsonObject): {
 	};
 }
 
-function accountIdFromAccessToken(access: unknown): string | null {
-	if (typeof access !== "string") {
-		return null;
-	}
-	const payload = access.split(".")[1];
-	if (payload === undefined) {
-		return null;
-	}
-	try {
-		const claims = JSON.parse(
-			Buffer.from(payload, "base64url").toString("utf8"),
-		) as unknown;
-		if (
-			isJsonObject(claims) === false ||
-			isJsonObject(claims["https://api.openai.com/auth"]) === false
-		) {
-			return null;
+export async function refreshExpiredProfileCredentials(
+	discovery: AccountDiscovery,
+	paths: AccountPaths,
+): Promise<{ auth: JsonObject; diagnostics: AccountDiscovery["diagnostics"] }> {
+	const auth = await readJsonObject(paths.auth);
+	const diagnostics: AccountDiscovery["diagnostics"] = [];
+	for (const profile of discovery.profiles) {
+		const entry = auth[profile.key];
+		if (isJsonObject(entry) === false || profileNeedsRefresh(entry) === false) {
+			continue;
 		}
-		return normalizedString(
-			claims["https://api.openai.com/auth"].chatgpt_account_id,
+		try {
+			await refreshProfileCredentials(
+				profile.key,
+				credentialsForEntry(entry),
+				paths,
+			);
+		} catch {
+			diagnostics.push({
+				code: "token-refresh-unavailable",
+				message: `token refresh unavailable for ${profile.key}`,
+			});
+		}
+	}
+	return { auth: await readJsonObject(paths.auth), diagnostics };
+}
+
+async function refreshProfileCredentials(
+	profileKey: string,
+	expected: { accessToken: string; accountId: string },
+	paths: AccountPaths,
+): Promise<{ accessToken: string; accountId: string }> {
+	const lock = await acquireMutationLockWithWait(paths);
+	try {
+		const auth = await readJsonObject(paths.auth);
+		const entry = auth[profileKey];
+		if (isJsonObject(entry) === false) {
+			throw new Error("Codex profile is missing credentials");
+		}
+		const current = credentialsForEntry(entry);
+		if (current.accountId !== expected.accountId) {
+			throw new Error("Codex profile changed during token refresh");
+		}
+		if (current.accessToken !== expected.accessToken) {
+			return current;
+		}
+
+		const refreshToken = typeof entry.refresh === "string" ? entry.refresh : null;
+		if (refreshToken === null || refreshToken === "") {
+			throw new Error("Codex profile is missing a refresh token");
+		}
+		const response = await fetch(oauthRefreshUrl, {
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				grant_type: "refresh_token",
+				refresh_token: refreshToken,
+				client_id: oauthClientId,
+			}).toString(),
+			signal: AbortSignal.timeout(oauthRefreshTimeoutMs),
+			redirect: "error",
+		});
+		if (response.ok === false) {
+			throw new Error(`OpenAI OAuth refresh failed with ${response.status}`);
+		}
+		const refreshed = refreshedCredentials(
+			await response.json(),
+			current.accountId,
 		);
-	} catch {
+		auth[profileKey] = {
+			...entry,
+			type: "oauth",
+			access: refreshed.accessToken,
+			refresh: refreshed.refreshToken,
+			expires: refreshed.expires,
+			accountId: refreshed.accountId,
+		};
+		await writeJsonAtomic(paths.auth, auth, 0o600, false);
+		return { accessToken: refreshed.accessToken, accountId: refreshed.accountId };
+	} finally {
+		await lock.release();
+	}
+}
+
+function accountIdFromAccessToken(access: unknown): string | null {
+	const claims = tokenClaims(access);
+	if (
+		claims === null ||
+		isJsonObject(claims["https://api.openai.com/auth"]) === false
+	) {
 		return null;
 	}
+	return normalizedString(
+		claims["https://api.openai.com/auth"].chatgpt_account_id,
+	);
 }
 
 function byteAt(seed: string, offset: number): number {
@@ -285,4 +380,97 @@ function byteAt(seed: string, offset: number): number {
 
 function normalizedString(value: unknown): string | null {
 	return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function profileNeedsRefresh(entry: JsonObject): boolean {
+	return typeof entry.expires !== "number" || entry.expires <= Date.now();
+}
+
+async function acquireMutationLockWithWait(paths: AccountPaths) {
+	const deadline = Date.now() + mutationLockTimeoutMs;
+	while (true) {
+		try {
+			return await acquireMutationLock(paths);
+		} catch (error) {
+			if (
+				error instanceof Error === false ||
+				error.message !== "another account mutation is already in progress" ||
+				Date.now() >= deadline
+			) {
+				throw error;
+			}
+			await Bun.sleep(mutationLockRetryDelayMs);
+		}
+	}
+}
+
+function refreshedCredentials(
+	value: unknown,
+	accountId: string,
+): {
+	accessToken: string;
+	refreshToken: string;
+	accountId: string;
+	expires: number;
+} {
+	if (isJsonObject(value) === false) {
+		throw new Error("OpenAI OAuth refresh returned an invalid response");
+	}
+	const accessToken = requiredToken(value.access_token, "access");
+	const refreshToken = requiredToken(value.refresh_token, "refresh");
+	const expiresIn = tokenLifetime(value.expires_in);
+	const returnedAccountId =
+		accountIdFromOAuthToken(value.id_token) ||
+		accountIdFromAccessToken(value.access_token);
+	if (returnedAccountId && returnedAccountId !== accountId) {
+		throw new Error("OpenAI OAuth refresh returned credentials for another account");
+	}
+	const expires = Date.now() + expiresIn * 1000;
+	if (Number.isFinite(expires) === false) {
+		throw new Error("OpenAI OAuth refresh returned an invalid expiry");
+	}
+	return { accessToken, refreshToken, accountId, expires };
+}
+
+function requiredToken(value: unknown, label: "access" | "refresh"): string {
+	if (typeof value !== "string" || value === "") {
+		throw new Error(`OpenAI OAuth refresh did not return a ${label} token`);
+	}
+	return value;
+}
+
+function tokenLifetime(value: unknown): number {
+	if (value === undefined) {
+		return 3600;
+	}
+	if (typeof value !== "number" || Number.isFinite(value) === false || value < 0) {
+		throw new Error("OpenAI OAuth refresh returned an invalid expiry");
+	}
+	return value;
+}
+
+function accountIdFromOAuthToken(value: unknown): string | null {
+	const claims = tokenClaims(value);
+	if (claims === null) {
+		return null;
+	}
+	return normalizedString(claims.chatgpt_account_id);
+}
+
+function tokenClaims(value: unknown): JsonObject | null {
+	if (typeof value !== "string") {
+		return null;
+	}
+	const payload = value.split(".")[1];
+	if (payload === undefined) {
+		return null;
+	}
+	try {
+		const claims = JSON.parse(
+			Buffer.from(payload, "base64url").toString("utf8"),
+		) as unknown;
+		return isJsonObject(claims) ? claims : null;
+	} catch {
+		return null;
+	}
 }
