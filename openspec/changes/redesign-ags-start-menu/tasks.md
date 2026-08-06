@@ -29,9 +29,9 @@
 
 - [x] 4.1 Add a Force Quit data adapter that groups current Hyprland clients by application identity, aggregates unique PIDs, resolves icons, and excludes protected desktop processes and shell surfaces.
 - [x] 4.2 Add visible-only two-second CPU/RSS metric sampling with deterministic cleanup when Force Quit hides or is destroyed.
-- [ ] 4.3 Implement graceful window-close, bounded revalidation, and forced termination of surviving selected application processes.
-- [ ] 4.4 Handle already-exited applications by clearing selection and refreshing the list without an error surface.
-- [ ] 4.5 Keep Force Quit open after successful action, remove the resolved application, and refresh metrics/list data.
+- [x] 4.3 Implement graceful window-close, bounded revalidation, and forced termination of surviving selected application processes.
+- [x] 4.4 Handle already-exited applications by clearing selection and refreshing the list without an error surface.
+- [x] 4.5 Keep Force Quit open after successful action, remove the resolved application, and refresh metrics/list data.
 
 ## 5. About This PC Runtime
 

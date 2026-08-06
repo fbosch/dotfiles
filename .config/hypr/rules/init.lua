@@ -5,13 +5,16 @@ require("rules.transient-placement").register()
 -- GTK Application
 hl.window_rule({ match = { class = "^(GTK Application)$" }, float = true })
 hl.window_rule({
-	match = { title = "^(Force Quit Applications)$" },
+	match = { class = "^(io\\.Astal\\.ags-bundled)$" },
 	float = true,
-	center = true,
-	size = "462 534",
 	pin = true,
 	border_size = 0,
 	rounding = 12,
+})
+hl.window_rule({
+	match = { title = "^(Force Quit Applications)$" },
+	center = true,
+	size = "462 534",
 })
 
 -- Bitwarden
