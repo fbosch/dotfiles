@@ -42,7 +42,7 @@
 ## 6. Validation And Documentation
 
 - [ ] 6.1 Run focused design-system validation: Biome, contrast validation, Storybook build, component tests, and accessibility checks when the local browser runtime is installed.
-- [ ] 6.2 Run `stow -n .` and AGS type validation; regenerate typings only if the runtime API surface changes.
+- [x] 6.2 Run `stow -n .` and AGS type validation; regenerate typings only if the runtime API surface changes.
 - [ ] 6.3 Verify Start Menu IPC, Waybar toggle, submenu timing/edge placement, session-action dismissal order, update-badge degradation, and recent-item clear behavior in a live Hyprland session.
 - [ ] 6.4 Verify Force Quit grouping, protected-process exclusion, graceful-close escalation, vanished-app behavior, and timer cleanup in a live session.
 - [ ] 6.5 Run the focused AGS component benchmark and verify repeated Start Menu, Force Quit, and About open/close cycles do not retain timers, monitors, subprocess handles, or growing memory.
