@@ -1250,6 +1250,9 @@ function executeMenuCommand(itemId: string) {
   }
 
   if (itemId === "force-quit") {
+    // Dismiss the menu before opening a competing exclusive surface.
+    hideMenu();
+    globalThis.ForceQuit?.show?.();
     return;
   }
 

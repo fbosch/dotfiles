@@ -80,6 +80,7 @@ function applyStyles(): void {
       window.start-menu.gaming-opaque box.recent-items-menu,
       window.calendar-widget.gaming-opaque box.calendar-container,
       window.audio-mixer-widget.gaming-opaque box.audio-mixer-container,
+      window.force-quit.gaming-opaque box.force-quit-container,
       window.confirm-dialog.gaming-opaque box.dialog-box {
         background-color: rgb(45, 45, 45);
       }

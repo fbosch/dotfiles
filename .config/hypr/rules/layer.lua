@@ -10,6 +10,7 @@ hl.layer_rule({ match = { namespace = "swaync-control-center" }, blur = true, no
 hl.layer_rule({ match = { namespace = "swaync-notification-window" }, blur = true, no_anim = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "swayosd" }, blur = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "ags-confirm" }, blur = true, animation = "popin 90%", ignore_alpha = 0.5 })
+hl.layer_rule({ match = { namespace = "ags-force-quit" }, blur = true, animation = "popin 90%", ignore_alpha = 0.5 })
 hl.layer_rule({ match = { namespace = "ags-layout-switcher" }, blur = true, no_anim = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "ags-volume-indicator" }, blur = true, no_anim = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "ags-window-switcher" }, blur = true, no_anim = true, ignore_alpha = 0.3 })

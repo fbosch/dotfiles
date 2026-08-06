@@ -22,6 +22,7 @@ interface ComponentModule {
   init: () => void;
   handleRequest: (argv: string[], res: (response: any) => void) => void;
   instanceName: string;
+  show?: () => void;
 }
 
 declare global {
@@ -29,6 +30,7 @@ declare global {
   var VolumeIndicator: ComponentModule;
   var KeyboardSwitcher: ComponentModule;
   var StartMenu: ComponentModule;
+  var ForceQuit: ComponentModule;
   var WindowSwitcher: ComponentModule;
   var DesktopClock: ComponentModule;
   var CalendarWidget: ComponentModule;
@@ -41,6 +43,7 @@ import "./components/confirm-dialog.tsx";
 import "./components/volume-indicator.tsx";
 import "./components/keyboard-switcher.tsx";
 import "./components/start-menu.tsx";
+import "./components/force-quit.tsx";
 import "./components/window-switcher.tsx";
 import "./components/desktop-clock.tsx";
 import "./components/calendar-widget.tsx";
@@ -57,6 +60,7 @@ interface ComponentRegistry {
 const components: ComponentRegistry = {};
 const taskbarVisibilityComponents = [
   "start-menu",
+  "force-quit",
   "calendar-widget",
   "audio-mixer-widget",
 ];
@@ -198,6 +202,15 @@ app.start({
       console.log(`[Bundled AGS] ✓ ${globalThis.WindowSwitcher.instanceName} initialized`);
     } catch (e) {
       console.error(`[Bundled AGS] ✗ Failed to initialize window-switcher:`, e);
+    }
+
+    // Initialize force-quit
+    try {
+      globalThis.ForceQuit.init();
+      registerComponent(globalThis.ForceQuit.instanceName, globalThis.ForceQuit.handleRequest);
+      console.log(`[Bundled AGS] ✓ ${globalThis.ForceQuit.instanceName} initialized`);
+    } catch (e) {
+      console.error(`[Bundled AGS] ✗ Failed to initialize force-quit:`, e);
     }
     
     // Initialize desktop-clock
