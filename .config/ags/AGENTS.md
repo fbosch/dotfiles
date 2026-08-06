@@ -11,6 +11,7 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI, using bundled mode.
 - Do not edit `.config/ags/@girs/` manually; regenerate typings when needed.
 - Use Effect for long-lived asynchronous services when it makes GLib/Gio ownership explicit; keep GTK widget construction imperative.
 - Run Effect through a GLib-backed scheduler. At Effect boundaries, prefer Gio callback/`*_finish` APIs and model native cancellation and cleanup explicitly.
+- Import Effect modules through direct subpaths such as `effect/Effect`; avoid the `effect` root barrel because AGS tree-shakes direct imports more effectively.
 
 ## Commands
 

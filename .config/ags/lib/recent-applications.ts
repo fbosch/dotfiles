@@ -1,6 +1,10 @@
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
-import { Context, Data, Effect, Fiber, Scheduler } from "effect";
+import * as Context from "effect/Context";
+import * as Data from "effect/Data";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Scheduler from "effect/Scheduler";
 import { isGenericWrapperClass } from "./app-icons";
 import { getHyprlandSocketPath } from "./hyprland-ipc";
 
