@@ -771,6 +771,13 @@ const menuCommands: Record<string, string> = {
   "nixos-updates": getSystemUpdatesCommand(),
   "flatpak-updates": getSystemUpdatesCommand(), // Both updated during NixOS rebuild
 };
+const sessionActionIds = new Set([
+  "lock-screen",
+  "sign-out",
+  "suspend",
+  "restart",
+  "shutdown",
+]);
 
 // Cache monitoring (fallback to polling if file monitor fails)
 let cacheDirMonitor: Gio.FileMonitor | null = null;
@@ -1247,17 +1254,23 @@ function executeMenuCommand(itemId: string) {
   }
 
   const command = menuCommands[itemId];
-  if (command) {
-    try {
-      // Use sh -c to properly handle complex commands with pipes and arguments
-      GLib.spawn_command_line_async(`sh -c '${command}'`);
-    } catch (e) {
-      console.error(`Failed to execute command for ${itemId}:`, e);
-    }
-  } else {
+  if (!command) {
     console.error(`No command found for ${itemId}`);
+    hideMenu();
+    return;
   }
-  hideMenu();
+
+  const hidesBeforeDispatch = sessionActionIds.has(itemId);
+  if (hidesBeforeDispatch) hideMenu();
+
+  try {
+    // Use sh -c to properly handle complex commands with pipes and arguments
+    GLib.spawn_command_line_async(`sh -c '${command}'`);
+  } catch (e) {
+    console.error(`Failed to execute command for ${itemId}:`, e);
+  }
+
+  if (hidesBeforeDispatch === false) hideMenu();
 }
 
 function updateMenuItems() {
