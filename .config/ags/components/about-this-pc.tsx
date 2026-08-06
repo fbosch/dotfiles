@@ -33,8 +33,7 @@ function clearChildren(container: Gtk.Box): void {
 
 function createArtwork(info: AboutThisPCInfo): Gtk.Widget {
 	if (info.deviceImagePath) {
-		return new Gtk.Picture({
-			filename: info.deviceImagePath,
+		const picture = new Gtk.Picture({
 			contentFit: Gtk.ContentFit.CONTAIN,
 			canShrink: true,
 			halign: Gtk.Align.FILL,
@@ -42,6 +41,8 @@ function createArtwork(info: AboutThisPCInfo): Gtk.Widget {
 			widthRequest: 320,
 			heightRequest: 144,
 		});
+		picture.set_filename(info.deviceImagePath);
+		return picture;
 	}
 
 	return (

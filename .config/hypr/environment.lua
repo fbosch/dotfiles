@@ -1,5 +1,7 @@
 -- Environment variables ported from environment.conf.
 
+local system = require("lib.system")
+
 hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
@@ -9,3 +11,7 @@ hl.env("GBM_BACKEND", "nvidia-drm")
 hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
 hl.env("__GL_GSYNC_ALLOWED", "1")
 hl.env("LIBVA_DRIVER_NAME", "nvidia")
+
+if system.hostname() == "rvn-pc" then
+	hl.env("AGS_ABOUT_DEVICE_IMAGE", os.getenv("HOME") .. "/.config/fbb/assets/images/rvn-pc.png")
+end

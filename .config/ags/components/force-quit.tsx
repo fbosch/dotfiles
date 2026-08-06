@@ -240,7 +240,7 @@ function destroyForceQuit(): void {
 
 function createWindow(): void {
 	const titlebar = (
-		<overlay>
+		<overlay class="force-quit-titlebar">
 			<label
 				label="Force Quit Applications"
 				class="force-quit-title"
@@ -262,49 +262,52 @@ function createWindow(): void {
 		</overlay>
 	) as Gtk.Overlay;
 	const content = (
-		<box
-			orientation={Gtk.Orientation.VERTICAL}
-			spacing={16}
-			class="force-quit-container"
-		>
+		<box orientation={Gtk.Orientation.VERTICAL} class="force-quit-container">
 			{new Gtk.WindowHandle({ child: titlebar })}
-			<label
-				class="force-quit-status"
-				halign={Gtk.Align.CENTER}
-				wrap={true}
-				$={(self: Gtk.Label) => {
-					statusLabel = self;
-				}}
-			/>
-			<scrolledwindow
+			<box
+				orientation={Gtk.Orientation.VERTICAL}
+				spacing={16}
 				vexpand={true}
-				hscrollbarPolicy={Gtk.PolicyType.NEVER}
-				vscrollbarPolicy={Gtk.PolicyType.AUTOMATIC}
-				minContentHeight={260}
-				maxContentHeight={360}
-				class="force-quit-list"
+				class="force-quit-body"
 			>
-				<box
-					orientation={Gtk.Orientation.VERTICAL}
-					class="force-quit-list-content"
-					$={(self: Gtk.Box) => {
-						applicationList = self;
+				<label
+					class="force-quit-status"
+					halign={Gtk.Align.CENTER}
+					wrap={true}
+					$={(self: Gtk.Label) => {
+						statusLabel = self;
 					}}
 				/>
-			</scrolledwindow>
-			<box halign={Gtk.Align.END}>
-				<button
-					canFocus={true}
-					class="force-quit-action"
-					onClicked={forceQuitSelectedApplication}
-					$={(self: Gtk.Button) => {
-						forceQuitButton = self;
-						configureButton(self, { variant: "danger" });
-						self.set_sensitive(false);
-					}}
+				<scrolledwindow
+					vexpand={true}
+					hscrollbarPolicy={Gtk.PolicyType.NEVER}
+					vscrollbarPolicy={Gtk.PolicyType.AUTOMATIC}
+					minContentHeight={260}
+					maxContentHeight={360}
+					class="force-quit-list"
 				>
-					<label label="Force Quit" />
-				</button>
+					<box
+						orientation={Gtk.Orientation.VERTICAL}
+						class="force-quit-list-content"
+						$={(self: Gtk.Box) => {
+							applicationList = self;
+						}}
+					/>
+				</scrolledwindow>
+				<box halign={Gtk.Align.END}>
+					<button
+						canFocus={true}
+						class="force-quit-action"
+						onClicked={forceQuitSelectedApplication}
+						$={(self: Gtk.Button) => {
+							forceQuitButton = self;
+							configureButton(self, { variant: "danger" });
+							self.set_sensitive(false);
+						}}
+					>
+						<label label="Force Quit" />
+					</button>
+				</box>
 			</box>
 		</box>
 	) as Gtk.Box;
@@ -349,12 +352,14 @@ function applyStaticCss(): void {
 		`
 		window.force-quit { background-color: transparent; border: none; padding: 0; }
 		window.force-quit box.force-quit-container {
-			min-width: 420px; min-height: 500px; padding: 12px 20px 20px;
+			min-width: 420px; min-height: 500px;
 			border: 1px solid ${tokens.colors.border.hover.value}; border-radius: 12px;
 			background-color: rgba(45, 45, 45, 0.90);
 		}
+		window.force-quit overlay.force-quit-titlebar { min-height: 36px; }
+		window.force-quit box.force-quit-body { padding: 0 20px 20px; }
 		window.force-quit label.force-quit-title { color: ${tokens.colors.foreground.primary.value}; font-size: 16px; font-weight: 600; }
-		window.force-quit button.force-quit-close { min-width: 32px; min-height: 32px; padding: 0; }
+		window.force-quit button.force-quit-close { min-width: 32px; min-height: 32px; padding: 0; margin: 3px 4px 0 0; }
 		window.force-quit button.force-quit-close label { font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif; font-size: 12px; }
 		window.force-quit label.force-quit-status { color: ${tokens.colors.foreground.tertiary.value}; font-size: 14px; margin: 16px; }
 		window.force-quit scrolledwindow.force-quit-list { border: 1px solid rgba(255, 255, 255, 0.20); border-radius: 8px; background-color: rgba(0, 0, 0, 0.12); }
