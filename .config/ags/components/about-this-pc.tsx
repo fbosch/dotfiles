@@ -20,7 +20,6 @@ let deviceNameLabel: Gtk.Label | null = null;
 let manufacturerLabel: Gtk.Label | null = null;
 let detailsBox: Gtk.Box | null = null;
 let statusLabel: Gtk.Label | null = null;
-let isVisible = false;
 
 function clearChildren(container: Gtk.Box): void {
 	let child = container.get_first_child();
@@ -120,21 +119,25 @@ function showMoreInfo(): void {
 }
 
 function hideAboutThisPC(): void {
-	win?.set_visible(false);
-	isVisible = false;
+	destroyAboutThisPC();
 }
 
 function showAboutThisPC(): void {
-	if (!win) createWindow();
+	destroyAboutThisPC();
+	createWindow();
 	renderInfo(getAboutThisPCInfo());
 	win?.present();
-	isVisible = true;
 }
 
 function destroyAboutThisPC(): void {
-	win?.destroy();
+	const currentWindow = win;
 	win = null;
-	isVisible = false;
+	artworkBox = null;
+	deviceNameLabel = null;
+	manufacturerLabel = null;
+	detailsBox = null;
+	statusLabel = null;
+	currentWindow?.destroy();
 }
 
 function createWindow(): void {
@@ -244,7 +247,7 @@ function createWindow(): void {
 	});
 	win.add_controller(keyController);
 	win.connect("close-request", () => {
-		hideAboutThisPC();
+		destroyAboutThisPC();
 		return true;
 	});
 }
@@ -291,7 +294,7 @@ function handleAboutThisPCRequest(
 	if (!data) return;
 
 	if (data.action === "is-visible") {
-		res(isVisible ? "true" : "false");
+		res(win?.get_mapped() === true ? "true" : "false");
 		return;
 	}
 	if (data.action === "show") {

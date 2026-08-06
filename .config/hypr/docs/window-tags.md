@@ -14,7 +14,8 @@ Consumers must treat `name` and `name*` as the same tag. Use
 
 - Owner: `lib/window_tags.lua`
 - Purpose: marks fixed-size windows that custom drag-resize must ignore.
-- Producers: title-specific rules for Force Quit and About This PC.
+- Producers: title-specific rules in `rules/ags.lua` for Force Quit and About
+  This PC.
 - Consumer: `custom-layout-drag-resize-daemon.lua`.
 
 ### Picture-In-Picture Corners

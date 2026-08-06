@@ -198,15 +198,12 @@ function refreshApplications(): void {
 }
 
 function hideForceQuit(): void {
-	clearMetricRefreshTimer();
-	clearForceQuitMetricSamples();
-	win?.set_visible(false);
-	isVisible = false;
-	selectedApplicationId = null;
+	destroyForceQuit();
 }
 
 function showForceQuit(): void {
-	if (!win) createWindow();
+	destroyForceQuit();
+	createWindow();
 	clearForceQuitMetricSamples();
 	refreshApplications();
 	win?.present();
@@ -217,9 +214,15 @@ function showForceQuit(): void {
 function destroyForceQuit(): void {
 	clearMetricRefreshTimer();
 	clearForceQuitMetricSamples();
-	win?.destroy();
+	const currentWindow = win;
 	win = null;
+	applicationList = null;
+	statusLabel = null;
+	forceQuitButton = null;
+	metricLabels.clear();
 	isVisible = false;
+	selectedApplicationId = null;
+	currentWindow?.destroy();
 }
 
 function createWindow(): void {
@@ -313,11 +316,17 @@ function createWindow(): void {
 	});
 	win.add_controller(keyController);
 	win.connect("close-request", () => {
-		hideForceQuit();
+		destroyForceQuit();
 		return true;
 	});
 	win.connect("notify::visible", () => {
 		if (win?.get_visible() === false) clearMetricRefreshTimer();
+	});
+	win.connect("notify::mapped", () => {
+		if (win?.get_mapped() === true) return;
+		isVisible = false;
+		clearMetricRefreshTimer();
+		clearForceQuitMetricSamples();
 	});
 }
 
@@ -363,7 +372,7 @@ function handleForceQuitRequest(
 	if (!data) return;
 
 	if (data.action === "is-visible") {
-		res(isVisible ? "true" : "false");
+		res(win?.get_mapped() === true ? "true" : "false");
 		return;
 	}
 	if (data.action === "show") {
