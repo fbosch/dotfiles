@@ -43,11 +43,11 @@ The profile control plane SHALL retain bounded, named automatic source claims fo
 - **THEN** Gaming is resolved
 
 ### Requirement: Canonical profile state publication
-The profile control plane SHALL publish one profile-state snapshot that includes manual selection, automatic source claims, resolved profile, last known applied profile, transition phase, and a monotonically increasing generation. Consumers SHALL observe either the complete previous snapshot or the complete next snapshot.
+The profile control plane SHALL publish one profile-state snapshot that includes manual selection, automatic source claims, resolved profile, and a monotonically increasing generation. Consumers SHALL observe either the complete previous snapshot or the complete next snapshot.
 
 #### Scenario: Successful state transition
 - **WHEN** a requested profile transition converges
-- **THEN** the published snapshot identifies the requested manual selection, resolved profile, applied profile, and a converged phase
+- **THEN** the published snapshot identifies the requested manual selection and resolved profile
 - **AND** its generation is newer than the prior published snapshot
 
 #### Scenario: Reader observes a state replacement
@@ -55,30 +55,12 @@ The profile control plane SHALL publish one profile-state snapshot that includes
 - **THEN** it observes a complete valid snapshot from one generation
 - **AND** it does not observe a partially written document or mixed generation
 
-### Requirement: Transactional reconciliation
-The profile control plane SHALL distinguish requested profile intent from confirmed applied state. It SHALL publish a non-converged phase when a core profile transition or rollback cannot be confirmed, and `reconcile` SHALL retry that transition deterministically.
-
-#### Scenario: Core activation failure with successful rollback
-- **WHEN** a requested profile activation fails and restoration of the prior applied profile succeeds
-- **THEN** the requested mutation fails
-- **AND** the prior converged state remains published
-
-#### Scenario: Rollback failure
-- **WHEN** profile activation fails and restoration cannot be confirmed
-- **THEN** the requested mutation fails
-- **AND** the published state identifies a rollback-failed phase with enough information for reconciliation
-
-#### Scenario: Reconcile recovers interrupted state
-- **WHEN** profile state is pending or rollback-failed
-- **AND** the required core actuator becomes available
-- **THEN** `reconcile` converges the resolved profile and updates the published applied profile
-
 ### Requirement: Profile controller command contract
-The profile controller SHALL provide idempotent commands to set an automatic source claim, set or clear manual selection, return human-readable and JSON status, and reconcile state. Commands that cannot validate or persist requested state SHALL fail without reporting successful convergence.
+The profile controller SHALL provide idempotent commands to set an automatic source claim, set or clear manual selection, and return human-readable and JSON status. Commands that cannot validate or persist requested state SHALL fail.
 
 #### Scenario: Source producer updates its exact claim
 - **WHEN** an automatic producer sets a source claim to an exact count
-- **THEN** repeating the same command does not change policy beyond the first update
+- **THEN** repeating the same command does not invoke profile actuators or publish a new generation
 
 #### Scenario: Manual selection command
 - **WHEN** a user selects Auto, Default, Gaming, or Powersave
@@ -86,7 +68,7 @@ The profile controller SHALL provide idempotent commands to set an automatic sou
 - **AND** two manual modes are not simultaneously selected
 
 #### Scenario: Status reflects canonical state
-- **WHEN** a caller requests JSON status
+- **WHEN** a caller requests `status --json`
 - **THEN** the response represents one canonical profile-state generation
 
 ### Requirement: Passive profile consumers
@@ -94,14 +76,14 @@ UI and runtime consumers SHALL derive profile presentation from the canonical pr
 
 #### Scenario: UI displays a manual override
 - **WHEN** manual Power Saver overrides active automatic Gaming
-- **THEN** the UI displays Power Saver as the selected and applied profile
-- **AND** it can identify Gaming as an active automatic condition without treating it as the applied profile
+- **THEN** the UI displays Power Saver as the selected and resolved profile
+- **AND** it can identify Gaming as an active automatic condition without treating it as resolved
 
 #### Scenario: UI distinguishes Auto from manual Default
 - **WHEN** automatic Gaming is active and the user selects manual Default
-- **THEN** the UI displays Default as the selected and applied profile
+- **THEN** the UI displays Default as the selected and resolved profile
 - **AND** it presents Auto as a separate selection that would resume automatic Gaming
 
 #### Scenario: Consumer starts during an active profile
-- **WHEN** a profile consumer starts while a converged Gaming or Powersave profile is active
+- **WHEN** a profile consumer starts while Gaming or Powersave is resolved
 - **THEN** it initializes from the canonical snapshot without requiring an imperative profile-specific command

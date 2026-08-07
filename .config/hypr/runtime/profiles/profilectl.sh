@@ -181,6 +181,16 @@ is_valid_source() {
   [[ "$source" =~ ^[a-z][a-z0-9_-]*$ ]]
 }
 
+normalize_count() {
+  local count="$1"
+
+  while [[ "${#count}" -gt 1 && "$count" == 0* ]]; do
+    count="${count#0}"
+  done
+
+  printf "%s" "$count"
+}
+
 profile_state_tool() {
   if ! command -v luajit >/dev/null 2>&1; then
     printf "profilectl: luajit is required for profile state\n" >&2
@@ -207,6 +217,13 @@ read_state_generation() {
   fi
 
   profile_state_tool generation "$STATE_FILE"
+}
+
+read_state_source_count() {
+  local profile="$1"
+  local source="$2"
+
+  profile_state_tool source-count "$STATE_FILE" "$profile" "$source"
 }
 
 canonical_profile() {
@@ -556,6 +573,9 @@ set_profile_count() {
   local count="$3"
   local previous_count
   local previous_generation
+  local canonical_count
+
+  count="$(normalize_count "$count")"
 
   if [[ "$source" == "manual" ]]; then
     if [[ "$count" -gt 0 ]]; then
@@ -571,6 +591,13 @@ set_profile_count() {
 
   previous_generation="$(read_state_generation)" || return 1
   previous_count="$(get_count "$profile" "$source")"
+  if [[ "$previous_count" == "$count" && -e "$STATE_FILE" ]]; then
+    canonical_count="$(read_state_source_count "$profile" "$source")" || return 1
+    if [[ "$canonical_count" == "$count" ]]; then
+      return
+    fi
+  fi
+
   set_count "$profile" "$source" "$count"
   if ! apply_and_publish_effective_state "$previous_generation"; then
     set_count "$profile" "$source" "$previous_count"
@@ -666,6 +693,16 @@ print_status() {
   printf "overlay=inactive\n"
 }
 
+print_json_status() {
+  if [[ ! -e "$STATE_FILE" ]]; then
+    printf "profilectl: profile state has not been published\n" >&2
+    return 1
+  fi
+
+  read_state_generation >/dev/null || return 1
+  cat "$STATE_FILE"
+}
+
 is_profile_active() {
   local profile="$1"
   local value
@@ -697,7 +734,7 @@ is_source_active() {
 }
 
 usage() {
-  printf "usage: %s <apply|remove|toggle|sync|apply-source|remove-source|sync-source|set-manual|clear-manual|is-active|is-source-active|status|reconcile> [profile] [source] [count]\n" "$0" >&2
+  printf "usage: %s <apply|remove|toggle|sync|apply-source|remove-source|sync-source|set-manual|clear-manual|is-active|is-source-active|status [--json]|reconcile> [profile] [source] [count]\n" "$0" >&2
 }
 
 main() {
@@ -813,7 +850,18 @@ main() {
       is_source_active "$profile" "$3"
       ;;
     status)
-      print_status
+      case "$profile" in
+        "")
+          print_status
+          ;;
+        --json)
+          print_json_status
+          ;;
+        *)
+          usage
+          exit 1
+          ;;
+      esac
       ;;
     reconcile)
       reconcile_profile_state

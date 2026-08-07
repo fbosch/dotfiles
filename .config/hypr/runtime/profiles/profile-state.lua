@@ -92,10 +92,7 @@ local function validate_state(state)
 			generation = true,
 			selection = true,
 			resolved = true,
-			applied = true,
-			phase = true,
 			sources = true,
-			degraded = true,
 		})
 	then
 		fail("invalid state fields")
@@ -109,12 +106,8 @@ local function validate_state(state)
 		fail("invalid selection")
 	end
 
-	if valid_profiles[state.resolved] ~= true or valid_profiles[state.applied] ~= true then
+	if valid_profiles[state.resolved] ~= true then
 		fail("invalid profile")
-	end
-
-	if state.phase ~= "converged" then
-		fail("invalid phase")
 	end
 
 	if
@@ -125,12 +118,8 @@ local function validate_state(state)
 		fail("invalid source claims")
 	end
 
-	if state.resolved ~= expected_resolved_profile(state) or state.applied ~= state.resolved then
+	if state.resolved ~= expected_resolved_profile(state) then
 		fail("inconsistent profile state")
-	end
-
-	if not json.is_array(state.degraded) or #state.degraded ~= 0 then
-		fail("invalid degraded state")
 	end
 end
 
@@ -160,12 +149,9 @@ local function encode_state(generation, selection, resolved)
 	state.generation = generation
 	state.selection = selection
 	state.resolved = resolved
-	state.applied = resolved
-	state.phase = "converged"
 	state.sources = json.new_object()
 	state.sources.gaming = json.new_object()
 	state.sources.powersave = json.new_object()
-	state.degraded = {}
 
 	for line in io.lines() do
 		local profile, source, count = line:match("^([^\t]+)\t([^\t]+)\t([^\t]+)$")
@@ -200,6 +186,20 @@ local function main()
 		return
 	end
 
+	if arg[1] == "source-count" and arg[2] and arg[3] and arg[4] then
+		local state = read_state(arg[2])
+		if valid_profiles[arg[3]] ~= true or arg[3] == "default" then
+			fail("invalid source profile")
+		end
+
+		if not arg[4]:match("^[a-z][a-z0-9_-]*$") then
+			fail("invalid source name")
+		end
+
+		io.write(state.sources[arg[3]][arg[4]] or 0)
+		return
+	end
+
 	if arg[1] == "encode" and arg[2] and arg[3] and arg[4] then
 		local written, write_error = io.write(encode_state(tonumber(arg[2]), arg[3], arg[4]))
 		if not written then
@@ -213,7 +213,7 @@ local function main()
 		return
 	end
 
-	fail("usage: profile-state.lua <generation|encode> ...")
+	fail("usage: profile-state.lua <generation|source-count|encode> ...")
 end
 
 local ok, error_message = pcall(main)

@@ -12,7 +12,6 @@ The design must retain the existing architecture: `autostart.lua` remains the st
 - Give profilectl one authoritative policy and state-publication boundary.
 - Let every consumer read one atomic state contract.
 - Preserve automatic-source updates while a manual override is selected.
-- Make incomplete transitions visible and recoverable through `reconcile`.
 - Remove profilectl knowledge of Window Capture process names and Window Switcher implementation details.
 
 **Non-Goals:**
@@ -41,40 +40,35 @@ Profilectl publishes `$XDG_RUNTIME_DIR/hypr-profiles/state.json` through a same-
 {
   "generation": 42,
   "selection": "default",
-  "resolved": "gaming",
-  "applied": "gaming",
-  "phase": "converged",
+  "resolved": "default",
   "sources": {
     "gaming": { "watchdog": 1 },
     "powersave": {}
-  },
-  "degraded": []
+  }
 }
 ```
 
-`phase` is `pending`, `converged`, or `rollback-failed`. `resolved` is policy output; `applied` is the last confirmed core Hyprland profile. Optional side-effect failures are recorded in `degraded` rather than claiming every actuator converged.
+`resolved` is the policy output after a successful profile application.
 
 Alternative considered: retain one file per source and derive a JSON view in every consumer. Rejected because it preserves torn reads and distributed policy logic.
 
-### State publication cannot make external actuators atomic
+### State publication follows successful application
 
 Profilectl serializes a transition under its existing lock:
 
 1. Read and validate the prior snapshot and requested input.
-2. Publish new intent with `phase: pending`.
-3. Perform bounded core Hyprland transition and rollback as necessary.
-4. Publish `converged` with confirmed `applied`, or `rollback-failed` with recovery evidence.
-5. Retry non-converged state through `reconcile`.
+2. Apply the requested profile and attempt the existing rollback on failure.
+3. Publish the resolved selection and active source claims only after successful application.
 
-Power profile selection and UI presentation are optional side effects unless later explicitly promoted to core behavior. They receive bounded attempts and appear in `degraded` on failure. User-success output occurs only after core convergence.
+Power profile selection and UI presentation retain their current behavior. User-success output occurs only after successful application.
 
-Alternative considered: publish only after actuation. Rejected because process death after successful actuation would leave no recovery intent. Publishing only before actuation was rejected because consumers would overclaim applied state.
+Alternative considered: publish intent before actuation. Rejected because profile changes are short-lived local commands and a recovery state machine adds more complexity than the observed failure modes justify.
 
 ### Consumers are passive adapters
 
-AGS gets one `profile-state` service that monitors the parent directory, parses complete snapshots, and exposes derived bindings. Gaming opacity, Start Menu, and Window Switcher consume that service. Lua consumers use one small profile-state reader. The custom-layout daemon reads applied profile state through that reader rather than the overlay marker path.
+AGS gets one `profile-state` service that monitors the parent directory, parses complete snapshots, and exposes derived bindings. Gaming opacity, Start Menu, and Window Switcher consume that service. Lua consumers use one small profile-state reader. The custom-layout daemon reads resolved profile state through that reader rather than the overlay marker path.
 
-Window Switcher derives icons versus previews from applied profile state. Profilectl no longer sends a Window Switcher-specific AGS request. AGS still owns rendering and request routing.
+Window Switcher derives icons versus previews from resolved profile state. Profilectl no longer sends a Window Switcher-specific AGS request. AGS still owns rendering and request routing.
 
 Alternative considered: a new Unix socket for profile state. Rejected because filesystem monitoring already supports passive, restart-safe consumers and no request/response interaction is needed.
 
@@ -82,7 +76,7 @@ Alternative considered: a new Unix socket for profile state. Rejected because fi
 
 Profilectl continues applying Hyprland profiles and selecting power profiles directly because those are profile actuators. Window Capture exposes a small feature-level pause, resume, refresh, and status interface; profilectl invokes it without process-name matching or daemon filename knowledge.
 
-The gaming watchdog remains owner of game detection, game workspace behavior, freezing, and presentation selection. It updates only its source claim. If its presentation would conflict with a manually applied non-Gaming profile, it consumes canonical applied state and suppresses presentation updates until Gaming is applied again.
+The gaming watchdog remains owner of game detection, game workspace behavior, freezing, and presentation selection. It updates only its source claim. If its presentation would conflict with a manual non-Gaming profile, it consumes canonical resolved state and suppresses presentation updates until Gaming is resolved again.
 
 ### Compatibility is temporary and one-way
 
@@ -92,22 +86,20 @@ Because state is session-scoped, a downgrade is either an explicit state export 
 
 ## Risks / Trade-offs
 
-- [Process exit between pending publication and actuation] -> `reconcile` completes or rolls back the pending generation.
-- [Process exit after actuation and before convergence publication] -> `reconcile` reapplies the resolved core profile before publishing convergence.
 - [Old AGS instance reads legacy files during migration] -> retain read-only projections until AGS consumers are migrated and restart AGS with the new reader.
 - [Profile state is malformed or oversized] -> reject it before actuation, preserve the last valid document, and emit a diagnostic.
-- [A manual override conflicts with watchdog presentation] -> watchdog continues detecting games but gates profile presentation on canonical applied state.
+- [A manual override conflicts with watchdog presentation] -> watchdog continues detecting games but gates profile presentation on canonical resolved state.
 - [Feature-level capture control changes ownership behavior] -> preserve existing window-capture ownership and worker tests before replacing process matching.
 
 ## Migration Plan
 
 1. Expand the production profilectl fixture to fully characterize current source, manual, and actuator behavior.
 2. Move in-repository Auto callers from `set-manual default` to `clear-manual` while that command retains its current meaning.
-3. Add transaction phases and canonical state publication while retaining legacy inputs and outputs.
+3. Add canonical state publication while retaining legacy inputs and outputs.
 4. Migrate automatic producers and remaining manual callers to the stable CLI; change `set-manual default` to force Default and prevent manual changes through generic source commands.
 5. Migrate AGS and Lua readers one at a time, then remove imperative Window Switcher updates.
 6. Introduce Window Capture feature controls and replace profilectl's process matching.
 7. Remove legacy state projections only after all in-repository consumers use the canonical document.
 8. Consider a LuaJIT implementation only after the CLI and state contract have remained stable.
 
-Rollback is phase-local: consumers can return to legacy readers until projection removal; the controller keeps its executable path and compatibility commands throughout the migration; capture interfaces retain the current process path as a temporary logged fallback until lifecycle tests prove the new interface.
+Consumers can return to legacy readers until projection removal; the controller keeps its executable path and compatibility commands throughout the migration; capture interfaces retain the current process path as a temporary logged fallback until lifecycle tests prove the new interface.

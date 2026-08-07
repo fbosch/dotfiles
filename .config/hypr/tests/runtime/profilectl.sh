@@ -185,7 +185,36 @@ reset_profile_state
 run_profilectl sync-source powersave idle 1
 assert_file_equals "$runtime_dir/hypr-profiles/powersave.idle.count" "1"
 assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "powersave"
-assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"applied":"powersave","degraded":[],"generation":1,"phase":"converged","resolved":"powersave","selection":"auto","sources":{"gaming":{},"powersave":{"idle":1}}}'
+assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"generation":1,"resolved":"powersave","selection":"auto","sources":{"gaming":{},"powersave":{"idle":1}}}'
+json_status="$(run_profilectl status --json)"
+[[ "$json_status" == "$(< "$runtime_dir/hypr-profiles/state.json")" ]] || fail "JSON status did not return canonical state"
+
+reset_profile_state
+run_profilectl sync-source gaming watchdog 1
+state_before="$(< "$runtime_dir/hypr-profiles/state.json")"
+: > "$actuator_log"
+run_profilectl sync-source gaming watchdog 1
+assert_file_equals "$runtime_dir/hypr-profiles/state.json" "$state_before"
+assert_file_equals "$actuator_log" ""
+
+reset_profile_state
+mkdir -p "$runtime_dir/hypr-profiles"
+printf '1' > "$runtime_dir/hypr-profiles/gaming.watchdog.count"
+run_profilectl sync-source gaming watchdog 1
+assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"generation":1,"resolved":"gaming","selection":"auto","sources":{"gaming":{"watchdog":1},"powersave":{}}}'
+
+write_raw_state_fixture '{"generation":7,"resolved":"default","selection":"auto","sources":{"gaming":{},"powersave":{}}}'
+run_profilectl sync-source gaming watchdog 1
+assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"generation":8,"resolved":"gaming","selection":"auto","sources":{"gaming":{"watchdog":1},"powersave":{}}}'
+
+reset_profile_state
+run_profilectl sync gaming 01
+assert_file_equals "$runtime_dir/hypr-profiles/gaming.watchdog.count" "1"
+state_before="$(< "$runtime_dir/hypr-profiles/state.json")"
+: > "$actuator_log"
+run_profilectl sync gaming 01
+assert_file_equals "$runtime_dir/hypr-profiles/state.json" "$state_before"
+assert_file_equals "$actuator_log" ""
 
 reset_profile_state
 run_profilectl sync gaming 1
@@ -284,7 +313,7 @@ assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"selection":'
 assert_file_equals "$actuator_log" ""
 
 reset_profile_state
-write_raw_state_fixture '{"applied":"powersave","degraded":[],"generation":7,"phase":"converged","resolved":"gaming","selection":"default","sources":{"gaming":{},"powersave":{}}}'
+write_raw_state_fixture '{"generation":7,"resolved":"gaming","selection":"default","sources":{"gaming":{},"powersave":{}}}'
 : > "$actuator_log"
 if run_profilectl sync-source gaming watchdog 1 >/dev/null 2>&1; then
   fail "profilectl accepted inconsistent canonical state"
@@ -298,7 +327,7 @@ assert_state_generation "$runtime_dir/hypr-profiles/state.json" "1"
 run_profilectl sync-source powersave idle 1
 assert_state_generation "$runtime_dir/hypr-profiles/state.json" "2"
 run_profilectl set-manual default
-assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"applied":"default","degraded":[],"generation":3,"phase":"converged","resolved":"default","selection":"default","sources":{"gaming":{"watchdog":1},"powersave":{"idle":1}}}'
+assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"generation":3,"resolved":"default","selection":"default","sources":{"gaming":{"watchdog":1},"powersave":{"idle":1}}}'
 run_profilectl clear-manual
 assert_state_generation "$runtime_dir/hypr-profiles/state.json" "4"
 
@@ -329,7 +358,7 @@ assert_file_equals "$runtime_dir/hypr-profiles/state.json" "$state_before"
 assert_file_equals "$runtime_dir/hypr-profiles/gaming.watchdog.count" "1"
 assert_file_equals "$runtime_dir/hypr-profiles/powersave.idle.count" "0"
 run_profilectl reconcile
-assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"applied":"gaming","degraded":[],"generation":2,"phase":"converged","resolved":"gaming","selection":"auto","sources":{"gaming":{"watchdog":1},"powersave":{}}}'
+assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"generation":2,"resolved":"gaming","selection":"auto","sources":{"gaming":{"watchdog":1},"powersave":{}}}'
 
 if luajit "$home_dir/.config/hypr/runtime/profiles/profile-state.lua" encode 1 auto default >/dev/full 2>/dev/null; then
   fail "profile state helper reported success after a write failure"

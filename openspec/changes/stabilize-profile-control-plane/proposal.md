@@ -8,7 +8,7 @@ The recently added profilectl fixture establishes transaction-failure coverage. 
 
 - Make manual selection an explicit `auto`, `default`, `gaming`, or `powersave` policy setting rather than a counted source.
 - Make a manual Default, Gaming, or Power Saver selection override automatic sources while retaining automatic source updates.
-- Publish one atomically replaced profile state document with intent, resolved mode, applied mode, transition phase, and source claims.
+- Publish one atomically replaced profile state document with selection, resolved mode, and source claims.
 - Make `profilectl` the sole profile-policy authority and expose an explicit CLI for setting automatic sources, manual selection, status, and reconciliation.
 - Migrate AGS and LuaJIT consumers to passive reads of the canonical profile state.
 - Replace profilectl's direct window-capture process matching and Window Switcher command knowledge with feature-level interfaces or state-derived behavior.
