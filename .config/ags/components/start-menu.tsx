@@ -67,9 +67,12 @@ interface FlatpakUpdatesData {
   timestamp: string;
 }
 
+type ProfileSelection = "auto" | "default" | "gaming" | "powersave";
+
 interface ProfileState {
   mode: "default" | "gaming" | "powersave";
   source: "none" | "manual" | "auto";
+  selection: ProfileSelection;
   gamingTotal: number;
   gamingManual: number;
   gamingWatchdog: number;
@@ -183,6 +186,7 @@ let flatpakUpdatesData: FlatpakUpdatesData | null = null;
 let profileState: ProfileState = {
   mode: "default",
   source: "none",
+  selection: "auto",
   gamingTotal: 0,
   gamingManual: 0,
   gamingWatchdog: 0,
@@ -192,7 +196,7 @@ let profileState: ProfileState = {
 };
 const menuItemButtons: Map<string, Gtk.Button> = new Map();
 let profileControlsBox: Gtk.Box | null = null;
-let profileAutoBadge: Gtk.Box | null = null;
+const profileConditionBadges = new Map<string, Gtk.Box>();
 let recentItemsHost: Gtk.Box | null = null;
 let recentItemsVisible = false;
 let recentDocuments: RecentDocument[] = [];
@@ -530,6 +534,7 @@ const getXdgUserDirOrDefault = (dirKey: string, fallback: string): string =>
 
 const profileStateDir = `${GLib.getenv("XDG_RUNTIME_DIR") || "/tmp"}/hypr-profiles`;
 const profilectlPath = `${homeDir}/.config/hypr/runtime/profiles/profilectl.sh`;
+const manualSelectionPath = `${profileStateDir}/manual-selection`;
 
 function readProfileCount(profile: string, source: string): number {
   try {
@@ -580,6 +585,32 @@ function readProfileTotal(profile: string): number {
   }
 }
 
+function readProfileSelection(
+  gamingManual: number,
+  powersaveManual: number,
+): ProfileSelection {
+  try {
+    const [success, contents] = GLib.file_get_contents(manualSelectionPath);
+    const selection = success
+      ? new TextDecoder("utf-8").decode(contents).trim()
+      : "";
+    if (
+      selection === "auto" ||
+      selection === "default" ||
+      selection === "gaming" ||
+      selection === "powersave"
+    ) {
+      return selection;
+    }
+  } catch (_e) {
+    // Fall through to the legacy manual-count representation.
+  }
+
+  if (gamingManual > 0) return "gaming";
+  if (powersaveManual > 0) return "powersave";
+  return "auto";
+}
+
 function readProfileState(): ProfileState {
   const gamingManual = readProfileCount("gaming", "manual");
   const gamingWatchdog = readProfileCount("gaming", "watchdog");
@@ -587,11 +618,41 @@ function readProfileState(): ProfileState {
   const powersaveManual = readProfileCount("powersave", "manual");
   const gamingTotal = readProfileTotal("gaming");
   const powersaveTotal = readProfileTotal("powersave");
+  const selection = readProfileSelection(gamingManual, powersaveManual);
+
+  if (selection === "default") {
+    return {
+      mode: "default",
+      source: "manual",
+      selection,
+      gamingTotal,
+      gamingManual,
+      gamingWatchdog,
+      gamingGamemode,
+      powersaveTotal,
+      powersaveManual,
+    };
+  }
+
+  if (selection === "gaming" || selection === "powersave") {
+    return {
+      mode: selection,
+      source: "manual",
+      selection,
+      gamingTotal,
+      gamingManual,
+      gamingWatchdog,
+      gamingGamemode,
+      powersaveTotal,
+      powersaveManual,
+    };
+  }
 
   if (gamingTotal > 0) {
     return {
       mode: "gaming",
-      source: gamingManual > 0 ? "manual" : "auto",
+      source: "auto",
+      selection,
       gamingTotal,
       gamingManual,
       gamingWatchdog,
@@ -604,7 +665,8 @@ function readProfileState(): ProfileState {
   if (powersaveTotal > 0) {
     return {
       mode: "powersave",
-      source: powersaveManual > 0 ? "manual" : "auto",
+      source: "auto",
+      selection,
       gamingTotal,
       gamingManual,
       gamingWatchdog,
@@ -617,6 +679,7 @@ function readProfileState(): ProfileState {
   return {
     mode: "default",
     source: "none",
+    selection,
     gamingTotal,
     gamingManual,
     gamingWatchdog,
@@ -633,11 +696,13 @@ function refreshProfileState() {
 function refreshProfileControls() {
   refreshProfileState();
 
-  const gamingActive = profileState.gamingManual > 0;
-  const powersaveActive = profileState.powersaveManual > 0;
-  const autoActive = !gamingActive && !powersaveActive;
+  const autoActive = profileState.selection === "auto";
+  const defaultActive = profileState.selection === "default";
+  const gamingActive = profileState.selection === "gaming";
+  const powersaveActive = profileState.selection === "powersave";
   const activeStates: Record<string, boolean> = {
     "profile-auto": autoActive,
+    "profile-default": defaultActive,
     "profile-gaming": gamingActive,
     "profile-powersave": powersaveActive,
   };
@@ -653,14 +718,33 @@ function refreshProfileControls() {
     }
   }
 
-  const automaticGamingActive = autoActive && profileState.mode === "gaming";
-  profileAutoBadge?.set_visible(automaticGamingActive);
+  const automaticGamingActive = profileState.gamingTotal > profileState.gamingManual;
+  const selectedProfileId = `profile-${profileState.selection}`;
+  for (const [id, badge] of profileConditionBadges) {
+    badge.set_visible(
+      automaticGamingActive &&
+        id === selectedProfileId &&
+        profileState.selection !== "gaming",
+    );
+  }
+  menuItemButtons.get("profile-auto")?.set_tooltip_text(
+    automaticGamingActive
+      ? "Use automatic profile rules; Game Mode is active"
+      : "Use automatic profile rules",
+  );
   menuItemButtons
-    .get("profile-auto")
+    .get("profile-default")
     ?.set_tooltip_text(
       automaticGamingActive
-        ? "Automatic profile rules; Game Mode is active"
-        : "Use automatic profile rules",
+        ? "Force Default profile; Game Mode condition remains active"
+        : "Force Default profile",
+    );
+  menuItemButtons
+    .get("profile-powersave")
+    ?.set_tooltip_text(
+      automaticGamingActive
+        ? "Force Power Saver; Game Mode condition remains active"
+        : "Force Power Saver profile",
     );
   profileControlsBox?.set_tooltip_text(profileTooltip());
 }
@@ -692,7 +776,7 @@ function startProfileStateMonitor() {
     );
     profileStateMonitor.connect("changed", (_monitor, file) => {
       const name = file.get_basename();
-      if (name?.endsWith(".count")) {
+      if (name?.endsWith(".count") || name === "manual-selection") {
         queueProfileRefresh();
       }
     });
@@ -1078,7 +1162,8 @@ function createProfileToggle(
   id: string,
   icon: string,
   active: boolean,
-  commandMode: "default" | "gaming" | "powersave",
+  selection: ProfileSelection,
+  halign: Gtk.Align,
   tooltip: string,
   badge?: string,
   badgeVisible = false,
@@ -1086,9 +1171,14 @@ function createProfileToggle(
   return (
     <button
       canFocus={true}
+      halign={halign}
       class={`profile-toggle ${active ? "profile-active" : ""}`}
       onClicked={() =>
-        runProfileCommand(`${profilectlPath} set-manual ${commandMode}`)
+        runProfileCommand(
+          selection === "auto"
+            ? `${profilectlPath} clear-manual`
+            : `${profilectlPath} set-manual ${selection}`,
+        )
       }
       $={(self: Gtk.Button) => {
         self.set_cursor_from_name("pointer");
@@ -1099,7 +1189,7 @@ function createProfileToggle(
       <overlay>
         <label
           label={icon}
-          class={`profile-toggle-icon profile-${commandMode}-icon`}
+          class={`profile-toggle-icon profile-${selection}-icon`}
         />
         {badge ? (
           <box
@@ -1111,7 +1201,7 @@ function createProfileToggle(
             heightRequest={14}
             visible={badgeVisible}
             $={(self: Gtk.Box) => {
-              profileAutoBadge = self;
+              profileConditionBadges.set(id, self);
             }}
           >
             <label
@@ -1131,51 +1221,94 @@ function createProfileToggle(
   ) as Gtk.Button;
 }
 
+function createProfileLabel(label: string): Gtk.Overlay {
+  return (
+    <overlay widthRequest={32} heightRequest={18}>
+      <box />
+      <label
+        $type="overlay"
+        label={label}
+        halign={Gtk.Align.CENTER}
+        valign={Gtk.Align.CENTER}
+        xalign={0.5}
+      />
+    </overlay>
+  ) as Gtk.Overlay;
+}
+
 function createProfileControls(): Gtk.Box {
-  const gamingActive = profileState.gamingManual > 0;
-  const powersaveActive = profileState.powersaveManual > 0;
-  const autoActive = !gamingActive && !powersaveActive;
-  const automaticGamingActive = autoActive && profileState.mode === "gaming";
+  const autoActive = profileState.selection === "auto";
+  const defaultActive = profileState.selection === "default";
+  const gamingActive = profileState.selection === "gaming";
+  const powersaveActive = profileState.selection === "powersave";
+  const automaticGamingActive = profileState.gamingTotal > profileState.gamingManual;
 
   const profileBox = (
-    <box orientation={Gtk.Orientation.VERTICAL} spacing={4} class="profile-row">
+    <box
+      orientation={Gtk.Orientation.VERTICAL}
+      spacing={4}
+      halign={Gtk.Align.CENTER}
+      widthRequest={224}
+      class="profile-row"
+    >
       <box
         orientation={Gtk.Orientation.HORIZONTAL}
-        spacing={44}
         class="profile-actions"
       >
         {createProfileToggle(
           "profile-auto",
           "\uF8B0",
           autoActive,
-          "default",
+          "auto",
+          Gtk.Align.START,
           automaticGamingActive
             ? "Automatic profile rules; Game Mode is active"
             : "Use automatic profile rules",
           "\u{F02B4}",
-          automaticGamingActive,
+          automaticGamingActive && autoActive,
         )}
+        <box hexpand={true} />
+        {createProfileToggle(
+          "profile-default",
+          "\uEC49",
+          defaultActive,
+          "default",
+          Gtk.Align.CENTER,
+          "Force Default profile",
+          "\u{F02B4}",
+          automaticGamingActive && defaultActive,
+        )}
+        <box hexpand={true} />
         {createProfileToggle(
           "profile-gaming",
           "\u{F02B4}",
           gamingActive,
           "gaming",
-          "Select manual Gaming profile",
+          Gtk.Align.CENTER,
+          "Force Gaming profile",
+          "\u{F02B4}",
+          false,
         )}
+        <box hexpand={true} />
         {createProfileToggle(
           "profile-powersave",
           "\uEA95",
           powersaveActive,
           "powersave",
-          "Select manual Power Saver profile",
+          Gtk.Align.END,
+          "Force Power Saver profile",
+          "\u{F02B4}",
+          automaticGamingActive && powersaveActive,
         )}
       </box>
       <box orientation={Gtk.Orientation.HORIZONTAL} class="profile-labels">
-        <label label="Auto" widthRequest={40} />
-        <box widthRequest={32} />
-        <label label="Gaming" widthRequest={48} />
-        <box widthRequest={32} />
-        <label label="Saver" widthRequest={40} />
+        {createProfileLabel("Auto")}
+        <box hexpand={true} />
+        {createProfileLabel("Default")}
+        <box hexpand={true} />
+        {createProfileLabel("Gaming")}
+        <box hexpand={true} />
+        {createProfileLabel("Saver")}
       </box>
     </box>
   ) as Gtk.Box;
@@ -1304,7 +1437,7 @@ function updateMenuItems() {
     // Clear button references
     menuItemButtons.clear();
     profileControlsBox = null;
-    profileAutoBadge = null;
+    profileConditionBadges.clear();
 
     // Add user profile at the top
     box.append(createUserProfile());
@@ -1544,7 +1677,7 @@ function applyStaticCSS() {
     }
 
     window.start-menu box.profile-row {
-      margin: 12px 39px;
+      margin: 12px 0;
     }
 
     window.start-menu box.profile-actions {
@@ -1604,6 +1737,10 @@ function applyStaticCSS() {
       font-size: 12px;
       font-weight: 500;
       color: ${tokens.colors.foreground.primary.value};
+    }
+
+    window.start-menu box.profile-labels {
+      padding: 0 4px;
     }
 
     /* Menu item base */

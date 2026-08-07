@@ -27,9 +27,9 @@ The design must retain the existing architecture: `autostart.lua` remains the st
 
 ### Profilectl owns policy; source claims remain inputs
 
-`profilectl` remains the only writer and arbiter. It stores manual selection as one enum and automatic claims by profile/source. Source producers set exact counts, not incremental ownership references. This keeps the watchdog's current reconciliation model idempotent and makes a future automatic Powersave producer straightforward.
+`profilectl` remains the only writer and arbiter. It stores manual selection as one enum and automatic claims by profile/source. The selection enum is `auto`, `default`, `gaming`, or `powersave`. Source producers set exact counts, not incremental ownership references. This keeps the watchdog's current reconciliation model idempotent and makes a future automatic Powersave producer straightforward.
 
-When selection is Auto, automatic resolution preserves current Gaming-over-Powersave precedence. When selection is Gaming or Powersave, that selection resolves the profile regardless of claims. Automatic claims are still updated and immediately take effect when selection returns to Auto.
+When selection is Auto, automatic resolution preserves current Gaming-over-Powersave precedence. When selection is Default, Gaming, or Powersave, that selection resolves the profile regardless of claims. Automatic claims are still updated and immediately take effect when selection returns to Auto.
 
 Alternative considered: keep `manual` as a special source with higher numeric priority. Rejected because it preserves the current ambiguity and requires consumers to know a source-level policy rule.
 
@@ -41,7 +41,7 @@ Profilectl publishes `$XDG_RUNTIME_DIR/hypr-profiles/state.json` through a same-
 {
   "version": 1,
   "generation": 42,
-  "selection": "auto",
+  "selection": "default",
   "resolved": "gaming",
   "applied": "gaming",
   "phase": "converged",
@@ -87,7 +87,7 @@ The gaming watchdog remains owner of game detection, game workspace behavior, fr
 
 ### Compatibility is temporary and one-way
 
-The controller retains the existing CLI commands as compatibility wrappers while callers migrate. Legacy count and marker files become read-only projections from canonical state for one migration release; no legacy writer may mutate policy independently. Every in-repository consumer migrates before the projections are removed.
+The controller retains existing CLI commands as compatibility wrappers while callers migrate, except for the intentionally changed `set-manual default` meaning. Before that change lands, in-repository Auto callers move to the existing `clear-manual` command. Legacy count and marker files become read-only projections from canonical state for one migration release; no legacy writer may mutate policy independently. Every in-repository consumer migrates before the projections are removed.
 
 Because state is session-scoped, a downgrade is either an explicit state export before running older code or an unsupported in-session transition that fails loudly. A newer unknown state version is never reset to Default.
 
@@ -103,11 +103,12 @@ Because state is session-scoped, a downgrade is either an explicit state export 
 ## Migration Plan
 
 1. Expand the production profilectl fixture to fully characterize current source, manual, and actuator behavior.
-2. Add transaction phases and canonical state publication while retaining legacy inputs and outputs.
-3. Migrate automatic producers and manual callers to the stable CLI; prevent manual changes through generic source commands.
-4. Migrate AGS and Lua readers one at a time, then remove imperative Window Switcher updates.
-5. Introduce Window Capture feature controls and replace profilectl's process matching.
-6. Remove legacy state projections only after all in-repository consumers use the canonical document.
-7. Consider a LuaJIT implementation only after the CLI and state contract have remained stable.
+2. Move in-repository Auto callers from `set-manual default` to `clear-manual` while that command retains its current meaning.
+3. Add transaction phases and canonical state publication while retaining legacy inputs and outputs.
+4. Migrate automatic producers and remaining manual callers to the stable CLI; change `set-manual default` to force Default and prevent manual changes through generic source commands.
+5. Migrate AGS and Lua readers one at a time, then remove imperative Window Switcher updates.
+6. Introduce Window Capture feature controls and replace profilectl's process matching.
+7. Remove legacy state projections only after all in-repository consumers use the canonical document.
+8. Consider a LuaJIT implementation only after the CLI and state contract have remained stable.
 
 Rollback is phase-local: consumers can return to legacy readers until projection removal; the controller keeps its executable path and compatibility commands throughout the migration; capture interfaces retain the current process path as a temporary logged fallback until lifecycle tests prove the new interface.

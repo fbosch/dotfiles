@@ -5,7 +5,12 @@ Define one reliable profile-control boundary for manual and automatic desktop pe
 ## ADDED Requirements
 
 ### Requirement: Explicit manual selection
-The profile control plane SHALL persist one manual selection of `auto`, `gaming`, or `powersave`. A manual Gaming or Powersave selection SHALL determine the resolved profile independently of automatic source claims.
+The profile control plane SHALL persist one manual selection of `auto`, `default`, `gaming`, or `powersave`. A manual Default, Gaming, or Powersave selection SHALL determine the resolved profile independently of automatic source claims.
+
+#### Scenario: Manual Default overrides automatic Gaming
+- **WHEN** an automatic Gaming source is active and the user selects manual Default
+- **THEN** the resolved and applied profile becomes Default after successful convergence
+- **AND** the automatic Gaming source claim remains recorded
 
 #### Scenario: Manual Power Saver overrides automatic Gaming
 - **WHEN** an automatic Gaming source is active and the user selects manual Power Saver
@@ -13,7 +18,7 @@ The profile control plane SHALL persist one manual selection of `auto`, `gaming`
 - **AND** the automatic Gaming source claim remains recorded
 
 #### Scenario: Clearing manual selection restores automatic policy
-- **WHEN** manual Power Saver is selected while an automatic Gaming source is active
+- **WHEN** manual Default, Gaming, or Power Saver is selected while an automatic Gaming source is active
 - **AND** the user clears the manual selection
 - **THEN** the manual selection becomes Auto
 - **AND** Gaming resolves immediately without waiting for a new source event
@@ -81,7 +86,7 @@ The profile controller SHALL provide idempotent commands to set an automatic sou
 - **THEN** repeating the same command does not change policy beyond the first update
 
 #### Scenario: Manual selection command
-- **WHEN** a user selects Auto, Gaming, or Powersave
+- **WHEN** a user selects Auto, Default, Gaming, or Powersave
 - **THEN** one controller operation records the complete selection change
 - **AND** two manual modes are not simultaneously selected
 
@@ -96,6 +101,11 @@ UI and runtime consumers SHALL derive profile presentation from the canonical pr
 - **WHEN** manual Power Saver overrides active automatic Gaming
 - **THEN** the UI displays Power Saver as the selected and applied profile
 - **AND** it can identify Gaming as an active automatic condition without treating it as the applied profile
+
+#### Scenario: UI distinguishes Auto from manual Default
+- **WHEN** automatic Gaming is active and the user selects manual Default
+- **THEN** the UI displays Default as the selected and applied profile
+- **AND** it presents Auto as a separate selection that would resume automatic Gaming
 
 #### Scenario: Consumer starts during an active profile
 - **WHEN** a profile consumer starts while a converged Gaming or Powersave profile is active

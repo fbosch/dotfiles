@@ -28,6 +28,16 @@ assert_file_equals() {
   [[ "$actual" == "$expected" ]] || fail "expected $file to contain $expected, got $actual"
 }
 
+assert_absent() {
+  local file="$1"
+
+  [[ ! -e "$file" ]] || fail "expected $file to be absent"
+}
+
+reset_profile_state() {
+  rm -rf "$runtime_dir/hypr-profiles"
+}
+
 write_stub() {
   local name="$1"
 
@@ -62,6 +72,43 @@ run_profilectl() {
     "$profilectl" "$@"
 }
 
+reset_profile_state
+run_profilectl sync-source powersave idle 1
+assert_file_equals "$runtime_dir/hypr-profiles/powersave.idle.count" "1"
+assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "powersave"
+
+reset_profile_state
+run_profilectl sync gaming 1
+assert_file_equals "$runtime_dir/hypr-profiles/gaming.watchdog.count" "1"
+assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
+run_profilectl sync-source powersave idle 1
+assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
+run_profilectl sync-source gaming gamemode 1
+run_profilectl sync gaming 0
+assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
+run_profilectl sync-source gaming gamemode 0
+assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "powersave"
+run_profilectl sync-source powersave idle 0
+assert_absent "$runtime_dir/hypr-profiles/profile-overlay.mode"
+
+reset_profile_state
+run_profilectl sync gaming 1
+run_profilectl set-manual default
+assert_absent "$runtime_dir/hypr-profiles/profile-overlay.mode"
+assert_file_equals "$runtime_dir/hypr-profiles/gaming.watchdog.count" "1"
+run_profilectl clear-manual
+assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
+run_profilectl set-manual powersave
+assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "powersave"
+run_profilectl clear-manual
+assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
+run_profilectl set-manual gaming
+run_profilectl sync gaming 0
+assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
+run_profilectl clear-manual
+assert_absent "$runtime_dir/hypr-profiles/profile-overlay.mode"
+
+reset_profile_state
 run_profilectl set-manual gaming
 assert_file_equals "$runtime_dir/hypr-profiles/gaming.manual.count" "1"
 assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
@@ -74,7 +121,7 @@ assert_file_equals "$runtime_dir/hypr-profiles/gaming.manual.count" "1"
 assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
 assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.active" ""
 
-rm -rf "$runtime_dir/hypr-profiles"
+reset_profile_state
 mkdir -p "$runtime_dir/hypr-profiles/profile-overlay.mode"
 
 if run_profilectl apply gaming >/dev/null 2>&1; then
@@ -87,7 +134,7 @@ rm -rf "$runtime_dir/hypr-profiles/profile-overlay.mode"
 run_profilectl reconcile
 [[ ! -e "$runtime_dir/hypr-profiles/profile-overlay.active" ]] || fail "profilectl retained recovery state after mode publication recovery"
 
-rm -rf "$runtime_dir/hypr-profiles"
+reset_profile_state
 run_profilectl set-manual gaming
 rm -f "$runtime_dir/hypr-profiles/powersave.manual.count"
 mkdir "$runtime_dir/hypr-profiles/powersave.manual.count"
@@ -99,7 +146,7 @@ fi
 assert_file_equals "$runtime_dir/hypr-profiles/gaming.manual.count" "1"
 assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
 
-rm -rf "$runtime_dir/hypr-profiles"
+reset_profile_state
 
 if HYPRCTL_FAIL_GAMING=1 HYPRCTL_FAIL_DEFAULT=1 run_profilectl apply gaming >/dev/null 2>&1; then
   fail "profilectl succeeded after Gaming activation and rollback both failed"

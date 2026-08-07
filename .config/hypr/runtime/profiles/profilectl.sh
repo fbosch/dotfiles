@@ -19,6 +19,9 @@ NOTIFY="$HOME/.config/hypr/runtime/notifications/notify.lua"
 
 POWERSAVE_PROFILE="powersave"
 GAMING_PROFILE="gaming"
+DEFAULT_PROFILE="default"
+AUTO_SELECTION="auto"
+MANUAL_SELECTION_FILE="$STATE_DIR/manual-selection"
 
 mkdir -p "$STATE_DIR"
 exec 9>"$LOCK_FILE"
@@ -36,6 +39,11 @@ is_valid_profile() {
   [[ "$profile" == "$POWERSAVE_PROFILE" || "$profile" == "$GAMING_PROFILE" ]]
 }
 
+is_valid_selection() {
+  local selection="$1"
+  [[ "$selection" == "$AUTO_SELECTION" || "$selection" == "$DEFAULT_PROFILE" ]] || is_valid_profile "$selection"
+}
+
 get_count() {
   local profile="$1"
   local source="$2"
@@ -48,6 +56,67 @@ get_count() {
   fi
 
   printf "0"
+}
+
+get_manual_selection() {
+  local selection
+  local gaming_manual
+  local powersave_manual
+
+  if [[ -e "$MANUAL_SELECTION_FILE" ]]; then
+    if [[ -L "$MANUAL_SELECTION_FILE" || ! -f "$MANUAL_SELECTION_FILE" ]]; then
+      printf "profilectl: invalid manual selection path: %s\n" "$MANUAL_SELECTION_FILE" >&2
+      return 1
+    fi
+
+    selection="$(< "$MANUAL_SELECTION_FILE")"
+    if is_valid_selection "$selection"; then
+      printf "%s" "$selection"
+      return
+    fi
+
+    printf "profilectl: invalid manual selection: %s\n" "$selection" >&2
+    return 1
+  fi
+
+  gaming_manual="$(get_count "$GAMING_PROFILE" manual)"
+  powersave_manual="$(get_count "$POWERSAVE_PROFILE" manual)"
+  if [[ "$gaming_manual" -gt 0 ]]; then
+    printf "%s" "$GAMING_PROFILE"
+    return
+  fi
+
+  if [[ "$powersave_manual" -gt 0 ]]; then
+    printf "%s" "$POWERSAVE_PROFILE"
+    return
+  fi
+
+  printf "%s" "$AUTO_SELECTION"
+}
+
+write_manual_selection() {
+  local selection="$1"
+  local temporary
+
+  if ! is_valid_selection "$selection"; then
+    return 1
+  fi
+
+  if [[ -L "$MANUAL_SELECTION_FILE" || ( -e "$MANUAL_SELECTION_FILE" && ! -f "$MANUAL_SELECTION_FILE" ) ]]; then
+    printf "profilectl: invalid manual selection path: %s\n" "$MANUAL_SELECTION_FILE" >&2
+    return 1
+  fi
+
+  temporary="$(mktemp "$STATE_DIR/.manual-selection.XXXXXX")" || return 1
+  if ! printf "%s" "$selection" > "$temporary"; then
+    rm -f "$temporary"
+    return 1
+  fi
+
+  if ! mv -f "$temporary" "$MANUAL_SELECTION_FILE"; then
+    rm -f "$temporary"
+    return 1
+  fi
 }
 
 set_count() {
@@ -72,6 +141,26 @@ get_profile_count() {
 
   for file in "$STATE_DIR/$profile".*.count; do
     if [[ ! -f "$file" ]]; then
+      continue
+    fi
+
+    value="$(< "$file")"
+    if [[ "$value" =~ ^[0-9]+$ ]]; then
+      total=$((total + value))
+    fi
+  done
+
+  printf "%s" "$total"
+}
+
+get_automatic_profile_count() {
+  local profile="$1"
+  local total=0
+  local file
+  local value
+
+  for file in "$STATE_DIR/$profile".*.count; do
+    if [[ ! -f "$file" || "$file" == *.manual.count ]]; then
       continue
     fi
 
@@ -215,9 +304,21 @@ remove_overlay_markers() {
 get_desired_overlay_mode() {
   local powersave_count
   local gaming_count
+  local selection
 
-  powersave_count="$(get_profile_count "$POWERSAVE_PROFILE")"
-  gaming_count="$(get_profile_count "$GAMING_PROFILE")"
+  selection="$(get_manual_selection)" || return 1
+  if [[ "$selection" == "$DEFAULT_PROFILE" ]]; then
+    printf "none"
+    return
+  fi
+
+  if [[ "$selection" != "$AUTO_SELECTION" ]]; then
+    printf "%s" "$selection"
+    return
+  fi
+
+  powersave_count="$(get_automatic_profile_count "$POWERSAVE_PROFILE")"
+  gaming_count="$(get_automatic_profile_count "$GAMING_PROFILE")"
 
   if [[ "$gaming_count" -gt 0 ]]; then
     printf "gaming"
@@ -313,6 +414,11 @@ apply_profile() {
   local source="${2:-manual}"
   local value
 
+  if [[ "$source" == "manual" ]]; then
+    set_manual_profile "$profile"
+    return
+  fi
+
   value="$(get_count "$profile" "$source")"
   set_profile_count "$profile" "$source" $((value + 1))
 }
@@ -321,6 +427,13 @@ remove_profile() {
   local profile="$1"
   local source="${2:-manual}"
   local value
+
+  if [[ "$source" == "manual" ]]; then
+    if [[ "$(get_manual_selection)" == "$profile" ]]; then
+      set_manual_profile "$AUTO_SELECTION"
+    fi
+    return
+  fi
 
   value="$(get_count "$profile" "$source")"
   set_profile_count "$profile" "$source" $((value - 1))
@@ -331,6 +444,18 @@ set_profile_count() {
   local source="$2"
   local count="$3"
   local previous_count
+
+  if [[ "$source" == "manual" ]]; then
+    if [[ "$count" -gt 0 ]]; then
+      set_manual_profile "$profile"
+      return
+    fi
+
+    if [[ "$(get_manual_selection)" == "$profile" ]]; then
+      set_manual_profile "$AUTO_SELECTION"
+    fi
+    return
+  fi
 
   previous_count="$(get_count "$profile" "$source")"
   set_count "$profile" "$source" "$count"
@@ -349,16 +474,22 @@ restore_manual_counts() {
   set_count "$POWERSAVE_PROFILE" manual "$powersave_count" || true
 }
 
+restore_manual_selection() {
+  write_manual_selection "$1" || true
+}
+
 set_manual_profile() {
-  local profile="$1"
+  local selection="$1"
   local previous_gaming
   local previous_powersave
+  local previous_selection
 
-  if [[ "$profile" != "default" ]] && ! is_valid_profile "$profile"; then
+  if ! is_valid_selection "$selection"; then
     usage
     return 1
   fi
 
+  previous_selection="$(get_manual_selection)" || return 1
   previous_gaming="$(get_count "$GAMING_PROFILE" manual)"
   previous_powersave="$(get_count "$POWERSAVE_PROFILE" manual)"
 
@@ -367,20 +498,26 @@ set_manual_profile() {
     return 1
   fi
 
-  if [[ "$profile" == "$GAMING_PROFILE" ]]; then
+  if [[ "$selection" == "$GAMING_PROFILE" ]]; then
     if ! set_count "$GAMING_PROFILE" manual 1; then
       restore_manual_counts "$previous_gaming" "$previous_powersave"
       return 1
     fi
-  elif [[ "$profile" == "$POWERSAVE_PROFILE" ]]; then
+  elif [[ "$selection" == "$POWERSAVE_PROFILE" ]]; then
     if ! set_count "$POWERSAVE_PROFILE" manual 1; then
       restore_manual_counts "$previous_gaming" "$previous_powersave"
       return 1
     fi
   fi
 
+  if ! write_manual_selection "$selection"; then
+    restore_manual_counts "$previous_gaming" "$previous_powersave"
+    return 1
+  fi
+
   if ! apply_effective_state true; then
     restore_manual_counts "$previous_gaming" "$previous_powersave"
+    restore_manual_selection "$previous_selection"
     apply_effective_state true || true
     return 1
   fi
@@ -389,10 +526,13 @@ set_manual_profile() {
 print_status() {
   local powersave_count
   local gaming_count
+  local selection
 
   powersave_count="$(get_profile_count "$POWERSAVE_PROFILE")"
   gaming_count="$(get_profile_count "$GAMING_PROFILE")"
+  selection="$(get_manual_selection)" || return 1
 
+  printf "selection=%s\n" "$selection"
   printf "powersave=%s\n" "$powersave_count"
   printf "gaming=%s\n" "$gaming_count"
 
@@ -420,6 +560,11 @@ is_source_active() {
   local profile="$1"
   local source="$2"
   local value
+
+  if [[ "$source" == "manual" ]]; then
+    [[ "$(get_manual_selection)" == "$profile" ]]
+    return
+  fi
 
   value="$(get_count "$profile" "$source")"
   if [[ "$value" -gt 0 ]]; then
@@ -525,7 +670,7 @@ main() {
       set_manual_profile "$profile"
       ;;
     clear-manual)
-      set_manual_profile default
+      set_manual_profile "$AUTO_SELECTION"
       ;;
     is-active)
       if is_valid_profile "$profile"; then

@@ -1,13 +1,14 @@
 ## 1. Characterize Profile Policy
 
 - [x] 1.1 Add a production `profilectl` fixture for failed restore, state publication, manual selection, and rollback paths.
-- [ ] 1.2 Add fixture cases for Auto to automatic Gaming, Auto to automatic Powersave, manual Gaming, manual Powersave, manual Powersave during automatic Gaming, clearing manual selection, and multiple automatic sources.
-- [ ] 1.3 Define fixture seams for bounded actuator timeout, malformed state, atomic reader snapshots, and interrupted pending transitions.
+- [x] 1.2 Add fixture cases for Auto to automatic Gaming, Auto to automatic Powersave, Gaming-over-Powersave precedence, and multiple automatic Gaming sources.
+- [x] 1.3 Add fixture cases for manual Default, Gaming, and Powersave overrides during automatic Gaming, plus clearing manual selection back to Auto.
+- [ ] 1.4 Define fixture seams for bounded actuator timeout, malformed state, atomic reader snapshots, and interrupted pending transitions.
 
 ## 2. Stabilize Profilectl State And Commands
 
 - [ ] 2.1 Add validated versioned canonical profile state with atomic same-directory publication and generation tracking.
-- [ ] 2.2 Replace counted manual sources with one explicit Auto, Gaming, or Powersave selection while preserving automatic source claims.
+- [x] 2.2 Move in-repository Auto callers to `clear-manual`, then replace counted manual sources with one explicit Auto, Default, Gaming, or Powersave selection while preserving automatic source claims.
 - [ ] 2.3 Add idempotent exact-source updates, JSON status, pending/converged/rollback-failed state, and deterministic reconcile behavior.
 - [ ] 2.4 Retain existing profilectl commands as tested compatibility wrappers and produce read-only legacy state projections during consumer migration.
 - [ ] 2.5 Add bounded core and optional actuator handling with explicit degraded state and recovery diagnostics.
@@ -15,7 +16,7 @@
 ## 3. Migrate Profile Producers And Consumers
 
 - [ ] 3.1 Migrate the gaming watchdog and all manual profile actions to the explicit controller contract.
-- [ ] 3.2 Add one AGS profile-state service and migrate Gaming opacity, Start Menu, and Window Switcher to passive canonical-state reads.
+- [ ] 3.2 Add one AGS profile-state service and migrate Gaming opacity, Start Menu, and Window Switcher to passive canonical-state reads, including separate Auto and Default controls.
 - [ ] 3.3 Add one Lua profile-state reader and migrate Hyprland reload and custom-layout recovery from overlay markers.
 - [ ] 3.4 Gate gaming presentation updates on canonical applied profile state so manual non-Gaming overrides remain effective.
 - [ ] 3.5 Remove the imperative Window Switcher profile request after the component follows canonical state.

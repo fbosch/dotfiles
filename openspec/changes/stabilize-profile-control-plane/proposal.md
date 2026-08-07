@@ -6,8 +6,8 @@ The recently added profilectl fixture establishes transaction-failure coverage. 
 
 ## What Changes
 
-- Make manual selection an explicit `auto`, `gaming`, or `powersave` policy setting rather than a counted source.
-- Make a manual Gaming or Power Saver selection override automatic sources while retaining automatic source updates.
+- Make manual selection an explicit `auto`, `default`, `gaming`, or `powersave` policy setting rather than a counted source.
+- Make a manual Default, Gaming, or Power Saver selection override automatic sources while retaining automatic source updates.
 - Publish one versioned, atomically replaced profile state document with intent, resolved mode, applied mode, transition phase, and source claims.
 - Make `profilectl` the sole profile-policy authority and expose an explicit CLI for setting automatic sources, manual selection, status, and reconciliation.
 - Migrate AGS and LuaJIT consumers to passive reads of the canonical profile state.
@@ -27,5 +27,5 @@ The recently added profilectl fixture establishes transaction-failure coverage. 
 
 - Affected code: `.config/hypr/runtime/profiles/profilectl.sh`, profile Lua helpers, gaming watchdog, window-capture control, AGS profile consumers, and desktop recovery paths.
 - Affected runtime state: `$XDG_RUNTIME_DIR/hypr-profiles` gains a canonical versioned document; existing count and marker files become temporary compatibility projections during migration.
-- Affected interfaces: profilectl commands and AGS profile-state consumption.
+- Affected interfaces: profilectl commands and AGS profile-state consumption. **BREAKING:** `set-manual default` changes from clearing manual state to forcing Default; callers must use `clear-manual` for Auto before that semantic change lands.
 - No new system service, framework, language runtime, or Nix dependency is introduced.
