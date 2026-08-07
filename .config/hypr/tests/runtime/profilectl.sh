@@ -258,8 +258,8 @@ run_profilectl reconcile
 [[ ! -e "$runtime_dir/hypr-profiles/profile-overlay.active" ]] || fail "profilectl retained recovery state after a successful reconcile"
 
 reset_profile_state
-write_raw_state_fixture '{"version":'
-assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"version":'
+write_raw_state_fixture '{"selection":'
+assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"selection":'
 
 write_raw_state_fixture '{"generation":1}'
 rename_ready="$seam_dir/rename-ready"

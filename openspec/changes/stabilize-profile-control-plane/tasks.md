@@ -7,7 +7,7 @@
 
 ## 2. Stabilize Profilectl State And Commands
 
-- [ ] 2.1 Add validated versioned canonical profile state with atomic same-directory publication and generation tracking.
+- [ ] 2.1 Add validated canonical profile state with atomic same-directory publication and generation tracking.
 - [x] 2.2 Move in-repository Auto callers to `clear-manual`, then replace counted manual sources with one explicit Auto, Default, Gaming, or Powersave selection while preserving automatic source claims.
 - [ ] 2.3 Add idempotent exact-source updates, JSON status, pending/converged/rollback-failed state, and deterministic reconcile behavior.
 - [ ] 2.4 Retain existing profilectl commands as tested compatibility wrappers and produce read-only legacy state projections during consumer migration.

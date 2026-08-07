@@ -43,7 +43,7 @@ The profile control plane SHALL retain bounded, named automatic source claims fo
 - **THEN** Gaming is resolved
 
 ### Requirement: Canonical profile state publication
-The profile control plane SHALL publish one versioned profile-state snapshot that includes manual selection, automatic source claims, resolved profile, last known applied profile, transition phase, and a monotonically increasing generation. Consumers SHALL observe either the complete previous snapshot or the complete next snapshot.
+The profile control plane SHALL publish one profile-state snapshot that includes manual selection, automatic source claims, resolved profile, last known applied profile, transition phase, and a monotonically increasing generation. Consumers SHALL observe either the complete previous snapshot or the complete next snapshot.
 
 #### Scenario: Successful state transition
 - **WHEN** a requested profile transition converges
@@ -54,11 +54,6 @@ The profile control plane SHALL publish one versioned profile-state snapshot tha
 - **WHEN** a consumer reads profile state during publication
 - **THEN** it observes a complete valid snapshot from one generation
 - **AND** it does not observe a partially written document or mixed generation
-
-#### Scenario: Unknown state version
-- **WHEN** a profile-state reader encounters a newer unsupported version
-- **THEN** it SHALL not replace that state with a default profile
-- **AND** it SHALL report an unsupported-state failure to its caller or diagnostic channel
 
 ### Requirement: Transactional reconciliation
 The profile control plane SHALL distinguish requested profile intent from confirmed applied state. It SHALL publish a non-converged phase when a core profile transition or rollback cannot be confirmed, and `reconcile` SHALL retry that transition deterministically.

@@ -10,7 +10,7 @@ The design must retain the existing architecture: `autostart.lua` remains the st
 
 - Separate manual user intent from automatic source claims.
 - Give profilectl one authoritative policy and state-publication boundary.
-- Let every consumer read one atomic, versioned state contract.
+- Let every consumer read one atomic state contract.
 - Preserve automatic-source updates while a manual override is selected.
 - Make incomplete transitions visible and recoverable through `reconcile`.
 - Remove profilectl knowledge of Window Capture process names and Window Switcher implementation details.
@@ -35,11 +35,10 @@ Alternative considered: keep `manual` as a special source with higher numeric pr
 
 ### One atomic public state document represents one logical generation
 
-Profilectl publishes `$XDG_RUNTIME_DIR/hypr-profiles/state.json` through a same-directory temporary file and rename. Version 1 contains:
+Profilectl publishes `$XDG_RUNTIME_DIR/hypr-profiles/state.json` through a same-directory temporary file and rename. It contains:
 
 ```json
 {
-  "version": 1,
   "generation": 42,
   "selection": "default",
   "resolved": "gaming",
@@ -89,7 +88,7 @@ The gaming watchdog remains owner of game detection, game workspace behavior, fr
 
 The controller retains existing CLI commands as compatibility wrappers while callers migrate, except for the intentionally changed `set-manual default` meaning. Before that change lands, in-repository Auto callers move to the existing `clear-manual` command. Legacy count and marker files become read-only projections from canonical state for one migration release; no legacy writer may mutate policy independently. Every in-repository consumer migrates before the projections are removed.
 
-Because state is session-scoped, a downgrade is either an explicit state export before running older code or an unsupported in-session transition that fails loudly. A newer unknown state version is never reset to Default.
+Because state is session-scoped, a downgrade is either an explicit state export before running older code or an unsupported in-session transition that fails loudly.
 
 ## Risks / Trade-offs
 
