@@ -65,7 +65,36 @@ in
 
     "test:stow".exec = ''
       set -euo pipefail
-      stow -n .
+      target="$(mktemp -d)"
+      trap 'rm -rf "$target"' EXIT
+
+      # Prevent directory folding from masking nested ignore behavior.
+      mkdir -p "$target/.config/ags" "$target/.config/waybar"
+      stow --dir "$PWD" --target "$target" .
+
+      required_paths=(
+        ".config/ags/config-bundled.tsx"
+        ".config/ags/scripts/generate-circular-avatar.sh"
+        ".config/waybar/config"
+        ".config/waybar/scripts/temperatures"
+      )
+      for deployment_path in "''${required_paths[@]}"; do
+        test -e "$target/$deployment_path"
+      done
+
+      ignored_paths=(
+        "scripts"
+        "docs"
+        "design-system"
+        "justfile"
+        "lefthook.yml"
+        ".codex"
+      )
+      for deployment_path in "''${ignored_paths[@]}"; do
+        test ! -e "$target/$deployment_path"
+      done
+
+      stow --dir "$PWD" --target "$target" .
     '';
 
     "test:fish".exec = ''
