@@ -11,6 +11,7 @@
 AGS_CONFIG_DIR="$HOME/.config/ags"
 RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 LOG_FILE="$RUNTIME_DIR/ags-daemons.log"
+PROFILECTL="$HOME/.config/hypr/runtime/profiles/profilectl.sh"
 
 # Bundled mode settings
 # Using global namespace pattern to bundle all 6 components
@@ -87,6 +88,10 @@ main() {
     
     # Wait for Hyprland to be ready (listen for first event)
     wait_for_hyprland
+
+    if [[ -x "$PROFILECTL" ]] && ! "$PROFILECTL" reconcile; then
+        log "${YELLOW}⚠${NC} Failed to initialize profile state"
+    fi
     
     # Start bundled AGS process with all components
     log "${BLUE}🚀${NC} Starting bundled AGS daemons..."

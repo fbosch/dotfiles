@@ -1229,7 +1229,6 @@ function updateMenuItems() {
   try {
     if (!menuBox) return;
     hideRecentItemsMenu();
-    refreshProfileState();
     // Type assertion to help TypeScript understand menuBox is non-null after guard
     const box = menuBox as Gtk.Box;
     // Clear existing items

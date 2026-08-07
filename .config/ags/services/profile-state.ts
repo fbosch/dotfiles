@@ -125,18 +125,28 @@ function parseState(contents: Uint8Array): ProfileState | null {
 }
 
 function readState(): ProfileState | null {
-  try {
-    const [success, contents] = GLib.file_get_contents(statePath);
-    if (success === false || !contents) return null;
-    return parseState(contents);
-  } catch {
+  if (GLib.file_test(statePath, GLib.FileTest.EXISTS) === false) {
     return null;
   }
+
+  try {
+    const [success, contents] = GLib.file_get_contents(statePath);
+    const snapshot = success && contents ? parseState(contents) : null;
+    if (snapshot !== null) return snapshot;
+
+    console.error("Ignoring invalid profile state");
+  } catch (error) {
+    console.error("Failed to read profile state:", error);
+  }
+
+  return null;
 }
 
 function refreshState(): void {
   const next = readState();
-  if (next === null || next.generation === state?.generation) return;
+  if (next === null || next.generation <= (state?.generation ?? -1)) {
+    return;
+  }
 
   state = next;
   for (const listener of listeners) {
