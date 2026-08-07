@@ -98,8 +98,14 @@ apply_hypr_gaming_overlay() {
 }
 
 restore_hypr_defaults() {
-  hyprctl reload >/dev/null
-  hyprctl eval 'require("profiles").apply("default")' >/dev/null
+  if ! hyprctl reload >/dev/null; then
+    return 1
+  fi
+
+  if ! hyprctl eval 'require("profiles").apply("default")' >/dev/null; then
+    return 1
+  fi
+
   rm -f "$overlay_active_file" "$overlay_mode_file"
 }
 
@@ -157,6 +163,27 @@ set_switcher_mode_previews() {
 
 overlay_active_file="$STATE_DIR/profile-overlay.active"
 overlay_mode_file="$STATE_DIR/profile-overlay.mode"
+
+write_overlay_mode() {
+  local mode="$1"
+  local temporary
+
+  if [[ -L "$overlay_mode_file" || ( -e "$overlay_mode_file" && ! -f "$overlay_mode_file" ) ]]; then
+    printf "profilectl: invalid overlay mode path: %s\n" "$overlay_mode_file" >&2
+    return 1
+  fi
+
+  temporary="$(mktemp "$STATE_DIR/.profile-overlay.mode.XXXXXX")" || return 1
+  if ! printf "%s" "$mode" > "$temporary"; then
+    rm -f "$temporary"
+    return 1
+  fi
+
+  if ! mv -f "$temporary" "$overlay_mode_file"; then
+    rm -f "$temporary"
+    return 1
+  fi
+}
 
 get_desired_overlay_mode() {
   local powersave_count
@@ -231,8 +258,12 @@ apply_effective_state() {
         return 1
       fi
     fi
+    if ! write_overlay_mode "$desired_mode"; then
+      rollback_overlay
+      notify_failure "profile-apply" "Profile state publication failed" "The previous profile was restored."
+      return 1
+    fi
     touch "$overlay_active_file"
-    printf "%s" "$desired_mode" > "$overlay_mode_file"
     set_switcher_mode_icons
     return
   fi
