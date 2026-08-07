@@ -48,6 +48,9 @@ printf '%s %s\n' "${0##*/}" "$*" >> "$ACTUATOR_LOG"
 if [ "${HYPRCTL_FAIL_DEFAULT:-0}" = 1 ] && [ "$1" = eval ] && [ "$2" = 'require("profiles").apply("default")' ]; then
   exit 1
 fi
+if [ "${HYPRCTL_FAIL_GAMING:-0}" = 1 ] && [ "$1" = eval ] && [ "$2" = 'require("profiles").apply("gaming")' ]; then
+  exit 1
+fi
 EOF
 chmod +x "$bin_dir/hyprctl"
 
@@ -79,7 +82,10 @@ if run_profilectl apply gaming >/dev/null 2>&1; then
 fi
 
 assert_file_equals "$runtime_dir/hypr-profiles/gaming.manual.count" "0"
-[[ ! -e "$runtime_dir/hypr-profiles/profile-overlay.active" ]] || fail "profilectl published an active overlay after mode state publication failed"
+assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.active" ""
+rm -rf "$runtime_dir/hypr-profiles/profile-overlay.mode"
+run_profilectl reconcile
+[[ ! -e "$runtime_dir/hypr-profiles/profile-overlay.active" ]] || fail "profilectl retained recovery state after mode publication recovery"
 
 rm -rf "$runtime_dir/hypr-profiles"
 run_profilectl set-manual gaming
@@ -93,4 +99,21 @@ fi
 assert_file_equals "$runtime_dir/hypr-profiles/gaming.manual.count" "1"
 assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
 
-printf 'PASS profilectl preserves state through restore, publication, and selection failures\n'
+rm -rf "$runtime_dir/hypr-profiles"
+
+if HYPRCTL_FAIL_GAMING=1 HYPRCTL_FAIL_DEFAULT=1 run_profilectl apply gaming >/dev/null 2>&1; then
+  fail "profilectl succeeded after Gaming activation and rollback both failed"
+fi
+
+assert_file_equals "$runtime_dir/hypr-profiles/gaming.manual.count" "0"
+assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.active" ""
+
+if HYPRCTL_FAIL_DEFAULT=1 run_profilectl reconcile >/dev/null 2>&1; then
+  fail "profilectl reconciled a failed rollback without restoring defaults"
+fi
+
+assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.active" ""
+run_profilectl reconcile
+[[ ! -e "$runtime_dir/hypr-profiles/profile-overlay.active" ]] || fail "profilectl retained recovery state after a successful reconcile"
+
+printf 'PASS profilectl preserves state through restore, publication, selection, and rollback failures\n'

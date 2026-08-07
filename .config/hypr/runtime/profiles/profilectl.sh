@@ -106,7 +106,7 @@ restore_hypr_defaults() {
     return 1
   fi
 
-  rm -f "$overlay_active_file" "$overlay_mode_file"
+  remove_overlay_markers
 }
 
 notify_failure() {
@@ -119,10 +119,24 @@ notify_failure() {
 rollback_overlay() {
   resume_background_helpers
   set_power_profile balanced
-  restore_hypr_defaults || true
-  rm -f "$overlay_active_file" "$overlay_mode_file"
+  if ! restore_hypr_defaults; then
+    touch "$overlay_active_file" || true
+    return 1
+  fi
+
   set_switcher_mode_previews
   refresh_window_captures
+}
+
+notify_apply_failure() {
+  local summary="$1"
+
+  if rollback_overlay; then
+    notify_failure "profile-apply" "$summary" "The previous profile was restored."
+    return
+  fi
+
+  notify_failure "profile-rollback" "$summary" "Rollback failed. Run profilectl reconcile."
 }
 
 set_power_profile() {
@@ -185,6 +199,19 @@ write_overlay_mode() {
   fi
 }
 
+remove_overlay_markers() {
+  if [[ -L "$overlay_mode_file" || ( -e "$overlay_mode_file" && ! -f "$overlay_mode_file" ) ]]; then
+    return 1
+  fi
+
+  if [[ -L "$overlay_active_file" || ( -e "$overlay_active_file" && ! -f "$overlay_active_file" ) ]]; then
+    return 1
+  fi
+
+  rm -f "$overlay_mode_file" || return 1
+  rm -f "$overlay_active_file"
+}
+
 get_desired_overlay_mode() {
   local powersave_count
   local gaming_count
@@ -223,14 +250,13 @@ apply_effective_state() {
       notify_failure "profile-restore" "Hyprland profile restore failed" "Gaming settings may still be active."
       return 1
     fi
-    rm -f "$overlay_active_file" "$overlay_mode_file"
     set_switcher_mode_previews
     refresh_window_captures
     return
   fi
 
   if [[ "$desired_mode" == "none" ]]; then
-    rm -f "$overlay_mode_file"
+    remove_overlay_markers
     return
   fi
 
@@ -246,21 +272,18 @@ apply_effective_state() {
     if [[ "$desired_mode" == "gaming" ]]; then
       set_power_profile performance
       if ! apply_hypr_gaming_overlay; then
-        rollback_overlay
-        notify_failure "profile-apply" "Gaming profile failed" "The previous profile was restored."
+        notify_apply_failure "Gaming profile failed"
         return 1
       fi
     else
       set_power_profile power-saver
       if ! apply_hypr_powersave_overlay; then
-        rollback_overlay
-        notify_failure "profile-apply" "Power-save profile failed" "The previous profile was restored."
+        notify_apply_failure "Power-save profile failed"
         return 1
       fi
     fi
     if ! write_overlay_mode "$desired_mode"; then
-      rollback_overlay
-      notify_failure "profile-apply" "Profile state publication failed" "The previous profile was restored."
+      notify_apply_failure "Profile state publication failed"
       return 1
     fi
     touch "$overlay_active_file"
@@ -273,15 +296,13 @@ apply_effective_state() {
   if [[ "$desired_mode" == "gaming" ]]; then
     set_power_profile performance
     if ! apply_hypr_gaming_overlay; then
-      rollback_overlay
-      notify_failure "profile-apply" "Gaming profile failed" "The previous profile was restored."
+      notify_apply_failure "Gaming profile failed"
       return 1
     fi
   else
     set_power_profile power-saver
     if ! apply_hypr_powersave_overlay; then
-      rollback_overlay
-      notify_failure "profile-apply" "Power-save profile failed" "The previous profile was restored."
+      notify_apply_failure "Power-save profile failed"
       return 1
     fi
   fi
