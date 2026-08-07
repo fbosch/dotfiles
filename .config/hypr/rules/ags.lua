@@ -33,7 +33,7 @@ function M.register()
 		float = true,
 		pin = true,
 		center = true,
-		size = "1142 675",
+		size = "968 666",
 	})
 end
 
