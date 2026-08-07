@@ -22,6 +22,9 @@ GAMING_PROFILE="gaming"
 DEFAULT_PROFILE="default"
 AUTO_SELECTION="auto"
 MANUAL_SELECTION_FILE="$STATE_DIR/manual-selection"
+STATE_FILE="$STATE_DIR/state.json"
+PROFILE_STATE_HELPER="$(dirname "$0")/profile-state.lua"
+MAX_STATE_GENERATION=2147483647
 
 mkdir -p "$STATE_DIR"
 exec 9>"$LOCK_FILE"
@@ -176,6 +179,114 @@ get_automatic_profile_count() {
 is_valid_source() {
   local source="$1"
   [[ "$source" =~ ^[a-z][a-z0-9_-]*$ ]]
+}
+
+profile_state_tool() {
+  if ! command -v luajit >/dev/null 2>&1; then
+    printf "profilectl: luajit is required for profile state\n" >&2
+    return 1
+  fi
+
+  if [[ ! -f "$PROFILE_STATE_HELPER" ]]; then
+    printf "profilectl: missing profile state helper: %s\n" "$PROFILE_STATE_HELPER" >&2
+    return 1
+  fi
+
+  luajit "$PROFILE_STATE_HELPER" "$@"
+}
+
+read_state_generation() {
+  if [[ -L "$STATE_FILE" || ( -e "$STATE_FILE" && ! -f "$STATE_FILE" ) ]]; then
+    printf "profilectl: invalid profile state path: %s\n" "$STATE_FILE" >&2
+    return 1
+  fi
+
+  if [[ ! -e "$STATE_FILE" ]]; then
+    printf "0"
+    return
+  fi
+
+  profile_state_tool generation "$STATE_FILE"
+}
+
+canonical_profile() {
+  local mode="$1"
+
+  if [[ "$mode" == "none" ]]; then
+    printf "%s" "$DEFAULT_PROFILE"
+    return
+  fi
+
+  printf "%s" "$mode"
+}
+
+emit_source_claims() {
+  local profile="$1"
+  local file
+  local source
+  local count
+
+  for file in "$STATE_DIR/$profile".*.count; do
+    if [[ ! -f "$file" || "$file" == *.manual.count ]]; then
+      continue
+    fi
+
+    source="${file#"$STATE_DIR/$profile."}"
+    source="${source%.count}"
+    count="$(< "$file")"
+    if is_valid_source "$source" && [[ "$count" =~ ^[0-9]+$ && "$count" -gt 0 ]]; then
+      printf "%s\t%s\t%s\n" "$profile" "$source" "$count"
+    fi
+  done
+}
+
+publish_state() {
+  local previous_generation="$1"
+  local next_generation
+  local selection
+  local desired
+  local resolved
+  local temporary
+
+  if [[ "$previous_generation" -ge "$MAX_STATE_GENERATION" ]]; then
+    printf "profilectl: profile state generation limit reached\n" >&2
+    return 1
+  fi
+
+  if [[ -L "$STATE_FILE" || ( -e "$STATE_FILE" && ! -f "$STATE_FILE" ) ]]; then
+    printf "profilectl: invalid profile state path: %s\n" "$STATE_FILE" >&2
+    return 1
+  fi
+
+  selection="$(get_manual_selection)" || return 1
+  desired="$(get_desired_overlay_mode)" || return 1
+  resolved="$(canonical_profile "$desired")"
+  next_generation=$((previous_generation + 1))
+  temporary="$(mktemp "$STATE_DIR/.state.XXXXXX")" || return 1
+
+  if ! { emit_source_claims "$GAMING_PROFILE"; emit_source_claims "$POWERSAVE_PROFILE"; } \
+    | profile_state_tool encode "$next_generation" "$selection" "$resolved" > "$temporary"; then
+    rm -f "$temporary"
+    return 1
+  fi
+
+  if [[ "$(profile_state_tool generation "$temporary")" != "$next_generation" ]]; then
+    rm -f "$temporary"
+    return 1
+  fi
+
+  if ! mv -f "$temporary" "$STATE_FILE"; then
+    rm -f "$temporary"
+    return 1
+  fi
+}
+
+apply_and_publish_effective_state() {
+  local previous_generation="$1"
+  local force_restore="${2:-false}"
+
+  apply_effective_state "$force_restore" || return 1
+  publish_state "$previous_generation"
 }
 
 apply_hypr_powersave_overlay() {
@@ -444,6 +555,7 @@ set_profile_count() {
   local source="$2"
   local count="$3"
   local previous_count
+  local previous_generation
 
   if [[ "$source" == "manual" ]]; then
     if [[ "$count" -gt 0 ]]; then
@@ -457,9 +569,10 @@ set_profile_count() {
     return
   fi
 
+  previous_generation="$(read_state_generation)" || return 1
   previous_count="$(get_count "$profile" "$source")"
   set_count "$profile" "$source" "$count"
-  if ! apply_effective_state; then
+  if ! apply_and_publish_effective_state "$previous_generation"; then
     set_count "$profile" "$source" "$previous_count"
     apply_effective_state || true
     return 1
@@ -483,12 +596,14 @@ set_manual_profile() {
   local previous_gaming
   local previous_powersave
   local previous_selection
+  local previous_generation
 
   if ! is_valid_selection "$selection"; then
     usage
     return 1
   fi
 
+  previous_generation="$(read_state_generation)" || return 1
   previous_selection="$(get_manual_selection)" || return 1
   previous_gaming="$(get_count "$GAMING_PROFILE" manual)"
   previous_powersave="$(get_count "$POWERSAVE_PROFILE" manual)"
@@ -515,12 +630,19 @@ set_manual_profile() {
     return 1
   fi
 
-  if ! apply_effective_state true; then
+  if ! apply_and_publish_effective_state "$previous_generation" true; then
     restore_manual_counts "$previous_gaming" "$previous_powersave"
     restore_manual_selection "$previous_selection"
     apply_effective_state true || true
     return 1
   fi
+}
+
+reconcile_profile_state() {
+  local previous_generation
+
+  previous_generation="$(read_state_generation)" || return 1
+  apply_and_publish_effective_state "$previous_generation" true
 }
 
 print_status() {
@@ -694,7 +816,7 @@ main() {
       print_status
       ;;
     reconcile)
-      apply_effective_state true
+      reconcile_profile_state
       ;;
     *)
       usage

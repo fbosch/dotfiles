@@ -1,5 +1,6 @@
 local M = {}
 M.null = {}
+local object_metatable = {}
 
 local encode_escapes = {
 	["\\"] = "\\\\",
@@ -23,6 +24,10 @@ local function escape_string(value)
 end
 
 local function is_array(value)
+	if getmetatable(value) == object_metatable then
+		return false
+	end
+
 	local count = 0
 	for key in pairs(value) do
 		if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then
@@ -47,7 +52,10 @@ local decode_escapes = {
 }
 
 local function decode_error(source, index, message)
-	error(message .. " at byte " .. tostring(index) .. " near " .. string.format("%q", source:sub(index, index + 20)), 0)
+	error(
+		message .. " at byte " .. tostring(index) .. " near " .. string.format("%q", source:sub(index, index + 20)),
+		0
+	)
 end
 
 local function skip_space(source, index)
@@ -66,10 +74,7 @@ local function utf8_char(codepoint)
 	if codepoint <= 0x7f then
 		return string.char(codepoint)
 	elseif codepoint <= 0x7ff then
-		return string.char(
-			0xc0 + math.floor(codepoint / 0x40),
-			0x80 + (codepoint % 0x40)
-		)
+		return string.char(0xc0 + math.floor(codepoint / 0x40), 0x80 + (codepoint % 0x40))
 	elseif codepoint <= 0xffff then
 		return string.char(
 			0xe0 + math.floor(codepoint / 0x1000),
@@ -216,7 +221,7 @@ local function parse_array(source, index)
 end
 
 local function parse_object(source, index)
-	local result = {}
+	local result = setmetatable({}, object_metatable)
 	index = skip_space(source, index + 1)
 	if source:sub(index, index) == "}" then
 		return result, index + 1
@@ -354,9 +359,21 @@ function M.array(source)
 	return {}
 end
 
+function M.is_array(value)
+	return type(value) == "table" and is_array(value)
+end
+
+function M.is_object(value)
+	return type(value) == "table" and getmetatable(value) == object_metatable
+end
+
+function M.new_object()
+	return setmetatable({}, object_metatable)
+end
+
 function M.object(source)
 	local decoded = type(source) == "table" and source or M.decode_or(source, {})
-	if type(decoded) ~= "table" or is_array(decoded) then
+	if not M.is_object(decoded) then
 		return {}
 	end
 

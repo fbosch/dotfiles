@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 profilectl="$repo_root/runtime/profiles/profilectl.sh"
+profile_state_helper="$repo_root/runtime/profiles/profile-state.lua"
 test_dir="$(mktemp -d)"
 bin_dir="$test_dir/bin"
 home_dir="$test_dir/home"
@@ -44,6 +45,14 @@ assert_file_contains() {
   [[ "$actual" == *"$expected"* ]] || fail "expected $file to contain $expected"
 }
 
+assert_state_generation() {
+  local file="$1" expected="$2" actual
+
+  actual="$(luajit "$home_dir/.config/hypr/runtime/profiles/profile-state.lua" generation "$file")" \
+    || fail "invalid profile state: $file"
+  [[ "$actual" == "$expected" ]] || fail "expected profile state generation $expected, got $actual"
+}
+
 wait_for_file() {
   local file="$1"
   local attempts=100
@@ -73,8 +82,10 @@ write_stub() {
   chmod +x "$bin_dir/$name"
 }
 
-mkdir -p "$bin_dir" "$home_dir/.config/hypr/runtime/profiles" "$runtime_dir" "$seam_dir"
+mkdir -p "$bin_dir" "$home_dir/.config/hypr/runtime/profiles" "$home_dir/.config/hypr/lib" "$runtime_dir" "$seam_dir"
 ln -s "$profilectl" "$home_dir/.config/hypr/runtime/profiles/profilectl.sh"
+ln -s "$profile_state_helper" "$home_dir/.config/hypr/runtime/profiles/profile-state.lua"
+ln -s "$repo_root/lib/json.lua" "$home_dir/.config/hypr/lib/json.lua"
 write_stub ags
 write_stub pkill
 write_stub powerprofilesctl
@@ -139,6 +150,10 @@ if [[ "${PROFILECTL_TEST_HOLD_STATE_RENAME:-0}" = 1 && "$destination" == "$state
   done
 fi
 
+if [[ "${PROFILECTL_TEST_FAIL_STATE_RENAME:-0}" = 1 && "$destination" == "$state_file" ]]; then
+  exit 1
+fi
+
 exec "${PROFILECTL_TEST_REAL_MV:?}" "$@"
 EOF
 chmod +x "$bin_dir/mv"
@@ -170,6 +185,7 @@ reset_profile_state
 run_profilectl sync-source powersave idle 1
 assert_file_equals "$runtime_dir/hypr-profiles/powersave.idle.count" "1"
 assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "powersave"
+assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"applied":"powersave","degraded":[],"generation":1,"phase":"converged","resolved":"powersave","selection":"auto","sources":{"gaming":{},"powersave":{"idle":1}}}'
 
 reset_profile_state
 run_profilectl sync gaming 1
@@ -259,26 +275,73 @@ run_profilectl reconcile
 
 reset_profile_state
 write_raw_state_fixture '{"selection":'
+: > "$actuator_log"
+if run_profilectl sync-source gaming watchdog 1 >/dev/null 2>&1; then
+  fail "profilectl accepted malformed canonical state"
+fi
+assert_absent "$runtime_dir/hypr-profiles/gaming.watchdog.count"
 assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"selection":'
+assert_file_equals "$actuator_log" ""
 
-write_raw_state_fixture '{"generation":1}'
+reset_profile_state
+write_raw_state_fixture '{"applied":"powersave","degraded":[],"generation":7,"phase":"converged","resolved":"gaming","selection":"default","sources":{"gaming":{},"powersave":{}}}'
+: > "$actuator_log"
+if run_profilectl sync-source gaming watchdog 1 >/dev/null 2>&1; then
+  fail "profilectl accepted inconsistent canonical state"
+fi
+assert_absent "$runtime_dir/hypr-profiles/gaming.watchdog.count"
+assert_file_equals "$actuator_log" ""
+
+reset_profile_state
+run_profilectl sync-source gaming watchdog 1
+assert_state_generation "$runtime_dir/hypr-profiles/state.json" "1"
+run_profilectl sync-source powersave idle 1
+assert_state_generation "$runtime_dir/hypr-profiles/state.json" "2"
+run_profilectl set-manual default
+assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"applied":"default","degraded":[],"generation":3,"phase":"converged","resolved":"default","selection":"default","sources":{"gaming":{"watchdog":1},"powersave":{"idle":1}}}'
+run_profilectl clear-manual
+assert_state_generation "$runtime_dir/hypr-profiles/state.json" "4"
+
+reset_profile_state
+run_profilectl sync-source gaming watchdog 1
+state_before="$(< "$runtime_dir/hypr-profiles/state.json")"
 rename_ready="$seam_dir/rename-ready"
 rename_release="$seam_dir/rename-release"
-state_temporary="$(mktemp "$runtime_dir/hypr-profiles/.state.XXXXXX")"
-printf '%s' '{"generation":2}' > "$state_temporary"
-
-XDG_RUNTIME_DIR="$runtime_dir" \
-  PROFILECTL_TEST_REAL_MV="$real_mv" \
-  PROFILECTL_TEST_HOLD_STATE_RENAME=1 \
-  PROFILECTL_TEST_RENAME_READY_FILE="$rename_ready" \
-  PROFILECTL_TEST_RENAME_RELEASE_FILE="$rename_release" \
-  "$bin_dir/mv" -f "$state_temporary" "$runtime_dir/hypr-profiles/state.json" &
-rename_pid=$!
+rm -f "$rename_ready" "$rename_release"
+export PROFILECTL_TEST_HOLD_STATE_RENAME=1
+export PROFILECTL_TEST_RENAME_READY_FILE="$rename_ready"
+export PROFILECTL_TEST_RENAME_RELEASE_FILE="$rename_release"
+start_profilectl sync-source powersave idle 1
 wait_for_file "$rename_ready"
-assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"generation":1}'
+assert_file_equals "$runtime_dir/hypr-profiles/state.json" "$state_before"
 touch "$rename_release"
-wait "$rename_pid"
-assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"generation":2}'
+wait "$profilectl_pid"
+assert_state_generation "$runtime_dir/hypr-profiles/state.json" "2"
+unset PROFILECTL_TEST_HOLD_STATE_RENAME PROFILECTL_TEST_RENAME_READY_FILE PROFILECTL_TEST_RENAME_RELEASE_FILE
+
+reset_profile_state
+run_profilectl sync-source gaming watchdog 1
+state_before="$(< "$runtime_dir/hypr-profiles/state.json")"
+if PROFILECTL_TEST_FAIL_STATE_RENAME=1 run_profilectl sync-source powersave idle 1 >/dev/null 2>&1; then
+  fail "profilectl succeeded after canonical state publication failed"
+fi
+assert_file_equals "$runtime_dir/hypr-profiles/state.json" "$state_before"
+assert_file_equals "$runtime_dir/hypr-profiles/gaming.watchdog.count" "1"
+assert_file_equals "$runtime_dir/hypr-profiles/powersave.idle.count" "0"
+run_profilectl reconcile
+assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"applied":"gaming","degraded":[],"generation":2,"phase":"converged","resolved":"gaming","selection":"auto","sources":{"gaming":{"watchdog":1},"powersave":{}}}'
+
+if luajit "$home_dir/.config/hypr/runtime/profiles/profile-state.lua" encode 1 auto default >/dev/full 2>/dev/null; then
+  fail "profile state helper reported success after a write failure"
+fi
+
+oversized_claims="$seam_dir/oversized-claims"
+for index in {1..7000}; do
+  printf 'gaming\tclaim-%s\t1\n' "$index" >> "$oversized_claims"
+done
+if luajit "$home_dir/.config/hypr/runtime/profiles/profile-state.lua" encode 1 auto gaming < "$oversized_claims" >/dev/null 2>&1; then
+  fail "profile state helper accepted an oversized snapshot"
+fi
 
 actuator_ready="$seam_dir/actuator-ready"
 actuator_release="$seam_dir/actuator-release"
