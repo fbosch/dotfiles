@@ -1,26 +1,12 @@
-import Gio from 'gi://Gio?version=2.0';
-import GLib from 'gi://GLib?version=2.0';
 import type Gtk from 'gi://Gtk?version=4.0';
 import app from 'ags/gtk4/app';
+import { getProfileState, isGamingResolved, subscribeProfileState } from './profile-state';
 
-const runtimeDir = GLib.getenv('XDG_RUNTIME_DIR') || GLib.get_tmp_dir();
-const profileStateDir = `${runtimeDir}/hypr-profiles`;
-const profileModePath = `${profileStateDir}/profile-overlay.mode`;
 const boundWidgets = new Set<Gtk.Widget>();
 
-let gamingActive = readGamingState();
-let monitor: Gio.FileMonitor | null = null;
-let refreshTimer: number | null = null;
+let gamingActive = isGamingResolved(getProfileState());
+let unsubscribeProfileState: (() => void) | null = null;
 let stylesApplied = false;
-
-function readGamingState(): boolean {
-  try {
-    const [success, contents] = GLib.file_get_contents(profileModePath);
-    return success && new TextDecoder('utf-8').decode(contents).trim() === 'gaming';
-  } catch {
-    return false;
-  }
-}
 
 function applyState(widget: Gtk.Widget): void {
   if (gamingActive) {
@@ -32,7 +18,7 @@ function applyState(widget: Gtk.Widget): void {
 }
 
 function refreshState(): void {
-  const nextGamingActive = readGamingState();
+  const nextGamingActive = isGamingResolved(getProfileState());
   if (nextGamingActive === gamingActive) return;
 
   gamingActive = nextGamingActive;
@@ -41,33 +27,10 @@ function refreshState(): void {
   }
 }
 
-function queueRefresh(): void {
-  if (refreshTimer !== null) {
-    GLib.source_remove(refreshTimer);
-  }
+function startProfileStateSubscription(): void {
+  if (unsubscribeProfileState !== null) return;
 
-  refreshTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 75, () => {
-    refreshTimer = null;
-    refreshState();
-    return GLib.SOURCE_REMOVE;
-  });
-}
-
-function startMonitor(): void {
-  if (monitor) return;
-
-  try {
-    GLib.mkdir_with_parents(profileStateDir, 0o700);
-    const dir = Gio.File.new_for_path(profileStateDir);
-    monitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null);
-    monitor.connect('changed', (_monitor, file) => {
-      if (file.get_basename() === 'profile-overlay.mode') {
-        queueRefresh();
-      }
-    });
-  } catch (error) {
-    console.error('Failed to monitor Gaming opacity state:', error);
-  }
+  unsubscribeProfileState = subscribeProfileState(() => refreshState());
 }
 
 function applyStyles(): void {
@@ -102,7 +65,7 @@ function applyStyles(): void {
 
 export function bindGamingOpacity(widget: Gtk.Widget): void {
   applyStyles();
-  startMonitor();
+  startProfileStateSubscription();
   boundWidgets.add(widget);
   widget.connect('destroy', (destroyedWidget: Gtk.Widget) => {
     boundWidgets.delete(destroyedWidget);

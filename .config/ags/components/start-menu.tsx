@@ -14,6 +14,12 @@ import { getFallbackLetter } from "../services/app-icons";
 import { bindGamingOpacity } from "../services/gaming-opacity";
 import { perf } from "../services/performance-monitor";
 import {
+  getProfileState,
+  hasAutomaticGamingClaim,
+  subscribeProfileState,
+  type ProfileState,
+} from "../services/profile-state";
+import {
   clearRecentApplicationFocusHistory,
   getRecentApplications,
   launchRecentApplication,
@@ -65,20 +71,6 @@ interface FlatpakUpdatesData {
   count: number;
   updates: FlatpakUpdate[];
   timestamp: string;
-}
-
-type ProfileSelection = "auto" | "default" | "gaming" | "powersave";
-
-interface ProfileState {
-  mode: "default" | "gaming" | "powersave";
-  source: "none" | "manual" | "auto";
-  selection: ProfileSelection;
-  gamingTotal: number;
-  gamingManual: number;
-  gamingWatchdog: number;
-  gamingGamemode: number;
-  powersaveTotal: number;
-  powersaveManual: number;
 }
 
 // Default menu items - matching design system
@@ -183,17 +175,8 @@ let flakeUpdatesCount: number = 0;
 let flakeUpdatesData: FlakeUpdatesData | null = null;
 let flatpakUpdatesCount: number = 0;
 let flatpakUpdatesData: FlatpakUpdatesData | null = null;
-let profileState: ProfileState = {
-  mode: "default",
-  source: "none",
-  selection: "auto",
-  gamingTotal: 0,
-  gamingManual: 0,
-  gamingWatchdog: 0,
-  gamingGamemode: 0,
-  powersaveTotal: 0,
-  powersaveManual: 0,
-};
+let profileState: ProfileState | null = getProfileState();
+let unsubscribeProfileState: (() => void) | null = null;
 const menuItemButtons: Map<string, Gtk.Button> = new Map();
 let profileControlsBox: Gtk.Box | null = null;
 const profileConditionBadges = new Map<string, Gtk.Box>();
@@ -532,174 +515,14 @@ const getXdgUserDir = (dirKey: string): string | null => {
 const getXdgUserDirOrDefault = (dirKey: string, fallback: string): string =>
   getXdgUserDir(dirKey) || fallback;
 
-const profileStateDir = `${GLib.getenv("XDG_RUNTIME_DIR") || "/tmp"}/hypr-profiles`;
 const profilectlPath = `${homeDir}/.config/hypr/runtime/profiles/profilectl.sh`;
-const manualSelectionPath = `${profileStateDir}/manual-selection`;
-
-function readProfileCount(profile: string, source: string): number {
-  try {
-    const path = `${profileStateDir}/${profile}.${source}.count`;
-    if (!GLib.file_test(path, GLib.FileTest.EXISTS)) {
-      return 0;
-    }
-
-    const [success, contents] = GLib.file_get_contents(path);
-    if (!success || !contents) {
-      return 0;
-    }
-
-    const value = Number.parseInt(
-      new TextDecoder("utf-8").decode(contents),
-      10,
-    );
-    return Number.isFinite(value) && value > 0 ? value : 0;
-  } catch (_e) {
-    return 0;
-  }
-}
-
-function readProfileTotal(profile: string): number {
-  try {
-    const dir = Gio.File.new_for_path(profileStateDir);
-    const enumerator = dir.enumerate_children(
-      "standard::name",
-      Gio.FileQueryInfoFlags.NONE,
-      null,
-    );
-    let total = 0;
-    let fileInfo;
-    while ((fileInfo = enumerator.next_file(null)) !== null) {
-      const name = fileInfo.get_name();
-      if (!name.startsWith(`${profile}.`) || !name.endsWith(".count")) {
-        continue;
-      }
-
-      total += readProfileCount(
-        profile,
-        name.slice(profile.length + 1, -".count".length),
-      );
-    }
-    return total;
-  } catch (_e) {
-    return 0;
-  }
-}
-
-function readProfileSelection(
-  gamingManual: number,
-  powersaveManual: number,
-): ProfileSelection {
-  try {
-    const [success, contents] = GLib.file_get_contents(manualSelectionPath);
-    const selection = success
-      ? new TextDecoder("utf-8").decode(contents).trim()
-      : "";
-    if (
-      selection === "auto" ||
-      selection === "default" ||
-      selection === "gaming" ||
-      selection === "powersave"
-    ) {
-      return selection;
-    }
-  } catch (_e) {
-    // Fall through to the legacy manual-count representation.
-  }
-
-  if (gamingManual > 0) return "gaming";
-  if (powersaveManual > 0) return "powersave";
-  return "auto";
-}
-
-function readProfileState(): ProfileState {
-  const gamingManual = readProfileCount("gaming", "manual");
-  const gamingWatchdog = readProfileCount("gaming", "watchdog");
-  const gamingGamemode = readProfileCount("gaming", "gamemode");
-  const powersaveManual = readProfileCount("powersave", "manual");
-  const gamingTotal = readProfileTotal("gaming");
-  const powersaveTotal = readProfileTotal("powersave");
-  const selection = readProfileSelection(gamingManual, powersaveManual);
-
-  if (selection === "default") {
-    return {
-      mode: "default",
-      source: "manual",
-      selection,
-      gamingTotal,
-      gamingManual,
-      gamingWatchdog,
-      gamingGamemode,
-      powersaveTotal,
-      powersaveManual,
-    };
-  }
-
-  if (selection === "gaming" || selection === "powersave") {
-    return {
-      mode: selection,
-      source: "manual",
-      selection,
-      gamingTotal,
-      gamingManual,
-      gamingWatchdog,
-      gamingGamemode,
-      powersaveTotal,
-      powersaveManual,
-    };
-  }
-
-  if (gamingTotal > 0) {
-    return {
-      mode: "gaming",
-      source: "auto",
-      selection,
-      gamingTotal,
-      gamingManual,
-      gamingWatchdog,
-      gamingGamemode,
-      powersaveTotal,
-      powersaveManual,
-    };
-  }
-
-  if (powersaveTotal > 0) {
-    return {
-      mode: "powersave",
-      source: "auto",
-      selection,
-      gamingTotal,
-      gamingManual,
-      gamingWatchdog,
-      gamingGamemode,
-      powersaveTotal,
-      powersaveManual,
-    };
-  }
-
-  return {
-    mode: "default",
-    source: "none",
-    selection,
-    gamingTotal,
-    gamingManual,
-    gamingWatchdog,
-    gamingGamemode,
-    powersaveTotal,
-    powersaveManual,
-  };
-}
-
-function refreshProfileState() {
-  profileState = readProfileState();
-}
 
 function refreshProfileControls() {
-  refreshProfileState();
-
-  const autoActive = profileState.selection === "auto";
-  const defaultActive = profileState.selection === "default";
-  const gamingActive = profileState.selection === "gaming";
-  const powersaveActive = profileState.selection === "powersave";
+  const selection = profileState?.selection;
+  const autoActive = selection === "auto";
+  const defaultActive = selection === "default";
+  const gamingActive = selection === "gaming";
+  const powersaveActive = selection === "powersave";
   const activeStates: Record<string, boolean> = {
     "profile-auto": autoActive,
     "profile-default": defaultActive,
@@ -718,13 +541,13 @@ function refreshProfileControls() {
     }
   }
 
-  const automaticGamingActive = profileState.gamingTotal > profileState.gamingManual;
-  const selectedProfileId = `profile-${profileState.selection}`;
+  const automaticGamingActive = hasAutomaticGamingClaim(profileState);
+  const selectedProfileId = selection ? `profile-${selection}` : "";
   for (const [id, badge] of profileConditionBadges) {
     badge.set_visible(
       automaticGamingActive &&
         id === selectedProfileId &&
-        profileState.selection !== "gaming",
+        selection !== "gaming",
     );
   }
   menuItemButtons.get("profile-auto")?.set_tooltip_text(
@@ -749,58 +572,45 @@ function refreshProfileControls() {
   profileControlsBox?.set_tooltip_text(profileTooltip());
 }
 
-let profileStateMonitor: Gio.FileMonitor | null = null;
-let profileRefreshTimer: number | null = null;
+function startProfileStateSubscription() {
+  if (unsubscribeProfileState !== null) return;
 
-function queueProfileRefresh() {
-  if (profileRefreshTimer !== null) {
-    GLib.source_remove(profileRefreshTimer);
-  }
-
-  profileRefreshTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 75, () => {
-    profileRefreshTimer = null;
+  profileState = getProfileState();
+  unsubscribeProfileState = subscribeProfileState((next) => {
+    profileState = next;
     refreshProfileControls();
-    return GLib.SOURCE_REMOVE;
   });
 }
 
-function startProfileStateMonitor() {
-  if (profileStateMonitor) return;
-
-  try {
-    GLib.mkdir_with_parents(profileStateDir, 0o700);
-    const dir = Gio.File.new_for_path(profileStateDir);
-    profileStateMonitor = dir.monitor_directory(
-      Gio.FileMonitorFlags.NONE,
-      null,
-    );
-    profileStateMonitor.connect("changed", (_monitor, file) => {
-      const name = file.get_basename();
-      if (name?.endsWith(".count") || name === "manual-selection") {
-        queueProfileRefresh();
-      }
-    });
-  } catch (e) {
-    console.error("Failed to monitor profile state:", e);
-  }
-}
-
 function profileModeLabel(): string {
-  if (profileState.mode === "gaming") return "Gaming";
-  if (profileState.mode === "powersave") return "Saver";
-  return "Balanced";
+  if (profileState?.resolved === "gaming") return "Gaming";
+  if (profileState?.resolved === "powersave") return "Saver";
+  if (profileState?.resolved === "default") return "Balanced";
+  return "Unavailable";
 }
 
 function profileSourceLabel(): string {
-  if (profileState.source === "manual") return "Manual";
-  return "Auto";
+  if (profileState === null) return "Unavailable";
+  if (profileState.selection === "auto") return "Auto";
+  return "Manual";
+}
+
+function profileClaimsLabel(claims: Record<string, number>): string {
+  const entries = Object.entries(claims);
+  if (entries.length === 0) return "none";
+
+  return entries.map(([source, count]) => `${source}=${count}`).join(" ");
 }
 
 function profileTooltip(): string {
+  if (profileState === null) {
+    return "Profile state unavailable";
+  }
+
   return [
     `Profile: ${profileModeLabel()} · ${profileSourceLabel()}`,
-    `Gaming: total=${profileState.gamingTotal} manual=${profileState.gamingManual} watchdog=${profileState.gamingWatchdog} gamemode=${profileState.gamingGamemode}`,
-    `Powersave: total=${profileState.powersaveTotal} manual=${profileState.powersaveManual}`,
+    `Gaming: ${profileClaimsLabel(profileState.sources.gaming)}`,
+    `Powersave: ${profileClaimsLabel(profileState.sources.powersave)}`,
   ].join("\n");
 }
 
@@ -810,11 +620,6 @@ function runProfileCommand(command: string) {
   } catch (e) {
     console.error("Failed to update profile:", e);
   }
-
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
-    refreshProfileControls();
-    return GLib.SOURCE_REMOVE;
-  });
 }
 
 // Build terminal command with correct flags based on terminal
@@ -1237,11 +1042,11 @@ function createProfileLabel(label: string): Gtk.Overlay {
 }
 
 function createProfileControls(): Gtk.Box {
-  const autoActive = profileState.selection === "auto";
-  const defaultActive = profileState.selection === "default";
-  const gamingActive = profileState.selection === "gaming";
-  const powersaveActive = profileState.selection === "powersave";
-  const automaticGamingActive = profileState.gamingTotal > profileState.gamingManual;
+  const autoActive = profileState?.selection === "auto";
+  const defaultActive = profileState?.selection === "default";
+  const gamingActive = profileState?.selection === "gaming";
+  const powersaveActive = profileState?.selection === "powersave";
+  const automaticGamingActive = hasAutomaticGamingClaim(profileState);
 
   const profileBox = (
     <box
@@ -1978,7 +1783,7 @@ function initStartMenu() {
 
   // Window created lazily on first show (see showMenu line 393)
   startCacheMonitor();
-  startProfileStateMonitor();
+  startProfileStateSubscription();
   refreshCacheData();
 }
 
