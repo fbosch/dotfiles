@@ -320,6 +320,14 @@ set_profile_count() {
   fi
 }
 
+restore_manual_counts() {
+  local gaming_count="$1"
+  local powersave_count="$2"
+
+  set_count "$GAMING_PROFILE" manual "$gaming_count" || true
+  set_count "$POWERSAVE_PROFILE" manual "$powersave_count" || true
+}
+
 set_manual_profile() {
   local profile="$1"
   local previous_gaming
@@ -333,18 +341,25 @@ set_manual_profile() {
   previous_gaming="$(get_count "$GAMING_PROFILE" manual)"
   previous_powersave="$(get_count "$POWERSAVE_PROFILE" manual)"
 
-  set_count "$GAMING_PROFILE" manual 0
-  set_count "$POWERSAVE_PROFILE" manual 0
+  if ! set_count "$GAMING_PROFILE" manual 0 || ! set_count "$POWERSAVE_PROFILE" manual 0; then
+    restore_manual_counts "$previous_gaming" "$previous_powersave"
+    return 1
+  fi
 
   if [[ "$profile" == "$GAMING_PROFILE" ]]; then
-    set_count "$GAMING_PROFILE" manual 1
+    if ! set_count "$GAMING_PROFILE" manual 1; then
+      restore_manual_counts "$previous_gaming" "$previous_powersave"
+      return 1
+    fi
   elif [[ "$profile" == "$POWERSAVE_PROFILE" ]]; then
-    set_count "$POWERSAVE_PROFILE" manual 1
+    if ! set_count "$POWERSAVE_PROFILE" manual 1; then
+      restore_manual_counts "$previous_gaming" "$previous_powersave"
+      return 1
+    fi
   fi
 
   if ! apply_effective_state true; then
-    set_count "$GAMING_PROFILE" manual "$previous_gaming"
-    set_count "$POWERSAVE_PROFILE" manual "$previous_powersave"
+    restore_manual_counts "$previous_gaming" "$previous_powersave"
     apply_effective_state true || true
     return 1
   fi

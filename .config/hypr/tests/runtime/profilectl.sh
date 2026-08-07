@@ -81,4 +81,16 @@ fi
 assert_file_equals "$runtime_dir/hypr-profiles/gaming.manual.count" "0"
 [[ ! -e "$runtime_dir/hypr-profiles/profile-overlay.active" ]] || fail "profilectl published an active overlay after mode state publication failed"
 
-printf 'PASS profilectl preserves state through restore and publication failures\n'
+rm -rf "$runtime_dir/hypr-profiles"
+run_profilectl set-manual gaming
+rm -f "$runtime_dir/hypr-profiles/powersave.manual.count"
+mkdir "$runtime_dir/hypr-profiles/powersave.manual.count"
+
+if run_profilectl set-manual powersave >/dev/null 2>&1; then
+  fail "profilectl succeeded after manual selection state publication failed"
+fi
+
+assert_file_equals "$runtime_dir/hypr-profiles/gaming.manual.count" "1"
+assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
+
+printf 'PASS profilectl preserves state through restore, publication, and selection failures\n'
