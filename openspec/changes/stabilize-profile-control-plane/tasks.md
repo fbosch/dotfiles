@@ -1,0 +1,34 @@
+## 1. Characterize Profile Policy
+
+- [x] 1.1 Add a production `profilectl` fixture for failed restore, state publication, manual selection, and rollback paths.
+- [ ] 1.2 Add fixture cases for Auto to automatic Gaming, Auto to automatic Powersave, manual Gaming, manual Powersave, manual Powersave during automatic Gaming, clearing manual selection, and multiple automatic sources.
+- [ ] 1.3 Define fixture seams for bounded actuator timeout, malformed state, atomic reader snapshots, and interrupted pending transitions.
+
+## 2. Stabilize Profilectl State And Commands
+
+- [ ] 2.1 Add validated versioned canonical profile state with atomic same-directory publication and generation tracking.
+- [ ] 2.2 Replace counted manual sources with one explicit Auto, Gaming, or Powersave selection while preserving automatic source claims.
+- [ ] 2.3 Add idempotent exact-source updates, JSON status, pending/converged/rollback-failed state, and deterministic reconcile behavior.
+- [ ] 2.4 Retain existing profilectl commands as tested compatibility wrappers and produce read-only legacy state projections during consumer migration.
+- [ ] 2.5 Add bounded core and optional actuator handling with explicit degraded state and recovery diagnostics.
+
+## 3. Migrate Profile Producers And Consumers
+
+- [ ] 3.1 Migrate the gaming watchdog and all manual profile actions to the explicit controller contract.
+- [ ] 3.2 Add one AGS profile-state service and migrate Gaming opacity, Start Menu, and Window Switcher to passive canonical-state reads.
+- [ ] 3.3 Add one Lua profile-state reader and migrate Hyprland reload and custom-layout recovery from overlay markers.
+- [ ] 3.4 Gate gaming presentation updates on canonical applied profile state so manual non-Gaming overrides remain effective.
+- [ ] 3.5 Remove the imperative Window Switcher profile request after the component follows canonical state.
+
+## 4. Clean Actuator Boundaries
+
+- [ ] 4.1 Add ownership-aware Window Capture pause, resume, refresh, and status operations while preserving worker ownership behavior.
+- [ ] 4.2 Replace profilectl process-name signals and implementation-path invocation with the Window Capture feature interface.
+- [ ] 4.3 Extend capture and profile fixtures for pause/resume idempotence, failed refresh, and no-unrelated-process signaling.
+
+## 5. Retire Legacy State And Validate
+
+- [ ] 5.1 Remove legacy count and overlay-marker readers after every in-repository consumer uses canonical state.
+- [ ] 5.2 Remove legacy state projections and obsolete profilectl compatibility commands after their callers are gone.
+- [ ] 5.3 Run profile fixtures, `devenv test`, AGS type validation, and targeted AGS benchmarks.
+- [ ] 5.4 Verify manual overrides, automatic recovery after Auto, interrupted reconciliation, AGS restart during active profiles, and Window Capture behavior in a live Hyprland session.
