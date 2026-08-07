@@ -3,7 +3,7 @@
 - [x] 1.1 Add a production `profilectl` fixture for failed restore, state publication, manual selection, and rollback paths.
 - [x] 1.2 Add fixture cases for Auto to automatic Gaming, Auto to automatic Powersave, Gaming-over-Powersave precedence, and multiple automatic Gaming sources.
 - [x] 1.3 Add fixture cases for manual Default, Gaming, and Powersave overrides during automatic Gaming, plus clearing manual selection back to Auto.
-- [ ] 1.4 Define fixture seams for bounded actuator timeout, malformed state, atomic reader snapshots, and interrupted pending transitions.
+- [x] 1.4 Define fixture seams for bounded actuator timeout, malformed state, atomic reader snapshots, and interrupted pending transitions.
 
 ## 2. Stabilize Profilectl State And Commands
 
