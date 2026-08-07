@@ -212,7 +212,10 @@ function createWindowInScope(dispose: () => void): void {
 				class="about-close"
 				onClicked={hideAboutThisPC}
 				$={(self: Gtk.Button) =>
-					configureButton(self, { variant: "transparent" })
+					configureButton(self, {
+						variant: "transparent",
+						className: "button-shape-circle",
+					})
 				}
 			>
 				<label label={"\uE711"} />
