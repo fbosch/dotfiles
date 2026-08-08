@@ -60,13 +60,13 @@ function M.target_id(target)
 		return nil
 	end
 
+	if window.address then
+		return "address:" .. tostring(window.address)
+	end
+
 	local stable_id = window.stable_id or window.stableId
 	if stable_id then
 		return "stable:" .. tostring(stable_id)
-	end
-
-	if window.address then
-		return "address:" .. tostring(window.address)
 	end
 
 	return nil
@@ -77,13 +77,13 @@ function M.window_id(window)
 		return nil
 	end
 
+	if window.address then
+		return "address:" .. tostring(window.address)
+	end
+
 	local stable_id = window.stable_id or window.stableId
 	if stable_id then
 		return "stable:" .. tostring(stable_id)
-	end
-
-	if window.address then
-		return "address:" .. tostring(window.address)
 	end
 
 	return nil
@@ -387,6 +387,17 @@ function M.sync(state, key, targets, insert_after_id, preserve_missing)
 		return nil, nil, false, false
 	end
 
+	local incoming_targets_by_id = {}
+	for index = 1, #targets do
+		local target = targets[index]
+		local id = M.target_id(target)
+		if not id or incoming_targets_by_id[id] then
+			return nil, nil, false, false
+		end
+
+		incoming_targets_by_id[id] = target
+	end
+
 	local order = state.order_by_key[key]
 	if not order then
 		order = {}
@@ -403,13 +414,7 @@ function M.sync(state, key, targets, insert_after_id, preserve_missing)
 		end
 	end
 
-	for index = 1, #targets do
-		local target = targets[index]
-		local id = M.target_id(target)
-		if not id or targets_by_id[id] then
-			return nil, nil, false, false
-		end
-
+	for id, target in pairs(incoming_targets_by_id) do
 		targets_by_id[id] = target
 	end
 

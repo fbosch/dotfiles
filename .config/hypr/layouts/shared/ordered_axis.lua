@@ -37,12 +37,15 @@ function M.move_active_to_position(state, key, targets, active_index, save_state
 	local active = active_index(targets)
 	local target_index = desired_index(position or order_state.position(targets[active], axis), ratios, start, span)
 	if not target_index or target_index == active then
-		return
+		return false
 	end
 
 	if order_state.move_active_to_index(state, key, targets, active_index, target_index) then
 		save_state()
+		return true
 	end
+
+	return false
 end
 
 function M.place_weighted(state, targets, ratios, area, axis, scope)
@@ -98,9 +101,15 @@ function M.recalculate_ordered(opts)
 	local scope = order_state.scope(opts.layout_name, key, role, axis)
 	local cleared_stale_order = order_state.clear_order_if_stale(state, key, source_targets)
 	local needs_state_save = key and state.order_by_key[key] == nil
+	local active_before_sync = opts.active_index(source_targets)
+	local active_target_before_sync = active_before_sync and source_targets[active_before_sync] or nil
+	local active_id = order_state.target_id(active_target_before_sync)
+	local previous_targets_by_id = key and state.target_maps_by_key[key] or nil
+	local active_was_present = active_id and previous_targets_by_id and previous_targets_by_id[active_id] ~= nil
 
 	order_state.initialize_order_from_geometry(state, key, source_targets, axis, opts.start, opts.span)
-	local order, targets_by_id, _, _, added_id = order_state.sync(state, key, source_targets, opts.insert_after_id, true)
+	local order, targets_by_id, _, _, added_id =
+		order_state.sync(state, key, source_targets, opts.insert_after_id, true)
 	needs_state_save = needs_state_save or cleared_stale_order or added_id ~= nil
 	local targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 
@@ -154,6 +163,29 @@ function M.recalculate_ordered(opts)
 	elseif manual_change then
 		state.manual_change_by_key[key] = nil
 		needs_state_save = true
+	else
+		local active = opts.active_index(targets)
+		local active_target = active and targets[active] or nil
+		if
+			active_was_present
+			and active_target
+			and order_state.same_scope(state, active_target, scope)
+			and order_state.position_changed(state, active_target, scope, axis)
+			and order_state.position_in_area(active_target, axis, opts.start, opts.span)
+			and M.move_active_to_position(
+				state,
+				key,
+				targets,
+				opts.active_index,
+				opts.save_state,
+				axis,
+				opts.ratios,
+				opts.start,
+				opts.span
+			)
+		then
+			targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
+		end
 	end
 
 	order_state.remember_active(state, key, source_targets, opts.active_index)

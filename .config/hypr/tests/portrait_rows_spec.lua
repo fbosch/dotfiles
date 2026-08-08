@@ -201,6 +201,19 @@ run("known active geometry reorders rows", function()
 	assert_box(third.placed, { x = 10, y = 220, w = 120, h = 100 }, "bottom target")
 end)
 
+run("same-scope drag geometry reorders active rows", function()
+	local first = make_workspace_target(1, "same-scope-drag", true)
+	local second = make_workspace_target(2, "same-scope-drag")
+	local ctx = make_context({ first, second })
+
+	registered_layout.layout.recalculate(ctx)
+	set_geometry(first, 220)
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(second.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
+	assert_box(first.placed, { x = 10, y = 120, w = 120, h = 200 }, "dragged target")
+end)
+
 run("dragging active row below layout moves it to bottom", function()
 	local top = make_workspace_target(1, "drag-below", true)
 	local bottom = make_workspace_target(2, "drag-below")

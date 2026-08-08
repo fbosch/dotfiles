@@ -202,6 +202,7 @@ function M.recalculate(ctx)
 		layout_name = "ultrawide_master",
 		role = role,
 		axis = "x",
+		ratios = ratios,
 		start = x,
 		span = width,
 		insert_after_id = previous_active,
