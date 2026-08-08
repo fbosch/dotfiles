@@ -9,6 +9,7 @@ capture_dir="$test_dir/captures"
 bin_dir="$test_dir/bin"
 home_dir="$test_dir/home"
 event_server="$test_dir/event-server.lua"
+control="$repo_root/runtime/windows/daemons/window-capture/window-capturectl.sh"
 original_path="$PATH"
 wrapper_pid=""
 event_server_pid=""
@@ -129,6 +130,28 @@ start_daemon() {
   wait_for_file "$runtime_dir/hypr-window-capture-daemon.lock.d/pid" "daemon lock"
 }
 
+capturectl() {
+  HOME="$home_dir" \
+    PATH="$bin_dir:$original_path" \
+    XDG_RUNTIME_DIR="$runtime_dir" \
+    HYPRLAND_INSTANCE_SIGNATURE=fixture \
+    HYPR_WINDOW_CAPTURE_DIR="$capture_dir" \
+    "$control" "$@"
+}
+
+process_state() {
+  ps -o stat= -p "$1" | tr -d '[:space:]'
+}
+
+process_start_time() {
+  local stat remainder fields
+
+  stat="$(<"/proc/$1/stat")"
+  remainder="${stat##*) }"
+  read -r -a fields <<< "$remainder"
+  printf '%s\n' "${fields[19]}"
+}
+
 stop_daemon() {
   kill -CONT "$wrapper_pid" >/dev/null 2>&1 || true
   kill -TERM "$wrapper_pid" >/dev/null 2>&1 || true
@@ -173,6 +196,36 @@ stale_sent="$test_dir/stale-sent"
 stale_owner_seen="$test_dir/stale-owner-seen"
 start_event_server "$stale_trigger" "$stale_sent"
 start_daemon
+daemon_pid="$(<"$runtime_dir/hypr-window-capture-daemon.lock.d/pid")"
+wait_for_file "$runtime_dir/hypr-window-capture-daemon.lock.d/owner" "daemon owner record"
+capture_status="$(capturectl status)"
+[[ "$capture_status" == *'daemon=running'* ]]
+capturectl pause
+test "$(process_state "$daemon_pid")" = T
+capture_status="$(capturectl status)"
+[[ "$capture_status" == *'daemon=paused'* ]]
+capturectl resume
+for _ in {1..100}; do
+  [[ "$(process_state "$daemon_pid")" != T ]] && break
+  sleep 0.01
+done
+test "$(process_state "$daemon_pid")" != T
+capturectl refresh
+
+# A stale lock that names another live process grants no signal ownership.
+setsid bash -c 'trap "exit 0" TERM INT; while true; do sleep 1; done' bash &
+unrelated_pid="$!"
+mkdir "$runtime_dir/unrelated-lock"
+printf '%s\t%s\n' "$unrelated_pid" "$(process_start_time "$unrelated_pid")" > "$runtime_dir/unrelated-lock/owner"
+mv "$runtime_dir/hypr-window-capture-daemon.lock.d" "$runtime_dir/real-daemon-lock"
+mv "$runtime_dir/unrelated-lock" "$runtime_dir/hypr-window-capture-daemon.lock.d"
+capturectl pause
+test "$(process_state "$unrelated_pid")" != T
+mv "$runtime_dir/hypr-window-capture-daemon.lock.d" "$runtime_dir/unrelated-lock"
+mv "$runtime_dir/real-daemon-lock" "$runtime_dir/hypr-window-capture-daemon.lock.d"
+rm -rf "$runtime_dir/unrelated-lock"
+kill -TERM -- "-$unrelated_pid" >/dev/null 2>&1 || true
+wait "$unrelated_pid" || true
 (
   for _ in {1..300}; do
     if [[ -r "$runtime_dir/hypr-window-capture-worker.lock.d/owner" ]]; then

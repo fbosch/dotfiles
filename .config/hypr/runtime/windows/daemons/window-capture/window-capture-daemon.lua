@@ -212,7 +212,8 @@ local function cleanup_stale_preview_files()
 		end
 	end
 
-	local previews = command.output("find " .. command.arg(screenshot_dir) .. " -maxdepth 1 -name '*.jpg' -type f 2>/dev/null")
+	local previews =
+		command.output("find " .. command.arg(screenshot_dir) .. " -maxdepth 1 -name '*.jpg' -type f 2>/dev/null")
 	for preview_path in previews:gmatch("[^\n]+") do
 		local preview_id = preview_path:match("([^/]+)%.jpg$")
 		if preview_id and not live_preview_ids[preview_id] then
@@ -498,7 +499,8 @@ local function event_type_for(line)
 		return "windowupdate"
 	elseif line:match("^windowtitlev2") then
 		return "windowtitle", line:match("^[^>,]+>>([^,]+)") or line:match("^[^,]+,([^,]+)") or ""
-	elseif line:match("^movewindowv2")
+	elseif
+		line:match("^movewindowv2")
 		or line:match("^changefloatingmode")
 		or line:match("^fullscreen")
 		or line:match("^fullscreenv2")
@@ -571,6 +573,17 @@ local function current_pid()
 	return stat:match("^(%d+)") or ""
 end
 
+local function current_start_time()
+	local stat = read_file("/proc/self/stat") or ""
+	local fields = {}
+	local remainder = stat:match("^%d+ %b() (.+)$") or ""
+	for field in remainder:gmatch("[^ ]+") do
+		fields[#fields + 1] = field
+	end
+
+	return fields[20] or ""
+end
+
 local function pid_is_running(pid)
 	return process_is_running(pid)
 end
@@ -578,6 +591,7 @@ end
 local function acquire_daemon_lock()
 	if command.ok("mkdir " .. command.arg(daemon_lock_dir) .. " 2>/dev/null") then
 		write_file(daemon_lock_dir .. "/pid", current_pid())
+		write_file(daemon_lock_dir .. "/owner", current_pid() .. "\t" .. current_start_time())
 		return true
 	end
 
@@ -590,6 +604,7 @@ local function acquire_daemon_lock()
 	command.ok("rm -rf " .. command.arg(daemon_lock_dir) .. " 2>/dev/null")
 	if command.ok("mkdir " .. command.arg(daemon_lock_dir) .. " 2>/dev/null") then
 		write_file(daemon_lock_dir .. "/pid", current_pid())
+		write_file(daemon_lock_dir .. "/owner", current_pid() .. "\t" .. current_start_time())
 		return true
 	end
 
