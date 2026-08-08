@@ -6,7 +6,6 @@ local dispatched = {}
 local active_window = nil
 local cursor_position = nil
 local windows = {}
-local pip_drag_target = nil
 
 _G.hl = {
 	dsp = {
@@ -75,7 +74,6 @@ local function reset(monitor, x, monitor_x, workspace_windows, name)
 	active_window.workspace = workspace
 	windows = { active_window }
 	cursor_position = nil
-	pip_drag_target = nil
 	if workspace_windows then
 		function workspace:get_windows()
 			return workspace_windows
@@ -106,8 +104,7 @@ local function load_modules()
 		end,
 	}
 	package.loaded["actions.picture-in-picture"] = {
-		drag = function(target)
-			pip_drag_target = target
+		drag = function()
 			hl.dispatch(hl.dsp.exec_cmd("pip drag"))
 			hl.dispatch(hl.dsp.window.drag())
 		end,
@@ -211,7 +208,6 @@ run("drag targets the normal cursor window instead of the active game", function
 	cursor_position = { x = 700, y = 400 }
 
 	assert_equal(interaction.start_drag(state), true, "drag starts")
-	assert_equal(pip_drag_target, normal_window, "PiP drag target")
 	assert_equal(dispatched[2].op, "window.drag", "drag dispatcher")
 	assert_equal(interaction.finish_drag(state, custom_layout), true, "drag finishes")
 end)

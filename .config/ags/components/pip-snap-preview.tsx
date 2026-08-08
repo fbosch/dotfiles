@@ -3,7 +3,6 @@ import app from "ags/gtk4/app";
 import Gdk from "gi://Gdk?version=4.0";
 import Gtk from "gi://Gtk?version=4.0";
 import tokens from "../../../design-system/tokens.json";
-import { queryHyprlandJson } from "../services/hyprland-ipc";
 
 type PreviewRequest = {
   action?: string;
@@ -12,6 +11,7 @@ type PreviewRequest = {
   y?: number;
   width?: number;
   height?: number;
+  rounding?: number;
 };
 
 let win: Astal.Window | null = null;
@@ -66,7 +66,8 @@ function showPreview(data: PreviewRequest): string {
     typeof data.x !== "number" ||
     typeof data.y !== "number" ||
     typeof data.width !== "number" ||
-    typeof data.height !== "number"
+    typeof data.height !== "number" ||
+    typeof data.rounding !== "number"
   ) {
     return "invalid preview geometry";
   }
@@ -74,7 +75,7 @@ function showPreview(data: PreviewRequest): string {
   const monitor = monitorByConnector(data.monitor);
   if (!monitor) return `unknown monitor ${data.monitor}`;
 
-  applyCss();
+  applyCss(data.rounding);
   createWindow();
   if (!win || !targetBox || !previewRoot) return "preview unavailable";
 
@@ -92,12 +93,7 @@ function hidePreview(): string {
   return "hidden";
 }
 
-function applyCss(): void {
-  const rounding = queryHyprlandJson<{ int?: number }>("j/getoption decoration:rounding", {
-    component: "pip-snap-preview",
-    metric: "hyprlandRounding",
-  })?.int;
-  if (typeof rounding !== "number") return;
+function applyCss(rounding: number): void {
   if (rounding === appliedRounding) return;
 
   appliedRounding = rounding;
@@ -119,7 +115,6 @@ function applyCss(): void {
 }
 
 function initPipSnapPreview(): void {
-  applyCss();
   createWindow();
 }
 

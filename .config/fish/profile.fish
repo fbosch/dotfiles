@@ -44,7 +44,7 @@ end
 set -U nvm_default_version 20
 # podman docker compat
 if test "$OS_TYPE" = Darwin
-    if command -q podman
+    if not set -q DOCKER_HOST; and command -q podman
         set -l sock (podman machine inspect podman-machine-default --format '{{.ConnectionInfo.PodmanSocket.Path}}' 2>/dev/null)
         if test -n "$sock"
             set -gx DOCKER_HOST "unix://"(string replace -r '^unix://' '' -- $sock)

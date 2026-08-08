@@ -231,6 +231,7 @@ local function snap_target(window, monitor, bars)
 		y = target_y - monitor.y,
 		width = width,
 		height = height,
+		rounding = pip.rounding,
 		corner = corner,
 	}
 end
@@ -370,7 +371,15 @@ end
 
 local function set_snap_preview(target)
 	local signature = target
-			and string.format("%s:%d:%d:%d:%d", target.monitor, target.x, target.y, target.width, target.height)
+			and string.format(
+				"%s:%d:%d:%d:%d:%d",
+				target.monitor,
+				target.x,
+				target.y,
+				target.width,
+				target.height,
+				target.rounding
+			)
 		or nil
 	if signature == preview_signature then
 		return
