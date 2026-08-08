@@ -10,7 +10,7 @@ import { execAsync } from "ags/process";
 import { getFallbackLetter, getIconForWindow, setImageFile } from "../services/app-icons";
 import { queryHyprlandJson } from "../services/hyprland-ipc";
 import { perf } from "../services/performance-monitor";
-import { getProfileState, isGamingResolved, subscribeProfileState } from "../services/profile-state";
+import { getProfileState, subscribeProfileState } from "../services/profile-state";
 
 /**
  * Performance Optimizations:
@@ -1583,7 +1583,7 @@ function rebuildUIIfActive() {
 }
 
 function syncProfilePresentation() {
-  const nextDisplayMode = isGamingResolved(getProfileState())
+  const nextDisplayMode = getProfileState()?.resolved !== "default"
     ? DisplayMode.ICONS
     : DisplayMode.PREVIEWS;
   if (nextDisplayMode === displayMode) return;

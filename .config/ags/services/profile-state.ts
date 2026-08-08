@@ -52,7 +52,7 @@ function parseClaims(value: unknown): Record<string, number> | null {
 
   const claims: Record<string, number> = {};
   for (const [source, count] of Object.entries(value)) {
-    if (sourceName.test(source) === false || isInteger(count) === false || count === 0) {
+    if (sourceName.test(source) === false || isInteger(count) === false) {
       return null;
     }
     claims[source] = count;
@@ -195,7 +195,8 @@ export function hasAutomaticGamingClaim(snapshot: ProfileState | null): boolean 
 }
 
 export function subscribeProfileState(listener: ProfileStateListener): () => void {
-  startMonitor();
   listeners.add(listener);
+  startMonitor();
+  refreshState();
   return () => listeners.delete(listener);
 }

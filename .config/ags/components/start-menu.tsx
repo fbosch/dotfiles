@@ -17,6 +17,7 @@ import {
   getProfileState,
   hasAutomaticGamingClaim,
   subscribeProfileState,
+  type ProfileSelection,
   type ProfileState,
 } from "../services/profile-state";
 import {
