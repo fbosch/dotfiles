@@ -199,13 +199,29 @@ end
 # Starship initialization
 if status is-interactive
     set -l starship_cache ~/.cache/fish/starship-init.fish
-    if not test -f $starship_cache
-        if command -v starship >/dev/null 2>&1
+    set -l starship_cache_key "$starship_cache.path"
+    set -l starship_path (command -s starship)
+    set -l cached_starship_path
+
+    if test -r $starship_cache_key
+        read -l cached_starship_path < $starship_cache_key
+    end
+
+    if test -n "$starship_path"
+        if not test -f $starship_cache; or test "$cached_starship_path" != "$starship_path"
             mkdir -p (dirname $starship_cache)
-            starship init fish --print-full-init > $starship_cache
+            set -l starship_cache_tmp "$starship_cache.tmp.$fish_pid"
+            if $starship_path init fish --print-full-init > $starship_cache_tmp
+                mv $starship_cache_tmp $starship_cache
+                printf '%s\n' "$starship_path" > $starship_cache_key
+                set cached_starship_path $starship_path
+            else
+                rm -f $starship_cache_tmp
+            end
         end
     end
-    if test -f $starship_cache
+
+    if test -f $starship_cache; and test "$cached_starship_path" = "$starship_path"
         source $starship_cache
     end
 end

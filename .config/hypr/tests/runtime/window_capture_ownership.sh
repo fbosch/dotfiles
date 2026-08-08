@@ -143,6 +143,10 @@ process_state() {
   ps -o stat= -p "$1" | tr -d '[:space:]'
 }
 
+process_is_stopped() {
+  [[ "$(process_state "$1")" == T* ]]
+}
+
 process_start_time() {
   local stat remainder fields
 
@@ -201,19 +205,23 @@ wait_for_file "$runtime_dir/hypr-window-capture-daemon.lock.d/owner" "daemon own
 capture_status="$(capturectl status)"
 [[ "$capture_status" == *'daemon=running'* ]]
 capturectl pause
-test "$(process_state "$daemon_pid")" = T
+process_is_stopped "$daemon_pid"
 capturectl pause
-test "$(process_state "$daemon_pid")" = T
+process_is_stopped "$daemon_pid"
 capture_status="$(capturectl status)"
 [[ "$capture_status" == *'daemon=paused'* ]]
 capturectl resume
 for _ in {1..100}; do
-  [[ "$(process_state "$daemon_pid")" != T ]] && break
+  process_is_stopped "$daemon_pid" || break
   sleep 0.01
 done
-test "$(process_state "$daemon_pid")" != T
+if process_is_stopped "$daemon_pid"; then
+  exit 1
+fi
 capturectl resume
-test "$(process_state "$daemon_pid")" != T
+if process_is_stopped "$daemon_pid"; then
+  exit 1
+fi
 capturectl refresh
 
 # A stale lock that names another live process grants no signal ownership.
@@ -224,7 +232,9 @@ printf '%s\t%s\n' "$unrelated_pid" "$(process_start_time "$unrelated_pid")" > "$
 mv "$runtime_dir/hypr-window-capture-daemon.lock.d" "$runtime_dir/real-daemon-lock"
 mv "$runtime_dir/unrelated-lock" "$runtime_dir/hypr-window-capture-daemon.lock.d"
 capturectl pause
-test "$(process_state "$unrelated_pid")" != T
+if process_is_stopped "$unrelated_pid"; then
+  exit 1
+fi
 mv "$runtime_dir/hypr-window-capture-daemon.lock.d" "$runtime_dir/unrelated-lock"
 mv "$runtime_dir/real-daemon-lock" "$runtime_dir/hypr-window-capture-daemon.lock.d"
 rm -rf "$runtime_dir/unrelated-lock"
