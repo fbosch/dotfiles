@@ -17,7 +17,7 @@ The Waybar volume indicator currently opens `wiremix` as a terminal UI. Replace 
 
 ### New Capabilities
 
-- `audio-mixer-widget`: Design-system Audio Mixer surface and AGS widget for PipeWire volume, mute, default-device, route/profile, and stream-target control.
+- `ags-audio-mixer-widget`: Design-system Audio Mixer surface and AGS widget for PipeWire volume, mute, default-device, route/profile, and stream-target control.
 
 ### Modified Capabilities
 
