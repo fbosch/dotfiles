@@ -1,98 +1,85 @@
 local M = {}
 local command = require("lib.command")
 local paths = require("lib.paths")
+local profile_state = require("lib.profile_state")
 
 local profiles = {
-  default = require("profiles.default"),
-  powersave = require("profiles.powersave"),
-  gaming = require("profiles.gaming"),
+	default = require("profiles.default"),
+	powersave = require("profiles.powersave"),
+	gaming = require("profiles.gaming"),
 }
 
 local profilectl = paths.runtime_script("profiles/profilectl.sh")
 
-local function state_dir()
-  return os.getenv("XDG_RUNTIME_DIR") or "/tmp"
-end
-
-local function mode_file()
-	return state_dir() .. "/hypr-profiles/profile-overlay.mode"
-end
-
-local function read_file(path)
-  local handle = io.open(path, "r")
-  if not handle then
-    return ""
-  end
-
-  local value = handle:read("*l") or ""
-  handle:close()
-  return value
-end
-
 local function profilectl_command(action, mode)
-  return command.line(profilectl, action, mode)
+	return command.line(profilectl, action, mode)
 end
 
 local function valid_mode(mode)
-  return profiles[mode] ~= nil
+	return profiles[mode] ~= nil
 end
 
 function M.current_mode()
-  return read_file(mode_file())
+	local ok, mode = pcall(profile_state.resolved)
+	if ok then
+		return mode
+	end
+
+	return nil
 end
 
 function M.is_current_mode(mode)
-  return valid_mode(mode) and M.current_mode() == mode
+	return valid_mode(mode) and M.current_mode() == mode
 end
 
 function M.is_gaming_active()
-  return M.is_current_mode("gaming")
+	return M.is_current_mode("gaming")
 end
 
 function M.is_active(mode)
-  if not valid_mode(mode) then
-    return false
-  end
+	if not valid_mode(mode) then
+		return false
+	end
 
-  return command.ok(profilectl_command("is-active", mode) .. " >/dev/null 2>&1")
+	return command.ok(profilectl_command("is-active", mode) .. " >/dev/null 2>&1")
 end
 
 function M.activate(mode)
-  if not valid_mode(mode) or M.is_active(mode) then
-    return false
-  end
+	if not valid_mode(mode) or M.is_active(mode) then
+		return false
+	end
 
-  return command.ok(profilectl_command("apply", mode))
+	return command.ok(profilectl_command("apply", mode))
 end
 
 function M.activate_async(mode)
-  if not valid_mode(mode) or M.is_active(mode) then
-    return false
-  end
+	if not valid_mode(mode) or M.is_active(mode) then
+		return false
+	end
 
-  hl.exec_cmd(profilectl_command("apply", mode))
-  return true
+	hl.exec_cmd(profilectl_command("apply", mode))
+	return true
 end
 
 function M.remove(mode)
-  if not valid_mode(mode) then
-    return false
-  end
+	if not valid_mode(mode) then
+		return false
+	end
 
-  return command.ok(profilectl_command("remove", mode))
+	return command.ok(profilectl_command("remove", mode))
 end
 
 function M.apply(mode)
-  local profile = profiles[mode]
-  if not profile then
-    return false
-  end
+	local profile = profiles[mode]
+	if not profile then
+		return false
+	end
 
-  if profile.on_apply then
-    profile.on_apply()
-  end
+	if profile.on_apply then
+		profile.on_apply()
+	end
 
-  hl.config(profile.config)
+	hl.config(profile.config)
 	return true
 end
 
@@ -105,7 +92,7 @@ function M.apply_presentation(vrr, direct_scanout)
 end
 
 function M.apply_current()
-  return M.apply(M.current_mode())
+	return M.apply(M.current_mode())
 end
 
 return M

@@ -94,6 +94,7 @@ mkdir -p "$bin_dir" "$home_dir/.config/hypr/runtime/profiles" "$home_dir/.config
 ln -s "$profilectl" "$home_dir/.config/hypr/runtime/profiles/profilectl.sh"
 ln -s "$profile_state_helper" "$home_dir/.config/hypr/runtime/profiles/profile-state.lua"
 ln -s "$repo_root/lib/json.lua" "$home_dir/.config/hypr/lib/json.lua"
+ln -s "$repo_root/lib/profile_state.lua" "$home_dir/.config/hypr/lib/profile_state.lua"
 write_stub ags
 write_stub pkill
 write_stub powerprofilesctl
