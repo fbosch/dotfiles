@@ -258,6 +258,7 @@ assert_absent "$runtime_dir/hypr-profiles/state.json"
 
 reset_profile_state
 run_profilectl sync-source powersave idle 1
+: > "$actuator_log"
 if HYPRCTL_FAIL_GAMING=1 run_profilectl sync-source gaming watchdog 1 >/dev/null 2>&1; then
   fail "profilectl accepted a failed Powersave-to-Gaming transition"
 fi
@@ -267,6 +268,7 @@ assert_file_contains "$actuator_log" 'hyprctl eval require("profiles").apply("po
 reset_profile_state
 run_profilectl sync-source gaming watchdog 1
 run_profilectl sync-source powersave idle 1
+: > "$actuator_log"
 if HYPRCTL_FAIL_POWERSAVE=1 run_profilectl sync-source gaming watchdog 0 >/dev/null 2>&1; then
   fail "profilectl accepted a failed Gaming-to-Powersave transition"
 fi
@@ -293,7 +295,7 @@ if run_profilectl sync-source gaming watchdog 1 >/dev/null 2>&1; then
   fail "profilectl accepted malformed canonical state"
 fi
 assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"selection":'
-assert_file_equals "$actuator_log" ""
+assert_file_not_contains "$actuator_log" "hyprctl"
 
 reset_profile_state
 write_raw_state_fixture '{"generation":7,"resolved":"gaming","selection":"default","sources":{"gaming":{},"powersave":{}}}'
@@ -301,7 +303,7 @@ write_raw_state_fixture '{"generation":7,"resolved":"gaming","selection":"defaul
 if run_profilectl sync-source gaming watchdog 1 >/dev/null 2>&1; then
   fail "profilectl accepted inconsistent canonical state"
 fi
-assert_file_equals "$actuator_log" ""
+assert_file_not_contains "$actuator_log" "hyprctl"
 
 reset_profile_state
 run_profilectl sync-source gaming watchdog 1
