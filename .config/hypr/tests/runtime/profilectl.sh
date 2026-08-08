@@ -45,6 +45,14 @@ assert_file_contains() {
   [[ "$actual" == *"$expected"* ]] || fail "expected $file to contain $expected"
 }
 
+assert_file_not_contains() {
+  local file="$1" unexpected="$2" actual
+
+  [[ -r "$file" ]] || fail "missing file: $file"
+  actual="$(<"$file")"
+  [[ "$actual" != *"$unexpected"* ]] || fail "expected $file not to contain $unexpected"
+}
+
 assert_state_generation() {
   local file="$1" expected="$2" actual
 
@@ -181,11 +189,16 @@ start_profilectl() {
   profilectl_pid=$!
 }
 
+assert_file_not_contains "$profilectl" "ags request"
+assert_file_not_contains "$profilectl" "window-switcher"
+
 reset_profile_state
+: > "$actuator_log"
 run_profilectl sync-source powersave idle 1
 assert_file_equals "$runtime_dir/hypr-profiles/powersave.idle.count" "1"
 assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "powersave"
 assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"generation":1,"resolved":"powersave","selection":"auto","sources":{"gaming":{},"powersave":{"idle":1}}}'
+assert_file_not_contains "$actuator_log" "ags request"
 json_status="$(run_profilectl status --json)"
 [[ "$json_status" == "$(< "$runtime_dir/hypr-profiles/state.json")" ]] || fail "JSON status did not return canonical state"
 

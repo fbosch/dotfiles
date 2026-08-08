@@ -341,7 +341,6 @@ rollback_overlay() {
     return 1
   fi
 
-  set_switcher_mode_previews
   refresh_window_captures
 }
 
@@ -382,14 +381,6 @@ refresh_window_captures() {
   if [[ -x "$capture_daemon_script" ]]; then
     ( sleep 0.3; "$capture_daemon_script" refresh-once >/dev/null 2>&1 ) &
   fi
-}
-
-set_switcher_mode_icons() {
-  ags request --instance ags-bundled window-switcher '{"action": "set-mode", "mode": "icons"}' 2>/dev/null || true
-}
-
-set_switcher_mode_previews() {
-  ags request --instance ags-bundled window-switcher '{"action": "set-mode", "mode": "previews"}' 2>/dev/null || true
 }
 
 overlay_active_file="$STATE_DIR/profile-overlay.active"
@@ -479,7 +470,6 @@ apply_effective_state() {
       notify_failure "profile-restore" "Hyprland profile restore failed" "Gaming settings may still be active."
       return 1
     fi
-    set_switcher_mode_previews
     refresh_window_captures
     return
   fi
@@ -516,12 +506,10 @@ apply_effective_state() {
       return 1
     fi
     touch "$overlay_active_file"
-    set_switcher_mode_icons
     return
   fi
 
   pause_background_helpers
-  set_switcher_mode_icons
   if [[ "$desired_mode" == "gaming" ]]; then
     set_power_profile performance
     if ! apply_hypr_gaming_overlay; then
