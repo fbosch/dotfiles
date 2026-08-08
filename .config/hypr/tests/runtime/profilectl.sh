@@ -343,6 +343,17 @@ assert_file_not_contains "$runtime_dir/hypr-profiles/state.json" '"idle"'
 run_profilectl reconcile
 assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"generation":2,"resolved":"gaming","selection":"auto","sources":{"gaming":{"watchdog":1},"powersave":{}}}'
 
+reset_profile_state
+run_profilectl sync-source powersave idle 1
+state_before="$(< "$runtime_dir/hypr-profiles/state.json")"
+: > "$actuator_log"
+if PROFILECTL_TEST_FAIL_STATE_RENAME=1 run_profilectl sync-source gaming watchdog 1 >/dev/null 2>&1; then
+  fail "profilectl succeeded after cross-profile state publication failed"
+fi
+assert_file_equals "$runtime_dir/hypr-profiles/state.json" "$state_before"
+assert_file_contains "$actuator_log" 'hyprctl eval require("profiles").apply("gaming")'
+assert_file_contains "$actuator_log" 'hyprctl eval require("profiles").apply("powersave")'
+
 if luajit "$home_dir/.config/hypr/runtime/profiles/profile-state.lua" encode 1 auto default >/dev/full 2>/dev/null; then
   fail "profile state helper reported success after a write failure"
 fi
