@@ -97,6 +97,7 @@
 ## Ambiguity and execution loop
 
 - Read the root `AGENTS.md` first; read deeper `AGENTS.md` files once target files or subtree are known.
+- Treat requests for "guidance" as referring primarily to `AGENTS.md`, `docs/agents/**/*.md`, or equivalent repository guidance. When asked to add guidance, locate the most appropriate existing guidance file and append it there.
 - If a request has multiple valid interpretations, list options with tradeoffs; do not pick silently.
 - Treat follow-up requests as cumulative unless the user clearly resets scope.
 - Prefer the simpler approach when it satisfies the request; push back on over-complex directions.
