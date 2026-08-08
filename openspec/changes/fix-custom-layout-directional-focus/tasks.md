@@ -3,9 +3,9 @@
 - [x] 1.1 Add `window_move_spec` coverage for tiled-to-floating focus on the
   ultrawide custom layout and floating-to-tiled focus on the portrait custom
   layout.
-- [ ] 1.2 Add focus-selection tests proving nearest mixed-state candidates win
+- [x] 1.2 Add focus-selection tests proving nearest mixed-state candidates win
   and opposite-side, invisible, and incomplete candidates are ignored.
-- [ ] 1.3 Add regression tests proving no local candidate retains native
+- [x] 1.3 Add regression tests proving no local candidate retains native
   directional fallback, non-custom workspaces retain native focus, and PiP
   retains its tiled-only override.
 
@@ -21,7 +21,8 @@
 ## 3. Validation
 
 - [x] 3.1 Run the focused `window_move_spec` suite with LuaJIT.
-- [ ] 3.2 Run `devenv test test:lua` and `devenv test test:lua-quality`.
-- [ ] 3.3 Reload Hyprland and run `hyprctl configerrors`.
+- [x] 3.2 Run `busted --lua=luajit .config/hypr/tests` and
+  `REQUIRE_LUA_TOOLS=1 bash scripts/lua-quality.sh ci`.
+- [x] 3.3 Reload Hyprland and run `hyprctl configerrors`.
 - [ ] 3.4 Live-test tiled-to-floating and floating-to-tiled directional focus
   on both custom layouts, including PiP precedence.

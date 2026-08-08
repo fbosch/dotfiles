@@ -91,6 +91,16 @@ local function assert_equal(actual, expected, message)
 	end
 end
 
+local function set_workspace_windows(layout, workspace_windows)
+	active_window.workspace.tiledLayout = layout
+	for index = 1, #workspace_windows do
+		workspace_windows[index].workspace = active_window.workspace
+	end
+	function active_window.workspace:get_windows()
+		return workspace_windows
+	end
+end
+
 local function load_modules()
 	package.loaded["lib.window.interaction"] = nil
 	package.loaded["lib.window.custom_layout"] = nil
@@ -100,6 +110,9 @@ local function load_modules()
 	package.loaded["layouts.shared.order_state"] = nil
 	package.loaded["runtime.lib.hypr-ipc"] = {
 		instance_path = function(name)
+			return "/tmp/" .. name
+		end,
+		instance_socket_path = function(name)
 			return "/tmp/" .. name
 		end,
 	}
@@ -146,18 +159,14 @@ run("ultrawide focus includes a floating window", function()
 	reset("DP-2")
 	active_window.visible = true
 	active_window.floating = false
-	active_window.workspace.tiledLayout = "lua:ultrawide_master"
 	local floating = {
 		address = "0xfloating",
 		visible = true,
 		floating = true,
 		at = { x = 500, y = 200 },
 		size = { x = 300, y = 400 },
-		workspace = active_window.workspace,
 	}
-	function active_window.workspace:get_windows()
-		return { active_window, floating }
-	end
+	set_workspace_windows("lua:ultrawide_master", { active_window, floating })
 
 	directional.focus(state, "right")()
 
@@ -169,23 +178,144 @@ run("portrait focus includes a tiled window from a floating window", function()
 	reset("HDMI-A-2")
 	active_window.visible = true
 	active_window.floating = true
-	active_window.workspace.tiledLayout = "lua:portrait_rows"
 	local tiled = {
 		address = "0xtiled",
 		visible = true,
 		floating = false,
 		at = { x = 100, y = 700 },
 		size = { x = 300, y = 400 },
-		workspace = active_window.workspace,
 	}
-	function active_window.workspace:get_windows()
-		return { active_window, tiled }
-	end
+	set_workspace_windows("lua:portrait_rows", { active_window, tiled })
 
 	directional.focus(state, "down")()
 
 	assert_equal(dispatched[1].op, "focus", "dispatcher")
 	assert_equal(dispatched[1].args.window, tiled, "tiled focus target")
+end)
+
+run("custom layout focus chooses the nearest mixed-state candidate", function()
+	reset("DP-2")
+	active_window.visible = true
+	local near_floating = {
+		visible = true,
+		floating = true,
+		at = { x = 500, y = 200 },
+		size = { x = 300, y = 400 },
+	}
+	local far_tiled = {
+		visible = true,
+		floating = false,
+		at = { x = 900, y = 200 },
+		size = { x = 300, y = 400 },
+	}
+	set_workspace_windows("lua:ultrawide_master", { active_window, far_tiled, near_floating })
+
+	directional.focus(state, "right")()
+
+	assert_equal(dispatched[1].args.window, near_floating, "nearest focus target")
+end)
+
+run("custom layout focus excludes opposite-side candidates", function()
+	reset("DP-2")
+	active_window.visible = true
+	local near_floating_left = {
+		visible = true,
+		floating = true,
+		at = { x = -200, y = 200 },
+		size = { x = 300, y = 400 },
+	}
+	local far_tiled_right = {
+		visible = true,
+		floating = false,
+		at = { x = 900, y = 200 },
+		size = { x = 300, y = 400 },
+	}
+	set_workspace_windows("lua:ultrawide_master", { active_window, near_floating_left, far_tiled_right })
+
+	directional.focus(state, "right")()
+
+	assert_equal(dispatched[1].args.window, far_tiled_right, "directional focus target")
+end)
+
+run("custom layout focus ignores invisible and incomplete candidates", function()
+	reset("DP-2")
+	active_window.visible = true
+	local invisible = {
+		visible = false,
+		at = { x = 300, y = 200 },
+		size = { x = 300, y = 400 },
+	}
+	local incomplete = { visible = true, at = { x = 400, y = 200 } }
+	local valid = {
+		visible = true,
+		at = { x = 600, y = 200 },
+		size = { x = 300, y = 400 },
+	}
+	set_workspace_windows("lua:ultrawide_master", { active_window, invisible, incomplete, valid })
+
+	directional.focus(state, "right")()
+
+	assert_equal(dispatched[1].args.window, valid, "usable focus target")
+end)
+
+run("custom layout focus falls back to native focus without a directional candidate", function()
+	reset("DP-2")
+	active_window.visible = true
+	local left = {
+		visible = true,
+		at = { x = -200, y = 200 },
+		size = { x = 300, y = 400 },
+	}
+	set_workspace_windows("lua:ultrawide_master", { active_window, left })
+
+	directional.focus(state, "right")()
+
+	assert_equal(dispatched[1].args.direction, "right", "native focus direction")
+end)
+
+run("non-custom layout focus remains native", function()
+	reset("DP-2", nil, nil, nil, "10")
+	active_window.visible = true
+	local floating = {
+		visible = true,
+		floating = true,
+		at = { x = 500, y = 200 },
+		size = { x = 300, y = 400 },
+	}
+	set_workspace_windows(nil, { active_window, floating })
+
+	directional.focus(state, "right")()
+
+	assert_equal(dispatched[1].args.direction, "right", "native focus direction")
+end)
+
+run("picture-in-picture focus retains its tiled-only override", function()
+	package.loaded["actions.picture-in-picture"] = nil
+	package.loaded["lib.window.directional"] = nil
+	directional = require("lib.window.directional")
+	reset("DP-2")
+	active_window.class = "app.zen_browser.zen"
+	active_window.title = "Picture-in-Picture"
+	active_window.visible = true
+	active_window.floating = true
+	local floating = {
+		visible = true,
+		floating = true,
+		at = { x = 500, y = 200 },
+		size = { x = 300, y = 400 },
+	}
+	local tiled = {
+		visible = true,
+		floating = false,
+		at = { x = 900, y = 200 },
+		size = { x = 300, y = 400 },
+	}
+	windows = { active_window, floating, tiled }
+	set_workspace_windows("lua:ultrawide_master", windows)
+
+	directional.focus(state, "right")()
+
+	assert_equal(dispatched[1].args.window, tiled, "PiP focus target")
 end)
 
 run("cursor lookup selects an unfocused normal window beside a game", function()
