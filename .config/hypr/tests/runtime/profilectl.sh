@@ -86,7 +86,7 @@ write_stub() {
   local name="$1"
 
   # shellcheck disable=SC2016
-  printf '%s\n' '#!/bin/sh' 'printf "%s %s\n" "${0##*/}" "$*" >> "$ACTUATOR_LOG"' 'exit 0' > "$bin_dir/$name"
+  printf '%s\n' '#!/bin/sh' 'printf "%s %s\n" "${0##*/}" "$*" >> "$ACTUATOR_LOG"' 'if [ "${PROFILECTL_TEST_FAIL_CAPTURE_REFRESH:-0}" = 1 ] && [ "$1" = refresh ]; then exit 1; fi' 'exit 0' > "$bin_dir/$name"
   chmod +x "$bin_dir/$name"
 }
 
@@ -435,6 +435,13 @@ run_profilectl clear-manual
 sleep 0.4
 assert_file_contains "$actuator_log" "window-capturectl.sh pause"
 assert_file_contains "$actuator_log" "window-capturectl.sh resume"
+assert_file_contains "$actuator_log" "window-capturectl.sh refresh"
+
+reset_profile_state
+: > "$actuator_log"
+run_profilectl set-manual gaming
+PROFILECTL_TEST_FAIL_CAPTURE_REFRESH=1 run_profilectl clear-manual
+sleep 0.4
 assert_file_contains "$actuator_log" "window-capturectl.sh refresh"
 
 printf 'PASS profilectl fixture preserves legacy behavior and exposes canonical-state transition seams\n'

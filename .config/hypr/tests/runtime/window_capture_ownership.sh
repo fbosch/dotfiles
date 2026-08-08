@@ -202,6 +202,8 @@ capture_status="$(capturectl status)"
 [[ "$capture_status" == *'daemon=running'* ]]
 capturectl pause
 test "$(process_state "$daemon_pid")" = T
+capturectl pause
+test "$(process_state "$daemon_pid")" = T
 capture_status="$(capturectl status)"
 [[ "$capture_status" == *'daemon=paused'* ]]
 capturectl resume
@@ -209,6 +211,8 @@ for _ in {1..100}; do
   [[ "$(process_state "$daemon_pid")" != T ]] && break
   sleep 0.01
 done
+test "$(process_state "$daemon_pid")" != T
+capturectl resume
 test "$(process_state "$daemon_pid")" != T
 capturectl refresh
 
