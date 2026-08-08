@@ -14,6 +14,11 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 - Dotfiles repo root is `~/dotfiles`.
 - Canonical skills live in `.agents/skills/` and are mirrored under `.config/{opencode,codex,github,claude}/skills`.
 
+## OpenSpec
+
+- Use `<domain>-<behavior>` when a domain disambiguates the capability, such as `hypr-custom-layout-ordering`, `ags-calendar-widget`, or `neovim-context-mcp-bridge`.
+- Keep each change as one cross-cutting vertical slice when it affects multiple areas.
+
 ## Commands
 
 - `stow .`
