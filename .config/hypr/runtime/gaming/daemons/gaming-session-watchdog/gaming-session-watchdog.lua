@@ -37,7 +37,9 @@ local function log_diagnostic(key, message)
 end
 
 local function profile_sync(count)
-	return command.ok(command.arg(profilectl) .. " sync gaming " .. command.arg(count) .. " >/dev/null 2>&1")
+	return command.ok(
+		command.arg(profilectl) .. " sync-source gaming watchdog " .. command.arg(count) .. " >/dev/null 2>&1"
+	)
 end
 
 local function apply_presentation(presentation)

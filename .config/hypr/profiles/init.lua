@@ -1,6 +1,4 @@
 local M = {}
-local command = require("lib.command")
-local paths = require("lib.paths")
 local profile_state = require("lib.profile_state")
 
 local profiles = {
@@ -8,12 +6,6 @@ local profiles = {
 	powersave = require("profiles.powersave"),
 	gaming = require("profiles.gaming"),
 }
-
-local profilectl = paths.runtime_script("profiles/profilectl.sh")
-
-local function profilectl_command(action, mode)
-	return command.line(profilectl, action, mode)
-end
 
 local function valid_mode(mode)
 	return profiles[mode] ~= nil
@@ -34,39 +26,6 @@ end
 
 function M.is_gaming_active()
 	return M.is_current_mode("gaming")
-end
-
-function M.is_active(mode)
-	if not valid_mode(mode) then
-		return false
-	end
-
-	return command.ok(profilectl_command("is-active", mode) .. " >/dev/null 2>&1")
-end
-
-function M.activate(mode)
-	if not valid_mode(mode) or M.is_active(mode) then
-		return false
-	end
-
-	return command.ok(profilectl_command("apply", mode))
-end
-
-function M.activate_async(mode)
-	if not valid_mode(mode) or M.is_active(mode) then
-		return false
-	end
-
-	hl.exec_cmd(profilectl_command("apply", mode))
-	return true
-end
-
-function M.remove(mode)
-	if not valid_mode(mode) then
-		return false
-	end
-
-	return command.ok(profilectl_command("remove", mode))
 end
 
 function M.apply(mode)

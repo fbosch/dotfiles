@@ -11,8 +11,8 @@ if command -v flock >/dev/null 2>&1; then
   flock -n 9 || exit 0
 fi
 
-if "$PROFILECTL" is-source-active powersave manual; then
-  "$PROFILECTL" remove-source powersave manual
+if "$PROFILECTL" status --json | jq --exit-status '.selection == "powersave"' >/dev/null; then
+  "$PROFILECTL" clear-manual
 
   ICON=$(~/.config/hypr/runtime/desktop/nerd-icon-gen.sh "󰠠" 64 "#dea721" 2>/dev/null || echo "")
   if [ -n "$ICON" ] && [ -f "$ICON" ]; then
@@ -24,7 +24,7 @@ if "$PROFILECTL" is-source-active powersave manual; then
   exit 0
 fi
 
-"$PROFILECTL" apply-source powersave manual
+"$PROFILECTL" set-manual powersave
 
 ICON=$(~/.config/hypr/runtime/desktop/nerd-icon-gen.sh "󱤅" 64 "#73bc6f" 2>/dev/null || echo "")
 if [ -n "$ICON" ] && [ -f "$ICON" ]; then

@@ -245,7 +245,8 @@ run_case manual-default missing override event default
 run_case manual-powersave missing override event powersave
 run_case unreadable-state missing override event missing
 run_case presentation-resume missing override event gaming gaming
-assert_contains "$test_dir/cleanup/profile.log" 'sync gaming 0'
+assert_contains "$test_dir/cleanup/profile.log" 'sync-source gaming watchdog 0'
+assert_contains "$test_dir/override/profile.log" 'sync-source gaming watchdog 1'
 assert_contains "$test_dir/cleanup/err" 'event socket closed; retrying in 1s'
 assert_contains "$test_dir/cleanup/err" 'event socket reconnected'
 assert_not_contains "$test_dir/missing/presentation.log" 'apply_presentation'
