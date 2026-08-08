@@ -57,6 +57,39 @@ local function main()
 		return
 	end
 
+	if arg[1] == "selection" and arg[2] then
+		io.write(profile_state.read(arg[2]).selection)
+		return
+	end
+
+	if arg[1] == "resolved" and arg[2] then
+		io.write(profile_state.read(arg[2]).resolved)
+		return
+	end
+
+	if arg[1] == "claims" and arg[2] then
+		local state = profile_state.read(arg[2])
+		for _, profile in ipairs({ "gaming", "powersave" }) do
+			for source, count in pairs(state.sources[profile]) do
+				io.write(profile, "\t", source, "\t", count, "\n")
+			end
+		end
+		return
+	end
+
+	if arg[1] == "profile-count" and arg[2] and arg[3] then
+		if arg[3] == "default" or profile_state.is_profile(arg[3]) == false then
+			fail("invalid profile")
+		end
+
+		local total = 0
+		for _, count in pairs(profile_state.read(arg[2]).sources[arg[3]]) do
+			total = total + count
+		end
+		io.write(total)
+		return
+	end
+
 	if arg[1] == "encode" and arg[2] and arg[3] and arg[4] then
 		local written, write_error = io.write(encode_state(tonumber(arg[2]), arg[3], arg[4]))
 		if not written then
@@ -70,7 +103,7 @@ local function main()
 		return
 	end
 
-	fail("usage: profile-state.lua <generation|source-count|encode> ...")
+	fail("usage: profile-state.lua <generation|selection|resolved|source-count|profile-count|claims|encode> ...")
 end
 
 local ok, error_message = pcall(main)

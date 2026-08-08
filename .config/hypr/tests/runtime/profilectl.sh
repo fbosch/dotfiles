@@ -201,9 +201,11 @@ assert_file_not_contains "$profilectl" "window-capture-daemon.lua"
 reset_profile_state
 : > "$actuator_log"
 run_profilectl sync-source powersave idle 1
-assert_file_equals "$runtime_dir/hypr-profiles/powersave.idle.count" "1"
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "powersave"
 assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"generation":1,"resolved":"powersave","selection":"auto","sources":{"gaming":{},"powersave":{"idle":1}}}'
+assert_absent "$runtime_dir/hypr-profiles/powersave.idle.count"
+assert_absent "$runtime_dir/hypr-profiles/manual-selection"
+assert_absent "$runtime_dir/hypr-profiles/profile-overlay.mode"
+assert_absent "$runtime_dir/hypr-profiles/profile-overlay.active"
 assert_file_not_contains "$actuator_log" "ags request"
 assert_file_contains "$actuator_log" "window-capturectl.sh pause"
 json_status="$(run_profilectl status --json)"
@@ -218,109 +220,38 @@ assert_file_equals "$runtime_dir/hypr-profiles/state.json" "$state_before"
 assert_file_equals "$actuator_log" ""
 
 reset_profile_state
-mkdir -p "$runtime_dir/hypr-profiles"
-printf '1' > "$runtime_dir/hypr-profiles/gaming.watchdog.count"
 run_profilectl sync-source gaming watchdog 1
-assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"generation":1,"resolved":"gaming","selection":"auto","sources":{"gaming":{"watchdog":1},"powersave":{}}}'
-
-write_raw_state_fixture '{"generation":7,"resolved":"default","selection":"auto","sources":{"gaming":{},"powersave":{}}}'
-run_profilectl sync-source gaming watchdog 1
-assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"generation":8,"resolved":"gaming","selection":"auto","sources":{"gaming":{"watchdog":1},"powersave":{}}}'
-
-reset_profile_state
-run_profilectl sync gaming 01
-assert_file_equals "$runtime_dir/hypr-profiles/gaming.watchdog.count" "1"
-state_before="$(< "$runtime_dir/hypr-profiles/state.json")"
-: > "$actuator_log"
-run_profilectl sync gaming 01
-assert_file_equals "$runtime_dir/hypr-profiles/state.json" "$state_before"
-assert_file_equals "$actuator_log" ""
-
-reset_profile_state
-run_profilectl sync gaming 1
-assert_file_equals "$runtime_dir/hypr-profiles/gaming.watchdog.count" "1"
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
 run_profilectl sync-source powersave idle 1
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
 run_profilectl sync-source gaming gamemode 1
-run_profilectl sync gaming 0
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
+run_profilectl sync-source gaming watchdog 0
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"resolved":"gaming"'
 run_profilectl sync-source gaming gamemode 0
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "powersave"
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"resolved":"powersave"'
 run_profilectl sync-source powersave idle 0
-assert_absent "$runtime_dir/hypr-profiles/profile-overlay.mode"
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"resolved":"default"'
 
 reset_profile_state
-run_profilectl sync gaming 1
+run_profilectl sync-source gaming watchdog 1
 run_profilectl set-manual default
-assert_absent "$runtime_dir/hypr-profiles/profile-overlay.mode"
-assert_file_equals "$runtime_dir/hypr-profiles/gaming.watchdog.count" "1"
+assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"generation":2,"resolved":"default","selection":"default","sources":{"gaming":{"watchdog":1},"powersave":{}}}'
 run_profilectl clear-manual
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"resolved":"gaming"'
 run_profilectl set-manual powersave
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "powersave"
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"selection":"powersave"'
 run_profilectl clear-manual
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
-run_profilectl set-manual gaming
-run_profilectl sync gaming 0
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
-run_profilectl clear-manual
-assert_absent "$runtime_dir/hypr-profiles/profile-overlay.mode"
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"selection":"auto"'
 
 reset_profile_state
-run_profilectl set-manual gaming
-assert_file_equals "$runtime_dir/hypr-profiles/gaming.manual.count" "1"
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
-
 if HYPRCTL_FAIL_DEFAULT=1 run_profilectl clear-manual; then
-  fail "profilectl succeeded after the default profile failed to apply"
+  fail "profilectl accepted a failed default application"
 fi
-
-assert_file_equals "$runtime_dir/hypr-profiles/gaming.manual.count" "1"
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.active" ""
+assert_absent "$runtime_dir/hypr-profiles/state.json"
 
 reset_profile_state
-mkdir -p "$runtime_dir/hypr-profiles/profile-overlay.mode"
-
-if run_profilectl apply gaming >/dev/null 2>&1; then
-  fail "profilectl succeeded after mode state publication failed"
-fi
-
-assert_file_equals "$runtime_dir/hypr-profiles/gaming.manual.count" "0"
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.active" ""
-rm -rf "$runtime_dir/hypr-profiles/profile-overlay.mode"
-run_profilectl reconcile
-[[ ! -e "$runtime_dir/hypr-profiles/profile-overlay.active" ]] || fail "profilectl retained recovery state after mode publication recovery"
-
-reset_profile_state
-run_profilectl set-manual gaming
-rm -f "$runtime_dir/hypr-profiles/powersave.manual.count"
-mkdir "$runtime_dir/hypr-profiles/powersave.manual.count"
-
-if run_profilectl set-manual powersave >/dev/null 2>&1; then
-  fail "profilectl succeeded after manual selection state publication failed"
-fi
-
-assert_file_equals "$runtime_dir/hypr-profiles/gaming.manual.count" "1"
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "gaming"
-
-reset_profile_state
-
 if HYPRCTL_FAIL_GAMING=1 HYPRCTL_FAIL_DEFAULT=1 run_profilectl apply gaming >/dev/null 2>&1; then
   fail "profilectl succeeded after Gaming activation and rollback both failed"
 fi
-
-assert_file_equals "$runtime_dir/hypr-profiles/gaming.manual.count" "0"
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.active" ""
-
-if HYPRCTL_FAIL_DEFAULT=1 run_profilectl reconcile >/dev/null 2>&1; then
-  fail "profilectl reconciled a failed rollback without restoring defaults"
-fi
-
-assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.active" ""
-run_profilectl reconcile
-[[ ! -e "$runtime_dir/hypr-profiles/profile-overlay.active" ]] || fail "profilectl retained recovery state after a successful reconcile"
+assert_absent "$runtime_dir/hypr-profiles/state.json"
 
 reset_profile_state
 write_raw_state_fixture '{"selection":'
@@ -328,7 +259,6 @@ write_raw_state_fixture '{"selection":'
 if run_profilectl sync-source gaming watchdog 1 >/dev/null 2>&1; then
   fail "profilectl accepted malformed canonical state"
 fi
-assert_absent "$runtime_dir/hypr-profiles/gaming.watchdog.count"
 assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"selection":'
 assert_file_equals "$actuator_log" ""
 
@@ -338,7 +268,6 @@ write_raw_state_fixture '{"generation":7,"resolved":"gaming","selection":"defaul
 if run_profilectl sync-source gaming watchdog 1 >/dev/null 2>&1; then
   fail "profilectl accepted inconsistent canonical state"
 fi
-assert_absent "$runtime_dir/hypr-profiles/gaming.watchdog.count"
 assert_file_equals "$actuator_log" ""
 
 reset_profile_state
@@ -375,8 +304,7 @@ if PROFILECTL_TEST_FAIL_STATE_RENAME=1 run_profilectl sync-source powersave idle
   fail "profilectl succeeded after canonical state publication failed"
 fi
 assert_file_equals "$runtime_dir/hypr-profiles/state.json" "$state_before"
-assert_file_equals "$runtime_dir/hypr-profiles/gaming.watchdog.count" "1"
-assert_file_equals "$runtime_dir/hypr-profiles/powersave.idle.count" "0"
+assert_file_not_contains "$runtime_dir/hypr-profiles/state.json" '"idle"'
 run_profilectl reconcile
 assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"generation":2,"resolved":"gaming","selection":"auto","sources":{"gaming":{"watchdog":1},"powersave":{}}}'
 
@@ -415,7 +343,7 @@ start_profilectl apply gaming
 if wait "$profilectl_pid"; then
   fail "controller survived interruption before actuation"
 fi
-assert_absent "$runtime_dir/hypr-profiles/profile-overlay.mode"
+assert_absent "$runtime_dir/hypr-profiles/state.json"
 
 reset_profile_state
 : > "$actuator_log"
@@ -425,7 +353,7 @@ if wait "$profilectl_pid"; then
   fail "controller survived interruption after actuation"
 fi
 assert_file_contains "$actuator_log" 'hyprctl applied gaming'
-assert_absent "$runtime_dir/hypr-profiles/profile-overlay.mode"
+assert_absent "$runtime_dir/hypr-profiles/state.json"
 unset PROFILECTL_TEST_HYPRCTL_INTERRUPT_TARGET PROFILECTL_TEST_HYPRCTL_INTERRUPT_PHASE
 
 reset_profile_state
@@ -436,12 +364,7 @@ sleep 0.4
 assert_file_contains "$actuator_log" "window-capturectl.sh pause"
 assert_file_contains "$actuator_log" "window-capturectl.sh resume"
 assert_file_contains "$actuator_log" "window-capturectl.sh refresh"
+assert_absent "$runtime_dir/hypr-profiles/gaming.manual.count"
+assert_absent "$runtime_dir/hypr-profiles/profile-overlay.mode"
 
-reset_profile_state
-: > "$actuator_log"
-run_profilectl set-manual gaming
-PROFILECTL_TEST_FAIL_CAPTURE_REFRESH=1 run_profilectl clear-manual
-sleep 0.4
-assert_file_contains "$actuator_log" "window-capturectl.sh refresh"
-
-printf 'PASS profilectl fixture preserves legacy behavior and exposes canonical-state transition seams\n'
+printf 'PASS profilectl fixture uses canonical state for profile policy\n'
