@@ -85,6 +85,56 @@ local function warp_window(active)
 	dispatch(hl.dsp.cursor.move({ x = at.x + size.x / 2, y = at.y + size.y / 2 }))
 end
 
+local function directional_candidate(active, direction)
+	local workspace = active and active.workspace
+	if workspace == nil or workspace.get_windows == nil then
+		return nil
+	end
+
+	local at = active.at
+	local size = active.size
+	if at == nil or size == nil or at.x == nil or at.y == nil or size.x == nil or size.y == nil then
+		return nil
+	end
+
+	local origin_x = at.x + size.x / 2
+	local origin_y = at.y + size.y / 2
+	local nearest = nil
+	local nearest_distance = math.huge
+	for _, window in ipairs(workspace:get_windows()) do
+		local window_at = window.at
+		local window_size = window.size
+		if
+			window ~= active
+			and window.visible ~= false
+			and window_at
+			and window_size
+			and window_at.x
+			and window_at.y
+			and window_size.x
+			and window_size.y
+		then
+			local x = window_at.x + window_size.x / 2
+			local y = window_at.y + window_size.y / 2
+			local horizontal = x - origin_x
+			local vertical = y - origin_y
+			local matches = (direction == "left" and horizontal < 0)
+				or (direction == "right" and horizontal > 0)
+				or (direction == "up" and vertical < 0)
+				or (direction == "down" and vertical > 0)
+			if matches then
+				local distance = horizontal * horizontal + vertical * vertical
+				if distance < nearest_distance then
+					nearest = window
+					nearest_distance = distance
+				end
+			end
+		end
+	end
+
+	return nearest
+end
+
 local function with_window_behavior(state, action, direction, fallback)
 	return function()
 		local active = state.active()
@@ -108,6 +158,16 @@ function M.focus(state, value)
 	local normalized = state.direction(value)
 	local focus_dispatcher = hl.dsp.focus({ direction = normalized })
 	return with_window_behavior(state, "focus", normalized, function()
+		local active = state.active()
+		if state.uses_any_custom_layout(active) then
+			local candidate = directional_candidate(active, normalized)
+			if candidate then
+				dispatch(hl.dsp.focus({ window = candidate }))
+				dispatch(warp_active_after_focus)
+				return
+			end
+		end
+
 		dispatch(focus_dispatcher)
 		dispatch(warp_active_after_focus)
 	end)

@@ -142,6 +142,52 @@ run("dp down moves window to portrait monitor", function()
 	assert_equal(dispatched[2].args.y, 400, "cursor y")
 end)
 
+run("ultrawide focus includes a floating window", function()
+	reset("DP-2")
+	active_window.visible = true
+	active_window.floating = false
+	active_window.workspace.tiledLayout = "lua:ultrawide_master"
+	local floating = {
+		address = "0xfloating",
+		visible = true,
+		floating = true,
+		at = { x = 500, y = 200 },
+		size = { x = 300, y = 400 },
+		workspace = active_window.workspace,
+	}
+	function active_window.workspace:get_windows()
+		return { active_window, floating }
+	end
+
+	directional.focus(state, "right")()
+
+	assert_equal(dispatched[1].op, "focus", "dispatcher")
+	assert_equal(dispatched[1].args.window, floating, "floating focus target")
+end)
+
+run("portrait focus includes a tiled window from a floating window", function()
+	reset("HDMI-A-2")
+	active_window.visible = true
+	active_window.floating = true
+	active_window.workspace.tiledLayout = "lua:portrait_rows"
+	local tiled = {
+		address = "0xtiled",
+		visible = true,
+		floating = false,
+		at = { x = 100, y = 700 },
+		size = { x = 300, y = 400 },
+		workspace = active_window.workspace,
+	}
+	function active_window.workspace:get_windows()
+		return { active_window, tiled }
+	end
+
+	directional.focus(state, "down")()
+
+	assert_equal(dispatched[1].op, "focus", "dispatcher")
+	assert_equal(dispatched[1].args.window, tiled, "tiled focus target")
+end)
+
 run("cursor lookup selects an unfocused normal window beside a game", function()
 	reset("DP-2")
 	active_window = {
