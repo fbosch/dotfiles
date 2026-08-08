@@ -18,6 +18,7 @@
 - Keep changes minimal and local; prefer existing patterns.
 - Default to current schema/contract; add compatibility layers only when explicitly required.
 - Run the smallest reasonable validation for changed behavior.
+- For screenshots, capture only the smallest useful window or region; use full-screen captures only when explicitly requested.
 - Read references on demand; do not load all of them by default.
 - Before adding or selecting a dependency, library, or development tool, read `~/.config/opencode/references/library-preferences.md`. When multiple suitable listed options exist and the repository does not establish one, ask the user to choose before adding one.
 - Before changing behavior, APIs, config formats, data handling, or validation paths, read `~/.config/opencode/references/compatibility.md`.
