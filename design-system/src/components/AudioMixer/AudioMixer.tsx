@@ -26,6 +26,8 @@ export interface AudioMixerProps {
   disableAnimations?: boolean;
   onTabChange?: (tab: AudioMixerTab) => void;
   onVolumeChange?: (itemId: string, volume: number) => void;
+  onMuteToggle?: (itemId: string) => void;
+  onDefaultChange?: (itemId: string) => void;
   className?: string;
 }
 
@@ -96,7 +98,6 @@ const VolumeMeter: React.FC<{
 
   const volume = clamp(item.volume, maxVolume);
   const visibleVolume = item.muted ? 0 : volume;
-  const peakVolume = item.muted ? 0 : clamp(item.peak ?? 0, maxVolume);
   const thumbPosition = item.muted ? 0 : (volume / maxVolume) * 100;
 
   const updateVolumeFromPointer = (clientX: number) => {
@@ -143,10 +144,9 @@ const VolumeMeter: React.FC<{
   };
 
   return (
-    <div className="mt-2">
-      <div className="mb-1 flex justify-between text-base text-foreground-tertiary">
+    <div className="mt-0.5">
+      <div className="text-sm text-foreground-tertiary">
         <span>{item.muted ? 'Muted' : `${volume}%`}</span>
-        {item.peak !== undefined && <span>Peak {clamp(item.peak, maxVolume)}%</span>}
       </div>
       <div
         ref={trackRef}
@@ -171,19 +171,12 @@ const VolumeMeter: React.FC<{
           const segmentEnd = (segment / volumeSegments.length) * maxVolume;
           const segmentRange = segmentEnd - segmentStart;
           const fillWidth = clamp(((visibleVolume - segmentStart) / segmentRange) * 100, 100);
-          const peakWidth = clamp(((peakVolume - segmentStart) / segmentRange) * 100, 100);
 
           return (
             <div
               key={`${item.id}-segment-${segment}`}
               className="relative h-2 flex-1 overflow-hidden rounded-sm bg-white/[0.08]"
             >
-              {peakWidth > fillWidth && (
-                <div
-                  className="absolute inset-y-0 left-0 bg-accent-primary/35"
-                  style={{ width: `${peakWidth}%` }}
-                />
-              )}
               <div
                 className="absolute inset-y-0 left-0 bg-accent-primary"
                 style={{ width: `${fillWidth}%` }}
@@ -209,24 +202,69 @@ const AudioRow: React.FC<{
   item: AudioMixerItem;
   maxVolume: number;
   onVolumeChange?: (itemId: string, volume: number) => void;
-}> = ({ item, maxVolume, onVolumeChange }) => (
+  onMuteToggle?: (itemId: string) => void;
+  onDefaultChange?: (itemId: string) => void;
+  showDefaultAction: boolean;
+}> = ({ item, maxVolume, onVolumeChange, onMuteToggle, onDefaultChange, showDefaultAction }) => (
   <article
     className={cn(
-      'rounded-lg border border-white/[0.08] bg-background-primary/45 p-2.5 shadow-sm',
+      'rounded-lg border border-white/[0.08] bg-background-primary/45 px-2.5 py-2 shadow-sm transition-colors duration-150 hover:border-white/[0.16] hover:bg-background-primary/[0.62] focus-within:border-accent-primary/65 focus-within:bg-background-primary/[0.62]',
       item.muted && 'opacity-70'
     )}
   >
     <div className="flex gap-2.5">
-      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-foreground-primary">
+      <div
+        className={cn(
+          'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-foreground-primary',
+          item.isDefault && 'bg-accent-primary/25 text-white',
+          item.muted && 'bg-state-error/10 text-state-error'
+        )}
+      >
         <span className="font-fluent text-base" aria-hidden="true">
           {itemIcon(item)}
         </span>
       </div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold text-foreground-primary">{item.name}</h3>
-          </div>
+        <div className="flex items-start gap-1.5">
+          <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground-primary">
+            {item.name}
+          </h3>
+          {(onMuteToggle || (showDefaultAction && onDefaultChange)) && (
+            <div className="flex shrink-0 gap-1">
+              {onMuteToggle && (
+                <Button
+                  type="button"
+                  variant="transparent"
+                  size="sm"
+                  className="h-7 min-h-7 w-7 min-w-7 rounded-md border border-white/10 bg-white/[0.06] p-0 font-fluent text-[15px] text-foreground-secondary hover:bg-white/10 hover:text-foreground-primary"
+                  onClick={() => onMuteToggle(item.id)}
+                  aria-label={item.muted ? `Unmute ${item.name}` : `Mute ${item.name}`}
+                >
+                  {itemIcon({ ...item, icon: undefined })}
+                </Button>
+              )}
+              {showDefaultAction && onDefaultChange && (
+                <Button
+                  type="button"
+                  variant={item.isDefault ? 'primary' : 'transparent'}
+                  size="sm"
+                  className={cn(
+                    'h-7 min-h-7 w-7 min-w-7 rounded-md border border-white/10 bg-white/[0.06] p-0 font-fluent text-[15px] text-foreground-secondary hover:bg-white/10 hover:text-foreground-primary',
+                    item.isDefault && 'border-accent-primary/55 text-white'
+                  )}
+                  onClick={() => onDefaultChange(item.id)}
+                  aria-label={
+                    item.isDefault
+                      ? `${item.name} is the default device`
+                      : `Set ${item.name} as default`
+                  }
+                  aria-pressed={item.isDefault}
+                >
+                  {'\uE8FB'}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         <VolumeMeter item={item} maxVolume={maxVolume} onVolumeChange={onVolumeChange} />
@@ -242,6 +280,8 @@ export const AudioMixer: React.FC<AudioMixerProps> = ({
   disableAnimations = false,
   onTabChange,
   onVolumeChange,
+  onMuteToggle,
+  onDefaultChange,
   className,
 }) => {
   const currentItems = items[activeTab] ?? [];
@@ -252,22 +292,25 @@ export const AudioMixer: React.FC<AudioMixerProps> = ({
       className={cn(panelVariants({ animated: !disableAnimations }), className)}
       aria-label="Audio mixer"
     >
-      <div className="max-h-[520px] overflow-y-auto p-3">
+      <div className="p-3 pb-1.5 pt-2">
         {currentItems.length === 0 ? (
-          <div className="flex min-h-[220px] flex-col items-center justify-center rounded-lg border border-dashed border-white/[0.12] bg-background-primary/30 p-8 text-center">
+          <div className="flex min-h-[180px] flex-col items-center justify-center rounded-lg border border-dashed border-white/[0.12] bg-background-primary/30 p-8 text-center">
             <span className="font-fluent text-3xl text-foreground-tertiary/60" aria-hidden="true">
               {'\uE7F4'}
             </span>
             <p className="mt-3 text-sm font-medium text-foreground-secondary">No audio objects</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-0.5">
             {currentItems.map((item) => (
               <AudioRow
                 key={item.id}
                 item={item}
                 maxVolume={normalizedMaxVolume}
                 onVolumeChange={onVolumeChange}
+                onMuteToggle={onMuteToggle}
+                onDefaultChange={onDefaultChange}
+                showDefaultAction={activeTab === 'output' || activeTab === 'input'}
               />
             ))}
           </div>

@@ -96,13 +96,40 @@ function updateItemVolume(
 
 const InteractiveMixer: React.FC<AudioMixerProps> = (args) => {
   const [items, setItems] = useState(args.items ?? {});
+  const [activeTab, setActiveTab] = useState(args.activeTab ?? 'playback');
 
   return (
     <AudioMixer
       {...args}
+      activeTab={activeTab}
       items={items}
+      onTabChange={setActiveTab}
       onVolumeChange={(itemId, volume) => {
         setItems((current) => updateItemVolume(current, itemId, volume));
+      }}
+      onMuteToggle={(itemId) => {
+        setItems(
+          (current) =>
+            Object.fromEntries(
+              Object.entries(current).map(([tab, tabItems]) => [
+                tab,
+                tabItems?.map((item) =>
+                  item.id === itemId ? { ...item, muted: !item.muted } : item
+                ),
+              ])
+            ) as Partial<Record<AudioMixerTab, AudioMixerItem[]>>
+        );
+      }}
+      onDefaultChange={(itemId) => {
+        setItems(
+          (current) =>
+            Object.fromEntries(
+              Object.entries(current).map(([tab, tabItems]) => [
+                tab,
+                tabItems?.map((item) => ({ ...item, isDefault: item.id === itemId })),
+              ])
+            ) as Partial<Record<AudioMixerTab, AudioMixerItem[]>>
+        );
       }}
     />
   );
@@ -155,7 +182,7 @@ export const Output: Story = {
   },
 };
 
-export const DraggableVolume: Story = {
+export const Interactive: Story = {
   render: (args) => <InteractiveMixer {...args} />,
   args: {
     ...baseArgs,
