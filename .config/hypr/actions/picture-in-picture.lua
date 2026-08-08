@@ -21,11 +21,11 @@ local function active_pip()
 	end
 end
 
-function M.drag()
-	local active = active_pip()
-	if active then
+function M.drag(target)
+	local pip_window = target or active_pip()
+	if pip_window and pip_window.class == pip.class and pip_window.title == pip.title and pip_window.address then
 		dragging = true
-		notify("drag-start " .. active.address)
+		notify("drag-start " .. pip_window.address)
 	else
 		notify("drag-cancel")
 	end

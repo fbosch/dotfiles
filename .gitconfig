@@ -94,3 +94,6 @@
 
 [credential]
 	credentialStore = secretservice
+
+[include]
+	path = ~/.config/nix/git/config

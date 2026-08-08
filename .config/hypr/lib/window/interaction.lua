@@ -10,7 +10,7 @@ function M.start_drag(state)
 	end
 
 	drag_started = true
-	picture_in_picture.drag()
+	picture_in_picture.drag(target)
 	return true
 end
 

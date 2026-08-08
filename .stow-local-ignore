@@ -29,6 +29,7 @@ docs-lock.json
 ^/devenv\.lock$
 ^/\.devenv
 ^/\.envrc
+^/\.direnv$
 ^/lefthook\.yml$
 
 # Example files should not be stowed, only used as templates
