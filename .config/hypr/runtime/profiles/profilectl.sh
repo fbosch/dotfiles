@@ -305,7 +305,7 @@ apply_effective_state() {
     return
   fi
 
-  if [[ "$current" != "$DEFAULT_PROFILE" && "$current" != "$desired" ]]; then
+  if [[ "$force_restore" == "true" || ( "$current" != "$DEFAULT_PROFILE" && "$current" != "$desired" ) ]]; then
     if ! restore_hypr_defaults; then
       notify_failure "profile-restore" "Hyprland profile restore failed" "The previous profile could not be cleared."
       return 1
@@ -370,6 +370,7 @@ set_profile_count() {
   local powersave_count
   local desired
   local state
+  local previous_resolved
 
   count="$(normalize_count "$count")"
 
@@ -386,6 +387,7 @@ set_profile_count() {
   fi
 
   previous_generation="$(read_state_generation)" || return 1
+  previous_resolved="$(read_state_resolved)" || return 1
   previous_count="$(read_state_source_count "$profile" "$source")" || return 1
   if [[ "$previous_count" == "$count" && -e "$STATE_FILE" ]]; then
     return
@@ -399,10 +401,11 @@ set_profile_count() {
   desired="$(get_desired_profile "$selection" "$gaming_count" "$powersave_count")"
   state="$(prepare_state "$previous_generation" "$selection" "$desired" "$profile" "$source" "$count")" || return 1
   if ! apply_effective_state "$desired"; then
+    apply_effective_state "$previous_resolved" true || true
     return 1
   fi
   if ! publish_state "$state"; then
-    apply_effective_state "$(read_state_resolved)" true || true
+    apply_effective_state "$previous_resolved" true || true
     return 1
   fi
 }
@@ -414,6 +417,7 @@ set_manual_profile() {
   local powersave_count
   local desired
   local state
+  local previous_resolved
 
   if ! is_valid_selection "$selection"; then
     usage
@@ -421,6 +425,7 @@ set_manual_profile() {
   fi
 
   previous_generation="$(read_state_generation)" || return 1
+  previous_resolved="$(read_state_resolved)" || return 1
   if [[ -e "$STATE_FILE" && "$(read_state_selection)" == "$selection" ]]; then
     return
   fi
@@ -429,10 +434,11 @@ set_manual_profile() {
   desired="$(get_desired_profile "$selection" "$gaming_count" "$powersave_count")"
   state="$(prepare_state "$previous_generation" "$selection" "$desired")" || return 1
   if ! apply_effective_state "$desired" true; then
+    apply_effective_state "$previous_resolved" true || true
     return 1
   fi
   if ! publish_state "$state"; then
-    apply_effective_state "$(read_state_resolved)" true || true
+    apply_effective_state "$previous_resolved" true || true
     return 1
   fi
 }
@@ -461,6 +467,9 @@ print_status() {
   gaming_count="$(read_state_profile_count "$GAMING_PROFILE")"
   selection="$(read_state_selection)" || return 1
 
+  if [[ "$selection" == "$POWERSAVE_PROFILE" ]]; then powersave_count=$((powersave_count + 1)); fi
+  if [[ "$selection" == "$GAMING_PROFILE" ]]; then gaming_count=$((gaming_count + 1)); fi
+
   printf "selection=%s\n" "$selection"
   printf "powersave=%s\n" "$powersave_count"
   printf "gaming=%s\n" "$gaming_count"
@@ -485,9 +494,9 @@ print_json_status() {
 
 is_profile_active() {
   local profile="$1"
-  local value
 
-  [[ "$(read_state_resolved)" == "$profile" ]]
+  [[ "$(read_state_selection)" == "$profile" ]] && return 0
+  [[ "$(read_state_profile_count "$profile")" -gt 0 ]]
 }
 
 is_source_active() {

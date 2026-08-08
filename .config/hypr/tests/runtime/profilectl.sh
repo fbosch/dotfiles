@@ -145,6 +145,9 @@ fi
 if [ "${HYPRCTL_FAIL_GAMING:-0}" = 1 ] && [ "$target" = gaming ]; then
   exit 1
 fi
+if [ "${HYPRCTL_FAIL_POWERSAVE:-0}" = 1 ] && [ "$target" = powersave ]; then
+  exit 1
+fi
 EOF
 chmod +x "$bin_dir/hyprctl"
 
@@ -252,6 +255,23 @@ if HYPRCTL_FAIL_GAMING=1 HYPRCTL_FAIL_DEFAULT=1 run_profilectl apply gaming >/de
   fail "profilectl succeeded after Gaming activation and rollback both failed"
 fi
 assert_absent "$runtime_dir/hypr-profiles/state.json"
+
+reset_profile_state
+run_profilectl sync-source powersave idle 1
+if HYPRCTL_FAIL_GAMING=1 run_profilectl sync-source gaming watchdog 1 >/dev/null 2>&1; then
+  fail "profilectl accepted a failed Powersave-to-Gaming transition"
+fi
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"resolved":"powersave"'
+assert_file_contains "$actuator_log" 'hyprctl eval require("profiles").apply("powersave")'
+
+reset_profile_state
+run_profilectl sync-source gaming watchdog 1
+run_profilectl sync-source powersave idle 1
+if HYPRCTL_FAIL_POWERSAVE=1 run_profilectl sync-source gaming watchdog 0 >/dev/null 2>&1; then
+  fail "profilectl accepted a failed Gaming-to-Powersave transition"
+fi
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"resolved":"gaming"'
+assert_file_contains "$actuator_log" 'hyprctl eval require("profiles").apply("gaming")'
 
 reset_profile_state
 write_raw_state_fixture '{"selection":'
