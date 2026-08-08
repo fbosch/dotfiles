@@ -8,8 +8,9 @@ different tiled and floating paths, so it cannot provide the required mixed
 navigation policy consistently.
 
 The completed `hypr-custom-layout-ordering` change remains authoritative for
-layout ordering, transfer intent, resize messages, and monitor roles. This
-change must not alter any of those paths.
+layout ordering, transfer intent, resize messages, monitor roles, and floating
+monitor moves. This change shares the directional module but does not define or
+alter those movement semantics.
 
 ## Goals / Non-Goals
 

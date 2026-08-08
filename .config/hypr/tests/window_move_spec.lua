@@ -74,7 +74,12 @@ local function reset(monitor, x, monitor_x, workspace_windows, name)
 		at = { x = x or 100, y = 200 },
 		size = { x = 300, y = 400 },
 	}
-	local workspace = { name = name or "2" }
+	local layouts = {
+		["DP-2"] = "lua:ultrawide_master",
+		["HDMI-A-2"] = "lua:portrait_rows",
+	}
+	local layout = layouts[monitor]
+	local workspace = { name = name or "2", tiled_layout = layout }
 	active_window.workspace = workspace
 	windows = { active_window }
 	monitors = {}
@@ -97,7 +102,7 @@ local function assert_equal(actual, expected, message)
 end
 
 local function set_workspace_windows(layout, workspace_windows)
-	active_window.workspace.tiledLayout = layout
+	active_window.workspace.tiled_layout = layout
 	for index = 1, #workspace_windows do
 		workspace_windows[index].workspace = active_window.workspace
 	end
@@ -329,7 +334,7 @@ run("custom layout focus falls back to native focus without a directional candid
 end)
 
 run("non-custom layout focus remains native", function()
-	reset("DP-2", nil, nil, nil, "10")
+	reset("DP-2", nil, nil, nil, "11")
 	active_window.visible = true
 	local floating = {
 		visible = true,
@@ -337,7 +342,7 @@ run("non-custom layout focus remains native", function()
 		at = { x = 500, y = 200 },
 		size = { x = 300, y = 400 },
 	}
-	set_workspace_windows(nil, { active_window, floating })
+	set_workspace_windows("master", { active_window, floating })
 
 	directional.focus(state, "right")()
 
@@ -445,7 +450,7 @@ end)
 
 run("custom layout drag places the active window after interactive dragging", function()
 	reset("DP-2")
-	active_window.workspace.tiledLayout = "lua:ultrawide_master"
+	active_window.workspace.tiled_layout = "lua:ultrawide_master"
 	cursor_position = { x = 250, y = 400 }
 
 	assert_equal(interaction.start_drag(state), true, "drag starts")
@@ -488,7 +493,7 @@ end)
 run("floating dp window moves left to portrait without transfer intent", function()
 	reset("DP-2", 3000)
 	active_window.floating = true
-	active_window.workspace.tiledLayout = "lua:ultrawide_master"
+	active_window.workspace.tiled_layout = "lua:ultrawide_master"
 
 	directional.move(state, "left")()
 
@@ -501,7 +506,7 @@ run("floating window preserves its relative position across monitors", function(
 	reset("DP-2", 2128)
 	active_window.floating = true
 	active_window.at.y = 788
-	active_window.workspace.tiledLayout = "lua:ultrawide_master"
+	active_window.workspace.tiled_layout = "lua:ultrawide_master"
 	monitors = {
 		{ name = "DP-2", x = 1440, y = 500, width = 3440, height = 1440 },
 		{ name = "HDMI-A-2", x = 0, y = 0, width = 2560, height = 1440, transform = 3 },
@@ -519,7 +524,7 @@ run("floating window position stays inside the destination monitor", function()
 	reset("DP-2", 4708)
 	active_window.floating = true
 	active_window.at.y = 1868
-	active_window.workspace.tiledLayout = "lua:ultrawide_master"
+	active_window.workspace.tiled_layout = "lua:ultrawide_master"
 	monitors = {
 		{ name = "DP-2", x = 1440, y = 500, width = 3440, height = 1440 },
 		{ name = "HDMI-A-2", x = 0, y = 0, width = 2560, height = 1440, transform = 3 },
@@ -529,6 +534,23 @@ run("floating window position stays inside the destination monitor", function()
 
 	assert_equal(dispatched[2].args.x, 1140, "clamped x")
 	assert_equal(dispatched[2].args.y, 2160, "clamped y")
+end)
+
+run("oversized floating window is positioned for maximum visibility", function()
+	reset("DP-2", 4708)
+	active_window.floating = true
+	active_window.at.y = 1868
+	active_window.size = { x = 2000, y = 3000 }
+	active_window.workspace.tiled_layout = "lua:ultrawide_master"
+	monitors = {
+		{ name = "DP-2", x = 1440, y = 500, width = 3440, height = 1440 },
+		{ name = "HDMI-A-2", x = 0, y = 0, width = 2560, height = 1440, transform = 3 },
+	}
+
+	directional.move(state, "left")()
+
+	assert_equal(dispatched[2].args.x, 0, "clamped oversized x")
+	assert_equal(dispatched[2].args.y, 0, "clamped oversized y")
 end)
 
 run("dp outside monitor edge tolerance swaps left", function()
@@ -576,9 +598,21 @@ end)
 
 run("dp scrolling workspace uses native move", function()
 	reset("DP-2", nil, nil, nil, "10")
+	active_window.workspace.tiled_layout = "master"
 	directional.move(state, "right")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.direction, "right", "move direction")
+end)
+
+run("floating window on a master workspace uses native movement", function()
+	reset("DP-2", 3000, nil, nil, "11")
+	active_window.floating = true
+	active_window.workspace.tiled_layout = "master"
+
+	directional.move(state, "left")()
+
+	assert_equal(dispatched[1].op, "window.move", "dispatcher")
+	assert_equal(dispatched[1].args.direction, "left", "move direction")
 end)
 
 run("hdmi right moves window to ultrawide monitor", function()
@@ -598,7 +632,7 @@ end)
 run("floating hdmi window moves right to ultrawide without transfer intent", function()
 	reset("HDMI-A-2")
 	active_window.floating = true
-	active_window.workspace.tiledLayout = "lua:portrait_rows"
+	active_window.workspace.tiled_layout = "lua:portrait_rows"
 
 	directional.move(state, "right")()
 
@@ -637,6 +671,7 @@ end)
 
 run("dp scrolling workspace uses native resize", function()
 	reset("DP-2", nil, nil, nil, "10")
+	active_window.workspace.tiled_layout = "master"
 	directional.adjust(state, "resize", "right")()
 	assert_equal(dispatched[1].op, "window.resize", "dispatcher")
 	assert_equal(dispatched[1].args.x, 32, "resize x")

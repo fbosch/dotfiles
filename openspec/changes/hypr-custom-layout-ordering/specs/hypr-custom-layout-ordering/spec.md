@@ -33,7 +33,8 @@ The system SHALL handle directional move commands within a custom layout by movi
 ### Requirement: Floating directional moves preserve visible monitor-relative placement
 The system SHALL move a floating window directly between paired custom-layout
 monitors without recording tiled-layout insertion intent, preserving its
-monitor-relative top-left position while keeping the whole window on-screen.
+monitor-relative top-left position while maximizing its visible area on the
+destination monitor.
 
 #### Scenario: Floating portrait window moves right to ultrawide
 - **WHEN** the active floating window is on the portrait monitor and the user

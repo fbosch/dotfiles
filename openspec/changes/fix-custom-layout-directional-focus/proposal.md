@@ -35,5 +35,7 @@ ultrawide workspaces.
   workspaces.
 - The completed `hypr-custom-layout-ordering` change remains authoritative for
   placement, ordering, transfer, resize, and directional move semantics.
+- Floating monitor-transfer behavior is specified separately in the ordering
+  change, despite sharing `.config/hypr/lib/window/directional.lua`.
 - No dependencies, persisted state, or configuration format changes are
   expected.

@@ -46,9 +46,9 @@ directional focus target.
   visible geometrically valid candidate in the requested direction
 - **THEN** directional focus selects the valid candidate
 
-#### Scenario: No eligible local candidate preserves native edge behavior
+#### Scenario: No eligible local or paired-monitor candidate preserves native edge behavior
 - **WHEN** no visible geometrically valid window lies in the requested direction
-  on a custom-layout workspace
+  on the custom-layout workspace or its configured paired-monitor edge
 - **THEN** the system retains its native directional-focus behavior
 
 ### Requirement: Directional-focus policy remains scoped to custom layouts
