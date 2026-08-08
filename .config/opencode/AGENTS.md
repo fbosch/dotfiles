@@ -28,6 +28,7 @@
 - If unsure whether a task is non-trivial, prefer reading the narrowest relevant reference over guessing.
 - Format user-executed multi-step instructions as a numbered list of bounded actions, with the immediate next action first.
 - For work spanning multiple replies, state the current step, completed outcome, and immediate next action; use the task list rather than repeating a full plan.
+- When asked to output a plan, write it to `docs/agents/plans/` by default.
 - When work reaches a coherent, independently reviewable checkpoint, briefly flag it as a good commit point and summarize the completed scope and validation. Do not pause, commit, or ask for confirmation unless the user requested a commit-oriented workflow.
 - Keep responses and implementation focused on the active problem; raise unrelated findings only when they affect correctness, safety, or the requested outcome.
 
