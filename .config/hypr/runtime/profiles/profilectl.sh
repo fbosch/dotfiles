@@ -368,18 +368,18 @@ set_power_profile() {
 }
 
 pause_background_helpers() {
-  pkill -STOP -f window-capture-daemon 2>/dev/null || true
+  "$HOME/.config/hypr/runtime/windows/daemons/window-capture/window-capturectl.sh" pause >/dev/null 2>&1 || true
 }
 
 resume_background_helpers() {
-  pkill -CONT -f window-capture-daemon 2>/dev/null || true
+  "$HOME/.config/hypr/runtime/windows/daemons/window-capture/window-capturectl.sh" resume >/dev/null 2>&1 || true
 }
 
 refresh_window_captures() {
-  local capture_daemon_script="$HOME/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.lua"
+  local capturectl="$HOME/.config/hypr/runtime/windows/daemons/window-capture/window-capturectl.sh"
 
-  if [[ -x "$capture_daemon_script" ]]; then
-    ( sleep 0.3; "$capture_daemon_script" refresh-once >/dev/null 2>&1 ) &
+  if [[ -x "$capturectl" ]]; then
+    ( sleep 0.3; "$capturectl" refresh >/dev/null 2>&1 ) &
   fi
 }
 

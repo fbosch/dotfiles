@@ -24,7 +24,7 @@
 ## 4. Clean Actuator Boundaries
 
 - [x] 4.1 Add ownership-aware Window Capture pause, resume, refresh, and status operations while preserving worker ownership behavior.
-- [ ] 4.2 Replace profilectl process-name signals and implementation-path invocation with the Window Capture feature interface.
+- [x] 4.2 Replace profilectl process-name signals and implementation-path invocation with the Window Capture feature interface.
 - [ ] 4.3 Extend capture and profile fixtures for pause/resume idempotence, failed refresh, and no-unrelated-process signaling.
 
 ## 5. Retire Legacy State And Validate

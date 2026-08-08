@@ -90,7 +90,7 @@ write_stub() {
   chmod +x "$bin_dir/$name"
 }
 
-mkdir -p "$bin_dir" "$home_dir/.config/hypr/runtime/profiles" "$home_dir/.config/hypr/lib" "$runtime_dir" "$seam_dir"
+mkdir -p "$bin_dir" "$home_dir/.config/hypr/runtime/profiles" "$home_dir/.config/hypr/runtime/windows/daemons/window-capture" "$home_dir/.config/hypr/lib" "$runtime_dir" "$seam_dir"
 ln -s "$profilectl" "$home_dir/.config/hypr/runtime/profiles/profilectl.sh"
 ln -s "$profile_state_helper" "$home_dir/.config/hypr/runtime/profiles/profile-state.lua"
 ln -s "$repo_root/lib/json.lua" "$home_dir/.config/hypr/lib/json.lua"
@@ -98,6 +98,8 @@ ln -s "$repo_root/lib/profile_state.lua" "$home_dir/.config/hypr/lib/profile_sta
 write_stub ags
 write_stub pkill
 write_stub powerprofilesctl
+write_stub window-capturectl
+ln -s "$bin_dir/window-capturectl" "$home_dir/.config/hypr/runtime/windows/daemons/window-capture/window-capturectl.sh"
 
 cat > "$bin_dir/hyprctl" <<'EOF'
 #!/usr/bin/env bash
@@ -192,6 +194,9 @@ start_profilectl() {
 
 assert_file_not_contains "$profilectl" "ags request"
 assert_file_not_contains "$profilectl" "window-switcher"
+assert_file_not_contains "$profilectl" "pkill -STOP"
+assert_file_not_contains "$profilectl" "pkill -CONT"
+assert_file_not_contains "$profilectl" "window-capture-daemon.lua"
 
 reset_profile_state
 : > "$actuator_log"
@@ -200,6 +205,7 @@ assert_file_equals "$runtime_dir/hypr-profiles/powersave.idle.count" "1"
 assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" "powersave"
 assert_file_equals "$runtime_dir/hypr-profiles/state.json" '{"generation":1,"resolved":"powersave","selection":"auto","sources":{"gaming":{},"powersave":{"idle":1}}}'
 assert_file_not_contains "$actuator_log" "ags request"
+assert_file_contains "$actuator_log" "window-capturectl.sh pause"
 json_status="$(run_profilectl status --json)"
 [[ "$json_status" == "$(< "$runtime_dir/hypr-profiles/state.json")" ]] || fail "JSON status did not return canonical state"
 
@@ -421,5 +427,14 @@ fi
 assert_file_contains "$actuator_log" 'hyprctl applied gaming'
 assert_absent "$runtime_dir/hypr-profiles/profile-overlay.mode"
 unset PROFILECTL_TEST_HYPRCTL_INTERRUPT_TARGET PROFILECTL_TEST_HYPRCTL_INTERRUPT_PHASE
+
+reset_profile_state
+: > "$actuator_log"
+run_profilectl set-manual gaming
+run_profilectl clear-manual
+sleep 0.4
+assert_file_contains "$actuator_log" "window-capturectl.sh pause"
+assert_file_contains "$actuator_log" "window-capturectl.sh resume"
+assert_file_contains "$actuator_log" "window-capturectl.sh refresh"
 
 printf 'PASS profilectl fixture preserves legacy behavior and exposes canonical-state transition seams\n'
