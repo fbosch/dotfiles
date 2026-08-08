@@ -493,7 +493,6 @@ function handleForceQuitRequest(
 		res("destroyed");
 		return;
 	}
-
 	res("unknown action");
 }
 

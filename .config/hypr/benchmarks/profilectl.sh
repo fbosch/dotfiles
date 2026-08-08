@@ -59,21 +59,12 @@ bench() {
   printf '%-28s %8d iters %8d us/call %8d ms total\n' "$name" "$iterations" "$per_call_us" "$elapsed_ms"
 }
 
-run_profilectl sync powersave 0 || true
-run_profilectl sync gaming 0 || true
+run_profilectl sync-source powersave idle 0 || true
+run_profilectl sync-source gaming watchdog 0 || true
 
-bench "is-active inactive" is-active powersave
-
-run_profilectl sync powersave 1 || true
-bench "is-active active" is-active powersave
-
-run_profilectl sync powersave 0 || true
-bench "apply powersave" apply powersave
-
-run_profilectl sync powersave 1 || true
-bench "remove powersave" remove powersave
-
-bench "sync gaming 0" sync gaming 0
-bench "sync gaming 1" sync gaming 1
-bench "status" status
+bench "sync-source gaming 0" sync-source gaming watchdog 0
+bench "sync-source gaming 1" sync-source gaming watchdog 1
+bench "set-manual powersave" set-manual powersave
+bench "clear-manual" clear-manual
+bench "status --json" status --json
 bench "reconcile" reconcile

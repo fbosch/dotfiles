@@ -329,36 +329,6 @@ apply_effective_state() {
     fi
 }
 
-apply_profile() {
-  local profile="$1"
-  local source="${2:-manual}"
-  local value
-
-  if [[ "$source" == "manual" ]]; then
-    set_manual_profile "$profile"
-    return
-  fi
-
-  value="$(read_state_source_count "$profile" "$source")" || return 1
-  set_profile_count "$profile" "$source" $((value + 1))
-}
-
-remove_profile() {
-  local profile="$1"
-  local source="${2:-manual}"
-  local value
-
-  if [[ "$source" == "manual" ]]; then
-    if [[ "$(read_state_selection)" == "$profile" ]]; then
-      set_manual_profile "$AUTO_SELECTION"
-    fi
-    return
-  fi
-
-  value="$(read_state_source_count "$profile" "$source")" || return 1
-  set_profile_count "$profile" "$source" $((value - 1))
-}
-
 set_profile_count() {
   local profile="$1"
   local source="$2"
@@ -461,30 +431,6 @@ reconcile_profile_state() {
   publish_state "$state"
 }
 
-print_status() {
-  local powersave_count
-  local gaming_count
-  local selection
-
-  powersave_count="$(read_state_profile_count "$POWERSAVE_PROFILE")"
-  gaming_count="$(read_state_profile_count "$GAMING_PROFILE")"
-  selection="$(read_state_selection)" || return 1
-
-  if [[ "$selection" == "$POWERSAVE_PROFILE" ]]; then powersave_count=$((powersave_count + 1)); fi
-  if [[ "$selection" == "$GAMING_PROFILE" ]]; then gaming_count=$((gaming_count + 1)); fi
-
-  printf "selection=%s\n" "$selection"
-  printf "powersave=%s\n" "$powersave_count"
-  printf "gaming=%s\n" "$gaming_count"
-
-  if [[ "$(read_state_resolved)" != "$DEFAULT_PROFILE" ]]; then
-    printf "overlay=active\n"
-    return
-  fi
-
-  printf "overlay=inactive\n"
-}
-
 print_json_status() {
   if [[ ! -e "$STATE_FILE" ]]; then
     printf "profilectl: profile state has not been published\n" >&2
@@ -495,33 +441,8 @@ print_json_status() {
   cat "$STATE_FILE"
 }
 
-is_profile_active() {
-  local profile="$1"
-
-  [[ "$(read_state_selection)" == "$profile" ]] && return 0
-  [[ "$(read_state_profile_count "$profile")" -gt 0 ]]
-}
-
-is_source_active() {
-  local profile="$1"
-  local source="$2"
-  local value
-
-  if [[ "$source" == "manual" ]]; then
-    [[ "$(read_state_selection)" == "$profile" ]]
-    return
-  fi
-
-  value="$(read_state_source_count "$profile" "$source")"
-  if [[ "$value" -gt 0 ]]; then
-    return 0
-  fi
-
-  return 1
-}
-
 usage() {
-  printf "usage: %s <apply|remove|toggle|sync|apply-source|remove-source|sync-source|set-manual|clear-manual|is-active|is-source-active|status [--json]|reconcile> [profile] [source] [count]\n" "$0" >&2
+  printf "usage: %s <sync-source|set-manual|clear-manual|status --json|reconcile> [profile] [source] [count]\n" "$0" >&2
 }
 
 main() {
@@ -529,72 +450,6 @@ main() {
   local profile="${2:-}"
 
   case "$command" in
-    apply)
-      if is_valid_profile "$profile"; then
-        :
-      else
-        usage
-        exit 1
-      fi
-      apply_profile "$profile"
-      ;;
-    remove)
-      if is_valid_profile "$profile"; then
-        :
-      else
-        usage
-        exit 1
-      fi
-      remove_profile "$profile"
-      ;;
-    toggle)
-      if is_valid_profile "$profile"; then
-        :
-      else
-        usage
-        exit 1
-      fi
-      if is_source_active "$profile" manual; then
-        remove_profile "$profile"
-      else
-        apply_profile "$profile"
-      fi
-      ;;
-    apply-source)
-      if is_valid_profile "$profile" && is_valid_source "${3:-}"; then
-        :
-      else
-        usage
-        exit 1
-      fi
-      apply_profile "$profile" "$3"
-      ;;
-    remove-source)
-      if is_valid_profile "$profile" && is_valid_source "${3:-}"; then
-        :
-      else
-        usage
-        exit 1
-      fi
-      remove_profile "$profile" "$3"
-      ;;
-    sync)
-      if is_valid_profile "$profile"; then
-        :
-      else
-        usage
-        exit 1
-      fi
-
-      if [[ "${3:-}" =~ ^[0-9]+$ ]]; then
-        :
-      else
-        usage
-        exit 1
-      fi
-
-      set_profile_count "$profile" watchdog "$3"
-      ;;
     sync-source)
       if is_valid_profile "$profile" && is_valid_source "${3:-}"; then
         :
@@ -618,37 +473,12 @@ main() {
     clear-manual)
       set_manual_profile "$AUTO_SELECTION"
       ;;
-    is-active)
-      if is_valid_profile "$profile"; then
-        :
-      else
-        usage
-        exit 1
-      fi
-      is_profile_active "$profile"
-      ;;
-    is-source-active)
-      if is_valid_profile "$profile" && is_valid_source "${3:-}"; then
-        :
-      else
-        usage
-        exit 1
-      fi
-      is_source_active "$profile" "$3"
-      ;;
     status)
-      case "$profile" in
-        "")
-          print_status
-          ;;
-        --json)
-          print_json_status
-          ;;
-        *)
-          usage
-          exit 1
-          ;;
-      esac
+      if [[ "$profile" != "--json" || $# -ne 2 ]]; then
+        usage
+        exit 1
+      fi
+      print_json_status
       ;;
     reconcile)
       reconcile_profile_state
