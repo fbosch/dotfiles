@@ -18,7 +18,7 @@
 - [ ] 3.1 Migrate the gaming watchdog and all manual profile actions to the explicit controller contract.
 - [x] 3.2 Add one AGS profile-state service and migrate Gaming opacity, Start Menu, and Window Switcher to passive canonical-state reads, including separate Auto and Default controls.
 - [x] 3.3 Add one Lua profile-state reader and migrate Hyprland reload and custom-layout recovery from overlay markers.
-- [ ] 3.4 Gate gaming presentation updates on canonical resolved profile state so manual non-Gaming overrides remain effective.
+- [x] 3.4 Gate gaming presentation updates on canonical resolved profile state so manual non-Gaming overrides remain effective.
 - [x] 3.5 Remove the imperative Window Switcher profile request after the component follows canonical state.
 
 ## 4. Clean Actuator Boundaries
