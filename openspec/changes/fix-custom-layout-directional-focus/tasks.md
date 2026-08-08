@@ -1,0 +1,27 @@
+## 1. Focus Selection Tests
+
+- [ ] 1.1 Add `window_move_spec` coverage for tiled-to-floating focus on the
+  ultrawide custom layout and floating-to-tiled focus on the portrait custom
+  layout.
+- [ ] 1.2 Add focus-selection tests proving nearest mixed-state candidates win
+  and opposite-side, invisible, and incomplete candidates are ignored.
+- [ ] 1.3 Add regression tests proving no local candidate retains native
+  directional fallback, non-custom workspaces retain native focus, and PiP
+  retains its tiled-only override.
+
+## 2. Custom Layout Focus Routing
+
+- [ ] 2.1 Add a private workspace-local directional candidate resolver that
+  selects the nearest visible tiled or floating candidate by geometry.
+- [ ] 2.2 Route ordinary directional focus through the resolver only for the
+  recognised portrait and ultrawide custom layouts.
+- [ ] 2.3 Retain existing native fallback and delayed cursor warp behavior when
+  the resolver has no eligible candidate.
+
+## 3. Validation
+
+- [ ] 3.1 Run the focused `window_move_spec` suite with LuaJIT.
+- [ ] 3.2 Run `devenv test test:lua` and `devenv test test:lua-quality`.
+- [ ] 3.3 Reload Hyprland and run `hyprctl configerrors`.
+- [ ] 3.4 Live-test tiled-to-floating and floating-to-tiled directional focus
+  on both custom layouts, including PiP precedence.
