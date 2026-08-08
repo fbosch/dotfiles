@@ -543,12 +543,11 @@ function refreshProfileControls() {
   }
 
   const automaticGamingActive = hasAutomaticGamingClaim(profileState);
-  const selectedProfileId = selection ? `profile-${selection}` : "";
   for (const [id, badge] of profileConditionBadges) {
     badge.set_visible(
       automaticGamingActive &&
-        id === selectedProfileId &&
-        selection !== "gaming",
+        selection === "auto" &&
+        id === "profile-auto",
     );
   }
   menuItemButtons.get("profile-auto")?.set_tooltip_text(
@@ -1082,7 +1081,7 @@ function createProfileControls(): Gtk.Box {
           Gtk.Align.CENTER,
           "Force Default profile",
           "\u{F02B4}",
-          automaticGamingActive && defaultActive,
+          false,
         )}
         <box hexpand={true} />
         {createProfileToggle(
@@ -1104,7 +1103,7 @@ function createProfileControls(): Gtk.Box {
           Gtk.Align.END,
           "Force Power Saver profile",
           "\u{F02B4}",
-          automaticGamingActive && powersaveActive,
+          false,
         )}
       </box>
       <box orientation={Gtk.Orientation.HORIZONTAL} class="profile-labels">
