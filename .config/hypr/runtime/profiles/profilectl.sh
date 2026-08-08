@@ -373,6 +373,9 @@ set_profile_count() {
   local previous_resolved
 
   count="$(normalize_count "$count")"
+  if [[ "$count" -lt 0 ]]; then
+    count=0
+  fi
 
   if [[ "$source" == "manual" ]]; then
     if [[ "$count" -gt 0 ]]; then

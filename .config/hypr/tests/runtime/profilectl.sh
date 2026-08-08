@@ -274,6 +274,19 @@ assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"resolved":"gaming
 assert_file_contains "$actuator_log" 'hyprctl eval require("profiles").apply("gaming")'
 
 reset_profile_state
+run_profilectl sync-source gaming watchdog 1
+printf '9' > "$runtime_dir/hypr-profiles/powersave.idle.count"
+printf 'powersave' > "$runtime_dir/hypr-profiles/manual-selection"
+printf 'powersave' > "$runtime_dir/hypr-profiles/profile-overlay.mode"
+: > "$runtime_dir/hypr-profiles/profile-overlay.active"
+run_profilectl sync-source gaming watchdog 0
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"resolved":"default"'
+assert_file_equals "$runtime_dir/hypr-profiles/powersave.idle.count" '9'
+assert_file_equals "$runtime_dir/hypr-profiles/manual-selection" 'powersave'
+assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.mode" 'powersave'
+assert_file_equals "$runtime_dir/hypr-profiles/profile-overlay.active" ''
+
+reset_profile_state
 write_raw_state_fixture '{"selection":'
 : > "$actuator_log"
 if run_profilectl sync-source gaming watchdog 1 >/dev/null 2>&1; then
