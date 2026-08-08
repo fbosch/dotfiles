@@ -60,6 +60,28 @@ and ultrawide custom-layout workspaces.
   portrait or ultrawide custom layout
 - **THEN** the system uses native directional-focus behavior
 
+### Requirement: Custom-layout focus crosses between paired monitors at layout edges
+The system SHALL focus the nearest visible directional window on the paired
+monitor when no same-workspace candidate exists at the portrait-right or
+ultrawide-left custom-layout edge.
+
+#### Scenario: Portrait right edge focuses ultrawide window
+- **WHEN** no eligible window lies to the right of an active window on a
+  portrait custom-layout workspace
+- **THEN** directional focus right selects the nearest visible ultrawide window
+  to the right
+
+#### Scenario: Ultrawide left edge focuses portrait window
+- **WHEN** no eligible window lies to the left of an active window on an
+  ultrawide custom-layout workspace
+- **THEN** directional focus left selects the nearest visible portrait window
+  to the left
+
+#### Scenario: Unpaired layout edges retain native focus
+- **WHEN** directional focus is invoked at another custom-layout edge
+- **THEN** the system retains native directional-focus behavior when no
+  same-workspace candidate exists
+
 ### Requirement: Picture-in-Picture focus retains its existing policy
 The system SHALL preserve the Picture-in-Picture focus override ahead of the
 custom-layout directional-focus policy.

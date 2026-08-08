@@ -31,19 +31,22 @@ change must not alter any of those paths.
 
 ## Decisions
 
-### Use workspace-local geometry for custom-layout focus
+### Use workspace-local geometry with paired-monitor edge traversal
 
 The resolver will inspect windows belonging to the active window's workspace.
 It will compare the centres of windows with usable geometry, retain only those
 strictly in the requested half-plane, and select the smallest squared distance.
 
 This keeps candidate scope local to the visible layout workspace and produces a
-single policy for tiled-to-floating and floating-to-tiled navigation.
+single policy for tiled-to-floating and floating-to-tiled navigation. When no
+local candidate exists, portrait-right selects from the ultrawide monitor and
+ultrawide-left selects from the portrait monitor using the same geometry rule.
+Other edges retain native focus behavior.
 
 Alternative considered: change Hyprland focus preferences. Native focus has
 separate tiled and floating selection modes and strict adjacency behavior, so a
 configuration preference cannot express the required mixed nearest-window
-policy.
+policy or the monitor-pair edge policy.
 
 ### Limit the resolver to recognised custom layouts
 

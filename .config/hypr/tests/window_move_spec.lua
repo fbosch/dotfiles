@@ -6,6 +6,7 @@ local dispatched = {}
 local active_window = nil
 local cursor_position = nil
 local windows = {}
+local monitors = {}
 
 _G.hl = {
 	dsp = {
@@ -53,6 +54,9 @@ _G.hl = {
 	get_windows = function()
 		return windows
 	end,
+	get_monitors = function()
+		return monitors
+	end,
 }
 
 local interaction
@@ -73,6 +77,7 @@ local function reset(monitor, x, monitor_x, workspace_windows, name)
 	local workspace = { name = name or "2" }
 	active_window.workspace = workspace
 	windows = { active_window }
+	monitors = {}
 	cursor_position = nil
 	if workspace_windows then
 		function workspace:get_windows()
@@ -191,6 +196,56 @@ run("portrait focus includes a tiled window from a floating window", function()
 
 	assert_equal(dispatched[1].op, "focus", "dispatcher")
 	assert_equal(dispatched[1].args.window, tiled, "tiled focus target")
+end)
+
+run("portrait right focus crosses to the nearest ultrawide window", function()
+	reset("HDMI-A-2")
+	active_window.visible = true
+	set_workspace_windows("lua:portrait_rows", { active_window })
+	local far = {
+		visible = true,
+		monitor = { name = "DP-2" },
+		at = { x = 3000, y = 200 },
+		size = { x = 300, y = 400 },
+		workspace = { name = "2" },
+	}
+	local near = {
+		visible = true,
+		monitor = { name = "DP-2" },
+		at = { x = 1800, y = 200 },
+		size = { x = 300, y = 400 },
+		workspace = { name = "2" },
+	}
+	windows = { active_window, far, near }
+
+	directional.focus(state, "right")()
+
+	assert_equal(dispatched[1].args.window, near, "ultrawide focus target")
+end)
+
+run("ultrawide left focus crosses to the nearest portrait window", function()
+	reset("DP-2", 2000)
+	active_window.visible = true
+	set_workspace_windows("lua:ultrawide_master", { active_window })
+	local far = {
+		visible = true,
+		monitor = { name = "HDMI-A-2" },
+		at = { x = 100, y = 200 },
+		size = { x = 300, y = 400 },
+		workspace = { name = "1" },
+	}
+	local near = {
+		visible = true,
+		monitor = { name = "HDMI-A-2" },
+		at = { x = 1000, y = 200 },
+		size = { x = 300, y = 400 },
+		workspace = { name = "1" },
+	}
+	windows = { active_window, far, near }
+
+	directional.focus(state, "left")()
+
+	assert_equal(dispatched[1].args.window, near, "portrait focus target")
 end)
 
 run("custom layout focus chooses the nearest mixed-state candidate", function()
@@ -430,6 +485,52 @@ run("dp non-left edge swaps left", function()
 	assert_equal(dispatched[2].op, "cursor.move", "cursor dispatcher")
 end)
 
+run("floating dp window moves left to portrait without transfer intent", function()
+	reset("DP-2", 3000)
+	active_window.floating = true
+	active_window.workspace.tiledLayout = "lua:ultrawide_master"
+
+	directional.move(state, "left")()
+
+	assert_equal(dispatched[1].op, "window.move", "dispatcher")
+	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
+	assert_equal(order_state.transfer_intent_for_window(active_window), nil, "transfer intent")
+end)
+
+run("floating window preserves its relative position across monitors", function()
+	reset("DP-2", 2128)
+	active_window.floating = true
+	active_window.at.y = 788
+	active_window.workspace.tiledLayout = "lua:ultrawide_master"
+	monitors = {
+		{ name = "DP-2", x = 1440, y = 500, width = 3440, height = 1440 },
+		{ name = "HDMI-A-2", x = 0, y = 0, width = 2560, height = 1440, transform = 3 },
+	}
+
+	directional.move(state, "left")()
+
+	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
+	assert_equal(dispatched[2].op, "window.move", "position dispatcher")
+	assert_equal(dispatched[2].args.x, 288, "relative x")
+	assert_equal(dispatched[2].args.y, 512, "relative y")
+end)
+
+run("floating window position stays inside the destination monitor", function()
+	reset("DP-2", 4708)
+	active_window.floating = true
+	active_window.at.y = 1868
+	active_window.workspace.tiledLayout = "lua:ultrawide_master"
+	monitors = {
+		{ name = "DP-2", x = 1440, y = 500, width = 3440, height = 1440 },
+		{ name = "HDMI-A-2", x = 0, y = 0, width = 2560, height = 1440, transform = 3 },
+	}
+
+	directional.move(state, "left")()
+
+	assert_equal(dispatched[2].args.x, 1140, "clamped x")
+	assert_equal(dispatched[2].args.y, 2160, "clamped y")
+end)
+
 run("dp outside monitor edge tolerance swaps left", function()
 	reset("DP-2", 2100, 2000)
 	directional.move(state, "left")()
@@ -492,6 +593,18 @@ run("hdmi right moves window to ultrawide monitor", function()
 	)
 	assert_equal(order_state.transfer_intent_for_window(active_window).axis, "x", "transfer axis")
 	assert_equal(order_state.transfer_intent_for_window(active_window).edge, "start", "transfer edge")
+end)
+
+run("floating hdmi window moves right to ultrawide without transfer intent", function()
+	reset("HDMI-A-2")
+	active_window.floating = true
+	active_window.workspace.tiledLayout = "lua:portrait_rows"
+
+	directional.move(state, "right")()
+
+	assert_equal(dispatched[1].op, "window.move", "dispatcher")
+	assert_equal(dispatched[1].args.monitor, "DP-2", "target monitor")
+	assert_equal(order_state.transfer_intent_for_window(active_window), nil, "transfer intent")
 end)
 
 run("hdmi down uses portrait layout swap", function()

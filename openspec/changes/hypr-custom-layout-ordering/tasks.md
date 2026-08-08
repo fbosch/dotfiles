@@ -47,3 +47,10 @@
 - [x] 6.4 Run `lua .config/hypr/tests/portrait_rows.lua`.
 - [x] 6.5 Run `hyprctl configerrors`.
 - [x] 6.6 Review the focused diff for unintended changes outside Hypr layout/keybind/order tests.
+
+## 7. Floating Monitor Moves
+
+- [x] 7.1 Move floating windows directly between paired custom-layout monitors
+  without tiled transfer intent, with focused regression tests.
+- [x] 7.2 Preserve floating-window relative placement and clamp it to the
+  destination monitor bounds.

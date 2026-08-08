@@ -30,6 +30,23 @@ The system SHALL handle directional move commands within a custom layout by movi
 - **WHEN** the active tiled window is already at the requested edge of its custom layout
 - **THEN** the corresponding same-layout move command leaves the stored order unchanged
 
+### Requirement: Floating directional moves preserve visible monitor-relative placement
+The system SHALL move a floating window directly between paired custom-layout
+monitors without recording tiled-layout insertion intent, preserving its
+monitor-relative top-left position while keeping the whole window on-screen.
+
+#### Scenario: Floating portrait window moves right to ultrawide
+- **WHEN** the active floating window is on the portrait monitor and the user
+  invokes the move-right command
+- **THEN** the window moves to the ultrawide monitor at the corresponding
+  clamped relative position without changing tiled layout order
+
+#### Scenario: Floating ultrawide window moves left to portrait
+- **WHEN** the active floating window is on the ultrawide monitor and the user
+  invokes the move-left command
+- **THEN** the window moves to the portrait monitor at the corresponding
+  clamped relative position without changing tiled layout order
+
 ### Requirement: Transfer insertion ignores source-monitor geometry
 The system SHALL NOT use source-monitor window geometry to choose the insertion position for a cross-monitor transfer.
 

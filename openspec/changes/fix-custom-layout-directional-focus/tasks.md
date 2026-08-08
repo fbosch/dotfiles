@@ -26,3 +26,11 @@
 - [x] 3.3 Reload Hyprland and run `hyprctl configerrors`.
 - [ ] 3.4 Live-test tiled-to-floating and floating-to-tiled directional focus
   on both custom layouts, including PiP precedence.
+
+## 4. Cross-Monitor Focus
+
+- [x] 4.1 Add focus-selection tests for portrait-right to ultrawide and
+  ultrawide-left to portrait transitions.
+- [x] 4.2 Focus the nearest eligible window on the paired monitor after local
+  custom-layout candidates are exhausted.
+- [x] 4.3 Live-test paired-monitor directional focus transitions.
