@@ -29,7 +29,7 @@
 
 ## 5. Retire Legacy State And Validate
 
-- [ ] 5.1 Remove legacy count and overlay-marker readers after every in-repository consumer uses canonical state.
+- [x] 5.1 Remove legacy count and overlay-marker readers after every in-repository consumer uses canonical state.
 - [ ] 5.2 Remove legacy state projections and obsolete profilectl compatibility commands after their callers are gone.
 - [ ] 5.3 Run profile fixtures, `devenv test`, AGS type validation, and targeted AGS benchmarks.
 - [ ] 5.4 Verify manual overrides, automatic recovery after Auto, AGS restart during active profiles, and Window Capture behavior in a live Hyprland session.

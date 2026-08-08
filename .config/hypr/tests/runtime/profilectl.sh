@@ -244,6 +244,65 @@ assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"selection":"power
 run_profilectl clear-manual
 assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"selection":"auto"'
 
+# Retained compatibility-wrapper matrix: manual commands, source claims, and watchdog sync.
+reset_profile_state
+run_profilectl apply gaming
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"selection":"gaming"'
+run_profilectl is-active gaming
+run_profilectl is-source-active gaming manual
+manual_status="$(run_profilectl status)"
+[[ "$manual_status" == $'selection=gaming\npowersave=0\ngaming=1\noverlay=active' ]] \
+  || fail "unexpected manual status: $manual_status"
+run_profilectl remove gaming
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"selection":"auto"'
+if run_profilectl is-active gaming; then
+  fail "removed manual gaming selection remained active"
+fi
+run_profilectl toggle powersave
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"selection":"powersave"'
+run_profilectl toggle powersave
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"selection":"auto"'
+
+reset_profile_state
+run_profilectl apply-source gaming launcher
+run_profilectl apply-source gaming launcher
+run_profilectl remove-source gaming launcher
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"launcher":1'
+run_profilectl remove-source gaming absent
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"launcher":1'
+run_profilectl is-active gaming
+run_profilectl is-source-active gaming launcher
+if run_profilectl is-source-active gaming absent; then
+  fail "absent source was reported active"
+fi
+run_profilectl remove-source gaming launcher
+if run_profilectl is-active gaming; then
+  fail "removed source claim remained active"
+fi
+
+reset_profile_state
+run_profilectl sync gaming 2
+assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"watchdog":2'
+run_profilectl is-source-active gaming watchdog
+automatic_status="$(run_profilectl status)"
+[[ "$automatic_status" == $'selection=auto\npowersave=0\ngaming=2\noverlay=active' ]] \
+  || fail "unexpected automatic status: $automatic_status"
+run_profilectl sync gaming 0
+if run_profilectl is-source-active gaming watchdog; then
+  fail "cleared watchdog claim remained active"
+fi
+
+reset_profile_state
+run_profilectl sync-source powersave idle 2
+run_profilectl apply gaming
+manual_with_claims_status="$(run_profilectl status)"
+[[ "$manual_with_claims_status" == $'selection=gaming\npowersave=2\ngaming=1\noverlay=active' ]] \
+  || fail "unexpected manual status with automatic claims: $manual_with_claims_status"
+run_profilectl remove gaming
+automatic_with_claims_status="$(run_profilectl status)"
+[[ "$automatic_with_claims_status" == $'selection=auto\npowersave=2\ngaming=0\noverlay=active' ]] \
+  || fail "unexpected automatic status with claims: $automatic_with_claims_status"
+
 reset_profile_state
 if HYPRCTL_FAIL_DEFAULT=1 run_profilectl clear-manual; then
   fail "profilectl accepted a failed default application"
