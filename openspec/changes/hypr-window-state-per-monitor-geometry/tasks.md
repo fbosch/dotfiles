@@ -14,6 +14,6 @@
 ## 3. Validate
 
 - [x] 3.1 Run the focused window-state rules and runtime tests.
-- [ ] 3.2 Run `devenv test` for the repository test suite, including Lua-quality checks.
+- [x] 3.2 Run `devenv test` for the repository test suite, including Lua-quality checks.
 - [x] 3.3 Reload Hyprland and run `hyprctl configerrors`.
-- [ ] 3.4 Live-test one selector with distinct geometry on each monitor, then confirm opening it from each monitor's active workspace restores that monitor's saved geometry without relocating the window.
+- [x] 3.4 Live-test one selector with distinct geometry on each monitor, then confirm opening it from each monitor's active workspace restores that monitor's saved geometry without relocating the window.
