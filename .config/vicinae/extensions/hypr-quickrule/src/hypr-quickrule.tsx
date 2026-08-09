@@ -15,7 +15,6 @@ import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type {
-	HyprMonitorInfo,
 	HyprpropWindowInfo,
 	WindowRuleProfile,
 	RuleSelector,
@@ -31,14 +30,8 @@ type LuaRuleEntry = {
 	pattern?: string;
 	match: Record<string, string>;
 	effects: Record<string, LuaValue>;
-	source: "quickrule" | "window-state";
+	source: "quickrule";
 	comment: string;
-};
-
-type WindowStateSnapshot = {
-	monitor: string;
-	size: [number, number];
-	move: [number, number];
 };
 
 const QUICKRULE_LUA_HEADER = `-- Auto-generated Lua window rules by hypr-quickrule
@@ -48,11 +41,6 @@ const QUICKRULE_LUA_HEADER = `-- Auto-generated Lua window rules by hypr-quickru
 
 const WINDOW_STATE_SELECTORS_LUA_HEADER = `-- Window state persistence selectors.
 -- Source selector list read by runtime/windows/window-state.sh.
-
-`;
-
-const WINDOW_STATE_RULES_LUA_HEADER = `-- Auto-generated Lua window state persistence rules
--- Managed by hypr-quickrule and runtime/windows/window-state.sh
 
 `;
 
@@ -232,10 +220,10 @@ const RULE_PROFILES: WindowRuleProfile[] = [
 	},
 	{
 		id: "snapshot-state",
-		name: "Snapshot Window State",
-		description: "Save the selected window's current size and position now",
+		name: "Track Window State",
+		description: "Track the selected window's floating size and position",
 		icon: Icon.SaveDocument,
-		rules: [], // Special profile - writes current geometry immediately
+		rules: [], // Special profile - enables daemon-owned persistence
 	},
 ];
 
@@ -427,10 +415,6 @@ export default function Command() {
 		return `${WINDOW_STATE_SELECTORS_LUA_HEADER}return {\n${entry}\n}\n`;
 	};
 
-	const renderWindowStateRuleFile = (entry: string): string => {
-		return `${WINDOW_STATE_RULES_LUA_HEADER}return {\n${entry}\n}\n`;
-	};
-
 	const serializeWindowStateSelectorEntry = (
 		matcher: string,
 		pattern: string,
@@ -476,85 +460,6 @@ export default function Command() {
 		return renderWindowStateSelectorFile(entry);
 	};
 
-	const upsertLuaTableRuleEntry = (
-		content: string,
-		entry: LuaRuleEntry,
-	): string => {
-		const serializedEntry = serializeLuaTableRuleEntry(entry);
-		const lines = content.trimEnd().split("\n");
-		const idLine = `id = ${luaString(entry.id)},`;
-		const idIndex = lines.findIndex((line) => line.includes(idLine));
-
-		if (idIndex !== -1) {
-			let startIndex = idIndex;
-			while (startIndex > 0 && !/^  \{$/.test(lines[startIndex])) {
-				startIndex -= 1;
-			}
-
-			let endIndex = idIndex;
-			while (endIndex < lines.length - 1 && !/^  },$/.test(lines[endIndex])) {
-				endIndex += 1;
-			}
-
-			lines.splice(
-				startIndex,
-				endIndex - startIndex + 1,
-				...serializedEntry.split("\n"),
-			);
-			return `${lines.join("\n")}\n`;
-		}
-
-		if (/return\s*{\s*}\s*$/.test(content.trimEnd())) {
-			return renderWindowStateRuleFile(serializedEntry);
-		}
-
-		if (/}\s*$/.test(content.trimEnd())) {
-			return `${content.trimEnd().replace(/}\s*$/, serializedEntry)}\n}\n`;
-		}
-
-		return renderWindowStateRuleFile(serializedEntry);
-	};
-
-	const renderRuntimeWindowStateRulesFile = (entry: string): string => {
-		return `# Auto-generated window state persistence rules\n# Selectors: $HOME/.config/hypr/rules/window-state-selectors.lua\n# Managed by hypr-quickrule and runtime/windows/window-state.sh\n\n${entry}\n`;
-	};
-
-	const renderRuntimeWindowStateRuleEntry = (
-		matcher: string,
-		pattern: string,
-		snapshot: WindowStateSnapshot,
-	): string => {
-		return [
-			`# ${matcher} ${pattern}`,
-			`windowrule = ${matcher} (${pattern}), monitor ${snapshot.monitor}`,
-			`windowrule = size ${snapshot.size[0]} ${snapshot.size[1]}, ${matcher} (${pattern})`,
-			`windowrule = move ${snapshot.move[0]} ${snapshot.move[1]}, ${matcher} (${pattern})`,
-		].join("\n");
-	};
-
-	const upsertRuntimeWindowStateRuleEntry = (
-		content: string,
-		matcher: string,
-		pattern: string,
-		entry: string,
-	): string => {
-		const lines = content.trimEnd().split("\n");
-		const marker = `# ${matcher} ${pattern}`;
-		const markerIndex = lines.findIndex((line) => line === marker);
-
-		if (markerIndex === -1) {
-			return `${content.trimEnd()}\n\n${entry}\n`;
-		}
-
-		let endIndex = markerIndex + 1;
-		while (endIndex < lines.length && lines[endIndex].trim() !== "") {
-			endIndex += 1;
-		}
-
-		lines.splice(markerIndex, endIndex - markerIndex, ...entry.split("\n"));
-		return `${lines.join("\n")}\n`;
-	};
-
 	const generateLuaRuleEntry = (
 		profile: WindowRuleProfile,
 		info: HyprpropWindowInfo,
@@ -591,51 +496,6 @@ export default function Command() {
 		return `^${escapeRegex(getRuleSelectorValue(info, sel))}$`;
 	};
 
-	const fetchMonitors = async (): Promise<HyprMonitorInfo[]> => {
-		const { stdout } = await execAsync("hyprctl monitors -j");
-		return JSON.parse(stdout);
-	};
-
-	const getSnapshot = async (
-		info: HyprpropWindowInfo,
-	): Promise<WindowStateSnapshot> => {
-		const monitors = await fetchMonitors();
-		const monitor = monitors.find((candidate) => candidate.id === info.monitor);
-		const monitorX = monitor?.x ?? 0;
-		const monitorY = monitor?.y ?? 0;
-
-		return {
-			monitor: monitor?.name ?? String(info.monitor),
-			size: info.size,
-			move: [info.at[0] - monitorX, info.at[1] - monitorY],
-		};
-	};
-
-	const generateWindowStateRuleEntry = (
-		info: HyprpropWindowInfo,
-		sel: RuleSelector,
-		snapshot: WindowStateSnapshot,
-	): LuaRuleEntry => {
-		const matcher = matcherForSelector(sel);
-		const pattern = patternForSelector(info, sel);
-
-		return {
-			id: `window-state:${matcher}:${pattern}`,
-			matcher,
-			pattern,
-			match: {
-				[sel]: pattern,
-			},
-			effects: {
-				monitor: snapshot.monitor,
-				size: `${snapshot.size[0]} ${snapshot.size[1]}`,
-				move: `${snapshot.move[0]} ${snapshot.move[1]}`,
-			},
-			source: "window-state",
-			comment: `${matcher} ${pattern}`,
-		};
-	};
-
 	const writeLuaRuleEntry = async (entry: LuaRuleEntry) => {
 		const luaRulesDir = join(homedir(), ".config/hypr/rules");
 		const luaRulesPath = join(luaRulesDir, "generated.lua");
@@ -653,53 +513,6 @@ export default function Command() {
 		blocks.set(entry.id, serializeLuaRuleEntry(entry));
 
 		await fs.writeFile(luaRulesPath, renderLuaRuleFile(blocks), "utf-8");
-	};
-
-	const writeWindowStateLuaRuleEntry = async (entry: LuaRuleEntry) => {
-		const luaRulesDir = join(homedir(), ".config/hypr/rules");
-		const luaRulesPath = join(luaRulesDir, "window-state.lua");
-
-		await fs.mkdir(luaRulesDir, { recursive: true });
-
-		let existingRules = "";
-		try {
-			existingRules = await fs.readFile(luaRulesPath, "utf-8");
-		} catch {
-			existingRules = `${WINDOW_STATE_RULES_LUA_HEADER}return {}\n`;
-		}
-
-		await fs.writeFile(
-			luaRulesPath,
-			upsertLuaTableRuleEntry(existingRules, entry),
-			"utf-8",
-		);
-	};
-
-	const writeRuntimeWindowStateRuleEntry = async (
-		matcher: string,
-		pattern: string,
-		snapshot: WindowStateSnapshot,
-	) => {
-		const runtimeDir = process.env.XDG_RUNTIME_DIR;
-		if (!runtimeDir) {
-			return;
-		}
-
-		const runtimeRulesPath = join(runtimeDir, "hypr-window-state-rules.conf");
-		const entry = renderRuntimeWindowStateRuleEntry(matcher, pattern, snapshot);
-
-		let existingRules = "";
-		try {
-			existingRules = await fs.readFile(runtimeRulesPath, "utf-8");
-		} catch {
-			existingRules = renderRuntimeWindowStateRulesFile(entry);
-		}
-
-		await fs.writeFile(
-			runtimeRulesPath,
-			upsertRuntimeWindowStateRuleEntry(existingRules, matcher, pattern, entry),
-			"utf-8",
-		);
 	};
 
 	const saveWindowState = async (info: HyprpropWindowInfo) => {
@@ -761,7 +574,7 @@ export default function Command() {
 		}
 	};
 
-	const snapshotWindowState = async (
+	const enableWindowStateTracking = async (
 		info: HyprpropWindowInfo,
 		sel: RuleSelector,
 	) => {
@@ -772,7 +585,6 @@ export default function Command() {
 			);
 			const matcher = matcherForSelector(sel);
 			const pattern = patternForSelector(info, sel);
-			const snapshot = await getSnapshot(info);
 
 			let existingSelectors = "";
 			try {
@@ -796,22 +608,19 @@ export default function Command() {
 				await fs.writeFile(windowStateSelectorsPath, newSelectors, "utf-8");
 			}
 
-			const luaRuleEntry = generateWindowStateRuleEntry(info, sel, snapshot);
-			await writeWindowStateLuaRuleEntry(luaRuleEntry);
-			await writeRuntimeWindowStateRuleEntry(matcher, pattern, snapshot);
 			await execAsync("hyprctl reload config-only");
 
 			await showToast({
 				style: Toast.Style.Success,
-				title: "Window State Snapshotted",
-				message: `${getRuleSelectorValue(info, sel)} saved at ${snapshot.size[0]}x${snapshot.size[1]}`,
+				title: "Window State Tracking Enabled",
+				message: `${getRuleSelectorValue(info, sel)} is now tracked for window-state persistence`,
 			});
 
 			await closeMainWindow();
 		} catch (error) {
 			await showToast({
 				style: Toast.Style.Failure,
-				title: "Failed to snapshot window state",
+				title: "Failed to enable window-state tracking",
 				message: error instanceof Error ? error.message : "Unknown error",
 			});
 		}
@@ -829,7 +638,7 @@ export default function Command() {
 		}
 
 		if (profile.id === "snapshot-state") {
-			await snapshotWindowState(info, sel);
+			await enableWindowStateTracking(info, sel);
 			return;
 		}
 
@@ -971,8 +780,8 @@ export default function Command() {
 									title={
 										profile.id === "save-state"
 											? "Save Window State"
-											: profile.id === "snapshot-state"
-												? "Snapshot Window State"
+									: profile.id === "snapshot-state"
+										? "Track Window State"
 												: "Apply Rule"
 									}
 									icon={

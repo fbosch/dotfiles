@@ -87,12 +87,12 @@ local function rule_pattern(pattern)
 	return "^" .. pattern .. "$"
 end
 
-local function rule_id(matcher, pattern)
-	return "window-state:" .. matcher .. ":" .. pattern
+local function rule_id(matcher, pattern, monitor)
+	return "window-state:" .. matcher .. ":" .. pattern .. ":" .. monitor
 end
 
-local function cache_key(matcher, pattern)
-	return matcher .. " " .. pattern
+local function cache_key(matcher, pattern, monitor)
+	return string.format("%d:%s%d:%s%d:%s", #matcher, matcher, #pattern, pattern, #monitor, monitor)
 end
 
 local function cache_entry(matcher, pattern, monitor, x, y, width, height)
@@ -131,16 +131,10 @@ function M.load_rules_cache(path)
 			local matcher, pattern = rule_identity(rule)
 			local width, height = generated_rules.parse_pair(rule.effects.size)
 			local x, y = generated_rules.parse_pair(rule.effects.move)
-			if matcher and pattern and width and height and x and y then
-				cache[cache_key(matcher, pattern)] = cache_entry(
-					matcher,
-					pattern,
-					rule.effects.monitor or "",
-					x,
-					y,
-					width,
-					height
-				)
+			local monitor = rule.monitor or rule.effects.monitor
+			if matcher and pattern and monitor and monitor ~= "" and width and height and x and y then
+				cache[cache_key(matcher, pattern, monitor)] =
+					cache_entry(matcher, pattern, monitor, x, y, width, height)
 			end
 		end
 	end
@@ -151,11 +145,11 @@ end
 function M.prune_rules_cache(cache, selectors)
 	local valid = {}
 	for _, selector in ipairs(selectors) do
-		valid[cache_key(selector.matcher, selector.pattern)] = true
+		valid[cache_key(selector.matcher, selector.pattern, "")] = true
 	end
 
-	for key in pairs(cache) do
-		if not valid[key] then
+	for key, entry in pairs(cache) do
+		if not valid[cache_key(entry.matcher, entry.pattern, "")] then
 			cache[key] = nil
 		end
 	end
@@ -183,23 +177,25 @@ local function render_rules(cache, selectors_path)
 		local entry = cache[key]
 		local lua_match_key = M.matcher_lua_key(entry.matcher)
 		if lua_match_key then
-			lines[#lines + 1] = "  -- " .. key
+			local comment = entry.matcher .. " " .. entry.pattern .. " on " .. entry.monitor
+			lines[#lines + 1] = "  -- " .. entry.matcher .. " " .. entry.pattern .. " on " .. entry.monitor
 			lines[#lines + 1] = "  {"
-			lines[#lines + 1] = "    id = " .. json.encode(rule_id(entry.matcher, entry.pattern)) .. ","
+			lines[#lines + 1] = "    id = " .. json.encode(rule_id(entry.matcher, entry.pattern, entry.monitor)) .. ","
 			lines[#lines + 1] = "    matcher = " .. json.encode(entry.matcher) .. ","
 			lines[#lines + 1] = "    pattern = " .. json.encode(entry.pattern) .. ","
+			lines[#lines + 1] = "    monitor = " .. json.encode(entry.monitor) .. ","
 			lines[#lines + 1] = "    match = {"
 			lines[#lines + 1] = "      " .. lua_match_key .. " = " .. json.encode(rule_pattern(entry.pattern)) .. ","
+			lines[#lines + 1] = "      workspace = " .. json.encode("m[" .. entry.monitor .. "]") .. ","
 			lines[#lines + 1] = "    },"
 			lines[#lines + 1] = "    effects = {"
-			if entry.monitor and entry.monitor ~= "" then
-				lines[#lines + 1] = "      monitor = " .. json.encode(entry.monitor) .. ","
-			end
-			lines[#lines + 1] = "      size = " .. json.encode(generated_rules.format_pair(entry.width, entry.height)) .. ","
+			lines[#lines + 1] = "      size = "
+				.. json.encode(generated_rules.format_pair(entry.width, entry.height))
+				.. ","
 			lines[#lines + 1] = "      move = " .. json.encode(generated_rules.format_pair(entry.x, entry.y)) .. ","
 			lines[#lines + 1] = "    },"
-			lines[#lines + 1] = "    source = \"window-state\","
-			lines[#lines + 1] = "    comment = " .. json.encode(key) .. ","
+			lines[#lines + 1] = '    source = "window-state",'
+			lines[#lines + 1] = "    comment = " .. json.encode(comment) .. ","
 			lines[#lines + 1] = "  },"
 			lines[#lines + 1] = ""
 		end
@@ -230,8 +226,8 @@ end
 
 function M.update_cache_from_windows(cache, windows, log)
 	for _, window in ipairs(json.array(windows)) do
-		if window.class and window.class ~= "" then
-			cache[cache_key(window.matcher, window.pattern)] = cache_entry(
+		if window.class and window.class ~= "" and window.monitor and window.monitor ~= "" then
+			cache[cache_key(window.matcher, window.pattern, window.monitor)] = cache_entry(
 				window.matcher,
 				window.pattern,
 				window.monitor or "",
@@ -241,16 +237,18 @@ function M.update_cache_from_windows(cache, windows, log)
 				window.height
 			)
 			if log then
-				log(string.format(
-					'Updated %s "%s": %sx%s at (%s,%s) on %s',
-					window.matcher,
-					window.pattern,
-					window.width,
-					window.height,
-					window.x,
-					window.y,
-					window.monitor ~= "" and window.monitor or "unknown"
-				))
+				log(
+					string.format(
+						'Updated %s "%s": %sx%s at (%s,%s) on %s',
+						window.matcher,
+						window.pattern,
+						window.width,
+						window.height,
+						window.x,
+						window.y,
+						window.monitor ~= "" and window.monitor or "unknown"
+					)
+				)
 			end
 		end
 	end

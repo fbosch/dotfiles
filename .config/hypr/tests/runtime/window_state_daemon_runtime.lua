@@ -25,6 +25,7 @@ local event_path = hypr_dir .. "/.socket2.sock"
 local state_path = runtime_dir .. "/hypr-window-state.cache"
 local rules_path = home_dir .. "/.config/hypr/rules/window-state.lua"
 local log_path = test_dir .. "/daemon.log"
+local hyprctl_log_path = test_dir .. "/hyprctl.log"
 local pid_path = test_dir .. "/daemon.pid"
 local reader_log_path = test_dir .. "/reader.log"
 local reader_stop_path = test_dir .. "/reader.stop"
@@ -42,9 +43,19 @@ local initial_published = false
 local reconnected = false
 
 local initial_clients = [=[[{"class":"nemo","floating":true,"monitor":1,"at":[110,220],"size":[800,600]}]]=]
-local updated_clients =
-	[=[[{"class":"Bitwarden","floating":true,"monitor":1,"at":[130,240],"size":[1000,700]},{"class":"nemo","floating":true,"monitor":1,"at":[150,260],"size":[900,650]}]]=]
-local monitors = [=[[{"id":1,"name":"DP-1","x":0,"y":0}]]=]
+local updated_clients = [=[
+[
+  {"class":"Bitwarden","floating":true,"monitor":1,"at":[130,240],"size":[1000,700]},
+  {"class":"nemo","floating":true,"monitor":1,"at":[150,260],"size":[900,650]},
+  {"class":"nemo","floating":true,"monitor":2,"at":[1030,140],"size":[500,600]}
+]
+]=]
+local monitors = [=[
+[
+  {"id":1,"name":"DP-1","x":0,"y":0},
+  {"id":2,"name":"HDMI-A-1","x":1000,"y":100}
+]
+]=]
 
 local function shell_quote(value)
 	return "'" .. value:gsub("'", "'\\''") .. "'"
@@ -72,6 +83,32 @@ local function read_file(path)
 	local content = handle:read("*a")
 	handle:close()
 	return content
+end
+
+local function write_file(path, content)
+	local handle = assert(io.open(path, "w"))
+	handle:write(content)
+	handle:close()
+end
+
+local function generated_rule(monitor, pattern)
+	local content = read_file(rules_path)
+	if not content then
+		return nil
+	end
+
+	local chunk = loadstring(content, "window-state.lua")
+	if not chunk then
+		return nil
+	end
+
+	for _, rule in ipairs(chunk()) do
+		if rule.monitor == monitor and rule.pattern == pattern then
+			return rule
+		end
+	end
+
+	return nil
 end
 
 local function validate_reader_state()
@@ -212,8 +249,7 @@ local function stop_reader()
 	run("touch " .. shell_quote(reader_stop_path))
 	local status = ffi.new("int[1]")
 	wait_for("reader cleanup", function()
-		return read_file(reader_report_path) ~= nil
-			or ffi.C.waitpid(reader_pid, status, 1) == reader_pid
+		return read_file(reader_report_path) ~= nil or ffi.C.waitpid(reader_pid, status, 1) == reader_pid
 	end, 1)
 	local log = read_file(reader_log_path)
 	local report = read_file(reader_report_path)
@@ -282,11 +318,26 @@ local function fixture()
 			.. shell_quote(repo_root .. "/.config/hypr/rules")
 			.. " "
 			.. shell_quote(home_dir .. "/.config/hypr/")
-			.. " && printf '%s\\n' 'return {}' > "
-			.. shell_quote(rules_path)
+	)
+	write_file(
+		rules_path,
+		[[return {
+  {
+    id = "window-state:match:class:^nemo$",
+    matcher = "match:class",
+    pattern = "^nemo$",
+    match = { class = "^nemo$" },
+    effects = {
+      monitor = "DP-1",
+      size = "800 600",
+      move = "110 220",
+    },
+  },
+}
+]]
 	)
 	run(
-		"printf '%s\\n' '#!/bin/sh' 'exit 0' > "
+		"printf '%s\\n' '#!/bin/sh' 'printf '''%s\\n''' \"$*\" >> \"$HYPRCTL_LOG_PATH\"' 'exit 0' > "
 			.. shell_quote(bin_dir .. "/hyprctl")
 			.. " && chmod +x "
 			.. shell_quote(bin_dir .. "/hyprctl")
@@ -307,6 +358,8 @@ local function fixture()
 		.. " XDG_RUNTIME_DIR="
 		.. shell_quote(runtime_dir)
 		.. " HYPRLAND_INSTANCE_SIGNATURE=fixture WINDOW_STATE_IDLE_SCHED=1"
+		.. " HYPRCTL_LOG_PATH="
+		.. shell_quote(hyprctl_log_path)
 		.. " PATH="
 		.. shell_quote(bin_dir .. ":" .. os.getenv("PATH"))
 		.. " "
@@ -342,9 +395,17 @@ local function fixture()
 			and rules
 			and rules:find("Bitwarden", 1, true)
 			and rules:find("nemo", 1, true)
+			and rules:find('workspace = "m[DP-1]"', 1, true)
+			and rules:find('workspace = "m[HDMI-A-1]"', 1, true)
+			and generated_rule("DP-1", "^nemo$")
+			and generated_rule("DP-1", "^nemo$").effects.move == "150 260"
+			and generated_rule("HDMI-A-1", "^nemo$")
+			and generated_rule("HDMI-A-1", "^nemo$").match.workspace == "m[HDMI-A-1]"
+			and generated_rule("HDMI-A-1", "^nemo$").effects.move == "30 40"
 	end, 3)
 	local log = read_file(log_path)
 	assert_contains("daemon reconnect log", log, "window-state: event socket reconnected")
+	assert_contains("window-state rule refresh", read_file(hyprctl_log_path), "reload config-only")
 	stop_daemon()
 	stop_reader()
 end
