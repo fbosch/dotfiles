@@ -13,7 +13,7 @@
 ^/.*\.md$
 ^/scripts$
 ^/docs$
-^/node_modules$
+node_modules
 ^/design-system$
 \.backup
 lazy-lock\.json
