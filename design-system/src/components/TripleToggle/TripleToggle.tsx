@@ -33,11 +33,7 @@ export interface TripleToggleOption<Value extends string = string> {
 }
 
 export interface TripleToggleProps<Value extends string = string> {
-  options: readonly [
-    TripleToggleOption<Value>,
-    TripleToggleOption<Value>,
-    TripleToggleOption<Value>,
-  ];
+  options: readonly TripleToggleOption<Value>[];
   value: Value;
   ariaLabel: string;
   onValueChange?: (value: Value) => void;
@@ -85,12 +81,9 @@ export const TripleToggle = <Value extends string>({
           );
         })}
       </div>
-      <div className="mt-1 flex items-center justify-between text-center text-xs font-medium text-foreground-primary">
-        {options.map((option, index) => (
-          <span
-            key={option.value}
-            className={cn('w-12', index === 0 && '-translate-x-1', index === 2 && 'translate-x-1')}
-          >
+      <div className="mt-1 flex justify-between px-1 text-center text-xs font-medium text-foreground-primary">
+        {options.map((option) => (
+          <span key={option.value} className="w-8 shrink-0 whitespace-nowrap">
             {option.label}
           </span>
         ))}

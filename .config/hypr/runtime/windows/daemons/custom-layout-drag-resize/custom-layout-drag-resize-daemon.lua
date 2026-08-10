@@ -8,13 +8,13 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 local hypr_ipc = require("runtime.lib.hypr-ipc")
 local json = require("lib.json")
 local monitor_role = require("lib.monitor_role")
+local profile_state = require("lib.profile_state")
 local window_tags = require("lib.window_tags")
 local control_protocol = require("runtime.windows.daemons.custom-layout-drag-resize.control-protocol")
 
 local command_socket_path = hypr_ipc.instance_socket_path("clr.sock")
 local state_file = hypr_ipc.instance_path("custom-layout-drag-resize.state")
 local pid_file = hypr_ipc.instance_path("custom-layout-drag-resize.pid")
-local profile_mode_file = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-profiles/profile-overlay.mode"
 local min_floating_size = 64
 local drag_numerator = 1
 local drag_denominator = 1
@@ -44,7 +44,8 @@ local function read_file(path)
 end
 
 local function restore_resize_animation()
-	if read_file(profile_mode_file) ~= "" then
+	local ok, mode = pcall(profile_state.resolved)
+	if ok and mode ~= "default" then
 		eval([[require("profiles").apply_current()]])
 		return
 	end

@@ -8,6 +8,7 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 
 local json = require("lib.json")
 local command = require("lib.command")
+local profile_state = require("lib.profile_state")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
 local gaming = require("gaming")
 local profilectl = home .. "/.config/hypr/runtime/profiles/profilectl.sh"
@@ -36,7 +37,9 @@ local function log_diagnostic(key, message)
 end
 
 local function profile_sync(count)
-	return command.ok(command.arg(profilectl) .. " sync gaming " .. command.arg(count) .. " >/dev/null 2>&1")
+	return command.ok(
+		command.arg(profilectl) .. " sync-source gaming watchdog " .. command.arg(count) .. " >/dev/null 2>&1"
+	)
 end
 
 local function apply_presentation(presentation)
@@ -257,8 +260,23 @@ local function same_presentation(left, right)
 	return left ~= nil and right ~= nil and left.vrr == right.vrr and left.direct_scanout == right.direct_scanout
 end
 
+local function is_gaming_profile_resolved()
+	local ok, resolved = pcall(profile_state.resolved)
+	if ok then
+		return resolved == "gaming"
+	end
+
+	log_diagnostic("profile-state", "cannot read canonical profile state; suppressing gaming presentation")
+	return false
+end
+
 local function sync_gaming_presentation(current_count, clients, force)
 	if current_count == 0 then
+		last_presentation = nil
+		return
+	end
+
+	if is_gaming_profile_resolved() == false then
 		last_presentation = nil
 		return
 	end

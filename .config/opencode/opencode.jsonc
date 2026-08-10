@@ -215,6 +215,11 @@
       "model": "openai/gpt-5.6-luna-fast",
       "reasoningEffort": "none",
       "textVerbosity": "low"
+    },
+    "tutor": {
+      "model": "openai/gpt-5.6-terra",
+      "reasoningEffort": "medium",
+      "textVerbosity": "medium"
     }
   }
 }

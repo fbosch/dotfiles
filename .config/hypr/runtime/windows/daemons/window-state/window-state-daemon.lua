@@ -241,10 +241,7 @@ local function write_lua_rules_cache_file()
 end
 
 local function apply_window_state_rules()
-	local script = "local config_dir = "
-		.. json.encode(config_dir)
-		.. '; package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path; require("rule-loader").apply_window_rule_phase(config_dir, "window_state")'
-	return command.ok("hyprctl eval " .. command.arg(script) .. " >/dev/null 2>&1")
+	return command.ok("hyprctl reload config-only >/dev/null 2>&1")
 end
 
 local function update_rules(windows)
@@ -418,7 +415,10 @@ local function handle_event(event)
 		parse_selectors()
 		load_rules_cache()
 		prune_stale_rules_cache()
-		write_lua_rules_cache_file()
+		local changed = write_lua_rules_cache_file()
+		if changed and not apply_window_state_rules() then
+			log("WARNING: Failed to refresh window-state rules")
+		end
 		local state = get_window_states()
 		if not is_state_empty(state) then
 			start_polling()
@@ -447,7 +447,10 @@ local function schedule_event_reconnect(events, reason)
 	end
 
 	event_reconnect_at = now() + event_reconnect_delay
-	log_rate_limited("event-reconnect", "event socket " .. tostring(reason) .. "; retrying in " .. event_reconnect_delay .. "s")
+	log_rate_limited(
+		"event-reconnect",
+		"event socket " .. tostring(reason) .. "; retrying in " .. event_reconnect_delay .. "s"
+	)
 	return nil
 end
 
@@ -467,7 +470,11 @@ local function reconnect_events()
 	event_reconnect_at = now() + event_reconnect_delay
 	log_rate_limited(
 		"event-reconnect",
-		"event socket reconnect failed (" .. tostring(events_or_err) .. "); retrying in " .. event_reconnect_delay .. "s"
+		"event socket reconnect failed ("
+			.. tostring(events_or_err)
+			.. "); retrying in "
+			.. event_reconnect_delay
+			.. "s"
 	)
 	return nil
 end
@@ -481,7 +488,10 @@ local function startup()
 	parse_selectors()
 	load_rules_cache()
 	prune_stale_rules_cache()
-	write_lua_rules_cache_file()
+	local changed = write_lua_rules_cache_file()
+	if changed and not apply_window_state_rules() then
+		log("WARNING: Failed to refresh window-state rules")
+	end
 	fetch_monitors()
 	if read_file(debounce_file) then
 		flush_pending_cached_state()

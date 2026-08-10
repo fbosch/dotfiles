@@ -17,7 +17,7 @@ The Waybar clock currently opens GNOME Calendar as an application popup for cale
 
 ### New Capabilities
 
-- `calendar-widget`: Read-only calendar surface and AGS widget for date, weekday, public-holiday, and event-marker glancing.
+- `ags-calendar-widget`: Read-only calendar surface and AGS widget for date, weekday, public-holiday, and event-marker glancing.
 
 ### Modified Capabilities
 

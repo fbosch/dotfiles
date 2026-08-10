@@ -334,14 +334,7 @@ end
 
 local function bench_profiles(iterations)
 	clear_modules()
-	local command = require("lib.command")
-	command.ok = function()
-		return true
-	end
 	local profiles = require("profiles")
-	run_case("profiles/is_active-stubbed", iterations, function()
-		profiles.is_active("powersave")
-	end)
 	run_case("profiles/apply", iterations, function()
 		profiles.apply("powersave")
 	end)

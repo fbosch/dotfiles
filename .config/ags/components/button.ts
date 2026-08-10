@@ -33,6 +33,10 @@ function applyStyles(): void {
       border-radius: 6px;
     }
 
+    button.ags-button.button-shape-circle {
+      border-radius: 16px;
+    }
+
     button.ags-button:disabled {
       opacity: 0.4;
     }

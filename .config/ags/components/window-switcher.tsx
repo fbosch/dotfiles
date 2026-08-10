@@ -10,6 +10,7 @@ import { execAsync } from "ags/process";
 import { getFallbackLetter, getIconForWindow, setImageFile } from "../services/app-icons";
 import { queryHyprlandJson } from "../services/hyprland-ipc";
 import { perf } from "../services/performance-monitor";
+import { getProfileState, subscribeProfileState } from "../services/profile-state";
 
 /**
  * Performance Optimizations:
@@ -96,23 +97,12 @@ const BUTTON_PADDING = 8; // Padding inside each button
 const WINDOW_CACHE_TTL_MS = 150; // Cache window list briefly for request bursts
 const ACTIVE_WINDOW_CACHE_TTL_MS = 100; // Cache active window briefly
 const RUNTIME_DIR = GLib.getenv("XDG_RUNTIME_DIR") || GLib.get_tmp_dir();
-const PERFORMANCE_OVERLAY_STATE_DIR = `${RUNTIME_DIR}/hypr-profiles`;
-const PROFILE_MODE_PATH = `${PERFORMANCE_OVERLAY_STATE_DIR}/profile-overlay.mode`;
 const MONITOR_DEBUG_PATH = `${RUNTIME_DIR}/monitor-debug.log`;
 const WINDOW_SWITCHER_DEBUG_PATH = `${RUNTIME_DIR}/ags-window-switcher-debug.log`;
 const WINDOW_SWITCHER_BIND_DIAGNOSTIC_PATH = `${RUNTIME_DIR}/ags-window-switcher-bind.debug`;
 const TOGGLE_MINIMIZED_WORKSPACE_SCRIPT = "~/.config/hypr/runtime/windows/toggle-minimized-workspace.sh";
 const WARP_CURSOR_TO_ACTIVE_WINDOW_SCRIPT = "luajit ~/.config/hypr/runtime/windows/warp-cursor-to-active-window.lua";
 const DEBUG = GLib.getenv("AGS_WINDOW_SWITCHER_DEBUG") === "1";
-
-function isGamingProfileActive(): boolean {
-  try {
-    const [success, contents] = GLib.file_get_contents(PROFILE_MODE_PATH);
-    return success && new TextDecoder("utf-8").decode(contents).trim() === "gaming";
-  } catch {
-    return false;
-  }
-}
 
 function debugLog(message: string): void {
   if (DEBUG) {
@@ -139,17 +129,9 @@ function writeBindDiagnostic(message: string): void {
 // State
 let state: SwitcherState = SwitcherState.IDLE;
 
-// Check if performance mode is active on startup
 let displayMode: DisplayMode = DisplayMode.PREVIEWS;
 let sortMode: SortMode = SortMode.RECENCY; // Default to recency like Windows 11
-try {
-  if (isGamingProfileActive()) {
-    displayMode = DisplayMode.ICONS;
-    debugLog("Performance mode detected, starting in ICONS mode");
-  }
-} catch (e) {
-  // Ignore errors, default to PREVIEWS
-}
+let unsubscribeProfileState: (() => void) | null = null;
 
 let win: Astal.Window | null = null;
 let containerBox: Gtk.Box | null = null;
@@ -1366,7 +1348,7 @@ function createWindow() {
 
 // Apply static CSS
 function applyStaticCSS() {
-  const transparencyDisabled = isGamingProfileActive();
+  const transparencyDisabled = displayMode === DisplayMode.ICONS;
   const switcherBackground = transparencyDisabled
     ? "rgb(25, 25, 25)"
     : "rgba(25, 25, 25, 0.5)";
@@ -1600,10 +1582,29 @@ function rebuildUIIfActive() {
   }
 }
 
+function syncProfilePresentation() {
+  const nextDisplayMode = getProfileState()?.resolved !== "default"
+    ? DisplayMode.ICONS
+    : DisplayMode.PREVIEWS;
+  if (nextDisplayMode === displayMode) return;
+
+  displayMode = nextDisplayMode;
+  applyStaticCSS();
+  rebuildUIIfActive();
+}
+
+function startProfileStateSubscription() {
+  if (unsubscribeProfileState !== null) return;
+
+  unsubscribeProfileState = subscribeProfileState(() => syncProfilePresentation());
+}
+
 // Functions for bundled mode (using global namespace pattern)
 function initWindowSwitcher() {
   // Window-switcher needs to be created immediately for Alt monitoring to work
   // This is the only component that can't be lazy-loaded due to its Alt key event handling
+  syncProfilePresentation();
+  startProfileStateSubscription();
   applyStaticCSS();
   createWindow();
 }

@@ -25,13 +25,6 @@ export type HyprpropWindowInfo = {
 	focusHistoryID: number;
 };
 
-export type HyprMonitorInfo = {
-	id: number;
-	name: string;
-	x: number;
-	y: number;
-};
-
 export type WindowRuleProfile = {
 	id: string;
 	name: string;

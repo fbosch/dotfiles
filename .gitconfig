@@ -92,5 +92,5 @@
 [gpg]
 	format = ssh
 
-[credential]
-	credentialStore = secretservice
+[include]
+	path = ~/.config/nix/git/config

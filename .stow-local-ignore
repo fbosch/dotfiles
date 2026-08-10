@@ -30,6 +30,7 @@ lazy-lock\.json
 ^/devenv\.lock$
 ^/\.devenv
 ^/\.envrc
+^/\.direnv$
 ^/lefthook\.yml$
 ^/tests$
 

@@ -20,7 +20,7 @@ cleanup() {
     kill -TERM "$child_pid" >/dev/null 2>&1 || true
     wait "$child_pid" >/dev/null 2>&1 || true
   fi
-  "$PROFILECTL" sync gaming 0 >/dev/null 2>&1 || true
+  "$PROFILECTL" sync-source gaming watchdog 0 >/dev/null 2>&1 || true
 }
 
 trap cleanup EXIT

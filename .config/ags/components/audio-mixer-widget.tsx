@@ -553,6 +553,7 @@ function createAudioBackend(options: { applySnapshot: (snapshot: AudioSnapshot) 
   let signalIds: number[] = [];
   let refreshSource = 0;
   let loadVersion = 0;
+  let pendingDefault: { tab: "output" | "input"; object: any } | null = null;
 
   async function loadModules(): Promise<{ AstalWp: any }> {
     if (modules) return modules;
@@ -589,6 +590,12 @@ function createAudioBackend(options: { applySnapshot: (snapshot: AudioSnapshot) 
     };
   }
 
+  function defaultEndpoint(tab: "output" | "input", backendDefault: any): any {
+    if (!pendingDefault || pendingDefault.tab !== tab) return backendDefault;
+    if (sameAudioObject(backendDefault, pendingDefault.object)) pendingDefault = null;
+    return pendingDefault?.tab === tab ? pendingDefault.object : backendDefault;
+  }
+
   function buildSnapshot(): AudioSnapshot {
     const mark = perf.start("audio-mixer-widget", "buildSnapshot");
     let ok = true;
@@ -596,8 +603,8 @@ function createAudioBackend(options: { applySnapshot: (snapshot: AudioSnapshot) 
     try {
       if (!audio) return emptySnapshot("AstalWP audio unavailable", "unavailable");
 
-      const defaultSpeaker = audio.get_default_speaker?.() ?? audio.default_speaker;
-      const defaultMicrophone = audio.get_default_microphone?.() ?? audio.default_microphone;
+      const defaultSpeaker = defaultEndpoint("output", audio.get_default_speaker?.() ?? audio.default_speaker);
+      const defaultMicrophone = defaultEndpoint("input", audio.get_default_microphone?.() ?? audio.default_microphone);
       const speakers = getList<any>(audio, ["speakers"]);
       const microphones = getList<any>(audio, ["microphones"]);
       const streams = getList<any>(audio, ["streams"]);
@@ -721,11 +728,11 @@ function createAudioBackend(options: { applySnapshot: (snapshot: AudioSnapshot) 
       else row.object.mute = muted;
     },
     setDefault(row: AudioRow) {
-      const group = snapshot.rows.output.some((endpoint) => endpoint.id === row.id)
-        ? snapshot.rows.output
-        : snapshot.rows.input;
+      const tab = snapshot.rows.output.some((endpoint) => endpoint.id === row.id) ? "output" : "input";
+      const group = snapshot.rows[tab];
       for (const endpoint of group) endpoint.isDefault = endpoint.id === row.id;
       row.isDefault = true;
+      pendingDefault = { tab, object: row.object };
       if (typeof row.object?.set_is_default === "function") row.object.set_is_default(true);
       else if (typeof row.object?.set_default === "function") row.object.set_default();
       scheduleRefresh();

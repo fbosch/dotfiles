@@ -334,7 +334,10 @@ function createWindowInScope(dispose: () => void): void {
 				class="force-quit-close"
 				onClicked={hideForceQuit}
 				$={(self: Gtk.Button) =>
-					configureButton(self, { variant: "transparent" })
+					configureButton(self, {
+						variant: "transparent",
+						className: "button-shape-circle",
+					})
 				}
 			>
 				<label label={"\uE711"} />
@@ -490,7 +493,6 @@ function handleForceQuitRequest(
 		res("destroyed");
 		return;
 	}
-
 	res("unknown action");
 }
 

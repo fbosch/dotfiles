@@ -16,7 +16,7 @@ The current AGS Start Menu is a flat, implementation-led surface that does not p
 
 ### New Capabilities
 
-- `start-menu`: A design-system contract and AGS implementation for system actions, recent items, Force Quit, About This PC, update badges, and safe session controls.
+- `ags-start-menu`: A design-system contract and AGS implementation for system actions, recent items, Force Quit, About This PC, update badges, and safe session controls.
 
 ### Modified Capabilities
 

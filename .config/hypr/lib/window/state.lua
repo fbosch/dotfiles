@@ -1,6 +1,5 @@
 local monitor_role = require("lib.monitor_role")
 local window_tags = require("lib.window_tags")
-local gaming = require("gaming")
 
 local M = {}
 
@@ -119,18 +118,9 @@ end
 
 function M.uses_custom_layout(active, expected)
 	local workspace = active and active.workspace
-	local layout = workspace and (workspace.tiledLayout or workspace.layout)
+	local layout = workspace and workspace.tiled_layout
 	local expected_name = expected_layout(expected)
-	if layout or expected_name == nil then
-		return layout == expected_name
-	end
-
-	local name = workspace and tostring(workspace.name or workspace.id) or nil
-	if name == nil or name == gaming.workspace or name:match("^special:") then
-		return false
-	end
-
-	return monitor_role.for_window(active) == expected
+	return layout == expected_name
 end
 
 function M.uses_any_custom_layout(active)

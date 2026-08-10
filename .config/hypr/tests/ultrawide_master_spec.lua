@@ -183,6 +183,19 @@ run("known active geometry reorders columns", function()
 	assert_box(first.placed, { x = 680, y = 20, w = 330, h = 500 }, "right target")
 end)
 
+run("same-scope drag geometry reorders active columns", function()
+	local first = make_target(1, true)
+	local second = make_target(2)
+	local workspace = "same-scope-drag"
+
+	registered_layout.layout.recalculate(make_context({ first, second }, workspace))
+	set_geometry(first, 800)
+	registered_layout.layout.recalculate(make_context({ first, second }, workspace))
+
+	assert_box(second.placed, { x = 10, y = 20, w = 670, h = 500 }, "left target")
+	assert_box(first.placed, { x = 680, y = 20, w = 330, h = 500 }, "dragged target")
+end)
+
 run("dragging active column left of layout moves it leftmost", function()
 	local left = make_target(1)
 	local right = make_target(2, true)

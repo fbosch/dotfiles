@@ -85,6 +85,129 @@ local function warp_window(active)
 	dispatch(hl.dsp.cursor.move({ x = at.x + size.x / 2, y = at.y + size.y / 2 }))
 end
 
+local function monitor_geometry(monitor)
+	local at = monitor and (monitor.at or monitor)
+	local size = monitor and monitor.size
+	local width = monitor and (monitor.width or (size and size.x))
+	local height = monitor and (monitor.height or (size and size.y))
+	if at == nil or width == nil or height == nil or at.x == nil or at.y == nil then
+		return nil
+	end
+
+	if monitor.transform == 1 or monitor.transform == 3 then
+		width, height = height, width
+	end
+
+	return { x = at.x, y = at.y, width = width, height = height }
+end
+
+local function monitor_by_role(role)
+	if hl.get_monitors == nil then
+		return nil
+	end
+
+	local name = monitor_role.name_for(role)
+	for _, monitor in ipairs(hl.get_monitors()) do
+		if monitor.name == name then
+			return monitor_geometry(monitor)
+		end
+	end
+
+	return nil
+end
+
+local function clamp(value, minimum, maximum)
+	return math.min(math.max(value, minimum), maximum)
+end
+
+local function move_floating_to_monitor(active, role, dispatcher)
+	local source = monitor_by_role(monitor_role.for_window(active))
+	local destination = monitor_by_role(role)
+	local at = active and active.at
+	local size = active and active.size
+	if source == nil or destination == nil or at == nil or size == nil or size.x == nil or size.y == nil then
+		dispatch(dispatcher)
+		return
+	end
+
+	local x_fraction = (at.x - source.x) / source.width
+	local y_fraction = (at.y - source.y) / source.height
+	local x = destination.x + clamp(x_fraction * destination.width, 0, math.max(0, destination.width - size.x))
+	local y = destination.y + clamp(y_fraction * destination.height, 0, math.max(0, destination.height - size.y))
+	dispatch(dispatcher)
+	dispatch(hl.dsp.window.move({ x = x, y = y }))
+end
+
+local function directional_candidate(active, direction, candidates, expected_role)
+	local at = active.at
+	local size = active.size
+	if at == nil or size == nil or at.x == nil or at.y == nil or size.x == nil or size.y == nil then
+		return nil
+	end
+
+	local origin_x = at.x + size.x / 2
+	local origin_y = at.y + size.y / 2
+	local nearest = nil
+	local nearest_distance = math.huge
+	for _, window in ipairs(candidates) do
+		local window_at = window.at
+		local window_size = window.size
+		if
+			window ~= active
+			and window.visible ~= false
+			and (expected_role == nil or monitor_role.for_window(window) == expected_role)
+			and window_at
+			and window_size
+			and window_at.x
+			and window_at.y
+			and window_size.x
+			and window_size.y
+		then
+			local x = window_at.x + window_size.x / 2
+			local y = window_at.y + window_size.y / 2
+			local horizontal = x - origin_x
+			local vertical = y - origin_y
+			local matches = (direction == "left" and horizontal < 0)
+				or (direction == "right" and horizontal > 0)
+				or (direction == "up" and vertical < 0)
+				or (direction == "down" and vertical > 0)
+			if matches then
+				local distance = horizontal * horizontal + vertical * vertical
+				if distance < nearest_distance then
+					nearest = window
+					nearest_distance = distance
+				end
+			end
+		end
+	end
+
+	return nearest
+end
+
+local function workspace_candidate(active, direction)
+	local workspace = active and active.workspace
+	if workspace == nil or workspace.get_windows == nil then
+		return nil
+	end
+
+	return directional_candidate(active, direction, workspace:get_windows())
+end
+
+local function monitor_candidate(state, active, direction)
+	local destination_role = nil
+	if direction == "right" and state.uses_custom_layout(active, monitor_role.portrait) then
+		destination_role = monitor_role.ultrawide
+	elseif direction == "left" and state.uses_custom_layout(active, monitor_role.ultrawide) then
+		destination_role = monitor_role.portrait
+	end
+
+	if destination_role == nil or hl.get_windows == nil then
+		return nil
+	end
+
+	return directional_candidate(active, direction, hl.get_windows(), destination_role)
+end
+
 local function with_window_behavior(state, action, direction, fallback)
 	return function()
 		local active = state.active()
@@ -108,6 +231,17 @@ function M.focus(state, value)
 	local normalized = state.direction(value)
 	local focus_dispatcher = hl.dsp.focus({ direction = normalized })
 	return with_window_behavior(state, "focus", normalized, function()
+		local active = state.active()
+		if state.uses_any_custom_layout(active) then
+			local candidate = workspace_candidate(active, normalized)
+			candidate = candidate or monitor_candidate(state, active, normalized)
+			if candidate then
+				dispatch(hl.dsp.focus({ window = candidate }))
+				dispatch(warp_active_after_focus)
+				return
+			end
+		end
+
 		dispatch(focus_dispatcher)
 		dispatch(warp_active_after_focus)
 	end)
@@ -121,7 +255,15 @@ function M.move(state, value)
 
 	local function move_window()
 		local active = state.active()
-		if normalized == "right" and state.uses_custom_layout(active, monitor_role.portrait) then
+		if active and active.floating then
+			if normalized == "right" and state.uses_custom_layout(active, monitor_role.portrait) then
+				move_floating_to_monitor(active, monitor_role.ultrawide, move_to_ultrawide)
+			elseif normalized == "left" and state.uses_custom_layout(active, monitor_role.ultrawide) then
+				move_floating_to_monitor(active, monitor_role.portrait, move_to_portrait)
+			else
+				dispatch(move_dispatcher)
+			end
+		elseif normalized == "right" and state.uses_custom_layout(active, monitor_role.portrait) then
 			order_state.record_transfer_intent(active, ultrawide_transfer_start)
 			dispatch(move_to_ultrawide)
 		elseif normalized == "right" and state.uses_custom_layout(active, monitor_role.ultrawide) then

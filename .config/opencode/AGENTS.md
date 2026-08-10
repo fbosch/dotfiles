@@ -18,6 +18,7 @@
 - Keep changes minimal and local; prefer existing patterns.
 - Default to current schema/contract; add compatibility layers only when explicitly required.
 - Run the smallest reasonable validation for changed behavior.
+- For screenshots, capture only the smallest useful window or region; use full-screen captures only when explicitly requested.
 - Read references on demand; do not load all of them by default.
 - Before adding or selecting a dependency, library, or development tool, read `~/.config/opencode/references/library-preferences.md`. When multiple suitable listed options exist and the repository does not establish one, ask the user to choose before adding one.
 - Before changing behavior, APIs, config formats, data handling, or validation paths, read `~/.config/opencode/references/compatibility.md`.
@@ -27,6 +28,8 @@
 - If unsure whether a task is non-trivial, prefer reading the narrowest relevant reference over guessing.
 - Format user-executed multi-step instructions as a numbered list of bounded actions, with the immediate next action first.
 - For work spanning multiple replies, state the current step, completed outcome, and immediate next action; use the task list rather than repeating a full plan.
+- Before creating a plan, look for existing planning documents in `docs/agents/plans/`, `docs/plans/`, `plans/`, and repository guidance. Use the established location and naming convention when present.
+- When asked to output a plan, write it to `docs/agents/plans/` by default, named `YYYY-MM-DD-brief-kebab-case-title.md`.
 - When work reaches a coherent, independently reviewable checkpoint, briefly flag it as a good commit point and summarize the completed scope and validation. Do not pause, commit, or ask for confirmation unless the user requested a commit-oriented workflow.
 - Keep responses and implementation focused on the active problem; raise unrelated findings only when they affect correctness, safety, or the requested outcome.
 
@@ -96,6 +99,7 @@
 ## Ambiguity and execution loop
 
 - Read the root `AGENTS.md` first; read deeper `AGENTS.md` files once target files or subtree are known.
+- Treat requests for "guidance" as referring primarily to `AGENTS.md`, `docs/agents/**/*.md`, or equivalent repository guidance. When asked to add guidance, locate the most appropriate existing guidance file and append it there.
 - If a request has multiple valid interpretations, list options with tradeoffs; do not pick silently.
 - Treat follow-up requests as cumulative unless the user clearly resets scope.
 - Prefer the simpler approach when it satisfies the request; push back on over-complex directions.

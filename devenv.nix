@@ -128,6 +128,37 @@ in
       fish tests/git_pull_system_repos.fish
     '';
 
+    "test:fish-starship-cache".exec = ''
+      set -euo pipefail
+      test_dir="$(mktemp -d)"
+      trap 'rm -rf "$test_dir"' EXIT
+
+      for version in a b; do
+        mkdir -p "$test_dir/$version"
+        cat > "$test_dir/$version/starship" <<'EOF'
+      #!/usr/bin/env bash
+      version="$(basename "$(dirname "$0")")"
+      printf 'set -g starship_cache_fixture %s\n' "$version"
+      EOF
+        chmod +x "$test_dir/$version/starship"
+      done
+
+      run_fish() {
+        HOME="$test_dir/home" \
+          XDG_CONFIG_HOME="$test_dir/home/.config" \
+          PATH="$test_dir/$1:$PATH" \
+          FISH_CONFIG="$PWD/.config/fish/config.fish" \
+          fish -ic 'source "$FISH_CONFIG"' >/dev/null
+      }
+
+      run_fish a
+      test "$(<"$test_dir/home/.cache/fish/starship-init.fish.path")" = "$test_dir/a/starship"
+
+      run_fish b
+      test "$(<"$test_dir/home/.cache/fish/starship-init.fish.path")" = "$test_dir/b/starship"
+      grep -Fq 'starship_cache_fixture b' "$test_dir/home/.cache/fish/starship-init.fish"
+    '';
+
     "test:lua-quality".exec = ''
       set -euo pipefail
       REQUIRE_LUA_TOOLS=1 bash scripts/lua-quality.sh ci
@@ -194,6 +225,7 @@ in
         "test:stow"
         "test:fish"
         "test:git-pull-system-repos"
+        "test:fish-starship-cache"
         "test:lua-quality"
         "test:vicinae"
         "test:runtime-shell"

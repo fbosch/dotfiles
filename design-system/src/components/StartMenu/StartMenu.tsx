@@ -92,7 +92,8 @@ export interface RecentItems {
 export interface StartMenuProfile {
   mode: 'default' | 'gaming' | 'powersave';
   source?: 'none' | 'manual' | 'auto';
-  manualMode: 'default' | 'gaming' | 'powersave';
+  selection: 'auto' | 'default' | 'gaming' | 'powersave';
+  automaticGamingActive?: boolean;
 }
 
 export interface StartMenuUser {
@@ -113,7 +114,7 @@ export interface StartMenuProps extends VariantProps<typeof menuVariants> {
   onItemClick?: (itemId: string) => void;
   onRecentItemClick?: (item: RecentMenuItem) => void;
   onClearRecentItems?: () => void;
-  onProfileChange?: (mode: StartMenuProfile['manualMode']) => void;
+  onProfileChange?: (selection: StartMenuProfile['selection']) => void;
   className?: string;
   style?: CSSProperties;
 }
@@ -142,7 +143,7 @@ const defaultMenuItems: StartMenuItem[] = [
 const defaultProfile: StartMenuProfile = {
   mode: 'default',
   source: 'none',
-  manualMode: 'default',
+  selection: 'auto',
 };
 
 const defaultUser: StartMenuUser = {
@@ -185,28 +186,43 @@ export const StartMenu = ({
   const applications = recentItems.applications ?? [];
   const documents = recentItems.documents ?? [];
   const hasRecentItems = applications.length > 0 || documents.length > 0;
-  const automaticGamingActive = profile.mode === 'gaming' && profile.source === 'auto';
-  const manualProfile = profile.manualMode;
-  const profileOptions: readonly [
-    TripleToggleOption<StartMenuProfile['manualMode']>,
-    TripleToggleOption<StartMenuProfile['manualMode']>,
-    TripleToggleOption<StartMenuProfile['manualMode']>,
-  ] = [
+  const automaticGamingActive =
+    profile.automaticGamingActive ?? (profile.mode === 'gaming' && profile.source === 'auto');
+  const profileSelection = profile.selection;
+  const profileOptions: readonly TripleToggleOption<StartMenuProfile['selection']>[] = [
     {
-      value: 'default',
+      value: 'auto',
       label: 'Auto',
       icon: <span className="font-fluent">{'\uF8B0'}</span>,
-      badge: automaticGamingActive ? (
-        <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-nerd text-[8px] text-state-success-foreground ring-2 ring-accent-primary">
-          {'\u{F02B4}'}
-        </span>
-      ) : undefined,
+      badge:
+        automaticGamingActive && profileSelection === 'auto' ? (
+          <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-nerd text-[8px] text-state-success-foreground ring-2 ring-accent-primary">
+            {'\u{F02B4}'}
+          </span>
+        ) : undefined,
       ariaLabel: automaticGamingActive
         ? 'Automatic profile rules; Game Mode is active'
         : 'Automatic profile rules',
       title: automaticGamingActive
         ? 'Game Mode is active automatically'
         : 'Use automatic profile rules',
+    },
+    {
+      value: 'default',
+      label: 'Default',
+      icon: <span className="font-fluent">{'\uEC49'}</span>,
+      badge:
+        automaticGamingActive && profileSelection === 'default' ? (
+          <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-nerd text-[8px] text-state-success-foreground ring-2 ring-accent-primary">
+            {'\u{F02B4}'}
+          </span>
+        ) : undefined,
+      ariaLabel: automaticGamingActive
+        ? 'Force Default profile; Game Mode condition remains active'
+        : 'Force Default profile',
+      title: automaticGamingActive
+        ? 'Force Default profile while Game Mode remains active automatically'
+        : 'Force Default profile',
     },
     {
       value: 'gaming',
@@ -219,8 +235,18 @@ export const StartMenu = ({
       value: 'powersave',
       label: 'Saver',
       icon: <span className="font-fluent">{'\uEA95'}</span>,
-      ariaLabel: 'Manual Power Saver profile',
-      title: 'Select manual Power Saver profile',
+      badge:
+        automaticGamingActive && profileSelection === 'powersave' ? (
+          <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-nerd text-[8px] text-state-success-foreground ring-2 ring-accent-primary">
+            {'\u{F02B4}'}
+          </span>
+        ) : undefined,
+      ariaLabel: automaticGamingActive
+        ? 'Force Power Saver profile; Game Mode condition remains active'
+        : 'Force Power Saver profile',
+      title: automaticGamingActive
+        ? 'Force Power Saver profile while Game Mode remains active automatically'
+        : 'Force Power Saver profile',
     },
   ];
 
@@ -602,9 +628,9 @@ export const StartMenu = ({
                 <hr className="my-1.5 border-t border-white/10" />
                 <div className="my-3">
                   <TripleToggle
-                    className="mx-auto"
+                    className="mx-auto w-56"
                     options={profileOptions}
-                    value={manualProfile}
+                    value={profileSelection}
                     ariaLabel="Manual performance profile"
                     onValueChange={onProfileChange}
                     onKeyDown={handleMenuItemKeyDown}

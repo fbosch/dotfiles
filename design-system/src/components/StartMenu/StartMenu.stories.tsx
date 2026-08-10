@@ -196,7 +196,7 @@ export const WithAutomaticGaming: Story = {
     profile: {
       mode: 'gaming',
       source: 'auto',
-      manualMode: 'default',
+      selection: 'auto',
     },
     onProfileChange: fn(),
   },
@@ -215,7 +215,27 @@ export const WithPinnedGaming: Story = {
     profile: {
       mode: 'gaming',
       source: 'manual',
-      manualMode: 'gaming',
+      selection: 'gaming',
+    },
+    onProfileChange: fn(),
+  },
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div className="min-h-screen bg-background-primary p-8">
+        <Story />
+      </div>
+    ),
+  ],
+};
+
+export const WithDefaultOverride: Story = {
+  args: {
+    isOpen: true,
+    profile: {
+      mode: 'default',
+      source: 'manual',
+      selection: 'default',
+      automaticGamingActive: true,
     },
     onProfileChange: fn(),
   },

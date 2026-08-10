@@ -178,6 +178,7 @@ function M.recalculate(ctx)
 		layout_name = "portrait_rows",
 		role = role,
 		axis = "y",
+		ratios = ratios,
 		start = y,
 		span = height,
 		active_index = active_index,

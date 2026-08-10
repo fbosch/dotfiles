@@ -72,6 +72,11 @@ emit_status() {
     return 0
   fi
 
+  if [[ "$status_text" == Connecting* ]]; then
+    printf '{"text":"󰖂","tooltip":"Mullvad connecting","class":"connecting"}\n'
+    return 0
+  fi
+
   printf '{"text":"󰖂","tooltip":"%s","class":"error"}\n' "$(json_escape "$status_text")"
 }
 
@@ -83,7 +88,7 @@ listen_status() {
   local line
   while IFS= read -r line || [[ -n "$line" ]]; do
     case "$line" in
-      Connected*|Disconnected*)
+      Connected*|Connecting*|Disconnected*)
         emit_status "$(mullvad status 2>/dev/null || true)"
         ;;
     esac

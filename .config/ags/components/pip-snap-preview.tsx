@@ -19,6 +19,7 @@ let targetBox: Gtk.Box | null = null;
 let previewRoot: Gtk.Fixed | null = null;
 let isVisible = false;
 let appliedRounding: number | null = null;
+const previewBorderWidth = 2;
 
 function monitorByConnector(connector: string): Gdk.Monitor | null {
   const display = Gdk.Display.get_default();
@@ -105,8 +106,8 @@ function applyCss(rounding: number): void {
 
       window.pip-snap-preview box.pip-snap-preview-target {
         background-color: ${tokens.colors.accent.primary.value}29;
-        border: 2px solid ${tokens.colors.accent.active.value};
-        border-radius: ${rounding}px;
+        border: ${previewBorderWidth}px solid ${tokens.colors.accent.active.value};
+        border-radius: ${rounding + previewBorderWidth}px;
         box-shadow: 0 0 20px ${tokens.colors.accent.primary.value}57;
       }
     `,

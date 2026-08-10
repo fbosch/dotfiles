@@ -67,6 +67,22 @@ wait_for_socket() {
   done
 }
 
+write_profile_state() {
+	local path="$1" resolved_profile="$2"
+
+	case "$resolved_profile" in
+		gaming)
+			printf '%s' '{"generation":1,"resolved":"gaming","selection":"auto","sources":{"gaming":{"watchdog":1},"powersave":{}}}' > "$path"
+			;;
+		default|powersave)
+			printf '{"generation":1,"resolved":"%s","selection":"%s","sources":{"gaming":{"watchdog":1},"powersave":{}}}' "$resolved_profile" "$resolved_profile" > "$path"
+			;;
+		missing)
+			rm -f "$path"
+			;;
+	esac
+}
+
 cat > "$test_dir/fake_socket.lua" <<'EOF'
 #!/usr/bin/env luajit
 local ffi = require("ffi")
@@ -81,6 +97,7 @@ ffi.cdef[[
 local AF_UNIX, SOCK_STREAM = 1, 1
 local path, kind = assert(arg[1]), assert(arg[2])
 local clear_file, ready_file = assert(arg[3]), assert(arg[4])
+local event_file = arg[5] ~= "" and arg[5] or nil
 local function make_server()
   ffi.C.unlink(path)
   local fd = assert(ffi.C.socket(AF_UNIX, SOCK_STREAM, 0))
@@ -129,8 +146,10 @@ while true do
   if connection == 1 then
     close(client)
   else
-    while not io.open(clear_file, "r") do ffi.C.usleep(20000) end
+    while not io.open(event_file or clear_file, "r") do ffi.C.usleep(20000) end
     local event = "workspace>>10\n"
+    ffi.C.send(client, event, #event, 0)
+    while not io.open((event_file or clear_file) .. ".2", "r") do ffi.C.usleep(20000) end
     ffi.C.send(client, event, #event, 0)
     while true do ffi.C.usleep(20000) end
   end
@@ -139,11 +158,12 @@ EOF
 chmod +x "$test_dir/fake_socket.lua"
 
 run_case() {
-  local name="$1" freeze_mode="$2" clients_mode="$3" event_mode="${4:-event}"
-  local case_dir="$test_dir/$name"
-  local bin_dir="$case_dir/bin" home_dir="$case_dir/home"
-  local runtime_dir="$case_dir/runtime"
-  local socket_dir="$runtime_dir/hypr/fixture"
+	local name="$1" freeze_mode="$2" clients_mode="$3" event_mode="${4:-event}" resolved_profile="${5:-gaming}" transition="${6:-}"
+	local case_dir="$test_dir/$name"
+	local bin_dir="$case_dir/bin" home_dir="$case_dir/home"
+	local runtime_dir="$case_dir/runtime"
+	local socket_dir="$runtime_dir/hypr/fixture"
+	local event_file=""
   mkdir -p "$bin_dir" "$home_dir/.config" "$socket_dir"
   cp -a "$repo_root/.config/hypr" "$home_dir/.config/"
   # shellcheck disable=SC2016
@@ -157,22 +177,32 @@ run_case() {
   printf '%s\n' '#!/bin/sh' 'printf "%s\n" "$*" >> "$PRESENTATION_LOG"' > "$bin_dir/hyprctl"
   chmod +x "$bin_dir/wl-freeze" "$bin_dir/ps" "$bin_dir/hyprctl"
   if [[ "$freeze_mode" == missing ]]; then rm "$bin_dir/wl-freeze"; fi
-  for utility in bash dirname flock luajit mkdir rm sleep touch; do ln -s "$(command -v "$utility")" "$bin_dir/$utility"; done
-  touch "$case_dir/ready-query" "$case_dir/ready-event"
+	for utility in bash dirname flock luajit mkdir rm sleep touch; do ln -s "$(command -v "$utility")" "$bin_dir/$utility"; done
+	mkdir -p "$runtime_dir/hypr-profiles"
+	write_profile_state "$runtime_dir/hypr-profiles/state.json" "$resolved_profile"
+	touch "$case_dir/ready-query" "$case_dir/ready-event"
   rm "$case_dir/ready-query" "$case_dir/ready-event"
   export CLIENTS_MODE="$clients_mode"
+	if [[ "$transition" == gaming ]]; then event_file="$case_dir/event"; fi
   "$luajit_path" "$test_dir/fake_socket.lua" "$socket_dir/.socket.sock" query "$case_dir/clear" "$case_dir/ready-query" & query_pid=$!
-  "$luajit_path" "$test_dir/fake_socket.lua" "$socket_dir/.socket2.sock" "$event_mode" "$case_dir/clear" "$case_dir/ready-event" & event_pid=$!
+	"$luajit_path" "$test_dir/fake_socket.lua" "$socket_dir/.socket2.sock" "$event_mode" "$case_dir/clear" "$case_dir/ready-event" "$event_file" & event_pid=$!
   wait_for_socket "$socket_dir/.socket.sock" "$name query socket"
   wait_for_socket "$socket_dir/.socket2.sock" "$name event socket"
   export HOME="$home_dir" PATH="$bin_dir" XDG_RUNTIME_DIR="$runtime_dir" HYPRLAND_INSTANCE_SIGNATURE=fixture
   export PROFILE_LOG="$case_dir/profile.log" FREEZE_LOG="$case_dir/freeze.log" PRESENTATION_LOG="$case_dir/presentation.log" FREEZE_STATE="$case_dir/frozen" FREEZE_MODE="$freeze_mode" CLIENTS_MODE="$clients_mode"
-  : > "$PROFILE_LOG"; : > "$FREEZE_LOG"; : > "$PRESENTATION_LOG"
-  if [[ "$clients_mode" == empty ]]; then touch "$case_dir/clear"; fi
-  "$home_dir/.config/hypr/runtime/gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh" > "$case_dir/out" 2> "$case_dir/err" & watchdog_pid=$!
-  wait_for_file "$PROFILE_LOG" "$name profile sync"
-  sleep 1.2
-  if [[ "$clients_mode" == late-game ]]; then
+	: > "$PROFILE_LOG"; : > "$FREEZE_LOG"; : > "$PRESENTATION_LOG"
+	if [[ "$clients_mode" == empty ]]; then touch "$case_dir/clear"; fi
+	"$home_dir/.config/hypr/runtime/gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh" > "$case_dir/out" 2> "$case_dir/err" & watchdog_pid=$!
+	wait_for_file "$PROFILE_LOG" "$name profile sync"
+	sleep 1.2
+	if [[ "$transition" == gaming ]]; then
+		write_profile_state "$runtime_dir/hypr-profiles/state.json" default
+		touch "$case_dir/event"
+		sleep 0.3
+		write_profile_state "$runtime_dir/hypr-profiles/state.json" gaming
+		touch "$case_dir/event.2"
+		sleep 1.2
+	elif [[ "$clients_mode" == late-game ]]; then
     touch "$case_dir/clear"
     sleep 1.2
   fi
@@ -193,10 +223,13 @@ run_case() {
 	assert_contains "$case_dir/err" 'gaming-session-watchdog: event socket reconnected'
   elif [[ "$clients_mode" == game && "$freeze_mode" == failed ]]; then
     assert_contains "$case_dir/err" 'gaming-session-watchdog: failed to freeze PID 4242'
-  else
+	else
     assert_not_contains "$case_dir/err" 'wl-freeze is unavailable'
     assert_not_contains "$case_dir/err" 'failed to '
-  fi
+	fi
+	if [[ "$resolved_profile" == missing ]]; then
+		assert_contains "$case_dir/err" 'gaming-session-watchdog: cannot read canonical profile state; suppressing gaming presentation'
+	fi
   kill -TERM "$query_pid" "$event_pid" >/dev/null 2>&1 || true
   wait "$query_pid" "$event_pid" >/dev/null 2>&1 || true
   query_pid=""; event_pid=""
@@ -208,11 +241,20 @@ run_case ordinary missing empty stable
 run_case cleanup success game event
 run_case override missing override event
 run_case late-game missing late-game event
-assert_contains "$test_dir/cleanup/profile.log" 'sync gaming 0'
+run_case manual-default missing override event default
+run_case manual-powersave missing override event powersave
+run_case unreadable-state missing override event missing
+run_case presentation-resume missing override event gaming gaming
+assert_contains "$test_dir/cleanup/profile.log" 'sync-source gaming watchdog 0'
+assert_contains "$test_dir/override/profile.log" 'sync-source gaming watchdog 1'
 assert_contains "$test_dir/cleanup/err" 'event socket closed; retrying in 1s'
 assert_contains "$test_dir/cleanup/err" 'event socket reconnected'
 assert_not_contains "$test_dir/missing/presentation.log" 'apply_presentation'
 assert_count "$test_dir/override/presentation.log" 'apply_presentation(0, 0)' 2
 assert_not_contains "$test_dir/late-game/presentation.log" 'apply_presentation'
+assert_not_contains "$test_dir/manual-default/presentation.log" 'apply_presentation'
+assert_not_contains "$test_dir/manual-powersave/presentation.log" 'apply_presentation'
+assert_not_contains "$test_dir/unreadable-state/presentation.log" 'apply_presentation'
+assert_count "$test_dir/presentation-resume/presentation.log" 'apply_presentation(0, 0)' 3
 
 printf 'PASS gaming-session-watchdog bounded runtime fixture\n'
