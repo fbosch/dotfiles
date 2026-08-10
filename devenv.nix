@@ -67,10 +67,11 @@ in
       set -euo pipefail
       target="$(mktemp -d)"
       trap 'rm -rf "$target"' EXIT
+      source_status_before="$(git status --porcelain --untracked-files=all)"
 
       # Prevent directory folding from masking nested ignore behavior.
       mkdir -p "$target/.config/ags" "$target/.config/waybar"
-      stow --dir "$PWD" --target "$target" .
+      stow --dir "$PWD" --target "$target" --restow .
 
       required_paths=(
         ".config/ags/config-bundled.tsx"
@@ -79,7 +80,10 @@ in
         ".config/waybar/scripts/temperatures"
       )
       for deployment_path in "''${required_paths[@]}"; do
-        test -e "$target/$deployment_path"
+        if ! test -e "$target/$deployment_path"; then
+          printf 'Expected Stow deployment is missing: %s\n' "$deployment_path" >&2
+          exit 1
+        fi
       done
 
       ignored_paths=(
@@ -89,12 +93,23 @@ in
         "justfile"
         "lefthook.yml"
         ".codex"
+        ".github"
+        "tests"
       )
       for deployment_path in "''${ignored_paths[@]}"; do
-        test ! -e "$target/$deployment_path"
+        if test -e "$target/$deployment_path"; then
+          printf 'Repository-only path was deployed: %s\n' "$deployment_path" >&2
+          exit 1
+        fi
       done
 
-      stow --dir "$PWD" --target "$target" .
+      stow --dir "$PWD" --target "$target" --restow .
+      source_status_after="$(git status --porcelain --untracked-files=all)"
+      if test "$source_status_before" != "$source_status_after"; then
+        printf '%s\n' 'Normal Stow deployment modified the source working tree:' >&2
+        git status --short >&2
+        exit 1
+      fi
     '';
 
     "test:fish".exec = ''
@@ -106,6 +121,11 @@ in
         exit 1
       fi
       fish -n "''${test_files[@]}"
+    '';
+
+    "test:git-pull-system-repos".exec = ''
+      set -euo pipefail
+      fish tests/git_pull_system_repos.fish
     '';
 
     "test:lua-quality".exec = ''
@@ -128,9 +148,9 @@ in
     "test:vicinae" = {
       after = [ "test:vicinae-install" ];
       exec = ''
-      set -euo pipefail
-      pnpm --dir .config/vicinae/extensions run lint
-      pnpm --dir .config/vicinae/extensions run build
+        set -euo pipefail
+        pnpm --dir .config/vicinae/extensions run lint
+        pnpm --dir .config/vicinae/extensions run build
       '';
     };
 
@@ -173,6 +193,7 @@ in
         "test:shellcheck"
         "test:stow"
         "test:fish"
+        "test:git-pull-system-repos"
         "test:lua-quality"
         "test:vicinae"
         "test:runtime-shell"

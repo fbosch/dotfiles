@@ -1,25 +1,26 @@
 # Stow ignore patterns
-\.git
-\.gitignore
-\.stow-local-ignore
+^/\.git$
+^/\.gitignore$
+^/\.stow-local-ignore$
 ^/README.*
 ^/LICENSE.*
 ^/AGENTS.md
+^/\.github$
 ^/opencode.json
-^/\.opencode
+^/\.opencode$
 ^/COPYING
-.DS_Store
+(.*/)?\.DS_Store$
 ^/.*\.md$
 ^/scripts$
 ^/docs$
-node_modules
+^/node_modules$
 ^/design-system$
 \.backup
 lazy-lock\.json
-Brewfile\.lock\.json
-\.luarc\.json
-docs.config.json
-docs-lock.json
+^/Brewfile\.lock\.json$
+^/\.luarc\.json$
+^/docs\.config\.json$
+^/docs-lock\.json$
 ^/\.docs$
 ^/\.codex$
 ^/\.config/gtk-[34]\.0$
@@ -30,6 +31,7 @@ docs-lock.json
 ^/\.devenv
 ^/\.envrc
 ^/lefthook\.yml$
+^/tests$
 
 # Example files should not be stowed, only used as templates
 \.example$

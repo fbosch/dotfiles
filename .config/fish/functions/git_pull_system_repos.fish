@@ -1,4 +1,24 @@
-function git_pull_system_repos --description 'Pull system repositories, then restow dotfiles and install dependencies'
+function _git_pull_system_repos_confirm_alignment --description 'Confirm alignment of the deployed dotfiles checkout'
+    set -l current_branch $argv[1]
+
+    if not test -t 0
+        printf 'git_pull_system_repos: ~/dotfiles is not on master; rerun with --yes to align it non-interactively.\n' >&2
+        return 2
+    end
+
+    printf 'Align ~/dotfiles to origin/master\n' >&2
+    printf '  Current branch  %s\n' "$current_branch" >&2
+    printf '  Local master will be replaced with origin/master.\n\n' >&2
+    printf 'Continue? [y/N] ' >&2
+    read -l confirmation
+    if contains -- (string lower -- "$confirmation") y yes
+        return 0
+    end
+
+    return 1
+end
+
+function git_pull_system_repos --description 'Synchronize canonical system repositories, then restow dotfiles and install dependencies'
     set -l assume_yes 0
 
     for argument in $argv
@@ -9,8 +29,9 @@ function git_pull_system_repos --description 'Pull system repositories, then res
                 printf '%s\n' \
                     'Usage: git_pull_system_repos [--yes]' \
                     '' \
-                    'Pull ~/nixos and ~/dotfiles with fast-forward-only updates.' \
+                    'Pull ~/nixos and the canonical deployed ~/dotfiles checkout with fast-forward-only updates.' \
                     'If ~/dotfiles is not on master, confirm before replacing local master with origin/master.' \
+                    'Use a separate Git worktree or Worktrunk checkout for dotfiles feature development.' \
                     '' \
                     'After both repositories update successfully, this command:' \
                     '  - Restows ~/dotfiles' \
@@ -60,7 +81,7 @@ function git_pull_system_repos --description 'Pull system repositories, then res
             continue
         end
 
-        git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1
+        set -l repo_toplevel (git -C "$repo" rev-parse --show-toplevel 2>/dev/null)
         set -l status_code $status
         if contains -- $status_code 130 143
             return $status_code
@@ -68,6 +89,13 @@ function git_pull_system_repos --description 'Pull system repositories, then res
         if test $status_code -ne 0
             printf '%sWarning%s  Skipped %s because it is not a Git repository.\n' "$warning" "$normal" "$label" >&2
             printf '  Initialize or restore the repository, then rerun `git_pull_system_repos`.\n' >&2
+            set had_failure 1
+            continue
+        end
+
+        if test (path resolve "$repo_toplevel") != (path resolve "$repo")
+            printf '%sWarning%s  Skipped %s because it is not the root of a Git repository.\n' "$warning" "$normal" "$label" >&2
+            printf '  Restore the checkout at %s, then rerun `git_pull_system_repos`.\n' "$label" >&2
             set had_failure 1
             continue
         end
@@ -120,17 +148,15 @@ function git_pull_system_repos --description 'Pull system repositories, then res
         end
 
         if test $assume_yes -ne 1
-            if not test -t 0
-                printf 'git_pull_system_repos: ~/dotfiles is not on master; rerun with --yes to align it non-interactively.\n' >&2
+            _git_pull_system_repos_confirm_alignment "$current_branch"
+            set -l confirmation_status $status
+            if contains -- $confirmation_status 130 143
+                return $confirmation_status
+            end
+            if test $confirmation_status -eq 2
                 return 2
             end
-
-            printf 'Align ~/dotfiles to origin/master\n' >&2
-            printf '  Current branch  %s\n' "$current_branch" >&2
-            printf '  Local master will be replaced with origin/master.\n\n' >&2
-            printf 'Continue? [y/N] ' >&2
-            read -l confirmation
-            if not contains -- (string lower -- "$confirmation") y yes
+            if test $confirmation_status -ne 0
                 return 0
             end
         end
@@ -141,26 +167,14 @@ function git_pull_system_repos --description 'Pull system repositories, then res
 
         if test "$repo" = "$dotfiles"; and test $align_dotfiles -eq 1
             printf '%sWorking%s  Aligning %s with origin/master...\n' "$working" "$normal" "$label" >&2
-            git -C "$repo" remote set-url origin git@github.com:fbosch/dotfiles
+            git -C "$repo" fetch origin master
             set -l command_status $status
             if contains -- $command_status 130 143
                 return $command_status
             end
             if test $command_status -ne 0
-                printf '%sError%s    Failed to set the origin remote for %s.\n' "$error" "$normal" "$label" >&2
-                printf '  Run `git -C %s remote -v` before rerunning `git_pull_system_repos`.\n' "$label" >&2
-                set had_failure 1
-                continue
-            end
-
-            git -C "$repo" fetch origin master
-            set command_status $status
-            if contains -- $command_status 130 143
-                return $command_status
-            end
-            if test $command_status -ne 0
                 printf '%sError%s    Failed to fetch origin/master for %s.\n' "$error" "$normal" "$label" >&2
-                printf '  Restore GitHub SSH access, then run `git -C %s fetch origin master`.\n' "$label" >&2
+                printf '  Restore access to origin, then run `git -C %s fetch origin master`.\n' "$label" >&2
                 set had_failure 1
                 continue
             end

@@ -145,3 +145,7 @@ stow-apply:
 # Restow dotfiles.
 stow-restow:
 	stow -R .
+
+# Migrate existing files into this repository after previewing a clean working tree.
+stow-adopt:
+	bash ./scripts/stow-adopt.sh

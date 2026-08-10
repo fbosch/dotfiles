@@ -16,7 +16,14 @@ local servers = {
 	fallow = {
 		cmd = { "fallow-lsp" },
 		filetypes = { "javascript", "typescript", "javascriptreact", "typescriptreact" },
-		root_markers = { ".fallowrc.json", "package.json", ".git" },
+		root_markers = {
+			"pnpm-workspace.yaml",
+			".fallowrc.json",
+			".fallowrc.jsonc",
+			"fallow.toml",
+			".fallow.toml",
+			".git",
+		},
 	},
 	docker_compose_language_service = {},
 	cssls = {
