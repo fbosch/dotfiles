@@ -416,11 +416,7 @@ const readFlakeUpdatesCache = () =>
   readUpdatesCache("flake-updates.json", "flake updates", isFlakeUpdate);
 
 const readFlatpakUpdatesCache = () =>
-  readUpdatesCache(
-    "flatpak-updates.json",
-    "Flatpak updates",
-    isFlatpakUpdate,
-  );
+  readUpdatesCache("flatpak-updates.json", "Flatpak updates", isFlatpakUpdate);
 
 // Format time difference for tooltip
 function formatTimeSince(timestamp: string): string {
@@ -545,16 +541,16 @@ function refreshProfileControls() {
   const automaticGamingActive = hasAutomaticGamingClaim(profileState);
   for (const [id, badge] of profileConditionBadges) {
     badge.set_visible(
-      automaticGamingActive &&
-        selection === "auto" &&
-        id === "profile-auto",
+      automaticGamingActive && selection === "auto" && id === "profile-auto",
     );
   }
-  menuItemButtons.get("profile-auto")?.set_tooltip_text(
-    automaticGamingActive
-      ? "Use automatic profile rules; Game Mode is active"
-      : "Use automatic profile rules",
-  );
+  menuItemButtons
+    .get("profile-auto")
+    ?.set_tooltip_text(
+      automaticGamingActive
+        ? "Use automatic profile rules; Game Mode is active"
+        : "Use automatic profile rules",
+    );
   menuItemButtons
     .get("profile-default")
     ?.set_tooltip_text(
@@ -835,7 +831,11 @@ function generateUpdatesTooltip(): string {
   return tooltipParts.join("\n\n");
 }
 
-function createUpdateBadge(icon: string, count: number): JSX.Element {
+function createUpdateBadge(
+  icon: string,
+  count: number,
+  iconClass = "updates-badge-icon",
+): JSX.Element {
   return (
     <box
       orientation={Gtk.Orientation.HORIZONTAL}
@@ -846,7 +846,7 @@ function createUpdateBadge(icon: string, count: number): JSX.Element {
     >
       <label
         label={icon}
-        class="updates-badge-icon"
+        class={iconClass}
         halign={Gtk.Align.CENTER}
         valign={Gtk.Align.CENTER}
       />
@@ -866,7 +866,13 @@ function createUpdateBadges(): JSX.Element | null {
 
   // Add flake updates badge if applicable
   if (flakeUpdatesCount > 0) {
-    badges.push(createUpdateBadge("\uE843", flakeUpdatesCount));
+    badges.push(
+      createUpdateBadge(
+        "\uE843",
+        flakeUpdatesCount,
+        "updates-badge-icon updates-badge-nix-icon",
+      ),
+    );
   }
 
   // Add flatpak updates badge if applicable
@@ -1067,10 +1073,7 @@ function createProfileControls(): Gtk.Box {
       widthRequest={224}
       class="profile-row"
     >
-      <box
-        orientation={Gtk.Orientation.HORIZONTAL}
-        class="profile-actions"
-      >
+      <box orientation={Gtk.Orientation.HORIZONTAL} class="profile-actions">
         {createProfileToggle(
           "profile-auto",
           "\uF8B0",
@@ -1374,7 +1377,8 @@ function handleOutsideClick(x: number, y: number): void {
   if (
     recentItemsVisible &&
     recentItemsHost &&
-    (target === recentItemsHost || target?.is_ancestor(recentItemsHost) === true)
+    (target === recentItemsHost ||
+      target?.is_ancestor(recentItemsHost) === true)
   ) {
     return;
   }
@@ -1676,6 +1680,10 @@ function applyStaticCSS() {
       font-size: 12px;
       font-weight: 700;
       color: inherit;
+    }
+
+    window.start-menu label.updates-badge-nix-icon {
+      transform: translate(0, -0.5px);
     }
 
     /* Menu dividers */

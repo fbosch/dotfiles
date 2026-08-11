@@ -14,6 +14,7 @@ local pip = require("lib.picture_in_picture")
 
 local monitor_cache_ttl_s = 10
 local drag_interval_s = 0.08
+local client_drag_settle_s = 0.2
 local open_window_delay_s = 0.1
 local waybar_position_vicinity = 12
 local control_socket_path = hypr_ipc.instance_socket_path("pip-monitor.sock")
@@ -23,6 +24,10 @@ local monitor_cache_at = 0
 local waybar_visible = false
 local dragging = false
 local dragging_address = nil
+local drag_source = nil
+local client_drag_settle_at = nil
+local pip_geometries = {}
+local next_pip_observation_at = 0
 local preview_signature = nil
 local resize_anchor = nil
 local control_server = nil
@@ -164,6 +169,56 @@ local function is_pip(window)
 		and window.floating == true
 		and window.class == pip.class
 		and window.title == pip.title
+end
+
+local function pip_geometry(window)
+	return string.format(
+		"%s:%s:%s:%s:%s",
+		tostring(window.monitor),
+		tostring(window.at[1]),
+		tostring(window.at[2]),
+		tostring(window.size[1]),
+		tostring(window.size[2])
+	)
+end
+
+local function observe_client_drag()
+	local now = socket.gettime()
+	local seen = {}
+	local moved_address = nil
+	for _, window in ipairs(json.array(request("j/clients"))) do
+		if is_pip(window) then
+			local address = window.address
+			local geometry = pip_geometry(window)
+			seen[address] = true
+			if pip_geometries[address] and pip_geometries[address] ~= geometry then
+				moved_address = moved_address or address
+			end
+			pip_geometries[address] = geometry
+		end
+	end
+
+	for address in pairs(pip_geometries) do
+		if seen[address] == nil then
+			pip_geometries[address] = nil
+		end
+	end
+
+	if drag_source == "client" then
+		if moved_address == dragging_address then
+			client_drag_settle_at = now + client_drag_settle_s
+		end
+		return next(seen) ~= nil
+	end
+
+	if dragging == false and moved_address then
+		dragging = true
+		dragging_address = moved_address
+		drag_source = "client"
+		client_drag_settle_at = now + client_drag_settle_s
+	end
+
+	return next(seen) ~= nil
 end
 
 local function corner_x(window, monitor)
@@ -394,6 +449,19 @@ local function set_snap_preview(target)
 	end
 end
 
+local function stop_drag()
+	if dragging_address then
+		pip_geometries[dragging_address] = nil
+	end
+
+	dragging = false
+	dragging_address = nil
+	drag_source = nil
+	client_drag_settle_at = nil
+	next_pip_observation_at = socket.gettime()
+	set_snap_preview(nil)
+end
+
 local function update_snap_preview()
 	refresh_monitors()
 	local bars = waybar_visible and predicted_waybar_layers() or visible_waybar_layers()
@@ -496,18 +564,16 @@ local function handle_control(control)
 	if action == "drag-start" then
 		dragging = true
 		dragging_address = address
+		drag_source = "bind"
+		client_drag_settle_at = nil
 	elseif action == "drag-end" then
 		if dragging then
 			update_snap_preview()
 			snap_pip(dragging_address)
 		end
-		dragging = false
-		dragging_address = nil
-		set_snap_preview(nil)
+		stop_drag()
 	elseif action == "drag-cancel" then
-		dragging = false
-		dragging_address = nil
-		set_snap_preview(nil)
+		stop_drag()
 	elseif action == "resize-start" then
 		begin_resize()
 	elseif action == "resize-end" then
@@ -567,12 +633,31 @@ local function run()
 	control_server:settimeout(0)
 
 	while true do
+		local now = socket.gettime()
+		if now >= next_pip_observation_at then
+			-- Client-initiated titlebar drags do not have an IPC start/end event.
+			local has_pip = observe_client_drag()
+			next_pip_observation_at = has_pip and now + drag_interval_s or math.huge
+		end
+
 		if dragging then
 			update_snap_preview()
+			if drag_source == "client" and client_drag_settle_at and now >= client_drag_settle_at then
+				snap_pip(dragging_address)
+				stop_drag()
+			end
 		end
-		local timeout = dragging and drag_interval_s or nil
+
+		local timeout = next_pip_observation_at == math.huge and nil or math.max(0, next_pip_observation_at - now)
+		if dragging then
+			timeout = timeout and math.min(timeout, drag_interval_s) or drag_interval_s
+		end
+		if client_drag_settle_at then
+			local settle_delay = math.max(0, client_drag_settle_at - now)
+			timeout = timeout and math.min(timeout, settle_delay) or settle_delay
+		end
 		if reconcile_at then
-			local delay = math.max(0, reconcile_at - socket.gettime())
+			local delay = math.max(0, reconcile_at - now)
 			timeout = timeout and math.min(timeout, delay) or delay
 		end
 
@@ -587,6 +672,11 @@ local function run()
 				local event, err, partial = event_socket:receive("*l")
 				event = event or partial
 				local opened = event and event:match("^openwindow") ~= nil
+				local client_changed = event
+					and (event:match("^openwindow") ~= nil or event:match("^closewindow") ~= nil)
+				if client_changed then
+					next_pip_observation_at = 0
+				end
 				local resized = event
 					and event:match("^resizewindow") ~= nil
 					and dragging == false
@@ -615,8 +705,10 @@ local function run()
 			waybar_visible = next(visible_waybar_layers()) ~= nil
 			for address, assign_default_corner in pairs(reconcile_addresses) do
 				move_pip(waybar_visible and "show" or "hide", address, assign_default_corner)
+				pip_geometries[address] = nil
 				reconcile_addresses[address] = nil
 			end
+			next_pip_observation_at = 0
 		end
 	end
 end
