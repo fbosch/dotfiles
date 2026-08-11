@@ -172,14 +172,8 @@ local function is_pip(window)
 end
 
 local function pip_geometry(window)
-	return string.format(
-		"%s:%s:%s:%s:%s",
-		tostring(window.monitor),
-		tostring(window.at[1]),
-		tostring(window.at[2]),
-		tostring(window.size[1]),
-		tostring(window.size[2])
-	)
+	return string.format("%s:%s:%s", tostring(window.monitor), tostring(window.at[1]), tostring(window.at[2])),
+		string.format("%s:%s", tostring(window.size[1]), tostring(window.size[2]))
 end
 
 local function observe_client_drag()
@@ -189,12 +183,13 @@ local function observe_client_drag()
 	for _, window in ipairs(json.array(request("j/clients"))) do
 		if is_pip(window) then
 			local address = window.address
-			local geometry = pip_geometry(window)
+			local position, size = pip_geometry(window)
+			local previous = pip_geometries[address]
 			seen[address] = true
-			if pip_geometries[address] and pip_geometries[address] ~= geometry then
+			if previous and previous.position ~= position and previous.size == size then
 				moved_address = moved_address or address
 			end
-			pip_geometries[address] = geometry
+			pip_geometries[address] = { position = position, size = size }
 		end
 	end
 
@@ -648,7 +643,10 @@ local function run()
 			end
 		end
 
-		local timeout = next_pip_observation_at == math.huge and nil or math.max(0, next_pip_observation_at - now)
+		local timeout = nil
+		if next_pip_observation_at ~= math.huge then
+			timeout = math.max(0, next_pip_observation_at - now)
+		end
 		if dragging then
 			timeout = timeout and math.min(timeout, drag_interval_s) or drag_interval_s
 		end

@@ -6,7 +6,6 @@ Fish shell configuration for interactive work, dotfiles maintenance, and local w
 
 - `config.fish` is the entrypoint.
 - `aliases.fish`, `profile.fish`, `scripts.fish`, `coreutils.fish`, `gum.fish`, and `colors.fish` are sourced from the entrypoint.
-- `private.fish` is local-only and not committed.
 - `functions/` contains autoloaded Fish functions.
 - `libexec/` contains TypeScript/Bun helpers used by wrapper functions.
 
