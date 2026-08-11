@@ -23,6 +23,7 @@ lazy-lock\.json
 ^/docs-lock\.json$
 ^/\.docs$
 ^/\.codex$
+^/\.serena$
 ^/\.config/gtk-[34]\.0$
 ^/justfile$
 ^/devenv\.nix$
