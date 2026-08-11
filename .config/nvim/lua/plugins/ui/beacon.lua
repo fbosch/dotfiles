@@ -8,7 +8,13 @@ return {
 				return vim.g.transparent_enabled == true and 20 or 70
 			end
 
-			beacon.setup({ winblend = winblend() })
+			beacon.setup({
+				fps = 30,
+				min_jump = 20,
+				speed = 4,
+				width = 20,
+				winblend = winblend(),
+			})
 
 			-- Beacon retains this scratch buffer after windows are restored.
 			local _, create_window = debug.getupvalue(beacon.highlight_cursor, 3)
@@ -16,7 +22,7 @@ return {
 				return
 			end
 
-			vim.api.nvim_create_autocmd({ "CursorMoved", "WinEnter", "FocusGained" }, {
+			vim.api.nvim_create_autocmd({ "WinEnter", "FocusGained" }, {
 				callback = function()
 					beacon.config.winblend = winblend()
 					local _, fake_buffer = debug.getupvalue(create_window, 1)
