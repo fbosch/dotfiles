@@ -839,9 +839,9 @@ export function getIconForWindow(
 
 	const candidates = shouldTryTitleLookup
 		? [
-				...classCandidates,
 				...buildTitleCandidates(title),
 				...buildTitleCandidates(initialTitle),
+				...classCandidates,
 			]
 		: classCandidates;
 
