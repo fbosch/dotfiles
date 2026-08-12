@@ -7,6 +7,13 @@ local function get_visual_selection()
 	return vim.trim(table.concat(lines, " "))
 end
 
+require("config.pack.registry").register({
+	name = "numb.nvim",
+	src = "https://github.com/nacro90/numb.nvim.git",
+	version = "36260c446465b1303b0b1922c722904791bdb03f",
+	events = { { "CmdlineEnter", pattern = ":" } },
+})
+
 return {
 	-- { "tpope/vim-unimpaired", event = "VeryLazy" },
 	{
@@ -24,11 +31,6 @@ return {
 				EyelinerDimmed = { fg = colors.search_backdrop },
 			})
 		end,
-	},
-	{
-		"nacro90/numb.nvim",
-		event = "CmdLineEnter",
-		opts = {},
 	},
 	{
 		url = "https://codeberg.org/andyg/leap.nvim",

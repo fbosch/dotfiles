@@ -177,27 +177,27 @@ Build hooks:
 
 **Rollback:** Stop requiring the native bootstrap. Lazy.nvim remains unchanged.
 
-## Phase 2: Validate Command And Key Loading With IncRename
+## Phase 2: Validate Native Key Loading With Live Rename
 
 **Purpose:** Prove native ownership, command loading, proxy keymaps, early globals, and setup-once behavior with an isolated plugin.
 
 Pilot plugin:
 
 ```text
-smjonas/inc-rename.nvim
+saecki/live-rename.nvim
 ```
 
 Changes:
 
-- Add `loader.lua` with dependency-first activation, `packadd`-once, `init`-once, `setup`-once, `CmdUndefined`, and proxy-key support.
-- Remove IncRename's Lazy declaration in the same change that adds its native declaration.
-- Preserve its command expansion and current-word key behavior.
+- Add `loader.lua` with `packadd`-once, setup-once, and proxy-key support.
+- Register live-rename beside its key and setup in `plugins/core/editing.lua`.
+- Preserve `<leader>rn` while replacing IncRename's duplicated command-line/Snacks UI with one cursor-positioned floating editor.
 
-**Acceptance:** `:IncRename` and its mapping work on their first use. The native copy is the only active copy in `runtimepath`. Counts, modes, registers, and command arguments are preserved.
+**Acceptance:** `<leader>rn` loads the native copy on first use and opens one cursor-positioned floating rename editor. The native copy is the only active copy in `runtimepath`.
 
-**Rollback:** Restore only IncRename's Lazy declaration and remove its native activation declaration.
+**Rollback:** Remove the live-rename native declaration and restore the previous rename mapping.
 
-**Outcome:** IncRename is the first native-owned plugin. Its declaration, source, pinned migration revision, setup, command trigger, and key behavior remain colocated in `plugins/core/editing.lua`. The native loader activates it once through either `CmdUndefined` or the expression key proxy; Lazy no longer includes it in its graph.
+**Outcome:** live-rename is the first native-owned key-triggered plugin. Its declaration, source, pinned migration revision, setup, and key behavior remain colocated in `plugins/core/editing.lua`. The native loader activates it once through the key proxy; Lazy does not include it in its graph.
 
 ## Phase 3: Prove Each Trigger Type
 
@@ -205,9 +205,8 @@ Changes:
 
 | Trigger | Pilot | Required behavior |
 | --- | --- | --- |
-| Command | IncRename | `CmdUndefined` loads and retries the command. |
-| Key | IncRename | The proxy loads and replays the original input. |
-| Event | `nacro90/numb.nvim` | The first `CmdlineEnter` receives plugin behavior. |
+| Key | live-rename | The proxy loads the plugin and invokes its rename action. |
+| Event | `nacro90/numb.nvim` | The first `CmdlineEnter` installs preview handlers before any address is typed. |
 | Filetype | `OXY2DEV/helpview.nvim` | The first help buffer receives filetype behavior. |
 | Post-start | `echasnovski/mini.ai` | Scheduled post-`VimEnter` setup replaces `VeryLazy`. |
 | Condition | A Git-only plugin | Activation happens only in a Git repository. |

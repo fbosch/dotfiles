@@ -240,4 +240,6 @@ The repeated warm-start measurement used the same three warmups and 21 recorded 
 
 Undotree was removed after this baseline because it was no longer used. The active migration inventory and native shadow set now contain 68 application plugins.
 
-IncRename became the first native runtime-owned plugin in Phase 2. Fresh-process checks confirmed it was absent from Lazy and unloaded at startup, then loaded from `site/pack/core/opt` on the first `:IncRename` command or `<leader>rn` key callback. The key retained its editable `:IncRename <current-word>` expansion.
+live-rename became the first native runtime-owned key plugin in Phase 2. Fresh-process checks confirmed it was absent from Lazy and unloaded at startup, then loaded from `site/pack/core/opt` on the first `<leader>rn`. It replaced IncRename because IncRename intrinsically displayed both Neovim's command line and a mirrored Snacks widget, while live-rename provides one cursor-positioned floating editor.
+
+Numb became the native event-loading pilot. The first `CmdlineEnter` installs its `CmdlineChanged` and `CmdlineLeave` handlers before a numeric Ex address is typed; a focused check confirmed the same first event could preview line 42.

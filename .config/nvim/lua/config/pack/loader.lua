@@ -18,6 +18,17 @@ end
 
 function M.setup()
 	for name, plugin in pairs(registry.all()) do
+		for _, event in ipairs(plugin.events or {}) do
+			local event_name = type(event) == "table" and event[1] or event
+			vim.api.nvim_create_autocmd(event_name, {
+				once = true,
+				pattern = type(event) == "table" and event.pattern or nil,
+				callback = function()
+					M.activate(name)
+				end,
+			})
+		end
+
 		for _, command in ipairs(plugin.commands or {}) do
 			vim.api.nvim_create_autocmd("CmdUndefined", {
 				pattern = command,
