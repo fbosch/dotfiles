@@ -159,10 +159,21 @@ in
       grep -Fq 'starship_cache_fixture b' "$test_dir/home/.cache/fish/starship-init.fish"
     '';
 
-    "test:lua-quality".exec = ''
-      set -euo pipefail
-      REQUIRE_LUA_TOOLS=1 bash scripts/lua-quality.sh ci
-    '';
+    "test:lua-quality:fbb".exec = "REQUIRE_LUA_TOOLS=1 bash scripts/lua-quality.sh fbb";
+    "test:lua-quality:hyprland".exec = "REQUIRE_LUA_TOOLS=1 bash scripts/lua-quality.sh hyprland";
+    "test:lua-quality:neovim".exec = "REQUIRE_LUA_TOOLS=1 bash scripts/lua-quality.sh neovim";
+    "test:lua-quality:wezterm".exec = "REQUIRE_LUA_TOOLS=1 bash scripts/lua-quality.sh wezterm";
+    "test:lua-quality:keybinds".exec = "REQUIRE_LUA_TOOLS=1 bash scripts/lua-quality.sh keybinds";
+    "test:lua-quality" = {
+      exec = "true";
+      after = [
+        "test:lua-quality:fbb"
+        "test:lua-quality:hyprland"
+        "test:lua-quality:neovim"
+        "test:lua-quality:wezterm"
+        "test:lua-quality:keybinds"
+      ];
+    };
 
     "test:design-system".exec = ''
       set -euo pipefail

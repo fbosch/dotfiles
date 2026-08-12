@@ -196,8 +196,8 @@ These checks establish loader activation, not full interactive UI parity. Key re
 | `nvim -i NONE --headless '+qa'` | Passed with no output. |
 | `nvim -i NONE --headless '+checkhealth' '+qa'` | Completed all reported health groups. |
 | `devenv tasks run test:lua` | Passed. |
-| `devenv tasks run test:lua-quality` | Inconclusive: timed out twice, after 2 and 10 minutes. |
-| Full `devenv test` | Not run because `test:lua-quality` did not terminate. |
+| `devenv tasks run test:lua-quality` | Initially timed out; passed after the follow-up fix below. |
+| Full `devenv test` | Reached a separate `test:runtime-shell` fixture failure after Lua quality passed. |
 | Headless `g:vscode = 1` approximation | Not valid outside vscode-neovim; `config/vscode.lua` requires the host-provided `vscode` module. |
 
 The Lua-quality task reached this command and remained there until terminated:
@@ -206,7 +206,7 @@ The Lua-quality task reached this command and remained there until terminated:
 lua-language-server --check=/Users/fbb/dotfiles --checklevel=Error --check_format=pretty
 ```
 
-It produced no error diagnostics before either timeout. Record this as an environment/tooling blocker, not a passing check or a source failure. Run the full gate again after bounding or fixing the repository-wide Lua language server scan.
+It produced no error diagnostics before either timeout. The follow-up fix below bounds the scan and restores this gate.
 
 The headless VSCode approximation failed because the standalone process cannot provide vscode-neovim's `vscode` Lua module. Validate VSCode behavior in the real host when a phase changes category gating or colorscheme ownership.
 
@@ -224,4 +224,10 @@ Use these thresholds and invariants after migration phases:
 
 ## Phase 0 Outcome
 
-Phase 0 is complete with two documented validation limitations: repository-wide Lua quality did not terminate, and VSCode behavior requires its real host. The plugin inventory, runtime ownership, warm-start performance, normal headless startup, health checks, and representative Lazy trigger behavior are established well enough to begin Phase 1.
+Phase 0 is complete with one Neovim-specific validation limitation: VSCode behavior requires its real host. The plugin inventory, runtime ownership, warm-start performance, normal headless startup, health checks, Lua quality, and representative Lazy trigger behavior are established well enough to begin Phase 1.
+
+## Follow-Up
+
+The Lua-quality timeout was traced to repository-wide LuaLS indexing of large generated dependency trees. `scripts/lua-quality.sh` now checks the five tracked Lua roots independently with a 120-second limit per root. Devenv exposes these as `test:lua-quality:fbb`, `test:lua-quality:hyprland`, `test:lua-quality:neovim`, `test:lua-quality:wezterm`, and `test:lua-quality:keybinds`; `test:lua-quality` remains the aggregate gate. This preserves diagnostics for all tracked Lua sources while excluding unrelated generated content.
+
+The subsequent full `devenv test` run passed Lua quality but failed in `test:runtime-shell`: its temporary fixture could not execute `/tmp/.../bin/uwsm-app`. That failure is outside the Neovim migration and remains a separate repository test issue.
