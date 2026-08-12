@@ -1,6 +1,6 @@
 - type: custom-api
   title: To-do
-  cache: 1m
+  cache: 1s
   hide-header: true
   url: http://127.0.0.1:8091/api/shared-todo/tasks
   template: |
