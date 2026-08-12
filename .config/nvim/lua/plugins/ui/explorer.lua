@@ -1,24 +1,29 @@
-return {
-	"nvim-tree/nvim-tree.lua",
+require("config.pack.registry").register({
+	name = "nvim-tree.lua",
+	src = "https://github.com/nvim-tree/nvim-tree.lua.git",
 	dependencies = {
-		"antosha417/nvim-lsp-file-operations",
+		"nvim-lsp-file-operations",
 	},
-	cmd = { "NvimTreeToggle", "NvimTreeFindFile" },
+	commands = { "NvimTreeToggle", "NvimTreeFindFile" },
 	keys = {
 		{
-			mode = { "n" },
 			"<leader>e",
-			"<cmd>NvimTreeToggle<cr>",
+			function()
+				vim.cmd("NvimTreeToggle")
+			end,
+			mode = { "n" },
 			desc = "toggle file explorer",
 		},
 		{
-			mode = { "n" },
 			"<leader>ff",
-			"<cmd>NvimTreeFindFile<cr>",
+			function()
+				vim.cmd("NvimTreeFindFile")
+			end,
+			mode = { "n" },
 			desc = "find file in file explorer",
 		},
 	},
-	config = function()
+	setup = function()
 		local terminal = require("utils.terminal")
 		local is_terminal_emulator = terminal.is_terminal_emulator()
 
@@ -141,4 +146,6 @@ return {
 		})
 		require("lsp-file-operations").setup()
 	end,
-}
+})
+
+return {}

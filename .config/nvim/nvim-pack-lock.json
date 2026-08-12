@@ -6,8 +6,7 @@
     },
     "LuaSnip": {
       "rev": "0abc8f390b278c3b4aabc4c004ac8a088b65cf24",
-      "src": "https://github.com/L3MON4D3/LuaSnip.git",
-      "version": "'0abc8f390b278c3b4aabc4c004ac8a088b65cf24'"
+      "src": "https://github.com/L3MON4D3/LuaSnip.git"
     },
     "barbar.nvim": {
       "rev": "d9c1f0f5ae6a1c333f620cfa81fbb0200fcb19cf",
@@ -21,7 +20,7 @@
     "blink.cmp": {
       "rev": "78336bc89ee5365633bcf754d93df01678b5c08f",
       "src": "https://github.com/saghen/blink.cmp.git",
-      "version": "'78336bc89ee5365633bcf754d93df01678b5c08f'"
+      "version": "1.0.0 - 2.0.0"
     },
     "bufresize.nvim": {
       "rev": "3b19527ab936d6910484dcc20fb59bdb12322d8b",
@@ -91,8 +90,7 @@
     },
     "lazydev.nvim": {
       "rev": "ff2cbcba459b637ec3fd165a2be59b7bbaeedf0d",
-      "src": "https://github.com/folke/lazydev.nvim.git",
-      "version": "'ff2cbcba459b637ec3fd165a2be59b7bbaeedf0d'"
+      "src": "https://github.com/folke/lazydev.nvim.git"
     },
     "leap.nvim": {
       "rev": "0d0549b13428855c063468a6935c18e933599a18",
@@ -113,8 +111,7 @@
     },
     "lspsaga.nvim": {
       "rev": "cf6fc9473bba1d332eda9887855ea29ed9b37701",
-      "src": "https://github.com/nvimdev/lspsaga.nvim.git",
-      "version": "'cf6fc9473bba1d332eda9887855ea29ed9b37701'"
+      "src": "https://github.com/nvimdev/lspsaga.nvim.git"
     },
     "lualine.nvim": {
       "rev": "221ce6b2d999187044529f49da6554a92f740a96",
@@ -161,13 +158,11 @@
     },
     "nvim-lsp-file-operations": {
       "rev": "b9c795d3973e8eec22706af14959bc60c579e771",
-      "src": "https://github.com/antosha417/nvim-lsp-file-operations.git",
-      "version": "'b9c795d3973e8eec22706af14959bc60c579e771'"
+      "src": "https://github.com/antosha417/nvim-lsp-file-operations.git"
     },
     "nvim-lspconfig": {
       "rev": "43ed3797b266e1ee8d222e491379ad471c9d3146",
-      "src": "https://github.com/neovim/nvim-lspconfig.git",
-      "version": "'43ed3797b266e1ee8d222e491379ad471c9d3146'"
+      "src": "https://github.com/neovim/nvim-lspconfig.git"
     },
     "nvim-nio": {
       "rev": "edcc181a875301dd21840189aa2f2f9ad69fc172",
@@ -202,8 +197,7 @@
     },
     "nvim-tree.lua": {
       "rev": "b2aadda94b107480c48e548d6db51c6840b7b33c",
-      "src": "https://github.com/nvim-tree/nvim-tree.lua.git",
-      "version": "'b2aadda94b107480c48e548d6db51c6840b7b33c'"
+      "src": "https://github.com/nvim-tree/nvim-tree.lua.git"
     },
     "nvim-treesitter": {
       "rev": "c9f9ed6c1892f629ea399f4ee7905f2686fa13f2",

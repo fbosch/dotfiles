@@ -149,6 +149,12 @@ end
 local function server_config(server_name, capabilities)
 	local server = servers[server_name] or {}
 	local settings = server.settings or {}
+	local root_dir = server.root_dir
+	if server_name == "lua_ls" then
+		root_dir = function(bufnr, on_dir)
+			on_dir(require("lazydev").find_workspace(bufnr))
+		end
+	end
 
 	return {
 		capabilities = vim.tbl_deep_extend("force", {}, capabilities, server.capabilities or {}),
@@ -156,6 +162,7 @@ local function server_config(server_name, capabilities)
 		cmd = server.cmd,
 		filetypes = server.filetypes,
 		root_markers = server.root_markers,
+		root_dir = root_dir,
 	}
 end
 
@@ -182,56 +189,76 @@ local function enable_servers(capabilities)
 	end
 end
 
-return {
-	"neovim/nvim-lspconfig",
-	event = { "BufReadPre", "BufNewFile" },
-	dependencies = {
-
-		"antosha417/nvim-lsp-file-operations",
-		"saghen/blink.cmp",
-		{
-			"folke/lazydev.nvim",
-			ft = { "lua" },
-		},
-		{
-			"nvimdev/lspsaga.nvim",
-			event = "LspAttach",
-			opts = {
-				lightbulb = {
-					enable = false,
-				},
-				ui = {
-					border = "rounded",
-					winblend = 20,
-				},
-				symbol_in_winbar = {
-					enable = false,
-				},
-				hover = {
-					silent = true,
-				},
+require("config.pack.registry").register({
+	{
+		name = "nvim-lsp-file-operations",
+		src = "https://github.com/antosha417/nvim-lsp-file-operations.git",
+		dependencies = { "plenary.nvim" },
+		root = false,
+	},
+	{
+		name = "lazydev.nvim",
+		src = "https://github.com/folke/lazydev.nvim.git",
+		root = false,
+		module = "lazydev",
+		opts = {
+			integrations = {
+				lspconfig = false,
 			},
 		},
 	},
-	config = function()
-		vim.lsp.document_color.enable(false)
+	{
+		name = "lspsaga.nvim",
+		src = "https://github.com/nvimdev/lspsaga.nvim.git",
+		root = false,
+		module = "lspsaga",
+		opts = {
+			lightbulb = {
+				enable = false,
+			},
+			ui = {
+				border = "rounded",
+				winblend = 20,
+			},
+			symbol_in_winbar = {
+				enable = false,
+			},
+			hover = {
+				silent = true,
+			},
+		},
+	},
+	{
+		name = "nvim-lspconfig",
+		src = "https://github.com/neovim/nvim-lspconfig.git",
+		events = { "BufReadPre", "BufNewFile" },
+		dependencies = {
+			"nvim-lsp-file-operations",
+			"blink.cmp",
+			"lazydev.nvim",
+			"lspsaga.nvim",
+		},
+		setup = function()
+			vim.lsp.document_color.enable(false)
 
-		local capabilities = get_capabilities()
-		enable_servers(capabilities)
-		require("lazydev").setup({ capabilities = capabilities })
-		setup_diagnostics()
+			local capabilities = get_capabilities()
+			enable_servers(capabilities)
+			setup_diagnostics()
 
-		vim.api.nvim_create_autocmd("LspAttach", {
-			group = vim.api.nvim_create_augroup("LspKeymapsAuto", { clear = true }),
-			callback = function(args)
-				local bufnr = args.buf
-				local client = vim.lsp.get_client_by_id(args.data.client_id)
-				if client == nil then
-					return
-				end
+			vim.api.nvim_create_autocmd("LspAttach", {
+				group = vim.api.nvim_create_augroup("LspKeymapsAuto", { clear = true }),
+				callback = function(args)
+					local bufnr = args.buf
+					local client = vim.lsp.get_client_by_id(args.data.client_id)
+					if client == nil then
+						return
+					end
 
-				require("config.keymaps.lsp").setup(client, bufnr)
-			end,
-		})
-	end,
-}
+					require("config.keymaps.lsp").setup(client, bufnr)
+				end,
+			})
+		end,
+	},
+})
+
+return {}

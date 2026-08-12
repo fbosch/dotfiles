@@ -13,8 +13,7 @@ require("config.pack.registry").register({
 	{
 		name = "plenary.nvim",
 		src = "https://github.com/nvim-lua/plenary.nvim.git",
-		-- nvim-lsp-file-operations requires Plenary without declaring it to Lazy.
-		startup = true,
+		root = false,
 	},
 	{
 		name = "nvim-nio",

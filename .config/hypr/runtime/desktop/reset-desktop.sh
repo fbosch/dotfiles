@@ -21,6 +21,20 @@ wait_for_shutdown() {
   done
 }
 
+has_live_named_process() {
+  name="$1"
+
+  for pid in $(pgrep -x "$name" 2>/dev/null); do
+    state=$(ps -o stat= -p "$pid" 2>/dev/null || true)
+    case "$state" in
+      *Z*) ;;
+      *) return 0 ;;
+    esac
+  done
+
+  return 1
+}
+
 wait_for_shutdowns() {
   wait_for_shutdown "AGS" pgrep -x gjs &
   ags_pid=$!
@@ -28,7 +42,8 @@ wait_for_shutdowns() {
   foot_pid=$!
   wait_for_shutdown "waybar" pgrep -x waybar &
   waybar_pid=$!
-  wait_for_shutdown "hyprpaper" pgrep -x hyprpaper &
+  # A zombie cannot own a background layer and must not block recovery.
+  wait_for_shutdown "hyprpaper" has_live_named_process hyprpaper &
   hyprpaper_pid=$!
   wait_for_shutdown "waybar monitor" pgrep -f "waybar-monitor\.(sh|lua)" &
   waybar_monitor_pid=$!

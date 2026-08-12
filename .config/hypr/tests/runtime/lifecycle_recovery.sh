@@ -28,6 +28,7 @@ write_stub pkill
 write_stub uwsm-app
 write_stub swaync-client
 write_stub notify-send
+write_stub ps
 # shellcheck disable=SC2016
 printf '%s\n' '#!/bin/sh' 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' 'exit 1' > "$bin_dir/pgrep"
 printf '%s\n' '#!/bin/sh' 'exit 0' > "$bin_dir/sleep"
@@ -86,10 +87,13 @@ assert_contains "$restart_log" 'uwsm-app -s s -- atuin daemon start'
 assert_not_contains "$restart_log" 'pkill -f custom-layout-drag-resize'
 assert_not_contains "$restart_log" 'pkill -f gamescope-clipboard-sync'
 
-# Make every shutdown probe take one second. Parallel waits keep reset below
-# three seconds; serial waits would take at least six seconds.
+# Make every normal shutdown probe take one second. The hyprpaper probe reports
+# a zombie; it must be ignored. Parallel waits keep reset below three seconds;
+# serial waits would take at least six seconds.
 # shellcheck disable=SC2016
-printf '%s\n' '#!/bin/sh' '/bin/sleep 1' 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' 'exit 1' > "$bin_dir/pgrep"
+printf '%s\n' '#!/bin/sh' 'if [ "$1" = "-x" ] && [ "$2" = "hyprpaper" ]; then printf "4242\n"; fi' '/bin/sleep 1' 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' 'if [ "$1" = "-x" ] && [ "$2" = "hyprpaper" ]; then exit 0; fi' 'exit 1' > "$bin_dir/pgrep"
+# shellcheck disable=SC2016
+printf '%s\n' '#!/bin/sh' 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' 'printf "Z\n"' 'exit 0' > "$bin_dir/ps"
 
 reset_log="$test_dir/reset.log"
 SECONDS=0
@@ -105,6 +109,7 @@ assert_contains "$reset_log" 'pkill -f custom-layout-drag-resize-daemon.lua'
 assert_contains "$reset_log" 'pgrep -f custom-layout-drag-resize(-daemon)?\.(sh|lua)'
 assert_contains "$reset_log" 'pgrep -x waybar'
 assert_contains "$reset_log" 'pgrep -x hyprpaper'
+assert_contains "$reset_log" 'ps -o stat= -p 4242'
 assert_contains "$reset_log" 'pkill -CONT -f window-capture-daemon'
 assert_contains "$reset_log" 'uwsm-app -s s -- hyprpaper'
 assert_contains "$reset_log" "uwsm-app -s b -- $home_dir/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh daemon"

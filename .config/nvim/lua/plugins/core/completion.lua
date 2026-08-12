@@ -13,14 +13,18 @@ local function completion_enabled()
 	)
 end
 
-return {
+require("config.pack.registry").register({
 	{
-		"saghen/blink.cmp",
-		version = "1.*",
-		dependencies = {
-			"L3MON4D3/LuaSnip",
-		},
-		event = "InsertEnter",
+		name = "LuaSnip",
+		src = "https://github.com/L3MON4D3/LuaSnip.git",
+		root = false,
+	},
+	{
+		name = "blink.cmp",
+		src = "https://github.com/saghen/blink.cmp.git",
+		version = vim.version.range("1.*"),
+		dependencies = { "LuaSnip" },
+		events = { "InsertEnter" },
 		opts = {
 			enabled = completion_enabled,
 			keymap = {
@@ -78,6 +82,7 @@ return {
 				implementation = "prefer_rust",
 			},
 		},
-		opts_extend = { "sources.default" },
 	},
-}
+})
+
+return {}
