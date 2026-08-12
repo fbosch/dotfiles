@@ -18,3 +18,4 @@ vim.pack.add(require("config.pack.specs").get(), {
 	-- Phase 1 installs and tracks native copies while Lazy remains runtime owner.
 	load = function() end,
 })
+require("config.pack.loader").setup()

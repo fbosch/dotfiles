@@ -16,23 +16,22 @@ return {
 				winblend = winblend(),
 			})
 
-			-- Beacon retains this scratch buffer after windows are restored.
-			local _, create_window = debug.getupvalue(beacon.highlight_cursor, 3)
+			local highlight_cursor = beacon.highlight_cursor
+			local _, create_window = debug.getupvalue(highlight_cursor, 3)
 			if type(create_window) ~= "function" then
 				return
 			end
 
-			vim.api.nvim_create_autocmd({ "WinEnter", "FocusGained" }, {
-				callback = function()
-					beacon.config.winblend = winblend()
-					local _, fake_buffer = debug.getupvalue(create_window, 1)
-					if type(fake_buffer) ~= "number" or vim.api.nvim_buf_is_valid(fake_buffer) then
-						return
-					end
-
+			beacon.highlight_cursor = function()
+				beacon.config.winblend = winblend()
+				local _, fake_buffer = debug.getupvalue(create_window, 1)
+				-- Beacon retains this scratch buffer, which session restoration can delete.
+				if type(fake_buffer) == "number" and not vim.api.nvim_buf_is_valid(fake_buffer) then
 					debug.setupvalue(create_window, 1, vim.api.nvim_create_buf(false, true))
-				end,
-			})
+				end
+
+				return highlight_cursor()
+			end
 		end,
 	},
 }

@@ -2,6 +2,7 @@ local M = {}
 
 function M.get()
 	local lazy_plugins = require("lazy.core.config").plugins
+	local native_plugins = require("config.pack.registry").all()
 	local lock_path = vim.fs.joinpath(vim.fn.stdpath("config"), "lazy-lock.json")
 	local lock = vim.json.decode(table.concat(vim.fn.readfile(lock_path), "\n"))
 	local specs = {}
@@ -18,6 +19,14 @@ function M.get()
 				version = locked.commit,
 			})
 		end
+	end
+
+	for name, plugin in pairs(native_plugins) do
+		table.insert(specs, {
+			name = name,
+			src = plugin.src,
+			version = plugin.version,
+		})
 	end
 
 	table.sort(specs, function(left, right)

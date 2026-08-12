@@ -1,3 +1,22 @@
+require("config.pack.registry").register({
+	name = "live-rename.nvim",
+	src = "https://github.com/saecki/live-rename.nvim.git",
+	version = "205bddec4bf1276c81a03777f8335d4ad034ae03",
+	keys = {
+		{
+			"<leader>rn",
+			function()
+				require("live-rename").rename({ insert = true, cursorpos = -1 })
+			end,
+			mode = "n",
+			desc = "rename",
+		},
+	},
+	setup = function()
+		require("live-rename").setup({})
+	end,
+})
+
 return {
 	{ "echasnovski/mini.ai", version = "*", event = "VeryLazy", opts = {} },
 	{ "tpope/vim-unimpaired", keys = { "]", "[" } },
@@ -9,21 +28,6 @@ return {
 		"tpope/vim-abolish",
 		event = "InsertEnter",
 		config = require("config.abbr").autofix_typos,
-	},
-	{
-		"smjonas/inc-rename.nvim",
-		cmd = { "IncRename" },
-		opts = {},
-		keys = {
-			{
-				"<leader>rn",
-				function()
-					return ":IncRename " .. vim.fn.expand("<cword>")
-				end,
-				mode = "n",
-				desc = "rename",
-			},
-		},
 	},
 	{
 		"kylechui/nvim-surround",

@@ -197,6 +197,8 @@ Changes:
 
 **Rollback:** Restore only IncRename's Lazy declaration and remove its native activation declaration.
 
+**Outcome:** IncRename is the first native-owned plugin. Its declaration, source, pinned migration revision, setup, command trigger, and key behavior remain colocated in `plugins/core/editing.lua`. The native loader activates it once through either `CmdUndefined` or the expression key proxy; Lazy no longer includes it in its graph.
+
 ## Phase 3: Prove Each Trigger Type
 
 **Purpose:** Validate all trigger primitives before migrating dependency clusters.

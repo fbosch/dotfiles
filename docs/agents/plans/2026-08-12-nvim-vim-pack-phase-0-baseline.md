@@ -239,3 +239,5 @@ Phase 1 projects the existing dendritic Lazy graph into `vim.pack` rather than m
 The repeated warm-start measurement used the same three warmups and 21 recorded launches. Its median was 146.81 ms, 32.16 ms below this baseline. The candidate range was 114.17-240.02 ms with a 35.38 ms standard deviation, so the comparison shows no Phase 1 regression but should not be treated as a stable optimization claim.
 
 Undotree was removed after this baseline because it was no longer used. The active migration inventory and native shadow set now contain 68 application plugins.
+
+IncRename became the first native runtime-owned plugin in Phase 2. Fresh-process checks confirmed it was absent from Lazy and unloaded at startup, then loaded from `site/pack/core/opt` on the first `:IncRename` command or `<leader>rn` key callback. The key retained its editable `:IncRename <current-word>` expansion.

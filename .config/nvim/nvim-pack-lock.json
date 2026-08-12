@@ -95,11 +95,6 @@
       "src": "https://github.com/m-demare/hlargs.nvim.git",
       "version": "'05f3d1789642d5e1807121c05c42a5e883ba46d3'"
     },
-    "inc-rename.nvim": {
-      "rev": "ddff8bd3eccedf043bd73f5bf89cf90d2d6d8105",
-      "src": "https://github.com/smjonas/inc-rename.nvim.git",
-      "version": "'ddff8bd3eccedf043bd73f5bf89cf90d2d6d8105'"
-    },
     "indent-blankline.nvim": {
       "rev": "d28a3f70721c79e3c5f6693057ae929f3d9c0a03",
       "src": "https://github.com/lukas-reineke/indent-blankline.nvim.git",
@@ -119,6 +114,11 @@
       "rev": "fc8c36d7e5b96945fbc52af7029facc317a47377",
       "src": "https://github.com/smjonas/live-command.nvim.git",
       "version": "'fc8c36d7e5b96945fbc52af7029facc317a47377'"
+    },
+    "live-rename.nvim": {
+      "rev": "205bddec4bf1276c81a03777f8335d4ad034ae03",
+      "src": "https://github.com/saecki/live-rename.nvim.git",
+      "version": "'205bddec4bf1276c81a03777f8335d4ad034ae03'"
     },
     "local-highlight.nvim": {
       "rev": "8fcfa84202cba89b45014ef2563f1f5756af4565",
