@@ -214,7 +214,7 @@
     "nvim-surround": {
       "rev": "1098d7b3c34adcfa7feb3289ee434529abd4afd1",
       "src": "https://github.com/kylechui/nvim-surround.git",
-      "version": "'1098d7b3c34adcfa7feb3289ee434529abd4afd1'"
+      "version": "'^3.0.0'"
     },
     "nvim-toggler": {
       "rev": "467808600882fd6c9e33b9dbc4889b1b80cfd917",

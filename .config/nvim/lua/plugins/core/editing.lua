@@ -28,6 +28,12 @@ register({
 		src = "https://github.com/nguyenvukhang/nvim-toggler.git",
 		opts = {},
 	},
+	{
+		name = "nvim-surround",
+		src = "https://github.com/kylechui/nvim-surround.git",
+		version = "^3.0.0",
+		opts = {},
+	},
 })
 
 return {
@@ -40,14 +46,6 @@ return {
 		"tpope/vim-abolish",
 		event = "InsertEnter",
 		config = require("config.abbr").autofix_typos,
-	},
-	{
-		"kylechui/nvim-surround",
-		version = "^3.0.0",
-		event = "VeryLazy",
-		config = function()
-			require("nvim-surround").setup({})
-		end,
 	},
 	{
 		"chrisgrieser/nvim-spider",
