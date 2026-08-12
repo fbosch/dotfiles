@@ -42,7 +42,16 @@
 
   function createClient(root, todoModule) {
     const { autoScalingTextarea, verticallyReorderable } = todoModule;
-    let state = { revision: 0, tasks: [] };
+    let state = {
+      revision: Number(root.dataset.revision || 0),
+      tasks: Array.from(root.querySelectorAll("[data-task-id]")).map(function (item) {
+        return {
+          id: item.dataset.taskId,
+          text: item.querySelector(".todo-item-text")?.value || "",
+          checked: item.dataset.taskChecked === "true",
+        };
+      }),
+    };
     let eventSource;
     let inputArea;
     let inputContainer;
@@ -308,12 +317,12 @@
       }
     }
 
+    render();
     eventSource = new EventSource(`${API}/events`);
     eventSource.addEventListener("revision", function (event) {
       const revision = Number(event.data);
       if (Number.isSafeInteger(revision) && revision !== state.revision) refresh();
     });
-    refresh();
 
     return {
       close: function () {

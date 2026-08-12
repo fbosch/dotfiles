@@ -1,10 +1,35 @@
-- type: html
-  source: |
-    <div class="widget widget-type-to-do">
-      <div class="widget-header">
-        <h2 class="uppercase">To-do</h2>
+- type: custom-api
+  title: To-do
+  cache: 1m
+  hide-header: true
+  url: http://127.0.0.1:8091/api/shared-todo/tasks
+  template: |
+    <div data-shared-todo data-revision="{{ .JSON.Int "revision" }}">
+      <div class="todo-input flex gap-10 items-center{{ if gt (len (.JSON.Array "tasks")) 0 }} margin-bottom-15{{ end }}" style="padding-right: 2.5rem">
+        <div class="todo-plus-icon shrink-0"></div>
+        <div class="auto-scaling-textarea-container grow min-width-0">
+          <textarea class="auto-scaling-textarea" placeholder="Add a task" spellcheck="false"></textarea>
+          <div class="auto-scaling-textarea-mimic"> </div>
+        </div>
       </div>
-      <div class="widget-content">
-        <div data-shared-todo></div>
+      <div class="drag-and-drop-container">
+        <div class="todo-items">
+          {{ range .JSON.Array "tasks" }}
+            <div class="todo-item flex gap-10 items-center" data-task-id="{{ .String "id" }}" data-task-checked="{{ .Bool "checked" }}">
+              <input class="todo-item-checkbox shrink-0" style="margin-top: -0.1rem" type="checkbox"{{ if .Bool "checked" }} checked{{ end }}>
+              <div class="auto-scaling-textarea-container min-width-0 grow">
+                <textarea class="auto-scaling-textarea todo-item-text" placeholder="empty task" spellcheck="false">{{ .String "text" }}</textarea>
+                <div class="auto-scaling-textarea-mimic">{{ .String "text" }} </div>
+                <div class="todo-item-drag-handle"></div>
+              </div>
+              <button class="todo-item-delete shrink-0" aria-label="Delete task">
+                <svg fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                  <path fill-rule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clip-rule="evenodd"></path>
+                </svg>
+              </button>
+            </div>
+          {{ end }}
+        </div>
+        <div class="drag-and-drop-draggable"></div>
       </div>
     </div>
