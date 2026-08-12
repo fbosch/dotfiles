@@ -292,6 +292,12 @@ CCC moved to native ownership across its configured filetypes, commands, and `<l
 
 Direct file-argument validation exposed that Lazy's runtime conditions removed disabled plugins from the transitional native install projection. The projection now includes Lazy's resolved disabled specs so conditions affect activation without changing the 68-plugin installation catalog.
 
+Phase 5 moved the complete Treesitter and Plenary ownership closure to native packages. The loader now validates dependency graphs, activates ordered dependencies before consumers, supports synchronous startup roots, retries false command/key conditions, and records lifecycle failures with their root, chain, plugin, and phase. Treesitter and Plenary load synchronously; Plenary remains startup-loaded for the still-Lazy `nvim-lsp-file-operations` consumer until Phase 6.
+
+Focused fresh-process checks covered the initial Treesitter/Hlargs Lua buffer, Autotag with native Treesitter, the initial Checkmate todo buffer, Treesj's first key and direct command, Todo Comments post-start setup, Coverage's first command and callback key, Neotest dependency ordering/configuration/key action, Diffview's non-Git-to-Git condition retry, and Gitlineage's first visual history action. Native ownership increased from 26 to 38 while the application catalog remained 68.
+
+The required Phase 5 Hyperfine checkpoint used the unchanged command, three warmups, and 21 recorded launches. Mean startup was 46.9 ms with a 1.3 ms standard deviation and a 44.6-50.0 ms range. This is 4.8 ms below the preceding 51.7 ms migration-wave mean, 116.71 ms below the 163.61 ms post-pilot median, and 132.07 ms below the 178.97 ms Phase 0 median; synchronous native Treesitter and Plenary introduced no measured startup regression.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:

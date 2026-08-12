@@ -2,15 +2,137 @@ local M = {}
 
 local plugins = {}
 
+local function has_triggers(plugin)
+	return #(plugin.events or {}) > 0
+		or #(plugin.commands or {}) > 0
+		or #(plugin.filetypes or {}) > 0
+		or #(plugin.keys or {}) > 0
+end
+
+local function validate_string_list(plugin, field)
+	local values = plugin[field]
+	if values == nil then
+		return
+	end
+
+	assert(vim.islist(values) and #values > 0, ("native %s must be a non-empty list: %s"):format(field, plugin.name))
+	for _, value in ipairs(values) do
+		assert(
+			type(value) == "string" and value ~= "",
+			("native %s entries must be non-empty strings: %s"):format(field, plugin.name)
+		)
+	end
+end
+
+local function validate_events(plugin)
+	if plugin.events == nil then
+		return
+	end
+
+	assert(vim.islist(plugin.events) and #plugin.events > 0, "native events must be a non-empty list: " .. plugin.name)
+	for _, event in ipairs(plugin.events) do
+		local name = type(event) == "table" and event[1] or event
+		assert(type(name) == "string" and name ~= "", "native event name is required: " .. plugin.name)
+		if type(event) == "table" then
+			assert(
+				event.pattern == nil or type(event.pattern) == "string",
+				"native event pattern must be a string: " .. plugin.name
+			)
+		else
+			assert(type(event) == "string", "native event must be a name or table: " .. plugin.name)
+		end
+	end
+end
+
+local function validate_keys(plugin)
+	if plugin.keys == nil then
+		return
+	end
+
+	assert(vim.islist(plugin.keys) and #plugin.keys > 0, "native keys must be a non-empty list: " .. plugin.name)
+	for _, key in ipairs(plugin.keys) do
+		assert(type(key) == "table", "native key must be a table: " .. plugin.name)
+		assert(type(key[1]) == "string" and key[1] ~= "", "native key lhs is required: " .. plugin.name)
+		assert(type(key[2]) == "function", "native key callback is required: " .. plugin.name)
+		assert(
+			key.mode == nil or type(key.mode) == "string" or vim.islist(key.mode),
+			"native key mode must be a string or list: " .. plugin.name
+		)
+		if type(key.mode) == "table" then
+			assert(#key.mode > 0, "native key mode list cannot be empty: " .. plugin.name)
+			for _, mode in ipairs(key.mode) do
+				assert(
+					type(mode) == "string" and mode ~= "",
+					"native key modes must be non-empty strings: " .. plugin.name
+				)
+			end
+		end
+		assert(key.desc == nil or type(key.desc) == "string", "native key desc must be a string: " .. plugin.name)
+		assert(key.expr == nil or type(key.expr) == "boolean", "native key expr must be boolean: " .. plugin.name)
+		assert(key.silent == nil or type(key.silent) == "boolean", "native key silent must be boolean: " .. plugin.name)
+	end
+end
+
 local function register_one(plugin)
-	assert(type(plugin.name) == "string", "native plugin name is required")
-	assert(type(plugin.src) == "string", "native plugin source is required for " .. plugin.name)
+	assert(type(plugin.name) == "string" and plugin.name ~= "", "native plugin name is required")
+	assert(type(plugin.src) == "string" and plugin.src ~= "", "native plugin source is required for " .. plugin.name)
 	assert(plugins[plugin.name] == nil, "duplicate native plugin registration: " .. plugin.name)
+	assert(plugin.module == nil or type(plugin.module) == "string", "native module must be a string: " .. plugin.name)
+	assert(plugin.opts == nil or type(plugin.opts) == "table", "native opts must be a table: " .. plugin.name)
+	assert(plugin.setup == nil or type(plugin.setup) == "function", "native setup must be a function: " .. plugin.name)
+	assert(
+		plugin.version == nil
+			or type(plugin.version) == "string"
+			or (type(plugin.version) == "table" and type(plugin.version.has) == "function"),
+		"native version must be a Git ref or vim.VersionRange: " .. plugin.name
+	)
 	assert(
 		plugin.opts == nil or plugin.setup == nil,
 		"native plugin cannot define both opts and setup: " .. plugin.name
 	)
-	if plugin.events == nil and plugin.commands == nil and plugin.filetypes == nil and plugin.keys == nil then
+	assert(
+		plugin.startup == nil or type(plugin.startup) == "boolean",
+		"native startup must be boolean: " .. plugin.name
+	)
+	assert(plugin.root == nil or type(plugin.root) == "boolean", "native root must be boolean: " .. plugin.name)
+	assert(
+		plugin.condition == nil or type(plugin.condition) == "function",
+		"native condition must be a function: " .. plugin.name
+	)
+	validate_string_list(plugin, "commands")
+	validate_string_list(plugin, "filetypes")
+	validate_events(plugin)
+	validate_keys(plugin)
+
+	if plugin.dependencies ~= nil then
+		assert(vim.islist(plugin.dependencies), "native dependencies must be a list: " .. plugin.name)
+		local dependencies = {}
+		for _, dependency in ipairs(plugin.dependencies) do
+			assert(type(dependency) == "string", "native dependency must be a name: " .. plugin.name)
+			assert(dependency ~= plugin.name, "native plugin cannot depend on itself: " .. plugin.name)
+			assert(
+				dependencies[dependency] == nil,
+				"duplicate native dependency: " .. plugin.name .. " -> " .. dependency
+			)
+			dependencies[dependency] = true
+		end
+	end
+
+	if plugin.root == false then
+		assert(plugin.startup ~= true, "native dependency-only plugin cannot be startup-loaded: " .. plugin.name)
+		assert(plugin.condition == nil, "native dependency-only plugin cannot have a condition: " .. plugin.name)
+		assert(has_triggers(plugin) == false, "native dependency-only plugin cannot have triggers: " .. plugin.name)
+	elseif plugin.startup == true then
+		assert(plugin.condition == nil, "native startup plugin cannot have a condition: " .. plugin.name)
+		assert(has_triggers(plugin) == false, "native startup plugin cannot have triggers: " .. plugin.name)
+	elseif plugin.condition ~= nil then
+		assert(
+			plugin.events == nil and plugin.filetypes == nil,
+			"native conditions currently support only command and key triggers: " .. plugin.name
+		)
+	end
+
+	if plugin.root ~= false and plugin.startup ~= true and has_triggers(plugin) == false then
 		plugin.events = { { "User", pattern = "PackReady" } }
 	end
 	plugins[plugin.name] = plugin

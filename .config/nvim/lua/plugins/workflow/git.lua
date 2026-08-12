@@ -2,6 +2,56 @@ local function is_git_repo()
 	return require("utils.git").is_git_repo()
 end
 
+local register = require("config.pack.registry").register
+
+register({
+	{
+		name = "diffview.nvim",
+		src = "https://github.com/sindrets/diffview.nvim.git",
+		dependencies = { "plenary.nvim" },
+		condition = is_git_repo,
+		commands = { "DiffviewOpen", "DiffviewClose" },
+		keys = {
+			{
+				"<leader>dff",
+				function()
+					vim.cmd("DiffviewOpen")
+				end,
+				mode = "n",
+				desc = "diff view open",
+			},
+			{
+				"<leader>dfq",
+				function()
+					vim.cmd("DiffviewClose")
+				end,
+				mode = "n",
+				desc = "diff view close",
+			},
+		},
+	},
+	{
+		name = "gitlineage.nvim",
+		src = "https://github.com/lionyxml/gitlineage.nvim.git",
+		dependencies = { "diffview.nvim" },
+		condition = is_git_repo,
+		module = "gitlineage",
+		keys = {
+			{
+				"<leader>gl",
+				function()
+					require("gitlineage").show_history()
+				end,
+				mode = "v",
+				desc = "git line history",
+			},
+		},
+		opts = {
+			keymap = "<leader>gl",
+		},
+	},
+})
+
 return {
 	{
 		"akinsho/git-conflict.nvim",
@@ -141,44 +191,6 @@ return {
 				":Gitsigns select_hunk<CR>",
 				desc = "git select hunk",
 			},
-		},
-	},
-	{
-		"sindrets/diffview.nvim",
-		dependencies = { "nvim-lua/plenary.nvim" },
-		cond = is_git_repo,
-		keys = {
-			{
-				mode = { "n" },
-				"<leader>dff",
-				"<cmd>DiffviewOpen<cr>",
-				desc = "diff view open",
-			},
-			{
-				mode = { "n" },
-				"<leader>dfq",
-				"<cmd>DiffviewClose<cr>",
-				desc = "diff view close",
-			},
-		},
-		cmd = {
-			"DiffviewOpen",
-			"DiffviewClose",
-		},
-	},
-	{
-		"lionyxml/gitlineage.nvim",
-		dependencies = { "sindrets/diffview.nvim" },
-		cond = is_git_repo,
-		keys = {
-			{
-				mode = { "v" },
-				"<leader>gl",
-				desc = "git line history",
-			},
-		},
-		opts = {
-			keymap = "<leader>gl",
 		},
 	},
 }

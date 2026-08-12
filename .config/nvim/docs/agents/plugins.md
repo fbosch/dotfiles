@@ -35,6 +35,8 @@ register({
 })
 ```
 
-A declaration without `events`, `commands`, `filetypes`, or `keys` loads on the scheduled post-start `User PackReady` event. Add an explicit trigger only when the plugin should load later.
+A root declaration without `startup`, `events`, `commands`, `filetypes`, or `keys` loads on the scheduled post-start `User PackReady` event. Add an explicit trigger only when the plugin should load at another lifecycle point.
 
 Use `opts = {}` for conventional `require(name).setup(opts)` initialization. Set `module` when the Lua module differs from the package name; use `setup` only for custom initialization. Omitting both means the plugin needs no setup.
+
+Use ordered `dependencies` for runtime requirements. Set `root = false` for libraries that activate only through a consumer, and `startup = true` only for packages that must load synchronously before initial buffer events. Command/key roots may use `condition(context)`; a false result leaves activation retryable. Startup and dependency-only declarations cannot also define triggers.

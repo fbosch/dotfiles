@@ -1,4 +1,6 @@
-require("config.pack.registry").register({
+local register = require("config.pack.registry").register
+
+register({
 	name = "treewalker.nvim",
 	src = "https://github.com/aaronik/treewalker.nvim.git",
 	module = "treewalker",
@@ -62,25 +64,21 @@ require("config.pack.registry").register({
 	opts = {},
 })
 
-require("config.pack.registry").register({
+register({
 	name = "nvim-ts-autotag",
 	src = "https://github.com/windwp/nvim-ts-autotag.git",
+	dependencies = { "nvim-treesitter" },
 	events = { "BufReadPre", "BufNewFile" },
 	opts = {},
 })
 
-return {
+register({
 	{
-		"nvim-treesitter/nvim-treesitter",
-		branch = "main",
-		build = ":TSUpdate",
-		lazy = false,
-		config = function()
-			local ok, treesitter = pcall(require, "nvim-treesitter")
-			if not ok then
-				vim.notify("nvim-treesitter not found", vim.log.levels.ERROR)
-				return
-			end
+		name = "nvim-treesitter",
+		src = "https://github.com/nvim-treesitter/nvim-treesitter.git",
+		startup = true,
+		setup = function()
+			local treesitter = require("nvim-treesitter")
 			treesitter.setup()
 
 			local function prefer_bundled_parser(lang)
@@ -166,18 +164,23 @@ return {
 		end,
 	},
 	{
-		"Wansmer/treesj",
+		name = "treesj",
+		src = "https://github.com/Wansmer/treesj.git",
 		keys = {
 			{
 				"<leader>m",
-				"<cmd>TSJToggle<CR>",
+				function()
+					vim.cmd("TSJToggle")
+				end,
 				mode = { "n" },
 			},
 		},
-		cmd = { "TSJToggle" },
-		dependencies = { "nvim-treesitter/nvim-treesitter" },
+		commands = { "TSJToggle" },
+		dependencies = { "nvim-treesitter" },
 		opts = {
 			use_default_keymaps = false,
 		},
 	},
-}
+})
+
+return {}

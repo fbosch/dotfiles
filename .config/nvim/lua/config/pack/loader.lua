@@ -1,24 +1,118 @@
 local registry = require("config.pack.registry")
 
 local M = {}
-local loaded = {}
+local states = {}
+local failures = {}
 
-function M.activate(name, context)
-	if loaded[name] then
-		return
+local function activation_error(root, chain, plugin, phase, cause)
+	return table.concat({
+		"native activation failed",
+		"root: " .. root,
+		"chain: " .. table.concat(chain, " -> "),
+		"plugin: " .. plugin,
+		"phase: " .. phase,
+		"cause: " .. tostring(cause),
+	}, "\n")
+end
+
+local function activate(name, context, root, chain, dependency)
+	if states[name] == "loaded" then
+		return true
+	end
+
+	if states[name] == "failed" then
+		error(failures[name], 0)
 	end
 
 	local plugin = assert(registry.get(name), "unknown native plugin: " .. name)
-	vim.cmd.packadd(name)
-	if plugin.opts ~= nil then
-		require(plugin.module or name).setup(plugin.opts)
-	elseif plugin.setup ~= nil then
-		plugin.setup(context)
+	local next_chain = vim.list_extend(vim.deepcopy(chain), { name })
+	if states[name] == "loading" then
+		error(activation_error(root, next_chain, name, "dependency", "re-entrant activation"), 0)
 	end
-	loaded[name] = true
+
+	if dependency == false and plugin.condition ~= nil then
+		local ok, eligible = xpcall(function()
+			return plugin.condition(context)
+		end, debug.traceback)
+		if ok == false or type(eligible) ~= "boolean" then
+			local cause = ok and "condition must return a boolean" or eligible
+			local message = activation_error(root, next_chain, name, "condition", cause)
+			states[name] = "failed"
+			failures[name] = message
+			error(message, 0)
+		end
+		if eligible == false then
+			return false, "activation condition not met"
+		end
+	end
+
+	states[name] = "loading"
+	local phase = "dependency"
+	local ok, cause = xpcall(function()
+		for _, dependency_name in ipairs(plugin.dependencies or {}) do
+			activate(dependency_name, context, root, next_chain, true)
+		end
+
+		phase = "packadd"
+		vim.cmd.packadd(name)
+
+		phase = "setup"
+		if plugin.opts ~= nil then
+			require(plugin.module or name).setup(plugin.opts)
+		elseif plugin.setup ~= nil then
+			plugin.setup(context)
+		end
+	end, debug.traceback)
+
+	if ok == false then
+		local message = activation_error(root, next_chain, name, phase, cause)
+		states[name] = "failed"
+		failures[name] = message
+		error(message, 0)
+	end
+
+	states[name] = "loaded"
+	return true
+end
+
+function M.activate(name, context)
+	return activate(name, context, name, {}, false)
+end
+
+local function validate_dependencies()
+	for name, plugin in pairs(registry.all()) do
+		for _, dependency in ipairs(plugin.dependencies or {}) do
+			assert(registry.get(dependency) ~= nil, "unknown native dependency: " .. name .. " -> " .. dependency)
+		end
+	end
+
+	local visiting = {}
+	local visited = {}
+	local function visit(name, chain)
+		if visiting[name] then
+			error("native dependency cycle: " .. table.concat(vim.list_extend(chain, { name }), " -> "))
+		end
+		if visited[name] then
+			return
+		end
+
+		visiting[name] = true
+		local next_chain = vim.list_extend(vim.deepcopy(chain), { name })
+		for _, dependency in ipairs(registry.get(name).dependencies or {}) do
+			visit(dependency, next_chain)
+		end
+		visiting[name] = nil
+		visited[name] = true
+	end
+
+	for name in pairs(registry.all()) do
+		visit(name, {})
+	end
 end
 
 function M.setup()
+	validate_dependencies()
+
 	for name, plugin in pairs(registry.all()) do
 		for _, filetype in ipairs(plugin.filetypes or {}) do
 			vim.api.nvim_create_autocmd("FileType", {
@@ -44,8 +138,11 @@ function M.setup()
 		for _, command in ipairs(plugin.commands or {}) do
 			vim.api.nvim_create_autocmd("CmdUndefined", {
 				pattern = command,
-				callback = function()
-					M.activate(name)
+				callback = function(event)
+					local activated, reason = M.activate(name, event)
+					if activated == false then
+						vim.notify(("%s is unavailable: %s"):format(name, reason), vim.log.levels.WARN)
+					end
 				end,
 			})
 		end
@@ -54,12 +151,27 @@ function M.setup()
 			local callback
 			if key.expr then
 				callback = function()
-					M.activate(name)
+					local activated = M.activate(name, {
+						buf = vim.api.nvim_get_current_buf(),
+						mode = vim.fn.mode(1),
+						source = "key",
+					})
+					if activated == false then
+						return ""
+					end
 					return key[2]()
 				end
 			else
 				callback = function()
-					M.activate(name)
+					local activated, reason = M.activate(name, {
+						buf = vim.api.nvim_get_current_buf(),
+						mode = vim.fn.mode(1),
+						source = "key",
+					})
+					if activated == false then
+						vim.notify(("%s is unavailable: %s"):format(name, reason), vim.log.levels.WARN)
+						return
+					end
 					key[2]()
 				end
 			end
@@ -70,6 +182,17 @@ function M.setup()
 				silent = key.silent,
 			})
 		end
+	end
+
+	local startup_plugins = {}
+	for name, plugin in pairs(registry.all()) do
+		if plugin.startup == true then
+			table.insert(startup_plugins, name)
+		end
+	end
+	table.sort(startup_plugins)
+	for _, name in ipairs(startup_plugins) do
+		M.activate(name, { source = "startup" })
 	end
 
 	vim.api.nvim_create_autocmd("VimEnter", {
@@ -83,7 +206,7 @@ function M.setup()
 end
 
 function M.is_loaded(name)
-	return loaded[name] == true
+	return states[name] == "loaded"
 end
 
 return M

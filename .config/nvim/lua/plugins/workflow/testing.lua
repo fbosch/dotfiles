@@ -9,15 +9,27 @@ local function upfind(start, name)
 	end
 end
 
-return {
+require("config.pack.registry").register({
 	{
-		"nvim-neotest/neotest",
-		dependencies = {
-			"nvim-neotest/nvim-nio",
-			"nvim-lua/plenary.nvim",
-			"nvim-treesitter/nvim-treesitter",
-			"marilari88/neotest-vitest",
-		},
+		name = "plenary.nvim",
+		src = "https://github.com/nvim-lua/plenary.nvim.git",
+		-- nvim-lsp-file-operations requires Plenary without declaring it to Lazy.
+		startup = true,
+	},
+	{
+		name = "nvim-nio",
+		src = "https://github.com/nvim-neotest/nvim-nio.git",
+		root = false,
+	},
+	{
+		name = "neotest-vitest",
+		src = "https://github.com/marilari88/neotest-vitest.git",
+		root = false,
+	},
+	{
+		name = "neotest",
+		src = "https://github.com/nvim-neotest/neotest.git",
+		dependencies = { "nvim-nio", "plenary.nvim", "nvim-treesitter", "neotest-vitest" },
 		keys = {
 			{
 				"<space>tr",
@@ -50,7 +62,7 @@ return {
 				silent = true,
 			},
 		},
-		config = function()
+		setup = function()
 			require("neotest").setup({
 				adapters = {
 					require("neotest-vitest")({
@@ -68,4 +80,6 @@ return {
 			vim.env.CI = vim.env.CI == "true" and "" or vim.env.CI
 		end,
 	},
-}
+})
+
+return {}

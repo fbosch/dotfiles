@@ -31,12 +31,15 @@ local activation layer
   -> flat event and FileType triggers
   -> CmdUndefined command triggers
   -> callback key triggers
+  -> ordered dependency activation
+  -> synchronous startup roots
+  -> retryable command/key conditions
   -> opts/module setup shorthand and custom setup
   -> scheduled User PackReady activation
   -> PackChanged build hooks
 ```
 
-The current loader does not yet implement dependency ordering, priority ordering, conditions, generic event/FileType replay, generic key replay, an `init` phase, or lifecycle-aware error reporting. Those remain Phase 3 prerequisites for plugins that depend on them.
+The current loader does not yet implement priority ordering, generic event/FileType replay, generic key replay, or an `init` phase. Those remain prerequisites for plugins that depend on them.
 
 Native-owned declarations follow upstream branches or semver ranges. Reproducibility comes from the generated `nvim-pack-lock.json`; commit hashes in declarations are reserved for intentional freezes.
 
@@ -100,18 +103,20 @@ Implemented and validated:
 - Callback key triggers activate the plugin before invoking the declared callback.
 - Flat `events` and `filetypes` declarations activate plugins on their first matching autocmd.
 - `opts`/`module` shorthand and custom `setup(context)` initialization run after `packadd`.
+- Named dependencies activate depth-first before consumer setup; invalid and cyclic graphs fail during startup.
+- `startup = true` activates a root synchronously before initial buffer events.
+- `root = false` keeps dependency-only libraries dormant until a consumer needs them.
+- Command/key conditions are evaluated at each direct activation attempt until they succeed.
+- Lifecycle failures identify the root, dependency chain, plugin, and phase and are terminal for the session.
 - A scheduled post-`VimEnter` `User PackReady` event replaces `User VeryLazy` for migrated plugins.
 - `PackChanged` dispatches isolated build hooks for configured packages.
 
 Pending Phase 3 capabilities:
 
-- Condition handling.
-- Dependency ordering.
 - Priority ordering.
 - Generic event and filetype replay under a recursion guard.
 - Generic key replay that preserves mode, count, register, operator, and visual selection context.
 - An `init` phase for plugins that require globals before runtime scripts are sourced.
-- Errors that identify the plugin, lifecycle phase, and dependency chain.
 - The `fff.nvim` build-hook pilot, including clear install/update failure behavior.
 
 ## Dependency Boundaries
@@ -123,6 +128,7 @@ LuaSnip -> blink.cmp -> nvim-lspconfig
 nvim-lsp-file-operations -> nvim-lspconfig and nvim-tree
 nvim-treesitter -> nvim-ts-autotag, treesj, hlargs, checkmate, neotest
 plenary.nvim -> todo-comments, diffview, coverage, neotest
+plenary.nvim -> nvim-lsp-file-operations (implicit runtime requirement until Phase 6)
 nvim-web-devicons -> barbar, lualine, trouble, wilder
 tiny-devicons-auto-colors -> nvim-web-devicons setup
 bufresize -> smart-splits
@@ -224,7 +230,7 @@ Changes:
 
 Add condition handling, dependency ordering, priority ordering, generic event/FileType replay with recursion guards, generic key replay, early `init`, and richer lifecycle errors in this phase. The `fff.nvim` build hook exists, but its install/update behavior remains a pending pilot.
 
-**Progress:** Numb validates first-command-line event loading, Helpview validates first-buffer filetype loading through targeted attachment, and MiniAI validates scheduled post-`VimEnter` loading through `User PackReady`. The loader also supports command activation and callback-key activation. These focused paths do not establish generic event, filetype, or key replay semantics.
+**Progress:** Numb validates first-command-line event loading, Helpview validates first-buffer filetype loading through targeted attachment, and MiniAI validates scheduled post-`VimEnter` loading through `User PackReady`. Phase 5 added validated dependency ordering, synchronous startup roots, retryable command/key conditions, graph validation, and lifecycle-aware terminal failures. These focused paths do not establish priority, generic event/filetype/key replay, or early `init` semantics; the FFF build pilot also remains pending.
 
 **Acceptance:** Every pilot works on its first trigger in a fresh process. Repeated triggers do not create duplicate mappings, setup calls, or autocmds. Lazy continues managing all unmigrated plugins.
 
@@ -268,7 +274,7 @@ Pending candidates:
 
 Each slice must remove the Lazy declaration, add the native declaration, preserve configuration and triggers, validate first use, and confirm that only one copy is active.
 
-**Progress:** The twenty-five completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, `eyeliner.nvim`, `beacon.nvim`, `ts-comments.nvim`, and `nvim-scrollbar` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. `FTerm.nvim` is command-loaded; its normal and terminal mappings invoke those commands without generic key replay. `tint.nvim` retains `BufWinEnter` activation and relies on its own before/after-`VimEnter` initialization for existing windows. `local-highlight.nvim` retains `CursorMoved` activation and uses the trigger context to attach the first buffer before future buffers use its own `BufRead` autocmd. `nvim-autopairs` retains `InsertEnter` activation and attaches the current buffer before the first inserted character. `vim-repeat` retains `BufEnter` activation with no setup; its autoload API initializes on the first consumer call. `vim-abolish` retains `InsertEnter` activation and installs typo abbreviations before the first inserted text. `which-key.nvim` preserves both scheduled `PackReady` setup and immediate `<leader>wk` activation. `nvim-jqx` retains JSON/YAML and `BufWritePost` activation. `treewalker.nvim` retains command and callback-key activation without depending on the `nvim-treesitter` plugin. `conform.nvim` retains its filetype activation and installs save handlers before the first subsequent save. `nvim-ts-autotag` retains `BufReadPre`/`BufNewFile` activation while Lazy continues startup-owning `nvim-treesitter`. `indent-blankline.nvim` retains early buffer activation and refreshes visible buffers during setup. `ccc.nvim` retains filetype, command, and callback-key activation and explicitly attaches the first triggering buffer. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic, the current native-owned total is twenty-six.
+**Progress:** The twenty-five completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, `eyeliner.nvim`, `beacon.nvim`, `ts-comments.nvim`, and `nvim-scrollbar` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. `FTerm.nvim` is command-loaded; its normal and terminal mappings invoke those commands without generic key replay. `tint.nvim` retains `BufWinEnter` activation and relies on its own before/after-`VimEnter` initialization for existing windows. `local-highlight.nvim` retains `CursorMoved` activation and uses the trigger context to attach the first buffer before future buffers use its own `BufRead` autocmd. `nvim-autopairs` retains `InsertEnter` activation and attaches the current buffer before the first inserted character. `vim-repeat` retains `BufEnter` activation with no setup; its autoload API initializes on the first consumer call. `vim-abolish` retains `InsertEnter` activation and installs typo abbreviations before the first inserted text. `which-key.nvim` preserves both scheduled `PackReady` setup and immediate `<leader>wk` activation. `nvim-jqx` retains JSON/YAML and `BufWritePost` activation. `treewalker.nvim` retains command and callback-key activation without depending on the `nvim-treesitter` plugin. `conform.nvim` retains its filetype activation and installs save handlers before the first subsequent save. `nvim-ts-autotag` retains `BufReadPre`/`BufNewFile` activation and now depends on native startup Treesitter. `indent-blankline.nvim` retains early buffer activation and refreshes visible buffers during setup. `ccc.nvim` retains filetype, command, and callback-key activation and explicitly attaches the first triggering buffer. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic and the completed Phase 5 closure, the current native-owned total is thirty-eight.
 
 `leap.nvim` remains pending. Its Lazy declaration uses placeholder mappings, while Leap now warns that manager-level key lazy-loading can cause problems. Migrating it requires an explicit mapping design or generic key replay support; it must not be moved using the current callback-key contract without preserving its normal, visual, and operator-pending behavior.
 
@@ -307,6 +313,8 @@ Requirements:
 - Diffview, Gitlineage, Coverage, and Todo Comments retain their commands and mappings.
 
 **Acceptance:** Exactly one Treesitter and Plenary copy is active. Parsers resolve, Checkmate works in the initial Markdown todo buffer, Neotest actions work, and Git workflows work within a repository.
+
+**Outcome:** Complete. Treesitter and Plenary are synchronous native startup roots; Plenary remains startup-loaded because the Phase 6 `nvim-lsp-file-operations` consumer requires it without a Lazy dependency declaration. Ordered dependencies cover Neotest, Todo Comments, Coverage, Diffview, and Gitlineage. First-file Treesitter/Hlargs/Autotag/Checkmate behavior, Treesj command and key activation, Todo post-start setup, Coverage command and key activation, Neotest setup and key actions, retryable Diffview conditions, and Gitlineage visual history all pass with one native runtime copy.
 
 **Rollback:** Revert this complete cluster because its dependency edges cross the named plugins.
 

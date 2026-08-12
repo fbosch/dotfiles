@@ -1,11 +1,14 @@
-return {
+local register = require("config.pack.registry").register
+
+register({
 	{
-		"m-demare/hlargs.nvim",
+		name = "hlargs.nvim",
+		src = "https://github.com/m-demare/hlargs.nvim.git",
 		dependencies = {
-			"nvim-treesitter/nvim-treesitter",
+			"nvim-treesitter",
 		},
-		event = { "BufReadPre", "BufNewFile", "LspAttach" },
-		config = function()
+		events = { "BufReadPre", "BufNewFile", "LspAttach" },
+		setup = function()
 			local hlargs = require("hlargs")
 			local colors = require("config.colors")
 			local colorpalette = {}
@@ -27,4 +30,6 @@ return {
 			})
 		end,
 	},
-}
+})
+
+return {}

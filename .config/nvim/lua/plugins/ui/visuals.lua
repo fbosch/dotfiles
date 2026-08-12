@@ -2,6 +2,15 @@ local register = require("config.pack.registry").register
 
 register({
 	{
+		name = "todo-comments.nvim",
+		src = "https://github.com/folke/todo-comments.nvim.git",
+		dependencies = { "plenary.nvim" },
+		module = "todo-comments",
+		opts = {
+			excluded_buftypes = { "terminal", "prompt" },
+		},
+	},
+	{
 		name = "live-command.nvim",
 		src = "https://github.com/smjonas/live-command.nvim.git",
 		events = { "CmdlineEnter" },
@@ -168,16 +177,6 @@ return {
 				},
 			})
 		end,
-	},
-	{
-		"folke/todo-comments.nvim",
-		dependencies = {
-			"nvim-lua/plenary.nvim",
-		},
-		event = { "VeryLazy" },
-		opts = {
-			excluded_buftypes = { "terminal", "prompt" },
-		},
 	},
 	{
 		"folke/snacks.nvim",

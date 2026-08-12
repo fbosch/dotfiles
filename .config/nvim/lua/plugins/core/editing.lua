@@ -31,7 +31,7 @@ register({
 	{
 		name = "nvim-surround",
 		src = "https://github.com/kylechui/nvim-surround.git",
-		version = "^3.0.0",
+		version = vim.version.range("^3.0.0"),
 		opts = {},
 	},
 	{

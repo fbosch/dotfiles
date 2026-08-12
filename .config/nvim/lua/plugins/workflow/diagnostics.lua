@@ -1,3 +1,48 @@
+local register = require("config.pack.registry").register
+
+register({
+	name = "nvim-coverage",
+	src = "https://github.com/andythigpen/nvim-coverage.git",
+	dependencies = { "plenary.nvim" },
+	module = "coverage",
+	commands = {
+		"Coverage",
+		"CoverageLoad",
+		"CoverageLoadLcov",
+		"CoverageShow",
+		"CoverageHide",
+		"CoverageToggle",
+		"CoverageClear",
+		"CoverageSummary",
+	},
+	keys = {
+		{
+			"<leader>cc",
+			function()
+				vim.cmd("Coverage")
+			end,
+			desc = "Toggle coverage display",
+		},
+		{
+			"<leader>cs",
+			function()
+				vim.cmd("CoverageSummary")
+			end,
+			desc = "Coverage summary",
+		},
+		{
+			"<leader>cl",
+			function()
+				vim.cmd("CoverageLoad")
+			end,
+			desc = "Load coverage",
+		},
+	},
+	opts = {
+		auto_reload = true,
+	},
+})
+
 return {
 	{
 		"folke/trouble.nvim",
@@ -5,31 +50,6 @@ return {
 		cmd = { "TroubleToggle", "Trouble", "TodoTrouble", "TroubleClose" },
 		config = function()
 			require("trouble").setup()
-		end,
-	},
-	{
-		"andythigpen/nvim-coverage",
-		version = "*",
-		dependencies = { "nvim-lua/plenary.nvim" },
-		cmd = {
-			"Coverage",
-			"CoverageLoad",
-			"CoverageLoadLcov",
-			"CoverageShow",
-			"CoverageHide",
-			"CoverageToggle",
-			"CoverageClear",
-			"CoverageSummary",
-		},
-		keys = {
-			{ "<leader>cc", "<cmd>Coverage<cr>", desc = "Toggle coverage display" },
-			{ "<leader>cs", "<cmd>CoverageSummary<cr>", desc = "Coverage summary" },
-			{ "<leader>cl", "<cmd>CoverageLoad<cr>", desc = "Load coverage" },
-		},
-		config = function()
-			require("coverage").setup({
-				auto_reload = true,
-			})
 		end,
 	},
 }
