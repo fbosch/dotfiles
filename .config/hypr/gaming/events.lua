@@ -55,6 +55,10 @@ local function register_fullscreen_handler()
 	end)
 
 	hl.on("window.active", function(window)
+		if window == nil then
+			return
+		end
+
 		local game, is_launcher = matcher.match(window)
 		if game == nil or is_launcher or game.presentation == nil or game.presentation.direct_scanout == 0 then
 			return

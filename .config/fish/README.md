@@ -6,7 +6,6 @@ Fish shell configuration for interactive work, dotfiles maintenance, and local w
 
 - `config.fish` is the entrypoint.
 - `aliases.fish`, `profile.fish`, `scripts.fish`, `coreutils.fish`, `gum.fish`, and `colors.fish` are sourced from the entrypoint.
-- `private.fish` is local-only and not committed.
 - `functions/` contains autoloaded Fish functions.
 - `libexec/` contains TypeScript/Bun helpers used by wrapper functions.
 
@@ -16,7 +15,7 @@ Fish shell configuration for interactive work, dotfiles maintenance, and local w
 - Herdr: `herdr_link_plugins.fish` links the tracked local Herdr plugins after `stow .`.
 - Worktree and branch helpers: `wt.fish`, `worktree_add.fish`, `worktree_clone.fish`, `latest_worktree.fish`, `wtfzf.fish`.
 - Azure DevOps helpers: `ado_test_case.fish`, `ado_refinement_candidates.fish`, `workitems_on_date.fish`, `workitems_week.fish`, `workitems_cache_clear.fish`.
-- Nix helpers: `flake_check_updates.fish`, `flake_update_interactive.fish`, `flake_updates_daemon.fish`, `flake_restore.fish`, `nxrb.fish`.
+- Nix helpers: `flake_update_interactive.fish`, `flake_updates_daemon.fish`, `flake_restore.fish`, `nxrb.fish`.
 - Navigation and utilities: `cdlc.fish`, `cdlm.fish`, `fzfcd.fish`, `mntnas.fish`, `open.fish`, `killport.fish`, `gamescope_kill.fish`, `disk_space.fish`.
 - Time and workday helpers: `first_login_of_the_day.fish`, `set_workday_start.fish`, `remaining_work_hours.fish`, `workday_end.fish`, date parsing helpers.
 

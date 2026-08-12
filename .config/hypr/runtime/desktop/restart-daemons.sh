@@ -105,7 +105,6 @@ pkill swaync 2>/dev/null || true
 pkill hyprpaper 2>/dev/null || true
 pkill hypridle 2>/dev/null || true
 pkill swayosd-server 2>/dev/null || true
-pkill flake-check-updates 2>/dev/null || true
 pkill -f "atuin daemon" 2>/dev/null || true
 pkill -f "foot --server" 2>/dev/null || true
 # The wrapper execs Lua, so stop and wait for both before the lock can be reused.
@@ -133,7 +132,6 @@ wait_for_gaming_watchdog_shutdown
 uwsm-app -s b -- hypridle &
 uwsm-app -s s -- atuin daemon start &
 uwsm-app -s b -- foot --server &
-uwsm-app -s b -- flake-check-updates &
 uwsm-app -s b -- swayosd-server &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-state/window-state.sh &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/minimized-state/minimized-state-daemon.sh &

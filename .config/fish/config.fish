@@ -32,13 +32,9 @@ switch $OS_TYPE
         end
 end
 
-for file in profile private
-    if test -f ~/.config/fish/$file.fish
-        source ~/.config/fish/$file.fish
-    end
+if test -f ~/.config/fish/profile.fish
+    source ~/.config/fish/profile.fish
 end
-
-set -e OPENAI_API_KEY
 
 if status is-interactive
     for file in aliases scripts colors fzf

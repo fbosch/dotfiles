@@ -416,11 +416,7 @@ const readFlakeUpdatesCache = () =>
   readUpdatesCache("flake-updates.json", "flake updates", isFlakeUpdate);
 
 const readFlatpakUpdatesCache = () =>
-  readUpdatesCache(
-    "flatpak-updates.json",
-    "Flatpak updates",
-    isFlatpakUpdate,
-  );
+  readUpdatesCache("flatpak-updates.json", "Flatpak updates", isFlatpakUpdate);
 
 // Format time difference for tooltip
 function formatTimeSince(timestamp: string): string {
@@ -545,16 +541,16 @@ function refreshProfileControls() {
   const automaticGamingActive = hasAutomaticGamingClaim(profileState);
   for (const [id, badge] of profileConditionBadges) {
     badge.set_visible(
-      automaticGamingActive &&
-        selection === "auto" &&
-        id === "profile-auto",
+      automaticGamingActive && selection === "auto" && id === "profile-auto",
     );
   }
-  menuItemButtons.get("profile-auto")?.set_tooltip_text(
-    automaticGamingActive
-      ? "Use automatic profile rules; Game Mode is active"
-      : "Use automatic profile rules",
-  );
+  menuItemButtons
+    .get("profile-auto")
+    ?.set_tooltip_text(
+      automaticGamingActive
+        ? "Use automatic profile rules; Game Mode is active"
+        : "Use automatic profile rules",
+    );
   menuItemButtons
     .get("profile-default")
     ?.set_tooltip_text(
@@ -835,53 +831,74 @@ function generateUpdatesTooltip(): string {
   return tooltipParts.join("\n\n");
 }
 
+function createUpdateBadge(
+  icon: string,
+  count: number,
+  iconClass = "updates-badge-icon",
+): JSX.Element {
+  return (
+    <box
+      orientation={Gtk.Orientation.HORIZONTAL}
+      spacing={4}
+      halign={Gtk.Align.CENTER}
+      valign={Gtk.Align.CENTER}
+      class="updates-badge"
+    >
+      <label
+        label={icon}
+        class={iconClass}
+        halign={Gtk.Align.CENTER}
+        valign={Gtk.Align.CENTER}
+      />
+      <label
+        label={count.toString()}
+        class="updates-badge-count"
+        halign={Gtk.Align.CENTER}
+        valign={Gtk.Align.CENTER}
+      />
+    </box>
+  );
+}
+
 // Create update badges for the updates menu item
-function createUpdateBadges(): JSX.Element[] {
+function createUpdateBadges(): JSX.Element | null {
   const badges: JSX.Element[] = [];
 
   // Add flake updates badge if applicable
   if (flakeUpdatesCount > 0) {
     badges.push(
-      <box
-        orientation={Gtk.Orientation.HORIZONTAL}
-        halign={Gtk.Align.END}
-        valign={Gtk.Align.CENTER}
-        class="updates-badge"
-      >
-        <label
-          label={`\uE843  ${flakeUpdatesCount.toString()}`}
-          halign={Gtk.Align.CENTER}
-          valign={Gtk.Align.CENTER}
-        />
-      </box>,
+      createUpdateBadge(
+        "\uE843",
+        flakeUpdatesCount,
+        "updates-badge-icon updates-badge-nix-icon",
+      ),
     );
   }
 
   // Add flatpak updates badge if applicable
   if (flatpakUpdatesCount > 0) {
-    badges.push(
-      <box
-        orientation={Gtk.Orientation.HORIZONTAL}
-        halign={Gtk.Align.END}
-        valign={Gtk.Align.CENTER}
-        class="updates-badge"
-      >
-        <label
-          label={`\uF1B2  ${flatpakUpdatesCount.toString()}`}
-          halign={Gtk.Align.CENTER}
-          valign={Gtk.Align.CENTER}
-        />
-      </box>,
-    );
+    badges.push(createUpdateBadge("\uF1B2", flatpakUpdatesCount));
   }
 
-  return badges;
+  if (badges.length === 0) return null;
+
+  return (
+    <box
+      orientation={Gtk.Orientation.HORIZONTAL}
+      spacing={4}
+      halign={Gtk.Align.END}
+      valign={Gtk.Align.CENTER}
+      class="updates-badges"
+    >
+      {badges}
+    </box>
+  );
 }
 
 // Create a menu item button
 function createMenuItem(item: MenuItem): Gtk.Widget {
   // Create badges if this is the updates item
-  const badges = item.id === "system-updates" ? createUpdateBadges() : [];
+  const badges = item.id === "system-updates" ? createUpdateBadges() : null;
 
   // Create menu item button using JSX
   const button = (
@@ -1056,10 +1073,7 @@ function createProfileControls(): Gtk.Box {
       widthRequest={224}
       class="profile-row"
     >
-      <box
-        orientation={Gtk.Orientation.HORIZONTAL}
-        class="profile-actions"
-      >
+      <box orientation={Gtk.Orientation.HORIZONTAL} class="profile-actions">
         {createProfileToggle(
           "profile-auto",
           "\uF8B0",
@@ -1363,7 +1377,8 @@ function handleOutsideClick(x: number, y: number): void {
   if (
     recentItemsVisible &&
     recentItemsHost &&
-    (target === recentItemsHost || target?.is_ancestor(recentItemsHost) === true)
+    (target === recentItemsHost ||
+      target?.is_ancestor(recentItemsHost) === true)
   ) {
     return;
   }
@@ -1647,19 +1662,28 @@ function applyStaticCSS() {
     window.start-menu box.updates-badge {
       background-color: ${tokens.colors.accent.primary.value};
       color: ${tokens.colors.foreground.primary.value};
-      padding: 1px 4px;
-      border-radius: 10px;
-      font-size: 11px;
-      font-weight: 600;
-      margin-left: 6px;
+      min-width: 18px;
+      min-height: 18px;
+      padding: 2px 6px;
+      border-radius: 999px;
     }
 
-    window.start-menu box.updates-badge label {
-      font-family: "${tokens.typography.fontFamily.symbols.value}", "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
-      font-size: 11px;
-      font-weight: 600;
+    window.start-menu label.updates-badge-icon {
+      font-family: "${tokens.typography.fontFamily.symbols.value}", sans-serif;
+      font-size: 12px;
+      font-weight: 700;
       color: inherit;
-      letter-spacing: 0.5px;
+    }
+
+    window.start-menu label.updates-badge-count {
+      font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      color: inherit;
+    }
+
+    window.start-menu label.updates-badge-nix-icon {
+      transform: translate(0, -0.5px);
     }
 
     /* Menu dividers */

@@ -340,13 +340,7 @@ function flake_update_interactive --description 'Interactively update nix flake 
                     # Clean up backup since rebuild succeeded
                     rm -f $flake_lock_backup
 
-                    # Regenerate update cache and trigger start-menu refresh
-                    if type -q flake_updates_daemon
-                        gum spin --spinner pulse --title "Refreshing update cache..." -- flake_updates_daemon refresh
-                    else if command -q flake-check-updates
-                        # Fallback to direct call if daemon function not available
-                        gum spin --spinner pulse --title "Refreshing update cache..." -- flake-check-updates ~/nixos
-                    end
+                    gum spin --spinner pulse --title "Refreshing update cache..." -- flake_updates_daemon refresh
 
                     # Send desktop notification if --notify flag was passed
                     if set -q _flag_notify

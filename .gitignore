@@ -61,7 +61,6 @@ __pycache__
 .config/nvim/nvim/
 
 # Fish shell state (ignore all generated/variable data, not main config)
-.config/fish/private.fish
 .config/fish/fish_variables*
 .config/fish/completions/
 .config/fish/conf.d/
