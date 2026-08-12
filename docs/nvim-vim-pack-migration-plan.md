@@ -246,18 +246,18 @@ Completed vertical slices:
 - `eyeliner.nvim`
 - `live-rename.nvim`, which replaced the obsolete `inc-rename.nvim`
 - `live-command.nvim`
+- `beacon.nvim`
 
 Pending candidates:
 
 - `leap.nvim`
 - `FTerm.nvim`
-- `beacon.nvim`
 - `local-highlight.nvim`
 - `tint.nvim`
 
 Each slice must remove the Lazy declaration, add the native declaration, preserve configuration and triggers, validate first use, and confirm that only one copy is active.
 
-**Progress:** The nine completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, and `eyeliner.nvim` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic, the current native-owned total is ten.
+**Progress:** The ten completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, `eyeliner.nvim`, and `beacon.nvim` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic, the current native-owned total is eleven.
 
 `leap.nvim` remains pending. Its Lazy declaration uses placeholder mappings, while Leap now warns that manager-level key lazy-loading can cause problems. Migrating it requires an explicit mapping design or generic key replay support; it must not be moved using the current callback-key contract without preserving its normal, visual, and operator-pending behavior.
 

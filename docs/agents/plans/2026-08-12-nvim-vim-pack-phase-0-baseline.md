@@ -254,6 +254,8 @@ Eyeliner moved to native ownership on the default post-start lifecycle. Its `hig
 
 Live Command moved to native ownership on `CmdlineEnter`. Its first trigger installs the `Norm` preview command and command-line cleanup autocmd before command text is entered. Leap remains Lazy-owned because its placeholder mappings require a safer mapping/replay design than the current callback-key loader provides.
 
+Beacon moved to native ownership on the default post-start lifecycle. Its cursor and window autocmds, dynamic transparency behavior, and session-restoration scratch-buffer repair remain unchanged.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:

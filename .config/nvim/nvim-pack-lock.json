@@ -17,8 +17,7 @@
     },
     "beacon.nvim": {
       "rev": "098ff96c33874339d5e61656f3050dbd587d6bd5",
-      "src": "https://github.com/DanilaMihailov/beacon.nvim.git",
-      "version": "'098ff96c33874339d5e61656f3050dbd587d6bd5'"
+      "src": "https://github.com/DanilaMihailov/beacon.nvim.git"
     },
     "blink.cmp": {
       "rev": "78336bc89ee5365633bcf754d93df01678b5c08f",
