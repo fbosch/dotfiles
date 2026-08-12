@@ -257,8 +257,7 @@
     },
     "tint.nvim": {
       "rev": "586e87f00c8b0f5e857cefe10839e41f3e8c6d01",
-      "src": "https://github.com/fbosch/tint.nvim.git",
-      "version": "'586e87f00c8b0f5e857cefe10839e41f3e8c6d01'"
+      "src": "https://github.com/fbosch/tint.nvim.git"
     },
     "tiny-devicons-auto-colors.nvim": {
       "rev": "3b0c0174f4ed9120b6bea00d77e179ed5c46dcfb",

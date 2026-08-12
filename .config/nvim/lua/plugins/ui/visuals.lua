@@ -1,21 +1,52 @@
 local register = require("config.pack.registry").register
 
 register({
-	name = "live-command.nvim",
-	src = "https://github.com/smjonas/live-command.nvim.git",
-	events = { "CmdlineEnter" },
-	module = "live-command",
-	opts = {
-		commands = {
-			Norm = { cmd = "norm" },
+	{
+		name = "live-command.nvim",
+		src = "https://github.com/smjonas/live-command.nvim.git",
+		events = { "CmdlineEnter" },
+		module = "live-command",
+		opts = {
+			commands = {
+				Norm = { cmd = "norm" },
+			},
+			enable_highlighting = true,
+			inline_highlighting = true,
+			hl_groups = {
+				insertion = "DiffAdd",
+				deletion = "DiffDelete",
+				change = "DiffChange",
+			},
 		},
-		enable_highlighting = true,
-		inline_highlighting = true,
-		hl_groups = {
-			insertion = "DiffAdd",
-			deletion = "DiffDelete",
-			change = "DiffChange",
-		},
+	},
+	{
+		name = "tint.nvim",
+		src = "https://github.com/fbosch/tint.nvim.git",
+		events = { "BufWinEnter" },
+		setup = function()
+			vim.schedule(function()
+				local tint = require("tint")
+				local transforms = require("tint.transforms")
+				local colors = require("config.colors")
+
+				tint.setup({
+					tint_background_colors = true,
+					transforms = {
+						transforms.tint_with_threshold(-30, colors.background, 100),
+						transforms.saturate(0.4),
+					},
+					highlight_ignore_patterns = {
+						"NvimTree*",
+						"IndentBlankline*",
+						"Ibl*",
+						"Whitespace",
+						"NonText",
+						"Ccc*",
+						"Leap*",
+					},
+				})
+			end)
+		end,
 	},
 })
 
@@ -172,35 +203,6 @@ return {
 			require("local-highlight").setup({
 				hlgroup = "LocalHighlight",
 			})
-		end,
-	},
-	{
-		-- "levouh/tint.nvim",
-		"fbosch/tint.nvim",
-		event = "BufWinEnter",
-		config = function()
-			vim.schedule(function()
-				local tint = require("tint")
-				local transforms = require("tint.transforms")
-				local colors = require("config.colors")
-
-				tint.setup({
-					tint_background_colors = true,
-					transforms = {
-						transforms.tint_with_threshold(-30, colors.background, 100),
-						transforms.saturate(0.4),
-					},
-					highlight_ignore_patterns = {
-						"NvimTree*",
-						"IndentBlankline*",
-						"Ibl*",
-						"Whitespace",
-						"NonText",
-						"Ccc*",
-						"Leap*",
-					},
-				})
-			end)
 		end,
 	},
 	{

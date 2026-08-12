@@ -258,6 +258,8 @@ Beacon moved to native ownership on the default post-start lifecycle. Its cursor
 
 FTerm moved to native command ownership. Its nine commands activate the native package through `CmdUndefined`; the six normal and terminal mappings retain their original command targets and terminal-mode escape behavior.
 
+Tint moved to native ownership on `BufWinEnter`. The `fbosch/tint.nvim` fork, scheduled setup, transforms, background tinting, and ignored highlight groups remain unchanged; Tint's own lifecycle initializes existing windows before or after `VimEnter` as needed.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:
