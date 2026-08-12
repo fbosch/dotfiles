@@ -247,7 +247,7 @@ Candidate vertical slices:
 
 Each slice must remove the Lazy declaration, add the native declaration, preserve configuration and triggers, validate first use, and confirm that only one copy is active.
 
-**Progress:** `nvim-toggler` and `nvim-surround` are native-owned and use the default post-start lifecycle. Focused validation confirmed Toggler's default inverse behavior and Surround's `ysiw)` operator.
+**Progress:** `nvim-toggler` and `nvim-surround` are native-owned on the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes.
 
 **Acceptance:** Every migrated plugin remains inactive until its original trigger and continues to work on first use.
 

@@ -208,8 +208,7 @@
     },
     "nvim-spider": {
       "rev": "38f74f733734566bec3b23a9dcf968a5a5559cd6",
-      "src": "https://github.com/chrisgrieser/nvim-spider.git",
-      "version": "'38f74f733734566bec3b23a9dcf968a5a5559cd6'"
+      "src": "https://github.com/chrisgrieser/nvim-spider.git"
     },
     "nvim-surround": {
       "rev": "1098d7b3c34adcfa7feb3289ee434529abd4afd1",

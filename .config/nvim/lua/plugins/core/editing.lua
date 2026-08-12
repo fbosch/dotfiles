@@ -34,6 +34,21 @@ register({
 		version = "^3.0.0",
 		opts = {},
 	},
+	{
+		name = "nvim-spider",
+		src = "https://github.com/chrisgrieser/nvim-spider.git",
+		events = { "BufEnter" },
+		setup = function()
+			-- Ex-command mappings preserve Spider's operator and dot-repeat behavior.
+			for _, motion in ipairs({ "w", "e", "b" }) do
+				vim.keymap.set(
+					{ "n", "o", "x" },
+					motion,
+					("<cmd>lua require('spider').motion('%s')<CR>"):format(motion)
+				)
+			end
+		end,
+	},
 })
 
 return {
@@ -46,27 +61,5 @@ return {
 		"tpope/vim-abolish",
 		event = "InsertEnter",
 		config = require("config.abbr").autofix_typos,
-	},
-	{
-		"chrisgrieser/nvim-spider",
-		event = { "BufEnter" },
-		-- override motions for word, line and block to be sensitive to camelCase etc.
-		keys = {
-			{
-				"w",
-				"<cmd>lua require('spider').motion('w')<CR>",
-				mode = { "n", "o", "x" },
-			},
-			{
-				"e",
-				"<cmd>lua require('spider').motion('e')<CR>",
-				mode = { "n", "o", "x" },
-			},
-			{
-				"b",
-				"<cmd>lua require('spider').motion('b')<CR>",
-				mode = { "n", "o", "x" },
-			},
-		},
 	},
 }

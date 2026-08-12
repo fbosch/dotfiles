@@ -248,6 +248,8 @@ Helpview became the native filetype-loading pilot and attaches directly to the f
 
 Nvim-toggler and Nvim-surround followed as isolated native post-start leaves. Focused checks confirmed Toggler changed `true` to `false` and Surround's `ysiw)` operator changed `word` to `(word)`.
 
+Nvim-spider moved to native ownership on the initial `BufEnter`. Its Ex-command mappings remain active in normal, operator-pending, and visual modes to preserve dot-repeat; a focused motion check stopped `w` at the `C` in `camelCase`.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:
