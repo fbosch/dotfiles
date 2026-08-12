@@ -91,6 +91,7 @@
     async function request(path, options) {
       const response = await fetch(`${API}${path}`, {
         ...options,
+        keepalive: options?.body !== undefined,
         headers: options?.body ? { "Content-Type": "application/json" } : undefined,
       });
       const payload = await response.json().catch(function () {
@@ -156,6 +157,12 @@
       }, 1000);
     }
 
+    function immediateSave() {
+      clearTimeout(saveTimeout);
+      saveDebounces = 0;
+      saveItems();
+    }
+
     function Item(data) {
       let item;
       let input;
@@ -173,7 +180,7 @@
       checkbox.checked = serializable.checked;
       checkbox.addEventListener("change", function (event) {
         serializable.checked = event.target.checked;
-        debouncedSave();
+        immediateSave();
       });
 
       input = autoScalingTextarea(function (area) {
@@ -318,6 +325,7 @@
     }
 
     render();
+    window.addEventListener("pagehide", immediateSave);
     eventSource = new EventSource(`${API}/events`);
     eventSource.addEventListener("revision", function (event) {
       const revision = Number(event.data);
@@ -327,6 +335,7 @@
     return {
       close: function () {
         clearTimeout(saveTimeout);
+        window.removeEventListener("pagehide", immediateSave);
         eventSource.close();
       },
     };
