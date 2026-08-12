@@ -6,6 +6,7 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 
 - Prefer event-based systems over polling when both are viable.
 - Planning tasks should be vertical slices with observable outcomes, not horizontal layers.
+- Add a brief intent comment when code preserves a non-obvious constraint, ordering/lifecycle requirement, workaround, performance tradeoff, or fallback whose reason is not clear from names, types, and local control flow; do not restate obvious mechanics.
 
 ## Essentials
 

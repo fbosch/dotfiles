@@ -8,7 +8,7 @@ Lua configuration for WezTerm. The entrypoint stays thin and delegates settings 
 - `base.lua`, `platform.lua`, `layout.lua`, `fonts.lua`, `colors.lua`, `theme.lua`, `tabs.lua`, `status/`, `keys.lua`, and `mux.lua` hold the main config groups.
 - `agent/` detects AI-agent activity and decorates tabs with state icons.
 - `utils/` contains small text, time, performance, and benchmark helpers.
-- `tests/` contains Lua specs for work-hour status and agent-deck detection.
+- `tests/` contains Lua specs for work-hour status, agent-deck detection, and Herdr tab titles.
 
 ## Behavior
 
@@ -24,4 +24,5 @@ Run the focused specs after changing related logic:
 ```bash
 lua .config/wezterm/tests/right_status_spec.lua
 lua .config/wezterm/tests/agent_deck_detection_spec.lua
+lua .config/wezterm/tests/herdr_tab_title_spec.lua
 ```

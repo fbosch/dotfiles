@@ -155,7 +155,7 @@ function resetCreditUrgency(
 ): DetailedResetCredit["urgency"] {
 	const milliseconds = expiryTimestamp(expiresAt) - Date.now();
 	if (Number.isFinite(milliseconds) === false) return "unknown";
-	if (milliseconds <= 86_400_000) return "urgent";
+	if (milliseconds < 12 * 60 * 60 * 1_000) return "urgent";
 	if (milliseconds <= 7 * 86_400_000) return "soon";
 	return "later";
 }

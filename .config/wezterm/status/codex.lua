@@ -21,11 +21,7 @@ local function run_command(command, args)
 	return pcall(wezterm.run_child_process, {
 		"/bin/sh",
 		"-c",
-		string.format(
-			"PATH=%q; export PATH; %s",
-			command_search_path,
-			command_line
-		),
+		string.format("PATH=%q; export PATH; %s", command_search_path, command_line),
 	})
 end
 
@@ -44,7 +40,7 @@ end
 
 local function reset_credit_color(urgency)
 	if urgency == "urgent" then
-		return palette.semantic.critical
+		return palette.ansi.brightRed
 	end
 	if urgency == "soon" then
 		return palette.semantic.attention

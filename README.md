@@ -1,6 +1,7 @@
 # 🗂️ Dotfiles
 
-Config files and scripts for my development environment.  
+Configuration and supporting tools for my macOS and Linux development environments.
+
 Managed with [GNU Stow](https://www.gnu.org/software/stow/) for easy symlink management.
 
 ## Installation
@@ -21,8 +22,8 @@ stow .
 
 ## Dependencies
 
-All system packages and dependencies are declaratively managed in my NixOS configuration:
+Linux system packages and dependencies are declaratively managed in my NixOS configuration:
 
 **→ [github.com/fbosch/nixos](https://github.com/fbosch/nixos)**
 
-This dotfiles repository contains only the application configuration files.
+This repository contains application configuration plus the scripts, extensions, plugins, tests, and benchmarks that support it. Some configuration, including Hyprland and AGS, is Linux-specific.

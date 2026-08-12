@@ -59,7 +59,7 @@ package.loaded.wezterm = {
 							active = true,
 							resetCredits = {
 								availableCount = mock_credit_count,
-								urgency = "soon",
+								urgency = "urgent",
 							},
 							usage = {
 								primary = {
@@ -105,6 +105,7 @@ package.loaded.wezterm = {
 						green = "#819B69",
 						magenta = "#B279A7",
 						yellow = "#B77E64",
+						brightRed = "#E8838F",
 					},
 				},
 			},
@@ -156,6 +157,14 @@ local function find_text(items, text)
 	end
 
 	return false
+end
+
+local function color_before_text(items, text)
+	for index, item in ipairs(items) do
+		if item.Text == text then
+			return items[index - 1].Foreground.Color
+		end
+	end
 end
 
 configure_status({})
@@ -213,6 +222,7 @@ assert_eq(find_text(captured_status, "kk"), true, "inactive Codex profile alias 
 assert_eq(find_text(captured_status, "²"), true, "Codex reset credits rendered")
 assert_eq(find_text(captured_status, "43%"), true, "ChatGPT remaining allowance rendered")
 assert_eq(find_text(captured_status, " ³ʰ"), true, "ChatGPT usage reset countdown rendered")
+assert_eq(color_before_text(captured_status, "²"), "#E8838F", "imminently expiring reset credits are prominent")
 
 for _, case in ipairs({
 	{ used = 98, remaining = "2" },
