@@ -18,7 +18,15 @@ Inspired by Amp's handoff command: [post](https://ampcode.com/news/handoff), [ma
 
 ## Install
 
-Add the plugin to `~/.config/opencode/opencode.json`:
+This dotfiles repository loads the local entrypoint from `~/.config/opencode/opencode.jsonc`:
+
+```jsonc
+{
+  "plugin": ["./plugins/opencode-handoff/handoff.ts"]
+}
+```
+
+To use the published package instead, add the pinned version to `~/.config/opencode/opencode.json`:
 
 ```json
 {
@@ -26,7 +34,7 @@ Add the plugin to `~/.config/opencode/opencode.json`:
 }
 ```
 
-Pinning avoids startup-to-startup changes from an unpinned npm plugin.
+Pinning the published package avoids startup-to-startup changes.
 
 ## Usage
 
@@ -53,4 +61,4 @@ bun install
 bun run typecheck
 ```
 
-The package exports `handoff.ts` and expects `@opencode-ai/plugin` as a runtime peer supplied by OpenCode.
+`handoff.ts` is the package and local-plugin entrypoint. The implementation lives under `src/`, and `@opencode-ai/plugin` is a runtime peer supplied by OpenCode.

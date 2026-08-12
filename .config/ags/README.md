@@ -4,22 +4,27 @@ Bundled AGS configuration for Hyprland desktop UI. One `ags-bundled` process own
 
 ## Components
 
-The bundled entrypoint imports these components from `lib/`:
+The bundled entrypoint imports these components from `components/`:
 
 - `confirm-dialog.tsx` for shutdown, restart, suspend, and exit confirmations.
 - `volume-indicator.tsx` for volume overlays.
 - `keyboard-switcher.tsx` for layout switch feedback.
 - `start-menu.tsx` for the launcher surface.
+- `force-quit.tsx` for selecting and terminating a window.
+- `about-this-pc.tsx` for system information.
 - `window-switcher.tsx` for Alt-Tab style window switching.
 - `desktop-clock.tsx` for the desktop clock surface.
 - `calendar-widget.tsx` for the taskbar calendar.
 - `audio-mixer-widget.tsx` for audio controls.
+- `pip-snap-preview.tsx` for picture-in-picture snap previews.
+
+`recent-items-menu.tsx` and `button.ts` support other components but are not registered as request targets.
 
 ## Layout
 
 - `config-bundled.tsx` imports every component, registers handlers, and starts AGS with `instanceName: "ags-bundled"`.
 - `start-daemons.sh` starts the bundled process during the desktop session.
-- `lib/` is the canonical component source.
+- `components/` is the canonical component source.
 - `docs/agents/` contains deeper implementation notes for agents.
 
 ## Working With It

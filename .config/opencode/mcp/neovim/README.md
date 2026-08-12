@@ -30,7 +30,7 @@ Sibling worktrees normally produce separate OpenCode server processes because th
 
 `nvim_quickfix` returns 20 items by default, at most 50 items, and no more than 32 KiB of discovery data.
 
-Presentation tools use loaded source buffers or readable workspace-relative paths. `nvim_reveal` never steals focus unless `focus: true` is explicit and creates a split only when `split` is `horizontal` or `vertical`. `nvim_highlight` needs `startLine` plus exactly one of `buffer` or `path` to mark a whole live line; exact columns remain optional. A path is loaded or reused, then shown in a source window without focus stealing. Highlights use a bridge-owned extmark namespace, expire after 2 seconds by default, and are capped at 30 seconds and 500 lines.
+Presentation tools use loaded source buffers or readable workspace-relative paths. `nvim_reveal` never steals focus unless `focus: true` is explicit and creates a split only when `split` is `horizontal` or `vertical`. `highlight` needs `startLine` plus exactly one of `buffer` or `path` to mark a whole live line; exact columns remain optional. A path is loaded or reused, then shown in a source window without focus stealing. Highlights use a bridge-owned extmark namespace, expire after 2 seconds by default, and are capped at 30 seconds and 500 lines.
 
 ## Validation
 
