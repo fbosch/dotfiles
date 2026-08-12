@@ -2,8 +2,7 @@
   "plugins": {
     "FTerm.nvim": {
       "rev": "d1320892cc2ebab472935242d9d992a2c9570180",
-      "src": "https://github.com/numtostr/FTerm.nvim.git",
-      "version": "'d1320892cc2ebab472935242d9d992a2c9570180'"
+      "src": "https://github.com/numtostr/FTerm.nvim.git"
     },
     "LuaSnip": {
       "rev": "0abc8f390b278c3b4aabc4c004ac8a088b65cf24",

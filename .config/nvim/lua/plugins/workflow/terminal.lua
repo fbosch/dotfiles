@@ -1,31 +1,31 @@
 local function term_keymaps(mappings)
-	local res = {}
 	for _, map in ipairs(mappings) do
 		local keys, cmd, desc = map[1], map[2], map[3]
-		-- normal mode mapping
-		table.insert(res, {
-			keys,
-			"<cmd>" .. cmd .. "<cr>",
+		vim.keymap.set("n", keys, "<cmd>" .. cmd .. "<cr>", {
 			desc = desc,
-			mode = "n",
 			silent = true,
 		})
-		-- terminal mode mapping (with escape from terminal mode)
-		table.insert(res, {
-			keys,
-			"<C-\\><C-n><cmd>" .. cmd .. "<cr>",
+		vim.keymap.set("t", keys, "<C-\\><C-n><cmd>" .. cmd .. "<cr>", {
 			desc = desc,
-			mode = "t",
 			silent = true,
 		})
 	end
-	return res
 end
 
-return {
+term_keymaps({
+	{ "<A-t>", "FTermToggle", "toggle floating terminal" },
+	{ "<A-m>", "FTermMProcs", "toggle floating terminal with mprocs" },
+	{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
+	{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
+	{ "<A-c>", "FTermCheckmate", "toggle floating terminal with checkmate in neovim instance" },
+	{ "<A-s>", "FTermScooter", "toggle floating terminal with scooter" },
+})
+
+require("config.pack.registry").register({
 	{
-		"numtostr/FTerm.nvim",
-		cmd = {
+		name = "FTerm.nvim",
+		src = "https://github.com/numtostr/FTerm.nvim.git",
+		commands = {
 			"FTermOpen",
 			"FTermClose",
 			"FTermExit",
@@ -36,15 +36,7 @@ return {
 			"FTermCheckmate",
 			"FTermScooter",
 		},
-		keys = term_keymaps({
-			{ "<A-t>", "FTermToggle", "toggle floating terminal" },
-			{ "<A-m>", "FTermMProcs", "toggle floating terminal with mprocs" },
-			{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
-			{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
-			{ "<A-c>", "FTermCheckmate", "toggle floating terminal with checkmate in neovim instance" },
-			{ "<A-s>", "FTermScooter", "toggle floating terminal with scooter" },
-		}),
-		config = function()
+		setup = function()
 			local usrcmd = vim.api.nvim_create_user_command
 			local fterm = require("FTerm")
 			local env = {
@@ -173,4 +165,6 @@ return {
 			end, { bang = true })
 		end,
 	},
-}
+})
+
+return {}

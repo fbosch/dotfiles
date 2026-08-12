@@ -247,17 +247,17 @@ Completed vertical slices:
 - `live-rename.nvim`, which replaced the obsolete `inc-rename.nvim`
 - `live-command.nvim`
 - `beacon.nvim`
+- `FTerm.nvim`
 
 Pending candidates:
 
 - `leap.nvim`
-- `FTerm.nvim`
 - `local-highlight.nvim`
 - `tint.nvim`
 
 Each slice must remove the Lazy declaration, add the native declaration, preserve configuration and triggers, validate first use, and confirm that only one copy is active.
 
-**Progress:** The ten completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, `eyeliner.nvim`, and `beacon.nvim` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic, the current native-owned total is eleven.
+**Progress:** The eleven completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, `eyeliner.nvim`, and `beacon.nvim` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. `FTerm.nvim` is command-loaded; its normal and terminal mappings invoke those commands without generic key replay. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic, the current native-owned total is twelve.
 
 `leap.nvim` remains pending. Its Lazy declaration uses placeholder mappings, while Leap now warns that manager-level key lazy-loading can cause problems. Migrating it requires an explicit mapping design or generic key replay support; it must not be moved using the current callback-key contract without preserving its normal, visual, and operator-pending behavior.
 
@@ -384,7 +384,6 @@ mini.sessions
 snacks.nvim
 opencode.nvim
 fff.nvim
-FTerm.nvim
 conform.nvim
 tsc.nvim
 nvim-jqx
@@ -400,12 +399,12 @@ Requirements:
 - Snacks' `vim.ui.input` and `vim.ui.select` wrappers remain available before consumers invoke them.
 - Snacks activates before opencode requires `snacks.terminal`.
 - Opencode's early environment and session autocmds remain boot-time behavior, while its main setup stays key-triggered.
-- FTerm custom commands remain first-use compatible.
+- FTerm remains command-loaded from its completed Phase 4 slice.
 - fff remains key-triggered and has its built binary.
 - Conform formats on the first eligible save.
 - TypeScript and JSON/YAML integrations work on the first matching filetype.
 
-**Acceptance:** Sessions restore and save once, Opencode lifecycle behavior works, FTerm and fff work on first use, first-save formatting works, and TypeScript/JSON/YAML behavior matches the baseline.
+**Acceptance:** Sessions restore and save once, Opencode lifecycle behavior works, fff works on first use, first-save formatting works, and TypeScript/JSON/YAML behavior matches the baseline. FTerm retains the first-use behavior validated in Phase 4.
 
 **Rollback:** Revert lifecycle integration slices individually unless they share a hard dependency such as Snacks and Opencode.
 

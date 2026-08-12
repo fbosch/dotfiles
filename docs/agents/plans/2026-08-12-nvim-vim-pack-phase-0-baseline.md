@@ -256,6 +256,8 @@ Live Command moved to native ownership on `CmdlineEnter`. Its first trigger inst
 
 Beacon moved to native ownership on the default post-start lifecycle. Its cursor and window autocmds, dynamic transparency behavior, and session-restoration scratch-buffer repair remain unchanged.
 
+FTerm moved to native command ownership. Its nine commands activate the native package through `CmdUndefined`; the six normal and terminal mappings retain their original command targets and terminal-mode escape behavior.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:
