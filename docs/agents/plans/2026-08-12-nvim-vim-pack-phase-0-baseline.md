@@ -288,6 +288,10 @@ Nvim TS Autotag moved to native ownership on `BufReadPre` and `BufNewFile`. Lazy
 
 Indent Blankline moved to native ownership on `BufReadPost` and `BufNewFile`. Its TTY-sensitive glyphs and custom highlights remain unchanged, and `ibl.setup()` refreshes visible buffers immediately without event replay.
 
+CCC moved to native ownership across its configured filetypes, commands, and `<leader>pc` callback key. Its setup continues wrapping highlighter failures and explicitly attaches the first triggering buffer before the plugin's own `BufEnter` handler covers later eligible buffers.
+
+Direct file-argument validation exposed that Lazy's runtime conditions removed disabled plugins from the transitional native install projection. The projection now includes Lazy's resolved disabled specs so conditions affect activation without changing the 68-plugin installation catalog.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:

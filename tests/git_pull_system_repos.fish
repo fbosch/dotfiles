@@ -43,6 +43,11 @@ function just
     return "$TEST_JUST_STATUS"
 end
 
+function nvim
+    printf 'nvim %s\n' (string join ' ' -- $argv) >> "$TEST_LOG"
+    return "$TEST_NVIM_STATUS"
+end
+
 function herdr_link_plugins
     printf 'herdr_link_plugins\n' >> "$TEST_LOG"
     return "$TEST_HERDR_STATUS"
@@ -103,6 +108,7 @@ function setup_scenario
     command touch "$TEST_LOG"
     set -g TEST_STOW_STATUS 0
     set -g TEST_JUST_STATUS 0
+    set -g TEST_NVIM_STATUS 0
     set -g TEST_HERDR_STATUS 0
     source "$SYNC_FUNCTION"
 end
@@ -119,6 +125,7 @@ function test_clean_repositories_fast_forward
     assert_status master (command git -C "$HOME/dotfiles" branch --show-current)
     assert_log_contains stow
     assert_log_contains just
+    assert_log_contains 'nvim --headless -i NONE +qa'
     assert_log_contains herdr_link_plugins
 end
 
@@ -135,6 +142,7 @@ function test_dirty_repository_aborts_before_updates
     assert_status "$dotfiles_head" (command git -C "$HOME/dotfiles" rev-parse HEAD)
     assert_log_absent stow
     assert_log_absent just
+    assert_log_absent nvim
     assert_log_absent herdr_link_plugins
 end
 
@@ -147,6 +155,7 @@ function test_non_git_directory_aborts
     assert_status 1 $status
     assert_log_absent stow
     assert_log_absent just
+    assert_log_absent nvim
     assert_log_absent herdr_link_plugins
 end
 
@@ -158,6 +167,7 @@ function test_pull_failure_skips_post_pull_setup
     assert_status 1 $status
     assert_log_absent stow
     assert_log_absent just
+    assert_log_absent nvim
     assert_log_absent herdr_link_plugins
 end
 
@@ -207,6 +217,19 @@ function test_stow_failure_skips_dependencies
     assert_status 1 $status
     assert_log_contains stow
     assert_log_absent just
+    assert_log_absent nvim
+    assert_log_absent herdr_link_plugins
+end
+
+function test_native_plugin_install_failure_skips_herdr
+    setup_scenario
+    set -g TEST_NVIM_STATUS 1
+
+    git_pull_system_repos
+    assert_status 1 $status
+    assert_log_contains stow
+    assert_log_contains just
+    assert_log_contains nvim
     assert_log_absent herdr_link_plugins
 end
 
@@ -218,6 +241,7 @@ function test_post_pull_failure_returns_nonzero
     assert_status 1 $status
     assert_log_contains stow
     assert_log_contains just
+    assert_log_contains nvim
     assert_log_contains herdr_link_plugins
 end
 
@@ -229,6 +253,7 @@ test_noninteractive_feature_branch_requires_yes
 test_feature_branch_declined
 test_feature_branch_accepted
 test_stow_failure_skips_dependencies
+test_native_plugin_install_failure_skips_herdr
 test_post_pull_failure_returns_nonzero
 
 printf '%s\n' 'git_pull_system_repos lifecycle tests passed'

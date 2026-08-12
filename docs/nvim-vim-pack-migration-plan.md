@@ -260,6 +260,7 @@ Completed vertical slices:
 - `nvim-scrollbar`
 - `nvim-ts-autotag`
 - `indent-blankline.nvim`
+- `ccc.nvim`
 
 Pending candidates:
 
@@ -267,7 +268,7 @@ Pending candidates:
 
 Each slice must remove the Lazy declaration, add the native declaration, preserve configuration and triggers, validate first use, and confirm that only one copy is active.
 
-**Progress:** The twenty-four completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, `eyeliner.nvim`, `beacon.nvim`, `ts-comments.nvim`, and `nvim-scrollbar` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. `FTerm.nvim` is command-loaded; its normal and terminal mappings invoke those commands without generic key replay. `tint.nvim` retains `BufWinEnter` activation and relies on its own before/after-`VimEnter` initialization for existing windows. `local-highlight.nvim` retains `CursorMoved` activation and uses the trigger context to attach the first buffer before future buffers use its own `BufRead` autocmd. `nvim-autopairs` retains `InsertEnter` activation and attaches the current buffer before the first inserted character. `vim-repeat` retains `BufEnter` activation with no setup; its autoload API initializes on the first consumer call. `vim-abolish` retains `InsertEnter` activation and installs typo abbreviations before the first inserted text. `which-key.nvim` preserves both scheduled `PackReady` setup and immediate `<leader>wk` activation. `nvim-jqx` retains JSON/YAML and `BufWritePost` activation. `treewalker.nvim` retains command and callback-key activation without depending on the `nvim-treesitter` plugin. `conform.nvim` retains its filetype activation and installs save handlers before the first subsequent save. `nvim-ts-autotag` retains `BufReadPre`/`BufNewFile` activation while Lazy continues startup-owning `nvim-treesitter`. `indent-blankline.nvim` retains early buffer activation and refreshes visible buffers during setup. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic, the current native-owned total is twenty-five.
+**Progress:** The twenty-five completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, `eyeliner.nvim`, `beacon.nvim`, `ts-comments.nvim`, and `nvim-scrollbar` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. `FTerm.nvim` is command-loaded; its normal and terminal mappings invoke those commands without generic key replay. `tint.nvim` retains `BufWinEnter` activation and relies on its own before/after-`VimEnter` initialization for existing windows. `local-highlight.nvim` retains `CursorMoved` activation and uses the trigger context to attach the first buffer before future buffers use its own `BufRead` autocmd. `nvim-autopairs` retains `InsertEnter` activation and attaches the current buffer before the first inserted character. `vim-repeat` retains `BufEnter` activation with no setup; its autoload API initializes on the first consumer call. `vim-abolish` retains `InsertEnter` activation and installs typo abbreviations before the first inserted text. `which-key.nvim` preserves both scheduled `PackReady` setup and immediate `<leader>wk` activation. `nvim-jqx` retains JSON/YAML and `BufWritePost` activation. `treewalker.nvim` retains command and callback-key activation without depending on the `nvim-treesitter` plugin. `conform.nvim` retains its filetype activation and installs save handlers before the first subsequent save. `nvim-ts-autotag` retains `BufReadPre`/`BufNewFile` activation while Lazy continues startup-owning `nvim-treesitter`. `indent-blankline.nvim` retains early buffer activation and refreshes visible buffers during setup. `ccc.nvim` retains filetype, command, and callback-key activation and explicitly attaches the first triggering buffer. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic, the current native-owned total is twenty-six.
 
 `leap.nvim` remains pending. Its Lazy declaration uses placeholder mappings, while Leap now warns that manager-level key lazy-loading can cause problems. Migrating it requires an explicit mapping design or generic key replay support; it must not be moved using the current callback-key contract without preserving its normal, visual, and operator-pending behavior.
 
@@ -283,13 +284,18 @@ Cluster:
 
 ```text
 nvim-treesitter
+nvim-ts-autotag (already native-owned; revalidate with native Treesitter)
+treesj
 hlargs
 checkmate
 plenary.nvim
+todo-comments.nvim
 neotest
 nvim-nio
 neotest-vitest
 nvim-coverage
+diffview.nvim
+gitlineage.nvim
 ```
 
 Requirements:
@@ -365,8 +371,6 @@ smart-splits.nvim
 ```text
 gitsigns.nvim
 git-conflict.nvim
-diffview.nvim
-gitlineage.nvim
 ```
 
 Special handling:
@@ -376,6 +380,7 @@ Special handling:
 - Preserve the first `RecordingEnter` behavior for Recorder.
 - Preserve Fidget notification routing.
 - Preserve Git-repository conditions and first-buffer Gitsigns attachment.
+- Revalidate the Phase 5 Diffview and Gitlineage migrations with the remaining Git plugins.
 - Ensure Lualine tolerates integrations that remain lazily unloaded.
 
 **Acceptance:** Wilder works on the first command-line interaction, Recorder works for the first macro, Barbar activates once on the second listed file, Git plugins remain inactive outside repositories, and Trouble/Lualine retain their integrations.
@@ -393,7 +398,6 @@ mini.sessions
 snacks.nvim
 opencode.nvim
 fff.nvim
-ccc.nvim
 ```
 
 Requirements:
@@ -456,6 +460,7 @@ Run after each individual plugin slice:
 
 ```bash
 nvim -i NONE --headless '+qa'
+nvim -i NONE --headless path/to/relevant-file '+qa'
 ```
 
 Run after each shared-dependency cluster:

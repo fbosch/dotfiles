@@ -28,7 +28,7 @@ Use `git_pull_system_repos` to reconcile `~/nixos` and the deployed `~/dotfiles`
 ## Neovim
 
 ```bash
-nvim --headless +"Lazy! sync" +qa  # Update plugins
+nvim --headless -i NONE '+qa'      # Install locked native plugins
 nvim --headless +checkhealth +qa   # Validate setup
 ```
 

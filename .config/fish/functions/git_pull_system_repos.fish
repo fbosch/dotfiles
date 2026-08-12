@@ -35,7 +35,7 @@ function git_pull_system_repos --description 'Synchronize canonical system repos
                     '' \
                     'After both repositories update successfully, this command:' \
                     '  - Restows ~/dotfiles' \
-                    '  - Installs the applicable dependencies' \
+                    '  - Installs the applicable dependencies and native Neovim plugins' \
                     '  - Links local Herdr plugins' \
                     '' \
                     'Options:' \
@@ -254,6 +254,18 @@ function git_pull_system_repos --description 'Synchronize canonical system repos
         else
             printf '  Run `just --justfile ~/dotfiles/justfile --working-directory ~/dotfiles install-fbb install-opencode-plugins` to diagnose the failure.\n' >&2
         end
+        return 1
+    end
+
+    printf '%sWorking%s  Installing native Neovim plugins...\n' "$working" "$normal" >&2
+    nvim --headless -i NONE '+qa'
+    set command_status $status
+    if contains -- $command_status 130 143
+        return $command_status
+    end
+    if test $command_status -ne 0
+        printf '%sError%s    Failed to install native Neovim plugins.\n' "$error" "$normal" >&2
+        printf "  Run `nvim --headless -i NONE '+qa'` to diagnose the failure.\n" >&2
         return 1
     end
 
