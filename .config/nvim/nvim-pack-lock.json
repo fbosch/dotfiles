@@ -303,8 +303,7 @@
     },
     "vim-repeat": {
       "rev": "65846025c15494983dafe5e3b46c8f88ab2e9635",
-      "src": "https://github.com/tpope/vim-repeat.git",
-      "version": "'65846025c15494983dafe5e3b46c8f88ab2e9635'"
+      "src": "https://github.com/tpope/vim-repeat.git"
     },
     "vim-startuptime": {
       "rev": "5f33e50f1e2e2a80370c9094e4c303ea54cd2aea",

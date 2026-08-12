@@ -61,11 +61,15 @@ register({
 		events = { "InsertEnter" },
 		opts = {},
 	},
+	{
+		name = "vim-repeat",
+		src = "https://github.com/tpope/vim-repeat.git",
+		events = { "BufEnter" },
+	},
 })
 
 return {
 	{ "tpope/vim-unimpaired", keys = { "]", "[" } },
-	{ "tpope/vim-repeat", event = "BufEnter" },
 	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },
 	{
 		"tpope/vim-abolish",
