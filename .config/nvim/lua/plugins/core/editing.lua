@@ -66,14 +66,15 @@ register({
 		src = "https://github.com/tpope/vim-repeat.git",
 		events = { "BufEnter" },
 	},
+	{
+		name = "vim-abolish",
+		src = "https://github.com/tpope/vim-abolish.git",
+		events = { "InsertEnter" },
+		setup = require("config.abbr").autofix_typos,
+	},
 })
 
 return {
 	{ "tpope/vim-unimpaired", keys = { "]", "[" } },
 	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },
-	{
-		"tpope/vim-abolish",
-		event = "InsertEnter",
-		config = require("config.abbr").autofix_typos,
-	},
 }

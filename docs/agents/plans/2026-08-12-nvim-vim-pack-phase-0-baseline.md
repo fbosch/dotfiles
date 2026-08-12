@@ -268,6 +268,10 @@ Nvim Autopairs moved to native ownership on `InsertEnter`. Its empty-options set
 
 Vim Repeat moved to native ownership on `BufEnter` without setup. The native package path makes its `repeat#set` autoload API available before consumers register repeatable mappings; the API still initializes only on first use.
 
+Vim Abolish moved to native ownership on `InsertEnter`. `packadd` sources the `:Abolish` command before custom setup installs all typo rules, so abbreviations apply during the first insert session.
+
+Which Key moved to native ownership with explicit scheduled `PackReady` and `<leader>wk` triggers. The command path remains available immediately after setup, while the plugin's own scheduler completes mapping-state initialization after `VimEnter`.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:

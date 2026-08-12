@@ -1,15 +1,18 @@
-return {
-	"folke/which-key.nvim",
-	event = "VeryLazy",
+require("config.pack.registry").register({
+	name = "which-key.nvim",
+	src = "https://github.com/folke/which-key.nvim.git",
+	events = { { "User", pattern = "PackReady" } },
 	keys = {
 		{
-			mode = "n",
 			"<leader>wk",
-			"<cmd>WhichKey<CR>",
+			function()
+				vim.cmd.WhichKey()
+			end,
+			mode = "n",
 			desc = "which-key",
 		},
 	},
-	config = function()
+	setup = function()
 		local colors = require("config.colors")
 
 		require("utils").load_highlights({
@@ -35,4 +38,6 @@ return {
 			},
 		})
 	end,
-}
+})
+
+return {}
