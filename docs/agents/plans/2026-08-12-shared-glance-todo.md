@@ -37,11 +37,16 @@ Glance browser
   |
   | https://glance.corvus-corax.synology.me/api/shared-todo/*
   v
-Synology HTTPS reverse proxy
+Synology HTTPS reverse proxy (existing rule)
   |
-  | http://192.168.1.46:8091/api/shared-todo/*
+  | http://192.168.1.46:8080
   v
-glance-shared-todo service
+Local nginx path router
+  |                         |
+  | /api/shared-todo/*      | all other paths
+  v                         v
+127.0.0.1:8091              127.0.0.1:8083
+glance-shared-todo          Glance
   |
   v
 SQLite database
@@ -83,36 +88,33 @@ refresh interval.
 
 ### Network Boundary
 
-Bind the service only to `192.168.1.46:8091`. Accept browser mutations only
+Bind the service only to `127.0.0.1:8091`. Accept browser mutations only
 when the `Origin` is exactly `https://glance.corvus-corax.synology.me`; reject
 other supplied origins. This is cross-site request protection, not
 authentication. The LAN remains the trust boundary, as agreed.
 
-The Synology proxy configuration is outside both repositories and is required
-before the widget works:
+Keep the existing Synology proxy configuration:
 
 ```text
 Host: glance.corvus-corax.synology.me
-Path: /api/shared-todo/*
-Destination: http://192.168.1.46:8091/api/shared-todo/*
+Destination: http://192.168.1.46:8080
 ```
 
-The proxy must preserve the request path and permit long-lived SSE responses
-without buffering them. Keep this path rule higher priority than Glance's
-catch-all rule.
+Local nginx owns path routing and disables buffering for the SSE endpoint.
 
 ## Implementation
 
-1. Add `modules/services/glance-shared-todo/` in `~/nixos`.
+1. Add the shared todo service under
+   `modules/services/containers/glance/` in `~/nixos`.
    - Implement the API in Bun with `Bun.serve` and `bun:sqlite`; add no npm
      dependencies.
    - Use a dynamically created system user, `StateDirectory`, a read-only
      packaged source path, and systemd filesystem hardening.
    - Create the database schema and indexes on startup.
    - Configure startup policy as a background NixOS service.
-   - Default the listen address to `192.168.1.46` and port to `8091`.
-   - Declare port `8091` through `services.exposedPorts`, open it in the NixOS
-     firewall for the LAN proxy, and document it in `docs/agents/service-ports.md`.
+   - Default the listen address to `127.0.0.1` and port to `8091`.
+   - Declare port `8091` through `services.exposedPorts` and document it in
+     `docs/agents/service-ports.md`; do not open it in the firewall.
 
 2. Add focused Bun tests next to the service source.
    - Test validation, CRUD, ordering, transaction atomicity, revision conflicts,
@@ -144,8 +146,9 @@ catch-all rule.
 
 7. Reference the new JS and CSS from `.config/glance/glance.yml`.
 
-8. Configure the Synology reverse proxy route described above, then reload the
-   service and Glance configuration.
+8. Put local nginx on the existing LAN port `8080`, route the shared todo path
+   to `127.0.0.1:8091`, and route all other paths to Glance on
+   `127.0.0.1:8083`.
 
 ## Validation
 
