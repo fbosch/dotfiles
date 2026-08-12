@@ -57,13 +57,13 @@ Create these modules during the foundation phase:
 ```text
 .config/nvim/lua/config/pack/
   init.lua       # version guard, native registration, startup entry point
-  catalog.lua    # sources, names, revisions, and dependency metadata
+  specs.lua      # transitional projection of the colocated plugin graph
   loader.lua     # native activation and trigger implementations
   build.lua      # PackChanged build hooks
 .config/nvim/nvim-pack-lock.json
 ```
 
-Keep plugin behavior organized by category under `.config/nvim/lua/plugins/`. As a plugin moves, replace its Lazy spec with a manager-independent activation declaration rather than centralizing configuration bodies in one file.
+Keep package definitions and behavior organized together by category under `.config/nvim/lua/plugins/`. Phase 1 projects the resolved Lazy graph into native specs so it does not duplicate a central 69-plugin catalog. As each plugin moves, replace its Lazy spec in place with a manager-independent activation declaration.
 
 The local declaration format should remain narrow and cover only the features used here:
 
@@ -160,7 +160,7 @@ devenv test
 Changes:
 
 - Add a Neovim `>= 0.12.4` guard and verify `vim.pack` is available.
-- Create one catalog covering all 69 active repositories.
+- Project the existing dendritic plugin graph into 69 pinned native specs without duplicating a central catalog.
 - Register each repository with `vim.pack.add(..., { load = function() end })`.
 - Run native registration after Lazy setup so Lazy cannot remove the standard native package path.
 - Retain the standard `site` directory in `packpath` during hybrid operation.
@@ -170,10 +170,10 @@ Changes:
 
 Build hooks:
 
-- `nvim-treesitter`: run `:TSUpdate` after install or update.
-- `fff.nvim`: run `require("fff.download").download_or_build_binary()` after install or update.
+- `nvim-treesitter`: update parsers in an isolated child Neovim after install or update.
+- `fff.nvim`: run its binary download/build in an isolated child Neovim after install or update.
 
-**Acceptance:** `vim.pack.get()` reports the full native catalog, no native plugin path is in `runtimepath`, and existing startup behavior is unchanged.
+**Acceptance:** `vim.pack.get()` reports 69 registered native packages at the pinned revisions, no native plugin path is in `runtimepath`, and Lazy remains the only runtime owner. Native registrations report `active = true`; runtime-path isolation is the actual shadow-install invariant.
 
 **Rollback:** Stop requiring the native bootstrap. Lazy.nvim remains unchanged.
 
@@ -450,9 +450,10 @@ XDG_CONFIG_HOME="$PWD/.config" \
 XDG_DATA_HOME="$tmp/data" \
 XDG_STATE_HOME="$tmp/state" \
 XDG_CACHE_HOME="$tmp/cache" \
-NVIM_PACK_CONFIRM=0 \
 nvim -i NONE --headless '+qa'
 ```
+
+On Neovim 0.12.4, headless confirmation accepts the default `Yes`. This command intentionally installs the locked native catalog into the isolated data directory; there is no native `NVIM_PACK_CONFIRM` environment variable.
 
 Validate VSCode-mode gating:
 

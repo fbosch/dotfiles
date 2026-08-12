@@ -3,7 +3,7 @@ description: Fast, cost-efficient execution for well-scoped tasks and command wo
 mode: subagent
 color: "#e5d784"
 temperature: 0.0
-steps: 8
+steps: 12
 permission:
   bash:
     "git commit *": deny

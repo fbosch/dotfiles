@@ -125,7 +125,7 @@ No native package path under `site/pack` is active. The startup runtime paths ow
 ~/.local/state/nvim/lazy/readme
 ```
 
-Phase 1 must preserve this outcome until native packages are explicitly assigned ownership. Registering an inactive native catalog must not add a `site/pack/core/opt` plugin path to `runtimepath`.
+Phase 1 must preserve this outcome until native packages are explicitly assigned runtime ownership. Shadow packages are registered as active by `vim.pack`, but registration must not add a `site/pack/core/opt` plugin path to `runtimepath`.
 
 ## Startup Performance
 
@@ -231,3 +231,9 @@ Phase 0 is complete with one Neovim-specific validation limitation: VSCode behav
 The Lua-quality timeout was traced to repository-wide LuaLS indexing of large generated dependency trees. `scripts/lua-quality.sh` now checks the five tracked Lua roots independently with a 120-second limit per root. Devenv exposes these as `test:lua-quality:fbb`, `test:lua-quality:hyprland`, `test:lua-quality:neovim`, `test:lua-quality:wezterm`, and `test:lua-quality:keybinds`; `test:lua-quality` remains the aggregate gate. This preserves diagnostics for all tracked Lua sources while excluding unrelated generated content.
 
 The subsequent full gate exposed runtime fixture races and Linux-only process assumptions. The lifecycle fixture now waits for background launcher logs, the gaming fixture waits for observable transitions, Linux `/proc` and `/dev/full` probes skip on macOS, and the comprehensive Profilectl fixture has a 60-second per-file budget. `test:runtime-shell` and the full `devenv test` gate now pass.
+
+## Phase 1 Comparison
+
+Phase 1 projects the existing dendritic Lazy graph into `vim.pack` rather than maintaining a duplicate central catalog. All 69 native repositories were installed at the exact Lazy-locked revisions, while a no-op native loader kept every `site/pack/core/opt` package path out of `runtimepath`. Lazy still declared 70 plugins and loaded the same eight at startup.
+
+The repeated warm-start measurement used the same three warmups and 21 recorded launches. Its median was 146.81 ms, 32.16 ms below this baseline. The candidate range was 114.17-240.02 ms with a 35.38 ms standard deviation, so the comparison shows no Phase 1 regression but should not be treated as a stable optimization claim.
