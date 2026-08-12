@@ -9,7 +9,7 @@ Options highlights:
 Autocmds:
 
 - Filetype overrides: JSON5, MDX.
-- Spell on for text filetypes (unless VSCode).
+- Spell on for text filetypes.
 - Relative number toggled by insert/normal state.
 - `checktime` on focus/enter, notify on external changes.
 

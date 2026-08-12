@@ -17,4 +17,3 @@ Core modules:
 Plugin loading:
 
 - `lua/plugins/init.lua` imports plugin categories
-- UI/lang/workflow/ai are disabled in VSCode mode

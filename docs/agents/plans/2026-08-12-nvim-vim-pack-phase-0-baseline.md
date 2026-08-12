@@ -232,6 +232,8 @@ The Lua-quality timeout was traced to repository-wide LuaLS indexing of large ge
 
 The subsequent full gate exposed runtime fixture races and Linux-only process assumptions. The lifecycle fixture now waits for background launcher logs, the gaming fixture waits for observable transitions, Linux `/proc` and `/dev/full` probes skip on macOS, and the comprehensive Profilectl fixture has a 60-second per-file budget. `test:runtime-shell` and the full `devenv test` gate now pass.
 
+VSCode mode was subsequently removed from the Neovim configuration. Its historical Phase 0 result remains recorded above, but it is no longer a migration acceptance target.
+
 ## Phase 1 Comparison
 
 Phase 1 projects the existing dendritic Lazy graph into `vim.pack` rather than maintaining a duplicate central catalog. All 69 native repositories were installed at the exact Lazy-locked revisions, while a no-op native loader kept every `site/pack/core/opt` package path out of `runtimepath`. Lazy still declared 70 plugins and loaded the same eight at startup.
@@ -279,6 +281,12 @@ Nvim JQX moved to native ownership on JSON/YAML `FileType` and `BufWritePost`. I
 Treewalker moved to native command and callback-key ownership. Its six active mappings retain their modes and actions; it uses Neovim's built-in Tree-sitter APIs and does not require native ownership of `nvim-treesitter`.
 
 Conform moved to native ownership across its 14 filetype triggers. Its existing formatter configuration and both existing `BufWritePre` handlers remain unchanged and are installed before the first subsequent save.
+
+Nvim Scrollbar moved to native ownership on the default post-start lifecycle. Its excluded buffer types and handle color remain unchanged; the initial existing buffer renders on the next cursor, scroll, text, diagnostic, or window event, matching its previous `VeryLazy` setup.
+
+Nvim TS Autotag moved to native ownership on `BufReadPre` and `BufNewFile`. Lazy still startup-owns `nvim-treesitter`; Autotag's native setup installs its modern handlers before the first later `FileType` or `InsertEnter`.
+
+Indent Blankline moved to native ownership on `BufReadPost` and `BufNewFile`. Its TTY-sensitive glyphs and custom highlights remain unchanged, and `ibl.setup()` refreshes visible buffers immediately without event replay.
 
 ## Post-Pilot Performance Checkpoint
 

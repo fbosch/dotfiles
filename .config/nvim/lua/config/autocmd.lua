@@ -81,11 +81,9 @@ cmd({ "FileType" }, {
 	pattern = { "markdown", "gitcommit", "text", "tex", "plaintex" },
 	group = group,
 	callback = function()
-		if not vim.g.vscode then
-			vim.opt_local.spell = true
-			vim.opt_local.spelllang = "en_us,da"
-			vim.opt_local.spelloptions:append("noplainbuffer")
-		end
+		vim.opt_local.spell = true
+		vim.opt_local.spelllang = "en_us,da"
+		vim.opt_local.spelloptions:append("noplainbuffer")
 	end,
 })
 

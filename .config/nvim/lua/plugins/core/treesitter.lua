@@ -62,6 +62,13 @@ require("config.pack.registry").register({
 	opts = {},
 })
 
+require("config.pack.registry").register({
+	name = "nvim-ts-autotag",
+	src = "https://github.com/windwp/nvim-ts-autotag.git",
+	events = { "BufReadPre", "BufNewFile" },
+	opts = {},
+})
+
 return {
 	{
 		"nvim-treesitter/nvim-treesitter",
@@ -157,11 +164,6 @@ return {
 				end,
 			})
 		end,
-	},
-	{
-		"windwp/nvim-ts-autotag",
-		event = { "BufReadPre", "BufNewFile" },
-		opts = {},
 	},
 	{
 		"Wansmer/treesj",

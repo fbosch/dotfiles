@@ -1,7 +1,3 @@
-if vim.g.vscode then
-	return
-end
-
 assert(vim.fn.has("nvim-0.12.4") == 1, "native packages require Neovim 0.12.4 or newer")
 assert(type(vim.pack) == "table" and type(vim.pack.add) == "function", "vim.pack is unavailable")
 

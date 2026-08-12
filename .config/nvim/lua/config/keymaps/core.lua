@@ -1,5 +1,4 @@
 local map = require("utils").set_keymap
-local vscode = require("utils.vscode")
 
 -- Swap ; and :
 map("n", ";", ":")
@@ -18,7 +17,7 @@ map("i", "<Left>", "<NOP>")
 map("i", "<Right>", "<NOP>")
 
 -- search for the word under the cursor and jump to the next match.
-vscode.adaptive_map("n", "<leader>fn", "editor.action.nextMatchFindAction", function()
+map("n", "<leader>fn", function()
 	local word = vim.fn.expand("<cword>")
 	vim.fn.setreg("/", "\\<" .. word .. "\\>")
 	vim.cmd("normal! l")

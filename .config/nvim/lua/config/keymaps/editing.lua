@@ -1,5 +1,4 @@
 local map = require("utils").set_keymap
-local vscode = require("utils.vscode")
 local refactor = require("utils.refactor")
 
 -- find and replace
@@ -14,7 +13,7 @@ map("n", "<leader>fb", ":lua vim.lsp.buf.format()<CR>", "Format buffer")
 map("n", "<leader>db", "d?$<cr>", "Delete backwards to start of previous line")
 
 -- save files
-vscode.adaptive_map("n", "<leader>s", "saveAll", ":wall<CR>")
+map("n", "<leader>s", ":wall<CR>")
 map("n", "<leader>S", ":wqa!<CR>", "Save all files and quit")
 
 -- easier indentation in visual mode

@@ -92,8 +92,7 @@
     },
     "indent-blankline.nvim": {
       "rev": "d28a3f70721c79e3c5f6693057ae929f3d9c0a03",
-      "src": "https://github.com/lukas-reineke/indent-blankline.nvim.git",
-      "version": "'d28a3f70721c79e3c5f6693057ae929f3d9c0a03'"
+      "src": "https://github.com/lukas-reineke/indent-blankline.nvim.git"
     },
     "lazydev.nvim": {
       "rev": "ff2cbcba459b637ec3fd165a2be59b7bbaeedf0d",
@@ -195,8 +194,7 @@
     },
     "nvim-scrollbar": {
       "rev": "f8e87b96cd6362ef8579be456afee3b38fd7e2a8",
-      "src": "https://github.com/petertriho/nvim-scrollbar.git",
-      "version": "'f8e87b96cd6362ef8579be456afee3b38fd7e2a8'"
+      "src": "https://github.com/petertriho/nvim-scrollbar.git"
     },
     "nvim-spider": {
       "rev": "38f74f733734566bec3b23a9dcf968a5a5559cd6",
@@ -223,8 +221,7 @@
     },
     "nvim-ts-autotag": {
       "rev": "88c1453db4ba7dd24131086fe51fdf74e587d275",
-      "src": "https://github.com/windwp/nvim-ts-autotag.git",
-      "version": "'88c1453db4ba7dd24131086fe51fdf74e587d275'"
+      "src": "https://github.com/windwp/nvim-ts-autotag.git"
     },
     "nvim-web-devicons": {
       "rev": "2ae6958df7ced50baac5035cec0c15799eedfbf7",

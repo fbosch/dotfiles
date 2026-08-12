@@ -7,7 +7,6 @@ This plan moves `.config/nvim` from Lazy.nvim to Neovim's built-in `vim.pack` AP
 - The native target is `vim.pack`, available in Neovim 0.12.4. There is no native `vim.plug` API.
 - `vim-plug` is a separate third-party manager and is not part of this migration.
 - The minimum supported editor version is Neovim 0.12.4.
-- Zenbones continues to load in vscode-neovim, matching the current configuration.
 - The current package-level lazy-loading behavior is preserved rather than replaced with eager startup loading.
 - Incline, Typr, Volt, and the redundant `tweekmonster/startuptime.vim` remain removed. `dstein64/vim-startuptime` is retained as a native, command-loaded migration diagnostic.
 - `lazy-lock.json` is generated state. Do not hand-edit or transform it.
@@ -148,7 +147,7 @@ Record:
 - Startup-time results from several launches.
 - Commands and mappings from representative plugins.
 - First-trigger behavior for insert, filetype, command line, LSP, recording, and second-buffer activation.
-- Normal startup, headless startup, vscode-neovim behavior, and session restoration.
+- Normal startup, headless startup, and session restoration. The historical Phase 0 baseline also recorded vscode-neovim behavior before that mode was removed.
 
 Commands:
 
@@ -258,6 +257,9 @@ Completed vertical slices:
 - `nvim-jqx`
 - `treewalker.nvim`
 - `conform.nvim`
+- `nvim-scrollbar`
+- `nvim-ts-autotag`
+- `indent-blankline.nvim`
 
 Pending candidates:
 
@@ -265,7 +267,7 @@ Pending candidates:
 
 Each slice must remove the Lazy declaration, add the native declaration, preserve configuration and triggers, validate first use, and confirm that only one copy is active.
 
-**Progress:** The twenty-one completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, `eyeliner.nvim`, `beacon.nvim`, and `ts-comments.nvim` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. `FTerm.nvim` is command-loaded; its normal and terminal mappings invoke those commands without generic key replay. `tint.nvim` retains `BufWinEnter` activation and relies on its own before/after-`VimEnter` initialization for existing windows. `local-highlight.nvim` retains `CursorMoved` activation and uses the trigger context to attach the first buffer before future buffers use its own `BufRead` autocmd. `nvim-autopairs` retains `InsertEnter` activation and attaches the current buffer before the first inserted character. `vim-repeat` retains `BufEnter` activation with no setup; its autoload API initializes on the first consumer call. `vim-abolish` retains `InsertEnter` activation and installs typo abbreviations before the first inserted text. `which-key.nvim` preserves both scheduled `PackReady` setup and immediate `<leader>wk` activation. `nvim-jqx` retains JSON/YAML and `BufWritePost` activation. `treewalker.nvim` retains command and callback-key activation without depending on the `nvim-treesitter` plugin. `conform.nvim` retains its filetype activation and installs save handlers before the first subsequent save. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic, the current native-owned total is twenty-two.
+**Progress:** The twenty-four completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, `eyeliner.nvim`, `beacon.nvim`, `ts-comments.nvim`, and `nvim-scrollbar` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. `FTerm.nvim` is command-loaded; its normal and terminal mappings invoke those commands without generic key replay. `tint.nvim` retains `BufWinEnter` activation and relies on its own before/after-`VimEnter` initialization for existing windows. `local-highlight.nvim` retains `CursorMoved` activation and uses the trigger context to attach the first buffer before future buffers use its own `BufRead` autocmd. `nvim-autopairs` retains `InsertEnter` activation and attaches the current buffer before the first inserted character. `vim-repeat` retains `BufEnter` activation with no setup; its autoload API initializes on the first consumer call. `vim-abolish` retains `InsertEnter` activation and installs typo abbreviations before the first inserted text. `which-key.nvim` preserves both scheduled `PackReady` setup and immediate `<leader>wk` activation. `nvim-jqx` retains JSON/YAML and `BufWritePost` activation. `treewalker.nvim` retains command and callback-key activation without depending on the `nvim-treesitter` plugin. `conform.nvim` retains its filetype activation and installs save handlers before the first subsequent save. `nvim-ts-autotag` retains `BufReadPre`/`BufNewFile` activation while Lazy continues startup-owning `nvim-treesitter`. `indent-blankline.nvim` retains early buffer activation and refreshes visible buffers during setup. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic, the current native-owned total is twenty-five.
 
 `leap.nvim` remains pending. Its Lazy declaration uses placeholder mappings, while Leap now warns that manager-level key lazy-loading can cause problems. Migrating it requires an explicit mapping design or generic key replay support; it must not be moved using the current callback-key contract without preserving its normal, visual, and operator-pending behavior.
 
@@ -281,7 +283,6 @@ Cluster:
 
 ```text
 nvim-treesitter
-nvim-ts-autotag
 hlargs
 checkmate
 plenary.nvim
@@ -392,8 +393,6 @@ mini.sessions
 snacks.nvim
 opencode.nvim
 fff.nvim
-nvim-scrollbar
-indent-blankline.nvim
 ccc.nvim
 ```
 
@@ -423,7 +422,7 @@ Changes:
 - Replace remaining `User VeryLazy` consumers with `User PackReady`.
 - Keep Lazy's bootstrap and installation unchanged but dormant for one release window.
 
-**Acceptance:** No application plugin path comes from `stdpath("data") .. "/lazy"`. Every plugin has a single native activation declaration. Normal, headless, and VSCode startup pass. Compare startup timing with Phase 0.
+**Acceptance:** No application plugin path comes from `stdpath("data") .. "/lazy"`. Every plugin has a single native activation declaration. Normal and headless startup pass. Compare startup timing with Phase 0.
 
 **Rollback:** Restore the last hybrid ownership commit while the Lazy installation remains present.
 
@@ -478,12 +477,6 @@ nvim -i NONE --headless '+qa'
 ```
 
 On Neovim 0.12.4, headless confirmation accepts the default `Yes`. This command intentionally installs the locked native catalog into the isolated data directory; there is no native `NVIM_PACK_CONFIRM` environment variable.
-
-Validate VSCode-mode gating:
-
-```bash
-nvim -i NONE --headless --cmd 'let g:vscode = 1' '+qa'
-```
 
 Compare startup performance at Phases 5, 7, and 9:
 

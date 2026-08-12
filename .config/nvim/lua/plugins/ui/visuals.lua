@@ -60,6 +60,41 @@ register({
 			local_highlight.attach(context.buf)
 		end,
 	},
+	{
+		name = "nvim-scrollbar",
+		src = "https://github.com/petertriho/nvim-scrollbar.git",
+		module = "scrollbar",
+		opts = {
+			excluded_buftypes = { "terminal", "prompt" },
+			handle = {
+				color = "#222222",
+			},
+		},
+	},
+	{
+		name = "indent-blankline.nvim",
+		src = "https://github.com/lukas-reineke/indent-blankline.nvim.git",
+		events = { "BufReadPost", "BufNewFile" },
+		setup = function()
+			local terminal = require("utils.terminal")
+			local is_tty = terminal.is_plain_tty()
+			local indent_char = is_tty and "|" or "▏"
+			local scope_char = is_tty and "|" or "▏"
+
+			-- Set highlights before setup to ensure colors are applied
+			local colors = require("config.colors")
+			vim.api.nvim_set_hl(0, "IblIndent", { fg = colors.dark_gray })
+			vim.api.nvim_set_hl(0, "IblScope", { fg = colors.match_blue })
+
+			require("ibl").setup({
+				indent = { char = indent_char },
+				scope = {
+					char = scope_char,
+					enabled = true,
+				},
+			})
+		end,
+	},
 })
 
 return {
@@ -135,17 +170,6 @@ return {
 		end,
 	},
 	{
-		"petertriho/nvim-scrollbar",
-		event = "VeryLazy",
-		priority = 10,
-		opts = {
-			excluded_buftypes = { "terminal", "prompt" },
-			handle = {
-				color = "#222222",
-			},
-		},
-	},
-	{
 		"folke/todo-comments.nvim",
 		dependencies = {
 			"nvim-lua/plenary.nvim",
@@ -206,30 +230,6 @@ return {
 		end,
 		config = function(_, opts)
 			require("snacks").setup(opts)
-		end,
-	},
-	{
-		"lukas-reineke/indent-blankline.nvim",
-		event = { "BufReadPost", "BufNewFile" },
-		priority = 100,
-		config = function()
-			local terminal = require("utils.terminal")
-			local is_tty = terminal.is_plain_tty()
-			local indent_char = is_tty and "|" or "▏"
-			local scope_char = is_tty and "|" or "▏"
-
-			-- Set highlights before setup to ensure colors are applied
-			local colors = require("config.colors")
-			vim.api.nvim_set_hl(0, "IblIndent", { fg = colors.dark_gray })
-			vim.api.nvim_set_hl(0, "IblScope", { fg = colors.match_blue })
-
-			require("ibl").setup({
-				indent = { char = indent_char },
-				scope = {
-					char = scope_char,
-					enabled = true,
-				},
-			})
 		end,
 	},
 }
