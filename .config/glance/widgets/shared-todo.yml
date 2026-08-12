@@ -1,0 +1,10 @@
+- type: html
+  source: |
+    <div class="widget widget-type-to-do">
+      <div class="widget-header">
+        <h2 class="uppercase">To-do</h2>
+      </div>
+      <div class="widget-content">
+        <div data-shared-todo></div>
+      </div>
+    </div>

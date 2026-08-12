@@ -15,7 +15,7 @@
           search-engine: kagi
           hide-header: true
           autofocus: false
-        - type: to-do
+        - $include: ../widgets/shared-todo.yml
         - type: group
           widgets:
             - type: reddit
