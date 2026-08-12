@@ -38,3 +38,22 @@ usrcmd("RefreshUsage", function()
 	end
 	vim.notify("Refreshing usage stats...", vim.log.levels.INFO)
 end, { desc = "Clear cache and refetch usage stats for all providers" })
+
+usrcmd("PackUpdate", function(args)
+	vim.pack.update(#args.fargs > 0 and args.fargs or nil)
+end, {
+	nargs = "*",
+	desc = "Review native plugin updates",
+	complete = function(arg_lead)
+		local names = vim.iter(vim.pack.get())
+			:map(function(plugin)
+				return plugin.spec.name
+			end)
+			:filter(function(name)
+				return vim.startswith(name, arg_lead)
+			end)
+			:totable()
+		table.sort(names)
+		return names
+	end,
+})

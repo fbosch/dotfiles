@@ -38,6 +38,10 @@ local activation layer
   -> PackChanged build hooks
 ```
 
+Native-owned declarations follow upstream branches or semver ranges. Reproducibility comes from the generated `nvim-pack-lock.json`; commit hashes in declarations are reserved for intentional freezes.
+
+Use `:PackUpdate` to review every native update or pass plugin names for a focused review. Write the review buffer to accept changes and regenerate the lockfile; quit it to discard them.
+
 The coexistence rule is strict: a plugin is installed and activated by one manager at a time. A plugin may exist in both managers' data directories during a rollback window, but its second copy must not be added to `runtimepath`.
 
 ```text

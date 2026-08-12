@@ -3,7 +3,7 @@ local registry = require("config.pack.registry")
 local M = {}
 local loaded = {}
 
-function M.activate(name)
+function M.activate(name, context)
 	if loaded[name] then
 		return
 	end
@@ -11,13 +11,23 @@ function M.activate(name)
 	local plugin = assert(registry.get(name), "unknown native plugin: " .. name)
 	vim.cmd.packadd(name)
 	if plugin.setup ~= nil then
-		plugin.setup()
+		plugin.setup(context)
 	end
 	loaded[name] = true
 end
 
 function M.setup()
 	for name, plugin in pairs(registry.all()) do
+		for _, filetype in ipairs(plugin.filetypes or {}) do
+			vim.api.nvim_create_autocmd("FileType", {
+				once = true,
+				pattern = filetype,
+				callback = function(event)
+					M.activate(name, event)
+				end,
+			})
+		end
+
 		for _, event in ipairs(plugin.events or {}) do
 			local event_name = type(event) == "table" and event[1] or event
 			vim.api.nvim_create_autocmd(event_name, {

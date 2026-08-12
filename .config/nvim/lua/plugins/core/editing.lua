@@ -1,7 +1,8 @@
-require("config.pack.registry").register({
+local register = require("config.pack.registry").register
+
+register({
 	name = "live-rename.nvim",
 	src = "https://github.com/saecki/live-rename.nvim.git",
-	version = "205bddec4bf1276c81a03777f8335d4ad034ae03",
 	keys = {
 		{
 			"<leader>rn",

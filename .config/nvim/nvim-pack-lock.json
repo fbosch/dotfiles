@@ -87,8 +87,7 @@
     },
     "helpview.nvim": {
       "rev": "06006b471890f19efeb199ffab5da49a2d624619",
-      "src": "https://github.com/OXY2DEV/helpview.nvim.git",
-      "version": "'06006b471890f19efeb199ffab5da49a2d624619'"
+      "src": "https://github.com/OXY2DEV/helpview.nvim.git"
     },
     "hlargs.nvim": {
       "rev": "05f3d1789642d5e1807121c05c42a5e883ba46d3",
@@ -117,8 +116,7 @@
     },
     "live-rename.nvim": {
       "rev": "205bddec4bf1276c81a03777f8335d4ad034ae03",
-      "src": "https://github.com/saecki/live-rename.nvim.git",
-      "version": "'205bddec4bf1276c81a03777f8335d4ad034ae03'"
+      "src": "https://github.com/saecki/live-rename.nvim.git"
     },
     "local-highlight.nvim": {
       "rev": "8fcfa84202cba89b45014ef2563f1f5756af4565",
@@ -162,8 +160,7 @@
     },
     "numb.nvim": {
       "rev": "36260c446465b1303b0b1922c722904791bdb03f",
-      "src": "https://github.com/nacro90/numb.nvim.git",
-      "version": "'36260c446465b1303b0b1922c722904791bdb03f'"
+      "src": "https://github.com/nacro90/numb.nvim.git"
     },
     "nvim-autopairs": {
       "rev": "7b9923abad60b903ece7c52940e1321d39eccc79",
