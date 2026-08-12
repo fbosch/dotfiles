@@ -250,6 +250,7 @@ Completed vertical slices:
 - `FTerm.nvim`
 - `tint.nvim`
 - `local-highlight.nvim`
+- `ts-comments.nvim`
 
 Pending candidates:
 
@@ -257,7 +258,7 @@ Pending candidates:
 
 Each slice must remove the Lazy declaration, add the native declaration, preserve configuration and triggers, validate first use, and confirm that only one copy is active.
 
-**Progress:** The thirteen completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, `eyeliner.nvim`, and `beacon.nvim` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. `FTerm.nvim` is command-loaded; its normal and terminal mappings invoke those commands without generic key replay. `tint.nvim` retains `BufWinEnter` activation and relies on its own before/after-`VimEnter` initialization for existing windows. `local-highlight.nvim` retains `CursorMoved` activation and uses the trigger context to attach the first buffer before future buffers use its own `BufRead` autocmd. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic, the current native-owned total is fourteen.
+**Progress:** The fourteen completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, `eyeliner.nvim`, `beacon.nvim`, and `ts-comments.nvim` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. `FTerm.nvim` is command-loaded; its normal and terminal mappings invoke those commands without generic key replay. `tint.nvim` retains `BufWinEnter` activation and relies on its own before/after-`VimEnter` initialization for existing windows. `local-highlight.nvim` retains `CursorMoved` activation and uses the trigger context to attach the first buffer before future buffers use its own `BufRead` autocmd. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic, the current native-owned total is fifteen.
 
 `leap.nvim` remains pending. Its Lazy declaration uses placeholder mappings, while Leap now warns that manager-level key lazy-loading can cause problems. Migrating it requires an explicit mapping design or generic key replay support; it must not be moved using the current callback-key contract without preserving its normal, visual, and operator-pending behavior.
 

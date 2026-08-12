@@ -262,6 +262,8 @@ Tint moved to native ownership on `BufWinEnter`. The `fbosch/tint.nvim` fork, sc
 
 Local Highlight moved to native ownership on `CursorMoved`. Unlike the prior Lazy path, native setup uses the trigger context to attach the current buffer immediately; future buffers continue attaching through the plugin's own `BufRead` autocmd.
 
+TS Comments moved to native ownership on the default post-start lifecycle. Its empty-options setup continues overriding Neovim's `commentstring` resolution while using built-in Tree-sitter APIs only when a parser is available.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:

@@ -49,6 +49,12 @@ register({
 			end
 		end,
 	},
+	{
+		name = "ts-comments.nvim",
+		src = "https://github.com/folke/ts-comments.nvim.git",
+		module = "ts-comments",
+		opts = {},
+	},
 })
 
 return {
@@ -56,7 +62,6 @@ return {
 	{ "tpope/vim-repeat", event = "BufEnter" },
 	{ "windwp/nvim-autopairs", event = { "InsertEnter" }, opts = {} },
 	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },
-	{ "folke/ts-comments.nvim", event = "VeryLazy", opts = {} },
 	{
 		"tpope/vim-abolish",
 		event = "InsertEnter",
