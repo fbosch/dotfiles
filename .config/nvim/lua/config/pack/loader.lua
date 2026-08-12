@@ -10,7 +10,9 @@ function M.activate(name, context)
 
 	local plugin = assert(registry.get(name), "unknown native plugin: " .. name)
 	vim.cmd.packadd(name)
-	if plugin.setup ~= nil then
+	if plugin.opts ~= nil then
+		require(plugin.module or name).setup(plugin.opts)
+	elseif plugin.setup ~= nil then
 		plugin.setup(context)
 	end
 	loaded[name] = true
@@ -69,6 +71,15 @@ function M.setup()
 			})
 		end
 	end
+
+	vim.api.nvim_create_autocmd("VimEnter", {
+		once = true,
+		callback = function()
+			vim.schedule(function()
+				vim.api.nvim_exec_autocmds("User", { pattern = "PackReady" })
+			end)
+		end,
+	})
 end
 
 function M.is_loaded(name)

@@ -6,6 +6,13 @@ local function register_one(plugin)
 	assert(type(plugin.name) == "string", "native plugin name is required")
 	assert(type(plugin.src) == "string", "native plugin source is required for " .. plugin.name)
 	assert(plugins[plugin.name] == nil, "duplicate native plugin registration: " .. plugin.name)
+	assert(
+		plugin.opts == nil or plugin.setup == nil,
+		"native plugin cannot define both opts and setup: " .. plugin.name
+	)
+	if plugin.events == nil and plugin.commands == nil and plugin.filetypes == nil and plugin.keys == nil then
+		plugin.events = { { "User", pattern = "PackReady" } }
+	end
 	plugins[plugin.name] = plugin
 end
 

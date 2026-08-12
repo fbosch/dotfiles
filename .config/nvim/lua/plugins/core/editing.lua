@@ -1,25 +1,36 @@
 local register = require("config.pack.registry").register
 
 register({
-	name = "live-rename.nvim",
-	src = "https://github.com/saecki/live-rename.nvim.git",
-	keys = {
-		{
-			"<leader>rn",
-			function()
-				require("live-rename").rename({ insert = true, cursorpos = -1 })
-			end,
-			mode = "n",
-			desc = "rename",
+	{
+		name = "live-rename.nvim",
+		src = "https://github.com/saecki/live-rename.nvim.git",
+		keys = {
+			{
+				"<leader>rn",
+				function()
+					require("live-rename").rename({ insert = true, cursorpos = -1 })
+				end,
+				mode = "n",
+				desc = "rename",
+			},
 		},
+		setup = function()
+			require("live-rename").setup({})
+		end,
 	},
-	setup = function()
-		require("live-rename").setup({})
-	end,
+	{
+		name = "mini.ai",
+		src = "https://github.com/echasnovski/mini.ai.git",
+		opts = {},
+	},
+	{
+		name = "nvim-toggler",
+		src = "https://github.com/nguyenvukhang/nvim-toggler.git",
+		opts = {},
+	},
 })
 
 return {
-	{ "echasnovski/mini.ai", version = "*", event = "VeryLazy", opts = {} },
 	{ "tpope/vim-unimpaired", keys = { "]", "[" } },
 	{ "tpope/vim-repeat", event = "BufEnter" },
 	{ "windwp/nvim-autopairs", event = { "InsertEnter" }, opts = {} },
@@ -38,7 +49,6 @@ return {
 			require("nvim-surround").setup({})
 		end,
 	},
-	{ "nguyenvukhang/nvim-toggler", event = "VeryLazy", opts = {} },
 	{
 		"chrisgrieser/nvim-spider",
 		event = { "BufEnter" },

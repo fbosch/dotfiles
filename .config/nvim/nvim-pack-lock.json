@@ -140,8 +140,7 @@
     },
     "mini.ai": {
       "rev": "d73c36349aa7b0bab5f77ad71701a1d42211a1df",
-      "src": "https://github.com/echasnovski/mini.ai.git",
-      "version": "'d73c36349aa7b0bab5f77ad71701a1d42211a1df'"
+      "src": "https://github.com/echasnovski/mini.ai.git"
     },
     "mini.sessions": {
       "rev": "7cb2945ccc11323b7ca19796eb42618493e1dc12",
@@ -219,8 +218,7 @@
     },
     "nvim-toggler": {
       "rev": "467808600882fd6c9e33b9dbc4889b1b80cfd917",
-      "src": "https://github.com/nguyenvukhang/nvim-toggler.git",
-      "version": "'467808600882fd6c9e33b9dbc4889b1b80cfd917'"
+      "src": "https://github.com/nguyenvukhang/nvim-toggler.git"
     },
     "nvim-tree.lua": {
       "rev": "b2aadda94b107480c48e548d6db51c6840b7b33c",
@@ -316,6 +314,10 @@
       "rev": "65846025c15494983dafe5e3b46c8f88ab2e9635",
       "src": "https://github.com/tpope/vim-repeat.git",
       "version": "'65846025c15494983dafe5e3b46c8f88ab2e9635'"
+    },
+    "vim-startuptime": {
+      "rev": "5f33e50f1e2e2a80370c9094e4c303ea54cd2aea",
+      "src": "https://github.com/dstein64/vim-startuptime.git"
     },
     "vim-unimpaired": {
       "rev": "db65482581a28e4ccf355be297f1864a4e66985c",

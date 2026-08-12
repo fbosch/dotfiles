@@ -32,7 +32,7 @@ function M.get()
 	table.sort(specs, function(left, right)
 		return left.name < right.name
 	end)
-	assert(#specs == 68, ("expected 68 application plugins, got %d"):format(#specs))
+	assert(#specs == 69, ("expected 69 application plugins, got %d"):format(#specs))
 
 	return specs
 end

@@ -238,8 +238,52 @@ Phase 1 projects the existing dendritic Lazy graph into `vim.pack` rather than m
 
 The repeated warm-start measurement used the same three warmups and 21 recorded launches. Its median was 146.81 ms, 32.16 ms below this baseline. The candidate range was 114.17-240.02 ms with a 35.38 ms standard deviation, so the comparison shows no Phase 1 regression but should not be treated as a stable optimization claim.
 
-Undotree was removed after this baseline because it was no longer used. The active migration inventory and native shadow set now contain 68 application plugins.
+Undotree was removed after this baseline because it was no longer used. `dstein64/vim-startuptime` was subsequently restored as a native, command-loaded diagnostic, so the active migration inventory and native catalog again contain 69 application plugins.
 
 live-rename became the first native runtime-owned key plugin in Phase 2. Fresh-process checks confirmed it was absent from Lazy and unloaded at startup, then loaded from `site/pack/core/opt` on the first `<leader>rn`. It replaced IncRename because IncRename intrinsically displayed both Neovim's command line and a mirrored Snacks widget, while live-rename provides one cursor-positioned floating editor.
 
 Numb became the native event-loading pilot. The first `CmdlineEnter` installs its `CmdlineChanged` and `CmdlineLeave` handlers before a numeric Ex address is typed; a focused check confirmed the same first event could preview line 42.
+
+Helpview became the native filetype-loading pilot and attaches directly to the first triggering help buffer. MiniAI became the native post-start pilot: it remains unloaded before `VimEnter`, then initializes once from the scheduled `User PackReady` event.
+
+## Post-Pilot Performance Checkpoint
+
+After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:
+
+```bash
+hyperfine --warmup 3 --runs 21 \
+  'nvim --headless -i NONE "+qa"'
+```
+
+| Metric | Post-pilot checkpoint | Change from Phase 0 |
+| --- | ---: | ---: |
+| Wall time median | 163.61 ms | -15.36 ms |
+| Wall time mean | 169.48 ms | -11.01 ms |
+| Standard deviation | 16.40 ms | -14.41 ms |
+| Wall time range | 150.45-210.52 ms | narrower |
+| Mean user CPU | 36.97 ms | +1.23 ms |
+| Mean system CPU | 41.99 ms | +2.65 ms |
+| Peak RSS median | 16.98 MiB | +0.15 MiB |
+| Samples | 21 successful, 0 failed | unchanged |
+
+The median remains 8.6% below the Phase 0 baseline, so the pilot migrations show no startup regression. This checkpoint supersedes the Phase 1 measurement for comparisons during the remaining migration.
+
+The restored `:StartupTime` command loads only on first invocation and defaults to 10 samples. This command captures a machine-readable initialization profile without adding the profiler itself to normal startup:
+
+```vim
+:StartupTime --tries 10 --save vim_pack_startup --hidden
+```
+
+The 10-launch initialization profile reported a 122.05 ms mean with a 31.78 ms standard deviation. Largest profiler attributions were:
+
+| Initialization source | Attributed exclusive mean | Attributed inclusive mean |
+| --- | ---: | ---: |
+| `require('config.lazy')` | 38.06 ms | 85.19 ms |
+| `require('fbb.palette')` | 13.30 ms | 13.30 ms |
+| `require('config.pack')` | 2.48 ms | 5.22 ms |
+| `require('config.hls')` | 0.99 ms | 20.47 ms |
+| `require('config.colors')` | 0.89 ms | 14.20 ms |
+
+The `fbb.palette` attribution is not its actual execution cost. A 30-sample follow-up still attributed 12.07 ms to it, but direct fresh-process instrumentation measured about 1.3 ms for module lookup, file read, JSON decode, and palette extraction. The file read itself took about 0.14 ms and JSON decoding about 0.02 ms. A minimal `--startuptime` launch attributed 1.44 ms exclusively to the same `require`. In the full trace, an unreported gap after sourcing the colorscheme is charged to the next recorded Lua event, which is `require('fbb.palette')`.
+
+Use the Hyperfine median as the regression gate and `:StartupTime` as a diagnostic lead, not proof of exclusive execution cost. Future checkpoints must use both commands unchanged, compare exclusive and inclusive attributions, and confirm suspicious entries with direct instrumentation before optimizing them.

@@ -9,7 +9,7 @@ This plan moves `.config/nvim` from Lazy.nvim to Neovim's built-in `vim.pack` AP
 - The minimum supported editor version is Neovim 0.12.4.
 - Zenbones continues to load in vscode-neovim, matching the current configuration.
 - The current package-level lazy-loading behavior is preserved rather than replaced with eager startup loading.
-- The recently removed Incline, StartupTime, Typr, and Volt plugins remain removed.
+- Incline, Typr, Volt, and the redundant `tweekmonster/startuptime.vim` remain removed. `dstein64/vim-startuptime` is retained as a native, command-loaded migration diagnostic.
 - `lazy-lock.json` is generated state. Do not hand-edit or transform it.
 - Freeze plugin updates while both managers coexist, so the two lockfiles do not diverge.
 
@@ -217,6 +217,8 @@ Changes:
 | Build | `dmtrKovalenko/fff.nvim` | Install or update builds the required binary and fails clearly. |
 
 Add event replay, FileType replay, recursion guards, priority ordering, condition evaluation, and `User PackReady` in this phase.
+
+**Progress:** Numb now validates first-command-line event loading, Helpview validates first-buffer filetype loading through targeted attachment, and MiniAI validates scheduled post-`VimEnter` loading through `User PackReady`.
 
 **Acceptance:** Every pilot works on its first trigger in a fresh process. Repeated triggers do not create duplicate mappings, setup calls, or autocmds. Lazy continues managing all unmigrated plugins.
 
@@ -469,8 +471,11 @@ nvim -i NONE --headless --cmd 'let g:vscode = 1' '+qa'
 Compare startup performance at Phases 5, 7, and 9:
 
 ```bash
-nvim --startuptime /tmp/nvim-native-startup.log
+hyperfine --warmup 3 --runs 21 \
+  'nvim --headless -i NONE "+qa"'
 ```
+
+Use `:StartupTime --tries 10 --save vim_pack_startup --hidden` to diagnose initialization contributors when the wall-time comparison regresses.
 
 Check runtime ownership while both systems coexist:
 
