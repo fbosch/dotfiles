@@ -158,8 +158,7 @@
     },
     "nvim-autopairs": {
       "rev": "7b9923abad60b903ece7c52940e1321d39eccc79",
-      "src": "https://github.com/windwp/nvim-autopairs.git",
-      "version": "'7b9923abad60b903ece7c52940e1321d39eccc79'"
+      "src": "https://github.com/windwp/nvim-autopairs.git"
     },
     "nvim-coverage": {
       "rev": "a939e425e363319d952a6c35fb3f38b34041ded2",

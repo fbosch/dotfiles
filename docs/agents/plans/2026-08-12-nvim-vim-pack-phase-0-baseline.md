@@ -264,6 +264,8 @@ Local Highlight moved to native ownership on `CursorMoved`. Unlike the prior Laz
 
 TS Comments moved to native ownership on the default post-start lifecycle. Its empty-options setup continues overriding Neovim's `commentstring` resolution while using built-in Tree-sitter APIs only when a parser is available.
 
+Nvim Autopairs moved to native ownership on `InsertEnter`. Its empty-options setup attaches the current buffer during the trigger, so the first inserted opening character receives its closing pair without event replay.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:

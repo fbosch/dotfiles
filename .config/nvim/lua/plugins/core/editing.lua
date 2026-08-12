@@ -55,12 +55,17 @@ register({
 		module = "ts-comments",
 		opts = {},
 	},
+	{
+		name = "nvim-autopairs",
+		src = "https://github.com/windwp/nvim-autopairs.git",
+		events = { "InsertEnter" },
+		opts = {},
+	},
 })
 
 return {
 	{ "tpope/vim-unimpaired", keys = { "]", "[" } },
 	{ "tpope/vim-repeat", event = "BufEnter" },
-	{ "windwp/nvim-autopairs", event = { "InsertEnter" }, opts = {} },
 	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },
 	{
 		"tpope/vim-abolish",
