@@ -310,11 +310,6 @@
       "src": "https://github.com/dmmulroy/tsc.nvim.git",
       "version": "'e083bcf1e54bc3af7df92b33235efb334e8c782c'"
     },
-    "undotree": {
-      "rev": "6fa6b57cda8459e1e4b2ca34df702f55242f4e4d",
-      "src": "https://github.com/mbbill/undotree.git",
-      "version": "'6fa6b57cda8459e1e4b2ca34df702f55242f4e4d'"
-    },
     "vim-abolish": {
       "rev": "dcbfe065297d31823561ba787f51056c147aa682",
       "src": "https://github.com/tpope/vim-abolish.git",

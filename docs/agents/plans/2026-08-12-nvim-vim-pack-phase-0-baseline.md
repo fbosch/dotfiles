@@ -218,7 +218,7 @@ Use these thresholds and invariants after migration phases:
 - Keep exactly eight startup-loaded plugins until a phase intentionally changes startup ownership or timing.
 - Require one active runtime path per plugin while Lazy and `vim.pack` coexist.
 - Require first-trigger success in a fresh process for every migrated command, event, filetype, and key path.
-- Preserve 69 active application plugin repositories unless a separate cleanup explicitly changes the inventory.
+- Preserve the current active application-plugin inventory unless a separate cleanup explicitly changes it.
 - Treat native paths appearing before Phase 1 activation as an ownership failure.
 - Do not claim VSCode parity from a standalone headless simulation.
 
@@ -237,3 +237,5 @@ The subsequent full gate exposed runtime fixture races and Linux-only process as
 Phase 1 projects the existing dendritic Lazy graph into `vim.pack` rather than maintaining a duplicate central catalog. All 69 native repositories were installed at the exact Lazy-locked revisions, while a no-op native loader kept every `site/pack/core/opt` package path out of `runtimepath`. Lazy still declared 70 plugins and loaded the same eight at startup.
 
 The repeated warm-start measurement used the same three warmups and 21 recorded launches. Its median was 146.81 ms, 32.16 ms below this baseline. The candidate range was 114.17-240.02 ms with a 35.38 ms standard deviation, so the comparison shows no Phase 1 regression but should not be treated as a stable optimization claim.
+
+Undotree was removed after this baseline because it was no longer used. The active migration inventory and native shadow set now contain 68 application plugins.

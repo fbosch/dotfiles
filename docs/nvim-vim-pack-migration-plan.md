@@ -63,7 +63,7 @@ Create these modules during the foundation phase:
 .config/nvim/nvim-pack-lock.json
 ```
 
-Keep package definitions and behavior organized together by category under `.config/nvim/lua/plugins/`. Phase 1 projects the resolved Lazy graph into native specs so it does not duplicate a central 69-plugin catalog. As each plugin moves, replace its Lazy spec in place with a manager-independent activation declaration.
+Keep package definitions and behavior organized together by category under `.config/nvim/lua/plugins/`. Phase 1 projects the resolved Lazy graph into native specs so it does not duplicate a central package catalog. As each plugin moves, replace its Lazy spec in place with a manager-independent activation declaration.
 
 The local declaration format should remain narrow and cover only the features used here:
 
@@ -160,7 +160,7 @@ devenv test
 Changes:
 
 - Add a Neovim `>= 0.12.4` guard and verify `vim.pack` is available.
-- Project the existing dendritic plugin graph into 69 pinned native specs without duplicating a central catalog.
+- Project the existing dendritic plugin graph into pinned native specs without duplicating a central catalog.
 - Register each repository with `vim.pack.add(..., { load = function() end })`.
 - Run native registration after Lazy setup so Lazy cannot remove the standard native package path.
 - Retain the standard `site` directory in `packpath` during hybrid operation.
@@ -173,29 +173,29 @@ Build hooks:
 - `nvim-treesitter`: update parsers in an isolated child Neovim after install or update.
 - `fff.nvim`: run its binary download/build in an isolated child Neovim after install or update.
 
-**Acceptance:** `vim.pack.get()` reports 69 registered native packages at the pinned revisions, no native plugin path is in `runtimepath`, and Lazy remains the only runtime owner. Native registrations report `active = true`; runtime-path isolation is the actual shadow-install invariant.
+**Acceptance:** `vim.pack.get()` reports every registered native package at the pinned revision, no native plugin path is in `runtimepath`, and Lazy remains the only runtime owner. Native registrations report `active = true`; runtime-path isolation is the actual shadow-install invariant.
 
 **Rollback:** Stop requiring the native bootstrap. Lazy.nvim remains unchanged.
 
-## Phase 2: Validate Command And Key Loading With Undotree
+## Phase 2: Validate Command And Key Loading With IncRename
 
 **Purpose:** Prove native ownership, command loading, proxy keymaps, early globals, and setup-once behavior with an isolated plugin.
 
 Pilot plugin:
 
 ```text
-mbbill/undotree
+smjonas/inc-rename.nvim
 ```
 
 Changes:
 
 - Add `loader.lua` with dependency-first activation, `packadd`-once, `init`-once, `setup`-once, `CmdUndefined`, and proxy-key support.
-- Remove Undotree's Lazy declaration in the same change that adds its native declaration.
-- Preserve Undotree's global configuration before its runtime scripts load.
+- Remove IncRename's Lazy declaration in the same change that adds its native declaration.
+- Preserve its command expansion and current-word key behavior.
 
-**Acceptance:** `:UndotreeToggle` and its mapping work on their first use. The native copy is the only active copy in `runtimepath`. Counts, modes, registers, and command arguments are preserved.
+**Acceptance:** `:IncRename` and its mapping work on their first use. The native copy is the only active copy in `runtimepath`. Counts, modes, registers, and command arguments are preserved.
 
-**Rollback:** Restore only Undotree's Lazy declaration and remove its native activation declaration.
+**Rollback:** Restore only IncRename's Lazy declaration and remove its native activation declaration.
 
 ## Phase 3: Prove Each Trigger Type
 
@@ -203,8 +203,8 @@ Changes:
 
 | Trigger | Pilot | Required behavior |
 | --- | --- | --- |
-| Command | Undotree | `CmdUndefined` loads and retries the command. |
-| Key | Undotree or IncRename | The proxy loads and replays the original input. |
+| Command | IncRename | `CmdUndefined` loads and retries the command. |
+| Key | IncRename | The proxy loads and replays the original input. |
 | Event | `nacro90/numb.nvim` | The first `CmdlineEnter` receives plugin behavior. |
 | Filetype | `OXY2DEV/helpview.nvim` | The first help buffer receives filetype behavior. |
 | Post-start | `echasnovski/mini.ai` | Scheduled post-`VimEnter` setup replaces `VeryLazy`. |
@@ -472,7 +472,7 @@ Check runtime ownership while both systems coexist:
 ```vim
 :lua vim.print(vim.api.nvim_list_runtime_paths())
 :lua vim.print(vim.pack.get())
-:verbose command UndotreeToggle
+:verbose command IncRename
 ```
 
 Check that Lazy is fully removed only after Phase 10:
