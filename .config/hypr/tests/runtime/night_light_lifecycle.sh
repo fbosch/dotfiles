@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
+if [[ ! -r /proc/self/stat ]]; then
+  printf 'SKIP night-light lifecycle requires Linux /proc process identity\n'
+  exit 0
+fi
+
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 test_dir="$(mktemp -d)"
 runtime_dir="$test_dir/runtime"

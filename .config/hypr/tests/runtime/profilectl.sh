@@ -354,8 +354,12 @@ assert_file_equals "$runtime_dir/hypr-profiles/state.json" "$state_before"
 assert_file_contains "$actuator_log" 'hyprctl eval require("profiles").apply("gaming")'
 assert_file_contains "$actuator_log" 'hyprctl eval require("profiles").apply("powersave")'
 
-if luajit "$home_dir/.config/hypr/runtime/profiles/profile-state.lua" encode 1 auto default >/dev/full 2>/dev/null; then
-  fail "profile state helper reported success after a write failure"
+if [[ "$(uname -s)" == Linux ]]; then
+  if luajit "$home_dir/.config/hypr/runtime/profiles/profile-state.lua" encode 1 auto default >/dev/full 2>/dev/null; then
+    fail "profile state helper reported success after a write failure"
+  fi
+else
+  printf 'SKIP profile state write-failure probe requires Linux /dev/full semantics\n'
 fi
 
 oversized_claims="$seam_dir/oversized-claims"

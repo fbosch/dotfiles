@@ -197,7 +197,7 @@ These checks establish loader activation, not full interactive UI parity. Key re
 | `nvim -i NONE --headless '+checkhealth' '+qa'` | Completed all reported health groups. |
 | `devenv tasks run test:lua` | Passed. |
 | `devenv tasks run test:lua-quality` | Initially timed out; passed after the follow-up fix below. |
-| Full `devenv test` | Reached a separate `test:runtime-shell` fixture failure after Lua quality passed. |
+| Full `devenv test` | Initially exposed runtime fixture portability and synchronization failures; passed after the follow-up fixes below. |
 | Headless `g:vscode = 1` approximation | Not valid outside vscode-neovim; `config/vscode.lua` requires the host-provided `vscode` module. |
 
 The Lua-quality task reached this command and remained there until terminated:
@@ -230,4 +230,4 @@ Phase 0 is complete with one Neovim-specific validation limitation: VSCode behav
 
 The Lua-quality timeout was traced to repository-wide LuaLS indexing of large generated dependency trees. `scripts/lua-quality.sh` now checks the five tracked Lua roots independently with a 120-second limit per root. Devenv exposes these as `test:lua-quality:fbb`, `test:lua-quality:hyprland`, `test:lua-quality:neovim`, `test:lua-quality:wezterm`, and `test:lua-quality:keybinds`; `test:lua-quality` remains the aggregate gate. This preserves diagnostics for all tracked Lua sources while excluding unrelated generated content.
 
-The subsequent full `devenv test` run passed Lua quality but failed in `test:runtime-shell`: its temporary fixture could not execute `/tmp/.../bin/uwsm-app`. That failure is outside the Neovim migration and remains a separate repository test issue.
+The subsequent full gate exposed runtime fixture races and Linux-only process assumptions. The lifecycle fixture now waits for background launcher logs, the gaming fixture waits for observable transitions, Linux `/proc` and `/dev/full` probes skip on macOS, and the comprehensive Profilectl fixture has a 60-second per-file budget. `test:runtime-shell` and the full `devenv test` gate now pass.

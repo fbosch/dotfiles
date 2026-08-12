@@ -207,7 +207,7 @@ in
       bash -n "''${test_files[@]}"
       shellcheck "''${test_files[@]}"
       for test_file in "''${test_files[@]}"; do
-        timeout --foreground 30s bash "$test_file"
+        timeout --foreground 60s bash "$test_file"
       done
     '';
 

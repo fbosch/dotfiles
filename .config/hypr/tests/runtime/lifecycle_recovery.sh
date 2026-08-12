@@ -52,11 +52,30 @@ assert_not_contains() {
   fi
 }
 
+wait_for_log_count() {
+  local file="$1" prefix="$2" expected="$3" attempts=0 count
+  while (( attempts < 100 )); do
+    count="$(grep -c "^$prefix" "$file" 2>/dev/null || true)"
+    if (( count >= expected )); then
+      return 0
+    fi
+
+    attempts=$((attempts + 1))
+    /bin/sleep 0.01
+  done
+
+  printf 'timed out waiting for %s %s entries in %s\n' "$expected" "$prefix" "$file" >&2
+  return 1
+}
+
 export HOME="$home_dir"
 export PATH="$bin_dir:$original_path"
 
 restart_log="$test_dir/restart.log"
 FIXTURE_LOG="$restart_log" "$repo_root/runtime/desktop/restart-daemons.sh"
+# The recovery script intentionally launches replacements in the background.
+# Wait for every launcher stub before assertions or fixture cleanup can race it.
+wait_for_log_count "$restart_log" uwsm-app 15
 assert_contains "$restart_log" 'pkill -f minimized-state-daemon'
 assert_contains "$restart_log" 'pkill -f gaming-session-watchdog'
 assert_contains "$restart_log" 'pgrep -f minimized-state-daemon\.(sh|lua)'
@@ -79,6 +98,8 @@ if (( SECONDS > 2 )); then
   printf 'reset-desktop shutdown waits ran serially (%ss)\n' "$SECONDS" >&2
   exit 1
 fi
+wait_for_log_count "$reset_log" uwsm-app 8
+wait_for_log_count "$reset_log" swaync-client 2
 assert_contains "$reset_log" 'pkill -f custom-layout-drag-resize.sh daemon'
 assert_contains "$reset_log" 'pkill -f custom-layout-drag-resize-daemon.lua'
 assert_contains "$reset_log" 'pgrep -f custom-layout-drag-resize(-daemon)?\.(sh|lua)'

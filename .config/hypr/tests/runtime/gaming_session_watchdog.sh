@@ -6,6 +6,7 @@ repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 test_dir="$(mktemp -d)"
 original_path="$PATH"
 luajit_path="$(command -v luajit)"
+grep_path="$(command -v grep)"
 
 cleanup() {
   for pid in ${watchdog_pid:-} ${query_pid:-} ${event_pid:-}; do
@@ -43,6 +44,22 @@ assert_count() {
     printf '%s\n' "$(<"$file")" >&2
     exit 1
   }
+}
+
+wait_for_count() {
+  local file="$1" expected="$2" count="$3" attempts=0 actual
+  while (( attempts < 80 )); do
+    actual="$("$grep_path" -Fc -- "$expected" "$file" || true)"
+    if (( actual >= count )); then
+      return 0
+    fi
+
+    attempts=$((attempts + 1))
+    sleep 0.05
+  done
+
+  printf 'timed out waiting for %s occurrences of %s in %s\n' "$count" "$expected" "$file" >&2
+  return 1
 }
 
 wait_for_file() {
@@ -205,6 +222,11 @@ run_case() {
 	elif [[ "$clients_mode" == late-game ]]; then
     touch "$case_dir/clear"
     sleep 1.2
+  fi
+  if [[ "$name" == override ]]; then
+    wait_for_count "$PRESENTATION_LOG" 'apply_presentation(0, 0)' 2
+  elif [[ "$name" == presentation-resume ]]; then
+    wait_for_count "$PRESENTATION_LOG" 'apply_presentation(0, 0)' 3
   fi
   if [[ "$clients_mode" == game && "$freeze_mode" == success ]]; then
     touch "$case_dir/clear"

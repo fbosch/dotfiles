@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
+if [[ ! -r /proc/self/stat ]]; then
+  printf 'SKIP window-capture supervisor requires Linux /proc process identity\n'
+  exit 0
+fi
+
 test_dir="$(mktemp -d)"
 wrapper="$(cd "$(dirname "$0")/../.." && pwd)/runtime/windows/daemons/window-capture/window-capture-daemon.sh"
 runtime_dir="$test_dir/runtime"
