@@ -2,6 +2,7 @@
   "use strict";
 
   const API = "/api/shared-todo";
+  const STATE_CACHE_KEY = "glance.shared-todo.state.v1";
   const ROOT_SELECTOR = "[data-shared-todo]";
   const initializedRoots = new WeakSet();
   const activeClients = new Map();
@@ -52,6 +53,19 @@
         };
       }),
     };
+    try {
+      const cachedState = JSON.parse(localStorage.getItem(STATE_CACHE_KEY) || "null");
+      if (
+        cachedState &&
+        Number.isSafeInteger(cachedState.revision) &&
+        cachedState.revision > state.revision &&
+        Array.isArray(cachedState.tasks)
+      ) {
+        state = cachedState;
+      }
+    } catch {
+      localStorage.removeItem(STATE_CACHE_KEY);
+    }
     let eventSource;
     let inputArea;
     let inputContainer;
@@ -86,6 +100,10 @@
 
     function clearError() {
       root.querySelector("[data-shared-todo-error]")?.remove();
+    }
+
+    function cacheState() {
+      localStorage.setItem(STATE_CACHE_KEY, JSON.stringify(state));
     }
 
     async function request(path, options) {
@@ -128,6 +146,7 @@
             tasks: serializedItems(),
           }),
         });
+        cacheState();
         clearError();
       } catch (error) {
         showError(error);
@@ -315,6 +334,7 @@
         const nextState = await request("/tasks");
         if (nextState.revision < state.revision) return;
         state = nextState;
+        cacheState();
         refreshPending = false;
         clearError();
         render();
