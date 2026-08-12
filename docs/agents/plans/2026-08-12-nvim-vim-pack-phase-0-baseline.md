@@ -274,6 +274,12 @@ Which Key moved to native ownership with explicit scheduled `PackReady` and `<le
 
 `tsc.nvim` was removed rather than migrated. The configured `tsgo` language server already provides TypeScript diagnostics, TSC had no key mappings, watch mode was disabled, and two declared command triggers no longer existed in the installed plugin. Its TSC-specific Trouble quickfix hook was removed with it, reducing the active application catalog to 68.
 
+Nvim JQX moved to native ownership on JSON/YAML `FileType` and `BufWritePost`. Its runtime script defines the query commands on activation and does not require trigger replay or setup.
+
+Treewalker moved to native command and callback-key ownership. Its six active mappings retain their modes and actions; it uses Neovim's built-in Tree-sitter APIs and does not require native ownership of `nvim-treesitter`.
+
+Conform moved to native ownership across its 14 filetype triggers. Its existing formatter configuration and both existing `BufWritePre` handlers remain unchanged and are installed before the first subsequent save.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:

@@ -1,6 +1,7 @@
-return {
-	"stevearc/conform.nvim",
-	ft = {
+require("config.pack.registry").register({
+	name = "conform.nvim",
+	src = "https://github.com/stevearc/conform.nvim.git",
+	filetypes = {
 		"html",
 		"css",
 		"javascript",
@@ -16,7 +17,7 @@ return {
 		"mdx",
 		"nix",
 	},
-	config = function()
+	setup = function()
 		local group = vim.api.nvim_create_augroup("Conform", {})
 		local conform = require("conform")
 		local web_formatters = { "biome", "prettierd", "prettier", stop_after_first = true }
@@ -74,4 +75,6 @@ return {
 			end,
 		})
 	end,
-}
+})
+
+return {}

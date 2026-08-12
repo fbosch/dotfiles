@@ -1,3 +1,67 @@
+require("config.pack.registry").register({
+	name = "treewalker.nvim",
+	src = "https://github.com/aaronik/treewalker.nvim.git",
+	module = "treewalker",
+	commands = { "Treewalker" },
+	keys = {
+		{
+			"<C-k>",
+			function()
+				vim.cmd("Treewalker Up")
+			end,
+			mode = { "n", "x" },
+			desc = "Treewalker up",
+			silent = true,
+		},
+		{
+			"<C-j>",
+			function()
+				vim.cmd("Treewalker Down")
+			end,
+			mode = { "n", "x" },
+			desc = "Treewalker down",
+			silent = true,
+		},
+		{
+			"<C-A-k>",
+			function()
+				vim.cmd("Treewalker SwapUp")
+			end,
+			mode = { "n" },
+			desc = "Treewalker swap up",
+			silent = true,
+		},
+		{
+			"<C-A-j>",
+			function()
+				vim.cmd("Treewalker SwapDown")
+			end,
+			mode = { "n" },
+			desc = "Treewalker swap down",
+			silent = true,
+		},
+		{
+			"<C-A-h>",
+			function()
+				vim.cmd("Treewalker SwapLeft")
+			end,
+			mode = { "n" },
+			desc = "Treewalker swap left",
+			silent = true,
+		},
+		{
+			"<C-A-l>",
+			function()
+				vim.cmd("Treewalker SwapRight")
+			end,
+			mode = { "n" },
+			desc = "Treewalker swap right",
+			silent = true,
+		},
+	},
+	opts = {},
+})
+
 return {
 	{
 		"nvim-treesitter/nvim-treesitter",
@@ -113,68 +177,5 @@ return {
 		opts = {
 			use_default_keymaps = false,
 		},
-	},
-	{
-		"aaronik/treewalker.nvim",
-		keys = {
-			{
-				"<C-k>",
-				"<cmd>Treewalker Up<CR>",
-				mode = { "n", "x" },
-				desc = "Treewalker up",
-				silent = true,
-			},
-			{
-				"<C-j>",
-				"<cmd>Treewalker Down<CR>",
-				mode = { "n", "x" },
-				desc = "Treewalker down",
-				silent = true,
-			},
-			-- {
-			-- 	"<C-h>",
-			-- 	"<cmd>Treewalker Left<CR>",
-			-- 	mode = { "n", "x" },
-			-- 	desc = "Treewalker left",
-			-- 	silent = true,
-			-- },
-			-- {
-			-- 	"<C-l>",
-			-- 	"<cmd>Treewalker Right<CR>",
-			-- 	mode = { "n", "x" },
-			-- 	desc = "Treewalker right",
-			-- 	silent = true,
-			-- },
-			{
-				"<C-A-k>",
-				"<cmd>Treewalker SwapUp<CR>",
-				mode = { "n" },
-				desc = "Treewalker swap up",
-				silent = true,
-			},
-			{
-				"<C-A-j>",
-				"<cmd>Treewalker SwapDown<CR>",
-				mode = { "n" },
-				desc = "Treewalker swap down",
-				silent = true,
-			},
-			{
-				"<C-A-h>",
-				"<cmd>Treewalker SwapLeft<CR>",
-				mode = { "n" },
-				desc = "Treewalker swap left",
-				silent = true,
-			},
-			{
-				"<C-A-l>",
-				"<cmd>Treewalker SwapRight<CR>",
-				mode = { "n" },
-				desc = "Treewalker swap right",
-				silent = true,
-			},
-		},
-		cmd = { "Treewalker" },
-		opts = {},
 	},
 }

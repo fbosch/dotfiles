@@ -40,8 +40,7 @@
     },
     "conform.nvim": {
       "rev": "619363c30309d29ffa631e67c8183f2a72caa373",
-      "src": "https://github.com/stevearc/conform.nvim.git",
-      "version": "'619363c30309d29ffa631e67c8183f2a72caa373'"
+      "src": "https://github.com/stevearc/conform.nvim.git"
     },
     "diffview.nvim": {
       "rev": "4516612fe98ff56ae0415a259ff6361a89419b0a",
@@ -167,8 +166,7 @@
     },
     "nvim-jqx": {
       "rev": "07393e80fa8097e82f9038fec05e948fe8a60fd1",
-      "src": "https://github.com/gennaro-tedesco/nvim-jqx.git",
-      "version": "'07393e80fa8097e82f9038fec05e948fe8a60fd1'"
+      "src": "https://github.com/gennaro-tedesco/nvim-jqx.git"
     },
     "nvim-lsp-file-operations": {
       "rev": "b9c795d3973e8eec22706af14959bc60c579e771",
@@ -279,8 +277,7 @@
     },
     "treewalker.nvim": {
       "rev": "afa598a8a380602d6a488b1ce7f7db619606cbfb",
-      "src": "https://github.com/aaronik/treewalker.nvim.git",
-      "version": "'afa598a8a380602d6a488b1ce7f7db619606cbfb'"
+      "src": "https://github.com/aaronik/treewalker.nvim.git"
     },
     "trouble.nvim": {
       "rev": "bd67efe408d4816e25e8491cc5ad4088e708a69a",

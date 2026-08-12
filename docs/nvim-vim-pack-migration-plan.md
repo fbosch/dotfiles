@@ -255,6 +255,9 @@ Completed vertical slices:
 - `vim-repeat`
 - `vim-abolish`
 - `which-key.nvim`
+- `nvim-jqx`
+- `treewalker.nvim`
+- `conform.nvim`
 
 Pending candidates:
 
@@ -262,7 +265,7 @@ Pending candidates:
 
 Each slice must remove the Lazy declaration, add the native declaration, preserve configuration and triggers, validate first use, and confirm that only one copy is active.
 
-**Progress:** The eighteen completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, `eyeliner.nvim`, `beacon.nvim`, and `ts-comments.nvim` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. `FTerm.nvim` is command-loaded; its normal and terminal mappings invoke those commands without generic key replay. `tint.nvim` retains `BufWinEnter` activation and relies on its own before/after-`VimEnter` initialization for existing windows. `local-highlight.nvim` retains `CursorMoved` activation and uses the trigger context to attach the first buffer before future buffers use its own `BufRead` autocmd. `nvim-autopairs` retains `InsertEnter` activation and attaches the current buffer before the first inserted character. `vim-repeat` retains `BufEnter` activation with no setup; its autoload API initializes on the first consumer call. `vim-abolish` retains `InsertEnter` activation and installs typo abbreviations before the first inserted text. `which-key.nvim` preserves both scheduled `PackReady` setup and immediate `<leader>wk` activation. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic, the current native-owned total is nineteen.
+**Progress:** The twenty-one completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, `eyeliner.nvim`, `beacon.nvim`, and `ts-comments.nvim` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. `FTerm.nvim` is command-loaded; its normal and terminal mappings invoke those commands without generic key replay. `tint.nvim` retains `BufWinEnter` activation and relies on its own before/after-`VimEnter` initialization for existing windows. `local-highlight.nvim` retains `CursorMoved` activation and uses the trigger context to attach the first buffer before future buffers use its own `BufRead` autocmd. `nvim-autopairs` retains `InsertEnter` activation and attaches the current buffer before the first inserted character. `vim-repeat` retains `BufEnter` activation with no setup; its autoload API initializes on the first consumer call. `vim-abolish` retains `InsertEnter` activation and installs typo abbreviations before the first inserted text. `which-key.nvim` preserves both scheduled `PackReady` setup and immediate `<leader>wk` activation. `nvim-jqx` retains JSON/YAML and `BufWritePost` activation. `treewalker.nvim` retains command and callback-key activation without depending on the `nvim-treesitter` plugin. `conform.nvim` retains its filetype activation and installs save handlers before the first subsequent save. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic, the current native-owned total is twenty-two.
 
 `leap.nvim` remains pending. Its Lazy declaration uses placeholder mappings, while Leap now warns that manager-level key lazy-loading can cause problems. Migrating it requires an explicit mapping design or generic key replay support; it must not be moved using the current callback-key contract without preserving its normal, visual, and operator-pending behavior.
 
@@ -389,9 +392,6 @@ mini.sessions
 snacks.nvim
 opencode.nvim
 fff.nvim
-conform.nvim
-nvim-jqx
-which-key.nvim
 nvim-scrollbar
 indent-blankline.nvim
 ccc.nvim
@@ -405,10 +405,10 @@ Requirements:
 - Opencode's early environment and session autocmds remain boot-time behavior, while its main setup stays key-triggered.
 - FTerm remains command-loaded from its completed Phase 4 slice.
 - fff remains key-triggered and has its built binary.
-- Conform formats on the first eligible save.
-- JSON/YAML integrations work on the first matching filetype.
+- Conform retains the first-save behavior validated in Phase 4.
+- Nvim JQX retains the first JSON/YAML behavior validated in Phase 4.
 
-**Acceptance:** Sessions restore and save once, Opencode lifecycle behavior works, fff works on first use, first-save formatting works, and JSON/YAML behavior matches the baseline. FTerm retains the first-use behavior validated in Phase 4.
+**Acceptance:** Sessions restore and save once, Opencode lifecycle behavior works, and fff works on first use. FTerm, Conform, and Nvim JQX retain the first-use behavior validated in Phase 4.
 
 **Rollback:** Revert lifecycle integration slices individually unless they share a hard dependency such as Snacks and Opencode.
 
