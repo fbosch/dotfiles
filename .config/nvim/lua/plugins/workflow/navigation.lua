@@ -10,16 +10,15 @@ local function get_visual_selection()
 end
 
 register({
-	name = "numb.nvim",
-	src = "https://github.com/nacro90/numb.nvim.git",
-	events = { { "CmdlineEnter", pattern = ":" } },
-})
-
-return {
 	{
-		"jinh0/eyeliner.nvim",
-		event = "VeryLazy",
-		config = function()
+		name = "numb.nvim",
+		src = "https://github.com/nacro90/numb.nvim.git",
+		events = { { "CmdlineEnter", pattern = ":" } },
+	},
+	{
+		name = "eyeliner.nvim",
+		src = "https://github.com/jinh0/eyeliner.nvim.git",
+		setup = function()
 			local colors = require("config.colors")
 			require("eyeliner").setup({
 				highlight_on_key = true,
@@ -32,6 +31,9 @@ return {
 			})
 		end,
 	},
+})
+
+return {
 	{
 		url = "https://codeberg.org/andyg/leap.nvim",
 		event = "VeryLazy",

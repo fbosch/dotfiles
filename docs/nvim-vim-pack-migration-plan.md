@@ -28,15 +28,16 @@ vim.pack
   -> repository lifecycle and native lockfile
 
 local activation layer
-  -> dependency ordering
   -> packadd-once activation
-  -> event and FileType replay
-  -> CmdUndefined triggers
-  -> proxy keymaps
-  -> init and setup phases
-  -> priority and condition handling
+  -> flat event and FileType triggers
+  -> CmdUndefined command triggers
+  -> callback key triggers
+  -> opts/module setup shorthand and custom setup
+  -> scheduled User PackReady activation
   -> PackChanged build hooks
 ```
+
+The current loader does not yet implement dependency ordering, priority ordering, conditions, generic event/FileType replay, generic key replay, an `init` phase, or lifecycle-aware error reporting. Those remain Phase 3 prerequisites for plugins that depend on them.
 
 Native-owned declarations follow upstream branches or semver ranges. Reproducibility comes from the generated `nvim-pack-lock.json`; commit hashes in declarations are reserved for intentional freezes.
 
@@ -69,44 +70,50 @@ Create these modules during the foundation phase:
 
 Keep package definitions and behavior organized together by category under `.config/nvim/lua/plugins/`. Phase 1 projects the resolved Lazy graph into native specs so it does not duplicate a central package catalog. As each plugin moves, replace its Lazy spec in place with a manager-independent activation declaration.
 
-The local declaration format should remain narrow and cover only the features used here:
+The implemented declaration format remains narrow and covers only the features currently used here:
 
 ```lua
 {
   name = "plugin-name",
   src = "https://github.com/owner/repository",
   version = "...",
-  dependencies = { ... },
-  priority = 1000,
-  condition = function() end,
-  init = function() end,
-  setup = function() end,
-  triggers = {
-    events = { ... },
-    commands = { ... },
-    filetypes = { ... },
-    keys = { ... },
-  },
+  events = { ... },
+  commands = { ... },
+  filetypes = { ... },
+  keys = { ... },
+  module = "plugin_module",
+  opts = { ... },
+  -- setup = function(context) ... end,
 }
 ```
 
+Declarations without `events`, `commands`, `filetypes`, or `keys` activate on the scheduled post-`VimEnter` `User PackReady` event. `opts = {}` calls `require(module or name).setup(opts)`. Omitting both `opts` and `setup` performs no setup. Use `setup = function(context) ... end` for custom initialization; a declaration cannot define both `opts` and `setup`.
+
 Do not recreate the full Lazy.nvim specification API. A smaller, explicit contract keeps the native loader understandable and bounded.
 
-## Loader Guarantees
+## Loader Capabilities
 
-The native loader must guarantee all of the following before broad plugin migration begins:
+Implemented and validated:
 
-- `init` runs before the plugin's runtime scripts when the plugin relies on early globals.
-- Dependencies activate before their consumer.
 - Each plugin is added to `runtimepath` at most once.
 - Each plugin's setup runs at most once.
-- `CmdUndefined` loads the plugin and retries the original command.
-- Key proxies remove themselves, load the plugin, and replay the original key without losing mode, count, register, operator, or visual selection context.
-- Event and filetype triggers replay the current event under a recursion guard when a plugin would otherwise miss its first trigger.
-- Conditions gate activation without making installation state nondeterministic.
-- Explicit priority controls replace Lazy.nvim priority sorting.
-- Errors identify the plugin, lifecycle phase, and dependency chain.
+- `CmdUndefined` activates command-loaded plugins on first invocation.
+- Callback key triggers activate the plugin before invoking the declared callback.
+- Flat `events` and `filetypes` declarations activate plugins on their first matching autocmd.
+- `opts`/`module` shorthand and custom `setup(context)` initialization run after `packadd`.
 - A scheduled post-`VimEnter` `User PackReady` event replaces `User VeryLazy` for migrated plugins.
+- `PackChanged` dispatches isolated build hooks for configured packages.
+
+Pending Phase 3 capabilities:
+
+- Condition handling.
+- Dependency ordering.
+- Priority ordering.
+- Generic event and filetype replay under a recursion guard.
+- Generic key replay that preserves mode, count, register, operator, and visual selection context.
+- An `init` phase for plugins that require globals before runtime scripts are sourced.
+- Errors that identify the plugin, lifecycle phase, and dependency chain.
+- The `fff.nvim` build-hook pilot, including clear install/update failure behavior.
 
 ## Dependency Boundaries
 
@@ -216,9 +223,9 @@ Changes:
 | Condition | A Git-only plugin | Activation happens only in a Git repository. |
 | Build | `dmtrKovalenko/fff.nvim` | Install or update builds the required binary and fails clearly. |
 
-Add event replay, FileType replay, recursion guards, priority ordering, condition evaluation, and `User PackReady` in this phase.
+Add condition handling, dependency ordering, priority ordering, generic event/FileType replay with recursion guards, generic key replay, early `init`, and richer lifecycle errors in this phase. The `fff.nvim` build hook exists, but its install/update behavior remains a pending pilot.
 
-**Progress:** Numb now validates first-command-line event loading, Helpview validates first-buffer filetype loading through targeted attachment, and MiniAI validates scheduled post-`VimEnter` loading through `User PackReady`.
+**Progress:** Numb validates first-command-line event loading, Helpview validates first-buffer filetype loading through targeted attachment, and MiniAI validates scheduled post-`VimEnter` loading through `User PackReady`. The loader also supports command activation and callback-key activation. These focused paths do not establish generic event, filetype, or key replay semantics.
 
 **Acceptance:** Every pilot works on its first trigger in a fresh process. Repeated triggers do not create duplicate mappings, setup calls, or autocmds. Lazy continues managing all unmigrated plugins.
 
@@ -228,26 +235,31 @@ Add event replay, FileType replay, recursion guards, priority ordering, conditio
 
 **Purpose:** Exercise the loader with low-dependency plugins before moving shared infrastructure.
 
-Candidate vertical slices:
+Completed vertical slices:
 
 - `mini.ai`
 - `numb.nvim`
 - `helpview.nvim`
 - `nvim-toggler`
-- `nvim-spider`
 - `nvim-surround`
-- `inc-rename.nvim`
+- `nvim-spider`
 - `eyeliner.nvim`
+- `live-rename.nvim`, which replaced the obsolete `inc-rename.nvim`
+- `live-command.nvim`
+
+Pending candidates:
+
 - `leap.nvim`
 - `FTerm.nvim`
 - `beacon.nvim`
 - `local-highlight.nvim`
 - `tint.nvim`
-- `live-command.nvim`
 
 Each slice must remove the Lazy declaration, add the native declaration, preserve configuration and triggers, validate first use, and confirm that only one copy is active.
 
-**Progress:** `nvim-toggler` and `nvim-surround` are native-owned on the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes.
+**Progress:** The nine completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, and `eyeliner.nvim` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic, the current native-owned total is ten.
+
+`leap.nvim` remains pending. Its Lazy declaration uses placeholder mappings, while Leap now warns that manager-level key lazy-loading can cause problems. Migrating it requires an explicit mapping design or generic key replay support; it must not be moved using the current callback-key contract without preserving its normal, visual, and operator-pending behavior.
 
 **Acceptance:** Every migrated plugin remains inactive until its original trigger and continues to work on first use.
 
@@ -484,8 +496,13 @@ Check runtime ownership while both systems coexist:
 ```vim
 :lua vim.print(vim.api.nvim_list_runtime_paths())
 :lua vim.print(vim.pack.get())
-:verbose command IncRename
+:lua print(vim.fn.exists(":StartupTime"))
+:StartupTime --tries 10 --save vim_pack_startup --hidden
+:verbose command StartupTime
+:lua vim.print(require("config.pack.loader").is_loaded("vim-startuptime"))
 ```
+
+The `StartupTime` check covers the restored native command-loaded diagnostic. Before the first invocation `exists()` must return `0` and the loader must report it unloaded; after the invocation, `:verbose command` must identify the native package and only its `site/pack/core/opt/vim-startuptime` path may be active.
 
 Check that Lazy is fully removed only after Phase 10:
 

@@ -250,6 +250,10 @@ Nvim-toggler and Nvim-surround followed as isolated native post-start leaves. Fo
 
 Nvim-spider moved to native ownership on the initial `BufEnter`. Its Ex-command mappings remain active in normal, operator-pending, and visual modes to preserve dot-repeat; a focused motion check stopped `w` at the `C` in `camelCase`.
 
+Eyeliner moved to native ownership on the default post-start lifecycle. Its `highlight_on_key` and dimming behavior, custom highlight groups, plugin commands, and `f`/`F`/`t`/`T` mappings remain unchanged.
+
+Live Command moved to native ownership on `CmdlineEnter`. Its first trigger installs the `Norm` preview command and command-line cleanup autocmd before command text is entered. Leap remains Lazy-owned because its placeholder mappings require a safer mapping/replay design than the current callback-key loader provides.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:

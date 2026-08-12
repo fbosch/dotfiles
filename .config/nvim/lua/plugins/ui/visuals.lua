@@ -1,3 +1,24 @@
+local register = require("config.pack.registry").register
+
+register({
+	name = "live-command.nvim",
+	src = "https://github.com/smjonas/live-command.nvim.git",
+	events = { "CmdlineEnter" },
+	module = "live-command",
+	opts = {
+		commands = {
+			Norm = { cmd = "norm" },
+		},
+		enable_highlighting = true,
+		inline_highlighting = true,
+		hl_groups = {
+			insertion = "DiffAdd",
+			deletion = "DiffDelete",
+			change = "DiffChange",
+		},
+	},
+})
+
 return {
 	{
 		"nvim-tree/nvim-web-devicons",
@@ -66,24 +87,6 @@ return {
 				cache = {
 					enabled = not platform.is_wsl(),
 					path = "/tmp/tiny-devicons-auto-colors-cache.json",
-				},
-			})
-		end,
-	},
-	{
-		"smjonas/live-command.nvim",
-		event = "CmdLineEnter",
-		config = function()
-			require("live-command").setup({
-				commands = {
-					Norm = { cmd = "norm" },
-				},
-				enable_highlighting = true,
-				inline_highlighting = true,
-				hl_groups = {
-					insertion = "DiffAdd",
-					deletion = "DiffDelete",
-					change = "DiffChange",
 				},
 			})
 		end,

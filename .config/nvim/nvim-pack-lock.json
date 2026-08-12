@@ -52,8 +52,7 @@
     },
     "eyeliner.nvim": {
       "rev": "8f197eb30cecdf4c2cc9988a5eecc6bc34c0c7d6",
-      "src": "https://github.com/jinh0/eyeliner.nvim.git",
-      "version": "'8f197eb30cecdf4c2cc9988a5eecc6bc34c0c7d6'"
+      "src": "https://github.com/jinh0/eyeliner.nvim.git"
     },
     "fff.nvim": {
       "rev": "d4c416c2fcf24eeda40a540a898da12824aed18f",
@@ -111,8 +110,7 @@
     },
     "live-command.nvim": {
       "rev": "fc8c36d7e5b96945fbc52af7029facc317a47377",
-      "src": "https://github.com/smjonas/live-command.nvim.git",
-      "version": "'fc8c36d7e5b96945fbc52af7029facc317a47377'"
+      "src": "https://github.com/smjonas/live-command.nvim.git"
     },
     "live-rename.nvim": {
       "rev": "205bddec4bf1276c81a03777f8335d4ad034ae03",
