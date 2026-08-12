@@ -74,21 +74,60 @@ run_stylua_check() {
 }
 
 run_luals_check() {
-  echo "lua-quality: lua-language-server error check"
-  run_tool lua-language-server lua-language-server --check="$ROOT" --checklevel=Error --check_format=pretty
+  local workspace="$1"
+
+  echo "lua-quality: lua-language-server error check ($workspace)"
+  # Keep generated dependency trees outside LuaLS and bound each workspace independently.
+  if command -v timeout >/dev/null 2>&1 && command -v lua-language-server >/dev/null 2>&1; then
+    timeout --foreground 120s lua-language-server \
+      --check="$ROOT/$workspace" \
+      --checklevel=Error \
+      --check_format=pretty
+  else
+    run_tool lua-language-server lua-language-server \
+      --check="$ROOT/$workspace" \
+      --checklevel=Error \
+      --check_format=pretty
+  fi
 }
 
-run_lua_tests() {
-  echo "lua-quality: Lua config tests"
-run_tool lua lua5_2 .config/wezterm/tests/right_status_spec.lua
-  run_tool lua lua5_2 .config/wezterm/tests/agent_deck_detection_spec.lua
-  run_tool busted luajitPackages.busted --lua=lua .config/hypr/tests/bind_spec.lua
-  run_tool luac lua5_2 -p .config/hypr/hyprland.lua
+run_domain() {
+  local domain="$1"
+
+  case "$domain" in
+  fbb)
+    run_luals_check .config/fbb/lua
+    ;;
+  hyprland)
+    run_luals_check .config/hypr
+    run_tool busted luajitPackages.busted --lua=lua .config/hypr/tests/bind_spec.lua
+    run_tool luac lua5_2 -p .config/hypr/hyprland.lua
+    ;;
+  neovim)
+    run_luals_check .config/nvim
+    ;;
+  wezterm)
+    run_luals_check .config/wezterm
+    run_tool lua lua5_2 .config/wezterm/tests/right_status_spec.lua
+    run_tool lua lua5_2 .config/wezterm/tests/agent_deck_detection_spec.lua
+    ;;
+  keybinds)
+    run_luals_check scripts/keybinds
+    ;;
+  *)
+    echo "lua-quality: unknown domain: $domain" >&2
+    return 2
+    ;;
+  esac
 }
 
 run_baseline() {
-  run_luals_check
-  run_lua_tests
+  local domain
+  local -a domains=(fbb hyprland neovim wezterm keybinds)
+
+  for domain in "${domains[@]}"; do
+    run_domain "$domain"
+  done
 }
 
 mode="${1:-baseline}"
@@ -106,6 +145,9 @@ case "$mode" in
   changed | ci)
     run_baseline
     ;;
+  fbb | hyprland | neovim | wezterm | keybinds)
+    run_domain "$mode"
+    ;;
   style-changed)
     mapfile -t lua_files < <(collect_changed_lua_files)
     run_stylua_check "${lua_files[@]}"
@@ -114,7 +156,7 @@ case "$mode" in
     run_stylua_check .config/wezterm .config/nvim/lua .config/hypr
     ;;
   *)
-    echo "usage: $0 [baseline|staged|changed|ci|style-staged|style-changed|style-all]" >&2
+    echo "usage: $0 [baseline|staged|changed|ci|fbb|hyprland|neovim|wezterm|keybinds|style-staged|style-changed|style-all]" >&2
     exit 2
     ;;
 esac
