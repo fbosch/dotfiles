@@ -116,8 +116,7 @@
     },
     "local-highlight.nvim": {
       "rev": "8fcfa84202cba89b45014ef2563f1f5756af4565",
-      "src": "https://github.com/tzachar/local-highlight.nvim.git",
-      "version": "'8fcfa84202cba89b45014ef2563f1f5756af4565'"
+      "src": "https://github.com/tzachar/local-highlight.nvim.git"
     },
     "lspsaga.nvim": {
       "rev": "cf6fc9473bba1d332eda9887855ea29ed9b37701",

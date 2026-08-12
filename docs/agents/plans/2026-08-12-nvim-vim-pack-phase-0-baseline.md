@@ -260,6 +260,8 @@ FTerm moved to native command ownership. Its nine commands activate the native p
 
 Tint moved to native ownership on `BufWinEnter`. The `fbosch/tint.nvim` fork, scheduled setup, transforms, background tinting, and ignored highlight groups remain unchanged; Tint's own lifecycle initializes existing windows before or after `VimEnter` as needed.
 
+Local Highlight moved to native ownership on `CursorMoved`. Unlike the prior Lazy path, native setup uses the trigger context to attach the current buffer immediately; future buffers continue attaching through the plugin's own `BufRead` autocmd.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:

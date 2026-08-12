@@ -48,6 +48,18 @@ register({
 			end)
 		end,
 	},
+	{
+		name = "local-highlight.nvim",
+		src = "https://github.com/tzachar/local-highlight.nvim.git",
+		events = { "CursorMoved" },
+		setup = function(context)
+			local local_highlight = require("local-highlight")
+			local_highlight.setup({
+				hlgroup = "LocalHighlight",
+			})
+			local_highlight.attach(context.buf)
+		end,
+	},
 })
 
 return {
@@ -194,15 +206,6 @@ return {
 		end,
 		config = function(_, opts)
 			require("snacks").setup(opts)
-		end,
-	},
-	{
-		"tzachar/local-highlight.nvim",
-		event = { "CursorMoved" },
-		config = function()
-			require("local-highlight").setup({
-				hlgroup = "LocalHighlight",
-			})
 		end,
 	},
 	{

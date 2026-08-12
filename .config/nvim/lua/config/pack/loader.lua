@@ -35,8 +35,8 @@ function M.setup()
 			vim.api.nvim_create_autocmd(event_name, {
 				once = true,
 				pattern = type(event) == "table" and event.pattern or nil,
-				callback = function()
-					M.activate(name)
+				callback = function(event_context)
+					M.activate(name, event_context)
 				end,
 			})
 		end
