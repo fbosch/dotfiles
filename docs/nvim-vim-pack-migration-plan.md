@@ -390,7 +390,6 @@ snacks.nvim
 opencode.nvim
 fff.nvim
 conform.nvim
-tsc.nvim
 nvim-jqx
 which-key.nvim
 nvim-scrollbar
@@ -407,9 +406,9 @@ Requirements:
 - FTerm remains command-loaded from its completed Phase 4 slice.
 - fff remains key-triggered and has its built binary.
 - Conform formats on the first eligible save.
-- TypeScript and JSON/YAML integrations work on the first matching filetype.
+- JSON/YAML integrations work on the first matching filetype.
 
-**Acceptance:** Sessions restore and save once, Opencode lifecycle behavior works, fff works on first use, first-save formatting works, and TypeScript/JSON/YAML behavior matches the baseline. FTerm retains the first-use behavior validated in Phase 4.
+**Acceptance:** Sessions restore and save once, Opencode lifecycle behavior works, fff works on first use, first-save formatting works, and JSON/YAML behavior matches the baseline. FTerm retains the first-use behavior validated in Phase 4.
 
 **Rollback:** Revert lifecycle integration slices individually unless they share a hard dependency such as Snacks and Opencode.
 

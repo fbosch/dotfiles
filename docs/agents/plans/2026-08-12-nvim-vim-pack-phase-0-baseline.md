@@ -272,6 +272,8 @@ Vim Abolish moved to native ownership on `InsertEnter`. `packadd` sources the `:
 
 Which Key moved to native ownership with explicit scheduled `PackReady` and `<leader>wk` triggers. The command path remains available immediately after setup, while the plugin's own scheduler completes mapping-state initialization after `VimEnter`.
 
+`tsc.nvim` was removed rather than migrated. The configured `tsgo` language server already provides TypeScript diagnostics, TSC had no key mappings, watch mode was disabled, and two declared command triggers no longer existed in the installed plugin. Its TSC-specific Trouble quickfix hook was removed with it, reducing the active application catalog to 68.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:
