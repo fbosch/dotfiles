@@ -4,13 +4,10 @@ vim.opt.shm:append("I")
 vim.opt.langmap = "æ:,ø',å[,¨],-/,"
 
 -- misc
-vim.opt.re = 0 -- regex engine auto
-vim.opt.compatible = false
 vim.opt.shell = "fish"
 vim.opt.shelltemp = false
 vim.opt.exrc = false
 vim.opt.title = false
-vim.opt.foldenable = false
 vim.opt.filetype = "off"
 vim.opt.syntax = "off"
 
@@ -32,7 +29,6 @@ vim.opt.cursorline = true
 vim.opt.fillchars:append("eob: ")
 vim.opt.laststatus = 3
 vim.opt.ruler = true
-vim.opt.background = "dark"
 vim.opt.pumblend = 10
 vim.opt.winblend = 0
 vim.opt.scrolloff = 8
