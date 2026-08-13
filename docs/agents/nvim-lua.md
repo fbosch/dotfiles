@@ -21,7 +21,7 @@ return M
 ## Conventions
 
 - Imports at top: `local git = require("utils.git")`
-- Functions use `snake_case`: `function M.word_wrap()`, `local function get_terminal_width()`
+- Functions use `snake_case`: `function M.wipe_all_sessions()`, `local function get_terminal_width()`
 - Indentation: 2 spaces, `expandtab`, `smartindent`
 - Error handling: guard clauses, nil checks like `if handle == nil then return nil end`
 - Keymaps: use `require("utils").set_keymap()` (not `vim.keymap.set()`)

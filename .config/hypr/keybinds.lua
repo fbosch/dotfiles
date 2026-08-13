@@ -15,6 +15,7 @@ local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
 local keyboard_layout = require("actions.keyboard-layout")
 local picture_in_picture = require("actions.picture-in-picture")
+local pip = require("lib.picture_in_picture")
 local window_switcher = require("actions.window-switcher")
 
 local main_mod = "SUPER"
@@ -108,7 +109,11 @@ bind.register("CTRL + SHIFT + O", "bash ~/.config/hypr/runtime/capture/screensho
 bind.register(main("Q"), programs.terminal)
 bind.register(main("B"), function()
 	for _, client in ipairs(hl.get_windows()) do
-		if client.class == "app.zen_browser.zen" and (client.title or ""):match("^Extension:") == nil then
+		if
+			client.class == pip.class
+			and client.title ~= pip.title
+			and (client.title or ""):match("^Extension:") == nil
+		then
 			hl.dispatch(hl.dsp.send_shortcut({ mods = "CTRL", key = "N", window = client }))
 			return
 		end

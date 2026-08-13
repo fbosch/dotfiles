@@ -21,11 +21,11 @@ find_existing_window_address() {
 }
 
 launch_update_terminal() {
-  if footclient -N -a "$class_name" fish -c 'flake_update_interactive --rebuild --cache --header --notify' >/dev/null 2>&1; then
+  if footclient -N -a "$class_name" fish -c 'flake_update_interactive --rebuild --cache --notify' >/dev/null 2>&1; then
     return
   fi
 
-  foot -a "$class_name" fish -c 'flake_update_interactive --rebuild --cache --header --notify' >/dev/null 2>&1 &
+  foot -a "$class_name" fish -c 'flake_update_interactive --rebuild --cache --notify' >/dev/null 2>&1 &
 }
 
 if command -v footclient >/dev/null 2>&1 && command -v fish >/dev/null 2>&1; then

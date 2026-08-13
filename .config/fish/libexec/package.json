@@ -8,6 +8,7 @@
     "fallow": "^3.3.0"
   },
   "dependencies": {
+    "@inquirer/core": "^10.3.1",
     "es-toolkit": "^1.46.0",
     "neverthrow": "^8.2.0",
     "ts-pattern": "^5.9.0",

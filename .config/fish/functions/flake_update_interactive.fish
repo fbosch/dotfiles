@@ -1,10 +1,9 @@
 function flake_update_interactive --description 'Interactively update Nix flake inputs'
     # -r/--rebuild: Prompt to rebuild NixOS after a successful update
-    # -c/--cache: Accept cache entries regardless of age when the lock still matches
+    # -c/--cache: Accept cache entries regardless of age when listed inputs still match the lock
     # -f/--force: Refresh the shared update-watcher cache before displaying updates
-    # -h/--header: Show flake and current-generation details
     # -n/--notify: Send a desktop notification after a rebuild
-    argparse r/rebuild c/cache f/force h/header n/notify -- $argv
+    argparse r/rebuild c/cache f/force n/notify -- $argv
     or return
 
     set -l flake_path $argv[1]
@@ -22,77 +21,57 @@ function flake_update_interactive --description 'Interactively update Nix flake 
         set cache_ttl_seconds 315360000
     end
 
-    if set -q _flag_header
-        __flake_update_header "$flake_path"
-    end
-
-    set -l cache_output
-    if not set -q _flag_force
-        set cache_output (bun --cwd ~/.config/fish/libexec nix/flake_update_cache.ts read --flake "$flake_path" --max-age-seconds $cache_ttl_seconds)
-    end
-
-    if test $status -ne 0
-        if set -q _flag_force
-            gum style --foreground 3 "Refreshing update cache (--force)..."
-        else
-            gum style --foreground 4 "Refreshing update cache..."
-        end
-
-        gum spin --spinner pulse --title "Checking for outdated inputs..." -- flake-check-updates "$flake_path"
-        or begin
-            gum style --foreground 1 "Failed to check flake updates"
-            return 1
-        end
-
-        set cache_output (bun --cwd ~/.config/fish/libexec nix/flake_update_cache.ts read --flake "$flake_path" --max-age-seconds 60 --allow-unidentified-fresh-cache)
-        or begin
-            gum style --foreground 1 "Update checker did not produce a valid cache"
-            return 1
-        end
-    end
-
-    set -l input_options
-    set -l cache_timestamp
-    for line in $cache_output
-        set -l fields (string split -m 1 \t -- "$line")
-        switch $fields[1]
-            case cache
-                set cache_timestamp $fields[2]
-            case update
-                set input_options $input_options $fields[2]
-        end
-    end
-
-    if test -n "$cache_timestamp"
-        gum style --foreground 6 "Using update cache (checked: $cache_timestamp)"
-    end
-
-    if test (count $input_options) -eq 0
-        gum style --foreground 2 "All flake inputs are up to date!"
-        return 0
-    end
-
-    set -l selected_options (printf '%s\n' $input_options | gum choose --no-limit --header="Select flake inputs to update (Space to select, Enter to confirm)")
-    if test -z "$selected_options"
-        gum style --foreground 3 "No inputs selected for update"
-        return 0
+    set -l should_refresh false
+    if set -q _flag_force
+        set should_refresh true
     end
 
     set -l selected_inputs
-    for option in $selected_options
-        set -l input_name (string split -m 1 ':' -- "$option")[1]
-        if string length -q "$input_name"
-            set selected_inputs $selected_inputs $input_name
+    while true
+        set -l cache_json
+        if test $should_refresh = false
+            set cache_json (bun --cwd ~/.config/fish/libexec nix/flake_update_cache.ts read --flake "$flake_path" --max-age-seconds $cache_ttl_seconds)
         end
-    end
 
-    if test (count $selected_inputs) -eq 0
-        gum style --foreground 3 "No valid inputs extracted from selection"
-        return 0
-    end
+        if test $should_refresh = true -o $status -ne 0
+            gum spin --spinner pulse --title "Checking for outdated inputs..." -- flake-check-updates "$flake_path"
+            or begin
+                gum style --foreground 1 "Failed to check flake updates"
+                return 1
+            end
 
-    gum style --foreground 4 "Selected inputs to update:"
-    printf '  %s\n' $selected_options
+            set cache_json (bun --cwd ~/.config/fish/libexec nix/flake_update_cache.ts read --flake "$flake_path" --max-age-seconds 60)
+            or begin
+                gum style --foreground 1 "Update checker did not produce a valid cache"
+                return 1
+            end
+        end
+
+        set -l update_count (string match -r '"count":([0-9]+)' -- "$cache_json")[2]
+        if test "$update_count" = 0
+            gum style --foreground 2 "All flake inputs are up to date!"
+            return 0
+        end
+
+        set -l selected_json (env FLAKE_PATH="$flake_path" FLAKE_UPDATE_CACHE="$cache_json" bun --cwd ~/.config/fish/libexec nix/flake_update_picker.ts)
+        if test $status -ne 0 -o -z "$selected_json"
+            gum style --foreground 3 "No inputs selected for update"
+            return 0
+        end
+
+        if test "$selected_json" = '["__refresh__"]'
+            set should_refresh true
+            continue
+        end
+
+        set selected_inputs (printf '%s' "$selected_json" | jq -r '.[]')
+        if test (count $selected_inputs) -eq 0
+            gum style --foreground 3 "No inputs selected for update"
+            return 0
+        end
+
+        break
+    end
 
     if not gum confirm "Update selected flake inputs?"
         gum style --foreground 3 "Update cancelled"
@@ -152,24 +131,6 @@ function flake_update_interactive --description 'Interactively update Nix flake 
         __flake_update_notify critical "NixOS Update Failed" "The system update encountered an error. Check the terminal output for details."
     end
     return 1
-end
-
-function __flake_update_header --argument-names flake_path
-    gum style --foreground 6 --bold '  Flake Updater'
-    gum style --foreground 8 "  Path: $flake_path"
-    gum style --foreground 8 "  Host: "(hostname)
-
-    set -l system_profile /nix/var/nix/profiles/system
-    if not test -L "$system_profile"
-        return
-    end
-
-    set -l generation (basename (readlink "$system_profile") | string replace 'system-' '' | string replace -- '-link' '')
-    set -l timestamp (stat -c %Y "$system_profile" 2>/dev/null)
-    if test -n "$timestamp" -a -n "$generation"
-        set -l time_ago (__time_ago_from_timestamp "$timestamp")
-        gum style --foreground 8 "  Generation: $generation (rebuilt $time_ago)"
-    end
 end
 
 function __flake_update_notify --argument-names urgency title body

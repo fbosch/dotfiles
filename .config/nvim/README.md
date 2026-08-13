@@ -12,7 +12,7 @@ Lua Neovim configuration using native `vim.pack` packages and a small local acti
 
 - `lua/config/` contains editor behavior: options, autocmds, abbreviations, colors, user commands, keymaps, and highlight groups.
 - `lua/plugins/` groups native package declarations by purpose: `ai`, `core`, `lang`, `misc`, `ui`, and `workflow`.
-- `lua/utils/` contains reusable Lua helpers for agents, formatting, Git, Kagi, layout, platform checks, projects, sessions, terminal behavior, web actions, and yanking.
+- `lua/utils/` contains reusable Lua helpers for Git, Kagi, platform checks, projects, sessions, terminal behavior, web actions, and yanking.
 - `snippets/` contains editor snippets.
 - `spell/` contains English and Danish spell additions.
 - `docs/agents/` contains deeper guidance for editing this config.
