@@ -201,6 +201,92 @@ run("known active geometry reorders rows", function()
 	assert_box(third.placed, { x = 10, y = 220, w = 120, h = 100 }, "bottom target")
 end)
 
+run("newly tiled window uses nearest resulting portrait slot center", function()
+	local top = make_workspace_target(301, "float-to-tile-nearest-bottom")
+	local bottom = make_workspace_target(302, "float-to-tile-nearest-bottom")
+	local ctx = make_context({ top, bottom })
+	registered_layout.layout.recalculate(ctx)
+
+	local tiled = make_workspace_target(303, "float-to-tile-nearest-bottom", true)
+	ctx = make_context({ top, bottom, tiled })
+	order_state.record_placement_intent(tiled.window, {
+		layout_name = "portrait_rows",
+		workspace_key = "float-to-tile-nearest-bottom",
+		monitor_role = monitor_role.portrait,
+		axis = "y",
+		position = 280,
+	})
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(top.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
+	assert_box(bottom.placed, { x = 10, y = 120, w = 120, h = 100 }, "middle target")
+	assert_box(tiled.placed, { x = 10, y = 220, w = 120, h = 100 }, "newly tiled target")
+	assert_equal(order_state.placement_intent_for_window(tiled.window), nil, "consumed intent")
+end)
+
+run("retiled window moves from its previous order to the nearest row", function()
+	local retiled = make_workspace_target(321, "retile-nearest-bottom", true)
+	local middle = make_workspace_target(322, "retile-nearest-bottom")
+	local bottom = make_workspace_target(323, "retile-nearest-bottom")
+	registered_layout.layout.recalculate(make_context({ retiled, middle, bottom }))
+	registered_layout.layout.recalculate(make_context({ middle, bottom }))
+
+	order_state.record_placement_intent(retiled.window, {
+		layout_name = "portrait_rows",
+		workspace_key = "retile-nearest-bottom",
+		monitor_role = monitor_role.portrait,
+		axis = "y",
+		position = 280,
+	})
+	registered_layout.layout.recalculate(make_context({ retiled, middle, bottom }))
+
+	assert_box(middle.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
+	assert_box(bottom.placed, { x = 10, y = 120, w = 120, h = 100 }, "middle target")
+	assert_box(retiled.placed, { x = 10, y = 220, w = 120, h = 100 }, "retiled target")
+end)
+
+run("retiled placement ignores retained missing identities", function()
+	local missing = make_workspace_target(331, "retile-stale-order")
+	local retiled = make_workspace_target(332, "retile-stale-order", true)
+	local existing = make_workspace_target(333, "retile-stale-order")
+	registered_layout.layout.recalculate(make_context({ missing, retiled, existing }))
+	registered_layout.layout.recalculate(make_context({ retiled, existing }))
+
+	order_state.record_placement_intent(retiled.window, {
+		layout_name = "portrait_rows",
+		workspace_key = "retile-stale-order",
+		monitor_role = monitor_role.portrait,
+		axis = "y",
+		position = 280,
+	})
+	registered_layout.layout.recalculate(make_context({ retiled, existing }))
+
+	assert_box(existing.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
+	assert_box(retiled.placed, { x = 10, y = 120, w = 120, h = 200 }, "retiled target")
+end)
+
+run("equidistant portrait slot centers choose the earlier slot", function()
+	local first = make_workspace_target(311, "float-to-tile-tie")
+	local second = make_workspace_target(312, "float-to-tile-tie")
+	local ctx = make_context({ first, second })
+	registered_layout.layout.recalculate(ctx)
+
+	local tiled = make_workspace_target(313, "float-to-tile-tie", true)
+	ctx = make_context({ first, second, tiled })
+	order_state.record_placement_intent(tiled.window, {
+		layout_name = "portrait_rows",
+		workspace_key = "float-to-tile-tie",
+		monitor_role = monitor_role.portrait,
+		axis = "y",
+		position = 120,
+	})
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(tiled.placed, { x = 10, y = 20, w = 120, h = 100 }, "earlier target")
+	assert_box(first.placed, { x = 10, y = 120, w = 120, h = 100 }, "first existing target")
+	assert_box(second.placed, { x = 10, y = 220, w = 120, h = 100 }, "second existing target")
+end)
+
 run("same-scope drag geometry reorders active rows", function()
 	local first = make_workspace_target(1, "same-scope-drag", true)
 	local second = make_workspace_target(2, "same-scope-drag")

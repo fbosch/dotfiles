@@ -12,14 +12,17 @@
 ---@class WindowStateSelector
 ---@field matcher WindowStateMatcher Identifies the client field and emitted window-rule selector.
 ---@field pattern string Regex preserved as-is, or a literal string matched exactly by generated rules.
----@field exclude? { matcher: WindowStateMatcher, pattern: string } Excludes clients matching this field and pattern.
+---@field exclude? { matcher: WindowStateMatcher, patterns: string[] } Excludes clients matching this field and any pattern.
 
 ---@return WindowStateSelector[]
 return {
 	{
 		matcher = "match:class",
 		pattern = [=[^nemo$]=],
-		exclude = { matcher = "match:initial_title", pattern = [=[^File Operations$]=] },
+		exclude = {
+			matcher = "match:initial_title",
+			patterns = { [=[^File Operations$]=], [=[^Preparing$]=] },
+		},
 	},
 	{ matcher = "match:class", pattern = [=[^xdg-desktop-portal-gtk$]=] },
 	{ matcher = "match:class", pattern = [=[^Bitwarden$]=] },

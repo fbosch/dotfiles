@@ -7,6 +7,7 @@ local active_window = nil
 local cursor_position = nil
 local windows = {}
 local monitors = {}
+local timers = {}
 
 _G.hl = {
 	dsp = {
@@ -25,6 +26,9 @@ _G.hl = {
 			end,
 		},
 		window = {
+			float = function()
+				return { op = "window.float" }
+			end,
 			move = function(args)
 				return { op = "window.move", args = args }
 			end,
@@ -57,6 +61,9 @@ _G.hl = {
 	get_monitors = function()
 		return monitors
 	end,
+	timer = function(callback, options)
+		timers[#timers + 1] = { callback = callback, options = options }
+	end,
 }
 
 local interaction
@@ -83,6 +90,7 @@ local function reset(monitor, x, monitor_x, workspace_windows, name)
 	active_window.workspace = workspace
 	windows = { active_window }
 	monitors = {}
+	timers = {}
 	cursor_position = nil
 	if workspace_windows then
 		function workspace:get_windows()
@@ -458,6 +466,91 @@ run("custom layout drag places the active window after interactive dragging", fu
 	assert_equal(interaction.finish_drag(state, custom_layout), true, "drag finishes")
 	assert_equal(dispatched[3].op, "layout", "layout dispatcher")
 	assert_equal(dispatched[3].value, "place-at-cursor", "layout message")
+end)
+
+run("float toggle records ultrawide window center before tiling", function()
+	reset("DP-2", 700)
+	active_window.floating = true
+	active_window.workspace.tiled_layout = "lua:ultrawide_master"
+
+	custom_layout.toggle_float(state)
+
+	local intent = order_state.placement_intent_for_window(active_window)
+	assert_equal(intent.layout_name, "ultrawide_master", "layout name")
+	assert_equal(intent.workspace_key, "2", "workspace key")
+	assert_equal(intent.axis, "x", "layout axis")
+	assert_equal(intent.position, 850, "window center")
+	assert_equal(dispatched[1].op, "window.float", "float dispatcher")
+	assert_equal(timers[1].options.timeout, 2000, "intent timeout")
+end)
+
+run("float toggle records portrait window center before tiling", function()
+	reset("HDMI-A-2")
+	active_window.floating = true
+	active_window.at.y = 500
+	active_window.workspace.tiled_layout = "lua:portrait_rows"
+
+	custom_layout.toggle_float(state)
+
+	local intent = order_state.placement_intent_for_window(active_window)
+	assert_equal(intent.layout_name, "portrait_rows", "layout name")
+	assert_equal(intent.axis, "y", "layout axis")
+	assert_equal(intent.position, 700, "window center")
+	assert_equal(dispatched[1].op, "window.float", "float dispatcher")
+end)
+
+run("float toggle falls through without placement intent", function()
+	reset("DP-2")
+	active_window.floating = true
+	active_window.workspace.tiled_layout = "master"
+
+	custom_layout.toggle_float(state)
+
+	assert_equal(order_state.placement_intent_for_window(active_window), nil, "placement intent")
+	assert_equal(dispatched[1].op, "window.float", "float dispatcher")
+end)
+
+run("float toggle falls through without complete geometry", function()
+	reset("DP-2")
+	active_window.floating = true
+	active_window.size = nil
+
+	custom_layout.toggle_float(state)
+
+	assert_equal(order_state.placement_intent_for_window(active_window), nil, "placement intent")
+	assert_equal(dispatched[1].op, "window.float", "float dispatcher")
+end)
+
+run("float toggle falls through without stable identity", function()
+	reset("DP-2")
+	active_window.floating = true
+	active_window.address = nil
+	active_window.stable_id = nil
+
+	custom_layout.toggle_float(state)
+
+	assert_equal(order_state.placement_intent_for_window(active_window), nil, "placement intent")
+	assert_equal(dispatched[1].op, "window.float", "float dispatcher")
+end)
+
+run("tiled to floating does not record placement intent", function()
+	reset("DP-2")
+	active_window.floating = false
+
+	custom_layout.toggle_float(state)
+
+	assert_equal(order_state.placement_intent_for_window(active_window), nil, "placement intent")
+	assert_equal(dispatched[1].op, "window.float", "float dispatcher")
+end)
+
+run("float placement intent expires", function()
+	reset("DP-2")
+	active_window.floating = true
+
+	custom_layout.toggle_float(state)
+	timers[1].callback()
+
+	assert_equal(order_state.placement_intent_for_window(active_window), nil, "expired intent")
 end)
 
 run("dp left edge moves window to portrait monitor", function()

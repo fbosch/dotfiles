@@ -632,4 +632,34 @@ function M.move_target_to_index(state, key, target, target_index)
 	return true
 end
 
+function M.move_target_to_visible_index(state, key, target, targets, target_index)
+	local order = state.order_by_key[key]
+	local id = M.target_id(target)
+	local order_index = order and M.index_of(order, id) or nil
+	if not order_index or not target_index then
+		return false
+	end
+
+	local visible_ids = {}
+	for index = 1, #targets do
+		local visible_id = M.target_id(targets[index])
+		if visible_id ~= id then
+			visible_ids[#visible_ids + 1] = visible_id
+		end
+	end
+
+	table.remove(order, order_index)
+	local next_id = visible_ids[target_index]
+	local insert_at = next_id and M.index_of(order, next_id) or nil
+	if not insert_at then
+		local previous_id = visible_ids[#visible_ids]
+		local previous_index = previous_id and M.index_of(order, previous_id) or nil
+		insert_at = previous_index and previous_index + 1 or #order + 1
+	end
+
+	table.insert(order, insert_at, id)
+	state.manual_change_by_key[key] = true
+	return insert_at ~= order_index
+end
+
 return M

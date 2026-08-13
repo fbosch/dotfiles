@@ -51,7 +51,7 @@ end)
 
 for _, mode in ipairs(modes) do
 	for _, map in ipairs(vim.api.nvim_get_keymap(mode)) do
-		if map.desc or map.lhs ~= map.rhs then
+		if map.lhs:sub(1, 6):lower() ~= "<plug>" and (map.desc or map.lhs ~= map.rhs) then
 			add(runtime_record(map, mode, "global"))
 		end
 	end
@@ -63,7 +63,9 @@ for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
 		local context = filetype ~= "" and "filetype:" .. filetype or "buffer:" .. bufnr
 		for _, mode in ipairs(modes) do
 			for _, map in ipairs(vim.api.nvim_buf_get_keymap(bufnr, mode)) do
-				add(runtime_record(map, mode, context))
+				if map.lhs:sub(1, 6):lower() ~= "<plug>" then
+					add(runtime_record(map, mode, context))
+				end
 			end
 		end
 	end

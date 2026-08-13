@@ -150,7 +150,16 @@ local function matched_selector(client)
 		if field and field_matches(client[field], selector.pattern) then
 			local exclude = selector.exclude
 			local exclude_field = exclude and state_rules.matcher_client_field(exclude.matcher)
-			if not exclude_field or not field_matches(client[exclude_field], exclude.pattern) then
+			local excluded = false
+			if exclude_field then
+				for _, pattern in ipairs(exclude.patterns) do
+					if field_matches(client[exclude_field], pattern) then
+						excluded = true
+						break
+					end
+				end
+			end
+			if not excluded then
 				return selector
 			end
 		end

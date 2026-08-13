@@ -63,9 +63,18 @@ function M.load_selectors(path)
 				or (
 					type(exclude) == "table"
 					and type(exclude.matcher) == "string"
-					and type(exclude.pattern) == "string"
+					and type(exclude.patterns) == "table"
+					and #exclude.patterns > 0
 					and M.matcher_client_field(exclude.matcher) ~= nil
 				)
+			if valid_exclude and exclude then
+				for _, pattern in ipairs(exclude.patterns) do
+					if type(pattern) ~= "string" then
+						valid_exclude = false
+						break
+					end
+				end
+			end
 			if field and valid_exclude then
 				normalized[#normalized + 1] = {
 					matcher = selector.matcher,
@@ -207,10 +216,14 @@ local function render_rules(cache, selectors_path, selectors)
 			if selector and selector.exclude then
 				local exclude_match_key = M.matcher_lua_key(selector.exclude.matcher)
 				if exclude_match_key then
+					local exclude_patterns = {}
+					for _, pattern in ipairs(selector.exclude.patterns) do
+						exclude_patterns[#exclude_patterns + 1] = rule_pattern(pattern)
+					end
 					lines[#lines + 1] = "      "
 						.. exclude_match_key
 						.. " = "
-						.. json.encode("negative:" .. rule_pattern(selector.exclude.pattern))
+						.. json.encode("negative:(" .. table.concat(exclude_patterns, "|") .. ")")
 						.. ","
 				end
 			end

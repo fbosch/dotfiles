@@ -183,6 +183,94 @@ run("known active geometry reorders columns", function()
 	assert_box(first.placed, { x = 680, y = 20, w = 330, h = 500 }, "right target")
 end)
 
+run("newly tiled window uses nearest resulting ultrawide slot center", function()
+	local left = make_target(301)
+	local right = make_target(302)
+	local workspace = "float-to-tile-nearest-right"
+	registered_layout.layout.recalculate(make_context({ left, right }, workspace))
+
+	local tiled = make_target(303, true)
+	local ctx = make_context({ left, right, tiled }, workspace)
+	order_state.record_placement_intent(tiled.window, {
+		layout_name = "ultrawide_master",
+		workspace_key = workspace,
+		monitor_role = monitor_role.ultrawide,
+		axis = "x",
+		position = 900,
+	})
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(left.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
+	assert_box(right.placed, { x = 310, y = 20, w = 400, h = 500 }, "center target")
+	assert_box(tiled.placed, { x = 710, y = 20, w = 300, h = 500 }, "newly tiled target")
+	assert_equal(order_state.placement_intent_for_window(tiled.window), nil, "consumed intent")
+end)
+
+run("retiled window moves from its previous order to the nearest slot", function()
+	local retiled = make_target(321, true)
+	local middle = make_target(322)
+	local right = make_target(323)
+	local workspace = "retile-nearest-right"
+	registered_layout.layout.recalculate(make_context({ retiled, middle, right }, workspace))
+	registered_layout.layout.recalculate(make_context({ middle, right }, workspace))
+
+	order_state.record_placement_intent(retiled.window, {
+		layout_name = "ultrawide_master",
+		workspace_key = workspace,
+		monitor_role = monitor_role.ultrawide,
+		axis = "x",
+		position = 900,
+	})
+	registered_layout.layout.recalculate(make_context({ retiled, middle, right }, workspace))
+
+	assert_box(middle.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
+	assert_box(right.placed, { x = 310, y = 20, w = 400, h = 500 }, "center target")
+	assert_box(retiled.placed, { x = 710, y = 20, w = 300, h = 500 }, "retiled target")
+end)
+
+run("retiled placement ignores retained missing identities", function()
+	local missing = make_target(331)
+	local retiled = make_target(332, true)
+	local existing = make_target(333)
+	local workspace = "retile-stale-order"
+	registered_layout.layout.recalculate(make_context({ missing, retiled, existing }, workspace))
+	registered_layout.layout.recalculate(make_context({ retiled, existing }, workspace))
+
+	order_state.record_placement_intent(retiled.window, {
+		layout_name = "ultrawide_master",
+		workspace_key = workspace,
+		monitor_role = monitor_role.ultrawide,
+		axis = "x",
+		position = 900,
+	})
+	registered_layout.layout.recalculate(make_context({ retiled, existing }, workspace))
+
+	assert_box(existing.placed, { x = 10, y = 20, w = 670, h = 500 }, "left target")
+	assert_box(retiled.placed, { x = 680, y = 20, w = 330, h = 500 }, "retiled target")
+end)
+
+run("equidistant ultrawide slot centers choose the earlier slot", function()
+	local first = make_target(311)
+	local second = make_target(312)
+	local workspace = "float-to-tile-tie"
+	registered_layout.layout.recalculate(make_context({ first, second }, workspace))
+
+	local tiled = make_target(313, true)
+	local ctx = make_context({ first, second, tiled }, workspace)
+	order_state.record_placement_intent(tiled.window, {
+		layout_name = "ultrawide_master",
+		workspace_key = workspace,
+		monitor_role = monitor_role.ultrawide,
+		axis = "x",
+		position = 285,
+	})
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(tiled.placed, { x = 10, y = 20, w = 300, h = 500 }, "earlier target")
+	assert_box(first.placed, { x = 310, y = 20, w = 400, h = 500 }, "first existing target")
+	assert_box(second.placed, { x = 710, y = 20, w = 300, h = 500 }, "second existing target")
+end)
+
 run("same-scope drag geometry reorders active columns", function()
 	local first = make_target(1, true)
 	local second = make_target(2)

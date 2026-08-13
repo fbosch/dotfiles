@@ -146,7 +146,7 @@ function M.recalculate_ordered(opts)
 
 	if placement_target then
 		local target_index = M.nearest_slot_index(placement_intent.position, opts.ratios, opts.start, opts.span)
-		if order_state.move_target_to_index(state, key, placement_target, target_index) then
+		if order_state.move_target_to_visible_index(state, key, placement_target, targets, target_index) then
 			state.manual_change_by_key[key] = nil
 			needs_state_save = true
 			targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)

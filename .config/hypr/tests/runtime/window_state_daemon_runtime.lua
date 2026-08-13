@@ -48,6 +48,7 @@ local updated_clients = [=[
   {"class":"Bitwarden","floating":true,"monitor":1,"at":[130,240],"size":[1000,700]},
   {"class":"nemo","floating":true,"monitor":1,"at":[150,260],"size":[900,650]},
   {"class":"nemo","initialTitle":"File Operations","floating":true,"monitor":1,"at":[250,360],"size":[300,200]},
+  {"class":"nemo","initialTitle":"Preparing","floating":true,"monitor":1,"at":[350,460],"size":[320,220]},
   {"class":"nemo","floating":true,"monitor":2,"at":[1030,140],"size":[500,600]}
 ]
 ]=]
@@ -394,6 +395,7 @@ local function fixture()
 		return state
 			and state:find('"Bitwarden"', 1, true)
 			and not state:find('"width":300', 1, true)
+			and not state:find('"width":320', 1, true)
 			and rules
 			and rules:find("Bitwarden", 1, true)
 			and rules:find("nemo", 1, true)
@@ -403,7 +405,7 @@ local function fixture()
 			and generated_rule("DP-1", "^nemo$").effects.move == "150 260"
 			and generated_rule("HDMI-A-1", "^nemo$")
 			and generated_rule("HDMI-A-1", "^nemo$").match.workspace == "m[HDMI-A-1]"
-			and generated_rule("DP-1", "^nemo$").match.initial_title == "negative:^File Operations$"
+			and generated_rule("DP-1", "^nemo$").match.initial_title == "negative:(^File Operations$|^Preparing$)"
 			and generated_rule("HDMI-A-1", "^nemo$").effects.move == "30 40"
 	end, 3)
 	local log = read_file(log_path)
