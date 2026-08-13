@@ -73,7 +73,7 @@ function flake_restore --description "Browse flake.lock history and restore a ve
         set lines $lines "Link:    $commit_url"
     end
 
-    if test "$dep_count" != "?"
+    if string match -qr '^[0-9]+$' -- "$dep_count"
         if test $dep_count -gt 0
             set lines $lines "" "Deps:    $dep_count changed" \n""
             set -l reset (set_color normal)

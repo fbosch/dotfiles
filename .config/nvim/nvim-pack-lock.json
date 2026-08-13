@@ -61,8 +61,7 @@
     },
     "git-conflict.nvim": {
       "rev": "a1badcd070d176172940eb55d9d59029dad1c5a6",
-      "src": "https://github.com/akinsho/git-conflict.nvim.git",
-      "version": "'a1badcd070d176172940eb55d9d59029dad1c5a6'"
+      "src": "https://github.com/akinsho/git-conflict.nvim.git"
     },
     "gitlineage.nvim": {
       "rev": "da795833925aae2e4d0cf75d2529d258bf4fb82c",
@@ -70,8 +69,7 @@
     },
     "gitsigns.nvim": {
       "rev": "31d6fb2d618bca1482b9f274751ead5f03461408",
-      "src": "https://github.com/lewis6991/gitsigns.nvim.git",
-      "version": "'31d6fb2d618bca1482b9f274751ead5f03461408'"
+      "src": "https://github.com/lewis6991/gitsigns.nvim.git"
     },
     "helpview.nvim": {
       "rev": "06006b471890f19efeb199ffab5da49a2d624619",

@@ -125,11 +125,6 @@ local function register_one(plugin)
 	elseif plugin.startup == true then
 		assert(plugin.condition == nil, "native startup plugin cannot have a condition: " .. plugin.name)
 		assert(has_triggers(plugin) == false, "native startup plugin cannot have triggers: " .. plugin.name)
-	elseif plugin.condition ~= nil then
-		assert(
-			plugin.events == nil and plugin.filetypes == nil,
-			"native conditions currently support only command and key triggers: " .. plugin.name
-		)
 	end
 
 	if plugin.root ~= false and plugin.startup ~= true and has_triggers(plugin) == false then

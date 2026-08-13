@@ -306,6 +306,8 @@ Phase 7 began with Bufresize and Smart Splits as one native dependency slice. Fr
 
 Notify, Recorder, and Fidget followed as one native dependency slice. Recorder now activates on `PackReady` so its intended bare-`q` mapping owns the complete first recording rather than loading after Neovim has already selected a native register. Fresh-process checks covered the first recording from start through stop, Fidget's scheduled post-start activation and global `vim.notify` ownership, suppression of Saga's empty-information message, and `on_open` delegation to Notify. Native ownership increased to 51 while the catalog remained 68.
 
+Gitsigns and Git Conflict completed the Git infrastructure slice. The native loader now keeps conditional event and filetype triggers retryable until activation succeeds. Fresh-process fixtures covered non-repository dormancy, later activation after entering a repository, first-buffer Gitsigns attachment and hunk selection, initial merge-conflict detection and choose-ours resolution, and the existing Diffview/Gitlineage paths. Native ownership increased to 53 while the catalog remained 68.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:

@@ -3,6 +3,19 @@ local registry = require("config.pack.registry")
 local M = {}
 local states = {}
 local failures = {}
+local trigger_autocmds = {}
+
+local function clear_trigger_autocmds(name)
+	for _, id in ipairs(trigger_autocmds[name] or {}) do
+		pcall(vim.api.nvim_del_autocmd, id)
+	end
+	trigger_autocmds[name] = nil
+end
+
+local function track_trigger_autocmd(name, id)
+	trigger_autocmds[name] = trigger_autocmds[name] or {}
+	table.insert(trigger_autocmds[name], id)
+end
 
 local function activation_error(root, chain, plugin, phase, cause)
 	return table.concat({
@@ -39,6 +52,7 @@ local function activate(name, context, root, chain, dependency)
 			local message = activation_error(root, next_chain, name, "condition", cause)
 			states[name] = "failed"
 			failures[name] = message
+			clear_trigger_autocmds(name)
 			error(message, 0)
 		end
 		if eligible == false then
@@ -68,10 +82,12 @@ local function activate(name, context, root, chain, dependency)
 		local message = activation_error(root, next_chain, name, phase, cause)
 		states[name] = "failed"
 		failures[name] = message
+		clear_trigger_autocmds(name)
 		error(message, 0)
 	end
 
 	states[name] = "loaded"
+	clear_trigger_autocmds(name)
 	return true
 end
 
@@ -115,24 +131,30 @@ function M.setup()
 
 	for name, plugin in pairs(registry.all()) do
 		for _, filetype in ipairs(plugin.filetypes or {}) do
-			vim.api.nvim_create_autocmd("FileType", {
-				once = true,
+			local id = vim.api.nvim_create_autocmd("FileType", {
 				pattern = filetype,
 				callback = function(event)
+					if states[name] == "loading" then
+						return
+					end
 					M.activate(name, event)
 				end,
 			})
+			track_trigger_autocmd(name, id)
 		end
 
 		for _, event in ipairs(plugin.events or {}) do
 			local event_name = type(event) == "table" and event[1] or event
-			vim.api.nvim_create_autocmd(event_name, {
-				once = true,
+			local id = vim.api.nvim_create_autocmd(event_name, {
 				pattern = type(event) == "table" and event.pattern or nil,
 				callback = function(event_context)
+					if states[name] == "loading" then
+						return
+					end
 					M.activate(name, event_context)
 				end,
 			})
+			track_trigger_autocmd(name, id)
 		end
 
 		for _, command in ipairs(plugin.commands or {}) do

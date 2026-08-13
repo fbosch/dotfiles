@@ -59,10 +59,12 @@ function M.extract_azure_org(url)
 	return nil
 end
 
-function M.is_git_repo()
+function M.is_git_repo(bufnr)
 	-- Check if the current buffer's file is in a git repo
 	-- This is dynamic and rechecks each time, no global caching
-	local bufpath = vim.api.nvim_buf_get_name(0)
+	bufnr = bufnr or 0
+	local bufpath = vim.api.nvim_buf_get_name(bufnr)
+	bufpath = (bufpath ~= "" and vim.uv.fs_realpath(bufpath)) or bufpath
 	local path = bufpath ~= "" and bufpath or vim.fn.getcwd()
 	local root = vim.fs.root(path, { ".git" })
 	return root ~= nil

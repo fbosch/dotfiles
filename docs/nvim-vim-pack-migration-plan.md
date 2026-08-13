@@ -33,7 +33,7 @@ local activation layer
   -> callback key triggers
   -> ordered dependency activation
   -> synchronous startup roots
-  -> retryable command/key conditions
+  -> retryable trigger conditions
   -> opts/module setup shorthand and custom setup
   -> scheduled User PackReady activation
   -> PackChanged build hooks
@@ -106,7 +106,7 @@ Implemented and validated:
 - Named dependencies activate depth-first before consumer setup; invalid and cyclic graphs fail during startup.
 - `startup = true` activates a root synchronously before initial buffer events.
 - `root = false` keeps dependency-only libraries dormant until a consumer needs them.
-- Command/key conditions are evaluated at each direct activation attempt until they succeed.
+- Trigger conditions are evaluated at each activation attempt until they succeed.
 - Lifecycle failures identify the root, dependency chain, plugin, and phase and are terminal for the session.
 - A scheduled post-`VimEnter` `User PackReady` event replaces `User VeryLazy` for migrated plugins.
 - `PackChanged` dispatches isolated build hooks for configured packages.
@@ -400,6 +400,8 @@ Special handling:
 **Progress:** The Bufresize/Smart Splits subcluster is complete. Bufresize is dependency-only and initializes before Smart Splits; the four resize commands and callback keys retain first-use activation. The locked Smart Splits revision no longer implements resize-mode hooks, so supported command wrappers refresh Bufresize after each resize instead. Native ownership increased from 46 to 48 while the catalog remained 68.
 
 The Notify/Recorder/Fidget subcluster is also complete. Notify is dependency-only; Recorder and Fidget activate after startup on `PackReady`. Recorder therefore installs its intended bare-`q` mapping before the first recording, while Fidget owns `vim.notify` and retains `on_open` delegation to Notify. Native ownership increased from 48 to 51 while the catalog remained 68.
+
+The Gitsigns/Git Conflict subcluster is complete. Conditional event triggers now remain retryable until a buffer enters a Git repository. Gitsigns attaches loaded named buffers during setup; Git Conflict replays only its newly installed `BufReadPost` handler for the triggering buffer so an initial conflicted file is detected. Non-repository dormancy, later-repository activation, hunk selection, conflict resolution, Diffview, and Gitlineage all passed focused checks. Native ownership increased from 51 to 53 while the catalog remained 68.
 
 **Rollback:** Revert each subcluster as one unit.
 
