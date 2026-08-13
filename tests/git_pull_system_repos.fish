@@ -125,7 +125,7 @@ function test_clean_repositories_fast_forward
     assert_status master (command git -C "$HOME/dotfiles" branch --show-current)
     assert_log_contains stow
     assert_log_contains just
-    assert_log_contains 'nvim --headless -i NONE +qa'
+    assert_log_contains 'nvim --headless -i NONE +TSInstallMissing +qa'
     assert_log_contains herdr_link_plugins
 end
 

@@ -9,13 +9,32 @@ local function canonical_lhs(lhs)
 	return vim.api.nvim_replace_termcodes(lhs, true, true, true)
 end
 
-local function add(record)
+local function is_plug(lhs)
+	return lhs:sub(1, 6):lower() == "<plug>"
+end
+
+local function binding_id(record)
 	record.context = record.context or "global"
-	local id = table.concat({ record.mode, record.context, canonical_lhs(record.lhs) }, "\0")
+	return table.concat({ record.mode, record.context, canonical_lhs(record.lhs) }, "\0")
+end
+
+local function add(record)
+	if is_plug(record.lhs) then
+		return
+	end
+	local id = binding_id(record)
 	if seen[id] then
 		return
 	end
 	seen[id] = true
+	table.insert(bindings, record)
+end
+
+local function add_declared(record)
+	if is_plug(record.lhs) then
+		return
+	end
+	seen[binding_id(record)] = true
 	table.insert(bindings, record)
 end
 
@@ -49,9 +68,25 @@ vim.wait(500, function()
 	return ok and config.loaded == true
 end)
 
+for name, spec in pairs(require("config.pack.registry").all()) do
+	for _, key in ipairs(spec.keys or {}) do
+		local key_modes = type(key.mode) == "table" and key.mode or { key.mode or "n" }
+		for _, mode in ipairs(key_modes) do
+			add_declared({
+				source = "native-spec",
+				owner = name,
+				mode = mode,
+				lhs = key[1],
+				context = "global",
+				desc = key.desc,
+			})
+		end
+	end
+end
+
 for _, mode in ipairs(modes) do
 	for _, map in ipairs(vim.api.nvim_get_keymap(mode)) do
-		if map.lhs:sub(1, 6):lower() ~= "<plug>" and (map.desc or map.lhs ~= map.rhs) then
+		if map.desc or map.lhs ~= map.rhs then
 			add(runtime_record(map, mode, "global"))
 		end
 	end
@@ -63,26 +98,8 @@ for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
 		local context = filetype ~= "" and "filetype:" .. filetype or "buffer:" .. bufnr
 		for _, mode in ipairs(modes) do
 			for _, map in ipairs(vim.api.nvim_buf_get_keymap(bufnr, mode)) do
-				if map.lhs:sub(1, 6):lower() ~= "<plug>" then
-					add(runtime_record(map, mode, context))
-				end
+				add(runtime_record(map, mode, context))
 			end
-		end
-	end
-end
-
-for name, spec in pairs(require("config.pack.registry").all()) do
-	for _, key in ipairs(spec.keys or {}) do
-		local key_modes = type(key.mode) == "table" and key.mode or { key.mode or "n" }
-		for _, mode in ipairs(key_modes) do
-			add({
-				source = "native-spec",
-				owner = name,
-				mode = mode,
-				lhs = key[1],
-				context = "global",
-				desc = key.desc,
-			})
 		end
 	end
 end

@@ -641,11 +641,17 @@ function M.move_target_to_visible_index(state, key, target, targets, target_inde
 	end
 
 	local visible_ids = {}
+	local visible_index = nil
 	for index = 1, #targets do
 		local visible_id = M.target_id(targets[index])
-		if visible_id ~= id then
+		if visible_id == id then
+			visible_index = index
+		else
 			visible_ids[#visible_ids + 1] = visible_id
 		end
+	end
+	if visible_index == target_index then
+		return false
 	end
 
 	table.remove(order, order_index)

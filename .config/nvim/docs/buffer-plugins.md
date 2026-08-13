@@ -11,6 +11,8 @@ Barbar is declared in `lua/plugins/ui/buffers.lua` and activates when a second l
 |-----|--------|
 | `<C-h>` | Previous buffer |
 | `<C-l>` | Next buffer |
+| `<leader>bh` | Move buffer left |
+| `<leader>bl` | Move buffer right |
 | `<leader>bd` | Delete current buffer |
 | `<leader>x` | Close all but current buffer (and terminals) |
 

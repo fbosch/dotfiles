@@ -20,6 +20,7 @@ _G.hl = {
 _G.__PORTRAIT_ROWS_DISABLE_STATE = true
 
 local monitor_role = require("lib.monitor_role")
+local ordered_axis = require("layouts.shared.ordered_axis")
 local persistent_state = require("layouts.shared.persistent_state")
 local order_state
 
@@ -174,6 +175,13 @@ run("three windows use equal vertical thirds", function()
 	assert_box(third.placed, { x = 10, y = 220, w = 120, h = 100 }, "third target")
 end)
 
+run("nearest slot center selects every unequal portrait row", function()
+	local ratios = { 0.4, 0.25, 0.35 }
+	assert_equal(ordered_axis.nearest_slot_index(80, ratios, 20, 300), 1, "top slot")
+	assert_equal(ordered_axis.nearest_slot_index(178, ratios, 20, 300), 2, "middle slot")
+	assert_equal(ordered_axis.nearest_slot_index(268, ratios, 20, 300), 3, "bottom slot")
+end)
+
 run("active target does not override target order", function()
 	local first = make_target(1)
 	local second = make_target(2)
@@ -263,6 +271,48 @@ run("retiled placement ignores retained missing identities", function()
 
 	assert_box(existing.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
 	assert_box(retiled.placed, { x = 10, y = 120, w = 120, h = 200 }, "retiled target")
+end)
+
+run("single tiled row consumes placement intent", function()
+	local tiled = make_workspace_target(341, "single-placement", true)
+	order_state.record_placement_intent(tiled.window, {
+		layout_name = "portrait_rows",
+		workspace_key = "single-placement",
+		monitor_role = monitor_role.portrait,
+		axis = "y",
+		position = 280,
+	})
+	registered_layout.layout.recalculate(make_context({ tiled }))
+
+	assert_equal(order_state.placement_intent_for_window(tiled.window), nil, "consumed intent")
+	local second = make_workspace_target(342, "single-placement")
+	registered_layout.layout.recalculate(make_context({ tiled, second }))
+	assert_box(tiled.placed, { x = 10, y = 20, w = 120, h = 100 }, "existing target")
+	assert_box(second.placed, { x = 10, y = 120, w = 120, h = 200 }, "new target")
+end)
+
+run("visible no-op placement preserves hidden identity order", function()
+	local first = make_workspace_target(351, "hidden-order")
+	local retiled = make_workspace_target(352, "hidden-order", true)
+	local hidden = make_workspace_target(353, "hidden-order")
+	local last = make_workspace_target(354, "hidden-order")
+	registered_layout.layout.recalculate(make_context({ first, retiled, hidden, last }))
+	registered_layout.layout.recalculate(make_context({ first, retiled, last }))
+
+	order_state.record_placement_intent(retiled.window, {
+		layout_name = "portrait_rows",
+		workspace_key = "hidden-order",
+		monitor_role = monitor_role.portrait,
+		axis = "y",
+		position = 170,
+	})
+	registered_layout.layout.recalculate(make_context({ first, retiled, last }))
+	registered_layout.layout.recalculate(make_context({ first, retiled, hidden, last }))
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 75 }, "first target")
+	assert_box(retiled.placed, { x = 10, y = 95, w = 120, h = 75 }, "retiled target")
+	assert_box(hidden.placed, { x = 10, y = 170, w = 120, h = 75 }, "hidden target")
+	assert_box(last.placed, { x = 10, y = 245, w = 120, h = 75 }, "last target")
 end)
 
 run("equidistant portrait slot centers choose the earlier slot", function()

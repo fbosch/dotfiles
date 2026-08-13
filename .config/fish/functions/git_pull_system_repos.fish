@@ -257,15 +257,15 @@ function git_pull_system_repos --description 'Synchronize canonical system repos
         return 1
     end
 
-    printf '%sWorking%s  Installing native Neovim plugins...\n' "$working" "$normal" >&2
-    nvim --headless -i NONE '+qa'
+    printf '%sWorking%s  Installing native Neovim plugins and parsers...\n' "$working" "$normal" >&2
+    nvim --headless -i NONE '+TSInstallMissing' '+qa'
     set command_status $status
     if contains -- $command_status 130 143
         return $command_status
     end
     if test $command_status -ne 0
-        printf '%sError%s    Failed to install native Neovim plugins.\n' "$error" "$normal" >&2
-        printf "  Run `nvim --headless -i NONE '+qa'` to diagnose the failure.\n" >&2
+        printf '%sError%s    Failed to install native Neovim plugins or parsers.\n' "$error" "$normal" >&2
+        printf "  Run `nvim --headless -i NONE '+TSInstallMissing' '+qa'` to diagnose the failure.\n" >&2
         return 1
     end
 

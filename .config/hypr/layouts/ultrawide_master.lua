@@ -172,6 +172,19 @@ function M.recalculate(ctx)
 
 	local area = ctx.area
 	if count == 1 then
+		local role = role_for_targets(targets)
+		local axis = role == monitor_role.portrait and "y" or "x"
+		local center = area[axis] + area[axis == "x" and "w" or "h"] / 2
+		ordered_axis.remember_single(
+			state,
+			workspace_key(targets),
+			targets,
+			"ultrawide_master",
+			role,
+			axis,
+			center,
+			active_index
+		)
 		targets[1]:place(area)
 		return
 	end

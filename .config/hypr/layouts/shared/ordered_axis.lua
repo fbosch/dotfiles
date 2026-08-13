@@ -108,6 +108,7 @@ function M.remember_single(state, key, targets, layout_name, role, axis, center,
 	local scope = order_state.scope(layout_name, key, role, axis)
 	order_state.sync(state, key, targets, nil, true)
 	order_state.consume_transfer_intent(targets[1], role, axis, true)
+	order_state.consume_placement_intent(targets[1], layout_name, key, role, axis)
 	order_state.remember_active(state, key, targets, active_index)
 	order_state.remember_position(state, targets[1], scope, center, axis)
 end

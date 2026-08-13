@@ -21,6 +21,7 @@ _G.hl = {
 _G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
 
 local monitor_role = require("lib.monitor_role")
+local ordered_axis = require("layouts.shared.ordered_axis")
 local persistent_state = require("layouts.shared.persistent_state")
 local order_state
 
@@ -160,6 +161,13 @@ run("three windows use left center right columns", function()
 	assert_box(right.placed, { x = 710, y = 20, w = 300, h = 500 }, "right target")
 end)
 
+run("nearest slot center selects every unequal ultrawide column", function()
+	local ratios = { 0.3, 0.4, 0.3 }
+	assert_equal(ordered_axis.nearest_slot_index(160, ratios, 10, 1000), 1, "left slot")
+	assert_equal(ordered_axis.nearest_slot_index(510, ratios, 10, 1000), 2, "center slot")
+	assert_equal(ordered_axis.nearest_slot_index(860, ratios, 10, 1000), 3, "right slot")
+end)
+
 run("hdmi fallback uses portrait rows", function()
 	local top = set_monitor(make_target(1, true), "HDMI-A-2")
 	local bottom = set_monitor(make_target(2), "HDMI-A-2")
@@ -249,6 +257,51 @@ run("retiled placement ignores retained missing identities", function()
 	assert_box(retiled.placed, { x = 680, y = 20, w = 330, h = 500 }, "retiled target")
 end)
 
+run("single tiled column consumes placement intent", function()
+	local tiled = make_target(341, true)
+	local workspace = "single-placement"
+	local ctx = make_context({ tiled }, workspace)
+	order_state.record_placement_intent(tiled.window, {
+		layout_name = "ultrawide_master",
+		workspace_key = workspace,
+		monitor_role = monitor_role.ultrawide,
+		axis = "x",
+		position = 900,
+	})
+	registered_layout.layout.recalculate(ctx)
+
+	assert_equal(order_state.placement_intent_for_window(tiled.window), nil, "consumed intent")
+	local second = make_target(342)
+	registered_layout.layout.recalculate(make_context({ tiled, second }, workspace))
+	assert_box(tiled.placed, { x = 10, y = 20, w = 670, h = 500 }, "existing target")
+	assert_box(second.placed, { x = 680, y = 20, w = 330, h = 500 }, "new target")
+end)
+
+run("visible no-op placement preserves hidden identity order", function()
+	local first = make_target(351)
+	local retiled = make_target(352, true)
+	local hidden = make_target(353)
+	local last = make_target(354)
+	local workspace = "hidden-order"
+	registered_layout.layout.recalculate(make_context({ first, retiled, hidden, last }, workspace))
+	registered_layout.layout.recalculate(make_context({ first, retiled, last }, workspace))
+
+	order_state.record_placement_intent(retiled.window, {
+		layout_name = "ultrawide_master",
+		workspace_key = workspace,
+		monitor_role = monitor_role.ultrawide,
+		axis = "x",
+		position = 510,
+	})
+	registered_layout.layout.recalculate(make_context({ first, retiled, last }, workspace))
+	registered_layout.layout.recalculate(make_context({ first, retiled, hidden, last }, workspace))
+
+	assert_box(first.placed, { x = 10, y = 20, w = 250, h = 500 }, "first target")
+	assert_box(retiled.placed, { x = 260, y = 20, w = 250, h = 500 }, "retiled target")
+	assert_box(hidden.placed, { x = 510, y = 20, w = 250, h = 500 }, "hidden target")
+	assert_box(last.placed, { x = 760, y = 20, w = 250, h = 500 }, "last target")
+end)
+
 run("equidistant ultrawide slot centers choose the earlier slot", function()
 	local first = make_target(311)
 	local second = make_target(312)
@@ -262,7 +315,7 @@ run("equidistant ultrawide slot centers choose the earlier slot", function()
 		workspace_key = workspace,
 		monitor_role = monitor_role.ultrawide,
 		axis = "x",
-		position = 285,
+		position = 335,
 	})
 	registered_layout.layout.recalculate(ctx)
 

@@ -105,9 +105,10 @@ require("config.pack.registry").register({
 			mode = { "n" },
 			desc = "next buffer",
 			silent = true,
+			replace = true,
 		},
 		{
-			"<C-A-h>",
+			"<leader>bh",
 			function()
 				vim.cmd("BufferMovePrevious")
 			end,
@@ -116,7 +117,7 @@ require("config.pack.registry").register({
 			silent = true,
 		},
 		{
-			"<C-A-l>",
+			"<leader>bl",
 			function()
 				vim.cmd("BufferMoveNext")
 			end,

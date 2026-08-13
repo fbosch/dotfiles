@@ -139,7 +139,10 @@ register({
 					return
 				end
 
-				treesitter.install(missing_languages, { force = true })
+				local installed = treesitter.install(missing_languages, { force = true }):wait()
+				if installed == false then
+					error("Failed to install one or more configured treesitter parsers")
+				end
 			end, { desc = "Install missing configured treesitter parsers" })
 
 			local group = vim.api.nvim_create_augroup("TreesitterStart", { clear = true })

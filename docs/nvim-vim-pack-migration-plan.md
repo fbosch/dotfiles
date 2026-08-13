@@ -478,7 +478,7 @@ Generated-state handling:
 
 **Acceptance:** `:Lazy` does not exist, `package.loaded.lazy` is `nil`, and no Lazy module resolves through `runtimepath`.
 
-**Progress:** Phase 10 is complete. The Lazy bootstrap and import aggregator were removed, while `lazy-lock.json` and the existing Lazy data directory remain untouched as rollback artifacts. Native bootstrap now owns built-in runtime-plugin disabling, and the repository keybind extractor reads callback-key metadata from the native registry. Normal and isolated-XDG startup both installed and activated the 68-entry native catalog with `:Lazy` absent, `package.loaded.lazy == nil`, and no `lua/lazy/init.lua` runtime file. Neovim health, Lua quality, Stow dry-run, and the five-tool keybind validator passed.
+**Progress:** Phase 10 is complete. The Lazy bootstrap and import aggregator were removed, while `lazy-lock.json` and the existing Lazy data directory remain untouched as rollback artifacts. Native bootstrap now owns built-in runtime-plugin disabling, and the repository keybind extractor reads callback-key metadata from the native registry. Normal and isolated-XDG startup both discovered, registered, and installed the 68-entry native catalog with `:Lazy` absent, `package.loaded.lazy == nil`, and no `lua/lazy/init.lua` runtime file; the local trigger layer continues to control which packages enter `runtimepath`. Neovim health, Lua quality, Stow dry-run, and the five-tool keybind validator passed.
 
 ## Validation Gates
 

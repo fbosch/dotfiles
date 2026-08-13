@@ -151,8 +151,29 @@ local function validate_dependencies()
 	end
 end
 
+local function validate_key_triggers()
+	local owners = {}
+	for name, plugin in pairs(registry.all()) do
+		for _, key in ipairs(plugin.keys or {}) do
+			local modes = type(key.mode) == "table" and key.mode or { key.mode or "n" }
+			for _, mode in ipairs(modes) do
+				local id = mode .. "\0" .. vim.keycode(key[1])
+				assert(owners[id] == nil, ("duplicate native key: %s and %s -> %s"):format(owners[id], name, key[1]))
+				owners[id] = name
+
+				local existing = vim.fn.maparg(key[1], mode, false, true)
+				assert(
+					next(existing) == nil or key.replace == true,
+					("native key conflicts with existing mapping: %s -> %s (%s)"):format(name, key[1], mode)
+				)
+			end
+		end
+	end
+end
+
 function M.setup()
 	validate_dependencies()
+	validate_key_triggers()
 
 	local plugin_names = vim.tbl_keys(registry.all())
 	table.sort(plugin_names)

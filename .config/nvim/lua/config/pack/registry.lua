@@ -70,6 +70,10 @@ local function validate_keys(plugin)
 		assert(key.desc == nil or type(key.desc) == "string", "native key desc must be a string: " .. plugin.name)
 		assert(key.expr == nil or type(key.expr) == "boolean", "native key expr must be boolean: " .. plugin.name)
 		assert(key.silent == nil or type(key.silent) == "boolean", "native key silent must be boolean: " .. plugin.name)
+		assert(
+			key.replace == nil or type(key.replace) == "boolean",
+			"native key replace must be boolean: " .. plugin.name
+		)
 	end
 end
 
