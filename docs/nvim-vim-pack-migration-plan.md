@@ -34,12 +34,13 @@ local activation layer
   -> ordered dependency activation
   -> synchronous startup roots
   -> retryable trigger conditions
+  -> dependency-ordered boot-only init
   -> opts/module setup shorthand and custom setup
   -> scheduled User PackReady activation
   -> PackChanged build hooks
 ```
 
-The current loader does not yet implement priority ordering, generic event/FileType replay, generic key replay, or an `init` phase. Those remain prerequisites for plugins that depend on them.
+The current loader does not yet implement priority ordering, generic event/FileType replay, or generic key replay. Those remain prerequisites for plugins that depend on them.
 
 Native-owned declarations follow upstream branches or semver ranges. Reproducibility comes from the generated `nvim-pack-lock.json`; commit hashes in declarations are reserved for intentional freezes.
 
@@ -85,6 +86,7 @@ The implemented declaration format remains narrow and covers only the features c
   keys = { ... },
   module = "plugin_module",
   opts = { ... },
+  -- init = function() ... end,
   -- setup = function(context) ... end,
 }
 ```
@@ -103,8 +105,9 @@ Implemented and validated:
 - Callback key triggers activate the plugin before invoking the declared callback.
 - Flat `events` and `filetypes` declarations activate plugins on their first matching autocmd.
 - `opts`/`module` shorthand and custom `setup(context)` initialization run after `packadd`.
+- Dependency-ordered `init()` callbacks run once before trigger installation and before any package enters `runtimepath`.
 - Named dependencies activate depth-first before consumer setup; invalid and cyclic graphs fail during startup.
-- `startup = true` activates a root synchronously before initial buffer events.
+- `startup = true` activates an eligible root synchronously before initial buffer events and may use a one-shot condition.
 - `root = false` keeps dependency-only libraries dormant until a consumer needs them.
 - Trigger conditions are evaluated at each activation attempt until they succeed.
 - Lifecycle failures identify the root, dependency chain, plugin, and phase and are terminal for the session.
@@ -116,7 +119,6 @@ Pending Phase 3 capabilities:
 - Priority ordering.
 - Generic event and filetype replay under a recursion guard.
 - Generic key replay that preserves mode, count, register, operator, and visual selection context.
-- An `init` phase for plugins that require globals before runtime scripts are sourced.
 - A real FFF fresh install/update build event, including clear failure behavior.
 
 ## Dependency Boundaries
@@ -433,6 +435,8 @@ Requirements:
 - Nvim JQX retains the first JSON/YAML behavior validated in Phase 4.
 
 **Acceptance:** Sessions restore and save once, Opencode lifecycle behavior works, and FFF retains its validated first-use behavior. FTerm, Conform, and Nvim JQX retain the first-use behavior validated in Phase 4.
+
+**Progress:** Phase 8 is complete. The native loader now supports dependency-ordered boot-only `init()` callbacks and conditional startup roots. Mini Sessions remains synchronous before `VimEnter`, retains its tagged-release policy, and stays dormant for file-argument and Git-message launches. Snacks installs boot-time `vim.ui` wrappers that activate its native package on first use, while otherwise remaining post-start loaded. Opencode keeps its environment and session listeners at boot, activates Snacks first, and runs its main setup only for a first key or qualifying restored Herdr session. Focused fixtures covered one restore/save lifecycle, file and Git-message exclusions, pre-`PackReady` Snacks dispatch, Opencode first-key callbacks, and restored-session dependency ordering. Native ownership increased from 60 to 63 while the catalog remained 68.
 
 **Rollback:** Revert lifecycle integration slices individually unless they share a hard dependency such as Snacks and Opencode.
 

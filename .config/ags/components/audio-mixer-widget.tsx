@@ -1354,7 +1354,7 @@ function applyStaticCSS(): void {
     }
 
     window.audio-mixer-widget box.audio-mixer-container {
-      background-color: rgba(45, 45, 45, 0.9);
+      background-color: ${tokens.colors.background.secondary.value}e6;
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 12px;
       min-width: 500px;
@@ -1373,7 +1373,7 @@ function applyStaticCSS(): void {
     }
 
     window.audio-mixer-widget box.audio-mixer-tabs {
-      background-color: rgba(32, 32, 32, 0.5);
+      background-color: ${tokens.colors.background.primary.value}80;
       border-radius: 8px;
       padding: 4px;
     }
@@ -1403,7 +1403,7 @@ function applyStaticCSS(): void {
     }
 
     window.audio-mixer-widget box.audio-mixer-row {
-      background-color: rgba(32, 32, 32, 0.45);
+      background-color: ${tokens.colors.background.primary.value}73;
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 8px;
       padding: 8px 10px;
@@ -1420,8 +1420,8 @@ function applyStaticCSS(): void {
     }
 
     window.audio-mixer-widget box.audio-mixer-row.focused {
-      border-color: rgba(0, 103, 192, 0.65);
-      background-color: rgba(32, 32, 32, 0.62);
+      border-color: ${tokens.colors.accent.primary.value}a6;
+      background-color: ${tokens.colors.background.primary.value}9e;
     }
 
     window.audio-mixer-widget box.audio-mixer-row-icon {
@@ -1435,12 +1435,12 @@ function applyStaticCSS(): void {
     }
 
     window.audio-mixer-widget box.audio-mixer-row-icon.default {
-      background-color: rgba(0, 103, 192, 0.25);
-      color: #ffffff;
+      background-color: ${tokens.colors.accent.primary.value}40;
+      color: ${tokens.colors.accent.text.value};
     }
 
     window.audio-mixer-widget box.audio-mixer-row-icon.muted {
-      background-color: rgba(196, 43, 28, 0.12);
+      background-color: ${tokens.colors.state.error.value}1f;
       color: ${tokens.colors.state.error.value};
     }
 
@@ -1462,14 +1462,14 @@ function applyStaticCSS(): void {
       border-radius: 999px;
       padding: 2px 8px;
       font-size: 11px;
-      border: 1px solid rgba(0, 103, 192, 0.4);
-      background-color: rgba(0, 103, 192, 0.2);
+      border: 1px solid ${tokens.colors.accent.primary.value}66;
+      background-color: ${tokens.colors.accent.primary.value}33;
       color: ${tokens.colors.foreground.primary.value};
     }
 
     window.audio-mixer-widget label.audio-mixer-badge.muted {
-      border-color: rgba(196, 43, 28, 0.3);
-      background-color: rgba(196, 43, 28, 0.1);
+      border-color: ${tokens.colors.state.error.value}4d;
+      background-color: ${tokens.colors.state.error.value}1a;
       color: ${tokens.colors.state.error.value};
     }
 
@@ -1523,8 +1523,8 @@ function applyStaticCSS(): void {
     }
 
     window.audio-mixer-widget button.audio-mixer-action.default-icon.active {
-      color: #ffffff;
-      border-color: rgba(0, 103, 192, 0.55);
+      color: ${tokens.colors.accent.text.value};
+      border-color: ${tokens.colors.accent.primary.value}8c;
       background-color: ${tokens.colors.accent.primary.value};
     }
 
@@ -1538,7 +1538,7 @@ function applyStaticCSS(): void {
     window.audio-mixer-widget box.audio-mixer-empty {
       border: 1px dashed rgba(255, 255, 255, 0.12);
       border-radius: 8px;
-      background-color: rgba(32, 32, 32, 0.3);
+      background-color: ${tokens.colors.background.primary.value}4d;
       padding: 0;
       min-height: 180px;
     }

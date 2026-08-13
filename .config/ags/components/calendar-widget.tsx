@@ -1113,7 +1113,7 @@ function applyStaticCSS(): void {
     }
 
     window.calendar-widget box.calendar-container {
-      background-color: rgba(45, 45, 45, 0.9);
+      background-color: ${tokens.colors.background.secondary.value}e6;
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 8px;
       padding: 12px;
@@ -1214,12 +1214,12 @@ function applyStaticCSS(): void {
 
     window.calendar-widget button.calendar-day.selected {
       border-radius: 6px;
-      background-color: rgba(0, 103, 192, 0.2);
+      background-color: ${tokens.colors.accent.primary.value}33;
       box-shadow: inset 0 0 0 1px ${tokens.colors.accent.primary.value};
     }
 
     window.calendar-widget button.calendar-day.today.selected {
-      background-color: rgba(0, 103, 192, 0.2);
+      background-color: ${tokens.colors.accent.primary.value}33;
     }
 
     window.calendar-widget button.calendar-day.outside-month {

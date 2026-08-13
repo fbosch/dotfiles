@@ -326,7 +326,7 @@ function applyStaticCss(): void {
 		window.about-this-pc box.about-container {
 			min-width: 420px; min-height: 560px;
 			border: 1px solid ${tokens.colors.border.hover.value}; border-radius: 12px;
-			background-color: rgba(45, 45, 45, 0.90);
+			background-color: ${tokens.colors.background.secondary.value}e6;
 		}
 		window.about-this-pc overlay.about-titlebar { min-height: 36px; }
 		window.about-this-pc button.about-close { min-width: 32px; min-height: 32px; padding: 0; margin: 3px 4px 0 0; }

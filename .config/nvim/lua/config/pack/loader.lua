@@ -4,6 +4,7 @@ local M = {}
 local states = {}
 local failures = {}
 local trigger_autocmds = {}
+local initialized = {}
 
 local function clear_trigger_autocmds(name)
 	for _, id in ipairs(trigger_autocmds[name] or {}) do
@@ -95,6 +96,30 @@ function M.activate(name, context)
 	return activate(name, context, name, {}, false)
 end
 
+local function initialize(name, root, chain)
+	if initialized[name] then
+		return
+	end
+
+	local plugin = assert(registry.get(name), "unknown native plugin: " .. name)
+	local next_chain = vim.list_extend(vim.deepcopy(chain), { name })
+	for _, dependency_name in ipairs(plugin.dependencies or {}) do
+		initialize(dependency_name, root, next_chain)
+	end
+
+	if plugin.init ~= nil then
+		local ok, cause = xpcall(plugin.init, debug.traceback)
+		if ok == false then
+			local message = activation_error(root, next_chain, name, "init", cause)
+			states[name] = "failed"
+			failures[name] = message
+			error(message, 0)
+		end
+	end
+
+	initialized[name] = true
+end
+
 local function validate_dependencies()
 	for name, plugin in pairs(registry.all()) do
 		for _, dependency in ipairs(plugin.dependencies or {}) do
@@ -128,6 +153,12 @@ end
 
 function M.setup()
 	validate_dependencies()
+
+	local plugin_names = vim.tbl_keys(registry.all())
+	table.sort(plugin_names)
+	for _, name in ipairs(plugin_names) do
+		initialize(name, name, {})
+	end
 
 	for name, plugin in pairs(registry.all()) do
 		for _, filetype in ipairs(plugin.filetypes or {}) do

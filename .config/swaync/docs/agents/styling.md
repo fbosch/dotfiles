@@ -33,10 +33,10 @@ Use margins instead of `gap`:
 ## Colors and transparency
 
 ```css
-background: rgba(32, 32, 32, 0.85);
+background: rgba(25, 25, 25, 0.85);
 border: 1px solid rgba(255, 255, 255, 0.1);
 
---bg-color: rgba(32, 32, 32, 0.85);
+--bg-color: rgba(25, 25, 25, 0.85);
 background: var(--bg-color);
 ```
 
@@ -51,6 +51,8 @@ background: var(--bg-color);
   transform: scale(0.98);
 }
 ```
+
+Define palette values in `style.css` `:root` and use those variables throughout. Keep them aligned with `design-system/tokens.json`: background `#191919`, surface `#242424`, tertiary `#2a2a2a`, sky accent `#6baedb`, and rose critical `#d86659`.
 
 ## Style organization
 

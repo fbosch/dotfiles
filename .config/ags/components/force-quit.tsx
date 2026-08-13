@@ -438,7 +438,7 @@ function applyStaticCss(): void {
 		window.force-quit box.force-quit-container {
 			min-width: 420px; min-height: 500px;
 			border: 1px solid ${tokens.colors.border.hover.value}; border-radius: 12px;
-			background-color: rgba(45, 45, 45, 0.90);
+			background-color: ${tokens.colors.background.secondary.value}e6;
 		}
 		window.force-quit overlay.force-quit-titlebar { min-height: 36px; }
 		window.force-quit box.force-quit-body { padding: 0 20px 20px; }
@@ -450,7 +450,7 @@ function applyStaticCss(): void {
 		window.force-quit box.force-quit-list-content { padding: 4px; }
 		window.force-quit button.force-quit-row { min-height: 36px; padding: 0 8px; border: none; border-radius: 6px; background-color: transparent; color: ${tokens.colors.foreground.primary.value}; }
 		window.force-quit button.force-quit-row:hover, window.force-quit button.force-quit-row:focus { background-color: rgba(255, 255, 255, 0.10); }
-		window.force-quit button.force-quit-row.selected { background-color: ${tokens.colors.accent.primary.value}; color: #ffffff; }
+		window.force-quit button.force-quit-row.selected { background-color: ${tokens.colors.accent.primary.value}; color: ${tokens.colors.accent.text.value}; }
 		window.force-quit image.force-quit-icon, window.force-quit box.force-quit-icon-fallback { min-width: 24px; min-height: 24px; }
 		window.force-quit box.force-quit-icon-fallback { border-radius: 4px; background-color: rgba(255, 255, 255, 0.10); }
 		window.force-quit box.force-quit-icon-fallback label { min-width: 24px; min-height: 24px; font-size: 12px; font-weight: 600; }

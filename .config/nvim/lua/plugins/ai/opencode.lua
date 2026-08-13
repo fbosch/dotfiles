@@ -1,26 +1,53 @@
-return {
+local register = require("config.pack.registry").register
+
+local function invoke_configured_mapping(lhs)
+	local mode = vim.fn.mode(1):sub(1, 1)
+	if mode == "v" or mode == "V" or mode == "\22" then
+		mode = "x"
+	elseif mode ~= "t" then
+		mode = "n"
+	end
+
+	local mapping = vim.fn.maparg(lhs, mode, false, true)
+	assert(type(mapping.callback) == "function", "missing configured opencode mapping: " .. lhs)
+	mapping.callback()
+end
+
+local function key(lhs, mode, desc)
+	return {
+		lhs,
+		function()
+			invoke_configured_mapping(lhs)
+		end,
+		mode = mode,
+		desc = desc,
+	}
+end
+
+register({
 	{
-		"NickvanDyke/opencode.nvim",
+		name = "opencode.nvim",
+		src = "https://github.com/NickvanDyke/opencode.nvim.git",
 		keys = {
-			{ "<leader>ac", mode = { "n", "x" }, desc = "Ask opencode" },
-			{ "<leader>as", mode = { "n", "x" }, desc = "opencode actions" },
-			{ "<leader>aS", mode = "n", desc = "Select opencode session" },
-			{ "ga", mode = { "n", "x" }, desc = "Add to opencode" },
-			{ "<A-a>", mode = { "n", "t" }, desc = "Toggle opencode" },
-			{ "<A-x>", mode = { "n", "v" }, desc = "Send to opencode" },
-			{ "<leader>ae", mode = { "n", "v" }, desc = "Explain code" },
-			{ "<leader>ao", mode = { "n", "v" }, desc = "Optimize code" },
-			{ "<leader>ad", mode = { "n", "v" }, desc = "Add documentation" },
-			{ "<leader>aa", mode = { "n", "v" }, desc = "Add tests" },
-			{ "<leader>ar", mode = { "n", "v" }, desc = "Review code" },
-			{ "<leader>af", mode = { "n", "v" }, desc = "Fix diagnostics" },
-			{ "<leader>ax", mode = { "n", "v" }, desc = "Explain diagnostics" },
-			{ "<leader>ag", mode = { "n", "v" }, desc = "Grammar correction" },
-			{ "<leader>ak", mode = { "n", "v" }, desc = "Extract keywords" },
-			{ "<leader>al", mode = { "n", "v" }, desc = "Code readability" },
+			key("<leader>ac", { "n", "x" }, "Ask opencode"),
+			key("<leader>as", { "n", "x" }, "opencode actions"),
+			key("<leader>aS", "n", "Select opencode session"),
+			key("ga", { "n", "x" }, "Add to opencode"),
+			key("<A-a>", { "n", "t" }, "Toggle opencode"),
+			key("<A-x>", { "n", "v" }, "Send to opencode"),
+			key("<leader>ae", { "n", "v" }, "Explain code"),
+			key("<leader>ao", { "n", "v" }, "Optimize code"),
+			key("<leader>ad", { "n", "v" }, "Add documentation"),
+			key("<leader>aa", { "n", "v" }, "Add tests"),
+			key("<leader>ar", { "n", "v" }, "Review code"),
+			key("<leader>af", { "n", "v" }, "Fix diagnostics"),
+			key("<leader>ax", { "n", "v" }, "Explain diagnostics"),
+			key("<leader>ag", { "n", "v" }, "Grammar correction"),
+			key("<leader>ak", { "n", "v" }, "Extract keywords"),
+			key("<leader>al", { "n", "v" }, "Code readability"),
 		},
 		dependencies = {
-			"folke/snacks.nvim",
+			"snacks.nvim",
 		},
 		init = function()
 			local session = require("utils.session")
@@ -254,6 +281,7 @@ return {
 					end
 
 					vim.schedule(function()
+						require("config.pack.loader").activate("opencode.nvim", { source = "SessionLoadPost" })
 						open_opencode_terminal()
 						connect_to_session(saved_session_id(), 10)
 					end)
@@ -296,7 +324,7 @@ return {
 				},
 			}
 		end,
-		config = function()
+		setup = function()
 			local opencode_terminal_var = "is_opencode_terminal"
 
 			local function is_opencode_terminal(buf)
@@ -678,4 +706,6 @@ return {
 			end, { desc = "Code readability" })
 		end,
 	},
-}
+})
+
+return {}

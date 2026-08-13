@@ -176,60 +176,39 @@ register({
 			})
 		end,
 	},
-})
-
-return {
 	{
-		"folke/snacks.nvim",
-		event = "VeryLazy",
-		priority = 1000,
-		opts = {
-			animate = {},
-			util = {},
-			input = {
-				enabled = true,
-			},
-			picker = {
-				enabled = true,
-			},
-		},
+		name = "snacks.nvim",
+		src = "https://github.com/folke/snacks.nvim.git",
 		init = function()
-			local builtin_input = vim.ui.input
-			local builtin_select = vim.ui.select
+			local function activate(source)
+				require("config.pack.loader").activate("snacks.nvim", {
+					buf = vim.api.nvim_get_current_buf(),
+					source = source,
+				})
+				return require("snacks")
+			end
 
 			vim.ui.input = function(opts, on_confirm)
-				opts = opts or {}
-				local ok, snacks = pcall(require, "snacks")
-				if ok then
-					return snacks.input.input(opts, on_confirm)
-				end
-
-				if builtin_input ~= nil then
-					return builtin_input(opts, on_confirm)
-				end
-
-				if on_confirm ~= nil then
-					on_confirm(vim.fn.input(opts.prompt or ""))
-				end
+				return activate("vim.ui.input").input.input(opts or {}, on_confirm)
 			end
 
 			vim.ui.select = function(items, opts, on_choice)
-				local ok, snacks = pcall(require, "snacks")
-				if ok then
-					return snacks.picker.select(items, opts, on_choice)
-				end
-
-				if builtin_select ~= nil then
-					return builtin_select(items, opts, on_choice)
-				end
-
-				if on_choice ~= nil then
-					on_choice(nil, nil)
-				end
+				return activate("vim.ui.select").picker.select(items, opts, on_choice)
 			end
 		end,
-		config = function(_, opts)
-			require("snacks").setup(opts)
+		setup = function()
+			require("snacks").setup({
+				animate = {},
+				util = {},
+				input = {
+					enabled = true,
+				},
+				picker = {
+					enabled = true,
+				},
+			})
 		end,
 	},
-}
+})
+
+return {}

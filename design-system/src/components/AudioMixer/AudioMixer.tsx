@@ -216,7 +216,7 @@ const AudioRow: React.FC<{
       <div
         className={cn(
           'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-foreground-primary',
-          item.isDefault && 'bg-accent-primary/25 text-white',
+          item.isDefault && 'bg-accent-primary/25 text-accent-text',
           item.muted && 'bg-state-error/10 text-state-error'
         )}
       >

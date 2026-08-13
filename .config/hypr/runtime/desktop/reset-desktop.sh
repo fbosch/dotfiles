@@ -21,6 +21,21 @@ wait_for_shutdown() {
   done
 }
 
+wait_for_start() {
+  name="$1"
+  shift
+  attempts=0
+  while ! "$@" >/dev/null 2>&1; do
+    if [ "$attempts" -ge 100 ]; then
+      printf 'reset-desktop: %s did not start\n' "$name" >&2
+      exit 1
+    fi
+
+    attempts=$((attempts + 1))
+    sleep 0.05
+  done
+}
+
 has_live_named_process() {
   name="$1"
 
@@ -84,6 +99,10 @@ wait_for_shutdowns
 hyprctl reload
 
 uwsm-app -s s -- waybar &
+waybar_launcher_pid=$!
+wait "$waybar_launcher_pid"
+wait_for_start "waybar" pgrep -x waybar
+
 uwsm-app -s s -- ~/.config/ags/start-daemons.sh &
 uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-monitor.sh &
 uwsm-app -s b -- foot --server &

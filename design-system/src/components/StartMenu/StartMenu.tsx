@@ -196,7 +196,7 @@ export const StartMenu = ({
       icon: <span className="font-fluent">{'\uF8B0'}</span>,
       badge:
         automaticGamingActive && profileSelection === 'auto' ? (
-          <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-nerd text-[8px] text-state-success-foreground ring-2 ring-accent-primary">
+          <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-nerd text-[8px] text-state-success-text ring-2 ring-accent-primary">
             {'\u{F02B4}'}
           </span>
         ) : undefined,
@@ -213,7 +213,7 @@ export const StartMenu = ({
       icon: <span className="font-fluent">{'\uEC49'}</span>,
       badge:
         automaticGamingActive && profileSelection === 'default' ? (
-          <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-nerd text-[8px] text-state-success-foreground ring-2 ring-accent-primary">
+          <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-nerd text-[8px] text-state-success-text ring-2 ring-accent-primary">
             {'\u{F02B4}'}
           </span>
         ) : undefined,
@@ -237,7 +237,7 @@ export const StartMenu = ({
       icon: <span className="font-fluent">{'\uEA95'}</span>,
       badge:
         automaticGamingActive && profileSelection === 'powersave' ? (
-          <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-nerd text-[8px] text-state-success-foreground ring-2 ring-accent-primary">
+          <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-nerd text-[8px] text-state-success-text ring-2 ring-accent-primary">
             {'\u{F02B4}'}
           </span>
         ) : undefined,
@@ -482,7 +482,7 @@ export const StartMenu = ({
                     menuItemVariants({ animated: !disableAnimations }),
                     'justify-between',
                     recentItemsOpen
-                      ? 'bg-accent-primary text-white hover:bg-accent-hover focus-visible:bg-accent-hover'
+                      ? 'bg-accent-primary text-accent-text hover:bg-accent-hover focus-visible:bg-accent-hover'
                       : ''
                   )}
                   aria-haspopup="menu"

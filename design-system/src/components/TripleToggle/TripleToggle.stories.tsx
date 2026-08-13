@@ -63,7 +63,7 @@ export const WithBadge: Story = {
       {
         ...options[0],
         badge: (
-          <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-fluent text-[8px] text-state-success-foreground ring-2 ring-accent-primary">
+          <span className="absolute -bottom-1 -right-1.5 grid size-3.5 place-items-center rounded-full bg-state-success font-fluent text-[8px] text-state-success-text ring-2 ring-accent-primary">
             {'\uE7FC'}
           </span>
         ),

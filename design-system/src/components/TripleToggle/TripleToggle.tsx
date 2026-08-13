@@ -7,7 +7,7 @@ const toggleOptionVariants = cva(
   {
     variants: {
       active: {
-        true: 'bg-accent-primary text-white shadow-sm',
+        true: 'bg-accent-primary text-accent-text shadow-sm',
         false:
           'text-foreground-secondary hover:bg-white/10 hover:text-foreground-primary focus-visible:bg-white/10 focus-visible:text-foreground-primary',
       },

@@ -3,6 +3,7 @@ import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import Gdk from "gi://Gdk?version=4.0";
+import tokens from "../../../design-system/tokens.json";
 import { bindGamingOpacity } from "../services/gaming-opacity";
 import { perf } from "../services/performance-monitor";
 
@@ -218,7 +219,7 @@ function applyCSS() {
       font-family: "SF Pro Rounded", "SF Pro Display", system-ui, sans-serif;
       font-size: 80px;
       font-weight: 700;
-      color: rgba(255, 255, 255, 0.95);
+      color: ${tokens.colors.foreground.primary.value}f2;
       text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
       min-width: 190px;
     }
@@ -227,7 +228,7 @@ function applyCSS() {
       font-family: "SF Pro Display", system-ui, sans-serif;
       font-size: 16px;
       font-weight: 500;
-      color: rgba(255, 255, 255, 0.7);
+      color: ${tokens.colors.foreground.secondary.value}b3;
       margin-top: 8px;
     }
   `,

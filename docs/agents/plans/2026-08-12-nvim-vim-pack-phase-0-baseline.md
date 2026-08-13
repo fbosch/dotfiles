@@ -312,6 +312,8 @@ The final Phase 7 UI closure moved Devicons, Tiny Devicons Auto Colors, Barbar, 
 
 The required Phase 7 Hyperfine checkpoint used the unchanged command, three warmups, and 21 recorded launches. Mean startup was 42.22 ms, median was 41.50 ms, standard deviation was 2.04 ms, and the range was 39.49-48.45 ms; all launches succeeded. This is 4.68 ms below the Phase 5 mean of 46.9 ms, so Phase 7 introduced no measured startup regression. A separate preceding 21-run confirmation measured 45.4 ms mean with a 3.7 ms standard deviation and a 40.1-51.8 ms range, also below the Phase 5 mean.
 
+Phase 8 moved Mini Sessions, Snacks, and Opencode to native ownership. The loader gained dependency-ordered one-shot `init()` callbacks and conditional startup roots so Mini Sessions remains synchronous only for eligible launches, Snacks can install its `vim.ui` activation wrappers at boot, and Opencode can register session listeners without eagerly loading its package. Opencode activates with Snacks before its first key callback or a qualifying restored Herdr session. Focused checks covered one restore/save lifecycle, file-argument and Git-message exclusions, pre-`PackReady` Snacks input/select dispatch, Opencode boot globals, first-key activation, restored-session ordering, runtime ownership, and unchanged lock revisions. Native ownership increased from 60 to 63 while the catalog remained 68. The next required Hyperfine checkpoint remains Phase 9.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:

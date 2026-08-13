@@ -1,5 +1,6 @@
 local git = require("utils.git")
 local session = require("utils.session")
+local register = require("config.pack.registry").register
 
 local function mark_herdr_pane()
 	local pane_id = vim.env.HERDR_PANE_ID
@@ -15,14 +16,16 @@ local should_persist_session = not (
 	or vim.fn.argc() > 0 -- opened specific file
 )
 
-return {
+register({
 	{
-		"echasnovski/mini.sessions",
-		version = "*",
-		lazy = false,
-		priority = 500,
-		cond = should_persist_session,
-		config = function()
+		name = "mini.sessions",
+		src = "https://github.com/echasnovski/mini.sessions.git",
+		version = vim.version.range("*"),
+		startup = true,
+		condition = function()
+			return should_persist_session
+		end,
+		setup = function()
 			local sessions = require("mini.sessions")
 			local target = session.resolve_requested()
 			session.set_current(target)
@@ -78,4 +81,6 @@ return {
 			})
 		end,
 	},
-}
+})
+
+return {}

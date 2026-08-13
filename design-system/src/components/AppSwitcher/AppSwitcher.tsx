@@ -57,25 +57,22 @@ const appIconVariants = cva('flex flex-col items-center gap-2 p-3 rounded-xl', {
   },
 });
 
-const appPreviewVariants = cva(
-  'flex flex-col items-center gap-3 p-3 rounded-xl overflow-hidden',
-  {
-    variants: {
-      selected: {
-        true: 'bg-background-tertiary/60 border-2 border-accent-active',
-        false: 'border-2 border-transparent opacity-70',
-      },
-      animated: {
-        true: 'transition-all duration-150',
-        false: '',
-      },
+const appPreviewVariants = cva('flex flex-col items-center gap-3 p-3 rounded-xl overflow-hidden', {
+  variants: {
+    selected: {
+      true: 'bg-background-tertiary/60 border-2 border-accent-active',
+      false: 'border-2 border-transparent opacity-70',
     },
-    defaultVariants: {
-      selected: false,
-      animated: true,
+    animated: {
+      true: 'transition-all duration-150',
+      false: '',
     },
-  }
-);
+  },
+  defaultVariants: {
+    selected: false,
+    animated: true,
+  },
+});
 
 export interface AppItem {
   /**
@@ -194,7 +191,7 @@ export const AppSwitcher: React.FC<AppSwitcherProps> = ({
                   const aspectRatio = app.aspectRatio ?? 16 / 9;
                   const height = 176; // Fixed height in pixels
                   const width = height * aspectRatio;
-                  
+
                   return (
                     <div className="flex flex-col gap-3" style={{ width: `${width}px` }}>
                       {/* App info row at top */}
@@ -205,7 +202,7 @@ export const AppSwitcher: React.FC<AppSwitcherProps> = ({
                         </span>
                       </div>
                       {/* Preview image */}
-                      <div 
+                      <div
                         className="relative bg-background-primary rounded-lg overflow-hidden"
                         style={{ width: `${width}px`, height: `${height}px` }}
                       >
@@ -222,7 +219,7 @@ export const AppSwitcher: React.FC<AppSwitcherProps> = ({
                 <div className="relative">
                   <img src={app.icon} alt={app.name} className="w-16 h-16 rounded-lg" />
                   {app.badge !== undefined && app.badge > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-state-error text-white text-xs font-medium rounded-full w-5 h-5 flex items-center justify-center">
+                    <span className="absolute -top-1 -right-1 bg-state-error text-foreground-primary text-xs font-medium rounded-full w-5 h-5 flex items-center justify-center">
                       {app.badge}
                     </span>
                   )}

@@ -7,6 +7,7 @@ test_dir="$(mktemp -d)"
 bin_dir="$test_dir/bin"
 home_dir="$test_dir/home"
 original_path="$PATH"
+real_sleep="$(command -v sleep)"
 
 cleanup() {
   rm -rf "$test_dir"
@@ -18,7 +19,7 @@ mkdir -p "$bin_dir" "$home_dir/.config/hypr/runtime/desktop" "$home_dir/.config/
 write_stub() {
   local name="$1"
   # shellcheck disable=SC2016
-  printf '%s\n' '#!/bin/sh' 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' 'exit 0' > "$bin_dir/$name"
+  printf '%s\n' '#!/bin/sh' 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' '[ "${0##*/}" = "uwsm-app" ] && [ "$*" = "-s s -- waybar" ] && : > "$WAYBAR_STARTED_FILE"' 'exit 0' > "$bin_dir/$name"
   chmod +x "$bin_dir/$name"
 }
 
@@ -62,7 +63,7 @@ wait_for_log_count() {
     fi
 
     attempts=$((attempts + 1))
-    /bin/sleep 0.01
+    "$real_sleep" 0.01
   done
 
   printf 'timed out waiting for %s %s entries in %s\n' "$expected" "$prefix" "$file" >&2
@@ -71,6 +72,8 @@ wait_for_log_count() {
 
 export HOME="$home_dir"
 export PATH="$bin_dir:$original_path"
+waybar_started_file="$test_dir/waybar-started"
+export WAYBAR_STARTED_FILE="$waybar_started_file"
 
 restart_log="$test_dir/restart.log"
 FIXTURE_LOG="$restart_log" "$repo_root/runtime/desktop/restart-daemons.sh"
@@ -91,11 +94,12 @@ assert_not_contains "$restart_log" 'pkill -f gamescope-clipboard-sync'
 # a zombie; it must be ignored. Parallel waits keep reset below three seconds;
 # serial waits would take at least six seconds.
 # shellcheck disable=SC2016
-printf '%s\n' '#!/bin/sh' 'if [ "$1" = "-x" ] && [ "$2" = "hyprpaper" ]; then printf "4242\n"; fi' '/bin/sleep 1' 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' 'if [ "$1" = "-x" ] && [ "$2" = "hyprpaper" ]; then exit 0; fi' 'exit 1' > "$bin_dir/pgrep"
+printf '%s\n' '#!/bin/sh' 'if [ "$1" = "-x" ] && [ "$2" = "hyprpaper" ]; then printf "4242\n"; fi' '/bin/sleep 1' 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' 'if [ "$1" = "-x" ] && [ "$2" = "hyprpaper" ]; then exit 0; fi' 'if [ "$1" = "-x" ] && [ "$2" = "waybar" ] && [ -e "$WAYBAR_STARTED_FILE" ]; then exit 0; fi' 'exit 1' > "$bin_dir/pgrep"
 # shellcheck disable=SC2016
 printf '%s\n' '#!/bin/sh' 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' 'printf "Z\n"' 'exit 0' > "$bin_dir/ps"
 
 reset_log="$test_dir/reset.log"
+rm -f "$waybar_started_file"
 SECONDS=0
 FIXTURE_LOG="$reset_log" "$repo_root/runtime/desktop/reset-desktop.sh"
 if (( SECONDS > 2 )); then
@@ -108,6 +112,10 @@ assert_contains "$reset_log" 'pkill -f custom-layout-drag-resize.sh daemon'
 assert_contains "$reset_log" 'pkill -f custom-layout-drag-resize-daemon.lua'
 assert_contains "$reset_log" 'pgrep -f custom-layout-drag-resize(-daemon)?\.(sh|lua)'
 assert_contains "$reset_log" 'pgrep -x waybar'
+if [ "$(grep -Fxc 'pgrep -x waybar' "$reset_log")" -ne 2 ]; then
+  printf 'reset-desktop did not wait for replacement waybar\n' >&2
+  exit 1
+fi
 assert_contains "$reset_log" 'pgrep -x hyprpaper'
 assert_contains "$reset_log" 'ps -o stat= -p 4242'
 assert_contains "$reset_log" 'pkill -CONT -f window-capture-daemon'

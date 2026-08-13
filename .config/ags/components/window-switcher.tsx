@@ -1350,21 +1350,21 @@ function createWindow() {
 function applyStaticCSS() {
   const transparencyDisabled = displayMode === DisplayMode.ICONS;
   const switcherBackground = transparencyDisabled
-    ? "rgb(25, 25, 25)"
-    : "rgba(25, 25, 25, 0.5)";
+    ? tokens.colors.background.primary.value
+    : `${tokens.colors.background.primary.value}80`;
   const switcherBorder = transparencyDisabled
-    ? "1px solid rgb(52, 52, 52)"
-    : "1px solid rgba(255, 255, 255, 0.12)";
+    ? `1px solid ${tokens.colors.background.tertiary.value}`
+    : `1px solid ${tokens.colors.border.hover.value}`;
   const switcherBackdrop = transparencyDisabled ? "none" : "blur(20px)";
   const previewBackground = transparencyDisabled
-    ? "rgb(30, 30, 30)"
-    : "rgba(30, 30, 30, 0.95)";
+    ? tokens.colors.background.primary.value
+    : `${tokens.colors.background.primary.value}f2`;
   const previewHeaderBackground = transparencyDisabled
-    ? "rgb(40, 40, 40)"
-    : "rgba(40, 40, 40, 0.95)";
+    ? tokens.colors.background.tertiary.value
+    : `${tokens.colors.background.tertiary.value}f2`;
   const previewBodyBackground = transparencyDisabled
-    ? "rgb(25, 25, 25)"
-    : "linear-gradient(135deg, rgba(40, 40, 40, 0.9) 0%, rgba(25, 25, 25, 0.9) 100%)";
+    ? tokens.colors.background.primary.value
+    : `linear-gradient(135deg, ${tokens.colors.background.tertiary.value}e6 0%, ${tokens.colors.background.primary.value}e6 100%)`;
 
   app.apply_css(
     `
@@ -1406,14 +1406,14 @@ function applyStaticCSS() {
   }
   
   window.window-switcher button.app-button.selected {
-    background-color: rgba(55, 55, 55, 0.7);
+    background-color: ${tokens.colors.background.tertiary.value}b3;
     border-color: ${tokens.colors.accent.active.value};
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2),
                 0 0 0 1px ${tokens.colors.accent.active.value}33 inset;
   }
   
   window.window-switcher button.app-button.selected:hover {
-    background-color: rgba(65, 65, 65, 0.8);
+    background-color: ${tokens.colors.background.tertiary.value}cc;
     border-color: ${tokens.colors.accent.active.value};
   }
   

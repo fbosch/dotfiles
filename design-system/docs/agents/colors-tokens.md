@@ -2,10 +2,10 @@
 
 Hierarchical palette:
 
-- Background layers: `primary` → `secondary` → `tertiary` (#202020 → #2d2d2d → #373737)
-- Foreground tiers: `primary` → `secondary` → `tertiary` (#ffffff → #cccccc → #999999)
-- Accent: blue #0067c0 with hover and active states
-- Semantic states: success, warning, error, info, purple
+- Background layers: `primary` → `secondary` → `tertiary` (#191919 → #242424 → #2a2a2a)
+- Foreground tiers: `primary` → `secondary` → `tertiary` (#ffffff → #bbbdc7 → #8c8e96)
+- Accent: Zenwritten sky (#6baedb) with bright-sky hover and water active states
+- Semantic states: leaf success, wood warning, rose error, sky info, blossom secondary action
 
 Token pattern:
 
@@ -15,15 +15,15 @@ Token pattern:
 
 State palette:
 
-- success: #73bc6f
-- warning: #dea721
-- error: #e35245
-- info: #0067c0
-- purple: #9b59b6
+- success: #7aca6c
+- warning: #c69761
+- error: #d86659
+- info: #6baedb
+- purple: #b671a1
 
 Purple rationale:
 
-Purple is intentionally lighter to align with Zenwritten Dark, providing a softer alternative for secondary actions while retaining contrast.
+Blossom provides a softer secondary action color while retaining contrast.
 
 Token usage in Tailwind:
 
@@ -33,25 +33,25 @@ export default {
     extend: {
       colors: {
         background: {
-          primary: "#202020",
-          secondary: "#2d2d2d",
-          tertiary: "#373737",
+          primary: "#191919",
+          secondary: "#242424",
+          tertiary: "#2a2a2a",
         },
         foreground: {
           primary: "#ffffff",
-          secondary: "#cccccc",
-          tertiary: "#999999",
+          secondary: "#bbbdc7",
+          tertiary: "#8c8e96",
         },
         accent: {
-          primary: "#0067c0",
-          hover: "#106ebe",
-          active: "#1a7fd4",
+          primary: "#6baedb",
+          hover: "#7bbefb",
+          active: "#5b64db",
         },
         state: {
-          success: "#73bc6f",
-          warning: "#dea721",
-          error: "#e35245",
-          info: "#0067c0",
+          success: "#7aca6c",
+          warning: "#c69761",
+          error: "#d86659",
+          info: "#6baedb",
         },
       },
       fontFamily: {

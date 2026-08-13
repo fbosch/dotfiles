@@ -46,14 +46,14 @@ function applyStyles(): void {
     }
 
     button.ags-button.button-variant-default {
-      background-color: #373737;
-      color: #ffffff;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      background-color: ${tokens.colors.background.tertiary.value};
+      color: ${tokens.colors.foreground.primary.value};
+      border: 1px solid ${tokens.colors.border.default.value};
     }
 
     button.ags-button.button-variant-default:hover {
-      background-color: rgba(55, 55, 55, 0.9);
-      border-color: rgba(255, 255, 255, 0.2);
+      background-color: ${tokens.colors.background.tertiary.value}e6;
+      border-color: ${tokens.colors.border.hover.value};
     }
 
     button.ags-button.button-variant-default:focus {
@@ -63,7 +63,7 @@ function applyStyles(): void {
 
     button.ags-button.button-variant-primary {
       background-color: ${tokens.colors.accent.primary.value};
-      color: #ffffff;
+      color: ${tokens.colors.accent.text.value};
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.05);
     }
 
@@ -95,7 +95,7 @@ function applyStyles(): void {
 
     button.ags-button.button-variant-danger {
       background-color: ${tokens.colors.state.error.value};
-      color: #ffffff;
+      color: ${tokens.colors.foreground.primary.value};
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.05);
     }
 

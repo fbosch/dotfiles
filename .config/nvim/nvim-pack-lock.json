@@ -122,7 +122,7 @@
     "mini.sessions": {
       "rev": "7cb2945ccc11323b7ca19796eb42618493e1dc12",
       "src": "https://github.com/echasnovski/mini.sessions.git",
-      "version": "'7cb2945ccc11323b7ca19796eb42618493e1dc12'"
+      "version": ">=0.0.0"
     },
     "neotest": {
       "rev": "1c529a1ef9c82e8131e872368415cecc2bb86ea2",
@@ -203,8 +203,7 @@
     },
     "opencode.nvim": {
       "rev": "41622312d5d8fb074699c1d5d96f089286191376",
-      "src": "https://github.com/NickvanDyke/opencode.nvim.git",
-      "version": "'41622312d5d8fb074699c1d5d96f089286191376'"
+      "src": "https://github.com/NickvanDyke/opencode.nvim.git"
     },
     "plenary.nvim": {
       "rev": "74b06c6c75e4eeb3108ec01852001636d85a932b",
@@ -216,8 +215,7 @@
     },
     "snacks.nvim": {
       "rev": "882c996cf28183f4d63640de0b4c02ec886d01f2",
-      "src": "https://github.com/folke/snacks.nvim.git",
-      "version": "'882c996cf28183f4d63640de0b4c02ec886d01f2'"
+      "src": "https://github.com/folke/snacks.nvim.git"
     },
     "tint.nvim": {
       "rev": "586e87f00c8b0f5e857cefe10839e41f3e8c6d01",

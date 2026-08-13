@@ -79,6 +79,7 @@ local function register_one(plugin)
 	assert(plugins[plugin.name] == nil, "duplicate native plugin registration: " .. plugin.name)
 	assert(plugin.module == nil or type(plugin.module) == "string", "native module must be a string: " .. plugin.name)
 	assert(plugin.opts == nil or type(plugin.opts) == "table", "native opts must be a table: " .. plugin.name)
+	assert(plugin.init == nil or type(plugin.init) == "function", "native init must be a function: " .. plugin.name)
 	assert(plugin.setup == nil or type(plugin.setup) == "function", "native setup must be a function: " .. plugin.name)
 	assert(
 		plugin.version == nil
@@ -123,7 +124,6 @@ local function register_one(plugin)
 		assert(plugin.condition == nil, "native dependency-only plugin cannot have a condition: " .. plugin.name)
 		assert(has_triggers(plugin) == false, "native dependency-only plugin cannot have triggers: " .. plugin.name)
 	elseif plugin.startup == true then
-		assert(plugin.condition == nil, "native startup plugin cannot have a condition: " .. plugin.name)
 		assert(has_triggers(plugin) == false, "native startup plugin cannot have triggers: " .. plugin.name)
 	end
 

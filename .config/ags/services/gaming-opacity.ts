@@ -1,5 +1,6 @@
 import type Gtk from 'gi://Gtk?version=4.0';
 import app from 'ags/gtk4/app';
+import tokens from '../../../design-system/tokens.json';
 import { getProfileState, isGamingResolved, subscribeProfileState } from './profile-state';
 
 const boundWidgets = new Set<Gtk.Widget>();
@@ -46,12 +47,12 @@ function applyStyles(): void {
       window.force-quit.gaming-opaque box.force-quit-container,
       window.about-this-pc.gaming-opaque box.about-container,
       window.confirm-dialog.gaming-opaque box.dialog-box {
-        background-color: rgb(45, 45, 45);
+        background-color: ${tokens.colors.background.secondary.value};
       }
 
       window.keyboard-layout-switcher.gaming-opaque box.keyboard-switcher-container,
       window.volume-indicator.gaming-opaque box.indicator-container {
-        background-color: rgb(55, 55, 55);
+        background-color: ${tokens.colors.background.tertiary.value};
       }
 
       window.desktop-clock.gaming-opaque box.clock-container {

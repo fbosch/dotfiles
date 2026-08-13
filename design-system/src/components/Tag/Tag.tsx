@@ -1,6 +1,6 @@
-import { cva, type VariantProps } from "class-variance-authority";
-import type React from "react";
-import { cn } from "../../utils/cn";
+import { cva, type VariantProps } from 'class-variance-authority';
+import type React from 'react';
+import { cn } from '../../utils/cn';
 
 /**
  * Tag component - macOS-style notification badge
@@ -14,21 +14,21 @@ import { cn } from "../../utils/cn";
  */
 
 const tagVariants = cva(
-  "inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[9px] font-bold min-w-[18px] leading-none shadow-sm",
+  'inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[9px] font-bold min-w-[18px] leading-none shadow-sm',
   {
     variants: {
       variant: {
-        default: "bg-background-tertiary text-foreground-primary",
-        primary: "bg-accent-primary text-white",
-        success: "bg-state-success text-state-success-text",
-        warning: "bg-state-warning text-state-warning-text",
-        danger: "bg-state-error text-state-error-text",
+        default: 'bg-background-tertiary text-foreground-primary',
+        primary: 'bg-accent-primary text-accent-text',
+        success: 'bg-state-success text-state-success-text',
+        warning: 'bg-state-warning text-state-warning-text',
+        danger: 'bg-state-error text-state-error-text',
       },
     },
     defaultVariants: {
-      variant: "default",
+      variant: 'default',
     },
-  },
+  }
 );
 
 export interface TagProps
@@ -45,13 +45,7 @@ export interface TagProps
   icon?: string;
 }
 
-export const Tag: React.FC<TagProps> = ({
-  variant,
-  className,
-  children,
-  icon,
-  ...props
-}) => {
+export const Tag: React.FC<TagProps> = ({ variant, className, children, icon, ...props }) => {
   return (
     <span className={cn(tagVariants({ variant }), className)} {...props}>
       {icon && <span className="mr-1 font-fluent">{icon}</span>}

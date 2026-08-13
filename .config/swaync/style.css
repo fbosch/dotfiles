@@ -2,19 +2,24 @@
 /* GTK-based notification center styling */
 
 :root {
-  --bg-color: rgba(32, 32, 32, 0.85);
-  --solid-bg-color: rgb(32, 32, 32);
-  --surface-color: rgba(45, 45, 45, 0.6);
-  --surface-hover: rgba(55, 55, 55, 0.7);
-  --surface-active: rgba(65, 65, 65, 0.8);
-  --accent-color: #0067c0;
-  --accent-hover: #106ebe;
+  --bg-color: rgba(25, 25, 25, 0.85);
+  --solid-bg-color: rgb(25, 25, 25);
+  --surface-color: rgba(36, 36, 36, 0.6);
+  --surface-solid: #2a2a2a;
+  --surface-hover: rgba(42, 42, 42, 0.7);
+  --surface-active: rgba(42, 42, 42, 0.8);
+  --accent-color: #6baedb;
+  --accent-hover: #7bbefb;
+  --accent-focus: rgba(107, 174, 219, 0.5);
+  --accent-subtle: rgba(107, 174, 219, 0.2);
   --text-color: #ffffff;
-  --text-secondary: #cccccc;
-  --text-tertiary: #999999;
+  --text-secondary: #bbbdc7;
+  --text-tertiary: #8c8e96;
   --border-color: rgba(255, 255, 255, 0.1);
   --border-hover: rgba(255, 255, 255, 0.25);
-  --critical-color: #c42b1c;
+  --critical-color: #d86659;
+  --critical-bright-color: #e58073;
+  --critical-subtle: rgba(216, 102, 89, 0.18);
   --shadow-color: 0deg 0% 0%;
   --radius-large: 12px;
   --radius-medium: 18px;
@@ -45,8 +50,8 @@
   --volume-track-border: rgba(255, 255, 255, 0.12);
   --volume-track-fill: linear-gradient(
     135deg,
-    rgba(0, 103, 192, 0.9),
-    rgba(16, 110, 190, 0.78)
+    rgba(107, 174, 219, 0.9),
+    rgba(123, 190, 251, 0.78)
   );
   --volume-thumb-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
   --volume-label-bg: rgba(255, 255, 255, 0.14);
@@ -241,7 +246,7 @@
 
 .notification:hover {
   background: var(--surface-color);
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: var(--border-hover);
 }
 
 /* Auto-width for floating notifications */
@@ -360,7 +365,7 @@
 /* Action buttons */
 .notification-action,
 .notification-action > button {
-  background: #373737;
+  background: var(--surface-solid);
   border-radius: var(--radius-small);
   color: #ffffff;
   font-size: 10px;
@@ -380,19 +385,19 @@
 
 .notification-action:hover,
 .notification-action > button:hover {
-  background: rgba(55, 55, 55, 0.9);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(42, 42, 42, 0.9);
+  border-color: var(--border-hover);
 }
 
 .notification-action:active,
 .notification-action > button:active {
-  background: rgba(55, 55, 55, 0.8);
+  background: rgba(42, 42, 42, 0.8);
   transform: scale(0.98);
 }
 
 .notification-action:focus-visible,
 .notification-action > button:focus-visible {
-  outline: 2px solid rgba(0, 103, 192, 0.5);
+  outline: 2px solid var(--accent-focus);
   outline-offset: 2px;
   border-radius: var(--radius-small);
 }
@@ -484,7 +489,7 @@
 }
 
 .widget-dnd > switch {
-  background: rgba(45, 45, 45, 0.6);
+  background: var(--surface-color);
   border-radius: 9999px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   padding: 0;
@@ -609,7 +614,7 @@
 .widget-volume scale slider:active {
   transform: scale(1.15);
   box-shadow:
-    0 0 0 4px rgba(0, 103, 192, 0.2),
+    0 0 0 4px var(--accent-subtle),
     0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
@@ -707,7 +712,7 @@
 .widget-volume .per-app-volume row scale slider:active {
   transform: scale(1.15);
   box-shadow:
-    0 0 0 4px rgba(0, 103, 192, 0.2),
+    0 0 0 4px var(--accent-subtle),
     0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
@@ -768,8 +773,8 @@
 .widget-buttons > flowbox > flowboxchild > button.active,
 .widget-buttons > flowbox > flowboxchild > button:checked,
 .widget-buttons > flowbox > flowboxchild > button.toggle:checked {
-  background: rgba(0, 103, 192, 0.35);
-  border-color: rgba(16, 110, 190, 0.9);
+  background: rgba(107, 174, 219, 0.35);
+  border-color: rgba(123, 190, 251, 0.9);
   color: #ffffff;
 }
 
@@ -881,13 +886,13 @@ scrollbar slider:active {
 }
 
 .notification.critical {
-  background: rgba(40, 15, 15, 0.75);
+  background: var(--critical-subtle);
   border-color: var(--critical-color);
   border-width: 2px;
 }
 
 .notification.critical .summary {
-  color: #ff6b6b;
+  color: var(--critical-bright-color);
 }
 
 /* Empty State */
@@ -908,7 +913,7 @@ scrollbar slider:active {
 
 /* Focus States */
 button:focus-visible {
-  outline: 2px solid rgba(0, 103, 192, 0.4);
+  outline: 2px solid var(--accent-focus);
   outline-offset: 2px;
 }
 

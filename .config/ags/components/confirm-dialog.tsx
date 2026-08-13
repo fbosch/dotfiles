@@ -72,7 +72,7 @@ function applyStaticCSS() {
     }
     
     window.confirm-dialog box.dialog-box {
-      background-color: rgba(45, 45, 45, 0.90);
+      background-color: ${tokens.colors.background.secondary.value}e6;
       border-radius: 12px;
       padding: 16px;
       min-width: 280px;

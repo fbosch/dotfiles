@@ -1462,7 +1462,7 @@ function applyStaticCSS() {
 
     /* Menu container - matches design-system StartMenu component */
     window.start-menu box.start-menu-container {
-      background-color: rgba(45, 45, 45, 0.85);
+      background-color: ${tokens.colors.background.secondary.value}d9;
       border: 1px solid rgba(255, 255, 255, 0.10);
       border-radius: 8px;
       padding: 8px;
@@ -1597,10 +1597,10 @@ function applyStaticCSS() {
       color: ${tokens.colors.foreground.primary.value};
     }
     window.start-menu button.menu-variant-default:hover {
-      background-color: #ffffff1a;
+      background-color: ${tokens.colors.foreground.primary.value}1a;
     }
     window.start-menu button.menu-variant-default:focus {
-      background-color: #ffffff1a;
+      background-color: ${tokens.colors.foreground.primary.value}1a;
     }
 
     window.start-menu button.menu-variant-warning {
@@ -1698,7 +1698,7 @@ function applyStaticCSS() {
       padding: 8px;
       border: 1px solid rgba(255, 255, 255, 0.10);
       border-radius: 8px;
-      background-color: rgba(45, 45, 45, 0.85);
+      background-color: ${tokens.colors.background.secondary.value}d9;
       box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28), 0 4px 12px rgba(0, 0, 0, 0.14);
     }
 

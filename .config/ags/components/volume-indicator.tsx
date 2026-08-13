@@ -3,6 +3,7 @@ import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import { execAsync } from "ags/process";
+import tokens from "../../../design-system/tokens.json";
 import { bindGamingOpacity } from "../services/gaming-opacity";
 import { perf } from "../services/performance-monitor";
 
@@ -359,8 +360,8 @@ function applyCSS() {
   }
   
   window.volume-indicator box.indicator-container {
-    background-color: rgba(55, 55, 55, 0.80);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: ${tokens.colors.background.tertiary.value}cc;
+    border: 1px solid ${tokens.colors.border.default.value};
     border-radius: 9999px;
     padding: ${size.containerPadding};
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
@@ -375,11 +376,11 @@ function applyCSS() {
   window.volume-indicator label.speaker-icon {
     font-family: "Segoe Fluent Icons";
     font-size: ${size.iconSize}px;
-    color: white;
+    color: ${tokens.colors.foreground.primary.value};
   }
   
   window.volume-indicator label.speaker-icon.muted {
-    color: rgba(255, 255, 255, 0.5);
+    color: ${tokens.colors.foreground.tertiary.value};
   }
   
   window.volume-indicator box.progress-container {
@@ -398,23 +399,23 @@ function applyCSS() {
   }
   
   window.volume-indicator box.progress-square.filled {
-    background-color: white;
+    background-color: ${tokens.colors.foreground.primary.value};
   }
   
   window.volume-indicator box.progress-square.empty {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: ${tokens.colors.foreground.primary.value}33;
   }
 
   window.volume-indicator label.volume-label {
     font-family: system-ui, sans-serif;
     font-weight: 700;
     font-size: ${size.fontSize}px;
-    color: white;
+    color: ${tokens.colors.foreground.primary.value};
     min-width: 42px;
   }
   
   window.volume-indicator label.volume-label.muted {
-    color: rgba(255, 255, 255, 0.5);
+    color: ${tokens.colors.foreground.tertiary.value};
   }
 `,
     false,

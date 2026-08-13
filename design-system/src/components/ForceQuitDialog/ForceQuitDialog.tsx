@@ -103,7 +103,7 @@ export const ForceQuitDialog = ({
                     className={cn(
                       'flex h-9 w-full items-center gap-2 rounded-md px-2 text-left transition-colors duration-150 focus-visible:outline-none',
                       isSelected
-                        ? 'bg-accent-primary text-white'
+                        ? 'bg-accent-primary text-accent-text'
                         : 'text-foreground-primary hover:bg-white/10 focus-visible:bg-white/10'
                     )}
                     onClick={() => setSelectedApplicationId(application.id)}

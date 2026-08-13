@@ -71,16 +71,14 @@ min-height: 40px;
 
 Colors:
 
-- Background: `rgb(32, 32, 32)` or `rgba(32, 32, 32, 0.85)`
-- Surface: `rgba(45, 45, 45, 0.6)`
-- Surface hover: `rgba(55, 55, 55, 0.7)`
-- Border: `rgba(255, 255, 255, 0.08)`
-- Text primary: `#ffffff`
-- Text secondary: `#cccccc`
-- Text tertiary: `#999999`
-- Accent: `#0067c0`
-- Critical: `#c42b1c`
-- Warning: `#ff9800`
+- Import `../../../design-system/tokens.json`; do not hard-code design-system palette values.
+- Background: `tokens.colors.background.primary`
+- Surface: `tokens.colors.background.secondary`
+- Surface hover: `tokens.colors.background.tertiary`
+- Border: `tokens.colors.border`
+- Text: `tokens.colors.foreground`
+- Accent: `tokens.colors.accent`
+- Semantic states: `tokens.colors.state`
 
 Typography:
 
