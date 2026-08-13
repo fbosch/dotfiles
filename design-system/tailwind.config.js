@@ -93,6 +93,15 @@ export default {
         xl: '1.25rem',
         '2xl': '1.5rem',
       },
+      keyframes: {
+        'update-progress': {
+          from: { transform: 'translateX(0)' },
+          to: { transform: 'translateX(200%)' },
+        },
+      },
+      animation: {
+        'update-progress': 'update-progress 1.4s ease-in-out infinite alternate',
+      },
       textShadow: {
         waybar: '0 0 2px rgba(0, 0, 0, 0.3)',
         'waybar-button': '1px 1px rgba(0, 0, 0, 0.5)',

@@ -9,6 +9,10 @@ const meta: Meta<typeof SystemUpdateDialog> = {
   parameters: {
     layout: 'fullscreen',
   },
+  args: {
+    currentGeneration: '182',
+    currentGenerationDate: '2026-08-10',
+  },
   decorators: [
     (Story: React.ComponentType) => (
       <Desktop minHeight="100vh">
@@ -24,14 +28,14 @@ type Story = StoryObj<typeof SystemUpdateDialog>;
 export const CheckForUpdates: Story = {
   args: {
     isOpen: true,
-    description: 'Check your flake inputs for newer upstream revisions.',
     progress: null,
-    phase: 'Your system is ready to check',
-    message: 'The last successful update check was today at 14:32.',
+    phase: 'Ready to check',
+    message: 'Last checked today at 14:32.',
     automaticallyCheckForUpdates: true,
     onAutomaticallyCheckForUpdatesChange: fn(),
     primaryActionLabel: 'Check for updates',
     onPrimaryAction: fn(),
+    onCancel: fn(),
     onClose: fn(),
   },
   play: async ({ args, canvasElement }) => {
@@ -45,10 +49,9 @@ export const CheckForUpdates: Story = {
 export const CheckingForUpdates: Story = {
   args: {
     isOpen: true,
-    description: 'Comparing your flake inputs with their configured upstream sources.',
     progress: 'indeterminate',
     phase: 'Checking for updates...',
-    message: 'Fetching the latest revision metadata.',
+    message: 'Fetching revision metadata.',
     elapsedTime: '8s',
     automaticallyCheckForUpdates: true,
     onAutomaticallyCheckForUpdatesChange: fn(),
@@ -69,20 +72,20 @@ export const CheckingForUpdates: Story = {
 export const CheckFailed: Story = {
   args: {
     isOpen: true,
-    description: 'The update check could not be completed.',
     progress: null,
-    phase: 'Could not check for updates',
-    errorMessage: 'The configured flake source could not be reached. Your system was not changed.',
+    phase: 'Update check failed',
+    errorMessage: 'Could not reach the configured flake source. No changes were made.',
     automaticallyCheckForUpdates: true,
     onAutomaticallyCheckForUpdatesChange: fn(),
     primaryActionLabel: 'Retry',
     onPrimaryAction: fn(),
+    onCancel: fn(),
     onClose: fn(),
   },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByRole('alert')).toHaveTextContent('Your system was not changed.');
+    await expect(canvas.getByRole('alert')).toHaveTextContent('No changes were made.');
     await userEvent.click(canvas.getByRole('button', { name: 'Retry' }));
     await expect(args.onPrimaryAction).toHaveBeenCalledOnce();
   },
@@ -92,14 +95,14 @@ export const RebuildingSystem: Story = {
   args: {
     isOpen: true,
     progress: 68,
+    progressIsEstimated: true,
     phase: 'Rebuilding system...',
     elapsedTime: '1m 24s',
     steps: [
-      { id: 'lockfile', label: 'Update lockfile', status: 'complete' },
+      { id: 'lockfile', label: 'Update lockfile', status: 'complete', duration: '7s' },
       { id: 'rebuild', label: 'Rebuild system', status: 'in-progress' },
+      { id: 'activate', label: 'Activate configuration', status: 'pending' },
     ],
-    currentGeneration: 'generation 182',
-    currentGenerationDate: '2026-08-10',
     technicalDetails: [
       'updating lock file "/etc/nixos/flake.lock"',
       'building the system configuration...',
@@ -120,6 +123,7 @@ export const RebuildingSystem: Story = {
       '68'
     );
     await expect(canvas.getByText('activating the configuration...')).toBeVisible();
+    await expect(canvas.getByText('~68%')).toBeVisible();
     await expect(canvas.getByText('Elapsed 1m 24s')).toBeVisible();
     await userEvent.click(
       canvas.getByRole('checkbox', { name: 'Automatically check for updates' })
@@ -133,18 +137,13 @@ export const RebuildingSystem: Story = {
 export const LockfileUpdateFailed: Story = {
   args: {
     isOpen: true,
-    description: 'The selected flake inputs could not be updated.',
-    progress: 18,
+    progress: null,
     phase: 'Lockfile update failed',
-    elapsedTime: '14s',
-    errorMessage:
-      'The rebuild did not start and the active system generation was not changed. Review the technical details before retrying.',
     steps: [
-      { id: 'lockfile', label: 'Update lockfile', status: 'failed' },
+      { id: 'lockfile', label: 'Update lockfile', status: 'failed', duration: '14s' },
       { id: 'rebuild', label: 'Rebuild system', status: 'pending' },
+      { id: 'activate', label: 'Activate configuration', status: 'pending' },
     ],
-    currentGeneration: 'generation 182',
-    currentGenerationDate: '2026-08-10',
     technicalDetails: [
       'error: failed to update input nixpkgs',
       'error: unable to download the requested revision',
@@ -155,13 +154,17 @@ export const LockfileUpdateFailed: Story = {
     onAutomaticallyCheckForUpdatesChange: fn(),
     primaryActionLabel: 'Retry',
     onPrimaryAction: fn(),
+    onCancel: fn(),
     onClose: fn(),
   },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByText('Failed')).toBeVisible();
-    await expect(canvas.getByText('Pending')).toBeVisible();
+    await expect(canvas.queryByRole('progressbar')).not.toBeInTheDocument();
+    await expect(
+      canvas.getByRole('listitem', { name: 'Update lockfile: Failed, 14s' })
+    ).toBeVisible();
+    await expect(canvas.getByRole('listitem', { name: 'Rebuild system: Pending' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Retry' }));
     await expect(args.onPrimaryAction).toHaveBeenCalledOnce();
   },
@@ -170,16 +173,14 @@ export const LockfileUpdateFailed: Story = {
 export const ReadyToActivate: Story = {
   args: {
     isOpen: true,
-    description: 'The new system configuration is built and ready.',
     progress: 100,
-    phase: 'Update ready to activate',
-    message: 'The new system configuration was built successfully.',
+    phase: 'Ready to activate',
+    message: 'Build completed successfully.',
     steps: [
-      { id: 'lockfile', label: 'Update lockfile', status: 'complete' },
-      { id: 'rebuild', label: 'Rebuild system', status: 'complete' },
+      { id: 'lockfile', label: 'Update lockfile', status: 'complete', duration: '7s' },
+      { id: 'rebuild', label: 'Rebuild system', status: 'complete', duration: '1m 46s' },
+      { id: 'activate', label: 'Activate configuration', status: 'pending' },
     ],
-    currentGeneration: 'generation 182',
-    currentGenerationDate: '2026-08-10',
     technicalDetails: [
       'updated lock file "/etc/nixos/flake.lock"',
       'built system closure /nix/store/9m2...-nixos-system-workstation',
@@ -189,6 +190,7 @@ export const ReadyToActivate: Story = {
     onAutomaticallyCheckForUpdatesChange: fn(),
     primaryActionLabel: 'Activate now',
     onPrimaryAction: fn(),
+    onCancel: fn(),
     onClose: fn(),
   },
   play: async ({ args, canvasElement }) => {
@@ -203,28 +205,27 @@ export const ReadyToActivate: Story = {
 export const RebuildFailed: Story = {
   args: {
     isOpen: true,
-    description: 'The new system configuration could not be activated.',
     progress: 74,
-    phase: 'System update failed',
+    progressIsEstimated: true,
+    phase: 'Rebuild failed',
     elapsedTime: '2m 11s',
-    errorMessage:
-      'The previous flake.lock was restored. The active system generation was not changed.',
+    errorMessage: 'The previous flake.lock was restored.',
     steps: [
-      { id: 'lockfile', label: 'Update lockfile', status: 'complete' },
-      { id: 'rebuild', label: 'Rebuild system', status: 'failed' },
+      { id: 'lockfile', label: 'Update lockfile', status: 'complete', duration: '7s' },
+      { id: 'rebuild', label: 'Rebuild system', status: 'failed', duration: '2m 04s' },
+      { id: 'activate', label: 'Activate configuration', status: 'pending' },
     ],
-    currentGeneration: 'generation 182',
-    currentGenerationDate: '2026-08-10',
     technicalDetails: [
       'error: builder for system closure failed',
       'restored /etc/nixos/flake.lock to its pre-update state',
-      'the active system generation remains generation 182',
+      'the active generation may require verification',
     ],
     technicalDetailsOpen: true,
     automaticallyCheckForUpdates: true,
     onAutomaticallyCheckForUpdatesChange: fn(),
     primaryActionLabel: 'Retry',
     onPrimaryAction: fn(),
+    onCancel: fn(),
     onClose: fn(),
   },
   play: async ({ args, canvasElement }) => {
@@ -233,7 +234,78 @@ export const RebuildFailed: Story = {
     await expect(canvas.getByRole('alert')).toHaveTextContent(
       'The previous flake.lock was restored.'
     );
-    await expect(canvas.getByText('Failed')).toBeVisible();
+    await expect(
+      canvas.getByRole('listitem', { name: 'Rebuild system: Failed, 2m 04s' })
+    ).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Retry' }));
+    await expect(args.onPrimaryAction).toHaveBeenCalledOnce();
+  },
+};
+
+export const ActivatingConfiguration: Story = {
+  args: {
+    isOpen: true,
+    progress: 'indeterminate',
+    phase: 'Activating configuration...',
+    elapsedTime: '2m 03s',
+    steps: [
+      { id: 'lockfile', label: 'Update lockfile', status: 'complete', duration: '7s' },
+      { id: 'rebuild', label: 'Rebuild system', status: 'complete', duration: '1m 46s' },
+      { id: 'activate', label: 'Activate configuration', status: 'in-progress' },
+    ],
+    technicalDetails: [
+      'built system closure /nix/store/9m2...-nixos-system-workstation',
+      'activating the configuration...',
+      'reloading user units...',
+    ],
+    technicalDetailsOpen: true,
+    automaticallyCheckForUpdates: true,
+    onAutomaticallyCheckForUpdatesChange: fn(),
+    onClose: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
+    await expect(canvas.getByText('Activate configuration')).toBeVisible();
+  },
+};
+
+export const ActivationFailed: Story = {
+  args: {
+    isOpen: true,
+    progress: null,
+    phase: 'Activation failed',
+    steps: [
+      { id: 'lockfile', label: 'Update lockfile', status: 'complete', duration: '7s' },
+      { id: 'rebuild', label: 'Rebuild system', status: 'complete', duration: '1m 46s' },
+      { id: 'activate', label: 'Activate configuration', status: 'failed', duration: '19s' },
+    ],
+    errorMessage: 'The active system state may be partially updated.',
+    technicalDetails: [
+      'activating the configuration...',
+      'error: failed to restart user service example.service',
+      'verify the active generation and affected services before retrying',
+    ],
+    technicalDetailsOpen: true,
+    automaticallyCheckForUpdates: true,
+    onAutomaticallyCheckForUpdatesChange: fn(),
+    primaryActionLabel: 'Retry',
+    onPrimaryAction: fn(),
+    onCancel: fn(),
+    onClose: fn(),
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.queryByRole('progressbar')).not.toBeInTheDocument();
+    await expect(
+      canvas.getByRole('listitem', { name: 'Activate configuration: Failed, 19s' })
+    ).toBeVisible();
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      'The active system state may be partially updated.'
+    );
+    await expect(canvas.getByRole('button', { name: 'Cancel' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Retry' }));
     await expect(args.onPrimaryAction).toHaveBeenCalledOnce();
   },

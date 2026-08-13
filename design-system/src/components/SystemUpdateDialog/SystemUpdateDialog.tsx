@@ -1,26 +1,28 @@
 import { useId } from 'react';
 import { cn } from '../../utils/cn';
 import { Button } from '../Button';
-import { Tag } from '../Tag';
+import { ProgressBar } from '../ProgressBar';
 import { Window } from '../Window';
 
 const stepStatusMeta = {
-  complete: { label: 'Complete', tagVariant: 'success' },
-  'in-progress': { label: 'In progress', tagVariant: 'primary' },
-  pending: { label: 'Pending', tagVariant: 'default' },
-  failed: { label: 'Failed', tagVariant: 'danger' },
+  complete: 'Complete',
+  'in-progress': 'In progress',
+  pending: 'Pending',
+  failed: 'Failed',
 } as const;
 
 export interface SystemUpdateStep {
   id: string;
   label: string;
   status: 'complete' | 'in-progress' | 'pending' | 'failed';
+  duration?: string;
 }
 
 export interface SystemUpdateDialogProps {
   isOpen?: boolean;
   description?: string;
   progress?: number | 'indeterminate' | null;
+  progressIsEstimated?: boolean;
   phase?: string;
   message?: string;
   errorMessage?: string;
@@ -40,8 +42,9 @@ export interface SystemUpdateDialogProps {
 
 export const SystemUpdateDialog = ({
   isOpen = false,
-  description = 'Building and activating the new system configuration.',
+  description,
   progress = 0,
+  progressIsEstimated = false,
   phase = 'Preparing update...',
   message,
   errorMessage,
@@ -63,6 +66,7 @@ export const SystemUpdateDialog = ({
   const normalizedProgress =
     typeof progress === 'number' ? Math.min(100, Math.max(0, progress)) : progress;
   const hasWorkflowDetails = steps.length > 0 || technicalDetails.length > 0;
+  const showProgressSummary = normalizedProgress !== null || steps.length === 0 || Boolean(message);
   let windowHeight = '360px';
   if (hasWorkflowDetails) windowHeight = 'min(640px, calc(100vh - 32px))';
   if (hasWorkflowDetails && errorMessage) windowHeight = 'min(680px, calc(100vh - 32px))';
@@ -80,7 +84,7 @@ export const SystemUpdateDialog = ({
     >
       <Window
         showTitlebar={false}
-        width="min(920px, calc(100vw - 32px))"
+        width="min(782px, calc(100vw - 32px))"
         height={windowHeight}
         className="rounded-xl"
       >
@@ -97,7 +101,19 @@ export const SystemUpdateDialog = ({
                 <h2 id={titleId} className="text-2xl font-semibold tracking-tight">
                   System update
                 </h2>
-                <p className="mt-1 text-base text-foreground-secondary">{description}</p>
+                {(currentGeneration || currentGenerationDate) && (
+                  <p className="mt-1 text-xs text-foreground-tertiary">
+                    Current generation{' '}
+                    {currentGeneration && (
+                      <strong className="font-semibold">{currentGeneration}</strong>
+                    )}
+                    {currentGeneration && currentGenerationDate ? ' · ' : ''}
+                    {currentGenerationDate}
+                  </p>
+                )}
+                {description && (
+                  <p className="mt-1 text-base text-foreground-secondary">{description}</p>
+                )}
               </div>
               {onClose && (
                 <Button
@@ -113,62 +129,38 @@ export const SystemUpdateDialog = ({
               )}
             </header>
 
-            <section className="mt-6" aria-label="Update progress">
-              <div className="mb-2 flex items-end justify-between gap-4">
-                <p className="text-lg font-semibold">{phase}</p>
-                {typeof normalizedProgress === 'number' && (
-                  <p className="shrink-0 text-lg tabular-nums text-foreground-secondary">
-                    {Math.round(normalizedProgress)}%
-                  </p>
-                )}
-              </div>
-              {normalizedProgress !== null && (
-                <div
-                  className="h-2 overflow-hidden rounded-full bg-white/10"
-                  role="progressbar"
-                  aria-label={phase}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={
-                    typeof normalizedProgress === 'number' ? normalizedProgress : undefined
-                  }
-                  aria-describedby={elapsedTime ? elapsedTimeId : undefined}
-                >
-                  <div
-                    className={cn(
-                      'h-full rounded-full',
-                      errorMessage ? 'bg-state-error' : 'bg-accent-primary',
-                      normalizedProgress === 'indeterminate'
-                        ? 'w-1/3 animate-pulse'
-                        : 'transition-[width] duration-200'
-                    )}
-                    style={
-                      typeof normalizedProgress === 'number'
-                        ? { width: `${normalizedProgress}%` }
-                        : undefined
-                    }
-                  />
-                </div>
-              )}
-              {(message || elapsedTime) && (
-                <div className="mt-2 flex flex-wrap justify-between gap-2 text-sm text-foreground-secondary">
-                  {message && <p>{message}</p>}
-                  {elapsedTime && (
-                    <p id={elapsedTimeId} className="ml-auto tabular-nums">
-                      Elapsed {elapsedTime}
+            {showProgressSummary && (
+              <section className="mt-6" aria-label="Update progress">
+                <div className="mb-2 flex items-end justify-between gap-4">
+                  <p className="text-lg font-semibold">{phase}</p>
+                  {typeof normalizedProgress === 'number' && (
+                    <p className="shrink-0 text-lg tabular-nums text-foreground-secondary">
+                      {progressIsEstimated ? '~' : ''}
+                      {Math.round(normalizedProgress)}%
                     </p>
                   )}
                 </div>
-              )}
-              {errorMessage && (
-                <div
-                  className="mt-3 rounded-lg border border-state-error/35 bg-state-error/10 px-4 py-3 text-sm text-state-error"
-                  role="alert"
-                >
-                  {errorMessage}
-                </div>
-              )}
-            </section>
+                {normalizedProgress !== null && (
+                  <ProgressBar
+                    value={typeof normalizedProgress === 'number' ? normalizedProgress : undefined}
+                    indeterminate={normalizedProgress === 'indeterminate'}
+                    variant={errorMessage ? 'error' : 'primary'}
+                    aria-label={phase}
+                    aria-describedby={elapsedTime ? elapsedTimeId : undefined}
+                  />
+                )}
+                {(message || elapsedTime) && (
+                  <div className="mt-2 flex flex-wrap justify-between gap-2 text-sm text-foreground-secondary">
+                    {message && <p>{message}</p>}
+                    {elapsedTime && (
+                      <p id={elapsedTimeId} className="ml-auto tabular-nums">
+                        Elapsed {elapsedTime}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </section>
+            )}
 
             {steps.length > 0 && (
               <ol className="mt-5 rounded-lg border border-white/10 bg-background-primary/25 px-4 py-2">
@@ -176,7 +168,7 @@ export const SystemUpdateDialog = ({
                   const isComplete = step.status === 'complete';
                   const isInProgress = step.status === 'in-progress';
                   const isFailed = step.status === 'failed';
-                  const statusMeta = stepStatusMeta[step.status];
+                  const statusLabel = stepStatusMeta[step.status];
 
                   return (
                     <li
@@ -186,11 +178,12 @@ export const SystemUpdateDialog = ({
                         index > 0 && 'border-t border-white/[0.06]'
                       )}
                       aria-current={isInProgress ? 'step' : undefined}
+                      aria-label={`${step.label}: ${statusLabel}${step.duration ? `, ${step.duration}` : ''}`}
                     >
                       <span className="relative grid h-16 w-12 shrink-0 place-items-center">
                         {index < steps.length - 1 && (
                           <span
-                            className="absolute left-1/2 top-12 h-10 border-l-2 border-dotted border-accent-primary/60"
+                            className="absolute left-1/2 top-12 z-0 h-10 border-l-2 border-dotted border-white/20"
                             aria-hidden="true"
                           />
                         )}
@@ -205,26 +198,22 @@ export const SystemUpdateDialog = ({
                           )}
                           aria-hidden="true"
                         >
-                          {isComplete || isFailed ? (
-                            <span className="font-fluent">{isComplete ? '\uE73E' : '\uEA39'}</span>
+                          {isComplete ? (
+                            <span className="font-fluent">{'\uE73E'}</span>
+                          ) : isFailed ? (
+                            <span className="font-fluent text-xs">{'\uE711'}</span>
                           ) : (
                             index + 1
                           )}
                         </span>
                       </span>
-                      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-3 pl-3">
-                        <span className="min-w-36 text-base font-semibold">{step.label}</span>
-                        <Tag
-                          variant={statusMeta.tagVariant}
-                          className={cn(
-                            'rounded-md px-2 py-1 text-xs font-semibold',
-                            isComplete && 'bg-state-success/10 text-state-success',
-                            isInProgress && 'bg-accent-primary/10 text-accent-hover',
-                            isFailed && 'bg-state-error/10 text-state-error'
-                          )}
-                        >
-                          {statusMeta.label}
-                        </Tag>
+                      <span className="flex min-w-0 flex-1 items-center justify-between gap-4 pl-3">
+                        <span className="min-w-0 text-base font-semibold">{step.label}</span>
+                        {step.duration && (
+                          <span className="shrink-0 text-right text-sm tabular-nums text-foreground-tertiary">
+                            {step.duration}
+                          </span>
+                        )}
                       </span>
                     </li>
                   );
@@ -232,32 +221,27 @@ export const SystemUpdateDialog = ({
               </ol>
             )}
 
+            {errorMessage && (
+              <div
+                className="mt-5 rounded-lg border border-state-error/35 bg-state-error/10 px-4 py-3 text-sm text-state-error"
+                role="alert"
+              >
+                {errorMessage}
+              </div>
+            )}
+
             {technicalDetails.length > 0 && (
               <details
-                className="group mt-5 border-t border-white/10 pt-3"
+                className="group mt-5 border-t border-white/10 pt-2"
                 open={technicalDetailsOpen}
               >
-                <summary className="flex min-h-10 cursor-pointer list-none flex-wrap items-center justify-between gap-3 rounded-md px-2 text-sm text-foreground-secondary transition-colors duration-150 hover:bg-white/[0.04] hover:text-foreground-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/30">
-                  <span className="flex min-w-0 items-center gap-3">
-                    <span
-                      className="font-fluent text-base text-foreground-tertiary"
-                      aria-hidden="true"
-                    >
-                      {'\uE787'}
-                    </span>
-                    <span className="font-semibold">Current:</span>
-                    <span className="font-mono">
-                      {[currentGeneration, currentGenerationDate].filter(Boolean).join(' · ')}
-                    </span>
-                  </span>
-                  <span className="flex items-center gap-3 font-semibold">
-                    Technical details
-                    <span
-                      className="font-fluent text-xs transition-transform duration-150 group-open:rotate-180"
-                      aria-hidden="true"
-                    >
-                      {'\uE70D'}
-                    </span>
+                <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between rounded-md px-2 text-sm font-semibold text-foreground-secondary transition-colors duration-150 hover:bg-white/[0.04] hover:text-foreground-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/30">
+                  Technical details
+                  <span
+                    className="font-fluent text-xs transition-transform duration-150 group-open:rotate-180"
+                    aria-hidden="true"
+                  >
+                    {'\uE70D'}
                   </span>
                 </summary>
                 <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap rounded-lg border border-white/15 bg-background-primary/30 px-5 py-4 font-mono text-sm leading-relaxed text-foreground-secondary">
@@ -281,7 +265,7 @@ export const SystemUpdateDialog = ({
             </label>
             <div className="flex justify-end gap-2">
               {onCancel && (
-                <Button variant="outline" className="min-w-28" onClick={onCancel}>
+                <Button variant="transparent" className="min-w-28" onClick={onCancel}>
                   Cancel
                 </Button>
               )}
